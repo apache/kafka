@@ -955,7 +955,7 @@ public class StreamsGroup implements Group {
     ) {
         Set<String> requiredTopicNames = topology.requiredTopics();
 
-        Map<String, Long> topicHash = new HashMap<>(requiredTopicNames.size());
+        Map<String, Long> topicHash = Utils.newHashMap(requiredTopicNames.size());
         requiredTopicNames.forEach(topicName -> {
             metadataImage.topicMetadata(topicName).ifPresent(__ ->
                 topicHash.put(

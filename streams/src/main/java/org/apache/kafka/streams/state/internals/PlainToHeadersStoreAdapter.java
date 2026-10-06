@@ -52,7 +52,7 @@ import static org.apache.kafka.streams.state.internals.Utils.rawPlainValue;
  * a {@code TimestampedKeyValueStoreWithHeaders}, this adapter is used to translate between
  * the plain {@code byte[]} format and the timestamped-with-headers {@code byte[]} format.
  *
- * @see PlainToHeadersIteratorAdapter
+ * @see MappingKeyValueIteratorAdapter#plainToHeaders(KeyValueIterator)
  */
 @SuppressWarnings("unchecked")
 public class PlainToHeadersStoreAdapter implements KeyValueStore<Bytes, byte[]> {
@@ -167,7 +167,7 @@ public class PlainToHeadersStoreAdapter implements KeyValueStore<Bytes, byte[]> 
 
             if (rawResult.isSuccess()) {
                 final KeyValueIterator<Bytes, byte[]> convertedIterator =
-                        new PlainToHeadersIteratorAdapter<>(rawResult.getResult());
+                        MappingKeyValueIteratorAdapter.plainToHeaders(rawResult.getResult());
                 result = (QueryResult<R>) InternalQueryResultUtil.copyAndSubstituteDeserializedResult(rawResult, convertedIterator);
             } else {
                 result = (QueryResult<R>) rawResult;
@@ -199,29 +199,29 @@ public class PlainToHeadersStoreAdapter implements KeyValueStore<Bytes, byte[]> 
     @Override
     public KeyValueIterator<Bytes, byte[]> range(final Bytes from,
                                                  final Bytes to) {
-        return new PlainToHeadersIteratorAdapter<>(store.range(from, to));
+        return MappingKeyValueIteratorAdapter.plainToHeaders(store.range(from, to));
     }
 
     @Override
     public KeyValueIterator<Bytes, byte[]> reverseRange(final Bytes from,
                                                         final Bytes to) {
-        return new PlainToHeadersIteratorAdapter<>(store.reverseRange(from, to));
+        return MappingKeyValueIteratorAdapter.plainToHeaders(store.reverseRange(from, to));
     }
 
     @Override
     public KeyValueIterator<Bytes, byte[]> all() {
-        return new PlainToHeadersIteratorAdapter<>(store.all());
+        return MappingKeyValueIteratorAdapter.plainToHeaders(store.all());
     }
 
     @Override
     public KeyValueIterator<Bytes, byte[]> reverseAll() {
-        return new PlainToHeadersIteratorAdapter<>(store.reverseAll());
+        return MappingKeyValueIteratorAdapter.plainToHeaders(store.reverseAll());
     }
 
     @Override
     public <PS extends Serializer<P>, P> KeyValueIterator<Bytes, byte[]> prefixScan(final P prefix,
                                                                                     final PS prefixKeySerializer) {
-        return new PlainToHeadersIteratorAdapter<>(store.prefixScan(prefix, prefixKeySerializer));
+        return MappingKeyValueIteratorAdapter.plainToHeaders(store.prefixScan(prefix, prefixKeySerializer));
     }
 
     @Override

@@ -19,13 +19,13 @@ package org.apache.kafka.coordinator.group.modern;
 import org.apache.kafka.common.utils.Time;
 import org.apache.kafka.coordinator.common.runtime.CoordinatorMetadataImage;
 import org.apache.kafka.coordinator.group.TargetAssignmentMetadata;
+import org.apache.kafka.coordinator.group.Utils;
 import org.apache.kafka.coordinator.group.api.assignor.GroupAssignment;
 import org.apache.kafka.coordinator.group.api.assignor.GroupSpec;
 import org.apache.kafka.coordinator.group.api.assignor.MemberAssignment;
 import org.apache.kafka.coordinator.group.api.assignor.PartitionAssignor;
 import org.apache.kafka.coordinator.group.api.assignor.PartitionAssignorException;
 
-import java.util.HashMap;
 import java.util.Map;
 import java.util.Objects;
 
@@ -142,7 +142,7 @@ public class TargetAssignmentBuilder {
             new SubscribedTopicDescriberImpl(metadataImage)
         );
 
-        Map<String, Assignment> newTargetAssignment = new HashMap<>();
+        Map<String, Assignment> newTargetAssignment = Utils.newHashMap(groupSpec.memberIds().size());
         for (String memberId : groupSpec.memberIds()) {
             newTargetAssignment.put(memberId, newMemberAssignment(newGroupAssignment, memberId));
         }

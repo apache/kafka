@@ -16,6 +16,7 @@
  */
 package org.apache.kafka.coordinator.group.streams.assignor;
 
+import org.apache.kafka.coordinator.group.Utils;
 import org.apache.kafka.coordinator.group.api.streams.assignor.GroupAssignment;
 import org.apache.kafka.coordinator.group.api.streams.assignor.GroupSpec;
 import org.apache.kafka.coordinator.group.api.streams.assignor.MemberAssignment;
@@ -388,9 +389,9 @@ public class BalancedTaskAssignor implements TaskAssignor {
          * @return The assignment of every member of this process, including members that received no task.
          */
         private Map<String, MemberAssignment> distributeTasksOverMembers() {
-            final Map<String, Integer> taskCountByMember = new HashMap<>(capacity());
-            final Map<String, Set<TaskId>> activeTasksByMember = new HashMap<>(capacity());
-            final Map<String, Set<TaskId>> standbyTasksByMember = new HashMap<>(capacity());
+            final Map<String, Integer> taskCountByMember = Utils.newHashMap(capacity());
+            final Map<String, Set<TaskId>> activeTasksByMember = Utils.newHashMap(capacity());
+            final Map<String, Set<TaskId>> standbyTasksByMember = Utils.newHashMap(capacity());
             for (final String memberId : memberIds) {
                 taskCountByMember.put(memberId, 0);
                 activeTasksByMember.put(memberId, new HashSet<>());

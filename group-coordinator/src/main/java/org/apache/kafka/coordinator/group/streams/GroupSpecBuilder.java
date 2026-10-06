@@ -16,12 +16,12 @@
  */
 package org.apache.kafka.coordinator.group.streams;
 
+import org.apache.kafka.coordinator.group.Utils;
 import org.apache.kafka.coordinator.group.api.streams.assignor.AssignmentConfigs;
 import org.apache.kafka.coordinator.group.api.streams.assignor.GroupSpec;
 import org.apache.kafka.coordinator.group.streams.assignor.GroupSpecImpl;
 import org.apache.kafka.coordinator.group.streams.assignor.MemberMetadataAndStateImpl;
 
-import java.util.HashMap;
 import java.util.Map;
 import java.util.Objects;
 
@@ -130,7 +130,7 @@ public class GroupSpecBuilder {
      * @return The {@link GroupSpec} describing the members and their existing assignments.
      */
     public GroupSpec build() {
-        Map<String, MemberMetadataAndStateImpl> memberMetadataMap = new HashMap<>();
+        Map<String, MemberMetadataAndStateImpl> memberMetadataMap = Utils.newHashMap(members.size());
 
         // Prepare the member metadata for all members.
         members.forEach((memberId, member) -> memberMetadataMap.put(memberId, createMemberMetadataAndState(
