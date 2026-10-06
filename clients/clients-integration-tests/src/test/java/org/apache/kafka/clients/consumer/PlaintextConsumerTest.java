@@ -449,20 +449,20 @@ public class PlaintextConsumerTest {
     }
 
     @ClusterTest
-    public void testClassicConsumerPartitionsFor() throws Exception {
+    public void testClassicConsumerPartitionsFor() {
         testPartitionsFor(Map.of(
             GROUP_PROTOCOL_CONFIG, GroupProtocol.CLASSIC.name().toLowerCase(Locale.ROOT)
         ));
     }
 
     @ClusterTest
-    public void testAsyncConsumerPartitionsFor() throws Exception {
+    public void testAsyncConsumerPartitionsFor() {
         testPartitionsFor(Map.of(
             GROUP_PROTOCOL_CONFIG, GroupProtocol.CONSUMER.name().toLowerCase(Locale.ROOT)
         ));
     }
 
-    private void testPartitionsFor(Map<String, Object> consumerConfig) throws Exception {
+    private void testPartitionsFor(Map<String, Object> consumerConfig) {
         var numParts = 2;
         cluster.createTopic(TOPIC, 2, (short) BROKER_COUNT);
         cluster.createTopic("part-test", numParts, (short) 1);
@@ -1252,20 +1252,20 @@ public class PlaintextConsumerTest {
     }
     
     @ClusterTest
-    public void testClassicConsumerSeekThrowsIllegalStateIfPartitionsNotAssigned() throws Exception {
+    public void testClassicConsumerSeekThrowsIllegalStateIfPartitionsNotAssigned() {
         testSeekThrowsIllegalStateIfPartitionsNotAssigned(Map.of(
             GROUP_PROTOCOL_CONFIG, GroupProtocol.CLASSIC.name().toLowerCase(Locale.ROOT)
         ));
     }
 
     @ClusterTest
-    public void testAsyncConsumerSeekThrowsIllegalStateIfPartitionsNotAssigned() throws Exception {
+    public void testAsyncConsumerSeekThrowsIllegalStateIfPartitionsNotAssigned() {
         testSeekThrowsIllegalStateIfPartitionsNotAssigned(Map.of(
             GROUP_PROTOCOL_CONFIG, GroupProtocol.CONSUMER.name().toLowerCase(Locale.ROOT)
         ));
     }
 
-    private void testSeekThrowsIllegalStateIfPartitionsNotAssigned(Map<String, Object> consumerConfig) throws Exception {
+    private void testSeekThrowsIllegalStateIfPartitionsNotAssigned(Map<String, Object> consumerConfig) {
         cluster.createTopic(TOPIC, 2, (short) BROKER_COUNT);
         try (var consumer = cluster.consumer(consumerConfig)) {
             var e = assertThrows(IllegalStateException.class, () -> consumer.seekToEnd(List.of(TP)));
@@ -1351,7 +1351,7 @@ public class PlaintextConsumerTest {
     }
 
     @ClusterTest
-    public void testClassicConsumerNullGroupIdNotSupportedIfCommitting() throws Exception {
+    public void testClassicConsumerNullGroupIdNotSupportedIfCommitting() {
         testNullGroupIdNotSupportedIfCommitting(Map.of(
             GROUP_PROTOCOL_CONFIG, GroupProtocol.CLASSIC.name().toLowerCase(Locale.ROOT),
             KEY_DESERIALIZER_CLASS_CONFIG, ByteArrayDeserializer.class.getName(),
@@ -1363,7 +1363,7 @@ public class PlaintextConsumerTest {
     }
 
     @ClusterTest
-    public void testAsyncConsumerNullGroupIdNotSupportedIfCommitting() throws Exception {
+    public void testAsyncConsumerNullGroupIdNotSupportedIfCommitting() {
         testNullGroupIdNotSupportedIfCommitting(Map.of(
             GROUP_PROTOCOL_CONFIG, GroupProtocol.CONSUMER.name().toLowerCase(Locale.ROOT),
             KEY_DESERIALIZER_CLASS_CONFIG, ByteArrayDeserializer.class.getName(),
@@ -1374,7 +1374,7 @@ public class PlaintextConsumerTest {
         ));
     }
 
-    private void testNullGroupIdNotSupportedIfCommitting(Map<String, Object> consumerConfig) throws Exception {
+    private void testNullGroupIdNotSupportedIfCommitting(Map<String, Object> consumerConfig) {
         cluster.createTopic(TOPIC, 2, (short) BROKER_COUNT);
         try (var consumer = new KafkaConsumer<>(consumerConfig)) {
             consumer.assign(List.of(TP));
@@ -1482,20 +1482,20 @@ public class PlaintextConsumerTest {
     }
 
     @ClusterTest
-    public void testClassicConsumerFetchOffsetsForTime() throws Exception {
+    public void testClassicConsumerFetchOffsetsForTime() {
         testFetchOffsetsForTime(Map.of(
             GROUP_PROTOCOL_CONFIG, GroupProtocol.CLASSIC.name().toLowerCase(Locale.ROOT)
         ));
     }
 
     @ClusterTest
-    public void testAsyncConsumerFetchOffsetsForTime() throws Exception {
+    public void testAsyncConsumerFetchOffsetsForTime() {
         testFetchOffsetsForTime(Map.of(
             GROUP_PROTOCOL_CONFIG, GroupProtocol.CONSUMER.name().toLowerCase(Locale.ROOT)
         ));
     }
 
-    private void testFetchOffsetsForTime(Map<String, Object> consumerConfig) throws Exception {
+    private void testFetchOffsetsForTime(Map<String, Object> consumerConfig) {
         var numPartitions = 2;
         var tp2 = new TopicPartition(TOPIC, 1);
         cluster.createTopic(TOPIC, 2, (short) BROKER_COUNT);
@@ -1615,20 +1615,20 @@ public class PlaintextConsumerTest {
     }
 
     @ClusterTest
-    public void testClassicConsumerOffsetRelatedWhenTimeoutZero() throws Exception {
+    public void testClassicConsumerOffsetRelatedWhenTimeoutZero() {
         testOffsetRelatedWhenTimeoutZero(Map.of(
             GROUP_PROTOCOL_CONFIG, GroupProtocol.CLASSIC.name().toLowerCase(Locale.ROOT)
         ));
     }
 
     @ClusterTest
-    public void testAsyncConsumerOffsetRelatedWhenTimeoutZero() throws Exception {
+    public void testAsyncConsumerOffsetRelatedWhenTimeoutZero() {
         testOffsetRelatedWhenTimeoutZero(Map.of(
             GROUP_PROTOCOL_CONFIG, GroupProtocol.CONSUMER.name().toLowerCase(Locale.ROOT)
         ));
     }
 
-    private void testOffsetRelatedWhenTimeoutZero(Map<String, Object> consumerConfig) throws Exception {
+    private void testOffsetRelatedWhenTimeoutZero(Map<String, Object> consumerConfig) {
         cluster.createTopic(TOPIC, 2, (short) BROKER_COUNT);
         try (var consumer = cluster.consumer(consumerConfig)) {
             var result1 = consumer.beginningOffsets(List.of(TP), Duration.ZERO);

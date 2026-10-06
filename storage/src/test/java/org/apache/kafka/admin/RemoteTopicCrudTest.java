@@ -407,7 +407,7 @@ class RemoteTopicCrudTest {
     }
 
     @ClusterTest
-    void testUpdateTopicConfigWithInheritedLocalRetentionTime() throws Exception {
+    void testUpdateTopicConfigWithInheritedLocalRetentionTime() {
         try (var admin = cluster.admin()) {
             var topicConfig = Map.of(
                 TopicConfig.REMOTE_LOG_STORAGE_ENABLE_CONFIG, "true"
@@ -428,7 +428,7 @@ class RemoteTopicCrudTest {
     }
 
     @ClusterTest
-    void testUpdateTopicConfigWithInheritedLocalRetentionSize() throws Exception {
+    void testUpdateTopicConfigWithInheritedLocalRetentionSize() {
         try (var admin = cluster.admin()) {
             var topicConfig = Map.of(
                 TopicConfig.REMOTE_LOG_STORAGE_ENABLE_CONFIG, "true"
@@ -449,7 +449,7 @@ class RemoteTopicCrudTest {
     }
 
     @ClusterTest
-    void testUpdateTopicConfigWithDisablingRemoteStorage() throws Exception {
+    void testUpdateTopicConfigWithDisablingRemoteStorage() {
         try (var admin = cluster.admin()) {
             var topicConfig = Map.of(
                 TopicConfig.REMOTE_LOG_STORAGE_ENABLE_CONFIG, "true"
