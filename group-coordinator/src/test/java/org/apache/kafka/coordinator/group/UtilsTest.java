@@ -43,6 +43,7 @@ import static org.apache.kafka.coordinator.group.AssignmentTestUtil.mkAssignment
 import static org.apache.kafka.coordinator.group.AssignmentTestUtil.mkTopicAssignmentWithEpochs;
 import static org.junit.jupiter.api.Assertions.assertEquals;
 import static org.junit.jupiter.api.Assertions.assertNotEquals;
+import static org.junit.jupiter.api.Assertions.assertTrue;
 
 public class UtilsTest {
     private static final Logger LOG = LoggerFactory.getLogger(UtilsTest.class);
@@ -325,6 +326,29 @@ public class UtilsTest {
                 .filter(msg -> msg.contains("[GroupId " + GROUP_ID + "] Size of assignment epochs 1 is not equal to partitions 3 for topic "
                     + FOO_TOPIC_ID))
                 .count());
+        }
+    }
+
+    @Test
+    public void testCapacity() {
+        assertEquals(0, Utils.capacity(0));
+        assertEquals(2, Utils.capacity(1));
+        assertEquals(3, Utils.capacity(2));
+        assertEquals(4, Utils.capacity(3));
+        assertEquals(15, Utils.capacity(11));
+        assertEquals(16, Utils.capacity(12));
+        assertEquals(18, Utils.capacity(13));
+    }
+
+    @Test
+    public void testCapacityIsTheSmallestThatHoldsTheEntriesWithoutResizing() {
+        // A HashMap resizes when its size exceeds its capacity times the load factor of 0.75.
+        for (int numEntries = 1; numEntries <= 100_000; numEntries++) {
+            int capacity = Utils.capacity(numEntries);
+            assertTrue(capacity * 0.75 >= numEntries,
+                "Capacity " + capacity + " is too small for " + numEntries);
+            assertTrue((capacity - 1) * 0.75 < numEntries,
+                "Capacity " + capacity + " is too large for " + numEntries);
         }
     }
 }

@@ -19,6 +19,7 @@ package org.apache.kafka.coordinator.group.streams;
 import org.apache.kafka.common.utils.Time;
 import org.apache.kafka.coordinator.common.runtime.CoordinatorMetadataImage;
 import org.apache.kafka.coordinator.group.TargetAssignmentMetadata;
+import org.apache.kafka.coordinator.group.Utils;
 import org.apache.kafka.coordinator.group.api.streams.assignor.GroupAssignment;
 import org.apache.kafka.coordinator.group.api.streams.assignor.GroupSpec;
 import org.apache.kafka.coordinator.group.api.streams.assignor.MemberAssignment;
@@ -26,7 +27,6 @@ import org.apache.kafka.coordinator.group.api.streams.assignor.TaskAssignor;
 import org.apache.kafka.coordinator.group.api.streams.assignor.TaskAssignorException;
 import org.apache.kafka.coordinator.group.streams.topics.ConfiguredTopology;
 
-import java.util.HashMap;
 import java.util.HashSet;
 import java.util.Map;
 import java.util.Objects;
@@ -159,7 +159,7 @@ public class TargetAssignmentBuilder {
                 groupSpec.memberIds().stream().collect(Collectors.toMap(x -> x, x -> new MemberAssignment(Map.of(), Map.of()))));
         }
 
-        Map<String, org.apache.kafka.coordinator.group.streams.TasksTuple> newTargetAssignment = new HashMap<>();
+        Map<String, org.apache.kafka.coordinator.group.streams.TasksTuple> newTargetAssignment = Utils.newHashMap(groupSpec.memberIds().size());
         groupSpec.memberIds().forEach(memberId -> {
             newTargetAssignment.put(memberId, newMemberAssignment(newGroupAssignment, memberId));
         });
@@ -190,7 +190,7 @@ public class TargetAssignmentBuilder {
     }
 
     private static Map<String, Set<Integer>> copyTasks(Map<String, Set<Integer>> tasks) {
-        Map<String, Set<Integer>> copy = new HashMap<>();
+        Map<String, Set<Integer>> copy = Utils.newHashMap(tasks.size());
         tasks.forEach((subtopologyId, partitions) -> copy.put(subtopologyId, new HashSet<>(partitions)));
         return copy;
     }
