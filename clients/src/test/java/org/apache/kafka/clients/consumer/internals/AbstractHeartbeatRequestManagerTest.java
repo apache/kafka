@@ -348,7 +348,7 @@ abstract class AbstractHeartbeatRequestManagerTest<R extends AbstractResponse> {
     @ValueSource(booleans = {true, false})
     public void testMaximumTimeToWaitWhenHeartbeatShouldBeSkipped(final boolean isUnsubscribed) {
         when(membershipManager.state()).thenReturn(isUnsubscribed ? MemberState.UNSUBSCRIBED : MemberState.JOINING);
-        // The implementation of shouldHeartbeatNow return true when MemberState is ACKNOWLEDGING, LEAVING, and JOINING.
+        // The implementation of shouldHeartbeatNow returns true when MemberState is ACKNOWLEDGING, LEAVING, and JOINING.
         when(membershipManager.shouldHeartbeatNow()).thenReturn(!isUnsubscribed);
 
         long result = heartbeatRequestManager.maximumTimeToWait(time.milliseconds());
