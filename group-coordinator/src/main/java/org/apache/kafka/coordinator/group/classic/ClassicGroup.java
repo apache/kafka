@@ -847,7 +847,7 @@ public class ClassicGroup implements Group {
         }
 
         if (generationId >= 0 || !memberId.isEmpty() || groupInstanceId != null) {
-            validateMember(memberId, groupInstanceId, isTransactional ? "offset-commit" : "txn-offset-commit");
+            validateMember(memberId, groupInstanceId, isTransactional ? "txn-offset-commit" : "offset-commit");
 
             if (generationId != this.generationId) {
                 throw Errors.ILLEGAL_GENERATION.exception();
@@ -1228,9 +1228,7 @@ public class ClassicGroup implements Group {
         ClassicGroupMember member,
         JoinGroupResponseData response
     ) {
-        if (member.isAwaitingJoin()) {
-            member.awaitingJoinFuture().complete(response);
-            member.setAwaitingJoinFuture(null);
+        if (member.completeJoinFuture(response)) {
             numMembersAwaitingJoinResponse--;
             return true;
         }
@@ -1264,12 +1262,7 @@ public class ClassicGroup implements Group {
         ClassicGroupMember member,
         SyncGroupResponseData response
     ) {
-        if (member.isAwaitingSync()) {
-            member.awaitingSyncFuture().complete(response);
-            member.setAwaitingSyncFuture(null);
-            return true;
-        }
-        return false;
+        return member.completeSyncFuture(response);
     }
 
     /**

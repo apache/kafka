@@ -56,7 +56,6 @@ import org.junit.jupiter.params.provider.Arguments;
 import org.junit.jupiter.params.provider.MethodSource;
 
 import java.util.ArrayList;
-import java.util.Arrays;
 import java.util.Collections;
 import java.util.List;
 import java.util.Properties;
@@ -64,10 +63,8 @@ import java.util.stream.Stream;
 
 import static java.time.Duration.ofMillis;
 import static java.util.Arrays.asList;
-import static org.hamcrest.CoreMatchers.equalTo;
-import static org.hamcrest.MatcherAssert.assertThat;
-import static org.hamcrest.core.IsInstanceOf.instanceOf;
 import static org.junit.jupiter.api.Assertions.assertEquals;
+import static org.junit.jupiter.api.Assertions.assertInstanceOf;
 import static org.junit.jupiter.api.Assertions.assertThrows;
 
 public class SessionWindowedKStreamImplTest {
@@ -245,18 +242,18 @@ public class SessionWindowedKStreamImplTest {
             final SessionStore<String, Long> store = driver.getSessionStore("count-store");
             final List<KeyValue<Windowed<String>, Long>> data = unwrapAggregations(store.fetch("1", "2"));
             if (!emitFinal) {
-                assertThat(
-                        data,
-                        equalTo(Arrays.asList(
+                assertEquals(
+                        List.of(
                                 KeyValue.pair(new Windowed<>("1", new SessionWindow(10, 15)), 2L),
                                 KeyValue.pair(new Windowed<>("1", new SessionWindow(600, 600)), 1L),
-                                KeyValue.pair(new Windowed<>("2", new SessionWindow(599, 600)), 2L))));
+                                KeyValue.pair(new Windowed<>("2", new SessionWindow(599, 600)), 2L)),
+                        data);
             } else {
-                assertThat(
-                        data,
-                        equalTo(Arrays.asList(
+                assertEquals(
+                        List.of(
                                 KeyValue.pair(new Windowed<>("1", new SessionWindow(600, 600)), 1L),
-                                KeyValue.pair(new Windowed<>("2", new SessionWindow(599, 600)), 2L))));
+                                KeyValue.pair(new Windowed<>("2", new SessionWindow(599, 600)), 2L)),
+                        data);
 
             }
         }
@@ -274,18 +271,18 @@ public class SessionWindowedKStreamImplTest {
             final List<KeyValue<Windowed<String>, String>> data = unwrapAggregations(sessionStore.fetch("1", "2"));
 
             if (!emitFinal) {
-                assertThat(
-                        data,
-                        equalTo(Arrays.asList(
+                assertEquals(
+                        List.of(
                                 KeyValue.pair(new Windowed<>("1", new SessionWindow(10, 15)), "1+2"),
                                 KeyValue.pair(new Windowed<>("1", new SessionWindow(600, 600)), "3"),
-                                KeyValue.pair(new Windowed<>("2", new SessionWindow(599, 600)), "1+2"))));
+                                KeyValue.pair(new Windowed<>("2", new SessionWindow(599, 600)), "1+2")),
+                        data);
             } else {
-                assertThat(
-                        data,
-                        equalTo(Arrays.asList(
+                assertEquals(
+                        List.of(
                                 KeyValue.pair(new Windowed<>("1", new SessionWindow(600, 600)), "3"),
-                                KeyValue.pair(new Windowed<>("2", new SessionWindow(599, 600)), "1+2"))));
+                                KeyValue.pair(new Windowed<>("2", new SessionWindow(599, 600)), "1+2")),
+                        data);
 
             }
         }
@@ -306,18 +303,18 @@ public class SessionWindowedKStreamImplTest {
             final SessionStore<String, String> sessionStore = driver.getSessionStore("aggregated");
             final List<KeyValue<Windowed<String>, String>> data = unwrapAggregations(sessionStore.fetch("1", "2"));
             if (!emitFinal) {
-                assertThat(
-                        data,
-                        equalTo(Arrays.asList(
+                assertEquals(
+                        List.of(
                                 KeyValue.pair(new Windowed<>("1", new SessionWindow(10, 15)), "0+0+1+2"),
                                 KeyValue.pair(new Windowed<>("1", new SessionWindow(600, 600)), "0+3"),
-                                KeyValue.pair(new Windowed<>("2", new SessionWindow(599, 600)), "0+0+1+2"))));
+                                KeyValue.pair(new Windowed<>("2", new SessionWindow(599, 600)), "0+0+1+2")),
+                        data);
             } else {
-                assertThat(
-                        data,
-                        equalTo(Arrays.asList(
+                assertEquals(
+                        List.of(
                                 KeyValue.pair(new Windowed<>("1", new SessionWindow(600, 600)), "0+3"),
-                                KeyValue.pair(new Windowed<>("2", new SessionWindow(599, 600)), "0+0+1+2"))));
+                                KeyValue.pair(new Windowed<>("2", new SessionWindow(599, 600)), "0+0+1+2")),
+                        data);
 
             }
         }
@@ -429,11 +426,11 @@ public class SessionWindowedKStreamImplTest {
         try (final TopologyTestDriver driver = new TopologyTestDriverBuilder(builder.build()).withConfig(props).build()) {
             final StateStore store = driver.getAllStateStores().get("aggregated");
             final WrappedStateStore<?, ?, ?> changeLogging = (WrappedStateStore<?, ?, ?>) ((WrappedStateStore<?, ?, ?>) store).wrapped();
-            assertThat(store, instanceOf(MeteredSessionStore.class));
+            assertInstanceOf(MeteredSessionStore.class, store);
             if (withHeaders) {
-                assertThat(changeLogging, instanceOf(ChangeLoggingSessionBytesStoreWithHeaders.class));
+                assertInstanceOf(ChangeLoggingSessionBytesStoreWithHeaders.class, changeLogging);
             } else {
-                assertThat(changeLogging, instanceOf(ChangeLoggingSessionBytesStore.class));
+                assertInstanceOf(ChangeLoggingSessionBytesStore.class, changeLogging);
             }
         }
     }

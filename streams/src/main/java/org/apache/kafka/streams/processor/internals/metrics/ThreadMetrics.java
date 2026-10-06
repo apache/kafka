@@ -21,7 +21,6 @@ import org.apache.kafka.common.metrics.Sensor;
 import org.apache.kafka.common.metrics.Sensor.RecordingLevel;
 import org.apache.kafka.streams.processor.internals.StreamThreadTotalBlockedTime;
 
-import java.util.Collections;
 import java.util.Map;
 
 import static org.apache.kafka.streams.processor.internals.metrics.StreamsMetricsImpl.LATENCY_SUFFIX;
@@ -311,7 +310,7 @@ public class ThreadMetrics {
             THREAD_STATE,
             THREAD_STATE_DESCRIPTION,
             threadId,
-            Collections.singletonMap(PROCESS_ID_TAG, processId),
+            Map.of(PROCESS_ID_TAG, processId),
             threadStateProvider
         );
     }

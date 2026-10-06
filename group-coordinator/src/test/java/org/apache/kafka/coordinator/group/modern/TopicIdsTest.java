@@ -28,8 +28,13 @@ import java.util.Set;
 
 import static org.junit.jupiter.api.Assertions.assertEquals;
 import static org.junit.jupiter.api.Assertions.assertFalse;
+import static org.junit.jupiter.api.Assertions.assertNull;
+import static org.junit.jupiter.api.Assertions.assertSame;
 import static org.junit.jupiter.api.Assertions.assertThrows;
 import static org.junit.jupiter.api.Assertions.assertTrue;
+import static org.mockito.Mockito.spy;
+import static org.mockito.Mockito.times;
+import static org.mockito.Mockito.verify;
 
 public class TopicIdsTest {
 
@@ -169,6 +174,55 @@ public class TopicIdsTest {
     }
 
     @Test
+    public void testToArray() {
+        var fooUuid = Uuid.randomUuid();
+        var barUuid = Uuid.randomUuid();
+        var bazUuid = Uuid.randomUuid();
+        var metadataImage = new KRaftCoordinatorMetadataImage(
+            new MetadataImageBuilder()
+                .addTopic(fooUuid, "foo", 3)
+                .addTopic(barUuid, "bar", 3)
+                .addTopic(bazUuid, "baz", 3)
+                .build()
+        );
+
+        var topicIds = new TopicIds(Set.of("foo", "bar", "baz"), metadataImage);
+
+        assertEquals(Set.of(fooUuid, barUuid, bazUuid), Set.of(topicIds.toArray()));
+        assertEquals(Set.of(fooUuid, barUuid, bazUuid), Set.of(topicIds.toArray(new Uuid[0])));
+
+        // An array which is large enough is filled in place, and the element after the last
+        // one is set to null.
+        var large = new Uuid[4];
+        assertSame(large, topicIds.toArray(large));
+        assertEquals(Set.of(fooUuid, barUuid, bazUuid), Set.of(large[0], large[1], large[2]));
+        assertNull(large[3]);
+    }
+
+    @Test
+    public void testToArrayOneTopicConversionFails() {
+        // topic 'qux' only exists as topic id.
+        // topic 'baz' only exists as topic name.
+        var fooUuid = Uuid.randomUuid();
+        var barUuid = Uuid.randomUuid();
+        var quxUuid = Uuid.randomUuid();
+        var metadataImage = new KRaftCoordinatorMetadataImage(
+            new MetadataImageBuilder()
+                .addTopic(fooUuid, "foo", 3)
+                .addTopic(barUuid, "bar", 3)
+                .addTopic(quxUuid, "qux", 3)
+                .build()
+        );
+
+        var topicIds = new TopicIds(Set.of("foo", "bar", "baz"), metadataImage);
+
+        // The arrays hold the ids of the topics which exist, so fewer than the size.
+        assertEquals(3, topicIds.size());
+        assertEquals(Set.of(fooUuid, barUuid), Set.of(topicIds.toArray()));
+        assertEquals(Set.of(fooUuid, barUuid), Set.of(topicIds.toArray(new Uuid[0])));
+    }
+
+    @Test
     public void testEquals() {
         Uuid topicId = Uuid.randomUuid();
         KRaftCoordinatorMetadataImage metadataImage = new KRaftCoordinatorMetadataImage(new MetadataImageBuilder()
@@ -179,5 +233,58 @@ public class TopicIdsTest {
         TopicIds topicIds2 = new TopicIds(Set.of("topic"), metadataImage);
 
         assertEquals(topicIds1, topicIds2);
+    }
+
+    @Test
+    public void testCachedTopicResolverId() {
+        var fooUuid = Uuid.randomUuid();
+        var metadataImage = spy(new KRaftCoordinatorMetadataImage(
+            new MetadataImageBuilder()
+                .addTopic(fooUuid, "foo", 3)
+                .build()
+        ));
+        var resolver = new TopicIds.CachedTopicResolver(metadataImage);
+
+        // A known topic is looked up in the image once, then served from the cache.
+        assertEquals(fooUuid, resolver.id("foo"));
+        assertEquals(fooUuid, resolver.id("foo"));
+        verify(metadataImage, times(1)).topicId("foo");
+
+        // An unknown topic is not cached, so it is looked up in the image every time.
+        assertNull(resolver.id("bar"));
+        assertNull(resolver.id("bar"));
+        verify(metadataImage, times(2)).topicId("bar");
+
+        // A cleared cache looks up the known topic in the image again.
+        resolver.clear();
+        assertEquals(fooUuid, resolver.id("foo"));
+        verify(metadataImage, times(2)).topicId("foo");
+    }
+
+    @Test
+    public void testCachedTopicResolverName() {
+        var fooUuid = Uuid.randomUuid();
+        var barUuid = Uuid.randomUuid();
+        var metadataImage = spy(new KRaftCoordinatorMetadataImage(
+            new MetadataImageBuilder()
+                .addTopic(fooUuid, "foo", 3)
+                .build()
+        ));
+        var resolver = new TopicIds.CachedTopicResolver(metadataImage);
+
+        // A known topic is looked up in the image once, then served from the cache.
+        assertEquals("foo", resolver.name(fooUuid));
+        assertEquals("foo", resolver.name(fooUuid));
+        verify(metadataImage, times(1)).topicName(fooUuid);
+
+        // An unknown topic is not cached, so it is looked up in the image every time.
+        assertNull(resolver.name(barUuid));
+        assertNull(resolver.name(barUuid));
+        verify(metadataImage, times(2)).topicName(barUuid);
+
+        // A cleared cache looks up the known topic in the image again.
+        resolver.clear();
+        assertEquals("foo", resolver.name(fooUuid));
+        verify(metadataImage, times(2)).topicName(fooUuid);
     }
 }

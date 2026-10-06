@@ -155,7 +155,7 @@ public class InMemoryWindowStore implements WindowStore<Bytes, byte[]>, WithRete
                         }
                         removeExpiredSegments();
                         if (expiredRecords > 0) {
-                            expiredRecordSensor.record(expiredRecords, internalProcessorContext.currentSystemTimeMs());
+                            expiredRecordSensor.record(expiredRecords);
                             LOG.warn("Skipping {} records for expired segments.", expiredRecords);
                         }
                     }
@@ -195,7 +195,7 @@ public class InMemoryWindowStore implements WindowStore<Bytes, byte[]>, WithRete
 
         synchronized (position) {
             if (windowStartTimestamp <= observedStreamTime - retentionPeriod) {
-                expiredRecordSensor.record(1.0d, internalProcessorContext.currentSystemTimeMs());
+                expiredRecordSensor.record();
                 LOG.warn("Skipping record for expired segment.");
             } else if (transactionBuffer != null) {
                 if (value != null) {
@@ -488,6 +488,10 @@ public class InMemoryWindowStore implements WindowStore<Bytes, byte[]>, WithRete
                                     final PositionBound positionBound,
                                     final QueryConfig config) {
 
+        // We enter handleBasicQueries (which takes the store monitor) while holding the
+        // position lock. This is safe only because this store's writers take only the
+        // position lock, never the store monitor; if a synchronized method is ever added
+        // here, take the store monitor before the position lock instead (KAFKA-19629).
         synchronized (position) {
             // Mirror RocksDBStore#query: under READ_UNCOMMITTED, expose the writes staged in the
             // transaction buffer since the last commit by merging the buffer's pending position

@@ -511,11 +511,18 @@ public class RocksDBStore implements KeyValueStore<Bytes, byte[]>, BatchWritingS
     }
 
     @Override
-    public void putAll(final List<KeyValue<Bytes, byte[]>> entries) {
+    public synchronized void putAll(final List<KeyValue<Bytes, byte[]>> entries) {
+        Objects.requireNonNull(entries, "entries cannot be null");
+        // Validate up front so a null key rejects the whole batch. An accessor may apply the entries
+        // one at a time, and failing part-way through would otherwise leave the batch half-applied.
+        for (final KeyValue<Bytes, byte[]> entry : entries) {
+            Objects.requireNonNull(entry, "entry cannot be null");
+            Objects.requireNonNull(entry.key, "key cannot be null");
+        }
+        validateStoreOpen();
         synchronized (position) {
-            try (final WriteBatch batch = new WriteBatch()) {
-                cfAccessor.prepareBatch(entries, batch);
-                write(batch);
+            try {
+                dbAccessor.putAll(cfAccessor, entries);
                 dbAccessor.updatePosition(position, context);
             } catch (final RocksDBException e) {
                 throw new ProcessorStateException("Error while batch writing to store " + name, e);
@@ -529,22 +536,24 @@ public class RocksDBStore implements KeyValueStore<Bytes, byte[]>, BatchWritingS
         final PositionBound positionBound,
         final QueryConfig config) {
 
+        // Snapshot under the position lock only: holding it into handleBasicQueries
+        // would invert its store-then-position order (KAFKA-19629).
+        final Position queryPosition;
         synchronized (position) {
-            final Position queryPosition;
             if (config.getIsolationLevel() == IsolationLevel.READ_COMMITTED) {
                 queryPosition = position;
             } else {
                 queryPosition = position.copy().merge(dbAccessor.uncommittedPositionDeltas());
             }
-            return StoreQueryUtils.handleBasicQueries(
-                query,
-                positionBound,
-                config,
-                this,
-                queryPosition,
-                context
-            );
         }
+        return StoreQueryUtils.handleBasicQueries(
+            query,
+            positionBound,
+            config,
+            this,
+            queryPosition,
+            context
+        );
     }
 
     @Override
@@ -1074,6 +1083,14 @@ public class RocksDBStore implements KeyValueStore<Bytes, byte[]>, BatchWritingS
         void reset();
         void close();
 
+        /**
+         * Applies a batch of writes through {@code cfAccessor}, which owns the column-family layout.
+         * Deliberately has no default. Each accessor must state how it makes the batch atomic — a single
+         * batch write, or staging it.
+         */
+        void putAll(final ColumnFamilyAccessor cfAccessor,
+                    final List<KeyValue<Bytes, byte[]>> entries) throws RocksDBException;
+
         default DBAccessor readOnly(final IsolationLevel isolationLevel) {
             Objects.requireNonNull(isolationLevel, "isolationLevel cannot be null");
             return this;
@@ -1167,6 +1184,16 @@ public class RocksDBStore implements KeyValueStore<Bytes, byte[]>, BatchWritingS
         }
 
         @Override
+        public void putAll(final ColumnFamilyAccessor cfAccessor,
+                           final List<KeyValue<Bytes, byte[]>> entries) throws RocksDBException {
+            // A single atomic batch write, so a crash part-way through leaves nothing behind.
+            try (final WriteBatch batch = new WriteBatch()) {
+                cfAccessor.prepareBatch(entries, batch);
+                db.write(wOptions, batch);
+            }
+        }
+
+        @Override
         public long approximateNumEntries(final ColumnFamilyHandle columnFamily) throws RocksDBException {
             return db.getLongProperty(columnFamily, "rocksdb.estimate-num-keys");
         }
@@ -1249,6 +1276,23 @@ public class RocksDBStore implements KeyValueStore<Bytes, byte[]>, BatchWritingS
         @Override
         public void deleteRange(final ColumnFamilyHandle columnFamily, final byte[] from, final byte[] to) throws RocksDBException {
             buffer.stageDeleteRange(columnFamily, Bytes.wrap(from), Bytes.wrap(to));
+        }
+
+        @Override
+        public void putAll(final ColumnFamilyAccessor cfAccessor,
+                           final List<KeyValue<Bytes, byte[]>> entries) {
+            // Batch writes must be staged like single-key puts. If written directly to RocksDB
+            // (what the direct accessor does), the uncommitted data would sit in the store rather
+            // than the buffer so would not get removed on error. Staging under one write-lock
+            // acquisition also hides the batch from a concurrent IQ reader until complete,
+            // matching the atomicity of the direct accessor's single db.write(batch). Reusing
+            // cfAccessor.put() keeps the column-family layout — including the dual-CF upgrade
+            // path — identical to a single-key put.
+            buffer.stageAll(() -> {
+                for (final KeyValue<Bytes, byte[]> entry : entries) {
+                    cfAccessor.put(this, entry.key.get(), entry.value);
+                }
+            });
         }
 
         @Override

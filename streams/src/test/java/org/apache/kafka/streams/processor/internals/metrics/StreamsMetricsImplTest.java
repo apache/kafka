@@ -61,15 +61,8 @@ import static org.apache.kafka.streams.processor.internals.metrics.StreamsMetric
 import static org.apache.kafka.streams.processor.internals.metrics.StreamsMetricsImpl.TOTAL_SUFFIX;
 import static org.apache.kafka.streams.processor.internals.metrics.StreamsMetricsImpl.addAvgAndMaxLatencyToSensor;
 import static org.apache.kafka.streams.processor.internals.metrics.StreamsMetricsImpl.addInvocationRateAndCountToSensor;
-import static org.hamcrest.CoreMatchers.equalToObject;
-import static org.hamcrest.CoreMatchers.is;
-import static org.hamcrest.CoreMatchers.not;
-import static org.hamcrest.CoreMatchers.notNullValue;
-import static org.hamcrest.CoreMatchers.nullValue;
-import static org.hamcrest.MatcherAssert.assertThat;
-import static org.hamcrest.Matchers.equalTo;
-import static org.hamcrest.Matchers.greaterThan;
 import static org.junit.jupiter.api.Assertions.assertEquals;
+import static org.junit.jupiter.api.Assertions.assertNotEquals;
 import static org.junit.jupiter.api.Assertions.assertNotNull;
 import static org.junit.jupiter.api.Assertions.assertNull;
 import static org.junit.jupiter.api.Assertions.assertThrows;
@@ -254,7 +247,7 @@ public class StreamsMetricsImplTest {
 
         final Sensor actualSensor = streamsMetrics.threadLevelSensor(THREAD_ID1, SENSOR_NAME_1, recordingLevel);
 
-        assertThat(actualSensor, is(equalToObject(sensor)));
+        assertEquals(sensor, actualSensor);
     }
 
     @Test
@@ -266,7 +259,7 @@ public class StreamsMetricsImplTest {
 
         final Sensor actualSensor = streamsMetrics.threadLevelSensor(THREAD_ID1, SENSOR_NAME_1, recordingLevel);
 
-        assertThat(actualSensor, is(equalToObject(sensor)));
+        assertEquals(sensor, actualSensor);
     }
 
     @Test
@@ -283,7 +276,7 @@ public class StreamsMetricsImplTest {
             recordingLevel
         );
 
-        assertThat(actualSensor, is(equalToObject(sensor)));
+        assertEquals(sensor, actualSensor);
     }
 
     @Test
@@ -300,7 +293,7 @@ public class StreamsMetricsImplTest {
             recordingLevel
         );
 
-        assertThat(actualSensor, is(equalToObject(sensor)));
+        assertEquals(sensor, actualSensor);
     }
 
     @Test
@@ -319,7 +312,7 @@ public class StreamsMetricsImplTest {
             recordingLevel
         );
 
-        assertThat(actualSensor, is(equalToObject(sensor)));
+        assertEquals(sensor, actualSensor);
     }
 
     @Test
@@ -338,7 +331,7 @@ public class StreamsMetricsImplTest {
             recordingLevel
         );
 
-        assertThat(actualSensor, is(equalToObject(sensor)));
+        assertEquals(sensor, actualSensor);
     }
 
     @Test
@@ -355,8 +348,8 @@ public class StreamsMetricsImplTest {
             recordingLevel
         );
 
-        assertThat(actualSensor, is(equalToObject(sensor)));
-        assertThat(sensorKeys.getAllValues().get(0), is(sensorKeys.getAllValues().get(1)));
+        assertEquals(sensor, actualSensor);
+        assertEquals(sensorKeys.getAllValues().get(1), sensorKeys.getAllValues().get(0));
     }
 
     @Test
@@ -373,7 +366,7 @@ public class StreamsMetricsImplTest {
             recordingLevel
         );
 
-        assertThat(actualSensor, is(equalToObject(sensor)));
+        assertEquals(sensor, actualSensor);
     }
 
     @Test
@@ -385,7 +378,7 @@ public class StreamsMetricsImplTest {
         streamsMetrics.storeLevelSensor(TASK_ID1, STORE_NAME1, SENSOR_NAME_1, INFO_RECORDING_LEVEL);
         streamsMetrics.storeLevelSensor(TASK_ID1, STORE_NAME1, SENSOR_NAME_2, INFO_RECORDING_LEVEL);
 
-        assertThat(sensorKeys.getAllValues().get(0), not(sensorKeys.getAllValues().get(1)));
+        assertNotEquals(sensorKeys.getAllValues().get(1), sensorKeys.getAllValues().get(0));
     }
 
     @Test
@@ -397,7 +390,7 @@ public class StreamsMetricsImplTest {
         streamsMetrics.storeLevelSensor(TASK_ID1, STORE_NAME1, SENSOR_NAME_1, INFO_RECORDING_LEVEL);
         streamsMetrics.storeLevelSensor(TASK_ID2, STORE_NAME1, SENSOR_NAME_1, INFO_RECORDING_LEVEL);
 
-        assertThat(sensorKeys.getAllValues().get(0), not(sensorKeys.getAllValues().get(1)));
+        assertNotEquals(sensorKeys.getAllValues().get(1), sensorKeys.getAllValues().get(0));
     }
 
     @Test
@@ -409,7 +402,7 @@ public class StreamsMetricsImplTest {
         streamsMetrics.storeLevelSensor(TASK_ID1, STORE_NAME1, SENSOR_NAME_1, INFO_RECORDING_LEVEL);
         streamsMetrics.storeLevelSensor(TASK_ID1, STORE_NAME2, SENSOR_NAME_1, INFO_RECORDING_LEVEL);
 
-        assertThat(sensorKeys.getAllValues().get(0), not(sensorKeys.getAllValues().get(1)));
+        assertNotEquals(sensorKeys.getAllValues().get(1), sensorKeys.getAllValues().get(0));
     }
 
     @Test
@@ -424,7 +417,7 @@ public class StreamsMetricsImplTest {
         otherThread.start();
         otherThread.join();
 
-        assertThat(sensorKeys.getAllValues().get(0), not(sensorKeys.getAllValues().get(1)));
+        assertNotEquals(sensorKeys.getAllValues().get(1), sensorKeys.getAllValues().get(0));
     }
 
     @Test
@@ -436,7 +429,7 @@ public class StreamsMetricsImplTest {
         streamsMetrics.storeLevelSensor(TASK_ID1, STORE_NAME1, SENSOR_NAME_1, INFO_RECORDING_LEVEL);
         streamsMetrics.storeLevelSensor(TASK_ID1, STORE_NAME1, SENSOR_NAME_1, INFO_RECORDING_LEVEL);
 
-        assertThat(sensorKeys.getAllValues().get(0), is(sensorKeys.getAllValues().get(1)));
+        assertEquals(sensorKeys.getAllValues().get(1), sensorKeys.getAllValues().get(0));
     }
 
     private ArgumentCaptor<String> setUpSensorKeyTests(final Metrics metrics) {
@@ -571,7 +564,7 @@ public class StreamsMetricsImplTest {
             recordingLevel
         );
 
-        assertThat(actualSensor, is(equalToObject(sensor)));
+        assertEquals(sensor, actualSensor);
     }
 
     @Test
@@ -589,7 +582,7 @@ public class StreamsMetricsImplTest {
             recordingLevel
         );
 
-        assertThat(actualSensor, is(equalToObject(sensor)));
+        assertEquals(sensor, actualSensor);
     }
 
     @Test
@@ -608,7 +601,7 @@ public class StreamsMetricsImplTest {
             recordingLevel
         );
 
-        assertThat(actualSensor, is(equalToObject(sensor)));
+        assertEquals(sensor, actualSensor);
     }
 
     @Test
@@ -626,7 +619,7 @@ public class StreamsMetricsImplTest {
             recordingLevel
         );
 
-        assertThat(actualSensor, is(equalToObject(sensor)));
+        assertEquals(sensor, actualSensor);
     }
 
     @Test
@@ -638,7 +631,7 @@ public class StreamsMetricsImplTest {
 
         final Sensor actualSensor = streamsMetrics.clientLevelSensor(SENSOR_NAME_1, recordingLevel);
 
-        assertThat(actualSensor, is(equalToObject(sensor)));
+        assertEquals(sensor, actualSensor);
     }
 
     @Test
@@ -650,7 +643,7 @@ public class StreamsMetricsImplTest {
 
         final Sensor actualSensor = streamsMetrics.clientLevelSensor(SENSOR_NAME_1, recordingLevel);
 
-        assertThat(actualSensor, is(equalToObject(sensor)));
+        assertEquals(sensor, actualSensor);
     }
 
     @Test
@@ -675,8 +668,8 @@ public class StreamsMetricsImplTest {
                 mkEntry("client-id", CLIENT_ID)
             )
         );
-        assertThat(metrics.metric(name).metricName().name(), equalTo(METRIC_NAME1));
-        assertThat(metrics.metric(name).metricValue(), equalTo(value));
+        assertEquals(METRIC_NAME1, metrics.metric(name).metricName().name());
+        assertEquals(value, metrics.metric(name).metricValue());
     }
 
     @Test
@@ -703,8 +696,8 @@ public class StreamsMetricsImplTest {
                 mkEntry("additional-tag", "additional-value")
             )
         );
-        assertThat(metrics.metric(name).metricName().name(), equalTo(METRIC_NAME1));
-        assertThat(metrics.metric(name).metricValue(), equalTo(value));
+        assertEquals(METRIC_NAME1, metrics.metric(name).metricName().name());
+        assertEquals(value, metrics.metric(name).metricValue());
     }
 
     @Test
@@ -729,8 +722,8 @@ public class StreamsMetricsImplTest {
                 mkEntry("client-id", CLIENT_ID)
             )
         );
-        assertThat(metrics.metric(name).metricName().name(), equalTo(METRIC_NAME1));
-        assertThat(metrics.metric(name).metricValue(), equalTo(value));
+        assertEquals(METRIC_NAME1, metrics.metric(name).metricName().name());
+        assertEquals(value, metrics.metric(name).metricValue());
     }
 
     @Test
@@ -757,14 +750,14 @@ public class StreamsMetricsImplTest {
                 mkEntry("additional-tag", "additional-value")
             )
         );
-        assertThat(metrics.metric(name).metricName().name(), equalTo(METRIC_NAME1));
-        assertThat(metrics.metric(name).metricValue(), equalTo(value));
+        assertEquals(METRIC_NAME1, metrics.metric(name).metricName().name());
+        assertEquals(value, metrics.metric(name).metricValue());
     }
 
     @Test
     public void shouldProvideCorrectStrings() {
-        assertThat(LATENCY_SUFFIX, is("-latency"));
-        assertThat(ROLLUP_VALUE, is("all"));
+        assertEquals("-latency", LATENCY_SUFFIX);
+        assertEquals("all", ROLLUP_VALUE);
     }
 
     private void setupRemoveSensorsTest(final Metrics metrics,
@@ -857,7 +850,7 @@ public class StreamsMetricsImplTest {
         addAvgAndMaxLatencyToSensor(sensor1, PROCESSOR_NODE_LEVEL_GROUP, nodeTags, operation);
         addInvocationRateAndCountToSensor(sensor1, PROCESSOR_NODE_LEVEL_GROUP, nodeTags, operation, "", "");
 
-        assertThat(registry.metrics().size(), greaterThan(numberOfTaskMetrics));
+        assertTrue(registry.metrics().size() > numberOfTaskMetrics);
 
         final int numberOfNodeMetrics = registry.metrics().size();
 
@@ -865,35 +858,35 @@ public class StreamsMetricsImplTest {
         addAvgAndMaxLatencyToSensor(child1, TOPIC_LEVEL_GROUP, topicTags, operation);
         addInvocationRateAndCountToSensor(child1, TOPIC_LEVEL_GROUP, topicTags, operation, "", "");
 
-        assertThat(registry.metrics().size(), greaterThan(numberOfNodeMetrics));
+        assertTrue(registry.metrics().size() > numberOfNodeMetrics);
 
         metrics.removeAllTopicLevelSensors(THREAD_ID1, taskName, processorNodeName, topicName);
 
-        assertThat(registry.metrics().size(), equalTo(numberOfNodeMetrics));
+        assertEquals(numberOfNodeMetrics, registry.metrics().size());
 
         metrics.removeAllNodeLevelSensors(THREAD_ID1, taskName, processorNodeName);
 
-        assertThat(registry.metrics().size(), equalTo(numberOfTaskMetrics));
+        assertEquals(numberOfTaskMetrics, registry.metrics().size());
 
         final Sensor parent2 = metrics.taskLevelSensor(THREAD_ID1, taskName, operation, RecordingLevel.DEBUG);
         addAvgAndMaxLatencyToSensor(parent2, PROCESSOR_NODE_LEVEL_GROUP, taskTags, operation);
         addInvocationRateAndCountToSensor(parent2, PROCESSOR_NODE_LEVEL_GROUP, taskTags, operation, "", "");
 
-        assertThat(registry.metrics().size(), equalTo(numberOfTaskMetrics));
+        assertEquals(numberOfTaskMetrics, registry.metrics().size());
 
         final Sensor sensor2 = metrics.nodeLevelSensor(THREAD_ID1, taskName, processorNodeName, operation, RecordingLevel.DEBUG, parent2);
         addAvgAndMaxLatencyToSensor(sensor2, PROCESSOR_NODE_LEVEL_GROUP, nodeTags, operation);
         addInvocationRateAndCountToSensor(sensor2, PROCESSOR_NODE_LEVEL_GROUP, nodeTags, operation, "", "");
 
-        assertThat(registry.metrics().size(), greaterThan(numberOfTaskMetrics));
+        assertTrue(registry.metrics().size() > numberOfTaskMetrics);
 
         metrics.removeAllNodeLevelSensors(THREAD_ID1, taskName, processorNodeName);
 
-        assertThat(registry.metrics().size(), equalTo(numberOfTaskMetrics));
+        assertEquals(numberOfTaskMetrics, registry.metrics().size());
 
         metrics.removeAllTaskLevelSensors(THREAD_ID1, taskName);
 
-        assertThat(registry.metrics().size(), equalTo(0));
+        assertEquals(0, registry.metrics().size());
     }
 
     @Test
@@ -1055,9 +1048,9 @@ public class StreamsMetricsImplTest {
                                                final Map<String, String> tags) {
         final String group = "stream-" + SCOPE_NAME + "-metrics";
         assertTrue(sensor.hasMetrics());
-        assertThat(
-            sensor.name(),
-            is("external." + Thread.currentThread().getName() + ".entity." + ENTITY_NAME + ".s." + OPERATION_NAME)
+        assertEquals(
+            "external." + Thread.currentThread().getName() + ".entity." + ENTITY_NAME + ".s." + OPERATION_NAME,
+            sensor.name()
         );
         for (final String name : metricsNames) {
             assertTrue(StreamsTestUtils.containsMetric(metrics, name, group, tags));
@@ -1092,7 +1085,7 @@ public class StreamsMetricsImplTest {
                 RecordingLevel.DEBUG,
                 "bad-tag")
         );
-        assertThat(exception.getMessage(), is("Tags needs to be specified in key-value pairs"));
+        assertEquals("Tags needs to be specified in key-value pairs", exception.getMessage());
     }
 
     @Test
@@ -1106,15 +1099,15 @@ public class StreamsMetricsImplTest {
                 RecordingLevel.DEBUG,
                 "bad-tag")
         );
-        assertThat(exception.getMessage(), is("Tags needs to be specified in key-value pairs"));
+        assertEquals("Tags needs to be specified in key-value pairs", exception.getMessage());
     }
 
     @Test
     public void shouldGetClientLevelTagMap() {
         final Map<String, String> tagMap = streamsMetrics.clientLevelTagMap();
 
-        assertThat(tagMap.size(), equalTo(1));
-        assertThat(tagMap.get(StreamsMetricsImpl.CLIENT_ID_TAG), equalTo(CLIENT_ID));
+        assertEquals(1, tagMap.size());
+        assertEquals(CLIENT_ID, tagMap.get(StreamsMetricsImpl.CLIENT_ID_TAG));
     }
 
     @Test
@@ -1126,12 +1119,10 @@ public class StreamsMetricsImplTest {
 
         final Map<String, String> tagMap = streamsMetrics.storeLevelTagMap(taskName, storeType, storeName);
 
-        assertThat(tagMap.size(), equalTo(3));
-        assertThat(
-            tagMap.get(StreamsMetricsImpl.THREAD_ID_TAG),
-            equalTo(Thread.currentThread().getName()));
-        assertThat(tagMap.get(StreamsMetricsImpl.TASK_ID_TAG), equalTo(taskName));
-        assertThat(tagMap.get(storeType + "-" + StreamsMetricsImpl.STORE_ID_TAG), equalTo(storeName));
+        assertEquals(3, tagMap.size());
+        assertEquals(Thread.currentThread().getName(), tagMap.get(StreamsMetricsImpl.THREAD_ID_TAG));
+        assertEquals(taskName, tagMap.get(StreamsMetricsImpl.TASK_ID_TAG));
+        assertEquals(storeName, tagMap.get(storeType + "-" + StreamsMetricsImpl.STORE_ID_TAG));
     }
 
     @Test
@@ -1143,13 +1134,10 @@ public class StreamsMetricsImplTest {
 
         final Map<String, String> tagMap = streamsMetrics.cacheLevelTagMap(THREAD_ID1, taskName, storeName);
 
-        assertThat(tagMap.size(), equalTo(3));
-        assertThat(
-            tagMap.get(StreamsMetricsImpl.THREAD_ID_TAG),
-            equalTo(THREAD_ID1)
-        );
-        assertThat(tagMap.get(TASK_ID_TAG), equalTo(taskName));
-        assertThat(tagMap.get(RECORD_CACHE_ID_TAG), equalTo(storeName));
+        assertEquals(3, tagMap.size());
+        assertEquals(THREAD_ID1, tagMap.get(StreamsMetricsImpl.THREAD_ID_TAG));
+        assertEquals(taskName, tagMap.get(TASK_ID_TAG));
+        assertEquals(storeName, tagMap.get(RECORD_CACHE_ID_TAG));
     }
 
     @Test
@@ -1158,11 +1146,8 @@ public class StreamsMetricsImplTest {
 
         final Map<String, String> tagMap = streamsMetrics.threadLevelTagMap(THREAD_ID1);
 
-        assertThat(tagMap.size(), equalTo(1));
-        assertThat(
-            tagMap.get(THREAD_ID_TAG),
-            equalTo(THREAD_ID1)
-        );
+        assertEquals(1, tagMap.size());
+        assertEquals(THREAD_ID1, tagMap.get(THREAD_ID_TAG));
     }
 
     @Test
@@ -1186,7 +1171,7 @@ public class StreamsMetricsImplTest {
         verifyMetric(metricNamePrefix + "-rate", DESCRIPTION1, valueToRecord1, valueToRecord2, expectedRateMetricValue);
         final double expectedSumMetricValue = 2 * valueToRecord1 + 2 * valueToRecord2; // values are recorded once for each metric verification
         verifyMetric(metricNamePrefix + "-total", DESCRIPTION2, valueToRecord1, valueToRecord2, expectedSumMetricValue);
-        assertThat(metrics.metrics().size(), equalTo(2 + 1)); // one metric is added automatically in the constructor of Metrics
+        assertEquals(2 + 1, metrics.metrics().size()); // one metric is added automatically in the constructor of Metrics
     }
 
     @Test
@@ -1197,7 +1182,7 @@ public class StreamsMetricsImplTest {
         final double valueToRecord2 = 42.0;
         final double expectedSumMetricValue = valueToRecord1 + valueToRecord2;
         verifyMetric(metricNamePrefix + "-total", DESCRIPTION1, valueToRecord1, valueToRecord2, expectedSumMetricValue);
-        assertThat(metrics.metrics().size(), equalTo(1 + 1)); // one metric is added automatically in the constructor of Metrics
+        assertEquals(1 + 1, metrics.metrics().size()); // one metric is added automatically in the constructor of Metrics
     }
 
     @Test
@@ -1209,7 +1194,7 @@ public class StreamsMetricsImplTest {
         final long defaultWindowSizeInSeconds = Duration.ofMillis(new MetricConfig().timeWindowMs()).getSeconds();
         final double expectedRateMetricValue = (valueToRecord1 + valueToRecord2) / defaultWindowSizeInSeconds;
         verifyMetric(metricNamePrefix + "-rate", DESCRIPTION1, valueToRecord1, valueToRecord2, expectedRateMetricValue);
-        assertThat(metrics.metrics().size(), equalTo(1 + 1)); // one metric is added automatically in the constructor of Metrics
+        assertEquals(1 + 1, metrics.metrics().size()); // one metric is added automatically in the constructor of Metrics
     }
 
     @Test
@@ -1217,15 +1202,15 @@ public class StreamsMetricsImplTest {
         StreamsMetricsImpl.addValueMetricToSensor(sensor, group, tags, metricNamePrefix, DESCRIPTION1);
 
         final KafkaMetric ratioMetric = metrics.metric(new MetricName(metricNamePrefix, group, DESCRIPTION1, tags));
-        assertThat(ratioMetric, is(notNullValue()));
+        assertNotNull(ratioMetric);
         final MetricConfig metricConfig = new MetricConfig();
         final double value1 = 42.0;
         sensor.record(value1);
-        assertThat(ratioMetric.measurable().measure(metricConfig, time.milliseconds()), equalTo(42.0));
+        assertEquals(42.0, ratioMetric.measurable().measure(metricConfig, time.milliseconds()));
         final double value2 = 18.0;
         sensor.record(value2);
-        assertThat(ratioMetric.measurable().measure(metricConfig, time.milliseconds()), equalTo(18.0));
-        assertThat(metrics.metrics().size(), equalTo(1 + 1)); // one metric is added automatically in the constructor of Metrics
+        assertEquals(18.0, ratioMetric.measurable().measure(metricConfig, time.milliseconds()));
+        assertEquals(1 + 1, metrics.metrics().size()); // one metric is added automatically in the constructor of Metrics
     }
 
     @Test
@@ -1241,7 +1226,7 @@ public class StreamsMetricsImplTest {
         verifyMetric(totalMetricNamePrefix + "-total", DESCRIPTION1, valueToRecord1, valueToRecord2, expectedCountMetricValue);
         final double expectedSumMetricValue = 2 * valueToRecord1 + 2 * valueToRecord2; // values are recorded once for each metric verification
         verifyMetric(sumMetricNamePrefix + "-total", DESCRIPTION2, valueToRecord1, valueToRecord2, expectedSumMetricValue);
-        assertThat(metrics.metrics().size(), equalTo(2 + 1)); // one metric is added automatically in the constructor of Metrics
+        assertEquals(2 + 1, metrics.metrics().size()); // one metric is added automatically in the constructor of Metrics
     }
 
     @Test
@@ -1255,7 +1240,7 @@ public class StreamsMetricsImplTest {
         verifyMetric(metricNamePrefix + "-avg", DESCRIPTION1, valueToRecord1, valueToRecord2, expectedAvgMetricValue);
         final double expectedSumMetricValue = 2 * valueToRecord1 + 2 * valueToRecord2; // values are recorded once for each metric verification
         verifyMetric(metricNamePrefix + "-total", DESCRIPTION2, valueToRecord1, valueToRecord2, expectedSumMetricValue);
-        assertThat(metrics.metrics().size(), equalTo(2 + 1)); // one metric is added automatically in the constructor of Metrics
+        assertEquals(2 + 1, metrics.metrics().size()); // one metric is added automatically in the constructor of Metrics
     }
 
     @Test
@@ -1269,7 +1254,7 @@ public class StreamsMetricsImplTest {
         verifyMetric(metricNamePrefix + "-avg", DESCRIPTION1, valueToRecord1, valueToRecord2, expectedAvgMetricValue);
         verifyMetric(metricNamePrefix + "-min", DESCRIPTION2, valueToRecord1, valueToRecord2, valueToRecord1);
         verifyMetric(metricNamePrefix + "-max", DESCRIPTION3, valueToRecord1, valueToRecord2, valueToRecord2);
-        assertThat(metrics.metrics().size(), equalTo(3 + 1)); // one metric is added automatically in the constructor of Metrics
+        assertEquals(3 + 1, metrics.metrics().size()); // one metric is added automatically in the constructor of Metrics
     }
 
     @Test
@@ -1281,15 +1266,12 @@ public class StreamsMetricsImplTest {
         final double valueToRecord2 = 42.0;
         verifyMetric(metricNamePrefix + "-min", DESCRIPTION1, valueToRecord1, valueToRecord2, valueToRecord1);
         verifyMetric(metricNamePrefix + "-max", DESCRIPTION2, valueToRecord1, valueToRecord2, valueToRecord2);
-        assertThat(metrics.metrics().size(), equalTo(2 + 1)); // one metric is added automatically in the constructor of Metrics
+        assertEquals(2 + 1, metrics.metrics().size()); // one metric is added automatically in the constructor of Metrics
     }
 
     @Test
     public void shouldReturnMetricsVersionCurrent() {
-        assertThat(
-            new StreamsMetricsImpl(metrics, THREAD_ID1, time).version(),
-            equalTo(Version.LATEST)
-        );
+        assertEquals(Version.LATEST, new StreamsMetricsImpl(metrics, THREAD_ID1, time).version());
     }
 
     private void verifyMetric(final String name,
@@ -1299,14 +1281,11 @@ public class StreamsMetricsImplTest {
                               final double expectedMetricValue) {
         final KafkaMetric metric = metrics
             .metric(new MetricName(name, group, description, tags));
-        assertThat(metric, is(notNullValue()));
-        assertThat(metric.metricName().description(), equalTo(description));
+        assertNotNull(metric);
+        assertEquals(description, metric.metricName().description());
         sensor.record(valueToRecord1, time.milliseconds());
         sensor.record(valueToRecord2, time.milliseconds());
-        assertThat(
-            metric.measurable().measure(new MetricConfig(), time.milliseconds()),
-            equalTo(expectedMetricValue)
-        );
+        assertEquals(expectedMetricValue, metric.measurable().measure(new MetricConfig(), time.milliseconds()));
     }
 
     @Test
@@ -1363,8 +1342,8 @@ public class StreamsMetricsImplTest {
                 mkEntry("thread-id", "t1")
             )
         );
-        assertThat(metrics.metric(metricName).metricName().name(), equalTo(name));
-        assertThat(metrics.metric(metricName).metricValue(), equalTo(measuredValue));
+        assertEquals(name, metrics.metric(metricName).metricName().name());
+        assertEquals(measuredValue, metrics.metric(metricName).metricValue());
     }
 
     @Test
@@ -1390,8 +1369,8 @@ public class StreamsMetricsImplTest {
                 mkEntry("additional-tag", "additional-value")
             )
         );
-        assertThat(metrics.metric(metricName).metricName().name(), equalTo(name));
-        assertThat(metrics.metric(metricName).metricValue(), equalTo(measuredValue));
+        assertEquals(name, metrics.metric(metricName).metricName().name());
+        assertEquals(measuredValue, metrics.metric(metricName).metricValue());
     }
 
     @Test
@@ -1413,7 +1392,7 @@ public class StreamsMetricsImplTest {
             THREAD_LEVEL_GROUP,
             Collections.singletonMap("thread-id", "t1")
         );
-        assertThat(metrics.metric(name), nullValue());
+        assertNull(metrics.metric(name));
     }
 
     @Test
@@ -1436,8 +1415,8 @@ public class StreamsMetricsImplTest {
                 mkEntry("thread-id", "t1")
             )
         );
-        assertThat(metrics.metric(name), notNullValue());
-        assertThat(metrics.metric(name).metricValue(), equalTo(measuredValue));
+        assertNotNull(metrics.metric(name));
+        assertEquals(measuredValue, metrics.metric(name).metricValue());
     }
 
     @Test
@@ -1459,6 +1438,6 @@ public class StreamsMetricsImplTest {
             THREAD_LEVEL_GROUP,
             Collections.singletonMap("thread-id", "t1")
         );
-        assertThat(metrics.metric(name), nullValue());
+        assertNull(metrics.metric(name));
     }
 }

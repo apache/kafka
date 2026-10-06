@@ -42,7 +42,6 @@ import org.apache.kafka.streams.state.internals.WindowedTimestampedHeadersStoreT
 import org.slf4j.Logger;
 import org.slf4j.LoggerFactory;
 
-import java.util.Collections;
 import java.util.Map;
 import java.util.Set;
 
@@ -83,7 +82,7 @@ public class KStreamWindowAggregate<KIn, VIn, VAgg, W extends Window> implements
 
     @Override
     public Set<StoreBuilder<?>> stores() {
-        return Collections.singleton(new FactoryWrappingStoreBuilder<>(storeFactory));
+        return Set.of(new FactoryWrappingStoreBuilder<>(storeFactory));
     }
 
     @Override
