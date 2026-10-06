@@ -17,6 +17,7 @@
 package org.apache.kafka.streams.processor.internals;
 
 import org.apache.kafka.clients.admin.MockAdminClient;
+import org.apache.kafka.clients.consumer.CloseOptions.GroupMembershipOperation;
 import org.apache.kafka.clients.consumer.Consumer;
 import org.apache.kafka.clients.consumer.ConsumerGroupMetadata;
 import org.apache.kafka.clients.consumer.ConsumerRebalanceListener;
@@ -115,6 +116,7 @@ import org.junit.jupiter.params.ParameterizedTest;
 import org.junit.jupiter.params.provider.Arguments;
 import org.junit.jupiter.params.provider.MethodSource;
 import org.junit.jupiter.params.provider.ValueSource;
+import org.mockito.ArgumentCaptor;
 import org.mockito.InOrder;
 import org.mockito.Mock;
 import org.mockito.Mockito;
@@ -138,7 +140,9 @@ import java.util.Optional;
 import java.util.Properties;
 import java.util.Set;
 import java.util.UUID;
+import java.util.concurrent.CountDownLatch;
 import java.util.concurrent.ExecutionException;
+import java.util.concurrent.TimeUnit;
 import java.util.concurrent.atomic.AtomicBoolean;
 import java.util.concurrent.atomic.AtomicInteger;
 import java.util.concurrent.atomic.AtomicLong;
@@ -1548,6 +1552,115 @@ public class StreamThreadTest {
         thread.run();
 
         verify(taskManager).shutdown(true);
+    }
+
+    /**
+     * Starts a real stream thread (classic protocol) whose run loop is parked inside poll, so a
+     * test can interleave shutdown calls deterministically before releasing it: the thread cannot
+     * consume its group membership operation while parked. On release, poll throws
+     * {@code failureOnRelease} if non-null and returns empty records otherwise. The thread is
+     * stored in {@code this.thread} for the tear-down.
+     *
+     * @return the latch releasing the parked poll
+     */
+    private CountDownLatch startThreadParkedInPoll(final RuntimeException failureOnRelease) throws InterruptedException {
+        final Time mockTime = new MockTime(1);
+        final StreamsConfig config = new StreamsConfig(configProps(false, false, false));
+        final StreamsMetricsImpl streamsMetrics = new StreamsMetricsImpl(metrics, APPLICATION_ID, mockTime);
+
+        final CountDownLatch pollEntered = new CountDownLatch(1);
+        final CountDownLatch releasePoll = new CountDownLatch(1);
+        final ConsumerGroupMetadata consumerGroupMetadata = mock(ConsumerGroupMetadata.class);
+        when(consumer.groupMetadata()).thenReturn(consumerGroupMetadata);
+        when(consumerGroupMetadata.groupInstanceId()).thenReturn(Optional.empty());
+        when(consumer.poll(any())).thenAnswer(invocation -> {
+            pollEntered.countDown();
+            releasePoll.await(30, TimeUnit.SECONDS);
+            if (failureOnRelease != null) {
+                throw failureOnRelease;
+            }
+            return ConsumerRecords.empty();
+        });
+        final MockConsumerClientSupplier mockClientSupplier = new MockConsumerClientSupplier(consumer);
+        mockClientSupplier.setCluster(createCluster());
+
+        final TopologyMetadata topologyMetadata = new TopologyMetadata(internalTopologyBuilder, config);
+        topologyMetadata.buildAndRewriteTopology();
+        stateDirectory = new StateDirectory(config, mockTime, true, false);
+        final StreamsMetadataState streamsMetadataState = new StreamsMetadataState(
+            new TopologyMetadata(internalTopologyBuilder, config),
+            StreamsMetadataState.UNKNOWN_HOST,
+            new LogContext(String.format("stream-client [%s] ", CLIENT_ID))
+        );
+        @SuppressWarnings("unchecked")
+        final BiConsumer<Throwable, Boolean> mockExceptionHandler = mock(BiConsumer.class);
+        thread = StreamThread.create(
+            topologyMetadata,
+            config,
+            mockClientSupplier,
+            mockClientSupplier.getAdmin(config.getAdminConfigs(CLIENT_ID)),
+            PROCESS_ID,
+            CLIENT_ID,
+            streamsMetrics,
+            mockTime,
+            streamsMetadataState,
+            0,
+            stateDirectory,
+            new MockStateRestoreListener(),
+            new MockStandbyUpdateListener(),
+            threadIdx,
+            null,
+            mockExceptionHandler
+        );
+
+        thread.start();
+        assertTrue(pollEntered.await(10, TimeUnit.SECONDS), "StreamThread never reached poll");
+        return releasePoll;
+    }
+
+    private void awaitThreadDead() throws InterruptedException {
+        TestUtils.waitForCondition(
+            () -> thread.state() == StreamThread.State.DEAD,
+            10 * 1000,
+            "Thread never shut down.");
+    }
+
+    private void verifyConsumerClosedWith(final GroupMembershipOperation expectedOperation) {
+        final ArgumentCaptor<org.apache.kafka.clients.consumer.CloseOptions> captor =
+            ArgumentCaptor.forClass(org.apache.kafka.clients.consumer.CloseOptions.class);
+        verify(consumer).close(captor.capture());
+        assertEquals(expectedOperation, captor.getValue().groupMembershipOperation());
+    }
+
+    @Test
+    public void shouldNotOverrideShutdownOperationWhenThreadFailsAfterShutdownWasInitiated() throws InterruptedException {
+        // A thread that dies with an uncaught exception requests LEAVE_GROUP as the failure
+        // default, but that default must not override the operation of a caller that already
+        // initiated the thread's shutdown, such as a close with an explicit REMAIN_IN_GROUP.
+        final CountDownLatch releasePoll = startThreadParkedInPoll(new RuntimeException("stream thread failure"));
+
+        assertTrue(thread.shutdown(org.apache.kafka.streams.CloseOptions.GroupMembershipOperation.REMAIN_IN_GROUP));
+
+        releasePoll.countDown();
+        awaitThreadDead();
+
+        verifyConsumerClosedWith(GroupMembershipOperation.REMAIN_IN_GROUP);
+    }
+
+    @Test
+    public void shouldKeepGroupMembershipOperationOfTheCallerThatInitiatedShutdown() throws InterruptedException {
+        // The caller that initiates the shutdown decides the group membership operation: a later
+        // shutdown request (e.g., a client close racing a removal or replacement) loses and must
+        // not change the operation the thread shuts down with.
+        final CountDownLatch releasePoll = startThreadParkedInPoll(null);
+
+        assertTrue(thread.shutdown(org.apache.kafka.streams.CloseOptions.GroupMembershipOperation.REMAIN_IN_GROUP));
+        assertFalse(thread.shutdown(org.apache.kafka.streams.CloseOptions.GroupMembershipOperation.LEAVE_GROUP));
+
+        releasePoll.countDown();
+        awaitThreadDead();
+
+        verifyConsumerClosedWith(GroupMembershipOperation.REMAIN_IN_GROUP);
     }
 
     @ParameterizedTest
