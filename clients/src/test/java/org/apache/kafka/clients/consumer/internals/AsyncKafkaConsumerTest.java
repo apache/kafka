@@ -261,7 +261,6 @@ public class AsyncKafkaConsumerTest {
         ConsumerInterceptors<String, String> interceptors,
         ConsumerRebalanceListenerInvoker rebalanceListenerInvoker,
         SubscriptionState subscriptions) {
-        long retryBackoffMs = 100L;
         int requestTimeoutMs = 30000;
         int defaultApiTimeoutMs = 1000;
         return new AsyncKafkaConsumer<>(
@@ -281,7 +280,7 @@ public class AsyncKafkaConsumerTest {
             metrics,
             subscriptions,
             metadata,
-            retryBackoffMs,
+            100L,
             requestTimeoutMs,
             defaultApiTimeoutMs,
             "group-id",
@@ -2134,7 +2133,7 @@ public class AsyncKafkaConsumerTest {
 
         final TopicPartition tp = new TopicPartition("topic1", 0);
 
-        // Manual assignment with valid position so pollForFetches() does not shrink pollTimeout to retryBackoffMs.
+        // Manual assignment with a valid position, so nothing here overrides the mocked maximumTimeToWait() below.
         subscriptions.assignFromUser(singleton(tp));
         subscriptions.seek(tp, 0);
 
@@ -2144,6 +2143,8 @@ public class AsyncKafkaConsumerTest {
 
         doReturn(Fetch.empty()).when(fetchCollector).collectFetch(any(FetchBuffer.class));
         doReturn(LeaderAndEpoch.noLeaderOrEpoch()).when(metadata).currentLeader(any());
+        // The partition is fetchable but already buffered, so pollForFetches should not bound the timeout.
+        doReturn(singleton(tp)).when(fetchBuffer).bufferedPartitions();
 
         // Capture the Timer passed to awaitWakeup so we can assert it was given the full
         // poll timeout, i.e. no busy loop. Also advance mock time by the timer's remaining ms so the
@@ -2484,6 +2485,8 @@ public class AsyncKafkaConsumerTest {
         client.prepareResponseFrom(result, coordinator);
 
         SubscriptionState subscriptionState = mock(SubscriptionState.class);
+        SubscriptionPattern pattern = new SubscriptionPattern("t*");
+        when(subscriptionState.subscriptionPattern()).thenReturn(pattern);
 
         consumer = new AsyncKafkaConsumer<>(
             new LogContext(),
@@ -2497,9 +2500,7 @@ public class AsyncKafkaConsumerTest {
         );
         completeTopicRe2JPatternSubscriptionChangeEventSuccessfully();
 
-        SubscriptionPattern pattern = new SubscriptionPattern("t*");
         consumer.subscribe(pattern);
-        when(subscriptionState.subscriptionPattern()).thenReturn(pattern);
         TestUtils.waitForCondition(() -> {
             try {
                 // The request is generated in the background thread so allow for that

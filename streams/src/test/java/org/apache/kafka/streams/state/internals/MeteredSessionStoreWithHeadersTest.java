@@ -67,14 +67,11 @@ import java.util.Collections;
 import java.util.List;
 import java.util.Map;
 import java.util.Optional;
+import java.util.concurrent.TimeUnit;
 import java.util.stream.Collectors;
 
 import static org.apache.kafka.common.utils.Utils.mkEntry;
 import static org.apache.kafka.common.utils.Utils.mkMap;
-import static org.hamcrest.MatcherAssert.assertThat;
-import static org.hamcrest.Matchers.empty;
-import static org.hamcrest.Matchers.equalTo;
-import static org.hamcrest.Matchers.not;
 import static org.junit.jupiter.api.Assertions.assertEquals;
 import static org.junit.jupiter.api.Assertions.assertFalse;
 import static org.junit.jupiter.api.Assertions.assertNotNull;
@@ -485,7 +482,7 @@ public class MeteredSessionStoreWithHeadersTest {
             .filter(metricName -> metricName.name().equals("restore-rate"))
             .collect(Collectors.toList());
 
-        assertThat(restoreMetrics, not(empty()));
+        assertFalse(restoreMetrics.isEmpty());
     }
 
     @Test
@@ -597,15 +594,15 @@ public class MeteredSessionStoreWithHeadersTest {
         final KafkaMetric openIteratorsMetric = metric("num-open-iterators");
         assertNotNull(openIteratorsMetric);
 
-        assertThat((Long) openIteratorsMetric.metricValue(), equalTo(0L));
+        assertEquals(0L, (Long) openIteratorsMetric.metricValue());
 
         final KeyValueIterator<Windowed<String>, AggregationWithHeaders<String>> iterator = store.fetch(KEY);
 
-        assertThat((Long) openIteratorsMetric.metricValue(), equalTo(1L));
+        assertEquals(1L, (Long) openIteratorsMetric.metricValue());
 
         iterator.close();
 
-        assertThat((Long) openIteratorsMetric.metricValue(), equalTo(0L));
+        assertEquals(0L, (Long) openIteratorsMetric.metricValue());
     }
 
     @Test
@@ -627,7 +624,7 @@ public class MeteredSessionStoreWithHeadersTest {
         final KafkaMetric oldestIteratorMetric = metric("oldest-iterator-open-since-ms");
         assertNotNull(oldestIteratorMetric);
 
-        assertThat(oldestIteratorMetric.metricValue(), equalTo(0L));
+        assertEquals(0L, oldestIteratorMetric.metricValue());
 
         final long beforeOpen = mockTime.milliseconds();
         final KeyValueIterator<Windowed<String>, AggregationWithHeaders<String>> iterator = store.fetch(KEY);
@@ -638,7 +635,7 @@ public class MeteredSessionStoreWithHeadersTest {
 
         iterator.close();
 
-        assertThat(oldestIteratorMetric.metricValue(), equalTo(0L));
+        assertEquals(0L, oldestIteratorMetric.metricValue());
     }
 
     @Test
@@ -646,25 +643,78 @@ public class MeteredSessionStoreWithHeadersTest {
         setUp();
         init();
 
-        final Headers headers = new RecordHeaders();
-        headers.add("key1", "value1".getBytes());
-        final AggregationWithHeaders<String> valueAndHeaders = AggregationWithHeaders.make(VALUE, headers);
-
-        final AggregationWithHeadersSerializer<String> serializer = new AggregationWithHeadersSerializer<>(Serdes.String().serializer());
-        final byte[] serializedValue = serializer.serialize(CHANGELOG_TOPIC, valueAndHeaders);
-
         when(innerStore.fetch(KEY_BYTES))
-            .thenReturn(new KeyValueIteratorStub<>(
-                Collections.singleton(KeyValue.pair(WINDOWED_KEY_BYTES, serializedValue)).iterator()));
+            .thenReturn(
+                new KeyValueIteratorStub<>(Collections.<KeyValue<Windowed<Bytes>, byte[]>>emptyList().iterator()),
+                new KeyValueIteratorStub<>(Collections.<KeyValue<Windowed<Bytes>, byte[]>>emptyList().iterator()));
 
-        final KeyValueIterator<Windowed<String>, AggregationWithHeaders<String>> iterator = store.fetch(KEY);
+        final KafkaMetric iteratorDurationAvgMetric = metric("iterator-duration-avg");
+        final KafkaMetric iteratorDurationMaxMetric = metric("iterator-duration-max");
+        assertEquals(Double.NaN, (Double) iteratorDurationAvgMetric.metricValue());
+        assertEquals(Double.NaN, (Double) iteratorDurationMaxMetric.metricValue());
 
-        mockTime.sleep(100L);
+        // Two samples (2ms then 3ms) so avg (2.5ms) and max (3ms) differ -- one sample would leave them
+        // identical and not actually pin avg. Mirrors the KV sibling shouldTimeIteratorDuration.
+        try (KeyValueIterator<Windowed<String>, AggregationWithHeaders<String>> iterator = store.fetch(KEY)) {
+            mockTime.sleep(2);
+        }
 
-        iterator.close();
+        assertEquals(2.0 * TimeUnit.MILLISECONDS.toNanos(1), (double) iteratorDurationAvgMetric.metricValue());
+        assertEquals(2.0 * TimeUnit.MILLISECONDS.toNanos(1), (double) iteratorDurationMaxMetric.metricValue());
 
-        final KafkaMetric iteratorDurationMetric = metric("iterator-duration-avg");
-        assertTrue((Double) iteratorDurationMetric.metricValue() > 0.0);
+        try (KeyValueIterator<Windowed<String>, AggregationWithHeaders<String>> iterator = store.fetch(KEY)) {
+            mockTime.sleep(3);
+        }
+
+        assertEquals(2.5 * TimeUnit.MILLISECONDS.toNanos(1), (double) iteratorDurationAvgMetric.metricValue());
+        assertEquals(3.0 * TimeUnit.MILLISECONDS.toNanos(1), (double) iteratorDurationMaxMetric.metricValue());
+    }
+
+    // The above shouldTimeIteratorDuration goes through store.fetch() -> the KeyValueIterator sibling.
+    // This pins the same close()-path recording for the ReadOnlyRecordIterator that backs
+    // TimestampedWindowRangeWithHeadersQuery.withKey, whose close() records both the operation sensor
+    // (fetch) and the iterator-duration sensor via the shared AbstractMeteredIterator lifecycle.
+    @SuppressWarnings({"unchecked", "rawtypes"})
+    @Test
+    public void shouldTimeIteratorDurationForTimestampedWindowRangeWithHeadersQuery() {
+        setUp();
+        init();
+
+        when(innerStore.query(any(), any(PositionBound.class), any(QueryConfig.class)))
+            .thenReturn(
+                (QueryResult) QueryResult.forResult(new KeyValueIteratorStub<>(
+                    Collections.<KeyValue<Windowed<Bytes>, byte[]>>emptyList().iterator())),
+                (QueryResult) QueryResult.forResult(new KeyValueIteratorStub<>(
+                    Collections.<KeyValue<Windowed<Bytes>, byte[]>>emptyList().iterator())));
+
+        final KafkaMetric iteratorDurationAvgMetric = metric("iterator-duration-avg");
+        final KafkaMetric iteratorDurationMaxMetric = metric("iterator-duration-max");
+        final KafkaMetric fetchLatencyMetric = metric("fetch-latency-avg");
+        assertEquals(Double.NaN, (Double) iteratorDurationAvgMetric.metricValue());
+        assertEquals(Double.NaN, (Double) iteratorDurationMaxMetric.metricValue());
+
+        // Two samples (2ms then 3ms), deterministic under mockTime, so avg (2.5ms) and max (3ms) differ
+        // and are pinned exactly -- one sample would leave avg == max.
+        try (ReadOnlyRecordIterator<Windowed<String>, String> iterator = store.query(
+                TimestampedWindowRangeWithHeadersQuery.<String, String>withKey(KEY),
+                PositionBound.unbounded(), new QueryConfig(false)).getResult()) {
+            mockTime.sleep(2);
+        }
+
+        assertEquals(2.0 * TimeUnit.MILLISECONDS.toNanos(1), (double) iteratorDurationAvgMetric.metricValue());
+        assertEquals(2.0 * TimeUnit.MILLISECONDS.toNanos(1), (double) iteratorDurationMaxMetric.metricValue());
+
+        try (ReadOnlyRecordIterator<Windowed<String>, String> iterator = store.query(
+                TimestampedWindowRangeWithHeadersQuery.<String, String>withKey(KEY),
+                PositionBound.unbounded(), new QueryConfig(false)).getResult()) {
+            mockTime.sleep(3);
+        }
+
+        assertEquals(2.5 * TimeUnit.MILLISECONDS.toNanos(1), (double) iteratorDurationAvgMetric.metricValue());
+        assertEquals(3.0 * TimeUnit.MILLISECONDS.toNanos(1), (double) iteratorDurationMaxMetric.metricValue());
+        // fetchSensor is recorded only from the iterator's close() on this path, so the two samples
+        // (2ms, 3ms) average to exactly 2.5ms.
+        assertEquals(2.5 * TimeUnit.MILLISECONDS.toNanos(1), (double) fetchLatencyMetric.metricValue());
     }
 
     @Test
@@ -689,9 +739,9 @@ public class MeteredSessionStoreWithHeadersTest {
         doThrow(new RuntimeException("Oops!")).when(innerStore).close();
         init();
 
-        assertThat(storeMetrics(), not(empty()));
+        assertFalse(storeMetrics().isEmpty());
         assertThrows(RuntimeException.class, store::close);
-        assertThat(storeMetrics(), empty());
+        assertTrue(storeMetrics().isEmpty());
     }
 
     @Test
@@ -952,7 +1002,7 @@ public class MeteredSessionStoreWithHeadersTest {
                 Collections.singleton(KeyValue.pair(windowedKeyBytes, serializedValue)).iterator())));
 
         final KafkaMetric openIteratorsMetric = metric("num-open-iterators");
-        assertThat((Long) openIteratorsMetric.metricValue(), equalTo(0L));
+        assertEquals(0L, (Long) openIteratorsMetric.metricValue());
 
         final QueryResult<ReadOnlyRecordIterator<Windowed<String>, String>> result = store.query(
             TimestampedWindowRangeWithHeadersQuery.<String, String>withKey(KEY),
@@ -961,9 +1011,9 @@ public class MeteredSessionStoreWithHeadersTest {
         assertTrue(result.isSuccess());
 
         try (ReadOnlyRecordIterator<Windowed<String>, String> iterator = result.getResult()) {
-            assertThat((Long) openIteratorsMetric.metricValue(), equalTo(1L));
+            assertEquals(1L, (Long) openIteratorsMetric.metricValue());
         }
-        assertThat((Long) openIteratorsMetric.metricValue(), equalTo(0L));
+        assertEquals(0L, (Long) openIteratorsMetric.metricValue());
     }
 
     @SuppressWarnings("unchecked")
@@ -985,13 +1035,13 @@ public class MeteredSessionStoreWithHeadersTest {
             PositionBound.unbounded(),
             new QueryConfig(false)).getResult();
 
-        assertThat((Long) openIteratorsMetric.metricValue(), equalTo(1L));
+        assertEquals(1L, (Long) openIteratorsMetric.metricValue());
         iterator.close();
-        assertThat((Long) openIteratorsMetric.metricValue(), equalTo(0L));
+        assertEquals(0L, (Long) openIteratorsMetric.metricValue());
         // close() is intentionally not idempotent (matching the sibling metered iterators): each call
         // decrements, so a repeated close drives the gauge below zero. Callers must close exactly once.
         iterator.close();
-        assertThat((Long) openIteratorsMetric.metricValue(), equalTo(-1L));
+        assertEquals(-1L, (Long) openIteratorsMetric.metricValue());
     }
 
     @SuppressWarnings("unchecked")

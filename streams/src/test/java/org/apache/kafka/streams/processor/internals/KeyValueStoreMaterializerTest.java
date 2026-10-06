@@ -54,10 +54,9 @@ import org.mockito.junit.jupiter.MockitoSettings;
 import org.mockito.quality.Strictness;
 
 import static java.util.Collections.emptyMap;
-import static org.hamcrest.MatcherAssert.assertThat;
-import static org.hamcrest.Matchers.equalTo;
-import static org.hamcrest.core.IsInstanceOf.instanceOf;
-import static org.hamcrest.core.IsNot.not;
+import static org.junit.jupiter.api.Assertions.assertEquals;
+import static org.junit.jupiter.api.Assertions.assertFalse;
+import static org.junit.jupiter.api.Assertions.assertInstanceOf;
 import static org.mockito.Mockito.doReturn;
 import static org.mockito.Mockito.lenient;
 import static org.mockito.Mockito.when;
@@ -127,9 +126,9 @@ public class KeyValueStoreMaterializerTest {
 
         final WrappedStateStore<?, ?, ?> caching = (WrappedStateStore<?, ?, ?>) ((WrappedStateStore<?, ?, ?>) store).wrapped();
         final StateStore logging = caching.wrapped();
-        assertThat(store, instanceOf(MeteredTimestampedKeyValueStore.class));
-        assertThat(caching, instanceOf(CachingKeyValueStore.class));
-        assertThat(logging, instanceOf(ChangeLoggingTimestampedKeyValueBytesStore.class));
+        assertInstanceOf(MeteredTimestampedKeyValueStore.class, store);
+        assertInstanceOf(CachingKeyValueStore.class, caching);
+        assertInstanceOf(ChangeLoggingTimestampedKeyValueBytesStore.class, logging);
     }
 
     @Test
@@ -141,7 +140,7 @@ public class KeyValueStoreMaterializerTest {
         final TimestampedKeyValueStore<String, String> store = getTimestampedStore(materialized);
 
         final WrappedStateStore<?, ?, ?> logging = (WrappedStateStore<?, ?, ?>) ((WrappedStateStore<?, ?, ?>) store).wrapped();
-        assertThat(logging, instanceOf(ChangeLoggingTimestampedKeyValueBytesStore.class));
+        assertInstanceOf(ChangeLoggingTimestampedKeyValueBytesStore.class, logging);
     }
 
     @Test
@@ -153,8 +152,8 @@ public class KeyValueStoreMaterializerTest {
         final TimestampedKeyValueStore<String, String> store = getTimestampedStore(materialized);
 
         final WrappedStateStore<?, ?, ?> caching = (WrappedStateStore<?, ?, ?>) ((WrappedStateStore<?, ?, ?>) store).wrapped();
-        assertThat(caching, instanceOf(CachingKeyValueStore.class));
-        assertThat(caching.wrapped(), not(instanceOf(ChangeLoggingKeyValueBytesStore.class)));
+        assertInstanceOf(CachingKeyValueStore.class, caching);
+        assertFalse(caching.wrapped() instanceof ChangeLoggingKeyValueBytesStore);
     }
 
     @Test
@@ -166,8 +165,8 @@ public class KeyValueStoreMaterializerTest {
         final TimestampedKeyValueStore<String, String> store = getTimestampedStore(materialized);
 
         final StateStore wrapped = ((WrappedStateStore<?, ?, ?>) store).wrapped();
-        assertThat(wrapped, not(instanceOf(CachingKeyValueStore.class)));
-        assertThat(wrapped, not(instanceOf(ChangeLoggingKeyValueBytesStore.class)));
+        assertFalse(wrapped instanceof CachingKeyValueStore);
+        assertFalse(wrapped instanceof ChangeLoggingKeyValueBytesStore);
     }
 
     @Test
@@ -179,10 +178,10 @@ public class KeyValueStoreMaterializerTest {
 
         final WrappedStateStore<?, ?, ?> caching = (WrappedStateStore<?, ?, ?>) ((WrappedStateStore<?, ?, ?>) store).wrapped();
         final StateStore logging = caching.wrapped();
-        assertThat(innerKeyValueStore.name(), equalTo(store.name()));
-        assertThat(store, instanceOf(MeteredTimestampedKeyValueStoreWithHeaders.class));
-        assertThat(caching, instanceOf(CachingKeyValueStore.class));
-        assertThat(logging, instanceOf(ChangeLoggingTimestampedKeyValueBytesStoreWithHeaders.class));
+        assertEquals(innerKeyValueStore.name(), store.name());
+        assertInstanceOf(MeteredTimestampedKeyValueStoreWithHeaders.class, store);
+        assertInstanceOf(CachingKeyValueStore.class, caching);
+        assertInstanceOf(ChangeLoggingTimestampedKeyValueBytesStoreWithHeaders.class, logging);
     }
 
     @Test
@@ -193,8 +192,8 @@ public class KeyValueStoreMaterializerTest {
         final TimestampedKeyValueStoreWithHeaders<String, String> store = getHeadersStore(materialized);
 
         final WrappedStateStore<?, ?, ?> logging = (WrappedStateStore<?, ?, ?>) ((WrappedStateStore<?, ?, ?>) store).wrapped();
-        assertThat(innerKeyValueStore.name(), equalTo(store.name()));
-        assertThat(logging, instanceOf(ChangeLoggingKeyValueBytesStore.class));
+        assertEquals(innerKeyValueStore.name(), store.name());
+        assertInstanceOf(ChangeLoggingKeyValueBytesStore.class, logging);
     }
 
     @Test
@@ -205,9 +204,9 @@ public class KeyValueStoreMaterializerTest {
         final TimestampedKeyValueStoreWithHeaders<String, String> store = getHeadersStore(materialized);
 
         final WrappedStateStore<?, ?, ?> caching = (WrappedStateStore<?, ?, ?>) ((WrappedStateStore<?, ?, ?>) store).wrapped();
-        assertThat(innerKeyValueStore.name(), equalTo(store.name()));
-        assertThat(caching, instanceOf(CachingKeyValueStore.class));
-        assertThat(caching.wrapped(), not(instanceOf(ChangeLoggingKeyValueBytesStore.class)));
+        assertEquals(innerKeyValueStore.name(), store.name());
+        assertInstanceOf(CachingKeyValueStore.class, caching);
+        assertFalse(caching.wrapped() instanceof ChangeLoggingKeyValueBytesStore);
     }
 
     @Test
@@ -218,9 +217,9 @@ public class KeyValueStoreMaterializerTest {
         final TimestampedKeyValueStoreWithHeaders<String, String> store = getHeadersStore(materialized);
 
         final StateStore wrapped = ((WrappedStateStore<?, ?, ?>) store).wrapped();
-        assertThat(innerKeyValueStore.name(), equalTo(store.name()));
-        assertThat(wrapped, not(instanceOf(CachingKeyValueStore.class)));
-        assertThat(wrapped, not(instanceOf(ChangeLoggingKeyValueBytesStore.class)));
+        assertEquals(innerKeyValueStore.name(), store.name());
+        assertFalse(wrapped instanceof CachingKeyValueStore);
+        assertFalse(wrapped instanceof ChangeLoggingKeyValueBytesStore);
     }
 
     @Test
@@ -233,10 +232,10 @@ public class KeyValueStoreMaterializerTest {
 
         final WrappedStateStore<?, ?, ?> logging = (WrappedStateStore<?, ?, ?>) ((WrappedStateStore<?, ?, ?>) store).wrapped();
         final StateStore inner = logging.wrapped();
-        assertThat(innerVersionedStore.name(), equalTo(store.name()));
-        assertThat(store, instanceOf(MeteredVersionedKeyValueStore.class));
-        assertThat(logging, instanceOf(ChangeLoggingVersionedKeyValueBytesStore.class));
-        assertThat(innerVersionedStore, equalTo(inner));
+        assertEquals(innerVersionedStore.name(), store.name());
+        assertInstanceOf(MeteredVersionedKeyValueStore.class, store);
+        assertInstanceOf(ChangeLoggingVersionedKeyValueBytesStore.class, logging);
+        assertEquals(innerVersionedStore, inner);
     }
 
     @Test
@@ -248,9 +247,9 @@ public class KeyValueStoreMaterializerTest {
         final VersionedKeyValueStore<String, String> store = getVersionedStore(materialized);
 
         final StateStore inner = ((WrappedStateStore<?, ?, ?>) store).wrapped();
-        assertThat(innerVersionedStore.name(), equalTo(store.name()));
-        assertThat(store, instanceOf(MeteredVersionedKeyValueStore.class));
-        assertThat(innerVersionedStore, equalTo(inner));
+        assertEquals(innerVersionedStore.name(), store.name());
+        assertInstanceOf(MeteredVersionedKeyValueStore.class, store);
+        assertEquals(innerVersionedStore, inner);
     }
 
     @Test
@@ -263,10 +262,10 @@ public class KeyValueStoreMaterializerTest {
 
         final WrappedStateStore<?, ?, ?> logging = (WrappedStateStore<?, ?, ?>) ((WrappedStateStore<?, ?, ?>) store).wrapped();
         final StateStore inner = logging.wrapped();
-        assertThat(innerVersionedStore.name(), equalTo(store.name()));
-        assertThat(store, instanceOf(MeteredVersionedKeyValueStore.class));
-        assertThat(logging, instanceOf(ChangeLoggingVersionedKeyValueBytesStore.class));
-        assertThat(innerVersionedStore, equalTo(inner));
+        assertEquals(innerVersionedStore.name(), store.name());
+        assertInstanceOf(MeteredVersionedKeyValueStore.class, store);
+        assertInstanceOf(ChangeLoggingVersionedKeyValueBytesStore.class, logging);
+        assertEquals(innerVersionedStore, inner);
     }
 
     @SuppressWarnings("unchecked")

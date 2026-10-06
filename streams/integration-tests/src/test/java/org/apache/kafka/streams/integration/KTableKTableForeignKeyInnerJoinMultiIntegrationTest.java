@@ -48,6 +48,7 @@ import org.junit.jupiter.api.AfterEach;
 import org.junit.jupiter.api.BeforeAll;
 import org.junit.jupiter.api.BeforeEach;
 import org.junit.jupiter.api.Tag;
+import org.junit.jupiter.api.TestInfo;
 import org.junit.jupiter.api.Timeout;
 import org.junit.jupiter.params.ParameterizedTest;
 import org.junit.jupiter.params.provider.ValueSource;
@@ -63,6 +64,7 @@ import java.util.function.Function;
 import static java.time.Duration.ofSeconds;
 import static java.util.Arrays.asList;
 import static org.apache.kafka.streams.integration.utils.IntegrationTestUtils.startApplicationAndWaitUntilRunning;
+import static org.apache.kafka.streams.utils.TestUtils.safeUniqueTestName;
 import static org.junit.jupiter.api.Assertions.assertEquals;
 
 @Timeout(600)
@@ -119,7 +121,12 @@ public class KTableKTableForeignKeyInnerJoinMultiIntegrationTest {
     }
 
     @BeforeEach
-    public void before() throws Exception {
+    public void before(final TestInfo testInfo) throws Exception {
+        final String applicationId = "KTable-FKJ-Multi-" + safeUniqueTestName(testInfo);
+        streamsConfig.put(StreamsConfig.APPLICATION_ID_CONFIG, applicationId);
+        streamsConfigTwo.put(StreamsConfig.APPLICATION_ID_CONFIG, applicationId);
+        streamsConfigThree.put(StreamsConfig.APPLICATION_ID_CONFIG, applicationId);
+
         final String stateDirBasePath = TestUtils.tempDirectory().getPath();
         streamsConfig.put(StreamsConfig.STATE_DIR_CONFIG, stateDirBasePath + "-1");
         streamsConfigTwo.put(StreamsConfig.STATE_DIR_CONFIG, stateDirBasePath + "-2");
@@ -215,7 +222,6 @@ public class KTableKTableForeignKeyInnerJoinMultiIntegrationTest {
 
     private static Properties getStreamsConfig() {
         final Properties streamsConfig = new Properties();
-        streamsConfig.put(StreamsConfig.APPLICATION_ID_CONFIG, "KTable-FKJ-Multi");
         streamsConfig.put(StreamsConfig.BOOTSTRAP_SERVERS_CONFIG, CLUSTER.bootstrapServers());
         streamsConfig.put(ConsumerConfig.AUTO_OFFSET_RESET_CONFIG, "earliest");
         streamsConfig.put(StreamsConfig.STATESTORE_CACHE_MAX_BYTES_CONFIG, 0);

@@ -59,13 +59,12 @@ import java.util.HashMap;
 import java.util.List;
 import java.util.Map;
 
-import static org.hamcrest.CoreMatchers.equalTo;
-import static org.hamcrest.CoreMatchers.is;
-import static org.hamcrest.CoreMatchers.notNullValue;
-import static org.hamcrest.CoreMatchers.nullValue;
-import static org.hamcrest.CoreMatchers.sameInstance;
-import static org.hamcrest.MatcherAssert.assertThat;
-import static org.hamcrest.Matchers.hasEntry;
+import static org.junit.jupiter.api.Assertions.assertArrayEquals;
+import static org.junit.jupiter.api.Assertions.assertEquals;
+import static org.junit.jupiter.api.Assertions.assertNotNull;
+import static org.junit.jupiter.api.Assertions.assertNull;
+import static org.junit.jupiter.api.Assertions.assertSame;
+import static org.junit.jupiter.api.Assertions.assertTrue;
 import static org.mockito.Mockito.mock;
 import static org.mockito.Mockito.verify;
 import static org.mockito.Mockito.when;
@@ -126,72 +125,72 @@ public class ChangeLoggingKeyValueBytesStoreTest {
     @Test
     public void shouldWriteKeyValueBytesToInnerStoreOnPut() {
         store.put(hi, there);
-        assertThat(inner.get(hi), equalTo(there));
-        assertThat(collector.collected().size(), equalTo(1));
-        assertThat(collector.collected().get(0).key(), equalTo(hi));
-        assertThat(collector.collected().get(0).value(), equalTo(there));
+        assertArrayEquals(there, inner.get(hi));
+        assertEquals(1, collector.collected().size());
+        assertEquals(hi, collector.collected().get(0).key());
+        assertArrayEquals(there, (byte[]) collector.collected().get(0).value());
     }
 
     @Test
     public void shouldWriteAllKeyValueToInnerStoreOnPutAll() {
         store.putAll(Arrays.asList(KeyValue.pair(hi, there),
                                    KeyValue.pair(hello, world)));
-        assertThat(inner.get(hi), equalTo(there));
-        assertThat(inner.get(hello), equalTo(world));
+        assertArrayEquals(there, inner.get(hi));
+        assertArrayEquals(world, inner.get(hello));
 
-        assertThat(collector.collected().size(), equalTo(2));
-        assertThat(collector.collected().get(0).key(), equalTo(hi));
-        assertThat(collector.collected().get(0).value(), equalTo(there));
-        assertThat(collector.collected().get(1).key(), equalTo(hello));
-        assertThat(collector.collected().get(1).value(), equalTo(world));
+        assertEquals(2, collector.collected().size());
+        assertEquals(hi, collector.collected().get(0).key());
+        assertArrayEquals(there, (byte[]) collector.collected().get(0).value());
+        assertEquals(hello, collector.collected().get(1).key());
+        assertArrayEquals(world, (byte[]) collector.collected().get(1).value());
     }
 
     @Test
     public void shouldPropagateDelete() {
         store.put(hi, there);
         store.delete(hi);
-        assertThat(inner.approximateNumEntries(), equalTo(0L));
-        assertThat(inner.get(hi), nullValue());
+        assertEquals(0L, inner.approximateNumEntries());
+        assertNull(inner.get(hi));
     }
 
     @Test
     public void shouldReturnOldValueOnDelete() {
         store.put(hi, there);
-        assertThat(store.delete(hi), equalTo(there));
+        assertArrayEquals(there, store.delete(hi));
     }
 
     @Test
     public void shouldLogKeyNullOnDelete() {
         store.put(hi, there);
-        assertThat(store.delete(hi), equalTo(there));
+        assertArrayEquals(there, store.delete(hi));
 
-        assertThat(collector.collected().size(), equalTo(2));
-        assertThat(collector.collected().get(0).key(), equalTo(hi));
-        assertThat(collector.collected().get(0).value(), equalTo(there));
-        assertThat(collector.collected().get(1).key(), equalTo(hi));
-        assertThat(collector.collected().get(1).value(), nullValue());
+        assertEquals(2, collector.collected().size());
+        assertEquals(hi, collector.collected().get(0).key());
+        assertArrayEquals(there, (byte[]) collector.collected().get(0).value());
+        assertEquals(hi, collector.collected().get(1).key());
+        assertNull(collector.collected().get(1).value());
     }
 
     @Test
     public void shouldWriteToInnerOnPutIfAbsentNoPreviousValue() {
         store.putIfAbsent(hi, there);
-        assertThat(inner.get(hi), equalTo(there));
+        assertArrayEquals(there, inner.get(hi));
     }
 
     @Test
     public void shouldNotWriteToInnerOnPutIfAbsentWhenValueForKeyExists() {
         store.put(hi, there);
         store.putIfAbsent(hi, world);
-        assertThat(inner.get(hi), equalTo(there));
+        assertArrayEquals(there, inner.get(hi));
     }
 
     @Test
     public void shouldWriteToChangelogOnPutIfAbsentWhenNoPreviousValue() {
         store.putIfAbsent(hi, there);
 
-        assertThat(collector.collected().size(), equalTo(1));
-        assertThat(collector.collected().get(0).key(), equalTo(hi));
-        assertThat(collector.collected().get(0).value(), equalTo(there));
+        assertEquals(1, collector.collected().size());
+        assertEquals(hi, collector.collected().get(0).key());
+        assertArrayEquals(there, (byte[]) collector.collected().get(0).value());
     }
 
     @Test
@@ -199,26 +198,26 @@ public class ChangeLoggingKeyValueBytesStoreTest {
         store.put(hi, there);
         store.putIfAbsent(hi, world);
 
-        assertThat(collector.collected().size(), equalTo(1));
-        assertThat(collector.collected().get(0).key(), equalTo(hi));
-        assertThat(collector.collected().get(0).value(), equalTo(there));
+        assertEquals(1, collector.collected().size());
+        assertEquals(hi, collector.collected().get(0).key());
+        assertArrayEquals(there, (byte[]) collector.collected().get(0).value());
     }
 
     @Test
     public void shouldReturnCurrentValueOnPutIfAbsent() {
         store.put(hi, there);
-        assertThat(store.putIfAbsent(hi, world), equalTo(there));
+        assertArrayEquals(there, store.putIfAbsent(hi, world));
     }
 
     @Test
     public void shouldReturnNullOnPutIfAbsentWhenNoPreviousValue() {
-        assertThat(store.putIfAbsent(hi, there), is(nullValue()));
+        assertNull(store.putIfAbsent(hi, there));
     }
 
     @Test
     public void shouldReturnValueOnGetWhenExists() {
         store.put(hello, world);
-        assertThat(store.get(hello), equalTo(world));
+        assertArrayEquals(world, store.get(hello));
     }
 
     @Test
@@ -239,14 +238,14 @@ public class ChangeLoggingKeyValueBytesStoreTest {
             }
         }
 
-        assertThat(numberOfKeysReturned, is(1));
-        assertThat(keys, is(Collections.singletonList(hi)));
-        assertThat(values, is(Collections.singletonList(Bytes.wrap(there))));
+        assertEquals(1, numberOfKeysReturned);
+        assertEquals(List.of(hi), keys);
+        assertEquals(List.of(Bytes.wrap(there)), values);
     }
 
     @Test
     public void shouldReturnNullOnGetWhenDoesntExist() {
-        assertThat(store.get(hello), is(nullValue()));
+        assertNull(store.get(hello));
     }
 
     @Test
@@ -254,16 +253,16 @@ public class ChangeLoggingKeyValueBytesStoreTest {
         context.setRecordContext(new ProcessorRecordContext(-1, INPUT_OFFSET, INPUT_PARTITION, INPUT_TOPIC_NAME, new RecordHeaders()));
         context.setTime(1L);
         store.put(hi, there);
-        assertThat(collector.collected().size(), equalTo(1));
-        assertThat(collector.collected().get(0).headers(), is(notNullValue()));
+        assertEquals(1, collector.collected().size());
+        assertNotNull(collector.collected().get(0).headers());
         final Header versionHeader = collector.collected().get(0).headers().lastHeader(ChangelogRecordDeserializationHelper.CHANGELOG_VERSION_HEADER_KEY);
-        assertThat(versionHeader, is(notNullValue()));
-        assertThat(versionHeader.equals(ChangelogRecordDeserializationHelper.CHANGELOG_VERSION_HEADER_RECORD_CONSISTENCY), is(true));
+        assertNotNull(versionHeader);
+        assertTrue(versionHeader.equals(ChangelogRecordDeserializationHelper.CHANGELOG_VERSION_HEADER_RECORD_CONSISTENCY));
         final Header vectorHeader = collector.collected().get(0).headers().lastHeader(ChangelogRecordDeserializationHelper.CHANGELOG_POSITION_HEADER_KEY);
-        assertThat(vectorHeader, is(notNullValue()));
+        assertNotNull(vectorHeader);
         final Position position = PositionSerde.deserialize(ByteBuffer.wrap(vectorHeader.value()));
-        assertThat(position.getPartitionPositions(INPUT_TOPIC_NAME), is(notNullValue()));
-        assertThat(position.getPartitionPositions(INPUT_TOPIC_NAME), hasEntry(0, 100L));
+        assertNotNull(position.getPartitionPositions(INPUT_TOPIC_NAME));
+        assertEquals(100L, position.getPartitionPositions(INPUT_TOPIC_NAME).get(0));
 
     }
 
@@ -275,7 +274,7 @@ public class ChangeLoggingKeyValueBytesStoreTest {
         final ReadOnlyKeyValueStore<Bytes, byte[]> view = mock(ReadOnlyKeyValueStore.class);
         when(innerMock.readOnly(IsolationLevel.READ_UNCOMMITTED)).thenReturn(view);
 
-        assertThat(outer.readOnly(IsolationLevel.READ_UNCOMMITTED), sameInstance(view));
+        assertSame(view, outer.readOnly(IsolationLevel.READ_UNCOMMITTED));
         verify(innerMock).readOnly(IsolationLevel.READ_UNCOMMITTED);
     }
 
@@ -287,7 +286,7 @@ public class ChangeLoggingKeyValueBytesStoreTest {
         final ReadOnlyKeyValueStore<Bytes, byte[]> view = mock(ReadOnlyKeyValueStore.class);
         when(innerMock.readOnly(IsolationLevel.READ_COMMITTED)).thenReturn(view);
 
-        assertThat(outer.readOnly(IsolationLevel.READ_COMMITTED), sameInstance(view));
+        assertSame(view, outer.readOnly(IsolationLevel.READ_COMMITTED));
         verify(innerMock).readOnly(IsolationLevel.READ_COMMITTED);
     }
 

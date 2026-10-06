@@ -183,7 +183,10 @@ public class DefaultTaskExecutor implements TaskExecutor {
                 log.error(String.format("Failed to process stream task %s due to the following error:", task.id()), e);
                 throw new StreamsException(e, task.id());
             } finally {
-                task.recordProcessBatchTime(time.milliseconds() - now);
+                final long end = time.milliseconds();
+                task.recordProcessBatchTime(end - now);
+                // record terminal e2e latency against the end time already read for the batch metric
+                task.maybeFlushTerminalE2ELatency(end);
             }
             return processed;
         }

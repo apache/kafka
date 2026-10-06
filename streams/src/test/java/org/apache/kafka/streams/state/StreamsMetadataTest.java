@@ -27,10 +27,9 @@ import org.junit.jupiter.api.Test;
 import java.util.Collection;
 import java.util.Set;
 
-import static org.hamcrest.MatcherAssert.assertThat;
-import static org.hamcrest.Matchers.equalTo;
-import static org.hamcrest.Matchers.is;
-import static org.hamcrest.Matchers.not;
+import static org.junit.jupiter.api.Assertions.assertEquals;
+import static org.junit.jupiter.api.Assertions.assertNotEquals;
+import static org.junit.jupiter.api.Assertions.assertTrue;
 
 public class StreamsMetadataTest {
 
@@ -57,10 +56,10 @@ public class StreamsMetadataTest {
 
     @Test
     public void shouldNotAllowModificationOfInternalStateViaGetters() {
-        assertThat(isUnmodifiable(streamsMetadata.stateStoreNames()), is(true));
-        assertThat(isUnmodifiable(streamsMetadata.topicPartitions()), is(true));
-        assertThat(isUnmodifiable(streamsMetadata.standbyTopicPartitions()), is(true));
-        assertThat(isUnmodifiable(streamsMetadata.standbyStateStoreNames()), is(true));
+        assertTrue(isUnmodifiable(streamsMetadata.stateStoreNames()));
+        assertTrue(isUnmodifiable(streamsMetadata.topicPartitions()));
+        assertTrue(isUnmodifiable(streamsMetadata.standbyTopicPartitions()));
+        assertTrue(isUnmodifiable(streamsMetadata.standbyStateStoreNames()));
     }
 
     @Test
@@ -71,8 +70,8 @@ public class StreamsMetadataTest {
             TOPIC_PARTITIONS,
             STAND_BY_STORE_NAMES,
             STANDBY_TOPIC_PARTITIONS);
-        assertThat(streamsMetadata, equalTo(same));
-        assertThat(streamsMetadata.hashCode(), equalTo(same.hashCode()));
+        assertEquals(same, streamsMetadata);
+        assertEquals(same.hashCode(), streamsMetadata.hashCode());
     }
 
     @Test
@@ -83,8 +82,8 @@ public class StreamsMetadataTest {
             TOPIC_PARTITIONS,
             STAND_BY_STORE_NAMES,
             STANDBY_TOPIC_PARTITIONS);
-        assertThat(streamsMetadata, not(equalTo(differHostInfo)));
-        assertThat(streamsMetadata.hashCode(), not(equalTo(differHostInfo.hashCode())));
+        assertNotEquals(differHostInfo, streamsMetadata);
+        assertNotEquals(differHostInfo.hashCode(), streamsMetadata.hashCode());
     }
 
     @Test
@@ -95,8 +94,8 @@ public class StreamsMetadataTest {
             TOPIC_PARTITIONS,
             STAND_BY_STORE_NAMES,
             STANDBY_TOPIC_PARTITIONS);
-        assertThat(streamsMetadata, not(equalTo(differStateStoreNames)));
-        assertThat(streamsMetadata.hashCode(), not(equalTo(differStateStoreNames.hashCode())));
+        assertNotEquals(differStateStoreNames, streamsMetadata);
+        assertNotEquals(differStateStoreNames.hashCode(), streamsMetadata.hashCode());
     }
 
     @Test
@@ -107,8 +106,8 @@ public class StreamsMetadataTest {
             Set.of(TP_0),
             STAND_BY_STORE_NAMES,
             STANDBY_TOPIC_PARTITIONS);
-        assertThat(streamsMetadata, not(equalTo(differTopicPartitions)));
-        assertThat(streamsMetadata.hashCode(), not(equalTo(differTopicPartitions.hashCode())));
+        assertNotEquals(differTopicPartitions, streamsMetadata);
+        assertNotEquals(differTopicPartitions.hashCode(), streamsMetadata.hashCode());
     }
 
     @Test
@@ -119,8 +118,8 @@ public class StreamsMetadataTest {
             TOPIC_PARTITIONS,
             Set.of("store1"),
             STANDBY_TOPIC_PARTITIONS);
-        assertThat(streamsMetadata, not(equalTo(differStandByStores)));
-        assertThat(streamsMetadata.hashCode(), not(equalTo(differStandByStores.hashCode())));
+        assertNotEquals(differStandByStores, streamsMetadata);
+        assertNotEquals(differStandByStores.hashCode(), streamsMetadata.hashCode());
     }
 
     @Test
@@ -131,8 +130,8 @@ public class StreamsMetadataTest {
             TOPIC_PARTITIONS,
             STAND_BY_STORE_NAMES,
             Set.of(TP_0));
-        assertThat(streamsMetadata, not(equalTo(differStandByTopicPartitions)));
-        assertThat(streamsMetadata.hashCode(), not(equalTo(differStandByTopicPartitions.hashCode())));
+        assertNotEquals(differStandByTopicPartitions, streamsMetadata);
+        assertNotEquals(differStandByTopicPartitions.hashCode(), streamsMetadata.hashCode());
     }
 
     private static boolean isUnmodifiable(final Collection<?> collection) {

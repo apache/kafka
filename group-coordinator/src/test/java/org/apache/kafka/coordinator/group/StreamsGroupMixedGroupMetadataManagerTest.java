@@ -33,7 +33,7 @@ import org.apache.kafka.coordinator.group.streams.StreamsGroupBuilder;
 import org.apache.kafka.coordinator.group.streams.StreamsGroupHeartbeatResult;
 import org.apache.kafka.coordinator.group.streams.StreamsGroupMember;
 import org.apache.kafka.coordinator.group.streams.StreamsTopology;
-import org.apache.kafka.coordinator.group.streams.TaskAssignmentTestUtil;
+import org.apache.kafka.coordinator.group.streams.TaskRole;
 import org.apache.kafka.coordinator.group.streams.TasksTuple;
 import org.apache.kafka.coordinator.group.streams.TasksTupleWithEpochs;
 
@@ -54,7 +54,6 @@ import static org.apache.kafka.coordinator.group.StreamsGroupTestUtil.staticHear
 import static org.apache.kafka.coordinator.group.StreamsGroupTestUtil.staticJoinHeartbeat;
 import static org.apache.kafka.coordinator.group.StreamsGroupTestUtil.streamsGroupMemberBuilderWithDefaults;
 import static org.apache.kafka.coordinator.group.StreamsGroupTestUtil.streamsTopicFixture;
-import static org.apache.kafka.coordinator.group.streams.TaskAssignmentTestUtil.TaskRole;
 import static org.apache.kafka.coordinator.group.streams.TaskAssignmentTestUtil.mkTasksTupleWithEpochs;
 import static org.apache.kafka.coordinator.group.streams.TaskAssignmentTestUtil.mkTasksWithEpochs;
 import static org.junit.jupiter.api.Assertions.assertEquals;
@@ -600,7 +599,7 @@ class StreamsGroupMixedGroupMetadataManagerTest {
             .setMemberEpoch(bumpedGroupEpoch)
             .setPreviousMemberEpoch(0)
             .setAssignedTasks(mkTasksTupleWithEpochs(
-                TaskAssignmentTestUtil.TaskRole.ACTIVE,
+                TaskRole.ACTIVE,
                 mkTasksWithEpochs(subtopologyId, Map.of(0, groupEpoch))
             ))
             .build();
@@ -674,7 +673,7 @@ class StreamsGroupMixedGroupMetadataManagerTest {
             .setMemberEpoch(bumpedGroupEpoch)
             .setPreviousMemberEpoch(groupEpoch)
             .setAssignedTasks(mkTasksTupleWithEpochs(
-                TaskAssignmentTestUtil.TaskRole.ACTIVE,
+                TaskRole.ACTIVE,
                 mkTasksWithEpochs(subtopologyId, Map.of(
                     1, bumpedGroupEpoch,
                     2, groupEpoch,
