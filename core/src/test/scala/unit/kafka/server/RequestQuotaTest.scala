@@ -753,7 +753,7 @@ class RequestQuotaTest extends BaseRequestTest {
           new DeleteShareGroupStateRequest.Builder(new DeleteShareGroupStateRequestData())
 
         case ApiKeys.READ_SHARE_GROUP_STATE_SUMMARY =>
-          new ReadShareGroupStateSummaryRequest.Builder(new ReadShareGroupStateSummaryRequestData())
+          new ReadShareGroupStateSummaryRequest.Builder(new ReadShareGroupStateSummaryRequestData(), false)
           
         case ApiKeys.STREAMS_GROUP_HEARTBEAT =>
           new StreamsGroupHeartbeatRequest.Builder(new StreamsGroupHeartbeatRequestData())

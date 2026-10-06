@@ -1627,7 +1627,7 @@ public class PersisterStateManager {
                             // to not be sent immediately but get batched
                             if (!inFlight.containsKey(rpcType) || !inFlight.get(rpcType).contains(coordNode)) {
                                 AbstractRequest.Builder<? extends AbstractRequest> combinedRequestPerTypePerGroup =
-                                    RequestCoalescerHelper.coalesceRequests(groupId, rpcType, handlersPerGroup);
+                                    RequestCoalescerHelper.coalesceRequests(groupId, rpcType, handlersPerGroup, cacheHelper.isRequestHeaderV3Supported());
                                 requests.add(new RequestAndCompletionHandler(
                                     time.milliseconds(),
                                     coordNode,
@@ -1696,12 +1696,12 @@ public class PersisterStateManager {
     private static class RequestCoalescerHelper {
         private static final Logger LOG = LoggerFactory.getLogger(RequestCoalescerHelper.class);
 
-        public static AbstractRequest.Builder<? extends AbstractRequest> coalesceRequests(String groupId, RPCType rpcType, List<? extends PersisterStateManagerHandler> handlers) {
+        public static AbstractRequest.Builder<? extends AbstractRequest> coalesceRequests(String groupId, RPCType rpcType, List<? extends PersisterStateManagerHandler> handlers, boolean useRequestHeaderV3) {
             LOG.trace("Received coalesce request for {} handlers of RPC type {}", handlers.size(), rpcType);
             return switch (rpcType) {
                 case WRITE -> coalesceWrites(groupId, handlers);
                 case READ -> coalesceReads(groupId, handlers);
-                case SUMMARY -> coalesceReadSummaries(groupId, handlers);
+                case SUMMARY -> coalesceReadSummaries(groupId, handlers, useRequestHeaderV3);
                 case DELETE -> coalesceDeletes(groupId, handlers);
                 case INITIALIZE -> coalesceInitializations(groupId, handlers);
                 default -> throw new RuntimeException("Unknown rpc type: " + rpcType);
@@ -1762,7 +1762,7 @@ public class PersisterStateManager {
                     .collect(Collectors.toList())));
         }
 
-        private static AbstractRequest.Builder<? extends AbstractRequest> coalesceReadSummaries(String groupId, List<? extends PersisterStateManagerHandler> handlers) {
+        private static AbstractRequest.Builder<? extends AbstractRequest> coalesceReadSummaries(String groupId, List<? extends PersisterStateManagerHandler> handlers, boolean useRequestHeaderV3) {
             Map<Uuid, List<ReadShareGroupStateSummaryRequestData.PartitionData>> partitionData = new HashMap<>();
             handlers.forEach(persisterStateManagerHandler -> {
                 assert persisterStateManagerHandler instanceof ReadStateSummaryHandler;
@@ -1781,7 +1781,8 @@ public class PersisterStateManager {
                     .map(entry -> new ReadShareGroupStateSummaryRequestData.ReadStateSummaryData()
                         .setTopicId(entry.getKey())
                         .setPartitions(entry.getValue()))
-                    .collect(Collectors.toList()))
+                    .collect(Collectors.toList())),
+                useRequestHeaderV3
             );
         }
 
