@@ -22,6 +22,7 @@ import org.apache.kafka.common.serialization.IntegerDeserializer;
 import org.apache.kafka.common.serialization.IntegerSerializer;
 import org.apache.kafka.common.serialization.Serdes;
 import org.apache.kafka.common.utils.MockTime;
+import org.apache.kafka.streams.CloseOptions;
 import org.apache.kafka.streams.KafkaStreams;
 import org.apache.kafka.streams.KeyValue;
 import org.apache.kafka.streams.StoreQueryParameters;
@@ -267,7 +268,7 @@ public class StandbyTaskEOSIntegrationTest {
             () -> streamInstanceOne.state() == KafkaStreams.State.ERROR,
             "Stream instance 1 did not go into error state"
         );
-        streamInstanceOne.close();
+        streamInstanceOne.close(CloseOptions.groupMembershipOperation(CloseOptions.GroupMembershipOperation.LEAVE_GROUP));
 
         IntegrationTestUtils.waitUntilMinRecordsReceived(
             TestUtils.consumerConfig(
@@ -294,7 +295,7 @@ public class StandbyTaskEOSIntegrationTest {
             "Could not get key from recovered standby store"
         );
 
-        streamInstanceTwo.close();
+        streamInstanceTwo.close(CloseOptions.groupMembershipOperation(CloseOptions.GroupMembershipOperation.LEAVE_GROUP));
         waitForCondition(
             () -> streamInstanceOneRecovery.store(
                 StoreQueryParameters.fromNameAndType(

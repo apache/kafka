@@ -119,9 +119,7 @@ public class ClientRebootstrapTest {
         }
     )
     public void testProducerRebootstrap(ClusterInstance clusterInstance) throws ExecutionException, InterruptedException {
-        try (var admin = clusterInstance.admin()) {
-            admin.createTopics(List.of(new NewTopic(TOPIC, PARTITIONS, (short) REPLICAS)));
-        }
+        clusterInstance.createTopic(TOPIC, PARTITIONS, (short) REPLICAS);
 
         var broker0 = 0;
         var broker1 = 1;
@@ -154,9 +152,7 @@ public class ClientRebootstrapTest {
         }
     )
     public void testProducerRebootstrapDisabled(ClusterInstance clusterInstance) throws ExecutionException, InterruptedException {
-        try (var admin = clusterInstance.admin()) {
-            admin.createTopics(List.of(new NewTopic(TOPIC, PARTITIONS, (short) REPLICAS)));
-        }
+        clusterInstance.createTopic(TOPIC, PARTITIONS, (short) REPLICAS);
 
         var broker0 = 0;
         var broker1 = 1;
@@ -307,9 +303,7 @@ public class ClientRebootstrapTest {
         }
     )
     public void testRebootstrapOnMetadataClusterCheckFail(ClusterInstance clusterInstance) throws ExecutionException, InterruptedException {
-        try (var admin = clusterInstance.admin()) {
-            admin.createTopics(List.of(new NewTopic(TOPIC, 2, (short) 1)));
-        }
+        clusterInstance.createTopic(TOPIC, 2, (short) 1);
 
         try (var producer = clusterInstance.producer()) {
             var recordMetadata0 = producer.send(new ProducerRecord<>(TOPIC, 0, null, "value 0".getBytes())).get();

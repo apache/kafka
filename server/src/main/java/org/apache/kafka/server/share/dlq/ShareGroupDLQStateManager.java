@@ -451,25 +451,21 @@ public class ShareGroupDLQStateManager {
         public Optional<Throwable> validateDlqTopic() {
             Optional<String> topicNameOpt = cacheHelper.shareGroupDlqTopic(param.groupId());
 
-            // Verify that DLQ topic for the share group is set and is correctly named.
+            // Verify that DLQ topic for the share group is set.
             if (topicNameOpt.isEmpty()) {
                 return Optional.of(new ConfigException(String.format("Configured DLQ topic name in share group: %s is empty.", param.groupId())));
             }
 
             String topicName = topicNameOpt.get();
 
-            Optional<Throwable> sharedError = ShareGroupDLQValidator.validateDlqTopicConfig(
-                    param.groupId(), topicName, topicName, cacheHelper);
-            if (sharedError.isPresent()) {
-                return sharedError;
-            }
-
-            // Verify that for a non-existent correctly named DLQ topic, auto create should be enabled.
+            // Verify topic existence (or that auto create is enabled) before the config-only checks in
+            // validateDlqTopicConfig, so a missing topic is reported as missing rather than being masked
+            // by an also-true-but-less-actionable naming/enablement error from that method.
             if (!cacheHelper.containsTopic(topicName) && !cacheHelper.isDlqAutoTopicCreateEnabled()) {
                 return Optional.of(new ConfigException(String.format("DLQ topic does not exist and auto create is disabled on cluster for share group: %s, topic: %s.", param.groupId(), topicName)));
             }
 
-            return Optional.empty();
+            return ShareGroupDLQValidator.validateDlqTopicConfig(param.groupId(), topicName, topicName, cacheHelper);
         }
 
         public boolean dlqTopicExists() {
