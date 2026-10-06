@@ -1125,14 +1125,19 @@ public class AsyncKafkaConsumer<K, V> implements ConsumerDelegate<K, V> {
                     offsetCommitCallbackInvoker.enqueueInterceptorInvocation(committedOffsets);
                 }
 
+                final Map<TopicPartition, OffsetAndMetadata> callbackOffsets =
+                    throwable == null
+                        ? committedOffsets
+                        : asyncCommitEvent.calculatedOffsets().orElse(new HashMap<>());
+
                 if (callback == null) {
                     if (throwable != null) {
-                        log.error("Offset commit with offsets {} failed", committedOffsets, throwable);
+                        log.error("Offset commit with offsets {} failed", callbackOffsets, throwable);
                     }
                     return;
                 }
 
-                offsetCommitCallbackInvoker.enqueueUserCallbackInvocation(callback, committedOffsets, (Exception) throwable);
+                offsetCommitCallbackInvoker.enqueueUserCallbackInvocation(callback, callbackOffsets, (Exception) throwable);
             });
         } finally {
             release();
