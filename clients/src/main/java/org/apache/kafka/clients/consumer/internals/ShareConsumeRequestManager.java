@@ -330,7 +330,7 @@ public class ShareConsumeRequestManager implements RequestManager, MemberStateLi
                 // The metadata has a newer leader epoch than the cached leader, so the cached leader is stale.
                 // This happens when the leader changes while the cached leader is unreachable and so cannot redirect.
                 log.debug("Updating leader for partition {} from {} to node {} with epoch {} from newer metadata",
-                    partition, leader, metadataLeader.leader.get().id(), metadataLeader.epoch.get());
+                    partition, leader.leaderId, metadataLeader.leader.get().id(), metadataLeader.epoch.get());
                 shareSessionLeaderMap.put(tip, new LeaderIdAndEpoch(metadataLeader.leader.get().id(), metadataLeader.epoch.get()));
             }
         }
@@ -1096,6 +1096,7 @@ public class ShareConsumeRequestManager implements RequestManager, MemberStateLi
             if (handler != null) {
                 handler.handleError(error);
             }
+            forgetLeadersOnNode(fetchTarget.id());
 
             requestData.topics().forEach(topic -> topic.partitions().forEach(partition -> {
                 TopicIdPartition tip = lookupTopicId(topic.topicId(), partition.partitionIndex());
@@ -1227,6 +1228,7 @@ public class ShareConsumeRequestManager implements RequestManager, MemberStateLi
         try {
             log.debug("Completed ShareAcknowledge request from node {} unsuccessfully {}", fetchTarget.id(), Errors.forException(error));
             acknowledgeRequestState.sessionHandler().handleError(error);
+            forgetLeadersOnNode(fetchTarget.id());
             acknowledgeRequestState.onFailedAttempt(responseCompletionTimeMs);
 
             requestData.topics().forEach(topic -> topic.partitions().forEach(partition -> {
@@ -1266,6 +1268,7 @@ public class ShareConsumeRequestManager implements RequestManager, MemberStateLi
                 // will have been released. Instead, these records will be re-delivered once they get timed out on the broker.
                 // If the topic or partition has been deleted, we do not retry the failed acknowledgements.
                 updateLeaderInfoMap(partitionData, partitionsWithUpdatedLeaderInfo, partitionError, tip);
+                metadata.requestUpdate(false);
             } else if (partitionError == Errors.UNKNOWN_TOPIC_OR_PARTITION || partitionError == Errors.UNKNOWN_TOPIC_ID) {
                 shareSessionLeaderMap.remove(tip);
                 shareSessionTopicIdMap.remove(tip.topicPartition());
@@ -1318,8 +1321,16 @@ public class ShareConsumeRequestManager implements RequestManager, MemberStateLi
             maybeUpdateLeaderCache(tip, partitionData.currentLeader().leaderId(), partitionData.currentLeader().leaderEpoch());
         } else {
             shareSessionLeaderMap.remove(tip);
-            metadata.requestUpdate(false);
         }
+    }
+
+    /**
+     * Forget the cached leader of every share partition routed to a node which a request could not be delivered to.
+     * The share session on that node has been lost. The next poll seeds those partitions from the cluster metadata again,
+     * so a leadership change which coincides with the failure is picked up as soon as the metadata reflects it.
+     */
+    private void forgetLeadersOnNode(int nodeId) {
+        shareSessionLeaderMap.values().removeIf(leader -> leader.leaderId == nodeId);
     }
 
     /**
