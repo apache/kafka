@@ -295,7 +295,7 @@ public class ShareConsumeRequestManager implements RequestManager, MemberStateLi
 
     /**
      * Resolve the topic ID and leader for each partition to fetch, caching the information in {@link #shareSessionTopicIdMap}
-     * and {@link #shareSessionLeaderMap}. The cached leader is normally kept up to date by redirects from tbe brokers
+     * and {@link #shareSessionLeaderMap}. The cached leader is normally kept up to date by redirects from the brokers
      * but it is replaced from the metadata if the cached node is no longer in the cluster, or if the metadata holds a
      * strictly newer leader epoch. A metadata update is requested if the topic ID or leader cannot be resolved.
      */
@@ -1323,9 +1323,9 @@ public class ShareConsumeRequestManager implements RequestManager, MemberStateLi
     }
 
     /**
-     * Update the cache leader for a partition in a share session, only if the new leader epoch at least as large as the
+     * Update the cache leader for a partition in a share session, only if the new leader epoch is at least as large as the
      * currently cached epoch. A stale entry is never overwritten by an older epoch. This mirrors the rules applied by
-     * {@code }Metadata#updateLatestMetadata(MetadataResponse.PartitionMetadata, boolean, Uuid, Uuid)}.
+     * {@code Metadata#updateLatestMetadata(MetadataResponse.PartitionMetadata, boolean, Uuid, Uuid)}.
      * <p>
      * The broker has explicitly told us it is no longer the leader, so we trust the redirect even if the epoch did
      * not advance. Without this, the share consumer would keep sending ShareFetch requests to the old leader indefinitely.
