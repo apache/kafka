@@ -493,18 +493,12 @@ public class AlterPartitionManagerTest {
                     .flatMap(topicData ->
                             topicData.partitions().stream()
                                     .map(partitionData ->
-                                            new TopicPartitionKey(topicData.topicId(), partitionData.partitionIndex()))
+                                            new TopicIdPartition(topicData.topicId(), partitionData.partitionIndex()))
                     ).collect(Collectors.toSet());
 
-            var expectedSet = expectedTopicPartitions.stream()
-                    .map(tp -> new TopicPartitionKey(tp.topicId(), tp.partitionId()))
-                    .collect(Collectors.toSet());
-
-            return expectedSet.equals(requestTopicPartitions);
+            return expectedTopicPartitions.equals(requestTopicPartitions);
         };
     }
-
-    record TopicPartitionKey(Uuid topicId, int partitionId) { }
 
     private ClientResponse makeClientResponse(AlterPartitionResponse response, short version) {
         return new ClientResponse(

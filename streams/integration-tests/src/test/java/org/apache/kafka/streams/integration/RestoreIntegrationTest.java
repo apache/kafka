@@ -37,6 +37,7 @@ import org.apache.kafka.common.serialization.StringDeserializer;
 import org.apache.kafka.common.utils.Bytes;
 import org.apache.kafka.common.utils.MockTime;
 import org.apache.kafka.common.utils.Utils;
+import org.apache.kafka.streams.CloseOptions;
 import org.apache.kafka.streams.GroupProtocol;
 import org.apache.kafka.streams.KafkaStreams;
 import org.apache.kafka.streams.KafkaStreams.State;
@@ -67,7 +68,6 @@ import org.apache.kafka.streams.state.internals.OffsetCheckpoint;
 import org.apache.kafka.test.StreamsTestUtils;
 import org.apache.kafka.test.TestUtils;
 
-import org.hamcrest.CoreMatchers;
 import org.junit.jupiter.api.AfterAll;
 import org.junit.jupiter.api.AfterEach;
 import org.junit.jupiter.api.BeforeAll;
@@ -111,11 +111,7 @@ import static org.apache.kafka.streams.integration.utils.IntegrationTestUtils.wa
 import static org.apache.kafka.streams.integration.utils.IntegrationTestUtils.waitForStandbyCompletion;
 import static org.apache.kafka.streams.utils.TestUtils.safeUniqueTestName;
 import static org.apache.kafka.test.TestUtils.waitForCondition;
-import static org.hamcrest.MatcherAssert.assertThat;
-import static org.hamcrest.Matchers.allOf;
-import static org.hamcrest.Matchers.greaterThanOrEqualTo;
-import static org.hamcrest.Matchers.lessThanOrEqualTo;
-import static org.hamcrest.core.IsEqual.equalTo;
+import static org.junit.jupiter.api.Assertions.assertEquals;
 import static org.junit.jupiter.api.Assertions.assertTrue;
 import static org.junit.jupiter.api.Assertions.fail;
 
@@ -262,7 +258,8 @@ public class RestoreIntegrationTest {
                 consumerConfig, outputTopic, initialKeyValues);
 
         // wipe out state store to trigger restore process on restart
-        streams.close();
+        // Use LEAVE_GROUP consistently across both protocols.
+        streams.close(CloseOptions.groupMembershipOperation(CloseOptions.GroupMembershipOperation.LEAVE_GROUP));
         streams.cleanUp();
 
         // Restart the stream instance. There should not be exception handling the null
@@ -323,7 +320,8 @@ public class RestoreIntegrationTest {
 
         if (useNewProtocol) {
             // For new protocol, we need to stop the streams instance before altering offsets
-            kafkaStreams.close(Duration.ofSeconds(60));
+            kafkaStreams.close(CloseOptions.groupMembershipOperation(CloseOptions.GroupMembershipOperation.LEAVE_GROUP)
+                .withTimeout(Duration.ofSeconds(60)));
             setCommittedOffset(inputStream, offsetLimitDelta, useNewProtocol);
             setCheckpointedOffset(props, inputStream, offsetCheckpointed);
 
@@ -334,10 +332,10 @@ public class RestoreIntegrationTest {
             startApplicationAndWaitUntilRunning(kafkaStreams);
         }
 
-        assertThat(restored.get(), equalTo((long) numberOfKeys - offsetLimitDelta * 2 - offsetCheckpointed * 2));
+        assertEquals((long) numberOfKeys - offsetLimitDelta * 2 - offsetCheckpointed * 2, restored.get());
 
         assertTrue(shutdownLatch.await(30, TimeUnit.SECONDS));
-        assertThat(numReceived.get(), equalTo(offsetLimitDelta * 2));
+        assertEquals(offsetLimitDelta * 2, numReceived.get());
     }
 
     @ParameterizedTest
@@ -388,7 +386,7 @@ public class RestoreIntegrationTest {
 
         if (useNewProtocol) {
             // For new protocol, we need to stop the streams instance before altering offsets
-            kafkaStreams.close();
+            kafkaStreams.close(CloseOptions.groupMembershipOperation(CloseOptions.GroupMembershipOperation.LEAVE_GROUP));
             setCommittedOffset(inputStream, offsetLimitDelta, useNewProtocol);
             setCheckpointedOffset(props, inputStream, offsetCheckpointed);
 
@@ -400,10 +398,10 @@ public class RestoreIntegrationTest {
 
         }
 
-        assertThat(restored.get(), equalTo((long) numberOfKeys - offsetLimitDelta * 2 - offsetCheckpointed * 2));
+        assertEquals((long) numberOfKeys - offsetLimitDelta * 2 - offsetCheckpointed * 2, restored.get());
 
         assertTrue(shutdownLatch.await(30, TimeUnit.SECONDS));
-        assertThat(numReceived.get(), equalTo(offsetLimitDelta * 2));
+        assertEquals(offsetLimitDelta * 2, numReceived.get());
     }
 
     // Adds a transactional dimension on top of (useNewProtocol, withHeaders). When transactional is true the
@@ -465,10 +463,10 @@ public class RestoreIntegrationTest {
         kafkaStreams.start();
 
         assertTrue(startupLatch.await(30, TimeUnit.SECONDS));
-        assertThat(restored.get(), equalTo((long) numberOfKeys - 2 * offsetCheckpointed));
+        assertEquals((long) numberOfKeys - 2 * offsetCheckpointed, restored.get());
 
         assertTrue(shutdownLatch.await(30, TimeUnit.SECONDS));
-        assertThat(numReceived.get(), equalTo(numberOfKeys));
+        assertEquals(numberOfKeys, numReceived.get());
     }
 
     @ParameterizedTest
@@ -619,18 +617,18 @@ public class RestoreIntegrationTest {
             waitForCompletion(streams1, 1, 30 * 1000L);
             waitForStandbyCompletion(streams1, 1, 30 * 1000L);
 
-            assertThat(restoreListener.totalNumRestored(), CoreMatchers.equalTo(initialNunRestoredCount));
+            assertEquals(initialNunRestoredCount, restoreListener.totalNumRestored());
 
             // After stopping instance 2 and letting instance 1 take over its tasks, we should have closed just two stores
             // total: the active and standby tasks on instance 2. The new protocol used to close one store more, because
             // the standby that instance 1 already held was closed and re-created instead of being promoted in place;
             // now that the reconciler changes the role in place, both protocols close the same two stores.
-            assertThat(CloseCountingInMemoryStore.numStoresClosed(), equalTo(initialStoreCloseCount + 2));
+            assertEquals(initialStoreCloseCount + 2, CloseCountingInMemoryStore.numStoresClosed());
         } finally {
             streams1.close(Duration.ofSeconds(60));
         }
         waitForTransitionTo(transitionedStates1, State.NOT_RUNNING, Duration.ofSeconds(60));
-        assertThat(CloseCountingInMemoryStore.numStoresClosed(), CoreMatchers.equalTo(initialStoreCloseCount + 4));
+        assertEquals(initialStoreCloseCount + 4, CloseCountingInMemoryStore.numStoresClosed());
     }
 
     @ParameterizedTest
@@ -669,7 +667,7 @@ public class RestoreIntegrationTest {
         validateReceivedMessages(sampleData, outputTopic);
 
         // Close kafkaStreams1 (with cleanup) and start it again to force the restoration of the state.
-        kafkaStreams.close();
+        kafkaStreams.close(CloseOptions.groupMembershipOperation(CloseOptions.GroupMembershipOperation.LEAVE_GROUP));
         IntegrationTestUtils.purgeLocalStreamsState(streamsConfigurations);
 
         final TestStateRestoreListener kafkaStreams1StateRestoreListener = new TestStateRestoreListener("ks1", RESTORATION_DELAY);
@@ -740,7 +738,7 @@ public class RestoreIntegrationTest {
         kafkaStreams.start();
 
         assertTrue(shutdownLatch.await(30, TimeUnit.SECONDS));
-        assertThat(numReceived.get(), equalTo(numberOfKeys));
+        assertEquals(numberOfKeys, numReceived.get());
 
         final Map<String, Long> taskIdToMetricValue = kafkaStreams.metrics().entrySet().stream()
                 .filter(e -> e.getKey().name().equals("restore-latency-max"))
@@ -749,7 +747,8 @@ public class RestoreIntegrationTest {
         for (final Map.Entry<TopicPartition, Long> entry : restoreListener.changelogToRestoreTime().entrySet()) {
             final long lowerBound = entry.getValue() - TimeUnit.NANOSECONDS.convert(1, TimeUnit.SECONDS);
             final long upperBound = entry.getValue() + TimeUnit.NANOSECONDS.convert(1, TimeUnit.SECONDS);
-            assertThat(taskIdToMetricValue.get("0_" + entry.getKey().partition()), allOf(greaterThanOrEqualTo(lowerBound), lessThanOrEqualTo(upperBound)));
+            final Long metricValue = taskIdToMetricValue.get("0_" + entry.getKey().partition());
+            assertTrue(metricValue != null && metricValue >= lowerBound && metricValue <= upperBound);
         }
     }
 

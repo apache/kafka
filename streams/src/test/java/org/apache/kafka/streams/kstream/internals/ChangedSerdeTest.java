@@ -16,6 +16,7 @@
  */
 package org.apache.kafka.streams.kstream.internals;
 
+import org.apache.kafka.common.errors.SerializationException;
 import org.apache.kafka.common.header.Headers;
 import org.apache.kafka.common.header.internals.RecordHeaders;
 import org.apache.kafka.common.serialization.Deserializer;
@@ -33,9 +34,8 @@ import java.nio.ByteBuffer;
 import java.util.Collections;
 import java.util.Map;
 
-import static org.hamcrest.MatcherAssert.assertThat;
-import static org.hamcrest.Matchers.is;
-import static org.hamcrest.Matchers.notNullValue;
+import static org.junit.jupiter.api.Assertions.assertEquals;
+import static org.junit.jupiter.api.Assertions.assertNotNull;
 import static org.junit.jupiter.api.Assertions.assertThrows;
 import static org.mockito.Mockito.mock;
 import static org.mockito.Mockito.never;
@@ -61,9 +61,9 @@ public class ChangedSerdeTest {
 
     private static <T> void checkRoundTrip(final T data, final Serializer<T> serializer, final Deserializer<T> deserializer) {
         final byte[] serialized = serializer.serialize(TOPIC, HEADERS, data);
-        assertThat(serialized, is(notNullValue()));
+        assertNotNull(serialized);
         final T deserialized = deserializer.deserialize(TOPIC, HEADERS, serialized);
-        assertThat(deserialized, is(data));
+        assertEquals(data, deserialized);
     }
 
     @Test
@@ -109,7 +109,7 @@ public class ChangedSerdeTest {
     public void shouldThrowErrorIfEncountersAnUnknownByteValueForOldNewFlag() {
         final Change<String> data = new Change<>(null, nonNullOldValue);
         final byte[] serialized = CHANGED_STRING_SERIALIZER.serialize(TOPIC, HEADERS, data);
-        assertThat(serialized, is(notNullValue()));
+        assertNotNull(serialized);
 
         // mutate the serialized array to replace OLD_NEW_FLAG with an unsupported byte value
         final ByteBuffer buffer = ByteBuffer.wrap(serialized);
@@ -181,9 +181,9 @@ public class ChangedSerdeTest {
 
     private static void checkRoundTripForReservedVersion(final Change<String> data) {
         final byte[] serialized = serializeVersions3Through5(TOPIC, data);
-        assertThat(serialized, is(notNullValue()));
+        assertNotNull(serialized);
         final Change<String> deserialized = CHANGED_STRING_DESERIALIZER.deserialize(TOPIC, HEADERS, serialized);
-        assertThat(deserialized, is(data));
+        assertEquals(data, deserialized);
     }
 
     @Test
@@ -215,5 +215,45 @@ public class ChangedSerdeTest {
 
         verify(mockDeserializer).deserialize(TOPIC, HEADERS, value.getBytes());
         verify(mockDeserializer, never()).deserialize(TOPIC, value.getBytes());
+    }
+
+    @Test
+    public void shouldThrowOnNewDataLengthLargerThanRemainingBytesForFlag2() {
+        final byte[] newData = STRING_SERIALIZER.serialize(TOPIC, HEADERS, nonNullNewValue);
+        final byte[] oldData = STRING_SERIALIZER.serialize(TOPIC, HEADERS, nonNullOldValue);
+        final int fakeNewDataLength = newData.length + oldData.length + ENCODING_FLAG_SIZE + 1; // one past what the buffer can actually back
+
+        final int capacity = MAX_VARINT_LENGTH + newData.length + oldData.length + ENCODING_FLAG_SIZE;
+        final ByteBuffer buf = ByteBuffer.allocate(capacity);
+        ByteUtils.writeVarint(fakeNewDataLength, buf);
+        buf.put(newData).put(oldData).put((byte) 2);
+        final byte[] serialized = new byte[buf.position()];
+        buf.position(0);
+        buf.get(serialized);
+
+        assertThrows(
+            SerializationException.class,
+            () -> CHANGED_STRING_DESERIALIZER.deserialize(TOPIC, HEADERS, serialized)
+        );
+    }
+
+    @Test
+    public void shouldThrowOnNewDataLengthLargerThanRemainingBytesForFlag5() {
+        final byte[] newData = STRING_SERIALIZER.serialize(TOPIC, HEADERS, nonNullNewValue);
+        final byte[] oldData = STRING_SERIALIZER.serialize(TOPIC, HEADERS, nonNullOldValue);
+        final int fakeNewDataLength = newData.length + oldData.length + IS_LATEST_FLAG_SIZE + ENCODING_FLAG_SIZE + 1;
+
+        final int capacity = MAX_VARINT_LENGTH + newData.length + oldData.length + IS_LATEST_FLAG_SIZE + ENCODING_FLAG_SIZE;
+        final ByteBuffer buf = ByteBuffer.allocate(capacity);
+        ByteUtils.writeVarint(fakeNewDataLength, buf);
+        buf.put(newData).put(oldData).put((byte) 1).put((byte) 5);
+        final byte[] serialized = new byte[buf.position()];
+        buf.position(0);
+        buf.get(serialized);
+
+        assertThrows(
+            SerializationException.class,
+            () -> CHANGED_STRING_DESERIALIZER.deserialize(TOPIC, HEADERS, serialized)
+        );
     }
 }

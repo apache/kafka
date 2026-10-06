@@ -16,13 +16,37 @@
  */
 package org.apache.kafka.server.config;
 
+import org.apache.kafka.common.config.AbstractConfig;
+import org.apache.kafka.common.config.provider.FileConfigProvider;
+
 import org.junit.jupiter.api.Test;
 
+import java.io.IOException;
+import java.nio.file.Files;
+import java.nio.file.Path;
 import java.util.List;
+import java.util.Properties;
 
+import static org.junit.jupiter.api.Assertions.assertDoesNotThrow;
 import static org.junit.jupiter.api.Assertions.assertEquals;
 
 public class DynamicBrokerConfigTest {
+
+    @Test
+    public void testValidateConfigTypesResolvesConfigProviders() throws IOException {
+        Path providerFile = Files.createTempFile("provider", ".properties");
+        try {
+            Files.writeString(providerFile, "token=42");
+            Properties props = new Properties();
+            props.setProperty(AbstractConfig.CONFIG_PROVIDERS_CONFIG, "file");
+            props.setProperty(AbstractConfig.CONFIG_PROVIDERS_CONFIG + ".file.class", FileConfigProvider.class.getName());
+            props.setProperty(ServerConfigs.NUM_IO_THREADS_CONFIG, "${file:" + providerFile.toAbsolutePath() + ":token}");
+
+            assertDoesNotThrow(() -> DynamicBrokerConfig.validateConfigTypes(props));
+        } finally {
+            Files.deleteIfExists(providerFile);
+        }
+    }
 
     @Test
     public void testBrokerConfigSynonyms() {

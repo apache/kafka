@@ -377,8 +377,6 @@ for filename in os.listdir(artifacts_dir):
     # argument for the file is included in the output and verification uses a simple diff that will break if an absolute path
     # is used.
     dir, fname = os.path.split(full_path)
-    cmd(f"Generating MD5    for {full_path}", f"gpg --print-md md5    {fname} > {fname}.md5   ", shell=True, cwd=dir)
-    cmd(f"Generating SHA1   for {full_path}", f"gpg --print-md sha1   {fname} > {fname}.sha1  ", shell=True, cwd=dir)
     cmd(f"Generating SHA512 for {full_path}", f"gpg --print-md sha512 {fname} > {fname}.sha512", shell=True, cwd=dir)
 
 cmd("Listing artifacts to be uploaded:", f"ls -R {artifacts_dir}")
@@ -388,7 +386,7 @@ confirm_or_fail(f"Going to check in artifacts to svn under {SVN_DEV_URL}/{rc_tag
 svn.commit_artifacts(rc_tag, artifacts_dir, work_dir)
 
 confirm_or_fail("Going to build and upload mvn artifacts based on these settings:\n" + textfiles.read(global_gradle_props) + '\nOK?')
-cmd("Building and uploading archives", "./gradlew publish -PscalaVersion=2.13", cwd=kafka_dir, env=jdk25_env, shell=True)
+cmd("Building and uploading archives", "./gradlew publish -PscalaVersion=2.13 --no-parallel", cwd=kafka_dir, env=jdk25_env, shell=True)
 # Publishes the KIP-1265 plugin artifacts to the same Nexus staging repo. The api-checker
 # tree is a separate Gradle build (composite/included) so the root :publish task does not
 # descend into it. The four coordinates uploaded here are:
@@ -406,7 +404,7 @@ cmd("Building and uploading archives", "./gradlew publish -PscalaVersion=2.13", 
 # scalaVersion flag isn't passed. Publish credentials come from ~/.gradle/gradle.properties
 # (mavenUrl / mavenUsername / mavenPassword).
 cmd("Building and uploading archives",
-    "./gradlew :api-checker:core:publish :api-checker:gradle-plugins:publish :api-checker:maven-plugin:publish",
+    "./gradlew :api-checker:core:publish :api-checker:gradle-plugins:publish :api-checker:maven-plugin:publish --no-parallel",
     cwd=kafka_dir, env=jdk25_env, shell=True)
 cmd("Building and uploading archives", "mvn deploy -Pgpg-signing", cwd=os.path.join(kafka_dir, "streams/quickstart"), env=jdk25_env, shell=True)
 

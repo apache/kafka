@@ -21,6 +21,10 @@
   // Version 2 adds flexible version support
   "validVersions": "0-2",
   "flexibleVersions": "2+",
+  "headerVersions": {
+    "0-1": "0",
+    "2+": "1"
+  },
   "fields": [
     { "name": "ErrorCode", "type": "int16", "versions": "0+",
       "about": "The error code, or 0 if there was no error." },

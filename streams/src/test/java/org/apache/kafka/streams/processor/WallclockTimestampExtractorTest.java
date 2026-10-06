@@ -17,13 +17,14 @@
 package org.apache.kafka.streams.processor;
 
 import org.apache.kafka.clients.consumer.ConsumerRecord;
+import org.apache.kafka.common.header.internals.RecordHeaders;
+import org.apache.kafka.common.record.TimestampType;
 
-import org.hamcrest.BaseMatcher;
-import org.hamcrest.Description;
 import org.junit.jupiter.api.Test;
 
-import static org.hamcrest.CoreMatchers.is;
-import static org.hamcrest.MatcherAssert.assertThat;
+import java.util.Optional;
+
+import static org.junit.jupiter.api.Assertions.assertTrue;
 
 public class WallclockTimestampExtractorTest {
 
@@ -32,32 +33,27 @@ public class WallclockTimestampExtractorTest {
         final TimestampExtractor extractor = new WallclockTimestampExtractor();
 
         final long before = System.currentTimeMillis();
-        final long timestamp = extractor.extract(new ConsumerRecord<>("anyTopic", 0, 0, null, null), 42);
+        final long recordTimestamp = 41;
+        final long partitionTime = 42;
+        // The extractor should ignore the input timestamps and return the current wall-clock time.
+        final long timestamp = extractor.extract(
+            new ConsumerRecord<>(
+                "anyTopic",
+                0,
+                0,
+                recordTimestamp,
+                TimestampType.CREATE_TIME,
+                0,
+                0,
+                null,
+                null,
+                new RecordHeaders(),
+                Optional.empty()),
+            partitionTime);
         final long after = System.currentTimeMillis();
 
-        assertThat(timestamp, is(new InBetween(before, after)));
-    }
-
-    private static class InBetween extends BaseMatcher<Long> {
-        private final long before;
-        private final long after;
-
-        public InBetween(final long before, final long after) {
-            this.before = before;
-            this.after = after;
-        }
-
-        @Override
-        public boolean matches(final Object item) {
-            final long timestamp = (Long) item;
-            return before <= timestamp && timestamp <= after;
-        }
-
-        @Override
-        public void describeMismatch(final Object item, final Description mismatchDescription) {}
-
-        @Override
-        public void describeTo(final Description description) {}
+        assertTrue(before <= timestamp);
+        assertTrue(timestamp <= after);
     }
 
 }
