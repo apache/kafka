@@ -572,12 +572,14 @@ org.apache.kafka.clients.admin.internals.AdminFetchMetricsManagerTest:
 - testMultiNodeLatency
 - testSingleNodeLatency
 org.apache.kafka.clients.admin.internals.AdminMetadataManagerTest:
+- testApiVersionsRequestIncludesClusterIdAndNodeId
 - testAuthenticationFailure
 - testAuthorizationFailure
 - testMetadataReady
 - testMetadataRefreshBackoff
 - testNeedsRebootstrap
 - testSetUsingBootstrapControllers
+- testUpdaterClusterId
 org.apache.kafka.clients.admin.internals.AllBrokersStrategyIntegrationTest:
 - testFatalFulfillmentError
 - testFatalLookupError
