@@ -530,50 +530,6 @@ public class LogConfig extends AbstractConfig {
     }
 
     /**
-     * Returns a warning if log.message.timestamp.after.max.ms is above the default and applies (i.e. not LogAppendTime).
-     */
-    public static Optional<String> brokerMessageTimestampAfterMaxMsWarning(long afterMaxMs, TimestampType timestampType) {
-        return messageTimestampAfterMaxMsWarning(
-                ServerLogConfigs.LOG_MESSAGE_TIMESTAMP_AFTER_MAX_MS_CONFIG + " is set to " + afterMaxMs, afterMaxMs, timestampType);
-    }
-
-    /**
-     * Topic-level variant; only warns when the override or the effective timestamp type is new or changed,
-     * so unrelated alters don't repeat it.
-     */
-    public static Optional<String> topicMessageTimestampAfterMaxMsWarning(String topic,
-                                                                          Map<String, String> existingConfigs,
-                                                                          Map<String, String> newConfigs,
-                                                                          TimestampType brokerTimestampType) {
-        String newValue = newConfigs.get(TopicConfig.MESSAGE_TIMESTAMP_AFTER_MAX_MS_CONFIG);
-        if (newValue == null) {
-            return Optional.empty();
-        }
-        TimestampType timestampType = effectiveTimestampType(newConfigs, brokerTimestampType);
-        if (newValue.equals(existingConfigs.get(TopicConfig.MESSAGE_TIMESTAMP_AFTER_MAX_MS_CONFIG)) &&
-                timestampType == effectiveTimestampType(existingConfigs, brokerTimestampType)) {
-            return Optional.empty();
-        }
-        long afterMaxMs = Long.parseLong(newValue.trim());
-        return messageTimestampAfterMaxMsWarning(TopicConfig.MESSAGE_TIMESTAMP_AFTER_MAX_MS_CONFIG + " for topic " + topic +
-                " is set to " + afterMaxMs, afterMaxMs, timestampType);
-    }
-
-    private static TimestampType effectiveTimestampType(Map<String, String> topicConfigs, TimestampType brokerTimestampType) {
-        String typeOverride = topicConfigs.get(TopicConfig.MESSAGE_TIMESTAMP_TYPE_CONFIG);
-        return typeOverride == null ? brokerTimestampType : TimestampType.forName(typeOverride.trim());
-    }
-
-    private static Optional<String> messageTimestampAfterMaxMsWarning(String subject, long afterMaxMs, TimestampType timestampType) {
-        if (timestampType == TimestampType.LOG_APPEND_TIME || afterMaxMs <= ServerLogConfigs.LOG_MESSAGE_TIMESTAMP_AFTER_MAX_MS_DEFAULT) {
-            return Optional.empty();
-        }
-        return Optional.of(subject + ", which is higher than the default of " + ServerLogConfigs.LOG_MESSAGE_TIMESTAMP_AFTER_MAX_MS_DEFAULT +
-                ". Segments containing messages with future timestamps are not eligible for time-based retention until " +
-                "those timestamps plus the retention time have passed, which can delay segment deletion and increase disk usage.");
-    }
-
-    /**
      * Validates the values of the given properties. Should be called only by the broker.
      * The `newConfigs` supplied contains the topic-level configs,
      * The default values should be extracted from the KafkaConfig.
