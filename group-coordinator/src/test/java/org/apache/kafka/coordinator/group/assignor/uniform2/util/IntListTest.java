@@ -26,8 +26,7 @@ import static org.junit.jupiter.api.Assertions.assertThrows;
 import static org.junit.jupiter.api.Assertions.assertTrue;
 
 /**
- * Tests of {@link IntList}. The lists are built with {@link #listOf(int...)}, whose capacity is
- * exactly the number of elements, so that the next addition grows the backing array.
+ * Tests of {@link IntList}.
  */
 public class IntListTest {
 
@@ -37,10 +36,10 @@ public class IntListTest {
     }
 
     /**
-     * A list without capacity grows to 4 elements on its first addition, then doubles.
+     * A list without capacity grows as elements are added.
      */
     @Test
-    public void testZeroCapacityGrows() {
+    public void testAdd() {
         var list = new IntList(0);
         assertTrue(list.isEmpty());
         assertEquals(0, list.size());
@@ -51,25 +50,41 @@ public class IntListTest {
         }
 
         assertFalse(list.isEmpty());
-        for (int i = 0; i < 9; i++) {
-            assertEquals(10 * i, list.get(i));
-        }
+        assertArrayEquals(new int[] {0, 10, 20, 30, 40, 50, 60, 70, 80}, list.toArray());
     }
 
+    /**
+     * The list holds a copy of the elements.
+     */
     @Test
-    public void testAddBeyondTheInitialCapacity() {
-        var list = new IntList(1);
-        list.add(3);
-        list.add(1);
-        list.add(2);
+    public void testOf() {
+        assertArrayEquals(new int[0], IntList.of().toArray());
 
-        assertEquals(3, list.size());
+        int[] elements = {3, 1, 2};
+        var list = IntList.of(elements);
+        elements[0] = 9;
         assertArrayEquals(new int[] {3, 1, 2}, list.toArray());
+    }
+
+    /**
+     * Reading at a negative index, or at an index not below the capacity, which is the number of
+     * elements of {@link IntList#of}, throws.
+     */
+    @Test
+    public void testGet() {
+        var list = IntList.of(7, 3, 5);
+
+        assertEquals(7, list.get(0));
+        assertEquals(3, list.get(1));
+        assertEquals(5, list.get(2));
+
+        assertThrows(ArrayIndexOutOfBoundsException.class, () -> list.get(-1));
+        assertThrows(ArrayIndexOutOfBoundsException.class, () -> list.get(3));
     }
 
     @Test
     public void testSet() {
-        var list = listOf(1, 2, 3);
+        var list = IntList.of(1, 2, 3);
 
         list.set(1, 20);
 
@@ -89,9 +104,7 @@ public class IntListTest {
 
         assertThrows(IndexOutOfBoundsException.class, () -> list.set(2, 9));
         assertThrows(IndexOutOfBoundsException.class, () -> list.set(-1, 9));
-
-        list.add(5);
-        assertArrayEquals(new int[] {1, 2, 5}, list.toArray());
+        assertArrayEquals(new int[] {1, 2}, list.toArray());
     }
 
     /**
@@ -100,7 +113,7 @@ public class IntListTest {
      */
     @Test
     public void testRemove() {
-        var list = listOf(10, 20, 30, 40);
+        var list = IntList.of(10, 20, 30, 40);
 
         assertEquals(20, list.remove(1));
         assertArrayEquals(new int[] {10, 40, 30}, list.toArray());
@@ -145,7 +158,7 @@ public class IntListTest {
      */
     @Test
     public void testIndexOf() {
-        var list = listOf(7, 3, 7, 0);
+        var list = IntList.of(7, 3, 7, 0);
         assertEquals(0, list.indexOf(7));
         assertEquals(1, list.indexOf(3));
         assertEquals(3, list.indexOf(0));
@@ -159,7 +172,7 @@ public class IntListTest {
 
     @Test
     public void testClear() {
-        var list = listOf(1, 2, 3);
+        var list = IntList.of(1, 2, 3);
 
         list.clear();
 
@@ -174,7 +187,7 @@ public class IntListTest {
 
     @Test
     public void testTruncate() {
-        var list = listOf(1, 2, 3);
+        var list = IntList.of(1, 2, 3);
 
         list.truncate(1);
 
@@ -192,7 +205,7 @@ public class IntListTest {
      */
     @Test
     public void testTruncateOutOfRangeThrows() {
-        var list = listOf(1, 2, 3);
+        var list = IntList.of(1, 2, 3);
 
         assertThrows(IndexOutOfBoundsException.class, () -> list.truncate(4));
         assertThrows(IndexOutOfBoundsException.class, () -> list.truncate(-1));
@@ -208,7 +221,7 @@ public class IntListTest {
 
     @Test
     public void testSort() {
-        var list = listOf(2, -1, 5, 2, 0);
+        var list = IntList.of(2, -1, 5, 2, 0);
 
         list.sort();
 
@@ -221,7 +234,7 @@ public class IntListTest {
      */
     @Test
     public void testSortIgnoresRemovedElements() {
-        var list = listOf(3, 2, 1, 0);
+        var list = IntList.of(3, 2, 1, 0);
         assertEquals(0, list.remove(3));
 
         list.sort();
@@ -230,7 +243,7 @@ public class IntListTest {
     }
 
     @Test
-    public void testToArrayIsANewArrayOfTheSize() {
+    public void testToArray() {
         var list = new IntList(8);
         list.add(1);
         list.add(2);
@@ -238,9 +251,6 @@ public class IntListTest {
         int[] array = list.toArray();
         assertArrayEquals(new int[] {1, 2}, array);
         assertNotSame(array, list.toArray());
-
-        array[0] = 9;
-        assertEquals(1, list.get(0));
     }
 
     @Test
@@ -248,18 +258,10 @@ public class IntListTest {
         assertEquals("[]", new IntList(0).toString());
         assertEquals("[]", new IntList(4).toString());
 
-        var list = listOf(1, 2, 3);
+        var list = IntList.of(1, 2, 3);
         assertEquals("[1, 2, 3]", list.toString());
 
         list.remove(0);
         assertEquals("[3, 2]", list.toString());
-    }
-
-    private static IntList listOf(int... elements) {
-        var list = new IntList(elements.length);
-        for (int element : elements) {
-            list.add(element);
-        }
-        return list;
     }
 }

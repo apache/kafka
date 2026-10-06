@@ -22,9 +22,15 @@ import java.util.Objects;
 /**
  * A growable list of primitive ints, avoiding the boxing of a {@code List<Integer>}.
  *
- * <p>{@link #get(int)} does not check its index beyond what the backing array does, to keep the
- * reads cheap: reading at an index between the size and the capacity returns a stale value
- * instead of throwing. The methods that change the list check their arguments.
+ * <p>It differs from a {@link java.util.List} in two ways:
+ * <ul>
+ *   <li>{@link #get(int)} does not check that its index is below the size, to keep the reads
+ *       cheap.</li>
+ *   <li>{@link #remove(int)} moves the last element into the place of the removed one, in
+ *       constant time, so it does not preserve the order of the elements.</li>
+ * </ul>
+ *
+ * <p>The methods that change the list check their arguments.
  */
 public final class IntList {
     private int[] elements;
@@ -44,6 +50,19 @@ public final class IntList {
     }
 
     /**
+     * Creates a list holding a copy of elements, with a capacity of their number.
+     *
+     * @param elements The elements.
+     * @return The list.
+     */
+    public static IntList of(int... elements) {
+        var list = new IntList(elements.length);
+        System.arraycopy(elements, 0, list.elements, 0, elements.length);
+        list.size = elements.length;
+        return list;
+    }
+
+    /**
      * @return The number of elements.
      */
     public int size() {
@@ -51,15 +70,19 @@ public final class IntList {
     }
 
     /**
-     * @return True if the list has no element.
+     * @return {@code true} if the list has no elements.
      */
     public boolean isEmpty() {
         return size == 0;
     }
 
     /**
+     * Does not check that the index is below the size: at an index between the size and the
+     * capacity, it returns a stale element instead of throwing.
+     *
      * @param index The index, below the size.
      * @return The element at the index.
+     * @throws ArrayIndexOutOfBoundsException If the index is negative or not below the capacity.
      */
     public int get(int index) {
         return elements[index];

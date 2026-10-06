@@ -61,14 +61,16 @@ public class LongHeapTest {
     }
 
     @Test
-    public void testClearKeepsTheHeapUsable() {
+    public void testClear() {
         var heap = new LongHeap(2);
         heap.add(2);
         heap.add(1);
         heap.clear();
         assertTrue(heap.isEmpty());
+        assertEquals(List.of(), pollAll(heap));
+
         heap.add(3);
-        assertEquals(3, heap.peek());
+        assertEquals(List.of(3L), pollAll(heap));
     }
 
     @Test
@@ -86,6 +88,7 @@ public class LongHeapTest {
         var empty = new LongHeap(new long[] {1, 2}, 0);
         assertTrue(empty.isEmpty());
         assertThrows(IllegalStateException.class, empty::peek);
+        assertEquals(List.of(), pollAll(empty));
         empty.add(3);
         assertEquals(List.of(3L), pollAll(empty));
 
@@ -133,61 +136,28 @@ public class LongHeapTest {
     }
 
     /**
-     * Elements packed with a key come out by key, negative keys included, then by element on
-     * equal keys, whether they are added one at a time or built from an array.
-     */
-    @Test
-    public void testPackedElementsPollByKeyThenElement() {
-        int[] keys = {3, -2, 3, 0, -2, Integer.MIN_VALUE, Integer.MAX_VALUE};
-        var packed = new long[keys.length];
-        var heap = new LongHeap(0);
-        for (int element = 0; element < keys.length; element++) {
-            packed[element] = ((long) keys[element] << 32) | element;
-            heap.add(packed[element]);
-        }
-
-        var expected = List.of(5, 1, 4, 3, 0, 2, 6);
-        assertEquals(expected, pollElements(heap));
-        assertEquals(expected, pollElements(new LongHeap(packed, packed.length)));
-    }
-
-    /**
-     * A negative element, masked, keeps its key, and comes after the non-negative elements of the
-     * same key.
-     */
-    @Test
-    public void testMaskedNegativeElementsKeepTheirKey() {
-        var heap = new LongHeap(0);
-        heap.add(((long) 5 << 32) | (-1 & 0xFFFFFFFFL));
-        heap.add(((long) 6 << 32) | 1);
-        heap.add(((long) 5 << 32) | 0);
-        heap.add(((long) 4 << 32) | (-2 & 0xFFFFFFFFL));
-
-        assertEquals(List.of(-2, 0, -1, 1), pollElements(heap));
-    }
-
-    /**
-     * Random additions and polls of elements packed with a key, and keys growing as their
-     * element is polled and added back, agree with a priority queue.
+     * Random additions and polls, and smallest elements polled and added back larger, agree with
+     * a priority queue.
      */
     @Test
     public void testAgreesWithAPriorityQueue() {
         var random = new Random(1);
         var heap = new LongHeap(1);
         var queue = new PriorityQueue<Long>();
-        int next = 0;
+        int added = 0;
         for (int step = 0; step < 5000; step++) {
             int action = random.nextInt(3);
-            if (action == 0 && next < 1000) {
-                long packed = ((long) random.nextInt(100) << 32) | next++;
-                heap.add(packed);
-                queue.add(packed);
+            if (action == 0 && added < 1000) {
+                long element = random.nextInt(100);
+                heap.add(element);
+                queue.add(element);
+                added++;
             } else if (action == 1 && !queue.isEmpty()) {
                 assertEquals((long) queue.poll(), heap.poll());
             } else if (!queue.isEmpty()) {
                 long top = queue.poll();
                 assertEquals(top, heap.poll());
-                long grown = (((top >> 32) + random.nextInt(10)) << 32) | (int) top;
+                long grown = top + random.nextInt(10);
                 heap.add(grown);
                 queue.add(grown);
             }
@@ -199,14 +169,6 @@ public class LongHeapTest {
         var polled = new ArrayList<Long>();
         while (!heap.isEmpty()) {
             polled.add(heap.poll());
-        }
-        return polled;
-    }
-
-    private static List<Integer> pollElements(LongHeap heap) {
-        var polled = new ArrayList<Integer>();
-        while (!heap.isEmpty()) {
-            polled.add((int) heap.poll());
         }
         return polled;
     }

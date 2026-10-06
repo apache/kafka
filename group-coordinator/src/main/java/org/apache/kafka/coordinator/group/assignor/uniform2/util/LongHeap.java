@@ -21,11 +21,6 @@ import java.util.Arrays;
 /**
  * A binary min heap of primitive longs, in their natural order, avoiding the boxing of a
  * {@code PriorityQueue<Long>}.
- *
- * <p>A long can pack a key and a non-negative element as {@code ((long) key << 32) | element}:
- * the heap then orders the elements by the key they had when they were added, then by element,
- * and {@code (int) packed} gives the element back. A negative element would set the bits of the
- * key, and must be masked as {@code element & 0xFFFFFFFFL}.
  */
 public final class LongHeap {
     private long[] elements;
@@ -71,7 +66,7 @@ public final class LongHeap {
     }
 
     /**
-     * @return True if the heap has no element.
+     * @return {@code true} if the heap has no elements.
      */
     public boolean isEmpty() {
         return size == 0;
