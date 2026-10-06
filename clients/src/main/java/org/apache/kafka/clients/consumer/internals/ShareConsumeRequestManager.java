@@ -1026,10 +1026,10 @@ public class ShareConsumeRequestManager implements RequestManager, MemberStateLi
                 if (partitionError == Errors.NOT_LEADER_OR_FOLLOWER || partitionError == Errors.FENCED_LEADER_EPOCH) {
                     log.debug("For {}, received error {}, with leaderIdAndEpoch {} in ShareFetch", tip, partitionError, partitionData.currentLeader());
                     if (partitionData.currentLeader().leaderId() != -1 && partitionData.currentLeader().leaderEpoch() != -1) {
-                        partitionsWithUpdatedLeaderInfo.put(tip.topicPartition(), new Metadata.LeaderIdAndEpoch(
-                            Optional.of(partitionData.currentLeader().leaderId()), Optional.of(partitionData.currentLeader().leaderEpoch())));
-
-                        maybeUpdateLeaderCache(tip, partitionData.currentLeader().leaderId(), partitionData.currentLeader().leaderEpoch());
+                        if (maybeUpdateLeaderCache(tip, partitionData.currentLeader().leaderId(), partitionData.currentLeader().leaderEpoch())) {
+                            partitionsWithUpdatedLeaderInfo.put(tip.topicPartition(), new Metadata.LeaderIdAndEpoch(
+                                Optional.of(partitionData.currentLeader().leaderId()), Optional.of(partitionData.currentLeader().leaderEpoch())));
+                        }
                     } else {
                         shareSessionLeaderMap.remove(tip);
                         metadata.requestUpdate(false);
@@ -1074,7 +1074,7 @@ public class ShareConsumeRequestManager implements RequestManager, MemberStateLi
                     .map(e -> new Node(e.nodeId(), e.host(), e.port(), e.rack()))
                     .filter(e -> !e.equals(Node.noNode()))
                     .collect(Collectors.toList());
-                metadata.updatePartitionLeadership(partitionsWithUpdatedLeaderInfo, leaderNodes);
+                updatePartitionLeadership(partitionsWithUpdatedLeaderInfo, leaderNodes);
             }
         } finally {
             log.debug("Removing pending request for node {} - success", fetchTarget.id());
@@ -1206,7 +1206,7 @@ public class ShareConsumeRequestManager implements RequestManager, MemberStateLi
                     .map(e -> new Node(e.nodeId(), e.host(), e.port(), e.rack()))
                     .filter(e -> !e.equals(Node.noNode()))
                     .collect(Collectors.toList());
-                metadata.updatePartitionLeadership(partitionsWithUpdatedLeaderInfo, leaderNodes);
+                updatePartitionLeadership(partitionsWithUpdatedLeaderInfo, leaderNodes);
             }
 
         } finally {
@@ -1305,25 +1305,6 @@ public class ShareConsumeRequestManager implements RequestManager, MemberStateLi
         }
     }
 
-    private void updateLeaderInfoMap(ShareAcknowledgeResponseData.PartitionData partitionData,
-                                  Map<TopicPartition, Metadata.LeaderIdAndEpoch> partitionsWithUpdatedLeaderInfo,
-                                  Errors partitionError,
-                                  TopicIdPartition tip) {
-
-        log.debug("For {}, received error {}, with leaderIdAndEpoch {} in ShareAcknowledge", tip, partitionError, partitionData.currentLeader());
-        if (partitionData.currentLeader().leaderId() != -1 && partitionData.currentLeader().leaderEpoch() != -1) {
-            partitionsWithUpdatedLeaderInfo.put(tip.topicPartition(),
-                new Metadata.LeaderIdAndEpoch(
-                    Optional.of(partitionData.currentLeader().leaderId()),
-                    Optional.of(partitionData.currentLeader().leaderEpoch())
-                ));
-
-            maybeUpdateLeaderCache(tip, partitionData.currentLeader().leaderId(), partitionData.currentLeader().leaderEpoch());
-        } else {
-            shareSessionLeaderMap.remove(tip);
-        }
-    }
-
     /**
      * Forget the cached leader of every share partition routed to a node which a request could not be delivered to.
      * The share session on that node has been lost. The next poll seeds those partitions from the cluster metadata again,
@@ -1333,6 +1314,43 @@ public class ShareConsumeRequestManager implements RequestManager, MemberStateLi
         shareSessionLeaderMap.values().removeIf(leader -> leader.leaderId == nodeId);
     }
 
+    private void updateLeaderInfoMap(ShareAcknowledgeResponseData.PartitionData partitionData,
+                                     Map<TopicPartition, Metadata.LeaderIdAndEpoch> partitionsWithUpdatedLeaderInfo,
+                                     Errors partitionError,
+                                     TopicIdPartition tip) {
+
+        log.debug("For {}, received error {}, with leaderIdAndEpoch {} in ShareAcknowledge", tip, partitionError, partitionData.currentLeader());
+        if (partitionData.currentLeader().leaderId() != -1 && partitionData.currentLeader().leaderEpoch() != -1) {
+            if (maybeUpdateLeaderCache(tip, partitionData.currentLeader().leaderId(), partitionData.currentLeader().leaderEpoch())) {
+                partitionsWithUpdatedLeaderInfo.put(tip.topicPartition(),
+                    new Metadata.LeaderIdAndEpoch(
+                        Optional.of(partitionData.currentLeader().leaderId()),
+                        Optional.of(partitionData.currentLeader().leaderEpoch())
+                    ));
+            }
+        } else {
+            shareSessionLeaderMap.remove(tip);
+        }
+    }
+
+    /**
+     * Pass leadership information from broker redirects to the cluster metadata. The metadata only applied a redirect
+     * whose leader epoch is strictly newer than the one it holds and whose leader it knows, so it can refuse a
+     * redirect which the share session leader has already accepted. When that happens, the cache and the
+     * metadata disagree about the leader, and the metadata may not even know the new leader's endpoint. A metadata
+     * refresh is requested so that the two converge, rather than waiting for the periodic refresh.
+     */
+    private void updatePartitionLeadership(Map<TopicPartition, Metadata.LeaderIdAndEpoch> partitionLeaders, List<Node> leaderNodes) {
+        Set<TopicPartition> updatedPartitions = metadata.updatePartitionLeadership(partitionLeaders, leaderNodes);
+        if (updatedPartitions.size() < partitionLeaders.size()) {
+            partitionLeaders.keySet().stream()
+                .filter(tp -> !updatedPartitions.contains(tp))
+                .forEach(tp -> log.debug("Requesting metadata update for partition {} since the metadata did not apply the leader {} from the broker",
+                    tp, partitionLeaders.get(tp)));
+            metadata.requestUpdate(false);
+        }
+    }
+
     /**
      * Update the cache leader for a partition in a share session, only if the new leader epoch is at least as large as the
      * currently cached epoch. A stale entry is never overwritten by an older epoch. This mirrors the rules applied by
@@ -1340,12 +1358,16 @@ public class ShareConsumeRequestManager implements RequestManager, MemberStateLi
      * <p>
      * The broker has explicitly told us it is no longer the leader, so we trust the redirect even if the epoch did
      * not advance. Without this, the share consumer would keep sending ShareFetch requests to the old leader indefinitely.
+     *
+     * @return True if the cached leader was updated.
      */
-    private void maybeUpdateLeaderCache(TopicIdPartition tip, int leaderId, int leaderEpoch) {
+    private boolean maybeUpdateLeaderCache(TopicIdPartition tip, int leaderId, int leaderEpoch) {
         LeaderIdAndEpoch oldLeader = shareSessionLeaderMap.get(tip);
         if ((oldLeader == null) || (leaderEpoch >= oldLeader.epoch)) {
             shareSessionLeaderMap.put(tip, new LeaderIdAndEpoch(leaderId, leaderEpoch));
+            return true;
         }
+        return false;
     }
 
     /**

@@ -3482,6 +3482,73 @@ public class ShareConsumeRequestManagerTest {
     }
 
     /**
+     * A redirect which the share session leader cache accepts can still be refused by the metadata, which only
+     * applies a strictly newer leader epoch in accordance with KIP-951. When the new leader is a broker the metadata
+     * has never seen, the cache names a node which is not in the cluster, so the next poll would fall back to the stale
+     * leader in the metadata and be redirected again, indefinitely, until the periodic refresh. The request manager must
+     * request a refresh as soon as the metadata refuses a redirect the cache accepted.
+     */
+    @Test
+    public void testShareFetchRedirectRefusedByMetadataRequestsMetadataUpdate() {
+        buildRequestManager();
+
+        subscriptions.subscribeToShareGroup(Set.of(topicName));
+        subscriptions.assignFromSubscribed(Set.of(tp0));
+
+        // A single-node cluster. Node 1 exists but the metadata has not yet seen it.
+        client.updateMetadata(
+            RequestTestUtils.metadataUpdateWithIds(1, Map.of(topicName, 1),
+                tp -> validLeaderEpoch, topicIds, false));
+        Node nodeId0 = metadata.fetch().nodeById(0);
+        Node nodeId1 = new Node(1, "localhost", 9093);
+        assertNull(metadata.fetch().nodeById(nodeId1.id()));
+        assertFalse(metadata.updateRequested());
+
+        // Establish the share session on node 0.
+        assertEquals(1, sendFetches());
+        assertEquals(nodeId0.id(), shareConsumeRequestManager.shareSessionNodeId(tip0));
+
+        // Node 0 redirects to node 1 without advancing the leader epoch. The cache accepts the redirect, but the
+        // metadata refuses it, so it does not learn node 1's endpoint from the response.
+        LinkedHashMap<TopicIdPartition, ShareFetchResponseData.PartitionData> partitionData = new LinkedHashMap<>();
+        partitionData.put(tip0,
+            new ShareFetchResponseData.PartitionData()
+                .setPartitionIndex(tip0.topicPartition().partition())
+                .setErrorCode(Errors.NOT_LEADER_OR_FOLLOWER.code())
+                .setCurrentLeader(new ShareFetchResponseData.LeaderIdAndEpoch()
+                    .setLeaderId(nodeId1.id())
+                    .setLeaderEpoch(validLeaderEpoch)));
+        client.prepareResponseFrom(ShareFetchResponse.of(Errors.NONE, 0, partitionData, List.of(nodeId1), 0), nodeId0);
+        networkClientDelegate.poll(time.timer(0));
+        assertTrue(shareConsumeRequestManager.hasCompletedFetches());
+
+        assertEquals(nodeId1.id(), shareConsumeRequestManager.shareSessionNodeId(tip0));
+        assertEquals(nodeId0, metadata.fetch().leaderFor(tp0));
+        assertNull(metadata.fetch().nodeById(nodeId1.id()));
+
+        // The cache and the metadata disagree, so a refresh is requested before the fetch collector runs.
+        assertTrue(metadata.updateRequested());
+        fetchRecords();
+
+        // The refresh arrives, naming node 1 as the leader at the same epoch and including node 1 in the cluster.
+        metadata.updateWithCurrentRequestVersion(
+            metadataResponseWithLeader(List.of(nodeId0, nodeId1), nodeId1, validLeaderEpoch), false, time.milliseconds());
+        assertEquals(nodeId1, metadata.fetch().leaderFor(tp0));
+
+        // The next poll fetches tp0 from node 1 and removes it from the share session on node 0.
+        NetworkClientDelegate.PollResult pollResult = shareConsumeRequestManager.sendFetchesReturnPollResult();
+        assertEquals(nodeId1.id(), shareConsumeRequestManager.shareSessionNodeId(tip0));
+        assertEquals(2, pollResult.unsentRequests.size());
+        Map<Integer, ShareFetchRequestData> requestsByNode = new HashMap<>();
+        pollResult.unsentRequests.forEach(unsentRequest ->
+            requestsByNode.put(unsentRequest.node().get().id(), ((ShareFetchRequest.Builder) unsentRequest.requestBuilder()).data()));
+        assertEquals(Set.of(nodeId0.id(), nodeId1.id()), requestsByNode.keySet());
+        assertNotNull(requestsByNode.get(nodeId1.id()).topics().find(tip0.topicId()).partitions().find(tip0.partition()));
+        assertTrue(requestsByNode.get(nodeId0.id()).topics().isEmpty());
+        assertEquals(List.of(tip0.partition()), requestsByNode.get(nodeId0.id()).forgottenTopicsData().get(0).partitions());
+    }
+
+    /**
      * Records fetched from a node may still be buffered when that node disappears from the cluster metadata and
      * its session handler is removed. When the application later acknowledges those records, the acknowledgements
      * are queued for the vanished node. They can never be sent, so they must be failed rather than left pending forever.
@@ -3730,6 +3797,11 @@ public class ShareConsumeRequestManagerTest {
         client.prepareResponseFrom(ShareFetchResponse.of(Errors.NONE, 0, partitionData, List.of(nodeId1), 0), nodeId0);
         networkClientDelegate.poll(time.timer(0));
         assertTrue(shareConsumeRequestManager.hasCompletedFetches());
+
+        // The cache rejected the stale redirect, so the request manager has no disagreement with the metadata to
+        // resolve and does not request a refresh. (The share fetch collector requests a metadata refresh when it
+        // sees the error.
+        assertFalse(metadata.updateRequested());
         fetchRecords();
 
         // The stale leader must not have replaced the cached leader, so the next fetch still goes only to node0.
