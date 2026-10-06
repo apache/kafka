@@ -37,7 +37,8 @@ import org.apache.kafka.network.{SocketServerConfigs, SocketServer => JSocketSer
 import org.apache.kafka.server.DynamicThreadPool
 import org.apache.kafka.server.authorizer._
 import org.apache.kafka.server.common.DirectoryEventHandler
-import org.apache.kafka.server.config.{ReplicationConfigs, ServerConfigs, ServerLogConfigs}
+import org.apache.kafka.coordinator.mirror.ClusterMirrorConfigs
+import org.apache.kafka.server.config.{ReplicationConfigs, ServerConfigs, ServerLogConfigs, DynamicBrokerConfig => JDynamicBrokerConfig}
 import org.apache.kafka.server.log.remote.storage.{RemoteLogManager, RemoteLogManagerConfig}
 import org.apache.kafka.server.metrics.{ClientTelemetryExporterPlugin, KafkaYammerMetrics, MetricConfigs}
 import org.apache.kafka.server.quota.QuotaFactory
@@ -1346,6 +1347,59 @@ class DynamicBrokerConfigTest {
     assertEquals(true, config.groupCoordinatorConfig.shareGroupAssignorOffloadEnable())
     assertEquals(250, config.groupCoordinatorConfig.streamsGroupAssignmentIntervalMs())
     assertEquals(true, config.groupCoordinatorConfig.streamsGroupAssignorOffloadEnable())
+  }
+
+  @Test
+  def testDynamicClusterMirrorConfigReconfigurableConfigs(): Unit = {
+    assertTrue(JDynamicBrokerConfig.DynamicClusterMirrorConfig.RECONFIGURABLE_CONFIGS.contains(
+      ClusterMirrorConfigs.MIRROR_NUM_REPLICA_FETCHERS_CONFIG))
+    assertTrue(JDynamicBrokerConfig.DynamicClusterMirrorConfig.RECONFIGURABLE_CONFIGS.contains(
+      ClusterMirrorConfigs.MIRROR_METADATA_REFRESH_INTERVAL_MS_CONFIG))
+  }
+
+  @Test
+  def testDynamicClusterMirrorConfigValidation(): Unit = {
+    val origProps = TestUtils.createBrokerConfig(0, port = 8181)
+    origProps.put(ClusterMirrorConfigs.MIRROR_NUM_REPLICA_FETCHERS_CONFIG, "4")
+    origProps.put(ClusterMirrorConfigs.MIRROR_METADATA_REFRESH_INTERVAL_MS_CONFIG, "60000")
+    val config = KafkaConfig(origProps)
+    val serverMock = mock(classOf[KafkaBroker])
+    when(serverMock.config).thenReturn(config)
+
+    config.dynamicConfig.initialize(None)
+    config.dynamicConfig.addBrokerReconfigurable(new DynamicClusterMirrorConfig(serverMock))
+
+    val validProps = new Properties()
+    validProps.put(ClusterMirrorConfigs.MIRROR_NUM_REPLICA_FETCHERS_CONFIG, "6")
+    config.dynamicConfig.validate(validProps, perBrokerConfig = true)
+
+    val zeroFetchers = new Properties()
+    zeroFetchers.put(ClusterMirrorConfigs.MIRROR_NUM_REPLICA_FETCHERS_CONFIG, "0")
+    val err1 = assertThrows(classOf[ConfigException],
+      () => config.dynamicConfig.validate(zeroFetchers, perBrokerConfig = true))
+    assertTrue(err1.getMessage.contains("Value must be at least 1"))
+
+    val tooFewFetchers = new Properties()
+    tooFewFetchers.put(ClusterMirrorConfigs.MIRROR_NUM_REPLICA_FETCHERS_CONFIG, "1")
+    val err2 = assertThrows(classOf[ConfigException],
+      () => config.dynamicConfig.validate(tooFewFetchers, perBrokerConfig = true))
+    assertTrue(err2.getMessage.contains("Value should be at least half the current value 4"))
+
+    val tooManyFetchers = new Properties()
+    tooManyFetchers.put(ClusterMirrorConfigs.MIRROR_NUM_REPLICA_FETCHERS_CONFIG, "9")
+    val err3 = assertThrows(classOf[ConfigException],
+      () => config.dynamicConfig.validate(tooManyFetchers, perBrokerConfig = true))
+    assertTrue(err3.getMessage.contains("Value should not be greater than double the current value 4"))
+
+    val negativeInterval = new Properties()
+    negativeInterval.put(ClusterMirrorConfigs.MIRROR_METADATA_REFRESH_INTERVAL_MS_CONFIG, "-1")
+    val err4 = assertThrows(classOf[ConfigException],
+      () => config.dynamicConfig.validate(negativeInterval, perBrokerConfig = true))
+    assertTrue(err4.getMessage.contains(ClusterMirrorConfigs.MIRROR_METADATA_REFRESH_INTERVAL_MS_CONFIG))
+
+    val zeroInterval = new Properties()
+    zeroInterval.put(ClusterMirrorConfigs.MIRROR_METADATA_REFRESH_INTERVAL_MS_CONFIG, "0")
+    config.dynamicConfig.validate(zeroInterval, perBrokerConfig = true)
   }
 
   @Test

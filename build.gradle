@@ -1065,6 +1065,7 @@ project(':server') {
     implementation project(':transaction-coordinator')
     implementation project(':raft')
     implementation project(':share-coordinator')
+    implementation project(':mirror-coordinator')
     implementation project(':storage:storage-api')
     implementation libs.jacksonDatabind
     implementation libs.metrics
@@ -1195,6 +1196,7 @@ project(':core') {
     implementation project(':server')
     implementation project(':coordinator-common')
     implementation project(':share-coordinator')
+    implementation project(':mirror-coordinator')
 
     implementation libs.argparse4j
     implementation libs.jacksonDatabind
@@ -1965,6 +1967,30 @@ project(':share-coordinator') {
 
   compileJava.dependsOn 'processMessages'
   srcJar.dependsOn 'processMessages'
+
+  javadoc {
+    enabled = false
+  }
+}
+
+project(':mirror-coordinator') {
+  base {
+    archivesName = "kafka-mirror-coordinator"
+  }
+
+  dependencies {
+    implementation project(':clients')
+
+    testImplementation libs.junitJupiter
+    testImplementation libs.mockitoCore
+    testImplementation testLog4j2Libs
+
+    testRuntimeOnly runtimeTestLibs
+  }
+
+  checkstyle {
+    configProperties = checkstyleConfigProperties("import-control-mirror-coordinator.xml")
+  }
 
   javadoc {
     enabled = false

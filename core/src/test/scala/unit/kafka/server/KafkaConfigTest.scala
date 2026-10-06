@@ -39,6 +39,7 @@ import org.apache.kafka.coordinator.share.ShareCoordinatorConfig
 import org.apache.kafka.coordinator.transaction.{TransactionLogConfig, TransactionStateManagerConfig}
 import org.apache.kafka.network.SocketServerConfigs
 import org.apache.kafka.raft.{KRaftConfigs, MetadataLogConfig, QuorumConfig}
+import org.apache.kafka.coordinator.mirror.ClusterMirrorConfigs
 import org.apache.kafka.server.config.{AbstractKafkaConfig, DelegationTokenManagerConfigs, QuotaConfig, ReplicationConfigs, ServerConfigs, ServerLogConfigs, ServerTopicConfigSynonyms}
 import org.apache.kafka.server.log.remote.storage.RemoteLogManagerConfig
 import org.apache.kafka.server.metrics.MetricConfigs
@@ -931,6 +932,7 @@ class KafkaConfigTest {
         case ReplicationConfigs.REPLICA_FETCH_MIN_BYTES_CONFIG => assertPropertyInvalid(baseProperties, name, "not_a_number")
         case ReplicationConfigs.REPLICA_FETCH_RESPONSE_MAX_BYTES_CONFIG => assertPropertyInvalid(baseProperties, name, "not_a_number")
         case ReplicationConfigs.REPLICA_SELECTOR_CLASS_CONFIG => // Ignore string
+        case ReplicationConfigs.MIRROR_ADMIN_LISTENER_NAME_CONFIG => // ignore string
         case ReplicationConfigs.NUM_REPLICA_FETCHERS_CONFIG => assertPropertyInvalid(baseProperties, name, "not_a_number", "0", "-1")
         case ReplicationConfigs.REPLICA_HIGH_WATERMARK_CHECKPOINT_INTERVAL_MS_CONFIG => assertPropertyInvalid(baseProperties, name, "not_a_number")
         case ReplicationConfigs.FETCH_PURGATORY_PURGE_INTERVAL_REQUESTS_CONFIG => assertPropertyInvalid(baseProperties, name, "not_a_number")
@@ -939,6 +941,20 @@ class KafkaConfigTest {
         case ReplicationConfigs.AUTO_LEADER_REBALANCE_ENABLE_CONFIG => assertPropertyInvalid(baseProperties, name, "not_a_boolean", "0")
         case ReplicationConfigs.LEADER_IMBALANCE_CHECK_INTERVAL_SECONDS_CONFIG => assertPropertyInvalid(baseProperties, name, "not_a_number")
         case ReplicationConfigs.UNCLEAN_LEADER_ELECTION_ENABLE_CONFIG => assertPropertyInvalid(baseProperties, name, "not_a_boolean", "0")
+
+        /** Cluster mirror configs */
+        case ClusterMirrorConfigs.MIRROR_COORDINATOR_THREADS_CONFIG => assertPropertyInvalid(baseProperties, name, "not_a_number", "0")
+        case ClusterMirrorConfigs.MIRROR_COORDINATOR_WRITE_TIMEOUT_MS_CONFIG => assertPropertyInvalid(baseProperties, name, "not_a_number", "0")
+        case ClusterMirrorConfigs.MIRROR_COORDINATOR_APPEND_LINGER_MS_CONFIG => assertPropertyInvalid(baseProperties, name, "not_a_number", "-1")
+        case ClusterMirrorConfigs.MIRROR_COORDINATOR_LOAD_BUFFER_SIZE_CONFIG => assertPropertyInvalid(baseProperties, name, "not_a_number", "0")
+        case ClusterMirrorConfigs.MIRROR_STATE_TOPIC_NUM_PARTITIONS_CONFIG => assertPropertyInvalid(baseProperties, name, "not_a_number", "0")
+        case ClusterMirrorConfigs.MIRROR_STATE_TOPIC_REPLICATION_FACTOR_CONFIG => assertPropertyInvalid(baseProperties, name, "not_a_number", "0")
+        case ClusterMirrorConfigs.MIRROR_NUM_REPLICA_FETCHERS_CONFIG => assertPropertyInvalid(baseProperties, name, "not_a_number", "0")
+        case ClusterMirrorConfigs.MIRROR_METADATA_REFRESH_INTERVAL_MS_CONFIG => assertPropertyInvalid(baseProperties, name, "not_a_number", "-1")
+        case ClusterMirrorConfigs.MIRROR_FAILED_RETRY_INITIAL_BACKOFF_MS_CONFIG => assertPropertyInvalid(baseProperties, name, "not_a_number", "0")
+        case ClusterMirrorConfigs.MIRROR_FAILED_RETRY_MAX_BACKOFF_MS_CONFIG => assertPropertyInvalid(baseProperties, name, "not_a_number", "0")
+        case ClusterMirrorConfigs.MIRROR_FAILED_RETRY_MAX_ATTEMPTS_CONFIG => assertPropertyInvalid(baseProperties, name, "not_a_number", "-1")
+
         case ServerConfigs.CONTROLLED_SHUTDOWN_ENABLE_CONFIG => assertPropertyInvalid(baseProperties, name, "not_a_boolean", "0")
         case GroupCoordinatorConfig.GROUP_MIN_SESSION_TIMEOUT_MS_CONFIG => assertPropertyInvalid(baseProperties, name, "not_a_number")
         case GroupCoordinatorConfig.GROUP_MAX_SESSION_TIMEOUT_MS_CONFIG => assertPropertyInvalid(baseProperties, name, "not_a_number")
@@ -1000,6 +1016,7 @@ class KafkaConfigTest {
         //Sasl Configs
         case KRaftConfigs.SASL_MECHANISM_CONTROLLER_PROTOCOL_CONFIG => // ignore
         case BrokerSecurityConfigs.SASL_MECHANISM_INTER_BROKER_PROTOCOL_CONFIG => // ignore
+        case BrokerSecurityConfigs.SASL_MECHANISM_MIRROR_ADMIN_PROTOCOL_CONFIG => // ignore string
         case BrokerSecurityConfigs.SASL_ENABLED_MECHANISMS_CONFIG =>
         case SaslConfigs.SASL_CLIENT_CALLBACK_HANDLER_CLASS =>
         case BrokerSecurityConfigs.SASL_SERVER_CALLBACK_HANDLER_CLASS_CONFIG =>
@@ -1265,6 +1282,8 @@ class KafkaConfigTest {
         case QuotaConfig.FOLLOWER_REPLICATION_THROTTLED_REPLICAS_CONFIG =>
         // topic only config
         case QuotaConfig.LEADER_REPLICATION_THROTTLED_REPLICAS_CONFIG =>
+        // topic only config
+        case QuotaConfig.MIRROR_REPLICATION_THROTTLED_REPLICAS_CONFIG =>
         // topic only config
         case "internal.segment.bytes" =>
         // topic internal config
