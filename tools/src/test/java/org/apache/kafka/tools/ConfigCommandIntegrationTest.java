@@ -23,7 +23,6 @@ import org.apache.kafka.clients.admin.AdminClientTestUtils;
 import org.apache.kafka.clients.admin.AlterConfigsOptions;
 import org.apache.kafka.clients.admin.AlterConfigsResult;
 import org.apache.kafka.clients.admin.ConfigEntry;
-import org.apache.kafka.clients.admin.NewTopic;
 import org.apache.kafka.clients.producer.Producer;
 import org.apache.kafka.common.config.ConfigResource;
 import org.apache.kafka.common.errors.InvalidConfigurationException;
@@ -217,23 +216,19 @@ public class ConfigCommandIntegrationTest {
 
     @ClusterTest
     public void testAddConfigKeyValuesUsingCommand() throws Exception {
-        try (Admin client = cluster.admin()) {
-            NewTopic newTopic = new NewTopic("topic", 1, (short) 1);
-            client.createTopics(Set.of(newTopic)).all().get();
-            cluster.waitTopicCreation("topic", 1);
-            Stream<String> command = Stream.concat(quorumArgs(), Stream.of(
-                    "--entity-type", "topics",
-                    "--entity-name", "topic",
-                    "--alter", "--add-config", "cleanup.policy=[delete,compact]"));
-            String message = captureStandardOut(run(command));
-            assertEquals("Completed updating config for topic topic.", message);
-            command = Stream.concat(quorumArgs(), Stream.of(
-                    "--entity-type", "topics",
-                    "--entity-name", "topic",
-                    "--describe"));
-            message = captureStandardOut(run(command));
-            assertTrue(message.contains("cleanup.policy=delete,compact"), "Config entry was not added correctly");
-        }
+        cluster.createTopic("topic", 1, (short) 1);
+        Stream<String> command = Stream.concat(quorumArgs(), Stream.of(
+                "--entity-type", "topics",
+                "--entity-name", "topic",
+                "--alter", "--add-config", "cleanup.policy=[delete,compact]"));
+        String message = captureStandardOut(run(command));
+        assertEquals("Completed updating config for topic topic.", message);
+        command = Stream.concat(quorumArgs(), Stream.of(
+                "--entity-type", "topics",
+                "--entity-name", "topic",
+                "--describe"));
+        message = captureStandardOut(run(command));
+        assertTrue(message.contains("cleanup.policy=delete,compact"), "Config entry was not added correctly");
     }
 
     @ClusterTest
@@ -645,7 +640,7 @@ public class ConfigCommandIntegrationTest {
     public void testUpdateInvalidTopicConfigs() throws ExecutionException, InterruptedException {
         List<String> alterOpts = List.of("--bootstrap-server", cluster.bootstrapServers(), "--entity-type", "topics", "--alter");
         try (Admin client = cluster.admin()) {
-            client.createTopics(List.of(new NewTopic("test-config-topic", 1, (short) 1))).all().get();
+            cluster.createTopic("test-config-topic", 1, (short) 1);
             assertInstanceOf(
                     InvalidConfigurationException.class,
                     assertThrows(
@@ -664,7 +659,7 @@ public class ConfigCommandIntegrationTest {
     public void testDeleteNonExistentConfigIsIdempotent() throws Exception {
         String topicName = "test-delete-nonexistent-topic";
         try (Admin client = cluster.admin()) {
-            client.createTopics(List.of(new NewTopic(topicName, 1, (short) 1))).all().get();
+            cluster.createTopic(topicName, 1, (short) 1);
 
             ConfigCommand.alterConfig(client, new ConfigCommand.ConfigCommandOptions(toArray(
                 List.of("--bootstrap-server", cluster.bootstrapServers(),
@@ -686,9 +681,8 @@ public class ConfigCommandIntegrationTest {
     @ClusterTest
     public void testDeleteNonExistentConfigIsIdempotentWithBootstrapController() throws Exception {
         String topicName = "test-delete-nonexistent-topic";
-        try (Admin bootstrapControllerClient = cluster.admin(Map.of(), true);
-             Admin bootstrapServerClient = cluster.admin(Map.of())) {
-            bootstrapServerClient.createTopics(List.of(new NewTopic(topicName, 1, (short) 1))).all().get();
+        try (Admin bootstrapControllerClient = cluster.admin(Map.of(), true)) {
+            cluster.createTopic(topicName, 1, (short) 1);
             ConfigCommand.alterConfig(bootstrapControllerClient, new ConfigCommand.ConfigCommandOptions(toArray(
                 List.of("--bootstrap-controller", cluster.bootstrapControllers(),
                     "--entity-type", "topics", "--entity-name", topicName,

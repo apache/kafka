@@ -52,11 +52,9 @@ import java.util.stream.Collectors;
 import static java.util.Collections.emptySet;
 import static org.apache.kafka.common.utils.Utils.mkEntry;
 import static org.apache.kafka.common.utils.Utils.mkMap;
-import static org.hamcrest.CoreMatchers.equalTo;
-import static org.hamcrest.CoreMatchers.is;
-import static org.hamcrest.MatcherAssert.assertThat;
-import static org.hamcrest.Matchers.closeTo;
+import static org.junit.jupiter.api.Assertions.assertEquals;
 import static org.junit.jupiter.api.Assertions.assertThrows;
+import static org.junit.jupiter.api.Assertions.assertTrue;
 import static org.mockito.Mockito.mock;
 import static org.mockito.Mockito.when;
 
@@ -94,7 +92,7 @@ public class ActiveTaskCreatorTest {
 
         final String clientIds = activeTaskCreator.producerClientIds();
 
-        assertThat(clientIds, is("clientId-StreamThread-0-producer"));
+        assertEquals("clientId-StreamThread-0-producer", clientIds);
     }
 
     @Test
@@ -103,7 +101,7 @@ public class ActiveTaskCreatorTest {
 
         activeTaskCreator.close();
 
-        assertThat(mockClientSupplier.producers.get(0).closed(), is(true));
+        assertTrue(mockClientSupplier.producers.get(0).closed());
     }
 
     @Test
@@ -113,7 +111,7 @@ public class ActiveTaskCreatorTest {
         final MockProducer<?, ?> producer = mockClientSupplier.producers.get(0);
         addMetric(producer, "flush-time-ns-total", blockedTime);
 
-        assertThat(activeTaskCreator.totalProducerBlockedTime(), closeTo(blockedTime, 0.01));
+        assertEquals(blockedTime, activeTaskCreator.totalProducerBlockedTime(), 0.01);
     }
 
     // error handling
@@ -124,8 +122,8 @@ public class ActiveTaskCreatorTest {
 
         final StreamsProducer threadProducer = activeTaskCreator.streamsProducer();
 
-        assertThat(mockClientSupplier.producers.size(), is(1));
-        assertThat(threadProducer.kafkaProducer(), is(mockClientSupplier.producers.get(0)));
+        assertEquals(1, mockClientSupplier.producers.size());
+        assertEquals(mockClientSupplier.producers.get(0), threadProducer.kafkaProducer());
     }
 
     @Test
@@ -138,8 +136,8 @@ public class ActiveTaskCreatorTest {
             activeTaskCreator::close
         );
 
-        assertThat(thrown.getMessage(), is("Thread producer encounter error trying to close."));
-        assertThat(thrown.getCause().getMessage(), is("KABOOM!"));
+        assertEquals("Thread producer encounter error trying to close.", thrown.getMessage());
+        assertEquals("KABOOM!", thrown.getCause().getMessage());
     }
 
 
@@ -157,8 +155,8 @@ public class ActiveTaskCreatorTest {
 
         final StreamsProducer threadProducer = activeTaskCreator.streamsProducer();
 
-        assertThat(mockClientSupplier.producers.size(), is(1));
-        assertThat(threadProducer.kafkaProducer(), is(mockClientSupplier.producers.get(0)));
+        assertEquals(1, mockClientSupplier.producers.size());
+        assertEquals(mockClientSupplier.producers.get(0), threadProducer.kafkaProducer());
     }
 
     @Test
@@ -177,7 +175,7 @@ public class ActiveTaskCreatorTest {
 
         final String clientIds = activeTaskCreator.producerClientIds();
 
-        assertThat(clientIds, is("clientId-StreamThread-0-producer"));
+        assertEquals("clientId-StreamThread-0-producer", clientIds);
     }
 
     @Test
@@ -188,8 +186,8 @@ public class ActiveTaskCreatorTest {
 
         activeTaskCreator.close();
 
-        assertThat(activeTaskCreator.isClosed(), is(true));
-        assertThat(mockClientSupplier.producers.get(0).closed(), is(true));
+        assertTrue(activeTaskCreator.isClosed());
+        assertTrue(mockClientSupplier.producers.get(0).closed());
     }
 
     @Test
@@ -197,15 +195,13 @@ public class ActiveTaskCreatorTest {
         properties.put(StreamsConfig.PROCESSING_GUARANTEE_CONFIG, StreamsConfig.EXACTLY_ONCE_V2);
         mockClientSupplier.setApplicationIdForProducer("appId");
         createTasks();
-        assertThat(mockClientSupplier.producers.size(), is(1));
+        assertEquals(1, mockClientSupplier.producers.size());
 
         activeTaskCreator.close();
         activeTaskCreator.reInitializeProducer();
         // Verifies that disableReset() prevents reInitializeProducer() from creating a new producer instance
         // Without disabling reset, the producers collection would contain more than one producer
-        assertThat("Producer should not be recreated after disabling reset",
-            mockClientSupplier.producers.size(),
-            is(1));
+        assertEquals(1, mockClientSupplier.producers.size(), "Producer should not be recreated after disabling reset");
     }
 
     // error handling
@@ -222,8 +218,8 @@ public class ActiveTaskCreatorTest {
             activeTaskCreator::close
         );
 
-        assertThat(thrown.getMessage(), is("Thread producer encounter error trying to close."));
-        assertThat(thrown.getCause().getMessage(), is("KABOOM!"));
+        assertEquals("Thread producer encounter error trying to close.", thrown.getMessage());
+        assertEquals("KABOOM!", thrown.getCause().getMessage());
     }
 
     private void shouldConstructStreamsProducerMetric() {
@@ -237,12 +233,12 @@ public class ActiveTaskCreatorTest {
             null,
             new MockTime());
         mockClientSupplier.producers.get(0).setMockMetrics(testMetricName, testMetric);
-        assertThat(mockClientSupplier.producers.size(), is(1));
+        assertEquals(1, mockClientSupplier.producers.size());
 
         final Map<MetricName, Metric> producerMetrics = activeTaskCreator.producerMetrics();
 
-        assertThat(producerMetrics.size(), is(1));
-        assertThat(producerMetrics.get(testMetricName), is(testMetric));
+        assertEquals(1, producerMetrics.size());
+        assertEquals(testMetric, producerMetrics.get(testMetricName));
     }
 
     @SuppressWarnings({"unchecked", "rawtypes"})
@@ -277,15 +273,15 @@ public class ActiveTaskCreatorTest {
             new LogContext(),
             false);
 
-        assertThat(
+        assertEquals(
+            Set.of(task00, task01),
             activeTaskCreator.createTasks(
                 mockClientSupplier.consumer,
                 mkMap(
                     mkEntry(task00, Collections.singleton(new TopicPartition("topic", 0))),
                     mkEntry(task01, Collections.singleton(new TopicPartition("topic", 1)))
                 )
-            ).stream().map(Task::id).collect(Collectors.toSet()),
-            equalTo(Set.of(task00, task01))
+            ).stream().map(Task::id).collect(Collectors.toSet())
         );
     }
 

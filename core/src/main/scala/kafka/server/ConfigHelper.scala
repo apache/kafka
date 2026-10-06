@@ -91,7 +91,8 @@ class ConfigHelper(metadataCache: MetadataCache, config: KafkaConfig, configRepo
             if (metadataCache.contains(topic)) {
               val topicProps = configRepository.topicConfig(topic)
               val logConfig = LogConfig.fromProps(config.extractLogConfigMap, topicProps)
-              createResponseConfig(resource, logConfig, createTopicConfigEntry(logConfig, topicProps, includeSynonyms, includeDocumentation)(_, _))
+              // Internal configs are reported only when set on the topic itself, consistent with the CreateTopics response.
+              createResponseConfig(resource, logConfig, logConfig.overriddenConfigs, createTopicConfigEntry(logConfig, topicProps, includeSynonyms, includeDocumentation)(_, _))
             } else {
               new DescribeConfigsResponseData.DescribeConfigsResult().setErrorCode(Errors.UNKNOWN_TOPIC_OR_PARTITION.code)
                 .setConfigs(Collections.emptyList[DescribeConfigsResponseData.DescribeConfigsResourceResult])

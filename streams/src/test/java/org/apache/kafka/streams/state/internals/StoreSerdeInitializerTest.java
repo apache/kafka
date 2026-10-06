@@ -30,8 +30,7 @@ import org.junit.jupiter.api.Test;
 import org.mockito.MockedStatic;
 import org.mockito.Mockito;
 
-import static org.hamcrest.MatcherAssert.assertThat;
-import static org.hamcrest.Matchers.equalTo;
+import static org.junit.jupiter.api.Assertions.assertEquals;
 import static org.junit.jupiter.api.Assertions.assertThrows;
 import static org.mockito.ArgumentMatchers.any;
 
@@ -62,9 +61,9 @@ public class StoreSerdeInitializerTest {
         final StateSerdes<String, String> result = StoreSerdeInitializer.prepareStoreSerde(
             context, "myStore", "topic", keySerde, valueSerde, WrappingNullableUtils::prepareValueSerde);
 
-        assertThat(result.keySerde(), equalTo(keySerde));
-        assertThat(result.valueSerde(), equalTo(valueSerde));
-        assertThat(result.topic(), equalTo("topic"));
+        assertEquals(keySerde, result.keySerde());
+        assertEquals(valueSerde, result.valueSerde());
+        assertEquals("topic", result.topic());
     }
 
     @Test
@@ -78,8 +77,8 @@ public class StoreSerdeInitializerTest {
             () -> StoreSerdeInitializer.prepareStoreSerde(context, "myStore", "topic",
                 new Serdes.StringSerde(), new Serdes.StringSerde(), WrappingNullableUtils::prepareValueSerde));
 
-        assertThat(exception.getMessage(), equalTo("Failed to initialize key serdes for store myStore"));
-        assertThat(exception.getCause().getMessage(), equalTo("Please set StreamsConfig#DEFAULT_KEY_SERDE_CLASS_CONFIG"));
+        assertEquals("Failed to initialize key serdes for store myStore", exception.getMessage());
+        assertEquals("Please set StreamsConfig#DEFAULT_KEY_SERDE_CLASS_CONFIG", exception.getCause().getMessage());
     }
 
     @Test
@@ -93,8 +92,8 @@ public class StoreSerdeInitializerTest {
             () -> StoreSerdeInitializer.prepareStoreSerde(context, "myStore", "topic",
                 new Serdes.StringSerde(), new Serdes.StringSerde(), WrappingNullableUtils::prepareValueSerde));
 
-        assertThat(exception.getMessage(), equalTo("Failed to initialize value serdes for store myStore"));
-        assertThat(exception.getCause().getMessage(), equalTo("Please set StreamsConfig#DEFAULT_VALUE_SERDE_CLASS_CONFIG"));
+        assertEquals("Failed to initialize value serdes for store myStore", exception.getMessage());
+        assertEquals("Please set StreamsConfig#DEFAULT_VALUE_SERDE_CLASS_CONFIG", exception.getCause().getMessage());
     }
 
     @Test
@@ -108,8 +107,8 @@ public class StoreSerdeInitializerTest {
             () -> StoreSerdeInitializer.prepareStoreSerde(context, "myStore", "topic",
                 new Serdes.StringSerde(), new Serdes.StringSerde(), WrappingNullableUtils::prepareValueSerde));
 
-        assertThat(exception.getMessage(), equalTo("Failed to initialize key serdes for store myStore"));
-        assertThat(exception.getCause().getMessage(), equalTo("Please set StreamsConfig#DEFAULT_KEY_SERDE_CLASS_CONFIG"));
+        assertEquals("Failed to initialize key serdes for store myStore", exception.getMessage());
+        assertEquals("Please set StreamsConfig#DEFAULT_KEY_SERDE_CLASS_CONFIG", exception.getCause().getMessage());
     }
 
     @Test
@@ -123,8 +122,8 @@ public class StoreSerdeInitializerTest {
             () -> StoreSerdeInitializer.prepareStoreSerde(context, "myStore", "topic",
                 new Serdes.StringSerde(), new Serdes.StringSerde(), WrappingNullableUtils::prepareValueSerde));
 
-        assertThat(exception.getMessage(), equalTo("Failed to initialize value serdes for store myStore"));
-        assertThat(exception.getCause().getMessage(), equalTo("Please set StreamsConfig#DEFAULT_VALUE_SERDE_CLASS_CONFIG"));
+        assertEquals("Failed to initialize value serdes for store myStore", exception.getMessage());
+        assertEquals("Please set StreamsConfig#DEFAULT_VALUE_SERDE_CLASS_CONFIG", exception.getCause().getMessage());
     }
 
     @Test
@@ -137,7 +136,7 @@ public class StoreSerdeInitializerTest {
             () -> StoreSerdeInitializer.prepareStoreSerde(context, "myStore", "topic",
                 new Serdes.StringSerde(), new Serdes.StringSerde(), WrappingNullableUtils::prepareValueSerde));
 
-        assertThat(exception.getMessage(), equalTo("Failed to initialize key serdes for store myStore"));
+        assertEquals("Failed to initialize key serdes for store myStore", exception.getMessage());
     }
 
     @Test
@@ -150,6 +149,6 @@ public class StoreSerdeInitializerTest {
             () -> StoreSerdeInitializer.prepareStoreSerde(context, "myStore", "topic",
                 new Serdes.StringSerde(), new Serdes.StringSerde(), WrappingNullableUtils::prepareValueSerde));
 
-        assertThat(exception.getMessage(), equalTo("Failed to initialize value serdes for store myStore"));
+        assertEquals("Failed to initialize value serdes for store myStore", exception.getMessage());
     }
 }

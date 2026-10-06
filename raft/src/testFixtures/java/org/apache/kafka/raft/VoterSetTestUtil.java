@@ -77,7 +77,7 @@ public final class VoterSetTestUtil {
     public static VoterSet.VoterNode voterNode(ReplicaKey replicaKey, Endpoints endpoints) {
         var supportedVersionRange = replicaKey.directoryId().isEmpty() ?
             new SupportedVersionRange((short) 0) :
-            Feature.KRAFT_VERSION.supportedVersionRange();
+            Feature.KRAFT_VERSION.supportedVersionRange(true);
 
         return new VoterSet.VoterNode(replicaKey, endpoints, supportedVersionRange);
     }

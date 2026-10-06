@@ -32,22 +32,18 @@ import org.apache.kafka.clients.consumer.internals.ShareMembershipManager;
 import org.apache.kafka.clients.consumer.internals.StreamsMembershipManager;
 import org.apache.kafka.clients.consumer.internals.SubscriptionState;
 import org.apache.kafka.common.Cluster;
-import org.apache.kafka.common.IsolationLevel;
 import org.apache.kafka.common.KafkaException;
 import org.apache.kafka.common.PartitionInfo;
 import org.apache.kafka.common.TopicIdPartition;
 import org.apache.kafka.common.TopicPartition;
-import org.apache.kafka.common.requests.ListOffsetsRequest;
 import org.apache.kafka.common.utils.internals.LogContext;
 
 import org.slf4j.Logger;
 
 import java.util.Collection;
-import java.util.Collections;
 import java.util.HashSet;
 import java.util.List;
 import java.util.Map;
-import java.util.OptionalLong;
 import java.util.Set;
 import java.util.concurrent.CompletableFuture;
 import java.util.concurrent.CompletionException;
@@ -666,35 +662,10 @@ public class ApplicationEventProcessor implements EventProcessor<ApplicationEven
 
     private void process(final CurrentLagEvent event) {
         try {
-            final TopicPartition topicPartition = event.partition();
-            final IsolationLevel isolationLevel = event.isolationLevel();
-            final Long lag = subscriptions.partitionLag(topicPartition, isolationLevel);
-
-            final OptionalLong lagOpt;
-            if (lag == null) {
-                if (subscriptions.partitionEndOffset(topicPartition, isolationLevel) == null &&
-                    !subscriptions.partitionEndOffsetRequested(topicPartition)) {
-                    // If the log end offset is unknown and there isn't already an in-flight list offset
-                    // request, issue one with the goal that the lag will be available the next time the
-                    // user calls currentLag().
-                    log.info("Requesting the log end offset for {} in order to compute lag", topicPartition);
-                    subscriptions.requestPartitionEndOffset(topicPartition);
-
-                    // Emulates the Consumer.endOffsets() logic...
-                    Map<TopicPartition, Long> timestampToSearch = Collections.singletonMap(
-                        topicPartition,
-                        ListOffsetsRequest.LATEST_TIMESTAMP
-                    );
-
-                    requestManagers.offsetsRequestManager.fetchOffsets(timestampToSearch, false);
-                }
-
-                lagOpt = OptionalLong.empty();
-            } else {
-                lagOpt = OptionalLong.of(lag);
-            }
-
-            event.future().complete(lagOpt);
+            event.future().complete(requestManagers.offsetsRequestManager.currentLag(
+                event.partition(),
+                event.isolationLevel()
+            ));
         } catch (Exception e) {
             event.future().completeExceptionally(e);
         }

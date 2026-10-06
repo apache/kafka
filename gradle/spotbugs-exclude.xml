@@ -550,7 +550,6 @@ For a detailed description of spotbugs bug categories, see https://spotbugs.read
             <Class name="org.apache.kafka.tools.VerifiableShareConsumer"/>
             <Class name="org.apache.kafka.server.quota.ClientQuotaManager"/>
             <Class name="kafka.log.LogManager"/>
-            <Class name="kafka.server.DelayedFetch"/>
             <Class name="kafka.server.KafkaApis"/>
             <Class name="kafka.server.metadata.KRaftMetadataCache"/>
             <Class name="org.apache.kafka.streams.processor.internals.InternalTopologyBuilder"/>

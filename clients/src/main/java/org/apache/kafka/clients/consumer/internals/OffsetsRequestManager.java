@@ -44,13 +44,13 @@ import org.apache.kafka.common.utils.internals.LogContext;
 import org.slf4j.Logger;
 
 import java.util.ArrayList;
-import java.util.Collections;
 import java.util.HashMap;
 import java.util.HashSet;
 import java.util.List;
 import java.util.Map;
 import java.util.Objects;
 import java.util.Optional;
+import java.util.OptionalLong;
 import java.util.Set;
 import java.util.concurrent.CompletableFuture;
 import java.util.concurrent.atomic.AtomicInteger;
@@ -188,15 +188,23 @@ public final class OffsetsRequestManager implements RequestManager, ClusterResou
     public CompletableFuture<Map<TopicPartition, OffsetAndTimestampInternal>> fetchOffsets(
             Map<TopicPartition, Long> timestampsToSearch,
             boolean requireTimestamps) {
+        return fetchOffsets(timestampsToSearch, requireTimestamps, false);
+    }
+
+    private CompletableFuture<Map<TopicPartition, OffsetAndTimestampInternal>> fetchOffsets(
+            Map<TopicPartition, Long> timestampsToSearch,
+            boolean requireTimestamps,
+            boolean oneShot) {
         if (timestampsToSearch.isEmpty()) {
-            return CompletableFuture.completedFuture(Collections.emptyMap());
+            return CompletableFuture.completedFuture(Map.of());
         }
         metadata.addTransientTopics(OffsetFetcherUtils.topicsForPartitions(timestampsToSearch.keySet()));
         ListOffsetsRequestState listOffsetsRequestState = new ListOffsetsRequestState(
                 timestampsToSearch,
                 requireTimestamps,
                 offsetFetcherUtils,
-                isolationLevel);
+                isolationLevel,
+                oneShot);
         listOffsetsRequestState.globalResult.whenComplete((result, error) -> {
             metadata.clearTransientTopics();
             if (error != null) {
@@ -213,6 +221,52 @@ public final class OffsetsRequestManager implements RequestManager, ClusterResou
                 result -> OffsetFetcherUtils.buildOffsetsForTimeInternalResult(
                         timestampsToSearch,
                         result.fetchedOffsets));
+    }
+
+    /**
+     * Retrieve the consumer's lag on the given partition, i.e. the number of records between the consumer's
+     * position and the end of the partition (the high watermark, or the last stable offset when reading with
+     * {@link IsolationLevel#READ_COMMITTED}).
+     *
+     * <p/>
+     *
+     * If the end offset is not known, this issues a <code>LIST_OFFSETS</code> request in the background so that
+     * the lag may be available on a subsequent call, and returns an empty result for now. Only one such request
+     * is allowed in flight per partition at a time; that is tracked by the 'end offset requested' flag in
+     * {@link SubscriptionState}, which is set here and cleared when the request completes, however it completes.
+     *
+     * @param topicPartition Partition to retrieve the lag for
+     * @param isolationLevel Isolation level the lag should be calculated against
+     * @return The lag, or empty if the end offset for the partition is not (yet) known
+     */
+    public OptionalLong currentLag(TopicPartition topicPartition, IsolationLevel isolationLevel) {
+        final Long lag = subscriptionState.partitionLag(topicPartition, isolationLevel);
+
+        if (lag == null) {
+            // If the log end offset is unknown and there isn't already an in-flight list offset
+            // request, issue one with the goal that the lag will be available the next time the
+            // user calls currentLag().
+            if (subscriptionState.partitionEndOffset(topicPartition, isolationLevel) == null &&
+                offsetFetcherUtils.maybeSetPartitionEndOffsetRequest(topicPartition)) {
+
+                Map<TopicPartition, Long> timestampToSearch = Map.of(
+                    topicPartition,
+                    ListOffsetsRequest.LATEST_TIMESTAMP
+                );
+
+                // The request is issued as 'one shot' so that it always completes rather than being retried
+                // internally on a metadata update. That keeps the 'end offset requested' flag clearing below
+                // reachable on every outcome, so a failed LIST_OFFSETS doesn't block all future lag lookups.
+                // A successful response clears the flag as a side effect of updating the subscription state,
+                // so the call below is a no-op in that case.
+                fetchOffsets(timestampToSearch, false, true).whenComplete((__, error) ->
+                    offsetFetcherUtils.clearPartitionEndOffsetRequests(Set.of(topicPartition)));
+            }
+
+            return OptionalLong.empty();
+        }
+
+        return OptionalLong.of(lag);
     }
 
     /**
@@ -523,7 +577,10 @@ public final class OffsetsRequestManager implements RequestManager, ClusterResou
                     timestampsToSearch, requireTimestamps, listOffsetsRequestState);
             requestsToSend.addAll(unsentRequests);
         } catch (StaleMetadataException e) {
-            requestsToRetry.add(listOffsetsRequestState);
+            if (listOffsetsRequestState.oneShot)
+                listOffsetsRequestState.completeWithResultSoFar();
+            else
+                requestsToRetry.add(listOffsetsRequestState);
         }
     }
 
@@ -573,11 +630,8 @@ public final class OffsetsRequestManager implements RequestManager, ClusterResou
                 offsetFetcherUtils.updateSubscriptionState(multiNodeResult.fetchedOffsets,
                         isolationLevel);
 
-                if (listOffsetsRequestState.remainingToSearch.isEmpty()) {
-                    ListOffsetResult listOffsetResult =
-                            new ListOffsetResult(listOffsetsRequestState.fetchedOffsets,
-                                    listOffsetsRequestState.remainingToSearch.keySet());
-                    listOffsetsRequestState.globalResult.complete(listOffsetResult);
+                if (listOffsetsRequestState.remainingToSearch.isEmpty() || listOffsetsRequestState.oneShot) {
+                    listOffsetsRequestState.completeWithResultSoFar();
                 } else {
                     requestsToRetry.add(listOffsetsRequestState);
                     metadata.requestUpdate(false);
@@ -826,10 +880,20 @@ public final class OffsetsRequestManager implements RequestManager, ClusterResou
         final OffsetFetcherUtils offsetFetcherUtils;
         final IsolationLevel isolationLevel;
 
+        /**
+         * If true, this request is never held back to be retried on a metadata update. It completes on the
+         * first attempt with whatever offsets were retrieved, leaving it to the caller to decide whether to
+         * issue another request. This is used by
+         * {@link OffsetsRequestManager#currentLag(TopicPartition, IsolationLevel)}, which relies on the
+         * request always completing in order to clear its 'end offset requested' flag.
+         */
+        final boolean oneShot;
+
         private ListOffsetsRequestState(Map<TopicPartition, Long> timestampsToSearch,
                                         boolean requireTimestamps,
                                         OffsetFetcherUtils offsetFetcherUtils,
-                                        IsolationLevel isolationLevel) {
+                                        IsolationLevel isolationLevel,
+                                        boolean oneShot) {
             remainingToSearch = new HashMap<>();
             fetchedOffsets = new HashMap<>();
             globalResult = new CompletableFuture<>();
@@ -838,11 +902,20 @@ public final class OffsetsRequestManager implements RequestManager, ClusterResou
             this.requireTimestamps = requireTimestamps;
             this.offsetFetcherUtils = offsetFetcherUtils;
             this.isolationLevel = isolationLevel;
+            this.oneShot = oneShot;
         }
 
         private void addPartitionsToRetry(Set<TopicPartition> partitionsToRetry) {
             remainingToSearch.putAll(partitionsToRetry.stream()
                     .collect(Collectors.toMap(tp -> tp, timestampsToSearch::get)));
+        }
+
+        /**
+         * Completes {@link #globalResult} with the offsets retrieved so far, reporting any partitions that
+         * are still outstanding as partitions to retry.
+         */
+        private void completeWithResultSoFar() {
+            globalResult.complete(new ListOffsetResult(fetchedOffsets, remainingToSearch.keySet()));
         }
     }
 

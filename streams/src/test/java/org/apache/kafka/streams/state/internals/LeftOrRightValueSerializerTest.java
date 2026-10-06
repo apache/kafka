@@ -24,9 +24,8 @@ import org.apache.kafka.common.serialization.StringSerializer;
 
 import org.junit.jupiter.api.Test;
 
-import static org.hamcrest.MatcherAssert.assertThat;
-import static org.hamcrest.Matchers.is;
-import static org.hamcrest.Matchers.notNullValue;
+import static org.junit.jupiter.api.Assertions.assertEquals;
+import static org.junit.jupiter.api.Assertions.assertNotNull;
 import static org.junit.jupiter.api.Assertions.assertThrows;
 import static org.mockito.Mockito.mock;
 import static org.mockito.Mockito.never;
@@ -46,11 +45,11 @@ public class LeftOrRightValueSerializerTest {
 
         final byte[] serialized = STRING_OR_INTEGER_SERDE.serializer().serialize(TOPIC, HEADERS, leftOrRightValue);
 
-        assertThat(serialized, is(notNullValue()));
+        assertNotNull(serialized);
 
         final LeftOrRightValue<String, Integer> deserialized = STRING_OR_INTEGER_SERDE.deserializer().deserialize(TOPIC, HEADERS, serialized);
 
-        assertThat(deserialized, is(leftOrRightValue));
+        assertEquals(leftOrRightValue, deserialized);
     }
 
     @Test
@@ -61,11 +60,11 @@ public class LeftOrRightValueSerializerTest {
 
         final byte[] serialized = STRING_OR_INTEGER_SERDE.serializer().serialize(TOPIC, HEADERS, leftOrRightValue);
 
-        assertThat(serialized, is(notNullValue()));
+        assertNotNull(serialized);
 
         final LeftOrRightValue<String, Integer> deserialized = STRING_OR_INTEGER_SERDE.deserializer().deserialize(TOPIC, HEADERS, serialized);
 
-        assertThat(deserialized, is(leftOrRightValue));
+        assertEquals(leftOrRightValue, deserialized);
     }
 
     @Test

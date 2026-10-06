@@ -16,6 +16,9 @@
  */
 package org.apache.kafka.streams.state.internals;
 
+import org.apache.kafka.common.utils.Bytes;
+import org.apache.kafka.streams.KeyValue;
+
 import org.rocksdb.ColumnFamilyHandle;
 import org.rocksdb.ReadOptions;
 import org.rocksdb.RocksDB;
@@ -26,6 +29,7 @@ import java.nio.ByteBuffer;
 import java.util.Arrays;
 import java.util.Comparator;
 import java.util.IdentityHashMap;
+import java.util.List;
 import java.util.Map;
 import java.util.NavigableMap;
 import java.util.TreeMap;
@@ -79,6 +83,17 @@ public class InMemoryRocksDBAccessor implements RocksDBStore.DBAccessor {
             delete(columnFamily, key);
         } else {
             storeFor(columnFamily).put(key, value);
+        }
+    }
+
+    @Override
+    public void putAll(final RocksDBStore.ColumnFamilyAccessor cfAccessor,
+                       final List<KeyValue<Bytes, byte[]>> entries) throws RocksDBException {
+        // Single-threaded in-memory maps, so applying the entries one at a time is already atomic
+        // from a test's point of view. Routing through cfAccessor keeps the column-family layout
+        // identical to a single-key put.
+        for (final KeyValue<Bytes, byte[]> entry : entries) {
+            cfAccessor.put(this, entry.key.get(), entry.value);
         }
     }
 

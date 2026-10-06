@@ -19,6 +19,8 @@ package org.apache.kafka.coordinator.group.modern;
 import org.apache.kafka.common.Uuid;
 import org.apache.kafka.coordinator.common.runtime.CoordinatorMetadataImage;
 
+import java.lang.reflect.Array;
+import java.util.Arrays;
 import java.util.Collection;
 import java.util.HashMap;
 import java.util.Iterator;
@@ -77,12 +79,12 @@ public class TopicIds implements Set<Uuid> {
 
         @Override
         public String name(Uuid id) {
-            return image.topicMetadata(id).map(CoordinatorMetadataImage.TopicMetadata::name).orElse(null);
+            return image.topicName(id);
         }
 
         @Override
         public Uuid id(String name) {
-            return image.topicMetadata(name).map(CoordinatorMetadataImage.TopicMetadata::id).orElse(null);
+            return image.topicId(name);
         }
 
         @Override
@@ -120,12 +122,30 @@ public class TopicIds implements Set<Uuid> {
 
         @Override
         public String name(Uuid id) {
-            return topicNames.computeIfAbsent(id, __ -> image.topicMetadata(id).map(CoordinatorMetadataImage.TopicMetadata::name).orElse(null));
+            // Uses get and put rather than computeIfAbsent, whose lambda would capture the id and
+            // be allocated on every call, cache hits included.
+            String name = topicNames.get(id);
+            if (name == null) {
+                name = image.topicName(id);
+                if (name != null) {
+                    topicNames.put(id, name);
+                }
+            }
+            return name;
         }
 
         @Override
         public Uuid id(String name) {
-            return topicIds.computeIfAbsent(name, __ -> image.topicMetadata(name).map(CoordinatorMetadataImage.TopicMetadata::id).orElse(null));
+            // Uses get and put rather than computeIfAbsent, whose lambda would capture the name
+            // and be allocated on every call, cache hits included.
+            Uuid id = topicIds.get(name);
+            if (id == null) {
+                id = image.topicId(name);
+                if (id != null) {
+                    topicIds.put(name, id);
+                }
+            }
+            return id;
         }
 
         @Override
@@ -226,12 +246,43 @@ public class TopicIds implements Set<Uuid> {
 
     @Override
     public Object[] toArray() {
-        throw new UnsupportedOperationException();
+        var topicIds = new Object[topicNames.size()];
+        var count = fill(topicIds);
+        return count == topicIds.length ? topicIds : Arrays.copyOf(topicIds, count);
     }
 
     @Override
+    @SuppressWarnings("unchecked")
     public <T> T[] toArray(T[] a) {
-        throw new UnsupportedOperationException();
+        var size = topicNames.size();
+        var topicIds = a.length >= size
+            ? a
+            : (T[]) Array.newInstance(a.getClass().getComponentType(), size);
+        var count = fill(topicIds);
+        if (count < topicIds.length) {
+            if (topicIds == a) {
+                topicIds[count] = null;
+            } else {
+                topicIds = Arrays.copyOf(topicIds, count);
+            }
+        }
+        return topicIds;
+    }
+
+    /**
+     * Fills the array with the ids of the topics. Unresolvable topic names are skipped.
+     *
+     * @return The number of successfully resolved ids.
+     */
+    private int fill(Object[] topicIds) {
+        var count = 0;
+        for (var topicName : topicNames) {
+            var topicId = resolver.id(topicName);
+            if (topicId != null) {
+                topicIds[count++] = topicId;
+            }
+        }
+        return count;
     }
 
     @Override
