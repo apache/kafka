@@ -20,7 +20,7 @@ import org.apache.kafka.common.utils.Utils;
 import org.apache.kafka.common.utils.internals.Exit;
 import org.apache.kafka.common.utils.internals.Java;
 
-import org.apache.commons.lang.text.StrSubstitutor;
+import org.apache.commons.text.StringSubstitutor;
 import org.apache.directory.api.ldap.model.entry.DefaultEntry;
 import org.apache.directory.api.ldap.model.entry.Entry;
 import org.apache.directory.api.ldap.model.exception.LdapException;
@@ -32,7 +32,6 @@ import org.apache.directory.api.ldap.schema.loader.LdifSchemaLoader;
 import org.apache.directory.api.ldap.schema.manager.impl.DefaultSchemaManager;
 import org.apache.directory.server.constants.ServerDNConstants;
 import org.apache.directory.server.core.DefaultDirectoryService;
-import org.apache.directory.server.core.api.CacheService;
 import org.apache.directory.server.core.api.DirectoryService;
 import org.apache.directory.server.core.api.InstanceLayout;
 import org.apache.directory.server.core.api.schema.SchemaPartition;
@@ -310,7 +309,6 @@ public class MiniKdc {
     private void initDirectoryService() throws Exception {
         ds = new DefaultDirectoryService();
         ds.setInstanceLayout(new InstanceLayout(workDir));
-        ds.setCacheService(new CacheService());
 
         // first load the schema
         InstanceLayout instanceLayout = ds.getInstanceLayout();
@@ -382,7 +380,7 @@ public class MiniKdc {
         try (BufferedReader reader = new BufferedReader(new InputStreamReader(getResourceAsStream("minikdc.ldiff")))) {
             StringBuilder builder = new StringBuilder();
             reader.lines().forEach(line -> builder.append(line).append("\n"));
-            addEntriesToDirectoryService(StrSubstitutor.replace(builder, map));
+            addEntriesToDirectoryService(StringSubstitutor.replace(builder, map));
         } catch (LdapException e) {
             throw new RuntimeException(e);
         }

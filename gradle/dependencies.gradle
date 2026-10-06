@@ -50,8 +50,8 @@ if ( !versions.scala.contains('-') ) {
 // See https://issues.apache.org/jira/browse/KAFKA-12622 for steps to verify the LICENSE-binary file is correct.
 versions += [
   activation: "1.1.1",
-  apacheda: "1.0.2",
-  apacheds: "2.0.0-M24",
+  apacheda: "2.1.9",
+  apacheds: "2.0.0.AM26",
   argparse4j: "0.7.0",
   bcpkix: "1.86",
   caffeine: "3.2.4",
@@ -59,6 +59,7 @@ versions += [
   commonsValidator: "1.11.0",
   commonsNet: "3.13.0",
   classgraph: "4.8.196",
+  commonsText: "1.12.0",
   gradle: "9.7.1",
   httpclient: "4.5.14",
   jackson: "2.22.3",
@@ -155,6 +156,7 @@ libs += [
   classgraph: "io.github.classgraph:classgraph:$versions.classgraph",
   commonsNet: "commons-net:commons-net:$versions.commonsNet",
   commonsValidator: "commons-validator:commons-validator:$versions.commonsValidator",
+  commonsText: "org.apache.commons:commons-text:$versions.commonsText",
   jacksonAnnotations: "com.fasterxml.jackson.core:jackson-annotations:$versions.jacksonAnnotations",
   jacksonDatabind: "com.fasterxml.jackson.core:jackson-databind:$versions.jackson",
   jacksonDataformatCsv: "com.fasterxml.jackson.dataformat:jackson-dataformat-csv:$versions.jackson",
