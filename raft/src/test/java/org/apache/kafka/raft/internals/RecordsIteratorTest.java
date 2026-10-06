@@ -132,6 +132,41 @@ public final class RecordsIteratorTest {
     }
 
     @Test
+    public void testFileRecordsSliceLargerThanBatchSize() throws IOException {
+        // Models KafkaRaftClient reading committed records: the slice ends at the high-watermark
+        // and the file has uncommitted batches after the end of the slice.
+        List<TestBatch<String>> sliceBatches = List.of(
+            new TestBatch<>(0, 1, 0, List.of("a", "b", "c", "d", "e")),
+            new TestBatch<>(5, 1, 0, List.of("f", "g", "h", "i", "j"))
+        );
+        List<TestBatch<String>> batchesAfterSlice = List.of(
+            new TestBatch<>(10, 1, 0, List.of("k"))
+        );
+
+        try (FileRecords fileRecords = FileRecords.open(TestUtils.tempFile())) {
+            fileRecords.append(buildRecords(CompressionType.NONE, sliceBatches));
+            int sliceSize = fileRecords.sizeInBytes();
+            fileRecords.append(buildRecords(CompressionType.NONE, batchesAfterSlice));
+            FileRecords slice = fileRecords.slice(0, sliceSize);
+
+            // A batch size one byte smaller than the slice forces a second read, which has only
+            // one byte of the slice left to read, but the buffer can hold `batchesAfterSlice`
+            List<TestBatch<String>> actualBatches = new ArrayList<>();
+            try (RecordsIterator<String> iterator = createIterator(
+                    slice,
+                    BufferSupplier.NO_CACHING,
+                    sliceSize - 1,
+                    true
+                )
+            ) {
+                iterator.forEachRemaining(batch -> actualBatches.add(TestBatch.from(batch)));
+            }
+
+            assertEquals(sliceBatches, actualBatches);
+        }
+    }
+
+    @Test
     public void testCrcValidation() {
         forCompressionTypeSeed((compressionType, seed) -> {
             List<TestBatch<String>> batches = createBatches(seed);
@@ -324,11 +359,20 @@ public final class RecordsIteratorTest {
         BufferSupplier bufferSupplier,
         boolean validateCrc
     ) {
+        return createIterator(records, bufferSupplier, Records.HEADER_SIZE_UP_TO_MAGIC, validateCrc);
+    }
+
+    static RecordsIterator<String> createIterator(
+        Records records,
+        BufferSupplier bufferSupplier,
+        int batchSize,
+        boolean validateCrc
+    ) {
         return new RecordsIterator<>(
             records,
             RecordsDecodingStrategy.dataAndControl(STRING_SERDE),
             bufferSupplier,
-            Records.HEADER_SIZE_UP_TO_MAGIC,
+            batchSize,
             validateCrc,
             new LogContext()
         );

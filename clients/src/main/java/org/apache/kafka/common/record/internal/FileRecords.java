@@ -127,14 +127,34 @@ public class FileRecords extends AbstractRecords implements Closeable {
 
     /**
      * Read log batches into the given buffer until there are no bytes remaining in the buffer or the end of the file
-     * is reached.
+     * is reached. This can read past the end of this FileRecords object. Use {@link #readUntil(ByteBuffer, int)} to
+     * stop at the end of this FileRecords object.
      *
      * @param buffer The buffer to write the batches to
-     * @param position Position in the buffer to read from
+     * @param position Position to start reading from, relative to the start of this FileRecords object
      * @throws IOException If an I/O error occurs, see {@link FileChannel#read(ByteBuffer, long)} for details on the
      * possible exceptions
      */
     public void readInto(ByteBuffer buffer, int position) throws IOException {
+        Utils.readFully(channel, buffer, position + this.start);
+        buffer.flip();
+    }
+
+    /**
+     * Read log batches into the given buffer until there are no bytes remaining in the buffer or the end of
+     * this FileRecords object is reached.
+     *
+     * @param buffer The buffer to write the batches to
+     * @param position Position to start reading from, relative to the start of this FileRecords object
+     * @throws IOException If an I/O error occurs, see {@link FileChannel#read(ByteBuffer, long)} for details on the
+     * possible exceptions
+     * @throws IllegalArgumentException If the position is negative or greater than the size of this FileRecords object
+     */
+    public void readUntil(ByteBuffer buffer, int position) throws IOException {
+        int size = sizeInBytes();
+        if (position < 0 || position > size)
+            throw new IllegalArgumentException("Position " + position + " is outside of records of size " + size);
+        buffer.limit(buffer.position() + Math.min(buffer.remaining(), size - position));
         Utils.readFully(channel, buffer, position + this.start);
         buffer.flip();
     }

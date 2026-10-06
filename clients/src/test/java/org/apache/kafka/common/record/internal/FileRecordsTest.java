@@ -240,6 +240,57 @@ public class FileRecordsTest {
         assertEquals(Collections.singletonList(second), batches(read), "Read a single message starting from the second message");
     }
 
+    @Test
+    public void testReadUntilStopsAtEndOfSlice() throws IOException {
+        List<RecordBatch> items = batches(fileRecords);
+        RecordBatch second = items.get(1);
+        // The slice holds only the second batch and the third batch follows it in the file
+        FileRecords slice = fileRecords.slice(items.get(0).sizeInBytes(), second.sizeInBytes());
+        ByteBuffer buffer = ByteBuffer.allocate(fileRecords.sizeInBytes());
+
+        slice.readUntil(buffer, 0);
+
+        assertEquals(second.sizeInBytes(), buffer.remaining());
+        assertEquals(List.of(second.baseOffset()), baseOffsets(buffer));
+    }
+
+    @Test
+    public void testReadUntilAtEndOfRecordsReadsNothing() throws IOException {
+        List<RecordBatch> items = batches(fileRecords);
+        FileRecords slice = fileRecords.slice(items.get(0).sizeInBytes(), items.get(1).sizeInBytes());
+        ByteBuffer buffer = ByteBuffer.allocate(fileRecords.sizeInBytes());
+
+        slice.readUntil(buffer, slice.sizeInBytes());
+
+        assertEquals(0, buffer.remaining());
+    }
+
+    @Test
+    public void testReadUntilWithPositionOutsideRecords() {
+        List<RecordBatch> items = batches(fileRecords);
+        FileRecords slice = fileRecords.slice(items.get(0).sizeInBytes(), items.get(1).sizeInBytes());
+        ByteBuffer buffer = ByteBuffer.allocate(fileRecords.sizeInBytes());
+
+        // Both positions are inside the file but outside the slice
+        assertThrows(IllegalArgumentException.class, () -> slice.readUntil(buffer, -1));
+        assertThrows(IllegalArgumentException.class, () -> slice.readUntil(buffer, slice.sizeInBytes() + 1));
+    }
+
+    @Test
+    public void testReadUntilMatchesReadIntoForWholeFile() throws IOException {
+        int position = batches(fileRecords).get(0).sizeInBytes();
+        int bytesLeft = fileRecords.sizeInBytes() - position;
+        for (int bufferSize : new int[] {bytesLeft - 1, bytesLeft + 1}) {
+            ByteBuffer readIntoBuffer = ByteBuffer.allocate(bufferSize);
+            ByteBuffer readUntilBuffer = ByteBuffer.allocate(bufferSize);
+
+            fileRecords.readInto(readIntoBuffer, position);
+            fileRecords.readUntil(readUntilBuffer, position);
+
+            assertEquals(readIntoBuffer, readUntilBuffer, "Buffer size " + bufferSize);
+        }
+    }
+
     /**
      * Test the MessageSet.searchFor API.
      */
@@ -771,6 +822,13 @@ public class FileRecordsTest {
 
     private static List<RecordBatch> batches(Records buffer) {
         return TestUtils.toList(buffer.batches());
+    }
+
+    private static List<Long> baseOffsets(ByteBuffer buffer) {
+        List<Long> baseOffsets = new ArrayList<>();
+        for (RecordBatch batch : MemoryRecords.readableRecords(buffer).batches())
+            baseOffsets.add(batch.baseOffset());
+        return baseOffsets;
     }
 
     private FileRecords createFileRecords(byte[][] values) throws IOException {
