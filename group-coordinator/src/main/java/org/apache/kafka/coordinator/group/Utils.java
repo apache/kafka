@@ -529,7 +529,7 @@ public class Utils {
      * @return The newly created map.
      */
     public static <K, V> HashMap<K, V> newHashMap(int numMappings) {
-        return new HashMap<>(capacity(numMappings));
+        return new HashMap<>(hashCapacity(numMappings));
     }
 
     /**
@@ -539,7 +539,7 @@ public class Utils {
      * @return The newly created set.
      */
     public static <E> HashSet<E> newHashSet(int numElements) {
-        return new HashSet<>(capacity(numElements));
+        return new HashSet<>(hashCapacity(numElements));
     }
 
     /**
@@ -549,14 +549,14 @@ public class Utils {
      * @return The newly created set.
      */
     public static <E> LinkedHashSet<E> newLinkedHashSet(int numElements) {
-        return new LinkedHashSet<>(capacity(numElements));
+        return new LinkedHashSet<>(hashCapacity(numElements));
     }
 
     /**
      * @return The smallest initial capacity of a HashMap or HashSet, with the default load factor
      * of 0.75, that holds the given number of entries without resizing.
      */
-    static int capacity(int numEntries) {
-        return (int) Math.ceil(numEntries / (double) 0.75f);
+    static int hashCapacity(int numEntries) {
+        return (int) Math.ceil(numEntries / 0.75);
     }
 }
