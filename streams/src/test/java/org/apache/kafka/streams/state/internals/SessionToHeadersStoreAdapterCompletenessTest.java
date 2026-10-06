@@ -31,11 +31,13 @@ import java.util.stream.Stream;
 import static org.junit.jupiter.api.Assertions.assertTrue;
 
 /**
- * Requires every {@link SessionStore} method to be classified into a contract group, so a header-aware
- * override that is silently dropped (returning raw bytes) fails this test rather than escaping to
- * manual testing (KAFKA-20328). Behavioral assertions live in
- * {@link SessionToHeadersStoreAdapterTest}. The Instant overloads delegate to their long counterparts
- * (SessionStore defaults), so they convert/wrap too.
+ * Requires every {@link SessionStore} method to be classified into a contract group, and every non-special
+ * method to be overridden by {@link SessionToHeadersStoreAdapter}, so a header-aware override that is
+ * silently dropped (returning raw bytes) fails this test rather than escaping to manual testing
+ * (KAFKA-20328). Behavioral assertions live in {@link SessionToHeadersStoreAdapterTest}.
+ * <p>
+ * The Instant overloads are exempt from the override check: they are {@link SessionStore} defaults that
+ * delegate to their long counterparts, so they convert/wrap through the adapter's long overrides.
  * <p>
  * Signatures use erased parameter types, so a key ({@code K}) or value ({@code V}) appears as {@code Object}.
  */
@@ -87,6 +89,15 @@ public class SessionToHeadersStoreAdapterCompletenessTest {
         "readOnly(IsolationLevel)"
     );
 
+    // SessionStore defaults that delegate to the long overloads; the adapter intentionally inherits them.
+    private static final Set<String> INSTANT_DEFAULTS = Set.of(
+        "fetchSession(Object,Instant,Instant)",
+        "findSessions(Object,Instant,Instant)",
+        "findSessions(Object,Object,Instant,Instant)",
+        "backwardFindSessions(Object,Instant,Instant)",
+        "backwardFindSessions(Object,Object,Instant,Instant)"
+    );
+
     @Test
     public void everySessionStoreMethodMustBeClassified() {
         final Set<String> classified = Stream.of(
@@ -105,6 +116,33 @@ public class SessionToHeadersStoreAdapterCompletenessTest {
             "Unclassified SessionStore method(s): " + unclassified + ". Add each to a contract group in "
                 + "this test AND cover it with a behavioral test in SessionToHeadersStoreAdapterTest, so a "
                 + "forgotten header conversion cannot leak raw bytes silently.");
+    }
+
+    @Test
+    public void everyNonSpecialMethodMustBeOverriddenByAdapter() {
+        final Set<String> notOverridden = Arrays.stream(SessionStore.class.getMethods())
+            .filter(m -> !m.isSynthetic())
+            .filter(m -> !Modifier.isStatic(m.getModifiers()))
+            .filter(m -> !(SPECIAL.contains(signature(m)) || INSTANT_DEFAULTS.contains(signature(m))))
+            .filter(m -> !isOverriddenByAdapter(m))
+            .map(SessionToHeadersStoreAdapterCompletenessTest::signature)
+            .collect(Collectors.toCollection(TreeSet::new));
+
+        assertTrue(notOverridden.isEmpty(),
+            "SessionStore method(s) not overridden by SessionToHeadersStoreAdapter: " + notOverridden
+                + ". The inherited default would return the inner store's raw bytes without header conversion.");
+    }
+
+    // For a generic method the adapter's override is reached via its compiler-generated bridge, which
+    // has the erased signature and is declared on the adapter; a missing override resolves to the
+    // interface default instead.
+    private static boolean isOverriddenByAdapter(final Method method) {
+        try {
+            return SessionToHeadersStoreAdapter.class.getMethod(method.getName(), method.getParameterTypes())
+                .getDeclaringClass() == SessionToHeadersStoreAdapter.class;
+        } catch (final NoSuchMethodException e) {
+            throw new AssertionError(e);
+        }
     }
 
     private static String signature(final Method m) {

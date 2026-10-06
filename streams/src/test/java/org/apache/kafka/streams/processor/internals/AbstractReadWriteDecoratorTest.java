@@ -17,7 +17,6 @@
 package org.apache.kafka.streams.processor.internals;
 
 import org.apache.kafka.streams.processor.StateStore;
-import org.apache.kafka.streams.processor.StateStoreContext;
 import org.apache.kafka.streams.processor.internals.AbstractReadWriteDecorator.KeyValueStoreReadWriteDecorator;
 import org.apache.kafka.streams.processor.internals.AbstractReadWriteDecorator.SessionStoreReadWriteDecorator;
 import org.apache.kafka.streams.processor.internals.AbstractReadWriteDecorator.SessionStoreWithHeadersReadWriteDecorator;
@@ -39,9 +38,14 @@ import org.apache.kafka.streams.state.WindowStore;
 
 import org.junit.jupiter.api.Test;
 import org.junit.jupiter.api.extension.ExtendWith;
+import org.junit.jupiter.params.ParameterizedTest;
+import org.junit.jupiter.params.provider.Arguments;
+import org.junit.jupiter.params.provider.MethodSource;
 import org.mockito.junit.jupiter.MockitoExtension;
 import org.mockito.junit.jupiter.MockitoSettings;
 import org.mockito.quality.Strictness;
+
+import java.util.stream.Stream;
 
 import static org.apache.kafka.streams.processor.internals.AbstractReadWriteDecorator.wrapWithReadWriteStore;
 import static org.junit.jupiter.api.Assertions.assertEquals;
@@ -56,59 +60,25 @@ public class AbstractReadWriteDecoratorTest {
     // Dispatch tests pin wrapWithReadWriteStore to the exact decorator per store type. Because the
     // *WithHeaders interfaces extend their base store interface, a reordered/removed instanceof check
     // would silently fall through to the base decorator; asserting the exact class catches that.
-
-    @Test
-    public void shouldWrapTimestampedKeyValueStoreWithHeaders() {
-        assertEquals(TimestampedKeyValueStoreReadWriteDecoratorWithHeaders.class,
-            wrapWithReadWriteStore(mock(TimestampedKeyValueStoreWithHeaders.class)).getClass());
+    private static Stream<Arguments> storeTypes() {
+        return Stream.of(
+            Arguments.of(TimestampedKeyValueStoreWithHeaders.class, TimestampedKeyValueStoreReadWriteDecoratorWithHeaders.class),
+            Arguments.of(TimestampedKeyValueStore.class, TimestampedKeyValueStoreReadWriteDecorator.class),
+            Arguments.of(VersionedKeyValueStore.class, VersionedKeyValueStoreReadWriteDecorator.class),
+            Arguments.of(KeyValueStore.class, KeyValueStoreReadWriteDecorator.class),
+            Arguments.of(TimestampedWindowStoreWithHeaders.class, TimestampedWindowStoreWithHeadersReadWriteDecorator.class),
+            Arguments.of(TimestampedWindowStore.class, TimestampedWindowStoreReadWriteDecorator.class),
+            Arguments.of(WindowStore.class, WindowStoreReadWriteDecorator.class),
+            Arguments.of(SessionStoreWithHeaders.class, SessionStoreWithHeadersReadWriteDecorator.class),
+            Arguments.of(SessionStore.class, SessionStoreReadWriteDecorator.class)
+        );
     }
 
-    @Test
-    public void shouldWrapTimestampedKeyValueStore() {
-        assertEquals(TimestampedKeyValueStoreReadWriteDecorator.class,
-            wrapWithReadWriteStore(mock(TimestampedKeyValueStore.class)).getClass());
-    }
-
-    @Test
-    public void shouldWrapVersionedKeyValueStore() {
-        assertEquals(VersionedKeyValueStoreReadWriteDecorator.class,
-            wrapWithReadWriteStore(mock(VersionedKeyValueStore.class)).getClass());
-    }
-
-    @Test
-    public void shouldWrapKeyValueStore() {
-        assertEquals(KeyValueStoreReadWriteDecorator.class,
-            wrapWithReadWriteStore(mock(KeyValueStore.class)).getClass());
-    }
-
-    @Test
-    public void shouldWrapTimestampedWindowStoreWithHeaders() {
-        assertEquals(TimestampedWindowStoreWithHeadersReadWriteDecorator.class,
-            wrapWithReadWriteStore(mock(TimestampedWindowStoreWithHeaders.class)).getClass());
-    }
-
-    @Test
-    public void shouldWrapTimestampedWindowStore() {
-        assertEquals(TimestampedWindowStoreReadWriteDecorator.class,
-            wrapWithReadWriteStore(mock(TimestampedWindowStore.class)).getClass());
-    }
-
-    @Test
-    public void shouldWrapWindowStore() {
-        assertEquals(WindowStoreReadWriteDecorator.class,
-            wrapWithReadWriteStore(mock(WindowStore.class)).getClass());
-    }
-
-    @Test
-    public void shouldWrapSessionStoreWithHeaders() {
-        assertEquals(SessionStoreWithHeadersReadWriteDecorator.class,
-            wrapWithReadWriteStore(mock(SessionStoreWithHeaders.class)).getClass());
-    }
-
-    @Test
-    public void shouldWrapSessionStore() {
-        assertEquals(SessionStoreReadWriteDecorator.class,
-            wrapWithReadWriteStore(mock(SessionStore.class)).getClass());
+    @ParameterizedTest(name = "{0} -> {1}")
+    @MethodSource("storeTypes")
+    public void shouldWrapWithMatchingDecorator(final Class<? extends StateStore> storeType,
+                                                final Class<? extends StateStore> expectedDecorator) {
+        assertEquals(expectedDecorator, wrapWithReadWriteStore(mock(storeType)).getClass());
     }
 
     @Test
@@ -117,29 +87,13 @@ public class AbstractReadWriteDecoratorTest {
         assertSame(store, wrapWithReadWriteStore(store));
     }
 
-    // init/commit/close are defined on the abstract parent and shared by every decorator, so one
-    // representative subtype suffices to verify they are blocked for user code.
-    @Test
-    public void shouldThrowOnInit() {
-        final StateStore store = wrapWithReadWriteStore(mock(KeyValueStore.class));
-        final UnsupportedOperationException e = assertThrows(UnsupportedOperationException.class,
-            () -> store.init((StateStoreContext) null, null));
-        assertEquals(AbstractReadWriteDecorator.ERROR_MESSAGE, e.getMessage());
-    }
-
+    // init/close are covered by ProcessorContextImplTest's local*StoreShouldNotAllowInitOrClose tests;
+    // commit is not, and is shared by every decorator.
     @Test
     public void shouldThrowOnCommit() {
         final StateStore store = wrapWithReadWriteStore(mock(KeyValueStore.class));
         final UnsupportedOperationException e = assertThrows(UnsupportedOperationException.class,
             () -> store.commit(null));
-        assertEquals(AbstractReadWriteDecorator.ERROR_MESSAGE, e.getMessage());
-    }
-
-    @Test
-    public void shouldThrowOnClose() {
-        final StateStore store = wrapWithReadWriteStore(mock(KeyValueStore.class));
-        final UnsupportedOperationException e = assertThrows(UnsupportedOperationException.class,
-            store::close);
         assertEquals(AbstractReadWriteDecorator.ERROR_MESSAGE, e.getMessage());
     }
 }

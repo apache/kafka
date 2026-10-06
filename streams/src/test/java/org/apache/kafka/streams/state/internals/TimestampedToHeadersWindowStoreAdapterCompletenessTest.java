@@ -31,10 +31,11 @@ import java.util.stream.Stream;
 import static org.junit.jupiter.api.Assertions.assertTrue;
 
 /**
- * Requires every {@link WindowStore} method to be classified into a contract group, so a header-aware
- * override that is silently dropped (returning raw bytes) fails this test rather than escaping to
- * manual testing (KAFKA-20328). Behavioral assertions live in
- * {@link TimestampedToHeadersWindowStoreAdapterTest}.
+ * Requires every {@link WindowStore} method to be classified into a contract group, and every non-special
+ * method to be overridden by {@link TimestampedToHeadersWindowStoreAdapter}, so a header-aware override
+ * that is silently dropped (returning raw bytes) fails this test rather than escaping to manual testing
+ * (KAFKA-20328). Behavioral assertions live in {@link TimestampedToHeadersWindowStoreAdapterDelegationTest}
+ * and {@link TimestampedToHeadersWindowStoreAdapterTest}.
  * <p>
  * Signatures use erased parameter types, so a key ({@code K}) or value ({@code V}) appears as {@code Object}.
  */
@@ -101,8 +102,35 @@ public class TimestampedToHeadersWindowStoreAdapterCompletenessTest {
 
         assertTrue(unclassified.isEmpty(),
             "Unclassified WindowStore method(s): " + unclassified + ". Add each to a contract group in "
-                + "this test AND cover it with a behavioral test in TimestampedToHeadersWindowStoreAdapterTest, "
+                + "this test AND cover it with a behavioral test in TimestampedToHeadersWindowStoreAdapterDelegationTest, "
                 + "so a forgotten header conversion cannot leak raw bytes silently.");
+    }
+
+    @Test
+    public void everyNonSpecialMethodMustBeOverriddenByAdapter() {
+        final Set<String> notOverridden = Arrays.stream(WindowStore.class.getMethods())
+            .filter(m -> !m.isSynthetic())
+            .filter(m -> !Modifier.isStatic(m.getModifiers()))
+            .filter(m -> !SPECIAL.contains(signature(m)))
+            .filter(m -> !isOverriddenByAdapter(m))
+            .map(TimestampedToHeadersWindowStoreAdapterCompletenessTest::signature)
+            .collect(Collectors.toCollection(TreeSet::new));
+
+        assertTrue(notOverridden.isEmpty(),
+            "WindowStore method(s) not overridden by TimestampedToHeadersWindowStoreAdapter: " + notOverridden
+                + ". The inherited default would return the inner store's raw bytes without header conversion.");
+    }
+
+    // For a generic method the adapter's override is reached via its compiler-generated bridge, which
+    // has the erased signature and is declared on the adapter; a missing override resolves to the
+    // interface default instead.
+    private static boolean isOverriddenByAdapter(final Method method) {
+        try {
+            return TimestampedToHeadersWindowStoreAdapter.class.getMethod(method.getName(), method.getParameterTypes())
+                .getDeclaringClass() == TimestampedToHeadersWindowStoreAdapter.class;
+        } catch (final NoSuchMethodException e) {
+            throw new AssertionError(e);
+        }
     }
 
     private static String signature(final Method m) {
