@@ -265,7 +265,8 @@ public class StreamsGroup implements Group {
     private final TimelineObject<Optional<ConfiguredTopology>> configuredTopology;
 
     /**
-     * The last used assignment configurations for this streams group; the defaults until any were recorded.
+     * The last used assignment configurations for this streams group, or {@link AssignmentConfigsImpl#DEFAULT} if the
+     * group metadata record has none.
      * This is used to determine when assignment configuration changes should trigger a rebalance.
      */
     private final TimelineObject<AssignmentConfigsImpl> lastAssignmentConfigs;
@@ -1550,7 +1551,8 @@ public class StreamsGroup implements Group {
     }
 
     /**
-     * @return The last used assignment configurations for this streams group; the defaults until any were recorded.
+     * @return The last used assignment configurations for this streams group, or {@link AssignmentConfigsImpl#DEFAULT}
+     *         if the group metadata record has none.
      */
     public AssignmentConfigsImpl lastAssignmentConfigs() {
         return lastAssignmentConfigs.get();

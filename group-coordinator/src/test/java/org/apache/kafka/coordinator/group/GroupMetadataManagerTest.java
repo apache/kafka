@@ -24182,8 +24182,9 @@ public class GroupMetadataManagerTest {
 
     @Test
     public void testStreamsGroupEpochDoesNotIncreaseWhenEveryAssignmentConfigIsAtItsDefault() {
-        // A group that sets nothing must compare equal to a record without configs, or upgrading the
-        // broker rebalances every group.
+        // A broker upgrade can add configs that older records do not contain. A missing config is treated as its
+        // default, so as long as a new config is not set, the stored configs equal the current ones and the heartbeat
+        // must not bump the group epoch.
         String groupId = "fooup";
         String memberId = Uuid.randomUuid().toString();
         String subtopology1 = "subtopology1";
@@ -24222,7 +24223,7 @@ public class GroupMetadataManagerTest {
             )
             .build();
 
-        // The group carries no recorded assignment configs, like a record written before they were persisted.
+        // Replay a metadata record without assignment configs, as written by a 4.1 broker.
         context.replay(CoordinatorRecord.record(
             new StreamsGroupMetadataKey().setGroupId(groupId),
             new ApiMessageAndVersion(
@@ -24257,8 +24258,8 @@ public class GroupMetadataManagerTest {
 
         assertTrue(
             result.records().stream().noneMatch(record -> record.key() instanceof StreamsGroupMetadataKey),
-            "Expected no StreamsGroupMetadata record, and therefore no group epoch bump. A group without "
-                + "recorded assignment configs must compare equal to the defaults."
+            "Expected no StreamsGroupMetadata record, and therefore no group epoch bump. Configs missing from the "
+                + "record are treated as their defaults, so a broker upgrade alone must not bump the group epoch."
         );
         assertEquals(10, result.response().data().memberEpoch());
         assertEquals(10, group.groupEpoch());
