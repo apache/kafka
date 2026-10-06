@@ -397,6 +397,9 @@ class ReplicaManagerTest {
       // watermark makes the first fetch fail with an offset mismatch in
       // ReplicaAlterLogDirsThread.processPartitionData, which marks the partition as failed.
       rm.maybeAddLogDirFetchers(Set(partition), new LazyOffsetCheckpoints(rm.highWatermarkCheckpoints.asJava), _ => None)
+      // The fetcher must start from the future log's end offset, not its high watermark.
+      rm.replicaAlterLogDirsManager.fetcherThreadMap.values.foreach(t =>
+        t.fetchState(topicPartition).foreach(s => assertEquals(futureLog.logEndOffset, s.fetchOffset)))
       rm.replicaAlterLogDirsManager.fetcherThreadMap.values.foreach(t => t.doWork())
       assertEquals(Set.empty, rm.replicaAlterLogDirsManager.failedPartitions.partitions())
     } finally {
