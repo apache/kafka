@@ -84,7 +84,15 @@ class RocksDBTransactionBuffer extends AbstractTransactionBuffer<Bytes> {
 
     @Override
     void stageToBackend(final Bytes key, final byte[] value) {
-        stage(cfHandle, key, value);
+        try {
+            if (value != null) {
+                writeBatch.put(cfHandle, key.get(), value);
+            } else {
+                writeBatch.delete(cfHandle, key.get());
+            }
+        } catch (final RocksDBException e) {
+            throw new ProcessorStateException("Error staging write in transaction buffer for store " + storeName, e);
+        }
     }
 
     /**
@@ -96,17 +104,17 @@ class RocksDBTransactionBuffer extends AbstractTransactionBuffer<Bytes> {
         snapshotLock.writeLock().lock();
         try {
             if (cf == cfHandle) {
-                pendingWrites.put(key, Optional.ofNullable(value));
-                pendingWritesBytes += estimateKeySize(key) + (value != null ? value.length : 0);
-            }
-            try {
-                if (value != null) {
-                    writeBatch.put(cf, key.get(), value);
-                } else {
-                    writeBatch.delete(cf, key.get());
+                super.stage(key, value);
+            } else {
+                try {
+                    if (value != null) {
+                        writeBatch.put(cf, key.get(), value);
+                    } else {
+                        writeBatch.delete(cf, key.get());
+                    }
+                } catch (final RocksDBException e) {
+                    throw new ProcessorStateException("Error staging write in transaction buffer for store " + storeName, e);
                 }
-            } catch (final RocksDBException e) {
-                throw new ProcessorStateException("Error staging write in transaction buffer for store " + storeName, e);
             }
         } finally {
             snapshotLock.writeLock().unlock();

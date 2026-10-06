@@ -103,6 +103,20 @@ public class AbstractTransactionBufferTest {
         assertEquals(2 * Integer.BYTES + 4 + 8, buffer.approximateNumUncommittedBytes());
     }
 
+    @Test
+    void byteCountCountsOverwrittenKeyOnce() {
+        buffer.stage(1, new byte[4]);
+        buffer.stage(1, new byte[8]);
+        assertEquals(Integer.BYTES + 8, buffer.approximateNumUncommittedBytes());
+    }
+
+    @Test
+    void byteCountReplacesValueWithTombstone() {
+        buffer.stage(1, new byte[4]);
+        buffer.stage(1, null);
+        assertEquals(Integer.BYTES, buffer.approximateNumUncommittedBytes());
+    }
+
     // -- commit --
 
     @Test

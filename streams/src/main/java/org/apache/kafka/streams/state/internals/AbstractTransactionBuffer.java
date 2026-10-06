@@ -100,7 +100,10 @@ abstract class AbstractTransactionBuffer<K extends Comparable<K>> implements Tra
     public void stage(final K key, final byte[] value) {
         snapshotLock.writeLock().lock();
         try {
-            pendingWrites.put(key, Optional.ofNullable(value));
+            final Optional<byte[]> previous = pendingWrites.put(key, Optional.ofNullable(value));
+            if (previous != null) {
+                pendingWritesBytes -= estimateKeySize(key) + previous.map(v -> v.length).orElse(0);
+            }
             pendingWritesBytes += estimateKeySize(key) + (value != null ? value.length : 0);
             stageToBackend(key, value);
         } finally {
