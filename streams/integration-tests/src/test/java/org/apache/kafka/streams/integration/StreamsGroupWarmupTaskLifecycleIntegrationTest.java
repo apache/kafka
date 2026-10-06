@@ -42,12 +42,12 @@ import org.apache.kafka.streams.KafkaStreams;
 import org.apache.kafka.streams.KeyValue;
 import org.apache.kafka.streams.StreamsBuilder;
 import org.apache.kafka.streams.StreamsConfig;
-import org.apache.kafka.streams.TaskMetadata;
-import org.apache.kafka.streams.ThreadMetadata;
 import org.apache.kafka.streams.integration.utils.EmbeddedKafkaCluster;
 import org.apache.kafka.streams.integration.utils.IntegrationTestUtils;
 import org.apache.kafka.streams.kstream.Materialized;
+import org.apache.kafka.streams.processor.StandbyUpdateListener;
 import org.apache.kafka.streams.processor.StateRestoreListener;
+import org.apache.kafka.streams.processor.TaskId;
 import org.apache.kafka.streams.processor.internals.DefaultKafkaClientSupplier;
 import org.apache.kafka.streams.state.Stores;
 import org.apache.kafka.test.TestUtils;
@@ -275,11 +275,15 @@ public class StreamsGroupWarmupTaskLifecycleIntegrationTest {
             && activeTasks(group, c).equals(tasksOfLeaver)
             && activeTasks(group, owner).equals(tasksOfOwner)
             && totalWarmupTasks(group) == 0);
+        // Observed through the standby update listener rather than the thread metadata, which a stream thread only
+        // refreshes once all its active tasks are restored -- and c's gate holds back the restore of its new tasks.
         TestUtils.waitForCondition(
-            () -> !localStandbyTasks(c).contains(task),
+            () -> c.standbySuspensionsByTask.containsKey(task),
             WAIT_MS,
-            () -> "c should have closed the warm-up task " + task + ", but still holds " + localStandbyTasks(c)
+            () -> "c never closed the warm-up task " + task
         );
+        assertEquals(StandbyUpdateListener.SuspendReason.MIGRATED, c.standbySuspensionsByTask.get(task),
+            "c should have given up the warm-up task " + task + " rather than promoted it");
         assertEquals(restoresByOwner, owner.restoreEnds(task), "the owner should have kept running " + task + " throughout");
     }
 
@@ -559,19 +563,6 @@ public class StreamsGroupWarmupTaskLifecycleIntegrationTest {
             .orElse(-1L);
     }
 
-    /**
-     * The tasks the instance runs as standby or warm-up tasks, which Kafka Streams does not tell apart.
-     */
-    private static Set<Integer> localStandbyTasks(final Instance instance) {
-        final Set<Integer> partitions = new HashSet<>();
-        for (final ThreadMetadata threadMetadata : instance.streams.metadataForLocalThreads()) {
-            for (final TaskMetadata taskMetadata : threadMetadata.standbyTasks()) {
-                partitions.add(taskMetadata.taskId().partition());
-            }
-        }
-        return partitions;
-    }
-
     private static int single(final Set<Integer> tasks) {
         assertEquals(1, tasks.size(), "Expected exactly one task, got " + tasks);
         return tasks.iterator().next();
@@ -585,6 +576,8 @@ public class StreamsGroupWarmupTaskLifecycleIntegrationTest {
         private final Map<Integer, Long> totalRestoredByTask = new ConcurrentHashMap<>();
         // How many restores of an active task have ended, by task.
         private final Map<Integer, AtomicInteger> restoreEndsByTask = new ConcurrentHashMap<>();
+        // Why a standby or warm-up task last stopped being updated, by task.
+        private final Map<Integer, StandbyUpdateListener.SuspendReason> standbySuspensionsByTask = new ConcurrentHashMap<>();
 
         private Instance(final String name, final long restoreBudget) {
             this.name = name;
@@ -613,6 +606,31 @@ public class StreamsGroupWarmupTaskLifecycleIntegrationTest {
                                          final long totalRestored) {
                     totalRestoredByTask.put(topicPartition.partition(), totalRestored);
                     restoreEndsByTask.computeIfAbsent(topicPartition.partition(), __ -> new AtomicInteger()).incrementAndGet();
+                }
+            });
+            streams.setStandbyUpdateListener(new StandbyUpdateListener() {
+                @Override
+                public void onUpdateStart(final TopicPartition topicPartition,
+                                          final String storeName,
+                                          final long startingOffset) {
+                }
+
+                @Override
+                public void onBatchLoaded(final TopicPartition topicPartition,
+                                          final String storeName,
+                                          final TaskId taskId,
+                                          final long batchEndOffset,
+                                          final long batchSize,
+                                          final long currentEndOffset) {
+                }
+
+                @Override
+                public void onUpdateSuspended(final TopicPartition topicPartition,
+                                              final String storeName,
+                                              final long storeOffset,
+                                              final long currentEndOffset,
+                                              final SuspendReason reason) {
+                    standbySuspensionsByTask.put(topicPartition.partition(), reason);
                 }
             });
         }
