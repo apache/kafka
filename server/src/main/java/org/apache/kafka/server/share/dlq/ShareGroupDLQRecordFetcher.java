@@ -30,8 +30,8 @@ import org.apache.kafka.common.record.internal.Records;
 import org.apache.kafka.common.requests.FetchRequest;
 import org.apache.kafka.common.utils.Time;
 import org.apache.kafka.common.utils.internals.BufferSupplier;
-import org.apache.kafka.common.utils.internals.ByteBufferOutputStream;
 import org.apache.kafka.common.utils.internals.CloseableIterator;
+import org.apache.kafka.common.utils.internals.SingleByteBufferOutputStream;
 import org.apache.kafka.server.share.LogReader;
 import org.apache.kafka.server.storage.log.FetchIsolation;
 import org.apache.kafka.server.storage.log.FetchParams;
@@ -437,7 +437,7 @@ public class ShareGroupDLQRecordFetcher {
     private ByteBuffer decompressBounded(DefaultRecordBatch batch) {
         int chunkBytes = Math.min(batch.sizeInBytes(), DECOMPRESS_CHUNK_BYTES);
         try (InputStream in = batch.recordInputStream(bufferSupplier);
-             ByteBufferOutputStream out = new ByteBufferOutputStream(chunkBytes)) {
+             SingleByteBufferOutputStream out = new SingleByteBufferOutputStream(chunkBytes)) {
             byte[] chunk = new byte[chunkBytes];
             int nRead;
             long total = 0;

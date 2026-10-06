@@ -60,8 +60,4 @@ public class CreateAclsResponse extends AbstractResponse {
         return new CreateAclsResponse(new CreateAclsResponseData(readable, version));
     }
 
-    @Override
-    public boolean shouldClientThrottle(short version) {
-        return version >= 1;
-    }
 }

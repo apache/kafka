@@ -187,13 +187,15 @@ Single Node
     - `KAFKA_OPTS` is set to point to the JAAS config file.
     - Similar to the plaintext example, two listeners are configured: one for inter-broker communication and one for client-to-broker communication. Both use the `SASL_PLAINTEXT` security protocol.
     - Two users are configured in the JAAS file: `admin` (for inter-broker) and `alice` (for clients).
-    - Note: SASL is currently not supported with the GraalVM based native image (`apache/kafka-native`) due to missing reflection configuration for `java.security.AccessController`. See [KAFKA-19584](https://issues.apache.org/jira/browse/KAFKA-19584) for details.
     - To run the example:
     ```
     # Run from root of the repo
 
     # JVM based Apache Kafka Docker Image
     $ IMAGE=apache/kafka:latest docker compose -f docker/examples/docker-compose-files/single-node/sasl_plaintext/docker-compose.yml up
+
+    # GraalVM based Native Apache Kafka Docker Image
+    $ IMAGE=apache/kafka-native:latest docker compose -f docker/examples/docker-compose-files/single-node/sasl_plaintext/docker-compose.yml up
     ```
     - To produce messages using client scripts (Ensure that java version >= 17):
     ```
@@ -256,13 +258,15 @@ Multi Node Cluster
         - Similar to Plaintext example, with SASL/PLAIN authentication added.
         - Similar to Plaintext example, two listeners are configured for inter-broker and client-to-broker communication, both using the `SASL_PLAINTEXT` security protocol. Controllers use `PLAINTEXT`.
         - Each broker mounts the same JAAS config file. In production, each broker should have its own credentials.
-        - Note: SASL is currently not supported with the GraalVM based native image (`apache/kafka-native`) due to missing reflection configuration for `java.security.AccessController`. See [KAFKA-19584](https://issues.apache.org/jira/browse/KAFKA-19584) for details.
         - To run the example:
         ```
         # Run from root of the repo
 
         # JVM based Apache Kafka Docker Image
         $ IMAGE=apache/kafka:latest docker compose -f docker/examples/docker-compose-files/cluster/combined/sasl_plaintext/docker-compose.yml up
+
+        # GraalVM based Native Apache Kafka Docker Image
+        $ IMAGE=apache/kafka-native:latest docker compose -f docker/examples/docker-compose-files/cluster/combined/sasl_plaintext/docker-compose.yml up
         ```
         - To produce messages using client scripts (Ensure that java version >= 17):
         ```
@@ -311,13 +315,15 @@ Multi Node Cluster
     - SASL_PLAINTEXT:
         - Same as combined SASL_PLAINTEXT example, with controllers and brokers separated.
         - `SASL_PLAINTEXT` is only for inter-broker and client communication. Controllers use `PLAINTEXT`.
-        - Note: SASL is currently not supported with the GraalVM based native image (`apache/kafka-native`) due to missing reflection configuration for `java.security.AccessController`. See [KAFKA-19584](https://issues.apache.org/jira/browse/KAFKA-19584) for details.
         - To run the example:
         ```
         # Run from root of the repo
 
         # JVM based Apache Kafka Docker Image
         $ IMAGE=apache/kafka:latest docker compose -f docker/examples/docker-compose-files/cluster/isolated/sasl_plaintext/docker-compose.yml up
+
+        # GraalVM based Native Apache Kafka Docker Image
+        $ IMAGE=apache/kafka-native:latest docker compose -f docker/examples/docker-compose-files/cluster/isolated/sasl_plaintext/docker-compose.yml up
         ```
         - To produce messages using client scripts (Ensure that java version >= 17):
         ```

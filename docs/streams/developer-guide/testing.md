@@ -72,7 +72,7 @@ To verify the output, you can use `TestOutputTopic` where you configure the topi
     
     
     TestOutputTopic<String, Long> outputTopic = testDriver.createOutputTopic("output-topic", stringSerde.deserializer(), longSerde.deserializer());
-    assertThat(outputTopic.readKeyValue(), equalTo(new KeyValue<>("key", 42L)));
+    assertEquals(new KeyValue<>("key", 42L), outputTopic.readKeyValue());
 
 `TopologyTestDriver` supports punctuations, too. Event-time punctuations are triggered automatically based on the processed records' timestamps. Wall-clock-time punctuations can also be triggered by advancing the test driver's wall-clock-time (the driver mocks wall-clock-time internally to give users control over it). 
     
@@ -138,54 +138,54 @@ The following example demonstrates how to use the test driver and helper classes
     @Test
     public void shouldFlushStoreForFirstInput() {
         inputTopic.pipeInput("a", 1L);
-        assertThat(outputTopic.readKeyValue(), equalTo(new KeyValue<>("a", 21L)));
-        assertThat(outputTopic.isEmpty(), is(true));
+        assertEquals(new KeyValue<>("a", 21L), outputTopic.readKeyValue());
+        assertTrue(outputTopic.isEmpty());
     }
     
     @Test
     public void shouldNotUpdateStoreForSmallerValue() {
         inputTopic.pipeInput("a", 1L);
-        assertThat(store.get("a"), equalTo(21L));
-        assertThat(outputTopic.readKeyValue(), equalTo(new KeyValue<>("a", 21L)));
-        assertThat(outputTopic.isEmpty(), is(true));
+        assertEquals(21L, store.get("a"));
+        assertEquals(new KeyValue<>("a", 21L), outputTopic.readKeyValue());
+        assertTrue(outputTopic.isEmpty());
     }
     
     @Test
     public void shouldNotUpdateStoreForLargerValue() {
         inputTopic.pipeInput("a", 42L);
-        assertThat(store.get("a"), equalTo(42L));
-        assertThat(outputTopic.readKeyValue(), equalTo(new KeyValue<>("a", 42L)));
-        assertThat(outputTopic.isEmpty(), is(true));
+        assertEquals(42L, store.get("a"));
+        assertEquals(new KeyValue<>("a", 42L), outputTopic.readKeyValue());
+        assertTrue(outputTopic.isEmpty());
     }
     
     @Test
     public void shouldUpdateStoreForNewKey() {
         inputTopic.pipeInput("b", 21L);
-        assertThat(store.get("b"), equalTo(21L));
-        assertThat(outputTopic.readKeyValue(), equalTo(new KeyValue<>("a", 21L)));
-        assertThat(outputTopic.readKeyValue(), equalTo(new KeyValue<>("b", 21L)));
-        assertThat(outputTopic.isEmpty(), is(true));
+        assertEquals(21L, store.get("b"));
+        assertEquals(new KeyValue<>("a", 21L), outputTopic.readKeyValue());
+        assertEquals(new KeyValue<>("b", 21L), outputTopic.readKeyValue());
+        assertTrue(outputTopic.isEmpty());
     }
     
     @Test
     public void shouldPunctuateIfEvenTimeAdvances() {
         final Instant recordTime = Instant.now();
         inputTopic.pipeInput("a", 1L,  recordTime);
-        assertThat(outputTopic.readKeyValue(), equalTo(new KeyValue<>("a", 21L)));
+        assertEquals(new KeyValue<>("a", 21L), outputTopic.readKeyValue());
     
         inputTopic.pipeInput("a", 1L,  recordTime);
-        assertThat(outputTopic.isEmpty(), is(true));
+        assertTrue(outputTopic.isEmpty());
     
         inputTopic.pipeInput("a", 1L, recordTime.plusSeconds(10L));
-        assertThat(outputTopic.readKeyValue(), equalTo(new KeyValue<>("a", 21L)));
-        assertThat(outputTopic.isEmpty(), is(true));
+        assertEquals(new KeyValue<>("a", 21L), outputTopic.readKeyValue());
+        assertTrue(outputTopic.isEmpty());
     }
     
     @Test
     public void shouldPunctuateIfWallClockTimeAdvances() {
         testDriver.advanceWallClockTime(Duration.ofSeconds(60));
-        assertThat(outputTopic.readKeyValue(), equalTo(new KeyValue<>("a", 21L)));
-        assertThat(outputTopic.isEmpty(), is(true));
+        assertEquals(new KeyValue<>("a", 21L), outputTopic.readKeyValue());
+        assertTrue(outputTopic.isEmpty());
     }
     
     public class CustomMaxAggregatorSupplier implements ProcessorSupplier<String, Long> {

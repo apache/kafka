@@ -52,10 +52,10 @@ import java.time.Instant;
 import java.util.List;
 import java.util.Properties;
 
-import static org.hamcrest.MatcherAssert.assertThat;
-import static org.hamcrest.Matchers.is;
 import static org.junit.jupiter.api.Assertions.assertEquals;
+import static org.junit.jupiter.api.Assertions.assertFalse;
 import static org.junit.jupiter.api.Assertions.assertNull;
+import static org.junit.jupiter.api.Assertions.assertTrue;
 
 @SuppressWarnings("unchecked")
 public class KTableFilterTest {
@@ -412,8 +412,8 @@ public class KTableFilterTest {
 
         table2.enableSendingOldValues(true);
 
-        assertThat(table1.sendingOldValueEnabled(), is(true));
-        assertThat(table2.sendingOldValueEnabled(), is(true));
+        assertTrue(table1.sendingOldValueEnabled());
+        assertTrue(table2.sendingOldValueEnabled());
 
         doTestSendingOldValue(builder, table1, table2, topic1);
     }
@@ -432,8 +432,8 @@ public class KTableFilterTest {
 
         table2.enableSendingOldValues(true);
 
-        assertThat(table1.sendingOldValueEnabled(), is(false));
-        assertThat(table2.sendingOldValueEnabled(), is(true));
+        assertFalse(table1.sendingOldValueEnabled());
+        assertTrue(table2.sendingOldValueEnabled());
 
         doTestSendingOldValue(builder, table1, table2, topic1);
     }
@@ -452,8 +452,8 @@ public class KTableFilterTest {
 
         table2.enableSendingOldValues(false);
 
-        assertThat(table1.sendingOldValueEnabled(), is(true));
-        assertThat(table2.sendingOldValueEnabled(), is(true));
+        assertTrue(table1.sendingOldValueEnabled());
+        assertTrue(table2.sendingOldValueEnabled());
 
         doTestSendingOldValue(builder, table1, table2, topic1);
     }

@@ -57,7 +57,7 @@ def is_version(node, version_list, proc_grep_string="kafka", logger=None):
     """Heuristic to check that only the specified version appears in the classpath of the process
     A useful tool to aid in checking that service version apis are working correctly.
     """
-    lines = [l for l in node.account.ssh_capture("ps ax | grep %s | grep -v grep" % proc_grep_string)]
+    lines = [l for l in node.account.ssh_capture("ps axww | grep %s | grep -v grep" % proc_grep_string)]
     assert len(lines) == 1, "lines: %s" % lines
     psLine = lines[0]
 

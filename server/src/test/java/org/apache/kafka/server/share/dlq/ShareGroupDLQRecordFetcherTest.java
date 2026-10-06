@@ -29,8 +29,8 @@ import org.apache.kafka.common.record.internal.Records;
 import org.apache.kafka.common.record.internal.SimpleRecord;
 import org.apache.kafka.common.utils.Utils;
 import org.apache.kafka.common.utils.internals.BufferSupplier;
-import org.apache.kafka.common.utils.internals.ByteBufferOutputStream;
 import org.apache.kafka.common.utils.internals.ByteUtils;
+import org.apache.kafka.common.utils.internals.SingleByteBufferOutputStream;
 import org.apache.kafka.server.share.LogReader;
 import org.apache.kafka.server.util.MockTime;
 import org.apache.kafka.storage.internals.log.FetchDataInfo;
@@ -647,7 +647,7 @@ class ShareGroupDLQRecordFetcherTest {
         corruptedPlain.get(corrupted);
 
         // Re-compress the corrupted plain bytes with the same codec.
-        ByteBufferOutputStream compressedOut = new ByteBufferOutputStream(256);
+        SingleByteBufferOutputStream compressedOut = new SingleByteBufferOutputStream(256);
         try (OutputStream out = Compression.gzip().build().wrapForOutput(compressedOut, RecordBatch.CURRENT_MAGIC_VALUE)) {
             out.write(corrupted);
         }

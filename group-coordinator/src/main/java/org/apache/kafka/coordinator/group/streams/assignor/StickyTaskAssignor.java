@@ -17,6 +17,7 @@
 
 package org.apache.kafka.coordinator.group.streams.assignor;
 
+import org.apache.kafka.coordinator.group.Utils;
 import org.apache.kafka.coordinator.group.api.streams.assignor.GroupAssignment;
 import org.apache.kafka.coordinator.group.api.streams.assignor.GroupSpec;
 import org.apache.kafka.coordinator.group.api.streams.assignor.MemberAssignment;
@@ -46,6 +47,23 @@ public class StickyTaskAssignor implements TaskAssignor {
     private static final String STICKY_ASSIGNOR_NAME = "sticky";
     private static final Logger log = LoggerFactory.getLogger(StickyTaskAssignor.class);
 
+    /**
+     * Members that currently hold the task as a standby or warm-up rank ahead of members only known to hold state
+     * through their reported offsets; within each group, the most caught-up state comes first.
+     */
+    private static final Comparator<StandbyCandidate> STANDBY_CANDIDATE_ORDER =
+        Comparator.comparingInt((StandbyCandidate candidate) -> candidate.isPrevStandby() ? 0 : 1)
+            .thenComparing(Comparator.comparingLong(StandbyCandidate::offsetSum).reversed());
+
+    /**
+     * Least loaded process first; among equally loaded processes, the one with the fewest stateless active tasks, so
+     * that a stateless task fills up a process heavy on stateful ones. Written as one lambda to keep heap operations cheap.
+     */
+    private static final Comparator<ProcessState> PROCESS_BY_LOAD = (process1, process2) -> {
+        final int byLoad = Double.compare(process1.load(), process2.load());
+        return byLoad != 0 ? byLoad : Double.compare(process1.statelessActiveLoad(), process2.statelessActiveLoad());
+    };
+
     @Override
     public String name() {
         return STICKY_ASSIGNOR_NAME;
@@ -60,71 +78,71 @@ public class StickyTaskAssignor implements TaskAssignor {
     public GroupAssignment assign(final GroupSpec groupSpec, final TopologyDescriber topologyDescriber) throws TaskAssignorException {
         return doAssign(
             initialize(groupSpec, topologyDescriber),
-            groupSpec,
-            topologyDescriber
+            groupSpec
         );
     }
 
     private static GroupAssignment doAssign(
         final LocalState localState,
-        final GroupSpec groupSpec,
-        final TopologyDescriber topologyDescriber
+        final GroupSpec groupSpec
     ) {
-        final LinkedList<TaskId> activeTasks = taskIds(topologyDescriber, true);
-        assignActive(localState, activeTasks);
+        // Stateful and stateless active tasks are balanced independently: the stateful ones are placed first, then
+        // the stateless ones fill up the remaining active capacity. The stateful pass must run before anything else
+        // is assigned, because the stateful quota check reads a member's task count as its stateful active task count.
+        // assignActive consumes its list, so the stateful tasks are copied for it and the original goes to assignStandby.
+        assignActive(localState, new LinkedList<>(localState.statefulActiveTaskIds), true);
+        assignActive(localState, localState.statelessActiveTaskIds, false);
 
         if (localState.numStandbyReplicas > 0) {
-            final LinkedList<TaskId> statefulTasks = taskIds(topologyDescriber, false);
-            assignStandby(localState, statefulTasks);
+            assignStandby(localState, localState.statefulActiveTaskIds);
         }
 
         return buildGroupAssignment(localState, groupSpec.memberIds());
     }
 
-    private static LinkedList<TaskId> taskIds(final TopologyDescriber topologyDescriber, final boolean isActive) {
-        final LinkedList<TaskId> ret = new LinkedList<>();
-        for (final String subtopology : topologyDescriber.subtopologies()) {
-            if (isActive || topologyDescriber.isStateful(subtopology)) {
-                final int numberOfPartitions = topologyDescriber.maxNumInputPartitions(subtopology);
-                for (int i = 0; i < numberOfPartitions; i++) {
-                    ret.add(new TaskId(subtopology, i));
-                }
-            }
-        }
-        return ret;
-    }
-
     private static LocalState initialize(final GroupSpec groupSpec, final TopologyDescriber topologyDescriber) {
         final LocalState localState = new LocalState();
-        localState.numStandbyReplicas =
-            groupSpec.configs().isEmpty() ? 0
-                : Integer.parseInt(groupSpec.configs().get("num.standby.replicas"));
+        localState.numStandbyReplicas = groupSpec.configs().numStandbyReplicas();
 
-        // Helpers for computing active tasks per member, and tasks per member
+        // Helpers for computing stateful active tasks per member, active tasks per member, and tasks per member
+        localState.totalStatefulActiveTasks = 0;
         localState.totalActiveTasks = 0;
         localState.totalTasks = 0;
+        localState.statefulActiveTaskIds = new LinkedList<>();
+        localState.statelessActiveTaskIds = new LinkedList<>();
         for (final String subtopology : topologyDescriber.subtopologies()) {
             final int numberOfPartitions = topologyDescriber.maxNumInputPartitions(subtopology);
+            final boolean stateful = topologyDescriber.isStateful(subtopology);
+            final LinkedList<TaskId> taskIds = stateful ? localState.statefulActiveTaskIds : localState.statelessActiveTaskIds;
+            for (int i = 0; i < numberOfPartitions; i++) {
+                taskIds.add(new TaskId(subtopology, i));
+            }
             localState.totalTasks += numberOfPartitions;
             localState.totalActiveTasks += numberOfPartitions;
-            if (topologyDescriber.isStateful(subtopology))
+            if (stateful) {
+                localState.totalStatefulActiveTasks += numberOfPartitions;
                 localState.totalTasks += numberOfPartitions * localState.numStandbyReplicas;
+            }
         }
+        localState.totalMembersWithStatefulActiveTaskCapacity = groupSpec.memberIds().size();
         localState.totalMembersWithActiveTaskCapacity = groupSpec.memberIds().size();
         localState.totalMembersWithTaskCapacity = groupSpec.memberIds().size();
+        localState.statefulActiveTasksPerMember = computeTasksPerMember(localState.totalStatefulActiveTasks, localState.totalMembersWithStatefulActiveTaskCapacity);
         localState.activeTasksPerMember = computeTasksPerMember(localState.totalActiveTasks, localState.totalMembersWithActiveTaskCapacity);
         localState.totalTasksPerMember = computeTasksPerMember(localState.totalTasks, localState.totalMembersWithTaskCapacity);
 
-        localState.processIdToState = new HashMap<>(localState.totalMembersWithActiveTaskCapacity);
-        localState.activeTaskToPrevMember = new HashMap<>(localState.totalActiveTasks);
-        localState.standbyTaskToPrevMember = new HashMap<>(localState.numStandbyReplicas > 0 ? (localState.totalTasks - localState.totalActiveTasks) / localState.numStandbyReplicas : 0);
+        localState.processIdToState = Utils.newHashMap(localState.totalMembersWithActiveTaskCapacity);
+        localState.activeTaskToPrevMember = Utils.newHashMap(localState.totalActiveTasks);
+
+        // Standby-strength candidates per task, gathered in a single pass over the members and ranked below.
+        final Map<TaskId, ArrayList<StandbyCandidate>> standbyCandidates = new HashMap<>();
         for (final String memberId : groupSpec.memberIds()) {
             final MemberAssignmentState memberAssignmentState = groupSpec.memberAssignmentState(memberId);
             final String processId = groupSpec.memberMetadata(memberId).processId();
             final Member member = new Member(processId, memberId);
 
-            localState.processIdToState.putIfAbsent(processId, new ProcessState(processId));
-            localState.processIdToState.get(processId).addMember(memberId);
+            localState.processIdToState.computeIfAbsent(processId, ProcessState::new)
+                .addMember(memberId);
 
             // prev active tasks
             for (final Map.Entry<String, Set<Integer>> entry : memberAssignmentState.activeTasks().entrySet()) {
@@ -134,17 +152,91 @@ public class StickyTaskAssignor implements TaskAssignor {
                 }
             }
 
-            // prev standby tasks
-            for (final Map.Entry<String, Set<Integer>> entry : memberAssignmentState.standbyTasks().entrySet()) {
-                final Set<Integer> partitionNoSet = entry.getValue();
-                for (final int partitionNo : partitionNoSet) {
-                    final TaskId taskId = new TaskId(entry.getKey(), partitionNo);
-                    localState.standbyTaskToPrevMember.putIfAbsent(taskId, new ArrayList<>(localState.numStandbyReplicas));
-                    localState.standbyTaskToPrevMember.get(taskId).add(member);
-                }
+            collectStandbyCandidates(standbyCandidates, memberAssignmentState, member);
+        }
+
+        localState.standbyTaskToPrevMember = rankStandbyCandidates(standbyCandidates);
+        return localState;
+    }
+
+    private static void collectStandbyCandidates(final Map<TaskId, ArrayList<StandbyCandidate>> standbyCandidates,
+                                                 final MemberAssignmentState memberAssignmentState,
+                                                 final Member member) {
+        // prev standby tasks, carrying any reported offset sum so the most caught-up standby ranks first
+        for (final Map.Entry<String, Set<Integer>> entry : memberAssignmentState.standbyTasks().entrySet()) {
+            final String subtopologyId = entry.getKey();
+            final Set<Integer> partitionNoSet = entry.getValue();
+            for (final int partitionNo : partitionNoSet) {
+                standbyCandidates
+                    .computeIfAbsent(new TaskId(subtopologyId, partitionNo), task -> new ArrayList<>())
+                    .add(new StandbyCandidate(member, true, reportedOffsetSum(memberAssignmentState, subtopologyId, partitionNo)));
             }
         }
-        return localState;
+
+        // prev warm-up tasks: a warm-up task is a member restoring the state of a task whose active task is being
+        // migrated to it, so for stickiness it counts as a prev standby -- the member that has already restored the
+        // state gets the task, instead of the restore work being thrown away. Its reported offset sum ranks it among
+        // the standbys, most caught-up first.
+        for (final Map.Entry<String, Set<Integer>> entry : memberAssignmentState.warmupTasks().entrySet()) {
+            final String subtopologyId = entry.getKey();
+            final Set<Integer> partitionNoSet = entry.getValue();
+            for (final int partitionNo : partitionNoSet) {
+                standbyCandidates
+                    .computeIfAbsent(new TaskId(subtopologyId, partitionNo), task -> new ArrayList<>())
+                    .add(new StandbyCandidate(member, true, reportedOffsetSum(memberAssignmentState, subtopologyId, partitionNo)));
+            }
+        }
+
+        // A member that rejoins after a restart gets a fresh member ID and an empty target assignment, so the maps
+        // above cannot capture what it owned before. Offsets reported for tasks with state on local disk make it a
+        // weaker standby candidate, so stickiness can still hand those tasks back to the local state.
+        for (final Map.Entry<String, Map<Integer, Long>> entry : memberAssignmentState.taskOffsets().entrySet()) {
+            final String subtopologyId = entry.getKey();
+            for (final Map.Entry<Integer, Long> partitionOffset : entry.getValue().entrySet()) {
+                final int partitionNo = partitionOffset.getKey();
+                if (isCurrentlyAssignedStandbyOrWarmupTask(memberAssignmentState, subtopologyId, partitionNo)) {
+                    continue;
+                }
+                standbyCandidates
+                    .computeIfAbsent(new TaskId(subtopologyId, partitionNo), task -> new ArrayList<>())
+                    .add(new StandbyCandidate(member, false, partitionOffset.getValue()));
+            }
+        }
+    }
+
+    private static Map<TaskId, ArrayList<Member>> rankStandbyCandidates(final Map<TaskId, ArrayList<StandbyCandidate>> standbyCandidates) {
+        final Map<TaskId, ArrayList<Member>> standbyTaskToPrevMember = Utils.newHashMap(standbyCandidates.size());
+        standbyCandidates.forEach((taskId, candidates) -> {
+            candidates.sort(STANDBY_CANDIDATE_ORDER);
+            final ArrayList<Member> prevMembers = new ArrayList<>(candidates.size());
+            for (final StandbyCandidate candidate : candidates) {
+                prevMembers.add(candidate.member());
+            }
+            standbyTaskToPrevMember.put(taskId, prevMembers);
+        });
+        return standbyTaskToPrevMember;
+    }
+
+    /** Falls back to {@code 0} when no offset is reported, the conservative bound implying maximum lag. */
+    private static long reportedOffsetSum(final MemberAssignmentState memberAssignmentState,
+                                          final String subtopologyId,
+                                          final int partitionNo) {
+        return memberAssignmentState.taskOffsets()
+            .getOrDefault(subtopologyId, Map.of())
+            .getOrDefault(partitionNo, 0L);
+    }
+
+    private static boolean isCurrentlyAssignedStandbyOrWarmupTask(
+        final MemberAssignmentState memberAssignmentState,
+        final String subtopologyId,
+        final int partitionNo
+    ) {
+        final Set<Integer> standbyPartitionNoSet = memberAssignmentState.standbyTasks().get(subtopologyId);
+        if (standbyPartitionNoSet != null && standbyPartitionNoSet.contains(partitionNo)) {
+            return true;
+        }
+        final Set<Integer> warmupPartitionNoSet = memberAssignmentState.warmupTasks().get(subtopologyId);
+        return warmupPartitionNoSet != null && warmupPartitionNoSet.contains(partitionNo);
     }
 
     private static GroupAssignment buildGroupAssignment(final LocalState localState, final Collection<String> members) {
@@ -183,13 +275,19 @@ public class StickyTaskAssignor implements TaskAssignor {
     private static Map<String, Set<Integer>> toCompactedTaskIds(final Set<TaskId> taskIds) {
         final Map<String, Set<Integer>> ret = new HashMap<>();
         for (final TaskId taskId : taskIds) {
-            ret.putIfAbsent(taskId.subtopologyId(), new HashSet<>());
-            ret.get(taskId.subtopologyId()).add(taskId.partition());
+            ret.computeIfAbsent(taskId.subtopologyId(), subtopologyId -> new HashSet<>())
+                .add(taskId.partition());
         }
         return ret;
     }
 
-    private static void assignActive(final LocalState localState, final LinkedList<TaskId> activeTasks) {
+    /**
+     * Assigns active tasks that are either all stateful or all stateless, as told by {@code stateful}; a previous
+     * owner stays sticky only while it is below the quota of that flavor, so that each flavor spreads evenly on its own.
+     * The stateful pass must run before anything else is assigned: it reads a member's task count as its stateful
+     * active task count.
+     */
+    private static void assignActive(final LocalState localState, final LinkedList<TaskId> activeTasks, final boolean stateful) {
 
         // Assuming our current assignment pairs same partitions (range-based), we want to sort by partition first
         activeTasks.sort(Comparator.comparing(TaskId::partition).thenComparing(TaskId::subtopologyId));
@@ -200,10 +298,8 @@ public class StickyTaskAssignor implements TaskAssignor {
             final Member prevMember = localState.activeTaskToPrevMember.get(task);
             if (prevMember != null) {
                 final ProcessState processState = localState.processIdToState.get(prevMember.processId);
-                if (hasUnfulfilledActiveTaskQuota(localState, processState, prevMember)) {
-                    int newActiveTasks = processState.addTask(prevMember.memberId, task, true);
-                    maybeUpdateActiveTasksPerMember(localState, newActiveTasks);
-                    maybeUpdateTotalTasksPerMember(localState, newActiveTasks);
+                if (hasUnfulfilledActiveTaskQuota(localState, processState, prevMember, stateful)) {
+                    addActiveTask(localState, processState, prevMember, task, stateful);
                     it.remove();
                 }
             }
@@ -216,10 +312,8 @@ public class StickyTaskAssignor implements TaskAssignor {
             final Member prevMember = findPrevMemberWithLeastLoad(localState, prevMembers, Optional.empty());
             if (prevMember != null) {
                 final ProcessState processState = localState.processIdToState.get(prevMember.processId);
-                if (hasUnfulfilledActiveTaskQuota(localState, processState, prevMember)) {
-                    int newActiveTasks = processState.addTask(prevMember.memberId, task, true);
-                    maybeUpdateActiveTasksPerMember(localState, newActiveTasks);
-                    maybeUpdateTotalTasksPerMember(localState, newActiveTasks);
+                if (hasUnfulfilledActiveTaskQuota(localState, processState, prevMember, stateful)) {
+                    addActiveTask(localState, processState, prevMember, task, stateful);
                     it.remove();
                 }
             }
@@ -229,21 +323,47 @@ public class StickyTaskAssignor implements TaskAssignor {
         activeTasks.sort(Comparator.comparing(TaskId::subtopologyId).thenComparing(TaskId::partition));
 
         // 3. assign any remaining unassigned tasks
-        final PriorityQueue<ProcessState> processByLoad = new PriorityQueue<>(Comparator.comparingDouble(ProcessState::load));
+        final PriorityQueue<ProcessState> processByLoad = new PriorityQueue<>(PROCESS_BY_LOAD);
         processByLoad.addAll(localState.processIdToState.values());
         for (final TaskId task: activeTasks) {
             final ProcessState processWithLeastLoad = processByLoad.poll();
             if (processWithLeastLoad == null) {
                 throw new TaskAssignorException(String.format("No process available to assign active task %s.", task));
             }
-            final int newTaskCount = processWithLeastLoad.addTaskToLeastLoadedMember(task, true);
+            final int newTaskCount = processWithLeastLoad.addTaskToLeastLoadedMember(task, true, stateful);
             if (newTaskCount != -1) {
+                // The stateful active task quota is only checked in steps 1 and 2, so it needs no update here.
                 maybeUpdateActiveTasksPerMember(localState, newTaskCount);
                 maybeUpdateTotalTasksPerMember(localState, newTaskCount);
             } else {
                 throw new TaskAssignorException(String.format("No member available to assign active task %s.", task));
             }
             processByLoad.add(processWithLeastLoad); // Add it back to the queue after updating its state
+        }
+    }
+
+    /** Assigns an active task to the given member and updates every quota the task counts towards. */
+    private static void addActiveTask(
+        final LocalState localState,
+        final ProcessState processState,
+        final Member member,
+        final TaskId task,
+        final boolean stateful
+    ) {
+        final int newTaskCount = processState.addTask(member.memberId, task, true, stateful);
+        if (stateful) {
+            // Nothing else is assigned yet, so the member's task count is its stateful active task count.
+            maybeUpdateStatefulActiveTasksPerMember(localState, newTaskCount);
+        }
+        maybeUpdateActiveTasksPerMember(localState, newTaskCount);
+        maybeUpdateTotalTasksPerMember(localState, newTaskCount);
+    }
+
+    private static void maybeUpdateStatefulActiveTasksPerMember(final LocalState localState, final int statefulActiveTasksNo) {
+        if (statefulActiveTasksNo == localState.statefulActiveTasksPerMember) {
+            localState.totalMembersWithStatefulActiveTaskCapacity--;
+            localState.totalStatefulActiveTasks -= statefulActiveTasksNo;
+            localState.statefulActiveTasksPerMember = computeTasksPerMember(localState.totalStatefulActiveTasks, localState.totalMembersWithStatefulActiveTaskCapacity);
         }
     }
 
@@ -274,7 +394,7 @@ public class StickyTaskAssignor implements TaskAssignor {
         }
         boolean found = false;
         if (!processWithLeastLoad.hasTask(taskId)) {
-            final int newTaskCount = processWithLeastLoad.addTaskToLeastLoadedMember(taskId, false);
+            final int newTaskCount = processWithLeastLoad.addTaskToLeastLoadedMember(taskId, false, true);
             if (newTaskCount != -1) {
                 found = true;
                 maybeUpdateTotalTasksPerMember(localState, newTaskCount);
@@ -332,9 +452,12 @@ public class StickyTaskAssignor implements TaskAssignor {
     private static boolean hasUnfulfilledActiveTaskQuota(
         final LocalState localState,
         final ProcessState process,
-        final Member member
+        final Member member,
+        final boolean stateful
     ) {
-        return process.memberToTaskCounts().get(member.memberId) < localState.activeTasksPerMember;
+        // During the stateful pass nothing else is assigned yet, so the member's task count is its stateful active task count.
+        final int quota = stateful ? localState.statefulActiveTasksPerMember : localState.activeTasksPerMember;
+        return process.memberToTaskCounts().get(member.memberId) < quota;
     }
 
     private static boolean hasUnfulfilledTaskQuota(
@@ -359,7 +482,7 @@ public class StickyTaskAssignor implements TaskAssignor {
                 if (prevActiveMember != null) {
                     final ProcessState prevActiveMemberProcessState = localState.processIdToState.get(prevActiveMember.processId);
                     if (!prevActiveMemberProcessState.hasTask(task) && hasUnfulfilledTaskQuota(localState, prevActiveMemberProcessState, prevActiveMember)) {
-                        int newTaskCount = prevActiveMemberProcessState.addTask(prevActiveMember.memberId, task, false);
+                        int newTaskCount = prevActiveMemberProcessState.addTask(prevActiveMember.memberId, task, false, true);
                         maybeUpdateTotalTasksPerMember(localState, newTaskCount);
                         continue;
                     }
@@ -372,7 +495,7 @@ public class StickyTaskAssignor implements TaskAssignor {
                     if (prevStandbyMember != null) {
                         final ProcessState prevStandbyMemberProcessState = localState.processIdToState.get(prevStandbyMember.processId);
                         if (hasUnfulfilledTaskQuota(localState, prevStandbyMemberProcessState, prevStandbyMember)) {
-                            int newTaskCount = prevStandbyMemberProcessState.addTask(prevStandbyMember.memberId, task, false);
+                            int newTaskCount = prevStandbyMemberProcessState.addTask(prevStandbyMember.memberId, task, false, true);
                             maybeUpdateTotalTasksPerMember(localState, newTaskCount);
                             continue;
                         }
@@ -438,17 +561,25 @@ public class StickyTaskAssignor implements TaskAssignor {
         }
     }
 
+    private record StandbyCandidate(Member member, boolean isPrevStandby, long offsetSum) {
+    }
+
     private static class LocalState {
         // helper data structures:
         Map<TaskId, Member> activeTaskToPrevMember;
         Map<TaskId, ArrayList<Member>> standbyTaskToPrevMember;
         Map<String, ProcessState> processIdToState;
+        LinkedList<TaskId> statefulActiveTaskIds;
+        LinkedList<TaskId> statelessActiveTaskIds;
 
         int numStandbyReplicas;
+        int totalStatefulActiveTasks;
         int totalActiveTasks;
         int totalTasks;
+        int totalMembersWithStatefulActiveTaskCapacity;
         int totalMembersWithActiveTaskCapacity;
         int totalMembersWithTaskCapacity;
+        int statefulActiveTasksPerMember;
         int activeTasksPerMember;
         int totalTasksPerMember;
     }

@@ -28,7 +28,6 @@ import org.apache.kafka.streams.processor.TaskId;
 
 import java.util.Arrays;
 import java.util.Collection;
-import java.util.Collections;
 import java.util.HashSet;
 import java.util.List;
 import java.util.Map;
@@ -212,7 +211,7 @@ public interface Task {
     void postCommit(boolean enforceCheckpoint);
 
     default Map<TopicPartition, Long> purgeableOffsets() {
-        return Collections.emptyMap();
+        return Map.of();
     }
 
     /**
@@ -223,7 +222,11 @@ public interface Task {
 
     void clearTaskTimeout();
 
-    void recordRestoration(final Time time, final long numRecords, final boolean initRemaining);
+    /**
+     * {@code numRecords} feeds restore-total/restore-rate; {@code numOffsets} feeds the offset-based
+     * remaining-records metric (or initialises it when {@code initRemaining} is true).
+     */
+    void recordRestoration(final Time time, final long numRecords, final long numOffsets, final boolean initRemaining);
 
     // task status inquiry
 

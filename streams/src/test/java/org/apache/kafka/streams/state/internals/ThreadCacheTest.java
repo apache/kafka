@@ -33,8 +33,6 @@ import java.util.List;
 import java.util.NoSuchElementException;
 import java.util.function.Supplier;
 
-import static org.hamcrest.MatcherAssert.assertThat;
-import static org.hamcrest.core.Is.is;
 import static org.junit.jupiter.api.Assertions.assertArrayEquals;
 import static org.junit.jupiter.api.Assertions.assertEquals;
 import static org.junit.jupiter.api.Assertions.assertFalse;
@@ -269,8 +267,8 @@ public class ThreadCacheTest {
         final ThreadCache cache = setupThreadCache(1, 1, 10000L, true);
         final Bytes theByte = Bytes.wrap(new byte[]{1});
         final ThreadCache.MemoryLRUCacheBytesIterator iterator = cache.reverseRange(namespace, Bytes.wrap(new byte[]{0}), theByte);
-        assertThat(iterator.peekNextKey(), is(theByte));
-        assertThat(iterator.peekNextKey(), is(theByte));
+        assertEquals(theByte, iterator.peekNextKey());
+        assertEquals(theByte, iterator.peekNextKey());
     }
 
     @Test
@@ -278,7 +276,9 @@ public class ThreadCacheTest {
         final ThreadCache cache = setupThreadCache(0, 1, 10000L, false);
         final Bytes theByte = Bytes.wrap(new byte[]{0});
         final ThreadCache.MemoryLRUCacheBytesIterator iterator = cache.range(namespace, theByte, Bytes.wrap(new byte[]{1}));
-        assertThat(iterator.peekNextKey(), is(iterator.next().key));
+        final Bytes expectedKey = iterator.peekNextKey();
+        final Bytes actualKey = iterator.next().key;
+        assertEquals(expectedKey, actualKey);
     }
 
     @Test
@@ -286,7 +286,9 @@ public class ThreadCacheTest {
         final ThreadCache cache = setupThreadCache(1, 1, 10000L, true);
         final Bytes theByte = Bytes.wrap(new byte[]{1});
         final ThreadCache.MemoryLRUCacheBytesIterator iterator = cache.reverseRange(namespace, Bytes.wrap(new byte[]{0}), theByte);
-        assertThat(iterator.peekNextKey(), is(iterator.next().key));
+        final Bytes expectedKey = iterator.peekNextKey();
+        final Bytes actualKey = iterator.next().key;
+        assertEquals(expectedKey, actualKey);
     }
 
     private void shouldThrowIfNoPeekNextKey(final Supplier<ThreadCache.MemoryLRUCacheBytesIterator> methodUnderTest) {

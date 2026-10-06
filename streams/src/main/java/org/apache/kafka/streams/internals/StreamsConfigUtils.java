@@ -16,6 +16,7 @@
  */
 package org.apache.kafka.streams.internals;
 
+import org.apache.kafka.streams.GroupProtocol;
 import org.apache.kafka.streams.StreamsConfig;
 
 import org.slf4j.Logger;
@@ -55,6 +56,10 @@ public class StreamsConfigUtils {
 
     public static boolean eosEnabled(final StreamsConfig config) {
         return processingMode(config) == ProcessingMode.EXACTLY_ONCE_V2;
+    }
+
+    public static boolean streamsProtocolEnabled(final StreamsConfig config) {
+        return config.getString(StreamsConfig.GROUP_PROTOCOL_CONFIG).equalsIgnoreCase(GroupProtocol.STREAMS.name);
     }
 
     @SuppressWarnings("deprecation")

@@ -67,8 +67,7 @@ import static org.apache.kafka.streams.processor.internals.assignment.Assignment
 import static org.apache.kafka.streams.processor.internals.assignment.AssignmentTestUtils.createMockAdminClientForAssignor;
 import static org.apache.kafka.streams.processor.internals.assignment.AssignmentTestUtils.getInfo;
 import static org.apache.kafka.streams.processor.internals.assignment.AssignmentTestUtils.processIdForInt;
-import static org.hamcrest.CoreMatchers.is;
-import static org.hamcrest.MatcherAssert.assertThat;
+import static org.junit.jupiter.api.Assertions.assertEquals;
 import static org.mockito.ArgumentMatchers.anySet;
 import static org.mockito.Mockito.lenient;
 import static org.mockito.Mockito.mock;
@@ -302,7 +301,7 @@ public class StreamsAssignmentScaleTest {
             log.info("Second assignment took {}ms.", secondAssignmentDuration);
         }
 
-        assertThat(secondAssignments.size(), is(numClients * numThreadsPerClient));
+        assertEquals(numClients * numThreadsPerClient, secondAssignments.size());
     }
 
     private String getConsumerName(final int consumerIndex, final int clientIndex) {
