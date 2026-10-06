@@ -85,6 +85,12 @@ abstract class AbstractTransactionBuffer<K extends Comparable<K>> implements Tra
     abstract ManagedKeyValueIterator<K, byte[]> newBaseSnapshotIterator(K from, K to,
                                                                         boolean forward, boolean toInclusive);
 
+    /**
+     * Called by the owner thread before the write lock is taken in {@link #commit()}.
+     * Must not change state that non-owner readers see.
+     */
+    void prepareFlush() { }
+
     /** Atomically apply the accumulated writes to the base store. */
     abstract void flushToBase();
 
@@ -171,6 +177,7 @@ abstract class AbstractTransactionBuffer<K extends Comparable<K>> implements Tra
 
     @Override
     public void commit() {
+        prepareFlush();
         snapshotLock.writeLock().lock();
         try {
             flushToBase();
