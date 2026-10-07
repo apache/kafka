@@ -3781,7 +3781,7 @@ public class RequestResponseTest {
                 .setTopicId(Uuid.randomUuid())
                 .setPartitions(Collections.singletonList(new ReadShareGroupStateRequestData.PartitionData()
                     .setPartition(0)))));
-        return new ReadShareGroupStateRequest.Builder(data).build(version);
+        return new ReadShareGroupStateRequest.Builder(data, true).build(version);
     }
 
     private ReadShareGroupStateResponse createReadShareGroupStateResponse() {

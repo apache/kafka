@@ -744,7 +744,7 @@ class RequestQuotaTest extends BaseRequestTest {
           new InitializeShareGroupStateRequest.Builder(new InitializeShareGroupStateRequestData())
 
         case ApiKeys.READ_SHARE_GROUP_STATE =>
-          new ReadShareGroupStateRequest.Builder(new ReadShareGroupStateRequestData())
+          new ReadShareGroupStateRequest.Builder(new ReadShareGroupStateRequestData(), false)
 
         case ApiKeys.WRITE_SHARE_GROUP_STATE =>
           new WriteShareGroupStateRequest.Builder(new WriteShareGroupStateRequestData())

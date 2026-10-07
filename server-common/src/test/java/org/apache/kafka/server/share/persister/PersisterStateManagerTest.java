@@ -2322,6 +2322,86 @@ class PersisterStateManagerTest {
         }
     }
 
+    @ParameterizedTest
+    @ValueSource(booleans = {true, false})
+    public void testReadStateRequestVersionGatedByRequestHeaderV3Supported(boolean requestHeaderV3Supported) {
+        MockClient client = new MockClient(MOCK_TIME);
+
+        String groupId = "group1";
+        Uuid topicId = Uuid.randomUuid();
+        int partition = 10;
+
+        Node coordinatorNode = new Node(1, HOST, PORT);
+
+        AtomicReference<Short> requestVersion = new AtomicReference<>();
+        client.prepareResponseFrom(body -> {
+            requestVersion.set(body.version());
+            return body instanceof ReadShareGroupStateRequest;
+        }, new ReadShareGroupStateResponse(
+            new ReadShareGroupStateResponseData()
+                .setResults(List.of(
+                    new ReadShareGroupStateResponseData.ReadStateResult()
+                        .setTopicId(topicId)
+                        .setPartitions(List.of(
+                            new ReadShareGroupStateResponseData.PartitionResult()
+                                .setPartition(partition)
+                                .setErrorCode(Errors.NONE.code())
+                                .setErrorMessage("")
+                                .setStateEpoch(1)
+                                .setStartOffset(0)
+                                .setStateBatches(List.of())
+                        ))
+                ))
+        ), coordinatorNode);
+
+        ShareCoordinatorMetadataCacheHelper cacheHelper = getCoordinatorCacheHelper(coordinatorNode, requestHeaderV3Supported);
+
+        PersisterStateManager stateManager = PersisterStateManagerBuilder.builder()
+            .withKafkaClient(client)
+            .withTimer(mockTimer)
+            .withCacheHelper(cacheHelper)
+            .build();
+
+        stateManager.start();
+
+        CompletableFuture<ReadShareGroupStateResponse> future = new CompletableFuture<>();
+
+        PersisterStateManager.ReadStateHandler handler = stateManager.new ReadStateHandler(
+            groupId,
+            topicId,
+            partition,
+            0,
+            future,
+            REQUEST_BACKOFF_MS,
+            REQUEST_BACKOFF_MAX_MS,
+            MAX_RPC_RETRY_ATTEMPTS,
+            null
+        );
+
+        stateManager.enqueue(handler);
+
+        try {
+            handler.result().get();
+        } catch (Exception e) {
+            fail("Failed to get result from future", e);
+        }
+
+        short expectedVersion = requestHeaderV3Supported
+            ? ApiKeys.READ_SHARE_GROUP_STATE.latestVersion()
+            : (short) 0;
+        assertEquals(expectedVersion, requestVersion.get());
+
+        short expectedHeaderVersion = requestHeaderV3Supported ? (short) 3 : (short) 2;
+        assertEquals(expectedHeaderVersion, ApiKeys.READ_SHARE_GROUP_STATE.requestHeaderVersion(requestVersion.get()));
+
+        try {
+            // Stopping the state manager
+            stateManager.stop();
+        } catch (Exception e) {
+            fail("Failed to stop state manager", e);
+        }
+    }
+
     @Test
     public void testReadStateRequestRetryWithCoordinatorNodeLookup() {
         MockClient client = new MockClient(MOCK_TIME);

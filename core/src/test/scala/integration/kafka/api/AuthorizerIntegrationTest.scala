@@ -776,7 +776,7 @@ class AuthorizerIntegrationTest extends AbstractAuthorizerIntegrationTest {
           .setPartition(part)
           .setLeaderEpoch(0)
         ).asJava)
-      ).asJava)).build()
+      ).asJava), false).build()
 
   private def writeShareGroupStateRequest = new WriteShareGroupStateRequest.Builder(
     new WriteShareGroupStateRequestData()
