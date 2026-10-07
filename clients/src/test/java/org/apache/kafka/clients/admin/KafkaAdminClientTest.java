@@ -1334,7 +1334,7 @@ public class KafkaAdminClientTest extends KafkaAdminClientTestBase {
             mockClient.setNodeApiVersions(NodeApiVersions.create());
 
             try (KafkaAdminClient admin = KafkaAdminClient.createInternal(
-                    new AdminClientConfig(Collections.emptyMap()), metadataManager, mockClient, Time.SYSTEM)) {
+                    new AdminClientConfig(Collections.emptyMap()), metadataManager, mockClient, mockClient.clientInstanceId(), Time.SYSTEM)) {
                 DescribeClusterResult result = admin.describeCluster(new DescribeClusterOptions());
 
                 // make sure maybeDrainPendingCalls doesn't remove duplicate pending calls

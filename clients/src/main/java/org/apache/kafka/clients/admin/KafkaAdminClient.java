@@ -644,11 +644,11 @@ public class KafkaAdminClient extends AdminClient {
     static KafkaAdminClient createInternal(AdminClientConfig config,
                                            AdminMetadataManager metadataManager,
                                            KafkaClient client,
+                                           Uuid clientInstanceId,
                                            Time time) {
         Metrics metrics = null;
         String clientId = generateClientId(config);
         List<MetricsReporter> reporters = CommonClientConfigs.metricsReporters(clientId, config);
-        Uuid clientInstanceId = Uuid.randomUuid();
         Optional<ClientTelemetryReporter> clientTelemetryReporter = CommonClientConfigs.telemetryReporter(clientId, clientInstanceId, config);
         clientTelemetryReporter.ifPresent(reporters::add);
 
