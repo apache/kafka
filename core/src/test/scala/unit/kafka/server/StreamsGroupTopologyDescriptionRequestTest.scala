@@ -697,8 +697,9 @@ class StreamsGroupTopologyDescriptionRequestTest(cluster: ClusterInstance) exten
   }
 
   /**
-   * Leaves a streams group with no members whose topology description is stored in the plugin,
-   * the state in which a classic join must delete the topology before converting the group.
+   * Creates a streams group whose only member has left, leaving its topology description
+   * stored in the plugin with no members remaining — the state in which a classic join
+   * must delete the topology before converting the group.
    */
   private def createEmptyStreamsGroupWithStoredTopology(admin: Admin, groupId: String, topicName: String): Unit = {
     val memberId = "test-member"
