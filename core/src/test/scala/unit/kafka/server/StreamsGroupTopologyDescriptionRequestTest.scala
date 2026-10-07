@@ -17,8 +17,9 @@
 package kafka.server
 
 import kafka.utils.TestUtils
+import org.apache.kafka.clients.admin.Admin
 import org.apache.kafka.common.errors.UnsupportedVersionException
-import org.apache.kafka.common.message.{DeleteGroupsRequestData, StreamsGroupHeartbeatRequestData, StreamsGroupTopologyDescriptionUpdateRequestData}
+import org.apache.kafka.common.message.{DeleteGroupsRequestData, JoinGroupResponseData, StreamsGroupHeartbeatRequestData, StreamsGroupTopologyDescriptionUpdateRequestData}
 import org.apache.kafka.common.protocol.{ApiKeys, Errors}
 import org.apache.kafka.common.requests.{DeleteGroupsRequest, DeleteGroupsResponse, StreamsGroupDescribeResponse}
 import org.apache.kafka.common.test.ClusterInstance
@@ -590,6 +591,154 @@ class StreamsGroupTopologyDescriptionRequestTest(cluster: ClusterInstance) exten
       FailingTopologyDescriptionPlugin.reset()
       admin.close()
     }
+  }
+
+  @ClusterTest(serverProperties = Array(
+    new ClusterConfigProperty(
+      key = GroupCoordinatorConfig.STREAMS_GROUP_TOPOLOGY_DESCRIPTION_PLUGIN_CLASS_CONFIG,
+      value = "kafka.server.FailingTopologyDescriptionPlugin")
+  ))
+  def testClassicJoinDeletesStoredTopologyAndConvertsEmptyStreamsGroup(): Unit = {
+    val admin = cluster.admin()
+    val groupId = "test-group"
+    val topicName = "test-topic"
+
+    try {
+      FailingTopologyDescriptionPlugin.reset()
+      createEmptyStreamsGroupWithStoredTopology(admin, groupId, topicName)
+
+      assertEquals(Errors.NONE.code(), classicJoin(groupId).errorCode())
+      assertEquals(1, FailingTopologyDescriptionPlugin.deleteTopologyAttempts(groupId))
+      assertEquals(Errors.GROUP_ID_NOT_FOUND.code(), streamsGroupDescribe(List(groupId)).head.errorCode())
+      assertEquals("consumer", describeGroups(List(groupId)).head.protocolType())
+    } finally {
+      FailingTopologyDescriptionPlugin.reset()
+      admin.close()
+    }
+  }
+
+  @ClusterTest(serverProperties = Array(
+    new ClusterConfigProperty(
+      key = GroupCoordinatorConfig.STREAMS_GROUP_TOPOLOGY_DESCRIPTION_PLUGIN_CLASS_CONFIG,
+      value = "kafka.server.FailingTopologyDescriptionPlugin")
+  ))
+  def testClassicJoinIsRejectedRetriablyWhenPluginDeleteFails(): Unit = {
+    val admin = cluster.admin()
+    val groupId = "test-group"
+    val topicName = "test-topic"
+
+    try {
+      FailingTopologyDescriptionPlugin.reset()
+      createEmptyStreamsGroupWithStoredTopology(admin, groupId, topicName)
+
+      FailingTopologyDescriptionPlugin.failDeleteTopologyWith(new RuntimeException("plugin offline"))
+      assertEquals(Errors.REBALANCE_IN_PROGRESS.code(), classicJoin(groupId).errorCode())
+      assertEquals(1, FailingTopologyDescriptionPlugin.deleteTopologyAttempts(groupId))
+      assertStillStreamsGroup(groupId)
+    } finally {
+      FailingTopologyDescriptionPlugin.reset()
+      admin.close()
+    }
+  }
+
+  @Timeout(120)
+  @ClusterTest(serverProperties = Array(
+    new ClusterConfigProperty(
+      key = GroupCoordinatorConfig.STREAMS_GROUP_TOPOLOGY_DESCRIPTION_PLUGIN_CLASS_CONFIG,
+      value = "kafka.server.FailingTopologyDescriptionPlugin"),
+    // Drives the periodic topology cleanup cycle, which runs on the offsets retention check interval.
+    new ClusterConfigProperty(key = GroupCoordinatorConfig.OFFSETS_RETENTION_CHECK_INTERVAL_MS_CONFIG, value = "500")
+  ))
+  def testPeriodicCleanupClearsTopologyAfterFailedClassicJoin(): Unit = {
+    val admin = cluster.admin()
+    val groupId = "test-group"
+    val topicName = "test-topic"
+
+    try {
+      FailingTopologyDescriptionPlugin.reset()
+      createEmptyStreamsGroupWithStoredTopology(admin, groupId, topicName)
+
+      // The plugin cannot delete: the classic join is rejected and the group stays a streams group.
+      FailingTopologyDescriptionPlugin.failDeleteTopologyWith(new RuntimeException("plugin offline"))
+      assertEquals(Errors.REBALANCE_IN_PROGRESS.code(), classicJoin(groupId).errorCode())
+      assertStillStreamsGroup(groupId)
+
+      // The plugin recovers and the periodic cleanup cycle empties it without any client involvement.
+      val attemptsBeforeRecovery = FailingTopologyDescriptionPlugin.deleteTopologyAttempts(groupId)
+      FailingTopologyDescriptionPlugin.failDeleteTopologyWith(null)
+      TestUtils.waitUntilTrue(
+        () => FailingTopologyDescriptionPlugin.deleteTopologyAttempts(groupId) > attemptsBeforeRecovery,
+        "Periodic cleanup cycle did not retry plugin.deleteTopology after the plugin recovered.")
+
+      // With no topology left to clean up, a classic join now converts the group.
+      TestUtils.waitUntilTrue(() => {
+        classicJoin(groupId).errorCode() == Errors.NONE.code()
+      }, "Classic join did not succeed after the periodic cleanup cleared the stored topology.")
+      assertEquals(Errors.GROUP_ID_NOT_FOUND.code(), streamsGroupDescribe(List(groupId)).head.errorCode())
+      assertEquals("consumer", describeGroups(List(groupId)).head.protocolType())
+    } finally {
+      FailingTopologyDescriptionPlugin.reset()
+      admin.close()
+    }
+  }
+
+  /**
+   * Joins as a new classic member. The topology cleanup runs on the first join; the group only
+   * converts to classic once the member re-joins with the member id the broker assigns
+   * (MEMBER_ID_REQUIRED), so this follows that second step.
+   */
+  private def classicJoin(groupId: String): JoinGroupResponseData = {
+    val firstResponse = sendJoinRequest(groupId = groupId)
+    if (firstResponse.errorCode() != Errors.MEMBER_ID_REQUIRED.code()) {
+      firstResponse
+    } else {
+      sendJoinRequest(groupId = groupId, memberId = firstResponse.memberId())
+    }
+  }
+
+  /**
+   * Leaves a streams group with no members whose topology description is stored in the plugin,
+   * the state in which a classic join must delete the topology before converting the group.
+   */
+  private def createEmptyStreamsGroupWithStoredTopology(admin: Admin, groupId: String, topicName: String): Unit = {
+    val memberId = "test-member"
+    TestUtils.createOffsetsTopicWithAdmin(
+      admin = admin,
+      brokers = cluster.brokers.values().asScala.toSeq,
+      controllers = cluster.controllers().values().asScala.toSeq
+    )
+    TestUtils.createTopicWithAdmin(
+      admin = admin,
+      brokers = cluster.brokers.values().asScala.toSeq,
+      controllers = cluster.controllers().values().asScala.toSeq,
+      topic = topicName,
+      numPartitions = 3
+    )
+
+    joinAndAwaitTopologyDescriptionSolicited(groupId, memberId, topicName)
+    val updateResponse = streamsGroupTopologyDescriptionUpdate(
+      groupId = groupId,
+      memberId = memberId,
+      topologyEpoch = topologyEpoch,
+      topologyDescription = createTopologyDescription(topicName)
+    )
+    assertEquals(Errors.NONE.code(), updateResponse.errorCode(), s"Unexpected error: ${updateResponse.errorMessage()}")
+
+    val leaveResponse = streamsGroupHeartbeat(
+      groupId = groupId,
+      memberId = memberId,
+      memberEpoch = -1,
+      rebalanceTimeoutMs = 1000,
+      activeTasks = List.empty,
+      standbyTasks = List.empty,
+      warmupTasks = List.empty
+    )
+    assertEquals(Errors.NONE.code(), leaveResponse.errorCode())
+  }
+
+  private def assertStillStreamsGroup(groupId: String): Unit = {
+    val describedGroup = streamsGroupDescribe(List(groupId), includeTopologyDescription = true).head
+    assertEquals(Errors.NONE.code(), describedGroup.errorCode())
   }
 
   private def joinAndAwaitTopologyDescriptionSolicited(groupId: String, memberId: String, topicName: String): Int = {
