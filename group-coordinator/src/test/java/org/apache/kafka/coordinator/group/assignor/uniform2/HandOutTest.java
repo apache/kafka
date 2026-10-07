@@ -25,6 +25,7 @@ import java.util.Map;
 import java.util.Set;
 
 import static org.junit.jupiter.api.Assertions.assertEquals;
+import static org.junit.jupiter.api.Assertions.assertFalse;
 
 /**
  * Tests the hand out of the extra partitions that no owner kept. The topic ids sort as
@@ -42,8 +43,9 @@ public class HandOutTest {
      * have none. The base partitions give sizes of 2 to A, B and D, and 3 to C. T2 has the fewest
      * subscribers and goes first: its extra partition goes to A, the smaller of A and C. Then the
      * one of T1 goes to B, since A now has 3. The sizes are within one of each other where the
-     * subscriptions allow it. Handing out T1 first would have given both extra partitions to A,
-     * the first cohort on ties: 4 partitions for A and 2 for B, which subscribes to T1.
+     * subscriptions allow it, and the balance step has nothing to do. Handing out T1 first would
+     * have given both extra partitions to A, the first cohort on ties: 4 partitions for A and 2
+     * for B, which subscribes to T1.
      */
     @Test
     public void testTopicsWithTheFewestSubscribersGoFirst() {
@@ -65,6 +67,7 @@ public class HandOutTest {
 
         assertEquals(Map.of(T1, List.of("B"), T2, List.of("A")), fixture.membersWithExtra());
         assertEquals(List.of(3, 3, 3, 2), fixture.sizes());
+        assertFalse(ShareBalancer.mayMove(fixture.group, fixture.shares));
     }
 
     /**
