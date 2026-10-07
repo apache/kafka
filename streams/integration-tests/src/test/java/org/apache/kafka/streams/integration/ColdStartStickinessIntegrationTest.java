@@ -25,7 +25,6 @@ import org.apache.kafka.common.serialization.IntegerSerializer;
 import org.apache.kafka.common.serialization.Serdes;
 import org.apache.kafka.common.utils.Utils;
 import org.apache.kafka.coordinator.group.GroupCoordinatorConfig;
-import org.apache.kafka.streams.CloseOptions;
 import org.apache.kafka.streams.GroupProtocol;
 import org.apache.kafka.streams.KafkaStreams;
 import org.apache.kafka.streams.KeyValue;
@@ -142,11 +141,8 @@ public class ColdStartStickinessIntegrationTest {
             startApplicationAndWaitUntilRunning(asList(streams1, streams2), Duration.ofSeconds(60));
             waitUntilMinKeyValueRecordsReceived(consumerConfig(), outputTopic, NUM_KEYS, 120_000L);
         } finally {
-            // Leave the group explicitly so the restart below does not wait for the session timeout
-            final CloseOptions leaveGroup = CloseOptions.groupMembershipOperation(CloseOptions.GroupMembershipOperation.LEAVE_GROUP)
-                .withTimeout(Duration.ofSeconds(60));
-            streams1.close(leaveGroup);
-            streams2.close(leaveGroup);
+            streams1.close(Duration.ofSeconds(60));
+            streams2.close(Duration.ofSeconds(60));
         }
 
         // Make sure the group is fully drained before restarting, so we get a proper cold start
@@ -192,6 +188,9 @@ public class ColdStartStickinessIntegrationTest {
             config.put(StreamsConfig.GROUP_PROTOCOL_CONFIG, GroupProtocol.STREAMS.name());
         } else {
             config.put(StreamsConfig.InternalConfig.INTERNAL_TASK_ASSIGNOR_CLASS, LegacyStickyTaskAssignor.class.getName());
+            // Classic members stay in the group on close, so expire them quickly before the cold restart
+            config.put(ConsumerConfig.SESSION_TIMEOUT_MS_CONFIG, 6000);
+            config.put(ConsumerConfig.HEARTBEAT_INTERVAL_MS_CONFIG, 1000);
         }
         streamsConfigurations.add(config);
         return config;
