@@ -250,7 +250,7 @@ License Version 2.0:
 - scala-library-2.13.18
 - scala-logging_2.13-3.9.6
 - scala-reflect-2.13.18
-- snappy-java-1.1.10.7
+- snappy-java-1.1.10.11
 - snakeyaml-2.5
 - swagger-annotations-2.2.39
 
