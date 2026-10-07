@@ -1702,7 +1702,7 @@ public class PersisterStateManager {
                 case WRITE -> coalesceWrites(groupId, handlers, useRequestHeaderV3);
                 case READ -> coalesceReads(groupId, handlers, useRequestHeaderV3);
                 case SUMMARY -> coalesceReadSummaries(groupId, handlers, useRequestHeaderV3);
-                case DELETE -> coalesceDeletes(groupId, handlers);
+                case DELETE -> coalesceDeletes(groupId, handlers, useRequestHeaderV3);
                 case INITIALIZE -> coalesceInitializations(groupId, handlers, useRequestHeaderV3);
                 default -> throw new RuntimeException("Unknown rpc type: " + rpcType);
             };
@@ -1790,7 +1790,7 @@ public class PersisterStateManager {
             );
         }
 
-        private static AbstractRequest.Builder<? extends AbstractRequest> coalesceDeletes(String groupId, List<? extends PersisterStateManagerHandler> handlers) {
+        private static AbstractRequest.Builder<? extends AbstractRequest> coalesceDeletes(String groupId, List<? extends PersisterStateManagerHandler> handlers, boolean useRequestHeaderV3) {
             Map<Uuid, List<DeleteShareGroupStateRequestData.PartitionData>> partitionData = new HashMap<>();
             handlers.forEach(persHandler -> {
                 assert persHandler instanceof DeleteStateHandler;
@@ -1808,7 +1808,9 @@ public class PersisterStateManager {
                     .map(entry -> new DeleteShareGroupStateRequestData.DeleteStateData()
                         .setTopicId(entry.getKey())
                         .setPartitions(entry.getValue()))
-                    .toList()));
+                    .toList()),
+                useRequestHeaderV3
+            );
         }
 
         private static AbstractRequest.Builder<? extends AbstractRequest> coalesceInitializations(String groupId, List<? extends PersisterStateManagerHandler> handlers, boolean useRequestHeaderV3) {

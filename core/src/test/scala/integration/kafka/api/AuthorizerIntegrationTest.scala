@@ -796,7 +796,7 @@ class AuthorizerIntegrationTest extends AbstractAuthorizerIntegrationTest {
         .setPartitions(List(new DeleteShareGroupStateRequestData.PartitionData()
           .setPartition(part)
         ).asJava)
-      ).asJava)).build()
+      ).asJava), false).build()
 
   private def readShareGroupStateSummaryRequest = new ReadShareGroupStateSummaryRequest.Builder(
     new ReadShareGroupStateSummaryRequestData()

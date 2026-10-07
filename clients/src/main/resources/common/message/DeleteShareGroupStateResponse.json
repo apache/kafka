@@ -17,7 +17,7 @@
   "apiKey": 86,
   "type": "response",
   "name": "DeleteShareGroupStateResponse",
-  "validVersions": "0",
+  "validVersions": "0-1",
   "flexibleVersions": "0+",
   "headerVersions": {
     "0+": "1"

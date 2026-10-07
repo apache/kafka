@@ -18,10 +18,13 @@
   "type": "request",
   "listeners": ["broker"],
   "name": "DeleteShareGroupStateRequest",
-  "validVersions": "0",
+  // Version 1 uses the v3 request header (KIP-1313).
+  "latestVersionUnstable": true,
+  "validVersions": "0-1",
   "flexibleVersions": "0+",
   "headerVersions": {
-    "0+": "2"
+    "0": "2",
+    "1+": "3"
   },
   "fields": [
     { "name": "GroupId", "type": "string", "versions": "0+",

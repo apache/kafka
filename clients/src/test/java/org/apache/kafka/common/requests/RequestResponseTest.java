@@ -3836,7 +3836,7 @@ public class RequestResponseTest {
                 .setTopicId(Uuid.randomUuid())
                 .setPartitions(Collections.singletonList(new DeleteShareGroupStateRequestData.PartitionData()
                     .setPartition(0)))));
-        return new DeleteShareGroupStateRequest.Builder(data).build(version);
+        return new DeleteShareGroupStateRequest.Builder(data, true).build(version);
     }
 
     private DeleteShareGroupStateResponse createDeleteShareGroupStateResponse() {
