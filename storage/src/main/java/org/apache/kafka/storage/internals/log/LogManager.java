@@ -1236,12 +1236,12 @@ public class LogManager {
     }
 
     // Only for testing
-    public UnifiedLog getOrCreateLog(TopicPartition topicPartition, Optional<Uuid> topicId) throws IOException {
+    public UnifiedLog getOrCreateLog(TopicPartition topicPartition, Optional<Uuid> topicId) {
         return getOrCreateLog(topicPartition, false, false, topicId, Optional.empty());
     }
 
     // Only for testing
-    public UnifiedLog getOrCreateLog(TopicPartition topicPartition, boolean isNew, boolean isFuture, Optional<Uuid> topicId) throws IOException {
+    public UnifiedLog getOrCreateLog(TopicPartition topicPartition, boolean isNew, boolean isFuture, Optional<Uuid> topicId) {
         return getOrCreateLog(topicPartition, isNew, isFuture, topicId, Optional.empty());
     }
 
@@ -1264,7 +1264,7 @@ public class LogManager {
                                      boolean isNew,
                                      boolean isFuture,
                                      Optional<Uuid> topicId,
-                                     Optional<Uuid> targetLogDirectoryId) throws IOException {
+                                     Optional<Uuid> targetLogDirectoryId) {
         synchronized (logCreationOrDeletionLock) {
             Optional<UnifiedLog> logOpt = getLog(topicPartition, isFuture);
             UnifiedLog log = logOpt.isPresent()
@@ -1287,7 +1287,7 @@ public class LogManager {
                                  boolean isNew,
                                  boolean isFuture,
                                  Optional<Uuid> topicId,
-                                 Optional<Uuid> targetLogDirectoryId) throws IOException {
+                                 Optional<Uuid> targetLogDirectoryId) {
         // create the log if it has not already been created in another thread
         if (!isNew && !offlineLogDirs().isEmpty())
             throw new KafkaStorageException("Can not create log for " + topicPartition + " because log directories " +

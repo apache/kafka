@@ -773,7 +773,7 @@ public class LogManagerTest {
     }
 
     @Test
-    public void testCreateAndDeleteOverlyLongTopic() throws IOException {
+    public void testCreateAndDeleteOverlyLongTopic() {
         String invalidTopicName = String.join("", Collections.nCopies(253, "x"));
         logManager.getOrCreateLog(new TopicPartition(invalidTopicName, 0), Optional.empty());
         logManager.asyncDelete(new TopicPartition(invalidTopicName, 0));
@@ -1172,7 +1172,7 @@ public class LogManagerTest {
     }
 
     @Test
-    public void testMetricsExistWhenLogIsRecreatedBeforeDeletion() throws IOException {
+    public void testMetricsExistWhenLogIsRecreatedBeforeDeletion() {
         String topicName = "metric-test";
         Supplier<Set<MetricName>> logMetrics = () -> KafkaYammerMetrics.defaultRegistry().allMetrics().keySet().stream()
                 .filter(metric -> metric.getType().equals("Log") && metric.getScope().contains(topicName))
