@@ -375,6 +375,27 @@ class StreamsGroupTopologyDescriptionRequestTest(cluster: ClusterInstance) exten
       assertFalse(heartbeatAfterFailure.topologyDescriptionRequired(),
         "Broker must not re-solicit a topology description push once the epoch is marked permanently failed.")
 
+      // Restarting the broker replaces its StreamsGroupTopologyDescriptionBackoff with a fresh,
+      // empty one, while the group's failed-topology-epoch record survives in the persisted
+      // coordinator log. If the heartbeat below is still suppressed, that can only be the
+      // persisted ratchet: neither a leftover back-off window from the original solicitation
+      // nor a transient-failure back-off window would survive the restart.
+      val brokerId = cluster.brokerIds().iterator().next()
+      cluster.restartBroker(brokerId, java.util.Collections.emptyMap())
+      cluster.waitForReadyBrokers()
+
+      val heartbeatAfterRestart = streamsGroupHeartbeat(
+        groupId = groupId,
+        memberId = memberId,
+        memberEpoch = memberEpoch,
+        rebalanceTimeoutMs = 1000,
+        activeTasks = List.empty,
+        standbyTasks = List.empty,
+        warmupTasks = List.empty
+      )
+      assertFalse(heartbeatAfterRestart.topologyDescriptionRequired(),
+        "Broker must still ratchet the failed topology epoch after a restart clears in-memory back-off state.")
+
       // Nothing was ever stored for this epoch: the permanent failure leaves the group's
       // stored-topology-epoch at its UNCERTAIN sentinel, which Describe reports as NOT_STORED.
       val describedGroup = streamsGroupDescribe(
