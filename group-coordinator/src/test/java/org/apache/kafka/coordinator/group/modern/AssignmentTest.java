@@ -17,7 +17,6 @@
 package org.apache.kafka.coordinator.group.modern;
 
 import org.apache.kafka.common.Uuid;
-import org.apache.kafka.coordinator.group.assignor.AssignorHelpers;
 import org.apache.kafka.coordinator.group.generated.ConsumerGroupTargetAssignmentMemberValue;
 
 import org.junit.jupiter.api.Test;
@@ -25,6 +24,7 @@ import org.junit.jupiter.api.Test;
 import java.util.ArrayList;
 import java.util.Arrays;
 import java.util.HashMap;
+import java.util.HashSet;
 import java.util.List;
 import java.util.Map;
 import java.util.Set;
@@ -33,7 +33,6 @@ import static org.apache.kafka.coordinator.group.AssignmentTestUtil.mkAssignment
 import static org.apache.kafka.coordinator.group.AssignmentTestUtil.mkTopicAssignment;
 import static org.junit.jupiter.api.Assertions.assertEquals;
 import static org.junit.jupiter.api.Assertions.assertThrows;
-import static org.junit.jupiter.api.Assertions.assertTrue;
 
 public class AssignmentTest {
 
@@ -44,12 +43,42 @@ public class AssignmentTest {
 
     @Test
     public void testPartitionsImmutable() {
-        // Assignments are used as input to assignors, which expect to receive immutable
-        // assignment maps, otherwise they will be modified in place.
+        Uuid topicId = Uuid.randomUuid();
         Map<Uuid, Set<Integer>> partitions = new HashMap<>();
-        partitions.put(Uuid.randomUuid(), Set.of(1, 2, 3));
+        partitions.put(topicId, new HashSet<>(Set.of(0, 1)));
+
         Assignment assignment = new Assignment(partitions);
-        assertTrue(AssignorHelpers.isImmutableMap(assignment.partitions()));
+
+        assertThrows(UnsupportedOperationException.class, () -> assignment.partitions().clear());
+        assertThrows(UnsupportedOperationException.class, () -> assignment.partitions().get(topicId).remove(0));
+        assertEquals(Map.of(topicId, Set.of(0, 1)), partitions);
+    }
+
+    @Test
+    public void testAssignmentIsolatedFromSourceSet() {
+        Uuid topicId = Uuid.randomUuid();
+        Set<Integer> partitionIds = new HashSet<>(Set.of(0, 1));
+        Map<Uuid, Set<Integer>> partitions = new HashMap<>();
+        partitions.put(topicId, partitionIds);
+
+        Assignment assignment = new Assignment(partitions);
+
+        partitionIds.remove(0);
+
+        assertEquals(Map.of(topicId, Set.of(0, 1)), assignment.partitions());
+    }
+
+    @Test
+    public void testAssignmentIsolatedFromSourceMap() {
+        Uuid topicId = Uuid.randomUuid();
+        Map<Uuid, Set<Integer>> partitions = new HashMap<>();
+        partitions.put(topicId, new HashSet<>(Set.of(0, 1)));
+
+        Assignment assignment = new Assignment(partitions);
+
+        partitions.clear();
+
+        assertEquals(Map.of(topicId, Set.of(0, 1)), assignment.partitions());
     }
 
     @Test

@@ -22,7 +22,7 @@ import org.apache.kafka.coordinator.group.generated.ConsumerGroupTargetAssignmen
 import org.apache.kafka.coordinator.group.generated.ShareGroupTargetAssignmentMemberValue;
 
 import java.util.Collections;
-import java.util.HashSet;
+import java.util.HashMap;
 import java.util.Map;
 import java.util.Objects;
 import java.util.Set;
@@ -42,9 +42,14 @@ public class Assignment implements MemberAssignment {
     public Assignment(
         Map<Uuid, Set<Integer>> partitions
     ) {
+        Objects.requireNonNull(partitions);
         // Assignments are used as input to assignors, which expect to receive immutable
         // assignment maps, otherwise they will be modified in place.
-        this.partitions = Collections.unmodifiableMap(Objects.requireNonNull(partitions));
+        Map<Uuid, Set<Integer>> copy = new HashMap<>(partitions.size());
+        partitions.forEach(
+            (topicId, partitionsIds) -> copy.put(topicId, Set.copyOf(partitionsIds))
+        );
+        this.partitions = Collections.unmodifiableMap(copy);
     }
 
     /**
@@ -85,7 +90,7 @@ public class Assignment implements MemberAssignment {
         return new Assignment(
             record.topicPartitions().stream().collect(Collectors.toMap(
                 ConsumerGroupTargetAssignmentMemberValue.TopicPartition::topicId,
-                topicPartitions -> new HashSet<>(topicPartitions.partitions())))
+                topicPartitions -> Set.copyOf(topicPartitions.partitions())))
         );
     }
 
@@ -101,7 +106,7 @@ public class Assignment implements MemberAssignment {
         return new Assignment(
             record.topicPartitions().stream().collect(Collectors.toMap(
                 ShareGroupTargetAssignmentMemberValue.TopicPartition::topicId,
-                topicPartitions -> new HashSet<>(topicPartitions.partitions())))
+                topicPartitions -> Set.copyOf(topicPartitions.partitions())))
         );
     }
 }
