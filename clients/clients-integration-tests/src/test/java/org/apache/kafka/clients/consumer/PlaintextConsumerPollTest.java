@@ -45,6 +45,7 @@ import java.util.concurrent.atomic.AtomicBoolean;
 import java.util.concurrent.atomic.AtomicLong;
 import java.util.stream.IntStream;
 
+import static org.apache.kafka.clients.ClientsTestUtils.awaitAssignment;
 import static org.apache.kafka.clients.ClientsTestUtils.awaitRebalance;
 import static org.apache.kafka.clients.ClientsTestUtils.consumeAndVerifyRecords;
 import static org.apache.kafka.clients.ClientsTestUtils.ensureNoRebalance;
@@ -157,8 +158,8 @@ public class PlaintextConsumerPollTest {
             consumer.subscribe(List.of(topic), listener);
 
             // rebalance to get the initial assignment
-            awaitRebalance(consumer, listener);
-            assertEquals(1, listener.callsToAssigned);
+            awaitAssignment(consumer, Set.of(tp, tp2));
+            var callsToAssignedAfterFirstRebalance = listener.callsToAssigned;
             assertEquals(0, listener.callsToRevoked);
 
             // after we extend longer than max.poll a rebalance should be triggered
@@ -166,7 +167,7 @@ public class PlaintextConsumerPollTest {
             TimeUnit.MILLISECONDS.sleep(3000);
 
             awaitRebalance(consumer, listener);
-            assertEquals(2, listener.callsToAssigned);
+            assertEquals(callsToAssignedAfterFirstRebalance + 1, listener.callsToAssigned);
             assertEquals(1, listener.callsToRevoked);
         }
     }
@@ -300,7 +301,7 @@ public class PlaintextConsumerPollTest {
             consumer.subscribe(List.of(topic), listener);
 
             // rebalance to get the initial assignment
-            awaitRebalance(consumer, listener);
+            awaitAssignment(consumer, Set.of(tp, tp2));
             var callsToAssignedAfterFirstRebalance = listener.callsToAssigned;
 
             consumer.poll(Duration.ofMillis(2000));
