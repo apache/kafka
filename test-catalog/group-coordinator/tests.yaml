@@ -810,6 +810,7 @@ org.apache.kafka.coordinator.group.GroupMetadataManagerTest:
 - testStreamsGroupDynamicConfigs
 - testStreamsGroupEndpointInformationIncludesNewMember
 - testStreamsGroupEndpointInformationOnlyWhenEpochGreater
+- testStreamsGroupEpochDoesNotIncreaseWhenEveryAssignmentConfigIsAtItsDefault
 - testStreamsGroupEpochIncreaseWithNumStandbyReplicasConfigChanges
 - testStreamsGroupEpochShouldNotIncreaseWithAcceptableRecoveryLagConfigChange
 - testStreamsGroupEvaluatedConfigs
@@ -1814,10 +1815,13 @@ org.apache.kafka.coordinator.group.streams.TopologyMetadataTest:
 - testTopology
 org.apache.kafka.coordinator.group.streams.assignor.AssignmentConfigsImplTest:
 - testDefault
-- testFromEmptyMap
-- testFromMap
-- testFromMapWithoutRackAwareAssignmentTags
+- testFromRecord
+- testFromRecordWithoutConfigs
+- testFromRecordWithoutRackAwareAssignmentTags
 - testRackAwareAssignmentTagsAreUnmodifiable
+- testRecordRoundTrip
+- testToMap
+- testToMapWithoutRackAwareAssignmentTags
 - testWithers
 org.apache.kafka.coordinator.group.streams.assignor.BalancedTaskAssignorTest:
 - shouldAssignActiveStatefulTasksEvenlyOverMembersWhereNumberOfMembersIntegralDivisorOfNumberOfTasks
