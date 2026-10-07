@@ -20,6 +20,7 @@ import org.apache.kafka.common.Uuid;
 import org.apache.kafka.coordinator.group.api.assignor.MemberAssignment;
 import org.apache.kafka.coordinator.group.api.assignor.MemberSubscription;
 
+import java.util.HashMap;
 import java.util.Map;
 import java.util.Objects;
 import java.util.Optional;
@@ -50,7 +51,7 @@ public class MemberSubscriptionAndAssignmentImpl implements MemberSubscription, 
         this.rackId = Objects.requireNonNull(rackId);
         this.instanceId = Objects.requireNonNull(instanceId);
         this.subscribedTopicIds = Objects.requireNonNull(subscribedTopicIds);
-        this.memberAssignment = Objects.requireNonNull(memberAssignment);
+        this.memberAssignment = deepCopyAssignment(memberAssignment);
     }
 
     @Override
@@ -101,4 +102,13 @@ public class MemberSubscriptionAndAssignmentImpl implements MemberSubscription, 
             ", memberAssignment=" + memberAssignment +
             ')';
     }
+
+    private static Assignment deepCopyAssignment(Assignment memberAssignment) {
+        final Map<Uuid, Set<Integer>> copiedPartitions = new HashMap<>();
+        Objects.requireNonNull(memberAssignment).partitions().forEach(
+            (uuid, partition) -> copiedPartitions.put(uuid, Set.copyOf(partition))
+        );
+        return new Assignment(copiedPartitions);
+    }
+
 }

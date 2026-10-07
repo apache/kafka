@@ -296,7 +296,7 @@ public class UniformHomogeneousAssignmentBuilderTest {
             Optional.empty(),
             Optional.empty(),
             Set.of(topic1Uuid, topic2Uuid),
-            new Assignment(mkOrderedAssignment(
+            new Assignment(mkAssignment(
                 mkTopicAssignment(topic1Uuid, 0, 1),
                 mkTopicAssignment(topic2Uuid, 0, 1)
             ))
@@ -306,20 +306,10 @@ public class UniformHomogeneousAssignmentBuilderTest {
             Optional.empty(),
             Optional.empty(),
             Set.of(topic1Uuid, topic2Uuid),
-            new Assignment(mkOrderedAssignment(
+            new Assignment(mkAssignment(
                 mkTopicAssignment(topic1Uuid, 2),
                 mkTopicAssignment(topic2Uuid, 2)
             ))
-        ));
-
-        Map<String, Map<Uuid, Set<Integer>>> expectedAssignment = new HashMap<>();
-        expectedAssignment.put(memberA, mkAssignment(
-            mkTopicAssignment(topic1Uuid, 0, 1),
-            mkTopicAssignment(topic2Uuid, 0)
-        ));
-        expectedAssignment.put(memberB, mkAssignment(
-            mkTopicAssignment(topic1Uuid, 2),
-            mkTopicAssignment(topic2Uuid, 1, 2)
         ));
 
         GroupSpec groupSpec = new GroupSpecImpl(
@@ -336,8 +326,14 @@ public class UniformHomogeneousAssignmentBuilderTest {
             subscribedTopicMetadata
         );
 
-        assertAssignment(expectedAssignment, computedAssignment);
-        checkValidityAndBalance(members, computedAssignment);
+        // Balance the assignment by moving exactly one partition from A to B.
+        // Which partitions move depends on iteration order.
+        assertReassignment(
+            members,
+            computedAssignment,
+            Map.of(topic1Uuid, Set.of(0, 1, 2), topic2Uuid, Set.of(0, 1, 2)),
+            Map.of(memberA, 3, memberB, 2)
+        );
     }
 
     @Test
@@ -411,7 +407,7 @@ public class UniformHomogeneousAssignmentBuilderTest {
             Optional.empty(),
             Optional.empty(),
             Set.of(topic1Uuid, topic2Uuid),
-            new Assignment(mkOrderedAssignment(
+            new Assignment(mkAssignment(
                 mkTopicAssignment(topic1Uuid, 0, 2),
                 mkTopicAssignment(topic2Uuid, 0)
             ))
@@ -421,7 +417,7 @@ public class UniformHomogeneousAssignmentBuilderTest {
             Optional.empty(),
             Optional.empty(),
             Set.of(topic1Uuid, topic2Uuid),
-            new Assignment(mkOrderedAssignment(
+            new Assignment(mkAssignment(
                 mkTopicAssignment(topic1Uuid, 1),
                 mkTopicAssignment(topic2Uuid, 1, 2)
             ))
@@ -433,18 +429,6 @@ public class UniformHomogeneousAssignmentBuilderTest {
             Optional.empty(),
             Set.of(topic1Uuid, topic2Uuid),
             Assignment.EMPTY
-        ));
-
-        Map<String, Map<Uuid, Set<Integer>>> expectedAssignment = new HashMap<>();
-        expectedAssignment.put(memberA, mkAssignment(
-            mkTopicAssignment(topic1Uuid, 0, 2)
-        ));
-        expectedAssignment.put(memberB, mkAssignment(
-            mkTopicAssignment(topic1Uuid, 1),
-            mkTopicAssignment(topic2Uuid, 1)
-        ));
-        expectedAssignment.put(memberC, mkAssignment(
-            mkTopicAssignment(topic2Uuid, 0, 2)
         ));
 
         GroupSpec groupSpec = new GroupSpecImpl(
@@ -461,8 +445,14 @@ public class UniformHomogeneousAssignmentBuilderTest {
             subscribedTopicMetadata
         );
 
-        assertAssignment(expectedAssignment, computedAssignment);
-        checkValidityAndBalance(members, computedAssignment);
+        // Each existing member gives up exactly one partition to the new member.
+        // Which partitions move depends on iteration order.
+        assertReassignment(
+            members,
+            computedAssignment,
+            Map.of(topic1Uuid, Set.of(0, 1, 2), topic2Uuid, Set.of(0, 1, 2)),
+            Map.of(memberA, 2, memberB, 2, memberC, 0)
+        );
     }
 
     @Test
@@ -578,6 +568,39 @@ public class UniformHomogeneousAssignmentBuilderTest {
 
         assertAssignment(expectedAssignment, computedAssignment);
         checkValidityAndBalance(members, computedAssignment);
+    }
+
+    /**
+     * Verifies complete, valid and balanced reassignment while checking how many
+     * partitions each member retains, without fixing which partitions must move.
+     */
+    private void assertReassignment(
+        Map<String, MemberSubscriptionAndAssignmentImpl> members,
+        GroupAssignment computedAssignment,
+        Map<Uuid, Set<Integer>> expectedPartitions,
+        Map<String, Integer> expectedRetainedPartitionCounts
+    ) {
+        assertEquals(members.keySet(), computedAssignment.members().keySet());
+        checkValidityAndBalance(members, computedAssignment);
+
+        Map<Uuid, Set<Integer>> assignedPartitions = new HashMap<>();
+        computedAssignment.members().forEach((memberId, assignment) -> {
+            Map<Uuid, Set<Integer>> previousAssignment = members.get(memberId).partitions();
+            int retainedPartitionCount = 0;
+            for (Map.Entry<Uuid, Set<Integer>> entry : assignment.partitions().entrySet()) {
+                Uuid topicId = entry.getKey();
+                Set<Integer> partitions = entry.getValue();
+                assignedPartitions.computeIfAbsent(topicId, __ -> new HashSet<>()).addAll(partitions);
+
+                Set<Integer> retainedPartitions = new HashSet<>(partitions);
+                retainedPartitions.retainAll(previousAssignment.getOrDefault(topicId, Set.of()));
+                retainedPartitionCount += retainedPartitions.size();
+            }
+            assertEquals(expectedRetainedPartitionCounts.get(memberId).intValue(), retainedPartitionCount,
+                "Unexpected partition movement for member " + memberId);
+        });
+
+        assertEquals(expectedPartitions, assignedPartitions, "All expected partitions must be assigned");
     }
 
     /**
