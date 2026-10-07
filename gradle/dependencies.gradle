@@ -128,7 +128,7 @@ versions += [
   scalafmt: "3.10.3",
   scoverage: "2.5.2",
   slf4j: "1.7.36",
-  snappy: "1.1.10.7",
+  snappy: "1.1.10.11",
   spotbugs: "4.9.8",
   testcontainers: "1.20.2",
   testcontainersKeycloak: "3.5.1",
