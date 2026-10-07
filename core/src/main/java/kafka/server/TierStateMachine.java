@@ -198,6 +198,17 @@ public class TierStateMachine {
 
         RemoteLogManager rlm = replicaMgr.remoteLogManager().get();
 
+        // When the fetch start offset equals the leader's log start offset, the range [leaderLogStartOffset,
+        // leaderLocalLogStartOffset) is empty and there is no remote state to build. The remote log segment before the
+        // log start offset may already be deleted. Fetch from the leader's log start offset.
+        if (leaderLocalLogStartOffset.longValue() == leaderLogStartOffset.longValue()) {
+            Partition partition = replicaMgr.getPartitionOrException(topicPartition);
+            partition.truncateFullyAndStartAt(leaderLogStartOffset, useFutureLog, Optional.of(leaderLogStartOffset));
+            log.info("Fetch start offset for {} equals the leader's log start offset {}, so there is no remote state " +
+                    "to build", topicPartition, leaderLogStartOffset);
+            return leaderLogStartOffset;
+        }
+
         // Find the respective leader epoch for (leaderLocalLogStartOffset - 1). We need to build the leader epoch cache
         // until that offset
         long previousOffsetToLeaderLocalLogStartOffset = leaderLocalLogStartOffset - 1;

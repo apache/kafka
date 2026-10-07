@@ -3091,7 +3091,12 @@ class ReplicaManagerTest {
                     Map(tp -> new FetchResponseData.PartitionData().setErrorCode(Errors.OFFSET_MOVED_TO_TIERED_STORAGE.code))
                   }.asJava
                 }
-                leader.setLeaderState(tp, PartitionState(leaderEpoch = 0))
+                // The leader has tiered offset 0, so the remote range [logStartOffset, localLogStartOffset) is not
+                // empty and the follower must build the auxiliary state from remote storage.
+                val leaderState = PartitionState(leaderEpoch = 0)
+                leaderState.localLogStartOffset = 1
+                leaderState.logEndOffset = 1
+                leader.setLeaderState(tp, leaderState)
                 leader.setReplicaPartitionStateCallback(_ => PartitionState(leaderEpoch = 0))
 
                 val fetcher = new ReplicaFetcherThread(threadName, leader, config, failedPartitions, replicaManager,
