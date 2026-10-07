@@ -450,6 +450,9 @@ org.apache.kafka.tools.LineMessageReaderTest:
 - testNullMarkerHeaderKeyThrows
 - testNullMarkerWithHeaders
 - testParseHeaderEnabledWithCustomDelimiterAndVaryingNumberOfKeyValueHeaderPairs
+org.apache.kafka.tools.LogCompactionTesterTest:
+- testConsumeMessagesDoesNotStopAtEmptyPollBeforeEndOffset
+- testConsumeMessagesFailsWhenNoProgress
 org.apache.kafka.tools.LogDirsCommandTest:
 - shouldNotThrowWhenDuplicatedBrokers
 - shouldQueryAllBrokersIfNonSpecified
