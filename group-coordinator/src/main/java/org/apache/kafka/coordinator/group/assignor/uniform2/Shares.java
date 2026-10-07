@@ -59,6 +59,11 @@ final class Shares {
     private final int[] cohortBaseSizes;
 
     /**
+     * Per cohort, the number of its topics having base partitions.
+     */
+    private final int[] cohortTopicsWithBase;
+
+    /**
      * Per topic, the members getting one of its extra partitions.
      */
     private final IntList[] membersWithExtra;
@@ -85,9 +90,11 @@ final class Shares {
             membersWithExtra[topic] = extraPartitions[topic] == 0 ? NONE : new IntList(extraPartitions[topic]);
         }
         cohortBaseSizes = new int[group.cohortCount()];
+        cohortTopicsWithBase = new int[group.cohortCount()];
         for (int cohort = 0; cohort < group.cohortCount(); cohort++) {
             for (int topic : group.topicsOf(cohort)) {
                 cohortBaseSizes[cohort] += basePartitions[topic];
+                cohortTopicsWithBase[cohort] += basePartitions[topic] > 0 ? 1 : 0;
             }
         }
         extraCounts = new int[group.memberCount()];
@@ -128,6 +135,14 @@ final class Shares {
      */
     int size(int member) {
         return cohortBaseSizes[group.cohortOf(member)] + extraCounts[member];
+    }
+
+    /**
+     * @return An upper bound of the number of topics of which the member gets partitions: a
+     *         topic with base partitions of which the member gets an extra partition counts twice.
+     */
+    int maxTopicsWithPartitions(int member) {
+        return cohortTopicsWithBase[group.cohortOf(member)] + extraCounts[member];
     }
 
     /**

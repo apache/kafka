@@ -28,6 +28,7 @@ import org.apache.kafka.coordinator.group.api.assignor.PartitionAssignor;
 import org.apache.kafka.coordinator.group.api.assignor.SubscribedTopicDescriber;
 import org.apache.kafka.coordinator.group.api.assignor.SubscriptionType;
 import org.apache.kafka.coordinator.group.assignor.RangeAssignor;
+import org.apache.kafka.coordinator.group.assignor.Uniform2Assignor;
 import org.apache.kafka.coordinator.group.assignor.UniformAssignor;
 import org.apache.kafka.coordinator.group.modern.Assignment;
 import org.apache.kafka.coordinator.group.modern.GroupSpecImpl;
@@ -75,7 +76,8 @@ import java.util.concurrent.TimeUnit;
  *     <li>{@code distribution}: how the partitions are split over the topics, see
  *     {@link Distribution}.</li>
  *     <li>{@code subscription}: how the members subscribe, see {@link Subscription}.</li>
- *     <li>{@code rack}: whether the members have a rack, see {@link Rack}.</li>
+ *     <li>{@code rack}: whether the members have a rack, see {@link Rack}. The uniform2
+ *     assignor does not use racks yet, so it does the same work with both values.</li>
  *     <li>{@code assignor}: the assignor.</li>
  *     <li>{@code event}: what happened to the group, see {@link Event}. The group has
  *     {@code memberCount} members when the assignment is computed, and the joining or leaving
@@ -89,7 +91,7 @@ import java.util.concurrent.TimeUnit;
  * with a {@link HashSet} per topic, so that the events measure what the coordinator hands the
  * assignor rather than the sets the assignor happened to return.
  *
- * <p>The parameters form 8064 combinations. These three runs of {@code jmh.sh} cover the ones
+ * <p>The parameters form 12096 combinations. These three runs of {@code jmh.sh} cover the ones
  * of interest: the scaling with the group size, then the events on a large group with many
  * topics and on a small group with very many topics. The largest groups need about 1 GB of
  * heap, so pass {@code -jvmArgs -Xmx2g} to {@code jmh.sh} when the default heap is smaller.
@@ -122,7 +124,12 @@ public class ConsumerAssignorBenchmark {
         /**
          * The uniform assignor.
          */
-        UNIFORM
+        UNIFORM,
+
+        /**
+         * The uniform2 assignor.
+         */
+        UNIFORM2
     }
 
     /**
@@ -590,7 +597,7 @@ public class ConsumerAssignorBenchmark {
     @Param({"NONE", "PROVIDED"})
     private Rack rack;
 
-    @Param({"RANGE", "UNIFORM"})
+    @Param({"RANGE", "UNIFORM", "UNIFORM2"})
     private AssignorType assignor;
 
     @Param({"FULL", "STABLE", "JOIN_ONE", "JOIN_MANY", "LEAVE_ONE", "LEAVE_MANY", "PARTITIONS_ADDED"})
@@ -636,6 +643,7 @@ public class ConsumerAssignorBenchmark {
         return switch (assignor) {
             case RANGE -> new RangeAssignor();
             case UNIFORM -> new UniformAssignor();
+            case UNIFORM2 -> new Uniform2Assignor();
         };
     }
 

@@ -132,6 +132,29 @@ public class SharesTest {
     }
 
     /**
+     * A subscribes to T1 and T2, B to T1 only. T1, 3 partitions, gives 1 base partition to each,
+     * and B gets its extra partition; T2, 1 partition, gives its base partition to A. A gets
+     * partitions of its 2 topics. B gets partitions of T1 only, but T1 counts twice in the bound,
+     * for its base partition and for its extra partition: the bound is 2 for both.
+     */
+    @Test
+    public void testMaxTopicsWithPartitions() {
+        var spec = new GroupSpecFixture()
+            .withMember("A", Set.of(T1, T2))
+            .withMember("B", Set.of(T1))
+            .build();
+        var describer = new TopicsFixture()
+            .withTopic(T1, 3)
+            .withTopic(T2, 1)
+            .build();
+        var group = new GroupModel(spec, describer);
+        var shares = new Shares(group);
+        shares.giveExtraPartition(B, group.topicIndex(T1));
+
+        assertEquals(List.of(2, 2), values(group.memberCount(), shares::maxTopicsWithPartitions));
+    }
+
+    /**
      * @return The values of the numbers from 0 to the count, in order.
      */
     private static List<Integer> values(int count, IntUnaryOperator value) {
