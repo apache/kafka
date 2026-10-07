@@ -3816,7 +3816,7 @@ public class RequestResponseTest {
                         .setLastOffset(0)
                         .setDeliveryState((byte) 0x0)
                         .setDeliveryCount((short) 0)))))));
-        return new WriteShareGroupStateRequest.Builder(data).build(version);
+        return new WriteShareGroupStateRequest.Builder(data, true).build(version);
     }
 
     private WriteShareGroupStateResponse createWriteShareGroupStateResponse() {
