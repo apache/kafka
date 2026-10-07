@@ -263,18 +263,20 @@ public final class MirrorMakerConfig extends AbstractConfig {
         // transform worker config according to config.providers
         List<String> providerNames = configProviders();
         Map<String, ConfigProvider> providers = new HashMap<>();
-        for (String name : providerNames) {
-            ConfigProvider configProvider = plugins.newConfigProvider(
-                    this,
-                    CONFIG_PROVIDERS_CONFIG + "." + name,
-                    Plugins.ClassLoaderUsage.PLUGINS
-            );
-            providers.put(name, configProvider);
+        try {
+            for (String name : providerNames) {
+                ConfigProvider configProvider = plugins.newConfigProvider(
+                        this,
+                        CONFIG_PROVIDERS_CONFIG + "." + name,
+                        Plugins.ClassLoaderUsage.PLUGINS
+                );
+                providers.put(name, configProvider);
+            }
+            ConfigTransformer transformer = new ConfigTransformer(providers);
+            return transformer.transform(props).data();
+        } finally {
+            providers.values().forEach(x -> Utils.closeQuietly(x, "config provider"));
         }
-        ConfigTransformer transformer = new ConfigTransformer(providers);
-        Map<String, String> transformed = transformer.transform(props).data();
-        providers.values().forEach(x -> Utils.closeQuietly(x, "config provider"));
-        return transformed;
     }
 
     private static ConfigDef config() {

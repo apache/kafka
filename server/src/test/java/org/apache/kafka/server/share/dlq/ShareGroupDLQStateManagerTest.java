@@ -54,6 +54,8 @@ import org.apache.kafka.test.TestUtils;
 
 import org.junit.jupiter.api.AfterEach;
 import org.junit.jupiter.api.Test;
+import org.junit.jupiter.params.ParameterizedTest;
+import org.junit.jupiter.params.provider.CsvSource;
 import org.mockito.ArgumentMatcher;
 import org.mockito.Mockito;
 
@@ -442,6 +444,8 @@ class ShareGroupDLQStateManagerTest {
         ShareGroupDLQMetadataCacheHelper cacheHelper = mock(ShareGroupDLQMetadataCacheHelper.class);
         when(cacheHelper.shareGroupDlqTopic(GROUP_ID)).thenReturn(Optional.of("__internal_dlq"));
         when(cacheHelper.shareGroupDlqTopicPrefix()).thenReturn(Optional.empty());
+        // Topic exists, so the existence check passes through to the "__" naming check being tested here.
+        when(cacheHelper.containsTopic("__internal_dlq")).thenReturn(true);
 
         stateManager = builder().withCacheHelper(cacheHelper).build();
         stateManager.start();
@@ -468,6 +472,23 @@ class ShareGroupDLQStateManagerTest {
     }
 
     @Test
+    public void testDlqExistingTopicWithoutDlqConfigAndPrefixMismatchReportsPrefixMismatch() throws Exception {
+        ShareGroupDLQMetadataCacheHelper cacheHelper = mock(ShareGroupDLQMetadataCacheHelper.class);
+        when(cacheHelper.shareGroupDlqTopic(GROUP_ID)).thenReturn(Optional.of(DLQ_TOPIC));
+        when(cacheHelper.shareGroupDlqTopicPrefix()).thenReturn(Optional.of("required-prefix-"));
+        when(cacheHelper.containsTopic(DLQ_TOPIC)).thenReturn(true);
+        when(cacheHelper.isDlqEnabledOnTopic(DLQ_TOPIC)).thenReturn(false);
+
+        stateManager = builder().withCacheHelper(cacheHelper).build();
+        stateManager.start();
+        Throwable cause = getCause(stateManager.dlq(param()));
+        assertInstanceOf(ConfigException.class, cause);
+        assertTrue(cause.getMessage().contains("does not comply with the DLQ topic prefix"));
+        assertFalse(cause.getMessage().contains("DLQ is not enabled"));
+        verifyNoInteractions(mockMetrics);
+    }
+
+    @Test
     public void testDlqTopicMissingAndAutoCreateDisabledFailsValidation() throws Exception {
         ShareGroupDLQMetadataCacheHelper cacheHelper = mock(ShareGroupDLQMetadataCacheHelper.class);
         when(cacheHelper.shareGroupDlqTopic(GROUP_ID)).thenReturn(Optional.of(DLQ_TOPIC));
@@ -480,6 +501,30 @@ class ShareGroupDLQStateManagerTest {
         Throwable cause = getCause(stateManager.dlq(param()));
         assertInstanceOf(ConfigException.class, cause);
         assertTrue(cause.getMessage().contains("auto create is disabled"));
+        verifyNoInteractions(mockMetrics);
+    }
+
+    @ParameterizedTest
+    @CsvSource({
+        "false, DLQ topic does not exist, does not comply with the DLQ topic prefix",
+        "true, does not comply with the DLQ topic prefix, DLQ topic does not exist"
+    })
+    public void testDlqTopicMissingAndPrefixMismatchFailsValidation(
+            boolean autoCreateEnabled, String expectedMessageFragment, String unexpectedMessageFragment) throws Exception {
+        ShareGroupDLQMetadataCacheHelper cacheHelper = mock(ShareGroupDLQMetadataCacheHelper.class);
+        when(cacheHelper.shareGroupDlqTopic(GROUP_ID)).thenReturn(Optional.of(DLQ_TOPIC));
+        when(cacheHelper.shareGroupDlqTopicPrefix()).thenReturn(Optional.of("required-prefix-"));
+        when(cacheHelper.containsTopic(DLQ_TOPIC)).thenReturn(false);
+        when(cacheHelper.isDlqAutoTopicCreateEnabled()).thenReturn(autoCreateEnabled);
+
+        stateManager = builder().withCacheHelper(cacheHelper).build();
+        stateManager.start();
+        Throwable cause = getCause(stateManager.dlq(param()));
+        assertInstanceOf(ConfigException.class, cause);
+        assertTrue(cause.getMessage().contains(expectedMessageFragment),
+            "Expected message to contain '" + expectedMessageFragment + "', got: " + cause.getMessage());
+        assertFalse(cause.getMessage().contains(unexpectedMessageFragment),
+            "Did not expect message to contain '" + unexpectedMessageFragment + "', got: " + cause.getMessage());
         verifyNoInteractions(mockMetrics);
     }
 

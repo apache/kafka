@@ -717,6 +717,16 @@ public class ClientTelemetryReporter implements MetricsReporter {
                 payload = createPayload(emitter.emittedMetrics());
             } catch (Exception e) {
                 log.warn("Error constructing client telemetry payload: ", e);
+                /*
+                 No request is sent, so neither handleResponse nor handleFailedRequest can run to
+                 move the state on. Restore PUSH_NEEDED so that the retry below actually happens,
+                 instead of leaving the sender stuck in PUSH_IN_PROGRESS forever. A terminating
+                 push can only transition to TERMINATED, but close() follows it, so staying in
+                 TERMINATING_PUSH_IN_PROGRESS is not a stuck state.
+                */
+                if (!terminating && !maybeSetState(ClientTelemetryState.PUSH_NEEDED)) {
+                    log.warn("Unable to transition state after failed telemetry payload construction from state {}", state);
+                }
                 // Update last accessed time for push request to be retried on next interval.
                 updateErrorResult(localSubscription.pushIntervalMs, time.milliseconds());
                 return Optional.empty();

@@ -19,7 +19,6 @@ package org.apache.kafka.tools.consumer.group;
 import org.apache.kafka.clients.CommonClientConfigs;
 import org.apache.kafka.clients.admin.Admin;
 import org.apache.kafka.clients.admin.AdminClientConfig;
-import org.apache.kafka.clients.admin.NewTopic;
 import org.apache.kafka.clients.consumer.Consumer;
 import org.apache.kafka.clients.consumer.ConsumerConfig;
 import org.apache.kafka.clients.consumer.ConsumerRecords;
@@ -260,9 +259,7 @@ public class DeleteOffsetsConsumerGroupCommandIntegrationTest {
     }
 
     private void createTopic(String topic) {
-        try (Admin admin = Admin.create(Map.of(CommonClientConfigs.BOOTSTRAP_SERVERS_CONFIG, clusterInstance.bootstrapServers()))) {
-            Assertions.assertDoesNotThrow(() -> admin.createTopics(List.of(new NewTopic(topic, 1, (short) 1))).topicId(topic).get());
-        }
+        Assertions.assertDoesNotThrow(() -> clusterInstance.createTopic(topic, 1, (short) 1));
     }
 
     private void removeTopic(String topic) {
