@@ -3761,7 +3761,7 @@ public class RequestResponseTest {
                     .setPartition(0)
                     .setStateEpoch(0)
                     .setStartOffset(0)))));
-        return new InitializeShareGroupStateRequest.Builder(data).build(version);
+        return new InitializeShareGroupStateRequest.Builder(data, true).build(version);
     }
 
     private InitializeShareGroupStateResponse createInitializeShareGroupStateResponse() {

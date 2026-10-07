@@ -1703,7 +1703,7 @@ public class PersisterStateManager {
                 case READ -> coalesceReads(groupId, handlers, useRequestHeaderV3);
                 case SUMMARY -> coalesceReadSummaries(groupId, handlers, useRequestHeaderV3);
                 case DELETE -> coalesceDeletes(groupId, handlers);
-                case INITIALIZE -> coalesceInitializations(groupId, handlers);
+                case INITIALIZE -> coalesceInitializations(groupId, handlers, useRequestHeaderV3);
                 default -> throw new RuntimeException("Unknown rpc type: " + rpcType);
             };
         }
@@ -1811,7 +1811,7 @@ public class PersisterStateManager {
                     .toList()));
         }
 
-        private static AbstractRequest.Builder<? extends AbstractRequest> coalesceInitializations(String groupId, List<? extends PersisterStateManagerHandler> handlers) {
+        private static AbstractRequest.Builder<? extends AbstractRequest> coalesceInitializations(String groupId, List<? extends PersisterStateManagerHandler> handlers, boolean useRequestHeaderV3) {
             Map<Uuid, List<InitializeShareGroupStateRequestData.PartitionData>> partitionData = new HashMap<>();
             handlers.forEach(persHandler -> {
                 assert persHandler instanceof InitializeStateHandler;
@@ -1831,7 +1831,9 @@ public class PersisterStateManager {
                     .map(entry -> new InitializeShareGroupStateRequestData.InitializeStateData()
                         .setTopicId(entry.getKey())
                         .setPartitions(entry.getValue()))
-                    .toList()));
+                    .toList()),
+                useRequestHeaderV3
+            );
         }
     }
 }

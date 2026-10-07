@@ -4909,6 +4909,85 @@ class PersisterStateManagerTest {
         }
     }
 
+    @ParameterizedTest
+    @ValueSource(booleans = {true, false})
+    public void testInitializeStateRequestVersionGatedByRequestHeaderV3Supported(boolean requestHeaderV3Supported) {
+        MockClient client = new MockClient(MOCK_TIME);
+
+        String groupId = "group1";
+        Uuid topicId = Uuid.randomUuid();
+        int partition = 10;
+        int stateEpoch = 1;
+        long startOffset = 10;
+
+        Node coordinatorNode = new Node(1, HOST, PORT);
+
+        AtomicReference<Short> requestVersion = new AtomicReference<>();
+        client.prepareResponseFrom(body -> {
+            requestVersion.set(body.version());
+            return body instanceof InitializeShareGroupStateRequest;
+        }, new InitializeShareGroupStateResponse(
+            new InitializeShareGroupStateResponseData()
+                .setResults(List.of(
+                    new InitializeShareGroupStateResponseData.InitializeStateResult()
+                        .setTopicId(topicId)
+                        .setPartitions(List.of(
+                            new InitializeShareGroupStateResponseData.PartitionResult()
+                                .setPartition(partition)
+                                .setErrorCode(Errors.NONE.code())
+                                .setErrorMessage("")
+                        ))
+                ))
+        ), coordinatorNode);
+
+        ShareCoordinatorMetadataCacheHelper cacheHelper = getCoordinatorCacheHelper(coordinatorNode, requestHeaderV3Supported);
+
+        PersisterStateManager stateManager = PersisterStateManagerBuilder.builder()
+            .withKafkaClient(client)
+            .withTimer(mockTimer)
+            .withCacheHelper(cacheHelper)
+            .build();
+
+        stateManager.start();
+
+        CompletableFuture<InitializeShareGroupStateResponse> future = new CompletableFuture<>();
+
+        PersisterStateManager.InitializeStateHandler handler = stateManager.new InitializeStateHandler(
+            groupId,
+            topicId,
+            partition,
+            stateEpoch,
+            startOffset,
+            future,
+            REQUEST_BACKOFF_MS,
+            REQUEST_BACKOFF_MAX_MS,
+            MAX_RPC_RETRY_ATTEMPTS
+        );
+
+        stateManager.enqueue(handler);
+
+        try {
+            handler.result().get();
+        } catch (Exception e) {
+            fail("Failed to get result from future", e);
+        }
+
+        short expectedVersion = requestHeaderV3Supported
+            ? ApiKeys.INITIALIZE_SHARE_GROUP_STATE.latestVersion()
+            : (short) 0;
+        assertEquals(expectedVersion, requestVersion.get());
+
+        short expectedHeaderVersion = requestHeaderV3Supported ? (short) 3 : (short) 2;
+        assertEquals(expectedHeaderVersion, ApiKeys.INITIALIZE_SHARE_GROUP_STATE.requestHeaderVersion(requestVersion.get()));
+
+        try {
+            // Stopping the state manager
+            stateManager.stop();
+        } catch (Exception e) {
+            fail("Failed to stop state manager", e);
+        }
+    }
+
     @Test
     public void testInitializeStateRequestWithRetryAndCoordinatorNodeLookup() {
         MockClient client = new MockClient(MOCK_TIME);
