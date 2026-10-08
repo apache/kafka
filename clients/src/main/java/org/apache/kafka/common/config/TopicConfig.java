@@ -234,7 +234,7 @@ public class TopicConfig {
         "This ensures that a majority of replicas must persist a write before it's considered successful by the producer and it's visible to consumers." +
         "<p>Note that the effective minimum ISR bound above applies regardless of whether the Eligible Leader Replicas feature is enabled; " +
         "however, when the Eligible Leader Replicas feature is enabled, additional configuration rules apply to this setting " +
-        "(for example, it must be set at the cluster level). Please refer to <a href=\"https://kafka.apache.org/documentation/#eligible_leader_replicas\">the ELR section</a> for more info.</p>";
+        "(for example, it cannot be set for individual brokers). Please refer to <a href=\"https://kafka.apache.org/documentation/#eligible_leader_replicas\">the ELR section</a> for more info.</p>";
 
     public static final String COMPRESSION_TYPE_CONFIG = "compression.type";
     public static final String COMPRESSION_TYPE_DOC = "Specify the final compression type for a given topic. " +
