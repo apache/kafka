@@ -597,7 +597,7 @@ public class KafkaConsumerTest {
         initMetadata(client, Map.of(topic, 1));
         consumer = newConsumer(groupProtocol, time, client, subscription, metadata, assignor,
                 true, groupId, groupInstanceId, Optional.of(deserializer), false);
-        consumer.setRebalanceListener(getConsumerRebalanceListener(consumer));
+        consumer.setRebalanceListener(getRebalanceListener(consumer));
         consumer.subscribe(Set.of(topic));
         prepareRebalance(client, node, assignor, List.of(tp), null);
         consumer.updateAssignmentMetadataIfNeeded(time.timer(Long.MAX_VALUE));
@@ -983,7 +983,7 @@ public class KafkaConsumerTest {
         consumer = newConsumer(groupProtocol, time, client, subscription, metadata, assignor, false, groupInstanceId);
 
         // Initial subscription and rebalance assigning tp0 and t2p0.
-        consumer.setRebalanceListener(getConsumerRebalanceListener(consumer));
+        consumer.setRebalanceListener(getRebalanceListener(consumer));
         consumer.subscribe(Arrays.asList(topic, topic2));
         Node coordinator = prepareRebalance(client, node, Set.of(topic, topic2), assignor, Arrays.asList(tp0, t2p0), null);
         consumer.updateAssignmentMetadataIfNeeded(time.timer(Long.MAX_VALUE));
@@ -995,7 +995,7 @@ public class KafkaConsumerTest {
         assertEquals(Set.of(tp0), consumer.paused());
 
         // Change the subscription so that t2p0 is revoked while tp0 is retained and t3p0 is added.
-        consumer.setRebalanceListener(getConsumerRebalanceListener(consumer));
+        consumer.setRebalanceListener(getRebalanceListener(consumer));
         consumer.subscribe(Arrays.asList(topic, topic3));
         prepareRebalance(client, node, Set.of(topic, topic3), assignor, Arrays.asList(tp0, t3p0), coordinator);
         consumer.updateAssignmentMetadataIfNeeded(time.timer(Long.MAX_VALUE));
@@ -1072,7 +1072,7 @@ public class KafkaConsumerTest {
 
         consumer = newConsumer(groupProtocol, time, client, subscription, metadata, assignor, true, groupInstanceId);
 
-        consumer.setRebalanceListener(getConsumerRebalanceListener(consumer));
+        consumer.setRebalanceListener(getRebalanceListener(consumer));
         consumer.subscribe(Set.of(topic));
         Node coordinator = prepareRebalance(client, node, assignor, List.of(tp0), null);
 
@@ -1104,7 +1104,7 @@ public class KafkaConsumerTest {
         Node node = metadata.fetch().nodes().get(0);
 
         consumer = newConsumer(groupProtocol, time, client, subscription, metadata, assignor, true, groupInstanceId);
-        consumer.setRebalanceListener(getConsumerRebalanceListener(consumer));
+        consumer.setRebalanceListener(getRebalanceListener(consumer));
         consumer.subscribe(Set.of(topic));
         Node coordinator = prepareRebalance(client, node, assignor, List.of(tp0), null);
 
@@ -1137,7 +1137,7 @@ public class KafkaConsumerTest {
 
         client.prepareResponseFrom(FindCoordinatorResponse.prepareResponse(Errors.NONE, groupId, node), node);
         consumer = newConsumer(groupProtocol, time, client, subscription, metadata, assignor, true, groupInstanceId);
-        consumer.setRebalanceListener(getConsumerRebalanceListener(consumer));
+        consumer.setRebalanceListener(getRebalanceListener(consumer));
         consumer.subscribe(Set.of(topic));
         // Since we would enable the heartbeat thread after received join-response which could
         // send the sync-group on behalf of the consumer if it is enqueued, we may still complete
@@ -1514,7 +1514,7 @@ public class KafkaConsumerTest {
         Node node = metadata.fetch().nodes().get(0);
 
         consumer = newConsumer(groupProtocol, time, client, subscription, metadata, assignor, true, groupInstanceId);
-        consumer.setRebalanceListener(getConsumerRebalanceListener(consumer));
+        consumer.setRebalanceListener(getRebalanceListener(consumer));
         consumer.subscribe(Set.of(topic));
         Node coordinator = prepareRebalance(client, node, assignor, List.of(tp0), null);
 
@@ -1555,7 +1555,7 @@ public class KafkaConsumerTest {
         consumer = newConsumer(groupProtocol, time, client, subscription, metadata, assignor, true, groupInstanceId);
         prepareRebalance(client, node, Set.of(topic), assignor, List.of(tp0), null);
 
-        consumer.setRebalanceListener(getConsumerRebalanceListener(consumer));
+        consumer.setRebalanceListener(getRebalanceListener(consumer));
         consumer.subscribe(Pattern.compile(topic));
 
         client.prepareMetadataUpdate(RequestTestUtils.metadataUpdateWithIds(1, partitionCounts, topicIds));
@@ -1586,7 +1586,7 @@ public class KafkaConsumerTest {
         consumer = newConsumer(groupProtocol, time, client, subscription, metadata, assignor, false, groupInstanceId);
 
         Node coordinator = prepareRebalance(client, node, Set.of(topic), assignor, List.of(tp0), null);
-        consumer.setRebalanceListener(getConsumerRebalanceListener(consumer));
+        consumer.setRebalanceListener(getRebalanceListener(consumer));
         consumer.subscribe(Pattern.compile(topic));
 
         consumer.updateAssignmentMetadataIfNeeded(time.timer(Long.MAX_VALUE));
@@ -1594,7 +1594,7 @@ public class KafkaConsumerTest {
 
         assertEquals(Set.of(topic), consumer.subscription());
 
-        consumer.setRebalanceListener(getConsumerRebalanceListener(consumer));
+        consumer.setRebalanceListener(getRebalanceListener(consumer));
         consumer.subscribe(Pattern.compile(otherTopic));
 
         client.prepareMetadataUpdate(RequestTestUtils.metadataUpdateWithIds(1, partitionCounts, topicIds));
@@ -1615,7 +1615,7 @@ public class KafkaConsumerTest {
         Node node = metadata.fetch().nodes().get(0);
 
         consumer = newConsumer(groupProtocol, time, client, subscription, metadata, assignor, true, groupInstanceId);
-        consumer.setRebalanceListener(getConsumerRebalanceListener(consumer));
+        consumer.setRebalanceListener(getRebalanceListener(consumer));
         consumer.subscribe(Set.of(topic));
         prepareRebalance(client, node, assignor, List.of(tp0), null);
 
@@ -1663,7 +1663,7 @@ public class KafkaConsumerTest {
         Node node = metadata.fetch().nodes().get(0);
 
         consumer = newConsumer(groupProtocol, time, client, subscription, metadata, assignor, false, groupInstanceId);
-        consumer.setRebalanceListener(getConsumerRebalanceListener(consumer));
+        consumer.setRebalanceListener(getRebalanceListener(consumer));
         consumer.subscribe(Set.of(topic));
         prepareRebalance(client, node, assignor, List.of(tp0), null);
 
@@ -1693,7 +1693,7 @@ public class KafkaConsumerTest {
         Node node = metadata.fetch().nodes().get(0);
 
         consumer = newConsumer(groupProtocol, time, client, subscription, metadata, assignor, true, groupInstanceId);
-        consumer.setRebalanceListener(getConsumerRebalanceListener(consumer));
+        consumer.setRebalanceListener(getRebalanceListener(consumer));
         consumer.subscribe(List.of(topic));
 
         prepareRebalance(client, node, assignor, List.of(tp0), null);
@@ -1738,7 +1738,7 @@ public class KafkaConsumerTest {
         consumer = newConsumer(groupProtocol, time, client, subscription, metadata, assignor, true, groupInstanceId);
 
         // initial subscription
-        consumer.setRebalanceListener(getConsumerRebalanceListener(consumer));
+        consumer.setRebalanceListener(getRebalanceListener(consumer));
         consumer.subscribe(Arrays.asList(topic, topic2));
 
         // verify that subscription has changed but assignment is still unchanged
@@ -1779,7 +1779,7 @@ public class KafkaConsumerTest {
         assertEquals(10L, consumer.position(t2p0));
 
         // subscription change
-        consumer.setRebalanceListener(getConsumerRebalanceListener(consumer));
+        consumer.setRebalanceListener(getRebalanceListener(consumer));
         consumer.subscribe(Arrays.asList(topic, topic3));
 
         // verify that subscription has changed but assignment is still unchanged
@@ -1855,7 +1855,7 @@ public class KafkaConsumerTest {
 
         consumer = newConsumer(groupProtocol, time, client, subscription, metadata, assignor, false, groupInstanceId);
 
-        initializeSubscriptionWithSingleTopic(consumer, getConsumerRebalanceListener(consumer));
+        initializeSubscriptionWithSingleTopic(consumer, getRebalanceListener(consumer));
 
         // mock rebalance responses
         prepareRebalance(client, node, assignor, List.of(tp0), null);
@@ -1870,7 +1870,7 @@ public class KafkaConsumerTest {
         consumer.poll(Duration.ZERO);
 
         // subscription change
-        consumer.setRebalanceListener(getConsumerRebalanceListener(consumer));
+        consumer.setRebalanceListener(getRebalanceListener(consumer));
         consumer.subscribe(Set.of(topic2));
 
         // verify that subscription has changed but assignment is still unchanged
@@ -1917,7 +1917,7 @@ public class KafkaConsumerTest {
         // Create consumer with auto-commit enabled
         consumer = newConsumer(groupProtocol, time, client, subscription, metadata, assignor, true, groupInstanceId);
 
-        initializeSubscriptionWithSingleTopic(consumer, getConsumerRebalanceListener(consumer));
+        initializeSubscriptionWithSingleTopic(consumer, getRebalanceListener(consumer));
 
         // Mock rebalance responses
         prepareRebalance(client, node, assignor, List.of(tp0), null);
@@ -1970,7 +1970,7 @@ public class KafkaConsumerTest {
         CooperativeStickyAssignor assignor = new CooperativeStickyAssignor();
         consumer = newConsumer(groupProtocol, time, client, subscription, metadata, assignor, false, groupInstanceId);
 
-        initializeSubscriptionWithSingleTopic(consumer, getExceptionConsumerRebalanceListener());
+        initializeSubscriptionWithSingleTopic(consumer, getExceptionRebalanceListener());
 
         prepareRebalance(client, node, assignor, List.of(tp0), null);
 
@@ -1995,7 +1995,7 @@ public class KafkaConsumerTest {
         CooperativeStickyAssignor assignor = new CooperativeStickyAssignor();
         consumer = newConsumer(groupProtocol, time, client, subscription, metadata, assignor, false, groupInstanceId);
 
-        initializeSubscriptionWithSingleTopic(consumer, getExceptionConsumerRebalanceListener());
+        initializeSubscriptionWithSingleTopic(consumer, getExceptionRebalanceListener());
         Node coordinator = prepareRebalance(client, node, assignor, List.of(tp0), null);
 
         RuntimeException assignException = assertThrows(RuntimeException.class,
@@ -2408,7 +2408,7 @@ public class KafkaConsumerTest {
         Node node = metadata.fetch().nodes().get(0);
 
         consumer = newConsumer(groupProtocol, time, client, subscription, metadata, assignor, false, groupInstanceId);
-        consumer.setRebalanceListener(getConsumerRebalanceListener(consumer));
+        consumer.setRebalanceListener(getRebalanceListener(consumer));
         consumer.subscribe(Set.of(topic));
         client.prepareResponseFrom(FindCoordinatorResponse.prepareResponse(Errors.NONE, groupId, node), node);
         Node coordinator = new GroupCoordinatorNode(node.id(), node.host(), node.port());
@@ -2479,7 +2479,7 @@ public class KafkaConsumerTest {
         Node node = metadata.fetch().nodes().get(0);
 
         final KafkaConsumer<String, String> consumer = newConsumer(groupProtocol, time, client, subscription, metadata, assignor, false, Optional.empty());
-        consumer.setRebalanceListener(getConsumerRebalanceListener(consumer));
+        consumer.setRebalanceListener(getRebalanceListener(consumer));
         consumer.subscribe(Set.of(topic));
         Node coordinator = prepareRebalance(client, node, assignor, List.of(tp0), null);
 
@@ -2766,7 +2766,7 @@ public class KafkaConsumerTest {
 
         KafkaConsumer<String, String> consumer = newConsumer(groupProtocol, time, client, subscription, metadata, assignor, true, groupInstanceId);
 
-        consumer.setRebalanceListener(getExceptionConsumerRebalanceListener());
+        consumer.setRebalanceListener(getExceptionRebalanceListener());
         consumer.subscribe(Set.of(topic));
         Node coordinator = new GroupCoordinatorNode(node.id(), node.host(), node.port());
 
@@ -2803,7 +2803,7 @@ public class KafkaConsumerTest {
 
         initMetadata(client, Map.of(topic, 1, topic2, 1, topic3, 1));
 
-        consumer.setRebalanceListener(getConsumerRebalanceListener(consumer));
+        consumer.setRebalanceListener(getRebalanceListener(consumer));
         consumer.subscribe(Arrays.asList(topic, topic2));
 
         Node node = metadata.fetch().nodes().get(0);
@@ -2850,7 +2850,7 @@ public class KafkaConsumerTest {
         client.respondFrom(fetchResponse(fetches1), node);
 
         // subscription change
-        consumer.setRebalanceListener(getConsumerRebalanceListener(consumer));
+        consumer.setRebalanceListener(getRebalanceListener(consumer));
         consumer.subscribe(Arrays.asList(topic, topic3));
 
         // verify that subscription has changed but assignment is still unchanged
@@ -2973,7 +2973,7 @@ public class KafkaConsumerTest {
         assertEquals(JoinGroupRequest.UNKNOWN_GENERATION_ID, groupMetadataOnStart.generationId());
         assertEquals(groupInstanceId, groupMetadataOnStart.groupInstanceId());
 
-        consumer.setRebalanceListener(getConsumerRebalanceListener(consumer));
+        consumer.setRebalanceListener(getRebalanceListener(consumer));
         consumer.subscribe(Set.of(topic));
         prepareRebalance(client, node, assignor, List.of(tp0), null);
 
@@ -3290,7 +3290,7 @@ public class KafkaConsumerTest {
         return consumerWithPendingAuthenticationError(groupProtocol, time);
     }
 
-    private RebalanceListener getConsumerRebalanceListener(final KafkaConsumer<?, ?> consumer) {
+    private RebalanceListener getRebalanceListener(final KafkaConsumer<?, ?> consumer) {
         return new RebalanceListener() {
             @Override
             public void onPartitionsRevoked(Collection<TopicPartition> partitions, RebalanceConsumer rebalanceConsumer) {
@@ -3305,7 +3305,7 @@ public class KafkaConsumerTest {
         };
     }
 
-    private RebalanceListener getExceptionConsumerRebalanceListener() {
+    private RebalanceListener getExceptionRebalanceListener() {
         return new RebalanceListener() {
             @Override
             public void onPartitionsRevoked(Collection<TopicPartition> partitions, RebalanceConsumer rebalanceConsumer) {
@@ -3710,7 +3710,7 @@ public class KafkaConsumerTest {
         client.prepareMetadataUpdate(updateResponse);
 
         KafkaConsumer<String, String> consumer = newConsumer(groupProtocol, time, client, subscription, metadata, assignor, true, groupInstanceId);
-        consumer.setRebalanceListener(getConsumerRebalanceListener(consumer));
+        consumer.setRebalanceListener(getRebalanceListener(consumer));
         consumer.subscribe(Set.of(invalidTopicName));
 
         if (groupProtocol == GroupProtocol.CONSUMER) {
