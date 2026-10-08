@@ -21,6 +21,7 @@ import org.apache.kafka.clients.consumer.ConsumerRecords;
 import org.apache.kafka.clients.consumer.KafkaConsumer;
 import org.apache.kafka.clients.consumer.OffsetAndMetadata;
 import org.apache.kafka.clients.consumer.OffsetCommitCallback;
+import org.apache.kafka.clients.consumer.RebalanceConsumer;
 import org.apache.kafka.clients.consumer.RebalanceListener;
 import org.apache.kafka.common.TopicPartition;
 import org.apache.kafka.common.header.internals.RecordHeaders;
@@ -82,6 +83,7 @@ import static org.mockito.Mockito.doAnswer;
 import static org.mockito.Mockito.doThrow;
 import static org.mockito.Mockito.times;
 import static org.mockito.Mockito.verify;
+import static org.mockito.Mockito.verifyNoInteractions;
 import static org.mockito.Mockito.when;
 
 @SuppressWarnings("unchecked")
@@ -127,6 +129,8 @@ public class WorkerSinkTaskThreadedTest {
     private ConnectMetrics metrics;
     @Mock
     private SinkTask sinkTask;
+    @Mock
+    private RebalanceConsumer rebalanceConsumer;
     private final ArgumentCaptor<WorkerSinkTaskContext> sinkTaskContext = ArgumentCaptor.forClass(WorkerSinkTaskContext.class);
     @Mock
     private PluginClassLoader pluginLoader;
@@ -187,6 +191,7 @@ public class WorkerSinkTaskThreadedTest {
     @AfterEach
     public void tearDown() {
         if (metrics != null) metrics.stop();
+        verifyNoInteractions(rebalanceConsumer);
     }
 
     @Test
@@ -593,7 +598,7 @@ public class WorkerSinkTaskThreadedTest {
         // Stub out all the consumer stream/iterator responses, which we just want to verify occur,
         // but don't care about the exact details here.
         when(consumer.poll(any(Duration.class))).thenAnswer(invocation -> {
-            rebalanceListener.getValue().onPartitionsAssigned(INITIAL_ASSIGNMENT, null);
+            rebalanceListener.getValue().onPartitionsAssigned(INITIAL_ASSIGNMENT, rebalanceConsumer);
             return ConsumerRecords.empty();
         }).thenAnswer((Answer<ConsumerRecords<byte[], byte[]>>) invocation -> {
             // "Sleep" so time will progress
@@ -619,14 +624,14 @@ public class WorkerSinkTaskThreadedTest {
         offsets.put(TOPIC_PARTITION, startOffset);
 
         when(consumer.poll(any(Duration.class))).thenAnswer(invocation -> {
-            rebalanceListener.getValue().onPartitionsAssigned(INITIAL_ASSIGNMENT, null);
+            rebalanceListener.getValue().onPartitionsAssigned(INITIAL_ASSIGNMENT, rebalanceConsumer);
             return ConsumerRecords.empty();
         }).thenAnswer((Answer<ConsumerRecords<byte[], byte[]>>) invocation -> {
             // "Sleep" so time will progress
             time.sleep(1L);
 
             sinkTaskContext.getValue().offset(offsets);
-            rebalanceListener.getValue().onPartitionsAssigned(partitions, null);
+            rebalanceListener.getValue().onPartitionsAssigned(partitions, rebalanceConsumer);
 
             TopicPartition topicPartition = new TopicPartition(TOPIC, PARTITION);
             ConsumerRecord<byte[], byte[]> consumerRecord = new ConsumerRecord<>(
