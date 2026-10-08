@@ -22,15 +22,12 @@ import org.apache.kafka.common.config.SaslConfigs
 import org.apache.kafka.common.config.internals.BrokerSecurityConfigs
 import org.apache.kafka.common.security.auth.SecurityProtocol
 import org.apache.kafka.common.security.oauthbearer.{OAuthBearerLoginCallbackHandler, OAuthBearerLoginModule, OAuthBearerValidatorCallbackHandler}
-import org.apache.kafka.common.utils.Utils
+import org.junit.jupiter.api.io.TempDir
 import org.junit.jupiter.api.{AfterEach, BeforeEach, TestInfo}
 
 import java.io.File
-import java.nio.ByteBuffer
-import java.nio.channels.FileChannel
-import java.nio.file.StandardOpenOption
+import java.nio.file.{Files, Path}
 import java.security.PrivateKey
-import java.util
 import java.util.{Base64, Properties}
 
 /**
@@ -56,9 +53,15 @@ abstract class AbstractClientOAuthIntegrationTest extends IntegrationTestHarness
   protected def clientCredentialsClientId: String
   protected def clientCredentialsClientSecret: String
 
-  // Called before the brokers are configured, so the endpoint urls above must be available afterwards.
   protected def startOAuthServer(): Unit = {}
   protected def stopOAuthServer(): Unit = {}
+
+  protected var tempDir: Path = _
+
+  @BeforeEach
+  def initTempDir(@TempDir dir: Path): Unit = {
+    tempDir = dir
+  }
 
   @BeforeEach
   override def setUp(testInfo: TestInfo): Unit = {
@@ -110,18 +113,6 @@ abstract class AbstractClientOAuthIntegrationTest extends IntegrationTestHarness
     configs
   }
 
-  def generatePrivateKeyFile(): File = {
-    val file = File.createTempFile("private-", ".key")
-    val bytes = Base64.getEncoder.encode(privateKey.getEncoded)
-    var channel: FileChannel = null
-
-    try {
-      channel = FileChannel.open(file.toPath, util.EnumSet.of(StandardOpenOption.WRITE))
-      Utils.writeFully(channel, ByteBuffer.wrap(bytes))
-    } finally {
-      channel.close()
-    }
-
-    file
-  }
+  def generatePrivateKeyFile(): File =
+    Files.write(Files.createTempFile(tempDir, "private-", ".key"), Base64.getEncoder.encode(privateKey.getEncoded)).toFile
 }

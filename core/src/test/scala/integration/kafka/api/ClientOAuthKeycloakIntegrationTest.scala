@@ -22,7 +22,6 @@ import org.apache.kafka.clients.admin.NewTopic
 import org.apache.kafka.clients.producer.ProducerRecord
 import org.apache.kafka.common.config.SaslConfigs
 import org.apache.kafka.common.config.internals.BrokerSecurityConfigs
-import org.apache.kafka.test.TestUtils
 import org.jose4j.jwk.RsaJsonWebKey
 import org.jose4j.jws.{AlgorithmIdentifiers, JsonWebSignature}
 import org.jose4j.jwt.JwtClaims
@@ -35,6 +34,7 @@ import org.keycloak.admin.client.Keycloak
 import org.keycloak.representations.idm.{ClientRepresentation, ProtocolMapperRepresentation, RealmRepresentation}
 import org.testcontainers.DockerClientFactory
 
+import java.nio.file.Files
 import java.security.{KeyPair, KeyPairGenerator, PrivateKey}
 import java.security.interfaces.RSAPublicKey
 import java.util.{Collections, Properties}
@@ -68,7 +68,7 @@ class ClientOAuthKeycloakIntegrationTest extends AbstractClientOAuthIntegrationT
 
   // Keycloak rejects a re-used client assertion jti, so every client needs its own pre-signed assertion file.
   def newAssertionFileConfigs(): Properties = {
-    val assertionFile = TestUtils.tempFile(signAssertion())
+    val assertionFile = Files.writeString(Files.createTempFile(tempDir, "assertion-", ".jwt"), signAssertion()).toFile
     val allowedFiles = System.getProperty(BrokerSecurityConfigs.ALLOWED_SASL_OAUTHBEARER_FILES_CONFIG, "")
     System.setProperty(BrokerSecurityConfigs.ALLOWED_SASL_OAUTHBEARER_FILES_CONFIG,
       if (allowedFiles.isEmpty) assertionFile.getAbsolutePath else s"$allowedFiles,${assertionFile.getAbsolutePath}")
