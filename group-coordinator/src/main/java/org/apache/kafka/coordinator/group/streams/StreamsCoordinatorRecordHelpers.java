@@ -18,6 +18,7 @@ package org.apache.kafka.coordinator.group.streams;
 
 import org.apache.kafka.common.message.StreamsGroupHeartbeatRequestData;
 import org.apache.kafka.coordinator.common.runtime.CoordinatorRecord;
+import org.apache.kafka.coordinator.group.api.streams.assignor.AssignmentConfigs;
 import org.apache.kafka.coordinator.group.generated.StreamsGroupCurrentMemberAssignmentKey;
 import org.apache.kafka.coordinator.group.generated.StreamsGroupCurrentMemberAssignmentValue;
 import org.apache.kafka.coordinator.group.generated.StreamsGroupMemberMetadataKey;
@@ -30,6 +31,7 @@ import org.apache.kafka.coordinator.group.generated.StreamsGroupTargetAssignment
 import org.apache.kafka.coordinator.group.generated.StreamsGroupTargetAssignmentMetadataValue;
 import org.apache.kafka.coordinator.group.generated.StreamsGroupTopologyKey;
 import org.apache.kafka.coordinator.group.generated.StreamsGroupTopologyValue;
+import org.apache.kafka.coordinator.group.streams.assignor.AssignmentConfigsImpl;
 import org.apache.kafka.server.common.ApiMessageAndVersion;
 
 import java.util.ArrayList;
@@ -101,18 +103,19 @@ public class StreamsCoordinatorRecordHelpers {
         int newGroupEpoch,
         long metadataHash,
         int validatedTopologyEpoch,
-        Map<String, String> assignmentConfigs,
+        AssignmentConfigs assignmentConfigs,
         int storedDescriptionTopologyEpoch,
         int failedDescriptionTopologyEpoch
     ) {
         Objects.requireNonNull(groupId, "groupId should not be null here");
         Objects.requireNonNull(assignmentConfigs, "assignmentConfigs should not be null here");
 
-        List<StreamsGroupMetadataValue.LastAssignmentConfig> assignmentConfigList = assignmentConfigs.entrySet().stream()
-            .map(entry -> new StreamsGroupMetadataValue.LastAssignmentConfig()
-                .setKey(entry.getKey())
-                .setValue(entry.getValue()))
-            .toList();
+        List<StreamsGroupMetadataValue.LastAssignmentConfig> assignmentConfigList =
+            AssignmentConfigsImpl.toMap(assignmentConfigs).entrySet().stream()
+                .map(entry -> new StreamsGroupMetadataValue.LastAssignmentConfig()
+                    .setKey(entry.getKey())
+                    .setValue(entry.getValue()))
+                .toList();
 
         return CoordinatorRecord.record(
             new StreamsGroupMetadataKey()
