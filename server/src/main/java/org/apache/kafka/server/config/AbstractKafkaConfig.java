@@ -161,6 +161,22 @@ public abstract class AbstractKafkaConfig extends AbstractConfig {
         return interBrokerListenerNameAndSecurityProtocol().getValue();
     }
 
+    public ListenerName mirrorAdminListenerName() {
+        String mirrorAdminListenerName = getString(ReplicationConfigs.MIRROR_ADMIN_LISTENER_NAME_CONFIG);
+        if (mirrorAdminListenerName == null) {
+            return interBrokerListenerName();
+        }
+
+        ListenerName listenerName = ListenerName.normalised(mirrorAdminListenerName);
+        SecurityProtocol securityProtocol = effectiveListenerSecurityProtocolMap().get(listenerName);
+        if (securityProtocol == null) {
+            throw new ConfigException("Listener with name " + listenerName.value() + " defined in " +
+                    ReplicationConfigs.MIRROR_ADMIN_LISTENER_NAME_CONFIG + " not found in " +
+                    SocketServerConfigs.LISTENER_SECURITY_PROTOCOL_MAP_CONFIG + ".");
+        }
+        return listenerName;
+    }
+
     public int initialRegistrationTimeoutMs() {
         return getInt(KRaftConfigs.INITIAL_BROKER_REGISTRATION_TIMEOUT_MS_CONFIG);
     }
@@ -914,6 +930,11 @@ public abstract class AbstractKafkaConfig extends AbstractConfig {
 
     public String saslMechanismInterBrokerProtocol() {
         return getString(BrokerSecurityConfigs.SASL_MECHANISM_INTER_BROKER_PROTOCOL_CONFIG);
+    }
+
+    public String saslMechanismMirrorAdminProtocol() {
+        String configured = getString(BrokerSecurityConfigs.SASL_MECHANISM_MIRROR_ADMIN_PROTOCOL_CONFIG);
+        return configured != null ? configured : saslMechanismInterBrokerProtocol();
     }
 
     // ********* Fetch Configuration **********
