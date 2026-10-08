@@ -612,7 +612,9 @@ class StreamsGroupTopologyDescriptionRequestTest(cluster: ClusterInstance) exten
       assertEquals(Errors.NONE.code(), classicJoin(groupId).errorCode())
       assertEquals(1, FailingTopologyDescriptionPlugin.deleteTopologyAttempts(groupId))
       assertEquals(Errors.GROUP_ID_NOT_FOUND.code(), streamsGroupDescribe(List(groupId)).head.errorCode())
-      assertEquals("consumer", describeGroups(List(groupId)).head.protocolType())
+      val describedClassicGroup = describeGroups(List(groupId)).head
+      assertEquals(Errors.NONE.code(), describedClassicGroup.errorCode())
+      assertEquals("consumer", describedClassicGroup.protocolType())
     } finally {
       FailingTopologyDescriptionPlugin.reset()
       admin.close()
@@ -681,7 +683,9 @@ class StreamsGroupTopologyDescriptionRequestTest(cluster: ClusterInstance) exten
       assertEquals(Errors.MEMBER_ID_REQUIRED.code(), joinResponse.errorCode())
       assertEquals(Errors.NONE.code(), sendJoinRequest(groupId = groupId, memberId = joinResponse.memberId()).errorCode())
       assertEquals(Errors.GROUP_ID_NOT_FOUND.code(), streamsGroupDescribe(List(groupId)).head.errorCode())
-      assertEquals("consumer", describeGroups(List(groupId)).head.protocolType())
+      val describedClassicGroup = describeGroups(List(groupId)).head
+      assertEquals(Errors.NONE.code(), describedClassicGroup.errorCode())
+      assertEquals("consumer", describedClassicGroup.protocolType())
     } finally {
       FailingTopologyDescriptionPlugin.reset()
       admin.close()
