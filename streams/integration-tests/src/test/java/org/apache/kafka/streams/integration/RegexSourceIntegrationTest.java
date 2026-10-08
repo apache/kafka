@@ -183,7 +183,7 @@ public class RegexSourceIntegrationTest {
                     return new KafkaConsumer<byte[], byte[]>(config, new ByteArrayDeserializer(), new ByteArrayDeserializer()) {
                         @Override
                         public void setRebalanceListener(final RebalanceListener listener) {
-                            super.setRebalanceListener(new TheConsumerRebalanceListener(assignedTopics, listener));
+                            super.setRebalanceListener(new TheRebalanceListener(assignedTopics, listener));
                         }
                     };
 
@@ -282,7 +282,7 @@ public class RegexSourceIntegrationTest {
                     return new KafkaConsumer<>(config, new ByteArrayDeserializer(), new ByteArrayDeserializer()) {
                         @Override
                         public void setRebalanceListener(final RebalanceListener listener) {
-                            super.setRebalanceListener(new TheConsumerRebalanceListener(assignedTopics, listener));
+                            super.setRebalanceListener(new TheRebalanceListener(assignedTopics, listener));
                         }
                     };
                 }
@@ -341,7 +341,7 @@ public class RegexSourceIntegrationTest {
                     return new KafkaConsumer<byte[], byte[]>(config, new ByteArrayDeserializer(), new ByteArrayDeserializer()) {
                         @Override
                         public void setRebalanceListener(final RebalanceListener listener) {
-                            super.setRebalanceListener(new TheConsumerRebalanceListener(assignedTopics, listener));
+                            super.setRebalanceListener(new TheRebalanceListener(assignedTopics, listener));
                         }
                     };
                 }
@@ -454,7 +454,7 @@ public class RegexSourceIntegrationTest {
                     return new KafkaConsumer<byte[], byte[]>(config, new ByteArrayDeserializer(), new ByteArrayDeserializer()) {
                         @Override
                         public void setRebalanceListener(final RebalanceListener listener) {
-                            super.setRebalanceListener(new TheConsumerRebalanceListener(leaderAssignment, listener));
+                            super.setRebalanceListener(new TheRebalanceListener(leaderAssignment, listener));
                         }
                     };
 
@@ -466,7 +466,7 @@ public class RegexSourceIntegrationTest {
                     return new KafkaConsumer<byte[], byte[]>(config, new ByteArrayDeserializer(), new ByteArrayDeserializer()) {
                         @Override
                         public void setRebalanceListener(final RebalanceListener listener) {
-                            super.setRebalanceListener(new TheConsumerRebalanceListener(followerAssignment, listener));
+                            super.setRebalanceListener(new TheRebalanceListener(followerAssignment, listener));
                         }
                     };
 
@@ -531,11 +531,11 @@ public class RegexSourceIntegrationTest {
         assertTrue(expectError.get());
     }
 
-    private static class TheConsumerRebalanceListener implements RebalanceListener {
+    private static class TheRebalanceListener implements RebalanceListener {
         private final List<String> assignedTopics;
         private final RebalanceListener listener;
 
-        TheConsumerRebalanceListener(final List<String> assignedTopics, final RebalanceListener listener) {
+        TheRebalanceListener(final List<String> assignedTopics, final RebalanceListener listener) {
             this.assignedTopics = assignedTopics;
             this.listener = listener;
         }
