@@ -658,10 +658,12 @@ class StreamsGroupTopologyDescriptionRequestTest(cluster: ClusterInstance) exten
 
     try {
       FailingTopologyDescriptionPlugin.reset()
+      // Fail deletes before the group becomes empty: once it is, the cleanup cycle (500 ms) may
+      // run at any moment and would otherwise delete the topology before the join is attempted.
+      FailingTopologyDescriptionPlugin.failDeleteTopologyWith(new RuntimeException("plugin offline"))
       createEmptyStreamsGroupWithStoredTopology(admin, groupId, topicName)
 
       // The plugin cannot delete: the classic join is rejected and the group stays a streams group.
-      FailingTopologyDescriptionPlugin.failDeleteTopologyWith(new RuntimeException("plugin offline"))
       assertEquals(Errors.REBALANCE_IN_PROGRESS.code(), classicJoin(groupId).errorCode())
       assertStillStreamsGroup(groupId)
 
