@@ -16,14 +16,12 @@
  */
 package org.apache.kafka.tools.consumer;
 
-import org.apache.kafka.clients.admin.Admin;
-import org.apache.kafka.clients.admin.NewTopic;
 import org.apache.kafka.clients.consumer.Consumer;
 import org.apache.kafka.clients.consumer.ConsumerRecord;
 import org.apache.kafka.clients.consumer.ConsumerRecords;
+import org.apache.kafka.clients.consumer.GroupProtocol;
 import org.apache.kafka.clients.consumer.KafkaConsumer;
 import org.apache.kafka.clients.consumer.MockConsumer;
-import org.apache.kafka.clients.consumer.RangeAssignor;
 import org.apache.kafka.clients.consumer.internals.AutoOffsetResetStrategy;
 import org.apache.kafka.clients.producer.KafkaProducer;
 import org.apache.kafka.clients.producer.Producer;
@@ -35,8 +33,14 @@ import org.apache.kafka.common.internals.Topic;
 import org.apache.kafka.common.serialization.ByteArrayDeserializer;
 import org.apache.kafka.common.serialization.ByteArraySerializer;
 import org.apache.kafka.common.test.ClusterInstance;
+import org.apache.kafka.common.test.api.ClusterConfigProperty;
 import org.apache.kafka.common.test.api.ClusterTest;
 import org.apache.kafka.common.utils.Time;
+import org.apache.kafka.coordinator.group.generated.ConsumerGroupMemberMetadataKey;
+import org.apache.kafka.coordinator.group.generated.ConsumerGroupMemberMetadataKeyJsonConverter;
+import org.apache.kafka.coordinator.group.generated.ConsumerGroupMemberMetadataValue;
+import org.apache.kafka.coordinator.group.generated.ConsumerGroupMemberMetadataValueJsonConverter;
+import org.apache.kafka.coordinator.group.generated.CoordinatorRecordType;
 import org.apache.kafka.coordinator.group.generated.GroupMetadataKey;
 import org.apache.kafka.coordinator.group.generated.GroupMetadataKeyJsonConverter;
 import org.apache.kafka.coordinator.group.generated.GroupMetadataValue;
@@ -64,26 +68,29 @@ import java.util.HashMap;
 import java.util.List;
 import java.util.Map;
 import java.util.Properties;
-import java.util.Set;
 import java.util.regex.Pattern;
 
 import static org.apache.kafka.clients.CommonClientConfigs.BOOTSTRAP_SERVERS_CONFIG;
 import static org.apache.kafka.clients.consumer.ConsumerConfig.AUTO_OFFSET_RESET_CONFIG;
 import static org.apache.kafka.clients.consumer.ConsumerConfig.EXCLUDE_INTERNAL_TOPICS_CONFIG;
 import static org.apache.kafka.clients.consumer.ConsumerConfig.GROUP_ID_CONFIG;
+import static org.apache.kafka.clients.consumer.ConsumerConfig.GROUP_PROTOCOL_CONFIG;
 import static org.apache.kafka.clients.consumer.ConsumerConfig.ISOLATION_LEVEL_CONFIG;
 import static org.apache.kafka.clients.consumer.ConsumerConfig.KEY_DESERIALIZER_CLASS_CONFIG;
-import static org.apache.kafka.clients.consumer.ConsumerConfig.PARTITION_ASSIGNMENT_STRATEGY_CONFIG;
 import static org.apache.kafka.clients.consumer.ConsumerConfig.VALUE_DESERIALIZER_CLASS_CONFIG;
 import static org.apache.kafka.clients.producer.ProducerConfig.ACKS_CONFIG;
 import static org.apache.kafka.clients.producer.ProducerConfig.ENABLE_IDEMPOTENCE_CONFIG;
 import static org.apache.kafka.clients.producer.ProducerConfig.KEY_SERIALIZER_CLASS_CONFIG;
 import static org.apache.kafka.clients.producer.ProducerConfig.TRANSACTIONAL_ID_CONFIG;
 import static org.apache.kafka.clients.producer.ProducerConfig.VALUE_SERIALIZER_CLASS_CONFIG;
+import static org.apache.kafka.coordinator.group.GroupCoordinatorConfig.OFFSETS_TOPIC_PARTITIONS_CONFIG;
+import static org.apache.kafka.coordinator.group.GroupCoordinatorConfig.OFFSETS_TOPIC_REPLICATION_FACTOR_CONFIG;
 import static org.junit.jupiter.api.Assertions.assertEquals;
+import static org.junit.jupiter.api.Assertions.assertFalse;
 import static org.junit.jupiter.api.Assertions.assertNotNull;
 import static org.junit.jupiter.api.Assertions.assertNull;
 import static org.junit.jupiter.api.Assertions.assertThrows;
+import static org.junit.jupiter.api.Assertions.assertTrue;
 import static org.mockito.ArgumentMatchers.any;
 import static org.mockito.ArgumentMatchers.eq;
 import static org.mockito.Mockito.mock;
@@ -290,124 +297,184 @@ public class ConsoleConsumerTest {
 
     @ClusterTest(brokers = 3)
     public void testTransactionLogMessageFormatter(ClusterInstance cluster) throws Exception {
-        try (Admin admin = cluster.admin()) {
+        cluster.createTopic(topic, 1, (short) 1);
+        produceMessagesWithTxn(cluster);
 
-            NewTopic newTopic = new NewTopic(topic, 1, (short) 1);
-            admin.createTopics(Set.of(newTopic));
-            produceMessagesWithTxn(cluster);
+        String[] transactionLogMessageFormatter = createConsoleConsumerArgs(cluster,
+                Topic.TRANSACTION_STATE_TOPIC_NAME, 
+                "org.apache.kafka.tools.consumer.TransactionLogMessageFormatter");
 
-            String[] transactionLogMessageFormatter = createConsoleConsumerArgs(cluster,
-                    Topic.TRANSACTION_STATE_TOPIC_NAME, 
-                    "org.apache.kafka.tools.consumer.TransactionLogMessageFormatter");
-
-            ConsoleConsumerOptions options = new ConsoleConsumerOptions(transactionLogMessageFormatter);
-            ConsoleConsumer.ConsumerWrapper consumerWrapper = new ConsoleConsumer.ConsumerWrapper(options, createTxnConsumer(cluster));
+        ConsoleConsumerOptions options = new ConsoleConsumerOptions(transactionLogMessageFormatter);
+        ConsoleConsumer.ConsumerWrapper consumerWrapper = new ConsoleConsumer.ConsumerWrapper(options, createTxnConsumer(cluster));
+        
+        try (ByteArrayOutputStream out = new ByteArrayOutputStream();
+             PrintStream output = new PrintStream(out)) {
+            ConsoleConsumer.process(1, options.formatter(), consumerWrapper, output, true);
             
-            try (ByteArrayOutputStream out = new ByteArrayOutputStream();
-                 PrintStream output = new PrintStream(out)) {
-                ConsoleConsumer.process(1, options.formatter(), consumerWrapper, output, true);
-                
-                JsonNode jsonNode = objectMapper.reader().readTree(out.toByteArray());
-                JsonNode keyNode = jsonNode.get("key");
+            JsonNode jsonNode = objectMapper.reader().readTree(out.toByteArray());
+            JsonNode keyNode = jsonNode.get("key");
 
-                TransactionLogKey logKey =
-                        TransactionLogKeyJsonConverter.read(keyNode.get("data"), TransactionLogKey.HIGHEST_SUPPORTED_VERSION);
-                assertNotNull(logKey);
-                assertEquals(transactionId, logKey.transactionalId());
+            TransactionLogKey logKey =
+                    TransactionLogKeyJsonConverter.read(keyNode.get("data"), TransactionLogKey.HIGHEST_SUPPORTED_VERSION);
+            assertNotNull(logKey);
+            assertEquals(transactionId, logKey.transactionalId());
 
-                JsonNode valueData = jsonNode.get("value").get("data");
-                assertNotNull(valueData);
-                assertEquals(0, valueData.get("producerId").asInt());
-                assertEquals(TransactionState.EMPTY.stateName(), valueData.get("transactionStatus").asText());
-            } finally {
-                consumerWrapper.cleanup();
-            }
+            JsonNode valueData = jsonNode.get("value").get("data");
+            assertNotNull(valueData);
+            assertEquals(0, valueData.get("producerId").asInt());
+            assertEquals(TransactionState.EMPTY.stateName(), valueData.get("transactionStatus").asText());
+        } finally {
+            consumerWrapper.cleanup();
         }
     }
 
     @ClusterTest(brokers = 3)
     public void testOffsetsMessageFormatter(ClusterInstance cluster) throws Exception {
-        try (Admin admin = cluster.admin()) {
+        cluster.createTopic(topic, 1, (short) 1);
+        produceMessages(cluster);
 
-            NewTopic newTopic = new NewTopic(topic, 1, (short) 1);
-            admin.createTopics(Set.of(newTopic));
-            produceMessages(cluster);
+        String[] offsetsMessageFormatter = createConsoleConsumerArgs(cluster, 
+                Topic.GROUP_METADATA_TOPIC_NAME, 
+                "org.apache.kafka.tools.consumer.OffsetsMessageFormatter");
 
-            String[] offsetsMessageFormatter = createConsoleConsumerArgs(cluster, 
-                    Topic.GROUP_METADATA_TOPIC_NAME, 
-                    "org.apache.kafka.tools.consumer.OffsetsMessageFormatter");
+        ConsoleConsumerOptions options = new ConsoleConsumerOptions(offsetsMessageFormatter);
+        ConsoleConsumer.ConsumerWrapper consumerWrapper = new ConsoleConsumer.ConsumerWrapper(options, createOffsetConsumer(cluster));
 
-            ConsoleConsumerOptions options = new ConsoleConsumerOptions(offsetsMessageFormatter);
-            ConsoleConsumer.ConsumerWrapper consumerWrapper = new ConsoleConsumer.ConsumerWrapper(options, createOffsetConsumer(cluster));
+        try (ByteArrayOutputStream out = new ByteArrayOutputStream(); 
+             PrintStream output = new PrintStream(out)) {
+            ConsoleConsumer.process(1, options.formatter(), consumerWrapper, output, true);
 
-            try (ByteArrayOutputStream out = new ByteArrayOutputStream(); 
-                 PrintStream output = new PrintStream(out)) {
-                ConsoleConsumer.process(1, options.formatter(), consumerWrapper, output, true);
+            JsonNode jsonNode = objectMapper.reader().readTree(out.toByteArray());
+            JsonNode keyNode = jsonNode.get("key");
 
-                JsonNode jsonNode = objectMapper.reader().readTree(out.toByteArray());
-                JsonNode keyNode = jsonNode.get("key");
+            OffsetCommitKey offsetCommitKey =
+                    OffsetCommitKeyJsonConverter.read(keyNode.get("data"), OffsetCommitKey.HIGHEST_SUPPORTED_VERSION);
+            assertNotNull(offsetCommitKey);
+            assertEquals(Topic.GROUP_METADATA_TOPIC_NAME, offsetCommitKey.topic());
+            assertEquals(groupId, offsetCommitKey.group());
 
-                OffsetCommitKey offsetCommitKey =
-                        OffsetCommitKeyJsonConverter.read(keyNode.get("data"), OffsetCommitKey.HIGHEST_SUPPORTED_VERSION);
-                assertNotNull(offsetCommitKey);
-                assertEquals(Topic.GROUP_METADATA_TOPIC_NAME, offsetCommitKey.topic());
-                assertEquals(groupId, offsetCommitKey.group());
-
-                JsonNode valueNode = jsonNode.get("value");
-                OffsetCommitValue offsetCommitValue =
-                        OffsetCommitValueJsonConverter.read(valueNode.get("data"), OffsetCommitValue.HIGHEST_SUPPORTED_VERSION);
-                assertNotNull(offsetCommitValue);
-                assertEquals(0, offsetCommitValue.offset());
-                assertEquals(-1, offsetCommitValue.leaderEpoch());
-                assertNotNull(offsetCommitValue.metadata());
-                assertEquals(-1, offsetCommitValue.expireTimestamp());
-            } finally {
-                consumerWrapper.cleanup();
-            }
+            JsonNode valueNode = jsonNode.get("value");
+            OffsetCommitValue offsetCommitValue =
+                    OffsetCommitValueJsonConverter.read(valueNode.get("data"), OffsetCommitValue.HIGHEST_SUPPORTED_VERSION);
+            assertNotNull(offsetCommitValue);
+            assertEquals(0, offsetCommitValue.offset());
+            assertEquals(-1, offsetCommitValue.leaderEpoch());
+            assertNotNull(offsetCommitValue.metadata());
+            assertEquals(-1, offsetCommitValue.expireTimestamp());
+        } finally {
+            consumerWrapper.cleanup();
         }
     }
 
-    @ClusterTest(brokers = 3)
-    public void testGroupMetadataMessageFormatter(ClusterInstance cluster) throws Exception {
-        try (Admin admin = cluster.admin()) {
+    @ClusterTest(serverProperties = {
+        @ClusterConfigProperty(key = OFFSETS_TOPIC_PARTITIONS_CONFIG, value = "1"),
+        @ClusterConfigProperty(key = OFFSETS_TOPIC_REPLICATION_FACTOR_CONFIG, value = "1")
+    })
+    public void testGroupMetadataMessageFormatterWithClassicGroupProtocol(ClusterInstance cluster) throws Exception {
+        cluster.createTopic(topic, 1, (short) 1);
+        produceMessages(cluster);
 
-            NewTopic newTopic = new NewTopic(topic, 1, (short) 1);
-            admin.createTopics(Set.of(newTopic));
-            produceMessages(cluster);
+        String[] groupMetadataMessageFormatter = createConsoleConsumerArgs(cluster, 
+                Topic.GROUP_METADATA_TOPIC_NAME, 
+                "org.apache.kafka.tools.consumer.GroupMetadataMessageFormatter");
 
-            String[] groupMetadataMessageFormatter = createConsoleConsumerArgs(cluster, 
-                    Topic.GROUP_METADATA_TOPIC_NAME, 
-                    "org.apache.kafka.tools.consumer.GroupMetadataMessageFormatter");
+        ConsoleConsumerOptions options = new ConsoleConsumerOptions(groupMetadataMessageFormatter);
+        ConsoleConsumer.ConsumerWrapper consumerWrapper = 
+                new ConsoleConsumer.ConsumerWrapper(options, createGroupMetadataConsumer(cluster, GroupProtocol.CLASSIC));
 
-            ConsoleConsumerOptions options = new ConsoleConsumerOptions(groupMetadataMessageFormatter);
-            ConsoleConsumer.ConsumerWrapper consumerWrapper = 
-                    new ConsoleConsumer.ConsumerWrapper(options, createGroupMetaDataConsumer(cluster));
+        try (ByteArrayOutputStream out = new ByteArrayOutputStream();
+             PrintStream output = new PrintStream(out)) {
+            ConsoleConsumer.process(1, options.formatter(), consumerWrapper, output, true);
 
-            try (ByteArrayOutputStream out = new ByteArrayOutputStream();
-                 PrintStream output = new PrintStream(out)) {
-                ConsoleConsumer.process(1, options.formatter(), consumerWrapper, output, true);
+            JsonNode jsonNode = objectMapper.reader().readTree(out.toByteArray());
 
-                JsonNode jsonNode = objectMapper.reader().readTree(out.toByteArray());
+            // The group coordinator writes an empty group metadata record when the group is created for the first time
+            JsonNode keyNode = jsonNode.get("key");
+            GroupMetadataKey groupMetadataKey =
+                GroupMetadataKeyJsonConverter.read(keyNode.get("data"), GroupMetadataKey.HIGHEST_SUPPORTED_VERSION);
+            assertNotNull(groupMetadataKey);
+            assertEquals(groupId, groupMetadataKey.group());
 
-                // The group coordinator writes an empty group metadata record when the group is created for the first time
-                JsonNode keyNode = jsonNode.get("key");
-                GroupMetadataKey groupMetadataKey =
-                    GroupMetadataKeyJsonConverter.read(keyNode.get("data"), GroupMetadataKey.HIGHEST_SUPPORTED_VERSION);
-                assertNotNull(groupMetadataKey);
-                assertEquals(groupId, groupMetadataKey.group());
+            JsonNode valueNode = jsonNode.get("value");
+            GroupMetadataValue groupMetadataValue =
+                GroupMetadataValueJsonConverter.read(valueNode.get("data"), GroupMetadataValue.HIGHEST_SUPPORTED_VERSION);
+            assertNotNull(groupMetadataValue);
+            assertEquals("", groupMetadataValue.protocolType());
+            assertEquals(0, groupMetadataValue.generation());
+            assertNull(groupMetadataValue.protocol());
+            assertNull(groupMetadataValue.leader());
+            assertEquals(0, groupMetadataValue.members().size());
+        } finally {
+            consumerWrapper.cleanup();
+        }
+    }
 
-                JsonNode valueNode = jsonNode.get("value");
-                GroupMetadataValue groupMetadataValue =
-                    GroupMetadataValueJsonConverter.read(valueNode.get("data"), GroupMetadataValue.HIGHEST_SUPPORTED_VERSION);
-                assertNotNull(groupMetadataValue);
-                assertEquals("", groupMetadataValue.protocolType());
-                assertEquals(0, groupMetadataValue.generation());
-                assertNull(groupMetadataValue.protocol());
-                assertNull(groupMetadataValue.leader());
-                assertEquals(0, groupMetadataValue.members().size());
-            } finally {
-                consumerWrapper.cleanup();
-            }
+    @ClusterTest(serverProperties = {
+        @ClusterConfigProperty(key = OFFSETS_TOPIC_PARTITIONS_CONFIG, value = "1"),
+        @ClusterConfigProperty(key = OFFSETS_TOPIC_REPLICATION_FACTOR_CONFIG, value = "1")
+    })
+    public void testGroupMetadataMessageFormatterWithConsumerGroupProtocol(ClusterInstance cluster) throws Exception {
+        cluster.createTopic(topic, 1, (short) 1);
+        produceMessages(cluster);
+
+        String[] groupMetadataMessageFormatter = createConsoleConsumerArgs(cluster,
+            Topic.GROUP_METADATA_TOPIC_NAME,
+            "org.apache.kafka.tools.consumer.GroupMetadataMessageFormatter");
+
+        ConsoleConsumerOptions options = new ConsoleConsumerOptions(groupMetadataMessageFormatter);
+        ConsoleConsumer.ConsumerWrapper consumerWrapper =
+            new ConsoleConsumer.ConsumerWrapper(options, createGroupMetadataConsumer(cluster, GroupProtocol.CONSUMER));
+
+        try (ByteArrayOutputStream out = new ByteArrayOutputStream();
+             PrintStream output = new PrintStream(out)) {
+            ConsoleConsumer.process(1, options.formatter(), consumerWrapper, output, true);
+
+            JsonNode jsonNode = objectMapper.reader().readTree(out.toByteArray());
+            // GroupMetadataMessageFormatter only formats GROUP_METADATA records, but the CONSUMER protocol writes
+            // CONSUMER_GROUP_* records (e.g. CONSUMER_GROUP_METADATA) instead, so the output is empty.
+            assertTrue(jsonNode.isEmpty());
+        } finally {
+            consumerWrapper.cleanup();
+        }
+    }
+
+    @ClusterTest(serverProperties = {
+        @ClusterConfigProperty(key = OFFSETS_TOPIC_PARTITIONS_CONFIG, value = "1"),
+        @ClusterConfigProperty(key = OFFSETS_TOPIC_REPLICATION_FACTOR_CONFIG, value = "1")
+    })
+    public void testConsumerGroupMessageFormatter(ClusterInstance cluster) throws Exception {
+        cluster.createTopic(topic, 1, (short) 1);
+        produceMessages(cluster);
+
+        String[] consumerGroupMessageFormatter = createConsoleConsumerArgs(cluster,
+            Topic.GROUP_METADATA_TOPIC_NAME,
+            "org.apache.kafka.tools.consumer.ConsumerGroupMessageFormatter");
+
+        ConsoleConsumerOptions options = new ConsoleConsumerOptions(consumerGroupMessageFormatter);
+        ConsoleConsumer.ConsumerWrapper consumerWrapper =
+            new ConsoleConsumer.ConsumerWrapper(options, createGroupMetadataConsumer(cluster, GroupProtocol.CONSUMER));
+
+        try (ByteArrayOutputStream out = new ByteArrayOutputStream();
+             PrintStream output = new PrintStream(out)) {
+            ConsoleConsumer.process(1, options.formatter(), consumerWrapper, output, true);
+
+            JsonNode jsonNode = objectMapper.reader().readTree(out.toByteArray());
+
+            // The group coordinator writes a member metadata record first when the consumer joins the group
+            JsonNode keyNode = jsonNode.get("key");
+            assertEquals(CoordinatorRecordType.CONSUMER_GROUP_MEMBER_METADATA.id(), keyNode.get("type").shortValue());
+            ConsumerGroupMemberMetadataKey memberMetadataKey = ConsumerGroupMemberMetadataKeyJsonConverter.read(
+                keyNode.get("data"), ConsumerGroupMemberMetadataKey.HIGHEST_SUPPORTED_VERSION);
+            assertEquals(groupId, memberMetadataKey.groupId());
+            assertFalse(memberMetadataKey.memberId().isEmpty());
+
+            JsonNode valueNode = jsonNode.get("value");
+            ConsumerGroupMemberMetadataValue memberMetadataValue = ConsumerGroupMemberMetadataValueJsonConverter.read(
+                valueNode.get("data"), ConsumerGroupMemberMetadataValue.HIGHEST_SUPPORTED_VERSION);
+            assertEquals(List.of(Topic.GROUP_METADATA_TOPIC_NAME), memberMetadataValue.subscribedTopicNames());
+            assertNull(memberMetadataValue.classicMemberMetadata());
+        } finally {
+            consumerWrapper.cleanup();
         }
     }
 
@@ -455,9 +522,10 @@ public class ConsoleConsumerTest {
         return new KafkaConsumer<>(props);
     }
 
-    private Consumer<byte[], byte[]> createGroupMetaDataConsumer(ClusterInstance cluster) {
+    private Consumer<byte[], byte[]> createGroupMetadataConsumer(ClusterInstance cluster, GroupProtocol groupProtocol) {
         Properties props = consumerProps(cluster);
         props.put(AUTO_OFFSET_RESET_CONFIG, "earliest");
+        props.put(GROUP_PROTOCOL_CONFIG, groupProtocol.name());
         return new KafkaConsumer<>(props);
     }
     
@@ -474,7 +542,6 @@ public class ConsoleConsumerTest {
         props.put(BOOTSTRAP_SERVERS_CONFIG, cluster.bootstrapServers());
         props.put(KEY_DESERIALIZER_CLASS_CONFIG, ByteArrayDeserializer.class.getName());
         props.put(VALUE_DESERIALIZER_CLASS_CONFIG, ByteArrayDeserializer.class.getName());
-        props.put(PARTITION_ASSIGNMENT_STRATEGY_CONFIG, RangeAssignor.class.getName());
         props.put(GROUP_ID_CONFIG, groupId);
         return props;
     }

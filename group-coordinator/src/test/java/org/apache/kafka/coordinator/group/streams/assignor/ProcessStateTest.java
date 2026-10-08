@@ -33,7 +33,7 @@ public class ProcessStateTest {
         processState.addMember("member1");
         TaskId taskId = new TaskId("id1", 0);
 
-        processState.addTask("member1", taskId, true);
+        processState.addTask("member1", taskId, true, true);
 
         assertTrue(processState.assignedActiveTasks().contains(taskId));
         assertEquals(1, processState.memberToTaskCounts().get("member1"));
@@ -45,7 +45,7 @@ public class ProcessStateTest {
         processState.addMember("member1");
         TaskId taskId = new TaskId("id1", 0);
 
-        processState.addTask("member1", taskId, false);
+        processState.addTask("member1", taskId, false, true);
 
         assertTrue(processState.assignedStandbyTasks().contains(taskId));
         assertEquals(1, processState.memberToTaskCounts().get("member1"));
@@ -72,7 +72,7 @@ public class ProcessStateTest {
     void shouldReturnFalseWhenCapacityIsFull() {
         ProcessState processState = new ProcessState("process1");
         processState.addMember("member1");
-        processState.addTask("member1", new TaskId("id1", 0), true);
+        processState.addTask("member1", new TaskId("id1", 0), true, true);
 
         assertFalse(processState.hasCapacity());
     }
@@ -83,7 +83,7 @@ public class ProcessStateTest {
         ProcessState processState2 = new ProcessState("process2");
         processState1.addMember("member1");
         processState2.addMember("member2");
-        processState1.addTask("member1", new TaskId("id1", 0), true);
+        processState1.addTask("member1", new TaskId("id1", 0), true, true);
 
         assertTrue(processState1.compareTo(processState2) > 0);
     }
@@ -93,7 +93,7 @@ public class ProcessStateTest {
         ProcessState processState = new ProcessState("process1");
         processState.addMember("member1");
         TaskId taskId = new TaskId("id1", 0);
-        processState.addTask("member1", taskId, true);
+        processState.addTask("member1", taskId, true, true);
 
         assertTrue(processState.hasTask(taskId));
     }
@@ -113,8 +113,8 @@ public class ProcessStateTest {
         processState.addMember("member1");
         TaskId activeTaskId = new TaskId("id1", 0);
         TaskId standbyTaskId = new TaskId("id1", 1);
-        processState.addTask("member1", activeTaskId, true);
-        processState.addTask("member1", standbyTaskId, false);
+        processState.addTask("member1", activeTaskId, true, true);
+        processState.addTask("member1", standbyTaskId, false, true);
 
         Set<TaskId> assignedTasks = processState.assignedTasks();
 
