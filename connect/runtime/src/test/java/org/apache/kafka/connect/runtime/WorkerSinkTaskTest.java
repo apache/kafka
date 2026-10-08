@@ -23,6 +23,7 @@ import org.apache.kafka.clients.consumer.KafkaConsumer;
 import org.apache.kafka.clients.consumer.MockConsumer;
 import org.apache.kafka.clients.consumer.OffsetAndMetadata;
 import org.apache.kafka.clients.consumer.OffsetCommitCallback;
+import org.apache.kafka.clients.consumer.RebalanceConsumer;
 import org.apache.kafka.clients.consumer.RebalanceListener;
 import org.apache.kafka.clients.consumer.internals.AutoOffsetResetStrategy;
 import org.apache.kafka.common.MetricName;
@@ -107,6 +108,7 @@ import static org.mockito.Mockito.doNothing;
 import static org.mockito.Mockito.doThrow;
 import static org.mockito.Mockito.times;
 import static org.mockito.Mockito.verify;
+import static org.mockito.Mockito.verifyNoInteractions;
 import static org.mockito.Mockito.when;
 
 @ExtendWith(MockitoExtension.class)
@@ -149,6 +151,8 @@ public class WorkerSinkTaskTest {
     private WorkerSinkTask workerTask;
     @Mock
     private SinkTask sinkTask;
+    @Mock
+    private RebalanceConsumer rebalanceConsumer;
     private final ArgumentCaptor<WorkerSinkTaskContext> sinkTaskContext = ArgumentCaptor.forClass(WorkerSinkTaskContext.class);
     private WorkerConfig workerConfig;
     private MockConnectMetrics metrics;
@@ -232,6 +236,7 @@ public class WorkerSinkTaskTest {
     @AfterEach
     public void tearDown() {
         if (metrics != null) metrics.stop();
+        verifyNoInteractions(rebalanceConsumer);
     }
 
     @Test
@@ -366,7 +371,7 @@ public class WorkerSinkTaskTest {
         verify(sinkTask, times(2)).put(anyList());
 
         doAnswer((Answer<ConsumerRecords<byte[], byte[]>>) invocation -> {
-            rebalanceListener.getValue().onPartitionsRevoked(INITIAL_ASSIGNMENT, null);
+            rebalanceListener.getValue().onPartitionsRevoked(INITIAL_ASSIGNMENT, rebalanceConsumer);
             return null;
         }).when(consumer).close();
 
@@ -494,14 +499,14 @@ public class WorkerSinkTaskTest {
 
         when(consumer.poll(any(Duration.class)))
                 .thenAnswer((Answer<ConsumerRecords<byte[], byte[]>>) invocation -> {
-                    rebalanceListener.getValue().onPartitionsAssigned(INITIAL_ASSIGNMENT, null);
+                    rebalanceListener.getValue().onPartitionsAssigned(INITIAL_ASSIGNMENT, rebalanceConsumer);
                     return ConsumerRecords.empty();
                 })
                 .thenAnswer(expectConsumerPoll(1))
                 // Empty consumer poll (all partitions are paused) with rebalance; one new partition is assigned
                 .thenAnswer(invocation -> {
-                    rebalanceListener.getValue().onPartitionsRevoked(Set.of(), null);
-                    rebalanceListener.getValue().onPartitionsAssigned(Set.of(TOPIC_PARTITION3), null);
+                    rebalanceListener.getValue().onPartitionsRevoked(Set.of(), rebalanceConsumer);
+                    rebalanceListener.getValue().onPartitionsAssigned(Set.of(TOPIC_PARTITION3), rebalanceConsumer);
                     return ConsumerRecords.empty();
                 })
                 .thenAnswer(expectConsumerPoll(0))
@@ -509,8 +514,8 @@ public class WorkerSinkTaskTest {
                 .thenAnswer(invocation -> {
                     ConsumerRecord<byte[], byte[]> newRecord = new ConsumerRecord<>(TOPIC, PARTITION3, FIRST_OFFSET, RAW_KEY, RAW_VALUE);
 
-                    rebalanceListener.getValue().onPartitionsRevoked(INITIAL_ASSIGNMENT, null);
-                    rebalanceListener.getValue().onPartitionsAssigned(List.of(), null);
+                    rebalanceListener.getValue().onPartitionsRevoked(INITIAL_ASSIGNMENT, rebalanceConsumer);
+                    rebalanceListener.getValue().onPartitionsAssigned(List.of(), rebalanceConsumer);
                     return new ConsumerRecords<>(Map.of(TOPIC_PARTITION3, List.of(newRecord)),
                         Map.of(TOPIC_PARTITION3, new OffsetAndMetadata(FIRST_OFFSET + 1, Optional.empty(), "")));
                 });
@@ -560,7 +565,7 @@ public class WorkerSinkTaskTest {
 
         expectPollInitialAssignment()
                 .thenAnswer((Answer<ConsumerRecords<byte[], byte[]>>) invocation -> {
-                    rebalanceListener.getValue().onPartitionsLost(INITIAL_ASSIGNMENT, null);
+                    rebalanceListener.getValue().onPartitionsLost(INITIAL_ASSIGNMENT, rebalanceConsumer);
                     return ConsumerRecords.empty();
                 });
 
@@ -584,7 +589,7 @@ public class WorkerSinkTaskTest {
 
         expectPollInitialAssignment()
                 .thenAnswer((Answer<ConsumerRecords<byte[], byte[]>>) invocation -> {
-                    rebalanceListener.getValue().onPartitionsRevoked(INITIAL_ASSIGNMENT, null);
+                    rebalanceListener.getValue().onPartitionsRevoked(INITIAL_ASSIGNMENT, rebalanceConsumer);
                     return ConsumerRecords.empty();
                 });
 
@@ -608,8 +613,8 @@ public class WorkerSinkTaskTest {
 
         expectPollInitialAssignment()
                 .thenAnswer((Answer<ConsumerRecords<byte[], byte[]>>) invocation -> {
-                    rebalanceListener.getValue().onPartitionsRevoked(INITIAL_ASSIGNMENT, null);
-                    rebalanceListener.getValue().onPartitionsAssigned(INITIAL_ASSIGNMENT, null);
+                    rebalanceListener.getValue().onPartitionsRevoked(INITIAL_ASSIGNMENT, rebalanceConsumer);
+                    rebalanceListener.getValue().onPartitionsAssigned(INITIAL_ASSIGNMENT, rebalanceConsumer);
                     return ConsumerRecords.empty();
                 });
 
@@ -649,22 +654,22 @@ public class WorkerSinkTaskTest {
 
         when(consumer.poll(any(Duration.class)))
                 .thenAnswer((Answer<ConsumerRecords<byte[], byte[]>>) invocation -> {
-                    rebalanceListener.getValue().onPartitionsAssigned(INITIAL_ASSIGNMENT, null);
+                    rebalanceListener.getValue().onPartitionsAssigned(INITIAL_ASSIGNMENT, rebalanceConsumer);
                     return ConsumerRecords.empty();
                 })
                 .thenAnswer((Answer<ConsumerRecords<byte[], byte[]>>) invocation -> {
-                    rebalanceListener.getValue().onPartitionsRevoked(Set.of(TOPIC_PARTITION), null);
-                    rebalanceListener.getValue().onPartitionsAssigned(Set.of(), null);
+                    rebalanceListener.getValue().onPartitionsRevoked(Set.of(TOPIC_PARTITION), rebalanceConsumer);
+                    rebalanceListener.getValue().onPartitionsAssigned(Set.of(), rebalanceConsumer);
                     return ConsumerRecords.empty();
                 })
                 .thenAnswer((Answer<ConsumerRecords<byte[], byte[]>>) invocation -> {
-                    rebalanceListener.getValue().onPartitionsRevoked(Set.of(), null);
-                    rebalanceListener.getValue().onPartitionsAssigned(Set.of(TOPIC_PARTITION3), null);
+                    rebalanceListener.getValue().onPartitionsRevoked(Set.of(), rebalanceConsumer);
+                    rebalanceListener.getValue().onPartitionsAssigned(Set.of(TOPIC_PARTITION3), rebalanceConsumer);
                     return ConsumerRecords.empty();
                 })
                 .thenAnswer((Answer<ConsumerRecords<byte[], byte[]>>) invocation -> {
-                    rebalanceListener.getValue().onPartitionsLost(Set.of(TOPIC_PARTITION3), null);
-                    rebalanceListener.getValue().onPartitionsAssigned(Set.of(TOPIC_PARTITION), null);
+                    rebalanceListener.getValue().onPartitionsLost(Set.of(TOPIC_PARTITION3), rebalanceConsumer);
+                    rebalanceListener.getValue().onPartitionsAssigned(Set.of(TOPIC_PARTITION), rebalanceConsumer);
                     return ConsumerRecords.empty();
                 });
 
@@ -720,21 +725,21 @@ public class WorkerSinkTaskTest {
         // First poll; assignment is [TP1, TP2]
         when(consumer.poll(any(Duration.class)))
                 .thenAnswer((Answer<ConsumerRecords<byte[], byte[]>>) invocation -> {
-                    rebalanceListener.getValue().onPartitionsAssigned(INITIAL_ASSIGNMENT, null);
+                    rebalanceListener.getValue().onPartitionsAssigned(INITIAL_ASSIGNMENT, rebalanceConsumer);
                     return ConsumerRecords.empty();
                 })
                 // Second poll; a single record is delivered from TP1
                 .thenAnswer(expectConsumerPoll(1))
                 // Third poll; assignment changes to [TP2]
                 .thenAnswer(invocation -> {
-                    rebalanceListener.getValue().onPartitionsRevoked(Set.of(TOPIC_PARTITION), null);
-                    rebalanceListener.getValue().onPartitionsAssigned(Set.of(), null);
+                    rebalanceListener.getValue().onPartitionsRevoked(Set.of(TOPIC_PARTITION), rebalanceConsumer);
+                    rebalanceListener.getValue().onPartitionsAssigned(Set.of(), rebalanceConsumer);
                     return ConsumerRecords.empty();
                 })
                 // Fourth poll; assignment changes to [TP2, TP3]
                 .thenAnswer(invocation -> {
-                    rebalanceListener.getValue().onPartitionsRevoked(Set.of(), null);
-                    rebalanceListener.getValue().onPartitionsAssigned(Set.of(TOPIC_PARTITION3), null);
+                    rebalanceListener.getValue().onPartitionsRevoked(Set.of(), rebalanceConsumer);
+                    rebalanceListener.getValue().onPartitionsAssigned(Set.of(TOPIC_PARTITION3), rebalanceConsumer);
                     return ConsumerRecords.empty();
                 })
                 // Fifth poll; an offset commit takes place
@@ -788,8 +793,8 @@ public class WorkerSinkTaskTest {
         expectPollInitialAssignment()
                 .thenAnswer(expectConsumerPoll(1))
                 .thenAnswer(invocation -> {
-                    rebalanceListener.getValue().onPartitionsRevoked(INITIAL_ASSIGNMENT, null);
-                    rebalanceListener.getValue().onPartitionsAssigned(INITIAL_ASSIGNMENT, null);
+                    rebalanceListener.getValue().onPartitionsRevoked(INITIAL_ASSIGNMENT, rebalanceConsumer);
+                    rebalanceListener.getValue().onPartitionsAssigned(INITIAL_ASSIGNMENT, rebalanceConsumer);
                     return ConsumerRecords.empty();
                 });
         expectConversionAndTransformation(null, new RecordHeaders());
@@ -1375,7 +1380,7 @@ public class WorkerSinkTaskTest {
 
         // iter 1
         Answer<ConsumerRecords<byte[], byte[]>> consumerPollRebalance = invocation -> {
-            rebalanceListener.getValue().onPartitionsAssigned(INITIAL_ASSIGNMENT, null);
+            rebalanceListener.getValue().onPartitionsAssigned(INITIAL_ASSIGNMENT, rebalanceConsumer);
             return ConsumerRecords.empty();
         };
 
@@ -1425,14 +1430,14 @@ public class WorkerSinkTaskTest {
         final AtomicBoolean rebalanced = new AtomicBoolean();
         Answer<ConsumerRecords<byte[], byte[]>> consumerPollRebalanced = invocation -> {
             // Rebalance always begins with revoking current partitions ...
-            rebalanceListener.getValue().onPartitionsRevoked(originalPartitions, null);
+            rebalanceListener.getValue().onPartitionsRevoked(originalPartitions, rebalanceConsumer);
             // Respond to the rebalance
             Map<TopicPartition, Long> offsets = new HashMap<>();
             offsets.put(TOPIC_PARTITION, rebalanceOffsets.get(TOPIC_PARTITION).offset());
             offsets.put(TOPIC_PARTITION2, rebalanceOffsets.get(TOPIC_PARTITION2).offset());
             offsets.put(TOPIC_PARTITION3, rebalanceOffsets.get(TOPIC_PARTITION3).offset());
             sinkTaskContext.getValue().offset(offsets);
-            rebalanceListener.getValue().onPartitionsAssigned(rebalancedPartitions, null);
+            rebalanceListener.getValue().onPartitionsAssigned(rebalancedPartitions, rebalanceConsumer);
             rebalanced.set(true);
 
             // Run the previous async commit handler
@@ -1928,7 +1933,7 @@ public class WorkerSinkTaskTest {
 
         return when(consumer.poll(any(Duration.class))).thenAnswer(
                 invocation -> {
-                    rebalanceListener.getValue().onPartitionsAssigned(INITIAL_ASSIGNMENT, null);
+                    rebalanceListener.getValue().onPartitionsAssigned(INITIAL_ASSIGNMENT, rebalanceConsumer);
                     return ConsumerRecords.empty();
                 }
         );
