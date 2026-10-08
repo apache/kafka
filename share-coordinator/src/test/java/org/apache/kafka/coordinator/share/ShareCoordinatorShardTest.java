@@ -2181,6 +2181,162 @@ class ShareCoordinatorShardTest {
     }
 
     @Test
+    public void testSnapshotColdPartitionsConsidersUpdatesAfterColdSnapshot() {
+        MetadataImage image = mock(MetadataImage.class);
+        shard.onMetadataUpdate(null, new KRaftCoordinatorMetadataImage(image));
+        int offset = 0;
+        int producerId = 0;
+        short producerEpoch = 0;
+        int leaderEpoch = 0;
+        SharePartitionKey key0 = SharePartitionKey.getInstance(GROUP_ID, TOPIC_ID, 0);
+        SharePartitionKey key1 = SharePartitionKey.getInstance(GROUP_ID, TOPIC_ID, 1);
+
+        long timestamp = TIME.milliseconds();
+
+        for (int partition = 0; partition < 2; partition++) {
+            shard.replay(offset++, producerId, producerEpoch, CoordinatorRecord.record(
+                new ShareSnapshotKey()
+                    .setGroupId(GROUP_ID)
+                    .setTopicId(TOPIC_ID)
+                    .setPartition(partition),
+                new ApiMessageAndVersion(
+                    new ShareSnapshotValue()
+                        .setSnapshotEpoch(0)
+                        .setStateEpoch(0)
+                        .setStartOffset(0)
+                        .setDeliveryCompleteCount(11)
+                        .setLeaderEpoch(leaderEpoch)
+                        .setCreateTimestamp(timestamp)
+                        .setWriteTimestamp(timestamp)
+                        .setStateBatches(List.of(
+                            new ShareSnapshotValue.StateBatch()
+                                .setFirstOffset(0)
+                                .setLastOffset(10)
+                                .setDeliveryCount((short) 1)
+                                .setDeliveryState((byte) 0))),
+                    (short) 0
+                )
+            ));
+        }
+
+        long sleep = 12000;
+        TIME.sleep(sleep);
+
+        // Both partitions are cold snapshotted.
+        List<CoordinatorRecord> coldRecords = shard.snapshotColdPartitions().records();
+        assertEquals(2, coldRecords.size());
+        for (CoordinatorRecord record : coldRecords) {
+            shard.replay(offset++, producerId, producerEpoch, record);
+        }
+
+        // A share update on a cold snapshotted partition does not change the snapshot timestamps.
+        shard.replay(offset++, producerId, producerEpoch, CoordinatorRecord.record(
+            new ShareUpdateKey()
+                .setGroupId(GROUP_ID)
+                .setTopicId(TOPIC_ID)
+                .setPartition(0),
+            new ApiMessageAndVersion(
+                new ShareUpdateValue()
+                    .setSnapshotEpoch(1)
+                    .setStartOffset(0)
+                    .setDeliveryCompleteCount(15)
+                    .setLeaderEpoch(leaderEpoch)
+                    .setStateBatches(List.of(
+                        new ShareUpdateValue.StateBatch()
+                            .setFirstOffset(0)
+                            .setLastOffset(10)
+                            .setDeliveryCount((short) 1)
+                            .setDeliveryState((byte) 0))),
+                (short) 0
+            )
+        ));
+        assertEquals(timestamp, shard.getShareStateMapValue(key0).createTimestamp());
+        assertEquals(timestamp + sleep, shard.getShareStateMapValue(key0).writeTimestamp());
+
+        TIME.sleep(sleep);
+
+        // The pending update must not be starved. Both partitions are snapshotted again,
+        // the updated one with the merged state.
+        ShareGroupOffset state0 = shard.getShareStateMapValue(key0);
+        ShareGroupOffset state1 = shard.getShareStateMapValue(key1);
+        List<CoordinatorRecord> expectedRecords = List.of(
+            ShareCoordinatorRecordHelpers.newShareSnapshotRecord(GROUP_ID, TOPIC_ID, 0,
+                state0.builderSupplier()
+                    .setSnapshotEpoch(state0.snapshotEpoch() + 1)
+                    .setWriteTimestamp(TIME.milliseconds())
+                    .build()),
+            ShareCoordinatorRecordHelpers.newShareSnapshotRecord(GROUP_ID, TOPIC_ID, 1,
+                state1.builderSupplier()
+                    .setSnapshotEpoch(state1.snapshotEpoch() + 1)
+                    .setWriteTimestamp(TIME.milliseconds())
+                    .build())
+        );
+
+        List<CoordinatorRecord> records = shard.snapshotColdPartitions().records();
+        assertEquals(Set.copyOf(expectedRecords), Set.copyOf(records));
+        assertEquals(15, ((ShareSnapshotValue) expectedRecords.get(0).value().message()).deliveryCompleteCount());
+
+        for (CoordinatorRecord record : records) {
+            shard.replay(offset++, producerId, producerEpoch, record);
+        }
+
+        // No pending updates remain, so the system is quiet again.
+        TIME.sleep(sleep);
+        assertEquals(0, shard.snapshotColdPartitions().records().size());
+    }
+
+    @Test
+    public void testColdSnapshotResetsSnapshotUpdateCount() {
+        shard = new ShareCoordinatorShardBuilder()
+            .setConfigOverrides(Map.of(ShareCoordinatorConfig.SNAPSHOT_UPDATE_RECORDS_PER_SNAPSHOT_CONFIG, "2"))
+            .build();
+
+        initSharePartition(shard, SHARE_PARTITION_KEY);
+
+        WriteShareGroupStateRequestData request = new WriteShareGroupStateRequestData()
+            .setGroupId(GROUP_ID)
+            .setTopics(List.of(new WriteShareGroupStateRequestData.WriteStateData()
+                .setTopicId(TOPIC_ID)
+                .setPartitions(List.of(new WriteShareGroupStateRequestData.PartitionData()
+                    .setPartition(PARTITION)
+                    .setStartOffset(0)
+                    .setDeliveryCompleteCount(0)
+                    .setStateEpoch(0)
+                    .setLeaderEpoch(0)
+                    .setStateBatches(List.of(new WriteShareGroupStateRequestData.StateBatch()
+                        .setFirstOffset(0)
+                        .setLastOffset(10)
+                        .setDeliveryCount((short) 1)
+                        .setDeliveryState((byte) 0)))))));
+
+        // Write 1: update count 0 < limit 2, should produce update record.
+        CoordinatorResult<WriteShareGroupStateResponseData, CoordinatorRecord> result = shard.writeState(request);
+        assertInstanceOf(ShareUpdateKey.class, result.records().get(0).key());
+        shard.replay(0L, 0L, (short) 0, result.records().get(0));
+
+        // Cold snapshot folds the pending update into a new snapshot.
+        TIME.sleep(12000);
+        List<CoordinatorRecord> coldRecords = shard.snapshotColdPartitions().records();
+        assertEquals(1, coldRecords.size());
+        assertInstanceOf(ShareSnapshotKey.class, coldRecords.get(0).key());
+        shard.replay(0L, 0L, (short) 0, coldRecords.get(0));
+
+        // Write 2: update count was reset by the cold snapshot, should produce update record.
+        result = shard.writeState(request);
+        assertInstanceOf(ShareUpdateKey.class, result.records().get(0).key());
+        shard.replay(0L, 0L, (short) 0, result.records().get(0));
+
+        // Write 3: update count 1 < limit 2, should still produce update record.
+        result = shard.writeState(request);
+        assertInstanceOf(ShareUpdateKey.class, result.records().get(0).key());
+        shard.replay(0L, 0L, (short) 0, result.records().get(0));
+
+        // Write 4: update count 2 >= limit 2, should produce snapshot record.
+        result = shard.writeState(request);
+        assertInstanceOf(ShareSnapshotKey.class, result.records().get(0).key());
+    }
+
+    @Test
     public void testSnapshotColdPartitionsPartialEligiblePartitions() {
         MetadataImage image = mock(MetadataImage.class);
         shard.onMetadataUpdate(null, new KRaftCoordinatorMetadataImage(image));
