@@ -35,6 +35,7 @@ import org.junit.jupiter.api.Assertions.{assertDoesNotThrow, assertEquals, asser
 import org.junit.jupiter.params.ParameterizedTest
 import org.junit.jupiter.params.provider.MethodSource
 
+import java.nio.file.Files
 import java.security.{KeyPairGenerator, PrivateKey}
 import java.security.interfaces.RSAPublicKey
 
@@ -119,7 +120,7 @@ class ClientOAuthIntegrationTest extends AbstractClientOAuthIntegrationTest {
   @MethodSource(Array("getTestGroupProtocolParametersAll"))
   def testBasicJwtBearer(groupProtocol: String): Unit = {
     val jwt = mockOAuthServer.issueToken(issuerId, "jdoe", "someaudience", Collections.singletonMap("scope", "test"))
-    val assertionFile = TestUtils.tempFile(jwt.serialize())
+    val assertionFile = Files.writeString(tempDir.resolve("assertion.jwt"), jwt.serialize()).toFile
     System.setProperty(BrokerSecurityConfigs.ALLOWED_SASL_OAUTHBEARER_FILES_CONFIG, assertionFile.getAbsolutePath)
 
     val configs = defaultJwtBearerConfigs()
@@ -153,7 +154,7 @@ class ClientOAuthIntegrationTest extends AbstractClientOAuthIntegrationTest {
   @MethodSource(Array("getTestGroupProtocolParametersAll"))
   def testJwtBearerWithMalformedAssertionFile(groupProtocol: String): Unit = {
     // Create the assertion file, but fill it with non-JWT garbage.
-    val assertionFile = TestUtils.tempFile("CQEN*)Q#F)&)^#QNC")
+    val assertionFile = Files.writeString(tempDir.resolve("assertion.jwt"), "CQEN*)Q#F)&)^#QNC").toFile
     System.setProperty(BrokerSecurityConfigs.ALLOWED_SASL_OAUTHBEARER_FILES_CONFIG, assertionFile.getAbsolutePath)
 
     val configs = defaultJwtBearerConfigs()
@@ -169,7 +170,7 @@ class ClientOAuthIntegrationTest extends AbstractClientOAuthIntegrationTest {
   @MethodSource(Array("getTestGroupProtocolParametersAll"))
   def testJwtBearerWithEmptyAssertionFile(groupProtocol: String): Unit = {
     // Create the assertion file, but leave it empty.
-    val assertionFile = TestUtils.tempFile()
+    val assertionFile = Files.createFile(tempDir.resolve("assertion.jwt")).toFile
     System.setProperty(BrokerSecurityConfigs.ALLOWED_SASL_OAUTHBEARER_FILES_CONFIG, assertionFile.getAbsolutePath)
 
     val configs = defaultJwtBearerConfigs()
