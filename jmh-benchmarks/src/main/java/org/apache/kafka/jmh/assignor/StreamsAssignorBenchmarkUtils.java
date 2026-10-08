@@ -66,7 +66,9 @@ public class StreamsAssignorBenchmarkUtils {
         MIXED,
         /**
          * Like ALL_LAGGING, and every member that a task migrates to is also restoring one of its own active tasks,
-         * which stalls every warm-up task on that member.
+         * which stalls every warm-up task on that member. Only a member that keeps a stateful active task of its target
+         * can report one as restoring, so where each member has a single active task, as with 1000 members and 10
+         * subtopologies of 100 partitions, this is the same as ALL_LAGGING.
          */
         RESTORING_DESTINATIONS
     }
@@ -394,7 +396,6 @@ public class StreamsAssignorBenchmarkUtils {
         memberIds.sort(null);
         for (String memberId : memberIds) {
             if (lagPicture == LagPicture.NOT_REPORTED) {
-                memberTaskOffsets.put(memberId, MemberTaskOffsets.EMPTY);
                 continue;
             }
 
