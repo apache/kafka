@@ -350,6 +350,17 @@ public class KafkaProducer<K, V> implements Producer<K, V> {
         this(Utils.propsToMap(properties), keySerializer, valueSerializer);
     }
 
+    KafkaProducer(ProducerConfig config,
+                  Serializer<K> keySerializer,
+                  Serializer<V> valueSerializer,
+                  ProducerMetadata metadata,
+                  KafkaClient kafkaClient,
+                  ProducerInterceptors<K, V> interceptors,
+                  ApiVersions apiVersions,
+                  Time time) {
+        this(config, keySerializer, valueSerializer, metadata, kafkaClient, Uuid.randomUuid(), interceptors, apiVersions, time);
+    }
+
     // visible for testing
     @SuppressWarnings({"unchecked", "this-escape"})
     KafkaProducer(ProducerConfig config,
@@ -357,6 +368,7 @@ public class KafkaProducer<K, V> implements Producer<K, V> {
                   Serializer<V> valueSerializer,
                   ProducerMetadata metadata,
                   KafkaClient kafkaClient,
+                  Uuid clientInstanceId,
                   ProducerInterceptors<K, V> interceptors,
                   ApiVersions apiVersions,
                   Time time) {
@@ -382,7 +394,6 @@ public class KafkaProducer<K, V> implements Producer<K, V> {
                     .recordLevel(Sensor.RecordingLevel.forName(config.getString(ProducerConfig.METRICS_RECORDING_LEVEL_CONFIG)))
                     .tags(metricTags);
             List<MetricsReporter> reporters = CommonClientConfigs.metricsReporters(clientId, config);
-            Uuid clientInstanceId = Uuid.randomUuid();
             this.clientTelemetryReporter = CommonClientConfigs.telemetryReporter(clientId, clientInstanceId, config);
             this.clientTelemetryReporter.ifPresent(reporters::add);
             MetricsContext metricsContext = new KafkaMetricsContext(JMX_PREFIX,
