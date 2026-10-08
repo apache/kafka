@@ -36,6 +36,7 @@ import org.apache.kafka.coordinator.group.streams.StreamsTopology;
 import org.apache.kafka.coordinator.group.streams.TaskRole;
 import org.apache.kafka.coordinator.group.streams.TasksTuple;
 import org.apache.kafka.coordinator.group.streams.TasksTupleWithEpochs;
+import org.apache.kafka.coordinator.group.streams.assignor.AssignmentConfigsImpl;
 
 import org.junit.jupiter.api.Test;
 
@@ -48,7 +49,6 @@ import static org.apache.kafka.coordinator.group.Assertions.assertRecordsEquals;
 import static org.apache.kafka.coordinator.group.Assertions.assertResponseEquals;
 import static org.apache.kafka.coordinator.group.Assertions.assertUnorderedRecordsEquals;
 import static org.apache.kafka.coordinator.group.GroupMetadataManager.groupSessionTimeoutKey;
-import static org.apache.kafka.coordinator.group.StreamsGroupTestUtil.getDefaultAssignmentConfigs;
 import static org.apache.kafka.coordinator.group.StreamsGroupTestUtil.mkResponseTasks;
 import static org.apache.kafka.coordinator.group.StreamsGroupTestUtil.staticHeartbeat;
 import static org.apache.kafka.coordinator.group.StreamsGroupTestUtil.staticJoinHeartbeat;
@@ -152,7 +152,7 @@ class StreamsGroupMixedGroupMetadataManagerTest {
                 .withTopology(StreamsTopology.fromHeartbeatRequest(topic.topology()))
                 .withValidatedTopologyEpoch(0)
                 .withMetadataHash(topic.metadataHash())
-                .withLastAssignmentConfigs(getDefaultAssignmentConfigs()))
+                .withLastAssignmentConfigs(AssignmentConfigsImpl.DEFAULT))
             .build();
 
 
@@ -245,7 +245,7 @@ class StreamsGroupMixedGroupMetadataManagerTest {
                 .withTopology(StreamsTopology.fromHeartbeatRequest(topology))
                 .withValidatedTopologyEpoch(0)
                 .withMetadataHash(groupMetadataHash)
-                .withLastAssignmentConfigs(getDefaultAssignmentConfigs()))
+                .withLastAssignmentConfigs(AssignmentConfigsImpl.DEFAULT))
             .build();
         context.onLoaded();
 
@@ -294,7 +294,7 @@ class StreamsGroupMixedGroupMetadataManagerTest {
             StreamsCoordinatorRecordHelpers.newStreamsGroupTargetAssignmentTombstoneRecord(groupId, staticMemberId),
             StreamsCoordinatorRecordHelpers.newStreamsGroupMemberTombstoneRecord(groupId, staticMemberId),
             StreamsCoordinatorRecordHelpers.newStreamsGroupMetadataRecord(
-                groupId, timeoutGroupEpoch, groupMetadataHash, 0, getDefaultAssignmentConfigs(), -1, -1
+                groupId, timeoutGroupEpoch, groupMetadataHash, 0, AssignmentConfigsImpl.DEFAULT, -1, -1
             )
         );
 
@@ -362,7 +362,7 @@ class StreamsGroupMixedGroupMetadataManagerTest {
                 joinGroupEpoch,
                 groupMetadataHash,
                 0,
-                getDefaultAssignmentConfigs(),
+                AssignmentConfigsImpl.DEFAULT,
                 -1,
                 -1
             ),
@@ -424,7 +424,7 @@ class StreamsGroupMixedGroupMetadataManagerTest {
                 .withTopology(StreamsTopology.fromHeartbeatRequest(topic.topology()))
                 .withValidatedTopologyEpoch(0)
                 .withMetadataHash(topic.metadataHash())
-                .withLastAssignmentConfigs(getDefaultAssignmentConfigs())
+                .withLastAssignmentConfigs(AssignmentConfigsImpl.DEFAULT)
             )
             .withConfig(GroupCoordinatorConfig.STREAMS_GROUP_INITIAL_REBALANCE_DELAY_MS_CONFIG, GroupCoordinatorConfig.STREAMS_GROUP_INITIAL_REBALANCE_DELAY_MS_DEFAULT)
             .build();
@@ -542,7 +542,7 @@ class StreamsGroupMixedGroupMetadataManagerTest {
                 .withTopology(StreamsTopology.fromHeartbeatRequest(topic.topology()))
                 .withValidatedTopologyEpoch(0)
                 .withMetadataHash(topic.metadataHash())
-                .withLastAssignmentConfigs(getDefaultAssignmentConfigs()))
+                .withLastAssignmentConfigs(AssignmentConfigsImpl.DEFAULT))
             .withConfig(GroupCoordinatorConfig.STREAMS_GROUP_INITIAL_REBALANCE_DELAY_MS_CONFIG, GroupCoordinatorConfig.STREAMS_GROUP_INITIAL_REBALANCE_DELAY_MS_DEFAULT)
             .build();
 
@@ -619,7 +619,7 @@ class StreamsGroupMixedGroupMetadataManagerTest {
                 bumpedGroupEpoch,
                 topic.metadataHash(),
                 0,
-                getDefaultAssignmentConfigs(),
+                AssignmentConfigsImpl.DEFAULT,
                 -1,
                 -1
             )
@@ -743,7 +743,7 @@ class StreamsGroupMixedGroupMetadataManagerTest {
                 .withTopology(StreamsTopology.fromHeartbeatRequest(topic.topology()))
                 .withValidatedTopologyEpoch(0)
                 .withMetadataHash(topic.metadataHash())
-                .withLastAssignmentConfigs(getDefaultAssignmentConfigs()))
+                .withLastAssignmentConfigs(AssignmentConfigsImpl.DEFAULT))
             .withConfig(GroupCoordinatorConfig.STREAMS_GROUP_INITIAL_REBALANCE_DELAY_MS_CONFIG, GroupCoordinatorConfig.STREAMS_GROUP_INITIAL_REBALANCE_DELAY_MS_DEFAULT)
             .build();
 
@@ -875,7 +875,7 @@ class StreamsGroupMixedGroupMetadataManagerTest {
                 .withTopology(StreamsTopology.fromHeartbeatRequest(topic.topology()))
                 .withValidatedTopologyEpoch(0)
                 .withMetadataHash(topic.metadataHash())
-                .withLastAssignmentConfigs(getDefaultAssignmentConfigs()))
+                .withLastAssignmentConfigs(AssignmentConfigsImpl.DEFAULT))
             .withConfig(GroupCoordinatorConfig.STREAMS_GROUP_INITIAL_REBALANCE_DELAY_MS_CONFIG, GroupCoordinatorConfig.STREAMS_GROUP_INITIAL_REBALANCE_DELAY_MS_DEFAULT)
             .build();
         
