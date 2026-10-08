@@ -17,56 +17,42 @@
 package integration.kafka.api
 
 import com.nimbusds.jose.jwk.RSAKey
-import kafka.api.{IntegrationTestHarness, SaslSetup}
-import kafka.utils.{TestInfoUtils, TestUtils => KafkaTestUtils}
-import org.apache.kafka.clients.CommonClientConfigs
-import org.apache.kafka.clients.admin.NewTopic
-import org.apache.kafka.clients.producer.ProducerRecord
+import kafka.utils.TestInfoUtils
 import org.apache.kafka.common.config.{ConfigException, SaslConfigs}
-import org.junit.jupiter.api.{AfterEach, BeforeEach, Disabled, TestInfo}
+import org.junit.jupiter.api.Disabled
 
-import java.util.{Base64, Collections, Properties}
+import java.util.{Collections, Properties}
 import no.nav.security.mock.oauth2.{MockOAuth2Server, OAuth2Config}
 import no.nav.security.mock.oauth2.token.{KeyProvider, OAuth2TokenProvider}
 import org.apache.kafka.common.{KafkaException, TopicPartition}
 import org.apache.kafka.common.config.internals.BrokerSecurityConfigs
 import org.apache.kafka.common.errors.SaslAuthenticationException
-import org.apache.kafka.common.security.auth.SecurityProtocol
-import org.apache.kafka.common.security.oauthbearer.{JwtRetriever, OAuthBearerLoginCallbackHandler, OAuthBearerLoginModule, OAuthBearerValidatorCallbackHandler}
-import org.apache.kafka.common.utils.Utils
+import org.apache.kafka.common.security.oauthbearer.{JwtRetriever, OAuthBearerLoginCallbackHandler}
 import org.apache.kafka.test.TestUtils
-import org.junit.jupiter.api.Assertions.{assertDoesNotThrow, assertEquals, assertNotNull, assertThrows}
+import org.junit.jupiter.api.Assertions.{assertDoesNotThrow, assertThrows}
 import org.junit.jupiter.params.ParameterizedTest
 import org.junit.jupiter.params.provider.MethodSource
 
-import java.io.File
-import java.nio.ByteBuffer
-import java.nio.channels.FileChannel
-import java.nio.file.StandardOpenOption
 import java.security.{KeyPairGenerator, PrivateKey}
 import java.security.interfaces.RSAPublicKey
-import java.util
 
 /**
- * Integration tests for the consumer that cover basic usage as well as coordinator failure
+ * Integration tests for the jwt-bearer grant against a mock OAuth server.
  */
-class ClientOAuthIntegrationTest extends IntegrationTestHarness with SaslSetup {
-
-  override val brokerCount = 3
-
-  override protected def securityProtocol = SecurityProtocol.SASL_PLAINTEXT
-  override protected val serverSaslProperties = Some(kafkaServerSaslProperties(kafkaServerSaslMechanisms, kafkaClientSaslMechanism))
-  override protected val clientSaslProperties = Some(kafkaClientSaslProperties(kafkaClientSaslMechanism))
-
-  protected def kafkaClientSaslMechanism = "OAUTHBEARER"
-  protected def kafkaServerSaslMechanisms = List(kafkaClientSaslMechanism)
+class ClientOAuthIntegrationTest extends AbstractClientOAuthIntegrationTest {
 
   val issuerId = "default"
   var mockOAuthServer: MockOAuth2Server = _
   var privateKey: PrivateKey = _
 
-  @BeforeEach
-  override def setUp(testInfo: TestInfo): Unit = {
+  override protected def issuerUrl: String = mockOAuthServer.issuerUrl(issuerId).toString
+  override protected def tokenEndpointUrl: String = mockOAuthServer.tokenEndpointUrl(issuerId).url().toString
+  override protected def jwksUrl: String = mockOAuthServer.jwksUrl(issuerId).url().toString
+  override protected def brokerAudience: String = issuerId
+  override protected def clientCredentialsClientId: String = "test-client"
+  override protected def clientCredentialsClientSecret: String = "test-secret"
+
+  override protected def startOAuthServer(): Unit = {
     // Step 1: Generate the key pair dynamically.
     val keyGen = KeyPairGenerator.getInstance("RSA")
     keyGen.initialize(2048)
@@ -87,56 +73,11 @@ class ClientOAuthIntegrationTest extends IntegrationTestHarness with SaslSetup {
     mockOAuthServer = new MockOAuth2Server(oauthConfig)
 
     mockOAuthServer.start()
-    val tokenEndpointUrl = mockOAuthServer.tokenEndpointUrl(issuerId).url().toString
-    val jwksUrl = mockOAuthServer.jwksUrl(issuerId).url().toString
-    System.setProperty(BrokerSecurityConfigs.ALLOWED_SASL_OAUTHBEARER_URLS_CONFIG, s"$tokenEndpointUrl,$jwksUrl")
-
-    val listenerNamePrefix = s"listener.name.${listenerName.value().toLowerCase}"
-
-    serverConfig.setProperty(s"$listenerNamePrefix.oauthbearer.${SaslConfigs.SASL_JAAS_CONFIG}", s"${classOf[OAuthBearerLoginModule].getName} required ;")
-    serverConfig.setProperty(s"$listenerNamePrefix.oauthbearer.${SaslConfigs.SASL_OAUTHBEARER_EXPECTED_AUDIENCE}", issuerId)
-    serverConfig.setProperty(s"$listenerNamePrefix.oauthbearer.${SaslConfigs.SASL_OAUTHBEARER_EXPECTED_ISSUER}", mockOAuthServer.issuerUrl(issuerId).toString)
-    serverConfig.setProperty(s"$listenerNamePrefix.oauthbearer.${SaslConfigs.SASL_OAUTHBEARER_JWKS_ENDPOINT_URL}", jwksUrl)
-    serverConfig.setProperty(s"$listenerNamePrefix.oauthbearer.${BrokerSecurityConfigs.SASL_SERVER_CALLBACK_HANDLER_CLASS_CONFIG}", classOf[OAuthBearerValidatorCallbackHandler].getName)
-
-    // create static config including client login context with credentials for JaasTestUtils 'client2'
-    startSasl(jaasSections(kafkaServerSaslMechanisms, Option(kafkaClientSaslMechanism)))
-
-    // The superuser needs the configuration in setUp because it's used to create resources before the individual
-    // test methods are invoked.
-    superuserClientConfig.putAll(defaultClientCredentialsConfigs())
-
-    super.setUp(testInfo)
   }
 
-  @AfterEach
-  override def tearDown(): Unit = {
+  override protected def stopOAuthServer(): Unit = {
     if (mockOAuthServer != null)
       mockOAuthServer.shutdown()
-
-    closeSasl()
-    super.tearDown()
-
-    System.clearProperty(BrokerSecurityConfigs.ALLOWED_SASL_OAUTHBEARER_FILES_CONFIG)
-    System.clearProperty(BrokerSecurityConfigs.ALLOWED_SASL_OAUTHBEARER_URLS_CONFIG)
-  }
-
-  def defaultOAuthConfigs(): Properties = {
-    val tokenEndpointUrl = mockOAuthServer.tokenEndpointUrl(issuerId).url().toString
-
-    val configs = new Properties()
-    configs.put(CommonClientConfigs.SECURITY_PROTOCOL_CONFIG, securityProtocol.name)
-    configs.put(SaslConfigs.SASL_JAAS_CONFIG, jaasClientLoginModule(kafkaClientSaslMechanism))
-    configs.put(SaslConfigs.SASL_LOGIN_CALLBACK_HANDLER_CLASS, classOf[OAuthBearerLoginCallbackHandler].getName)
-    configs.put(SaslConfigs.SASL_OAUTHBEARER_TOKEN_ENDPOINT_URL, tokenEndpointUrl)
-    configs
-  }
-
-  def defaultClientCredentialsConfigs(): Properties = {
-    val configs = defaultOAuthConfigs()
-    configs.put(SaslConfigs.SASL_OAUTHBEARER_CLIENT_CREDENTIALS_CLIENT_ID, "test-client")
-    configs.put(SaslConfigs.SASL_OAUTHBEARER_CLIENT_CREDENTIALS_CLIENT_SECRET, "test-secret")
-    configs
   }
 
   def defaultJwtBearerConfigs(): Properties = {
@@ -145,15 +86,6 @@ class ClientOAuthIntegrationTest extends IntegrationTestHarness with SaslSetup {
     configs.put(SaslConfigs.SASL_LOGIN_CALLBACK_HANDLER_CLASS, classOf[OAuthBearerLoginCallbackHandler].getName)
     configs.put(SaslConfigs.SASL_OAUTHBEARER_JWT_RETRIEVER_CLASS, "org.apache.kafka.common.security.oauthbearer.JwtBearerJwtRetriever")
     configs
-  }
-
-  @ParameterizedTest(name = TestInfoUtils.TestWithParameterizedGroupProtocolNames)
-  @MethodSource(Array("getTestGroupProtocolParametersAll"))
-  def testBasicClientCredentials(groupProtocol: String): Unit = {
-    val configs = defaultClientCredentialsConfigs()
-    assertDoesNotThrow(() => createProducer(configOverrides = configs))
-    assertDoesNotThrow(() => createConsumer(configOverrides = configs))
-    assertDoesNotThrow(() => createAdminClient(configOverrides = configs))
   }
 
   @ParameterizedTest(name = TestInfoUtils.TestWithParameterizedGroupProtocolNames)
@@ -267,100 +199,6 @@ class ClientOAuthIntegrationTest extends IntegrationTestHarness with SaslSetup {
     val consumer = createConsumer(configOverrides = configs)
     consumer.assign(Collections.singleton(tp))
     assertThrows(classOf[SaslAuthenticationException], () => consumer.position(tp))
-  }
-
-  @ParameterizedTest(name = TestInfoUtils.TestWithParameterizedGroupProtocolNames)
-  @MethodSource(Array("getTestGroupProtocolParametersAll"))
-  def testClientAssertionProduceConsume(groupProtocol: String): Unit = {
-    val topic = "client-assertion-test"
-    val privateKeyFile = generatePrivateKeyFile()
-    System.setProperty(BrokerSecurityConfigs.ALLOWED_SASL_OAUTHBEARER_FILES_CONFIG, privateKeyFile.getAbsolutePath)
-
-    val configs = defaultOAuthConfigs()
-    configs.put(SaslConfigs.SASL_OAUTHBEARER_ASSERTION_PRIVATE_KEY_FILE, privateKeyFile.getPath)
-    configs.put(SaslConfigs.SASL_OAUTHBEARER_ASSERTION_CLAIM_ISS, "kafka-e2e-test")
-    configs.put(SaslConfigs.SASL_OAUTHBEARER_ASSERTION_CLAIM_AUD, "default")
-    configs.put(SaslConfigs.SASL_OAUTHBEARER_ASSERTION_CLAIM_SUB, "kafka-e2e-test")
-    configs.put(SaslConfigs.SASL_OAUTHBEARER_SCOPE, "default")
-
-    val admin = createAdminClient(configOverrides = configs)
-    admin.createTopics(Collections.singletonList(new NewTopic(topic, 1, 1.toShort))).all().get()
-
-    val producer = createProducer(configOverrides = configs)
-    val record = new ProducerRecord[Array[Byte], Array[Byte]](topic, "key".getBytes, "value".getBytes)
-    producer.send(record).get()
-
-    val consumer = createConsumer(configOverrides = configs)
-    consumer.subscribe(Collections.singletonList(topic))
-    val records = KafkaTestUtils.consumeRecords(consumer, 1)
-    assertEquals(1, records.size)
-    assertEquals("value", new String(records.head.value()))
-  }
-
-  @ParameterizedTest(name = TestInfoUtils.TestWithParameterizedGroupProtocolNames)
-  @MethodSource(Array("getTestGroupProtocolParametersAll"))
-  def testClientAssertionFileBasedProduceConsume(groupProtocol: String): Unit = {
-    val topic = "file-assertion-test"
-    val jwt = mockOAuthServer.issueToken(issuerId, "jdoe", "someaudience", Collections.singletonMap("scope", "test"))
-    val assertionFile = TestUtils.tempFile(jwt.serialize())
-    System.setProperty(BrokerSecurityConfigs.ALLOWED_SASL_OAUTHBEARER_FILES_CONFIG, assertionFile.getAbsolutePath)
-
-    val configs = defaultOAuthConfigs()
-    configs.put(SaslConfigs.SASL_OAUTHBEARER_ASSERTION_FILE, assertionFile.getAbsolutePath)
-
-    val admin = createAdminClient(configOverrides = configs)
-    admin.createTopics(Collections.singletonList(new NewTopic(topic, 1, 1.toShort))).all().get()
-
-    val producer = createProducer(configOverrides = configs)
-    val record = new ProducerRecord[Array[Byte], Array[Byte]](topic, "key".getBytes, "value".getBytes)
-    producer.send(record).get()
-
-    val consumer = createConsumer(configOverrides = configs)
-    consumer.subscribe(Collections.singletonList(topic))
-    val records = KafkaTestUtils.consumeRecords(consumer, 1)
-    assertEquals(1, records.size)
-  }
-
-  @ParameterizedTest(name = TestInfoUtils.TestWithParameterizedGroupProtocolNames)
-  @MethodSource(Array("getTestGroupProtocolParametersAll"))
-  def testClientAssertionAdminOperations(groupProtocol: String): Unit = {
-    val privateKeyFile = generatePrivateKeyFile()
-    System.setProperty(BrokerSecurityConfigs.ALLOWED_SASL_OAUTHBEARER_FILES_CONFIG, privateKeyFile.getAbsolutePath)
-
-    val configs = defaultOAuthConfigs()
-    configs.put(SaslConfigs.SASL_OAUTHBEARER_ASSERTION_PRIVATE_KEY_FILE, privateKeyFile.getPath)
-    configs.put(SaslConfigs.SASL_OAUTHBEARER_ASSERTION_CLAIM_ISS, "kafka-admin-test")
-    configs.put(SaslConfigs.SASL_OAUTHBEARER_ASSERTION_CLAIM_AUD, "default")
-    configs.put(SaslConfigs.SASL_OAUTHBEARER_ASSERTION_CLAIM_SUB, "kafka-admin-test")
-    configs.put(SaslConfigs.SASL_OAUTHBEARER_SCOPE, "default")
-
-    val admin = createAdminClient(configOverrides = configs)
-
-    val clusterId = admin.describeCluster().clusterId().get()
-    assertNotNull(clusterId)
-
-    val topic = "admin-assertion-test"
-    admin.createTopics(Collections.singletonList(new NewTopic(topic, 1, 1.toShort))).all().get()
-
-    KafkaTestUtils.waitForAllPartitionsMetadata(brokers, topic, 1)
-
-    val description = admin.describeTopics(Collections.singletonList(topic)).allTopicNames().get()
-    assertNotNull(description.get(topic))
-  }
-
-  def generatePrivateKeyFile(): File = {
-    val file = File.createTempFile("private-", ".key")
-    val bytes = Base64.getEncoder.encode(privateKey.getEncoded)
-    var channel: FileChannel = null
-
-    try {
-      channel = FileChannel.open(file.toPath, util.EnumSet.of(StandardOpenOption.WRITE))
-      Utils.writeFully(channel, ByteBuffer.wrap(bytes))
-    } finally {
-      channel.close()
-    }
-
-    file
   }
 }
 
