@@ -1245,6 +1245,9 @@ project(':core') {
       testRuntimeOnly.exclude module: 'api-ldap-schema-data'
       testCompileClasspath.exclude group: 'org.bouncycastle', module: 'bcprov-jdk15on'
       testRuntimeClasspath.exclude group: 'org.bouncycastle', module: 'bcprov-jdk15on'
+      // JUnit 4 is a transitive runtime dependency of mock-oauth2-server (via okhttp3 mockwebserver),
+      // keep it off the compile classpath so tests can't accidentally use JUnit 4 APIs.
+      testCompileClasspath.exclude group: 'junit', module: 'junit'
     }
 
     testRuntimeOnly(libs.apacheda) {
@@ -2719,7 +2722,6 @@ project(':tools') {
     testImplementation testFixtures(project(':server'))
     testImplementation project(':test-common:test-common-internal-api')
     testImplementation project(':test-common:test-common-runtime')
-    testImplementation project(':test-common:test-common-util')
     testImplementation project(':server-common')
     testImplementation testFixtures(project(':server-common'))
     testImplementation project(':connect:api')
