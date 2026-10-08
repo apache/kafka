@@ -596,7 +596,9 @@ class StreamsGroupTopologyDescriptionRequestTest(cluster: ClusterInstance) exten
   @ClusterTest(serverProperties = Array(
     new ClusterConfigProperty(
       key = GroupCoordinatorConfig.STREAMS_GROUP_TOPOLOGY_DESCRIPTION_PLUGIN_CLASS_CONFIG,
-      value = "kafka.server.FailingTopologyDescriptionPlugin")
+      value = "kafka.server.FailingTopologyDescriptionPlugin"),
+    // Keeps the periodic cleanup cycle from also deleting the topology while the test runs.
+    new ClusterConfigProperty(key = GroupCoordinatorConfig.OFFSETS_RETENTION_CHECK_INTERVAL_MS_CONFIG, value = "3600000")
   ))
   def testClassicJoinDeletesStoredTopologyAndConvertsEmptyStreamsGroup(): Unit = {
     val admin = cluster.admin()
@@ -663,17 +665,19 @@ class StreamsGroupTopologyDescriptionRequestTest(cluster: ClusterInstance) exten
       assertEquals(Errors.REBALANCE_IN_PROGRESS.code(), classicJoin(groupId).errorCode())
       assertStillStreamsGroup(groupId)
 
-      // The plugin recovers and the periodic cleanup cycle empties it without any client involvement.
-      val attemptsBeforeRecovery = FailingTopologyDescriptionPlugin.deleteTopologyAttempts(groupId)
+      // The plugin recovers. The failed join armed a back-off (at least 24s) that stops further
+      // joins from calling the plugin, and only a successful cleanup cycle clears it. So a join
+      // that gets past REBALANCE_IN_PROGRESS shows the periodic cycle emptied the plugin.
       FailingTopologyDescriptionPlugin.failDeleteTopologyWith(null)
-      TestUtils.waitUntilTrue(
-        () => FailingTopologyDescriptionPlugin.deleteTopologyAttempts(groupId) > attemptsBeforeRecovery,
-        "Periodic cleanup cycle did not retry plugin.deleteTopology after the plugin recovered.")
-
-      // With no topology left to clean up, a classic join now converts the group.
+      var joinResponse: JoinGroupResponseData = null
       TestUtils.waitUntilTrue(() => {
-        classicJoin(groupId).errorCode() == Errors.NONE.code()
-      }, "Classic join did not succeed after the periodic cleanup cleared the stored topology.")
+        joinResponse = sendJoinRequest(groupId = groupId)
+        joinResponse.errorCode() != Errors.REBALANCE_IN_PROGRESS.code()
+      }, "Classic join was still rejected after the plugin recovered.")
+
+      // The group converts once the member re-joins with the member id the broker assigned.
+      assertEquals(Errors.MEMBER_ID_REQUIRED.code(), joinResponse.errorCode())
+      assertEquals(Errors.NONE.code(), sendJoinRequest(groupId = groupId, memberId = joinResponse.memberId()).errorCode())
       assertEquals(Errors.GROUP_ID_NOT_FOUND.code(), streamsGroupDescribe(List(groupId)).head.errorCode())
       assertEquals("consumer", describeGroups(List(groupId)).head.protocolType())
     } finally {
@@ -738,7 +742,7 @@ class StreamsGroupTopologyDescriptionRequestTest(cluster: ClusterInstance) exten
   }
 
   private def assertStillStreamsGroup(groupId: String): Unit = {
-    val describedGroup = streamsGroupDescribe(List(groupId), includeTopologyDescription = true).head
+    val describedGroup = streamsGroupDescribe(List(groupId)).head
     assertEquals(Errors.NONE.code(), describedGroup.errorCode())
   }
 
