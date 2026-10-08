@@ -26,7 +26,7 @@ import java.nio.file.Files;
 import java.nio.file.Path;
 import java.nio.file.Paths;
 
-import static org.apache.kafka.message.checker.CheckerTestUtils.messageSpecStringToTempFile;
+import static org.apache.kafka.message.checker.CheckerTestUtils.messageSpecStringToFile;
 import static org.junit.jupiter.api.Assertions.assertEquals;
 import static org.junit.jupiter.api.Assumptions.assumeTrue;
 
@@ -66,7 +66,7 @@ public class MetadataSchemaCheckerToolTest {
     @Test
     public void testSuccessfulParse() throws Exception {
         try (ByteArrayOutputStream stream = new ByteArrayOutputStream()) {
-            String path = messageSpecStringToTempFile(tempDir,
+            String path = messageSpecStringToFile(tempDir,
                 "{'apiKey':62, 'type': 'request', 'name': 'BrokerRegistrationRequest', " +
                 "'validVersions': '0-2', 'flexibleVersions': '0+', " +
                 "'fields': [{'name': 'BrokerId', 'type': 'int32', 'versions': '0+'}]}");
@@ -78,7 +78,7 @@ public class MetadataSchemaCheckerToolTest {
     @Test
     public void testSuccessfulVerifyEvolution() throws Exception {
         try (ByteArrayOutputStream stream = new ByteArrayOutputStream()) {
-            String path = messageSpecStringToTempFile(tempDir,
+            String path = messageSpecStringToFile(tempDir,
                 "{'apiKey':62, 'type': 'request', 'name': 'BrokerRegistrationRequest', " +
                 "'validVersions': '0-2', 'flexibleVersions': '0+', " +
                 "'fields': [{'name': 'BrokerId', 'type': 'int32', 'versions': '0+'}]}");

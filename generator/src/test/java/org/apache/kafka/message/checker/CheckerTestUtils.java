@@ -144,7 +144,7 @@ public class CheckerTestUtils {
             false);
     }
 
-    static String messageSpecStringToTempFile(Path tempDir, String input) throws IOException {
+    static String messageSpecStringToFile(Path tempDir, String input) throws IOException {
         File file = Files.createFile(tempDir.resolve("MetadataSchemaCheckerToolTest.json")).toFile();
         MessageSpec messageSpec = MessageGenerator.JSON_SERDE.
                 readValue(input.replaceAll("'", "\""), MessageSpec.class);
