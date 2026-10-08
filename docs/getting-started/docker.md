@@ -33,7 +33,7 @@ type: docs
 Docker image can be pulled from Docker Hub using the following command: 
 
 ```bash
-$ docker pull apache/kafka:4.3.0
+$ docker pull apache/kafka:4.4.0
 ```
 
 If you want to fetch the latest version of the Docker image use following command: 
@@ -45,7 +45,7 @@ $ docker pull apache/kafka:latest
 To start the Kafka container using this Docker image with default configs and on default port 9092: 
 
 ```bash
-$ docker run -p 9092:9092 apache/kafka:4.3.0
+$ docker run -p 9092:9092 apache/kafka:4.4.0
 ```
 
 ## GraalVM Based Native Apache Kafka Docker Image
@@ -56,7 +56,7 @@ NOTE: This image is experimental and intended for local development and testing 
 Docker image can be pulled from Docker Hub using the following command: 
 
 ```bash
-$ docker pull apache/kafka-native:4.3.0
+$ docker pull apache/kafka-native:4.4.0
 ```
 
 If you want to fetch the latest version of the Docker image use following command: 
@@ -68,8 +68,12 @@ $ docker pull apache/kafka-native:latest
 To start the Kafka container using this Docker image with default configs and on default port 9092: 
 
 ```bash
-$ docker run -p 9092:9092 apache/kafka-native:4.3.0
+$ docker run -p 9092:9092 apache/kafka-native:4.4.0
 ```
+
+### SASL and SSL
+
+The native image supports SASL authentication since 4.4.0; earlier native images do not. Docker Compose examples for SASL and SSL, which work with both the JVM and the native image, are described in the [usage guide](https://github.com/apache/kafka/blob/trunk/docker/examples/README.md).
 
 ## Usage guide
 
