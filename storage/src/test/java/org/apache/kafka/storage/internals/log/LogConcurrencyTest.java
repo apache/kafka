@@ -63,9 +63,13 @@ public class LogConcurrencyTest {
 
     @AfterEach
     public void teardown() throws Exception {
-        scheduler.shutdown();
-        if (log != null) {
-            log.close();
+        try {
+            scheduler.shutdown();
+            if (log != null) {
+                log.close();
+            }
+        } finally {
+            brokerTopicStats.close();
         }
         Utils.delete(tmpDir);
     }
