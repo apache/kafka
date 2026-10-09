@@ -335,7 +335,8 @@ public class LogSegment implements Closeable {
     public int appendFromFile(FileRecords records, int start) throws IOException {
         int position = start;
         BufferSupplier bufferSupplier = new BufferSupplier.GrowableBufferSupplier();
-        while (position < start + records.sizeInBytes()) {
+        // sizeInBytes() is the end of the file, not the length remaining after start.
+        while (position < records.sizeInBytes()) {
             int bytesAppended = appendChunkFromFile(records, position, bufferSupplier);
             if (bytesAppended == 0)
                 return position - start;
@@ -477,7 +478,9 @@ public class LogSegment implements Closeable {
      *                             the transaction index.
      * @param leaderEpochCache a cache for updating the leader epoch during recovery.
      * @return The number of bytes truncated from the log
-     * @throws LogSegmentOffsetOverflowException if the log segment contains an offset that causes the index offset to overflow
+     * @throws LogSegmentOffsetOverflowException if the log segment contains an offset that causes the index offset to overflow.
+     *         The invalid tail is still truncated before this is thrown, so a preallocated zero-filled tail is not
+     *         left on the segment for the subsequent split.
      */
     public int recover(ProducerStateManager producerStateManager, LeaderEpochFileCache leaderEpochCache) throws IOException {
         offsetIndex().reset();
@@ -486,30 +489,42 @@ public class LogSegment implements Closeable {
         int validBytes = 0;
         int lastIndexEntry = 0;
         maxTimestampAndOffsetSoFar = TimestampOffset.UNKNOWN;
+        // Offset overflow aborts indexing, but the bytes of that batch and any later valid batches must stay in the
+        // file so the caller can split them. Keep scanning until the first corrupt batch (the preallocated zero tail)
+        // so truncate below removes only that tail, then rethrow.
+        LogSegmentOffsetOverflowException overflowException = null;
         try {
             for (RecordBatch batch : log.batches()) {
                 batch.ensureValid();
-                ensureOffsetInRange(batch.lastOffset());
-
-                // The max timestamp is exposed at the batch level, so no need to iterate the records
-                if (batch.maxTimestamp() > maxTimestampSoFar()) {
-                    maxTimestampAndOffsetSoFar = new TimestampOffset(batch.maxTimestamp(), batch.lastOffset());
+                if (overflowException == null) {
+                    try {
+                        ensureOffsetInRange(batch.lastOffset());
+                    } catch (LogSegmentOffsetOverflowException e) {
+                        overflowException = e;
+                    }
                 }
 
-                // Build offset index
-                if (validBytes - lastIndexEntry > indexIntervalBytes) {
-                    offsetIndex().append(batch.lastOffset(), validBytes);
-                    timeIndex().maybeAppend(maxTimestampSoFar(), shallowOffsetOfMaxTimestampSoFar());
-                    lastIndexEntry = validBytes;
+                if (overflowException == null) {
+                    // The max timestamp is exposed at the batch level, so no need to iterate the records
+                    if (batch.maxTimestamp() > maxTimestampSoFar()) {
+                        maxTimestampAndOffsetSoFar = new TimestampOffset(batch.maxTimestamp(), batch.lastOffset());
+                    }
+
+                    // Build offset index
+                    if (validBytes - lastIndexEntry > indexIntervalBytes) {
+                        offsetIndex().append(batch.lastOffset(), validBytes);
+                        timeIndex().maybeAppend(maxTimestampSoFar(), shallowOffsetOfMaxTimestampSoFar());
+                        lastIndexEntry = validBytes;
+                    }
+
+                    if (batch.magic() >= RecordBatch.MAGIC_VALUE_V2) {
+                        if (batch.partitionLeaderEpoch() >= 0 &&
+                                (leaderEpochCache.latestEpoch().isEmpty() || batch.partitionLeaderEpoch() > leaderEpochCache.latestEpoch().get()))
+                            leaderEpochCache.assign(batch.partitionLeaderEpoch(), batch.baseOffset());
+                        updateProducerState(producerStateManager, batch);
+                    }
                 }
                 validBytes += batch.sizeInBytes();
-
-                if (batch.magic() >= RecordBatch.MAGIC_VALUE_V2) {
-                    if (batch.partitionLeaderEpoch() >= 0 &&
-                            (leaderEpochCache.latestEpoch().isEmpty() || batch.partitionLeaderEpoch() > leaderEpochCache.latestEpoch().get()))
-                        leaderEpochCache.assign(batch.partitionLeaderEpoch(), batch.baseOffset());
-                    updateProducerState(producerStateManager, batch);
-                }
             }
         } catch (CorruptRecordException | InvalidRecordException e) {
             LOGGER.warn("Found invalid messages in log segment {} at byte offset {}.", log.file().getAbsolutePath(),
@@ -524,6 +539,8 @@ public class LogSegment implements Closeable {
         // A normally closed segment always appends the biggest timestamp ever seen into log segment, we do this as well.
         timeIndex().maybeAppend(maxTimestampSoFar(), shallowOffsetOfMaxTimestampSoFar(), true);
         timeIndex().trimToValidSize();
+        if (overflowException != null)
+            throw overflowException;
         return truncated;
     }
 
