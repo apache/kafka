@@ -44,6 +44,7 @@ import org.apache.kafka.common.errors.RebalanceInProgressException;
 import org.apache.kafka.common.errors.RetriableException;
 import org.apache.kafka.common.errors.TimeoutException;
 import org.apache.kafka.common.errors.TopicAuthorizationException;
+import org.apache.kafka.common.errors.UnknownTopicOrPartitionException;
 import org.apache.kafka.common.errors.UnstableOffsetCommitException;
 import org.apache.kafka.common.errors.WakeupException;
 import org.apache.kafka.common.message.JoinGroupRequestData;
@@ -782,11 +783,16 @@ public final class ConsumerCoordinator extends AbstractCoordinator {
             // 1. if joinPrepareTimer has expired
             // 2. if offset commit failed with non-retriable exception
             // 3. if offset commit success
+            // 4. if offset commit failed because a topic/partition was deleted (UNKNOWN_TOPIC_OR_PARTITION).
+            //    Retrying that error blocks JoinGroup indefinitely and, with the EAGER protocol, pauses
+            //    fetches for every assigned partition (KAFKA-16235).
             boolean onJoinPrepareAsyncCommitCompleted = true;
             if (joinPrepareTimer.isExpired()) {
                 log.error("Asynchronous auto-commit of offsets failed: joinPrepare timeout. Will continue to join group");
             } else if (!autoCommitOffsetRequestFuture.isDone()) {
                 onJoinPrepareAsyncCommitCompleted = false;
+            } else if (autoCommitOffsetRequestFuture.failed() && isUnknownTopicOrPartition(autoCommitOffsetRequestFuture.exception())) {
+                log.info("Asynchronous auto-commit of offsets failed because a topic or partition was deleted. Will continue to join group.");
             } else if (autoCommitOffsetRequestFuture.failed() && autoCommitOffsetRequestFuture.isRetriable()) {
                 log.debug("Asynchronous auto-commit of offsets failed with retryable error: {}. Will retry it.",
                         autoCommitOffsetRequestFuture.exception().getMessage());
@@ -1183,7 +1189,7 @@ public final class ConsumerCoordinator extends AbstractCoordinator {
 
     private void maybeAutoCommitOffsetsSync(Timer timer) {
         if (autoCommitEnabled) {
-            Map<TopicPartition, OffsetAndMetadata> allConsumedOffsets = subscriptions.allConsumed();
+            Map<TopicPartition, OffsetAndMetadata> allConsumedOffsets = offsetsForExistingTopics(subscriptions.allConsumed());
             try {
                 log.debug("Sending synchronous auto-commit of offsets {}", allConsumedOffsets);
                 if (!commitOffsetsSync(allConsumedOffsets, timer))
@@ -1230,8 +1236,40 @@ public final class ConsumerCoordinator extends AbstractCoordinator {
         return false;
     }
 
+    /**
+     * For group management, drop offsets for topics that are no longer in the subscription
+     * (for example a regex match that disappeared after a topic delete). Committing those
+     * partitions returns {@link Errors#UNKNOWN_TOPIC_OR_PARTITION}, which is retriable and
+     * can stall rebalance (KAFKA-16235). Manual assignment is left unchanged.
+     */
+    private Map<TopicPartition, OffsetAndMetadata> offsetsForExistingTopics(Map<TopicPartition, OffsetAndMetadata> offsets) {
+        if (!subscriptions.hasAutoAssignedPartitions()) {
+            return offsets;
+        }
+        Map<TopicPartition, OffsetAndMetadata> filtered = new HashMap<>(offsets.size());
+        for (Map.Entry<TopicPartition, OffsetAndMetadata> entry : offsets.entrySet()) {
+            if (subscriptions.subscription().contains(entry.getKey().topic())) {
+                filtered.put(entry.getKey(), entry.getValue());
+            } else {
+                log.debug("Skipping offset commit for partition {} because its topic is no longer subscribed",
+                    entry.getKey());
+            }
+        }
+        return filtered;
+    }
+
+    private static boolean isUnknownTopicOrPartition(Throwable exception) {
+        while (exception != null) {
+            if (exception instanceof UnknownTopicOrPartitionException) {
+                return true;
+            }
+            exception = exception.getCause();
+        }
+        return false;
+    }
+
     private RequestFuture<Void> autoCommitOffsetsAsync() {
-        Map<TopicPartition, OffsetAndMetadata> allConsumedOffsets = subscriptions.allConsumed();
+        Map<TopicPartition, OffsetAndMetadata> allConsumedOffsets = offsetsForExistingTopics(subscriptions.allConsumed());
         log.debug("Sending asynchronous auto-commit of offsets {}", allConsumedOffsets);
 
         return commitOffsetsAsync(allConsumedOffsets, (offsets, exception) -> {
