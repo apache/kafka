@@ -34,11 +34,12 @@ You can run Java applications that use the Kafka Streams library without any add
 # Starting a Kafka Streams application
 
 You can package your Java application as a fat JAR file and then start the application like this:
-    
-    
-    # Start the application in class `com.example.MyStreamsApp`
-    # from the fat JAR named `path-to-app-fatjar.jar`.
-    $ java -cp path-to-app-fatjar.jar com.example.MyStreamsApp
+
+```bash
+# Start the application in class `com.example.MyStreamsApp`
+# from the fat JAR named `path-to-app-fatjar.jar`.
+$ java -cp path-to-app-fatjar.jar com.example.MyStreamsApp
+```
 
 When you start your application you are launching a Kafka Streams instance of your application. You can run multiple instances of your application. A common scenario is that there are multiple instances of your application running in parallel. For more information, see [Parallelism Model](../../architecture#streams_architecture_tasks).
 
@@ -52,17 +53,19 @@ When the application instance starts running, the defined processor topology wil
 
 You can set a `KafkaStreams.StateListener` to be notified whenever the `KafkaStreams` instance transitions between states. The possible states are: `CREATED`, `REBALANCING`, `RUNNING`, `PENDING_SHUTDOWN`, `NOT_RUNNING`, `PENDING_ERROR`, and `ERROR`. See the [`KafkaStreams.State`](/{version}/javadoc/org/apache/kafka/streams/KafkaStreams.State.html) javadocs for the meaning of each state and the allowed transitions.
 
-    KafkaStreams streams = new KafkaStreams(topology, props);
+```java
+KafkaStreams streams = new KafkaStreams(topology, props);
 
-    streams.setStateListener((newState, oldState) -> {
-        if (newState == KafkaStreams.State.RUNNING) {
-            // application is now ready to process records
-        } else if (newState == KafkaStreams.State.ERROR) {
-            // application has encountered a fatal error
-        }
-    });
+streams.setStateListener((newState, oldState) -> {
+    if (newState == KafkaStreams.State.RUNNING) {
+        // application is now ready to process records
+    } else if (newState == KafkaStreams.State.ERROR) {
+        // application has encountered a fatal error
+    }
+});
 
-    streams.start();
+streams.start();
+```
 
 ## Uncaught exception handler
 
@@ -74,14 +77,16 @@ You can set a `StreamsUncaughtExceptionHandler` to handle unexpected exceptions 
 
 Example:
 
-    import org.apache.kafka.streams.errors.StreamsUncaughtExceptionHandler;
+```java
+import org.apache.kafka.streams.errors.StreamsUncaughtExceptionHandler;
 
-    streams.setUncaughtExceptionHandler(exception -> {
-        if (exception instanceof RetriableException) {
-            return StreamsUncaughtExceptionHandler.StreamThreadExceptionResponse.REPLACE_THREAD;
-        }
-        return StreamsUncaughtExceptionHandler.StreamThreadExceptionResponse.SHUTDOWN_CLIENT;
-    });
+streams.setUncaughtExceptionHandler(exception -> {
+    if (exception instanceof RetriableException) {
+        return StreamsUncaughtExceptionHandler.StreamThreadExceptionResponse.REPLACE_THREAD;
+    }
+    return StreamsUncaughtExceptionHandler.StreamThreadExceptionResponse.SHUTDOWN_CLIENT;
+});
+```
 
 The handler executes on the thread that produced the exception. Because the handler is shared across all stream threads, the implementation **must be thread-safe**. To get the thread that threw the exception, call `Thread.currentThread()` from within the handler.
 
@@ -96,27 +101,29 @@ You can set a `StateRestoreListener` to be notified about the progress of state 
 
 Example:
 
-    import org.apache.kafka.streams.processor.StateRestoreListener;
+```java
+import org.apache.kafka.streams.processor.StateRestoreListener;
 
-    streams.setGlobalStateRestoreListener(new StateRestoreListener() {
-        @Override
-        public void onRestoreStart(TopicPartition topicPartition, String storeName,
-                                   long startingOffset, long endingOffset) {
-            // log that restoration has started
-        }
+streams.setGlobalStateRestoreListener(new StateRestoreListener() {
+    @Override
+    public void onRestoreStart(TopicPartition topicPartition, String storeName,
+                               long startingOffset, long endingOffset) {
+        // log that restoration has started
+    }
 
-        @Override
-        public void onBatchRestored(TopicPartition topicPartition, String storeName,
-                                    long batchEndOffset, long numRestored) {
-            // track progress
-        }
+    @Override
+    public void onBatchRestored(TopicPartition topicPartition, String storeName,
+                                long batchEndOffset, long numRestored) {
+        // track progress
+    }
 
-        @Override
-        public void onRestoreEnd(TopicPartition topicPartition, String storeName,
-                                 long totalRestored) {
-            // log that restoration is complete
-        }
-    });
+    @Override
+    public void onRestoreEnd(TopicPartition topicPartition, String storeName,
+                             long totalRestored) {
+        // log that restoration is complete
+    }
+});
+```
 
 Because the listener is shared across all `StreamThread` instances, the implementation **must be thread-safe**. Note that this listener does **not** monitor standby task updates. To monitor standby tasks, use the standby update listener described below.
 
@@ -130,29 +137,31 @@ You can set a `StandbyUpdateListener` to be notified about updates to standby st
 
 Example:
 
-    import org.apache.kafka.streams.processor.StandbyUpdateListener;
+```java
+import org.apache.kafka.streams.processor.StandbyUpdateListener;
 
-    streams.setStandbyUpdateListener(new StandbyUpdateListener() {
-        @Override
-        public void onUpdateStart(TopicPartition topicPartition, String storeName,
-                                  long startingOffset) {
-            // log that standby update has started
-        }
+streams.setStandbyUpdateListener(new StandbyUpdateListener() {
+    @Override
+    public void onUpdateStart(TopicPartition topicPartition, String storeName,
+                              long startingOffset) {
+        // log that standby update has started
+    }
 
-        @Override
-        public void onBatchLoaded(TopicPartition topicPartition, String storeName,
-                                  TaskId taskId, long batchEndOffset,
-                                  long batchSize, long currentEndOffset) {
-            // track standby replication progress
-        }
+    @Override
+    public void onBatchLoaded(TopicPartition topicPartition, String storeName,
+                              TaskId taskId, long batchEndOffset,
+                              long batchSize, long currentEndOffset) {
+        // track standby replication progress
+    }
 
-        @Override
-        public void onUpdateSuspended(TopicPartition topicPartition, String storeName,
-                                      long storeOffset, long currentEndOffset,
-                                      StandbyUpdateListener.SuspendReason reason) {
-            // log reason for suspension
-        }
-    });
+    @Override
+    public void onUpdateSuspended(TopicPartition topicPartition, String storeName,
+                                  long storeOffset, long currentEndOffset,
+                                  StandbyUpdateListener.SuspendReason reason) {
+        // log reason for suspension
+    }
+});
+```
 
 For more information about standby replicas, see [Standby Replicas](../config-streams#num-standby-replicas).
 
