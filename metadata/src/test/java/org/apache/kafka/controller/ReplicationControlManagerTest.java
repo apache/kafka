@@ -1713,6 +1713,41 @@ public class ReplicationControlManagerTest {
     }
 
     @Test
+    public void testCreatePartitionsUsesReplicationFactorOfPartitionZero() {
+        ReplicationControlTestContext ctx = new ReplicationControlTestContext.Builder().build();
+        ReplicationControlManager replicationControl = ctx.replicationControl;
+        ctx.registerBrokers(0, 1, 2);
+        ctx.unfenceBrokers(0, 1, 2);
+        // Use enough partitions that iterating over them does not start at partition 0.
+        int[][] replicas = new int[20][];
+        for (int i = 0; i < replicas.length; i++) {
+            replicas[i] = new int[] {i % 3};
+        }
+        Uuid fooId = ctx.createTestTopic("foo", replicas).topicId();
+        // Increase the replication factor of partition 0 only.
+        ctx.replay(List.of(new ApiMessageAndVersion(new PartitionChangeRecord().
+            setTopicId(fooId).
+            setPartitionId(0).
+            setReplicas(List.of(0, 1, 2)).
+            setIsr(List.of(0, 1, 2)).
+            setDirectories(List.of(DirectoryId.UNASSIGNED, DirectoryId.UNASSIGNED, DirectoryId.UNASSIGNED)),
+            (short) 0)));
+
+        ControllerRequestContext requestContext = anonymousContextFor(ApiKeys.CREATE_PARTITIONS);
+        ControllerResult<List<CreatePartitionsTopicResult>> result = replicationControl.createPartitions(
+            requestContext, List.of(new CreatePartitionsTopic().setName("foo").setCount(21).setAssignments(null)));
+        assertEquals(NONE.code(), result.response().get(0).errorCode());
+        ctx.replay(result.records());
+        assertEquals(3, replicationControl.getPartition(fooId, 20).replicas.length);
+
+        // Manual assignments are also validated against partition 0.
+        result = replicationControl.createPartitions(requestContext, List.of(new CreatePartitionsTopic().
+            setName("foo").setCount(22).setAssignments(List.of(
+                new CreatePartitionsAssignment().setBrokerIds(List.of(0))))));
+        assertEquals(INVALID_REPLICA_ASSIGNMENT.code(), result.response().get(0).errorCode());
+    }
+
+    @Test
     public void testCreatePartitionsWithMutationQuotaExceeded() {
         ReplicationControlTestContext ctx = new ReplicationControlTestContext.Builder().build();
         ReplicationControlManager replicationControl = ctx.replicationControl;

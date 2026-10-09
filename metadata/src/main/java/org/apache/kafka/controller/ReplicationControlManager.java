@@ -1989,12 +1989,11 @@ public class ReplicationControlManager {
                 additional, e.throttleTimeMs());
             throw e;
         }
-        Iterator<PartitionRegistration> iterator = topicInfo.parts.values().iterator();
-        if (!iterator.hasNext()) {
+        PartitionRegistration partitionInfo = topicInfo.parts.get(0);
+        if (partitionInfo == null) {
             throw new UnknownServerException("Invalid state: topic " + topic.name() +
-                " appears to have no partitions.");
+                " appears to have no partition 0.");
         }
-        PartitionRegistration partitionInfo = iterator.next();
         if (partitionInfo.replicas.length > Short.MAX_VALUE) {
             throw new UnknownServerException("Invalid replication factor " +
                 partitionInfo.replicas.length + ": expected a number equal to less than " +
