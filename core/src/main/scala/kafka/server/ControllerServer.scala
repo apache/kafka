@@ -154,7 +154,9 @@ class ControllerServer(
 
       featuresPublisher = new FeaturesPublisher(logContext, sharedServer.metadataPublishingFaultHandler)
 
-      registrationsPublisher = new ControllerRegistrationsPublisher()
+      registrationsPublisher = sharedServer.controllerRegistrationsPublisher.getOrElse(
+        throw new IllegalStateException("Controller registrations publisher is not configured")
+      )
 
       incarnationId = Uuid.randomUuid()
 
@@ -467,8 +469,6 @@ class ControllerServer(
       metadataCachePublisher = null
       Utils.closeQuietly(featuresPublisher, "features publisher")
       featuresPublisher = null
-      Utils.closeQuietly(registrationsPublisher, "registrations publisher")
-      registrationsPublisher = null
       if (socketServer != null)
         Utils.swallow(this.logger.underlying, () => socketServer.stopProcessingRequests())
       if (controller != null)

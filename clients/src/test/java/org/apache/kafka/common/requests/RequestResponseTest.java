@@ -325,6 +325,7 @@ import static org.apache.kafka.common.protocol.ApiKeys.UNREGISTER_BROKER;
 import static org.apache.kafka.common.protocol.ApiKeys.UNREGISTER_CONTROLLER;
 import static org.apache.kafka.common.requests.EndTxnRequest.LAST_STABLE_VERSION_BEFORE_TRANSACTION_V2;
 import static org.apache.kafka.common.requests.FetchMetadata.INVALID_SESSION_ID;
+import static org.junit.jupiter.api.Assertions.assertDoesNotThrow;
 import static org.junit.jupiter.api.Assertions.assertEquals;
 import static org.junit.jupiter.api.Assertions.assertFalse;
 import static org.junit.jupiter.api.Assertions.assertNotNull;
@@ -4212,5 +4213,43 @@ public class RequestResponseTest {
                 .setTopologyDescriptionStatus(StreamsGroupDescribeResponse.TOPOLOGY_DESCRIPTION_STATUS_AVAILABLE)));
         StreamsGroupDescribeResponse response = new StreamsGroupDescribeResponse(data);
         assertThrows(UnsupportedVersionException.class, () -> response.serialize((short) 0));
+    }
+
+    @Test
+    public void testAddRaftVoterRequestBeforeV2RejectsZeroUUID() {
+        AddRaftVoterRequest.Builder builder = new AddRaftVoterRequest.Builder(
+            new AddRaftVoterRequestData()
+                .setClusterId("cluster-id")
+                .setTimeoutMs(1000)
+                .setVoterId(1)
+                .setVoterDirectoryId(Uuid.ZERO_UUID)
+                .setListeners(new AddRaftVoterRequestData.ListenerCollection())
+        );
+
+        String errorMsg = "Version 2 or later is required to omit voterDirectoryId";
+        assertEquals(errorMsg,
+                assertThrows(UnsupportedVersionException.class, () -> builder.build((short) 0)).getMessage());
+        assertEquals(errorMsg,
+                assertThrows(UnsupportedVersionException.class, () -> builder.build((short) 1)).getMessage());
+        assertDoesNotThrow(() -> builder.build((short) 2));
+    }
+
+    @Test
+    public void testAddRaftVoterRequestBeforeV2RejectsEmptyListeners() {
+        AddRaftVoterRequest.Builder builder = new AddRaftVoterRequest.Builder(
+            new AddRaftVoterRequestData()
+                .setClusterId("cluster-id")
+                .setTimeoutMs(1000)
+                .setVoterId(1)
+                .setVoterDirectoryId(Uuid.randomUuid())
+                .setListeners(new AddRaftVoterRequestData.ListenerCollection())
+        );
+
+        String errorMsg = "Version 2 or later is required to omit listeners";
+        assertEquals(errorMsg,
+            assertThrows(UnsupportedVersionException.class, () -> builder.build((short) 0)).getMessage());
+        assertEquals(errorMsg,
+            assertThrows(UnsupportedVersionException.class, () -> builder.build((short) 1)).getMessage());
+        assertDoesNotThrow(() -> builder.build((short) 2));
     }
 }

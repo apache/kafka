@@ -58,6 +58,15 @@ public final class VoterSetTest {
     }
 
     @Test
+    void testVoterKey() {
+        VoterSet.VoterNode voter = voterNode(1, true);
+        VoterSet voterSet = VoterSet.fromMap(Map.of(1, voter));
+
+        assertEquals(Optional.of(voter.voterKey()), voterSet.voterKey(1));
+        assertEquals(Optional.empty(), voterSet.voterKey(2));
+    }
+
+    @Test
     void testVoterNodes() {
         VoterSet voterSet = VoterSet.fromMap(voterMap(IntStream.of(1, 2, 3), true));
 

@@ -1371,14 +1371,13 @@ public class KafkaAdminClientTest extends KafkaAdminClientTestBase {
                     return true;
                 },
                 new AddRaftVoterResponse(responseData));
-            AddRaftVoterOptions options = new AddRaftVoterOptions();
+            AddRaftVoterOptions options = new AddRaftVoterOptions()
+                    .setVoterDirectoryId(Optional.of(Uuid.fromString("YAfa4HClT3SIIW2klIUspg")))
+                    .setEndpoints(Collections.singleton(new RaftVoterEndpoint("CONTROLLER", "example.com", 8080)));
             if (sendClusterId) {
                 options.setClusterId(Optional.of("_o_GnDGwQaWu4r-NMzmkTw"));
             }
-            AddRaftVoterResult result = env.adminClient().addRaftVoter(1,
-                    Uuid.fromString("YAfa4HClT3SIIW2klIUspg"),
-                    Collections.singleton(new RaftVoterEndpoint("CONTROLLER", "example.com", 8080)),
-                    options);
+            AddRaftVoterResult result = env.adminClient().addRaftVoter(1, options);
             assertNotNull(result.all());
             if (fail) {
                 TestUtils.assertFutureThrows(DuplicateVoterException.class, result.all());
@@ -1430,10 +1429,7 @@ public class KafkaAdminClientTest extends KafkaAdminClientTestBase {
                         },
                         new AddRaftVoterResponse(responseData2));
 
-                AddRaftVoterResult result2 = env.adminClient().addRaftVoter(1,
-                        Uuid.fromString("YAfa4HClT3SIIW2klIUspg"),
-                        Collections.singleton(new RaftVoterEndpoint("CONTROLLER", "example.com", 8080)),
-                        options);
+                AddRaftVoterResult result2 = env.adminClient().addRaftVoter(1, options);
                 result2.all().get();
             }
         }
@@ -1457,13 +1453,12 @@ public class KafkaAdminClientTest extends KafkaAdminClientTestBase {
                         return true;
                     },
                     new RemoveRaftVoterResponse(responseData));
-            RemoveRaftVoterOptions options = new RemoveRaftVoterOptions();
+            RemoveRaftVoterOptions options = new RemoveRaftVoterOptions()
+                .setVoterDirectoryId(Optional.of(Uuid.fromString("YAfa4HClT3SIIW2klIUspg")));
             if (sendClusterId) {
                 options.setClusterId(Optional.of("_o_GnDGwQaWu4r-NMzmkTw"));
             }
-            RemoveRaftVoterResult result = env.adminClient().removeRaftVoter(1,
-                Uuid.fromString("YAfa4HClT3SIIW2klIUspg"),
-                options);
+            RemoveRaftVoterResult result = env.adminClient().removeRaftVoter(1, options);
             assertNotNull(result.all());
             if (fail) {
                 TestUtils.assertFutureThrows(VoterNotFoundException.class, result.all());
@@ -1510,9 +1505,7 @@ public class KafkaAdminClientTest extends KafkaAdminClientTestBase {
                         },
                         new RemoveRaftVoterResponse(responseData2));
 
-                RemoveRaftVoterResult result2 = env.adminClient().removeRaftVoter(1,
-                        Uuid.fromString("YAfa4HClT3SIIW2klIUspg"),
-                        options);
+                RemoveRaftVoterResult result2 = env.adminClient().removeRaftVoter(1, options);
                 result2.all().get();
             }
         }

@@ -5148,10 +5148,10 @@ public class KafkaAdminClient extends AdminClient {
     @Override
     public AddRaftVoterResult addRaftVoter(
         int voterId,
-        Uuid voterDirectoryId,
-        Set<RaftVoterEndpoint> endpoints,
         AddRaftVoterOptions options
     ) {
+        Uuid voterDirectoryId = options.voterDirectoryId().orElse(Uuid.ZERO_UUID);
+        Set<RaftVoterEndpoint> endpoints = options.endpoints();
         NodeProvider provider = new LeastLoadedBrokerOrActiveKController();
 
         final KafkaFutureImpl<Void> future = new KafkaFutureImpl<>();
@@ -5200,9 +5200,9 @@ public class KafkaAdminClient extends AdminClient {
     @Override
     public RemoveRaftVoterResult removeRaftVoter(
         int voterId,
-        Uuid voterDirectoryId,
         RemoveRaftVoterOptions options
     ) {
+        Uuid voterDirectoryId = options.voterDirectoryId().orElse(Uuid.ZERO_UUID);
         NodeProvider provider = new LeastLoadedBrokerOrActiveKController();
 
         final KafkaFutureImpl<Void> future = new KafkaFutureImpl<>();
