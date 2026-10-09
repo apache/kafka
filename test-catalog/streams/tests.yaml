@@ -5347,7 +5347,6 @@ org.apache.kafka.streams.state.internals.MappingKeyValueIteratorAdapterTest:
 - shouldDelegatePeekNextKey
 - shouldPassThroughNullValue
 - shouldReturnNullWhenInnerReturnsNullEntry
-- timestampedToHeadersShouldConvertValueForSessionKeys
 - timestampedToHeadersShouldConvertValueOnNext
 - timestampedToHeadersWindowShouldConvertValueOnNext
 org.apache.kafka.streams.state.internals.MaybeTest:
