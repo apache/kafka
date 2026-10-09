@@ -181,7 +181,7 @@ class TransactionCoordinatorConcurrencyTest extends AbstractCoordinatorConcurren
     val transactionalId = "stale-coordinator"
     val producerEpoch: Short = 5
     txnStateManager.putTransactionStateIfNotExists(new TransactionMetadata(transactionalId, producerId,
-      RecordBatch.NO_PRODUCER_ID, RecordBatch.NO_PRODUCER_ID, producerEpoch, (producerEpoch - 1).toShort, 60000,
+      RecordBatch.NO_PRODUCER_ID, RecordBatch.NO_PRODUCER_ID, producerEpoch, (producerEpoch - 1).toShort, RecordBatch.NO_PRODUCER_EPOCH, 60000,
       TransactionState.COMPLETE_COMMIT, new util.HashSet[TopicPartition](), time.milliseconds(), time.milliseconds(),
       TransactionVersion.TV_2))
     val txnPartition = txnStateManager.partitionFor(transactionalId)
@@ -207,7 +207,7 @@ class TransactionCoordinatorConcurrencyTest extends AbstractCoordinatorConcurren
     val producerEpoch: Short = 5
     val partition = new TopicPartition("topic", 0)
     txnStateManager.putTransactionStateIfNotExists(new TransactionMetadata(transactionalId, producerId,
-      RecordBatch.NO_PRODUCER_ID, RecordBatch.NO_PRODUCER_ID, producerEpoch, (producerEpoch - 1).toShort, 60000,
+      RecordBatch.NO_PRODUCER_ID, RecordBatch.NO_PRODUCER_ID, producerEpoch, (producerEpoch - 1).toShort, RecordBatch.NO_PRODUCER_EPOCH, 60000,
       TransactionState.ONGOING, new util.HashSet[TopicPartition](util.Set.of(partition)), time.milliseconds(),
       time.milliseconds(), TransactionVersion.TV_0))
 
@@ -232,7 +232,7 @@ class TransactionCoordinatorConcurrencyTest extends AbstractCoordinatorConcurren
     val producerEpoch: Short = 5
     val partition = new TopicPartition("topic", 0)
     txnStateManager.putTransactionStateIfNotExists(new TransactionMetadata(transactionalId, producerId,
-      RecordBatch.NO_PRODUCER_ID, RecordBatch.NO_PRODUCER_ID, producerEpoch, (producerEpoch - 1).toShort, 60000,
+      RecordBatch.NO_PRODUCER_ID, RecordBatch.NO_PRODUCER_ID, producerEpoch, (producerEpoch - 1).toShort, RecordBatch.NO_PRODUCER_EPOCH, 60000,
       TransactionState.ONGOING, new util.HashSet[TopicPartition](util.Set.of(partition)), time.milliseconds(),
       time.milliseconds(), TransactionVersion.TV_1))
 

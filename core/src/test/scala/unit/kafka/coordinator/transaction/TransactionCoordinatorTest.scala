@@ -757,7 +757,7 @@ class TransactionCoordinatorTest {
   def shouldReturnProducerFencedOnEndTxnWhenStatusIsCompleteAbortAndCommitAtPreAbortEpochInV2(): Unit = {
     val clientTransactionVersion = TransactionVersion.fromFeatureLevel(2)
     val txnMetadata = new TransactionMetadata(transactionalId, producerId, producerId, RecordBatch.NO_PRODUCER_ID,
-      producerEpoch, (producerEpoch - 1).toShort, 1, TransactionState.COMPLETE_ABORT, util.Set.of, 0, time.milliseconds(), clientTransactionVersion)
+      producerEpoch, (producerEpoch - 1).toShort, RecordBatch.NO_PRODUCER_EPOCH, 1, TransactionState.COMPLETE_ABORT, util.Set.of, 0, time.milliseconds(), clientTransactionVersion)
     when(transactionManager.getTransactionState(ArgumentMatchers.eq(transactionalId)))
       .thenReturn(Right(Some(new CoordinatorEpochAndTxnMetadata(coordinatorEpoch, txnMetadata))))
 
@@ -785,7 +785,7 @@ class TransactionCoordinatorTest {
     // the old producer ID in prevProducerId.
     val newProducerId = producerId + 1
     val txnMetadata = new TransactionMetadata(transactionalId, newProducerId, producerId, RecordBatch.NO_PRODUCER_ID,
-      0.toShort, RecordBatch.NO_PRODUCER_EPOCH, 1, TransactionState.COMPLETE_ABORT, util.Set.of, 0, time.milliseconds(), clientTransactionVersion)
+      0.toShort, RecordBatch.NO_PRODUCER_EPOCH, RecordBatch.NO_PRODUCER_EPOCH, 1, TransactionState.COMPLETE_ABORT, util.Set.of, 0, time.milliseconds(), clientTransactionVersion)
     when(transactionManager.getTransactionState(ArgumentMatchers.eq(transactionalId)))
       .thenReturn(Right(Some(new CoordinatorEpochAndTxnMetadata(coordinatorEpoch, txnMetadata))))
 
@@ -2024,6 +2024,7 @@ class TransactionCoordinatorTest {
       RecordBatch.NO_PRODUCER_ID,
       RecordBatch.NO_PRODUCER_ID,
       exhaustedEpoch,
+      RecordBatch.NO_PRODUCER_EPOCH,
       RecordBatch.NO_PRODUCER_EPOCH,
       txnTimeoutMs,
       TransactionState.EMPTY,

@@ -136,6 +136,7 @@ class TransactionLogTest {
             201L,       // nextProducerId
             (short) 5,  // producerEpoch
             (short) 4,  // lastProducerEpoch
+            RecordBatch.NO_PRODUCER_EPOCH, // nextProducerEpoch
             1000,       // txnTimeoutMs
             TransactionState.PREPARE_COMMIT,
             new HashSet<>(Set.of(new TopicPartition("topic", 0))),
@@ -166,6 +167,7 @@ class TransactionLogTest {
             201L,       // nextProducerId — not persisted at v0
             (short) 5,  // producerEpoch
             (short) 4,  // lastProducerEpoch - not persisted at v0
+            RecordBatch.NO_PRODUCER_EPOCH, // nextProducerEpoch
             1000,       // txnTimeoutMs
             TransactionState.PREPARE_COMMIT,
             new HashSet<>(Set.of(new TopicPartition("topic", 0))),
