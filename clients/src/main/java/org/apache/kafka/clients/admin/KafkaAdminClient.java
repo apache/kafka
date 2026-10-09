@@ -262,6 +262,7 @@ import org.apache.kafka.common.security.scram.internals.ScramFormatter;
 import org.apache.kafka.common.security.token.delegation.DelegationToken;
 import org.apache.kafka.common.security.token.delegation.TokenInformation;
 import org.apache.kafka.common.telemetry.internals.ClientTelemetryReporter;
+import org.apache.kafka.common.telemetry.internals.ClientTelemetrySender;
 import org.apache.kafka.common.telemetry.internals.ClientTelemetryUtils;
 import org.apache.kafka.common.utils.Time;
 import org.apache.kafka.common.utils.Utils;
@@ -405,6 +406,14 @@ public class KafkaAdminClient extends AdminClient {
      * and force the RPC thread to exit. If the admin client is not closing, this will be 0.
      */
     private final AtomicLong hardShutdownTimeMs = new AtomicLong(INVALID_SHUTDOWN_TIME);
+
+    /**
+     * During a close operation, this is the time until which the RPC thread keeps running, once
+     * all other work is complete, to send the telemetry reporter's terminating metrics push and
+     * receive its response. If the admin client is not closing or has no telemetry reporter,
+     * this will be INVALID_SHUTDOWN_TIME.
+     */
+    private final AtomicLong terminatingTelemetryPushDeadlineMs = new AtomicLong(INVALID_SHUTDOWN_TIME);
 
     /**
      * A factory which creates TimeoutProcessors for the RPC thread.
@@ -741,8 +750,14 @@ public class KafkaAdminClient extends AdminClient {
         long now = time.milliseconds();
         long newHardShutdownTimeMs = now + waitTimeMs;
         long prev = INVALID_SHUTDOWN_TIME;
-        clientTelemetryReporter.ifPresent(ClientTelemetryReporter::initiateClose);
-        metrics.close();
+        // Ask the telemetry reporter to make its final, terminating metrics push. The push is sent by the
+        // I/O thread, which waits for it to compelte, bounded by the request timeout, before exiting. The
+        // metrics and their reporters and closed by the I/O thread as it exits, so that the reporter is
+        // not closed before the push has been made.
+        clientTelemetryReporter.ifPresent(reporter -> {
+            reporter.initiateClose();
+            terminatingTelemetryPushDeadlineMs.compareAndSet(INVALID_SHUTDOWN_TIME, now + requestTimeoutMs);
+        });
         while (true) {
             if (hardShutdownTimeMs.compareAndSet(prev, newHardShutdownTimeMs)) {
                 if (prev == INVALID_SHUTDOWN_TIME) {
@@ -1517,6 +1532,22 @@ public class KafkaAdminClient extends AdminClient {
         }
 
         /**
+         * Whether the I/O thread should keep running during close so that the telemetry reporter's
+         * terminating metrics push can be sent and its response received. The wait is bounded by the
+         * request timeout from the time the close was initiated.
+         */
+        private boolean isTerminatingTelemetryPushPending(long now) {
+            long deadlineMs = terminatingTelemetryPushDeadlineMs.get();
+            if (deadlineMs == INVALID_SHUTDOWN_TIME || now >= deadlineMs) {
+                return false;
+            }
+            return clientTelemetryReporter
+                .map(ClientTelemetryReporter::telemetrySender)
+                .map(ClientTelemetrySender::isTerminatingPushPending)
+                .orElse(false);
+        }
+
+        /**
          * Return true if there are currently active external calls.
          */
         private boolean hasActiveExternalCalls() {
@@ -1533,6 +1564,10 @@ public class KafkaAdminClient extends AdminClient {
 
         private boolean threadShouldExit(long now, long curHardShutdownTimeMs) {
             if (!hasActiveExternalCalls()) {
+                if (isTerminatingTelemetryPushPending(now)) {
+                    log.trace("All work has been completed, but the I/O thread is waiting for the terminating telemetry push.");
+                    return false;
+                }
                 log.trace("All work has been completed, and the I/O thread is now exiting.");
                 return true;
             }
@@ -1591,6 +1626,10 @@ public class KafkaAdminClient extends AdminClient {
                 long pollTimeout = Math.min(1200000, timeoutProcessor.nextTimeoutMs());
                 if (curHardShutdownTimeMs != INVALID_SHUTDOWN_TIME) {
                     pollTimeout = Math.min(pollTimeout, curHardShutdownTimeMs - now);
+                }
+                long terminatingPushDeadlineMs = terminatingTelemetryPushDeadlineMs.get();
+                if (terminatingPushDeadlineMs != INVALID_SHUTDOWN_TIME) {
+                    pollTimeout = Math.min(pollTimeout, Math.max(0, terminatingPushDeadlineMs - now));
                 }
 
                 // Choose nodes for our pending calls.

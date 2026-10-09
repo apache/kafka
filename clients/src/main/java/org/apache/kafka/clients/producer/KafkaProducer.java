@@ -600,7 +600,8 @@ public class KafkaProducer<K, V> implements Producer<K, V> {
                 time,
                 requestTimeoutMs,
                 producerConfig.getLong(ProducerConfig.RETRY_BACKOFF_MS_CONFIG),
-                this.transactionManager);
+                this.transactionManager,
+                clientTelemetryReporter.map(ClientTelemetryReporter::telemetrySender).orElse(null));
     }
 
     private static Compression configureCompression(ProducerConfig config) {

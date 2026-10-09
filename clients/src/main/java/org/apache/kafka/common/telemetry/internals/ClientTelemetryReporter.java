@@ -300,6 +300,12 @@ public class ClientTelemetryReporter implements MetricsReporter {
          when the client receives unrecoverable error from broker.
         */
         private boolean enabled;
+        /*
+         Whether the terminating push requested by initiateClose() has completed, meaning the response
+         to it has been handled, it has failed, or it could not be built. The state stays in
+         TERMINATING_PUSH_IN_PROGRESS until close() so this is tracked separately.
+        */
+        private boolean terminatingPushCompleted;
 
         private DefaultClientTelemetrySender() {
             enabled = true;
@@ -494,10 +500,14 @@ public class ClientTelemetryReporter implements MetricsReporter {
             lock.writeLock().lock();
             try {
                 /*
-                 This is the case when client began termination sometime after the last push request
-                 was issued. Just getting the callback, hence need to ignore it.
+                 This is the case when client began termination some time after the last push request
+                 was issued. Just getting the callback, hence need to ignore it. If the terminating
+                 push itself has been issued, this response completes it.
                 */
                 if (isTerminatingState()) {
+                    if (state == ClientTelemetryState.TERMINATING_PUSH_IN_PROGRESS) {
+                        terminatingPushCompleted = true;
+                    }
                     return;
                 }
 
@@ -535,6 +545,8 @@ public class ClientTelemetryReporter implements MetricsReporter {
         @Override
         public void handleFailedPushTelemetryRequest(KafkaException maybeFatalException) {
             log.debug("The broker generated an error for the push telemetry network API request", maybeFatalException);
+            // A failed terminating push is not retried, so there is nothing left to wait for.
+            markTerminatingPushCompletedIfInState(ClientTelemetryState.TERMINATING_PUSH_IN_PROGRESS);
             handleFailedRequest(maybeFatalException);
         }
 
@@ -629,7 +641,33 @@ public class ClientTelemetryReporter implements MetricsReporter {
             }
         }
 
-        private boolean isRetryable(final KafkaException maybeFatalException) {
+        @Override
+        public boolean isTerminatingPushPending() {
+            lock.readLock().lock();
+            try {
+                return (state == ClientTelemetryState.TERMINATING_PUSH_NEEDED || state == ClientTelemetryState.TERMINATING_PUSH_IN_PROGRESS) &&
+                    !terminatingPushCompleted;
+            } finally {
+                lock.readLock().unlock();
+            }
+        }
+
+        /**
+         * Records that the terminating push has completed, meaning there is nothing left for the enclosing
+         * client to wait for at close, provided the sender is in the given terminating state.
+         */
+        private void markTerminatingPushCompletedIfInState(ClientTelemetryState expectedState) {
+            lock.writeLock().lock();
+            try {
+                if (state == expectedState) {
+                    terminatingPushCompleted = true;
+                }
+            } finally {
+                lock.writeLock().unlock();
+            }
+        }
+
+        private boolean isRetriable(final KafkaException maybeFatalException) {
             return maybeFatalException == null ||
                 (maybeFatalException instanceof RetriableException) ||
                 (maybeFatalException.getCause() != null && maybeFatalException.getCause() instanceof RetriableException);
@@ -680,6 +718,8 @@ public class ClientTelemetryReporter implements MetricsReporter {
                 log.warn("Cannot make telemetry request as collector is not initialized");
                 // Update last accessed time for push request to be retried on next interval.
                 updateErrorResult(localSubscription.pushIntervalMs, time.milliseconds());
+                // Without a collector, the terminating push can never be made, so there is nothing to wait for.
+                markTerminatingPushCompletedIfInState(ClientTelemetryState.TERMINATING_PUSH_NEEDED);
                 return Optional.empty();
             }
 
@@ -706,7 +746,12 @@ public class ClientTelemetryReporter implements MetricsReporter {
                 lock.writeLock().unlock();
             }
 
-            return createPushRequest(localSubscription, terminating);
+            Optional<Builder<?>> request = createPushRequest(localSubscription, terminating);
+            if (request.isEmpty()) {
+                // A terminating push which could not be built is not retried, so there is nothing left to wait for.
+                markTerminatingPushCompletedIfInState(ClientTelemetryState.TERMINATING_PUSH_IN_PROGRESS);
+            }
+            return request;
         }
 
         private Optional<Builder<?>> createPushRequest(ClientTelemetrySubscription localSubscription, boolean terminating) {
@@ -878,7 +923,7 @@ public class ClientTelemetryReporter implements MetricsReporter {
                  again. We may disconnect from the broker and connect to a broker that supports client
                  telemetry.
                 */
-                if (isRetryable(maybeFatalException)) {
+                if (isRetriable(maybeFatalException)) {
                     updateErrorResult(DEFAULT_PUSH_INTERVAL_MS, nowMs);
                 } else {
                     if (!(maybeFatalException instanceof UnsupportedVersionException)) {
