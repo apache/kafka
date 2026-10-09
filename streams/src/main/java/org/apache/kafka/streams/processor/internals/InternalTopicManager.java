@@ -492,7 +492,7 @@ public class InternalTopicManager {
                 break;
             }
             if (!topicsToCreate.isEmpty()) {
-                final Set<String> createdTopics = createTopics(topicsToCreate, topicsNotReady, deadlineMs);
+                final Set<String> createdTopics = createTopics(topicsToCreate, topicsNotReady);
                 topicsNotReady.removeAll(createdTopics);
                 newlyCreatedTopics.addAll(createdTopics);
             }
@@ -504,7 +504,7 @@ public class InternalTopicManager {
                     String.format("Could not create topics within %d milliseconds. This can happen if the Kafka cluster is temporarily not available.", retryTimeoutMs),
                     null
                 ));
-
+                maybeSleep(List.of(topicsNotReady), deadlineMs, "made ready");
             }
         }
         log.debug("Completed validating internal topics and created {}", newlyCreatedTopics);
@@ -543,8 +543,7 @@ public class InternalTopicManager {
     }
 
     private Set<String> createTopics(final Set<NewTopic> topicsToCreate,
-                                     final Set<String> topicsNotReady,
-                                     final long deadlineMs) {
+                                     final Set<String> topicsNotReady) {
         final CreateTopicsResult createTopicsResult = adminClient.createTopics(topicsToCreate);
         final Set<String> createdTopics = new HashSet<>();
 
@@ -554,7 +553,6 @@ public class InternalTopicManager {
                 createTopicResult.getValue().get();
                 topicsNotReady.remove(topicName);
                 createdTopics.add(topicName);
-                
             } catch (final InterruptedException fatalException) {
                 // this should not happen; if it ever happens it indicate a bug
                 Thread.currentThread().interrupt();
@@ -594,27 +592,10 @@ public class InternalTopicManager {
                 }
             }
 
-            if (!topicsNotReady.isEmpty()) {
-                maybeThrowTimeout(new TimeoutContext(
-                        topicsNotReady,
-                        deadlineMs,
-                        "createTopics timeout",
-                        String.format(
-                                "Could not create topics within %d milliseconds. This can happen if the Kafka cluster is temporarily not available.",
-                                retryTimeoutMs),
-                        null));
-                log.info(
-                    "Topics {} could not be made ready. Will retry in {} milliseconds. Remaining time in milliseconds: {}",
-                    topicsNotReady,
-                    retryBackOffMs,
-                    deadlineMs - time.milliseconds()
-                );
-                Utils.sleep(retryBackOffMs);
-            }
-        } 
+        }
+
         return createdTopics;
-    } 
-        
+    }
 
     /**
      * Try to get the partition information for the given topics; return the partition info for topics that already exists.
@@ -939,7 +920,7 @@ public class InternalTopicManager {
                 retryBackOffMs,
                 deadline - now
             );
-            Utils.sleep(retryBackOffMs);
+            time.sleep(retryBackOffMs);
         }
     }
 }
