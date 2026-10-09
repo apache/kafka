@@ -133,9 +133,12 @@ import java.util.Collection;
  * }
  * </pre>
  *
+ * @deprecated Since 4.5, to be removed in Kafka 5.0. Use {@link RebalanceListener} and register it via
+ *             {@link Consumer#setRebalanceListener(RebalanceListener)} instead.
  * @see RebalanceListener
  * @see RebalanceConsumer
  */
+@Deprecated(since = "4.5", forRemoval = true)
 @InterfaceAudience.Public
 public interface ConsumerRebalanceListener extends RebalanceListener {
 

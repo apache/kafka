@@ -26,6 +26,14 @@ type: docs
 -->
 
 
+## Upgrading to 4.5.0
+
+### Upgrading Servers to 4.5.0 from any version 3.3.x through 4.4.0
+
+### Notable changes in 4.5.0
+
+  * The `ConsumerRebalanceListener` interface and the `Consumer#subscribe` overloads that accept it are deprecated and will be removed in Kafka 5.0. Implement `RebalanceListener` instead, whose callbacks receive a `RebalanceConsumer` exposing the operations that are safe to call during a rebalance, and register it with `Consumer#setRebalanceListener` before subscribing. For further details, please refer to [KIP-1306](https://cwiki.apache.org/confluence/spaces/KAFKA/pages/406623733/KIP-1306+Extend+ConsumerRebalanceListener+with+Consumer-Aware+methods).
+
 ## Upgrading to 4.4.0
 
 ### Upgrading Servers to 4.4.0 from any version 3.3.x through 4.3.0

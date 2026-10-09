@@ -151,9 +151,9 @@ public class MockConsumer<K, V> implements Consumer<K, V> {
     }
 
     /**
-     * Simulates a partition loss event. Calls {@link ConsumerRebalanceListener#onPartitionsLost}
+     * Simulates a partition loss event. Calls {@link RebalanceListener#onPartitionsLost}
      * for the specified partitions and removes them from the current assignment. Unlike
-     * {@link #rebalance(Collection)}, which calls {@link ConsumerRebalanceListener#onPartitionsRevoked},
+     * {@link #rebalance(Collection)}, which calls {@link RebalanceListener#onPartitionsRevoked},
      * this method models the case where the consumer loses partitions without a graceful revoke..
      *
      * <p>Only records belonging to the lost partitions are cleared; records for retained
@@ -189,6 +189,7 @@ public class MockConsumer<K, V> implements Consumer<K, V> {
     }
 
     @Override
+    @SuppressWarnings("removal")
     public synchronized void subscribe(Pattern pattern, final ConsumerRebalanceListener listener) {
         if (listener == null)
             throw new IllegalArgumentException("RebalanceListener cannot be null");
@@ -202,6 +203,7 @@ public class MockConsumer<K, V> implements Consumer<K, V> {
     }
 
     @Override
+    @SuppressWarnings("removal")
     public synchronized void subscribe(SubscriptionPattern pattern, ConsumerRebalanceListener listener) {
         if (listener == null)
             throw new IllegalArgumentException("RebalanceListener cannot be null");
@@ -215,6 +217,7 @@ public class MockConsumer<K, V> implements Consumer<K, V> {
     }
 
     @Override
+    @SuppressWarnings("removal")
     public void subscribe(Collection<String> topics, final ConsumerRebalanceListener listener) {
         if (listener == null)
             throw new IllegalArgumentException("RebalanceListener cannot be null");
@@ -222,7 +225,7 @@ public class MockConsumer<K, V> implements Consumer<K, V> {
         subscribeInternal(topics, listener);
     }
 
-    private synchronized void subscribeInternal(SubscriptionPattern pattern, ConsumerRebalanceListener listener) {
+    private synchronized void subscribeInternal(SubscriptionPattern pattern, RebalanceListener listener) {
         if (pattern == null || pattern.toString().isEmpty())
             throw new IllegalArgumentException("Topic pattern cannot be " + (pattern == null ? "null" : "empty"));
 
@@ -233,7 +236,7 @@ public class MockConsumer<K, V> implements Consumer<K, V> {
         subscriptions.subscribe(pattern);
     }
 
-    private synchronized void subscribeInternal(Collection<String> topics, ConsumerRebalanceListener listener) {
+    private synchronized void subscribeInternal(Collection<String> topics, RebalanceListener listener) {
         ensureNotClosed();
         committed.clear();
         if (listener != null)
@@ -241,7 +244,7 @@ public class MockConsumer<K, V> implements Consumer<K, V> {
         subscriptions.subscribe(new HashSet<>(topics));
     }
 
-    private synchronized void subscribeInternal(Pattern pattern, ConsumerRebalanceListener listener) {
+    private synchronized void subscribeInternal(Pattern pattern, RebalanceListener listener) {
         ensureNotClosed();
         committed.clear();
         if (listener != null)
