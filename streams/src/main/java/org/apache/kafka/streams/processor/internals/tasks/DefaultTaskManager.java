@@ -126,32 +126,23 @@ public final class DefaultTaskManager implements TaskManager {
     @Override
     public void awaitProcessableTasks(final Supplier<Boolean> isShuttingDown) throws InterruptedException {
         final boolean interrupted = returnWithTasksLocked(() -> {
-            for (final StreamTask task : tasks.activeInitializedTasks()) {
-                if (!assignedTasks.containsKey(task.id()) &&
-                    !lockedTasks.contains(task.id()) &&
-                    canProgress(task, time.milliseconds()) &&
-                    !hasUncaughtException(task.id())
-                ) {
-                    log.debug("Await unblocked: returning early from await since a processable task {} was found", task.id());
-                    return false;
-                }
-            }
-            try {
-                // We re-check the shutdownRequest atomic boolean to avoid a race condition. If this thread was
-                // previously interrupted while awaiting tasksCondition, it is possible to miss the signalAll that
-                // is called during shutdown. If this happens, we end up blocking in the await forever.
-                if (!isShuttingDown.get()) {
+            // Condition.await may wake spuriously, so keep checking whether any task can actually make progress.
+            while (!isShuttingDown.get() && !hasProcessableTask()) {
+                try {
                     log.debug("Await blocking");
                     tasksCondition.await();
-                } else {
-                    log.debug("Not awaiting since shutdown was requested");
+                } catch (final InterruptedException e) {
+                    Thread.currentThread().interrupt();
+                    log.warn("Await unblocked: Interrupted while waiting for processable tasks", e);
+                    return true;
                 }
-            } catch (final InterruptedException e) {
-                Thread.currentThread().interrupt();
-                log.warn("Await unblocked: Interrupted while waiting for processable tasks", e);
-                return true;
+
+                log.debug("Await unblocked: Woken up to check for processable tasks");
             }
-            log.debug("Await unblocked: Woken up to check for processable tasks");
+
+            if (isShuttingDown.get()) {
+                log.debug("Not awaiting since shutdown was requested");
+            }
             return false;
         });
 
@@ -359,6 +350,21 @@ public final class DefaultTaskManager implements TaskManager {
         } finally {
             tasksLock.unlock();
         }
+    }
+
+    private boolean hasProcessableTask() {
+        for (final StreamTask task : tasks.activeInitializedTasks()) {
+            if (!assignedTasks.containsKey(task.id()) &&
+                !lockedTasks.contains(task.id()) &&
+                canProgress(task, time.milliseconds()) &&
+                !hasUncaughtException(task.id())
+            ) {
+                log.debug("Await unblocked: returning early from await since a processable task {} was found", task.id());
+                return true;
+            }
+        }
+
+        return false;
     }
 
     private boolean canProgress(final StreamTask task, final long nowMs) {
