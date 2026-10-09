@@ -474,6 +474,37 @@ public class DefaultRecordBatch extends AbstractRecordBatch implements MutableRe
                                    boolean isDeleteHorizonSet,
                                    int partitionLeaderEpoch,
                                    int numRecords) {
+        int position = buffer.position();
+        writeHeaderFieldsExceptCrc(buffer, baseOffset, lastOffsetDelta, sizeInBytes, magic, compressionType,
+                timestampType, baseTimestamp, maxTimestamp, producerId, epoch, sequence, isTransactional,
+                isControlBatch, isDeleteHorizonSet, partitionLeaderEpoch, numRecords);
+        long crc = Crc32C.compute(buffer, ATTRIBUTES_OFFSET, sizeInBytes - ATTRIBUTES_OFFSET);
+        buffer.putInt(position + CRC_OFFSET, (int) crc);
+        buffer.position(position + RECORD_BATCH_OVERHEAD);
+    }
+
+    /**
+     * Writes every v2 batch header field except the CRC, at offsets relative to the buffer's current
+     * position, and leaves the position unchanged. Lets a builder whose batch spans several buffers
+     * write the header into the first one and compute the CRC across all of them.
+     */
+    static void writeHeaderFieldsExceptCrc(ByteBuffer buffer,
+                                           long baseOffset,
+                                           int lastOffsetDelta,
+                                           int sizeInBytes,
+                                           byte magic,
+                                           CompressionType compressionType,
+                                           TimestampType timestampType,
+                                           long baseTimestamp,
+                                           long maxTimestamp,
+                                           long producerId,
+                                           short epoch,
+                                           int sequence,
+                                           boolean isTransactional,
+                                           boolean isControlBatch,
+                                           boolean isDeleteHorizonSet,
+                                           int partitionLeaderEpoch,
+                                           int numRecords) {
         if (magic < RecordBatch.CURRENT_MAGIC_VALUE)
             throw new IllegalArgumentException("Invalid magic value " + magic);
         if (baseTimestamp < 0 && baseTimestamp != NO_TIMESTAMP)
@@ -494,9 +525,6 @@ public class DefaultRecordBatch extends AbstractRecordBatch implements MutableRe
         buffer.putShort(position + PRODUCER_EPOCH_OFFSET, epoch);
         buffer.putInt(position + BASE_SEQUENCE_OFFSET, sequence);
         buffer.putInt(position + RECORDS_COUNT_OFFSET, numRecords);
-        long crc = Crc32C.compute(buffer, ATTRIBUTES_OFFSET, sizeInBytes - ATTRIBUTES_OFFSET);
-        buffer.putInt(position + CRC_OFFSET, (int) crc);
-        buffer.position(position + RECORD_BATCH_OVERHEAD);
     }
 
     @Override

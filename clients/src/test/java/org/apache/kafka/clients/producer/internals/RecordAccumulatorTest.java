@@ -260,7 +260,7 @@ public class RecordAccumulatorTest {
         assertEquals(1, batches.size());
         ProducerBatch batch = batches.get(0);
 
-        Iterator<Record> iter = batch.records().records().iterator();
+        Iterator<Record> iter = ((MemoryRecords) batch.records()).records().iterator();
         for (int i = 0; i < appends; i++) {
             Record record = iter.next();
             assertEquals(ByteBuffer.wrap(key), record.key(), "Keys should match");
@@ -290,7 +290,7 @@ public class RecordAccumulatorTest {
         Deque<ProducerBatch> batches = accum.getDeque(tp1);
         assertEquals(1, batches.size());
         ProducerBatch producerBatch = batches.peek();
-        List<MutableRecordBatch> recordBatches = TestUtils.toList(producerBatch.records().batches());
+        List<MutableRecordBatch> recordBatches = TestUtils.toList(((MemoryRecords) producerBatch.records()).batches());
         assertEquals(1, recordBatches.size());
         MutableRecordBatch recordBatch = recordBatches.get(0);
         assertEquals(0L, recordBatch.baseOffset());
@@ -328,7 +328,7 @@ public class RecordAccumulatorTest {
         Deque<ProducerBatch> batches = accum.getDeque(tp1);
         assertEquals(1, batches.size());
         ProducerBatch producerBatch = batches.peek();
-        List<MutableRecordBatch> recordBatches = TestUtils.toList(producerBatch.records().batches());
+        List<MutableRecordBatch> recordBatches = TestUtils.toList(((MemoryRecords) producerBatch.records()).batches());
         assertEquals(1, recordBatches.size());
         MutableRecordBatch recordBatch = recordBatches.get(0);
         assertEquals(0L, recordBatch.baseOffset());
@@ -354,7 +354,7 @@ public class RecordAccumulatorTest {
         assertEquals(1, batches.size());
         ProducerBatch batch = batches.get(0);
 
-        Iterator<Record> iter = batch.records().records().iterator();
+        Iterator<Record> iter = ((MemoryRecords) batch.records()).records().iterator();
         Record record = iter.next();
         assertEquals(ByteBuffer.wrap(key), record.key(), "Keys should match");
         assertEquals(ByteBuffer.wrap(value), record.value(), "Values should match");
@@ -406,7 +406,7 @@ public class RecordAccumulatorTest {
             List<ProducerBatch> batches = accum.drain(metadataCache, nodes, 5 * 1024, 0).get(node1.id());
             if (batches != null) {
                 for (ProducerBatch batch : batches) {
-                    for (@SuppressWarnings("UnusedLocalVariable") Record ignored : batch.records().records())
+                    for (@SuppressWarnings("UnusedLocalVariable") Record ignored : ((MemoryRecords) batch.records()).records())
                         read++;
                     accum.completeAndDeallocateBatch(batch);
                 }
@@ -1861,7 +1861,7 @@ public class RecordAccumulatorTest {
             assertTrue(batch.recordCount <= 1, "All remaining batches should have at most 1 record");
 
             // Extract the record and its key
-            MemoryRecords batchRecords = batch.records();
+            MemoryRecords batchRecords = (MemoryRecords) batch.records();
             Iterator<Record> recordIterator = batchRecords.records().iterator();
             Record singleRecord = recordIterator.next();
 

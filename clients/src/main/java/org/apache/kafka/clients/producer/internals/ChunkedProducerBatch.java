@@ -19,14 +19,13 @@ package org.apache.kafka.clients.producer.internals;
 import org.apache.kafka.clients.producer.Callback;
 import org.apache.kafka.common.TopicPartition;
 import org.apache.kafka.common.header.Header;
-import org.apache.kafka.common.record.internal.MemoryRecordsBuilder;
 
 import java.nio.ByteBuffer;
 import java.util.List;
 
 /**
  * A {@link ProducerBatch} for the incremental buffer.memory allocation strategy, backed
- * by a {@link MemoryRecordsBuilder} whose stream is a {@link ChunkedByteBufferOutputStream}.
+ * by a {@link CompositeMemoryRecordsBuilder} whose stream is a {@link ChunkedByteBufferOutputStream}.
  * It adds mid-batch chunk extension support ({@link #extensionBytesNeeded} /
  * {@link #addBuffers}) and overrides the pool deallocation hooks so all chunks are returned to
  * the pool rather than a single buffer.
@@ -35,12 +34,11 @@ import java.util.List;
  */
 public class ChunkedProducerBatch extends ProducerBatch {
 
-    public ChunkedProducerBatch(TopicPartition tp, MemoryRecordsBuilder recordsBuilder, long createdMs) {
+    private final CompositeMemoryRecordsBuilder recordsBuilder;
+
+    public ChunkedProducerBatch(TopicPartition tp, CompositeMemoryRecordsBuilder recordsBuilder, long createdMs) {
         super(tp, recordsBuilder, createdMs);
-        if (!(recordsBuilder.bufferStream() instanceof ChunkedByteBufferOutputStream))
-            throw new IllegalArgumentException("recordsBuilder must be an instance of "
-                    + ChunkedByteBufferOutputStream.class.getSimpleName() + ", but found "
-                    + recordsBuilder.bufferStream().getClass().getName());
+        this.recordsBuilder = recordsBuilder;
     }
 
     /**
@@ -60,7 +58,7 @@ public class ChunkedProducerBatch extends ProducerBatch {
         // ratio-adjusted when compressed), not per-record. Per-record sizing would over-count the
         // header and miss the compressor's flush-accumulation behavior.
         int target = recordsBuilder.estimatedBytesWrittenAfter(key, value, headers);
-        return Math.max(0, target - stream().attachedCapacity());
+        return Math.max(0, target - recordsBuilder.bufferStream().attachedCapacity());
     }
 
     /**
@@ -96,30 +94,28 @@ public class ChunkedProducerBatch extends ProducerBatch {
      * the pool when the batch closes for appends.
      */
     void addBuffers(List<ByteBuffer> chunks) {
-        stream().addBuffers(chunks);
+        recordsBuilder.bufferStream().addBuffers(chunks);
     }
 
     @Override
     protected void deallocateBuffer(BufferPool pool) {
-        stream().deallocate(pool);
+        recordsBuilder.bufferStream().deallocate(pool);
     }
 
     /**
-     * Unlike the single-buffer batch — which must donate a fresh buffer because the network
-     * layer may still be reading the pooled one — a chunked batch's inflight bytes live in the
-     * separate flattened buffer (see {@link ChunkedByteBufferOutputStream#buffer()}), so it is
-     * safe to return the actual chunks to the pool here.
-     * <p>
-     * TODO (KAFKA-20580): review when removing the flatten.
-     *  Once we send directly from the chunks, the chunks themselves hold the
-     *  inflight bytes so would be unsafe to return them here.
+     * Credit the pool back for a batch that is unexpectedly still inflight (KAFKA-19012). With
+     * scatter-gather send (KAFKA-20580) the inflight bytes now live in the chunks themselves — not
+     * in a detached flattened copy — so the network layer may still be reading them and the chunks
+     * must not be returned to the pool here. Instead, like the single-buffer batch, donate fresh
+     * same-sized buffers so pool accounting is restored; the live chunks become garbage once the
+     * network layer releases them.
      */
     @Override
     protected void deallocateInflightBuffer(BufferPool pool) {
-        stream().deallocate(pool);
+        ChunkedByteBufferOutputStream stream = recordsBuilder.bufferStream();
+        for (int i = 0; i < stream.chunkCount(); i++) {
+            pool.deallocate(ByteBuffer.allocate(stream.initialCapacity()));
+        }
     }
 
-    private ChunkedByteBufferOutputStream stream() {
-        return (ChunkedByteBufferOutputStream) recordsBuilder.bufferStream();
-    }
 }

@@ -37,7 +37,7 @@ public class SingleByteBufferOutputStreamTest {
     }
 
     private void testExpandByteBufferOnPositionIncrease(ByteBuffer initialBuffer) throws Exception {
-        ByteBufferOutputStream output = new SingleByteBufferOutputStream(initialBuffer);
+        SingleByteBufferOutputStream output = new SingleByteBufferOutputStream(initialBuffer);
         output.write("hello".getBytes());
         output.position(32);
         assertEquals(32, output.position());
@@ -64,7 +64,7 @@ public class SingleByteBufferOutputStreamTest {
     }
 
     private void testExpandByteBufferOnWrite(ByteBuffer initialBuffer) throws Exception {
-        ByteBufferOutputStream output = new SingleByteBufferOutputStream(initialBuffer);
+        SingleByteBufferOutputStream output = new SingleByteBufferOutputStream(initialBuffer);
         output.write("hello".getBytes());
         output.write(new byte[27]);
         assertEquals(32, output.position());
@@ -95,7 +95,7 @@ public class SingleByteBufferOutputStreamTest {
         input.putLong(value);
         input.flip();
 
-        ByteBufferOutputStream output = new SingleByteBufferOutputStream(ByteBuffer.allocate(32));
+        SingleByteBufferOutputStream output = new SingleByteBufferOutputStream(ByteBuffer.allocate(32));
         output.write(input);
         assertEquals(8, input.position());
         assertEquals(8, output.position());

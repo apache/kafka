@@ -20,7 +20,6 @@ import org.apache.kafka.common.InvalidRecordException;
 import org.apache.kafka.common.header.Header;
 import org.apache.kafka.common.header.internals.RecordHeader;
 import org.apache.kafka.common.utils.internals.ByteBufferInputStream;
-import org.apache.kafka.common.utils.internals.ByteBufferOutputStream;
 import org.apache.kafka.common.utils.internals.ByteUtils;
 import org.apache.kafka.common.utils.internals.SingleByteBufferOutputStream;
 
@@ -60,7 +59,7 @@ public class DefaultRecordTest {
             long baseTimestamp = System.currentTimeMillis();
             long timestampDelta = 323;
 
-            ByteBufferOutputStream out = new SingleByteBufferOutputStream(1024);
+            SingleByteBufferOutputStream out = new SingleByteBufferOutputStream(1024);
             DefaultRecord.writeTo(new DataOutputStream(out), offsetDelta, timestampDelta, record.key(), record.value(),
                     record.headers());
             ByteBuffer buffer = out.buffer();
@@ -95,7 +94,7 @@ public class DefaultRecordTest {
         long baseTimestamp = System.currentTimeMillis();
         long timestampDelta = 323;
 
-        ByteBufferOutputStream out = new SingleByteBufferOutputStream(1024);
+        SingleByteBufferOutputStream out = new SingleByteBufferOutputStream(1024);
         DefaultRecord.writeTo(new DataOutputStream(out), offsetDelta, timestampDelta, record.key(), record.value(),
                 record.headers());
         ByteBuffer buffer = out.buffer();
@@ -127,7 +126,7 @@ public class DefaultRecordTest {
         long baseTimestamp = System.currentTimeMillis();
         long timestampDelta = 323;
 
-        ByteBufferOutputStream out = new SingleByteBufferOutputStream(1024);
+        SingleByteBufferOutputStream out = new SingleByteBufferOutputStream(1024);
         DefaultRecord.writeTo(new DataOutputStream(out), offsetDelta, timestampDelta, record.key(), record.value(),
                 record.headers());
         ByteBuffer buffer = out.buffer();
@@ -463,7 +462,7 @@ public class DefaultRecordTest {
         long baseTimestamp = System.currentTimeMillis();
         long timestampDelta = 323;
 
-        ByteBufferOutputStream out = new SingleByteBufferOutputStream(1024);
+        SingleByteBufferOutputStream out = new SingleByteBufferOutputStream(1024);
         DefaultRecord.writeTo(new DataOutputStream(out), offsetDelta, timestampDelta, key, value, new Header[0]);
         ByteBuffer buffer = out.buffer();
         buffer.flip();

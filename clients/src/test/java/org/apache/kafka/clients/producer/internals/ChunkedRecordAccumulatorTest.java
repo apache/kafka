@@ -22,17 +22,24 @@ import org.apache.kafka.clients.producer.RecordMetadata;
 import org.apache.kafka.common.Cluster;
 import org.apache.kafka.common.Node;
 import org.apache.kafka.common.TopicPartition;
+import org.apache.kafka.common.Uuid;
 import org.apache.kafka.common.compress.Compression;
 import org.apache.kafka.common.errors.TimeoutException;
+import org.apache.kafka.common.message.ProduceRequestData;
 import org.apache.kafka.common.metrics.KafkaMetric;
 import org.apache.kafka.common.metrics.Metrics;
+import org.apache.kafka.common.protocol.ApiKeys;
+import org.apache.kafka.common.protocol.ByteBufferAccessor;
 import org.apache.kafka.common.protocol.Errors;
 import org.apache.kafka.common.record.TimestampType;
+import org.apache.kafka.common.record.internal.BaseRecords;
 import org.apache.kafka.common.record.internal.MemoryRecords;
-import org.apache.kafka.common.record.internal.MemoryRecordsBuilder;
 import org.apache.kafka.common.record.internal.Record;
 import org.apache.kafka.common.record.internal.RecordBatch;
+import org.apache.kafka.common.requests.ByteBufferChannel;
 import org.apache.kafka.common.requests.MetadataResponse.PartitionMetadata;
+import org.apache.kafka.common.requests.ProduceRequest;
+import org.apache.kafka.common.requests.RequestHeader;
 import org.apache.kafka.common.utils.MockTime;
 import org.apache.kafka.common.utils.internals.LogContext;
 
@@ -61,6 +68,7 @@ import java.util.stream.Stream;
 import static org.junit.jupiter.api.Assertions.assertEquals;
 import static org.junit.jupiter.api.Assertions.assertFalse;
 import static org.junit.jupiter.api.Assertions.assertNotNull;
+import static org.junit.jupiter.api.Assertions.assertNotSame;
 import static org.junit.jupiter.api.Assertions.assertThrows;
 import static org.junit.jupiter.api.Assertions.assertTrue;
 
@@ -408,6 +416,87 @@ public class ChunkedRecordAccumulatorTest {
         accum.close();
     }
 
+    @Test
+    public void testInflightDeallocateDoesNotReturnChunksToPool() throws Exception {
+        int chunkSize = 128;
+        long totalMemory = 3L * chunkSize;
+        BufferPool pool = new BufferPool(totalMemory, chunkSize, metrics, time, "producer-metrics", BufferPool.AllocationMode.INCREMENTAL);
+        // Take all of the pool's memory as the batch's chunks.
+        List<ByteBuffer> chunks = pool.allocateChunks((int) totalMemory, 0);
+        CompositeMemoryRecordsBuilder builder = new CompositeMemoryRecordsBuilder(
+                new ChunkedByteBufferOutputStream(chunks, chunkSize, pool), RecordBatch.CURRENT_MAGIC_VALUE,
+                Compression.NONE, TimestampType.CREATE_TIME, 0L, RecordBatch.NO_TIMESTAMP, RecordBatch.NO_PRODUCER_ID,
+                RecordBatch.NO_PRODUCER_EPOCH, RecordBatch.NO_SEQUENCE, false, false,
+                RecordBatch.NO_PARTITION_LEADER_EPOCH, (int) totalMemory);
+        ChunkedProducerBatch batch = new ChunkedProducerBatch(tp1, builder, time.milliseconds());
+        assertNotNull(batch.tryAppend(time.milliseconds(), key, new byte[200], Record.EMPTY_HEADERS, null, time.milliseconds()));
+
+        batch.deallocateInflightBuffer(pool);
+
+        // The pool's budget is restored...
+        assertEquals(totalMemory, pool.availableMemory());
+        // ...but with fresh buffers: the chunks the network may still be sending are not handed out.
+        for (ByteBuffer chunk : pool.allocateChunks((int) totalMemory, 0)) {
+            for (ByteBuffer live : chunks) {
+                assertNotSame(live, chunk, "an inflight batch's chunk was returned to the pool");
+            }
+        }
+    }
+
+    @Test
+    public void testChunkedBatchProduceRequestRoundTrip() throws Exception {
+        // Small chunks so the batch's records span several of them.
+        int chunkSize = 128;
+        List<ByteBuffer> chunks = new ArrayList<>();
+        for (int i = 0; i < 8; i++) {
+            chunks.add(ByteBuffer.allocate(chunkSize));
+        }
+        CompositeMemoryRecordsBuilder builder = new CompositeMemoryRecordsBuilder(
+                new ChunkedByteBufferOutputStream(chunks, chunkSize, null), RecordBatch.CURRENT_MAGIC_VALUE,
+                Compression.NONE, TimestampType.CREATE_TIME, 0L, RecordBatch.NO_TIMESTAMP, RecordBatch.NO_PRODUCER_ID,
+                RecordBatch.NO_PRODUCER_EPOCH, RecordBatch.NO_SEQUENCE, false, false,
+                RecordBatch.NO_PARTITION_LEADER_EPOCH, 8 * chunkSize);
+        ChunkedProducerBatch batch = new ChunkedProducerBatch(tp1, builder, time.milliseconds());
+        for (int i = 0; i < 5; i++) {
+            assertNotNull(batch.tryAppend(time.milliseconds(), key, new byte[100], Record.EMPTY_HEADERS, null, time.milliseconds()));
+        }
+        batch.close();
+        CompositeMemoryRecords records = (CompositeMemoryRecords) batch.records();
+        assertTrue(records.buffers().size() > 1, "test setup expects the batch to span several chunks");
+
+        // Build the request the way Sender does, encode it the way NetworkClient does, then parse it
+        // back the way the broker does.
+        ProduceRequestData.TopicProduceDataCollection topicData = new ProduceRequestData.TopicProduceDataCollection();
+        topicData.add(new ProduceRequestData.TopicProduceData()
+                .setName(tp1.topic())
+                .setTopicId(Uuid.randomUuid())
+                .setPartitionData(List.of(new ProduceRequestData.PartitionProduceData()
+                        .setIndex(tp1.partition())
+                        .setRecords(records))));
+        short version = ApiKeys.PRODUCE.latestVersion();
+        ProduceRequest request = ProduceRequest.builder(new ProduceRequestData()
+                .setAcks((short) -1)
+                .setTimeoutMs(1000)
+                .setTopicData(topicData), false).build(version);
+        ByteBuffer wire = ByteBufferChannel.toBuffer(request.toSend(new RequestHeader(ApiKeys.PRODUCE, version, "client", 1)));
+
+        assertEquals(wire.remaining() - 4, wire.getInt(), "size prefix must match the encoded request");
+        RequestHeader.parse(wire);
+        ProduceRequest parsed = ProduceRequest.parse(new ByteBufferAccessor(wire), version);
+        MemoryRecords parsedRecords = (MemoryRecords) parsed.data().topicData().iterator().next()
+                .partitionData().get(0).records();
+
+        assertEquals(records.flatten(), parsedRecords);
+        ProduceRequest.validateRecords(version, parsedRecords);
+        for (RecordBatch parsedBatch : parsedRecords.batches()) {
+            parsedBatch.ensureValid();
+        }
+
+        // Serializing through a ByteBufferAccessor instead of a Send must produce the same records.
+        ProduceRequest reparsed = ProduceRequest.parse(request.serialize(), version);
+        assertEquals(parsedRecords, reparsed.data().topicData().iterator().next().partitionData().get(0).records());
+    }
+
     private Deque<ProducerBatch> batchesFor(RecordAccumulator accum, TopicPartition tp) {
         return accum.getDeque(tp);
     }
@@ -448,7 +537,8 @@ public class ChunkedRecordAccumulatorTest {
                 /* deliveryTimeoutMs */ 3200, metrics, "producer-metrics", time,
                 /* transactionManager */ null, pool) {
             @Override
-            protected ProducerBatch createProducerBatch(TopicPartition tp, MemoryRecordsBuilder recordsBuilder, long nowMs) {
+            protected ChunkedProducerBatch createChunkedProducerBatch(TopicPartition tp, CompositeMemoryRecordsBuilder recordsBuilder,
+                                                                      long nowMs) {
                 // Count closeForRecordAppends calls on the batches this accumulator creates.
                 return new ChunkedProducerBatch(tp, recordsBuilder, nowMs) {
                     @Override
@@ -525,7 +615,8 @@ public class ChunkedRecordAccumulatorTest {
                 /* deliveryTimeoutMs */ 3200, metrics, "producer-metrics", time,
                 /* transactionManager */ null, pool) {
             @Override
-            protected ProducerBatch createProducerBatch(TopicPartition tp, MemoryRecordsBuilder recordsBuilder, long nowMs) {
+            protected ChunkedProducerBatch createChunkedProducerBatch(TopicPartition tp, CompositeMemoryRecordsBuilder recordsBuilder,
+                                                                      long nowMs) {
                 return new ChunkedProducerBatch(tp, recordsBuilder, nowMs) {
                     @Override
                     public void closeForRecordAppends() {
@@ -931,12 +1022,12 @@ public class ChunkedRecordAccumulatorTest {
         // close() must not return the chunk to the pool: available memory is unchanged, and the
         // built record set is still readable because its bytes still live in the batch's chunk.
         assertEquals(totalMemory - chunkSize, pool.availableMemory(), "close() must not return chunks to the pool");
-        MemoryRecords records = batch.records();
+        BaseRecords records = batch.records();
         assertTrue(records.sizeInBytes() > 0,
                 "batch must produce a non-empty record set after close; chunks were deallocated prematurely");
 
         int count = 0;
-        for (RecordBatch rb : records.batches()) {
+        for (RecordBatch rb : ((CompositeMemoryRecords) records).flatten().batches()) {
             for (Record r : rb) {
                 count++;
                 assertNotNull(r.value());
@@ -978,7 +1069,7 @@ public class ChunkedRecordAccumulatorTest {
         // extension chunks before appending, and an append without capacity would throw), so the
         // chunks already hold the whole batch by the time it is built.
         batch.close();
-        MemoryRecords records = batch.records();
+        BaseRecords records = batch.records();
         int actualSize = records.sizeInBytes();
         // Under NONE compression, estimatedBytesWritten is exact: physical bytes = header + sum
         // of per-record bytes. The chunks attached must cover that, so actualSize must be >
@@ -1018,14 +1109,6 @@ public class ChunkedRecordAccumulatorTest {
                         + "header double-counting (per-record formula) would inflate this");
 
         accum.close();
-    }
-
-    @Test
-    public void testChunkedBatchRejectsNonChunkedStream() {
-        MemoryRecordsBuilder plainBuilder = MemoryRecords.builder(ByteBuffer.allocate(256),
-                RecordBatch.CURRENT_MAGIC_VALUE, Compression.NONE, TimestampType.CREATE_TIME, 0L);
-        assertThrows(IllegalArgumentException.class,
-                () -> new ChunkedProducerBatch(tp1, plainBuilder, time.milliseconds()));
     }
 
     /**
