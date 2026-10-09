@@ -425,6 +425,12 @@ class DataPlaneAcceptor(socketServer: SocketServer,
   }
 
   /**
+   * Returns the processors for this acceptor.
+   * Used by controller dynamic config to access channel builders.
+   */
+  def getProcessors: Seq[Processor] = processors.toSeq
+
+  /**
    * Reconfigures this instance with the given key-value pairs. The provided
    * map contains all configs including any reconfigurable configs that
    * may have changed since the object was initially configured using
@@ -784,7 +790,7 @@ private[kafka] class Processor(
   connectionQuotas: ConnectionQuotas,
   connectionsMaxIdleMs: Long,
   failedAuthenticationDelayMs: Int,
-  listenerName: ListenerName,
+  val listenerName: ListenerName,
   securityProtocol: SecurityProtocol,
   config: KafkaConfig,
   metrics: Metrics,
@@ -828,19 +834,19 @@ private[kafka] class Processor(
   private val expiredConnectionsKilledCountMetricName = metrics.metricName("expired-connections-killed-count", JSocketServer.METRICS_GROUP, metricTags)
   metrics.addMetric(expiredConnectionsKilledCountMetricName, expiredConnectionsKilledCount)
 
-  private[network] val selector = createSelector(
-    ChannelBuilders.serverChannelBuilder(
-      listenerName,
-      listenerName == config.interBrokerListenerName,
-      securityProtocol,
-      config,
-      credentialProvider.credentialCache,
-      credentialProvider.tokenCache,
-      time,
-      logContext,
-      version => apiVersionManager.apiVersionResponse(0, version < 4)
-    )
+  private[kafka] val channelBuilder: ChannelBuilder = ChannelBuilders.serverChannelBuilder(
+    listenerName,
+    listenerName == config.interBrokerListenerName,
+    securityProtocol,
+    config,
+    credentialProvider.credentialCache,
+    credentialProvider.tokenCache,
+    time,
+    logContext,
+    version => apiVersionManager.apiVersionResponse(0, version < 4)
   )
+
+  private[network] val selector = createSelector(channelBuilder)
 
   // Visible to override for testing
   protected[network] def createSelector(channelBuilder: ChannelBuilder): KSelector = {
