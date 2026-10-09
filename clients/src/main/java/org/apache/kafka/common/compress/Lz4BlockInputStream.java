@@ -19,11 +19,13 @@ package org.apache.kafka.common.compress;
 import org.apache.kafka.common.compress.Lz4BlockOutputStream.BD;
 import org.apache.kafka.common.compress.Lz4BlockOutputStream.FLG;
 import org.apache.kafka.common.utils.internals.BufferSupplier;
+import org.apache.kafka.common.utils.internals.Checksums;
 
 import net.jpountz.lz4.LZ4Compressor;
 import net.jpountz.lz4.LZ4Exception;
 import net.jpountz.lz4.LZ4Factory;
 import net.jpountz.lz4.LZ4SafeDecompressor;
+import net.jpountz.xxhash.StreamingXXHash32;
 import net.jpountz.xxhash.XXHash32;
 import net.jpountz.xxhash.XXHashFactory;
 
@@ -31,6 +33,7 @@ import java.io.IOException;
 import java.io.InputStream;
 import java.nio.ByteBuffer;
 import java.nio.ByteOrder;
+import java.util.zip.Checksum;
 
 import static org.apache.kafka.common.compress.Lz4BlockOutputStream.LZ4_FRAME_INCOMPRESSIBLE_MASK;
 import static org.apache.kafka.common.compress.Lz4BlockOutputStream.MAGIC;
@@ -48,9 +51,11 @@ public final class Lz4BlockInputStream extends InputStream {
     public static final String NOT_SUPPORTED = "Stream unsupported (invalid magic bytes)";
     public static final String BLOCK_HASH_MISMATCH = "Block checksum mismatch";
     public static final String DESCRIPTOR_HASH_MISMATCH = "Stream frame descriptor corrupted";
+    public static final String CONTENT_HASH_MISMATCH = "Content checksum mismatch";
 
     private static final LZ4SafeDecompressor DECOMPRESSOR = LZ4Factory.fastestInstance().safeDecompressor();
-    private static final XXHash32 CHECKSUM = XXHashFactory.fastestInstance().hash32();
+    private static final XXHashFactory HASH_FACTORY = XXHashFactory.fastestInstance();
+    private static final XXHash32 CHECKSUM = HASH_FACTORY.hash32();
 
     private static final RuntimeException BROKEN_LZ4_EXCEPTION;
     // https://issues.apache.org/jira/browse/KAFKA-9203
@@ -77,6 +82,10 @@ public final class Lz4BlockInputStream extends InputStream {
     // If a block is compressed, this is the same as `decompressionBuffer`. If a block is not compressed, this is
     // a slice of `in` to avoid unnecessary copies.
     private ByteBuffer decompressedBuffer;
+    // Running XXHash32 over the decompressed content; both fields are non-null iff the frame's FLG.contentChecksum
+    // bit is set. `contentHashAsChecksum` is the j.u.z.Checksum view of `contentHash` used by `Checksums.update`.
+    private StreamingXXHash32 contentHash;
+    private Checksum contentHashAsChecksum;
     private boolean finished;
 
     /**
@@ -95,6 +104,10 @@ public final class Lz4BlockInputStream extends InputStream {
         this.bufferSupplier = bufferSupplier;
         readHeader();
         decompressionBuffer = bufferSupplier.get(maxBlockSize);
+        if (flg.isContentChecksumSet()) {
+            contentHash = HASH_FACTORY.newStreamingHash32(0);
+            contentHashAsChecksum = contentHash.asChecksum();
+        }
         finished = false;
     }
 
@@ -169,8 +182,14 @@ public final class Lz4BlockInputStream extends InputStream {
         // Check for EndMark
         if (blockSize == 0) {
             finished = true;
-            if (flg.isContentChecksumSet())
-                in.getInt(); // TODO: verify this content checksum
+            if (flg.isContentChecksumSet()) {
+                int expected = in.getInt();
+                // Read directly from StreamingXXHash32: the lz4-java 1.10.2 asChecksum() adapter masks the
+                // returned value with 0xFFFFFFFL (28 bits) instead of 0xFFFFFFFFL, dropping the top 4 bits.
+                if (contentHash.getValue() != expected) {
+                    throw new IOException(CONTENT_HASH_MISMATCH);
+                }
+            }
             return;
         } else if (blockSize > maxBlockSize) {
             throw new IOException(String.format("Block size %d exceeded max: %d", blockSize, maxBlockSize));
@@ -193,6 +212,11 @@ public final class Lz4BlockInputStream extends InputStream {
         } else {
             decompressedBuffer = in.slice();
             decompressedBuffer.limit(blockSize);
+        }
+
+        // Update running content hash before the consumer can advance decompressedBuffer's position.
+        if (contentHashAsChecksum != null) {
+            Checksums.update(contentHashAsChecksum, decompressedBuffer, 0, decompressedBuffer.remaining());
         }
 
         // verify checksum
@@ -264,6 +288,11 @@ public final class Lz4BlockInputStream extends InputStream {
     @Override
     public void close() {
         bufferSupplier.release(decompressionBuffer);
+        if (contentHash != null) {
+            contentHash.close();
+            contentHash = null;
+            contentHashAsChecksum = null;
+        }
     }
 
     @Override
