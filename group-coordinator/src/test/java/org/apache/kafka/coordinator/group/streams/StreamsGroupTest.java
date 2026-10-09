@@ -136,6 +136,40 @@ public class StreamsGroupTest {
     }
 
     @Test
+    public void testWarmupSupportFollowsTheHeartbeatVersionOfEveryMember() {
+        StreamsGroup streamsGroup = createStreamsGroup("foo");
+        streamsGroup.updateMember(new StreamsGroupMember.Builder("unheard").build());
+        streamsGroup.updateMember(new StreamsGroupMember.Builder("old").build());
+        streamsGroup.updateMember(new StreamsGroupMember.Builder("new").build());
+        streamsGroup.updateHeartbeatVersion("old", 0);
+        streamsGroup.updateHeartbeatVersion("new", 1);
+
+        assertEquals(
+            Map.of(
+                "unheard", WarmupSupport.UNKNOWN,
+                "old", WarmupSupport.NOT_SUPPORTED,
+                "new", WarmupSupport.SUPPORTED),
+            streamsGroup.warmupSupport()
+        );
+
+        // The last heartbeat counts, as a member can be restarted with another client version under the same ID.
+        streamsGroup.updateHeartbeatVersion("old", 1);
+        assertEquals(WarmupSupport.SUPPORTED, streamsGroup.warmupSupport().get("old"));
+    }
+
+    @Test
+    public void testRemoveMemberForgetsItsHeartbeatVersion() {
+        StreamsGroup streamsGroup = createStreamsGroup("foo");
+        streamsGroup.updateMember(new StreamsGroupMember.Builder("member-id").build());
+        streamsGroup.updateHeartbeatVersion("member-id", 1);
+
+        streamsGroup.removeMember("member-id");
+        streamsGroup.updateMember(new StreamsGroupMember.Builder("member-id").build());
+
+        assertEquals(WarmupSupport.UNKNOWN, streamsGroup.warmupSupport().get("member-id"));
+    }
+
+    @Test
     public void testCacheAndRetrieveRefinedAssignment() {
         StreamsGroup streamsGroup = createStreamsGroup("foo");
 
