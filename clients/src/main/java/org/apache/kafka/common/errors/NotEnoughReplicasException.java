@@ -20,7 +20,7 @@ package org.apache.kafka.common.errors;
 import org.apache.kafka.common.annotation.InterfaceAudience;
 
 /**
- * Number of insync replicas for the partition is lower than min.insync.replicas
+ * Number of insync replicas for the partition is lower than min(min.insync.replicas, replica count)
  */
 @InterfaceAudience.Public
 public class NotEnoughReplicasException extends RetriableException {
