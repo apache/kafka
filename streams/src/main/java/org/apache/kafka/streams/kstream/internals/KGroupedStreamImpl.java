@@ -25,6 +25,8 @@ import org.apache.kafka.streams.kstream.KGroupedStream;
 import org.apache.kafka.streams.kstream.KTable;
 import org.apache.kafka.streams.kstream.Materialized;
 import org.apache.kafka.streams.kstream.Named;
+import org.apache.kafka.streams.kstream.Range;
+import org.apache.kafka.streams.kstream.RangedKStream;
 import org.apache.kafka.streams.kstream.Reducer;
 import org.apache.kafka.streams.kstream.SessionWindowedKStream;
 import org.apache.kafka.streams.kstream.SessionWindows;
@@ -32,9 +34,13 @@ import org.apache.kafka.streams.kstream.SlidingWindows;
 import org.apache.kafka.streams.kstream.TimeWindowedKStream;
 import org.apache.kafka.streams.kstream.Window;
 import org.apache.kafka.streams.kstream.Windows;
+import org.apache.kafka.streams.kstream.internals.GroupedStreamAggregateBuilder.RangedBufferBuildResult;
 import org.apache.kafka.streams.kstream.internals.graph.GraphNode;
+import org.apache.kafka.streams.kstream.internals.graph.ProcessorGraphNode;
+import org.apache.kafka.streams.kstream.internals.graph.ProcessorParameters;
 import org.apache.kafka.streams.state.KeyValueStore;
 import org.apache.kafka.streams.state.VersionedBytesStoreSupplier;
+import org.apache.kafka.streams.state.WindowStore;
 
 import java.util.Objects;
 import java.util.Set;
@@ -43,6 +49,7 @@ class KGroupedStreamImpl<K, V> extends AbstractStream<K, V> implements KGroupedS
 
     static final String REDUCE_NAME = "KSTREAM-REDUCE-";
     static final String AGGREGATE_NAME = "KSTREAM-AGGREGATE-";
+    static final String RANGE_BUFFER_NAME = "KSTREAM-RANGE-BUFFER-";
 
     private final GroupedStreamAggregateBuilder<K, V> aggregateBuilder;
     final boolean repartitionRequired;
@@ -193,6 +200,58 @@ class KGroupedStreamImpl<K, V> extends AbstractStream<K, V> implements KGroupedS
             new KStreamAggregate<>(storeFactory, aggregateBuilder.countInitializer, aggregateBuilder.countAggregator),
             name,
             storeFactory);
+    }
+
+    @Override
+    public RangedKStream<K, V> rangeOver(final Range<? super K, ? super V> range) {
+        Objects.requireNonNull(range, "range can't be null");
+        final Materialized<K, V, WindowStore<Bytes, byte[]>> materialized = Materialized.with(keySerde, valueSerde);
+        return rangeOver(range, materialized);
+    }
+
+    @Override
+    public RangedKStream<K, V> rangeOver(
+        final Range<? super K, ? super V> range,
+        final Materialized<K, V, WindowStore<Bytes, byte[]>> materialized
+    ) {
+        Objects.requireNonNull(range, "range can't be null");
+        Objects.requireNonNull(materialized, "materialized can't be null");
+
+        final MaterializedInternal<K, V, WindowStore<Bytes, byte[]>> materializedInternal =
+            new MaterializedInternal<>(materialized, builder, RANGE_BUFFER_NAME);
+
+        if (materializedInternal.keySerde() == null) {
+            materializedInternal.withKeySerde(keySerde);
+        }
+        if (materializedInternal.valueSerde() == null) {
+            materializedInternal.withValueSerde(valueSerde);
+        }
+
+        final RangeWindowStoreMaterializer<K, V> storeFactory =
+            new RangeWindowStoreMaterializer<>(materializedInternal, range);
+
+        final RangedBufferBuildResult result = aggregateBuilder.prepareRangedBuffer(storeFactory.storeName());
+
+        final String bufferName = builder.newProcessorName(RANGE_BUFFER_NAME);
+        final KStreamRangeBuffer<K, V> bufferSupplier = new KStreamRangeBuffer<>(storeFactory, range.gracePeriodMs());
+
+        final ProcessorGraphNode<K, V> bufferNode = new ProcessorGraphNode<>(
+            bufferName,
+            new ProcessorParameters<>(bufferSupplier, bufferName)
+        );
+
+        builder.addGraphNode(result.parentNode, bufferNode);
+
+        return new RangedKStreamImpl<>(
+            range,
+            storeFactory,
+            bufferName,
+            builder,
+            result.sourceNodes,
+            materializedInternal.keySerde(),
+            materializedInternal.valueSerde(),
+            bufferNode
+        );
     }
 
     @Override

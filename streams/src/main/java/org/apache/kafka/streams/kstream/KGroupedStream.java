@@ -27,6 +27,7 @@ import org.apache.kafka.streams.processor.api.Record;
 import org.apache.kafka.streams.state.KeyValueStore;
 import org.apache.kafka.streams.state.ReadOnlyKeyValueStore;
 import org.apache.kafka.streams.state.TimestampedKeyValueStore;
+import org.apache.kafka.streams.state.WindowStore;
 
 /**
  * {@code KGroupedStream} is an abstraction of a <em>grouped</em> record stream of {@link Record key-value} pairs.
@@ -562,6 +563,51 @@ public interface KGroupedStream<K, V> {
      * @return an instance of {@link TimeWindowedKStream}
      */
     SessionWindowedKStream<K, V> windowedBy(final SessionWindows windows);
+
+    /**
+     * Create a new {@link RangedKStream} instance with a default internal buffer store.
+     * The store is auto-named, uses the Serdes of this grouped stream, and its retention is set
+     * to {@link Range#retentionMs()} — the minimum required to serve the range. Use
+     * {@link #rangeOver(Range, Materialized)} to name the store, override Serdes, or increase
+     * retention.
+     *
+     * <p>Records with {@code null} key or {@code null} value are dropped and not written to the
+     * buffer store. The {@code dropped-records-total} metric is incremented for each dropped record.
+     *
+     * @param range the range definition, determining which records are included for each anchor
+     *              record
+     * @return an instance of {@link RangedKStream}
+     */
+    RangedKStream<K, V> rangeOver(final Range<? super K, ? super V> range);
+
+    /**
+     * Create a new {@link RangedKStream} instance that can be used to perform ranged aggregations
+     * on the grouped stream. The range of the aggregation is defined by the provided {@link Range}
+     * instance. Built-in implementations are provided via {@link EventTimeRange} and
+     * {@link EventCountRange}. Custom implementations of {@link Range} can also be provided.
+     *
+     * <p>The {@code materialized} parameter configures the underlying buffer store, which holds
+     * the raw records used by the range definition to fetch records on each trigger. This store is
+     * materialized at this step, not at aggregation time, because the aggregation result is emitted
+     * as a {@link KStream} and not persisted.
+     *
+     * <p>Records with {@code null} key or {@code null} value are dropped and not written to the
+     * buffer store. The {@code dropped-records-total} metric is incremented for each dropped record.
+     *
+     * @param range        the range definition, determining which records are included for each
+     *                     anchor record
+     * @param materialized the configuration for the underlying buffer state store
+     * @return an instance of {@link RangedKStream}
+     * @throws IllegalArgumentException if the retention period specified in {@code materialized} is
+     *                                  smaller than {@link Range#retentionMs()}
+     * @throws IllegalArgumentException if a custom {@link org.apache.kafka.streams.state.WindowBytesStoreSupplier}
+     *                                  in {@code materialized} has {@code retainDuplicates} set to
+     *                                  {@code false}
+     */
+    RangedKStream<K, V> rangeOver(
+        final Range<? super K, ? super V> range,
+        final Materialized<K, V, WindowStore<Bytes, byte[]>> materialized
+    );
 
     /**
      * Create a new {@link CogroupedKStream} from this grouped KStream to allow cogrouping other
