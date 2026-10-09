@@ -33,6 +33,7 @@ import org.apache.kafka.coordinator.group.Group.GroupType;
 import org.apache.kafka.coordinator.group.GroupConfig;
 import org.apache.kafka.coordinator.group.GroupCoordinatorConfig;
 import org.apache.kafka.coordinator.group.modern.share.ShareGroupConfig;
+import org.apache.kafka.coordinator.mirror.ClusterMirrorConfigs;
 import org.apache.kafka.coordinator.share.ShareCoordinatorConfig;
 import org.apache.kafka.coordinator.transaction.AddPartitionsToTxnConfig;
 import org.apache.kafka.coordinator.transaction.TransactionLogConfig;
@@ -95,7 +96,8 @@ public abstract class AbstractKafkaConfig extends AbstractConfig {
         QuotaConfig.CONFIG_DEF,
         BrokerSecurityConfigs.CONFIG_DEF,
         DelegationTokenManagerConfigs.CONFIG_DEF,
-        AddPartitionsToTxnConfig.CONFIG_DEF
+        AddPartitionsToTxnConfig.CONFIG_DEF,
+        ClusterMirrorConfigs.brokerConfigDef()
     ));
 
     public AbstractKafkaConfig(ConfigDef definition, Map<?, ?> originals, Map<String, ?> configProviderProps, boolean doLog) {
@@ -157,6 +159,22 @@ public abstract class AbstractKafkaConfig extends AbstractConfig {
 
     public SecurityProtocol interBrokerSecurityProtocol() {
         return interBrokerListenerNameAndSecurityProtocol().getValue();
+    }
+
+    public ListenerName mirrorAdminListenerName() {
+        String mirrorAdminListenerName = getString(ReplicationConfigs.MIRROR_ADMIN_LISTENER_NAME_CONFIG);
+        if (mirrorAdminListenerName == null) {
+            return interBrokerListenerName();
+        }
+
+        ListenerName listenerName = ListenerName.normalised(mirrorAdminListenerName);
+        SecurityProtocol securityProtocol = effectiveListenerSecurityProtocolMap().get(listenerName);
+        if (securityProtocol == null) {
+            throw new ConfigException("Listener with name " + listenerName.value() + " defined in " +
+                    ReplicationConfigs.MIRROR_ADMIN_LISTENER_NAME_CONFIG + " not found in " +
+                    SocketServerConfigs.LISTENER_SECURITY_PROTOCOL_MAP_CONFIG + ".");
+        }
+        return listenerName;
     }
 
     public int initialRegistrationTimeoutMs() {
@@ -912,6 +930,11 @@ public abstract class AbstractKafkaConfig extends AbstractConfig {
 
     public String saslMechanismInterBrokerProtocol() {
         return getString(BrokerSecurityConfigs.SASL_MECHANISM_INTER_BROKER_PROTOCOL_CONFIG);
+    }
+
+    public String saslMechanismMirrorAdminProtocol() {
+        String configured = getString(BrokerSecurityConfigs.SASL_MECHANISM_MIRROR_ADMIN_PROTOCOL_CONFIG);
+        return configured != null ? configured : saslMechanismInterBrokerProtocol();
     }
 
     // ********* Fetch Configuration **********
