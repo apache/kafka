@@ -557,6 +557,7 @@ public class ProducerPerformance {
         }
 
         public void printTotal() {
+            this.suppressPrint = true;
             long elapsed = System.currentTimeMillis() - start;
             double recsPerSec = 1000.0 * count / (double) elapsed;
             double mbPerSec = 1000.0 * this.bytes / (double) elapsed / (1024.0 * 1024.0);
