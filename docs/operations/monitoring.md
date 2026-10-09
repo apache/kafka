@@ -829,7 +829,7 @@ kafka.server:type={Produce|Fetch},user=([-.\w]+),client-id=([-.\w]+)
 </td>  
 <td>
 
-Two attributes. throttle-time indicates the amount of time in ms the client was throttled. Ideally = 0. byte-rate indicates the data produce/consume rate of the client in bytes/sec. For (user, client-id) quotas, both user and client-id are specified. If per-client-id quota is applied to the client, user is not specified. If per-user quota is applied, client-id is not specified.
+Three attributes. throttle-time indicates the amount of time in ms the client was throttled. Ideally = 0. byte-rate indicates the data produce/consume rate of the client in bytes/sec. quota-utilization is byte-rate as a percentage of the effective quota applied on this broker. It is not capped at 100, and is NaN when there is no finite positive quota. For (user, client-id) quotas, both user and client-id are specified. If per-client-id quota is applied to the client, user is not specified. If per-user quota is applied, client-id is not specified.
 </td> </tr>  
 <tr>  
 <td>
@@ -842,7 +842,7 @@ kafka.server:type=Request,user=([-.\w]+),client-id=([-.\w]+)
 </td>  
 <td>
 
-Two attributes. throttle-time indicates the amount of time in ms the client was throttled. Ideally = 0. request-time indicates the percentage of time spent in broker network and I/O threads to process requests from client group. For (user, client-id) quotas, both user and client-id are specified. If per-client-id quota is applied to the client, user is not specified. If per-user quota is applied, client-id is not specified.
+Three attributes. throttle-time indicates the amount of time in ms the client was throttled. Ideally = 0. request-time indicates the percentage of time spent in broker network and I/O threads to process requests from client group. quota-utilization is request-time as a percentage of the effective request quota applied on this broker. It is not capped at 100, and is NaN when there is no finite positive quota. For (user, client-id) quotas, both user and client-id are specified. If per-client-id quota is applied to the client, user is not specified. If per-user quota is applied, client-id is not specified.
 </td> </tr>  
 <tr>  
 <td>
