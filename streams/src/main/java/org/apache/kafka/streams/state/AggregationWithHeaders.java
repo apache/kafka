@@ -19,6 +19,7 @@ package org.apache.kafka.streams.state;
 import org.apache.kafka.common.annotation.InterfaceAudience;
 import org.apache.kafka.common.header.Headers;
 
+import java.util.Arrays;
 import java.util.Objects;
 
 /**
@@ -98,12 +99,18 @@ public final class AggregationWithHeaders<AGG> {
         }
         final AggregationWithHeaders<?> that = (AggregationWithHeaders<?>) o;
         return Objects.equals(aggregation, that.aggregation)
-            && Objects.equals(this.headers, that.headers);
+            && headersEqual(this.headers, that.headers);
+    }
+
+    private static boolean headersEqual(final Headers a, final Headers b) {
+        if (a == b) return true;
+        if (a == null || b == null) return false;
+        return Arrays.equals(a.toArray(), b.toArray());
     }
 
     @Override
     public int hashCode() {
-        return Objects.hash(aggregation, headers);
+        return Objects.hash(aggregation, Arrays.hashCode(headers.toArray()));
     }
 
     @Override
