@@ -129,7 +129,7 @@ This section documents differences in behavior between KRaft mode and ZooKeeper 
   
   Note that the entity-type must be specified as `broker-loggers`, even though we are changing a controller's log level rather than a broker's log level. 
 
-* When changing the log level of a combined node, which has both broker and controller roles, either --bootstrap-servers or --bootstrap-controllers may be used. Combined nodes have only a single set of log levels; there are not different log levels for the broker and controller parts of the process. 
+* When changing the log level of a combined node, which has both broker and controller roles, either `--bootstrap-server` or `--bootstrap-controller` may be used. Combined nodes have only a single set of log levels; there are not different log levels for the broker and controller parts of the process.
 
 
 
@@ -181,7 +181,6 @@ Prior to version 4.3, dynamic configuration updates were not supported unless a 
     * `kafka.controller:type=ControllerChannelManager,name=QueueSize`
     * `kafka.controller:type=ControllerChannelManager,name=RequestRateAndQueueTimeMs`
     * `kafka.controller:type=ControllerEventManager,name=EventQueueSize`
-    * `kafka.controller:type=ControllerEventManager,name=EventQueueTimeMs`
     * `kafka.controller:type=ControllerStats,name=AutoLeaderBalanceRateAndTimeMs`
     * `kafka.controller:type=ControllerStats,name=ControlledShutdownRateAndTimeMs`
     * `kafka.controller:type=ControllerStats,name=ControllerChangeRateAndTimeMs`
@@ -200,17 +199,9 @@ Prior to version 4.3, dynamic configuration updates were not supported unless a 
     * `kafka.controller:type=KafkaController,name=TopicsIneligibleToDeleteCount`
     * `kafka.controller:type=ControllerStats,name=TopicUncleanLeaderElectionEnableRateAndTimeMs`
     * `kafka.controller:type=ControllerStats,name=UncleanLeaderElectionEnableRateAndTimeMs`
-    * `kafka.controller:type=ControllerStats,name=UncleanLeaderElectionsPerSec`
     * `kafka.controller:type=ControllerStats,name=UpdateFeaturesRateAndTimeMs`
     * `kafka.controller:type=ControllerStats,name=UpdateMetadataResponseReceivedRateAndTimeMs`
-    * `kafka.controller:type=KafkaController,name=ActiveBrokerCount`
-    * `kafka.controller:type=KafkaController,name=ActiveControllerCount`
     * `kafka.controller:type=KafkaController,name=ControllerState`
-    * `kafka.controller:type=KafkaController,name=FencedBrokerCount`
-    * `kafka.controller:type=KafkaController,name=GlobalPartitionCount`
-    * `kafka.controller:type=KafkaController,name=GlobalTopicCount`
-    * `kafka.controller:type=KafkaController,name=OfflinePartitionsCount`
-    * `kafka.controller:type=KafkaController,name=PreferredReplicaImbalanceCount`
     * `kafka.controller:type=KafkaController,name=ReplicasIneligibleToDeleteCount`
     * `kafka.controller:type=KafkaController,name=ReplicasToDeleteCount`
     * `kafka.controller:type=KafkaController,name=TopicsToDeleteCount`
@@ -240,5 +231,4 @@ This document catalogs the functional and operational differences between ZooKee
   Note: If migrating from ZooKeeper mode, ensure policy JARs are moved from brokers to controllers.
 
 * **Custom implementations of`KafkaPrincipalBuilder`**: In KRaft mode, custom implementations of `KafkaPrincipalBuilder` must also implement `KafkaPrincipalSerde`; otherwise brokers will not be able to forward requests to the controller. 
-
 
