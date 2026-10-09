@@ -17,6 +17,7 @@
 package org.apache.kafka.clients.admin.internals;
 
 import org.apache.kafka.common.TopicPartition;
+import org.apache.kafka.common.utils.Time;
 
 import java.util.Collection;
 import java.util.HashMap;
@@ -24,14 +25,27 @@ import java.util.Map;
 
 public class PartitionLeaderCache {
 
-    private final Map<TopicPartition, Integer> cache = new HashMap<>();
+    private final Map<TopicPartition, CacheEntry> cache = new HashMap<>();
+    private final Time time;
+    private final long ttlMs;
+
+    public PartitionLeaderCache() {
+        this(Time.SYSTEM, Long.MAX_VALUE);
+    }
+
+    public PartitionLeaderCache(Time time, long ttlMs) {
+        this.time = time;
+        this.ttlMs = ttlMs;
+    }
 
     public Map<TopicPartition, Integer> get(Collection<TopicPartition> keys) {
         Map<TopicPartition, Integer> result = new HashMap<>();
+        long now = time.milliseconds();
         synchronized (cache) {
             for (TopicPartition key : keys) {
-                if (cache.containsKey(key)) {
-                    result.put(key, cache.get(key));
+                CacheEntry entry = cache.get(key);
+                if (entry != null && !entry.isExpired(now, ttlMs)) {
+                    result.put(key, entry.brokerId);
                 }
             }
         }
@@ -39,8 +53,10 @@ public class PartitionLeaderCache {
     }
 
     public void put(Map<TopicPartition, Integer> values) {
+        long now = time.milliseconds();
         synchronized (cache) {
-            cache.putAll(values);
+            values.forEach((tp, brokerId) ->
+                cache.put(tp, new CacheEntry(brokerId, now)));
         }
     }
 
@@ -49,6 +65,20 @@ public class PartitionLeaderCache {
             for (TopicPartition key : keys) {
                 cache.remove(key);
             }
+        }
+    }
+
+    private static class CacheEntry {
+        final int brokerId;
+        final long timestampMs;
+
+        CacheEntry(int brokerId, long timestampMs) {
+            this.brokerId = brokerId;
+            this.timestampMs = timestampMs;
+        }
+
+        boolean isExpired(long nowMs, long ttlMs) {
+            return (nowMs - timestampMs) >= ttlMs;
         }
     }
 }
