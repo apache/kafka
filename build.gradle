@@ -1526,8 +1526,9 @@ project(':metadata') {
   tasks.register('processMessages', JavaExec) {
     mainClass = "org.apache.kafka.message.MessageGenerator"
     classpath = configurations.generator
+    workingDir = projectDir
     args = [ "-p", "org.apache.kafka.common.metadata",
-             "-o", "${projectDir}/build/generated/main/java/org/apache/kafka/common/metadata",
+             "-o", "build/generated/main/java/org/apache/kafka/common/metadata",
              "-i", "src/main/resources/common/metadata",
              "-m", "MessageDataGenerator", "JsonConverterGenerator",
              "-t", "MetadataRecordTypeGenerator", "MetadataJsonConvertersGenerator"
@@ -1677,8 +1678,9 @@ project(':group-coordinator') {
   tasks.register('processMessages', JavaExec) {
     mainClass = "org.apache.kafka.message.MessageGenerator"
     classpath = configurations.generator
+    workingDir = projectDir
     args = [ "-p", "org.apache.kafka.coordinator.group.generated",
-             "-o", "${projectDir}/build/generated/main/java/org/apache/kafka/coordinator/group/generated",
+             "-o", "build/generated/main/java/org/apache/kafka/coordinator/group/generated",
              "-i", "src/main/resources/common/message",
              "-m", "MessageDataGenerator", "JsonConverterGenerator",
              "-t", "CoordinatorRecordTypeGenerator", "CoordinatorRecordJsonConvertersGenerator"
@@ -1834,8 +1836,9 @@ project(':transaction-coordinator') {
   tasks.register('processMessages', JavaExec) {
     mainClass = "org.apache.kafka.message.MessageGenerator"
     classpath = configurations.generator
+    workingDir = projectDir
     args = [ "-p", "org.apache.kafka.coordinator.transaction.generated",
-             "-o", "${projectDir}/build/generated/main/java/org/apache/kafka/coordinator/transaction/generated",
+             "-o", "build/generated/main/java/org/apache/kafka/coordinator/transaction/generated",
              "-i", "src/main/resources/common/message",
              "-m", "MessageDataGenerator", "JsonConverterGenerator",
              "-t", "CoordinatorRecordTypeGenerator", "CoordinatorRecordJsonConvertersGenerator"
@@ -1947,8 +1950,9 @@ project(':share-coordinator') {
   tasks.register('processMessages', JavaExec) {
     mainClass = "org.apache.kafka.message.MessageGenerator"
     classpath = configurations.generator
+    workingDir = projectDir
     args = [ "-p", "org.apache.kafka.coordinator.share.generated",
-             "-o", "${projectDir}/build/generated/main/java/org/apache/kafka/coordinator/share/generated",
+             "-o", "build/generated/main/java/org/apache/kafka/coordinator/share/generated",
              "-i", "src/main/resources/common/message",
              "-m", "MessageDataGenerator", "JsonConverterGenerator",
              "-t", "CoordinatorRecordTypeGenerator", "CoordinatorRecordJsonConvertersGenerator"
@@ -2125,8 +2129,9 @@ project(':clients') {
   tasks.register('processMessages', JavaExec) {
     mainClass = "org.apache.kafka.message.MessageGenerator"
     classpath = configurations.generator
+    workingDir = projectDir
     args = [ "-p", "org.apache.kafka.common.message",
-             "-o", "${projectDir}/build/generated/main/java/org/apache/kafka/common/message",
+             "-o", "build/generated/main/java/org/apache/kafka/common/message",
              "-i", "src/main/resources/common/message",
              "-t", "ApiMessageTypeGenerator",
              "-m", "MessageDataGenerator", "JsonConverterGenerator"
@@ -2141,8 +2146,9 @@ project(':clients') {
   tasks.register('processTestMessages', JavaExec) {
     mainClass = "org.apache.kafka.message.MessageGenerator"
     classpath = configurations.generator
+    workingDir = projectDir
     args = [ "-p", "org.apache.kafka.common.message",
-             "-o", "${projectDir}/build/generated/test/java/org/apache/kafka/common/message",
+             "-o", "build/generated/test/java/org/apache/kafka/common/message",
              "-i", "src/test/resources/common/message",
              "-m", "MessageDataGenerator", "JsonConverterGenerator"
            ]
@@ -2317,8 +2323,9 @@ project(':raft') {
   tasks.register('processMessages', JavaExec) {
     mainClass = "org.apache.kafka.message.MessageGenerator"
     classpath = configurations.generator
+    workingDir = projectDir
     args = [ "-p", "org.apache.kafka.raft.generated",
-             "-o", "${projectDir}/build/generated/main/java/org/apache/kafka/raft/generated",
+             "-o", "build/generated/main/java/org/apache/kafka/raft/generated",
              "-i", "src/main/resources/common/message",
              "-m", "MessageDataGenerator", "JsonConverterGenerator"]
     inputs.dir("src/main/resources/common/message")
@@ -2572,8 +2579,9 @@ project(':storage') {
   tasks.register('processMessages', JavaExec) {
     mainClass = "org.apache.kafka.message.MessageGenerator"
     classpath = configurations.generator
+    workingDir = projectDir
     args = [ "-p", "org.apache.kafka.server.log.remote.metadata.storage.generated",
-             "-o", "${projectDir}/build/generated/main/java/org/apache/kafka/server/log/remote/metadata/storage/generated",
+             "-o", "build/generated/main/java/org/apache/kafka/server/log/remote/metadata/storage/generated",
              "-i", "src/main/resources/message",
              "-m", "MessageDataGenerator", "JsonConverterGenerator",
              "-t", "MetadataRecordTypeGenerator", "MetadataJsonConvertersGenerator" ]
@@ -2906,8 +2914,9 @@ project(':streams') {
   tasks.register('processMessages', JavaExec) {
     mainClass = "org.apache.kafka.message.MessageGenerator"
     classpath = configurations.generator
+    workingDir = projectDir
     args = [ "-p", "org.apache.kafka.streams.internals.generated",
-             "-o", "${projectDir}/build/generated/main/java/org/apache/kafka/streams/internals/generated",
+             "-o", "build/generated/main/java/org/apache/kafka/streams/internals/generated",
              "-i", "src/main/resources/common/message",
              "-m", "MessageDataGenerator"
            ]
