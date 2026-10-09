@@ -22,6 +22,8 @@ import org.apache.kafka.coordinator.group.api.streams.StreamsTopologyDescription
 import org.apache.kafka.server.streams.InMemoryTopologyDescriptionPlugin;
 
 import java.util.concurrent.CompletableFuture;
+import java.util.concurrent.ConcurrentHashMap;
+import java.util.concurrent.atomic.AtomicInteger;
 import java.util.concurrent.atomic.AtomicReference;
 
 /**
@@ -47,6 +49,8 @@ public class FailingTopologyDescriptionPlugin extends InMemoryTopologyDescriptio
         new AtomicReference<>(SetTopologyFailureMode.NONE);
     private static final AtomicReference<RuntimeException> DELETE_TOPOLOGY_FAILURE =
         new AtomicReference<>(null);
+    private static final ConcurrentHashMap<String, AtomicInteger> DELETE_TOPOLOGY_ATTEMPTS =
+        new ConcurrentHashMap<>();
 
     public static void failNextSetTopology(SetTopologyFailureMode mode) {
         SET_TOPOLOGY_FAILURE_MODE.set(mode);
@@ -59,6 +63,16 @@ public class FailingTopologyDescriptionPlugin extends InMemoryTopologyDescriptio
     public static void reset() {
         SET_TOPOLOGY_FAILURE_MODE.set(SetTopologyFailureMode.NONE);
         DELETE_TOPOLOGY_FAILURE.set(null);
+        DELETE_TOPOLOGY_ATTEMPTS.clear();
+    }
+
+    /**
+     * @return how many times {@code deleteTopology} was invoked for the group since the last
+     *         {@link #reset()}, whether or not the call was configured to fail.
+     */
+    public static int deleteTopologyAttempts(String groupId) {
+        AtomicInteger attempts = DELETE_TOPOLOGY_ATTEMPTS.get(groupId);
+        return attempts == null ? 0 : attempts.get();
     }
 
     @Override
@@ -77,6 +91,7 @@ public class FailingTopologyDescriptionPlugin extends InMemoryTopologyDescriptio
 
     @Override
     public CompletableFuture<Void> deleteTopology(String groupId) {
+        DELETE_TOPOLOGY_ATTEMPTS.computeIfAbsent(groupId, k -> new AtomicInteger()).incrementAndGet();
         RuntimeException failure = DELETE_TOPOLOGY_FAILURE.get();
         if (failure != null) {
             return CompletableFuture.failedFuture(failure);
