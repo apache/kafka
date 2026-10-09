@@ -2556,6 +2556,80 @@ public class AssignmentRefinerTest {
     }
 
     // ---------------------------------------------------------------------------------------------------------------
+    // Members that cannot be warmed up
+    // ---------------------------------------------------------------------------------------------------------------
+
+    @Test
+    public void shouldGrantATaskAtOnceToATargetOwnerThatCannotBeWarmedUp() {
+        // memberB heartbeats with version 0, so it never reports its restore progress and a warm-up task on it could
+        // never be promoted. The migration that would be staged for any other target owner is completed in this step.
+        final Map<String, StreamsGroupMember> members = Map.of(
+            "memberA", member("memberA", "processA", mkTasksTuple(TaskRole.ACTIVE, mkTasks(STATEFUL, 0))),
+            "memberB", member("memberB", "processB", TasksTuple.EMPTY)
+        );
+        final Map<String, TasksTuple> targetAssignment = Map.of(
+            "memberA", TasksTuple.EMPTY,
+            "memberB", mkTasksTuple(TaskRole.ACTIVE, mkTasks(STATEFUL, 0))
+        );
+        final Map<String, Integer> heartbeatVersions = heartbeatVersions(members, Map.of("memberB", 0));
+
+        final AssignmentRefinerImpl.TaskDecisions decisions =
+            analyze(members, targetAssignment, Map.of(), heartbeatVersions);
+
+        assertEquals(List.of(new AssignmentRefinerImpl.TaskGrant(STATEFUL_0, "memberB")), decisions.grantedTasks());
+        assertEquals(List.of(), decisions.stagedMigrations());
+        assertEquals(targetAssignment, assemble(members, targetAssignment, Map.of(), heartbeatVersions, 2));
+    }
+
+    @Test
+    public void shouldNotDetourThroughACaughtUpCopyWhenTheTargetOwnerCannotBeWarmedUp() {
+        // memberC holds a caught-up standby task, which would be promoted for a target owner that can be warmed up. For
+        // memberB it would only postpone the same cold grant and add a second hand-over.
+        final Map<String, StreamsGroupMember> members = Map.of(
+            "memberA", member("memberA", "processA", TasksTuple.EMPTY),
+            "memberB", member("memberB", "processB", TasksTuple.EMPTY),
+            "memberC", member("memberC", "processC", mkTasksTuple(TaskRole.STANDBY, mkTasks(STATEFUL, 0)))
+        );
+        final Map<String, TasksTuple> targetAssignment = Map.of(
+            "memberA", TasksTuple.EMPTY,
+            "memberB", mkTasksTuple(TaskRole.ACTIVE, mkTasks(STATEFUL, 0)),
+            "memberC", mkTasksTuple(TaskRole.STANDBY, mkTasks(STATEFUL, 0))
+        );
+        final Map<String, MemberTaskOffsets> taskOffsets = Map.of("memberC", offsets(10_000L, 10_000L));
+
+        assertEquals(
+            List.of(new AssignmentRefinerImpl.StagedMigration(
+                STATEFUL_0, "memberC", "memberB", Optional.of("processB"), Optional.empty())),
+            analyze(members, targetAssignment, taskOffsets).stagedMigrations()
+        );
+        assertEquals(
+            List.of(new AssignmentRefinerImpl.TaskGrant(STATEFUL_0, "memberB")),
+            analyze(members, targetAssignment, taskOffsets, heartbeatVersions(members, Map.of("memberB", 0)))
+                .grantedTasks()
+        );
+    }
+
+    @Test
+    public void shouldKeepATaskRunningOnACurrentOwnerThatCannotBeWarmedUp() {
+        // A member processing a task is hot by definition, whatever it reports. So a version 0 owner keeps the task
+        // while a target owner that can be warmed up restores it.
+        final Map<String, StreamsGroupMember> members = Map.of(
+            "memberA", member("memberA", "processA", mkTasksTuple(TaskRole.ACTIVE, mkTasks(STATEFUL, 0))),
+            "memberB", member("memberB", "processB", TasksTuple.EMPTY)
+        );
+        final Map<String, TasksTuple> targetAssignment = Map.of(
+            "memberA", TasksTuple.EMPTY,
+            "memberB", mkTasksTuple(TaskRole.ACTIVE, mkTasks(STATEFUL, 0))
+        );
+
+        final Map<String, TasksTuple> refined =
+            assemble(members, targetAssignment, Map.of(), heartbeatVersions(members, Map.of("memberA", 0)), 2);
+
+        assertEquals(mkTasksTuple(TaskRole.ACTIVE, mkTasks(STATEFUL, 0)), refined.get("memberA"));
+        assertEquals(mkTasksTuple(TaskRole.WARMUP, mkTasks(STATEFUL, 0)), refined.get("memberB"));
+    }
+
+    // ---------------------------------------------------------------------------------------------------------------
     // Fixtures
     // ---------------------------------------------------------------------------------------------------------------
 
@@ -2576,13 +2650,35 @@ public class AssignmentRefinerTest {
         final Map<String, TasksTuple> targetAssignment,
         final Map<String, MemberTaskOffsets> taskOffsets
     ) {
+        return analyze(members, targetAssignment, taskOffsets, heartbeatVersions(members, Map.of()));
+    }
+
+    private static AssignmentRefinerImpl.TaskDecisions analyze(
+        final Map<String, StreamsGroupMember> members,
+        final Map<String, TasksTuple> targetAssignment,
+        final Map<String, MemberTaskOffsets> taskOffsets,
+        final Map<String, Integer> heartbeatVersions
+    ) {
         return AssignmentRefinerImpl.analyzeTasks(
             index(members, taskOffsets),
             targetAssignment,
             members,
+            heartbeatVersions,
             subtopologies(),
             load(members)
         );
+    }
+
+    /**
+     * Every member of the group heartbeats with version 1, except for the members that {@code versions} names.
+     */
+    private static Map<String, Integer> heartbeatVersions(
+        final Map<String, StreamsGroupMember> members,
+        final Map<String, Integer> versions
+    ) {
+        final Map<String, Integer> heartbeatVersions = new HashMap<>();
+        members.keySet().forEach(memberId -> heartbeatVersions.put(memberId, versions.getOrDefault(memberId, 1)));
+        return heartbeatVersions;
     }
 
     private static Map<String, AssignmentRefinerImpl.ProcessLoad> load(
@@ -2652,8 +2748,16 @@ public class AssignmentRefinerTest {
         final Map<String, MemberTaskOffsets> taskOffsets,
         final int numWarmupReplicas
     ) {
-        final Map<String, Integer> heartbeatVersions = new HashMap<>();
-        members.keySet().forEach(memberId -> heartbeatVersions.put(memberId, 1));
+        return assemble(members, targetAssignment, taskOffsets, heartbeatVersions(members, Map.of()), numWarmupReplicas);
+    }
+
+    private static Map<String, TasksTuple> assemble(
+        final Map<String, StreamsGroupMember> members,
+        final Map<String, TasksTuple> targetAssignment,
+        final Map<String, MemberTaskOffsets> taskOffsets,
+        final Map<String, Integer> heartbeatVersions,
+        final int numWarmupReplicas
+    ) {
         return new AssignmentRefinerImpl().refine(
             members,
             targetAssignment,
