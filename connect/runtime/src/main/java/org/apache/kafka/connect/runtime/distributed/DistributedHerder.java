@@ -20,6 +20,7 @@ import org.apache.kafka.clients.CommonClientConfigs;
 import org.apache.kafka.common.KafkaFuture;
 import org.apache.kafka.common.config.ConfigDef;
 import org.apache.kafka.common.config.ConfigValue;
+import org.apache.kafka.common.errors.BootstrapResolutionException;
 import org.apache.kafka.common.errors.WakeupException;
 import org.apache.kafka.common.metrics.Sensor;
 import org.apache.kafka.common.metrics.stats.Avg;
@@ -394,7 +395,13 @@ public class DistributedHerder extends AbstractHerder implements Runnable {
 
             log.info("Herder stopped");
         } catch (Throwable t) {
-            log.error("Uncaught exception in herder work thread, exiting: ", t);
+            if (t instanceof BootstrapResolutionException) {
+                log.error("Herder thread exiting because the Kafka cluster's bootstrap servers could not be "
+                        + "resolved within bootstrap.resolve.timeout.ms; this worker cannot join the cluster. "
+                        + "Verify DNS resolution and the bootstrap.servers configuration: {}", t.getMessage());
+            } else {
+                log.error("Uncaught exception in herder work thread, exiting: ", t);
+            }
             Utils.closeQuietly(this::stopServices, "herder services");
             Exit.exit(1);
         }

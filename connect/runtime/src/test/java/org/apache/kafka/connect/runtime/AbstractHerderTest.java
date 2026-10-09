@@ -24,6 +24,7 @@ import org.apache.kafka.common.config.ConfigTransformer;
 import org.apache.kafka.common.config.ConfigValue;
 import org.apache.kafka.common.config.SaslConfigs;
 import org.apache.kafka.common.config.provider.DirectoryConfigProvider;
+import org.apache.kafka.common.errors.BootstrapResolutionException;
 import org.apache.kafka.common.metrics.KafkaMetric;
 import org.apache.kafka.common.metrics.Measurable;
 import org.apache.kafka.common.metrics.Monitorable;
@@ -358,6 +359,27 @@ public class AbstractHerderTest {
         assertEquals("FAILED", taskState.state());
         assertEquals(0, taskState.id());
         assertNotNull(taskState.trace());
+    }
+
+    @Test
+    public void testTaskStatusSummarizesBootstrapResolutionExceptionInCauseChain() {
+        ConnectorTaskId taskId = new ConnectorTaskId(connectorName, 0);
+
+        AbstractHerder herder = testHerder();
+
+        final ArgumentCaptor<TaskStatus> taskStatusArgumentCaptor = ArgumentCaptor.forClass(TaskStatus.class);
+        doNothing().when(statusStore).putSafe(taskStatusArgumentCaptor.capture());
+        when(statusStore.get(taskId)).thenAnswer(invocation -> taskStatusArgumentCaptor.getValue());
+
+        BootstrapResolutionException bootstrapResolutionException =
+                new BootstrapResolutionException("could not resolve bootstrap.servers");
+        herder.onFailure(taskId, new ConnectException("Failed to start task", bootstrapResolutionException));
+
+        ConnectorStateInfo.TaskState taskState = herder.taskStatus(taskId);
+        assertEquals("FAILED", taskState.state());
+        assertTrue(taskState.trace().contains("bootstrap.resolve.timeout.ms"));
+        assertTrue(taskState.trace().contains("could not resolve bootstrap.servers"));
+        assertTrue(taskState.trace().contains("ConnectException"));
     }
 
     @Test
