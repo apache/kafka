@@ -80,18 +80,6 @@ final class IdenticalTagGroups<P> {
         return tagGroupByProcess.get(process);
     }
 
-    /** The least-loaded process with room of the candidate tag groups, which all have one. */
-    static <P> P leastLoaded(final Collection<TagGroup<P>> candidates) {
-        QueuedProcess<P> leastLoaded = null;
-        for (final TagGroup<P> candidate : candidates) {
-            final QueuedProcess<P> head = candidate.leastLoadedWithRoom();
-            if (leastLoaded == null || QueuedProcess.ORDER.compare(head, leastLoaded) < 0) {
-                leastLoaded = head;
-            }
-        }
-        return leastLoaded.process;
-    }
-
     /** Processes with the same values for {@code rack.aware.assignment.tags}. */
     static final class TagGroup<P> {
         private final Map<String, String> clientTags;

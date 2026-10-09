@@ -57,12 +57,12 @@ public class IdenticalTagGroupsTest {
     public void shouldQueueProcessAgainOnceItsLoadHasGrown() {
         loads.putAll(Map.of("A", 1.0, "B", 2.0));
         final IdenticalTagGroups<String> identicalTagGroups = sameZone("A", "B");
-        final List<IdenticalTagGroups.TagGroup<String>> tagGroup = List.of(identicalTagGroups.tagGroupOf("A"));
-        assertEquals("A", IdenticalTagGroups.leastLoaded(tagGroup));
+        final IdenticalTagGroups.TagGroup<String> tagGroup = identicalTagGroups.tagGroupOf("A");
+        assertEquals("A", tagGroup.leastLoadedWithRoom().process);
 
         loads.put("A", 3.0);
 
-        assertEquals("B", IdenticalTagGroups.leastLoaded(tagGroup));
+        assertEquals("B", tagGroup.leastLoadedWithRoom().process);
     }
 
     @Test
@@ -73,21 +73,10 @@ public class IdenticalTagGroupsTest {
 
         withRoom.remove("A");
         assertTrue(tagGroup.hasRoom());
-        assertEquals("B", IdenticalTagGroups.leastLoaded(List.of(tagGroup)));
+        assertEquals("B", tagGroup.leastLoadedWithRoom().process);
 
         withRoom.remove("B");
         assertFalse(tagGroup.hasRoom());
-    }
-
-    @Test
-    public void shouldPickLeastLoadedProcessAcrossTagGroups() {
-        loads.putAll(Map.of("A", 2.0, "B", 1.0));
-        final IdenticalTagGroups<String> identicalTagGroups = identicalTagGroups(List.of("zone"), List.of("A", "B"), Map.of(
-            "A", Map.of("zone", "z1"),
-            "B", Map.of("zone", "z2")
-        ));
-
-        assertEquals("B", IdenticalTagGroups.leastLoaded(identicalTagGroups.tagGroups()));
     }
 
     private IdenticalTagGroups<String> sameZone(final String... processes) {
