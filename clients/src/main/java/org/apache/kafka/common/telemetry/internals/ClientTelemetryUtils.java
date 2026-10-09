@@ -160,6 +160,26 @@ public class ClientTelemetryUtils {
         return intervalMs;
     }
 
+    /**
+     * Validates the maximum size of the telemetry payload the broker accepts in a push telemetry
+     * request. A non-positive value cannot be honored, as no payload would ever fit, hence the limit
+     * is not enforced in that case.
+     *
+     * @param telemetryMaxBytes maximum payload size from the subscription response
+     *
+     * @return the maximum payload size to enforce for a push telemetry request
+     */
+    public static int validateTelemetryMaxBytes(int telemetryMaxBytes) {
+        if (telemetryMaxBytes <= 0) {
+            log.warn("Telemetry subscription max bytes value from broker was invalid ({}),"
+                + " the telemetry payload size will not be limited by the client", telemetryMaxBytes);
+            return Integer.MAX_VALUE;
+        }
+
+        log.debug("Telemetry subscription max bytes value from broker: {}", telemetryMaxBytes);
+        return telemetryMaxBytes;
+    }
+
     public static boolean validateResourceLabel(Map<String, ?> m, String key) {
         if (!m.containsKey(key)) {
             log.trace("{} does not exist in map {}", key, m);
