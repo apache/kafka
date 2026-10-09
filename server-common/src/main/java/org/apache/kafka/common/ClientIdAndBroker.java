@@ -16,6 +16,8 @@
  */
 package org.apache.kafka.common;
 
+import java.util.Locale;
+
 /**
  * Convenience case class since (clientId, brokerInfo) pairs are used to create
  * SyncProducer Request Stats and SimpleConsumer Request and Response Stats.
@@ -33,6 +35,6 @@ public class ClientIdAndBroker {
 
     @Override
     public String toString() {
-        return String.format("%s-%s-%d", clientId, brokerHost, brokerPort);
+        return String.format(Locale.ROOT, "%s-%s-%d", clientId, brokerHost, brokerPort);
     }
 }
