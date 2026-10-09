@@ -234,6 +234,8 @@ public class ConnectorsResource {
 
     @PATCH
     @Path("/{connector}/config")
+    @Operation(summary = "Patch the configuration for the specified connector",
+               description = "Keys with null values in the request body are removed from the connector configuration")
     public ConnectorInfo patchConnectorConfig(final @PathParam("connector") String connector,
                                          final @Context HttpHeaders headers,
                                          final @Parameter(hidden = true) @QueryParam("forward") Boolean forward,
