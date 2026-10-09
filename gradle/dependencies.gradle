@@ -61,8 +61,8 @@ versions += [
   classgraph: "4.8.196",
   gradle: "9.7.1",
   httpclient: "4.5.14",
-  jackson: "2.22.3",
-  jacksonAnnotations: "2.22",
+  jackson: "2.21.7",
+  jacksonAnnotations: "2.21",
   jacoco: "0.8.15",
   javassist: "3.30.2-GA",
   // When upgrading Jetty, verify that it does not use the SLF4J 2.x fluent API
