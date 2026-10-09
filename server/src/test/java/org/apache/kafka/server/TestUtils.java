@@ -181,4 +181,38 @@ public class TestUtils {
 
         return newLeaderExists.get().get();
     }
+
+    /**
+     * Wait for the leader of the partition to change from {@code oldLeaderOpt} to {@code expectedLeaderOpt},
+     * or for any leader to be elected if both are empty.
+     *
+     * @param brokers The list of brokers
+     * @param tp The topic partition to check
+     * @param oldLeaderOpt If defined, wait for the leader to change away from this broker
+     * @param expectedLeaderOpt If defined, wait for this specific broker to become leader
+     * @param timeoutMs The duration in ms to wait
+     * @return The elected leader broker id
+     */
+    public static int awaitLeaderChange(
+            Collection<KafkaBroker> brokers,
+            TopicPartition tp,
+            Optional<Integer> oldLeaderOpt,
+            Optional<Integer> expectedLeaderOpt,
+            long timeoutMs) throws InterruptedException {
+        if (oldLeaderOpt.isPresent() && expectedLeaderOpt.isPresent()) {
+            throw new IllegalArgumentException("Cannot define both oldLeaderOpt and expectedLeaderOpt");
+        }
+
+        Supplier<Optional<Integer>> newLeaderExists = () -> brokers.stream()
+                    .filter(b -> expectedLeaderOpt.map(id -> b.config().brokerId() == id).orElse(true))
+                    .filter(b -> oldLeaderOpt.map(id -> b.config().brokerId() != id).orElse(true))
+                    .filter(b -> b.replicaManager().onlinePartition(tp).exists(p -> p.leaderLogIfLocal().isDefined()))
+                    .map(b -> b.config().brokerId())
+                    .findFirst();
+
+        waitForCondition(() -> newLeaderExists.get().isPresent(),
+                timeoutMs, "Did not observe leader change for partition " + tp + " after " + timeoutMs + " ms");
+
+        return newLeaderExists.get().orElseThrow(() -> new IllegalStateException("Leader did not change within the timeout period"));
+    }
 }
