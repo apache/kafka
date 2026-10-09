@@ -346,6 +346,7 @@ public class AsyncKafkaConsumerTest {
         forceCommitCallbackInvocation();
 
         assertEquals(1, callback.invoked);
+        assertEquals(offsets, callback.offsets);
         assertNull(callback.exception);
     }
 
@@ -362,7 +363,36 @@ public class AsyncKafkaConsumerTest {
         assertDoesNotThrow(() -> consumer.commitAsync(offsets, callback));
         forceCommitCallbackInvocation();
 
-        assertSame(exception.getClass(), callback.exception.getClass());
+        assertEquals(1, callback.invoked);
+        assertEquals(offsets, callback.offsets);
+        assertSame(exception, callback.exception);
+    }
+
+    @ParameterizedTest
+    @MethodSource("commitExceptionSupplier")
+    public void testCommitAsyncAllConsumedUserSuppliedCallbackWithException(Exception exception) {
+        consumer = newConsumer();
+        TopicPartition tp = new TopicPartition("my-topic", 1);
+        SubscriptionState subscriptions = consumer.subscriptions();
+        subscriptions.assignFromUser(singleton(tp));
+        subscriptions.seek(tp, 200L);
+        markOffsetsReadyForCommitEvent();
+
+        MockCommitCallback callback = new MockCommitCallback();
+        assertDoesNotThrow(() -> consumer.commitAsync(callback));
+
+        ArgumentCaptor<AsyncCommitEvent> eventCaptor = ArgumentCaptor.forClass(AsyncCommitEvent.class);
+        verify(applicationEventHandler).add(eventCaptor.capture());
+        AsyncCommitEvent event = eventCaptor.getValue();
+        assertTrue(event.offsets().isEmpty());
+
+        subscriptions.seek(tp, 300L);
+        event.future().completeExceptionally(exception);
+        forceCommitCallbackInvocation();
+
+        assertEquals(1, callback.invoked);
+        assertEquals(Map.of(tp, new OffsetAndMetadata(200L)), callback.offsets);
+        assertSame(exception, callback.exception);
     }
 
     @Test
@@ -1182,12 +1212,14 @@ public class AsyncKafkaConsumerTest {
 
     private static class MockCommitCallback implements OffsetCommitCallback {
         public int invoked = 0;
+        public Map<TopicPartition, OffsetAndMetadata> offsets;
         public Exception exception = null;
         public String completionThread;
 
         @Override
         public void onComplete(Map<TopicPartition, OffsetAndMetadata> offsets, Exception exception) {
             invoked++;
+            this.offsets = offsets;
             this.completionThread = Thread.currentThread().getName();
             this.exception = exception;
         }
@@ -2583,6 +2615,7 @@ public class AsyncKafkaConsumerTest {
     private void completeCommitAsyncApplicationEventExceptionally(Exception ex) {
         doAnswer(invocation -> {
             AsyncCommitEvent event = invocation.getArgument(0);
+            event.updateCalculatedOffsets(event.offsets().orElseGet(() -> consumer.subscriptions().allConsumed()));
             event.markOffsetsReady();
             event.future().completeExceptionally(ex);
             return null;
@@ -2605,8 +2638,11 @@ public class AsyncKafkaConsumerTest {
     private void completeCommitAsyncApplicationEventSuccessfully() {
         doAnswer(invocation -> {
             AsyncCommitEvent event = invocation.getArgument(0);
+            Map<TopicPartition, OffsetAndMetadata> offsets =
+                event.offsets().orElseGet(() -> consumer.subscriptions().allConsumed());
+            event.updateCalculatedOffsets(offsets);
             event.markOffsetsReady();
-            event.future().complete(null);
+            event.future().complete(offsets);
             return null;
         }).when(applicationEventHandler).add(ArgumentMatchers.isA(AsyncCommitEvent.class));
     }
@@ -2709,6 +2745,7 @@ public class AsyncKafkaConsumerTest {
     private void markOffsetsReadyForCommitEvent() {
         doAnswer(invocation -> {
             CommitEvent event = invocation.getArgument(0);
+            event.updateCalculatedOffsets(event.offsets().orElseGet(() -> consumer.subscriptions().allConsumed()));
             event.markOffsetsReady();
             return null;
         }).when(applicationEventHandler).add(ArgumentMatchers.isA(CommitEvent.class));
