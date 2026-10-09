@@ -239,15 +239,15 @@ public class TestableSourceConnector extends SampleSourceConnector {
         }
 
         @Override
-        public void commit() {
+        public void commit(Map<Map<String, Object>, Map<String, Object>> latestCommittedOffsets) {
             log.info("Task {} committing offsets", taskId);
-            //TODO: save progress outside the offset topic, potentially in the task handle
+            taskHandle.commit(latestCommittedOffsets);
         }
 
         @Override
         public void commitRecord(SourceRecord record, RecordMetadata metadata) {
             log.trace("Committing record: {}", record);
-            taskHandle.commit();
+            taskHandle.commitRecord();
         }
 
         @Override
