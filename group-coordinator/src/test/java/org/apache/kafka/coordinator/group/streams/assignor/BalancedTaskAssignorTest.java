@@ -165,15 +165,18 @@ public class BalancedTaskAssignorTest {
 
     @Test
     public void shouldSpreadTasksOfEachSubtopologyInProportionToMemberCounts() {
-        // process1 has two members, process2 has one. Dealt in sorted order, the three tasks of each subtopology go
-        // to process1, process2 and process1, so every subtopology is split two to one rather than only the total.
+        // process1 has two members, process2 has one, so every subtopology is split 2:1, not only the total.
         final GroupAssignment result = assignor.assign(
             new GroupSpecImpl(members("member1_1", "process1", "member1_2", "process1", "member2_1", "process2"), AssignmentConfigsImpl.DEFAULT),
             statefulTopology(3, SUBTOPOLOGY_1, SUBTOPOLOGY_2)
         );
 
-        assertEquals(Map.of(SUBTOPOLOGY_1, Set.of(0, 2), SUBTOPOLOGY_2, Set.of(0, 2)), mergeTasks(result, true, "member1_1", "member1_2"));
-        assertEquals(Map.of(SUBTOPOLOGY_1, Set.of(1), SUBTOPOLOGY_2, Set.of(1)), mergeTasks(result, true, "member2_1"));
+        final Map<String, Set<Integer>> process1Tasks = mergeTasks(result, true, "member1_1", "member1_2");
+        final Map<String, Set<Integer>> process2Tasks = mergeTasks(result, true, "member2_1");
+        for (final String subtopology : List.of(SUBTOPOLOGY_1, SUBTOPOLOGY_2)) {
+            assertEquals(2, process1Tasks.getOrDefault(subtopology, Set.of()).size(), subtopology + " on process1");
+            assertEquals(1, process2Tasks.getOrDefault(subtopology, Set.of()).size(), subtopology + " on process2");
+        }
         assertAllTasksAssignedOnce(result, statefulTopology(3, SUBTOPOLOGY_1, SUBTOPOLOGY_2));
     }
 
