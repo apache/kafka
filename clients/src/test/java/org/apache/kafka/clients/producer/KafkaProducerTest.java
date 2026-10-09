@@ -813,24 +813,58 @@ public class KafkaProducerTest {
         ProducerRecord<String, String> record = new ProducerRecord<>(topic, "value");
         producer.send(record);
 
-        // One request update for each empty cluster returned
-        verify(metadata, times(4)).requestUpdateForTopic(topic);
-        verify(metadata, times(4)).awaitUpdate(anyInt(), any(Timer.class));
+        // Each update has an empty snapshot recheck before the request.
+        verify(metadata, times(2)).requestUpdateForTopic(topic);
+        verify(metadata, times(2)).awaitUpdate(anyInt(), any(Timer.class));
         verify(metadata, times(5)).fetch();
 
         // Should not request update for subsequent `send`
         producer.send(record, null);
-        verify(metadata, times(4)).requestUpdateForTopic(topic);
-        verify(metadata, times(4)).awaitUpdate(anyInt(), any(Timer.class));
+        verify(metadata, times(2)).requestUpdateForTopic(topic);
+        verify(metadata, times(2)).awaitUpdate(anyInt(), any(Timer.class));
         verify(metadata, times(6)).fetch();
 
         // Should not request update for subsequent `partitionsFor`
         producer.partitionsFor(topic);
-        verify(metadata, times(4)).requestUpdateForTopic(topic);
-        verify(metadata, times(4)).awaitUpdate(anyInt(), any(Timer.class));
+        verify(metadata, times(2)).requestUpdateForTopic(topic);
+        verify(metadata, times(2)).awaitUpdate(anyInt(), any(Timer.class));
         verify(metadata, times(7)).fetch();
 
         producer.close(Duration.ofMillis(0));
+    }
+
+    @Test
+    public void testMetadataUpdatedAfterFetch() {
+        Map<String, Object> configs = Map.of(
+                ProducerConfig.BOOTSTRAP_SERVERS_CONFIG, "localhost:9999",
+                ProducerConfig.ENABLE_IDEMPOTENCE_CONFIG, false,
+                ProducerConfig.MAX_BLOCK_MS_CONFIG, 250);
+        AtomicBoolean updateAfterFetch = new AtomicBoolean();
+        Thread applicationThread = Thread.currentThread();
+        ProducerMetadata metadata = new ProducerMetadata(750, 1000, Long.MAX_VALUE, DEFAULT_METADATA_IDLE_MS,
+                new LogContext(), new ClusterResourceListeners()) {
+            @Override
+            public Cluster fetch() {
+                Cluster cluster = super.fetch();
+                if (Thread.currentThread() == applicationThread && updateAfterFetch.compareAndSet(true, false)) {
+                    // Apply the response after reading the snapshot, before choosing the wait version.
+                    updateWithCurrentRequestVersion(RequestTestUtils.metadataUpdateWith(1, singletonMap(topic, 1)),
+                            false, Time.SYSTEM.milliseconds());
+                }
+                return cluster;
+            }
+        };
+        metadata.add(topic, Time.SYSTEM.milliseconds());
+        MockClient client = new MockClient(Time.SYSTEM, List.of(NODE));
+        try (KafkaProducer<String, String> producer = kafkaProducer(configs, new StringSerializer(),
+                new StringSerializer(), metadata, client, null, Time.SYSTEM)) {
+            updateAfterFetch.set(true);
+            List<PartitionInfo> partitions = producer.partitionsFor(topic);
+            assertEquals(1, partitions.size());
+            assertEquals(topic, partitions.get(0).topic());
+            assertEquals(0, partitions.get(0).partition());
+            assertFalse(metadata.updateRequested());
+        }
     }
 
     @ParameterizedTest
@@ -841,7 +875,7 @@ public class KafkaProducerTest {
         configs.put(ProducerConfig.ENABLE_IDEMPOTENCE_CONFIG, isIdempotenceEnabled);
         ProducerMetadata metadata = mock(ProducerMetadata.class);
 
-        when(metadata.fetch()).thenReturn(onePartitionCluster, emptyCluster, onePartitionCluster);
+        when(metadata.fetch()).thenReturn(onePartitionCluster, emptyCluster, emptyCluster, onePartitionCluster);
 
         KafkaProducer<String, String> producer = producerWithOverrideNewSender(configs, metadata);
         ProducerRecord<String, String> record = new ProducerRecord<>(topic, "value");
@@ -856,7 +890,7 @@ public class KafkaProducerTest {
         producer.send(record, null);
         verify(metadata, times(1)).requestUpdateForTopic(topic);
         verify(metadata, times(1)).awaitUpdate(anyInt(), any(Timer.class));
-        verify(metadata, times(3)).fetch();
+        verify(metadata, times(4)).fetch();
 
         producer.close(Duration.ofMillis(0));
     }
@@ -886,12 +920,12 @@ public class KafkaProducerTest {
 
         KafkaProducer<String, String> producer = producerWithOverrideNewSender(configs, metadata, mockTime);
 
-        // Four request updates where the topic isn't present, at which point the timeout expires and a
+        // Two request updates where the topic isn't present, at which point the timeout expires and a
         // TimeoutException is thrown
         // For idempotence enabled case, the first metadata.fetch will be called in Sender#maybeSendAndPollTransactionalRequest
         Future<RecordMetadata> future = producer.send(record);
-        verify(metadata, times(4)).requestUpdateForTopic(topic);
-        verify(metadata, times(4)).awaitUpdate(anyInt(), any(Timer.class));
+        verify(metadata, times(2)).requestUpdateForTopic(topic);
+        verify(metadata, times(2)).awaitUpdate(anyInt(), any(Timer.class));
         verify(metadata, times(5)).fetch();
         try {
             assertInstanceOf(TimeoutException.class, assertThrows(ExecutionException.class, future::get).getCause());
@@ -919,8 +953,8 @@ public class KafkaProducerTest {
         KafkaProducer<String, String> producer = producerWithOverrideNewSender(configs, metadata, mockTime);
         // One request update if metadata is available but outdated for the given record
         producer.send(record);
-        verify(metadata, times(2)).requestUpdateForTopic(topic);
-        verify(metadata, times(2)).awaitUpdate(anyInt(), any(Timer.class));
+        verify(metadata, times(1)).requestUpdateForTopic(topic);
+        verify(metadata, times(1)).awaitUpdate(anyInt(), any(Timer.class));
         verify(metadata, times(3)).fetch();
 
         producer.close(Duration.ofMillis(0));
@@ -951,14 +985,14 @@ public class KafkaProducerTest {
 
         KafkaProducer<String, String> producer = producerWithOverrideNewSender(configs, metadata, mockTime);
 
-        // Four request updates where the requested partition is out of range, at which point the timeout expires
+        // Two request updates where the requested partition is out of range, at which point the timeout expires
         // and a TimeoutException is thrown
         // For idempotence enabled case, the first and last metadata.fetch will be called in Sender#maybeSendAndPollTransactionalRequest,
         // before the producer#send and after it finished
         Future<RecordMetadata> future = producer.send(record);
 
-        verify(metadata, times(4)).requestUpdateForTopic(topic);
-        verify(metadata, times(4)).awaitUpdate(anyInt(), any(Timer.class));
+        verify(metadata, times(2)).requestUpdateForTopic(topic);
+        verify(metadata, times(2)).awaitUpdate(anyInt(), any(Timer.class));
         verify(metadata, times(5)).fetch();
         try {
             assertInstanceOf(TimeoutException.class, assertThrows(ExecutionException.class, future::get).getCause());
