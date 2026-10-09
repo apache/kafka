@@ -26,7 +26,9 @@ import org.apache.kafka.clients.consumer.AcknowledgementCommitCallback;
 import org.apache.kafka.clients.consumer.ConsumerConfig;
 import org.apache.kafka.clients.consumer.ConsumerRecord;
 import org.apache.kafka.clients.consumer.ConsumerRecords;
+import org.apache.kafka.clients.consumer.ShareAcknowledgements;
 import org.apache.kafka.clients.consumer.ShareConsumer;
+import org.apache.kafka.clients.consumer.ShareGroupMetadata;
 import org.apache.kafka.clients.consumer.internals.events.ApplicationEvent;
 import org.apache.kafka.clients.consumer.internals.events.ApplicationEventHandler;
 import org.apache.kafka.clients.consumer.internals.events.ApplicationEventProcessor;
@@ -44,6 +46,7 @@ import org.apache.kafka.clients.consumer.internals.events.ShareAcknowledgementCo
 import org.apache.kafka.clients.consumer.internals.events.ShareAcknowledgementEvent;
 import org.apache.kafka.clients.consumer.internals.events.ShareAcknowledgementEventHandler;
 import org.apache.kafka.clients.consumer.internals.events.ShareFetchEvent;
+import org.apache.kafka.clients.consumer.internals.events.ShareGroupMetadataEvent;
 import org.apache.kafka.clients.consumer.internals.events.SharePollEvent;
 import org.apache.kafka.clients.consumer.internals.events.ShareSubscriptionChangeEvent;
 import org.apache.kafka.clients.consumer.internals.events.ShareUnsubscribeEvent;
@@ -1117,6 +1120,40 @@ public class ShareConsumerImpl<K, V> implements ShareConsumerDelegate<K, V> {
     @Override
     public void wakeup() {
         wakeupTrigger.wakeup();
+    }
+
+    @Override
+    public ShareGroupMetadata shareGroupMetadata() {
+        acquireAndEnsureOpen();
+        try {
+            ShareGroupMetadataEvent event = new ShareGroupMetadataEvent(
+                calculateDeadlineMs(time.timer(defaultApiTimeoutMs)));
+            applicationEventHandler.add(event);
+            return processBackgroundEvents(event.future(),
+                time.timer(defaultApiTimeoutMs),
+                e -> false);
+        } finally {
+            release();
+        }
+    }
+
+    @Override
+    public ShareAcknowledgements acknowledgementsForTransaction() {
+        acquireAndEnsureOpen();
+        try {
+            handleCompletedAcknowledgements();
+            ensureExplicitAcknowledgement();
+            ensureInFlightAcknowledgedIfExplicitAcknowledgement();
+            // Records already handed to a previous renewal round are not ours to acknowledge.
+            if (currentFetch.hasRenewals()) {
+                throw new IllegalStateException("Renew acknowledgements cannot be sent to a transaction.");
+            }
+            // hasRenewals() above only sees renewals from a completed drain; a RENEW recorded on this
+            // fetch is caught inside takeAcknowledgementsForTransaction, before anything is drained.
+            return currentFetch.takeAcknowledgementsForTransaction();
+        } finally {
+            release();
+        }
     }
 
     /**

@@ -28,7 +28,8 @@ public enum RecordState {
     ACQUIRED((byte) 1),
     ACKNOWLEDGED((byte) 2),
     ARCHIVING((byte) 3),    // Per KIP-1191
-    ARCHIVED((byte) 4);
+    ARCHIVED((byte) 4),
+    TX_PENDING((byte) 5);   // Per KIP-1289: staged into an open producer transaction
 
     public final byte id;
 
@@ -62,8 +63,19 @@ public enum RecordState {
             throw new IllegalStateException("The state can only be transitioned to ACQUIRED from AVAILABLE");
         }
 
-        // Either the transition is from Available -> Acquired or from Acquired -> Available/
-        // Acknowledged/Archived.
+        if (newState == TX_PENDING && this != ACQUIRED) {
+            throw new IllegalStateException("TX_PENDING can only be transitioned to from ACQUIRED");
+        }
+
+        if (this == TX_PENDING
+            && newState != ACKNOWLEDGED
+            && newState != AVAILABLE
+            && newState != ARCHIVING
+            && newState != ARCHIVED
+        ) {
+            throw new IllegalStateException("Invalid transition from TX_PENDING to " + newState);
+        }
+
         return newState;
     }
 
@@ -74,6 +86,7 @@ public enum RecordState {
             case 2 -> ACKNOWLEDGED;
             case 3 -> ARCHIVING;
             case 4 -> ARCHIVED;
+            case 5 -> TX_PENDING;
             default -> throw new IllegalArgumentException("Unknown record state id: " + id);
         };
     }

@@ -37,6 +37,7 @@ import org.apache.kafka.common.protocol.Errors;
 import org.apache.kafka.common.record.internal.ControlRecordType;
 import org.apache.kafka.common.record.internal.Record;
 import org.apache.kafka.common.record.internal.RecordBatch;
+import org.apache.kafka.common.requests.TransactionResult;
 import org.apache.kafka.common.utils.Time;
 import org.apache.kafka.common.utils.Utils;
 import org.apache.kafka.coordinator.group.ShareGroupAutoOffsetResetStrategy;
@@ -145,10 +146,17 @@ public class SharePartition implements AutoCloseable {
     }
 
     /**
+     * The acknowledgement type byte the client sends for an acquired offset that holds no
+     * non-control record. It has no {@link AcknowledgeType} constant because it is not a
+     * disposition the application can choose.
+     */
+    private static final byte ACKNOWLEDGE_TYPE_GAP = (byte) 0;
+
+    /**
      * To provide static mapping between acknowledgement type bytes to RecordState.
      */
     private static final Map<Byte, RecordState> ACK_TYPE_TO_RECORD_STATE = Map.of(
-        (byte) 0, RecordState.ARCHIVED,                             // Represents gap
+        ACKNOWLEDGE_TYPE_GAP, RecordState.ARCHIVED,
         AcknowledgeType.ACCEPT.id, RecordState.ACKNOWLEDGED,
         AcknowledgeType.RELEASE.id, RecordState.AVAILABLE,
         AcknowledgeType.REJECT.id, RecordState.ARCHIVED
@@ -183,6 +191,7 @@ public class SharePartition implements AutoCloseable {
      * the in-flight records are accessed in a thread-safe manner.
      */
     private final ReadWriteLock lock;
+    private final SharePartitionTxnState txnState;
 
     /**
      * The lock to ensure that the same share partition does not enter a fetch queue
@@ -392,6 +401,8 @@ public class SharePartition implements AutoCloseable {
         this.defaultMaxDeliveryCount = defaultMaxDeliveryCount;
         this.cachedState = new ConcurrentSkipListMap<>();
         this.lock = new ReentrantReadWriteLock();
+        this.txnState = new SharePartitionTxnState(lock, cachedState,
+            () -> partitionState == SharePartitionState.ACTIVE, this::readTransactionalState, this::finishTransactionalRefresh);
         this.findNextFetchOffset = false;
         this.fetchLock = new AtomicReference<>(null);
         this.defaultRecordLockDurationMs = defaultRecordLockDurationMs;
@@ -527,9 +538,15 @@ public class SharePartition implements AutoCloseable {
                     }
                     previousBatchLastOffset = stateBatch.lastOffset();
                     RecordState recordState = RecordState.forId(stateBatch.deliveryState());
-                    InFlightBatch inFlightBatch = new InFlightBatch(timer, time, EMPTY_MEMBER_ID, stateBatch.firstOffset(),
-                        stateBatch.lastOffset(), recordState, stateBatch.deliveryCount(),
-                        null, timeoutHandler, sharePartitionMetrics);
+                    InFlightBatch inFlightBatch = new InFlightBatch(
+                        timer,
+                        time,
+                        EMPTY_MEMBER_ID,
+                        stateBatch,
+                        null,
+                        timeoutHandler,
+                        sharePartitionMetrics
+                    );
                     cachedState.put(stateBatch.firstOffset(), inFlightBatch);
                     // During initialization, deliveryCompleteCount is updated with the number of records that are in the
                     // ACKNOWLEDGED or ARCHIVED state.
@@ -1077,6 +1094,366 @@ public class SharePartition implements AutoCloseable {
         // and update the cached state for start offset. Else rollback the state transition.
         rollbackOrProcessStateUpdates(future, throwable, persisterBatches);
         return future;
+    }
+
+    public CompletableFuture<Void> stageTxnAcknowledge(
+        String memberId,
+        long txnOwnerId,
+        short txnOwnerEpoch,
+        List<ShareAcknowledgementBatch> acknowledgementBatches
+    ) {
+        log.trace("Txn stage request for share partition: {}-{} txnOwnerId={}", groupId, topicIdPartition, txnOwnerId);
+
+        CompletableFuture<Void> future = new CompletableFuture<>();
+        Throwable throwable = null;
+        List<PersisterBatch> persisterBatches = new ArrayList<>();
+        lock.writeLock().lock();
+        try {
+            for (ShareAcknowledgementBatch batch : acknowledgementBatches) {
+                Map<Long, Byte> ackTypeMap;
+                try {
+                    ackTypeMap = fetchAckTypeMapForBatch(batch);
+                } catch (IllegalArgumentException e) {
+                    throwable = new InvalidRequestException("Invalid acknowledge type: " + batch.acknowledgeTypes());
+                    break;
+                }
+
+                // ACCEPT and REJECT are the only ack types a client may choose inside a transaction.
+                // GAP (0) is not a client choice: the consumer emits it for an acquired offset that
+                // holds no non-control record (see ShareCompletedFetch), which is unavoidable on any
+                // topic written by a transactional producer. It is terminal everywhere else in the
+                // ack path (ACK_TYPE_TO_RECORD_STATE maps it to ARCHIVED), so it is staged like any
+                // other terminal ack: archived on commit, released on abort.
+                for (Byte ackType : ackTypeMap.values()) {
+                    if (ackType != AcknowledgeType.ACCEPT.id
+                        && ackType != AcknowledgeType.REJECT.id
+                        && ackType != ACKNOWLEDGE_TYPE_GAP) {
+                        throwable = new InvalidRequestException(
+                            "Only ACCEPT, REJECT or gap permitted in transactional ack, got: " + ackType);
+                        break;
+                    }
+                }
+                if (throwable != null) break;
+
+                if (batch.lastOffset() < startOffset) continue;
+
+                NavigableMap<Long, InFlightBatch> subMap;
+                try {
+                    subMap = fetchSubMapForAcknowledgementBatch(batch);
+                } catch (InvalidRecordStateException | InvalidRequestException e) {
+                    throwable = e;
+                    break;
+                }
+
+                throwable = stageBatchTxnRecords(
+                    memberId,
+                    txnOwnerId,
+                    txnOwnerEpoch,
+                    batch,
+                    ackTypeMap,
+                    subMap,
+                    persisterBatches
+                );
+                if (throwable != null) break;
+            }
+
+            if (throwable != null) {
+                revertStagedAndRearm(persisterBatches, txnOwnerId, txnOwnerEpoch);
+            } else if (!persisterBatches.isEmpty()) {
+                txnState.beginStaging();
+            }
+        } finally {
+            lock.writeLock().unlock();
+        }
+
+        if (throwable != null) future.completeExceptionally(throwable);
+        else if (persisterBatches.isEmpty()) future.complete(null);
+        else return txnState.persistStaging(
+            () -> writeShareGroupState(persisterBatches.stream().map(PersisterBatch::stateBatch).toList()),
+            () -> revertStagedAndRearm(persisterBatches, txnOwnerId, txnOwnerEpoch));
+        return future;
+    }
+
+    // Revert records staged into a transaction back to ACQUIRED and restore the acquisition-lock
+    // timeout that staging cancelled. Without this, a failed stage leaves records ACQUIRED with no
+    // timer, holding them until the session ends instead of releasing them for redelivery.
+    private void revertStagedAndRearm(List<PersisterBatch> persisterBatches, long txnOwnerId, short txnOwnerEpoch) {
+        for (PersisterBatch persisterBatch : persisterBatches) {
+            InFlightState state = persisterBatch.updatedState();
+            if (state.revertStagedTxnAcknowledge(txnOwnerId, txnOwnerEpoch)) {
+                PersisterStateBatch batch = persisterBatch.stateBatch();
+                state.updateAcquisitionLockTimeoutTask(
+                    scheduleAcquisitionLockTimeout(state.memberId(), batch.firstOffset(), batch.lastOffset()));
+            }
+        }
+    }
+
+    private Throwable stageBatchTxnRecords(
+        String memberId,
+        long txnOwnerId,
+        short txnOwnerEpoch,
+        ShareAcknowledgementBatch batch,
+        Map<Long, Byte> ackTypeMap,
+        NavigableMap<Long, InFlightBatch> subMap,
+        List<PersisterBatch> persisterBatches
+    ) {
+        for (Map.Entry<Long, InFlightBatch> entry : subMap.entrySet()) {
+            InFlightBatch inFlightBatch = entry.getValue();
+            if (inFlightBatch.lastOffset() < startOffset) continue;
+
+            if (inFlightBatch.offsetState() == null) {
+                Optional<Throwable> memberCheck = validateAcknowledgementBatchMemberId(memberId, inFlightBatch);
+                if (memberCheck.isPresent()) return memberCheck.get();
+
+                if ((!checkForFullMatch(inFlightBatch, batch.firstOffset(), batch.lastOffset())
+                        || batch.acknowledgeTypes().size() > 1
+                        || checkForStartOffsetWithinBatch(inFlightBatch.firstOffset(), inFlightBatch.lastOffset()))
+                    && inFlightBatch.batchState() == RecordState.ACQUIRED) {
+                    inFlightBatch.maybeInitializeOffsetStateUpdate();
+                }
+            }
+
+            if (inFlightBatch.offsetState() == null) {
+                byte ackType = ackTypeMap.get(batch.firstOffset());
+                RecordState stagedDeliveryState = recordStateWithDlq(ackType);
+                if (inFlightBatch.batchState() == RecordState.TX_PENDING) {
+                    if (matchesStagedTxnAcknowledge(inFlightBatch, txnOwnerId, txnOwnerEpoch, ackType, stagedDeliveryState)) {
+                        continue;
+                    }
+                    return new InvalidRecordStateException("A different transactional acknowledgement is already pending");
+                }
+                InFlightState staged = inFlightBatch.stageBatchTxnAcknowledge(
+                    txnOwnerId, txnOwnerEpoch, ackType, stagedDeliveryState);
+                if (staged == null) {
+                    return new InvalidRecordStateException("Cannot stage txn ack: batch not in ACQUIRED state");
+                }
+                persisterBatches.add(new PersisterBatch(
+                    staged,
+                    persisterStateBatch(inFlightBatch.firstOffset(), inFlightBatch.lastOffset(), staged),
+                    null
+                ));
+            } else {
+                for (Map.Entry<Long, InFlightState> os : inFlightBatch.offsetState().entrySet()) {
+                    if (os.getKey() < batch.firstOffset() || os.getKey() < startOffset) continue;
+                    if (os.getKey() > batch.lastOffset()) break;
+
+                    if (!os.getValue().memberId().equals(memberId)) {
+                        return new InvalidRecordStateException("Member is not the owner of offset");
+                    }
+                    byte ackType = ackTypeMap.size() > 1 ? ackTypeMap.get(os.getKey()) : batch.acknowledgeTypes().get(0);
+                    RecordState stagedDeliveryState = recordStateWithDlq(ackType);
+                    if (os.getValue().state() == RecordState.TX_PENDING) {
+                        if (matchesStagedTxnAcknowledge(os.getValue(), txnOwnerId, txnOwnerEpoch, ackType, stagedDeliveryState)) {
+                            continue;
+                        }
+                        return new InvalidRecordStateException("A different transactional acknowledgement is already pending");
+                    }
+                    InFlightState staged = os.getValue().stageTxnAcknowledge(
+                        txnOwnerId, txnOwnerEpoch, ackType, stagedDeliveryState);
+                    if (staged == null) {
+                        return new InvalidRecordStateException("Cannot stage txn ack: offset " + os.getKey() + " not ACQUIRED");
+                    }
+                    persisterBatches.add(new PersisterBatch(
+                        staged,
+                        persisterStateBatch(os.getKey(), os.getKey(), staged),
+                        null
+                    ));
+                }
+            }
+        }
+        return null;
+    }
+
+    private PersisterStateBatch persisterStateBatch(long firstOffset, long lastOffset, InFlightState state) {
+        return new PersisterStateBatch(
+            firstOffset,
+            lastOffset,
+            state.state().id(),
+            (short) state.deliveryCount(),
+            state.stagedTxnOwnerId(),
+            state.stagedTxnOwnerEpoch(),
+            state.stagedAckType(),
+            state.stagedDeliveryState()
+        );
+    }
+
+    public CompletableFuture<Void> applyTxnMarker(long txnOwnerId, short txnOwnerEpoch, TransactionResult result) {
+        List<TxnMarkerBatch> markerBatches = new ArrayList<>();
+        lock.writeLock().lock();
+        try {
+            for (InFlightBatch batch : cachedState.values()) {
+                if (batch.offsetState() == null) {
+                    if (matchesTxnMarker(batch, txnOwnerId, txnOwnerEpoch)) {
+                        markerBatches.add(new TxnMarkerBatch(
+                            batch,
+                            null,
+                            batch.firstOffset(),
+                            batch.lastOffset(),
+                            finalStateForTxnMarker(batch, result),
+                            (short) batch.batchDeliveryCount()
+                        ));
+                    }
+                } else {
+                    for (Map.Entry<Long, InFlightState> state : batch.offsetState().entrySet()) {
+                        if (matchesTxnMarker(state.getValue(), txnOwnerId, txnOwnerEpoch)) {
+                            markerBatches.add(new TxnMarkerBatch(
+                                null,
+                                state.getValue(),
+                                state.getKey(),
+                                state.getKey(),
+                                finalStateForTxnMarker(state.getValue(), result),
+                                (short) state.getValue().deliveryCount()
+                            ));
+                        }
+                    }
+                }
+            }
+        } finally {
+            lock.writeLock().unlock();
+        }
+        if (markerBatches.isEmpty()) {
+            return CompletableFuture.completedFuture(null);
+        }
+
+        CompletableFuture<Void> future = new CompletableFuture<>();
+        writeShareGroupState(markerBatches.stream().map(this::txnMarkerStateBatch).toList())
+            .whenComplete((writeResult, exception) -> {
+                if (exception != null) {
+                    future.completeExceptionally(exception);
+                    return;
+                }
+
+                List<SharePartitionTxnState.ResolvedRecord> resolved = new ArrayList<>();
+                lock.writeLock().lock();
+                try {
+                    for (TxnMarkerBatch markerBatch : markerBatches) {
+                        InFlightState updatedState = applyTxnMarkerToBatch(markerBatch, txnOwnerId, txnOwnerEpoch, result);
+                        if (updatedState == null) {
+                            continue;
+                        }
+                        resolved.add(new SharePartitionTxnState.ResolvedRecord(markerBatch.firstOffset(), markerBatch.lastOffset(),
+                            updatedState.state(), (short) updatedState.deliveryCount(),
+                            markerBatch.batch() != null ? markerBatch.batch()::archiveBatch : markerBatch.state()::archive));
+                    }
+                } finally {
+                    lock.writeLock().unlock();
+                }
+                finishTransactionalRefresh(resolved);
+                future.complete(null);
+            });
+        return future;
+    }
+
+    public CompletableFuture<Void> refreshTransactionalState() {
+        return txnState.refresh();
+    }
+
+    private CompletableFuture<PartitionAllData> readTransactionalState() {
+        return SharePartitionTxnState.readState(persister, groupId, topicIdPartition, leaderEpoch, stateEpoch);
+    }
+
+    private void finishTransactionalRefresh(List<SharePartitionTxnState.ResolvedRecord> resolved) {
+        List<DlqBatch> dlqBatches = new ArrayList<>();
+        lock.writeLock().lock();
+        try {
+            if (partitionState != SharePartitionState.ACTIVE) return;
+            for (SharePartitionTxnState.ResolvedRecord record : resolved) {
+                if (record.state() == RecordState.AVAILABLE) {
+                    updateFindNextFetchOffset(true);
+                } else if (record.state() == RecordState.ARCHIVING) {
+                    dlqBatches.add(new DlqBatch(record.archive(), record.firstOffset(), record.lastOffset(),
+                        record.deliveryCount()));
+                } else {
+                    deliveryCompleteCount.addAndGet(Math.toIntExact(record.lastOffset() - record.firstOffset() + 1));
+                }
+            }
+            maybeUpdateCachedStateAndOffsets();
+        } finally {
+            lock.writeLock().unlock();
+        }
+        maybeCompleteDelayedShareFetchRequest(!resolved.isEmpty());
+        dlqBatches.forEach(batch -> initiateDLQAndArchive(batch.archiveAction(), batch.firstOffset(),
+            batch.lastOffset(), batch.deliveryCount(), ShareGroupDLQManager.CLIENT_REJECT));
+    }
+
+    boolean hasPendingTransactionalRecords() {
+        return SharePartitionTxnState.hasPendingRecords(cachedState, lock);
+    }
+
+    private boolean matchesTxnMarker(InFlightState state, long txnOwnerId, short txnOwnerEpoch) {
+        return state.state() == RecordState.TX_PENDING &&
+            state.stagedTxnOwnerId() == txnOwnerId &&
+            state.stagedTxnOwnerEpoch() == txnOwnerEpoch;
+    }
+
+    private boolean matchesTxnMarker(InFlightBatch batch, long txnOwnerId, short txnOwnerEpoch) {
+        return batch.batchState() == RecordState.TX_PENDING &&
+            batch.batchStagedTxnOwnerId() == txnOwnerId &&
+            batch.batchStagedTxnOwnerEpoch() == txnOwnerEpoch;
+    }
+
+    private boolean matchesStagedTxnAcknowledge(
+        InFlightState state,
+        long txnOwnerId,
+        short txnOwnerEpoch,
+        byte ackType,
+        RecordState stagedDeliveryState
+    ) {
+        return state.state() == RecordState.TX_PENDING &&
+            state.stagedTxnOwnerId() == txnOwnerId &&
+            state.stagedTxnOwnerEpoch() == txnOwnerEpoch &&
+            state.stagedAckType() == ackType &&
+            state.stagedDeliveryState() == stagedDeliveryState.id();
+    }
+
+    private boolean matchesStagedTxnAcknowledge(
+        InFlightBatch batch,
+        long txnOwnerId,
+        short txnOwnerEpoch,
+        byte ackType,
+        RecordState stagedDeliveryState
+    ) {
+        return batch.batchState() == RecordState.TX_PENDING &&
+            batch.batchStagedTxnOwnerId() == txnOwnerId &&
+            batch.batchStagedTxnOwnerEpoch() == txnOwnerEpoch &&
+            batch.batchStagedAckType() == ackType &&
+            batch.batchStagedDeliveryState() == stagedDeliveryState.id();
+    }
+
+    private RecordState finalStateForTxnMarker(InFlightState state, TransactionResult result) {
+        return result == TransactionResult.ABORT ? RecordState.AVAILABLE :
+            state.stagedDeliveryState() != PersisterStateBatch.NO_STAGED_DELIVERY_STATE ? RecordState.forId(state.stagedDeliveryState()) :
+                state.stagedAckType() == AcknowledgeType.ACCEPT.id ? RecordState.ACKNOWLEDGED :
+                    shareGroupDlqEnableSupplier.get() ? RecordState.ARCHIVING : RecordState.ARCHIVED;
+    }
+
+    private RecordState finalStateForTxnMarker(InFlightBatch batch, TransactionResult result) {
+        return result == TransactionResult.ABORT ? RecordState.AVAILABLE :
+            batch.batchStagedDeliveryState() != PersisterStateBatch.NO_STAGED_DELIVERY_STATE ? RecordState.forId(batch.batchStagedDeliveryState()) :
+                batch.batchStagedAckType() == AcknowledgeType.ACCEPT.id ? RecordState.ACKNOWLEDGED :
+                    shareGroupDlqEnableSupplier.get() ? RecordState.ARCHIVING : RecordState.ARCHIVED;
+    }
+
+    private InFlightState applyTxnMarkerToBatch(
+        TxnMarkerBatch markerBatch,
+        long txnOwnerId,
+        short txnOwnerEpoch,
+        TransactionResult result
+    ) {
+        boolean dlqSupportEnabled = markerBatch.finalState() == RecordState.ARCHIVING;
+        if (markerBatch.batch() != null) {
+            return markerBatch.batch().applyBatchTxnMarker(txnOwnerId, txnOwnerEpoch, result, dlqSupportEnabled);
+        }
+        return markerBatch.state().applyTxnMarker(txnOwnerId, txnOwnerEpoch, result, dlqSupportEnabled);
+    }
+
+    private PersisterStateBatch txnMarkerStateBatch(TxnMarkerBatch markerBatch) {
+        return new PersisterStateBatch(
+            markerBatch.firstOffset(),
+            markerBatch.lastOffset(),
+            markerBatch.finalState().id(),
+            markerBatch.deliveryCount()
+        );
     }
 
     /**
@@ -2548,16 +2925,16 @@ public class SharePartition implements AutoCloseable {
                 log.debug("Request failed for updating state, rollback any changed state"
                     + " for the share partition: {}-{}", groupId, topicIdPartition);
                 persisterBatches.forEach(persisterBatch -> {
-                    persisterBatch.updatedState.completeStateTransition(false);
-                    if (persisterBatch.updatedState.state() == RecordState.AVAILABLE) {
+                    persisterBatch.updatedState().completeStateTransition(false);
+                    if (persisterBatch.updatedState().state() == RecordState.AVAILABLE) {
                         updateFindNextFetchOffset(true);
                     }
                     // If there is a failure, then update the deliveryCompleteCount only in case there are some records
                     // which were in a Terminal state, but after rolling back they are in a non-Terminal state. We also
                     // need to consider only those records that lie after the start offset, because LSO movement can happen
                     // after local state transition begins but before writeState result is obtained.
-                    if (isStateTerminal(RecordState.forId(persisterBatch.stateBatch.deliveryState())) && !isStateTerminal(persisterBatch.updatedState.state())) {
-                        deliveryCompleteCount.addAndGet(-numInFlightRecordsInBatch(persisterBatch.stateBatch.firstOffset(), persisterBatch.stateBatch.lastOffset()));
+                    if (isStateTerminal(RecordState.forId(persisterBatch.stateBatch().deliveryState())) && !isStateTerminal(persisterBatch.updatedState().state())) {
+                        deliveryCompleteCount.addAndGet(-numInFlightRecordsInBatch(persisterBatch.stateBatch().firstOffset(), persisterBatch.stateBatch().lastOffset()));
                     }
                 });
             } finally {
@@ -2595,8 +2972,8 @@ public class SharePartition implements AutoCloseable {
                             // which were in a Terminal state, but after rolling back they are in a non-Terminal state. We also
                             // need to consider only those records that lie after the start offset, because LSO movement can happen
                             // after local state transition begins but before writeState result is obtained.
-                            if (isStateTerminal(RecordState.forId(persisterBatch.stateBatch.deliveryState())) && !isStateTerminal(persisterBatch.updatedState.state())) {
-                                deliveryCompleteCount.addAndGet(-numInFlightRecordsInBatch(persisterBatch.stateBatch.firstOffset(), persisterBatch.stateBatch.lastOffset()));
+                            if (isStateTerminal(RecordState.forId(persisterBatch.stateBatch().deliveryState())) && !isStateTerminal(persisterBatch.updatedState().state())) {
+                                deliveryCompleteCount.addAndGet(-numInFlightRecordsInBatch(persisterBatch.stateBatch().firstOffset(), persisterBatch.stateBatch().lastOffset()));
                             }
                         });
                         return;
@@ -2607,10 +2984,10 @@ public class SharePartition implements AutoCloseable {
 
                     for (PersisterBatch persisterBatch : persisterBatches) {
                         persisterBatch.updatedState().completeStateTransition(true);
-                        if (persisterBatch.updatedState.state() == RecordState.AVAILABLE) {
+                        if (persisterBatch.updatedState().state() == RecordState.AVAILABLE) {
                             updateFindNextFetchOffset(true);
                         }
-                        if (persisterBatch.updatedState.state() == RecordState.ARCHIVING) {
+                        if (persisterBatch.updatedState().state() == RecordState.ARCHIVING) {
                             dlqBatches.add(persisterBatch);
                         }
                     }
@@ -2634,10 +3011,10 @@ public class SharePartition implements AutoCloseable {
                 dlqBatches.forEach(persisterBatch -> {
                     initiateDLQAndArchive(
                         persisterBatch.updatedState()::archive,
-                        persisterBatch.stateBatch.firstOffset(),
-                        persisterBatch.stateBatch.lastOffset(),
-                        persisterBatch.stateBatch.deliveryCount(),
-                        persisterBatch.dlqCause
+                        persisterBatch.stateBatch().firstOffset(),
+                        persisterBatch.stateBatch().lastOffset(),
+                        persisterBatch.stateBatch().deliveryCount(),
+                        persisterBatch.dlqCause()
                     );
                 });
             });
@@ -3582,42 +3959,6 @@ public class SharePartition implements AutoCloseable {
             this.gapStartOffset = gapStartOffset;
         }
     }
-
-    /**
-     * FetchOffsetMetadata class is used to cache offset and its log metadata.
-     */
-    static final class OffsetMetadata {
-        // This offset could be different from offsetMetadata.messageOffset if it's in the middle of a batch.
-        private long offset;
-        private LogOffsetMetadata offsetMetadata;
-
-        OffsetMetadata() {
-            offset = -1;
-        }
-
-        long offset() {
-            return offset;
-        }
-
-        LogOffsetMetadata offsetMetadata() {
-            return offsetMetadata;
-        }
-
-        void updateOffsetMetadata(long offset, LogOffsetMetadata offsetMetadata) {
-            this.offset = offset;
-            this.offsetMetadata = offsetMetadata;
-        }
-    }
-
-    /**
-     * PersisterBatch class is used to record the state updates for a batch or an offset.
-     * It contains the updated in-flight state and the persister state batch to be sent to persister.
-     */
-    private record PersisterBatch(
-        InFlightState updatedState,
-        PersisterStateBatch stateBatch,
-        Throwable dlqCause
-    ) { }
 
     /**
      * OffsetAndMetadata class is used to record the last acknowledged offset post which the startOffset can be moved,

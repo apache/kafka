@@ -478,9 +478,15 @@ public class Sender implements Runnable {
         Node targetNode = null;
         try {
             FindCoordinatorRequest.CoordinatorType coordinatorType = nextRequestHandler.coordinatorType();
-            targetNode = coordinatorType != null ?
-                    transactionManager.coordinator(coordinatorType) :
-                    client.leastLoadedNode(time.milliseconds()).node();
+            TopicPartition targetTopicPartition = nextRequestHandler.targetTopicPartition();
+            if (targetTopicPartition != null) {
+                metadata.add(targetTopicPartition.topic(), time.milliseconds());
+                targetNode = metadata.currentLeader(targetTopicPartition).leader.orElse(null);
+            } else {
+                targetNode = coordinatorType != null ?
+                        transactionManager.coordinator(coordinatorType) :
+                        client.leastLoadedNode(time.milliseconds()).node();
+            }
             if (targetNode != null) {
                 if (!awaitNodeReady(targetNode, coordinatorType)) {
                     log.trace("Target node {} not ready within request timeout, will retry when node is ready.", targetNode);
@@ -490,6 +496,11 @@ public class Sender implements Runnable {
             } else if (coordinatorType != null) {
                 log.trace("Coordinator not known for {}, will retry {} after finding coordinator.", coordinatorType, requestBuilder.apiKey());
                 maybeFindCoordinatorAndRetry(nextRequestHandler);
+                return true;
+            } else if (targetTopicPartition != null) {
+                log.trace("Leader not known for {}, will retry {} after refreshing metadata.", targetTopicPartition, requestBuilder.apiKey());
+                maybeFindCoordinatorAndRetry(nextRequestHandler);
+                client.poll(retryBackoffMs, time.milliseconds());
                 return true;
             } else {
                 log.trace("No nodes available to send requests, will poll and retry when until a node is ready.");
@@ -522,6 +533,11 @@ public class Sender implements Runnable {
         if (nextRequestHandler.needsCoordinator()) {
             transactionManager.lookupCoordinator(nextRequestHandler);
         } else {
+            TopicPartition targetTopicPartition = nextRequestHandler.targetTopicPartition();
+            if (targetTopicPartition != null) {
+                metadata.add(targetTopicPartition.topic(), time.milliseconds());
+                metadata.requestUpdateForTopic(targetTopicPartition.topic());
+            }
             // For non-coordinator requests, sleep here to prevent a tight loop when no node is available
             time.sleep(retryBackoffMs);
             metadata.requestUpdate(false);
