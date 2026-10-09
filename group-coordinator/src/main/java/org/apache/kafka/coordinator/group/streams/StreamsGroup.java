@@ -585,6 +585,12 @@ public class StreamsGroup implements Group {
      */
     public void removeMember(String memberId) {
         StreamsGroupMember oldMember = members.remove(memberId);
+
+        // When the group coordinator loads concurrently with compaction, intermediate tombstone
+        // records can be missed, so the member metadata tombstone is treated as authoritative and
+        // the member's target assignment is removed with the member.
+        removeTargetAssignment(memberId);
+
         maybeRemoveTaskProcessId(oldMember);
         removeStaticMember(oldMember);
         maybeUpdateGroupState();
@@ -774,6 +780,13 @@ public class StreamsGroup implements Group {
      */
     public void removeTargetAssignment(String memberId) {
         targetAssignment.remove(memberId);
+    }
+
+    /**
+     * Removes the target assignment of every member.
+     */
+    public void clearTargetAssignment() {
+        targetAssignment.clear();
     }
 
     /**

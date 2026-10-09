@@ -1506,7 +1506,22 @@ public class GroupMetadataManager {
     private void removeGroup(
         String groupId
     ) {
-        groups.remove(groupId);
+        Group group = groups.remove(groupId);
+
+        // Clean up the state kept outside of the group. The group may still be subscribed to
+        // topics or have share state partition metadata here: when the group coordinator loads
+        // concurrently with compaction, intermediate tombstone records can be missed, so the
+        // group metadata tombstone is treated as authoritative.
+        if (group instanceof ModernGroup<?> modernGroup) {
+            modernGroup.subscribedTopicNames().keySet()
+                .forEach(topicName -> unsubscribeGroupFromTopic(groupId, topicName));
+        } else if (group instanceof StreamsGroup streamsGroup) {
+            streamsGroup.topology().ifPresent(topology -> topology.requiredTopics()
+                .forEach(topicName -> unsubscribeGroupFromTopic(groupId, topicName)));
+        }
+        if (group instanceof ShareGroup) {
+            shareGroupStatePartitionMetadata.remove(groupId);
+        }
     }
 
     /**
@@ -6062,14 +6077,19 @@ public class GroupMetadataManager {
                 return;
             }
 
+            List<String> inconsistencies = new ArrayList<>();
             if (oldMember.memberEpoch() != LEAVE_GROUP_MEMBER_EPOCH) {
-                throw new IllegalStateException("Received a tombstone record to delete member " + memberId
-                    + " but did not receive ConsumerGroupCurrentMemberAssignmentValue tombstone.");
+                inconsistencies.add("still has a current assignment");
             }
             if (consumerGroup.targetAssignment().containsKey(memberId)) {
-                throw new IllegalStateException("Received a tombstone record to delete member " + memberId
-                    + " but did not receive ConsumerGroupTargetAssignmentMetadataValue tombstone.");
+                inconsistencies.add("still has a target assignment");
             }
+            if (!inconsistencies.isEmpty()) {
+                log.debug("[GroupId {}] Received a tombstone record to delete consumer group member {} but the member {};"
+                    + " the missing tombstones were likely removed by compaction.",
+                    groupId, memberId, String.join(" and ", inconsistencies));
+            }
+
             consumerGroup.removeMember(memberId);
         }
 
@@ -6180,19 +6200,22 @@ public class GroupMetadataManager {
                 return;
             }
 
+            List<String> inconsistencies = new ArrayList<>();
             if (!consumerGroup.members().isEmpty()) {
-                throw new IllegalStateException("Received a tombstone record to delete group " + groupId
-                    + " but the group still has " + consumerGroup.members().size() + " members.");
+                inconsistencies.add(consumerGroup.members().size() + " members");
             }
             if (!consumerGroup.targetAssignment().isEmpty()) {
-                throw new IllegalStateException("Received a tombstone record to delete group " + groupId
-                    + " but the target assignment still has " + consumerGroup.targetAssignment().size()
-                    + " members.");
+                inconsistencies.add(consumerGroup.targetAssignment().size() + " target assignments");
             }
             if (consumerGroup.assignmentEpoch() != -1) {
-                throw new IllegalStateException("Received a tombstone record to delete group " + groupId
-                    + " but did not receive ConsumerGroupTargetAssignmentMetadataValue tombstone.");
+                inconsistencies.add("target assignment epoch " + consumerGroup.assignmentEpoch());
             }
+            if (!inconsistencies.isEmpty()) {
+                log.debug("[GroupId {}] Received a tombstone record to delete the consumer group but the group still has {};"
+                    + " the missing tombstones were likely removed by compaction.",
+                    groupId, String.join(" and ", inconsistencies));
+            }
+
             removeGroup(groupId);
         }
 
@@ -6280,8 +6303,10 @@ public class GroupMetadataManager {
                 return;
             }
             if (!group.targetAssignment().isEmpty()) {
-                throw new IllegalStateException("Received a tombstone record to delete target assignment of " + groupId
-                    + " but the assignment still has " + group.targetAssignment().size() + " members.");
+                log.debug("[GroupId {}] Received a tombstone record to delete the target assignment metadata of the consumer group"
+                    + " but the assignment still has {} members; the missing tombstones were likely removed by compaction.",
+                    groupId, group.targetAssignment().size());
+                group.clearTargetAssignment();
             }
             group.setTargetAssignmentMetadata(-1, 0L);
         }
@@ -6410,14 +6435,22 @@ public class GroupMetadataManager {
                 return;
             }
 
+            List<String> inconsistencies = new ArrayList<>();
             if (!streamsGroup.members().isEmpty()) {
-                throw new IllegalStateException("Received a tombstone record to delete group " + groupId
-                    + " but the group still has " + streamsGroup.members().size() + " members.");
+                inconsistencies.add(streamsGroup.members().size() + " members");
+            }
+            if (!streamsGroup.targetAssignment().isEmpty()) {
+                inconsistencies.add(streamsGroup.targetAssignment().size() + " target assignments");
             }
             if (streamsGroup.assignmentEpoch() != -1) {
-                throw new IllegalStateException("Received a tombstone record to delete group " + groupId
-                    + " but did not receive StreamsGroupTargetAssignmentMetadataValue tombstone.");
+                inconsistencies.add("target assignment epoch " + streamsGroup.assignmentEpoch());
             }
+            if (!inconsistencies.isEmpty()) {
+                log.debug("[GroupId {}] Received a tombstone record to delete the streams group but the group still has {};"
+                    + " the missing tombstones were likely removed by compaction.",
+                    groupId, String.join(" and ", inconsistencies));
+            }
+
             removeGroup(groupId);
         }
 
@@ -6458,14 +6491,19 @@ public class GroupMetadataManager {
                 .updateWith(value)
                 .build());
         } else {
+            List<String> inconsistencies = new ArrayList<>();
             if (oldMember.memberEpoch() != LEAVE_GROUP_MEMBER_EPOCH) {
-                throw new IllegalStateException("Received a tombstone record to delete member " + memberId
-                    + " with invalid leave group epoch.");
+                inconsistencies.add("still has a current assignment");
             }
             if (shareGroup.targetAssignment().containsKey(memberId)) {
-                throw new IllegalStateException("Received a tombstone record to delete member " + memberId
-                    + " but member exists in target assignment.");
+                inconsistencies.add("still has a target assignment");
             }
+            if (!inconsistencies.isEmpty()) {
+                log.debug("[GroupId {}] Received a tombstone record to delete share group member {} but the member {};"
+                    + " the missing tombstones were likely removed by compaction.",
+                    groupId, memberId, String.join(" and ", inconsistencies));
+            }
+
             shareGroup.removeMember(memberId);
         }
 
@@ -6498,19 +6536,22 @@ public class GroupMetadataManager {
             shareGroup.setGroupEpoch(value.epoch());
             shareGroup.setMetadataHash(value.metadataHash());
         } else {
+            List<String> inconsistencies = new ArrayList<>();
             if (!shareGroup.members().isEmpty()) {
-                throw new IllegalStateException("Received a tombstone record to delete group " + groupId
-                    + " but the group still has " + shareGroup.members().size() + " members.");
+                inconsistencies.add(shareGroup.members().size() + " members");
             }
             if (!shareGroup.targetAssignment().isEmpty()) {
-                throw new IllegalStateException("Received a tombstone record to delete group " + groupId
-                    + " but the target assignment still has " + shareGroup.targetAssignment().size()
-                    + " members.");
+                inconsistencies.add(shareGroup.targetAssignment().size() + " target assignments");
             }
             if (shareGroup.assignmentEpoch() != -1) {
-                throw new IllegalStateException("Received a tombstone record to delete group " + groupId
-                    + " but target assignment epoch in invalid.");
+                inconsistencies.add("target assignment epoch " + shareGroup.assignmentEpoch());
             }
+            if (!inconsistencies.isEmpty()) {
+                log.debug("[GroupId {}] Received a tombstone record to delete the share group but the group still has {};"
+                    + " the missing tombstones were likely removed by compaction.",
+                    groupId, String.join(" and ", inconsistencies));
+            }
+
             removeGroup(groupId);
         }
     }
@@ -6552,14 +6593,19 @@ public class GroupMetadataManager {
                 return;
             }
 
+            List<String> inconsistencies = new ArrayList<>();
             if (oldMember.memberEpoch() != LEAVE_GROUP_MEMBER_EPOCH) {
-                throw new IllegalStateException("Received a tombstone record to delete member " + memberId
-                    + " but did not receive StreamsGroupCurrentMemberAssignmentValue tombstone.");
+                inconsistencies.add("still has a current assignment");
             }
             if (streamsGroup.targetAssignment().containsKey(memberId)) {
-                throw new IllegalStateException("Received a tombstone record to delete member " + memberId
-                    + " but did not receive StreamsGroupTargetAssignmentMetadataValue tombstone.");
+                inconsistencies.add("still has a target assignment");
             }
+            if (!inconsistencies.isEmpty()) {
+                log.debug("[GroupId {}] Received a tombstone record to delete streams group member {} but the member {};"
+                    + " the missing tombstones were likely removed by compaction.",
+                    groupId, memberId, String.join(" and ", inconsistencies));
+            }
+
             streamsGroup.removeMember(memberId);
         }
     }
@@ -6590,8 +6636,10 @@ public class GroupMetadataManager {
                 return;
             }
             if (!streamsGroup.targetAssignment().isEmpty()) {
-                throw new IllegalStateException("Received a tombstone record to delete target assignment of " + groupId
-                    + " but the assignment still has " + streamsGroup.targetAssignment().size() + " members.");
+                log.debug("[GroupId {}] Received a tombstone record to delete the target assignment metadata of the streams group"
+                    + " but the assignment still has {} members; the missing tombstones were likely removed by compaction.",
+                    groupId, streamsGroup.targetAssignment().size());
+                streamsGroup.clearTargetAssignment();
             }
             streamsGroup.setTargetAssignmentMetadata(-1, 0L);
         }
@@ -6731,8 +6779,10 @@ public class GroupMetadataManager {
             group.setTargetAssignmentMetadata(value.assignmentEpoch(), value.assignmentTimestamp());
         } else {
             if (!group.targetAssignment().isEmpty()) {
-                throw new IllegalStateException("Received a tombstone record to delete target assignment of " + groupId
-                        + " but the assignment still has " + group.targetAssignment().size() + " members.");
+                log.debug("[GroupId {}] Received a tombstone record to delete the target assignment metadata of the share group"
+                    + " but the assignment still has {} members; the missing tombstones were likely removed by compaction.",
+                    groupId, group.targetAssignment().size());
+                group.clearTargetAssignment();
             }
             group.setTargetAssignmentMetadata(-1, 0L);
         }
