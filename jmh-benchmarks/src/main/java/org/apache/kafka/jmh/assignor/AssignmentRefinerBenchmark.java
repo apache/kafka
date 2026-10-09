@@ -116,7 +116,7 @@ public class AssignmentRefinerBenchmark {
         subtopologyMap = StreamsAssignorBenchmarkUtils.createSubtopologyMap(partitionCount, allTopicNames);
         CoordinatorMetadataImage metadataImage = AssignorBenchmarkUtils.createMetadataImage(allTopicNames, partitionCount);
 
-        Map<String, StreamsGroupMember> newMembers = StreamsAssignorBenchmarkUtils.createStreamsMembers(memberCount, membersPerProcess);
+        Map<String, StreamsGroupMember> newMembers = StreamsAssignorBenchmarkUtils.createStreamsMembers(memberCount, membersPerProcess, Map.of());
         GroupAssignment groupAssignment = new StickyTaskAssignor().assign(
             StreamsAssignorBenchmarkUtils.createGroupSpec(
                 newMembers,
