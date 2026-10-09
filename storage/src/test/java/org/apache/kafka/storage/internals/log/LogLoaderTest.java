@@ -23,6 +23,7 @@ import org.apache.kafka.common.message.AbortedTxn;
 import org.apache.kafka.common.record.TimestampType;
 import org.apache.kafka.common.record.internal.ControlRecordType;
 import org.apache.kafka.common.record.internal.DefaultRecordBatch;
+import org.apache.kafka.common.record.internal.FileRecords;
 import org.apache.kafka.common.record.internal.MemoryRecords;
 import org.apache.kafka.common.record.internal.MemoryRecordsBuilder;
 import org.apache.kafka.common.record.internal.Record;
@@ -49,12 +50,14 @@ import java.io.BufferedWriter;
 import java.io.File;
 import java.io.FileWriter;
 import java.io.IOException;
+import java.io.RandomAccessFile;
 import java.nio.ByteBuffer;
 import java.nio.file.Files;
 import java.nio.file.NoSuchFileException;
 import java.nio.file.Path;
 import java.nio.file.Paths;
 import java.util.ArrayList;
+import java.util.Comparator;
 import java.util.HashSet;
 import java.util.List;
 import java.util.Map;
@@ -468,6 +471,46 @@ public class LogLoaderTest {
         );
 
         return new LogAndSegment(log, segmentWithOverflow);
+    }
+
+    private List<Long> keysInRawLog(File dir) throws IOException {
+        List<Long> keys = new ArrayList<>();
+        List<File> logFiles = Stream.of(dir.listFiles())
+                .filter(file -> file.isFile() && LogFileUtils.isLogFile(file))
+                .sorted(Comparator.comparing(File::getName))
+                .toList();
+        for (File file : logFiles) {
+            try (FileRecords records = FileRecords.open(file, false)) {
+                for (RecordBatch batch : records.batches()) {
+                    for (Record record : batch) {
+                        if (record.hasKey() && record.hasValue())
+                            keys.add(Long.parseLong(Utils.utf8(record.key())));
+                    }
+                }
+            }
+        }
+        return keys;
+    }
+
+    private static File overflowLogFile(File dir) throws IOException {
+        for (File file : dir.listFiles()) {
+            if (!file.isFile() || !LogFileUtils.isLogFile(file))
+                continue;
+            long baseOffset = LogFileUtils.offsetFromFile(file);
+            try (FileRecords records = FileRecords.open(file, false)) {
+                for (RecordBatch batch : records.batches()) {
+                    if (batch.lastOffset() > baseOffset + Integer.MAX_VALUE)
+                        return file;
+                }
+            }
+        }
+        throw new AssertionError("Failed to find an overflowed segment in " + dir);
+    }
+
+    private static void padWithZeros(File file, int bytes) throws IOException {
+        try (RandomAccessFile raf = new RandomAccessFile(file, "rw")) {
+            raf.setLength(raf.length() + bytes);
+        }
     }
 
     private UnifiedLog recoverAndCheck(LogConfig config, List<Long> expectedKeys) throws IOException {
@@ -1198,6 +1241,21 @@ public class LogLoaderTest {
         for (LogSegment segment : recoveredLog.logSegments()) {
             assertThrows(IllegalArgumentException.class, () -> logAndSegment.log.splitOverflowedSegment(segment));
         }
+    }
+
+    @Test
+    public void testRecoveryOfPreallocatedSegmentWithOffsetOverflow() throws IOException {
+        LogTestUtils.initializeLogDirWithOverflowedSegment(logDir);
+        List<Long> expectedKeys = keysInRawLog(logDir);
+        padWithZeros(overflowLogFile(logDir), 1024 * 1024);
+
+        LogConfig logConfig = new LogTestUtils.LogConfigBuilder()
+                .indexIntervalBytes(1)
+                .fileDeleteDelayMs(1000)
+                .build();
+        UnifiedLog recoveredLog = recoverAndCheck(logConfig, expectedKeys);
+        assertEquals(expectedKeys, LogTestUtils.keysInLog(recoveredLog));
+        assertFalse(LogTestUtils.hasOffsetOverflow(recoveredLog));
     }
 
     @Test
