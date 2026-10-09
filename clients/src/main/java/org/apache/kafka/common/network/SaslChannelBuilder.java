@@ -393,7 +393,8 @@ public class SaslChannelBuilder implements ChannelBuilder, ListenerReconfigurabl
                 GSSCredential cred = manager.createCredential(gssName,
                         GSSContext.INDEFINITE_LIFETIME, krb5Mechanism, GSSCredential.ACCEPT_ONLY);
                 subject.getPrivateCredentials().add(cred);
-                log.info("Configured native GSSAPI private credentials for {}@{}", serviceHostname, serviceHostname);
+                log.info("Configured native GSSAPI private credentials for {}@{}",
+                    servicePrincipalName, serviceHostname);
             } catch (GSSException ex) {
                 log.warn("Cannot add private credential to subject; clients authentication may fail", ex);
             }
