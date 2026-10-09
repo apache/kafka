@@ -169,6 +169,7 @@ import static org.mockito.Mockito.doAnswer;
 import static org.mockito.Mockito.doNothing;
 import static org.mockito.Mockito.doReturn;
 import static org.mockito.Mockito.mock;
+import static org.mockito.Mockito.never;
 import static org.mockito.Mockito.spy;
 import static org.mockito.Mockito.timeout;
 import static org.mockito.Mockito.times;
@@ -2826,7 +2827,7 @@ public class WorkerTest {
 
         assertEquals(1, alterOffsetsMapCapture.getValue().size());
         assertEquals(7, alterOffsetsMapCapture.getValue().get(p1).offset());
-        verify(admin, times(0)).deleteConsumerGroupOffsets(anyString(), anySet(), any(DeleteConsumerGroupOffsetsOptions.class));
+        verify(admin, never()).deleteConsumerGroupOffsets(anyString(), anySet(), any(DeleteConsumerGroupOffsetsOptions.class));
 
         verify(admin, timeout(1000)).close();
         verifyKafkaClusterId();
@@ -2897,10 +2898,10 @@ public class WorkerTest {
         assertInstanceOf(BadRequestException.class, e.getCause());
 
         // No existing offsets may be listed/wiped and no offsets may be written when validation fails
-        verify(admin, times(0)).listConsumerGroupOffsets(anyString(), any(ListConsumerGroupOffsetsOptions.class));
-        verify(admin, times(0)).alterConsumerGroupOffsets(anyString(), anyMap(), any(AlterConsumerGroupOffsetsOptions.class));
-        verify(admin, times(0)).deleteConsumerGroupOffsets(anyString(), anySet(), any(DeleteConsumerGroupOffsetsOptions.class));
-        verify(sinkConnector, times(0)).alterOffsets(anyMap(), anyMap());
+        verify(admin, never()).listConsumerGroupOffsets(anyString(), any(ListConsumerGroupOffsetsOptions.class));
+        verify(admin, never()).alterConsumerGroupOffsets(anyString(), anyMap(), any(AlterConsumerGroupOffsetsOptions.class));
+        verify(admin, never()).deleteConsumerGroupOffsets(anyString(), anySet(), any(DeleteConsumerGroupOffsetsOptions.class));
+        verify(sinkConnector, never()).alterOffsets(anyMap(), anyMap());
         verifyKafkaClusterId();
     }
 

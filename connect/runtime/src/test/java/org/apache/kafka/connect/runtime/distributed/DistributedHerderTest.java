@@ -789,7 +789,7 @@ public class DistributedHerderTest {
         // No immediate action besides this -- change will be picked up via the config log
         List<String> stages = expectRecordStages(putConnectorCallback);
 
-        herder.putConnectorConfig(CONN2, CONN2_CONFIG, TargetState.STOPPED, false, putConnectorCallback);
+        herder.putConnectorConfig(CONN2, CONN2_CONFIG, TargetState.STOPPED, null, false, putConnectorCallback);
         // This tick runs the initial herder request, which issues an asynchronous request for
         // connector validation
         herder.tick();

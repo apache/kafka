@@ -1353,13 +1353,13 @@ public abstract class AbstractHerder implements Herder, TaskStatus.Listener, Con
     }
 
     /**
-     * Remove the initial offsets written for a connector whose config could not subsequently be written, so that a
+     * Remove the initial offsets written for a connector whose creation could not subsequently be completed, so that a
      * failed creation does not leave offsets behind for a connector that does not exist, and then complete
      * {@code callback} with the original failure rather than with any error from the cleanup itself.
      */
     protected void wipeInitialOffsetsAfterFailedCreate(String connName, Map<String, String> config,
                                                        Throwable configWriteError, Callback<Created<ConnectorInfo>> callback) {
-        log.error("Failed to write the configuration for connector {} after its initial offsets had been written; "
+        log.error("Failed to create connector {} after its initial offsets had been written; "
                 + "removing those offsets so that the failed creation does not leave them behind", connName, configWriteError);
         Callback<Message> cleanupCallback = (wipeError, ignored) -> {
             if (wipeError != null) {

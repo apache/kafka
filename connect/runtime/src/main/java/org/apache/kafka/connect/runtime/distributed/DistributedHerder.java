@@ -1093,12 +1093,6 @@ public class DistributedHerder extends AbstractHerder implements Runnable {
 
     @Override
     public void putConnectorConfig(final String connName, final Map<String, String> config, final TargetState targetState,
-                                   final boolean allowReplace, final Callback<Created<ConnectorInfo>> callback) {
-        putConnectorConfig(connName, config, targetState, null, allowReplace, callback);
-    }
-
-    @Override
-    public void putConnectorConfig(final String connName, final Map<String, String> config, final TargetState targetState,
                                    final Map<Map<String, ?>, Map<String, ?>> initialOffsets, final boolean allowReplace,
                                    final Callback<Created<ConnectorInfo>> callback) {
         log.trace("Submitting connector config write request {}", connName);
@@ -1160,7 +1154,7 @@ public class DistributedHerder extends AbstractHerder implements Runnable {
                         }
 
                         if (initialOffsets == null) {
-                            writeConnectorConfigAndComplete(connName, config, targetState, allowReplace, null, callback);
+                            writeConnectorConfigAndComplete(connName, config, targetState, null, callback);
                         } else {
                             setInitialOffsetsThenWriteConfig(connName, config, targetState, initialOffsets, allowReplace, callback);
                         }
@@ -1223,7 +1217,7 @@ public class DistributedHerder extends AbstractHerder implements Runnable {
                             return null;
                         }
                         try {
-                            writeConnectorConfigAndComplete(connName, config, targetState, allowReplace, message.message(), callback);
+                            writeConnectorConfigAndComplete(connName, config, targetState, message.message(), callback);
                         } catch (Throwable t) {
                             wipeInitialOffsetsAfterFailedCreate(connName, config, t, callback);
                         }
@@ -1244,11 +1238,11 @@ public class DistributedHerder extends AbstractHerder implements Runnable {
      *                      case the response is identical to one for a creation without initial offsets
      */
     private void writeConnectorConfigAndComplete(String connName, Map<String, String> config, TargetState targetState,
-                                                 boolean allowReplace, String offsetsStatus, Callback<Created<ConnectorInfo>> callback) {
+                                                 String offsetsStatus, Callback<Created<ConnectorInfo>> callback) {
         // Must be read before the write, which may update the snapshot and make every connector look pre-existing
         boolean exists = configState.contains(connName);
 
-        log.trace("Submitting connector config {} {} {}", connName, allowReplace, configState.connectors());
+        log.trace("Submitting connector config {} {}", connName, configState.connectors());
         writeToConfigTopicAsLeader(
                 "writing a config for connector " + connName + " to the config topic",
                 () -> configBackingStore.putConnectorConfig(connName, config, targetState)

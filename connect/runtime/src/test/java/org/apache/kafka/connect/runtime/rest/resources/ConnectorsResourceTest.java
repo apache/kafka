@@ -339,6 +339,22 @@ public class ConnectorsResourceTest {
     }
 
     @Test
+    public void testCreateConnectorWithInitialOffsets() throws Throwable {
+        CreateConnectorRequest body = new CreateConnectorRequest(CONNECTOR_NAME,
+            Map.of(ConnectorConfig.NAME_CONFIG, CONNECTOR_NAME), null,
+            List.of(new ConnectorOffset(Map.of("partitionKey", "partitionValue"), Map.of("offsetKey", "offsetValue"))));
+        String offsetsStatus = "The offsets for this connector have been set successfully";
+
+        final ArgumentCaptor<Callback<Herder.Created<ConnectorInfo>>> cb = ArgumentCaptor.forClass(Callback.class);
+        expectAndCallbackResult(cb, new Herder.Created<>(true, new ConnectorInfo(CONNECTOR_NAME, CONNECTOR_CONFIG,
+            CONNECTOR_TASK_NAMES, ConnectorType.SOURCE).withOffsetsStatus(offsetsStatus))
+        ).when(herder).putConnectorConfig(eq(CONNECTOR_NAME), eq(body.config()), isNull(), eq(body.initialOffsetsMap()), eq(false), cb.capture());
+
+        Response response = connectorsResource.createConnector(FORWARD, NULL_HEADERS, body);
+        assertEquals(offsetsStatus, ((ConnectorInfo) response.getEntity()).offsetsStatus());
+    }
+
+    @Test
     public void testCreateConnectorNotLeader() throws Throwable {
         CreateConnectorRequest body = new CreateConnectorRequest(CONNECTOR_NAME,
             Map.of(ConnectorConfig.NAME_CONFIG, CONNECTOR_NAME), null);

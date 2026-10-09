@@ -1442,7 +1442,6 @@ public final class Worker {
                     // Both a reset and a replace start by tombstoning every offset the consumer group currently has;
                     // a replace then overlays the requested offsets on top of those tombstones.
                     if (isReset || replaceAllOffsets) {
-                        String modification = isReset ? "resetting" : "replacing";
                         // Parse the requested offsets before doing any admin client work, so that a malformed request
                         // fails fast and doesn't cost a round trip to list the consumer group's existing offsets.
                         Map<TopicPartition, Long> requestedOffsets = isReset ? Map.of() : SinkUtils.parseSinkConnectorOffsets(offsets);
@@ -1460,6 +1459,7 @@ public final class Worker {
                                     connName, groupId, offsetsToWrite.keySet());
                         } catch (Exception e) {
                             Utils.closeQuietly(admin, "Offset modification admin for sink connector " + connName);
+                            String modification = isReset ? "resetting" : "replacing";
                             log.error("Failed to list offsets prior to {} offsets for sink connector {}", modification, connName, e);
                             cb.onCompletion(new ConnectException("Failed to list offsets prior to " + modification
                                     + " offsets for sink connector " + connName, e), null);
