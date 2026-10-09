@@ -16,8 +16,6 @@
 # limitations under the License.
 ###############################################################################
 
-# Any Alpine-based image carrying a JRE works here, e.g. to build on a different JDK version.
-# Override with `docker_build_test.py --base-image <ref>` or `--build-arg base_image=<ref>`.
 ARG base_image=docker.io/library/eclipse-temurin:25-jre-alpine
 
 FROM ${base_image} AS build-jsa
@@ -33,6 +31,7 @@ COPY server.properties /etc/kafka/docker/server.properties
 COPY *kafka.tgz kafka.tgz
 
 RUN set -eux ; \
+    command -v java >/dev/null || { echo "base_image must carry a JRE (java not found on PATH)" >&2; exit 1; } ; \
     apk update ; \
     apk upgrade ; \
     apk add --no-cache bash procps-ng; \
