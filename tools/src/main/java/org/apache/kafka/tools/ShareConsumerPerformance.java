@@ -148,6 +148,7 @@ public class ShareConsumerPerformance {
                     consumeRecordsForSingleShareConsumer(shareConsumers.get(index), recordsRead, bytesRead, options,
                         shareConsumerConsumption, index + 1);
                 } catch (InterruptedException e) {
+                    Thread.currentThread().interrupt();
                     throw new RuntimeException(e);
                 }
             }));

@@ -134,6 +134,7 @@ class SubmittedRecords {
         try {
             return messageDrainLatch.await(timeout, timeUnit);
         } catch (InterruptedException e) {
+            Thread.currentThread().interrupt();
             return false;
         }
     }
