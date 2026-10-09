@@ -2654,6 +2654,87 @@ public class AssignmentRefinerTest {
         assertEquals(mkTasksTuple(TaskRole.WARMUP, mkTasks(STATEFUL, 0)), refined.get("memberB"));
     }
 
+    @Test
+    public void shouldRunAnOrphanOnTheStandbyHolderThatCannotReportItsProgress() {
+        // Nobody runs the task. memberC holds a standby task of it, and the target assignment keeps it there, but
+        // memberC never reports how far it has restored. The task runs on memberC while memberB warms up, instead of
+        // being restored from scratch on memberB next to a standby task that has to restore anyway.
+        final Map<String, StreamsGroupMember> members = orphanWithAStandbyOnC();
+        final Map<String, TasksTuple> targetAssignment = orphanTargetAssignment();
+        final Map<String, Integer> versionZero = heartbeatVersions(members, Map.of("memberC", 0));
+        final Map<String, Integer> unknownVersion = heartbeatVersions(members, Map.of());
+        unknownVersion.remove("memberC");
+
+        for (final Map<String, Integer> heartbeatVersions : List.of(versionZero, unknownVersion)) {
+            final AssignmentRefinerImpl.TaskDecisions decisions =
+                analyze(members, targetAssignment, Map.of(), heartbeatVersions);
+
+            assertEquals(List.of(), decisions.grantedTasks());
+            assertEquals(
+                List.of(new AssignmentRefinerImpl.StagedMigration(
+                    STATEFUL_0, "memberC", "memberB", Optional.of("processB"), Optional.empty())),
+                decisions.stagedMigrations()
+            );
+        }
+    }
+
+    @Test
+    public void shouldGrantAnOrphanWhoseStandbyHolderReportsItsProgressAndIsBehind() {
+        // memberC reports that its standby task is far behind, so it is neither promoted nor protected, as always.
+        final Map<String, StreamsGroupMember> members = orphanWithAStandbyOnC();
+        final Map<String, MemberTaskOffsets> taskOffsets = Map.of("memberC", offsets(100L, 10_000L));
+
+        final AssignmentRefinerImpl.TaskDecisions decisions =
+            analyze(members, orphanTargetAssignment(), taskOffsets);
+
+        assertEquals(List.of(new AssignmentRefinerImpl.TaskGrant(STATEFUL_0, "memberB")), decisions.grantedTasks());
+        assertEquals(List.of(), decisions.stagedMigrations());
+    }
+
+    @Test
+    public void shouldGrantAnOrphanWhenTheTargetAssignmentDoesNotKeepTheStandbyOnItsHolder() {
+        final Map<String, StreamsGroupMember> members = orphanWithAStandbyOnC();
+        final Map<String, TasksTuple> targetAssignment = Map.of(
+            "memberA", TasksTuple.EMPTY,
+            "memberB", mkTasksTuple(TaskRole.ACTIVE, mkTasks(STATEFUL, 0)),
+            "memberC", TasksTuple.EMPTY
+        );
+
+        final AssignmentRefinerImpl.TaskDecisions decisions =
+            analyze(members, targetAssignment, Map.of(), heartbeatVersions(members, Map.of("memberC", 0)));
+
+        assertEquals(List.of(new AssignmentRefinerImpl.TaskGrant(STATEFUL_0, "memberB")), decisions.grantedTasks());
+        assertEquals(List.of(), decisions.stagedMigrations());
+    }
+
+    @Test
+    public void shouldGrantAnOrphanToATargetOwnerThatCannotBeWarmedUpEvenIfAStandbyHolderCannotReport() {
+        final Map<String, StreamsGroupMember> members = orphanWithAStandbyOnC();
+
+        final AssignmentRefinerImpl.TaskDecisions decisions = analyze(
+            members, orphanTargetAssignment(), Map.of(),
+            heartbeatVersions(members, Map.of("memberB", 0, "memberC", 0)));
+
+        assertEquals(List.of(new AssignmentRefinerImpl.TaskGrant(STATEFUL_0, "memberB")), decisions.grantedTasks());
+        assertEquals(List.of(), decisions.stagedMigrations());
+    }
+
+    private static Map<String, StreamsGroupMember> orphanWithAStandbyOnC() {
+        return Map.of(
+            "memberA", member("memberA", "processA", TasksTuple.EMPTY),
+            "memberB", member("memberB", "processB", TasksTuple.EMPTY),
+            "memberC", member("memberC", "processC", mkTasksTuple(TaskRole.STANDBY, mkTasks(STATEFUL, 0)))
+        );
+    }
+
+    private static Map<String, TasksTuple> orphanTargetAssignment() {
+        return Map.of(
+            "memberA", TasksTuple.EMPTY,
+            "memberB", mkTasksTuple(TaskRole.ACTIVE, mkTasks(STATEFUL, 0)),
+            "memberC", mkTasksTuple(TaskRole.STANDBY, mkTasks(STATEFUL, 0))
+        );
+    }
+
     // ---------------------------------------------------------------------------------------------------------------
     // Fixtures
     // ---------------------------------------------------------------------------------------------------------------
