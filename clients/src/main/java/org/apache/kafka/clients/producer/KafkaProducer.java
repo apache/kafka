@@ -1319,8 +1319,19 @@ public class KafkaProducer<K, V> implements Producer<K, V> {
             } else {
                 log.trace("Requesting metadata update for topic {}.", topic);
             }
-            metadata.add(topic, nowMs + elapsed);
-            int version = metadata.requestUpdateForTopic(topic);
+            int version;
+            synchronized (metadata) {
+                metadata.add(topic, nowMs + elapsed);
+                // Recheck and choose the wait version atomically with metadata updates.
+                cluster = metadata.fetch();
+                partitionsCount = cluster.partitionCountForTopic(topic);
+                if (partitionsCount != null && (partition == null || partition < partitionsCount)) {
+                    metadata.maybeThrowExceptionForTopic(topic);
+                    elapsed = time.milliseconds() - nowMs;
+                    break;
+                }
+                version = metadata.requestUpdateForTopic(topic);
+            }
             sender.wakeup();
             try {
                 metadata.awaitUpdate(version, time.timer(remainingWaitMs));
