@@ -54,6 +54,7 @@ import org.apache.kafka.streams.query.TimestampedRangeWithHeadersQuery;
 import org.apache.kafka.streams.state.KeyValueIterator;
 import org.apache.kafka.streams.state.KeyValueStore;
 import org.apache.kafka.streams.state.ReadOnlyRecordIterator;
+import org.apache.kafka.streams.state.ValueAndTimestamp;
 import org.apache.kafka.streams.state.ValueTimestampHeaders;
 import org.apache.kafka.test.KeyValueIteratorStub;
 
@@ -78,6 +79,7 @@ import static org.apache.kafka.common.utils.Utils.mkMap;
 import static org.junit.jupiter.api.Assertions.assertEquals;
 import static org.junit.jupiter.api.Assertions.assertFalse;
 import static org.junit.jupiter.api.Assertions.assertNotNull;
+import static org.junit.jupiter.api.Assertions.assertNull;
 import static org.junit.jupiter.api.Assertions.assertThrows;
 import static org.junit.jupiter.api.Assertions.assertTrue;
 import static org.junit.jupiter.api.Assertions.fail;
@@ -107,6 +109,7 @@ public class MeteredTimestampedKeyValueStoreWithHeadersTest {
     private static final byte[] VALUE_TIMESTAMP_HEADERS_BYTES = serializeValueTimestampHeaders(VALUE_TIMESTAMP_HEADERS);
     private static final byte[] NEGATIVE_TIMESTAMP_VALUE_TIMESTAMP_HEADERS_BYTES =
         serializeValueTimestampHeaders(ValueTimestampHeaders.make("value", -1L, HEADERS));
+    private static final byte[] NULL_DESERIALIZED_VALUE_BYTES = {0};
     private final String threadId = Thread.currentThread().getName();
     private final TaskId taskId = new TaskId(0, 0, "My-Topology");
     @Mock
@@ -320,6 +323,22 @@ public class MeteredTimestampedKeyValueStoreWithHeadersTest {
     }
 
     @Test
+    public void shouldReturnNullValueFromRangeWhenValueDeserializesToNull() {
+        setUp();
+        final KeyValue<Bytes, byte[]> nullValueEntry = KeyValue.pair(KEY_BYTES, NULL_DESERIALIZED_VALUE_BYTES);
+        when(inner.range(any(Bytes.class), any(Bytes.class)))
+            .thenReturn(new KeyValueIteratorStub<>(List.of(nullValueEntry).iterator()));
+        metered = createStoreWithMockSerdes();
+
+        try (final KeyValueIterator<String, ValueTimestampHeaders<String>> iterator = metered.range(KEY, KEY)) {
+            final KeyValue<String, ValueTimestampHeaders<String>> next = iterator.next();
+            assertEquals(KEY, next.key);
+            assertNull(next.value);
+            assertFalse(iterator.hasNext());
+        }
+    }
+
+    @Test
     public void shouldPropagateLowerBoundAndDescendingOrderForTimestampedRangeWithHeadersQuery() {
         setUp();
         init();
@@ -377,6 +396,70 @@ public class MeteredTimestampedKeyValueStoreWithHeadersTest {
 
         assertFalse(result.isSuccess());
         assertEquals(FailureReason.NOT_UP_TO_BOUND, result.getFailureReason());
+    }
+
+    @SuppressWarnings("unchecked")
+    @Test
+    public void shouldReturnNullValueForRangeQueryWhenValueDeserializesToNull() {
+        setUp();
+        final KeyValue<Bytes, byte[]> nullValueEntry = KeyValue.pair(KEY_BYTES, NULL_DESERIALIZED_VALUE_BYTES);
+        when(inner.query(any(), any(PositionBound.class), any(QueryConfig.class)))
+            .thenReturn((QueryResult) QueryResult.forResult(
+                new KeyValueIteratorStub<>(List.of(nullValueEntry).iterator())));
+        metered = createStoreWithMockSerdes();
+
+        final QueryResult<KeyValueIterator<String, String>> result = metered.query(
+            RangeQuery.withNoBounds(), PositionBound.unbounded(), new QueryConfig(false));
+
+        try (final KeyValueIterator<String, String> iterator = result.getResult()) {
+            final KeyValue<String, String> next = iterator.next();
+            assertEquals(KEY, next.key);
+            assertNull(next.value);
+            assertFalse(iterator.hasNext());
+        }
+    }
+
+    @SuppressWarnings("unchecked")
+    @Test
+    public void shouldReturnNullValueForTimestampedRangeQueryWhenValueDeserializesToNull() {
+        setUp();
+        final KeyValue<Bytes, byte[]> nullValueEntry = KeyValue.pair(KEY_BYTES, NULL_DESERIALIZED_VALUE_BYTES);
+        when(inner.query(any(), any(PositionBound.class), any(QueryConfig.class)))
+            .thenReturn((QueryResult) QueryResult.forResult(
+                new KeyValueIteratorStub<>(List.of(nullValueEntry).iterator())));
+        metered = createStoreWithMockSerdes();
+
+        final QueryResult<KeyValueIterator<String, ValueAndTimestamp<String>>> result = metered.query(
+            TimestampedRangeQuery.withNoBounds(), PositionBound.unbounded(), new QueryConfig(false));
+
+        try (final KeyValueIterator<String, ValueAndTimestamp<String>> iterator = result.getResult()) {
+            final KeyValue<String, ValueAndTimestamp<String>> next = iterator.next();
+            assertEquals(KEY, next.key);
+            assertNull(next.value);
+            assertFalse(iterator.hasNext());
+        }
+    }
+
+    @SuppressWarnings("unchecked")
+    @Test
+    public void shouldThrowDescriptiveExceptionForTimestampedRangeWithHeadersQueryWhenValueDeserializesToNull() {
+        setUp();
+        final KeyValue<Bytes, byte[]> nullValueEntry = KeyValue.pair(KEY_BYTES, NULL_DESERIALIZED_VALUE_BYTES);
+        when(inner.query(any(), any(PositionBound.class), any(QueryConfig.class)))
+            .thenReturn((QueryResult) QueryResult.forResult(
+                new KeyValueIteratorStub<>(List.of(nullValueEntry).iterator())));
+        metered = createStoreWithMockSerdes();
+
+        final QueryResult<ReadOnlyRecordIterator<String, String>> result = metered.query(
+            TimestampedRangeWithHeadersQuery.withNoBounds(), PositionBound.unbounded(), new QueryConfig(false));
+
+        try (final ReadOnlyRecordIterator<String, String> iterator = result.getResult()) {
+            final StreamsException exception = assertThrows(StreamsException.class, iterator::next);
+            assertEquals(
+                "Cannot represent the stored record for key [" + KEY
+                    + "] as a ReadOnlyRecord: its value is null.",
+                exception.getMessage());
+        }
     }
 
     // The num-open-iterators gauge is tracked by every metered iterator this store returns from query().
@@ -773,10 +856,12 @@ public class MeteredTimestampedKeyValueStoreWithHeadersTest {
 
         lenient().when(keySerializer.serialize(any(), any(RecordHeaders.class), any())).thenReturn(KEY.getBytes());
 
-        lenient().when(valueDeserializer.deserialize(any(), any(RecordHeaders.class), eq(VALUE_TIMESTAMP_HEADERS_BYTES)))
+        lenient().when(valueDeserializer.deserialize(any(), any(Headers.class), eq(VALUE_TIMESTAMP_HEADERS_BYTES)))
             .thenReturn(VALUE_TIMESTAMP_HEADERS);
+        lenient().when(valueDeserializer.deserialize(any(), any(Headers.class), eq(NULL_DESERIALIZED_VALUE_BYTES)))
+            .thenReturn(null);
 
-        lenient().when(keyDeserializer.deserialize(any(), eq(HEADERS), eq(KEY.getBytes())))
+        lenient().when(keyDeserializer.deserialize(any(), any(Headers.class), eq(KEY.getBytes())))
             .thenReturn(KEY);
 
         final MeteredTimestampedKeyValueStoreWithHeaders<String, String> mockStore = new MeteredTimestampedKeyValueStoreWithHeaders<>(
