@@ -128,6 +128,7 @@ public class LoggingResource {
                 return herder.setWorkerLoggerLevel(namespace, levelString);
             case CLUSTER_SCOPE:
                 herder.setClusterLoggerLevel(namespace, levelString);
+                // JAX-RS translates a null return value into a 204 No Content response
                 return null;
         }
     }
