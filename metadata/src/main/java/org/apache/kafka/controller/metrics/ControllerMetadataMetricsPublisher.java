@@ -118,10 +118,19 @@ public class ControllerMetadataMetricsPublisher implements MetadataPublisher {
 
     private void publishSnapshot(MetadataImage newImage) {
         metrics.setGlobalTopicCount(newImage.topics().topicsById().size());
+        for (int brokerId : prevImage.cluster().brokers().keySet()) {
+            if (!newImage.cluster().brokers().containsKey(brokerId)) {
+                metrics.setBrokerRegistrationState(brokerId, null);
+            }
+        }
         int fencedBrokers = 0;
         int activeBrokers = 0;
         int controlledShutdownBrokers = 0;
         for (BrokerRegistration broker : newImage.cluster().brokers().values()) {
+            if (!metrics.tracksBrokerRegistrationState(broker.id())) {
+                metrics.addBrokerRegistrationStateMetric(broker.id());
+            }
+            metrics.setBrokerRegistrationState(broker.id(), broker);
             if (broker.fenced()) {
                 fencedBrokers++;
             } else {
