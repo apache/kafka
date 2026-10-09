@@ -75,6 +75,7 @@ import static org.junit.jupiter.api.Assertions.assertArrayEquals;
 import static org.junit.jupiter.api.Assertions.assertEquals;
 import static org.junit.jupiter.api.Assertions.assertNotNull;
 import static org.junit.jupiter.api.Assertions.assertNull;
+import static org.junit.jupiter.api.Assertions.assertThrows;
 import static org.junit.jupiter.api.Assertions.fail;
 
 public class TimeOrderedKeyValueBufferTest<B extends TimeOrderedKeyValueBuffer<String, String, Change<String>>> {
@@ -182,12 +183,11 @@ public class TimeOrderedKeyValueBufferTest<B extends TimeOrderedKeyValueBuffer<S
         final TimeOrderedKeyValueBuffer<String, String, Change<String>> buffer = bufferSupplier.apply(testName);
         final MockInternalProcessorContext<?, ?> context = makeContext();
         buffer.init(context, buffer);
-        try {
-            buffer.put(0, new Record<>("asdf", null, 0L), getContext(0));
-            fail("expected an exception");
-        } catch (final NullPointerException expected) {
-            // expected
-        }
+        assertThrows(
+            NullPointerException.class,
+            () -> buffer.put(0, new Record<>("asdf", null, 0L), getContext(0)),
+            "should not buffer a record with a null value"
+        );
         cleanup(context, buffer);
     }
 
@@ -1619,22 +1619,23 @@ public class TimeOrderedKeyValueBufferTest<B extends TimeOrderedKeyValueBuffer<S
 
         final byte[] todeleteValue = getBufferValue("doomed", 0).serialize(0).array();
         try {
-            stateRestoreCallback.restoreBatch(singletonList(
-                new ConsumerRecord<>("changelog-topic",
-                                     0,
-                                     0,
-                                     999,
-                                     TimestampType.CREATE_TIME,
-                                     -1,
-                                     -1,
-                                     "todelete".getBytes(UTF_8),
-                                     ByteBuffer.allocate(Long.BYTES + todeleteValue.length).putLong(0L).put(todeleteValue).array(),
-                                     unknownFlagHeaders,
-                                     Optional.empty())
-            ));
-            fail("expected an exception");
-        } catch (final IllegalArgumentException expected) {
-            // nothing to do.
+            assertThrows(
+                IllegalArgumentException.class,
+                () -> stateRestoreCallback.restoreBatch(singletonList(
+                    new ConsumerRecord<>("changelog-topic",
+                                         0,
+                                         0,
+                                         999,
+                                         TimestampType.CREATE_TIME,
+                                         -1,
+                                         -1,
+                                         "todelete".getBytes(UTF_8),
+                                         ByteBuffer.allocate(Long.BYTES + todeleteValue.length).putLong(0L).put(todeleteValue).array(),
+                                         unknownFlagHeaders,
+                                         Optional.empty())
+                )),
+                "should not restore a record with an unrecognized version header"
+            );
         } finally {
             cleanup(context, buffer);
         }

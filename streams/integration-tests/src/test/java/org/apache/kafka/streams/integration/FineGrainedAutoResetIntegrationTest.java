@@ -65,7 +65,7 @@ import static org.apache.kafka.common.utils.Utils.mkProperties;
 import static org.apache.kafka.streams.utils.TestUtils.safeUniqueTestName;
 import static org.apache.kafka.test.TestUtils.waitForCondition;
 import static org.junit.jupiter.api.Assertions.assertEquals;
-import static org.junit.jupiter.api.Assertions.fail;
+import static org.junit.jupiter.api.Assertions.assertThrows;
 
 @Timeout(600)
 @Tag("integration")
@@ -369,13 +369,12 @@ public class FineGrainedAutoResetIntegrationTest {
         //NOTE this would realistically get caught when building topology, the test is for completeness
         builder.stream(Pattern.compile("topic-[A-D]_1"), Consumed.with(AutoOffsetReset.earliest()));
 
-        try {
-            builder.stream(Pattern.compile("topic-[A-D]_1"), Consumed.with(AutoOffsetReset.latest()));
-            builder.build();
-            fail("Should have thrown TopologyException");
-        } catch (final TopologyException expected) {
-            // do nothing
-        }
+        builder.stream(Pattern.compile("topic-[A-D]_1"), Consumed.with(AutoOffsetReset.latest()));
+        assertThrows(
+            TopologyException.class,
+            builder::build,
+            "should not build a topology with the same pattern subscribed twice"
+        );
     }
 
     @Test
@@ -383,13 +382,12 @@ public class FineGrainedAutoResetIntegrationTest {
         final StreamsBuilder builder = new StreamsBuilder();
         //NOTE this would realistically get caught when building topology, the test is for completeness
         builder.stream(Pattern.compile("topic-[A-D]_1"), Consumed.with(AutoOffsetReset.earliest()));
-        try {
-            builder.stream(Arrays.asList(TOPIC_A_1, TOPIC_Z_1), Consumed.with(AutoOffsetReset.latest()));
-            builder.build();
-            fail("Should have thrown TopologyException");
-        } catch (final TopologyException expected) {
-            // do nothing
-        }
+        builder.stream(Arrays.asList(TOPIC_A_1, TOPIC_Z_1), Consumed.with(AutoOffsetReset.latest()));
+        assertThrows(
+            TopologyException.class,
+            builder::build,
+            "should not build a topology with a topic that matches a subscribed pattern"
+        );
     }
 
     @Test
