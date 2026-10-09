@@ -415,10 +415,12 @@ public class StreamsGroupWarmupTaskLifecycleIntegrationTest {
         // The remaining thread takes over the removed thread's task. Its process ran the task, but the state lived
         // in the removed thread's in-memory store, so the remaining thread restores it from scratch. Handing that
         // state over between the threads of a process is KAFKA-21090.
+        final Map<Integer, String> storeHoldersBeforeRemoval = new HashMap<>(b.storeHolders);
         final String removedThread = b.streams.removeStreamThread().orElseThrow();
-        final Set<Integer> tasksOfRemovedThread = new HashSet<>(b.tasksOpenedByThread.getOrDefault(removedThread, Set.of()));
-        tasksOfRemovedThread.retainAll(tasksOfB);
-        final int movedTask = single(tasksOfRemovedThread);
+        final int movedTask = single(storeHoldersBeforeRemoval.entrySet().stream()
+            .filter(holder -> holder.getValue().equals(removedThread))
+            .map(Map.Entry::getKey)
+            .collect(Collectors.toSet()));
         waitForGroup("b's remaining thread to take over both of b's tasks", group -> isStable(group, 2)
             && members(group, b).size() == 1
             && activeTasks(group, b).equals(tasksOfB));
@@ -753,9 +755,8 @@ public class StreamsGroupWarmupTaskLifecycleIntegrationTest {
         // How often a standby or warm-up task started updating, by task.
         private final Map<Integer, AtomicInteger> standbyUpdateStartsByTask = new ConcurrentHashMap<>();
 
-        // The stream thread holding each task's open store, and the tasks each thread ever opened a store of.
+        // The stream thread holding each task's open store, by task.
         private final Map<Integer, String> storeHolders = new ConcurrentHashMap<>();
-        private final Map<String, Set<Integer>> tasksOpenedByThread = new ConcurrentHashMap<>();
         private final AtomicReference<String> storeOpenedTwice = new AtomicReference<>();
 
         private Instance(final String name, final long restoreBudget, final int numThreads) {
@@ -822,7 +823,6 @@ public class StreamsGroupWarmupTaskLifecycleIntegrationTest {
          */
         private void storeOpened(final int task) {
             final String thread = Thread.currentThread().getName();
-            tasksOpenedByThread.computeIfAbsent(thread, __ -> ConcurrentHashMap.newKeySet()).add(task);
             final String holder = storeHolders.putIfAbsent(task, thread);
             if (holder != null) {
                 storeOpenedTwice.compareAndSet(null, "task " + task + " was opened by " + thread + " while open on " + holder);
