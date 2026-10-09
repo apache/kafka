@@ -113,7 +113,10 @@ import java.util.stream.IntStream;
 
 import javax.crypto.SecretKey;
 
+import static jakarta.ws.rs.core.Response.Status.BAD_REQUEST;
+import static jakarta.ws.rs.core.Response.Status.CONFLICT;
 import static jakarta.ws.rs.core.Response.Status.FORBIDDEN;
+import static jakarta.ws.rs.core.Response.Status.NOT_FOUND;
 import static jakarta.ws.rs.core.Response.Status.SERVICE_UNAVAILABLE;
 import static org.apache.kafka.common.utils.Utils.UncheckedCloseable;
 import static org.apache.kafka.connect.runtime.AbstractStatus.State.FAILED;
@@ -129,6 +132,7 @@ import static org.apache.kafka.connect.source.SourceTask.TransactionBoundary.CON
 import static org.junit.jupiter.api.Assertions.assertEquals;
 import static org.junit.jupiter.api.Assertions.assertFalse;
 import static org.junit.jupiter.api.Assertions.assertInstanceOf;
+import static org.junit.jupiter.api.Assertions.assertNotNull;
 import static org.junit.jupiter.api.Assertions.assertThrows;
 import static org.junit.jupiter.api.Assertions.assertTrue;
 import static org.junit.jupiter.api.Assertions.fail;
@@ -136,6 +140,7 @@ import static org.mockito.AdditionalMatchers.leq;
 import static org.mockito.ArgumentMatchers.any;
 import static org.mockito.ArgumentMatchers.anyLong;
 import static org.mockito.ArgumentMatchers.anyMap;
+import static org.mockito.ArgumentMatchers.anyString;
 import static org.mockito.ArgumentMatchers.eq;
 import static org.mockito.ArgumentMatchers.isNull;
 import static org.mockito.Mockito.CALLS_REAL_METHODS;
@@ -228,6 +233,18 @@ public class DistributedHerderTest {
             Map.of(),
             Map.of(CONN1, new AppliedConnectorConfig(CONN1_CONFIG)),
             Set.of(),
+            Set.of());
+    private static final ClusterConfigState SNAPSHOT_WITH_MISSING_TASK_CONFIGS = new ClusterConfigState(
+            1,
+            null,
+            Map.of(),
+            Map.of(CONN1, CONN1_CONFIG),
+            Map.of(CONN1, TargetState.STARTED),
+            Map.of(),
+            Map.of(),
+            Map.of(),
+            Map.of(),
+            Set.of(CONN1),
             Set.of());
     private static final ClusterConfigState SNAPSHOT_PAUSED_CONN1 = new ClusterConfigState(
             1,
@@ -359,6 +376,115 @@ public class DistributedHerderTest {
         time.sleep(1000L);
         assertStatistics(3, 1, 100, 1000L);
         verifyNoMoreInteractions(member, configBackingStore, statusBackingStore, worker);
+    }
+
+    @Test
+    public void testDoesNotStartAssignedTaskWithoutLocalTaskConfig() {
+        // A long-running leader may retain a task config that a newly-started worker cannot
+        // reconstruct from the compacted config topic, even when both have the same config offset.
+        when(member.memberId()).thenReturn("member");
+        when(member.currentProtocolVersion()).thenReturn(CONNECT_PROTOCOL_V0);
+        expectRebalance(1, List.of(), List.of(TASK1));
+        expectConfigRefreshAndSnapshot(SNAPSHOT_WITH_MISSING_TASK_CONFIGS);
+        expectMemberPoll();
+
+        herder.tick();
+
+        verify(worker, never()).startSourceTask(
+                eq(TASK1),
+                any(),
+                eq(CONN1_CONFIG),
+                isNull(),
+                eq(herder),
+                eq(TargetState.STARTED));
+        verify(herder).refreshTaskConfigs(eq(TASK1), eq(1L), any());
+    }
+
+    @Test
+    public void testStartsTaskAfterRefreshedTaskConfigsTriggerRebalance() {
+        when(member.memberId()).thenReturn("member");
+        when(member.currentProtocolVersion()).thenReturn(CONNECT_PROTOCOL_V0);
+        expectRebalance(1, List.of(), List.of(TASK1));
+        expectConfigRefreshAndSnapshot(SNAPSHOT_WITH_MISSING_TASK_CONFIGS);
+        expectMemberPoll();
+        doAnswer(invocation -> {
+            invocation.<Callback<Void>>getArgument(2).onCompletion(null, null);
+            return null;
+        }).when(herder).refreshTaskConfigs(eq(TASK1), eq(1L), any());
+
+        herder.tick();
+
+        configUpdateListener.onTaskConfigUpdate(List.of(TASK1));
+        expectMemberEnsureActive();
+        when(configBackingStore.snapshot()).thenReturn(SNAPSHOT);
+        doNothing().when(member).requestRejoin();
+
+        herder.tick();
+
+        expectRebalance(
+                List.of(),
+                List.of(TASK1),
+                ConnectProtocol.Assignment.NO_ERROR,
+                1,
+                List.of(),
+                List.of(TASK1)
+        );
+        when(herder.connectorType(anyMap())).thenReturn(ConnectorType.SOURCE);
+        when(worker.startSourceTask(
+                eq(TASK1),
+                any(),
+                eq(CONN1_CONFIG),
+                eq(TASK_CONFIG),
+                eq(herder),
+                eq(TargetState.STARTED)
+        )).thenReturn(true);
+        expectMemberPoll();
+
+        herder.tick();
+
+        verify(worker).startSourceTask(
+                eq(TASK1),
+                any(),
+                eq(CONN1_CONFIG),
+                eq(TASK_CONFIG),
+                eq(herder),
+                eq(TargetState.STARTED)
+        );
+    }
+
+    @Test
+    public void testRetriesMissingTaskAfterAssignmentOffsetChanges() {
+        connectProtocolVersion = CONNECT_PROTOCOL_V1;
+        when(member.memberId()).thenReturn("member");
+        when(member.currentProtocolVersion()).thenReturn(CONNECT_PROTOCOL_V1);
+        expectRebalance(1, List.of(), List.of(TASK1));
+        expectConfigRefreshAndSnapshot(SNAPSHOT_WITH_MISSING_TASK_CONFIGS);
+        expectMemberPoll();
+        doNothing().when(herder).refreshTaskConfigs(eq(TASK1), anyLong(), any());
+
+        herder.tick();
+
+        ClusterConfigState newerSnapshotWithMissingTaskConfigs = new ClusterConfigState(
+                2,
+                null,
+                Map.of(),
+                Map.of(CONN1, CONN1_CONFIG),
+                Map.of(CONN1, TargetState.STARTED),
+                Map.of(),
+                Map.of(),
+                Map.of(),
+                Map.of(),
+                Set.of(CONN1),
+                Set.of()
+        );
+        expectRebalance(2, List.of(), List.of(TASK1));
+        expectConfigRefreshAndSnapshot(newerSnapshotWithMissingTaskConfigs);
+        expectMemberPoll();
+
+        herder.tick();
+
+        verify(herder).refreshTaskConfigs(eq(TASK1), eq(1L), any());
+        verify(herder).refreshTaskConfigs(eq(TASK1), eq(2L), any());
     }
 
     @Test
@@ -2796,6 +2922,210 @@ public class DistributedHerderTest {
     }
 
     @Test
+    public void testRefreshTaskConfigsRepublishesLeaderTaskConfigs() throws Exception {
+        when(member.memberId()).thenReturn("leader");
+        herder.assignment = mock(ExtendedAssignment.class);
+        when(herder.assignment.leader()).thenReturn("leader");
+        herder.configState = SNAPSHOT;
+        expectConfigRefreshAndSnapshot(SNAPSHOT);
+
+        FutureCallback<Void> callback = new FutureCallback<>();
+        herder.doRefreshTaskConfigs(CONN1, SNAPSHOT.offset(), callback);
+
+        callback.get(0, TimeUnit.MILLISECONDS);
+        verify(configBackingStore).putTaskConfigs(CONN1, TASK_CONFIGS);
+    }
+
+    @Test
+    public void testRefreshTaskConfigsRefreshesSnapshotBeforeCheckingAssignmentOffset() {
+        when(member.memberId()).thenReturn("leader");
+        herder.assignment = mock(ExtendedAssignment.class);
+        when(herder.assignment.leader()).thenReturn("leader");
+        herder.configState = SNAPSHOT;
+        ClusterConfigState newerSnapshot = new ClusterConfigState(
+                SNAPSHOT.offset() + 1,
+                null,
+                Map.of(CONN1, 3),
+                Map.of(CONN1, CONN1_CONFIG),
+                Map.of(CONN1, TargetState.STARTED),
+                TASK_CONFIGS_MAP,
+                Map.of(),
+                Map.of(),
+                Map.of(CONN1, new AppliedConnectorConfig(CONN1_CONFIG)),
+                Set.of(),
+                Set.of()
+        );
+        expectConfigRefreshAndSnapshot(newerSnapshot);
+
+        FutureCallback<Void> callback = new FutureCallback<>();
+        herder.doRefreshTaskConfigs(CONN1, SNAPSHOT.offset(), callback);
+
+        ExecutionException exception = assertThrows(
+                ExecutionException.class,
+                () -> callback.get(0, TimeUnit.MILLISECONDS)
+        );
+        assertInstanceOf(RebalanceNeededException.class, exception.getCause());
+        verify(configBackingStore, never()).putTaskConfigs(any(), any());
+    }
+
+    @Test
+    public void testRefreshTaskConfigsDoesNotGuessWhenLeaderIsMissingConfigs() {
+        when(member.memberId()).thenReturn("leader");
+        herder.assignment = mock(ExtendedAssignment.class);
+        when(herder.assignment.leader()).thenReturn("leader");
+        herder.configState = SNAPSHOT_WITH_MISSING_TASK_CONFIGS;
+        expectConfigRefreshAndSnapshot(SNAPSHOT_WITH_MISSING_TASK_CONFIGS);
+
+        FutureCallback<Void> callback = new FutureCallback<>();
+        herder.doRefreshTaskConfigs(CONN1, SNAPSHOT_WITH_MISSING_TASK_CONFIGS.offset(), callback);
+
+        ExecutionException exception = assertThrows(
+                ExecutionException.class,
+                () -> callback.get(0, TimeUnit.MILLISECONDS)
+        );
+        assertInstanceOf(ConnectException.class, exception.getCause());
+        verify(configBackingStore, never()).putTaskConfigs(any(), any());
+    }
+
+    @Test
+    public void testTaskConfigRefreshIsForwardedToLeader() throws Exception {
+        ExecutorService forwardRequestExecutor = mock(ExecutorService.class);
+        herder.forwardRequestExecutor = forwardRequestExecutor;
+
+        doAnswer(invocation -> {
+            Callback<Void> callback = invocation.getArgument(2);
+            callback.onCompletion(new NotLeaderException("Not leader", "http://leader:8083"), null);
+            return null;
+        }).when(herder).refreshTaskConfigs(eq(CONN1), eq(1L), any());
+        doAnswer(invocation -> {
+            invocation.<Runnable>getArgument(0).run();
+            return null;
+        }).when(forwardRequestExecutor).execute(any());
+        doAnswer(invocation -> null).when(restClient).httpRequest(
+                anyString(), eq("POST"), isNull(), eq(1L), isNull(), anyString()
+        );
+
+        FutureCallback<Void> callback = new FutureCallback<>();
+        herder.refreshTaskConfigs(TASK1, 1L, callback);
+
+        callback.get(0, TimeUnit.MILLISECONDS);
+        ArgumentCaptor<String> url = ArgumentCaptor.forClass(String.class);
+        verify(restClient).httpRequest(
+                url.capture(), eq("POST"), isNull(), eq(1L), isNull(), anyString()
+        );
+        assertEquals("http://leader:8083/connectors/" + CONN1 + "/tasks/refresh", url.getValue());
+    }
+
+    @Test
+    public void testTaskConfigRefreshIsDeduplicatedPerConnectorAndAssignment() {
+        herder.assignment = mock(ExtendedAssignment.class);
+        when(herder.assignment.offset()).thenReturn(1L);
+        when(herder.assignment.tasks()).thenReturn(List.of(TASK0, TASK1));
+        doNothing().when(herder).refreshTaskConfigs(eq(TASK0), eq(1L), any());
+
+        herder.requestTaskConfigRefresh(TASK0);
+        herder.requestTaskConfigRefresh(TASK1);
+
+        verify(herder, times(1)).refreshTaskConfigs(eq(TASK0), eq(1L), any());
+        verify(herder, never()).refreshTaskConfigs(eq(TASK1), eq(1L), any());
+
+        when(herder.assignment.leader()).thenReturn("new-leader");
+        when(herder.assignment.leaderUrl()).thenReturn("http://new-leader:8083");
+        herder.requestTaskConfigRefresh(TASK1);
+
+        verify(herder).refreshTaskConfigs(eq(TASK1), eq(1L), any());
+    }
+
+    @Test
+    public void testTaskConfigRefreshRetriesWithBackoff() throws Exception {
+        herder.assignment = mock(ExtendedAssignment.class);
+        when(herder.assignment.offset()).thenReturn(1L);
+        when(herder.assignment.tasks()).thenReturn(List.of(TASK1));
+        @SuppressWarnings("unchecked")
+        ArgumentCaptor<Callback<Void>> callback = ArgumentCaptor.forClass(Callback.class);
+        doNothing().when(herder).refreshTaskConfigs(eq(TASK1), eq(1L), callback.capture());
+
+        herder.requestTaskConfigRefresh(TASK1);
+        callback.getValue().onCompletion(new ConnectException("Transient failure"), null);
+
+        assertEquals(1, herder.requests.size());
+        time.sleep(DistributedHerder.RECONFIGURE_CONNECTOR_TASKS_BACKOFF_INITIAL_MS);
+        DistributedHerder.DistributedHerderRequest retry = herder.requests.pollFirst();
+        assertNotNull(retry);
+        retry.action().call();
+
+        verify(herder, times(2)).refreshTaskConfigs(eq(TASK1), eq(1L), any());
+    }
+
+    @Test
+    public void testTerminalTaskConfigRefreshFailuresRequestRejoinWithoutRetry() throws Exception {
+        herder.assignment = mock(ExtendedAssignment.class);
+        when(herder.assignment.tasks()).thenReturn(List.of(TASK1));
+        @SuppressWarnings("unchecked")
+        ArgumentCaptor<Callback<Void>> callback = ArgumentCaptor.forClass(Callback.class);
+        doNothing().when(herder).refreshTaskConfigs(eq(TASK1), anyLong(), callback.capture());
+
+        List<ConnectException> terminalFailures = List.of(
+                new RebalanceNeededException("Stale assignment"),
+                new NotFoundException("Connector not found"),
+                new BadRequestException("Connector is stopped"),
+                new ConnectRestException(BAD_REQUEST, "Connector is stopped"),
+                new ConnectRestException(NOT_FOUND, "Connector or refresh endpoint not found"),
+                new ConnectRestException(CONFLICT, "Stale assignment")
+        );
+        for (int i = 0; i < terminalFailures.size(); i++) {
+            long offset = i + 1L;
+            when(herder.assignment.offset()).thenReturn(offset);
+            herder.requestTaskConfigRefresh(TASK1);
+            callback.getAllValues().get(i).onCompletion(terminalFailures.get(i), null);
+
+            DistributedHerder.DistributedHerderRequest rejoinRequest = herder.requests.pollFirst();
+            assertNotNull(rejoinRequest);
+            rejoinRequest.action().call();
+
+            // A rejoin may produce the same assignment and leader, especially during a rolling upgrade
+            // where the leader does not support the refresh endpoint. Do not repeat the same failed request.
+            herder.requestTaskConfigRefresh(TASK1);
+            verify(herder, times(i + 1)).refreshTaskConfigs(eq(TASK1), anyLong(), any());
+        }
+
+        verify(herder, times(terminalFailures.size())).refreshTaskConfigs(eq(TASK1), anyLong(), any());
+        verify(member, times(terminalFailures.size())).requestRejoin();
+        assertTrue(herder.requests.isEmpty());
+    }
+
+    @Test
+    public void testTaskConfigRefreshStopsRetryingAndRequestsRejoin() throws Exception {
+        herder.assignment = mock(ExtendedAssignment.class);
+        when(herder.assignment.offset()).thenReturn(1L);
+        when(herder.assignment.tasks()).thenReturn(List.of(TASK1));
+        @SuppressWarnings("unchecked")
+        ArgumentCaptor<Callback<Void>> callback = ArgumentCaptor.forClass(Callback.class);
+        doNothing().when(herder).refreshTaskConfigs(eq(TASK1), eq(1L), callback.capture());
+
+        herder.requestTaskConfigRefresh(TASK1);
+        for (int attempt = 0; attempt <= TaskConfigRefreshRecovery.MAX_RETRIES; attempt++) {
+            callback.getAllValues().get(attempt).onCompletion(new ConnectException("Transient failure"), null);
+            DistributedHerder.DistributedHerderRequest request = herder.requests.pollFirst();
+            assertNotNull(request);
+            request.action().call();
+        }
+
+        verify(herder, times(TaskConfigRefreshRecovery.MAX_RETRIES + 1))
+                .refreshTaskConfigs(eq(TASK1), eq(1L), any());
+        ArgumentCaptor<Long> retryDelay = ArgumentCaptor.forClass(Long.class);
+        verify(herder, times(TaskConfigRefreshRecovery.MAX_RETRIES + 1))
+                .addRequest(retryDelay.capture(), any(), any());
+        assertTrue(retryDelay.getAllValues().contains(DistributedHerder.RECONFIGURE_CONNECTOR_TASKS_BACKOFF_MAX_MS));
+        verify(member).requestRejoin();
+        assertTrue(herder.requests.isEmpty());
+
+        herder.requestTaskConfigRefresh(TASK1);
+        verify(herder, times(TaskConfigRefreshRecovery.MAX_RETRIES + 1))
+                .refreshTaskConfigs(eq(TASK1), eq(1L), any());
+    }
+
+    @Test
     public void testFailedToWriteSessionKey() {
         // First tick -- after joining the group, we try to write a new
         // session key to the config topic, and fail
@@ -3391,12 +3721,6 @@ public class DistributedHerderTest {
             time.milliseconds(),
             new ConnectRestException(FORBIDDEN.getStatusCode(), "")
         ));
-    }
-
-    @Test
-    public void testInconsistentConfigs() {
-        // FIXME: if we have inconsistent configs, we need to request forced reconfig + write of the connector's task configs
-        // This requires inter-worker communication, so needs the REST API
     }
 
     @Test

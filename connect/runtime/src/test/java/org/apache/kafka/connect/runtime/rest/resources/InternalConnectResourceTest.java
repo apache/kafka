@@ -70,6 +70,8 @@ public class InternalConnectResourceTest {
     }
     private static final String FENCE_PATH = "/connectors/" + CONNECTOR_NAME + "/fence";
     private static final String TASK_CONFIGS_PATH = "/connectors/" + CONNECTOR_NAME + "/tasks";
+    private static final String REFRESH_TASK_CONFIGS_PATH = TASK_CONFIGS_PATH + "/refresh";
+    private static final long EXPECTED_CONFIG_OFFSET = 42L;
     private static final RestRequestTimeout REST_REQUEST_TIMEOUT = RestRequestTimeout.constant(
             RestServer.DEFAULT_REST_REQUEST_TIMEOUT_MS,
             RestServer.DEFAULT_HEALTH_CHECK_TIMEOUT_MS
@@ -154,6 +156,59 @@ public class InternalConnectResourceTest {
 
         assertThrows(NotFoundException.class, () -> internalResource.putTaskConfigs(CONNECTOR_NAME, NULL_HEADERS,
                 FORWARD, serializeAsBytes(TASK_CONFIGS)));
+    }
+
+    @Test
+    public void testRefreshConnectorTaskConfigsNoInternalRequestSignature() throws Throwable {
+        @SuppressWarnings("unchecked")
+        final ArgumentCaptor<Callback<Void>> cb = ArgumentCaptor.forClass(Callback.class);
+        expectAndCallbackResult(cb, null).when(herder).refreshTaskConfigs(
+                eq(CONNECTOR_NAME),
+                eq(EXPECTED_CONFIG_OFFSET),
+                cb.capture(),
+                isNull()
+        );
+        expectRequestPath(REFRESH_TASK_CONFIGS_PATH);
+
+        internalResource.refreshTaskConfigs(
+                CONNECTOR_NAME,
+                NULL_HEADERS,
+                FORWARD,
+                serializeAsBytes(EXPECTED_CONFIG_OFFSET)
+        );
+    }
+
+    @Test
+    public void testRefreshConnectorTaskConfigsWithInternalRequestSignature() throws Throwable {
+        final String signatureAlgorithm = "HmacSHA256";
+        final String encodedSignature = "Kv1/OSsxzdVIwvZ4e30avyRIVrngDfhzVUm/kAZEKc4=";
+
+        @SuppressWarnings("unchecked")
+        final ArgumentCaptor<Callback<Void>> cb = ArgumentCaptor.forClass(Callback.class);
+        final ArgumentCaptor<InternalRequestSignature> signatureCapture = ArgumentCaptor.forClass(InternalRequestSignature.class);
+        expectAndCallbackResult(cb, null).when(herder).refreshTaskConfigs(
+                eq(CONNECTOR_NAME),
+                eq(EXPECTED_CONFIG_OFFSET),
+                cb.capture(),
+                signatureCapture.capture()
+        );
+
+        HttpHeaders headers = mock(HttpHeaders.class);
+        when(headers.getHeaderString(InternalRequestSignature.SIGNATURE_ALGORITHM_HEADER))
+                .thenReturn(signatureAlgorithm);
+        when(headers.getHeaderString(InternalRequestSignature.SIGNATURE_HEADER))
+                .thenReturn(encodedSignature);
+        expectRequestPath(REFRESH_TASK_CONFIGS_PATH);
+
+        byte[] requestBody = serializeAsBytes(EXPECTED_CONFIG_OFFSET);
+        internalResource.refreshTaskConfigs(CONNECTOR_NAME, headers, FORWARD, requestBody);
+
+        InternalRequestSignature expectedSignature = new InternalRequestSignature(
+                requestBody,
+                Mac.getInstance(signatureAlgorithm),
+                Base64.getDecoder().decode(encodedSignature)
+        );
+        assertEquals(expectedSignature, signatureCapture.getValue());
     }
 
     @Test
