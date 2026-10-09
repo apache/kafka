@@ -40,8 +40,11 @@ import org.junit.jupiter.api.Test;
 import java.util.ArrayList;
 import java.util.Collection;
 import java.util.List;
+import java.util.Map;
 import java.util.Optional;
 import java.util.Set;
+import java.util.concurrent.CompletableFuture;
+import java.util.concurrent.TimeUnit;
 import java.util.concurrent.atomic.AtomicBoolean;
 import java.util.function.LongSupplier;
 import java.util.function.Predicate;
@@ -643,6 +646,39 @@ public class SubscriptionStateTest {
         state.updatePreferredReadReplica(tp0, 44, () -> 30L);
         TestUtils.assertOptional(state.preferredReadReplica(tp0, 30L),  value -> assertEquals(44, value.intValue()));
         assertFalse(state.preferredReadReplica(tp0, 31L).isPresent());
+    }
+
+    @Test
+    public void testSeekUnvalidatedWaitsForConsumedOffsetsSnapshot() throws Exception {
+        state.assignFromUser(Set.of(tp0));
+        CompletableFuture<Void> seekCompleted = new CompletableFuture<>();
+        Thread initializer = new Thread(() -> {
+            try {
+                state.seekUnvalidated(tp0, new SubscriptionState.FetchPosition(100));
+                seekCompleted.complete(null);
+            } catch (Throwable t) {
+                seekCompleted.completeExceptionally(t);
+            }
+        }, "offset-initialization");
+
+        try {
+            synchronized (state) {
+                initializer.start();
+                // Wait until the writer reaches the lock, or completes incorrectly without taking it.
+                TestUtils.waitForCondition(
+                    () -> initializer.getState() == Thread.State.BLOCKED || seekCompleted.isDone(),
+                    10_000, "Offset initialization did not reach the snapshot lock");
+                assertFalse(seekCompleted.isDone(),
+                    "Offset initialization must wait for the SubscriptionState snapshot lock");
+                assertTrue(state.allConsumed().isEmpty());
+            }
+
+            seekCompleted.get(10, TimeUnit.SECONDS);
+            assertEquals(Map.of(tp0, new OffsetAndMetadata(100)), state.allConsumed());
+        } finally {
+            initializer.join(TimeUnit.SECONDS.toMillis(10));
+            assertFalse(initializer.isAlive(), "Offset initialization thread did not terminate");
+        }
     }
 
     @Test

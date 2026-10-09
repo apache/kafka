@@ -33,6 +33,7 @@ import org.apache.kafka.clients.consumer.OffsetCommitCallback;
 import org.apache.kafka.clients.consumer.SubscriptionPattern;
 import org.apache.kafka.clients.consumer.internals.events.ApplicationEvent;
 import org.apache.kafka.clients.consumer.internals.events.ApplicationEventHandler;
+import org.apache.kafka.clients.consumer.internals.events.ApplicationEventProcessor;
 import org.apache.kafka.clients.consumer.internals.events.ApplyAssignmentEvent;
 import org.apache.kafka.clients.consumer.internals.events.AssignmentChangeEvent;
 import org.apache.kafka.clients.consumer.internals.events.AsyncCommitEvent;
@@ -69,6 +70,7 @@ import org.apache.kafka.common.Metric;
 import org.apache.kafka.common.Node;
 import org.apache.kafka.common.TopicPartition;
 import org.apache.kafka.common.Uuid;
+import org.apache.kafka.common.compress.Compression;
 import org.apache.kafka.common.config.ConfigException;
 import org.apache.kafka.common.errors.GroupAuthorizationException;
 import org.apache.kafka.common.errors.InterruptException;
@@ -78,9 +80,13 @@ import org.apache.kafka.common.errors.UnsupportedVersionException;
 import org.apache.kafka.common.errors.WakeupException;
 import org.apache.kafka.common.internals.ClusterResourceListeners;
 import org.apache.kafka.common.message.ConsumerGroupHeartbeatResponseData;
+import org.apache.kafka.common.message.FetchResponseData;
+import org.apache.kafka.common.message.OffsetCommitRequestData;
 import org.apache.kafka.common.metrics.Metrics;
 import org.apache.kafka.common.protocol.ApiKeys;
 import org.apache.kafka.common.protocol.Errors;
+import org.apache.kafka.common.record.internal.MemoryRecords;
+import org.apache.kafka.common.record.internal.SimpleRecord;
 import org.apache.kafka.common.requests.ConsumerGroupHeartbeatResponse;
 import org.apache.kafka.common.requests.FindCoordinatorResponse;
 import org.apache.kafka.common.requests.JoinGroupRequest;
@@ -92,6 +98,7 @@ import org.apache.kafka.common.utils.LogCaptureAppender;
 import org.apache.kafka.common.utils.MockTime;
 import org.apache.kafka.common.utils.Time;
 import org.apache.kafka.common.utils.Timer;
+import org.apache.kafka.common.utils.internals.BufferSupplier;
 import org.apache.kafka.common.utils.internals.LogContext;
 import org.apache.kafka.test.MockConsumerInterceptor;
 import org.apache.kafka.test.TestUtils;
@@ -108,6 +115,7 @@ import org.mockito.ArgumentMatchers;
 import org.mockito.MockedStatic;
 import org.mockito.Mockito;
 
+import java.nio.charset.StandardCharsets;
 import java.time.Duration;
 import java.util.ArrayList;
 import java.util.Arrays;
@@ -157,6 +165,7 @@ import static org.junit.jupiter.api.Assertions.assertThrows;
 import static org.junit.jupiter.api.Assertions.assertTrue;
 import static org.junit.jupiter.api.Assertions.fail;
 import static org.mockito.ArgumentMatchers.any;
+import static org.mockito.ArgumentMatchers.anyLong;
 import static org.mockito.ArgumentMatchers.isA;
 import static org.mockito.Mockito.atLeast;
 import static org.mockito.Mockito.atLeastOnce;
@@ -259,6 +268,16 @@ public class AsyncKafkaConsumerTest {
         ConsumerInterceptors<String, String> interceptors,
         ConsumerRebalanceListenerInvoker rebalanceListenerInvoker,
         SubscriptionState subscriptions) {
+        return newConsumer(fetchBuffer, interceptors, rebalanceListenerInvoker, subscriptions, false, fetchCollector);
+    }
+
+    private AsyncKafkaConsumer<String, String> newConsumer(
+        FetchBuffer fetchBuffer,
+        ConsumerInterceptors<String, String> interceptors,
+        ConsumerRebalanceListenerInvoker rebalanceListenerInvoker,
+        SubscriptionState subscriptions,
+        boolean autoCommitEnabled,
+        FetchCollector<String, String> collector) {
         int requestTimeoutMs = 30000;
         int defaultApiTimeoutMs = 1000;
         return new AsyncKafkaConsumer<>(
@@ -266,7 +285,7 @@ public class AsyncKafkaConsumerTest {
             "client-id",
             new Deserializers<>(new StringDeserializer(), new StringDeserializer(), metrics),
             fetchBuffer,
-            fetchCollector,
+            collector,
             mock(FetchMetricsManager.class),
             mock(RebalanceCallbackMetricsManager.class),
             interceptors,
@@ -282,7 +301,7 @@ public class AsyncKafkaConsumerTest {
             requestTimeoutMs,
             defaultApiTimeoutMs,
             "group-id",
-            false,
+            autoCommitEnabled,
             new PositionsValidator(new LogContext(), time, subscriptions, metadata));
     }
 
@@ -805,6 +824,109 @@ public class AsyncKafkaConsumerTest {
         assertNotNull(capturedEvent.get(), "AsyncPollEvent should have been captured");
         assertFalse(capturedEvent.get().isReconciliationCheckComplete(), "Reconciliation check should still be incomplete");
         assertEquals(2, result.count(), "Expected records without waiting when no reconciliation is pending");
+    }
+
+    @ParameterizedTest
+    @ValueSource(booleans = {true, false})
+    public void testAutoCommitDoesNotIncludeRecordsReturnedByCurrentPoll(boolean autoCommitEnabled) {
+        LogContext logContext = new LogContext();
+        Properties props = requiredConsumerConfig();
+        props.put(ConsumerConfig.GROUP_ID_CONFIG, "group-id");
+        props.put(ConsumerConfig.ENABLE_AUTO_COMMIT_CONFIG, autoCommitEnabled);
+        props.put(ConsumerConfig.AUTO_COMMIT_INTERVAL_MS_CONFIG, 100);
+        ConsumerConfig config = new ConsumerConfig(props);
+        
+        TopicPartition tp = new TopicPartition("topic", 0);
+        SubscriptionState subscriptions = new SubscriptionState(logContext, AutoOffsetResetStrategy.NONE);
+        subscriptions.assignFromUser(singleton(tp));
+        subscriptions.seek(tp, 0);
+        doReturn(LeaderAndEpoch.noLeaderOrEpoch()).when(metadata).currentLeader(any());
+        doReturn(-1).when(metadata).updateVersion();
+
+        FetchBuffer fetchBuffer = new FetchBuffer(logContext);
+        FetchMetricsManager fetchMetricsManager = mock(FetchMetricsManager.class);
+        FetchCollector<String, String> collector = new FetchCollector<>(
+            logContext, metadata, subscriptions, new FetchConfig(config),
+            new Deserializers<>(new StringDeserializer(), new StringDeserializer(), metrics),
+            fetchMetricsManager, time);
+        consumer = newConsumer(fetchBuffer, new ConsumerInterceptors<>(Collections.emptyList(), metrics),
+            mock(ConsumerRebalanceListenerInvoker.class), subscriptions, autoCommitEnabled, collector);
+        completeCommitSyncApplicationEventSuccessfully();
+
+        CoordinatorRequestManager coordinator = mock(CoordinatorRequestManager.class);
+        when(coordinator.coordinator()).thenReturn(Optional.of(new Node(1, "localhost", 9092)));
+        CommitRequestManager commitManager = new CommitRequestManager(
+            time, logContext, subscriptions, config, coordinator,
+            mock(OffsetCommitCallbackInvoker.class), "group-id", Optional.empty(), metrics, metadata);
+        OffsetsRequestManager offsetsManager = mock(OffsetsRequestManager.class);
+        when(offsetsManager.updateFetchPositions(anyLong())).thenReturn(CompletableFuture.completedFuture(null));
+        FetchRequestManager fetchManager = mock(FetchRequestManager.class);
+        when(fetchManager.createFetchRequests()).thenReturn(CompletableFuture.completedFuture(null));
+        ApplicationEventProcessor processor = new ApplicationEventProcessor(
+            logContext,
+            new RequestManagers(logContext, offsetsManager, mock(TopicMetadataRequestManager.class), fetchManager,
+                Optional.of(coordinator), Optional.of(commitManager), Optional.empty(), Optional.empty(),
+                Optional.empty(), Optional.empty(), Optional.empty()),
+            metadata, subscriptions);
+
+        MemoryRecords records = MemoryRecords.withRecords(Compression.NONE,
+            new SimpleRecord("first".getBytes(StandardCharsets.UTF_8)),
+            new SimpleRecord("second".getBytes(StandardCharsets.UTF_8)));
+        fetchBuffer.add(new CompletedFetch(logContext.logger(CompletedFetch.class), subscriptions,
+            BufferSupplier.NO_CACHING, tp,
+            new FetchResponseData.PartitionData().setPartitionIndex(tp.partition()).setHighWatermark(2).setRecords(records),
+            new FetchMetricsAggregator(fetchMetricsManager, singleton(tp)), 0L));
+
+        time.sleep(100);
+        // Leave the poll event queued until actual record collection has advanced the position.
+        ConsumerRecords<String, String> returned = consumer.poll(Duration.ZERO);
+        assertEquals(2, returned.count());
+        assertEquals(0, returned.records(tp).get(0).offset());
+        assertEquals(2, subscriptions.position(tp).offset);
+        
+        ArgumentCaptor<AsyncPollEvent> eventCaptor = ArgumentCaptor.forClass(AsyncPollEvent.class);
+        verify(applicationEventHandler).add(eventCaptor.capture());
+        AsyncPollEvent event = eventCaptor.getValue();
+        assertFalse(event.isComplete());
+        assertEquals(autoCommitEnabled, event.offsetsToCommitSnapshot().isPresent());
+
+        processor.process(event);
+        assertTrue(event.isComplete());
+        List<NetworkClientDelegate.UnsentRequest> requests = commitManager.poll(time.milliseconds()).unsentRequests;
+        if (autoCommitEnabled) {
+            assertEquals(1, requests.size());
+            OffsetCommitRequestData request = (OffsetCommitRequestData) requests.get(0).requestBuilder().build().data();
+            OffsetCommitRequestData.OffsetCommitRequestTopic offsetCommitRequestTopic = request.topics().get(0);
+            assertEquals(tp.topic(), offsetCommitRequestTopic.name());
+            assertEquals(tp.partition(), offsetCommitRequestTopic.partitions().get(0).partitionIndex());
+            assertEquals(0, offsetCommitRequestTopic.partitions().get(0).committedOffset(),
+                "Auto-commit must not include the records returned by this poll");
+        } else {
+            assertTrue(requests.isEmpty());
+        }
+    }
+
+    @ParameterizedTest
+    @ValueSource(booleans = {true, false})
+    public void testPollSubmitsEventBeforePositionsAreInitialized(boolean autoCommitEnabled) {
+        Properties props = requiredConsumerConfig();
+        props.put(ConsumerConfig.GROUP_ID_CONFIG, "group-id");
+        props.put(ConsumerConfig.ENABLE_AUTO_COMMIT_CONFIG, autoCommitEnabled);
+        consumer = newConsumer(props);
+        completeCommitSyncApplicationEventSuccessfully();
+        SubscriptionState subscriptions = consumer.subscriptions();
+        subscriptions.assignFromUser(singleton(new TopicPartition("topic", 0)));
+
+        assertTrue(consumer.poll(Duration.ZERO).isEmpty());
+
+        ArgumentCaptor<AsyncPollEvent> eventCaptor = ArgumentCaptor.forClass(AsyncPollEvent.class);
+        verify(applicationEventHandler).add(eventCaptor.capture());
+        AsyncPollEvent event = eventCaptor.getValue();
+        assertEquals(autoCommitEnabled, event.offsetsToCommitSnapshot().isPresent());
+        if (autoCommitEnabled) {
+            assertEquals(subscriptions.assignmentId(), event.offsetsToCommitSnapshot().get().assignmentId());
+            assertTrue(event.offsetsToCommitSnapshot().get().offsetsToCommit().isEmpty());
+        }
     }
 
     @Test

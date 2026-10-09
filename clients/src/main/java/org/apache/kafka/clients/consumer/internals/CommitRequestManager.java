@@ -21,6 +21,7 @@ import org.apache.kafka.clients.consumer.CommitFailedException;
 import org.apache.kafka.clients.consumer.ConsumerConfig;
 import org.apache.kafka.clients.consumer.OffsetAndMetadata;
 import org.apache.kafka.clients.consumer.RetriableCommitFailedException;
+import org.apache.kafka.clients.consumer.internals.events.AsyncPollEventOffsetsToCommit;
 import org.apache.kafka.clients.consumer.internals.metrics.OffsetCommitMetricsManager;
 import org.apache.kafka.common.KafkaException;
 import org.apache.kafka.common.TopicPartition;
@@ -287,10 +288,12 @@ public class CommitRequestManager implements RequestManager, MemberStateListener
      * In that case, the next auto-commit request will be sent on the next call to poll, after a
      * response for the in-flight is received.
      */
-    private void maybeAutoCommitAsync() {
+    private void maybeAutoCommitAsync(Optional<Map<TopicPartition, OffsetAndMetadata>> offsets) {
         if (autoCommitEnabled() && autoCommitState.get().shouldAutoCommit()) {
             OffsetCommitRequestState requestState = createOffsetCommitRequest(
-                subscriptions.allConsumed(),
+                // For the AsyncPollEvent, offsets should be set.
+                // For the AssignmentChangeEvent, calling subscriptions.allConsumed() would be okay.
+                offsets.orElseGet(subscriptions::allConsumed),
                 Long.MAX_VALUE);
             CompletableFuture<Map<TopicPartition, OffsetAndMetadata>> result = requestAutoCommit(requestState);
             // Reset timer to the interval (even if no request was generated), but ensure that if
@@ -755,11 +758,26 @@ public class CommitRequestManager implements RequestManager, MemberStateListener
      *
      * @param currentTimeMs the current timestamp in millisecond
      * @see CommitRequestManager#updateAutoCommitTimer(long)
-     * @see CommitRequestManager#maybeAutoCommitAsync()
+     * @see CommitRequestManager#maybeAutoCommitAsync(Optional)
      */
     public void updateTimerAndMaybeCommit(final long currentTimeMs) {
         updateAutoCommitTimer(currentTimeMs);
-        maybeAutoCommitAsync();
+        maybeAutoCommitAsync(Optional.empty());
+    }
+
+    public void updateTimerAndMaybeCommit(final long currentTimeMs, Optional<AsyncPollEventOffsetsToCommit> snapshot) {
+        updateAutoCommitTimer(currentTimeMs);
+
+        if (snapshot.isEmpty()) {
+            return;
+        }
+
+        final AsyncPollEventOffsetsToCommit offsets = snapshot.get();
+        if (offsets.assignmentId() != subscriptions.assignmentId()) {
+            return;
+        }
+
+        maybeAutoCommitAsync(Optional.of(snapshot.get().offsetsToCommit()));
     }
 
     class OffsetCommitRequestState extends RetriableRequestState {
