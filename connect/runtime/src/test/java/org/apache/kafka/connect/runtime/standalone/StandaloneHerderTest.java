@@ -68,6 +68,7 @@ import org.junit.jupiter.api.AfterEach;
 import org.junit.jupiter.api.Test;
 import org.junit.jupiter.api.extension.ExtendWith;
 import org.mockito.ArgumentCaptor;
+import org.mockito.InOrder;
 import org.mockito.Mock;
 import org.mockito.junit.jupiter.MockitoExtension;
 import org.mockito.junit.jupiter.MockitoSettings;
@@ -91,19 +92,25 @@ import static org.apache.kafka.connect.runtime.TopicCreationConfig.REPLICATION_F
 import static org.junit.jupiter.api.Assertions.assertEquals;
 import static org.junit.jupiter.api.Assertions.assertInstanceOf;
 import static org.junit.jupiter.api.Assertions.assertNotNull;
+import static org.junit.jupiter.api.Assertions.assertSame;
 import static org.junit.jupiter.api.Assertions.assertThrows;
 import static org.junit.jupiter.api.Assertions.assertTrue;
 import static org.mockito.ArgumentMatchers.any;
+import static org.mockito.ArgumentMatchers.anyBoolean;
+import static org.mockito.ArgumentMatchers.anyMap;
 import static org.mockito.ArgumentMatchers.anyString;
 import static org.mockito.ArgumentMatchers.eq;
 import static org.mockito.Mockito.CALLS_REAL_METHODS;
 import static org.mockito.Mockito.doAnswer;
 import static org.mockito.Mockito.doNothing;
 import static org.mockito.Mockito.doReturn;
+import static org.mockito.Mockito.doThrow;
+import static org.mockito.Mockito.inOrder;
 import static org.mockito.Mockito.isNull;
 import static org.mockito.Mockito.mock;
 import static org.mockito.Mockito.never;
 import static org.mockito.Mockito.reset;
+import static org.mockito.Mockito.spy;
 import static org.mockito.Mockito.times;
 import static org.mockito.Mockito.verify;
 import static org.mockito.Mockito.verifyNoMoreInteractions;
@@ -257,13 +264,135 @@ public class StandaloneHerderTest {
         when(worker.isRunning(CONNECTOR_NAME)).thenReturn(true);
         when(herder.connectorType(any())).thenReturn(ConnectorType.SINK);
 
-        herder.putConnectorConfig(CONNECTOR_NAME, config, TargetState.STOPPED, false, createCallback);
+        herder.putConnectorConfig(CONNECTOR_NAME, config, TargetState.STOPPED, null, false, createCallback);
         Herder.Created<ConnectorInfo> connectorInfo = createCallback.get(WAIT_TIME_MS, TimeUnit.MILLISECONDS);
         assertEquals(
             new ConnectorInfo(CONNECTOR_NAME, connectorConfig(SourceSink.SINK), List.of(), ConnectorType.SINK),
             connectorInfo.result()
         );
         verify(loaderSwap).close();
+    }
+
+    @Test
+    public void testCreateConnectorWithInitialOffsets() throws Exception {
+        initialize(true);
+        Map<String, String> config = connectorConfig(SourceSink.SOURCE);
+        expectConfigValidation(SourceSink.SOURCE, config);
+        expectAdd(SourceSink.SOURCE);
+
+        Map<Map<String, ?>, Map<String, ?>> initialOffsets =
+            Map.of(Map.of("filename", "test.txt"), Map.of("position", 4096L));
+        String offsetsStatus = "The offsets for this connector have been set successfully";
+
+        // The worker writes the offsets asynchronously and completes the callback once they're durable
+        doAnswer(invocation -> {
+            invocation.getArgument(4, Callback.class).onCompletion(null, new Message(offsetsStatus));
+            return null;
+        }).when(worker).modifyConnectorOffsets(eq(CONNECTOR_NAME), eq(config), eq(initialOffsets), eq(true), any());
+
+        herder.putConnectorConfig(CONNECTOR_NAME, config, null, initialOffsets, false, createCallback);
+        Herder.Created<ConnectorInfo> connectorInfo = createCallback.get(WAIT_TIME_MS, TimeUnit.MILLISECONDS);
+
+        // The offsets must be written before the connector is started, otherwise a running connector could read from
+        // the wrong position before its initial offsets land
+        InOrder inOrder = inOrder(worker);
+        inOrder.verify(worker).modifyConnectorOffsets(eq(CONNECTOR_NAME), eq(config), eq(initialOffsets), eq(true), any());
+        inOrder.verify(worker).startConnector(eq(CONNECTOR_NAME), eq(config), any(), eq(herder), eq(TargetState.STARTED), any());
+
+        assertEquals(createdInfo(SourceSink.SOURCE).withOffsetsStatus(offsetsStatus), connectorInfo.result());
+    }
+
+    @Test
+    public void testCreateConnectorWithInitialOffsetsNullOffsetValue() {
+        initialize(false);
+        Map<String, String> config = connectorConfig(SourceSink.SOURCE);
+        expectConfigValidation(SourceSink.SOURCE, config);
+
+        // A null offset value is meaningless on create (the wipe has already removed every partition) and is rejected
+        // before anything destructive happens
+        Map<Map<String, ?>, Map<String, ?>> initialOffsets = new HashMap<>();
+        initialOffsets.put(Map.of("filename", "test.txt"), null);
+
+        herder.putConnectorConfig(CONNECTOR_NAME, config, null, initialOffsets, false, createCallback);
+
+        ExecutionException e = assertThrows(ExecutionException.class,
+            () -> createCallback.get(WAIT_TIME_MS, TimeUnit.MILLISECONDS));
+        assertInstanceOf(BadRequestException.class, e.getCause());
+
+        // Neither the offsets nor the config may be touched by a request that failed validation
+        verify(worker, never()).modifyConnectorOffsets(anyString(), anyMap(), anyMap(), anyBoolean(), any());
+    }
+
+    @Test
+    public void testCreateConnectorWithInitialOffsetsOffsetsWriteFails() {
+        initialize(false);
+        Map<String, String> config = connectorConfig(SourceSink.SOURCE);
+        expectConfigValidation(SourceSink.SOURCE, config);
+
+        Map<Map<String, ?>, Map<String, ?>> initialOffsets =
+            Map.of(Map.of("filename", "test.txt"), Map.of("position", 4096L));
+
+        ConnectException offsetsError = new ConnectException("Test exception");
+        doAnswer(invocation -> {
+            invocation.getArgument(4, Callback.class).onCompletion(offsetsError, null);
+            return null;
+        }).when(worker).modifyConnectorOffsets(eq(CONNECTOR_NAME), eq(config), eq(initialOffsets), eq(true), any());
+
+        herder.putConnectorConfig(CONNECTOR_NAME, config, null, initialOffsets, false, createCallback);
+
+        ExecutionException e = assertThrows(ExecutionException.class,
+            () -> createCallback.get(WAIT_TIME_MS, TimeUnit.MILLISECONDS));
+        assertSame(offsetsError, e.getCause());
+
+        // The connector is not created if its initial offsets could not be written
+        verify(worker).modifyConnectorOffsets(eq(CONNECTOR_NAME), eq(config), eq(initialOffsets), eq(true), any());
+        verify(worker, never()).startConnector(any(), any(), any(), any(), any(), any());
+    }
+
+    @Test
+    public void testCreateConnectorWithInitialOffsetsConfigWriteFails() {
+        // A spied config store, so that the config write can be made to fail
+        MemoryConfigBackingStore configStore = spy(new MemoryConfigBackingStore(transformer));
+        when(worker.getPlugins()).thenReturn(plugins);
+        when(worker.metrics()).thenReturn(new MockConnectMetrics());
+        herder = mock(StandaloneHerder.class, withSettings()
+            .useConstructor(worker, WORKER_ID, KAFKA_CLUSTER_ID, statusBackingStore, configStore, noneConnectorClientConfigOverridePolicy, new MockTime())
+            .defaultAnswer(CALLS_REAL_METHODS));
+        verify(worker).getPlugins();
+        createCallback = new FutureCallback<>();
+
+        Map<String, String> config = connectorConfig(SourceSink.SOURCE);
+        expectConfigValidation(SourceSink.SOURCE, config);
+
+        Map<Map<String, ?>, Map<String, ?>> initialOffsets =
+            Map.of(Map.of("filename", "test.txt"), Map.of("position", 4096L));
+
+        doAnswer(invocation -> {
+            invocation.getArgument(4, Callback.class).onCompletion(null, new Message("The offsets for this connector have been set successfully"));
+            return null;
+        }).when(worker).modifyConnectorOffsets(eq(CONNECTOR_NAME), eq(config), eq(initialOffsets), eq(true), any());
+
+        // The offsets land, but the config write then fails
+        ConnectException configWriteError = new ConnectException("Test exception");
+        doThrow(configWriteError).when(configStore).putConnectorConfig(eq(CONNECTOR_NAME), eq(config), any());
+
+        // The offsets written in the previous step are wiped as cleanup
+        doAnswer(invocation -> {
+            invocation.getArgument(3, Callback.class).onCompletion(null, new Message("The offsets for this connector have been reset successfully"));
+            return null;
+        }).when(worker).modifyConnectorOffsets(eq(CONNECTOR_NAME), eq(config), isNull(), any());
+
+        herder.putConnectorConfig(CONNECTOR_NAME, config, null, initialOffsets, false, createCallback);
+
+        // The caller sees the original config-write failure, not the outcome of the cleanup
+        ExecutionException e = assertThrows(ExecutionException.class,
+            () -> createCallback.get(WAIT_TIME_MS, TimeUnit.MILLISECONDS));
+        assertSame(configWriteError, e.getCause());
+
+        InOrder inOrder = inOrder(worker);
+        inOrder.verify(worker).modifyConnectorOffsets(eq(CONNECTOR_NAME), eq(config), eq(initialOffsets), eq(true), any());
+        inOrder.verify(worker).modifyConnectorOffsets(eq(CONNECTOR_NAME), eq(config), isNull(), any());
+        verify(worker, never()).startConnector(any(), any(), any(), any(), any(), any());
     }
 
     @Test

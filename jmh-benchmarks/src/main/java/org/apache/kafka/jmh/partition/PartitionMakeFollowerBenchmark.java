@@ -19,7 +19,6 @@ package org.apache.kafka.jmh.partition;
 
 import kafka.cluster.DelayedOperations;
 import kafka.cluster.Partition;
-import kafka.server.builders.LogManagerBuilder;
 
 import org.apache.kafka.common.DirectoryId;
 import org.apache.kafka.common.TopicPartition;
@@ -33,14 +32,17 @@ import org.apache.kafka.metadata.LeaderRecoveryState;
 import org.apache.kafka.metadata.MetadataCache;
 import org.apache.kafka.metadata.MockConfigRepository;
 import org.apache.kafka.metadata.PartitionRegistration;
+import org.apache.kafka.server.config.ServerLogConfigs;
 import org.apache.kafka.server.partition.AlterPartitionListener;
 import org.apache.kafka.server.partition.AlterPartitionManager;
 import org.apache.kafka.server.util.KafkaScheduler;
 import org.apache.kafka.storage.internals.checkpoint.OffsetCheckpoints;
 import org.apache.kafka.storage.internals.log.CleanerConfig;
+import org.apache.kafka.storage.internals.log.LogCleaner;
 import org.apache.kafka.storage.internals.log.LogConfig;
 import org.apache.kafka.storage.internals.log.LogDirFailureChannel;
 import org.apache.kafka.storage.internals.log.LogManager;
+import org.apache.kafka.storage.internals.log.ProducerStateManagerConfig;
 import org.apache.kafka.storage.log.metrics.BrokerTopicStats;
 
 import org.mockito.Mockito;
@@ -98,23 +100,26 @@ public class PartitionMakeFollowerBenchmark {
 
         BrokerTopicStats brokerTopicStats = new BrokerTopicStats(false);
         LogDirFailureChannel logDirFailureChannel = Mockito.mock(LogDirFailureChannel.class);
-        logManager = new LogManagerBuilder().
-            setLogDirs(List.of(logDir)).
-            setInitialOfflineDirs(List.of()).
-            setConfigRepository(new MockConfigRepository()).
-            setInitialDefaultConfig(logConfig).
-            setCleanerConfig(new CleanerConfig(0, 0, 0, 0, 0, 0.0, 0, false)).
-            setRecoveryThreadsPerDataDir(1).
-            setFlushCheckMs(1000L).
-            setFlushRecoveryOffsetCheckpointMs(10000L).
-            setFlushStartOffsetCheckpointMs(10000L).
-            setRetentionCheckMs(1000L).
-            setProducerStateManagerConfig(60000, false).
-            setScheduler(scheduler).
-            setBrokerTopicStats(brokerTopicStats).
-            setLogDirFailureChannel(logDirFailureChannel).
-            setTime(Time.SYSTEM).
-            build();
+        logManager = new LogManager(List.of(logDir),
+            List.of(),
+            new MockConfigRepository(),
+            logConfig,
+            new CleanerConfig(0, 0, 0, 0, 0, 0.0, 0, false),
+            1,
+            1000L,
+            10000L,
+            10000L,
+            1000L,
+            15 * 60 * 1000,
+            new ProducerStateManagerConfig(60000, false),
+            600000,
+            scheduler,
+            brokerTopicStats,
+            logDirFailureChannel,
+            Time.SYSTEM,
+            false,
+            ServerLogConfigs.LOG_INITIAL_TASK_DELAY_MS_DEFAULT,
+            LogCleaner::new);
 
         TopicPartition tp = new TopicPartition("topic", 0);
         topicId = OptionConverters.toScala(Optional.of(Uuid.randomUuid()));
