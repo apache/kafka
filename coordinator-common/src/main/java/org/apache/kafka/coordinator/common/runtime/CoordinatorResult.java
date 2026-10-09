@@ -24,10 +24,13 @@ import java.util.concurrent.CompletableFuture;
  * The result of an operation applied to a state machine. The result
  * contains a list of records and a response.
  *
+ * This is the terminal case of {@link CoordinatorOperationResult}: it is the only
+ * case that may carry a response or an append future.
+ *
  * @param <T> The type of the response.
  * @param <U> The type of the record.
  */
-public class CoordinatorResult<T, U> {
+public final class CoordinatorResult<T, U> implements CoordinatorOperationResult<T, U> {
     /**
      * The records.
      */
@@ -150,6 +153,7 @@ public class CoordinatorResult<T, U> {
     /**
      * @return The list of records.
      */
+    @Override
     public List<U> records() {
         return records;
     }

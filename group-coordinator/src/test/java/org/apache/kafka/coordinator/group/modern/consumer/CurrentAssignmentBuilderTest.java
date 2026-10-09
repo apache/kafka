@@ -848,7 +848,7 @@ public class CurrentAssignmentBuilderTest {
             .withTargetAssignment(targetAssignmentEpoch, new Assignment(mkAssignment(
                 mkTopicAssignment(topicId1, 1, 2, 3),
                 mkTopicAssignment(topicId2, 4, 5, 6))))
-            .withHasSubscriptionChanged(hasSubscriptionChanged)
+            .withEnforceSubscriptionConsistency(hasSubscriptionChanged)
             .withCurrentPartitionEpoch((topicId, partitionId) -> -1)
             .withOwnedTopicPartitions(Arrays.asList(
                 new ConsumerGroupHeartbeatRequestData.TopicPartitions()
@@ -911,7 +911,7 @@ public class CurrentAssignmentBuilderTest {
             .withTargetAssignment(targetAssignmentEpoch, new Assignment(mkAssignment(
                 mkTopicAssignment(topicId1, 1, 2, 3),
                 mkTopicAssignment(topicId2, 4, 5, 6))))
-            .withHasSubscriptionChanged(hasSubscriptionChanged)
+            .withEnforceSubscriptionConsistency(hasSubscriptionChanged)
             .withCurrentPartitionEpoch((topicId, partitionId) -> -1)
             .withOwnedTopicPartitions(Arrays.asList(
                 new ConsumerGroupHeartbeatRequestData.TopicPartitions()
@@ -968,7 +968,7 @@ public class CurrentAssignmentBuilderTest {
             .withTargetAssignment(12, new Assignment(mkAssignment(
                 mkTopicAssignment(topicId1, 1, 3, 4),
                 mkTopicAssignment(topicId2, 6, 7))))
-            .withHasSubscriptionChanged(true)
+            .withEnforceSubscriptionConsistency(true)
             .withCurrentPartitionEpoch((topicId, partitionId) -> -1)
             .withOwnedTopicPartitions(Arrays.asList(
                 new ConsumerGroupHeartbeatRequestData.TopicPartitions()
@@ -1023,7 +1023,7 @@ public class CurrentAssignmentBuilderTest {
             .withTargetAssignment(10, new Assignment(mkAssignment(
                 mkTopicAssignment(fooTopicId, 1, 2, 3),
                 mkTopicAssignment(barTopicId, 4, 5, 6))))
-            .withHasSubscriptionChanged(true)
+            .withEnforceSubscriptionConsistency(true)
             .withResolvedRegularExpressions(Map.of())
             .withCurrentPartitionEpoch((topicId, partitionId) -> -1)
             .withOwnedTopicPartitions(Arrays.asList(
@@ -1079,7 +1079,7 @@ public class CurrentAssignmentBuilderTest {
             .withTargetAssignment(10, new Assignment(mkAssignment(
                 mkTopicAssignment(fooTopicId, 1, 2, 3),
                 mkTopicAssignment(barTopicId, 4, 5, 6))))
-            .withHasSubscriptionChanged(true)
+            .withEnforceSubscriptionConsistency(true)
             .withResolvedRegularExpressions(Map.of())
             .withCurrentPartitionEpoch((topicId, partitionId) -> -1)
             .withOwnedTopicPartitions(Arrays.asList(
@@ -1135,7 +1135,7 @@ public class CurrentAssignmentBuilderTest {
             .withTargetAssignment(10, new Assignment(mkAssignment(
                 mkTopicAssignment(fooTopicId, 1, 2, 3),
                 mkTopicAssignment(barTopicId, 4, 5, 6))))
-            .withHasSubscriptionChanged(true)
+            .withEnforceSubscriptionConsistency(true)
             .withResolvedRegularExpressions(Map.of(
                 "bar*", new ResolvedRegularExpression(
                     Set.of("bar"),
@@ -1165,6 +1165,212 @@ public class CurrentAssignmentBuilderTest {
                     mkTopicAssignment(barTopicId, 4, 5, 6)), 10))
                 .build(),
             updatedMember
+        );
+    }
+
+    @Test
+    public void testAssignmentIsSubscriptionConsistentWithEmptyAssignment() {
+        ConsumerGroupMember member = new ConsumerGroupMember.Builder("member")
+            .setState(MemberState.STABLE)
+            .setMemberEpoch(10)
+            .setPreviousMemberEpoch(10)
+            .setSubscribedTopicNames(List.of("foo"))
+            .build();
+
+        assertEquals(
+            true,
+            CurrentAssignmentBuilder.assignmentIsSubscriptionConsistent(
+                member,
+                Map.of(),
+                CoordinatorMetadataImage.EMPTY
+            )
+        );
+    }
+
+    @Test
+    public void testAssignmentIsSubscriptionConsistentWithSubscribedTopicNames() {
+        String fooTopic = "foo";
+        String barTopic = "bar";
+        Uuid fooTopicId = Uuid.randomUuid();
+        Uuid barTopicId = Uuid.randomUuid();
+
+        CoordinatorMetadataImage metadataImage = new MetadataImageBuilder()
+            .addTopic(fooTopicId, fooTopic, 10)
+            .addTopic(barTopicId, barTopic, 10)
+            .buildCoordinatorMetadataImage();
+
+        ConsumerGroupMember member = new ConsumerGroupMember.Builder("member")
+            .setState(MemberState.STABLE)
+            .setMemberEpoch(10)
+            .setPreviousMemberEpoch(10)
+            .setSubscribedTopicNames(List.of(fooTopic, barTopic))
+            .setAssignedPartitions(toAssignmentWithEpochs(mkAssignment(
+                mkTopicAssignment(fooTopicId, 1, 2, 3),
+                mkTopicAssignment(barTopicId, 4, 5, 6)), 10))
+            .build();
+
+        assertEquals(
+            true,
+            CurrentAssignmentBuilder.assignmentIsSubscriptionConsistent(
+                member,
+                Map.of(),
+                metadataImage
+            )
+        );
+    }
+
+    @Test
+    public void testAssignmentIsSubscriptionConsistentWithTopicNoLongerSubscribed() {
+        String fooTopic = "foo";
+        String barTopic = "bar";
+        Uuid fooTopicId = Uuid.randomUuid();
+        Uuid barTopicId = Uuid.randomUuid();
+
+        CoordinatorMetadataImage metadataImage = new MetadataImageBuilder()
+            .addTopic(fooTopicId, fooTopic, 10)
+            .addTopic(barTopicId, barTopic, 10)
+            .buildCoordinatorMetadataImage();
+
+        // The member is still assigned topic "bar" but is no longer subscribed to it.
+        ConsumerGroupMember member = new ConsumerGroupMember.Builder("member")
+            .setState(MemberState.STABLE)
+            .setMemberEpoch(10)
+            .setPreviousMemberEpoch(10)
+            .setSubscribedTopicNames(List.of(fooTopic))
+            .setAssignedPartitions(toAssignmentWithEpochs(mkAssignment(
+                mkTopicAssignment(fooTopicId, 1, 2, 3),
+                mkTopicAssignment(barTopicId, 4, 5, 6)), 10))
+            .build();
+
+        assertEquals(
+            false,
+            CurrentAssignmentBuilder.assignmentIsSubscriptionConsistent(
+                member,
+                Map.of(),
+                metadataImage
+            )
+        );
+    }
+
+    @Test
+    public void testAssignmentIsSubscriptionConsistentWithResolvedRegularExpression() {
+        String fooTopic = "foo";
+        Uuid fooTopicId = Uuid.randomUuid();
+
+        CoordinatorMetadataImage metadataImage = new MetadataImageBuilder()
+            .addTopic(fooTopicId, fooTopic, 10)
+            .buildCoordinatorMetadataImage();
+
+        ConsumerGroupMember member = new ConsumerGroupMember.Builder("member")
+            .setState(MemberState.STABLE)
+            .setMemberEpoch(10)
+            .setPreviousMemberEpoch(10)
+            .setSubscribedTopicRegex("foo*")
+            .setAssignedPartitions(toAssignmentWithEpochs(mkAssignment(
+                mkTopicAssignment(fooTopicId, 1, 2, 3)), 10))
+            .build();
+
+        assertEquals(
+            true,
+            CurrentAssignmentBuilder.assignmentIsSubscriptionConsistent(
+                member,
+                Map.of("foo*", new ResolvedRegularExpression(Set.of(fooTopic), 12345L, 0L)),
+                metadataImage
+            )
+        );
+    }
+
+    @Test
+    public void testAssignmentIsSubscriptionConsistentWithUnresolvedRegularExpressionDoesNotThrow() {
+        String fooTopic = "foo";
+        Uuid fooTopicId = Uuid.randomUuid();
+
+        CoordinatorMetadataImage metadataImage = new MetadataImageBuilder()
+            .addTopic(fooTopicId, fooTopic, 10)
+            .buildCoordinatorMetadataImage();
+
+        ConsumerGroupMember member = new ConsumerGroupMember.Builder("member")
+            .setState(MemberState.STABLE)
+            .setMemberEpoch(10)
+            .setPreviousMemberEpoch(10)
+            .setSubscribedTopicRegex("foo*")
+            .setAssignedPartitions(toAssignmentWithEpochs(mkAssignment(
+                mkTopicAssignment(fooTopicId, 1, 2, 3)), 10))
+            .build();
+
+        // The regex is not resolved yet: it must be treated as matching no topics (conservative),
+        // not throw, exactly like subscribedTopicIds() already does.
+        assertEquals(
+            false,
+            CurrentAssignmentBuilder.assignmentIsSubscriptionConsistent(
+                member,
+                Map.of(),
+                metadataImage
+            )
+        );
+    }
+
+    @Test
+    public void testAssignmentIsSubscriptionConsistentWithDeletedTopic() {
+        String fooTopic = "foo";
+        Uuid fooTopicId = Uuid.randomUuid();
+        Uuid deletedTopicId = Uuid.randomUuid();
+
+        CoordinatorMetadataImage metadataImage = new MetadataImageBuilder()
+            .addTopic(fooTopicId, fooTopic, 10)
+            .buildCoordinatorMetadataImage();
+
+        ConsumerGroupMember member = new ConsumerGroupMember.Builder("member")
+            .setState(MemberState.STABLE)
+            .setMemberEpoch(10)
+            .setPreviousMemberEpoch(10)
+            .setSubscribedTopicNames(List.of(fooTopic))
+            .setAssignedPartitions(toAssignmentWithEpochs(mkAssignment(
+                mkTopicAssignment(fooTopicId, 1, 2, 3),
+                mkTopicAssignment(deletedTopicId, 4, 5, 6)), 10))
+            .build();
+
+        assertEquals(
+            false,
+            CurrentAssignmentBuilder.assignmentIsSubscriptionConsistent(
+                member,
+                Map.of(),
+                metadataImage
+            )
+        );
+    }
+
+    @Test
+    public void testAssignmentIsSubscriptionConsistentWithMixedNamesAndRegex() {
+        String fooTopic = "foo";
+        String barTopic = "bar";
+        Uuid fooTopicId = Uuid.randomUuid();
+        Uuid barTopicId = Uuid.randomUuid();
+
+        CoordinatorMetadataImage metadataImage = new MetadataImageBuilder()
+            .addTopic(fooTopicId, fooTopic, 10)
+            .addTopic(barTopicId, barTopic, 10)
+            .buildCoordinatorMetadataImage();
+
+        // foo is subscribed by name, bar is only covered by the resolved regex.
+        ConsumerGroupMember member = new ConsumerGroupMember.Builder("member")
+            .setState(MemberState.STABLE)
+            .setMemberEpoch(10)
+            .setPreviousMemberEpoch(10)
+            .setSubscribedTopicNames(List.of(fooTopic))
+            .setSubscribedTopicRegex("bar*")
+            .setAssignedPartitions(toAssignmentWithEpochs(mkAssignment(
+                mkTopicAssignment(fooTopicId, 1, 2, 3),
+                mkTopicAssignment(barTopicId, 4, 5, 6)), 10))
+            .build();
+
+        assertEquals(
+            true,
+            CurrentAssignmentBuilder.assignmentIsSubscriptionConsistent(
+                member,
+                Map.of("bar*", new ResolvedRegularExpression(Set.of(barTopic), 12345L, 0L)),
+                metadataImage
+            )
         );
     }
 }
