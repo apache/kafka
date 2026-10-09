@@ -27,8 +27,10 @@ import org.apache.kafka.common.utils.internals.ByteUtils;
 import org.junit.jupiter.api.Test;
 
 import java.nio.ByteBuffer;
+import java.util.Arrays;
 
 import static org.junit.jupiter.api.Assertions.assertEquals;
+import static org.junit.jupiter.api.Assertions.assertFalse;
 import static org.junit.jupiter.api.Assertions.assertThrows;
 import static org.junit.jupiter.api.Assertions.assertTrue;
 import static org.mockito.ArgumentMatchers.any;
@@ -105,6 +107,74 @@ public class RequestHeaderTest {
     }
 
     @Test
+    public void testParseUnsupportedApiVersionOnlyReadsCommonHeaderFields() {
+        short apiVersion = (short) (ApiKeys.API_VERSIONS.latestVersion() + 1);
+        byte[] unknownField = unknownHeaderField();
+        ByteBuffer buffer = RequestTestUtils.serializeRequestHeaderPrefix(ApiKeys.API_VERSIONS, apiVersion, 123,
+            "client", unknownField);
+        int commonFieldsSize = buffer.remaining() - unknownField.length;
+
+        RequestHeader header = RequestHeader.parse(buffer);
+        assertEquals(ApiKeys.API_VERSIONS, header.apiKey());
+        assertEquals(apiVersion, header.apiVersion());
+        assertEquals(123, header.correlationId());
+        assertEquals("client", header.clientId());
+        assertFalse(header.isApiVersionSupported());
+        assertEquals(ApiKeys.API_VERSIONS.requestHeaderVersion(apiVersion), header.headerVersion());
+        // Only the common fields are consumed and the unknown bytes are left in the buffer.
+        assertEquals(commonFieldsSize, header.size());
+        assertEquals(commonFieldsSize, buffer.position());
+        assertEquals(unknownField.length, buffer.remaining());
+    }
+
+    @Test
+    public void testParseSupportedApiVersionRejectsInvalidTaggedFields() {
+        ByteBuffer buffer = RequestTestUtils.serializeRequestHeaderPrefix(ApiKeys.API_VERSIONS,
+            ApiKeys.API_VERSIONS.latestVersion(), 123, "client", unknownHeaderField());
+        assertThrows(InvalidRequestException.class, () -> RequestHeader.parse(buffer));
+    }
+
+    @Test
+    public void testParseUnsupportedApiVersionWithNullClientId() {
+        ByteBuffer buffer = RequestTestUtils.serializeRequestHeaderPrefix(ApiKeys.API_VERSIONS, Short.MAX_VALUE, 123,
+            null, new byte[0]);
+        RequestHeader header = RequestHeader.parse(buffer);
+        assertEquals("", header.clientId());
+        assertEquals(123, header.correlationId());
+        assertFalse(header.isApiVersionSupported());
+        assertEquals(0, buffer.remaining());
+    }
+
+    @Test
+    public void testParseUnsupportedVersionOfOtherApi() {
+        ByteBuffer buffer = RequestTestUtils.serializeRequestHeaderPrefix(ApiKeys.FETCH, Short.MAX_VALUE, 5, "client",
+            unknownHeaderField());
+        RequestHeader header = RequestHeader.parse(buffer);
+        assertEquals(ApiKeys.FETCH, header.apiKey());
+        assertEquals(Short.MAX_VALUE, header.apiVersion());
+        assertEquals(5, header.correlationId());
+        assertEquals("client", header.clientId());
+        assertFalse(header.isApiVersionSupported());
+    }
+
+    @Test
+    public void testParseUnsupportedApiVersionWithTruncatedClientId() {
+        ByteBuffer buffer = ByteBuffer.allocate(10);
+        buffer.putShort(ApiKeys.API_VERSIONS.id);
+        buffer.putShort(Short.MAX_VALUE);
+        buffer.putInt(123);
+        buffer.putShort((short) 100); // client id length larger than the remaining bytes
+        buffer.flip();
+        assertThrows(InvalidRequestException.class, () -> RequestHeader.parse(buffer));
+    }
+
+    private static byte[] unknownHeaderField() {
+        byte[] bytes = new byte[16];
+        Arrays.fill(bytes, (byte) 0xFF);
+        return bytes;
+    }
+
+    @Test
     public void parseHeaderFromBufferWithNonZeroPosition() {
         ByteBuffer buffer = ByteBuffer.allocate(64);
         buffer.position(10);
@@ -128,7 +198,7 @@ public class RequestHeaderTest {
             setClientId(null).
             setCorrelationId(123).
             setRequestApiKey(ApiKeys.FIND_COORDINATOR.id).
-            setRequestApiVersion((short) 10);
+            setRequestApiVersion(ApiKeys.FIND_COORDINATOR.latestVersion());
         ObjectSerializationCache serializationCache = new ObjectSerializationCache();
         ByteBuffer buffer = ByteBuffer.allocate(headerData.size(serializationCache, (short) 2));
         headerData.write(new ByteBufferAccessor(buffer), serializationCache, (short) 2);
@@ -137,7 +207,7 @@ public class RequestHeaderTest {
         assertEquals("", parsed.clientId());
         assertEquals(123, parsed.correlationId());
         assertEquals(ApiKeys.FIND_COORDINATOR, parsed.apiKey());
-        assertEquals((short) 10, parsed.apiVersion());
+        assertEquals(ApiKeys.FIND_COORDINATOR.latestVersion(), parsed.apiVersion());
     }
 
     @Test
@@ -146,7 +216,7 @@ public class RequestHeaderTest {
             setClientId("client").
             setCorrelationId(123).
             setRequestApiKey(ApiKeys.FIND_COORDINATOR.id).
-            setRequestApiVersion((short) 10);
+            setRequestApiVersion(ApiKeys.FIND_COORDINATOR.latestVersion());
         ObjectSerializationCache serializationCache = new ObjectSerializationCache();
         ByteBuffer prefix = ByteBuffer.allocate(headerData.size(serializationCache, (short) 2));
         headerData.write(new ByteBufferAccessor(prefix), serializationCache, (short) 2);
@@ -183,7 +253,7 @@ public class RequestHeaderTest {
             setClientId("hakuna-matata").
             setCorrelationId(123).
             setRequestApiKey(ApiKeys.FIND_COORDINATOR.id).
-            setRequestApiVersion((short) 10);
+            setRequestApiVersion(ApiKeys.FIND_COORDINATOR.latestVersion());
 
         // Serialize RequestHeaderData to a buffer
         ObjectSerializationCache serializationCache = new ObjectSerializationCache();
