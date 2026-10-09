@@ -21,20 +21,30 @@ import org.apache.kafka.common.config.ConfigException;
 import org.apache.kafka.common.config.SaslConfigs;
 import org.apache.kafka.common.security.oauthbearer.internals.secured.AccessTokenBuilder;
 import org.apache.kafka.common.security.oauthbearer.internals.secured.CloseableVerificationKeyResolver;
+import org.apache.kafka.common.security.oauthbearer.internals.secured.VerificationKeyResolverFactory;
 import org.apache.kafka.common.utils.LogCaptureAppender;
 
 import org.apache.logging.log4j.Level;
 import org.jose4j.jwk.PublicJsonWebKey;
 import org.jose4j.jws.AlgorithmIdentifiers;
+import org.jose4j.jws.JsonWebSignature;
+import org.jose4j.jwx.JsonWebStructure;
 import org.jose4j.lang.InvalidAlgorithmException;
+import org.junit.jupiter.api.AfterEach;
 import org.junit.jupiter.api.Test;
 
+import java.security.Key;
 import java.util.List;
 import java.util.Map;
+import java.util.concurrent.atomic.AtomicBoolean;
 
 import static org.apache.kafka.common.config.SaslConfigs.SASL_OAUTHBEARER_EXPECTED_ISSUER;
+import static org.apache.kafka.common.config.internals.BrokerSecurityConfigs.ALLOWED_SASL_OAUTHBEARER_URLS_CONFIG;
 import static org.apache.kafka.common.security.oauthbearer.OAuthBearerLoginModule.OAUTHBEARER_MECHANISM;
+import static org.apache.kafka.test.TestUtils.tempFile;
 import static org.junit.jupiter.api.Assertions.assertEquals;
+import static org.junit.jupiter.api.Assertions.assertFalse;
+import static org.junit.jupiter.api.Assertions.assertNotSame;
 import static org.junit.jupiter.api.Assertions.assertThrows;
 import static org.junit.jupiter.api.Assertions.assertTrue;
 
@@ -48,10 +58,60 @@ public class BrokerJwtValidatorTest extends JwtValidatorTest {
 
     private static final String EXPECTED_AUDIENCE = "https://legit.example/other-service";
 
+    @AfterEach
+    public void tearDown() {
+        System.clearProperty(ALLOWED_SASL_OAUTHBEARER_URLS_CONFIG);
+    }
+
     @Override
     protected JwtValidator createJwtValidator(AccessTokenBuilder builder) {
         CloseableVerificationKeyResolver resolver = (jws, nestingContext) -> builder.jwk().getKey();
         return new BrokerJwtValidator(resolver);
+    }
+
+    @Test
+    public void testCloseReleasesFactoryCreatedVerificationKeyResolver() throws Exception {
+        String file = tempFile("{\"keys\":[]}").toURI().toString();
+        System.setProperty(ALLOWED_SASL_OAUTHBEARER_URLS_CONFIG, file);
+        Map<String, ?> saslConfigs = getSaslConfigs(Map.of(
+                SaslConfigs.SASL_OAUTHBEARER_JWKS_ENDPOINT_URL, file,
+                SASL_OAUTHBEARER_EXPECTED_ISSUER, EXPECTED_ISSUER,
+                SaslConfigs.SASL_OAUTHBEARER_EXPECTED_AUDIENCE, List.of(EXPECTED_AUDIENCE)));
+
+        CloseableVerificationKeyResolver cached = VerificationKeyResolverFactory.get(saslConfigs, OAUTHBEARER_MECHANISM, getJaasConfigEntries());
+
+        BrokerJwtValidator validator = new BrokerJwtValidator();
+        validator.configure(saslConfigs, OAUTHBEARER_MECHANISM, getJaasConfigEntries());
+        validator.close();
+
+        // Closing the validator release the shared resolver. The factory should return a new one.
+        assertNotSame(cached, VerificationKeyResolverFactory.get(saslConfigs, OAUTHBEARER_MECHANISM, getJaasConfigEntries()));
+    }
+
+    @Test
+    public void testCloseDoesNotCloseInjectedVerificationKeyResolver() throws Exception {
+        PublicJsonWebKey jwk = createRsaJwk();
+        AtomicBoolean closed = new AtomicBoolean();
+        CloseableVerificationKeyResolver resolver = new CloseableVerificationKeyResolver() {
+            @Override
+            public Key resolveKey(JsonWebSignature jws, List<JsonWebStructure> nestingContext) {
+                return jwk.getKey();
+            }
+
+            @Override
+            public void close() {
+                closed.set(true);
+            }
+        };
+        BrokerJwtValidator validator = new BrokerJwtValidator(resolver);
+        validator.configure(getSaslConfigs(Map.of(
+                        SASL_OAUTHBEARER_EXPECTED_ISSUER, EXPECTED_ISSUER,
+                        SaslConfigs.SASL_OAUTHBEARER_EXPECTED_AUDIENCE, List.of(EXPECTED_AUDIENCE))),
+                OAUTHBEARER_MECHANISM, getJaasConfigEntries());
+        validator.close();
+
+        // An injected resolver is owned by the code that supplied it; the validator must not close it.
+        assertFalse(closed.get());
     }
 
     @Test
