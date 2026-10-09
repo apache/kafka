@@ -74,8 +74,9 @@ public interface AssignmentRefiner {
      *        example right after a coordinator failover.
      * @param warmupSupport
      *        Whether each member may be handed a warm-up task, keyed by member ID. A member that is missing from the
-     *        map is {@link WarmupSupport#UNKNOWN}. The refiner never places a warm-up task on a member that is not
-     *        {@link WarmupSupport#SUPPORTED}, except that it keeps one that a member of unknown version already holds.
+     *        map is {@link WarmupSupport#UNKNOWN}. An implementation must not newly place a warm-up task on a member
+     *        that is not {@link WarmupSupport#SUPPORTED}, and the coordinator reconciles towards the target assignment
+     *        if it does. A member of unknown version may keep a warm-up task that its process already holds.
      * @param subtopologies
      *        The group's resolved subtopologies, keyed by subtopology ID, which tell whether a subtopology is
      *        stateful. Only stateful tasks are warmed up; a stateless task has no state to restore. The coordinator
