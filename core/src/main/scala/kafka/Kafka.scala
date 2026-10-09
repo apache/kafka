@@ -33,6 +33,7 @@ object Kafka extends Logging {
     val overrideOpt = optionParser.accepts("override", "Optional property that should override values set in server.properties file (e.g. Key=value)")
       .withRequiredArg()
       .ofType(classOf[String])
+    optionParser.accepts("check-config", "Check the configuration and exit.")
     // This is just to make the parameter show up in the help output, we are not actually using this due the
     // fact that this class ignores the first parameter which is interpreted as positional and mandatory
     // but would not be mandatory if --version is specified
@@ -41,7 +42,7 @@ object Kafka extends Logging {
 
     if (args.isEmpty || args.contains("--help")) {
       CommandLineUtils.printUsageAndExit(optionParser,
-        "USAGE: java [options] %s server.properties [--override property=value]*".format(this.getClass.getCanonicalName.split('$').head))
+        "USAGE: java [options] %s [--check-config] server.properties [--override property=value]*".format(this.getClass.getCanonicalName.split('$').head))
     }
 
     if (args.contains("--version")) {
@@ -73,6 +74,23 @@ object Kafka extends Logging {
   def main(args: Array[String]): Unit = {
     try {
       val serverProps = getPropsFromArgs(args)
+      if (args.contains("--check-config")) {
+        try {
+          info("Verifying configuration")
+          // Explicit validation for common errors
+          if (!serverProps.containsKey("log.dirs")) {
+            throw new IllegalArgumentException("Missing required property: log.dirs")
+          }
+          // Validate configuration using KafkaConfig
+          KafkaConfig.fromProps(serverProps, doLog = true)
+          println("Configuration is valid.")
+          Exit.exit(0)
+        } catch {
+          case e: Exception =>
+            System.err.println(s"Configuration validation failed: ${e.getMessage}")
+            Exit.exit(1)
+        }
+      }
       val server = buildServer(serverProps)
 
       try {
