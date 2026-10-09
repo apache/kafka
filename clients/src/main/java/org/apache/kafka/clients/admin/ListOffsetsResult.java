@@ -17,6 +17,7 @@
 
 package org.apache.kafka.clients.admin;
 
+import org.apache.kafka.common.KafkaException;
 import org.apache.kafka.common.KafkaFuture;
 import org.apache.kafka.common.TopicPartition;
 import org.apache.kafka.common.annotation.InterfaceAudience;
@@ -63,7 +64,7 @@ public class ListOffsetsResult {
                             offsets.put(entry.getKey(), entry.getValue().get());
                         } catch (InterruptedException | ExecutionException e) {
                             // This should be unreachable, because allOf ensured that all the futures completed successfully.
-                            throw new RuntimeException(e);
+                            throw new KafkaException(e);
                         }
                     }
                     return offsets;
