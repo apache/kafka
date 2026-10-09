@@ -79,7 +79,6 @@ import java.util.Properties;
 import java.util.function.BiConsumer;
 import java.util.function.Predicate;
 
-import static java.util.Arrays.asList;
 import static java.util.Collections.singletonList;
 import static org.apache.kafka.streams.utils.TestUtils.safeUniqueTestName;
 import static org.junit.jupiter.api.Assertions.assertEquals;
@@ -98,7 +97,8 @@ public class HeadersStoreUpgradeIntegrationTest {
     private static final Duration CLOSE_TIMEOUT = Duration.ofSeconds(30L);
     /**
      * Timestamp reported through the headers-aware view for records written to a store that does
-     * not preserve timestamps (a plain key-value or window store, migrated or proxied).
+     * not preserve timestamps (a persistent plain key-value or window store, migrated or proxied).
+     * In-memory plain stores still report a real timestamp after migration.
      */
     private static final long NO_TIMESTAMP = -1L;
     private static final Logger LOG = LoggerFactory.getLogger(HeadersStoreUpgradeIntegrationTest.class);
@@ -186,7 +186,9 @@ public class HeadersStoreUpgradeIntegrationTest {
     private void closeAndLeaveGroupBeforeRestart() {
         // Leave the group so the immediate restart with the same application id
         // does not wait for the previous member's session timeout.
-        kafkaStreams.close(CloseOptions.groupMembershipOperation(GroupMembershipOperation.LEAVE_GROUP));
+        kafkaStreams.close(
+            CloseOptions.groupMembershipOperation(GroupMembershipOperation.LEAVE_GROUP)
+                .withTimeout(CLOSE_TIMEOUT));
     }
 
     /**
@@ -328,9 +330,10 @@ public class HeadersStoreUpgradeIntegrationTest {
      * synchronously from {@link KafkaStreams#start()}, which opens existing local stores, usually
      * wrapped in another exception, so the whole cause chain is searched.
      *
-     * <p>Callers pass the fragments because the message depends on the store kind: key-value and
-     * window stores report an explicit unsupported "Downgrade", while a session store only sees an
-     * unexpected column family ("incompatible settings").
+     * <p>Callers pass the fragments because the message depends on the store kind and downgrade
+     * target: key-value and window stores report an explicit unsupported "Downgrade" naming the
+     * target ("to regular store" or "to timestamped store"), so each test only passes on its own
+     * error, while a session store only sees an unexpected column family ("incompatible settings").
      */
     private void assertDowngradeThrowsProcessorStateException(
             final String downgradeTarget,
@@ -838,7 +841,7 @@ public class HeadersStoreUpgradeIntegrationTest {
                 Serdes.String(),
                 Serdes.String()),
             KEY_VALUE_PROCESSOR, STORE_NAME,
-            "headers-aware", "Downgrade");
+            "headers-aware", "Downgrade", "to regular store");
     }
 
     @Test
@@ -868,7 +871,7 @@ public class HeadersStoreUpgradeIntegrationTest {
                 Serdes.String(),
                 Serdes.String()),
             TIMESTAMPED_KEY_VALUE_PROCESSOR, STORE_NAME,
-            "headers-aware", "Downgrade");
+            "headers-aware", "Downgrade", "to timestamped store");
     }
 
     @Test
@@ -902,12 +905,12 @@ public class HeadersStoreUpgradeIntegrationTest {
                 Serdes.String(),
                 Serdes.String()),
             PLAIN_WINDOWED_PROCESSOR, WINDOW_STORE_NAME,
-            "headers-aware", "Downgrade");
+            "headers-aware", "Downgrade", "to regular store");
     }
 
     @Test
     public void shouldFailDowngradeFromTimestampedWindowStoreWithHeadersToTimestampedWindowStore() throws Exception {
-        setupAndPopulateWindowStoreWithHeaders(singletonList(KeyValue.pair("key1", 100L)));
+        setupAndPopulateWindowStoreWithHeaders(List.of(KeyValue.pair("key1", 100L)));
 
         assertDowngradeThrowsProcessorStateException(
             "to timestamped window store",
@@ -916,12 +919,12 @@ public class HeadersStoreUpgradeIntegrationTest {
                 Serdes.String(),
                 Serdes.String()),
             TIMESTAMPED_WINDOWED_PROCESSOR, WINDOW_STORE_NAME,
-            "headers-aware", "Downgrade");
+            "headers-aware", "Downgrade", "to timestamped store");
     }
 
     @Test
     public void shouldSuccessfullyDowngradeFromTimestampedWindowStoreWithHeadersToPlainWindowStoreAfterCleanup() throws Exception {
-        setupAndPopulateWindowStoreWithHeaders(asList(KeyValue.pair("key1", 100L), KeyValue.pair("key2", 200L)));
+        setupAndPopulateWindowStoreWithHeaders(List.of(KeyValue.pair("key1", 100L), KeyValue.pair("key2", 200L)));
         wipeLocalState();
 
         buildAndStart(
@@ -938,7 +941,7 @@ public class HeadersStoreUpgradeIntegrationTest {
 
     @Test
     public void shouldSuccessfullyDowngradeFromTimestampedWindowStoreWithHeadersAfterCleanup() throws Exception {
-        setupAndPopulateWindowStoreWithHeaders(asList(KeyValue.pair("key1", 100L), KeyValue.pair("key2", 200L)));
+        setupAndPopulateWindowStoreWithHeaders(List.of(KeyValue.pair("key1", 100L), KeyValue.pair("key2", 200L)));
         wipeLocalState();
 
         buildAndStart(
