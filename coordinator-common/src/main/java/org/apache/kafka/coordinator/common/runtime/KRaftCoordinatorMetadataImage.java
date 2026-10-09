@@ -75,8 +75,26 @@ public class KRaftCoordinatorMetadataImage implements CoordinatorMetadataImage {
     }
 
     @Override
+    public Uuid topicId(String topicName) {
+        TopicImage topicImage = metadataImage.topics().getTopic(topicName);
+        return topicImage == null ? null : topicImage.id();
+    }
+
+    @Override
+    public String topicName(Uuid topicId) {
+        TopicImage topicImage = metadataImage.topics().getTopic(topicId);
+        return topicImage == null ? null : topicImage.name();
+    }
+
+    @Override
     public CoordinatorMetadataDelta emptyDelta() {
-        return new KRaftCoordinatorMetadataDelta(new MetadataDelta(metadataImage));
+        // Note: supportedConfigChecker is not set because CoordinatorMetadataDelta only exposes topic-related methods.
+        // No ConfigRecord replay happens through this path, so the checker is never invoked.
+        return new KRaftCoordinatorMetadataDelta(
+            new MetadataDelta.Builder()
+                .setImage(metadataImage)
+                .build()
+        );
     }
 
     @Override

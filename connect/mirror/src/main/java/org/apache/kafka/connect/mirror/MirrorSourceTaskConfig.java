@@ -18,6 +18,7 @@ package org.apache.kafka.connect.mirror;
 
 import org.apache.kafka.common.TopicPartition;
 import org.apache.kafka.common.config.ConfigDef;
+import org.apache.kafka.common.metrics.PluginMetrics;
 
 import java.util.List;
 import java.util.Map;
@@ -39,10 +40,14 @@ public class MirrorSourceTaskConfig extends MirrorSourceConfig {
             .collect(Collectors.toSet());
     }
 
-    MirrorSourceMetrics metrics() {
-        MirrorSourceMetrics metrics = new MirrorSourceMetrics(this);
+    MirrorSourceLegacyMetrics legacyMetrics() {
+        MirrorSourceLegacyMetrics metrics = new MirrorSourceLegacyMetrics(this);
         metricsReporters().forEach(metrics::addReporter);
         return metrics;
+    }
+
+    MirrorSourceMetrics metrics(PluginMetrics pluginMetrics) {
+        return new MirrorSourceMetrics(pluginMetrics, this);
     }
 
     @Override

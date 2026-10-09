@@ -17,14 +17,13 @@
 package org.apache.kafka.common.requests;
 
 import org.apache.kafka.common.GroupType;
-import org.apache.kafka.common.errors.UnsupportedVersionException;
+import org.apache.kafka.common.internals.UnsupportedProtocolFieldException;
 import org.apache.kafka.common.message.ListGroupsRequestData;
 import org.apache.kafka.common.message.ListGroupsResponseData;
 import org.apache.kafka.common.protocol.ApiKeys;
 import org.apache.kafka.common.protocol.Errors;
 import org.apache.kafka.common.protocol.Readable;
 
-import java.util.Collections;
 import java.util.HashSet;
 import java.util.List;
 
@@ -49,8 +48,7 @@ public class ListGroupsRequest extends AbstractRequest {
         @Override
         public ListGroupsRequest build(short version) {
             if (!data.statesFilter().isEmpty() && version < 4) {
-                throw new UnsupportedVersionException("The broker only supports ListGroups " +
-                        "v" + version + ", but we need v4 or newer to request groups by states.");
+                throw new UnsupportedProtocolFieldException("StatesFilter", apiKey().name(), version, 4);
             }
             if (!data.typesFilter().isEmpty() && version < 5) {
                 // Types filter is supported by brokers with version 3.8.0 or later. Older brokers only support
@@ -61,9 +59,7 @@ public class ListGroupsRequest extends AbstractRequest {
                 boolean containedClassic = typesCopy.remove(GroupType.CLASSIC.toString());
                 boolean containedConsumer = typesCopy.remove(GroupType.CONSUMER.toString());
                 if (!typesCopy.isEmpty() || (!containedClassic && containedConsumer)) {
-                    throw new UnsupportedVersionException("The broker only supports ListGroups " +
-                        "v" + version + ", but we need v5 or newer to request groups by type. " +
-                        "Requested group types: [" + String.join(", ", data.typesFilter()) + "].");
+                    throw new UnsupportedProtocolFieldException(String.join(",", data.typesFilter()), apiKey().name(), version, 5);
                 }
                 return new ListGroupsRequest(data.duplicate().setTypesFilter(List.of()), version);
             }
@@ -86,7 +82,7 @@ public class ListGroupsRequest extends AbstractRequest {
     @Override
     public ListGroupsResponse getErrorResponse(int throttleTimeMs, Throwable e) {
         ListGroupsResponseData listGroupsResponseData = new ListGroupsResponseData().
-            setGroups(Collections.emptyList()).
+            setGroups(List.of()).
             setErrorCode(Errors.forException(e).code());
         if (version() >= 1) {
             listGroupsResponseData.setThrottleTimeMs(throttleTimeMs);

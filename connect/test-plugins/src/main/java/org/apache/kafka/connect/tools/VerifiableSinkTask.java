@@ -18,6 +18,7 @@ package org.apache.kafka.connect.tools;
 
 import org.apache.kafka.clients.consumer.OffsetAndMetadata;
 import org.apache.kafka.common.TopicPartition;
+import org.apache.kafka.common.annotation.InterfaceAudience;
 import org.apache.kafka.connect.errors.ConnectException;
 import org.apache.kafka.connect.sink.SinkRecord;
 import org.apache.kafka.connect.sink.SinkTask;
@@ -37,6 +38,7 @@ import java.util.Map;
  * and failures. This task relies on the offset management provided by the Kafka Connect framework and therefore can detect
  * bugs in its implementation.
  */
+@InterfaceAudience.Public
 public class VerifiableSinkTask extends SinkTask {
     public static final String NAME_CONFIG = "name";
     public static final String ID_CONFIG = "id";

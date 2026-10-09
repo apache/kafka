@@ -16,22 +16,14 @@
  */
 package kafka.server.share;
 
-import kafka.cluster.Partition;
-import kafka.server.ReplicaManager;
-
-import org.apache.kafka.common.IsolationLevel;
 import org.apache.kafka.common.TopicIdPartition;
-import org.apache.kafka.common.TopicPartition;
-import org.apache.kafka.common.errors.NotLeaderOrFollowerException;
-import org.apache.kafka.common.errors.OffsetNotAvailableException;
 import org.apache.kafka.common.message.ShareFetchResponseData;
 import org.apache.kafka.common.message.ShareFetchResponseData.AcquiredRecords;
 import org.apache.kafka.common.protocol.Errors;
-import org.apache.kafka.common.record.internal.FileRecords;
 import org.apache.kafka.common.record.internal.MemoryRecords;
 import org.apache.kafka.common.record.internal.RecordBatch;
 import org.apache.kafka.common.record.internal.Records;
-import org.apache.kafka.common.requests.ListOffsetsRequest;
+import org.apache.kafka.server.share.PartitionMetadataProvider;
 import org.apache.kafka.server.share.SharePartitionKey;
 import org.apache.kafka.server.share.fetch.ShareAcquiredRecords;
 import org.apache.kafka.server.share.fetch.ShareFetch;
@@ -46,11 +38,7 @@ import java.util.Iterator;
 import java.util.LinkedHashMap;
 import java.util.List;
 import java.util.Map;
-import java.util.Optional;
 import java.util.function.BiConsumer;
-
-import scala.Option;
-import scala.Some;
 
 /**
  * Utility class for post-processing of share fetch operations.
@@ -66,7 +54,7 @@ public class ShareFetchUtils {
             ShareFetch shareFetch,
             List<ShareFetchPartitionData> shareFetchPartitionDataList,
             LinkedHashMap<TopicIdPartition, SharePartition> sharePartitions,
-            ReplicaManager replicaManager,
+            PartitionMetadataProvider metadataProvider,
             BiConsumer<SharePartitionKey, Throwable> exceptionHandler
     ) {
         Map<TopicIdPartition, ShareFetchResponseData.PartitionData> response = new HashMap<>();
@@ -94,8 +82,8 @@ public class ShareFetchUtils {
                 // would be returned for other share partitions in the fetch request.
                 if (fetchPartitionData.error.code() == Errors.OFFSET_OUT_OF_RANGE.code()) {
                     try {
-                        sharePartition.updateCacheAndOffsets(offsetForEarliestTimestamp(topicIdPartition,
-                            replicaManager, sharePartition.leaderEpoch()));
+                        sharePartition.updateCacheAndOffsets(metadataProvider.offsetForEarliestTimestamp(
+                            topicIdPartition, sharePartition.leaderEpoch()));
                     } catch (Exception e) {
                         log.error("Error while fetching offset for earliest timestamp for topicIdPartition: {}", topicIdPartition, e);
                         shareFetch.addErroneous(topicIdPartition, e);
@@ -136,65 +124,6 @@ public class ShareFetchUtils {
             response.put(topicIdPartition, partitionData);
         }
         return response;
-    }
-
-    /**
-     * The method is used to get the offset for the earliest timestamp for the topic-partition.
-     *
-     * @return The offset for the earliest timestamp.
-     */
-    static long offsetForEarliestTimestamp(TopicIdPartition topicIdPartition, ReplicaManager replicaManager, int leaderEpoch) {
-        // Isolation level is only required when reading from the latest offset hence use Option.empty() for now.
-        Optional<FileRecords.TimestampAndOffset> timestampAndOffset = replicaManager.fetchOffsetForTimestamp(
-                topicIdPartition.topicPartition(), ListOffsetsRequest.EARLIEST_TIMESTAMP, Option.empty(),
-                Optional.of(leaderEpoch), true).timestampAndOffsetOpt();
-        if (timestampAndOffset.isEmpty()) {
-            throw new OffsetNotAvailableException("Offset for earliest timestamp not found for topic partition: " + topicIdPartition);
-        }
-        return timestampAndOffset.get().offset;
-    }
-
-    /**
-     * The method is used to get the offset for the latest timestamp for the topic-partition.
-     *
-     * @return The offset for the latest timestamp.
-     */
-    static long offsetForLatestTimestamp(TopicIdPartition topicIdPartition, ReplicaManager replicaManager, int leaderEpoch) {
-        // Isolation level is set to READ_UNCOMMITTED, matching with that used in share fetch requests
-        Optional<FileRecords.TimestampAndOffset> timestampAndOffset = replicaManager.fetchOffsetForTimestamp(
-            topicIdPartition.topicPartition(), ListOffsetsRequest.LATEST_TIMESTAMP, new Some<>(IsolationLevel.READ_UNCOMMITTED),
-            Optional.of(leaderEpoch), true).timestampAndOffsetOpt();
-        if (timestampAndOffset.isEmpty()) {
-            throw new OffsetNotAvailableException("Offset for latest timestamp not found for topic partition: " + topicIdPartition);
-        }
-        return timestampAndOffset.get().offset;
-    }
-
-    /**
-     * The method is used to get the offset for the given timestamp for the topic-partition.
-     *
-     * @return The offset for the given timestamp.
-     */
-    static long offsetForTimestamp(TopicIdPartition topicIdPartition, ReplicaManager replicaManager, long timestampToSearch, int leaderEpoch) {
-        Optional<FileRecords.TimestampAndOffset> timestampAndOffset = replicaManager.fetchOffsetForTimestamp(
-            topicIdPartition.topicPartition(), timestampToSearch, new Some<>(IsolationLevel.READ_UNCOMMITTED), Optional.of(leaderEpoch), true).timestampAndOffsetOpt();
-        if (timestampAndOffset.isEmpty()) {
-            throw new OffsetNotAvailableException("Offset for timestamp " + timestampToSearch + " not found for topic partition: " + topicIdPartition);
-        }
-        return timestampAndOffset.get().offset;
-    }
-
-    static int leaderEpoch(ReplicaManager replicaManager, TopicPartition tp) {
-        return partition(replicaManager, tp).getLeaderEpoch();
-    }
-
-    static Partition partition(ReplicaManager replicaManager, TopicPartition tp) {
-        Partition partition = replicaManager.getPartitionOrException(tp);
-        if (!partition.isLeader()) {
-            log.debug("The broker is not the leader for topic partition: {}-{}", tp.topic(), tp.partition());
-            throw new NotLeaderOrFollowerException();
-        }
-        return partition;
     }
 
     /**

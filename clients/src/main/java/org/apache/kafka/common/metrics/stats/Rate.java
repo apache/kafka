@@ -16,6 +16,7 @@
  */
 package org.apache.kafka.common.metrics.stats;
 
+import org.apache.kafka.common.annotation.InterfaceAudience;
 import org.apache.kafka.common.metrics.MeasurableStat;
 import org.apache.kafka.common.metrics.MetricConfig;
 
@@ -30,6 +31,7 @@ import static org.apache.kafka.common.metrics.internals.MetricsUtils.convert;
  * however, to record the rate of occurrences (e.g. the count of values measured over the time interval) or other such
  * values.
  */
+@InterfaceAudience.Public
 public class Rate implements MeasurableStat {
 
     protected final TimeUnit unit;

@@ -30,7 +30,7 @@ import java.util.List;
 import java.util.Optional;
 import java.util.OptionalInt;
 import java.util.OptionalLong;
-import java.util.concurrent.CompletableFuture;
+import java.util.concurrent.CompletionStage;
 
 public interface RaftClient<T> extends AutoCloseable {
 
@@ -51,7 +51,7 @@ public interface RaftClient<T> extends AutoCloseable {
         void handleCommit(BatchReader<T> reader);
 
         /**
-         * Callback which is invoked when the Listener needs to load a snapshot.
+         * Callback which is invoked when the Listener needs to load a committed snapshot.
          * It is the responsibility of this implementation to invoke {@link SnapshotReader#close()}
          * after consuming the reader.
          *
@@ -63,12 +63,24 @@ public interface RaftClient<T> extends AutoCloseable {
         void handleLoadSnapshot(SnapshotReader<T> reader);
 
         /**
+         * Callback which is invoked when the Listener needs to load bootstrap snapshot.
+         * Bootstrap snapshots are uncommitted and are used to store and load the initial application state.
+         *
+         * It is the responsibility of this implementation to invoke {@link SnapshotReader#close()}
+         * after consuming the reader.
+         *
+         * @param reader snapshot reader instance which must be iterated and closed
+         */
+        void handleLoadBootstrap(SnapshotReader<T> reader);
+
+        /**
          * Called on any change to leadership. This includes both when a leader is elected and
          * when a leader steps down or fails.
          *
          * If this node is the leader, then the notification of leadership will be delayed until
          * the implementation of this interface has caught up to the high-watermark through calls to
-         * {@link #handleLoadSnapshot(SnapshotReader)} and {@link #handleCommit(BatchReader)}.
+         * {@link #handleLoadSnapshot(SnapshotReader)}, {@link #handleLoadBootstrap(SnapshotReader)},
+         * and {@link #handleCommit(BatchReader)}.
          *
          * If this node is not the leader, then this method will be called as soon as possible. In
          * this case the leader may or may not be known for the current epoch.
@@ -188,9 +200,9 @@ public interface RaftClient<T> extends AutoCloseable {
      * in use.
      *
      * @param timeoutMs How long to wait for graceful completion of pending operations.
-     * @return A future which is completed when shutdown completes successfully or the timeout expires.
+     * @return A stage which is completed when shutdown completes successfully or the timeout expires.
      */
-    CompletableFuture<Void> shutdown(int timeoutMs);
+    CompletionStage<Void> shutdown(int timeoutMs);
 
     /**
      * Resign the leadership. The leader will give up its leadership in the passed epoch
@@ -251,6 +263,17 @@ public interface RaftClient<T> extends AutoCloseable {
      * @return the current kraft.version.
      */
     KRaftVersion kraftVersion();
+
+    /**
+     * Returns the latest set of voters, even if it hasn't been committed durably to Raft.
+     *
+     * When the kraft.version is 0, the set of voters is the one configured in
+     * {@code controller.quorum.voters} and it never changes. When the kraft.version is 1, the set
+     * of voters is the one from the latest {@code VotersRecord} in the log or snapshot.
+     *
+     * @return the latest set of voters
+     */
+    VoterSet latestVoterSet();
 
     /**
      * Request that the leader to upgrade the kraft version.

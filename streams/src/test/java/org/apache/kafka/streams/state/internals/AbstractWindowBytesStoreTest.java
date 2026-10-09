@@ -25,8 +25,7 @@ import org.apache.kafka.common.serialization.Serde;
 import org.apache.kafka.common.serialization.Serdes;
 import org.apache.kafka.common.utils.Bytes;
 import org.apache.kafka.common.utils.LogCaptureAppender;
-import org.apache.kafka.common.utils.LogContext;
-import org.apache.kafka.common.utils.Time;
+import org.apache.kafka.common.utils.internals.LogContext;
 import org.apache.kafka.streams.KeyValue;
 import org.apache.kafka.streams.StreamsConfig;
 import org.apache.kafka.streams.kstream.Windowed;
@@ -62,12 +61,8 @@ import static org.apache.kafka.common.utils.Utils.mkMap;
 import static org.apache.kafka.test.StreamsTestUtils.toListAndCloseIterator;
 import static org.apache.kafka.test.StreamsTestUtils.toSet;
 import static org.apache.kafka.test.StreamsTestUtils.valuesToSetAndCloseIterator;
-import static org.hamcrest.CoreMatchers.equalTo;
-import static org.hamcrest.CoreMatchers.hasItem;
-import static org.hamcrest.MatcherAssert.assertThat;
 import static org.junit.jupiter.api.Assertions.assertEquals;
 import static org.junit.jupiter.api.Assertions.assertFalse;
-import static org.junit.jupiter.api.Assertions.assertNotEquals;
 import static org.junit.jupiter.api.Assertions.assertNull;
 import static org.junit.jupiter.api.Assertions.assertThrows;
 import static org.junit.jupiter.api.Assertions.assertTrue;
@@ -99,12 +94,21 @@ public abstract class AbstractWindowBytesStoreTest {
                                                        final boolean retainDuplicates,
                                                        final Serde<K> keySerde,
                                                        final Serde<V> valueSerde);
+    /** Overridden by subclasses to exercise the transactional (staged-write) code path. */
+    boolean transactional() {
+        return false;
+    }
+
     @BeforeEach
     protected void setup() {
-        
+
         windowStore = buildWindowStore(RETENTION_PERIOD, WINDOW_SIZE, false, Serdes.Integer(), Serdes.String());
 
         recordCollector = new MockRecordCollector();
+        final Properties streamsConfig = StreamsTestUtils.getStreamsConfig();
+        if (transactional()) {
+            streamsConfig.put(StreamsConfig.TRANSACTIONAL_STATE_STORES_CONFIG, true);
+        }
         context = new InternalMockProcessorContext<>(
             baseDir,
             Serdes.String(),
@@ -113,7 +117,8 @@ public abstract class AbstractWindowBytesStoreTest {
             new ThreadCache(
                 new LogContext("testCache"),
                 0,
-                new MockStreamsMetrics(new Metrics())));
+                new MockStreamsMetrics(new Metrics())),
+            new StreamsConfig(streamsConfig));
         context.setTime(1L);
 
         windowStore.init(context, windowStore);
@@ -853,30 +858,23 @@ public abstract class AbstractWindowBytesStoreTest {
         windowStore.put("a", "0005", 0x7a00000000000000L - 1);
 
         final Set<String> expected = Set.of("0001", "0003", "0005");
-        assertThat(
-            valuesToSetAndCloseIterator(windowStore.fetch("a", ofEpochMilli(0), ofEpochMilli(Long.MAX_VALUE))),
-            equalTo(expected)
-        );
+        assertEquals(expected, valuesToSetAndCloseIterator(windowStore.fetch("a", ofEpochMilli(0), ofEpochMilli(Long.MAX_VALUE))));
 
         Set<KeyValue<Windowed<String>, String>> set =
             toSet(windowStore.fetch("a", "a", ofEpochMilli(0), ofEpochMilli(Long.MAX_VALUE)));
-        assertThat(
-            set,
-            equalTo(Set.of(
+        assertEquals(
+            Set.of(
                 windowedPair("a", "0001", 0, windowSize),
                 windowedPair("a", "0003", 1, windowSize),
-                windowedPair("a", "0005", 0x7a00000000000000L - 1, windowSize)
-            ))
-        );
+                windowedPair("a", "0005", 0x7a00000000000000L - 1, windowSize)),
+            set);
 
         set = toSet(windowStore.fetch("aa", "aa", ofEpochMilli(0), ofEpochMilli(Long.MAX_VALUE)));
-        assertThat(
-            set,
-            equalTo(Set.of(
+        assertEquals(
+            Set.of(
                 windowedPair("aa", "0002", 0, windowSize),
-                windowedPair("aa", "0004", 1, windowSize)
-            ))
-        );
+                windowedPair("aa", "0004", 1, windowSize)),
+            set);
         windowStore.close();
     }
 
@@ -935,20 +933,11 @@ public abstract class AbstractWindowBytesStoreTest {
         windowStore.put(key3, "9", 59999);
 
         final Set<String> expectedKey1 = Set.of("1", "4", "7");
-        assertThat(
-            valuesToSetAndCloseIterator(windowStore.fetch(key1, ofEpochMilli(0), ofEpochMilli(Long.MAX_VALUE))),
-            equalTo(expectedKey1)
-        );
+        assertEquals(expectedKey1, valuesToSetAndCloseIterator(windowStore.fetch(key1, ofEpochMilli(0), ofEpochMilli(Long.MAX_VALUE))));
         final Set<String> expectedKey2 = Set.of("2", "5", "8");
-        assertThat(
-            valuesToSetAndCloseIterator(windowStore.fetch(key2, ofEpochMilli(0), ofEpochMilli(Long.MAX_VALUE))),
-            equalTo(expectedKey2)
-        );
+        assertEquals(expectedKey2, valuesToSetAndCloseIterator(windowStore.fetch(key2, ofEpochMilli(0), ofEpochMilli(Long.MAX_VALUE))));
         final Set<String> expectedKey3 = Set.of("3", "6", "9");
-        assertThat(
-            valuesToSetAndCloseIterator(windowStore.fetch(key3, ofEpochMilli(0), ofEpochMilli(Long.MAX_VALUE))),
-            equalTo(expectedKey3)
-        );
+        assertEquals(expectedKey3, valuesToSetAndCloseIterator(windowStore.fetch(key3, ofEpochMilli(0), ofEpochMilli(Long.MAX_VALUE))));
 
         windowStore.close();
     }
@@ -977,13 +966,11 @@ public abstract class AbstractWindowBytesStoreTest {
             assertFalse(iterator.hasNext());
 
             final List<String> messages = appender.getMessages();
-            assertThat(
-                messages,
-                hasItem("Returning empty iterator for fetch with invalid key range: from > to." +
-                    " This may be due to range arguments set in the wrong order, " +
-                    "or serdes that don't preserve ordering when lexicographically comparing the serialized bytes." +
-                    " Note that the built-in numerical serdes do not follow this for negative numbers")
-            );
+            assertTrue(messages.contains(
+                "Returning empty iterator for fetch with invalid key range: from > to." +
+                " This may be due to range arguments set in the wrong order, " +
+                "or serdes that don't preserve ordering when lexicographically comparing the serialized bytes." +
+                " Note that the built-in numerical serdes do not follow this for negative numbers"));
         }
     }
 
@@ -997,8 +984,6 @@ public abstract class AbstractWindowBytesStoreTest {
             new StreamsConfig(streamsConfig),
             recordCollector
         );
-        final Time time = Time.SYSTEM;
-        context.setSystemTimeMs(time.milliseconds());
         context.setTime(1L);
         windowStore.init(context, windowStore);
 
@@ -1034,7 +1019,16 @@ public abstract class AbstractWindowBytesStoreTest {
             )
         ));
         assertEquals(1.0, dropTotal.metricValue());
-        assertNotEquals(0.0, dropRate.metricValue());
+        // exactly one record was dropped, over the rate's default un-elapsed sampling window of
+        // (metrics.num.samples - 1) * metrics.sample.window.ms == 30s. The delta is generous because the
+        // window also grows by however long the store work takes between recording and reading the
+        // metric; it still separates one dropped record from none (0.0) and from two (0.06666).
+        assertEquals(
+            1.0 / 30.0,
+            ((Number) dropRate.metricValue()).doubleValue(),
+            0.005d,
+            "dropped-records-rate should reflect the single dropped record over the ~30s sampling window"
+        );
 
         windowStore.close();
     }
@@ -1163,7 +1157,7 @@ public abstract class AbstractWindowBytesStoreTest {
 
     <K> K extractStoreKey(final byte[] binaryKey,
                           final StateSerdes<K, ?> serdes) {
-        return WindowKeySchema.extractStoreKey(binaryKey, serdes);
+        return WindowKeySchema.extractStoreKey(binaryKey, new RecordHeaders(), serdes);
     }
 
     private Map<Integer, Set<String>> entriesByKey(final List<KeyValue<byte[], byte[]>> changeLog,

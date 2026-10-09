@@ -138,9 +138,17 @@ class OffsetValidationTest(VerifiableConsumerTest):
         clean_shutdown=[True],
         bounce_mode=["all", "rolling"],
         metadata_quorum=[quorum.isolated_kraft],
-        group_protocol=consumer_group.all_group_protocols
+        group_protocol=consumer_group.all_group_protocols,
+        enable_assignment_batching=[True]
     )
-    def test_consumer_bounce(self, clean_shutdown, bounce_mode, metadata_quorum=quorum.isolated_kraft, group_protocol=None):
+    @matrix(
+        clean_shutdown=[True],
+        bounce_mode=["all", "rolling"],
+        metadata_quorum=[quorum.isolated_kraft],
+        group_protocol=[consumer_group.consumer_group_protocol],
+        enable_assignment_batching=[False]
+    )
+    def test_consumer_bounce(self, clean_shutdown, bounce_mode, metadata_quorum=quorum.isolated_kraft, group_protocol=None, enable_assignment_batching=True):
         """
         Verify correct consumer behavior when the consumers in the group are consecutively restarted.
 
@@ -331,6 +339,10 @@ class OffsetValidationTest(VerifiableConsumerTest):
                        err_msg="Timed out waiting for the fenced consumers to stop")
             else:
                 # Consumer protocol: Existing members should remain active and new conflicting ones should not be able to join.
+                # Conflict consumers will terminate due to a fatal UnreleasedInstanceIdException error.
+                # Wait for termination to complete to prevent conflict consumers from immediately re-joining the group while existing nodes are shutting down.
+                self.await_conflict_consumers_fenced(conflict_consumer)
+
                 self.await_consumed_messages(consumer)
                 assert num_rebalances == consumer.num_rebalances(), "Static consumers attempt to join with instance id in use should not cause a rebalance"
                 try:
@@ -341,9 +353,6 @@ class OffsetValidationTest(VerifiableConsumerTest):
                     raise
                 assert len(conflict_consumer.joined_nodes()) == 0
 
-                # Conflict consumers will terminate due to a fatal UnreleasedInstanceIdException error.
-                # Wait for termination to complete to prevent conflict consumers from immediately re-joining the group while existing nodes are shutting down.
-                self.await_conflict_consumers_fenced(conflict_consumer)
 
                 # Stop existing nodes, so conflicting ones should be able to join.
                 consumer.stop_all()
@@ -386,9 +395,17 @@ class OffsetValidationTest(VerifiableConsumerTest):
         clean_shutdown=[True],
         enable_autocommit=[True, False],
         metadata_quorum=[quorum.isolated_kraft],
-        group_protocol=consumer_group.all_group_protocols
+        group_protocol=consumer_group.all_group_protocols,
+        enable_assignment_batching=[True]
     )
-    def test_consumer_failure(self, clean_shutdown, enable_autocommit, metadata_quorum=quorum.isolated_kraft, group_protocol=None):
+    @matrix(
+        clean_shutdown=[True],
+        enable_autocommit=[True],
+        metadata_quorum=[quorum.isolated_kraft],
+        group_protocol=[consumer_group.consumer_group_protocol],
+        enable_assignment_batching=[False]
+    )
+    def test_consumer_failure(self, clean_shutdown, enable_autocommit, metadata_quorum=quorum.isolated_kraft, group_protocol=None, enable_assignment_batching=True):
         partition = TopicPartition(self.TOPIC, 0)
 
         consumer = self.setup_consumer(self.TOPIC, enable_autocommit=enable_autocommit, group_protocol=group_protocol)
@@ -478,9 +495,15 @@ class OffsetValidationTest(VerifiableConsumerTest):
     @cluster(num_nodes=7)
     @matrix(
         metadata_quorum=[quorum.isolated_kraft],
-        group_protocol=consumer_group.all_group_protocols
+        group_protocol=consumer_group.all_group_protocols,
+        enable_assignment_batching=[True]
     )
-    def test_group_consumption(self, metadata_quorum=quorum.isolated_kraft, group_protocol=None):
+    @matrix(
+        metadata_quorum=[quorum.isolated_kraft],
+        group_protocol=[consumer_group.consumer_group_protocol],
+        enable_assignment_batching=[False]
+    )
+    def test_group_consumption(self, metadata_quorum=quorum.isolated_kraft, group_protocol=None, enable_assignment_batching=True):
         """
         Verifies correct group rebalance behavior as consumers are started and stopped.
         In particular, this test verifies that the partition is readable after every
@@ -541,9 +564,10 @@ class AssignmentValidationTest(VerifiableConsumerTest):
     @matrix(
         metadata_quorum=[quorum.isolated_kraft],
         group_protocol=[consumer_group.consumer_group_protocol],
-        group_remote_assignor=consumer_group.all_remote_assignors
+        group_remote_assignor=consumer_group.all_remote_assignors,
+        enable_assignment_batching=[False, True]
     )
-    def test_valid_assignment(self, assignment_strategy=None, metadata_quorum=quorum.isolated_kraft, group_protocol=None, group_remote_assignor=None):
+    def test_valid_assignment(self, assignment_strategy=None, metadata_quorum=quorum.isolated_kraft, group_protocol=None, group_remote_assignor=None, enable_assignment_batching=True):
         """
         Verify assignment strategy correctness: each partition is assigned to exactly
         one consumer instance.

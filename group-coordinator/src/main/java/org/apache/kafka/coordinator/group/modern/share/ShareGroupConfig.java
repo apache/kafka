@@ -27,17 +27,11 @@ import java.util.Map;
 import static org.apache.kafka.common.config.ConfigDef.Importance.MEDIUM;
 import static org.apache.kafka.common.config.ConfigDef.Range.atLeast;
 import static org.apache.kafka.common.config.ConfigDef.Range.between;
-import static org.apache.kafka.common.config.ConfigDef.Type.BOOLEAN;
 import static org.apache.kafka.common.config.ConfigDef.Type.INT;
 import static org.apache.kafka.common.config.ConfigDef.Type.STRING;
 
 public class ShareGroupConfig {
     /** Share Group Configurations **/
-
-    // Internal configuration used by integration and system tests.
-    public static final String SHARE_GROUP_ENABLE_CONFIG = "group.share.enable";
-    public static final boolean SHARE_GROUP_ENABLE_DEFAULT = false;
-    public static final String SHARE_GROUP_ENABLE_DOC = "Enable share groups on the broker.";
 
     public static final String SHARE_GROUP_PARTITION_MAX_RECORD_LOCKS_CONFIG = "group.share.partition.max.record.locks";
     public static final int SHARE_GROUP_PARTITION_MAX_RECORD_LOCKS_DEFAULT = 2000;
@@ -88,8 +82,12 @@ public class ShareGroupConfig {
     public static final String SHARE_GROUP_PERSISTER_CLASS_NAME_DOC = "The fully qualified name of a class which implements " +
         "the <code>org.apache.kafka.server.share.Persister</code> interface.";
 
+    public static final String SHARE_GROUP_DLQ_MANAGER_CLASS_NAME_CONFIG = "group.share.dlq.manager.class.name";
+    public static final String SHARE_GROUP_DLQ_MANAGER_CLASS_NAME_DEFAULT = "org.apache.kafka.server.share.dlq.DefaultShareGroupDLQManager";
+    public static final String SHARE_GROUP_DLQ_MANAGER_CLASS_NAME_DOC = "The fully qualified name of a class which implements " +
+        "the <code>org.apache.kafka.server.share.dlq.ShareGroupDLQManager</code> interface.";
+
     public static final ConfigDef CONFIG_DEF = new ConfigDef()
-            .defineInternal(SHARE_GROUP_ENABLE_CONFIG, BOOLEAN, SHARE_GROUP_ENABLE_DEFAULT, null, MEDIUM, SHARE_GROUP_ENABLE_DOC)
             .define(SHARE_GROUP_DELIVERY_COUNT_LIMIT_CONFIG, INT, SHARE_GROUP_DELIVERY_COUNT_LIMIT_DEFAULT, between(2, 10), MEDIUM, SHARE_GROUP_DELIVERY_COUNT_LIMIT_DOC)
             .define(SHARE_GROUP_MAX_DELIVERY_COUNT_LIMIT_CONFIG, INT, SHARE_GROUP_MAX_DELIVERY_COUNT_LIMIT_DEFAULT, between(5, 25), MEDIUM, SHARE_GROUP_MAX_DELIVERY_COUNT_LIMIT_DOC)
             .define(SHARE_GROUP_MIN_DELIVERY_COUNT_LIMIT_CONFIG, INT, SHARE_GROUP_MIN_DELIVERY_COUNT_LIMIT_DEFAULT, between(2, 5), MEDIUM, SHARE_GROUP_MIN_DELIVERY_COUNT_LIMIT_DOC)
@@ -101,9 +99,9 @@ public class ShareGroupConfig {
             .define(SHARE_GROUP_MIN_PARTITION_MAX_RECORD_LOCKS_CONFIG, INT, SHARE_GROUP_MIN_PARTITION_MAX_RECORD_LOCKS_DEFAULT, between(100, 2000), MEDIUM, SHARE_GROUP_MIN_PARTITION_MAX_RECORD_LOCKS_DOC)
             .define(SHARE_FETCH_PURGATORY_PURGE_INTERVAL_REQUESTS_CONFIG, INT, SHARE_FETCH_PURGATORY_PURGE_INTERVAL_REQUESTS_DEFAULT, MEDIUM, SHARE_FETCH_PURGATORY_PURGE_INTERVAL_REQUESTS_DOC)
             .define(SHARE_GROUP_MAX_SHARE_SESSIONS_CONFIG, INT, SHARE_GROUP_MAX_SHARE_SESSIONS_DEFAULT, atLeast(1), MEDIUM, SHARE_GROUP_MAX_SHARE_SESSIONS_DOC)
-            .defineInternal(SHARE_GROUP_PERSISTER_CLASS_NAME_CONFIG, STRING, SHARE_GROUP_PERSISTER_CLASS_NAME_DEFAULT, null, MEDIUM, SHARE_GROUP_PERSISTER_CLASS_NAME_DOC);
+            .defineInternal(SHARE_GROUP_PERSISTER_CLASS_NAME_CONFIG, STRING, SHARE_GROUP_PERSISTER_CLASS_NAME_DEFAULT, null, MEDIUM, SHARE_GROUP_PERSISTER_CLASS_NAME_DOC)
+            .defineInternal(SHARE_GROUP_DLQ_MANAGER_CLASS_NAME_CONFIG, STRING, SHARE_GROUP_DLQ_MANAGER_CLASS_NAME_DEFAULT, null, MEDIUM, SHARE_GROUP_DLQ_MANAGER_CLASS_NAME_DOC);
 
-    private final boolean isShareGroupEnabled;
     private final int shareGroupPartitionMaxRecordLocks;
     private final int shareGroupMaxPartitionMaxRecordLocks;
     private final int shareGroupMinPartitionMaxRecordLocks;
@@ -116,12 +114,11 @@ public class ShareGroupConfig {
     private final int shareFetchPurgatoryPurgeIntervalRequests;
     private final int shareGroupMaxShareSessions;
     private final String shareGroupPersisterClassName;
+    private final String shareGroupDLQManagerClassName;
     private final AbstractConfig config;
 
     public ShareGroupConfig(AbstractConfig config) {
         this.config = config;
-        // The proper way to enable share groups is to use the share.version feature with v1 or later.
-        isShareGroupEnabled = config.getBoolean(ShareGroupConfig.SHARE_GROUP_ENABLE_CONFIG);
         shareGroupPartitionMaxRecordLocks = config.getInt(ShareGroupConfig.SHARE_GROUP_PARTITION_MAX_RECORD_LOCKS_CONFIG);
         shareGroupMaxPartitionMaxRecordLocks = config.getInt(SHARE_GROUP_MAX_PARTITION_MAX_RECORD_LOCKS_CONFIG);
         shareGroupMinPartitionMaxRecordLocks = config.getInt(SHARE_GROUP_MIN_PARTITION_MAX_RECORD_LOCKS_CONFIG);
@@ -134,6 +131,7 @@ public class ShareGroupConfig {
         shareFetchPurgatoryPurgeIntervalRequests = config.getInt(ShareGroupConfig.SHARE_FETCH_PURGATORY_PURGE_INTERVAL_REQUESTS_CONFIG);
         shareGroupMaxShareSessions = config.getInt(ShareGroupConfig.SHARE_GROUP_MAX_SHARE_SESSIONS_CONFIG);
         shareGroupPersisterClassName = config.getString(ShareGroupConfig.SHARE_GROUP_PERSISTER_CLASS_NAME_CONFIG);
+        shareGroupDLQManagerClassName = config.getString(ShareGroupConfig.SHARE_GROUP_DLQ_MANAGER_CLASS_NAME_CONFIG);
         validate();
     }
 
@@ -148,10 +146,6 @@ public class ShareGroupConfig {
     }
 
     /** Share group configuration **/
-    public boolean isShareGroupEnabled() {
-        return isShareGroupEnabled;
-    }
-
     public int shareGroupPartitionMaxRecordLocks() {
         return shareGroupPartitionMaxRecordLocks;
     }
@@ -198,6 +192,10 @@ public class ShareGroupConfig {
 
     public String shareGroupPersisterClassName() {
         return shareGroupPersisterClassName;
+    }
+
+    public String shareGroupDLQManagerClassName() {
+        return shareGroupDLQManagerClassName;
     }
 
     private void validate() {

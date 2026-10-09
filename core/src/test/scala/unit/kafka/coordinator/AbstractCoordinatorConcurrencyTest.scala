@@ -17,13 +17,13 @@
 
 package kafka.coordinator
 
+import java.util
 import java.util.concurrent.{ConcurrentHashMap, ExecutorService, Executors}
 import java.util.{Collections, Random}
 import java.util.concurrent.atomic.AtomicInteger
 import kafka.coordinator.AbstractCoordinatorConcurrencyTest._
 import kafka.cluster.Partition
-import kafka.log.LogManager
-import kafka.server.QuotaFactory.QuotaManagers
+import org.apache.kafka.server.quota.QuotaFactory.QuotaManagers
 import kafka.server._
 import kafka.utils._
 import org.apache.kafka.common.{TopicIdPartition, TopicPartition}
@@ -34,13 +34,15 @@ import org.apache.kafka.common.utils.{Time, Utils}
 import org.apache.kafka.metadata.MetadataCache
 import org.apache.kafka.server.purgatory.DelayedProduce.ProducePartitionStatus
 import org.apache.kafka.server.common.{RequestLocal, TransactionVersion}
-import org.apache.kafka.server.purgatory.{DelayedDeleteRecords, DelayedOperationPurgatory, DelayedProduce, DelayedRemoteFetch, DelayedRemoteListOffsets, TopicPartitionOperationKey}
+import org.apache.kafka.server.purgatory.{DelayedDeleteRecords, DelayedFetch, DelayedOperationPurgatory, DelayedProduce, DelayedRemoteFetch, DelayedRemoteListOffsets, TopicPartitionOperationKey}
 import org.apache.kafka.server.transaction.AddPartitionsToTxnManager.TransactionSupportedOperation
 import org.apache.kafka.server.util.timer.{MockTimer, Timer}
 import org.apache.kafka.server.util.{MockScheduler, MockTime, Scheduler}
-import org.apache.kafka.storage.internals.log.{AppendOrigin, LogConfig, RecordValidationStats, UnifiedLog, VerificationGuard}
+import org.apache.kafka.storage.internals.log.{AppendOrigin, LogConfig, LogManager, RecordValidationStats, UnifiedLog, VerificationGuard}
 import org.junit.jupiter.api.{AfterEach, BeforeEach}
-import org.mockito.Mockito.{mock, when, withSettings}
+import org.mockito.Mockito.{RETURNS_DEFAULTS, mock, when, withSettings}
+import org.mockito.invocation.InvocationOnMock
+import org.mockito.stubbing.Answer
 
 import scala.collection._
 import scala.jdk.CollectionConverters._
@@ -63,7 +65,7 @@ abstract class AbstractCoordinatorConcurrencyTest[M <: CoordinatorMember] extend
     scheduler = new MockScheduler(time)
     executor = Executors.newFixedThreadPool(nThreads)
     val mockLogMger = mock(classOf[LogManager])
-    when(mockLogMger.liveLogDirs).thenReturn(Seq.empty)
+    when(mockLogMger.liveLogDirs).thenReturn(util.List.of)
     val producePurgatory = new DelayedOperationPurgatory[DelayedProduce]("Produce", timer, 1, 1000, false, true)
     val watchKeys = Collections.newSetFromMap(new ConcurrentHashMap[TopicPartitionOperationKey, java.lang.Boolean]()).asScala
     replicaManager = TestReplicaManager(KafkaConfig.fromProps(serverProps), time, scheduler, timer, mockLogMger, mock(classOf[QuotaManagers], withSettings().stubOnly()), producePurgatory, watchKeys)
@@ -252,8 +254,25 @@ object AbstractCoordinatorConcurrencyTest {
       producePurgatory.tryCompleteElseWatch(delayedProduce, producerRequestKeys.toList.asJava)
     }
 
+    // leader epoch of the partitions this broker leads; None means it is not the leader
+    @volatile var leaderEpochOf: TopicPartition => Option[Int] = _ => None
+    // reuse mocks since the concurrency tests look up partitions frequently
+    private val leaderPartitions = new ConcurrentHashMap[Integer, Partition]()
+
     override def onlinePartition(topicPartition: TopicPartition): Option[Partition] = {
-      Some(mock(classOf[Partition]))
+      leaderEpochOf(topicPartition) match {
+        case Some(leaderEpoch) =>
+          Some(leaderPartitions.computeIfAbsent(leaderEpoch, _ =>
+            mock(classOf[Partition], withSettings().defaultAnswer(new Answer[AnyRef] {
+              override def answer(invocation: InvocationOnMock): AnyRef = invocation.getMethod.getName match {
+                case "isLeader" => java.lang.Boolean.TRUE
+                case "getLeaderEpoch" => Int.box(leaderEpoch)
+                case _ => RETURNS_DEFAULTS.answer(invocation)
+              }
+            }))))
+        case None =>
+          Some(mock(classOf[Partition]))
+      }
     }
 
     def getOrCreateLogs(): mutable.Map[TopicPartition, (UnifiedLog, Long)] = {

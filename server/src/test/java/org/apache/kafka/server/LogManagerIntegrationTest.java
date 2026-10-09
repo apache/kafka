@@ -17,7 +17,6 @@
 package org.apache.kafka.server;
 
 import org.apache.kafka.clients.admin.Admin;
-import org.apache.kafka.clients.admin.NewTopic;
 import org.apache.kafka.clients.consumer.Consumer;
 import org.apache.kafka.clients.consumer.ConsumerConfig;
 import org.apache.kafka.clients.consumer.ConsumerRecord;
@@ -61,10 +60,7 @@ public class LogManagerIntegrationTest {
 
     @ClusterTest(types = {Type.KRAFT})
     public void testIOExceptionOnLogSegmentCloseResultsInRecovery() throws IOException, InterruptedException, ExecutionException {
-        try (Admin admin = cluster.admin()) {
-            admin.createTopics(List.of(new NewTopic("foo", 1, (short) 1))).all().get();
-        }
-        cluster.waitTopicCreation("foo", 1);
+        cluster.createTopic("foo", 1, (short) 1);
 
         // Produce some data into the topic
         Map<String, Object> producerConfigs = Map.of(
@@ -126,10 +122,7 @@ public class LogManagerIntegrationTest {
     @ClusterTest(types = {Type.KRAFT, Type.CO_KRAFT}, brokers = 3)
     public void testRestartBrokerNoErrorIfMissingPartitionMetadata() throws IOException, ExecutionException, InterruptedException {
 
-        try (Admin admin = cluster.admin()) {
-            admin.createTopics(List.of(new NewTopic("foo", 1, (short) 3))).all().get();
-        }
-        cluster.waitTopicCreation("foo", 1);
+        cluster.createTopic("foo", 1, (short) 3);
 
         Optional<PartitionMetadataFile> partitionMetadataFile = cluster.brokers().get(0).logManager()
                 .getLog(new TopicPartition("foo", 0), false).get()

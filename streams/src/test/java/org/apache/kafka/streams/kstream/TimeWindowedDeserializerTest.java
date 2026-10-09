@@ -31,8 +31,6 @@ import org.junit.jupiter.api.Test;
 import java.util.HashMap;
 import java.util.Map;
 
-import static org.hamcrest.MatcherAssert.assertThat;
-import static org.hamcrest.core.Is.is;
 import static org.junit.jupiter.api.Assertions.assertEquals;
 import static org.junit.jupiter.api.Assertions.assertInstanceOf;
 import static org.junit.jupiter.api.Assertions.assertNotNull;
@@ -56,7 +54,7 @@ public class TimeWindowedDeserializerTest {
         final Deserializer<?> inner = timeWindowedDeserializer.innerDeserializer();
         assertNotNull(inner, "Inner deserializer should be not null");
         assertInstanceOf(StringDeserializer.class, inner, "Inner deserializer type should be StringDeserializer");
-        assertThat(timeWindowedDeserializer.getWindowSize(), is(5000000L));
+        assertEquals(5000000L, timeWindowedDeserializer.getWindowSize());
     }
 
     @Deprecated
@@ -66,7 +64,7 @@ public class TimeWindowedDeserializerTest {
         props.put(StreamsConfig.WINDOWED_INNER_CLASS_SERDE, Serdes.ByteArraySerde.class.getName());
         try (final TimeWindowedDeserializer<?> deserializer = new TimeWindowedDeserializer<>()) {
             deserializer.configure(props, false);
-            assertThat(deserializer.getWindowSize(), is(500L));
+            assertEquals(500L, deserializer.getWindowSize());
             assertInstanceOf(ByteArrayDeserializer.class, deserializer.innerDeserializer());
         }
     }
@@ -77,7 +75,7 @@ public class TimeWindowedDeserializerTest {
         props.put(TimeWindowedDeserializer.WINDOWED_INNER_DESERIALIZER_CLASS, Serdes.ByteArraySerde.class.getName());
         try (final TimeWindowedDeserializer<?> deserializer = new TimeWindowedDeserializer<>()) {
             deserializer.configure(props, false);
-            assertThat(deserializer.getWindowSize(), is(500L));
+            assertEquals(500L, deserializer.getWindowSize());
             assertInstanceOf(ByteArrayDeserializer.class, deserializer.innerDeserializer());
         }
     }
@@ -96,7 +94,7 @@ public class TimeWindowedDeserializerTest {
         props.put(StreamsConfig.WINDOWED_INNER_CLASS_SERDE, "some.non.existent.class");
         try (final TimeWindowedDeserializer<?> deserializer = new TimeWindowedDeserializer<>()) {
             deserializer.configure(props, false);
-            assertThat(deserializer.getWindowSize(), is(500L));
+            assertEquals(500L, deserializer.getWindowSize());
             assertInstanceOf(ByteArrayDeserializer.class, deserializer.innerDeserializer());
         }
     }
@@ -179,15 +177,16 @@ public class TimeWindowedDeserializerTest {
         final Deserializer<String> mockDeserializer = mock(StringDeserializer.class);
         when(mockDeserializer.deserialize(anyString(), any(Headers.class), any(byte[].class))).thenReturn("test-value");
 
+        final String topic = "dummy";
         final Headers headers = new RecordHeaders().add("key1", "value1".getBytes());
         final Windowed<String> windowed = new Windowed<>("test-key", new TimeWindow(0, 1));
-        final byte[] data = new TimeWindowedSerializer<>(Serdes.String().serializer()).serialize("dummy", headers, windowed);
+        final byte[] data = new TimeWindowedSerializer<>(Serdes.String().serializer()).serialize(topic, headers, windowed);
 
         final TimeWindowedDeserializer<String> testDeserializer = new TimeWindowedDeserializer<>(mockDeserializer, 1L);
 
-        testDeserializer.deserialize("dummy", headers, data);
+        testDeserializer.deserialize(topic, headers, data);
 
-        verify(mockDeserializer).deserialize(anyString(), eq(headers), any(byte[].class));
+        verify(mockDeserializer).deserialize(eq(topic), eq(headers), any(byte[].class));
         verify(mockDeserializer, never()).deserialize(anyString(), any(byte[].class));
     }
 }

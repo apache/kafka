@@ -14,8 +14,10 @@
  * See the License for the specific language governing permissions and
  * limitations under the License.
  */
+
 package org.apache.kafka.streams.kstream;
 
+import org.apache.kafka.common.annotation.InterfaceAudience;
 
 /**
  * The interface for merging aggregate values for {@link SessionWindows} with the given key.
@@ -24,6 +26,7 @@ package org.apache.kafka.streams.kstream;
  * @param <V>   aggregate value type
  */
 @FunctionalInterface
+@InterfaceAudience.Public
 public interface Merger<K, V> {
 
     /**

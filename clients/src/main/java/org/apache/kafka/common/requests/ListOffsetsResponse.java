@@ -25,7 +25,6 @@ import org.apache.kafka.common.protocol.Errors;
 import org.apache.kafka.common.protocol.Readable;
 import org.apache.kafka.common.record.internal.RecordBatch;
 
-import java.util.Collections;
 import java.util.EnumMap;
 import java.util.List;
 import java.util.Map;
@@ -97,15 +96,10 @@ public class ListOffsetsResponse extends AbstractResponse {
         return data.toString();
     }
 
-    @Override
-    public boolean shouldClientThrottle(short version) {
-        return version >= 3;
-    }
-
     public static ListOffsetsTopicResponse singletonListOffsetsTopicResponse(TopicPartition tp, Errors error, long timestamp, long offset, int epoch) {
         return new ListOffsetsTopicResponse()
                  .setName(tp.topic())
-                 .setPartitions(Collections.singletonList(new ListOffsetsPartitionResponse()
+                 .setPartitions(List.of(new ListOffsetsPartitionResponse()
                          .setPartitionIndex(tp.partition())
                          .setErrorCode(error.code())
                          .setTimestamp(timestamp)

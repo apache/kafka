@@ -19,6 +19,7 @@ package org.apache.kafka.storage.internals.log;
 import org.apache.kafka.common.TopicIdPartition;
 import org.apache.kafka.common.TopicPartition;
 import org.apache.kafka.common.Uuid;
+import org.apache.kafka.common.message.AbortedTxn;
 import org.apache.kafka.common.utils.Utils;
 import org.apache.kafka.server.log.remote.storage.RemoteLogSegmentId;
 import org.apache.kafka.server.log.remote.storage.RemoteLogSegmentMetadata;
@@ -47,7 +48,6 @@ import java.nio.file.Files;
 import java.nio.file.Path;
 import java.nio.file.Paths;
 import java.util.ArrayList;
-import java.util.Collections;
 import java.util.HashMap;
 import java.util.List;
 import java.util.Map;
@@ -119,7 +119,7 @@ public class RemoteIndexCacheTest {
 
         RemoteLogSegmentId remoteLogSegmentId = RemoteLogSegmentId.generateNew(idPartition);
         rlsMetadata = new RemoteLogSegmentMetadata(remoteLogSegmentId, baseOffset, lastOffset, time.milliseconds(),
-                brokerId, time.milliseconds(), segmentSize, Collections.singletonMap(0, 0L));
+                brokerId, time.milliseconds(), segmentSize, Map.of(0, 0L));
         cache = new RemoteIndexCache(defaultRemoteIndexCacheSizeBytes, rsm, logDir.toString());
         cache.setFileDeleteDelayMs(20);
         mockRsmFetchIndex(rsm);
@@ -1060,7 +1060,7 @@ public class RemoteIndexCacheTest {
         invalidTimeIndexFile.createNewFile();
 
         RemoteLogSegmentMetadata rlsMetadata = new RemoteLogSegmentMetadata(RemoteLogSegmentId.generateNew(idPartition), baseOffset + 100,
-                lastOffset, time.milliseconds(), brokerId, time.milliseconds(), segmentSize, Collections.singletonMap(0, 0L));
+                lastOffset, time.milliseconds(), brokerId, time.milliseconds(), segmentSize, Map.of(0, 0L));
         OffsetIndex validOffsetIdx = createOffsetIndexForSegmentMetadata(rlsMetadata, logDir);
         TransactionIndex validTimeIdx = createTxIndexForSegmentMetadata(rlsMetadata, logDir);
 
@@ -1139,7 +1139,7 @@ public class RemoteIndexCacheTest {
                                                          File dir) throws IOException {
         RemoteLogSegmentMetadata rlsMetadata = new RemoteLogSegmentMetadata(remoteLogSegmentId, baseOffset,
                 lastOffset, time.milliseconds(), brokerId, time.milliseconds(),
-                segmentSize, Collections.singletonMap(0, 0L));
+                segmentSize, Map.of(0, 0L));
         TimeIndex timeIndex = spy(createTimeIndexForSegmentMetadata(rlsMetadata, dir));
         TransactionIndex txIndex = spy(createTxIndexForSegmentMetadata(rlsMetadata, dir));
         OffsetIndex offsetIndex = spy(createOffsetIndexForSegmentMetadata(rlsMetadata, dir));
@@ -1189,10 +1189,10 @@ public class RemoteIndexCacheTest {
         txnIdxFile.createNewFile();
         TransactionIndex txnIndex = new TransactionIndex(metadata.startOffset(), txnIdxFile);
         List<AbortedTxn> abortedTxns = List.of(
-                new AbortedTxn(0L, 0, 10, 11),
-                new AbortedTxn(1L, 5, 15, 13),
-                new AbortedTxn(2L, 18, 35, 25),
-                new AbortedTxn(3L, 32, 50, 40));
+                new AbortedTxn().setProducerId(0L).setFirstOffset(0).setLastOffset(10).setLastStableOffset(11),
+                new AbortedTxn().setProducerId(1L).setFirstOffset(5).setLastOffset(15).setLastStableOffset(13),
+                new AbortedTxn().setProducerId(2L).setFirstOffset(18).setLastOffset(35).setLastStableOffset(25),
+                new AbortedTxn().setProducerId(3L).setFirstOffset(32).setLastOffset(50).setLastStableOffset(40));
         for (AbortedTxn abortedTxn : abortedTxns) {
             txnIndex.append(abortedTxn);
         }
@@ -1215,12 +1215,12 @@ public class RemoteIndexCacheTest {
     private List<RemoteLogSegmentMetadata> generateRemoteLogSegmentMetadata(int size, TopicIdPartition tpId) {
         List<RemoteLogSegmentMetadata> metadataList = new ArrayList<>();
         for (int i = 0; i < size; i++) {
-            metadataList.add(new RemoteLogSegmentMetadata(new RemoteLogSegmentId(tpId, Uuid.randomUuid()), baseOffset * i, baseOffset * i + 10, time.milliseconds(), brokerId, time.milliseconds(), segmentSize, Collections.singletonMap(0, 0L)));
+            metadataList.add(new RemoteLogSegmentMetadata(new RemoteLogSegmentId(tpId, Uuid.randomUuid()), baseOffset * i, baseOffset * i + 10, time.milliseconds(), brokerId, time.milliseconds(), segmentSize, Map.of(0, 0L)));
         }
         return metadataList;
     }
 
-    private void maybeAppendIndexEntries(OffsetIndex offsetIndex, TimeIndex timeIndex) {
+    private void maybeAppendIndexEntries(OffsetIndex offsetIndex, TimeIndex timeIndex) throws IOException {
         if (!offsetIndex.isFull()) {
             long curTime = time.milliseconds();
             for (int i = 0; i < offsetIndex.maxEntries(); i++) {
@@ -1380,7 +1380,7 @@ public class RemoteIndexCacheTest {
         try {
             RemoteLogSegmentId remoteLogSegmentId2 = RemoteLogSegmentId.generateNew(idPartition);
             RemoteLogSegmentMetadata rlsMetadata2 = new RemoteLogSegmentMetadata(remoteLogSegmentId2, baseOffset + 100, lastOffset + 100,
-                    time.milliseconds(), brokerId, time.milliseconds(), segmentSize, Collections.singletonMap(0, 0L));
+                    time.milliseconds(), brokerId, time.milliseconds(), segmentSize, Map.of(0, 0L));
 
             ttlCache.getIndexEntry(rlsMetadata);
             fakeTicker.advance(TimeUnit.SECONDS.toNanos(5));

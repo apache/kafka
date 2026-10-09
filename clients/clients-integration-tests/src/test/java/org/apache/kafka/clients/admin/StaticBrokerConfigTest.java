@@ -131,9 +131,7 @@ public class StaticBrokerConfigTest {
             ConfigResource groupResource = new ConfigResource(ConfigResource.Type.GROUP, "testGroup");
             ConfigResource clientMetricsResource = new ConfigResource(ConfigResource.Type.CLIENT_METRICS, "testClient");
 
-            admin.createTopics(List.of(new NewTopic(TOPIC, 1, (short) 1))).config(TOPIC).get();
-            // make sure the topic metadata exist
-            cluster.waitTopicCreation(TOPIC, 1);
+            cluster.createTopic(TOPIC, 1, (short) 1);
             Map<ConfigResource, Config> configResourceMap = admin.describeConfigs(
                     List.of(brokerResource, topicResource, groupResource, clientMetricsResource)).all().get();
 
@@ -155,7 +153,7 @@ public class StaticBrokerConfigTest {
 
             // test for case ConfigResource.Type == GROUP
             Config groupConfig = configResourceMap.get(groupResource);
-            assertNotContainsAnyInternalConfig(groupConfig, GroupConfig.configDef().configKeys());
+            assertNotContainsAnyInternalConfig(groupConfig, GroupConfig.CONFIG_DEF.configKeys());
 
             // test for case ConfigResource.Type == CLIENT_METRICS
             Config clientMetricsConfig = configResourceMap.get(clientMetricsResource);

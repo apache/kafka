@@ -16,6 +16,7 @@
  */
 package org.apache.kafka.streams.kstream.internals;
 
+import org.apache.kafka.common.header.internals.RecordHeaders;
 import org.apache.kafka.common.metrics.Sensor;
 import org.apache.kafka.streams.kstream.ValueJoiner;
 import org.apache.kafka.streams.processor.api.ContextualProcessor;
@@ -24,14 +25,14 @@ import org.apache.kafka.streams.processor.api.ProcessorContext;
 import org.apache.kafka.streams.processor.api.Record;
 import org.apache.kafka.streams.processor.api.RecordMetadata;
 import org.apache.kafka.streams.processor.internals.metrics.StreamsMetricsImpl;
-import org.apache.kafka.streams.state.ValueAndTimestamp;
+import org.apache.kafka.streams.state.ValueTimestampHeaders;
 
 import org.slf4j.Logger;
 import org.slf4j.LoggerFactory;
 
 import static org.apache.kafka.streams.processor.internals.RecordQueue.UNKNOWN;
 import static org.apache.kafka.streams.processor.internals.metrics.TaskMetrics.droppedRecordsSensor;
-import static org.apache.kafka.streams.state.ValueAndTimestamp.getValueOrNull;
+import static org.apache.kafka.streams.state.ValueTimestampHeaders.getValueOrNull;
 
 class KTableKTableLeftJoin<K, V1, V2, VOut> extends KTableKTableAbstractJoin<K, V1, V2, VOut> {
     private static final Logger LOG = LoggerFactory.getLogger(KTableKTableLeftJoin.class);
@@ -116,8 +117,8 @@ class KTableKTableLeftJoin<K, V1, V2, VOut> extends KTableKTableAbstractJoin<K, 
             final long resultTimestamp;
             VOut oldValue = null;
 
-            final ValueAndTimestamp<V2> valueAndTimestampRight = valueGetter.get(record.key());
-            final V2 value2 = getValueOrNull(valueAndTimestampRight);
+            final ValueTimestampHeaders<V2> valueTimestampHeadersRight = valueGetter.get(record.key());
+            final V2 value2 = getValueOrNull(valueTimestampHeadersRight);
             final long timestampRight;
 
             if (value2 == null) {
@@ -126,7 +127,7 @@ class KTableKTableLeftJoin<K, V1, V2, VOut> extends KTableKTableAbstractJoin<K, 
                 }
                 timestampRight = UNKNOWN;
             } else {
-                timestampRight = valueAndTimestampRight.timestamp();
+                timestampRight = valueTimestampHeadersRight.timestamp();
             }
 
             resultTimestamp = Math.max(record.timestamp(), timestampRight);
@@ -166,20 +167,20 @@ class KTableKTableLeftJoin<K, V1, V2, VOut> extends KTableKTableAbstractJoin<K, 
         }
 
         @Override
-        public ValueAndTimestamp<VOut> get(final K key) {
-            final ValueAndTimestamp<V1> valueAndTimestamp1 = valueGetter1.get(key);
-            final V1 value1 = getValueOrNull(valueAndTimestamp1);
+        public ValueTimestampHeaders<VOut> get(final K key) {
+            final ValueTimestampHeaders<V1> valueTimestampHeaders1 = valueGetter1.get(key);
+            final V1 value1 = getValueOrNull(valueTimestampHeaders1);
 
             if (value1 != null) {
-                final ValueAndTimestamp<V2> valueAndTimestamp2 = valueGetter2.get(key);
-                final V2 value2 = getValueOrNull(valueAndTimestamp2);
+                final ValueTimestampHeaders<V2> valueTimestampHeaders2 = valueGetter2.get(key);
+                final V2 value2 = getValueOrNull(valueTimestampHeaders2);
                 final long resultTimestamp;
-                if (valueAndTimestamp2 == null) {
-                    resultTimestamp = valueAndTimestamp1.timestamp();
+                if (valueTimestampHeaders2 == null) {
+                    resultTimestamp = valueTimestampHeaders1.timestamp();
                 } else {
-                    resultTimestamp = Math.max(valueAndTimestamp1.timestamp(), valueAndTimestamp2.timestamp());
+                    resultTimestamp = Math.max(valueTimestampHeaders1.timestamp(), valueTimestampHeaders2.timestamp());
                 }
-                return ValueAndTimestamp.make(joiner.apply(value1, value2), resultTimestamp);
+                return ValueTimestampHeaders.make(joiner.apply(value1, value2), resultTimestamp, new RecordHeaders());
             } else {
                 return null;
             }

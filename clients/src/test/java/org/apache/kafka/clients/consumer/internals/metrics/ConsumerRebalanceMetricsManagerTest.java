@@ -21,15 +21,14 @@ import org.apache.kafka.clients.consumer.internals.SubscriptionState;
 import org.apache.kafka.common.TopicPartition;
 import org.apache.kafka.common.metrics.MetricConfig;
 import org.apache.kafka.common.metrics.Metrics;
-import org.apache.kafka.common.utils.LogContext;
 import org.apache.kafka.common.utils.MockTime;
 import org.apache.kafka.common.utils.Time;
+import org.apache.kafka.common.utils.internals.LogContext;
 
 import org.junit.jupiter.api.AfterEach;
 import org.junit.jupiter.api.BeforeEach;
 import org.junit.jupiter.api.Test;
 
-import java.util.Optional;
 import java.util.Set;
 
 import static org.junit.jupiter.api.Assertions.assertEquals;
@@ -39,7 +38,7 @@ import static org.junit.jupiter.api.Assertions.assertTrue;
 import static org.mockito.Mockito.mock;
 
 
-class ConsumerRebalanceMetricsManagerTest {
+class ConsumerRebalanceMetricsManagerTest extends AbstractConsumerMetricsManagerTest {
 
     private Time time;
     private Metrics metrics;
@@ -68,6 +67,12 @@ class ConsumerRebalanceMetricsManagerTest {
         metrics.close();
     }
 
+    @Override
+    protected AbstractConsumerMetricsManager metricsManager(Metrics metrics, String groupDescription) {
+        SubscriptionState subscriptionState = new SubscriptionState(mock(LogContext.class), AutoOffsetResetStrategy.EARLIEST);
+        return new ConsumerRebalanceMetricsManager(metrics, subscriptionState);
+    }
+
     @Test
     public void testAssignedPartitionCountMetric() {
         assertNotNull(metrics.metric(metricsManager.assignedPartitionsCount), "Metric assigned-partitions has not been registered as expected");
@@ -82,7 +87,7 @@ class ConsumerRebalanceMetricsManagerTest {
         assertEquals(0.0d, metrics.metric(metricsManager.assignedPartitionsCount).metricValue());
 
         // Check for automatically assigned partitions
-        subscriptionState.subscribe(Set.of("topic"), Optional.empty());
+        subscriptionState.subscribe(Set.of("topic"));
         subscriptionState.assignFromSubscribed(Set.of(new TopicPartition("topic", 0)));
         assertEquals(1.0d, metrics.metric(metricsManager.assignedPartitionsCount).metricValue());
     }

@@ -22,6 +22,7 @@ import org.apache.kafka.common.utils.MockTime;
 import org.apache.kafka.common.utils.Utils;
 import org.apache.kafka.streams.StreamsConfig;
 import org.apache.kafka.streams.errors.ProcessorStateException;
+import org.apache.kafka.streams.internals.UpgradeFromValues;
 import org.apache.kafka.streams.processor.StateStore;
 import org.apache.kafka.streams.processor.StateStoreContext;
 import org.apache.kafka.streams.processor.TaskId;
@@ -49,14 +50,9 @@ import java.util.Set;
 
 import static org.apache.kafka.streams.state.internals.LegacyCheckpointingStateStore.CHECKPOINT_FILE_NAME;
 import static org.apache.kafka.streams.state.internals.LegacyCheckpointingStateStore.OFFSET_DELTA_THRESHOLD_FOR_CHECKPOINT;
-import static org.apache.kafka.streams.state.internals.OffsetCheckpoint.OFFSET_UNKNOWN;
-import static org.hamcrest.CoreMatchers.containsString;
-import static org.hamcrest.CoreMatchers.hasItem;
-import static org.hamcrest.CoreMatchers.instanceOf;
-import static org.hamcrest.CoreMatchers.not;
-import static org.hamcrest.MatcherAssert.assertThat;
 import static org.junit.jupiter.api.Assertions.assertEquals;
 import static org.junit.jupiter.api.Assertions.assertFalse;
+import static org.junit.jupiter.api.Assertions.assertInstanceOf;
 import static org.junit.jupiter.api.Assertions.assertNull;
 import static org.junit.jupiter.api.Assertions.assertThrows;
 import static org.junit.jupiter.api.Assertions.assertTrue;
@@ -110,7 +106,7 @@ public class LegacyCheckpointingStateStoreTest {
         final StateStore result = LegacyCheckpointingStateStore.maybeWrapStore(
             persistentStore, false, Set.of(partition), stateDirectory, taskId, LOG_PREFIX);
 
-        assertThat(result, instanceOf(LegacyCheckpointingStateStore.class));
+        assertInstanceOf(LegacyCheckpointingStateStore.class, result);
     }
 
     @Test
@@ -120,7 +116,7 @@ public class LegacyCheckpointingStateStoreTest {
         final StateStore result = LegacyCheckpointingStateStore.maybeWrapStore(
             nonPersistentStore, false, Set.of(partition), stateDirectory, taskId, LOG_PREFIX);
 
-        assertThat(result, not(instanceOf(LegacyCheckpointingStateStore.class)));
+        assertFalse(result instanceof LegacyCheckpointingStateStore);
     }
 
     @Test
@@ -136,7 +132,7 @@ public class LegacyCheckpointingStateStoreTest {
         final StateStore result = LegacyCheckpointingStateStore.maybeWrapStore(
             offsetManagingStore, false, Set.of(partition), stateDirectory, taskId, LOG_PREFIX);
 
-        assertThat(result, not(instanceOf(LegacyCheckpointingStateStore.class)));
+        assertFalse(result instanceof LegacyCheckpointingStateStore);
     }
 
     // =====================================================================
@@ -307,8 +303,9 @@ public class LegacyCheckpointingStateStoreTest {
     }
 
     @Test
-    public void shouldMapOffsetUnknownToNullOnInit() throws IOException {
-        writeCheckpointFile(Collections.singletonMap(partition, OFFSET_UNKNOWN));
+    public void shouldReturnNullForPartitionNotInCheckpointOnInit() throws IOException {
+        // write a checkpoint with no entry for our partition
+        writeCheckpointFile(Collections.emptyMap());
 
         final LegacyCheckpointingStateStore<MockKeyValueStore, Object, Object> store = createStore(false);
         store.init(context, persistentStore);
@@ -464,15 +461,21 @@ public class LegacyCheckpointingStateStoreTest {
     }
 
     @Test
-    public void shouldWriteOffsetUnknownSentinelWhenOffsetIsNull() throws IOException {
+    public void shouldRemoveOffsetWhenCommittedWithNull() throws IOException {
         final LegacyCheckpointingStateStore<MockKeyValueStore, Object, Object> store = createStore(false);
+        // first commit a real offset
+        store.commit(Collections.singletonMap(partition, 42L));
+        store.checkpoint();
+        assertEquals(42L, (long) readCheckpointFile().get(partition));
+
+        // now commit null for the same partition — should remove it
         final Map<TopicPartition, Long> nullOffset = new HashMap<>();
         nullOffset.put(partition, null);
         store.commit(nullOffset);
         store.checkpoint();
 
-        final Map<TopicPartition, Long> checkpointed = readCheckpointFile();
-        assertEquals(OFFSET_UNKNOWN, (long) checkpointed.get(partition));
+        assertFalse(readCheckpointFile().containsKey(partition));
+        assertNull(store.committedOffset(partition));
     }
 
     @Test
@@ -487,8 +490,7 @@ public class LegacyCheckpointingStateStoreTest {
                  LogCaptureAppender.createAndRegister(LegacyCheckpointingStateStore.class)) {
             store.checkpoint(); // should log a warning, not throw
 
-            assertThat(appender.getMessages(),
-                hasItem(containsString("Failed to write offset checkpoint file")));
+            assertTrue(appender.getMessages().stream().anyMatch(message -> message.contains("Failed to write offset checkpoint file")));
         }
     }
 
@@ -623,8 +625,7 @@ public class LegacyCheckpointingStateStoreTest {
             LegacyCheckpointingStateStore.migrateLegacyOffsets(
                 LOG_PREFIX, stateDirectory, taskId, Collections.singletonMap(partition, persistentStore));
 
-            assertThat(appender.getMessages(),
-                hasItem(containsString("does not manage its own offsets")));
+            assertTrue(appender.getMessages().stream().anyMatch(message -> message.contains("does not manage its own offsets")));
         }
     }
 
@@ -643,6 +644,87 @@ public class LegacyCheckpointingStateStoreTest {
         assertThrows(ProcessorStateException.class, () ->
             LegacyCheckpointingStateStore.migrateLegacyOffsets(
                 LOG_PREFIX, stateDirectory, taskId, Collections.singletonMap(partition, throwingStore)));
+    }
+
+    // =====================================================================
+    // maybeDowngradeOffsets()
+    // =====================================================================
+
+    @Test
+    public void shouldWriteDowngradeCheckpointWhenUpgradeFromIsPre43() throws IOException {
+        final Map<TopicPartition, Long> offsets = Collections.singletonMap(partition, 100L);
+
+        LegacyCheckpointingStateStore.maybeDowngradeOffsets(
+            LOG_PREFIX, UpgradeFromValues.UPGRADE_FROM_42, stateDirectory, taskId, offsets);
+
+        final File legacyFile = LegacyCheckpointingStateStore.checkpointFileFor(stateDirectory, taskId, null);
+        assertTrue(legacyFile.exists());
+        final Map<TopicPartition, Long> written = new OffsetCheckpoint(legacyFile).read();
+        assertEquals(100L, written.get(partition));
+    }
+
+    @Test
+    public void shouldBeNoOpWhenUpgradeFromIsNull() {
+        LegacyCheckpointingStateStore.maybeDowngradeOffsets(
+            LOG_PREFIX, null, stateDirectory, taskId, Collections.singletonMap(partition, 100L));
+
+        final File legacyFile = LegacyCheckpointingStateStore.checkpointFileFor(stateDirectory, taskId, null);
+        assertFalse(legacyFile.exists());
+    }
+
+    @Test
+    public void shouldWriteNullOffsetsAsOffsetUnknownInDowngradeCheckpoint() throws IOException {
+        final TopicPartition otherPartition = new TopicPartition("other-topic", 0);
+        final Map<TopicPartition, Long> offsets = new HashMap<>();
+        offsets.put(partition, 100L);
+        offsets.put(otherPartition, null);
+
+        LegacyCheckpointingStateStore.maybeDowngradeOffsets(
+            LOG_PREFIX, UpgradeFromValues.UPGRADE_FROM_42, stateDirectory, taskId, offsets);
+
+        final File legacyFile = LegacyCheckpointingStateStore.checkpointFileFor(stateDirectory, taskId, null);
+        final Map<TopicPartition, Long> written = new OffsetCheckpoint(legacyFile).read();
+        assertEquals(2, written.size());
+        assertEquals(100L, written.get(partition));
+        assertEquals(OffsetCheckpoint.OFFSET_UNKNOWN, written.get(otherPartition));
+    }
+
+    @Test
+    public void shouldWriteDowngradeCheckpointForGlobalStore() throws IOException {
+        // ensure global state dir exists
+        stateDirectory.globalStateDir().mkdirs();
+
+        final Map<TopicPartition, Long> offsets = Collections.singletonMap(partition, 200L);
+
+        LegacyCheckpointingStateStore.maybeDowngradeOffsets(
+            LOG_PREFIX, UpgradeFromValues.UPGRADE_FROM_40, stateDirectory, null, offsets);
+
+        final File legacyGlobalFile = LegacyCheckpointingStateStore.checkpointFileFor(stateDirectory, null, null);
+        assertTrue(legacyGlobalFile.exists());
+        final Map<TopicPartition, Long> written = new OffsetCheckpoint(legacyGlobalFile).read();
+        assertEquals(200L, written.get(partition));
+    }
+
+    @Test
+    public void shouldWriteDowngradeCheckpointForAllPre43Versions() throws IOException {
+        for (final UpgradeFromValues version : UpgradeFromValues.values()) {
+            // clean up any existing checkpoint from previous iteration
+            final File legacyFile = LegacyCheckpointingStateStore.checkpointFileFor(stateDirectory, taskId, null);
+            if (legacyFile.exists()) {
+                legacyFile.delete();
+            }
+
+            LegacyCheckpointingStateStore.maybeDowngradeOffsets(
+                LOG_PREFIX, version, stateDirectory, taskId, Collections.singletonMap(partition, 100L));
+
+            if (version.ordinal() <= UpgradeFromValues.UPGRADE_FROM_42.ordinal()) {
+                assertTrue(legacyFile.exists(),
+                    "Expected downgrade checkpoint for " + version);
+            } else {
+                assertFalse(legacyFile.exists(),
+                    "Expected no downgrade checkpoint for " + version);
+            }
+        }
     }
 
     // =====================================================================

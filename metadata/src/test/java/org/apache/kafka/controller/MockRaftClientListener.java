@@ -36,6 +36,8 @@ public class MockRaftClientListener implements RaftClient.Listener<ApiMessageAnd
     public static final String RENOUNCE = "RENOUNCE";
     public static final String SHUTDOWN = "SHUTDOWN";
     public static final String SNAPSHOT = "SNAPSHOT";
+    public static final String BOOTSTRAP_SNAPSHOT = "BOOTSTRAP_SNAPSHOT";
+    public static final String BOOTSTRAP_OFFSET = "BOOTSTRAP_OFFSET";
 
     private final int nodeId;
     private final List<String> serializedEvents = new ArrayList<>();
@@ -65,16 +67,25 @@ public class MockRaftClientListener implements RaftClient.Listener<ApiMessageAnd
 
     @Override
     public synchronized void handleLoadSnapshot(SnapshotReader<ApiMessageAndVersion> reader) {
-        long lastCommittedOffset = reader.lastContainedLogOffset();
+        loadSnapshot(reader, SNAPSHOT, LAST_COMMITTED_OFFSET);
+    }
+
+    @Override
+    public synchronized void handleLoadBootstrap(SnapshotReader<ApiMessageAndVersion> reader) {
+        loadSnapshot(reader, BOOTSTRAP_SNAPSHOT, BOOTSTRAP_OFFSET);
+    }
+
+    private void loadSnapshot(SnapshotReader<ApiMessageAndVersion> reader, String eventType, String offsetLabel) {
+        long lastContainedLogOffset = reader.lastContainedLogOffset();
         try {
             while (reader.hasNext()) {
                 Batch<ApiMessageAndVersion> batch = reader.next();
 
                 for (ApiMessageAndVersion messageAndVersion : batch.records()) {
                     ApiMessage message = messageAndVersion.message();
-                    serializedEvents.add(SNAPSHOT + " " + message.toString());
+                    serializedEvents.add(eventType + " " + message.toString());
                 }
-                serializedEvents.add(LAST_COMMITTED_OFFSET + " " + lastCommittedOffset);
+                serializedEvents.add(offsetLabel + " " + lastContainedLogOffset);
             }
         } finally {
             reader.close();

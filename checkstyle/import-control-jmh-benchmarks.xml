@@ -43,6 +43,7 @@
     <allow pkg="org.apache.kafka.security.authorizer"/>
     <allow pkg="org.apache.kafka.server"/>
     <allow pkg="org.apache.kafka.storage"/>
+    <allow pkg="org.apache.kafka.streams"/>
     <allow pkg="org.apache.kafka.clients"/>
     <allow pkg="org.apache.kafka.coordinator.common.runtime"/>
     <allow pkg="org.apache.kafka.coordinator.group"/>

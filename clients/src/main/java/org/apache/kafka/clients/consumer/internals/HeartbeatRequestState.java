@@ -16,9 +16,9 @@
  */
 package org.apache.kafka.clients.consumer.internals;
 
-import org.apache.kafka.common.utils.LogContext;
 import org.apache.kafka.common.utils.Time;
 import org.apache.kafka.common.utils.Timer;
+import org.apache.kafka.common.utils.internals.LogContext;
 
 /**
  * Represents the state of a heartbeat request, including logic for timing, retries, and exponential backoff.
@@ -58,6 +58,10 @@ public class HeartbeatRequestState extends RequestState {
 
     public long heartbeatIntervalMs() {
         return heartbeatIntervalMs;
+    }
+
+    public long retryBackoffMs() {
+        return exponentialBackoff.initialInterval();
     }
 
     public void resetTimer() {

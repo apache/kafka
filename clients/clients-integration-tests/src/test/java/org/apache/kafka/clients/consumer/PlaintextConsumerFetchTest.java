@@ -41,6 +41,7 @@ import java.util.concurrent.ExecutionException;
 import static org.apache.kafka.clients.ClientsTestUtils.awaitAssignment;
 import static org.apache.kafka.clients.ClientsTestUtils.consumeAndVerifyRecords;
 import static org.apache.kafka.clients.ClientsTestUtils.consumeRecords;
+import static org.apache.kafka.clients.ClientsTestUtils.pollUntilTrue;
 import static org.apache.kafka.clients.ClientsTestUtils.sendRecords;
 import static org.apache.kafka.clients.consumer.ConsumerConfig.AUTO_OFFSET_RESET_CONFIG;
 import static org.apache.kafka.clients.consumer.ConsumerConfig.FETCH_MAX_BYTES_CONFIG;
@@ -55,7 +56,6 @@ import static org.junit.jupiter.api.Assertions.assertArrayEquals;
 import static org.junit.jupiter.api.Assertions.assertEquals;
 import static org.junit.jupiter.api.Assertions.assertNotNull;
 import static org.junit.jupiter.api.Assertions.assertThrows;
-import static org.junit.jupiter.api.Assertions.assertTrue;
 
 @ClusterTestDefaults(
     types = {Type.KRAFT},
@@ -174,14 +174,18 @@ public class PlaintextConsumerFetchTest {
             sendRecords(producer, tp, totalRecords, startingTimestamp);
             consumer.assign(List.of(tp));
             consumer.seek(tp, 0);
-            
+
             // consume some, but not all the records
             consumeAndVerifyRecords(consumer, tp, totalRecords / 2, 0);
             // seek to out of range position
             var outOfRangePos = totalRecords + 17; // arbitrary, much higher offset
             consumer.seek(tp, outOfRangePos);
             // assert that poll resets to the ending position
-            assertTrue(consumer.poll(Duration.ofMillis(50)).isEmpty());
+            // use pollUntilTrue because AsyncConsumer with manual assignment sends fewer
+            // fetch requests per poll compared to the fix before KAFKA-20426, so the
+            // offset reset from out-of-range may not complete in a single poll() call
+            pollUntilTrue(consumer, () -> consumer.position(tp) == totalRecords,
+                "Consumer position should advance to the latest end offset " + totalRecords);
             sendRecords(producer, tp, totalRecords, totalRecords);
             var nextRecord = consumer.poll(Duration.ofMillis(50)).iterator().next();
             // ensure the seek went to the last known record at the time of the previous poll

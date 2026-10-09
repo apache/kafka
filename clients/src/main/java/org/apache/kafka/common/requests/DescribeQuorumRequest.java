@@ -24,7 +24,6 @@ import org.apache.kafka.common.protocol.Errors;
 import org.apache.kafka.common.protocol.Readable;
 
 import java.util.ArrayList;
-import java.util.Collections;
 import java.util.List;
 import java.util.stream.Collectors;
 
@@ -61,10 +60,10 @@ public class DescribeQuorumRequest extends AbstractRequest {
 
     public static DescribeQuorumRequestData singletonRequest(TopicPartition topicPartition) {
         return new DescribeQuorumRequestData()
-            .setTopics(Collections.singletonList(
+            .setTopics(List.of(
                 new DescribeQuorumRequestData.TopicData()
                     .setTopicName(topicPartition.topic())
-                    .setPartitions(Collections.singletonList(
+                    .setPartitions(List.of(
                         new DescribeQuorumRequestData.PartitionData()
                             .setPartitionIndex(topicPartition.partition()))
             )));

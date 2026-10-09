@@ -21,7 +21,6 @@ import org.apache.kafka.common.network.Send;
 import org.apache.kafka.common.protocol.ApiKeys;
 import org.apache.kafka.common.protocol.ByteBufferAccessor;
 import org.apache.kafka.common.protocol.Errors;
-import org.apache.kafka.test.TestUtils;
 
 import org.junit.jupiter.api.Test;
 
@@ -40,7 +39,7 @@ class EnvelopeResponseTest {
             ResponseHeader header = new ResponseHeader(15, headerVersion);
 
             Send send = response.toSend(header, version);
-            ByteBuffer buffer = TestUtils.toBuffer(send);
+            ByteBuffer buffer = ByteBufferChannel.toBuffer(send);
             assertEquals(send.size() - 4, buffer.getInt());
             ResponseHeader parsedHeader = ResponseHeader.parse(buffer, headerVersion);
             assertEquals(header.size(), parsedHeader.size());

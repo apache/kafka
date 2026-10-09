@@ -18,6 +18,7 @@ package org.apache.kafka.common.config.internals;
 
 import org.apache.kafka.common.config.ConfigException;
 
+import java.io.IOException;
 import java.nio.file.Files;
 import java.nio.file.Path;
 import java.nio.file.Paths;
@@ -49,7 +50,11 @@ public class AllowedPaths {
                 } else if (!Files.exists(normalisedPath)) {
                     throw new ConfigException("Path " + normalisedPath + " does not exist");
                 } else {
-                    allowedPaths.add(normalisedPath);
+                    try {
+                        allowedPaths.add(normalisedPath.toRealPath());
+                    } catch (IOException e) {
+                        throw new ConfigException("Path " + normalisedPath + " could not be resolved", e);
+                    }
                 }
             });
 
@@ -69,12 +74,16 @@ public class AllowedPaths {
         Path parsedPath = Paths.get(path);
 
         if (allowedPaths != null) {
-            Path normalisedPath = parsedPath.normalize();
-            long allowed = allowedPaths.stream().filter(normalisedPath::startsWith).count();
-            if (allowed == 0) {
+            try {
+                Path realPath = parsedPath.toRealPath();
+                long allowed = allowedPaths.stream().filter(realPath::startsWith).count();
+                if (allowed == 0) {
+                    return null;
+                }
+                return realPath;
+            } catch (IOException e) {
                 return null;
             }
-            return normalisedPath;
         }
 
         return parsedPath;

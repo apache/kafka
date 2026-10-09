@@ -19,12 +19,12 @@ package org.apache.kafka.connect.runtime.isolation;
 
 import org.apache.kafka.common.Configurable;
 import org.apache.kafka.common.config.AbstractConfig;
+import org.apache.kafka.common.config.ConfigData;
 import org.apache.kafka.common.config.ConfigDef;
 import org.apache.kafka.common.config.ConfigException;
 import org.apache.kafka.common.config.provider.ConfigProvider;
 import org.apache.kafka.common.utils.LogCaptureAppender;
 import org.apache.kafka.common.utils.Utils;
-import org.apache.kafka.connect.components.Versioned;
 import org.apache.kafka.connect.connector.Connector;
 import org.apache.kafka.connect.connector.policy.AllConnectorClientConfigOverridePolicy;
 import org.apache.kafka.connect.connector.policy.ConnectorClientConfigOverridePolicy;
@@ -47,6 +47,7 @@ import org.apache.kafka.connect.storage.ConverterType;
 import org.apache.kafka.connect.storage.HeaderConverter;
 import org.apache.kafka.connect.storage.SimpleHeaderConverter;
 
+import org.apache.logging.log4j.Level;
 import org.junit.jupiter.api.BeforeEach;
 import org.junit.jupiter.api.Test;
 
@@ -417,6 +418,76 @@ public class PluginsTest {
     }
 
     @Test
+    public void newConverterShouldCloseConverterWhenConfigureFails() {
+        try {
+            props.put(WorkerConfig.KEY_CONVERTER_CLASS_CONFIG, FailingToConfigureConverter.class.getName());
+            createConfig();
+
+            assertThrows(RuntimeException.class, () -> plugins.newConverter(
+                config,
+                WorkerConfig.KEY_CONVERTER_CLASS_CONFIG,
+                ClassLoaderUsage.CURRENT_CLASSLOADER
+            ));
+
+            assertTrue(FailingToConfigureConverter.closed);
+        } finally {
+            FailingToConfigureConverter.closed = false;
+        }
+    }
+
+    @Test
+    public void newInternalConverterShouldCloseConverterWhenConfigureFails() {
+        try {
+            assertThrows(RuntimeException.class, () -> plugins.newInternalConverter(
+                true,
+                FailingToConfigureConverter.class.getName(),
+                Map.of()
+            ));
+
+            assertTrue(FailingToConfigureConverter.closed);
+        } finally {
+            FailingToConfigureConverter.closed = false;
+        }
+    }
+
+    @Test
+    public void newHeaderConverterShouldCloseHeaderConverterWhenConfigureFails() {
+        try {
+            props.put(WorkerConfig.HEADER_CONVERTER_CLASS_CONFIG, FailingToConfigureHeaderConverter.class.getName());
+            createConfig();
+
+            assertThrows(RuntimeException.class, () -> plugins.newHeaderConverter(
+                config,
+                WorkerConfig.HEADER_CONVERTER_CLASS_CONFIG,
+                ClassLoaderUsage.CURRENT_CLASSLOADER
+            ));
+
+            assertTrue(FailingToConfigureHeaderConverter.closed);
+        } finally {
+            FailingToConfigureHeaderConverter.closed = false;
+        }
+    }
+
+    @Test
+    public void newConfigProviderShouldCloseConfigProviderWhenConfigureFails() {
+        try {
+            String providerPrefix = "some.provider";
+            props.put(providerPrefix + ".class", FailingToConfigureConfigProvider.class.getName());
+            createConfig();
+
+            assertThrows(RuntimeException.class, () -> plugins.newConfigProvider(
+                config,
+                providerPrefix,
+                ClassLoaderUsage.PLUGINS
+            ));
+
+            assertTrue(FailingToConfigureConfigProvider.closed);
+        } finally {
+            FailingToConfigureConfigProvider.closed = false;
+        }
+    }
+
+    @Test
     public void newConnectorShouldInstantiateWithPluginClassLoader() {
         Connector plugin = plugins.newConnector(TestPlugin.SAMPLING_CONNECTOR.className());
 
@@ -497,7 +568,8 @@ public class PluginsTest {
     public void testOnlyScanNoPlugins() {
         try (LogCaptureAppender logCaptureAppender = LogCaptureAppender.createAndRegister(Plugins.class)) {
             Plugins.maybeReportHybridDiscoveryIssue(PluginDiscoveryMode.ONLY_SCAN, empty, empty);
-            assertTrue(logCaptureAppender.getEvents().stream().noneMatch(e -> e.getLevel().contains("ERROR") || e.getLevel().equals("WARN")));
+            assertTrue(logCaptureAppender.getMessages(Level.ERROR).isEmpty());
+            assertTrue(logCaptureAppender.getMessages(Level.WARN).isEmpty());
         }
     }
 
@@ -505,7 +577,8 @@ public class PluginsTest {
     public void testOnlyScanWithPlugins() {
         try (LogCaptureAppender logCaptureAppender = LogCaptureAppender.createAndRegister(Plugins.class)) {
             Plugins.maybeReportHybridDiscoveryIssue(PluginDiscoveryMode.ONLY_SCAN, empty, nonEmpty);
-            assertTrue(logCaptureAppender.getEvents().stream().noneMatch(e -> e.getLevel().contains("ERROR") || e.getLevel().equals("WARN")));
+            assertTrue(logCaptureAppender.getMessages(Level.ERROR).isEmpty());
+            assertTrue(logCaptureAppender.getMessages(Level.WARN).isEmpty());
         }
     }
 
@@ -513,10 +586,9 @@ public class PluginsTest {
     public void testHybridWarnNoPlugins() {
         try (LogCaptureAppender logCaptureAppender = LogCaptureAppender.createAndRegister(Plugins.class)) {
             Plugins.maybeReportHybridDiscoveryIssue(PluginDiscoveryMode.HYBRID_WARN, empty, empty);
-            assertTrue(logCaptureAppender.getEvents().stream().anyMatch(e ->
-                    e.getLevel().equals("WARN")
-                            // These log messages must contain the config name, it is referenced in the documentation.
-                            && e.getMessage().contains(WorkerConfig.PLUGIN_DISCOVERY_CONFIG)
+            assertTrue(logCaptureAppender.getMessages(Level.WARN).stream().anyMatch(m ->
+                    // These log messages must contain the config name, it is referenced in the documentation.
+                    m.contains(WorkerConfig.PLUGIN_DISCOVERY_CONFIG)
             ));
         }
     }
@@ -525,10 +597,8 @@ public class PluginsTest {
     public void testHybridWarnWithPlugins() {
         try (LogCaptureAppender logCaptureAppender = LogCaptureAppender.createAndRegister(Plugins.class)) {
             Plugins.maybeReportHybridDiscoveryIssue(PluginDiscoveryMode.HYBRID_WARN, nonEmpty, nonEmpty);
-            assertTrue(logCaptureAppender.getEvents().stream().anyMatch(e ->
-                    e.getLevel().equals("WARN")
-                            && !e.getMessage().contains(missingPluginClass)
-                            && e.getMessage().contains(WorkerConfig.PLUGIN_DISCOVERY_CONFIG)
+            assertTrue(logCaptureAppender.getMessages(Level.WARN).stream().anyMatch(m ->
+                    !m.contains(missingPluginClass) && m.contains(WorkerConfig.PLUGIN_DISCOVERY_CONFIG)
             ));
         }
     }
@@ -537,10 +607,8 @@ public class PluginsTest {
     public void testHybridWarnMissingPlugins() {
         try (LogCaptureAppender logCaptureAppender = LogCaptureAppender.createAndRegister(Plugins.class)) {
             Plugins.maybeReportHybridDiscoveryIssue(PluginDiscoveryMode.HYBRID_WARN, empty, nonEmpty);
-            assertTrue(logCaptureAppender.getEvents().stream().anyMatch(e ->
-                    e.getLevel().equals("WARN")
-                            && e.getMessage().contains(missingPluginClass)
-                            && e.getMessage().contains(WorkerConfig.PLUGIN_DISCOVERY_CONFIG)
+            assertTrue(logCaptureAppender.getMessages(Level.WARN).stream().anyMatch(m ->
+                    m.contains(missingPluginClass) && m.contains(WorkerConfig.PLUGIN_DISCOVERY_CONFIG)
             ));
         }
     }
@@ -549,9 +617,8 @@ public class PluginsTest {
     public void testHybridFailNoPlugins() {
         try (LogCaptureAppender logCaptureAppender = LogCaptureAppender.createAndRegister(Plugins.class)) {
             Plugins.maybeReportHybridDiscoveryIssue(PluginDiscoveryMode.HYBRID_FAIL, empty, empty);
-            assertTrue(logCaptureAppender.getEvents().stream().anyMatch(e ->
-                    e.getLevel().equals("WARN")
-                            && e.getMessage().contains(WorkerConfig.PLUGIN_DISCOVERY_CONFIG)
+            assertTrue(logCaptureAppender.getMessages(Level.WARN).stream().anyMatch(m ->
+                    m.contains(WorkerConfig.PLUGIN_DISCOVERY_CONFIG)
             ));
         }
     }
@@ -560,10 +627,8 @@ public class PluginsTest {
     public void testHybridFailWithPlugins() {
         try (LogCaptureAppender logCaptureAppender = LogCaptureAppender.createAndRegister(Plugins.class)) {
             Plugins.maybeReportHybridDiscoveryIssue(PluginDiscoveryMode.HYBRID_FAIL, nonEmpty, nonEmpty);
-            assertTrue(logCaptureAppender.getEvents().stream().anyMatch(e ->
-                    e.getLevel().equals("WARN")
-                            && !e.getMessage().contains(missingPluginClass)
-                            && e.getMessage().contains(WorkerConfig.PLUGIN_DISCOVERY_CONFIG)
+            assertTrue(logCaptureAppender.getMessages(Level.WARN).stream().anyMatch(m ->
+                    !m.contains(missingPluginClass) && m.contains(WorkerConfig.PLUGIN_DISCOVERY_CONFIG)
             ));
         }
     }
@@ -577,7 +642,8 @@ public class PluginsTest {
     public void testServiceLoadNoPlugins() {
         try (LogCaptureAppender logCaptureAppender = LogCaptureAppender.createAndRegister(Plugins.class)) {
             Plugins.maybeReportHybridDiscoveryIssue(PluginDiscoveryMode.SERVICE_LOAD, empty, empty);
-            assertTrue(logCaptureAppender.getEvents().stream().noneMatch(e -> e.getLevel().contains("ERROR") || e.getLevel().equals("WARN")));
+            assertTrue(logCaptureAppender.getMessages(Level.ERROR).isEmpty());
+            assertTrue(logCaptureAppender.getMessages(Level.WARN).isEmpty());
         }
     }
 
@@ -585,7 +651,8 @@ public class PluginsTest {
     public void testServiceLoadWithPlugins() {
         try (LogCaptureAppender logCaptureAppender = LogCaptureAppender.createAndRegister(Plugins.class)) {
             Plugins.maybeReportHybridDiscoveryIssue(PluginDiscoveryMode.SERVICE_LOAD, nonEmpty, nonEmpty);
-            assertTrue(logCaptureAppender.getEvents().stream().noneMatch(e -> e.getLevel().contains("ERROR") || e.getLevel().equals("WARN")));
+            assertTrue(logCaptureAppender.getMessages(Level.ERROR).isEmpty());
+            assertTrue(logCaptureAppender.getMessages(Level.WARN).isEmpty());
         }
     }
 
@@ -690,7 +757,7 @@ public class PluginsTest {
         }
     }
 
-    public static class TestConverter implements Converter, Configurable, Versioned {
+    public static class TestConverter implements Converter, Configurable {
         public Map<String, ?> configs;
 
         public ConfigDef config() {
@@ -716,11 +783,6 @@ public class PluginsTest {
         @Override
         public SchemaAndValue toConnectData(String topic, byte[] value) {
             return null;
-        }
-
-        @Override
-        public String version() {
-            return "test";
         }
     }
 
@@ -777,18 +839,90 @@ public class PluginsTest {
         }
     }
 
-    public static class TestInternalConverter extends JsonConverter implements Versioned {
+    public static class TestInternalConverter extends JsonConverter {
         public Map<String, ?> configs;
-
-        @Override
-        public String version() {
-            return "test";
-        }
 
         @Override
         public void configure(Map<String, ?> configs) {
             this.configs = configs;
             super.configure(configs);
+        }
+    }
+
+    public static class FailingToConfigureConverter implements Converter {
+        static volatile boolean closed;
+
+        @Override
+        public void configure(Map<String, ?> configs, boolean isKey) {
+            throw new RuntimeException("configure failed");
+        }
+
+        @Override
+        public byte[] fromConnectData(String topic, Schema schema, Object value) {
+            return new byte[0];
+        }
+
+        @Override
+        public SchemaAndValue toConnectData(String topic, byte[] value) {
+            return null;
+        }
+
+        @Override
+        public void close() {
+            closed = true;
+        }
+    }
+
+    public static class FailingToConfigureHeaderConverter implements HeaderConverter {
+        static volatile boolean closed;
+
+        @Override
+        public ConfigDef config() {
+            return new ConfigDef();
+        }
+
+        @Override
+        public void configure(Map<String, ?> configs) {
+            throw new RuntimeException("configure failed");
+        }
+
+        @Override
+        public byte[] fromConnectHeader(String topic, String headerKey, Schema schema, Object value) {
+            return new byte[0];
+        }
+
+        @Override
+        public SchemaAndValue toConnectHeader(String topic, String headerKey, byte[] value) {
+            return null;
+        }
+
+        @Override
+        public void close() {
+            closed = true;
+        }
+    }
+
+    public static class FailingToConfigureConfigProvider implements ConfigProvider {
+        static volatile boolean closed;
+
+        @Override
+        public void configure(Map<String, ?> configs) {
+            throw new RuntimeException("configure failed");
+        }
+
+        @Override
+        public ConfigData get(String path) {
+            return null;
+        }
+
+        @Override
+        public ConfigData get(String path, Set<String> keys) {
+            return null;
+        }
+
+        @Override
+        public void close() {
+            closed = true;
         }
     }
 }

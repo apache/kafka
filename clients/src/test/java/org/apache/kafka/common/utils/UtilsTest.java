@@ -17,6 +17,8 @@
 package org.apache.kafka.common.utils;
 
 import org.apache.kafka.common.config.ConfigException;
+import org.apache.kafka.common.utils.internals.OperatingSystem;
+import org.apache.kafka.common.utils.internals.SingleByteBufferOutputStream;
 import org.apache.kafka.test.TestUtils;
 
 import org.junit.jupiter.api.Test;
@@ -38,6 +40,7 @@ import java.nio.charset.StandardCharsets;
 import java.nio.file.DirectoryStream;
 import java.nio.file.FileSystem;
 import java.nio.file.Files;
+import java.nio.file.NoSuchFileException;
 import java.nio.file.Path;
 import java.nio.file.StandardOpenOption;
 import java.nio.file.attribute.BasicFileAttributes;
@@ -79,7 +82,6 @@ import static org.apache.kafka.common.utils.Utils.formatBytes;
 import static org.apache.kafka.common.utils.Utils.getHost;
 import static org.apache.kafka.common.utils.Utils.getPort;
 import static org.apache.kafka.common.utils.Utils.intersection;
-import static org.apache.kafka.common.utils.Utils.mkEntry;
 import static org.apache.kafka.common.utils.Utils.murmur2;
 import static org.apache.kafka.common.utils.Utils.union;
 import static org.apache.kafka.common.utils.Utils.validHostPattern;
@@ -93,6 +95,7 @@ import static org.junit.jupiter.api.Assertions.assertNull;
 import static org.junit.jupiter.api.Assertions.assertThrows;
 import static org.junit.jupiter.api.Assertions.assertTrue;
 import static org.junit.jupiter.api.Assertions.fail;
+import static org.junit.jupiter.api.Assumptions.assumeFalse;
 import static org.mockito.ArgumentMatchers.any;
 import static org.mockito.ArgumentMatchers.anyLong;
 import static org.mockito.Mockito.atLeastOnce;
@@ -218,6 +221,7 @@ public class UtilsTest {
     @Test
     public void testFormatBytes() {
         assertEquals("-1", formatBytes(-1));
+        assertEquals("0 B", formatBytes(0));
         assertEquals("1023 B", formatBytes(1023));
         assertEquals("1 KB", formatBytes(1024));
         assertEquals("1024 KB", formatBytes((1024 * 1024) - 1));
@@ -253,7 +257,7 @@ public class UtilsTest {
     private void doTestWriteToByteBuffer(ByteBuffer source, ByteBuffer dest) throws IOException {
         int numBytes = source.remaining();
         int position = source.position();
-        DataOutputStream out = new DataOutputStream(new ByteBufferOutputStream(dest));
+        DataOutputStream out = new DataOutputStream(new SingleByteBufferOutputStream(dest));
         Utils.writeTo(out, source, source.remaining());
         dest.flip();
         assertEquals(numBytes, dest.remaining());
@@ -603,13 +607,41 @@ public class UtilsTest {
             assertFalse(smallBuffer.hasRemaining(), "Buffer should be filled");
             assertEquals("world", new String(smallBuffer.array()), "Buffer should be populated correctly");
             // Scenario 4: test end of stream is reached before buffer is filled up
-            try {
-                Utils.readFullyOrFail(channel, largeBuffer, 0, "large");
-                fail("Expected EOFException to be raised");
-            } catch (EOFException e) {
-                // expected
-            }
+            assertThrows(EOFException.class, () -> Utils.readFullyOrFail(channel, largeBuffer, 0, "large"));
         }
+    }
+
+    @Test
+    public void testFlushPathWithExistingFile() throws IOException {
+        Path file = TestUtils.tempFile().toPath();
+        // On non-Windows/z/OS platforms this fsyncs the file; on Windows/z/OS it is skipped. Either way it must not throw.
+        assertDoesNotThrow(() -> Utils.flushPath(file));
+    }
+
+    @Test
+    public void testFlushPathWithExistingDirectory() {
+        Path dir = TestUtils.tempDirectory().toPath();
+        assertDoesNotThrow(() -> Utils.flushPath(dir));
+    }
+
+    @Test
+    public void testFlushPathWithNullIsNoOp() {
+        assertDoesNotThrow(() -> Utils.flushPath(null));
+    }
+
+    @Test
+    public void testFlushPathThrowsForMissingPath() {
+        // The platform guard short-circuits before the path is opened on Windows/z/OS, so nothing is thrown there.
+        assumeFalse(OperatingSystem.IS_WINDOWS || OperatingSystem.IS_ZOS);
+        Path missing = TestUtils.tempDirectory().toPath().resolve("does-not-exist");
+        assertThrows(NoSuchFileException.class, () -> Utils.flushPath(missing));
+    }
+
+    @Test
+    public void testFlushPathIfExistsSwallowsNoSuchFileException() {
+        Path missing = TestUtils.tempDirectory().toPath().resolve("does-not-exist");
+        // A missing path must be swallowed (NoSuchFileException), not propagated.
+        assertDoesNotThrow(() -> Utils.flushPathIfExists(missing));
     }
 
     /**
@@ -1269,11 +1301,11 @@ public class UtilsTest {
             recordingCallable(recorded, "valid-2", null),
             recordingCallable(recorded, null, new TestException("exception-3"))
         ));
-        Map<String, Object> expected = Utils.mkMap(
-            mkEntry("valid-0", "valid-0"),
-            mkEntry("exception-1", new TestException("exception-1")),
-            mkEntry("valid-2", "valid-2"),
-            mkEntry("exception-3", new TestException("exception-3"))
+        Map<String, Object> expected = Map.of(
+            "valid-0", "valid-0",
+            "exception-1", new TestException("exception-1"),
+            "valid-2", "valid-2",
+            "exception-3", new TestException("exception-3")
         );
         assertEquals(expected, recorded);
 
@@ -1282,9 +1314,9 @@ public class UtilsTest {
             recordingCallable(recorded, "valid-0", null),
             recordingCallable(recorded, "valid-1", null)
         ));
-        expected = Utils.mkMap(
-            mkEntry("valid-0", "valid-0"),
-            mkEntry("valid-1", "valid-1")
+        expected = Map.of(
+            "valid-0", "valid-0",
+            "valid-1", "valid-1"
         );
         assertEquals(expected, recorded);
 
@@ -1293,9 +1325,9 @@ public class UtilsTest {
             recordingCallable(recorded, null, new TestException("exception-0")),
             recordingCallable(recorded, null, new TestException("exception-1")))
         );
-        expected = Utils.mkMap(
-            mkEntry("exception-0", new TestException("exception-0")),
-            mkEntry("exception-1", new TestException("exception-1"))
+        expected = Map.of(
+            "exception-0", new TestException("exception-0"),
+            "exception-1", new TestException("exception-1")
         );
         assertEquals(expected, recorded);
     }

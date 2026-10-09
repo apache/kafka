@@ -39,6 +39,7 @@ import org.apache.kafka.streams.state.WindowStore;
 import org.apache.kafka.streams.state.WindowStoreIterator;
 import org.apache.kafka.streams.state.internals.WrappedStateStore;
 
+import java.time.Instant;
 import java.util.List;
 import java.util.Map;
 
@@ -324,6 +325,70 @@ abstract class AbstractReadWriteDecorator<T extends StateStore, K, V> extends Wr
         public KeyValueIterator<Windowed<K>, AGG> findSessions(final long earliestSessionEndTime,
                                                                final long latestSessionEndTime) {
             return wrapped().findSessions(earliestSessionEndTime, latestSessionEndTime);
+        }
+
+        @Override
+        public AGG fetchSession(final K key,
+                                final Instant sessionStartTime,
+                                final Instant sessionEndTime) {
+            return wrapped().fetchSession(key, sessionStartTime, sessionEndTime);
+        }
+
+        @Override
+        public KeyValueIterator<Windowed<K>, AGG> backwardFindSessions(final K keyFrom,
+                                                                       final K keyTo,
+                                                                       final Instant earliestSessionEndTime,
+                                                                       final Instant latestSessionStartTime) {
+
+            return wrapped().backwardFindSessions(keyFrom, keyTo, earliestSessionEndTime, latestSessionStartTime);
+        }
+
+        @Override
+        public KeyValueIterator<Windowed<K>, AGG> findSessions(final K keyFrom,
+                                                               final K keyTo,
+                                                               final Instant earliestSessionEndTime,
+                                                               final Instant latestSessionStartTime) {
+            return wrapped().findSessions(keyFrom, keyTo, earliestSessionEndTime, latestSessionStartTime);
+        }
+
+        @Override
+        public KeyValueIterator<Windowed<K>, AGG> backwardFetch(final K key) {
+            return wrapped().backwardFetch(key);
+        }
+
+        @Override
+        public KeyValueIterator<Windowed<K>, AGG> backwardFetch(final K keyFrom,
+                                                                final K keyTo) {
+            return wrapped().backwardFetch(keyFrom, keyTo);
+        }
+
+        @Override
+        public KeyValueIterator<Windowed<K>, AGG> backwardFindSessions(final K key,
+                                                                       final long earliestSessionEndTime,
+                                                                       final long latestSessionStartTime) {
+            return wrapped().backwardFindSessions(key, earliestSessionEndTime, latestSessionStartTime);
+        }
+
+        @Override
+        public KeyValueIterator<Windowed<K>, AGG> backwardFindSessions(final K keyFrom,
+                                                                       final K keyTo,
+                                                                       final long earliestSessionEndTime,
+                                                                       final long latestSessionStartTime) {
+            return wrapped().backwardFindSessions(keyFrom, keyTo, earliestSessionEndTime, latestSessionStartTime);
+        }
+
+        @Override
+        public KeyValueIterator<Windowed<K>, AGG> backwardFindSessions(final K key,
+                                                                       final Instant earliestSessionEndTime,
+                                                                       final Instant latestSessionStartTime) {
+            return wrapped().backwardFindSessions(key, earliestSessionEndTime, latestSessionStartTime);
+        }
+
+        @Override
+        public KeyValueIterator<Windowed<K>, AGG> findSessions(final K key,
+                                                               final Instant earliestSessionEndTime,
+                                                               final Instant latestSessionStartTime) {
+            return wrapped().findSessions(key, earliestSessionEndTime, latestSessionStartTime);
         }
 
         @Override

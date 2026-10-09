@@ -35,6 +35,8 @@ public class QuorumConfigTest {
         assertInvalidConfig(Map.of(QuorumConfig.QUORUM_REQUEST_TIMEOUT_MS_CONFIG, "-1"));
         assertInvalidConfig(Map.of(QuorumConfig.QUORUM_RETRY_BACKOFF_MS_CONFIG, "-1"));
         assertInvalidConfig(Map.of(QuorumConfig.QUORUM_AUTO_JOIN_ENABLE_CONFIG, "-1"));
+        assertInvalidConfig(Map.of(QuorumConfig.QUORUM_FETCH_SNAPSHOT_MAX_BYTES_CONFIG, "-1"));
+        assertInvalidConfig(Map.of(QuorumConfig.QUORUM_FETCH_MAX_BYTES_CONFIG, "-1"));
     }
 
     private void assertInvalidConfig(Map<String, Object> overrideConfig) {

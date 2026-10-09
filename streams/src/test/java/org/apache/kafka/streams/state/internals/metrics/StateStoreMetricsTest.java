@@ -27,8 +27,7 @@ import java.util.Collections;
 import java.util.Map;
 import java.util.function.Supplier;
 
-import static org.hamcrest.CoreMatchers.is;
-import static org.hamcrest.MatcherAssert.assertThat;
+import static org.junit.jupiter.api.Assertions.assertEquals;
 import static org.mockito.Mockito.mock;
 import static org.mockito.Mockito.mockStatic;
 import static org.mockito.Mockito.when;
@@ -184,6 +183,23 @@ public class StateStoreMetricsTest {
     }
 
     @Test
+    public void shouldGetCommitSensor() {
+        final String metricName = "commit";
+        final String descriptionOfRate = "The average number of calls to commit per second";
+        final String descriptionOfAvg = "The average latency of calls to commit";
+        final String descriptionOfMax = "The maximum latency of calls to commit";
+        setupStreamsMetrics(metricName);
+
+        getAndVerifySensor(
+            () -> StateStoreMetrics.commitSensor(TASK_ID, STORE_TYPE, STORE_NAME, streamsMetrics),
+            metricName,
+            descriptionOfAvg,
+            descriptionOfMax,
+            descriptionOfRate
+        );
+    }
+
+    @Test
     public void shouldGetRemoveSensor() {
         final String metricName = "remove";
         final String descriptionOfRate = "The average number of calls to remove per second";
@@ -266,7 +282,7 @@ public class StateStoreMetricsTest {
                     descriptionOfMax
                 )
             );
-            assertThat(sensor, is(expectedSensor));
+            assertEquals(expectedSensor, sensor);
         }
     }
 
@@ -301,6 +317,24 @@ public class StateStoreMetricsTest {
     }
 
     @Test
+    public void shouldAddNumKeysGauge() {
+        @SuppressWarnings("unchecked")
+        final org.apache.kafka.common.metrics.Gauge<Long> gauge = mock(org.apache.kafka.common.metrics.Gauge.class);
+
+        StateStoreMetrics.addNumKeysGauge(TASK_ID, STORE_TYPE, STORE_NAME, streamsMetrics, gauge);
+
+        org.mockito.Mockito.verify(streamsMetrics).addStoreLevelMutableMetric(
+            TASK_ID,
+            STORE_TYPE,
+            STORE_NAME,
+            "num-keys",
+            "The current number of keys in the in-memory state store",
+            RecordingLevel.INFO,
+            gauge
+        );
+    }
+
+    @Test
     public void shouldGetRecordE2ELatencySensor() {
         final String metricName = "record-e2e-latency";
         final String e2eLatencyDescription =
@@ -327,7 +361,7 @@ public class StateStoreMetricsTest {
                     descriptionOfMax
                 )
             );
-            assertThat(sensor, is(expectedSensor));
+            assertEquals(expectedSensor, sensor);
         }
     }
 
@@ -363,7 +397,7 @@ public class StateStoreMetricsTest {
                     descriptionOfMax
                 )
             );
-            assertThat(sensor, is(expectedSensor));
+            assertEquals(expectedSensor, sensor);
         }
     }
 
@@ -397,7 +431,7 @@ public class StateStoreMetricsTest {
                     descriptionOfMax
                 )
             );
-            assertThat(sensor, is(expectedSensor));
+            assertEquals(expectedSensor, sensor);
         }
     }
 }

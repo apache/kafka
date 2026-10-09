@@ -44,8 +44,8 @@ import org.apache.kafka.common.requests.GetTelemetrySubscriptionsResponse;
 import org.apache.kafka.common.requests.PushTelemetryRequest;
 import org.apache.kafka.common.requests.PushTelemetryResponse;
 import org.apache.kafka.common.requests.RequestContext;
-import org.apache.kafka.common.utils.Crc32C;
 import org.apache.kafka.common.utils.Time;
+import org.apache.kafka.common.utils.internals.Crc32C;
 import org.apache.kafka.server.metrics.ClientMetricsConfigs;
 import org.apache.kafka.server.metrics.ClientMetricsInstance;
 import org.apache.kafka.server.metrics.ClientMetricsInstanceMetadata;
@@ -162,7 +162,7 @@ public class ClientMetricsManager implements AutoCloseable {
         long now = time.milliseconds();
         Uuid clientInstanceId = Optional.ofNullable(request.data().clientInstanceId())
             .filter(id -> !id.equals(Uuid.ZERO_UUID))
-            .orElse(generateNewClientId());
+            .orElseGet(this::generateNewClientId);
 
         /*
          Get the client instance from the cache or create a new one. If subscription has changed
@@ -204,18 +204,28 @@ public class ClientMetricsManager implements AutoCloseable {
             log.debug("Error validating push telemetry request from client [{}]", clientInstanceId, exception);
             clientInstance.lastKnownError(Errors.forException(exception));
             return request.getErrorResponse(0, exception);
-        } finally {
-            // Update the client instance with the latest push request parameters.
-            clientInstance.terminating(request.data().terminating());
         }
+
+        // Update the client instance with the latest push request parameters only
+        // after successful validation. Setting terminating on validation failure would
+        // permanently lock out the client instance from future requests.
+        clientInstance.terminating(request.data().terminating());
 
         // Push the metrics to the external client receiver plugin.
         ByteBuffer metrics = request.data().metrics();
         if (metrics != null && metrics.limit() > 0) {
             try {
                 long exportTimeStartMs = time.hiResClockMs();
-                clientTelemetryExporterPlugin.exportMetrics(requestContext, request, clientInstance.pushIntervalMs());
+                clientTelemetryExporterPlugin.exportMetrics(requestContext, request, clientInstance.pushIntervalMs(), clientTelemetryMaxBytes);
                 clientMetricsStats.recordPluginExport(clientInstanceId, time.hiResClockMs() - exportTimeStartMs);
+            } catch (TelemetryTooLargeException exception) {
+                // The decompressed payload exceeded the configured size limit. This is retryable (the client may
+                // shrink its metric set or the broker may be reconfigured), unlike a malformed payload, so it must
+                // not be reported as INVALID_RECORD: that error tells the client to stop pushing telemetry entirely.
+                clientMetricsStats.recordPluginErrorCount(clientInstanceId);
+                clientInstance.lastKnownError(Errors.TELEMETRY_TOO_LARGE);
+                log.warn("Error exporting client metrics to the plugin for client instance id: {}: {}", clientInstanceId, exception.toString());
+                return request.errorResponse(0, Errors.TELEMETRY_TOO_LARGE);
             } catch (Throwable exception) {
                 clientMetricsStats.recordPluginErrorCount(clientInstanceId);
                 clientInstance.lastKnownError(Errors.INVALID_RECORD);

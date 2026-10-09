@@ -17,10 +17,13 @@
 package org.apache.kafka.streams.state.internals;
 
 import org.apache.kafka.common.errors.SerializationException;
+import org.apache.kafka.common.header.Header;
 import org.apache.kafka.common.header.Headers;
+import org.apache.kafka.common.header.internals.RecordHeader;
 import org.apache.kafka.common.header.internals.RecordHeaders;
 import org.apache.kafka.common.serialization.Serdes;
-import org.apache.kafka.common.utils.ByteUtils;
+import org.apache.kafka.common.serialization.StringSerializer;
+import org.apache.kafka.common.utils.internals.ByteUtils;
 import org.apache.kafka.streams.state.StateSerdes;
 import org.apache.kafka.streams.state.ValueAndTimestamp;
 import org.apache.kafka.streams.state.ValueTimestampHeaders;
@@ -35,13 +38,18 @@ import java.nio.ByteBuffer;
 import java.nio.charset.StandardCharsets;
 import java.util.stream.Stream;
 
+import static org.apache.kafka.streams.state.internals.Utils.hasEmptyHeaders;
+import static org.apache.kafka.streams.state.internals.Utils.rawHeadersTimestampPrefix;
 import static org.apache.kafka.streams.state.internals.Utils.rawPlainValue;
 import static org.apache.kafka.streams.state.internals.Utils.rawTimestampedValue;
+import static org.apache.kafka.streams.state.internals.Utils.rawValueTimestampHeaders;
 import static org.apache.kafka.streams.state.internals.Utils.readBytes;
 import static org.junit.jupiter.api.Assertions.assertArrayEquals;
 import static org.junit.jupiter.api.Assertions.assertEquals;
+import static org.junit.jupiter.api.Assertions.assertFalse;
 import static org.junit.jupiter.api.Assertions.assertNull;
 import static org.junit.jupiter.api.Assertions.assertThrows;
+import static org.junit.jupiter.api.Assertions.assertTrue;
 
 public class UtilsTest {
     private static final String TOPIC = "test-topic";
@@ -52,6 +60,8 @@ public class UtilsTest {
     // Header size's varint encoding cannot exceed 5 bytes (see @{link ByteUtils#readVarint(ByteBuffer)})
     private static final int MAX_VARINT_SIZE = 5;
     private static final int OVERFLOW_HEADERS_SIZE = (1 + MAX_VARINT_SIZE) + HEADERS.length + StateSerdes.TIMESTAMP_SIZE + VALUE.length;
+    // 1 byte header size, 0 byte empty headers, and timestamp
+    private static final int MIN_SIZE = 1 + 0 + StateSerdes.TIMESTAMP_SIZE;
 
     @Test
     public void shouldExtractRawPlainValue() {
@@ -75,7 +85,13 @@ public class UtilsTest {
 
     @Test
     public void shouldReturnNullForNullRawTimestampedValue() {
-        assertNull(rawPlainValue(null));
+        assertNull(rawTimestampedValue(null));
+    }
+
+    @Test
+    public void shouldExtractRawValueWithEmptyHeaders() {
+        final byte[] res = rawPlainValue(timestampedValueWithEmptyHeaders(VALUE));
+        assertArrayEquals(VALUE, res);
     }
 
     @ParameterizedTest
@@ -88,6 +104,19 @@ public class UtilsTest {
         final byte[] outputBytes = rawTimestampedValue(inputBytes);
 
         assertArrayEquals(timestampedValueOf(value), outputBytes);
+    }
+
+    @Test
+    public void testRawTimestampedValueWithEmptyHeaders() {
+        final byte[] input = timestampedValueWithEmptyHeaders(VALUE);
+        final byte[] res = rawTimestampedValue(input);
+        final ByteBuffer buf = ByteBuffer.wrap(res);
+        assertEquals(TIMESTAMP, buf.getLong());
+
+        assertEquals(VALUE.length, buf.remaining());
+        final byte[] resValue = new byte[buf.remaining()];
+        buf.get(resValue);
+        assertArrayEquals(VALUE, resValue);
     }
 
     @ParameterizedTest
@@ -108,7 +137,7 @@ public class UtilsTest {
         final Headers headers = new RecordHeaders().add("key1", "value1".getBytes(StandardCharsets.UTF_8));
         final ValueTimestampHeaders<String> input = ValueTimestampHeaders.make(VALUE_STR, TIMESTAMP, headers);
         try (
-            final ValueTimestampHeadersSerializer<String> serializer = new ValueTimestampHeadersSerializer<>(Serdes.String().serializer());
+            final ValueTimestampHeadersSerializer<String> serializer = new ValueTimestampHeadersSerializer<>(new StringSerializer());
             final ValueAndTimestampSerde<String> stringSerde = new ValueAndTimestampSerde<>(Serdes.String())
         ) {
             final byte[] inputBytes = serializer.serialize(TOPIC, input);
@@ -118,6 +147,25 @@ public class UtilsTest {
             assertEquals(TIMESTAMP, output.timestamp());
             assertEquals(VALUE_STR, output.value());
         }
+    }
+
+    @Test
+    public void testEmptyHeadersAndTimestamp() {
+        final byte[] empty = new byte[MIN_SIZE];
+        empty[0] = (byte) 0x00; // header size
+        assertTrue(hasEmptyHeaders(empty));
+
+        final byte[] nonEmpty = new byte[MIN_SIZE];
+        nonEmpty[0] = (byte) 0x01; // header size
+        assertFalse(hasEmptyHeaders(nonEmpty));
+    }
+
+    @ParameterizedTest
+    @ValueSource(bytes = { 0x10, 0x11 })
+    public void testEmptyHeadersAndTimestampWithInvalidHeaderSizes(final byte invalidSize) {
+        final byte[] invalid = new byte[MIN_SIZE];
+        invalid[0] = invalidSize; // header size
+        assertFalse(hasEmptyHeaders(invalid));
     }
 
     @Test
@@ -140,6 +188,96 @@ public class UtilsTest {
         assertArrayEquals("-value".getBytes(StandardCharsets.UTF_8), tail);
 
         assertThrows(SerializationException.class, () -> readBytes(buf, 1));
+    }
+
+    @Test
+    public void shouldExtractHeadersTimestampPrefixWithHeaders() {
+        final byte[] headers = headersOf(HEADERS);
+        final byte[] input = headersTimestampValueOf(headers, VALUE);
+
+        // The prefix is everything rawPlainValue() strips: [headersSize(varint)][headers][timestamp].
+        final byte[] expected = new byte[headers.length + StateSerdes.TIMESTAMP_SIZE];
+        ByteBuffer.wrap(expected).put(headers).putLong(TIMESTAMP);
+
+        assertArrayEquals(expected, rawHeadersTimestampPrefix(input));
+    }
+
+    @Test
+    public void shouldExtractHeadersTimestampPrefixWithEmptyHeaders() {
+        // Empty headers encode as a single-byte varint, so the prefix is 1 + 8 bytes.
+        final byte[] prefix = rawHeadersTimestampPrefix(timestampedValueWithEmptyHeaders(VALUE));
+
+        assertEquals(MIN_SIZE, prefix.length);
+        assertEquals((byte) 0x00, prefix[0]);
+        assertEquals(TIMESTAMP, ByteBuffer.wrap(prefix, 1, StateSerdes.TIMESTAMP_SIZE).getLong());
+    }
+
+    @Test
+    public void shouldReturnNullForNullRawHeadersTimestampPrefix() {
+        assertNull(rawHeadersTimestampPrefix(null));
+    }
+
+    @Test
+    public void shouldRebuildValueTimestampHeadersFromPrefixAndPlainValue() {
+        final byte[] input = headersTimestampValueOf(headersOf(HEADERS), VALUE);
+
+        // Splitting and rejoining must be lossless, for headers and for the empty-headers case.
+        assertArrayEquals(input, rawValueTimestampHeaders(rawHeadersTimestampPrefix(input), rawPlainValue(input)));
+
+        final byte[] empty = timestampedValueWithEmptyHeaders(VALUE);
+        assertArrayEquals(empty, rawValueTimestampHeaders(rawHeadersTimestampPrefix(empty), rawPlainValue(empty)));
+    }
+
+    @Test
+    public void shouldReturnNullWhenRebuildingFromNullPlainValue() {
+        assertNull(rawValueTimestampHeaders(rawHeadersTimestampPrefix(timestampedValueWithEmptyHeaders(VALUE)), null));
+    }
+
+    @Test
+    public void shouldBuildValueTimestampHeadersFromPlainValueTimestampAndHeaders() {
+        final Headers headers = new RecordHeaders(new Header[]{new RecordHeader("h", "hv".getBytes(StandardCharsets.UTF_8))});
+        final byte[] built = rawValueTimestampHeaders(VALUE, TIMESTAMP, headers);
+
+        // Building must be the exact inverse of the extracting helpers.
+        assertArrayEquals(VALUE, rawPlainValue(built));
+        assertEquals(TIMESTAMP, Utils.timestamp(built));
+        assertEquals(headers, Utils.headers(built));
+    }
+
+    @Test
+    public void shouldBuildValueTimestampHeadersWithEmptyHeadersLikeTheTimestampOnlyOverload() {
+        // Empty and null headers must both encode as headersSize=0, i.e. exactly what the overload
+        // without headers produces -- otherwise the two writers would disagree on the wire format.
+        final byte[] expected = timestampedValueWithEmptyHeaders(VALUE);
+
+        assertArrayEquals(expected, rawValueTimestampHeaders(VALUE, TIMESTAMP));
+        assertArrayEquals(expected, rawValueTimestampHeaders(VALUE, TIMESTAMP, new RecordHeaders()));
+        assertArrayEquals(expected, rawValueTimestampHeaders(VALUE, TIMESTAMP, null));
+    }
+
+    @Test
+    public void shouldReturnNullWhenBuildingFromNullPlainValueWithHeaders() {
+        assertNull(rawValueTimestampHeaders(null, TIMESTAMP, new RecordHeaders()));
+    }
+
+    private static byte[] timestampedValueWithEmptyHeaders(final byte[] value) {
+        // header size: 1 byte, empty headers: 0 byte, timestamp: 8 bytes, plain value length
+        final byte[] res = new byte[1 + 0 + StateSerdes.TIMESTAMP_SIZE + value.length];
+        final ByteBuffer buf = ByteBuffer.wrap(res);
+        buf.put((byte) 0x00); // header size
+        buf.putLong(TIMESTAMP);
+        buf.put(value);
+        return res;
+    }
+
+    private static byte[] timestampedValueWithEmptyHeadersInvalidTimestamp() {
+        // header size: 1 byte, empty headers: 0 bytes, invalid timestamp: 1 byte, value: 1 byte
+        final byte[] invalid = new byte[1 + 0 + 1 + 1];
+        final ByteBuffer buf = ByteBuffer.wrap(invalid);
+        buf.put((byte) 0x00); // header size
+        buf.put((byte) 0x01); // invalid timestamp, should be StateSerde.TIMESTAMP_SIZE
+        buf.put((byte) 0x02); // plain value, small enough for the whole data to go under the min data size
+        return invalid;
     }
 
     private static Stream<Arguments> invalidHeaderSizes() {

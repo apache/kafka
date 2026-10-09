@@ -15,7 +15,17 @@
  * limitations under the License.
  */
 /**
- * Provides common utilities for Kafka server and clients.
- * <strong>This package is not a supported Kafka API; the implementation may change without warning between minor or patch releases.</strong>
+ * Provides utilities for Kafka server and clients.
+ *
+ * <p>This package contains the public API class {@link org.apache.kafka.common.utils.Bytes}, which was made
+ * part of the public API via KIP-1247.
+ *
+ * <p>Other classes in this package, including {@link org.apache.kafka.common.utils.Time} and {@link org.apache.kafka.common.utils.Timer},
+ * are currently exposed through Kafka APIs but are not yet officially designated
+ * as public API. A future KIP will address their public API status and design.
+ *
+ * <p>The remaining classes in this package are internal utilities and not part of
+ * the supported Kafka API; their implementation may change without warning
+ * between releases.
  */
 package org.apache.kafka.common.utils;

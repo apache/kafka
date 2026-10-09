@@ -63,7 +63,7 @@ public class ProducerRequestBenchmark {
     private static final ProduceRequestData PRODUCE_REQUEST_DATA = new ProduceRequestData()
             .setTimeoutMs(100)
             .setAcks((short) 1)
-            .setTopicData(new ProduceRequestData.TopicProduceDataCollection(TOPIC_PRODUCE_DATA.iterator()));
+            .setTopicData(new ProduceRequestData.TopicProduceDataCollection(TOPIC_PRODUCE_DATA));
 
     private static ProduceRequest request() {
         return ProduceRequest.builder(PRODUCE_REQUEST_DATA, false).build();

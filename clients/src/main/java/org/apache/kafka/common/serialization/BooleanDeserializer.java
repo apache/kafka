@@ -16,11 +16,13 @@
  */
 package org.apache.kafka.common.serialization;
 
+import org.apache.kafka.common.annotation.InterfaceAudience;
 import org.apache.kafka.common.errors.SerializationException;
 import org.apache.kafka.common.header.Headers;
 
 import java.nio.ByteBuffer;
 
+@InterfaceAudience.Public
 public class BooleanDeserializer implements Deserializer<Boolean> {
     private static final byte TRUE = 0x01;
     private static final byte FALSE = 0x00;

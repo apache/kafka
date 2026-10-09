@@ -16,6 +16,7 @@
  */
 package org.apache.kafka.streams.state.internals;
 
+import org.apache.kafka.common.IsolationLevel;
 import org.apache.kafka.streams.errors.InvalidStateStoreException;
 import org.apache.kafka.streams.kstream.Windowed;
 import org.apache.kafka.streams.state.KeyValueIterator;
@@ -26,6 +27,7 @@ import org.apache.kafka.streams.state.WindowStoreIterator;
 import java.time.Instant;
 import java.util.List;
 import java.util.Objects;
+import java.util.stream.Collectors;
 
 /**
  * Wrapper over the underlying {@link ReadOnlyWindowStore}s found in a {@link
@@ -36,19 +38,42 @@ public class CompositeReadOnlyWindowStore<K, V> implements ReadOnlyWindowStore<K
     private final QueryableStoreType<ReadOnlyWindowStore<K, V>> windowStoreType;
     private final String storeName;
     private final StateStoreProvider provider;
+    private final IsolationLevel isolationOverride;
 
     public CompositeReadOnlyWindowStore(final StateStoreProvider provider,
                                         final QueryableStoreType<ReadOnlyWindowStore<K, V>> windowStoreType,
                                         final String storeName) {
+        this(provider, windowStoreType, storeName, null);
+    }
+
+    private CompositeReadOnlyWindowStore(final StateStoreProvider provider,
+                                         final QueryableStoreType<ReadOnlyWindowStore<K, V>> windowStoreType,
+                                         final String storeName,
+                                         final IsolationLevel isolationOverride) {
         this.provider = provider;
         this.windowStoreType = windowStoreType;
         this.storeName = storeName;
+        this.isolationOverride = isolationOverride;
+    }
+
+    @Override
+    public ReadOnlyWindowStore<K, V> readOnly(final IsolationLevel isolationLevel) {
+        Objects.requireNonNull(isolationLevel, "isolationLevel");
+        return new CompositeReadOnlyWindowStore<>(provider, windowStoreType, storeName, isolationLevel);
+    }
+
+    private List<ReadOnlyWindowStore<K, V>> readOnlyStores() {
+        final IsolationLevel level =
+            isolationOverride != null ? isolationOverride : provider.defaultIsolationLevel();
+        return provider.stores(storeName, windowStoreType).stream()
+            .map(s -> s.readOnly(level))
+            .collect(Collectors.toList());
     }
 
     @Override
     public V fetch(final K key, final long time) {
         Objects.requireNonNull(key, "key can't be null");
-        final List<ReadOnlyWindowStore<K, V>> stores = provider.stores(storeName, windowStoreType);
+        final List<ReadOnlyWindowStore<K, V>> stores = readOnlyStores();
         for (final ReadOnlyWindowStore<K, V> windowStore : stores) {
             try {
                 final V result = windowStore.fetch(key, time);
@@ -69,7 +94,7 @@ public class CompositeReadOnlyWindowStore<K, V> implements ReadOnlyWindowStore<K
                                         final Instant timeFrom,
                                         final Instant timeTo) {
         Objects.requireNonNull(key, "key can't be null");
-        final List<ReadOnlyWindowStore<K, V>> stores = provider.stores(storeName, windowStoreType);
+        final List<ReadOnlyWindowStore<K, V>> stores = readOnlyStores();
         for (final ReadOnlyWindowStore<K, V> windowStore : stores) {
             try {
                 final WindowStoreIterator<V> result = windowStore.fetch(key, timeFrom, timeTo);
@@ -92,7 +117,7 @@ public class CompositeReadOnlyWindowStore<K, V> implements ReadOnlyWindowStore<K
                                                 final Instant timeFrom,
                                                 final Instant timeTo) throws IllegalArgumentException {
         Objects.requireNonNull(key, "key can't be null");
-        final List<ReadOnlyWindowStore<K, V>> stores = provider.stores(storeName, windowStoreType);
+        final List<ReadOnlyWindowStore<K, V>> stores = readOnlyStores();
         for (final ReadOnlyWindowStore<K, V> windowStore : stores) {
             try {
                 final WindowStoreIterator<V> result = windowStore.backwardFetch(key, timeFrom, timeTo);
@@ -120,7 +145,7 @@ public class CompositeReadOnlyWindowStore<K, V> implements ReadOnlyWindowStore<K
         return new DelegatingPeekingKeyValueIterator<>(
             storeName,
             new CompositeKeyValueIterator<>(
-                provider.stores(storeName, windowStoreType).iterator(),
+                readOnlyStores().iterator(),
                 nextIteratorFunction));
     }
 
@@ -134,7 +159,7 @@ public class CompositeReadOnlyWindowStore<K, V> implements ReadOnlyWindowStore<K
         return new DelegatingPeekingKeyValueIterator<>(
             storeName,
             new CompositeKeyValueIterator<>(
-                provider.stores(storeName, windowStoreType).iterator(),
+                readOnlyStores().iterator(),
                 nextIteratorFunction));
     }
 
@@ -145,7 +170,7 @@ public class CompositeReadOnlyWindowStore<K, V> implements ReadOnlyWindowStore<K
         return new DelegatingPeekingKeyValueIterator<>(
             storeName,
             new CompositeKeyValueIterator<>(
-                provider.stores(storeName, windowStoreType).iterator(),
+                readOnlyStores().iterator(),
                 nextIteratorFunction));
     }
 
@@ -156,7 +181,7 @@ public class CompositeReadOnlyWindowStore<K, V> implements ReadOnlyWindowStore<K
         return new DelegatingPeekingKeyValueIterator<>(
             storeName,
             new CompositeKeyValueIterator<>(
-                provider.stores(storeName, windowStoreType).iterator(),
+                readOnlyStores().iterator(),
                 nextIteratorFunction));
     }
 
@@ -168,7 +193,7 @@ public class CompositeReadOnlyWindowStore<K, V> implements ReadOnlyWindowStore<K
         return new DelegatingPeekingKeyValueIterator<>(
             storeName,
             new CompositeKeyValueIterator<>(
-                provider.stores(storeName, windowStoreType).iterator(),
+                readOnlyStores().iterator(),
                 nextIteratorFunction));
     }
 
@@ -180,7 +205,7 @@ public class CompositeReadOnlyWindowStore<K, V> implements ReadOnlyWindowStore<K
         return new DelegatingPeekingKeyValueIterator<>(
             storeName,
             new CompositeKeyValueIterator<>(
-                provider.stores(storeName, windowStoreType).iterator(),
+                readOnlyStores().iterator(),
                 nextIteratorFunction));
     }
 }

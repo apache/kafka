@@ -14,9 +14,11 @@
  * See the License for the specific language governing permissions and
  * limitations under the License.
  */
+
 package org.apache.kafka.clients.consumer;
 
 import org.apache.kafka.common.TopicPartition;
+import org.apache.kafka.common.annotation.InterfaceAudience;
 
 import java.util.Collections;
 import java.util.Map;
@@ -29,15 +31,29 @@ import java.util.Map;
  * has been defined) with the first offset known to diverge from what the
  * consumer previously read.
  */
+@InterfaceAudience.Public
 public class LogTruncationException extends OffsetOutOfRangeException {
 
     private final Map<TopicPartition, OffsetAndMetadata> divergentOffsets;
 
+    /**
+     * Constructs a new LogTruncationException with the fetch offsets and divergent offsets.
+     *
+     * @param fetchOffsets The fetch offsets that were out of range
+     * @param divergentOffsets The offsets where the consumer's log diverged from the broker's log
+     */
     public LogTruncationException(Map<TopicPartition, Long> fetchOffsets,
                                   Map<TopicPartition, OffsetAndMetadata> divergentOffsets) {
         this("Truncated partitions detected with divergent offsets " + divergentOffsets, fetchOffsets, divergentOffsets);
     }
 
+    /**
+     * Constructs a new LogTruncationException with a custom message.
+     *
+     * @param message The detail message
+     * @param fetchOffsets The fetch offsets that were out of range
+     * @param divergentOffsets The offsets where the consumer's log diverged from the broker's log
+     */
     public LogTruncationException(String message,
                                   Map<TopicPartition, Long> fetchOffsets,
                                   Map<TopicPartition, OffsetAndMetadata> divergentOffsets) {

@@ -28,7 +28,6 @@ import org.slf4j.LoggerFactory;
 import java.io.File;
 import java.io.IOException;
 import java.util.ArrayList;
-import java.util.Collections;
 import java.util.Comparator;
 import java.util.HashMap;
 import java.util.HashSet;
@@ -521,7 +520,7 @@ public class LogCleanerManager {
                 LOG.error("Failed to access checkpoint file in dir {}", sourceLogDir.getAbsolutePath(), e);
             }
 
-            Set<TopicPartition> logUncleanablePartitions = uncleanablePartitions.getOrDefault(sourceLogDir.toString(), Collections.emptySet());
+            Set<TopicPartition> logUncleanablePartitions = uncleanablePartitions.getOrDefault(sourceLogDir.toString(), Set.of());
             if (logUncleanablePartitions.contains(topicPartition)) {
                 logUncleanablePartitions.remove(topicPartition);
                 markPartitionUncleanable(destLogDir.toString(), topicPartition);

@@ -20,11 +20,11 @@ import org.apache.kafka.common.TopicPartition;
 import org.apache.kafka.common.protocol.ByteBufferAccessor;
 import org.apache.kafka.common.protocol.MessageUtil;
 import org.apache.kafka.common.record.internal.RecordBatch;
-import org.apache.kafka.common.utils.ByteUtils;
-import org.apache.kafka.common.utils.Crc32C;
-import org.apache.kafka.common.utils.LogContext;
 import org.apache.kafka.common.utils.Time;
 import org.apache.kafka.common.utils.Utils;
+import org.apache.kafka.common.utils.internals.ByteUtils;
+import org.apache.kafka.common.utils.internals.Crc32C;
+import org.apache.kafka.common.utils.internals.LogContext;
 import org.apache.kafka.server.log.remote.metadata.storage.generated.ProducerSnapshot;
 
 import org.slf4j.Logger;
@@ -375,7 +375,12 @@ public class ProducerStateManager {
 
     public ProducerAppendInfo prepareUpdate(long producerId, AppendOrigin origin) {
         ProducerStateEntry currentEntry = lastEntry(producerId).orElse(ProducerStateEntry.empty(producerId));
-        return new ProducerAppendInfo(topicPartition, producerId, currentEntry, origin, verificationStateEntry(producerId));
+        // mapEndOffset() == 0 means no records have ever been appended to the log. It is advanced on every append
+        // (including from producers without idempotence enabled) and by producer state rebuilds, so it tracks the
+        // log end offset, and is advanced to the log start offset when producer state is loaded without a snapshot
+        // or when the log start offset is incremented, so any deletion of records leaves it non-zero.
+        return new ProducerAppendInfo(topicPartition, producerId, currentEntry, origin,
+            verificationStateEntry(producerId), mapEndOffset() == 0);
     }
 
     /**

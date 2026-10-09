@@ -43,9 +43,10 @@ import org.apache.kafka.test.TestUtils;
 import org.junit.jupiter.api.AfterEach;
 import org.junit.jupiter.api.BeforeEach;
 import org.junit.jupiter.api.Tag;
-import org.junit.jupiter.api.Test;
 import org.junit.jupiter.api.TestInfo;
 import org.junit.jupiter.api.Timeout;
+import org.junit.jupiter.params.ParameterizedTest;
+import org.junit.jupiter.params.provider.ValueSource;
 
 import java.io.IOException;
 import java.time.Duration;
@@ -60,9 +61,8 @@ import java.util.stream.IntStream;
 
 import static org.apache.kafka.streams.integration.utils.IntegrationTestUtils.startApplicationAndWaitUntilRunning;
 import static org.apache.kafka.streams.utils.TestUtils.safeUniqueTestName;
-import static org.hamcrest.MatcherAssert.assertThat;
-import static org.hamcrest.Matchers.equalTo;
-import static org.hamcrest.Matchers.is;
+import static org.junit.jupiter.api.Assertions.assertEquals;
+import static org.junit.jupiter.api.Assertions.assertTrue;
 
 @Tag("integration")
 @Timeout(600)
@@ -93,8 +93,10 @@ public class ConsistencyVectorIntegrationTest {
         cluster.stop();
     }
 
-    @Test
-    public void shouldHaveSamePositionBoundActiveAndStandBy(final TestInfo testInfo) throws Exception {
+    @ParameterizedTest
+    @ValueSource(booleans = {false, true})
+    public void shouldHaveSamePositionBoundActiveAndStandBy(final boolean transactionalStateStores,
+                                                            final TestInfo testInfo) throws Exception {
         final Semaphore semaphore = new Semaphore(0);
 
         final StreamsBuilder builder = new StreamsBuilder();
@@ -107,8 +109,8 @@ public class ConsistencyVectorIntegrationTest {
                .peek((k, v) -> semaphore.release());
 
         final String safeTestName = safeUniqueTestName(testInfo);
-        final KafkaStreams kafkaStreams1 = createKafkaStreams(builder, streamsConfiguration(safeTestName));
-        final KafkaStreams kafkaStreams2 = createKafkaStreams(builder, streamsConfiguration(safeTestName));
+        final KafkaStreams kafkaStreams1 = createKafkaStreams(builder, streamsConfiguration(safeTestName, transactionalStateStores));
+        final KafkaStreams kafkaStreams2 = createKafkaStreams(builder, streamsConfiguration(safeTestName, transactionalStateStores));
         final List<KafkaStreams> kafkaStreamsList = Arrays.asList(kafkaStreams1, kafkaStreams2);
 
         try {
@@ -117,9 +119,9 @@ public class ConsistencyVectorIntegrationTest {
             produceValueRange();
 
             // Assert that all messages in the first batch were processed in a timely manner
-            assertThat(
-                "Did not process all message in time.",
-                semaphore.tryAcquire(NUMBER_OF_MESSAGES, 120, TimeUnit.SECONDS), is(equalTo(true))
+            assertTrue(
+                semaphore.tryAcquire(NUMBER_OF_MESSAGES, 120, TimeUnit.SECONDS),
+                "Did not process all message in time."
             );
 
             // Assert that both active and standby have the same position bound
@@ -152,13 +154,10 @@ public class ConsistencyVectorIntegrationTest {
                 stateQueryResult.getPartitionResults().get(0);
             if (queryResult.isSuccess() && queryResult.getResult() != null) {
                 // invariant: each value is also at the equivalent offset
-                assertThat(
-                    "Result:" + queryResult,
+                assertEquals(
+                    Position.emptyPosition().withComponent(INPUT_TOPIC_NAME, 0, queryResult.getResult()),
                     queryResult.getPosition(),
-                    is(
-                        Position.emptyPosition()
-                                .withComponent(INPUT_TOPIC_NAME, 0, queryResult.getResult())
-                    )
+                    "Result:" + queryResult
                 );
 
                 if (queryResult.getResult() == NUMBER_OF_MESSAGES - 1) {
@@ -200,7 +199,7 @@ public class ConsistencyVectorIntegrationTest {
         );
     }
 
-    private Properties streamsConfiguration(final String safeTestName) {
+    private Properties streamsConfiguration(final String safeTestName, final boolean transactionalStateStores) {
         final Properties config = new Properties();
         config.put(StreamsConfig.APPLICATION_ID_CONFIG, "app-" + safeTestName);
         config.put(StreamsConfig.APPLICATION_SERVER_CONFIG, "localhost:" + (++port));
@@ -214,6 +213,10 @@ public class ConsistencyVectorIntegrationTest {
         config.put(ConsumerConfig.SESSION_TIMEOUT_MS_CONFIG, 1000);
         config.put(StreamsConfig.COMMIT_INTERVAL_MS_CONFIG, 100L);
         config.put(InternalConfig.IQ_CONSISTENCY_OFFSET_VECTOR_ENABLED, true);
+        if (transactionalStateStores) {
+            config.put(StreamsConfig.TRANSACTIONAL_STATE_STORES_CONFIG, true);
+            config.put(StreamsConfig.PROCESSING_GUARANTEE_CONFIG, StreamsConfig.EXACTLY_ONCE_V2);
+        }
         return config;
     }
 }

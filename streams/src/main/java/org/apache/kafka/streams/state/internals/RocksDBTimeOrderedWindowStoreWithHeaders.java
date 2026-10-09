@@ -26,23 +26,24 @@ import org.apache.kafka.streams.state.TimestampedBytesStore;
  * {@link TimestampedBytesStore} (for timestamp support) and {@link HeadersBytesStore}
  * (for header support) marker interfaces.
  * <p>
- * The storage format for values is: [headersSize(varint)][headersBytes][timestamp(8)][value]
+ * IQv2 query handling is inherited (via {@code StoreQueryUtils}); header-aware value
+ * (de)serialization is performed at the metered layer. There is deliberately no {@code query()}
+ * override to gate query types: the metered wrapper ({@code MeteredTimestampedWindowStoreWithHeaders})
+ * intercepts and deserializes every query that would otherwise be served from this store's raw
+ * header-format bytes, delegating downward only queries that {@code StoreQueryUtils} rejects as
+ * {@code UNKNOWN_QUERY_TYPE}. So raw header-format value bytes are never returned directly to a
+ * caller; teaching {@code StoreQueryUtils} to serve a new query type from window stores would
+ * require matching interception at the metered layer.
  * <p>
- * This implementation uses segment-level versioning for backward compatibility:
- * <ul>
- * <li>Old segments continue to use the legacy format without headers</li>
- * <li>New segments use the header-embedded format</li>
- * <li>Legacy values are served with empty headers on read</li>
- * <li>All new writes use the new format</li>
- * </ul>
+ * The storage format for values is: [headersSize(varint)][headersBytes][timestamp(8)][value]
  *
  * @see RocksDBTimeOrderedWindowStore
  * @see HeadersBytesStore
  * @see TimestampedBytesStore
  */
-class RocksDBTimeOrderedWindowStoreWithHeaders extends RocksDBTimeOrderedWindowStore implements TimestampedBytesStore, HeadersBytesStore {
+class RocksDBTimeOrderedWindowStoreWithHeaders extends RocksDBTimeOrderedWindowStore<WindowSegmentWithHeaders> implements TimestampedBytesStore, HeadersBytesStore {
 
-    RocksDBTimeOrderedWindowStoreWithHeaders(final RocksDBTimeOrderedWindowSegmentedBytesStore store,
+    RocksDBTimeOrderedWindowStoreWithHeaders(final RocksDBTimeOrderedWindowSegmentedBytesStore<WindowSegmentWithHeaders> store,
                                              final boolean retainDuplicates,
                                              final long windowSize) {
         super(store, retainDuplicates, windowSize);

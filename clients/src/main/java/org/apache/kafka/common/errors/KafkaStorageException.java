@@ -14,7 +14,10 @@
  * See the License for the specific language governing permissions and
  * limitations under the License.
  */
+
 package org.apache.kafka.common.errors;
+
+import org.apache.kafka.common.annotation.InterfaceAudience;
 
 /**
  * Miscellaneous disk-related IOException occurred when handling a request.
@@ -28,6 +31,7 @@ package org.apache.kafka.common.errors;
  * 3) It is preferred for IOException to be caught in Log rather than in ReplicaManager or LogSegment.
  *
  */
+@InterfaceAudience.Public
 public class KafkaStorageException extends InvalidMetadataException {
 
     private static final long serialVersionUID = 1L;

@@ -17,6 +17,7 @@
 
 package org.apache.kafka.common.acl;
 
+import org.apache.kafka.common.annotation.InterfaceAudience;
 import org.apache.kafka.common.resource.ResourcePatternFilter;
 
 import java.util.Objects;
@@ -24,6 +25,7 @@ import java.util.Objects;
 /**
  * A filter which can match AclBinding objects.
  */
+@InterfaceAudience.Public
 public class AclBindingFilter {
     private final ResourcePatternFilter patternFilter;
     private final AccessControlEntryFilter entryFilter;

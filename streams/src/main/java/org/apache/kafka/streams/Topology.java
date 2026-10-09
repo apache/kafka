@@ -16,6 +16,8 @@
  */
 package org.apache.kafka.streams;
 
+import org.apache.kafka.common.annotation.InterfaceAudience;
+import org.apache.kafka.common.annotation.SuppressKafkaInternalApiUsage;
 import org.apache.kafka.common.serialization.Deserializer;
 import org.apache.kafka.common.serialization.Serializer;
 import org.apache.kafka.streams.errors.TopologyException;
@@ -57,8 +59,10 @@ import static org.apache.kafka.streams.internals.ApiUtils.checkSupplier;
  * {@link KafkaStreams} instance that will then {@link KafkaStreams#start() begin consuming, processing, and producing
  * records}.
  */
+@InterfaceAudience.Public
 public class Topology {
 
+    @SuppressKafkaInternalApiUsage("KIP-1265: protected field exposes internal InternalTopologyBuilder for subclass access — pending KIP review to promote the type or refactor")
     protected final InternalTopologyBuilder internalTopologyBuilder;
 
     public Topology() {
@@ -69,6 +73,7 @@ public class Topology {
         this(new InternalTopologyBuilder(topologyConfigs));
     }
 
+    @SuppressKafkaInternalApiUsage("KIP-1265: protected ctor takes internal InternalTopologyBuilder as a subclass extension point — pending KIP review to promote the type or refactor")
     protected Topology(final InternalTopologyBuilder internalTopologyBuilder) {
         this.internalTopologyBuilder = internalTopologyBuilder;
     }

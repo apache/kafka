@@ -28,7 +28,7 @@ import org.apache.kafka.common.requests.FetchMetadata;
 import org.apache.kafka.common.requests.FetchRequest;
 import org.apache.kafka.common.requests.FetchRequest.PartitionData;
 import org.apache.kafka.common.requests.FetchResponse;
-import org.apache.kafka.common.utils.ImplicitLinkedHashCollection;
+import org.apache.kafka.common.utils.internals.ImplicitLinkedHashCollection;
 import org.apache.kafka.server.FetchContext.FullFetchContext;
 import org.apache.kafka.server.FetchContext.IncrementalFetchContext;
 import org.apache.kafka.server.FetchContext.SessionErrorContext;

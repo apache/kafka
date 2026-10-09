@@ -18,7 +18,7 @@ package org.apache.kafka.common.security.kerberos;
 
 import org.apache.kafka.common.KafkaException;
 import org.apache.kafka.common.security.authenticator.SaslClientAuthenticator;
-import org.apache.kafka.common.utils.Java;
+import org.apache.kafka.common.utils.internals.Java;
 
 import org.ietf.jgss.GSSException;
 import org.slf4j.Logger;

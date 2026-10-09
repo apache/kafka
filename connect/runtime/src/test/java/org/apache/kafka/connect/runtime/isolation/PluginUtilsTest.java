@@ -17,7 +17,6 @@
 package org.apache.kafka.connect.runtime.isolation;
 
 import org.apache.kafka.common.config.ConfigDef;
-import org.apache.kafka.connect.components.Versioned;
 import org.apache.kafka.connect.connector.ConnectRecord;
 import org.apache.kafka.connect.data.Schema;
 import org.apache.kafka.connect.data.SchemaAndValue;
@@ -602,7 +601,7 @@ public class PluginUtilsTest {
         assertEquals(expectedAliases, actualAliases);
     }
 
-    public static class CollidingConverter implements Converter, Versioned {
+    public static class CollidingConverter implements Converter {
         @Override
         public void configure(Map<String, ?> configs, boolean isKey) {
         }
@@ -623,7 +622,7 @@ public class PluginUtilsTest {
         }
     }
 
-    public static class CollidingHeaderConverter implements HeaderConverter, Versioned {
+    public static class CollidingHeaderConverter implements HeaderConverter {
 
         @Override
         public SchemaAndValue toConnectHeader(String topic, String headerKey, byte[] value) {
@@ -654,7 +653,7 @@ public class PluginUtilsTest {
         }
     }
 
-    public static class Colliding<R extends ConnectRecord<R>> implements Transformation<R>, Versioned {
+    public static class Colliding<R extends ConnectRecord<R>> implements Transformation<R> {
 
         @Override
         public String version() {

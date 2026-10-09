@@ -92,9 +92,8 @@ class ShareGroupCommandTest(Test):
     @matrix(
         security_protocol=['PLAINTEXT', 'SSL'],
         metadata_quorum=[quorum.isolated_kraft],
-        use_share_groups=[True]
     )
-    def test_list_share_groups(self, security_protocol='PLAINTEXT', metadata_quorum=quorum.isolated_kraft, use_share_groups=True):
+    def test_list_share_groups(self, security_protocol='PLAINTEXT', metadata_quorum=quorum.isolated_kraft):
         """
         Tests if ShareGroupCommand is listing correct share groups
         :return: None
@@ -105,9 +104,8 @@ class ShareGroupCommandTest(Test):
     @matrix(
         security_protocol=['PLAINTEXT', 'SSL'],
         metadata_quorum=[quorum.isolated_kraft],
-        use_share_groups=[True],
     )
-    def test_describe_share_group(self, security_protocol='PLAINTEXT', metadata_quorum=quorum.isolated_kraft, use_share_groups=True):
+    def test_describe_share_group(self, security_protocol='PLAINTEXT', metadata_quorum=quorum.isolated_kraft):
         """
         Tests if ShareGroupCommand is describing a share group correctly
         :return: None
@@ -118,9 +116,8 @@ class ShareGroupCommandTest(Test):
     @matrix(
         security_protocol=['PLAINTEXT', 'SSL'],
         metadata_quorum=[quorum.isolated_kraft],
-        use_share_groups=[True],
     )
-    def test_describe_share_group_members(self, security_protocol='PLAINTEXT', metadata_quorum=quorum.isolated_kraft, use_share_groups=True):
+    def test_describe_share_group_members(self, security_protocol='PLAINTEXT', metadata_quorum=quorum.isolated_kraft):
         """
         Tests if ShareGroupCommand is describing the members of a share group correctly
         :return: None

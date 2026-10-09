@@ -26,7 +26,7 @@ import java.util.Set;
  */
 public interface TaskController {
     /**
-     * Get the agent nodes which this task is targetting.
+     * Get the agent nodes which this task is targeting.
      *
      * @param topology      The topology to use.
      *

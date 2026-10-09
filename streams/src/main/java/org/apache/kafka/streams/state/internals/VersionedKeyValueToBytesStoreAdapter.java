@@ -16,6 +16,7 @@
  */
 package org.apache.kafka.streams.state.internals;
 
+import org.apache.kafka.common.IsolationLevel;
 import org.apache.kafka.common.TopicPartition;
 import org.apache.kafka.common.serialization.Serde;
 import org.apache.kafka.common.serialization.Serdes.ByteArraySerde;
@@ -85,6 +86,11 @@ public class VersionedKeyValueToBytesStoreAdapter implements VersionedBytesStore
     }
 
     @Override
+    public VersionedBytesStore readOnly(final IsolationLevel isolationLevel) {
+        return new VersionedKeyValueToBytesStoreAdapter(inner.readOnly(isolationLevel));
+    }
+
+    @Override
     public String name() {
         return inner.name();
     }
@@ -97,6 +103,22 @@ public class VersionedKeyValueToBytesStoreAdapter implements VersionedBytesStore
     @Override
     public void commit(final Map<TopicPartition, Long> changelogOffsets) {
         inner.commit(changelogOffsets);
+    }
+
+    @SuppressWarnings("deprecation")
+    @Override
+    public boolean managesOffsets() {
+        return inner.managesOffsets();
+    }
+
+    @Override
+    public Long committedOffset(final TopicPartition partition) {
+        return inner.committedOffset(partition);
+    }
+
+    @Override
+    public long approximateNumUncommittedBytes() {
+        return inner.approximateNumUncommittedBytes();
     }
 
     @Override

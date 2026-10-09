@@ -1,6 +1,6 @@
 ---
 title: Data Types and Serialization
-description: 
+description: Kafka Streams data types, serialization, and SerDes.
 weight: 6
 tags: ['kafka', 'docs']
 aliases: 
@@ -80,7 +80,7 @@ If you want to override serdes selectively, i.e., keep the defaults for some fie
     KStream<String, Long> userCountByRegion = ...;
     userCountByRegion.to("RegionCountsTopic", Produced.valueSerde(Serdes.Long()));
 
-If some of your incoming records are corrupted or ill-formatted, they will cause the deserializer class to report an error. Since 1.0.x we have introduced an `DeserializationExceptionHandler` interface which allows you to customize how to handle such records. The customized implementation of the interface can be specified via the `StreamsConfig`. For more details, please feel free to read the [Configuring a Streams Application](config-streams.html#default-deserialization-exception-handler) section. 
+If some of your incoming records are corrupted or ill-formatted, they will cause the deserializer class to report an error. Since 1.0.x we have introduced an `DeserializationExceptionHandler` interface which allows you to customize how to handle such records. The customized implementation of the interface can be specified via the `StreamsConfig`. For more details, please feel free to read the [Configuring a Streams Application](../config-streams#default-deserialization-exception-handler) section. 
 
 # Available Serdes
 
@@ -306,9 +306,9 @@ If you need to implement custom Serdes, your best starting point is to take a lo
 
 
 
-# Kafka Streams DSL for Scala Implicit Serdes[](scala-dsl-serdes "Permalink to this headline")
+# Kafka Streams DSL for Scala Implicit Serdes[](#scala-dsl-serdes "Permalink to this headline")
 
-When using the [Kafka Streams DSL for Scala](dsl-api.html#scala-dsl) you're not required to configure a default Serdes. In fact, it's not supported. Serdes are instead provided implicitly by default implementations for common primitive datatypes. See the [Implicit Serdes](dsl-api.html#scala-dsl-implicit-serdes) and [User-Defined Serdes](dsl-api.html#scala-dsl-user-defined-serdes) sections in the DSL API documentation for details
+When using the [Kafka Streams DSL for Scala](../dsl-api#scala-dsl) you're not required to configure a default Serdes. In fact, it's not supported. Serdes are instead provided implicitly by default implementations for common primitive datatypes. See the [Implicit Serdes](../dsl-api#scala-dsl-implicit-serdes) and [User-Defined Serdes](../dsl-api#scala-dsl-user-defined-serdes) sections in the DSL API documentation for details
 
   * [Documentation](/documentation)
   * [Kafka Streams](/documentation/streams)

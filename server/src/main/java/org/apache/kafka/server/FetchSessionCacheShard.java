@@ -17,8 +17,8 @@
 package org.apache.kafka.server;
 
 import org.apache.kafka.common.requests.FetchMetadata;
-import org.apache.kafka.common.utils.ImplicitLinkedHashCollection;
-import org.apache.kafka.common.utils.LogContext;
+import org.apache.kafka.common.utils.internals.ImplicitLinkedHashCollection;
+import org.apache.kafka.common.utils.internals.LogContext;
 import org.apache.kafka.server.FetchSession.EvictableKey;
 import org.apache.kafka.server.FetchSession.LastUsedKey;
 
@@ -118,7 +118,7 @@ public class FetchSessionCacheShard {
      * Get a session by session ID.
      *
      * @param sessionId  The session ID.
-     * @return           The session, or None if no such session was found.
+     * @return           The session, or an empty Optional if no such session was found.
      */
     synchronized Optional<FetchSession> get(int sessionId) {
         return Optional.ofNullable(sessions.get(sessionId));
@@ -243,7 +243,7 @@ public class FetchSessionCacheShard {
      *
      * @param session  The session.
      *
-     * @return         The removed session, or None if there was no such session.
+     * @return         The removed session, or an empty Optional if there was no such session.
      */
     synchronized Optional<FetchSession> remove(FetchSession session) {
         EvictableKey evictableKey;

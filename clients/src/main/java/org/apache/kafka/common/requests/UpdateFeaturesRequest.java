@@ -22,7 +22,7 @@ import org.apache.kafka.common.protocol.ApiKeys;
 import org.apache.kafka.common.protocol.Readable;
 
 import java.util.Collection;
-import java.util.Collections;
+import java.util.Set;
 import java.util.stream.Collectors;
 
 public class UpdateFeaturesRequest extends AbstractRequest {
@@ -105,7 +105,7 @@ public class UpdateFeaturesRequest extends AbstractRequest {
     public UpdateFeaturesResponse getErrorResponse(int throttleTimeMs, Throwable e) {
         return UpdateFeaturesResponse.createWithErrors(
             ApiError.fromThrowable(e),
-            Collections.emptySet(),
+            Set.of(),
             throttleTimeMs
         );
     }

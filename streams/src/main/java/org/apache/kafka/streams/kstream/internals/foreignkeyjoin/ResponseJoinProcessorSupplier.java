@@ -29,7 +29,7 @@ import org.apache.kafka.streams.processor.api.ProcessorSupplier;
 import org.apache.kafka.streams.processor.api.Record;
 import org.apache.kafka.streams.processor.internals.InternalProcessorContext;
 import org.apache.kafka.streams.processor.internals.metrics.TaskMetrics;
-import org.apache.kafka.streams.state.ValueAndTimestamp;
+import org.apache.kafka.streams.state.ValueTimestampHeaders;
 import org.apache.kafka.streams.state.internals.Murmur3;
 
 import org.slf4j.Logger;
@@ -106,11 +106,11 @@ public class ResponseJoinProcessorSupplier<KLeft, VLeft, VRight, VOut>
                     //upgrading from older SubscriptionWrapper versions to newer versions.
                     throw new UnsupportedVersionException("SubscriptionResponseWrapper is of an incompatible version.");
                 }
-                final ValueAndTimestamp<VLeft> currentValueWithTimestamp = valueGetter.get(record.key());
+                final ValueTimestampHeaders<VLeft> currentValueWithTimestamp = valueGetter.get(record.key());
 
                 final long[] currentHash = currentValueWithTimestamp == null ?
                     null :
-                    Murmur3.hash128(runtimeValueSerializer.serialize(valueHashSerdePseudoTopic, currentValueWithTimestamp.value()));
+                    Murmur3.hash128(runtimeValueSerializer.serialize(valueHashSerdePseudoTopic, record.headers(), currentValueWithTimestamp.value()));
 
                 final long[] messageHash = record.value().originalValueHash();
 

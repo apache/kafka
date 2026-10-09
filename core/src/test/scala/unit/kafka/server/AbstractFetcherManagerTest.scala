@@ -17,7 +17,6 @@
 package kafka.server
 
 import com.yammer.metrics.core.Gauge
-import kafka.utils.TestUtils
 import org.apache.kafka.common.message.{FetchResponseData, OffsetForLeaderEpochRequestData}
 import org.apache.kafka.common.message.OffsetForLeaderEpochResponseData.EpochEndOffset
 import org.apache.kafka.common.metrics.Metrics
@@ -32,6 +31,8 @@ import org.apache.kafka.server.ReplicaState
 import org.apache.kafka.server.ResultWithPartitions
 import org.apache.kafka.server.PartitionFetchState
 import org.apache.kafka.server.LeaderEndPoint
+import org.apache.kafka.server.quota.ReplicationQuotaManager
+import org.apache.kafka.server.util.ServerTestUtils
 import org.apache.kafka.storage.internals.log.LogAppendInfo
 import org.apache.kafka.storage.log.metrics.BrokerTopicStats
 import org.junit.jupiter.api.Assertions._
@@ -47,7 +48,7 @@ class AbstractFetcherManagerTest {
 
   @BeforeEach
   def cleanMetricRegistry(): Unit = {
-    TestUtils.clearYammerMetrics()
+    ServerTestUtils.clearYammerMetrics()
   }
 
   private def getMetricValue(name: String): Any = {
@@ -314,8 +315,6 @@ class AbstractFetcherManagerTest {
 
     override def buildFetch(partitions: java.util.Map[TopicPartition, PartitionFetchState]): ResultWithPartitions[java.util.Optional[ReplicaFetch]] = new ResultWithPartitions(java.util.Optional.empty[ReplicaFetch](), java.util.Set.of())
 
-    override val isTruncationOnFetchSupported: Boolean = false
-
     override def fetchEarliestLocalOffset(topicPartition: TopicPartition, currentLeaderEpoch: Int): OffsetAndEpoch = new OffsetAndEpoch(1L, 0)
 
     override def fetchEarliestPendingUploadOffset(topicPartition: TopicPartition, currentLeaderEpoch: Int): OffsetAndEpoch = new OffsetAndEpoch(-1L, -1)
@@ -344,7 +343,7 @@ class AbstractFetcherManagerTest {
       partitionData: FetchData
     ): Option[LogAppendInfo] = None
 
-    override protected def truncate(topicPartition: TopicPartition, truncationState: OffsetTruncationState): Unit = {}
+    override protected def truncate(topicPartition: TopicPartition, offset: Long): Unit = {}
 
     override protected def truncateFullyAndStartAt(topicPartition: TopicPartition, offset: Long): Unit = {}
 

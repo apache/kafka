@@ -83,7 +83,7 @@ public class UuidTest {
 
         assertNotEquals(Uuid.ZERO_UUID, randomID);
         assertNotEquals(Uuid.METADATA_TOPIC_ID, randomID);
-        assertFalse(randomID.toString().startsWith("-"));
+        assertFalse(randomID.toString().contains("-"));
     }
 
     @Test

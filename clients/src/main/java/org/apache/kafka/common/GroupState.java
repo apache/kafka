@@ -17,6 +17,8 @@
 
 package org.apache.kafka.common;
 
+import org.apache.kafka.common.annotation.InterfaceAudience;
+
 import java.util.Arrays;
 import java.util.Locale;
 import java.util.Map;
@@ -45,6 +47,7 @@ import java.util.stream.Collectors;
  *     </tbody>
  * </table>
  */
+@InterfaceAudience.Public
 public enum GroupState {
     UNKNOWN("Unknown"),
     PREPARING_REBALANCE("PreparingRebalance"),

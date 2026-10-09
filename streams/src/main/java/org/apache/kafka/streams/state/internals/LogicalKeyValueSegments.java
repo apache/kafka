@@ -19,7 +19,6 @@ package org.apache.kafka.streams.state.internals;
 import org.apache.kafka.common.TopicPartition;
 import org.apache.kafka.streams.processor.StateStoreContext;
 import org.apache.kafka.streams.processor.internals.ProcessorContextUtils;
-import org.apache.kafka.streams.query.Position;
 import org.apache.kafka.streams.state.internals.metrics.RocksDBMetricsRecorder;
 
 import java.util.HashMap;
@@ -56,9 +55,8 @@ public class LogicalKeyValueSegments extends AbstractSegments<LogicalKeyValueSeg
         this.physicalStore = new RocksDBStore(name, parentDir, metricsRecorder, false);
     }
 
-    @Override
-    public void setPosition(final Position position) {
-        this.physicalStore.position = position;
+    RocksDBStore physicalStore() {
+        return physicalStore;
     }
 
     @Override
@@ -92,14 +90,16 @@ public class LogicalKeyValueSegments extends AbstractSegments<LogicalKeyValueSeg
     }
 
     // VisibleForTesting
-    LogicalKeyValueSegment getReservedSegment(final long segmentId) {
-        return reservedSegments.get(segmentId);
+    LogicalKeyValueSegment getReservedSegment() {
+        return reservedSegments.get(-1L);
     }
 
     @Override
     public void openExisting(final StateStoreContext context, final long streamTime) {
         metricsRecorder.init(ProcessorContextUtils.metricsImpl(context), context.taskId());
+        physicalStore.setTaskId(context.taskId());
         physicalStore.openDB(context.appConfigs(), context.stateDir());
+        position.merge(physicalStore.getPosition());
     }
 
     @Override
@@ -110,6 +110,18 @@ public class LogicalKeyValueSegments extends AbstractSegments<LogicalKeyValueSeg
     @Override
     public void commit(final Map<TopicPartition, Long> changelogOffsets) {
         physicalStore.commit(changelogOffsets);
+    }
+
+    @SuppressWarnings("deprecation")
+    @Deprecated
+    @Override
+    public boolean managesOffsets() {
+        return physicalStore.managesOffsets();
+    }
+
+    @Override
+    public Long committedOffset(final TopicPartition partition) {
+        return physicalStore.committedOffset(partition);
     }
 
     @Override

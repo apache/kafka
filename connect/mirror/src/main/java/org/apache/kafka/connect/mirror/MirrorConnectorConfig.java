@@ -122,6 +122,11 @@ public abstract class MirrorConnectorConfig extends AbstractConfig {
             EMIT_OFFSET_SYNCS_ENABLED + " is disabled.";
     public static final boolean EMIT_OFFSET_SYNCS_ENABLED_DEFAULT = true;
 
+    public static final String METRIC_NAMES_FORMAT = "metric.names.formats";
+    public static final String METRIC_NAMES_LEGACY = "legacy";
+    public static final String METRIC_NAMES_NEW = "new";
+    public static final String METRIC_NAMES_FORMAT_DEFAULT = METRIC_NAMES_LEGACY;
+
     public static final String OFFSET_SYNCS_CLIENT_ROLE_PREFIX = "offset-syncs-";
 
     public static final String TASK_INDEX = "task.index";

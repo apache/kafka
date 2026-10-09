@@ -16,15 +16,19 @@
  */
 package org.apache.kafka.streams.state.internals;
 
+import org.apache.kafka.common.TopicPartition;
 import org.apache.kafka.common.serialization.Serializer;
 import org.apache.kafka.common.serialization.StringSerializer;
 import org.apache.kafka.common.utils.Bytes;
 import org.apache.kafka.common.utils.LogCaptureAppender;
 import org.apache.kafka.streams.KeyValue;
+import org.apache.kafka.streams.StreamsConfig;
 import org.apache.kafka.streams.errors.ProcessorStateException;
 import org.apache.kafka.streams.state.KeyValueIterator;
+import org.apache.kafka.test.InternalMockProcessorContext;
+import org.apache.kafka.test.StreamsTestUtils;
+import org.apache.kafka.test.TestUtils;
 
-import org.hamcrest.core.IsNull;
 import org.junit.jupiter.api.Test;
 import org.rocksdb.ColumnFamilyDescriptor;
 import org.rocksdb.ColumnFamilyHandle;
@@ -36,14 +40,18 @@ import java.io.File;
 import java.nio.charset.StandardCharsets;
 import java.util.ArrayList;
 import java.util.List;
+import java.util.Map;
+import java.util.Properties;
 
 import static java.util.Arrays.asList;
-import static org.hamcrest.CoreMatchers.hasItem;
-import static org.hamcrest.CoreMatchers.is;
-import static org.hamcrest.MatcherAssert.assertThat;
+import static org.apache.kafka.streams.state.internals.RocksDBStore.OFFSETS_COLUMN_FAMILY_NAME;
 import static org.junit.jupiter.api.Assertions.assertArrayEquals;
+import static org.junit.jupiter.api.Assertions.assertEquals;
 import static org.junit.jupiter.api.Assertions.assertFalse;
+import static org.junit.jupiter.api.Assertions.assertNotNull;
+import static org.junit.jupiter.api.Assertions.assertNull;
 import static org.junit.jupiter.api.Assertions.assertThrows;
+import static org.junit.jupiter.api.Assertions.assertTrue;
 
 public class RocksDBTimestampedStoreTest extends RocksDBStoreTest {
 
@@ -58,11 +66,11 @@ public class RocksDBTimestampedStoreTest extends RocksDBStoreTest {
         try (final LogCaptureAppender appender = LogCaptureAppender.createAndRegister(RocksDBTimestampedStore.class)) {
             rocksDBStore.init(context, rocksDBStore);
 
-            assertThat(appender.getMessages(), hasItem("Opening store " + DB_NAME + " in regular mode"));
+            assertTrue(appender.getMessages().contains("Opening store " + DB_NAME + " in regular mode"));
         }
 
         try (final KeyValueIterator<Bytes, byte[]> iterator = rocksDBStore.all()) {
-            assertThat(iterator.hasNext(), is(false));
+            assertFalse(iterator.hasNext());
         }
     }
 
@@ -77,7 +85,7 @@ public class RocksDBTimestampedStoreTest extends RocksDBStoreTest {
         try (final LogCaptureAppender appender = LogCaptureAppender.createAndRegister(RocksDBTimestampedStore.class)) {
             rocksDBStore.init(context, rocksDBStore);
 
-            assertThat(appender.getMessages(), hasItem("Opening store " + DB_NAME + " in regular mode"));
+            assertTrue(appender.getMessages().contains("Opening store " + DB_NAME + " in regular mode"));
         } finally {
             rocksDBStore.close();
         }
@@ -88,7 +96,8 @@ public class RocksDBTimestampedStoreTest extends RocksDBStoreTest {
 
         final List<ColumnFamilyDescriptor> columnFamilyDescriptors = asList(
             new ColumnFamilyDescriptor(RocksDB.DEFAULT_COLUMN_FAMILY, columnFamilyOptions),
-            new ColumnFamilyDescriptor("keyValueWithTimestamp".getBytes(StandardCharsets.UTF_8), columnFamilyOptions));
+            new ColumnFamilyDescriptor("keyValueWithTimestamp".getBytes(StandardCharsets.UTF_8), columnFamilyOptions),
+            new ColumnFamilyDescriptor(OFFSETS_COLUMN_FAMILY_NAME, columnFamilyOptions));
         final List<ColumnFamilyHandle> columnFamilies = new ArrayList<>(columnFamilyDescriptors.size());
 
         RocksDB db = null;
@@ -103,10 +112,10 @@ public class RocksDBTimestampedStoreTest extends RocksDBStoreTest {
             noTimestampColumnFamily = columnFamilies.get(0);
             withTimestampColumnFamily = columnFamilies.get(1);
 
-            assertThat(db.get(noTimestampColumnFamily, "key".getBytes()), new IsNull<>());
-            assertThat(db.getLongProperty(noTimestampColumnFamily, "rocksdb.estimate-num-keys"), is(0L));
-            assertThat(db.get(withTimestampColumnFamily, "key".getBytes()).length, is(11));
-            assertThat(db.getLongProperty(withTimestampColumnFamily, "rocksdb.estimate-num-keys"), is(1L));
+            assertNull(db.get(noTimestampColumnFamily, "key".getBytes()));
+            assertEquals(0L, db.getLongProperty(noTimestampColumnFamily, "rocksdb.estimate-num-keys"));
+            assertEquals(11, db.get(withTimestampColumnFamily, "key".getBytes()).length);
+            assertEquals(1L, db.getLongProperty(withTimestampColumnFamily, "rocksdb.estimate-num-keys"));
         } finally {
             // Order of closing must follow: ColumnFamilyHandle > RocksDB > DBOptions > ColumnFamilyOptions
             if (noTimestampColumnFamily != null) {
@@ -130,25 +139,25 @@ public class RocksDBTimestampedStoreTest extends RocksDBStoreTest {
         try (final LogCaptureAppender appender = LogCaptureAppender.createAndRegister(RocksDBTimestampedStore.class)) {
             rocksDBStore.init(context, rocksDBStore);
 
-            assertThat(appender.getMessages(), hasItem("Opening store " + DB_NAME + " in upgrade mode"));
+            assertTrue(appender.getMessages().contains("Opening store " + DB_NAME + " in upgrade mode"));
         }
 
         // approx: 7 entries on old CF, 0 in new CF
-        assertThat(rocksDBStore.approximateNumEntries(), is(7L));
+        assertEquals(7L, rocksDBStore.approximateNumEntries());
 
         // get()
 
         // should be no-op on both CF
-        assertThat(rocksDBStore.get(new Bytes("unknown".getBytes())), new IsNull<>());
+        assertNull(rocksDBStore.get(new Bytes("unknown".getBytes())));
         // approx: 7 entries on old CF, 0 in new CF
-        assertThat(rocksDBStore.approximateNumEntries(), is(7L));
+        assertEquals(7L, rocksDBStore.approximateNumEntries());
 
         // should migrate key1 from old to new CF
         // must return timestamp plus value, ie, it's not 1 byte but 9 bytes
-        assertThat(rocksDBStore.get(new Bytes("key1".getBytes())).length, is(8 + 1));
+        assertEquals(8 + 1, rocksDBStore.get(new Bytes("key1".getBytes())).length);
         // one delete on old CF, one put on new CF
         // approx: 6 entries on old CF, 1 in new CF
-        assertThat(rocksDBStore.approximateNumEntries(), is(7L));
+        assertEquals(7L, rocksDBStore.approximateNumEntries());
 
         // put()
 
@@ -156,61 +165,61 @@ public class RocksDBTimestampedStoreTest extends RocksDBStoreTest {
         rocksDBStore.put(new Bytes("key2".getBytes()), "timestamp+22".getBytes());
         // one delete on old CF, one put on new CF
         // approx: 5 entries on old CF, 2 in new CF
-        assertThat(rocksDBStore.approximateNumEntries(), is(7L));
+        assertEquals(7L, rocksDBStore.approximateNumEntries());
 
         // should delete key3 from old and new CF
         rocksDBStore.put(new Bytes("key3".getBytes()), null);
         // count is off by one, due to two delete operations (even if one does not delete anything)
         // approx: 4 entries on old CF, 1 in new CF
-        assertThat(rocksDBStore.approximateNumEntries(), is(5L));
+        assertEquals(5L, rocksDBStore.approximateNumEntries());
 
         // should add new key8 to new CF
         rocksDBStore.put(new Bytes("key8new".getBytes()), "timestamp+88888888".getBytes());
         // one delete on old CF, one put on new CF
         // approx: 3 entries on old CF, 2 in new CF
-        assertThat(rocksDBStore.approximateNumEntries(), is(5L));
+        assertEquals(5L, rocksDBStore.approximateNumEntries());
 
         rocksDBStore.put(new Bytes("key9new".getBytes()), null);
         // one delete on old CF, one put on new CF
         // approx: 2 entries on old CF, 1 in new CF
-        assertThat(rocksDBStore.approximateNumEntries(), is(3L));
+        assertEquals(3L, rocksDBStore.approximateNumEntries());
 
         // putIfAbsent()
 
         // should migrate key4 from old to new CF with old value
-        assertThat(rocksDBStore.putIfAbsent(new Bytes("key4".getBytes()), "timestamp+4444".getBytes()).length, is(8 + 4));
+        assertEquals(8 + 4, rocksDBStore.putIfAbsent(new Bytes("key4".getBytes()), "timestamp+4444".getBytes()).length);
         // one delete on old CF, one put on new CF
         // approx: 1 entries on old CF, 2 in new CF
-        assertThat(rocksDBStore.approximateNumEntries(), is(3L));
+        assertEquals(3L, rocksDBStore.approximateNumEntries());
 
         // should add new key11 to new CF
-        assertThat(rocksDBStore.putIfAbsent(new Bytes("key11new".getBytes()), "timestamp+11111111111".getBytes()), new IsNull<>());
+        assertNull(rocksDBStore.putIfAbsent(new Bytes("key11new".getBytes()), "timestamp+11111111111".getBytes()));
         // one delete on old CF, one put on new CF
         // approx: 0 entries on old CF, 3 in new CF
-        assertThat(rocksDBStore.approximateNumEntries(), is(3L));
+        assertEquals(3L, rocksDBStore.approximateNumEntries());
 
         // should not delete key5 but migrate to new CF
-        assertThat(rocksDBStore.putIfAbsent(new Bytes("key5".getBytes()), null).length, is(8 + 5));
+        assertEquals(8 + 5, rocksDBStore.putIfAbsent(new Bytes("key5".getBytes()), null).length);
         // one delete on old CF, one put on new CF
         // approx: 0 entries on old CF, 4 in new CF
-        assertThat(rocksDBStore.approximateNumEntries(), is(4L));
+        assertEquals(4L, rocksDBStore.approximateNumEntries());
 
         // should be no-op on both CF
-        assertThat(rocksDBStore.putIfAbsent(new Bytes("key12new".getBytes()), null), new IsNull<>());
+        assertNull(rocksDBStore.putIfAbsent(new Bytes("key12new".getBytes()), null));
         // one delete operation, however, not counted because old CF count was zero before already
         // approx: 0 entries on old CF, 4 in new CF
-        assertThat(rocksDBStore.approximateNumEntries(), is(4L));
+        assertEquals(4L, rocksDBStore.approximateNumEntries());
 
         // delete()
 
         // should delete key6 from old and new CF
-        assertThat(rocksDBStore.delete(new Bytes("key6".getBytes())).length, is(8 + 6));
+        assertEquals(8 + 6, rocksDBStore.delete(new Bytes("key6".getBytes())).length);
         // two delete operation, however, only one is counted because old CF count was zero before already
         // approx: 0 entries on old CF, 3 in new CF
-        assertThat(rocksDBStore.approximateNumEntries(), is(3L));
+        assertEquals(3L, rocksDBStore.approximateNumEntries());
 
         iteratorsShouldNotMigrateData();
-        assertThat(rocksDBStore.approximateNumEntries(), is(3L));
+        assertEquals(3L, rocksDBStore.approximateNumEntries());
 
         rocksDBStore.close();
 
@@ -371,7 +380,8 @@ public class RocksDBTimestampedStoreTest extends RocksDBStoreTest {
 
         final List<ColumnFamilyDescriptor> columnFamilyDescriptors = asList(
             new ColumnFamilyDescriptor(RocksDB.DEFAULT_COLUMN_FAMILY, columnFamilyOptions),
-            new ColumnFamilyDescriptor("keyValueWithTimestamp".getBytes(StandardCharsets.UTF_8), columnFamilyOptions));
+            new ColumnFamilyDescriptor("keyValueWithTimestamp".getBytes(StandardCharsets.UTF_8), columnFamilyOptions),
+            new ColumnFamilyDescriptor(OFFSETS_COLUMN_FAMILY_NAME, columnFamilyOptions));
         final List<ColumnFamilyHandle> columnFamilies = new ArrayList<>(columnFamilyDescriptors.size());
 
         RocksDB db = null;
@@ -387,31 +397,31 @@ public class RocksDBTimestampedStoreTest extends RocksDBStoreTest {
             noTimestampColumnFamily = columnFamilies.get(0);
             withTimestampColumnFamily = columnFamilies.get(1);
 
-            assertThat(db.get(noTimestampColumnFamily, "unknown".getBytes()), new IsNull<>());
-            assertThat(db.get(noTimestampColumnFamily, "key1".getBytes()), new IsNull<>());
-            assertThat(db.get(noTimestampColumnFamily, "key2".getBytes()), new IsNull<>());
-            assertThat(db.get(noTimestampColumnFamily, "key3".getBytes()), new IsNull<>());
-            assertThat(db.get(noTimestampColumnFamily, "key4".getBytes()), new IsNull<>());
-            assertThat(db.get(noTimestampColumnFamily, "key5".getBytes()), new IsNull<>());
-            assertThat(db.get(noTimestampColumnFamily, "key6".getBytes()), new IsNull<>());
-            assertThat(db.get(noTimestampColumnFamily, "key7".getBytes()).length, is(7));
-            assertThat(db.get(noTimestampColumnFamily, "key8new".getBytes()), new IsNull<>());
-            assertThat(db.get(noTimestampColumnFamily, "key9new".getBytes()), new IsNull<>());
-            assertThat(db.get(noTimestampColumnFamily, "key11new".getBytes()), new IsNull<>());
-            assertThat(db.get(noTimestampColumnFamily, "key12new".getBytes()), new IsNull<>());
+            assertNull(db.get(noTimestampColumnFamily, "unknown".getBytes()));
+            assertNull(db.get(noTimestampColumnFamily, "key1".getBytes()));
+            assertNull(db.get(noTimestampColumnFamily, "key2".getBytes()));
+            assertNull(db.get(noTimestampColumnFamily, "key3".getBytes()));
+            assertNull(db.get(noTimestampColumnFamily, "key4".getBytes()));
+            assertNull(db.get(noTimestampColumnFamily, "key5".getBytes()));
+            assertNull(db.get(noTimestampColumnFamily, "key6".getBytes()));
+            assertEquals(7, db.get(noTimestampColumnFamily, "key7".getBytes()).length);
+            assertNull(db.get(noTimestampColumnFamily, "key8new".getBytes()));
+            assertNull(db.get(noTimestampColumnFamily, "key9new".getBytes()));
+            assertNull(db.get(noTimestampColumnFamily, "key11new".getBytes()));
+            assertNull(db.get(noTimestampColumnFamily, "key12new".getBytes()));
 
-            assertThat(db.get(withTimestampColumnFamily, "unknown".getBytes()), new IsNull<>());
-            assertThat(db.get(withTimestampColumnFamily, "key1".getBytes()).length, is(8 + 1));
-            assertThat(db.get(withTimestampColumnFamily, "key2".getBytes()).length, is(12));
-            assertThat(db.get(withTimestampColumnFamily, "key3".getBytes()), new IsNull<>());
-            assertThat(db.get(withTimestampColumnFamily, "key4".getBytes()).length, is(8 + 4));
-            assertThat(db.get(withTimestampColumnFamily, "key5".getBytes()).length, is(8 + 5));
-            assertThat(db.get(withTimestampColumnFamily, "key6".getBytes()), new IsNull<>());
-            assertThat(db.get(withTimestampColumnFamily, "key7".getBytes()), new IsNull<>());
-            assertThat(db.get(withTimestampColumnFamily, "key8new".getBytes()).length, is(18));
-            assertThat(db.get(noTimestampColumnFamily, "key9new".getBytes()), new IsNull<>());
-            assertThat(db.get(withTimestampColumnFamily, "key11new".getBytes()).length, is(21));
-            assertThat(db.get(withTimestampColumnFamily, "key12new".getBytes()), new IsNull<>());
+            assertNull(db.get(withTimestampColumnFamily, "unknown".getBytes()));
+            assertEquals(8 + 1, db.get(withTimestampColumnFamily, "key1".getBytes()).length);
+            assertEquals(12, db.get(withTimestampColumnFamily, "key2".getBytes()).length);
+            assertNull(db.get(withTimestampColumnFamily, "key3".getBytes()));
+            assertEquals(8 + 4, db.get(withTimestampColumnFamily, "key4".getBytes()).length);
+            assertEquals(8 + 5, db.get(withTimestampColumnFamily, "key5".getBytes()).length);
+            assertNull(db.get(withTimestampColumnFamily, "key6".getBytes()));
+            assertNull(db.get(withTimestampColumnFamily, "key7".getBytes()));
+            assertEquals(18, db.get(withTimestampColumnFamily, "key8new".getBytes()).length);
+            assertNull(db.get(noTimestampColumnFamily, "key9new".getBytes()));
+            assertEquals(21, db.get(withTimestampColumnFamily, "key11new".getBytes()).length);
+            assertNull(db.get(withTimestampColumnFamily, "key12new".getBytes()));
         } catch (final RuntimeException fatal) {
             errorOccurred = true;
         } finally {
@@ -435,7 +445,7 @@ public class RocksDBTimestampedStoreTest extends RocksDBStoreTest {
         try (LogCaptureAppender appender = LogCaptureAppender.createAndRegister(RocksDBTimestampedStore.class)) {
             rocksDBStore.init(context, rocksDBStore);
 
-            assertThat(appender.getMessages(), hasItem("Opening store " + DB_NAME + " in upgrade mode"));
+            assertTrue(appender.getMessages().contains("Opening store " + DB_NAME + " in upgrade mode"));
         } finally {
             rocksDBStore.close();
         }
@@ -469,7 +479,7 @@ public class RocksDBTimestampedStoreTest extends RocksDBStoreTest {
         try (LogCaptureAppender appender = LogCaptureAppender.createAndRegister(RocksDBTimestampedStore.class)) {
             rocksDBStore.init(context, rocksDBStore);
 
-            assertThat(appender.getMessages(), hasItem("Opening store " + DB_NAME + " in regular mode"));
+            assertTrue(appender.getMessages().contains("Opening store " + DB_NAME + " in regular mode"));
         }
     }
 
@@ -487,12 +497,63 @@ public class RocksDBTimestampedStoreTest extends RocksDBStoreTest {
                 () -> kvStore.init(context, kvStore)
             );
 
-            assertThat(exception.getMessage(), is(
+            assertEquals(
                 "Store " + DB_NAME + " is a timestamped key-value store and cannot be opened as a regular key-value store. " +
                 "Downgrade from timestamped to regular store is not supported directly. " +
-                "To downgrade, you can delete the local state in the state directory, and rebuild the store as regular key-value store from the changelog."));
+                "To downgrade, you can delete the local state in the state directory, and rebuild the store as regular key-value store from the changelog.",
+                exception.getMessage());
         } finally {
             kvStore.close();
+        }
+    }
+
+    /**
+     * Regression test for the null {@code dataColumnFamily} bug under EOS.
+     *
+     * <p>When {@code TRANSACTIONAL_STATE_STORES_CONFIG} is enabled, {@link RocksDBStore#openDB}
+     * wraps the underlying accessor in a {@link RocksDBStore.TransactionalDBAccessor}. The
+     * accessor's {@code get()} consults the staged-write buffer only when the request targets
+     * the distinguished data CF ({@code columnFamily.equals(cfHandle)}). Before the fix,
+     * {@link RocksDBTimestampedStore} never set {@code dataColumnFamily}, so {@code cfHandle}
+     * was {@code null} and the check was always false — staged writes were invisible to
+     * {@code get()}, breaking read-your-writes.
+     */
+    @Test
+    public void shouldReadYourWritesViaGetWhenTransactionalTimestampedStoreOpenedUnderEOS() {
+        final Properties props = StreamsTestUtils.getStreamsConfig();
+        props.setProperty(StreamsConfig.PROCESSING_GUARANTEE_CONFIG, StreamsConfig.EXACTLY_ONCE_V2);
+        props.setProperty(StreamsConfig.TRANSACTIONAL_STATE_STORES_CONFIG, "true");
+        final File stateDir = TestUtils.tempDirectory();
+        final InternalMockProcessorContext<?, ?> txnContext =
+                new InternalMockProcessorContext<>(stateDir, new StreamsConfig(props));
+
+        final RocksDBStore txnStore = new RocksDBTimestampedStore(DB_NAME, METRICS_SCOPE);
+        try {
+            txnStore.init(txnContext, txnStore);
+
+            final Bytes key = new Bytes("k1".getBytes());
+            final byte[] value = "v1".getBytes();
+
+            // Put a value — this is staged in the transaction buffer but not yet committed to RocksDB.
+            txnStore.put(key, value);
+
+            // get() must see the staged write (read-your-writes).
+            assertArrayEquals(value, txnStore.get(key),
+                    "transactional TimestampedStore should return staged value via get() before commit");
+
+            // Commit and verify the value persists.
+            final TopicPartition tp = new TopicPartition("changelog", 0);
+            txnStore.commit(Map.of(tp, 1L));
+
+            assertArrayEquals(value, txnStore.get(key),
+                    "transactional TimestampedStore should return value via get() after commit");
+
+            // Delete should also be read-your-writes.
+            txnStore.put(key, null);
+            assertNull(txnStore.get(key),
+                    "transactional TimestampedStore should return null for a staged delete via get() before commit");
+        } finally {
+            txnStore.close();
         }
     }
 
@@ -510,6 +571,40 @@ public class RocksDBTimestampedStoreTest extends RocksDBStoreTest {
             keyValueStore.put(new Bytes("key7".getBytes()), "7777777".getBytes());
         } finally {
             keyValueStore.close();
+        }
+    }
+
+    // KAFKA-20456 regression: the offsets-CF ColumnFamilyOptions allocated by
+    // offsetsCFOptions() must be released on close(); otherwise the JNI-auto-allocated
+    // default BlockBasedTableFactory and its LRUCache leak per store open.
+    @Test
+    public void shouldCloseOffsetsCfOptionsOnStoreClose() {
+        final CapturingOffsetsTimestampedStore capturingStore = new CapturingOffsetsTimestampedStore();
+        rocksDBStore = capturingStore;
+        rocksDBStore.init(context, rocksDBStore);
+
+        final ColumnFamilyOptions captured = capturingStore.capturedOffsetsOptions;
+        assertNotNull(captured, "offsetsCFOptions should have been invoked during init");
+        assertTrue(captured.isOwningHandle(),
+                "offsets CF options should own its native handle while store is open");
+
+        rocksDBStore.close();
+
+        assertFalse(captured.isOwningHandle(),
+                "offsets CF options native handle should be released by close()");
+    }
+
+    private static final class CapturingOffsetsTimestampedStore extends RocksDBTimestampedStore {
+        ColumnFamilyOptions capturedOffsetsOptions;
+
+        CapturingOffsetsTimestampedStore() {
+            super(DB_NAME, METRICS_SCOPE);
+        }
+
+        @Override
+        protected ColumnFamilyOptions offsetsCFOptions() {
+            capturedOffsetsOptions = super.offsetsCFOptions();
+            return capturedOffsetsOptions;
         }
     }
 }

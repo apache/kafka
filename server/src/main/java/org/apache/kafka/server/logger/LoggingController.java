@@ -25,9 +25,8 @@ import java.util.Map;
 
 /**
  * An MBean that allows the user to dynamically alter log4j levels at runtime.
- * The companion object contains the singleton instance of this class and
- * registers the MBean. The {@code kafka.utils.Logging} trait forces initialization
- * of the companion object.
+ * {@link Log4jControllerRegistration} registers this MBean. The {@code kafka.utils.Logging}
+ * trait invokes the registration helper during initialization.
  */
 public class LoggingController implements LoggingControllerMBean {
 

@@ -51,27 +51,29 @@ public final class ConsumerRebalanceMetricsManager extends RebalanceMetricsManag
     public final MetricName assignedPartitionsCount;
     private long lastRebalanceEndMs = -1L;
     private long lastRebalanceStartMs = -1L;
-    private final Metrics metrics;
 
     public ConsumerRebalanceMetricsManager(Metrics metrics, SubscriptionState subscriptions) {
-        super(CONSUMER_METRIC_GROUP_PREFIX + COORDINATOR_METRICS_SUFFIX);
-        this.metrics = metrics;
+        this(new MetricsLedger(metrics), subscriptions);
+    }
 
-        rebalanceLatencyAvg = createMetric(metrics, "rebalance-latency-avg",
+    private ConsumerRebalanceMetricsManager(MetricsLedger metrics, SubscriptionState subscriptions) {
+        super(metrics, CONSUMER_METRIC_GROUP_PREFIX + COORDINATOR_METRICS_SUFFIX);
+
+        rebalanceLatencyAvg = createMetric("rebalance-latency-avg",
                 "The average time in ms taken for a group to complete a rebalance");
-        rebalanceLatencyMax = createMetric(metrics, "rebalance-latency-max",
+        rebalanceLatencyMax = createMetric("rebalance-latency-max",
                 "The max time in ms taken for a group to complete a rebalance");
-        rebalanceLatencyTotal = createMetric(metrics, "rebalance-latency-total",
+        rebalanceLatencyTotal = createMetric("rebalance-latency-total",
                 "The total number of milliseconds spent in rebalances");
-        rebalanceTotal = createMetric(metrics, "rebalance-total",
+        rebalanceTotal = createMetric("rebalance-total",
                 "The total number of rebalance events");
-        rebalanceRatePerHour = createMetric(metrics, "rebalance-rate-per-hour",
+        rebalanceRatePerHour = createMetric("rebalance-rate-per-hour",
                 "The number of rebalance events per hour");
-        failedRebalanceTotal = createMetric(metrics, "failed-rebalance-total",
+        failedRebalanceTotal = createMetric("failed-rebalance-total",
                 "The total number of failed rebalance events");
-        failedRebalanceRate = createMetric(metrics, "failed-rebalance-rate-per-hour",
+        failedRebalanceRate = createMetric("failed-rebalance-rate-per-hour",
                 "The number of failed rebalance events per hour");
-        assignedPartitionsCount = createMetric(metrics, "assigned-partitions",
+        assignedPartitionsCount = createMetric("assigned-partitions",
                 "The number of partitions currently assigned to this consumer");
         registerAssignedPartitionCount(subscriptions);
 
@@ -92,7 +94,7 @@ public final class ConsumerRebalanceMetricsManager extends RebalanceMetricsManag
             else
                 return TimeUnit.SECONDS.convert(now - lastRebalanceEndMs, TimeUnit.MILLISECONDS);
         };
-        lastRebalanceSecondsAgo = createMetric(metrics,
+        lastRebalanceSecondsAgo = createMetric(
                 "last-rebalance-seconds-ago",
                 "The number of seconds since the last rebalance event");
         metrics.addMetric(lastRebalanceSecondsAgo, lastRebalance);

@@ -25,6 +25,7 @@ import org.apache.kafka.server.log.remote.storage._
 import org.junit.jupiter.api.Assertions._
 import org.junit.jupiter.api.{BeforeEach, Tag, Test, TestInfo}
 
+import java.util
 import java.util.Properties
 import scala.collection.Seq
 import scala.util.Random
@@ -58,11 +59,10 @@ class RemoteTopicCrudTest extends IntegrationTestHarness {
 
   @Test
   def testClusterWideDisablementOfTieredStorageWithEnabledTieredTopic(): Unit = {
-    val topicConfig = new Properties()
-    topicConfig.setProperty(TopicConfig.REMOTE_LOG_STORAGE_ENABLE_CONFIG, "true")
+    val topicConfigs = util.Map.of(TopicConfig.REMOTE_LOG_STORAGE_ENABLE_CONFIG, "true")
 
     TestUtils.createTopicWithAdmin(createAdminClient(), testTopicName, brokers, controllerServers, numPartitions, brokerCount,
-      topicConfig = topicConfig)
+      topicConfig = topicConfigs)
 
     val tsDisabledProps = TestUtils.createBrokerConfigs(1).head
     instanceConfigs = List(KafkaConfig.fromProps(tsDisabledProps))
@@ -75,11 +75,10 @@ class RemoteTopicCrudTest extends IntegrationTestHarness {
 
   @Test
   def testClusterWithoutTieredStorageStartsSuccessfullyIfTopicWithTieringDisabled(): Unit = {
-    val topicConfig = new Properties()
-    topicConfig.setProperty(TopicConfig.REMOTE_LOG_STORAGE_ENABLE_CONFIG, false.toString)
+    val topicConfigs = util.Map.of(TopicConfig.REMOTE_LOG_STORAGE_ENABLE_CONFIG, false.toString)
 
     TestUtils.createTopicWithAdmin(createAdminClient(), testTopicName, brokers, controllerServers, numPartitions, brokerCount,
-      topicConfig = topicConfig)
+      topicConfig = topicConfigs)
 
     val tsDisabledProps = TestUtils.createBrokerConfigs(1).head
     instanceConfigs = List(KafkaConfig.fromProps(tsDisabledProps))

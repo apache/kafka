@@ -16,7 +16,6 @@
  */
 package org.apache.kafka.clients.producer;
 
-import org.apache.kafka.clients.admin.NewTopic;
 import org.apache.kafka.clients.admin.TransactionState;
 import org.apache.kafka.clients.consumer.Consumer;
 import org.apache.kafka.clients.consumer.ConsumerConfig;
@@ -66,10 +65,10 @@ import static org.junit.jupiter.api.Assertions.assertTrue;
     @ClusterConfigProperty(key = GroupCoordinatorConfig.OFFSETS_TOPIC_REPLICATION_FACTOR_CONFIG, value = "1"),
     @ClusterConfigProperty(key = GroupCoordinatorConfig.OFFSETS_TOPIC_PARTITIONS_CONFIG, value = "1"),
 })
-class ProducerIntegrationTest {
+public class ProducerIntegrationTest {
 
     @ClusterTest(metadataVersion = MetadataVersion.IBP_3_3_IV3)
-    void testUniqueProducerIds(ClusterInstance clusterInstance) {
+    public void testUniqueProducerIds(ClusterInstance clusterInstance) {
         // Request enough PIDs from each broker to ensure each broker generates two blocks
         var ids = clusterInstance.brokers().values().stream().flatMap(broker -> {
             int port = broker.boundPort(clusterInstance.clientListener());
@@ -97,7 +96,7 @@ class ProducerIntegrationTest {
         @ClusterTest(features = {
             @ClusterFeature(feature = Feature.TRANSACTION_VERSION, version = 2)}),
     })
-    void testTransactionWithAndWithoutSend(ClusterInstance cluster) {
+    public void testTransactionWithAndWithoutSend(ClusterInstance cluster) {
         Map<String, Object> properties = Map.of(
             ProducerConfig.TRANSACTIONAL_ID_CONFIG, "foobar",
             ProducerConfig.CLIENT_ID_CONFIG, "test",
@@ -121,25 +120,22 @@ class ProducerIntegrationTest {
         @ClusterTest(features = {
             @ClusterFeature(feature = Feature.TRANSACTION_VERSION, version = 2)}),
     })
-    void testTransactionWithInvalidSendAndEndTxnRequestSent(ClusterInstance cluster) {
-        var topic = new NewTopic("foobar", 1, (short) 1)
-            .configs(Map.of(TopicConfig.MAX_MESSAGE_BYTES_CONFIG, "100"));
+    public void testTransactionWithInvalidSendAndEndTxnRequestSent(ClusterInstance cluster) throws InterruptedException {
+        var topic = "foobar";
+        cluster.createTopic(topic, 1, (short) 1, Map.of(TopicConfig.MAX_MESSAGE_BYTES_CONFIG, "100"));
         String txnId = "test-txn";
         Map<String, Object> properties = Map.of(
             ProducerConfig.TRANSACTIONAL_ID_CONFIG, txnId,
             ProducerConfig.CLIENT_ID_CONFIG, "test",
             ProducerConfig.ENABLE_IDEMPOTENCE_CONFIG, "true");
 
-        try (var admin = cluster.admin();
-             var producer = cluster.producer(properties)) {
-            admin.createTopics(List.of(topic));
-
+        try (var producer = cluster.producer(properties)) {
             producer.initTransactions();
             producer.beginTransaction();
             assertInstanceOf(RecordTooLargeException.class,
                 assertThrows(ExecutionException.class,
                     () -> producer.send(new ProducerRecord<>(
-                        topic.name(), new byte[100], new byte[100])).get()).getCause());
+                        topic, new byte[100], new byte[100])).get()).getCause());
 
             producer.abortTransaction();
         }
@@ -153,7 +149,7 @@ class ProducerIntegrationTest {
         @ClusterTest(features = {
             @ClusterFeature(feature = Feature.TRANSACTION_VERSION, version = 2)}),
     })
-    void testTransactionWithSendOffset(ClusterInstance cluster) throws ExecutionException, InterruptedException {
+    public void testTransactionWithSendOffset(ClusterInstance cluster) throws ExecutionException, InterruptedException {
         String inputTopic = "my-input-topic";
         try (var producer = cluster.producer()) {
             for (int i = 0; i < 5; i++) {

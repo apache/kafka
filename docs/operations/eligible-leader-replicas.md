@@ -1,6 +1,6 @@
 ---
 title: Eligible Leader Replicas
-description: Eligible Leader Replicas
+description: Kafka Eligible Leader Replicas behavior, upgrades, and tooling.
 weight: 12
 tags: ['kafka', 'docs']
 aliases: 

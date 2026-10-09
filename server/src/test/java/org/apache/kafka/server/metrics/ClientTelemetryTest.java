@@ -50,7 +50,8 @@ public class ClientTelemetryTest {
 
         byte[] metrics = "test-metrics-multiple".getBytes(StandardCharsets.UTF_8);
         clientTelemetryExporterPlugin.exportMetrics(ClientMetricsTestUtils.requestContext(),
-            new PushTelemetryRequest.Builder(new PushTelemetryRequestData().setMetrics(ByteBuffer.wrap(metrics)), true).build(), 5000);
+            new PushTelemetryRequest.Builder(new PushTelemetryRequestData().setMetrics(ByteBuffer.wrap(metrics)), true).build(),
+            5000, MetricConfigs.CLIENT_TELEMETRY_MAX_BYTES_DEFAULT);
 
         // Verify both receivers were called
         assertEquals(1, receiver1.exportMetricsInvokedCount);
@@ -71,7 +72,8 @@ public class ClientTelemetryTest {
         byte[] metrics = "test-metrics-multiple-new".getBytes(StandardCharsets.UTF_8);
         int pushIntervalMs = 20000;
         clientTelemetryExporterPlugin.exportMetrics(ClientMetricsTestUtils.requestContext(),
-            new PushTelemetryRequest.Builder(new PushTelemetryRequestData().setMetrics(ByteBuffer.wrap(metrics)), true).build(), pushIntervalMs);
+            new PushTelemetryRequest.Builder(new PushTelemetryRequestData().setMetrics(ByteBuffer.wrap(metrics)), true).build(),
+            pushIntervalMs, MetricConfigs.CLIENT_TELEMETRY_MAX_BYTES_DEFAULT);
 
         // Verify both exporters were called
         assertEquals(1, exporter1.exportMetricsInvokedCount);

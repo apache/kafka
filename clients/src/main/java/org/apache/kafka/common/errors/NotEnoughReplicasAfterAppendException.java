@@ -14,12 +14,16 @@
  * See the License for the specific language governing permissions and
  * limitations under the License.
  */
+
 package org.apache.kafka.common.errors;
+
+import org.apache.kafka.common.annotation.InterfaceAudience;
 
 /**
  * Number of insync replicas for the partition is lower than min.insync.replicas This exception is raised when the low
  * ISR size is discovered *after* the message was already appended to the log. Producer retries will cause duplicates.
  */
+@InterfaceAudience.Public
 public class NotEnoughReplicasAfterAppendException extends RetriableException {
     private static final long serialVersionUID = 1L;
 

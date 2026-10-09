@@ -16,6 +16,7 @@
  */
 package org.apache.kafka.streams.kstream.internals;
 
+import org.apache.kafka.common.header.internals.RecordHeaders;
 import org.apache.kafka.streams.KeyValue;
 import org.apache.kafka.streams.StreamsConfig;
 import org.apache.kafka.streams.errors.StreamsException;
@@ -26,11 +27,11 @@ import org.apache.kafka.streams.processor.api.Processor;
 import org.apache.kafka.streams.processor.api.ProcessorContext;
 import org.apache.kafka.streams.processor.api.Record;
 import org.apache.kafka.streams.processor.internals.InternalProcessorContext;
-import org.apache.kafka.streams.state.ValueAndTimestamp;
+import org.apache.kafka.streams.state.ValueTimestampHeaders;
 
 import java.util.Map;
 
-import static org.apache.kafka.streams.state.ValueAndTimestamp.getValueOrNull;
+import static org.apache.kafka.streams.state.ValueTimestampHeaders.getValueOrNull;
 
 /**
  * KTable repartition map functions are not exposed to public APIs, but only used for keyed aggregations.
@@ -181,12 +182,12 @@ public class KTableRepartitionMap<K, V, K1, V1> implements KTableRepartitionMapS
         }
 
         @Override
-        public ValueAndTimestamp<KeyValue<? extends K1, ? extends V1>> get(final K key) {
+        public ValueTimestampHeaders<KeyValue<? extends K1, ? extends V1>> get(final K key) {
             return mapValue(key, parentGetter.get(key));
         }
 
         @Override
-        public ValueAndTimestamp<KeyValue<? extends K1, ? extends V1>> get(final K key, final long asOfTimestamp) {
+        public ValueTimestampHeaders<KeyValue<? extends K1, ? extends V1>> get(final K key, final long asOfTimestamp) {
             return mapValue(key, parentGetter.get(key, asOfTimestamp));
         }
 
@@ -200,10 +201,11 @@ public class KTableRepartitionMap<K, V, K1, V1> implements KTableRepartitionMapS
             parentGetter.close();
         }
 
-        private ValueAndTimestamp<KeyValue<? extends K1, ? extends V1>> mapValue(final K key, final ValueAndTimestamp<V> valueAndTimestamp) {
-            return ValueAndTimestamp.make(
-                mapper.apply(key, getValueOrNull(valueAndTimestamp)),
-                valueAndTimestamp == null ? context.recordContext().timestamp() : valueAndTimestamp.timestamp()
+        private ValueTimestampHeaders<KeyValue<? extends K1, ? extends V1>> mapValue(final K key, final ValueTimestampHeaders<V> valueTimestampHeaders) {
+            return ValueTimestampHeaders.make(
+                mapper.apply(key, getValueOrNull(valueTimestampHeaders)),
+                valueTimestampHeaders == null ? context.recordContext().timestamp() : valueTimestampHeaders.timestamp(),
+                new RecordHeaders()
             );
         }
     }

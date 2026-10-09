@@ -20,6 +20,8 @@ import org.apache.kafka.common.header.Header;
 import org.apache.kafka.common.header.Headers;
 import org.apache.kafka.common.header.internals.RecordHeader;
 import org.apache.kafka.common.header.internals.RecordHeaders;
+import org.apache.kafka.common.serialization.Deserializer;
+import org.apache.kafka.common.serialization.LongDeserializer;
 import org.apache.kafka.common.serialization.Serializer;
 import org.apache.kafka.common.serialization.StringDeserializer;
 import org.apache.kafka.common.serialization.StringSerializer;
@@ -45,12 +47,14 @@ import static java.util.Arrays.asList;
 import static org.junit.jupiter.api.Assertions.assertArrayEquals;
 import static org.junit.jupiter.api.Assertions.assertEquals;
 import static org.junit.jupiter.api.Assertions.assertFalse;
+import static org.junit.jupiter.api.Assertions.assertNotNull;
 import static org.junit.jupiter.api.Assertions.assertNull;
 import static org.junit.jupiter.api.Assertions.assertTrue;
 
 public class RocksDBMigratingSessionStoreWithHeadersTest extends RocksDBStoreTest {
 
     private final Serializer<String> stringSerializer = new StringSerializer();
+    private final Deserializer<Long> longDeserializer = new LongDeserializer();
     private final AggregationWithHeadersSerializer<String> aggSerializer =
         new AggregationWithHeadersSerializer<>(new StringSerializer());
     private final AggregationWithHeadersDeserializer<String> aggDeserializer =
@@ -98,11 +102,12 @@ public class RocksDBMigratingSessionStoreWithHeadersTest extends RocksDBStoreTes
 
         final List<ColumnFamilyDescriptor> columnFamilyDescriptors = asList(
                 new ColumnFamilyDescriptor(RocksDB.DEFAULT_COLUMN_FAMILY, columnFamilyOptions),
-                new ColumnFamilyDescriptor(sessionStoreHeaderColumnFamilyName, columnFamilyOptions));
+                new ColumnFamilyDescriptor(sessionStoreHeaderColumnFamilyName, columnFamilyOptions),
+                new ColumnFamilyDescriptor(RocksDBStore.OFFSETS_COLUMN_FAMILY_NAME, columnFamilyOptions));
         final List<ColumnFamilyHandle> columnFamilies = new ArrayList<>(columnFamilyDescriptors.size());
 
         RocksDB db = null;
-        ColumnFamilyHandle defaultColumnFamily = null, headersColumnFamily = null;
+        ColumnFamilyHandle defaultColumnFamily = null, headersColumnFamily = null, offsetsColumnFamily = null;
         try {
             db = RocksDB.open(
                     dbOptions,
@@ -112,6 +117,7 @@ public class RocksDBMigratingSessionStoreWithHeadersTest extends RocksDBStoreTes
 
             defaultColumnFamily = columnFamilies.get(0);
             headersColumnFamily = columnFamilies.get(1);
+            offsetsColumnFamily = columnFamilies.get(2);
 
             assertNull(db.get(defaultColumnFamily, "key".getBytes()));
             assertEquals(0L, db.getLongProperty(defaultColumnFamily, "rocksdb.estimate-num-keys"));
@@ -119,6 +125,9 @@ public class RocksDBMigratingSessionStoreWithHeadersTest extends RocksDBStoreTes
             assertEquals(1L, db.getLongProperty(headersColumnFamily, "rocksdb.estimate-num-keys"));
         } finally {
             // Order of closing must follow: ColumnFamilyHandle > RocksDB > DBOptions > ColumnFamilyOptions
+            if (offsetsColumnFamily != null) {
+                offsetsColumnFamily.close();
+            }
             if (defaultColumnFamily != null) {
                 defaultColumnFamily.close();
             }
@@ -331,12 +340,14 @@ public class RocksDBMigratingSessionStoreWithHeadersTest extends RocksDBStoreTes
 
         final List<ColumnFamilyDescriptor> columnFamilyDescriptors = asList(
                 new ColumnFamilyDescriptor(RocksDB.DEFAULT_COLUMN_FAMILY, columnFamilyOptions),
-                new ColumnFamilyDescriptor(sessionStoreHeaderColumnFamilyName, columnFamilyOptions));
+                new ColumnFamilyDescriptor(sessionStoreHeaderColumnFamilyName, columnFamilyOptions),
+                new ColumnFamilyDescriptor(RocksDBStore.OFFSETS_COLUMN_FAMILY_NAME, columnFamilyOptions));
 
         final List<ColumnFamilyHandle> columnFamilies = new ArrayList<>(columnFamilyDescriptors.size());
         RocksDB db = null;
         ColumnFamilyHandle defaultColumnFamily = null;
         ColumnFamilyHandle headersColumnFamily = null;
+        ColumnFamilyHandle offsetsColumnFamily = null;
         try {
             db = RocksDB.open(
                     dbOptions,
@@ -346,11 +357,13 @@ public class RocksDBMigratingSessionStoreWithHeadersTest extends RocksDBStoreTes
 
             defaultColumnFamily = columnFamilies.get(0);
             headersColumnFamily = columnFamilies.get(1);
+            offsetsColumnFamily = columnFamilies.get(2);
 
             verifyDefaultColumnFamily(db, defaultColumnFamily);
             verifyHeadersColumnFamily(db, headersColumnFamily);
+            verifyOffsetsColumnFamily(db, offsetsColumnFamily);
         } finally {
-            closeColumnFamilies(db, defaultColumnFamily, headersColumnFamily);
+            closeColumnFamilies(db, offsetsColumnFamily, defaultColumnFamily, headersColumnFamily);
             dbOptions.close();
             columnFamilyOptions.close();
         }
@@ -385,11 +398,20 @@ public class RocksDBMigratingSessionStoreWithHeadersTest extends RocksDBStoreTes
         assertNull(db.get(headersColumnFamily, "key12new".getBytes())); // putIfAbsent with null value on non-existing key
     }
 
+    private void verifyOffsetsColumnFamily(final RocksDB db, final ColumnFamilyHandle offsetsColumnFamily) throws Exception {
+        assertNull(db.get(offsetsColumnFamily, "unknown".getBytes()));
+        assertEquals(0L, longDeserializer.deserialize(null, db.get(offsetsColumnFamily, "status".getBytes())));
+    }
+
     private void closeColumnFamilies(
             final RocksDB db,
+            final ColumnFamilyHandle offsetColumnFamily,
             final ColumnFamilyHandle defaultColumnFamily,
             final ColumnFamilyHandle headersColumnFamily) {
         // Order of closing must follow: ColumnFamilyHandle > RocksDB
+        if (offsetColumnFamily != null) {
+            offsetColumnFamily.close();
+        }
         if (defaultColumnFamily != null) {
             defaultColumnFamily.close();
         }
@@ -419,12 +441,14 @@ public class RocksDBMigratingSessionStoreWithHeadersTest extends RocksDBStoreTes
 
         final List<ColumnFamilyDescriptor> columnFamilyDescriptors = asList(
                 new ColumnFamilyDescriptor(RocksDB.DEFAULT_COLUMN_FAMILY, columnFamilyOptions),
-                new ColumnFamilyDescriptor(sessionStoreHeaderColumnFamilyName, columnFamilyOptions));
+                new ColumnFamilyDescriptor(sessionStoreHeaderColumnFamilyName, columnFamilyOptions),
+                new ColumnFamilyDescriptor(RocksDBStore.OFFSETS_COLUMN_FAMILY_NAME, columnFamilyOptions));
 
         final List<ColumnFamilyHandle> columnFamilies = new ArrayList<>(columnFamilyDescriptors.size());
         RocksDB db = null;
         ColumnFamilyHandle defaultCF = null;
         ColumnFamilyHandle headersCF = null;
+        ColumnFamilyHandle offsetsCF = null;
         try {
             db = RocksDB.open(
                     dbOptions,
@@ -434,10 +458,14 @@ public class RocksDBMigratingSessionStoreWithHeadersTest extends RocksDBStoreTes
 
             defaultCF = columnFamilies.get(0);
             headersCF = columnFamilies.get(1);
+            offsetsCF = columnFamilies.get(2);
             db.delete(defaultCF, "key4".getBytes());
             db.delete(defaultCF, "key7".getBytes());
         } finally {
             // Order of closing must follow: ColumnFamilyHandle > RocksDB > DBOptions > ColumnFamilyOptions
+            if (offsetsCF != null) {
+                offsetsCF.close();
+            }
             if (defaultCF != null) {
                 defaultCF.close();
             }
@@ -491,11 +519,11 @@ public class RocksDBMigratingSessionStoreWithHeadersTest extends RocksDBStoreTes
     }
 
     private void assertMigratedValue(final byte[] value, final String expectedAggregation) {
-        final Headers headers = AggregationWithHeadersDeserializer.headers(value);
+        final Headers headers = Utils.headers(value);
         assertFalse(headers.iterator().hasNext(), "Migrated value should have empty headers");
         assertArrayEquals(
             expectedAggregation.getBytes(StandardCharsets.UTF_8),
-            AggregationWithHeadersDeserializer.rawAggregation(value),
+            Utils.rawAggregation(value),
             "Migrated value should preserve original aggregation: " + expectedAggregation);
     }
 
@@ -507,6 +535,74 @@ public class RocksDBMigratingSessionStoreWithHeadersTest extends RocksDBStoreTes
                 header.value(),
                 deserialized.headers().lastHeader(header.key()).value(),
                 "Expected header '" + header.key() + "' to match");
+        }
+    }
+
+    // KAFKA-20456 regression: the offsets-CF ColumnFamilyOptions must be released on close().
+    @Test
+    public void shouldCloseOffsetsCfOptionsOnStoreClose() {
+        final CapturingOffsetsMigratingSessionStore capturingStore = new CapturingOffsetsMigratingSessionStore();
+        rocksDBStore = capturingStore;
+        rocksDBStore.init(context, rocksDBStore);
+
+        final ColumnFamilyOptions captured = capturingStore.capturedOffsetsOptions;
+        assertNotNull(captured, "offsetsCFOptions should have been invoked during init");
+        assertTrue(captured.isOwningHandle(),
+                "offsets CF options should own its native handle while store is open");
+
+        rocksDBStore.close();
+
+        assertFalse(captured.isOwningHandle(),
+                "offsets CF options native handle should be released by close()");
+    }
+
+    // KIP-1035 close-path leak regression: when the migrating store enters upgrade mode it
+    // installs a DualColumnFamilyAccessor with three CF handles (offsets + oldCF + newCF).
+    // If the close-time put(closedState) throws, all three handles must still be released
+    // via the try/finally chain in AbstractColumnFamilyAccessor.close() and
+    // DualColumnFamilyAccessor.close().
+    @Test
+    public void shouldCloseAllDualColumnFamilyHandlesWhenAccessorPutThrowsDuringClose() {
+        prepareDefaultStore();
+
+        rocksDBStore = new RocksDBMigratingSessionStoreWithHeaders(DB_NAME, METRICS_SCOPE);
+        rocksDBStore.init(context, rocksDBStore);
+
+        final DualColumnFamilyAccessor accessor = (DualColumnFamilyAccessor) rocksDBStore.cfAccessor;
+        final ColumnFamilyHandle offsetsHandle = accessor.offsetColumnFamilyHandle();
+        final ColumnFamilyHandle oldHandle = accessor.oldColumnFamily();
+        final ColumnFamilyHandle newHandle = accessor.newColumnFamily();
+        assertTrue(offsetsHandle.isOwningHandle());
+        assertTrue(oldHandle.isOwningHandle());
+        assertTrue(newHandle.isOwningHandle());
+
+        final ThrowingOnOffsetsPutDBAccessor wrapper =
+                new ThrowingOnOffsetsPutDBAccessor(rocksDBStore.dbAccessor, offsetsHandle);
+        rocksDBStore.dbAccessor = wrapper;
+
+        rocksDBStore.close();
+
+        assertTrue(wrapper.thrownPutCount.get() >= 1,
+                "expected the closedState put on the offsets CF to be invoked and to throw");
+        assertFalse(offsetsHandle.isOwningHandle(),
+                "offsets CF handle should still be closed when accessor.put throws");
+        assertFalse(oldHandle.isOwningHandle(),
+                "old CF handle should still be closed when super.close() throws");
+        assertFalse(newHandle.isOwningHandle(),
+                "new CF handle should still be closed when oldColumnFamily.close() chain runs");
+    }
+
+    private static final class CapturingOffsetsMigratingSessionStore extends RocksDBMigratingSessionStoreWithHeaders {
+        ColumnFamilyOptions capturedOffsetsOptions;
+
+        CapturingOffsetsMigratingSessionStore() {
+            super(DB_NAME, METRICS_SCOPE);
+        }
+
+        @Override
+        protected ColumnFamilyOptions offsetsCFOptions() {
+            capturedOffsetsOptions = super.offsetsCFOptions();
+            return capturedOffsetsOptions;
         }
     }
 }

@@ -17,7 +17,7 @@
 
 package kafka.server
 
-import kafka.server.QuotaFactory.UNBOUNDED_QUOTA
+import org.apache.kafka.server.quota.QuotaFactory.UNBOUNDED_QUOTA
 import kafka.utils.Logging
 import org.apache.kafka.common.errors.KafkaStorageException
 import org.apache.kafka.common.message.{FetchResponseData, OffsetForLeaderEpochRequestData}
@@ -29,6 +29,7 @@ import org.apache.kafka.common.{TopicIdPartition, TopicPartition, Uuid}
 import org.apache.kafka.server.common.OffsetAndEpoch
 import org.apache.kafka.server.network.BrokerEndPoint
 import org.apache.kafka.server.LeaderEndPoint
+import org.apache.kafka.server.quota.ReplicaQuota
 import org.apache.kafka.server.{PartitionFetchState, ReplicaFetch, ResultWithPartitions}
 import org.apache.kafka.server.storage.log.{FetchIsolation, FetchParams, FetchPartitionData}
 
@@ -55,8 +56,6 @@ class LocalLeaderEndPoint(sourceBroker: BrokerEndPoint,
   private val fetchSize = brokerConfig.replicaFetchMaxBytes
   private var inProgressPartition: Option[TopicPartition] = None
 
-  override val isTruncationOnFetchSupported: Boolean = false
-
   override def initiateClose(): Unit = {} // do nothing
 
   override def close(): Unit = {} // do nothing
@@ -78,7 +77,7 @@ class LocalLeaderEndPoint(sourceBroker: BrokerEndPoint,
       partitionData = responsePartitionData.map { case (tp, data) =>
         val abortedTransactions =  data.abortedTransactions.orElse(null)
         val lastStableOffset: Long = data.lastStableOffset.orElse(FetchResponse.INVALID_LAST_STABLE_OFFSET)
-        tp.topicPartition -> new FetchResponseData.PartitionData()
+        val partitionData = new FetchResponseData.PartitionData()
           .setPartitionIndex(tp.topicPartition.partition)
           .setErrorCode(data.error.code)
           .setHighWatermark(data.highWatermark)
@@ -86,6 +85,8 @@ class LocalLeaderEndPoint(sourceBroker: BrokerEndPoint,
           .setLogStartOffset(data.logStartOffset)
           .setAbortedTransactions(abortedTransactions)
           .setRecords(data.records)
+        data.divergingEpoch.ifPresent(partitionData.setDivergingEpoch)
+        tp.topicPartition -> partitionData
       }
     }
 
@@ -236,10 +237,7 @@ class LocalLeaderEndPoint(sourceBroker: BrokerEndPoint,
 
     try {
       val logStartOffset = replicaManager.futureLocalLogOrException(topicPartition).logStartOffset
-      val lastFetchedEpoch = if (isTruncationOnFetchSupported)
-        fetchState.lastFetchedEpoch
-      else
-        Optional.empty[Integer]
+      val lastFetchedEpoch = fetchState.lastFetchedEpoch
       val topicId = fetchState.topicId.orElse(Uuid.ZERO_UUID)
       requestMap.put(topicPartition, new FetchRequest.PartitionData(topicId, fetchState.fetchOffset, logStartOffset,
         fetchSize, Optional.of(fetchState.currentLeaderEpoch), lastFetchedEpoch))

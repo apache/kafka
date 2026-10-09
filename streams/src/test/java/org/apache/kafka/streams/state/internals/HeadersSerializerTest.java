@@ -40,8 +40,7 @@ public class HeadersSerializerTest {
 
     @Test
     public void shouldSerializeEmptyHeaders() {
-        final Headers headers = new RecordHeaders();
-        final byte[] serialized = HeadersSerializer.serialize(headers);
+        final byte[] serialized = HeadersSerializer.serialize(new RecordHeaders());
 
         assertNotNull(serialized);
         assertEquals(0, serialized.length, "Empty headers should serialize to empty byte array (0 bytes)");
@@ -51,6 +50,7 @@ public class HeadersSerializerTest {
     public void shouldSerializeSingleHeader() {
         final Headers headers = new RecordHeaders()
             .add("key1", "value1".getBytes());
+
         final byte[] serialized = HeadersSerializer.serialize(headers);
 
         assertNotNull(serialized);
@@ -72,6 +72,7 @@ public class HeadersSerializerTest {
             .add("key0", "value0".getBytes())
             .add("key1", "value1".getBytes())
             .add("key2", "value2".getBytes());
+
         final byte[] serialized = HeadersSerializer.serialize(headers);
 
         assertNotNull(serialized);
@@ -93,6 +94,7 @@ public class HeadersSerializerTest {
     public void shouldSerializeHeaderWithNullValue() {
         final Headers headers = new RecordHeaders()
             .add("key1", null);
+
         final byte[] serialized = HeadersSerializer.serialize(headers);
 
         assertNotNull(serialized);
@@ -112,6 +114,7 @@ public class HeadersSerializerTest {
     public void shouldSerializeHeadersWithEmptyValue() {
         final Headers headers = new RecordHeaders()
             .add("key1", new byte[0]);
+
         final byte[] serialized = HeadersSerializer.serialize(headers);
 
         assertNotNull(serialized);

@@ -20,7 +20,6 @@ import org.apache.kafka.common.config.ConfigDef;
 import org.apache.kafka.common.config.SaslConfigs;
 import org.apache.kafka.common.internals.KafkaFutureImpl;
 import org.apache.kafka.common.security.oauthbearer.internals.expiring.ExpiringCredentialRefreshingLogin.LoginContextFactory;
-import org.apache.kafka.common.utils.MockScheduler;
 import org.apache.kafka.common.utils.MockTime;
 import org.apache.kafka.common.utils.Time;
 
@@ -35,6 +34,7 @@ import java.util.HashMap;
 import java.util.List;
 import java.util.Map;
 import java.util.Objects;
+import java.util.TreeMap;
 import java.util.concurrent.Future;
 import java.util.concurrent.TimeUnit;
 
@@ -281,6 +281,40 @@ public class ExpiringCredentialRefreshingLoginTest {
 
         public Future<?> refresherThreadDoneFuture() {
             return refresherThreadDoneFuture;
+        }
+    }
+
+    /*
+    * */
+    private static class MockScheduler implements MockTime.Listener {
+
+        private final MockTime time;
+        private final Map<Long, List<KafkaFutureImpl<Long>>> waiters = new TreeMap<>();
+
+        public MockScheduler(MockTime time) {
+            this.time = time;
+            time.addListener(this);
+        }
+
+        @Override
+        public synchronized void onTimeUpdated() {
+            long timeMs = time.milliseconds();
+            var iterator = waiters.entrySet().iterator();
+            while (iterator.hasNext()) {
+                var entry = iterator.next();
+                if (entry.getKey() > timeMs) break;
+                entry.getValue().forEach(future -> future.complete(timeMs));
+                iterator.remove();
+            }
+        }
+
+        public synchronized void addWaiter(long delayMs, KafkaFutureImpl<Long> waiter) {
+            long timeMs = time.milliseconds();
+            if (delayMs <= 0) {
+                waiter.complete(timeMs);
+            } else {
+                waiters.computeIfAbsent(timeMs + delayMs, k -> new ArrayList<>()).add(waiter);
+            }
         }
     }
 

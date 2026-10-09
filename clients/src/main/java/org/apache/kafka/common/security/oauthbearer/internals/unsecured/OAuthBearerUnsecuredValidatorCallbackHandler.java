@@ -26,7 +26,6 @@ import org.apache.kafka.common.utils.Utils;
 import org.slf4j.Logger;
 import org.slf4j.LoggerFactory;
 
-import java.util.Collections;
 import java.util.List;
 import java.util.Map;
 import java.util.Objects;
@@ -118,8 +117,7 @@ public class OAuthBearerUnsecuredValidatorCallbackHandler implements Authenticat
             throw new IllegalArgumentException(
                     String.format("Must supply exactly 1 non-null JAAS mechanism configuration (size was %d)",
                             jaasConfigEntries.size()));
-        this.moduleOptions = Collections
-                .unmodifiableMap((Map<String, String>) jaasConfigEntries.get(0).getOptions());
+        this.moduleOptions = Map.copyOf((Map<String, String>) jaasConfigEntries.get(0).getOptions());
         configured = true;
     }
 
@@ -188,7 +186,7 @@ public class OAuthBearerUnsecuredValidatorCallbackHandler implements Authenticat
 
     private List<String> requiredScope() {
         String requiredSpaceDelimitedScope = option(REQUIRED_SCOPE_OPTION);
-        return Utils.isBlank(requiredSpaceDelimitedScope) ? Collections.emptyList() : OAuthBearerScopeUtils.parseScope(requiredSpaceDelimitedScope.trim());
+        return Utils.isBlank(requiredSpaceDelimitedScope) ? List.of() : OAuthBearerScopeUtils.parseScope(requiredSpaceDelimitedScope.trim());
     }
 
     private int allowableClockSkewMs() {

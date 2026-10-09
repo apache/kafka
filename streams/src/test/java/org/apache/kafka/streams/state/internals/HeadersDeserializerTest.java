@@ -49,8 +49,8 @@ public class HeadersDeserializerTest {
 
     @Test
     public void shouldRoundTripEmptyHeaders() {
-        final Headers original = new RecordHeaders();
-        final byte[] serialized = HeadersSerializer.serialize(original);
+        final byte[] serialized = HeadersSerializer.serialize(new RecordHeaders());
+
         final Headers deserialized = HeadersDeserializer.deserialize(serialized);
 
         assertNotNull(deserialized);
@@ -62,6 +62,7 @@ public class HeadersDeserializerTest {
         final Headers original = new RecordHeaders()
             .add("key1", "value1".getBytes());
         final byte[] serialized = HeadersSerializer.serialize(original);
+
         final Headers deserialized = HeadersDeserializer.deserialize(serialized);
 
         assertNotNull(deserialized);
@@ -80,7 +81,9 @@ public class HeadersDeserializerTest {
             .add("key1", "value1".getBytes())
             .add("key2", "value2".getBytes());
         final byte[] serialized = HeadersSerializer.serialize(original);
+
         final Headers deserialized = HeadersDeserializer.deserialize(serialized);
+
         assertNotNull(deserialized);
 
         final Header[] headerArray = deserialized.toArray();
@@ -97,6 +100,7 @@ public class HeadersDeserializerTest {
         final Headers original = new RecordHeaders()
             .add("key1", null);
         final byte[] serialized = HeadersSerializer.serialize(original);
+
         final Headers deserialized = HeadersDeserializer.deserialize(serialized);
 
         assertNotNull(deserialized);
@@ -113,6 +117,7 @@ public class HeadersDeserializerTest {
         final Headers original = new RecordHeaders()
             .add("key1", new byte[0]);
         final byte[] serialized = HeadersSerializer.serialize(original);
+
         final Headers deserialized = HeadersDeserializer.deserialize(serialized);
 
         assertNotNull(deserialized);
@@ -133,7 +138,9 @@ public class HeadersDeserializerTest {
             .add("key2", "value2".getBytes())
             .add("key2", "value3".getBytes());
         final byte[] serialized = HeadersSerializer.serialize(original);
+
         final Headers deserialized = HeadersDeserializer.deserialize(serialized);
+
         assertNotNull(deserialized);
 
         final Header[] headerArray = deserialized.toArray();

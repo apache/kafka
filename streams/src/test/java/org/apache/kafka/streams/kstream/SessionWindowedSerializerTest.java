@@ -36,9 +36,9 @@ import static org.junit.jupiter.api.Assertions.assertNotNull;
 import static org.junit.jupiter.api.Assertions.assertThrows;
 import static org.mockito.ArgumentMatchers.any;
 import static org.mockito.ArgumentMatchers.anyString;
-import static org.mockito.ArgumentMatchers.eq;
 import static org.mockito.Mockito.mock;
 import static org.mockito.Mockito.never;
+import static org.mockito.Mockito.times;
 import static org.mockito.Mockito.verify;
 import static org.mockito.Mockito.when;
 
@@ -122,15 +122,21 @@ public class SessionWindowedSerializerTest {
         final Serializer<String> mockSerializer = mock(StringSerializer.class);
         when(mockSerializer.serialize(anyString(), any(Headers.class), anyString())).thenReturn("test-value".getBytes());
 
+        final String topic = "dummy";
         final String key = "test-key";
         final Windowed<String> data = new Windowed<>(key, new SessionWindow(0, 1));
         final Headers headers = new RecordHeaders().add("key1", "value1".getBytes());
 
         final SessionWindowedSerializer<String> testSerializer = new SessionWindowedSerializer<>(mockSerializer);
 
-        testSerializer.serialize("dummy", headers, data);
+        testSerializer.serialize(topic, headers, data);
 
-        verify(mockSerializer).serialize(anyString(), eq(headers), eq(key));
-        verify(mockSerializer, never()).serialize(anyString(), eq(key));
+        verify(mockSerializer, times(1)).serialize(topic, headers, key);
+        verify(mockSerializer, never()).serialize(topic, key);
+
+        testSerializer.serializeBaseKey(topic, headers, data);
+
+        verify(mockSerializer, times(2)).serialize(topic, headers, key);
+        verify(mockSerializer, never()).serialize(topic, key);
     }
 }

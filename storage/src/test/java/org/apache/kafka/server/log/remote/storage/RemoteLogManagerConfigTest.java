@@ -29,6 +29,7 @@ import static org.junit.jupiter.api.Assertions.assertThrows;
 
 @SuppressWarnings("removal")
 public class RemoteLogManagerConfigTest {
+
     @Test
     public void testValidConfigs() {
         String rsmPrefix = "__custom.rsm.";
@@ -53,6 +54,8 @@ public class RemoteLogManagerConfigTest {
         RemoteLogManagerConfig remoteLogManagerConfigEmptyConfig = new RLMTestConfig(emptyProps).remoteLogManagerConfig();
         assertEquals(RemoteLogManagerConfig.DEFAULT_REMOTE_LOG_MANAGER_THREAD_POOL_SIZE, remoteLogManagerConfigEmptyConfig.remoteLogManagerThreadPoolSize());
         assertEquals(RemoteLogManagerConfig.DEFAULT_REMOTE_LOG_MANAGER_COPY_QUOTA_WINDOW_NUM, remoteLogManagerConfigEmptyConfig.remoteLogManagerCopyNumQuotaSamples());
+        assertEquals(RemoteLogManagerConfig.DEFAULT_LOG_REMOTE_COPY_LAG_MS, remoteLogManagerConfigEmptyConfig.logRemoteCopyLagMs());
+        assertEquals(RemoteLogManagerConfig.DEFAULT_LOG_REMOTE_COPY_LAG_BYTES, remoteLogManagerConfigEmptyConfig.logRemoteCopyLagBytes());
     }
 
     @Test

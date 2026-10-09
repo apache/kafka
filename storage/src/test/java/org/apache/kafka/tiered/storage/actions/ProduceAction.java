@@ -38,9 +38,8 @@ import java.util.concurrent.TimeoutException;
 
 import static org.apache.kafka.server.log.remote.storage.LocalTieredStorageCondition.expectEvent;
 import static org.apache.kafka.server.log.remote.storage.LocalTieredStorageEvent.EventType.COPY_SEGMENT;
-import static org.apache.kafka.tiered.storage.utils.RecordsKeyValueMatcher.correspondTo;
+import static org.apache.kafka.tiered.storage.utils.RecordsKeyValueAssert.assertRecordsCorrespondTo;
 import static org.apache.kafka.tiered.storage.utils.TieredStorageTestUtils.tieredStorageRecords;
-import static org.hamcrest.MatcherAssert.assertThat;
 
 public final class ProduceAction implements TieredStorageTestAction {
 
@@ -128,7 +127,7 @@ public final class ProduceAction implements TieredStorageTestAction {
         // Verify that the produced records can be consumed from the topic-partition.
         List<ConsumerRecord<String, String>> consumedRecords =
                 context.consume(topicPartition, recordsToProduce.size(), startOffset);
-        assertThat(consumedRecords, correspondTo(recordsToProduce, topicPartition, serde, serde));
+        assertRecordsCorrespondTo(recordsToProduce, consumedRecords, topicPartition, serde, serde);
 
         // Take a physical snapshot of the second-tier storage, and compare the records found with
         // those of the expected log segments.
@@ -160,6 +159,6 @@ public final class ProduceAction implements TieredStorageTestAction {
     private void compareRecords(List<Record> discoveredRecords,
                                 List<ProducerRecord<String, String>> producerRecords,
                                 TopicPartition topicPartition) {
-        assertThat(discoveredRecords, correspondTo(producerRecords, topicPartition, serde, serde));
+        assertRecordsCorrespondTo(producerRecords, discoveredRecords, topicPartition, serde, serde);
     }
 }

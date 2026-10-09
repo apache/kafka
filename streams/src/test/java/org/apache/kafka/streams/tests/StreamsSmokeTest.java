@@ -16,8 +16,8 @@
  */
 package org.apache.kafka.streams.tests;
 
-import org.apache.kafka.common.utils.Exit;
 import org.apache.kafka.common.utils.Utils;
+import org.apache.kafka.common.utils.internals.Exit;
 import org.apache.kafka.streams.StreamsConfig;
 
 import java.io.IOException;

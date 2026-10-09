@@ -45,6 +45,7 @@ import org.apache.kafka.connect.util.clusters.EmbeddedConnectCluster;
 import org.apache.kafka.connect.util.clusters.WorkerHandle;
 import org.apache.kafka.test.TestUtils;
 
+import org.apache.logging.log4j.Level;
 import org.junit.jupiter.api.AfterEach;
 import org.junit.jupiter.api.BeforeEach;
 import org.junit.jupiter.api.Tag;
@@ -72,7 +73,6 @@ import java.util.stream.IntStream;
 import jakarta.ws.rs.core.Response;
 
 import static jakarta.ws.rs.core.Response.Status.INTERNAL_SERVER_ERROR;
-import static org.apache.kafka.clients.CommonClientConfigs.BOOTSTRAP_SERVERS_CONFIG;
 import static org.apache.kafka.clients.CommonClientConfigs.METADATA_RECOVERY_STRATEGY_CONFIG;
 import static org.apache.kafka.common.config.AbstractConfig.CONFIG_PROVIDERS_CONFIG;
 import static org.apache.kafka.common.config.TopicConfig.DELETE_RETENTION_MS_CONFIG;
@@ -80,7 +80,6 @@ import static org.apache.kafka.common.config.TopicConfig.SEGMENT_MS_CONFIG;
 import static org.apache.kafka.connect.integration.BlockingConnectorTest.TASK_STOP;
 import static org.apache.kafka.connect.integration.TestableSourceConnector.TOPIC_CONFIG;
 import static org.apache.kafka.connect.runtime.ConnectorConfig.CONNECTOR_CLASS_CONFIG;
-import static org.apache.kafka.connect.runtime.ConnectorConfig.CONNECTOR_CLIENT_PRODUCER_OVERRIDES_PREFIX;
 import static org.apache.kafka.connect.runtime.ConnectorConfig.HEADER_CONVERTER_CLASS_CONFIG;
 import static org.apache.kafka.connect.runtime.ConnectorConfig.KEY_CONVERTER_CLASS_CONFIG;
 import static org.apache.kafka.connect.runtime.ConnectorConfig.PREDICATES_CONFIG;
@@ -211,9 +210,9 @@ public class ConnectWorkerIntegrationTest {
 
         // setup up props for the source connector
         Map<String, String> props = defaultSourceConnectorProps(TOPIC_NAME);
-        // Properties for the source connector. The task should fail at startup due to the bad broker address.
+        // Properties for the source connector. The task should fail at startup due to injected error.
         props.put(TASKS_MAX_CONFIG, Objects.toString(numTasks));
-        props.put(CONNECTOR_CLIENT_PRODUCER_OVERRIDES_PREFIX + BOOTSTRAP_SERVERS_CONFIG, "nobrokerrunningatthisaddress");
+        props.put("task-" + CONNECTOR_NAME + "-0.start.inject.error", "true");
 
         // Try to start the connector and its single task.
         connect.configureConnector(CONNECTOR_NAME, props);
@@ -221,8 +220,8 @@ public class ConnectWorkerIntegrationTest {
         connect.assertions().assertConnectorIsRunningAndTasksHaveFailed(CONNECTOR_NAME, numTasks,
                 "Connector tasks did not fail in time");
 
-        // Reconfigure the connector without the bad broker address.
-        props.remove(CONNECTOR_CLIENT_PRODUCER_OVERRIDES_PREFIX + BOOTSTRAP_SERVERS_CONFIG);
+        // Reconfigure the connector without the injected error.
+        props.remove("task-" + CONNECTOR_NAME + "-0.start.inject.error");
         connect.configureConnector(CONNECTOR_NAME, props);
 
         // Restart the failed task
@@ -755,6 +754,95 @@ public class ConnectWorkerIntegrationTest {
     }
 
     @Test
+    public void testCreateSourceConnectorWithInitialOffsets() throws Exception {
+        connect = connectBuilder.build();
+        // start the clusters
+        connect.start();
+
+        Map<String, String> props = defaultSourceConnectorProps(TOPIC_NAME);
+        // Configure the connector to produce a maximum of 10 messages
+        props.put("max.messages", "10");
+        props.put(TASKS_MAX_CONFIG, "1");
+
+        // Create the connector already positioned at offset 5. The TestableSourceConnector produces messages with
+        // sequence numbers starting after the supplied offset, so it should produce only the last 5 of its 10 messages.
+        CreateConnectorRequest createConnectorRequest = new CreateConnectorRequest(
+            CONNECTOR_NAME,
+            props,
+            null,
+            List.of(new ConnectorOffset(Map.of("task.id", CONNECTOR_NAME + "-0"), Map.of("saved", 5L)))
+        );
+        String response = connect.configureConnector(createConnectorRequest);
+        // The creation response must carry offsets_status because initial_offsets was supplied
+        assertTrue(response.contains("offsets_status"),
+            "Create response should include offsets_status when initial_offsets is supplied: " + response);
+
+        connect.assertions().assertConnectorAndExactlyNumTasksAreRunning(
+            CONNECTOR_NAME,
+            1,
+            "Connector or tasks did not start running healthily in time"
+        );
+
+        // Verify that only 5 messages were produced, i.e. the connector started from the supplied initial offset
+        // rather than from the beginning. We consume 5 first to ensure at least 5 are available before counting all.
+        long timeoutMs = TimeUnit.SECONDS.toMillis(10);
+        connect.kafka().consume(5, timeoutMs, TOPIC_NAME);
+        assertEquals(5, connect.kafka().consumeAll(timeoutMs, TOPIC_NAME).count());
+    }
+
+    @Test
+    public void testCreateSinkConnectorWithInitialOffsets() throws Exception {
+        connect = connectBuilder.build();
+        // start the clusters
+        connect.start();
+
+        // Create topic and produce 10 messages
+        connect.kafka().createTopic(TOPIC_NAME);
+        for (int i = 0; i < 10; i++) {
+            connect.kafka().produce(TOPIC_NAME, "Message " + i);
+        }
+
+        Map<String, String> props = defaultSinkConnectorProps(TOPIC_NAME);
+        props.put(TASKS_MAX_CONFIG, "1");
+
+        // This will cause the connector task to fail if it encounters a record with offset < 5
+        TaskHandle taskHandle = RuntimeHandles.get().connectorHandle(CONNECTOR_NAME).taskHandle(CONNECTOR_NAME + "-0",
+            sinkRecord -> {
+                if (sinkRecord.kafkaOffset() < 5L) {
+                    throw new ConnectException("Unexpected record encountered: " + sinkRecord);
+                }
+            });
+        // We produced 10 records and create the connector already positioned at offset 5, so we expect only the last 5 to be consumed
+        taskHandle.expectedRecords(5);
+
+        Map<String, Object> partition = new HashMap<>();
+        partition.put(SinkUtils.KAFKA_TOPIC_KEY, TOPIC_NAME);
+        partition.put(SinkUtils.KAFKA_PARTITION_KEY, 0);
+        CreateConnectorRequest createConnectorRequest = new CreateConnectorRequest(
+            CONNECTOR_NAME,
+            props,
+            null,
+            List.of(new ConnectorOffset(partition, Map.of(SinkUtils.KAFKA_OFFSET_KEY, 5)))
+        );
+        connect.configureConnector(createConnectorRequest);
+
+        connect.assertions().assertConnectorAndExactlyNumTasksAreRunning(
+            CONNECTOR_NAME,
+            1,
+            "Connector or tasks did not start running healthily in time"
+        );
+
+        taskHandle.awaitRecords(TimeUnit.SECONDS.toMillis(10));
+
+        // Confirm that the task is still running (i.e. it didn't fail due to encountering any records with offset < 5)
+        connect.assertions().assertConnectorAndExactlyNumTasksAreRunning(
+            CONNECTOR_NAME,
+            1,
+            "Connector or tasks did not start running healthily in time"
+        );
+    }
+
+    @Test
     public void testPatchConnectorConfig() throws Exception {
         connect = connectBuilder.build();
         // start the clusters
@@ -894,11 +982,10 @@ public class ConnectWorkerIntegrationTest {
 
         try (LogCaptureAppender logCaptureAppender = LogCaptureAppender.createAndRegister(DistributedHerder.class)) {
             connect.restartTask(CONNECTOR_NAME, 0);
-            TestUtils.waitForCondition(() -> logCaptureAppender.getEvents().stream().anyMatch(e -> e.getLevel().equals("WARN")) &&
-                    logCaptureAppender.getEvents().stream().anyMatch(e ->
+            TestUtils.waitForCondition(() -> logCaptureAppender.getMessages(Level.WARN).stream().anyMatch(m ->
                         // Ensure that the tick thread is blocked on the stage which we expect it to be, i.e restarting the task.
-                        e.getMessage().contains("worker poll timeout has expired") &&
-                        e.getMessage().contains("The last known action being performed by the worker is : restarting task " + CONNECTOR_NAME + "-0")
+                        m.contains("worker poll timeout has expired") &&
+                        m.contains("The last known action being performed by the worker is : restarting task " + CONNECTOR_NAME + "-0")
                     ),
                 "Coordinator did not poll for rebalance.timeout.ms");
             // This clean up ensures that the test ends quickly as o/w we will wait for task#stop.

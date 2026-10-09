@@ -22,8 +22,8 @@ import org.apache.kafka.common.record.internal.ControlRecordType;
 import org.apache.kafka.common.record.internal.FileRecords;
 import org.apache.kafka.common.record.internal.MemoryRecords;
 import org.apache.kafka.common.record.internal.Records;
-import org.apache.kafka.common.utils.BufferSupplier;
-import org.apache.kafka.common.utils.LogContext;
+import org.apache.kafka.common.utils.internals.BufferSupplier;
+import org.apache.kafka.common.utils.internals.LogContext;
 import org.apache.kafka.raft.BatchReader;
 import org.apache.kafka.raft.ControlRecord;
 import org.apache.kafka.raft.internals.RecordsIteratorTest.TestBatch;
@@ -133,7 +133,7 @@ class RecordsBatchReaderTest {
             true,
             new LogContext()
         );
-        try {
+        try (reader) {
             for (TestBatch<String> batch : expectedBatches) {
                 assertTrue(reader.hasNext());
                 assertEquals(batch, TestBatch.from(reader.next()));
@@ -141,8 +141,6 @@ class RecordsBatchReaderTest {
 
             assertFalse(reader.hasNext());
             assertThrows(NoSuchElementException.class, reader::next);
-        } finally {
-            reader.close();
         }
 
         Mockito.verify(closeListener).onClose(reader);

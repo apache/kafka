@@ -1,6 +1,6 @@
 ---
 title: Distribution
-description: Distribution
+description: Kafka consumer offset tracking via the group coordinator.
 weight: 5
 tags: ['kafka', 'docs']
 aliases: 

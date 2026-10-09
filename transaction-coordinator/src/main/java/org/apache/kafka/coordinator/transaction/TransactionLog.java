@@ -17,10 +17,8 @@
 package org.apache.kafka.coordinator.transaction;
 
 import org.apache.kafka.common.TopicPartition;
-import org.apache.kafka.common.compress.Compression;
 import org.apache.kafka.common.protocol.ByteBufferAccessor;
 import org.apache.kafka.common.protocol.MessageUtil;
-import org.apache.kafka.common.record.internal.RecordBatch;
 import org.apache.kafka.coordinator.transaction.generated.CoordinatorRecordType;
 import org.apache.kafka.coordinator.transaction.generated.TransactionLogKey;
 import org.apache.kafka.coordinator.transaction.generated.TransactionLogValue;
@@ -41,14 +39,6 @@ import java.util.stream.Collectors;
  *    -> value version 0:       [producer_id, producer_epoch, expire_timestamp, status, [topic, [partition] ], timestamp]
  */
 public class TransactionLog {
-
-    // enforce always using
-    //  1. cleanup policy = compact
-    //  2. compression = none
-    //  3. unclean leader election = disabled
-    //  4. required acks = -1 when writing
-    public static final Compression ENFORCED_COMPRESSION = Compression.NONE;
-    public static final short ENFORCED_REQUIRED_ACKS = (short) -1;
 
     /**
      * Generates the bytes for transaction log message key
@@ -84,43 +74,26 @@ public class TransactionLog {
                             .setPartitionIds(entry.getValue().stream().map(TopicPartition::partition).toList())).toList();
         }
 
-        short logVersion = transactionVersionLevel.transactionLogValueVersion();
+        short logValueVersion = transactionVersionLevel.transactionLogValueVersion();
         TransactionLogValue value = new TransactionLogValue()
-                .setProducerId(txnMetadata.producerId())
-                .setProducerEpoch(txnMetadata.producerEpoch())
-                .setTransactionTimeoutMs(txnMetadata.txnTimeoutMs())
-                .setTransactionStatus(txnMetadata.txnState().id())
-                .setTransactionLastUpdateTimestampMs(txnMetadata.txnLastUpdateTimestamp())
-                .setTransactionStartTimestampMs(txnMetadata.txnStartTimestamp())
-                .setTransactionPartitions(transactionPartitions)
-                .setClientTransactionVersion(txnMetadata.clientTransactionVersion().featureLevel());
+                        .setProducerId(txnMetadata.producerId())
+                        .setProducerEpoch(txnMetadata.producerEpoch())
+                        .setTransactionTimeoutMs(txnMetadata.txnTimeoutMs())
+                        .setTransactionStatus(txnMetadata.txnState().id())
+                        .setTransactionLastUpdateTimestampMs(txnMetadata.txnLastUpdateTimestamp())
+                        .setTransactionStartTimestampMs(txnMetadata.txnStartTimestamp())
+                        .setTransactionPartitions(transactionPartitions)
+                        .setClientTransactionVersion(txnMetadata.clientTransactionVersion().featureLevel());
 
-        // Tagged fields are only supported in log version 1+ (flexible versions)
-        if (logVersion >= 1) {
+        if (logValueVersion >= 1) {
             value.setPreviousProducerId(txnMetadata.prevProducerId());
             value.setNextProducerId(txnMetadata.nextProducerId());
+            value.setLastProducerEpoch(txnMetadata.lastProducerEpoch());
             value.setNextProducerEpoch(txnMetadata.nextProducerEpoch());
         }
 
-        return MessageUtil.toVersionPrefixedBytes(logVersion, value);
+        return MessageUtil.toVersionPrefixedBytes(logValueVersion, value);
     }
-
-    /**
-     * Decodes the transaction log messages' key
-     *
-     * @return the transactional id
-     * @throws IllegalStateException if the version is not a valid transaction log key version
-     */
-    public static String readTxnRecordKey(ByteBuffer buffer) {
-        short version = buffer.getShort();
-        if (version == CoordinatorRecordType.TRANSACTION_LOG.id()) {
-            return new TransactionLogKey(new ByteBufferAccessor(buffer), (short) 0).transactionalId();
-        } else {
-            throw new IllegalStateException("Unknown version " + version + " from the transaction log message key");
-        }
-    }
-
-
 
     public sealed interface ReadResult permits TxnRecord, TxnTombstone, UnknownKeyVersion, UnknownValueVersion { }
 
@@ -177,7 +150,7 @@ public class TransactionLog {
                     value.previousProducerId(),
                     value.nextProducerId(),
                     value.producerEpoch(),
-                    RecordBatch.NO_PRODUCER_EPOCH,
+                    value.lastProducerEpoch(),
                     value.nextProducerEpoch(),
                     value.transactionTimeoutMs(),
                     state,

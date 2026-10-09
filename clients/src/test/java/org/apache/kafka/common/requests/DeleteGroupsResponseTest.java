@@ -45,7 +45,7 @@ public class DeleteGroupsResponseTest {
                         .setErrorCode(Errors.NONE.code()),
                     new DeletableGroupResult()
                         .setGroupId(GROUP_ID_2)
-                        .setErrorCode(Errors.GROUP_AUTHORIZATION_FAILED.code())).iterator()
+                        .setErrorCode(Errors.GROUP_AUTHORIZATION_FAILED.code()))
                 )
             )
             .setThrottleTimeMs(THROTTLE_TIME_MS));

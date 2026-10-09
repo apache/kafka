@@ -16,6 +16,7 @@
  */
 package org.apache.kafka.streams.state;
 
+import org.apache.kafka.common.annotation.InterfaceAudience;
 import org.apache.kafka.streams.DslStoreFormat;
 
 import java.util.Objects;
@@ -24,10 +25,10 @@ import java.util.Objects;
  * {@code DslKeyValueParams} is a wrapper class for all parameters that function
  * as inputs to {@link DslStoreSuppliers#keyValueStore(DslKeyValueParams)}.
  */
+@InterfaceAudience.Public
 public class DslKeyValueParams {
 
     private final String name;
-    private final boolean isTimestamped;
     private final DslStoreFormat dslStoreFormat;
 
     /**
@@ -39,7 +40,6 @@ public class DslKeyValueParams {
     public DslKeyValueParams(final String name, final boolean isTimestamped) {
         Objects.requireNonNull(name);
         this.name = name;
-        this.isTimestamped = isTimestamped;
         // If isTimestamped is false and the user is still calling the old deprecated constructor, we should assume they mean plain.
         this.dslStoreFormat = isTimestamped ? DslStoreFormat.TIMESTAMPED : DslStoreFormat.PLAIN;
     }
@@ -51,7 +51,6 @@ public class DslKeyValueParams {
     public DslKeyValueParams(final String name, final DslStoreFormat dslStoreFormat) {
         this.name =  Objects.requireNonNull(name);
         this.dslStoreFormat = Objects.requireNonNull(dslStoreFormat);
-        this.isTimestamped = dslStoreFormat == DslStoreFormat.TIMESTAMPED;
     }
 
     public String name() {
@@ -85,21 +84,19 @@ public class DslKeyValueParams {
             return false;
         }
         final DslKeyValueParams that = (DslKeyValueParams) o;
-        return isTimestamped == that.isTimestamped
-                && dslStoreFormat == that.dslStoreFormat
+        return dslStoreFormat == that.dslStoreFormat
                 && Objects.equals(name, that.name);
     }
 
     @Override
     public int hashCode() {
-        return Objects.hash(name, isTimestamped, dslStoreFormat);
+        return Objects.hash(name, dslStoreFormat);
     }
 
     @Override
     public String toString() {
         return "DslKeyValueParams{" +
                 "name='" + name + '\'' +
-                "isTimestamped=" + isTimestamped +
                 "dslStoreFormat=" + dslStoreFormat +
                 '}';
     }

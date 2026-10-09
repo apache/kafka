@@ -25,7 +25,6 @@ import org.apache.kafka.common.message.ApiVersionsResponseData.ApiVersion;
 import org.apache.kafka.common.message.ApiVersionsResponseData.ApiVersionCollection;
 import org.apache.kafka.common.message.ApiVersionsResponseData.SupportedFeatureKey;
 import org.apache.kafka.common.protocol.ApiKeys;
-import org.apache.kafka.common.utils.Utils;
 import org.apache.kafka.test.TestUtils;
 
 import org.junit.jupiter.api.Test;
@@ -95,15 +94,15 @@ public class ApiVersionsResponseTest {
         final ApiKeys nonForwardableAPIKey = ApiKeys.JOIN_GROUP;
         final short minVersion = 2;
         final short maxVersion = 3;
-        Map<ApiKeys, ApiVersion> activeControllerApiVersions = Utils.mkMap(
-            Utils.mkEntry(forwardableAPIKey, new ApiVersion()
+        Map<ApiKeys, ApiVersion> activeControllerApiVersions = Map.of(
+            forwardableAPIKey, new ApiVersion()
                 .setApiKey(forwardableAPIKey.id)
                 .setMinVersion(minVersion)
-                .setMaxVersion(maxVersion)),
-            Utils.mkEntry(nonForwardableAPIKey, new ApiVersion()
+                .setMaxVersion(maxVersion),
+            nonForwardableAPIKey, new ApiVersion()
                 .setApiKey(nonForwardableAPIKey.id)
                 .setMinVersion(minVersion)
-                .setMaxVersion(maxVersion))
+                .setMaxVersion(maxVersion)
         );
 
         ApiVersionCollection commonResponse = ApiVersionsResponse.intersectForwardableApis(

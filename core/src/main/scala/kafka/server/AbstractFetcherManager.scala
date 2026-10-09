@@ -20,12 +20,12 @@ package kafka.server
 import kafka.utils.Logging
 import org.apache.kafka.common.{TopicPartition, Uuid}
 import org.apache.kafka.common.utils.Utils
+import org.apache.kafka.common.metrics.internals.MetricsUtils
 import org.apache.kafka.server.metrics.KafkaMetricsGroup
 import org.apache.kafka.server.network.BrokerEndPoint
 import org.apache.kafka.server.PartitionFetchState
 
 import scala.collection.{Map, Set, mutable}
-import scala.jdk.CollectionConverters._
 import scala.jdk.OptionConverters._
 
 abstract class AbstractFetcherManager[T <: AbstractFetcherThread](val name: String, clientId: String, numFetchers: Int)
@@ -43,7 +43,7 @@ abstract class AbstractFetcherManager[T <: AbstractFetcherThread](val name: Stri
   val failedPartitions = new FailedPartitions
   this.logIdent = "[" + name + "] "
 
-  private val tags = Map("clientId" -> clientId).asJava
+  private val tags = MetricsUtils.getTags("clientId", clientId)
 
   metricsGroup.newGauge("MaxLag", () => {
     // current max lag across all fetchers/topics/partitions
@@ -111,17 +111,6 @@ abstract class AbstractFetcherManager[T <: AbstractFetcherThread](val name: Stri
   private[server] def getFetcherId(topicPartition: TopicPartition): Int = {
     lock synchronized {
       Utils.abs(31 * topicPartition.topic.hashCode() + topicPartition.partition) % numFetchersPerBroker
-    }
-  }
-
-  // This method is only needed by ReplicaAlterDirManager
-  def markPartitionsForTruncation(brokerId: Int, topicPartition: TopicPartition, truncationOffset: Long): Unit = {
-    lock synchronized {
-      val fetcherId = getFetcherId(topicPartition)
-      val brokerIdAndFetcherId = BrokerIdAndFetcherId(brokerId, fetcherId)
-      fetcherThreadMap.get(brokerIdAndFetcherId).foreach { thread =>
-        thread.markPartitionsForTruncation(topicPartition, truncationOffset)
-      }
     }
   }
 

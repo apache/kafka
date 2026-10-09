@@ -18,6 +18,7 @@
 package org.apache.kafka.streams.kstream.internals.foreignkeyjoin;
 
 import org.apache.kafka.common.MetricName;
+import org.apache.kafka.common.header.internals.RecordHeaders;
 import org.apache.kafka.common.serialization.StringSerializer;
 import org.apache.kafka.streams.kstream.ValueJoiner;
 import org.apache.kafka.streams.kstream.internals.KTableValueGetter;
@@ -27,7 +28,7 @@ import org.apache.kafka.streams.processor.api.Processor;
 import org.apache.kafka.streams.processor.api.ProcessorContext;
 import org.apache.kafka.streams.processor.api.Record;
 import org.apache.kafka.streams.processor.internals.InternalProcessorContext;
-import org.apache.kafka.streams.state.ValueAndTimestamp;
+import org.apache.kafka.streams.state.ValueTimestampHeaders;
 import org.apache.kafka.streams.state.internals.Murmur3;
 import org.apache.kafka.test.MockInternalProcessorContext;
 
@@ -39,11 +40,9 @@ import java.util.Map;
 
 import static org.apache.kafka.common.utils.Utils.mkEntry;
 import static org.apache.kafka.common.utils.Utils.mkMap;
-import static org.hamcrest.CoreMatchers.is;
-import static org.hamcrest.MatcherAssert.assertThat;
-import static org.hamcrest.collection.IsEmptyCollection.empty;
 import static org.junit.jupiter.api.Assertions.assertEquals;
 import static org.junit.jupiter.api.Assertions.assertNotEquals;
+import static org.junit.jupiter.api.Assertions.assertTrue;
 
 public class ResponseJoinProcessorSupplierTest {
     private static final StringSerializer STRING_SERIALIZER = new StringSerializer();
@@ -61,8 +60,8 @@ public class ResponseJoinProcessorSupplierTest {
                 }
 
                 @Override
-                public ValueAndTimestamp<V> get(final K key) {
-                    return ValueAndTimestamp.make(map.get(key), -1);
+                public ValueTimestampHeaders<V> get(final K key) {
+                    return ValueTimestampHeaders.make(map.get(key), -1, new RecordHeaders());
                 }
 
                 @Override
@@ -104,7 +103,7 @@ public class ResponseJoinProcessorSupplierTest {
         final long[] oldHash = Murmur3.hash128(STRING_SERIALIZER.serialize("topic-join-resolver", "oldLhsValue"));
         processor.process(new Record<>("lhs1", new SubscriptionResponseWrapper<>(oldHash, "rhsValue", 0), 0));
         final List<MockProcessorContext.CapturedForward<? extends String, ? extends String>> forwarded = context.forwarded();
-        assertThat(forwarded, empty());
+        assertTrue(forwarded.isEmpty());
 
         // test dropped-records sensors
         assertEquals(1.0, getDroppedRecordsTotalMetric(context));
@@ -133,7 +132,7 @@ public class ResponseJoinProcessorSupplierTest {
         final long[] hash = Murmur3.hash128(STRING_SERIALIZER.serialize("topic-join-resolver", "lhsValue"));
         processor.process(new Record<>("lhs1", new SubscriptionResponseWrapper<>(hash, "rhsValue", 0), 0));
         final List<MockProcessorContext.CapturedForward<? extends String, ? extends String>> forwarded = context.forwarded();
-        assertThat(forwarded, empty());
+        assertTrue(forwarded.isEmpty());
 
         // test dropped-records sensors
         assertEquals(1.0, getDroppedRecordsTotalMetric(context));
@@ -162,8 +161,8 @@ public class ResponseJoinProcessorSupplierTest {
         final long[] hash = Murmur3.hash128(STRING_SERIALIZER.serialize("topic-join-resolver", "lhsValue"));
         processor.process(new Record<>("lhs1", new SubscriptionResponseWrapper<>(hash, "rhsValue", 0), 0));
         final List<MockProcessorContext.CapturedForward<? extends String, ? extends String>> forwarded = context.forwarded();
-        assertThat(forwarded.size(), is(1));
-        assertThat(forwarded.get(0).record(), is(new Record<>("lhs1", "(lhsValue,rhsValue)", 0)));
+        assertEquals(1, forwarded.size());
+        assertEquals(new Record<>("lhs1", "(lhsValue,rhsValue)", 0), forwarded.get(0).record());
 
         // test dropped-records sensors
         assertEquals(0.0, getDroppedRecordsTotalMetric(context));
@@ -191,8 +190,8 @@ public class ResponseJoinProcessorSupplierTest {
         final long[] hash = Murmur3.hash128(STRING_SERIALIZER.serialize("topic-join-resolver", "lhsValue"));
         processor.process(new Record<>("lhs1", new SubscriptionResponseWrapper<>(hash, null, 0), 0));
         final List<MockProcessorContext.CapturedForward<? extends String, ? extends String>> forwarded = context.forwarded();
-        assertThat(forwarded.size(), is(1));
-        assertThat(forwarded.get(0).record(), is(new Record<>("lhs1", null, 0)));
+        assertEquals(1, forwarded.size());
+        assertEquals(new Record<>("lhs1", null, 0), forwarded.get(0).record());
 
         // test dropped-records sensors
         assertEquals(0.0, getDroppedRecordsTotalMetric(context));
@@ -220,8 +219,8 @@ public class ResponseJoinProcessorSupplierTest {
         final long[] hash = Murmur3.hash128(STRING_SERIALIZER.serialize("topic-join-resolver", "lhsValue"));
         processor.process(new Record<>("lhs1", new SubscriptionResponseWrapper<>(hash, null, 0), 0));
         final List<MockProcessorContext.CapturedForward<? extends String, ? extends String>> forwarded = context.forwarded();
-        assertThat(forwarded.size(), is(1));
-        assertThat(forwarded.get(0).record(), is(new Record<>("lhs1", "(lhsValue,null)", 0)));
+        assertEquals(1, forwarded.size());
+        assertEquals(new Record<>("lhs1", "(lhsValue,null)", 0), forwarded.get(0).record());
 
         // test dropped-records sensors
         assertEquals(0.0, getDroppedRecordsTotalMetric(context));
@@ -249,8 +248,8 @@ public class ResponseJoinProcessorSupplierTest {
         final long[] hash = null;
         processor.process(new Record<>("lhs1", new SubscriptionResponseWrapper<>(hash, null, 0), 0));
         final List<MockProcessorContext.CapturedForward<? extends String, ? extends String>> forwarded = context.forwarded();
-        assertThat(forwarded.size(), is(1));
-        assertThat(forwarded.get(0).record(), is(new Record<>("lhs1", null, 0)));
+        assertEquals(1, forwarded.size());
+        assertEquals(new Record<>("lhs1", null, 0), forwarded.get(0).record());
 
         // test dropped-records sensors
         assertEquals(0.0, getDroppedRecordsTotalMetric(context));

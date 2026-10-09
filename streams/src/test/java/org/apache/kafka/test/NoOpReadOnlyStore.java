@@ -16,6 +16,7 @@
  */
 package org.apache.kafka.test;
 
+import org.apache.kafka.common.IsolationLevel;
 import org.apache.kafka.common.TopicPartition;
 import org.apache.kafka.common.serialization.Serializer;
 import org.apache.kafka.streams.processor.StateRestoreCallback;
@@ -35,6 +36,7 @@ public class NoOpReadOnlyStore<K, V> implements ReadOnlyKeyValueStore<K, V>, Sta
     private boolean open = true;
     public boolean initialized;
     public boolean committed;
+    public IsolationLevel isolationLevel;
 
     public NoOpReadOnlyStore() {
         this("", false);
@@ -122,6 +124,12 @@ public class NoOpReadOnlyStore<K, V> implements ReadOnlyKeyValueStore<K, V>, Sta
     @Override
     public Position getPosition() {
         throw new UnsupportedOperationException("Position handling not implemented");
+    }
+
+    @Override
+    public ReadOnlyKeyValueStore<K, V> readOnly(final IsolationLevel level) {
+        this.isolationLevel = level;
+        return this;
     }
 
 }

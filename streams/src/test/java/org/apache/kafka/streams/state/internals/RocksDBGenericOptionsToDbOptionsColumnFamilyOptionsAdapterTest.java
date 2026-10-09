@@ -18,6 +18,7 @@ package org.apache.kafka.streams.state.internals;
 
 import org.apache.kafka.common.utils.LogCaptureAppender;
 
+import org.apache.logging.log4j.Level;
 import org.junit.jupiter.api.Test;
 import org.junit.jupiter.api.extension.ExtendWith;
 import org.mockito.invocation.Invocation;
@@ -64,10 +65,7 @@ import java.util.Set;
 import java.util.stream.Collectors;
 import java.util.stream.Stream;
 
-import static org.hamcrest.CoreMatchers.hasItem;
-import static org.hamcrest.MatcherAssert.assertThat;
-import static org.hamcrest.Matchers.instanceOf;
-import static org.hamcrest.Matchers.matchesPattern;
+import static org.junit.jupiter.api.Assertions.assertInstanceOf;
 import static org.junit.jupiter.api.Assertions.assertTrue;
 import static org.mockito.Mockito.mock;
 import static org.mockito.Mockito.mockingDetails;
@@ -110,7 +108,8 @@ public class RocksDBGenericOptionsToDbOptionsColumnFamilyOptionsAdapterTest {
             "maxBackgroundFlushes",
             "setMaxBackgroundFlushes",
             "tablePropertiesCollectorFactory",
-            "setTablePropertiesCollectorFactory"
+            "setTablePropertiesCollectorFactory",
+            "setAtomicFlush"
         ),
         walRelatedMethods.stream()
     ).collect(Collectors.toList());
@@ -150,9 +149,9 @@ public class RocksDBGenericOptionsToDbOptionsColumnFamilyOptionsAdapterTest {
             final Set<String> invokedMethodNames = invocations.stream().map(invocation -> invocation.getMethod().getName()).collect(Collectors.toSet());
             assertTrue(invokedMethodNames.contains(method.getName()), "Should have called DBOptions." + method.getName() + "()");
         } catch (final InvocationTargetException undeclaredMockMethodCall) {
-            assertThat(undeclaredMockMethodCall.getCause(), instanceOf(AssertionError.class));
-            assertThat(undeclaredMockMethodCall.getCause().getMessage().trim(),
-                matchesPattern("Unexpected method call DBOptions\\." + method.getName() + "((.*\n*)*):"));
+            assertInstanceOf(AssertionError.class, undeclaredMockMethodCall.getCause());
+            assertTrue(undeclaredMockMethodCall.getCause().getMessage().trim().matches(
+                "Unexpected method call DBOptions\\." + method.getName() + "((.*\n*)*):"));
         } finally {
             optionsFacadeDbOptions.close();
         }
@@ -253,9 +252,9 @@ public class RocksDBGenericOptionsToDbOptionsColumnFamilyOptionsAdapterTest {
             final Set<String> invokedMethodNames = invocations.stream().map(invocation -> invocation.getMethod().getName()).collect(Collectors.toSet());
             assertTrue(invokedMethodNames.contains(method.getName()), "Should have called ColumnFamilyOptions." + method.getName() + "()");
         } catch (final InvocationTargetException undeclaredMockMethodCall) {
-            assertThat(undeclaredMockMethodCall.getCause(), instanceOf(AssertionError.class));
-            assertThat(undeclaredMockMethodCall.getCause().getMessage().trim(),
-                matchesPattern("Unexpected method call ColumnFamilyOptions\\." + method.getName() +  "(.*)"));
+            assertInstanceOf(AssertionError.class, undeclaredMockMethodCall.getCause());
+            assertTrue(undeclaredMockMethodCall.getCause().getMessage().trim().matches(
+                "Unexpected method call ColumnFamilyOptions\\." + method.getName() + "(.*)"));
         } finally {
             optionsFacadeColumnFamilyOptions.close();
         }
@@ -348,12 +347,25 @@ public class RocksDBGenericOptionsToDbOptionsColumnFamilyOptionsAdapterTest {
 
                 final List<String> walOptions = Arrays.asList("walDir", "walFilter", "walRecoveryMode", "walBytesPerSync", "walSizeLimitMB", "manualWalFlush", "maxTotalWalSize", "walTtlSeconds");
 
-                final Set<String> logMessages = appender.getEvents().stream()
-                    .filter(e -> e.getLevel().equals("WARN"))
-                    .map(LogCaptureAppender.Event::getMessage)
-                    .collect(Collectors.toSet());
+                final List<String> logMessages = appender.getMessages(Level.WARN);
 
-                walOptions.forEach(option -> assertThat(logMessages, hasItem(String.format("WAL is explicitly disabled by Streams in RocksDB. Setting option '%s' will be ignored", option))));
+                walOptions.forEach(option -> assertTrue(logMessages.contains(
+                    String.format("WAL is explicitly disabled by Streams in RocksDB. Setting option '%s' will be ignored", option))));
+            }
+        }
+    }
+
+    @Test
+    public void shouldLogWarningWhenSettingAtomicFlushOption() {
+
+        try (final LogCaptureAppender appender = LogCaptureAppender.createAndRegister(RocksDBGenericOptionsToDbOptionsColumnFamilyOptionsAdapter.class)) {
+
+            try (RocksDBGenericOptionsToDbOptionsColumnFamilyOptionsAdapter adapter =
+                         new RocksDBGenericOptionsToDbOptionsColumnFamilyOptionsAdapter(new DBOptions(), new ColumnFamilyOptions())) {
+                adapter.setAtomicFlush(false);
+                final List<String> logMessages = appender.getMessages(Level.WARN);
+                assertTrue(logMessages.contains(
+                    "AtomicFlush is explicitly set to True by Streams in RocksDB. Setting this option to 'false' will be ignored"));
             }
         }
     }

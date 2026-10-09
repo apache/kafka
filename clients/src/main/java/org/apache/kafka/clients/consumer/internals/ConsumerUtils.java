@@ -28,6 +28,7 @@ import org.apache.kafka.clients.consumer.OffsetAndMetadata;
 import org.apache.kafka.common.IsolationLevel;
 import org.apache.kafka.common.KafkaException;
 import org.apache.kafka.common.TopicPartition;
+import org.apache.kafka.common.Uuid;
 import org.apache.kafka.common.errors.InterruptException;
 import org.apache.kafka.common.errors.TimeoutException;
 import org.apache.kafka.common.metrics.KafkaMetricsContext;
@@ -37,9 +38,9 @@ import org.apache.kafka.common.metrics.MetricsContext;
 import org.apache.kafka.common.metrics.MetricsReporter;
 import org.apache.kafka.common.metrics.Sensor;
 import org.apache.kafka.common.telemetry.internals.ClientTelemetrySender;
-import org.apache.kafka.common.utils.LogContext;
 import org.apache.kafka.common.utils.Time;
 import org.apache.kafka.common.utils.Timer;
+import org.apache.kafka.common.utils.internals.LogContext;
 
 import org.slf4j.Logger;
 import org.slf4j.LoggerFactory;
@@ -80,6 +81,7 @@ public final class ConsumerUtils {
     private static final Logger log = LoggerFactory.getLogger(ConsumerUtils.class);
 
     public static ConsumerNetworkClient createConsumerNetworkClient(ConsumerConfig config,
+                                                                    Uuid clientInstanceId,
                                                                     Metrics metrics,
                                                                     LogContext logContext,
                                                                     ApiVersions apiVersions,
@@ -89,6 +91,8 @@ public final class ConsumerUtils {
                                                                     long retryBackoffMs,
                                                                     ClientTelemetrySender clientTelemetrySender) {
         NetworkClient netClient = ClientUtils.createNetworkClient(config,
+                config.getList(ConsumerConfig.BOOTSTRAP_SERVERS_CONFIG),
+                clientInstanceId,
                 metrics,
                 CONSUMER_METRIC_GROUP_PREFIX,
                 logContext,

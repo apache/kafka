@@ -16,7 +16,7 @@
  */
 package org.apache.kafka.clients.admin.internals;
 
-import org.apache.kafka.common.utils.LogContext;
+import org.apache.kafka.common.utils.internals.LogContext;
 
 public class DeleteConsumerGroupsHandler extends DeleteGroupsHandler {
 

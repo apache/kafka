@@ -25,8 +25,10 @@ import org.apache.kafka.streams.errors.ProcessorStateException;
 import org.apache.kafka.streams.query.FailureReason;
 import org.apache.kafka.streams.query.KeyQuery;
 import org.apache.kafka.streams.query.PositionBound;
+import org.apache.kafka.streams.query.Query;
 import org.apache.kafka.streams.query.QueryConfig;
 import org.apache.kafka.streams.query.QueryResult;
+import org.apache.kafka.streams.query.RangeQuery;
 import org.apache.kafka.streams.state.KeyValueIterator;
 
 import org.junit.jupiter.api.Test;
@@ -45,6 +47,7 @@ import java.util.Arrays;
 import java.util.List;
 
 import static java.util.Arrays.asList;
+import static org.apache.kafka.streams.state.internals.RocksDBStore.OFFSETS_COLUMN_FAMILY_NAME;
 import static org.junit.jupiter.api.Assertions.assertArrayEquals;
 import static org.junit.jupiter.api.Assertions.assertEquals;
 import static org.junit.jupiter.api.Assertions.assertFalse;
@@ -98,7 +101,8 @@ public class RocksDBTimestampedStoreWithHeadersTest extends RocksDBStoreTest {
 
         final List<ColumnFamilyDescriptor> columnFamilyDescriptors = asList(
                 new ColumnFamilyDescriptor(RocksDB.DEFAULT_COLUMN_FAMILY, columnFamilyOptions),
-                new ColumnFamilyDescriptor("keyValueWithTimestampAndHeaders".getBytes(StandardCharsets.UTF_8), columnFamilyOptions));
+                new ColumnFamilyDescriptor("keyValueWithTimestampAndHeaders".getBytes(StandardCharsets.UTF_8), columnFamilyOptions),
+                new ColumnFamilyDescriptor(OFFSETS_COLUMN_FAMILY_NAME, columnFamilyOptions));
         final List<ColumnFamilyHandle> columnFamilies = new ArrayList<>(columnFamilyDescriptors.size());
 
         RocksDB db = null;
@@ -235,7 +239,8 @@ public class RocksDBTimestampedStoreWithHeadersTest extends RocksDBStoreTest {
 
         final List<ColumnFamilyDescriptor> columnFamilyDescriptors = asList(
             new ColumnFamilyDescriptor(RocksDB.DEFAULT_COLUMN_FAMILY, columnFamilyOptions),
-            new ColumnFamilyDescriptor("keyValueWithTimestampAndHeaders".getBytes(StandardCharsets.UTF_8), columnFamilyOptions));
+            new ColumnFamilyDescriptor("keyValueWithTimestampAndHeaders".getBytes(StandardCharsets.UTF_8), columnFamilyOptions),
+            new ColumnFamilyDescriptor(OFFSETS_COLUMN_FAMILY_NAME, columnFamilyOptions));
 
         final List<ColumnFamilyHandle> columnFamilies = new ArrayList<>(columnFamilyDescriptors.size());
         RocksDB db = null;
@@ -528,7 +533,8 @@ public class RocksDBTimestampedStoreWithHeadersTest extends RocksDBStoreTest {
         final List<ColumnFamilyDescriptor> columnFamilyDescriptors = asList(
                 new ColumnFamilyDescriptor(RocksDB.DEFAULT_COLUMN_FAMILY, columnFamilyOptions),
                 new ColumnFamilyDescriptor("keyValueWithTimestamp".getBytes(StandardCharsets.UTF_8), columnFamilyOptions),
-                new ColumnFamilyDescriptor("keyValueWithTimestampAndHeaders".getBytes(StandardCharsets.UTF_8), columnFamilyOptions));
+                new ColumnFamilyDescriptor("keyValueWithTimestampAndHeaders".getBytes(StandardCharsets.UTF_8), columnFamilyOptions),
+                new ColumnFamilyDescriptor(OFFSETS_COLUMN_FAMILY_NAME, columnFamilyOptions));
 
         final List<ColumnFamilyHandle> columnFamilies = new ArrayList<>(columnFamilyDescriptors.size());
         RocksDB db = null;
@@ -680,7 +686,8 @@ public class RocksDBTimestampedStoreWithHeadersTest extends RocksDBStoreTest {
 
         final List<ColumnFamilyDescriptor> columnFamilyDescriptors = asList(
             new ColumnFamilyDescriptor(RocksDB.DEFAULT_COLUMN_FAMILY, columnFamilyOptions),
-            new ColumnFamilyDescriptor("keyValueWithTimestampAndHeaders".getBytes(StandardCharsets.UTF_8), columnFamilyOptions));
+            new ColumnFamilyDescriptor("keyValueWithTimestampAndHeaders".getBytes(StandardCharsets.UTF_8), columnFamilyOptions),
+            new ColumnFamilyDescriptor(OFFSETS_COLUMN_FAMILY_NAME, columnFamilyOptions));
 
         final List<ColumnFamilyHandle> columnFamilies = new ArrayList<>(columnFamilyDescriptors.size());
         RocksDB db = null;
@@ -746,7 +753,8 @@ public class RocksDBTimestampedStoreWithHeadersTest extends RocksDBStoreTest {
         final List<ColumnFamilyDescriptor> columnFamilyDescriptors = asList(
                 new ColumnFamilyDescriptor(RocksDB.DEFAULT_COLUMN_FAMILY, columnFamilyOptions),
                 new ColumnFamilyDescriptor("keyValueWithTimestamp".getBytes(StandardCharsets.UTF_8), columnFamilyOptions),
-                new ColumnFamilyDescriptor("keyValueWithTimestampAndHeaders".getBytes(StandardCharsets.UTF_8), columnFamilyOptions));
+                new ColumnFamilyDescriptor("keyValueWithTimestampAndHeaders".getBytes(StandardCharsets.UTF_8), columnFamilyOptions),
+                new ColumnFamilyDescriptor(OFFSETS_COLUMN_FAMILY_NAME, columnFamilyOptions));
 
         final List<ColumnFamilyHandle> columnFamilies = new ArrayList<>(columnFamilyDescriptors.size());
         RocksDB db = null;
@@ -796,12 +804,13 @@ public class RocksDBTimestampedStoreWithHeadersTest extends RocksDBStoreTest {
                 new File(new File(context.stateDir(), "rocksdb"), DB_NAME).getAbsolutePath()
             );
 
-            // Should only have DEFAULT and keyValueWithTimestampAndHeaders, not the legacy keyValueWithTimestamp
-            assertEquals(2, existingCFs.size(), "Expected only 2 column families after legacy CF is dropped");
+            // Should only have DEFAULT, OFFSETS and keyValueWithTimestampAndHeaders, not the legacy keyValueWithTimestamp
+            assertEquals(3, existingCFs.size(), "Expected only 3 column families after legacy CF is dropped");
 
             boolean hasDefault = false;
             boolean hasHeadersAware = false;
             boolean hasLegacy = false;
+            boolean hasOffsets = false;
 
             for (final byte[] cf : existingCFs) {
                 if (Arrays.equals(cf, RocksDB.DEFAULT_COLUMN_FAMILY)) {
@@ -810,9 +819,12 @@ public class RocksDBTimestampedStoreWithHeadersTest extends RocksDBStoreTest {
                     hasHeadersAware = true;
                 } else if (Arrays.equals(cf, "keyValueWithTimestamp".getBytes(StandardCharsets.UTF_8))) {
                     hasLegacy = true;
+                } else if (Arrays.equals(cf, OFFSETS_COLUMN_FAMILY_NAME)) {
+                    hasOffsets = true;
                 }
             }
 
+            assertTrue(hasOffsets, "Expected offsets column family to exist");
             assertTrue(hasDefault, "Expected default column family to exist");
             assertTrue(hasHeadersAware, "Expected headers-aware column family to exist");
             assertFalse(hasLegacy, "Expected legacy column family to be dropped");
@@ -971,17 +983,17 @@ public class RocksDBTimestampedStoreWithHeadersTest extends RocksDBStoreTest {
     }
 
     @Test
-    public void shouldReturnUnknownQueryTypeForQuery() {
+    public void shouldReturnUnknownQueryTypeForUnsupportedQuery() {
         // Initialize the store
         rocksDBStore.init(context, rocksDBStore);
 
-        // Create a query
-        final KeyQuery<Bytes, byte[]> query = KeyQuery.withKey(new Bytes("test-key".getBytes()));
+        // A query type the store has no handler for still yields UNKNOWN_QUERY_TYPE.
+        final Query<Void> unsupportedQuery = new Query<>() { };
         final PositionBound positionBound = PositionBound.unbounded();
         final QueryConfig config = new QueryConfig(false);
 
         // Execute query
-        final QueryResult<byte[]> result = rocksDBStore.query(query, positionBound, config);
+        final QueryResult<Void> result = rocksDBStore.query(unsupportedQuery, positionBound, config);
 
         // Verify result indicates unknown query type
         assertFalse(result.isSuccess(), "Expected query to fail with unknown query type");
@@ -992,6 +1004,56 @@ public class RocksDBTimestampedStoreWithHeadersTest extends RocksDBStoreTest {
         );
 
         // Verify position is set
+        assertNotNull(result.getPosition(), "Expected position to be set");
+    }
+
+    @Test
+    public void shouldHandleKeyQuery() {
+        // Initialize the store
+        rocksDBStore.init(context, rocksDBStore);
+
+        // Store raw (serialized ValueTimestampHeaders) bytes for a key.
+        final Bytes key = new Bytes("test-key".getBytes());
+        final byte[] storedBytes = "headers+timestamp+value".getBytes();
+        rocksDBStore.put(key, storedBytes);
+
+        // KIP-1356: removing the query() override lets the native store serve KeyQuery (previously
+        // UNKNOWN_QUERY_TYPE), matching the adapter build path. The raw stored bytes are returned;
+        // the metered store performs the header-aware deserialization.
+        final KeyQuery<Bytes, byte[]> query = KeyQuery.withKey(key);
+        final QueryResult<byte[]> result =
+            rocksDBStore.query(query, PositionBound.unbounded(), new QueryConfig(false));
+
+        assertTrue(result.isSuccess(), "Expected KeyQuery to succeed");
+        assertArrayEquals(storedBytes, result.getResult(), "Expected the raw stored bytes to be returned");
+        assertNotNull(result.getPosition(), "Expected position to be set");
+    }
+
+    @Test
+    public void shouldHandleRangeQuery() {
+        // Initialize the store
+        rocksDBStore.init(context, rocksDBStore);
+
+        // Store raw (serialized ValueTimestampHeaders) bytes for a key.
+        final Bytes key = new Bytes("test-key".getBytes());
+        final byte[] storedBytes = "headers+timestamp+value".getBytes();
+        rocksDBStore.put(key, storedBytes);
+
+        // KIP-1356: the range follow-up enables RangeQuery on the native header store via the inherited
+        // RocksDBStore handling (returning the raw stored header-format bytes; the metered store does
+        // the header-aware deserialization), matching the adapter build path.
+        final RangeQuery<Bytes, byte[]> query = RangeQuery.withNoBounds();
+        final QueryResult<KeyValueIterator<Bytes, byte[]>> result =
+                rocksDBStore.query(query, PositionBound.unbounded(), new QueryConfig(false));
+
+        assertTrue(result.isSuccess(), "Expected RangeQuery to succeed");
+        try (KeyValueIterator<Bytes, byte[]> iterator = result.getResult()) {
+            assertTrue(iterator.hasNext(), "Expected the stored key in the range result");
+            final KeyValue<Bytes, byte[]> keyValue = iterator.next();
+            assertEquals(key, keyValue.key);
+            assertArrayEquals(storedBytes, keyValue.value, "Expected the raw stored bytes to be returned");
+            assertFalse(iterator.hasNext());
+        }
         assertNotNull(result.getPosition(), "Expected position to be set");
     }
 
@@ -1035,5 +1097,51 @@ public class RocksDBTimestampedStoreWithHeadersTest extends RocksDBStoreTest {
 
         // Verify no execution info was collected
         assertTrue(result.getExecutionInfo().isEmpty(), "Expected no execution info to be collected");
+    }
+
+    // KAFKA-20456 regression: both RocksDBTimestampedStoreWithHeaders open paths
+    // (openFromDefaultStore and openFromTimestampedStore) independently call
+    // offsetsCFOptions(); the returned ColumnFamilyOptions must be released on close().
+
+    @Test
+    public void shouldCloseOffsetsCfOptionsAfterOpenFromDefaultStore() {
+        prepareKeyValueStoreWithMultipleKeys();
+        assertOffsetsCfOptionsClosedAfterStoreClose();
+    }
+
+    @Test
+    public void shouldCloseOffsetsCfOptionsAfterOpenFromTimestampedStore() {
+        prepareTimestampedStore();
+        assertOffsetsCfOptionsClosedAfterStoreClose();
+    }
+
+    private void assertOffsetsCfOptionsClosedAfterStoreClose() {
+        final CapturingOffsetsHeadersStore capturingStore = new CapturingOffsetsHeadersStore();
+        rocksDBStore = capturingStore;
+        rocksDBStore.init(context, rocksDBStore);
+
+        final ColumnFamilyOptions captured = capturingStore.capturedOffsetsOptions;
+        assertNotNull(captured, "offsetsCFOptions should have been invoked during init");
+        assertTrue(captured.isOwningHandle(),
+                "offsets CF options should own its native handle while store is open");
+
+        rocksDBStore.close();
+
+        assertFalse(captured.isOwningHandle(),
+                "offsets CF options native handle should be released by close()");
+    }
+
+    private static final class CapturingOffsetsHeadersStore extends RocksDBTimestampedStoreWithHeaders {
+        ColumnFamilyOptions capturedOffsetsOptions;
+
+        CapturingOffsetsHeadersStore() {
+            super(DB_NAME, METRICS_SCOPE);
+        }
+
+        @Override
+        protected ColumnFamilyOptions offsetsCFOptions() {
+            capturedOffsetsOptions = super.offsetsCFOptions();
+            return capturedOffsetsOptions;
+        }
     }
 }

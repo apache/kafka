@@ -22,9 +22,8 @@ import org.rocksdb.Cache;
 import org.rocksdb.LRUCache;
 import org.rocksdb.RocksDB;
 
-import static org.hamcrest.CoreMatchers.nullValue;
-import static org.hamcrest.CoreMatchers.sameInstance;
-import static org.hamcrest.MatcherAssert.assertThat;
+import static org.junit.jupiter.api.Assertions.assertNull;
+import static org.junit.jupiter.api.Assertions.assertSame;
 
 public class BlockBasedTableConfigWithAccessibleCacheTest {
 
@@ -37,7 +36,7 @@ public class BlockBasedTableConfigWithAccessibleCacheTest {
         final BlockBasedTableConfigWithAccessibleCache configWithAccessibleCache =
             new BlockBasedTableConfigWithAccessibleCache();
 
-        assertThat(configWithAccessibleCache.blockCache(), nullValue());
+        assertNull(configWithAccessibleCache.blockCache());
     }
 
     @Test
@@ -48,8 +47,8 @@ public class BlockBasedTableConfigWithAccessibleCacheTest {
 
             final BlockBasedTableConfig updatedConfig = configWithAccessibleCache.setBlockCache(blockCache);
 
-            assertThat(updatedConfig, sameInstance(configWithAccessibleCache));
-            assertThat(configWithAccessibleCache.blockCache(), sameInstance(blockCache));
+            assertSame(configWithAccessibleCache, updatedConfig);
+            assertSame(blockCache, configWithAccessibleCache.blockCache());
         }
     }
 }

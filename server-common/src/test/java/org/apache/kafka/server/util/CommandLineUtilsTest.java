@@ -16,7 +16,7 @@
  */
 package org.apache.kafka.server.util;
 
-import org.apache.kafka.common.utils.Exit;
+import org.apache.kafka.common.utils.internals.Exit;
 
 import org.junit.jupiter.api.Test;
 

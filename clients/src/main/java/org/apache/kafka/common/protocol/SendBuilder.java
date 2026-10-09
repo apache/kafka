@@ -24,7 +24,7 @@ import org.apache.kafka.common.record.internal.MultiRecordsSend;
 import org.apache.kafka.common.record.internal.UnalignedMemoryRecords;
 import org.apache.kafka.common.requests.RequestHeader;
 import org.apache.kafka.common.requests.ResponseHeader;
-import org.apache.kafka.common.utils.ByteUtils;
+import org.apache.kafka.common.utils.internals.ByteUtils;
 
 import java.nio.ByteBuffer;
 import java.util.ArrayDeque;

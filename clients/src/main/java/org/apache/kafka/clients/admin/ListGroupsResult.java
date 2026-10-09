@@ -18,6 +18,7 @@
 package org.apache.kafka.clients.admin;
 
 import org.apache.kafka.common.KafkaFuture;
+import org.apache.kafka.common.annotation.InterfaceAudience;
 import org.apache.kafka.common.internals.KafkaFutureImpl;
 
 import java.util.ArrayList;
@@ -28,6 +29,7 @@ import java.util.List;
 /**
  * The result of the {@link Admin#listGroups()} call.
  */
+@InterfaceAudience.Public
 public class ListGroupsResult {
     private final KafkaFutureImpl<Collection<GroupListing>> all;
     private final KafkaFutureImpl<Collection<GroupListing>> valid;

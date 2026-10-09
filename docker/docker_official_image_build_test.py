@@ -84,4 +84,4 @@ if __name__ == '__main__':
             raise ValueError(
                 "--kafka-version is required argument for jvm docker official image image")
     if args.test_only or not (args.build_only or args.test_only):
-        run_docker_tests(args.image, args.tag, kafka_url, args.image_type)
+        run_docker_tests(args.image, args.tag, kafka_url, None, args.image_type)

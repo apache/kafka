@@ -91,7 +91,7 @@ public final class LocalTieredStorageTest {
         Map<String, Object> config = new HashMap<>();
         config.put(LocalTieredStorage.STORAGE_DIR_CONFIG, storageDir);
         config.put(LocalTieredStorage.DELETE_ON_CLOSE_CONFIG, "true");
-        config.put(LocalTieredStorage.BROKER_ID, 1);
+        config.put(LocalTieredStorage.NODE_ID, 1);
         config.putAll(extraConfig);
 
         tieredStorage.configure(config);

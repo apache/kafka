@@ -18,7 +18,7 @@
 package org.apache.kafka.connect.runtime.isolation;
 
 import org.apache.kafka.common.config.AbstractConfig;
-import org.apache.kafka.connect.components.Versioned;
+import org.apache.kafka.connect.components.ConnectPlugin;
 import org.apache.kafka.connect.runtime.WorkerConfig;
 import org.apache.kafka.connect.storage.Converter;
 import org.apache.kafka.connect.storage.HeaderConverter;
@@ -61,8 +61,8 @@ public class MultiVersionTest {
                 Assertions.assertInstanceOf(PluginClassLoader.class, pluginLoader);
                 Assertions.assertTrue(((PluginClassLoader) pluginLoader).location().contains(pluginLocation));
                 Object p = plugins.newPlugin(buildInfo.plugin().className(), PluginUtils.connectorVersionRequirement(buildInfo.version()));
-                Assertions.assertInstanceOf(Versioned.class, p);
-                Assertions.assertEquals(buildInfo.version(), ((Versioned) p).version());
+                Assertions.assertInstanceOf(ConnectPlugin.class, p);
+                Assertions.assertEquals(buildInfo.version(), ((ConnectPlugin) p).version());
             }
         }
     }
@@ -185,8 +185,8 @@ public class MultiVersionTest {
             String version = plugins.pluginVersion(className, connectorLoader, PluginType.values());
             Assertions.assertEquals(versions.get(i), version);
             Object p = plugins.newPlugin(className, null, connectorLoader);
-            Assertions.assertInstanceOf(Versioned.class, p);
-            Assertions.assertEquals(versions.get(i), ((Versioned) p).version());
+            Assertions.assertInstanceOf(ConnectPlugin.class, p);
+            Assertions.assertEquals(versions.get(i), ((ConnectPlugin) p).version());
 
             String latestVersion = plugins.latestVersion(className, PluginType.values());
             Assertions.assertEquals(DEFAULT_ISOLATED_ARTIFACTS_LATEST_VERSION, latestVersion);
@@ -220,10 +220,10 @@ public class MultiVersionTest {
         for (Map.Entry<VersionRange, String> entry : requiredVersions.entrySet()) {
             for (VersionedPluginBuilder.VersionedTestPlugin pluginType: VersionedPluginBuilder.VersionedTestPlugin.values()) {
                 Object p = plugins.newPlugin(pluginType.className(), entry.getKey());
-                Assertions.assertInstanceOf(Versioned.class, p);
-                Assertions.assertEquals(entry.getValue(), ((Versioned) p).version(),
+                Assertions.assertInstanceOf(ConnectPlugin.class, p);
+                Assertions.assertEquals(entry.getValue(), ((ConnectPlugin) p).version(),
                     String.format("Provided Version Range %s for class %s should return plugin version %s instead of %s",
-                        entry.getKey(), pluginType.className(), entry.getValue(), ((Versioned) p).version()));
+                        entry.getKey(), pluginType.className(), entry.getValue(), ((ConnectPlugin) p).version()));
             }
         }
     }
@@ -276,17 +276,17 @@ public class MultiVersionTest {
 
         Converter keyConverter = plugins.newConverter(config, WorkerConfig.KEY_CONVERTER_CLASS_CONFIG, WorkerConfig.KEY_CONVERTER_VERSION);
         Assertions.assertEquals(keyConverter.getClass().getName(), VersionedPluginBuilder.VersionedTestPlugin.CONVERTER.className());
-        Assertions.assertInstanceOf(Versioned.class, keyConverter);
-        Assertions.assertEquals("1.1.0", ((Versioned) keyConverter).version());
+        Assertions.assertInstanceOf(ConnectPlugin.class, keyConverter);
+        Assertions.assertEquals("1.1.0", keyConverter.version());
 
         Converter valueConverter = plugins.newConverter(config, WorkerConfig.VALUE_CONVERTER_CLASS_CONFIG, WorkerConfig.VALUE_CONVERTER_VERSION);
         Assertions.assertEquals(valueConverter.getClass().getName(), VersionedPluginBuilder.VersionedTestPlugin.CONVERTER.className());
-        Assertions.assertInstanceOf(Versioned.class, valueConverter);
-        Assertions.assertEquals("2.3.0", ((Versioned) valueConverter).version());
+        Assertions.assertInstanceOf(ConnectPlugin.class, valueConverter);
+        Assertions.assertEquals("2.3.0", valueConverter.version());
 
         HeaderConverter headerConverter = plugins.newHeaderConverter(config, WorkerConfig.HEADER_CONVERTER_CLASS_CONFIG, WorkerConfig.HEADER_CONVERTER_VERSION);
         Assertions.assertEquals(headerConverter.getClass().getName(), VersionedPluginBuilder.VersionedTestPlugin.HEADER_CONVERTER.className());
-        Assertions.assertInstanceOf(Versioned.class, headerConverter);
-        Assertions.assertEquals("4.3.0", ((Versioned) headerConverter).version());
+        Assertions.assertInstanceOf(ConnectPlugin.class, headerConverter);
+        Assertions.assertEquals("4.3.0", headerConverter.version());
     }
 }

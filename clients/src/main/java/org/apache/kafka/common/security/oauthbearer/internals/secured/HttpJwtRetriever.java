@@ -21,6 +21,7 @@ import org.apache.kafka.common.config.SaslConfigs;
 import org.apache.kafka.common.security.oauthbearer.JwtRetriever;
 import org.apache.kafka.common.security.oauthbearer.JwtRetrieverException;
 import org.apache.kafka.common.security.oauthbearer.OAuthBearerLoginCallbackHandler;
+import org.apache.kafka.common.utils.Utils;
 
 import com.fasterxml.jackson.databind.JsonNode;
 import com.fasterxml.jackson.databind.ObjectMapper;
@@ -312,5 +313,10 @@ public class HttpJwtRetriever implements JwtRetriever {
             log.warn("Error parsing error response", e);
         }
         return String.format("{%s}", errorResponseBody);
+    }
+
+    @Override
+    public void close() throws IOException {
+        Utils.maybeCloseQuietly(requestFormatter, "request formatter");
     }
 }

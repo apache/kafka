@@ -25,7 +25,6 @@ import org.apache.kafka.common.protocol.ApiKeys;
 import org.apache.kafka.common.protocol.Readable;
 
 import java.util.ArrayList;
-import java.util.Collections;
 import java.util.List;
 import java.util.stream.Collectors;
 
@@ -104,7 +103,7 @@ public class DeleteTopicsRequest extends AbstractRequest {
     public List<Uuid> topicIds() {
         if (version() >= 6)
             return data.topics().stream().map(DeleteTopicState::topicId).collect(Collectors.toList());
-        return Collections.emptyList();
+        return List.of();
     }
     
     public List<DeleteTopicState> topics() {

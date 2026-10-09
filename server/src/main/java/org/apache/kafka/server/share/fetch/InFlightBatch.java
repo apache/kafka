@@ -166,11 +166,12 @@ public class InFlightBatch {
      * @param ops      The behavior on the delivery count.
      * @param maxDeliveryCount The maximum delivery count for the records.
      * @param newMemberId The new member id for the records.
+     * @param dlqSupportEnabled Boolean indicating if share group DLQ support is enabled.
      * @return {@code InFlightState} if update succeeds, null otherwise. Returning state helps update chaining.
      * @throws IllegalStateException if the offset state is maintained and the batch state is not available.
      */
-    public InFlightState tryUpdateBatchState(RecordState newState, DeliveryCountOps ops, int maxDeliveryCount, String newMemberId) {
-        return inFlightState().tryUpdateState(newState, ops, maxDeliveryCount, newMemberId);
+    public InFlightState tryUpdateBatchState(RecordState newState, DeliveryCountOps ops, int maxDeliveryCount, String newMemberId, boolean dlqSupportEnabled) {
+        return inFlightState().tryUpdateState(newState, ops, maxDeliveryCount, newMemberId, dlqSupportEnabled);
     }
 
     /**
@@ -181,13 +182,14 @@ public class InFlightBatch {
      * @param ops      The behavior on the delivery count.
      * @param maxDeliveryCount The maximum delivery count for the records.
      * @param newMemberId The new member id for the records.
+     * @param dlqSupportEnabled Boolean indicating if share group DLQ support is enabled.
      * @return {@code InFlightState} if update succeeds, null otherwise. Returning state helps update chaining.
      * @throws IllegalStateException if the offset state is maintained and the batch state is not available.
      */
     public InFlightState startBatchStateTransition(RecordState newState, DeliveryCountOps ops, int maxDeliveryCount,
-        String newMemberId
+        String newMemberId, boolean dlqSupportEnabled
     ) {
-        return inFlightState().startStateTransition(newState, ops, maxDeliveryCount, newMemberId);
+        return inFlightState().startStateTransition(newState, ops, maxDeliveryCount, newMemberId, dlqSupportEnabled);
     }
 
     /**

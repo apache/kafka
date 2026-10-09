@@ -17,8 +17,6 @@
 
 package kafka.server.handlers;
 
-import kafka.network.RequestChannel;
-import kafka.server.AuthHelper;
 import kafka.server.KafkaConfig;
 import kafka.utils.TestUtils;
 
@@ -50,18 +48,20 @@ import org.apache.kafka.common.resource.ResourceType;
 import org.apache.kafka.common.security.auth.KafkaPrincipal;
 import org.apache.kafka.common.security.auth.KafkaPrincipalSerde;
 import org.apache.kafka.common.security.auth.SecurityProtocol;
-import org.apache.kafka.common.utils.SecurityUtils;
 import org.apache.kafka.common.utils.Utils;
+import org.apache.kafka.common.utils.internals.SecurityUtils;
 import org.apache.kafka.image.ClusterImage;
 import org.apache.kafka.image.MetadataDelta;
 import org.apache.kafka.image.MetadataImage;
 import org.apache.kafka.image.MetadataProvenance;
 import org.apache.kafka.metadata.KRaftMetadataCache;
 import org.apache.kafka.metadata.LeaderRecoveryState;
+import org.apache.kafka.network.Request;
 import org.apache.kafka.network.SocketServerConfigs;
 import org.apache.kafka.network.metrics.RequestChannelMetrics;
 import org.apache.kafka.raft.KRaftConfigs;
 import org.apache.kafka.raft.QuorumConfig;
+import org.apache.kafka.server.AuthHelper;
 import org.apache.kafka.server.authorizer.Action;
 import org.apache.kafka.server.authorizer.AuthorizationResult;
 import org.apache.kafka.server.authorizer.Authorizer;
@@ -192,7 +192,7 @@ class DescribeTopicPartitionsRequestHandlerTest {
         KRaftMetadataCache metadataCache = new KRaftMetadataCache(0, () -> KRaftVersion.KRAFT_VERSION_1);
         updateKraftMetadataCache(metadataCache, records);
         DescribeTopicPartitionsRequestHandler handler =
-            new DescribeTopicPartitionsRequestHandler(metadataCache, new AuthHelper(scala.Option.apply(authorizerPlugin)), createKafkaDefaultConfig());
+            new DescribeTopicPartitionsRequestHandler(metadataCache, new AuthHelper(Optional.ofNullable(authorizerPlugin)), createKafkaDefaultConfig());
 
         // 3.1 Basic test
         DescribeTopicPartitionsRequest describeTopicPartitionsRequest = new DescribeTopicPartitionsRequest(
@@ -202,7 +202,7 @@ class DescribeTopicPartitionsRequestHandlerTest {
                     new DescribeTopicPartitionsRequestData.TopicRequest().setName(unauthorizedTopic)
                 ))
         );
-        RequestChannel.Request request;
+        Request request;
         try {
             request = buildRequest(describeTopicPartitionsRequest, plaintextListener);
         } catch (Exception e) {
@@ -390,7 +390,7 @@ class DescribeTopicPartitionsRequestHandlerTest {
         KRaftMetadataCache metadataCache = new KRaftMetadataCache(0, () -> KRaftVersion.KRAFT_VERSION_1);
         updateKraftMetadataCache(metadataCache, records);
         DescribeTopicPartitionsRequestHandler handler =
-            new DescribeTopicPartitionsRequestHandler(metadataCache, new AuthHelper(scala.Option.apply(authorizerPlugin)), createKafkaDefaultConfig());
+            new DescribeTopicPartitionsRequestHandler(metadataCache, new AuthHelper(Optional.ofNullable(authorizerPlugin)), createKafkaDefaultConfig());
 
         // 3.1 With cursor point to the first one
         DescribeTopicPartitionsRequest describeTopicPartitionsRequest = new DescribeTopicPartitionsRequest(new DescribeTopicPartitionsRequestData()
@@ -401,7 +401,7 @@ class DescribeTopicPartitionsRequestHandlerTest {
             .setCursor(new DescribeTopicPartitionsRequestData.Cursor().setTopicName(authorizedTopic).setPartitionIndex(1))
         );
 
-        RequestChannel.Request request;
+        Request request;
         try {
             request = buildRequest(describeTopicPartitionsRequest, plaintextListener);
         } catch (Exception e) {
@@ -497,7 +497,7 @@ class DescribeTopicPartitionsRequestHandlerTest {
         kRaftMetadataCache.setImage(delta.apply(new MetadataProvenance(100L, 10, 1000L, true)));
     }
 
-    private RequestChannel.Request buildRequest(AbstractRequest request,
+    private Request buildRequest(AbstractRequest request,
                                                 ListenerName listenerName
     ) throws UnknownHostException {
         ByteBuffer buffer = request.serializeWithHeader(
@@ -512,8 +512,7 @@ class DescribeTopicPartitionsRequestHandlerTest {
         RequestContext context = new RequestContext(header, "1", InetAddress.getLocalHost(), Optional.empty(), new KafkaPrincipal(KafkaPrincipal.USER_TYPE, "Alice"),
                 listenerName, SecurityProtocol.SSL, ClientInformation.EMPTY, false,
                 Optional.of(kafkaPrincipalSerde));
-        return new RequestChannel.Request(1, context, 0, MemoryPool.NONE, buffer,
-                requestChannelMetrics, scala.Option.apply(null));
+        return new Request(1, context, 0, MemoryPool.NONE, buffer, requestChannelMetrics);
     }
 
     KafkaConfig createKafkaDefaultConfig() {

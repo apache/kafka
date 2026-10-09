@@ -45,7 +45,6 @@ import org.slf4j.LoggerFactory;
 
 import java.nio.ByteBuffer;
 import java.time.Duration;
-import java.util.Collections;
 import java.util.List;
 import java.util.Map;
 import java.util.Objects;
@@ -112,7 +111,7 @@ public class ClientTelemetryReporter implements MetricsReporter {
      context. These additional labels from the request context should be added by broker prior
      exporting the metrics to the telemetry backend.
     */
-    private static final Set<String> EXCLUDE_LABELS = Collections.singleton("client_id");
+    private static final Set<String> EXCLUDE_LABELS = Set.of("client_id");
 
     public static final int DEFAULT_PUSH_INTERVAL_MS = 5 * 60 * 1000;
 
@@ -718,6 +717,16 @@ public class ClientTelemetryReporter implements MetricsReporter {
                 payload = createPayload(emitter.emittedMetrics());
             } catch (Exception e) {
                 log.warn("Error constructing client telemetry payload: ", e);
+                /*
+                 No request is sent, so neither handleResponse nor handleFailedRequest can run to
+                 move the state on. Restore PUSH_NEEDED so that the retry below actually happens,
+                 instead of leaving the sender stuck in PUSH_IN_PROGRESS forever. A terminating
+                 push can only transition to TERMINATED, but close() follows it, so staying in
+                 TERMINATING_PUSH_IN_PROGRESS is not a stuck state.
+                */
+                if (!terminating && !maybeSetState(ClientTelemetryState.PUSH_NEEDED)) {
+                    log.warn("Unable to transition state after failed telemetry payload construction from state {}", state);
+                }
                 // Update last accessed time for push request to be retried on next interval.
                 updateErrorResult(localSubscription.pushIntervalMs, time.milliseconds());
                 return Optional.empty();
@@ -976,7 +985,7 @@ public class ClientTelemetryReporter implements MetricsReporter {
             this.clientInstanceId = clientInstanceId;
             this.subscriptionId = subscriptionId;
             this.pushIntervalMs = pushIntervalMs;
-            this.acceptedCompressionTypes = Collections.unmodifiableList(acceptedCompressionTypes);
+            this.acceptedCompressionTypes = List.copyOf(acceptedCompressionTypes);
             this.deltaTemporality = deltaTemporality;
             this.selector = selector;
         }

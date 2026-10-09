@@ -14,20 +14,29 @@
  * See the License for the specific language governing permissions and
  * limitations under the License.
  */
+
 package org.apache.kafka.clients.admin;
 
 import org.apache.kafka.common.KafkaFuture;
+import org.apache.kafka.common.annotation.InterfaceAudience;
 
 /**
  * The result of the {@link Admin#describeFeatures(DescribeFeaturesOptions)} call.
  *
  * The API of this class is evolving, see {@link Admin} for details.
  */
+@InterfaceAudience.Public
 public class DescribeFeaturesResult {
 
     private final KafkaFuture<FeatureMetadata> future;
 
-    DescribeFeaturesResult(KafkaFuture<FeatureMetadata> future) {
+    /**
+     * This constructor is {@code protected} only to allow internal subclasses (e.g.
+     * {@link org.apache.kafka.clients.admin.internals.InternalDescribeFeaturesResult}) to reuse it.
+     * It is not part of the public API contract, so binary/source compatibility for subclassing
+     * outside of the Kafka clients module is not guaranteed.
+     */
+    protected DescribeFeaturesResult(KafkaFuture<FeatureMetadata> future) {
         this.future = future;
     }
 

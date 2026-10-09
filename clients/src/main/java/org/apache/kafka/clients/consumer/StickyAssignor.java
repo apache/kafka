@@ -18,16 +18,18 @@ package org.apache.kafka.clients.consumer;
 
 import org.apache.kafka.clients.consumer.internals.AbstractStickyAssignor;
 import org.apache.kafka.common.TopicPartition;
+import org.apache.kafka.common.annotation.InterfaceAudience;
+import org.apache.kafka.common.annotation.SuppressKafkaInternalApiUsage;
 import org.apache.kafka.common.protocol.types.ArrayOf;
 import org.apache.kafka.common.protocol.types.Field;
 import org.apache.kafka.common.protocol.types.Schema;
 import org.apache.kafka.common.protocol.types.Struct;
 import org.apache.kafka.common.protocol.types.Type;
-import org.apache.kafka.common.utils.CollectionUtils;
 
 import java.nio.ByteBuffer;
 import java.util.ArrayList;
 import java.util.Collections;
+import java.util.HashMap;
 import java.util.List;
 import java.util.Map;
 import java.util.Optional;
@@ -174,6 +176,8 @@ import java.util.Set;
  * reassigned to another consumer will be revoked. That is the preferred assignor for newer cluster. See
  * {@link ConsumerPartitionAssignor.RebalanceProtocol} for a detailed explanation of cooperative rebalancing.
  */
+@InterfaceAudience.Public
+@SuppressKafkaInternalApiUsage("KIP-1265: extends internal AbstractStickyAssignor — pending KIP review to promote the parent or refactor the assignor hierarchy")
 public class StickyAssignor extends AbstractStickyAssignor {
     public static final String STICKY_ASSIGNOR_NAME = "sticky";
 
@@ -216,6 +220,9 @@ public class StickyAssignor extends AbstractStickyAssignor {
     }
 
     @Override
+    @SuppressKafkaInternalApiUsage("KIP-1265: forced override of AbstractStickyAssignor#memberData (internal) — "
+            + "the abstract parent declares the MemberData return type. Pending refactor to either promote MemberData "
+            + "or replace the hook with a public-typed equivalent.")
     protected MemberData memberData(Subscription subscription) {
         // Always deserialize ownedPartitions and generation id from user data
         // since StickyAssignor is an eager rebalance protocol that will revoke all existing partitions before joining group
@@ -230,7 +237,11 @@ public class StickyAssignor extends AbstractStickyAssignor {
     static ByteBuffer serializeTopicPartitionAssignment(MemberData memberData) {
         Struct struct = new Struct(STICKY_ASSIGNOR_USER_DATA_V1);
         List<Struct> topicAssignments = new ArrayList<>();
-        for (Map.Entry<String, List<Integer>> topicEntry : CollectionUtils.groupPartitionsByTopic(memberData.partitions).entrySet()) {
+        var partitionsByTopic = new HashMap<String, List<Integer>>();
+        for (TopicPartition tp : memberData.partitions) {
+            partitionsByTopic.computeIfAbsent(tp.topic(), t -> new ArrayList<>()).add(tp.partition());
+        }
+        for (Map.Entry<String, List<Integer>> topicEntry : partitionsByTopic.entrySet()) {
             Struct topicAssignment = new Struct(TOPIC_ASSIGNMENT);
             topicAssignment.set(TOPIC_KEY_NAME, topicEntry.getKey());
             topicAssignment.set(PARTITIONS_KEY_NAME, topicEntry.getValue().toArray());
@@ -272,4 +283,5 @@ public class StickyAssignor extends AbstractStickyAssignor {
         Optional<Integer> generation = struct.hasField(GENERATION_KEY_NAME) ? Optional.of(struct.getInt(GENERATION_KEY_NAME)) : Optional.empty();
         return new MemberData(partitions, generation);
     }
+
 }

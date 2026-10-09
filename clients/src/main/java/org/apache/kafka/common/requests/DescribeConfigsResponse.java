@@ -251,8 +251,4 @@ public class DescribeConfigsResponse extends AbstractResponse {
         return new DescribeConfigsResponse(new DescribeConfigsResponseData(readable, version));
     }
 
-    @Override
-    public boolean shouldClientThrottle(short version) {
-        return version >= 2;
-    }
 }
