@@ -121,8 +121,8 @@ public class BalancedTaskAssignorTest {
 
     @Test
     public void shouldAssignActiveStatefulTasksEvenlyOverUnevenlyDistributedMembers() {
-        // process1 has three members, process2 has one. Round-robin would give each process four tasks, so the
-        // balancing step has to move two tasks to process1 to even out the per-member load.
+        // process1 has three members, process2 has one, so process1 takes three of every four tasks and every
+        // member ends up with two.
         final GroupAssignment result = assignor.assign(
             new GroupSpecImpl(members(
                 "member1_1", "process1", "member1_2", "process1", "member1_3", "process1",
@@ -161,6 +161,20 @@ public class BalancedTaskAssignorTest {
         assertOnePartitionOfEachSubtopology(result, "member1", SUBTOPOLOGY_1, SUBTOPOLOGY_2);
         assertOnePartitionOfEachSubtopology(result, "member2", SUBTOPOLOGY_1, SUBTOPOLOGY_2);
         assertAllTasksAssignedOnce(result, statefulTopology(2, SUBTOPOLOGY_1, SUBTOPOLOGY_2));
+    }
+
+    @Test
+    public void shouldSpreadTasksOfEachSubtopologyInProportionToMemberCounts() {
+        // process1 has two members, process2 has one. Dealt in sorted order, the three tasks of each subtopology go
+        // to process1, process2 and process1, so every subtopology is split two to one rather than only the total.
+        final GroupAssignment result = assignor.assign(
+            new GroupSpecImpl(members("member1_1", "process1", "member1_2", "process1", "member2_1", "process2"), AssignmentConfigsImpl.DEFAULT),
+            statefulTopology(3, SUBTOPOLOGY_1, SUBTOPOLOGY_2)
+        );
+
+        assertEquals(Map.of(SUBTOPOLOGY_1, Set.of(0, 2), SUBTOPOLOGY_2, Set.of(0, 2)), mergeTasks(result, true, "member1_1", "member1_2"));
+        assertEquals(Map.of(SUBTOPOLOGY_1, Set.of(1), SUBTOPOLOGY_2, Set.of(1)), mergeTasks(result, true, "member2_1"));
+        assertAllTasksAssignedOnce(result, statefulTopology(3, SUBTOPOLOGY_1, SUBTOPOLOGY_2));
     }
 
     @Test
