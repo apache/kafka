@@ -84,27 +84,58 @@ public record TasksTuple(Map<String, Set<Integer>> activeTasks,
      * carried by the active tasks of {@code other}. Used to decide whether the intermediate assignment produced by
      * the refiner differs from the assignment a member is currently reconciled to (an active task set is considered
      * unchanged even if only its epochs would differ).
+     * Subtopologies with empty task sets are treated as equivalent to absent subtopologies.
      *
      * @param other Another task tuple with epochs.
      * @return true if the active, standby and warm-up task sets are equal (active-task epochs are not compared).
      */
     public boolean sameTasks(TasksTupleWithEpochs other) {
-        if (!warmupTasks.equals(other.warmupTasks()) || !standbyTasks.equals(other.standbyTasks())) {
+        if (!sameTaskSets(warmupTasks, other.warmupTasks()) ||
+            !sameTaskSets(standbyTasks, other.standbyTasks())
+        ) {
             return false;
         }
         Map<String, Map<Integer, Integer>> otherActiveTasks = other.activeTasksWithEpochs();
-        if (activeTasks.size() != otherActiveTasks.size()) {
-            return false;
-        }
         for (Map.Entry<String, Set<Integer>> entry : activeTasks.entrySet()) {
             Map<Integer, Integer> otherPartitions = otherActiveTasks.get(entry.getKey());
-            if (otherPartitions == null || !entry.getValue().equals(otherPartitions.keySet())) {
+            Set<Integer> otherTaskIds = otherPartitions == null
+                ? Set.of()
+                : otherPartitions.keySet();
+
+            if (!entry.getValue().equals(otherTaskIds)) {
+                return false;
+            }
+        }
+        
+        for (Map.Entry<String, Map<Integer, Integer>> entry : otherActiveTasks.entrySet()) {
+            final Set<Integer> taskValue = activeTasks.getOrDefault(entry.getKey(), Set.of());
+            if (!entry.getValue().keySet().equals(taskValue)) {
                 return false;
             }
         }
         return true;
     }
 
+    private static boolean sameTaskSets(
+        Map<String, Set<Integer>> tasks, 
+        Map<String, Set<Integer>> otherTasks
+    ) {
+        for (Map.Entry<String, Set<Integer>> entry : tasks.entrySet()) {
+            final Set<Integer> otherTaskValue = otherTasks.getOrDefault(entry.getKey(), Set.of());
+            if (!entry.getValue().equals(otherTaskValue)) {
+                return false;
+            }
+        }
+
+        for (Map.Entry<String, Set<Integer>> entry : otherTasks.entrySet()) {
+            final Set<Integer> taskValue = tasks.getOrDefault(entry.getKey(), Set.of());
+            if (!entry.getValue().equals(taskValue)) {
+                return false;
+            }
+        }
+        return true;
+    }
+    
     /**
      * Creates a {{@link TasksTuple}} from a
      * {{@link org.apache.kafka.coordinator.group.generated.StreamsGroupTargetAssignmentMemberValue}}.
