@@ -69,7 +69,6 @@ import org.apache.kafka.test.MockRocksDbConfigSetter;
 import org.apache.kafka.test.StreamsTestUtils;
 import org.apache.kafka.test.TestUtils;
 
-import org.hamcrest.Matchers;
 import org.junit.jupiter.api.AfterEach;
 import org.junit.jupiter.api.BeforeEach;
 import org.junit.jupiter.api.Test;
@@ -113,15 +112,9 @@ import static java.nio.charset.StandardCharsets.UTF_8;
 import static org.apache.kafka.common.utils.Utils.mkEntry;
 import static org.apache.kafka.common.utils.Utils.mkMap;
 import static org.apache.kafka.streams.state.internals.RocksDBStore.DB_FILE_DIR;
-import static org.hamcrest.CoreMatchers.either;
-import static org.hamcrest.CoreMatchers.equalTo;
-import static org.hamcrest.CoreMatchers.is;
-import static org.hamcrest.CoreMatchers.notNullValue;
-import static org.hamcrest.MatcherAssert.assertThat;
-import static org.hamcrest.Matchers.greaterThan;
-import static org.hamcrest.Matchers.hasEntry;
 import static org.junit.jupiter.api.Assertions.assertEquals;
 import static org.junit.jupiter.api.Assertions.assertFalse;
+import static org.junit.jupiter.api.Assertions.assertNotNull;
 import static org.junit.jupiter.api.Assertions.assertNull;
 import static org.junit.jupiter.api.Assertions.assertThrows;
 import static org.junit.jupiter.api.Assertions.assertTrue;
@@ -447,11 +440,11 @@ public class RocksDBStoreTest extends AbstractKeyValueStoreTest {
 
         context.restore(DB_NAME, restoreBytes);
 
-        assertThat(
+        assertEquals(
+            "restoredValue",
             stringDeserializer.deserialize(
                 null,
-                rocksDBStore.get(new Bytes(stringSerializer.serialize(null, "restoredKey")))),
-            equalTo("restoredValue"));
+                rocksDBStore.get(new Bytes(stringSerializer.serialize(null, "restoredKey")))));
     }
 
     @Test
@@ -472,7 +465,7 @@ public class RocksDBStoreTest extends AbstractKeyValueStoreTest {
         rocksDBStore.init(context, rocksDBStore);
 
         assertTrue(MockRocksDbConfigSetter.called);
-        assertThat(MockRocksDbConfigSetter.configMap.get("abc.def"), equalTo(param));
+        assertEquals(param, MockRocksDbConfigSetter.configMap.get("abc.def"));
     }
 
     @Test
@@ -587,10 +580,10 @@ public class RocksDBStoreTest extends AbstractKeyValueStoreTest {
                 valuesWithPrefix.add(new String(next.value));
                 numberOfKeysReturned++;
             }
-            assertThat(numberOfKeysReturned, is(3));
-            assertThat(valuesWithPrefix.get(0), is("f"));
-            assertThat(valuesWithPrefix.get(1), is("d"));
-            assertThat(valuesWithPrefix.get(2), is("b"));
+            assertEquals(3, numberOfKeysReturned);
+            assertEquals("f", valuesWithPrefix.get(0));
+            assertEquals("d", valuesWithPrefix.get(1));
+            assertEquals("b", valuesWithPrefix.get(2));
         }
     }
 
@@ -621,7 +614,7 @@ public class RocksDBStoreTest extends AbstractKeyValueStoreTest {
                 numberOfKeysReturned++;
             }
 
-            assertThat(numberOfKeysReturned, is(1));
+            assertEquals(1, numberOfKeysReturned);
         }
     }
 
@@ -632,29 +625,29 @@ public class RocksDBStoreTest extends AbstractKeyValueStoreTest {
         final Set<KeyValueIterator<Bytes, byte[]>> openIterators = new HashSet<>();
 
         final KeyValueIterator<Bytes, byte[]> prefixScanIterator = rocksDBStore.prefixScan("abcd", stringSerializer, openIterators);
-        assertThat(openIterators.size(), is(1));
+        assertEquals(1, openIterators.size());
         prefixScanIterator.close();
-        assertThat(openIterators.size(), is(0));
+        assertEquals(0, openIterators.size());
 
         final KeyValueIterator<Bytes, byte[]> rangeIterator = rocksDBStore.range(null, new Bytes(stringSerializer.serialize(null, "1")), openIterators);
-        assertThat(openIterators.size(), is(1));
+        assertEquals(1, openIterators.size());
         rangeIterator.close();
-        assertThat(openIterators.size(), is(0));
+        assertEquals(0, openIterators.size());
 
         final KeyValueIterator<Bytes, byte[]> reverseRangeIterator = rocksDBStore.reverseRange(null, new Bytes(stringSerializer.serialize(null, "1")), openIterators);
-        assertThat(openIterators.size(), is(1));
+        assertEquals(1, openIterators.size());
         reverseRangeIterator.close();
-        assertThat(openIterators.size(), is(0));
+        assertEquals(0, openIterators.size());
 
         final KeyValueIterator<Bytes, byte[]> allIterator = rocksDBStore.all(openIterators);
-        assertThat(openIterators.size(), is(1));
+        assertEquals(1, openIterators.size());
         allIterator.close();
-        assertThat(openIterators.size(), is(0));
+        assertEquals(0, openIterators.size());
 
         final KeyValueIterator<Bytes, byte[]> reverseAllIterator = rocksDBStore.reverseAll(openIterators);
-        assertThat(openIterators.size(), is(1));
+        assertEquals(1, openIterators.size());
         reverseAllIterator.close();
-        assertThat(openIterators.size(), is(0));
+        assertEquals(0, openIterators.size());
     }
 
     @SuppressWarnings("resource")
@@ -721,11 +714,11 @@ public class RocksDBStoreTest extends AbstractKeyValueStoreTest {
                 numberOfKeysReturned++;
             }
 
-            assertThat(numberOfKeysReturned, is(numMatches));
+            assertEquals(numMatches, numberOfKeysReturned);
             if (numMatches == 2) {
-                assertThat(valuesWithPrefix.get(0), either(is("a")).or(is("b")));
+                assertTrue("a".equals(valuesWithPrefix.get(0)) || "b".equals(valuesWithPrefix.get(0)));
             } else {
-                assertThat(valuesWithPrefix.get(0), is("a"));
+                assertEquals("a", valuesWithPrefix.get(0));
             }
         }
     }
@@ -753,7 +746,7 @@ public class RocksDBStoreTest extends AbstractKeyValueStoreTest {
                 keysWithPrefix.next();
                 numberOfKeysReturned++;
             }
-            assertThat(numberOfKeysReturned, is(0));
+            assertEquals(0, numberOfKeysReturned);
         }
     }
 
@@ -810,7 +803,7 @@ public class RocksDBStoreTest extends AbstractKeyValueStoreTest {
                 keys.add(stringDeserializer.deserialize(null, iterator.next().key.get()));
             }
 
-            assertThat(keys, equalTo(Set.of("2", "3")));
+            assertEquals(Set.of("2", "3"), keys);
         }
     }
 
@@ -835,7 +828,7 @@ public class RocksDBStoreTest extends AbstractKeyValueStoreTest {
                 keys.add(stringDeserializer.deserialize(null, iterator.next().key.get()));
             }
 
-            assertThat(keys, equalTo(Set.of("1", "2", "3")));
+            assertEquals(Set.of("1", "2", "3"), keys);
 
             assertEquals(
                 "restored",
@@ -894,7 +887,7 @@ public class RocksDBStoreTest extends AbstractKeyValueStoreTest {
                 keys.add(stringDeserializer.deserialize(null, iterator.next().key.get()));
             }
 
-            assertThat(keys, equalTo(Set.of("2", "3")));
+            assertEquals(Set.of("2", "3"), keys);
         }
     }
 
@@ -977,7 +970,7 @@ public class RocksDBStoreTest extends AbstractKeyValueStoreTest {
         int expectedIndex = 0;
         for (final KeyValue<byte[], byte[]> keyValue : keyValues) {
             final byte[] valBytes = rocksDBStore.get(new Bytes(keyValue.key));
-            assertThat(new String(valBytes, UTF_8), is(expectedValues.get(expectedIndex++)));
+            assertEquals(expectedValues.get(expectedIndex++), new String(valBytes, UTF_8));
         }
         assertFalse(TestingBloomFilterRocksDBConfigSetter.bloomFiltersSet);
 
@@ -991,7 +984,7 @@ public class RocksDBStoreTest extends AbstractKeyValueStoreTest {
 
         for (final KeyValue<byte[], byte[]> keyValue : keyValues) {
             final byte[] valBytes = rocksDBStore.get(new Bytes(keyValue.key));
-            assertThat(new String(valBytes, UTF_8), is(expectedValues.get(expectedIndex++)));
+            assertEquals(expectedValues.get(expectedIndex++), new String(valBytes, UTF_8));
         }
 
         assertTrue(TestingBloomFilterRocksDBConfigSetter.bloomFiltersSet);
@@ -1027,7 +1020,7 @@ public class RocksDBStoreTest extends AbstractKeyValueStoreTest {
             "description is not verified",
             streamsMetrics.storeLevelTagMap(taskId.toString(), METRICS_SCOPE, DB_NAME)
         ));
-        assertThat((double) bytesWrittenTotal.metricValue(), greaterThan(0d));
+        assertTrue(Double.compare((double) bytesWrittenTotal.metricValue(), 0d) > 0);
     }
 
     @Test
@@ -1058,8 +1051,8 @@ public class RocksDBStoreTest extends AbstractKeyValueStoreTest {
             "description is not verified",
             streamsMetrics.storeLevelTagMap(taskId.toString(), METRICS_SCOPE, DB_NAME)
         ));
-        assertThat(numberOfEntriesActiveMemTable, notNullValue());
-        assertThat((BigInteger) numberOfEntriesActiveMemTable.metricValue(), greaterThan(BigInteger.valueOf(0)));
+        assertNotNull(numberOfEntriesActiveMemTable);
+        assertTrue(((BigInteger) numberOfEntriesActiveMemTable.metricValue()).compareTo(BigInteger.valueOf(0)) > 0);
     }
 
     @Test
@@ -1110,7 +1103,7 @@ public class RocksDBStoreTest extends AbstractKeyValueStoreTest {
                 "description is not verified",
                 streamsMetrics.storeLevelTagMap(taskId.toString(), METRICS_SCOPE, DB_NAME)
             ));
-            assertThat("Metric " + propertyname + " not found!", metric, notNullValue());
+            assertNotNull(metric, "Metric " + propertyname + " not found!");
             metric.metricValue();
         }
     }
@@ -1191,9 +1184,9 @@ public class RocksDBStoreTest extends AbstractKeyValueStoreTest {
                         null,
                         rocksDBStore.get(new Bytes(stringSerializer.serialize(null, "3")))));
 
-        assertThat(rocksDBStore.getPosition(), Matchers.notNullValue());
-        assertThat(rocksDBStore.getPosition().getPartitionPositions(""), Matchers.notNullValue());
-        assertThat(rocksDBStore.getPosition().getPartitionPositions(""), hasEntry(0, 3L));
+        assertNotNull(rocksDBStore.getPosition());
+        assertNotNull(rocksDBStore.getPosition().getPartitionPositions(""));
+        assertEquals(3L, rocksDBStore.getPosition().getPartitionPositions("").get(0));
     }
 
     @Test
@@ -1228,11 +1221,11 @@ public class RocksDBStoreTest extends AbstractKeyValueStoreTest {
                         null,
                         rocksDBStore.get(new Bytes(stringSerializer.serialize(null, "3")))));
 
-        assertThat(rocksDBStore.getPosition(), Matchers.notNullValue());
-        assertThat(rocksDBStore.getPosition().getPartitionPositions("A"), Matchers.notNullValue());
-        assertThat(rocksDBStore.getPosition().getPartitionPositions("A"), hasEntry(0, 3L));
-        assertThat(rocksDBStore.getPosition().getPartitionPositions("B"), Matchers.notNullValue());
-        assertThat(rocksDBStore.getPosition().getPartitionPositions("B"), hasEntry(0, 2L));
+        assertNotNull(rocksDBStore.getPosition());
+        assertNotNull(rocksDBStore.getPosition().getPartitionPositions("A"));
+        assertEquals(3L, rocksDBStore.getPosition().getPartitionPositions("A").get(0));
+        assertNotNull(rocksDBStore.getPosition().getPartitionPositions("B"));
+        assertEquals(2L, rocksDBStore.getPosition().getPartitionPositions("B").get(0));
     }
 
     @Test
@@ -1255,8 +1248,8 @@ public class RocksDBStoreTest extends AbstractKeyValueStoreTest {
                 null,
                 rocksDBStore.get(new Bytes(stringSerializer.serialize(null, "1")))));
 
-        assertThat(rocksDBStore.getPosition(), Matchers.notNullValue());
-        assertThat(rocksDBStore.getPosition().getPartitionPositions("A"), hasEntry(0, 2L));
+        assertNotNull(rocksDBStore.getPosition());
+        assertEquals(2L, rocksDBStore.getPosition().getPartitionPositions("A").get(0));
     }
 
     @Test
@@ -1274,7 +1267,7 @@ public class RocksDBStoreTest extends AbstractKeyValueStoreTest {
         );
         rocksDBStore.init(context, rocksDBStore);
         context.restore(rocksDBStore.name(), entries);
-        assertThat(rocksDBStore.getPosition(), is(Position.emptyPosition()));
+        assertEquals(Position.emptyPosition(), rocksDBStore.getPosition());
     }
 
     @Test

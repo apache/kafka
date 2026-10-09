@@ -29,6 +29,7 @@ import org.apache.kafka.common.serialization.Serdes;
 import org.apache.kafka.common.serialization.StringDeserializer;
 import org.apache.kafka.common.serialization.StringSerializer;
 import org.apache.kafka.common.utils.Utils;
+import org.apache.kafka.streams.CloseOptions;
 import org.apache.kafka.streams.GroupProtocol;
 import org.apache.kafka.streams.KafkaStreams;
 import org.apache.kafka.streams.KeyValue;
@@ -763,7 +764,8 @@ public class KStreamRepartitionIntegrationTest {
             )
         );
 
-        kafkaStreamsToClose.close(Duration.ofSeconds(5));
+        kafkaStreamsToClose.close(CloseOptions.groupMembershipOperation(CloseOptions.GroupMembershipOperation.LEAVE_GROUP)
+            .withTimeout(Duration.ofSeconds(5)));
 
         sendEvents(
             timestamp,

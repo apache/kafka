@@ -45,6 +45,7 @@ import static org.apache.kafka.streams.processor.internals.assignment.Assignment
 import static org.apache.kafka.streams.processor.internals.assignment.AssignmentTestUtils.TASK_1_1;
 import static org.apache.kafka.streams.processor.internals.assignment.AssignmentTestUtils.TASK_1_2;
 import static org.apache.kafka.streams.processor.internals.assignment.AssignmentTestUtils.assertHasProperty;
+import static org.apache.kafka.streams.processor.internals.assignment.AssignmentTestUtils.clientState;
 import static org.apache.kafka.streams.processor.internals.assignment.AssignmentTestUtils.getClientStatesMap;
 import static org.apache.kafka.streams.processor.internals.assignment.TaskMovement.assignActiveTaskMovements;
 import static org.junit.jupiter.api.Assertions.assertEquals;
@@ -291,7 +292,7 @@ public class TaskMovementTest {
 
     private static ClientState getClientStateWithLags(final Set<TaskId> activeTasks,
                                                       final Map<TaskId, Long> taskLags) {
-        final ClientState client1 = new ClientState(activeTasks, Set.of(), taskLags, Map.of(), 1);
+        final ClientState client1 = clientState(activeTasks, Set.of(), taskLags, 1);
         client1.assignActiveTasks(activeTasks);
         return client1;
     }

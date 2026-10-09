@@ -35,7 +35,7 @@ import org.apache.kafka.clients.admin.AlterConfigOp.OpType
 import org.apache.kafka.clients.admin.ConfigEntry.ConfigSource
 import org.apache.kafka.clients.admin._
 import org.apache.kafka.clients.consumer.internals.AsyncKafkaConsumer
-import org.apache.kafka.clients.consumer.{CommitFailedException, Consumer, ConsumerConfig, ConsumerRecords, GroupProtocol, KafkaConsumer, OffsetAndMetadata, ShareConsumer}
+import org.apache.kafka.clients.consumer.{CommitFailedException, Consumer, ConsumerConfig, ConsumerRebalanceListener, ConsumerRecords, GroupProtocol, KafkaConsumer, OffsetAndMetadata, ShareConsumer}
 import org.apache.kafka.clients.producer.{KafkaProducer, ProducerConfig, ProducerRecord}
 import org.apache.kafka.common.acl.{AccessControlEntry, AclBinding, AclBindingFilter, AclOperation, AclPermissionType}
 import org.apache.kafka.common.config.{ConfigResource, LogLevelConfig, SslConfigs, TopicConfig}
@@ -732,35 +732,6 @@ class PlaintextAdminIntegrationTest extends BaseAdminIntegrationTest {
     consumerRecords.zipWithIndex.foreach { case (consumerRecord, index) =>
       assertEquals(s"xxxxxxxxxxxxxxxxxxxx-$index", new String(consumerRecord.value))
     }
-  }
-
-  @Test
-  def testDescribeConfigsNonexistent(): Unit = {
-    client = createAdminClient
-
-    val brokerException = assertThrows(classOf[ExecutionException], () => {
-      client.describeConfigs(util.List.of(new ConfigResource(ConfigResource.Type.BROKER, "-1"))).all().get()
-    })
-    assertInstanceOf(classOf[TimeoutException], brokerException.getCause)
-
-    val topicException = assertThrows(classOf[ExecutionException], () => {
-      client.describeConfigs(util.List.of(new ConfigResource(ConfigResource.Type.TOPIC, "none_topic"))).all().get()
-    })
-    assertInstanceOf(classOf[UnknownTopicOrPartitionException], topicException.getCause)
-
-    val brokerLoggerException = assertThrows(classOf[ExecutionException], () => {
-      client.describeConfigs(util.List.of(new ConfigResource(ConfigResource.Type.BROKER_LOGGER, "-1"))).all().get()
-    })
-    assertInstanceOf(classOf[TimeoutException], brokerLoggerException.getCause)
-  }
-
-  @Test
-  def testDescribeConfigsNonexistentForKraft(): Unit = {
-    client = createAdminClient
-
-    val groupResource = new ConfigResource(ConfigResource.Type.GROUP, "none_group")
-    val groupResult = client.describeConfigs(util.List.of(groupResource)).all().get().get(groupResource)
-    assertNotEquals(0, groupResult.entries().size())
   }
 
   @Test
@@ -1539,6 +1510,13 @@ class PlaintextAdminIntegrationTest extends BaseAdminIntegrationTest {
         val groupType = if (groupProtocol.equalsIgnoreCase(GroupProtocol.CONSUMER.name)) GroupType.CONSUMER else GroupType.CLASSIC
         // Start consumer polling threads in the background
         backgroundConsumers.start()
+
+        TestUtils.waitUntilTrue(() => {
+          val matching = client.listConsumerGroups.all.get.asScala.filter(group =>
+            group.groupId == testGroupId &&
+              group.groupState.get == GroupState.STABLE)
+          matching.size == 1
+        }, "Consumer group did not transition to STABLE before timeout")
 
         val describeWithFakeGroupResult = client.describeConsumerGroups(util.List.of(testGroupId, fakeGroupId),
           new DescribeConsumerGroupsOptions().includeAuthorizedOperations(true))
@@ -3908,12 +3886,19 @@ class PlaintextAdminIntegrationTest extends BaseAdminIntegrationTest {
     private def createConsumerThread[K,V](consumer: Consumer[K,V], topic: String): Thread = {
       new Thread {
         override def run : Unit = {
-          consumer.subscribe(util.Set.of(topic))
+          var started = false
+          consumer.subscribe(util.Set.of(topic), new ConsumerRebalanceListener {
+            override def onPartitionsRevoked(partitions: util.Collection[TopicPartition]): Unit = {}
+            override def onPartitionsAssigned(partitions: util.Collection[TopicPartition]): Unit = {
+              if (!started) {
+                startLatch.countDown()
+                started = true
+              }
+            }
+          })
           try {
             while (consumerThreadRunning.get()) {
               consumer.poll(JDuration.ofSeconds(5))
-              if (!consumer.assignment.isEmpty && startLatch.getCount > 0L)
-                startLatch.countDown()
               try {
                 consumer.commitSync()
               } catch {

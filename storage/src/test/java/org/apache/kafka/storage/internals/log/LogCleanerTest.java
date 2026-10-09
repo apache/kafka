@@ -16,6 +16,7 @@
  */
 package org.apache.kafka.storage.internals.log;
 
+import org.apache.kafka.common.InvalidRecordException;
 import org.apache.kafka.common.TopicPartition;
 import org.apache.kafka.common.compress.Compression;
 import org.apache.kafka.common.config.AbstractConfig;
@@ -353,6 +354,33 @@ public class LogCleanerTest {
 
         assertTrue(log.logSegments().iterator().next().log().channel().size() < originalMaxFileSize,
             "Cleaned segment file should be trimmed to its real size.");
+    }
+
+    /**
+     * Compaction rejects a compressed record whose decompressed body exceeds
+     * max.decompressed.message.bytes with InvalidRecordException (mapped to an uncleanable
+     * partition by LogCleaner) rather than OOMing. Injected via follower append to skip produce
+     * validation, mirroring a record that was already durable before the limit was lowered.
+     */
+    @Test
+    public void testCleanRejectsRecordExceedingConfiguredMaxDecompressedMessageBytes() throws IOException {
+        Cleaner cleaner = makeCleaner(10);
+        Properties logProps = new Properties();
+        logProps.put(TopicConfig.CLEANUP_POLICY_CONFIG, TopicConfig.CLEANUP_POLICY_COMPACT);
+        logProps.put(TopicConfig.MAX_DECOMPRESSED_MESSAGE_BYTES_CONFIG, "10");
+        UnifiedLog log = makeLog(LogConfig.fromProps(logConfig.originals(), logProps));
+
+        // partitionLeaderEpoch must be valid (>= 0) for follower append to assign it to the epoch cache.
+        MemoryRecords oversized = MemoryRecords.withIdempotentRecords(RecordBatch.CURRENT_MAGIC_VALUE, 0L,
+            Compression.gzip().build(), RecordBatch.NO_PRODUCER_ID, RecordBatch.NO_PRODUCER_EPOCH,
+            RecordBatch.NO_SEQUENCE, 0, new SimpleRecord("k".getBytes(), new byte[100]));
+        log.appendAsFollower(oversized, Integer.MAX_VALUE);
+        log.roll();
+
+        InvalidRecordException e = assertThrows(InvalidRecordException.class,
+            () -> cleaner.clean(new LogToClean(log, 0L, log.activeSegment().baseOffset(), false)));
+        assertTrue(e.getMessage().contains("exceeds the configured maximum record size"),
+            "expected the configured-maximum guard message, got: " + e.getMessage());
     }
 
     @Test

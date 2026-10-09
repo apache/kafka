@@ -88,9 +88,6 @@ import static org.apache.kafka.test.MockStateRestoreListener.RESTORE_BATCH;
 import static org.apache.kafka.test.MockStateRestoreListener.RESTORE_END;
 import static org.apache.kafka.test.MockStateRestoreListener.RESTORE_START;
 import static org.apache.kafka.test.MockStateRestoreListener.RESTORE_SUSPENDED;
-import static org.hamcrest.MatcherAssert.assertThat;
-import static org.hamcrest.Matchers.equalTo;
-import static org.hamcrest.Matchers.hasItem;
 import static org.junit.jupiter.api.Assertions.assertEquals;
 import static org.junit.jupiter.api.Assertions.assertFalse;
 import static org.junit.jupiter.api.Assertions.assertNull;
@@ -450,7 +447,7 @@ public class StoreChangelogReaderTest {
             changelogReader.register(tp, stateManager);
             changelogReader.restore(mockTasks);
 
-            assertThat(callback.restoreStartOffset, equalTo(0L));
+            assertEquals(0L, callback.restoreStartOffset);
         }
     }
 
@@ -1461,11 +1458,8 @@ public class StoreChangelogReaderTest {
             appender.setClassLogger(StoreChangelogReader.class, Level.DEBUG);
             changelogReader.unregister(Collections.singletonList(new TopicPartition("unknown", 0)));
 
-            assertThat(
-                appender.getMessages(),
-                hasItem("test-reader Changelog partition unknown-0 could not be found," +
-                    " it could be already cleaned up during the handling of task corruption and never restore again")
-            );
+            assertTrue(appender.getMessages().contains("test-reader Changelog partition unknown-0 could not be found," +
+                " it could be already cleaned up during the handling of task corruption and never restore again"));
         }
     }
 
@@ -2699,6 +2693,166 @@ public class StoreChangelogReaderTest {
 
         assertEquals(storedOffset + 1, noProbeConsumer.position(tp),
             "a standby replays its stored offset gap; the skip optimisation is active-only");
+    }
+
+    /**
+     * Three active windowed partitions with stored offsets restore in one call, each taking a different
+     * branch: one skips past expired data, one is demoted to its floor because its head was truncated and
+     * takes the wipe path, one falls back to its floor because the probe never answers. The demoted
+     * partition's TaskCorruptedException must name only its own task and must leave where the other two
+     * land untouched -- the per-partition floor map and the demote bookkeeping are what keep them apart.
+     */
+    @Test
+    public void shouldRouteEachStoredOffsetPartitionIndependentlyInOneRestore() {
+        final long retentionMs = Duration.ofHours(2).toMillis();
+        final long endOffset = 100_000L;          // every gap far exceeds PROBE_MIN_OFFSET_GAP
+        final long skipStoredOffset = 100L;       // tp:  probe resolves and skips past expired data
+        final long truncatedStoredOffset = 200L;  // tp1: head truncated below the floor -> demote -> wipe
+        final long truncatedLogStart = 5_000L;
+        final long fallbackStoredOffset = 300L;   // tp2: probe never answers -> fall back to the floor
+        final long offsetForTimestamp = 50_000L;  // tp's skip target
+
+        final MockConsumer<byte[], byte[]> probeConsumer = new MockConsumer<>(AutoOffsetResetStrategy.EARLIEST.name()) {
+            @Override
+            public synchronized Map<TopicPartition, OffsetAndTimestamp> offsetsForTimes(final Map<TopicPartition, Long> timestampsToSearch) {
+                final Map<TopicPartition, OffsetAndTimestamp> result = new HashMap<>();
+                timestampsToSearch.forEach((key, value) -> result.put(key, new OffsetAndTimestamp(offsetForTimestamp, value)));
+                return result;
+            }
+        };
+        final Map<TopicPartition, Long> begins = new HashMap<>();
+        begins.put(tp, 0L);
+        begins.put(tp1, truncatedLogStart);       // tp1's head is gone, so its floor sits below the log start
+        begins.put(tp2, 0L);
+        final Map<TopicPartition, Long> ends = new HashMap<>();
+        ends.put(tp, endOffset);
+        ends.put(tp1, endOffset);
+        ends.put(tp2, endOffset);
+        probeConsumer.updateBeginningOffsets(begins);
+        probeConsumer.updateEndOffsets(ends);
+        adminClient.updateEndOffsets(ends);
+        // one poll task queues tp's head record (which the probe consumes to resolve stream time) and tp1's
+        // truncated record (which the demoted partition's own restore poll trips over); tp2 gets none, so
+        // its probe never answers. tp1 stays paused through the probe, so its record only bites afterwards.
+        probeConsumer.schedulePollTask(() -> {
+            probeConsumer.addRecord(changelogRecord(tp, endOffset - 1, 10_000_000L));
+            probeConsumer.addRecord(changelogRecord(tp1, truncatedLogStart, 10_000_000L));
+        });
+
+        final TaskId skipTaskId = new TaskId(0, 0);
+        final TaskId truncatedTaskId = new TaskId(0, 1);
+        final TaskId fallbackTaskId = new TaskId(0, 2);
+        final StateStoreMetadata skipMeta = mock(StateStoreMetadata.class);
+        when(skipMeta.offset()).thenReturn(skipStoredOffset);
+        final StateStoreMetadata truncatedMeta = mock(StateStoreMetadata.class);
+        when(truncatedMeta.offset()).thenReturn(truncatedStoredOffset);
+        final StateStoreMetadata fallbackMeta = mock(StateStoreMetadata.class);
+        when(fallbackMeta.offset()).thenReturn(fallbackStoredOffset);
+
+        final StoreChangelogReader reader =
+            new StoreChangelogReader(time, config, logContext, adminClient, probeConsumer, callback, standbyListener);
+        reader.register(tp, windowedActiveManager(skipMeta, tp, skipTaskId, retentionMs));
+        reader.register(tp1, windowedActiveManager(truncatedMeta, tp1, truncatedTaskId, retentionMs));
+        reader.register(tp2, windowedActiveManager(fallbackMeta, tp2, fallbackTaskId, retentionMs));
+
+        final Map<TaskId, Task> tasks = new HashMap<>();
+        tasks.put(skipTaskId, mock(Task.class));
+        tasks.put(truncatedTaskId, mock(Task.class));
+        tasks.put(fallbackTaskId, mock(Task.class));
+
+        final TaskCorruptedException thrown = assertThrows(TaskCorruptedException.class,
+            () -> reader.restore(tasks),
+            "the demoted partition's truncated head must trigger the wipe path");
+        assertEquals(Collections.singleton(truncatedTaskId), thrown.corruptedTasks(),
+            "only the demoted partition is corrupt; the skipped and fallen-back partitions must not be dragged in");
+        assertEquals(offsetForTimestamp, probeConsumer.position(tp),
+            "the partition with a resolvable probe skips past expired data");
+        assertEquals(truncatedStoredOffset + 1, probeConsumer.position(tp1),
+            "the demoted partition is seeked to its floor before the wipe path takes over");
+        assertEquals(fallbackStoredOffset + 1, probeConsumer.position(tp2),
+            "the partition whose probe never answers falls back to its own floor, not tp's skip target");
+    }
+
+    /**
+     * A windowed store whose retention is unbounded (Long.MAX_VALUE) discards nothing, so there is no
+     * expired data to skip. Even with a gap large enough to probe, a stored-offset partition must replay
+     * straight from its stored offset without a single probe RPC.
+     */
+    @Test
+    public void shouldNotProbeWindowedStoreWithUnboundedRetention() {
+        final long storedOffset = 100L;
+        final long endOffset = 100_000L;   // gap far exceeds PROBE_MIN_OFFSET_GAP: only the retention rules out a probe
+
+        final MockConsumer<byte[], byte[]> noProbeConsumer = new MockConsumer<>(AutoOffsetResetStrategy.EARLIEST.name()) {
+            @Override
+            public synchronized Map<TopicPartition, Long> endOffsets(final Collection<TopicPartition> partitions) {
+                throw new AssertionError("an unbounded retention must not trigger a probe");
+            }
+
+            @Override
+            public synchronized Map<TopicPartition, Long> beginningOffsets(final Collection<TopicPartition> partitions) {
+                throw new AssertionError("an unbounded retention must not trigger a probe");
+            }
+
+            @Override
+            public synchronized Map<TopicPartition, OffsetAndTimestamp> offsetsForTimes(final Map<TopicPartition, Long> timestampsToSearch) {
+                throw new AssertionError("an unbounded retention must not trigger a probe");
+            }
+        };
+        adminClient.updateEndOffsets(Collections.singletonMap(tp, endOffset));
+
+        final TaskId taskId = new TaskId(0, 0);
+        final StateStoreMetadata meta = mock(StateStoreMetadata.class);
+        when(meta.offset()).thenReturn(storedOffset);
+        final ProcessorStateManager manager = windowedActiveManager(meta, tp, taskId, Long.MAX_VALUE);
+
+        final StoreChangelogReader reader =
+            new StoreChangelogReader(time, config, logContext, adminClient, noProbeConsumer, callback, standbyListener);
+        reader.register(tp, manager);
+        reader.restore(Collections.singletonMap(taskId, mock(Task.class)));
+
+        assertEquals(storedOffset + 1, noProbeConsumer.position(tp),
+            "an unbounded-retention windowed store replays from its stored offset; there is no expired data to skip");
+    }
+
+    /**
+     * A stored-offset windowed partition whose observed stream time has not advanced past one retention
+     * period has no expired data to skip: latestTimestamp - retentionPeriod is not positive, so the probe
+     * falls back to its floor without ever calling offsetsForTimes. The newest record here sits exactly one
+     * retention period from the epoch, so the seek timestamp is exactly zero -- and the guard is strict.
+     */
+    @Test
+    public void shouldFallBackToFloorWhenNothingHasExpiredYet() {
+        final long retentionMs = Duration.ofHours(2).toMillis();
+        final long storedOffset = 100L;
+        final long endOffset = 100_000L;   // gap far exceeds PROBE_MIN_OFFSET_GAP, so the probe runs
+
+        final MockConsumer<byte[], byte[]> probeConsumer = new MockConsumer<>(AutoOffsetResetStrategy.EARLIEST.name()) {
+            @Override
+            public synchronized Map<TopicPartition, OffsetAndTimestamp> offsetsForTimes(final Map<TopicPartition, Long> timestampsToSearch) {
+                throw new AssertionError("a stream time still within one retention period must not reach offsetsForTimes");
+            }
+        };
+        probeConsumer.updateBeginningOffsets(Collections.singletonMap(tp, 0L));
+        probeConsumer.updateEndOffsets(Collections.singletonMap(tp, endOffset));
+        adminClient.updateEndOffsets(Collections.singletonMap(tp, endOffset));
+        // the probe resolves a stream time of exactly one retention period, so latestTimestamp - retentionPeriod == 0
+        probeConsumer.schedulePollTask(() -> probeConsumer.addRecord(changelogRecord(tp, endOffset - 1, retentionMs)));
+
+        final TaskId taskId = new TaskId(0, 0);
+        final StateStoreMetadata meta = mock(StateStoreMetadata.class);
+        when(meta.offset()).thenReturn(storedOffset);
+        final ProcessorStateManager manager = windowedActiveManager(meta, tp, taskId, retentionMs);
+
+        final StoreChangelogReader reader =
+            new StoreChangelogReader(time, config, logContext, adminClient, probeConsumer, callback, standbyListener);
+        reader.register(tp, manager);
+        reader.restore(Collections.singletonMap(taskId, mock(Task.class)));
+
+        assertEquals(storedOffset + 1, probeConsumer.position(tp),
+            "with no expired data the probe falls back to its floor, not a skip target or the beginning");
+        assertEquals(storedOffset + 1, callback.restoreStartOffset,
+            "restoration is reported as starting at the floor, since nothing was skipped");
     }
 
     private void assignPartition(final long messages,

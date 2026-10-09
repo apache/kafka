@@ -17,8 +17,6 @@
 package org.apache.kafka.clients.consumer;
 
 import org.apache.kafka.clients.ClientsTestUtils;
-import org.apache.kafka.clients.admin.Admin;
-import org.apache.kafka.clients.admin.NewTopic;
 import org.apache.kafka.common.TopicPartition;
 import org.apache.kafka.common.compress.Compression;
 import org.apache.kafka.common.record.TimestampType;
@@ -108,19 +106,11 @@ public class ConsumerWithLegacyMessageFormatIntegrationTest {
                 });
     }
 
-    private void createTopicWithAssignment(String topic, Map<Integer, List<Integer>> assignment) throws InterruptedException {
-        try (Admin admin = cluster.admin()) {
-            NewTopic newTopic = new NewTopic(topic, assignment);
-            admin.createTopics(List.of(newTopic));
-            cluster.waitTopicCreation(topic, assignment.size());
-        }
-    }
-
     @BeforeEach
     public void setupTopics() throws InterruptedException {
         cluster.createTopic(topic1, 2, (short) 1);
-        createTopicWithAssignment(topic2, Map.of(0, List.of(0), 1, List.of(1)));
-        createTopicWithAssignment(topic3, Map.of(0, List.of(0), 1, List.of(1)));
+        cluster.createTopicWithAssignment(topic2, Map.of(0, List.of(0), 1, List.of(1)));
+        cluster.createTopicWithAssignment(topic3, Map.of(0, List.of(0), 1, List.of(1)));
 
         // v2 message format for topic1
         ClientsTestUtils.sendRecords(cluster, t1p0, 100, 0);

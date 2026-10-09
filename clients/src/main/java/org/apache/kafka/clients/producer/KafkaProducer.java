@@ -512,7 +512,8 @@ public class KafkaProducer<K, V> implements Producer<K, V> {
             }
 
             this.errors = this.metrics.sensor("errors");
-            this.sender = newSender(logContext, kafkaClient, this.metadata);
+            Uuid clientInstanceId = Uuid.randomUuid();
+            this.sender = newSender(logContext, kafkaClient, this.metadata, clientInstanceId);
             String ioThreadName = NETWORK_THREAD_PREFIX + " | " + clientId;
             this.ioThread = new Sender.SenderThread(ioThreadName, this.sender, true);
             this.ioThread.start();
@@ -568,13 +569,14 @@ public class KafkaProducer<K, V> implements Producer<K, V> {
     }
 
     // visible for testing
-    Sender newSender(LogContext logContext, KafkaClient kafkaClient, ProducerMetadata metadata) {
+    Sender newSender(LogContext logContext, KafkaClient kafkaClient, ProducerMetadata metadata, Uuid clientInstanceId) {
         int maxInflightRequests = producerConfig.getInt(ProducerConfig.MAX_IN_FLIGHT_REQUESTS_PER_CONNECTION);
         int requestTimeoutMs = producerConfig.getInt(ProducerConfig.REQUEST_TIMEOUT_MS_CONFIG);
         ProducerMetrics metricsRegistry = new ProducerMetrics(this.metrics);
         Sensor throttleTimeSensor = Sender.throttleTimeSensor(metricsRegistry.senderMetrics);
         KafkaClient client = kafkaClient != null ? kafkaClient : ClientUtils.createNetworkClient(producerConfig,
                 producerConfig.getList(ProducerConfig.BOOTSTRAP_SERVERS_CONFIG),
+                clientInstanceId,
                 this.metrics,
                 "producer",
                 logContext,
