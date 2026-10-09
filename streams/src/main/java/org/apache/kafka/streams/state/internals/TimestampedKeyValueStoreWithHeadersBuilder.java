@@ -36,16 +36,18 @@ import java.util.Objects;
 /**
  * Builder for {@link TimestampedKeyValueStoreWithHeaders} instances.
  *
- * This is analogous to {@link TimestampedKeyValueStoreBuilder}, but uses
+ * <p>This is analogous to {@link TimestampedKeyValueStoreBuilder}, but uses
  * {@link ValueTimestampHeaders} as the value wrapper and wires up the
  * header-aware store stack (change-logging, caching, metering).
+ * The naming follows the {@code *WithHeadersBuilder} pattern used by
+ * {@link TimestampedWindowStoreWithHeadersBuilder} and {@link SessionStoreWithHeadersBuilder}.
  */
-public class TimestampedKeyValueStoreBuilderWithHeaders<K, V>
+public class TimestampedKeyValueStoreWithHeadersBuilder<K, V>
     extends AbstractStoreBuilder<K, ValueTimestampHeaders<V>, TimestampedKeyValueStoreWithHeaders<K, V>> {
 
     private final KeyValueBytesStoreSupplier storeSupplier;
 
-    public TimestampedKeyValueStoreBuilderWithHeaders(final KeyValueBytesStoreSupplier storeSupplier,
+    public TimestampedKeyValueStoreWithHeadersBuilder(final KeyValueBytesStoreSupplier storeSupplier,
                                                       final Serde<K> keySerde,
                                                       final Serde<V> valueSerde,
                                                       final Time time) {
