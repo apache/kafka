@@ -94,7 +94,7 @@ public class AdminClientUnitTestEnv implements AutoCloseable {
 
         metadataManager.update(cluster, time.milliseconds());
         unreachableNodes.forEach(mockClient::setUnreachable);
-        this.adminClient = KafkaAdminClient.createInternal(adminClientConfig, metadataManager, mockClient, time);
+        this.adminClient = KafkaAdminClient.createInternal(adminClientConfig, metadataManager, mockClient, mockClient.clientInstanceId(), time);
     }
 
     public Time time() {

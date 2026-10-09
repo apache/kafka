@@ -1887,8 +1887,8 @@ public interface Admin extends AutoCloseable {
      * The ID is useful for correlating client operations with telemetry sent to the broker and
      * to its eventual monitoring destinations.
      * <p>
-     * If telemetry is enabled, this will first require a connection to the cluster to generate
-     * the unique client instance ID. This method waits up to {@code timeout} for the admin
+     * If telemetry is enabled, this will first require a connection to the cluster to receive
+     * a telemetry subscription. This method waits up to {@code timeout} for the admin
      * client to complete the request.
      * <p>
      * Client telemetry is controlled by the {@link AdminClientConfig#ENABLE_METRICS_PUSH_CONFIG}
@@ -1904,7 +1904,7 @@ public interface Admin extends AutoCloseable {
      * @throws IllegalArgumentException If the {@code timeout} is negative.
      * @throws IllegalStateException If telemetry is not enabled ie, config `{@code enable.metrics.push}`
      *                               is set to `{@code false}`.
-     * @return The client's assigned instance id used for metrics collection.
+     * @return The client's instance id used for metrics collection.
      */
     Uuid clientInstanceId(Duration timeout);
 
