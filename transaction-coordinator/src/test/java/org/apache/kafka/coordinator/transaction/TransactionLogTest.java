@@ -250,7 +250,7 @@ class TransactionLogTest {
             50L,                            // prevProducerId
             200L,                           // nextProducerId
             (short) 5,                      // producerEpoch
-            (short) 3,                      // lastProducerEpoch (non-default, should become NO_PRODUCER_EPOCH)
+            (short) 3,                      // lastProducerEpoch
             (short) 10,                     // nextProducerEpoch
             1000,                           // txnTimeoutMs
             TransactionState.PREPARE_COMMIT, // state
@@ -272,7 +272,7 @@ class TransactionLogTest {
         assertEquals(50L, deserializedWithPartitions.prevProducerId());
         assertEquals(200L, deserializedWithPartitions.nextProducerId());
         assertEquals((short) 5, deserializedWithPartitions.producerEpoch());
-        assertEquals(RecordBatch.NO_PRODUCER_EPOCH, deserializedWithPartitions.lastProducerEpoch());  // not persisted
+        assertEquals((short) 3, deserializedWithPartitions.lastProducerEpoch());
         assertEquals((short) 10, deserializedWithPartitions.nextProducerEpoch());
         assertEquals(TransactionState.PREPARE_COMMIT, deserializedWithPartitions.state());
         assertEquals(1000, deserializedWithPartitions.txnTimeoutMs());
