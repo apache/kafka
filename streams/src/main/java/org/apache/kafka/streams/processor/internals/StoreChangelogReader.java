@@ -654,7 +654,7 @@ public class StoreChangelogReader implements ChangelogReader {
             updateOffsetIntervalMs < time.milliseconds() - lastUpdateOffsetTime) {
 
             // when the interval has elapsed we should try to update the limit offset for standbys reading from
-            // a source changelog with the new committed offset, unless there are no buffered records since 
+            // a source changelog with the new committed offset, unless there are no buffered records since
             // we only need the limit when processing new records
             // for other changelog partitions we do not need to update limit offset at all since we never need to
             // check when it completes based on limit offset anyways: the end offset would keep increasing and the
@@ -754,6 +754,10 @@ public class StoreChangelogReader implements ChangelogReader {
             // markers) so the remaining-records metric reaches exactly zero on completion
             recordRestorationProgress(task, changelogMetadata, 0, storeMetadata.offset(), changelogMetadata.restoreEndOffset);
 
+            // restoration reached the end offset: advance to restoreEndOffset, not the consumer position,
+            // which may already be past buffered records that were never applied
+            stateManager.advanceRestoredOffsetTo(storeMetadata, changelogMetadata.restoreEndOffset);
+
             changelogMetadata.transitTo(ChangelogState.COMPLETED);
             pauseChangelogsFromRestoreConsumer(Set.of(partition));
             if (storeMetadata.store() instanceof MeteredStateStore) {
@@ -765,6 +769,8 @@ public class StoreChangelogReader implements ChangelogReader {
             } catch (final Exception e) {
                 throw new StreamsException("State restore listener failed on restore completed", e);
             }
+        } else if (changelogMetadata.stateManager.taskType() == TaskType.STANDBY) {
+            maybeAdvanceStandbyRestoredOffset(stateManager, changelogMetadata, storeMetadata, partition);
         }
 
         if (numRecords > 0 || changelogMetadata.state().equals(ChangelogState.COMPLETED)) {
@@ -772,6 +778,42 @@ public class StoreChangelogReader implements ChangelogReader {
         }
 
         return numRecords;
+    }
+
+    /**
+     * Advance a standby store's restored offset only once restoration has actually reached the end
+     * offset — the limit offset for changelogs piggy-backed on a source topic. A zero-record poll is
+     * not sufficient: retention seeks, source buffering, and incomplete fetches can leave the consumer
+     * at a non-zero position while records remain to apply.
+     */
+    private void maybeAdvanceStandbyRestoredOffset(final ProcessorStateManager stateManager,
+                                                   final ChangelogMetadata changelogMetadata,
+                                                   final StateStoreMetadata storeMetadata,
+                                                   final TopicPartition partition) {
+        if (!changelogMetadata.bufferedRecords().isEmpty()) {
+            return;
+        }
+        try {
+            final Long restoreEndOffset = changelogMetadata.restoreEndOffset;
+            if (restoreEndOffset == null) {
+                // dedicated changelog (no restoreEndOffset): lag == 0 with an empty buffer means the
+                // consumer is at the log-end offset with every fetched record applied; position() is
+                // the next offset to fetch, not last-applied
+                final OptionalLong lag = restoreConsumer.currentLag(partition);
+                if (lag.isPresent() && lag.getAsLong() == 0L) {
+                    stateManager.advanceRestoredOffsetTo(storeMetadata, restoreConsumer.position(partition));
+                }
+            } else if (restoreEndOffset > 0L) {
+                // source changelog: restoreEndOffset is the committed-offset limit; advance only up to
+                // that limit, never the live position past unapplied/uncommitted records
+                final long position = restoreConsumer.position(partition);
+                if (position >= restoreEndOffset) {
+                    stateManager.advanceRestoredOffsetTo(storeMetadata, restoreEndOffset);
+                }
+            }
+        } catch (final TimeoutException timeoutException) {
+            // Leave the offset unchanged; the next restore loop retries.
+        }
     }
 
     /**
