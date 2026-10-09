@@ -1313,6 +1313,7 @@ public final class KafkaRaftClient<T> implements RaftClient<T> {
                     requestLeaderId,
                     requestEpoch
                 );
+                state.setLeaderHasResigned();
                 state.overrideFetchTimeout(currentTimeMs, electionBackoffMs);
             }
         }
