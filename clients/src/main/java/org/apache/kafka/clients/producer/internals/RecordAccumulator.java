@@ -1010,6 +1010,14 @@ public class RecordAccumulator {
                 if (shouldBackoff(first.hasLeaderChangedForTheOngoingRetry(), first, first.waitedTimeMs(now)))
                     continue;
 
+                // Don't assign a sequence to a new batch while that could push the partition's oldest in-flight batch
+                // out of the broker's deduplication window. Retries already have a sequence and are already counted,
+                // so they are exempt; they are serialised below by the `firstInFlightSequence` check.
+                if (transactionManager != null && !first.hasSequence()
+                        && transactionManager.wouldExceedBrokerDeduplicationWindow(tp)) {
+                    continue;
+                }
+
                 if (size + first.estimatedSizeInBytes() > maxSize && !ready.isEmpty()) {
                     // there is a rare case that a single batch size is larger than the request size due to
                     // compression; in this case we will still eventually send this batch in a single request

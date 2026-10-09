@@ -51,6 +51,11 @@ class TxnPartitionEntry {
     // (either successfully or through a fatal failure).
     private SortedSet<ProducerBatch> inflightBatchesBySequence;
 
+    // Base sequences of batches that completed while an older batch was still in flight. The broker may have
+    // appended them after that older batch, so they still take up room in its deduplication window. Entries
+    // are dropped lazily in `numBatchesAheadOfOldestInflight` once no older batch is in flight.
+    private final TreeSet<Integer> completedSequencesAheadOfOldestInflight;
+
     // We keep track of the last acknowledged offset on a per partition basis in order to disambiguate UnknownProducer
     // responses which are due to the retention period elapsing, and those which are due to actual lost data.
     private long lastAckedOffset;
@@ -71,6 +76,7 @@ class TxnPartitionEntry {
         this.lastAckedSequence = NO_LAST_ACKED_SEQUENCE_NUMBER;
         this.lastAckedOffset = ProduceResponse.INVALID_OFFSET;
         this.inflightBatchesBySequence = new TreeSet<>(PRODUCER_BATCH_COMPARATOR);
+        this.completedSequencesAheadOfOldestInflight = new TreeSet<>();
     }
 
     ProducerIdAndEpoch producerIdAndEpoch() {
@@ -95,6 +101,31 @@ class TxnPartitionEntry {
 
     boolean hasInflightBatches() {
         return !inflightBatchesBySequence.isEmpty();
+    }
+
+    /**
+     * Returns the number of batches sent after the oldest in-flight batch, completed or not.
+     * <p>
+     * As a side effect this forgets completed batches that are no longer ahead of any in-flight batch. That is done
+     * here rather than when a batch is removed from the in-flight set, because a batch that is rejected as too large
+     * is removed and then re-added as several smaller batches with the sequences it had before, so at removal time
+     * it is not yet known which completed batches are still ahead of something in flight.
+     */
+    int numBatchesAheadOfOldestInflight() {
+        forgetCompletedSequencesNotAheadOfInflightBatches();
+        if (inflightBatchesBySequence.isEmpty()) {
+            return 0;
+        }
+        return inflightBatchesBySequence.size() - 1 + completedSequencesAheadOfOldestInflight.size();
+    }
+
+    private void forgetCompletedSequencesNotAheadOfInflightBatches() {
+        if (inflightBatchesBySequence.isEmpty()) {
+            completedSequencesAheadOfOldestInflight.clear();
+        } else {
+            int oldestSequence = inflightBatchesBySequence.first().baseSequence();
+            completedSequencesAheadOfOldestInflight.headSet(oldestSequence, true).clear();
+        }
     }
 
     ProducerBatch nextBatchBySequence() {
@@ -122,6 +153,9 @@ class TxnPartitionEntry {
         producerIdAndEpoch = newProducerIdAndEpoch;
         nextSequence = sequence.value;
         lastAckedSequence = NO_LAST_ACKED_SEQUENCE_NUMBER;
+        // The broker's state for this partition starts over with the resent in-flight batches, so batches that
+        // completed under the previous sequences no longer take up room in its deduplication window.
+        completedSequencesAheadOfOldestInflight.clear();
     }
 
     int maybeUpdateLastAckedSequence(int sequence) {
@@ -133,7 +167,14 @@ class TxnPartitionEntry {
     }
 
     void removeInFlightBatch(ProducerBatch batch) {
-        inflightBatchesBySequence.remove(batch);
+        if (!inflightBatchesBySequence.remove(batch)) {
+            return;
+        }
+        if (!inflightBatchesBySequence.isEmpty()
+                && batch.baseSequence() > inflightBatchesBySequence.first().baseSequence()) {
+            // Completed while an older batch is still in flight, see `completedSequencesAheadOfOldestInflight`.
+            completedSequencesAheadOfOldestInflight.add(batch.baseSequence());
+        }
     }
 
     void adjustSequencesDueToFailedBatch(long baseSequence, int recordCount) {
@@ -149,6 +190,17 @@ class TxnPartitionEntry {
 
             inFlightBatch.resetProducerState(new ProducerIdAndEpoch(inFlightBatch.producerId(), inFlightBatch.producerEpoch()), newSequence);
         });
+
+        // The failed batch was never appended, so it no longer occupies a sequence range, and the completed batches
+        // after it move down along with the in-flight ones. The failed batch itself may have been recorded as
+        // completed ahead of the oldest in-flight batch when it was removed from the in-flight set, so drop it first.
+        completedSequencesAheadOfOldestInflight.remove((int) baseSequence);
+        TreeSet<Integer> adjustedSequences = new TreeSet<>();
+        for (int completedSequence : completedSequencesAheadOfOldestInflight) {
+            adjustedSequences.add(completedSequence > baseSequence ? completedSequence - recordCount : completedSequence);
+        }
+        completedSequencesAheadOfOldestInflight.clear();
+        completedSequencesAheadOfOldestInflight.addAll(adjustedSequences);
     }
 
     private void resetSequenceNumbers(Consumer<ProducerBatch> resetSequence) {
