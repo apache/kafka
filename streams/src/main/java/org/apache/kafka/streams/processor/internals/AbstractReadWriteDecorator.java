@@ -17,6 +17,7 @@
 package org.apache.kafka.streams.processor.internals;
 
 import org.apache.kafka.common.TopicPartition;
+import org.apache.kafka.common.header.Headers;
 import org.apache.kafka.common.serialization.Serializer;
 import org.apache.kafka.streams.KeyValue;
 import org.apache.kafka.streams.kstream.Windowed;
@@ -34,6 +35,7 @@ import org.apache.kafka.streams.state.TimestampedWindowStoreWithHeaders;
 import org.apache.kafka.streams.state.ValueAndTimestamp;
 import org.apache.kafka.streams.state.ValueTimestampHeaders;
 import org.apache.kafka.streams.state.VersionedKeyValueStore;
+import org.apache.kafka.streams.state.VersionedKeyValueStoreWithHeaders;
 import org.apache.kafka.streams.state.VersionedRecord;
 import org.apache.kafka.streams.state.WindowStore;
 import org.apache.kafka.streams.state.WindowStoreIterator;
@@ -71,6 +73,8 @@ abstract class AbstractReadWriteDecorator<T extends StateStore, K, V> extends Wr
             return new TimestampedKeyValueStoreReadWriteDecoratorWithHeaders<>((TimestampedKeyValueStoreWithHeaders<?, ?>) store);
         } else if (store instanceof TimestampedKeyValueStore) {
             return new TimestampedKeyValueStoreReadWriteDecorator<>((TimestampedKeyValueStore<?, ?>) store);
+        } else if (store instanceof VersionedKeyValueStoreWithHeaders) {
+            return new VersionedKeyValueStoreReadWriteDecoratorWithHeaders<>((VersionedKeyValueStoreWithHeaders<?, ?>) store);
         } else if (store instanceof VersionedKeyValueStore) {
             return new VersionedKeyValueStoreReadWriteDecorator<>((VersionedKeyValueStore<?, ?>) store);
         } else if (store instanceof KeyValueStore) {
@@ -194,6 +198,21 @@ abstract class AbstractReadWriteDecorator<T extends StateStore, K, V> extends Wr
         @Override
         public VersionedRecord<V> get(final K key, final long asOfTimestamp) {
             return wrapped().get(key, asOfTimestamp);
+        }
+    }
+
+    static class VersionedKeyValueStoreReadWriteDecoratorWithHeaders<K, V>
+        extends VersionedKeyValueStoreReadWriteDecorator<K, V>
+        implements VersionedKeyValueStoreWithHeaders<K, V> {
+
+        VersionedKeyValueStoreReadWriteDecoratorWithHeaders(final VersionedKeyValueStoreWithHeaders<K, V> inner) {
+            super(inner);
+        }
+
+        @Override
+        @SuppressWarnings("unchecked")
+        public long put(final K key, final V value, final long timestamp, final Headers headers) {
+            return ((VersionedKeyValueStoreWithHeaders<K, V>) wrapped()).put(key, value, timestamp, headers);
         }
     }
 
