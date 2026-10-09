@@ -142,7 +142,7 @@ public final class TieredStorageTestContext implements AutoCloseable {
                 .toList();
     }
 
-    public void createTopic(TopicSpec spec) throws InterruptedException {
+    public void createTopic(TopicSpec spec) {
         if (spec.assignment() == null || spec.assignment().isEmpty()) {
             cluster.createTopic(spec.topicName(), spec.partitionCount(), (short) spec.replicationFactor(), spec.properties());
         } else {

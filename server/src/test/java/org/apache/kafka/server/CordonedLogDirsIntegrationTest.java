@@ -348,7 +348,7 @@ public class CordonedLogDirsIntegrationTest {
         try (Admin admin = clusterInstance.admin()) {
             // Create 10 topics
             for (int i = 0; i < 10; i++) {
-                createTopic("topic" + i, (short) 1);
+                clusterInstance.createTopic("topic" + i, 1, (short) 1);
             }
 
             // Check the 10 topics have been created and find the partitions on brokerId
@@ -377,7 +377,7 @@ public class CordonedLogDirsIntegrationTest {
 
             // Create another 10 topics
             for (int i = 10; i < 20; i++) {
-                createTopic("topic" + i, (short) 1);
+                clusterInstance.createTopic("topic" + i, 1, (short) 1);
             }
 
             // Check only the other broker has replicas
@@ -494,12 +494,8 @@ public class CordonedLogDirsIntegrationTest {
         }, 10_000, "Unable to set the " + CORDONED_LOG_DIRS_CONFIG + " configuration on " + cr + ".");
     }
 
-    private void createTopic(String name) throws InterruptedException {
-        createTopic(name, (short) clusterInstance.brokers().size());
-    }
-
-    private void createTopic(String name, short replicationFactor) throws InterruptedException {
-        clusterInstance.createTopic(name, 1, replicationFactor);
+    private void createTopic(String name) {
+        clusterInstance.createTopic(name, 1, (short) clusterInstance.brokers().size());
     }
 
     private Set<NewTopic> newTopic(String name) {

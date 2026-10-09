@@ -120,7 +120,7 @@ public class ProducerIntegrationTest {
         @ClusterTest(features = {
             @ClusterFeature(feature = Feature.TRANSACTION_VERSION, version = 2)}),
     })
-    public void testTransactionWithInvalidSendAndEndTxnRequestSent(ClusterInstance cluster) throws InterruptedException {
+    public void testTransactionWithInvalidSendAndEndTxnRequestSent(ClusterInstance cluster) {
         var topic = "foobar";
         cluster.createTopic(topic, 1, (short) 1, Map.of(TopicConfig.MAX_MESSAGE_BYTES_CONFIG, "100"));
         String txnId = "test-txn";
