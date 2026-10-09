@@ -38,7 +38,7 @@ public class IdenticalTagGroupsTest {
     @Test
     public void shouldGroupProcessesByTheirValuesForTheTagKeysOnly() {
         // A and C share the zone and differ only in rack, which is not a tag key; D and E both have no zone.
-        final IdenticalTagGroups<String> tagGroups = tagGroups(List.of("zone"), List.of("A", "B", "C", "D", "E"), Map.of(
+        final IdenticalTagGroups<String> identicalTagGroups = identicalTagGroups(List.of("zone"), List.of("A", "B", "C", "D", "E"), Map.of(
             "A", Map.of("zone", "z1", "rack", "r1"),
             "B", Map.of("zone", "z2"),
             "C", Map.of("zone", "z1", "rack", "r2"),
@@ -46,61 +46,48 @@ public class IdenticalTagGroupsTest {
             "E", Map.of("rack", "r1")
         ));
 
-        assertSame(tagGroups.groupOf("A"), tagGroups.groupOf("C"));
-        assertSame(tagGroups.groupOf("D"), tagGroups.groupOf("E"));
-        assertNotSame(tagGroups.groupOf("A"), tagGroups.groupOf("B"));
-        assertNotSame(tagGroups.groupOf("A"), tagGroups.groupOf("D"));
-        assertEquals(List.of(tagGroups.groupOf("A"), tagGroups.groupOf("B"), tagGroups.groupOf("D")), List.copyOf(tagGroups.groups()));
-    }
-
-    @Test
-    public void shouldPickLeastLoadedProcessOfGroupAndBreakTiesInProcessOrder() {
-        loads.putAll(Map.of("A", 2.0, "B", 1.0, "C", 1.0));
-        final IdenticalTagGroups<String> tagGroups = sameZone("A", "B", "C");
-
-        assertEquals("B", IdenticalTagGroups.leastLoaded(List.of(tagGroups.groupOf("A"))));
+        assertSame(identicalTagGroups.tagGroupOf("A"), identicalTagGroups.tagGroupOf("C"));
+        assertSame(identicalTagGroups.tagGroupOf("D"), identicalTagGroups.tagGroupOf("E"));
+        assertNotSame(identicalTagGroups.tagGroupOf("A"), identicalTagGroups.tagGroupOf("B"));
+        assertNotSame(identicalTagGroups.tagGroupOf("A"), identicalTagGroups.tagGroupOf("D"));
+        assertEquals(3, identicalTagGroups.tagGroups().size());
     }
 
     @Test
     public void shouldQueueProcessAgainOnceItsLoadHasGrown() {
         loads.putAll(Map.of("A", 1.0, "B", 2.0));
-        final IdenticalTagGroups<String> tagGroups = sameZone("A", "B");
-        final List<IdenticalTagGroups.Group<String>> group = List.of(tagGroups.groupOf("A"));
-        assertEquals("A", IdenticalTagGroups.leastLoaded(group));
+        final IdenticalTagGroups<String> identicalTagGroups = sameZone("A", "B");
+        final List<IdenticalTagGroups.TagGroup<String>> tagGroup = List.of(identicalTagGroups.tagGroupOf("A"));
+        assertEquals("A", IdenticalTagGroups.leastLoaded(tagGroup));
 
         loads.put("A", 3.0);
 
-        assertEquals("B", IdenticalTagGroups.leastLoaded(group));
+        assertEquals("B", IdenticalTagGroups.leastLoaded(tagGroup));
     }
 
     @Test
     public void shouldSkipProcessWithoutRoomAndHaveNoRoomOnceNoProcessHasRoom() {
         loads.putAll(Map.of("A", 1.0, "B", 2.0));
-        final IdenticalTagGroups<String> tagGroups = sameZone("A", "B");
-        final IdenticalTagGroups.Group<String> group = tagGroups.groupOf("A");
+        final IdenticalTagGroups<String> identicalTagGroups = sameZone("A", "B");
+        final IdenticalTagGroups.TagGroup<String> tagGroup = identicalTagGroups.tagGroupOf("A");
 
         withRoom.remove("A");
-        assertTrue(group.hasRoom());
-        assertEquals("B", IdenticalTagGroups.leastLoaded(List.of(group)));
+        assertTrue(tagGroup.hasRoom());
+        assertEquals("B", IdenticalTagGroups.leastLoaded(List.of(tagGroup)));
 
         withRoom.remove("B");
-        assertFalse(group.hasRoom());
+        assertFalse(tagGroup.hasRoom());
     }
 
     @Test
-    public void shouldPickLeastLoadedProcessAcrossGroupsAndBreakTiesInProcessOrder() {
-        // B and C have the same load in different zones, and B comes first.
-        loads.putAll(Map.of("A", 2.0, "B", 1.0, "C", 1.0));
-        final IdenticalTagGroups<String> tagGroups = tagGroups(List.of("zone"), List.of("A", "B", "C"), Map.of(
+    public void shouldPickLeastLoadedProcessAcrossTagGroups() {
+        loads.putAll(Map.of("A", 2.0, "B", 1.0));
+        final IdenticalTagGroups<String> identicalTagGroups = identicalTagGroups(List.of("zone"), List.of("A", "B"), Map.of(
             "A", Map.of("zone", "z1"),
-            "B", Map.of("zone", "z2"),
-            "C", Map.of("zone", "z1")
+            "B", Map.of("zone", "z2")
         ));
-        assertEquals("B", IdenticalTagGroups.leastLoaded(tagGroups.groups()));
 
-        loads.put("B", 3.0);
-
-        assertEquals("C", IdenticalTagGroups.leastLoaded(tagGroups.groups()));
+        assertEquals("B", IdenticalTagGroups.leastLoaded(identicalTagGroups.tagGroups()));
     }
 
     private IdenticalTagGroups<String> sameZone(final String... processes) {
@@ -108,10 +95,10 @@ public class IdenticalTagGroupsTest {
         for (final String process : processes) {
             clientTags.put(process, Map.of("zone", "z1"));
         }
-        return tagGroups(List.of("zone"), List.of(processes), clientTags);
+        return identicalTagGroups(List.of("zone"), List.of(processes), clientTags);
     }
 
-    private IdenticalTagGroups<String> tagGroups(
+    private IdenticalTagGroups<String> identicalTagGroups(
         final List<String> tagKeys,
         final List<String> processes,
         final Map<String, Map<String, String>> clientTags

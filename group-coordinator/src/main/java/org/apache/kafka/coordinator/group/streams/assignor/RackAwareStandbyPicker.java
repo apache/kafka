@@ -16,167 +16,98 @@
  */
 package org.apache.kafka.coordinator.group.streams.assignor;
 
+import org.apache.kafka.coordinator.group.streams.assignor.IdenticalTagGroups.TagGroup;
+import org.apache.kafka.coordinator.group.streams.assignor.TagTree.TagKey;
+
 import java.util.ArrayList;
-import java.util.Arrays;
 import java.util.Collection;
-import java.util.HashMap;
-import java.util.LinkedHashSet;
 import java.util.List;
-import java.util.Map;
-import java.util.Set;
-import java.util.function.Function;
-import java.util.function.Predicate;
 
 /**
- * Picks the processes for the standbys of one task over the keys of {@code rack.aware.assignment.tags}, whose list
- * order is the priority. A standby goes to an eligible process whose value for the highest-priority key is not yet
- * carried by a holder of the task; among those, the one with the lexicographically largest diversity vector over the
- * lower-priority keys wins (one bit per key, set where its value is new to the task), then the assignor's tie-break
- * decides. When no eligible process has a new value for that key, the key is given up and the search repeats with the
- * next key in priority order. Once every key is given up no process can make the task more diverse, so the assignor's
- * tag-blind pass places the remaining standbys.
+ * Picks the candidate tag groups for each standby of one task. A tag group meets the condition of a key of
+ * {@code rack.aware.assignment.tags} when its value for the key is new to the task. Starting from the tag groups with
+ * room, each key in list order narrows the candidates to those that meet its condition, or is given up if none would
+ * be left; the assignor's tie-break then decides among them. Once every key is given up, the assignor's tag-blind
+ * pass places the remaining standbys.
  * <p>
- * For each task: {@link #startTask()}, {@link #markUsed(Object)} for the active owner, then per standby
- * {@link #pickCandidates(Predicate)} followed by the assignor's own choice, and {@link #markUsed(Object)} for the
- * winner.
+ * A {@link TagTree} records the values that the holders of the task carry and finds the least-loaded tag group with
+ * room that meets a set of conditions without testing every tag group.
+ * <p>
+ * One picker per task, on the tree of the assignment: build it with the holders of the task, then per standby
+ * {@link #pick()}, the assignor's choice by {@link #isCandidate(TagGroup)} or {@link #leastLoaded()}, and
+ * {@link #markUsed(TagGroup)} for it.
  *
  * @param <P> The assignor's process type.
  */
 final class RackAwareStandbyPicker<P> {
 
-    /** A process with the id of its value for each key, -1 where it has none. Ids number the values of each key. */
-    private record TaggedProcess<P>(P process, int[] valueIds) {
-    }
+    private final TagTree<P> tree;
 
-    private final List<String> tagKeys;
-    private final List<TaggedProcess<P>> allProcesses;
-    private final Map<P, int[]> valueIdsByProcess;
-
-    // State of the task being placed, reset by startTask.
-    private final boolean[][] usedTagValues;             // per key and value id, whether a holder of the task carries it
-    private int priorityIndex;                           // position in tagKeys of the key the filter enforces
-    private List<TaggedProcess<P>> candidates;           // the pool the next pick filters
+    // The keys whose condition holds in the last pick.
+    private List<TagKey> pickedConditions;
 
     /**
-     * @param tagKeys    The keys of {@code rack.aware.assignment.tags}, highest priority first.
-     * @param processes  All processes of the group.
-     * @param clientTags The client tags of a process.
+     * @param tree    The tag tree of the assignment, whose used values the picker resets for this task.
+     * @param holders The holders of the task: its active owner and the standbys placed so far.
      */
-    RackAwareStandbyPicker(
-        final List<String> tagKeys,
-        final Collection<P> processes,
-        final Function<P, Map<String, String>> clientTags
-    ) {
-        this.tagKeys = tagKeys;
-        final List<Map<String, Integer>> idsByValue = new ArrayList<>(tagKeys.size());
-        for (int i = 0; i < tagKeys.size(); i++) {
-            idsByValue.add(new HashMap<>());
+    RackAwareStandbyPicker(final TagTree<P> tree, final Collection<TagGroup<P>> holders) {
+        this.tree = tree;
+        tree.clearUsedValues();
+        for (final TagGroup<P> holder : holders) {
+            markUsed(holder);
         }
-        allProcesses = new ArrayList<>(processes.size());
-        valueIdsByProcess = new HashMap<>();
-        for (final P process : processes) {
-            final Map<String, String> tags = clientTags.apply(process);
-            final int[] valueIds = new int[tagKeys.size()];
-            for (int i = 0; i < tagKeys.size(); i++) {
-                final String value = tags.get(tagKeys.get(i));
-                final Map<String, Integer> ids = idsByValue.get(i);
-                valueIds[i] = value == null ? -1 : ids.computeIfAbsent(value, v -> ids.size());
-            }
-            allProcesses.add(new TaggedProcess<>(process, valueIds));
-            valueIdsByProcess.put(process, valueIds);
-        }
-        usedTagValues = new boolean[tagKeys.size()][];
-        for (int i = 0; i < tagKeys.size(); i++) {
-            usedTagValues[i] = new boolean[idsByValue.get(i).size()];
-        }
-        candidates = allProcesses;
     }
 
-    void startTask() {
-        for (final boolean[] used : usedTagValues) {
-            Arrays.fill(used, false);
-        }
-        priorityIndex = 0;
-        candidates = allProcesses;
+    /** Records the tag values of a new holder of the task, so that no later standby lands on them while a new value exists. */
+    void markUsed(final TagGroup<P> holder) {
+        tree.markUsed(holder);
     }
 
-    /** Records the tag values of a holder of the task, so that no later standby lands on them while a new value exists. */
-    void markUsed(final P holder) {
-        final int[] valueIds = valueIdsByProcess.get(holder);
-        for (int i = 0; i < valueIds.length; i++) {
-            if (valueIds[i] >= 0) {
-                usedTagValues[i][valueIds[i]] = true;
+    /** Picks the candidates for the next standby, or returns false once no tag group can make the task more diverse. */
+    boolean pick() {
+        // A key whose values the holders all carry cannot make the task more diverse.
+        final List<TagKey> keysWithNewValue = new ArrayList<>();
+        for (final TagKey key : tree.keys()) {
+            if (tree.hasUnusedValue(key)) {
+                keysWithNewValue.add(key);
             }
         }
-    }
+        if (keysWithNewValue.isEmpty()) {
+            return false;
+        }
+        tree.startPick();
+        if (!tree.hasRoom()) {
+            return false;
+        }
 
-    /**
-     * Returns the processes that make the task most diverse for the next standby, in group order, or an empty set
-     * once no process can make it more diverse. The assignor chooses among them with its own rules and then calls
-     * {@link #markUsed(Object)} for the one it took.
-     *
-     * @param eligible Whether a process may take the standby: not a holder of the task, plus the assignor's own rules.
-     */
-    Set<P> pickCandidates(final Predicate<P> eligible) {
-        while (priorityIndex < tagKeys.size()) {
-            final List<TaggedProcess<P>> survivors = new ArrayList<>();
-            for (final TaggedProcess<P> candidate : candidates) {
-                if (hasUnusedValue(candidate, priorityIndex) && eligible.test(candidate.process)) {
-                    survivors.add(candidate);
+        // Most picks find a tag group with room that meets the condition of every such key.
+        List<TagKey> conditions = keysWithNewValue;
+        if (!tree.hasTagGroupMeeting(conditions)) {
+            // Otherwise the keys are added in priority order, giving up each one that would leave no tag group.
+            conditions = new ArrayList<>();
+            for (final TagKey key : keysWithNewValue) {
+                final List<TagKey> withKey = new ArrayList<>(conditions);
+                withKey.add(key);
+                // With every key, the query above already found no tag group.
+                if (withKey.size() < keysWithNewValue.size() && tree.hasTagGroupMeeting(withKey)) {
+                    conditions = withKey;
                 }
             }
-
-            if (survivors.isEmpty()) {
-                // Give up the key: it can no longer be diversified, so the next key becomes the priority.
-                priorityIndex++;
-                candidates = allProcesses;
-                continue;
-            }
-
-            // A process dropped by the filter stays out while the key is the priority: usedTagValues only grows and
-            // a holder stays a holder, so the survivors are the pool for the next standby. The one taken now drops
-            // out through the eligibility test once it holds the task.
-            candidates = survivors;
-            return mostDiverse(survivors);
-        }
-        return Set.of();
-    }
-
-    private Set<P> mostDiverse(final List<TaggedProcess<P>> survivors) {
-        final Set<P> best = new LinkedHashSet<>();
-        TaggedProcess<P> reference = survivors.get(0);
-        best.add(reference.process);
-        for (int i = 1; i < survivors.size(); i++) {
-            final TaggedProcess<P> candidate = survivors.get(i);
-            final int comparison = compareDiversity(reference, candidate);
-            if (comparison > 0) {
-                best.clear();
-                reference = candidate;
-                best.add(candidate.process);
-            } else if (comparison == 0) {
-                best.add(candidate.process);
+            if (conditions.isEmpty()) {
+                return false;
             }
         }
-        return best;
+        pickedConditions = conditions;
+        return true;
     }
 
-    /**
-     * Compares the diversity vectors of two survivors, one bit per key in priority order: 1 where the process carries
-     * a value for the key that no holder carries yet. Both share the bits up to the priority key, so the more diverse
-     * process orders first.
-     */
-    private int compareDiversity(final TaggedProcess<P> process1, final TaggedProcess<P> process2) {
-        for (int i = priorityIndex + 1; i < tagKeys.size(); i++) {
-            final int comparison = Boolean.compare(hasUnusedValue(process2, i), hasUnusedValue(process1, i));
-            if (comparison != 0) {
-                return comparison;
-            }
-        }
-        return 0;
+    /** Whether a tag group is one of the candidates of the last pick. */
+    boolean isCandidate(final TagGroup<P> tagGroup) {
+        return tree.meetsConditions(tagGroup, pickedConditions) && tagGroup.hasRoom();
     }
 
-    private boolean hasUnusedValue(final TaggedProcess<P> process, final int keyIndex) {
-        final int valueId = process.valueIds[keyIndex];
-        return valueId >= 0 && !usedTagValues[keyIndex][valueId];
+    /** The least-loaded process with room of the candidates of the last pick; call it before placing the standby. */
+    P leastLoaded() {
+        return tree.leastLoadedMeeting(pickedConditions).process;
     }
 }

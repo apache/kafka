@@ -92,12 +92,20 @@ public class StreamsAssignorBenchmark {
     }
 
     /**
-     * The rack.aware.assignment.tags of the group, highest priority first. Each process takes the values of every key
-     * round-robin; 2 clusters and 3 zones are coprime counts, so every combination of the two occurs.
+     * The rack.aware.assignment.tags of the streams group, highest priority first. Each process takes the values of every key
+     * round-robin; the value counts are pairwise coprime, so every combination occurs once there are enough processes.
+     * CLUSTER_ZONE_AND_HOST and REGION_CLUSTER_ZONE_RACK_AND_HOST give every process its own host, so each process has a
+     * combination of its own; the latter has the five keys a streams client allows at most.
      */
     public enum RackAwareTags {
         NONE(List.of(), Map.of()),
-        CLUSTER_AND_ZONE(List.of("cluster", "zone"), Map.of("cluster", 2, "zone", 3));
+        CLUSTER_AND_ZONE(List.of("cluster", "zone"), Map.of("cluster", 2, "zone", 3)),
+        CLUSTER_ZONE_AND_RACK(List.of("cluster", "zone", "rack"), Map.of("cluster", 2, "zone", 3, "rack", 7)),
+        CLUSTER_ZONE_AND_HOST(List.of("cluster", "zone", "host"), Map.of("cluster", 2, "zone", 3, "host", Integer.MAX_VALUE)),
+        REGION_CLUSTER_ZONE_RACK_AND_HOST(
+            List.of("region", "cluster", "zone", "rack", "host"),
+            Map.of("region", 2, "cluster", 3, "zone", 5, "rack", 7, "host", Integer.MAX_VALUE)
+        );
 
         private final List<String> tagKeys;
         private final Map<String, Integer> valuesPerTagKey;
@@ -137,7 +145,7 @@ public class StreamsAssignorBenchmark {
     @Param({"NONE", "OWNED_AND_DORMANT"})
     private ReportedOffsets reportedOffsets;
 
-    @Param({"NONE", "CLUSTER_AND_ZONE"})
+    @Param({"NONE", "CLUSTER_AND_ZONE", "CLUSTER_ZONE_AND_RACK", "CLUSTER_ZONE_AND_HOST", "REGION_CLUSTER_ZONE_RACK_AND_HOST"})
     private RackAwareTags rackAwareTags;
 
     private TaskAssignor taskAssignor;

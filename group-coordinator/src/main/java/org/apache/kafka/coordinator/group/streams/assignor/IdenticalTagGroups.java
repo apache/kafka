@@ -21,7 +21,7 @@ import org.apache.kafka.coordinator.group.Utils;
 import java.util.ArrayList;
 import java.util.Collection;
 import java.util.Comparator;
-import java.util.LinkedHashMap;
+import java.util.HashMap;
 import java.util.List;
 import java.util.Map;
 import java.util.PriorityQueue;
@@ -30,25 +30,22 @@ import java.util.function.Predicate;
 import java.util.function.ToDoubleFunction;
 
 /**
- * The processes of a group, grouped by their values for the keys of {@code rack.aware.assignment.tags}, which the
- * rack-aware picks cannot tell apart. The least-loaded lookups assume that loads only grow and room only shrinks.
+ * Splits the processes of a streams group into tag groups by their values for {@code rack.aware.assignment.tags}.
+ * The least-loaded lookups assume that loads only grow and room only shrinks.
  *
  * @param <P> The assignor's process type.
  */
 final class IdenticalTagGroups<P> {
 
-    private final Collection<Group<P>> groups;
-    private final Map<P, Group<P>> groupByProcess;
+    private final Collection<TagGroup<P>> tagGroups;
+    private final Map<P, TagGroup<P>> tagGroupByProcess;
 
     /**
-     * Groups order their processes by load, then in the order of {@code processes}, so that a pick breaks load ties
-     * as a scan over all processes would.
-     *
      * @param tagKeys    The keys of {@code rack.aware.assignment.tags}.
-     * @param processes  All processes of the group.
+     * @param processes  All processes of the streams group; an earlier one wins a load tie.
      * @param clientTags The client tags of a process.
      * @param load       The load of a process.
-     * @param hasRoom    Whether a process can take another task.
+     * @param hasRoom    Whether a process can take another task; {@code process -> true} without a limit.
      */
     IdenticalTagGroups(
         final List<String> tagKeys,
@@ -57,35 +54,36 @@ final class IdenticalTagGroups<P> {
         final ToDoubleFunction<P> load,
         final Predicate<P> hasRoom
     ) {
-        final Map<List<String>, Group<P>> groupsByTagValues = new LinkedHashMap<>();
-        groupByProcess = Utils.newHashMap(processes.size());
-        int order = 0;
+        final Map<List<String>, TagGroup<P>> tagGroupsByTagValues = new HashMap<>();
+        tagGroupByProcess = Utils.newHashMap(processes.size());
+        int processIndex = 0;
         for (final P process : processes) {
             final Map<String, String> tags = clientTags.apply(process);
             final List<String> tagValues = new ArrayList<>(tagKeys.size());
             for (final String tagKey : tagKeys) {
                 tagValues.add(tags.get(tagKey));
             }
-            final Group<P> group = groupsByTagValues.computeIfAbsent(tagValues, values -> new Group<>(tags, load, hasRoom));
-            group.processesByLoad.add(new QueuedProcess<>(process, order++, load.applyAsDouble(process)));
-            groupByProcess.put(process, group);
+            final TagGroup<P> tagGroup =
+                tagGroupsByTagValues.computeIfAbsent(tagValues, values -> new TagGroup<>(tags, load, hasRoom));
+            tagGroup.processesByLoad.add(new QueuedProcess<>(process, processIndex++, load.applyAsDouble(process)));
+            tagGroupByProcess.put(process, tagGroup);
         }
-        groups = groupsByTagValues.values();
+        tagGroups = tagGroupsByTagValues.values();
     }
 
-    /** The groups, in the order of their first process. */
-    Collection<Group<P>> groups() {
-        return groups;
+    Collection<TagGroup<P>> tagGroups() {
+        return tagGroups;
     }
 
-    Group<P> groupOf(final P process) {
-        return groupByProcess.get(process);
+    /** The tag group of a process, valid even when loads drop. */
+    TagGroup<P> tagGroupOf(final P process) {
+        return tagGroupByProcess.get(process);
     }
 
-    /** The least-loaded process with room of the candidate groups, which all have one. */
-    static <P> P leastLoaded(final Collection<Group<P>> candidates) {
+    /** The least-loaded process with room of the candidate tag groups, which all have one. */
+    static <P> P leastLoaded(final Collection<TagGroup<P>> candidates) {
         QueuedProcess<P> leastLoaded = null;
-        for (final Group<P> candidate : candidates) {
+        for (final TagGroup<P> candidate : candidates) {
             final QueuedProcess<P> head = candidate.leastLoadedWithRoom();
             if (leastLoaded == null || QueuedProcess.ORDER.compare(head, leastLoaded) < 0) {
                 leastLoaded = head;
@@ -94,21 +92,21 @@ final class IdenticalTagGroups<P> {
         return leastLoaded.process;
     }
 
-    /** Processes with the same values for the keys of {@code rack.aware.assignment.tags}. */
-    static final class Group<P> {
+    /** Processes with the same values for {@code rack.aware.assignment.tags}. */
+    static final class TagGroup<P> {
         private final Map<String, String> clientTags;
         private final ToDoubleFunction<P> processLoad;
         private final Predicate<P> processHasRoom;
-        // The processes of the group that may still have room, by the load each was queued with. Placing a task
-        // leaves the queue alone: a process whose load has grown since is queued again once it reaches the head.
+        // The processes that may still have room, by the load each was queued with.
         private final PriorityQueue<QueuedProcess<P>> processesByLoad = new PriorityQueue<>(QueuedProcess.ORDER);
 
-        private Group(final Map<String, String> clientTags, final ToDoubleFunction<P> processLoad, final Predicate<P> processHasRoom) {
+        private TagGroup(final Map<String, String> clientTags, final ToDoubleFunction<P> processLoad, final Predicate<P> processHasRoom) {
             this.clientTags = clientTags;
             this.processLoad = processLoad;
             this.processHasRoom = processHasRoom;
         }
 
+        /** The client tags of the first process: only the values for {@code rack.aware.assignment.tags} are shared by the tag group. */
         Map<String, String> clientTags() {
             return clientTags;
         }
@@ -117,12 +115,8 @@ final class IdenticalTagGroups<P> {
             return leastLoadedWithRoom() != null;
         }
 
-        /**
-         * The least-loaded process of the group with room, or null when none has room. Loads only grow, so the head is
-         * the least loaded once the load it was queued with is current. One without room is dropped for good, since
-         * room only shrinks.
-         */
-        private QueuedProcess<P> leastLoadedWithRoom() {
+        /** The least-loaded process with room, or null if none. A stale head is queued again, one without room dropped. */
+        QueuedProcess<P> leastLoadedWithRoom() {
             while (!processesByLoad.isEmpty()) {
                 final QueuedProcess<P> head = processesByLoad.peek();
                 final double currentLoad = processLoad.applyAsDouble(head.process);
@@ -140,20 +134,20 @@ final class IdenticalTagGroups<P> {
         }
     }
 
-    /** A process in the queue of its group, with its position in the processes and the load it was queued with. */
-    private static final class QueuedProcess<P> {
-        private static final Comparator<QueuedProcess<?>> ORDER = (process1, process2) -> {
+    /** A process with its index in {@code processes} and the load it was queued with. */
+    static final class QueuedProcess<P> {
+        static final Comparator<QueuedProcess<?>> ORDER = (process1, process2) -> {
             final int byLoad = Double.compare(process1.load, process2.load);
-            return byLoad != 0 ? byLoad : Integer.compare(process1.order, process2.order);
+            return byLoad != 0 ? byLoad : Integer.compare(process1.processIndex, process2.processIndex);
         };
 
-        private final P process;
-        private final int order;
-        private double load;
+        final P process;
+        final int processIndex;
+        double load;
 
-        private QueuedProcess(final P process, final int order, final double load) {
+        private QueuedProcess(final P process, final int processIndex, final double load) {
             this.process = process;
-            this.order = order;
+            this.processIndex = processIndex;
             this.load = load;
         }
     }
