@@ -172,6 +172,10 @@ class NamedCache {
             );
         }
         LRUNode node = cache.get(key);
+        if (node != null && node.entry.hasSameRecord(value)) {
+            updateLRU(node);
+            return;
+        }
         if (node != null) {
             numOverwrites++;
 
