@@ -45,6 +45,7 @@ import org.apache.kafka.test.TestUtils;
 
 import org.junit.jupiter.api.AfterEach;
 import org.junit.jupiter.api.BeforeEach;
+import org.junit.jupiter.api.Timeout;
 
 import java.time.Duration;
 import java.util.List;
@@ -280,6 +281,8 @@ public class TransactionsWith2PCTest {
         }
     }
 
+    // Multiple coordinator crash/restart cycles take longer than the default @ClusterTest timeout.
+    @Timeout(300)
     @ClusterTest
     public void testProducerCrashAndRecoverWith2PC() throws Exception {
         // Test producer crash and recovery with 2PC keepPrepared transaction flow.
