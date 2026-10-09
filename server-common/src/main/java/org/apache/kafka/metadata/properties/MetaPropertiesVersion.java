@@ -31,7 +31,13 @@ public enum MetaPropertiesVersion {
      * The KRaft version of meta.properties. Not all KRaft clusters have this version; some which
      * were migrated from ZK may have v0.
      */
-    V1(1);
+    V1(1),
+
+    /**
+     * The second KRaft version of meta.properties. The only difference between this and V1 is that
+     * cluster.id is now optional.
+     */
+    V2(2);
 
     private final int number;
 
@@ -50,6 +56,7 @@ public enum MetaPropertiesVersion {
         return switch (number) {
             case 0 -> V0;
             case 1 -> V1;
+            case 2 -> V2;
             default -> throw new RuntimeException("Unknown meta.properties version number " + number);
         };
     }
@@ -75,6 +82,6 @@ public enum MetaPropertiesVersion {
     }
 
     public boolean alwaysHasClusterId() {
-        return this != V0;
+        return this == V1;
     }
 }
