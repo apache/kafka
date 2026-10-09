@@ -18,9 +18,12 @@ package org.apache.kafka.coordinator.group.streams;
 
 import org.apache.kafka.coordinator.group.streams.topics.ConfiguredSubtopology;
 
+import java.util.HashMap;
+import java.util.HashSet;
 import java.util.Map;
 import java.util.Set;
 import java.util.SortedMap;
+import java.util.TreeSet;
 
 /**
  * Refines the task assignor's target assignment into the <em>intermediate</em> assignment that the reconciler
@@ -69,6 +72,11 @@ public interface AssignmentRefiner {
      *        The latest changelog offsets/end-offsets reported by the members via heartbeats, from which the lag
      *        of a warm-up task is derived. Not populated for a member that has not reported any offsets yet, for
      *        example right after a coordinator failover.
+     * @param warmupSupport
+     *        Whether each member may be handed a warm-up task, keyed by member ID. A member that is missing from the
+     *        map is {@link WarmupSupport#UNKNOWN}. An implementation must not newly place a warm-up task on a member
+     *        that is not {@link WarmupSupport#SUPPORTED}, and the coordinator reconciles towards the target assignment
+     *        if it does. A member of unknown version may keep a warm-up task that its process already holds.
      * @param subtopologies
      *        The group's resolved subtopologies, keyed by subtopology ID, which tell whether a subtopology is
      *        stateful. Only stateful tasks are warmed up; a stateless task has no state to restore. The coordinator
@@ -88,6 +96,7 @@ public interface AssignmentRefiner {
         Map<String, StreamsGroupMember> members,
         Map<String, TasksTuple> targetAssignment,
         Map<String, MemberTaskOffsets> taskOffsets,
+        Map<String, WarmupSupport> warmupSupport,
         SortedMap<String, ConfiguredSubtopology> subtopologies,
         int numWarmupReplicas,
         long acceptableRecoveryLag
@@ -98,6 +107,45 @@ public interface AssignmentRefiner {
         Map<String, TasksTuple> refinedAssignment
     ) {
         return countActiveTasks(targetAssignment) == countActiveTasks(refinedAssignment);
+    }
+
+    /**
+     * The members that the assignment hands a warm-up task which they may not be given: one that is not
+     * {@link WarmupSupport#SUPPORTED}, unless the member is merely {@link WarmupSupport#UNKNOWN} and its process
+     * already holds that warm-up task. The latter is a warm-up task that a coordinator handed out before it failed
+     * over: only a member that supports warm-up tasks can have been given one, and revoking it would throw its restore
+     * progress away. It may sit on another member of the process than before, since the members of a process share
+     * the state of their tasks. A member that is missing from {@code warmupSupport} is {@link WarmupSupport#UNKNOWN}.
+     */
+    static Set<String> membersWithUnsupportedWarmupTasks(
+        Map<String, TasksTuple> assignment,
+        Map<String, WarmupSupport> warmupSupport,
+        Map<String, StreamsGroupMember> members
+    ) {
+        final Map<String, Map<String, Set<Integer>>> warmupsHeldByProcess = new HashMap<>();
+        members.values().forEach(member -> member.assignedTasks().warmupTasks().forEach((subtopologyId, partitions) ->
+            warmupsHeldByProcess
+                .computeIfAbsent(member.processId(), processId -> new HashMap<>())
+                .computeIfAbsent(subtopologyId, id -> new HashSet<>())
+                .addAll(partitions)));
+
+        final Set<String> offenders = new TreeSet<>();
+        assignment.forEach((memberId, tasks) -> {
+            final WarmupSupport support = warmupSupport.getOrDefault(memberId, WarmupSupport.UNKNOWN);
+            if (tasks.warmupTasks().isEmpty() || support == WarmupSupport.SUPPORTED) {
+                return;
+            }
+            final StreamsGroupMember member = members.get(memberId);
+            final boolean keptFromBeforeFailover = support == WarmupSupport.UNKNOWN
+                && member != null
+                && tasks.warmupTasks().entrySet().stream().allMatch(entry ->
+                    warmupsHeldByProcess.getOrDefault(member.processId(), Map.of())
+                        .getOrDefault(entry.getKey(), Set.of()).containsAll(entry.getValue()));
+            if (!keptFromBeforeFailover) {
+                offenders.add(memberId);
+            }
+        });
+        return offenders;
     }
 
     private static int countActiveTasks(Map<String, TasksTuple> assignment) {

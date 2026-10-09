@@ -2556,6 +2556,76 @@ public class AssignmentRefinerTest {
     }
 
     // ---------------------------------------------------------------------------------------------------------------
+    // Warm-up tasks on members that may not be given one
+    // ---------------------------------------------------------------------------------------------------------------
+
+    @Test
+    public void shouldOnlyAcceptAWarmupTaskOnAMemberOfUnknownVersionThatItsProcessAlreadyHolds() {
+        final Map<String, StreamsGroupMember> members = Map.of(
+            "memberA", member("memberA", "processA", mkTasksTuple(TaskRole.ACTIVE, mkTasks(STATEFUL, 0))),
+            "memberB", member("memberB", "processB", mkTasksTuple(TaskRole.WARMUP, mkTasks(STATEFUL, 0))),
+            "memberC", member("memberC", "processC", TasksTuple.EMPTY)
+        );
+        final Map<String, WarmupSupport> unknown = Map.of(
+            "memberA", WarmupSupport.UNKNOWN, "memberB", WarmupSupport.UNKNOWN, "memberC", WarmupSupport.UNKNOWN);
+        final Map<String, TasksTuple> keptWarmup = Map.of(
+            "memberA", mkTasksTuple(TaskRole.ACTIVE, mkTasks(STATEFUL, 0)),
+            "memberB", mkTasksTuple(TaskRole.WARMUP, mkTasks(STATEFUL, 0))
+        );
+        final Map<String, TasksTuple> plantedWarmup = Map.of(
+            "memberA", mkTasksTuple(TaskRole.ACTIVE, mkTasks(STATEFUL, 0)),
+            "memberC", mkTasksTuple(TaskRole.WARMUP, mkTasks(STATEFUL, 0))
+        );
+
+        // A warm-up task a member already holds survives a coordinator failover, a new one is not placed on it.
+        assertEquals(Set.of(), AssignmentRefiner.membersWithUnsupportedWarmupTasks(keptWarmup, unknown, members));
+        assertEquals(
+            Set.of("memberC"),
+            AssignmentRefiner.membersWithUnsupportedWarmupTasks(plantedWarmup, unknown, members)
+        );
+        // A member that is missing from the support map is unknown.
+        assertEquals(
+            Set.of("memberC"),
+            AssignmentRefiner.membersWithUnsupportedWarmupTasks(plantedWarmup, Map.of(), members)
+        );
+    }
+
+    @Test
+    public void shouldAcceptAKeptWarmupTaskThatMovedToAnotherMemberOfTheProcessThatHoldsIt() {
+        final Map<String, StreamsGroupMember> members = Map.of(
+            "memberB1", member("memberB1", "processB", mkTasksTuple(TaskRole.WARMUP, mkTasks(STATEFUL, 0))),
+            "memberB2", member("memberB2", "processB", TasksTuple.EMPTY)
+        );
+        final Map<String, WarmupSupport> unknown = Map.of(
+            "memberB1", WarmupSupport.UNKNOWN, "memberB2", WarmupSupport.UNKNOWN);
+
+        assertEquals(
+            Set.of(),
+            AssignmentRefiner.membersWithUnsupportedWarmupTasks(
+                Map.of("memberB2", mkTasksTuple(TaskRole.WARMUP, mkTasks(STATEFUL, 0))), unknown, members)
+        );
+    }
+
+    @Test
+    public void shouldNeverAcceptAWarmupTaskOnAMemberThatIsNotSupportedToHoldOne() {
+        final Map<String, StreamsGroupMember> members = Map.of(
+            "memberB", member("memberB", "processB", mkTasksTuple(TaskRole.WARMUP, mkTasks(STATEFUL, 0)))
+        );
+        final Map<String, TasksTuple> keptWarmup = Map.of("memberB", mkTasksTuple(TaskRole.WARMUP, mkTasks(STATEFUL, 0)));
+
+        assertEquals(
+            Set.of("memberB"),
+            AssignmentRefiner.membersWithUnsupportedWarmupTasks(
+                keptWarmup, Map.of("memberB", WarmupSupport.NOT_SUPPORTED), members)
+        );
+        assertEquals(
+            Set.of(),
+            AssignmentRefiner.membersWithUnsupportedWarmupTasks(
+                keptWarmup, Map.of("memberB", WarmupSupport.SUPPORTED), members)
+        );
+    }
+
+    // ---------------------------------------------------------------------------------------------------------------
     // Fixtures
     // ---------------------------------------------------------------------------------------------------------------
 
@@ -2652,10 +2722,13 @@ public class AssignmentRefinerTest {
         final Map<String, MemberTaskOffsets> taskOffsets,
         final int numWarmupReplicas
     ) {
+        final Map<String, WarmupSupport> warmupSupport = new HashMap<>();
+        members.keySet().forEach(memberId -> warmupSupport.put(memberId, WarmupSupport.SUPPORTED));
         return new AssignmentRefinerImpl().refine(
             members,
             targetAssignment,
             taskOffsets,
+            warmupSupport,
             subtopologies(),
             numWarmupReplicas,
             ACCEPTABLE_RECOVERY_LAG

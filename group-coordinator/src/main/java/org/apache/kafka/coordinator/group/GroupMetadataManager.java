@@ -166,6 +166,7 @@ import org.apache.kafka.coordinator.group.streams.StreamsGroupMember;
 import org.apache.kafka.coordinator.group.streams.StreamsTopology;
 import org.apache.kafka.coordinator.group.streams.TasksTuple;
 import org.apache.kafka.coordinator.group.streams.TasksTupleWithEpochs;
+import org.apache.kafka.coordinator.group.streams.WarmupSupport;
 import org.apache.kafka.coordinator.group.streams.assignor.AssignmentConfigsImpl;
 import org.apache.kafka.coordinator.group.streams.assignor.StickyTaskAssignor;
 import org.apache.kafka.coordinator.group.streams.topics.ConfiguredSubtopology;
@@ -2262,6 +2263,9 @@ public class GroupMetadataManager {
         if (taskOffsets != null || taskEndOffsets != null) {
             group.updateTaskOffsets(memberId, group.taskOffsets(memberId).update(taskOffsets, taskEndOffsets));
         }
+        // The version of the heartbeat tells the refiner whether the member reports task offsets, so whether it may be
+        // given a warm-up task. Transient like the offsets, and recorded under the same constraint.
+        group.updateHeartbeatVersion(memberId, requestApiVersion);
 
         // We validated a topology that was not validated before, so bump the group epoch as we may have to reassign tasks.
         if (validatedTopologyEpoch != group.validatedTopologyEpoch()) {
@@ -4699,10 +4703,12 @@ public class GroupMetadataManager {
             // target assignment, trading off availability.
             return targetAssignment;
         }
+        final Map<String, WarmupSupport> warmupSupport = group.warmupSupport();
         final Map<String, TasksTuple> refinedAssignment = streamsGroupAssignmentRefiner.refine(
             group.members(),
             targetAssignment,
             group.taskOffsets(),
+            warmupSupport,
             Collections.unmodifiableSortedMap(configuredTopology.subtopologies().get()),
             numWarmupReplicas,
             streamsGroupAcceptableRecoveryLag(group.groupId())
@@ -4716,6 +4722,19 @@ public class GroupMetadataManager {
                     "assignment. Reconciling towards the target assignment instead, so tasks that have to move do so " +
                     "without warming up first. Target assignment: {}, refined assignment: {}.",
                 group.groupId(), targetAssignment, refinedAssignment);
+            return targetAssignment;
+        }
+        final Set<String> unsupportedWarmupHolders =
+            AssignmentRefiner.membersWithUnsupportedWarmupTasks(refinedAssignment, warmupSupport, group.members());
+        if (!unsupportedWarmupHolders.isEmpty()) {
+            // A member that does not report task offsets could never be promoted from warm-up to active, and an older
+            // client that holds a warm-up task can not be relieved of it by an older coordinator. Reconciling towards
+            // the target assignment revokes any warm-up task, since the target assignment contains none. A warm-up
+            // task is only kept on a member of unknown version if the member already held it.
+            log.error("[GroupId {}] The refined assignment hands a warm-up task to members that may not be given one: " +
+                    "{}. Reconciling towards the target assignment instead, so tasks that have to move do so " +
+                    "without warming up first. Target assignment: {}, refined assignment: {}.",
+                group.groupId(), unsupportedWarmupHolders, targetAssignment, refinedAssignment);
             return targetAssignment;
         }
         return refinedAssignment;

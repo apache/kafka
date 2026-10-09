@@ -24,6 +24,7 @@ import org.apache.kafka.coordinator.group.streams.MemberTaskOffsets;
 import org.apache.kafka.coordinator.group.streams.NoOpAssignmentRefiner;
 import org.apache.kafka.coordinator.group.streams.StreamsGroupMember;
 import org.apache.kafka.coordinator.group.streams.TasksTuple;
+import org.apache.kafka.coordinator.group.streams.WarmupSupport;
 import org.apache.kafka.coordinator.group.streams.TopologyMetadata;
 import org.apache.kafka.coordinator.group.streams.assignor.AssignmentConfigsImpl;
 import org.apache.kafka.coordinator.group.streams.assignor.StickyTaskAssignor;
@@ -108,6 +109,8 @@ public class AssignmentRefinerBenchmark {
 
     private Map<String, MemberTaskOffsets> taskOffsets;
 
+    private Map<String, WarmupSupport> warmupSupport;
+
     private SortedMap<String, ConfiguredSubtopology> subtopologyMap;
 
     @Setup(Level.Trial)
@@ -146,6 +149,8 @@ public class AssignmentRefinerBenchmark {
             lagPicture,
             ACCEPTABLE_RECOVERY_LAG
         );
+        warmupSupport = new HashMap<>();
+        members.keySet().forEach(memberId -> warmupSupport.put(memberId, WarmupSupport.SUPPORTED));
     }
 
     @Benchmark
@@ -165,6 +170,7 @@ public class AssignmentRefinerBenchmark {
             members,
             targetAssignment,
             taskOffsets,
+            warmupSupport,
             subtopologyMap,
             numWarmupReplicas,
             ACCEPTABLE_RECOVERY_LAG
