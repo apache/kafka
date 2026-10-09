@@ -1770,6 +1770,7 @@ project(':test-common:test-common-runtime') {
     implementation testFixtures(project(':clients'))
 
     testImplementation testFixtures(project(':clients'))
+    testImplementation testFixtures(project(':server-common'))
     testImplementation libs.junitJupiter
     testImplementation libs.mockitoCore
     testImplementation testLog4j2Libs
