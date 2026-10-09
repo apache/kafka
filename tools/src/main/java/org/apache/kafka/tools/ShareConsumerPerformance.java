@@ -47,7 +47,6 @@ import java.util.concurrent.ExecutionException;
 import java.util.concurrent.ExecutorService;
 import java.util.concurrent.Executors;
 import java.util.concurrent.Future;
-import java.util.concurrent.TimeUnit;
 import java.util.concurrent.atomic.AtomicLong;
 import java.util.function.Function;
 
@@ -153,28 +152,16 @@ public class ShareConsumerPerformance {
             }));
             shareConsumersConsumptionDetails.add(shareConsumerConsumption);
         }
-        LOG.debug("Shutting down of thread pool is started");
         executorService.shutdown();
 
+        // Each task stops by itself once it reads numRecords or gets no records for recordFetchTimeoutMs,
+        // so wait for all of them without a total time limit.
         try {
-            // Wait a while for existing tasks to terminate.
-            // Adding 100 ms to the timeout so all the threads can finish before we reach this part of code.
-            if (!executorService.awaitTermination(recordFetchTimeoutMs + 100, TimeUnit.MILLISECONDS)) {
-                LOG.debug("Shutting down of thread pool could not be completed. It will retry cancelling the tasks using shutdownNow.");
-                executorService.shutdownNow(); // Cancel currently executing tasks
-                // Wait a while for tasks to respond to being cancelled
-                if (!executorService.awaitTermination(recordFetchTimeoutMs + 100, TimeUnit.MILLISECONDS))
-                    LOG.debug("Shutting down of thread pool could not be completed even after retrying cancellation of the tasks using shutdownNow.");
+            for (Future<?> future : futures) {
+                future.get();
             }
-        } catch (InterruptedException e) {
-            // (Re-)Cancel if current thread also interrupted
-            LOG.warn("Encountered InterruptedException while shutting down thread pool. It will retry cancelling the tasks using shutdownNow.");
+        } finally {
             executorService.shutdownNow();
-            // Preserve interrupt status
-            Thread.currentThread().interrupt();
-        }
-        for (Future<?> future : futures) {
-            future.get();
         }
 
         if (options.showShareConsumerStats()) {
