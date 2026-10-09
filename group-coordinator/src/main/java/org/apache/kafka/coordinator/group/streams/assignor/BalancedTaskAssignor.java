@@ -161,6 +161,11 @@ public class BalancedTaskAssignor implements TaskAssignor {
      * repeats after every {@code C / g} items, {@code C} the total member count, and each process receives exactly
      * {@code c / g} of the items of a period. With equal member counts the period lists the processes once, in
      * order, which is the round-robin.
+     * <p>
+     * With {@code P} the number of processes, {@code c_p} the member count of process {@code p} and
+     * {@code c_max = max_p c_p}, computing {@code g} takes {@code O(P + log(c_max))} with Euclid's algorithm folded
+     * over the processes, and building the period takes {@code O((C / g) log P)}: one poll and at most one offer on
+     * a heap of {@code P} processes per item.
      *
      * @param processes The processes in sorted order of their ID; not empty.
      * @return The index of the process that receives each item of one period.
@@ -168,7 +173,6 @@ public class BalancedTaskAssignor implements TaskAssignor {
     private static int[] dealPeriod(final ProcessTasks[] processes) {
         int divisor = 0;
 
-        // O(P + log(max_p c_p))
         for (final ProcessTasks process : processes) {
             divisor = greatestCommonDivisor(divisor, process.capacity());
         }
@@ -204,7 +208,14 @@ public class BalancedTaskAssignor implements TaskAssignor {
     }
 
     private static int greatestCommonDivisor(final int a, final int b) {
-        return b == 0 ? a : greatestCommonDivisor(b, a % b);
+        int x = a;
+        int y = b;
+        while (y != 0) {
+            final int remainder = x % y;
+            x = y;
+            y = remainder;
+        }
+        return x;
     }
 
     /**
