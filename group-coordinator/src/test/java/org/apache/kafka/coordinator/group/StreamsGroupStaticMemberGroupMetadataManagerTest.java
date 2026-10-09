@@ -2353,8 +2353,7 @@ class StreamsGroupStaticMemberGroupMetadataManagerTest {
         );
 
         // First Check
-        assertResponseEquals(
-            new StreamsGroupHeartbeatResponseData()
+        StreamsGroupHeartbeatResponseData firstExpectedResponse = new StreamsGroupHeartbeatResponseData()
                 .setMemberId(oldMemberId)
                 .setMemberEpoch(bumpedEpoch)
                 .setHeartbeatIntervalMs(5000)
@@ -2363,10 +2362,15 @@ class StreamsGroupStaticMemberGroupMetadataManagerTest {
                 .setActiveTasks(topic.responseTasks(0, 1, 2))
                 .setWarmupTasks(List.of())
                 .setStandbyTasks(List.of())
-                .setEndpointInformationEpoch(firstExpectedUserEndpointEpoch) // first endpoint epoch
-                .setPartitionsByUserEndpoint(firstExpectedPartitionsByUserEndpoint), // first partitions by user endpoint
-            result.response().data()
-        );
+                .setEndpointInformationEpoch(firstExpectedUserEndpointEpoch)
+                .setPartitionsByUserEndpoint(firstExpectedPartitionsByUserEndpoint);
+        if (firstExpectedPartitionsByUserEndpoint != null) {
+            firstExpectedResponse.setTopicPartitionCounts(List.of(
+                new StreamsGroupHeartbeatResponseData.TopicPartitionCount()
+                    .setTopic("foo")
+                    .setPartitionCount(3)));
+        }
+        assertResponseEquals(firstExpectedResponse, result.response().data());
 
         if (firstExpectedUserEndpointMetadata != null) {
             assertEquals(firstExpectedUserEndpointMetadata, context.groupMetadataManager.streamsGroup(groupId).getMemberOrThrow(oldMemberId).userEndpoint().get());
@@ -2386,8 +2390,7 @@ class StreamsGroupStaticMemberGroupMetadataManagerTest {
                 .setUserEndpoint(secondUserEndpoint)
         );
 
-        assertResponseEquals(
-            new StreamsGroupHeartbeatResponseData()
+        StreamsGroupHeartbeatResponseData secondExpectedResponse = new StreamsGroupHeartbeatResponseData()
                 .setMemberId(rejoinMemberId)
                 .setMemberEpoch(bumpedEpoch)
                 .setHeartbeatIntervalMs(5000)
@@ -2397,9 +2400,14 @@ class StreamsGroupStaticMemberGroupMetadataManagerTest {
                 .setWarmupTasks(List.of())
                 .setStandbyTasks(List.of())
                 .setEndpointInformationEpoch(secondExpectedUserEndpointEpoch)
-                .setPartitionsByUserEndpoint(secondExpectedPartitionsByUserEndpoint),
-            rejoinResult.response().data()
-        );
+                .setPartitionsByUserEndpoint(secondExpectedPartitionsByUserEndpoint);
+        if (secondExpectedPartitionsByUserEndpoint != null) {
+            secondExpectedResponse.setTopicPartitionCounts(List.of(
+                new StreamsGroupHeartbeatResponseData.TopicPartitionCount()
+                    .setTopic("foo")
+                    .setPartitionCount(3)));
+        }
+        assertResponseEquals(secondExpectedResponse, rejoinResult.response().data());
 
         if (secondExpectedUserEndpointMetadata != null) {
             assertEquals(secondExpectedUserEndpointMetadata, context.groupMetadataManager.streamsGroup(groupId).getMemberOrThrow(rejoinMemberId).userEndpoint().get());
