@@ -23,6 +23,8 @@ import com.fasterxml.jackson.core.JsonProcessingException;
 import com.fasterxml.jackson.databind.DeserializationFeature;
 import com.fasterxml.jackson.databind.ObjectMapper;
 import com.fasterxml.jackson.databind.SerializationFeature;
+import com.fasterxml.jackson.databind.json.JsonMapper;
+import com.fasterxml.jackson.databind.jsontype.BasicPolymorphicTypeValidator;
 import com.fasterxml.jackson.datatype.jdk8.Jdk8Module;
 
 import java.io.File;
@@ -31,10 +33,19 @@ import java.io.File;
  * Utilities for working with JSON.
  */
 public class JsonUtil {
+    private static final BasicPolymorphicTypeValidator POLYMORPHIC_TYPE_VALIDATOR =
+        BasicPolymorphicTypeValidator.builder().
+            allowIfSubType("org.apache.kafka.trogdor.task.").
+            allowIfSubType("org.apache.kafka.trogdor.fault.").
+            allowIfSubType("org.apache.kafka.trogdor.workload.").
+            build();
+
     public static final ObjectMapper JSON_SERDE;
 
     static {
-        JSON_SERDE = new ObjectMapper();
+        JSON_SERDE = JsonMapper.builder().
+            polymorphicTypeValidator(POLYMORPHIC_TYPE_VALIDATOR).
+            build();
         JSON_SERDE.configure(SerializationFeature.FAIL_ON_EMPTY_BEANS, false);
         JSON_SERDE.configure(DeserializationFeature.ACCEPT_SINGLE_VALUE_AS_ARRAY, true);
         JSON_SERDE.configure(JsonParser.Feature.ALLOW_COMMENTS, true);
