@@ -74,10 +74,12 @@ import java.util.Random;
  *
  * Unattached transitions to:
  *    Unattached: After learning of a new election with a higher epoch
- *    Follower:   After discovering a leader with an equal or larger epoch
+ *    Follower:   After discovering a leader or new leader endpoints
+ *                with an equal or larger epoch
  *
  * Follower transitions to:
- *    Unattached: After learning of a new election with a higher epoch
+ *    Unattached: After learning of a new election with a higher epoch; after
+ *                the expiration of the fetch timeout on observers only
  *    Follower:   After discovering a leader with a larger epoch
  *
  */
@@ -379,7 +381,7 @@ public class QuorumState {
      */
     public void transitionToUnattached(int epoch, OptionalInt leaderId) {
         int currentEpoch = state.epoch();
-        if (epoch < currentEpoch || (epoch == currentEpoch && !isProspective())) {
+        if (epoch < currentEpoch || (epoch == currentEpoch && !isProspective() && !isObserver())) {
             throw new IllegalStateException(
                 String.format(
                     "Cannot transition to Unattached with epoch %d from current state %s",
