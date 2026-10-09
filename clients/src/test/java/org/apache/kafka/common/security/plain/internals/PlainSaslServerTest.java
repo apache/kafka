@@ -29,6 +29,7 @@ import java.util.HashMap;
 import java.util.Map;
 
 import static org.junit.jupiter.api.Assertions.assertEquals;
+import static org.junit.jupiter.api.Assertions.assertNotNull;
 import static org.junit.jupiter.api.Assertions.assertThrows;
 
 public class PlainSaslServerTest {
@@ -63,6 +64,13 @@ public class PlainSaslServerTest {
     public void authorizationIdEqualsAuthenticationId() {
         byte[] nextChallenge = saslServer.evaluateResponse(saslMessage(USER_A, USER_A, PASSWORD_A));
         assertEquals(0, nextChallenge.length);
+    }
+
+    @Test
+    public void factoryCreatesServerWithNullServerName() throws Exception {
+        PlainSaslServer.PlainSaslServerFactory factory = new PlainSaslServer.PlainSaslServerFactory();
+        assertNotNull(factory.createSaslServer(PlainSaslServer.PLAIN_MECHANISM, "kafka", null,
+                Map.of(), callbackHandler()));
     }
 
     @Test
@@ -113,5 +121,17 @@ public class PlainSaslServerTest {
         String nul = "\u0000";
         String message = String.format("%s%s%s%s%s", authorizationId, nul, userName, nul, password);
         return message.getBytes(StandardCharsets.UTF_8);
+    }
+
+    private PlainServerCallbackHandler callbackHandler() {
+        TestJaasConfig jaasConfig = new TestJaasConfig();
+        Map<String, Object> options = new HashMap<>();
+        options.put("user_" + USER_A, PASSWORD_A);
+        options.put("user_" + USER_B, PASSWORD_B);
+        jaasConfig.addEntry("jaasContext", PlainLoginModule.class.getName(), options);
+        JaasContext jaasContext = new JaasContext("jaasContext", JaasContext.Type.SERVER, jaasConfig, null);
+        PlainServerCallbackHandler callbackHandler = new PlainServerCallbackHandler();
+        callbackHandler.configure(null, "PLAIN", jaasContext.configurationEntries());
+        return callbackHandler;
     }
 }
