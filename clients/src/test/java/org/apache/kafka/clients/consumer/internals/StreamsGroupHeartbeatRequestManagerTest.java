@@ -21,6 +21,8 @@ import org.apache.kafka.clients.consumer.CloseOptions;
 import org.apache.kafka.clients.consumer.ConsumerConfig;
 import org.apache.kafka.clients.consumer.internals.events.BackgroundEventHandler;
 import org.apache.kafka.clients.consumer.internals.events.ErrorEvent;
+import org.apache.kafka.clients.consumer.internals.events.StreamsOnTasksRevokedCallbackNeededEvent;
+import org.apache.kafka.clients.consumer.internals.events.StreamsTasksAssignedEvent;
 import org.apache.kafka.common.Node;
 import org.apache.kafka.common.TopicPartition;
 import org.apache.kafka.common.errors.DisconnectException;
@@ -44,6 +46,8 @@ import org.apache.kafka.common.utils.Timer;
 import org.apache.kafka.common.utils.internals.LogContext;
 
 import org.apache.logging.log4j.Level;
+import org.junit.jupiter.api.BeforeEach;
+import org.junit.jupiter.api.Nested;
 import org.junit.jupiter.api.Test;
 import org.junit.jupiter.api.extension.ExtendWith;
 import org.junit.jupiter.params.ParameterizedTest;
@@ -67,6 +71,7 @@ import java.util.Optional;
 import java.util.Properties;
 import java.util.Set;
 import java.util.UUID;
+import java.util.concurrent.CompletableFuture;
 import java.util.concurrent.atomic.AtomicReference;
 import java.util.function.Function;
 import java.util.stream.Collectors;
@@ -79,11 +84,13 @@ import static org.junit.jupiter.api.Assertions.assertFalse;
 import static org.junit.jupiter.api.Assertions.assertInstanceOf;
 import static org.junit.jupiter.api.Assertions.assertNotNull;
 import static org.junit.jupiter.api.Assertions.assertNull;
+import static org.junit.jupiter.api.Assertions.assertSame;
 import static org.junit.jupiter.api.Assertions.assertThrows;
 import static org.junit.jupiter.api.Assertions.assertTrue;
 import static org.mockito.ArgumentMatchers.any;
 import static org.mockito.ArgumentMatchers.anyLong;
 import static org.mockito.ArgumentMatchers.argThat;
+import static org.mockito.Mockito.mock;
 import static org.mockito.Mockito.mockConstruction;
 import static org.mockito.Mockito.never;
 import static org.mockito.Mockito.verify;
@@ -340,6 +347,95 @@ class StreamsGroupHeartbeatRequestManagerTest {
             assertEquals(1, result.unsentRequests.size());
             assertEquals(heartbeatIntervalMs, result.timeUntilNextPollMs);
             verify(pollTimer).update(time.milliseconds());
+        }
+    }
+
+    @Nested
+    class RemainInGroupClose {
+        private StreamsMembershipManager membershipManager;
+        private StreamsGroupHeartbeatRequestManager heartbeatManager;
+        private SubscriptionState subscriptions;
+
+        @BeforeEach
+        void setup() {
+            subscriptions = mock(SubscriptionState.class);
+            membershipManager = new StreamsMembershipManager(
+                GROUP_ID, Optional.empty(), streamsRebalanceData, subscriptions,
+                backgroundEventHandler, LOG_CONTEXT, time, metrics);
+            membershipManager.onSubscriptionUpdated();
+            membershipManager.onConsumerPoll();
+            membershipManager.onHeartbeatSuccess(new StreamsGroupHeartbeatResponse(
+                new StreamsGroupHeartbeatResponseData()
+                    .setMemberId(membershipManager.memberId())
+                    .setMemberEpoch(MEMBER_EPOCH)
+                    .setActiveTasks(List.of(new StreamsGroupHeartbeatResponseData.TaskIds()
+                        .setSubtopologyId(SUBTOPOLOGY_NAME_1).setPartitions(List.of(0))))
+                    .setStandbyTasks(List.of())
+                    .setWarmupTasks(List.of())));
+            membershipManager.poll(time.milliseconds());
+            final ArgumentCaptor<StreamsTasksAssignedEvent> assignedEventCaptor =
+                ArgumentCaptor.forClass(StreamsTasksAssignedEvent.class);
+            verify(backgroundEventHandler).add(assignedEventCaptor.capture());
+            final StreamsTasksAssignedEvent assignedEvent = assignedEventCaptor.getValue();
+            membershipManager.applyAssignment(assignedEvent.assignedPartitions(), assignedEvent.addedPartitions());
+            streamsRebalanceData.setReconciledAssignment(assignedEvent.assignment());
+            assignedEvent.future().complete(null);
+            membershipManager.onHeartbeatRequestGenerated();
+            assertEquals(MemberState.STABLE, membershipManager.state());
+
+            heartbeatManager = createStreamsGroupHeartbeatRequestManager(membershipManager);
+            when(coordinatorRequestManager.coordinator()).thenReturn(Optional.of(coordinatorNode));
+        }
+
+        @ParameterizedTest
+        @ValueSource(booleans = {false, true})
+        void testDynamicMemberRemainInGroupCompletesWithoutHeartbeat(final boolean pollTimerExpired) {
+            if (pollTimerExpired) {
+                time.sleep(DEFAULT_MAX_POLL_INTERVAL_MS + 1);
+            }
+
+            final CompletableFuture<Void> leaveFuture =
+                membershipManager.leaveGroupOnClose(CloseOptions.GroupMembershipOperation.REMAIN_IN_GROUP);
+            assertEquals(MemberState.LEAVING, membershipManager.state());
+            assertFalse(leaveFuture.isDone());
+
+            // Close-time cleanup must also respect the option now that isLeavingGroup() returns true.
+            assertTrue(heartbeatManager.pollOnClose(time.milliseconds()).unsentRequests.isEmpty());
+            assertFalse(leaveFuture.isDone());
+
+            assertTrue(heartbeatManager.poll(time.milliseconds()).unsentRequests.isEmpty());
+            assertTrue(leaveFuture.isDone());
+            assertFalse(leaveFuture.isCompletedExceptionally());
+            assertEquals(MemberState.UNSUBSCRIBED, membershipManager.state());
+            verify(subscriptions).unsubscribe();
+        }
+
+        @Test
+        void testRemainInGroupWhilePreparingToLeaveDespitePollTimeout() {
+            // Closing can reuse a leave operation that is still waiting for the revocation callback.
+            // For PREPARE_LEAVING.
+            final CompletableFuture<Void> leaveFuture = membershipManager.leaveGroup();
+            final ArgumentCaptor<StreamsOnTasksRevokedCallbackNeededEvent> revokedEventCaptor =
+                ArgumentCaptor.forClass(StreamsOnTasksRevokedCallbackNeededEvent.class);
+            verify(backgroundEventHandler).add(revokedEventCaptor.capture());
+            assertSame(leaveFuture, membershipManager.leaveGroupOnClose(CloseOptions.GroupMembershipOperation.REMAIN_IN_GROUP));
+            assertEquals(MemberState.PREPARE_LEAVING, membershipManager.state());
+            time.sleep(DEFAULT_MAX_POLL_INTERVAL_MS + 1);
+
+            final NetworkClientDelegate.PollResult result = heartbeatManager.poll(time.milliseconds());
+            assertEquals(1, result.unsentRequests.size());
+            final StreamsGroupHeartbeatRequest heartbeat =
+                (StreamsGroupHeartbeatRequest) result.unsentRequests.get(0).requestBuilder().build();
+            assertEquals(MEMBER_EPOCH, heartbeat.data().memberEpoch());
+            assertEquals(MemberState.PREPARE_LEAVING, membershipManager.state());
+            assertFalse(leaveFuture.isDone());
+
+            revokedEventCaptor.getValue().future().complete(null);
+            assertEquals(MemberState.LEAVING, membershipManager.state());
+            assertTrue(heartbeatManager.poll(time.milliseconds()).unsentRequests.isEmpty());
+            assertTrue(leaveFuture.isDone());
+            assertFalse(leaveFuture.isCompletedExceptionally());
+            assertEquals(MemberState.UNSUBSCRIBED, membershipManager.state());
         }
     }
 
@@ -2729,6 +2825,12 @@ class StreamsGroupHeartbeatRequestManagerTest {
     }
 
     private StreamsGroupHeartbeatRequestManager createStreamsGroupHeartbeatRequestManager() {
+        return createStreamsGroupHeartbeatRequestManager(membershipManager);
+    }
+
+    private StreamsGroupHeartbeatRequestManager createStreamsGroupHeartbeatRequestManager(
+        final StreamsMembershipManager membershipManager
+    ) {
         return new StreamsGroupHeartbeatRequestManager(
             LOG_CONTEXT,
             time,
