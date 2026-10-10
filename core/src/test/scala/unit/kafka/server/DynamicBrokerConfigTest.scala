@@ -1283,22 +1283,31 @@ class DynamicBrokerConfigTest {
 
     // Reporter implementing only ClientTelemetryExporterProvider
     updateReporter(classOf[TestExporterOnly])
-    verify(telemetryPlugin, Mockito.times(1)).add(ArgumentMatchers.any(classOf[ClientTelemetryExporter]))
+    val exporterCaptor = ArgumentCaptor.forClass(classOf[ClientTelemetryExporter])
+    verify(telemetryPlugin, Mockito.times(1)).add(exporterCaptor.capture())
+    val exporter = exporterCaptor.getValue
     Mockito.reset(telemetryPlugin)
 
     // Reporter implementing only ClientTelemetryReceiver (deprecated)
     updateReporter(classOf[TestReceiverOnly])
-    verify(telemetryPlugin, Mockito.times(1)).add(ArgumentMatchers.any(classOf[ClientTelemetryReceiver]))
+    verify(telemetryPlugin, Mockito.times(1)).remove(exporter)
+    val receiverCaptor = ArgumentCaptor.forClass(classOf[ClientTelemetryReceiver])
+    verify(telemetryPlugin, Mockito.times(1)).add(receiverCaptor.capture())
+    val receiver = receiverCaptor.getValue
     Mockito.reset(telemetryPlugin)
 
     // Reporter implementing both interfaces => only exporter should be used
     updateReporter(classOf[TestReceiverAndExporter])
-    verify(telemetryPlugin, Mockito.times(1)).add(ArgumentMatchers.any(classOf[ClientTelemetryExporter]))
+    verify(telemetryPlugin, Mockito.times(1)).remove(receiver)
+    val dualExporterCaptor = ArgumentCaptor.forClass(classOf[ClientTelemetryExporter])
+    verify(telemetryPlugin, Mockito.times(1)).add(dualExporterCaptor.capture())
     verify(telemetryPlugin, Mockito.never()).add(ArgumentMatchers.any(classOf[ClientTelemetryReceiver]))
+    val dualExporter = dualExporterCaptor.getValue
     Mockito.reset(telemetryPlugin)
 
-    // Reporter implementing neither interface => nothing should be added
+    // Reporter implementing neither interface => the previous exporter should only be removed
     updateReporter(classOf[MockMetricsReporter])
+    verify(telemetryPlugin, Mockito.times(1)).remove(dualExporter)
     verifyNoMoreInteractions(telemetryPlugin)
   }
 

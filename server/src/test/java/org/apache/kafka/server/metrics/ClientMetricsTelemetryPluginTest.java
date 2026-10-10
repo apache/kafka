@@ -87,6 +87,26 @@ public class ClientMetricsTelemetryPluginTest {
     }
 
     @Test
+    public void testRemoveDeprecatedReceiver() {
+        clientTelemetryExporterPlugin.add(telemetryReceiver);
+        assertFalse(clientTelemetryExporterPlugin.isEmpty());
+
+        clientTelemetryExporterPlugin.remove(telemetryReceiver);
+
+        assertTrue(clientTelemetryExporterPlugin.isEmpty());
+    }
+
+    @Test
+    public void testRemoveExporter() {
+        clientTelemetryExporterPlugin.add(telemetryExporter);
+        assertFalse(clientTelemetryExporterPlugin.isEmpty());
+
+        clientTelemetryExporterPlugin.remove(telemetryExporter);
+
+        assertTrue(clientTelemetryExporterPlugin.isEmpty());
+    }
+
+    @Test
     public void testExportMetricsWithBothReceiverAndExporter() throws UnknownHostException {
         // Test with separate receiver and exporter objects - both should be called
         clientTelemetryExporterPlugin.add(telemetryReceiver);
