@@ -1238,6 +1238,7 @@ project(':core') {
     testImplementation libs.junitJupiter
     testImplementation testLog4j2Libs
     testImplementation libs.mockOAuth2Server
+    testImplementation libs.testcontainersKeycloak
 
     configurations {
       // To prevent a UniqueResourceException due the same resource existing in both
