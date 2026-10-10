@@ -532,6 +532,22 @@ kafka.server:type=ReplicaManager,name=AtMinIsrPartitionCount
 
 0
 </td> </tr>  
+
+<tr>
+<td>
+
+Count of leader partitions with late transactions
+</td>
+<td>
+
+kafka.server:type=ReplicaManager,name=PartitionsWithLateTransactionsCount
+</td>
+<td>
+
+0
+</td> </tr>
+
+
 <tr>  
 <td>
 
