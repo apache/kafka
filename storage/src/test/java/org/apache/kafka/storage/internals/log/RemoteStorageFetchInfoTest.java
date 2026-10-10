@@ -14,20 +14,33 @@
  * See the License for the specific language governing permissions and
  * limitations under the License.
  */
+
 package org.apache.kafka.storage.internals.log;
 
 import org.apache.kafka.common.TopicIdPartition;
-import org.apache.kafka.common.requests.FetchRequest;
+import org.apache.kafka.common.Uuid;
 import org.apache.kafka.server.storage.log.FetchIsolation;
+
+import org.junit.jupiter.api.Test;
 
 import java.util.Optional;
 
-public record RemoteStorageFetchInfo(int fetchMaxBytes, boolean minOneMessage, TopicIdPartition topicIdPartition,
-                                     FetchRequest.PartitionData fetchInfo, FetchIsolation fetchIsolation,
-                                     Optional<String> clientId) {
+import static org.junit.jupiter.api.Assertions.assertEquals;
 
-    public RemoteStorageFetchInfo(int fetchMaxBytes, boolean minOneMessage, TopicIdPartition topicIdPartition,
-                                  FetchRequest.PartitionData fetchInfo, FetchIsolation fetchIsolation) {
-        this(fetchMaxBytes, minOneMessage, topicIdPartition, fetchInfo, fetchIsolation, Optional.empty());
+public class RemoteStorageFetchInfoTest {
+    private final TopicIdPartition topicIdPartition = new TopicIdPartition(Uuid.randomUuid(), 0, "topic");
+
+    @Test
+    public void testClientIdDefaultsToEmpty() {
+        RemoteStorageFetchInfo info = new RemoteStorageFetchInfo(
+            100, false, topicIdPartition, null, FetchIsolation.HIGH_WATERMARK);
+        assertEquals(Optional.empty(), info.clientId());
+    }
+
+    @Test
+    public void testClientIdRetained() {
+        RemoteStorageFetchInfo info = new RemoteStorageFetchInfo(
+            100, false, topicIdPartition, null, FetchIsolation.HIGH_WATERMARK, Optional.of("client-1"));
+        assertEquals(Optional.of("client-1"), info.clientId());
     }
 }
