@@ -632,27 +632,21 @@ public class DefaultRecordBatchTest {
                 "expected the configured-maximum guard, got: " + ex.getMessage());
         }
 
-        try (CloseableIterator<Record> iterator = batch.skipKeyValueIterator(BufferSupplier.NO_CACHING, 10_000)) {
-            assertNotNull(iterator.next());
-        }
-        try (CloseableIterator<Record> iterator = batch.skipKeyValueIterator(BufferSupplier.NO_CACHING, 100)) {
-            InvalidRecordException ex = assertThrows(InvalidRecordException.class, iterator::next);
-            assertTrue(ex.getMessage().contains("exceeds the configured maximum record size"),
-                "expected the configured-maximum guard, got: " + ex.getMessage());
+        // the skip iterator never allocates the record body, so it has no limit
+        try (CloseableIterator<Record> iterator = batch.skipKeyValueIterator(BufferSupplier.NO_CACHING)) {
+            assertEquals(1000, iterator.next().valueSize());
         }
     }
 
-    // offsetOfMaxTimestamp decompresses the batch on the broker when it resolves ListOffsets MAX_TIMESTAMP to an
-    // exact offset, so it honours the same per-record limit as the compressed iterators.
+    // the lookup must not decode record bodies it never reads
     @Test
-    public void testOffsetOfMaxTimestampEnforcesConfiguredMaxRecordBodySize() {
-        DefaultRecordBatch batch = recordBatchWithValueSize(1000);
+    public void testOffsetOfMaxTimestampSkipsKeyAndValue() {
+        DefaultRecordBatch batch = spy(recordBatchWithValueSize(1000));
 
-        assertEquals(Optional.of(0L), batch.offsetOfMaxTimestamp(10_000));
+        assertEquals(Optional.of(0L), batch.offsetOfMaxTimestamp());
 
-        InvalidRecordException ex = assertThrows(InvalidRecordException.class, () -> batch.offsetOfMaxTimestamp(100));
-        assertTrue(ex.getMessage().contains("exceeds the configured maximum record size"),
-            "expected the configured-maximum guard, got: " + ex.getMessage());
+        verify(batch).skipKeyValueIterator(any());
+        verify(batch, never()).streamingIterator(any(), anyInt());
     }
 
     private static DefaultRecordBatch recordBatchWithValueSize(int valueSize) {

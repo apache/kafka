@@ -77,7 +77,7 @@ public final class LegacyRecord {
      * Specifies the mask for the compression code. 3 bits to hold the compression codec. 0 is reserved to indicate no
      * compression
      */
-    private static final byte COMPRESSION_CODEC_MASK = 0x07;
+    static final byte COMPRESSION_CODEC_MASK = 0x07;
 
     /**
      * Specify the mask of timestamp type: 0 for CreateTime, 1 for LogAppendTime.

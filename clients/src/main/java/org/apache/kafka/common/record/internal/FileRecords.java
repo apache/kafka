@@ -340,18 +340,13 @@ public class FileRecords extends AbstractRecords implements Closeable {
      * @param targetTimestamp The timestamp to search for.
      * @param startingPosition The starting position to search.
      * @param startingOffset The starting offset to search.
-     * @param maxRecordBodySize The maximum declared (decompressed) body size of a single record; a compressed
-     *                          record exceeding it is rejected with an InvalidRecordException before its body is
-     *                          allocated. Pass {@link Records#SOFT_MAX_ARRAY_LENGTH} for no limit beyond the
-     *                          array-length ceiling.
      * @return The timestamp and offset of the message found. Null if no message is found.
      */
-    public TimestampAndOffset searchForTimestamp(long targetTimestamp, int startingPosition, long startingOffset,
-                                                 int maxRecordBodySize) {
+    public TimestampAndOffset searchForTimestamp(long targetTimestamp, int startingPosition, long startingOffset) {
         for (RecordBatch batch : batchesFrom(startingPosition)) {
             if (batch.maxTimestamp() >= targetTimestamp) {
                 // We found a message
-                try (CloseableIterator<Record> iterator = batch.streamingIterator(BufferSupplier.NO_CACHING, maxRecordBodySize)) {
+                try (CloseableIterator<Record> iterator = batch.skipKeyValueIterator(BufferSupplier.NO_CACHING)) {
                     while (iterator.hasNext()) {
                         Record record = iterator.next();
                         long timestamp = record.timestamp();
