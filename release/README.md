@@ -90,3 +90,62 @@ entry from `.release-settings.json` or delete the file entirely.
 ```
 GITHUB_DRY_RUN=true GITHUB_REPO=myuser/kafka python release.py
 ```
+
+# Release schedule helper
+
+`schedule.py` helps release managers and committers agree on release dates from data instead of
+re-discussing them on every release. It only needs python 3 and git (no virtualenv), plus up-to-date
+release branches and tags from `apache/kafka` (`git fetch <remote> --tags`). By default it learns from
+the last 5 release branches (`--window`), or from all branches since a given one (`--since`).
+
+Show how past releases actually went: feature freeze (release branch cut), first RC, release date,
+number of RCs, commits landed on the release branch after the cut / after RC0, and the medians:
+
+```
+python schedule.py history --release-date 4.4.0=2026-10-12
+```
+
+Project the next releases (`--count`, default 3) after the latest release branch. This is the
+default command, so running the script without arguments is enough. Without further input, every date is derived from history: the
+next feature freeze is the previous one plus the typical interval between feature freezes, KIP freeze
+is 3 weeks before and code freeze 2 weeks after it, and the KIP freeze is moved later while a
+milestone falls on Christmas or Lunar New Year. Next to the nominal release date (code freeze + 4
+weeks) it prints a realistic one (feature freeze + typical feature freeze to release duration) and
+warns about overlapping releases and very short cycles:
+
+```
+python schedule.py
+```
+
+Until the latest release is tagged, add its release date to include it in the statistics, e.g.
+`--release-date 4.4.0=2026-10-12`. Use `--after 4.5.0` to plan from a later release; releases that
+have no branch yet are projected first and marked as assumed.
+
+Use `--kip-freeze 4.5.0=2027-01-13` for a date already agreed on dev@, `--kip-freeze-weeks 9,25,41`
+to apply a fixed calendar rule instead of history, and `--percentile 75` for more conservative dates.
+
+Show the milestone countdown and open Blocker/Critical JIRA issues for the next release, or for a
+given one (milestones are derived from history unless `--kip-freeze` is given):
+
+```
+python schedule.py status
+python schedule.py status 4.6.0
+```
+
+The planned KIP freeze, feature freeze, code freeze and target release dates are read from the
+"Release Dates" section of the "Release Plan X.Y.0" pages on cwiki.apache.org and shown next to what
+actually happened. The phase lengths (KIP freeze -> feature freeze -> code freeze -> target release)
+default to those of the most recent published plan. If an upcoming release already has a published
+plan, its dates are used as is and only the realistic dates are projected; `--ignore-wiki-plan` shows
+the pure history-based projection instead, and `--no-wiki` skips reading the wiki altogether.
+
+To answer "would a week earlier be better?" style questions, give `--kip-freeze` more than once for
+the same version; every option is projected and compared side by side. `--mail` prints the plan in
+a table with the KIP Freeze / Feature Freeze / Code Freeze / Target Release columns and date format used on dev@ (add `--markdown` for a markdown table):
+
+```
+python schedule.py --kip-freeze 4.5.0=2027-01-13 --kip-freeze 4.5.0=2027-01-06 --kip-freeze-weeks 9,25,41 --mail
+```
+
+Add `--markdown` to any command to get tables that can be pasted into the release plan wiki page or
+a mail to dev@.
