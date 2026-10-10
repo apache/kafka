@@ -31,7 +31,6 @@ import org.slf4j.Logger;
 
 import java.util.ArrayList;
 import java.util.Collection;
-import java.util.Collections;
 import java.util.HashMap;
 import java.util.HashSet;
 import java.util.List;
@@ -400,7 +399,7 @@ public class AdminApiDriver<K, V> {
         collectRequests(
             requests,
             lookupMap,
-            (keys, scope) -> Collections.singletonList(new AdminApiHandler.RequestAndKeys<>(handler.lookupStrategy().buildRequest(keys), keys))
+            (keys, scope) -> List.of(new AdminApiHandler.RequestAndKeys<>(handler.lookupStrategy().buildRequest(keys), keys))
         );
     }
 

@@ -234,14 +234,14 @@ public class MetadataSnapshot {
             nodes.put(nodeId, new Node(nodeId, address.getHostString(), address.getPort()));
             nodeId--;
         }
-        return new MetadataSnapshot(null, nodes, Collections.emptyList(),
-                Collections.emptySet(), Collections.emptySet(), Collections.emptySet(),
-                null, Collections.emptyMap(), Cluster.bootstrap(addresses));
+        return new MetadataSnapshot(null, nodes, List.of(),
+                Set.of(), Set.of(), Set.of(),
+                null, Map.of(), Cluster.bootstrap(addresses));
     }
 
     static MetadataSnapshot empty() {
-        return new MetadataSnapshot(null, Collections.emptyMap(), Collections.emptyList(),
-                Collections.emptySet(), Collections.emptySet(), Collections.emptySet(), null, Collections.emptyMap(), Cluster.empty());
+        return new MetadataSnapshot(null, Map.of(), List.of(),
+                Set.of(), Set.of(), Set.of(), null, Map.of(), Cluster.empty());
     }
 
     @Override

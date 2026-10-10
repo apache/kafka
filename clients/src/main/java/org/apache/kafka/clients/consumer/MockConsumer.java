@@ -345,7 +345,7 @@ public class MockConsumer<K, V> implements Consumer<K, V> {
                     final ConsumerRecord<K, V> rec = recIterator.next();
 
                     if (beginningOffsets.get(entry.getKey()) != null && beginningOffsets.get(entry.getKey()) > position) {
-                        throw new OffsetOutOfRangeException(Collections.singletonMap(entry.getKey(), position));
+                        throw new OffsetOutOfRangeException(Map.of(entry.getKey(), position));
                     }
 
                     if (rec.offset() >= position) {
@@ -584,13 +584,13 @@ public class MockConsumer<K, V> implements Consumer<K, V> {
     @Override
     public synchronized Map<MetricName, ? extends Metric> metrics() {
         ensureNotClosed();
-        return Collections.emptyMap();
+        return Map.of();
     }
 
     @Override
     public synchronized List<PartitionInfo> partitionsFor(String topic) {
         ensureNotClosed();
-        return this.partitions.getOrDefault(topic, Collections.emptyList());
+        return this.partitions.getOrDefault(topic, List.of());
     }
 
     @Override

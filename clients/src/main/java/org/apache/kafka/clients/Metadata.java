@@ -38,7 +38,6 @@ import org.slf4j.Logger;
 import java.io.Closeable;
 import java.net.InetSocketAddress;
 import java.util.ArrayList;
-import java.util.Collections;
 import java.util.HashMap;
 import java.util.HashSet;
 import java.util.List;
@@ -120,8 +119,8 @@ public class Metadata implements Closeable {
         this.clusterResourceListeners = clusterResourceListeners;
         this.isClosed = false;
         this.lastSeenLeaderEpochs = new HashMap<>();
-        this.invalidTopics = Collections.emptySet();
-        this.unauthorizedTopics = Collections.emptySet();
+        this.invalidTopics = Set.of();
+        this.unauthorizedTopics = Set.of();
     }
 
     /**
@@ -450,7 +449,7 @@ public class Metadata implements Closeable {
             metadataSnapshot.clusterResource().clusterId(),
             newNodes,
             updatePartitionMetadata,
-            Collections.emptySet(), Collections.emptySet(), Collections.emptySet(),
+            Set.of(), Set.of(), Set.of(),
             metadataSnapshot.cluster().controller(),
             topicIdsForUpdatedTopics,
             (topic, isInternal) -> true);
@@ -655,16 +654,16 @@ public class Metadata implements Closeable {
 
     private KafkaException recoverableExceptionForTopic(String topic) {
         if (unauthorizedTopics.contains(topic))
-            return new TopicAuthorizationException(Collections.singleton(topic));
+            return new TopicAuthorizationException(Set.of(topic));
         else if (invalidTopics.contains(topic))
-            return new InvalidTopicException(Collections.singleton(topic));
+            return new InvalidTopicException(Set.of(topic));
         else
             return null;
     }
 
     private void clearRecoverableErrors() {
-        invalidTopics = Collections.emptySet();
-        unauthorizedTopics = Collections.emptySet();
+        invalidTopics = Set.of();
+        unauthorizedTopics = Set.of();
     }
 
     /**

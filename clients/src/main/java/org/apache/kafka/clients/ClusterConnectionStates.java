@@ -24,7 +24,6 @@ import org.slf4j.Logger;
 
 import java.net.InetAddress;
 import java.net.UnknownHostException;
-import java.util.Collections;
 import java.util.HashMap;
 import java.util.HashSet;
 import java.util.List;
@@ -484,7 +483,7 @@ final class ClusterConnectionStates {
         private NodeConnectionState(ConnectionState state, long lastConnectAttemptMs, long reconnectBackoffMs,
                 long connectionSetupTimeoutMs, String host, HostResolver hostResolver, Logger log) {
             this.state = state;
-            this.addresses = Collections.emptyList();
+            this.addresses = List.of();
             this.addressIndex = -1;
             this.authenticationException = null;
             this.lastConnectAttemptMs = lastConnectAttemptMs;
@@ -552,7 +551,7 @@ final class ClusterConnectionStates {
          * Clears the resolved addresses in order to trigger re-resolving on the next {@link #currentAddress()} call.
          */
         private void clearAddresses() {
-            addresses = Collections.emptyList();
+            addresses = List.of();
         }
 
         public String toString() {

@@ -27,7 +27,7 @@ import org.apache.kafka.common.utils.internals.LogContext;
 
 import org.slf4j.Logger;
 
-import java.util.Collections;
+import java.util.List;
 import java.util.Objects;
 
 public class StreamsGroupTopologyDescriptionRequestManager implements RequestManager {
@@ -81,7 +81,7 @@ public class StreamsGroupTopologyDescriptionRequestManager implements RequestMan
         unsent.whenComplete((response, exception) -> onResponse(response, exception));
 
         pushRequestState.onSendAttempt(currentTimeMs);
-        return new NetworkClientDelegate.PollResult(Collections.singletonList(unsent));
+        return new NetworkClientDelegate.PollResult(List.of(unsent));
     }
 
     @Override

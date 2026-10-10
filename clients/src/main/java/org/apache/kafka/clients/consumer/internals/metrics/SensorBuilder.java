@@ -54,7 +54,7 @@ public class SensorBuilder {
 
         if (s != null) {
             sensor = s;
-            tags = Collections.emptyMap();
+            tags = Map.of();
             preexisting = true;
         } else {
             sensor = metrics.sensor(name);

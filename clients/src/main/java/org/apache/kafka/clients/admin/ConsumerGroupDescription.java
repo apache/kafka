@@ -25,7 +25,6 @@ import org.apache.kafka.common.acl.AclOperation;
 import org.apache.kafka.common.annotation.InterfaceAudience;
 
 import java.util.Collection;
-import java.util.Collections;
 import java.util.List;
 import java.util.Objects;
 import java.util.Optional;
@@ -59,7 +58,7 @@ public class ConsumerGroupDescription {
                                     String partitionAssignor,
                                     ConsumerGroupState state,
                                     Node coordinator) {
-        this(groupId, isSimpleConsumerGroup, members, partitionAssignor, state, coordinator, Collections.emptySet());
+        this(groupId, isSimpleConsumerGroup, members, partitionAssignor, state, coordinator, Set.of());
     }
 
     /**
@@ -92,7 +91,7 @@ public class ConsumerGroupDescription {
                                     Set<AclOperation> authorizedOperations) {
         this.groupId = groupId == null ? "" : groupId;
         this.isSimpleConsumerGroup = isSimpleConsumerGroup;
-        this.members = members == null ? Collections.emptyList() : List.copyOf(members);
+        this.members = members == null ? List.of() : List.copyOf(members);
         this.partitionAssignor = partitionAssignor == null ? "" : partitionAssignor;
         this.type = type;
         this.groupState = GroupState.parse(state.toString());
@@ -114,7 +113,7 @@ public class ConsumerGroupDescription {
                                     Optional<Integer> targetAssignmentEpoch) {
         this.groupId = groupId == null ? "" : groupId;
         this.isSimpleConsumerGroup = isSimpleConsumerGroup;
-        this.members = members == null ? Collections.emptyList() : List.copyOf(members);
+        this.members = members == null ? List.of() : List.copyOf(members);
         this.partitionAssignor = partitionAssignor == null ? "" : partitionAssignor;
         this.type = type;
         this.groupState = groupState;

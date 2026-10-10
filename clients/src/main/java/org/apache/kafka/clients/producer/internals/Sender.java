@@ -61,7 +61,6 @@ import org.slf4j.Logger;
 
 import java.io.IOException;
 import java.util.ArrayList;
-import java.util.Collections;
 import java.util.HashMap;
 import java.util.Iterator;
 import java.util.List;
@@ -773,7 +772,7 @@ public class Sender implements Runnable {
                            boolean deallocateBatch) {
         final RuntimeException topLevelException;
         if (response.error == Errors.TOPIC_AUTHORIZATION_FAILED)
-            topLevelException = new TopicAuthorizationException(Collections.singleton(batch.topicPartition.topic()));
+            topLevelException = new TopicAuthorizationException(Set.of(batch.topicPartition.topic()));
         else if (response.error == Errors.CLUSTER_AUTHORIZATION_FAILED)
             topLevelException = new ClusterAuthorizationException("The producer is not authorized to do idempotent sends");
         else
@@ -1034,7 +1033,7 @@ public class Sender implements Runnable {
             String topicRecordsCountName = "topic." + topic + ".records-per-batch";
             Sensor topicRecordCount = this.metrics.getSensor(topicRecordsCountName);
             if (topicRecordCount == null) {
-                Map<String, String> metricTags = Collections.singletonMap("topic", topic);
+                Map<String, String> metricTags = Map.of("topic", topic);
 
                 topicRecordCount = this.metrics.sensor(topicRecordsCountName);
                 MetricName rateMetricName = this.metrics.topicRecordSendRate(metricTags);

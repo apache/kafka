@@ -34,7 +34,7 @@ import org.apache.kafka.common.utils.internals.LogContext;
 
 import org.slf4j.Logger;
 
-import java.util.Collections;
+import java.util.List;
 
 import static org.apache.kafka.clients.consumer.internals.NetworkClientDelegate.PollResult.EMPTY;
 import static org.apache.kafka.clients.consumer.internals.RequestState.RETRY_BACKOFF_JITTER;
@@ -181,7 +181,7 @@ public abstract class AbstractHeartbeatRequestManager<R extends AbstractResponse
             // We can ignore the leave response because we can join before or after receiving the response.
             heartbeatRequestState.reset();
             resetHeartbeatState();
-            return new NetworkClientDelegate.PollResult(heartbeatRequestState.heartbeatIntervalMs(), Collections.singletonList(leaveHeartbeat));
+            return new NetworkClientDelegate.PollResult(heartbeatRequestState.heartbeatIntervalMs(), List.of(leaveHeartbeat));
         }
 
         // Case 1: The member state is LEAVING - if the member is a share consumer, we should immediately send leave;
@@ -196,7 +196,7 @@ public abstract class AbstractHeartbeatRequestManager<R extends AbstractResponse
         }
 
         NetworkClientDelegate.UnsentRequest request = makeHeartbeatRequest(currentTimeMs, false);
-        return new NetworkClientDelegate.PollResult(heartbeatRequestState.heartbeatIntervalMs(), Collections.singletonList(request));
+        return new NetworkClientDelegate.PollResult(heartbeatRequestState.heartbeatIntervalMs(), List.of(request));
     }
 
     /**
@@ -231,7 +231,7 @@ public abstract class AbstractHeartbeatRequestManager<R extends AbstractResponse
     public PollResult pollOnClose(long currentTimeMs) {
         if (membershipManager().isLeavingGroup()) {
             NetworkClientDelegate.UnsentRequest request = makeHeartbeatRequest(currentTimeMs, true);
-            return new NetworkClientDelegate.PollResult(heartbeatRequestState.heartbeatIntervalMs(), Collections.singletonList(request));
+            return new NetworkClientDelegate.PollResult(heartbeatRequestState.heartbeatIntervalMs(), List.of(request));
         }
         return EMPTY;
     }

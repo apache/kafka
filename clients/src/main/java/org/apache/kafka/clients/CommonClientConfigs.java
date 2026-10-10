@@ -27,7 +27,6 @@ import org.apache.kafka.common.utils.Time;
 import org.slf4j.Logger;
 import org.slf4j.LoggerFactory;
 
-import java.util.Collections;
 import java.util.HashMap;
 import java.util.List;
 import java.util.Map;
@@ -329,11 +328,11 @@ public class CommonClientConfigs {
     }
 
     public static List<MetricsReporter> metricsReporters(AbstractConfig config) {
-        return metricsReporters(Collections.emptyMap(), config);
+        return metricsReporters(Map.of(), config);
     }
 
     public static List<MetricsReporter> metricsReporters(String clientId, AbstractConfig config) {
-        return metricsReporters(Collections.singletonMap(CommonClientConfigs.CLIENT_ID_CONFIG, clientId), config);
+        return metricsReporters(Map.of(CommonClientConfigs.CLIENT_ID_CONFIG, clientId), config);
     }
 
     public static List<MetricsReporter> metricsReporters(Map<String, Object> clientIdOverride, AbstractConfig config) {
@@ -347,7 +346,7 @@ public class CommonClientConfigs {
         }
 
         ClientTelemetryReporter telemetryReporter = new ClientTelemetryReporter(Time.SYSTEM);
-        telemetryReporter.configure(config.originals(Collections.singletonMap(CommonClientConfigs.CLIENT_ID_CONFIG, clientId)));
+        telemetryReporter.configure(config.originals(Map.of(CommonClientConfigs.CLIENT_ID_CONFIG, clientId)));
         return Optional.of(telemetryReporter);
     }
 }

@@ -533,11 +533,11 @@ public class KafkaAdminClient extends AdminClient {
     static boolean determineBootstrapType(AdminClientConfig config) {
         List<String> bootstrapServers = config.getList(CommonClientConfigs.BOOTSTRAP_SERVERS_CONFIG);
         if (bootstrapServers == null) {
-            bootstrapServers = Collections.emptyList();
+            bootstrapServers = List.of();
         }
         List<String> controllerServers = config.getList(AdminClientConfig.BOOTSTRAP_CONTROLLERS_CONFIG);
         if (controllerServers == null) {
-            controllerServers = Collections.emptyList();
+            controllerServers = List.of();
         }
 
         if (bootstrapServers.isEmpty()) {
@@ -605,7 +605,7 @@ public class KafkaAdminClient extends AdminClient {
             List<MetricsReporter> reporters = CommonClientConfigs.metricsReporters(clientId, config);
             clientTelemetryReporter = CommonClientConfigs.telemetryReporter(clientId, config);
             clientTelemetryReporter.ifPresent(reporters::add);
-            Map<String, String> metricTags = Collections.singletonMap("client-id", clientId);
+            Map<String, String> metricTags = Map.of("client-id", clientId);
             MetricConfig metricConfig = new MetricConfig().samples(config.getInt(AdminClientConfig.METRICS_NUM_SAMPLES_CONFIG))
                 .timeWindow(config.getLong(AdminClientConfig.METRICS_SAMPLE_WINDOW_MS_CONFIG), TimeUnit.MILLISECONDS)
                 .recordLevel(Sensor.RecordingLevel.forName(config.getString(AdminClientConfig.METRICS_RECORDING_LEVEL_CONFIG)))
@@ -1782,7 +1782,7 @@ public class KafkaAdminClient extends AdminClient {
                     // for allowAutoTopicCreation (and it simplifies communication with
                     // older brokers)
                     return new MetadataRequest.Builder(new MetadataRequestData()
-                        .setTopics(Collections.emptyList())
+                        .setTopics(List.of())
                         .setAllowAutoTopicCreation(true));
                 }
 
@@ -1835,9 +1835,9 @@ public class KafkaAdminClient extends AdminClient {
         }
         return new Cluster(response.clusterId(),
             nodes,
-            Collections.emptyList(),
-            Collections.emptySet(),
-            Collections.emptySet(),
+            List.of(),
+            Set.of(),
+            Set.of(),
             controllerNode);
     }
 
@@ -1908,7 +1908,7 @@ public class KafkaAdminClient extends AdminClient {
             final long now = time.milliseconds();
             final long deadline = calcDeadlineMs(now, options.timeoutMs());
             final Call call = getCreateTopicsCall(options, topicFutures, topics,
-                Collections.emptyMap(), now, deadline);
+                Map.of(), now, deadline);
             runnable.call(call, now);
         }
         return new CreateTopicsResult(new HashMap<>(topicFutures));
@@ -1998,7 +1998,7 @@ public class KafkaAdminClient extends AdminClient {
                     configSource(DescribeConfigsResponse.ConfigSource.forId(config.configSource())),
                     config.isSensitive(),
                     config.readOnly(),
-                    Collections.emptyList(),
+                    List.of(),
                     null,
                     null);
             }
@@ -2045,7 +2045,7 @@ public class KafkaAdminClient extends AdminClient {
             final long now = time.milliseconds();
             final long deadline = calcDeadlineMs(now, options.timeoutMs());
             final Call call = getDeleteTopicsCall(options, topicFutures, validTopicNames,
-                Collections.emptyMap(), now, deadline);
+                Map.of(), now, deadline);
             runnable.call(call, now);
         }
         return new HashMap<>(topicFutures);
@@ -2070,7 +2070,7 @@ public class KafkaAdminClient extends AdminClient {
             final long now = time.milliseconds();
             final long deadline = calcDeadlineMs(now, options.timeoutMs());
             final Call call = getDeleteTopicsWithIdsCall(options, topicFutures, validTopicIds,
-                Collections.emptyMap(), now, deadline);
+                Map.of(), now, deadline);
             runnable.call(call, now);
         }
         return new HashMap<>(topicFutures);
@@ -2604,7 +2604,7 @@ public class KafkaAdminClient extends AdminClient {
                     // Since this only requests node information, it's safe to pass true for allowAutoTopicCreation (and it
                     // simplifies communication with older brokers)
                     return new MetadataRequest.Builder(new MetadataRequestData()
-                        .setTopics(Collections.emptyList())
+                        .setTopics(List.of())
                         .setAllowAutoTopicCreation(true)
                         .setIncludeClusterAuthorizedOperations(
                             options.includeAuthorizedOperations()));
@@ -2986,7 +2986,7 @@ public class KafkaAdminClient extends AdminClient {
             }
             if (node != null) {
                 NodeProvider nodeProvider = new ConstantNodeIdProvider(node, true);
-                allFutures.putAll(incrementalAlterConfigs(configs, options, Collections.singleton(resource), nodeProvider));
+                allFutures.putAll(incrementalAlterConfigs(configs, options, Set.of(resource), nodeProvider));
             } else
                 unifiedRequestResources.add(resource);
         }
@@ -3301,7 +3301,7 @@ public class KafkaAdminClient extends AdminClient {
             final long now = time.milliseconds();
             final long deadline = calcDeadlineMs(now, options.timeoutMs());
             final Call call = getCreatePartitionsCall(options, futures, topics,
-                Collections.emptyMap(), now, deadline);
+                Map.of(), now, deadline);
             runnable.call(call, now);
         }
         return new CreatePartitionsResult(new HashMap<>(futures));
@@ -3595,7 +3595,7 @@ public class KafkaAdminClient extends AdminClient {
             @Override
             MetadataRequest.Builder createRequest(int timeoutMs) {
                 return new MetadataRequest.Builder(new MetadataRequestData()
-                    .setTopics(Collections.emptyList())
+                    .setTopics(List.of())
                     .setAllowAutoTopicCreation(true));
             }
 
@@ -3686,7 +3686,7 @@ public class KafkaAdminClient extends AdminClient {
             @Override
             void handleFailure(Throwable throwable) {
                 KafkaException exception = new KafkaException("Failed to find brokers to send ListGroups", throwable);
-                all.complete(Collections.singletonList(exception));
+                all.complete(List.of(exception));
             }
         }, nowMetadata);
 
@@ -3759,7 +3759,7 @@ public class KafkaAdminClient extends AdminClient {
             @Override
             MetadataRequest.Builder createRequest(int timeoutMs) {
                 return new MetadataRequest.Builder(new MetadataRequestData()
-                    .setTopics(Collections.emptyList())
+                    .setTopics(List.of())
                     .setAllowAutoTopicCreation(true));
             }
 
@@ -3844,7 +3844,7 @@ public class KafkaAdminClient extends AdminClient {
             @Override
             void handleFailure(Throwable throwable) {
                 KafkaException exception = new KafkaException("Failed to find brokers to send ListGroups", throwable);
-                all.complete(Collections.singletonList(exception));
+                all.complete(List.of(exception));
             }
         }, nowMetadata);
 
@@ -4354,7 +4354,7 @@ public class KafkaAdminClient extends AdminClient {
 
         memFuture.whenComplete((members, ex) -> {
             if (ex != null) {
-                adminFuture.completeExceptionally(Collections.singletonMap(CoordinatorKey.byGroupId(groupId), ex));
+                adminFuture.completeExceptionally(Map.of(CoordinatorKey.byGroupId(groupId), ex));
             } else {
                 RemoveMembersFromConsumerGroupHandler handler = new RemoveMembersFromConsumerGroupHandler(groupId, members, logContext);
                 invokeDriver(handler, adminFuture, options.timeoutMs());

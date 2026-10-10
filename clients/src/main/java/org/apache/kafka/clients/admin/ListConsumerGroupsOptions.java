@@ -21,7 +21,6 @@ import org.apache.kafka.common.ConsumerGroupState;
 import org.apache.kafka.common.GroupState;
 import org.apache.kafka.common.GroupType;
 
-import java.util.Collections;
 import java.util.HashSet;
 import java.util.Set;
 import java.util.stream.Collectors;
@@ -34,8 +33,8 @@ import java.util.stream.Collectors;
 @SuppressWarnings("removal")
 public class ListConsumerGroupsOptions extends AbstractOptions<ListConsumerGroupsOptions> {
 
-    private Set<GroupState> groupStates = Collections.emptySet();
-    private Set<GroupType> types = Collections.emptySet();
+    private Set<GroupState> groupStates = Set.of();
+    private Set<GroupType> types = Set.of();
 
     /**
      * If groupStates is set, only groups in these states will be returned by listGroups().
@@ -43,7 +42,7 @@ public class ListConsumerGroupsOptions extends AbstractOptions<ListConsumerGroup
      * This operation is supported by brokers with version 2.6.0 or later.
      */
     public ListConsumerGroupsOptions inGroupStates(Set<GroupState> groupStates) {
-        this.groupStates = (groupStates == null || groupStates.isEmpty()) ? Collections.emptySet() : Set.copyOf(groupStates);
+        this.groupStates = (groupStates == null || groupStates.isEmpty()) ? Set.of() : Set.copyOf(groupStates);
         return this;
     }
 
@@ -56,7 +55,7 @@ public class ListConsumerGroupsOptions extends AbstractOptions<ListConsumerGroup
     @Deprecated
     public ListConsumerGroupsOptions inStates(Set<ConsumerGroupState> states) {
         this.groupStates = (states == null || states.isEmpty())
-            ? Collections.emptySet()
+            ? Set.of()
             : states.stream().map(state -> GroupState.parse(state.toString())).collect(Collectors.toSet());
         return this;
     }
@@ -66,7 +65,7 @@ public class ListConsumerGroupsOptions extends AbstractOptions<ListConsumerGroup
      * Otherwise, all groups are returned.
      */
     public ListConsumerGroupsOptions withTypes(Set<GroupType> types) {
-        this.types = (types == null || types.isEmpty()) ? Collections.emptySet() : new HashSet<>(types);
+        this.types = (types == null || types.isEmpty()) ? Set.of() : new HashSet<>(types);
         return this;
     }
 
