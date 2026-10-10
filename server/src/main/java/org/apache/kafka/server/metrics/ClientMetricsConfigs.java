@@ -23,14 +23,19 @@ import org.apache.kafka.common.config.ConfigDef.Type;
 import org.apache.kafka.common.errors.InvalidConfigurationException;
 import org.apache.kafka.common.errors.InvalidRequestException;
 
+import com.google.re2j.Pattern;
+import com.google.re2j.PatternSyntaxException;
+
+import org.slf4j.Logger;
+import org.slf4j.LoggerFactory;
+
 import java.util.HashMap;
 import java.util.List;
 import java.util.Map;
+import java.util.Objects;
 import java.util.Optional;
 import java.util.Properties;
 import java.util.Set;
-import java.util.regex.Pattern;
-import java.util.regex.PatternSyntaxException;
 
 /**
  * Client metric configuration related parameters and the supporting methods like validation, etc. are
@@ -69,6 +74,8 @@ import java.util.regex.PatternSyntaxException;
  * <a href="https://cwiki.apache.org/confluence/display/KAFKA/KIP-714%3A+Client+metrics+and+observability#KIP714:Clientmetricsandobservability-Clientmetricsconfiguration">KIP-714</a>
  */
 public class ClientMetricsConfigs extends AbstractConfig {
+
+    private static final Logger log = LoggerFactory.getLogger(ClientMetricsConfigs.class);
 
     public static final String METRICS_CONFIG = "metrics";
     public static final String INTERVAL_MS_CONFIG = "interval.ms";
@@ -140,16 +147,25 @@ public class ClientMetricsConfigs extends AbstractConfig {
         return CONFIG.names();
     }
 
-    public static void validate(String subscriptionName, Map<?, ?> props) {
+    /**
+     * Validates a subscription's configs. Unknown keys and interval bounds are always enforced.
+     * Match patterns are only strictly validated if {@code match} is new or changed relative to
+     * {@code oldProps}.
+     *
+     * @param subscriptionName Name of the client metrics subscription being validated
+     * @param newProps The full set of configs this subscription would have after this call
+     * @param oldProps The subscription's previously persisted configs, or an empty map if new.
+     */
+    public static void validate(String subscriptionName, Map<?, ?> newProps, Map<?, ?> oldProps) {
         if (subscriptionName == null || subscriptionName.isEmpty()) {
             throw new InvalidRequestException("Subscription name can't be empty");
         }
 
-        validateConfigs(props);
+        validateConfigs(newProps, oldProps);
     }
 
     @SuppressWarnings("unchecked")
-    private static void validateConfigs(Map<?, ?> configs) {
+    private static void validateConfigs(Map<?, ?> configs, Map<?, ?> oldProps) {
         // Make sure that all the configs are valid
         configs.forEach((key, value) -> {
             if (!configNames().contains(key)) {
@@ -169,11 +185,39 @@ public class ClientMetricsConfigs extends AbstractConfig {
             }
         }
 
-        // Make sure that client match patterns are valid by parsing them.
-        if (configs.containsKey(MATCH_CONFIG)) {
+        // Make sure that new or changed match patterns are valid RE2/J syntax.
+        if (configs.containsKey(MATCH_CONFIG) && matchPatternsChanged(configs, oldProps)) {
             List<String> patterns = (List<String>) parsed.get(MATCH_CONFIG);
-            // Parse the client matching patterns to validate if the patterns are valid.
-            parseMatchingPatterns(patterns);
+            patterns.forEach(pattern -> {
+                String[] nameValuePair = splitMatchPattern(pattern);
+                String param = nameValuePair[0];
+                String patternValue = nameValuePair[1];
+
+                compileStrict(param, patternValue);
+            });
+        }
+    }
+
+    private static boolean matchPatternsChanged(Map<?, ?> newProps, Map<?, ?> oldProps) {
+        Object newMatch = newProps.get(MATCH_CONFIG);
+        Object oldMatch = oldProps == null ? null : oldProps.get(MATCH_CONFIG);
+        return !Objects.equals(newMatch, oldMatch);
+    }
+
+    /**
+     * Compiles a single match pattern with RE2/J only.
+     *
+     * See also {@link #compileLenient(String, String, String)}.
+     *
+     * @throws InvalidConfigurationException if the pattern is not valid RE2/J syntax
+     */
+    private static ClientMatchPattern compileStrict(String param, String patternValue) {
+        try {
+            return ClientMatchPattern.ofRe2(Pattern.compile(patternValue));
+        } catch (PatternSyntaxException e) {
+            throw new InvalidConfigurationException(
+                String.format("Client match pattern `%s=%s` is not a valid regular expression: %s.",
+                    param, patternValue, e.getDescription()));
         }
     }
 
@@ -185,36 +229,74 @@ public class ClientMetricsConfigs extends AbstractConfig {
      * NOTES:
      * Client match pattern splits the input into two parts separated by first occurrence of the character '='
      *
+     * @param subscriptionName Name of the client metrics subscription these patterns belong to
      * @param patterns List of client matching pattern strings
      * @return map of client matching pattern entries
      */
-    public static Map<String, Pattern> parseMatchingPatterns(List<String> patterns) {
+    public static Map<String, ClientMatchPattern> parseMatchingPatterns(String subscriptionName, List<String> patterns) {
         if (patterns == null || patterns.isEmpty()) {
             return Map.of();
         }
 
-        Map<String, Pattern> patternsMap = new HashMap<>();
+        Map<String, ClientMatchPattern> patternsMap = new HashMap<>();
         patterns.forEach(pattern -> {
-            // The pattern value may contain '=' characters, so split only at the first occurrence.
-            String[] nameValuePair = pattern.split("=", 2);
-            if (nameValuePair.length != 2) {
-                throw new InvalidConfigurationException("Illegal client matching pattern: " + pattern);
-            }
+            String[] nameValuePair = splitMatchPattern(pattern);
+            String param = nameValuePair[0];
+            String patternValue = nameValuePair[1];
 
-            String param = nameValuePair[0].trim();
-            if (!isValidParam(param)) {
-                throw new InvalidConfigurationException("Illegal client matching pattern: " + pattern);
-            }
-
-            try {
-                Pattern patternValue = Pattern.compile(nameValuePair[1].trim());
-                patternsMap.put(param, patternValue);
-            } catch (PatternSyntaxException e) {
-                throw new InvalidConfigurationException("Illegal client matching pattern: " + pattern);
-            }
+            patternsMap.put(param, compileLenient(subscriptionName, param, patternValue));
         });
 
         return patternsMap;
+    }
+
+    /**
+     * Compiles a single match pattern with RE2/J, falling back to java.util.regex (and logging a
+     * warning) if that fails.
+     *
+     * See also {@link #compileStrict(String, String)}.
+     *
+     * @throws InvalidConfigurationException if the pattern is not valid under either engine
+     */
+    @SuppressWarnings("removal")
+    private static ClientMatchPattern compileLenient(String subscriptionName, String param, String patternValue) {
+        try {
+            return ClientMatchPattern.ofRe2(Pattern.compile(patternValue));
+        } catch (PatternSyntaxException re2Exception) {
+            try {
+                java.util.regex.Pattern legacyPattern = java.util.regex.Pattern.compile(patternValue);
+                log.warn("Client metrics subscription '{}' match pattern '{}={}' relies on deprecated " +
+                        "java.util.regex syntax ({}) and will stop being supported in Apache Kafka 5.0. " +
+                        "Please update it to valid RE2/J syntax.",
+                    subscriptionName, param, patternValue, re2Exception.getDescription());
+                return ClientMatchPattern.ofLegacy(legacyPattern);
+            } catch (java.util.regex.PatternSyntaxException legacyException) {
+                throw new InvalidConfigurationException("Illegal client matching pattern: " + param + "=" + patternValue);
+            }
+        }
+    }
+
+    /**
+     * Splits a client match pattern of the form {@code param=patternValue} into its two parts.
+     * The pattern value may itself contain '=' characters, so the split only occurs at the first
+     * occurrence.
+     *
+     * @param pattern a single client matching pattern string
+     * @return a two-element array of {@code [param, patternValue]}, both trimmed
+     * @throws InvalidConfigurationException if the pattern is malformed or the param name is unknown
+     */
+    private static String[] splitMatchPattern(String pattern) {
+        String[] nameValuePair = pattern.split("=", 2);
+        if (nameValuePair.length != 2) {
+            throw new InvalidConfigurationException("Illegal client matching pattern: " + pattern);
+        }
+
+        String param = nameValuePair[0].trim();
+        if (!isValidParam(param)) {
+            throw new InvalidConfigurationException("Illegal client matching pattern: " + pattern);
+        }
+
+        return new String[] {param, nameValuePair[1].trim()};
     }
 
     private static boolean isValidParam(String paramName) {

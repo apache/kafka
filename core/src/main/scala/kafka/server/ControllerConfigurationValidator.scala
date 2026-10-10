@@ -131,7 +131,7 @@ class ControllerConfigurationValidator(kafkaConfig: KafkaConfig) extends Configu
       case BROKER => validateBrokerName(resource.name())
       case CLIENT_METRICS =>
         val filteredConfigs = filterAndValidateNullConfigs(newConfigs, "client metrics")
-        ClientMetricsConfigs.validate(resource.name(), filteredConfigs)
+        ClientMetricsConfigs.validate(resource.name(), filteredConfigs, oldConfigs)
       case GROUP =>
         validateGroupName(resource.name())
         val filteredConfigs = filterAndValidateNullConfigs(newConfigs, "group")

@@ -1062,6 +1062,7 @@ project(':server') {
     implementation project(':storage:storage-api')
     implementation libs.jacksonDatabind
     implementation libs.metrics
+    implementation libs.re2j
     implementation libs.slf4jApi
     implementation log4j2Libs
 
