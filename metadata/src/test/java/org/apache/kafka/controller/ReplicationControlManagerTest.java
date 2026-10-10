@@ -43,6 +43,7 @@ import org.apache.kafka.common.message.AlterPartitionResponseData;
 import org.apache.kafka.common.message.AssignReplicasToDirsRequestData;
 import org.apache.kafka.common.message.AssignReplicasToDirsResponseData;
 import org.apache.kafka.common.message.BrokerHeartbeatRequestData;
+import org.apache.kafka.common.message.BrokerHeartbeatRequestData.LeaderlessReplica;
 import org.apache.kafka.common.message.CreatePartitionsRequestData.CreatePartitionsAssignment;
 import org.apache.kafka.common.message.CreatePartitionsRequestData.CreatePartitionsTopic;
 import org.apache.kafka.common.message.CreatePartitionsResponseData.CreatePartitionsTopicResult;
@@ -175,6 +176,7 @@ public class ReplicationControlManagerTest {
             private MetadataVersion metadataVersion = MetadataVersion.latestTesting();
             private MockTime mockTime = new MockTime();
             private boolean isElrEnabled = false;
+            private boolean uncleanRecoveryManagerEnabled = false;
             private final Map<String, Object> staticConfig = new HashMap<>();
 
             Builder setCreateTopicPolicy(CreateTopicPolicy createTopicPolicy) {
@@ -189,6 +191,11 @@ public class ReplicationControlManagerTest {
 
             Builder setIsElrEnabled(boolean isElrEnabled) {
                 this.isElrEnabled = isElrEnabled;
+                return this;
+            }
+
+            Builder setUncleanRecoveryManagerEnabled(boolean uncleanRecoveryManagerEnabled) {
+                this.uncleanRecoveryManagerEnabled = uncleanRecoveryManagerEnabled;
                 return this;
             }
 
@@ -207,6 +214,7 @@ public class ReplicationControlManagerTest {
                     createTopicPolicy,
                     mockTime,
                     isElrEnabled,
+                    uncleanRecoveryManagerEnabled,
                     staticConfig);
             }
         }
@@ -232,6 +240,7 @@ public class ReplicationControlManagerTest {
             Optional<CreateTopicPolicy> createTopicPolicy,
             MockTime time,
             boolean isElrEnabled,
+            boolean uncleanRecoveryManagerEnabled,
             Map<String, Object> staticConfig
         ) {
             this.time = time;
@@ -279,6 +288,8 @@ public class ReplicationControlManagerTest {
                 setClusterControl(clusterControl).
                 setCreateTopicPolicy(createTopicPolicy).
                 setFeatureControl(featureControl).
+                setUncleanRecoveryManagerEnabled(uncleanRecoveryManagerEnabled).
+                setTime(time).
                 build();
             clusterControl.activate();
         }
@@ -471,6 +482,14 @@ public class ReplicationControlManagerTest {
                     result.response());
                 replay(result.records());
             }
+        }
+
+        void heartbeat(int brokerId, LeaderlessReplica... leaderlessReplicas) {
+            long brokerEpoch = currentBrokerEpoch(brokerId);
+            clusterControl.trackBrokerHeartbeat(brokerId, brokerEpoch);
+            replay(replicationControl.processBrokerHeartbeat(new BrokerHeartbeatRequestData().
+                setBrokerId(brokerId).setBrokerEpoch(brokerEpoch).setCurrentMetadataOffset(1).
+                setLeaderlessReplicas(List.of(leaderlessReplicas)), 0).records());
         }
 
         void inControlledShutdownBrokers(Integer... brokerIds) {
@@ -1275,6 +1294,166 @@ public class ReplicationControlManagerTest {
         assertArrayEquals(new int[]{2}, partition.isr, partition.toString());
         assertEquals(2, partition.leader, partition.toString());
         assertArrayEquals(new int[]{}, partition.lastKnownElr, partition.toString());
+    }
+
+    @Test
+    public void testUncleanRecoveryElectsReplicaWithHighestEpochAndLongestLog() {
+        ReplicationControlTestContext ctx = new ReplicationControlTestContext.Builder()
+            .setStaticConfig(TopicConfig.UNCLEAN_LEADER_ELECTION_ENABLE_CONFIG, "true")
+            .setUncleanRecoveryManagerEnabled(true)
+            .build();
+        ctx.registerBrokers(0, 1, 2, 3);
+        ctx.unfenceBrokers(0, 1, 2, 3);
+        TopicIdPartition tp = new TopicIdPartition(ctx.createTestTopic("foo", new int[][] {new int[] {0, 1, 2, 3}}).topicId(), 0);
+        ctx.alterPartition(tp, 0, isrWithDefaultEpoch(0), LeaderRecoveryState.RECOVERED);
+        ctx.fenceBrokers(0);
+        assertEquals(OptionalInt.empty(), ctx.currentLeader(tp));
+        int leaderEpoch = ctx.replicationControl.getPartition(tp.topicId(), 0).leaderEpoch;
+
+        ctx.heartbeat(1, leaderlessReplica(tp, leaderEpoch, 0, 30));
+        ctx.heartbeat(2, leaderlessReplica(tp, leaderEpoch, 1, 20));
+        ctx.heartbeat(3, leaderlessReplica(tp, leaderEpoch - 1, 1, 40));
+        assertEquals(OptionalInt.empty(), ctx.currentLeader(tp));
+
+        ctx.heartbeat(3, leaderlessReplica(tp, leaderEpoch, 1, 10));
+        assertEquals(OptionalInt.of(2), ctx.currentLeader(tp));
+        assertArrayEquals(new int[] {2}, ctx.replicationControl.getPartition(tp.topicId(), 0).isr);
+    }
+
+    @Test
+    public void testBalancedUncleanRecoveryWaitsForLastKnownElr() {
+        ReplicationControlTestContext ctx = new ReplicationControlTestContext.Builder()
+            .setIsElrEnabled(true)
+            .setUncleanRecoveryManagerEnabled(true)
+            .build();
+        TopicIdPartition tp = createPartitionWithOnlyLastKnownElr(ctx);
+        PartitionRegistration partition = ctx.replicationControl.getPartition(tp.topicId(), 0);
+
+        ctx.heartbeat(3, leaderlessReplica(tp, partition.leaderEpoch, 0, 10));
+        ctx.unfenceBrokers(0, 1);
+        ctx.heartbeat(0, leaderlessReplica(tp, partition.leaderEpoch, 0, 30));
+        ctx.heartbeat(1, leaderlessReplica(tp, partition.leaderEpoch, 0, 20));
+        assertEquals(OptionalInt.empty(), ctx.currentLeader(tp));
+
+        ctx.unfenceBrokers(2);
+        ctx.heartbeat(2, leaderlessReplica(tp, partition.leaderEpoch, 0, 20));
+        assertEquals(OptionalInt.of(0), ctx.currentLeader(tp));
+    }
+
+    @Test
+    public void testBalancedUncleanRecoveryWaitsForLastKnownElrReportsAfterTimeout() {
+        ReplicationControlTestContext ctx = new ReplicationControlTestContext.Builder()
+            .setIsElrEnabled(true)
+            .setUncleanRecoveryManagerEnabled(true)
+            .build();
+        TopicIdPartition tp = createPartitionWithOnlyLastKnownElr(ctx);
+        int leaderEpoch = ctx.replicationControl.getPartition(tp.topicId(), 0).leaderEpoch;
+        ctx.unfenceBrokers(0, 1, 2);
+        ctx.heartbeat(0, leaderlessReplica(tp, leaderEpoch, 0, 30));
+        ctx.heartbeat(1, leaderlessReplica(tp, leaderEpoch, 0, 20));
+
+        ctx.time.sleep(TimeUnit.MINUTES.toMillis(5));
+        assertEquals(List.of(), ctx.replicationControl.maybeElectUncleanLeaders().records());
+        ctx.heartbeat(2, leaderlessReplica(tp, leaderEpoch, 0, 10));
+        assertEquals(OptionalInt.of(0), ctx.currentLeader(tp));
+    }
+
+    @Test
+    public void testUncleanRecoveryRestartsAfterControllerFailover() {
+        ReplicationControlTestContext ctx = new ReplicationControlTestContext.Builder()
+            .setStaticConfig(TopicConfig.UNCLEAN_LEADER_ELECTION_ENABLE_CONFIG, "true")
+            .setUncleanRecoveryManagerEnabled(true)
+            .build();
+        ctx.registerBrokers(0, 1, 2);
+        ctx.unfenceBrokers(0, 1, 2);
+        TopicIdPartition tp = new TopicIdPartition(ctx.createTestTopic("foo", new int[][] {new int[] {0, 1, 2}}).topicId(), 0);
+        ctx.alterPartition(tp, 0, isrWithDefaultEpoch(0), LeaderRecoveryState.RECOVERED);
+        ctx.fenceBrokers(0);
+        ctx.heartbeat(1, leaderlessReplica(tp, ctx.replicationControl.getPartition(tp.topicId(), 0).leaderEpoch, 0, 10));
+
+        ctx.replicationControl.deactivate();
+        ctx.time.sleep(TimeUnit.MINUTES.toMillis(5));
+        assertEquals(List.of(), ctx.replicationControl.maybeElectUncleanLeaders().records());
+    }
+
+    private static TopicIdPartition createPartitionWithOnlyLastKnownElr(ReplicationControlTestContext ctx) {
+        ctx.registerBrokers(0, 1, 2, 3);
+        ctx.unfenceBrokers(0, 1, 2, 3);
+        TopicIdPartition tp = new TopicIdPartition(ctx.createTestTopic("foo", new int[][] {new int[] {0, 1, 2, 3}}).topicId(), 0);
+        ctx.alterTopicConfig("foo", TopicConfig.MIN_IN_SYNC_REPLICAS_CONFIG, "3");
+        ctx.alterPartition(tp, 0, isrWithDefaultEpoch(0, 1, 2), LeaderRecoveryState.RECOVERED);
+        ctx.fenceBrokers(0, 1, 2);
+        for (int brokerId : List.of(0, 1, 2)) {
+            ctx.handleBrokersShutdown(false, brokerId);
+        }
+        PartitionRegistration partition = ctx.replicationControl.getPartition(tp.topicId(), 0);
+        assertArrayEquals(new int[] {}, partition.elr, partition.toString());
+        assertEquals(Set.of(0, 1, 2), Arrays.stream(partition.lastKnownElr).boxed().collect(Collectors.toSet()), partition.toString());
+        return tp;
+    }
+
+    @Test
+    public void testUncleanRecoveryElectsLongestReportedLogAfterTimeout() {
+        ReplicationControlTestContext ctx = new ReplicationControlTestContext.Builder()
+            .setStaticConfig(TopicConfig.UNCLEAN_LEADER_ELECTION_ENABLE_CONFIG, "true")
+            .setUncleanRecoveryManagerEnabled(true)
+            .build();
+        ctx.registerBrokers(0, 1, 2, 3);
+        ctx.unfenceBrokers(0, 1, 2, 3);
+        TopicIdPartition tp = new TopicIdPartition(ctx.createTestTopic("foo", new int[][] {new int[] {0, 1, 2, 3}}).topicId(), 0);
+        ctx.alterPartition(tp, 0, isrWithDefaultEpoch(0), LeaderRecoveryState.RECOVERED);
+        ctx.fenceBrokers(0);
+        int leaderEpoch = ctx.replicationControl.getPartition(tp.topicId(), 0).leaderEpoch;
+        ctx.heartbeat(1, leaderlessReplica(tp, leaderEpoch, 0, 20));
+        ctx.heartbeat(2, leaderlessReplica(tp, leaderEpoch, 0, 30));
+
+        assertEquals(List.of(), ctx.replicationControl.maybeElectUncleanLeaders().records());
+        ctx.time.sleep(TimeUnit.MINUTES.toMillis(5));
+        ctx.replay(ctx.replicationControl.maybeElectUncleanLeaders().records());
+        assertEquals(OptionalInt.of(2), ctx.currentLeader(tp));
+    }
+
+    @Test
+    public void testUncleanRecoveryElectsFirstReportAfterTimeout() {
+        ReplicationControlTestContext ctx = new ReplicationControlTestContext.Builder()
+            .setStaticConfig(TopicConfig.UNCLEAN_LEADER_ELECTION_ENABLE_CONFIG, "true")
+            .setUncleanRecoveryManagerEnabled(true)
+            .build();
+        ctx.registerBrokers(0, 1, 2);
+        ctx.unfenceBrokers(0, 1, 2);
+        TopicIdPartition tp = new TopicIdPartition(ctx.createTestTopic("foo", new int[][] {new int[] {0, 1, 2}}).topicId(), 0);
+        ctx.alterPartition(tp, 0, isrWithDefaultEpoch(0), LeaderRecoveryState.RECOVERED);
+        ctx.fenceBrokers(0);
+
+        int leaderEpoch = ctx.replicationControl.getPartition(tp.topicId(), 0).leaderEpoch;
+
+        assertEquals(List.of(), ctx.replicationControl.maybeElectUncleanLeaders().records());
+        ctx.time.sleep(TimeUnit.MINUTES.toMillis(5));
+        assertEquals(List.of(), ctx.replicationControl.maybeElectUncleanLeaders().records());
+        ctx.heartbeat(1, leaderlessReplica(tp, leaderEpoch, 0, 10));
+        assertEquals(OptionalInt.of(1), ctx.currentLeader(tp));
+    }
+
+    @Test
+    public void testUncleanRecoveryFallsBackToUncleanElectionBeforeSupportedMetadataVersion() {
+        ReplicationControlTestContext ctx = new ReplicationControlTestContext.Builder()
+            .setMetadataVersion(MetadataVersion.IBP_4_4_IV2)
+            .setStaticConfig(TopicConfig.UNCLEAN_LEADER_ELECTION_ENABLE_CONFIG, "true")
+            .setUncleanRecoveryManagerEnabled(true)
+            .build();
+        ctx.registerBrokers(0, 1, 2);
+        ctx.unfenceBrokers(0, 1, 2);
+        TopicIdPartition tp = new TopicIdPartition(ctx.createTestTopic("foo", new int[][] {new int[] {0, 1, 2}}).topicId(), 0);
+        ctx.alterPartition(tp, 0, isrWithDefaultEpoch(0), LeaderRecoveryState.RECOVERED);
+        ctx.fenceBrokers(0);
+
+        ctx.replay(ctx.replicationControl.maybeElectUncleanLeaders().records());
+        assertTrue(Set.of(1, 2).contains(ctx.currentLeader(tp).orElse(NO_LEADER)));
+    }
+
+    private static LeaderlessReplica leaderlessReplica(TopicIdPartition tp, int currentLeaderEpoch, int lastWrittenLeaderEpoch, long logEndOffset) {
+        return new LeaderlessReplica().setTopicId(tp.topicId()).setPartitionIndex(tp.partitionId())
+            .setCurrentLeaderEpoch(currentLeaderEpoch).setLastWrittenLeaderEpoch(lastWrittenLeaderEpoch).setLogEndOffset(logEndOffset);
     }
 
     @Test

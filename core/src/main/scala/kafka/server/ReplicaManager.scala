@@ -31,6 +31,7 @@ import org.apache.kafka.common.message.ListOffsetsRequestData.{ListOffsetsPartit
 import org.apache.kafka.common.message.ListOffsetsResponseData.{ListOffsetsPartitionResponse, ListOffsetsTopicResponse}
 import org.apache.kafka.common.message.OffsetForLeaderEpochRequestData.OffsetForLeaderTopic
 import org.apache.kafka.common.message.OffsetForLeaderEpochResponseData.{EpochEndOffset, OffsetForLeaderTopicResult}
+import org.apache.kafka.common.message.BrokerHeartbeatRequestData.LeaderlessReplica
 import org.apache.kafka.common.message.{DescribeLogDirsResponseData, DescribeProducersResponseData}
 import org.apache.kafka.common.metrics.Metrics
 import org.apache.kafka.common.network.ListenerName
@@ -87,6 +88,7 @@ import scala.jdk.OptionConverters.RichOptional
 
 object ReplicaManager {
   val HighWatermarkFilename = "replication-offset-checkpoint"
+  val MaxLeaderlessReplicasPerHeartbeat = 2000
 
   private val LeaderCountMetricName = "LeaderCount"
   private val PartitionCountMetricName = "PartitionCount"
@@ -479,6 +481,19 @@ class ReplicaManager(val config: KafkaConfig,
       case _ => None
     }
   }
+
+  def leaderlessReplicas(maxReplicas: Int = ReplicaManager.MaxLeaderlessReplicasPerHeartbeat): util.List[LeaderlessReplica] = onlinePartitionsIterator
+    .filter(partition => partition.leaderReplicaIdOpt.contains(NO_LEADER) && partition.topicId.isDefined)
+    .flatMap(partition => partition.log.map(log => new LeaderlessReplica()
+      .setTopicId(partition.topicId.get)
+      .setPartitionIndex(partition.partitionId)
+      .setCurrentLeaderEpoch(partition.getLeaderEpoch)
+      .setLastWrittenLeaderEpoch(log.latestEpoch.orElse(-1))
+      .setLogEndOffset(log.logEndOffset)))
+    .toList
+    .sortBy(replica => (replica.topicId, replica.partitionIndex))
+    .take(maxReplicas)
+    .asJava
 
   private def offlinePartitionCount: Int = {
     allPartitions.values.asScala.iterator.count(_.getClass == classOf[HostedPartition.Offline[Partition]])

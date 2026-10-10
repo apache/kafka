@@ -141,6 +141,7 @@ public enum MetadataVersion {
     //
 
     // New version for the Kafka 4.5.0 release.
+    // Brokers report leaderless replicas in BrokerHeartbeatRequest v3 for unclean recovery (KIP-966).
     IBP_4_5_IV0(34, "4.5", "IV0", false);
 
     // NOTES when adding a new version:
@@ -230,6 +231,10 @@ public enum MetadataVersion {
 
     public boolean isCordonedLogDirsSupported() {
         return this.isAtLeast(MetadataVersion.IBP_4_3_IV0);
+    }
+
+    public boolean isUncleanRecoverySupported() {
+        return this.isAtLeast(MetadataVersion.IBP_4_5_IV0);
     }
 
     public short registerBrokerRecordVersion() {
