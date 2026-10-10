@@ -3013,6 +3013,25 @@ public class KafkaAdminClientConsumerGroupTest extends KafkaAdminClientTestBase 
     }
 
     @Test
+    public void testRemoveAllMembersFromEmptyGroup() throws Exception {
+        // "removeAll" on a group with no members should be a successful no-op
+        try (AdminClientUnitTestEnv env = new AdminClientUnitTestEnv(mockCluster(1, 0))) {
+            env.kafkaClient().setNodeApiVersions(NodeApiVersions.create());
+
+            DescribeGroupsResponseData data = prepareDescribeGroupsResponseData(GROUP_ID, List.of(), List.of());
+            env.kafkaClient().prepareResponse(prepareFindCoordinatorResponse(Errors.NONE, env.cluster().controller()));
+            env.kafkaClient().prepareResponse(new DescribeGroupsResponse(data));
+
+            final RemoveMembersFromConsumerGroupResult result = env.adminClient().removeMembersFromConsumerGroup(
+                GROUP_ID,
+                new RemoveMembersFromConsumerGroupOptions()
+            );
+
+            assertNull(result.all().get());
+        }
+    }
+
+    @Test
     public void testRemoveMembersFromGroupReason() throws Exception {
         testRemoveMembersFromGroup("testing remove members reason", "testing remove members reason");
     }
