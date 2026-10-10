@@ -188,6 +188,9 @@ public class ColdStartStickinessIntegrationTest {
             config.put(StreamsConfig.GROUP_PROTOCOL_CONFIG, GroupProtocol.STREAMS.name());
         } else {
             config.put(StreamsConfig.InternalConfig.INTERNAL_TASK_ASSIGNOR_CLASS, LegacyStickyTaskAssignor.class.getName());
+            // Classic members stay in the group on close, so expire them quickly before the cold restart
+            config.put(ConsumerConfig.SESSION_TIMEOUT_MS_CONFIG, 6000);
+            config.put(ConsumerConfig.HEARTBEAT_INTERVAL_MS_CONFIG, 1000);
         }
         streamsConfigurations.add(config);
         return config;
