@@ -22,6 +22,7 @@ import org.junit.jupiter.params.provider.Arguments;
 import org.junit.jupiter.params.provider.MethodSource;
 import org.junit.jupiter.params.provider.ValueSource;
 
+import java.io.ByteArrayInputStream;
 import java.io.IOException;
 import java.io.InputStream;
 import java.nio.ByteBuffer;
@@ -132,6 +133,33 @@ public class ChunkedBytesStreamTest {
         try (InputStream is = new ChunkedBytesStream(sourcestream, supplier, 10, pushSkipToSourceStream)) {
             long res = is.skip(inputBuf.capacity() + 1);
             assertEquals(inputBuf.capacity(), res);
+        }
+    }
+
+    @ParameterizedTest
+    @ValueSource(ints = {2, 5, 10, 11})
+    public void testSkipWhenSourceInitiallySkipsZeroBytes(int bytesToSkip) throws IOException {
+        byte[] bytes = new byte[10];
+        for (int i = 0; i < bytes.length; i++) {
+            bytes[i] = (byte) i;
+        }
+        InputStream source = new ByteArrayInputStream(bytes) {
+            private boolean firstSkip = true;
+
+            @Override
+            public long skip(long n) {
+                if (firstSkip) {
+                    firstSkip = false;
+                    return 0;
+                }
+                return super.skip(n);
+            }
+        };
+
+        try (InputStream is = new ChunkedBytesStream(source, supplier, 4, true)) {
+            int expectedSkipped = Math.min(bytesToSkip, bytes.length);
+            assertEquals(expectedSkipped, is.skip(bytesToSkip));
+            assertArrayEquals(Arrays.copyOfRange(bytes, expectedSkipped, bytes.length), is.readAllBytes());
         }
     }
 
