@@ -26,7 +26,6 @@ import org.apache.kafka.common.metadata.ConfigRecord;
 import org.apache.kafka.common.requests.DescribeConfigsResponse;
 import org.apache.kafka.server.config.ConfigSynonym;
 
-import java.util.ArrayList;
 import java.util.Collections;
 import java.util.HashMap;
 import java.util.List;
@@ -165,102 +164,11 @@ public class KafkaConfigSchema {
     }
 
     /**
-     * Like {@link #resolveEffectiveTopicConfigs}, but for each topic config key also returns the full
-     * chain of candidate values across all levels (topic, per-broker, cluster default, static, schema
-     * default), in precedence order. This is the data DescribeConfigs needs to populate its synonyms
-     * list; CreateTopics only needs the winning entry, which is {@code chain.get(0)}'s equivalent.
-     */
-    public Map<String, TopicConfigWithSynonyms> resolveEffectiveTopicConfigsWithSynonyms(
-            Map<String, ?> staticNodeConfig,
-            Map<String, ?> dynamicClusterConfigs,
-            Map<String, ?> dynamicNodeConfigs,
-            Map<String, ?> dynamicTopicConfigs) {
-        ConfigDef configDef = configDefs.getOrDefault(ConfigResource.Type.TOPIC, EMPTY_CONFIG_DEF);
-        HashMap<String, TopicConfigWithSynonyms> result = new HashMap<>();
-        for (ConfigDef.ConfigKey configKey : configDef.configKeys().values()) {
-            if (!shouldIncludeTopicConfig(configKey, dynamicTopicConfigs)) continue;
-            List<ConfigSynonymValue> chain = resolveTopicConfigSynonymChain(configKey, staticNodeConfig,
-                dynamicClusterConfigs, dynamicNodeConfigs, dynamicTopicConfigs);
-            ConfigSynonymValue resolvedValue = chain.get(0);
-            ConfigEntry entry = toConfigEntry(configKey, resolvedValue.value(), resolvedValue.source(), Function.identity());
-            result.put(configKey.name, new TopicConfigWithSynonyms(entry, chain));
-        }
-        return result;
-    }
-
-    /**
      * This config is internal; if the user hasn't set it explicitly, it should not be returned.
      */
     private static boolean shouldIncludeTopicConfig(ConfigDef.ConfigKey configKey, Map<String, ?> dynamicTopicConfigs) {
         return !configKey.internalConfig || dynamicTopicConfigs.containsKey(configKey.name);
     }
-
-    /**
-     * Resolves the full ordered chain of candidate values for a topic config key, across every level:
-     * dynamic topic config, dynamic per-broker config, dynamic cluster default, static broker config,
-     * and finally the schema's built-in default. Unlike {@link #resolveEffectiveTopicConfig}, which
-     * stops at the first match per level, this collects every synonym that currently has a value at
-     * each level, since all of them are valid answers to "what value could this config have taken."
-     */
-    private List<ConfigSynonymValue> resolveTopicConfigSynonymChain(
-            ConfigDef.ConfigKey configKey,
-            Map<String, ?> staticNodeConfig,
-            Map<String, ?> dynamicClusterConfigs,
-            Map<String, ?> dynamicNodeConfigs,
-            Map<String, ?> dynamicTopicConfigs) {
-        List<ConfigSynonymValue> chain = new ArrayList<>();
-        if (dynamicTopicConfigs.containsKey(configKey.name)) {
-            chain.add(toSynonymValue(configKey, configKey.name, dynamicTopicConfigs.get(configKey.name),
-                ConfigSource.DYNAMIC_TOPIC_CONFIG, Function.identity()));
-        }
-        List<ConfigSynonym> synonyms = logConfigSynonyms.getOrDefault(configKey.name, List.of());
-        for (ConfigSynonym synonym : synonyms) {
-            if (dynamicNodeConfigs.containsKey(synonym.name())) {
-                chain.add(toSynonymValue(configKey, synonym.name(), dynamicNodeConfigs.get(synonym.name()),
-                    ConfigSource.DYNAMIC_BROKER_CONFIG, synonym.converter()));
-            }
-        }
-        for (ConfigSynonym synonym : synonyms) {
-            if (dynamicClusterConfigs.containsKey(synonym.name())) {
-                chain.add(toSynonymValue(configKey, synonym.name(), dynamicClusterConfigs.get(synonym.name()),
-                    ConfigSource.DYNAMIC_DEFAULT_BROKER_CONFIG, synonym.converter()));
-            }
-        }
-        for (ConfigSynonym synonym : synonyms) {
-            if (staticNodeConfig.containsKey(synonym.name())) {
-                chain.add(toSynonymValue(configKey, synonym.name(), staticNodeConfig.get(synonym.name()),
-                    ConfigSource.STATIC_BROKER_CONFIG, synonym.converter()));
-            }
-        }
-        chain.add(toSynonymValue(configKey, configKey.name,
-            configKey.hasDefault() ? configKey.defaultValue : null,
-            ConfigSource.DEFAULT_CONFIG, Function.identity()));
-        return chain;
-    }
-
-    private ConfigSynonymValue toSynonymValue(
-            ConfigDef.ConfigKey configKey,
-            String name,
-            Object value,
-            ConfigSource source,
-            Function<String, String> converter) {
-        ConfigEntry entry = toConfigEntry(configKey, value, source, converter);
-        return new ConfigSynonymValue(name, entry.value(), source);
-    }
-
-    /**
-     * One candidate value for a topic config, from a single level of the precedence chain (e.g. the
-     * dynamic per-broker override, or the static broker config). {@code name} may differ from the
-     * topic config's own name, since a level may supply the value under a differently-named synonym
-     * (e.g. broker config {@code log.roll.ms} is a synonym for topic config {@code segment.ms}).
-     */
-    public record ConfigSynonymValue(String name, String value, ConfigSource source) { }
-
-    /**
-     * The effective {@link ConfigEntry} for a topic config, plus the full chain of candidate values
-     * (in precedence order) that {@link #resolveEffectiveTopicConfigsWithSynonyms} resolved it from.
-     */
-    public record TopicConfigWithSynonyms(ConfigEntry entry, List<ConfigSynonymValue> synonyms) { }
 
     public ConfigEntry resolveEffectiveTopicConfig(
         String keyName,
@@ -358,6 +266,10 @@ public class KafkaConfigSchema {
         }
         if (stringValue != null) {
             stringValue = converter.apply(stringValue);
+            if (!configKey.type.isSensitive()) {
+                stringValue = ConfigDef.convertToString(
+                    ConfigDef.parseType(configKey.name, stringValue, configKey.type), configKey.type);
+            }
         }
         return new ConfigEntry(
             configKey.name,

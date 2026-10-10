@@ -368,7 +368,7 @@ public class KafkaClusterTestKit implements AutoCloseable {
                     }
                     BrokerServer broker = null;
                     try {
-                        broker = new BrokerServer(sharedServer, KafkaRaftServer.configSchema());
+                        broker = new BrokerServer(sharedServer);
                     } catch (Throwable e) {
                         log.error("Error creating broker {}", node.id(), e);
                         Utils.swallow(log, Level.WARN, "sharedServer.stopForBroker error", sharedServer::stopForBroker);
@@ -654,7 +654,7 @@ public class KafkaClusterTestKit implements AutoCloseable {
             faultHandlerFactory,
             socketFactoryManager.getOrCreateSocketFactory(nodeId1)
         );
-        broker1 = new BrokerServer(sharedServer1, KafkaRaftServer.configSchema());
+        broker1 = new BrokerServer(sharedServer1);
         brokers.put(nodeId1, broker1);
 
         SharedServer sharedServer2 = new SharedServer(
@@ -668,7 +668,7 @@ public class KafkaClusterTestKit implements AutoCloseable {
             faultHandlerFactory,
             socketFactoryManager.getOrCreateSocketFactory(nodeId2)
         );
-        broker2 = new BrokerServer(sharedServer2, KafkaRaftServer.configSchema());
+        broker2 = new BrokerServer(sharedServer2);
         brokers.put(nodeId2, broker2);
 
         broker1.startup();
@@ -713,7 +713,7 @@ public class KafkaClusterTestKit implements AutoCloseable {
             faultHandlerFactory,
             socketFactoryManager.getOrCreateSocketFactory(nodeId)
         );
-        broker = new BrokerServer(sharedServer, KafkaRaftServer.configSchema());
+        broker = new BrokerServer(sharedServer);
         brokers.put(nodeId, broker);
 
         broker.startup();

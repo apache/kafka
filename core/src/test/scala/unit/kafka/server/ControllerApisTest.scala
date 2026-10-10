@@ -177,8 +177,7 @@ class ControllerApisTest {
         ListenerType.CONTROLLER,
         true,
         () => FinalizedFeatures.fromMetadataVersion(MetadataVersion.latestTesting())),
-      metadataCache,
-      KafkaRaftServer.configSchema
+      metadataCache
     )
   }
 

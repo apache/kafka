@@ -170,64 +170,6 @@ public class KafkaConfigSchemaTest {
     }
 
     @Test
-    public void testResolveEffectiveTopicConfigsWithSynonymsMatchesWinningEntry() {
-        Map<String, String> staticNodeConfig = new HashMap<>();
-        staticNodeConfig.put("foo.bar", "the,static,value");
-        staticNodeConfig.put("quux", "123");
-        staticNodeConfig.put("ghi", "false");
-        Map<String, String> dynamicClusterConfigs = new HashMap<>();
-        dynamicClusterConfigs.put("foo.bar", "the,dynamic,cluster,config,value");
-        dynamicClusterConfigs.put("quux", "456");
-        Map<String, String> dynamicNodeConfigs = new HashMap<>();
-        dynamicNodeConfigs.put("quux", "789");
-        Map<String, String> dynamicTopicConfigs = new HashMap<>();
-        dynamicTopicConfigs.put("ghi", "true");
-
-        Map<String, ConfigEntry> expectedEntries = SCHEMA.resolveEffectiveTopicConfigs(staticNodeConfig,
-            dynamicClusterConfigs, dynamicNodeConfigs, dynamicTopicConfigs);
-        Map<String, KafkaConfigSchema.TopicConfigWithSynonyms> actual = SCHEMA.resolveEffectiveTopicConfigsWithSynonyms(
-            staticNodeConfig, dynamicClusterConfigs, dynamicNodeConfigs, dynamicTopicConfigs);
-
-        assertEquals(expectedEntries.keySet(), actual.keySet());
-        expectedEntries.forEach((name, expectedEntry) ->
-            assertEquals(expectedEntry, actual.get(name).entry(), "mismatch for " + name));
-
-        assertEquals(List.of(
-            new KafkaConfigSchema.ConfigSynonymValue("foo.bar", "the,dynamic,cluster,config,value",
-                ConfigEntry.ConfigSource.DYNAMIC_DEFAULT_BROKER_CONFIG),
-            new KafkaConfigSchema.ConfigSynonymValue("foo.bar", "the,static,value",
-                ConfigEntry.ConfigSource.STATIC_BROKER_CONFIG),
-            new KafkaConfigSchema.ConfigSynonymValue("abc", null,
-                ConfigEntry.ConfigSource.DEFAULT_CONFIG)
-        ), actual.get("abc").synonyms());
-
-        assertEquals(List.of(
-            new KafkaConfigSchema.ConfigSynonymValue("quux", "2840400000",
-                ConfigEntry.ConfigSource.DYNAMIC_BROKER_CONFIG),
-            new KafkaConfigSchema.ConfigSynonymValue("quux", "1641600000",
-                ConfigEntry.ConfigSource.DYNAMIC_DEFAULT_BROKER_CONFIG),
-            new KafkaConfigSchema.ConfigSynonymValue("quux", "442800000",
-                ConfigEntry.ConfigSource.STATIC_BROKER_CONFIG),
-            new KafkaConfigSchema.ConfigSynonymValue("def", null,
-                ConfigEntry.ConfigSource.DEFAULT_CONFIG)
-        ), actual.get("def").synonyms());
-
-        assertEquals(List.of(
-            new KafkaConfigSchema.ConfigSynonymValue("ghi", "true",
-                ConfigEntry.ConfigSource.DYNAMIC_TOPIC_CONFIG),
-            new KafkaConfigSchema.ConfigSynonymValue("ghi", "false",
-                ConfigEntry.ConfigSource.STATIC_BROKER_CONFIG),
-            new KafkaConfigSchema.ConfigSynonymValue("ghi", "true",
-                ConfigEntry.ConfigSource.DEFAULT_CONFIG)
-        ), actual.get("ghi").synonyms());
-
-        assertEquals(List.of(
-            new KafkaConfigSchema.ConfigSynonymValue("xyz", "thedefault",
-                ConfigEntry.ConfigSource.DEFAULT_CONFIG)
-        ), actual.get("xyz").synonyms());
-    }
-
-    @Test
     public void testResolveEffectiveDynamicInternalTopicConfig() {
         Map<String, String> dynamicTopicConfigs = Map.of(
             "ghi", "true",
@@ -251,24 +193,5 @@ public class KafkaConfigSchemaTest {
                     ConfigEntry.ConfigType.STRING, "internal doc")
         );
         assertEquals(expected, SCHEMA.resolveEffectiveTopicConfigs(Map.of(), Map.of(), Map.of(), dynamicTopicConfigs));
-    }
-
-    @Test
-    public void testResolveEffectiveDynamicInternalTopicConfigWithSynonymsMatchesInclusionRule() {
-        Map<String, String> dynamicTopicConfigs = Map.of(
-            "ghi", "true",
-            "internal", "internal,change"
-        );
-        Map<String, ConfigEntry> expectedEntries = SCHEMA.resolveEffectiveTopicConfigs(
-            Map.of(), Map.of(), Map.of(), dynamicTopicConfigs);
-        Map<String, KafkaConfigSchema.TopicConfigWithSynonyms> actual = SCHEMA.resolveEffectiveTopicConfigsWithSynonyms(
-            Map.of(), Map.of(), Map.of(), dynamicTopicConfigs);
-
-        // "internal" is only included because it was set explicitly on the topic; without that, it
-        // must be excluded here exactly as it is from resolveEffectiveTopicConfigs, since both are
-        // meant to agree on which configs get returned.
-        assertEquals(expectedEntries.keySet(), actual.keySet());
-        expectedEntries.forEach((name, expectedEntry) ->
-            assertEquals(expectedEntry, actual.get(name).entry(), "mismatch for " + name));
     }
 }

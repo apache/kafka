@@ -19,6 +19,7 @@ package kafka.server
 
 import java.util.{Collections, Properties}
 import kafka.utils.Logging
+import org.apache.kafka.clients.admin.ConfigEntry
 import org.apache.kafka.common.acl.AclOperation.DESCRIBE_CONFIGS
 import org.apache.kafka.common.config.{ConfigDef, ConfigResource}
 import org.apache.kafka.common.errors.{ApiException, InvalidRequestException}
@@ -35,7 +36,7 @@ import org.apache.kafka.metadata.{ConfigRepository, KafkaConfigSchema, MetadataC
 import org.apache.kafka.network.Request
 import org.apache.kafka.server.AuthHelper
 import org.apache.kafka.server.ConfigHelperUtils.createResponseConfig
-import org.apache.kafka.server.config.DynamicBrokerConfig
+import org.apache.kafka.server.config.{DynamicBrokerConfig, ServerTopicConfigSynonyms}
 import org.apache.kafka.server.logger.LoggingController
 import org.apache.kafka.server.metrics.ClientMetricsConfigs
 import org.apache.kafka.storage.internals.log.LogConfig
@@ -44,8 +45,7 @@ import scala.collection.{Map, mutable}
 import scala.jdk.CollectionConverters._
 import scala.jdk.OptionConverters.RichOptional
 
-class ConfigHelper(metadataCache: MetadataCache, config: KafkaConfig, configRepository: ConfigRepository,
-                    configSchema: KafkaConfigSchema) extends Logging {
+class ConfigHelper(metadataCache: MetadataCache, config: KafkaConfig, configRepository: ConfigRepository) extends Logging {
 
   def handleDescribeConfigsRequest(
     request: Request,
@@ -91,16 +91,12 @@ class ConfigHelper(metadataCache: MetadataCache, config: KafkaConfig, configRepo
             Topic.validate(topic)
             if (metadataCache.contains(topic)) {
               val topicProps = configRepository.topicConfig(topic)
-              val dynamicTopicConfigs: java.util.Map[String, String] =
-                topicProps.stringPropertyNames.asScala.map(name => name -> topicProps.getProperty(name)).toMap.asJava
-              // Resolved the same way as the CreateTopics response, via KafkaConfigSchema, so the two
-              // APIs cannot diverge on effective value, source, or which configs are included.
-              val effectiveConfigs = configSchema.resolveEffectiveTopicConfigsWithSynonyms(
+              val effectiveConfigs = KafkaRaftServer.configSchema.resolveEffectiveTopicConfigs(
                 config.dynamicConfig.staticBrokerConfigs.asJava,
                 config.dynamicConfig.currentDynamicDefaultConfigs.asJava,
                 config.dynamicConfig.currentDynamicBrokerConfigs.asJava,
-                dynamicTopicConfigs)
-              createResponseConfig(resource, effectiveConfigs, createTopicConfigEntry(includeSynonyms, includeDocumentation)(_, _))
+                topicProps.asScala.asJava)
+              createResponseConfig(resource, effectiveConfigs, createTopicConfigEntry(topicProps, includeSynonyms, includeDocumentation)(_, _))
             } else {
               new DescribeConfigsResponseData.DescribeConfigsResult().setErrorCode(Errors.UNKNOWN_TOPIC_OR_PARTITION.code)
                 .setConfigs(Collections.emptyList[DescribeConfigsResponseData.DescribeConfigsResourceResult])
@@ -224,25 +220,29 @@ class ConfigHelper(metadataCache: MetadataCache, config: KafkaConfig, configRepo
       .setDocumentation(configDocumentation).setConfigType(dataType.id)
   }
 
-  def createTopicConfigEntry(includeSynonyms: Boolean, includeDocumentation: Boolean)
+  def createTopicConfigEntry(topicProps: Properties, includeSynonyms: Boolean, includeDocumentation: Boolean)
                             (name: String, value: Any): DescribeConfigsResponseData.DescribeConfigsResourceResult = {
-    val resolved = value.asInstanceOf[KafkaConfigSchema.TopicConfigWithSynonyms]
-    val entry = resolved.entry
-    val isSensitive = entry.isSensitive
-    val valueAsString = if (isSensitive) null else entry.value
-    val allSynonyms = resolved.synonyms.asScala.map { synonym =>
-      new DescribeConfigsResponseData.DescribeConfigsSynonym().setName(synonym.name)
-        .setValue(if (isSensitive) null else synonym.value)
-        .setSource(KafkaConfigSchema.translateConfigSource(synonym.source).id)
-    }.toList
-    val synonyms = if (!includeSynonyms) List.empty else allSynonyms
     val configEntryType = LogConfig.configType(name).toScala
+    val entry = value.asInstanceOf[ConfigEntry]
+    val isSensitive = KafkaConfig.maybeSensitive(configEntryType)
+    val valueAsString = if (isSensitive) null else entry.value
+    val allSynonyms = {
+      val list = Option(ServerTopicConfigSynonyms.TOPIC_CONFIG_SYNONYMS.get(name))
+        .map(s => configSynonyms(s, brokerSynonyms(s), isSensitive))
+        .getOrElse(List.empty)
+      if (!topicProps.containsKey(name))
+        list
+      else
+        new DescribeConfigsResponseData.DescribeConfigsSynonym().setName(name).setValue(valueAsString)
+          .setSource(ConfigSource.TOPIC_CONFIG.id) +: list
+    }
+    val source = KafkaConfigSchema.translateConfigSource(entry.source).id
+    val synonyms = if (!includeSynonyms) List.empty else allSynonyms
     val dataType = configResponseType(configEntryType)
     val configDocumentation = if (includeDocumentation) entry.documentation else null
     new DescribeConfigsResponseData.DescribeConfigsResourceResult()
-      .setName(name).setValue(valueAsString)
-      .setConfigSource(KafkaConfigSchema.translateConfigSource(entry.source).id)
-      .setIsSensitive(isSensitive).setReadOnly(entry.isReadOnly).setSynonyms(synonyms.asJava)
+      .setName(name).setValue(valueAsString).setConfigSource(source)
+      .setIsSensitive(isSensitive).setReadOnly(false).setSynonyms(synonyms.asJava)
       .setDocumentation(configDocumentation).setConfigType(dataType.id)
   }
 

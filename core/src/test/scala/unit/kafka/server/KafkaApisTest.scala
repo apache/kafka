@@ -217,8 +217,7 @@ class KafkaApisTest extends Logging {
       tokenManager = null,
       apiVersionManager = apiVersionManager,
       clientMetricsManager = clientMetricsManager,
-      groupConfigManager = groupConfigManager,
-      configSchema = KafkaRaftServer.configSchema)
+      groupConfigManager = groupConfigManager)
   }
 
   private def setupFeatures(featureVersions: Seq[FeatureVersion]): Unit = {
