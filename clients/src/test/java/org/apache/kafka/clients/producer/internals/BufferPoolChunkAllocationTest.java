@@ -29,12 +29,14 @@ import java.nio.ByteBuffer;
 import java.util.List;
 import java.util.concurrent.CountDownLatch;
 import java.util.concurrent.TimeUnit;
+import java.util.concurrent.atomic.AtomicInteger;
 import java.util.concurrent.atomic.AtomicReference;
 
 import static org.junit.jupiter.api.Assertions.assertEquals;
 import static org.junit.jupiter.api.Assertions.assertInstanceOf;
 import static org.junit.jupiter.api.Assertions.assertNotNull;
 import static org.junit.jupiter.api.Assertions.assertNull;
+import static org.junit.jupiter.api.Assertions.assertSame;
 import static org.junit.jupiter.api.Assertions.assertThrows;
 import static org.junit.jupiter.api.Assertions.assertTrue;
 
@@ -125,26 +127,117 @@ public class BufferPoolChunkAllocationTest {
     }
 
     /**
-     * A request that cannot be satisfied immediately and has no time to wait takes nothing: it
-     * blocks on the wait queue before acquiring anything, so the timeout leaves pool memory
-     * untouched (no roll back needed).
+     * When the memory is available, {@link BufferPool#tryAllocateChunks} hands out the whole request, taking
+     * free-list chunks first and the rest from non-pooled memory, exactly as a satisfiable
+     * {@link BufferPool#allocateChunks} does.
      */
     @Test
-    public void testImmediateTimeoutAcquiresNothing() throws Exception {
+    public void testTryAllocateChunksReturnsChunksWhenAvailable() throws Exception {
         int chunkSize = 64;
-        long total = 2 * chunkSize;  // only 2 chunks worth of memory
+        long total = 4L * chunkSize;
         BufferPool p = pool(total, chunkSize);
-        // Reserve one chunk so the pool has only 1 left.
+        // Put one chunk on the free list.
+        ByteBuffer freed = p.allocateChunks(chunkSize, 100).get(0);
+        p.deallocate(freed);
+
+        List<ByteBuffer> chunks = p.tryAllocateChunks(2 * chunkSize + 1);
+
+        assertNotNull(chunks);
+        assertEquals(3, chunks.size());
+        for (ByteBuffer chunk : chunks)
+            assertEquals(chunkSize, chunk.capacity());
+        assertSame(freed, chunks.get(0), "the free-list chunk is reused first");
+        assertEquals(total - 3L * chunkSize, p.availableMemory());
+
+        chunks.forEach(p::deallocate);
+        assertEquals(total, p.availableMemory());
+    }
+
+    /**
+     * When the memory is not available right away, {@link BufferPool#tryAllocateChunks} returns null without
+     * waiting: it takes nothing, never joins the wait queue or records a wait time, and so cannot be
+     * interrupted either.
+     */
+    @Test
+    public void testTryAllocateChunksReturnsNullWithoutWaitingWhenUnavailable() throws Exception {
+        int chunkSize = 64;
+        AtomicInteger waitTimeRecordings = new AtomicInteger();
+        BufferPool p = new BufferPool(2L * chunkSize, chunkSize, metrics, time, "producer-metrics",
+                BufferPool.AllocationMode.INCREMENTAL) {
+            @Override
+            protected void recordWaitTime(long timeNs) {
+                waitTimeRecordings.incrementAndGet();
+                super.recordWaitTime(timeNs);
+            }
+        };
         ByteBuffer held = p.allocateChunks(chunkSize, 100).get(0);
 
-        // Request 2 chunks with a zero deadline. Only 1 chunk's worth is free, so the request goes
-        // to the wait queue and times out on its first wait, before taking anything.
-        assertThrows(BufferExhaustedException.class, () -> p.allocateChunks(2 * chunkSize, 0));
-
-        // Available memory reflects only the chunk we deliberately hold.
-        assertEquals(total - chunkSize, p.availableMemory());
+        // An interrupted thread would get InterruptedException from any wait.
+        Thread.currentThread().interrupt();
+        try {
+            assertNull(p.tryAllocateChunks(2 * chunkSize));
+        } finally {
+            assertTrue(Thread.interrupted(), "the interrupt flag must be left untouched");
+        }
+        assertEquals(0, p.queued());
+        assertEquals(0, waitTimeRecordings.get());
+        assertEquals(chunkSize, p.availableMemory(), "a refused request must take nothing");
 
         p.deallocate(held);
+        assertEquals(2L * chunkSize, p.availableMemory());
+    }
+
+    /**
+     * Once the pool is closed, {@link BufferPool#tryAllocateChunks} returns null even with memory free, where
+     * {@link BufferPool#allocateChunks} throws. A chunked stream growing while its batch is drained or
+     * aborted on producer close relies on this to fall back to the heap.
+     */
+    @Test
+    public void testTryAllocateChunksReturnsNullWhenClosed() throws Exception {
+        int chunkSize = 64;
+        long total = 4L * chunkSize;
+        BufferPool p = pool(total, chunkSize);
+        p.close();
+
+        assertNull(p.tryAllocateChunks(chunkSize));
+        assertThrows(KafkaException.class, () -> p.allocateChunks(chunkSize, 0));
+        assertEquals(total, p.availableMemory());
+    }
+
+    /**
+     * {@link BufferPool#tryAllocateChunks} rejects the same invalid requests as {@link BufferPool#allocateChunks}:
+     * these are programming errors, not a lack of memory, so they throw rather than return null.
+     */
+    @Test
+    public void testTryAllocateChunksRejectsInvalidRequests() {
+        int chunkSize = 64;
+        BufferPool p = pool(2L * chunkSize, chunkSize);
+        assertThrows(IllegalArgumentException.class, () -> p.tryAllocateChunks(0));
+        assertThrows(IllegalArgumentException.class, () -> p.tryAllocateChunks(-1));
+        assertThrows(IllegalArgumentException.class, () -> p.tryAllocateChunks(2 * chunkSize + 1));
+
+        BufferPool full = new BufferPool(2L * chunkSize, chunkSize, metrics, time, "producer-metrics",
+                BufferPool.AllocationMode.FULL);
+        assertThrows(IllegalStateException.class, () -> full.tryAllocateChunks(chunkSize));
+    }
+
+    /**
+     * If allocating the raw chunks fails (e.g. out of heap), {@link BufferPool#tryAllocateChunks} refunds the
+     * whole reservation before the error propagates, as {@link BufferPool#allocateChunks} does.
+     */
+    @Test
+    public void testTryAllocateChunksRefundsReservationWhenAllocationFails() {
+        int chunkSize = 64;
+        long total = 4L * chunkSize;
+        BufferPool p = new BufferPool(total, chunkSize, metrics, time, "producer-metrics",
+                BufferPool.AllocationMode.INCREMENTAL) {
+            @Override
+            protected ByteBuffer allocateByteBuffer(int size) {
+                throw new OutOfMemoryError("injected");
+            }
+        };
+
+        assertThrows(OutOfMemoryError.class, () -> p.tryAllocateChunks(2 * chunkSize));
         assertEquals(total, p.availableMemory());
     }
 

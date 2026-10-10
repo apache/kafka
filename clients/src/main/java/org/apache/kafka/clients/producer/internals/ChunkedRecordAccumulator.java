@@ -27,7 +27,6 @@ import org.apache.kafka.common.header.Header;
 import org.apache.kafka.common.metrics.Metrics;
 import org.apache.kafka.common.record.TimestampType;
 import org.apache.kafka.common.record.internal.AbstractRecords;
-import org.apache.kafka.common.record.internal.CompressionType;
 import org.apache.kafka.common.record.internal.MemoryRecordsBuilder;
 import org.apache.kafka.common.record.internal.Record;
 import org.apache.kafka.common.record.internal.RecordBatch;
@@ -47,7 +46,6 @@ import java.util.List;
  * <p>
  * See {@link #append} and {@link #tryAppend} for how batches are created and grown.
  * <p>
- * TODO: support compressed data (with mid-record growth); the constructor rejects compression for now.
  */
 public class ChunkedRecordAccumulator extends RecordAccumulator {
 
@@ -79,11 +77,6 @@ public class ChunkedRecordAccumulator extends RecordAccumulator {
             throw new IllegalArgumentException("bufferPool must serve "
                     + BufferPool.AllocationMode.INCREMENTAL + " allocation, but serves "
                     + bufferPool.allocationMode());
-        // TODO: drop this once the incremental strategy supports compressed data (with the
-        //   mid-record growth fallback for compressor overshoot).
-        if (compression.type() != CompressionType.NONE)
-            throw new UnsupportedOperationException(
-                    "Compression is not yet supported with the incremental buffer.memory allocation strategy");
         this.chunkedFree = bufferPool;
     }
 
@@ -179,7 +172,7 @@ public class ChunkedRecordAccumulator extends RecordAccumulator {
                     extensionChunks = allocateExtensionChunks(appendResult.extensionBytesNeeded, batchToExtend, dq,
                             topic, effectivePartition);
                     if (extensionChunks == null) {
-                        // Pool exhausted, so no chunks are held. allocateExtensionChunks has already
+                        // Pool exhausted (or closed), so no chunks are held. allocateExtensionChunks has already
                         // decided whether to close the open batch; retry either way, bounded by
                         // throwIfNoMoreRetriesAllowed, which will report exhausted memory as the cause.
                         nonBlockingMemoryAllocationDenied = true;
@@ -188,10 +181,10 @@ public class ChunkedRecordAccumulator extends RecordAccumulator {
                     nowMs = time.milliseconds();
                 } else if (appendResult.needsNewBatch() && newBatch == null) {
                     // The open batch is done (e.g., full, closed) so start a new one. Size it for
-                    // this first record with the same estimator the full strategy uses
-                    // (RecordAccumulator.append), but reserve only enough for the record rather than
-                    // a whole batch.size.
-                    // TODO: review when compression is supported.
+                    // this first record only (not a whole batch.size), to the uncompressed upper bound
+                    // the first-record capacity check in ChunkedProducerBatch.tryAppend demands. For a
+                    // compressed batch this is only a heuristic (that check is skipped for it): any
+                    // compressor overshoot is absorbed by the stream growing mid-write.
                     int newBatchSize = AbstractRecords.estimateSizeInBytesUpperBound(
                             RecordBatch.CURRENT_MAGIC_VALUE, compression.type(), key, value, headers);
                     long remainingTimeToBlock = remainingTimeToBlockMs(deadlineMs);
@@ -225,7 +218,7 @@ public class ChunkedRecordAccumulator extends RecordAccumulator {
                     }
                     if (extensionChunks != null) {
                         ProducerBatch last = dq.peekLast();
-                        // The batch may have changed while allocateChunks was off-lock: drained and
+                        // The batch may have changed while tryAllocateChunks was off-lock: drained and
                         // replaced, closed for appends, filled to its limit, or already grown by a
                         // concurrent appender. extensionBytesNeeded is 0 whenever attaching would be
                         // wrong, so it serves as both tests at once: the batch still needs chunks for
@@ -255,8 +248,8 @@ public class ChunkedRecordAccumulator extends RecordAccumulator {
                     // so bufferStream was allocated (this iteration or carried from a prior one).
                     if (newBatch == null)
                         throw new IllegalStateException("needsNewBatch path reached without an allocated buffer stream");
-                    // Reuse the new-batch size estimate as the write-limit basis.
-                    // TODO: review when compression is supported.
+                    // Reuse the new-batch size estimate as the write-limit basis; fullness checks in
+                    // MemoryRecordsBuilder already fold in the estimated compression ratio.
                     final NewBatchBuffer pendingNewBatch = newBatch;
                     appendResult = appendNewBatch(tp, dq, timestamp, key, value, headers, callbacks,
                             () -> chunkedRecordsBuilder(pendingNewBatch.stream, pendingNewBatch.firstAppendSize), nowMs);
@@ -286,8 +279,13 @@ public class ChunkedRecordAccumulator extends RecordAccumulator {
 
     /**
      * Mid-batch extension: the open batch can still take this record so grow it in place. The
-     * acquire is non-blocking and fails fast when the pool is exhausted, closing
-     * {@code batchToExtend} for appends so the record retries on the new-batch path (blocks for memory)
+     * acquire ({@link BufferPool#tryAllocateChunks}) is non-blocking and fails fast when the pool is
+     * exhausted, closing {@code batchToExtend} for appends so the record retries on the new-batch path
+     * (blocks for memory).
+     * <p>
+     * {@code tryAllocateChunks} also refuses once the pool is closed. That is handled the same way: when the
+     * retry then needs a new batch, its blocking acquire throws {@link KafkaException} for the closed pool
+     * (unless {@code max.block.ms} is already spent, in which case the retry bound gives up first).
      * <p>
      * The acquire runs off the deque lock, so the open batch may no longer be the one the gap was
      * sized against by the time this would close it: it could have been drained and replaced by a batch
@@ -296,28 +294,26 @@ public class ChunkedRecordAccumulator extends RecordAccumulator {
      * re-evaluates against whatever is open then.
      *
      * @param batchToExtend the batch the gap was sized against; must not be null
-     * @return the chunks, or null if the pool was exhausted
+     * @return the chunks, or null if the pool was exhausted or closed
      */
     private List<ByteBuffer> allocateExtensionChunks(int extensionBytesNeeded, ProducerBatch batchToExtend,
-                                                     Deque<ProducerBatch> dq, String topic, int partition)
-            throws InterruptedException {
-        try {
-            return chunkedFree.allocateChunks(extensionBytesNeeded, 0L);
-        } catch (BufferExhaustedException e) {
-            synchronized (dq) {
-                if (dq.peekLast() == batchToExtend) {
-                    log.trace("Pool exhausted while extending batch for topic {} partition {}; closing existing batch",
-                            topic, partition);
-                    // No need to check whether it is still open: closeForRecordAppends is idempotent.
-                    batchToExtend.closeForRecordAppends();
-                } else {
-                    log.trace("Pool exhausted while extending batch for topic {} partition {}; the batch it "
-                            + "was sized against is no longer the open one, so closing nothing and retrying",
-                            topic, partition);
-                }
+                                                     Deque<ProducerBatch> dq, String topic, int partition) {
+        List<ByteBuffer> chunks = chunkedFree.tryAllocateChunks(extensionBytesNeeded);
+        if (chunks != null)
+            return chunks;
+        synchronized (dq) {
+            if (dq.peekLast() == batchToExtend) {
+                log.trace("Pool exhausted while extending batch for topic {} partition {}; closing existing batch",
+                        topic, partition);
+                // No need to check whether it is still open: closeForRecordAppends is idempotent.
+                batchToExtend.closeForRecordAppends();
+            } else {
+                log.trace("Pool exhausted while extending batch for topic {} partition {}; the batch it "
+                        + "was sized against is no longer the open one, so closing nothing and retrying",
+                        topic, partition);
             }
-            return null;
         }
+        return null;
     }
 
     /**
