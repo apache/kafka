@@ -43,6 +43,7 @@ import org.apache.kafka.common.TopicPartition;
 import org.apache.kafka.common.errors.GroupIdNotFoundException;
 import org.apache.kafka.common.protocol.Errors;
 import org.apache.kafka.common.utils.Utils;
+import org.apache.kafka.common.utils.internals.Exit;
 import org.apache.kafka.server.util.CommandLineUtils;
 import org.apache.kafka.tools.GroupOffsetsResetter;
 
@@ -74,7 +75,6 @@ import java.util.function.Function;
 import java.util.stream.Collectors;
 import java.util.stream.Stream;
 
-import joptsimple.OptionException;
 import joptsimple.OptionSpec;
 
 public class ConsumerGroupCommand {
@@ -82,8 +82,12 @@ public class ConsumerGroupCommand {
     static final String MISSING_COLUMN_VALUE = "-";
 
     public static void main(String[] args) {
-        ConsumerGroupCommandOptions opts = ConsumerGroupCommandOptions.fromArgs(args);
+        Exit.exit(mainNoExit(args));
+    }
+
+    static int mainNoExit(String[] args) {
         try {
+            ConsumerGroupCommandOptions opts = ConsumerGroupCommandOptions.fromArgs(args);
             List<OptionSpec<?>> actions = List.of(
                 opts.listOpt,
                 opts.describeOpt,
@@ -95,24 +99,31 @@ public class ConsumerGroupCommand {
 
             // Should have exactly one action.
             if (actions.stream().filter(opts.options::has).count() != 1) {
-                CommandLineUtils.printUsageAndExit(
-                    opts.parser,
-                    String.format(
-                        "Command must include exactly one action: %s",
-                        actions.stream().map(opt ->
-                            "--" + opt.options().get(0)
-                        ).collect(Collectors.joining(", "))
-                    )
-                );
+                CommandLineUtils.printUsageAndThrow(opts.parser, String.format(
+                    "Command must include exactly one action: %s",
+                    actions.stream().map(opt ->
+                        "--" + opt.options().get(0)
+                    ).collect(Collectors.joining(", "))
+                ));
             }
 
             run(opts);
-        } catch (OptionException e) {
-            CommandLineUtils.printUsageAndExit(opts.parser, e.getMessage());
+            return 0;
+        } catch (CommandLineUtils.HelpOrVersionException e) {
+            if (e.getMessage() != null) {
+                System.err.println(e.getMessage());
+            }
+            return 0;
+        } catch (IllegalArgumentException e) {
+            System.err.println(e.getMessage());
+            return 1;
+        } catch (Throwable e) {
+            printError("Executing consumer group command failed due to " + e.getMessage(), Optional.of(e));
+            return 1;
         }
     }
 
-    static void run(ConsumerGroupCommandOptions opts) {
+    static void run(ConsumerGroupCommandOptions opts) throws Exception {
         if (opts.options.has(opts.validateRegexOpt)) {
             validateRegex(opts.options.valueOf(opts.validateRegexOpt));
             return;
@@ -135,10 +146,6 @@ public class ConsumerGroupCommand {
             } else if (opts.options.has(opts.deleteOffsetsOpt)) {
                 consumerGroupService.deleteOffsets();
             }
-        } catch (IllegalArgumentException e) {
-            CommandLineUtils.printUsageAndExit(opts.parser, e.getMessage());
-        } catch (Throwable e) {
-            printError("Executing consumer group command failed due to " + e.getMessage(), Optional.of(e));
         }
     }
 
@@ -950,7 +957,7 @@ public class ConsumerGroupCommand {
                 return groupOffsetsResetter.parseTopicPartitionsToReset(topics);
             } else {
                 if (!opts.options.has(opts.resetFromFileOpt))
-                    CommandLineUtils.printUsageAndExit(opts.parser, "One of the reset scopes should be defined: --all-topics, --topic.");
+                    CommandLineUtils.printUsageAndThrow(opts.parser, "One of the reset scopes should be defined: --all-topics, --topic.");
 
                 return List.of();
             }
@@ -991,7 +998,7 @@ public class ConsumerGroupCommand {
                 return groupOffsetsResetter.resetToCurrent(partitionsToReset, currentCommittedOffsets);
             }
 
-            CommandLineUtils.printUsageAndExit(opts.parser, String.format("Option '%s' requires one of the following scenarios: %s", opts.resetOffsetsOpt, opts.allResetOffsetScenarioOpts));
+            CommandLineUtils.printUsageAndThrow(opts.parser, String.format("Option '%s' requires one of the following scenarios: %s", opts.resetOffsetsOpt, opts.allResetOffsetScenarioOpts));
             return null;
         }
 

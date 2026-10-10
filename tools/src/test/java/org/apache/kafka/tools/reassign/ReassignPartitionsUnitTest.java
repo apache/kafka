@@ -843,4 +843,30 @@ public class ReassignPartitionsUnitTest {
             assertEquals("/tmp/broker2/logs0", result.get(new TopicPartitionReplica("bar", 0, 3)));
         }
     }
+
+    @Test
+    public void testMainNoExitWithNoArgs() {
+        assertEquals(1, ReassignPartitionsCommand.mainNoExit(new String[0]));
+    }
+
+    @Test
+    public void testMainNoExitWithUnrecognizedOption() {
+        assertEquals(1, ReassignPartitionsCommand.mainNoExit(new String[]{"--foo"}));
+    }
+
+    @Test
+    public void testMainNoExitWithMissingBootstrapServer() {
+        assertEquals(1, ReassignPartitionsCommand.mainNoExit(new String[]{
+            "--generate",
+            "--broker-list", "0",
+            "--topics-to-move-json-file", "myfile.json"}));
+    }
+
+    @Test
+    public void testMainNoExitWithMultipleActions() {
+        assertEquals(1, ReassignPartitionsCommand.mainNoExit(new String[]{
+            "--bootstrap-server", "localhost:1234",
+            "--execute", "--verify",
+            "--reassignment-json-file", "myfile.json"}));
+    }
 }
