@@ -143,11 +143,7 @@ final class TagTree<P> {
         leafByTagGroup.put(tagGroup, node);
     }
 
-    /**
-     * The tag keys by their number of values, fewest first, as the levels from the top: a used value near the top then
-     * rules out a large subtree at once, and a query that leaves out the top key still walks into few branches. The
-     * order only decides which nodes a query walks, not its result.
-     */
+    /** The key indexes as the levels from the top, fewest values first; the order affects speed, not results. */
     private static int[] tagKeysInTreeOrder(final int[] numValues) {
         final Integer[] keyIndexes = new Integer[numValues.length];
         for (int keyIndex = 0; keyIndex < keyIndexes.length; keyIndex++) {
@@ -164,10 +160,7 @@ final class TagTree<P> {
         return tagKeysInTreeOrder;
     }
 
-    /**
-     * Collects the values below the node and queues its children by their least-loaded process with room, for the node
-     * and every inner node under it.
-     */
+    /** Fills in the values below and the child queues of the node and of every inner node under it. */
     private void buildInnerNodes(final Node<P> node) {
         if (node.tagGroup != null) {
             return;
@@ -233,7 +226,7 @@ final class TagTree<P> {
         return numValues[keyIndex];
     }
 
-    /** Whether the value is used: a holder of the task carries it, or it is missing, which never makes a task more diverse. */
+    /** Whether the value is used: a holder of the task carries it, or it is missing. */
     private boolean valueUsed(final int keyIndex, final int valueIndex) {
         return valueIndex == missingValueIndex(keyIndex) || usedValues[keyIndex].get(valueIndex);
     }
@@ -251,10 +244,7 @@ final class TagTree<P> {
         return hasTagGroupBelowMeeting(root, keyBits(conditionKeys));
     }
 
-    /**
-     * The least-loaded process with room in a tag group whose values for {@code conditionKeys} are all unused, or null
-     * if none.
-     */
+    /** The least-loaded process with room in a tag group meeting {@code conditionKeys}, or null if none. */
     QueuedProcess<P> leastLoadedProcessMeeting(final List<TagKey> conditionKeys) {
         return leastLoadedProcessBelowMeeting(root, keyBits(conditionKeys));
     }
@@ -268,10 +258,7 @@ final class TagTree<P> {
         return keyBits;
     }
 
-    /**
-     * Whether a tag group with room below the node has values for {@code conditionKeys} that are all unused; the node's
-     * own value and those above it meet the conditions.
-     */
+    /** Whether a tag group with room below the node meets {@code conditionKeys}. */
     private boolean hasTagGroupBelowMeeting(final Node<P> node, final int conditionKeys) {
         if (valuesBelowAllMeeting(node, conditionKeys)) {
             return leastLoadedProcessBelow(node) != null;
@@ -286,8 +273,7 @@ final class TagTree<P> {
     }
 
     /**
-     * The least-loaded process with room below the node in a tag group whose values for {@code conditionKeys} are all
-     * unused; the node's own value and those above it meet the conditions.
+     * The least-loaded process with room below the node in a tag group meeting {@code conditionKeys}, or null if none.
      */
     private QueuedProcess<P> leastLoadedProcessBelowMeeting(final Node<P> node, final int conditionKeys) {
         if (valuesBelowAllMeeting(node, conditionKeys)) {
@@ -309,10 +295,7 @@ final class TagTree<P> {
         return head;
     }
 
-    /**
-     * Puts the children that the query set aside back in the node's queue, with the processes they were queued with, so
-     * the node's cache stays valid.
-     */
+    /** Puts the children that a query set aside back in the node's queue. */
     private void putBackSetAsideChildren(final Node<P> node) {
         node.childrenByLeastLoaded.addAll(node.setAsideChildren);
         node.setAsideChildren.clear();
@@ -323,10 +306,7 @@ final class TagTree<P> {
         return (conditionKeys & 1 << node.keyIndex) == 0 || !valueUsed(node.keyIndex, node.valueIndex);
     }
 
-    /**
-     * Whether, for every key of {@code conditionKeys}, no value below the node is used or missing: every tag group
-     * below the node then meets the conditions, given that the node's own value and those above it do.
-     */
+    /** Whether every value below the node meets {@code conditionKeys}. */
     private boolean valuesBelowAllMeeting(final Node<P> node, final int conditionKeys) {
         // One key of conditionKeys at a time, lowest bit first.
         for (int keyBits = conditionKeys; keyBits != 0; keyBits &= keyBits - 1) {
@@ -359,10 +339,8 @@ final class TagTree<P> {
     }
 
     /**
-     * Brings the next child to walk into to the head of the node's queue and returns it, leaving it there: one with
-     * room whose own value meets {@code conditionKeys}, queued with its current least-loaded process. The tag groups
-     * below it may still fail a condition further down. Null once no child is left or none can beat {@code bound}, the
-     * best found so far.
+     * Brings the next child whose own value meets {@code conditionKeys} to the head of the queue and returns it, or
+     * null if none left can beat {@code bound}.
      */
     private Node<P> nextChildMeeting(final Node<P> node, final int conditionKeys, final QueuedProcess<P> bound) {
         while (!node.childrenByLeastLoaded.isEmpty()) {

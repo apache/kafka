@@ -56,18 +56,12 @@ final class RackAwareStandbyPicker<P> {
         }
     }
 
-    /**
-     * Records the tag values of a new holder of the task, so that no later standby lands on them while a new value
-     * exists.
-     */
+    /** Records the tag values of a new holder of the task as used. */
     void markUsed(final TagGroup<P> holder) {
         tree.markUsed(holder);
     }
 
-    /**
-     * The conditions for the next standby: the tag keys for which a candidate must have a value new to the task, met by
-     * at least one tag group with room. Empty once no tag group with room can make the task more diverse.
-     */
+    /** The conditions for the next standby, or empty once no tag group with room can make the task more diverse. */
     List<TagKey> pick() {
         // Only if a tag key has an unused value is it possible to choose a process that makes the task more diverse
         // in this tag key.
@@ -109,10 +103,7 @@ final class RackAwareStandbyPicker<P> {
         return tree.tagGroupMeeting(tagGroup, conditions) && tagGroup.hasRoom();
     }
 
-    /**
-     * The least-loaded process with room of the candidates under the conditions of the last {@link #pick()}, of which
-     * there is at least one; call this before placing the standby, which changes loads.
-     */
+    /** The least-loaded process with room of the candidates; call it before placing the standby. */
     P leastLoaded(final List<TagKey> conditions) {
         return tree.leastLoadedProcessMeeting(conditions).process;
     }
