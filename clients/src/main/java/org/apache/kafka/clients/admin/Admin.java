@@ -697,6 +697,15 @@ public interface Admin extends AutoCloseable {
     /**
      * Delete records whose offset is smaller than the given offset of the corresponding partition.
      * <p>
+     * The following exceptions can be anticipated when calling {@code get()} on the futures obtained from
+     * the returned {@link DeleteRecordsResult}:
+     * <ul>
+     * <li>{@link org.apache.kafka.common.errors.PolicyViolationException}
+     * if the records of the partition can not be deleted due to the configured {@code cleanup.policy},
+     * for example because the topic's {@code cleanup.policy} is {@code compact} and does not include
+     * {@code delete}.</li>
+     * </ul>
+     * <p>
      * This operation is supported by brokers with version 0.11.0.0 or higher.
      *
      * @param recordsToDelete The topic partitions and related offsets from which records deletion starts.
