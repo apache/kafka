@@ -20,6 +20,7 @@ import org.apache.kafka.common.utils.internals.AppInfoParser;
 import org.apache.kafka.connect.data.Schema;
 import org.apache.kafka.connect.data.SchemaBuilder;
 import org.apache.kafka.connect.data.Struct;
+import org.apache.kafka.connect.errors.SchemaBuilderException;
 import org.apache.kafka.connect.sink.SinkRecord;
 
 import org.junit.jupiter.api.AfterEach;
@@ -27,6 +28,7 @@ import org.junit.jupiter.api.Test;
 import org.junit.jupiter.params.ParameterizedTest;
 import org.junit.jupiter.params.provider.Arguments;
 import org.junit.jupiter.params.provider.MethodSource;
+import org.junit.jupiter.params.provider.ValueSource;
 
 import java.util.HashMap;
 import java.util.Map;
@@ -34,6 +36,7 @@ import java.util.stream.Stream;
 
 import static org.junit.jupiter.api.Assertions.assertEquals;
 import static org.junit.jupiter.api.Assertions.assertNull;
+import static org.junit.jupiter.api.Assertions.assertThrows;
 
 public class ReplaceFieldTest {
     private final ReplaceField<SinkRecord> xformKey = new ReplaceField.Key<>();
@@ -114,6 +117,19 @@ public class ReplaceFieldTest {
     }
 
     @Test
+    public void testIgnoreRenamesForExcludedFieldsSchemaless() {
+        final Map<String, String> props = Map.of("exclude", "a", "renames", "a:b");
+        xform.configure(props);
+        xformKey.configure(props);
+
+        final Map<String, Integer> value = Map.of("a", 1, "b", 2);
+        final SinkRecord record = new SinkRecord("test", 0, null, value, null, value, 0);
+
+        assertEquals(Map.of("b", 2), xform.apply(record).value());
+        assertEquals(Map.of("b", 2), xformKey.apply(record).key());
+    }
+
+    @Test
     public void withSchema() {
         final Map<String, String> props = new HashMap<>();
         props.put("include", "abc,foo");
@@ -142,6 +158,117 @@ public class ReplaceFieldTest {
         assertEquals(2, updatedValue.schema().fields().size());
         assertEquals(Integer.valueOf(42), updatedValue.getInt32("xyz"));
         assertEquals(true, updatedValue.getBoolean("bar"));
+    }
+
+    @ParameterizedTest
+    @MethodSource("data")
+    public void testIgnoreRenamesForExcludedFieldsWithSchema(boolean replaceNullWithDefault, Object expectedValue) {
+        final Map<String, String> props = Map.of(
+                "exclude", "a",
+                "renames", "a:b",
+                "replace.null.with.default", String.valueOf(replaceNullWithDefault));
+        xform.configure(props);
+        xformKey.configure(props);
+
+        final Schema schema = SchemaBuilder.struct()
+                .field("a", Schema.INT32_SCHEMA)
+                .field("b", SchemaBuilder.int32().optional().defaultValue(42).build())
+                .build();
+        final Struct value = new Struct(schema).put("a", 1).put("b", null);
+        assertTransformedField(schema, value, "b", expectedValue);
+
+        // Exercise the cached schema with different field values.
+        assertTransformedField(schema, new Struct(schema).put("a", 3).put("b", 2), "b", 2);
+    }
+
+    @Test
+    public void testIgnoreRenamesForFieldsNotIncludedWithSchema() {
+        final Map<String, String> props = Map.of("include", "b", "renames", "a:b");
+        xform.configure(props);
+        xformKey.configure(props);
+
+        final Schema schema = SchemaBuilder.struct()
+                .field("a", Schema.INT32_SCHEMA)
+                .field("b", Schema.INT32_SCHEMA)
+                .build();
+        assertTransformedField(schema, new Struct(schema).put("a", 1).put("b", 2), "b", 2);
+    }
+
+    @Test
+    public void testIgnoreRenamesForMissingFieldsWithSchema() {
+        final Map<String, String> props = Map.of("renames", "a:b");
+        xform.configure(props);
+        xformKey.configure(props);
+
+        final Schema sourceSchema = SchemaBuilder.struct().field("a", Schema.INT32_SCHEMA).build();
+        assertTransformedField(sourceSchema, new Struct(sourceSchema).put("a", 1), "b", 1);
+
+        final Schema targetSchema = SchemaBuilder.struct().field("b", Schema.INT32_SCHEMA).build();
+        assertTransformedField(targetSchema, new Struct(targetSchema).put("b", 2), "b", 2);
+
+        // Cached mappings must remain specific to each input schema.
+        assertTransformedField(sourceSchema, new Struct(sourceSchema).put("a", 3), "b", 3);
+        assertTransformedField(targetSchema, new Struct(targetSchema).put("b", 4), "b", 4);
+    }
+
+    @ParameterizedTest
+    @ValueSource(booleans = {true, false})
+    public void testIgnoreInactiveRenamesToSameTargetWithSchema(boolean sourcePresent) {
+        final Map<String, String> props = Map.of("exclude", "b", "renames", "a:target,b:target");
+        xform.configure(props);
+        xformKey.configure(props);
+
+        final SchemaBuilder builder = SchemaBuilder.struct().field("a", Schema.INT32_SCHEMA);
+        if (sourcePresent) {
+            builder.field("b", Schema.INT32_SCHEMA);
+        }
+        final Schema schema = builder.build();
+        final Struct value = new Struct(schema).put("a", 1);
+        if (sourcePresent) {
+            value.put("b", 2);
+        }
+        assertTransformedField(schema, value, "target", 1);
+    }
+
+    @ParameterizedTest
+    @ValueSource(strings = {"a:b,b:c", "a:b,b:a"})
+    public void testRenamesAreAppliedOnceWithSchema(String renames) {
+        xform.configure(Map.of("renames", renames));
+        final Schema schema = SchemaBuilder.struct()
+                .field("a", Schema.INT32_SCHEMA)
+                .field("b", Schema.INT32_SCHEMA)
+                .build();
+        final Struct value = new Struct(schema).put("a", 1).put("b", 2);
+        final SinkRecord record = new SinkRecord("test", 0, null, null, schema, value, 0);
+        final Struct updatedValue = (Struct) xform.apply(record).value();
+
+        assertEquals(2, updatedValue.schema().fields().size());
+        assertEquals(1, updatedValue.getInt32("b"));
+        assertEquals(2, updatedValue.getInt32(renames.endsWith("c") ? "c" : "a"));
+    }
+
+    @Test
+    public void testRejectDuplicateRetainedFieldNamesWithSchema() {
+        xform.configure(Map.of("renames", "a:target,b:target"));
+        final Schema schema = SchemaBuilder.struct()
+                .field("a", Schema.INT32_SCHEMA)
+                .field("b", Schema.INT32_SCHEMA)
+                .build();
+        final Struct value = new Struct(schema).put("a", 1).put("b", 2);
+        final SinkRecord record = new SinkRecord("test", 0, null, null, schema, value, 0);
+
+        assertThrows(SchemaBuilderException.class, () -> xform.apply(record));
+    }
+
+    private void assertTransformedField(Schema schema, Struct value, String fieldName, Object expectedValue) {
+        final SinkRecord record = new SinkRecord("test", 0, schema, value, schema, value, 0);
+        final Struct updatedValue = (Struct) xform.apply(record).value();
+        final Struct updatedKey = (Struct) xformKey.apply(record).key();
+
+        assertEquals(1, updatedValue.schema().fields().size());
+        assertEquals(expectedValue, updatedValue.getWithoutDefault(fieldName));
+        assertEquals(1, updatedKey.schema().fields().size());
+        assertEquals(expectedValue, updatedKey.getWithoutDefault(fieldName));
     }
 
     @Test
