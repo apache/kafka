@@ -19,6 +19,7 @@ package org.apache.kafka.common.utils.internals;
 import java.io.IOException;
 import java.io.InputStream;
 import java.nio.ByteBuffer;
+import java.util.Objects;
 
 /**
  * A byte buffer backed input inputStream
@@ -38,6 +39,7 @@ public final class ByteBufferInputStream extends InputStream {
     }
 
     public int read(byte[] bytes, int off, int len) {
+        Objects.checkFromIndexSize(off, len, bytes.length);
         if (len == 0) {
             return 0;
         }
