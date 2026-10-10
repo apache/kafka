@@ -41,6 +41,7 @@ import org.apache.kafka.common.config.SaslConfigs;
 import org.apache.kafka.common.errors.ClusterAuthorizationException;
 import org.apache.kafka.common.errors.SaslAuthenticationException;
 import org.apache.kafka.common.errors.TopicAuthorizationException;
+import org.apache.kafka.common.errors.UnknownTopicOrPartitionException;
 import org.apache.kafka.common.security.auth.SecurityProtocol;
 import org.apache.kafka.common.serialization.StringDeserializer;
 import org.apache.kafka.common.serialization.StringSerializer;
@@ -299,15 +300,16 @@ public class ClusterTestExtensionsTest {
             @ClusterConfigProperty(key = "log.segment.delete.delay.ms", value = "1000")
         }
     )
-    public void testVerifyTopicDeletion(ClusterInstance clusterInstance) throws Exception {
+    public void testDeleteTopic(ClusterInstance clusterInstance) throws Exception {
         String testTopic = "testTopic";
         clusterInstance.createTopic(testTopic, 1, (short) 1);
         try (Admin admin = clusterInstance.admin()) {
-            admin.deleteTopics(List.of(testTopic));
-            clusterInstance.waitTopicDeletion(testTopic);
+            clusterInstance.deleteTopic(testTopic);
             Assertions.assertTrue(admin.listTopics().listings().get().stream().noneMatch(
                     topic -> topic.name().equals(testTopic)
             ));
+
+            assertThrows(UnknownTopicOrPartitionException.class, () -> clusterInstance.deleteTopic("non-existent-topic"));
         }
     }
 
