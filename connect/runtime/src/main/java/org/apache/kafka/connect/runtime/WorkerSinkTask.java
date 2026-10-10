@@ -17,11 +17,12 @@
 package org.apache.kafka.connect.runtime;
 
 import org.apache.kafka.clients.consumer.Consumer;
-import org.apache.kafka.clients.consumer.ConsumerRebalanceListener;
 import org.apache.kafka.clients.consumer.ConsumerRecord;
 import org.apache.kafka.clients.consumer.ConsumerRecords;
 import org.apache.kafka.clients.consumer.OffsetAndMetadata;
 import org.apache.kafka.clients.consumer.OffsetCommitCallback;
+import org.apache.kafka.clients.consumer.RebalanceConsumer;
+import org.apache.kafka.clients.consumer.RebalanceListener;
 import org.apache.kafka.common.KafkaException;
 import org.apache.kafka.common.TopicPartition;
 import org.apache.kafka.common.errors.WakeupException;
@@ -323,14 +324,15 @@ class WorkerSinkTask extends WorkerTask<ConsumerRecord<byte[], byte[]>, SinkReco
     @Override
     protected void initializeAndStart() {
         SinkConnectorConfig.validate(taskConfig);
+        consumer.setRebalanceListener(new HandleRebalance());
         if (SinkConnectorConfig.hasTopicsConfig(taskConfig)) {
             List<String> topics = SinkConnectorConfig.parseTopicsList(taskConfig);
-            consumer.subscribe(topics, new HandleRebalance());
+            consumer.subscribe(topics);
             log.debug("{} Initializing and starting task for topics {}", this, String.join(", ", topics));
         } else {
             String topicsRegexStr = taskConfig.get(SinkTask.TOPICS_REGEX_CONFIG);
             Pattern pattern = Pattern.compile(topicsRegexStr);
-            consumer.subscribe(pattern, new HandleRebalance());
+            consumer.subscribe(pattern);
             log.debug("{} Initializing and starting task for topics regex {}", this, topicsRegexStr);
         }
 
@@ -729,9 +731,9 @@ class WorkerSinkTask extends WorkerTask<ConsumerRecord<byte[], byte[]>, SinkReco
         return nextCommit;
     }
 
-    private class HandleRebalance implements ConsumerRebalanceListener {
+    private class HandleRebalance implements RebalanceListener {
         @Override
-        public void onPartitionsAssigned(Collection<TopicPartition> partitions) {
+        public void onPartitionsAssigned(Collection<TopicPartition> partitions, RebalanceConsumer rebalanceConsumer) {
             log.debug("{} Partitions assigned {}", WorkerSinkTask.this, partitions);
 
             for (TopicPartition tp : partitions) {
@@ -783,12 +785,12 @@ class WorkerSinkTask extends WorkerTask<ConsumerRecord<byte[], byte[]>, SinkReco
         }
 
         @Override
-        public void onPartitionsRevoked(Collection<TopicPartition> partitions) {
+        public void onPartitionsRevoked(Collection<TopicPartition> partitions, RebalanceConsumer rebalanceConsumer) {
             onPartitionsRemoved(partitions, false);
         }
 
         @Override
-        public void onPartitionsLost(Collection<TopicPartition> partitions) {
+        public void onPartitionsLost(Collection<TopicPartition> partitions, RebalanceConsumer rebalanceConsumer) {
             onPartitionsRemoved(partitions, true);
         }
 
