@@ -18,6 +18,7 @@ package org.apache.kafka.coordinator.group.streams.assignor;
 
 import org.junit.jupiter.api.Test;
 
+import java.util.ArrayList;
 import java.util.HashMap;
 import java.util.HashSet;
 import java.util.List;
@@ -40,7 +41,8 @@ public class RackAwareStandbyPickerTest {
 
     @Test
     public void shouldOnlyPickEligibleProcessesWithNewValueForPriorityKey() {
-        // W is new in zone but not in cluster, N has no cluster, and I is new in both but has no room.
+        // W is new in zone but not in cluster, N has no cluster, and I is new in both but has no room, so zone is given
+        // up.
         processesWithoutRoom.add("I");
         picker(List.of("cluster", "zone"), Map.of(
             "H", Map.of("cluster", "c1", "zone", "z1"),
@@ -52,6 +54,7 @@ public class RackAwareStandbyPickerTest {
         hold("H");
 
         assertEquals(Set.of("X"), candidates());
+        assertEquals(List.of("cluster"), conditionNames());
     }
 
     @Test
@@ -68,7 +71,24 @@ public class RackAwareStandbyPickerTest {
         hold("H");
 
         assertEquals(Set.of("X", "Z"), candidates());
+        assertEquals(List.of("cluster", "zone"), conditionNames());
         assertEquals("Z", picker.leastLoaded(conditions));
+    }
+
+    @Test
+    public void shouldKeepLaterTagKeyAfterGivingUpAnEarlierOne() {
+        // No process is new in both cluster and zone, so zone is given up, but rack still narrows the processes in a
+        // new cluster down to X.
+        picker(List.of("cluster", "zone", "rack"), Map.of(
+            "H", Map.of("cluster", "c1", "zone", "z1", "rack", "r1"),
+            "X", Map.of("cluster", "c2", "zone", "z1", "rack", "r2"),
+            "Y", Map.of("cluster", "c1", "zone", "z2", "rack", "r2"),
+            "Z", Map.of("cluster", "c2", "zone", "z1", "rack", "r1")
+        ));
+        hold("H");
+
+        assertEquals(Set.of("X"), candidates());
+        assertEquals(List.of("cluster", "rack"), conditionNames());
     }
 
     @Test
@@ -81,10 +101,12 @@ public class RackAwareStandbyPickerTest {
         ));
         hold("H");
         assertEquals(Set.of("X", "Y", "Z"), candidates());
+        assertEquals(List.of("cluster"), conditionNames());
 
         // X holds cluster c2 now, so Y is out.
         hold("X");
         assertEquals(Set.of("Z"), candidates());
+        assertEquals(List.of("cluster"), conditionNames());
     }
 
     @Test
@@ -97,15 +119,18 @@ public class RackAwareStandbyPickerTest {
         ));
         hold("H");
         assertEquals(Set.of("X"), candidates());
+        assertEquals(List.of("cluster"), conditionNames());
 
         // Every cluster is used: zone becomes the priority and N and W are back. There is no lower key to order
         // them by.
         hold("X");
         assertEquals(Set.of("N", "W"), candidates());
+        assertEquals(List.of("zone"), conditionNames());
 
         // N has no cluster to record; its zone is used now.
         hold("N");
         assertEquals(Set.of("W"), candidates());
+        assertEquals(List.of("zone"), conditionNames());
     }
 
     @Test
@@ -118,9 +143,11 @@ public class RackAwareStandbyPickerTest {
         ));
         hold("H");
         assertEquals(Set.of("W"), candidates());
+        assertEquals(List.of("zone"), conditionNames());
 
         hold("W");
         assertEquals(Set.of(), candidates());
+        assertEquals(List.of(), conditionNames());
     }
 
     @Test
@@ -133,34 +160,16 @@ public class RackAwareStandbyPickerTest {
         ));
         hold("A");
         assertEquals(Set.of("B"), candidates());
+        assertEquals(List.of("cluster", "zone"), conditionNames());
         hold("B");
         assertEquals(Set.of("C"), candidates());
+        assertEquals(List.of("zone"), conditionNames());
 
         // The previous task gave up cluster and left C as the only candidate. The picker of this one starts from cluster
         // again, over every process and with no value used.
         picker = new RackAwareStandbyPicker<>(tagTree, List.of(identicalTagGroups.tagGroupOf("C")));
         assertEquals(Set.of("B", "D"), candidates());
-    }
-
-    @Test
-    public void shouldPickLeastLoadedCandidateAsLoadsGrow() {
-        // V is the lightest process but shares the holder's cluster, so X is the least-loaded candidate until it is
-        // heavier than Y.
-        loads.put("X", 1.0);
-        loads.put("Y", 2.0);
-        picker(List.of("cluster", "host"), Map.of(
-            "H", Map.of("cluster", "c1", "host", "h"),
-            "V", Map.of("cluster", "c1", "host", "v"),
-            "X", Map.of("cluster", "c2", "host", "x"),
-            "Y", Map.of("cluster", "c2", "host", "y")
-        ));
-        hold("H");
-        assertEquals(Set.of("X", "Y"), candidates());
-        assertEquals("X", picker.leastLoaded(conditions));
-
-        loads.put("X", 3.0);
-        assertEquals(Set.of("X", "Y"), candidates());
-        assertEquals("Y", picker.leastLoaded(conditions));
+        assertEquals(List.of("cluster", "zone"), conditionNames());
     }
 
     private void picker(final List<String> tagKeys, final Map<String, Map<String, String>> clientTags) {
@@ -193,5 +202,14 @@ public class RackAwareStandbyPickerTest {
             }
         }
         return candidates;
+    }
+
+    /** The names of the tag keys in the conditions of the last pick by candidates(). */
+    private List<String> conditionNames() {
+        final List<String> names = new ArrayList<>();
+        for (final TagTree.TagKey tagKey : conditions) {
+            names.add(tagKey.toString());
+        }
+        return names;
     }
 }

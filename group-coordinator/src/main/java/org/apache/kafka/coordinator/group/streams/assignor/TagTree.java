@@ -231,7 +231,7 @@ final class TagTree<P> {
         return valueIndex == missingValueIndex(keyIndex) || usedValues[keyIndex].get(valueIndex);
     }
 
-    /** Starts a pick: loads and room may have changed since the last one, but do not change during it. */
+    /** Clears the cache, since loads and room may have changed since the last pick. */
     void startPick() {
         for (final Node<P> node : cachedNodes) {
             node.cached = false;
@@ -263,7 +263,7 @@ final class TagTree<P> {
         if (valuesBelowAllMeeting(node, conditionKeys)) {
             return leastLoadedProcessBelow(node) != null;
         }
-        // The children in queue order, until one has such a tag group.
+        // Walk into the children in queue order until one has a tag group meeting the conditions.
         boolean found = false;
         while (!found && nextChildMeeting(node, conditionKeys, null) != null) {
             found = hasTagGroupBelowMeeting(setAsideHead(node), conditionKeys);
@@ -279,10 +279,13 @@ final class TagTree<P> {
         if (valuesBelowAllMeeting(node, conditionKeys)) {
             return leastLoadedProcessBelow(node);
         }
-        // The children in queue order, until the next one cannot beat the best found.
+        // Walk into the children in queue order until the next one cannot beat the best found.
         QueuedProcess<P> leastLoaded = null;
         while (nextChildMeeting(node, conditionKeys, leastLoaded) != null) {
-            leastLoaded = lessLoaded(leastLoaded, leastLoadedProcessBelowMeeting(setAsideHead(node), conditionKeys));
+            final QueuedProcess<P> found = leastLoadedProcessBelowMeeting(setAsideHead(node), conditionKeys);
+            if (found != null && (leastLoaded == null || QueuedProcess.ORDER.compare(found, leastLoaded) < 0)) {
+                leastLoaded = found;
+            }
         }
         putBackSetAsideChildren(node);
         return leastLoaded;
@@ -299,11 +302,6 @@ final class TagTree<P> {
     private void putBackSetAsideChildren(final Node<P> node) {
         node.childrenByLeastLoaded.addAll(node.setAsideChildren);
         node.setAsideChildren.clear();
-    }
-
-    /** Whether the node's own value meets {@code conditionKeys}: its key is not one of them, or its value is unused. */
-    private boolean ownValueMeeting(final Node<P> node, final int conditionKeys) {
-        return (conditionKeys & 1 << node.keyIndex) == 0 || !valueUsed(node.keyIndex, node.valueIndex);
     }
 
     /** Whether every value below the node meets {@code conditionKeys}. */
@@ -346,11 +344,16 @@ final class TagTree<P> {
         while (!node.childrenByLeastLoaded.isEmpty()) {
             final Node<P> child = node.childrenByLeastLoaded.peek();
             // The process a child is queued with may be stale, but a stale one is only lighter than its current one.
-            if (bound != null && !queuedLighter(child, bound)) {
-                return null;
+            if (bound != null) {
+                // Lighter by QueuedProcess.ORDER: by load, then by process index.
+                final int byLoad = Double.compare(child.queuedLoad, bound.load);
+                final boolean queuedLighter = byLoad != 0 ? byLoad < 0 : child.queuedProcessIndex < bound.processIndex;
+                if (!queuedLighter) {
+                    return null;
+                }
             }
-            // Every tag group below carries its own value, so none meets the conditions: set it aside for this query.
-            if (!ownValueMeeting(child, conditionKeys)) {
+            // Every tag group below carries its value, so none meets the conditions: set it aside for this query.
+            if ((conditionKeys & 1 << child.keyIndex) != 0 && valueUsed(child.keyIndex, child.valueIndex)) {
                 setAsideHead(node);
                 continue;
             }
@@ -369,20 +372,6 @@ final class TagTree<P> {
             }
         }
         return null;
-    }
-
-    /** Whether the child is queued with a process lighter than {@code process}, by {@link QueuedProcess#ORDER}. */
-    private static boolean queuedLighter(final Node<?> child, final QueuedProcess<?> process) {
-        final int byLoad = Double.compare(child.queuedLoad, process.load);
-        return byLoad != 0 ? byLoad < 0 : child.queuedProcessIndex < process.processIndex;
-    }
-
-    /** The lighter of the two by {@link QueuedProcess#ORDER}; a null one loses. */
-    private static <P> QueuedProcess<P> lessLoaded(final QueuedProcess<P> process1, final QueuedProcess<P> process2) {
-        if (process1 == null) {
-            return process2;
-        }
-        return process2 == null || QueuedProcess.ORDER.compare(process1, process2) <= 0 ? process1 : process2;
     }
 
     /** A key of {@code rack.aware.assignment.tags}. */
