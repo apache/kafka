@@ -1107,12 +1107,8 @@ class DynamicBrokerConfigTest {
   def testEnableFollowerFetchLastTieredOffset(): Unit = {
     val props = TestUtils.createBrokerConfig(0, port = 9092)
     val config = KafkaConfig.fromProps(props)
-    val serverMock: KafkaBroker = mock(classOf[KafkaBroker])
-
-    Mockito.when(serverMock.config).thenReturn(config)
 
     config.dynamicConfig.initialize(None)
-    config.dynamicConfig.addBrokerReconfigurable(new DynamicReplicationConfig(serverMock))
 
     assertEquals(ReplicationConfigs.FOLLOWER_FETCH_LAST_TIERED_OFFSET_ENABLE_DEFAULT,
       config.followerFetchLastTieredOffsetEnable)

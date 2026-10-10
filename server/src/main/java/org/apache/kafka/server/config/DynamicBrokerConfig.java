@@ -53,6 +53,9 @@ public class DynamicBrokerConfig {
             TransactionLogConfig.PRODUCER_ID_EXPIRATION_MS_CONFIG,
             TransactionLogConfig.TRANSACTION_PARTITION_VERIFICATION_ENABLE_CONFIG);
 
+    private static final Set<String> DYNAMIC_REPLICATION_CONFIGS = Set.of(
+            ReplicationConfigs.FOLLOWER_FETCH_LAST_TIERED_OFFSET_ENABLE_CONFIG);
+
     private static final Set<String> CLUSTER_LEVEL_LISTENER_CONFIGS = Set.of(
             SocketServerConfigs.MAX_CONNECTIONS_CONFIG,
             SocketServerConfigs.MAX_CONNECTION_CREATION_RATE_CONFIG,
@@ -76,7 +79,7 @@ public class DynamicBrokerConfig {
             SocketServer.RECONFIGURABLE_CONFIGS,
             DYNAMIC_PRODUCER_STATE_MANAGER_CONFIGS,
             DynamicRemoteLogConfig.RECONFIGURABLE_CONFIGS,
-            DynamicReplicationConfig.RECONFIGURABLE_CONFIGS,
+            DYNAMIC_REPLICATION_CONFIGS,
             List.of(AbstractConfig.CONFIG_PROVIDERS_CONFIG),
             GroupCoordinatorConfig.RECONFIGURABLE_CONFIGS,
             DynamicQuotaConfig.RECONFIGURABLE_CONFIGS,
@@ -285,11 +288,6 @@ public class DynamicBrokerConfig {
                 RemoteLogManagerConfig.REMOTE_LOG_MANAGER_EXPIRATION_THREAD_POOL_SIZE_PROP,
                 RemoteLogManagerConfig.REMOTE_LOG_MANAGER_FOLLOWER_THREAD_POOL_SIZE_PROP,
                 RemoteLogManagerConfig.REMOTE_LOG_READER_THREADS_PROP);
-    }
-
-    public static class DynamicReplicationConfig {
-        public static final Set<String> RECONFIGURABLE_CONFIGS = Set.of(
-                ReplicationConfigs.FOLLOWER_FETCH_LAST_TIERED_OFFSET_ENABLE_CONFIG);
     }
 
     public static class DynamicQuotaConfig {

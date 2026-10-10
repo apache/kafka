@@ -201,7 +201,6 @@ class DynamicBrokerConfig(private val kafkaConfig: KafkaConfig) extends Logging 
     addBrokerReconfigurable(kafkaServer.socketServer)
     addBrokerReconfigurable(new DynamicProducerStateManagerConfig(kafkaServer.logManager.producerStateManagerConfig))
     addBrokerReconfigurable(new DynamicRemoteLogConfig(kafkaServer))
-    addBrokerReconfigurable(new DynamicReplicationConfig(kafkaServer))
   }
 
   /**
@@ -997,19 +996,5 @@ class DynamicRemoteLogConfig(server: KafkaBroker) extends BrokerReconfigurable w
         config.getLong(name)
       case n => throw new IllegalStateException(s"Unexpected dynamic remote log manager config $n")
     }
-  }
-}
-
-class DynamicReplicationConfig(server: KafkaBroker) extends BrokerReconfigurable with Logging {
-  override def reconfigurableConfigs: util.Set[String] = {
-    JDynamicBrokerConfig.DynamicReplicationConfig.RECONFIGURABLE_CONFIGS
-  }
-
-  override def validateReconfiguration(newConfig: KafkaConfig): Unit = {
-    // Currently it is a noop for reconfiguring the dynamic config follower.fetch.last.tiered.offset.enable
-  }
-
-  override def reconfigure(oldConfig: KafkaConfig, newConfig: KafkaConfig): Unit = {
-    // Currently it is a noop for reconfiguring the dynamic config follower.fetch.last.tiered.offset.enable
   }
 }
