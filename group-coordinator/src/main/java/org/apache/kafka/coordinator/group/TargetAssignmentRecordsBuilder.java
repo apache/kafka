@@ -60,19 +60,27 @@ public abstract class TargetAssignmentRecordsBuilder<A> {
     private TargetAssignmentMetadata targetAssignmentMetadata;
 
     /**
+     * Whether the static members in the group may have changed since the new target assignment
+     * was computed.
+     */
+    private boolean staticMembersChanged = true;
+
+    /**
      * The static members in the group at the time the new target assignment was computed.
+     * Only set when {@link #staticMembersChanged} is true.
      */
     private Map<String, String> previousStaticMembers;
+
+    /**
+     * The current static members in the group.
+     * Only set when {@link #staticMembersChanged} is true.
+     */
+    private Map<String, String> currentStaticMembers;
 
     /**
      * The current member ids in the group.
      */
     private Set<String> currentMemberIds;
-
-    /**
-     * The current static members in the group.
-     */
-    private Map<String, String> currentStaticMembers;
 
     /**
      * The current target assignment.
@@ -110,13 +118,32 @@ public abstract class TargetAssignmentRecordsBuilder<A> {
     }
 
     /**
-     * Sets the static members in the group at the time the new target assignment was computed.
+     * Indicates that the static members in the group may have changed since the new target
+     * assignment was computed, and provides the previous and current static members so that
+     * static member replacements can be identified.
      *
      * @param previousStaticMembers The static members in the group at the time the new target assignment was computed.
+     * @param currentStaticMembers  The current static members in the group.
      * @return This object.
      */
-    public TargetAssignmentRecordsBuilder<A> withPreviousStaticMembers(Map<String, String> previousStaticMembers) {
+    public TargetAssignmentRecordsBuilder<A> withChangedStaticMembers(
+        Map<String, String> previousStaticMembers,
+        Map<String, String> currentStaticMembers
+    ) {
+        this.staticMembersChanged = true;
         this.previousStaticMembers = Objects.requireNonNull(previousStaticMembers);
+        this.currentStaticMembers = Objects.requireNonNull(currentStaticMembers);
+        return this;
+    }
+
+    /**
+     * Indicates that the static members in the group have not changed since the new target
+     * assignment was computed, so static member replacements do not need to be identified.
+     *
+     * @return This object.
+     */
+    public TargetAssignmentRecordsBuilder<A> withUnchangedStaticMembers() {
+        this.staticMembersChanged = false;
         return this;
     }
 
@@ -128,17 +155,6 @@ public abstract class TargetAssignmentRecordsBuilder<A> {
      */
     public TargetAssignmentRecordsBuilder<A> withCurrentMemberIds(Set<String> currentMemberIds) {
         this.currentMemberIds = Objects.requireNonNull(currentMemberIds);
-        return this;
-    }
-
-    /**
-     * Sets the current static members in the group.
-     *
-     * @param currentStaticMembers The current static members in the group.
-     * @return This object.
-     */
-    public TargetAssignmentRecordsBuilder<A> withCurrentStaticMembers(Map<String, String> currentStaticMembers) {
-        this.currentStaticMembers = Objects.requireNonNull(currentStaticMembers);
         return this;
     }
 
@@ -184,12 +200,14 @@ public abstract class TargetAssignmentRecordsBuilder<A> {
     public void build(List<CoordinatorRecord> records) {
         if (targetAssignmentMetadata == null)
             throw new IllegalArgumentException("Target assignment metadata must be set.");
-        if (previousStaticMembers == null)
-            throw new IllegalArgumentException("Previous static members must be set.");
+        if (staticMembersChanged) {
+            if (previousStaticMembers == null)
+                throw new IllegalArgumentException("Previous static members must be set.");
+            if (currentStaticMembers == null)
+                throw new IllegalArgumentException("Current static members must be set.");
+        }
         if (currentMemberIds == null)
             throw new IllegalArgumentException("Current member ids must be set.");
-        if (currentStaticMembers == null)
-            throw new IllegalArgumentException("Current static members must be set.");
         if (currentTargetAssignment == null)
             throw new IllegalArgumentException("Current target assignment must be set.");
         if (newTargetAssignment == null)
@@ -214,49 +232,54 @@ public abstract class TargetAssignmentRecordsBuilder<A> {
 
         // Build map of replacement member ids for static members that have churned.
         Map<String, String> staticMemberIdRemapping = new HashMap<>();
-        for (Map.Entry<String, String> entry : previousStaticMembers.entrySet()) {
-            String instanceId = entry.getKey();
-            String oldMemberId = entry.getValue();
-            String newMemberId = currentStaticMembers.get(instanceId);
 
-            if (currentMemberIds.contains(oldMemberId)) {
-                // The old member id is still in the group. We must not create a remapping entry,
-                // otherwise we could give the same assignment to two different members.
-                continue;
-            }
+        if (staticMembersChanged) {
+            for (Map.Entry<String, String> entry : previousStaticMembers.entrySet()) {
+                String instanceId = entry.getKey();
+                String oldMemberId = entry.getValue();
+                String newMemberId = currentStaticMembers.get(instanceId);
 
-            if (newMemberId != null) {
-                if (newTargetAssignment.containsKey(newMemberId)) {
-                    // The new member id has been in the group since before the assignment was
-                    // computed. We want to prioritize matching assignments up by member id, so
-                    // avoid creating a remapping entry. Note that we can't detect this if the
-                    // assignor omits an entry for the member but nothing bad happens in that case.
+                if (currentMemberIds.contains(oldMemberId)) {
+                    // The old member id is still in the group. We must not create a remapping entry,
+                    // otherwise we could give the same assignment to two different members.
                     continue;
                 }
 
-                log.debug("[GroupId {}] Previous static member {} with instance id {} has been replaced by {}, transferring target assignment.",
-                    groupId, oldMemberId, instanceId, newMemberId);
+                if (newMemberId != null) {
+                    if (newTargetAssignment.containsKey(newMemberId)) {
+                        // The new member id has been in the group since before the assignment was
+                        // computed. We want to prioritize matching assignments up by member id, so
+                        // avoid creating a remapping entry. Note that we can't detect this if the
+                        // assignor omits an entry for the member but nothing bad happens in that case.
+                        continue;
+                    }
 
-                staticMemberIdRemapping.put(newMemberId, oldMemberId);
-            } else {
-                log.debug("[GroupId {}] Previous static member {} with instance id {} has no replacement, discarding their target assignment.",
-                    groupId, oldMemberId, instanceId);
+                    log.debug("[GroupId {}] Previous static member {} with instance id {} has been replaced by {}, transferring target assignment.",
+                        groupId, oldMemberId, instanceId, newMemberId);
+
+                    staticMemberIdRemapping.put(newMemberId, oldMemberId);
+                } else {
+                    log.debug("[GroupId {}] Previous static member {} with instance id {} has no replacement, discarding their target assignment.",
+                        groupId, oldMemberId, instanceId);
+                }
             }
         }
 
         if (log.isDebugEnabled()) {
-            for (Map.Entry<String, String> entry : currentStaticMembers.entrySet()) {
-                String instanceId = entry.getKey();
-                String newMemberId = entry.getValue();
+            if (staticMembersChanged) {
+                for (Map.Entry<String, String> entry : currentStaticMembers.entrySet()) {
+                    String instanceId = entry.getKey();
+                    String newMemberId = entry.getValue();
 
-                if (newTargetAssignment.containsKey(newMemberId)) {
-                    // The member id has been in the group the whole time.
-                    continue;
-                }
+                    if (newTargetAssignment.containsKey(newMemberId)) {
+                        // The member id has been in the group the whole time.
+                        continue;
+                    }
 
-                if (!previousStaticMembers.containsKey(instanceId)) {
-                    log.debug("[GroupId {}] Current static member {} with instance id {} has no previous static member and will receive an empty target assignment.",
-                        groupId, newMemberId, instanceId);
+                    if (!previousStaticMembers.containsKey(instanceId)) {
+                        log.debug("[GroupId {}] Current static member {} with instance id {} has no previous static member and will receive an empty target assignment.",
+                            groupId, newMemberId, instanceId);
+                    }
                 }
             }
 

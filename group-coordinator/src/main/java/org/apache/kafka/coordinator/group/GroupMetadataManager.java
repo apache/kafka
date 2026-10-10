@@ -88,10 +88,11 @@ import org.apache.kafka.coordinator.common.runtime.CoordinatorRecord;
 import org.apache.kafka.coordinator.common.runtime.CoordinatorResult;
 import org.apache.kafka.coordinator.common.runtime.CoordinatorTimer;
 import org.apache.kafka.coordinator.group.api.assignor.ConsumerGroupPartitionAssignor;
-import org.apache.kafka.coordinator.group.api.assignor.MemberAssignment;
+import org.apache.kafka.coordinator.group.api.assignor.GroupSpec;
 import org.apache.kafka.coordinator.group.api.assignor.PartitionAssignorException;
 import org.apache.kafka.coordinator.group.api.assignor.ShareGroupPartitionAssignor;
 import org.apache.kafka.coordinator.group.api.assignor.SubscriptionType;
+import org.apache.kafka.coordinator.group.api.streams.assignor.AssignmentConfigs;
 import org.apache.kafka.coordinator.group.api.streams.assignor.TaskAssignor;
 import org.apache.kafka.coordinator.group.api.streams.assignor.TaskAssignorException;
 import org.apache.kafka.coordinator.group.assignor.SimpleAssignor;
@@ -140,6 +141,7 @@ import org.apache.kafka.coordinator.group.generated.StreamsGroupTopologyKey;
 import org.apache.kafka.coordinator.group.generated.StreamsGroupTopologyValue;
 import org.apache.kafka.coordinator.group.metrics.GroupCoordinatorMetricsShard;
 import org.apache.kafka.coordinator.group.modern.Assignment;
+import org.apache.kafka.coordinator.group.modern.GroupSpecBuilder;
 import org.apache.kafka.coordinator.group.modern.MemberState;
 import org.apache.kafka.coordinator.group.modern.ModernGroup;
 import org.apache.kafka.coordinator.group.modern.SubscriptionCount;
@@ -164,6 +166,7 @@ import org.apache.kafka.coordinator.group.streams.StreamsGroupMember;
 import org.apache.kafka.coordinator.group.streams.StreamsTopology;
 import org.apache.kafka.coordinator.group.streams.TasksTuple;
 import org.apache.kafka.coordinator.group.streams.TasksTupleWithEpochs;
+import org.apache.kafka.coordinator.group.streams.assignor.AssignmentConfigsImpl;
 import org.apache.kafka.coordinator.group.streams.assignor.StickyTaskAssignor;
 import org.apache.kafka.coordinator.group.streams.topics.ConfiguredSubtopology;
 import org.apache.kafka.coordinator.group.streams.topics.ConfiguredTopology;
@@ -186,12 +189,10 @@ import org.slf4j.Logger;
 
 import java.nio.ByteBuffer;
 import java.util.ArrayList;
-import java.util.Arrays;
 import java.util.Collection;
 import java.util.Collections;
 import java.util.HashMap;
 import java.util.HashSet;
-import java.util.LinkedHashSet;
 import java.util.List;
 import java.util.Map;
 import java.util.Objects;
@@ -199,7 +200,6 @@ import java.util.Optional;
 import java.util.OptionalInt;
 import java.util.Set;
 import java.util.SortedMap;
-import java.util.TreeMap;
 import java.util.concurrent.CompletableFuture;
 import java.util.concurrent.TimeUnit;
 import java.util.function.BiFunction;
@@ -239,6 +239,7 @@ import static org.apache.kafka.coordinator.group.GroupCoordinatorRecordHelpers.n
 import static org.apache.kafka.coordinator.group.GroupCoordinatorRecordHelpers.newShareGroupTargetAssignmentTombstoneRecord;
 import static org.apache.kafka.coordinator.group.Utils.assignmentToString;
 import static org.apache.kafka.coordinator.group.Utils.assignmentWithEpochsToString;
+import static org.apache.kafka.coordinator.group.Utils.newLinkedHashSet;
 import static org.apache.kafka.coordinator.group.Utils.ofSentinel;
 import static org.apache.kafka.coordinator.group.Utils.throwIfRegularExpressionIsInvalid;
 import static org.apache.kafka.coordinator.group.Utils.toConsumerProtocolAssignment;
@@ -263,8 +264,6 @@ import static org.apache.kafka.coordinator.group.streams.StreamsCoordinatorRecor
 import static org.apache.kafka.coordinator.group.streams.StreamsCoordinatorRecordHelpers.newStreamsGroupTargetAssignmentTombstoneRecord;
 import static org.apache.kafka.coordinator.group.streams.StreamsCoordinatorRecordHelpers.newStreamsGroupTopologyRecord;
 import static org.apache.kafka.coordinator.group.streams.StreamsGroupMember.hasAssignedTasksChanged;
-import static org.apache.kafka.coordinator.group.streams.assignor.AssignmentConfigsImpl.NUM_STANDBY_REPLICAS_CONFIG;
-import static org.apache.kafka.coordinator.group.streams.assignor.AssignmentConfigsImpl.RACK_AWARE_ASSIGNMENT_TAGS_CONFIG;
 
 
 /**
@@ -2269,9 +2268,11 @@ public class GroupMetadataManager {
             assignmentUpdate = AssignmentUpdate.RECOMPUTE;
         }
 
-        // Check if assignment configurations have changed
-        Map<String, String> currentAssignmentConfigs = streamsGroupAssignmentConfigs(groupId);
-        Map<String, String> storedAssignmentConfigs = group.lastAssignmentConfigs();
+        // Check if assignment configurations have changed. If the group metadata record has no assignment configs, we
+        // don't know which configs the current assignment used and assume the defaults, so after a broker upgrade such
+        // a group only rebalances if an effective config differs from its default.
+        AssignmentConfigsImpl currentAssignmentConfigs = streamsGroupAssignmentConfigs(groupId);
+        AssignmentConfigsImpl storedAssignmentConfigs = group.lastAssignmentConfigs();
         if (assignmentUpdate == AssignmentUpdate.NONE && !currentAssignmentConfigs.equals(storedAssignmentConfigs)) {
             log.info("[GroupId {}][MemberId {}] Assignment configurations changed to {}. Triggering rebalance.",
                 groupId, memberId, currentAssignmentConfigs);
@@ -2439,11 +2440,10 @@ public class GroupMetadataManager {
                 )
         ));
 
-        String rackAwareTagsValue = currentAssignmentConfigs.getOrDefault(RACK_AWARE_ASSIGNMENT_TAGS_CONFIG, "").trim();
+        List<String> requiredTags = currentAssignmentConfigs.rackAwareAssignmentTags();
         // The MISSING_CLIENT_TAGS status (code 6) requires version 1 of the RPC: version 0 clients
         // throw on unknown status codes, so it must not be sent to them.
-        if (requestApiVersion >= 1 && !rackAwareTagsValue.isEmpty()) {
-            List<String> requiredTags = Arrays.asList(rackAwareTagsValue.split("\\s*,\\s*", -1));
+        if (requestApiVersion >= 1 && !requiredTags.isEmpty()) {
             Set<String> memberTagKeys = updatedMember.clientTags().keySet();
             List<String> missingTags = requiredTags.stream()
                 .filter(tag -> !memberTagKeys.contains(tag))
@@ -4379,17 +4379,22 @@ public class GroupMetadataManager {
                 );
             updatedMembersAndTargetAssignment.addOrUpdateMember(updatedMember.memberId(), updatedMember);
 
-            TargetAssignmentBuilder.ConsumerTargetAssignmentBuilder assignmentResultBuilder =
-                new TargetAssignmentBuilder.ConsumerTargetAssignmentBuilder(group.groupId(), groupEpoch, consumerGroupAssignors.get(preferredServerAssignor))
-                    .withTime(time)
-                    .withMembers(updatedMembersAndTargetAssignment.members())
-                    .withSubscriptionType(subscriptionType)
-                    .withTargetAssignment(updatedMembersAndTargetAssignment.targetAssignment())
-                    .withInvertedTargetAssignment(group.invertedTargetAssignment())
-                    .withMetadataImage(metadataImage)
-                    .withResolvedRegularExpressions(group.resolvedRegularExpressions());
-
             long startTimeMs = time.milliseconds();
+            GroupSpec groupSpec = new GroupSpecBuilder.ConsumerGroupSpecBuilder()
+                .withMembers(updatedMembersAndTargetAssignment.members())
+                .withSubscriptionType(subscriptionType)
+                .withTargetAssignment(updatedMembersAndTargetAssignment.targetAssignment())
+                .withInvertedTargetAssignment(group.invertedTargetAssignment())
+                .withMetadataImage(metadataImage)
+                .withResolvedRegularExpressions(group.resolvedRegularExpressions())
+                .build();
+
+            TargetAssignmentBuilder assignmentResultBuilder =
+                new TargetAssignmentBuilder(groupEpoch, consumerGroupAssignors.get(preferredServerAssignor))
+                    .withTime(time)
+                    .withMetadataImage(metadataImage)
+                    .withGroupSpec(groupSpec);
+
             TargetAssignmentBuilder.TargetAssignmentResult assignmentResult =
                 assignmentResultBuilder.build();
             long assignorTimeMs = time.milliseconds() - startTimeMs;
@@ -4402,11 +4407,17 @@ public class GroupMetadataManager {
                     group.groupId(), groupEpoch, preferredServerAssignor, assignorTimeMs);
             }
 
-            records.addAll(assignmentResult.records());
+            new TargetAssignmentRecordsBuilder.ConsumerTargetAssignmentRecordsBuilder(log, group.groupId())
+                .withTargetAssignmentMetadata(assignmentResult.targetAssignmentMetadata())
+                .withCurrentMemberIds(updatedMembersAndTargetAssignment.members().keySet())
+                .withUnchangedStaticMembers()
+                .withCurrentTargetAssignment(updatedMembersAndTargetAssignment.targetAssignment())
+                .withNewTargetAssignment(assignmentResult.targetAssignment())
+                .build(records);
 
-            MemberAssignment newMemberAssignment = assignmentResult.targetAssignment().get(updatedMember.memberId());
+            Assignment newMemberAssignment = assignmentResult.targetAssignment().get(updatedMember.memberId());
             if (newMemberAssignment != null) {
-                return new UpdateTargetAssignmentResult<>(groupEpoch, new Assignment(newMemberAssignment.partitions()));
+                return new UpdateTargetAssignmentResult<>(groupEpoch, newMemberAssignment);
             } else {
                 return new UpdateTargetAssignmentResult<>(groupEpoch, Assignment.EMPTY);
             }
@@ -4463,17 +4474,22 @@ public class GroupMetadataManager {
                 );
             updatedMembersAndTargetAssignment.addOrUpdateMember(updatedMember.memberId(), updatedMember);
 
-            TargetAssignmentBuilder.ShareTargetAssignmentBuilder assignmentResultBuilder =
-                new TargetAssignmentBuilder.ShareTargetAssignmentBuilder(group.groupId(), groupEpoch, shareGroupAssignor)
-                    .withTime(time)
-                    .withMembers(updatedMembersAndTargetAssignment.members())
-                    .withSubscriptionType(subscriptionType)
-                    .withTargetAssignment(updatedMembersAndTargetAssignment.targetAssignment())
-                    .withTopicAssignablePartitionsMap(initializedTopicPartitions)
-                    .withInvertedTargetAssignment(group.invertedTargetAssignment())
-                    .withMetadataImage(metadataImage);
-
             long startTimeMs = time.milliseconds();
+            GroupSpec groupSpec = new GroupSpecBuilder.ShareGroupSpecBuilder()
+                .withMembers(updatedMembersAndTargetAssignment.members())
+                .withSubscriptionType(subscriptionType)
+                .withTargetAssignment(updatedMembersAndTargetAssignment.targetAssignment())
+                .withTopicAssignablePartitionsMap(initializedTopicPartitions)
+                .withInvertedTargetAssignment(group.invertedTargetAssignment())
+                .withMetadataImage(metadataImage)
+                .build();
+
+            TargetAssignmentBuilder assignmentResultBuilder =
+                new TargetAssignmentBuilder(groupEpoch, shareGroupAssignor)
+                    .withTime(time)
+                    .withMetadataImage(metadataImage)
+                    .withGroupSpec(groupSpec);
+
             TargetAssignmentBuilder.TargetAssignmentResult assignmentResult =
                 assignmentResultBuilder.build();
             long assignorTimeMs = time.milliseconds() - startTimeMs;
@@ -4486,11 +4502,17 @@ public class GroupMetadataManager {
                     group.groupId(), groupEpoch, shareGroupAssignor, assignorTimeMs);
             }
 
-            records.addAll(assignmentResult.records());
+            new TargetAssignmentRecordsBuilder.ShareTargetAssignmentRecordsBuilder(log, group.groupId())
+                .withTargetAssignmentMetadata(assignmentResult.targetAssignmentMetadata())
+                .withCurrentMemberIds(updatedMembersAndTargetAssignment.members().keySet())
+                .withUnchangedStaticMembers()
+                .withCurrentTargetAssignment(updatedMembersAndTargetAssignment.targetAssignment())
+                .withNewTargetAssignment(assignmentResult.targetAssignment())
+                .build(records);
 
-            MemberAssignment newMemberAssignment = assignmentResult.targetAssignment().get(updatedMember.memberId());
+            Assignment newMemberAssignment = assignmentResult.targetAssignment().get(updatedMember.memberId());
             if (newMemberAssignment != null) {
-                return new UpdateTargetAssignmentResult<>(groupEpoch, new Assignment(newMemberAssignment.partitions()));
+                return new UpdateTargetAssignmentResult<>(groupEpoch, newMemberAssignment);
             } else {
                 return new UpdateTargetAssignmentResult<>(groupEpoch, Assignment.EMPTY);
             }
@@ -4539,7 +4561,7 @@ public class GroupMetadataManager {
         CoordinatorMetadataImage metadataImage,
         List<CoordinatorRecord> records,
         Optional<List<Status>> returnedStatus,
-        Map<String, String> assignmentConfigs,
+        AssignmentConfigs assignmentConfigs,
         boolean refineOnly
     ) {
         boolean initialDelayActive = timer.isScheduled(streamsInitialRebalanceKey(group.groupId()));
@@ -4600,21 +4622,20 @@ public class GroupMetadataManager {
 
         TaskAssignor assignor = streamsGroupAssignor(group.groupId(), true);
         try {
-            org.apache.kafka.coordinator.group.streams.TargetAssignmentBuilder assignmentResultBuilder =
-                new org.apache.kafka.coordinator.group.streams.TargetAssignmentBuilder(
-                    group.groupId(),
-                    groupEpoch,
-                    assignor,
-                    assignmentConfigs
-                )
-                .withTime(time)
-                .withMembers(updatedMembersAndTargetAssignment.members())
-                .withTopology(configuredTopology)
-                .withMetadataImage(metadataImage)
-                .withTargetAssignment(updatedMembersAndTargetAssignment.targetAssignment())
-                .withTaskOffsets(group.taskOffsets());
-
             long startTimeMs = time.milliseconds();
+            org.apache.kafka.coordinator.group.api.streams.assignor.GroupSpec groupSpec =
+                new org.apache.kafka.coordinator.group.streams.GroupSpecBuilder(assignmentConfigs)
+                    .withMembers(updatedMembersAndTargetAssignment.members())
+                    .withTaskOffsets(group.taskOffsets())
+                    .build();
+
+            org.apache.kafka.coordinator.group.streams.TargetAssignmentBuilder assignmentResultBuilder =
+                new org.apache.kafka.coordinator.group.streams.TargetAssignmentBuilder(groupEpoch, assignor)
+                    .withTime(time)
+                    .withTopology(configuredTopology)
+                    .withMetadataImage(metadataImage)
+                    .withGroupSpec(groupSpec);
+
             org.apache.kafka.coordinator.group.streams.TargetAssignmentBuilder.TargetAssignmentResult assignmentResult =
                 assignmentResultBuilder.build();
             long assignorTimeMs = time.milliseconds() - startTimeMs;
@@ -4627,7 +4648,13 @@ public class GroupMetadataManager {
                     group.groupId(), groupEpoch, assignor, assignorTimeMs);
             }
 
-            records.addAll(assignmentResult.records());
+            new TargetAssignmentRecordsBuilder.StreamsTargetAssignmentRecordsBuilder(log, group.groupId())
+                .withTargetAssignmentMetadata(assignmentResult.targetAssignmentMetadata())
+                .withCurrentMemberIds(updatedMembersAndTargetAssignment.members().keySet())
+                .withUnchangedStaticMembers()
+                .withCurrentTargetAssignment(updatedMembersAndTargetAssignment.targetAssignment())
+                .withNewTargetAssignment(assignmentResult.targetAssignment())
+                .build(records);
 
             return new UpdateTargetAssignmentResult<>(groupEpoch, assignmentResult.targetAssignment());
         } catch (TaskAssignorException ex) {
@@ -6370,17 +6397,9 @@ public class GroupMetadataManager {
             streamsGroup.setStoredDescriptionTopologyEpoch(value.storedDescriptionTopologyEpoch());
             streamsGroup.setFailedDescriptionTopologyEpoch(value.failedDescriptionTopologyEpoch());
 
-            if (value.lastAssignmentConfigs() != null) {
-                streamsGroup.setLastAssignmentConfigs(
-                    value.lastAssignmentConfigs().stream()
-                        .collect(Collectors.toMap(
-                            StreamsGroupMetadataValue.LastAssignmentConfig::key,
-                            StreamsGroupMetadataValue.LastAssignmentConfig::value
-                        ))
-                );
-            } else {
-                streamsGroup.setLastAssignmentConfigs(Map.of());
-            }
+            // A record without configs (written before they were persisted) yields the defaults, so the next
+            // heartbeat only rebalances the group if any effective config differs from its default.
+            streamsGroup.setLastAssignmentConfigs(AssignmentConfigsImpl.fromRecord(value.lastAssignmentConfigs()));
 
         } else {
             StreamsGroup streamsGroup;
@@ -9035,7 +9054,7 @@ public class GroupMetadataManager {
         Set<String> groupIds
     ) {
         List<CoordinatorRecord> records = new ArrayList<>(groupIds.size());
-        Set<String> eligible = new LinkedHashSet<>(groupIds.size());
+        Set<String> eligible = newLinkedHashSet(groupIds.size());
         for (String groupId : groupIds) {
             CoordinatorResult<Boolean, CoordinatorRecord> one =
                 markStoredDescriptionTopologyEpochUncertain(groupId, false);
@@ -10047,20 +10066,15 @@ public class GroupMetadataManager {
     }
 
     /**
-     * Get the assignor of the provided streams group.
+     * Get the assignment configs of the provided streams group.
      */
-    private Map<String, String> streamsGroupAssignmentConfigs(String groupId) {
+    private AssignmentConfigsImpl streamsGroupAssignmentConfigs(String groupId) {
         Optional<GroupConfig> groupConfig = groupConfigManager.groupConfig(groupId);
-        final Integer numStandbyReplicas = groupConfig.flatMap(GroupConfig::streamsNumStandbyReplicas)
+        final int numStandbyReplicas = groupConfig.flatMap(GroupConfig::streamsNumStandbyReplicas)
             .orElse(config.streamsGroupNumStandbyReplicas());
         final List<String> rackAwareAssignmentTags = groupConfig.flatMap(GroupConfig::streamsRackAwareAssignmentTags)
             .orElse(config.streamsGroupRackAwareAssignmentTags());
-        Map<String, String> configs = new TreeMap<>();
-        configs.put(NUM_STANDBY_REPLICAS_CONFIG, numStandbyReplicas.toString());
-        if (!rackAwareAssignmentTags.isEmpty()) {
-            configs.put(RACK_AWARE_ASSIGNMENT_TAGS_CONFIG, String.join(",", rackAwareAssignmentTags));
-        }
-        return configs;
+        return new AssignmentConfigsImpl(numStandbyReplicas, rackAwareAssignmentTags);
     }
 
     private static boolean hasUserEndpointChanged(StreamsGroupMember maybeOldMember, StreamsGroupMember updatedMember) {

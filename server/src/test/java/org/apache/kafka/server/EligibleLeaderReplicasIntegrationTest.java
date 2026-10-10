@@ -20,7 +20,6 @@ import org.apache.kafka.clients.admin.Admin;
 import org.apache.kafka.clients.admin.AlterConfigOp;
 import org.apache.kafka.clients.admin.ConfigEntry;
 import org.apache.kafka.clients.admin.FeatureUpdate;
-import org.apache.kafka.clients.admin.NewTopic;
 import org.apache.kafka.clients.admin.OffsetSpec;
 import org.apache.kafka.clients.admin.TopicDescription;
 import org.apache.kafka.clients.consumer.Consumer;
@@ -98,8 +97,7 @@ public class EligibleLeaderReplicasIntegrationTest {
                 Map.of(EligibleLeaderReplicasVersion.FEATURE_NAME,
                     new FeatureUpdate(EligibleLeaderReplicasVersion.ELRV_1.featureLevel(), FeatureUpdate.UpgradeType.UPGRADE))).all().get();
 
-            admin.createTopics(List.of(new NewTopic(testTopicName, 1, (short) 4))).all().get();
-            clusterInstance.waitTopicCreation(testTopicName, 1);
+            clusterInstance.createTopic(testTopicName, 1, (short) 4);
 
             ConfigResource configResource = new ConfigResource(ConfigResource.Type.TOPIC, testTopicName);
             Collection<AlterConfigOp> ops = new ArrayList<>();
@@ -163,8 +161,7 @@ public class EligibleLeaderReplicasIntegrationTest {
             admin.updateFeatures(
                 Map.of(EligibleLeaderReplicasVersion.FEATURE_NAME,
                     new FeatureUpdate(EligibleLeaderReplicasVersion.ELRV_1.featureLevel(), FeatureUpdate.UpgradeType.UPGRADE))).all().get();
-            admin.createTopics(List.of(new NewTopic(testTopicName, 1, (short) 4))).all().get();
-            clusterInstance.waitTopicCreation(testTopicName, 1);
+            clusterInstance.createTopic(testTopicName, 1, (short) 4);
 
             ConfigResource configResource = new ConfigResource(ConfigResource.Type.TOPIC, testTopicName);
             Collection<AlterConfigOp> ops = new ArrayList<>();
@@ -232,8 +229,7 @@ public class EligibleLeaderReplicasIntegrationTest {
             admin.updateFeatures(
                 Map.of(EligibleLeaderReplicasVersion.FEATURE_NAME,
                     new FeatureUpdate(EligibleLeaderReplicasVersion.ELRV_1.featureLevel(), FeatureUpdate.UpgradeType.UPGRADE))).all().get();
-            admin.createTopics(List.of(new NewTopic(testTopicName, 1, (short) 4))).all().get();
-            clusterInstance.waitTopicCreation(testTopicName, 1);
+            clusterInstance.createTopic(testTopicName, 1, (short) 4);
 
             ConfigResource configResource = new ConfigResource(ConfigResource.Type.TOPIC, testTopicName);
             Collection<AlterConfigOp> ops = new ArrayList<>();
@@ -289,8 +285,7 @@ public class EligibleLeaderReplicasIntegrationTest {
             admin.updateFeatures(
                 Map.of(EligibleLeaderReplicasVersion.FEATURE_NAME,
                     new FeatureUpdate(EligibleLeaderReplicasVersion.ELRV_1.featureLevel(), FeatureUpdate.UpgradeType.UPGRADE))).all().get();
-            admin.createTopics(List.of(new NewTopic(testTopicName, 1, (short) 4))).all().get();
-            clusterInstance.waitTopicCreation(testTopicName, 1);
+            clusterInstance.createTopic(testTopicName, 1, (short) 4);
 
             ConfigResource configResource = new ConfigResource(ConfigResource.Type.TOPIC, testTopicName);
             Collection<AlterConfigOp> ops = new ArrayList<>();

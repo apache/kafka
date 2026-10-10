@@ -18,10 +18,13 @@
   "type": "request",
   "listeners": ["broker"],
   "name": "OffsetDeleteRequest",
-  "validVersions": "0",
-  "flexibleVersions": "none",
+  // Version 1 enables flexible versions and uses the v3 request header (KIP-1313).
+  "latestVersionUnstable": true,
+  "validVersions": "0-1",
+  "flexibleVersions": "1+",
   "headerVersions": {
-    "0+": "1"
+    "0": "1",
+    "1+": "3"
   },
   "fields": [
     { "name": "GroupId", "type": "string", "versions": "0+", "entityType": "groupId",

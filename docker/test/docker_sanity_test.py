@@ -21,14 +21,18 @@ import unittest
 
 import pytest
 import test.constants as constants
+from common import detect_compose_command
 
 class DockerSanityTest(unittest.TestCase):
     IMAGE="apache/kafka"
     FIXTURES_DIR="."
     CONTAINER_RUNTIME="docker"
+    COMPOSE_COMMAND=None
 
     def compose_command(self):
-        return [f"{self.CONTAINER_RUNTIME}-compose"]
+        if self.COMPOSE_COMMAND is None:
+            return detect_compose_command(self.CONTAINER_RUNTIME)
+        return self.COMPOSE_COMMAND
 
     def resume_container(self):
         subprocess.run([self.CONTAINER_RUNTIME, "start", constants.BROKER_CONTAINER])
@@ -223,10 +227,11 @@ class DockerSanityTestIsolatedMode(DockerSanityTest):
     def test_bed(self):
         self.execute()
 
-def run_tests(image, mode, fixtures_dir, container_runtime="docker"):
+def run_tests(image, mode, fixtures_dir, container_runtime="docker", compose_command=None):
     DockerSanityTest.IMAGE = image
     DockerSanityTest.FIXTURES_DIR = fixtures_dir
     DockerSanityTest.CONTAINER_RUNTIME = container_runtime
+    DockerSanityTest.COMPOSE_COMMAND = compose_command or detect_compose_command(container_runtime)
 
     cur_directory = os.path.dirname(os.path.realpath(__file__))
     report_path = f"{cur_directory}/report_{mode}.html"

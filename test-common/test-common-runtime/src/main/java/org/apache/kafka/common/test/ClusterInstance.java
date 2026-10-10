@@ -341,8 +341,12 @@ public interface ClusterInstance {
     }
 
     default void createTopicWithAssignment(String topicName, Map<Integer, List<Integer>> replicaAssignment) throws InterruptedException {
+        createTopicWithAssignment(topicName, replicaAssignment, Map.of());
+    }
+
+    default void createTopicWithAssignment(String topicName, Map<Integer, List<Integer>> replicaAssignment, Map<String, String> props) throws InterruptedException {
         try (Admin admin = admin()) {
-            admin.createTopics(List.of(new NewTopic(topicName, replicaAssignment)));
+            admin.createTopics(List.of(new NewTopic(topicName, replicaAssignment).configs(props)));
             int partitions = replicaAssignment.size();
             waitTopicCreation(topicName, partitions);
         }

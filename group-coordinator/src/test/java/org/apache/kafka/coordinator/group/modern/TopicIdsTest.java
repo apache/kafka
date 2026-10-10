@@ -32,6 +32,9 @@ import static org.junit.jupiter.api.Assertions.assertNull;
 import static org.junit.jupiter.api.Assertions.assertSame;
 import static org.junit.jupiter.api.Assertions.assertThrows;
 import static org.junit.jupiter.api.Assertions.assertTrue;
+import static org.mockito.Mockito.spy;
+import static org.mockito.Mockito.times;
+import static org.mockito.Mockito.verify;
 
 public class TopicIdsTest {
 
@@ -230,5 +233,58 @@ public class TopicIdsTest {
         TopicIds topicIds2 = new TopicIds(Set.of("topic"), metadataImage);
 
         assertEquals(topicIds1, topicIds2);
+    }
+
+    @Test
+    public void testCachedTopicResolverId() {
+        var fooUuid = Uuid.randomUuid();
+        var metadataImage = spy(new KRaftCoordinatorMetadataImage(
+            new MetadataImageBuilder()
+                .addTopic(fooUuid, "foo", 3)
+                .build()
+        ));
+        var resolver = new TopicIds.CachedTopicResolver(metadataImage);
+
+        // A known topic is looked up in the image once, then served from the cache.
+        assertEquals(fooUuid, resolver.id("foo"));
+        assertEquals(fooUuid, resolver.id("foo"));
+        verify(metadataImage, times(1)).topicId("foo");
+
+        // An unknown topic is not cached, so it is looked up in the image every time.
+        assertNull(resolver.id("bar"));
+        assertNull(resolver.id("bar"));
+        verify(metadataImage, times(2)).topicId("bar");
+
+        // A cleared cache looks up the known topic in the image again.
+        resolver.clear();
+        assertEquals(fooUuid, resolver.id("foo"));
+        verify(metadataImage, times(2)).topicId("foo");
+    }
+
+    @Test
+    public void testCachedTopicResolverName() {
+        var fooUuid = Uuid.randomUuid();
+        var barUuid = Uuid.randomUuid();
+        var metadataImage = spy(new KRaftCoordinatorMetadataImage(
+            new MetadataImageBuilder()
+                .addTopic(fooUuid, "foo", 3)
+                .build()
+        ));
+        var resolver = new TopicIds.CachedTopicResolver(metadataImage);
+
+        // A known topic is looked up in the image once, then served from the cache.
+        assertEquals("foo", resolver.name(fooUuid));
+        assertEquals("foo", resolver.name(fooUuid));
+        verify(metadataImage, times(1)).topicName(fooUuid);
+
+        // An unknown topic is not cached, so it is looked up in the image every time.
+        assertNull(resolver.name(barUuid));
+        assertNull(resolver.name(barUuid));
+        verify(metadataImage, times(2)).topicName(barUuid);
+
+        // A cleared cache looks up the known topic in the image again.
+        resolver.clear();
+        assertEquals("foo", resolver.name(fooUuid));
+        verify(metadataImage, times(2)).topicName(fooUuid);
     }
 }
