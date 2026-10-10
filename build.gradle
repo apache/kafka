@@ -1241,6 +1241,7 @@ project(':core') {
     testImplementation libs.junitJupiter
     testImplementation testLog4j2Libs
     testImplementation libs.mockOAuth2Server
+    testImplementation libs.caffeine
 
     configurations {
       // To prevent a UniqueResourceException due the same resource existing in both
@@ -2079,6 +2080,7 @@ project(':clients') {
     testImplementation libs.mockitoCore
     testImplementation libs.mockitoJunitJupiter // supports MockitoExtension
     testImplementation libs.testcontainersKeycloak
+    testImplementation libs.caffeine
 
     testRuntimeOnly libs.jacksonDatabind
     testRuntimeOnly runtimeTestLibs
