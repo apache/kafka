@@ -271,6 +271,38 @@ class StreamsGroupHeartbeatRequestManagerTest {
     }
 
     @Test
+    public void testInitialHeartbeatIntervalUsesRequestTimeout() {
+        int requestTimeoutMs = 1000;
+        when(coordinatorRequestManager.coordinator()).thenReturn(Optional.of(coordinatorNode));
+        when(membershipManager.state()).thenReturn(MemberState.JOINING);
+        when(membershipManager.shouldNotWaitForHeartbeatInterval()).thenReturn(true);
+
+        ConsumerConfig testConfig =
+            new ConsumerConfig(config.originals(Map.of(ConsumerConfig.REQUEST_TIMEOUT_MS_CONFIG, requestTimeoutMs)));
+        StreamsGroupHeartbeatRequestManager heartbeatRequestManager = createStreamsGroupHeartbeatRequestManager(testConfig);
+
+        assertEquals(0, heartbeatRequestManager.maximumTimeToWait(time.milliseconds()));
+        NetworkClientDelegate.PollResult result = heartbeatRequestManager.poll(time.milliseconds());
+        assertEquals(1, result.unsentRequests.size());
+        assertEquals(requestTimeoutMs, result.timeUntilNextPollMs);
+
+        // Keep the first heartbeat in flight; neither polling path should busy-spin or generate another request.
+        result = heartbeatRequestManager.poll(time.milliseconds());
+        assertTrue(result.unsentRequests.isEmpty());
+        assertEquals(requestTimeoutMs, result.timeUntilNextPollMs);
+        assertTrue(heartbeatRequestManager.maximumTimeToWait(time.milliseconds()) > 0,
+            "Should wait while the first heartbeat is in flight");
+
+        long elapsedMs = requestTimeoutMs / 2;
+        time.sleep(elapsedMs);
+        result = heartbeatRequestManager.poll(time.milliseconds());
+        assertTrue(result.unsentRequests.isEmpty());
+        assertEquals(requestTimeoutMs - elapsedMs, result.timeUntilNextPollMs);
+        assertTrue(heartbeatRequestManager.maximumTimeToWait(time.milliseconds()) > 0,
+            "Should wait while the first heartbeat is in flight");
+    }
+
+    @Test
     public void testNoHeartbeatIfCoordinatorUnknown() {
         try (final MockedConstruction<Timer> pollTimerMockedConstruction = mockConstruction(Timer.class)) {
             final StreamsGroupHeartbeatRequestManager heartbeatRequestManager = createStreamsGroupHeartbeatRequestManager();
@@ -2729,6 +2761,10 @@ class StreamsGroupHeartbeatRequestManagerTest {
     }
 
     private StreamsGroupHeartbeatRequestManager createStreamsGroupHeartbeatRequestManager() {
+        return createStreamsGroupHeartbeatRequestManager(config);
+    }
+
+    private StreamsGroupHeartbeatRequestManager createStreamsGroupHeartbeatRequestManager(ConsumerConfig config) {
         return new StreamsGroupHeartbeatRequestManager(
             LOG_CONTEXT,
             time,
