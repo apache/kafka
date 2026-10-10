@@ -782,6 +782,21 @@ class KafkaConfigTest {
   }
 
   @Test
+  def testDisabledCompressionTypes(): Unit = {
+    val props = TestUtils.createBrokerConfig(0, port = 8181)
+    props.setProperty(ServerConfigs.COMPRESSION_DISABLED_TYPES_CONFIG, "snappy,lz4")
+    val serverConfig = KafkaConfig.fromProps(props)
+    assertEquals(util.List.of("snappy", "lz4"), serverConfig.disabledCompressionTypes)
+  }
+
+  @Test
+  def testInvalidDisabledCompressionType(): Unit = {
+    val props = TestUtils.createBrokerConfig(0, port = 8181)
+    props.setProperty(ServerConfigs.COMPRESSION_DISABLED_TYPES_CONFIG, "brotli")
+    assertThrows(classOf[ConfigException], () => KafkaConfig.fromProps(props))
+  }
+
+  @Test
   def testInvalidGzipCompressionLevel(): Unit = {
     val props = TestUtils.createBrokerConfig(0, port = 8181)
     props.setProperty(ServerConfigs.COMPRESSION_TYPE_CONFIG, "gzip")
@@ -1272,6 +1287,7 @@ class KafkaConfigTest {
           fail(prop + " must be explicitly checked for dynamic updatability. Note that LogConfig(s) require that KafkaConfig value lookups are dynamic and not static values.")
       }
     }
+    assertDynamic(ServerConfigs.COMPRESSION_DISABLED_TYPES_CONFIG, "gzip", () => config.disabledCompressionTypes)
   }
 
   @Test

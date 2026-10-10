@@ -38,6 +38,7 @@ import org.apache.kafka.server.ProcessRole
 import org.apache.kafka.server.authorizer.Authorizer
 import org.apache.kafka.server.config.{AbstractKafkaConfig, QuotaConfig, ReplicationConfigs, ServerConfigs, ServerLogConfigs, DynamicBrokerConfig => JDynamicBrokerConfig}
 import org.apache.kafka.server.log.remote.storage.RemoteLogManagerConfig
+import org.apache.kafka.storage.internals.log.LogConfig
 
 import java.util
 import java.util.Properties
@@ -172,6 +173,7 @@ class KafkaConfig private(doLog: Boolean, val props: util.Map[_, _], enforceProv
   val controllerMaxRecordsPerBatch: Int = getInt(KRaftConfigs.CONTROLLER_MAX_RECORDS_PER_BATCH_CONFIG)
 
   def maxDecompressedMessageBytes = getInt(ServerConfigs.MAX_DECOMPRESSED_MESSAGE_BYTES_CONFIG)
+  def disabledCompressionTypes = getList(ServerConfigs.COMPRESSION_DISABLED_TYPES_CONFIG)
 
   /************* Authorizer Configuration ***********/
   def createNewAuthorizer(metrics: Metrics, role: String): Option[Plugin[Authorizer]] = {
@@ -494,6 +496,7 @@ class KafkaConfig private(doLog: Boolean, val props: util.Map[_, _], enforceProv
     logProps.put(TopicConfig.CLEANUP_POLICY_CONFIG, logCleanupPolicy)
     logProps.put(TopicConfig.MIN_IN_SYNC_REPLICAS_CONFIG, minInSyncReplicas)
     logProps.put(TopicConfig.COMPRESSION_TYPE_CONFIG, compressionType)
+    logProps.put(LogConfig.INTERNAL_COMPRESSION_DISABLED_TYPES_CONFIG, disabledCompressionTypes)
     logProps.put(TopicConfig.COMPRESSION_GZIP_LEVEL_CONFIG, gzipCompressionLevel)
     logProps.put(TopicConfig.COMPRESSION_LZ4_LEVEL_CONFIG, lz4CompressionLevel)
     logProps.put(TopicConfig.COMPRESSION_ZSTD_LEVEL_CONFIG, zstdCompressionLevel)
