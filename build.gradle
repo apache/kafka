@@ -1095,6 +1095,7 @@ project(':server') {
     testFixturesImplementation libs.apachedsLdifPartition
     testFixturesImplementation libs.apachedsMavibotPartition
     testFixturesImplementation libs.apachedsJdbmPartition
+    testFixturesImplementation libs.commonsText
 
     testRuntimeOnly runtimeTestLibs
   }
