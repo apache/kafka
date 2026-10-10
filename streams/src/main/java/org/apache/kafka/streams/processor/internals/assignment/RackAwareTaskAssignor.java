@@ -170,8 +170,8 @@ public class RackAwareTaskAssignor {
     }
 
     /**
-     * This function populates the {@param racksForPartition} parameter passed into the function by using both
-     * the {@code Cluster} metadata as well as the {@param internalTopicManager} for topics that have stale
+     * This function populates the {@code racksForPartition} parameter passed into the function by using both
+     * the {@code Cluster} metadata as well as the {@code internalTopicManager} for topics that have stale
      * information.
      *
      * @return whether the operation successfully completed and the rack information is valid.
@@ -220,8 +220,8 @@ public class RackAwareTaskAssignor {
     }
 
     /**
-     * Verifies that within the {@param racksForProcessConsumer}, a single process is only running on a single
-     * rack. This function mutates the parameter {@param racksForProcess} to contain the resulting process
+     * Verifies that within the {@code racksForProcessConsumer}, a single process is only running on a single
+     * rack. This function mutates the parameter {@code rackForProcess} to contain the resulting process
      * to rack mapping.
      *
      * @return true if the validation was successful, and false otherwise.
