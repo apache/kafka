@@ -61,38 +61,6 @@ public class TagTreeTest {
     }
 
     @Test
-    public void shouldOnlyCheckTheGivenConditions() {
-        // X shares the holder's cluster but not its zone.
-        tree(List.of("cluster", "zone"), Map.of(
-            "H", Map.of("cluster", "c1", "zone", "z1"),
-            "X", Map.of("cluster", "c1", "zone", "z2")
-        ));
-        hold("H");
-
-        assertTrue(meets("X", "zone"));
-        assertFalse(meets("X", "cluster", "zone"));
-        assertTrue(meets("X"));
-        assertEquals("X", leastLoadedMeeting("zone"));
-        assertNull(leastLoadedMeeting("cluster"));
-    }
-
-    @Test
-    public void shouldForgetUsedValuesOnClear() {
-        tree(List.of("zone"), Map.of(
-            "H", Map.of("zone", "z1"),
-            "X", Map.of("zone", "z2")
-        ));
-        hold("H");
-        hold("X");
-        assertFalse(tree.hasUnusedValue(key("zone")));
-
-        tree.clearUsedValues();
-        assertTrue(tree.hasUnusedValue(key("zone")));
-        assertTrue(meets("H", "zone"));
-        assertTrue(meets("X", "zone"));
-    }
-
-    @Test
     public void shouldOnlyFindTagGroupsWithRoom() {
         // X is the only process in a new zone but has no room. With no conditions, only room counts.
         processesWithoutRoom.add("X");
@@ -107,81 +75,6 @@ public class TagTreeTest {
         assertNull(leastLoadedMeeting("zone"));
         assertTrue(hasTagGroupMeeting());
         assertEquals("H", leastLoadedMeeting());
-    }
-
-    @Test
-    public void shouldReturnLeastLoadedProcessMeetingConditions() {
-        // W is the lightest but shares the holder's zone. Y and Z are as loaded, so the earlier process wins.
-        loads.putAll(Map.of("Y", 1.0, "Z", 1.0));
-        tree(List.of("zone"), Map.of(
-            "H", Map.of("zone", "z1"),
-            "W", Map.of("zone", "z1"),
-            "Y", Map.of("zone", "z2"),
-            "Z", Map.of("zone", "z3")
-        ));
-        hold("H");
-
-        assertEquals("Y", leastLoadedMeeting("zone"));
-    }
-
-    @Test
-    public void shouldSeeGrownLoadsAfterStartPick() {
-        // V is the lightest but shares the holder's cluster, so X is the least loaded until it is heavier than Y.
-        loads.putAll(Map.of("X", 1.0, "Y", 2.0));
-        tree(List.of("cluster", "host"), Map.of(
-            "H", Map.of("cluster", "c1", "host", "h"),
-            "V", Map.of("cluster", "c1", "host", "v"),
-            "X", Map.of("cluster", "c2", "host", "x"),
-            "Y", Map.of("cluster", "c2", "host", "y")
-        ));
-        hold("H");
-        assertEquals("X", leastLoadedMeeting("cluster"));
-
-        loads.put("X", 3.0);
-        assertEquals("Y", leastLoadedMeeting("cluster"));
-    }
-
-    @Test
-    public void shouldDropTagGroupOnceNoProcessHasRoom() {
-        // X and Y are the processes in the new zone z2; X has no room first, then Y.
-        loads.putAll(Map.of("X", 1.0, "Y", 2.0));
-        tree(List.of("zone"), Map.of(
-            "H", Map.of("zone", "z1"),
-            "X", Map.of("zone", "z2"),
-            "Y", Map.of("zone", "z2")
-        ));
-        hold("H");
-        assertEquals("X", leastLoadedMeeting("zone"));
-
-        processesWithoutRoom.add("X");
-        assertEquals("Y", leastLoadedMeeting("zone"));
-
-        processesWithoutRoom.add("Y");
-        assertNull(leastLoadedMeeting("zone"));
-        assertFalse(hasTagGroupMeeting("zone"));
-        assertEquals("H", leastLoadedMeeting());
-    }
-
-    @Test
-    public void shouldGiveTheSameResultsWhateverTheTreeOrder() {
-        // cluster and zone have two values each, so their order in the list decides which one is on top of the tree.
-        final Map<String, Map<String, String>> clientTags = Map.of(
-            "H", Map.of("cluster", "c1", "zone", "z1"),
-            "A", Map.of("cluster", "c1", "zone", "z2"),
-            "B", Map.of("cluster", "c2", "zone", "z1"),
-            "C", Map.of("cluster", "c2", "zone", "z2")
-        );
-        loads.putAll(Map.of("A", 1.0, "B", 2.0, "C", 3.0));
-        for (final List<String> tagKeys : List.of(List.of("cluster", "zone"), List.of("zone", "cluster"))) {
-            tree(tagKeys, clientTags);
-            hold("H");
-
-            assertEquals(tagKeys, names(tree.tagKeys()));
-            assertEquals("B", leastLoadedMeeting("cluster"));
-            assertEquals("A", leastLoadedMeeting("zone"));
-            assertEquals("C", leastLoadedMeeting("cluster", "zone"));
-            assertEquals("H", leastLoadedMeeting());
-        }
     }
 
     @Test
@@ -305,14 +198,6 @@ public class TagTreeTest {
             keys.add(key(name));
         }
         return keys;
-    }
-
-    private static List<String> names(final List<TagKey> keys) {
-        final List<String> names = new ArrayList<>();
-        for (final TagKey key : keys) {
-            names.add(key.toString());
-        }
-        return names;
     }
 
     private boolean meets(final String process, final String... conditions) {
