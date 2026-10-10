@@ -2388,11 +2388,13 @@ public class GroupMetadataManager {
         // The assignment is only provided in the following cases:
         // 1. The member is joining.
         // 2. The member's assignment has been updated.
+        // 3. The member reports all owned task sets, including when acknowledging an assignment or retrying after a heartbeat failure.
         boolean assignedTaskChanged = hasAssignedTasksChanged(member, updatedMember);
         boolean endpointChanged = hasUserEndpointChanged(member, updatedMember);
+        boolean hasOwnedTasksReported = ownedActiveTasks != null && ownedStandbyTasks != null && ownedWarmupTasks != null;
 
-        // Echo the assignment back when joining or the assignment changed.
-        if (isJoining || assignedTaskChanged) {
+        // Echo the assignment when joining, when it changes, or when all owned task sets are reported.
+        if (isJoining || assignedTaskChanged || hasOwnedTasksReported) {
             response.setActiveTasks(createStreamsGroupHeartbeatResponseTaskIdsFromEpochs(updatedMember.assignedTasks().activeTasksWithEpochs()));
             response.setStandbyTasks(createStreamsGroupHeartbeatResponseTaskIds(updatedMember.assignedTasks().standbyTasks()));
             response.setWarmupTasks(createStreamsGroupHeartbeatResponseTaskIds(updatedMember.assignedTasks().warmupTasks()));
