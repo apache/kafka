@@ -155,19 +155,15 @@ public class KafkaConfigSchema {
         ConfigDef configDef = configDefs.getOrDefault(ConfigResource.Type.TOPIC, EMPTY_CONFIG_DEF);
         HashMap<String, ConfigEntry> effectiveConfigs = new HashMap<>();
         for (ConfigDef.ConfigKey configKey : configDef.configKeys().values()) {
-            if (!shouldIncludeTopicConfig(configKey, dynamicTopicConfigs)) continue;
+            // This config is internal; if the user hasn't set it explicitly, it should not be returned.
+            if (configKey.internalConfig && !dynamicTopicConfigs.containsKey(configKey.name)) {
+                continue;
+            }
             ConfigEntry entry = resolveEffectiveTopicConfig(configKey, staticNodeConfig,
                 dynamicClusterConfigs, dynamicNodeConfigs, dynamicTopicConfigs);
             effectiveConfigs.put(entry.name(), entry);
         }
         return effectiveConfigs;
-    }
-
-    /**
-     * This config is internal; if the user hasn't set it explicitly, it should not be returned.
-     */
-    private static boolean shouldIncludeTopicConfig(ConfigDef.ConfigKey configKey, Map<String, ?> dynamicTopicConfigs) {
-        return !configKey.internalConfig || dynamicTopicConfigs.containsKey(configKey.name);
     }
 
     public ConfigEntry resolveEffectiveTopicConfig(
