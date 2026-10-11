@@ -31,6 +31,7 @@ import org.apache.kafka.common.record.internal.Records;
 import org.apache.kafka.common.utils.Utils;
 import org.apache.kafka.common.utils.internals.ConfigUtils;
 import org.apache.kafka.server.config.QuotaConfig;
+import org.apache.kafka.server.config.ServerConfigs;
 import org.apache.kafka.server.config.ServerLogConfigs;
 import org.apache.kafka.server.config.ServerTopicConfigSynonyms;
 import org.apache.kafka.server.log.remote.storage.RemoteLogManagerConfig;
@@ -63,6 +64,76 @@ import static org.apache.kafka.common.config.ConfigDef.Type.STRING;
 import static org.apache.kafka.common.config.ConfigDef.ValidString.in;
 
 public class LogConfig extends AbstractConfig {
+
+    /**
+     * Translate broker defaults to topic log configuration names, preserving the precedence and
+     * unit conversions of broker configuration synonyms. Read through the supplied config so
+     * dynamically updated broker defaults are also reflected in the result.
+     */
+    public static Map<String, Object> extractLogConfigMap(AbstractConfig config) {
+        Map<String, Object> logProps = new HashMap<>();
+        logProps.put(TopicConfig.SEGMENT_BYTES_CONFIG, config.getInt(ServerLogConfigs.LOG_SEGMENT_BYTES_CONFIG));
+        logProps.put(TopicConfig.SEGMENT_MS_CONFIG, logRollTimeMillis(config));
+        logProps.put(TopicConfig.SEGMENT_JITTER_MS_CONFIG, logRollTimeJitterMillis(config));
+        logProps.put(TopicConfig.SEGMENT_INDEX_BYTES_CONFIG, config.getInt(ServerLogConfigs.LOG_INDEX_SIZE_MAX_BYTES_CONFIG));
+        logProps.put(TopicConfig.FLUSH_MESSAGES_INTERVAL_CONFIG, config.getLong(ServerLogConfigs.LOG_FLUSH_INTERVAL_MESSAGES_CONFIG));
+        logProps.put(TopicConfig.FLUSH_MS_CONFIG, logFlushIntervalMs(config));
+        logProps.put(TopicConfig.RETENTION_BYTES_CONFIG, config.getLong(ServerLogConfigs.LOG_RETENTION_BYTES_CONFIG));
+        logProps.put(TopicConfig.RETENTION_MS_CONFIG, logRetentionTimeMillis(config));
+        logProps.put(TopicConfig.MAX_MESSAGE_BYTES_CONFIG, config.getInt(ServerConfigs.MESSAGE_MAX_BYTES_CONFIG));
+        logProps.put(TopicConfig.MAX_DECOMPRESSED_MESSAGE_BYTES_CONFIG, config.getInt(ServerConfigs.MAX_DECOMPRESSED_MESSAGE_BYTES_CONFIG));
+        logProps.put(TopicConfig.INDEX_INTERVAL_BYTES_CONFIG, config.getInt(ServerLogConfigs.LOG_INDEX_INTERVAL_BYTES_CONFIG));
+        logProps.put(TopicConfig.DELETE_RETENTION_MS_CONFIG, config.getLong(CleanerConfig.LOG_CLEANER_DELETE_RETENTION_MS_PROP));
+        logProps.put(TopicConfig.MIN_COMPACTION_LAG_MS_CONFIG, config.getLong(CleanerConfig.LOG_CLEANER_MIN_COMPACTION_LAG_MS_PROP));
+        logProps.put(TopicConfig.MAX_COMPACTION_LAG_MS_CONFIG, config.getLong(CleanerConfig.LOG_CLEANER_MAX_COMPACTION_LAG_MS_PROP));
+        logProps.put(TopicConfig.FILE_DELETE_DELAY_MS_CONFIG, config.getLong(ServerLogConfigs.LOG_DELETE_DELAY_MS_CONFIG));
+        logProps.put(TopicConfig.MIN_CLEANABLE_DIRTY_RATIO_CONFIG, config.getDouble(CleanerConfig.LOG_CLEANER_MIN_CLEAN_RATIO_PROP));
+        logProps.put(TopicConfig.CLEANUP_POLICY_CONFIG, config.getList(ServerLogConfigs.LOG_CLEANUP_POLICY_CONFIG));
+        logProps.put(TopicConfig.MIN_IN_SYNC_REPLICAS_CONFIG, config.getInt(ServerLogConfigs.MIN_IN_SYNC_REPLICAS_CONFIG));
+        logProps.put(TopicConfig.COMPRESSION_TYPE_CONFIG, config.getString(ServerConfigs.COMPRESSION_TYPE_CONFIG));
+        logProps.put(TopicConfig.COMPRESSION_GZIP_LEVEL_CONFIG, config.getInt(ServerConfigs.COMPRESSION_GZIP_LEVEL_CONFIG));
+        logProps.put(TopicConfig.COMPRESSION_LZ4_LEVEL_CONFIG, config.getInt(ServerConfigs.COMPRESSION_LZ4_LEVEL_CONFIG));
+        logProps.put(TopicConfig.COMPRESSION_ZSTD_LEVEL_CONFIG, config.getInt(ServerConfigs.COMPRESSION_ZSTD_LEVEL_CONFIG));
+        logProps.put(TopicConfig.UNCLEAN_LEADER_ELECTION_ENABLE_CONFIG,
+            config.getBoolean(ServerTopicConfigSynonyms.serverSynonym(TopicConfig.UNCLEAN_LEADER_ELECTION_ENABLE_CONFIG)));
+        logProps.put(TopicConfig.PREALLOCATE_CONFIG, config.getBoolean(ServerLogConfigs.LOG_PRE_ALLOCATE_CONFIG));
+        logProps.put(TopicConfig.MESSAGE_TIMESTAMP_TYPE_CONFIG, TimestampType.forName(config.getString(ServerLogConfigs.LOG_MESSAGE_TIMESTAMP_TYPE_CONFIG)).name);
+        logProps.put(TopicConfig.MESSAGE_TIMESTAMP_BEFORE_MAX_MS_CONFIG, config.getLong(ServerLogConfigs.LOG_MESSAGE_TIMESTAMP_BEFORE_MAX_MS_CONFIG));
+        logProps.put(TopicConfig.MESSAGE_TIMESTAMP_AFTER_MAX_MS_CONFIG, config.getLong(ServerLogConfigs.LOG_MESSAGE_TIMESTAMP_AFTER_MAX_MS_CONFIG));
+        logProps.put(TopicConfig.LOCAL_LOG_RETENTION_MS_CONFIG, config.getLong(RemoteLogManagerConfig.LOG_LOCAL_RETENTION_MS_PROP));
+        logProps.put(TopicConfig.LOCAL_LOG_RETENTION_BYTES_CONFIG, config.getLong(RemoteLogManagerConfig.LOG_LOCAL_RETENTION_BYTES_PROP));
+        logProps.put(TopicConfig.REMOTE_COPY_LAG_MS_CONFIG, config.getLong(RemoteLogManagerConfig.LOG_REMOTE_COPY_LAG_MS_PROP));
+        logProps.put(TopicConfig.REMOTE_COPY_LAG_BYTES_CONFIG, config.getLong(RemoteLogManagerConfig.LOG_REMOTE_COPY_LAG_BYTES_PROP));
+        return logProps;
+    }
+
+    public static Long logRollTimeMillis(AbstractConfig config) {
+        Long millis = config.getLong(ServerLogConfigs.LOG_ROLL_TIME_MILLIS_CONFIG);
+        if (millis != null) return millis;
+        return TimeUnit.HOURS.toMillis(config.getInt(ServerLogConfigs.LOG_ROLL_TIME_HOURS_CONFIG));
+    }
+
+    public static Long logRollTimeJitterMillis(AbstractConfig config) {
+        Long millis = config.getLong(ServerLogConfigs.LOG_ROLL_TIME_JITTER_MILLIS_CONFIG);
+        if (millis != null) return millis;
+        return TimeUnit.HOURS.toMillis(config.getInt(ServerLogConfigs.LOG_ROLL_TIME_JITTER_HOURS_CONFIG));
+    }
+
+    public static Long logFlushIntervalMs(AbstractConfig config) {
+        Long millis = config.getLong(ServerLogConfigs.LOG_FLUSH_INTERVAL_MS_CONFIG);
+        if (millis != null) return millis;
+        return config.getLong(ServerLogConfigs.LOG_FLUSH_SCHEDULER_INTERVAL_MS_CONFIG);
+    }
+
+    public static Long logRetentionTimeMillis(AbstractConfig config) {
+        Long millis = config.getLong(ServerLogConfigs.LOG_RETENTION_TIME_MILLIS_CONFIG);
+        if (millis == null) {
+            Integer minutes = config.getInt(ServerLogConfigs.LOG_RETENTION_TIME_MINUTES_CONFIG);
+            millis = minutes != null ? TimeUnit.MINUTES.toMillis(minutes)
+                : TimeUnit.HOURS.toMillis(config.getInt(ServerLogConfigs.LOG_RETENTION_TIME_HOURS_CONFIG));
+        }
+        return millis < 0 ? Long.valueOf(-1) : millis;
+    }
 
     private static class RemoteLogConfig {
 
@@ -270,7 +341,7 @@ public class LogConfig extends AbstractConfig {
 
     /*
      * Important note: Any configuration parameter that is passed along from KafkaConfig to LogConfig
-     * should also be in `KafkaConfig#extractLogConfigMap`.
+     * should also be in `LogConfig#extractLogConfigMap`.
      */
     private final int segmentSize;
     private final Integer internalSegmentSize;
