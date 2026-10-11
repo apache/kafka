@@ -76,19 +76,13 @@ import static java.util.Collections.singletonMap;
 import static org.apache.kafka.common.utils.Utils.mkEntry;
 import static org.apache.kafka.common.utils.Utils.mkMap;
 import static org.apache.kafka.streams.processor.internals.StateManagerUtil.CHECKPOINT_FILE_NAME;
-import static org.hamcrest.CoreMatchers.containsString;
-import static org.hamcrest.CoreMatchers.equalTo;
-import static org.hamcrest.CoreMatchers.notNullValue;
-import static org.hamcrest.MatcherAssert.assertThat;
-import static org.hamcrest.Matchers.lessThan;
-import static org.hamcrest.core.Is.is;
 import static org.junit.jupiter.api.Assertions.assertEquals;
 import static org.junit.jupiter.api.Assertions.assertFalse;
 import static org.junit.jupiter.api.Assertions.assertInstanceOf;
+import static org.junit.jupiter.api.Assertions.assertNotNull;
 import static org.junit.jupiter.api.Assertions.assertNull;
 import static org.junit.jupiter.api.Assertions.assertThrows;
 import static org.junit.jupiter.api.Assertions.assertTrue;
-import static org.junit.jupiter.api.Assertions.fail;
 import static org.mockito.ArgumentMatchers.any;
 import static org.mockito.Mockito.doThrow;
 import static org.mockito.Mockito.mock;
@@ -163,10 +157,7 @@ public class ProcessorStateManagerTest {
         final String applicationId = "appId";
         final String storeName = "store";
 
-        assertThat(
-            ProcessorStateManager.storeChangelogTopic(applicationId, storeName, null),
-            is(applicationId + "-" + storeName + "-changelog")
-        );
+        assertEquals(applicationId + "-" + storeName + "-changelog", ProcessorStateManager.storeChangelogTopic(applicationId, storeName, null));
     }
 
     @Test
@@ -175,10 +166,9 @@ public class ProcessorStateManagerTest {
         final String namedTopology = "namedTopology";
         final String storeName = "store";
 
-        assertThat(
-            ProcessorStateManager.storeChangelogTopic(applicationId, storeName, namedTopology),
-            is(applicationId + "-" + namedTopology + "-" + storeName + "-changelog")
-        );
+        assertEquals(
+            applicationId + "-" + namedTopology + "-" + storeName + "-changelog",
+            ProcessorStateManager.storeChangelogTopic(applicationId, storeName, namedTopology));
     }
 
     @Test
@@ -256,11 +246,11 @@ public class ProcessorStateManagerTest {
         try {
             stateMgr.registerStore(persistentStore, restoreCallback, null);
             final StateStoreMetadata storeMetadata = stateMgr.storeMetadata(persistentStorePartition);
-            assertThat(storeMetadata, notNullValue());
+            assertNotNull(storeMetadata);
 
             stateMgr.restore(storeMetadata, singletonList(consumerRecord), OptionalLong.of(2L));
 
-            assertThat(restoreCallback.restored.size(), is(1));
+            assertEquals(1, restoreCallback.restored.size());
             assertTrue(restoreCallback.restored.contains(expectedKeyValue));
 
             assertEquals(Collections.singletonMap(persistentStorePartition, 101L), stateMgr.changelogOffsets());
@@ -276,11 +266,11 @@ public class ProcessorStateManagerTest {
         try {
             stateMgr.registerStore(persistentStore, persistentStore.stateRestoreCallback, null);
             final StateStoreMetadata storeMetadata = stateMgr.storeMetadata(persistentStorePartition);
-            assertThat(storeMetadata, notNullValue());
+            assertNotNull(storeMetadata);
 
             stateMgr.restore(storeMetadata, singletonList(consumerRecord), OptionalLong.of(2L));
 
-            assertThat(persistentStore.keys.size(), is(1));
+            assertEquals(1, persistentStore.keys.size());
             assertTrue(persistentStore.keys.contains(key));
             // we just check non timestamped value length
             assertEquals(9, persistentStore.values.get(0).length);
@@ -297,11 +287,11 @@ public class ProcessorStateManagerTest {
         try {
             stateMgr.registerStore(store, store.stateRestoreCallback, null);
             final StateStoreMetadata storeMetadata = stateMgr.storeMetadata(persistentStorePartition);
-            assertThat(storeMetadata, notNullValue());
+            assertNotNull(storeMetadata);
 
             stateMgr.restore(storeMetadata, singletonList(consumerRecord), OptionalLong.of(2L));
 
-            assertThat(store.keys.size(), is(1));
+            assertEquals(1, store.keys.size());
             assertTrue(store.keys.contains(key));
             // we just check timestamped value length
             assertEquals(17, store.values.get(0).length);
@@ -339,11 +329,11 @@ public class ProcessorStateManagerTest {
         final File taskDir = stateDirectory.getOrCreateDirectoryForTask(taskId);
         final long staleTime = time.milliseconds() - 60_000L;
         assertTrue(taskDir.setLastModified(staleTime));
-        assertThat(taskDir.lastModified(), is(staleTime));
+        assertEquals(staleTime, taskDir.lastModified());
 
         stateMgr.close();
 
-        assertThat(taskDir.lastModified(), is(time.milliseconds()));
+        assertEquals(time.milliseconds(), taskDir.lastModified());
     }
 
     @Test
@@ -368,7 +358,7 @@ public class ProcessorStateManagerTest {
 
         stateMgr.close();
 
-        assertThat(taskDir.lastModified(), is(staleTime));
+        assertEquals(staleTime, taskDir.lastModified());
     }
 
     @Test
@@ -384,7 +374,7 @@ public class ProcessorStateManagerTest {
         stateMgr.registerStore(store, noopStateRestoreCallback, null);
 
         stateMgr.recycle();
-        assertThat(stateMgr.store(persistentStoreName), equalTo(store));
+        assertEquals(store, stateMgr.store(persistentStoreName));
 
         stateMgr.registerStateStores(singletonList(store), context);
 
@@ -403,10 +393,10 @@ public class ProcessorStateManagerTest {
         verify(store).init(context, store);
 
         stateMgr.registerStore(store, noopStateRestoreCallback, null);
-        assertThat(stateMgr.store(persistentStoreName), equalTo(store));
+        assertEquals(store, stateMgr.store(persistentStoreName));
 
         stateMgr.recycle();
-        assertThat(stateMgr.store(persistentStoreName), equalTo(store));
+        assertEquals(store, stateMgr.store(persistentStoreName));
 
         verify(store).clearCache();
     }
@@ -460,7 +450,7 @@ public class ProcessorStateManagerTest {
             stateMgr.registerStateStores(singletonList(unloggedStore), context);
 
             assertTrue(unloggedStore.initialized);
-            assertThat(stateMgr.store(unloggedStoreName), is(unloggedStore));
+            assertEquals(unloggedStore, stateMgr.store(unloggedStoreName));
             assertTrue(stateMgr.changelogPartitions().isEmpty());
         } finally {
             stateMgr.close();
@@ -499,7 +489,7 @@ public class ProcessorStateManagerTest {
 
             assertNull(stateMgr.storeMetadata(irrelevantPartition));
             assertNull(stateMgr.storeMetadata(persistentStoreTwoPartition).offset());
-            assertThat(stateMgr.storeMetadata(persistentStorePartition).offset(), equalTo(checkpointOffset));
+            assertEquals(checkpointOffset, stateMgr.storeMetadata(persistentStorePartition).offset());
             assertNull(stateMgr.storeMetadata(nonPersistentStorePartition).offset());
         } finally {
             stateMgr.close();
@@ -539,7 +529,7 @@ public class ProcessorStateManagerTest {
 
             assertNull(stateMgr.storeMetadata(irrelevantPartition));
             assertNull(stateMgr.storeMetadata(persistentStoreTwoPartition).offset());
-            assertThat(stateMgr.storeMetadata(persistentStorePartition).offset(), equalTo(checkpointOffset));
+            assertEquals(checkpointOffset, stateMgr.storeMetadata(persistentStorePartition).offset());
             assertNull(stateMgr.storeMetadata(nonPersistentStorePartition).offset());
         } finally {
             stateMgr.close();
@@ -560,15 +550,17 @@ public class ProcessorStateManagerTest {
 
             // the shared sums outlive this task, so they must only count state that outlives it too (KAFKA-20893);
             // the in-memory store's 201 is reported from the live task by TaskManager instead
-            assertThat(stateDirectory.taskOffsetSums(), is(mkMap(mkEntry(taskId, 101L))));
-            assertThat(stateMgr.changelogOffsets(), is(mkMap(
-                mkEntry(persistentStorePartition, 101L),
-                mkEntry(nonPersistentStorePartition, 201L))));
+            assertEquals(Map.of(taskId, 101L), stateDirectory.taskOffsetSums());
+            assertEquals(
+                Map.of(
+                    persistentStorePartition, 101L,
+                    nonPersistentStorePartition, 201L),
+                stateMgr.changelogOffsets());
         } finally {
             stateMgr.close();
         }
 
-        assertThat(stateDirectory.taskOffsetSums(), is(mkMap(mkEntry(taskId, 101L))));
+        assertEquals(Map.of(taskId, 101L), stateDirectory.taskOffsetSums());
     }
 
     @Test
@@ -581,12 +573,12 @@ public class ProcessorStateManagerTest {
             stateMgr.initializeStoreOffsets(true);
             stateMgr.updateChangelogOffsets(Collections.singletonMap(nonPersistentStorePartition, 200L));
 
-            assertThat(stateDirectory.taskOffsetSums(), is(Collections.emptyMap()));
+            assertTrue(stateDirectory.taskOffsetSums().isEmpty());
         } finally {
             stateMgr.close();
         }
 
-        assertThat(stateDirectory.taskOffsetSums(), is(Collections.emptyMap()));
+        assertTrue(stateDirectory.taskOffsetSums().isEmpty());
     }
 
     @Test
@@ -601,12 +593,12 @@ public class ProcessorStateManagerTest {
                 mkEntry(persistentStorePartition, 100L),
                 mkEntry(persistentStoreTwoPartition, 200L)));
 
-            assertThat(stateDirectory.taskOffsetSums(), is(mkMap(mkEntry(taskId, 302L))));
+            assertEquals(Map.of(taskId, 302L), stateDirectory.taskOffsetSums());
         } finally {
             stateMgr.close();
         }
 
-        assertThat(stateDirectory.taskOffsetSums(), is(mkMap(mkEntry(taskId, 302L))));
+        assertEquals(Map.of(taskId, 302L), stateDirectory.taskOffsetSums());
     }
 
     @Test
@@ -631,8 +623,8 @@ public class ProcessorStateManagerTest {
 
         final TopicPartition changelogPartition = stateMgr.registeredChangelogPartitionFor(persistentStoreName);
 
-        assertThat(changelogPartition.topic(), is(persistentStoreTopicName));
-        assertThat(changelogPartition.partition(), is(taskId.partition()));
+        assertEquals(persistentStoreTopicName, changelogPartition.topic());
+        assertEquals(taskId.partition(), changelogPartition.partition());
     }
 
     @Test
@@ -688,7 +680,7 @@ public class ProcessorStateManagerTest {
             assertTrue(nonPersistentStore.committed);
 
             // make sure that flush is called in the proper order
-            assertThat(persistentStore.getLastCommitCount(), lessThan(nonPersistentStore.getLastCommitCount()));
+            assertTrue(persistentStore.getLastCommitCount() < nonPersistentStore.getLastCommitCount());
 
             stateMgr.updateChangelogOffsets(ackedOffsets);
             stateMgr.commit();
@@ -698,7 +690,7 @@ public class ProcessorStateManagerTest {
             // the checkpoint file should contain an offset from the persistent store only.
             final OffsetCheckpoint storeCheckpoint = new OffsetCheckpoint(storeCheckpointFile);
             final Map<TopicPartition, Long> checkpointedOffsets = storeCheckpoint.read();
-            assertThat(checkpointedOffsets, is(singletonMap(new TopicPartition(persistentStoreTopicName, 1), 25_000L)));
+            assertEquals(Map.of(new TopicPartition(persistentStoreTopicName, 1), 25_000L), checkpointedOffsets);
 
             stateMgr.close();
 
@@ -733,7 +725,7 @@ public class ProcessorStateManagerTest {
             assertTrue(nonPersistentStore.committed);
 
             // make sure that flush is called in the proper order
-            assertThat(persistentStore.getLastCommitCount(), lessThan(nonPersistentStore.getLastCommitCount()));
+            assertTrue(persistentStore.getLastCommitCount() < nonPersistentStore.getLastCommitCount());
 
             stateMgr.updateChangelogOffsets(ackedOffsets);
             stateMgr.commit();
@@ -746,7 +738,7 @@ public class ProcessorStateManagerTest {
             // the checkpoint file should contain an offset from the persistent store only.
             final OffsetCheckpoint storeCheckpoint = new OffsetCheckpoint(storeCheckpointFile);
             final Map<TopicPartition, Long> checkpointedOffsets = storeCheckpoint.read();
-            assertThat(checkpointedOffsets, is(singletonMap(new TopicPartition(persistentStoreTopicName, 1), -4L)));
+            assertEquals(Map.of(new TopicPartition(persistentStoreTopicName, 1), -4L), checkpointedOffsets);
 
             try {
                 // Reopen to verify null committed offset
@@ -770,12 +762,12 @@ public class ProcessorStateManagerTest {
             stateMgr.initializeStoreOffsets(true);
 
             final StateStoreMetadata storeMetadata = stateMgr.storeMetadata(persistentStorePartition);
-            assertThat(storeMetadata, notNullValue());
-            assertThat(storeMetadata.offset(), equalTo(99L));
+            assertNotNull(storeMetadata);
+            assertEquals(99L, storeMetadata.offset());
 
             stateMgr.restore(storeMetadata, singletonList(consumerRecord), OptionalLong.of(2L));
 
-            assertThat(storeMetadata.offset(), equalTo(100L));
+            assertEquals(100L, storeMetadata.offset());
 
             // should ignore irrelevant topic partitions
             stateMgr.updateChangelogOffsets(mkMap(
@@ -784,8 +776,8 @@ public class ProcessorStateManagerTest {
             ));
             stateMgr.commit();
 
-            assertThat(stateMgr.storeMetadata(irrelevantPartition), equalTo(null));
-            assertThat(storeMetadata.offset(), equalTo(220L));
+            assertNull(stateMgr.storeMetadata(irrelevantPartition));
+            assertEquals(220L, storeMetadata.offset());
         } finally {
             stateMgr.close();
         }
@@ -811,7 +803,7 @@ public class ProcessorStateManagerTest {
             stateMgr.commit();
 
             final Map<TopicPartition, Long> read = checkpoint.read();
-            assertThat(read, equalTo(emptyMap()));
+            assertTrue(read.isEmpty());
         } finally {
             stateMgr.close();
         }
@@ -1004,13 +996,10 @@ public class ProcessorStateManagerTest {
         writer.write("abcdefg");
         writer.close();
 
-        try {
+        assertThrows(ProcessorStateException.class, () -> {
             stateMgr.registerStateStores(Collections.singletonList(persistentStore), context);
             stateMgr.initializeStoreOffsets(true);
-            fail("should have thrown processor state exception when IO exception happens");
-        } catch (final ProcessorStateException e) {
-            // pass
-        }
+        }, "should have thrown processor state exception when IO exception happens");
     }
 
     @Test
@@ -1027,12 +1016,9 @@ public class ProcessorStateManagerTest {
 
         final StateStoreMetadata storeMetadata = stateMgr.storeMetadata(persistentStorePartition);
 
-        try {
-            stateMgr.restore(storeMetadata, singletonList(consumerRecord), OptionalLong.of(2L));
-            fail("should have thrown processor state exception when IO exception happens");
-        } catch (final ProcessorStateException e) {
-            // pass
-        }
+        assertThrows(ProcessorStateException.class,
+            () -> stateMgr.restore(storeMetadata, singletonList(consumerRecord), OptionalLong.of(2L)),
+            "should have thrown processor state exception when IO exception happens");
     }
 
     @Test
@@ -1152,8 +1138,8 @@ public class ProcessorStateManagerTest {
             stateMgr.registerStateStores(Arrays.asList(persistentStore, nonPersistentStore), context);
             stateMgr.initializeStoreOffsets(true);
 
-            assertThat(stateMgr.storeMetadata(nonPersistentStorePartition), notNullValue());
-            assertThat(stateMgr.storeMetadata(persistentStorePartition), notNullValue());
+            assertNotNull(stateMgr.storeMetadata(nonPersistentStorePartition));
+            assertNotNull(stateMgr.storeMetadata(persistentStorePartition));
 
             stateMgr.updateChangelogOffsets(mkMap(
                 mkEntry(nonPersistentStorePartition, 876L),
@@ -1171,8 +1157,8 @@ public class ProcessorStateManagerTest {
 
             // This should not throw a TaskCorruptedException!
             stateMgr.initializeStoreOffsets(false);
-            assertThat(stateMgr.storeMetadata(nonPersistentStorePartition), notNullValue());
-            assertThat(stateMgr.storeMetadata(persistentStorePartition), notNullValue());
+            assertNotNull(stateMgr.storeMetadata(nonPersistentStorePartition));
+            assertNotNull(stateMgr.storeMetadata(persistentStorePartition));
         } finally {
             stateMgr.close();
         }
@@ -1225,10 +1211,7 @@ public class ProcessorStateManagerTest {
         // the checkpoint file should contain an offset from the persistent store only.
         final Map<TopicPartition, Long> persistentOffsets = persistentCheckpoint.getOffsetCheckpoint()
                                                                                 .read();
-        assertThat(
-            persistentOffsets,
-            is(singletonMap(new TopicPartition(persistentStoreTopicName, 1), 123L))
-        );
+        assertEquals(Map.of(new TopicPartition(persistentStoreTopicName, 1), 123L), persistentOffsets);
 
         assertEquals(
             persistentCheckpoint.getCheckpointedPosition(),
@@ -1257,14 +1240,10 @@ public class ProcessorStateManagerTest {
             stateMgr::commit
         );
 
-        assertThat(
-            processorStateException.getMessage(),
-            containsString(
-                "process-state-manager-test Exception caught while trying to checkpoint store,"
-                    + " changelog partition test-application-My-Topology-persistentStore-changelog-1"
-            )
-        );
-        assertThat(processorStateException.getCause(), is(ioException));
+        assertTrue(processorStateException.getMessage().contains(
+            "process-state-manager-test Exception caught while trying to checkpoint store,"
+                + " changelog partition test-application-My-Topology-persistentStore-changelog-1"));
+        assertEquals(ioException, processorStateException.getCause());
     }
 
     @Test

@@ -245,27 +245,35 @@ public abstract class AbstractHeartbeatRequestManager<R extends AbstractResponse
      * <p>Similarly, we may have to unblock the application thread to send a {@link AsyncPollEvent} to make sure
      * our poll timer will not expire while we are polling.
      *
-     * <p>When the member is {@link MemberState#UNSUBSCRIBED} (for example, with manual assignment),
-     * this returns {@code Long.MAX_VALUE} to indicate there is no next heartbeat to wait for,
-     * allowing the application thread to block for the full user-specified poll timeout rather than
-     * spinning in a busy loop.
+     * <p>When the member is {@link MemberState#UNSUBSCRIBED} or in the terminal {@link MemberState#FATAL} state,
+     * this returns {@code Long.MAX_VALUE} to indicate there is no next heartbeat to wait for, allowing the application
+     * thread to block for the full user-specified poll timeout rather than spinning in a busy loop.
      */
     @Override
     public long maximumTimeToWait(long currentTimeMs) {
         pollTimer.update(currentTimeMs);
-        if (membershipManager().state() == MemberState.UNSUBSCRIBED) {
+        MemberState state = membershipManager().state();
+        // No heartbeat can be sent in these states: UNSUBSCRIBED has nothing to heartbeat for,
+        // and FATAL is terminal. The fatal error has already been propagated to the
+        // application thread, so there is no need to wake it before its poll timeout expires.
+        if (state == MemberState.UNSUBSCRIBED || state == MemberState.FATAL) {
             return Long.MAX_VALUE;
         }
+        // Unblock the application thread so STALE/FENCED members can run
+        // assignment-release callbacks and rejoin during the next poll.
         if (pollTimer.isExpired()) {
             return 0L;
         }
-        // KAFKA-20253: mirror the guard in poll(). A heartbeat is only sent when the coordinator is known
-        // and the member is in a state that heartbeats. When the coordinator is unavailable (e.g. after a
-        // re-authentication failure) or the member should skip heartbeats (FATAL/FENCED/STALE/UNSUBSCRIBED),
-        // poll() returns EMPTY, so falling through to the timer-based branches below would return 0 (the
-        // heartbeat timer is left permanently expired) and busy-spin both the application and network threads.
+        // Mirror the guard in poll(). A heartbeat is only sent when the coordinator is known and the
+        // member is in a state that can send heartbeats. This covers cases such as:
+        // - The coordinator is unavailable (for example, during bootstrap DNS resolution or after a
+        //   re-authentication failure).
+        // - The member is FENCED (or STALE with the poll timer already reset) and waiting for the
+        //   application thread to run assignment-release callbacks before rejoining.
+        // Return retryBackoffMs rather than the heartbeat interval, since the interval remains 0 until
+        // the first heartbeat response is received, which would also lead to busy-spinning.
         if (coordinatorRequestManager.coordinator().isEmpty() || membershipManager().shouldSkipHeartbeat()) {
-            return heartbeatRequestState.heartbeatIntervalMs();
+            return heartbeatRequestState.retryBackoffMs();
         }
         if (membershipManager().shouldHeartbeatNow() && !heartbeatRequestState.requestInFlight()) {
             return 0L;

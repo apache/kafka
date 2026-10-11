@@ -76,14 +76,12 @@ class MetadataVersionTest {
     @Test
     public void testFromVersionStringUnstableDisabled() {
         MetadataVersion latestTesting = MetadataVersion.latestTesting();
-        if (!latestTesting.isProduction()) {
-            String expectedMsg = "Unknown metadata.version '" + latestTesting.version()
-                + "'. Supported metadata.version are: "
-                + MetadataVersion.metadataVersionsToString(MINIMUM_VERSION, LATEST_PRODUCTION);
-            assertEquals(expectedMsg,
-                assertThrows(IllegalArgumentException.class,
-                    () -> MetadataVersion.fromVersionString(latestTesting.version(), false)).getMessage());
-        }
+        String expectedMsg = "Unknown metadata.version '" + latestTesting.version()
+            + "'. Supported metadata.version are: "
+            + MetadataVersion.metadataVersionsToString(MINIMUM_VERSION, LATEST_PRODUCTION);
+        assertEquals(expectedMsg,
+            assertThrows(IllegalArgumentException.class,
+                () -> MetadataVersion.fromVersionString(latestTesting.version(), false)).getMessage());
     }
 
     @Test
@@ -207,10 +205,10 @@ class MetadataVersionTest {
     }
 
     @Test
-    public void assertLatestProductionIsNotAfterLatestTesting() {
-        assertTrue(LATEST_PRODUCTION.ordinal() <= MetadataVersion.latestTesting().ordinal(),
+    public void assertLatestProductionIsLessThanLatest() {
+        assertTrue(LATEST_PRODUCTION.ordinal() < MetadataVersion.latestTesting().ordinal(),
             "Expected LATEST_PRODUCTION " + LATEST_PRODUCTION +
-            " to not be after the latest of " + MetadataVersion.latestTesting());
+            " to be less than the latest of " + MetadataVersion.latestTesting());
     }
 
     /**
@@ -231,11 +229,8 @@ class MetadataVersionTest {
     }
 
     @Test
-    public void assertLatestTestingIsUnstable() {
-        MetadataVersion latestTesting = MetadataVersion.latestTesting();
-        if (LATEST_PRODUCTION.isLessThan(latestTesting)) {
-            assertFalse(latestTesting.isProduction());
-        }
+    public void assertLatestIsNotProduction() {
+        assertFalse(MetadataVersion.latestTesting().isProduction());
     }
 
     @ParameterizedTest

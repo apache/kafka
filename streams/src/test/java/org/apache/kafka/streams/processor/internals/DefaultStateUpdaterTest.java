@@ -34,7 +34,6 @@ import org.apache.kafka.streams.processor.internals.Task.State;
 import org.apache.kafka.streams.processor.internals.metrics.StreamsMetricsImpl;
 import org.apache.kafka.test.TestUtils;
 
-import org.hamcrest.Matcher;
 import org.junit.jupiter.api.AfterEach;
 import org.junit.jupiter.api.Test;
 import org.mockito.InOrder;
@@ -58,6 +57,7 @@ import java.util.concurrent.ExecutionException;
 import java.util.concurrent.TimeUnit;
 import java.util.concurrent.atomic.AtomicBoolean;
 import java.util.concurrent.atomic.AtomicReference;
+import java.util.function.Consumer;
 import java.util.stream.Collectors;
 
 import static org.apache.kafka.common.utils.Utils.mkEntry;
@@ -69,13 +69,10 @@ import static org.apache.kafka.test.StreamsTestUtils.TaskBuilder.statefulTask;
 import static org.apache.kafka.test.StreamsTestUtils.TaskBuilder.statelessTask;
 import static org.apache.kafka.test.StreamsTestUtils.TopologyMetadataBuilder.unnamedTopology;
 import static org.apache.kafka.test.TestUtils.waitForCondition;
-import static org.hamcrest.MatcherAssert.assertThat;
-import static org.hamcrest.Matchers.greaterThanOrEqualTo;
-import static org.hamcrest.Matchers.is;
-import static org.hamcrest.Matchers.not;
 import static org.junit.jupiter.api.Assertions.assertEquals;
 import static org.junit.jupiter.api.Assertions.assertFalse;
 import static org.junit.jupiter.api.Assertions.assertInstanceOf;
+import static org.junit.jupiter.api.Assertions.assertNotEquals;
 import static org.junit.jupiter.api.Assertions.assertNull;
 import static org.junit.jupiter.api.Assertions.assertThrows;
 import static org.junit.jupiter.api.Assertions.assertTrue;
@@ -633,7 +630,7 @@ class DefaultStateUpdaterTest {
 
     @Test
     public void shouldPublishEmptyTaskEndOffsetSumSnapshotBeforeStart() {
-        assertThat(stateUpdater.taskEndOffsetSumSnapshot(), is(Collections.emptyMap()));
+        assertTrue(stateUpdater.taskEndOffsetSumSnapshot().isEmpty());
     }
 
     @Test
@@ -1949,7 +1946,7 @@ class DefaultStateUpdaterTest {
         stateUpdater.add(standbyTask4);
 
         verifyPausedTasks(activeTask2, standbyTask4);
-        assertThat(metrics.metrics().size(), is(11));
+        assertEquals(11, metrics.metrics().size());
 
         final Map<String, String> tagMap = new LinkedHashMap<>();
         tagMap.put("thread-id", "test-state-updater");
@@ -1958,64 +1955,64 @@ class DefaultStateUpdaterTest {
             "stream-state-updater-metrics",
             "The number of active tasks currently undergoing restoration",
             tagMap);
-        verifyMetric(metrics, metricName, is(1.0));
+        verifyMetric(metrics, metricName, value -> assertEquals(1.0, value));
 
         metricName = new MetricName("standby-updating-tasks",
             "stream-state-updater-metrics",
             "The number of standby tasks currently undergoing state update",
             tagMap);
-        verifyMetric(metrics, metricName, is(1.0));
+        verifyMetric(metrics, metricName, value -> assertEquals(1.0, value));
 
         metricName = new MetricName("active-paused-tasks",
             "stream-state-updater-metrics",
             "The number of active tasks paused restoring",
             tagMap);
-        verifyMetric(metrics, metricName, is(1.0));
+        verifyMetric(metrics, metricName, value -> assertEquals(1.0, value));
 
         metricName = new MetricName("standby-paused-tasks",
             "stream-state-updater-metrics",
             "The number of standby tasks paused state update",
             tagMap);
-        verifyMetric(metrics, metricName, is(1.0));
+        verifyMetric(metrics, metricName, value -> assertEquals(1.0, value));
 
         metricName = new MetricName("idle-ratio",
             "stream-state-updater-metrics",
             "The ratio, over a rolling measurement window, of the time this thread spent being idle",
             tagMap);
-        verifyMetric(metrics, metricName, greaterThanOrEqualTo(0.0d));
+        verifyMetric(metrics, metricName, value -> assertTrue(Double.compare((Double) value, 0.0d) >= 0));
 
         metricName = new MetricName("active-restore-ratio",
             "stream-state-updater-metrics",
             "The ratio, over a rolling measurement window, of the time this thread spent restoring active tasks",
             tagMap);
-        verifyMetric(metrics, metricName, greaterThanOrEqualTo(0.0d));
+        verifyMetric(metrics, metricName, value -> assertTrue(Double.compare((Double) value, 0.0d) >= 0));
 
         metricName = new MetricName("standby-update-ratio",
             "stream-state-updater-metrics",
             "The ratio, over a rolling measurement window, of the time this thread spent updating standby tasks",
             tagMap);
-        verifyMetric(metrics, metricName, is(0.0d));
+        verifyMetric(metrics, metricName, value -> assertEquals(0.0d, value));
 
         metricName = new MetricName("checkpoint-ratio",
             "stream-state-updater-metrics",
             "The ratio, over a rolling measurement window, of the time this thread spent checkpointing tasks restored progress",
             tagMap);
-        verifyMetric(metrics, metricName, greaterThanOrEqualTo(0.0d));
+        verifyMetric(metrics, metricName, value -> assertTrue(Double.compare((Double) value, 0.0d) >= 0));
 
         metricName = new MetricName("restore-records-rate",
             "stream-state-updater-metrics",
             "The average per-second number of records restored",
             tagMap);
-        verifyMetric(metrics, metricName, not(0.0d));
+        verifyMetric(metrics, metricName, value -> assertNotEquals(0.0d, value));
 
         metricName = new MetricName("restore-call-rate",
             "stream-state-updater-metrics",
             "The average per-second number of restore calls triggered",
             tagMap);
-        verifyMetric(metrics, metricName, not(0.0d));
+        verifyMetric(metrics, metricName, value -> assertNotEquals(0.0d, value));
 
         stateUpdater.shutdown(Duration.ofMinutes(1));
-        assertThat(metrics.metrics().size(), is(1));
+        assertEquals(1, metrics.metrics().size());
     }
 
     @Test
@@ -2292,13 +2289,12 @@ class DefaultStateUpdaterTest {
         );
     }
 
-    @SuppressWarnings("unchecked")
-    private static <T> void verifyMetric(final StreamsMetricsImpl metrics,
-                                         final MetricName metricName,
-                                         final Matcher<T> matcher) {
-        assertThat(metrics.metrics().get(metricName).metricName().description(), is(metricName.description()));
-        assertThat(metrics.metrics().get(metricName).metricName().tags(), is(metricName.tags()));
-        assertThat((T) metrics.metrics().get(metricName).metricValue(), matcher);
+    private static void verifyMetric(final StreamsMetricsImpl metrics,
+                                     final MetricName metricName,
+                                     final Consumer<Object> valueAssertion) {
+        assertEquals(metricName.description(), metrics.metrics().get(metricName).metricName().description());
+        assertEquals(metricName.tags(), metrics.metrics().get(metricName).metricName().tags());
+        valueAssertion.accept(metrics.metrics().get(metricName).metricValue());
     }
 
     private void verifyGetTasks(final Set<StreamTask> expectedActiveTasks,

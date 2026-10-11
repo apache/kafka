@@ -96,9 +96,8 @@ import java.util.concurrent.TimeoutException;
 import java.util.stream.Stream;
 
 import static org.apache.kafka.streams.query.StateQueryRequest.inStore;
-import static org.hamcrest.MatcherAssert.assertThat;
-import static org.hamcrest.Matchers.equalTo;
-import static org.hamcrest.Matchers.is;
+import static org.junit.jupiter.api.Assertions.assertEquals;
+import static org.junit.jupiter.api.Assertions.assertTrue;
 
 @Tag("integration")
 @Timeout(600)
@@ -320,7 +319,7 @@ public class PositionRestartIntegrationTest {
 
             for (final Future<RecordMetadata> future : futures) {
                 final RecordMetadata recordMetadata = future.get(1, TimeUnit.MINUTES);
-                assertThat(recordMetadata.hasOffset(), is(true));
+                assertTrue(recordMetadata.hasOffset());
                 inputPosition.withComponent(
                     recordMetadata.topic(),
                     recordMetadata.partition(),
@@ -329,12 +328,12 @@ public class PositionRestartIntegrationTest {
             }
         }
 
-        assertThat(inputPosition, equalTo(
+        assertEquals(
             Position
                 .emptyPosition()
                 .withComponent(INPUT_TOPIC_NAME, 0, 1L)
-                .withComponent(INPUT_TOPIC_NAME, 1, 1L)
-        ));
+                .withComponent(INPUT_TOPIC_NAME, 1, 1L),
+            inputPosition);
     }
 
     public static StreamsBuilder getStreamBuilder(final boolean cache,
@@ -416,7 +415,7 @@ public class PositionRestartIntegrationTest {
         final StateQueryResult<?> result =
             IntegrationTestUtils.iqv2WaitForResult(kafkaStreams, request);
 
-        assertThat(result.getPosition(), is(inputPosition));
+        assertEquals(inputPosition, result.getPosition());
     }
 
     private static void setUpSessionDSLTopology(final SessionBytesStoreSupplier supplier,

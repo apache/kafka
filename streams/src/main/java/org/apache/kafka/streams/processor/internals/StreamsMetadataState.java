@@ -60,7 +60,7 @@ public class StreamsMetadataState {
     private final TopologyMetadata topologyMetadata;
     private final Set<String> globalStores;
     private final HostInfo thisHost;
-    private List<StreamsMetadata> allMetadata = Collections.emptyList();
+    private List<StreamsMetadata> allMetadata = List.of();
     private Map<String, List<PartitionInfo>> partitionsByTopic;
     private final AtomicReference<StreamsMetadata> localMetadata = new AtomicReference<>(null);
 
@@ -119,7 +119,7 @@ public class StreamsMetadataState {
         }
 
         if (!isInitialized()) {
-            return Collections.emptyList();
+            return List.of();
         }
 
         if (globalStores.contains(storeName)) {
@@ -128,7 +128,7 @@ public class StreamsMetadataState {
 
         final Collection<String> sourceTopics = topologyMetadata.sourceTopicsForStore(storeName, null);
         if (sourceTopics.isEmpty()) {
-            return Collections.emptyList();
+            return List.of();
         }
 
         final ArrayList<StreamsMetadata> results = new ArrayList<>();
@@ -152,12 +152,12 @@ public class StreamsMetadataState {
         Objects.requireNonNull(topologyName, "topologyName cannot be null");
 
         if (!isInitialized()) {
-            return Collections.emptyList();
+            return List.of();
         }
 
         final Collection<String> sourceTopics = topologyMetadata.sourceTopicsForStore(storeName, topologyName);
         if (sourceTopics.isEmpty()) {
-            return Collections.emptyList();
+            return List.of();
         }
 
         final ArrayList<StreamsMetadata> results = new ArrayList<>();
@@ -175,7 +175,7 @@ public class StreamsMetadataState {
         Objects.requireNonNull(topologyName, "topologyName cannot be null");
 
         if (!isInitialized()) {
-            return Collections.emptyList();
+            return List.of();
         }
 
         final ArrayList<StreamsMetadata> results = new ArrayList<>();
@@ -272,9 +272,9 @@ public class StreamsMetadataState {
             // global stores are on every node. if we don't have the host info
             // for this host then just pick the first metadata
             if (thisHost.equals(UNKNOWN_HOST)) {
-                return new KeyQueryMetadata(allMetadata.get(0).hostInfo(), Collections.emptySet(), UNKNOWN_PARTITION);
+                return new KeyQueryMetadata(allMetadata.get(0).hostInfo(), Set.of(), UNKNOWN_PARTITION);
             }
-            return new KeyQueryMetadata(localMetadata.get().hostInfo(), Collections.emptySet(), UNKNOWN_PARTITION);
+            return new KeyQueryMetadata(localMetadata.get().hostInfo(), Set.of(), UNKNOWN_PARTITION);
         }
 
         final SourceTopicsInfo sourceTopicsInfo = getSourceTopicsInfo(storeName);
@@ -352,13 +352,13 @@ public class StreamsMetadataState {
     private void rebuildMetadata(final Map<HostInfo, Set<TopicPartition>> activePartitionHostMap,
                                  final Map<HostInfo, Set<TopicPartition>> standbyPartitionHostMap) {
         if (activePartitionHostMap.isEmpty() && standbyPartitionHostMap.isEmpty()) {
-            allMetadata = Collections.emptyList();
+            allMetadata = List.of();
             localMetadata.set(new StreamsMetadataImpl(
                 thisHost,
-                Collections.emptySet(),
-                Collections.emptySet(),
-                Collections.emptySet(),
-                Collections.emptySet()
+                Set.of(),
+                Set.of(),
+                Set.of(),
+                Set.of()
             ));
             return;
         }
@@ -583,7 +583,7 @@ public class StreamsMetadataState {
         private SourceTopicsInfo(final List<String> sourceTopics) {
             this.sourceTopics = sourceTopics;
             for (final String topic : sourceTopics) {
-                final List<PartitionInfo> partitions = partitionsByTopic.getOrDefault(topic, Collections.emptyList());
+                final List<PartitionInfo> partitions = partitionsByTopic.getOrDefault(topic, List.of());
                 if (partitions.size() > maxPartitions) {
                     maxPartitions = partitions.size();
                     topicWithMostPartitions = topic;

@@ -63,7 +63,6 @@ import java.util.Set;
 import java.util.function.Function;
 import java.util.stream.Collectors;
 
-import static java.util.Collections.singleton;
 import static org.apache.kafka.streams.StreamsConfig.PROCESSING_EXCEPTION_HANDLER_CLASS_CONFIG;
 import static org.apache.kafka.streams.processor.internals.metrics.StreamsMetricsImpl.maybeMeasureLatency;
 import static org.apache.kafka.streams.processor.internals.metrics.StreamsMetricsImpl.maybeRecordSensor;
@@ -459,7 +458,7 @@ public class StreamTask extends AbstractTask implements ProcessorNodePunctuator,
                     return committableOffsetsAndMetadata();
                 } else {
                     log.debug("Skipped preparing {} task for commit since there is nothing to commit", state());
-                    return Collections.emptyMap();
+                    return Map.of();
                 }
 
             case CLOSED:
@@ -492,7 +491,7 @@ public class StreamTask extends AbstractTask implements ProcessorNodePunctuator,
         switch (state()) {
             case CREATED:
             case RESTORING:
-                return Collections.emptyMap();
+                return Map.of();
 
             case RUNNING:
             case SUSPENDED:
@@ -713,6 +712,9 @@ public class StreamTask extends AbstractTask implements ProcessorNodePunctuator,
         record = null;
         closeTaskSensor.record();
         partitionsToResume.clear();
+        consumedOffsets.clear();
+        // Clear so a revived task has no stale fallback for a partition it has not re-read.
+        nextOffsetsAndMetadataToBeConsumed.clear();
 
         transitionTo(State.CLOSED);
     }
@@ -826,7 +828,7 @@ public class StreamTask extends AbstractTask implements ProcessorNodePunctuator,
                 throw timeoutException;
             } else {
                 record = null;
-                throw new TaskCorruptedException(Collections.singleton(id));
+                throw new TaskCorruptedException(Set.of(id));
             }
         } catch (final FailedProcessingException failedProcessingException) {
             // Do not keep the failed processing exception in the stack trace
@@ -949,7 +951,7 @@ public class StreamTask extends AbstractTask implements ProcessorNodePunctuator,
                 throw timeoutException;
             } else {
                 record = null;
-                throw new TaskCorruptedException(Collections.singleton(id));
+                throw new TaskCorruptedException(Set.of(id));
             }
         } catch (final FailedProcessingException e) {
             throw createStreamsException(node.name(), e.getCause());
@@ -1041,9 +1043,9 @@ public class StreamTask extends AbstractTask implements ProcessorNodePunctuator,
      */
     private Map<TopicPartition, Long> checkpointableOffsets() {
         final Map<TopicPartition, Long> checkpointableOffsets = new HashMap<>(recordCollector.offsets());
-        for (final Map.Entry<TopicPartition, Long> entry : consumedOffsets.entrySet()) {
-            checkpointableOffsets.putIfAbsent(entry.getKey(), entry.getValue());
-        }
+        // The consumed offset wins over the produced offset: for a source-topic changelog the store is
+        // filled by consuming the partition, so the consumed offset is what was applied to the store.
+        checkpointableOffsets.putAll(consumedOffsets);
 
         log.debug("Checkpointable offsets {}", checkpointableOffsets);
 
@@ -1161,7 +1163,7 @@ public class StreamTask extends AbstractTask implements ProcessorNodePunctuator,
         // if after adding these records, its partition queue's buffered size has been
         // increased beyond the threshold, we can then pause the consumption for this partition
         if (newQueueSize > maxBufferedSize) {
-            mainConsumer.pause(singleton(partition));
+            mainConsumer.pause(Set.of(partition));
         }
     }
 

@@ -136,6 +136,18 @@ public class TopicConfig {
     public static final String MAX_MESSAGE_BYTES_DOC =
         "The largest record batch size allowed by Kafka (after compression if compression is enabled).";
 
+    public static final String MAX_DECOMPRESSED_MESSAGE_BYTES_CONFIG = "max.decompressed.message.bytes";
+    public static final String MAX_DECOMPRESSED_MESSAGE_BYTES_DOC = "The maximum decompressed size, in bytes, of a " +
+        "single record the broker will accept; larger records are rejected with an " +
+        "<code>InvalidRecordException</code>. It is enforced where the broker decompresses records: produce " +
+        "validation of compressed batches, log compaction, and offset lookups by timestamp or max timestamp against " +
+        "the local log or remote storage. " +
+        "Unlike <code>max.message.bytes</code>, which bounds the compressed batch on the wire, this bounds the " +
+        "decompressed size of an individual record. Lowering it below the size of already-stored records makes " +
+        "compaction and timestamp offset lookups of affected partitions fail until it is raised again. The " +
+        "default imposes no limit beyond the largest record the broker could allocate anyway; set a smaller value " +
+        "to enforce a per-record cap.";
+
     public static final String INDEX_INTERVAL_BYTES_CONFIG = "index.interval.bytes";
     public static final String INDEX_INTERVAL_BYTES_DOC = "This setting controls how frequently Kafka " +
             "adds entries to its offset index and, conditionally, to its time index. " +
@@ -252,7 +264,11 @@ public class TopicConfig {
         "difference between the message timestamp and the broker's timestamp. The message timestamp can be later than " +
         "or equal to the broker's timestamp, with the maximum allowable difference determined by the value set in this " +
         "configuration. If message.timestamp.type=CreateTime, the message will be rejected if the difference in " +
-        "timestamps exceeds this specified threshold. This configuration is ignored if message.timestamp.type=LogAppendTime.";
+        "timestamps exceeds this specified threshold. This configuration is ignored if message.timestamp.type=LogAppendTime. " +
+        "Note that time-based retention (" + RETENTION_MS_CONFIG + ") is based on the largest message timestamp in a segment, " +
+        "so a segment containing a message with a future timestamp is not eligible for time-based deletion until that " +
+        "timestamp plus the retention time has passed. Increasing this value above the default allows more " +
+        "future-timestamped messages and can delay segment deletion, increasing disk usage.";
 
     /**
      * @deprecated down-conversion is not possible in Apache Kafka 4.0 and newer, hence this configuration is a no-op,

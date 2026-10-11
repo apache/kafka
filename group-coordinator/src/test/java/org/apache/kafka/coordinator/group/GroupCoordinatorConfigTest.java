@@ -17,6 +17,7 @@
 package org.apache.kafka.coordinator.group;
 
 import org.apache.kafka.common.Configurable;
+import org.apache.kafka.common.KafkaException;
 import org.apache.kafka.common.config.AbstractConfig;
 import org.apache.kafka.common.config.ConfigException;
 import org.apache.kafka.common.record.internal.CompressionType;
@@ -33,7 +34,13 @@ import org.apache.kafka.coordinator.group.api.streams.assignor.TopologyDescriber
 import org.apache.kafka.coordinator.group.assignor.RangeAssignor;
 import org.apache.kafka.coordinator.group.assignor.SimpleAssignor;
 import org.apache.kafka.coordinator.group.assignor.UniformAssignor;
+import org.apache.kafka.coordinator.group.streams.AssignmentRefiner;
+import org.apache.kafka.coordinator.group.streams.MemberTaskOffsets;
+import org.apache.kafka.coordinator.group.streams.NoOpAssignmentRefiner;
+import org.apache.kafka.coordinator.group.streams.StreamsGroupMember;
+import org.apache.kafka.coordinator.group.streams.TasksTuple;
 import org.apache.kafka.coordinator.group.streams.assignor.StickyTaskAssignor;
+import org.apache.kafka.coordinator.group.streams.topics.ConfiguredSubtopology;
 
 import org.junit.jupiter.api.Test;
 
@@ -42,6 +49,7 @@ import java.util.HashMap;
 import java.util.List;
 import java.util.Map;
 import java.util.OptionalInt;
+import java.util.SortedMap;
 import java.util.concurrent.CompletableFuture;
 
 import static org.junit.jupiter.api.Assertions.assertEquals;
@@ -94,7 +102,7 @@ public class GroupCoordinatorConfigTest {
     public static class UniformNamedAssignor implements ConsumerGroupPartitionAssignor {
         @Override
         public String name() {
-            // Collides with the built-in "uniform" assignor.
+            // Overrides the built-in "uniform" assignor.
             return "uniform";
         }
 
@@ -199,28 +207,28 @@ public class GroupCoordinatorConfigTest {
     }
 
     @Test
-    public void testConsumerGroupAssignorsWithReservedBuiltinNameFails() {
-        // A custom assignor must not take the name of a built-in, whether or not the built-in is
-        // itself configured: a member selecting that name would otherwise silently get the custom one.
+    public void testConsumerGroupAssignorsOverridingBuiltinName() {
+        // A custom assignor may reuse the name of a built-in; members selecting that name get the custom one.
         Map<String, Object> configs = new HashMap<>();
         configs.put(GroupCoordinatorConfig.CONSUMER_GROUP_ASSIGNORS_CONFIG, UniformNamedAssignor.class.getName());
-        assertEquals("Invalid value " + UniformNamedAssignor.class.getName() +
-                " for configuration group.consumer.assignors: Assignor name 'uniform' is reserved by a " +
-                "built-in assignor. A custom assignor must not reuse the name of a built-in assignor",
-            assertThrows(ConfigException.class, () -> createConfig(configs)).getMessage());
+        GroupCoordinatorConfig config = createConfig(configs);
+        List<ConsumerGroupPartitionAssignor> assignors = config.consumerGroupAssignors();
+        assertEquals(1, assignors.size());
+        assertInstanceOf(UniformNamedAssignor.class, assignors.get(0));
+        assertEquals("uniform", assignors.get(0).name());
 
+        // Configuring the built-in alongside the custom assignor overriding its name still fails the duplicate check.
         configs.put(GroupCoordinatorConfig.CONSUMER_GROUP_ASSIGNORS_CONFIG,
             List.of("uniform", UniformNamedAssignor.class.getName()));
         assertEquals("Invalid value " + UniformNamedAssignor.class.getName() +
-                " for configuration group.consumer.assignors: Assignor name 'uniform' is reserved by a " +
-                "built-in assignor. A custom assignor must not reuse the name of a built-in assignor",
+                " for configuration group.consumer.assignors: Assignor name 'uniform' is already " +
+                "registered by another configured assignor. Assignor names, whether built-in or custom, must be unique",
             assertThrows(ConfigException.class, () -> createConfig(configs)).getMessage());
     }
 
     @Test
     public void testConsumerGroupAssignorsBuiltinByClassName() {
-        // A built-in may also be configured by its class name, so the reserved-name check must
-        // recognise it by class rather than by name.
+        // A built-in may also be configured by its class name and resolves to the built-in itself.
         Map<String, Object> configs = new HashMap<>();
         configs.put(GroupCoordinatorConfig.CONSUMER_GROUP_ASSIGNORS_CONFIG,
             List.of(UniformAssignor.class.getName(), RangeAssignor.class.getName()));
@@ -1231,6 +1239,78 @@ public class GroupCoordinatorConfigTest {
         StreamsGroupTopologyDescriptionPlugin second =
             config.streamsGroupTopologyDescriptionPlugin(Map.of());
         assertNotSame(first, second);
+    }
+
+    @Test
+    public void testStreamsGroupAssignmentRefinerDefaultsToNoOp() {
+        GroupCoordinatorConfig config = createConfig(new HashMap<>());
+        assertInstanceOf(NoOpAssignmentRefiner.class, config.streamsGroupAssignmentRefiner());
+    }
+
+    @Test
+    public void testStreamsGroupAssignmentRefinerLoadedAndConfigured() {
+        Map<String, Object> configs = new HashMap<>();
+        configs.put(GroupCoordinatorConfig.STREAMS_GROUP_ASSIGNMENT_REFINER_CLASS_CONFIG,
+            TestAssignmentRefiner.class.getName());
+        GroupCoordinatorConfig config = createConfig(configs);
+
+        AssignmentRefiner refiner = config.streamsGroupAssignmentRefiner();
+        assertInstanceOf(TestAssignmentRefiner.class, refiner);
+        // A refiner is handed the broker configuration, so a test implementation can be steered through broker
+        // properties rather than static state.
+        assertEquals(TestAssignmentRefiner.class.getName(),
+            ((TestAssignmentRefiner) refiner).configs.get(GroupCoordinatorConfig.STREAMS_GROUP_ASSIGNMENT_REFINER_CLASS_CONFIG));
+    }
+
+    @Test
+    public void testStreamsGroupAssignmentRefinerReturnsFreshInstancePerCall() {
+        Map<String, Object> configs = new HashMap<>();
+        configs.put(GroupCoordinatorConfig.STREAMS_GROUP_ASSIGNMENT_REFINER_CLASS_CONFIG,
+            TestAssignmentRefiner.class);
+        GroupCoordinatorConfig config = createConfig(configs);
+
+        // Every coordinator shard asks for its own refiner, so they must not share one instance.
+        assertNotSame(config.streamsGroupAssignmentRefiner(), config.streamsGroupAssignmentRefiner());
+    }
+
+    @Test
+    public void testStreamsGroupAssignmentRefinerRejectsUnknownClassAtStartup() {
+        Map<String, Object> configs = new HashMap<>();
+        configs.put(GroupCoordinatorConfig.STREAMS_GROUP_ASSIGNMENT_REFINER_CLASS_CONFIG, "not.a.Class");
+        // The class is resolved while the configuration is parsed, so a typo fails the broker rather than the
+        // coordinator shard that first tries to use it.
+        assertThrows(ConfigException.class, () -> createConfig(configs));
+    }
+
+    @Test
+    public void testStreamsGroupAssignmentRefinerRejectsClassOfWrongType() {
+        Map<String, Object> configs = new HashMap<>();
+        configs.put(GroupCoordinatorConfig.STREAMS_GROUP_ASSIGNMENT_REFINER_CLASS_CONFIG,
+            TestTopologyDescriptionPlugin.class);
+        GroupCoordinatorConfig config = createConfig(configs);
+
+        assertThrows(KafkaException.class, config::streamsGroupAssignmentRefiner);
+    }
+
+    public static class TestAssignmentRefiner implements AssignmentRefiner, Configurable {
+        public Map<String, ?> configs;
+
+        @Override
+        public void configure(Map<String, ?> configs) {
+            this.configs = configs;
+        }
+
+        @Override
+        public Map<String, TasksTuple> refine(
+            Map<String, StreamsGroupMember> members,
+            Map<String, TasksTuple> targetAssignment,
+            Map<String, MemberTaskOffsets> taskOffsets,
+            SortedMap<String, ConfiguredSubtopology> subtopologies,
+            int numWarmupReplicas,
+            long acceptableRecoveryLag
+        ) {
+            return targetAssignment;
+        }
     }
 
     public static class TestTopologyDescriptionPlugin implements StreamsGroupTopologyDescriptionPlugin {

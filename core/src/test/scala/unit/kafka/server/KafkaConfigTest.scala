@@ -18,12 +18,14 @@
 package kafka.server
 
 import java.net.InetSocketAddress
+import java.nio.file.Files
 import java.util
 import java.util.{Arrays, Collections, Properties}
 import kafka.utils.TestUtils.assertBadConfigContainingMessage
 import kafka.utils.TestUtils
 import org.apache.kafka.common.{Endpoint, Node}
 import org.apache.kafka.common.config.{AbstractConfig, ConfigException, SaslConfigs, SecurityConfig, SslConfigs, TopicConfig}
+import org.apache.kafka.common.config.provider.FileConfigProvider
 import org.apache.kafka.common.metrics.Sensor
 import org.apache.kafka.common.network.ListenerName
 import org.apache.kafka.common.record.internal.{CompressionType, Records}
@@ -52,6 +54,51 @@ import scala.jdk.CollectionConverters._
 import scala.util.Using
 
 class KafkaConfigTest {
+
+  @Test
+  def testConfigProviderAllowlistSkippedForServerProperties(): Unit = {
+    val providerFile = Files.createTempFile("provider", ".properties")
+    val previous = System.getProperty(AbstractConfig.AUTOMATIC_CONFIG_PROVIDERS_PROPERTY)
+    try {
+      Files.writeString(providerFile, "token=1234")
+      System.setProperty(AbstractConfig.AUTOMATIC_CONFIG_PROVIDERS_PROPERTY, "none")
+
+      val props = TestUtils.createBrokerConfig(0)
+      props.setProperty(AbstractConfig.CONFIG_PROVIDERS_CONFIG, "file")
+      props.setProperty(AbstractConfig.CONFIG_PROVIDERS_CONFIG + ".file.class", classOf[FileConfigProvider].getName)
+      props.setProperty(ServerConfigs.NUM_IO_THREADS_CONFIG, "${file:" + providerFile.toAbsolutePath + ":token}")
+
+      val config = KafkaConfig.fromProps(props)
+      assertEquals(1234, config.numIoThreads)
+    } finally {
+      if (previous == null) System.clearProperty(AbstractConfig.AUTOMATIC_CONFIG_PROVIDERS_PROPERTY)
+      else System.setProperty(AbstractConfig.AUTOMATIC_CONFIG_PROVIDERS_PROPERTY, previous)
+      Files.deleteIfExists(providerFile)
+    }
+  }
+
+  @Test
+  def testConfigProviderAllowlistEnforcedForReconfiguration(): Unit = {
+    val providerFile = Files.createTempFile("provider", ".properties")
+    val previous = System.getProperty(AbstractConfig.AUTOMATIC_CONFIG_PROVIDERS_PROPERTY)
+    try {
+      Files.writeString(providerFile, "token=1234")
+      System.setProperty(AbstractConfig.AUTOMATIC_CONFIG_PROVIDERS_PROPERTY, "none")
+
+      val props = TestUtils.createBrokerConfig(0)
+      props.setProperty(AbstractConfig.CONFIG_PROVIDERS_CONFIG, "file")
+      props.setProperty(AbstractConfig.CONFIG_PROVIDERS_CONFIG + ".file.class", classOf[FileConfigProvider].getName)
+      props.setProperty(ServerConfigs.NUM_IO_THREADS_CONFIG, "${file:" + providerFile.toAbsolutePath + ":token}")
+
+      val e = assertThrows(classOf[ConfigException], () => KafkaConfig(props, doLog = false, enforceProviderAllowlist = true))
+      assertTrue(e.getMessage.contains("is not allowed"))
+      assertFalse(e.getMessage.contains("1234"))
+    } finally {
+      if (previous == null) System.clearProperty(AbstractConfig.AUTOMATIC_CONFIG_PROVIDERS_PROPERTY)
+      else System.setProperty(AbstractConfig.AUTOMATIC_CONFIG_PROVIDERS_PROPERTY, previous)
+      Files.deleteIfExists(providerFile)
+    }
+  }
 
   def createDefaultConfig(): Properties = {
     val props = new Properties()
@@ -1180,6 +1227,8 @@ class KafkaConfigTest {
           assertDynamic(kafkaConfigProp, 10007, () => config.logIndexIntervalBytes)
         case TopicConfig.MAX_MESSAGE_BYTES_CONFIG =>
           assertDynamic(kafkaConfigProp, 10008, () => config.messageMaxBytes)
+        case TopicConfig.MAX_DECOMPRESSED_MESSAGE_BYTES_CONFIG =>
+          assertDynamic(kafkaConfigProp, 20000, () => config.maxDecompressedMessageBytes)
         case TopicConfig.MESSAGE_TIMESTAMP_BEFORE_MAX_MS_CONFIG =>
           assertDynamic(kafkaConfigProp, 10015L, () => config.logMessageTimestampBeforeMaxMs)
         case TopicConfig.MESSAGE_TIMESTAMP_AFTER_MAX_MS_CONFIG =>
@@ -1890,16 +1939,16 @@ class KafkaConfigTest {
     // This is OK.
     props.put(GroupCoordinatorConfig.GROUP_COORDINATOR_REBALANCE_PROTOCOLS_CONFIG, "classic,consumer")
     val config = KafkaConfig.fromProps(props)
-    assertEquals(Set(GroupType.CLASSIC, GroupType.CONSUMER), config.groupCoordinatorRebalanceProtocols)
+    assertEquals(Set(GroupType.CLASSIC, GroupType.CONSUMER), config.groupCoordinatorRebalanceProtocols.asScala.toSet)
 
     props.put(GroupCoordinatorConfig.GROUP_COORDINATOR_REBALANCE_PROTOCOLS_CONFIG, "classic,streams")
     val config2 = KafkaConfig.fromProps(props)
-    assertEquals(Set(GroupType.CLASSIC, GroupType.STREAMS), config2.groupCoordinatorRebalanceProtocols)
+    assertEquals(Set(GroupType.CLASSIC, GroupType.STREAMS), config2.groupCoordinatorRebalanceProtocols.asScala.toSet)
 
     // Including "share" is also OK
     props.put(GroupCoordinatorConfig.GROUP_COORDINATOR_REBALANCE_PROTOCOLS_CONFIG, "classic,consumer,share")
     val config3 = KafkaConfig.fromProps(props)
-    assertEquals(Set(GroupType.CLASSIC, GroupType.CONSUMER, GroupType.SHARE), config3.groupCoordinatorRebalanceProtocols)
+    assertEquals(Set(GroupType.CLASSIC, GroupType.CONSUMER, GroupType.SHARE), config3.groupCoordinatorRebalanceProtocols.asScala.toSet)
   }
 
   @Test
