@@ -23,7 +23,7 @@ import java.util.Collections.{singleton, singletonList, singletonMap}
 import java.util.{OptionalInt, Properties}
 import java.util.concurrent.atomic.{AtomicInteger, AtomicReference}
 import kafka.server.share.SharePartitionManager
-import kafka.server.{BrokerServer, KafkaConfig, ReplicaManager}
+import kafka.server.{BrokerServer, DynamicBrokerConfig, InitialDynamicBrokerConfigPublisher, KafkaConfig, ReplicaManager}
 import kafka.utils.TestUtils
 import org.apache.kafka.clients.admin.AlterConfigOp.OpType.SET
 import org.apache.kafka.clients.admin.{AlterConfigOp, ConfigEntry, NewTopic}
@@ -45,16 +45,16 @@ import org.apache.kafka.raft.LeaderAndEpoch
 import org.apache.kafka.server.common.{KRaftVersion, MetadataVersion, ShareVersion}
 import org.apache.kafka.server.fault.FaultHandler
 import org.apache.kafka.storage.internals.log.LogManager
-import org.junit.jupiter.api.Assertions.{assertEquals, assertNotNull, assertTrue}
+import org.junit.jupiter.api.Assertions.{assertEquals, assertNotNull, assertSame, assertThrows, assertTrue}
 import org.junit.jupiter.api.{AfterEach, BeforeEach, Test}
 import org.mockito.ArgumentMatchers.any
 import org.mockito.Mockito
-import org.mockito.Mockito.{doThrow, mock, verify}
+import org.mockito.Mockito.{doThrow, mock, verify, when}
 import org.mockito.invocation.InvocationOnMock
 import org.mockito.stubbing.Answer
 
 import java.util
-import java.util.concurrent.TimeUnit
+import java.util.concurrent.{ExecutionException, TimeUnit}
 import scala.jdk.CollectionConverters._
 
 class BrokerMetadataPublisherTest {
@@ -143,6 +143,35 @@ class BrokerMetadataPublisherTest {
       } finally {
         admin.close()
       }
+    } finally {
+      cluster.close()
+    }
+  }
+
+  @Test
+  def testInitialDynamicConfigFailureKeepsPublisherRemovable(): Unit = {
+    val cluster = new KafkaClusterTestKit.Builder(
+      new TestKitNodes.Builder().
+        setNumBrokerNodes(1).
+        setNumControllerNodes(1).build()).build()
+    try {
+      cluster.format()
+      cluster.startup()
+      cluster.waitForReadyBrokers()
+      val broker = cluster.brokers().values().iterator().next()
+      val config = mock(classOf[KafkaConfig])
+      val dynamicConfig = mock(classOf[DynamicBrokerConfig])
+      val failure = new AssertionError("initial config failure")
+      when(config.nodeId).thenReturn(broker.config.nodeId)
+      when(config.dynamicConfig).thenReturn(dynamicConfig)
+      doThrow(failure).when(dynamicConfig).initializeFromPersistentProps(any[Properties](), any[Properties]())
+      val publisher = new InitialDynamicBrokerConfigPublisher(config)
+
+      broker.sharedServer.loader.installPublishers(List(publisher).asJava).get(1, TimeUnit.MINUTES)
+      val exception = assertThrows(classOf[ExecutionException],
+        () => publisher.firstPublishFuture.get(1, TimeUnit.MINUTES))
+      assertSame(failure, exception.getCause)
+      broker.sharedServer.loader.removeAndClosePublisher(publisher).get(1, TimeUnit.MINUTES)
     } finally {
       cluster.close()
     }
