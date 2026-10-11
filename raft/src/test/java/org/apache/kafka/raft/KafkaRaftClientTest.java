@@ -36,12 +36,14 @@ import org.apache.kafka.common.record.internal.Record;
 import org.apache.kafka.common.record.internal.RecordBatch;
 import org.apache.kafka.common.record.internal.Records;
 import org.apache.kafka.common.requests.FetchRequest;
+import org.apache.kafka.common.utils.LogCaptureAppender;
 import org.apache.kafka.common.utils.Utils;
 import org.apache.kafka.raft.errors.BufferAllocationException;
 import org.apache.kafka.raft.errors.NotLeaderException;
 import org.apache.kafka.server.common.KRaftVersion;
 import org.apache.kafka.test.TestUtils;
 
+import org.apache.logging.log4j.Level;
 import org.junit.jupiter.api.Test;
 import org.junit.jupiter.params.ParameterizedTest;
 import org.junit.jupiter.params.provider.CsvSource;
@@ -2545,6 +2547,33 @@ class KafkaRaftClientTest {
         context.deliverRequest(context.voteRequest("invalid-uuid", epoch, otherNodeKey, 0, 0, false));
         context.pollUntilResponse();
         context.assertSentVoteResponse(Errors.INCONSISTENT_CLUSTER_ID);
+    }
+
+    @Test
+    public void testInconsistentClusterIdLogsComparedClusterIds() throws Exception {
+        int localId = randomReplicaId();
+        ReplicaKey otherNodeKey = replicaKey(localId + 1, true);
+        Set<Integer> voters = Set.of(localId, otherNodeKey.id());
+
+        RaftClientTestContext context = new RaftClientTestContext.Builder(localId, voters)
+            .withKip853Rpc(true)
+            .build();
+        context.unattachedToLeader();
+        int epoch = context.currentEpoch();
+
+        try (LogCaptureAppender appender = LogCaptureAppender.createAndRegister(KafkaRaftClient.class)) {
+            appender.setClassLogger(KafkaRaftClient.class, Level.WARN);
+            context.deliverRequest(context.voteRequest("invalid-uuid", epoch, otherNodeKey, 0, 0, false));
+            context.pollUntilResponse();
+            context.assertSentVoteResponse(Errors.INCONSISTENT_CLUSTER_ID);
+
+            List<String> messages = appender.getMessages();
+            assertTrue(
+                messages.stream().anyMatch(message ->
+                    message.contains("invalid-uuid") && message.contains(context.clusterId)),
+                "Expected the compared cluster ids to be logged, but got: " + messages
+            );
+        }
     }
 
     @Test
