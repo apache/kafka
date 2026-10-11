@@ -553,6 +553,22 @@ public class GroupMetadataManager {
     /**
      * A map of in-flight offloaded assignor runs. The keys are group ids and values are the
      * assignment epochs for each run.
+     *
+     * <p>Entries are added when an offloaded assignor run is queued on {@link #executor} and removed
+     * when the run completes or is cancelled.
+     *
+     * <p>This is used to detect when an in-flight offloaded assignor run is no longer valid due to
+     * a group coordinator rollback. After a rollback that resets the group epoch, an in-flight
+     * assignor run may:
+     * <ul>
+     *   <li>finish before another epoch bump, in which case the current epoch of the group will be
+     *       less than the assignment epoch of the run. We detect this case when the assignor run
+     *       completes and discard the assignment.</li>
+     *   <li>finish after another epoch bump, which we cannot reliably detect on completion of the
+     *       assignor run. Instead, when bumping the group epoch, we check the assignment epoch of
+     *       the in-flight assignor run if it exists and cancel the run if its assignment epoch is
+     *       greater than the unbumped group epoch.</li>
+     * </ul>
      */
     private final Map<String, Integer> inflightOffloadedAssignorEpochs;
 
