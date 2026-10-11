@@ -21,6 +21,7 @@ import org.junit.jupiter.api.Test
 
 import java.nio.charset.StandardCharsets
 import java.nio.file.{Files, Path, Paths}
+import java.util.Locale
 
 class KafkaDockerWrapperTest {
   @Test
@@ -33,6 +34,21 @@ class KafkaDockerWrapperTest {
     val expected = List("valid.property=Value", "valid-property_all.cases=All Cases Value", "kafka.valid.property=Value")
     val actual = KafkaDockerWrapper.getServerConfigsFromEnv(envVars)
     assertEquals(expected, actual)
+  }
+
+  @Test
+  def testGetServerConfigsFromEnvWithLocaleSensitiveCaseMapping(): Unit = {
+    // In Turkish, uppercasing 'i' yields 'İ' and lowercasing 'I' yields 'ı' (dotless i). Config keys must
+    // be converted using Locale.ROOT so that they are independent of the system default locale.
+    val defaultLocale = Locale.getDefault
+    try {
+      Locale.setDefault(new Locale("tr", "TR"))
+      val envVars = Map("KAFKA_INTER_BROKER_LISTENER_NAME" -> "PLAINTEXT")
+      val actual = KafkaDockerWrapper.getServerConfigsFromEnv(envVars)
+      assertEquals(List("inter.broker.listener.name=PLAINTEXT"), actual)
+    } finally {
+      Locale.setDefault(defaultLocale)
+    }
   }
 
   @Test
