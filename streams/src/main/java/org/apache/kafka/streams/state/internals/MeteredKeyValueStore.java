@@ -98,7 +98,7 @@ public class MeteredKeyValueStore<K, V>
     private TaskId taskId;
     private Sensor restoreSensor;
 
-    protected final MeteredIteratorTracker iteratorTracker = new MeteredIteratorTracker();
+    final MeteredIteratorTracker iteratorTracker = new MeteredIteratorTracker();
 
     private final Map<Class<?>, QueryHandler<?>> queryHandlers =
         mkMap(

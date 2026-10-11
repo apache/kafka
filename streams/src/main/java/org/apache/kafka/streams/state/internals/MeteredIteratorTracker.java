@@ -19,7 +19,6 @@ package org.apache.kafka.streams.state.internals;
 import java.util.Comparator;
 import java.util.Iterator;
 import java.util.NavigableSet;
-import java.util.NoSuchElementException;
 import java.util.concurrent.ConcurrentSkipListSet;
 import java.util.concurrent.atomic.LongAdder;
 
@@ -56,11 +55,7 @@ final class MeteredIteratorTracker {
     }
 
     long oldestIteratorStartTimestamp() {
-        try {
-            final Iterator<MeteredIterator> iterator = openIterators.iterator();
-            return iterator.hasNext() ? iterator.next().startTimestamp() : 0L;
-        } catch (final NoSuchElementException e) {
-            return 0L;
-        }
+        final Iterator<MeteredIterator> iterator = openIterators.iterator();
+        return iterator.hasNext() ? iterator.next().startTimestamp() : 0L;
     }
 }
