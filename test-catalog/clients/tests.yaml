@@ -5472,9 +5472,12 @@ org.apache.kafka.common.security.oauthbearer.internals.unsecured.OAuthBearerUnse
 - validCompactSerialization
 org.apache.kafka.common.security.oauthbearer.internals.unsecured.OAuthBearerUnsecuredLoginCallbackHandlerTest:
 - addsExtensions
+- emptyModuleOptionsProduceTokenlessLogin
 - minimalToken
+- sslOnlyModuleOptionsProduceTokenlessLogin
 - throwsErrorOnInvalidExtensionName
 - throwsErrorOnInvalidExtensionValue
+- unsecuredLoginWithSslOptionsStillProducesToken
 - validOptionsWithExplicitOptionValues
 org.apache.kafka.common.security.oauthbearer.internals.unsecured.OAuthBearerUnsecuredValidatorCallbackHandlerTest:
 - badOrMissingPrincipal
