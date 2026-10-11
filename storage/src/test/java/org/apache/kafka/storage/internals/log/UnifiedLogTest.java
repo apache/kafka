@@ -3566,6 +3566,67 @@ public class UnifiedLogTest {
     }
 
     @Test
+    public void testFetchOffsetByTimestampRespectsFetchableBound() throws IOException {
+        // Large index interval so the fetchable max in the active segment is not in the time index yet.
+        LogConfig logConfig = new LogTestUtils.LogConfigBuilder()
+                .segmentBytes(1024 * 1024)
+                .indexIntervalBytes(4096)
+                .build();
+        log = createLog(logDir, logConfig);
+
+        int leaderEpoch = 0;
+        long baseTimestamp = mockTime.milliseconds();
+        log.appendAsLeader(singletonRecords(TestUtils.randomBytes(10), baseTimestamp + 100), leaderEpoch);
+        log.appendAsLeader(singletonRecords(TestUtils.randomBytes(10), baseTimestamp + 500), leaderEpoch);
+        log.roll();
+        log.appendAsLeader(singletonRecords(TestUtils.randomBytes(10), baseTimestamp + 700), leaderEpoch);
+        log.updateHighWatermark(3L);
+        log.appendAsLeader(singletonRecords(TestUtils.randomBytes(10), baseTimestamp + 800), leaderEpoch);
+
+        assertEquals(3L, log.highWatermark());
+        assertEquals(4L, log.logEndOffset());
+
+        // No bound: the max includes the batch past the high watermark.
+        assertEquals(new OffsetResultHolder(new FileRecords.TimestampAndOffset(baseTimestamp + 800, 3L, Optional.of(leaderEpoch))),
+                log.fetchOffsetByTimestamp(ListOffsetsRequest.MAX_TIMESTAMP, Optional.empty()));
+
+        // Bound at the high watermark: the fetchable max is in the active segment, below the uncommitted batch,
+        // and it is higher than the previous segment's max.
+        assertEquals(new OffsetResultHolder(new FileRecords.TimestampAndOffset(baseTimestamp + 700, 2L, Optional.of(leaderEpoch))),
+                log.fetchOffsetByTimestamp(ListOffsetsRequest.MAX_TIMESTAMP, Optional.empty(), log.highWatermark()));
+
+        // A timestamp that exists only past the high watermark is not visible inside the bound.
+        assertEquals(new OffsetResultHolder(Optional.empty()),
+                log.fetchOffsetByTimestamp(baseTimestamp + 800, Optional.empty(), log.highWatermark()));
+
+        // A timestamp below the high watermark is still found.
+        assertEquals(new OffsetResultHolder(new FileRecords.TimestampAndOffset(baseTimestamp + 500, 1L, Optional.of(leaderEpoch))),
+                log.fetchOffsetByTimestamp(baseTimestamp + 500, Optional.empty(), log.highWatermark()));
+    }
+
+    @Test
+    public void testMaxTimestampBelowBoundCanComeFromEarlierSegment() throws IOException {
+        LogConfig logConfig = new LogTestUtils.LogConfigBuilder()
+                .segmentBytes(1024 * 1024)
+                .indexIntervalBytes(1)
+                .build();
+        log = createLog(logDir, logConfig);
+
+        int leaderEpoch = 0;
+        long baseTimestamp = mockTime.milliseconds();
+        log.appendAsLeader(singletonRecords(TestUtils.randomBytes(10), baseTimestamp + 100), leaderEpoch);
+        log.appendAsLeader(singletonRecords(TestUtils.randomBytes(10), baseTimestamp + 500), leaderEpoch);
+        log.roll();
+        log.appendAsLeader(singletonRecords(TestUtils.randomBytes(10), baseTimestamp + 200), leaderEpoch);
+        log.updateHighWatermark(3L);
+        log.appendAsLeader(singletonRecords(TestUtils.randomBytes(10), baseTimestamp + 900), leaderEpoch);
+
+        // The global max is past the high watermark. The fetchable max is in the previous segment.
+        assertEquals(new OffsetResultHolder(new FileRecords.TimestampAndOffset(baseTimestamp + 500, 1L, Optional.of(leaderEpoch))),
+                log.fetchOffsetByTimestamp(ListOffsetsRequest.MAX_TIMESTAMP, Optional.empty(), log.highWatermark()));
+    }
+
+    @Test
     public void testFetchOffsetByTimestampFromRemoteStorage() throws Exception {
         DelayedOperationPurgatory<DelayedRemoteListOffsets> purgatory = new DelayedOperationPurgatory<DelayedRemoteListOffsets>("RemoteListOffsets", 0);
         RemoteLogManager remoteLogManager = spy(new RemoteLogManager(createRemoteLogManagerConfig(),
