@@ -21,7 +21,7 @@ import kafka.utils.{TestInfoUtils, TestUtils => KafkaTestUtils}
 import org.apache.kafka.clients.admin.NewTopic
 import org.apache.kafka.clients.producer.ProducerRecord
 import org.apache.kafka.common.config.{ConfigException, SaslConfigs}
-import org.junit.jupiter.api.{Disabled, TestInfo}
+import org.junit.jupiter.api.TestInfo
 
 import java.util.{Collections, Properties}
 import no.nav.security.mock.oauth2.{MockOAuth2Server, OAuth2Config}
@@ -149,7 +149,7 @@ class ClientOAuthIntegrationTest extends AbstractClientOAuthIntegrationTest {
     assertDoesNotThrow(() => createAdminClient(configOverrides = configs))
   }
 
-  @Disabled("KAFKA-19394: Failure in ConsumerNetworkThread.initializeResources() can cause hangs on AsyncKafkaConsumer.close()")
+//  @Disabled("KAFKA-19394: Failure in ConsumerNetworkThread.initializeResources() can cause hangs on AsyncKafkaConsumer.close()")
   @ParameterizedTest(name = TestInfoUtils.TestWithParameterizedGroupProtocolNames)
   @MethodSource(Array("getTestGroupProtocolParametersAll"))
   def testJwtBearerWithMalformedAssertionFile(groupProtocol: String): Unit = {
@@ -165,7 +165,7 @@ class ClientOAuthIntegrationTest extends AbstractClientOAuthIntegrationTest {
     assertThrows(classOf[KafkaException], () => createAdminClient(configOverrides = configs))
   }
 
-  @Disabled("KAFKA-19394: Failure in ConsumerNetworkThread.initializeResources() can cause hangs on AsyncKafkaConsumer.close()")
+//  @Disabled("KAFKA-19394: Failure in ConsumerNetworkThread.initializeResources() can cause hangs on AsyncKafkaConsumer.close()")
   @ParameterizedTest(name = TestInfoUtils.TestWithParameterizedGroupProtocolNames)
   @MethodSource(Array("getTestGroupProtocolParametersAll"))
   def testJwtBearerWithEmptyAssertionFile(groupProtocol: String): Unit = {
@@ -181,7 +181,7 @@ class ClientOAuthIntegrationTest extends AbstractClientOAuthIntegrationTest {
     assertThrows(classOf[KafkaException], () => createAdminClient(configOverrides = configs))
   }
 
-  @Disabled("KAFKA-19394: Failure in ConsumerNetworkThread.initializeResources() can cause hangs on AsyncKafkaConsumer.close()")
+//  @Disabled("KAFKA-19394: Failure in ConsumerNetworkThread.initializeResources() can cause hangs on AsyncKafkaConsumer.close()")
   @ParameterizedTest(name = TestInfoUtils.TestWithParameterizedGroupProtocolNames)
   @MethodSource(Array("getTestGroupProtocolParametersAll"))
   def testJwtBearerWithMissingAssertionFile(groupProtocol: String): Unit = {
