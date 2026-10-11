@@ -239,7 +239,9 @@ class BrokerServer(
         s"broker-${config.nodeId}-",
         logManager.directoryIds,
         () => new Thread(() => shutdown(), "kafka-shutdown-thread").start(),
-        () => metadataCache.metadataVersion().isCordonedLogDirsSupported)
+        () => metadataCache.metadataVersion().isCordonedLogDirsSupported,
+        () => metadataCache.metadataVersion().isUncleanRecoverySupported,
+        () => replicaManager.leaderlessReplicas())
 
       // Enable delegation token cache for all SCRAM mechanisms to simplify dynamic update.
       // This keeps the cache up-to-date if new SCRAM mechanisms are enabled dynamically.

@@ -36,6 +36,7 @@ import org.apache.kafka.common.config.TopicConfig
 import org.apache.kafka.common.errors.InvalidPidMappingException
 import org.apache.kafka.common.internals.Topic
 import org.apache.kafka.common.message.{DeleteRecordsResponseData, FetchResponseData, ShareFetchResponseData}
+import org.apache.kafka.common.message.BrokerHeartbeatRequestData.LeaderlessReplica
 import org.apache.kafka.common.message.OffsetForLeaderEpochResponseData.EpochEndOffset
 import org.apache.kafka.common.metadata.{PartitionChangeRecord, PartitionRecord, RemoveTopicRecord, TopicRecord}
 import org.apache.kafka.common.metrics.Metrics
@@ -4675,6 +4676,43 @@ class ReplicaManagerTest {
       }
 
       assertEquals(None, replicaManager.replicaFetcherManager.getFetcher(topicPartition))
+    } finally {
+      replicaManager.shutdown(checkpointHW = false)
+    }
+  }
+
+  @Test
+  def testLeaderlessReplicasReportLocalLogEnd(): Unit = {
+    val localId = 1
+    val replicaManager = setupReplicaManagerWithMockedPurgatories(new MockTimer(time), localId)
+    try {
+      val leaderTopicsDelta = topicsCreateDelta(localId, isStartIdLeader = true)
+      replicaManager.applyDelta(leaderTopicsDelta, imageFromTopics(leaderTopicsDelta.apply()))
+      sendProducerAppend(replicaManager, new TopicIdPartition(FOO_UUID, new TopicPartition("foo", 0)), 3)
+      assertEquals(util.List.of(), replicaManager.leaderlessReplicas())
+
+      val leaderlessTopicsDelta = new TopicsDelta(leaderTopicsDelta.apply())
+      leaderlessTopicsDelta.replay(partitionChangeRecord(localId, NO_LEADER))
+      replicaManager.applyDelta(leaderlessTopicsDelta, imageFromTopics(leaderlessTopicsDelta.apply()))
+      assertEquals(util.List.of(new LeaderlessReplica().setTopicId(FOO_UUID).setPartitionIndex(0)
+        .setCurrentLeaderEpoch(1).setLastWrittenLeaderEpoch(0).setLogEndOffset(3)), replicaManager.leaderlessReplicas())
+    } finally {
+      replicaManager.shutdown(checkpointHW = false)
+    }
+  }
+
+  @Test
+  def testLeaderlessReplicasAreCappedToLowestPartitions(): Unit = {
+    val localId = 1
+    val replicaManager = setupReplicaManagerWithMockedPurgatories(new MockTimer(time), localId)
+    try {
+      val leaderlessTopicsDelta = new TopicsDelta(TopicsImage.EMPTY)
+      leaderlessTopicsDelta.replay(new TopicRecord().setName("foo").setTopicId(FOO_UUID))
+      List(3, 1, 2, 0).foreach(partition => leaderlessTopicsDelta.replay(partitionRecord(localId, NO_LEADER, partition)))
+      replicaManager.applyDelta(leaderlessTopicsDelta, imageFromTopics(leaderlessTopicsDelta.apply()))
+
+      assertEquals(4, replicaManager.leaderlessReplicas().size)
+      assertEquals(util.List.of(0, 1), replicaManager.leaderlessReplicas(2).asScala.map(_.partitionIndex).asJava)
     } finally {
       replicaManager.shutdown(checkpointHW = false)
     }

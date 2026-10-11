@@ -23,6 +23,7 @@ import kafka.utils.TestUtils
 import org.apache.kafka.common.Node
 import org.apache.kafka.common.Uuid
 import org.apache.kafka.common.message.{BrokerHeartbeatResponseData, BrokerRegistrationResponseData}
+import org.apache.kafka.common.message.BrokerHeartbeatRequestData.LeaderlessReplica
 import org.apache.kafka.common.protocol.Errors
 import org.apache.kafka.common.requests.{AbstractRequest, AbstractResponse, BrokerHeartbeatRequest, BrokerHeartbeatResponse, BrokerRegistrationRequest, BrokerRegistrationResponse}
 import org.apache.kafka.metadata.BrokerState
@@ -253,6 +254,31 @@ class BrokerLifecycleManagerTest {
   }
 
   @Test
+  def testSendsLeaderlessReplicasInHeartbeat(): Unit = {
+    val ctx = new RegistrationTestContext(configProperties)
+    var uncleanRecoverySupported = false
+    var leaderlessReplicas = util.List.of[LeaderlessReplica]()
+    manager = new BrokerLifecycleManager(ctx.config, ctx.time, "leaderless-replicas-sent-in-heartbeat-", logDirs,
+      () => {}, () => false, () => uncleanRecoverySupported, () => leaderlessReplicas)
+    ctx.controllerNodeProvider.node.set(new Node(3000, "localhost", 8021))
+    val registration = prepareResponse(ctx, new BrokerRegistrationResponse(new BrokerRegistrationResponseData().setBrokerEpoch(1000)))
+    manager.start(() => ctx.highestMetadataOffset.get(),
+      ctx.mockChannelManager, ctx.clusterId, ctx.advertisedListeners,
+      Collections.emptyMap(), OptionalLong.empty())
+    poll(ctx, manager, registration)
+
+    def nextHeartbeatLeaderlessReplicas(): util.List[LeaderlessReplica] =
+      poll(ctx, manager, prepareResponse[BrokerHeartbeatRequest](ctx, new BrokerHeartbeatResponse(new BrokerHeartbeatResponseData())))
+        .data().leaderlessReplicas()
+    assertEquals(util.List.of(), nextHeartbeatLeaderlessReplicas())
+    leaderlessReplicas = util.List.of(new LeaderlessReplica().setTopicId(Uuid.randomUuid()).setPartitionIndex(1)
+      .setCurrentLeaderEpoch(2).setLastWrittenLeaderEpoch(1).setLogEndOffset(100))
+    assertEquals(util.List.of(), nextHeartbeatLeaderlessReplicas())
+    uncleanRecoverySupported = true
+    assertEquals(leaderlessReplicas, nextHeartbeatLeaderlessReplicas())
+  }
+
+  @Test
   def testRegistrationIncludesDirs(): Unit = {
     val dirs = util.Map.of("/dir1", Uuid.fromString("ad5FLIeCTnaQdai5vOjeng"), "/dir2", Uuid.fromString("ybdzUKmYSLK6oiIpI6CPlw"))
     val ctx = new RegistrationTestContext(configProperties)
@@ -311,7 +337,7 @@ class BrokerLifecycleManagerTest {
       enabled
     }
     manager = new BrokerLifecycleManager(ctx.config, ctx.time, "cordoned-dirs-sent-in-heartbeat-", logDirs,
-      () => {}, () => cordonedLogDirsEnabled())
+      () => {}, () => cordonedLogDirsEnabled(), () => false, () => util.List.of())
     val controllerNode = new Node(3000, "localhost", 8021)
     ctx.controllerNodeProvider.node.set(controllerNode)
 

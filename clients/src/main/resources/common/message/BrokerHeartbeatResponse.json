@@ -15,11 +15,12 @@
 
 // Version 1 is the same as version 0 (new field in request).
 // Version 2 is the same as version 0 (new field in request).
+// Version 3 is the same as version 0 (new field in request).
 {
   "apiKey": 63,
   "type": "response",
   "name": "BrokerHeartbeatResponse",
-  "validVersions": "0-2",
+  "validVersions": "0-3",
   "flexibleVersions": "0+",
   "headerVersions": {
     "0+": "1"

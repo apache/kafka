@@ -263,6 +263,8 @@
               files="(QuorumController|QuorumControllerTest|ReplicationControlManager|ReplicationControlManagerTest).java"/>
     <suppress checks="ParameterNumber"
               files="(QuorumController).java"/>
+    <suppress checks="JavaNCSS"
+              files="ReplicationControlManagerTest.java"/>
     <suppress checks="(CyclomaticComplexity|NPathComplexity)"
               files="(ConfigurationControlManager|PartitionRegistration|PartitionChangeBuilder|ScramParser).java"/>
     <suppress checks="CyclomaticComplexity"
