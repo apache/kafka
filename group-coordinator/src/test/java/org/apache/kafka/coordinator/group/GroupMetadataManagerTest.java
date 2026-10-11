@@ -22128,7 +22128,7 @@ public class GroupMetadataManagerTest {
                     .withTopology(StreamsTopology.fromHeartbeatRequest(topic.topology()))
                     .withMetadataHash(topic.metadataHash())
                     .withValidatedTopologyEpoch(0)
-                    .withLastAssignmentConfigs(getDefaultAssignmentConfigs())
+                    .withLastAssignmentConfigs(AssignmentConfigsImpl.DEFAULT)
                     .withTargetAssignment(member.memberId(), topic.targetAssignment(0, 1))
                     .withTargetAssignmentEpoch(2))
                 .build();
@@ -22168,7 +22168,7 @@ public class GroupMetadataManagerTest {
                     .withTopology(StreamsTopology.fromHeartbeatRequest(topic.topology()))
                     .withMetadataHash(topic.metadataHash())
                     .withValidatedTopologyEpoch(0)
-                    .withLastAssignmentConfigs(getDefaultAssignmentConfigs())
+                    .withLastAssignmentConfigs(AssignmentConfigsImpl.DEFAULT)
                     .withTargetAssignment(member.memberId(), topic.targetAssignment(0))
                     .withTargetAssignmentEpoch(2))
                 .build();
@@ -22215,7 +22215,7 @@ public class GroupMetadataManagerTest {
                     .withTopology(StreamsTopology.fromHeartbeatRequest(topic.topology()))
                     .withMetadataHash(topic.metadataHash())
                     .withValidatedTopologyEpoch(0)
-                    .withLastAssignmentConfigs(getDefaultAssignmentConfigs())
+                    .withLastAssignmentConfigs(AssignmentConfigsImpl.DEFAULT)
                     .withTargetAssignment(member.memberId(), topic.targetAssignment(0))
                     .withTargetAssignmentEpoch(2))
                 .build();
