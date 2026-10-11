@@ -16,7 +16,7 @@
  */
 package kafka.server
 
-import org.apache.kafka.common.test.api.{ClusterConfigProperty, ClusterFeature, ClusterTest, ClusterTestDefaults, Type}
+import org.apache.kafka.common.test.api.{ClusterConfigProperty, ClusterFeature, ClusterTest, ClusterTestDefaults, ClusterTests, Type}
 import kafka.utils.TestUtils
 import org.apache.kafka.clients.admin.AlterConfigOp.OpType
 import org.apache.kafka.clients.admin.{AlterConfigOp, ConfigEntry}
@@ -33,47 +33,13 @@ import org.junit.jupiter.api.Assertions.{assertEquals, assertFalse, assertNotEqu
 import scala.collection.Map
 import scala.jdk.CollectionConverters._
 
-object ConsumerGroupHeartbeatRequestTest {
-  @ClusterTestDefaults(
-    types = Array(Type.KRAFT),
-    serverProperties = Array(
-      new ClusterConfigProperty(key = GroupCoordinatorConfig.OFFSETS_TOPIC_PARTITIONS_CONFIG, value = "1"),
-      new ClusterConfigProperty(key = GroupCoordinatorConfig.OFFSETS_TOPIC_REPLICATION_FACTOR_CONFIG, value = "1"),
-      new ClusterConfigProperty(key = GroupCoordinatorConfig.CONSUMER_GROUP_ASSIGNMENT_INTERVAL_MS_CONFIG, value = "0")
-    )
-  )
-  class WithAssignmentBatchingDisabledTest(cluster: ClusterInstance) extends ConsumerGroupHeartbeatRequestTest(cluster) {
-  }
-
-  @ClusterTestDefaults(
-    types = Array(Type.KRAFT),
-    serverProperties = Array(
-      new ClusterConfigProperty(key = GroupCoordinatorConfig.OFFSETS_TOPIC_PARTITIONS_CONFIG, value = "1"),
-      new ClusterConfigProperty(key = GroupCoordinatorConfig.OFFSETS_TOPIC_REPLICATION_FACTOR_CONFIG, value = "1"),
-      new ClusterConfigProperty(key = GroupCoordinatorConfig.CONSUMER_GROUP_ASSIGNOR_OFFLOAD_ENABLE_CONFIG, value = "false")
-    )
-  )
-  class WithAssignorOffloadDisabledTest(cluster: ClusterInstance) extends ConsumerGroupHeartbeatRequestTest(cluster) {
-  }
-
-  @ClusterTestDefaults(
-    types = Array(Type.KRAFT),
-    serverProperties = Array(
-      new ClusterConfigProperty(key = GroupCoordinatorConfig.OFFSETS_TOPIC_PARTITIONS_CONFIG, value = "1"),
-      new ClusterConfigProperty(key = GroupCoordinatorConfig.OFFSETS_TOPIC_REPLICATION_FACTOR_CONFIG, value = "1"),
-      new ClusterConfigProperty(key = GroupCoordinatorConfig.CONSUMER_GROUP_ASSIGNMENT_INTERVAL_MS_CONFIG, value = "0"),
-      new ClusterConfigProperty(key = GroupCoordinatorConfig.CONSUMER_GROUP_ASSIGNOR_OFFLOAD_ENABLE_CONFIG, value = "false")
-    )
-  )
-  class WithAssignmentBatchingAndAssignorOffloadDisabledTest(cluster: ClusterInstance) extends ConsumerGroupHeartbeatRequestTest(cluster) {
-  }
-}
-
 @ClusterTestDefaults(
   types = Array(Type.KRAFT),
   serverProperties = Array(
     new ClusterConfigProperty(key = GroupCoordinatorConfig.OFFSETS_TOPIC_PARTITIONS_CONFIG, value = "1"),
-    new ClusterConfigProperty(key = GroupCoordinatorConfig.OFFSETS_TOPIC_REPLICATION_FACTOR_CONFIG, value = "1")
+    new ClusterConfigProperty(key = GroupCoordinatorConfig.OFFSETS_TOPIC_REPLICATION_FACTOR_CONFIG, value = "1"),
+    new ClusterConfigProperty(key = GroupCoordinatorConfig.CONSUMER_GROUP_ASSIGNMENT_INTERVAL_MS_CONFIG, value = "0"),
+    new ClusterConfigProperty(key = GroupCoordinatorConfig.CONSUMER_GROUP_ASSIGNOR_OFFLOAD_ENABLE_CONFIG, value = "false")
   )
 )
 class ConsumerGroupHeartbeatRequestTest(cluster: ClusterInstance) extends GroupCoordinatorBaseRequestTest(cluster) {
@@ -116,7 +82,24 @@ class ConsumerGroupHeartbeatRequestTest(cluster: ClusterInstance) extends GroupC
     assertEquals(expectedResponse, consumerGroupHeartbeatResponse.data)
   }
 
-  @ClusterTest
+  @ClusterTests(Array(
+    new ClusterTest(serverProperties = Array(
+      new ClusterConfigProperty(key = GroupCoordinatorConfig.CONSUMER_GROUP_ASSIGNMENT_INTERVAL_MS_CONFIG, value = "0"),
+      new ClusterConfigProperty(key = GroupCoordinatorConfig.CONSUMER_GROUP_ASSIGNOR_OFFLOAD_ENABLE_CONFIG, value = "false")
+    )),
+    new ClusterTest(serverProperties = Array(
+      new ClusterConfigProperty(key = GroupCoordinatorConfig.CONSUMER_GROUP_ASSIGNMENT_INTERVAL_MS_CONFIG, value = "1000"),
+      new ClusterConfigProperty(key = GroupCoordinatorConfig.CONSUMER_GROUP_ASSIGNOR_OFFLOAD_ENABLE_CONFIG, value = "false")
+    )),
+    new ClusterTest(serverProperties = Array(
+      new ClusterConfigProperty(key = GroupCoordinatorConfig.CONSUMER_GROUP_ASSIGNMENT_INTERVAL_MS_CONFIG, value = "0"),
+      new ClusterConfigProperty(key = GroupCoordinatorConfig.CONSUMER_GROUP_ASSIGNOR_OFFLOAD_ENABLE_CONFIG, value = "true")
+    )),
+    new ClusterTest(serverProperties = Array(
+      new ClusterConfigProperty(key = GroupCoordinatorConfig.CONSUMER_GROUP_ASSIGNMENT_INTERVAL_MS_CONFIG, value = "1000"),
+      new ClusterConfigProperty(key = GroupCoordinatorConfig.CONSUMER_GROUP_ASSIGNOR_OFFLOAD_ENABLE_CONFIG, value = "true")
+    ))
+  ))
   def testConsumerGroupHeartbeatIsAccessibleWhenNewGroupCoordinatorIsEnabled(): Unit = {
     // Creates the __consumer_offsets topics because it won't be created automatically
     // in this test because it does not use FindCoordinator API.
@@ -212,7 +195,24 @@ class ConsumerGroupHeartbeatRequestTest(cluster: ClusterInstance) extends GroupC
     assertEquals(-1, consumerGroupHeartbeatResponse.data.memberEpoch)
   }
 
-  @ClusterTest
+  @ClusterTests(Array(
+    new ClusterTest(serverProperties = Array(
+      new ClusterConfigProperty(key = GroupCoordinatorConfig.CONSUMER_GROUP_ASSIGNMENT_INTERVAL_MS_CONFIG, value = "0"),
+      new ClusterConfigProperty(key = GroupCoordinatorConfig.CONSUMER_GROUP_ASSIGNOR_OFFLOAD_ENABLE_CONFIG, value = "false")
+    )),
+    new ClusterTest(serverProperties = Array(
+      new ClusterConfigProperty(key = GroupCoordinatorConfig.CONSUMER_GROUP_ASSIGNMENT_INTERVAL_MS_CONFIG, value = "1000"),
+      new ClusterConfigProperty(key = GroupCoordinatorConfig.CONSUMER_GROUP_ASSIGNOR_OFFLOAD_ENABLE_CONFIG, value = "false")
+    )),
+    new ClusterTest(serverProperties = Array(
+      new ClusterConfigProperty(key = GroupCoordinatorConfig.CONSUMER_GROUP_ASSIGNMENT_INTERVAL_MS_CONFIG, value = "0"),
+      new ClusterConfigProperty(key = GroupCoordinatorConfig.CONSUMER_GROUP_ASSIGNOR_OFFLOAD_ENABLE_CONFIG, value = "true")
+    )),
+    new ClusterTest(serverProperties = Array(
+      new ClusterConfigProperty(key = GroupCoordinatorConfig.CONSUMER_GROUP_ASSIGNMENT_INTERVAL_MS_CONFIG, value = "1000"),
+      new ClusterConfigProperty(key = GroupCoordinatorConfig.CONSUMER_GROUP_ASSIGNOR_OFFLOAD_ENABLE_CONFIG, value = "true")
+    ))
+  ))
   def testConsumerGroupHeartbeatWithRegularExpression(): Unit = {
     val admin = cluster.admin()
 
@@ -415,7 +415,24 @@ class ConsumerGroupHeartbeatRequestTest(cluster: ClusterInstance) extends GroupC
     }, msg = s"Did not receive the expected successful response. Last response $consumerGroupHeartbeatResponse.")
   }
 
-  @ClusterTest
+  @ClusterTests(Array(
+    new ClusterTest(serverProperties = Array(
+      new ClusterConfigProperty(key = GroupCoordinatorConfig.CONSUMER_GROUP_ASSIGNMENT_INTERVAL_MS_CONFIG, value = "0"),
+      new ClusterConfigProperty(key = GroupCoordinatorConfig.CONSUMER_GROUP_ASSIGNOR_OFFLOAD_ENABLE_CONFIG, value = "false")
+    )),
+    new ClusterTest(serverProperties = Array(
+      new ClusterConfigProperty(key = GroupCoordinatorConfig.CONSUMER_GROUP_ASSIGNMENT_INTERVAL_MS_CONFIG, value = "1000"),
+      new ClusterConfigProperty(key = GroupCoordinatorConfig.CONSUMER_GROUP_ASSIGNOR_OFFLOAD_ENABLE_CONFIG, value = "false")
+    )),
+    new ClusterTest(serverProperties = Array(
+      new ClusterConfigProperty(key = GroupCoordinatorConfig.CONSUMER_GROUP_ASSIGNMENT_INTERVAL_MS_CONFIG, value = "0"),
+      new ClusterConfigProperty(key = GroupCoordinatorConfig.CONSUMER_GROUP_ASSIGNOR_OFFLOAD_ENABLE_CONFIG, value = "true")
+    )),
+    new ClusterTest(serverProperties = Array(
+      new ClusterConfigProperty(key = GroupCoordinatorConfig.CONSUMER_GROUP_ASSIGNMENT_INTERVAL_MS_CONFIG, value = "1000"),
+      new ClusterConfigProperty(key = GroupCoordinatorConfig.CONSUMER_GROUP_ASSIGNOR_OFFLOAD_ENABLE_CONFIG, value = "true")
+    ))
+  ))
   def testRejoiningStaticMemberGetsAssignmentsBackWhenNewGroupCoordinatorIsEnabled(): Unit = {
     // Creates the __consumer_offsets topics because it won't be created automatically
     // in this test because it does not use FindCoordinator API.
@@ -576,28 +593,8 @@ class ConsumerGroupHeartbeatRequestTest(cluster: ClusterInstance) extends GroupC
 
     // Verify the response.
     assertNotNull(consumerGroupHeartbeatResponse.data.memberId)
-    assertEquals(if (isConsumerAssignorOffloadEnabled) 1 else 2, consumerGroupHeartbeatResponse.data.memberEpoch)
+    assertEquals(2, consumerGroupHeartbeatResponse.data.memberEpoch)
     assertEquals(new ConsumerGroupHeartbeatResponseData.Assignment(), consumerGroupHeartbeatResponse.data.assignment)
-
-    // When assignor offload is enabled, the initial assignment is available in a later heartbeat.
-    if (isConsumerAssignorOffloadEnabled) {
-      consumerGroupHeartbeatRequest = new ConsumerGroupHeartbeatRequest.Builder(
-        new ConsumerGroupHeartbeatRequestData()
-          .setGroupId("grp")
-          .setInstanceId(instanceId)
-          .setMemberId(consumerGroupHeartbeatResponse.data.memberId)
-          .setMemberEpoch(consumerGroupHeartbeatResponse.data.memberEpoch)
-      ).build()
-      TestUtils.waitUntilTrue(() => {
-        consumerGroupHeartbeatResponse = connectAndReceive[ConsumerGroupHeartbeatResponse](consumerGroupHeartbeatRequest)
-        consumerGroupHeartbeatResponse.data.errorCode == Errors.NONE.code &&
-          consumerGroupHeartbeatResponse.data.memberEpoch > 1
-      }, msg = s"Did not receive initial assignment. Last response $consumerGroupHeartbeatResponse.")
-
-      // Verify the response.
-      assertEquals(2, consumerGroupHeartbeatResponse.data.memberEpoch)
-      assertNull(consumerGroupHeartbeatResponse.data.assignment)
-    }
 
     // Create the topic.
     val topicId = createTopic(
@@ -653,24 +650,9 @@ class ConsumerGroupHeartbeatRequestTest(cluster: ClusterInstance) extends GroupC
     // because of not sending a heartbeat till session timeout expiry.
     TestUtils.waitUntilTrue(() => {
       consumerGroupHeartbeatResponse = connectAndReceive[ConsumerGroupHeartbeatResponse](consumerGroupHeartbeatRequest)
-      consumerGroupHeartbeatResponse.data.errorCode == Errors.NONE.code
+      consumerGroupHeartbeatResponse.data.errorCode == Errors.NONE.code &&
+        consumerGroupHeartbeatResponse.data.assignment == expectedAssignment
     }, msg = s"Could not re-join the group successfully. Last response $consumerGroupHeartbeatResponse.")
-
-    // When assignor offload is enabled, the new static member's assignment is available in a later heartbeat.
-    if (isConsumerAssignorOffloadEnabled) {
-      consumerGroupHeartbeatRequest = new ConsumerGroupHeartbeatRequest.Builder(
-        new ConsumerGroupHeartbeatRequestData()
-          .setGroupId("grp")
-          .setInstanceId(instanceId)
-          .setMemberId(consumerGroupHeartbeatResponse.data.memberId)
-          .setMemberEpoch(consumerGroupHeartbeatResponse.data.memberEpoch)
-      ).build()
-      TestUtils.waitUntilTrue(() => {
-        consumerGroupHeartbeatResponse = connectAndReceive[ConsumerGroupHeartbeatResponse](consumerGroupHeartbeatRequest)
-        consumerGroupHeartbeatResponse.data.errorCode == Errors.NONE.code &&
-          consumerGroupHeartbeatResponse.data.assignment != null
-      }, msg = s"Did not receive assignment. Last response $consumerGroupHeartbeatResponse.")
-    }
 
     // Verify the response. The group epoch bumps upto 5 which eventually reflects in the new member epoch.
     assertEquals(5, consumerGroupHeartbeatResponse.data.memberEpoch)
@@ -716,27 +698,8 @@ class ConsumerGroupHeartbeatRequestTest(cluster: ClusterInstance) extends GroupC
 
       // Verify the response.
       assertNotNull(consumerGroupHeartbeatResponse.data.memberId)
-      assertEquals(if (isConsumerAssignorOffloadEnabled) 1 else 2, consumerGroupHeartbeatResponse.data.memberEpoch)
+      assertEquals(2, consumerGroupHeartbeatResponse.data.memberEpoch)
       assertEquals(5000, consumerGroupHeartbeatResponse.data.heartbeatIntervalMs)
-
-      // When assignor offload is enabled, the initial assignment is available in a later heartbeat.
-      if (isConsumerAssignorOffloadEnabled) {
-        consumerGroupHeartbeatRequest = new ConsumerGroupHeartbeatRequest.Builder(
-          new ConsumerGroupHeartbeatRequestData()
-            .setGroupId(consumerGroupId)
-            .setMemberId(consumerGroupHeartbeatResponse.data.memberId)
-            .setMemberEpoch(consumerGroupHeartbeatResponse.data.memberEpoch)
-        ).build()
-        TestUtils.waitUntilTrue(() => {
-          consumerGroupHeartbeatResponse = connectAndReceive[ConsumerGroupHeartbeatResponse](consumerGroupHeartbeatRequest)
-          consumerGroupHeartbeatResponse.data.errorCode == Errors.NONE.code &&
-            consumerGroupHeartbeatResponse.data.memberEpoch > 1
-        }, msg = s"Did not receive initial assignment. Last response $consumerGroupHeartbeatResponse.")
-
-        // Verify the response.
-        assertEquals(2, consumerGroupHeartbeatResponse.data.memberEpoch)
-        assertEquals(5000, consumerGroupHeartbeatResponse.data.heartbeatIntervalMs)
-      }
 
       // Alter consumer heartbeat interval config
       val resource = new ConfigResource(ConfigResource.Type.GROUP, consumerGroupId)
@@ -843,26 +806,7 @@ class ConsumerGroupHeartbeatRequestTest(cluster: ClusterInstance) extends GroupC
 
     // Verify initial join success.
     assertNotNull(consumerGroupHeartbeatResponse.data.memberId)
-    assertEquals(if (isConsumerAssignorOffloadEnabled) 1 else 2, consumerGroupHeartbeatResponse.data.memberEpoch)
-
-    // When assignor offload is enabled, the initial assignment is available in a later heartbeat.
-    if (isConsumerAssignorOffloadEnabled) {
-      consumerGroupHeartbeatRequest = new ConsumerGroupHeartbeatRequest.Builder(
-        new ConsumerGroupHeartbeatRequestData()
-          .setGroupId(groupId)
-          .setMemberId(consumerGroupHeartbeatResponse.data.memberId)
-          .setMemberEpoch(consumerGroupHeartbeatResponse.data.memberEpoch)
-      ).build()
-      TestUtils.waitUntilTrue(() => {
-        consumerGroupHeartbeatResponse = connectAndReceive[ConsumerGroupHeartbeatResponse](consumerGroupHeartbeatRequest)
-        consumerGroupHeartbeatResponse.data.errorCode == Errors.NONE.code &&
-          consumerGroupHeartbeatResponse.data.memberEpoch > 1
-      }, msg = s"Did not receive initial assignment. Last response $consumerGroupHeartbeatResponse.")
-
-      // Verify the response.
-      assertEquals(2, consumerGroupHeartbeatResponse.data.memberEpoch)
-    }
-
+    assertEquals(2, consumerGroupHeartbeatResponse.data.memberEpoch)
 
     // Create the topic to trigger partition assignment.
     val topicId = createTopic(
@@ -1035,8 +979,7 @@ class ConsumerGroupHeartbeatRequestTest(cluster: ClusterInstance) extends GroupC
     var response2: ConsumerGroupHeartbeatResponse = null
     TestUtils.waitUntilTrue(() => {
       response2 = connectAndReceive[ConsumerGroupHeartbeatResponse](request2)
-      response2.data.errorCode == Errors.NONE.code &&
-        response2.data.memberEpoch > response1.data.memberEpoch
+      response2.data.errorCode == Errors.NONE.code
     }, msg = s"Member 2 could not join. Last response $response2.")
 
     val member2Epoch = response2.data.memberEpoch
@@ -1120,8 +1063,7 @@ class ConsumerGroupHeartbeatRequestTest(cluster: ClusterInstance) extends GroupC
     var response2: ConsumerGroupHeartbeatResponse = null
     TestUtils.waitUntilTrue(() => {
       response2 = connectAndReceive[ConsumerGroupHeartbeatResponse](request2)
-      response2.data.errorCode == Errors.NONE.code &&
-        response2.data.memberEpoch > response1.data.memberEpoch
+      response2.data.errorCode == Errors.NONE.code
     }, msg = s"Member 2 could not join. Last response $response2.")
 
     // Member 1 sends full heartbeat (still reporting all partitions).
@@ -1205,8 +1147,7 @@ class ConsumerGroupHeartbeatRequestTest(cluster: ClusterInstance) extends GroupC
     var response2: ConsumerGroupHeartbeatResponse = null
     TestUtils.waitUntilTrue(() => {
       response2 = connectAndReceive[ConsumerGroupHeartbeatResponse](request2)
-      response2.data.errorCode == Errors.NONE.code &&
-        response2.data.memberEpoch > response1.data.memberEpoch
+      response2.data.errorCode == Errors.NONE.code
     }, msg = s"Member 2 could not join. Last response $response2.")
 
     // Member 1 sends heartbeat acknowledging revocation (only reporting partition 0).
@@ -1258,7 +1199,24 @@ class ConsumerGroupHeartbeatRequestTest(cluster: ClusterInstance) extends GroupC
     assertEquals(expectedFirstResponse1, duplicateResponse1.data)
   }
 
-  @ClusterTest
+  @ClusterTests(Array(
+    new ClusterTest(serverProperties = Array(
+      new ClusterConfigProperty(key = GroupCoordinatorConfig.CONSUMER_GROUP_ASSIGNMENT_INTERVAL_MS_CONFIG, value = "0"),
+      new ClusterConfigProperty(key = GroupCoordinatorConfig.CONSUMER_GROUP_ASSIGNOR_OFFLOAD_ENABLE_CONFIG, value = "false")
+    )),
+    new ClusterTest(serverProperties = Array(
+      new ClusterConfigProperty(key = GroupCoordinatorConfig.CONSUMER_GROUP_ASSIGNMENT_INTERVAL_MS_CONFIG, value = "1000"),
+      new ClusterConfigProperty(key = GroupCoordinatorConfig.CONSUMER_GROUP_ASSIGNOR_OFFLOAD_ENABLE_CONFIG, value = "false")
+    )),
+    new ClusterTest(serverProperties = Array(
+      new ClusterConfigProperty(key = GroupCoordinatorConfig.CONSUMER_GROUP_ASSIGNMENT_INTERVAL_MS_CONFIG, value = "0"),
+      new ClusterConfigProperty(key = GroupCoordinatorConfig.CONSUMER_GROUP_ASSIGNOR_OFFLOAD_ENABLE_CONFIG, value = "true")
+    )),
+    new ClusterTest(serverProperties = Array(
+      new ClusterConfigProperty(key = GroupCoordinatorConfig.CONSUMER_GROUP_ASSIGNMENT_INTERVAL_MS_CONFIG, value = "1000"),
+      new ClusterConfigProperty(key = GroupCoordinatorConfig.CONSUMER_GROUP_ASSIGNOR_OFFLOAD_ENABLE_CONFIG, value = "true")
+    ))
+  ))
   def testConsumerGroupHeartbeatRebalance(): Unit = {
     createOffsetsTopic()
 
@@ -1416,12 +1374,7 @@ class ConsumerGroupHeartbeatRequestTest(cluster: ClusterInstance) extends GroupC
     assertEquals(expectedResponse4, response4.data)
   }
 
-  @ClusterTest(
-    serverProperties = Array(
-      new ClusterConfigProperty(key = GroupCoordinatorConfig.CONSUMER_GROUP_ASSIGNMENT_INTERVAL_MS_CONFIG, value = "0"),
-      new ClusterConfigProperty(key = GroupCoordinatorConfig.CONSUMER_GROUP_ASSIGNOR_OFFLOAD_ENABLE_CONFIG, value = "false")
-    )
-  )
+  @ClusterTest
   def testStaticMembersRejoinWithDifferentServerAssignor(): Unit = {
     // Creates the __consumer_offsets topics because it won't be created automatically
     // in this test because it does not use FindCoordinator API.
