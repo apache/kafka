@@ -246,12 +246,13 @@ public class DefaultSslEngineFactoryTest {
     }
 
     @Test
-    public void testEmptyNamedGroupsDisableNamedGroups() throws Exception {
+    public void testEmptyNamedGroupsUseSslProviderDefaults() throws Exception {
         assumeTrue(Runtime.version().feature() >= 20);
         configs.put(SslConfigs.SSL_NAMED_GROUPS_CONFIG, List.of());
         factory.configure(configs);
 
-        assertArrayEquals(new String[0], namedGroups(factory.createClientSslEngine("localhost", 0, "HTTPS")));
+        String[] providerDefaults = namedGroups(factory.sslContext().createSSLEngine("localhost", 0));
+        assertArrayEquals(providerDefaults, namedGroups(factory.createClientSslEngine("localhost", 0, "HTTPS")));
     }
 
     private String[] namedGroups(SSLEngine sslEngine) throws Exception {

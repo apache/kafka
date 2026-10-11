@@ -154,7 +154,7 @@ public class DefaultSslEngineFactory implements SslEngineFactory {
         }
 
         List<String> namedGroupsList = (List<String>) configs.get(SslConfigs.SSL_NAMED_GROUPS_CONFIG);
-        this.namedGroups = namedGroupsList == null ? null : namedGroupsList.toArray(new String[0]);
+        this.namedGroups = namedGroupsList == null || namedGroupsList.isEmpty() ? null : namedGroupsList.toArray(new String[0]);
 
         this.secureRandomImplementation = createSecureRandom((String)
                 configs.get(SslConfigs.SSL_SECURE_RANDOM_IMPLEMENTATION_CONFIG));
