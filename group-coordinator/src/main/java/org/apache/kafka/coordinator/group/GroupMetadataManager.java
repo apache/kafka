@@ -4548,7 +4548,15 @@ public class GroupMetadataManager {
         TargetAssignmentBuilder.TargetAssignmentResult result,
         Throwable exception
     ) {
-        inflightOffloadedAssignorEpochs.remove(groupId, targetAssignmentEpoch);
+        Integer expectedTargetAssignmentEpoch = inflightOffloadedAssignorEpochs.remove(groupId);
+        if (expectedTargetAssignmentEpoch == null || targetAssignmentEpoch != expectedTargetAssignmentEpoch) {
+            // The assignment epoch doesn't match the expected in-flight assignment epoch.
+            // This should never happen since we only allow a single in-flight assignor run per
+            // group and cancel assignor tasks before removing their epoch from the in-flight map.
+            log.error("[GroupId {}] Discarding unexpected offloaded target assignment for epoch {} (expected in-flight epoch was {}).",
+                groupId, targetAssignmentEpoch, expectedTargetAssignmentEpoch);
+            return new CoordinatorResult<>(List.of());
+        }
 
         if (exception != null) {
             log.error("[GroupId {}] Failed to compute a new target assignment for epoch {}: {}.",
