@@ -152,6 +152,10 @@ public class StreamsGroupTest {
             streamsGroup.warmupSupport()
         );
 
+        // The refiner and the coordinator's check share one snapshot, which the refiner must not be able to change.
+        assertThrows(UnsupportedOperationException.class,
+            () -> streamsGroup.warmupSupport().put("old", WarmupSupport.SUPPORTED));
+
         // The last heartbeat counts, as a member can be restarted with another client version under the same ID.
         streamsGroup.updateHeartbeatVersion("old", 1);
         assertEquals(WarmupSupport.SUPPORTED, streamsGroup.warmupSupport().get("old"));

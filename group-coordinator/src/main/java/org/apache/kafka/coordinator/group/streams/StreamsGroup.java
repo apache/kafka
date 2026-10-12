@@ -623,8 +623,8 @@ public class StreamsGroup implements Group {
     }
 
     /**
-     * @return Whether each member of the group may be handed a warm-up task, keyed by member ID. A member whose
-     *         heartbeat version is not known is {@link WarmupSupport#UNKNOWN}.
+     * @return An immutable snapshot of whether each member of the group may be handed a warm-up task, keyed by
+     *         member ID. A member whose heartbeat version is not known is {@link WarmupSupport#UNKNOWN}.
      */
     public Map<String, WarmupSupport> warmupSupport() {
         final Map<String, WarmupSupport> warmupSupport = new HashMap<>();
@@ -632,7 +632,7 @@ public class StreamsGroup implements Group {
             final Integer version = heartbeatVersions.get(memberId);
             warmupSupport.put(memberId, version == null ? WarmupSupport.UNKNOWN : WarmupSupport.ofHeartbeatVersion(version));
         });
-        return warmupSupport;
+        return Collections.unmodifiableMap(warmupSupport);
     }
 
     /**
