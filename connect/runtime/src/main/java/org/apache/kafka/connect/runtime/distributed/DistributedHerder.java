@@ -1149,6 +1149,9 @@ public class DistributedHerder extends AbstractHerder implements Runnable {
                         }
 
                         log.trace("Handling connector config request {}", connName);
+                        if (initialOffsets != null && !refreshConfigSnapshotForInitialOffsets(connName, callback)) {
+                            return null;
+                        }
                         if (!putConnectorConfigChecks(connName, allowReplace, callback)) {
                             return null;
                         }
@@ -1187,6 +1190,18 @@ public class DistributedHerder extends AbstractHerder implements Runnable {
     }
 
     /**
+     * Read to the end of the config topic so that the precondition checks for a creation with initial offsets don't act
+     * on stale configs, completing {@code callback} exceptionally if that fails.
+     */
+    private boolean refreshConfigSnapshotForInitialOffsets(String connName, Callback<Created<ConnectorInfo>> callback) {
+        if (!refreshConfigSnapshot(workerSyncTimeoutMs)) {
+            callback.onCompletion(new ConnectException("Failed to read to end of config topic before setting initial offsets for connector " + connName), null);
+            return false;
+        }
+        return true;
+    }
+
+    /**
      * Write a connector's initial offsets and, once they are durable, write its config. Must be invoked on the tick thread.
      * <p>
      * The offsets are written asynchronously, so the config write is handed back to the tick thread via a nested request
@@ -1209,11 +1224,17 @@ public class DistributedHerder extends AbstractHerder implements Runnable {
                 }
                 addRequest(
                     () -> {
-                        // The offsets are already durable, so wipe them back out if the create can't be completed,
-                        // whether because the precondition re-check fails here or the config write below throws.
-                        Callback<Created<ConnectorInfo>> wipeOnFailure = (error, ignored) ->
-                            wipeInitialOffsetsAfterFailedCreate(connName, config, error, callback);
-                        if (!putConnectorConfigChecks(connName, allowReplace, wipeOnFailure)) {
+                        // The offsets are already durable, so wipe them back out if the create can't be completed, unless
+                        // another request created the connector in the meantime, since that would reset its offsets.
+                        Callback<Created<ConnectorInfo>> wipeOnFailure = (error, ignored) -> {
+                            if (error instanceof AlreadyExistsException) {
+                                callback.onCompletion(error, null);
+                            } else {
+                                wipeInitialOffsetsAfterFailedCreate(connName, config, error, callback);
+                            }
+                        };
+                        if (!refreshConfigSnapshotForInitialOffsets(connName, wipeOnFailure)
+                                || !putConnectorConfigChecks(connName, allowReplace, wipeOnFailure)) {
                             return null;
                         }
                         try {
