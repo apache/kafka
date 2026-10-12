@@ -22,7 +22,6 @@ import org.apache.kafka.coordinator.group.assignor.uniform2.util.IntList;
 
 import java.util.ArrayList;
 import java.util.Arrays;
-import java.util.HashSet;
 import java.util.List;
 import java.util.Map;
 import java.util.Set;
@@ -30,11 +29,11 @@ import java.util.Set;
 /**
  * The current assignment of a group: the owner of every partition.
  *
- * <p>A member owns a partition when it holds it, subscribes to its topic, and the partition
- * exists. Everything else the members hold is stale: the partitions of topics they do not
- * subscribe to or which no longer exist, the partitions beyond the partition count of their topic,
- * and the empty sets of partitions. Stale partitions are dropped silently, and the members holding
- * some get a new map. As the coordinator guarantees, a partition is held by at most one member.
+ * <p>A member owns a partition when it holds it and subscribes to its topic. The partitions of
+ * topics that a member does not subscribe to, or which no longer exist, are stale: they are dropped
+ * silently, and the members holding some get a new map. As the coordinator guarantees, a partition
+ * is held by at most one member, a topic never has fewer partitions than its members hold, and no
+ * set of partitions is empty.
  */
 final class CurrentAssignment {
     /**
@@ -43,22 +42,16 @@ final class CurrentAssignment {
     private final List<Map<Uuid, Set<Integer>>> assignments;
 
     /**
-     * Per member, whether it holds stale partitions, and thus needs a new map.
+     * Per member, whether it needs a new map because it holds stale partitions.
      */
     private final boolean[] holdsStalePartitions;
 
     /**
      * Per topic, the owner of every partition, or -1; null while no partition of the topic has an
-     * owner.
+     * owner, so that no array is allocated for a topic that nobody owns, as on the first assignment
+     * of a group.
      */
     private final int[][] owners;
-
-    /**
-     * The sets of partitions holding partitions that do not exist, beyond the partition count of
-     * their topic or negative, each as the key of its member and topic, see {@link #key}. They are
-     * rare, hence a set rather than a flag per member and topic.
-     */
-    private final Set<Long> setsBeyondPartitionCount = new HashSet<>();
 
     /**
      * Reads the current assignment of every member.
@@ -66,7 +59,7 @@ final class CurrentAssignment {
      * @param groupSpec The group spec.
      * @param group     The members and topics of the group.
      */
-    CurrentAssignment(GroupSpec groupSpec, GroupModel group) {
+    CurrentAssignment(GroupSpec groupSpec, IndexedGroup group) {
         int memberCount = group.memberCount();
         int topicCount = group.topicCount();
         assignments = new ArrayList<>(memberCount);
@@ -94,54 +87,32 @@ final class CurrentAssignment {
      * Records the owners of the partitions that the member holds, and whether it holds stale
      * partitions.
      */
-    private void recordAssignment(GroupModel group, int member, int cohort, int[] subscribed) {
+    private void recordAssignment(IndexedGroup group, int member, int cohort, int[] subscribed) {
         // forEach walks the table of a HashMap directly, measurably cheaper than its iterator on
         // large groups.
         assignments.get(member).forEach((topicId, partitions) -> {
             int topic = group.topicIndex(topicId);
             if (topic < 0 || subscribed[topic] != cohort) {
                 holdsStalePartitions[member] = true;
-                return;
-            }
-            int owned = recordOwner(group, topic, member, partitions);
-            if (owned < partitions.size()) {
-                setsBeyondPartitionCount.add(key(member, topic));
-                holdsStalePartitions[member] = true;
-            } else if (partitions.isEmpty()) {
-                holdsStalePartitions[member] = true;
+            } else {
+                recordOwner(group, topic, member, partitions);
             }
         });
     }
 
     /**
-     * Records the member as the owner of its partitions of the topic that exist.
-     *
-     * @return The number of partitions it owns.
+     * Records the member as the owner of its partitions of the topic.
      */
-    private int recordOwner(GroupModel group, int topic, int member, Set<Integer> partitions) {
-        int partitionCount = group.partitionCount(topic);
-        int owned = 0;
-        for (int partition : partitions) {
-            if (partition >= 0 && partition < partitionCount) {
-                var topicOwners = owners[topic];
-                if (topicOwners == null) {
-                    topicOwners = new int[partitionCount];
-                    Arrays.fill(topicOwners, -1);
-                    owners[topic] = topicOwners;
-                }
-                topicOwners[partition] = member;
-                owned++;
-            }
+    private void recordOwner(IndexedGroup group, int topic, int member, Set<Integer> partitions) {
+        var topicOwners = owners[topic];
+        if (topicOwners == null) {
+            topicOwners = new int[group.partitionCount(topic)];
+            Arrays.fill(topicOwners, -1);
+            owners[topic] = topicOwners;
         }
-        return owned;
-    }
-
-    /**
-     * @return The key of the member and the topic: the member in the high 32 bits of a long and
-     *         the topic in the low 32 bits, so that every member and topic have their own key.
-     */
-    private static long key(int member, int topic) {
-        return ((long) member << 32) | topic;
+        for (int partition : partitions) {
+            topicOwners[partition] = member;
+        }
     }
 
     /**
@@ -152,18 +123,10 @@ final class CurrentAssignment {
     }
 
     /**
-     * @return True if the member holds stale partitions.
+     * @return {@code true} if the member holds stale partitions.
      */
     boolean holdsStalePartitions(int member) {
         return holdsStalePartitions[member];
-    }
-
-    /**
-     * @return True if the set of partitions of the topic that the member holds has partitions
-     *         which do not exist, beyond the partition count or negative.
-     */
-    boolean holdsPartitionsBeyondCount(int member, int topic) {
-        return !setsBeyondPartitionCount.isEmpty() && setsBeyondPartitionCount.contains(key(member, topic));
     }
 
     /**
@@ -177,11 +140,12 @@ final class CurrentAssignment {
     /**
      * Counts the partitions of the topic that each of its owners owns.
      *
-     * @param topic  The topic.
-     * @param counts Receives, at the index of every owner, its number of partitions. The entries
-     *               of the owners must be zero, and the caller resets them.
-     * @param distinctOwners Receives the owners, in the order of their lowest partition. It is
-     *                       cleared first.
+     * @param topic          The topic.
+     * @param counts         Receives, at the index of every owner, its number of partitions. Must
+     *                       be sized to the number of members, with zero entries; the caller resets
+     *                       the entries of the owners to zero after use.
+     * @param distinctOwners Receives the owners, in the order of their lowest partition. Existing
+     *                       entries are cleared by this method.
      */
     void countOwned(int topic, int[] counts, IntList distinctOwners) {
         distinctOwners.clear();

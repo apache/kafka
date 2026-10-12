@@ -35,15 +35,13 @@ import java.util.stream.IntStream;
 import static org.junit.jupiter.api.Assertions.assertEquals;
 
 /**
- * Tests of {@link GroupModel}: the numbering of the members and the topics, and the cohorts.
+ * Tests of {@link IndexedGroup}: the numbering of the members, the numbering of the topics, and the
+ * cohorts.
  *
- * <p>The topic ids sort as T1 &lt; T2 &lt; T3, so that when all of them are subscribed T1 is
- * topic 0, T2 is topic 1 and T3 is topic 2; the member ids sort as A &lt; B &lt; C &lt; D, so
- * that A is member 0, B is member 1, and so on. The members are put in the specs in another
- * order, and the subscriptions list their topics in another order, so that the numbers cannot
- * come from the iteration order of the spec.
+ * <p>The members are added to the specs, and the subscriptions list their topics, out of id order,
+ * so that the indices cannot come from the iteration order of the spec.
  */
-public class GroupModelTest {
+public class IndexedGroupTest {
     private static final Uuid T1 = new Uuid(1L, 1L);
     private static final Uuid T2 = new Uuid(2L, 1L);
     private static final Uuid T3 = new Uuid(3L, 1L);
@@ -55,6 +53,8 @@ public class GroupModelTest {
         .withTopic(T3, 7)
         .build();
 
+    // Numbering of the members.
+
     /**
      * Member ids are compared as strings, so m10 comes between m1 and m2.
      */
@@ -63,46 +63,152 @@ public class GroupModelTest {
         var spec = new GroupSpecFixture()
             .withMember("m2", Set.of(T1))
             .withMember("m10", Set.of(T1))
-            .withMember("m1", Set.of(T1));
+            .withMember("m1", Set.of(T1))
+            .build();
 
-        var group = new GroupModel(spec.build(), DESCRIBER);
+        var group = new IndexedGroup(spec, DESCRIBER);
 
         assertEquals(List.of("m1", "m10", "m2"), memberIds(group));
     }
 
+    // Numbering of the topics.
+
     /**
-     * A, read first, meets T3 before T1, and B then meets T2; the topics are still numbered in
-     * topic id order, with their partition counts.
+     * A, read first, sees T3 before T1, and B then sees T2; the topics are still numbered in topic
+     * id order, with their partition counts, and so are the topics of the cohorts.
      */
     @Test
     public void testTopicsAreNumberedInTopicIdOrder() {
         var spec = new GroupSpecFixture()
             .withMember("B", Set.of(T2))
-            .withMember("A", ordered(T3, T1));
+            .withMember("A", orderedSet(T3, T1))
+            .build();
 
-        var group = new GroupModel(spec.build(), DESCRIBER);
+        var group = new IndexedGroup(spec, DESCRIBER);
 
         assertEquals(List.of(T1, T2, T3), topicIds(group));
-        assertEquals(List.of(0, 1, 2), topicIndexes(group, T1, T2, T3));
+        assertEquals(List.of(0, 1, 2), topicIndices(group, T1, T2, T3));
         assertEquals(List.of(2, 5, 7), partitionCounts(group));
         assertEquals(List.of(List.of(0, 2), List.of(1)), topicsOfCohorts(group));
     }
 
     /**
-     * A subscribes to T1 and T2, B to T2 and T3, C to T1 and T2 like A, and D to T3. Read in
-     * member order, A starts cohort 0, B cohort 1, C joins cohort 0 although it lists its topics
-     * in another order, and D starts cohort 2. T1 then has 2 subscribers (A and C), T2 has 3 (A,
-     * B and C) and T3 has 2 (B and D).
+     * A subscribes to T1: only T1 has an index, and any other topic gets -1.
      */
     @Test
-    public void testCohorts() {
+    public void testTopicIndex() {
+        var spec = new GroupSpecFixture()
+            .withMember("A", Set.of(T1))
+            .build();
+
+        var group = new IndexedGroup(spec, DESCRIBER);
+
+        assertEquals(List.of(T1), topicIds(group));
+        assertEquals(List.of(0, -1, -1), topicIndices(group, T1, T2, MISSING));
+        assertEquals(List.of(2), partitionCounts(group));
+    }
+
+    /**
+     * The describer gives -1 partitions for a topic that does not exist, which is then dropped from
+     * the subscriptions: A, subscribing to T1 and the missing topic, and B, subscribing to T1,
+     * share cohort 0, and C, subscribing only to the missing topic, has a cohort without topics.
+     */
+    @Test
+    public void testTopicsThatDoNotExistAreIgnored() {
+        var spec = new GroupSpecFixture()
+            .withMember("C", Set.of(MISSING))
+            .withMember("B", Set.of(T1))
+            .withMember("A", orderedSet(MISSING, T1))
+            .build();
+
+        var group = new IndexedGroup(spec, DESCRIBER);
+
+        assertEquals(List.of(T1), topicIds(group));
+        assertEquals(List.of(0, -1), topicIndices(group, T1, MISSING));
+        assertEquals(List.of(2), partitionCounts(group));
+        assertEquals(List.of(List.of(0, 1), List.of(2)), membersOfCohorts(group));
+        assertEquals(List.of(List.of(0), List.of()), topicsOfCohorts(group));
+    }
+
+    // Cohorts.
+
+    /**
+     * An empty group, homogeneous as the coordinator declares it, has a single cohort without
+     * members nor topics.
+     */
+    @Test
+    public void testEmptyGroup() {
+        var spec = new GroupSpecFixture().build();
+
+        var group = new IndexedGroup(spec, DESCRIBER);
+
+        assertEquals(List.of(), cohorts(group));
+        assertEquals(List.of(List.of()), membersOfCohorts(group));
+        assertEquals(List.of(List.of()), topicsOfCohorts(group));
+        assertEquals(List.of(), cohortsOfTopics(group));
+        assertEquals(List.of(), subscriberCounts(group));
+        assertEquals(List.of(), subscribedTopics(group));
+    }
+
+    /**
+     * A single member makes a single cohort with its topics.
+     */
+    @Test
+    public void testSingleMember() {
+        var spec = new GroupSpecFixture()
+            .withMember("A", orderedSet(T2, T1))
+            .build();
+
+        var group = new IndexedGroup(spec, DESCRIBER);
+
+        assertEquals(List.of(0), cohorts(group));
+        assertEquals(List.of(List.of(0)), membersOfCohorts(group));
+        assertEquals(List.of(List.of(0, 1)), topicsOfCohorts(group));
+        assertEquals(List.of(List.of(0), List.of(0)), cohortsOfTopics(group));
+        assertEquals(List.of(1, 1), subscriberCounts(group));
+        assertEquals(List.of(List.of(0, 1)), subscribedTopics(group));
+    }
+
+    /**
+     * A, B and C subscribe to T1 and T2, listing them in different orders: the group is
+     * homogeneous, and makes a single cohort with every member and topic.
+     */
+    @Test
+    public void testHomogeneousGroup() {
+        var spec = new GroupSpecFixture()
+            .withMember("C", orderedSet(T2, T1))
+            .withMember("B", orderedSet(T1, T2))
+            .withMember("A", orderedSet(T2, T1))
+            .build();
+        assertEquals(SubscriptionType.HOMOGENEOUS, spec.subscriptionType());
+
+        var group = new IndexedGroup(spec, DESCRIBER);
+
+        assertEquals(List.of(0, 0, 0), cohorts(group));
+        assertEquals(List.of(List.of(0, 1, 2)), membersOfCohorts(group));
+        assertEquals(List.of(List.of(0, 1)), topicsOfCohorts(group));
+        assertEquals(List.of(List.of(0), List.of(0)), cohortsOfTopics(group));
+        assertEquals(List.of(3, 3), subscriberCounts(group));
+        assertEquals(List.of(List.of(0, 1), List.of(0, 1), List.of(0, 1)), subscribedTopics(group));
+    }
+
+    /**
+     * A subscribes to T1 and T2, B to T2 and T3, C to T1 and T2 like A, and D to T3. Read in member
+     * order, A starts cohort 0, B cohort 1, C joins cohort 0 although it lists its topics in
+     * another order, and D starts cohort 2. T1 then has 2 subscribers (A and C), T2 has 3 (A, B
+     * and C) and T3 has 2 (B and D).
+     */
+    @Test
+    public void testHeterogeneousGroup() {
         var spec = new GroupSpecFixture()
             .withMember("D", Set.of(T3))
-            .withMember("C", ordered(T2, T1))
-            .withMember("B", ordered(T3, T2))
-            .withMember("A", ordered(T1, T2));
+            .withMember("C", orderedSet(T2, T1))
+            .withMember("B", orderedSet(T3, T2))
+            .withMember("A", orderedSet(T1, T2))
+            .build();
+        assertEquals(SubscriptionType.HETEROGENEOUS, spec.subscriptionType());
 
-        var group = new GroupModel(spec.build(), DESCRIBER);
+        var group = new IndexedGroup(spec, DESCRIBER);
 
         assertEquals(List.of(0, 1, 0, 2), cohorts(group));
         assertEquals(List.of(List.of(0, 2), List.of(1), List.of(3)), membersOfCohorts(group));
@@ -113,62 +219,15 @@ public class GroupModelTest {
     }
 
     /**
-     * The describer gives -1 partitions for a topic that does not exist, which is then dropped
-     * from the subscriptions: A, subscribing to T1 and the missing topic, and B, subscribing to T1,
-     * share cohort 0, and C, subscribing only to the missing topic, has a cohort without topics.
+     * The coordinator passes the subscriptions as {@link TopicIds}, which resolve topic names
+     * against the metadata image while being iterated and skip the unknown names, although
+     * {@code size()} counts them. The group is read from the iteration only: A, subscribing to t1,
+     * t3 and an unknown topic, and C, subscribing to t3 and t1, share cohort 0, and three members
+     * subscribing to all the topics and the unknown one make a homogeneous group with the three
+     * topics.
      */
     @Test
-    public void testTopicsThatDoNotExistAreIgnored() {
-        var spec = new GroupSpecFixture()
-            .withMember("C", Set.of(MISSING))
-            .withMember("B", Set.of(T1))
-            .withMember("A", ordered(MISSING, T1));
-
-        var group = new GroupModel(spec.build(), DESCRIBER);
-
-        assertEquals(List.of(T1), topicIds(group));
-        assertEquals(List.of(0, -1), topicIndexes(group, T1, MISSING));
-        assertEquals(List.of(2), subscriberCounts(group));
-        assertEquals(List.of(List.of(0, 1), List.of(2)), membersOfCohorts(group));
-        assertEquals(List.of(List.of(0), List.of()), topicsOfCohorts(group));
-        assertEquals(List.of(List.of(0)), cohortsOfTopics(group));
-        assertEquals(List.of(List.of(0), List.of(0), List.of()), subscribedTopics(group));
-    }
-
-    /**
-     * A, B and C subscribe to T1 and T2, listing them in different orders: the group is
-     * homogeneous, and makes a single cohort with every member and topic.
-     */
-    @Test
-    public void testHomogeneousGroup() {
-        var spec = new GroupSpecFixture()
-            .withMember("C", ordered(T2, T1))
-            .withMember("B", ordered(T1, T2))
-            .withMember("A", ordered(T2, T1))
-            .build();
-        assertEquals(SubscriptionType.HOMOGENEOUS, spec.subscriptionType());
-
-        var group = new GroupModel(spec, DESCRIBER);
-
-        assertEquals(List.of("A", "B", "C"), memberIds(group));
-        assertEquals(List.of(T1, T2), topicIds(group));
-        assertEquals(List.of(3, 3), subscriberCounts(group));
-        assertEquals(List.of(0, 0, 0), cohorts(group));
-        assertEquals(List.of(List.of(0, 1, 2)), membersOfCohorts(group));
-        assertEquals(List.of(List.of(0, 1)), topicsOfCohorts(group));
-        assertEquals(List.of(List.of(0), List.of(0)), cohortsOfTopics(group));
-        assertEquals(List.of(List.of(0, 1), List.of(0, 1), List.of(0, 1)), subscribedTopics(group));
-    }
-
-    /**
-     * The coordinator gives the subscriptions as {@link TopicIds}, resolving topic names against
-     * the metadata image when iterated; an unknown name is skipped, although it counts in their
-     * size. A subscribes to t1, t3 and an unknown topic, B to t1 and t2, and C to t1 and t3: A and
-     * C have the same topics, so they share cohort 0. Three members subscribing to all the topics
-     * and the unknown one make a homogeneous group, a single cohort with the three topics.
-     */
-    @Test
-    public void testSubscriptionsAsTopicIds() {
+    public void testSubscriptionsResolvedFromTopicNames() {
         CoordinatorMetadataImage image = new MetadataImageBuilder()
             .addTopic(T1, "t1", 2)
             .addTopic(T2, "t2", 5)
@@ -184,7 +243,7 @@ public class GroupModelTest {
             .withMember("C", new TopicIds(Set.of("t3", "t1"), resolver))
             .build();
 
-        var group = new GroupModel(spec, describer);
+        var group = new IndexedGroup(spec, describer);
 
         assertEquals(List.of(T1, T2, T3), topicIds(group));
         assertEquals(List.of(2, 5, 7), partitionCounts(group));
@@ -197,7 +256,7 @@ public class GroupModelTest {
             homogeneousSpec.withMember(id, new TopicIds(Set.of("t1", "t2", "t3", "unknown"), resolver));
         }
 
-        var homogeneous = new GroupModel(homogeneousSpec.build(), describer);
+        var homogeneous = new IndexedGroup(homogeneousSpec.build(), describer);
 
         assertEquals(List.of(T1, T2, T3), topicIds(homogeneous));
         assertEquals(List.of(List.of(0, 1, 2)), membersOfCohorts(homogeneous));
@@ -205,96 +264,49 @@ public class GroupModelTest {
         assertEquals(List.of(3, 3, 3), subscriberCounts(homogeneous));
     }
 
-    /**
-     * T2 exists but nobody subscribes to it, and the missing topic does not exist: neither has a
-     * number.
-     */
-    @Test
-    public void testTopicIndex() {
-        var spec = new GroupSpecFixture()
-            .withMember("A", Set.of(T1));
-
-        var group = new GroupModel(spec.build(), DESCRIBER);
-
-        assertEquals(List.of(0, -1, -1), topicIndexes(group, T1, T2, MISSING));
-    }
-
-    /**
-     * An empty group, homogeneous as the coordinator declares it, has no member nor topic, and
-     * its single cohort has neither.
-     */
-    @Test
-    public void testEmptyGroup() {
-        var group = new GroupModel(new GroupSpecFixture().build(), DESCRIBER);
-
-        assertEquals(List.of(), memberIds(group));
-        assertEquals(List.of(), topicIds(group));
-        assertEquals(List.of(-1), topicIndexes(group, T1));
-        assertEquals(List.of(List.of()), membersOfCohorts(group));
-        assertEquals(List.of(List.of()), topicsOfCohorts(group));
-    }
-
-    /**
-     * A single member makes a single cohort with its topics.
-     */
-    @Test
-    public void testSingleMember() {
-        var spec = new GroupSpecFixture()
-            .withMember("A", ordered(T2, T1))
-            .build();
-
-        var group = new GroupModel(spec, DESCRIBER);
-
-        assertEquals(List.of("A"), memberIds(group));
-        assertEquals(List.of(T1, T2), topicIds(group));
-        assertEquals(List.of(List.of(0)), membersOfCohorts(group));
-        assertEquals(List.of(List.of(0, 1)), topicsOfCohorts(group));
-        assertEquals(List.of(1, 1), subscriberCounts(group));
-    }
-
-    private static List<String> memberIds(GroupModel group) {
+    private static List<String> memberIds(IndexedGroup group) {
         return IntStream.range(0, group.memberCount()).mapToObj(group::memberId).toList();
     }
 
-    private static List<Uuid> topicIds(GroupModel group) {
+    private static List<Uuid> topicIds(IndexedGroup group) {
         return IntStream.range(0, group.topicCount()).mapToObj(group::topicId).toList();
     }
 
-    private static List<Integer> topicIndexes(GroupModel group, Uuid... topicIds) {
+    private static List<Integer> topicIndices(IndexedGroup group, Uuid... topicIds) {
         return Arrays.stream(topicIds).map(group::topicIndex).toList();
     }
 
-    private static List<Integer> partitionCounts(GroupModel group) {
+    private static List<Integer> partitionCounts(IndexedGroup group) {
         return IntStream.range(0, group.topicCount()).mapToObj(group::partitionCount).toList();
     }
 
     /**
      * @return The cohort of every member.
      */
-    private static List<Integer> cohorts(GroupModel group) {
+    private static List<Integer> cohorts(IndexedGroup group) {
         return IntStream.range(0, group.memberCount()).mapToObj(group::cohortOf).toList();
     }
 
-    private static List<List<Integer>> membersOfCohorts(GroupModel group) {
+    private static List<List<Integer>> membersOfCohorts(IndexedGroup group) {
         return IntStream.range(0, group.cohortCount()).mapToObj(cohort -> boxed(group.membersOf(cohort))).toList();
     }
 
-    private static List<List<Integer>> topicsOfCohorts(GroupModel group) {
+    private static List<List<Integer>> topicsOfCohorts(IndexedGroup group) {
         return IntStream.range(0, group.cohortCount()).mapToObj(cohort -> boxed(group.topicsOf(cohort))).toList();
     }
 
-    private static List<List<Integer>> cohortsOfTopics(GroupModel group) {
+    private static List<List<Integer>> cohortsOfTopics(IndexedGroup group) {
         return IntStream.range(0, group.topicCount()).mapToObj(topic -> boxed(group.cohortsOf(topic))).toList();
     }
 
-    private static List<Integer> subscriberCounts(GroupModel group) {
+    private static List<Integer> subscriberCounts(IndexedGroup group) {
         return IntStream.range(0, group.topicCount()).mapToObj(group::subscriberCount).toList();
     }
 
     /**
      * @return Per member, the topics it subscribes to.
      */
-    private static List<List<Integer>> subscribedTopics(GroupModel group) {
+    private static List<List<Integer>> subscribedTopics(IndexedGroup group) {
         return IntStream.range(0, group.memberCount())
             .mapToObj(member -> IntStream.range(0, group.topicCount()).filter(topic -> group.subscribes(member, topic)).boxed().toList())
             .toList();
@@ -304,7 +316,7 @@ public class GroupModelTest {
         return Arrays.stream(values).boxed().toList();
     }
 
-    private static Set<Uuid> ordered(Uuid... topicIds) {
+    private static Set<Uuid> orderedSet(Uuid... topicIds) {
         return new LinkedHashSet<>(List.of(topicIds));
     }
 }

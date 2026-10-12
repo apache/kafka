@@ -31,12 +31,9 @@ import java.util.Optional;
 import java.util.Set;
 
 /**
- * The group spec of a test: its members, in the order they are added, with their subscriptions
- * and current partitions. The group is homogeneous when every member has the same subscription,
- * as the coordinator declares it, and the current partitions are the target assignment.
- *
- * <p>The spec is derived as the members are added, and built once: the fixture cannot change
- * afterwards.
+ * Builds the {@link GroupSpec} for tests, preserving the order of members as they are added. The
+ * subscription type is homogeneous when every member has the same subscription, as the coordinator
+ * declares it. The spec can be built only once.
  */
 public final class GroupSpecFixture {
     private final Map<String, MemberSubscriptionAndAssignmentImpl> members = new LinkedHashMap<>();
