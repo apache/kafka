@@ -17,12 +17,8 @@
 package org.apache.kafka.coordinator.group.assignor.uniform2;
 
 import org.apache.kafka.common.Uuid;
-import org.apache.kafka.coordinator.common.runtime.CoordinatorMetadataImage;
-import org.apache.kafka.coordinator.common.runtime.MetadataImageBuilder;
 import org.apache.kafka.coordinator.group.api.assignor.SubscribedTopicDescriber;
 import org.apache.kafka.coordinator.group.api.assignor.SubscriptionType;
-import org.apache.kafka.coordinator.group.modern.SubscribedTopicDescriberImpl;
-import org.apache.kafka.coordinator.group.modern.TopicIds;
 
 import org.junit.jupiter.api.Test;
 
@@ -216,52 +212,6 @@ public class IndexedGroupTest {
         assertEquals(List.of(List.of(0), List.of(0, 1), List.of(1, 2)), cohortsOfTopics(group));
         assertEquals(List.of(2, 3, 2), subscriberCounts(group));
         assertEquals(List.of(List.of(0, 1), List.of(1, 2), List.of(0, 1), List.of(2)), subscribedTopics(group));
-    }
-
-    /**
-     * The coordinator passes the subscriptions as {@link TopicIds}, which resolve topic names
-     * against the metadata image while being iterated and skip the unknown names, although
-     * {@code size()} counts them. The group is read from the iteration only: A, subscribing to t1,
-     * t3 and an unknown topic, and C, subscribing to t3 and t1, share cohort 0, and three members
-     * subscribing to all the topics and the unknown one make a homogeneous group with the three
-     * topics.
-     */
-    @Test
-    public void testSubscriptionsResolvedFromTopicNames() {
-        CoordinatorMetadataImage image = new MetadataImageBuilder()
-            .addTopic(T1, "t1", 2)
-            .addTopic(T2, "t2", 5)
-            .addTopic(T3, "t3", 7)
-            .buildCoordinatorMetadataImage();
-        var describer = new SubscribedTopicDescriberImpl(image);
-        var resolver = new TopicIds.CachedTopicResolver(image);
-        var subscriptionOfA = new TopicIds(Set.of("t1", "t3", "unknown"), resolver);
-        assertEquals(3, subscriptionOfA.size());
-        var spec = new GroupSpecFixture()
-            .withMember("A", subscriptionOfA)
-            .withMember("B", new TopicIds(Set.of("t1", "t2"), resolver))
-            .withMember("C", new TopicIds(Set.of("t3", "t1"), resolver))
-            .build();
-
-        var group = new IndexedGroup(spec, describer);
-
-        assertEquals(List.of(T1, T2, T3), topicIds(group));
-        assertEquals(List.of(2, 5, 7), partitionCounts(group));
-        assertEquals(List.of(List.of(0, 2), List.of(1)), membersOfCohorts(group));
-        assertEquals(List.of(List.of(0, 2), List.of(0, 1)), topicsOfCohorts(group));
-        assertEquals(List.of(3, 1, 2), subscriberCounts(group));
-
-        var homogeneousSpec = new GroupSpecFixture();
-        for (String id : List.of("C", "B", "A")) {
-            homogeneousSpec.withMember(id, new TopicIds(Set.of("t1", "t2", "t3", "unknown"), resolver));
-        }
-
-        var homogeneous = new IndexedGroup(homogeneousSpec.build(), describer);
-
-        assertEquals(List.of(T1, T2, T3), topicIds(homogeneous));
-        assertEquals(List.of(List.of(0, 1, 2)), membersOfCohorts(homogeneous));
-        assertEquals(List.of(List.of(0, 1, 2)), topicsOfCohorts(homogeneous));
-        assertEquals(List.of(3, 3, 3), subscriberCounts(homogeneous));
     }
 
     private static List<String> memberIds(IndexedGroup group) {

@@ -90,6 +90,8 @@ final class IndexedGroup {
          * @param topics   Receives the indices of its subscribed topics that exist.
          */
         void readSubscribedTopics(String memberId, IntList topics) {
+            // Only the iteration is used: the subscription may be a TopicIds, whose size() also
+            // counts the names that do not resolve.
             for (Uuid topicId : groupSpec.memberSubscription(memberId).subscribedTopicIds()) {
                 var index = topicIndices.get(topicId);
                 if (index == null) {
