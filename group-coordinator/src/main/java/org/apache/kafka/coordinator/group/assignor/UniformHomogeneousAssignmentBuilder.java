@@ -17,6 +17,7 @@
 package org.apache.kafka.coordinator.group.assignor;
 
 import org.apache.kafka.common.Uuid;
+import org.apache.kafka.coordinator.group.Utils;
 import org.apache.kafka.coordinator.group.api.assignor.GroupAssignment;
 import org.apache.kafka.coordinator.group.api.assignor.GroupSpec;
 import org.apache.kafka.coordinator.group.api.assignor.MemberAssignment;
@@ -26,7 +27,6 @@ import org.apache.kafka.coordinator.group.modern.MemberAssignmentImpl;
 import org.apache.kafka.server.common.TopicIdPartition;
 
 import java.util.ArrayList;
-import java.util.HashMap;
 import java.util.HashSet;
 import java.util.List;
 import java.util.Map;
@@ -100,7 +100,7 @@ public class UniformHomogeneousAssignmentBuilder {
         this.unfilledMembers = new ArrayList<>();
         this.unassignedPartitions = new ArrayList<>();
 
-        this.targetAssignment = new HashMap<>();
+        this.targetAssignment = Utils.newHashMap(groupSpec.memberIds().size());
     }
 
     /**
