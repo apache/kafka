@@ -292,11 +292,6 @@ public class DynamicBrokerConfig {
                 RemoteLogManagerConfig.REMOTE_LOG_READER_THREADS_PROP);
     }
 
-    public static class DynamicReplicationConfig {
-        public static final Set<String> RECONFIGURABLE_CONFIGS = Set.of(
-                ReplicationConfigs.FOLLOWER_FETCH_LAST_TIERED_OFFSET_ENABLE_CONFIG);
-    }
-
     public static class DynamicClusterMirrorConfig {
         public static final Set<String> RECONFIGURABLE_CONFIGS = Set.of(
                 ClusterMirrorConfigs.MIRROR_NUM_REPLICA_FETCHERS_CONFIG,
