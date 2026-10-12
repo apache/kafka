@@ -122,30 +122,45 @@ public interface AssignmentRefiner {
         Map<String, WarmupSupport> warmupSupport,
         Map<String, StreamsGroupMember> members
     ) {
+        // The index of the warm-up tasks each process holds is only needed for a member of unknown version that holds a
+        // warm-up task in the assignment, which is rare, so it is built on first use.
+        Map<String, Map<String, Set<Integer>>> warmupsHeldByProcess = null;
+
+        final Set<String> offenders = new TreeSet<>();
+        for (final Map.Entry<String, TasksTuple> entry : assignment.entrySet()) {
+            final String memberId = entry.getKey();
+            final Map<String, Set<Integer>> warmupTasks = entry.getValue().warmupTasks();
+            final WarmupSupport support = warmupSupport.getOrDefault(memberId, WarmupSupport.UNKNOWN);
+            if (warmupTasks.isEmpty() || support == WarmupSupport.SUPPORTED) {
+                continue;
+            }
+            final StreamsGroupMember member = members.get(memberId);
+            if (support == WarmupSupport.NOT_SUPPORTED || member == null) {
+                offenders.add(memberId);
+                continue;
+            }
+            if (warmupsHeldByProcess == null) {
+                warmupsHeldByProcess = warmupTasksByProcess(members);
+            }
+            final Map<String, Set<Integer>> heldByProcess =
+                warmupsHeldByProcess.getOrDefault(member.processId(), Map.of());
+            final boolean keptFromBeforeFailover = warmupTasks.entrySet().stream().allMatch(task ->
+                heldByProcess.getOrDefault(task.getKey(), Set.of()).containsAll(task.getValue()));
+            if (!keptFromBeforeFailover) {
+                offenders.add(memberId);
+            }
+        }
+        return offenders;
+    }
+
+    private static Map<String, Map<String, Set<Integer>>> warmupTasksByProcess(Map<String, StreamsGroupMember> members) {
         final Map<String, Map<String, Set<Integer>>> warmupsHeldByProcess = new HashMap<>();
         members.values().forEach(member -> member.assignedTasks().warmupTasks().forEach((subtopologyId, partitions) ->
             warmupsHeldByProcess
                 .computeIfAbsent(member.processId(), processId -> new HashMap<>())
                 .computeIfAbsent(subtopologyId, id -> new HashSet<>())
                 .addAll(partitions)));
-
-        final Set<String> offenders = new TreeSet<>();
-        assignment.forEach((memberId, tasks) -> {
-            final WarmupSupport support = warmupSupport.getOrDefault(memberId, WarmupSupport.UNKNOWN);
-            if (tasks.warmupTasks().isEmpty() || support == WarmupSupport.SUPPORTED) {
-                return;
-            }
-            final StreamsGroupMember member = members.get(memberId);
-            final boolean keptFromBeforeFailover = support == WarmupSupport.UNKNOWN
-                && member != null
-                && tasks.warmupTasks().entrySet().stream().allMatch(entry ->
-                    warmupsHeldByProcess.getOrDefault(member.processId(), Map.of())
-                        .getOrDefault(entry.getKey(), Set.of()).containsAll(entry.getValue()));
-            if (!keptFromBeforeFailover) {
-                offenders.add(memberId);
-            }
-        });
-        return offenders;
+        return warmupsHeldByProcess;
     }
 
     private static int countActiveTasks(Map<String, TasksTuple> assignment) {
