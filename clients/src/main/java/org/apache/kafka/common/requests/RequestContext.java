@@ -17,6 +17,7 @@
 package org.apache.kafka.common.requests;
 
 import org.apache.kafka.common.errors.InvalidRequestException;
+import org.apache.kafka.common.errors.UnsupportedVersionException;
 import org.apache.kafka.common.message.ApiVersionsRequestData;
 import org.apache.kafka.common.network.ClientInformation;
 import org.apache.kafka.common.network.ListenerName;
@@ -114,6 +115,12 @@ public class RequestContext implements AuthorizableRequestContext {
             // Unsupported ApiVersion requests are treated as v0 requests and are not parsed
             ApiVersionsRequest apiVersionsRequest = new ApiVersionsRequest(new ApiVersionsRequestData(), (short) 0, header.apiVersion());
             return new RequestAndSize(apiVersionsRequest, 0);
+        } else if (!header.isApiVersionSupported()) {
+            // The request header is only partially parsed for unsupported versions (see RequestHeader#parse),
+            // so the buffer is not positioned at the start of the request body and must not be parsed.
+            throw new UnsupportedVersionException("Unsupported version " + header.apiVersion() + " for apiKey: " +
+                    header.apiKey() + ", connectionId: " + connectionId + ", listenerName: " + listenerName +
+                    ", principal: " + principal);
         } else {
             ApiKeys apiKey = header.apiKey();
             try {

@@ -17,6 +17,7 @@
 package org.apache.kafka.common.requests;
 
 import org.apache.kafka.common.errors.InvalidRequestException;
+import org.apache.kafka.common.errors.UnsupportedVersionException;
 import org.apache.kafka.common.message.ApiVersionsResponseData;
 import org.apache.kafka.common.message.ApiVersionsResponseData.ApiVersionCollection;
 import org.apache.kafka.common.message.CreateTopicsResponseData;
@@ -116,6 +117,23 @@ public class RequestContextTest {
             new ByteBufferAccessor(responseBuffer), (short) 0);
         assertEquals(Errors.UNSUPPORTED_VERSION.code(), response.data().errorCode());
         assertTrue(response.data().apiKeys().isEmpty());
+    }
+
+    @Test
+    public void testParseRequestWithUnsupportedApiVersion() throws Exception {
+        short apiVersion = (short) (ApiKeys.FETCH.latestVersion() + 1);
+        byte[] unknownBytes = new byte[24];
+        Arrays.fill(unknownBytes, (byte) 0xFF);
+        ByteBuffer requestBuffer = RequestTestUtils.serializeRequestHeaderPrefix(ApiKeys.FETCH, apiVersion,
+            5, "client", unknownBytes);
+        RequestHeader header = RequestHeader.parse(requestBuffer);
+
+        // The header is only partially parsed for unsupported versions, so the body must not be parsed.
+        RequestContext context = new RequestContext(header, "0", InetAddress.getLocalHost(), KafkaPrincipal.ANONYMOUS,
+                new ListenerName("ssl"), SecurityProtocol.SASL_SSL, ClientInformation.EMPTY, false);
+        int position = requestBuffer.position();
+        assertThrows(UnsupportedVersionException.class, () -> context.parseRequest(requestBuffer));
+        assertEquals(position, requestBuffer.position());
     }
 
     @Test
