@@ -19,6 +19,7 @@ package org.apache.kafka.security.minikdc;
 import org.apache.kafka.common.utils.Utils;
 import org.apache.kafka.common.utils.internals.Exit;
 import org.apache.kafka.common.utils.internals.Java;
+import org.apache.kafka.common.utils.internals.ThreadUtils;
 
 import org.apache.commons.text.StringSubstitutor;
 import org.apache.directory.api.ldap.model.entry.DefaultEntry;
@@ -51,6 +52,10 @@ import org.apache.directory.server.protocol.shared.transport.UdpTransport;
 import org.apache.directory.server.xdbm.Index;
 import org.apache.directory.shared.kerberos.KerberosTime;
 import org.apache.mina.core.service.IoAcceptor;
+import org.apache.mina.core.service.SimpleIoProcessorPool;
+import org.apache.mina.transport.socket.nio.NioProcessor;
+import org.apache.mina.transport.socket.nio.NioSession;
+import org.apache.mina.transport.socket.nio.NioSocketAcceptor;
 
 import java.io.BufferedReader;
 import java.io.File;
@@ -72,6 +77,9 @@ import java.util.Optional;
 import java.util.Properties;
 import java.util.Set;
 import java.util.UUID;
+import java.util.concurrent.ExecutorService;
+import java.util.concurrent.Executors;
+import java.util.concurrent.TimeUnit;
 
 /**
  * Mini KDC based on Apache Directory Server that can be embedded in tests or used from command line as a standalone
@@ -267,6 +275,7 @@ public class MiniKdc {
                 for (Transport transport: kdc.getTransports()) {
                     IoAcceptor acceptor = transport.getAcceptor();
                     if (acceptor != null) acceptor.dispose(true);
+                    if (transport instanceof MiniKdcTcpTransport tcpTransport) tcpTransport.disposeProcessors();
                 }
                 kdc.stop();
                 try {
@@ -402,7 +411,7 @@ public class MiniKdc {
         AbstractTransport absTransport;
         String transport = config.getProperty(TRANSPORT).trim();
         absTransport = switch (transport) {
-            case "TCP" -> new TcpTransport(bindAddress, port, 3, 50);
+            case "TCP" -> new MiniKdcTcpTransport(bindAddress, port, 3, 50);
             case "UDP" -> new UdpTransport(port);
             default -> throw new IllegalArgumentException("Invalid transport: " + transport);
         };
@@ -491,6 +500,42 @@ public class MiniKdc {
                     throw new RuntimeException(e);
                 }
             });
+        }
+    }
+
+    /**
+     * A {@link TcpTransport} whose MINA I/O processors run on an executor owned by MiniKdc.
+     * <p>
+     * By default, MINA runs the processors on an unnamed {@link Executors#newCachedThreadPool()}: a processor thread is
+     * named "NioProcessor-N" only while it serves sessions, and once the Kerberos sessions end it lingers idle as
+     * "pool-N-thread-M" for up to a minute, which test thread leak detection reports as leaked threads. Here the
+     * threads are consistently named and they are shut down when MiniKdc stops.
+     */
+    private static final class MiniKdcTcpTransport extends TcpTransport {
+        private final ExecutorService processorExecutor;
+        private final SimpleIoProcessorPool<NioSession> processorPool;
+
+        MiniKdcTcpTransport(String address, int port, int nbThreads, int backLog) {
+            super(address, port, nbThreads, backLog);
+            processorExecutor = Executors.newCachedThreadPool(ThreadUtils.createThreadFactory("NioProcessor-MiniKdc-%d", true));
+            processorPool = new SimpleIoProcessorPool<>(NioProcessor.class, processorExecutor, nbThreads, null);
+
+            // Replace the acceptor created by TcpTransport, which uses MINA's default processor executor
+            NioSocketAcceptor nioAcceptor = new NioSocketAcceptor(processorPool);
+            nioAcceptor.setReuseAddress(true);
+            nioAcceptor.setBacklog(backLog);
+            nioAcceptor.setDefaultLocalAddress(new InetSocketAddress(address, port));
+            acceptor.dispose();
+            acceptor = nioAcceptor;
+        }
+
+        /**
+         * The acceptor does not dispose a processor pool it did not create, so this must be called once the acceptor
+         * is disposed.
+         */
+        void disposeProcessors() {
+            processorPool.dispose();
+            ThreadUtils.shutdownExecutorServiceQuietly(processorExecutor, 30, TimeUnit.SECONDS);
         }
     }
 }
