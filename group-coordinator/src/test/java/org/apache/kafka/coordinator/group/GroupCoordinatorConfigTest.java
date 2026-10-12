@@ -39,7 +39,6 @@ import org.apache.kafka.coordinator.group.streams.MemberTaskOffsets;
 import org.apache.kafka.coordinator.group.streams.NoOpAssignmentRefiner;
 import org.apache.kafka.coordinator.group.streams.StreamsGroupMember;
 import org.apache.kafka.coordinator.group.streams.TasksTuple;
-import org.apache.kafka.coordinator.group.streams.WarmupSupport;
 import org.apache.kafka.coordinator.group.streams.assignor.StickyTaskAssignor;
 import org.apache.kafka.coordinator.group.streams.topics.ConfiguredSubtopology;
 
@@ -1306,7 +1305,7 @@ public class GroupCoordinatorConfigTest {
             Map<String, StreamsGroupMember> members,
             Map<String, TasksTuple> targetAssignment,
             Map<String, MemberTaskOffsets> taskOffsets,
-            Map<String, WarmupSupport> warmupSupport,
+            Map<String, Integer> heartbeatVersions,
             SortedMap<String, ConfiguredSubtopology> subtopologies,
             int numWarmupReplicas,
             long acceptableRecoveryLag

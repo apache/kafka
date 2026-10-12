@@ -53,7 +53,7 @@ public class AssignmentRefinerImpl implements AssignmentRefiner {
         Map<String, StreamsGroupMember> members,
         Map<String, TasksTuple> targetAssignment,
         Map<String, MemberTaskOffsets> taskOffsets,
-        Map<String, WarmupSupport> warmupSupport,
+        Map<String, Integer> heartbeatVersions,
         SortedMap<String, ConfiguredSubtopology> subtopologies,
         int numWarmupReplicas,
         long acceptableRecoveryLag

@@ -25,7 +25,6 @@ import org.apache.kafka.coordinator.group.streams.NoOpAssignmentRefiner;
 import org.apache.kafka.coordinator.group.streams.StreamsGroupMember;
 import org.apache.kafka.coordinator.group.streams.TasksTuple;
 import org.apache.kafka.coordinator.group.streams.TopologyMetadata;
-import org.apache.kafka.coordinator.group.streams.WarmupSupport;
 import org.apache.kafka.coordinator.group.streams.assignor.AssignmentConfigsImpl;
 import org.apache.kafka.coordinator.group.streams.assignor.StickyTaskAssignor;
 import org.apache.kafka.coordinator.group.streams.topics.ConfiguredSubtopology;
@@ -109,7 +108,7 @@ public class AssignmentRefinerBenchmark {
 
     private Map<String, MemberTaskOffsets> taskOffsets;
 
-    private Map<String, WarmupSupport> warmupSupport;
+    private Map<String, Integer> heartbeatVersions;
 
     private SortedMap<String, ConfiguredSubtopology> subtopologyMap;
 
@@ -149,8 +148,8 @@ public class AssignmentRefinerBenchmark {
             lagPicture,
             ACCEPTABLE_RECOVERY_LAG
         );
-        warmupSupport = new HashMap<>();
-        members.keySet().forEach(memberId -> warmupSupport.put(memberId, WarmupSupport.SUPPORTED));
+        heartbeatVersions = new HashMap<>();
+        members.keySet().forEach(memberId -> heartbeatVersions.put(memberId, 1));
     }
 
     @Benchmark
@@ -170,7 +169,7 @@ public class AssignmentRefinerBenchmark {
             members,
             targetAssignment,
             taskOffsets,
-            warmupSupport,
+            heartbeatVersions,
             subtopologyMap,
             numWarmupReplicas,
             ACCEPTABLE_RECOVERY_LAG

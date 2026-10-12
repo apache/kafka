@@ -2652,13 +2652,13 @@ public class AssignmentRefinerTest {
         final Map<String, MemberTaskOffsets> taskOffsets,
         final int numWarmupReplicas
     ) {
-        final Map<String, WarmupSupport> warmupSupport = new HashMap<>();
-        members.keySet().forEach(memberId -> warmupSupport.put(memberId, WarmupSupport.SUPPORTED));
+        final Map<String, Integer> heartbeatVersions = new HashMap<>();
+        members.keySet().forEach(memberId -> heartbeatVersions.put(memberId, 1));
         return new AssignmentRefinerImpl().refine(
             members,
             targetAssignment,
             taskOffsets,
-            warmupSupport,
+            heartbeatVersions,
             subtopologies(),
             numWarmupReplicas,
             ACCEPTABLE_RECOVERY_LAG

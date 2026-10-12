@@ -136,34 +136,30 @@ public class StreamsGroupTest {
     }
 
     @Test
-    public void testWarmupSupportFollowsTheLastHeartbeatVersionOfEachMember() {
+    public void testUpdateAndRetrieveHeartbeatVersions() {
         StreamsGroup streamsGroup = createStreamsGroup("foo");
-        streamsGroup.updateWarmupSupport("old", 0);
-        streamsGroup.updateWarmupSupport("new", 1);
+        streamsGroup.updateHeartbeatVersion("old", 0);
+        streamsGroup.updateHeartbeatVersion("new", 1);
 
-        // A member that has not heartbeated is missing, which stands for unknown.
-        assertEquals(
-            Map.of("old", WarmupSupport.NOT_SUPPORTED, "new", WarmupSupport.SUPPORTED),
-            streamsGroup.warmupSupport()
-        );
+        // A member that has not heartbeated is missing.
+        assertEquals(Map.of("old", 0, "new", 1), streamsGroup.heartbeatVersions());
         // The refiner must not be able to change what the coordinator knows.
-        assertThrows(UnsupportedOperationException.class,
-            () -> streamsGroup.warmupSupport().put("old", WarmupSupport.SUPPORTED));
+        assertThrows(UnsupportedOperationException.class, () -> streamsGroup.heartbeatVersions().put("old", 1));
 
-        // The last heartbeat counts, as a member can be restarted with another client version under the same ID.
-        streamsGroup.updateWarmupSupport("old", 1);
-        assertEquals(WarmupSupport.SUPPORTED, streamsGroup.warmupSupport().get("old"));
+        // The last heartbeat counts.
+        streamsGroup.updateHeartbeatVersion("old", 1);
+        assertEquals(1, streamsGroup.heartbeatVersions().get("old"));
     }
 
     @Test
-    public void testRemoveMemberForgetsItsWarmupSupport() {
+    public void testRemoveMemberForgetsItsHeartbeatVersion() {
         StreamsGroup streamsGroup = createStreamsGroup("foo");
         streamsGroup.updateMember(new StreamsGroupMember.Builder("member-id").build());
-        streamsGroup.updateWarmupSupport("member-id", 1);
+        streamsGroup.updateHeartbeatVersion("member-id", 1);
 
         streamsGroup.removeMember("member-id");
 
-        assertEquals(Map.of(), streamsGroup.warmupSupport());
+        assertEquals(Map.of(), streamsGroup.heartbeatVersions());
     }
 
     @Test

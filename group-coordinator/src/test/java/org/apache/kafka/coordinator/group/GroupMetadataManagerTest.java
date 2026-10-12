@@ -160,7 +160,6 @@ import org.apache.kafka.coordinator.group.streams.TaskAssignmentTestUtil;
 import org.apache.kafka.coordinator.group.streams.TaskRole;
 import org.apache.kafka.coordinator.group.streams.TasksTuple;
 import org.apache.kafka.coordinator.group.streams.TasksTupleWithEpochs;
-import org.apache.kafka.coordinator.group.streams.WarmupSupport;
 import org.apache.kafka.coordinator.group.streams.assignor.AssignmentConfigsImpl;
 import org.apache.kafka.image.MetadataDelta;
 import org.apache.kafka.image.MetadataImage;
@@ -20011,7 +20010,7 @@ public class GroupMetadataManagerTest {
     }
 
     @Test
-    public void testStreamsGroupRefinerIsToldWhichMembersMayBeWarmedUp() {
+    public void testStreamsGroupRefinerIsPassedTheHeartbeatVersionsOfTheMembers() {
         String groupId = "fooup";
         String memberA = Uuid.randomUuid().toString();
         String memberB = Uuid.randomUuid().toString();
@@ -20029,13 +20028,11 @@ public class GroupMetadataManagerTest {
         // The coordinator has not heard from memberA since it loaded the group, which is how an unknown member shows.
         context.streamsGroupHeartbeat(
             streamsGroupRefinementHeartbeat(groupId, memberB, "process-b", topic, List.of()), (short) 0);
-        assertEquals(Map.of(memberB, WarmupSupport.NOT_SUPPORTED), refiner.lastPassedWarmupSupport());
+        assertEquals(Map.of(memberB, 0), refiner.lastPassedHeartbeatVersions());
 
         context.streamsGroupHeartbeat(
             streamsGroupRefinementHeartbeat(groupId, memberA, DEFAULT_PROCESS_ID, topic, List.of(0, 1, 2)), (short) 1);
-        assertEquals(
-            Map.of(memberA, WarmupSupport.SUPPORTED, memberB, WarmupSupport.NOT_SUPPORTED),
-            refiner.lastPassedWarmupSupport());
+        assertEquals(Map.of(memberA, 1, memberB, 0), refiner.lastPassedHeartbeatVersions());
     }
 
     @Test
