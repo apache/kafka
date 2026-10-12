@@ -215,9 +215,9 @@ public class PlaintextConsumerPollTest {
                         // than session timeout and then try a commit. We should still be in the group,
                         // so the commit should succeed
                         Utils.sleep(1500);
-                        committedPosition.set(consumer.position(tp));
+                        committedPosition.set(rebalanceConsumer.position(tp));
                         var offsets = Map.of(tp, new OffsetAndMetadata(committedPosition.get()));
-                        consumer.commitSync(offsets);
+                        rebalanceConsumer.commitSync(offsets);
                         commitCompleted.set(true);
                     }
                     super.onPartitionsRevoked(partitions, rebalanceConsumer);
