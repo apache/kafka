@@ -247,8 +247,6 @@ public class AssignmentRefinerImpl implements AssignmentRefiner {
      *        All members' target assignments, as computed by the task assignor.
      * @param members
      *        All members of the group, used to resolve which process a member runs in.
-     * @param warmupSupport
-     *        Whether each member may be handed a warm-up task.
      * @param heartbeatVersions
      *        The version of the latest heartbeat of each member, which tells whether a member can be warmed up.
      * @param subtopologies
