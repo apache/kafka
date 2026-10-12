@@ -226,13 +226,14 @@ public class StreamsGroup implements Group {
     private final Map<String, MemberTaskOffsets> taskOffsets = new HashMap<>();
 
     /**
-     * The version of the latest streams group heartbeat of each member, keyed by member ID. It tells the
-     * {@link AssignmentRefiner} which members report task offsets, and thus may be given warm-up tasks. Like
+     * Whether each member may be handed a warm-up task, as far as the version of its latest streams group heartbeat
+     * tells, keyed by member ID. It lets the {@link AssignmentRefiner} avoid giving a warm-up task to a member that
+     * does not report its task offsets. A member that is missing is {@link WarmupSupport#UNKNOWN}. Like
      * {@link #taskOffsets}, it is transient: written in the heartbeat path, dropped when the member is removed and
      * not known again after a coordinator failover until the member's next heartbeat. It is deliberately not
      * persisted, so that it can never outlive the client that sent it.
      */
-    private final Map<String, Integer> heartbeatVersions = new HashMap<>();
+    private final Map<String, WarmupSupport> warmupSupport = new HashMap<>();
 
     /**
      * The intermediate assignment the members are reconciled toward, as derived by the {@link AssignmentRefiner} from
@@ -599,7 +600,7 @@ public class StreamsGroup implements Group {
         maybeUpdateGroupState();
         endpointToPartitionsCache.remove(memberId);
         taskOffsets.remove(memberId);
-        heartbeatVersions.remove(memberId);
+        warmupSupport.remove(memberId);
     }
 
     /**
@@ -613,25 +614,21 @@ public class StreamsGroup implements Group {
     }
 
     /**
-     * Records the version of the latest streams group heartbeat of a member. This is transient and not persisted.
+     * Records whether a member may be handed a warm-up task, from the version of its latest streams group heartbeat.
+     * This is transient and not persisted.
      *
      * @param memberId         The member ID.
      * @param heartbeatVersion The version of the heartbeat request.
      */
-    public void updateHeartbeatVersion(String memberId, int heartbeatVersion) {
-        heartbeatVersions.put(memberId, heartbeatVersion);
+    public void updateWarmupSupport(String memberId, int heartbeatVersion) {
+        warmupSupport.put(memberId, WarmupSupport.ofHeartbeatVersion(heartbeatVersion));
     }
 
     /**
-     * @return An immutable snapshot of whether each member of the group may be handed a warm-up task, keyed by
-     *         member ID. A member whose heartbeat version is not known is {@link WarmupSupport#UNKNOWN}.
+     * @return An immutable view of whether each member of the group may be handed a warm-up task, keyed by member ID.
+     *         A member that is missing is {@link WarmupSupport#UNKNOWN}.
      */
     public Map<String, WarmupSupport> warmupSupport() {
-        final Map<String, WarmupSupport> warmupSupport = new HashMap<>();
-        members.keySet().forEach(memberId -> {
-            final Integer version = heartbeatVersions.get(memberId);
-            warmupSupport.put(memberId, version == null ? WarmupSupport.UNKNOWN : WarmupSupport.ofHeartbeatVersion(version));
-        });
         return Collections.unmodifiableMap(warmupSupport);
     }
 

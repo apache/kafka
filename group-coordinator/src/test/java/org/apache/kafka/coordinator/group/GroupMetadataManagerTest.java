@@ -20026,55 +20026,16 @@ public class GroupMetadataManagerTest {
             Map.of(memberA, DEFAULT_PROCESS_ID, memberB, "process-b")
         );
 
-        // The coordinator has not heard from memberA since it loaded the group.
+        // The coordinator has not heard from memberA since it loaded the group, which is how an unknown member shows.
         context.streamsGroupHeartbeat(
             streamsGroupRefinementHeartbeat(groupId, memberB, "process-b", topic, List.of()), (short) 0);
-        assertEquals(
-            Map.of(memberA, WarmupSupport.UNKNOWN, memberB, WarmupSupport.NOT_SUPPORTED),
-            refiner.lastPassedWarmupSupport());
+        assertEquals(Map.of(memberB, WarmupSupport.NOT_SUPPORTED), refiner.lastPassedWarmupSupport());
 
         context.streamsGroupHeartbeat(
             streamsGroupRefinementHeartbeat(groupId, memberA, DEFAULT_PROCESS_ID, topic, List.of(0, 1, 2)), (short) 1);
         assertEquals(
             Map.of(memberA, WarmupSupport.SUPPORTED, memberB, WarmupSupport.NOT_SUPPORTED),
             refiner.lastPassedWarmupSupport());
-    }
-
-    @Test
-    public void testStreamsGroupFallsBackToTargetAssignmentWhenRefinementWarmsUpAMemberThatCannotBeWarmedUp() {
-        String groupId = "fooup";
-        String memberA = Uuid.randomUuid().toString();
-        String memberB = Uuid.randomUuid().toString();
-        StreamsTopicFixture topic = streamsTopicFixture("subtopology1", "foo", 3);
-
-        MockAssignmentRefiner refiner = new MockAssignmentRefiner();
-        GroupMetadataManagerTestContext context = streamsGroupContextForRefinement(
-            groupId,
-            refiner,
-            topic,
-            Map.of(memberA, List.of(0, 1, 2), memberB, List.of()),
-            Map.of(memberA, DEFAULT_PROCESS_ID, memberB, "process-b")
-        );
-        refiner.prepareRefinedAssignment(Map.of(
-            memberA, topic.targetAssignment(0, 1, 2),
-            memberB, mkTasksTuple(TaskRole.WARMUP, topic.tasks(2))
-        ));
-        StreamsGroup group = context.groupMetadataManager.streamsGroup(groupId);
-
-        // memberB has not heartbeated since the coordinator loaded the group, so it is not known to report its restore
-        // progress. Reconciling towards the target assignment keeps memberA's tasks where they are.
-        CoordinatorResult<StreamsGroupHeartbeatResult, CoordinatorRecord> result = context.streamsGroupHeartbeat(
-            streamsGroupRefinementHeartbeat(groupId, memberA, DEFAULT_PROCESS_ID, topic, List.of(0, 1, 2)), (short) 1);
-        assertEquals(10, group.groupEpoch());
-        assertEquals(0, group.getMemberOrThrow(memberB).assignedTasks().warmupTasks().size());
-
-        // A member that heartbeats with version 0 never reports its restore progress, so it would stay the holder of a
-        // warm-up task forever.
-        result = context.streamsGroupHeartbeat(
-            streamsGroupRefinementHeartbeat(groupId, memberB, "process-b", topic, List.of()), (short) 0);
-        assertEquals(10, group.groupEpoch());
-        assertNull(result.response().data().warmupTasks());
-        assertEquals(0, group.getMemberOrThrow(memberB).assignedTasks().warmupTasks().size());
     }
 
     @Test

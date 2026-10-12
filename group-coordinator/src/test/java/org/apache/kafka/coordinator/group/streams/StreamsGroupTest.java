@@ -136,41 +136,34 @@ public class StreamsGroupTest {
     }
 
     @Test
-    public void testWarmupSupportFollowsTheHeartbeatVersionOfEveryMember() {
+    public void testWarmupSupportFollowsTheLastHeartbeatVersionOfEachMember() {
         StreamsGroup streamsGroup = createStreamsGroup("foo");
-        streamsGroup.updateMember(new StreamsGroupMember.Builder("unheard").build());
-        streamsGroup.updateMember(new StreamsGroupMember.Builder("old").build());
-        streamsGroup.updateMember(new StreamsGroupMember.Builder("new").build());
-        streamsGroup.updateHeartbeatVersion("old", 0);
-        streamsGroup.updateHeartbeatVersion("new", 1);
+        streamsGroup.updateWarmupSupport("old", 0);
+        streamsGroup.updateWarmupSupport("new", 1);
 
+        // A member that has not heartbeated is missing, which stands for unknown.
         assertEquals(
-            Map.of(
-                "unheard", WarmupSupport.UNKNOWN,
-                "old", WarmupSupport.NOT_SUPPORTED,
-                "new", WarmupSupport.SUPPORTED),
+            Map.of("old", WarmupSupport.NOT_SUPPORTED, "new", WarmupSupport.SUPPORTED),
             streamsGroup.warmupSupport()
         );
-
-        // The refiner and the coordinator's check share one snapshot, which the refiner must not be able to change.
+        // The refiner must not be able to change what the coordinator knows.
         assertThrows(UnsupportedOperationException.class,
             () -> streamsGroup.warmupSupport().put("old", WarmupSupport.SUPPORTED));
 
         // The last heartbeat counts, as a member can be restarted with another client version under the same ID.
-        streamsGroup.updateHeartbeatVersion("old", 1);
+        streamsGroup.updateWarmupSupport("old", 1);
         assertEquals(WarmupSupport.SUPPORTED, streamsGroup.warmupSupport().get("old"));
     }
 
     @Test
-    public void testRemoveMemberForgetsItsHeartbeatVersion() {
+    public void testRemoveMemberForgetsItsWarmupSupport() {
         StreamsGroup streamsGroup = createStreamsGroup("foo");
         streamsGroup.updateMember(new StreamsGroupMember.Builder("member-id").build());
-        streamsGroup.updateHeartbeatVersion("member-id", 1);
+        streamsGroup.updateWarmupSupport("member-id", 1);
 
         streamsGroup.removeMember("member-id");
-        streamsGroup.updateMember(new StreamsGroupMember.Builder("member-id").build());
 
-        assertEquals(WarmupSupport.UNKNOWN, streamsGroup.warmupSupport().get("member-id"));
+        assertEquals(Map.of(), streamsGroup.warmupSupport());
     }
 
     @Test
