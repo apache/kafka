@@ -273,7 +273,7 @@ public class LogCompactionTester {
                 compressionType, compressionLevel,
                 dups, percentDeletes);
         System.out.println("Sleeping for " + sleepSecs + "seconds...");
-        TimeUnit.MILLISECONDS.sleep(sleepSecs * 1000L);
+        TimeUnit.SECONDS.sleep(sleepSecs);
         System.out.println("Consuming messages...");
         Path consumedDataFilePath = consumeMessages(brokerUrl, topics);
 
