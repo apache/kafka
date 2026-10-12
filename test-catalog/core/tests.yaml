@@ -1372,6 +1372,8 @@ kafka.server.DynamicBrokerConfigTest:
 - testConfigUpdateWithSomeInvalidConfigs
 - testConnectionQuota
 - testConnectionRateQuota
+- testDynamicClusterMirrorConfigReconfigurableConfigs
+- testDynamicClusterMirrorConfigValidation
 - testDynamicGroupCoordinatorConfig
 - testDynamicListenerConfig
 - testDynamicLogConfigCordonedLogDirs
@@ -1439,6 +1441,8 @@ kafka.server.DynamicConfigChangeTest:
 - testUserClientIdQuotaChange
 - testUserQuotaConfigChange
 kafka.server.DynamicConfigChangeUnitTest:
+- shouldParseMirrorReplicationQuotaProperties
+- shouldParseMirrorReplicationQuotaWildcard
 - shouldParseRegardlessOfWhitespaceAroundValues
 - shouldParseReplicationQuotaProperties
 - shouldParseReplicationQuotaReset
@@ -1843,6 +1847,8 @@ kafka.server.KafkaConfigTest:
 - testLowercaseControllerListenerNames
 - testMaxConnectionsPerIpProp
 - testMetadataMaxSnapshotInterval
+- testMirrorAdminListenerNameDefaultsToInterBrokerListenerName
+- testMirrorAdminListenerNameExplicitlySet
 - testMultipleControllerListenerNamesMapToPlaintextByDefaultForKRaft
 - testNodeIdIsInferredByBrokerIdWithKraft
 - testNodeIdMustNotBeDifferentThanBrokerId
@@ -1853,6 +1859,8 @@ kafka.server.KafkaConfigTest:
 - testRejectsNegativeBrokerId
 - testRejectsNegativeNodeId
 - testSaslJwksEndpointRetryDefaults
+- testSaslMechanismMirrorAdminProtocolDefaultsToInterBrokerProtocol
+- testSaslMechanismMirrorAdminProtocolExplicitlySet
 - testSeparateControllerListenerDefinedForKRaftBrokerController
 - testShareGroupHeartbeatIntervalValidation
 - testShareGroupRecordLockDurationValidation
