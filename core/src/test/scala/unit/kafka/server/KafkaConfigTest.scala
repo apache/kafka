@@ -1321,6 +1321,8 @@ class KafkaConfigTest {
         // topic only config
         case QuotaConfig.MIRROR_REPLICATION_THROTTLED_REPLICAS_CONFIG =>
         // topic only config
+        case TopicConfig.MIRROR_UNCLEAN_LEADER_ELECTION_ENABLE_CONFIG =>
+        // topic only config
         case "internal.segment.bytes" =>
         // topic internal config
         case prop =>
