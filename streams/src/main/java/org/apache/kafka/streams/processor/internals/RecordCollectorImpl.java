@@ -601,13 +601,17 @@ public class RecordCollectorImpl implements RecordCollector {
     @Override
     public void closeDirty() {
         log.info("Closing record collector dirty");
-
-        if (streamsProducer.eosEnabled()) {
-            // We may be closing dirty because the commit failed, so we must abort the transaction to be safe
-            streamsProducer.abortTransaction();
+        try {
+            if (streamsProducer.eosEnabled()) {
+                // We may be closing dirty because the commit failed, so we must abort the transaction to be safe
+                streamsProducer.abortTransaction();
+            }
+        } catch (final Throwable e) {
+            log.error("Error while aborting transaction during closeDirty", e);
+            throw e;
+        } finally {
+            close();
         }
-
-        close();
     }
 
     private void close() {
