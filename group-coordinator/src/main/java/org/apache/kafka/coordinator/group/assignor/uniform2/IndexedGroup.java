@@ -291,7 +291,7 @@ final class IndexedGroup {
         cohortOfMember = new int[memberIds.length];
 
         var reader = new SubscriptionReader(groupSpec, subscribedTopicDescriber);
-        List<int[]> cohortSubscriptions = groupSpec.subscriptionType() == SubscriptionType.HOMOGENEOUS || memberIds.length <= 1
+        var cohortSubscriptions = groupSpec.subscriptionType() == SubscriptionType.HOMOGENEOUS || memberIds.length <= 1
             ? readHomogeneousCohorts(reader)
             : readHeterogeneousCohorts(reader);
 
