@@ -27,7 +27,6 @@ import org.apache.kafka.common.test.api.ClusterTestDefaults;
 import org.apache.kafka.common.test.api.Type;
 import org.apache.kafka.test.TestUtils;
 
-import org.junit.jupiter.api.AfterEach;
 import org.junit.jupiter.api.Timeout;
 
 import java.time.Duration;
@@ -63,8 +62,6 @@ import static org.junit.jupiter.api.Assertions.assertTrue;
 )
 public class PlaintextConsumerAssignorsTest {
     private final ClusterInstance cluster;
-    private final List<Consumer<byte[], byte[]>> consumers = new ArrayList<>();
-    private final List<ConsumerAssignmentPoller> pollers = new ArrayList<>();
 
     public PlaintextConsumerAssignorsTest(ClusterInstance cluster) {
         this.cluster = cluster;
@@ -104,83 +101,97 @@ public class PlaintextConsumerAssignorsTest {
         ));
     }
 
-    private void testSubscriptionChanges(Map<String, Object> configs) throws Exception {
-        var consumer = createConsumer(configs);
-        var expected = createTopicAndSendRecords("topic1", 2);
-        expected.addAll(createTopicAndSendRecords("topic2", 2));
-        assertTrue(consumer.assignment().isEmpty());
-        consumer.subscribe(List.of("topic1", "topic2"));
-        ClientsTestUtils.awaitAssignment(consumer, expected);
+    private void testSubscriptionChanges(Map<String, String> configs) throws Exception {
+        try (var consumer = createConsumer(configs)) {
+            var expected = createTopicAndSendRecords("topic1", 2);
+            expected.addAll(createTopicAndSendRecords("topic2", 2));
+            assertTrue(consumer.assignment().isEmpty());
+            consumer.subscribe(List.of("topic1", "topic2"));
+            ClientsTestUtils.awaitAssignment(consumer, expected);
 
-        var expanded = new HashSet<>(expected);
-        expanded.addAll(createTopicAndSendRecords("topic3", 2));
-        consumer.subscribe(List.of("topic1", "topic2", "topic3"));
-        ClientsTestUtils.awaitAssignment(consumer, expanded);
-        consumer.subscribe(List.of("topic1", "topic2"));
-        ClientsTestUtils.awaitAssignment(consumer, expected);
-        consumer.unsubscribe();
-        assertTrue(consumer.assignment().isEmpty());
+            var expanded = new HashSet<>(expected);
+            expanded.addAll(createTopicAndSendRecords("topic3", 2));
+            consumer.subscribe(List.of("topic1", "topic2", "topic3"));
+            ClientsTestUtils.awaitAssignment(consumer, expanded);
+            consumer.subscribe(List.of("topic1", "topic2"));
+            ClientsTestUtils.awaitAssignment(consumer, expected);
+            consumer.unsubscribe();
+            assertTrue(consumer.assignment().isEmpty());
+        }
     }
 
     @ClusterTest
     public void testRemoteAssignorInvalid() throws Exception {
-        var consumer = createConsumer(Map.of(
+        try (var consumer = createConsumer(Map.of(
             ConsumerConfig.GROUP_PROTOCOL_CONFIG, GroupProtocol.CONSUMER.name,
             ConsumerConfig.GROUP_ID_CONFIG, "invalid-assignor-group",
             ConsumerConfig.GROUP_REMOTE_ASSIGNOR_CONFIG, "invalid"
-        ));
-        createTopicAndSendRecords("topic1", 2);
-        assertTrue(consumer.assignment().isEmpty());
-        consumer.subscribe(List.of("topic1"));
-        var failure = new AtomicReference<UnsupportedAssignorException>();
-        // Assert inside the retry loop so the polling exception is not swallowed by the wait helper.
-        TestUtils.waitForCondition(() -> {
-            failure.set(assertThrows(UnsupportedAssignorException.class,
-                () -> consumer.poll(Duration.ofMillis(100))));
-            return true;
-        }, "Consumer did not reject the invalid remote assignor");
-        assertTrue(failure.get().getMessage().startsWith(
-            "ServerAssignor invalid is not supported. Supported assignors: "));
+        ))) {
+            createTopicAndSendRecords("topic1", 2);
+            assertTrue(consumer.assignment().isEmpty());
+            consumer.subscribe(List.of("topic1"));
+            var failure = new AtomicReference<UnsupportedAssignorException>();
+            // Assert inside the retry loop so the polling exception is not swallowed by the wait helper.
+            TestUtils.waitForCondition(() -> {
+                failure.set(assertThrows(UnsupportedAssignorException.class,
+                    () -> consumer.poll(Duration.ofMillis(100))));
+                return true;
+            }, "Consumer did not reject the invalid remote assignor");
+            assertTrue(failure.get().getMessage().startsWith(
+                "ServerAssignor invalid is not supported. Supported assignors: "));
+        }
     }
 
     @ClusterTest
     public void testMultiConsumerRoundRobinAssignor() throws Exception {
-        var configs = Map.<String, Object>of(
-            ConsumerConfig.GROUP_ID_CONFIG, "roundrobin-group",
-            ConsumerConfig.PARTITION_ASSIGNMENT_STRATEGY_CONFIG, RoundRobinAssignor.class.getName()
-        );
-        var partitions = createTopicAndSendRecords("topic1", 5);
-        partitions.addAll(createTopicAndSendRecords("topic2", 8));
-        var topics = List.of("topic1", "topic2");
-        addConsumers(10, topics, configs);
-        awaitGroupAssignment(partitions);
-        addConsumers(1, topics, configs);
-        awaitGroupAssignment(partitions);
+        var consumers = new ArrayList<Consumer<byte[], byte[]>>();
+        var pollers = new ArrayList<ConsumerAssignmentPoller>();
+        try {
+            var configs = Map.of(
+                ConsumerConfig.GROUP_ID_CONFIG, "roundrobin-group",
+                ConsumerConfig.PARTITION_ASSIGNMENT_STRATEGY_CONFIG, RoundRobinAssignor.class.getName()
+            );
+            var partitions = createTopicAndSendRecords("topic1", 5);
+            partitions.addAll(createTopicAndSendRecords("topic2", 8));
+            var topics = List.of("topic1", "topic2");
+            addConsumers(consumers, pollers, 10, topics, configs);
+            awaitGroupAssignment(pollers, partitions);
+            addConsumers(consumers, pollers, 1, topics, configs);
+            awaitGroupAssignment(pollers, partitions);
+        } finally {
+            closeConsumers(consumers, pollers);
+        }
     }
 
     @ClusterTest
     public void testMultiConsumerStickyAssignor() throws Exception {
-        var configs = Map.<String, Object>of(
-            ConsumerConfig.GROUP_ID_CONFIG, "sticky-group",
-            ConsumerConfig.PARTITION_ASSIGNMENT_STRATEGY_CONFIG, StickyAssignor.class.getName()
-        );
-        // Adding the tenth consumer should move exactly one tenth of the partitions.
-        int partitionsPerConsumer = ThreadLocalRandom.current().nextInt(1, 11);
-        var partitions = createTopicAndSendRecords("single-topic", partitionsPerConsumer * 10);
-        var topics = List.of("single-topic");
-        addConsumers(9, topics, configs);
-        awaitGroupAssignment(partitions);
-        var previousOwners = partitionOwners();
-        addConsumers(1, topics, configs);
-        awaitGroupAssignment(partitions);
-        var newOwners = partitionOwners();
-        long changes = partitions.stream()
-            .filter(partition -> previousOwners.get(partition) != newOwners.get(partition)).count();
-        assertEquals(partitionsPerConsumer, changes,
-            "Only the partitions needed by the tenth consumer should change owners");
+        var consumers = new ArrayList<Consumer<byte[], byte[]>>();
+        var pollers = new ArrayList<ConsumerAssignmentPoller>();
+        try {
+            var configs = Map.of(
+                ConsumerConfig.GROUP_ID_CONFIG, "sticky-group",
+                ConsumerConfig.PARTITION_ASSIGNMENT_STRATEGY_CONFIG, StickyAssignor.class.getName()
+            );
+            // Adding the tenth consumer should move exactly one tenth of the partitions.
+            int partitionsPerConsumer = ThreadLocalRandom.current().nextInt(1, 11);
+            var partitions = createTopicAndSendRecords("single-topic", partitionsPerConsumer * 10);
+            var topics = List.of("single-topic");
+            addConsumers(consumers, pollers, 9, topics, configs);
+            awaitGroupAssignment(pollers, partitions);
+            var previousOwners = partitionOwners(pollers);
+            addConsumers(consumers, pollers, 1, topics, configs);
+            awaitGroupAssignment(pollers, partitions);
+            var newOwners = partitionOwners(pollers);
+            long changes = partitions.stream()
+                .filter(partition -> previousOwners.get(partition) != newOwners.get(partition)).count();
+            assertEquals(partitionsPerConsumer, changes,
+                "Only the partitions needed by the tenth consumer should change owners");
+        } finally {
+            closeConsumers(consumers, pollers);
+        }
     }
 
-    private Map<TopicPartition, ConsumerAssignmentPoller> partitionOwners() {
+    private Map<TopicPartition, ConsumerAssignmentPoller> partitionOwners(List<ConsumerAssignmentPoller> pollers) {
         var owners = new HashMap<TopicPartition, ConsumerAssignmentPoller>();
         pollers.forEach(poller -> poller.consumerAssignment().forEach(partition -> owners.put(partition, poller)));
         return owners;
@@ -188,31 +199,43 @@ public class PlaintextConsumerAssignorsTest {
 
     @ClusterTest
     public void testMultiConsumerDefaultAssignorAndVerifyAssignment() throws Exception {
-        cluster.createTopic("topic1", 3, (short) 3);
-        cluster.createTopic("topic2", 3, (short) 3);
-        var first = Set.of(new TopicPartition("topic1", 0), new TopicPartition("topic1", 1),
-            new TopicPartition("topic2", 0), new TopicPartition("topic2", 1));
-        var second = Set.of(new TopicPartition("topic1", 2), new TopicPartition("topic2", 2));
-        var partitions = new HashSet<>(first);
-        partitions.addAll(second);
-        // Leave the assignment strategy unset to exercise the default Range assignor.
-        addConsumers(2, List.of("topic1", "topic2"), Map.of());
-        awaitGroupAssignment(partitions, List.of(first, second));
+        var consumers = new ArrayList<Consumer<byte[], byte[]>>();
+        var pollers = new ArrayList<ConsumerAssignmentPoller>();
+        try {
+            cluster.createTopic("topic1", 3, (short) 3);
+            cluster.createTopic("topic2", 3, (short) 3);
+            var first = Set.of(new TopicPartition("topic1", 0), new TopicPartition("topic1", 1),
+                new TopicPartition("topic2", 0), new TopicPartition("topic2", 1));
+            var second = Set.of(new TopicPartition("topic1", 2), new TopicPartition("topic2", 2));
+            var partitions = new HashSet<>(first);
+            partitions.addAll(second);
+            // Leave the assignment strategy unset to exercise the default Range assignor.
+            addConsumers(consumers, pollers, 2, List.of("topic1", "topic2"), Map.of());
+            awaitGroupAssignment(pollers, partitions, List.of(first, second));
+        } finally {
+            closeConsumers(consumers, pollers);
+        }
     }
 
     @ClusterTest
     public void testMultiConsumerDefaultAssignor() throws Exception {
-        var partitions = createTopicAndSendRecords("topic", 2);
-        partitions.addAll(createTopicAndSendRecords("topic1", 5));
-        var topics = List.of("topic", "topic1");
-        addConsumers(2, topics, Map.of());
-        awaitGroupAssignment(partitions);
-        addConsumers(2, topics, Map.of());
-        awaitGroupAssignment(partitions);
-        var expanded = new HashSet<>(partitions);
-        expanded.addAll(createTopicAndSendRecords("topic2", 3));
-        changeSubscriptions(List.of("topic", "topic1", "topic2"), expanded);
-        changeSubscriptions(topics, partitions);
+        var consumers = new ArrayList<Consumer<byte[], byte[]>>();
+        var pollers = new ArrayList<ConsumerAssignmentPoller>();
+        try {
+            var partitions = createTopicAndSendRecords("topic", 2);
+            partitions.addAll(createTopicAndSendRecords("topic1", 5));
+            var topics = List.of("topic", "topic1");
+            addConsumers(consumers, pollers, 2, topics, Map.of());
+            awaitGroupAssignment(pollers, partitions);
+            addConsumers(consumers, pollers, 2, topics, Map.of());
+            awaitGroupAssignment(pollers, partitions);
+            var expanded = new HashSet<>(partitions);
+            expanded.addAll(createTopicAndSendRecords("topic2", 3));
+            changeSubscriptions(pollers, List.of("topic", "topic1", "topic2"), expanded);
+            changeSubscriptions(pollers, topics, partitions);
+        } finally {
+            closeConsumers(consumers, pollers);
+        }
     }
 
     @ClusterTest
@@ -226,41 +249,47 @@ public class PlaintextConsumerAssignorsTest {
     }
 
     private void testRebalanceAndRejoin(String strategy, int expectedGenerations) throws Exception {
-        var configs = Map.<String, Object>of(
+        var configs = Map.of(
             ConsumerConfig.GROUP_ID_CONFIG, "rebalance-and-rejoin-group",
             ConsumerConfig.PARTITION_ASSIGNMENT_STRATEGY_CONFIG, strategy,
             ConsumerConfig.ENABLE_AUTO_COMMIT_CONFIG, "true"
         );
-        var consumer1 = createConsumer(configs);
-        var consumer2 = createConsumer(configs);
-        var partitions = createTopicAndSendRecords("topic1", 2);
-        assertTrue(consumer1.assignment().isEmpty());
-        assertTrue(consumer2.assignment().isEmpty());
-        var metadata = new AtomicReference<ConsumerGroupMetadata>();
-        var listener = new ConsumerRebalanceListener() {
-            @Override
-            public void onPartitionsRevoked(Collection<TopicPartition> revoked) {
-            }
+        var pollers = new ArrayList<ConsumerAssignmentPoller>();
+        try (var consumer1 = createConsumer(configs);
+             var consumer2 = createConsumer(configs)) {
+            try {
+                var partitions = createTopicAndSendRecords("topic1", 2);
+                assertTrue(consumer1.assignment().isEmpty());
+                assertTrue(consumer2.assignment().isEmpty());
+                var metadata = new AtomicReference<ConsumerGroupMetadata>();
+                var listener = new ConsumerRebalanceListener() {
+                    @Override
+                    public void onPartitionsRevoked(Collection<TopicPartition> revoked) {
+                    }
 
-            @Override
-            public void onPartitionsAssigned(Collection<TopicPartition> assigned) {
-                metadata.set(consumer1.groupMetadata());
+                    @Override
+                    public void onPartitionsAssigned(Collection<TopicPartition> assigned) {
+                        metadata.set(consumer1.groupMetadata());
+                    }
+                };
+                var poller1 = startPolling(pollers, consumer1, List.of("topic1"), listener);
+                TestUtils.waitForCondition(() -> poller1.consumerAssignment().equals(partitions) && metadata.get() != null,
+                    "First consumer did not complete its initial assignment");
+                var stableMetadata = metadata.get();
+                var poller2 = startPolling(pollers, consumer2, List.of("topic1"), null);
+                TestUtils.waitForCondition(() -> poller1.consumerAssignment().size() == 1
+                        && poller2.consumerAssignment().size() == 1
+                        && metadata.get().generationId() >= stableMetadata.generationId() + expectedGenerations,
+                    "Consumers did not complete the expected rebalance");
+                assertEquals(stableMetadata.generationId() + expectedGenerations, metadata.get().generationId());
+                assertEquals(stableMetadata.memberId(), metadata.get().memberId());
+            } finally {
+                assertAll(pollers.stream().map(poller -> poller::shutdown));
             }
-        };
-        var poller1 = startPolling(consumer1, List.of("topic1"), listener);
-        TestUtils.waitForCondition(() -> poller1.consumerAssignment().equals(partitions) && metadata.get() != null,
-            "First consumer did not complete its initial assignment");
-        var stableMetadata = metadata.get();
-        var poller2 = startPolling(consumer2, List.of("topic1"), null);
-        TestUtils.waitForCondition(() -> poller1.consumerAssignment().size() == 1
-                && poller2.consumerAssignment().size() == 1
-                && metadata.get().generationId() >= stableMetadata.generationId() + expectedGenerations,
-            "Consumers did not complete the expected rebalance");
-        assertEquals(stableMetadata.generationId() + expectedGenerations, metadata.get().generationId());
-        assertEquals(stableMetadata.memberId(), metadata.get().memberId());
+        }
     }
 
-    private Consumer<byte[], byte[]> createConsumer(Map<String, Object> overrides) {
+    private Consumer<byte[], byte[]> createConsumer(Map<String, String> overrides) {
         var configs = new HashMap<String, Object>();
         configs.put(ConsumerConfig.GROUP_ID_CONFIG, "my-test");
         configs.put(ConsumerConfig.GROUP_PROTOCOL_CONFIG, GroupProtocol.CLASSIC.name);
@@ -268,9 +297,7 @@ public class PlaintextConsumerAssignorsTest {
         configs.put(ConsumerConfig.METADATA_MAX_AGE_CONFIG, "100");
         configs.put(ConsumerConfig.MAX_POLL_INTERVAL_MS_CONFIG, "6000");
         configs.putAll(overrides);
-        Consumer<byte[], byte[]> consumer = cluster.consumer(configs);
-        consumers.add(consumer);
-        return consumer;
+        return cluster.consumer(configs);
     }
 
     private Set<TopicPartition> createTopicAndSendRecords(String topic, int partitionCount) throws Exception {
@@ -286,13 +313,17 @@ public class PlaintextConsumerAssignorsTest {
         return partitions;
     }
 
-    private void addConsumers(int count, List<String> topics, Map<String, Object> configs) {
+    private void addConsumers(List<Consumer<byte[], byte[]>> consumers, List<ConsumerAssignmentPoller> pollers,
+                              int count, List<String> topics, Map<String, String> configs) {
         for (int i = 0; i < count; i++) {
-            startPolling(createConsumer(configs), topics, null);
+            var consumer = createConsumer(configs);
+            consumers.add(consumer);
+            startPolling(pollers, consumer, topics, null);
         }
     }
 
-    private ConsumerAssignmentPoller startPolling(Consumer<byte[], byte[]> consumer, List<String> topics,
+    private ConsumerAssignmentPoller startPolling(List<ConsumerAssignmentPoller> pollers,
+                                                  Consumer<byte[], byte[]> consumer, List<String> topics,
                                                   ConsumerRebalanceListener listener) {
         var poller = new ConsumerAssignmentPoller(consumer, topics, Set.of(), listener);
         pollers.add(poller);
@@ -300,18 +331,18 @@ public class PlaintextConsumerAssignorsTest {
         return poller;
     }
 
-    private void changeSubscriptions(List<String> topics, Set<TopicPartition> partitions) throws InterruptedException {
+    private void changeSubscriptions(List<ConsumerAssignmentPoller> pollers, List<String> topics, Set<TopicPartition> partitions) throws InterruptedException {
         pollers.forEach(poller -> poller.subscribe(topics));
         TestUtils.waitForCondition(() -> pollers.stream().allMatch(ConsumerAssignmentPoller::isSubscribeRequestProcessed),
             "Not all consumers processed the subscription change");
-        awaitGroupAssignment(partitions);
+        awaitGroupAssignment(pollers, partitions);
     }
 
-    private void awaitGroupAssignment(Set<TopicPartition> partitions) throws InterruptedException {
-        awaitGroupAssignment(partitions, List.of());
+    private void awaitGroupAssignment(List<ConsumerAssignmentPoller> pollers, Set<TopicPartition> partitions) throws InterruptedException {
+        awaitGroupAssignment(pollers, partitions, List.of());
     }
 
-    private void awaitGroupAssignment(Set<TopicPartition> partitions,
+    private void awaitGroupAssignment(List<ConsumerAssignmentPoller> pollers, Set<TopicPartition> partitions,
                                       List<Set<TopicPartition>> expectedAssignments) throws InterruptedException {
         TestUtils.waitForCondition(() -> {
             var assignments = new ArrayList<Set<TopicPartition>>();
@@ -325,8 +356,7 @@ public class PlaintextConsumerAssignorsTest {
         }, "Consumers did not reach the expected assignment for " + partitions);
     }
 
-    @AfterEach
-    public void tearDown() {
+    private void closeConsumers(List<Consumer<byte[], byte[]>> consumers, List<ConsumerAssignmentPoller> pollers) {
         try {
             assertAll(pollers.stream().map(poller -> poller::shutdown));
         } finally {
