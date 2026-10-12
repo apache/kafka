@@ -1244,7 +1244,42 @@ public class ReplicationControlManagerTest {
         TopicIdPartition topicIdPartition = new TopicIdPartition(createTopicResult.topicId(), 0);
         assertEquals(OptionalInt.of(0), ctx.currentLeader(topicIdPartition));
         ctx.alterTopicConfig("foo", TopicConfig.MIN_IN_SYNC_REPLICAS_CONFIG, "5");
-        assertEquals(3, replicationControl.getTopicEffectiveMinIsr("foo"));
+        assertEquals(3, replicationControl.getEffectiveMinIsr("foo",
+            replicationControl.getPartition(topicIdPartition.topicId(), topicIdPartition.partitionId())));
+    }
+
+    @Test
+    public void testEligibleLeaderReplicas_EffectiveMinIsrUsesTargetPartitionReplicas() {
+        ReplicationControlTestContext ctx = new ReplicationControlTestContext.Builder().setIsElrEnabled(true).build();
+        ReplicationControlManager replicationControl = ctx.replicationControl;
+        ctx.registerBrokers(0, 1, 2);
+        ctx.unfenceBrokers(0, 1, 2);
+        Uuid fooId = ctx.createTestTopic("foo",
+            new int[][] {new int[] {0, 1, 2}, new int[] {0, 1, 2}}).topicId();
+        // Decrease the replication factor of partition 0 only.
+        ctx.replay(List.of(new ApiMessageAndVersion(new PartitionChangeRecord().
+            setTopicId(fooId).
+            setPartitionId(0).
+            setReplicas(List.of(0)).
+            setIsr(List.of(0)).
+            setDirectories(List.of(DirectoryId.UNASSIGNED)),
+            (short) 0)));
+        ctx.alterTopicConfig("foo", TopicConfig.MIN_IN_SYNC_REPLICAS_CONFIG, "2");
+        assertEquals(1, replicationControl.getEffectiveMinIsr("foo", replicationControl.getPartition(fooId, 0)));
+        assertEquals(2, replicationControl.getEffectiveMinIsr("foo", replicationControl.getPartition(fooId, 1)));
+
+        // Shrink the ISR of partition 1 to {0}. It is below the min ISR of partition 1,
+        // so the removed replicas should be kept in the ELR.
+        TopicIdPartition topicIdPartition = new TopicIdPartition(fooId, 1);
+        PartitionData shrinkIsrRequest = newAlterPartition(
+            replicationControl, topicIdPartition, isrWithDefaultEpoch(0), LeaderRecoveryState.RECOVERED);
+        ControllerResult<AlterPartitionResponseData> shrinkIsrResult = sendAlterPartition(
+            replicationControl, 0, ctx.currentBrokerEpoch(0), fooId, shrinkIsrRequest);
+        assertAlterPartitionResponse(shrinkIsrResult, topicIdPartition, NONE);
+
+        PartitionRegistration partition = replicationControl.getPartition(fooId, 1);
+        assertArrayEquals(new int[]{0}, partition.isr, partition.toString());
+        assertArrayEquals(new int[]{1, 2}, partition.elr, partition.toString());
     }
 
     @Test
@@ -1435,7 +1470,7 @@ public class ReplicationControlManagerTest {
         PartitionRegistration partitionControl =
             replicationControl.getPartition(topicIdPartition.topicId(), topicIdPartition.partitionId());
         return new AlterPartitionRequestData.PartitionData()
-            .setPartitionIndex(0)
+            .setPartitionIndex(topicIdPartition.partitionId())
             .setLeaderEpoch(partitionControl.leaderEpoch)
             .setPartitionEpoch(partitionControl.partitionEpoch)
             .setNewIsrWithEpochs(newIsrWithEpoch)
