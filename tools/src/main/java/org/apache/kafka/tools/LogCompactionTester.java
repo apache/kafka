@@ -148,9 +148,9 @@ public class LogCompactionTester {
                     .defaultsTo(0);
 
             sleepSecsOpt = parser
-                    .accepts("sleep", "Time in milliseconds to sleep between production and consumption.")
+                    .accepts("sleep", "Time in seconds to sleep between production and consumption.")
                     .withRequiredArg()
-                    .describedAs("ms")
+                    .describedAs("seconds")
                     .ofType(Integer.class)
                     .defaultsTo(0);
 
