@@ -130,14 +130,10 @@ public class AddPartitionsTest {
         @ClusterTest(brokers = 3, controllers = 3, metadataVersion = MetadataVersion.IBP_3_7_IV2)
     })
     public void testCreatePartitionsAcrossMetadataVersions(ClusterInstance cluster) throws Exception {
-        try (Admin admin = cluster.admin()) {
-            Map<String, KafkaFuture<Void>> createResults = admin.createTopics(List.of(
-                new NewTopic("foo", 1, (short) 3),
-                new NewTopic("bar", 2, (short) 3)
-            )).values();
-            createResults.get("foo").get();
-            createResults.get("bar").get();
+        cluster.createTopic("foo", 1, (short) 3);
+        cluster.createTopic("bar", 2, (short) 3);
 
+        try (Admin admin = cluster.admin()) {
             Map<String, KafkaFuture<Void>> increaseResults = admin.createPartitions(Map.of(
                 "foo", NewPartitions.increaseTo(3),
                 "bar", NewPartitions.increaseTo(2)
@@ -246,11 +242,8 @@ public class AddPartitionsTest {
         try (Admin admin = cluster.admin()) {
             String topic1 = "create-partitions-topic-1";
             String topic2 = "create-partitions-topic-2";
-            admin.createTopics(List.of(
-                    new NewTopic(topic1, 1, (short) 1),
-                    new NewTopic(topic2, 1, (short) 2))).all().get();
-            cluster.waitTopicCreation(topic1, 1);
-            cluster.waitTopicCreation(topic2, 1);
+            cluster.createTopic(topic1, 1, (short) 1);
+            cluster.createTopic(topic2, 1, (short) 2);
             assertEquals(1, numPartitions(admin, topic1));
             assertEquals(1, numPartitions(admin, topic2));
 

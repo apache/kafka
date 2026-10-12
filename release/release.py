@@ -377,8 +377,6 @@ for filename in os.listdir(artifacts_dir):
     # argument for the file is included in the output and verification uses a simple diff that will break if an absolute path
     # is used.
     dir, fname = os.path.split(full_path)
-    cmd(f"Generating MD5    for {full_path}", f"gpg --print-md md5    {fname} > {fname}.md5   ", shell=True, cwd=dir)
-    cmd(f"Generating SHA1   for {full_path}", f"gpg --print-md sha1   {fname} > {fname}.sha1  ", shell=True, cwd=dir)
     cmd(f"Generating SHA512 for {full_path}", f"gpg --print-md sha512 {fname} > {fname}.sha512", shell=True, cwd=dir)
 
 cmd("Listing artifacts to be uploaded:", f"ls -R {artifacts_dir}")

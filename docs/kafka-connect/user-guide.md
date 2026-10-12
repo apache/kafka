@@ -57,7 +57,7 @@ The parameters that are configured here are intended for producers and consumers
 
 Client configuration overrides can be configured individually per connector by using the prefixes `producer.override.` and `consumer.override.` for Kafka sources or Kafka sinks respectively. These overrides are included with the rest of the connector's configuration properties.
 
-The remaining parameters are connector configuration files. Each file may either be a Java Properties file or a JSON file containing an object with the same structure as the request body of either the `POST /connectors` endpoint or the `PUT /connectors/{name}/config` endpoint (see the [OpenAPI documentation](/43/generated/connect_rest.yaml)). You may include as many as you want, but all will execute within the same process (on different threads). You can also choose not to specify any connector configuration files on the command line, and instead use the REST API to create connectors at runtime after your standalone worker starts.
+The remaining parameters are connector configuration files. Each file may either be a Java Properties file or a JSON file containing an object with the same structure as the request body of either the `POST /connectors` endpoint or the `PUT /connectors/{name}/config` endpoint (see the [OpenAPI documentation](/{version}/generated/connect_rest.yaml)). You may include as many as you want, but all will execute within the same process (on different threads). You can also choose not to specify any connector configuration files on the command line, and instead use the REST API to create connectors at runtime after your standalone worker starts.
 
 Distributed mode handles automatic balancing of work, allows you to scale up (or down) dynamically, and offers fault tolerance both in the active tasks and for configuration and offset commit data. Execution is very similar to standalone mode:
 
@@ -293,7 +293,7 @@ The REST API is used not only by users to monitor / manage Kafka Connect. In dis
 The following are the currently supported REST API endpoints:
 
   * `GET /connectors` \- return a list of active connectors
-  * `POST /connectors` \- create a new connector; the request body should be a JSON object containing a string `name` field and an object `config` field with the connector configuration parameters. The JSON object may also optionally contain a string `initial_state` field which can take the following values - `STOPPED`, `PAUSED` or `RUNNING` (the default value)
+  * `POST /connectors` \- create a new connector; the request body should be a JSON object containing a string `name` field and an object `config` field with the connector configuration parameters. The JSON object may also optionally contain a string `initial_state` field which can take the following values - `STOPPED`, `PAUSED` or `RUNNING` (the default value). The JSON object may also optionally contain a JSON array `initial_offsets` field, in the same format as the `PATCH /connectors/{name}/offsets` request body; these replace (not merge with) any existing offsets for the connector name, and an invalid payload fails the request without creating the connector (see [KIP-995](https://cwiki.apache.org/confluence/display/KAFKA/KIP-995%3A+Allow+users+to+specify+initial+offsets+while+creating+connectors))
   * `GET /connectors/{name}` \- get information about a specific connector
   * `GET /connectors/{name}/config` \- get the configuration parameters for a specific connector
   * `PUT /connectors/{name}/config` \- update the configuration parameters for a specific connector
@@ -391,7 +391,7 @@ The following are the currently supported admin REST API endpoints:
 
 See [KIP-495](https://cwiki.apache.org/confluence/x/-4tTBw) for more details about the admin logger REST APIs.
 
-For the complete specification of the Kafka Connect REST API, see the [OpenAPI documentation](/43/generated/connect_rest.yaml)
+For the complete specification of the Kafka Connect REST API, see the [OpenAPI documentation](/{version}/generated/connect_rest.yaml)
 
 ## Error Reporting in Connect
 
