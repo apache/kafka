@@ -32,6 +32,7 @@ import org.apache.kafka.coordinator.group.generated.StreamsGroupTargetAssignment
 import org.apache.kafka.coordinator.group.generated.StreamsGroupTargetAssignmentMetadataValue;
 import org.apache.kafka.coordinator.group.generated.StreamsGroupTopologyKey;
 import org.apache.kafka.coordinator.group.generated.StreamsGroupTopologyValue;
+import org.apache.kafka.coordinator.group.streams.assignor.AssignmentConfigsImpl;
 import org.apache.kafka.server.common.ApiMessageAndVersion;
 
 import org.junit.jupiter.api.Test;
@@ -277,9 +278,8 @@ class StreamsCoordinatorRecordHelpersTest {
             )
         );
 
-        assertEquals(expectedRecord, StreamsCoordinatorRecordHelpers.newStreamsGroupMetadataRecord(GROUP_ID, 42, 43, 44, Map.of(
-            "num.standby.replicas", "2"
-        ), -1, -1));
+        assertEquals(expectedRecord, StreamsCoordinatorRecordHelpers.newStreamsGroupMetadataRecord(
+            GROUP_ID, 42, 43, 44, new AssignmentConfigsImpl(2, List.of()), -1, -1));
     }
 
     @Test
@@ -292,7 +292,11 @@ class StreamsCoordinatorRecordHelpersTest {
                     .setEpoch(42)
                     .setMetadataHash(43)
                     .setValidatedTopologyEpoch(44)
-                    .setLastAssignmentConfigs(List.of())
+                    .setLastAssignmentConfigs(List.of(
+                        new StreamsGroupMetadataValue.LastAssignmentConfig()
+                            .setKey("num.standby.replicas")
+                            .setValue("0")
+                    ))
                     .setStoredDescriptionTopologyEpoch(7)
                     .setFailedDescriptionTopologyEpoch(5),
                 (short) 0
@@ -300,7 +304,7 @@ class StreamsCoordinatorRecordHelpersTest {
         );
 
         assertEquals(expectedRecord, StreamsCoordinatorRecordHelpers.newStreamsGroupMetadataRecord(
-            GROUP_ID, 42, 43, 44, Map.of(), 7, 5));
+            GROUP_ID, 42, 43, 44, AssignmentConfigsImpl.DEFAULT, 7, 5));
     }
 
     @Test
@@ -709,7 +713,7 @@ class StreamsCoordinatorRecordHelpersTest {
     @Test
     public void testNewStreamsGroupMetadataRecordNullGroupId() {
         NullPointerException exception = assertThrows(NullPointerException.class, () ->
-            StreamsCoordinatorRecordHelpers.newStreamsGroupMetadataRecord(null, 1, 1, 1, Map.of(), -1, -1));
+            StreamsCoordinatorRecordHelpers.newStreamsGroupMetadataRecord(null, 1, 1, 1, AssignmentConfigsImpl.DEFAULT, -1, -1));
         assertEquals("groupId should not be null here", exception.getMessage());
     }
 

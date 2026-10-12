@@ -576,6 +576,28 @@ class DynamicConfigChangeUnitTest {
   }
 
   @Test
+  def shouldParseMirrorReplicationQuotaProperties(): Unit = {
+    val configHandler: TopicConfigHandler = new TopicConfigHandler(null, null, null)
+    val props: Properties = new Properties()
+
+    props.put(QuotaConfig.MIRROR_REPLICATION_THROTTLED_REPLICAS_CONFIG, "0:101,0:102,1:101,1:102")
+
+    assertEquals(Seq(0, 1), configHandler.parseThrottledPartitions(props, 102, QuotaConfig.MIRROR_REPLICATION_THROTTLED_REPLICAS_CONFIG))
+    assertEquals(Seq(), configHandler.parseThrottledPartitions(props, 103, QuotaConfig.MIRROR_REPLICATION_THROTTLED_REPLICAS_CONFIG))
+  }
+
+  @Test
+  def shouldParseMirrorReplicationQuotaWildcard(): Unit = {
+    val configHandler: TopicConfigHandler = new TopicConfigHandler(null, null, null)
+    val props: Properties = new Properties()
+
+    props.put(QuotaConfig.MIRROR_REPLICATION_THROTTLED_REPLICAS_CONFIG, "*")
+
+    val result = configHandler.parseThrottledPartitions(props, 102, QuotaConfig.MIRROR_REPLICATION_THROTTLED_REPLICAS_CONFIG)
+    assertEquals(ReplicationQuotaManager.ALL_REPLICAS.asScala.map(_.toInt).toSeq, result)
+  }
+
+  @Test
   def testEnableRemoteLogStorageOnTopic(): Unit = {
     val topic = "test-topic"
     val topicUuid = Uuid.randomUuid()

@@ -1652,6 +1652,7 @@ public class ShareConsumeRequestManager implements RequestManager, MemberStateLi
         private final Map<TopicIdPartition, Acknowledgements> result;
         private final AtomicInteger remainingResults;
         private final Optional<CompletableFuture<Map<TopicIdPartition, Acknowledgements>>> future;
+        private boolean anyRenewAcknowledgements = false;
 
         ResultHandler(final Optional<CompletableFuture<Map<TopicIdPartition, Acknowledgements>>> future) {
             this(null, future);
@@ -1677,8 +1678,14 @@ public class ShareConsumeRequestManager implements RequestManager, MemberStateLi
                 if (acknowledgements != null) {
                     result.put(partition, acknowledgements);
                 }
+                // The results for a commitSync or close arrive one node at a time, and the renew flag is per-node.
+                // The single event sent when all results are known must reflect every node, rather than taken from
+                // whichever node happened to complete last.
+                if (checkForRenewAcknowledgements) {
+                    anyRenewAcknowledgements = true;
+                }
                 if (remainingResults != null && remainingResults.decrementAndGet() == 0) {
-                    maybeSendShareAcknowledgementEvent(result, checkForRenewAcknowledgements, acquisitionLockTimeoutMs);
+                    maybeSendShareAcknowledgementEvent(result, anyRenewAcknowledgements, acquisitionLockTimeoutMs);
                     future.ifPresent(future -> future.complete(result));
                 }
             }

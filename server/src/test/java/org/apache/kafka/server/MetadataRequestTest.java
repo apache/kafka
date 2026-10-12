@@ -43,7 +43,6 @@ import org.apache.kafka.test.TestUtils;
 
 import java.io.IOException;
 import java.util.Collection;
-import java.util.Collections;
 import java.util.HashSet;
 import java.util.List;
 import java.util.Map;
@@ -183,7 +182,7 @@ public class MetadataRequestTest {
         clusterInstance.createTopic("t1", 3, (short) 2);
         clusterInstance.createTopic("t2", 3, (short) 2);
 
-        MetadataResponse metadataResponse = sendMetadataRequest(new MetadataRequest.Builder(Collections.emptyList(), true, (short) 4).build());
+        MetadataResponse metadataResponse = sendMetadataRequest(new MetadataRequest.Builder(List.of(), true, (short) 4).build());
         assertTrue(metadataResponse.errors().isEmpty(), "Response should have no errors");
         assertTrue(metadataResponse.topicMetadata().isEmpty(), "Response should have no topics");
     }
@@ -240,7 +239,7 @@ public class MetadataRequestTest {
         clusterInstance.createTopic("t2", 3, (short) 2);
 
         // v0, Empty list represents all topics
-        MetadataResponse metadataResponseV0 = sendMetadataRequest(new MetadataRequest(requestData(Collections.emptyList(), true), (short) 0));
+        MetadataResponse metadataResponseV0 = sendMetadataRequest(new MetadataRequest(requestData(List.of(), true), (short) 0));
         assertTrue(metadataResponseV0.errors().isEmpty(), "V0 Response should have no errors");
         assertEquals(2, metadataResponseV0.topicMetadata().size(), "V0 Response should have 2 (all) topics");
 
