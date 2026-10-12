@@ -22,17 +22,24 @@ import org.apache.kafka.coordinator.group.api.assignor.GroupSpec;
 import org.apache.kafka.coordinator.group.api.assignor.MemberAssignment;
 import org.apache.kafka.coordinator.group.api.assignor.SubscribedTopicDescriber;
 import org.apache.kafka.coordinator.group.api.assignor.SubscriptionType;
+import org.apache.kafka.coordinator.group.assignor.Uniform2Assignor;
+import org.apache.kafka.coordinator.group.assignor.uniform2.steps.AssignRemainingExtraPartitions;
+import org.apache.kafka.coordinator.group.assignor.uniform2.steps.BalanceExtraPartitions;
+import org.apache.kafka.coordinator.group.assignor.uniform2.steps.KeepStickyExtraPartitions;
 
 import java.util.ArrayList;
+import java.util.Arrays;
 import java.util.Collections;
 import java.util.HashMap;
 import java.util.HashSet;
+import java.util.List;
 import java.util.Map;
 import java.util.Set;
 
 import static org.junit.jupiter.api.Assertions.assertEquals;
 import static org.junit.jupiter.api.Assertions.assertFalse;
 import static org.junit.jupiter.api.Assertions.assertNull;
+import static org.junit.jupiter.api.Assertions.assertSame;
 import static org.junit.jupiter.api.Assertions.assertTrue;
 
 /**
@@ -160,6 +167,79 @@ public final class AssignmentTestUtils {
                         + sizes.get(giver) + " to " + receiver + " of size " + sizes.get(receiver));
             }
         }
+    }
+
+    /**
+     * Checks that assigning the result again returns the same map instances, which the coordinator
+     * relies on to recognize unchanged members. The context prefixes the failure message.
+     */
+    public static void assertStable(
+        GroupSpec spec,
+        SubscribedTopicDescriber describer,
+        GroupAssignment result,
+        Uniform2Assignor assignor,
+        String context
+    ) {
+        var stable = GroupSpecFixture.after(spec, result).build();
+        var again = assignor.assign(stable, describer);
+        String prefix = context.isEmpty() ? "" : context + ": ";
+        for (String id : stable.memberIds()) {
+            assertSame(stable.memberAssignment(id).partitions(), again.members().get(id).partitions(),
+                prefix + "the assignment of " + id + " is not a fixed point");
+        }
+    }
+
+    /**
+     * @return The number of current partitions of the members that they do not have in the
+     *         assignment.
+     */
+    public static int revocations(GroupSpec spec, GroupAssignment assignment) {
+        int revocations = 0;
+        for (String id : spec.memberIds()) {
+            var newPartitions = assignment.members().get(id).partitions();
+            for (Map.Entry<Uuid, Set<Integer>> topicEntry : spec.memberAssignment(id).partitions().entrySet()) {
+                var kept = newPartitions.getOrDefault(topicEntry.getKey(), Set.of());
+                for (int partition : topicEntry.getValue()) {
+                    if (!kept.contains(partition)) {
+                        revocations++;
+                    }
+                }
+            }
+        }
+        return revocations;
+    }
+
+    /**
+     * @return The number of partitions assigned to the member.
+     */
+    public static int assignmentSize(GroupAssignment assignment, String memberId) {
+        return assignment.members().get(memberId).partitions().values().stream().mapToInt(Set::size).sum();
+    }
+
+    /**
+     * @return Per way of counting of the balance step, keeping the counts per cohort of every
+     *         member or of one member at a time, the quotas that the steps decide without rack
+     *         awareness, as the members with an extra partition of every topic, in topic and member
+     *         order.
+     */
+    public static List<String> quotasPerWayOfCounting(GroupSpec spec, SubscribedTopicDescriber describer) {
+        var ways = new ArrayList<String>();
+        var group = new IndexedGroup.Builder(spec, describer).build();
+        var currentAssignment = new CurrentAssignment(spec, group);
+        for (boolean keepCounts : new boolean[] {true, false}) {
+            var quotas = new Quotas(group);
+            new KeepStickyExtraPartitions(group, currentAssignment, quotas).run();
+            new AssignRemainingExtraPartitions(group, quotas).run();
+            new BalanceExtraPartitions(group, currentAssignment, quotas, keepCounts).run();
+            var extras = new StringBuilder();
+            for (int topic = 0; topic < group.topicCount(); topic++) {
+                int[] members = quotas.membersWithExtraPartition(topic).toArray();
+                Arrays.sort(members);
+                extras.append(group.topicId(topic)).append('=').append(Arrays.toString(members)).append(' ');
+            }
+            ways.add(extras.toString());
+        }
+        return ways;
     }
 
     private static Set<Uuid> subscribedTopicIds(GroupSpec spec, String memberId) {
