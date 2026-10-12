@@ -336,8 +336,8 @@ class PlaintextConsumerAssignorsTest extends AbstractConsumerTest {
           fail(s"Time out while awaiting for lock.")
         }
         try {
-          generationId1 = consumer1.groupMetadata().generationId()
-          memberId1 = consumer1.groupMetadata().memberId()
+          generationId1 = rebalanceConsumer.groupMetadata().generationId()
+          memberId1 = rebalanceConsumer.groupMetadata().memberId()
         } finally {
           lock.unlock()
         }
