@@ -39,9 +39,36 @@ public class Assignment implements MemberAssignment {
      */
     private final Map<Uuid, Set<Integer>> partitions;
 
-    public Assignment(
+    private Assignment(
         Map<Uuid, Set<Integer>> partitions
     ) {
+        // Assignments are used as input to assignors, which expect to receive immutable
+        // assignment maps, otherwise they will be modified in place.
+        this.partitions = Collections.unmodifiableMap(partitions);
+    }
+
+    /**
+     * Creates an assignment without copying the provided map or its partition sets.
+     * The partition sets must be immutable, and the caller must ensure that the map
+     * is not modified after this method returns.
+     *
+     * @param partitions The assigned partitions.
+     * @return An assignment backed by the provided map.
+     */
+    public static Assignment of(Map<Uuid, Set<Integer>> partitions) {
+        Objects.requireNonNull(partitions);
+        return new Assignment(partitions);
+    }
+
+    /**
+     * Creates an immutable assignment with a defensive copy of the provided map
+     * and immutable copies of its partition sets. Subsequent changes to the original
+     * map or its partition sets do not affect the returned assignment.
+     *
+     * @param partitions The assigned partitions.
+     * @return An immutable assignment independent of subsequent changes to the input.
+     */
+    public static Assignment copyOf(Map<Uuid, Set<Integer>> partitions) {
         Objects.requireNonNull(partitions);
         // Assignments are used as input to assignors, which expect to receive immutable
         // assignment maps, otherwise they will be modified in place.
@@ -49,7 +76,7 @@ public class Assignment implements MemberAssignment {
         partitions.forEach(
             (topicId, partitionsIds) -> copy.put(topicId, Set.copyOf(partitionsIds))
         );
-        this.partitions = Collections.unmodifiableMap(copy);
+        return new Assignment(copy);
     }
 
     /**
@@ -87,7 +114,7 @@ public class Assignment implements MemberAssignment {
     public static Assignment fromRecord(
         ConsumerGroupTargetAssignmentMemberValue record
     ) {
-        return new Assignment(
+        return Assignment.of(
             record.topicPartitions().stream().collect(Collectors.toMap(
                 ConsumerGroupTargetAssignmentMemberValue.TopicPartition::topicId,
                 topicPartitions -> Set.copyOf(topicPartitions.partitions())))
@@ -103,7 +130,7 @@ public class Assignment implements MemberAssignment {
     public static Assignment fromRecord(
         ShareGroupTargetAssignmentMemberValue record
     ) {
-        return new Assignment(
+        return Assignment.of(
             record.topicPartitions().stream().collect(Collectors.toMap(
                 ShareGroupTargetAssignmentMemberValue.TopicPartition::topicId,
                 topicPartitions -> Set.copyOf(topicPartitions.partitions())))

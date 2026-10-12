@@ -218,7 +218,7 @@ public class ShareGroupTest {
         String memberId2 = "member2";
 
         // Initial assignment for member1
-        Assignment initialAssignment = new Assignment(Map.of(
+        Assignment initialAssignment = Assignment.of(Map.of(
             topicId,
             Set.of(0)
         ));
@@ -233,7 +233,7 @@ public class ShareGroupTest {
         );
 
         // New assignment for member1
-        Assignment newAssignment = new Assignment(Map.of(
+        Assignment newAssignment = Assignment.of(Map.of(
             topicId,
             Set.of(1)
         ));
@@ -248,7 +248,7 @@ public class ShareGroupTest {
         );
 
         // New assignment for member2 to add partition 1
-        Assignment newAssignment2 = new Assignment(Map.of(
+        Assignment newAssignment2 = Assignment.of(Map.of(
             topicId,
             Set.of(1)
         ));
@@ -263,7 +263,7 @@ public class ShareGroupTest {
         );
 
         // New assignment for member1 to revoke partition 1 and assign partition 0
-        Assignment newAssignment1 = new Assignment(Map.of(
+        Assignment newAssignment1 = Assignment.of(Map.of(
             topicId,
             Set.of(0)
         ));

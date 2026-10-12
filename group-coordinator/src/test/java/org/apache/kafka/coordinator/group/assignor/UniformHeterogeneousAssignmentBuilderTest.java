@@ -265,7 +265,7 @@ public class UniformHeterogeneousAssignmentBuilderTest {
             Optional.empty(),
             Optional.empty(),
             Set.of(topic1Uuid),
-            new Assignment(mkAssignment(
+            Assignment.of(mkAssignment(
                 mkTopicAssignment(topic1Uuid, 0, 1, 2)
             ))
         ));
@@ -274,7 +274,7 @@ public class UniformHeterogeneousAssignmentBuilderTest {
             Optional.empty(),
             Optional.empty(),
             Set.of(topic1Uuid, topic2Uuid),
-            new Assignment(mkAssignment(
+            Assignment.of(mkAssignment(
                 mkTopicAssignment(topic1Uuid, 3),
                 mkTopicAssignment(topic2Uuid, 0)
             ))
@@ -284,7 +284,7 @@ public class UniformHeterogeneousAssignmentBuilderTest {
             Optional.empty(),
             Optional.empty(),
             Set.of(topic1Uuid, topic2Uuid, topic3Uuid),
-            new Assignment(mkAssignment(
+            Assignment.of(mkAssignment(
                 mkTopicAssignment(topic1Uuid, 4, 5),
                 mkTopicAssignment(topic2Uuid, 1, 2, 3),
                 mkTopicAssignment(topic3Uuid, 0, 1, 2, 3)
@@ -339,7 +339,7 @@ public class UniformHeterogeneousAssignmentBuilderTest {
             Optional.empty(),
             Optional.empty(),
             Set.of(topic1Uuid, topic3Uuid),
-            new Assignment(mkAssignment(
+            Assignment.of(mkAssignment(
                 mkTopicAssignment(topic1Uuid, 0, 1, 2, 3),
                 mkTopicAssignment(topic3Uuid, 0, 1)
             ))
@@ -349,7 +349,7 @@ public class UniformHeterogeneousAssignmentBuilderTest {
             Optional.empty(),
             Optional.empty(),
             Set.of(topic1Uuid, topic2Uuid, topic3Uuid, topic4Uuid),
-            new Assignment(mkAssignment(
+            Assignment.of(mkAssignment(
                 mkTopicAssignment(topic2Uuid, 0, 1, 2),
                 mkTopicAssignment(topic4Uuid, 0, 1, 2)
             ))
@@ -396,7 +396,7 @@ public class UniformHeterogeneousAssignmentBuilderTest {
             Optional.empty(),
             Optional.empty(),
             Set.of(topic1Uuid),
-            new Assignment(mkAssignment(
+            Assignment.of(mkAssignment(
                 mkTopicAssignment(topic1Uuid, 0, 2),
                 mkTopicAssignment(topic2Uuid, 0)
             ))
@@ -406,7 +406,7 @@ public class UniformHeterogeneousAssignmentBuilderTest {
             Optional.empty(),
             Optional.empty(),
             Set.of(topic1Uuid, topic2Uuid),
-            new Assignment(mkAssignment(
+            Assignment.of(mkAssignment(
                 mkTopicAssignment(topic1Uuid, 1),
                 mkTopicAssignment(topic2Uuid, 1, 2)
             ))
@@ -463,7 +463,7 @@ public class UniformHeterogeneousAssignmentBuilderTest {
             Optional.empty(),
             Optional.empty(),
             Set.of(topic1Uuid, topic3Uuid),
-            new Assignment(mkAssignment(
+            Assignment.of(mkAssignment(
                 mkTopicAssignment(topic1Uuid, 0, 1, 2),
                 mkTopicAssignment(topic3Uuid, 0, 1)
             ))
@@ -473,7 +473,7 @@ public class UniformHeterogeneousAssignmentBuilderTest {
             Optional.empty(),
             Optional.empty(),
             Set.of(topic2Uuid),
-            new Assignment(mkAssignment(
+            Assignment.of(mkAssignment(
                 mkTopicAssignment(topic2Uuid, 3, 4, 5, 6)
             ))
         ));
@@ -520,7 +520,7 @@ public class UniformHeterogeneousAssignmentBuilderTest {
             Optional.empty(),
             Optional.empty(),
             Set.of(topic1Uuid),
-            new Assignment(mkAssignment(
+            Assignment.of(mkAssignment(
                 mkTopicAssignment(topic1Uuid, 0, 2),
                 mkTopicAssignment(topic2Uuid, 1, 3)
             ))
@@ -530,7 +530,7 @@ public class UniformHeterogeneousAssignmentBuilderTest {
             Optional.empty(),
             Optional.empty(),
             Set.of(topic1Uuid, topic2Uuid),
-            new Assignment(mkAssignment(
+            Assignment.of(mkAssignment(
                 mkTopicAssignment(topic1Uuid, 1),
                 mkTopicAssignment(topic2Uuid, 0, 2, 4)
             ))
@@ -581,7 +581,7 @@ public class UniformHeterogeneousAssignmentBuilderTest {
             Optional.empty(),
             Optional.empty(),
             Set.of(topic1Uuid, topic2Uuid, topic3Uuid),
-            new Assignment(mkAssignment(
+            Assignment.of(mkAssignment(
                 mkTopicAssignment(topic1Uuid, 0, 1),
                 mkTopicAssignment(topic2Uuid, 0, 1),
                 mkTopicAssignment(topic3Uuid, 0, 1)

@@ -587,7 +587,7 @@ public class SimpleAssignorTest {
                 Optional.empty(),
                 Optional.empty(),
                 topicsSubscription,
-                new Assignment(partitions.partitions())
+                Assignment.copyOf(partitions.partitions())
             )));
         }
     }
@@ -636,7 +636,7 @@ public class SimpleAssignorTest {
                 Optional.empty(),
                 Optional.empty(),
                 topicsSubscription,
-                new Assignment(computedAssignment.members().get(newMemberId).partitions()))
+                Assignment.copyOf(computedAssignment.members().get(newMemberId).partitions()))
             );
         }
 
@@ -658,7 +658,7 @@ public class SimpleAssignorTest {
                 Optional.empty(),
                 Optional.empty(),
                 topicsSubscription,
-                new Assignment(partitions.partitions())
+                Assignment.copyOf(partitions.partitions())
             )));
         }
     }
@@ -741,7 +741,7 @@ public class SimpleAssignorTest {
             Optional.empty(),
             Optional.empty(),
             memberATopicsSubscription2,
-            new Assignment(mkAssignment(
+            Assignment.of(mkAssignment(
                 mkTopicAssignment(TOPIC_1_UUID, 0, 1, 2),
                 mkTopicAssignment(TOPIC_2_UUID, 0, 2)))
         ));
@@ -750,7 +750,7 @@ public class SimpleAssignorTest {
             Optional.empty(),
             Optional.empty(),
             memberBTopicsSubscription2,
-            new Assignment(mkAssignment(
+            Assignment.of(mkAssignment(
                 mkTopicAssignment(TOPIC_3_UUID, 0, 1)))
         ));
 
@@ -834,7 +834,7 @@ public class SimpleAssignorTest {
                     Optional.empty(),
                     Optional.empty(),
                     topicsSubscriptions.get(m % numTopicsSubscriptions),
-                    new Assignment(computedAssignment.members().get(memberId).partitions())
+                    Assignment.copyOf(computedAssignment.members().get(memberId).partitions())
                 ));
             }
         }
@@ -902,7 +902,7 @@ public class SimpleAssignorTest {
                 Optional.empty(),
                 Optional.empty(),
                 topicsSubscriptions.get(member % numTopicsSubscriptions),
-                new Assignment(computedAssignment.members().get(newMemberId).partitions()))
+                Assignment.copyOf(computedAssignment.members().get(newMemberId).partitions()))
             );
         }
 
@@ -926,7 +926,7 @@ public class SimpleAssignorTest {
                     Optional.empty(),
                     Optional.empty(),
                     topicsSubscriptions.get(m % numTopicsSubscriptions),
-                    new Assignment(computedAssignment.members().get(memberId).partitions())
+                    Assignment.copyOf(computedAssignment.members().get(memberId).partitions())
                 ));
             }
         }

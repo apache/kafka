@@ -67,7 +67,7 @@ public class CurrentAssignmentBuilderTest {
 
         ConsumerGroupMember updatedMember = new CurrentAssignmentBuilder(member)
             .withMetadataImage(metadataImage)
-            .withTargetAssignment(11, new Assignment(mkAssignment(
+            .withTargetAssignment(11, Assignment.of(mkAssignment(
                 mkTopicAssignment(topicId1, 1, 2, 3),
                 mkTopicAssignment(topicId2, 4, 5, 6))))
             .withCurrentPartitionEpoch((topicId, partitionId) -> 10)
@@ -111,7 +111,7 @@ public class CurrentAssignmentBuilderTest {
 
         ConsumerGroupMember updatedMember = new CurrentAssignmentBuilder(member)
             .withMetadataImage(metadataImage)
-            .withTargetAssignment(11, new Assignment(mkAssignment(
+            .withTargetAssignment(11, Assignment.of(mkAssignment(
                 mkTopicAssignment(topicId1, 1, 2, 3, 4),
                 mkTopicAssignment(topicId2, 4, 5, 6, 7))))
             .withCurrentPartitionEpoch((topicId, partitionId) -> -1)
@@ -159,7 +159,7 @@ public class CurrentAssignmentBuilderTest {
 
         ConsumerGroupMember updatedMember = new CurrentAssignmentBuilder(member)
             .withMetadataImage(metadataImage)
-            .withTargetAssignment(11, new Assignment(mkAssignment(
+            .withTargetAssignment(11, Assignment.of(mkAssignment(
                 mkTopicAssignment(topicId1, 2, 3, 4),
                 mkTopicAssignment(topicId2, 5, 6, 7))))
             .withCurrentPartitionEpoch((topicId, partitionId) -> -1)
@@ -206,7 +206,7 @@ public class CurrentAssignmentBuilderTest {
 
         ConsumerGroupMember updatedMember = new CurrentAssignmentBuilder(member)
             .withMetadataImage(metadataImage)
-            .withTargetAssignment(11, new Assignment(mkAssignment(
+            .withTargetAssignment(11, Assignment.of(mkAssignment(
                 mkTopicAssignment(topicId1, 1, 2, 3, 4),
                 mkTopicAssignment(topicId2, 4, 5, 6, 7))))
             .withCurrentPartitionEpoch((topicId, partitionId) -> 10)
@@ -250,7 +250,7 @@ public class CurrentAssignmentBuilderTest {
 
         ConsumerGroupMember updatedMember = new CurrentAssignmentBuilder(member)
             .withMetadataImage(metadataImage)
-            .withTargetAssignment(11, new Assignment(mkAssignment(
+            .withTargetAssignment(11, Assignment.of(mkAssignment(
                 mkTopicAssignment(topicId1, 1, 2, 3),
                 mkTopicAssignment(topicId2, 4, 5, 7))))
             .withCurrentPartitionEpoch((topicId, __) ->
@@ -301,7 +301,7 @@ public class CurrentAssignmentBuilderTest {
 
         ConsumerGroupMember updatedMember = new CurrentAssignmentBuilder(member)
             .withMetadataImage(metadataImage)
-            .withTargetAssignment(11, new Assignment(mkAssignment(
+            .withTargetAssignment(11, Assignment.of(mkAssignment(
                 mkTopicAssignment(topicId1, 2, 3),
                 mkTopicAssignment(topicId2, 5, 6))))
             .withCurrentPartitionEpoch((topicId, partitionId) -> -1)
@@ -356,7 +356,7 @@ public class CurrentAssignmentBuilderTest {
 
         CurrentAssignmentBuilder currentAssignmentBuilder = new CurrentAssignmentBuilder(member)
             .withMetadataImage(metadataImage)
-            .withTargetAssignment(12, new Assignment(mkAssignment(
+            .withTargetAssignment(12, Assignment.of(mkAssignment(
                 mkTopicAssignment(topicId1, 3),
                 mkTopicAssignment(topicId2, 6))))
             .withCurrentPartitionEpoch((topicId, partitionId) -> -1);
@@ -422,7 +422,7 @@ public class CurrentAssignmentBuilderTest {
 
         ConsumerGroupMember updatedMember = new CurrentAssignmentBuilder(member)
             .withMetadataImage(metadataImage)
-            .withTargetAssignment(12, new Assignment(mkAssignment(
+            .withTargetAssignment(12, Assignment.of(mkAssignment(
                 mkTopicAssignment(topicId1, 3),
                 mkTopicAssignment(topicId2, 6))))
             .withCurrentPartitionEpoch((topicId, partitionId) -> -1)
@@ -476,7 +476,7 @@ public class CurrentAssignmentBuilderTest {
 
         ConsumerGroupMember updatedMember = new CurrentAssignmentBuilder(member)
             .withMetadataImage(metadataImage)
-            .withTargetAssignment(11, new Assignment(mkAssignment(
+            .withTargetAssignment(11, Assignment.of(mkAssignment(
                 mkTopicAssignment(topicId1, 2, 3, 4),
                 mkTopicAssignment(topicId2, 5, 6, 7))))
             .withCurrentPartitionEpoch((topicId, partitionId) -> 10)
@@ -531,7 +531,7 @@ public class CurrentAssignmentBuilderTest {
 
         ConsumerGroupMember updatedMember = new CurrentAssignmentBuilder(member)
             .withMetadataImage(metadataImage)
-            .withTargetAssignment(12, new Assignment(mkAssignment(
+            .withTargetAssignment(12, Assignment.of(mkAssignment(
                 mkTopicAssignment(topicId1, 2, 3, 4),
                 mkTopicAssignment(topicId2, 5, 6, 7))))
             .withCurrentPartitionEpoch((topicId, partitionId) -> {
@@ -606,7 +606,7 @@ public class CurrentAssignmentBuilderTest {
 
         ConsumerGroupMember updatedMember = new CurrentAssignmentBuilder(member)
             .withMetadataImage(metadataImage)
-            .withTargetAssignment(12, new Assignment(mkAssignment(
+            .withTargetAssignment(12, Assignment.of(mkAssignment(
                 mkTopicAssignment(topicId1, 2, 3),
                 mkTopicAssignment(topicId2, 5, 6))))
             .withCurrentPartitionEpoch((topicId, partitionId) -> 10)
@@ -650,7 +650,7 @@ public class CurrentAssignmentBuilderTest {
 
         ConsumerGroupMember updatedMember = new CurrentAssignmentBuilder(member)
             .withMetadataImage(metadataImage)
-            .withTargetAssignment(11, new Assignment(mkAssignment(
+            .withTargetAssignment(11, Assignment.of(mkAssignment(
                 mkTopicAssignment(topicId1, 2, 3, 4),
                 mkTopicAssignment(topicId2, 5, 6, 7))))
             .withCurrentPartitionEpoch((topicId, partitionId) -> -1)
@@ -694,7 +694,7 @@ public class CurrentAssignmentBuilderTest {
 
         ConsumerGroupMember updatedMember = new CurrentAssignmentBuilder(member)
             .withMetadataImage(metadataImage)
-            .withTargetAssignment(11, new Assignment(mkAssignment(
+            .withTargetAssignment(11, Assignment.of(mkAssignment(
                 mkTopicAssignment(topicId1, 2, 3, 4),
                 mkTopicAssignment(topicId2, 5, 6, 7))))
             .withCurrentPartitionEpoch((topicId, partitionId) -> 10)
@@ -727,7 +727,7 @@ public class CurrentAssignmentBuilderTest {
 
         ConsumerGroupMember updatedMember = new CurrentAssignmentBuilder(member)
             .withMetadataImage(metadataImage)
-            .withTargetAssignment(12, new Assignment(mkAssignment(
+            .withTargetAssignment(12, Assignment.of(mkAssignment(
                 mkTopicAssignment(topicId1, 3),
                 mkTopicAssignment(topicId2, 6))))
             .withCurrentPartitionEpoch((topicId, partitionId) -> 10)
@@ -779,7 +779,7 @@ public class CurrentAssignmentBuilderTest {
         // a reset of the client side member state.
         assertThrows(FencedMemberEpochException.class, () -> new CurrentAssignmentBuilder(member)
             .withMetadataImage(metadataImage)
-            .withTargetAssignment(12, new Assignment(mkAssignment(
+            .withTargetAssignment(12, Assignment.of(mkAssignment(
                 mkTopicAssignment(topicId1, 3),
                 mkTopicAssignment(topicId2, 6))))
             .withCurrentPartitionEpoch((topicId, partitionId) -> 10)
@@ -788,7 +788,7 @@ public class CurrentAssignmentBuilderTest {
         // Then the member rejoins with no owned partitions.
         ConsumerGroupMember updatedMember = new CurrentAssignmentBuilder(member)
             .withMetadataImage(metadataImage)
-            .withTargetAssignment(12, new Assignment(mkAssignment(
+            .withTargetAssignment(12, Assignment.of(mkAssignment(
                 mkTopicAssignment(topicId1, 3),
                 mkTopicAssignment(topicId2, 6))))
             .withCurrentPartitionEpoch((topicId, partitionId) -> 11)
@@ -845,7 +845,7 @@ public class CurrentAssignmentBuilderTest {
 
         ConsumerGroupMember updatedMember = new CurrentAssignmentBuilder(member)
             .withMetadataImage(metadataImage)
-            .withTargetAssignment(targetAssignmentEpoch, new Assignment(mkAssignment(
+            .withTargetAssignment(targetAssignmentEpoch, Assignment.of(mkAssignment(
                 mkTopicAssignment(topicId1, 1, 2, 3),
                 mkTopicAssignment(topicId2, 4, 5, 6))))
             .withHasSubscriptionChanged(hasSubscriptionChanged)
@@ -908,7 +908,7 @@ public class CurrentAssignmentBuilderTest {
 
         ConsumerGroupMember updatedMember = new CurrentAssignmentBuilder(member)
             .withMetadataImage(metadataImage)
-            .withTargetAssignment(targetAssignmentEpoch, new Assignment(mkAssignment(
+            .withTargetAssignment(targetAssignmentEpoch, Assignment.of(mkAssignment(
                 mkTopicAssignment(topicId1, 1, 2, 3),
                 mkTopicAssignment(topicId2, 4, 5, 6))))
             .withHasSubscriptionChanged(hasSubscriptionChanged)
@@ -965,7 +965,7 @@ public class CurrentAssignmentBuilderTest {
 
         ConsumerGroupMember updatedMember = new CurrentAssignmentBuilder(member)
             .withMetadataImage(metadataImage)
-            .withTargetAssignment(12, new Assignment(mkAssignment(
+            .withTargetAssignment(12, Assignment.of(mkAssignment(
                 mkTopicAssignment(topicId1, 1, 3, 4),
                 mkTopicAssignment(topicId2, 6, 7))))
             .withHasSubscriptionChanged(true)
@@ -1020,7 +1020,7 @@ public class CurrentAssignmentBuilderTest {
 
         ConsumerGroupMember updatedMember = new CurrentAssignmentBuilder(member)
             .withMetadataImage(metadataImage)
-            .withTargetAssignment(10, new Assignment(mkAssignment(
+            .withTargetAssignment(10, Assignment.of(mkAssignment(
                 mkTopicAssignment(fooTopicId, 1, 2, 3),
                 mkTopicAssignment(barTopicId, 4, 5, 6))))
             .withHasSubscriptionChanged(true)
@@ -1076,7 +1076,7 @@ public class CurrentAssignmentBuilderTest {
 
         ConsumerGroupMember updatedMember = new CurrentAssignmentBuilder(member)
             .withMetadataImage(metadataImage)
-            .withTargetAssignment(10, new Assignment(mkAssignment(
+            .withTargetAssignment(10, Assignment.of(mkAssignment(
                 mkTopicAssignment(fooTopicId, 1, 2, 3),
                 mkTopicAssignment(barTopicId, 4, 5, 6))))
             .withHasSubscriptionChanged(true)
@@ -1132,7 +1132,7 @@ public class CurrentAssignmentBuilderTest {
 
         ConsumerGroupMember updatedMember = new CurrentAssignmentBuilder(member)
             .withMetadataImage(metadataImage)
-            .withTargetAssignment(10, new Assignment(mkAssignment(
+            .withTargetAssignment(10, Assignment.of(mkAssignment(
                 mkTopicAssignment(fooTopicId, 1, 2, 3),
                 mkTopicAssignment(barTopicId, 4, 5, 6))))
             .withHasSubscriptionChanged(true)

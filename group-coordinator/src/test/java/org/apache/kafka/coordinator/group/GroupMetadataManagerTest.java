@@ -11637,7 +11637,7 @@ public class GroupMetadataManagerTest {
                 .setGroupId(consumerGroupIds.get(1))
                 .setMembers(List.of(
                     memberBuilder.build().asConsumerGroupDescribeMember(
-                        new Assignment(Map.of()),
+                        Assignment.EMPTY,
                         new MetadataImageBuilder().buildCoordinatorMetadataImage()
                     )
                 ))
@@ -11720,8 +11720,8 @@ public class GroupMetadataManagerTest {
         describedGroup = new ConsumerGroupDescribeResponseData.DescribedGroup()
             .setGroupId(consumerGroupId)
             .setMembers(List.of(
-                memberBuilder1.build().asConsumerGroupDescribeMember(new Assignment(Map.of()), metadataImage),
-                memberBuilder2.build().asConsumerGroupDescribeMember(new Assignment(assignmentMap), metadataImage)
+                memberBuilder1.build().asConsumerGroupDescribeMember(Assignment.EMPTY, metadataImage),
+                memberBuilder2.build().asConsumerGroupDescribeMember(Assignment.copyOf(assignmentMap), metadataImage)
             ))
             .setGroupState(ConsumerGroup.ConsumerGroupState.ASSIGNING.toString())
             .setAssignorName("range")
@@ -31091,7 +31091,7 @@ public class GroupMetadataManagerTest {
                 when(group.groupId()).thenReturn(groupId1);
                 when(group.isEmpty()).thenReturn(false);
                 when(group.subscribedTopicNames()).thenReturn(Map.of(tName1, new SubscriptionCount(1, 1)));
-                when(group.targetAssignment()).thenReturn(Map.of(tName1, new Assignment(Map.of(tid1, Set.of(0, 1)))));
+                when(group.targetAssignment()).thenReturn(Map.of(tName1, Assignment.of(Map.of(tid1, Set.of(0, 1)))));
                 context.groupMetadataManager.replay(
                     new ShareGroupStatePartitionMetadataKey()
                         .setGroupId(groupId1),
@@ -31116,7 +31116,7 @@ public class GroupMetadataManagerTest {
                 when(group.groupId()).thenReturn(groupId1);
                 when(group.isEmpty()).thenReturn(false);
                 when(group.subscribedTopicNames()).thenReturn(Map.of(tName1, new SubscriptionCount(1, 1)));
-                when(group.targetAssignment()).thenReturn(Map.of(tName1, new Assignment(Map.of(tid1, Set.of(0)))));
+                when(group.targetAssignment()).thenReturn(Map.of(tName1, Assignment.of(Map.of(tid1, Set.of(0)))));
                 context.groupMetadataManager.replay(
                     new ShareGroupStatePartitionMetadataKey()
                         .setGroupId(groupId1),
@@ -31142,8 +31142,8 @@ public class GroupMetadataManagerTest {
                 when(group.isEmpty()).thenReturn(false);
                 when(group.subscribedTopicNames()).thenReturn(Map.of(tName1, new SubscriptionCount(1, 1)));
                 when(group.targetAssignment()).thenReturn(Map.of(
-                    tName1, new Assignment(Map.of(tid1, Set.of(0, 1))),
-                    tName2, new Assignment(Map.of(tid2, Set.of(0)))
+                    tName1, Assignment.of(Map.of(tid1, Set.of(0, 1))),
+                    tName2, Assignment.of(Map.of(tid2, Set.of(0)))
                 ));
                 context.groupMetadataManager.replay(
                     new ShareGroupStatePartitionMetadataKey()

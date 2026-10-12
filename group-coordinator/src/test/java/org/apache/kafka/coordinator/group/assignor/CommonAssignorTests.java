@@ -108,7 +108,7 @@ public class CommonAssignorTests {
                 memberSubscriptionAndAssignment.rackId(),
                 memberSubscriptionAndAssignment.instanceId(),
                 memberSubscriptionAndAssignment.subscribedTopicIds(),
-                new Assignment(firstAssignment.members().get(memberId).partitions())
+                Assignment.copyOf(firstAssignment.members().get(memberId).partitions())
             ));
         }
         GroupSpec groupSpecWithAssignment = new GroupSpecImpl(
@@ -205,7 +205,7 @@ public class CommonAssignorTests {
                     memberSubscriptionAndAssignment.rackId(),
                     memberSubscriptionAndAssignment.instanceId(),
                     memberSubscriptionAndAssignment.subscribedTopicIds(),
-                    new Assignment(firstAssignment.members().get(memberId).partitions())
+                    Assignment.copyOf(firstAssignment.members().get(memberId).partitions())
                 ));
             }
             GroupSpec groupSpecWithAssignment = new GroupSpecImpl(
