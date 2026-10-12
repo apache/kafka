@@ -24,7 +24,6 @@ import org.apache.kafka.coordinator.group.modern.GroupSpecImpl;
 import org.apache.kafka.coordinator.group.modern.MemberSubscriptionAndAssignmentImpl;
 
 import java.util.HashMap;
-import java.util.HashSet;
 import java.util.LinkedHashMap;
 import java.util.Map;
 import java.util.Optional;
@@ -69,16 +68,17 @@ public final class GroupSpecFixture {
         if (members.containsKey(memberId)) {
             throw new IllegalArgumentException("Member " + memberId + " is already added");
         }
-        members.put(memberId, new MemberSubscriptionAndAssignmentImpl(Optional.empty(), Optional.empty(), topics,
-            new Assignment(partitions)));
+        members.put(memberId, new MemberSubscriptionAndAssignmentImpl(
+            Optional.empty(),
+            Optional.empty(),
+            topics,
+            new Assignment(partitions)
+        ));
 
-        // A copy, compared by its topics: a TopicIds also counts in its size the names that do not
-        // resolve.
-        var subscription = new HashSet<>(topics);
         if (firstSubscription == null) {
-            firstSubscription = subscription;
+            firstSubscription = topics;
         } else {
-            sameSubscriptions &= firstSubscription.equals(subscription);
+            sameSubscriptions &= firstSubscription.equals(topics);
         }
         partitions.forEach((topicId, topicPartitions) -> {
             var owners = invertedTargetAssignment.computeIfAbsent(topicId, k -> new HashMap<>());
