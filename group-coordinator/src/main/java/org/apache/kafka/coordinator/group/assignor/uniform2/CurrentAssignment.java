@@ -30,10 +30,10 @@ import java.util.Set;
  * The current assignment of a group: the owner of every partition.
  *
  * <p>A member owns a partition when it holds it and subscribes to its topic. The partitions of
- * topics that a member does not subscribe to, or which no longer exist, are stale: they are dropped
- * silently, and the members holding some get a new map. As the coordinator guarantees, a partition
- * is held by at most one member, a topic never has fewer partitions than its members hold, and no
- * set of partitions is empty.
+ * topics that a member does not subscribe to, or which no longer exist, are stale: they have no
+ * owner, {@link #holdsStalePartitions} tells which members hold some, and {@link #assignment} still
+ * contains them. As the coordinator guarantees, a partition is held by at most one member, a topic
+ * never has fewer partitions than its members hold, and no set of partitions is empty.
  */
 final class CurrentAssignment {
     /**
@@ -142,8 +142,7 @@ final class CurrentAssignment {
      *
      * @param topic          The topic.
      * @param counts         Receives, at the index of every owner, its number of partitions. Must
-     *                       be sized to the number of members, with zero entries; the caller resets
-     *                       the entries of the owners to zero after use.
+     *                       be sized to the number of members, with zeroed entries.
      * @param distinctOwners Receives the owners, in the order of their lowest partition. Existing
      *                       entries are cleared by this method.
      */

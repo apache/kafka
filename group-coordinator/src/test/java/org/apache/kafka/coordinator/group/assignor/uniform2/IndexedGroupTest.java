@@ -19,9 +19,11 @@ package org.apache.kafka.coordinator.group.assignor.uniform2;
 import org.apache.kafka.common.Uuid;
 import org.apache.kafka.coordinator.group.api.assignor.SubscribedTopicDescriber;
 import org.apache.kafka.coordinator.group.api.assignor.SubscriptionType;
+import org.apache.kafka.coordinator.group.assignor.uniform2.util.IntList;
 
 import org.junit.jupiter.api.Test;
 
+import java.util.ArrayList;
 import java.util.Arrays;
 import java.util.LinkedHashSet;
 import java.util.List;
@@ -85,14 +87,15 @@ public class IndexedGroupTest {
         assertEquals(List.of(T1, T2, T3), topicIds(group));
         assertEquals(List.of(0, 1, 2), topicIndices(group, T1, T2, T3));
         assertEquals(List.of(2, 5, 7), partitionCounts(group));
+        assertEquals(List.of(List.of(0), List.of(1)), membersOfCohorts(group));
         assertEquals(List.of(List.of(0, 2), List.of(1)), topicsOfCohorts(group));
     }
 
     /**
-     * A subscribes to T1: only T1 has an index, and any other topic gets -1.
+     * A subscribes to T1 only: T2 exists, but nobody subscribes to it, so it has no index.
      */
     @Test
-    public void testTopicIndex() {
+    public void testTopicsThatAreNotSubscribedAreIgnored() {
         var spec = new GroupSpecFixture()
             .withMember("A", Set.of(T1))
             .build();
@@ -100,8 +103,10 @@ public class IndexedGroupTest {
         var group = new IndexedGroup(spec, DESCRIBER);
 
         assertEquals(List.of(T1), topicIds(group));
-        assertEquals(List.of(0, -1, -1), topicIndices(group, T1, T2, MISSING));
+        assertEquals(List.of(0, -1), topicIndices(group, T1, T2));
         assertEquals(List.of(2), partitionCounts(group));
+        assertEquals(List.of(List.of(0)), membersOfCohorts(group));
+        assertEquals(List.of(List.of(0)), topicsOfCohorts(group));
     }
 
     /**
@@ -212,6 +217,31 @@ public class IndexedGroupTest {
         assertEquals(List.of(List.of(0), List.of(0, 1), List.of(1, 2)), cohortsOfTopics(group));
         assertEquals(List.of(2, 3, 2), subscriberCounts(group));
         assertEquals(List.of(List.of(0, 1), List.of(1, 2), List.of(0, 1), List.of(2)), subscribedTopics(group));
+    }
+
+    /**
+     * With every hash masked to 0, all the subscriptions have the same hash, and the cohorts are
+     * told apart by comparing their topics: {0} and {0, 1} have different numbers of topics, {1}
+     * and {0} different topics, and {0} and {1, 0} find their cohorts again.
+     */
+    @Test
+    public void testCohortsWithTheSameHashAreComparedExactly() {
+        var cohorts = new IndexedGroup.CohortsBySubscription(0L);
+
+        var found = new ArrayList<Integer>();
+        for (var topics : List.of(List.of(0), List.of(0, 1), List.of(1), List.of(0), List.<Integer>of(), List.of(1, 0))) {
+            found.add(cohorts.getOrCreateCohort(intList(topics)));
+        }
+
+        assertEquals(List.of(0, 1, 2, 0, 3, 1), found);
+        assertEquals(List.of(List.of(0), List.of(0, 1), List.of(1), List.of()),
+            cohorts.subscriptions().stream().map(IndexedGroupTest::boxed).toList());
+    }
+
+    private static IntList intList(List<Integer> values) {
+        var list = new IntList(values.size());
+        values.forEach(list::add);
+        return list;
     }
 
     private static List<String> memberIds(IndexedGroup group) {

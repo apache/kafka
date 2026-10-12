@@ -35,16 +35,17 @@ import java.util.Map;
  * is deterministic and does not depend on the iteration order of the collections in the spec.
  *
  * <p>A cohort is a set of members having the same subscription. Cohorts are numbered in the order
- * of their first member. Grouping the members by subscription lets the assignor read, store and
- * process every subscription once, however many members share it.
+ * of their first member. Grouping the members by subscription lets the assignor store and process
+ * every distinct subscription once, however many members share it.
  *
  * <p>Only topics subscribed by at least one member and which exist are retained.
  *
  * <p>With a homogeneous subscription type, only the subscription of the first member is read, as
- * the coordinator guarantees that every member has the same one, and the group is a single cohort.
- * Otherwise every subscription is read once and looked up by a hash of its topics that does not
- * depend on their order, see {@link CohortsBySubscription}. The cohorts with the same hash are
- * compared exactly, so a collision only costs a comparison, never a wrong cohort.
+ * the coordinator guarantees that every member has the same one, and the group is a single cohort;
+ * an empty group is a single cohort without members. Otherwise every subscription is read once and
+ * looked up by a hash of its topics that does not depend on their order, see
+ * {@link CohortsBySubscription}. The cohorts with the same hash are compared exactly, so members
+ * are never assigned to the wrong cohort.
  */
 final class IndexedGroup {
     /**
@@ -112,8 +113,7 @@ final class IndexedGroup {
     }
 
     /**
-     * A hash map from subscriptions to cohorts: {@link #getOrCreateCohort} returns the cohort with
-     * the exact same subscribed topics, creating it when there is none.
+     * A hash map from subscriptions to cohorts.
      *
      * <p>A subscription is summarized by a hash that does not depend on the order of its topics,
      * and the cohorts with the same hash are listed together, usually one per hash.
@@ -123,7 +123,13 @@ final class IndexedGroup {
      * {@code HashMap} keyed by the subscription, this needs no sorted copy of every member's
      * subscription.
      */
-    private static final class CohortsBySubscription {
+    static final class CohortsBySubscription {
+        /**
+         * The mask applied to every hash: all the bits in the assignor, none in a test that makes
+         * every subscription collide.
+         */
+        private final long hashMask;
+
         /**
          * Per cohort, its subscribed topics, indexed in the order they were seen.
          */
@@ -144,6 +150,17 @@ final class IndexedGroup {
          */
         private int lookups;
 
+        CohortsBySubscription() {
+            this(-1L);
+        }
+
+        /**
+         * @param hashMask The mask applied to every hash.
+         */
+        CohortsBySubscription(long hashMask) {
+            this.hashMask = hashMask;
+        }
+
         /**
          * @param subscribedTopics The subscribed topics of a member, in any order, without
          *                         duplicates.
@@ -152,7 +169,7 @@ final class IndexedGroup {
         int getOrCreateCohort(IntList subscribedTopics) {
             int mark = ++lookups;
             markTopics(subscribedTopics, mark);
-            long hash = hashOf(subscribedTopics);
+            long hash = subscriptionHash(subscribedTopics) & hashMask;
             var cohorts = cohortsByHash.get(hash);
             if (cohorts == null) {
                 cohorts = new IntList(1);
@@ -171,14 +188,16 @@ final class IndexedGroup {
         }
 
         /**
-         * @return Per cohort, its subscribed topics. The list must not be changed.
+         * @return Per cohort, its subscribed topics. The arrays are handed over: no subscription
+         *         can be looked up once they are changed.
          */
         List<int[]> subscriptions() {
             return subscriptions;
         }
 
         /**
-         * Marks the topics with the mark, growing the marks to cover them.
+         * Sets the entry of every subscribed topic in {@link #marks} to the mark, growing the marks
+         * as needed.
          */
         private void markTopics(IntList subscribedTopics, int mark) {
             for (int i = 0; i < subscribedTopics.size(); i++) {
@@ -192,14 +211,14 @@ final class IndexedGroup {
 
         /**
          * @return {@code true} if the cohort has the exact same subscription as the one marked with
-         *         the mark, which has that many topics.
+         *         the mark, which has {@code topicCount} topics.
          */
         private boolean hasSameSubscription(int cohort, int topicCount, int mark) {
             int[] topics = subscriptions.get(cohort);
             if (topics.length != topicCount) {
                 return false;
             }
-            // Its topics were marked when it was created, so the marks cover them.
+            // The topics of the cohort were marked when it was created, so the marks cover them.
             for (int topic : topics) {
                 if (marks.get(topic) != mark) {
                     return false;
@@ -213,10 +232,10 @@ final class IndexedGroup {
          *         sum of a well spread hash of every topic, so that two different subscriptions
          *         rarely have the same hash.
          */
-        private static long hashOf(IntList topics) {
+        private static long subscriptionHash(IntList topics) {
             long hash = topics.size();
             for (int i = 0; i < topics.size(); i++) {
-                hash += mix(topics.get(i));
+                hash += topicHash(topics.get(i));
             }
             return hash;
         }
@@ -224,7 +243,7 @@ final class IndexedGroup {
         /**
          * @return A well spread hash of the topic: the SplitMix64 finalizer of its index plus one.
          */
-        private static long mix(int topic) {
+        private static long topicHash(int topic) {
             long z = (topic + 1) * 0x9E3779B97F4A7C15L;
             z = (z ^ (z >>> 30)) * 0xBF58476D1CE4E5B9L;
             z = (z ^ (z >>> 27)) * 0x94D049BB133111EBL;
@@ -233,7 +252,7 @@ final class IndexedGroup {
     }
 
     /**
-     * The member ids, in member id order: the id of every member.
+     * The member ids, in ascending order.
      */
     private final String[] memberIds;
 
@@ -243,7 +262,7 @@ final class IndexedGroup {
     private final int[] cohortOfMember;
 
     /**
-     * The topic ids, in topic id order: the id of every topic.
+     * The topic ids, in ascending order.
      */
     private final Uuid[] topicIds;
 
@@ -263,19 +282,17 @@ final class IndexedGroup {
     private final int[] subscriberCounts;
 
     /**
-     * Per topic, the cohorts subscribing to it, in cohort order: an array of cohorts, as long as
-     * the number of such cohorts.
+     * Per topic, the list of cohorts subscribing to it, in cohort order.
      */
     private final int[][] cohortsOfTopic;
 
     /**
-     * Per cohort, its members, in member order: an array of members, as long as the cohort.
+     * Per cohort, its members, in member order.
      */
     private final int[][] cohortMembers;
 
     /**
-     * Per cohort, its subscribed topics, in topic order: an array of topics, as long as the
-     * subscription.
+     * Per cohort, its subscribed topics, in topic order.
      */
     private final int[][] cohortTopics;
 
@@ -291,7 +308,9 @@ final class IndexedGroup {
         cohortOfMember = new int[memberIds.length];
 
         var reader = new SubscriptionReader(groupSpec, subscribedTopicDescriber);
-        var cohortSubscriptions = groupSpec.subscriptionType() == SubscriptionType.HOMOGENEOUS || memberIds.length <= 1
+        boolean singleCohort = groupSpec.subscriptionType() == SubscriptionType.HOMOGENEOUS
+            || memberIds.length <= 1;
+        var cohortSubscriptions = singleCohort
             ? readHomogeneousCohorts(reader)
             : readHeterogeneousCohorts(reader);
 
@@ -329,7 +348,7 @@ final class IndexedGroup {
     }
 
     /**
-     * Reads the subscription of the first member, which every member has.
+     * Reads the subscription of the first member, which every member is assumed to share.
      *
      * @return The subscribed topics of the single cohort, indexed in the order they were seen.
      */

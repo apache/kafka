@@ -33,7 +33,8 @@ import java.util.Set;
 /**
  * Builds the {@link GroupSpec} for tests, preserving the order of members as they are added. The
  * subscription type is homogeneous when every member has the same subscription, as the coordinator
- * declares it. The spec can be built only once.
+ * declares it. A partition is held by one member at most, as the coordinator guarantees. The spec
+ * can be built only once.
  */
 public final class GroupSpecFixture {
     private final Map<String, MemberSubscriptionAndAssignmentImpl> members = new LinkedHashMap<>();
@@ -60,6 +61,8 @@ public final class GroupSpecFixture {
      * @param topics     The topics it subscribes to.
      * @param partitions The partitions it holds, per topic.
      * @return This fixture.
+     * @throws IllegalArgumentException If the member is already added, or a partition it holds is
+     *                                  held by another member.
      */
     public GroupSpecFixture withMember(String memberId, Set<Uuid> topics, Map<Uuid, Set<Integer>> partitions) {
         checkNotBuilt();
@@ -69,6 +72,8 @@ public final class GroupSpecFixture {
         members.put(memberId, new MemberSubscriptionAndAssignmentImpl(Optional.empty(), Optional.empty(), topics,
             new Assignment(partitions)));
 
+        // A copy, compared by its topics: a TopicIds also counts in its size the names that do not
+        // resolve.
         var subscription = new HashSet<>(topics);
         if (firstSubscription == null) {
             firstSubscription = subscription;
@@ -77,7 +82,12 @@ public final class GroupSpecFixture {
         }
         partitions.forEach((topicId, topicPartitions) -> {
             var owners = invertedTargetAssignment.computeIfAbsent(topicId, k -> new HashMap<>());
-            topicPartitions.forEach(partition -> owners.put(partition, memberId));
+            for (int partition : topicPartitions) {
+                var holder = owners.put(partition, memberId);
+                if (holder != null) {
+                    throw new IllegalArgumentException("Partition " + partition + " of " + topicId + " is already held by " + holder);
+                }
+            }
         });
         return this;
     }

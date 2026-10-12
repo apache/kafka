@@ -95,14 +95,16 @@ public class CurrentAssignmentTest {
     }
 
     /**
-     * A subscribes to T1 only, and holds partition 0 of T2, to which B subscribes: A does not own
-     * it, so T2 has no owner, and A holds a stale partition. A still owns its partition of T1.
+     * B subscribes to T1 only, and holds partition 0 of T2, to which A subscribes: B does not own
+     * it, so T2 has no owner, and B holds a stale partition. B still owns its partition of T1, and
+     * {@code assignment} still returns its map, the stale partition included. The cohort of A is
+     * read first: subscribing to T2 must not carry over to B.
      */
     @Test
     public void testPartitionsOfATopicTheMemberDoesNotSubscribeToAreStale() {
         var spec = new GroupSpecFixture()
-            .withMember("A", Set.of(T1), mkAssignment(mkTopicAssignment(T1, 0), mkTopicAssignment(T2, 0)))
-            .withMember("B", Set.of(T1, T2), mkAssignment(mkTopicAssignment(T1, 1)))
+            .withMember("A", Set.of(T1, T2), mkAssignment(mkTopicAssignment(T1, 0)))
+            .withMember("B", Set.of(T1), mkAssignment(mkTopicAssignment(T1, 1), mkTopicAssignment(T2, 0)))
             .build();
         var group = new IndexedGroup(spec, DESCRIBER);
 
@@ -110,11 +112,13 @@ public class CurrentAssignmentTest {
 
         assertEquals(List.of(List.of(A, B, -1, -1), List.of()), owners(group, currentAssignment));
         assertEquals(List.of(List.of(entry(A, 1), entry(B, 1)), List.of()), ownedCounts(group, currentAssignment));
-        assertEquals(List.of(A), membersHoldingStalePartitions(group, currentAssignment));
+        assertEquals(List.of(B), membersHoldingStalePartitions(group, currentAssignment));
+        assertSame(spec.memberAssignment("B").partitions(), currentAssignment.assignment(B));
     }
 
     /**
-     * A holds partition 0 of the missing topic, which is stale. A still owns its partition of T1.
+     * A holds partition 0 of the missing topic, which is stale. A still owns its partition of T1,
+     * and {@code assignment} still returns its map, the stale partition included.
      */
     @Test
     public void testPartitionsOfATopicThatNoLongerExistsAreStale() {
@@ -129,6 +133,7 @@ public class CurrentAssignmentTest {
         assertEquals(List.of(List.of(A, B, -1, -1)), owners(group, currentAssignment));
         assertEquals(List.of(List.of(entry(A, 1), entry(B, 1))), ownedCounts(group, currentAssignment));
         assertEquals(List.of(A), membersHoldingStalePartitions(group, currentAssignment));
+        assertSame(spec.memberAssignment("A").partitions(), currentAssignment.assignment(A));
     }
 
     /**
