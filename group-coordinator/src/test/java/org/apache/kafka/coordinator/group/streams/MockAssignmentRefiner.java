@@ -88,7 +88,7 @@ public class MockAssignmentRefiner implements AssignmentRefiner {
         lastPassedMembers = members;
         lastPassedTargetAssignment = targetAssignment;
         lastPassedTaskOffsets = taskOffsets;
-        lastPassedHeartbeatVersions = heartbeatVersions;
+        lastPassedHeartbeatVersions = Map.copyOf(heartbeatVersions);
         lastPassedSubtopologies = subtopologies;
         lastPassedNumWarmupReplicas = numWarmupReplicas;
         lastPassedAcceptableRecoveryLag = acceptableRecoveryLag;

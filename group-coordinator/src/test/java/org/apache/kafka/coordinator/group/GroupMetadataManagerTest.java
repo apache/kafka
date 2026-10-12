@@ -20028,10 +20028,12 @@ public class GroupMetadataManagerTest {
         // memberA has not heartbeated since the coordinator loaded the group, so it is missing.
         context.streamsGroupHeartbeat(
             streamsGroupRefinementHeartbeat(groupId, memberB, "process-b", topic, List.of()), (short) 0);
+        assertEquals(1, refiner.numRefinements());
         assertEquals(Map.of(memberB, 0), refiner.lastPassedHeartbeatVersions());
 
         context.streamsGroupHeartbeat(
             streamsGroupRefinementHeartbeat(groupId, memberA, DEFAULT_PROCESS_ID, topic, List.of(0, 1, 2)), (short) 1);
+        assertEquals(2, refiner.numRefinements());
         assertEquals(Map.of(memberA, 1, memberB, 0), refiner.lastPassedHeartbeatVersions());
     }
 
