@@ -246,7 +246,7 @@ public class FileRecordsTest {
         try (FileRecords fileRecords = createFileRecords(values, preallocate)) {
             List<RecordBatch> items = batches(fileRecords);
             RecordBatch second = items.get(1);
-            // The slice holds only the second batch and the third batch follows it in the file
+            // The slice holds only the second batch. The third batch should not be read into the buffer.
             FileRecords slice = fileRecords.slice(items.get(0).sizeInBytes(), second.sizeInBytes());
             ByteBuffer buffer = ByteBuffer.allocate(fileRecords.sizeInBytes());
 
