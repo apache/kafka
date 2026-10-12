@@ -135,10 +135,10 @@ public class FileRecords extends AbstractRecords implements Closeable {
      * possible exceptions
      */
     public void readInto(ByteBuffer buffer, int position) throws IOException {
-        int size = sizeInBytes();
-        if (position < 0 || position > size)
-            throw new IllegalArgumentException("Position " + position + " is outside of records of size " + size);
-        buffer.limit(buffer.position() + Math.min(buffer.remaining(), size - position));
+        int available = availableBytes(position, buffer.remaining());
+        if (buffer.remaining() > available) {
+            buffer.limit(buffer.position() + available);
+        }
         Utils.readFully(channel, buffer, position + this.start);
         buffer.flip();
     }
