@@ -338,7 +338,7 @@ public class PlaintextConsumerCommitTest {
                 @Override
                 public void onPartitionsAssigned(Collection<TopicPartition> partitions, RebalanceConsumer rebalanceConsumer) {
                     // keep partitions paused in this test so that we can verify the commits based on specific seeks
-                    consumer.pause(partitions);
+                    rebalanceConsumer.pause(partitions);
                 }
                 @Override
                 public void onPartitionsRevoked(Collection<TopicPartition> partitions, RebalanceConsumer rebalanceConsumer) {
@@ -452,7 +452,7 @@ public class PlaintextConsumerCommitTest {
                 @Override
                 public void onPartitionsAssigned(Collection<TopicPartition> partitions, RebalanceConsumer rebalanceConsumer) {
                     // keep partitions paused in this test so that we can verify the commits based on specific seeks
-                    consumer.pause(partitions);
+                    rebalanceConsumer.pause(partitions);
                 }
 
                 @Override

@@ -649,7 +649,7 @@ public class AsyncKafkaConsumerTest {
         RebalanceListener listener = new RebalanceListener() {
             @Override
             public void onPartitionsRevoked(final Collection<TopicPartition> partitions, final RebalanceConsumer rebalanceConsumer) {
-                assertDoesNotThrow(() -> consumer.commitSync(Map.of(tp, new OffsetAndMetadata(0))));
+                assertDoesNotThrow(() -> rebalanceConsumer.commitSync(Map.of(tp, new OffsetAndMetadata(0))));
                 callbackExecuted.set(true);
             }
 
