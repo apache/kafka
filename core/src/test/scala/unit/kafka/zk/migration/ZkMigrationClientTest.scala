@@ -517,11 +517,63 @@ class ZkMigrationClientTest extends ZkMigrationTestHarness {
 
   /**
    * A partition can be present in a topic's replica assignment without having any partition state, for
-   * instance when a controller fails in between writing the two. Verify that such partitions are only
-   * visited when the caller asks for them, and that the other partitions and topics are visited either way.
+   * instance when a controller fails in between writing the two. Verify that such partitions are visited
+   * through visitPartitionWithoutState rather than visitPartition, and that the other partitions and topics
+   * are visited as usual.
    */
   @Test
   def testIterateTopicsWithMissingPartitionState(): Unit = {
+    val topicNames = createTopicsWithMissingPartitionState()
+
+    val visitor = new CapturingTopicVisitor()
+    migrationClient.topicClient().iterateTopics(
+      java.util.EnumSet.of(TopicVisitorInterest.TOPICS, TopicVisitorInterest.PARTITIONS),
+      visitor)
+    assertEquals(topicNames.toSet, visitor.visitedTopics.toSet)
+    assertEquals(
+      topicNames.map(new TopicPartition(_, 0)).toSet,
+      visitor.visitedPartitions.keySet.toSet)
+    assertEquals(
+      topicNames.map(new TopicPartition(_, 1)).toSet,
+      visitor.visitedPartitionsWithoutState.keySet.toSet)
+    topicNames.foreach { topicName =>
+      val record = visitor.visitedPartitionsWithoutState(new TopicPartition(topicName, 1))
+      assertEquals(1, record.partitionId)
+      assertEquals(Seq(1, 2, 3), record.replicas.asScala.map(_.toInt))
+    }
+  }
+
+  /**
+   * ZooKeeper is the source of truth during the migration, so a partition without any state in ZK must be
+   * migrated with a synthetic leader and ISR rather than being left out of the migrated metadata.
+   */
+  @Test
+  def testMigrateTopicsWithMissingPartitionState(): Unit = {
+    val topicNames = createTopicsWithMissingPartitionState()
+
+    val batches = new java.util.ArrayList[java.util.List[ApiMessageAndVersion]]()
+    migrationClient.readAllMetadata(batch => batches.add(batch), _ => ())
+    val partitionRecords = batches.asScala.flatMap(_.asScala).map(_.message).collect {
+      case record: PartitionRecord => record
+    }
+    val topicIds = zkClient.getTopicIdsForTopics(topicNames.toSet)
+
+    topicNames.foreach { topicName =>
+      val topicRecords = partitionRecords.filter(_.topicId == topicIds(topicName))
+      assertEquals(Set(0, 1), topicRecords.map(_.partitionId).toSet)
+      val synthesized = topicRecords.find(_.partitionId == 1).get
+      assertEquals(1, synthesized.leader)
+      assertEquals(Seq(1, 2, 3), synthesized.isr.asScala.map(_.toInt))
+      assertEquals(0, synthesized.leaderEpoch)
+      assertEquals(0, synthesized.partitionEpoch)
+      assertEquals(LeaderRecoveryState.RECOVERED.value, synthesized.leaderRecoveryState)
+    }
+  }
+
+  /**
+   * Create two topics with two partitions each, where only partition 0 of each topic has partition state.
+   */
+  private def createTopicsWithMissingPartitionState(): Seq[String] = {
     val topicNames = Seq("test-a", "test-b")
     topicNames.foreach { topicName =>
       val assignment = Map(
@@ -529,41 +581,12 @@ class ZkMigrationClientTest extends ZkMigrationTestHarness {
         new TopicPartition(topicName, 1) -> List(1, 2, 3)
       )
       zkClient.createTopicAssignment(topicName, Some(Uuid.randomUuid()), assignment)
-      // Only write the state of partition 0, leaving partition 1 without any state
       zkClient.createTopicPartitionStatesRaw(Map(
         new TopicPartition(topicName, 0) -> LeaderIsrAndControllerEpoch(
           LeaderAndIsr(0, 5, List(0, 1, 2), LeaderRecoveryState.RECOVERED, -1), 1)
       ), 0)
     }
-
-    val skippingVisitor = new CapturingTopicVisitor()
-    migrationClient.topicClient().iterateTopics(
-      java.util.EnumSet.of(TopicVisitorInterest.TOPICS, TopicVisitorInterest.PARTITIONS),
-      skippingVisitor)
-    assertEquals(topicNames.toSet, skippingVisitor.visitedTopics.toSet)
-    assertEquals(
-      topicNames.map(new TopicPartition(_, 0)).toSet,
-      skippingVisitor.visitedPartitions.keySet.toSet)
-
-    val synthesizingVisitor = new CapturingTopicVisitor()
-    migrationClient.topicClient().iterateTopics(
-      java.util.EnumSet.of(
-        TopicVisitorInterest.TOPICS,
-        TopicVisitorInterest.PARTITIONS,
-        TopicVisitorInterest.PARTITIONS_WITHOUT_STATE),
-      synthesizingVisitor)
-    assertEquals(topicNames.toSet, synthesizingVisitor.visitedTopics.toSet)
-    assertEquals(
-      topicNames.flatMap(topicName => Seq(0, 1).map(new TopicPartition(topicName, _))).toSet,
-      synthesizingVisitor.visitedPartitions.keySet.toSet)
-    topicNames.foreach { topicName =>
-      val synthesized = synthesizingVisitor.visitedPartitions(new TopicPartition(topicName, 1))
-      assertEquals(1, synthesized.leader)
-      assertEquals(Seq(1, 2, 3), synthesized.isr.toSeq)
-      assertEquals(0, synthesized.leaderEpoch)
-      assertEquals(0, synthesized.partitionEpoch)
-      assertEquals(LeaderRecoveryState.RECOVERED, synthesized.leaderRecoveryState)
-    }
+    topicNames
   }
 
   /**
@@ -624,6 +647,7 @@ class ZkMigrationClientTest extends ZkMigrationTestHarness {
   private class CapturingTopicVisitor extends TopicVisitor {
     val visitedTopics = new mutable.ArrayBuffer[String]()
     val visitedPartitions = new mutable.HashMap[TopicPartition, PartitionRegistration]()
+    val visitedPartitionsWithoutState = new mutable.HashMap[TopicPartition, PartitionRecord]()
 
     override def visitTopic(
       topicName: String,
@@ -638,6 +662,13 @@ class ZkMigrationClientTest extends ZkMigrationTestHarness {
       partitionRegistration: PartitionRegistration
     ): Unit = {
       visitedPartitions.put(topicIdPartition.topicPartition(), partitionRegistration)
+    }
+
+    override def visitPartitionWithoutState(
+      topicIdPartition: TopicIdPartition,
+      partitionRecord: PartitionRecord
+    ): Unit = {
+      visitedPartitionsWithoutState.put(topicIdPartition.topicPartition(), partitionRecord)
     }
   }
 }

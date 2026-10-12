@@ -28,7 +28,7 @@ import org.apache.kafka.common.metadata.PartitionRecord
 import org.apache.kafka.common.{TopicIdPartition, TopicPartition, Uuid}
 import org.apache.kafka.metadata.migration.TopicMigrationClient.TopicVisitorInterest
 import org.apache.kafka.metadata.migration.{MigrationClientException, TopicMigrationClient, ZkMigrationLeadershipState}
-import org.apache.kafka.metadata.{LeaderRecoveryState, PartitionRegistration}
+import org.apache.kafka.metadata.PartitionRegistration
 import org.apache.kafka.server.config.ConfigType
 import org.apache.zookeeper.CreateMode
 import org.apache.zookeeper.KeeperException.Code
@@ -67,7 +67,6 @@ class ZkTopicMigrationClient(zkClient: KafkaZkClient) extends TopicMigrationClie
         visitor.visitTopic(topic, topicIdOpt.get, topicAssignment)
       }
       if (interests.contains(TopicVisitorInterest.PARTITIONS)) {
-        val visitPartitionsWithoutState = interests.contains(TopicVisitorInterest.PARTITIONS_WITHOUT_STATE)
         val partitions = partitionAssignments.keys.toSeq
         val leaderIsrAndControllerEpochs = zkClient.getTopicPartitionStates(partitions)
         partitionAssignments.foreach { case (topicPartition, replicaAssignment) =>
@@ -78,30 +77,19 @@ class ZkTopicMigrationClient(zkClient: KafkaZkClient) extends TopicMigrationClie
             .setReplicas(replicaList)
             .setAddingReplicas(replicaAssignment.addingReplicas.map(Integer.valueOf).asJava)
             .setRemovingReplicas(replicaAssignment.removingReplicas.map(Integer.valueOf).asJava)
-          val recordToVisit = leaderIsrAndControllerEpochs.get(topicPartition) match {
-            case Some(leaderIsrAndEpoch) =>
-              Some(record
-                .setIsr(leaderIsrAndEpoch.leaderAndIsr.isr.map(Integer.valueOf).asJava)
-                .setLeader(leaderIsrAndEpoch.leaderAndIsr.leader)
-                .setLeaderEpoch(leaderIsrAndEpoch.leaderAndIsr.leaderEpoch)
-                .setPartitionEpoch(leaderIsrAndEpoch.leaderAndIsr.partitionEpoch)
-                .setLeaderRecoveryState(leaderIsrAndEpoch.leaderAndIsr.leaderRecoveryState.value()))
-            case None if visitPartitionsWithoutState =>
-              warn(s"Could not find partition state in ZK for $topicPartition. Initializing this partition " +
-                s"with ISR={$replicaList} and leaderEpoch=0.")
-              Some(record
-                .setIsr(replicaList)
-                .setLeader(replicaList.get(0))
-                .setLeaderEpoch(0)
-                .setPartitionEpoch(0)
-                .setLeaderRecoveryState(LeaderRecoveryState.RECOVERED.value()))
-            case None =>
-              warn(s"Could not find partition state in ZK for $topicPartition. Skipping this partition.")
-              None
-          }
-          recordToVisit.foreach { partitionRecord =>
-            logAndRethrow(this, s"Error in partition consumer. TopicPartition was $topicPartition.") {
-              visitor.visitPartition(new TopicIdPartition(topicIdOpt.get, topicPartition), new PartitionRegistration(partitionRecord))
+          logAndRethrow(this, s"Error in partition consumer. TopicPartition was $topicPartition.") {
+            leaderIsrAndControllerEpochs.get(topicPartition) match {
+              case Some(leaderIsrAndEpoch) =>
+                record
+                  .setIsr(leaderIsrAndEpoch.leaderAndIsr.isr.map(Integer.valueOf).asJava)
+                  .setLeader(leaderIsrAndEpoch.leaderAndIsr.leader)
+                  .setLeaderEpoch(leaderIsrAndEpoch.leaderAndIsr.leaderEpoch)
+                  .setPartitionEpoch(leaderIsrAndEpoch.leaderAndIsr.partitionEpoch)
+                  .setLeaderRecoveryState(leaderIsrAndEpoch.leaderAndIsr.leaderRecoveryState.value())
+                visitor.visitPartition(new TopicIdPartition(topicIdOpt.get, topicPartition), new PartitionRegistration(record))
+              case None =>
+                warn(s"Could not find partition state in ZK for $topicPartition.")
+                visitor.visitPartitionWithoutState(new TopicIdPartition(topicIdOpt.get, topicPartition), record)
             }
           }
         }

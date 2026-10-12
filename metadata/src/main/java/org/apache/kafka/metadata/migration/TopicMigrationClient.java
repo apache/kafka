@@ -19,6 +19,7 @@ package org.apache.kafka.metadata.migration;
 
 import org.apache.kafka.common.TopicIdPartition;
 import org.apache.kafka.common.Uuid;
+import org.apache.kafka.common.metadata.PartitionRecord;
 import org.apache.kafka.metadata.PartitionRegistration;
 
 import java.util.EnumSet;
@@ -30,26 +31,29 @@ public interface TopicMigrationClient {
 
     enum TopicVisitorInterest {
         TOPICS,
-        PARTITIONS,
-
-        /**
-         * Partitions which are included in a topic's replica assignment, but which have no partition state
-         * (leader and ISR) in ZooKeeper. Such partitions are left behind when a controller fails in between
-         * writing the topic assignment and the partition states.
-         * <p>
-         * Only meaningful in combination with {@link #PARTITIONS}. If included, these partitions are visited
-         * with a synthetic {@link PartitionRegistration} which elects the first replica as the leader. Callers
-         * for which ZooKeeper is the source of truth (i.e. the ZK to KRaft migration) should include this
-         * interest, since skipping such a partition would drop it from the migrated metadata. Callers for which
-         * KRaft is the source of truth (i.e. the KRaft to ZK dual-write) should not, since the missing partition
-         * state is meant to be (re)created from the KRaft state rather than inferred from ZooKeeper.
-         */
-        PARTITIONS_WITHOUT_STATE
+        PARTITIONS
     }
 
     interface TopicVisitor {
         void visitTopic(String topicName, Uuid topicId, Map<Integer, List<Integer>> assignments);
         default void visitPartition(TopicIdPartition topicIdPartition, PartitionRegistration partitionRegistration) {
+
+        }
+
+        /**
+         * Visit a partition which is included in a topic's replica assignment, but which has no partition state
+         * (leader and ISR) in ZooKeeper. Such partitions are left behind when a controller fails in between
+         * writing the topic assignment and the partition states.
+         * <p>
+         * The given record only has the topic ID, partition ID and replica assignment set. Callers for which
+         * ZooKeeper is the source of truth (i.e. the ZK to KRaft migration) should override this method, since
+         * skipping such a partition would drop it from the migrated metadata. Callers for which KRaft is the
+         * source of truth (i.e. the KRaft to ZK dual-write) should not, since the missing partition state is
+         * meant to be (re)created from the KRaft state rather than inferred from ZooKeeper.
+         * <p>
+         * Only invoked if {@link TopicVisitorInterest#PARTITIONS} is included in the interests.
+         */
+        default void visitPartitionWithoutState(TopicIdPartition topicIdPartition, PartitionRecord partitionRecord) {
 
         }
     }
