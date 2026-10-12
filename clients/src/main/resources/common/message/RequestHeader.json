@@ -40,6 +40,11 @@
     // ApiVersionsRequest, even if it is from a newer version.
     // Since the client is sending the ApiVersionsRequest in order to discover what
     // versions are supported, the client does not know the best version to use.
+    //
+    // When the request api version is unsupported, the request header is parsed with version 1,
+    // i.e. only the fields above are read (see RequestHeader#parse). Brokers without that change
+    // parse the header with the version derived from the request api version instead. So, any new
+    // field added to the header must be a tagged field until all supported releases have that change.
     { "name": "ClientId", "type": "string", "versions": "1+", "nullableVersions": "1+", "flexibleVersions": "none",
       "about": "The client ID, for identifying an application." },
     { "name": "ClientInstanceId", "type": "uuid", "versions": "3+", "taggedVersions": "3+", "tag": 0,
