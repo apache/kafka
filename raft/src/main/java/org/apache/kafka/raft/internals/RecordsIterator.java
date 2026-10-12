@@ -115,7 +115,7 @@ public final class RecordsIterator<T> implements Iterator<Batch<T>>, AutoCloseab
     private MemoryRecords readFileRecords(FileRecords fileRecords, ByteBuffer buffer) {
         int start = buffer.position();
         try {
-            fileRecords.readUntil(buffer, bytesRead);
+            fileRecords.readInto(buffer, bytesRead);
         } catch (IOException e) {
             throw new UncheckedIOException("Failed to read records into memory", e);
         }

@@ -248,7 +248,7 @@ public class FileRecordsTest {
         FileRecords slice = fileRecords.slice(items.get(0).sizeInBytes(), second.sizeInBytes());
         ByteBuffer buffer = ByteBuffer.allocate(fileRecords.sizeInBytes());
 
-        slice.readUntil(buffer, 0);
+        slice.readInto(buffer, 0);
 
         assertEquals(second.sizeInBytes(), buffer.remaining());
         assertEquals(List.of(second.baseOffset()), baseOffsets(buffer));
@@ -260,7 +260,7 @@ public class FileRecordsTest {
         FileRecords slice = fileRecords.slice(items.get(0).sizeInBytes(), items.get(1).sizeInBytes());
         ByteBuffer buffer = ByteBuffer.allocate(fileRecords.sizeInBytes());
 
-        slice.readUntil(buffer, slice.sizeInBytes());
+        slice.readInto(buffer, slice.sizeInBytes());
 
         assertEquals(0, buffer.remaining());
     }
@@ -272,23 +272,8 @@ public class FileRecordsTest {
         ByteBuffer buffer = ByteBuffer.allocate(fileRecords.sizeInBytes());
 
         // Both positions are inside the file but outside the slice
-        assertThrows(IllegalArgumentException.class, () -> slice.readUntil(buffer, -1));
-        assertThrows(IllegalArgumentException.class, () -> slice.readUntil(buffer, slice.sizeInBytes() + 1));
-    }
-
-    @Test
-    public void testReadUntilMatchesReadIntoForWholeFile() throws IOException {
-        int position = batches(fileRecords).get(0).sizeInBytes();
-        int bytesLeft = fileRecords.sizeInBytes() - position;
-        for (int bufferSize : new int[] {bytesLeft - 1, bytesLeft + 1}) {
-            ByteBuffer readIntoBuffer = ByteBuffer.allocate(bufferSize);
-            ByteBuffer readUntilBuffer = ByteBuffer.allocate(bufferSize);
-
-            fileRecords.readInto(readIntoBuffer, position);
-            fileRecords.readUntil(readUntilBuffer, position);
-
-            assertEquals(readIntoBuffer, readUntilBuffer, "Buffer size " + bufferSize);
-        }
+        assertThrows(IllegalArgumentException.class, () -> slice.readInto(buffer, -1));
+        assertThrows(IllegalArgumentException.class, () -> slice.readInto(buffer, slice.sizeInBytes() + 1));
     }
 
     /**
