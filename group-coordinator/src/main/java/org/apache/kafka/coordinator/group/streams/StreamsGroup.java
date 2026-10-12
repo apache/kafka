@@ -226,12 +226,11 @@ public class StreamsGroup implements Group {
     private final Map<String, MemberTaskOffsets> taskOffsets = new HashMap<>();
 
     /**
-     * The version of the latest streams group heartbeat of each member, keyed by member ID. It tells the
-     * {@link AssignmentRefiner} which members report their task offsets, and thus can be given warm-up tasks. A member
-     * that is missing has not heartbeated since the coordinator loaded the group. Like {@link #taskOffsets}, it is
-     * transient: written in the heartbeat path, dropped when the member is removed and not known again after a
-     * coordinator failover until the member's next heartbeat. It is deliberately not persisted, so that it can never
-     * outlive the client that sent it.
+     * The version of the latest streams group heartbeat of each member, keyed by member ID, which tells the
+     * {@link AssignmentRefiner} which members report their task offsets. A member that is missing has not heartbeated
+     * since the coordinator loaded the group. Like {@link #taskOffsets}, it is transient: written in the heartbeat
+     * path, dropped when the member is removed and lost on coordinator failover. It is not persisted, so that it can
+     * never outlive the client that sent it.
      */
     private final Map<String, Integer> heartbeatVersions = new HashMap<>();
 
@@ -614,18 +613,14 @@ public class StreamsGroup implements Group {
     }
 
     /**
-     * Records the version of the latest streams group heartbeat of a member. This is transient and not persisted.
-     *
-     * @param memberId         The member ID.
-     * @param heartbeatVersion The version of the heartbeat request.
+     * Records the version of the latest streams group heartbeat of a member.
      */
     public void updateHeartbeatVersion(String memberId, int heartbeatVersion) {
         heartbeatVersions.put(memberId, heartbeatVersion);
     }
 
     /**
-     * @return An immutable view of the version of the latest heartbeat of each member, keyed by member ID. A member
-     *         that has not heartbeated since the coordinator loaded the group is missing.
+     * @return An immutable view of the latest heartbeat version of each member, keyed by member ID.
      */
     public Map<String, Integer> heartbeatVersions() {
         return Collections.unmodifiableMap(heartbeatVersions);

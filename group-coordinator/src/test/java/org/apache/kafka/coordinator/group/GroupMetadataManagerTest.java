@@ -20025,7 +20025,7 @@ public class GroupMetadataManagerTest {
             Map.of(memberA, DEFAULT_PROCESS_ID, memberB, "process-b")
         );
 
-        // The coordinator has not heard from memberA since it loaded the group, which is how an unknown member shows.
+        // memberA has not heartbeated since the coordinator loaded the group, so it is missing.
         context.streamsGroupHeartbeat(
             streamsGroupRefinementHeartbeat(groupId, memberB, "process-b", topic, List.of()), (short) 0);
         assertEquals(Map.of(memberB, 0), refiner.lastPassedHeartbeatVersions());

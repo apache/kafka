@@ -2262,8 +2262,6 @@ public class GroupMetadataManager {
         if (taskOffsets != null || taskEndOffsets != null) {
             group.updateTaskOffsets(memberId, group.taskOffsets(memberId).update(taskOffsets, taskEndOffsets));
         }
-        // The version of the heartbeat tells the refiner whether the member reports task offsets. Transient like the
-        // offsets, and recorded under the same constraint.
         group.updateHeartbeatVersion(memberId, requestApiVersion);
 
         // We validated a topology that was not validated before, so bump the group epoch as we may have to reassign tasks.

@@ -141,12 +141,10 @@ public class StreamsGroupTest {
         streamsGroup.updateHeartbeatVersion("old", 0);
         streamsGroup.updateHeartbeatVersion("new", 1);
 
-        // A member that has not heartbeated is missing.
         assertEquals(Map.of("old", 0, "new", 1), streamsGroup.heartbeatVersions());
         // The refiner must not be able to change what the coordinator knows.
         assertThrows(UnsupportedOperationException.class, () -> streamsGroup.heartbeatVersions().put("old", 1));
 
-        // The last heartbeat counts.
         streamsGroup.updateHeartbeatVersion("old", 1);
         assertEquals(1, streamsGroup.heartbeatVersions().get("old"));
     }
