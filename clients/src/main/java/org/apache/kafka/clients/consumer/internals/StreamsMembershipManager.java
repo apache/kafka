@@ -366,25 +366,11 @@ public class StreamsMembershipManager implements RequestManager {
     }
 
     /**
-     * @return True if the member is preparing to leave the group or leaving and a leave heartbeat
-     *         should be sent. Returns false for dynamic members with REMAIN_IN_GROUP, which skip
-     *         the leave heartbeat entirely.
+     * @return True if the member is preparing to leave the group or leaving.
      */
     public boolean isLeavingGroup() {
-        if (CloseOptions.GroupMembershipOperation.REMAIN_IN_GROUP == leaveGroupOperation && groupInstanceId.isEmpty()) {
-            return false;
-        }
-        MemberState currentState = state();
-        boolean isLeavingState = currentState == MemberState.PREPARE_LEAVING || currentState == MemberState.LEAVING;
-        boolean hasLeaveOperation =
-            // Default operation: both static and dynamic members will send a leave heartbeat
-            CloseOptions.GroupMembershipOperation.DEFAULT == leaveGroupOperation
-            // Leave group operation: both static and dynamic members will send a leave heartbeat
-            || CloseOptions.GroupMembershipOperation.LEAVE_GROUP == leaveGroupOperation
-            // Remain in group: static members will send a leave heartbeat with -2 epoch to signal
-            // that a member using this instance ID is temporarily gone and will rejoin within session timeout.
-            || groupInstanceId.isPresent();
-        return isLeavingState && hasLeaveOperation;
+        MemberState state = state();
+        return state == MemberState.PREPARE_LEAVING || state == MemberState.LEAVING;
     }
 
     private boolean isNotInGroup() {
@@ -587,7 +573,9 @@ public class StreamsMembershipManager implements RequestManager {
      */
     public void onHeartbeatRequestSkipped() {
         if (state == MemberState.LEAVING) {
-            if (isLeavingGroup()) {
+            boolean intentionallySkipped = leaveGroupOperation == CloseOptions.GroupMembershipOperation.REMAIN_IN_GROUP
+                && groupInstanceId.isEmpty(); 
+            if (!intentionallySkipped) {
                 log.warn("Heartbeat to leave group cannot be sent (most probably due to coordinator " +
                         "not known/available). Member {} with epoch {} will transition to {}.",
                     memberId, memberEpoch, MemberState.UNSUBSCRIBED);
