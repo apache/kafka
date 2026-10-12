@@ -424,9 +424,7 @@ public class EmbeddedKafkaCluster {
 
     public KafkaConsumer<byte[], byte[]> createConsumerAndSubscribeTo(final Map<String, Object> consumerProps, final RebalanceListener rebalanceListener, final String... topics) {
         final KafkaConsumer<byte[], byte[]> consumer = createConsumer(consumerProps);
-        if (rebalanceListener != null) {
-            consumer.setRebalanceListener(rebalanceListener);
-        }
+        consumer.setRebalanceListener(rebalanceListener);
         consumer.subscribe(Arrays.asList(topics));
         return consumer;
     }
