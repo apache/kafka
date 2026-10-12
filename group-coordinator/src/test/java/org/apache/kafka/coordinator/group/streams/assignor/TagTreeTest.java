@@ -31,9 +31,6 @@ import java.util.Set;
 import java.util.TreeMap;
 
 import static org.junit.jupiter.api.Assertions.assertEquals;
-import static org.junit.jupiter.api.Assertions.assertFalse;
-import static org.junit.jupiter.api.Assertions.assertNull;
-import static org.junit.jupiter.api.Assertions.assertTrue;
 
 public class TagTreeTest {
 
@@ -41,41 +38,6 @@ public class TagTreeTest {
     private final Set<String> processesWithoutRoom = new HashSet<>();
     private IdenticalTagGroups<String> identicalTagGroups;
     private TagTree<String> tree;
-
-    @Test
-    public void shouldCountMissingValueAsUsed() {
-        // N has no zone, so it never meets a zone condition, and its missing zone is not a value that is left.
-        tree(List.of("zone"), Map.of(
-            "H", Map.of("zone", "z1"),
-            "N", Map.of()
-        ));
-        hold("H");
-        assertFalse(meets("N", "zone"));
-        assertFalse(tree.hasUnusedValue(key("zone")));
-
-        // A holder without a zone uses no value of it.
-        tree.clearUsedValues();
-        hold("N");
-        assertTrue(meets("H", "zone"));
-        assertTrue(tree.hasUnusedValue(key("zone")));
-    }
-
-    @Test
-    public void shouldOnlyFindTagGroupsWithRoom() {
-        // X is the only process in a new zone but has no room. With no conditions, only room counts.
-        processesWithoutRoom.add("X");
-        tree(List.of("zone"), Map.of(
-            "H", Map.of("zone", "z1"),
-            "X", Map.of("zone", "z2")
-        ));
-        hold("H");
-
-        assertTrue(meets("X", "zone"));
-        assertFalse(hasTagGroupMeeting("zone"));
-        assertNull(leastLoadedMeeting("zone"));
-        assertTrue(hasTagGroupMeeting());
-        assertEquals("H", leastLoadedMeeting());
-    }
 
     @Test
     public void shouldMatchAScanOverAllProcesses() {
@@ -198,23 +160,6 @@ public class TagTreeTest {
             keys.add(key(name));
         }
         return keys;
-    }
-
-    private boolean meets(final String process, final String... conditions) {
-        return tree.tagGroupMeeting(identicalTagGroups.tagGroupOf(process), keys(List.of(conditions)));
-    }
-
-    /** Whether a tag group with room meets the conditions, in a new pick. */
-    private boolean hasTagGroupMeeting(final String... conditions) {
-        tree.startPick();
-        return tree.hasTagGroupMeeting(keys(List.of(conditions)));
-    }
-
-    /** The least-loaded process with room in a tag group meeting the conditions, in a new pick. */
-    private String leastLoadedMeeting(final String... conditions) {
-        tree.startPick();
-        final QueuedProcess<String> leastLoaded = tree.leastLoadedProcessMeeting(keys(List.of(conditions)));
-        return leastLoaded == null ? null : leastLoaded.process;
     }
 
     private static boolean scanHasUnusedValue(

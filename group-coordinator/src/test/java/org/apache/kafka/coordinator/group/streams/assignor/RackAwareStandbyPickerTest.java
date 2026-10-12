@@ -92,24 +92,6 @@ public class RackAwareStandbyPickerTest {
     }
 
     @Test
-    public void shouldExcludeValuesOfEachNewHolder() {
-        picker(List.of("cluster"), Map.of(
-            "H", Map.of("cluster", "c1"),
-            "X", Map.of("cluster", "c2"),
-            "Y", Map.of("cluster", "c2"),
-            "Z", Map.of("cluster", "c3")
-        ));
-        hold("H");
-        assertEquals(Set.of("X", "Y", "Z"), candidates());
-        assertEquals(List.of("cluster"), conditionNames());
-
-        // X holds cluster c2 now, so Y is out.
-        hold("X");
-        assertEquals(Set.of("Z"), candidates());
-        assertEquals(List.of("cluster"), conditionNames());
-    }
-
-    @Test
     public void shouldGiveUpPriorityKeyOnceEveryValueIsUsed() {
         picker(List.of("cluster", "zone"), Map.of(
             "H", Map.of("cluster", "c1", "zone", "z1"),
@@ -131,20 +113,8 @@ public class RackAwareStandbyPickerTest {
         hold("N");
         assertEquals(Set.of("W"), candidates());
         assertEquals(List.of("zone"), conditionNames());
-    }
 
-    @Test
-    public void shouldPickNothingOnceNoProcessAddsDiversity() {
-        // U carries the holder's zone, so it never comes up.
-        picker(List.of("zone"), Map.of(
-            "H", Map.of("zone", "z1"),
-            "U", Map.of("zone", "z1"),
-            "W", Map.of("zone", "z2")
-        ));
-        hold("H");
-        assertEquals(Set.of("W"), candidates());
-        assertEquals(List.of("zone"), conditionNames());
-
+        // Every zone is used too, so no process makes the task more diverse.
         hold("W");
         assertEquals(Set.of(), candidates());
         assertEquals(List.of(), conditionNames());

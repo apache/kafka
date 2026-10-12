@@ -24,19 +24,10 @@ import java.util.Collection;
 import java.util.List;
 
 /**
- * Picks the candidate tag groups for each standby of one task. A tag group meets the condition of a tag key of
- * {@code rack.aware.assignment.tags} when its value for the tag key is new to the task. Starting from the tag groups
- * with room, each tag key in priority order narrows the candidates to those that meet its condition, or is given up if
- * none would be left; the assignor's tie-break then decides among them. Once every tag key is given up, the assignor's
- * tag-blind pass places the remaining standbys.
- * <p>
- * A {@link TagTree} records the values that the holders of the task carry and finds, without testing every tag group,
- * whether a tag group with room meets a set of conditions and the least-loaded process with room of those that do.
- * <p>
- * One picker per task, on the tree of the assignment: build it with the holders of the task, then per standby call
- * {@link #pick()}, stopping once it returns no conditions; let the assignor choose among the candidates under them, by
- * {@link #isCandidate(TagGroup, List)} or {@link #leastLoaded(List)}; and call {@link #markUsed(TagGroup)} for its
- * choice.
+ * Picks the conditions for the next standby of one task: the most tag keys that a tag group with room can meet,
+ * preferring the keys earlier in {@code rack.aware.assignment.tags}. A tag group meets a tag key when it has a value
+ * for it that no holder of the task has yet. It can then tell whether a tag group meets the conditions and return the
+ * least-loaded process with room among those that do.
  *
  * @param <P> The assignor's process type.
  */

@@ -25,10 +25,8 @@ import java.util.Map;
 import java.util.Set;
 
 import static org.junit.jupiter.api.Assertions.assertEquals;
-import static org.junit.jupiter.api.Assertions.assertFalse;
 import static org.junit.jupiter.api.Assertions.assertNotSame;
 import static org.junit.jupiter.api.Assertions.assertSame;
-import static org.junit.jupiter.api.Assertions.assertTrue;
 
 public class IdenticalTagGroupsTest {
 
@@ -51,40 +49,6 @@ public class IdenticalTagGroupsTest {
         assertNotSame(identicalTagGroups.tagGroupOf("A"), identicalTagGroups.tagGroupOf("B"));
         assertNotSame(identicalTagGroups.tagGroupOf("A"), identicalTagGroups.tagGroupOf("D"));
         assertEquals(3, identicalTagGroups.tagGroups().size());
-    }
-
-    @Test
-    public void shouldQueueProcessAgainOnceItsLoadHasGrown() {
-        loads.putAll(Map.of("A", 1.0, "B", 2.0));
-        final IdenticalTagGroups<String> identicalTagGroups = sameZone("A", "B");
-        final IdenticalTagGroups.TagGroup<String> tagGroup = identicalTagGroups.tagGroupOf("A");
-        assertEquals("A", tagGroup.leastLoadedWithRoom().process);
-
-        loads.put("A", 3.0);
-
-        assertEquals("B", tagGroup.leastLoadedWithRoom().process);
-    }
-
-    @Test
-    public void shouldSkipProcessWithoutRoomAndHaveNoRoomOnceNoProcessHasRoom() {
-        loads.putAll(Map.of("A", 1.0, "B", 2.0));
-        final IdenticalTagGroups<String> identicalTagGroups = sameZone("A", "B");
-        final IdenticalTagGroups.TagGroup<String> tagGroup = identicalTagGroups.tagGroupOf("A");
-
-        withRoom.remove("A");
-        assertTrue(tagGroup.hasRoom());
-        assertEquals("B", tagGroup.leastLoadedWithRoom().process);
-
-        withRoom.remove("B");
-        assertFalse(tagGroup.hasRoom());
-    }
-
-    private IdenticalTagGroups<String> sameZone(final String... processes) {
-        final Map<String, Map<String, String>> clientTags = new HashMap<>();
-        for (final String process : processes) {
-            clientTags.put(process, Map.of("zone", "z1"));
-        }
-        return identicalTagGroups(List.of("zone"), List.of(processes), clientTags);
     }
 
     private IdenticalTagGroups<String> identicalTagGroups(

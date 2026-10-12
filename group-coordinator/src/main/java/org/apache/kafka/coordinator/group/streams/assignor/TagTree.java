@@ -30,25 +30,10 @@ import java.util.Map;
 import java.util.PriorityQueue;
 
 /**
- * The tag groups of a streams group, each a group of the processes with the same values for
- * {@code rack.aware.assignment.tags}, as the leaves of a tree. A key is a tag of {@code rack.aware.assignment.tags},
- * such as {@code cluster}, and its values are the values it takes on the processes, such as {@code c1}. The tree has
- * one level per key, ordered by the number of values of the key, fewest on top.
- * <p>
- * The tree records the values that the holders of the task being placed carry; a missing value always counts as used.
- * Every inner node knows the values below it and queues its children by the least-loaded process with room below them.
- * A query for the tag groups whose values for some keys, the conditions, are all unused takes the children in queue
- * order: it skips a child whose own value fails a condition, takes the least-loaded process of a child whose values
- * below all meet them, and walks into the others. It stops at the first such tag group when any will do, or once the
- * next child cannot beat the best found. Loads must only grow and room only shrink: a queued process may then be
- * stale, but only lighter than the current one, and a child without room can be dropped for good.
- * Each assignor sets what room is when it builds the {@link IdenticalTagGroups}; without a limit, every process has
- * room.
- * <p>
- * Inside the tree, the index of a key is its position in {@code rack.aware.assignment.tags}, the index of a value
- * comes from a map per key, and the index after the last value stands for a missing value. A set of keys, such as the
- * conditions of a query, is an int with bit k set for the key with index k. Callers only see a key as a
- * {@link TagKey}.
+ * A tree built from {@code rack.aware.assignment.tags} with every tag group of {@link IdenticalTagGroups} as a leaf.
+ * Given some tag keys as conditions, it tells whether a tag group with room has values for them that no holder of the
+ * task has yet, and returns the least-loaded process with room among such tag groups. It assumes that loads only grow
+ * and room only shrinks.
  *
  * @param <P> The assignor's process type.
  */
