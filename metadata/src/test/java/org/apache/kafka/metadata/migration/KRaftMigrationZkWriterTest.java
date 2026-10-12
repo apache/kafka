@@ -99,9 +99,9 @@ public class KRaftMigrationZkWriterTest {
             operation.apply(ZkMigrationLeadershipState.EMPTY)
         );
         assertEquals(3, topicClient.updatedTopics.get("foo").size());
-        assertEquals(topicClient.deletedTopicPartitions.get("foo"), Collections.singleton(3));
+        assertEquals(Collections.singleton(3), topicClient.deletedTopicPartitions.get("foo"));
         // Partition 1 is missing from ZK, so it must be created rather than updated
-        assertEquals(topicClient.newTopicPartitions.get("foo"), Collections.singleton(1));
+        assertEquals(Collections.singleton(1), topicClient.newTopicPartitions.get("foo"));
         assertTrue(topicClient.updatedTopicPartitions.isEmpty());
     }
 
