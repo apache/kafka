@@ -171,22 +171,32 @@ After topics are deleted, you're safe to set `remote.log.storage.system.enable=f
 
 By default, non-active log segments are uploaded to remote storage as soon as they are eligible, keeping data in remote storage as up to date as possible. As a result, some segments before local retention are stored redundantly in both the local and remote tiers. If you do not need remote storage to always hold the newest data, you can delay upload with `remote.copy.lag.ms` and `remote.copy.lag.bytes` to reduce this redundancy and save remote storage space. The remote log manager uses these time-based and size-based lag parameters to decide when a segment becomes eligible for upload; the same settings are also available at the broker level as `log.remote.copy.lag.ms` and `log.remote.copy.lag.bytes`.
 
-For example, you can configure both settings for one topic as follows:
+For example, assume a topic with 7-day overall retention, 3-day local retention, and no size limits:
 
 ```properties
-# Default value is 0 (upload immediately).
-remote.copy.lag.ms=3600000
-
-# Default value is -1 (follow local.retention.bytes).
-remote.copy.lag.bytes=1073741824
+retention.ms=604800000
+retention.bytes=-1
+local.retention.ms=259200000
+local.retention.bytes=-1
 ```
 
-With both settings configured, a non-active segment becomes eligible for upload
-when either the time-based threshold is reached (the newest message in the
-segment is at least one hour old) or the size-based threshold is reached
-(at least 1 GiB of local log remains after that segment).
+* Delay upload by 1 day (so remote storage does not hold a redundant copy of the newest day of data). Because `local.retention.bytes` is unlimited, the default `remote.copy.lag.bytes=-1` does not enable a size-based check:
 
-For more information, please check [KIP-1241](https://cwiki.apache.org/confluence/x/A4LMFw).
+```properties
+# 1 day. Default is 0 (upload immediately).
+remote.copy.lag.ms=86400000
+```
+
+* Delay upload until there is at least 10 GiB of newer local data after a segment. Do not leave `remote.copy.lag.ms` at its default of 0, or uploads remain immediately eligible; set it to `-1` so the time-based check follows `local.retention.ms` (3 days). A segment becomes eligible when either the size lag or the time lag is met:
+
+```properties
+# Follow local.retention.ms (3 days). Default is 0 (upload immediately).
+remote.copy.lag.ms=-1
+# 10 GiB. Default is -1 (follow local.retention.bytes).
+remote.copy.lag.bytes=10737418240
+```
+
+For more examples and information, please check [KIP-1241](https://cwiki.apache.org/confluence/x/A4LMFw).
 
 ## Limitations
 
