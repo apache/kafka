@@ -43,6 +43,7 @@ import java.util.Optional;
 import java.util.concurrent.ExecutorService;
 import java.util.concurrent.Executors;
 import java.util.concurrent.Future;
+import java.util.stream.Collectors;
 import java.util.stream.IntStream;
 
 import static java.util.Arrays.asList;
@@ -253,7 +254,11 @@ public class FileRecordsTest {
             slice.readInto(buffer, 0);
 
             assertEquals(second.sizeInBytes(), buffer.remaining());
-            assertEquals(List.of(second.baseOffset()), baseOffsets(buffer));
+            assertEquals(
+                List.of(second.baseOffset()),
+                batches(MemoryRecords.readableRecords(buffer)).stream().
+                    map(RecordBatch::baseOffset).collect(Collectors.toList())
+            );
         }
     }
 
@@ -267,7 +272,11 @@ public class FileRecordsTest {
             fileRecords.readInto(buffer, 0);
 
             assertEquals(fileRecords.sizeInBytes(), buffer.remaining());
-            assertEquals(List.of(0L, 1L, 2L), baseOffsets(buffer));
+            assertEquals(
+                List.of(0L, 1L, 2L),
+                batches(MemoryRecords.readableRecords(buffer)).stream()
+                    .map(RecordBatch::baseOffset).collect(Collectors.toList())
+            );
         }
     }
 
@@ -830,13 +839,6 @@ public class FileRecordsTest {
 
     private static List<RecordBatch> batches(Records buffer) {
         return TestUtils.toList(buffer.batches());
-    }
-
-    private static List<Long> baseOffsets(ByteBuffer buffer) {
-        List<Long> baseOffsets = new ArrayList<>();
-        for (RecordBatch batch : MemoryRecords.readableRecords(buffer).batches())
-            baseOffsets.add(batch.baseOffset());
-        return baseOffsets;
     }
 
     private FileRecords createFileRecords(byte[][] values) throws IOException {
