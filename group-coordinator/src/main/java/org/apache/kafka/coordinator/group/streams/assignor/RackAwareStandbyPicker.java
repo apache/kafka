@@ -94,8 +94,14 @@ final class RackAwareStandbyPicker<P> {
         return tree.tagGroupMeeting(tagGroup, conditions) && tagGroup.hasRoom();
     }
 
-    /** The least-loaded process with room of the candidates; call it before placing the standby. */
+    /**
+     * The least-loaded process with room of the candidates; call it before placing the standby. Only valid for the
+     * non-empty conditions {@link #pick()} returned: without conditions, nothing keeps out the holders of the task.
+     */
     P leastLoaded(final List<TagKey> conditions) {
+        if (conditions.isEmpty()) {
+            throw new IllegalArgumentException("Conditions must be the non-empty result of pick()");
+        }
         return tree.leastLoadedProcessMeeting(conditions).process;
     }
 }

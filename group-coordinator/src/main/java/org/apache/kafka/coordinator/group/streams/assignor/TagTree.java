@@ -34,6 +34,9 @@ import java.util.PriorityQueue;
  * Given some tag keys as conditions, it tells whether a tag group with room has values for them that no holder of the
  * task has yet, and returns the least-loaded process with room among such tag groups. It assumes that loads only grow
  * and room only shrinks.
+ * <p>
+ * Scanning every tag group per standby is too slow once there are many tag groups, e.g. one per process for a host
+ * tag. A query skips a subtree whose own value is used and takes a subtree with no used value without looking inside.
  *
  * @param <P> The assignor's process type.
  */
@@ -86,10 +89,10 @@ final class TagTree<P> {
     /** Per key, the index of each of its values, in the order the values first appear on the tag groups. */
     private static <P> List<Map<String, Integer>> indexValues(final List<String> tagKeys, final Collection<TagGroup<P>> tagGroups) {
         final List<Map<String, Integer>> indexOfValues = new ArrayList<>(tagKeys.size());
-        for (final String tagKey : tagKeys) {
+        for (int keyIndex = 0; keyIndex < tagKeys.size(); keyIndex++) {
             final Map<String, Integer> indexOfValue = new HashMap<>();
             for (final TagGroup<P> tagGroup : tagGroups) {
-                final String value = tagGroup.clientTags().get(tagKey);
+                final String value = tagGroup.tagValues().get(keyIndex);
                 if (value != null) {
                     indexOfValue.putIfAbsent(value, indexOfValue.size());
                 }
@@ -103,7 +106,7 @@ final class TagTree<P> {
     private int[] valueIndexes(final TagGroup<P> tagGroup, final List<String> tagKeys, final List<Map<String, Integer>> indexOfValues) {
         final int[] valueIndexes = new int[tagKeys.size()];
         for (int keyIndex = 0; keyIndex < valueIndexes.length; keyIndex++) {
-            final String value = tagGroup.clientTags().get(tagKeys.get(keyIndex));
+            final String value = tagGroup.tagValues().get(keyIndex);
             valueIndexes[keyIndex] = indexOfValues.get(keyIndex).getOrDefault(value, missingValueIndex(keyIndex));
         }
         return valueIndexes;
@@ -329,13 +332,8 @@ final class TagTree<P> {
         while (!node.childrenByLeastLoaded.isEmpty()) {
             final Node<P> child = node.childrenByLeastLoaded.peek();
             // The process a child is queued with may be stale, but a stale one is only lighter than its current one.
-            if (bound != null) {
-                // Lighter by QueuedProcess.ORDER: by load, then by process index.
-                final int byLoad = Double.compare(child.queuedLoad, bound.load);
-                final boolean queuedLighter = byLoad != 0 ? byLoad < 0 : child.queuedProcessIndex < bound.processIndex;
-                if (!queuedLighter) {
-                    return null;
-                }
+            if (bound != null && QueuedProcess.compare(child.queuedLoad, child.queuedProcessIndex, bound.load, bound.processIndex) >= 0) {
+                return null;
             }
             // Every tag group below carries its value, so none meets the conditions: set it aside for this query.
             if ((conditionKeys & 1 << child.keyIndex) != 0 && valueUsed(child.keyIndex, child.valueIndex)) {
@@ -376,10 +374,8 @@ final class TagTree<P> {
     }
 
     private static final class Node<P> {
-        private static final Comparator<Node<?>> BY_LEAST_LOADED = (node1, node2) -> {
-            final int byLoad = Double.compare(node1.queuedLoad, node2.queuedLoad);
-            return byLoad != 0 ? byLoad : Integer.compare(node1.queuedProcessIndex, node2.queuedProcessIndex);
-        };
+        private static final Comparator<Node<?>> BY_LEAST_LOADED = (node1, node2) ->
+            QueuedProcess.compare(node1.queuedLoad, node1.queuedProcessIndex, node2.queuedLoad, node2.queuedProcessIndex);
 
         // The key index and value index of the node's own value, -1 for the root.
         private final int keyIndex;

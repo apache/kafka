@@ -64,7 +64,7 @@ final class IdenticalTagGroups<P> {
                 tagValues.add(tags.get(tagKey));
             }
             final TagGroup<P> tagGroup =
-                tagGroupsByTagValues.computeIfAbsent(tagValues, values -> new TagGroup<>(tags, load, hasRoom));
+                tagGroupsByTagValues.computeIfAbsent(tagValues, values -> new TagGroup<>(values, load, hasRoom));
             tagGroup.processesByLoad.add(new QueuedProcess<>(process, processIndex++, load.applyAsDouble(process)));
             tagGroupByProcess.put(process, tagGroup);
         }
@@ -82,21 +82,21 @@ final class IdenticalTagGroups<P> {
 
     /** Processes with the same values for {@code rack.aware.assignment.tags}. */
     static final class TagGroup<P> {
-        private final Map<String, String> clientTags;
+        private final List<String> tagValues;
         private final ToDoubleFunction<P> processLoad;
         private final Predicate<P> processHasRoom;
         // The processes that may still have room, by the load each was queued with.
         private final PriorityQueue<QueuedProcess<P>> processesByLoad = new PriorityQueue<>(QueuedProcess.ORDER);
 
-        private TagGroup(final Map<String, String> clientTags, final ToDoubleFunction<P> processLoad, final Predicate<P> processHasRoom) {
-            this.clientTags = clientTags;
+        private TagGroup(final List<String> tagValues, final ToDoubleFunction<P> processLoad, final Predicate<P> processHasRoom) {
+            this.tagValues = tagValues;
             this.processLoad = processLoad;
             this.processHasRoom = processHasRoom;
         }
 
-        /** The client tags of the first process: only the values for {@code rack.aware.assignment.tags} are shared by the tag group. */
-        Map<String, String> clientTags() {
-            return clientTags;
+        /** The values of the tag group for {@code rack.aware.assignment.tags}, in its order; null for a missing one. */
+        List<String> tagValues() {
+            return tagValues;
         }
 
         boolean hasRoom() {
@@ -124,10 +124,8 @@ final class IdenticalTagGroups<P> {
 
     /** A process with its index in {@code processes} and the load it was queued with. */
     static final class QueuedProcess<P> {
-        static final Comparator<QueuedProcess<?>> ORDER = (process1, process2) -> {
-            final int byLoad = Double.compare(process1.load, process2.load);
-            return byLoad != 0 ? byLoad : Integer.compare(process1.processIndex, process2.processIndex);
-        };
+        static final Comparator<QueuedProcess<?>> ORDER = (process1, process2) ->
+            compare(process1.load, process1.processIndex, process2.load, process2.processIndex);
 
         final P process;
         final int processIndex;
@@ -137,6 +135,12 @@ final class IdenticalTagGroups<P> {
             this.process = process;
             this.processIndex = processIndex;
             this.load = load;
+        }
+
+        /** Orders by load, then by process index. */
+        static int compare(final double load1, final int processIndex1, final double load2, final int processIndex2) {
+            final int byLoad = Double.compare(load1, load2);
+            return byLoad != 0 ? byLoad : Integer.compare(processIndex1, processIndex2);
         }
     }
 }
