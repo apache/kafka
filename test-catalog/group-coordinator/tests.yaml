@@ -1164,6 +1164,21 @@ org.apache.kafka.coordinator.group.assignor.UniformHomogeneousAssignmentBuilderT
 - testReassignmentWhenOneSubscriptionRemovedAfterInitialAssignmentWithTwoMembersTwoTopics
 - testReassignmentWhenPartitionsAreAddedForTwoMembersTwoTopics
 - testValidityAndBalanceForLargeSampleSet
+org.apache.kafka.coordinator.group.assignor.uniform2.CurrentAssignmentTest:
+- testOwnersAndAssignments
+- testPartitionsOfATopicThatNoLongerExistsAreStale
+- testPartitionsOfATopicTheMemberDoesNotSubscribeToAreStale
+- testTopicNobodyOwnsHasNoOwners
+org.apache.kafka.coordinator.group.assignor.uniform2.IndexedGroupTest:
+- testCohortsWithTheSameHashAreComparedExactly
+- testEmptyGroup
+- testHeterogeneousGroup
+- testHomogeneousGroup
+- testMembersAreNumberedInMemberIdOrder
+- testSingleMember
+- testTopicsAreNumberedInTopicIdOrder
+- testTopicsThatAreNotSubscribedAreIgnored
+- testTopicsThatDoNotExistAreIgnored
 org.apache.kafka.coordinator.group.assignor.uniform2.util.IntListTest:
 - testAdd
 - testClear
