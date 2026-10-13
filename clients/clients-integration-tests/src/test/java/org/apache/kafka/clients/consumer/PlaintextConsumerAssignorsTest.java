@@ -25,6 +25,7 @@ import org.apache.kafka.common.test.api.ClusterConfigProperty;
 import org.apache.kafka.common.test.api.ClusterTest;
 import org.apache.kafka.common.test.api.ClusterTestDefaults;
 import org.apache.kafka.common.test.api.Type;
+import org.apache.kafka.test.NoRetryException;
 import org.apache.kafka.test.TestUtils;
 
 import org.junit.jupiter.api.Timeout;
@@ -42,7 +43,6 @@ import java.util.concurrent.atomic.AtomicReference;
 
 import static org.junit.jupiter.api.Assertions.assertAll;
 import static org.junit.jupiter.api.Assertions.assertEquals;
-import static org.junit.jupiter.api.Assertions.assertThrows;
 import static org.junit.jupiter.api.Assertions.assertTrue;
 
 /**
@@ -131,11 +131,14 @@ public class PlaintextConsumerAssignorsTest {
             assertTrue(consumer.assignment().isEmpty());
             consumer.subscribe(List.of("topic1"));
             var failure = new AtomicReference<UnsupportedAssignorException>();
-            // Assert inside the retry loop so the polling exception is not swallowed by the wait helper.
             TestUtils.waitForCondition(() -> {
-                failure.set(assertThrows(UnsupportedAssignorException.class,
-                    () -> consumer.poll(Duration.ofMillis(100))));
-                return true;
+                try {
+                    consumer.poll(Duration.ofMillis(100));
+                    return false;
+                } catch (UnsupportedAssignorException e) {
+                    failure.set(e);
+                    return true;
+                }
             }, "Consumer did not reject the invalid remote assignor");
             assertTrue(failure.get().getMessage().startsWith(
                 "ServerAssignor invalid is not supported. Supported assignors: "));
@@ -273,14 +276,18 @@ public class PlaintextConsumerAssignorsTest {
                     }
                 };
                 var poller1 = startPolling(pollers, consumer1, List.of("topic1"), listener);
-                TestUtils.waitForCondition(() -> poller1.consumerAssignment().equals(partitions) && metadata.get() != null,
-                    "First consumer did not complete its initial assignment");
+                TestUtils.waitForCondition(() -> {
+                    checkPollerExceptions(pollers);
+                    return poller1.consumerAssignment().equals(partitions) && metadata.get() != null;
+                }, "First consumer did not complete its initial assignment");
                 var stableMetadata = metadata.get();
                 var poller2 = startPolling(pollers, consumer2, List.of("topic1"), null);
-                TestUtils.waitForCondition(() -> poller1.consumerAssignment().size() == 1
+                TestUtils.waitForCondition(() -> {
+                    checkPollerExceptions(pollers);
+                    return poller1.consumerAssignment().size() == 1
                         && poller2.consumerAssignment().size() == 1
-                        && metadata.get().generationId() >= stableMetadata.generationId() + expectedGenerations,
-                    "Consumers did not complete the expected rebalance");
+                        && metadata.get().generationId() >= stableMetadata.generationId() + expectedGenerations;
+                }, "Consumers did not complete the expected rebalance");
                 assertEquals(stableMetadata.generationId() + expectedGenerations, metadata.get().generationId());
                 assertEquals(stableMetadata.memberId(), metadata.get().memberId());
             } finally {
@@ -333,8 +340,10 @@ public class PlaintextConsumerAssignorsTest {
 
     private void changeSubscriptions(List<ConsumerAssignmentPoller> pollers, List<String> topics, Set<TopicPartition> partitions) throws InterruptedException {
         pollers.forEach(poller -> poller.subscribe(topics));
-        TestUtils.waitForCondition(() -> pollers.stream().allMatch(ConsumerAssignmentPoller::isSubscribeRequestProcessed),
-            "Not all consumers processed the subscription change");
+        TestUtils.waitForCondition(() -> {
+            checkPollerExceptions(pollers);
+            return pollers.stream().allMatch(ConsumerAssignmentPoller::isSubscribeRequestProcessed);
+        }, "Not all consumers processed the subscription change");
         awaitGroupAssignment(pollers, partitions);
     }
 
@@ -345,15 +354,21 @@ public class PlaintextConsumerAssignorsTest {
     private void awaitGroupAssignment(List<ConsumerAssignmentPoller> pollers, Set<TopicPartition> partitions,
                                       List<Set<TopicPartition>> expectedAssignments) throws InterruptedException {
         TestUtils.waitForCondition(() -> {
+            checkPollerExceptions(pollers);
             var assignments = new ArrayList<Set<TopicPartition>>();
             for (var poller : pollers) {
-                poller.getThrownException().ifPresent(exception -> {
-                    throw new AssertionError("Consumer poller failed", exception);
-                });
                 assignments.add(poller.consumerAssignment());
             }
             return isPartitionAssignmentValid(assignments, partitions, expectedAssignments);
         }, "Consumers did not reach the expected assignment for " + partitions);
+    }
+
+    private void checkPollerExceptions(List<ConsumerAssignmentPoller> pollers) {
+        for (var poller : pollers) {
+            poller.getThrownException().ifPresent(exception -> {
+                throw new NoRetryException(exception);
+            });
+        }
     }
 
     private void closeConsumers(List<Consumer<byte[], byte[]>> consumers, List<ConsumerAssignmentPoller> pollers) {
