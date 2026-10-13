@@ -95,6 +95,7 @@ import org.apache.kafka.coordinator.common.runtime.MockCoordinatorExecutor;
 import org.apache.kafka.coordinator.common.runtime.MockCoordinatorTimer;
 import org.apache.kafka.coordinator.common.runtime.MockCoordinatorTimer.ExpiredTimeout;
 import org.apache.kafka.coordinator.common.runtime.MockCoordinatorTimer.ScheduledTimeout;
+import org.apache.kafka.coordinator.group.StreamsGroupTestUtil.StreamsTopicFixture;
 import org.apache.kafka.coordinator.group.api.assignor.ConsumerGroupPartitionAssignor;
 import org.apache.kafka.coordinator.group.api.assignor.GroupAssignment;
 import org.apache.kafka.coordinator.group.api.assignor.GroupSpec;
@@ -228,6 +229,8 @@ import static org.apache.kafka.coordinator.group.GroupMetadataManagerTestContext
 import static org.apache.kafka.coordinator.group.GroupMetadataManagerTestContext.DEFAULT_CLIENT_ID;
 import static org.apache.kafka.coordinator.group.GroupMetadataManagerTestContext.DEFAULT_PROCESS_ID;
 import static org.apache.kafka.coordinator.group.StreamsGroupTestUtil.getDefaultAssignmentConfigs;
+import static org.apache.kafka.coordinator.group.StreamsGroupTestUtil.mkResponseTasks;
+import static org.apache.kafka.coordinator.group.StreamsGroupTestUtil.streamsTopicFixture;
 import static org.apache.kafka.coordinator.group.Utils.computeGroupHash;
 import static org.apache.kafka.coordinator.group.Utils.computeTopicHash;
 import static org.apache.kafka.coordinator.group.Utils.toAssignmentWithEpochs;
@@ -20987,6 +20990,135 @@ public class GroupMetadataManagerTest {
     }
 
     @Test
+    public void testStreamsGroupHeartbeatResendsAssignmentAfterEpochBumpResponseLoss() {
+        String groupId = "fooup";
+        String memberId = "member";
+        StreamsTopicFixture topic = streamsTopicFixture("subtopology1", "foo", 2);
+        StreamsGroupMember member = streamsGroupMemberBuilderWithDefaults(memberId)
+            .setAssignedTasks(topic.assignedTasks(1, 0))
+            .build();
+        GroupMetadataManagerTestContext context =
+            new GroupMetadataManagerTestContext.Builder()
+                .withMetadataImage(topic.metadataImage())
+                .withStreamsGroupTaskAssignors(List.of(new MockTaskAssignor("sticky")))
+                .withStreamsGroup(new StreamsGroupBuilder(groupId, 2)
+                    .withMember(member)
+                    .withTopology(StreamsTopology.fromHeartbeatRequest(topic.topology()))
+                    .withMetadataHash(topic.metadataHash())
+                    .withValidatedTopologyEpoch(0)
+                    .withLastAssignmentConfigs(getDefaultAssignmentConfigs())
+                    .withTargetAssignment(member.memberId(), topic.targetAssignment(0, 1))
+                    .withTargetAssignmentEpoch(2))
+                .build();
+        StreamsGroupHeartbeatRequestData request = new StreamsGroupHeartbeatRequestData()
+            .setGroupId(groupId)
+            .setMemberId(memberId)
+            .setMemberEpoch(1);
+
+        StreamsGroupHeartbeatResponseData response = context.streamsGroupHeartbeat(request).response().data();
+        assertEquals(2, response.memberEpoch());
+        assertEquals(topic.responseTasks(0, 1), response.activeTasks());
+
+        // The response is lost; retry with the old epoch and the client's unchanged owned tasks.
+        request
+            .setActiveTasks(topic.requestTasks(List.of(0)))
+            .setStandbyTasks(List.of())
+            .setWarmupTasks(List.of());
+        CoordinatorResult<StreamsGroupHeartbeatResult, CoordinatorRecord> retry = context.streamsGroupHeartbeat(request);
+        assertResponseEquals(response, retry.response().data());
+        assertEquals(List.of(), retry.records());
+    }
+
+    @Test
+    public void testStreamsGroupHeartbeatResendsRevocationAfterResponseLoss() {
+        String groupId = "fooup";
+        String memberId = "member";
+        StreamsTopicFixture topic = streamsTopicFixture("subtopology1", "foo", 2);
+        StreamsGroupMember member = streamsGroupMemberBuilderWithDefaults(memberId)
+            .setAssignedTasks(topic.assignedTasks(1, 0, 1))
+            .build();
+        GroupMetadataManagerTestContext context =
+            new GroupMetadataManagerTestContext.Builder()
+                .withMetadataImage(topic.metadataImage())
+                .withStreamsGroupTaskAssignors(List.of(new MockTaskAssignor("sticky")))
+                .withStreamsGroup(new StreamsGroupBuilder(groupId, 2)
+                    .withMember(member)
+                    .withTopology(StreamsTopology.fromHeartbeatRequest(topic.topology()))
+                    .withMetadataHash(topic.metadataHash())
+                    .withValidatedTopologyEpoch(0)
+                    .withLastAssignmentConfigs(getDefaultAssignmentConfigs())
+                    .withTargetAssignment(member.memberId(), topic.targetAssignment(0))
+                    .withTargetAssignmentEpoch(2))
+                .build();
+        StreamsGroupHeartbeatRequestData request = new StreamsGroupHeartbeatRequestData()
+            .setGroupId(groupId)
+            .setMemberId(memberId)
+            .setMemberEpoch(1);
+
+        StreamsGroupHeartbeatResponseData response = context.streamsGroupHeartbeat(request).response().data();
+        assertEquals(1, response.memberEpoch());
+        assertEquals(topic.responseTasks(0), response.activeTasks());
+
+        // Without the response, the client still owns the task pending revocation.
+        request
+            .setActiveTasks(topic.requestTasks(List.of(0, 1)))
+            .setStandbyTasks(List.of())
+            .setWarmupTasks(List.of());
+        CoordinatorResult<StreamsGroupHeartbeatResult, CoordinatorRecord> retry = context.streamsGroupHeartbeat(request);
+        assertResponseEquals(response, retry.response().data());
+        assertEquals(List.of(), retry.records());
+
+        request
+            .setActiveTasks(topic.requestTasks(List.of(0)));
+        assertEquals(2, context.streamsGroupHeartbeat(request).response().data().memberEpoch());
+        context.assertNoRebalanceTimeout(groupId, memberId);
+    }
+
+    @Test
+    public void testStreamsGroupHeartbeatResendsAssignmentAfterSameEpochResponseLoss() {
+        String groupId = "fooup";
+        String memberId = "member";
+        StreamsTopicFixture topic = streamsTopicFixture("subtopology1", "foo", 1);
+        StreamsGroupMember member = streamsGroupMemberBuilderWithDefaults(memberId)
+            .setMemberEpoch(2)
+            .setPreviousMemberEpoch(1)
+            .setState(org.apache.kafka.coordinator.group.streams.MemberState.UNRELEASED_TASKS)
+            .build();
+        GroupMetadataManagerTestContext context =
+            new GroupMetadataManagerTestContext.Builder()
+                .withMetadataImage(topic.metadataImage())
+                .withStreamsGroupTaskAssignors(List.of(new MockTaskAssignor("sticky")))
+                .withStreamsGroup(new StreamsGroupBuilder(groupId, 2)
+                    .withMember(member)
+                    .withTopology(StreamsTopology.fromHeartbeatRequest(topic.topology()))
+                    .withMetadataHash(topic.metadataHash())
+                    .withValidatedTopologyEpoch(0)
+                    .withLastAssignmentConfigs(getDefaultAssignmentConfigs())
+                    .withTargetAssignment(member.memberId(), topic.targetAssignment(0))
+                    .withTargetAssignmentEpoch(2))
+                .build();
+
+        StreamsGroupHeartbeatRequestData request = new StreamsGroupHeartbeatRequestData()
+            .setGroupId(groupId)
+            .setMemberId(memberId)
+            .setMemberEpoch(2);
+
+        // The task's former owner has released it; assignment can advance without changing the member epoch.
+        StreamsGroupHeartbeatResponseData response = context.streamsGroupHeartbeat(request).response().data();
+        assertEquals(2, response.memberEpoch());
+        assertEquals(topic.responseTasks(0), response.activeTasks());
+
+        // The client missed the assignment and still reports no owned tasks.
+        request
+            .setActiveTasks(List.of())
+            .setStandbyTasks(List.of())
+            .setWarmupTasks(List.of());
+        CoordinatorResult<StreamsGroupHeartbeatResult, CoordinatorRecord> retry = context.streamsGroupHeartbeat(request);
+        assertResponseEquals(response, retry.response().data());
+        assertEquals(List.of(), retry.records());
+    }
+
+    @Test
     public void testStreamsGroupHeartbeatResponseVersion0() {
         String groupId = "fooup";
         String memberId = Uuid.randomUuid().toString();
@@ -21616,6 +21748,15 @@ public class GroupMetadataManagerTest {
                 .setMemberId(memberId1)
                 .setMemberEpoch(11)
                 .setHeartbeatIntervalMs(5000)
+                .setActiveTasks(List.of(
+                    new StreamsGroupHeartbeatResponseData.TaskIds()
+                        .setSubtopologyId(subtopology1)
+                        .setPartitions(List.of(0, 1)),
+                    new StreamsGroupHeartbeatResponseData.TaskIds()
+                        .setSubtopologyId(subtopology2)
+                        .setPartitions(List.of(0))))
+                .setStandbyTasks(List.of())
+                .setWarmupTasks(List.of())
                 .setStatus(List.of())
                 .setTaskOffsetIntervalMs(60_000)
                 .setAcceptableRecoveryLag(10_000),
@@ -22505,6 +22646,9 @@ public class GroupMetadataManagerTest {
                 .setMemberId(memberId1)
                 .setMemberEpoch(3)
                 .setHeartbeatIntervalMs(5000)
+                .setActiveTasks(mkResponseTasks(subtopology1, 0, 1))
+                .setStandbyTasks(List.of())
+                .setWarmupTasks(List.of())
                 .setEndpointInformationEpoch(0)
                 .setStatus(List.of())
                 .setTaskOffsetIntervalMs(60_000)
@@ -23119,6 +23263,9 @@ public class GroupMetadataManagerTest {
                 .setMemberId(memberId)
                 .setMemberEpoch(11)
                 .setHeartbeatIntervalMs(5000)
+                .setActiveTasks(mkResponseTasks(subtopology1, 0, 1, 2, 3, 4, 5))
+                .setStandbyTasks(List.of())
+                .setWarmupTasks(List.of())
                 .setStatus(List.of())
                 .setTaskOffsetIntervalMs(60_000)
                 .setAcceptableRecoveryLag(50_000L),
