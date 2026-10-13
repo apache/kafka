@@ -60,6 +60,7 @@ This section contains the most common Streams configuration parameters. For a fu
   * Optional configuration parameters
     * acceptable.recovery.lag
     * default.deserialization.exception.handler (deprecated)
+    * default.interactive.query.isolation.level
     * default.key.serde
     * default.production.exception.handler (deprecated)
     * default.timestamp.extractor
@@ -67,6 +68,7 @@ This section contains the most common Streams configuration parameters. For a fu
     * deserialization.exception.handler
     * dsl.store.format
     * enable.metrics.push
+    * enable.transactional.statestores
     * ensure.explicit.internal.resource.naming
     * group.protocol
     * log.summary.interval.ms
@@ -87,6 +89,7 @@ This section contains the most common Streams configuration parameters. For a fu
     * replication.factor
     * rocksdb.config.setter
     * state.dir
+    * statestore.uncommitted.max.bytes
     * task.assignor.class
     * topology.optimization
   * Kafka consumers and producer configuration parameters
@@ -570,6 +573,23 @@ The default state store type used by DSL operators.
 <tr>  
 <td>
 
+default.interactive.query.isolation.level
+</td>  
+<td>
+
+Low
+</td>  
+<td>
+
+The default `IsolationLevel` used by interactive queries. Accepted values are `READ_UNCOMMITTED` and `READ_COMMITTED` (case-insensitive). Only meaningful when `enable.transactional.statestores` is `true`.
+</td>  
+<td>
+
+`READ_UNCOMMITTED`
+</td> </tr>  
+<tr>  
+<td>
+
 deserialization.exception.handler
 </td>  
 <td>
@@ -668,6 +688,23 @@ Whether to enable pushing of client metrics to the cluster, if the cluster has a
 <td>
 
 `true`
+</td> </tr>  
+<tr>  
+<td>
+
+enable.transactional.statestores
+</td>  
+<td>
+
+Low
+</td>  
+<td>
+
+Whether state stores buffer writes in a transaction buffer, if supported by the state store implementation, and apply them only after the corresponding Kafka changelog transaction has committed.
+</td>  
+<td>
+
+`false`
 </td> </tr>  
 <tr>  
 <td>
@@ -1097,6 +1134,23 @@ Directory location for state stores.
 <tr>  
 <td>
 
+statestore.uncommitted.max.bytes
+</td>  
+<td>
+
+Low
+</td>  
+<td>
+
+The maximum number of uncommitted bytes across all transactional state stores on this application instance before an early commit is triggered, regardless of `commit.interval.ms`. Set to `-1` to disable.
+</td>  
+<td>
+
+`67108864` (64 MB)
+</td> </tr>  
+<tr>  
+<td>
+
 task.assignor.class
 </td>  
 <td>
@@ -1395,6 +1449,15 @@ Serde for the inner class of a windowed record. Must implement the `Serde` inter
 > 
 > This is discussed in more detail in [Data types and serialization](../datatypes#streams-developer-guide-serdes).
 
+### default.interactive.query.isolation.level {#default-interactive-query-isolation-level}
+
+> The default `IsolationLevel` used by interactive queries. Accepted values are `READ_UNCOMMITTED` (default) and `READ_COMMITTED` (case-insensitive). The setting is only meaningful when [`enable.transactional.statestores`](#enable-transactional-statestores) is `true`.
+>
+> * `READ_UNCOMMITTED`: reads include writes staged in the transaction buffer since the last commit.
+> * `READ_COMMITTED`: reads skip the transaction buffer and return only committed data.
+>
+> IQv1 queries always use this value. IQv2 queries use it as the default, and can override it per query.
+
 ### dsl.store.format {#dsl-store-format}
 
 > Selects the state store format used by all DSL operators that materialize a state store. Accepted values are `DEFAULT` and `HEADERS` (case-insensitive); the default is `DEFAULT`.
@@ -1409,6 +1472,14 @@ Serde for the inner class of a windowed record. Must implement the `Serde` inter
 > See [KIP-1271](https://cwiki.apache.org/confluence/x/QIM8G) for migration procedures, changelog compatibility, restore behavior, and per-record overhead.
 >
 > **Current limitations**: `dsl.store.format=HEADERS` changes the state store format. It does not define how DSL operators create headers for output records. Some operators write empty headers to their materialized stores, and the buffer store used by left/outer stream-stream joins for not-yet-matched records is not headers-aware. See [Stateful transformations](/{version}/streams/developer-guide/dsl-api.html#stateful-transformations) and the [Streams upgrade guide](/{version}/streams/upgrade-guide.html#current-limitations) for details.
+
+### enable.transactional.statestores {#enable-transactional-statestores}
+
+> Whether to enable transactional state stores. The default is `false`. When enabled, state stores buffer writes in a transaction buffer, if supported by the state store implementation, and apply them only after the corresponding Kafka changelog transaction has committed.
+>
+> Under exactly-once processing, state stores are no longer wiped on error and rebuilt from scratch. In the event of an error, under either exactly-once or at-least-once processing, only the writes since the last successful commit are lost and replayed through the topology.
+>
+> The amount of buffered data is bounded by [`statestore.uncommitted.max.bytes`](#statestore-uncommitted-max-bytes).
 
 ### ensure.explicit.internal.resource.naming
 
@@ -1654,6 +1725,10 @@ Serde for the inner class of a windowed record. Must implement the `Serde` inter
 > 
 > Recommendation:
 >     Increase the replication factor to 3 to ensure that the internal Kafka Streams topic can tolerate up to 2 broker failures. Note that you will require more storage space as well (3x with the replication factor of 3).
+
+### statestore.uncommitted.max.bytes {#statestore-uncommitted-max-bytes}
+
+> The maximum number of uncommitted bytes across all transactional state stores on this application instance before an early commit is triggered, regardless of `commit.interval.ms`. The default is `67108864` (64 MB), and `-1` disables the limit. The limit is divided equally across the configured number of stream threads, and the global state thread if the topology has any global stores.
 
 ### rocksdb.config.setter
 
