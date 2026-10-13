@@ -211,15 +211,9 @@ public class ShareConsumeBenchWorker implements TaskWorker {
                     // Do the record batch processing immediately to avoid latency skew.
                     recordProcessor.ifPresent(processor -> processor.processRecords(records));
 
-                    // Explicit acknowledgement requires every polled record to be acknowledged before the next poll,
-                    // including the ones skipped by the maxMessages break below.
-                    spec.acknowledgeType().ifPresent(type -> {
-                        for (ConsumerRecord<byte[], byte[]> record : records) {
-                            consumer.acknowledge(record, type);
-                        }
-                    });
-
                     for (ConsumerRecord<byte[], byte[]> record : records) {
+                        // Explicit acknowledgement requires acknowledging each record individually.
+                        spec.acknowledgeType().ifPresent(type -> consumer.acknowledge(record, type));
                         messagesConsumed++;
                         long messageBytes = 0;
                         if (record.key() != null) {
@@ -237,6 +231,11 @@ public class ShareConsumeBenchWorker implements TaskWorker {
                         throttle.increment();
                     }
                     startBatchMs = Time.SYSTEM.milliseconds();
+                }
+                // Send the pending acknowledgements while the consumer is still a member of the share group.
+                // Records after the maxMessages break are deliberately left unacknowledged.
+                if (spec.acknowledgeType().isPresent()) {
+                    consumer.commitSync();
                 }
             } catch (Exception e) {
                 WorkerUtils.abort(log, "ConsumeRecords", e, doneFuture);
@@ -486,6 +485,16 @@ public class ShareConsumeBenchWorker implements TaskWorker {
             this.consumerLock.lock();
             try {
                 consumer.acknowledge(record, type);
+            } finally {
+                this.consumerLock.unlock();
+            }
+        }
+
+        void commitSync() {
+            this.consumerLock.lock();
+            try {
+                consumer.commitSync().forEach((partition, exception) ->
+                        exception.ifPresent(e -> log.warn("{} failed to acknowledge records of {}", clientId, partition, e)));
             } finally {
                 this.consumerLock.unlock();
             }
