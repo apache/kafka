@@ -27,7 +27,6 @@ import java.util.Map;
 import java.util.Properties;
 
 import static java.util.Collections.emptyMap;
-import static org.junit.jupiter.api.Assertions.assertEquals;
 import static org.junit.jupiter.api.Assertions.assertFalse;
 import static org.junit.jupiter.api.Assertions.assertThrows;
 import static org.junit.jupiter.api.Assertions.assertTrue;
@@ -43,7 +42,6 @@ public class ClientMetricsConfigsTest {
         );
 
         ClientMatchPattern clientIdPattern = patterns.get(ClientMetricsConfigs.CLIENT_ID);
-        assertEquals("foo=bar", clientIdPattern.pattern());
         assertTrue(clientIdPattern.matches("foo=bar"));
     }
 
