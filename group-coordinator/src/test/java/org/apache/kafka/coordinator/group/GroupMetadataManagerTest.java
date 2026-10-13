@@ -20010,6 +20010,34 @@ public class GroupMetadataManagerTest {
     }
 
     @Test
+    public void testStreamsGroupRefinerIsPassedTheHeartbeatVersionsOfTheMembers() {
+        String groupId = "fooup";
+        String memberA = Uuid.randomUuid().toString();
+        String memberB = Uuid.randomUuid().toString();
+        StreamsTopicFixture topic = streamsTopicFixture("subtopology1", "foo", 3);
+
+        MockAssignmentRefiner refiner = new MockAssignmentRefiner();
+        GroupMetadataManagerTestContext context = streamsGroupContextForRefinement(
+            groupId,
+            refiner,
+            topic,
+            Map.of(memberA, List.of(0, 1, 2), memberB, List.of()),
+            Map.of(memberA, DEFAULT_PROCESS_ID, memberB, "process-b")
+        );
+
+        // memberA has not heartbeated since the coordinator loaded the group, so it is missing.
+        context.streamsGroupHeartbeat(
+            streamsGroupRefinementHeartbeat(groupId, memberB, "process-b", topic, List.of()), (short) 0);
+        assertEquals(1, refiner.numRefinements());
+        assertEquals(Map.of(memberB, 0), refiner.lastPassedHeartbeatVersions());
+
+        context.streamsGroupHeartbeat(
+            streamsGroupRefinementHeartbeat(groupId, memberA, DEFAULT_PROCESS_ID, topic, List.of(0, 1, 2)), (short) 1);
+        assertEquals(2, refiner.numRefinements());
+        assertEquals(Map.of(memberA, 1, memberB, 0), refiner.lastPassedHeartbeatVersions());
+    }
+
+    @Test
     public void testStreamsGroupDoesNotRefineWhenWarmupsAreDisabled() {
         String groupId = "fooup";
         String memberId = Uuid.randomUuid().toString();
