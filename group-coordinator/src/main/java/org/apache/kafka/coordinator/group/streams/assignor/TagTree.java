@@ -42,6 +42,9 @@ import java.util.PriorityQueue;
  */
 final class TagTree<P> {
 
+    // No conditions, for the least-loaded process below a node. Never modified.
+    private static final BitSet NO_CONDITIONS = new BitSet();
+
     // The keys in the order of rack.aware.assignment.tags.
     private final List<TagKey> keys;
     // Per key index, the number of values.
@@ -237,17 +240,17 @@ final class TagTree<P> {
         return leastLoadedProcessBelowMeeting(root, keyBits(conditionKeys));
     }
 
-    /** The keys as an int with bit k set for the key with index k. */
-    private static int keyBits(final List<TagKey> keys) {
-        int keyBits = 0;
+    /** The keys as a BitSet with bit k set for the key with index k. */
+    private static BitSet keyBits(final List<TagKey> keys) {
+        final BitSet keyBits = new BitSet();
         for (final TagKey key : keys) {
-            keyBits |= 1 << key.index;
+            keyBits.set(key.index);
         }
         return keyBits;
     }
 
     /** Whether a tag group with room below the node meets {@code conditionKeys}. */
-    private boolean hasTagGroupBelowMeeting(final Node<P> node, final int conditionKeys) {
+    private boolean hasTagGroupBelowMeeting(final Node<P> node, final BitSet conditionKeys) {
         if (valuesBelowAllMeeting(node, conditionKeys)) {
             return leastLoadedProcessBelow(node) != null;
         }
@@ -263,7 +266,7 @@ final class TagTree<P> {
     /**
      * The least-loaded process with room below the node in a tag group meeting {@code conditionKeys}, or null if none.
      */
-    private QueuedProcess<P> leastLoadedProcessBelowMeeting(final Node<P> node, final int conditionKeys) {
+    private QueuedProcess<P> leastLoadedProcessBelowMeeting(final Node<P> node, final BitSet conditionKeys) {
         if (valuesBelowAllMeeting(node, conditionKeys)) {
             return leastLoadedProcessBelow(node);
         }
@@ -293,10 +296,9 @@ final class TagTree<P> {
     }
 
     /** Whether every value below the node meets {@code conditionKeys}. */
-    private boolean valuesBelowAllMeeting(final Node<P> node, final int conditionKeys) {
-        // One key of conditionKeys at a time, lowest bit first.
-        for (int keyBits = conditionKeys; keyBits != 0; keyBits &= keyBits - 1) {
-            final int keyIndex = Integer.numberOfTrailingZeros(keyBits);
+    private boolean valuesBelowAllMeeting(final Node<P> node, final BitSet conditionKeys) {
+        // One key of conditionKeys at a time, lowest index first.
+        for (int keyIndex = conditionKeys.nextSetBit(0); keyIndex >= 0; keyIndex = conditionKeys.nextSetBit(keyIndex + 1)) {
             final BitSet valuesBelow = node.valuesBelow[keyIndex];
             if (valuesBelow == null) {
                 continue;
@@ -315,7 +317,7 @@ final class TagTree<P> {
                 node.cachedLeastLoaded = node.tagGroup.leastLoadedWithRoom();
             } else {
                 // With no conditions, the next child is the one with the least-loaded process below it.
-                final Node<P> head = nextChildMeeting(node, 0, null);
+                final Node<P> head = nextChildMeeting(node, NO_CONDITIONS, null);
                 node.cachedLeastLoaded = head == null ? null : leastLoadedProcessBelow(head);
             }
             node.cached = true;
@@ -328,7 +330,7 @@ final class TagTree<P> {
      * Brings the next child whose own value meets {@code conditionKeys} to the head of the queue and returns it, or
      * null if none left can beat {@code bound}.
      */
-    private Node<P> nextChildMeeting(final Node<P> node, final int conditionKeys, final QueuedProcess<P> bound) {
+    private Node<P> nextChildMeeting(final Node<P> node, final BitSet conditionKeys, final QueuedProcess<P> bound) {
         while (!node.childrenByLeastLoaded.isEmpty()) {
             final Node<P> child = node.childrenByLeastLoaded.peek();
             // The process a child is queued with may be stale, but a stale one is only lighter than its current one.
@@ -336,7 +338,7 @@ final class TagTree<P> {
                 return null;
             }
             // Every tag group below carries its value, so none meets the conditions: set it aside for this query.
-            if ((conditionKeys & 1 << child.keyIndex) != 0 && valueUsed(child.keyIndex, child.valueIndex)) {
+            if (conditionKeys.get(child.keyIndex) && valueUsed(child.keyIndex, child.valueIndex)) {
                 setAsideHead(node);
                 continue;
             }
