@@ -1230,7 +1230,6 @@ project(':core') {
       // It is safer to use from `apacheds` since that is the implementation.
       exclude module: 'mina-core'
     }
-    testImplementation libs.apachedsCoreApi
     testImplementation libs.apachedsInterceptorKerberos
     testImplementation libs.apachedsProtocolShared
     testImplementation libs.apachedsProtocolKerberos
@@ -3871,8 +3870,6 @@ project(':connect:runtime') {
     testImplementation project(':test-common:test-common-util')
     testImplementation project(':test-common:test-common-runtime')
     testImplementation project(':raft')
-    testImplementation project(':server-common')
-    testImplementation project(':server')
     testImplementation project(':group-coordinator')
     testImplementation project(':storage')
     testImplementation project(':connect:test-plugins')
