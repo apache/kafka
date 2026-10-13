@@ -438,6 +438,9 @@ class StreamsGroupStaticMemberGroupMetadataManagerTest {
                 .setHeartbeatIntervalMs(5000)
                 .setTaskOffsetIntervalMs(60000)
                 .setAcceptableRecoveryLag(10000)
+                .setActiveTasks(topic.responseTasks(0, 1))
+                .setWarmupTasks(List.of())
+                .setStandbyTasks(List.of())
                 .setStatus(List.of()),
             revokeAckResult.response().data()
         );
