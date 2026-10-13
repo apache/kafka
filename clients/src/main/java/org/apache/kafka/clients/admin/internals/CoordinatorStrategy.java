@@ -30,7 +30,6 @@ import org.apache.kafka.common.utils.internals.LogContext;
 
 import org.slf4j.Logger;
 
-import java.util.Collections;
 import java.util.HashMap;
 import java.util.Map;
 import java.util.Objects;
@@ -43,7 +42,7 @@ public class CoordinatorStrategy implements AdminApiLookupStrategy<CoordinatorKe
 
     private final Logger log;
     private final FindCoordinatorRequest.CoordinatorType type;
-    private Set<CoordinatorKey> unrepresentableKeys = Collections.emptySet();
+    private Set<CoordinatorKey> unrepresentableKeys = Set.of();
 
     boolean batch = true;
 

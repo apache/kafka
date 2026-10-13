@@ -25,7 +25,6 @@ import org.apache.kafka.common.utils.internals.LogContext;
 import org.slf4j.Logger;
 
 import java.util.Collection;
-import java.util.Collections;
 import java.util.HashSet;
 import java.util.List;
 import java.util.Set;
@@ -264,7 +263,7 @@ public class FetchBuffer implements AutoCloseable {
             lock.lock();
 
             idempotentCloser.close(
-                    () -> retainAll(Collections.emptySet()),
+                    () -> retainAll(Set.of()),
                     () -> log.warn("The fetch buffer was already closed")
             );
         } finally {

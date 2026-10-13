@@ -22,7 +22,6 @@ import org.apache.kafka.common.Uuid;
 import org.apache.kafka.common.acl.AclOperation;
 import org.apache.kafka.common.annotation.InterfaceAudience;
 
-import java.util.Collections;
 import java.util.List;
 import java.util.Objects;
 import java.util.Set;
@@ -64,7 +63,7 @@ public class TopicDescription {
      *                   leadership and replica information for that partition.
      */
     public TopicDescription(String name, boolean internal, List<TopicPartitionInfo> partitions) {
-        this(name, internal, partitions, Collections.emptySet());
+        this(name, internal, partitions, Set.of());
     }
 
     /**

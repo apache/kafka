@@ -18,7 +18,6 @@ package org.apache.kafka.clients;
 
 import java.util.ArrayDeque;
 import java.util.ArrayList;
-import java.util.Collections;
 import java.util.Deque;
 import java.util.HashMap;
 import java.util.List;
@@ -144,7 +143,7 @@ final class InFlightRequests {
     public Iterable<NetworkClient.InFlightRequest> clearAll(String node) {
         Deque<NetworkClient.InFlightRequest> reqs = requests.get(node);
         if (reqs == null) {
-            return Collections.emptyList();
+            return List.of();
         } else {
             final Deque<NetworkClient.InFlightRequest> clearedRequests = requests.remove(node);
             inFlightRequestCount.getAndAdd(-clearedRequests.size());

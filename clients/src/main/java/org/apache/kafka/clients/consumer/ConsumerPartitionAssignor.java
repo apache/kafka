@@ -25,7 +25,6 @@ import org.apache.kafka.common.utils.Utils;
 
 import java.nio.ByteBuffer;
 import java.util.ArrayList;
-import java.util.Collections;
 import java.util.HashMap;
 import java.util.List;
 import java.util.Map;
@@ -86,7 +85,7 @@ public interface ConsumerPartitionAssignor {
      * By default it should always work with {@link RebalanceProtocol#EAGER}.
      */
     default List<RebalanceProtocol> supportedProtocols() {
-        return Collections.singletonList(RebalanceProtocol.EAGER);
+        return List.of(RebalanceProtocol.EAGER);
     }
 
     /**
@@ -151,7 +150,7 @@ public interface ConsumerPartitionAssignor {
          * @param userData Nullable user data to include in the subscription
          */
         public Subscription(List<String> topics, ByteBuffer userData) {
-            this(topics, userData, Collections.emptyList(), DEFAULT_GENERATION, Optional.empty());
+            this(topics, userData, List.of(), DEFAULT_GENERATION, Optional.empty());
         }
 
         /**
@@ -160,7 +159,7 @@ public interface ConsumerPartitionAssignor {
          * @param topics The list of topics to subscribe to
          */
         public Subscription(List<String> topics) {
-            this(topics, null, Collections.emptyList(), DEFAULT_GENERATION, Optional.empty());
+            this(topics, null, List.of(), DEFAULT_GENERATION, Optional.empty());
         }
 
         /**

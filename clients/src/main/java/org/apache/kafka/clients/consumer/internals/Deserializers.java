@@ -24,7 +24,7 @@ import org.apache.kafka.common.metrics.Metrics;
 import org.apache.kafka.common.serialization.Deserializer;
 import org.apache.kafka.common.utils.Utils;
 
-import java.util.Collections;
+import java.util.Map;
 import java.util.Objects;
 import java.util.concurrent.atomic.AtomicReference;
 
@@ -50,7 +50,7 @@ public class Deserializers<K, V> implements AutoCloseable {
 
         if (keyDeserializer == null) {
             keyDeserializer = config.getConfiguredInstance(ConsumerConfig.KEY_DESERIALIZER_CLASS_CONFIG, Deserializer.class);
-            keyDeserializer.configure(config.originals(Collections.singletonMap(ConsumerConfig.CLIENT_ID_CONFIG, clientId)), true);
+            keyDeserializer.configure(config.originals(Map.of(ConsumerConfig.CLIENT_ID_CONFIG, clientId)), true);
         } else {
             config.ignore(ConsumerConfig.KEY_DESERIALIZER_CLASS_CONFIG);
         }
@@ -58,7 +58,7 @@ public class Deserializers<K, V> implements AutoCloseable {
 
         if (valueDeserializer == null) {
             valueDeserializer = config.getConfiguredInstance(ConsumerConfig.VALUE_DESERIALIZER_CLASS_CONFIG, Deserializer.class);
-            valueDeserializer.configure(config.originals(Collections.singletonMap(ConsumerConfig.CLIENT_ID_CONFIG, clientId)), false);
+            valueDeserializer.configure(config.originals(Map.of(ConsumerConfig.CLIENT_ID_CONFIG, clientId)), false);
         } else {
             config.ignore(ConsumerConfig.VALUE_DESERIALIZER_CLASS_CONFIG);
         }

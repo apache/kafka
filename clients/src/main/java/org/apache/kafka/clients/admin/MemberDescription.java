@@ -20,9 +20,9 @@ package org.apache.kafka.clients.admin;
 import org.apache.kafka.common.GroupType;
 import org.apache.kafka.common.annotation.InterfaceAudience;
 
-import java.util.Collections;
 import java.util.Objects;
 import java.util.Optional;
+import java.util.Set;
 
 /**
  * A detailed description of a single group member in the cluster.
@@ -56,7 +56,7 @@ public class MemberDescription {
         this.clientId = clientId == null ? "" : clientId;
         this.host = host == null ? "" : host;
         this.assignment = assignment == null ?
-            new MemberAssignment(Collections.emptySet()) : assignment;
+            new MemberAssignment(Set.of()) : assignment;
         this.targetAssignment = targetAssignment;
         this.memberEpoch = memberEpoch;
         this.upgraded = upgraded;

@@ -363,7 +363,7 @@ public class StreamsRebalanceData {
 
     private final AtomicReference<Assignment> reconciledAssignment = new AtomicReference<>(Assignment.EMPTY);
 
-    private final AtomicReference<Map<HostInfo, EndpointPartitions>> partitionsByHost = new AtomicReference<>(Collections.emptyMap());
+    private final AtomicReference<Map<HostInfo, EndpointPartitions>> partitionsByHost = new AtomicReference<>(Map.of());
 
     private final AtomicBoolean shutdownRequested = new AtomicBoolean(false);
 

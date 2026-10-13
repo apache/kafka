@@ -31,7 +31,6 @@ import org.apache.kafka.common.utils.internals.LogContext;
 
 import org.slf4j.Logger;
 
-import java.util.Collections;
 import java.util.HashMap;
 import java.util.Map;
 import java.util.Set;
@@ -100,7 +99,7 @@ public class PartitionLeaderStrategy implements AdminApiLookupStrategy<TopicPart
                     topicError.exception());
                 failAllPartitionsForTopic(topic, requestPartitions, failed, tp -> new TopicAuthorizationException(
                     "Failed to fetch metadata for partition " + tp + " due to topic authorization failure",
-                    Collections.singleton(topic)));
+                    Set.of(topic)));
                 break;
 
             case INVALID_TOPIC_EXCEPTION:
@@ -108,7 +107,7 @@ public class PartitionLeaderStrategy implements AdminApiLookupStrategy<TopicPart
                     topicError.exception());
                 failAllPartitionsForTopic(topic, requestPartitions, failed, tp -> new InvalidTopicException(
                     "Failed to fetch metadata for partition " + tp + " due to invalid topic `" + topic + "`",
-                    Collections.singleton(topic)));
+                    Set.of(topic)));
                 break;
 
             default:

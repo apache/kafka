@@ -19,7 +19,6 @@ package org.apache.kafka.clients.admin;
 
 import org.apache.kafka.common.annotation.InterfaceAudience;
 
-import java.util.Collections;
 import java.util.List;
 import java.util.Objects;
 
@@ -46,7 +45,7 @@ public class ConfigEntry {
      */
     public ConfigEntry(String name, String value) {
         this(name, value, ConfigSource.UNKNOWN, false, false,
-            Collections.emptyList(), ConfigType.UNKNOWN, null);
+            List.of(), ConfigType.UNKNOWN, null);
     }
 
     /**

@@ -559,8 +559,8 @@ public abstract class AbstractMembershipManager<R extends AbstractResponse> impl
      */
     private void clearAssignment() {
         if (subscriptions.hasAutoAssignedPartitions()) {
-            subscriptions.assignFromSubscribed(Collections.emptySet());
-            notifyAssignmentChange(Collections.emptySet());
+            subscriptions.assignFromSubscribed(Set.of());
+            notifyAssignmentChange(Set.of());
         }
         currentAssignment = LocalAssignment.NONE;
         clearPendingAssignmentsAndLocalNamesCache();
@@ -631,7 +631,7 @@ public abstract class AbstractMembershipManager<R extends AbstractResponse> impl
                 transitionTo(MemberState.UNSUBSCRIBED);
             }
             subscriptions.unsubscribe();
-            notifyAssignmentChange(Collections.emptySet());
+            notifyAssignmentChange(Set.of());
             return CompletableFuture.completedFuture(null);
         }
 
@@ -1407,7 +1407,7 @@ public abstract class AbstractMembershipManager<R extends AbstractResponse> impl
      */
     Map<Uuid, SortedSet<Integer>> topicPartitionsAwaitingReconciliation() {
         if (currentTargetAssignment == LocalAssignment.NONE) {
-            return Collections.emptyMap();
+            return Map.of();
         }
         if (currentAssignment == LocalAssignment.NONE) {
             return currentTargetAssignment.partitions;
@@ -1483,7 +1483,7 @@ public abstract class AbstractMembershipManager<R extends AbstractResponse> impl
 
         public static final long NONE_EPOCH = -1;
 
-        public static final LocalAssignment NONE = new LocalAssignment(NONE_EPOCH, Collections.emptyMap());
+        public static final LocalAssignment NONE = new LocalAssignment(NONE_EPOCH, Map.of());
 
         public final long localEpoch;
 

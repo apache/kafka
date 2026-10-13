@@ -80,7 +80,6 @@ import org.slf4j.Logger;
 import java.io.Closeable;
 import java.nio.ByteBuffer;
 import java.util.ArrayList;
-import java.util.Collections;
 import java.util.List;
 import java.util.Map;
 import java.util.Objects;
@@ -673,7 +672,7 @@ public abstract class AbstractCoordinator implements Closeable {
 
                             log.info("Successfully joined group with generation {}", AbstractCoordinator.this.generation);
                             clientTelemetryReporter.ifPresent(reporter -> reporter.updateMetricsLabels(
-                                Collections.singletonMap(ClientTelemetryProvider.GROUP_MEMBER_ID, joinResponse.data().memberId())));
+                                Map.of(ClientTelemetryProvider.GROUP_MEMBER_ID, joinResponse.data().memberId())));
 
                             if (joinResponse.isLeader()) {
                                 onLeaderElected(joinResponse).chain(future);
@@ -763,7 +762,7 @@ public abstract class AbstractCoordinator implements Closeable {
                                 .setProtocolName(generation.protocolName)
                                 .setGroupInstanceId(this.rebalanceConfig.groupInstanceId.orElse(null))
                                 .setGenerationId(generation.generationId)
-                                .setAssignments(Collections.emptyList())
+                                .setAssignments(List.of())
                 );
         log.debug("Sending follower SyncGroup to coordinator {}: {}", this.coordinator, requestBuilder);
         return sendSyncGroupRequest(requestBuilder);
@@ -1173,7 +1172,7 @@ public abstract class AbstractCoordinator implements Closeable {
                 generation.memberId, coordinator, leaveReason);
             LeaveGroupRequest.Builder request = new LeaveGroupRequest.Builder(
                 rebalanceConfig.groupId,
-                Collections.singletonList(new MemberIdentity().setMemberId(generation.memberId).setReason(JoinGroupRequest.maybeTruncateReason(leaveReason)))
+                List.of(new MemberIdentity().setMemberId(generation.memberId).setReason(JoinGroupRequest.maybeTruncateReason(leaveReason)))
             );
 
             future = client.send(coordinator, request).compose(new LeaveGroupResponseHandler(generation));

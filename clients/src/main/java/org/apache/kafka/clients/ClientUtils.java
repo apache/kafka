@@ -40,8 +40,8 @@ import java.net.InetAddress;
 import java.net.InetSocketAddress;
 import java.net.UnknownHostException;
 import java.util.ArrayList;
-import java.util.Collections;
 import java.util.List;
+import java.util.Map;
 import java.util.stream.Collectors;
 
 import static org.apache.kafka.common.utils.Utils.closeQuietly;
@@ -327,7 +327,7 @@ public final class ClientUtils {
         return config.getConfiguredInstances(
                 interceptorClassesConfigName,
                 clazz,
-                Collections.singletonMap(CommonClientConfigs.CLIENT_ID_CONFIG, clientId));
+                Map.of(CommonClientConfigs.CLIENT_ID_CONFIG, clientId));
     }
 
     public static ClusterResourceListeners configureClusterResourceListeners(List<?>... candidateLists) {

@@ -737,7 +737,7 @@ public class ConsumerNetworkClient implements Closeable {
             // queue after it has been removed from the map
             synchronized (unsent) {
                 ConcurrentLinkedQueue<ClientRequest> requests = unsent.remove(node);
-                return requests == null ? Collections.emptyList() : requests;
+                return requests == null ? List.of() : requests;
             }
         }
 

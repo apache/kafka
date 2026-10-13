@@ -32,11 +32,12 @@ import org.apache.kafka.common.utils.internals.LogContext;
 import org.slf4j.Logger;
 
 import java.util.ArrayDeque;
-import java.util.Collections;
 import java.util.Iterator;
 import java.util.List;
+import java.util.Map;
 import java.util.Optional;
 import java.util.Queue;
+import java.util.Set;
 
 import static org.apache.kafka.clients.consumer.internals.FetchUtils.requestMetadataUpdate;
 
@@ -357,7 +358,7 @@ public class FetchCollector<K, V> {
                     } else {
                         log.info("{}, raising error to the application since no reset policy is configured", errorMessage);
                         throw new OffsetOutOfRangeException(errorMessage,
-                                Collections.singletonMap(tp, position.offset));
+                                Map.of(tp, position.offset));
                     }
                 }
             } else {
@@ -367,7 +368,7 @@ public class FetchCollector<K, V> {
         } else if (error == Errors.TOPIC_AUTHORIZATION_FAILED) {
             //we log the actual partition and not just the topic to help with ACL propagation issues in large clusters
             log.warn("Not authorized to read from partition {}.", tp);
-            throw new TopicAuthorizationException(Collections.singleton(tp.topic()));
+            throw new TopicAuthorizationException(Set.of(tp.topic()));
         } else if (error == Errors.UNKNOWN_LEADER_EPOCH) {
             log.debug("Received unknown leader epoch error in fetch for partition {}", tp);
         } else if (error == Errors.UNKNOWN_SERVER_ERROR) {

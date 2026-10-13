@@ -20,7 +20,6 @@ package org.apache.kafka.clients.admin;
 import org.apache.kafka.common.TopicPartition;
 import org.apache.kafka.common.annotation.InterfaceAudience;
 
-import java.util.Collections;
 import java.util.Objects;
 import java.util.Set;
 import java.util.stream.Collectors;
@@ -38,7 +37,7 @@ public class MemberAssignment {
      * @param topicPartitions List of topic partitions
      */
     public MemberAssignment(Set<TopicPartition> topicPartitions) {
-        this.topicPartitions = topicPartitions == null ? Collections.emptySet() : Set.copyOf(topicPartitions);
+        this.topicPartitions = topicPartitions == null ? Set.of() : Set.copyOf(topicPartitions);
     }
 
     @Override

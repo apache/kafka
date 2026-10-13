@@ -20,7 +20,6 @@ package org.apache.kafka.clients.admin;
 import org.apache.kafka.common.annotation.InterfaceAudience;
 
 import java.util.Collection;
-import java.util.Collections;
 import java.util.HashSet;
 import java.util.Objects;
 import java.util.Set;
@@ -30,8 +29,8 @@ import java.util.Set;
  */
 @InterfaceAudience.Public
 public class ListTransactionsOptions extends AbstractOptions<ListTransactionsOptions> {
-    private Set<TransactionState> filteredStates = Collections.emptySet();
-    private Set<Long> filteredProducerIds = Collections.emptySet();
+    private Set<TransactionState> filteredStates = Set.of();
+    private Set<Long> filteredProducerIds = Set.of();
 
     private long filteredDuration = -1L;
     private String filteredTransactionalIdPattern;

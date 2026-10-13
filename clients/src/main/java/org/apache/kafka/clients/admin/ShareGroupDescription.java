@@ -23,7 +23,6 @@ import org.apache.kafka.common.acl.AclOperation;
 import org.apache.kafka.common.annotation.InterfaceAudience;
 
 import java.util.Collection;
-import java.util.Collections;
 import java.util.List;
 import java.util.Objects;
 import java.util.Set;
@@ -48,7 +47,7 @@ public class ShareGroupDescription {
                                  Node coordinator,
                                  int groupEpoch,
                                  int targetAssignmentEpoch) {
-        this(groupId, members, groupState, coordinator, groupEpoch, targetAssignmentEpoch, Collections.emptySet());
+        this(groupId, members, groupState, coordinator, groupEpoch, targetAssignmentEpoch, Set.of());
     }
 
     public ShareGroupDescription(String groupId,
@@ -59,7 +58,7 @@ public class ShareGroupDescription {
                                  int targetAssignmentEpoch,
                                  Set<AclOperation> authorizedOperations) {
         this.groupId = groupId == null ? "" : groupId;
-        this.members = members == null ? Collections.emptyList() : List.copyOf(members);
+        this.members = members == null ? List.of() : List.copyOf(members);
         this.groupState = groupState;
         this.coordinator = coordinator;
         this.groupEpoch = groupEpoch;

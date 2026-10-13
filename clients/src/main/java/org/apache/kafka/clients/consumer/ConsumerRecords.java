@@ -90,7 +90,7 @@ public class ConsumerRecords<K, V> implements Iterable<ConsumerRecord<K, V>> {
     public List<ConsumerRecord<K, V>> records(TopicPartition partition) {
         List<ConsumerRecord<K, V>> recs = this.records.get(partition);
         if (recs == null)
-            return Collections.emptyList();
+            return List.of();
         else
             return Collections.unmodifiableList(recs);
     }
