@@ -45,13 +45,14 @@ import org.apache.kafka.streams.state.ReadOnlyKeyValueStore;
 import org.apache.kafka.test.TestUtils;
 import org.apache.kafka.test.faultproxy.FaultRule;
 import org.apache.kafka.test.faultproxy.KafkaProtocolFaultProxy;
-
 import org.junit.jupiter.api.AfterEach;
 import org.junit.jupiter.api.BeforeEach;
 import org.junit.jupiter.api.Tag;
 import org.junit.jupiter.api.Test;
 import org.junit.jupiter.api.TestInfo;
 import org.junit.jupiter.api.Timeout;
+import org.slf4j.Logger;
+import org.slf4j.LoggerFactory;
 
 import java.time.Duration;
 import java.util.ArrayList;
@@ -80,6 +81,7 @@ import static org.junit.jupiter.api.Assertions.assertTrue;
 @Timeout(600)
 public class CommitTimeoutDirtyCloseIntegrationTest {
 
+    private static final Logger LOG = LoggerFactory.getLogger(CommitTimeoutDirtyCloseIntegrationTest.class);
     private static final int NUM_PARTITIONS = 4;
     private static final int NUM_KEYS = 300;
     private static final String INPUT_TOPIC = "input";
@@ -95,6 +97,7 @@ public class CommitTimeoutDirtyCloseIntegrationTest {
     private final List<KafkaStreams> streamsToClose = new ArrayList<>();
     private EmbeddedKafkaCluster cluster;
     private KafkaProtocolFaultProxy proxy;
+    private KafkaProducer<String, String> producer;
     private String appId;
 
     @BeforeEach
@@ -105,11 +108,16 @@ public class CommitTimeoutDirtyCloseIntegrationTest {
         cluster.createTopic(INPUT_TOPIC, NUM_PARTITIONS, 1);
         cluster.createTopic(OUTPUT_TOPIC, 1, 1);
         proxy = KafkaProtocolFaultProxy.inFrontOf(cluster.bootstrapServers());
+        producer = new KafkaProducer<>(
+            TestUtils.producerConfig(cluster.bootstrapServers(), StringSerializer.class, StringSerializer.class));
     }
 
     @AfterEach
     public void tearDown() {
         streamsToClose.forEach(streams -> streams.close(Duration.ofSeconds(30)));
+        if (producer != null) {
+            producer.close();
+        }
         if (proxy != null) {
             proxy.close();
         }
@@ -131,6 +139,7 @@ public class CommitTimeoutDirtyCloseIntegrationTest {
         final List<TaskId> instanceATasks = activeTasks(instanceA);
         final TaskId corruptedTask = instanceATasks.get(0);
         final TaskId otherTask = instanceATasks.get(1);
+        final String instanceAProducer = producerClientId(instanceA);
 
         final List<String> keys = new ArrayList<>();
         for (int i = 0; i < NUM_KEYS; i++) {
@@ -141,7 +150,7 @@ public class CommitTimeoutDirtyCloseIntegrationTest {
         waitForCommittedOutput();
 
         final FaultRule commitTimeout =
-            proxy.delayOn(ApiKeys.END_TXN, END_TXN_DELAY).forClient(producer("instance-a")).once();
+            proxy.delayOn(ApiKeys.END_TXN, END_TXN_DELAY).forClient(instanceAProducer).once();
         final FaultRule restoreDelay =
             proxy.delayOn(ApiKeys.FETCH, RESTORE_FETCH_DELAY).forClient(restoreConsumer("instance-a")).everyTime();
         instanceARestores.record();
@@ -153,14 +162,14 @@ public class CommitTimeoutDirtyCloseIntegrationTest {
             "the store of " + corruptedTask + " was never restored after the commit timed out"
         );
         // a later commit acknowledges the late EndTxn; until then any send on this thread throws IllegalStateException
-        final double committedBeforeAck = commitTimeNanos(instanceA);
+        final double committedBeforeAck = commitTimeNanos(instanceA, instanceAProducer);
         TestUtils.waitForCondition(
-            () -> commitTimeNanos(instanceA) > committedBeforeAck,
+            () -> commitTimeNanos(instanceA, instanceAProducer) > committedBeforeAck,
             WAIT_MS,
             "instance-a never completed the commit whose EndTxn was delayed"
         );
         final FaultRule generationMismatch = proxy.injectError(ApiKeys.TXN_OFFSET_COMMIT, Errors.ILLEGAL_GENERATION)
-            .forClient(producer("instance-a"))
+            .forClient(instanceAProducer)
             .once();
         produce(otherTask.partition(), List.of("other"));
 
@@ -254,14 +263,13 @@ public class CommitTimeoutDirtyCloseIntegrationTest {
     }
 
     private void produce(final int partition, final List<String> keys) throws Exception {
-        final Properties producerConfig = new Properties();
-        producerConfig.put(ProducerConfig.BOOTSTRAP_SERVERS_CONFIG, cluster.bootstrapServers());
-        producerConfig.put(ProducerConfig.KEY_SERIALIZER_CLASS_CONFIG, StringSerializer.class);
-        producerConfig.put(ProducerConfig.VALUE_SERIALIZER_CLASS_CONFIG, StringSerializer.class);
-        try (final KafkaProducer<String, String> producer = new KafkaProducer<>(producerConfig)) {
-            for (final String key : keys) {
-                producer.send(new ProducerRecord<>(INPUT_TOPIC, partition, key, "value")).get();
-            }
+        for (final String key : keys) {
+            producer.send(new ProducerRecord<>(INPUT_TOPIC, partition, key, "value"),
+                ((metadata, exception) -> {
+                    if (exception != null) {
+                        LOG.error("Failed to produce record", exception);
+                    }
+                }));
         }
     }
 
@@ -269,15 +277,25 @@ public class CommitTimeoutDirtyCloseIntegrationTest {
         final Properties consumerConfig =
             TestUtils.consumerConfig(cluster.bootstrapServers(), StringDeserializer.class, StringDeserializer.class);
         consumerConfig.put(ConsumerConfig.ISOLATION_LEVEL_CONFIG, "read_committed");
-        IntegrationTestUtils.waitUntilMinKeyValueRecordsReceived(consumerConfig, OUTPUT_TOPIC, CommitTimeoutDirtyCloseIntegrationTest.NUM_KEYS, WAIT_MS);
+        IntegrationTestUtils.waitUntilMinKeyValueRecordsReceived(consumerConfig, OUTPUT_TOPIC, NUM_KEYS, WAIT_MS);
     }
 
     // only recorded once a commitTransaction() completes, not when it times out
-    private static double commitTimeNanos(final KafkaStreams streams) {
-        return streams.metrics().entrySet().stream()
-            .filter(e -> e.getKey().name().equals("txn-commit-time-ns-total"))
-            .mapToDouble(e -> (double) e.getValue().metricValue())
-            .sum();
+    private static double commitTimeNanos(final KafkaStreams streams, final String producerClientId) {
+        return (double) streams.metrics().entrySet().stream()
+            .filter(e -> e.getKey().name().equals("txn-commit-time-ns-total")
+                && producerClientId.equals(e.getKey().tags().get("client-id")))
+            .map(e -> e.getValue().metricValue())
+            .findFirst()
+            .orElseThrow(() -> new AssertionError("no txn-commit-time-ns-total metric for " + producerClientId));
+    }
+
+    private static String producerClientId(final KafkaStreams streams) {
+        final List<String> producerClientIds = streams.metadataForLocalThreads().stream()
+            .flatMap(thread -> thread.producerClientIds().stream())
+            .toList();
+        assertEquals(1, producerClientIds.size(), "expected the single thread's producer, found " + producerClientIds);
+        return producerClientIds.get(0);
     }
 
     private static List<TaskId> activeTasks(final KafkaStreams streams) {
@@ -306,10 +324,6 @@ public class CommitTimeoutDirtyCloseIntegrationTest {
 
     private static String restoreConsumer(final String clientId) {
         return clientId + "-StateUpdater-1-restore-consumer";
-    }
-
-    private static String producer(final String clientId) {
-        return clientId + "-StreamThread-1-producer";
     }
 
     // once recording, captures where the wiped store's restore starts and whether it is suspended before finishing
