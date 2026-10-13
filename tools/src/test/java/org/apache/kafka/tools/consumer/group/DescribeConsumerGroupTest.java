@@ -935,9 +935,9 @@ public class DescribeConsumerGroupTest {
         List<String> cgcArgs = new ArrayList<>(List.of("--bootstrap-server", clusterInstance.bootstrapServers(), "--describe", "--group", group, "--timeout", "1"));
         cgcArgs.addAll(describeType);
 
-        // run one consumer in the group consuming from a single-partition topic
-        try (AutoCloseable protocolConsumerGroupExecutor = consumerGroupClosable(groupProtocol, group, topic, Map.of());
-             ConsumerGroupCommand.ConsumerGroupService service = consumerGroupService(cgcArgs.toArray(new String[0]))
+        // Service before consumer: FindCoordinator must reach the broker before __consumer_offsets is created.
+        try (ConsumerGroupCommand.ConsumerGroupService service = consumerGroupService(cgcArgs.toArray(new String[0]));
+             AutoCloseable protocolConsumerGroupExecutor = consumerGroupClosable(groupProtocol, group, topic, Map.of())
         ) {
             ExecutionException e = assertThrows(ExecutionException.class, service::describeGroups);
             assertInstanceOf(TimeoutException.class, e.getCause());
@@ -955,10 +955,10 @@ public class DescribeConsumerGroupTest {
         // Let creation of the offsets topic happen during group initialization to ensure that initialization doesn't
         // complete before the timeout expires
 
-        // run one consumer in the group consuming from a single-partition topic
-        try (AutoCloseable protocolConsumerGroupExecutor = consumerGroupClosable(groupProtocol, group, topic, Map.of());
-             // set the group service timeout too low for the group to stabilize
-             ConsumerGroupCommand.ConsumerGroupService service = consumerGroupService(new String[]{"--bootstrap-server", clusterInstance.bootstrapServers(), "--describe", "--group", group, "--timeout", "1"})
+        // Service before consumer: FindCoordinator must reach the broker before __consumer_offsets is created.
+        try (ConsumerGroupCommand.ConsumerGroupService service = consumerGroupService(
+                new String[]{"--bootstrap-server", clusterInstance.bootstrapServers(), "--describe", "--group", group, "--timeout", "1"});
+             AutoCloseable protocolConsumerGroupExecutor = consumerGroupClosable(groupProtocol, group, topic, Map.of())
         ) {
             Throwable e = assertThrows(ExecutionException.class, () -> service.collectGroupOffsets(group));
             assertEquals(TimeoutException.class, e.getCause().getClass());
@@ -976,10 +976,10 @@ public class DescribeConsumerGroupTest {
         // Let creation of the offsets topic happen during group initialization to ensure that initialization doesn't
         // complete before the timeout expires
 
-        // run one consumer in the group consuming from a single-partition topic
-        try (AutoCloseable protocolConsumerGroupExecutor = consumerGroupClosable(groupProtocol, group, topic, Map.of());
-             // set the group service timeout too low for the group to stabilize
-             ConsumerGroupCommand.ConsumerGroupService service = consumerGroupService(new String[]{"--bootstrap-server", clusterInstance.bootstrapServers(), "--describe", "--group", group, "--timeout", "1"})
+        // Service before consumer: FindCoordinator must reach the broker before __consumer_offsets is created.
+        try (ConsumerGroupCommand.ConsumerGroupService service = consumerGroupService(
+                new String[]{"--bootstrap-server", clusterInstance.bootstrapServers(), "--describe", "--group", group, "--timeout", "1"});
+             AutoCloseable protocolConsumerGroupExecutor = consumerGroupClosable(groupProtocol, group, topic, Map.of())
         ) {
             Throwable e = assertThrows(ExecutionException.class, () -> service.collectGroupMembers(group));
             assertEquals(TimeoutException.class, e.getCause().getClass());
@@ -997,10 +997,10 @@ public class DescribeConsumerGroupTest {
         // Let creation of the offsets topic happen during group initialization to ensure that initialization doesn't
         // complete before the timeout expires
 
-        // run one consumer in the group consuming from a single-partition topic
-        try (AutoCloseable protocolConsumerGroupExecutor = consumerGroupClosable(groupProtocol, group, topic, Map.of());
-             // set the group service timeout too low for the group to stabilize
-             ConsumerGroupCommand.ConsumerGroupService service = consumerGroupService(new String[]{"--bootstrap-server", clusterInstance.bootstrapServers(), "--describe", "--group", group, "--timeout", "1"})
+        // Service before consumer: FindCoordinator must reach the broker before __consumer_offsets is created.
+        try (ConsumerGroupCommand.ConsumerGroupService service = consumerGroupService(
+                new String[]{"--bootstrap-server", clusterInstance.bootstrapServers(), "--describe", "--group", group, "--timeout", "1"});
+             AutoCloseable protocolConsumerGroupExecutor = consumerGroupClosable(groupProtocol, group, topic, Map.of())
         ) {
             Throwable e = assertThrows(ExecutionException.class, () -> service.collectGroupState(group));
             assertEquals(TimeoutException.class, e.getCause().getClass());

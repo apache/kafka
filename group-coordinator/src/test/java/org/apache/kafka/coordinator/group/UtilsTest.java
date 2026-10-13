@@ -24,6 +24,7 @@ import org.apache.kafka.coordinator.group.generated.ConsumerGroupCurrentMemberAs
 
 import com.dynatrace.hash4j.hashing.Hashing;
 
+import org.apache.logging.log4j.Level;
 import org.junit.jupiter.api.Test;
 import org.junit.jupiter.params.ParameterizedTest;
 import org.junit.jupiter.params.provider.Arguments;
@@ -320,7 +321,7 @@ public class UtilsTest {
                 result
             );
             // Verify error log includes group id
-            assertEquals(1, appender.getMessages("ERROR").stream()
+            assertEquals(1, appender.getMessages(Level.ERROR).stream()
                 .filter(msg -> msg.contains("[GroupId " + GROUP_ID + "] Size of assignment epochs 1 is not equal to partitions 3 for topic "
                     + FOO_TOPIC_ID))
                 .count());

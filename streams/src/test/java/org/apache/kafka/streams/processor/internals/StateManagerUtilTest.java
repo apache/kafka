@@ -282,9 +282,9 @@ public class StateManagerUtilTest {
             StateManagerUtil.closeStateManager(
                 logger, "logPrefix:", true, false, false, stateManager, stateDirectory, TaskType.ACTIVE);
 
-            assertTrue(appender.getMessages("DEBUG").stream().anyMatch(
+            assertTrue(appender.getMessages(Level.DEBUG).stream().anyMatch(
                 m -> m.contains("Unable to acquire lock while closing the state store for ACTIVE task 0_0; held by other-stream-thread")));
-            assertFalse(appender.getMessages("WARN").stream().anyMatch(
+            assertFalse(appender.getMessages(Level.WARN).stream().anyMatch(
                 m -> m.contains("Unable to acquire lock")));
         } finally {
             lockOwner.interrupt();
@@ -303,9 +303,9 @@ public class StateManagerUtilTest {
             StateManagerUtil.closeStateManager(
                 logger, "logPrefix:", true, false, false, stateManager, stateDirectory, TaskType.ACTIVE);
 
-            assertTrue(appender.getMessages("DEBUG").stream().anyMatch(
+            assertTrue(appender.getMessages(Level.DEBUG).stream().anyMatch(
                 m -> m.contains("Unable to acquire lock while closing the state store for ACTIVE task 0_0")));
-            assertFalse(appender.getMessages("WARN").stream().anyMatch(
+            assertFalse(appender.getMessages(Level.WARN).stream().anyMatch(
                 m -> m.contains("Unable to acquire lock")));
         }
         verify(stateManager, never()).close();
@@ -323,9 +323,9 @@ public class StateManagerUtilTest {
             StateManagerUtil.closeStateManager(
                 logger, "logPrefix:", true, false, false, stateManager, stateDirectory, TaskType.ACTIVE);
 
-            assertTrue(appender.getMessages("WARN").stream().anyMatch(
+            assertTrue(appender.getMessages(Level.WARN).stream().anyMatch(
                 m -> m.contains("Unable to acquire lock while closing the state store for ACTIVE task 0_0; held by terminated thread dead-stream-thread")));
-            assertFalse(appender.getMessages("DEBUG").stream().anyMatch(
+            assertFalse(appender.getMessages(Level.DEBUG).stream().anyMatch(
                 m -> m.contains("Unable to acquire lock")));
         }
         verify(stateManager, never()).close();
