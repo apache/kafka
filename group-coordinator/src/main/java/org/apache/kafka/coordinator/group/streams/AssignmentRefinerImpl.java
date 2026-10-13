@@ -236,7 +236,8 @@ public class AssignmentRefinerImpl implements AssignmentRefiner {
      * process: (1) either the old owner of the task keeps running it, or (2) caught-up copy which we temporarily
      * promote as active is running it.
      *
-     * <p>Only an active-running or caught-up copy is ever promoted.
+     * <p>Only an active-running or caught-up copy is ever promoted, with one exception: the standby task of an orphan
+     * on a member that does not report its restore progress, see {@link #unobservableStandbyToPromote}.
      *
      * <p>A task whose target owner is {@link WarmupSupport#NOT_SUPPORTED} is never staged: its target owner never
      * reports its restore progress, so no warm-up task could ever be seen to complete the migration.
@@ -1304,9 +1305,11 @@ public class AssignmentRefinerImpl implements AssignmentRefiner {
      *        The task being migrated.
      * @param currentOwner
      *        The member the task runs on for now: the member holding it as an active task, or, when that member is
-     *        too far behind to run it or there is none, the caught-up copy holder promoted to run it. When the target
-     *        assignment names a member the group no longer has, it can also be a holder that is still restoring the
-     *        task, which is better than taking the task away from a restore that is part-way through.
+     *        too far behind to run it or there is none, the caught-up copy holder promoted to run it. For an orphan,
+     *        it can also be a standby holder that does not report its restore progress, see
+     *        {@link #unobservableStandbyToPromote}. When the target assignment names a member the group no longer has,
+     *        it can also be a holder that is still restoring the task, which is better than taking the task away from
+     *        a restore that is part-way through.
      * @param targetOwner
      *        The member the target assignment moves the task to.
      * @param targetProcessId
