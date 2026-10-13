@@ -211,14 +211,13 @@ public class TargetAssignmentBuilderTest {
 
     @ParameterizedTest
     @ValueSource(booleans = {false, true})
-    public void testAssignmentIsolatedFromAssignorResult(boolean unmodifiableMap) {
+    public void testAssignmentReusesAssignorResultPartitionSets(boolean unmodifiableMap) {
         Uuid topicId = Uuid.randomUuid();
         Assignment previousAssignment = Assignment.of(mkAssignment(mkTopicAssignment(topicId, 0, 1)));
         Set<Integer> partitionIds = new HashSet<>(Set.of(0, 1));
         Map<Uuid, Set<Integer>> partitions = new HashMap<>();
         partitions.put(topicId, partitionIds);
 
-        // Equal contents do not make this new map or its sets safe to reuse.
         Map<Uuid, Set<Integer>> returnedPartitions = unmodifiableMap
             ? Collections.unmodifiableMap(partitions)
             : partitions;
@@ -226,12 +225,9 @@ public class TargetAssignmentBuilderTest {
             "member", new MemberAssignmentImpl(returnedPartitions)
         ));
 
-        partitionIds.clear();
-        partitions.clear();
-
         assertEquals(previousAssignment, assignment);
+        assertSame(partitionIds, assignment.partitions().get(topicId));
         assertThrows(UnsupportedOperationException.class, () -> assignment.partitions().clear());
-        assertThrows(UnsupportedOperationException.class, () -> assignment.partitions().get(topicId).remove(0));
     }
 
     @Test

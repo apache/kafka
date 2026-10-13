@@ -16,7 +16,6 @@
  */
 package org.apache.kafka.coordinator.group.modern;
 
-import org.apache.kafka.common.Uuid;
 import org.apache.kafka.common.utils.Time;
 import org.apache.kafka.coordinator.common.runtime.CoordinatorMetadataImage;
 import org.apache.kafka.coordinator.group.TargetAssignmentMetadata;
@@ -29,7 +28,6 @@ import org.apache.kafka.coordinator.group.api.assignor.PartitionAssignorExceptio
 
 import java.util.Map;
 import java.util.Objects;
-import java.util.Set;
 
 /**
  * Build a new Target Assignment based on the provided parameters.
@@ -164,15 +162,9 @@ public class TargetAssignmentBuilder {
             return Assignment.EMPTY;
         }
 
-        Map<Uuid, Set<Integer>> newPartitions = newMemberAssignment.partitions();
-        Map<Uuid, Set<Integer>> previousPartitions = groupSpec.memberAssignment(memberId).partitions();
-
-        // Reuse the existing immutable assignment if the assignor returned the same map instance.
-        if (newPartitions == previousPartitions) {
-            return Assignment.of(newPartitions);
-        }
-
-        // The returned map and its sets may be mutable, so take a defensive copy.
-        return Assignment.copyOf(newPartitions);
+        // The output is only read by the coordinator. Assignor inputs are
+        // reconstructed from target assignment records during replay.
+        // So, we don't need defensive copy here.
+        return Assignment.of(newMemberAssignment.partitions());
     }
 }

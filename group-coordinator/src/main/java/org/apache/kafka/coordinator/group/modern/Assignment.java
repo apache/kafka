@@ -49,8 +49,11 @@ public class Assignment implements MemberAssignment {
 
     /**
      * Creates an assignment without copying the provided map or its partition sets.
-     * The partition sets must be immutable, and the caller must ensure that the map
-     * is not modified after this method returns.
+     * The caller must ensure that neither the map nor its partition sets are modified
+     * after this call.
+     *
+     * <p>The returned assignment exposes an unmodifiable map, but this method does not
+     * make its partition sets unmodifiable.
      *
      * @param partitions The assigned partitions.
      * @return An assignment backed by the provided map.
