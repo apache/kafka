@@ -17,12 +17,16 @@
 package org.apache.kafka.tools.consumer.group;
 
 import org.apache.kafka.clients.admin.Admin;
+import org.apache.kafka.clients.admin.AdminClientConfig;
 import org.apache.kafka.clients.admin.AdminClientTestUtils;
 import org.apache.kafka.clients.admin.ConsumerGroupDescription;
 import org.apache.kafka.clients.admin.DescribeConsumerGroupsResult;
 import org.apache.kafka.clients.admin.DescribeTopicsResult;
 import org.apache.kafka.clients.admin.ListConsumerGroupOffsetsResult;
 import org.apache.kafka.clients.admin.ListConsumerGroupOffsetsSpec;
+import org.apache.kafka.clients.admin.ListGroupsOptions;
+import org.apache.kafka.clients.admin.ListGroupsResult;
+import org.apache.kafka.clients.admin.ListOffsetsOptions;
 import org.apache.kafka.clients.admin.ListOffsetsResult;
 import org.apache.kafka.clients.admin.ListOffsetsResult.ListOffsetsResultInfo;
 import org.apache.kafka.clients.admin.MemberAssignment;
@@ -38,11 +42,14 @@ import org.apache.kafka.common.Node;
 import org.apache.kafka.common.TopicPartition;
 import org.apache.kafka.common.TopicPartitionInfo;
 import org.apache.kafka.common.internals.KafkaFutureImpl;
+import org.apache.kafka.test.TestUtils;
 
 import org.junit.jupiter.api.Test;
+import org.mockito.ArgumentCaptor;
 import org.mockito.ArgumentMatcher;
 import org.mockito.ArgumentMatchers;
 
+import java.io.File;
 import java.util.ArrayList;
 import java.util.Collection;
 import java.util.HashMap;
@@ -52,6 +59,7 @@ import java.util.Map;
 import java.util.Map.Entry;
 import java.util.Objects;
 import java.util.Optional;
+import java.util.Properties;
 import java.util.Set;
 import java.util.function.Function;
 import java.util.stream.Collectors;
@@ -247,10 +255,85 @@ public class ConsumerGroupServiceTest {
         verify(admin, times(1)).listOffsets(offsetsArgMatcher(), any());
     }
 
+    @Test
+    public void testDefaultApiTimeoutFromCommandConfigIsUsedForResetOffsets() throws Exception {
+        File config = TestUtils.tempFile(AdminClientConfig.DEFAULT_API_TIMEOUT_MS_CONFIG + "=5000");
+        List<String> args = new ArrayList<>(List.of("--bootstrap-server", "localhost:9092", "--group", GROUP,
+            "--reset-offsets", "--to-latest", "--command-config", config.getAbsolutePath()));
+        TOPICS.forEach(topic -> args.addAll(List.of("--topic", topic)));
+        ConsumerGroupCommand.ConsumerGroupService groupService = consumerGroupService(args.toArray(new String[0]));
+
+        when(admin.describeConsumerGroups(ArgumentMatchers.eq(List.of(GROUP)), any()))
+                .thenReturn(describeGroupsResult(GroupState.DEAD));
+        when(admin.describeTopics(ArgumentMatchers.eq(TOPICS), any()))
+                .thenReturn(describeTopicsResult(TOPICS));
+        when(admin.describeTopics(anySet(), any()))
+                .thenReturn(describeTopicsResult(TOPICS));
+        when(admin.listOffsets(offsetsArgMatcher(), any()))
+                .thenReturn(listOffsetsResult());
+
+        groupService.resetOffsets();
+
+        ArgumentCaptor<ListOffsetsOptions> options = ArgumentCaptor.forClass(ListOffsetsOptions.class);
+        verify(admin).listOffsets(offsetsArgMatcher(), options.capture());
+        assertEquals(5000, options.getValue().timeoutMs());
+    }
+
+    @Test
+    public void testDefaultTimeoutIsUsedWhenNotConfigured() throws Exception {
+        assertEquals(30000, listGroupsTimeoutMs(List.of(), Map.of()));
+    }
+
+    @Test
+    public void testDefaultApiTimeoutFromCommandConfigIsUsed() throws Exception {
+        File config = TestUtils.tempFile(AdminClientConfig.DEFAULT_API_TIMEOUT_MS_CONFIG + "=5000");
+        assertEquals(5000, listGroupsTimeoutMs(List.of("--command-config", config.getAbsolutePath()), Map.of()));
+    }
+
+    @Test
+    public void testDefaultApiTimeoutFromConfigOverridesIsUsed() throws Exception {
+        assertEquals(4000, listGroupsTimeoutMs(List.of(), Map.of(AdminClientConfig.DEFAULT_API_TIMEOUT_MS_CONFIG, "4000")));
+    }
+
+    @Test
+    public void testExplicitTimeoutEqualToDefaultTakesPrecedenceOverCommandConfig() throws Exception {
+        File config = TestUtils.tempFile(AdminClientConfig.DEFAULT_API_TIMEOUT_MS_CONFIG + "=5000");
+        assertEquals(30000, listGroupsTimeoutMs(
+            List.of("--command-config", config.getAbsolutePath(), "--timeout", "30000"), Map.of()));
+    }
+
+    @Test
+    public void testTimeoutOptionTakesPrecedenceOverCommandConfig() throws Exception {
+        File config = TestUtils.tempFile(AdminClientConfig.DEFAULT_API_TIMEOUT_MS_CONFIG + "=5000");
+        assertEquals(7000, listGroupsTimeoutMs(
+            List.of("--command-config", config.getAbsolutePath(), "--timeout", "7000"), Map.of()));
+    }
+
+    private int listGroupsTimeoutMs(List<String> extraArgs, Map<String, String> configOverrides) throws Exception {
+        List<String> args = new ArrayList<>(List.of("--bootstrap-server", "localhost:9092", "--list"));
+        args.addAll(extraArgs);
+        ListGroupsResult result = mock(ListGroupsResult.class);
+        when(result.all()).thenReturn(KafkaFuture.completedFuture(List.of()));
+        when(admin.listGroups(any(ListGroupsOptions.class))).thenReturn(result);
+
+        try (ConsumerGroupCommand.ConsumerGroupService groupService = new ConsumerGroupCommand.ConsumerGroupService(
+                ConsumerGroupCommandOptions.fromArgs(args.toArray(new String[0])), configOverrides) {
+            @Override
+            protected Admin createAdminClient(Properties adminClientProps) {
+                return admin;
+            }
+        }) {
+            groupService.listConsumerGroups();
+        }
+        ArgumentCaptor<ListGroupsOptions> options = ArgumentCaptor.forClass(ListGroupsOptions.class);
+        verify(admin).listGroups(options.capture());
+        return options.getValue().timeoutMs();
+    }
+
     private ConsumerGroupCommand.ConsumerGroupService consumerGroupService(String[] args) {
         return new ConsumerGroupCommand.ConsumerGroupService(ConsumerGroupCommandOptions.fromArgs(args), Map.of()) {
             @Override
-            protected Admin createAdminClient(Map<String, String> configOverrides) {
+            protected Admin createAdminClient(Properties adminClientProps) {
                 return admin;
             }
         };
