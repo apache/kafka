@@ -234,9 +234,7 @@ public class ShareConsumeBenchWorker implements TaskWorker {
                 }
                 // Send the pending acknowledgements while the consumer is still a member of the share group.
                 // Records after the maxMessages break are deliberately left unacknowledged.
-                if (spec.acknowledgeType().isPresent()) {
-                    consumer.commitSync();
-                }
+                spec.acknowledgeType().ifPresent(__ -> consumer.commitSync());
             } catch (Exception e) {
                 WorkerUtils.abort(log, "ConsumeRecords", e, doneFuture);
             } finally {
