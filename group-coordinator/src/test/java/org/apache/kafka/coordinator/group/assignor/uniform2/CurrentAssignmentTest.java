@@ -64,7 +64,7 @@ public class CurrentAssignmentTest {
             .withMember("B", Set.of(T1, T2), mkAssignment(mkTopicAssignment(T1, 1)))
             .withMember("C", Set.of(T1, T2), mkAssignment(mkTopicAssignment(T2, 0, 2)))
             .build();
-        var group = new IndexedGroup(spec, DESCRIBER);
+        var group = new IndexedGroup.Builder(spec, DESCRIBER).build();
 
         var currentAssignment = new CurrentAssignment(spec, group);
 
@@ -85,7 +85,7 @@ public class CurrentAssignmentTest {
             .withMember("A", Set.of(T1, T2), mkAssignment(mkTopicAssignment(T1, 0, 1)))
             .withMember("B", Set.of(T1, T2))
             .build();
-        var group = new IndexedGroup(spec, DESCRIBER);
+        var group = new IndexedGroup.Builder(spec, DESCRIBER).build();
 
         var currentAssignment = new CurrentAssignment(spec, group);
 
@@ -106,7 +106,7 @@ public class CurrentAssignmentTest {
             .withMember("A", Set.of(T1, T2), mkAssignment(mkTopicAssignment(T1, 0)))
             .withMember("B", Set.of(T1), mkAssignment(mkTopicAssignment(T1, 1), mkTopicAssignment(T2, 0)))
             .build();
-        var group = new IndexedGroup(spec, DESCRIBER);
+        var group = new IndexedGroup.Builder(spec, DESCRIBER).build();
 
         var currentAssignment = new CurrentAssignment(spec, group);
 
@@ -126,7 +126,7 @@ public class CurrentAssignmentTest {
             .withMember("A", Set.of(T1), mkAssignment(mkTopicAssignment(T1, 0), mkTopicAssignment(MISSING, 0)))
             .withMember("B", Set.of(T1), mkAssignment(mkTopicAssignment(T1, 1)))
             .build();
-        var group = new IndexedGroup(spec, DESCRIBER);
+        var group = new IndexedGroup.Builder(spec, DESCRIBER).build();
 
         var currentAssignment = new CurrentAssignment(spec, group);
 
