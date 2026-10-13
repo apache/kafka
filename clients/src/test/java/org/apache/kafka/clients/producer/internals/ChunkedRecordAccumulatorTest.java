@@ -29,6 +29,7 @@ import org.apache.kafka.common.metrics.KafkaMetric;
 import org.apache.kafka.common.metrics.Metrics;
 import org.apache.kafka.common.protocol.Errors;
 import org.apache.kafka.common.record.TimestampType;
+import org.apache.kafka.common.record.internal.AbstractRecords;
 import org.apache.kafka.common.record.internal.CompressionRatioEstimator;
 import org.apache.kafka.common.record.internal.CompressionType;
 import org.apache.kafka.common.record.internal.MemoryRecords;
@@ -438,6 +439,96 @@ public class ChunkedRecordAccumulatorTest {
                 assertArrayEquals(values.get(i), decoded.get(i));
 
             // Every pool chunk returns to the pool, and no heap fallback chunk is added to it.
+            accum.deallocate(second);
+            assertEquals(totalMemory, pool.availableMemory());
+        } finally {
+            CompressionRatioEstimator.resetEstimation(topic);
+            accum.close();
+        }
+    }
+
+    /**
+     * A compressed batch can need an extension larger than the whole pool. {@code hasRoomFor} admits the next
+     * record by its exact uncompressed size, while the extension is sized from the record's upper bound times
+     * the compression ratio estimate and the 1.05 estimation factor. With batch.size equal to buffer.memory, a
+     * tiny first record followed by a record just under batch.size is admitted, but its extension rounds up to
+     * more whole chunks than the pool holds. That must be treated as a denied extension (close the batch and
+     * retry the record as a new batch's first record) rather than let {@link BufferPool#tryAllocateChunks}
+     * throw {@link IllegalArgumentException} out of {@code append}.
+     * <p>
+     * batch.size and the pool are 16384 so the 5% factor (~800 bytes) is more than one 256-byte chunk;
+     * at 4096 it would be absorbed by rounding and the extension would fit the pool exactly.
+     */
+    @ParameterizedTest
+    @ValueSource(strings = {"gzip", "snappy", "lz4", "zstd"})
+    public void testExtensionLargerThanPoolClosesBatchAndRetriesAsNewBatch(String codec) throws Exception {
+        int chunkSize = 256;
+        int batchSize = 16384;
+        long totalMemory = batchSize;
+        Compression compression = Compression.of(CompressionType.forName(codec)).build();
+        BufferPool pool = new BufferPool(totalMemory, chunkSize, metrics, time, "producer-metrics",
+                BufferPool.AllocationMode.INCREMENTAL);
+        ChunkedRecordAccumulator accum = newAccumulator(batchSize, compression, pool);
+        // Read by the batch on construction, so it must be set before the first append.
+        CompressionRatioEstimator.setEstimation(topic, compression.type(), 1.0f);
+        try {
+            byte[] tiny = new byte[1];
+            accum.append(topic, partition1, 0L, key, tiny, Record.EMPTY_HEADERS, null,
+                    maxBlockTimeMs, time.milliseconds(), cluster);
+            Deque<ProducerBatch> dq = batchesFor(accum, tp1);
+            assertEquals(1, dq.size());
+            ProducerBatch first = dq.peekFirst();
+            assertInstanceOf(ChunkedProducerBatch.class, first);
+
+            // Preconditions, so the test cannot pass for the wrong reason.
+            byte[] large = new byte[16000];
+            new Random(42).nextBytes(large);
+            // The open batch admits the record...
+            assertTrue(first.recordsBuilder.hasRoomFor(0L, key, large, Record.EMPTY_HEADERS),
+                    "the open batch must admit the second record");
+            // ...but its extension, rounded up to whole chunks, exceeds the whole pool.
+            int ext = ((ChunkedProducerBatch) first).extensionBytesNeeded(0L, key, large, Record.EMPTY_HEADERS);
+            long extChunkAligned = ((long) ext + chunkSize - 1) / chunkSize * chunkSize;
+            assertTrue(extChunkAligned > totalMemory, "the extension of " + ext + " bytes rounds to "
+                    + extChunkAligned + ", which must exceed the pool's " + totalMemory);
+            // The record passes KafkaProducer.ensureValidRecordSize, and the new batch it retries into fits
+            // in the pool alongside the first batch's chunks.
+            int upperBound = AbstractRecords.estimateSizeInBytesUpperBound(RecordBatch.CURRENT_MAGIC_VALUE,
+                    compression.type(), key, large, Record.EMPTY_HEADERS);
+            assertTrue(upperBound <= totalMemory);
+            long newBatchChunkAligned = ((long) upperBound + chunkSize - 1) / chunkSize * chunkSize;
+            assertTrue(newBatchChunkAligned <= pool.availableMemory(),
+                    "the new batch needs " + newBatchChunkAligned + " bytes but only "
+                            + pool.availableMemory() + " are free");
+
+            RecordAccumulator.RecordAppendResult result = accum.append(topic, partition1, 0L, key, large,
+                    Record.EMPTY_HEADERS, null, maxBlockTimeMs, time.milliseconds(), cluster);
+
+            // The first batch was closed for appends and the record went to a new batch.
+            assertTrue(result.appended());
+            assertTrue(result.newBatchCreated, "the record must land in a new batch");
+            assertEquals(2, dq.size());
+            assertEquals(1, first.recordCount);
+            assertNull(first.tryAppend(time.milliseconds(), key, new byte[1], Record.EMPTY_HEADERS, null,
+                    time.milliseconds()), "the first batch should be closed for appends");
+            ProducerBatch second = dq.peekLast();
+            assertNotSame(first, second);
+            assertEquals(1, second.recordCount);
+
+            // The closed first batch is the one drained.
+            Map<Integer, List<ProducerBatch>> drained =
+                    accum.drain(metadataCache, Set.of(node1), Integer.MAX_VALUE, time.milliseconds());
+            assertEquals(List.of(first), drained.get(node1.id()));
+
+            List<byte[]> decoded = new ArrayList<>();
+            first.records().records().forEach(r -> decoded.add(readBytes(r.value())));
+            second.close();
+            second.records().records().forEach(r -> decoded.add(readBytes(r.value())));
+            assertEquals(2, decoded.size());
+            assertArrayEquals(tiny, decoded.get(0));
+            assertArrayEquals(large, decoded.get(1));
+
+            accum.deallocate(first);
             accum.deallocate(second);
             assertEquals(totalMemory, pool.availableMemory());
         } finally {

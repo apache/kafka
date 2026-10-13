@@ -173,9 +173,10 @@ public class ChunkedRecordAccumulator extends RecordAccumulator {
                     extensionChunks = allocateExtensionChunks(appendResult.extensionBytesNeeded, batchToExtend, dq,
                             topic, effectivePartition);
                     if (extensionChunks == null) {
-                        // Pool exhausted (or closed), so no chunks are held. allocateExtensionChunks has already
-                        // decided whether to close the open batch; retry either way, bounded by
-                        // throwIfNoMoreRetriesAllowed, which will report exhausted memory as the cause.
+                        // Pool exhausted or closed, or the extension exceeds the whole pool in whole chunks: no
+                        // chunks are held. allocateExtensionChunks has already decided whether to close the open
+                        // batch (then the record retries as a new batch's first record); retry either way, bounded
+                        // by throwIfNoMoreRetriesAllowed, which will report exhausted memory as the cause.
                         nonBlockingMemoryAllocationDenied = true;
                         continue;
                     }
@@ -288,6 +289,15 @@ public class ChunkedRecordAccumulator extends RecordAccumulator {
      * retry then needs a new batch, its blocking acquire throws {@link KafkaException} for the closed pool
      * (unless {@code max.block.ms} is already spent, in which case the retry bound gives up first).
      * <p>
+     * An extension that, rounded up to whole chunks, exceeds the pool's entire capacity can never be
+     * satisfied, and {@code tryAllocateChunks} would throw {@link IllegalArgumentException} for it. The
+     * open batch admits a record by its exact size ({@code MemoryRecordsBuilder.hasRoomFor}), while the
+     * extension is sized from the record's upper bound and, for a compressed batch, the compression ratio
+     * estimate times the 1.05 estimation factor. So with {@code batch.size} close to {@code buffer.memory}
+     * the last admitted record can need more chunks than the pool holds. That is treated as a denied
+     * acquire too: the batch is closed and the record retries as a new batch's first record, which
+     * {@code KafkaProducer.ensureValidRecordSize} has already bounded by {@code buffer.memory}.
+     * <p>
      * The acquire runs off the deque lock, so the open batch may no longer be the one the gap was
      * sized against by the time this would close it: it could have been drained and replaced by a batch
      * a concurrent appender created. So close only if the open batch is still
@@ -295,26 +305,47 @@ public class ChunkedRecordAccumulator extends RecordAccumulator {
      * re-evaluates against whatever is open then.
      *
      * @param batchToExtend the batch the gap was sized against; must not be null
-     * @return the chunks, or null if the pool was exhausted or closed
+     * @return the chunks, or null if the pool was exhausted or closed, or the extension can never fit in it
      */
     private List<ByteBuffer> allocateExtensionChunks(int extensionBytesNeeded, ProducerBatch batchToExtend,
                                                      Deque<ProducerBatch> dq, String topic, int partition) {
+        // Codec-agnostic: even uncompressed, hasRoomFor uses the record's exact size while
+        // extensionBytesNeeded uses DefaultRecord.recordSizeUpperBound, so with batch.size == buffer.memory
+        // the last admitted record can round up one chunk past the pool. Same rounding as BufferPool.numChunksFor.
+        int chunkSize = chunkedFree.poolableSize();
+        long chunkAlignedSize = ((long) extensionBytesNeeded + chunkSize - 1L) / chunkSize * chunkSize;
+        if (chunkAlignedSize > chunkedFree.totalMemory()) {
+            closeBatchToExtendIfStillOpen(batchToExtend, dq, topic, partition,
+                    "Extension of " + extensionBytesNeeded + " bytes (" + chunkAlignedSize
+                            + " bytes in whole chunks) exceeds the pool's " + chunkedFree.totalMemory() + " bytes");
+            return null;
+        }
         List<ByteBuffer> chunks = chunkedFree.tryAllocateChunks(extensionBytesNeeded);
         if (chunks != null)
             return chunks;
+        closeBatchToExtendIfStillOpen(batchToExtend, dq, topic, partition, "Pool exhausted");
+        return null;
+    }
+
+    /**
+     * Close {@code batchToExtend} for appends if it is still the open batch, after its extension was denied.
+     *
+     * @param reason why the extension was denied, for the trace log
+     */
+    private void closeBatchToExtendIfStillOpen(ProducerBatch batchToExtend, Deque<ProducerBatch> dq,
+                                               String topic, int partition, String reason) {
         synchronized (dq) {
             if (dq.peekLast() == batchToExtend) {
-                log.trace("Pool exhausted while extending batch for topic {} partition {}; closing existing batch",
-                        topic, partition);
+                log.trace("{} while extending batch for topic {} partition {}; closing existing batch",
+                        reason, topic, partition);
                 // No need to check whether it is still open: closeForRecordAppends is idempotent.
                 batchToExtend.closeForRecordAppends();
             } else {
-                log.trace("Pool exhausted while extending batch for topic {} partition {}; the batch it "
+                log.trace("{} while extending batch for topic {} partition {}; the batch it "
                         + "was sized against is no longer the open one, so closing nothing and retrying",
-                        topic, partition);
+                        reason, topic, partition);
             }
         }
-        return null;
     }
 
     /**
