@@ -27,6 +27,7 @@ import org.apache.kafka.common.header.Header;
 import org.apache.kafka.common.metrics.Metrics;
 import org.apache.kafka.common.record.TimestampType;
 import org.apache.kafka.common.record.internal.AbstractRecords;
+import org.apache.kafka.common.record.internal.CompressionRatioEstimator;
 import org.apache.kafka.common.record.internal.CompressionType;
 import org.apache.kafka.common.record.internal.MemoryRecordsBuilder;
 import org.apache.kafka.common.record.internal.Record;
@@ -182,19 +183,19 @@ public class ChunkedRecordAccumulator extends RecordAccumulator {
                     }
                     nowMs = time.milliseconds();
                 } else if (appendResult.needsNewBatch() && newBatch == null) {
-                    // The open batch is done (e.g., full, closed) so start a new one. Size it for
-                    // this first record only (not a whole batch.size), to the uncompressed upper bound
-                    // the first-record capacity check in ChunkedProducerBatch.tryAppend demands. For a
-                    // compressed batch this is only a heuristic (that check is skipped for it): any
-                    // compressor overshoot is absorbed by the stream growing mid-write.
-                    int newBatchSize = AbstractRecords.estimateSizeInBytesUpperBound(
+                    // The open batch is done (e.g., full, closed) so start a new one, with chunks for this first
+                    // record only (not a whole batch.size), sized by newBatchChunkBytes: by the compression ratio
+                    // estimate when compressed, per KIP-1332. The record's uncompressed upper bound stays the
+                    // builder's write-limit basis either way, as in the full strategy.
+                    int firstRecordUpperBound = AbstractRecords.estimateSizeInBytesUpperBound(
                             RecordBatch.CURRENT_MAGIC_VALUE, compression.type(), key, value, headers);
+                    int newBatchChunkBytes = newBatchChunkBytes(topic, firstRecordUpperBound);
                     long remainingTimeToBlock = remainingTimeToBlockMs(deadlineMs);
-                    log.trace("Allocating {} byte chunked buffer ({} byte chunks) for topic {} partition {} with remaining timeout {}ms",
-                            newBatchSize, chunkedFree.poolableSize(), topic, effectivePartition, remainingTimeToBlock);
+                    log.trace("Allocating {} byte chunked buffer ({} byte chunks, first record upper bound {} bytes) for topic {} partition {} with remaining timeout {}ms",
+                            newBatchChunkBytes, chunkedFree.poolableSize(), firstRecordUpperBound, topic, effectivePartition, remainingTimeToBlock);
                     List<ByteBuffer> initialChunks;
                     try {
-                        initialChunks = chunkedFree.allocateChunks(newBatchSize, remainingTimeToBlock);
+                        initialChunks = chunkedFree.allocateChunks(newBatchChunkBytes, remainingTimeToBlock);
                     } catch (BufferExhaustedException e) {
                         // The blocking new-batch acquire was not able to get memory within what is
                         // left of max.block.ms. Record it in the buffer-exhausted metrics.
@@ -205,7 +206,7 @@ public class ChunkedRecordAccumulator extends RecordAccumulator {
                     }
                     newBatch = new NewBatchBuffer(new ChunkedByteBufferOutputStream(initialChunks,
                             chunkedFree.poolableSize(), chunkedFree, compression.type() != CompressionType.NONE),
-                            newBatchSize);
+                            firstRecordUpperBound);
                 }
 
                 synchronized (dq) {
@@ -250,8 +251,8 @@ public class ChunkedRecordAccumulator extends RecordAccumulator {
                     // so bufferStream was allocated (this iteration or carried from a prior one).
                     if (newBatch == null)
                         throw new IllegalStateException("needsNewBatch path reached without an allocated buffer stream");
-                    // Reuse the new-batch size estimate as the write-limit basis; fullness checks in
-                    // MemoryRecordsBuilder already fold in the estimated compression ratio.
+                    // The first record's uncompressed upper bound is the write-limit basis; fullness checks
+                    // in MemoryRecordsBuilder already fold in the estimated compression ratio.
                     final NewBatchBuffer pendingNewBatch = newBatch;
                     appendResult = appendNewBatch(tp, dq, timestamp, key, value, headers, callbacks,
                             () -> chunkedRecordsBuilder(pendingNewBatch.stream, pendingNewBatch.firstAppendSize), nowMs);
@@ -277,6 +278,38 @@ public class ChunkedRecordAccumulator extends RecordAccumulator {
             deallocateExtensionChunks(extensionChunks);
             appendsInProgress.decrementAndGet();
         }
+    }
+
+    /**
+     * Bytes of chunk capacity to allocate for a new batch's first record (see the new-batch path in
+     * {@link #append}).
+     * <p>
+     * Uncompressed, this is the record's upper bound, which is exact, and the first-record capacity check
+     * in {@link ChunkedProducerBatch#tryAppend} relies on it.
+     * <p>
+     * Compressed, per KIP-1332, it is the batch header plus the record's upper bound scaled by the topic's
+     * compression ratio estimate and padded by the 1.05 estimation factor: the same formula
+     * ({@link MemoryRecordsBuilder#estimatedCompressedSizeInBytes}) the batch's builder uses for its
+     * fullness checks, and so {@link ChunkedProducerBatch#extensionBytesNeeded} for later records. Sizing
+     * it to the uncompressed upper bound was a rejected alternative, because it over-reserves pool memory
+     * for data that compresses. This is only an estimate, so a compressor overshoot is absorbed by the
+     * growable stream growing mid-write. The estimate read here can differ from the one the batch reads in
+     * its constructor moments later, which {@link ChunkedProducerBatch#tryAppend} accepts for the same reason.
+     * <p>
+     * The compressed size is capped at the pool's total memory. {@code KafkaProducer.ensureValidRecordSize}
+     * bounds only the uncompressed upper bound by {@code buffer.memory}, so an estimate near or above 1.0
+     * could otherwise size a record that passed that check past the whole pool, which
+     * {@link BufferPool#allocateChunks} rejects. The stream is growable, so the cap is safe.
+     *
+     * @param firstRecordUpperBound the record's uncompressed upper bound, batch header included
+     */
+    private int newBatchChunkBytes(String topic, int firstRecordUpperBound) {
+        if (compression.type() == CompressionType.NONE)
+            return firstRecordUpperBound;
+        int batchHeaderSize = AbstractRecords.recordBatchHeaderSizeInBytes(RecordBatch.CURRENT_MAGIC_VALUE, compression.type());
+        int estimate = MemoryRecordsBuilder.estimatedCompressedSizeInBytes(batchHeaderSize,
+                firstRecordUpperBound - batchHeaderSize, CompressionRatioEstimator.estimation(topic, compression.type()));
+        return (int) Math.min(estimate, chunkedFree.totalMemory());
     }
 
     /**
@@ -410,10 +443,12 @@ public class ChunkedRecordAccumulator extends RecordAccumulator {
     }
 
     /**
-     * A buffer stream allocated to back a new batch, sized to fit the batch's first record,
-     * paired with that size. That same size is also used as the batch's write-limit basis (see
-     * {@link #chunkedRecordsBuilder}). The two are always set and cleared together in {@link #append},
-     * including across retries.
+     * A buffer stream allocated to back a new batch, with chunks sized for the batch's first record (see
+     * {@link #newBatchChunkBytes}: the record's upper bound when uncompressed, the compression ratio
+     * estimate applied to it when compressed), paired with {@code firstAppendSize}, the record's
+     * uncompressed upper bound. That upper bound, not the chunk size, is the batch's write-limit basis (see
+     * {@link #chunkedRecordsBuilder}), as in the full strategy. The two are always set and cleared together
+     * in {@link #append}, including across retries.
      * <p>
      * The stream is growable only for a compressed batch, whose chunk sizing is a ratio-based estimate the
      * compressor may overshoot. An uncompressed batch's sizing (the first record's upper bound, then

@@ -32,6 +32,7 @@ import org.apache.kafka.common.record.TimestampType;
 import org.apache.kafka.common.record.internal.AbstractRecords;
 import org.apache.kafka.common.record.internal.CompressionRatioEstimator;
 import org.apache.kafka.common.record.internal.CompressionType;
+import org.apache.kafka.common.record.internal.DefaultRecordBatch;
 import org.apache.kafka.common.record.internal.MemoryRecords;
 import org.apache.kafka.common.record.internal.MemoryRecordsBuilder;
 import org.apache.kafka.common.record.internal.Record;
@@ -235,8 +236,9 @@ public class ChunkedRecordAccumulatorTest {
      * A topic whose data doesn't compress drives its compression ratio estimate above 1.0 (from the
      * initial 1.0, a single such batch, whose observed ratio is just above 1.0 once the batch header is
      * counted, raises it by at least COMPRESSION_RATIO_DETERIORATE_STEP). The first record of a new batch
-     * must still append: its chunks are pre-sized to the uncompressed upper bound, and any compressor
-     * overshoot must be absorbed by mid-write growth rather than rejected up front. The estimate here is
+     * must still append: its chunks are pre-sized by the compression ratio estimate (here 1.3 times the
+     * uncompressed upper bound, padded by the 1.05 estimation factor), and any compressor overshoot must be
+     * absorbed by mid-write growth rather than rejected up front. The estimate here is
      * set straight to 1.3, above the ~1.0 this batch then observes, so closing the batch lowers it by
      * COMPRESSION_RATIO_IMPROVING_STEP to exactly 1.295 rather than raising it.
      */
@@ -272,6 +274,113 @@ public class ChunkedRecordAccumulatorTest {
             assertEquals(1.295f, CompressionRatioEstimator.estimation(topic, compression.type()), 1e-6f);
 
             accum.deallocate(batch);
+        } finally {
+            CompressionRatioEstimator.resetEstimation(topic);
+            accum.close();
+        }
+    }
+
+    /**
+     * Per KIP-1332, a compressed batch's first record is sized by the topic's compression ratio estimate
+     * times the 1.05 estimation factor, not by its uncompressed upper bound (a rejected alternative, because
+     * it over-reserves pool memory for data that compresses). An estimate of 0.5 reserves about half the
+     * upper bound, and one of 1.3 (an incompressible topic) reserves more than it. The record spans many
+     * chunks so the difference is not absorbed by rounding up to a whole chunk.
+     */
+    @ParameterizedTest
+    @ValueSource(strings = {"gzip", "snappy", "lz4", "zstd"})
+    public void testCompressedFirstRecordIsSizedByCompressionRatioEstimate(String codec) throws Exception {
+        int chunkSize = 256;
+        long totalMemory = 1024L * chunkSize;
+        Compression compression = Compression.of(CompressionType.forName(codec)).build();
+        BufferPool pool = new BufferPool(totalMemory, chunkSize, metrics, time, "producer-metrics",
+                BufferPool.AllocationMode.INCREMENTAL);
+        ChunkedRecordAccumulator accum = newAccumulator(8192, compression, pool);
+        byte[] value = new byte[20_000];
+        int upperBound = AbstractRecords.estimateSizeInBytesUpperBound(RecordBatch.CURRENT_MAGIC_VALUE,
+                compression.type(), key, value, Record.EMPTY_HEADERS);
+        long upperBoundChunkAligned = ((long) upperBound + chunkSize - 1) / chunkSize * chunkSize;
+        try {
+            for (float estimate : new float[] {0.5f, 1.3f}) {
+                // Read when the first record is sized, so it must be set before the append.
+                CompressionRatioEstimator.setEstimation(topic, compression.type(), estimate);
+                int expected = MemoryRecordsBuilder.estimatedCompressedSizeInBytes(DefaultRecordBatch.RECORD_BATCH_OVERHEAD,
+                        upperBound - DefaultRecordBatch.RECORD_BATCH_OVERHEAD, estimate);
+                long expectedChunkAligned = ((long) expected + chunkSize - 1) / chunkSize * chunkSize;
+                if (estimate < 1.0f)
+                    assertTrue(expectedChunkAligned < upperBoundChunkAligned, "an estimate of " + estimate + " must reserve "
+                            + expectedChunkAligned + " bytes, less than the upper bound's " + upperBoundChunkAligned);
+                else
+                    assertTrue(expectedChunkAligned > upperBoundChunkAligned, "an estimate of " + estimate + " must reserve "
+                            + expectedChunkAligned + " bytes, more than the upper bound's " + upperBoundChunkAligned);
+
+                accum.append(topic, partition1, 0L, key, value, Record.EMPTY_HEADERS, null,
+                        maxBlockTimeMs, time.milliseconds(), cluster);
+                Deque<ProducerBatch> dq = batchesFor(accum, tp1);
+                assertEquals(1, dq.size());
+                ProducerBatch batch = dq.peekFirst();
+                assertNotNull(batch);
+                assertEquals(1, batch.recordCount);
+                // Zero-filled data compresses well, so the write stays within the reserved chunks.
+                assertEquals(totalMemory - expectedChunkAligned, pool.availableMemory(),
+                        "an estimate of " + estimate + " must reserve " + expectedChunkAligned + " bytes");
+
+                // Drain, so the next estimate starts a new batch from an untouched pool.
+                Map<Integer, List<ProducerBatch>> drained =
+                        accum.drain(metadataCache, Set.of(node1), Integer.MAX_VALUE, time.milliseconds());
+                assertEquals(List.of(batch), drained.get(node1.id()));
+                assertArrayEquals(value, readBytes(batch.records().records().iterator().next().value()));
+                accum.deallocate(batch);
+                assertEquals(totalMemory, pool.availableMemory());
+            }
+        } finally {
+            CompressionRatioEstimator.resetEstimation(topic);
+            accum.close();
+        }
+    }
+
+    /**
+     * {@code KafkaProducer.ensureValidRecordSize} bounds only a record's uncompressed upper bound by
+     * buffer.memory, so a compression ratio estimate above about 0.95 can size a valid record past the
+     * whole pool. Its first-record allocation must be capped at the pool's total memory rather than be
+     * rejected by {@link BufferPool#allocateChunks}.
+     */
+    @ParameterizedTest
+    @ValueSource(strings = {"gzip", "snappy", "lz4", "zstd"})
+    public void testCompressedFirstRecordSizeIsCappedAtPoolSize(String codec) throws Exception {
+        int chunkSize = 256;
+        int batchSize = 16384;
+        long totalMemory = batchSize;
+        Compression compression = Compression.of(CompressionType.forName(codec)).build();
+        BufferPool pool = new BufferPool(totalMemory, chunkSize, metrics, time, "producer-metrics",
+                BufferPool.AllocationMode.INCREMENTAL);
+        ChunkedRecordAccumulator accum = newAccumulator(batchSize, compression, pool);
+        CompressionRatioEstimator.setEstimation(topic, compression.type(), 1.3f);
+        try {
+            // Preconditions: the record passes ensureValidRecordSize, but its ratio-based size exceeds the pool.
+            byte[] value = new byte[16000];
+            int upperBound = AbstractRecords.estimateSizeInBytesUpperBound(RecordBatch.CURRENT_MAGIC_VALUE,
+                    compression.type(), key, value, Record.EMPTY_HEADERS);
+            assertTrue(upperBound <= totalMemory);
+            int estimated = MemoryRecordsBuilder.estimatedCompressedSizeInBytes(DefaultRecordBatch.RECORD_BATCH_OVERHEAD,
+                    upperBound - DefaultRecordBatch.RECORD_BATCH_OVERHEAD, 1.3f);
+            assertTrue(estimated > totalMemory, "the estimate of " + estimated + " bytes must exceed the pool");
+
+            accum.append(topic, partition1, 0L, key, value, Record.EMPTY_HEADERS, null,
+                    maxBlockTimeMs, time.milliseconds(), cluster);
+
+            // The whole pool backs the batch.
+            Deque<ProducerBatch> dq = batchesFor(accum, tp1);
+            assertEquals(1, dq.size());
+            ProducerBatch batch = dq.peekFirst();
+            assertNotNull(batch);
+            assertEquals(1, batch.recordCount);
+            assertEquals(0, pool.availableMemory());
+
+            batch.close();
+            assertArrayEquals(value, readBytes(batch.records().records().iterator().next().value()));
+            accum.deallocate(batch);
+            assertEquals(totalMemory, pool.availableMemory());
         } finally {
             CompressionRatioEstimator.resetEstimation(topic);
             accum.close();
@@ -458,6 +567,10 @@ public class ChunkedRecordAccumulatorTest {
      * <p>
      * batch.size and the pool are 16384 so the 5% factor (~800 bytes) is more than one 256-byte chunk;
      * at 4096 it would be absorbed by rounding and the extension would fit the pool exactly.
+     * <p>
+     * The new batch is sized by the compression ratio estimate too, so at the first batch's 1.0 it would
+     * also need more than the pool. The topic's estimate is therefore lowered to 0.9 before the retry: the
+     * first batch keeps the 1.0 it read on construction, so only the new batch shrinks.
      */
     @ParameterizedTest
     @ValueSource(strings = {"gzip", "snappy", "lz4", "zstd"})
@@ -491,12 +604,15 @@ public class ChunkedRecordAccumulatorTest {
             long extChunkAligned = ((long) ext + chunkSize - 1) / chunkSize * chunkSize;
             assertTrue(extChunkAligned > totalMemory, "the extension of " + ext + " bytes rounds to "
                     + extChunkAligned + ", which must exceed the pool's " + totalMemory);
-            // The record passes KafkaProducer.ensureValidRecordSize, and the new batch it retries into fits
-            // in the pool alongside the first batch's chunks.
+            // The record passes KafkaProducer.ensureValidRecordSize, and the new batch it retries into, sized
+            // by the lowered estimate, fits in the pool alongside the first batch's chunks.
             int upperBound = AbstractRecords.estimateSizeInBytesUpperBound(RecordBatch.CURRENT_MAGIC_VALUE,
                     compression.type(), key, large, Record.EMPTY_HEADERS);
             assertTrue(upperBound <= totalMemory);
-            long newBatchChunkAligned = ((long) upperBound + chunkSize - 1) / chunkSize * chunkSize;
+            CompressionRatioEstimator.setEstimation(topic, compression.type(), 0.9f);
+            int newBatchSize = MemoryRecordsBuilder.estimatedCompressedSizeInBytes(DefaultRecordBatch.RECORD_BATCH_OVERHEAD,
+                    upperBound - DefaultRecordBatch.RECORD_BATCH_OVERHEAD, 0.9f);
+            long newBatchChunkAligned = ((long) newBatchSize + chunkSize - 1) / chunkSize * chunkSize;
             assertTrue(newBatchChunkAligned <= pool.availableMemory(),
                     "the new batch needs " + newBatchChunkAligned + " bytes but only "
                             + pool.availableMemory() + " are free");
