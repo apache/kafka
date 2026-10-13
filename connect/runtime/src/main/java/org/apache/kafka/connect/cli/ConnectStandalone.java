@@ -90,6 +90,7 @@ public class ConnectStandalone extends AbstractConnectCli<StandaloneHerder, Stan
                 connect.herder().putConnectorConfig(
                     createConnectorRequest.name(), createConnectorRequest.config(),
                     createConnectorRequest.initialTargetState(),
+                    createConnectorRequest.initialOffsetsMap(),
                     false, cb);
                 cb.get();
             }

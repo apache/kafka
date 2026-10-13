@@ -518,11 +518,13 @@ public class AsyncKafkaConsumer<K, V> implements ConsumerDelegate<K, V> {
             // This FetchBuffer is shared between the application and network threads.
             this.fetchBuffer = new FetchBuffer(logContext);
             this.positionsValidator = new PositionsValidator(logContext, time, subscriptions, metadata);
+            Uuid clientInstanceId = Uuid.randomUuid();
             final Supplier<NetworkClientDelegate> networkClientDelegateSupplier = NetworkClientDelegate.supplier(time,
                     logContext,
                     metadata,
                     config,
                     apiVersions,
+                    clientInstanceId,
                     metrics,
                     fetchMetricsManager.throttleTimeSensor(),
                     clientTelemetryReporter.map(ClientTelemetryReporter::telemetrySender).orElse(null),

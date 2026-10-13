@@ -24,6 +24,7 @@ import org.apache.kafka.common.serialization.Serdes;
 import org.apache.kafka.common.serialization.StringDeserializer;
 import org.apache.kafka.common.serialization.StringSerializer;
 import org.apache.kafka.server.util.MockTime;
+import org.apache.kafka.streams.CloseOptions;
 import org.apache.kafka.streams.KafkaStreams;
 import org.apache.kafka.streams.KeyValue;
 import org.apache.kafka.streams.LagInfo;
@@ -135,6 +136,11 @@ public class LagFetchIntegrationTest {
             return lagMap.size() > 0;
         }, WAIT_TIMEOUT_MS, "Should obtain non-empty lag information eventually");
         return offsetLagInfoMap;
+    }
+
+    private boolean closeStreamsWithLeaveGroup(final KafkaStreams streams) {
+        return streams.close(CloseOptions.groupMembershipOperation(CloseOptions.GroupMembershipOperation.LEAVE_GROUP)
+            .withTimeout(Duration.ofSeconds(60)));
     }
 
     private void shouldFetchLagsDuringRebalancing(final String optimization) throws Exception {
@@ -306,13 +312,13 @@ public class LagFetchIntegrationTest {
             }, WAIT_TIMEOUT_MS, "Eventually should reach zero lag.");
 
             // Kill instance, delete state to force restoration.
-            assertTrue(streams.close(Duration.ofSeconds(60)), "Streams instance did not close within timeout");
+            assertTrue(closeStreamsWithLeaveGroup(streams), "Streams instance did not close within timeout");
             IntegrationTestUtils.purgeLocalStreamsState(streamsConfiguration);
             Files.walk(stateDir.toPath()).sorted(Comparator.reverseOrder())
                 .map(Path::toFile)
                 .forEach(f -> assertTrue(f.delete(), "Some state " + f + " could not be deleted"));
         } finally {
-            streams.close();
+            closeStreamsWithLeaveGroup(streams);
             streams.cleanUp();
         }
 

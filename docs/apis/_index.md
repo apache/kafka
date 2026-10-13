@@ -86,11 +86,11 @@ To use the share consumer, add the following Maven dependency to your project:
 
 # Streams API
 
-The [Streams](/43/documentation/streams) API allows transforming streams of data from input topics to output topics. 
+The [Streams](/{version}/streams/) API allows transforming streams of data from input topics to output topics. 
 
 Examples of using this library are shown in the [javadocs](/{version}/javadoc/index.html?org/apache/kafka/streams/KafkaStreams.html "Kafka 4.3 Javadoc"). 
 
-Additional documentation on using the Streams API is available [here](/43/documentation/streams). 
+Additional documentation on using the Streams API is available [here](/{version}/streams/). 
 
 To use Kafka Streams, add the following Maven dependency to your project: 
 
@@ -102,7 +102,7 @@ To use Kafka Streams, add the following Maven dependency to your project:
 </dependency>
 ```
 
-When using Scala you may optionally include the `kafka-streams-scala` library. Additional documentation on using the Kafka Streams DSL for Scala is available [in the developer guide](/43/documentation/streams/developer-guide/dsl-api.html#scala-dsl). 
+When using Scala you may optionally include the `kafka-streams-scala` library. Additional documentation on using the Kafka Streams DSL for Scala is available [in the developer guide](/{version}/streams/developer-guide/dsl-api/#kafka-streams-dsl-for-scala). 
 
 To use Kafka Streams DSL for Scala 2.13, add the following Maven dependency to your project: 
 
