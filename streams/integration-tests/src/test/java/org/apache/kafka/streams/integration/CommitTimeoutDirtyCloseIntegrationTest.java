@@ -45,6 +45,7 @@ import org.apache.kafka.streams.state.ReadOnlyKeyValueStore;
 import org.apache.kafka.test.TestUtils;
 import org.apache.kafka.test.faultproxy.FaultRule;
 import org.apache.kafka.test.faultproxy.KafkaProtocolFaultProxy;
+
 import org.junit.jupiter.api.AfterEach;
 import org.junit.jupiter.api.BeforeEach;
 import org.junit.jupiter.api.Tag;
