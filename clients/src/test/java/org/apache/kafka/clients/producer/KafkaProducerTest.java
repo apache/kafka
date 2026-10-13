@@ -2770,8 +2770,7 @@ public class KafkaProducerTest {
 
         assertTrue(config.unused().contains(SslConfigs.SSL_PROTOCOL_CONFIG));
 
-        try (KafkaProducer<byte[], byte[]> producer = new KafkaProducer<>(config, null, null,
-                null, null, null, null, Time.SYSTEM)) {
+        try (KafkaProducer<byte[], byte[]> producer = new KafkaProducer<>(config, null, null)) {
             assertTrue(config.unused().contains(SslConfigs.SSL_PROTOCOL_CONFIG));
         }
     }

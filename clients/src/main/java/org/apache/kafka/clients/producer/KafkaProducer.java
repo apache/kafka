@@ -321,7 +321,7 @@ public class KafkaProducer<K, V> implements Producer<K, V> {
      */
     public KafkaProducer(Map<String, Object> configs, Serializer<K> keySerializer, Serializer<V> valueSerializer) {
         this(new ProducerConfig(ProducerConfig.appendSerializerToConfig(configs, keySerializer, valueSerializer)),
-                keySerializer, valueSerializer, null, null, null, new ApiVersions(), Time.SYSTEM);
+                keySerializer, valueSerializer);
     }
 
     /**
@@ -350,15 +350,8 @@ public class KafkaProducer<K, V> implements Producer<K, V> {
         this(Utils.propsToMap(properties), keySerializer, valueSerializer);
     }
 
-    KafkaProducer(ProducerConfig config,
-                  Serializer<K> keySerializer,
-                  Serializer<V> valueSerializer,
-                  ProducerMetadata metadata,
-                  KafkaClient kafkaClient,
-                  ProducerInterceptors<K, V> interceptors,
-                  ApiVersions apiVersions,
-                  Time time) {
-        this(config, keySerializer, valueSerializer, metadata, kafkaClient, Uuid.randomUuid(), interceptors, apiVersions, time);
+    KafkaProducer(ProducerConfig config, Serializer<K> keySerializer, Serializer<V> valueSerializer) {
+        this(config, keySerializer, valueSerializer, null, null, Uuid.randomUuid(), null, new ApiVersions(), Time.SYSTEM);
     }
 
     // visible for testing
