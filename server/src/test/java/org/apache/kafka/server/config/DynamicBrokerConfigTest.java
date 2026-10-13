@@ -97,26 +97,25 @@ public class DynamicBrokerConfigTest {
 
     @Test
     public void testDynamicClusterMirrorConfigValidation() {
-        AbstractKafkaConfig currentConfig = mockConfig(4, 60000L);
+        AbstractKafkaConfig currentConfig = mockConfig(4);
         DynamicClusterMirrorConfig dynamicConfig = new DynamicClusterMirrorConfig(() -> currentConfig);
 
-        assertDoesNotThrow(() -> dynamicConfig.validateReconfiguration(mockConfig(6, 60000L)));
+        assertDoesNotThrow(() -> dynamicConfig.validateReconfiguration(mockConfig(6)));
 
         ConfigException err1 = assertThrows(ConfigException.class,
-                () -> dynamicConfig.validateReconfiguration(mockConfig(1, 60000L)));
+                () -> dynamicConfig.validateReconfiguration(mockConfig(1)));
         assertTrue(err1.getMessage().contains("Value should be at least half the current value 4"));
 
         ConfigException err2 = assertThrows(ConfigException.class,
-                () -> dynamicConfig.validateReconfiguration(mockConfig(9, 60000L)));
+                () -> dynamicConfig.validateReconfiguration(mockConfig(9)));
         assertTrue(err2.getMessage().contains("Value should not be greater than double the current value 4"));
 
-        assertDoesNotThrow(() -> dynamicConfig.validateReconfiguration(mockConfig(4, 0L)));
+        assertDoesNotThrow(() -> dynamicConfig.validateReconfiguration(mockConfig(4)));
     }
 
-    private static AbstractKafkaConfig mockConfig(int fetchers, long intervalMs) {
+    private static AbstractKafkaConfig mockConfig(int fetchers) {
         AbstractKafkaConfig config = mock(AbstractKafkaConfig.class);
         when(config.getInt(ClusterMirrorConfigs.MIRROR_NUM_REPLICA_FETCHERS_CONFIG)).thenReturn(fetchers);
-        when(config.getLong(ClusterMirrorConfigs.MIRROR_METADATA_REFRESH_INTERVAL_MS_CONFIG)).thenReturn(intervalMs);
         return config;
     }
 }
