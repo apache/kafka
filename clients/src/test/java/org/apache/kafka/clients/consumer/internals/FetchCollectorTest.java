@@ -377,7 +377,8 @@ public class FetchCollectorTest {
             .partition(topicAPartition1)
             .build();
         // Put the paused partition first so collection must skip it to reach the available records.
-        fetchBuffer.addAll(List.of(pausedFetch, unpausedFetch));
+        fetchBuffer.add(pausedFetch);
+        fetchBuffer.add(unpausedFetch);
         fetchBuffer.awaitWakeup(time.timer(0));
         subscriptions.pause(topicAPartition0);
 

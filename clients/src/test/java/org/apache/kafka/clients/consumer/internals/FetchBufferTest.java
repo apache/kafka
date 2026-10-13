@@ -32,7 +32,6 @@ import org.junit.jupiter.api.BeforeEach;
 import org.junit.jupiter.api.Test;
 
 import java.time.Duration;
-import java.util.Arrays;
 import java.util.List;
 import java.util.Properties;
 import java.util.Set;
@@ -162,7 +161,8 @@ public class FetchBufferTest {
     public void testAddAllAndRetainAll() {
         try (FetchBuffer fetchBuffer = new FetchBuffer(logContext)) {
             fetchBuffer.setNextInLineFetch(completedFetch(topicAPartition0));
-            fetchBuffer.addAll(Arrays.asList(completedFetch(topicAPartition1), completedFetch(topicAPartition2)));
+            fetchBuffer.add(completedFetch(topicAPartition1));
+            fetchBuffer.add(completedFetch(topicAPartition2));
             assertEquals(allPartitions, fetchBuffer.bufferedPartitions());
 
             fetchBuffer.retainAll(partitions(topicAPartition1, topicAPartition2));
@@ -191,10 +191,10 @@ public class FetchBufferTest {
     }
 
     @Test
-    public void testRequeueDoesNotWakeUpBuffer() throws Exception {
+    public void testAddAllNoWakeupDoesNotWakeUpBuffer() throws Exception {
         try (FetchBuffer fetchBuffer = new FetchBuffer(logContext)) {
             CompletedFetch completedFetch = completedFetch(topicAPartition0);
-            fetchBuffer.requeue(List.of(completedFetch));
+            fetchBuffer.addAllNoWakeup(List.of(completedFetch));
 
             FutureTask<Void> awaitWakeup = new FutureTask<>(() -> {
                 fetchBuffer.awaitWakeup(time.timer(Duration.ofMinutes(1)));
@@ -205,9 +205,9 @@ public class FetchBufferTest {
             try {
                 TestUtils.waitForCondition(
                     () -> waitingThread.getState() == Thread.State.TIMED_WAITING,
-                    "Thread did not start waiting on the fetch buffer"
+                    "Expected the thread to wait on the fetch buffer; addAllNoWakeup must not trigger a wakeup"
                 );
-                assertFalse(awaitWakeup.isDone(), "Requeuing fetches must not wake up the buffer");
+                assertFalse(awaitWakeup.isDone(), "addAllNoWakeup must not wake up the buffer");
                 assertSame(completedFetch, fetchBuffer.poll());
                 assertTrue(fetchBuffer.isEmpty());
             } finally {
@@ -220,10 +220,10 @@ public class FetchBufferTest {
     }
 
     @Test
-    public void testRequeuePreservesPendingWakeup() throws Exception {
+    public void testAddAllNoWakeupPreservesPendingWakeup() throws Exception {
         try (FetchBuffer fetchBuffer = new FetchBuffer(logContext)) {
             fetchBuffer.wakeup();
-            fetchBuffer.requeue(List.of(completedFetch(topicAPartition0)));
+            fetchBuffer.addAllNoWakeup(List.of(completedFetch(topicAPartition0)));
 
             FutureTask<Void> awaitWakeup = new FutureTask<>(() -> {
                 fetchBuffer.awaitWakeup(time.timer(Duration.ofMinutes(1)));

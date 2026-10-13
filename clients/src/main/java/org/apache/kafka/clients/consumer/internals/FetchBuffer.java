@@ -27,7 +27,6 @@ import org.slf4j.Logger;
 import java.util.Collection;
 import java.util.Collections;
 import java.util.HashSet;
-import java.util.List;
 import java.util.Set;
 import java.util.concurrent.ConcurrentLinkedQueue;
 import java.util.concurrent.TimeUnit;
@@ -96,16 +95,9 @@ public class FetchBuffer implements AutoCloseable {
     }
 
     void add(CompletedFetch completedFetch) {
-        addAll(List.of(completedFetch));
-    }
-
-    void addAll(Collection<CompletedFetch> completedFetches) {
-        if (completedFetches == null || completedFetches.isEmpty())
-            return;
-
         try {
             lock.lock();
-            this.completedFetches.addAll(completedFetches);
+            this.completedFetches.add(completedFetch);
             wokenup.set(true);
             blockingCondition.signalAll();
         } finally {
@@ -113,7 +105,7 @@ public class FetchBuffer implements AutoCloseable {
         }
     }
 
-    void requeue(Collection<CompletedFetch> completedFetches) {
+    void addAllNoWakeup(Collection<CompletedFetch> completedFetches) {
         if (completedFetches == null || completedFetches.isEmpty())
             return;
 
