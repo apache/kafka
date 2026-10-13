@@ -36,6 +36,7 @@ import org.apache.kafka.common.utils.MockTime;
 import org.apache.kafka.server.metrics.ClientMatchPattern;
 import org.apache.kafka.server.metrics.ClientMetricsConfigs;
 import org.apache.kafka.server.metrics.ClientMetricsInstance;
+import org.apache.kafka.server.metrics.ClientMetricsInstanceMetadata;
 import org.apache.kafka.server.metrics.ClientMetricsTestUtils;
 import org.apache.kafka.server.metrics.ClientTelemetryExporterPlugin;
 import org.apache.kafka.server.util.timer.SystemTimer;
@@ -131,11 +132,9 @@ public class ClientMetricsManagerTest {
         // Validate match patterns.
         assertEquals(ClientMetricsTestUtils.MATCH_TEST_DEFAULT.size(),
             subscriptionInfo.matchPattern().size());
-        ClientMetricsTestUtils.MATCH_TEST_DEFAULT.forEach(pattern -> {
-            String[] split = pattern.split("=");
-            assertTrue(subscriptionInfo.matchPattern().containsKey(split[0]));
-            assertEquals(split[1], subscriptionInfo.matchPattern().get(split[0]).pattern());
-        });
+        ClientMetricsInstanceMetadata instanceMetadata =
+            new ClientMetricsInstanceMetadata(Uuid.randomUuid(), ClientMetricsTestUtils.requestContext());
+        assertTrue(instanceMetadata.isMatch(subscriptionInfo.matchPattern()));
         assertEquals(1, clientMetricsManager.subscriptionUpdateVersion());
         // Validate metrics should have instance count metric, 2 unknown subscription count metrics
         // and kafka metrics count registered i.e. 4 metrics.

@@ -75,7 +75,7 @@ import java.util.Set;
  */
 public class ClientMetricsConfigs extends AbstractConfig {
 
-    private static final Logger log = LoggerFactory.getLogger(ClientMetricsConfigs.class);
+    private static final Logger LOG = LoggerFactory.getLogger(ClientMetricsConfigs.class);
 
     public static final String METRICS_CONFIG = "metrics";
     public static final String INTERVAL_MS_CONFIG = "interval.ms";
@@ -185,7 +185,8 @@ public class ClientMetricsConfigs extends AbstractConfig {
             }
         }
 
-        // Make sure that new or changed match patterns are valid RE2/J syntax.
+        // Make sure every match pattern is valid RE2/J syntax, but only when the match config
+        // itself is new or has changed.
         if (configs.containsKey(MATCH_CONFIG) && matchPatternsChanged(configs, oldProps)) {
             List<String> patterns = (List<String>) parsed.get(MATCH_CONFIG);
             patterns.forEach(pattern -> {
@@ -265,7 +266,7 @@ public class ClientMetricsConfigs extends AbstractConfig {
         } catch (PatternSyntaxException re2Exception) {
             try {
                 java.util.regex.Pattern legacyPattern = java.util.regex.Pattern.compile(patternValue);
-                log.warn("Client metrics subscription '{}' match pattern '{}={}' relies on deprecated " +
+                LOG.warn("Client metrics subscription '{}' match pattern '{}={}' relies on deprecated " +
                         "java.util.regex syntax ({}) and will stop being supported in Apache Kafka 5.0. " +
                         "Please update it to valid RE2/J syntax.",
                     subscriptionName, param, patternValue, re2Exception.getDescription());
