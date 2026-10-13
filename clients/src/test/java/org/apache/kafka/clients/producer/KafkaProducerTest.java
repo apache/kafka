@@ -2123,6 +2123,7 @@ public class KafkaProducerTest {
             new StringSerializer(),
             metadata,
             client,
+            client.clientInstanceId(),
             new ProducerInterceptors<>(List.of(), null),
             apiVersions,
             time
@@ -2201,6 +2202,7 @@ public class KafkaProducerTest {
             new StringSerializer(),
             metadata,
             client,
+            client.clientInstanceId(),
             new ProducerInterceptors<>(List.of(), null),
             apiVersions,
             time
