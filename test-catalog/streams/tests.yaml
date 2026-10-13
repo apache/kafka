@@ -431,6 +431,7 @@ org.apache.kafka.streams.StreamsConfigTest:
 - testInvalidSocketReceiveBufferSize
 - testInvalidSocketSendBufferSize
 - testOsDefaultSocketBufferSizes
+- testValidateConfigPropertiesFile
 org.apache.kafka.streams.TopologyTest:
 - kGroupedStreamAnonymousMaterializedCountShouldPreserveTopologyStructure
 - kGroupedStreamAnonymousStoreTypedMaterializedCountShouldPreserveTopologyStructure
