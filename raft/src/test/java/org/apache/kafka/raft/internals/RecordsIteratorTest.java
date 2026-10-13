@@ -55,6 +55,7 @@ import org.junit.jupiter.params.ParameterizedTest;
 import org.junit.jupiter.params.provider.Arguments;
 import org.junit.jupiter.params.provider.EnumSource;
 import org.junit.jupiter.params.provider.MethodSource;
+import org.junit.jupiter.params.provider.ValueSource;
 import org.mockito.Mockito;
 
 import java.io.IOException;
@@ -104,8 +105,8 @@ public final class RecordsIteratorTest {
             for (int i = 0; i < 50; i++) {
                 long seed = new Random(System.nanoTime() + i).nextLong();
                 assertDoesNotThrow(
-                        () -> compressionTypeSeed.accept(ct, seed),
-                        () -> "Failed with compressionType=" + ct + ", seed=" + seed);
+                    () -> compressionTypeSeed.accept(ct, seed),
+                    () -> "Failed with compressionType=" + ct + ", seed=" + seed);
             }
         }
     }
@@ -153,16 +154,80 @@ public final class RecordsIteratorTest {
             // one byte of the slice left to read, but the buffer can hold `batchesAfterSlice`
             List<TestBatch<String>> actualBatches = new ArrayList<>();
             try (RecordsIterator<String> iterator = createIterator(
-                    slice,
-                    BufferSupplier.NO_CACHING,
-                    sliceSize - 1,
-                    true
-                )
-            ) {
+                slice,
+                BufferSupplier.NO_CACHING,
+                sliceSize - 1,
+                true
+            )) {
                 iterator.forEachRemaining(batch -> actualBatches.add(TestBatch.from(batch)));
             }
 
             assertEquals(sliceBatches, actualBatches);
+        }
+    }
+
+    @ParameterizedTest
+    @ValueSource(ints = {1, Records.HEADER_SIZE_UP_TO_MAGIC - 1, Records.HEADER_SIZE_UP_TO_MAGIC})
+    public void testFileRecordsSliceEndingInPartialBatch(int partialBatchBytes) throws IOException {
+        TestBatch<String> firstBatch = new TestBatch<>(0, 1, 0, List.of("a", "b", "c", "d", "e"));
+        TestBatch<String> secondBatch = new TestBatch<>(5, 1, 0, List.of("a", "b", "c", "d", "e"));
+
+        try (FileRecords fileRecords = FileRecords.open(TestUtils.tempFile())) {
+            fileRecords.append(buildRecords(CompressionType.NONE, List.of(firstBatch)));
+            int firstBatchSize = fileRecords.sizeInBytes();
+            fileRecords.append(buildRecords(CompressionType.NONE, List.of(secondBatch)));
+            // The slice ends partialBatchBytes into the second batch
+            FileRecords slice = fileRecords.slice(0, firstBatchSize + partialBatchBytes);
+
+            // A batch size equal to the first batch makes the second read return only the partial batch
+            Set<ByteBuffer> allocatedBuffers = Collections.newSetFromMap(new IdentityHashMap<>());
+            BufferSupplier bufferSupplier = mockBufferSupplier(allocatedBuffers);
+            List<TestBatch<String>> actualBatches = new ArrayList<>();
+            try (RecordsIterator<String> iterator = createIterator(
+                slice,
+                bufferSupplier,
+                firstBatchSize,
+                true
+            )) {
+                iterator.forEachRemaining(batch -> actualBatches.add(TestBatch.from(batch)));
+            }
+
+            assertEquals(List.of(firstBatch), actualBatches);
+        }
+    }
+
+    @Test
+    public void testFileRecordsSliceEndingInLargeBatchDoesNotGrowBuffer() throws IOException {
+        TestBatch<String> firstBatch = new TestBatch<>(0, 1, 0, List.of("a", "b", "c", "d", "e"));
+        // Twice as many records as the first batch, so it doesn't fit in a buffer sized for the first batch
+        TestBatch<String> secondBatch = new TestBatch<>(5, 1, 0, Collections.nCopies(10, "f"));
+
+        try (FileRecords fileRecords = FileRecords.open(TestUtils.tempFile())) {
+            fileRecords.append(buildRecords(CompressionType.NONE, List.of(firstBatch)));
+            int firstBatchSize = fileRecords.sizeInBytes();
+            fileRecords.append(buildRecords(CompressionType.NONE, List.of(secondBatch)));
+            // The slice ends one byte before the end of the second batch, so that batch can never be completed
+            FileRecords slice = fileRecords.slice(0, fileRecords.sizeInBytes() - 1);
+
+            // A batch size equal to the first batch makes the second read fill the buffer with the start
+            // of the second batch while the slice still has bytes left to read
+            Set<ByteBuffer> allocatedBuffers = Collections.newSetFromMap(new IdentityHashMap<>());
+            BufferSupplier bufferSupplier = mockBufferSupplier(allocatedBuffers);
+            List<TestBatch<String>> actualBatches = new ArrayList<>();
+            try (RecordsIterator<String> iterator = createIterator(
+                slice,
+                bufferSupplier,
+                firstBatchSize,
+                true
+            )) {
+                iterator.forEachRemaining(batch -> actualBatches.add(TestBatch.from(batch)));
+            }
+
+            assertEquals(List.of(firstBatch), actualBatches);
+            // The buffer was never grown to fit the second batch
+            Mockito.verify(bufferSupplier, Mockito.never())
+                .get(Mockito.intThat(size -> size > firstBatchSize));
+            assertEquals(Set.of(), allocatedBuffers);
         }
     }
 

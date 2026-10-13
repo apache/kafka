@@ -137,8 +137,9 @@ public final class RecordsIterator<T> implements Iterator<Batch<T>>, AutoCloseab
         MemoryRecords memoryRecords = readFileRecords(fileRecords, buffer);
 
         Integer firstBatchSize = memoryRecords.firstBatchSize();
+        int bytesAvailable = buffer.remaining() + (fileRecords.sizeInBytes() - bytesRead);
         if (firstBatchSize == null || firstBatchSize <= buffer.remaining() ||
-            bytesRead >= fileRecords.sizeInBytes()
+            firstBatchSize > bytesAvailable
         ) {
             return memoryRecords;
         } else {
