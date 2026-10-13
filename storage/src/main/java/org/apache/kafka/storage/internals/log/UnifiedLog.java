@@ -391,7 +391,7 @@ public class UnifiedLog implements AutoCloseable {
         return logStartOffset;
     }
 
-    long highestOffsetInRemoteStorage() {
+    public long highestOffsetInRemoteStorage() {
         return highestOffsetInRemoteStorage;
     }
 
