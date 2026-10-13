@@ -16,7 +16,6 @@
  */
 package kafka.server;
 
-import kafka.server.builders.LogManagerBuilder;
 import kafka.server.builders.ReplicaManagerBuilder;
 
 import org.apache.kafka.common.TopicPartition;
@@ -54,9 +53,11 @@ import org.apache.kafka.server.util.MockTime;
 import org.apache.kafka.storage.internals.checkpoint.LeaderEpochCheckpointFile;
 import org.apache.kafka.storage.internals.log.CleanerConfig;
 import org.apache.kafka.storage.internals.log.EpochEntry;
+import org.apache.kafka.storage.internals.log.LogCleaner;
 import org.apache.kafka.storage.internals.log.LogConfig;
 import org.apache.kafka.storage.internals.log.LogDirFailureChannel;
 import org.apache.kafka.storage.internals.log.LogManager;
+import org.apache.kafka.storage.internals.log.ProducerStateManagerConfig;
 import org.apache.kafka.storage.internals.log.UnifiedLog;
 import org.apache.kafka.storage.log.metrics.BrokerTopicStats;
 import org.apache.kafka.test.TestUtils;
@@ -119,19 +120,26 @@ public class TierStateMachineBuildRemoteLogAuxStateTest {
         LogDirFailureChannel logDirFailureChannel = new LogDirFailureChannel(config.logDirs().size());
         // remote storage metrics must be registered, TierStateMachine.start() marks them
         BrokerTopicStats brokerTopicStats = new BrokerTopicStats(true);
-        LogManager logManager = new LogManagerBuilder()
-            .setLogDirs(config.logDirs().stream().map(File::new).toList())
-            .setInitialOfflineDirs(List.of())
-            .setConfigRepository(new MockConfigRepository())
-            .setInitialDefaultConfig(new LogConfig(logProps))
-            .setCleanerConfig(new CleanerConfig(false))
-            .setProducerStateManagerConfig(60000, false)
-            .setScheduler(scheduler)
-            .setBrokerTopicStats(brokerTopicStats)
-            .setLogDirFailureChannel(logDirFailureChannel)
-            .setTime(time)
-            .setRemoteStorageSystemEnable(true)
-            .build();
+        LogManager logManager = new LogManager(config.logDirs().stream().map(File::new).toList(),
+            List.of(),
+            new MockConfigRepository(),
+            new LogConfig(logProps),
+            new CleanerConfig(false),
+            1,
+            1000L,
+            10000L,
+            10000L,
+            1000L,
+            15 * 60 * 1000,
+            new ProducerStateManagerConfig(60000, false),
+            600000,
+            scheduler,
+            brokerTopicStats,
+            logDirFailureChannel,
+            time,
+            true,
+            ServerLogConfigs.LOG_INITIAL_TASK_DELAY_MS_DEFAULT,
+            LogCleaner::new);
 
         when(remoteLogManager.storageManager()).thenReturn(remoteStorageManager);
         when(remoteLogManager.isPartitionReady(any())).thenReturn(true);
