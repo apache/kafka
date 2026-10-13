@@ -169,6 +169,13 @@ public class CommitTimeoutDirtyCloseIntegrationTest {
             WAIT_MS,
             "instance-a never completed the commit whose EndTxn was delayed"
         );
+        // instance-b has no state for the task, so restored progress makes instance-a the most caught-up client
+        // and the assignor gives the task back to it after the migration
+        TestUtils.waitForCondition(
+            instanceARestores::restoredBatch,
+            WAIT_MS,
+            "instance-a never restored a batch of the wiped store of " + corruptedTask
+        );
         final FaultRule generationMismatch = proxy.injectError(ApiKeys.TXN_OFFSET_COMMIT, Errors.ILLEGAL_GENERATION)
             .forClient(instanceAProducer)
             .once();
@@ -327,10 +334,12 @@ public class CommitTimeoutDirtyCloseIntegrationTest {
         return clientId + "-StateUpdater-1-restore-consumer";
     }
 
-    // once recording, captures where the wiped store's restore starts and whether it is suspended before finishing
+    // once recording, captures where the wiped store's restore starts, whether it restores a batch, and whether it is
+    // suspended before finishing
     private static final class RecordingRestoreListener implements StateRestoreListener {
         private final AtomicLong startingOffset = new AtomicLong(-1L);
         private final AtomicBoolean suspended = new AtomicBoolean();
+        private final AtomicBoolean restoredBatch = new AtomicBoolean();
         private volatile boolean recording;
 
         void record() {
@@ -343,6 +352,10 @@ public class CommitTimeoutDirtyCloseIntegrationTest {
 
         boolean suspended() {
             return suspended.get();
+        }
+
+        boolean restoredBatch() {
+            return restoredBatch.get();
         }
 
         @Override
@@ -360,6 +373,9 @@ public class CommitTimeoutDirtyCloseIntegrationTest {
                                     final String storeName,
                                     final long batchEndOffset,
                                     final long numRestored) {
+            if (recording) {
+                restoredBatch.set(true);
+            }
         }
 
         @Override
