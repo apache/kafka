@@ -144,6 +144,7 @@ import static org.mockito.ArgumentMatchers.anyString;
 import static org.mockito.ArgumentMatchers.eq;
 import static org.mockito.ArgumentMatchers.isNull;
 import static org.mockito.Mockito.CALLS_REAL_METHODS;
+import static org.mockito.Mockito.clearInvocations;
 import static org.mockito.Mockito.doAnswer;
 import static org.mockito.Mockito.doNothing;
 import static org.mockito.Mockito.doReturn;
@@ -1136,6 +1137,38 @@ public class DistributedHerderTest {
         assertInstanceOf(AlreadyExistsException.class, error.getValue());
         verify(worker, never()).modifyConnectorOffsets(anyString(), anyMap(), isNull(), any());
         verify(configBackingStore, never()).putConnectorConfig(eq(CONN2), anyMap(), any());
+    }
+
+    @Test
+    public void testCreateConnectorWithInitialOffsetsNotLeader() throws Exception {
+        when(member.memberId()).thenReturn("member");
+        when(member.currentProtocolVersion()).thenReturn(CONNECT_PROTOCOL_V0);
+        expectRebalance(1, List.of(), List.of(), false);
+        expectConfigRefreshAndSnapshot(SNAPSHOT);
+
+        herder.tick();
+        clearInvocations(configBackingStore);
+
+        ArgumentCaptor<Callback<ConfigInfos>> validateCallback = ArgumentCaptor.forClass(Callback.class);
+        doAnswer(invocation -> {
+            validateCallback.getValue().onCompletion(null, CONN2_CONFIG_INFOS);
+            return null;
+        }).when(herder).validateConnectorConfig(eq(CONN2_CONFIG), validateCallback.capture());
+
+        expectRecordStages(putConnectorCallback);
+
+        Map<Map<String, ?>, Map<String, ?>> initialOffsets =
+                Map.of(Map.of("partitionKey", "partitionValue"), Map.of("offsetKey", "offsetValue"));
+        herder.putConnectorConfig(CONN2, CONN2_CONFIG, null, initialOffsets, false, putConnectorCallback);
+        herder.tick();
+        herder.tick();
+
+        ArgumentCaptor<Throwable> error = ArgumentCaptor.forClass(Throwable.class);
+        verify(putConnectorCallback).onCompletion(error.capture(), isNull());
+        assertInstanceOf(NotLeaderException.class, error.getValue());
+        // A worker that isn't the leader rejects the request before reading the config topic
+        verify(configBackingStore, never()).refresh(anyLong(), any(TimeUnit.class));
+        verify(worker, never()).modifyConnectorOffsets(anyString(), anyMap(), any(), anyBoolean(), any());
     }
 
     @Test

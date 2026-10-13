@@ -1149,10 +1149,7 @@ public class DistributedHerder extends AbstractHerder implements Runnable {
                         }
 
                         log.trace("Handling connector config request {}", connName);
-                        if (initialOffsets != null && !refreshConfigSnapshotForInitialOffsets(connName, callback)) {
-                            return null;
-                        }
-                        if (!putConnectorConfigChecks(connName, allowReplace, callback)) {
+                        if (!putConnectorConfigChecks(connName, allowReplace, initialOffsets != null, callback)) {
                             return null;
                         }
 
@@ -1174,28 +1171,23 @@ public class DistributedHerder extends AbstractHerder implements Runnable {
      *
      * @param connName the name of the connector whose config is to be written
      * @param allowReplace whether an existing connector with this name may be overwritten
+     * @param refreshConfigs whether to read to the end of the config topic before checking whether the connector exists,
+     *                       so that a creation with initial offsets doesn't act on stale configs
      * @param callback callback to complete exceptionally if a check fails
      * @return true if all the checks passed, false otherwise
      */
-    private boolean putConnectorConfigChecks(String connName, boolean allowReplace, Callback<Created<ConnectorInfo>> callback) {
+    private boolean putConnectorConfigChecks(String connName, boolean allowReplace, boolean refreshConfigs,
+                                             Callback<Created<ConnectorInfo>> callback) {
         if (!isLeader()) {
             callback.onCompletion(new NotLeaderException("Only the leader can set connector configs.", leaderUrl()), null);
             return false;
         }
-        if (!allowReplace && configState.contains(connName)) {
-            callback.onCompletion(new AlreadyExistsException("Connector " + connName + " already exists"), null);
+        if (refreshConfigs && !refreshConfigSnapshot(workerSyncTimeoutMs)) {
+            callback.onCompletion(new ConnectException("Failed to read to end of config topic before setting initial offsets for connector " + connName), null);
             return false;
         }
-        return true;
-    }
-
-    /**
-     * Read to the end of the config topic so that the precondition checks for a creation with initial offsets don't act
-     * on stale configs, completing {@code callback} exceptionally if that fails.
-     */
-    private boolean refreshConfigSnapshotForInitialOffsets(String connName, Callback<Created<ConnectorInfo>> callback) {
-        if (!refreshConfigSnapshot(workerSyncTimeoutMs)) {
-            callback.onCompletion(new ConnectException("Failed to read to end of config topic before setting initial offsets for connector " + connName), null);
+        if (!allowReplace && configState.contains(connName)) {
+            callback.onCompletion(new AlreadyExistsException("Connector " + connName + " already exists"), null);
             return false;
         }
         return true;
@@ -1233,8 +1225,7 @@ public class DistributedHerder extends AbstractHerder implements Runnable {
                                 wipeInitialOffsetsAfterFailedCreate(connName, config, error, callback);
                             }
                         };
-                        if (!refreshConfigSnapshotForInitialOffsets(connName, wipeOnFailure)
-                                || !putConnectorConfigChecks(connName, allowReplace, wipeOnFailure)) {
+                        if (!putConnectorConfigChecks(connName, allowReplace, true, wipeOnFailure)) {
                             return null;
                         }
                         try {
