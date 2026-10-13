@@ -392,6 +392,14 @@ class TransactionStateManager(brokerId: Int,
   }
 
   /**
+   * Check whether this broker still leads the given transaction state partition at the given coordinator epoch.
+   * The cache entry is only removed on resignation, which happens after the replica becomes a follower.
+   */
+  private def isCoordinatorFor(partitionId: Int, coordinatorEpoch: Int): Boolean =
+    replicaManager.onlinePartition(new TopicPartition(Topic.TRANSACTION_STATE_TOPIC_NAME, partitionId))
+      .exists(partition => partition.isLeader && partition.getLeaderEpoch == coordinatorEpoch)
+
+  /**
    * Get the transaction metadata associated with the given transactional id, or an error if
    * the coordinator does not own the transaction partition or is still loading it; if not found
    * either return None or create a new metadata and added to the cache
@@ -406,6 +414,10 @@ class TransactionStateManager(brokerId: Int,
         Left(Errors.COORDINATOR_LOAD_IN_PROGRESS)
       else {
         transactionMetadataCache.get(partitionId) match {
+          // leadership moved but the partition has not been unloaded or reloaded yet, so the cache may be stale
+          case Some(cacheEntry) if !isCoordinatorFor(partitionId, cacheEntry.coordinatorEpoch) =>
+            Left(Errors.NOT_COORDINATOR)
+
           case Some(cacheEntry) =>
             val txnMetadata = Option(cacheEntry.metadataPerTransactionalId.get(transactionalId)).orElse {
               createdTxnMetadataOpt.map { createdTxnMetadata =>

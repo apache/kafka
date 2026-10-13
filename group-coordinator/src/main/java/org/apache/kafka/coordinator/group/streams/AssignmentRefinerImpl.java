@@ -16,6 +16,7 @@
  */
 package org.apache.kafka.coordinator.group.streams;
 
+import org.apache.kafka.coordinator.group.Utils;
 import org.apache.kafka.coordinator.group.streams.assignor.TaskId;
 import org.apache.kafka.coordinator.group.streams.topics.ConfiguredSubtopology;
 
@@ -52,6 +53,7 @@ public class AssignmentRefinerImpl implements AssignmentRefiner {
         Map<String, StreamsGroupMember> members,
         Map<String, TasksTuple> targetAssignment,
         Map<String, MemberTaskOffsets> taskOffsets,
+        Map<String, Integer> heartbeatVersions,
         SortedMap<String, ConfiguredSubtopology> subtopologies,
         int numWarmupReplicas,
         long acceptableRecoveryLag
@@ -153,7 +155,7 @@ public class AssignmentRefinerImpl implements AssignmentRefiner {
             );
         }
 
-        final Map<String, Set<TaskId>> onDiskByProcess = new HashMap<>(reportedByProcess.size());
+        final Map<String, Set<TaskId>> onDiskByProcess = Utils.newHashMap(reportedByProcess.size());
         reportedByProcess.forEach((processId, reported) -> {
             reported.removeAll(heldByProcess.getOrDefault(processId, Set.of()));
             if (!reported.isEmpty()) {
@@ -220,7 +222,7 @@ public class AssignmentRefinerImpl implements AssignmentRefiner {
             forEachStatefulTask(member.assignedTasks().warmupTasks(), subtopologies, count);
         }
 
-        final Map<String, ProcessLoad> processLoad = new HashMap<>(memberCounts.size());
+        final Map<String, ProcessLoad> processLoad = Utils.newHashMap(memberCounts.size());
         memberCounts.forEach((processId, memberCount) ->
             processLoad.put(processId, new ProcessLoad(statefulTaskCounts.getOrDefault(processId, 0), memberCount)));
         return processLoad;
