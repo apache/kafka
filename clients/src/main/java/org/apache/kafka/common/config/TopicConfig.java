@@ -217,10 +217,11 @@ public class TopicConfig {
 
     public static final String MIRROR_UNCLEAN_LEADER_ELECTION_ENABLE_CONFIG = "mirror.unclean.leader.election.enable";
     public static final String MIRROR_UNCLEAN_LEADER_ELECTION_ENABLE_DOC = "When enabled, this property allows the mirror to support " +
-        "unclean leader elections. During log truncation, it forces the mirror to wait for all assigned replicas, not just active ISR " +
-        "members, to complete truncation. While this guarantees absolute cross-cluster consistency, a single stuck replica will block " +
-        "the partition indefinitely. Conversely, when disabled, the mirror will bypass recovery entirely during a ULE, immediately " +
-        "dropping the partition into a FAILED state and halting replication.";
+        "unclean leader elections on the source cluster. During log truncation, it forces the mirror to wait for all assigned replicas, " +
+        "not just active ISR members, to complete truncation. While this guarantees absolute cross-cluster consistency, a single stuck " +
+        "replica will block the partition indefinitely. Conversely, when disabled, the mirror will bypass recovery entirely during a ULE, " +
+        "immediately dropping the partition into a FAILED state and halting replication.";
+    public static final Boolean MIRROR_UNCLEAN_LEADER_ELECTION_ENABLE_DEFAULT = false;
 
     public static final String MIN_IN_SYNC_REPLICAS_CONFIG = "min.insync.replicas";
     public static final String MIN_IN_SYNC_REPLICAS_DOC = "Specifies the <i>minimum</i> number of in-sync replicas (including the leader) " +

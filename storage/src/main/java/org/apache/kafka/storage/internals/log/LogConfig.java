@@ -254,7 +254,7 @@ public class LogConfig extends AbstractConfig {
                         ThrottledReplicaListValidator.INSTANCE, MEDIUM, QuotaConfig.FOLLOWER_REPLICATION_THROTTLED_REPLICAS_DOC)
                 .defineInternal(QuotaConfig.MIRROR_REPLICATION_THROTTLED_REPLICAS_CONFIG, LIST, QuotaConfig.MIRROR_REPLICATION_THROTTLED_REPLICAS_DEFAULT,
                         ThrottledReplicaListValidator.INSTANCE, MEDIUM, QuotaConfig.MIRROR_REPLICATION_THROTTLED_REPLICAS_DOC)
-                .defineInternal(TopicConfig.MIRROR_UNCLEAN_LEADER_ELECTION_ENABLE_CONFIG, BOOLEAN, false,
+                .defineInternal(TopicConfig.MIRROR_UNCLEAN_LEADER_ELECTION_ENABLE_CONFIG, BOOLEAN, TopicConfig.MIRROR_UNCLEAN_LEADER_ELECTION_ENABLE_DEFAULT,
                         null, MEDIUM, TopicConfig.MIRROR_UNCLEAN_LEADER_ELECTION_ENABLE_DOC)
                 .define(TopicConfig.REMOTE_LOG_STORAGE_ENABLE_CONFIG, BOOLEAN, DEFAULT_REMOTE_STORAGE_ENABLE, null,
                         MEDIUM, TopicConfig.REMOTE_LOG_STORAGE_ENABLE_DOC)
