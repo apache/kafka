@@ -31,6 +31,7 @@ import java.util.Set;
 import java.util.TreeMap;
 
 import static org.junit.jupiter.api.Assertions.assertEquals;
+import static org.junit.jupiter.api.Assertions.assertTrue;
 
 public class TagTreeTest {
 
@@ -123,9 +124,15 @@ public class TagTreeTest {
                 );
             }
             final String expected = scanLeastLoadedMeeting(clientTags, holders, processes, conditions);
-            final QueuedProcess<String> actual = tree.leastLoadedProcessMeeting(keys(conditions));
-            assertEquals(expected != null, tree.hasTagGroupMeeting(keys(conditions)), conditionsContext);
-            assertEquals(expected, actual == null ? null : actual.process, conditionsContext);
+            final QueuedProcess<String> found = tree.processMeeting(keys(conditions));
+            assertEquals(expected != null, found != null, conditionsContext);
+            if (found != null) {
+                assertTrue(
+                    !processesWithoutRoom.contains(found.process) && scanMeets(clientTags, holders, found.process, conditions),
+                    conditionsContext
+                );
+                assertEquals(expected, tree.leastLoadedProcessMeeting(keys(conditions), found).process, conditionsContext);
+            }
         }
     }
 

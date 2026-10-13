@@ -16,6 +16,7 @@
  */
 package org.apache.kafka.coordinator.group.streams.assignor;
 
+import org.apache.kafka.coordinator.group.streams.assignor.IdenticalTagGroups.QueuedProcess;
 import org.apache.kafka.coordinator.group.streams.assignor.IdenticalTagGroups.TagGroup;
 import org.apache.kafka.coordinator.group.streams.assignor.TagTree.TagKey;
 
@@ -34,6 +35,8 @@ import java.util.List;
 final class RackAwareStandbyPicker<P> {
 
     private final TagTree<P> tree;
+    // A process meeting the conditions the last pick returned, which leastLoaded starts from.
+    private QueuedProcess<P> found;
 
     /**
      * @param tree    The tag tree of the assignment, whose used values the picker resets for this task.
@@ -67,13 +70,14 @@ final class RackAwareStandbyPicker<P> {
         }
         tree.startPick();
         // No tag group has room for the standby; with no conditions, only room counts.
-        if (!tree.hasTagGroupMeeting(List.of())) {
+        if (tree.processMeeting(List.of()) == null) {
             return List.of();
         }
 
         // Most picks find a tag group with room that meets the condition of every such tag key.
         List<TagKey> conditions = tagKeysWithUnusedValue;
-        if (!tree.hasTagGroupMeeting(conditions)) {
+        found = tree.processMeeting(conditions);
+        if (found == null) {
             // Otherwise the tag keys are added in priority order; a tag key is given up when no tag group with room
             // meets it together with the tag keys kept so far.
             conditions = new ArrayList<>();
@@ -81,8 +85,12 @@ final class RackAwareStandbyPicker<P> {
                 final List<TagKey> withTagKey = new ArrayList<>(conditions);
                 withTagKey.add(tagKey);
                 // If withTagKey holds every tag key, the query above already found no tag group for it.
-                if (withTagKey.size() < tagKeysWithUnusedValue.size() && tree.hasTagGroupMeeting(withTagKey)) {
-                    conditions = withTagKey;
+                if (withTagKey.size() < tagKeysWithUnusedValue.size()) {
+                    final QueuedProcess<P> foundWithTagKey = tree.processMeeting(withTagKey);
+                    if (foundWithTagKey != null) {
+                        conditions = withTagKey;
+                        found = foundWithTagKey;
+                    }
                 }
             }
         }
@@ -102,6 +110,6 @@ final class RackAwareStandbyPicker<P> {
         if (conditions.isEmpty()) {
             throw new IllegalArgumentException("Conditions must be the non-empty result of pick()");
         }
-        return tree.leastLoadedProcessMeeting(conditions).process;
+        return tree.leastLoadedProcessMeeting(conditions, found).process;
     }
 }

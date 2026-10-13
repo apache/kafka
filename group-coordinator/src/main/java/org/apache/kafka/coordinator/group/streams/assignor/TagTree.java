@@ -230,14 +230,17 @@ final class TagTree<P> {
         cachedNodes.clear();
     }
 
-    /** Whether a tag group with room has values for {@code conditionKeys} that are all unused. */
-    boolean hasTagGroupMeeting(final List<TagKey> conditionKeys) {
-        return hasTagGroupBelowMeeting(root, keyBits(conditionKeys));
+    /** The first process found with room in a tag group meeting {@code conditionKeys}, or null if none. */
+    QueuedProcess<P> processMeeting(final List<TagKey> conditionKeys) {
+        return processBelowMeeting(root, keyBits(conditionKeys));
     }
 
-    /** The least-loaded process with room in a tag group meeting {@code conditionKeys}, or null if none. */
-    QueuedProcess<P> leastLoadedProcessMeeting(final List<TagKey> conditionKeys) {
-        return leastLoadedProcessBelowMeeting(root, keyBits(conditionKeys));
+    /**
+     * The least-loaded process with room in a tag group meeting {@code conditionKeys}, starting from {@code bound}, a
+     * process meeting them found in this pick.
+     */
+    QueuedProcess<P> leastLoadedProcessMeeting(final List<TagKey> conditionKeys, final QueuedProcess<P> bound) {
+        return leastLoadedProcessBelowMeeting(root, keyBits(conditionKeys), bound);
     }
 
     /** The keys as a BitSet with bit k set for the key with index k. */
@@ -249,34 +252,38 @@ final class TagTree<P> {
         return keyBits;
     }
 
-    /** Whether a tag group with room below the node meets {@code conditionKeys}. */
-    private boolean hasTagGroupBelowMeeting(final Node<P> node, final BitSet conditionKeys) {
+    /** The first process found with room below the node in a tag group meeting {@code conditionKeys}, or null if none. */
+    private QueuedProcess<P> processBelowMeeting(final Node<P> node, final BitSet conditionKeys) {
         if (valuesBelowAllMeeting(node, conditionKeys)) {
-            return leastLoadedProcessBelow(node) != null;
+            return leastLoadedProcessBelow(node);
         }
         // Walk into the children in queue order until one has a tag group meeting the conditions.
-        boolean found = false;
-        while (!found && nextChildMeeting(node, conditionKeys, null) != null) {
-            found = hasTagGroupBelowMeeting(setAsideHead(node), conditionKeys);
+        QueuedProcess<P> found = null;
+        while (found == null && nextChildMeeting(node, conditionKeys, null) != null) {
+            found = processBelowMeeting(setAsideHead(node), conditionKeys);
         }
         putBackSetAsideChildren(node);
         return found;
     }
 
     /**
-     * The least-loaded process with room below the node in a tag group meeting {@code conditionKeys}, or null if none.
+     * The least-loaded process with room below the node in a tag group meeting {@code conditionKeys} if lighter than
+     * {@code bound}, the least-loaded process meeting them found so far, else bound.
      */
-    private QueuedProcess<P> leastLoadedProcessBelowMeeting(final Node<P> node, final BitSet conditionKeys) {
+    private QueuedProcess<P> leastLoadedProcessBelowMeeting(
+        final Node<P> node,
+        final BitSet conditionKeys,
+        final QueuedProcess<P> bound
+    ) {
+        // Every tag group below the node meets the conditions. The node is the root, with bound below it, or a child
+        // walked into for being lighter than bound, so its least-loaded process is never heavier than bound.
         if (valuesBelowAllMeeting(node, conditionKeys)) {
             return leastLoadedProcessBelow(node);
         }
         // Walk into the children in queue order until the next one cannot beat the best found.
-        QueuedProcess<P> leastLoaded = null;
+        QueuedProcess<P> leastLoaded = bound;
         while (nextChildMeeting(node, conditionKeys, leastLoaded) != null) {
-            final QueuedProcess<P> found = leastLoadedProcessBelowMeeting(setAsideHead(node), conditionKeys);
-            if (found != null && (leastLoaded == null || QueuedProcess.ORDER.compare(found, leastLoaded) < 0)) {
-                leastLoaded = found;
-            }
+            leastLoaded = leastLoadedProcessBelowMeeting(setAsideHead(node), conditionKeys, leastLoaded);
         }
         putBackSetAsideChildren(node);
         return leastLoaded;
