@@ -682,7 +682,7 @@ public class ChunkedRecordAccumulatorTest {
                 BufferPool.AllocationMode.INCREMENTAL);
         // Deliberately under-sized: a single chunk for a record that needs several.
         ChunkedByteBufferOutputStream stream = new ChunkedByteBufferOutputStream(
-                List.of(ByteBuffer.allocate(chunkSize)), chunkSize, pool);
+                List.of(ByteBuffer.allocate(chunkSize)), chunkSize, pool, compression.type() != CompressionType.NONE);
         MemoryRecordsBuilder builder = new MemoryRecordsBuilder(stream, RecordBatch.CURRENT_MAGIC_VALUE,
                 compression, TimestampType.CREATE_TIME, 0L, RecordBatch.NO_TIMESTAMP, RecordBatch.NO_PRODUCER_ID,
                 RecordBatch.NO_PRODUCER_EPOCH, RecordBatch.NO_SEQUENCE, false, false,
@@ -691,8 +691,10 @@ public class ChunkedRecordAccumulatorTest {
         byte[] value = new byte[4 * chunkSize];
 
         if (compression.type() == CompressionType.NONE) {
-            assertThrows(IllegalStateException.class, () ->
+            // Thrown by the first-record capacity check, before the non-growable stream's own guard is reached.
+            IllegalStateException e = assertThrows(IllegalStateException.class, () ->
                     batch.tryAppend(0L, key, value, Record.EMPTY_HEADERS, null, time.milliseconds()));
+            assertTrue(e.getMessage().contains("pre-sized for the batch's first record"), e.getMessage());
         } else {
             assertNotNull(batch.tryAppend(0L, key, value, Record.EMPTY_HEADERS, null, time.milliseconds()));
             assertEquals(1, batch.recordCount);

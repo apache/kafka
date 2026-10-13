@@ -28,19 +28,24 @@ import java.util.Set;
 
 /**
  * A {@link ByteBufferOutputStream} backed by a linked list of fixed-size chunks instead of a single
- * re-allocated buffer. Chunks are supplied by the caller (initial chunks via the constructor,
- * additional chunks via {@link #addBuffers(List)}).
+ * re-allocated buffer. Chunks are pre-supplied by the caller (initial chunks via the constructor,
+ * additional chunks via {@link #addBuffers(List)}), sized ahead of each write.
  * <p>
- * The stream grows on its own: when a write runs past the attached chunks it attaches one more chunk,
- * taken from the pool without blocking and falling back to a heap-allocated chunk when the pool has no
- * remaining chunks, or has been closed, in the middle of a write (a partially written record can neither be
- * rolled back nor blocked on). Heap growth is not left unbounded, though: once a record's append falls back to
- * the heap, the owning batch is closed for appends after that record (see {@link ChunkedProducerBatch#tryAppend}),
- * so only the current record and the compressor's final flush can grow on the heap. The closed case arises when
- * a compressed batch is closed or aborted after the producer closed the pool (e.g. drained or aborted on producer
- * close) and the compressor flush grows the stream.
+ * Only a stream constructed {@code growable} also grows on its own mid-write. That is the compressed case,
+ * where the caller's sizing is only a ratio-based estimate of the compressor's output: when a write runs past
+ * the attached chunks the stream attaches one more chunk, taken from the pool without blocking and falling back
+ * to a heap-allocated chunk when the pool has no remaining chunks, or has been closed, in the middle of a write
+ * (a partially written record can neither be rolled back nor blocked on). Heap growth is not left unbounded,
+ * though: once a record's append falls back to the heap, the owning batch is closed for appends after that record
+ * (see {@link ChunkedProducerBatch#tryAppend}), so only the current record and the compressor's final flush can
+ * grow on the heap. The closed case arises when a compressed batch is closed or aborted after the producer closed
+ * the pool (e.g. drained or aborted on producer close) and the compressor flush grows the stream.
  * Only pool-owned chunks are tracked in {@code poolAllocatedChunks}, so heap-allocated fallback chunks are
  * never returned to the pool on {@link #deallocate()}; see {@link #fallbackAllocations()}.
+ * <p>
+ * A non-growable stream (the uncompressed case, where the caller's sizing is an exact upper bound) never
+ * grows on its own: a write that runs past the attached chunks throws {@link IllegalStateException}
+ * instead, as a guard against pre-sizing bugs.
  * <p>
  * {@link #buffer()} returns the written bytes as a single contiguous {@link ByteBuffer}, flattening
  * all chunks into a new buffer with an extra copy.
@@ -53,6 +58,8 @@ public class ChunkedByteBufferOutputStream extends ByteBufferOutputStream {
     private final Set<ByteBuffer> poolAllocatedChunks;
     private final int chunkSize;
     private final BufferPool pool;
+    // Whether a write past the attached chunks may grow the stream (pool, then heap) instead of throwing.
+    private final boolean growable;
     private ByteBuffer currentChunk;
     private int currentChunkIndex;
     private int fallbackAllocations;
@@ -71,11 +78,16 @@ public class ChunkedByteBufferOutputStream extends ByteBufferOutputStream {
      *                      equal {@code chunkSize}
      * @param chunkSize     the size of each chunk in bytes
      * @param pool          the buffer pool that growth allocates from and chunks are returned to; must not be null
+     * @param growable      whether a write past the attached chunks grows the stream (non-blocking pool
+     *                      allocation, then heap fallback), for a compressed batch whose sizing is an estimate;
+     *                      if false (an uncompressed batch, sized to an exact upper bound) such a write throws
+     *                      {@link IllegalStateException}
      */
-    public ChunkedByteBufferOutputStream(List<ByteBuffer> initialChunks, int chunkSize, BufferPool pool) {
+    public ChunkedByteBufferOutputStream(List<ByteBuffer> initialChunks, int chunkSize, BufferPool pool, boolean growable) {
         validateInitialChunks(initialChunks, chunkSize);
         this.chunkSize = chunkSize;
         this.pool = Objects.requireNonNull(pool, "pool must not be null");
+        this.growable = growable;
         this.chunks = new ArrayList<>(initialChunks);
         this.poolAllocatedChunks = Collections.newSetFromMap(new IdentityHashMap<>());
         this.poolAllocatedChunks.addAll(initialChunks);
@@ -167,10 +179,17 @@ public class ChunkedByteBufferOutputStream extends ByteBufferOutputStream {
     }
 
     /**
-     * Advances {@code currentChunk} to the next pre-supplied chunk.
+     * Advances {@code currentChunk} to the next pre-supplied chunk, growing the stream by one chunk
+     * first if none is left and the stream is growable.
+     *
+     * @throws IllegalStateException if no pre-supplied chunk is left and the stream is not growable
      */
     private void advanceToNextChunk() {
         if (currentChunkIndex + 1 >= chunks.size()) {
+            if (!growable)
+                throw new IllegalStateException("write exceeded the attached chunk capacity ("
+                    + attachedCapacity() + " bytes) of a non-growable (uncompressed) stream; "
+                    + "this indicates a pre-sizing bug");
             // Non-blocking, and null rather than an exception when the pool has no memory right now or has been
             // closed (the producer closes it before draining or aborting the last batches)
             List<ByteBuffer> pooled = pool.tryAllocateChunks(chunkSize);
@@ -325,9 +344,10 @@ public class ChunkedByteBufferOutputStream extends ByteBufferOutputStream {
 
     /**
      * Number of chunks that had to be allocated from the heap because the pool was exhausted, or
-     * closed, mid-record. Zero on the normal path; a non-zero value means the producer transiently exceeded
-     * buffer.memory to guarantee forward progress. {@link ChunkedProducerBatch#tryAppend} reads it to close the
-     * batch for appends (sending it early) once growth has fallen back to the heap; also used by tests.
+     * closed, mid-record. Always zero for a non-growable stream, and zero on the normal path; a non-zero
+     * value means the producer transiently exceeded buffer.memory to guarantee forward progress.
+     * {@link ChunkedProducerBatch#tryAppend} reads it to close the batch for appends (sending it early) once
+     * growth has fallen back to the heap; also used by tests.
      */
     int fallbackAllocations() {
         return fallbackAllocations;
@@ -361,9 +381,9 @@ public class ChunkedByteBufferOutputStream extends ByteBufferOutputStream {
         ensureNotDeallocated();
         // A single write can be split across several chunks, so the required bytes needn't be
         // contiguous: only the total free space matters. Advancing here would waste the tail of the
-        // current chunk, so writes advance lazily and this only validates. Automatic growth lives in
-        // advanceToNextChunk; this method only checks the currently attached chunks (the accumulator
-        // uses it to decide when to attach extension chunks up front).
+        // current chunk, so writes advance lazily and this only validates. Automatic growth (growable
+        // streams only) lives in advanceToNextChunk; this method only checks the currently attached chunks
+        // (the accumulator uses it to decide when to attach extension chunks up front).
         if (requiredBytes > remaining())
             throw new IllegalStateException("required " + requiredBytes
                 + " bytes but only " + remaining() + " remaining across the attached chunks");

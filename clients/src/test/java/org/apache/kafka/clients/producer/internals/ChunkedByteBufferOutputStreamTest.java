@@ -32,6 +32,7 @@ import static org.junit.jupiter.api.Assertions.assertDoesNotThrow;
 import static org.junit.jupiter.api.Assertions.assertEquals;
 import static org.junit.jupiter.api.Assertions.assertSame;
 import static org.junit.jupiter.api.Assertions.assertThrows;
+import static org.junit.jupiter.api.Assertions.assertTrue;
 
 public class ChunkedByteBufferOutputStreamTest {
 
@@ -59,21 +60,21 @@ public class ChunkedByteBufferOutputStreamTest {
         BufferPool p = pool(64, chunkSize);
 
         assertThrows(IllegalArgumentException.class,
-            () -> new ChunkedByteBufferOutputStream(null, chunkSize, p));
+            () -> new ChunkedByteBufferOutputStream(null, chunkSize, p, false));
         assertThrows(IllegalArgumentException.class,
-            () -> new ChunkedByteBufferOutputStream(Collections.emptyList(), chunkSize, p));
+            () -> new ChunkedByteBufferOutputStream(Collections.emptyList(), chunkSize, p, false));
 
         // A chunk whose capacity doesn't match chunkSize violates the contract.
         List<ByteBuffer> wrongSize = Collections.singletonList(ByteBuffer.allocate(chunkSize + 1));
         assertThrows(IllegalArgumentException.class,
-            () -> new ChunkedByteBufferOutputStream(wrongSize, chunkSize, p));
+            () -> new ChunkedByteBufferOutputStream(wrongSize, chunkSize, p, false));
     }
 
     @Test
     public void testOperationsRejectedAfterDeallocate() throws Exception {
         int chunkSize = 8;
         BufferPool p = pool(64, chunkSize);
-        try (ChunkedByteBufferOutputStream stream = new ChunkedByteBufferOutputStream(chunks(p, chunkSize, 2), chunkSize, p)) {
+        try (ChunkedByteBufferOutputStream stream = new ChunkedByteBufferOutputStream(chunks(p, chunkSize, 2), chunkSize, p, false)) {
             stream.write(new byte[]{1, 2, 3}, 0, 3);
 
             stream.deallocate();
@@ -103,7 +104,7 @@ public class ChunkedByteBufferOutputStreamTest {
     public void testWritesDisallowedAfterClose() throws Exception {
         int chunkSize = 16;
         BufferPool p = pool(64, chunkSize);
-        try (ChunkedByteBufferOutputStream stream = new ChunkedByteBufferOutputStream(chunks(p, chunkSize, 2), chunkSize, p)) {
+        try (ChunkedByteBufferOutputStream stream = new ChunkedByteBufferOutputStream(chunks(p, chunkSize, 2), chunkSize, p, false)) {
             stream.write(new byte[]{1, 2, 3}, 0, 3);
 
             // close() closes the stream for appends; any subsequent write must fail.
@@ -128,7 +129,7 @@ public class ChunkedByteBufferOutputStreamTest {
     public void testSingleChunkWriteRoundtrip() throws Exception {
         int chunkSize = 16;
         BufferPool p = pool(64, chunkSize);
-        try (ChunkedByteBufferOutputStream stream = new ChunkedByteBufferOutputStream(chunks(p, chunkSize, 1), chunkSize, p)) {
+        try (ChunkedByteBufferOutputStream stream = new ChunkedByteBufferOutputStream(chunks(p, chunkSize, 1), chunkSize, p, false)) {
 
             byte[] payload = new byte[]{1, 2, 3, 4, 5};
             stream.write(payload, 0, payload.length);
@@ -148,7 +149,7 @@ public class ChunkedByteBufferOutputStreamTest {
     public void testWriteAcrossMultipleChunks() throws Exception {
         int chunkSize = 8;
         BufferPool p = pool(64, chunkSize);
-        try (ChunkedByteBufferOutputStream stream = new ChunkedByteBufferOutputStream(chunks(p, chunkSize, 3), chunkSize, p)) {
+        try (ChunkedByteBufferOutputStream stream = new ChunkedByteBufferOutputStream(chunks(p, chunkSize, 3), chunkSize, p, false)) {
 
             byte[] payload = new byte[20];
             for (int i = 0; i < payload.length; i++) payload[i] = (byte) i;
@@ -169,7 +170,7 @@ public class ChunkedByteBufferOutputStreamTest {
     public void testRemainingSumsFreeBytesAcrossChunks() throws Exception {
         int chunkSize = 8;
         BufferPool p = pool(64, chunkSize);
-        try (ChunkedByteBufferOutputStream stream = new ChunkedByteBufferOutputStream(chunks(p, chunkSize, 2), chunkSize, p)) {
+        try (ChunkedByteBufferOutputStream stream = new ChunkedByteBufferOutputStream(chunks(p, chunkSize, 2), chunkSize, p, false)) {
 
             assertEquals(2 * chunkSize, stream.remaining());
             stream.write(new byte[3], 0, 3);
@@ -185,7 +186,7 @@ public class ChunkedByteBufferOutputStreamTest {
     public void testThrowIfInsufficientRemainingDoesNotWasteCurrentChunk() throws Exception {
         int chunkSize = 8;
         BufferPool p = pool(64, chunkSize);
-        try (ChunkedByteBufferOutputStream stream = new ChunkedByteBufferOutputStream(chunks(p, chunkSize, 2), chunkSize, p)) {
+        try (ChunkedByteBufferOutputStream stream = new ChunkedByteBufferOutputStream(chunks(p, chunkSize, 2), chunkSize, p, false)) {
             stream.write(new byte[]{1, 2, 3}, 0, 3);
 
             // Requesting more than the current chunk's free bytes (5) but no more than the total
@@ -205,7 +206,7 @@ public class ChunkedByteBufferOutputStreamTest {
     public void testAddBuffersExtendsStream() throws Exception {
         int chunkSize = 8;
         BufferPool p = pool(64, chunkSize);
-        try (ChunkedByteBufferOutputStream stream = new ChunkedByteBufferOutputStream(chunks(p, chunkSize, 1), chunkSize, p)) {
+        try (ChunkedByteBufferOutputStream stream = new ChunkedByteBufferOutputStream(chunks(p, chunkSize, 1), chunkSize, p, false)) {
 
             // Fill the initial chunk.
             stream.write(new byte[chunkSize], 0, chunkSize);
@@ -227,7 +228,7 @@ public class ChunkedByteBufferOutputStreamTest {
     public void testAddBuffersRejectsWrongSizeChunks() throws Exception {
         int chunkSize = 8;
         BufferPool p = pool(64, chunkSize);
-        try (ChunkedByteBufferOutputStream stream = new ChunkedByteBufferOutputStream(chunks(p, chunkSize, 1), chunkSize, p)) {
+        try (ChunkedByteBufferOutputStream stream = new ChunkedByteBufferOutputStream(chunks(p, chunkSize, 1), chunkSize, p, false)) {
             // A chunk whose capacity doesn't match chunkSize violates the contract, same as the constructor.
             List<ByteBuffer> wrongSize = Collections.singletonList(ByteBuffer.allocate(chunkSize + 1));
             assertThrows(IllegalArgumentException.class, () -> stream.addBuffers(wrongSize));
@@ -240,7 +241,7 @@ public class ChunkedByteBufferOutputStreamTest {
     public void testPositionWalksAcrossChunks() throws Exception {
         int chunkSize = 4;
         BufferPool p = pool(32, chunkSize);
-        try (ChunkedByteBufferOutputStream stream = new ChunkedByteBufferOutputStream(chunks(p, chunkSize, 3), chunkSize, p)) {
+        try (ChunkedByteBufferOutputStream stream = new ChunkedByteBufferOutputStream(chunks(p, chunkSize, 3), chunkSize, p, false)) {
 
             stream.position(6); // straddles chunk 0 (4 bytes) and chunk 1 (2 bytes)
             assertEquals(6, stream.position());
@@ -256,7 +257,7 @@ public class ChunkedByteBufferOutputStreamTest {
         long total = 64;
         BufferPool p = pool(total, chunkSize);
         List<ByteBuffer> initial = chunks(p, chunkSize, 3);
-        try (ChunkedByteBufferOutputStream stream = new ChunkedByteBufferOutputStream(initial, chunkSize, p)) {
+        try (ChunkedByteBufferOutputStream stream = new ChunkedByteBufferOutputStream(initial, chunkSize, p, false)) {
             // Also attach one extra chunk so deallocate must handle the added-buffer case too.
             stream.addBuffers(Collections.singletonList(p.allocateChunks(chunkSize, 100).get(0)));
             assertEquals(total - 4L * chunkSize, p.availableMemory());
@@ -278,7 +279,7 @@ public class ChunkedByteBufferOutputStreamTest {
         int chunkSize = 8;
         long total = 64;
         BufferPool p = pool(total, chunkSize);
-        ChunkedByteBufferOutputStream stream = new ChunkedByteBufferOutputStream(chunks(p, chunkSize, 3), chunkSize, p);
+        ChunkedByteBufferOutputStream stream = new ChunkedByteBufferOutputStream(chunks(p, chunkSize, 3), chunkSize, p, false);
         // Write into the first chunk only; chunks 2 and 3 stay unused.
         byte[] payload = new byte[]{1, 2, 3};
         stream.write(payload, 0, payload.length);
@@ -320,7 +321,7 @@ public class ChunkedByteBufferOutputStreamTest {
         int chunkSize = 8;
         long total = 64; // room for 8 chunks
         BufferPool p = pool(total, chunkSize);
-        try (ChunkedByteBufferOutputStream stream = new ChunkedByteBufferOutputStream(chunks(p, chunkSize, 1), chunkSize, p)) {
+        try (ChunkedByteBufferOutputStream stream = new ChunkedByteBufferOutputStream(chunks(p, chunkSize, 1), chunkSize, p, true)) {
             // Start with 1 chunk but write 3 chunks' worth: the stream must attach 2 more from the pool.
             byte[] payload = new byte[3 * chunkSize];
             for (int i = 0; i < payload.length; i++) payload[i] = (byte) i;
@@ -353,7 +354,7 @@ public class ChunkedByteBufferOutputStreamTest {
         long total = 2L * chunkSize; // pool holds exactly 2 chunks
         BufferPool p = pool(total, chunkSize);
         // Take both chunks as the stream's initial chunks: the pool is now empty.
-        try (ChunkedByteBufferOutputStream stream = new ChunkedByteBufferOutputStream(chunks(p, chunkSize, 2), chunkSize, p)) {
+        try (ChunkedByteBufferOutputStream stream = new ChunkedByteBufferOutputStream(chunks(p, chunkSize, 2), chunkSize, p, true)) {
             assertEquals(0, p.availableMemory(), "pool drained by the initial allocation");
 
             // Write a third chunk's worth. The pool is empty, so the non-blocking grow must fall
@@ -396,7 +397,7 @@ public class ChunkedByteBufferOutputStreamTest {
         BufferPool p = pool(total, chunkSize);
         byte[] payload = new byte[4 * chunkSize];
         for (int i = 0; i < payload.length; i++) payload[i] = (byte) i;
-        try (ChunkedByteBufferOutputStream stream = new ChunkedByteBufferOutputStream(chunks(p, chunkSize, 2), chunkSize, p)) {
+        try (ChunkedByteBufferOutputStream stream = new ChunkedByteBufferOutputStream(chunks(p, chunkSize, 2), chunkSize, p, true)) {
             ByteBuffer held = p.allocateChunks(chunkSize, 100).get(0);
             assertEquals(0, p.availableMemory(), "pool drained by the stream and the held chunk");
 
@@ -448,7 +449,7 @@ public class ChunkedByteBufferOutputStreamTest {
         BufferPool p = pool(total, chunkSize);
         byte[] payload = new byte[2 * chunkSize - 3];
         for (int i = 0; i < payload.length; i++) payload[i] = (byte) i;
-        try (ChunkedByteBufferOutputStream stream = new ChunkedByteBufferOutputStream(chunks(p, chunkSize, 1), chunkSize, p)) {
+        try (ChunkedByteBufferOutputStream stream = new ChunkedByteBufferOutputStream(chunks(p, chunkSize, 1), chunkSize, p, true)) {
             ByteBuffer held = p.allocateChunks(chunkSize, 100).get(0);
             assertEquals(0, p.availableMemory());
 
@@ -477,5 +478,72 @@ public class ChunkedByteBufferOutputStreamTest {
         }
         assertEquals(total, p.availableMemory(),
             "pool must be restored to exactly its capacity; the heap chunk must not be returned to the pool");
+    }
+
+    /**
+     * A non-growable stream (the uncompressed case, whose pre-sizing is an exact upper bound) must not grow
+     * on its own: a write past the attached chunks throws instead, so a sizing bug fails loudly rather than
+     * silently taking memory from the pool or the heap. The pool has spare chunks, so a growable stream
+     * would have grown from it here.
+     */
+    @Test
+    public void testNonGrowableWritePastAttachedChunksThrows() throws Exception {
+        int chunkSize = 8;
+        long total = 64; // room for 8 chunks
+        BufferPool p = pool(total, chunkSize);
+        try (ChunkedByteBufferOutputStream stream = new ChunkedByteBufferOutputStream(chunks(p, chunkSize, 1), chunkSize, p, false)) {
+            assertEquals(total - chunkSize, p.availableMemory());
+
+            IllegalStateException e = assertThrows(IllegalStateException.class,
+                () -> stream.write(new byte[chunkSize + 1], 0, chunkSize + 1));
+            assertTrue(e.getMessage().contains("non-growable"), "unexpected message: " + e.getMessage());
+            assertTrue(e.getMessage().contains("pre-sizing bug"), "unexpected message: " + e.getMessage());
+
+            assertEquals(0, stream.fallbackAllocations(), "a non-growable stream must never fall back to the heap");
+            assertEquals(total - chunkSize, p.availableMemory(), "a non-growable stream must not allocate from the pool");
+            assertEquals(chunkSize, stream.attachedCapacity(), "no chunk should have been attached");
+
+            // The single-byte write path is guarded too.
+            assertThrows(IllegalStateException.class, () -> stream.write(1));
+            assertEquals(chunkSize, stream.attachedCapacity());
+
+            stream.deallocate();
+        }
+        assertEquals(total, p.availableMemory());
+    }
+
+    /**
+     * A non-growable stream still grows through its caller: chunks attached via
+     * {@link ChunkedByteBufferOutputStream#addBuffers(List)} are written across like the initial ones, without
+     * the stream allocating anything itself.
+     */
+    @Test
+    public void testNonGrowableStreamWritesAcrossAddedBuffers() throws Exception {
+        int chunkSize = 8;
+        long total = 64;
+        BufferPool p = pool(total, chunkSize);
+        try (ChunkedByteBufferOutputStream stream = new ChunkedByteBufferOutputStream(chunks(p, chunkSize, 1), chunkSize, p, false)) {
+            stream.addBuffers(chunks(p, chunkSize, 1));
+            assertEquals(total - 2L * chunkSize, p.availableMemory());
+
+            // A single write straddling the initial and the added chunk.
+            byte[] payload = new byte[2 * chunkSize - 3];
+            for (int i = 0; i < payload.length; i++) payload[i] = (byte) i;
+            stream.write(payload, 0, payload.length);
+
+            assertEquals(0, stream.fallbackAllocations());
+            assertEquals(total - 2L * chunkSize, p.availableMemory(), "the stream must not allocate on its own");
+            assertEquals(3, stream.remaining());
+
+            stream.close();
+            ByteBuffer flat = stream.buffer();
+            flat.flip();
+            byte[] out = new byte[flat.remaining()];
+            flat.get(out);
+            assertArrayEquals(payload, out);
+
+            stream.deallocate();
+        }
+        assertEquals(total, p.availableMemory(), "pool fully restored after deallocate");
     }
 }

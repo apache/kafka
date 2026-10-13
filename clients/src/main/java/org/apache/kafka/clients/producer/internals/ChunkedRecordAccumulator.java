@@ -27,6 +27,7 @@ import org.apache.kafka.common.header.Header;
 import org.apache.kafka.common.metrics.Metrics;
 import org.apache.kafka.common.record.TimestampType;
 import org.apache.kafka.common.record.internal.AbstractRecords;
+import org.apache.kafka.common.record.internal.CompressionType;
 import org.apache.kafka.common.record.internal.MemoryRecordsBuilder;
 import org.apache.kafka.common.record.internal.Record;
 import org.apache.kafka.common.record.internal.RecordBatch;
@@ -201,8 +202,8 @@ public class ChunkedRecordAccumulator extends RecordAccumulator {
                     } finally {
                         nowMs = time.milliseconds();
                     }
-                    newBatch = new NewBatchBuffer(
-                            new ChunkedByteBufferOutputStream(initialChunks, chunkedFree.poolableSize(), chunkedFree),
+                    newBatch = new NewBatchBuffer(new ChunkedByteBufferOutputStream(initialChunks,
+                            chunkedFree.poolableSize(), chunkedFree, compression.type() != CompressionType.NONE),
                             newBatchSize);
                 }
 
@@ -382,6 +383,11 @@ public class ChunkedRecordAccumulator extends RecordAccumulator {
      * paired with that size. That same size is also used as the batch's write-limit basis (see
      * {@link #chunkedRecordsBuilder}). The two are always set and cleared together in {@link #append},
      * including across retries.
+     * <p>
+     * The stream is growable only for a compressed batch, whose chunk sizing is a ratio-based estimate the
+     * compressor may overshoot. An uncompressed batch's sizing (the first record's upper bound, then
+     * {@link ChunkedProducerBatch#extensionBytesNeeded}) is exact, so its stream is non-growable: running
+     * past its chunks is a sizing bug and throws instead of silently allocating on the heap.
      */
     private static final class NewBatchBuffer {
         final ChunkedByteBufferOutputStream stream;
