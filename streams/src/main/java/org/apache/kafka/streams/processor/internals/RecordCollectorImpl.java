@@ -606,9 +606,9 @@ public class RecordCollectorImpl implements RecordCollector {
                 // We may be closing dirty because the commit failed, so we must abort the transaction to be safe
                 streamsProducer.abortTransaction();
             }
-            
+            checkForException();
         } finally {
-            close();
+            offsets.clear();
         }
     }
 
