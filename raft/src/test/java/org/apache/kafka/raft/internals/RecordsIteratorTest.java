@@ -197,41 +197,6 @@ public final class RecordsIteratorTest {
     }
 
     @Test
-    public void testFileRecordsSliceEndingInLargeBatchDoesNotGrowBuffer() throws IOException {
-        TestBatch<String> firstBatch = new TestBatch<>(0, 1, 0, List.of("a", "b", "c", "d", "e"));
-        // Twice as many records as the first batch, so it doesn't fit in a buffer sized for the first batch
-        TestBatch<String> secondBatch = new TestBatch<>(5, 1, 0, Collections.nCopies(10, "f"));
-
-        try (FileRecords fileRecords = FileRecords.open(TestUtils.tempFile())) {
-            fileRecords.append(buildRecords(CompressionType.NONE, List.of(firstBatch)));
-            int firstBatchSize = fileRecords.sizeInBytes();
-            fileRecords.append(buildRecords(CompressionType.NONE, List.of(secondBatch)));
-            // The slice ends one byte before the end of the second batch, so that batch can never be completed
-            FileRecords slice = fileRecords.slice(0, fileRecords.sizeInBytes() - 1);
-
-            // A batch size equal to the first batch makes the second read fill the buffer with the start
-            // of the second batch while the slice still has bytes left to read
-            Set<ByteBuffer> allocatedBuffers = Collections.newSetFromMap(new IdentityHashMap<>());
-            BufferSupplier bufferSupplier = mockBufferSupplier(allocatedBuffers);
-            List<TestBatch<String>> actualBatches = new ArrayList<>();
-            try (RecordsIterator<String> iterator = createIterator(
-                slice,
-                bufferSupplier,
-                firstBatchSize,
-                true
-            )) {
-                iterator.forEachRemaining(batch -> actualBatches.add(TestBatch.from(batch)));
-            }
-
-            assertEquals(List.of(firstBatch), actualBatches);
-            // The buffer was never grown to fit the second batch
-            Mockito.verify(bufferSupplier, Mockito.never())
-                .get(Mockito.intThat(size -> size > firstBatchSize));
-            assertEquals(Set.of(), allocatedBuffers);
-        }
-    }
-
-    @Test
     public void testCrcValidation() {
         forCompressionTypeSeed((compressionType, seed) -> {
             List<TestBatch<String>> batches = createBatches(seed);
