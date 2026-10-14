@@ -72,6 +72,7 @@ import java.util.Arrays;
 import java.util.Collections;
 import java.util.List;
 import java.util.Random;
+import java.util.Set;
 import java.util.function.Consumer;
 import java.util.function.Supplier;
 
@@ -885,11 +886,16 @@ public final class MessageTest {
             List<Integer> expectedTags = new ArrayList<>();
             for (int tag = 0; tag < numKnownTags; tag++) {
                 if (random.nextBoolean()) {
-                    knownTagSetters.get(tag).accept(message);
                     expectedTags.add(tag);
                 }
             }
+            // Set the known tagged fields in random order, so the written order cannot come from it.
+            Collections.shuffle(expectedTags, random);
+            for (int tag : expectedTags) {
+                knownTagSetters.get(tag).accept(message);
+            }
             // Unknown tags are the ones the schema does not define, so they are above all known tags.
+            // They must be added in ascending order, since RawTaggedFieldWriter rejects an unsorted list.
             int unknownTag = knownTagSetters.size() - 1;
             int numUnknownTags = random.nextInt(5);
             for (int i = 0; i < numUnknownTags; i++) {
@@ -897,7 +903,13 @@ public final class MessageTest {
                 message.unknownTaggedFields().add(new RawTaggedField(unknownTag, new byte[random.nextInt(3)]));
                 expectedTags.add(unknownTag);
             }
-            assertEquals(expectedTags, writtenTaggedFieldTags(message, version), "Failed with seed=" + seed);
+            List<Integer> writtenTags = writtenTaggedFieldTags(message, version);
+            for (int i = 1; i < writtenTags.size(); i++) {
+                assertTrue(
+                    writtenTags.get(i - 1) < writtenTags.get(i),
+                    "Tags " + writtenTags + " are not strictly ascending, seed=" + seed);
+            }
+            assertEquals(Set.copyOf(expectedTags), Set.copyOf(writtenTags), "Failed with seed=" + seed);
         }
     }
 
