@@ -17,6 +17,7 @@
 
 package org.apache.kafka.trogdor.workload;
 
+import org.apache.kafka.clients.consumer.AcknowledgeType;
 import org.apache.kafka.trogdor.common.StringExpander;
 import org.apache.kafka.trogdor.task.TaskController;
 import org.apache.kafka.trogdor.task.TaskSpec;
@@ -60,6 +61,11 @@ import java.util.Set;
  * The "recordProcessor" field allows the specification of tasks to run on records that are consumed.  This is run
  * immediately after the messages are polled.  See the `RecordProcessor` interface for more information.
  *
+ * The optional "acknowledgeType" field makes the share consumers use explicit acknowledgement mode and acknowledge
+ * every consumed record with the given type. Supported values are "ACCEPT", "REJECT" and "RELEASE". If it is not given, the
+ * share consumers use implicit acknowledgement. Note that with "RELEASE" the records are redelivered, so the
+ * "maxMessages" field bounds the total number of deliveries rather than the number of distinct records.
+ *
  * An example JSON representation which will result in a share consumer that is part of the share group "sg" and
  * subscribed to topics foo1, foo2, foo3 and bar.
  * #{@code
@@ -89,6 +95,7 @@ public final class ShareConsumeBenchSpec extends TaskSpec {
     private final String shareGroup;
     private final int threadsPerWorker;
     private final Optional<RecordProcessor> recordProcessor;
+    private final Optional<AcknowledgeType> acknowledgeType;
 
     @JsonCreator
     public ShareConsumeBenchSpec(@JsonProperty("startMs") long startMs,
@@ -103,7 +110,8 @@ public final class ShareConsumeBenchSpec extends TaskSpec {
                             @JsonProperty("adminClientConf") Map<String, String> adminClientConf,
                             @JsonProperty("threadsPerWorker") Integer threadsPerWorker,
                             @JsonProperty("recordProcessor") Optional<RecordProcessor> recordProcessor,
-                            @JsonProperty("activeTopics") List<String> activeTopics) {
+                            @JsonProperty("activeTopics") List<String> activeTopics,
+                            @JsonProperty("acknowledgeType") AcknowledgeType acknowledgeType) {
         super(startMs, durationMs);
         this.consumerNode = (consumerNode == null) ? "" : consumerNode;
         this.bootstrapServers = (bootstrapServers == null) ? "" : bootstrapServers;
@@ -116,6 +124,10 @@ public final class ShareConsumeBenchSpec extends TaskSpec {
         this.shareGroup = shareGroup == null ? DEFAULT_SHARE_GROUP_NAME : shareGroup;
         this.threadsPerWorker = threadsPerWorker == null ? 1 : threadsPerWorker;
         this.recordProcessor = recordProcessor;
+        if (acknowledgeType == AcknowledgeType.RENEW) {
+            throw new IllegalArgumentException("acknowledgeType must be ACCEPT, REJECT or RELEASE, but was " + acknowledgeType);
+        }
+        this.acknowledgeType = Optional.ofNullable(acknowledgeType);
     }
 
     @JsonProperty
@@ -151,6 +163,11 @@ public final class ShareConsumeBenchSpec extends TaskSpec {
     @JsonProperty
     public Optional<RecordProcessor> recordProcessor() {
         return this.recordProcessor;
+    }
+
+    @JsonProperty
+    public Optional<AcknowledgeType> acknowledgeType() {
+        return acknowledgeType;
     }
 
     @JsonProperty

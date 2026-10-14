@@ -21,10 +21,14 @@ import org.apache.kafka.common.errors.TimeoutException;
 import org.apache.kafka.common.errors.UnknownTopicOrPartitionException;
 import org.apache.kafka.common.test.ClusterInstance;
 import org.apache.kafka.common.test.api.ClusterTest;
+import org.apache.kafka.common.test.api.Type;
+import org.apache.kafka.server.config.QuotaConfig;
 
 import java.util.List;
+import java.util.Map;
 import java.util.concurrent.ExecutionException;
 
+import static org.junit.jupiter.api.Assertions.assertEquals;
 import static org.junit.jupiter.api.Assertions.assertInstanceOf;
 import static org.junit.jupiter.api.Assertions.assertNotEquals;
 import static org.junit.jupiter.api.Assertions.assertThrows;
@@ -57,6 +61,19 @@ public class DescribeConfigsTest {
             ConfigResource groupResource = new ConfigResource(ConfigResource.Type.GROUP, "none_group");
             Config groupConfig = admin.describeConfigs(List.of(groupResource)).all().get().get(groupResource);
             assertNotEquals(0, groupConfig.entries().size());
+        }
+    }
+
+    @ClusterTest(types = {Type.CO_KRAFT})
+    public void testDescribeConfigsTopicWithInternalListConfig(ClusterInstance cluster) throws Exception {
+        String topic = "topic";
+        cluster.createTopic(topic, 1, (short) 1,
+            Map.of(QuotaConfig.MIRROR_REPLICATION_THROTTLED_REPLICAS_CONFIG, "0:101"));
+        try (Admin admin = cluster.admin()) {
+            ConfigResource topicResource = new ConfigResource(ConfigResource.Type.TOPIC, topic);
+            Config topicConfig = admin.describeConfigs(List.of(topicResource)).all().get().get(topicResource);
+            ConfigEntry entry = topicConfig.get(QuotaConfig.MIRROR_REPLICATION_THROTTLED_REPLICAS_CONFIG);
+            assertEquals("0:101", entry.value());
         }
     }
 }

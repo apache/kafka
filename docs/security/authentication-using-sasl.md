@@ -485,9 +485,15 @@ Set to a positive integer value if you wish to allow up to some number of positi
    sasl.enabled.mechanisms=OAUTHBEARER
    listener.name.<listener name>.oauthbearer.sasl.server.callback.handler.class=org.apache.kafka.common.security.oauthbearer.OAuthBearerValidatorCallbackHandler
    listener.name.<listener name>.oauthbearer.sasl.oauthbearer.jwks.endpoint.url=https://example.com/oauth2/v1/keys
+   listener.name.<listener name>.oauthbearer.sasl.oauthbearer.expected.audience=my-kafka-cluster
+   listener.name.<listener name>.oauthbearer.sasl.oauthbearer.expected.issuer=https://example.com
    ```
 
+   When `sasl.oauthbearer.jwks.endpoint.url` is set, the broker fails at startup unless `sasl.oauthbearer.expected.audience` and `sasl.oauthbearer.expected.issuer` are also set. To accept tokens without verifying the `aud` or `iss` claim, set `sasl.oauthbearer.allow.unverified.audience` or `sasl.oauthbearer.allow.unverified.issuer` to `true` instead. This is insecure and strongly discouraged.
+
 The OAUTHBEARER broker configuration includes: 
+   * sasl.oauthbearer.allow.unverified.audience
+   * sasl.oauthbearer.allow.unverified.issuer
    * sasl.oauthbearer.clock.skew.seconds
    * sasl.oauthbearer.expected.audience
    * sasl.oauthbearer.expected.issuer
