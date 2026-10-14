@@ -285,9 +285,6 @@ see: licenses/CDDL+GPL-1.1
 - jakarta.activation-api-2.1.0
 - jakarta.servlet-api-6.0.0
 - jakarta.xml.bind-api-3.0.1
-- javax.activation-api-1.2.0
-- jaxb-api-2.3.1
-- activation-1.1.1
 
 ---------------------------------------
 MIT License
