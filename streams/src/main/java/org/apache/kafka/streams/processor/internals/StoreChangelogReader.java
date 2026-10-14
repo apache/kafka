@@ -162,6 +162,11 @@ public class StoreChangelogReader implements ChangelogReader {
             this.bufferedRecords.clear();
         }
 
+        // buffered records at or after bufferedLimitIndex are beyond the limit and cannot be applied yet
+        private boolean hasBufferedRecordsBeyondLimit() {
+            return bufferedRecords.size() > bufferedLimitIndex;
+        }
+
         private void transitTo(final ChangelogState newState) {
             if (newState.prevStates.contains(changelogState.ordinal())) {
                 changelogState = newState;
@@ -592,21 +597,25 @@ public class StoreChangelogReader implements ChangelogReader {
     }
 
     private boolean shouldResume(final Map<TaskId, Task> tasks, final TopicPartition partition, final TaskType taskType) {
-        final ProcessorStateManager manager = changelogs.get(partition).stateManager;
+        final ChangelogMetadata metadata = changelogs.get(partition);
+        final ProcessorStateManager manager = metadata.stateManager;
         final TaskId taskId = manager.taskId();
         final Task task = tasks.get(taskId);
         if (manager.taskType() == taskType) {
-            return task != null;
+            return task != null && !metadata.hasBufferedRecordsBeyondLimit();
         }
         return false;
     }
 
     private boolean shouldPause(final Map<TaskId, Task> tasks, final TopicPartition partition, final TaskType taskType) {
-        final ProcessorStateManager manager = changelogs.get(partition).stateManager;
+        final ChangelogMetadata metadata = changelogs.get(partition);
+        final ProcessorStateManager manager = metadata.stateManager;
         final TaskId taskId = manager.taskId();
         final Task task = tasks.get(taskId);
         if (manager.taskType() == taskType) {
-            return task == null;
+            // fetching more for a partition whose buffer holds records beyond the limit would only grow the buffer;
+            // this is evaluated before every poll, so it also re-pauses partitions resumed by transitToUpdateStandby()
+            return task == null || metadata.hasBufferedRecordsBeyondLimit();
         }
         return false;
     }
