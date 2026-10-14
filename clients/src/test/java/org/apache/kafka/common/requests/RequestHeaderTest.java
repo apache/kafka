@@ -139,7 +139,7 @@ public class RequestHeaderTest {
         ByteBuffer buffer = RequestTestUtils.serializeRequestHeaderPrefix(ApiKeys.API_VERSIONS, Short.MAX_VALUE, 123,
             null, new byte[0]);
         RequestHeader header = RequestHeader.parse(buffer);
-        // A null client ID is treated as equivalent to an empty client ID.
+        // A null client ID is treated as equivalent to an empty client ID (see RequestHeader#parse).
         assertEquals("", header.clientId());
         assertEquals(123, header.correlationId());
         assertFalse(header.isApiVersionSupported());
