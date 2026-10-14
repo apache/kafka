@@ -373,7 +373,7 @@ public class FineGrainedAutoResetIntegrationTest {
         assertThrows(
             TopologyException.class,
             builder::build,
-            "should not build a topology with the same pattern subscribed twice"
+            "should not build a topology with conflicting offset reset policies for the same pattern"
         );
     }
 
