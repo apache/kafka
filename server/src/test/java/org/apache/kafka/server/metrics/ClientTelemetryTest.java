@@ -16,6 +16,7 @@
  */
 package org.apache.kafka.server.metrics;
 
+import org.apache.kafka.common.Uuid;
 import org.apache.kafka.common.message.PushTelemetryRequestData;
 import org.apache.kafka.common.requests.PushTelemetryRequest;
 import org.apache.kafka.server.metrics.ClientMetricsTestUtils.TestClientMetricsReceiver;
@@ -27,6 +28,7 @@ import org.junit.jupiter.api.Test;
 import java.net.UnknownHostException;
 import java.nio.ByteBuffer;
 import java.nio.charset.StandardCharsets;
+import java.util.List;
 
 import static org.junit.jupiter.api.Assertions.assertEquals;
 
@@ -49,15 +51,18 @@ public class ClientTelemetryTest {
         clientTelemetryExporterPlugin.add(receiver2);
 
         byte[] metrics = "test-metrics-multiple".getBytes(StandardCharsets.UTF_8);
+        Uuid clientInstanceId = Uuid.randomUuid();
         clientTelemetryExporterPlugin.exportMetrics(ClientMetricsTestUtils.requestContext(),
             new PushTelemetryRequest.Builder(new PushTelemetryRequestData().setMetrics(ByteBuffer.wrap(metrics)), true).build(),
-            5000, MetricConfigs.CLIENT_TELEMETRY_MAX_BYTES_DEFAULT);
+            clientInstanceId, 5000, MetricConfigs.CLIENT_TELEMETRY_MAX_BYTES_DEFAULT);
 
         // Verify both receivers were called
         assertEquals(1, receiver1.exportMetricsInvokedCount);
         assertEquals(1, receiver2.exportMetricsInvokedCount);
         assertEquals(ByteBuffer.wrap(metrics), receiver1.metricsData.get(0));
         assertEquals(ByteBuffer.wrap(metrics), receiver2.metricsData.get(0));
+        assertEquals(List.of(clientInstanceId), receiver1.clientInstanceIds);
+        assertEquals(List.of(clientInstanceId), receiver2.clientInstanceIds);
     }
 
     @Test
@@ -71,9 +76,10 @@ public class ClientTelemetryTest {
 
         byte[] metrics = "test-metrics-multiple-new".getBytes(StandardCharsets.UTF_8);
         int pushIntervalMs = 20000;
+        Uuid clientInstanceId = Uuid.randomUuid();
         clientTelemetryExporterPlugin.exportMetrics(ClientMetricsTestUtils.requestContext(),
             new PushTelemetryRequest.Builder(new PushTelemetryRequestData().setMetrics(ByteBuffer.wrap(metrics)), true).build(),
-            pushIntervalMs, MetricConfigs.CLIENT_TELEMETRY_MAX_BYTES_DEFAULT);
+            clientInstanceId, pushIntervalMs, MetricConfigs.CLIENT_TELEMETRY_MAX_BYTES_DEFAULT);
 
         // Verify both exporters were called
         assertEquals(1, exporter1.exportMetricsInvokedCount);
@@ -82,5 +88,7 @@ public class ClientTelemetryTest {
         assertEquals(ByteBuffer.wrap(metrics), exporter2.metricsData.get(0));
         assertEquals(pushIntervalMs, exporter1.pushIntervals.get(0));
         assertEquals(pushIntervalMs, exporter2.pushIntervals.get(0));
+        assertEquals(List.of(clientInstanceId), exporter1.clientInstanceIds);
+        assertEquals(List.of(clientInstanceId), exporter2.clientInstanceIds);
     }
 }

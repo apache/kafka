@@ -49,7 +49,6 @@ if ( !versions.scala.contains('-') ) {
 // When adding, removing or updating dependencies, please also update the LICENSE-binary file accordingly.
 // See https://issues.apache.org/jira/browse/KAFKA-12622 for steps to verify the LICENSE-binary file is correct.
 versions += [
-  activation: "1.1.1",
   apacheda: "1.0.2",
   apacheds: "2.0.0-M24",
   argparse4j: "0.7.0",
@@ -76,7 +75,6 @@ versions += [
   jakartaAnnotationApi: "2.1.1",
   jakartaRs: "3.1.0",
   jakartaServletApi: "6.1.0",
-  jaxb: "2.3.1",
   jfreechart: "1.5.6",
   jopt: "5.0.4",
   jose4j: "0.9.6",
@@ -139,7 +137,6 @@ versions += [
 ]
 
 libs += [
-  activation: "javax.activation:activation:$versions.activation",
   apacheda: "org.apache.directory.api:api-all:$versions.apacheda",
   apachedsCoreApi: "org.apache.directory.server:apacheds-core-api:$versions.apacheds",
   apachedsInterceptorKerberos: "org.apache.directory.server:apacheds-interceptor-kerberos:$versions.apacheds",
@@ -163,7 +160,6 @@ libs += [
   jacksonBlackbird: "com.fasterxml.jackson.module:jackson-module-blackbird:$versions.jackson",
   jacksonJakartarsJsonProvider: "com.fasterxml.jackson.jakarta.rs:jackson-jakarta-rs-json-provider:$versions.jackson",
   jakartaAnnotationApi: "jakarta.annotation:jakarta.annotation-api:$versions.jakartaAnnotationApi",
-  jaxbApi: "javax.xml.bind:jaxb-api:$versions.jaxb",
   jakartaRsApi: "jakarta.ws.rs:jakarta.ws.rs-api:$versions.jakartaRs",
   jakartaServletApi: "jakarta.servlet:jakarta.servlet-api:$versions.jakartaServletApi",
   jaxrs2Jakarta: "io.swagger.core.v3:swagger-jaxrs2-jakarta:$swaggerVersion",
@@ -181,7 +177,6 @@ libs += [
   jgitGpgBc: "org.eclipse.jgit:org.eclipse.jgit.gpg.bc:$versions.jgit",
   jline: "org.jline:jline-reader:$versions.jline",
   jmhCore: "org.openjdk.jmh:jmh-core:$versions.jmh",
-  jmhCoreBenchmarks: "org.openjdk.jmh:jmh-core-benchmarks:$versions.jmh",
   jmhGeneratorAnnProcess: "org.openjdk.jmh:jmh-generator-annprocess:$versions.jmh",
   joptSimple: "net.sf.jopt-simple:jopt-simple:$versions.jopt",
   jose4j: "org.bitbucket.b_c:jose4j:$versions.jose4j",
@@ -233,7 +228,6 @@ libs += [
   slf4jApi: "org.slf4j:slf4j-api:$versions.slf4j",
   slf4jLog4j2: "org.apache.logging.log4j:log4j-slf4j-impl:$versions.log4j2",
   snappy: "org.xerial.snappy:snappy-java:$versions.snappy",
-  spotbugs: "com.github.spotbugs:spotbugs-annotations:$versions.spotbugs",
   swaggerAnnotations: "io.swagger.core.v3:swagger-annotations:$swaggerVersion",
   testcontainersKeycloak: "com.github.dasniko:testcontainers-keycloak:$versions.testcontainersKeycloak",
   mockOAuth2Server: "no.nav.security:mock-oauth2-server:$versions.mockOAuth2Server",
