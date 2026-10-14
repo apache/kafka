@@ -1038,10 +1038,16 @@ public class SslTransportLayer implements TransportLayer {
                     int bytesRemaining = totalBytesToWrite - totalBytesWritten;
                     if (bytesRemaining < fileChannelBuffer.limit())
                         fileChannelBuffer.limit(bytesRemaining);
-                    int bytesRead = fileChannel.read(fileChannelBuffer, pos);
+                    int bytesRead;
+                    try {
+                        bytesRead = fileChannel.read(fileChannelBuffer, pos);
+                    } finally {
+                        // Holds exactly what was read, nothing if the read failed: otherwise the next call would
+                        // send the previous read as the contents of this position.
+                        fileChannelBuffer.flip();
+                    }
                     if (bytesRead <= 0)
                         break;
-                    fileChannelBuffer.flip();
                 }
                 int networkBytesWritten = write(fileChannelBuffer);
                 totalBytesWritten += networkBytesWritten;

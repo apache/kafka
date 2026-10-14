@@ -51,6 +51,7 @@ import java.net.InetSocketAddress;
 import java.net.Socket;
 import java.nio.ByteBuffer;
 import java.nio.channels.Channels;
+import java.nio.channels.FileChannel;
 import java.nio.channels.SelectionKey;
 import java.nio.channels.SocketChannel;
 import java.nio.charset.StandardCharsets;
@@ -61,8 +62,11 @@ import java.util.Collections;
 import java.util.HashMap;
 import java.util.List;
 import java.util.Map;
+import java.util.concurrent.Callable;
+import java.util.concurrent.atomic.AtomicBoolean;
 import java.util.concurrent.atomic.AtomicInteger;
 import java.util.concurrent.atomic.AtomicLong;
+import java.util.concurrent.atomic.AtomicReference;
 import java.util.function.Function;
 import java.util.stream.Stream;
 
@@ -81,6 +85,7 @@ import static org.junit.jupiter.api.Assertions.assertThrows;
 import static org.junit.jupiter.api.Assertions.assertTrue;
 import static org.junit.jupiter.api.Assumptions.assumeTrue;
 import static org.mockito.ArgumentMatchers.any;
+import static org.mockito.ArgumentMatchers.anyLong;
 import static org.mockito.Mockito.doReturn;
 import static org.mockito.Mockito.doThrow;
 import static org.mockito.Mockito.mock;
@@ -96,6 +101,8 @@ import static org.mockito.Mockito.when;
 public class SslTransportLayerTest {
 
     private static final int BUFFER_SIZE = 4 * 1024;
+    // The size of SslTransportLayer's file channel buffer
+    private static final int TRANSFER_SIZE = 32 * 1024;
     private static final Time TIME = Time.SYSTEM;
 
     private static class Args {
@@ -1281,6 +1288,105 @@ public class SslTransportLayerTest {
     public void testInvalidSslEngineFactory(Args args) {
         args.sslClientConfigs.put(SslConfigs.SSL_ENGINE_FACTORY_CLASS_CONFIG, String.class);
         assertThrows(KafkaException.class, () -> createSelector(args.sslClientConfigs));
+    }
+
+    /**
+     * A failed read of the file being transferred must not leave the previous read in the buffer to be sent as the
+     * contents of the failed position: the next transfer has to read again, and fail.
+     */
+    @ParameterizedTest
+    @ArgumentsSource(SslTransportLayerArgumentsProvider.class)
+    public void testTransferFromDoesNotSendStaleBytesAfterFailedRead(Args args) throws Exception {
+        ByteArrayOutputStream sent = new ByteArrayOutputStream();
+        SslTransportLayer layer = connectRecordingWrites(args, sent);
+        FileChannel fileChannel = fileChannelReadableUpTo(TRANSFER_SIZE, () -> {
+            throw new IOException("Input/output error");
+        });
+
+        // The readable part is sent, then the read of the next part fails after progress was made
+        assertEquals(TRANSFER_SIZE, layer.transferFrom(fileChannel, 0, 3 * TRANSFER_SIZE));
+        // The next transfer starts at the unreadable position: it must fail instead of sending what was read before
+        assertThrows(IOException.class, () -> layer.transferFrom(fileChannel, TRANSFER_SIZE, 2 * TRANSFER_SIZE));
+        assertArrayEquals(fileContents(TRANSFER_SIZE), sent.toByteArray());
+    }
+
+    /**
+     * The same holds when the file ends early, for instance because it was truncated during the transfer.
+     */
+    @ParameterizedTest
+    @ArgumentsSource(SslTransportLayerArgumentsProvider.class)
+    public void testTransferFromDoesNotSendStaleBytesAtEndOfFile(Args args) throws Exception {
+        ByteArrayOutputStream sent = new ByteArrayOutputStream();
+        SslTransportLayer layer = connectRecordingWrites(args, sent);
+        FileChannel fileChannel = fileChannelReadableUpTo(TRANSFER_SIZE, () -> -1);
+
+        assertEquals(TRANSFER_SIZE, layer.transferFrom(fileChannel, 0, 3 * TRANSFER_SIZE));
+        assertEquals(0, layer.transferFrom(fileChannel, TRANSFER_SIZE, 2 * TRANSFER_SIZE));
+        assertArrayEquals(fileContents(TRANSFER_SIZE), sent.toByteArray());
+    }
+
+    /**
+     * Connects to an echo server and returns the client's transport layer, which from then on records what is
+     * written to it instead of sending it. Data is exchanged first, as with TLSv1.3 the transport layer only becomes
+     * ready for transferFrom once it has read some.
+     */
+    private SslTransportLayer connectRecordingWrites(Args args, ByteArrayOutputStream sent) throws Exception {
+        String node = "0";
+        server = createEchoServer(args, SecurityProtocol.SSL);
+        AtomicBoolean record = new AtomicBoolean(false);
+        AtomicReference<SslTransportLayer> transportLayer = new AtomicReference<>();
+        TestSslChannelBuilder channelBuilder = new TestSslChannelBuilder(ConnectionMode.CLIENT) {
+            @Override
+            protected TestSslTransportLayer newTransportLayer(String id, SelectionKey key, SSLEngine sslEngine) {
+                TestSslTransportLayer layer = new TestSslTransportLayer(id, key, sslEngine) {
+                    @Override
+                    public int write(ByteBuffer src) throws IOException {
+                        if (!record.get())
+                            return super.write(src);
+                        int length = src.remaining();
+                        byte[] bytes = new byte[length];
+                        src.get(bytes);
+                        sent.write(bytes);
+                        return length;
+                    }
+                };
+                transportLayer.set(layer);
+                return layer;
+            }
+        };
+        channelBuilder.configure(args.sslClientConfigs);
+        selector = new Selector(5000, new Metrics(), TIME, "MetricGroup", channelBuilder, new LogContext());
+        selector.connect(node, new InetSocketAddress("localhost", server.port()), BUFFER_SIZE, BUFFER_SIZE);
+        NetworkTestUtils.checkClientConnection(selector, node, 100, 10);
+        record.set(true);
+        return transportLayer.get();
+    }
+
+    /**
+     * A file channel of three times readableSize bytes whose content is fileContents up to readableSize, and whose
+     * reads from there on are answered by beyondReadable.
+     */
+    private static FileChannel fileChannelReadableUpTo(int readableSize, Callable<Integer> beyondReadable) throws IOException {
+        FileChannel fileChannel = mock(FileChannel.class);
+        when(fileChannel.size()).thenReturn(3L * readableSize);
+        when(fileChannel.read(any(ByteBuffer.class), anyLong())).thenAnswer(invocation -> {
+            ByteBuffer buffer = invocation.getArgument(0);
+            long position = invocation.getArgument(1);
+            if (position >= readableSize)
+                return beyondReadable.call();
+            int length = (int) Math.min(buffer.remaining(), readableSize - position);
+            for (int i = 0; i < length; i++)
+                buffer.put((byte) (position + i));
+            return length;
+        });
+        return fileChannel;
+    }
+
+    private static byte[] fileContents(int size) {
+        byte[] contents = new byte[size];
+        for (int i = 0; i < size; i++)
+            contents[i] = (byte) i;
+        return contents;
     }
 
     private void verifyInvalidReconfigure(ListenerReconfigurable reconfigurable,
