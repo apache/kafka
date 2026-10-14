@@ -42,7 +42,9 @@ import static org.apache.kafka.common.requests.ConsumerGroupHeartbeatRequest.LEA
 import static org.apache.kafka.coordinator.group.AssignmentTestUtil.mkAssignmentWithEpochs;
 import static org.apache.kafka.coordinator.group.AssignmentTestUtil.mkTopicAssignmentWithEpochs;
 import static org.junit.jupiter.api.Assertions.assertEquals;
+import static org.junit.jupiter.api.Assertions.assertFalse;
 import static org.junit.jupiter.api.Assertions.assertNotEquals;
+import static org.junit.jupiter.api.Assertions.assertTrue;
 
 public class UtilsTest {
     private static final Logger LOG = LoggerFactory.getLogger(UtilsTest.class);
@@ -325,6 +327,32 @@ public class UtilsTest {
                 .filter(msg -> msg.contains("[GroupId " + GROUP_ID + "] Size of assignment epochs 1 is not equal to partitions 3 for topic "
                     + FOO_TOPIC_ID))
                 .count());
+        }
+    }
+
+    @Test
+    public void testHashCapacity() {
+        assertEquals(0, Utils.hashCapacity(0));
+        assertEquals(2, Utils.hashCapacity(1));
+        assertEquals(3, Utils.hashCapacity(2));
+        assertEquals(4, Utils.hashCapacity(3));
+        assertEquals(15, Utils.hashCapacity(11));
+        assertEquals(16, Utils.hashCapacity(12));
+        assertEquals(18, Utils.hashCapacity(13));
+    }
+
+    @Test
+    public void testHashCapacityCanHoldEntriesWithoutResizing() {
+        // A HashMap resizes when its size is strictly greater than its capacity times the load
+        // factor of 0.75, rounded down to the nearest integer.
+        for (int numEntries = 1; numEntries <= 100_000; numEntries++) {
+            int capacity = Utils.hashCapacity(numEntries);
+            assertTrue(numEntries <= (int) (capacity * 0.75f),
+                numEntries + " elements do not fit in capacity " + capacity);
+
+            // numEntries no longer fits when shrinking the capacity.
+            assertFalse(numEntries <= (int) ((capacity - 1) * 0.75f),
+                "Capacity " + capacity + " for " + numEntries + " elements is oversized");
         }
     }
 }

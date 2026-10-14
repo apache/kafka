@@ -39,6 +39,7 @@ import org.apache.kafka.network.SocketServer
 import org.apache.kafka.raft.{KRaftConfigs, KafkaRaftClient}
 import org.apache.kafka.server.{DynamicThreadPool, ProcessRole}
 import org.apache.kafka.server.common.{ApiMessageAndVersion, DirectoryEventHandler}
+import org.apache.kafka.coordinator.mirror.ClusterMirrorConfigs
 import org.apache.kafka.server.config.{BrokerReconfigurable => JBrokerReconfigurable, DynamicConfig, DynamicProducerStateManagerConfig, ServerConfigs, ServerLogConfigs, DynamicBrokerConfig => JDynamicBrokerConfig}
 import org.apache.kafka.server.log.remote.storage.RemoteLogManagerConfig
 import org.apache.kafka.server.metrics.{ClientTelemetryExporterPlugin, MetricConfigs}
@@ -201,7 +202,7 @@ class DynamicBrokerConfig(private val kafkaConfig: KafkaConfig) extends Logging 
     addBrokerReconfigurable(kafkaServer.socketServer)
     addBrokerReconfigurable(new DynamicProducerStateManagerConfig(kafkaServer.logManager.producerStateManagerConfig))
     addBrokerReconfigurable(new DynamicRemoteLogConfig(kafkaServer))
-    addBrokerReconfigurable(new DynamicReplicationConfig(kafkaServer))
+    addBrokerReconfigurable(new DynamicClusterMirrorConfig(kafkaServer))
   }
 
   /**
@@ -1000,16 +1001,28 @@ class DynamicRemoteLogConfig(server: KafkaBroker) extends BrokerReconfigurable w
   }
 }
 
-class DynamicReplicationConfig(server: KafkaBroker) extends BrokerReconfigurable with Logging {
+class DynamicClusterMirrorConfig(server: KafkaBroker) extends BrokerReconfigurable with Logging {
   override def reconfigurableConfigs: util.Set[String] = {
-    JDynamicBrokerConfig.DynamicReplicationConfig.RECONFIGURABLE_CONFIGS
+    JDynamicBrokerConfig.DynamicClusterMirrorConfig.RECONFIGURABLE_CONFIGS
   }
 
   override def validateReconfiguration(newConfig: KafkaConfig): Unit = {
-    // Currently it is a noop for reconfiguring the dynamic config follower.fetch.last.tiered.offset.enable
+    val newFetchers = newConfig.getInt(ClusterMirrorConfigs.MIRROR_NUM_REPLICA_FETCHERS_CONFIG)
+    val oldFetchers = server.config.getInt(ClusterMirrorConfigs.MIRROR_NUM_REPLICA_FETCHERS_CONFIG)
+    if (newFetchers != oldFetchers) {
+      val errorMsg = s"Dynamic thread count update validation failed for ${ClusterMirrorConfigs.MIRROR_NUM_REPLICA_FETCHERS_CONFIG}=$newFetchers"
+      if (newFetchers < oldFetchers / 2)
+        throw new ConfigException(s"$errorMsg, Value should be at least half the current value $oldFetchers")
+      if (newFetchers > oldFetchers * 2)
+        throw new ConfigException(s"$errorMsg, Value should not be greater than double the current value $oldFetchers")
+    }
+
+    val newInterval = newConfig.getLong(ClusterMirrorConfigs.MIRROR_METADATA_REFRESH_INTERVAL_MS_CONFIG)
+    if (newInterval < 0)
+      throw new ConfigException(s"${ClusterMirrorConfigs.MIRROR_METADATA_REFRESH_INTERVAL_MS_CONFIG} must be >= 0")
   }
 
   override def reconfigure(oldConfig: KafkaConfig, newConfig: KafkaConfig): Unit = {
-    // Currently it is a noop for reconfiguring the dynamic config follower.fetch.last.tiered.offset.enable
+    // TODO: Implement reconfiguration when MirrorMetadataManager is available (KAFKA-21233)
   }
 }
