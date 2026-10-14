@@ -198,6 +198,51 @@ public class AssignRemainingExtraPartitionsTest {
     }
 
     /**
+     * A, B, C, D and E subscribe to T1, T2, T3 and T4. T1, T2 and T3, of 9 partitions each, have 4
+     * extra partitions each, and T4, of 7 partitions, has 2. A kept an extra partition of T1, B and
+     * C kept ones of T2 and T3, and D and E kept ones of T2, T3 and T4. A is the only member with
+     * the fewest extra partitions, but it already has an extra partition of T1, so none of the 3
+     * other extra partitions of T1 can go to it. They go to the members without one, from the
+     * fewest extra partitions up and in member order: B and C, which have 2, then D, the first of
+     * the members with 3.
+     */
+    @Test
+    public void testMembersWithMoreExtraPartitionsAreServedInMemberOrderWhenTheOthersHaveOneOfTheTopic() {
+        var spec = new GroupSpecFixture()
+            .withMember("A", Set.of(T1, T2, T3, T4))
+            .withMember("B", Set.of(T1, T2, T3, T4))
+            .withMember("C", Set.of(T1, T2, T3, T4))
+            .withMember("D", Set.of(T1, T2, T3, T4))
+            .withMember("E", Set.of(T1, T2, T3, T4))
+            .build();
+        var describer = new TopicsFixture()
+            .withTopic(T1, 9)
+            .withTopic(T2, 9)
+            .withTopic(T3, 9)
+            .withTopic(T4, 7)
+            .build();
+        var fixture = new QuotasFixture(spec, describer);
+        fixture.addExtras("A", T1);
+        fixture.addExtras("B", T2, T3);
+        fixture.addExtras("C", T2, T3);
+        fixture.addExtras("D", T2, T3, T4);
+        fixture.addExtras("E", T2, T3, T4);
+
+        new AssignRemainingExtraPartitions(fixture.group, fixture.quotas).run();
+
+        assertEquals(
+            Map.ofEntries(
+                Map.entry(T1, List.of("A", "B", "C", "D")),
+                Map.entry(T2, List.of("B", "C", "D", "E")),
+                Map.entry(T3, List.of("B", "C", "D", "E")),
+                Map.entry(T4, List.of("D", "E"))
+            ),
+            fixture.membersWithExtraPartition()
+        );
+        assertEquals(List.of(5, 7, 7, 8, 7), fixture.assignmentSizes());
+    }
+
+    /**
      * A subscribes to T1 only, B and C to T1 and T2. T1, 5 partitions, has 2 extra partitions,
      * and A kept one. A has the smallest assignment, but its cohort has no member left without an
      * extra partition of T1, and the other one goes to B.
