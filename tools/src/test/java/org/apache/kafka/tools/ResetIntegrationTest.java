@@ -453,8 +453,6 @@ public class ResetIntegrationTest {
 
             assertInternalTopicsGotDeleted(admin, null);
 
-            resetFile.deleteOnExit();
-
             // RE-RUN
             startApplicationAndWaitUntilRunning(streams);
             final List<KeyValue<Long, Long>> resultRerun = waitUntilOutputRecordsReceived(cluster, 5);
@@ -502,8 +500,6 @@ public class ResetIntegrationTest {
 
             assertInternalTopicsGotDeleted(admin, null);
 
-            resetFile.deleteOnExit();
-
             // RE-RUN
             startApplicationAndWaitUntilRunning(streams);
 
@@ -546,8 +542,6 @@ public class ResetIntegrationTest {
             waitForEmptyConsumerGroup(admin, appId);
 
             assertInternalTopicsGotDeleted(admin, null);
-
-            resetFile.deleteOnExit();
 
             // RE-RUN
             startApplicationAndWaitUntilRunning(streams);

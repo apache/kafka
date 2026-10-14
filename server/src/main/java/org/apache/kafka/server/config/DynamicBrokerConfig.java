@@ -23,6 +23,7 @@ import org.apache.kafka.common.config.SaslConfigs;
 import org.apache.kafka.common.config.SslConfigs;
 import org.apache.kafka.common.config.internals.BrokerSecurityConfigs;
 import org.apache.kafka.coordinator.group.GroupCoordinatorConfig;
+import org.apache.kafka.coordinator.mirror.ClusterMirrorConfigs;
 import org.apache.kafka.coordinator.share.ShareCoordinatorConfig;
 import org.apache.kafka.coordinator.transaction.TransactionLogConfig;
 import org.apache.kafka.network.SocketServer;
@@ -40,6 +41,7 @@ import java.util.Optional;
 import java.util.Properties;
 import java.util.Set;
 import java.util.function.Function;
+import java.util.function.Supplier;
 import java.util.regex.Matcher;
 import java.util.regex.Pattern;
 import java.util.stream.Collectors;
@@ -52,6 +54,9 @@ public class DynamicBrokerConfig {
     private static final Set<String> DYNAMIC_PRODUCER_STATE_MANAGER_CONFIGS = Set.of(
             TransactionLogConfig.PRODUCER_ID_EXPIRATION_MS_CONFIG,
             TransactionLogConfig.TRANSACTION_PARTITION_VERIFICATION_ENABLE_CONFIG);
+
+    private static final Set<String> DYNAMIC_REPLICATION_CONFIGS = Set.of(
+            ReplicationConfigs.FOLLOWER_FETCH_LAST_TIERED_OFFSET_ENABLE_CONFIG);
 
     private static final Set<String> CLUSTER_LEVEL_LISTENER_CONFIGS = Set.of(
             SocketServerConfigs.MAX_CONNECTIONS_CONFIG,
@@ -76,9 +81,10 @@ public class DynamicBrokerConfig {
             SocketServer.RECONFIGURABLE_CONFIGS,
             DYNAMIC_PRODUCER_STATE_MANAGER_CONFIGS,
             DynamicRemoteLogConfig.RECONFIGURABLE_CONFIGS,
-            DynamicReplicationConfig.RECONFIGURABLE_CONFIGS,
+            DYNAMIC_REPLICATION_CONFIGS,
             List.of(AbstractConfig.CONFIG_PROVIDERS_CONFIG),
             GroupCoordinatorConfig.RECONFIGURABLE_CONFIGS,
+            DynamicClusterMirrorConfig.RECONFIGURABLE_CONFIGS,
             DynamicQuotaConfig.RECONFIGURABLE_CONFIGS,
             ShareCoordinatorConfig.RECONFIGURABLE_CONFIGS)
         .flatMap(Collection::stream)
@@ -287,12 +293,43 @@ public class DynamicBrokerConfig {
                 RemoteLogManagerConfig.REMOTE_LOG_READER_THREADS_PROP);
     }
 
-    public static class DynamicReplicationConfig {
-        public static final Set<String> RECONFIGURABLE_CONFIGS = Set.of(
-                ReplicationConfigs.FOLLOWER_FETCH_LAST_TIERED_OFFSET_ENABLE_CONFIG);
-    }
-
     public static class DynamicQuotaConfig {
         public static final Set<String> RECONFIGURABLE_CONFIGS = QuotaConfig.BROKER_QUOTA_CONFIGS;
+    }
+
+    public static class DynamicClusterMirrorConfig implements BrokerReconfigurable {
+        public static final Set<String> RECONFIGURABLE_CONFIGS = Set.of(
+                ClusterMirrorConfigs.MIRROR_NUM_REPLICA_FETCHERS_CONFIG,
+                ClusterMirrorConfigs.MIRROR_METADATA_REFRESH_INTERVAL_MS_CONFIG);
+
+        private final Supplier<AbstractKafkaConfig> currentConfig;
+
+        public DynamicClusterMirrorConfig(Supplier<AbstractKafkaConfig> currentConfig) {
+            this.currentConfig = currentConfig;
+        }
+
+        @Override
+        public Set<String> reconfigurableConfigs() {
+            return RECONFIGURABLE_CONFIGS;
+        }
+
+        @Override
+        public void validateReconfiguration(AbstractKafkaConfig newConfig) {
+            int newFetchers = newConfig.getInt(ClusterMirrorConfigs.MIRROR_NUM_REPLICA_FETCHERS_CONFIG);
+            int oldFetchers = currentConfig.get().getInt(ClusterMirrorConfigs.MIRROR_NUM_REPLICA_FETCHERS_CONFIG);
+            if (newFetchers != oldFetchers) {
+                String errorMsg = "Dynamic thread count update validation failed for "
+                        + ClusterMirrorConfigs.MIRROR_NUM_REPLICA_FETCHERS_CONFIG + "=" + newFetchers;
+                if (newFetchers < oldFetchers / 2)
+                    throw new ConfigException(errorMsg + ", Value should be at least half the current value " + oldFetchers);
+                if (newFetchers > oldFetchers * 2)
+                    throw new ConfigException(errorMsg + ", Value should not be greater than double the current value " + oldFetchers);
+            }
+        }
+
+        @Override
+        public void reconfigure(AbstractKafkaConfig oldConfig, AbstractKafkaConfig newConfig) {
+            // TODO: Implement reconfiguration when MirrorMetadataManager is available (KAFKA-21233)
+        }
     }
 }

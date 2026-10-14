@@ -224,6 +224,27 @@ public class EmbeddedKafkaCluster {
         }
     }
 
+    /**
+     * The IDs of the nodes that run a controller. These nodes are also brokers, and the cluster runs a single
+     * controller, so a test that restarts a broker to fail over a partition leader should pick a broker that is not
+     * one of these.
+     */
+    public Set<Integer> controllerNodeIds() {
+        return cluster.controllers().keySet();
+    }
+
+    /**
+     * Shuts the broker down and starts it back up with the same identity, and waits for it to be ready again.
+     */
+    public void restartBroker(final int nodeId) {
+        cluster.restartBroker(nodeId, Map.of());
+        try {
+            cluster.waitForReadyBrokers();
+        } catch (final InterruptedException | ExecutionException e) {
+            throw new RuntimeException(e);
+        }
+    }
+
     public String bootstrapServers() {
         return cluster.bootstrapServers();
     }

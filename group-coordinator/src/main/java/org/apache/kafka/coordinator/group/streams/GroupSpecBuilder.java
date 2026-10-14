@@ -19,7 +19,6 @@ package org.apache.kafka.coordinator.group.streams;
 import org.apache.kafka.coordinator.group.Utils;
 import org.apache.kafka.coordinator.group.api.streams.assignor.AssignmentConfigs;
 import org.apache.kafka.coordinator.group.api.streams.assignor.GroupSpec;
-import org.apache.kafka.coordinator.group.streams.assignor.AssignmentConfigsImpl;
 import org.apache.kafka.coordinator.group.streams.assignor.GroupSpecImpl;
 import org.apache.kafka.coordinator.group.streams.assignor.MemberMetadataAndStateImpl;
 
@@ -56,11 +55,13 @@ public class GroupSpecBuilder {
 
     /**
      * Constructs the object.
+     *
+     * @param assignmentConfigs The assignment configs to pass to the assignor.
      */
     public GroupSpecBuilder(
-        Map<String, String> assignmentConfigs
+        AssignmentConfigs assignmentConfigs
     ) {
-        this.assignmentConfigs = AssignmentConfigsImpl.fromMap(Objects.requireNonNull(assignmentConfigs));
+        this.assignmentConfigs = Objects.requireNonNull(assignmentConfigs);
     }
 
     static MemberMetadataAndStateImpl createMemberMetadataAndState(

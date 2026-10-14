@@ -18,6 +18,7 @@ package org.apache.kafka.streams.integration;
 
 import org.apache.kafka.clients.admin.Admin;
 import org.apache.kafka.clients.admin.AdminClientConfig;
+import org.apache.kafka.clients.admin.ListTopicsOptions;
 import org.apache.kafka.clients.admin.OffsetSpec;
 import org.apache.kafka.clients.admin.StreamsGroupDescription;
 import org.apache.kafka.clients.admin.StreamsGroupMemberAssignment;
@@ -29,13 +30,17 @@ import org.apache.kafka.clients.consumer.KafkaConsumer;
 import org.apache.kafka.clients.producer.Producer;
 import org.apache.kafka.common.GroupState;
 import org.apache.kafka.common.TopicPartition;
+import org.apache.kafka.common.TopicPartitionInfo;
 import org.apache.kafka.common.config.TopicConfig;
+import org.apache.kafka.common.internals.Topic;
 import org.apache.kafka.common.serialization.ByteArrayDeserializer;
 import org.apache.kafka.common.serialization.Serdes;
 import org.apache.kafka.common.serialization.StringSerializer;
+import org.apache.kafka.common.utils.Bytes;
 import org.apache.kafka.common.utils.Utils;
 import org.apache.kafka.coordinator.group.GroupCoordinatorConfig;
 import org.apache.kafka.coordinator.group.streams.AssignmentRefinerImpl;
+import org.apache.kafka.coordinator.transaction.TransactionLogConfig;
 import org.apache.kafka.streams.GroupProtocol;
 import org.apache.kafka.streams.KafkaClientSupplier;
 import org.apache.kafka.streams.KafkaStreams;
@@ -47,9 +52,13 @@ import org.apache.kafka.streams.integration.utils.IntegrationTestUtils;
 import org.apache.kafka.streams.kstream.Materialized;
 import org.apache.kafka.streams.processor.StandbyUpdateListener;
 import org.apache.kafka.streams.processor.StateRestoreListener;
+import org.apache.kafka.streams.processor.StateStore;
+import org.apache.kafka.streams.processor.StateStoreContext;
 import org.apache.kafka.streams.processor.TaskId;
 import org.apache.kafka.streams.processor.internals.DefaultKafkaClientSupplier;
-import org.apache.kafka.streams.state.Stores;
+import org.apache.kafka.streams.state.KeyValueBytesStoreSupplier;
+import org.apache.kafka.streams.state.KeyValueStore;
+import org.apache.kafka.streams.state.internals.InMemoryKeyValueStore;
 import org.apache.kafka.test.TestUtils;
 
 import org.junit.jupiter.api.AfterAll;
@@ -88,14 +97,16 @@ import static org.apache.kafka.common.utils.Utils.mkProperties;
 import static org.apache.kafka.streams.utils.TestUtils.safeUniqueTestName;
 import static org.junit.jupiter.api.Assertions.assertEquals;
 import static org.junit.jupiter.api.Assertions.assertFalse;
+import static org.junit.jupiter.api.Assertions.assertNull;
 import static org.junit.jupiter.api.Assertions.assertTrue;
 
 /**
  * Covers the warm-up task lifecycle under the streams group protocol (KIP-1071) end to end, with real Kafka Streams
  * clients against the broker-side {@link AssignmentRefinerImpl}: the warm-up budget, a warm-up task given up because
  * the target assignment no longer wants it, the offset reporting that drives promotion, the promotion gate on
- * {@code acceptable.recovery.lag}, and warm-up tasks being disabled. The scale-out case itself is covered by
- * {@link StreamsGroupWarmupTaskIntegrationTest}.
+ * {@code acceptable.recovery.lag}, warm-up tasks being disabled, a warm-up task surviving a coordinator failover, a
+ * lagging warm-up task taking over when the active owner leaves, and members with several stream threads. The
+ * scale-out case itself is covered by {@link StreamsGroupWarmupTaskIntegrationTest}.
  *
  * <p>All stores are in memory, so a task that is closed rather than recycled has to restore its changelog from
  * scratch, which the restore listeners record. Where a test has to hold a warm-up task behind, a {@link RestoreGate}
@@ -108,10 +119,14 @@ import static org.junit.jupiter.api.Assertions.assertTrue;
 public class StreamsGroupWarmupTaskLifecycleIntegrationTest {
     private static final Properties BROKER_CONFIG = mkProperties(mkMap(
         mkEntry(GroupCoordinatorConfig.STREAMS_GROUP_ASSIGNMENT_REFINER_CLASS_CONFIG, AssignmentRefinerImpl.class.getName()),
-        mkEntry(GroupCoordinatorConfig.STREAMS_GROUP_ACCEPTABLE_RECOVERY_LAG_CONFIG, "0")
+        mkEntry(GroupCoordinatorConfig.STREAMS_GROUP_ACCEPTABLE_RECOVERY_LAG_CONFIG, "0"),
+        // Replicated, so that the group coordinator can fail over to another broker.
+        mkEntry(GroupCoordinatorConfig.OFFSETS_TOPIC_REPLICATION_FACTOR_CONFIG, "3"),
+        mkEntry(TransactionLogConfig.TRANSACTIONS_TOPIC_REPLICATION_FACTOR_CONFIG, "3")
     ));
 
-    public static final EmbeddedKafkaCluster CLUSTER = new EmbeddedKafkaCluster(1, BROKER_CONFIG);
+    private static final int NUM_BROKERS = 3;
+    public static final EmbeddedKafkaCluster CLUSTER = new EmbeddedKafkaCluster(NUM_BROKERS, BROKER_CONFIG);
 
     private static final String SUBTOPOLOGY_ID = "0";
     private static final int HEARTBEAT_INTERVAL_MS = 500;
@@ -307,6 +322,114 @@ public class StreamsGroupWarmupTaskLifecycleIntegrationTest {
             "b should have taken over " + movedTask + " cold, restoring all of it from the changelog");
     }
 
+    @Test
+    public void shouldKeepAWarmupTaskThroughACoordinatorFailover(final TestInfo testInfo) throws Exception {
+        setUp(testInfo, 2, appIdWithCoordinatorOffTheControllers(testInfo));
+        final Instance a = startOwnerOfAllTasks();
+
+        final Instance b = startInstance("b", RESTORE_BUDGET);
+        final int task = awaitStagedMigration(a, b);
+
+        // The coordinator holds the intermediate assignment and the reported offsets in memory only, so the new
+        // coordinator derives the intermediate assignment again from the members' persisted current assignments, and
+        // knows no lag until the members report their offsets to it. b has to keep its warm-up task through that.
+        final int coordinator = describeGroup().coordinator().id();
+        assertFalse(CLUSTER.controllerNodeIds().contains(coordinator), "the group coordinator is on a controller node");
+        CLUSTER.restartBroker(coordinator);
+        waitForGroup("the group to fail over with the warm-up task " + task + " still on b", group -> isStable(group, 2)
+            && group.coordinator().id() != coordinator
+            && warmupTasks(group, b).equals(Set.of(task))
+            && activeTasks(group, a).contains(task));
+
+        b.gate.open();
+        waitForGroup("the warm-up task " + task + " to be promoted to active on b", group -> isStable(group, 2)
+            && activeTasks(group, b).equals(Set.of(task))
+            && !activeTasks(group, a).contains(task)
+            && totalWarmupTasks(group) == 0);
+        awaitNoActiveRestore(b, task);
+        assertEquals(1, b.standbyUpdateStarts(task), "b should have kept its warm-up task open across the failover");
+    }
+
+    @Test
+    public void shouldContinueRestoringFromAWarmupTaskWhenTheActiveOwnerLeaves(final TestInfo testInfo) throws Exception {
+        setUp(testInfo, 2);
+        final Instance a = startOwnerOfAllTasks();
+
+        final Instance b = startInstance("b", RESTORE_BUDGET);
+        final int task = awaitStagedMigration(a, b);
+        final int otherTask = task == 0 ? 1 : 0;
+        final long restoredByWarmup = b.gate.delivered.get();
+
+        // With its owner gone, the task runs nowhere, and no caught-up copy of it exists, so the refiner grants the task
+        // to b right away, and b turns its warm-up task into the active task in place.
+        instances.remove(a);
+        a.streams.close(Duration.ofSeconds(30));
+        waitForGroup("b to take over both tasks", group -> isStable(group, 1)
+            && activeTasks(group, b).equals(Set.of(0, 1))
+            && totalWarmupTasks(group) == 0);
+
+        // Only open the gate once b restores the task as an active task. Until b has turned the warm-up task into the
+        // active task, an open gate would let the warm-up task itself catch up.
+        TestUtils.waitForCondition(
+            () -> b.restoreStartingOffsetByTask.containsKey(task),
+            WAIT_MS,
+            () -> "b never started restoring " + task + " as an active task"
+        );
+        b.gate.open();
+        final Map<Integer, Long> changelogSizes = changelogSizes();
+        // The active task continues from where the warm-up task stopped, rather than restoring from the start.
+        assertEquals(restoredByWarmup, b.restoreStartingOffsetByTask.get(task),
+            "b should have continued restoring " + task + " from where its warm-up task stopped");
+        awaitRestoreEnd(b, task, 1);
+        assertEquals(changelogSizes.get(task) - restoredByWarmup, b.totalRestoredByTask.get(task),
+            "b should have restored only what its warm-up task " + task + " had not");
+        // The other task had no copy anywhere, so b restores all of it.
+        awaitRestoreEnd(b, otherTask, 1);
+        assertEquals(changelogSizes.get(otherTask), b.totalRestoredByTask.get(otherTask),
+            "b should have restored all of " + otherTask);
+    }
+
+    @Test
+    public void shouldNeverRunATaskTwiceWithMembersOfSeveralStreamThreads(final TestInfo testInfo) throws Exception {
+        setUp(testInfo, 4);
+        final Instance a = startOwnerOfAllTasks();
+
+        final Instance b = startInstance("b", RESTORE_BUDGET, 2);
+        // Each of b's two stream threads is a separate group member, and each is to take over one of a's tasks.
+        waitForGroup("each of b's threads to warm up one task", group -> isStable(group, 3)
+            && members(group, b).stream().allMatch(member -> partitions(member.assignment().warmupTasks()).size() == 1)
+            && warmupTasks(group, b).size() == 2
+            && activeTasks(group, a).size() == 4);
+
+        b.gate.open();
+        waitForGroup("b's threads to take over their tasks", group -> isStable(group, 3)
+            && members(group, b).stream().allMatch(member -> partitions(member.assignment().activeTasks()).size() == 1)
+            && activeTasks(group, a).size() == 2
+            && totalWarmupTasks(group) == 0);
+        final Set<Integer> tasksOfB = activeTasks(describeGroup(), b);
+        for (final int task : tasksOfB) {
+            awaitRestoreEnd(b, task, 1);
+            assertEquals(0L, b.totalRestoredByTask.get(task), "b should have taken over the warmed-up task " + task);
+        }
+
+        // The remaining thread takes over the removed thread's task. Its process ran the task, but the state lived
+        // in the removed thread's in-memory store, so the remaining thread restores it from scratch. Handing that
+        // state over between the threads of a process is KAFKA-21090.
+        final Map<Integer, String> storeHoldersBeforeRemoval = new HashMap<>(b.storeHolders);
+        final String removedThread = b.streams.removeStreamThread().orElseThrow();
+        final int movedTask = single(storeHoldersBeforeRemoval.entrySet().stream()
+            .filter(holder -> holder.getValue().equals(removedThread))
+            .map(Map.Entry::getKey)
+            .collect(Collectors.toSet()));
+        waitForGroup("b's remaining thread to take over both of b's tasks", group -> isStable(group, 2)
+            && members(group, b).size() == 1
+            && activeTasks(group, b).equals(tasksOfB));
+        awaitRestoreEnd(b, movedTask, 2);
+        assertEquals(changelogSizes().get(movedTask), b.totalRestoredByTask.get(movedTask),
+            "b's remaining thread should have restored all of " + movedTask);
+        assertNull(b.storeOpenedTwice.get(), "b should never have run a task on two threads at once");
+    }
+
     /**
      * Waits until the broker no longer takes any active task to be restoring. A client reports the changelog offsets of
      * an active task while it restores it, but only reports that the restore has finished with its next offset report,
@@ -384,15 +507,19 @@ public class StreamsGroupWarmupTaskLifecycleIntegrationTest {
     }
 
     private void setUp(final TestInfo testInfo, final int numPartitions) throws InterruptedException {
+        setUp(testInfo, numPartitions, "appId_" + System.currentTimeMillis() + "_" + safeUniqueTestName(testInfo));
+    }
+
+    private void setUp(final TestInfo testInfo, final int numPartitions, final String appId) throws InterruptedException {
         final String testId = safeUniqueTestName(testInfo);
         this.numPartitions = numPartitions;
-        appId = "appId_" + System.currentTimeMillis() + "_" + testId;
+        this.appId = appId;
         inputTopic = "input" + testId;
         storeName = "store" + testId;
         changelogTopic = appId + "-" + storeName + "-changelog";
 
-        CLUSTER.createTopic(inputTopic, numPartitions, 1);
-        CLUSTER.createTopic(changelogTopic, numPartitions, 1, Map.of(TopicConfig.CLEANUP_POLICY_CONFIG, TopicConfig.CLEANUP_POLICY_COMPACT));
+        CLUSTER.createTopic(inputTopic, numPartitions, NUM_BROKERS);
+        CLUSTER.createTopic(changelogTopic, numPartitions, NUM_BROKERS, Map.of(TopicConfig.CLEANUP_POLICY_CONFIG, TopicConfig.CLEANUP_POLICY_COMPACT));
         // Refinement steps only advance on heartbeats, so short heartbeats keep the tests fast.
         CLUSTER.setGroupHeartbeatInterval(appId, HEARTBEAT_INTERVAL_MS);
         // The shortest interval allowed, so that the broker learns quickly that a restore has finished (see
@@ -406,13 +533,17 @@ public class StreamsGroupWarmupTaskLifecycleIntegrationTest {
     }
 
     private Instance startInstance(final String name, final long restoreBudget) {
-        final Instance instance = new Instance(name, restoreBudget);
+        return startInstance(name, restoreBudget, 1);
+    }
+
+    private Instance startInstance(final String name, final long restoreBudget, final int numThreads) {
+        final Instance instance = new Instance(name, restoreBudget, numThreads);
         instances.add(instance);
         instance.streams.start();
         return instance;
     }
 
-    private Properties streamsProperties(final String name) {
+    private Properties streamsProperties(final String name, final int numThreads) {
         return mkObjectProperties(
             mkMap(
                 mkEntry(StreamsConfig.BOOTSTRAP_SERVERS_CONFIG, CLUSTER.bootstrapServers()),
@@ -421,7 +552,7 @@ public class StreamsGroupWarmupTaskLifecycleIntegrationTest {
                 mkEntry(StreamsConfig.STATE_DIR_CONFIG, TestUtils.tempDirectory().getPath()),
                 mkEntry(StreamsConfig.GROUP_PROTOCOL_CONFIG, GroupProtocol.STREAMS.name().toLowerCase(Locale.getDefault())),
                 mkEntry(StreamsConfig.COMMIT_INTERVAL_MS_CONFIG, 100L),
-                mkEntry(StreamsConfig.NUM_STREAM_THREADS_CONFIG, 1),
+                mkEntry(StreamsConfig.NUM_STREAM_THREADS_CONFIG, numThreads),
                 mkEntry(StreamsConfig.DEFAULT_KEY_SERDE_CLASS_CONFIG, Serdes.StringSerde.class.getName()),
                 mkEntry(StreamsConfig.DEFAULT_VALUE_SERDE_CLASS_CONFIG, Serdes.StringSerde.class.getName())
             )
@@ -469,6 +600,44 @@ public class StreamsGroupWarmupTaskLifecycleIntegrationTest {
             .collect(Collectors.toMap(entry -> entry.getKey().partition(), entry -> entry.getValue().offset()));
     }
 
+    /**
+     * An application ID whose group coordinator is on a broker that does not also run the cluster's controller, so
+     * that the coordinator can be failed over by restarting that broker without taking the metadata quorum down.
+     */
+    private String appIdWithCoordinatorOffTheControllers(final TestInfo testInfo) throws Exception {
+        // Looking the coordinator up creates the offsets topic if it does not exist yet.
+        TestUtils.waitForCondition(
+            () -> {
+                try {
+                    admin.describeStreamsGroups(List.of("coordinator-lookup")).all().get();
+                } catch (final ExecutionException expected) {
+                    // The group does not exist, which is fine: only the lookup of its coordinator matters.
+                }
+                return admin.listTopics(new ListTopicsOptions().listInternal(true)).names().get().contains(Topic.GROUP_METADATA_TOPIC_NAME);
+            },
+            WAIT_MS,
+            "the offsets topic was never created"
+        );
+        final List<TopicPartitionInfo> offsetsPartitions = admin.describeTopics(List.of(Topic.GROUP_METADATA_TOPIC_NAME))
+            .allTopicNames().get().get(Topic.GROUP_METADATA_TOPIC_NAME).partitions();
+        final Set<Integer> controllers = CLUSTER.controllerNodeIds();
+        final String base = "appId_" + System.currentTimeMillis() + "_" + safeUniqueTestName(testInfo);
+        for (int attempt = 0; attempt < 100; attempt++) {
+            final String candidate = base + "_" + attempt;
+            // Assumes the group coordinator's mapping of a group to its offsets partition
+            // (GroupCoordinatorService#partitionFor), and that the partition's current leader is the coordinator.
+            final int partitionId = Utils.abs(candidate.hashCode()) % offsetsPartitions.size();
+            final TopicPartitionInfo partition = offsetsPartitions.stream()
+                .filter(info -> info.partition() == partitionId)
+                .findFirst()
+                .orElseThrow();
+            if (partition.leader() != null && !controllers.contains(partition.leader().id())) {
+                return candidate;
+            }
+        }
+        throw new AssertionError("No application ID maps to a group coordinator off the controllers " + controllers);
+    }
+
     private StreamsGroupDescription describeGroup() throws InterruptedException {
         try {
             return admin.describeStreamsGroups(List.of(appId)).describedGroups().get(appId).get();
@@ -513,6 +682,9 @@ public class StreamsGroupWarmupTaskLifecycleIntegrationTest {
             .orElse(null);
     }
 
+    /**
+     * The members of the instance, one per stream thread.
+     */
     private List<StreamsGroupMemberDescription> members(final StreamsGroupDescription group, final Instance instance) {
         final String prefix = clientIdPrefix(instance.name) + "-";
         return group.members().stream()
@@ -574,23 +746,32 @@ public class StreamsGroupWarmupTaskLifecycleIntegrationTest {
         private final RestoreGate gate;
         // The total an active task's restore ended with, by task. A task's changelog partition is the task's partition.
         private final Map<Integer, Long> totalRestoredByTask = new ConcurrentHashMap<>();
+        // The offset the latest restore of an active task started from, by task.
+        private final Map<Integer, Long> restoreStartingOffsetByTask = new ConcurrentHashMap<>();
         // How many restores of an active task have ended, by task.
         private final Map<Integer, AtomicInteger> restoreEndsByTask = new ConcurrentHashMap<>();
         // Why a standby or warm-up task last stopped being updated, by task.
         private final Map<Integer, StandbyUpdateListener.SuspendReason> standbySuspensionsByTask = new ConcurrentHashMap<>();
+        // How often a standby or warm-up task started updating, by task.
+        private final Map<Integer, AtomicInteger> standbyUpdateStartsByTask = new ConcurrentHashMap<>();
 
-        private Instance(final String name, final long restoreBudget) {
+        // The stream thread holding each task's open store, by task.
+        private final Map<Integer, String> storeHolders = new ConcurrentHashMap<>();
+        private final AtomicReference<String> storeOpenedTwice = new AtomicReference<>();
+
+        private Instance(final String name, final long restoreBudget, final int numThreads) {
             this.name = name;
             this.gate = new RestoreGate(restoreBudget);
             final StreamsBuilder builder = new StreamsBuilder();
-            builder.table(inputTopic, Materialized.as(Stores.inMemoryKeyValueStore(storeName)));
-            this.streams = new KafkaStreams(builder.build(), streamsProperties(name), new GatedRestoreClientSupplier(gate));
+            builder.table(inputTopic, Materialized.as(new TrackingStoreSupplier(storeName, this)));
+            this.streams = new KafkaStreams(builder.build(), streamsProperties(name, numThreads), new GatedRestoreClientSupplier(gate));
             streams.setGlobalStateRestoreListener(new StateRestoreListener() {
                 @Override
                 public void onRestoreStart(final TopicPartition topicPartition,
                                            final String storeName,
                                            final long startingOffset,
                                            final long endingOffset) {
+                    restoreStartingOffsetByTask.put(topicPartition.partition(), startingOffset);
                 }
 
                 @Override
@@ -613,6 +794,7 @@ public class StreamsGroupWarmupTaskLifecycleIntegrationTest {
                 public void onUpdateStart(final TopicPartition topicPartition,
                                           final String storeName,
                                           final long startingOffset) {
+                    standbyUpdateStartsByTask.computeIfAbsent(topicPartition.partition(), __ -> new AtomicInteger()).incrementAndGet();
                 }
 
                 @Override
@@ -635,8 +817,76 @@ public class StreamsGroupWarmupTaskLifecycleIntegrationTest {
             });
         }
 
+        /**
+         * Records that the calling stream thread opened the task's store. A process must never hold a task twice, so
+         * the task's store must not be open already, on this thread or another.
+         */
+        private void storeOpened(final int task) {
+            final String thread = Thread.currentThread().getName();
+            final String holder = storeHolders.putIfAbsent(task, thread);
+            if (holder != null) {
+                storeOpenedTwice.compareAndSet(null, "task " + task + " was opened by " + thread + " while open on " + holder);
+            }
+        }
+
+        private void storeClosed(final int task) {
+            storeHolders.remove(task);
+        }
+
         private int restoreEnds(final int task) {
             return restoreEndsByTask.getOrDefault(task, new AtomicInteger()).get();
+        }
+
+        private int standbyUpdateStarts(final int task) {
+            return standbyUpdateStartsByTask.getOrDefault(task, new AtomicInteger()).get();
+        }
+    }
+
+    /**
+     * Supplies in-memory stores that report to their instance when a task's store is opened and closed, which happens
+     * in step with the task's lifecycle. A stream thread's published task metadata does not: the thread refreshes it
+     * only once all its active tasks are restored. A standby or warm-up task recycled into an active task keeps its
+     * store open.
+     */
+    private static final class TrackingStoreSupplier implements KeyValueBytesStoreSupplier {
+        private final String name;
+        private final Instance instance;
+
+        private TrackingStoreSupplier(final String name, final Instance instance) {
+            this.name = name;
+            this.instance = instance;
+        }
+
+        @Override
+        public String name() {
+            return name;
+        }
+
+        @Override
+        public KeyValueStore<Bytes, byte[]> get() {
+            return new InMemoryKeyValueStore(name) {
+                private int task = -1;
+
+                @Override
+                public void init(final StateStoreContext stateStoreContext, final StateStore root) {
+                    task = stateStoreContext.taskId().partition();
+                    instance.storeOpened(task);
+                    super.init(stateStoreContext, root);
+                }
+
+                @Override
+                public void close() {
+                    super.close();
+                    if (task != -1) {
+                        instance.storeClosed(task);
+                    }
+                }
+            };
+        }
+
+        @Override
+        public String metricsScope() {
+            return "in-memory";
         }
     }
 
