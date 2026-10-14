@@ -277,9 +277,10 @@ public class RecordAccumulatorTest {
         assertFalse(iter.hasNext(), "No more records");
     }
 
-    @Test
-    public void testAppendLargeCompressed() throws Exception {
-        testAppendLarge(BUFFER_MEMORY_ALLOCATION_STRATEGY_FULL, Compression.gzip().build());
+    @ParameterizedTest
+    @MethodSource("allocationStrategies")
+    public void testAppendLargeCompressed(String allocationStrategy) throws Exception {
+        testAppendLarge(allocationStrategy, Compression.gzip().build());
     }
 
     @ParameterizedTest
@@ -312,9 +313,10 @@ public class RecordAccumulatorTest {
         assertEquals(0L, record.timestamp());
     }
 
-    @Test
-    public void testAppendLargeOldMessageFormatCompressed() throws Exception {
-        testAppendLargeOldMessageFormat(BUFFER_MEMORY_ALLOCATION_STRATEGY_FULL, Compression.gzip().build());
+    @ParameterizedTest
+    @MethodSource("allocationStrategies")
+    public void testAppendLargeOldMessageFormatCompressed(String allocationStrategy) throws Exception {
+        testAppendLargeOldMessageFormat(allocationStrategy, Compression.gzip().build());
     }
 
     @ParameterizedTest
@@ -1038,10 +1040,11 @@ public class RecordAccumulatorTest {
         assertEquals(1, batches.size());
     }
 
-    @Test
-    public void testSplitAndReenqueue() throws ExecutionException, InterruptedException {
+    @ParameterizedTest
+    @MethodSource("allocationStrategies")
+    public void testSplitAndReenqueue(String allocationStrategy) throws ExecutionException, InterruptedException {
         long now = time.milliseconds();
-        RecordAccumulator accum = createTestRecordAccumulator(BUFFER_MEMORY_ALLOCATION_STRATEGY_FULL, 1024, 10 * 1024, Compression.gzip().build(), 10);
+        RecordAccumulator accum = createTestRecordAccumulator(allocationStrategy, 1024, 10 * 1024, Compression.gzip().build(), 10);
 
         // Create a big batch
         ByteBuffer buffer = ByteBuffer.allocate(4096);
@@ -1123,15 +1126,16 @@ public class RecordAccumulatorTest {
         assertFalse(hasRoomForSmall, "hasRoomFor() should return false for any record when buffer is full from oversized first record");
     }
 
-    @Test
-    public void testSplitBatchOffAccumulator() throws InterruptedException {
+    @ParameterizedTest
+    @MethodSource("allocationStrategies")
+    public void testSplitBatchOffAccumulator(String allocationStrategy) throws InterruptedException {
         long seed = System.currentTimeMillis();
         final int batchSize = 1024;
         final int bufferCapacity = 3 * 1024;
 
         // First set the compression ratio estimation to be good.
         CompressionRatioEstimator.setEstimation(tp1.topic(), CompressionType.GZIP, 0.1f);
-        RecordAccumulator accum = createTestRecordAccumulator(BUFFER_MEMORY_ALLOCATION_STRATEGY_FULL, batchSize, bufferCapacity, Compression.gzip().build(), 0);
+        RecordAccumulator accum = createTestRecordAccumulator(allocationStrategy, batchSize, bufferCapacity, Compression.gzip().build(), 0);
         int numSplitBatches = prepareSplitBatches(accum, seed, 100, 20);
         assertTrue(numSplitBatches > 0, "There should be some split batches");
         // Drain all the split batches.
@@ -1147,15 +1151,16 @@ public class RecordAccumulatorTest {
             "The split batches should be allocated off the accumulator");
     }
 
-    @Test
-    public void testSplitFrequency() throws InterruptedException {
+    @ParameterizedTest
+    @MethodSource("allocationStrategies")
+    public void testSplitFrequency(String allocationStrategy) throws InterruptedException {
         long seed = System.currentTimeMillis();
         Random random = new Random();
         random.setSeed(seed);
         final int batchSize = 1024;
         final int numMessages = 1000;
 
-        RecordAccumulator accum = createTestRecordAccumulator(BUFFER_MEMORY_ALLOCATION_STRATEGY_FULL, batchSize, 3 * 1024, Compression.gzip().build(), 10);
+        RecordAccumulator accum = createTestRecordAccumulator(allocationStrategy, batchSize, 3 * 1024, Compression.gzip().build(), 10);
         // Adjust the high and low compression ratio message percentage
         for (int goodCompRatioPercentage = 1; goodCompRatioPercentage < 100; goodCompRatioPercentage++) {
             int numSplit = 0;
@@ -1847,12 +1852,13 @@ public class RecordAccumulatorTest {
      * 3. No records are lost or duplicated during splitting
      * 4. The correct batch state is maintained throughout the process
      */
-    @Test
-    public void testSplitAndReenqueuePreventInfiniteRecursion() throws InterruptedException {
+    @ParameterizedTest
+    @MethodSource("allocationStrategies")
+    public void testSplitAndReenqueuePreventInfiniteRecursion(String allocationStrategy) throws InterruptedException {
         // Initialize test environment with a large batch size
         long now = time.milliseconds();
         int batchSize = 1024 * 1024; // 1MB batch size
-        RecordAccumulator accum = createTestRecordAccumulator(BUFFER_MEMORY_ALLOCATION_STRATEGY_FULL, batchSize,
+        RecordAccumulator accum = createTestRecordAccumulator(allocationStrategy, batchSize,
                 10 * batchSize, Compression.gzip().build(), 10);
 
         // Create a large producer batch manually (bypassing the accumulator's normal
