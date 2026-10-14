@@ -170,7 +170,7 @@ public final class RecordsIteratorTest {
     @ValueSource(ints = {1, Records.HEADER_SIZE_UP_TO_MAGIC - 1, Records.HEADER_SIZE_UP_TO_MAGIC})
     public void testFileRecordsSliceEndingInPartialBatch(int partialBatchBytes) throws IOException {
         TestBatch<String> firstBatch = new TestBatch<>(0, 1, 0, List.of("a", "b", "c", "d", "e"));
-        TestBatch<String> secondBatch = new TestBatch<>(5, 1, 0, List.of("a", "b", "c", "d", "e"));
+        TestBatch<String> secondBatch = new TestBatch<>(5, 1, 0, Collections.nCopies(10, "f"));
 
         try (FileRecords fileRecords = FileRecords.open(TestUtils.tempFile())) {
             fileRecords.append(buildRecords(CompressionType.NONE, List.of(firstBatch)));
@@ -193,6 +193,10 @@ public final class RecordsIteratorTest {
             }
 
             assertEquals(List.of(firstBatch), actualBatches);
+            // The slice ends before the second batch does, check the buffer is never grown for it
+            Mockito.verify(bufferSupplier, Mockito.never())
+                .get(Mockito.intThat(size -> size > firstBatchSize));
+            assertEquals(Set.of(), allocatedBuffers);
         }
     }
 

@@ -243,22 +243,20 @@ public class FileRecordsTest {
 
     @Test
     public void testReadIntoStopsAtEndOfSlice() throws IOException {
-        try (FileRecords fileRecords = createFileRecords(values)) {
-            List<RecordBatch> items = batches(fileRecords);
-            RecordBatch second = items.get(1);
-            // The slice holds only the second batch. The third batch should not be read into the buffer.
-            FileRecords slice = fileRecords.slice(items.get(0).sizeInBytes(), second.sizeInBytes());
-            ByteBuffer buffer = ByteBuffer.allocate(fileRecords.sizeInBytes());
+        List<RecordBatch> items = batches(fileRecords);
+        RecordBatch second = items.get(1);
+        // The slice holds only the second batch. The third batch should not be read into the buffer.
+        FileRecords slice = fileRecords.slice(items.get(0).sizeInBytes(), second.sizeInBytes());
+        ByteBuffer buffer = ByteBuffer.allocate(fileRecords.sizeInBytes());
 
-            slice.readInto(buffer, 0);
+        slice.readInto(buffer, 0);
 
-            assertEquals(second.sizeInBytes(), buffer.remaining());
-            assertEquals(
-                List.of(second.baseOffset()),
-                batches(MemoryRecords.readableRecords(buffer)).stream()
-                    .map(RecordBatch::baseOffset).collect(Collectors.toList())
-            );
-        }
+        assertEquals(second.sizeInBytes(), buffer.remaining());
+        assertEquals(
+            List.of(second.baseOffset()),
+            batches(MemoryRecords.readableRecords(buffer)).stream()
+                .map(RecordBatch::baseOffset).collect(Collectors.toList())
+        );
     }
 
     @ParameterizedTest
@@ -281,28 +279,24 @@ public class FileRecordsTest {
 
     @Test
     public void testReadIntoAtEndOfRecordsReadsNothing() throws IOException {
-        try (FileRecords fileRecords = createFileRecords(values)) {
-            List<RecordBatch> items = batches(fileRecords);
-            FileRecords slice = fileRecords.slice(items.get(0).sizeInBytes(), items.get(1).sizeInBytes());
-            ByteBuffer buffer = ByteBuffer.allocate(fileRecords.sizeInBytes());
+        List<RecordBatch> items = batches(fileRecords);
+        FileRecords slice = fileRecords.slice(items.get(0).sizeInBytes(), items.get(1).sizeInBytes());
+        ByteBuffer buffer = ByteBuffer.allocate(fileRecords.sizeInBytes());
 
-            slice.readInto(buffer, slice.sizeInBytes());
+        slice.readInto(buffer, slice.sizeInBytes());
 
-            assertEquals(0, buffer.remaining());
-        }
+        assertEquals(0, buffer.remaining());
     }
 
     @Test
-    public void testReadIntoWithPositionOutsideRecords() throws IOException {
-        try (FileRecords fileRecords = createFileRecords(values)) {
-            List<RecordBatch> items = batches(fileRecords);
-            FileRecords slice = fileRecords.slice(items.get(0).sizeInBytes(), items.get(1).sizeInBytes());
-            ByteBuffer buffer = ByteBuffer.allocate(fileRecords.sizeInBytes());
+    public void testReadIntoWithPositionOutsideRecords() {
+        List<RecordBatch> items = batches(fileRecords);
+        FileRecords slice = fileRecords.slice(items.get(0).sizeInBytes(), items.get(1).sizeInBytes());
+        ByteBuffer buffer = ByteBuffer.allocate(fileRecords.sizeInBytes());
 
-            // Both positions are inside the file but outside the slice
-            assertThrows(IllegalArgumentException.class, () -> slice.readInto(buffer, -1));
-            assertThrows(IllegalArgumentException.class, () -> slice.readInto(buffer, slice.sizeInBytes() + 1));
-        }
+        // Both positions are inside the file but outside the slice
+        assertThrows(IllegalArgumentException.class, () -> slice.readInto(buffer, -1));
+        assertThrows(IllegalArgumentException.class, () -> slice.readInto(buffer, slice.sizeInBytes() + 1));
     }
 
     /**

@@ -137,6 +137,9 @@ public final class RecordsIterator<T> implements Iterator<Batch<T>>, AutoCloseab
         MemoryRecords memoryRecords = readFileRecords(fileRecords, buffer);
 
         Integer firstBatchSize = memoryRecords.firstBatchSize();
+        // firstBatchSize is null when fewer than HEADER_SIZE_UP_TO_MAGIC bytes were read, which only
+        // happens at the end of the records. Once all records have been read, a trailing partial
+        // batch can't be completed, so return the records read so far instead of growing the buffer.
         if (firstBatchSize == null || firstBatchSize <= buffer.remaining() ||
             bytesRead >= fileRecords.sizeInBytes()
         ) {
@@ -148,7 +151,7 @@ public final class RecordsIterator<T> implements Iterator<Batch<T>>, AutoCloseab
                 firstBatchSize
             );
             // Not enough bytes read; create a bigger buffer
-            ByteBuffer newBuffer = bufferSupplier.get(memoryRecords.firstBatchSize());
+            ByteBuffer newBuffer = bufferSupplier.get(firstBatchSize);
             allocatedBuffer = Optional.of(newBuffer);
 
             newBuffer.put(buffer);
