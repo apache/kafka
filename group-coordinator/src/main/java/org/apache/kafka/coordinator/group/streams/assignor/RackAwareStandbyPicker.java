@@ -69,7 +69,7 @@ final class RackAwareStandbyPicker<P> {
     private QueuedProcess<P> foundByPick;
 
     /**
-     * @param tagKeys    The keys of {@code rack.aware.assignment.tags}.
+     * @param tagKeys    The keys of {@code rack.aware.assignment.tags}; not empty, since without them there is nothing to pick.
      * @param processes  All processes of the streams group; an earlier one wins a load tie.
      * @param clientTags The client tags of a process.
      * @param load       The load of a process.
@@ -82,6 +82,9 @@ final class RackAwareStandbyPicker<P> {
         final ToDoubleFunction<P> load,
         final Predicate<P> hasRoom
     ) {
+        if (tagKeys.isEmpty()) {
+            throw new IllegalArgumentException("Tag keys must not be empty");
+        }
         processLoad = load;
         processHasRoom = hasRoom;
         // One level per tag key, so this is also the number of tag keys.
@@ -99,8 +102,7 @@ final class RackAwareStandbyPicker<P> {
         }
         tagKeysInTreeOrder = tagKeysInTreeOrder(numValues);
 
-        // Without tag keys, the root is the only leaf.
-        root = new Node<>(-1, -1, treeHeight, treeHeight == 0);
+        root = new Node<>(-1, -1, treeHeight, false);
         leafByProcess = Utils.newHashMap(processes.size());
         // The children of each inner node by their value index, only needed to build the tree.
         final Map<Node<P>, Map<Integer, Node<P>>> childrenByValueIndex = new HashMap<>();
