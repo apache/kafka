@@ -110,6 +110,15 @@ public class RequestContext implements AuthorizableRequestContext {
         this.principalSerde = principalSerde;
     }
 
+    /**
+     * Parses the request body from the given buffer, which must be positioned at the start of the request body.
+     * An {@link ApiVersionsRequest} with an unsupported version is not parsed and is treated as a v0 request.
+     *
+     * @param buffer the buffer containing the request body
+     * @return the parsed request and its size
+     * @throws UnsupportedVersionException if the request api version is not supported, except for {@link ApiVersionsRequest}
+     * @throws InvalidRequestException if the request body cannot be parsed
+     */
     public RequestAndSize parseRequest(ByteBuffer buffer) {
         if (isUnsupportedApiVersionsRequest()) {
             // Unsupported ApiVersion requests are treated as v0 requests and are not parsed

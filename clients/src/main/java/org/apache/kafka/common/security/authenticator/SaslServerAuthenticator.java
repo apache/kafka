@@ -451,11 +451,6 @@ public class SaslServerAuthenticator implements Authenticator {
                 throw e;
             }
             short version = header.apiVersion();
-            if (!header.isApiVersionSupported()) {
-                // We cannot create an error response if the request version of SaslAuthenticate is not supported
-                // This should not normally occur since clients typically check supported versions using ApiVersionsRequest
-                throw new UnsupportedVersionException("Version " + version + " is not supported for apiKey " + apiKey);
-            }
             /*
              * The client sends multiple SASL_AUTHENTICATE requests, and the client is known
              * to support the required version if any one of them indicates it supports that
@@ -542,7 +537,7 @@ public class SaslServerAuthenticator implements Authenticator {
                     setSaslState(SaslState.AUTHENTICATE);
                 }
             }
-        } catch (InvalidRequestException e) {
+        } catch (InvalidRequestException | UnsupportedVersionException e) {
             if (saslState == SaslState.INITIAL_REQUEST) {
                 // InvalidRequestException is thrown if the request is not in Kafka format or if the API key is invalid.
                 // If it's the initial request, this could be an ancient client (see method documentation for more details),

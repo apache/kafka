@@ -138,16 +138,19 @@ public class RequestHeader implements AbstractRequestResponse {
     }
 
     /**
-     * Parses a request header from the given buffer. On return, the buffer is positioned at the start of the
-     * request body.
+     * Parses a request header from the given buffer. For a supported request API version, the buffer is positioned
+     * at the start of the request body on return.
      * <p>
      * If the request API version is not supported by this node, the corresponding header version may also be unknown.
      * In this case, the header is parsed using version 1, which contains only the fields common to all header versions:
      * API key, API version, correlation ID, and client ID. Any remaining header bytes, including tagged fields,
-     * are left unread.
-     * This allows the broker to return an error response for requests with unsupported versions, particularly
-     * {@link ApiVersionsRequest} from newer clients. The request body must not be parsed in this case because the buffer
-     * is not positioned at its start.
+     * are left unread. The returned header has {@link #isApiVersionSupported()} set to false, and the caller is
+     * expected to check it before parsing the rest of the bytes in the request, since the buffer is not positioned
+     * at the start of the request body.
+     * <p>
+     * This allows the broker to handle {@link ApiVersionsRequest} from newer clients, which uses a request version
+     * unknown to the broker. The broker responds with a v0 {@link ApiVersionsResponse} in that case, and the client
+     * falls back to parsing the response as v0 if it cannot parse it as the expected version.
      *
      * @param buffer the buffer containing the request header
      * @return the parsed request header
@@ -169,10 +172,9 @@ public class RequestHeader implements AbstractRequestResponse {
             if (!apiKey.hasValidVersion())
                 throw new InvalidRequestException("Unsupported api with key " + apiKeyId + " (" + apiKey.name + ") and version " + apiVersion);
 
-            short headerVersion = apiKey.requestHeaderVersion(apiVersion);
-            short parseHeaderVersion = apiKey.isVersionSupported(apiVersion) ? headerVersion : (short) 1;
+            short headerVersion = apiKey.isVersionSupported(apiVersion) ? apiKey.requestHeaderVersion(apiVersion) : (short) 1;
             buffer.position(bufferStartPositionForHeader);
-            final RequestHeaderData headerData = new RequestHeaderData(new ByteBufferAccessor(buffer), parseHeaderVersion);
+            final RequestHeaderData headerData = new RequestHeaderData(new ByteBufferAccessor(buffer), headerVersion);
             // Due to a quirk in the protocol, client ID is marked as nullable.
             // However, we treat a null client ID as equivalent to an empty client ID.
             if (headerData.clientId() == null) {

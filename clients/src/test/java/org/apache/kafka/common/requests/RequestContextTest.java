@@ -18,8 +18,6 @@ package org.apache.kafka.common.requests;
 
 import org.apache.kafka.common.errors.InvalidRequestException;
 import org.apache.kafka.common.errors.UnsupportedVersionException;
-import org.apache.kafka.common.message.ApiVersionsResponseData;
-import org.apache.kafka.common.message.ApiVersionsResponseData.ApiVersionCollection;
 import org.apache.kafka.common.message.CreateTopicsResponseData;
 import org.apache.kafka.common.message.ProduceRequestData;
 import org.apache.kafka.common.message.SaslAuthenticateRequestData;
@@ -98,10 +96,7 @@ public class RequestContextTest {
         ApiVersionsRequest request = (ApiVersionsRequest) requestAndSize.request;
         assertTrue(request.hasUnsupportedRequestVersion());
 
-        Send send = context.buildResponseSend(new ApiVersionsResponse(new ApiVersionsResponseData()
-            .setThrottleTimeMs(0)
-            .setErrorCode(Errors.UNSUPPORTED_VERSION.code())
-            .setApiKeys(new ApiVersionCollection())));
+        Send send = context.buildResponseSend(request.getErrorResponse(0, Errors.UNSUPPORTED_VERSION.exception()));
         ByteBufferChannel channel = new ByteBufferChannel(256);
         send.writeTo(channel);
 
@@ -116,7 +111,8 @@ public class RequestContextTest {
         ApiVersionsResponse response = (ApiVersionsResponse) AbstractResponse.parseResponse(ApiKeys.API_VERSIONS,
             new ByteBufferAccessor(responseBuffer), (short) 0);
         assertEquals(Errors.UNSUPPORTED_VERSION.code(), response.data().errorCode());
-        assertTrue(response.data().apiKeys().isEmpty());
+        assertEquals(ApiKeys.API_VERSIONS.latestVersion(),
+            response.data().apiKeys().find(ApiKeys.API_VERSIONS.id).maxVersion());
     }
 
     @Test

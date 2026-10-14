@@ -120,7 +120,7 @@ public class RequestHeaderTest {
         assertEquals(123, header.correlationId());
         assertEquals("client", header.clientId());
         assertFalse(header.isApiVersionSupported());
-        assertEquals(ApiKeys.API_VERSIONS.requestHeaderVersion(apiVersion), header.headerVersion());
+        assertEquals(1, header.headerVersion());
         // Only the common fields are consumed and the unknown bytes are left in the buffer.
         assertEquals(commonFieldsSize, header.size());
         assertEquals(commonFieldsSize, buffer.position());
@@ -139,6 +139,7 @@ public class RequestHeaderTest {
         ByteBuffer buffer = RequestTestUtils.serializeRequestHeaderPrefix(ApiKeys.API_VERSIONS, Short.MAX_VALUE, 123,
             null, new byte[0]);
         RequestHeader header = RequestHeader.parse(buffer);
+        // A null client ID is treated as equivalent to an empty client ID.
         assertEquals("", header.clientId());
         assertEquals(123, header.correlationId());
         assertFalse(header.isApiVersionSupported());
@@ -147,14 +148,20 @@ public class RequestHeaderTest {
 
     @Test
     public void testParseUnsupportedVersionOfOtherApi() {
+        byte[] unknownField = unknownHeaderField();
         ByteBuffer buffer = RequestTestUtils.serializeRequestHeaderPrefix(ApiKeys.FETCH, Short.MAX_VALUE, 5, "client",
-            unknownHeaderField());
+            unknownField);
+        int commonFieldsSize = buffer.remaining() - unknownField.length;
+
         RequestHeader header = RequestHeader.parse(buffer);
         assertEquals(ApiKeys.FETCH, header.apiKey());
         assertEquals(Short.MAX_VALUE, header.apiVersion());
         assertEquals(5, header.correlationId());
         assertEquals("client", header.clientId());
         assertFalse(header.isApiVersionSupported());
+        // Only the common fields are consumed and the unknown bytes are left in the buffer.
+        assertEquals(commonFieldsSize, buffer.position());
+        assertEquals(unknownField.length, buffer.remaining());
     }
 
     @Test
