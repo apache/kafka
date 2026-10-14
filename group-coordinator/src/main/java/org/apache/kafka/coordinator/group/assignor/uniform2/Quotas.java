@@ -44,7 +44,7 @@ final class Quotas {
     private final IndexedGroup group;
 
     /**
-     * Per topic, its minimum quota: the number of partitions that every subscriber gets.
+     * Per topic, the minimum number of partitions that every subscriber gets.
      */
     private final int[] minQuotas;
 
@@ -95,8 +95,7 @@ final class Quotas {
     }
 
     /**
-     * @return The minimum quota of the topic: the number of its partitions that every subscriber
-     *         gets.
+     * @return The minimum number of partitions of the topic that every subscriber gets.
      */
     int minQuota(int topic) {
         return minQuotas[topic];
@@ -141,7 +140,8 @@ final class Quotas {
     }
 
     /**
-     * Gives an extra partition of the topic to the member, which does not have one yet.
+     * Gives an extra partition of the topic to the member. The member must not already have an
+     * extra partition of the topic.
      *
      * @throws IllegalStateException If every extra partition of the topic is given already.
      */
@@ -155,8 +155,8 @@ final class Quotas {
     }
 
     /**
-     * Moves an extra partition of the topic from the giver, which has one, to the receiver,
-     * which does not.
+     * Moves an extra partition of the topic from the giver to the receiver. The giver must have an
+     * extra partition of the topic and the receiver must not already have one.
      *
      * @throws IndexOutOfBoundsException If the giver has no extra partition of the topic.
      */

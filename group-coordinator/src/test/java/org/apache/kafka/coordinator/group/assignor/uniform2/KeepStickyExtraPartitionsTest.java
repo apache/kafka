@@ -29,7 +29,7 @@ import static org.apache.kafka.coordinator.group.AssignmentTestUtil.mkTopicAssig
 import static org.junit.jupiter.api.Assertions.assertEquals;
 
 /**
- * Tests of {@link KeepStickyExtraPartitions}. The topic ids sort as T1 &lt; T2 &lt; T3.
+ * Tests of {@link KeepStickyExtraPartitions}.
  */
 public class KeepStickyExtraPartitionsTest {
     private static final Uuid T1 = new Uuid(1L, 1L);
@@ -37,27 +37,28 @@ public class KeepStickyExtraPartitionsTest {
     private static final Uuid T3 = new Uuid(3L, 1L);
 
     /**
-     * T1, 3 partitions over 3 members, has a minimum quota of 1 and no extra partition. T2, 5
-     * partitions, has a minimum quota of 1 and 2 extra partitions; A and C own 2 partitions of it,
-     * more than the minimum quota, so they keep them, and the assignment sizes are 3, 2 and 3.
+     * T1, 3 partitions over 3 members, has a minimum quota of 1 and no extra partition. T2, 8
+     * partitions, has a minimum quota of 2 and 2 extra partitions. A owns 3 partitions of T2 and C
+     * owns 4. Both own more than the minimum quota, so each keeps one extra partition, even C,
+     * which owns two partitions more than the minimum quota. The assignment sizes are 4, 3 and 4.
      */
     @Test
     public void testOwnersAboveTheMinQuotaKeepAnExtraPartition() {
         var spec = new GroupSpecFixture()
-            .withMember("A", Set.of(T1, T2), mkAssignment(mkTopicAssignment(T1, 0), mkTopicAssignment(T2, 0, 1)))
-            .withMember("B", Set.of(T1, T2), mkAssignment(mkTopicAssignment(T1, 1), mkTopicAssignment(T2, 2)))
-            .withMember("C", Set.of(T1, T2), mkAssignment(mkTopicAssignment(T1, 2), mkTopicAssignment(T2, 3, 4)))
+            .withMember("A", Set.of(T1, T2), mkAssignment(mkTopicAssignment(T1, 0), mkTopicAssignment(T2, 0, 1, 2)))
+            .withMember("B", Set.of(T1, T2), mkAssignment(mkTopicAssignment(T1, 1), mkTopicAssignment(T2, 3)))
+            .withMember("C", Set.of(T1, T2), mkAssignment(mkTopicAssignment(T1, 2), mkTopicAssignment(T2, 4, 5, 6, 7)))
             .build();
         var describer = new TopicsFixture()
             .withTopic(T1, 3)
-            .withTopic(T2, 5)
+            .withTopic(T2, 8)
             .build();
         var fixture = new QuotasFixture(spec, describer);
 
         new KeepStickyExtraPartitions(fixture.group, fixture.currentAssignment, fixture.quotas).run();
 
         assertEquals(Map.of(T2, List.of("A", "C")), fixture.membersWithExtraPartition());
-        assertEquals(List.of(3, 2, 3), fixture.assignmentSizes());
+        assertEquals(List.of(4, 3, 4), fixture.assignmentSizes());
     }
 
     /**

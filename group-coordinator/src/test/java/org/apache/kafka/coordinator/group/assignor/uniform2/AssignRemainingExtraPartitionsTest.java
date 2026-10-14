@@ -27,8 +27,7 @@ import java.util.Set;
 import static org.junit.jupiter.api.Assertions.assertEquals;
 
 /**
- * Tests of {@link AssignRemainingExtraPartitions}. The topic ids sort as T1 &lt; T2 &lt; T3 &lt;
- * T4, and the cohorts are numbered in the order of their first member.
+ * Tests of {@link AssignRemainingExtraPartitions}.
  */
 public class AssignRemainingExtraPartitionsTest {
     private static final Uuid T1 = new Uuid(1L, 1L);
@@ -42,9 +41,9 @@ public class AssignRemainingExtraPartitionsTest {
      * have none. The minimum quotas give assignment sizes of 2 to A, B and D, and 3 to C. T2 has
      * the fewest subscribers and goes first: its extra partition goes to A, the smaller of A and
      * C. Then the one of T1 goes to B, since A now has 3. The assignment sizes are within one of
-     * each other where the subscriptions allow it. Handing out T1 first would have given both
-     * extra partitions to A, the first cohort on ties: 4 partitions for A and 2 for B, which
-     * subscribes to T1.
+     * each other where the subscriptions allow it. Assigning T1 first would have given both extra
+     * partitions to A, the first cohort on ties: 4 partitions for A and 2 for B, which subscribes
+     * to T1.
      */
     @Test
     public void testTopicsWithTheFewestSubscribersGoFirst() {
@@ -74,7 +73,16 @@ public class AssignRemainingExtraPartitionsTest {
      */
     @Test
     public void testExtraPartitionGoesToTheCohortWithTheSmallestAssignment() {
-        var fixture = twoCohortGroup(2, 1);
+        var spec = new GroupSpecFixture()
+            .withMember("A", Set.of(T1, T2))
+            .withMember("B", Set.of(T1, T3))
+            .build();
+        var describer = new TopicsFixture()
+            .withTopic(T1, 3)
+            .withTopic(T2, 2)
+            .withTopic(T3, 1)
+            .build();
+        var fixture = new QuotasFixture(spec, describer);
 
         new AssignRemainingExtraPartitions(fixture.group, fixture.quotas).run();
 
@@ -83,12 +91,22 @@ public class AssignRemainingExtraPartitionsTest {
     }
 
     /**
-     * The same group, with 1 partition for T2 and T3: A and B have the same assignment size, and
-     * the extra partition of T1 goes to the first cohort, A's.
+     * A subscribes to T1 and T2, B to T1 and T3. T1, 3 partitions, has 1 extra partition. T2 and
+     * T3 have 1 partition each, so A and B have the same assignment size, and the extra partition
+     * of T1 goes to the first cohort, A's.
      */
     @Test
     public void testTiesGoToTheFirstCohort() {
-        var fixture = twoCohortGroup(1, 1);
+        var spec = new GroupSpecFixture()
+            .withMember("A", Set.of(T1, T2))
+            .withMember("B", Set.of(T1, T3))
+            .build();
+        var describer = new TopicsFixture()
+            .withTopic(T1, 3)
+            .withTopic(T2, 1)
+            .withTopic(T3, 1)
+            .build();
+        var fixture = new QuotasFixture(spec, describer);
 
         new AssignRemainingExtraPartitions(fixture.group, fixture.quotas).run();
 
@@ -202,11 +220,37 @@ public class AssignRemainingExtraPartitionsTest {
     }
 
     /**
-     * A and B subscribe to T1, of 3 partitions: a minimum quota of 1 and 1 extra partition, which
-     * A kept. Nothing is left to hand out, and the quotas do not change.
+     * A and B subscribe to T1 only, C and D to T1 and T2. T1, 7 partitions over the four, has a
+     * minimum quota of 1 and 3 extra partitions, and T2 gives C and D 2 more partitions each. A and
+     * B have the smaller assignments and get the first two extra partitions. Their cohort is then
+     * full, and the third goes to C.
      */
     @Test
-    public void testNothingToHandOut() {
+    public void testACohortThatFillsUpGetsNoMore() {
+        var spec = new GroupSpecFixture()
+            .withMember("A", Set.of(T1))
+            .withMember("B", Set.of(T1))
+            .withMember("C", Set.of(T1, T2))
+            .withMember("D", Set.of(T1, T2))
+            .build();
+        var describer = new TopicsFixture()
+            .withTopic(T1, 7)
+            .withTopic(T2, 4)
+            .build();
+        var fixture = new QuotasFixture(spec, describer);
+
+        new AssignRemainingExtraPartitions(fixture.group, fixture.quotas).run();
+
+        assertEquals(Map.of(T1, List.of("A", "B", "C")), fixture.membersWithExtraPartition());
+        assertEquals(List.of(2, 2, 4, 3), fixture.assignmentSizes());
+    }
+
+    /**
+     * A and B subscribe to T1, of 3 partitions: a minimum quota of 1 and 1 extra partition, which
+     * A kept. Nothing is left to assign, and the quotas do not change.
+     */
+    @Test
+    public void testNothingLeftToAssign() {
         var spec = new GroupSpecFixture()
             .withMember("A", Set.of(T1))
             .withMember("B", Set.of(T1))
@@ -221,21 +265,5 @@ public class AssignRemainingExtraPartitionsTest {
 
         assertEquals(Map.of(T1, List.of("A")), fixture.membersWithExtraPartition());
         assertEquals(List.of(2, 1), fixture.assignmentSizes());
-    }
-
-    /**
-     * A subscribes to T1 and T2, B to T1 and T3, with 3 partitions for T1.
-     */
-    private static QuotasFixture twoCohortGroup(int t2Partitions, int t3Partitions) {
-        var spec = new GroupSpecFixture()
-            .withMember("A", Set.of(T1, T2))
-            .withMember("B", Set.of(T1, T3))
-            .build();
-        var describer = new TopicsFixture()
-            .withTopic(T1, 3)
-            .withTopic(T2, t2Partitions)
-            .withTopic(T3, t3Partitions)
-            .build();
-        return new QuotasFixture(spec, describer);
     }
 }

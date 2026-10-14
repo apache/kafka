@@ -25,8 +25,8 @@ import java.util.Arrays;
  * The first step deciding the {@link Quotas}: every member owning more than the minimum quota of a
  * topic keeps one of its extra partitions, so that it only gives up what it owns beyond its quota.
  * When more owners qualify than the topic has extra partitions, the ones with the smallest
- * assignments keep them, the assignment sizes counting the extra partitions kept for the previous
- * topics, then the members in member order.
+ * assignment sizes keep them. The assignment sizes include the extra partitions kept for the topics
+ * so far. Ties are broken by member order.
  */
 final class KeepStickyExtraPartitions {
     /**
@@ -37,21 +37,21 @@ final class KeepStickyExtraPartitions {
     /**
      * The current assignment, which tells the owners of every topic.
      */
-    private final CurrentAssignment current;
+    private final CurrentAssignment currentAssignment;
 
     /**
-     * The quotas, which the step completes.
+     * The quotas, which the step updates.
      */
     private final Quotas quotas;
 
     /**
-     * @param group   The members and topics of the group.
-     * @param current The current assignment.
-     * @param quotas  The quotas, at the minimum quota.
+     * @param group             The members and topics of the group.
+     * @param currentAssignment The current assignment.
+     * @param quotas            The quotas, at the minimum quota.
      */
-    KeepStickyExtraPartitions(IndexedGroup group, CurrentAssignment current, Quotas quotas) {
+    KeepStickyExtraPartitions(IndexedGroup group, CurrentAssignment currentAssignment, Quotas quotas) {
         this.group = group;
-        this.current = current;
+        this.currentAssignment = currentAssignment;
         this.quotas = quotas;
     }
 
@@ -59,31 +59,34 @@ final class KeepStickyExtraPartitions {
      * Lets the owners of more than the minimum quota of every topic keep an extra partition.
      */
     void run() {
-        var counts = new int[group.memberCount()];
+        // Per member, the number of partitions of the topic that it owns.
+        var ownedPartitionCounts = new int[group.memberCount()];
+        // The owners of the topic.
         var owners = new IntList(16);
-        var candidates = new IntList(16);
+        // The owners above the minimum quota of the topic, which may keep an extra partition.
+        var ownersAboveMinQuota = new IntList(16);
         for (int topic = 0; topic < group.topicCount(); topic++) {
             int extraPartitions = quotas.extraPartitions(topic);
             if (extraPartitions == 0) {
                 continue;
             }
-            current.countOwned(topic, counts, owners);
-            candidates.clear();
+            currentAssignment.countOwned(topic, ownedPartitionCounts, owners);
+            ownersAboveMinQuota.clear();
             for (int i = 0; i < owners.size(); i++) {
                 int owner = owners.get(i);
-                if (counts[owner] > quotas.minQuota(topic)) {
-                    candidates.add(owner);
+                if (ownedPartitionCounts[owner] > quotas.minQuota(topic)) {
+                    ownersAboveMinQuota.add(owner);
                 }
                 // Reset for the next topic, as countOwned requires.
-                counts[owner] = 0;
+                ownedPartitionCounts[owner] = 0;
             }
             // More owners qualify than the topic has extra partitions, as after a join. They are
             // at most the subscribers of the topic, so the sort stays small.
-            if (candidates.size() > extraPartitions) {
-                sortBySize(candidates);
+            if (ownersAboveMinQuota.size() > extraPartitions) {
+                sortBySize(ownersAboveMinQuota);
             }
-            for (int i = 0; i < Math.min(candidates.size(), extraPartitions); i++) {
-                quotas.giveExtraPartition(candidates.get(i), topic);
+            for (int i = 0; i < Math.min(ownersAboveMinQuota.size(), extraPartitions); i++) {
+                quotas.giveExtraPartition(ownersAboveMinQuota.get(i), topic);
             }
         }
     }
@@ -93,13 +96,13 @@ final class KeepStickyExtraPartitions {
      */
     private void sortBySize(IntList members) {
         // Pairs of the assignment size and the member, which sort by assignment size, then member.
-        var keys = new long[members.size()];
-        for (int i = 0; i < keys.length; i++) {
-            keys[i] = IntPair.pack(quotas.assignmentSize(members.get(i)), members.get(i));
+        var assignmentSizesAndMembers = new long[members.size()];
+        for (int i = 0; i < assignmentSizesAndMembers.length; i++) {
+            assignmentSizesAndMembers[i] = IntPair.pack(quotas.assignmentSize(members.get(i)), members.get(i));
         }
-        Arrays.sort(keys);
-        for (int i = 0; i < keys.length; i++) {
-            members.set(i, IntPair.low(keys[i]));
+        Arrays.sort(assignmentSizesAndMembers);
+        for (int i = 0; i < assignmentSizesAndMembers.length; i++) {
+            members.set(i, IntPair.low(assignmentSizesAndMembers[i]));
         }
     }
 }

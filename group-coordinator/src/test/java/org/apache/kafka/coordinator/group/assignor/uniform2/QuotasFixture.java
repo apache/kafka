@@ -79,7 +79,8 @@ final class QuotasFixture {
     }
 
     /**
-     * Gives the member an extra partition of every topic, which it must not have yet.
+     * Gives the member an extra partition of each of the topics. It must not have an extra
+     * partition of any of them yet.
      */
     void addExtras(String memberId, Uuid... topicIds) {
         for (Uuid topicId : topicIds) {
@@ -91,8 +92,8 @@ final class QuotasFixture {
     }
 
     /**
-     * @return Per topic of which some members have an extra partition, these members, in member
-     *         id order.
+     * @return Per topic, the members which have an extra partition of it, in member order. The
+     *         topics where no member has an extra partition are left out.
      */
     Map<Uuid, List<String>> membersWithExtraPartition() {
         var result = new HashMap<Uuid, List<String>>();

@@ -32,10 +32,6 @@ import static org.junit.jupiter.api.Assertions.assertThrows;
 
 /**
  * Tests of {@link Quotas}.
- *
- * <p>The member ids sort as A &lt; B &lt; C, so that A is member 0, B is member 1 and C is member
- * 2, and the topic ids as T1 &lt; T2 &lt; T3, so that T1 is topic 0, T2 is topic 1 and T3 is
- * topic 2 when all of them are subscribed.
  */
 public class QuotasTest {
     private static final Uuid T1 = new Uuid(1L, 1L);
@@ -77,13 +73,11 @@ public class QuotasTest {
     }
 
     /**
-     * A and B subscribe to T1, of 3 partitions, and T2, of 2: T1 has 1 extra partition, which A
-     * gets, and T2 none. Neither a second extra partition of T1 nor one of T2 can be given, and an
-     * extra partition of T1 cannot move from B, which has none: A keeps its only extra partition,
-     * and the assignment sizes are 3 and 2.
+     * A and B subscribe to T1, of 3 partitions, and T2, of 2. T1 has 1 extra partition, which A
+     * gets, and T2 has none. A second extra partition of T1 cannot be given, nor one of T2.
      */
     @Test
-    public void testExtraPartitionsBeyondThoseOfTheTopicAreRejected() {
+    public void testGiveExtraPartition() {
         var spec = new GroupSpecFixture()
             .withMember("A", Set.of(T1, T2))
             .withMember("B", Set.of(T1, T2))
@@ -96,20 +90,19 @@ public class QuotasTest {
         var quotas = new Quotas(group);
         int t1 = group.topicIndex(T1);
         int t2 = group.topicIndex(T2);
+
         quotas.giveExtraPartition(A, t1);
 
         assertThrows(IllegalStateException.class, () -> quotas.giveExtraPartition(B, t1));
         assertThrows(IllegalStateException.class, () -> quotas.giveExtraPartition(A, t2));
-        assertThrows(IndexOutOfBoundsException.class, () -> quotas.moveExtraPartition(B, t1, A));
-
-        assertEquals(List.of(List.of(A), List.of()), membersWithExtraPartition(group, quotas));
-        assertEquals(List.of(1, 0), values(group.memberCount(), quotas::extraPartitionCount));
         assertEquals(List.of(3, 2), values(group.memberCount(), quotas::assignmentSize));
+        assertEquals(List.of(1, 0), values(group.memberCount(), quotas::extraPartitionCount));
+        assertEquals(List.of(List.of(A), List.of()), membersWithExtraPartition(group, quotas));
     }
 
     /**
-     * A and B subscribe to T1, of 3 partitions: a minimum quota of 1 and 1 extra partition, A's.
-     * Moving it to B gives B the extra partition and the larger assignment size.
+     * A and B subscribe to T1, of 3 partitions, which has 1 extra partition, A's. B has none to
+     * give. Moving the extra partition from A to B gives B the larger assignment size.
      */
     @Test
     public void testMoveExtraPartition() {
@@ -125,11 +118,12 @@ public class QuotasTest {
         int t1 = group.topicIndex(T1);
         quotas.giveExtraPartition(A, t1);
 
+        assertThrows(IndexOutOfBoundsException.class, () -> quotas.moveExtraPartition(B, t1, A));
         quotas.moveExtraPartition(A, t1, B);
 
-        assertEquals(List.of(List.of(B)), membersWithExtraPartition(group, quotas));
-        assertEquals(List.of(0, 1), values(group.memberCount(), quotas::extraPartitionCount));
         assertEquals(List.of(1, 2), values(group.memberCount(), quotas::assignmentSize));
+        assertEquals(List.of(0, 1), values(group.memberCount(), quotas::extraPartitionCount));
+        assertEquals(List.of(List.of(B)), membersWithExtraPartition(group, quotas));
     }
 
     /**
