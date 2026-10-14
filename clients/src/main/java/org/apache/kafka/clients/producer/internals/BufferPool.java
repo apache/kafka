@@ -261,7 +261,7 @@ public class BufferPool {
      * tracked as bytes against {@link #nonPooledAvailableMemory} plus chunks polled from {@link #free}.
      * Any failure refunds the whole reservation and signals the next waiter before the exception
      * propagates, so a failed request leaves nothing reserved. Callers that must not block or fail use
-     * {@link #tryAllocateChunks} instead.
+     * {@link #tryAllocateChunks} or {@link #tryAllocateChunksUpTo} instead.
      * <p>
      * Used by the incremental buffer.memory allocation strategy; the poolable size is the chunk size.
      *
@@ -362,7 +362,8 @@ public class BufferPool {
      * away, and {@code null} otherwise, without reserving anything, joining {@link #waiters} or recording a
      * wait time. It never waits, so it ignores the thread's interrupt status and leaves it untouched. Also
      * returns {@code null} once the pool is closed: the producer closes the pool before it drains or aborts the
-     * last batches, and closing those batches can still need to grow their streams.
+     * last batches, and closing those batches can still need to grow their streams. A stream growing
+     * mid-write, which can take a partial grant, uses {@link #tryAllocateChunksUpTo} instead.
      *
      * @param totalSize minimum total bytes of capacity required across the returned chunks
      * @return list of {@code ceil(totalSize / poolableSize())} {@code ByteBuffer}s, each of capacity
@@ -391,6 +392,43 @@ public class BufferPool {
             }
         }
         return materializeChunks(pooled, numChunks, chunkSize, memoryRequired);
+    }
+
+    /**
+     * Best-effort variant of {@link #tryAllocateChunks} for a chunked stream growing mid-write: returns as many
+     * of the {@code ceil(totalSize / poolableSize())} chunks as are available right now, possibly none, and the
+     * caller covers the rest from the heap. A request larger than the pool is clamped to the pool's size rather
+     * than rejected. Never waits; returns an empty list, never {@code null}, when nothing is free or the pool
+     * is closed.
+     *
+     * @throws IllegalArgumentException if {@code totalSize <= 0}
+     */
+    public List<ByteBuffer> tryAllocateChunksUpTo(int totalSize) {
+        if (allocationMode != AllocationMode.INCREMENTAL)
+            throw new IllegalStateException("allocateChunks() and tryAllocateChunks() are not supported in "
+                + allocationMode + " allocation mode; use allocate()");
+        if (totalSize <= 0)
+            throw new IllegalArgumentException("totalSize must be positive: " + totalSize);
+        int chunkSize = poolableSize();
+        int numChunks = (int) Math.min(((long) totalSize + chunkSize - 1L) / chunkSize, totalMemory / chunkSize);
+        List<ByteBuffer> pooled = new ArrayList<>();
+        int granted;
+
+        lock.lock();
+        try {
+            if (this.closed)
+                return List.of();
+            granted = reserveChunksUpTo(numChunks, chunkSize, pooled);
+        } finally {
+            try {
+                signalNextWaiterIfMemoryAvailable();
+            } finally {
+                lock.unlock();
+            }
+        }
+        if (granted == 0)
+            return List.of();
+        return materializeChunks(pooled, granted, chunkSize, (long) granted * chunkSize);
     }
 
     /**
@@ -431,6 +469,22 @@ public class BufferPool {
             this.nonPooledAvailableMemory -= remainingBytes;
         }
         return pooled;
+    }
+
+    /**
+     * Reserves as many of {@code maxChunks} chunks as are available right now, possibly none: free-list chunks
+     * into {@code pooled} first, the rest as whole chunks against {@link #nonPooledAvailableMemory}.
+     * Must be called with {@link #lock} held.
+     *
+     * @return the number of chunks reserved
+     */
+    private int reserveChunksUpTo(int maxChunks, int chunkSize, List<ByteBuffer> pooled) {
+        long availableChunks = free.size() + this.nonPooledAvailableMemory / chunkSize;
+        int granted = (int) Math.min(maxChunks, availableChunks);
+        while (pooled.size() < granted && !free.isEmpty())
+            pooled.add(free.pollFirst());
+        this.nonPooledAvailableMemory -= (long) (granted - pooled.size()) * chunkSize;
+        return granted;
     }
 
     /**

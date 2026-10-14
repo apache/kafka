@@ -26,6 +26,7 @@ import java.nio.ByteBuffer;
 import java.util.Arrays;
 import java.util.Collections;
 import java.util.List;
+import java.util.concurrent.atomic.AtomicInteger;
 
 import static org.junit.jupiter.api.Assertions.assertArrayEquals;
 import static org.junit.jupiter.api.Assertions.assertDoesNotThrow;
@@ -313,14 +314,21 @@ public class ChunkedByteBufferOutputStreamTest {
 
     /**
      * A write that runs past the attached chunks grows the stream by pulling more chunks from the
-     * pool (no heap fallback while the pool has room). The extra chunks return to the pool on
-     * deallocate.
+     * pool (no heap fallback while the pool has room), all of them in a single best-effort pool call
+     * rather than one call per chunk. The extra chunks return to the pool on deallocate.
      */
     @Test
     public void testWriteGrowsFromPoolBeyondInitialChunks() throws Exception {
         int chunkSize = 8;
         long total = 64; // room for 8 chunks
-        BufferPool p = pool(total, chunkSize);
+        AtomicInteger poolCalls = new AtomicInteger();
+        BufferPool p = new BufferPool(total, chunkSize, metrics, time, "test", BufferPool.AllocationMode.INCREMENTAL) {
+            @Override
+            public List<ByteBuffer> tryAllocateChunksUpTo(int totalSize) {
+                poolCalls.incrementAndGet();
+                return super.tryAllocateChunksUpTo(totalSize);
+            }
+        };
         try (ChunkedByteBufferOutputStream stream = new ChunkedByteBufferOutputStream(chunks(p, chunkSize, 1), chunkSize, p, true)) {
             // Start with 1 chunk but write 3 chunks' worth: the stream must attach 2 more from the pool.
             byte[] payload = new byte[3 * chunkSize];
@@ -329,6 +337,7 @@ public class ChunkedByteBufferOutputStreamTest {
 
             assertEquals(0, stream.fallbackAllocations(), "growth should come from the pool, not the heap");
             assertEquals(total - 3L * chunkSize, p.availableMemory(), "two extra chunks pulled from the pool");
+            assertEquals(1, poolCalls.get(), "both extra chunks should come from a single pool call");
 
             stream.close();
             ByteBuffer flat = stream.buffer();
@@ -340,6 +349,44 @@ public class ChunkedByteBufferOutputStreamTest {
             stream.deallocate();
         }
         assertEquals(total, p.availableMemory(), "pool fully restored after deallocate");
+    }
+
+    /**
+     * When the pool has only part of what a write needs, growth takes what the pool has and covers only the
+     * rest from the heap. The pool holds 3 chunks: 1 goes to the stream up front and the test holds 1, so of
+     * the 3 more chunks a 4-chunk write needs, 1 comes from the pool and 2 from the heap.
+     */
+    @Test
+    public void testGrowthTakesWhatThePoolHasThenHeap() throws Exception {
+        int chunkSize = 8;
+        long total = 3L * chunkSize;
+        BufferPool p = pool(total, chunkSize);
+        byte[] payload = new byte[4 * chunkSize];
+        for (int i = 0; i < payload.length; i++) payload[i] = (byte) i;
+        ByteBuffer held;
+        try (ChunkedByteBufferOutputStream stream = new ChunkedByteBufferOutputStream(chunks(p, chunkSize, 1), chunkSize, p, true)) {
+            held = p.allocateChunks(chunkSize, 100).get(0);
+            assertEquals(chunkSize, p.availableMemory(), "one chunk left in the pool");
+
+            stream.write(payload, 0, payload.length);
+
+            assertEquals(0, p.availableMemory(), "the pool's last chunk should be taken");
+            assertEquals(2, stream.fallbackAllocations(), "only the chunks the pool was short of come from the heap");
+            assertEquals(4 * chunkSize, stream.attachedCapacity());
+
+            stream.close();
+            ByteBuffer flat = stream.buffer();
+            flat.flip();
+            byte[] out = new byte[flat.remaining()];
+            flat.get(out);
+            assertArrayEquals(payload, out);
+
+            stream.deallocate();
+        }
+        assertEquals(total - chunkSize, p.availableMemory(),
+            "the stream's two pool chunks should be returned, but not its two heap chunks");
+        p.deallocate(held);
+        assertEquals(total, p.availableMemory());
     }
 
     /**
@@ -502,8 +549,10 @@ public class ChunkedByteBufferOutputStreamTest {
             assertEquals(0, stream.fallbackAllocations(), "a non-growable stream must never fall back to the heap");
             assertEquals(total - chunkSize, p.availableMemory(), "a non-growable stream must not allocate from the pool");
             assertEquals(chunkSize, stream.attachedCapacity(), "no chunk should have been attached");
+            assertEquals(0, stream.position(), "the refused write should be rejected before writing any byte");
 
-            // The single-byte write path is guarded too.
+            // The single-byte write path is guarded too, once the attached chunk is full.
+            stream.write(new byte[chunkSize], 0, chunkSize);
             assertThrows(IllegalStateException.class, () -> stream.write(1));
             assertEquals(chunkSize, stream.attachedCapacity());
 
