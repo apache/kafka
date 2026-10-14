@@ -52,8 +52,9 @@ final class IndexedGroup {
      * order. The cohorts with the same hash are compared exactly, so members are never assigned to
      * the wrong cohort.
      *
-     * <p>A subscription is only iterated, so it may be a {@code TopicIds}. The topics that do not
-     * exist are dropped from it.
+     * <p>A subscription may be a {@code TopicIds}, whose {@code size()} also counts the topic names
+     * that do not resolve, so the builder only uses the topics it iterates, never {@code size()}.
+     * Subscribed topics that do not exist are ignored.
      *
      * <p>A builder builds a single group: a second call to {@link #build()} throws.
      */
@@ -108,7 +109,8 @@ final class IndexedGroup {
         private final List<int[]> subscriptions = new ArrayList<>();
 
         /**
-         * Per hash of a subscription, the cohorts whose subscription has that hash, usually one.
+         * Per hash of a subscription, the cohorts whose subscription has that hash. There is
+         * usually only one cohort per hash.
          */
         private final Map<Long, IntList> cohortsByHash = new HashMap<>();
 
