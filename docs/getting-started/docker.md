@@ -150,6 +150,13 @@ When using environment variables, you need to set all properties required to sta
 - The Docker image `configure` script will log a warning if `KAFKA_OPTS` does not contain the `java.security.auth.login.config` property when SASL listeners are detected.
 - For more details on SASL mechanisms and configuration, refer to the [Kafka SASL authentication documentation](https://kafka.apache.org/documentation/#security_sasl).
 
+### Dynamic controller quorum
+
+- By default the image formats storage for static voters (`KAFKA_CONTROLLER_QUORUM_VOTERS`).
+- For a dynamic quorum (KIP-853), set `KAFKA_CONTROLLER_QUORUM_BOOTSTRAP_SERVERS` instead and pass the format option of each controller in `STORAGE_FORMAT_ARGS`: `--standalone` on the first controller, `--no-initial-controllers` on the others (they join as observers and are added with `kafka-metadata-quorum.sh add-controller`).
+- `STORAGE_FORMAT_ARGS` is appended to the image's `kafka-storage format` command, so any of its options can be passed.
+- Each controller must advertise its controller listener, e.g. `KAFKA_ADVERTISED_LISTENERS=CONTROLLER://controller-1:9093`. On a controller, `KAFKA_ADVERTISED_LISTENERS` may only list listeners from `KAFKA_CONTROLLER_LISTENER_NAMES`.
+
 ### Running in SSL mode
 
 - The recommended way to run in SSL mode is by mounting secrets on `/etc/kafka/secrets` in the Docker container and providing the following configs through environment variables: `KAFKA_SSL_KEYSTORE_FILENAME`, `KAFKA_SSL_KEYSTORE_CREDENTIALS`, `KAFKA_SSL_KEY_CREDENTIALS`, `KAFKA_SSL_TRUSTSTORE_FILENAME` and `KAFKA_SSL_TRUSTSTORE_CREDENTIALS`. This lets the Docker image scripts extract passwords and populate the correct paths in `server.properties`.
