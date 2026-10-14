@@ -2582,6 +2582,31 @@ public class AssignmentRefinerTest {
     }
 
     @Test
+    public void shouldGrantATaskAtOnceToATargetOwnerThatCannotBeWarmedUpAndAlreadyHoldsAStandby() {
+        // memberB holds a standby task of the task, which would be borrowed to warm the migration for a target owner
+        // that reports its progress. memberB never does, so the standby would never be seen to catch up and the
+        // migration would stay staged forever. The task is granted instead, and the client recycles the standby.
+        final Map<String, StreamsGroupMember> members = Map.of(
+            "memberA", member("memberA", "processA", mkTasksTuple(TaskRole.ACTIVE, mkTasks(STATEFUL, 0))),
+            "memberB", member("memberB", "processB", mkTasksTuple(TaskRole.STANDBY, mkTasks(STATEFUL, 0)))
+        );
+        final Map<String, TasksTuple> targetAssignment = Map.of(
+            "memberA", TasksTuple.EMPTY,
+            "memberB", mkTasksTuple(TaskRole.ACTIVE, mkTasks(STATEFUL, 0))
+        );
+
+        assertEquals(Set.of(STATEFUL_0), plan(members, targetAssignment, Map.of(), 1).borrowedMigrations());
+
+        final Map<String, Integer> heartbeatVersions = heartbeatVersions(members, Map.of("memberB", 0));
+        final AssignmentRefinerImpl.TaskDecisions decisions =
+            analyze(members, targetAssignment, Map.of(), heartbeatVersions);
+
+        assertEquals(List.of(new AssignmentRefinerImpl.TaskGrant(STATEFUL_0, "memberB")), decisions.grantedTasks());
+        assertEquals(List.of(), decisions.stagedMigrations());
+        assertEquals(targetAssignment, assemble(members, targetAssignment, Map.of(), heartbeatVersions, 1));
+    }
+
+    @Test
     public void shouldNotDetourThroughACaughtUpCopyWhenTheTargetOwnerCannotBeWarmedUp() {
         // memberC holds a caught-up standby task, which would be promoted for a target owner that can be warmed up. For
         // memberB it would only postpone the same cold grant and add a second hand-over.
