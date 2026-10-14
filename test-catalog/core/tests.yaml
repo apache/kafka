@@ -1372,8 +1372,6 @@ kafka.server.DynamicBrokerConfigTest:
 - testConfigUpdateWithSomeInvalidConfigs
 - testConnectionQuota
 - testConnectionRateQuota
-- testDynamicClusterMirrorConfigReconfigurableConfigs
-- testDynamicClusterMirrorConfigValidation
 - testDynamicGroupCoordinatorConfig
 - testDynamicListenerConfig
 - testDynamicLogConfigCordonedLogDirs
