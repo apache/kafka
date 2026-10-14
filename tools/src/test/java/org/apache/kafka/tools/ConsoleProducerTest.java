@@ -388,6 +388,59 @@ public class ConsoleProducerTest {
         assertEquals(16384, producerConfig.getInt(ProducerConfig.BATCH_SIZE_CONFIG));
     }
 
+    @Test
+    public void testDefaultCompressionType() throws IOException {
+        ConsoleProducerOptions opts = new ConsoleProducerOptions(BOOTSTRAP_SERVER_VALID_ARGS);
+        ProducerConfig producerConfig = new ProducerConfig(opts.producerProps());
+
+        assertEquals("none", producerConfig.getString(ProducerConfig.COMPRESSION_TYPE_CONFIG));
+    }
+
+    @Test
+    public void testCompressionTypeFromCommandProperty() throws IOException {
+        String[] args = new String[]{
+            "--bootstrap-server", "localhost:9092",
+            "--topic", "test",
+            "--command-property", "compression.type=zstd"
+        };
+
+        ConsoleProducerOptions opts = new ConsoleProducerOptions(args);
+        ProducerConfig producerConfig = new ProducerConfig(opts.producerProps());
+
+        assertEquals("zstd", producerConfig.getString(ProducerConfig.COMPRESSION_TYPE_CONFIG));
+    }
+
+    @Test
+    public void testCompressionTypeFromCommandConfig() throws IOException {
+        File propsFile = ToolsTestUtils.tempPropertiesFile(Map.of("compression.type", "lz4"));
+
+        String[] args = new String[]{
+            "--bootstrap-server", "localhost:9092",
+            "--topic", "test",
+            "--command-config", propsFile.getAbsolutePath()
+        };
+
+        ConsoleProducerOptions opts = new ConsoleProducerOptions(args);
+        ProducerConfig producerConfig = new ProducerConfig(opts.producerProps());
+
+        assertEquals("lz4", producerConfig.getString(ProducerConfig.COMPRESSION_TYPE_CONFIG));
+    }
+
+    @Test
+    public void testCompressionCodecOverridesCommandProperty() throws IOException {
+        String[] args = new String[]{
+            "--bootstrap-server", "localhost:9092",
+            "--topic", "test",
+            "--command-property", "compression.type=zstd",
+            "--compression-codec", "lz4"
+        };
+
+        ConsoleProducerOptions opts = new ConsoleProducerOptions(args);
+        ProducerConfig producerConfig = new ProducerConfig(opts.producerProps());
+
+        assertEquals("lz4", producerConfig.getString(ProducerConfig.COMPRESSION_TYPE_CONFIG));
+    }
+
     public static class TestRecordReader implements RecordReader {
         private int configureCount = 0;
         private int closeCount = 0;
