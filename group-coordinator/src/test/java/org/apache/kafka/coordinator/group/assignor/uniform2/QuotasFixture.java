@@ -54,7 +54,7 @@ final class QuotasFixture {
      * @param describer The describer of the topics.
      */
     QuotasFixture(GroupSpec groupSpec, SubscribedTopicDescriber describer) {
-        group = new IndexedGroup(groupSpec, describer);
+        group = new IndexedGroup.Builder(groupSpec, describer).build();
         currentAssignment = new CurrentAssignment(groupSpec, group);
         quotas = new Quotas(group);
     }

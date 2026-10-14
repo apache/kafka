@@ -60,7 +60,7 @@ public class QuotasTest {
             .withTopic(T2, 7)
             .withTopic(T3, 2)
             .build();
-        var group = new IndexedGroup(spec, describer);
+        var group = new IndexedGroup.Builder(spec, describer).build();
 
         var quotas = new Quotas(group);
 
@@ -86,7 +86,7 @@ public class QuotasTest {
             .withTopic(T1, 3)
             .withTopic(T2, 2)
             .build();
-        var group = new IndexedGroup(spec, describer);
+        var group = new IndexedGroup.Builder(spec, describer).build();
         var quotas = new Quotas(group);
         int t1 = group.topicIndex(T1);
         int t2 = group.topicIndex(T2);
@@ -113,7 +113,7 @@ public class QuotasTest {
         var describer = new TopicsFixture()
             .withTopic(T1, 3)
             .build();
-        var group = new IndexedGroup(spec, describer);
+        var group = new IndexedGroup.Builder(spec, describer).build();
         var quotas = new Quotas(group);
         int t1 = group.topicIndex(T1);
         quotas.giveExtraPartition(A, t1);
