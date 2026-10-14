@@ -244,7 +244,7 @@ public class RackAwareStandbyPickerTest {
         final Set<String> holders,
         final String context
     ) {
-        picker.startPick();
+        picker.clearCache();
         for (final String tagKey : tagKeys) {
             assertEquals(scanHasUnusedValue(clientTags, holders, tagKey), picker.hasUnusedValue(key(tagKey)), context);
         }
@@ -264,7 +264,7 @@ public class RackAwareStandbyPickerTest {
                 );
             }
             final String expected = scanLeastLoadedMeeting(clientTags, holders, conditions);
-            final QueuedProcess<String> found = picker.processMeeting(keys(conditions));
+            final QueuedProcess<String> found = picker.anyProcessMeeting(keys(conditions));
             assertEquals(expected != null, found != null, conditionsContext);
             if (found != null) {
                 assertTrue(
