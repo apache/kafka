@@ -62,6 +62,12 @@ class ConfigHelperTest {
     config
   }
 
+  private def staticBrokerConfig(staticConfigs: (String, String)*): KafkaConfig = {
+    val staticProps = TestUtils.createBrokerConfig(0)
+    staticConfigs.foreach { case (k, v) => staticProps.put(k, v) }
+    KafkaConfig.fromProps(staticProps)
+  }
+
   private def describeTopic(config: KafkaConfig, topicConfigs: (String, String)*): Map[String, DescribeConfigsResourceResult] = {
     val repository = new MockConfigRepository()
     topicConfigs.foreach { case (k, v) => repository.setTopicConfig(topic, k, v) }
@@ -90,7 +96,8 @@ class ConfigHelperTest {
   @Test
   def testDescribeTopicConfigsWithDefaultBrokerConfig(): Unit = {
     val configs = describeTopic(defaultBrokerConfig())
-    assertConfig(configs, "retention.ms", "604800000", ConfigSource.DEFAULT_CONFIG)
+    assertConfig(configs, "retention.ms", "604800000", ConfigSource.DEFAULT_CONFIG,
+      ("log.retention.hours", "168", ConfigSource.DEFAULT_CONFIG))
     assertConfig(configs, "segment.bytes", "1073741824", ConfigSource.DEFAULT_CONFIG,
       ("log.segment.bytes", "1073741824", ConfigSource.DEFAULT_CONFIG))
     assertConfig(configs, "min.insync.replicas", "1", ConfigSource.DEFAULT_CONFIG,
@@ -137,6 +144,36 @@ class ConfigHelperTest {
     assertConfig(configs, "unclean.leader.election.enable", "true", ConfigSource.TOPIC_CONFIG,
       ("unclean.leader.election.enable", "true", ConfigSource.TOPIC_CONFIG),
       ("unclean.leader.election.enable", "false", ConfigSource.DEFAULT_CONFIG))
+  }
+
+  @Test
+  def testDescribeTopicConfigsKeepsSynonymsWhenHighestPrioritySynonymIsUnset(): Unit = {
+    val configs = describeTopic(staticBrokerConfig(
+      "log.retention.minutes" -> "30",
+      "log.roll.hours" -> "2"))
+    assertConfig(configs, "retention.ms", "1800000", ConfigSource.STATIC_BROKER_CONFIG,
+      ("log.retention.minutes", "30", ConfigSource.STATIC_BROKER_CONFIG),
+      ("log.retention.hours", "168", ConfigSource.DEFAULT_CONFIG))
+    assertConfig(configs, "segment.ms", "7200000", ConfigSource.STATIC_BROKER_CONFIG,
+      ("log.roll.hours", "2", ConfigSource.STATIC_BROKER_CONFIG),
+      ("log.roll.hours", "168", ConfigSource.DEFAULT_CONFIG))
+  }
+
+  @Test
+  def testDescribeTopicConfigsFirstSynonymMatchesConfigSource(): Unit = {
+    val brokerConfigs = Seq(
+      defaultBrokerConfig(),
+      layeredBrokerConfig(),
+      staticBrokerConfig("log.retention.minutes" -> "30", "log.roll.hours" -> "2"))
+    brokerConfigs.foreach { brokerConfig =>
+      Seq(describeTopic(brokerConfig), describeTopic(brokerConfig, "retention.ms" -> "100")).foreach { configs =>
+        configs.values.foreach { config =>
+          val expectedSource = config.synonyms.asScala.headOption.map(_.source)
+            .getOrElse(ConfigSource.DEFAULT_CONFIG.id)
+          assertEquals(expectedSource, config.configSource, s"source of ${config.name}")
+        }
+      }
+    }
   }
 
   @Test
