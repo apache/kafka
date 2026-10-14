@@ -1539,6 +1539,7 @@ kafka.server.KafkaApisTest:
 - testDescribeConfigsClientMetrics
 - testDescribeConfigsConsumerGroup
 - testDescribeConfigsTopicIncludesInternalConfigSetOnTopic
+- testDescribeConfigsTopicIncludesInternalListConfigSetOnTopic
 - testDescribeConfigsWithAuthorizer
 - testDescribeProducers
 - testDescribeQuorumForwardedForKRaftClusters

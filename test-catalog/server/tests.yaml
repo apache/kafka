@@ -177,6 +177,8 @@ org.apache.kafka.server.ClientMetricsManagerTest:
 - testGetTelemetrySubscriptionAfterPushTelemetryUnknownCompressionSucceeds
 - testGetTelemetrySubscriptionAfterPushTelemetryUnknownSubscriptionSucceeds
 - testGetTelemetryUpdateSubscription
+- testGetTelemetryV1RejectsReservedClientInstanceId
+- testGetTelemetryV1UsesClientInstanceIdFromRequestHeader
 - testGetTelemetryWithoutSubscription
 - testPushTelemetry
 - testPushTelemetryAfterPushIntervalTime
@@ -194,6 +196,8 @@ org.apache.kafka.server.ClientMetricsManagerTest:
 - testPushTelemetryTerminatingFlag
 - testPushTelemetryTerminatingFlagNotSetOnValidationFailure
 - testPushTelemetryThrottleError
+- testPushTelemetryV1RejectsReservedClientInstanceId
+- testPushTelemetryV1UsesClientInstanceIdFromRequestHeader
 - testRemoveConnection
 - testRemoveConnectionUnknownConnectionId
 - testUpdateSubscription

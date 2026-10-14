@@ -103,6 +103,7 @@ org.apache.kafka.clients.admin.DescribeAuthorizedOperationsTest:
 - testTopicAuthorizedOperations
 org.apache.kafka.clients.admin.DescribeConfigsTest:
 - testDescribeConfigsNonexistent
+- testDescribeConfigsTopicWithInternalListConfig
 org.apache.kafka.clients.admin.DescribeFeaturesTest:
 - testApiVersions
 - testDescribeKRaftVersion

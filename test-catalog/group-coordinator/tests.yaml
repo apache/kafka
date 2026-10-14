@@ -1179,6 +1179,7 @@ org.apache.kafka.coordinator.group.assignor.uniform2.IndexedGroupTest:
 - testHeterogeneousGroup
 - testHomogeneousGroup
 - testMembersAreNumberedInMemberIdOrder
+- testSecondBuildThrows
 - testSingleMember
 - testTopicsAreNumberedInTopicIdOrder
 - testTopicsThatAreNotSubscribedAreIgnored
