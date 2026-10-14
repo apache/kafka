@@ -16,6 +16,9 @@
  */
 package org.apache.kafka.coordinator.group.streams.assignor;
 
+import org.apache.kafka.coordinator.group.streams.assignor.RackAwareStandbyPicker.QueuedProcess;
+import org.apache.kafka.coordinator.group.streams.assignor.RackAwareStandbyPicker.TagKey;
+
 import org.junit.jupiter.api.Test;
 
 import java.util.ArrayList;
@@ -23,21 +26,21 @@ import java.util.HashMap;
 import java.util.HashSet;
 import java.util.List;
 import java.util.Map;
+import java.util.Random;
 import java.util.Set;
 import java.util.TreeMap;
 
 import static org.junit.jupiter.api.Assertions.assertEquals;
+import static org.junit.jupiter.api.Assertions.assertTrue;
 
 public class RackAwareStandbyPickerTest {
 
     private final Map<String, Double> loads = new HashMap<>();
     private final Set<String> processesWithoutRoom = new HashSet<>();
-    private Set<String> processes;
-    private IdenticalTagGroups<String> identicalTagGroups;
-    private TagTree<String> tagTree;
+    private List<String> processes;
     private RackAwareStandbyPicker<String> picker;
     // The conditions of the last pick by candidates().
-    private List<TagTree.TagKey> conditions;
+    private List<TagKey> conditions;
 
     @Test
     public void shouldOnlyPickEligibleProcessesWithNewValueForPriorityKey() {
@@ -135,38 +138,69 @@ public class RackAwareStandbyPickerTest {
         assertEquals(Set.of("C"), candidates());
         assertEquals(List.of("zone"), conditionNames());
 
-        // The previous task gave up cluster and left C as the only candidate. The picker of this one starts from cluster
+        // The previous task gave up cluster and left C as the only candidate. The picks of this one start from cluster
         // again, over every process and with no value used.
-        picker = new RackAwareStandbyPicker<>(tagTree, List.of(identicalTagGroups.tagGroupOf("C")));
+        picker.startTask(List.of("C"));
         assertEquals(Set.of("B", "D"), candidates());
         assertEquals(List.of("cluster", "zone"), conditionNames());
     }
 
+    @Test
+    public void shouldMatchAScanOverAllProcesses() {
+        // Random trees and holders, with loads that only grow and room that only shrinks between picks. Every query is
+        // checked against a scan over all processes in their order.
+        final Random random = new Random(42);
+        for (int round = 0; round < 300; round++) {
+            final List<String> tagKeys = new ArrayList<>();
+            for (int keyIndex = 0, numKeys = 1 + random.nextInt(3); keyIndex < numKeys; keyIndex++) {
+                tagKeys.add("key" + keyIndex);
+            }
+            final Map<String, Map<String, String>> clientTags = randomProcesses(random, tagKeys);
+            picker(tagKeys, clientTags);
+
+            for (int task = 0; task < 3; task++) {
+                final Set<String> holders = new HashSet<>();
+                for (int holder = 0, numHolders = 1 + random.nextInt(2); holder < numHolders; holder++) {
+                    holders.add(processes.get(random.nextInt(processes.size())));
+                }
+                picker.startTask(holders);
+
+                for (int pick = 0; pick < 3; pick++) {
+                    assertPickMatchesScan(tagKeys, clientTags, holders, "round " + round + ", task " + task + ", pick " + pick);
+
+                    // Before the next pick, a load grows and sometimes a process runs out of room.
+                    loads.merge(processes.get(random.nextInt(processes.size())), 1.0 + random.nextInt(2), Double::sum);
+                    if (random.nextInt(3) == 0) {
+                        processesWithoutRoom.add(processes.get(random.nextInt(processes.size())));
+                    }
+                }
+            }
+        }
+    }
+
     private void picker(final List<String> tagKeys, final Map<String, Map<String, String>> clientTags) {
         final Map<String, Map<String, String>> clientTagsByProcess = new TreeMap<>(clientTags);
-        processes = clientTagsByProcess.keySet();
-        identicalTagGroups = new IdenticalTagGroups<>(
+        processes = new ArrayList<>(clientTagsByProcess.keySet());
+        picker = new RackAwareStandbyPicker<>(
             tagKeys,
             processes,
             clientTagsByProcess::get,
             process -> loads.getOrDefault(process, 0.0),
             process -> !processesWithoutRoom.contains(process)
         );
-        tagTree = new TagTree<>(tagKeys, identicalTagGroups.tagGroups());
-        picker = new RackAwareStandbyPicker<>(tagTree, List.of());
     }
 
     private void hold(final String process) {
-        picker.markUsed(identicalTagGroups.tagGroupOf(process));
+        picker.markUsed(process);
     }
 
-    /** The processes of the candidate tag groups of a new pick, empty when nothing is picked. */
+    /** The candidate processes of a new pick, empty when nothing is picked. */
     private Set<String> candidates() {
         conditions = picker.pick();
         final Set<String> candidates = new HashSet<>();
         if (!conditions.isEmpty()) {
             for (final String process : processes) {
-                if (picker.isCandidate(identicalTagGroups.tagGroupOf(process), conditions)) {
+                if (picker.isCandidate(process, conditions)) {
                     candidates.add(process);
                 }
             }
@@ -177,9 +211,143 @@ public class RackAwareStandbyPickerTest {
     /** The names of the tag keys in the conditions of the last pick by candidates(). */
     private List<String> conditionNames() {
         final List<String> names = new ArrayList<>();
-        for (final TagTree.TagKey tagKey : conditions) {
+        for (final TagKey tagKey : conditions) {
             names.add(tagKey.toString());
         }
         return names;
+    }
+
+    /** The client tags of up to 12 processes with random loads, each key taking one of three values or none. */
+    private Map<String, Map<String, String>> randomProcesses(final Random random, final List<String> tagKeys) {
+        loads.clear();
+        processesWithoutRoom.clear();
+        final Map<String, Map<String, String>> clientTags = new TreeMap<>();
+        for (int processIndex = 0, numProcesses = 1 + random.nextInt(12); processIndex < numProcesses; processIndex++) {
+            final String process = String.format("p%02d", processIndex);
+            final Map<String, String> tags = new HashMap<>();
+            for (final String tagKey : tagKeys) {
+                final int value = random.nextInt(4);
+                if (value < 3) {
+                    tags.put(tagKey, tagKey + "-v" + value);
+                }
+            }
+            clientTags.put(process, tags);
+            loads.put(process, (double) random.nextInt(4));
+        }
+        return clientTags;
+    }
+
+    /** Checks every query of a new pick, for every set of conditions, against a scan over all processes. */
+    private void assertPickMatchesScan(
+        final List<String> tagKeys,
+        final Map<String, Map<String, String>> clientTags,
+        final Set<String> holders,
+        final String context
+    ) {
+        picker.startPick();
+        for (final String tagKey : tagKeys) {
+            assertEquals(scanHasUnusedValue(clientTags, holders, tagKey), picker.hasUnusedValue(key(tagKey)), context);
+        }
+        for (int subset = 0; subset < 1 << tagKeys.size(); subset++) {
+            final List<String> conditions = new ArrayList<>();
+            for (int keyIndex = 0; keyIndex < tagKeys.size(); keyIndex++) {
+                if ((subset & 1 << keyIndex) != 0) {
+                    conditions.add(tagKeys.get(keyIndex));
+                }
+            }
+            final String conditionsContext = context + ", conditions " + conditions;
+            for (final String process : processes) {
+                assertEquals(
+                    scanMeets(clientTags, holders, process, conditions),
+                    picker.meets(process, keys(conditions)),
+                    conditionsContext + ", process " + process
+                );
+            }
+            final String expected = scanLeastLoadedMeeting(clientTags, holders, conditions);
+            final QueuedProcess<String> found = picker.processMeeting(keys(conditions));
+            assertEquals(expected != null, found != null, conditionsContext);
+            if (found != null) {
+                assertTrue(
+                    !processesWithoutRoom.contains(found.process) && scanMeets(clientTags, holders, found.process, conditions),
+                    conditionsContext
+                );
+                assertEquals(expected, picker.leastLoadedProcessMeeting(keys(conditions), found).process, conditionsContext);
+            }
+        }
+    }
+
+    private TagKey key(final String name) {
+        for (final TagKey tagKey : picker.tagKeys()) {
+            if (tagKey.toString().equals(name)) {
+                return tagKey;
+            }
+        }
+        throw new IllegalArgumentException("No tag key " + name);
+    }
+
+    private List<TagKey> keys(final List<String> names) {
+        final List<TagKey> keys = new ArrayList<>();
+        for (final String name : names) {
+            keys.add(key(name));
+        }
+        return keys;
+    }
+
+    private static boolean scanHasUnusedValue(
+        final Map<String, Map<String, String>> clientTags,
+        final Set<String> holders,
+        final String tagKey
+    ) {
+        for (final Map<String, String> tags : clientTags.values()) {
+            final String value = tags.get(tagKey);
+            if (value != null && !heldValue(clientTags, holders, tagKey, value)) {
+                return true;
+            }
+        }
+        return false;
+    }
+
+    private static boolean scanMeets(
+        final Map<String, Map<String, String>> clientTags,
+        final Set<String> holders,
+        final String process,
+        final List<String> conditions
+    ) {
+        for (final String tagKey : conditions) {
+            final String value = clientTags.get(process).get(tagKey);
+            if (value == null || heldValue(clientTags, holders, tagKey, value)) {
+                return false;
+            }
+        }
+        return true;
+    }
+
+    private static boolean heldValue(
+        final Map<String, Map<String, String>> clientTags,
+        final Set<String> holders,
+        final String tagKey,
+        final String value
+    ) {
+        for (final String holder : holders) {
+            if (value.equals(clientTags.get(holder).get(tagKey))) {
+                return true;
+            }
+        }
+        return false;
+    }
+
+    private String scanLeastLoadedMeeting(
+        final Map<String, Map<String, String>> clientTags,
+        final Set<String> holders,
+        final List<String> conditions
+    ) {
+        String leastLoaded = null;
+        for (final String process : processes) {
+            if (!processesWithoutRoom.contains(process) && scanMeets(clientTags, holders, process, conditions)
+                && (leastLoaded == null || loads.get(process) < loads.get(leastLoaded))) {
+                leastLoaded = process;
+            }
+        }
+        return leastLoaded;
     }
 }
