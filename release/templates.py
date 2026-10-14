@@ -76,6 +76,12 @@ Do you have all of these setup?"""
 def release_announcement_email(release_version, contributors):
     contributors_str = ", ".join(contributors)
     num_contributors = len(contributors)
+    # The downloads page on kafka-site is Hugo-generated and strips dots from version numbers when
+    # deriving heading anchors (e.g. "4.2.2" -> "#422"), so the anchor here must match that format.
+    # Link to the real page directly rather than the https://kafka.apache.org/downloads shortcut,
+    # since that shortcut is a client-side meta-refresh (not an HTTP redirect) and does not carry
+    # the URL fragment over to the page it points to.
+    downloads_anchor = release_version.replace(".", "")
     return f"""
 To: announce@apache.org, dev@kafka.apache.org, users@kafka.apache.org, kafka-clients@googlegroups.com
 Subject: [ANNOUNCE] Apache Kafka {release_version}
@@ -92,7 +98,7 @@ An overview of the release can be found in our announcement blog post:
 https://kafka.apache.org/blog
 
 You can download the source and binary release (Scala <VERSIONS>) from:
-https://kafka.apache.org/downloads#{release_version}
+https://kafka.apache.org/community/downloads/#{downloads_anchor}
 
 ---------------------------------------------------------------------------------------------------
 
@@ -175,12 +181,8 @@ Some suggested steps:
  * Validate GPG signatures on at least one file:
       wget https://dist.apache.org/repos/dist/dev/kafka/{rc_tag}/kafka-{release_version}-src.tgz &&
       wget https://dist.apache.org/repos/dist/dev/kafka/{rc_tag}/kafka-{release_version}-src.tgz.asc &&
-      wget https://dist.apache.org/repos/dist/dev/kafka/{rc_tag}/kafka-{release_version}-src.tgz.md5 &&
-      wget https://dist.apache.org/repos/dist/dev/kafka/{rc_tag}/kafka-{release_version}-src.tgz.sha1 &&
       wget https://dist.apache.org/repos/dist/dev/kafka/{rc_tag}/kafka-{release_version}-src.tgz.sha512 &&
       gpg --verify kafka-{release_version}-src.tgz.asc kafka-{release_version}-src.tgz &&
-      gpg --print-md md5 kafka-{release_version}-src.tgz | diff - kafka-{release_version}-src.tgz.md5 &&
-      gpg --print-md sha1 kafka-{release_version}-src.tgz | diff - kafka-{release_version}-src.tgz.sha1 &&
       gpg --print-md sha512 kafka-{release_version}-src.tgz | diff - kafka-{release_version}-src.tgz.sha512 &&
       rm kafka-{release_version}-src.tgz* &&
       echo "OK" || echo "Failed"

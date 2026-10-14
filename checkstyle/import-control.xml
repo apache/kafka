@@ -457,6 +457,7 @@
     <allow pkg="org.apache.kafka" />
     <allow pkg="org.bouncycastle" />
     <allow pkg="org.rocksdb" />
+    <allow class="org.apache.logging.log4j.Level" />
   </subpackage>
 
   <subpackage name="raft">
