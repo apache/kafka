@@ -37,7 +37,8 @@ import static org.apache.kafka.coordinator.group.streams.assignor.TaskAssignorTe
  * processes, the distribution of each stateful task's replicas over the client tags, and task movement since the
  * assignment before the change. What only one assignor aims for is graded by the
  * {@link TaskAssignorTestbed.AssignmentGrader} its fuzz test registers. Nothing here is asserted; the {@link Summary}
- * over a run is printed so two assignors, or two versions of one, can be compared on the same scenarios.
+ * over a run is printed so two assignors, or two versions of one, can be compared on the same scenarios, and a fuzz
+ * test can bound its averages.
  */
 final class AssignmentMetrics {
 
@@ -50,7 +51,8 @@ final class AssignmentMetrics {
         "all replicas on one tag value",
         "process load (max-min)",
         "standby load per process (max-min)",
-        "standby tasks moved"
+        "standby tasks moved",
+        "assignment time"
     );
 
     /** The {@link TaskAssignorTestbed.AssignmentGrader} the testbed runs for every assignor. */
@@ -178,12 +180,14 @@ final class AssignmentMetrics {
 
     /**
      * Rows of the convergence loop: {@code rounds} is the number of assignments that changed something before the
-     * output reproduced itself, empty when the cap was reached without that.
+     * output reproduced itself, empty when the cap was reached without that. The time is that of the loop's first
+     * assignment, the one the coordinator runs; the first scenarios of a run include JIT warm-up.
      */
-    static Map<String, OptionalDouble> convergenceRows(final int rounds, final boolean converged) {
+    static Map<String, OptionalDouble> convergenceRows(final int rounds, final boolean converged, final long firstAssignmentNanos) {
         final Map<String, OptionalDouble> rows = new LinkedHashMap<>();
         rows.put("rounds to converge", converged ? OptionalDouble.of(rounds) : OptionalDouble.empty());
         rows.put("not converged", OptionalDouble.of(converged ? 0 : 1));
+        rows.put("assignment time (ms)", OptionalDouble.of(firstAssignmentNanos / 1_000_000.0));
         return rows;
     }
 
@@ -472,6 +476,15 @@ final class AssignmentMetrics {
             });
         }
 
+        /** The average of the row over the rebalances that graded it, NaN when none did. */
+        double average(final String name) {
+            final Stat stat = rows.get(name);
+            if (stat == null) {
+                throw new IllegalArgumentException("No row " + name + " in " + title);
+            }
+            return stat.average();
+        }
+
         @Override
         public String toString() {
             int width = "metric".length();
@@ -497,6 +510,10 @@ final class AssignmentMetrics {
             sum += value;
             min = Math.min(min, value);
             max = Math.max(max, value);
+        }
+
+        double average() {
+            return count == 0 ? Double.NaN : sum / count;
         }
 
         @Override

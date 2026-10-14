@@ -20,6 +20,7 @@ import org.apache.kafka.coordinator.group.api.streams.assignor.GroupAssignment;
 import org.apache.kafka.coordinator.group.api.streams.assignor.MemberAssignment;
 import org.apache.kafka.coordinator.group.streams.assignor.TaskAssignorTestbed.Profile;
 import org.apache.kafka.coordinator.group.streams.assignor.TaskAssignorTestbed.Scenario;
+import org.apache.kafka.coordinator.group.streams.assignor.TaskAssignorTestbed.Summaries;
 
 import org.junit.jupiter.api.Test;
 
@@ -37,7 +38,9 @@ import static org.junit.jupiter.api.Assertions.assertTrue;
 /**
  * Runs {@link StickyTaskAssignor} through the {@link TaskAssignorTestbed} with the check and metrics specific to it.
  * The check: no member exceeds the stateful or total active task quota. The metrics: of the tasks that could have
- * stayed on their previous owner, the fraction that did, which is what the sticky assignor promises.
+ * stayed on their previous owner, the fraction that did, which is what the sticky assignor promises. The tests bound
+ * the average of stateful active tasks kept on member over fixed scenarios and only print the other rows;
+ * {@link #main} runs the seeds set in the environment and only prints.
  */
 public class StickyTaskAssignorFuzzTest {
 
@@ -47,14 +50,30 @@ public class StickyTaskAssignorFuzzTest {
         List.of(StickyTaskAssignorFuzzTest::stickiness)
     );
 
+    /** Runs both profiles and prints the summaries, to compare assignors or versions by hand. */
+    public static void main(final String[] args) {
+        final TaskAssignorTestbed testbed = new StickyTaskAssignorFuzzTest().testbed;
+        testbed.runFromEnvironment(Profile.SMALL);
+        testbed.runFromEnvironment(Profile.LARGE);
+    }
+
+    // The bounds sit a little outside the averages the assignor reaches on the fixed scenarios, so that a quality
+    // regression fails the test.
     @Test
-    public void shouldConvergeToValidAssignmentsForSmallGroupsUnderRandomChanges() {
-        testbed.run(Profile.SMALL);
+    public void shouldProduceValidAndStickyAssignmentsForSmallGroupsUnderRandomChanges() {
+        final Summaries summaries = testbed.run(Profile.SMALL);
+        assertAverageAtLeast(summaries.fromPrevious(), "stateful active tasks kept on member (1.0 = all)", 0.95);
     }
 
     @Test
-    public void shouldConvergeToValidAssignmentsForLargeGroupsUnderRandomChanges() {
-        testbed.run(Profile.LARGE);
+    public void shouldProduceValidAndStickyAssignmentsForLargeGroupsUnderRandomChanges() {
+        final Summaries summaries = testbed.run(Profile.LARGE);
+        assertAverageAtLeast(summaries.fromPrevious(), "stateful active tasks kept on member (1.0 = all)", 0.98);
+    }
+
+    private static void assertAverageAtLeast(final AssignmentMetrics.Summary summary, final String row, final double bound) {
+        final double average = summary.average(row);
+        assertTrue(average >= bound, row + " averaged " + average + ", below the bound of " + bound);
     }
 
     /**

@@ -45,11 +45,11 @@ import java.util.TreeSet;
  * scenario has client tags, the same input is also assigned with {@code rackAwareAssignmentTags} empty, and the
  * tag-related rows of that tag-blind result are reported next to the real ones.
  * <p>
- * Runs are deterministic: all scenarios derive from {@link #DEFAULT_BASE_SEED}. Set
- * {@code STREAMS_ASSIGNOR_FUZZ_BASE_SEED=<seed>} to run a different set of scenarios, or
- * {@code STREAMS_ASSIGNOR_FUZZ_SEED=<seed>} to replay the single scenario named by a failure. From an IDE the
- * system properties {@code streams.assignor.fuzz.base.seed} and {@code streams.assignor.fuzz.seed} work as well;
- * Gradle does not forward {@code -D} to the test JVM.
+ * Runs are deterministic: {@link #run} derives all scenarios from {@link #DEFAULT_BASE_SEED}, so a test can assert
+ * fixed bounds on the summaries. {@link #runFromEnvironment}, for a fuzz test's {@code main}, prints the summaries
+ * only: set {@code STREAMS_ASSIGNOR_FUZZ_BASE_SEED=<seed>} to run a different set of scenarios, or
+ * {@code STREAMS_ASSIGNOR_FUZZ_SEED=<seed>} to replay the single scenario named by a failure. The system properties
+ * {@code streams.assignor.fuzz.base.seed} and {@code streams.assignor.fuzz.seed} work as well.
  */
 final class TaskAssignorTestbed {
 
@@ -245,22 +245,36 @@ final class TaskAssignorTestbed {
         this.graders = List.copyOf(allGraders);
     }
 
+    /** The two summaries of a run: the initial assignment of each group, and the rebalances after the random changes. */
+    record Summaries(AssignmentMetrics.Summary fromEmpty, AssignmentMetrics.Summary fromPrevious) {
+    }
+
     /**
-     * Runs all scenarios of the profile and prints two summaries: the initial assignment of each group, computed from
-     * an empty assignment, and the rebalances after the random changes, computed from the previous assignment.
+     * Runs all scenarios of the profile from {@link #DEFAULT_BASE_SEED} and prints two summaries: the initial
+     * assignment of each group, computed from an empty assignment, and the rebalances after the random changes,
+     * computed from the previous assignment.
      */
-    void run(final Profile profile) {
+    Summaries run(final Profile profile) {
+        return run(profile, baseSeed(DEFAULT_BASE_SEED, profile), profile.scenarios());
+    }
+
+    /** Like {@link #run(Profile)}, but from the seeds set in the environment, see the class javadoc. */
+    void runFromEnvironment(final Profile profile) {
         final Long fixedSeed = readSeed(SEED_PROPERTY, SEED_ENVIRONMENT_VARIABLE);
         final Long fixedBaseSeed = readSeed(BASE_SEED_PROPERTY, BASE_SEED_ENVIRONMENT_VARIABLE);
-        final long baseSeed;
         if (fixedSeed != null) {
-            baseSeed = fixedSeed;
+            run(profile, fixedSeed, 1);
         } else {
-            // Offset per profile so the runs do not replay the same scenarios.
-            final long base = fixedBaseSeed != null ? fixedBaseSeed : DEFAULT_BASE_SEED;
-            baseSeed = base + profile.ordinal() * 1_000_000L;
+            run(profile, baseSeed(fixedBaseSeed != null ? fixedBaseSeed : DEFAULT_BASE_SEED, profile), profile.scenarios());
         }
-        final int scenarios = fixedSeed != null ? 1 : profile.scenarios();
+    }
+
+    /** Offset per profile so the runs do not replay the same scenarios. */
+    private static long baseSeed(final long base, final Profile profile) {
+        return base + profile.ordinal() * 1_000_000L;
+    }
+
+    private Summaries run(final Profile profile, final long baseSeed, final int scenarios) {
         final String title = assignor.name() + ", " + profile + ", " + scenarios + " scenarios, base seed " + baseSeed;
         final AssignmentMetrics.Summary fromEmpty = new AssignmentMetrics.Summary(title + ", from empty assignment");
         final AssignmentMetrics.Summary fromPrevious = new AssignmentMetrics.Summary(title + ", from previous assignment");
@@ -269,6 +283,7 @@ final class TaskAssignorTestbed {
         }
         System.out.println(fromEmpty);
         System.out.println(fromPrevious);
+        return new Summaries(fromEmpty, fromPrevious);
     }
 
     private static Long readSeed(final String property, final String environmentVariable) {
@@ -299,7 +314,7 @@ final class TaskAssignorTestbed {
         } catch (final AssertionError | RuntimeException e) {
             throw new AssertionError(
                 "Fuzz scenario failed. Reproduce with " + SEED_ENVIRONMENT_VARIABLE + "=" + seed + " (or -D" + SEED_PROPERTY + "=" + seed
-                    + ") in the " + profile + " test\n" + scenario.history,
+                    + ") in the " + profile + " run of the fuzz test's main\n" + scenario.history,
                 e
             );
         }
@@ -349,12 +364,18 @@ final class TaskAssignorTestbed {
         final List<String> rackAwareAssignmentTags,
         final String label
     ) {
+        long firstAssignmentNanos = 0;
         for (int iteration = 1; ; iteration++) {
             GroupAssignment result = null;
             final boolean converged;
             final boolean last;
             try {
-                result = assignor.assign(scenario.groupSpec(rackAwareAssignmentTags), scenario.topology);
+                final GroupSpecImpl groupSpec = scenario.groupSpec(rackAwareAssignmentTags);
+                final long start = System.nanoTime();
+                result = assignor.assign(groupSpec, scenario.topology);
+                if (iteration == 1) {
+                    firstAssignmentNanos = System.nanoTime() - start;
+                }
                 AssignmentInvariants.assertValid(scenario, result);
                 converged = result.members().equals(scenario.previousAssignment);
                 last = converged || iteration == MAX_CONVERGENCE_ITERATIONS;
@@ -375,7 +396,7 @@ final class TaskAssignorTestbed {
                 for (final AssignmentGrader grader : graders) {
                     metrics.putAll(grader.grade(scenario, result, before, reportedTasks));
                 }
-                metrics.putAll(AssignmentMetrics.convergenceRows(rounds, converged));
+                metrics.putAll(AssignmentMetrics.convergenceRows(rounds, converged, firstAssignmentNanos));
                 scenario.feedBack(result);
                 return new Converged(result, converged, rounds, metrics);
             }
