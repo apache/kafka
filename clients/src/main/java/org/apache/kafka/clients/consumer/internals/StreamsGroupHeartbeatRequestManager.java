@@ -413,10 +413,11 @@ public class StreamsGroupHeartbeatRequestManager implements RequestManager {
         long retryBackoffMs = config.getLong(ConsumerConfig.RETRY_BACKOFF_MS_CONFIG);
         long retryBackoffMaxMs = config.getLong(ConsumerConfig.RETRY_BACKOFF_MAX_MS_CONFIG);
         this.heartbeatState = new HeartbeatState(streamsRebalanceData, membershipManager, maxPollIntervalMs, time);
+        int requestTimeout = config.getInt(ConsumerConfig.REQUEST_TIMEOUT_MS_CONFIG);
         this.heartbeatRequestState = new HeartbeatRequestState(
             logContext,
             time,
-            0,
+            requestTimeout,
             retryBackoffMs,
             retryBackoffMaxMs,
             RETRY_BACKOFF_JITTER
@@ -539,8 +540,7 @@ public class StreamsGroupHeartbeatRequestManager implements RequestManager {
         // shouldNotWaitForHeartbeatInterval() check would return 0 whenever the member wants to
         // (re)join. Because no heartbeat can be sent until the coordinator is discovered, the
         // condition remains true and both the application and network threads end up busy-spinning.
-        // Wait a retry backoff rather than the heartbeat interval, because the interval is zero
-        // until the first heartbeat response is received, which would also busy-spin.
+        // Wait a retry backoff to keep the application thread responsive without busy-spinning.
         if (coordinatorRequestManager.coordinator().isEmpty() || membershipManager.shouldSkipHeartbeat()) {
             return heartbeatRequestState.retryBackoffMs();
         }
