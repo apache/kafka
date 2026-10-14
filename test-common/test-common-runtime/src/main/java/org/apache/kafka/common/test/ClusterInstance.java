@@ -275,6 +275,17 @@ public interface ClusterInstance {
 
     //---------------------------[wait]---------------------------//
 
+    /**
+     * Waits for topic deletion to propagate to all live brokers.
+     *
+     * <p>Also verifies that partition 0 has no online replica, is absent from log managers
+     * and cleaner checkpoints, and has no active log directories. These directories are
+     * soft-deleted by renaming them with a unique ID and a {@code -delete} suffix.
+     * Physical file cleanup happens asynchronously and is not awaited.
+     *
+     * @param topic The name of the deleted topic
+     * @throws InterruptedException If the wait is interrupted
+     */
     default void waitTopicDeletion(String topic) throws InterruptedException {
         Collection<KafkaBroker> brokers = aliveBrokers().values();
         // wait for metadata
