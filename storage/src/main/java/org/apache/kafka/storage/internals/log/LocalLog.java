@@ -46,6 +46,7 @@ import java.util.Optional;
 import java.util.Set;
 import java.util.UUID;
 import java.util.concurrent.atomic.AtomicLong;
+import java.util.function.BiConsumer;
 import java.util.function.Consumer;
 import java.util.function.Supplier;
 import java.util.regex.Pattern;
@@ -83,6 +84,7 @@ public class LocalLog {
     private final Time time;
     private final TopicPartition topicPartition;
     private final LogDirFailureChannel logDirFailureChannel;
+    private final BiConsumer<String, IOException> readFailureHandler;
     private final Logger logger;
 
     private volatile LogOffsetMetadata nextOffsetMetadata;
@@ -124,6 +126,7 @@ public class LocalLog {
         this.time = time;
         this.topicPartition = topicPartition;
         this.logDirFailureChannel = logDirFailureChannel;
+        this.readFailureHandler = (msg, e) -> logDirFailureChannel.maybeAddOfflineLogDir(parentDir, msg, e);
         this.logIdent = "[LocalLog partition=" + topicPartition + ", dir=" + dir + "] ";
         this.logger = new LogContext(logIdent).logger(LocalLog.class);
         // Last time the log was flushed
@@ -515,7 +518,7 @@ public class LocalLog {
                         }
                     }
                     if (fetchDataInfo != null) {
-                        return fetchDataInfo;
+                        return withReadFailureHandler(fetchDataInfo);
                     } else {
                         // okay we are beyond the end of the last segment with no data fetched although the start offset is in range,
                         // this can happen when all messages with offset larger than start offsets have been deleted.
@@ -524,6 +527,21 @@ public class LocalLog {
                     }
                 }
         );
+    }
+
+    /**
+     * The records of a fetch are read from the segment only when they are written to the network, after this log
+     * has returned them, so an IOException from that read cannot be caught here. Have the records report it instead,
+     * so that the log directory is marked offline as for any other IOException in this log.
+     */
+    private FetchDataInfo withReadFailureHandler(FetchDataInfo fetchDataInfo) {
+        if (!(fetchDataInfo.records instanceof FileRecords fileRecords))
+            return fetchDataInfo;
+        return new FetchDataInfo(fetchDataInfo.fetchOffsetMetadata,
+                fileRecords.withReadFailureHandler(readFailureHandler),
+                fetchDataInfo.firstEntryIncomplete,
+                fetchDataInfo.abortedTransactions,
+                fetchDataInfo.delayedRemoteStorageFetch);
     }
 
     public void append(long lastOffset, MemoryRecords records) throws IOException {

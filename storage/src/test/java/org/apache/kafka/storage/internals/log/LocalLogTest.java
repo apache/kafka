@@ -21,6 +21,7 @@ import org.apache.kafka.common.TopicPartition;
 import org.apache.kafka.common.compress.Compression;
 import org.apache.kafka.common.config.TopicConfig;
 import org.apache.kafka.common.errors.KafkaStorageException;
+import org.apache.kafka.common.record.internal.FileRecords;
 import org.apache.kafka.common.record.internal.MemoryRecords;
 import org.apache.kafka.common.record.internal.Record;
 import org.apache.kafka.common.record.internal.SimpleRecord;
@@ -47,7 +48,9 @@ import java.util.stream.Stream;
 import static org.junit.jupiter.api.Assertions.assertDoesNotThrow;
 import static org.junit.jupiter.api.Assertions.assertEquals;
 import static org.junit.jupiter.api.Assertions.assertFalse;
+import static org.junit.jupiter.api.Assertions.assertInstanceOf;
 import static org.junit.jupiter.api.Assertions.assertNotEquals;
+import static org.junit.jupiter.api.Assertions.assertNotNull;
 import static org.junit.jupiter.api.Assertions.assertThrows;
 import static org.junit.jupiter.api.Assertions.assertTrue;
 import static org.mockito.Mockito.doReturn;
@@ -254,6 +257,20 @@ class LocalLogTest {
         FetchDataInfo fetchDataInfo = readRecords(0L);
         assertEquals(2L, Utils.toList(fetchDataInfo.records.records()).size());
         assertEquals(keyValues, recordsToKvs(fetchDataInfo.records.records()));
+    }
+
+    @Test
+    public void testReadFailureWhileWritingFetchedRecordsMarksLogDirOffline() throws IOException {
+        appendRecords(kvsToRecords(List.of(new KeyValue("abc", "ABC"))), 0L);
+        FileRecords records = assertInstanceOf(FileRecords.class, readRecords(0L).records);
+        assertNotNull(records.readFailureHandler());
+
+        // The fetched records are read from the segment only when they are written to the network, and
+        // report a failure of that read through their handler
+        records.readFailureHandler().accept("Failed to read", new IOException("Input/output error"));
+
+        assertTrue(logDirFailureChannel.hasOfflineLogDir(logDir.getParent()));
+        assertThrows(KafkaStorageException.class, () -> readRecords(0L));
     }
 
     @Test

@@ -17,6 +17,7 @@
 package org.apache.kafka.common.record.internal;
 
 import org.apache.kafka.common.KafkaException;
+import org.apache.kafka.common.errors.KafkaStorageException;
 import org.apache.kafka.common.network.TransferableChannel;
 import org.apache.kafka.common.record.internal.FileLogInputStream.FileChannelRecordBatch;
 import org.apache.kafka.common.utils.Utils;
@@ -29,21 +30,28 @@ import java.io.File;
 import java.io.IOException;
 import java.io.RandomAccessFile;
 import java.nio.ByteBuffer;
+import java.nio.channels.ClosedChannelException;
 import java.nio.channels.FileChannel;
 import java.nio.file.Files;
 import java.nio.file.StandardOpenOption;
 import java.util.Objects;
 import java.util.Optional;
 import java.util.concurrent.atomic.AtomicInteger;
+import java.util.function.BiConsumer;
 
 /**
  * A {@link Records} implementation backed by a file. An optional start and end position can be applied to this
  * instance to enable slicing a range of the log records.
  */
 public class FileRecords extends AbstractRecords implements Closeable {
+    // Size of the buffer used to re-read a region that failed to transfer, see writeTo
+    private static final int REREAD_BUFFER_SIZE = 32 * 1024;
+
     private final boolean isSlice;
     private final int start;
     private final int end;
+    // Notified when a read of the backing file fails while writing to a channel, or null
+    private final BiConsumer<String, IOException> readFailureHandler;
 
     private final Iterable<FileLogInputStream.FileChannelRecordBatch> batches;
 
@@ -66,6 +74,7 @@ public class FileRecords extends AbstractRecords implements Closeable {
         this.start = 0;
         this.end = end;
         this.isSlice = false;
+        this.readFailureHandler = null;
 
         if (channel.size() > Integer.MAX_VALUE) {
             throw new KafkaException(
@@ -92,13 +101,15 @@ public class FileRecords extends AbstractRecords implements Closeable {
         File file,
         FileChannel channel,
         int start,
-        int end
+        int end,
+        BiConsumer<String, IOException> readFailureHandler
     ) {
         this.file = file;
         this.channel = channel;
         this.start = start;
         this.end = end;
         this.isSlice = true;
+        this.readFailureHandler = readFailureHandler;
 
         // don't check the file size since this is just a slice view
         this.size = new AtomicInteger(end - start);
@@ -146,7 +157,25 @@ public class FileRecords extends AbstractRecords implements Closeable {
         int availableBytes = availableBytes(position, size);
         int startPosition = this.start + position;
 
-        return new FileRecords(file, channel, startPosition, startPosition + availableBytes);
+        return new FileRecords(file, channel, startPosition, startPosition + availableBytes, readFailureHandler);
+    }
+
+    /**
+     * Return a slice covering the current records of this instance whose {@link #writeTo} reports a failed read of
+     * the backing file to the given handler, with a description of the failure, before throwing a
+     * {@link KafkaStorageException}. Slices taken from it with {@link #slice} report to the same handler. This
+     * instance is not modified.
+     *
+     * @param handler The handler to notify, typically one that marks the log directory offline
+     * @return A view of these records that reports read failures to the handler
+     */
+    public FileRecords withReadFailureHandler(BiConsumer<String, IOException> handler) {
+        return new FileRecords(file, channel, start, start + sizeInBytes(), Objects.requireNonNull(handler));
+    }
+
+    // Visible for testing
+    public BiConsumer<String, IOException> readFailureHandler() {
+        return readFailureHandler;
     }
 
     /**
@@ -287,8 +316,53 @@ public class FileRecords extends AbstractRecords implements Closeable {
 
         long position = start + offset;
         int count = Math.min(length, oldSize - offset);
-        // safe to cast to int since `count` is an int
-        return (int) destChannel.transferFrom(channel, position, count);
+        try {
+            // safe to cast to int since `count` is an int
+            return (int) destChannel.transferFrom(channel, position, count);
+        } catch (IOException e) {
+            // The transfer reads the file and writes the socket in one call, so a storage failure and a
+            // socket failure both arrive here as a bare IOException. Tell them apart by re-reading the
+            // region: only on the error path, and only when someone handles storage failures. The message
+            // text is not inspected, it is platform specific.
+            if (readFailureHandler != null)
+                reReadRegion(position, count, e);
+            throw e;
+        }
+    }
+
+    /**
+     * Re-read the given region of the backing file, used by {@link #writeTo} to tell a storage failure
+     * from a socket failure. The whole region is read rather than its first byte because, depending on
+     * the platform, the transfer may fail anywhere within it without reporting progress. Only a failed
+     * read of an open channel counts as a storage failure: the end of the file may be reached because the
+     * log was truncated concurrently (e.g. when the replica becomes a follower), and the channel may have
+     * been closed concurrently, by a deletion or a shutdown; neither says anything about the medium.
+     *
+     * @throws KafkaStorageException If a read failed, after notifying the read failure handler
+     */
+    private void reReadRegion(long position, int count, IOException transferFailure) {
+        ByteBuffer buffer = ByteBuffer.allocate(Math.min(count, REREAD_BUFFER_SIZE));
+        long end = position + count;
+        long readPosition = position;
+        try {
+            while (readPosition < end) {
+                buffer.clear();
+                buffer.limit((int) Math.min(buffer.capacity(), end - readPosition));
+                int bytesRead = channel.read(buffer, readPosition);
+                if (bytesRead <= 0)
+                    return;
+                readPosition += bytesRead;
+            }
+        } catch (ClosedChannelException e) {
+            // nothing can be concluded about the medium
+        } catch (IOException e) {
+            String message = "Failed to read " + file.getAbsolutePath() + " at position " + readPosition
+                    + " while writing " + count + " bytes from position " + position + " to a channel";
+            readFailureHandler.accept(message, e);
+            KafkaStorageException storageException = new KafkaStorageException(message, transferFailure);
+            storageException.addSuppressed(e);
+            throw storageException;
+        }
     }
 
     /**
