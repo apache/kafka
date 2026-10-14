@@ -160,6 +160,20 @@ class KafkaDockerWrapperTest {
   }
 
   @Test
+  def testFormatStorageCmdWithInitialControllers(): Unit = {
+    val configsPath = Paths.get("/path/to/configs")
+    val initialControllers = "0@controller-0:9093:4pP_aCYqTo-VzAk9X1tE3A,1@controller-1:9093:Mxw3GWSgSHyy5yeHvMJRqw," +
+      "2@controller-2:9093:Bz9fNNY7QBKx6JLhSrPh2Q"
+    val envVars = Map("CLUSTER_ID" -> "MYwKGPhXQZidgd0qMv8Mkw", "STORAGE_FORMAT_ARGS" -> s"--initial-controllers $initialControllers")
+
+    val expected = Array("format", "--cluster-id=MYwKGPhXQZidgd0qMv8Mkw", "-c", "/path/to/configs/server.properties",
+      "--initial-controllers", initialControllers)
+    val actual = KafkaDockerWrapper.formatStorageCmd(configsPath, envVars)
+
+    assertArrayEquals(expected.toArray[Object], actual.toArray[Object])
+  }
+
+  @Test
   def testGetLog4jConfigsFromEnv(): Unit = {
     val envVars = Map(
       "KAFKA_LOG4J_LOGGERS" -> "kafka=INFO,kafka.network.RequestChannel$=WARN,kafka.producer.async.DefaultEventHandler=DEBUG,",

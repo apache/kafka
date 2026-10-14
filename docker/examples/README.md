@@ -89,7 +89,9 @@ Dynamic controller quorum
 -------------------------
 
 - By default the image formats storage for static voters (`KAFKA_CONTROLLER_QUORUM_VOTERS`).
-- For a dynamic quorum (KIP-853), set `KAFKA_CONTROLLER_QUORUM_BOOTSTRAP_SERVERS` instead and pass the format option of each controller in `STORAGE_FORMAT_ARGS`: `--standalone` on the first controller, `--no-initial-controllers` on the others (they join as observers and are added with `kafka-metadata-quorum.sh add-controller`).
+- For a dynamic quorum (KIP-853), set `KAFKA_CONTROLLER_QUORUM_BOOTSTRAP_SERVERS` instead and pass the `kafka-storage format` option that sets up the quorum in `STORAGE_FORMAT_ARGS`:
+  - `--initial-controllers` forms the whole quorum from the start. Pass the same value to every controller, e.g. `STORAGE_FORMAT_ARGS="--initial-controllers 1@controller-1:9093:<directory-id-1>,2@controller-2:9093:<directory-id-2>,3@controller-3:9093:<directory-id-3>"`. Generate each directory id once with `kafka-storage.sh random-uuid`; every controller formats its metadata log directory with its own id from the list.
+  - Alternatively, start with a single voter and grow the quorum later: `--standalone` on the first controller, `--no-initial-controllers` on the others. They join as observers and are added with `kafka-metadata-quorum.sh add-controller`.
 - `STORAGE_FORMAT_ARGS` is appended to the image's `kafka-storage format` command, so any of its options can be passed.
 - Each controller must advertise its controller listener, e.g. `KAFKA_ADVERTISED_LISTENERS=CONTROLLER://controller-1:9093`. On a controller, `KAFKA_ADVERTISED_LISTENERS` may only list listeners from `KAFKA_CONTROLLER_LISTENER_NAMES`.
 
