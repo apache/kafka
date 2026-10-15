@@ -279,6 +279,7 @@ class TransactionLogTest {
         assertEquals(500L, deserializedWithPartitions.txnStartTimestamp());
         assertEquals(750L, deserializedWithPartitions.txnLastUpdateTimestamp());
         assertEquals(partitionsWithData, deserializedWithPartitions.topicPartitions());
+        assertEquals(TV_2, deserializedWithPartitions.clientTransactionVersion());
     }
 
     @Test

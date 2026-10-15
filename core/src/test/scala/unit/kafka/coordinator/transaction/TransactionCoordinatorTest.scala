@@ -127,9 +127,8 @@ class TransactionCoordinatorTest {
       capturedErrorsCallback.capture(),
       any(),
       any()
-    )).thenAnswer(invocation => {
-      val metadata = invocation.getArgument[TxnTransitMetadata](2)
-      txnMetadata.completeTransitionTo(metadata)
+    )).thenAnswer(_ => {
+      txnMetadata.completeTransitionTo(capturedTransitMetadata.getValue)
       capturedErrorsCallback.getValue.apply(Errors.NONE)
     })
 
@@ -2823,7 +2822,7 @@ class TransactionCoordinatorTest {
     // while keeping the ongoing transaction epoch constant.
 
     // Setup: Use helper to set up 2PC transaction and make first InitProducerId call
-    val capturedNewMetadata = setupPrepared2PcTxnWithBumpedClientEpoch()
+    val capturedNewMetadata = setupPrepared2PcTxnWithBumpedClientEpoch(initialEpoch = producerEpoch)
 
     // Verify that epoch bumps a few times (the first bump happened during the setup)
     var iteration = 0
@@ -2862,7 +2861,8 @@ class TransactionCoordinatorTest {
     def testComplete(txnResult: TransactionResult): Unit = {
       val capturedTransitMetadata = setupPrepared2PcTxnWithBumpedClientEpoch()
 
-      // Setup bumped from epoch 1 to epoch 2, now bump again from 2 to 3
+      // Setup bumped the client-facing epoch (nextProducerEpoch) from 1 to 2, the ongoing
+      // txn epoch (producerEpoch) is still 1.  Now bump the client-facing epoch again from 2 to 3.
       // Action: Call InitProducerId again to bump client epoch once more
       coordinator.handleInitProducerId(
         transactionalId,
@@ -2982,6 +2982,58 @@ class TransactionCoordinatorTest {
 
     assertEquals(new InitProducerIdResult(-1, -1, Errors.CONCURRENT_TRANSACTIONS), result)
     verifyEpochFenceOfPreparedTxn(capturedTransitMetadata, rotatedProducerId, 0)
+  }
+
+  @Test
+  def shouldRotateClientProducerIdWhenFencingKeptPreparedTxnWithExhaustedClientEpoch(): Unit = {
+    // InitProducerId(keepPreparedTxn=false) fences a kept transaction whose client-facing epoch is exhausted:
+    // the markers use the frozen identity and the client-facing producer id is rotated.
+    mockPidGenerator()
+    val capturedTransitMetadata = setupPrepared2PcTxnWithBumpedClientEpoch()
+    currentTxnMetadata().setNextProducerEpoch((Short.MaxValue - 1).toShort)
+    val rotatedProducerId = nextPid
+
+    coordinator.handleInitProducerId(transactionalId, txnTimeoutMs, enableTwoPCFlag = true,
+      keepPreparedTxn = false, None, initProducerIdMockCallback)
+
+    assertEquals(new InitProducerIdResult(-1, -1, Errors.CONCURRENT_TRANSACTIONS), result)
+    val prepareAbort = capturedTransitMetadata.getValue
+    assertEquals(TransactionState.PREPARE_ABORT, prepareAbort.txnState)
+    assertEquals(producerId, prepareAbort.producerId)
+    assertEquals((producerEpoch + 1).toShort, prepareAbort.producerEpoch)
+    assertEquals(rotatedProducerId, prepareAbort.nextProducerId)
+    assertEquals(0.toShort, prepareAbort.nextProducerEpoch)
+  }
+
+  @Test
+  def shouldInitProducerIdAfterFencedKeptPreparedTxnCompletes(): Unit = {
+    // After InitProducerId(keepPreparedTxn=false) fenced and aborted a kept transaction, the transaction
+    // completes with the client-facing identity bumped, and the client's retry of InitProducerId succeeds.
+    val capturedTransitMetadata = setupPrepared2PcTxnWithBumpedClientEpoch()
+    coordinator.handleInitProducerId(transactionalId, txnTimeoutMs, enableTwoPCFlag = true,
+      keepPreparedTxn = true, None, initProducerIdMockCallback)
+    val clientEpoch = (producerEpoch + 2).toShort
+
+    coordinator.handleInitProducerId(transactionalId, txnTimeoutMs, enableTwoPCFlag = true,
+      keepPreparedTxn = false, None, initProducerIdMockCallback)
+    assertEquals(new InitProducerIdResult(-1, -1, Errors.CONCURRENT_TRANSACTIONS), result)
+
+    // Complete the abort with the COMPLETE_ABORT transition passed with the markers.
+    val completeMetadataCaptor: ArgumentCaptor[TxnTransitMetadata] = ArgumentCaptor.forClass(classOf[TxnTransitMetadata])
+    verify(transactionMarkerChannelManager).addTxnMarkersToSend(ArgumentMatchers.eq(coordinatorEpoch),
+      ArgumentMatchers.eq(TransactionResult.ABORT), any[TransactionMetadata], completeMetadataCaptor.capture())
+    val txnMetadata = currentTxnMetadata()
+    txnMetadata.completeTransitionTo(completeMetadataCaptor.getValue)
+    assertEquals(TransactionState.COMPLETE_ABORT, txnMetadata.state)
+    assertEquals(producerId, txnMetadata.producerId)
+    assertEquals((clientEpoch + 1).toShort, txnMetadata.producerEpoch)
+    assertFalse(txnMetadata.hasNextProducerEpoch)
+
+    // The client retries InitProducerId and gets the bumped epoch.
+    coordinator.handleInitProducerId(transactionalId, txnTimeoutMs, enableTwoPCFlag = true,
+      keepPreparedTxn = false, None, initProducerIdMockCallback)
+    assertEquals(new InitProducerIdResult(producerId, (clientEpoch + 2).toShort, Errors.NONE), result)
+    assertEquals(TransactionState.EMPTY, capturedTransitMetadata.getValue.txnState)
   }
 
   @Test
@@ -3203,7 +3255,7 @@ class TransactionCoordinatorTest {
 
   @Test
   def shouldRotateProducerIdWhenClientEpochExhausted(): Unit = {
-    // Test that when the client epoch reaches Short.MaxValue, a new producer ID is allocated
+    // Test that when the client epoch reaches Short.MaxValue - 1, a new producer ID is allocated
     // and the client epoch resets to 0, while the ongoing transaction identity remains unchanged.
 
     val startEpoch = (Short.MaxValue - 2).toShort  // 32765
@@ -3224,7 +3276,7 @@ class TransactionCoordinatorTest {
     assertEquals(producerId, firstMetadata.nextProducerId)
     assertEquals(firstClientEpoch, firstMetadata.nextProducerEpoch)
 
-    // Second call: exhaust at 32767, should rotate producer ID
+    // Second call: 32766 is exhausted, should rotate producer ID
     coordinator.handleInitProducerId(
       transactionalId,
       txnTimeoutMs,
@@ -3360,8 +3412,9 @@ class TransactionCoordinatorTest {
         endTxnCallback
       )
 
-      // Capture the TxnTransitMetadata that was passed to addTxnMarkersToSend
-      // This represents the COMPLETE_* transition metadata created by the internal prepareComplete() call
+      // Capture the COMPLETE_* TxnTransitMetadata (created by the internal prepareComplete() call) that
+      // will be used to complete the transaction once the markers are written.  The markers themselves
+      // are sent with the frozen producerId / producerEpoch from txnMetadata.
       val capturedMarkerMetadata: ArgumentCaptor[TxnTransitMetadata] = ArgumentCaptor.forClass(classOf[TxnTransitMetadata])
       verify(transactionMarkerChannelManager).addTxnMarkersToSend(
         ArgumentMatchers.eq(coordinatorEpoch),
@@ -3505,7 +3558,7 @@ class TransactionCoordinatorTest {
     // Helper will bump: 32765 → 32766, establishing dual identity
     val capturedTransitMetadata = setupPrepared2PcTxnWithBumpedClientEpoch(startEpoch)
 
-    // Call InitProducerId again - this will exhaust at 32767 and rotate
+    // Call InitProducerId again - 32766 is exhausted, so this will rotate
     coordinator.handleInitProducerId(
       transactionalId,
       txnTimeoutMs,
@@ -3528,7 +3581,7 @@ class TransactionCoordinatorTest {
     assertEquals(0, rotationMetadata.nextProducerEpoch,
       "Rotated epoch should be 0")
     assertEquals(producerId, rotationMetadata.prevProducerId,
-      "prevProducerId should be set to original ID for retry detection")
+      "prevProducerId is not changed by InitProducerId(keepPreparedTxn=true)")
 
     // Verify ongoing identity still uses original producer ID
     assertEquals(producerId, rotationMetadata.producerId, "Ongoing transaction producerId unchanged")
@@ -3550,20 +3603,30 @@ class TransactionCoordinatorTest {
     val prepareCommitMetadata = capturedTransitMetadata.getAllValues.get(2)
     assertEquals(TransactionState.PREPARE_COMMIT, prepareCommitMetadata.txnState)
 
-    // Verify: The key aspect of persistence is that prevProducerId was
-    // correctly set during rotation.  This ensures that after the transaction
-    // completes to EMPTY, retry detection will work correctly by recognizing
-    // requests from the old producer ID.
-    assertEquals(producerId, rotationMetadata.prevProducerId,
-      "prevProducerId persisted for retry detection")
+    // Verify: The kept transaction with the rotated client-facing identity survives a coordinator failover,
+    // i.e. it round-trips through the transaction log both before and after EndTransaction.
+    def roundTrip(transitMetadata: TxnTransitMetadata): TransactionMetadata =
+      TransactionLog.read(
+        java.nio.ByteBuffer.wrap(TransactionLog.keyToBytes(transactionalId)),
+        java.nio.ByteBuffer.wrap(TransactionLog.valueToBytes(transitMetadata, TV_2))
+      ).asInstanceOf[TransactionLog.TxnRecord].metadata()
 
-    // Verify: The rotation information is persisted in the metadata.  After
-    // this transaction completes, the next transaction will start with
-    // rotatedProducerId.
-    assertEquals(rotatedProducerId, rotationMetadata.nextProducerId,
-      "Rotated ID persisted in nextProducerId")
-    assertEquals(0, rotationMetadata.nextProducerEpoch,
-      "Rotated epoch persisted as 0")
+    val recoveredOngoing = roundTrip(rotationMetadata)
+    assertEquals(TransactionState.ONGOING, recoveredOngoing.state)
+    assertEquals(producerId, recoveredOngoing.producerId)
+    assertEquals(startEpoch, recoveredOngoing.producerEpoch)
+    assertEquals(rotatedProducerId, recoveredOngoing.clientProducerId)
+    assertEquals(rotatedEpoch, recoveredOngoing.clientProducerEpoch)
+
+    // EndTransaction bumped the frozen epoch for the markers and the client-facing epoch, and recorded the
+    // client's producer id as prevProducerId.
+    val recoveredPrepare = roundTrip(prepareCommitMetadata)
+    assertEquals(TransactionState.PREPARE_COMMIT, recoveredPrepare.state)
+    assertEquals(producerId, recoveredPrepare.producerId)
+    assertEquals((startEpoch + 1).toShort, recoveredPrepare.producerEpoch)
+    assertEquals(rotatedProducerId, recoveredPrepare.prevProducerId)
+    assertEquals(rotatedProducerId, recoveredPrepare.clientProducerId)
+    assertEquals((rotatedEpoch + 1).toShort, recoveredPrepare.clientProducerEpoch)
 
     // Verify: The state transitions are captured correctly in metadata
     assertEquals(3, capturedTransitMetadata.getAllValues.size(),
@@ -3611,29 +3674,42 @@ class TransactionCoordinatorTest {
       assertEquals(prepareState, transitMetadata.txnState,
         s"Transaction should be in $prepareState state")
 
-      val stateBefore = transitMetadata.txnState
+      // The markers are not written (addTxnMarkersToSend is mocked), so the transaction stays in the
+      // PREPARE state with a pending COMPLETE_* state.
+      val txnMetadata = currentTxnMetadata()
+      val expectedPendingState = if (prepareState == TransactionState.PREPARE_COMMIT)
+        TransactionState.COMPLETE_COMMIT
+      else
+        TransactionState.COMPLETE_ABORT
+      assertEquals(prepareState, txnMetadata.state)
+      assertEquals(util.Optional.of(expectedPendingState), txnMetadata.pendingState)
 
-      // Attempt another EndTransaction while still in PREPARE state
-      coordinator.handleEndTransaction(
-        transactionalId,
-        result.producerId,  // Same client producer ID
-        result.producerEpoch,  // Same client epoch
-        attemptedResult,
-        TV_2,
-        endTxnCallback
-      )
+      def attemptEndTransaction(): Unit = {
+        coordinator.handleEndTransaction(
+          transactionalId,
+          result.producerId,  // Same client producer ID
+          result.producerEpoch,  // Same client epoch
+          attemptedResult,
+          TV_2,
+          endTxnCallback
+        )
 
-      // Verify: TV2 returns CONCURRENT_TRANSACTIONS (retriable error)
-      assertEquals(Errors.CONCURRENT_TRANSACTIONS, error,
-        s"Should return CONCURRENT_TRANSACTIONS when attempting $attemptedResult while in $prepareState")
+        // Verify: TV2 returns CONCURRENT_TRANSACTIONS (retriable error)
+        assertEquals(Errors.CONCURRENT_TRANSACTIONS, error,
+          s"Should return CONCURRENT_TRANSACTIONS when attempting $attemptedResult while in $prepareState")
 
-      // Verify: State unchanged after rejection
-      assertEquals(stateBefore, capturedTransitMetadata.getAllValues.get(1).txnState,
-        "State should remain unchanged after CONCURRENT_TRANSACTIONS error")
+        // Verify: State unchanged and no additional state transitions captured (request was rejected)
+        assertEquals(prepareState, txnMetadata.state)
+        assertEquals(2, capturedTransitMetadata.getAllValues.size(),
+          "No new state transition should be captured for rejected request")
+      }
 
-      // Verify: No additional state transitions captured (request was rejected)
-      assertEquals(2, capturedTransitMetadata.getAllValues.size(),
-        "No new state transition should be captured for rejected request")
+      // Attempt another EndTransaction while the transition to COMPLETE_* is pending.
+      attemptEndTransaction()
+
+      // Attempt another EndTransaction in the PREPARE state without a pending state.
+      txnMetadata.pendingState(util.Optional.empty())
+      attemptEndTransaction()
     }
 
     // Test Matrix: All 4 combinations of PREPARE state × attempted operation.
@@ -3672,15 +3748,18 @@ class TransactionCoordinatorTest {
       "Should return INVALID_REQUEST when both keepPreparedTxn and expectedEpoch are set")
   }
 
-  @Test
-  def shouldRejectKeepPreparedTxnWhenTransactionVersionTooLow(): Unit = {
+  @ParameterizedTest
+  @ValueSource(shorts = Array(0, 1))
+  def shouldRejectKeepPreparedTxnWhenTransactionVersionTooLow(transactionVersion: Short): Unit = {
     // Test that keepPreparedTxn=true is rejected when transaction.version < TV_2.
     // keepPreparedTxn requires TV_2 to ensure the 2PC metadata (nextProducerEpoch,
     // prevProducerId, nextProducerId) is properly persisted to the transaction log.
     // Without TV_2, these fields would be omitted during serialization, causing
     // silent data corruption on coordinator recovery.
 
-    // Setup: ONGOING transaction at TV_0
+    val clusterTransactionVersion = TransactionVersion.fromFeatureLevel(transactionVersion)
+
+    // Setup: ONGOING transaction at the given transaction version
     val txnMetadata = new TransactionMetadata(
       transactionalId,
       producerId,
@@ -3694,7 +3773,7 @@ class TransactionCoordinatorTest {
       partitions,
       time.milliseconds(),
       time.milliseconds(),
-      TV_0  // Transaction version 0 - doesn't support epoch bump
+      clusterTransactionVersion  // Doesn't support epoch bump
     )
 
     when(transactionManager.getTransactionState(ArgumentMatchers.eq(transactionalId)))
@@ -3702,7 +3781,7 @@ class TransactionCoordinatorTest {
     when(transactionManager.isTransaction2pcEnabled())
       .thenReturn(true)
     when(transactionManager.transactionVersionLevel())
-      .thenReturn(TV_0)  // Cluster finalized feature is TV_0
+      .thenReturn(clusterTransactionVersion)  // Cluster finalized feature is below TV_2
     when(transactionManager.validateTransactionTimeoutMs(anyBoolean(), anyInt()))
       .thenReturn(true)
 
@@ -3777,32 +3856,23 @@ class TransactionCoordinatorTest {
   }
 
   @Test
-  def shouldRejectKeepPreparedTxnWithoutOngoingTransaction(): Unit = {
-    // Test that keepPreparedTxn=true without an ONGOING transaction returns an
-    // appropriate error.  Properly implemented clients call keepPreparedTxn only
-    // after a crash with a transaction in flight, but server validates this.
+  def shouldAllowKeepPreparedTxnWithoutOngoingTransaction(): Unit = {
+    // InitProducerId(keepPreparedTxn=true) without an ONGOING transaction doesn't keep anything and works
+    // like a regular InitProducerId: the epoch is bumped and no ongoing transaction is returned.  E.g. a
+    // client could have committed the prepared transaction but failed to receive the response before crashing.
 
     def testKeepPreparedInState(state: TransactionState): Unit = {
-      val txnMetadata = new TransactionMetadata(
-        transactionalId,
-        producerId,
-        RecordBatch.NO_PRODUCER_ID,
-        RecordBatch.NO_PRODUCER_ID,
-        producerEpoch,
-        RecordBatch.NO_PRODUCER_EPOCH,
-        RecordBatch.NO_PRODUCER_EPOCH,
-        txnTimeoutMs,
-        state,
-        new util.HashSet[TopicPartition](),
-        time.milliseconds(),
-        time.milliseconds(),
-        TV_0
-      )
+      mockKeepPreparedTxnMetadata(state, Int.MaxValue)
+      val capturedTransitMetadata: ArgumentCaptor[TxnTransitMetadata] = ArgumentCaptor.forClass(classOf[TxnTransitMetadata])
+      when(transactionManager.appendTransactionToLog(
+        ArgumentMatchers.eq(transactionalId),
+        ArgumentMatchers.eq(coordinatorEpoch),
+        capturedTransitMetadata.capture(),
+        capturedErrorsCallback.capture(),
+        any(),
+        any()
+      )).thenAnswer(_ => capturedErrorsCallback.getValue.apply(Errors.NONE))
 
-      when(transactionManager.getTransactionState(ArgumentMatchers.eq(transactionalId)))
-        .thenReturn(Right(Some(new CoordinatorEpochAndTxnMetadata(coordinatorEpoch, txnMetadata))))
-
-      // Attempt InitProducerId with keepPreparedTxn in non-ONGOING state
       coordinator.handleInitProducerId(
         transactionalId,
         txnTimeoutMs,
@@ -3812,9 +3882,10 @@ class TransactionCoordinatorTest {
         initProducerIdMockCallback
       )
 
-      // Verify: Returns error (no ONGOING transaction to prepare)
-      assertNotEquals(Errors.NONE, result.error,
-        s"Should return error when keepPreparedTxn=true in $state state")
+      assertEquals(new InitProducerIdResult(producerId, (producerEpoch + 1).toShort, Errors.NONE,
+        RecordBatch.NO_PRODUCER_ID, RecordBatch.NO_PRODUCER_EPOCH), result, s"keepPreparedTxn=true in $state state")
+      assertEquals(TransactionState.EMPTY, capturedTransitMetadata.getValue.txnState)
+      assertEquals(RecordBatch.NO_PRODUCER_EPOCH, capturedTransitMetadata.getValue.nextProducerEpoch)
     }
 
     // Test keepPreparedTxn in states where there's no ongoing transaction

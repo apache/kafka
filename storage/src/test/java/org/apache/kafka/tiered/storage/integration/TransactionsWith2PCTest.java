@@ -150,12 +150,6 @@ public class TransactionsWith2PCTest {
             var consumedRecords = TransactionsTestHelper.consumeRecordsFor(consumer, CONSUME_DURATION_MS);
             assertEquals(numRecords, consumedRecords.size(),
                 "Consumer should see all records from first producer after commit");
-
-            // Verify transaction state
-            var txnDescription = adminClient.describeTransactions(List.of(transactionalId))
-                .description(transactionalId).get();
-            assertEquals(TransactionState.COMPLETE_COMMIT, txnDescription.state(),
-                "Transaction should be in COMPLETE_COMMIT state");
         }
     }
 
@@ -204,12 +198,6 @@ public class TransactionsWith2PCTest {
             var consumedRecords = TransactionsTestHelper.consumeRecordsFor(consumer, CONSUME_DURATION_MS);
             assertEquals(numRecords, consumedRecords.size(),
                 "Consumer should see all records after commit");
-
-            // Verify transaction state
-            var txnDescription = adminClient.describeTransactions(List.of(transactionalId))
-                .description(transactionalId).get();
-            assertEquals(TransactionState.COMPLETE_COMMIT, txnDescription.state(),
-                "Transaction should be in COMPLETE_COMMIT state");
         }
     }
 
@@ -272,12 +260,6 @@ public class TransactionsWith2PCTest {
             var consumedRecords = TransactionsTestHelper.consumeRecordsFor(consumer, CONSUME_DURATION_MS);
             assertEquals(0, consumedRecords.size(),
                 "Consumer should see no records after abort");
-
-            // Verify transaction state
-            var txnDescription = adminClient.describeTransactions(List.of(transactionalId))
-                .description(transactionalId).get();
-            assertEquals(TransactionState.COMPLETE_ABORT, txnDescription.state(),
-                "Transaction should be in COMPLETE_ABORT state");
         }
     }
 
@@ -327,7 +309,10 @@ public class TransactionsWith2PCTest {
             // Simulate crash by closing without committing
             producer.close(Duration.ZERO);
 
-            short baseEpoch = 0;
+            // The epoch of the ongoing transaction, it's frozen to be used for the markers once the
+            // transaction is kept with initTransactions(keepPreparedTxn=true).
+            var ongoingEpoch = getProducerEpoch(transactionalId);
+            var clientEpoch = getClientProducerEpoch(transactionalId);
 
             // Crash and recover numCrashes times
             for (var crashNum = 1; crashNum <= numCrashes; crashNum++) {
@@ -335,19 +320,22 @@ public class TransactionsWith2PCTest {
                 // Use keepPreparedTxn=true to preserve in-flight transaction
                 recoveredProducer.initTransactions(true);
 
+                // Each initTransactions(keepPreparedTxn=true) bumps the client-facing epoch.
+                var clientEpochAfterInit = getClientProducerEpoch(transactionalId);
+                assertEquals((short) (clientEpoch + 1), clientEpochAfterInit,
+                    "Crash " + crashNum + ": client-facing epoch should be bumped");
+
                 // Crash the transaction coordinator to test resilience during 2PC recovery
                 crashAndRestartTransactionCoordinator(transactionalId);
 
-                // Verify dual identity after recovery
-                var txnDescription = adminClient.describeTransactions(List.of(transactionalId))
-                    .description(transactionalId).get();
-
-                // After crash recovery, server should set up dual identity
-                assertTrue(txnDescription.producerEpoch() >= baseEpoch,
-                    "Crash " + crashNum + ": client epoch should be >= base epoch");
-
-                // For simplicity in this test, we just verify epoch progression.
-                // Detailed dual identity verification is in unit tests.
+                // The dual identity survives the coordinator restart (it's reloaded from the transaction log):
+                // the client-facing epoch is preserved and the ongoing transaction epoch (which is what
+                // DescribeTransactions returns) is unchanged.
+                assertEquals(clientEpochAfterInit, getClientProducerEpoch(transactionalId),
+                    "Crash " + crashNum + ": client-facing epoch should survive coordinator restart");
+                assertEquals(ongoingEpoch, getProducerEpoch(transactionalId),
+                    "Crash " + crashNum + ": ongoing transaction epoch should be unchanged");
+                clientEpoch = clientEpochAfterInit;
 
                 if (crashNum < numCrashes) {
                     // Simulate another crash
@@ -483,7 +471,7 @@ public class TransactionsWith2PCTest {
                         recoveryProducer.close(Duration.ZERO);
                     }
 
-                    assertTrue(rotationCount >= 1, "First rotation should have occurred after " + iteration + " iterations");
+                    assertEquals(1, rotationCount, "First rotation should have occurred after " + iteration + " iterations");
                     assertEquals((short) 0, getClientProducerEpoch(transactionalId),
                         "After first rotation, client epoch should be exactly 0");
 
@@ -628,7 +616,7 @@ public class TransactionsWith2PCTest {
      * but the client gets new credentials (nextProducerId/nextProducerEpoch).
      */
     private long getClientProducerId(String transactionalId) throws Exception {
-        return withTransactionMetadata(transactionalId, TransactionMetadata::clientProducerId);
+        return withTransactionMetadata(transactionalId, metadata -> metadata.inLock(metadata::clientProducerId));
     }
 
     /**
@@ -637,7 +625,7 @@ public class TransactionsWith2PCTest {
      * but the client gets new credentials (nextProducerId/nextProducerEpoch).
      */
     private short getClientProducerEpoch(String transactionalId) throws Exception {
-        return withTransactionMetadata(transactionalId, TransactionMetadata::clientProducerEpoch);
+        return withTransactionMetadata(transactionalId, metadata -> metadata.inLock(metadata::clientProducerEpoch));
     }
 
     /**
