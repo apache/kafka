@@ -42,7 +42,9 @@ import java.util.Collections;
 import java.util.LinkedList;
 import java.util.List;
 import java.util.concurrent.BlockingQueue;
+import java.util.concurrent.CountDownLatch;
 import java.util.concurrent.LinkedBlockingQueue;
+import java.util.concurrent.TimeUnit;
 import java.util.function.Supplier;
 
 import static org.apache.kafka.test.TestUtils.DEFAULT_MAX_WAIT_MS;
@@ -117,6 +119,45 @@ public class ConsumerNetworkThreadTest {
         consumerNetworkThread.close();
         assertFalse(consumerNetworkThread.isRunning(),
             "close() should make consumerNetworkThread.running false by calling closeInternal(Duration timeout)");
+    }
+
+    @Test
+    public void testCloseRestoresInterruptStatusClearedByJoin() throws Exception {
+        CountDownLatch started = new CountDownLatch(1);
+        CountDownLatch release = new CountDownLatch(1);
+        ConsumerNetworkThread blockingThread = new ConsumerNetworkThread(
+                new LogContext(),
+                time,
+                applicationEventQueue,
+                applicationEventReaper,
+                () -> applicationEventProcessor,
+                () -> networkClientDelegate,
+                () -> requestManagers,
+                asyncConsumerMetrics) {
+            @Override
+            public void run() {
+                started.countDown();
+                try {
+                    release.await();
+                } catch (InterruptedException e) {
+                    Thread.currentThread().interrupt();
+                }
+            }
+        };
+        blockingThread.start();
+        try {
+            assertTrue(started.await(DEFAULT_MAX_WAIT_MS, TimeUnit.MILLISECONDS));
+            Thread.currentThread().interrupt();
+            blockingThread.close(Duration.ZERO);
+            assertTrue(Thread.currentThread().isInterrupted(),
+                "close() should restore the interrupt status cleared by Thread.join()");
+        } finally {
+            // Clear the status restored by close() before waiting again. Thread.join() throws
+            // if it is still set, which would hide the assertion result.
+            Thread.interrupted();
+            release.countDown();
+            blockingThread.join(DEFAULT_MAX_WAIT_MS);
+        }
     }
 
     @ParameterizedTest
