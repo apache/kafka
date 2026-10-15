@@ -2929,6 +2929,132 @@ class TransactionCoordinatorTest {
     testComplete(TransactionResult.ABORT)
   }
 
+  private def currentTxnMetadata(): TransactionMetadata =
+    transactionManager.getTransactionState(transactionalId).toOption.flatten.get.transactionMetadata
+
+  /**
+   * Verifies the PREPARE_ABORT transition produced by a coordinator-initiated epoch fence of a
+   * transaction kept with InitProducerId(keepPreparedTxn=true): markers use the ongoing transaction's
+   * producer id with the bumped ongoing epoch, the client-facing identity is bumped once more,
+   * and the PREPARE_EPOCH_FENCE pending state doesn't linger.
+   */
+  private def verifyEpochFenceOfPreparedTxn(capturedTransitMetadata: ArgumentCaptor[TxnTransitMetadata],
+                                            expectedClientProducerId: Long,
+                                            clientEpochBeforeFence: Short): Unit = {
+    val prepareAbort = capturedTransitMetadata.getValue
+    assertEquals(TransactionState.PREPARE_ABORT, prepareAbort.txnState)
+    assertEquals(producerId, prepareAbort.producerId)
+    assertEquals((producerEpoch + 1).toShort, prepareAbort.producerEpoch)
+    assertEquals(expectedClientProducerId, prepareAbort.nextProducerId)
+    assertEquals((clientEpochBeforeFence + 1).toShort, prepareAbort.nextProducerEpoch)
+    assertNotEquals(util.Optional.of(TransactionState.PREPARE_EPOCH_FENCE), currentTxnMetadata().pendingState)
+  }
+
+  @Test
+  def shouldFenceKeptPreparedTxnOnInitProducerIdWithoutKeepPreparedAfterMultipleKeepPreparedCalls(): Unit = {
+    // A client that did a few InitProducerId(keepPreparedTxn=true) calls (so the client-facing epoch is
+    // more than one ahead of the ongoing txn epoch) decides to force-terminate the prepared transaction with
+    // InitProducerId(keepPreparedTxn=false).  The coordinator must fence the client-facing identity (the
+    // ongoing txn identity is only used for the markers).
+    val capturedTransitMetadata = setupPrepared2PcTxnWithBumpedClientEpoch()
+    coordinator.handleInitProducerId(transactionalId, txnTimeoutMs, enableTwoPCFlag = true,
+      keepPreparedTxn = true, None, initProducerIdMockCallback)
+    val clientEpoch = (producerEpoch + 2).toShort
+    assertEquals(new InitProducerIdResult(producerId, clientEpoch, Errors.NONE, producerId, producerEpoch), result)
+
+    coordinator.handleInitProducerId(transactionalId, txnTimeoutMs, enableTwoPCFlag = true,
+      keepPreparedTxn = false, None, initProducerIdMockCallback)
+
+    // The ongoing transaction is aborted and the client is asked to retry.
+    assertEquals(new InitProducerIdResult(-1, -1, Errors.CONCURRENT_TRANSACTIONS), result)
+    verifyEpochFenceOfPreparedTxn(capturedTransitMetadata, producerId, clientEpoch)
+  }
+
+  @Test
+  def shouldFenceKeptPreparedTxnOnInitProducerIdWithoutKeepPreparedAfterClientProducerIdRotation(): Unit = {
+    // Same as above, but the client-facing producer id was rotated by InitProducerId(keepPreparedTxn=true),
+    // so it is different from the ongoing txn producer id.
+    val (capturedTransitMetadata, rotatedProducerId) = setupPrepared2PcTxnWithRotatedClientProducerId()
+    assertEquals(rotatedProducerId, currentTxnMetadata().clientProducerId)
+
+    coordinator.handleInitProducerId(transactionalId, txnTimeoutMs, enableTwoPCFlag = true,
+      keepPreparedTxn = false, None, initProducerIdMockCallback)
+
+    assertEquals(new InitProducerIdResult(-1, -1, Errors.CONCURRENT_TRANSACTIONS), result)
+    verifyEpochFenceOfPreparedTxn(capturedTransitMetadata, rotatedProducerId, 0)
+  }
+
+  @Test
+  def shouldAbortTimedOutKeptPreparedTxnAfterMultipleKeepPreparedCalls(): Unit = {
+    // The coordinator aborts a timed out transaction that was kept with InitProducerId(keepPreparedTxn=true)
+    // (e.g. a recovered non-2PC transaction).  The timeout abort must fence the client-facing identity.
+    val capturedTransitMetadata = setupPrepared2PcTxnWithBumpedClientEpoch()
+    coordinator.handleInitProducerId(transactionalId, txnTimeoutMs, enableTwoPCFlag = true,
+      keepPreparedTxn = true, None, initProducerIdMockCallback)
+    val clientEpoch = (producerEpoch + 2).toShort
+    assertEquals(clientEpoch, currentTxnMetadata().clientProducerEpoch)
+
+    when(transactionManager.timedOutTransactions())
+      .thenReturn(List(new TransactionalIdAndProducerIdEpoch(transactionalId, producerId, clientEpoch)))
+    var abortError: Option[Errors] = None
+    coordinator.abortTimedOutTransactions(_ => (error, _, _) => abortError = Some(error))
+
+    assertEquals(Some(Errors.NONE), abortError)
+    verifyEpochFenceOfPreparedTxn(capturedTransitMetadata, producerId, clientEpoch)
+  }
+
+  /**
+   * Sets up a transaction kept with InitProducerId(keepPreparedTxn=true) where the client-facing producer id
+   * was rotated, so it is different from the frozen producer id of the ongoing transaction.
+   * Returns the transit metadata captor and the rotated client-facing producer id (with epoch 0).
+   */
+  private def setupPrepared2PcTxnWithRotatedClientProducerId(): (ArgumentCaptor[TxnTransitMetadata], Long) = {
+    mockPidGenerator()
+    val capturedTransitMetadata = setupPrepared2PcTxnWithBumpedClientEpoch()
+    currentTxnMetadata().setNextProducerEpoch((Short.MaxValue - 1).toShort)
+    val rotatedProducerId = nextPid
+    coordinator.handleInitProducerId(transactionalId, txnTimeoutMs, enableTwoPCFlag = true,
+      keepPreparedTxn = true, None, initProducerIdMockCallback)
+    assertEquals(new InitProducerIdResult(rotatedProducerId, 0, Errors.NONE, producerId, producerEpoch), result)
+    (capturedTransitMetadata, rotatedProducerId)
+  }
+
+  @Test
+  def shouldAcceptClientFacingIdentityInInitProducerIdForKeptPreparedTxn(): Unit = {
+    // InitProducerId with the expected producer id and epoch (e.g. epoch bump after an abortable error)
+    // is validated against the client-facing identity.
+    val (capturedTransitMetadata, rotatedProducerId) = setupPrepared2PcTxnWithRotatedClientProducerId()
+
+    coordinator.handleInitProducerId(transactionalId, txnTimeoutMs, enableTwoPCFlag = true,
+      keepPreparedTxn = false, Some(new ProducerIdAndEpoch(rotatedProducerId, 0.toShort)), initProducerIdMockCallback)
+
+    // The ongoing transaction is aborted and the client is asked to retry.
+    assertEquals(new InitProducerIdResult(-1, -1, Errors.CONCURRENT_TRANSACTIONS), result)
+    verifyEpochFenceOfPreparedTxn(capturedTransitMetadata, rotatedProducerId, 0)
+  }
+
+  @Test
+  def shouldFenceFrozenIdentityInInitProducerIdForKeptPreparedTxn(): Unit = {
+    // The frozen producer id / epoch of the kept transaction belong to the previous client incarnation,
+    // so InitProducerId with that expected identity (including an exhausted epoch that would otherwise
+    // be treated as a retry after rotation) must be fenced without touching the prepared transaction.
+    val (capturedTransitMetadata, rotatedProducerId) = setupPrepared2PcTxnWithRotatedClientProducerId()
+    val transitCount = capturedTransitMetadata.getAllValues.size
+
+    for (expectedEpoch <- Seq(producerEpoch, (Short.MaxValue - 1).toShort)) {
+      coordinator.handleInitProducerId(transactionalId, txnTimeoutMs, enableTwoPCFlag = true,
+        keepPreparedTxn = false, Some(new ProducerIdAndEpoch(producerId, expectedEpoch)), initProducerIdMockCallback)
+
+      assertEquals(new InitProducerIdResult(-1, -1, Errors.PRODUCER_FENCED), result)
+      val txnMetadata = currentTxnMetadata()
+      assertEquals(TransactionState.ONGOING, txnMetadata.state)
+      assertEquals(util.Optional.empty(), txnMetadata.pendingState)
+      assertEquals(rotatedProducerId, txnMetadata.clientProducerId)
+      assertEquals(0.toShort, txnMetadata.clientProducerEpoch)
+      assertEquals(transitCount, capturedTransitMetadata.getAllValues.size)
+    }
+  }
+
   @Test
   def shouldRejectAddPartitionsAfterInitProducerIdWithKeepPreparedTxn(): Unit = {
     // Test that trying to add partitions with the client-facing epoch (after

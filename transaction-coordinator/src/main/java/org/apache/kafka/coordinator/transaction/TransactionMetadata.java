@@ -163,17 +163,29 @@ public class TransactionMetadata {
             clientTransactionVersion);
     }
 
+    /**
+     * Prepare the transition to fence the current producer.  The fence is applied to the client-facing
+     * identity (see {@link #clientProducerEpoch()}): if InitProducerId(keepPreparedTxn=true) was used,
+     * producerId / producerEpoch are frozen to be used for the transaction markers, so the
+     * nextProducerEpoch is bumped instead.
+     */
     public TxnTransitMetadata prepareFenceProducerEpoch() {
-        if (producerEpoch == Short.MAX_VALUE)
-            LOGGER.error("Fencing producer {} {} with epoch equal to Short.MaxValue, this must not happen unless there is a bug", transactionalId, producerId);
+        short clientEpoch = clientProducerEpoch();
+        if (clientEpoch == Short.MAX_VALUE)
+            LOGGER.error("Fencing producer {} {} with epoch equal to Short.MaxValue, this must not happen unless there is a bug",
+                transactionalId, clientProducerId());
 
         // If we've already failed to fence an epoch (because the write to the log failed), we don't increase it again.
         // This is safe because we never return the epoch to client if we fail to fence the epoch
-        // Also don't increase if producerEpoch is already at max, to avoid overflow.
-        short bumpedEpoch = hasFailedEpochFence || producerEpoch == Short.MAX_VALUE ? producerEpoch : (short) (producerEpoch + 1);
+        // Also don't increase if the epoch is already at max, to avoid overflow.
+        short bumpedEpoch = hasFailedEpochFence || clientEpoch == Short.MAX_VALUE ? clientEpoch : (short) (clientEpoch + 1);
 
         TransitionData data = new TransitionData(TransactionState.PREPARE_EPOCH_FENCE);
-        data.producerEpoch = bumpedEpoch;
+        if (hasNextProducerEpoch()) {
+            data.nextProducerEpoch = bumpedEpoch;
+        } else {
+            data.producerEpoch = bumpedEpoch;
+        }
         return prepareTransitionTo(data);
     }
 

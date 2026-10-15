@@ -204,8 +204,8 @@ class TransactionCoordinator(txnConfig: TransactionConfig,
             }
 
             endTransaction(transactionalId,
-              newMetadata.producerId,
-              newMetadata.producerEpoch,
+              newMetadata.clientProducerId,
+              newMetadata.clientProducerEpoch,
               TransactionResult.ABORT,
               isFromClient = false,
               clientTransactionVersion = txnManager.transactionVersionLevel(), // Since this is not from client, use server TV
@@ -247,9 +247,14 @@ class TransactionCoordinator(txnConfig: TransactionConfig,
       //      increment it)
       //   3. The expected producer ID matches the previous one and the expected epoch is exhausted, in which case this
       //      could be a retry after a valid epoch bump that the producer never received the response for
-      txnMetadata.producerEpoch == RecordBatch.NO_PRODUCER_EPOCH ||
-        producerIdAndEpoch.producerId == txnMetadata.producerId ||
-        (producerIdAndEpoch.producerId == txnMetadata.prevProducerId && TransactionMetadata.isEpochExhausted(producerIdAndEpoch.epoch))
+      // The checks are done against the client-facing identity: if InitProducerId(keepPreparedTxn=true) was used, the
+      // producerId / producerEpoch are frozen to be used for the transaction markers.  In that case prevProducerId
+      // refers to the frozen producerId rather than to a previous client-facing producer ID, so check 3 doesn't apply
+      // (InitProducerId(keepPreparedTxn=true) itself never has the expected producer ID and epoch).
+      txnMetadata.clientProducerEpoch == RecordBatch.NO_PRODUCER_EPOCH ||
+        producerIdAndEpoch.producerId == txnMetadata.clientProducerId ||
+        (!txnMetadata.hasNextProducerEpoch && producerIdAndEpoch.producerId == txnMetadata.prevProducerId &&
+          TransactionMetadata.isEpochExhausted(producerIdAndEpoch.epoch))
     }
 
     if (txnMetadata.pendingTransitionInProgress) {
@@ -1137,10 +1142,10 @@ class TransactionCoordinator(txnConfig: TransactionConfig,
         case Some(epochAndTxnMetadata) =>
           val txnMetadata = epochAndTxnMetadata.transactionMetadata
           val transitMetadataOpt = txnMetadata.inLock(() => {
-            if (txnMetadata.producerId != txnIdAndPidEpoch.producerId) {
+            if (txnMetadata.clientProducerId != txnIdAndPidEpoch.producerId) {
               error(s"Found incorrect producerId when expiring transactionalId: ${txnIdAndPidEpoch.transactionalId}. " +
                 s"Expected producerId: ${txnIdAndPidEpoch.producerId}. Found producerId: " +
-                s"${txnMetadata.producerId}")
+                s"${txnMetadata.clientProducerId}")
               None
             } else if (txnMetadata.pendingTransitionInProgress) {
               debug(s"Skipping abort of timed out transaction $txnIdAndPidEpoch since there is a " +
@@ -1153,8 +1158,8 @@ class TransactionCoordinator(txnConfig: TransactionConfig,
 
           transitMetadataOpt.foreach { txnTransitMetadata =>
             endTransaction(txnMetadata.transactionalId,
-              txnTransitMetadata.producerId,
-              txnTransitMetadata.producerEpoch,
+              txnTransitMetadata.clientProducerId,
+              txnTransitMetadata.clientProducerEpoch,
               TransactionResult.ABORT,
               isFromClient = false,
               clientTransactionVersion = txnManager.transactionVersionLevel(), // Since this is not from client, use server TV

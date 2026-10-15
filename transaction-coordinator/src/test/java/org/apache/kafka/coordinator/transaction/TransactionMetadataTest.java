@@ -511,6 +511,37 @@ public class TransactionMetadataTest {
     }
 
     @Test
+    public void testFenceProducerWithKeptPreparedTxnBumpsClientFacingEpoch() {
+        // After InitProducerId(keepPreparedTxn=true) producerId / producerEpoch are frozen for the markers
+        // and the client-facing identity is in nextProducerId / nextProducerEpoch, so the fence bumps the latter.
+        short producerEpoch = 735;
+        short clientEpoch = 740;
+        long clientProducerId = producerId + 1;
+
+        TransactionMetadata txnMetadata = new TransactionMetadata(
+            transactionalId,
+            producerId,
+            RecordBatch.NO_PRODUCER_ID,
+            clientProducerId,
+            producerEpoch,
+            RecordBatch.NO_PRODUCER_EPOCH,
+            clientEpoch,
+            30000,
+            TransactionState.ONGOING,
+            Set.of(),
+            -1,
+            time.milliseconds(),
+            TV_2);
+
+        TxnTransitMetadata fencingTransitMetadata = txnMetadata.prepareFenceProducerEpoch();
+        assertEquals(producerId, fencingTransitMetadata.producerId());
+        assertEquals(producerEpoch, fencingTransitMetadata.producerEpoch());
+        assertEquals(clientProducerId, fencingTransitMetadata.clientProducerId());
+        assertEquals((short) (clientEpoch + 1), fencingTransitMetadata.clientProducerEpoch());
+        assertEquals(Optional.of(TransactionState.PREPARE_EPOCH_FENCE), txnMetadata.pendingState());
+    }
+
+    @Test
     public void testFenceProducerNotAllowedIfItWouldOverflow() {
         short producerEpoch = Short.MAX_VALUE;
 
