@@ -57,7 +57,7 @@ public class FileRecords extends AbstractRecords implements Closeable {
     private final boolean isSlice;
     private final int start;
     private final int end;
-    // Notified when writing to a channel fails, or null
+    // Notified when writing to a network channel fails, or null
     private final TransferFailureHandler transferFailureHandler;
 
     private final Iterable<FileLogInputStream.FileChannelRecordBatch> batches;
@@ -168,8 +168,8 @@ public class FileRecords extends AbstractRecords implements Closeable {
     }
 
     /**
-     * Return a copy of this slice whose {@link #writeTo} notifies the given handler when writing to a channel fails.
-     * Slices taken from it with {@link #slice} notify the same handler. This instance is not modified.
+     * Return a copy of this slice whose {@link #writeTo} notifies the given handler when writing to a network channel
+     * fails. Slices taken from it with {@link #slice} notify the same handler. This instance is not modified.
      *
      * @param handler The handler to notify
      * @return A copy of this slice that notifies the handler
@@ -368,7 +368,7 @@ public class FileRecords extends AbstractRecords implements Closeable {
         } catch (IOException e) {
             return Optional.of(new IOException("Failed to read " + file.getAbsolutePath() + " at position "
                     + readPosition + " after failing to write " + count + " bytes from position " + position
-                    + " to a channel", e));
+                    + " to a network channel", e));
         }
     }
 

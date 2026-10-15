@@ -45,7 +45,6 @@ import java.util.List;
 import java.util.Optional;
 import java.util.Set;
 import java.util.UUID;
-import java.util.concurrent.ConcurrentHashMap;
 import java.util.concurrent.ScheduledFuture;
 import java.util.concurrent.atomic.AtomicLong;
 import java.util.function.Consumer;
@@ -85,8 +84,6 @@ public class LocalLog {
     private final Time time;
     private final TopicPartition topicPartition;
     private final LogDirFailureChannel logDirFailureChannel;
-    // Segment files with a read check pending, see checkReadAfterTransferFailure
-    private final Set<String> pendingReadChecks = ConcurrentHashMap.newKeySet();
     private final FileRecords.TransferFailureHandler transferFailureHandler = this::checkReadAfterTransferFailure;
     private final Logger logger;
 
@@ -546,29 +543,30 @@ public class LocalLog {
     /**
      * Called on the network thread when writing fetched records failed, which may be a socket or a storage failure.
      * Re-reading the region tells them apart, so it is done on the scheduler rather than on the network thread, at
-     * most once at a time per segment file so that a burst of failed sends does not queue up re-reads.
+     * most once at a time per log dir, so that a burst of failed sends or a slow failing disk does not take up the
+     * threads of the scheduler, which other tasks of the broker share.
      */
     private void checkReadAfterTransferFailure(FileRecords records, long position, int count, IOException transferFailure) {
-        String file = records.file().getAbsolutePath();
-        if (logDirFailureChannel.hasOfflineLogDir(parentDir) || !pendingReadChecks.add(file))
+        String logDir = parentDir;
+        if (logDirFailureChannel.hasOfflineLogDir(logDir) || !logDirFailureChannel.tryStartReadCheck(logDir))
             return;
         try {
             ScheduledFuture<?> check = scheduler.scheduleOnce("check-read-after-transfer-failure", () -> {
                 try {
                     records.readFailure(position, count).ifPresent(readFailure -> {
                         readFailure.addSuppressed(transferFailure);
-                        logDirFailureChannel.maybeAddOfflineLogDir(parentDir, readFailure.getMessage(), readFailure);
+                        logDirFailureChannel.maybeAddOfflineLogDir(logDir, readFailure.getMessage(), readFailure);
                     });
                 } finally {
-                    pendingReadChecks.remove(file);
+                    logDirFailureChannel.finishReadCheck(logDir);
                 }
             });
-            // A scheduler that is not running ignores the task, which would otherwise stop checking this file for good
+            // A scheduler that is not running ignores the task, which would otherwise stop checking this log dir for good
             if (check.isCancelled())
-                pendingReadChecks.remove(file);
+                logDirFailureChannel.finishReadCheck(logDir);
         } catch (RuntimeException e) {
-            pendingReadChecks.remove(file);
-            logger.warn("Could not schedule a read check of {} after a failed transfer", file, e);
+            logDirFailureChannel.finishReadCheck(logDir);
+            logger.warn("Could not schedule a read check of {} after a failed transfer", records.file().getAbsolutePath(), e);
         }
     }
 

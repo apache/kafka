@@ -20,6 +20,7 @@ import org.slf4j.Logger;
 import org.slf4j.LoggerFactory;
 
 import java.io.IOException;
+import java.util.Set;
 import java.util.concurrent.ArrayBlockingQueue;
 import java.util.concurrent.BlockingQueue;
 import java.util.concurrent.ConcurrentHashMap;
@@ -39,6 +40,8 @@ public class LogDirFailureChannel {
     private static final Logger log = LoggerFactory.getLogger(LogDirFailureChannel.class);
     private final ConcurrentMap<String, String> offlineLogDirs;
     private final BlockingQueue<String> offlineLogDirQueue;
+    // Log dirs with a read check running, see tryStartReadCheck
+    private final Set<String> logDirsWithReadCheck = ConcurrentHashMap.newKeySet();
 
     public LogDirFailureChannel(int logDirNum) {
         this.offlineLogDirs = new ConcurrentHashMap<>();
@@ -62,6 +65,27 @@ public class LogDirFailureChannel {
         if (offlineLogDirs.putIfAbsent(logDir, logDir) == null) {
             offlineLogDirQueue.add(logDir);
         }
+    }
+
+    /**
+     * Start a check of whether the given log dir can still be read, unless one is already running. Taking the log dir
+     * offline is all or nothing, so one check at a time per log dir is enough, and a failing disk then holds at most
+     * one thread per log dir. A started check must be finished with {@link #finishReadCheck}.
+     *
+     * @param logDir The log dir to check.
+     * @return true if the check was started, false if one is already running.
+     */
+    public boolean tryStartReadCheck(String logDir) {
+        return logDirsWithReadCheck.add(logDir);
+    }
+
+    /**
+     * Finish a check started with {@link #tryStartReadCheck}.
+     *
+     * @param logDir The checked log dir.
+     */
+    public void finishReadCheck(String logDir) {
+        logDirsWithReadCheck.remove(logDir);
     }
 
     /**

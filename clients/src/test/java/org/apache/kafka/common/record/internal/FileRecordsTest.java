@@ -590,7 +590,7 @@ public class FileRecordsTest {
     }
 
     /**
-     * Only slices are written to a channel; the records of a whole segment keep growing.
+     * Only slices are written to a network channel; the records of a whole segment keep growing.
      */
     @Test
     public void testTransferFailureHandlerCannotBeSetOnNonSlice() {

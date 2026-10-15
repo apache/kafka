@@ -308,32 +308,44 @@ class LocalLogTest {
     }
 
     /**
-     * A burst of failed writes on a segment schedules a single re-read, and another one only once it is done.
+     * A burst of failed writes across the partitions of a log dir schedules a single re-read, and another one only
+     * once it is done. Another log dir is checked on its own.
      */
     @Test
-    public void testOneReadCheckAtATimePerSegment() throws IOException {
+    public void testOneReadCheckAtATimePerLogDir() throws IOException {
         List<Runnable> scheduled = new ArrayList<>();
         Scheduler scheduler = mock(Scheduler.class);
         when(scheduler.scheduleOnce(anyString(), any(Runnable.class))).thenAnswer(invocation -> {
             scheduled.add(invocation.getArgument(1));
             return mock(ScheduledFuture.class);
         });
-        LocalLog otherLog = createLocalLogWithActiveSegment(TestUtils.randomPartitionLogDir(tmpDir),
-            new LogConfig(new Properties()), scheduler);
+        LogConfig config = new LogConfig(new Properties());
+        LocalLog firstLog = createLocalLogWithActiveSegment(TestUtils.randomPartitionLogDir(tmpDir), config, scheduler);
+        LocalLog secondLog = createLocalLogWithActiveSegment(TestUtils.randomPartitionLogDir(tmpDir), config, scheduler);
+        LocalLog otherDirLog = createLocalLogWithActiveSegment(
+            TestUtils.randomPartitionLogDir(TestUtils.tempDirectory()), config, scheduler);
         try {
-            FileRecords records = fetchedRecords(otherLog);
-            FileRecords readable = spy(records);
+            FileRecords first = fetchedRecords(firstLog);
+            FileRecords readable = spy(first);
+            FileRecords second = fetchedRecords(secondLog);
+            FileRecords otherDir = fetchedRecords(otherDirLog);
 
-            for (int i = 0; i < 3; i++)
-                records.transferFailureHandler().onTransferFailure(readable, 0, 10, new IOException("Broken pipe"));
+            for (int i = 0; i < 3; i++) {
+                first.transferFailureHandler().onTransferFailure(readable, 0, 10, new IOException("Broken pipe"));
+                second.transferFailureHandler().onTransferFailure(second, 0, 10, new IOException("Broken pipe"));
+            }
             assertEquals(1, scheduled.size());
+            otherDir.transferFailureHandler().onTransferFailure(otherDir, 0, 10, new IOException("Broken pipe"));
+            assertEquals(2, scheduled.size());
 
             scheduled.get(0).run();
             verify(readable).readFailure(0, 10);
-            records.transferFailureHandler().onTransferFailure(readable, 0, 10, new IOException("Broken pipe"));
-            assertEquals(2, scheduled.size());
+            second.transferFailureHandler().onTransferFailure(second, 0, 10, new IOException("Broken pipe"));
+            assertEquals(3, scheduled.size());
         } finally {
-            otherLog.closeQuietly();
+            firstLog.closeQuietly();
+            secondLog.closeQuietly();
+            otherDirLog.closeQuietly();
         }
     }
 
@@ -374,6 +386,8 @@ class LocalLogTest {
             verify(scheduler, never()).scheduleOnce(anyString(), any(Runnable.class));
         } finally {
             otherLog.closeQuietly();
+            // Its log dir is offline as well
+            log.closeQuietly();
         }
     }
 
