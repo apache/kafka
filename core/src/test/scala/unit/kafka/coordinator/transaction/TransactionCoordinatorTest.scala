@@ -913,6 +913,39 @@ class TransactionCoordinatorTest {
   }
 
   @ParameterizedTest
+  @EnumSource(value = classOf[TransactionState], names = Array("EMPTY", "COMPLETE_COMMIT", "COMPLETE_ABORT"))
+  def shouldGenerateNewProducerIdOnEmptyCommitIfEpochsExhaustedV2(state: TransactionState): Unit = {
+    mockPidGenerator()
+    nextPid = producerId2
+    val txnMetadata = new TransactionMetadata(transactionalId, producerId, producerId, RecordBatch.NO_PRODUCER_ID,
+      (Short.MaxValue - 1).toShort, (Short.MaxValue - 2).toShort, txnTimeoutMs, state, util.Set.of, 0, time.milliseconds(), TV_2)
+    when(transactionManager.getTransactionState(ArgumentMatchers.eq(transactionalId)))
+      .thenReturn(Right(Some(new CoordinatorEpochAndTxnMetadata(coordinatorEpoch, txnMetadata))))
+    when(transactionManager.appendTransactionToLog(
+      ArgumentMatchers.eq(transactionalId),
+      ArgumentMatchers.eq(coordinatorEpoch),
+      capturedTxnTransitMetadata.capture(),
+      capturedErrorsCallback.capture(),
+      any(),
+      any())
+    ).thenAnswer(_ => {
+      txnMetadata.completeTransitionTo(capturedTxnTransitMetadata.getValue)
+      capturedErrorsCallback.getValue.apply(Errors.NONE)
+    })
+
+    coordinator.handleEndTransaction(transactionalId, producerId, (Short.MaxValue - 1).toShort, TransactionResult.COMMIT, TV_2, endTxnCallback)
+
+    // The empty commit bumps the epoch to Short.MaxValue, so the producer ID is rotated on completion.
+    assertEquals(Errors.NONE, error)
+    assertEquals(producerId2, newProducerId)
+    assertEquals(0, newEpoch)
+    assertEquals(TransactionState.PREPARE_COMMIT, txnMetadata.state)
+    assertEquals(Short.MaxValue, txnMetadata.producerEpoch)
+    assertEquals(producerId2, capturedTxnTransitMetadata.getValue.nextProducerId)
+    assertTrue(txnMetadata.topicPartitions.isEmpty)
+  }
+
+  @ParameterizedTest
   @EnumSource(value = classOf[Errors], names = Array("NOT_COORDINATOR", "COORDINATOR_NOT_AVAILABLE"))
   def shouldReturnRetriableErrorWhenEmptyCommitCannotBeWrittenInV2(appendError: Errors): Unit = {
     // A stale coordinator sees the transaction as empty since its partitions were added on the new coordinator,

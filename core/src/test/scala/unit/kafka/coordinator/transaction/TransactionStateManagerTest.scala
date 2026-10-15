@@ -736,6 +736,40 @@ class TransactionStateManagerTest {
   }
 
   @Test
+  def shouldCompleteEmptyPrepareCommitOnLoad(): Unit = {
+    // With transaction V2, committing a transaction with no partitions writes PrepareCommit with no partitions.
+    // On load, it must be completed the same way as an empty PrepareAbort.
+    val txnMetadata = new TransactionMetadata(transactionalId1, producerIds(transactionalId1), RecordBatch.NO_PRODUCER_ID,
+      RecordBatch.NO_PRODUCER_ID, 0.toShort, RecordBatch.NO_PRODUCER_EPOCH, transactionTimeoutMs, TransactionState.COMPLETE_COMMIT,
+      util.Set.of, time.milliseconds(), time.milliseconds(), TV_2)
+    txnMetadata.completeTransitionTo(txnMetadata.prepareAbortOrCommit(TransactionState.PREPARE_COMMIT, TV_2,
+      RecordBatch.NO_PRODUCER_ID, time.milliseconds(), true))
+
+    txnRecords += new SimpleRecord(txnMessageKeyBytes1, TransactionLog.valueToBytes(txnMetadata.prepareNoTransit(), TV_2))
+    prepareTxnLog(topicPartition, 0, MemoryRecords.withRecords(0L, Compression.NONE, txnRecords.toArray: _*))
+
+    var txnResult: TransactionResult = null
+    var loadedMetadata: TransactionMetadata = null
+    var completeMetadata: TxnTransitMetadata = null
+    transactionManager.loadTransactionsForTxnTopicPartition(partitionId, 0, (_, result, metadata, newMetadata) => {
+      txnResult = result
+      loadedMetadata = metadata
+      completeMetadata = newMetadata
+    })
+    scheduler.tick()
+
+    assertEquals(TransactionResult.COMMIT, txnResult)
+    assertEquals(TransactionState.PREPARE_COMMIT, loadedMetadata.state)
+    assertEquals(1.toShort, loadedMetadata.producerEpoch)
+    assertTrue(loadedMetadata.topicPartitions.isEmpty)
+    assertEquals(TransactionState.COMPLETE_COMMIT, completeMetadata.txnState)
+
+    loadedMetadata.completeTransitionTo(completeMetadata)
+    assertEquals(TransactionState.COMPLETE_COMMIT, loadedMetadata.state)
+    assertEquals(1.toShort, loadedMetadata.producerEpoch)
+  }
+
+  @Test
   def shouldRemoveCompleteCommitExpiredTransactionalIds(): Unit = {
     setupAndRunTransactionalIdExpiration(Errors.NONE, TransactionState.COMPLETE_COMMIT)
     verifyMetadataDoesntExist(transactionalId1)
