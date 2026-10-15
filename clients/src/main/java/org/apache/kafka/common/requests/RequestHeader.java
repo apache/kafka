@@ -147,10 +147,6 @@ public class RequestHeader implements AbstractRequestResponse {
      * are left unread. The returned header has {@link #isApiVersionSupported()} set to false, and the caller is
      * expected to check it before parsing the rest of the bytes in the request, since the buffer is not positioned
      * at the start of the request body.
-     * <p>
-     * This allows the broker to handle {@link ApiVersionsRequest} from newer clients, which uses a request version
-     * unknown to the broker. The broker responds with a v0 {@link ApiVersionsResponse} in that case, and the client
-     * falls back to parsing the response as v0 if it cannot parse it as the expected version.
      *
      * @param buffer the buffer containing the request header
      * @return the parsed request header

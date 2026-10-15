@@ -539,7 +539,8 @@ public class SaslServerAuthenticator implements Authenticator {
             }
         } catch (InvalidRequestException | UnsupportedVersionException e) {
             if (saslState == SaslState.INITIAL_REQUEST) {
-                // InvalidRequestException is thrown if the request is not in Kafka format or if the API key is invalid.
+                // InvalidRequestException or UnsupportedVersionException is thrown if the request is not in Kafka format,
+                // if the API key is invalid or if the API version is unsupported.
                 // If it's the initial request, this could be an ancient client (see method documentation for more details),
                 // a client configured with the wrong security protocol or a non kafka-client altogether (eg http client).
                 throw new InvalidRequestException("Invalid request, potential reasons: kafka client configured with the " +

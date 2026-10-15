@@ -112,7 +112,12 @@ public class RequestContext implements AuthorizableRequestContext {
 
     /**
      * Parses the request body from the given buffer, which must be positioned at the start of the request body.
-     * An {@link ApiVersionsRequest} with an unsupported version is not parsed and is treated as a v0 request.
+     * If the header indicates the request version is unsupported, the request body is not parsed. An unsupported
+     * {@link ApiVersionsRequest} is treated as a v0 request. For other requests, an UnsupportedVersionException is thrown.
+     * <p>
+     * This allows the broker to handle {@link ApiVersionsRequest} from newer clients, which uses a request version
+     * unknown to the broker. The broker responds with a v0 {@link ApiVersionsResponse} in that case, and the client
+     * falls back to parsing the response as v0 if it cannot parse it as the expected version.
      *
      * @param buffer the buffer containing the request body
      * @return the parsed request and its size
