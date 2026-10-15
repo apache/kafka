@@ -609,6 +609,10 @@ public class RecordCollectorImpl implements RecordCollector {
             checkForException();
         } finally {
             offsets.clear();
+            // On the normal path any send exception is cleared by checkForException.
+            // However, if abortTransaction throws, we need to clear the send exception so
+            // the revived task using this collector doesn't throw the stale exception
+            sendException.set(null);
         }
     }
 
