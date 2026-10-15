@@ -14,8 +14,10 @@
  * See the License for the specific language governing permissions and
  * limitations under the License.
  */
-package org.apache.kafka.coordinator.group.assignor.uniform2;
+package org.apache.kafka.coordinator.group.assignor.uniform2.steps;
 
+import org.apache.kafka.coordinator.group.assignor.uniform2.IndexedGroup;
+import org.apache.kafka.coordinator.group.assignor.uniform2.Quotas;
 import org.apache.kafka.coordinator.group.assignor.uniform2.util.IntPair;
 import org.apache.kafka.coordinator.group.assignor.uniform2.util.LongHeap;
 
@@ -36,7 +38,7 @@ import java.util.Arrays;
  *
  * <p>On exit, every extra partition of every topic is assigned, each to a distinct subscriber.
  */
-final class AssignRemainingExtraPartitions {
+public final class AssignRemainingExtraPartitions {
     /**
      * The state of a cohort while the extra partitions are assigned.
      */
@@ -102,7 +104,7 @@ final class AssignRemainingExtraPartitions {
      * @param group  The members and topics of the group.
      * @param quotas The quotas, as the first step left them.
      */
-    AssignRemainingExtraPartitions(IndexedGroup group, Quotas quotas) {
+    public AssignRemainingExtraPartitions(IndexedGroup group, Quotas quotas) {
         this.group = group;
         this.quotas = quotas;
     }
@@ -122,7 +124,7 @@ final class AssignRemainingExtraPartitions {
      * Assigns the extra partitions that no owner kept. When the owners kept them all, as in a
      * stable group, returns at once without allocating anything.
      */
-    void run() {
+    public void run() {
         if (!hasRemainingExtraPartitions()) {
             return;
         }

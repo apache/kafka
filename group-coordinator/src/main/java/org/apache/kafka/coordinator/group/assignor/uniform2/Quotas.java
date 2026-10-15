@@ -30,7 +30,7 @@ import org.apache.kafka.coordinator.group.assignor.uniform2.util.IntList;
  * partitions with {@link #giveExtraPartition} and move them with {@link #moveExtraPartition},
  * every extra partition going to a distinct subscriber of its topic.
  */
-final class Quotas {
+public final class Quotas {
     /**
      * The empty list of members with an extra partition shared by all the topics without extra
      * partitions. It never changes: {@link #giveExtraPartition} rejects such a topic, and
@@ -97,7 +97,7 @@ final class Quotas {
     /**
      * @return The minimum number of partitions of the topic that every subscriber gets.
      */
-    int minQuota(int topic) {
+    public int minQuota(int topic) {
         return minQuotas[topic];
     }
 
@@ -105,21 +105,21 @@ final class Quotas {
      * @return The number of subscribers of the topic getting one partition more than the minimum
      *         quota.
      */
-    int extraPartitions(int topic) {
+    public int extraPartitions(int topic) {
         return extraPartitions[topic];
     }
 
     /**
      * @return The members getting an extra partition of the topic. The list must not be changed.
      */
-    IntList membersWithExtraPartition(int topic) {
+    public IntList membersWithExtraPartition(int topic) {
         return membersWithExtraPartition[topic];
     }
 
     /**
      * @return The number of topics of which the member gets an extra partition.
      */
-    int extraPartitionCount(int member) {
+    public int extraPartitionCount(int member) {
         return extraPartitionCounts[member];
     }
 
@@ -127,7 +127,7 @@ final class Quotas {
      * @return The assignment size of the member: the number of partitions it gets over all its
      *         topics.
      */
-    int assignmentSize(int member) {
+    public int assignmentSize(int member) {
         return minAssignmentSizes[group.cohortOf(member)] + extraPartitionCounts[member];
     }
 
@@ -135,7 +135,7 @@ final class Quotas {
      * @return The sum of the minimum quotas of the topics of the cohort: the smallest assignment
      *         size of its members.
      */
-    int minAssignmentSize(int cohort) {
+    public int minAssignmentSize(int cohort) {
         return minAssignmentSizes[cohort];
     }
 
@@ -145,7 +145,7 @@ final class Quotas {
      *
      * @throws IllegalStateException If every extra partition of the topic is given already.
      */
-    void giveExtraPartition(int member, int topic) {
+    public void giveExtraPartition(int member, int topic) {
         if (membersWithExtraPartition[topic].size() == extraPartitions[topic]) {
             throw new IllegalStateException("No extra partition of topic " + group.topicId(topic) + " left for member "
                 + group.memberId(member));

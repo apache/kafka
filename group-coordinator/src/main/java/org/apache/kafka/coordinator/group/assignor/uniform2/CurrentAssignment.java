@@ -35,7 +35,7 @@ import java.util.Set;
  * contains them. As the coordinator guarantees, a partition is held by at most one member, a topic
  * never has fewer partitions than its members hold, and no set of partitions is empty.
  */
-final class CurrentAssignment {
+public final class CurrentAssignment {
     /**
      * Per member, the partitions it holds, as given by the spec.
      */
@@ -146,7 +146,7 @@ final class CurrentAssignment {
      * @param distinctOwners Receives the owners, in the order of their lowest partition. Existing
      *                       entries are cleared by this method.
      */
-    void countOwned(int topic, int[] counts, IntList distinctOwners) {
+    public void countOwned(int topic, int[] counts, IntList distinctOwners) {
         distinctOwners.clear();
         var topicOwners = owners[topic];
         if (topicOwners == null) {

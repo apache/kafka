@@ -42,7 +42,7 @@ import java.util.Map;
  *
  * <p>Only topics subscribed by at least one member and which exist are retained.
  */
-final class IndexedGroup {
+public final class IndexedGroup {
     /**
      * Builds the {@link IndexedGroup} of a group spec.
      *
@@ -498,7 +498,7 @@ final class IndexedGroup {
     /**
      * @return The number of members.
      */
-    int memberCount() {
+    public int memberCount() {
         return memberIds.length;
     }
 
@@ -512,14 +512,14 @@ final class IndexedGroup {
     /**
      * @return The cohort of the member.
      */
-    int cohortOf(int member) {
+    public int cohortOf(int member) {
         return cohortOfMember[member];
     }
 
     /**
      * @return The number of topics.
      */
-    int topicCount() {
+    public int topicCount() {
         return topicIds.length;
     }
 
@@ -549,7 +549,7 @@ final class IndexedGroup {
      * @return The number of members subscribing to the topic. Always at least one for topics
      *         retained by the class.
      */
-    int subscriberCount(int topic) {
+    public int subscriberCount(int topic) {
         return subscriberCounts[topic];
     }
 
@@ -557,21 +557,21 @@ final class IndexedGroup {
      * @return The cohorts subscribing to the topic, in cohort order. The array must not be
      *         changed.
      */
-    int[] cohortsOf(int topic) {
+    public int[] cohortsOf(int topic) {
         return cohortsOfTopic[topic];
     }
 
     /**
      * @return The number of cohorts.
      */
-    int cohortCount() {
+    public int cohortCount() {
         return cohortMembers.length;
     }
 
     /**
      * @return The members of the cohort, in member order. The array must not be changed.
      */
-    int[] membersOf(int cohort) {
+    public int[] membersOf(int cohort) {
         return cohortMembers[cohort];
     }
 

@@ -14,8 +14,11 @@
  * See the License for the specific language governing permissions and
  * limitations under the License.
  */
-package org.apache.kafka.coordinator.group.assignor.uniform2;
+package org.apache.kafka.coordinator.group.assignor.uniform2.steps;
 
+import org.apache.kafka.coordinator.group.assignor.uniform2.CurrentAssignment;
+import org.apache.kafka.coordinator.group.assignor.uniform2.IndexedGroup;
+import org.apache.kafka.coordinator.group.assignor.uniform2.Quotas;
 import org.apache.kafka.coordinator.group.assignor.uniform2.util.IntList;
 import org.apache.kafka.coordinator.group.assignor.uniform2.util.IntPair;
 
@@ -28,7 +31,7 @@ import java.util.Arrays;
  * assignment sizes keep them. The assignment sizes include the extra partitions kept for the topics
  * so far. Ties are broken by member order.
  */
-final class KeepStickyExtraPartitions {
+public final class KeepStickyExtraPartitions {
     /**
      * The members and topics of the group.
      */
@@ -49,7 +52,7 @@ final class KeepStickyExtraPartitions {
      * @param currentAssignment The current assignment.
      * @param quotas            The quotas, at the minimum quota.
      */
-    KeepStickyExtraPartitions(IndexedGroup group, CurrentAssignment currentAssignment, Quotas quotas) {
+    public KeepStickyExtraPartitions(IndexedGroup group, CurrentAssignment currentAssignment, Quotas quotas) {
         this.group = group;
         this.currentAssignment = currentAssignment;
         this.quotas = quotas;
@@ -58,7 +61,7 @@ final class KeepStickyExtraPartitions {
     /**
      * Lets the owners of more than the minimum quota of every topic keep an extra partition.
      */
-    void run() {
+    public void run() {
         // Per member, the number of partitions of the topic that it owns.
         var ownedPartitionCounts = new int[group.memberCount()];
         // The owners of the topic.
