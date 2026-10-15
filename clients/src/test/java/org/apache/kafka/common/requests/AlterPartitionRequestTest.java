@@ -58,7 +58,7 @@ class AlterPartitionRequestTest {
 
         request.topics().add(topicData);
 
-        AlterPartitionRequest.Builder builder = new AlterPartitionRequest.Builder(request);
+        AlterPartitionRequest.Builder builder = new AlterPartitionRequest.Builder(request, true);
         AlterPartitionRequest alterPartitionRequest = builder.build(version);
         assertEquals(1, alterPartitionRequest.data().topics().size());
         assertEquals(1, alterPartitionRequest.data().topics().get(0).partitions().size());

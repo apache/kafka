@@ -631,7 +631,7 @@ class RequestQuotaTest extends BaseRequestTest {
             Topic.CLUSTER_METADATA_TOPIC_PARTITION))
 
         case ApiKeys.ALTER_PARTITION =>
-          new AlterPartitionRequest.Builder(new AlterPartitionRequestData())
+          new AlterPartitionRequest.Builder(new AlterPartitionRequestData(), false)
 
         case ApiKeys.UPDATE_FEATURES =>
           new UpdateFeaturesRequest.Builder(new UpdateFeaturesRequestData())

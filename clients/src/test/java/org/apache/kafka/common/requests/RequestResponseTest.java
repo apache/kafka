@@ -1872,7 +1872,7 @@ public class RequestResponseTest {
             .setTopics(singletonList(new AlterPartitionRequestData.TopicData()
                 .setTopicId(Uuid.randomUuid())
                 .setPartitions(singletonList(partitionData))));
-        return new AlterPartitionRequest.Builder(data).build(version);
+        return new AlterPartitionRequest.Builder(data, true).build(version);
     }
 
     private AlterPartitionResponse createAlterPartitionResponse() {
