@@ -1168,16 +1168,6 @@ org.apache.kafka.coordinator.group.assignor.UniformHomogeneousAssignmentBuilderT
 - testReassignmentWhenOneSubscriptionRemovedAfterInitialAssignmentWithTwoMembersTwoTopics
 - testReassignmentWhenPartitionsAreAddedForTwoMembersTwoTopics
 - testValidityAndBalanceForLargeSampleSet
-org.apache.kafka.coordinator.group.assignor.uniform2.AssignRemainingExtraPartitionsTest:
-- testACohortThatFillsUpGetsNoMore
-- testACohortWhoseMembersAllHaveAnExtraPartitionGetsNoMore
-- testAMemberWithMoreExtraPartitionsGetsOneWhenTheOthersHaveOneOfTheTopic
-- testExtraPartitionGoesToTheCohortWithTheSmallestAssignment
-- testMembersOfACohortAreServedInTurn
-- testMembersWithTheFewestExtraPartitionsAreServedFirst
-- testNothingLeftToAssign
-- testTiesGoToTheFirstCohort
-- testTopicsWithTheFewestSubscribersGoFirst
 org.apache.kafka.coordinator.group.assignor.uniform2.CurrentAssignmentTest:
 - testOwnersAndAssignments
 - testPartitionsOfATopicThatNoLongerExistsAreStale
@@ -1194,14 +1184,24 @@ org.apache.kafka.coordinator.group.assignor.uniform2.IndexedGroupTest:
 - testTopicsAreNumberedInTopicIdOrder
 - testTopicsThatAreNotSubscribedAreIgnored
 - testTopicsThatDoNotExistAreIgnored
-org.apache.kafka.coordinator.group.assignor.uniform2.KeepStickyExtraPartitionsTest:
-- testOwnersAboveTheMinQuotaKeepAnExtraPartition
-- testOwnersOfTheSameSizeKeepInMemberOrder
-- testOwnersWithTheSmallestAssignmentKeepTheExtraPartitions
 org.apache.kafka.coordinator.group.assignor.uniform2.QuotasTest:
 - testGiveExtraPartition
 - testMinQuotaAndExtraPartitions
 - testMoveExtraPartition
+org.apache.kafka.coordinator.group.assignor.uniform2.steps.AssignRemainingExtraPartitionsTest:
+- testACohortThatFillsUpGetsNoMore
+- testACohortWhoseMembersAllHaveAnExtraPartitionGetsNoMore
+- testAMemberWithMoreExtraPartitionsGetsOneWhenTheOthersHaveOneOfTheTopic
+- testExtraPartitionGoesToTheCohortWithTheSmallestAssignment
+- testMembersOfACohortAreServedInTurn
+- testMembersWithTheFewestExtraPartitionsAreServedFirst
+- testNothingLeftToAssign
+- testTiesGoToTheFirstCohort
+- testTopicsWithTheFewestSubscribersGoFirst
+org.apache.kafka.coordinator.group.assignor.uniform2.steps.KeepStickyExtraPartitionsTest:
+- testOwnersAboveTheMinQuotaKeepAnExtraPartition
+- testOwnersOfTheSameSizeKeepInMemberOrder
+- testOwnersWithTheSmallestAssignmentKeepTheExtraPartitions
 org.apache.kafka.coordinator.group.assignor.uniform2.util.IntListTest:
 - testAdd
 - testClear
