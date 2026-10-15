@@ -1168,6 +1168,16 @@ org.apache.kafka.coordinator.group.assignor.UniformHomogeneousAssignmentBuilderT
 - testReassignmentWhenOneSubscriptionRemovedAfterInitialAssignmentWithTwoMembersTwoTopics
 - testReassignmentWhenPartitionsAreAddedForTwoMembersTwoTopics
 - testValidityAndBalanceForLargeSampleSet
+org.apache.kafka.coordinator.group.assignor.uniform2.AssignRemainingExtraPartitionsTest:
+- testACohortThatFillsUpGetsNoMore
+- testACohortWhoseMembersAllHaveAnExtraPartitionGetsNoMore
+- testAMemberWithMoreExtraPartitionsGetsOneWhenTheOthersHaveOneOfTheTopic
+- testExtraPartitionGoesToTheCohortWithTheSmallestAssignment
+- testMembersOfACohortAreServedInTurn
+- testMembersWithTheFewestExtraPartitionsAreServedFirst
+- testNothingLeftToAssign
+- testTiesGoToTheFirstCohort
+- testTopicsWithTheFewestSubscribersGoFirst
 org.apache.kafka.coordinator.group.assignor.uniform2.CurrentAssignmentTest:
 - testOwnersAndAssignments
 - testPartitionsOfATopicThatNoLongerExistsAreStale
@@ -1184,6 +1194,14 @@ org.apache.kafka.coordinator.group.assignor.uniform2.IndexedGroupTest:
 - testTopicsAreNumberedInTopicIdOrder
 - testTopicsThatAreNotSubscribedAreIgnored
 - testTopicsThatDoNotExistAreIgnored
+org.apache.kafka.coordinator.group.assignor.uniform2.KeepStickyExtraPartitionsTest:
+- testOwnersAboveTheMinQuotaKeepAnExtraPartition
+- testOwnersOfTheSameSizeKeepInMemberOrder
+- testOwnersWithTheSmallestAssignmentKeepTheExtraPartitions
+org.apache.kafka.coordinator.group.assignor.uniform2.QuotasTest:
+- testGiveExtraPartition
+- testMinQuotaAndExtraPartitions
+- testMoveExtraPartition
 org.apache.kafka.coordinator.group.assignor.uniform2.util.IntListTest:
 - testAdd
 - testClear
@@ -1201,6 +1219,11 @@ org.apache.kafka.coordinator.group.assignor.uniform2.util.IntListTest:
 - testToString
 - testTruncate
 - testTruncateOutOfRangeThrows
+org.apache.kafka.coordinator.group.assignor.uniform2.util.IntPairTest:
+- testHigh
+- testLow
+- testPack
+- testPairsOfNonNegativeIntsSortByHighThenLow
 org.apache.kafka.coordinator.group.assignor.uniform2.util.LongHeapTest:
 - testAgreesWithAPriorityQueue
 - testClear
@@ -1493,6 +1516,8 @@ org.apache.kafka.coordinator.group.streams.AssignmentRefinerTest:
 - shouldFundOnTheLoadThisStepsGrantsLeaveBehind
 - shouldFundTheMigrationRelievingTheBusierSourceWhenDestinationsTie
 - shouldFundTheMigrationWithTheLeastLoadedDestinationFirst
+- shouldGrantATaskAtOnceToATargetOwnerThatCannotBeWarmedUp
+- shouldGrantATaskAtOnceToATargetOwnerThatCannotBeWarmedUpAndAlreadyHoldsAStandby
 - shouldGrantATaskNobodyHoldsWhenItsTargetProcessReportsStateOnDisk
 - shouldGrantATaskNobodyHoldsWhenNoCopyOfItIsCaughtUp
 - shouldGrantATaskNobodyRunsEvenToAColdMember
@@ -1513,6 +1538,7 @@ org.apache.kafka.coordinator.group.streams.AssignmentRefinerTest:
 - shouldIndexWhetherACopyHasStartedItsRestore
 - shouldKeepABorrowedStandbyWhereHistoryLeftIt
 - shouldKeepAStalledWarmupThatHasAlreadyRestoredSomething
+- shouldKeepATaskRunningOnACurrentOwnerThatCannotBeWarmedUp
 - shouldKeepFundingAWarmupThatIsAlreadyRestoring
 - shouldKeepTheActiveWithItsCurrentOwnerAndWithholdItFromTheTargetOwner
 - shouldMoveASiblingStandbyOntoTheTargetOwnerAndBackfillTheRelocatedOne
@@ -1529,6 +1555,7 @@ org.apache.kafka.coordinator.group.streams.AssignmentRefinerTest:
 - shouldNotCountStatelessTasksTowardsProcessLoad
 - shouldNotCountTasksPendingRevocationTowardsProcessLoad
 - shouldNotDetectADropAndADuplicateCancellingEachOtherOut
+- shouldNotDetourThroughACaughtUpCopyWhenTheTargetOwnerCannotBeWarmedUp
 - shouldNotFundAMigrationWhoseTargetMemberHasLeftTheGroup
 - shouldNotFundAWarmupWhoseTaskWasReTargetedToAnotherProcess
 - shouldNotIndexAnActiveHolderForATaskThatIsPendingRevocation
