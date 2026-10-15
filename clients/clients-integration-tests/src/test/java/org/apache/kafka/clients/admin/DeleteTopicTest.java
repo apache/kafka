@@ -58,9 +58,7 @@ import static org.junit.jupiter.api.Assertions.fail;
     brokers = 3,
     serverProperties = {
         @ClusterConfigProperty(key = GroupCoordinatorConfig.OFFSETS_TOPIC_PARTITIONS_CONFIG, value = "1"),
-        @ClusterConfigProperty(key = GroupCoordinatorConfig.OFFSETS_TOPIC_REPLICATION_FACTOR_CONFIG, value = "1"),
-        @ClusterConfigProperty(key = "log.initial.task.delay.ms", value = "100"),
-        @ClusterConfigProperty(key = "log.segment.delete.delay.ms", value = "1000")
+        @ClusterConfigProperty(key = GroupCoordinatorConfig.OFFSETS_TOPIC_REPLICATION_FACTOR_CONFIG, value = "1")
     })
 public class DeleteTopicTest {
     private static final String DEFAULT_TOPIC = "topic";

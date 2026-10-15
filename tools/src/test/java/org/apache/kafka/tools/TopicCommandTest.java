@@ -51,7 +51,6 @@ import org.apache.kafka.common.requests.MetadataResponse;
 import org.apache.kafka.common.serialization.StringSerializer;
 import org.apache.kafka.common.test.ClusterInstance;
 import org.apache.kafka.common.test.api.ClusterConfig;
-import org.apache.kafka.common.test.api.ClusterConfigProperty;
 import org.apache.kafka.common.test.api.ClusterTemplate;
 import org.apache.kafka.common.test.api.ClusterTest;
 import org.apache.kafka.common.test.api.Type;
@@ -341,8 +340,6 @@ public class TopicCommandTest {
     static List<ClusterConfig> generate() {
         Map<String, String> serverProp = new HashMap<>();
         serverProp.put(REPLICA_FETCH_MAX_BYTES_CONFIG, "1"); // if config name error, no exception throw
-        serverProp.put("log.initial.task.delay.ms", "100");
-        serverProp.put("log.segment.delete.delay.ms", "1000");
 
         Map<Integer, Map<String, String>> rackInfo = new HashMap<>();
         Map<String, String> infoPerBroker1 = new HashMap<>();
@@ -374,13 +371,7 @@ public class TopicCommandTest {
         );
     }
 
-    @ClusterTest(
-        brokers = 3,
-        serverProperties = {
-            @ClusterConfigProperty(key = "log.initial.task.delay.ms", value = "100"),
-            @ClusterConfigProperty(key = "log.segment.delete.delay.ms", value = "1000")
-        }
-    )
+    @ClusterTest(brokers = 3)
     public void testCreate(ClusterInstance clusterInstance) throws InterruptedException, ExecutionException {
         String testTopicName = TestUtils.randomString(10);
         clusterInstance.createTopic(testTopicName, defaultNumPartitions, defaultReplicationFactor);
@@ -395,13 +386,7 @@ public class TopicCommandTest {
         }
     }
 
-    @ClusterTest(
-        brokers = 3,
-        serverProperties = {
-            @ClusterConfigProperty(key = "log.initial.task.delay.ms", value = "100"),
-            @ClusterConfigProperty(key = "log.segment.delete.delay.ms", value = "1000")
-        }
-    )
+    @ClusterTest(brokers = 3)
     public void testCreateWithDefaults(ClusterInstance clusterInstance) throws InterruptedException, ExecutionException {
         String testTopicName = TestUtils.randomString(10);
         clusterInstance.createTopic(testTopicName, defaultNumPartitions, defaultReplicationFactor);
@@ -425,13 +410,7 @@ public class TopicCommandTest {
         }
     }
 
-    @ClusterTest(
-        brokers = 3,
-        serverProperties = {
-            @ClusterConfigProperty(key = "log.initial.task.delay.ms", value = "100"),
-            @ClusterConfigProperty(key = "log.segment.delete.delay.ms", value = "1000")
-        }
-    )
+    @ClusterTest(brokers = 3)
     public void testCreateWithDefaultReplication(ClusterInstance clusterInstance) throws InterruptedException, ExecutionException {
         String testTopicName = TestUtils.randomString(10);
         clusterInstance.createTopic(testTopicName, 2, defaultReplicationFactor);
@@ -832,13 +811,7 @@ public class TopicCommandTest {
         }
     }
 
-    @ClusterTest(
-        brokers = 3,
-        serverProperties = {
-            @ClusterConfigProperty(key = "log.initial.task.delay.ms", value = "100"),
-            @ClusterConfigProperty(key = "log.segment.delete.delay.ms", value = "1000")
-        }
-    )
+    @ClusterTest(brokers = 3)
     public void testTopicDeletion(ClusterInstance clusterInstance) throws Exception {
         String testTopicName = "testing";
         clusterInstance.createTopic(testTopicName, defaultNumPartitions, defaultReplicationFactor);
@@ -855,13 +828,7 @@ public class TopicCommandTest {
         }
     }
 
-    @ClusterTest(
-        brokers = 3,
-        serverProperties = {
-            @ClusterConfigProperty(key = "log.initial.task.delay.ms", value = "100"),
-            @ClusterConfigProperty(key = "log.segment.delete.delay.ms", value = "1000")
-        }
-    )
+    @ClusterTest(brokers = 3)
     public void testTopicWithCollidingCharDeletionAndCreateAgain(ClusterInstance clusterInstance) throws Exception {
         // create the topic with colliding chars
         String topicWithCollidingChar = "test.a";
@@ -883,13 +850,7 @@ public class TopicCommandTest {
         clusterInstance.createTopic(topicWithCollidingChar, defaultNumPartitions, defaultReplicationFactor);
     }
 
-    @ClusterTest(
-        brokers = 3,
-        serverProperties = {
-            @ClusterConfigProperty(key = "log.initial.task.delay.ms", value = "100"),
-            @ClusterConfigProperty(key = "log.segment.delete.delay.ms", value = "1000")
-        }
-    )
+    @ClusterTest(brokers = 3)
     public void testDeleteInternalTopic(ClusterInstance clusterInstance) throws Exception {
         // create the offset topic
         clusterInstance.createTopic(Topic.GROUP_METADATA_TOPIC_NAME, defaultNumPartitions, defaultReplicationFactor);
@@ -910,13 +871,7 @@ public class TopicCommandTest {
         }
     }
 
-    @ClusterTest(
-        brokers = 3,
-        serverProperties = {
-            @ClusterConfigProperty(key = "log.initial.task.delay.ms", value = "100"),
-            @ClusterConfigProperty(key = "log.segment.delete.delay.ms", value = "1000")
-        }
-    )
+    @ClusterTest(brokers = 3)
     public void testDeleteWhenTopicDoesntExist(ClusterInstance clusterInstance) throws Exception {
         String testTopicName = TestUtils.randomString(10);
         try (Admin adminClient = clusterInstance.admin();
@@ -928,13 +883,7 @@ public class TopicCommandTest {
         }
     }
 
-    @ClusterTest(
-        brokers = 3,
-        serverProperties = {
-            @ClusterConfigProperty(key = "log.initial.task.delay.ms", value = "100"),
-            @ClusterConfigProperty(key = "log.segment.delete.delay.ms", value = "1000")
-        }
-    )
+    @ClusterTest(brokers = 3)
     public void testDeleteWhenTopicDoesntExistWithIfExists(ClusterInstance clusterInstance) throws Exception {
         String testTopicName = TestUtils.randomString(10);
         try (Admin adminClient = clusterInstance.admin();

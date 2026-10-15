@@ -92,6 +92,7 @@ import org.apache.kafka.coordinator.group.api.assignor.GroupSpec;
 import org.apache.kafka.coordinator.group.api.assignor.PartitionAssignorException;
 import org.apache.kafka.coordinator.group.api.assignor.ShareGroupPartitionAssignor;
 import org.apache.kafka.coordinator.group.api.assignor.SubscriptionType;
+import org.apache.kafka.coordinator.group.api.streams.assignor.AssignmentConfigs;
 import org.apache.kafka.coordinator.group.api.streams.assignor.TaskAssignor;
 import org.apache.kafka.coordinator.group.api.streams.assignor.TaskAssignorException;
 import org.apache.kafka.coordinator.group.assignor.SimpleAssignor;
@@ -165,6 +166,7 @@ import org.apache.kafka.coordinator.group.streams.StreamsGroupMember;
 import org.apache.kafka.coordinator.group.streams.StreamsTopology;
 import org.apache.kafka.coordinator.group.streams.TasksTuple;
 import org.apache.kafka.coordinator.group.streams.TasksTupleWithEpochs;
+import org.apache.kafka.coordinator.group.streams.assignor.AssignmentConfigsImpl;
 import org.apache.kafka.coordinator.group.streams.assignor.StickyTaskAssignor;
 import org.apache.kafka.coordinator.group.streams.topics.ConfiguredSubtopology;
 import org.apache.kafka.coordinator.group.streams.topics.ConfiguredTopology;
@@ -187,12 +189,10 @@ import org.slf4j.Logger;
 
 import java.nio.ByteBuffer;
 import java.util.ArrayList;
-import java.util.Arrays;
 import java.util.Collection;
 import java.util.Collections;
 import java.util.HashMap;
 import java.util.HashSet;
-import java.util.LinkedHashSet;
 import java.util.List;
 import java.util.Map;
 import java.util.Objects;
@@ -200,7 +200,6 @@ import java.util.Optional;
 import java.util.OptionalInt;
 import java.util.Set;
 import java.util.SortedMap;
-import java.util.TreeMap;
 import java.util.concurrent.CompletableFuture;
 import java.util.concurrent.TimeUnit;
 import java.util.function.BiFunction;
@@ -240,6 +239,7 @@ import static org.apache.kafka.coordinator.group.GroupCoordinatorRecordHelpers.n
 import static org.apache.kafka.coordinator.group.GroupCoordinatorRecordHelpers.newShareGroupTargetAssignmentTombstoneRecord;
 import static org.apache.kafka.coordinator.group.Utils.assignmentToString;
 import static org.apache.kafka.coordinator.group.Utils.assignmentWithEpochsToString;
+import static org.apache.kafka.coordinator.group.Utils.newLinkedHashSet;
 import static org.apache.kafka.coordinator.group.Utils.ofSentinel;
 import static org.apache.kafka.coordinator.group.Utils.throwIfRegularExpressionIsInvalid;
 import static org.apache.kafka.coordinator.group.Utils.toConsumerProtocolAssignment;
@@ -264,8 +264,6 @@ import static org.apache.kafka.coordinator.group.streams.StreamsCoordinatorRecor
 import static org.apache.kafka.coordinator.group.streams.StreamsCoordinatorRecordHelpers.newStreamsGroupTargetAssignmentTombstoneRecord;
 import static org.apache.kafka.coordinator.group.streams.StreamsCoordinatorRecordHelpers.newStreamsGroupTopologyRecord;
 import static org.apache.kafka.coordinator.group.streams.StreamsGroupMember.hasAssignedTasksChanged;
-import static org.apache.kafka.coordinator.group.streams.assignor.AssignmentConfigsImpl.NUM_STANDBY_REPLICAS_CONFIG;
-import static org.apache.kafka.coordinator.group.streams.assignor.AssignmentConfigsImpl.RACK_AWARE_ASSIGNMENT_TAGS_CONFIG;
 
 
 /**
@@ -2182,7 +2180,6 @@ public class GroupMetadataManager {
         // 1. Create or update the member.
         StreamsGroupMember.Builder updatedMemberBuilder = new StreamsGroupMember.Builder(member)
             .maybeUpdateInstanceId(Optional.ofNullable(instanceId))
-            .maybeUpdateRackId(Optional.ofNullable(rackId))
             .maybeUpdateRebalanceTimeoutMs(ofSentinel(rebalanceTimeoutMs))
             .maybeUpdateTopologyEpoch(topology != null ? OptionalInt.of(topology.epoch()) : OptionalInt.empty())
             .setClientId(clientId)
@@ -2193,10 +2190,13 @@ public class GroupMetadataManager {
         if (isJoining) {
             StreamsGroupMemberMetadataValue.Endpoint userEndpointMetadata = userEndpoint == null ? null :
                 new StreamsGroupMemberMetadataValue.Endpoint().setHost(userEndpoint.host()).setPort(userEndpoint.port());
-            updatedMemberBuilder.setUserEndpoint(userEndpointMetadata);
+            updatedMemberBuilder
+                .setUserEndpoint(userEndpointMetadata)
+                .setRackId(rackId);
         } else {
             updatedMemberBuilder
-                .maybeUpdateUserEndpoint(Optional.ofNullable(userEndpoint).map(x -> new StreamsGroupMemberMetadataValue.Endpoint().setHost(x.host()).setPort(x.port())));
+                .maybeUpdateUserEndpoint(Optional.ofNullable(userEndpoint).map(x -> new StreamsGroupMemberMetadataValue.Endpoint().setHost(x.host()).setPort(x.port())))
+                .maybeUpdateRackId(Optional.ofNullable(rackId));
         }
         StreamsGroupMember updatedMember = updatedMemberBuilder.build();
         
@@ -2264,15 +2264,18 @@ public class GroupMetadataManager {
         if (taskOffsets != null || taskEndOffsets != null) {
             group.updateTaskOffsets(memberId, group.taskOffsets(memberId).update(taskOffsets, taskEndOffsets));
         }
+        group.updateHeartbeatVersion(memberId, requestApiVersion);
 
         // We validated a topology that was not validated before, so bump the group epoch as we may have to reassign tasks.
         if (validatedTopologyEpoch != group.validatedTopologyEpoch()) {
             assignmentUpdate = AssignmentUpdate.RECOMPUTE;
         }
 
-        // Check if assignment configurations have changed
-        Map<String, String> currentAssignmentConfigs = streamsGroupAssignmentConfigs(groupId);
-        Map<String, String> storedAssignmentConfigs = group.lastAssignmentConfigs();
+        // Check if assignment configurations have changed. If the group metadata record has no assignment configs, we
+        // don't know which configs the current assignment used and assume the defaults, so after a broker upgrade such
+        // a group only rebalances if an effective config differs from its default.
+        AssignmentConfigsImpl currentAssignmentConfigs = streamsGroupAssignmentConfigs(groupId);
+        AssignmentConfigsImpl storedAssignmentConfigs = group.lastAssignmentConfigs();
         if (assignmentUpdate == AssignmentUpdate.NONE && !currentAssignmentConfigs.equals(storedAssignmentConfigs)) {
             log.info("[GroupId {}][MemberId {}] Assignment configurations changed to {}. Triggering rebalance.",
                 groupId, memberId, currentAssignmentConfigs);
@@ -2388,11 +2391,13 @@ public class GroupMetadataManager {
         // The assignment is only provided in the following cases:
         // 1. The member is joining.
         // 2. The member's assignment has been updated.
+        // 3. The member reports all owned task sets, including when acknowledging an assignment or retrying after a heartbeat failure.
         boolean assignedTaskChanged = hasAssignedTasksChanged(member, updatedMember);
         boolean endpointChanged = hasUserEndpointChanged(member, updatedMember);
+        boolean hasOwnedTasksReported = ownedActiveTasks != null && ownedStandbyTasks != null && ownedWarmupTasks != null;
 
-        // Echo the assignment back when joining or the assignment changed.
-        if (isJoining || assignedTaskChanged) {
+        // Echo the assignment when joining, when it changes, or when all owned task sets are reported.
+        if (isJoining || assignedTaskChanged || hasOwnedTasksReported) {
             response.setActiveTasks(createStreamsGroupHeartbeatResponseTaskIdsFromEpochs(updatedMember.assignedTasks().activeTasksWithEpochs()));
             response.setStandbyTasks(createStreamsGroupHeartbeatResponseTaskIds(updatedMember.assignedTasks().standbyTasks()));
             response.setWarmupTasks(createStreamsGroupHeartbeatResponseTaskIds(updatedMember.assignedTasks().warmupTasks()));
@@ -2440,11 +2445,10 @@ public class GroupMetadataManager {
                 )
         ));
 
-        String rackAwareTagsValue = currentAssignmentConfigs.getOrDefault(RACK_AWARE_ASSIGNMENT_TAGS_CONFIG, "").trim();
+        List<String> requiredTags = currentAssignmentConfigs.rackAwareAssignmentTags();
         // The MISSING_CLIENT_TAGS status (code 6) requires version 1 of the RPC: version 0 clients
         // throw on unknown status codes, so it must not be sent to them.
-        if (requestApiVersion >= 1 && !rackAwareTagsValue.isEmpty()) {
-            List<String> requiredTags = Arrays.asList(rackAwareTagsValue.split("\\s*,\\s*", -1));
+        if (requestApiVersion >= 1 && !requiredTags.isEmpty()) {
             Set<String> memberTagKeys = updatedMember.clientTags().keySet();
             List<String> missingTags = requiredTags.stream()
                 .filter(tag -> !memberTagKeys.contains(tag))
@@ -4562,7 +4566,7 @@ public class GroupMetadataManager {
         CoordinatorMetadataImage metadataImage,
         List<CoordinatorRecord> records,
         Optional<List<Status>> returnedStatus,
-        Map<String, String> assignmentConfigs,
+        AssignmentConfigs assignmentConfigs,
         boolean refineOnly
     ) {
         boolean initialDelayActive = timer.isScheduled(streamsInitialRebalanceKey(group.groupId()));
@@ -4704,6 +4708,7 @@ public class GroupMetadataManager {
             group.members(),
             targetAssignment,
             group.taskOffsets(),
+            group.heartbeatVersions(),
             Collections.unmodifiableSortedMap(configuredTopology.subtopologies().get()),
             numWarmupReplicas,
             streamsGroupAcceptableRecoveryLag(group.groupId())
@@ -6398,17 +6403,9 @@ public class GroupMetadataManager {
             streamsGroup.setStoredDescriptionTopologyEpoch(value.storedDescriptionTopologyEpoch());
             streamsGroup.setFailedDescriptionTopologyEpoch(value.failedDescriptionTopologyEpoch());
 
-            if (value.lastAssignmentConfigs() != null) {
-                streamsGroup.setLastAssignmentConfigs(
-                    value.lastAssignmentConfigs().stream()
-                        .collect(Collectors.toMap(
-                            StreamsGroupMetadataValue.LastAssignmentConfig::key,
-                            StreamsGroupMetadataValue.LastAssignmentConfig::value
-                        ))
-                );
-            } else {
-                streamsGroup.setLastAssignmentConfigs(Map.of());
-            }
+            // A record without configs (written before they were persisted) yields the defaults, so the next
+            // heartbeat only rebalances the group if any effective config differs from its default.
+            streamsGroup.setLastAssignmentConfigs(AssignmentConfigsImpl.fromRecord(value.lastAssignmentConfigs()));
 
         } else {
             StreamsGroup streamsGroup;
@@ -9063,7 +9060,7 @@ public class GroupMetadataManager {
         Set<String> groupIds
     ) {
         List<CoordinatorRecord> records = new ArrayList<>(groupIds.size());
-        Set<String> eligible = new LinkedHashSet<>(groupIds.size());
+        Set<String> eligible = newLinkedHashSet(groupIds.size());
         for (String groupId : groupIds) {
             CoordinatorResult<Boolean, CoordinatorRecord> one =
                 markStoredDescriptionTopologyEpochUncertain(groupId, false);
@@ -10075,20 +10072,15 @@ public class GroupMetadataManager {
     }
 
     /**
-     * Get the assignor of the provided streams group.
+     * Get the assignment configs of the provided streams group.
      */
-    private Map<String, String> streamsGroupAssignmentConfigs(String groupId) {
+    private AssignmentConfigsImpl streamsGroupAssignmentConfigs(String groupId) {
         Optional<GroupConfig> groupConfig = groupConfigManager.groupConfig(groupId);
-        final Integer numStandbyReplicas = groupConfig.flatMap(GroupConfig::streamsNumStandbyReplicas)
+        final int numStandbyReplicas = groupConfig.flatMap(GroupConfig::streamsNumStandbyReplicas)
             .orElse(config.streamsGroupNumStandbyReplicas());
         final List<String> rackAwareAssignmentTags = groupConfig.flatMap(GroupConfig::streamsRackAwareAssignmentTags)
             .orElse(config.streamsGroupRackAwareAssignmentTags());
-        Map<String, String> configs = new TreeMap<>();
-        configs.put(NUM_STANDBY_REPLICAS_CONFIG, numStandbyReplicas.toString());
-        if (!rackAwareAssignmentTags.isEmpty()) {
-            configs.put(RACK_AWARE_ASSIGNMENT_TAGS_CONFIG, String.join(",", rackAwareAssignmentTags));
-        }
-        return configs;
+        return new AssignmentConfigsImpl(numStandbyReplicas, rackAwareAssignmentTags);
     }
 
     private static boolean hasUserEndpointChanged(StreamsGroupMember maybeOldMember, StreamsGroupMember updatedMember) {

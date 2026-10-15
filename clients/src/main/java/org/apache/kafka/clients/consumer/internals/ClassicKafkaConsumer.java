@@ -175,7 +175,8 @@ public class ClassicKafkaConsumer<K, V> implements ConsumerDelegate<K, V> {
             this.defaultApiTimeoutMs = config.getInt(ConsumerConfig.DEFAULT_API_TIMEOUT_MS_CONFIG);
             this.time = Time.SYSTEM;
             List<MetricsReporter> reporters = CommonClientConfigs.metricsReporters(clientId, config);
-            this.clientTelemetryReporter = CommonClientConfigs.telemetryReporter(clientId, config);
+            Uuid clientInstanceId = Uuid.randomUuid();
+            this.clientTelemetryReporter = CommonClientConfigs.telemetryReporter(clientId, clientInstanceId, config);
             this.clientTelemetryReporter.ifPresent(reporters::add);
             this.metrics = createMetrics(config, time, reporters);
             this.retryBackoffMs = config.getLong(ConsumerConfig.RETRY_BACKOFF_MS_CONFIG);
@@ -198,7 +199,6 @@ public class ClassicKafkaConsumer<K, V> implements ConsumerDelegate<K, V> {
             this.isolationLevel = fetchConfig.isolationLevel;
 
             ApiVersions apiVersions = new ApiVersions();
-            Uuid clientInstanceId = Uuid.randomUuid();
             this.client = createConsumerNetworkClient(config,
                     clientInstanceId,
                     metrics,

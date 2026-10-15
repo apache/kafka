@@ -114,17 +114,6 @@ abstract class AbstractFetcherManager[T <: AbstractFetcherThread](val name: Stri
     }
   }
 
-  // This method is only needed by ReplicaAlterDirManager
-  def markPartitionsForTruncation(brokerId: Int, topicPartition: TopicPartition, truncationOffset: Long): Unit = {
-    lock synchronized {
-      val fetcherId = getFetcherId(topicPartition)
-      val brokerIdAndFetcherId = BrokerIdAndFetcherId(brokerId, fetcherId)
-      fetcherThreadMap.get(brokerIdAndFetcherId).foreach { thread =>
-        thread.markPartitionsForTruncation(topicPartition, truncationOffset)
-      }
-    }
-  }
-
   // to be defined in subclass to create a specific fetcher
   def createFetcherThread(fetcherId: Int, sourceBroker: BrokerEndPoint): T
 

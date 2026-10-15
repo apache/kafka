@@ -697,6 +697,15 @@ public interface Admin extends AutoCloseable {
     /**
      * Delete records whose offset is smaller than the given offset of the corresponding partition.
      * <p>
+     * The following exceptions can be anticipated when calling {@code get()} on the futures obtained from
+     * the returned {@link DeleteRecordsResult}:
+     * <ul>
+     * <li>{@link org.apache.kafka.common.errors.PolicyViolationException}
+     * if the records of the partition can not be deleted due to the configured {@code cleanup.policy},
+     * for example because the topic's {@code cleanup.policy} is {@code compact} and does not include
+     * {@code delete}.</li>
+     * </ul>
+     * <p>
      * This operation is supported by brokers with version 0.11.0.0 or higher.
      *
      * @param recordsToDelete The topic partitions and related offsets from which records deletion starts.
@@ -1887,8 +1896,8 @@ public interface Admin extends AutoCloseable {
      * The ID is useful for correlating client operations with telemetry sent to the broker and
      * to its eventual monitoring destinations.
      * <p>
-     * If telemetry is enabled, this will first require a connection to the cluster to generate
-     * the unique client instance ID. This method waits up to {@code timeout} for the admin
+     * If telemetry is enabled, this will first require a connection to the cluster to receive
+     * a telemetry subscription. This method waits up to {@code timeout} for the admin
      * client to complete the request.
      * <p>
      * Client telemetry is controlled by the {@link AdminClientConfig#ENABLE_METRICS_PUSH_CONFIG}
@@ -1904,7 +1913,7 @@ public interface Admin extends AutoCloseable {
      * @throws IllegalArgumentException If the {@code timeout} is negative.
      * @throws IllegalStateException If telemetry is not enabled ie, config `{@code enable.metrics.push}`
      *                               is set to `{@code false}`.
-     * @return The client's assigned instance id used for metrics collection.
+     * @return The client's instance id used for metrics collection.
      */
     Uuid clientInstanceId(Duration timeout);
 

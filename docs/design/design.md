@@ -302,7 +302,7 @@ In distributed systems terminology we only attempt to handle a "fail/recover" mo
 Only committed messages are ever given out to the consumer. This means that the consumer need not worry about potentially seeing a message that could be lost if the leader fails. Producers, on the other hand, have the option of either waiting for the message to be committed or not, depending on their preference for tradeoff between latency and durability. This preference is controlled by the `acks` setting that the producer uses. Note that topics have a setting for the minimum number of in-sync replicas (`min.insync.replicas`) that is checked when the producer requests acknowledgment that a message has been written to the full set of in-sync replicas. If a less stringent acknowledgment is requested by the producer, then the message is committed asynchronously across the set of in-sync replicas if `acks=0`, or synchronously only on the leader if `acks=1`. Regardless of the `acks` setting, the messages will not be visible to the consumers until all the following conditions are met: 
 
   1. The messages are replicated to all the in-sync replicas.
-  2. The number of the in-sync replicas is no less than the `min.insync.replicas` setting.
+  2. The number of the in-sync replicas is no less than the effective minimum in-sync replica count, `min(min.insync.replicas, replica count)`. If `min.insync.replicas` is configured higher than the partition's replica count, the replica count is used instead, since the ISR can never exceed it.
 
 
 
