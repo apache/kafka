@@ -146,9 +146,7 @@ class ZkMigrationClient(
   ): Unit = wrapZkException {
     var topicBatch = new util.ArrayList[ApiMessageAndVersion]()
     topicClient.iterateTopics(
-      util.EnumSet.of(
-        TopicVisitorInterest.TOPICS,
-        TopicVisitorInterest.PARTITIONS),
+      util.EnumSet.allOf(classOf[TopicVisitorInterest]),
       new TopicVisitor() {
         override def visitTopic(topicName: String, topicId: Uuid, assignments: util.Map[Integer, util.List[Integer]]): Unit = {
           if (!topicBatch.isEmpty) {

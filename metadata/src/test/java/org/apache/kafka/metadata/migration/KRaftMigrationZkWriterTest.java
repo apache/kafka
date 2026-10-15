@@ -155,7 +155,7 @@ public class KRaftMigrationZkWriterTest {
             operation.apply(ZkMigrationLeadershipState.EMPTY)
         );
         assertEquals(3, topicClient.updatedTopics.get("foo").size());
-        assertEquals(topicClient.deletedTopicPartitions.get("foo"), Collections.singleton(3));
+        assertEquals(Collections.singleton(3), topicClient.deletedTopicPartitions.get("foo"));
         assertTrue(topicClient.newTopicPartitions.isEmpty());
         assertTrue(topicClient.updatedTopicPartitions.isEmpty());
     }
