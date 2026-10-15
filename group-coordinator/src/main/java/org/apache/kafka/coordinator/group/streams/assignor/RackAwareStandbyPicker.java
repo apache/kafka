@@ -47,6 +47,11 @@ import java.util.stream.IntStream;
  */
 final class RackAwareStandbyPicker<P> {
 
+    // The value index of a process for a key it has no value for.
+    private static final int MISSING_VALUE_INDEX = -1;
+    // The key index and value index of the root, which has no own value.
+    private static final int ROOT_PLACEHOLDER_INDEX = -2;
+
     private final ToDoubleFunction<P> processLoad;
     private final Predicate<P> processHasRoom;
     // The keys in the order of rack.aware.assignment.tags.
@@ -85,7 +90,25 @@ final class RackAwareStandbyPicker<P> {
         processHasRoom = hasRoom;
         // One level per tag key, so this is also the number of tag keys.
         final int treeHeight = tagKeys.size();
-        final List<Map<String, Integer>> indexOfValues = indexValues(tagKeys, processes, clientTags);
+        // Per key, the index of each of its values, in the order the values first appear on the processes.
+        final List<Map<String, Integer>> valueIndexAllKeys = new ArrayList<>(treeHeight);
+        for (int keyIndex = 0; keyIndex < treeHeight; keyIndex++) {
+            valueIndexAllKeys.add(new HashMap<>());
+        }
+        // Per process in order, its value index for each key.
+        final List<int[]> valueIndexesOfProcesses = new ArrayList<>(processes.size());
+        for (final P process : processes) {
+            final Map<String, String> tags = clientTags.apply(process);
+            final int[] valueIndexes = new int[treeHeight];
+            for (int keyIndex = 0; keyIndex < treeHeight; keyIndex++) {
+                final String value = tags.get(tagKeys.get(keyIndex));
+                final Map<String, Integer> valueIndexPerKey = valueIndexAllKeys.get(keyIndex);
+                valueIndexes[keyIndex] = value == null
+                    ? MISSING_VALUE_INDEX
+                    : valueIndexPerKey.computeIfAbsent(value, __ -> valueIndexPerKey.size());
+            }
+            valueIndexesOfProcesses.add(valueIndexes);
+        }
 
         // The keys and the number of values of each, with no value used yet.
         keys = new ArrayList<>(treeHeight);
@@ -93,12 +116,12 @@ final class RackAwareStandbyPicker<P> {
         usedValues = new BitSet[treeHeight];
         for (int keyIndex = 0; keyIndex < treeHeight; keyIndex++) {
             keys.add(new TagKey(tagKeys.get(keyIndex), keyIndex));
-            numValues[keyIndex] = indexOfValues.get(keyIndex).size();
-            usedValues[keyIndex] = new BitSet(numValues[keyIndex] + 1);
+            numValues[keyIndex] = valueIndexAllKeys.get(keyIndex).size();
+            usedValues[keyIndex] = new BitSet(numValues[keyIndex]);
         }
         tagKeysInTreeOrder = tagKeysInTreeOrder(numValues);
 
-        root = new Node<>(null, -1, -1, false, null);
+        root = new Node<>(null, ROOT_PLACEHOLDER_INDEX, ROOT_PLACEHOLDER_INDEX, false, null);
         queuedByProcess = Utils.newHashMap(processes.size());
         // The children of each inner node by their value index, only needed to build the tree.
         final Map<Node<P>, Map<Integer, Node<P>>> childrenByValueIndex = new HashMap<>();
@@ -106,41 +129,12 @@ final class RackAwareStandbyPicker<P> {
         for (final P process : processes) {
             insert(
                 process,
-                processIndex++,
-                valueIndexes(clientTags.apply(process), tagKeys, indexOfValues),
+                processIndex,
+                valueIndexesOfProcesses.get(processIndex),
                 childrenByValueIndex
             );
+            processIndex++;
         }
-    }
-
-    /** Per key, the index of each of its values, in the order the values first appear on the processes. */
-    private static <P> List<Map<String, Integer>> indexValues(
-        final List<String> tagKeys,
-        final Collection<P> processes,
-        final Function<P, Map<String, String>> clientTags
-    ) {
-        final List<Map<String, Integer>> indexOfValues = new ArrayList<>(tagKeys.size());
-        for (int keyIndex = 0; keyIndex < tagKeys.size(); keyIndex++) {
-            final Map<String, Integer> indexOfValue = new HashMap<>();
-            for (final P process : processes) {
-                final String value = clientTags.apply(process).get(tagKeys.get(keyIndex));
-                if (value != null) {
-                    indexOfValue.putIfAbsent(value, indexOfValue.size());
-                }
-            }
-            indexOfValues.add(indexOfValue);
-        }
-        return indexOfValues;
-    }
-
-    /** The value index of a process with these tags for each key, the missing value's index for a key it has no value for. */
-    private int[] valueIndexes(final Map<String, String> tags, final List<String> tagKeys, final List<Map<String, Integer>> indexOfValues) {
-        final int[] valueIndexes = new int[tagKeys.size()];
-        for (int keyIndex = 0; keyIndex < valueIndexes.length; keyIndex++) {
-            final String value = tags.get(tagKeys.get(keyIndex));
-            valueIndexes[keyIndex] = indexOfValues.get(keyIndex).getOrDefault(value, missingValueIndex(keyIndex));
-        }
-        return valueIndexes;
     }
 
     /** Adds the process to the leaf of its values, creating the leaf and the inner nodes on its path. */
@@ -203,7 +197,10 @@ final class RackAwareStandbyPicker<P> {
     void markUsed(final P holder) {
         final int[] valueIndexes = queuedByProcess.get(holder).leaf.valueIndexes;
         for (int keyIndex = 0; keyIndex < keys.size(); keyIndex++) {
-            usedValues[keyIndex].set(valueIndexes[keyIndex]);
+            // A missing value has no bit: isUsed counts it as used.
+            if (valueIndexes[keyIndex] != MISSING_VALUE_INDEX) {
+                usedValues[keyIndex].set(valueIndexes[keyIndex]);
+            }
         }
     }
 
@@ -265,7 +262,6 @@ final class RackAwareStandbyPicker<P> {
 
     /** Whether some value of the key is not used yet. */
     boolean hasUnusedValue(final TagKey key) {
-        // The first unused value index is a value, not the missing one after the last value.
         return usedValues[key.index].nextClearBit(0) < numValues[key.index];
     }
 
@@ -280,14 +276,9 @@ final class RackAwareStandbyPicker<P> {
         return true;
     }
 
-    /** The value index of a missing value, after the last value. */
-    private int missingValueIndex(final int keyIndex) {
-        return numValues[keyIndex];
-    }
-
     /** Whether the value is used: a holder of the task carries it, or it is missing. */
     private boolean isUsed(final int keyIndex, final int valueIndex) {
-        return valueIndex == missingValueIndex(keyIndex) || usedValues[keyIndex].get(valueIndex);
+        return valueIndex == MISSING_VALUE_INDEX || usedValues[keyIndex].get(valueIndex);
     }
 
     /** The least-loaded process with room meeting {@code conditions}, or null if none. */
@@ -420,7 +411,7 @@ final class RackAwareStandbyPicker<P> {
 
         // Null for the root.
         private final Node<P> parent;
-        // The key index and value index of the node's own value, -1 for the root.
+        // The key index and value index of the node's own value, ROOT_PLACEHOLDER_INDEX for the root.
         private final int keyIndex;
         private final int valueIndex;
         private final boolean isLeaf;
