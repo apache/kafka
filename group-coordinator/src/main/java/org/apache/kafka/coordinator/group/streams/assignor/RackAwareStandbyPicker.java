@@ -19,7 +19,6 @@ package org.apache.kafka.coordinator.group.streams.assignor;
 import org.apache.kafka.coordinator.group.Utils;
 
 import java.util.ArrayList;
-import java.util.Arrays;
 import java.util.BitSet;
 import java.util.Collection;
 import java.util.Comparator;
@@ -30,6 +29,7 @@ import java.util.TreeSet;
 import java.util.function.Function;
 import java.util.function.Predicate;
 import java.util.function.ToDoubleFunction;
+import java.util.stream.IntStream;
 
 /**
  * Picks the conditions for the next standby of one task: the most tag keys that a process with room can meet,
@@ -63,8 +63,6 @@ final class RackAwareStandbyPicker<P> {
     // Per key index, one bit per value index, set once a holder of the task carries that value.
     // Cleared by startTask.
     private final BitSet[] usedValues;
-    // The least-loaded process with room meeting the conditions the last pick returned.
-    private QueuedProcess<P> foundByPick;
 
     /**
      * @param tagKeys    The keys of {@code rack.aware.assignment.tags}; not empty, since without them there is nothing to pick.
@@ -100,7 +98,7 @@ final class RackAwareStandbyPicker<P> {
         }
         tagKeysInTreeOrder = tagKeysInTreeOrder(numValues);
 
-        root = new Node<>(null, -1, -1, false);
+        root = new Node<>(null, -1, -1, false, null);
         queuedByProcess = Utils.newHashMap(processes.size());
         // The children of each inner node by their value index, only needed to build the tree.
         final Map<Node<P>, Map<Integer, Node<P>>> childrenByValueIndex = new HashMap<>();
@@ -160,12 +158,11 @@ final class RackAwareStandbyPicker<P> {
             final Map<Integer, Node<P>> children = childrenByValueIndex.computeIfAbsent(node, __ -> new HashMap<>());
             Node<P> child = children.get(valueIndex);
             if (child == null) {
-                child = new Node<>(node, keyIndex, valueIndex, level == treeHeight - 1);
+                child = new Node<>(node, keyIndex, valueIndex, level == treeHeight - 1, valueIndexes);
                 children.put(valueIndex, child);
             }
             node = child;
         }
-        node.valueIndexes = valueIndexes;
         final QueuedProcess<P> queued = new QueuedProcess<>(process, processIndex, node, processLoad.applyAsDouble(process));
         if (processHasRoom.test(process)) {
             node.processesByLoad.add(queued);
@@ -176,19 +173,11 @@ final class RackAwareStandbyPicker<P> {
 
     /** The key indexes as the levels from the top, fewest values first; the order affects speed, not results. */
     private static int[] tagKeysInTreeOrder(final int[] numValues) {
-        final Integer[] keyIndexes = new Integer[numValues.length];
-        for (int keyIndex = 0; keyIndex < keyIndexes.length; keyIndex++) {
-            keyIndexes[keyIndex] = keyIndex;
-        }
-        Arrays.sort(
-            keyIndexes,
-            Comparator.<Integer>comparingInt(keyIndex -> numValues[keyIndex]).thenComparingInt(keyIndex -> keyIndex)
-        );
-        final int[] tagKeysInTreeOrder = new int[keyIndexes.length];
-        for (int level = 0; level < keyIndexes.length; level++) {
-            tagKeysInTreeOrder[level] = keyIndexes[level];
-        }
-        return tagKeysInTreeOrder;
+        return IntStream.range(0, numValues.length)
+            .boxed()
+            .sorted(Comparator.comparingInt(keyIndex -> numValues[keyIndex]))
+            .mapToInt(Integer::intValue)
+            .toArray();
     }
 
     /** The tag keys in priority order: that of {@code rack.aware.assignment.tags}, not of the levels. */
@@ -230,6 +219,10 @@ final class RackAwareStandbyPicker<P> {
 
     /** The conditions for the next standby, or empty once no process with room can make the task more diverse. */
     List<TagKey> pick() {
+        // No process has room for the standby.
+        if (root.leastLoaded == null) {
+            return List.of();
+        }
         // Only if a tag key has an unused value is it possible to choose a process that makes the task more diverse
         // in this tag key.
         final List<TagKey> tagKeysWithUnusedValue = new ArrayList<>();
@@ -241,29 +234,20 @@ final class RackAwareStandbyPicker<P> {
         if (tagKeysWithUnusedValue.isEmpty()) {
             return List.of();
         }
-        // No process has room for the standby.
-        if (root.leastLoaded == null) {
-            return List.of();
-        }
 
         // Most picks find a process with room that meets the condition of every such tag key.
-        List<TagKey> conditions = tagKeysWithUnusedValue;
-        foundByPick = leastLoadedProcessMeeting(conditions);
-        if (foundByPick == null) {
-            // Otherwise the tag keys are added in priority order; a tag key is given up when no process with room
-            // meets it together with the tag keys kept so far.
-            conditions = new ArrayList<>();
-            for (final TagKey tagKey : tagKeysWithUnusedValue) {
-                final List<TagKey> withTagKey = new ArrayList<>(conditions);
-                withTagKey.add(tagKey);
-                // If withTagKey holds every tag key, the query above already found no process for it.
-                if (withTagKey.size() < tagKeysWithUnusedValue.size()) {
-                    final QueuedProcess<P> foundWithTagKey = leastLoadedProcessMeeting(withTagKey);
-                    if (foundWithTagKey != null) {
-                        conditions = withTagKey;
-                        foundByPick = foundWithTagKey;
-                    }
-                }
+        if (leastLoadedProcessMeeting(tagKeysWithUnusedValue) != null) {
+            return tagKeysWithUnusedValue;
+        }
+        // Otherwise the tag keys are added in priority order; a tag key is given up when no process with room
+        // meets it together with the tag keys kept so far.
+        List<TagKey> conditions = new ArrayList<>();
+        for (final TagKey tagKey : tagKeysWithUnusedValue) {
+            final List<TagKey> withTagKey = new ArrayList<>(conditions);
+            withTagKey.add(tagKey);
+            // If withTagKey holds every tag key, the query above already found no process for it.
+            if (withTagKey.size() < tagKeysWithUnusedValue.size() && leastLoadedProcessMeeting(withTagKey) != null) {
+                conditions = withTagKey;
             }
         }
         return conditions;
@@ -274,15 +258,9 @@ final class RackAwareStandbyPicker<P> {
         return meets(process, conditions) && processHasRoom.test(process);
     }
 
-    /**
-     * The least-loaded process with room of the candidates; call it before placing the standby. Only valid for the
-     * non-empty conditions {@link #pick()} returned: otherwise the pick found no process.
-     */
+    /** The least-loaded process with room of the candidates, for the non-empty conditions {@link #pick()} returned. */
     P leastLoaded(final List<TagKey> conditions) {
-        if (conditions.isEmpty()) {
-            throw new IllegalArgumentException("Conditions must be the non-empty result of pick()");
-        }
-        return foundByPick.process;
+        return leastLoadedProcessMeeting(conditions).process;
     }
 
     /** Whether some value of the key is not used yet. */
@@ -451,17 +429,18 @@ final class RackAwareStandbyPicker<P> {
         // Leaves only: the processes with room, by load.
         private final TreeSet<QueuedProcess<P>> processesByLoad;
         // Leaves only: the value index of the processes for each key.
-        private int[] valueIndexes;
+        private final int[] valueIndexes;
         // The least-loaded process with room below this node, or null if none.
         private QueuedProcess<P> leastLoaded;
 
-        private Node(final Node<P> parent, final int keyIndex, final int valueIndex, final boolean isLeaf) {
+        private Node(final Node<P> parent, final int keyIndex, final int valueIndex, final boolean isLeaf, final int[] valueIndexes) {
             this.parent = parent;
             this.keyIndex = keyIndex;
             this.valueIndex = valueIndex;
             this.isLeaf = isLeaf;
             this.childrenByLeastLoaded = isLeaf ? null : new TreeSet<>(BY_LEAST_LOADED);
             this.processesByLoad = isLeaf ? new TreeSet<>(QueuedProcess.ORDER) : null;
+            this.valueIndexes = isLeaf ? valueIndexes : null;
         }
 
         /** The least-loaded process with room below this node, from the head of its queue. */
