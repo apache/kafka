@@ -241,7 +241,7 @@ As one can see, outputs of the Wordcount application is actually a continuous st
 
 The two diagrams below illustrate what is essentially happening behind the scenes. The first column shows the evolution of the current state of the `KTable<String, Long>` that is counting word occurrences for `count`. The second column shows the change records that result from state updates to the KTable and that are being sent to the output Kafka topic **streams-wordcount-output**. 
 
-![](/43/images/streams-table-updates-02.png) ![](/43/images/streams-table-updates-01.png)
+![](/{version}/images/streams-table-updates-02.png) ![](/{version}/images/streams-table-updates-01.png)
 
 First the text line "all streams lead to kafka" is being processed. The `KTable` is being built up as each new word results in a new table entry (highlighted with a green background), and a corresponding change record is sent to the downstream `KStream`. 
 

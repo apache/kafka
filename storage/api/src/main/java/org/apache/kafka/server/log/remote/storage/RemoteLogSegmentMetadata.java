@@ -95,7 +95,7 @@ public class RemoteLogSegmentMetadata extends RemoteLogMetadata {
      * @param endOffset           End offset of this segment (inclusive).
      * @param maxTimestampMs      Maximum timestamp in milliseconds in this segment.
      * @param brokerId            Broker id from which this event is generated.
-     * @param eventTimestampMs    Epoch time in milliseconds at which the remote log segment is copied to the remote tier storage.
+     * @param eventTimestampMs    Epoch time in milliseconds at which this remote log segment metadata event occurred.
      * @param segmentSizeInBytes  Size of this segment in bytes.
      * @param customMetadata      Custom metadata.
      * @param state               State of the respective segment of remoteLogSegmentId.
@@ -126,7 +126,7 @@ public class RemoteLogSegmentMetadata extends RemoteLogMetadata {
      * @param endOffset           End offset of this segment (inclusive).
      * @param maxTimestampMs      Maximum timestamp in milliseconds in this segment.
      * @param brokerId            Broker id from which this event is generated.
-     * @param eventTimestampMs    Epoch time in milliseconds at which the remote log segment is copied to the remote tier storage.
+     * @param eventTimestampMs    Epoch time in milliseconds at which this remote log segment metadata event occurred.
      * @param segmentSizeInBytes  Size of this segment in bytes.
      * @param customMetadata      Custom metadata.
      * @param state               State of the respective segment of remoteLogSegmentId.
@@ -181,7 +181,7 @@ public class RemoteLogSegmentMetadata extends RemoteLogMetadata {
      * @param endOffset           End offset of this segment (inclusive).
      * @param maxTimestampMs      Maximum timestamp in this segment
      * @param brokerId            Broker id from which this event is generated.
-     * @param eventTimestampMs    Epoch time in milliseconds at which the remote log segment is copied to the remote tier storage.
+     * @param eventTimestampMs    Epoch time in milliseconds at which this remote log segment metadata event occurred.
      * @param segmentSizeInBytes  Size of this segment in bytes.
      * @param segmentLeaderEpochs leader epochs occurred within this segment
      */
@@ -215,7 +215,7 @@ public class RemoteLogSegmentMetadata extends RemoteLogMetadata {
      * @param endOffset           End offset of this segment (inclusive).
      * @param maxTimestampMs      Maximum timestamp in this segment
      * @param brokerId            Broker id from which this event is generated.
-     * @param eventTimestampMs    Epoch time in milliseconds at which the remote log segment is copied to the remote tier storage.
+     * @param eventTimestampMs    Epoch time in milliseconds at which this remote log segment metadata event occurred.
      * @param segmentSizeInBytes  Size of this segment in bytes.
      * @param segmentLeaderEpochs leader epochs occurred within this segment
      * @param txnIdxEmpty         True if the transaction index is empty, false otherwise.

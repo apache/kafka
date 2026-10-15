@@ -18,6 +18,7 @@ package org.apache.kafka.clients.producer;
 
 import org.apache.kafka.clients.ApiVersions;
 import org.apache.kafka.clients.ClientDnsLookup;
+import org.apache.kafka.clients.ClientInstanceIdCapture;
 import org.apache.kafka.clients.ClientUtils;
 import org.apache.kafka.clients.CommonClientConfigs;
 import org.apache.kafka.clients.KafkaClient;
@@ -215,11 +216,12 @@ public class KafkaProducerTest {
                   Serializer<K> keySerializer,
                   Serializer<V> valueSerializer,
                   ProducerMetadata metadata,
-                  KafkaClient kafkaClient,
+                  MockClient kafkaClient,
                   ProducerInterceptors<K, V> interceptors,
                   Time time) {
+        Uuid clientInstanceId = kafkaClient != null ? kafkaClient.clientInstanceId() : Uuid.randomUuid();
         return new KafkaProducer<>(new ProducerConfig(ProducerConfig.appendSerializerToConfig(configs, keySerializer, valueSerializer)),
-            keySerializer, valueSerializer, metadata, kafkaClient, interceptors, new ApiVersions(), time);
+            keySerializer, valueSerializer, metadata, kafkaClient, clientInstanceId, interceptors, new ApiVersions(), time);
     }
 
     @BeforeEach
@@ -787,11 +789,11 @@ public class KafkaProducerTest {
 
         return new KafkaProducer<>(
                 new ProducerConfig(ProducerConfig.appendSerializerToConfig(configs, new StringSerializer(), new StringSerializer())),
-                new StringSerializer(), new StringSerializer(), metadata, mockClient, null, new ApiVersions(), time) {
+                new StringSerializer(), new StringSerializer(), metadata, mockClient, mockClient.clientInstanceId(), null, new ApiVersions(), time) {
             @Override
-            Sender newSender(LogContext logContext, KafkaClient kafkaClient, ProducerMetadata metadata) {
+            Sender newSender(LogContext logContext, KafkaClient kafkaClient, ProducerMetadata metadata, Uuid clientInstanceId) {
                 // give Sender its own Metadata instance so that we can isolate Metadata calls from KafkaProducer
-                return super.newSender(logContext, kafkaClient, newMetadata(0, 0, 100_000));
+                return super.newSender(logContext, kafkaClient, newMetadata(0, 0, 100_000), clientInstanceId);
             }
         };
     }
@@ -1783,7 +1785,7 @@ public class KafkaProducerTest {
         client.prepareResponse(endTxnResponse(Errors.NONE));
 
         try (KafkaProducer<String, String> producer = new KafkaProducer<>(
-            config, new StringSerializer(), new StringSerializer(), metadata, client, interceptor, apiVersions, time)
+            config, new StringSerializer(), new StringSerializer(), metadata, client, client.clientInstanceId(), interceptor, apiVersions, time)
         ) {
             producer.initTransactions();
             producer.beginTransaction();
@@ -2048,7 +2050,7 @@ public class KafkaProducerTest {
         client.prepareResponse(endTxnResponse(Errors.NONE));
 
         try (KafkaProducer<String, String> producer = new KafkaProducer<>(
-            new ProducerConfig(properties), new StringSerializer(), new StringSerializer(), metadata, client,
+            new ProducerConfig(properties), new StringSerializer(), new StringSerializer(), metadata, client, client.clientInstanceId(),
             new ProducerInterceptors<>(Collections.emptyList(), null), apiVersions, time)) {
             producer.initTransactions();
             producer.beginTransaction();
@@ -2121,6 +2123,7 @@ public class KafkaProducerTest {
             new StringSerializer(),
             metadata,
             client,
+            client.clientInstanceId(),
             new ProducerInterceptors<>(List.of(), null),
             apiVersions,
             time
@@ -2199,6 +2202,7 @@ public class KafkaProducerTest {
             new StringSerializer(),
             metadata,
             client,
+            client.clientInstanceId(),
             new ProducerInterceptors<>(List.of(), null),
             apiVersions,
             time
@@ -2267,7 +2271,7 @@ public class KafkaProducerTest {
         client.prepareResponse(endTxnResponse(Errors.NONE));
 
         try (KafkaProducer<String, String> producer = new KafkaProducer<>(
-                config, new StringSerializer(), new StringSerializer(), metadata, client, interceptor, apiVersions, time)
+                config, new StringSerializer(), new StringSerializer(), metadata, client, client.clientInstanceId(), interceptor, apiVersions, time)
         ) {
             producer.initTransactions();
             producer.beginTransaction();
@@ -2413,7 +2417,7 @@ public class KafkaProducerTest {
         clientTelemetryReporter.configure(any());
 
         try (MockedStatic<CommonClientConfigs> mockedCommonClientConfigs = mockStatic(CommonClientConfigs.class, new CallsRealMethods())) {
-            mockedCommonClientConfigs.when(() -> CommonClientConfigs.telemetryReporter(anyString(), any())).thenReturn(Optional.of(clientTelemetryReporter));
+            mockedCommonClientConfigs.when(() -> CommonClientConfigs.telemetryReporter(anyString(), any(), any())).thenReturn(Optional.of(clientTelemetryReporter));
 
             ClientTelemetrySender clientTelemetrySender = mock(ClientTelemetrySender.class);
             Uuid expectedUuid = Uuid.randomUuid();
@@ -2766,8 +2770,7 @@ public class KafkaProducerTest {
 
         assertTrue(config.unused().contains(SslConfigs.SSL_PROTOCOL_CONFIG));
 
-        try (KafkaProducer<byte[], byte[]> producer = new KafkaProducer<>(config, null, null,
-                null, null, null, null, Time.SYSTEM)) {
+        try (KafkaProducer<byte[], byte[]> producer = new KafkaProducer<>(config, null, null)) {
             assertTrue(config.unused().contains(SslConfigs.SSL_PROTOCOL_CONFIG));
         }
     }
@@ -3224,7 +3227,7 @@ public class KafkaProducerTest {
         try (MockedStatic<CommonClientConfigs> mockedCommonClientConfigs = mockStatic(CommonClientConfigs.class, new CallsRealMethods())) {
             ClientTelemetryReporter clientTelemetryReporter = mock(ClientTelemetryReporter.class);
             clientTelemetryReporter.configure(any());
-            mockedCommonClientConfigs.when(() -> CommonClientConfigs.telemetryReporter(anyString(), any())).thenReturn(Optional.of(clientTelemetryReporter));
+            mockedCommonClientConfigs.when(() -> CommonClientConfigs.telemetryReporter(anyString(), any(), any())).thenReturn(Optional.of(clientTelemetryReporter));
 
             Map<String, Object> props = new HashMap<>();
             props.put(ConsumerConfig.BOOTSTRAP_SERVERS_CONFIG, "localhost:9999");
@@ -3243,7 +3246,7 @@ public class KafkaProducerTest {
         try (MockedStatic<CommonClientConfigs> mockedCommonClientConfigs = mockStatic(CommonClientConfigs.class, new CallsRealMethods())) {
             ClientTelemetryReporter clientTelemetryReporter = mock(ClientTelemetryReporter.class);
             clientTelemetryReporter.configure(any());
-            mockedCommonClientConfigs.when(() -> CommonClientConfigs.telemetryReporter(anyString(), any())).thenReturn(Optional.of(clientTelemetryReporter));
+            mockedCommonClientConfigs.when(() -> CommonClientConfigs.telemetryReporter(anyString(), any(), any())).thenReturn(Optional.of(clientTelemetryReporter));
 
             Map<String, Object> props = new HashMap<>();
             props.put(ConsumerConfig.BOOTSTRAP_SERVERS_CONFIG, "localhost:9999");
@@ -3473,5 +3476,13 @@ public class KafkaProducerTest {
 
         KafkaException e = assertThrows(KafkaException.class, () -> new KafkaProducer<>(configs));
         assertInstanceOf(ConfigException.class, e.getCause());
+    }
+
+    @Test
+    public void testClientInstanceIdIsPassedToTheNetworkClient() {
+        Map<String, Object> configs = new HashMap<>();
+        configs.put(ProducerConfig.BOOTSTRAP_SERVERS_CONFIG, "localhost:9999");
+        ClientInstanceIdCapture.assertGenerated(
+            () -> new KafkaProducer<>(configs, new StringSerializer(), new StringSerializer()));
     }
 }

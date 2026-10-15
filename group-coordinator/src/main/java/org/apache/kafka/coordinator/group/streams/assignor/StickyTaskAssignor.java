@@ -17,6 +17,7 @@
 
 package org.apache.kafka.coordinator.group.streams.assignor;
 
+import org.apache.kafka.coordinator.group.Utils;
 import org.apache.kafka.coordinator.group.api.streams.assignor.GroupAssignment;
 import org.apache.kafka.coordinator.group.api.streams.assignor.GroupSpec;
 import org.apache.kafka.coordinator.group.api.streams.assignor.MemberAssignment;
@@ -130,8 +131,8 @@ public class StickyTaskAssignor implements TaskAssignor {
         localState.activeTasksPerMember = computeTasksPerMember(localState.totalActiveTasks, localState.totalMembersWithActiveTaskCapacity);
         localState.totalTasksPerMember = computeTasksPerMember(localState.totalTasks, localState.totalMembersWithTaskCapacity);
 
-        localState.processIdToState = new HashMap<>(localState.totalMembersWithActiveTaskCapacity);
-        localState.activeTaskToPrevMember = new HashMap<>(localState.totalActiveTasks);
+        localState.processIdToState = Utils.newHashMap(localState.totalMembersWithActiveTaskCapacity);
+        localState.activeTaskToPrevMember = Utils.newHashMap(localState.totalActiveTasks);
 
         // Standby-strength candidates per task, gathered in a single pass over the members and ranked below.
         final Map<TaskId, ArrayList<StandbyCandidate>> standbyCandidates = new HashMap<>();
@@ -204,7 +205,7 @@ public class StickyTaskAssignor implements TaskAssignor {
     }
 
     private static Map<TaskId, ArrayList<Member>> rankStandbyCandidates(final Map<TaskId, ArrayList<StandbyCandidate>> standbyCandidates) {
-        final Map<TaskId, ArrayList<Member>> standbyTaskToPrevMember = new HashMap<>(standbyCandidates.size());
+        final Map<TaskId, ArrayList<Member>> standbyTaskToPrevMember = Utils.newHashMap(standbyCandidates.size());
         standbyCandidates.forEach((taskId, candidates) -> {
             candidates.sort(STANDBY_CANDIDATE_ORDER);
             final ArrayList<Member> prevMembers = new ArrayList<>(candidates.size());

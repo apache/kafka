@@ -17,6 +17,7 @@
 
 package org.apache.kafka.trogdor.workload;
 
+import org.apache.kafka.clients.consumer.AcknowledgeType;
 import org.apache.kafka.clients.consumer.ConsumerConfig;
 import org.apache.kafka.clients.consumer.ConsumerRecord;
 import org.apache.kafka.clients.consumer.ConsumerRecords;
@@ -138,8 +139,16 @@ public class ShareConsumeBenchWorker implements TaskWorker {
             props.put(ConsumerConfig.CLIENT_ID_CONFIG, clientId);
             props.put(ConsumerConfig.GROUP_ID_CONFIG, shareGroup);
             props.put(ConsumerConfig.MAX_POLL_INTERVAL_MS_CONFIG, 100000);
+            // an explicit acknowledge type requires the consumer to acknowledge each record itself
+            spec.acknowledgeType().ifPresent(type ->
+                    props.put(ConsumerConfig.SHARE_ACKNOWLEDGEMENT_MODE_CONFIG, "explicit"));
             // these defaults maybe over-written by the user-specified commonClientConf or consumerConf
             WorkerUtils.addConfigsToProperties(props, spec.commonClientConf(), spec.consumerConf());
+            if (spec.acknowledgeType().isPresent()
+                    && "implicit".equalsIgnoreCase(String.valueOf(props.get(ConsumerConfig.SHARE_ACKNOWLEDGEMENT_MODE_CONFIG)))) {
+                throw new IllegalArgumentException(String.format("acknowledgeType %s requires %s=explicit",
+                        spec.acknowledgeType().get(), ConsumerConfig.SHARE_ACKNOWLEDGEMENT_MODE_CONFIG));
+            }
             return new ThreadSafeShareConsumer(new KafkaShareConsumer<>(props, new ByteArrayDeserializer(), new ByteArrayDeserializer()), clientId);
         }
 
@@ -203,6 +212,8 @@ public class ShareConsumeBenchWorker implements TaskWorker {
                     recordProcessor.ifPresent(processor -> processor.processRecords(records));
 
                     for (ConsumerRecord<byte[], byte[]> record : records) {
+                        // Explicit acknowledgement requires acknowledging each record individually.
+                        spec.acknowledgeType().ifPresent(type -> consumer.acknowledge(record, type));
                         messagesConsumed++;
                         long messageBytes = 0;
                         if (record.key() != null) {
@@ -221,6 +232,9 @@ public class ShareConsumeBenchWorker implements TaskWorker {
                     }
                     startBatchMs = Time.SYSTEM.milliseconds();
                 }
+                // Send the pending acknowledgements while the consumer is still a member of the share group.
+                // Records after the maxMessages break are deliberately left unacknowledged.
+                spec.acknowledgeType().ifPresent(__ -> consumer.commitSync());
             } catch (Exception e) {
                 WorkerUtils.abort(log, "ConsumeRecords", e, doneFuture);
             } finally {
@@ -460,6 +474,25 @@ public class ShareConsumeBenchWorker implements TaskWorker {
             this.consumerLock.lock();
             try {
                 return consumer.poll(Duration.ofMillis(50));
+            } finally {
+                this.consumerLock.unlock();
+            }
+        }
+
+        void acknowledge(ConsumerRecord<byte[], byte[]> record, AcknowledgeType type) {
+            this.consumerLock.lock();
+            try {
+                consumer.acknowledge(record, type);
+            } finally {
+                this.consumerLock.unlock();
+            }
+        }
+
+        void commitSync() {
+            this.consumerLock.lock();
+            try {
+                consumer.commitSync().forEach((partition, exception) ->
+                        exception.ifPresent(e -> log.warn("{} failed to acknowledge records of {}", clientId, partition, e)));
             } finally {
                 this.consumerLock.unlock();
             }

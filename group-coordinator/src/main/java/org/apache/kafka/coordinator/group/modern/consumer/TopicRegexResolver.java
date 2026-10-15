@@ -81,7 +81,7 @@ public class TopicRegexResolver {
         long startTimeMs = time.milliseconds();
         log.debug("[GroupId {}] Refreshing regular expressions: {}", groupId, regexes);
 
-        Map<String, Set<String>> resolvedRegexes = new HashMap<>(regexes.size());
+        Map<String, Set<String>> resolvedRegexes = Utils.newHashMap(regexes.size());
         List<Pattern> compiledRegexes = new ArrayList<>(regexes.size());
         for (String regex : regexes) {
             resolvedRegexes.put(regex, new HashSet<>());
@@ -110,7 +110,7 @@ public class TopicRegexResolver {
         );
 
         long version = metadataImage.version();
-        Map<String, ResolvedRegularExpression> result = new HashMap<>(resolvedRegexes.size());
+        Map<String, ResolvedRegularExpression> result = Utils.newHashMap(resolvedRegexes.size());
         for (Map.Entry<String, Set<String>> resolvedRegex : resolvedRegexes.entrySet()) {
             result.put(
                 resolvedRegex.getKey(),
