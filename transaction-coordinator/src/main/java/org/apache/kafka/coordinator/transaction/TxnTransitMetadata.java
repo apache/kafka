@@ -48,7 +48,7 @@ public record TxnTransitMetadata(
     // When InitProducerId keeps an Ongoing transaction (which is "prepared" from
     // the 2PC protocol perspective) it needs to preserve the producerId / epoch of
     // the transaction (that will be used for sending markers), but update the
-    // producerId / epoch that's going ot be used by client (so that we could fence
+    // producerId / epoch that's going to be used by client (so that we could fence
     // stale client requests).  For backward compatibility (in case of server
     // downgrade) we keep the producerId / epoch of the transaction in the
     // producer* fields and the other pair in the nextProducer* fields, so

@@ -1335,7 +1335,7 @@ class TransactionCoordinatorTest {
   def shouldUseLastEpochToFenceWhenEpochsAreExhausted(): Unit = {
     val txnMetadata = new TransactionMetadata(transactionalId, producerId, producerId, RecordBatch.NO_PRODUCER_ID,
       (Short.MaxValue - 1).toShort, (Short.MaxValue - 2).toShort, RecordBatch.NO_PRODUCER_EPOCH, txnTimeoutMs, TransactionState.ONGOING, partitions, time.milliseconds(), time.milliseconds(), TV_0)
-    assertTrue(txnMetadata.isProducerEpochExhausted)
+    assertTrue(txnMetadata.isClientFacingEpochExhausted)
 
     when(transactionManager.validateTransactionTimeoutMs(anyBoolean(), anyInt()))
       .thenReturn(true)
@@ -1487,7 +1487,7 @@ class TransactionCoordinatorTest {
       now,
       TV_2
     )
-    assertTrue(txnMetadata.isProducerEpochExhausted)
+    assertTrue(txnMetadata.isClientFacingEpochExhausted)
 
     // Mock the transaction manager to return our test transaction as timed out
     when(transactionManager.timedOutTransactions())
@@ -1577,7 +1577,7 @@ class TransactionCoordinatorTest {
       now,
       TV_2
     )
-    assertTrue(txnMetadata.isProducerEpochExhausted)
+    assertTrue(txnMetadata.isClientFacingEpochExhausted)
 
     // Mock the transaction manager to return our test transaction as timed out
     when(transactionManager.timedOutTransactions())
@@ -1748,7 +1748,7 @@ class TransactionCoordinatorTest {
       now,
       TV_2
     )
-    assertTrue(txnMetadata.isProducerEpochExhausted)
+    assertTrue(txnMetadata.isClientFacingEpochExhausted)
 
     when(transactionManager.validateTransactionTimeoutMs(anyBoolean(), anyInt()))
       .thenReturn(true)
@@ -1893,7 +1893,7 @@ class TransactionCoordinatorTest {
       now,
       TV_2
     )
-    assertTrue(txnMetadata.isProducerEpochExhausted)
+    assertTrue(txnMetadata.isClientFacingEpochExhausted)
 
     // Mock the transaction manager to return our test transaction as timed out
     when(transactionManager.timedOutTransactions())
@@ -3539,7 +3539,7 @@ class TransactionCoordinatorTest {
     //     nextPid=300, nextEpoch=32766
     //  4. CommitTxn/AbortTxn: prepareAbortOrCommit bumps epoch 32764→32765,
     //     then generateTxnTransitMetadataForTxnCompletion sees
-    //     isProducerEpochExhausted() → rotation. PrepareCommit, pid=32765,
+    //     isClientFacingEpochExhausted() → rotation. PrepareCommit, pid=32765,
     //     nextPid=<new>, nextEpoch=0
     //  5. Complete: CompleteCommit, pid=<new>, epoch=0, prevPid=300
     val startEpoch2 = (Short.MaxValue - 3).toShort  // 32764

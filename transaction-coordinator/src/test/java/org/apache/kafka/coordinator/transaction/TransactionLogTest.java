@@ -196,6 +196,19 @@ class TransactionLogTest {
     }
 
     @Test
+    void testSerializeClientTransactionVersionToNonFlexibleVersion() {
+        // ClientTransactionVersion is a tagged field, it can only be written at the flexible version and
+        // falls back to the default (TV_0) at the non-flexible version, like the other tagged fields.
+        var txnTransitMetadata = new TxnTransitMetadata(1L, 1L, 1L, (short) 1, (short) 1, RecordBatch.NO_PRODUCER_EPOCH, 1000, TransactionState.COMPLETE_COMMIT, new HashSet<>(), 500L, 500L, TV_2);
+        var record = MemoryRecords.withRecords(Compression.NONE, new SimpleRecord(
+            TransactionLog.keyToBytes("transactionalId"),
+            TransactionLog.valueToBytes(txnTransitMetadata, TV_0)
+        )).records().iterator().next();
+        var readResult = assertInstanceOf(TransactionLog.TxnRecord.class, TransactionLog.read(record.key(), record.value()));
+        assertEquals(TV_0, readResult.metadata().clientTransactionVersion());
+    }
+
+    @Test
     void testSerializeTransactionLogValueToFlexibleVersion() {
         var txnTransitMetadata = new TxnTransitMetadata(1L, 1L, 1L, (short) 1, (short) 1, RecordBatch.NO_PRODUCER_EPOCH, 1000, TransactionState.COMPLETE_COMMIT, new HashSet<>(), 500L, 500L, TV_2);
         var txnLogValueBuffer = wrap(TransactionLog.valueToBytes(txnTransitMetadata, TV_2));

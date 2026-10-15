@@ -24,6 +24,7 @@ import org.apache.kafka.server.common.TransactionVersion;
 
 import org.junit.jupiter.api.Test;
 import org.junit.jupiter.params.ParameterizedTest;
+import org.junit.jupiter.params.provider.EnumSource;
 import org.junit.jupiter.params.provider.ValueSource;
 
 import java.util.HashSet;
@@ -118,7 +119,7 @@ public class TransactionMetadataTest {
             TV_0
         );
 
-        assertTrue(txnMetadata.isProducerEpochExhausted());
+        assertTrue(txnMetadata.isClientFacingEpochExhausted());
         assertThrows(IllegalStateException.class, () -> txnMetadata.prepareIncrementProducerEpoch(30000,
             Optional.empty(), time.milliseconds()));
     }
@@ -449,7 +450,7 @@ public class TransactionMetadataTest {
             -1,
             time.milliseconds(),
             TV_0);
-        assertTrue(txnMetadata.isProducerEpochExhausted());
+        assertTrue(txnMetadata.isClientFacingEpochExhausted());
 
         TxnTransitMetadata fencingTransitMetadata = txnMetadata.prepareFenceProducerEpoch();
         assertEquals(Short.MAX_VALUE, fencingTransitMetadata.producerEpoch());
@@ -482,7 +483,7 @@ public class TransactionMetadataTest {
             -1,
             time.milliseconds(),
             TV_0);
-        assertTrue(txnMetadata.isProducerEpochExhausted());
+        assertTrue(txnMetadata.isClientFacingEpochExhausted());
 
         assertThrows(IllegalStateException.class, txnMetadata::prepareFenceProducerEpoch);
     }
@@ -505,9 +506,33 @@ public class TransactionMetadataTest {
             -1,
             time.milliseconds(),
             TV_0);
-        assertTrue(txnMetadata.isProducerEpochExhausted());
+        assertTrue(txnMetadata.isClientFacingEpochExhausted());
 
         assertThrows(IllegalStateException.class, txnMetadata::prepareFenceProducerEpoch);
+    }
+
+    @ParameterizedTest
+    @EnumSource(value = TransactionState.class, names = {"EMPTY", "COMPLETE_COMMIT", "COMPLETE_ABORT", "PREPARE_COMMIT", "PREPARE_ABORT"})
+    public void testKeepPreparedTxnTransitionsRequireOngoingState(TransactionState state) {
+        // InitProducerId(keepPreparedTxn=true) transitions are only valid for an ONGOING transaction.
+        TransactionMetadata txnMetadata = new TransactionMetadata(
+            transactionalId,
+            producerId,
+            RecordBatch.NO_PRODUCER_ID,
+            RecordBatch.NO_PRODUCER_ID,
+            (short) 735,
+            RecordBatch.NO_PRODUCER_EPOCH,
+            RecordBatch.NO_PRODUCER_EPOCH,
+            30000,
+            state,
+            Set.of(),
+            time.milliseconds(),
+            time.milliseconds(),
+            TV_2);
+
+        assertThrows(IllegalStateException.class, () -> txnMetadata.prepareIncrementProducerEpochForOngoing(time.milliseconds()));
+        assertThrows(IllegalStateException.class, () -> txnMetadata.prepareProducerIdRotationForOngoing(producerId + 1, time.milliseconds()));
+        assertEquals(Optional.empty(), txnMetadata.pendingState());
     }
 
     @Test
@@ -559,7 +584,7 @@ public class TransactionMetadataTest {
             -1,
             time.milliseconds(),
             TV_0);
-        assertTrue(txnMetadata.isProducerEpochExhausted());
+        assertTrue(txnMetadata.isClientFacingEpochExhausted());
 
         // When epoch is at max, prepareFenceProducerEpoch logs an error but doesn't throw
         // This allows graceful recovery through producer ID rotation
@@ -650,7 +675,7 @@ public class TransactionMetadataTest {
             time.milliseconds(),
             time.milliseconds(),
             TV_2);
-        assertTrue(txnMetadata.isProducerEpochExhausted());
+        assertTrue(txnMetadata.isClientFacingEpochExhausted());
 
         long newProducerId = 9893L;
         TxnTransitMetadata transitMetadata = txnMetadata.prepareAbortOrCommit(TransactionState.PREPARE_COMMIT, TV_2, newProducerId, RecordBatch.NO_PRODUCER_EPOCH, time.milliseconds() - 1, false);

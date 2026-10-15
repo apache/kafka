@@ -275,7 +275,7 @@ class TransactionCoordinator(txnConfig: TransactionConfig,
           val transitMetadataResult =
             // If the epoch is exhausted and the expected epoch (if provided) matches it, generate a new producer ID
             try {
-              if (txnMetadata.isProducerEpochExhausted &&
+              if (txnMetadata.isClientFacingEpochExhausted &&
                   expectedProducerIdAndEpoch.forall(_.epoch == txnMetadata.producerEpoch))
                 Right(txnMetadata.prepareProducerIdRotation(producerIdManager.generateProducerId(), transactionTimeoutMs, time.milliseconds(),
                   expectedProducerIdAndEpoch.isDefined))
@@ -302,7 +302,7 @@ class TransactionCoordinator(txnConfig: TransactionConfig,
             Left(Errors.INVALID_TXN_STATE)
           } else if (keepPreparedTxn) {
             // Note: expectedProducerIdAndEpoch is always empty (we error out earlier).
-            val transitMetadataResult = if (txnMetadata.isProducerEpochExhausted) {
+            val transitMetadataResult = if (txnMetadata.isClientFacingEpochExhausted) {
               try {
                 Right(txnMetadata.prepareProducerIdRotationForOngoing(producerIdManager.generateProducerId(), time.milliseconds()))
               } catch {
@@ -907,7 +907,7 @@ class TransactionCoordinator(txnConfig: TransactionConfig,
                 // EndTxn completion on TV2 bumps epoch, so rotate producer ID whenever the current epoch is exhausted.
                 // This must also apply to the epoch-fence path.
                 val nextProducerIdOrErrors =
-                  if (txnMetadata.isProducerEpochExhausted) {
+                  if (txnMetadata.isClientFacingEpochExhausted) {
                     try {
                       Right(producerIdManager.generateProducerId())
                     } catch {
@@ -917,22 +917,22 @@ class TransactionCoordinator(txnConfig: TransactionConfig,
                     Right(txnMetadata.nextProducerId)
                   }
 
-                // If the next producer epoch is set (which can happen if we used InitProducerId(keepPreparedTxn))
+                // If the next producer epoch is set (which can happen if we used InitProducerId(keepPreparedTxn=true))
                 // then we also need to bump this epoch -- we want to fence requests that were issued with that
                 // epoch after the transaction is complete.  Consider this example:
                 //  1. (initial state): Ongoing, producerId = 42, producerEpoch = 100, nextProducerId = -1, nextProducerEpoch = -1
-                //  2. InitProducerId(keepPreparedTxn): Ongoing, producerId = 42, producerEpoch = 100, nextProducerId = 42, nextProducerEpoch = 101
+                //  2. InitProducerId(keepPreparedTxn=true): Ongoing, producerId = 42, producerEpoch = 100, nextProducerId = 42, nextProducerEpoch = 101
                 //  3. CommitTxn: timed out (but actually delayed)
                 //  4. CommitTxn + complete: CompleteCommit, producerId = 42, producerEpoch = 101, nextProducerId = -1, nextProducerEpoch = -1
                 //  5. Start new transaction, do some actions
                 //  6. Delayed CommitTxn from step 3 arrives and commits partially completed transaction.
                 // In order to prevent this problem, we need to bump the epoch at step 4 (so it becomes 102) even though we
                 // already bumped it at step 2.
-                // Note that we can arrive at this scenario when a client did a few keep-prepared calls and then
-                // decided to do one without keep-prepared (e.g. to force-terminate), so this logic applies
-                // to isEpochFence as well.
+                // Note that we can arrive at this scenario when a client did a few InitProducerId(keepPreparedTxn=true)
+                // calls and then decided to do one with keepPreparedTxn=false (e.g. to force-terminate), so this logic
+                // applies to isEpochFence as well.
                 val nextProducerEpoch = if (txnMetadata.hasNextProducerEpoch) {
-                  if (txnMetadata.isProducerEpochExhausted) 0.toShort else (txnMetadata.nextProducerEpoch + 1).toShort
+                  if (txnMetadata.isClientFacingEpochExhausted) 0.toShort else (txnMetadata.nextProducerEpoch + 1).toShort
                 } else {
                   RecordBatch.NO_PRODUCER_EPOCH
                 }
@@ -1034,13 +1034,19 @@ class TransactionCoordinator(txnConfig: TransactionConfig,
                   if (epochAndMetadata.coordinatorEpoch == coordinatorEpoch) {
                     val txnMetadata = epochAndMetadata.transactionMetadata
                     txnMetadata.inLock(() => {
-                      // Note that if we did a few InitProducerId(keepPreparedTxn) the client's producer id
-                      // may be different from the producerId (we track it in the nextProducerId), but at
-                      // this point even nextProducerId could be different from the client's producer id
-                      // if we generated a new nextProducerId due to nextProducerEpoch overflow.  So we
-                      // check with the copy of the txnMetadata.producerId.  Ditto for the epoch.
+                      // Sanity check that the metadata didn't change while the PREPARE_* transition was being
+                      // appended to the log.  It cannot change: other transitions are blocked while a transition
+                      // is pending, the PREPARE_* transition doesn't change the producerId, and a coordinator
+                      // reload is detected by the coordinator epoch check above.  We check with the copy of the
+                      // producerId / producerEpoch in txnMetadata rather than with the request: if
+                      // InitProducerId(keepPreparedTxn=true) was used, the request has the client-facing producer
+                      // id / epoch (nextProducerId / nextProducerEpoch), while txnMetadata.producerId / producerEpoch
+                      // are frozen to be used for the markers.
                       if (txnMetadata.producerId != producerIdCopy)
                         Left(Errors.INVALID_PRODUCER_ID_MAPPING)
+                      // This is the transaction V2 path: the PREPARE_* transition bumps the producer epoch for the
+                      // markers (producerEpochCopy + 1), except when aborting with the producer epoch at
+                      // Short.MaxValue, which doesn't bump it (producerEpochCopy), see prepareAbortOrCommit.
                       else if (txnMetadata.producerEpoch != producerEpochCopy && txnMetadata.producerEpoch != producerEpochCopy + 1)
                         Left(Errors.PRODUCER_FENCED)
                       else if (txnMetadata.pendingTransitionInProgress)

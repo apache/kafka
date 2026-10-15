@@ -82,14 +82,15 @@ public class TransactionLog {
                         .setTransactionStatus(txnMetadata.txnState().id())
                         .setTransactionLastUpdateTimestampMs(txnMetadata.txnLastUpdateTimestamp())
                         .setTransactionStartTimestampMs(txnMetadata.txnStartTimestamp())
-                        .setTransactionPartitions(transactionPartitions)
-                        .setClientTransactionVersion(txnMetadata.clientTransactionVersion().featureLevel());
+                        .setTransactionPartitions(transactionPartitions);
 
+        // Tagged fields are only supported in the flexible versions (1+).
         if (logValueVersion >= 1) {
             value.setPreviousProducerId(txnMetadata.prevProducerId());
             value.setNextProducerId(txnMetadata.nextProducerId());
             value.setLastProducerEpoch(txnMetadata.lastProducerEpoch());
             value.setNextProducerEpoch(txnMetadata.nextProducerEpoch());
+            value.setClientTransactionVersion(txnMetadata.clientTransactionVersion().featureLevel());
         }
 
         return MessageUtil.toVersionPrefixedBytes(logValueVersion, value);
