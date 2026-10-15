@@ -288,13 +288,16 @@ public class AssignmentRefinerImpl implements AssignmentRefiner {
             // was removed from the group in the meantime. For this case, all previously owned tasks of this member
             // (which were not moved to a new owner) will be dangling, which the next assignor run fixes.
             // Furthermore, we stage all tasks the assignor moves to this member on their old owners to keep them
-            // "online". A task nobody holds as an active task is put on a caught-up copy holder instead, which is the
-            // only way it runs at all before the next assignor run.
+            // "online". A task nobody holds as an active task is put on a caught-up copy holder instead, or on a
+            // standby holder that does not report its progress, which is the only way it runs at all before the next
+            // assignor run.
             final StreamsGroupMember targetMember = members.get(targetOwner);
             if (targetMember == null) {
                 final Optional<String> currentOwner = holder != null
                     ? Optional.of(holder.memberId())
-                    : bestCopyToPromote(currentAssignment, task, targetStandbyHolders, processLoad);
+                    : bestCopyToPromote(currentAssignment, task, targetStandbyHolders, processLoad)
+                        .or(() -> unobservableStandbyToPromote(
+                            currentAssignment, task, null, targetStandbyHolders, heartbeatVersions, processLoad));
                 currentOwner.ifPresent(owner -> stagedMigrations.add(
                     stagedMigration(currentAssignment, task, owner, targetOwner, Optional.empty())));
                 continue;
@@ -357,7 +360,9 @@ public class AssignmentRefinerImpl implements AssignmentRefiner {
             return Optional.empty();
         }
         final Optional<String> copy = bestCopyToPromote(currentAssignment, task, targetStandbyHolders, processLoad);
-        if (copy.isEmpty() && holder == null) {
+        // Only for an orphan whose target owner's process holds no copy of the task. A copy there is warmer than one
+        // of unknown lag elsewhere, and is what a hand-over that is already under way completes with.
+        if (copy.isEmpty() && holder == null && findCopyOnProcess(currentAssignment, task, targetProcessId).isEmpty()) {
             return unobservableStandbyToPromote(
                 currentAssignment, task, targetProcessId, targetStandbyHolders, heartbeatVersions, processLoad);
         }
@@ -394,8 +399,9 @@ public class AssignmentRefinerImpl implements AssignmentRefiner {
     /**
      * The standby task of an orphan that is promoted to run the task although the coordinator cannot tell how far
      * behind it is, because its holder does not report its restore progress: a member that is not
-     * {@link WarmupSupport#SUPPORTED}. Only a standby task that the target assignment also gives to that member is
-     * promoted.
+     * {@link WarmupSupport#SUPPORTED}. Only a standby task that the target assignment also gives to that member, and
+     * that is not on the target owner's process, is promoted. The target owner's process is {@code null} if the
+     * target owner has left the group.
      *
      * <p>This is the one place where a copy of unknown lag is acted on. Elsewhere, the alternative to promoting a
      * lagging copy is keeping a running owner, here it is a restore from scratch on the target owner next to a copy
@@ -404,7 +410,7 @@ public class AssignmentRefinerImpl implements AssignmentRefiner {
      * that is close resumes processing at once. When the target owner's warm-up task has caught up, the hand-over
      * demotes the temporary owner to its standby task in place.
      *
-     * <p>Among several candidates, the tie-breaks of {@link #bestCopyToPromote} pick one without comparing lags.
+     * <p>Among several candidates, the least loaded process wins, without comparing lags.
      */
     private static Optional<String> unobservableStandbyToPromote(
         final CurrentAssignmentIndex currentAssignment,
