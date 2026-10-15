@@ -3323,7 +3323,10 @@ class TransactionCoordinatorTest {
     val allocatedProducerIds = scala.collection.mutable.Set[Long](producerId)
 
     // Loop until we've seen 2 rotations
+    var iterations = 0
     while (rotationCount < targetRotations) {
+      iterations += 1
+      assertTrue(iterations <= 10, s"Expected $targetRotations rotations, got $rotationCount after $iterations calls")
       coordinator.handleInitProducerId(
         transactionalId,
         txnTimeoutMs,
@@ -3347,6 +3350,11 @@ class TransactionCoordinatorTest {
       assertEquals(startEpoch, result.ongoingTxnProducerEpoch)
 
       currentClientEpoch = result.producerEpoch
+      if (currentClientEpoch == 0 && rotationCount < targetRotations) {
+        // Move the client-facing epoch close to the boundary again rather than bumping it ~32K times.
+        currentClientEpoch = (Short.MaxValue - 2).toShort
+        currentTxnMetadata().setNextProducerEpoch(currentClientEpoch)
+      }
     }
 
     assertEquals(2, rotationCount, "Should have seen exactly 2 rotations")
