@@ -25,11 +25,8 @@ import org.apache.kafka.clients.consumer.GroupProtocol;
 import org.apache.kafka.clients.producer.Producer;
 import org.apache.kafka.clients.producer.ProducerConfig;
 import org.apache.kafka.clients.producer.ProducerRecord;
-import org.apache.kafka.common.ElectionType;
-import org.apache.kafka.common.TopicPartition;
 import org.apache.kafka.common.config.TopicConfig;
 import org.apache.kafka.common.errors.ProducerFencedException;
-import org.apache.kafka.common.internals.Topic;
 import org.apache.kafka.common.test.ClusterInstance;
 import org.apache.kafka.common.test.api.ClusterConfigProperty;
 import org.apache.kafka.common.test.api.ClusterTest;
@@ -45,12 +42,10 @@ import org.apache.kafka.test.TestUtils;
 
 import org.junit.jupiter.api.AfterEach;
 import org.junit.jupiter.api.BeforeEach;
-import org.junit.jupiter.api.Timeout;
 
 import java.time.Duration;
 import java.util.List;
 import java.util.Map;
-import java.util.Set;
 import java.util.function.Function;
 
 import static org.junit.jupiter.api.Assertions.assertEquals;
@@ -70,7 +65,8 @@ import static org.junit.jupiter.api.Assertions.assertTrue;
         @ClusterConfigProperty(key = ServerLogConfigs.AUTO_CREATE_TOPICS_ENABLE_CONFIG, value = "false"),
         @ClusterConfigProperty(key = "offsets.topic.num.partitions", value = "1"),
         @ClusterConfigProperty(key = TransactionLogConfig.TRANSACTIONS_TOPIC_PARTITIONS_CONFIG, value = "3"),
-        @ClusterConfigProperty(key = TransactionLogConfig.TRANSACTIONS_TOPIC_REPLICATION_FACTOR_CONFIG, value = "2"),
+        // With 3 replicas and min.insync.replicas = 2 the transaction log stays writable while a crashed coordinator restarts.
+        @ClusterConfigProperty(key = TransactionLogConfig.TRANSACTIONS_TOPIC_REPLICATION_FACTOR_CONFIG, value = "3"),
         @ClusterConfigProperty(key = TransactionLogConfig.TRANSACTIONS_TOPIC_MIN_ISR_CONFIG, value = "2"),
         @ClusterConfigProperty(key = ServerConfigs.CONTROLLED_SHUTDOWN_ENABLE_CONFIG, value = "true"),
         @ClusterConfigProperty(key = TopicConfig.UNCLEAN_LEADER_ELECTION_ENABLE_CONFIG, value = "false"),
@@ -147,9 +143,7 @@ public class TransactionsWith2PCTest {
 
             // Verify consumer sees the records from the first producer
             consumer.seekToBeginning(consumer.assignment());
-            var consumedRecords = TransactionsTestHelper.consumeRecordsFor(consumer, CONSUME_DURATION_MS);
-            assertEquals(numRecords, consumedRecords.size(),
-                "Consumer should see all records from first producer after commit");
+            TransactionsTestHelper.consumeRecords(consumer, numRecords);
         }
     }
 
@@ -195,9 +189,7 @@ public class TransactionsWith2PCTest {
 
             // Verify consumer sees the records
             consumer.seekToBeginning(consumer.assignment());
-            var consumedRecords = TransactionsTestHelper.consumeRecordsFor(consumer, CONSUME_DURATION_MS);
-            assertEquals(numRecords, consumedRecords.size(),
-                "Consumer should see all records after commit");
+            TransactionsTestHelper.consumeRecords(consumer, numRecords);
         }
     }
 
@@ -263,25 +255,27 @@ public class TransactionsWith2PCTest {
         }
     }
 
-    // Multiple coordinator crash/restart cycles take longer than the default @ClusterTest timeout.
-    @Timeout(300)
+    // Test producer crash and recovery with 2PC keepPrepared transaction flow: the producer crashes with an
+    // ongoing transaction, a new producer recovers it with initTransactions(keepPreparedTxn=true) and completes
+    // it.  The transaction coordinator crashes after the last recovery.
+
     @ClusterTest
-    public void testProducerCrashAndRecoverWith2PC() throws Exception {
-        // Test producer crash and recovery with 2PC keepPrepared transaction flow.
-        // Note: 2PC is enabled server-side and triggered by calling
-        // initTransactions(keepPreparedTxn=true) after crash.
-
-        // Test single crash with commit
+    public void testProducerCrashAndRecoverWith2PCCommit() throws Exception {
         test2PCRecovery(1, true);
+    }
 
-        // Test single crash with abort
+    @ClusterTest
+    public void testProducerCrashAndRecoverWith2PCAbort() throws Exception {
         test2PCRecovery(1, false);
+    }
 
-        // Test multiple crashes before final commit (validates epoch progression)
+    @ClusterTest
+    public void testProducerMultipleCrashesAndRecoverWith2PC() throws Exception {
+        // Multiple recoveries before the final commit (validates epoch progression)
         test2PCRecovery(3, true);
     }
 
-    private void test2PCRecovery(int numCrashes, boolean shouldCommit) throws Exception {
+    private void test2PCRecovery(int numRecoveries, boolean shouldCommit) throws Exception {
         var transactionalId = "test-2pc-recovery-" + System.nanoTime();
         var testTopic = "test-2pc-topic-" + System.nanoTime();
         clusterInstance.createTopic(testTopic, 1, TransactionsTestHelper.BROKER_COUNT, TOPIC_CONFIG);
@@ -314,30 +308,22 @@ public class TransactionsWith2PCTest {
             var ongoingEpoch = getProducerEpoch(transactionalId);
             var clientEpoch = getClientProducerEpoch(transactionalId);
 
-            // Crash and recover numCrashes times
-            for (var crashNum = 1; crashNum <= numCrashes; crashNum++) {
+            // Recover numRecoveries times
+            for (var recoveryNum = 1; recoveryNum <= numRecoveries; recoveryNum++) {
                 var recoveredProducer = create2PCProducer(transactionalId);
                 // Use keepPreparedTxn=true to preserve in-flight transaction
                 recoveredProducer.initTransactions(true);
 
-                // Each initTransactions(keepPreparedTxn=true) bumps the client-facing epoch.
+                // Each initTransactions(keepPreparedTxn=true) bumps the client-facing epoch, the ongoing transaction
+                // epoch (which is what DescribeTransactions returns) is unchanged.
                 var clientEpochAfterInit = getClientProducerEpoch(transactionalId);
                 assertEquals((short) (clientEpoch + 1), clientEpochAfterInit,
-                    "Crash " + crashNum + ": client-facing epoch should be bumped");
-
-                // Crash the transaction coordinator to test resilience during 2PC recovery
-                crashAndRestartTransactionCoordinator(transactionalId);
-
-                // The dual identity survives the coordinator restart (it's reloaded from the transaction log):
-                // the client-facing epoch is preserved and the ongoing transaction epoch (which is what
-                // DescribeTransactions returns) is unchanged.
-                assertEquals(clientEpochAfterInit, getClientProducerEpoch(transactionalId),
-                    "Crash " + crashNum + ": client-facing epoch should survive coordinator restart");
+                    "Recovery " + recoveryNum + ": client-facing epoch should be bumped");
                 assertEquals(ongoingEpoch, getProducerEpoch(transactionalId),
-                    "Crash " + crashNum + ": ongoing transaction epoch should be unchanged");
+                    "Recovery " + recoveryNum + ": ongoing transaction epoch should be unchanged");
                 clientEpoch = clientEpochAfterInit;
 
-                if (crashNum < numCrashes) {
+                if (recoveryNum < numRecoveries) {
                     // Simulate another crash
                     recoveredProducer.close(Duration.ZERO);
                 } else {
@@ -345,6 +331,14 @@ public class TransactionsWith2PCTest {
                     producer = recoveredProducer;
                 }
             }
+
+            // Crash the transaction coordinator to test resilience during 2PC recovery.  The dual identity
+            // survives the coordinator failover (it's reloaded from the transaction log).
+            crashAndRestartTransactionCoordinator(transactionalId);
+            assertEquals(clientEpoch, getClientProducerEpoch(transactionalId),
+                "Client-facing epoch should survive coordinator failover");
+            assertEquals(ongoingEpoch, getProducerEpoch(transactionalId),
+                "Ongoing transaction epoch should survive coordinator failover");
 
             try {
                 // Complete prepared transaction directly.  Cannot call beginTransaction()
@@ -363,12 +357,10 @@ public class TransactionsWith2PCTest {
 
                 // Verify consumer sees correct records
                 consumer.seekToBeginning(consumer.assignment());
-                var consumedRecords = TransactionsTestHelper.consumeRecordsFor(consumer, CONSUME_DURATION_MS);
-
                 if (shouldCommit) {
-                    assertEquals(numRecords, consumedRecords.size(),
-                        "Consumer should see all records after commit");
+                    TransactionsTestHelper.consumeRecords(consumer, numRecords);
                 } else {
+                    var consumedRecords = TransactionsTestHelper.consumeRecordsFor(consumer, CONSUME_DURATION_MS);
                     assertEquals(0, consumedRecords.size(),
                         "Consumer should see no records after abort");
                 }
@@ -380,10 +372,7 @@ public class TransactionsWith2PCTest {
 
                 // Seek to beginning to read all records (both 2PC and fresh)
                 consumer.seekToBeginning(consumer.assignment());
-                var allRecords = TransactionsTestHelper.consumeRecordsFor(consumer, CONSUME_DURATION_MS);
-                var expectedTotal = shouldCommit ? numRecords + 1 : 1;
-                assertEquals(expectedTotal, allRecords.size(),
-                    "Should have " + expectedTotal + " total records after fresh transaction");
+                TransactionsTestHelper.consumeRecords(consumer, shouldCommit ? numRecords + 1 : 1);
             } finally {
                 producer.close();
             }
@@ -525,9 +514,7 @@ public class TransactionsWith2PCTest {
 
                     // Verify consumer sees all records
                     consumer.seekToBeginning(consumer.assignment());
-                    var consumedRecords = TransactionsTestHelper.consumeRecordsFor(consumer, CONSUME_DURATION_MS);
-                    assertEquals(numRecords, consumedRecords.size(),
-                        "Consumer should see all records despite rotation");
+                    TransactionsTestHelper.consumeRecords(consumer, numRecords);
                 }
             }
         }
@@ -637,18 +624,13 @@ public class TransactionsWith2PCTest {
     }
 
     /**
-     * Crash the transaction coordinator, wait for a new coordinator to be elected,
-     * restart the crashed broker, and wait for leadership to stabilize.
-     * This simulates a coordinator failure during transaction processing.
+     * Crash the transaction coordinator, wait for a new coordinator to take over (it reloads the transaction
+     * state from the transaction log) and restart the crashed broker.  The transaction log stays writable while
+     * the crashed broker catches up (3 replicas, min.insync.replicas = 2), and leadership doesn't move back to
+     * it since automatic leader rebalance is disabled.
      */
     private void crashAndRestartTransactionCoordinator(String transactionalId) throws Exception {
-        // Find the current coordinator
         var oldCoordinatorId = findTransactionCoordinatorId(transactionalId);
-        var transactionPartitionId = ((BrokerServer) clusterInstance.brokers().get(oldCoordinatorId))
-            .transactionCoordinator().partitionFor(transactionalId);
-        var transactionPartition = new TopicPartition(Topic.TRANSACTION_STATE_TOPIC_NAME, transactionPartitionId);
-
-        // Shutdown the coordinator broker
         clusterInstance.shutdownBroker(oldCoordinatorId);
 
         // Wait for a new coordinator to be elected (coordinator ID should change)
@@ -660,34 +642,6 @@ public class TransactionsWith2PCTest {
             }
         }, "New coordinator was not elected after shutting down broker " + oldCoordinatorId);
 
-        // Restart the old broker
         clusterInstance.startBroker(oldCoordinatorId);
-
-        // Wait for the broker to fully start and metadata to propagate
-        clusterInstance.ensureConsistentMetadata();
-
-        // Wait for the old coordinator to be in ISR before triggering preferred leader election
-        TestUtils.waitForCondition(() -> {
-            try {
-                var topicDesc = adminClient.describeTopics(Set.of(Topic.TRANSACTION_STATE_TOPIC_NAME)).allTopicNames().get();
-                return topicDesc.get(Topic.TRANSACTION_STATE_TOPIC_NAME).partitions().stream()
-                    .filter(p -> p.partition() == transactionPartitionId)
-                    .anyMatch(p -> p.isr().stream().anyMatch(node -> node.id() == oldCoordinatorId));
-            } catch (Exception e) {
-                return false;
-            }
-        }, "Old coordinator " + oldCoordinatorId + " did not rejoin ISR for partition " + transactionPartition);
-
-        // Trigger preferred leader election for the transaction state topic partition
-        adminClient.electLeaders(ElectionType.PREFERRED, Set.of(transactionPartition)).all().get();
-
-        // Wait until the old coordinator regains leadership.
-        TestUtils.waitForCondition(() -> {
-            try {
-                return findTransactionCoordinatorId(transactionalId) == oldCoordinatorId;
-            } catch (Exception e) {
-                return false;  // Coordinator not yet available
-            }
-        }, "Old coordinator " + oldCoordinatorId + " did not regain leadership after restart");
     }
 }
