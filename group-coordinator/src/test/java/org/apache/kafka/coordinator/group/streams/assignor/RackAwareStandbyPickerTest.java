@@ -31,7 +31,6 @@ import java.util.Set;
 import java.util.TreeMap;
 
 import static org.junit.jupiter.api.Assertions.assertEquals;
-import static org.junit.jupiter.api.Assertions.assertTrue;
 
 public class RackAwareStandbyPickerTest {
 
@@ -54,7 +53,7 @@ public class RackAwareStandbyPickerTest {
             "W", Map.of("cluster", "c1", "zone", "z2"),
             "X", Map.of("cluster", "c2", "zone", "z1")
         ));
-        hold("H");
+        picker.markUsed("H");
 
         assertEquals(Set.of("X"), candidates());
         assertEquals(List.of("cluster"), conditionNames());
@@ -71,7 +70,7 @@ public class RackAwareStandbyPickerTest {
             "X", Map.of("cluster", "c2", "zone", "z2", "rack", "r1"),
             "Z", Map.of("cluster", "c3", "zone", "z2", "rack", "r1")
         ));
-        hold("H");
+        picker.markUsed("H");
 
         assertEquals(Set.of("X", "Z"), candidates());
         assertEquals(List.of("cluster", "zone"), conditionNames());
@@ -88,7 +87,7 @@ public class RackAwareStandbyPickerTest {
             "Y", Map.of("cluster", "c1", "zone", "z2", "rack", "r2"),
             "Z", Map.of("cluster", "c2", "zone", "z1", "rack", "r1")
         ));
-        hold("H");
+        picker.markUsed("H");
 
         assertEquals(Set.of("X"), candidates());
         assertEquals(List.of("cluster", "rack"), conditionNames());
@@ -102,23 +101,23 @@ public class RackAwareStandbyPickerTest {
             "W", Map.of("cluster", "c1", "zone", "z3"),
             "X", Map.of("cluster", "c2", "zone", "z1")
         ));
-        hold("H");
+        picker.markUsed("H");
         assertEquals(Set.of("X"), candidates());
         assertEquals(List.of("cluster"), conditionNames());
 
         // Every cluster is used: zone becomes the priority and N and W are back. There is no lower key to order
         // them by.
-        hold("X");
+        picker.markUsed("X");
         assertEquals(Set.of("N", "W"), candidates());
         assertEquals(List.of("zone"), conditionNames());
 
         // N has no cluster to record; its zone is used now.
-        hold("N");
+        picker.markUsed("N");
         assertEquals(Set.of("W"), candidates());
         assertEquals(List.of("zone"), conditionNames());
 
         // Every zone is used too, so no process makes the task more diverse.
-        hold("W");
+        picker.markUsed("W");
         assertEquals(Set.of(), candidates());
         assertEquals(List.of(), conditionNames());
     }
@@ -131,10 +130,10 @@ public class RackAwareStandbyPickerTest {
             "C", Map.of("cluster", "c1", "zone", "z3"),
             "D", Map.of("cluster", "c2", "zone", "z1")
         ));
-        hold("A");
+        picker.markUsed("A");
         assertEquals(Set.of("B"), candidates());
         assertEquals(List.of("cluster", "zone"), conditionNames());
-        hold("B");
+        picker.markUsed("B");
         assertEquals(Set.of("C"), candidates());
         assertEquals(List.of("zone"), conditionNames());
 
@@ -192,10 +191,6 @@ public class RackAwareStandbyPickerTest {
             process -> loads.getOrDefault(process, 0.0),
             process -> !processesWithoutRoom.contains(process)
         );
-    }
-
-    private void hold(final String process) {
-        picker.markUsed(process);
     }
 
     /** Gives a random process a new load, lower or higher, and sometimes flips its room; returns the process. */
@@ -276,16 +271,12 @@ public class RackAwareStandbyPickerTest {
                     conditionsContext + ", process " + process
                 );
             }
-            final String expected = scanLeastLoadedMeeting(clientTags, holders, conditions);
-            final QueuedProcess<String> found = picker.anyProcessMeeting(keys(conditions));
-            assertEquals(expected != null, found != null, conditionsContext);
-            if (found != null) {
-                assertTrue(
-                    !processesWithoutRoom.contains(found.process) && scanMeets(clientTags, holders, found.process, conditions),
-                    conditionsContext
-                );
-                assertEquals(expected, picker.leastLoadedProcessMeeting(keys(conditions), found).process, conditionsContext);
-            }
+            final QueuedProcess<String> leastLoaded = picker.leastLoadedProcessMeeting(keys(conditions));
+            assertEquals(
+                scanLeastLoadedMeeting(clientTags, holders, conditions),
+                leastLoaded == null ? null : leastLoaded.process,
+                conditionsContext
+            );
         }
     }
 

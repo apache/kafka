@@ -41,7 +41,7 @@ import java.util.function.ToDoubleFunction;
  * The processes sit in a tree with one level per tag key, those with the same values sharing a leaf. Scanning every
  * leaf per standby is too slow once there are many, e.g. one per process for a host tag. Each node keeps its
  * least-loaded process with room, and its children are ordered by theirs. A query skips a subtree whose own value is
- * used and takes a subtree with no used value without looking inside.
+ * used and stops at the first child no lighter than the best process found.
  *
  * @param <P> The assignor's process type.
  */
@@ -63,7 +63,7 @@ final class RackAwareStandbyPicker<P> {
     // Per key index, one bit per value index, set once a holder of the task carries that value.
     // Cleared by startTask.
     private final BitSet[] usedValues;
-    // A process meeting the conditions the last pick returned, which leastLoaded starts from.
+    // The least-loaded process with room meeting the conditions the last pick returned.
     private QueuedProcess<P> foundByPick;
 
     /**
@@ -100,7 +100,7 @@ final class RackAwareStandbyPicker<P> {
         }
         tagKeysInTreeOrder = tagKeysInTreeOrder(numValues);
 
-        root = new Node<>(null, -1, -1, treeHeight, false);
+        root = new Node<>(null, -1, -1, false);
         queuedByProcess = Utils.newHashMap(processes.size());
         // The children of each inner node by their value index, only needed to build the tree.
         final Map<Node<P>, Map<Integer, Node<P>>> childrenByValueIndex = new HashMap<>();
@@ -155,17 +155,12 @@ final class RackAwareStandbyPicker<P> {
         final int treeHeight = tagKeysInTreeOrder.length;
         Node<P> node = root;
         for (int level = 0; level < treeHeight; level++) {
-            // The values of the process on this level and the ones below are below the node.
-            for (int levelBelow = level; levelBelow < treeHeight; levelBelow++) {
-                final int keyIndexBelow = tagKeysInTreeOrder[levelBelow];
-                node.valuesBelowOf(keyIndexBelow).set(valueIndexes[keyIndexBelow]);
-            }
             final int keyIndex = tagKeysInTreeOrder[level];
             final int valueIndex = valueIndexes[keyIndex];
             final Map<Integer, Node<P>> children = childrenByValueIndex.computeIfAbsent(node, __ -> new HashMap<>());
             Node<P> child = children.get(valueIndex);
             if (child == null) {
-                child = new Node<>(node, keyIndex, valueIndex, treeHeight, level == treeHeight - 1);
+                child = new Node<>(node, keyIndex, valueIndex, level == treeHeight - 1);
                 children.put(valueIndex, child);
             }
             node = child;
@@ -253,7 +248,7 @@ final class RackAwareStandbyPicker<P> {
 
         // Most picks find a process with room that meets the condition of every such tag key.
         List<TagKey> conditions = tagKeysWithUnusedValue;
-        foundByPick = anyProcessMeeting(conditions);
+        foundByPick = leastLoadedProcessMeeting(conditions);
         if (foundByPick == null) {
             // Otherwise the tag keys are added in priority order; a tag key is given up when no process with room
             // meets it together with the tag keys kept so far.
@@ -263,7 +258,7 @@ final class RackAwareStandbyPicker<P> {
                 withTagKey.add(tagKey);
                 // If withTagKey holds every tag key, the query above already found no process for it.
                 if (withTagKey.size() < tagKeysWithUnusedValue.size()) {
-                    final QueuedProcess<P> foundWithTagKey = anyProcessMeeting(withTagKey);
+                    final QueuedProcess<P> foundWithTagKey = leastLoadedProcessMeeting(withTagKey);
                     if (foundWithTagKey != null) {
                         conditions = withTagKey;
                         foundByPick = foundWithTagKey;
@@ -287,7 +282,7 @@ final class RackAwareStandbyPicker<P> {
         if (conditions.isEmpty()) {
             throw new IllegalArgumentException("Conditions must be the non-empty result of pick()");
         }
-        return leastLoadedProcessMeeting(conditions, foundByPick).process;
+        return foundByPick.process;
     }
 
     /** Whether some value of the key is not used yet. */
@@ -317,17 +312,9 @@ final class RackAwareStandbyPicker<P> {
         return valueIndex == missingValueIndex(keyIndex) || usedValues[keyIndex].get(valueIndex);
     }
 
-    /** The first process found with room meeting {@code conditions}, or null if none. */
-    QueuedProcess<P> anyProcessMeeting(final List<TagKey> conditions) {
-        return anyProcessBelowMeeting(root, keyBits(conditions));
-    }
-
-    /**
-     * The least-loaded process with room meeting {@code conditions}, starting from {@code bound}, a process meeting
-     * them found in this pick.
-     */
-    QueuedProcess<P> leastLoadedProcessMeeting(final List<TagKey> conditions, final QueuedProcess<P> bound) {
-        return leastLoadedProcessBelowMeeting(root, keyBits(conditions), bound);
+    /** The least-loaded process with room meeting {@code conditions}, or null if none. */
+    QueuedProcess<P> leastLoadedProcessMeeting(final List<TagKey> conditions) {
+        return leastLoadedProcessBelowMeeting(root, keyBits(conditions), null);
     }
 
     /** The keys as a BitSet with bit k set for the key with index k. */
@@ -339,41 +326,24 @@ final class RackAwareStandbyPicker<P> {
         return keyBits;
     }
 
-    /** The first process found with room below the node meeting {@code conditionBits}, or null if none. */
-    private QueuedProcess<P> anyProcessBelowMeeting(final Node<P> node, final BitSet conditionBits) {
-        if (valuesBelowAllMeeting(node, conditionBits)) {
-            return node.leastLoaded;
-        }
-        // Walk into the children in order until one has a process meeting the conditions.
-        for (final Node<P> child : node.childrenByLeastLoaded) {
-            if (ownValueMeeting(child, conditionBits)) {
-                final QueuedProcess<P> found = anyProcessBelowMeeting(child, conditionBits);
-                if (found != null) {
-                    return found;
-                }
-            }
-        }
-        return null;
-    }
-
     /**
      * The least-loaded process with room below the node meeting {@code conditionBits} if lighter than {@code bound},
-     * the least-loaded process meeting them found so far, else bound.
+     * the least-loaded process meeting them found so far or null, else bound.
      */
     private QueuedProcess<P> leastLoadedProcessBelowMeeting(
         final Node<P> node,
         final BitSet conditionBits,
         final QueuedProcess<P> bound
     ) {
-        // Every process below the node meets the conditions. The node is the root, with bound below it, or a child
-        // walked into for being lighter than bound, so its least-loaded process is never heavier than bound.
-        if (valuesBelowAllMeeting(node, conditionBits)) {
+        // Every process of a leaf meets the conditions: the own values on its path were checked on the way down. The
+        // leaf was walked into for being lighter than bound, so its least-loaded process is never heavier than bound.
+        if (node.isLeaf) {
             return node.leastLoaded;
         }
         // Walk into the children in order until the next one cannot beat the best found.
         QueuedProcess<P> leastLoaded = bound;
         for (final Node<P> child : node.childrenByLeastLoaded) {
-            if (QueuedProcess.ORDER.compare(child.leastLoaded, leastLoaded) >= 0) {
+            if (leastLoaded != null && QueuedProcess.ORDER.compare(child.leastLoaded, leastLoaded) >= 0) {
                 break;
             }
             if (ownValueMeeting(child, conditionBits)) {
@@ -386,25 +356,6 @@ final class RackAwareStandbyPicker<P> {
     /** Whether the node's own value meets {@code conditionBits}; every process below the node carries it. */
     private boolean ownValueMeeting(final Node<P> node, final BitSet conditionBits) {
         return !conditionBits.get(node.keyIndex) || !isUsed(node.keyIndex, node.valueIndex);
-    }
-
-    /** Whether every value below the node meets {@code conditionBits}. */
-    private boolean valuesBelowAllMeeting(final Node<P> node, final BitSet conditionBits) {
-        // A leaf has no values below it.
-        if (node.isLeaf) {
-            return true;
-        }
-        // One key of conditionBits at a time, lowest index first.
-        for (int keyIndex = conditionBits.nextSetBit(0); keyIndex >= 0; keyIndex = conditionBits.nextSetBit(keyIndex + 1)) {
-            final BitSet valuesBelow = node.valuesBelow[keyIndex];
-            if (valuesBelow == null) {
-                continue;
-            }
-            if (valuesBelow.get(missingValueIndex(keyIndex)) || valuesBelow.intersects(usedValues[keyIndex])) {
-                return false;
-            }
-        }
-        return true;
     }
 
     /**
@@ -495,9 +446,6 @@ final class RackAwareStandbyPicker<P> {
         private final int keyIndex;
         private final int valueIndex;
         private final boolean isLeaf;
-        // Inner nodes only: per key index, the value indexes of the nodes below this one, not its own; null for a key
-        // with none.
-        private final BitSet[] valuesBelow;
         // Inner nodes only: the children with room below, by their least-loaded process.
         private final TreeSet<Node<P>> childrenByLeastLoaded;
         // Leaves only: the processes with room, by load.
@@ -507,12 +455,11 @@ final class RackAwareStandbyPicker<P> {
         // The least-loaded process with room below this node, or null if none.
         private QueuedProcess<P> leastLoaded;
 
-        private Node(final Node<P> parent, final int keyIndex, final int valueIndex, final int numKeys, final boolean isLeaf) {
+        private Node(final Node<P> parent, final int keyIndex, final int valueIndex, final boolean isLeaf) {
             this.parent = parent;
             this.keyIndex = keyIndex;
             this.valueIndex = valueIndex;
             this.isLeaf = isLeaf;
-            this.valuesBelow = isLeaf ? null : new BitSet[numKeys];
             this.childrenByLeastLoaded = isLeaf ? null : new TreeSet<>(BY_LEAST_LOADED);
             this.processesByLoad = isLeaf ? new TreeSet<>(QueuedProcess.ORDER) : null;
         }
@@ -523,14 +470,6 @@ final class RackAwareStandbyPicker<P> {
                 return processesByLoad.isEmpty() ? null : processesByLoad.first();
             }
             return childrenByLeastLoaded.isEmpty() ? null : childrenByLeastLoaded.first().leastLoaded;
-        }
-
-        /** The value indexes below this node for the key, created on first use. */
-        private BitSet valuesBelowOf(final int keyIndex) {
-            if (valuesBelow[keyIndex] == null) {
-                valuesBelow[keyIndex] = new BitSet();
-            }
-            return valuesBelow[keyIndex];
         }
     }
 }
