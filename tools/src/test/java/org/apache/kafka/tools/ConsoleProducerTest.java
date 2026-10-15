@@ -19,6 +19,7 @@ package org.apache.kafka.tools;
 import org.apache.kafka.clients.producer.Producer;
 import org.apache.kafka.clients.producer.ProducerConfig;
 import org.apache.kafka.clients.producer.ProducerRecord;
+import org.apache.kafka.common.config.ConfigException;
 import org.apache.kafka.common.utils.internals.Exit;
 import org.apache.kafka.test.TestUtils;
 import org.apache.kafka.tools.ConsoleProducer.ConsoleProducerOptions;
@@ -37,6 +38,7 @@ import java.util.HashMap;
 import java.util.Iterator;
 import java.util.List;
 import java.util.Map;
+import java.util.Properties;
 
 import static org.junit.jupiter.api.Assertions.assertEquals;
 import static org.junit.jupiter.api.Assertions.assertThrows;
@@ -389,14 +391,6 @@ public class ConsoleProducerTest {
     }
 
     @Test
-    public void testDefaultCompressionType() throws IOException {
-        ConsoleProducerOptions opts = new ConsoleProducerOptions(BOOTSTRAP_SERVER_VALID_ARGS);
-        ProducerConfig producerConfig = new ProducerConfig(opts.producerProps());
-
-        assertEquals("none", producerConfig.getString(ProducerConfig.COMPRESSION_TYPE_CONFIG));
-    }
-
-    @Test
     public void testCompressionTypeFromCommandProperty() throws IOException {
         String[] args = new String[]{
             "--bootstrap-server", "localhost:9092",
@@ -424,6 +418,65 @@ public class ConsoleProducerTest {
         ProducerConfig producerConfig = new ProducerConfig(opts.producerProps());
 
         assertEquals("lz4", producerConfig.getString(ProducerConfig.COMPRESSION_TYPE_CONFIG));
+    }
+
+    @Test
+    public void testCompressionTypeFromProducerPropertyDeprecated() throws IOException {
+        String[] args = new String[]{
+            "--bootstrap-server", "localhost:9092",
+            "--topic", "test",
+            "--producer-property", "compression.type=zstd"
+        };
+
+        ConsoleProducerOptions opts = new ConsoleProducerOptions(args);
+        ProducerConfig producerConfig = new ProducerConfig(opts.producerProps());
+
+        assertEquals("zstd", producerConfig.getString(ProducerConfig.COMPRESSION_TYPE_CONFIG));
+    }
+
+    @Test
+    public void testCompressionTypeFromProducerConfigDeprecated() throws IOException {
+        File propsFile = ToolsTestUtils.tempPropertiesFile(Map.of("compression.type", "lz4"));
+
+        String[] args = new String[]{
+            "--bootstrap-server", "localhost:9092",
+            "--topic", "test",
+            "--producer.config", propsFile.getAbsolutePath()
+        };
+
+        ConsoleProducerOptions opts = new ConsoleProducerOptions(args);
+        ProducerConfig producerConfig = new ProducerConfig(opts.producerProps());
+
+        assertEquals("lz4", producerConfig.getString(ProducerConfig.COMPRESSION_TYPE_CONFIG));
+    }
+
+    @Test
+    public void testInvalidCompressionTypeFromCommandProperty() throws IOException {
+        String[] args = new String[]{
+            "--bootstrap-server", "localhost:9092",
+            "--topic", "test",
+            "--command-property", "compression.type=foo"
+        };
+
+        ConsoleProducerOptions opts = new ConsoleProducerOptions(args);
+        Properties props = opts.producerProps();
+
+        assertThrows(ConfigException.class, () -> new ProducerConfig(props));
+    }
+
+    @Test
+    public void testCompressionCodecWithoutValueOverridesCommandProperty() throws IOException {
+        String[] args = new String[]{
+            "--bootstrap-server", "localhost:9092",
+            "--topic", "test",
+            "--command-property", "compression.type=zstd",
+            "--compression-codec"
+        };
+
+        ConsoleProducerOptions opts = new ConsoleProducerOptions(args);
+        ProducerConfig producerConfig = new ProducerConfig(opts.producerProps());
+
+        assertEquals("gzip", producerConfig.getString(ProducerConfig.COMPRESSION_TYPE_CONFIG));
     }
 
     @Test
