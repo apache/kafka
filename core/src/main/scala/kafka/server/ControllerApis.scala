@@ -743,7 +743,7 @@ class ControllerApis(
     val alterConfigsRequest = request.body(classOf[IncrementalAlterConfigsRequest])
     val context = new ControllerRequestContext(request.context.header.data, request.context.principal,
       OptionalLong.empty())
-    val duplicateResources = new util.HashSet[ConfigResource]
+    val invalidResources = new util.HashSet[ConfigResource]
     val configChanges = new util.HashMap[ConfigResource,
       util.Map[String, Entry[AlterConfigOp.OpType, String]]]()
     val brokerLoggerResponses = new util.ArrayList[AlterConfigsResourceResponse](1)
@@ -771,18 +771,29 @@ class ControllerApis(
           setErrorMessage("Unknown resource type " + resource.resourceType() + ".").
           setResourceName(resource.resourceName()).
           setResourceType(resource.resourceType()))
-      } else if (!duplicateResources.contains(configResource)) {
+      } else if (!invalidResources.contains(configResource)) {
         val altersByName = new util.HashMap[String, Entry[AlterConfigOp.OpType, String]]()
-        resource.configs.forEach { config =>
-          altersByName.put(config.name, new util.AbstractMap.SimpleEntry[AlterConfigOp.OpType, String](
-            AlterConfigOp.OpType.forId(config.configOperation), config.value))
+        val configs = resource.configs.iterator()
+        var apiError = ApiError.NONE
+        while (configs.hasNext && !apiError.isFailure) {
+          val config = configs.next()
+          val opType = AlterConfigOp.OpType.forId(config.configOperation)
+          if (opType == null) {
+            apiError = new ApiError(INVALID_REQUEST, s"Unknown operations type ${config.configOperation}")
+          } else {
+            altersByName.put(config.name, new util.AbstractMap.SimpleEntry[AlterConfigOp.OpType, String](
+              opType, config.value))
+          }
         }
-        if (configChanges.put(configResource, altersByName) != null) {
-          duplicateResources.add(configResource)
+        if (!apiError.isFailure && configChanges.put(configResource, altersByName) != null) {
+          apiError = new ApiError(INVALID_REQUEST, "Duplicate resource.")
+        }
+        if (apiError.isFailure) {
+          invalidResources.add(configResource)
           configChanges.remove(configResource)
           response.responses().add(new AlterConfigsResourceResponse().
-            setErrorCode(INVALID_REQUEST.code()).
-            setErrorMessage("Duplicate resource.").
+            setErrorCode(apiError.error().code()).
+            setErrorMessage(apiError.message()).
             setResourceName(resource.resourceName()).
             setResourceType(resource.resourceType()))
         }
