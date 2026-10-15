@@ -44,6 +44,7 @@ import org.apache.kafka.common.protocol.Errors;
 import org.apache.kafka.common.protocol.ObjectSerializationCache;
 import org.apache.kafka.common.record.internal.FileRecords;
 import org.apache.kafka.common.record.internal.MemoryRecords;
+import org.apache.kafka.common.record.internal.Records;
 import org.apache.kafka.common.record.internal.SimpleRecord;
 import org.apache.kafka.common.requests.FetchRequest;
 import org.apache.kafka.common.requests.ShareFetchResponse;
@@ -63,6 +64,8 @@ import org.apache.kafka.server.share.acknowledge.ShareAcknowledgementBatch;
 import org.apache.kafka.server.share.context.FinalContext;
 import org.apache.kafka.server.share.context.ShareFetchContext;
 import org.apache.kafka.server.share.context.ShareSessionContext;
+import org.apache.kafka.server.share.dlq.NoOpShareGroupDLQManager;
+import org.apache.kafka.server.share.dlq.ShareGroupDLQManager;
 import org.apache.kafka.server.share.fetch.DelayedShareFetchGroupKey;
 import org.apache.kafka.server.share.fetch.DelayedShareFetchKey;
 import org.apache.kafka.server.share.fetch.PartitionMaxBytesStrategy;
@@ -77,6 +80,7 @@ import org.apache.kafka.server.share.session.ShareSessionKey;
 import org.apache.kafka.server.storage.log.FetchIsolation;
 import org.apache.kafka.server.storage.log.FetchParams;
 import org.apache.kafka.server.util.MockTime;
+import org.apache.kafka.server.util.ServerTestUtils;
 import org.apache.kafka.server.util.timer.MockTimer;
 import org.apache.kafka.server.util.timer.SystemTimer;
 import org.apache.kafka.server.util.timer.SystemTimerReaper;
@@ -110,7 +114,13 @@ import java.util.OptionalLong;
 import java.util.Set;
 import java.util.concurrent.CompletableFuture;
 import java.util.concurrent.ExecutionException;
+import java.util.concurrent.ExecutorService;
+import java.util.concurrent.Executors;
+import java.util.concurrent.Future;
+import java.util.concurrent.TimeUnit;
 import java.util.function.Consumer;
+import java.util.function.Supplier;
+import java.util.stream.IntStream;
 
 import scala.Tuple2;
 import scala.collection.Seq;
@@ -171,7 +181,7 @@ public class SharePartitionManagerTest {
     @BeforeEach
     public void setUp() {
         time = new MockTime();
-        kafka.utils.TestUtils.clearYammerMetrics();
+        ServerTestUtils.clearYammerMetrics();
         brokerTopicStats = new BrokerTopicStats();
         mockReplicaManager = mock(ReplicaManager.class);
         Partition partition = mockPartition();
@@ -344,8 +354,67 @@ public class SharePartitionManagerTest {
         // and delete the older one.
         ShareFetchContext context2 = sharePartitionManager.newContext(groupId, reqData, EMPTY_PART_LIST, memberId, ShareRequestMetadata.INITIAL_EPOCH, false, CONNECTION_ID);
         assertInstanceOf(ShareSessionContext.class, context2);
-        assertFalse(((ShareSessionContext) context1).isSubsequent());
+        assertFalse(((ShareSessionContext) context2).isSubsequent());
         assertEquals(1, cache.size());
+    }
+
+    @Test
+    @SuppressWarnings("resource")
+    public void testConcurrentInitialEpochRequestsClearsState() throws Exception {
+        // Enough iterations to make catching a regression here reliable, tests complete under a sec
+        // with 1000 iterations.
+        int iterations = 1000;
+        ShareSessionCache cache = new ShareSessionCache(iterations * 2);
+        SharePartitionCache partitionCache = new SharePartitionCache();
+        sharePartitionManager = SharePartitionManagerBuilder.builder()
+            .withCache(cache)
+            .withPartitionCache(partitionCache)
+            .withReplicaManager(mockReplicaManager)
+            .build();
+
+        SharePartition sharePartition = mock(SharePartition.class);
+        ExecutorService executor = Executors.newFixedThreadPool(2);
+        try {
+            for (int i = 0; i < iterations; i++) {
+                String groupId = "grp-" + i;
+                String memberId = Uuid.randomUuid().toString();
+                String connectionA = "conn-a-" + i;
+                String connectionB = "conn-b-" + i;
+                TopicIdPartition tp = new TopicIdPartition(Uuid.randomUuid(),
+                    new TopicPartition("topic-" + i, 0));
+                List<TopicIdPartition> reqData = List.of(tp);
+
+                partitionCache.computeIfAbsent(new SharePartitionKey(groupId, tp),
+                    k -> sharePartition);
+
+                Future<?> futureA = executor.submit(
+                    () -> sharePartitionManager.newContext(groupId, reqData,
+                        EMPTY_PART_LIST, memberId, ShareRequestMetadata.INITIAL_EPOCH, false,
+                        connectionA));
+                Future<?> futureB = executor.submit(
+                    () -> sharePartitionManager.newContext(groupId, reqData,
+                        EMPTY_PART_LIST, memberId, ShareRequestMetadata.INITIAL_EPOCH, false,
+                        connectionB));
+                futureA.get(10, TimeUnit.SECONDS);
+                futureB.get(10, TimeUnit.SECONDS);
+
+                cache.connectionDisconnectListener().onDisconnect(connectionA);
+                cache.connectionDisconnectListener().onDisconnect(connectionB);
+            }
+        } finally {
+            executor.shutdownNow();
+            assertTrue(executor.awaitTermination(10, TimeUnit.SECONDS));
+        }
+
+        // Every session must be fully cleaned up. No leaked sessions, no phantom member/partition counts,
+        // and no share partitions retained past the point where the group should have gone empty.
+        assertEquals(0, cache.size());
+        assertEquals(0, cache.totalPartitions());
+        assertEquals(0, partitionCache.size());
+        IntStream.range(0, iterations).forEach(i -> {
+            Integer numMembers = cache.numMembers("grp-" + i);
+            assertEquals(0, numMembers == null ? 0 : numMembers);
+        });
     }
 
     @Test
@@ -1261,7 +1330,6 @@ public class SharePartitionManagerTest {
         sharePartitionManager.close();
         // Verify that the timer object in sharePartitionManager is closed by checking the calls to timer.close() and shareGroupMetrics.close().
         Mockito.verify(timer, times(1)).close();
-        Mockito.verify(shareGroupMetrics, times(1)).close();
     }
 
     @Test
@@ -1767,7 +1835,7 @@ public class SharePartitionManagerTest {
 
         DelayedShareFetch delayedShareFetch = DelayedShareFetchTest.DelayedShareFetchBuilder.builder()
             .withShareFetchData(shareFetch)
-            .withReplicaManager(mockReplicaManager)
+            .withReplicaManagerLogReader(mockReplicaManager)
             .withSharePartitions(sharePartitions)
             .withPartitionMaxBytesStrategy(PartitionMaxBytesStrategy.type(PartitionMaxBytesStrategy.StrategyType.UNIFORM))
             .build();
@@ -1878,7 +1946,7 @@ public class SharePartitionManagerTest {
 
         DelayedShareFetch delayedShareFetch = DelayedShareFetchTest.DelayedShareFetchBuilder.builder()
             .withShareFetchData(shareFetch)
-            .withReplicaManager(mockReplicaManager)
+            .withReplicaManagerLogReader(mockReplicaManager)
             .withSharePartitions(sharePartitions)
             .build();
 
@@ -1985,7 +2053,7 @@ public class SharePartitionManagerTest {
 
         DelayedShareFetch delayedShareFetch = DelayedShareFetchTest.DelayedShareFetchBuilder.builder()
             .withShareFetchData(shareFetch)
-            .withReplicaManager(mockReplicaManager)
+            .withReplicaManagerLogReader(mockReplicaManager)
             .withSharePartitions(sharePartitions)
             .withPartitionMaxBytesStrategy(PartitionMaxBytesStrategy.type(PartitionMaxBytesStrategy.StrategyType.UNIFORM))
             .build();
@@ -2093,7 +2161,7 @@ public class SharePartitionManagerTest {
 
         DelayedShareFetch delayedShareFetch = DelayedShareFetchTest.DelayedShareFetchBuilder.builder()
             .withShareFetchData(shareFetch)
-            .withReplicaManager(mockReplicaManager)
+            .withReplicaManagerLogReader(mockReplicaManager)
             .withSharePartitions(sharePartitions)
             .build();
 
@@ -2783,7 +2851,9 @@ public class SharePartitionManagerTest {
         SharePartitionCache partitionCache = new SharePartitionCache();
         ReplicaManager mockReplicaManager = mock(ReplicaManager.class);
 
-        SharePartitionListener partitionListener = new SharePartitionListener(sharePartitionKey, mockReplicaManager, partitionCache);
+        SharePartitionListener partitionListener = new SharePartitionListener(sharePartitionKey,
+            new ReplicaManagerPartitionMetadataProvider(mockReplicaManager),
+            mockReplicaManager::completeDelayedShareFetchRequest, partitionCache);
         testSharePartitionListener(sharePartitionKey, partitionCache, mockReplicaManager, partitionListener::onFailed);
     }
 
@@ -2794,7 +2864,9 @@ public class SharePartitionManagerTest {
         SharePartitionCache partitionCache = new SharePartitionCache();
         ReplicaManager mockReplicaManager = mock(ReplicaManager.class);
 
-        SharePartitionListener partitionListener = new SharePartitionListener(sharePartitionKey, mockReplicaManager, partitionCache);
+        SharePartitionListener partitionListener = new SharePartitionListener(sharePartitionKey,
+            new ReplicaManagerPartitionMetadataProvider(mockReplicaManager),
+            mockReplicaManager::completeDelayedShareFetchRequest, partitionCache);
         testSharePartitionListener(sharePartitionKey, partitionCache, mockReplicaManager, partitionListener::onDeleted);
     }
 
@@ -2805,7 +2877,9 @@ public class SharePartitionManagerTest {
         SharePartitionCache partitionCache = new SharePartitionCache();
         ReplicaManager mockReplicaManager = mock(ReplicaManager.class);
 
-        SharePartitionListener partitionListener = new SharePartitionListener(sharePartitionKey, mockReplicaManager, partitionCache);
+        SharePartitionListener partitionListener = new SharePartitionListener(sharePartitionKey,
+            new ReplicaManagerPartitionMetadataProvider(mockReplicaManager),
+            mockReplicaManager::completeDelayedShareFetchRequest, partitionCache);
         testSharePartitionListener(sharePartitionKey, partitionCache, mockReplicaManager, partitionListener::onBecomingFollower);
     }
 
@@ -2932,6 +3006,11 @@ public class SharePartitionManagerTest {
         Mockito.verify(sp1).markFenced();
         Mockito.verify(sp2).markFenced();
         Mockito.verify(sp3).markFenced();
+        // Removal from the cache must also close the share partitions to release their metrics.
+        Mockito.verify(sp0).close();
+        Mockito.verify(sp1).close();
+        Mockito.verify(sp2).close();
+        Mockito.verify(sp3).close();
     }
 
     @Test
@@ -3185,10 +3264,18 @@ public class SharePartitionManagerTest {
     }
 
     static Seq<Tuple2<TopicIdPartition, LogReadResult>> buildLogReadResult(List<TopicIdPartition> topicIdPartitions) {
+        return buildLogReadResult(topicIdPartitions, MemoryRecords.withRecords(
+            Compression.NONE, new SimpleRecord("test-key".getBytes(), "test-value".getBytes())));
+    }
+
+    static Seq<Tuple2<TopicIdPartition, LogReadResult>> buildEmptyLogReadResult(List<TopicIdPartition> topicIdPartitions) {
+        return buildLogReadResult(topicIdPartitions, MemoryRecords.EMPTY);
+    }
+
+    static Seq<Tuple2<TopicIdPartition, LogReadResult>> buildLogReadResult(List<TopicIdPartition> topicIdPartitions, Records records) {
         List<Tuple2<TopicIdPartition, LogReadResult>> logReadResults = new ArrayList<>();
         topicIdPartitions.forEach(topicIdPartition -> logReadResults.add(new Tuple2<>(topicIdPartition, new LogReadResult(
-            new FetchDataInfo(new LogOffsetMetadata(0, 0, 0), MemoryRecords.withRecords(
-                    Compression.NONE, new SimpleRecord("test-key".getBytes(), "test-value".getBytes()))),
+            new FetchDataInfo(new LogOffsetMetadata(0, 0, 0), records),
             Optional.empty(),
             -1L,
             -1L,
@@ -3237,6 +3324,8 @@ public class SharePartitionManagerTest {
         private Timer timer = new MockTimer();
         private ShareGroupMetrics shareGroupMetrics = new ShareGroupMetrics(time);
         private BrokerTopicStats brokerTopicStats;
+        private Supplier<Boolean> shareGroupDlqEnableSupplier = () -> false;
+        private ShareGroupDLQManager shareGroupDLQManager = new NoOpShareGroupDLQManager();
 
         private SharePartitionManagerBuilder withReplicaManager(ReplicaManager replicaManager) {
             this.replicaManager = replicaManager;
@@ -3273,12 +3362,25 @@ public class SharePartitionManagerTest {
             return this;
         }
 
+        private SharePartitionManagerBuilder withShareGroupDlqEnableSupplier(Supplier<Boolean> shareGroupDlqEnableSupplier) {
+            this.shareGroupDlqEnableSupplier = shareGroupDlqEnableSupplier;
+            return this;
+        }
+
+        private SharePartitionManagerBuilder withShareGroupDlqManager(ShareGroupDLQManager shareGroupDLQManager) {
+            this.shareGroupDLQManager = shareGroupDLQManager;
+            return this;
+        }
+
         public static SharePartitionManagerBuilder builder() {
             return new SharePartitionManagerBuilder();
         }
 
         public SharePartitionManager build() {
             return new SharePartitionManager(replicaManager,
+                new ReplicaManagerLogReader(replicaManager),
+                new ReplicaManagerPartitionMetadataProvider(replicaManager),
+                replicaManager::completeDelayedShareFetchRequest,
                 time,
                 cache,
                 partitionCache,
@@ -3290,7 +3392,9 @@ public class SharePartitionManagerTest {
                 persister,
                 new ShareGroupConfigProvider(mock(GroupConfigManager.class)),
                 shareGroupMetrics,
-                brokerTopicStats
+                brokerTopicStats,
+                shareGroupDlqEnableSupplier,
+                shareGroupDLQManager
             );
         }
     }

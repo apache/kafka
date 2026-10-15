@@ -16,6 +16,7 @@
  */
 package org.apache.kafka.streams.state;
 
+import org.apache.kafka.common.annotation.InterfaceAudience;
 import org.apache.kafka.common.header.Headers;
 import org.apache.kafka.common.header.internals.RecordHeaders;
 
@@ -26,6 +27,7 @@ import java.util.Objects;
  *
  * @param <V> the value type
  */
+@InterfaceAudience.Public
 public final class ValueTimestampHeaders<V> {
 
     private final V value;

@@ -16,6 +16,7 @@
  */
 package org.apache.kafka.streams.state.internals;
 
+import org.apache.kafka.common.IsolationLevel;
 import org.apache.kafka.streams.KeyValue;
 import org.apache.kafka.streams.StoreQueryParameters;
 import org.apache.kafka.streams.errors.InvalidStateStoreException;
@@ -37,10 +38,9 @@ import java.util.List;
 
 import static java.util.Collections.singletonList;
 import static org.apache.kafka.test.StreamsTestUtils.toListAndCloseIterator;
-import static org.hamcrest.MatcherAssert.assertThat;
-import static org.hamcrest.core.IsEqual.equalTo;
 import static org.junit.jupiter.api.Assertions.assertEquals;
 import static org.junit.jupiter.api.Assertions.assertFalse;
+import static org.junit.jupiter.api.Assertions.assertNotSame;
 import static org.junit.jupiter.api.Assertions.assertThrows;
 import static org.junit.jupiter.api.Assertions.fail;
 
@@ -147,9 +147,11 @@ public class CompositeReadOnlySessionStoreTest {
         underlyingSessionStore.put(new Windowed<>("a", new SessionWindow(0, 0)), 0L);
         secondUnderlying.put(new Windowed<>("b", new SessionWindow(0, 0)), 10L);
         final List<KeyValue<Windowed<String>, Long>> results = StreamsTestUtils.toListAndCloseIterator(sessionStore.fetch("a", "b"));
-        assertThat(results, equalTo(Arrays.asList(
-            KeyValue.pair(new Windowed<>("a", new SessionWindow(0, 0)), 0L),
-            KeyValue.pair(new Windowed<>("b", new SessionWindow(0, 0)), 10L))));
+        assertEquals(
+            List.of(
+                KeyValue.pair(new Windowed<>("a", new SessionWindow(0, 0)), 0L),
+                KeyValue.pair(new Windowed<>("b", new SessionWindow(0, 0)), 10L)),
+            results);
     }
 
     @Test
@@ -160,9 +162,11 @@ public class CompositeReadOnlySessionStoreTest {
         underlyingSessionStore.put(new Windowed<>("a", new SessionWindow(0, 0)), 0L);
         secondUnderlying.put(new Windowed<>("b", new SessionWindow(0, 0)), 10L);
         final List<KeyValue<Windowed<String>, Long>> results = StreamsTestUtils.toListAndCloseIterator(sessionStore.fetch(null, "b"));
-        assertThat(results, equalTo(Arrays.asList(
-            KeyValue.pair(new Windowed<>("a", new SessionWindow(0, 0)), 0L),
-            KeyValue.pair(new Windowed<>("b", new SessionWindow(0, 0)), 10L))));
+        assertEquals(
+            List.of(
+                KeyValue.pair(new Windowed<>("a", new SessionWindow(0, 0)), 0L),
+                KeyValue.pair(new Windowed<>("b", new SessionWindow(0, 0)), 10L)),
+            results);
     }
 
     @Test
@@ -173,9 +177,11 @@ public class CompositeReadOnlySessionStoreTest {
         underlyingSessionStore.put(new Windowed<>("a", new SessionWindow(0, 0)), 0L);
         secondUnderlying.put(new Windowed<>("b", new SessionWindow(0, 0)), 10L);
         final List<KeyValue<Windowed<String>, Long>> results = StreamsTestUtils.toListAndCloseIterator(sessionStore.fetch("a", null));
-        assertThat(results, equalTo(Arrays.asList(
-            KeyValue.pair(new Windowed<>("a", new SessionWindow(0, 0)), 0L),
-            KeyValue.pair(new Windowed<>("b", new SessionWindow(0, 0)), 10L))));
+        assertEquals(
+            List.of(
+                KeyValue.pair(new Windowed<>("a", new SessionWindow(0, 0)), 0L),
+                KeyValue.pair(new Windowed<>("b", new SessionWindow(0, 0)), 10L)),
+            results);
     }
 
     @Test
@@ -186,13 +192,61 @@ public class CompositeReadOnlySessionStoreTest {
         underlyingSessionStore.put(new Windowed<>("a", new SessionWindow(0, 0)), 0L);
         secondUnderlying.put(new Windowed<>("b", new SessionWindow(0, 0)), 10L);
         final List<KeyValue<Windowed<String>, Long>> results = StreamsTestUtils.toListAndCloseIterator(sessionStore.fetch(null, null));
-        assertThat(results, equalTo(Arrays.asList(
-            KeyValue.pair(new Windowed<>("a", new SessionWindow(0, 0)), 0L),
-            KeyValue.pair(new Windowed<>("b", new SessionWindow(0, 0)), 10L))));
+        assertEquals(
+            List.of(
+                KeyValue.pair(new Windowed<>("a", new SessionWindow(0, 0)), 0L),
+                KeyValue.pair(new Windowed<>("b", new SessionWindow(0, 0)), 10L)),
+            results);
     }
 
     @Test
     public void shouldThrowNPEIfKeyIsNull() {
         assertThrows(NullPointerException.class, () -> underlyingSessionStore.fetch(null));
+    }
+
+    @Test
+    public void readOnlyShouldReturnNewInstanceWithOverride() {
+        final CompositeReadOnlySessionStore<String, Long> override =
+            (CompositeReadOnlySessionStore<String, Long>) sessionStore.readOnly(IsolationLevel.READ_COMMITTED);
+        assertNotSame(sessionStore, override);
+    }
+
+    @Test
+    public void readOnlyShouldPropagateLevelToUnderlyingStore() {
+        final StateStoreProviderStub stub = new StateStoreProviderStub(false);
+        final ReadOnlySessionStoreStub<String, Long> recorder = new ReadOnlySessionStoreStub<>();
+        stub.addStore(storeName, recorder);
+        final CompositeReadOnlySessionStore<String, Long> store = new CompositeReadOnlySessionStore<>(
+            new WrappingStoreProvider(Arrays.asList(stub), StoreQueryParameters.fromNameAndType(storeName, QueryableStoreTypes.sessionStore())),
+            QueryableStoreTypes.sessionStore(),
+            storeName
+        );
+
+        toListAndCloseIterator(store.readOnly(IsolationLevel.READ_COMMITTED).fetch("k"));
+
+        assertEquals(IsolationLevel.READ_COMMITTED, recorder.isolationLevel);
+    }
+
+    @Test
+    public void readOnlyOverrideShouldBeatProviderDefault() {
+        final StateStoreProviderStub stub = new StateStoreProviderStub(false);
+        final ReadOnlySessionStoreStub<String, Long> recorder = new ReadOnlySessionStoreStub<>();
+        stub.addStore(storeName, recorder);
+        final CompositeReadOnlySessionStore<String, Long> store = new CompositeReadOnlySessionStore<>(
+            new WrappingStoreProvider(Arrays.asList(stub),
+                StoreQueryParameters.fromNameAndType(storeName, QueryableStoreTypes.sessionStore()),
+                IsolationLevel.READ_UNCOMMITTED),
+            QueryableStoreTypes.sessionStore(),
+            storeName
+        );
+
+        toListAndCloseIterator(store.readOnly(IsolationLevel.READ_COMMITTED).fetch("k"));
+
+        assertEquals(IsolationLevel.READ_COMMITTED, recorder.isolationLevel);
+    }
+
+    @Test
+    public void readOnlyShouldRejectNullLevel() {
+        assertThrows(NullPointerException.class, () -> sessionStore.readOnly(null));
     }
 }

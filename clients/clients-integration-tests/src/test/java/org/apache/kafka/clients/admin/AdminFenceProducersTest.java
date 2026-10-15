@@ -65,7 +65,7 @@ public class AdminFenceProducersTest {
     }
 
     @ClusterTest
-    void testFenceAfterProducerCommit() throws Exception {
+    public void testFenceAfterProducerCommit() throws Exception {
         clusterInstance.createTopic(TOPIC_NAME, 1, (short) 1);
 
         try (Producer<byte[], byte[]> producer = createProducer();
@@ -94,7 +94,7 @@ public class AdminFenceProducersTest {
     }
 
     @ClusterTest
-    void testFenceProducerTimeoutMs() {
+    public void testFenceProducerTimeoutMs() {
         Map<String, Object> config = new HashMap<>();
         config.put(AdminClientConfig.BOOTSTRAP_SERVERS_CONFIG, "localhost:" + INCORRECT_BROKER_PORT);
 
@@ -107,7 +107,7 @@ public class AdminFenceProducersTest {
     }
 
     @ClusterTest
-    void testFenceBeforeProducerCommit() throws Exception {
+    public void testFenceBeforeProducerCommit() throws Exception {
         clusterInstance.createTopic(TOPIC_NAME, 1, (short) 1);
 
         try (Producer<byte[], byte[]> producer = createProducer();

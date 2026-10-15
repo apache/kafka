@@ -53,8 +53,8 @@ import org.apache.kafka.common.record.internal.Records;
 import org.apache.kafka.common.record.internal.SimpleRecord;
 import org.apache.kafka.common.requests.ListOffsetsRequest;
 import org.apache.kafka.common.requests.ListOffsetsResponse;
-import org.apache.kafka.common.utils.BufferSupplier;
 import org.apache.kafka.common.utils.Utils;
+import org.apache.kafka.common.utils.internals.BufferSupplier;
 import org.apache.kafka.coordinator.transaction.TransactionLogConfig;
 import org.apache.kafka.server.common.RequestLocal;
 import org.apache.kafka.server.common.TransactionVersion;
@@ -79,7 +79,6 @@ import org.apache.kafka.storage.log.metrics.BrokerTopicMetrics;
 import org.apache.kafka.storage.log.metrics.BrokerTopicStats;
 import org.apache.kafka.test.TestUtils;
 
-import com.yammer.metrics.core.Gauge;
 import com.yammer.metrics.core.Meter;
 
 import org.junit.jupiter.api.AfterEach;
@@ -125,6 +124,7 @@ import java.util.stream.Collectors;
 import java.util.stream.IntStream;
 import java.util.stream.Stream;
 
+import static org.apache.kafka.server.util.ServerTestUtils.yammerMetricValue;
 import static org.junit.jupiter.api.Assertions.assertDoesNotThrow;
 import static org.junit.jupiter.api.Assertions.assertEquals;
 import static org.junit.jupiter.api.Assertions.assertFalse;
@@ -468,6 +468,56 @@ public class UnifiedLogTest {
     }
 
     @Test
+    public void onlyLocalLogSegmentsExcludeCopiedBoundarySegment() throws IOException {
+        Supplier<MemoryRecords> records = () -> singletonRecords("test".getBytes(), "test".getBytes(), mockTime.milliseconds());
+        LogConfig config = new LogTestUtils.LogConfigBuilder()
+                .remoteLogStorageEnable(true)
+                .build();
+        log = createLog(logDir, config, true);
+
+        // Build single-record segments: closed segments at base-offsets 0, 1 and 2 (each with
+        // end-offset == base-offset), plus an empty active segment at base-offset 3.
+        for (int i = 0; i < 3; i++) {
+            log.appendAsLeader(records.get(), 0);
+            log.roll();
+        }
+        assertEquals(3L, log.logEndOffset());
+        assertEquals(4, log.numberOfSegments());
+
+        // Nothing copied yet (highestOffsetInRemoteStorage == -1): every segment is local-only.
+        assertEquals(4L, log.onlyLocalLogSegmentsCount());
+
+        // Segments up to offset 1 copied. The closed single-record segment at base-offset 2 is
+        // genuinely uncopied, so it is counted alongside the active segment => lag 1.
+        log.updateHighestOffsetInRemoteStorage(1L);
+        assertEquals(2L, log.onlyLocalLogSegmentsCount());
+
+        // Every closed segment is now copied; highestOffsetInRemoteStorage == base-offset of the last
+        // (single-record) segment. Only the empty active segment remains local-only => lag must be 0.
+        // With the previous ">=" comparison the copied boundary segment was still counted, giving 1.
+        log.updateHighestOffsetInRemoteStorage(2L);
+        assertEquals(1L, log.onlyLocalLogSegmentsCount());
+        assertEquals(log.activeSegment().size(), log.onlyLocalLogSegmentsSize());
+
+        // Two closed segments of two records each plus an empty active segment
+        for (int seg = 0; seg < 2; seg++) {
+            log.appendAsLeader(records.get(), 0);
+            log.appendAsLeader(records.get(), 0);
+            log.roll();
+        }
+        assertEquals(7L, log.logEndOffset());
+        // segments 0 - 2 contain 1 record each and seg 3 - 4 contain 2 records each, and the active segment is empty.
+        assertEquals(6, log.numberOfSegments());
+
+        log.updateHighestOffsetInRemoteStorage(4L);
+        assertEquals(2L, log.onlyLocalLogSegmentsCount());
+
+        // Both closed segments copied: only the active segment is local-only => lag 0.
+        log.updateHighestOffsetInRemoteStorage(6L);
+        assertEquals(1L, log.onlyLocalLogSegmentsCount());
+    }
+
+    @Test
     public void shouldDeleteLocalLogSegmentsWhenPolicyIsEmptyWithMsRetention() throws IOException {
         long oldTimestamp = mockTime.milliseconds() - 20000;
         Supplier<MemoryRecords> oldRecords = () -> singletonRecords("test".getBytes(), "test".getBytes(), oldTimestamp);
@@ -497,6 +547,63 @@ public class UnifiedLogTest {
 
         assertTrue(log.numberOfSegments() < segmentsBefore, "Some segments should be deleted due to time retention");
         assertTrue(deletedSegments > 0, "At least one segment should be deleted");
+    }
+
+    @Test
+    public void shouldDeleteLocalLogSegmentsWithFutureTimestampBasedOnLastModifiedTime() throws IOException {
+        long futureTimestamp = mockTime.milliseconds() + 60_000;
+        Supplier<MemoryRecords> futureRecords = () -> singletonRecords("test".getBytes(), "test".getBytes(), futureTimestamp);
+        int recordSize = futureRecords.get().sizeInBytes();
+        LogConfig logConfig = new LogTestUtils.LogConfigBuilder()
+                .segmentBytes(recordSize * 2)
+                .localRetentionMs(5000)
+                .cleanupPolicy("")
+                .remoteLogStorageEnable(true)
+                .build();
+        log = createLog(logDir, logConfig, true);
+
+        for (int i = 0; i < 10; i++) {
+            log.appendAsLeader(futureRecords.get(), 0);
+        }
+
+        // Age the segments' lastModified time past the local retention so they become eligible for deletion,
+        // even though their record timestamps are in the future.
+        for (LogSegment segment : log.logSegments()) {
+            segment.setLastModified(mockTime.milliseconds() - 20000);
+        }
+
+        int segmentsBefore = log.numberOfSegments();
+        log.updateHighWatermark(log.logEndOffset());
+        log.updateHighestOffsetInRemoteStorage(log.logEndOffset() - 1);
+        int deletedSegments = log.deleteOldSegments();
+
+        assertTrue(log.numberOfSegments() < segmentsBefore, "Segments with future timestamps should be deleted based on lastModified time");
+        assertTrue(deletedSegments > 0, "At least one segment should be deleted");
+    }
+
+    @Test
+    public void shouldNotDeleteLocalLogSegmentsWithFutureTimestampWhenLastModifiedWithinRetention() throws IOException {
+        long futureTimestamp = mockTime.milliseconds() + 60_000;
+        Supplier<MemoryRecords> futureRecords = () -> singletonRecords("test".getBytes(), "test".getBytes(), futureTimestamp);
+        int recordSize = futureRecords.get().sizeInBytes();
+        LogConfig logConfig = new LogTestUtils.LogConfigBuilder()
+                .segmentBytes(recordSize * 2)
+                .localRetentionMs(5000)
+                .cleanupPolicy("")
+                .remoteLogStorageEnable(true)
+                .build();
+        log = createLog(logDir, logConfig, true);
+
+        for (int i = 0; i < 10; i++) {
+            log.appendAsLeader(futureRecords.get(), 0);
+        }
+
+        int segmentsBefore = log.numberOfSegments();
+        log.updateHighWatermark(log.logEndOffset());
+        log.updateHighestOffsetInRemoteStorage(log.logEndOffset() - 1);
+
+        assertEquals(0, log.deleteOldSegments(), "Segments should be retained when lastModified time is within local retention");
+        assertEquals(segmentsBefore, log.numberOfSegments());
     }
 
     @Test
@@ -1260,6 +1367,63 @@ public class UnifiedLogTest {
     }
 
     @Test
+    public void testRejectOutOfOrderFirstRequestOnNewlyCreatedLog() throws IOException {
+        // KAFKA-15591: A producer with multiple in-flight produce requests on a newly created partition sends
+        // request A (sequences 0-3) and request B (sequences 4-5). Because topic creation occurs asynchronously,
+        // request A can fail with NOT_LEADER_OR_FOLLOWER briefly because the broker has not yet completed
+        // the topic creation, so request B is the first to reach the log. If B were accepted, every retry of A
+        // would fail with OUT_OF_ORDER_SEQUENCE_NUMBER until it expires, losing its records.
+        UnifiedLog log = createLog(logDir, new LogConfig(new Properties()));
+        long pid = 1L;
+        short epoch = 0;
+
+        MemoryRecords requestB = LogTestUtils.records(
+            List.of(new SimpleRecord("a".getBytes(), "b".getBytes()),
+                    new SimpleRecord("a".getBytes(), "b".getBytes())),
+            pid, epoch, 4, 0L);
+        assertThrows(OutOfOrderSequenceException.class, () -> log.appendAsLeader(requestB, 0));
+
+        MemoryRecords requestA = LogTestUtils.records(
+            List.of(new SimpleRecord("a".getBytes(), "b".getBytes()),
+                    new SimpleRecord("a".getBytes(), "b".getBytes()),
+                    new SimpleRecord("a".getBytes(), "b".getBytes()),
+                    new SimpleRecord("a".getBytes(), "b".getBytes())),
+            pid, epoch, 0, 0L);
+        log.appendAsLeader(requestA, 0);
+
+        log.appendAsLeader(requestB, 0);
+        assertEquals(6L, log.logEndOffset());
+    }
+
+    @Test
+    public void testNonZeroFirstSequenceAcceptedAfterProducerStateExpiration() throws IOException {
+        // KAFKA-15591: Once records exist in the log, a producer with no state may start at a non-zero sequence.
+        // Its state may have legitimately been lost, such as through producer expiration.
+        int producerIdExpirationCheckIntervalMs = 100;
+        int producerIdExpirationMs = 200;
+        ProducerStateManagerConfig customPSMConfig = new ProducerStateManagerConfig(producerIdExpirationMs, false);
+
+        LogConfig logConfig = new LogTestUtils.LogConfigBuilder().segmentBytes(TEN_KB).build();
+        UnifiedLog log = createLog(logDir, logConfig, 0L, 0L, brokerTopicStats,
+            mockTime.scheduler, mockTime, customPSMConfig, true, Optional.empty(), false,
+            producerIdExpirationCheckIntervalMs);
+        long pid = 1L;
+        short epoch = 0;
+
+        log.appendAsLeader(LogTestUtils.records(List.of(new SimpleRecord("foo".getBytes())),
+            pid, epoch, 0, 0L), 0);
+        assertEquals(Set.of(pid), log.activeProducersWithLastSequence().keySet());
+
+        mockTime.sleep(producerIdExpirationMs);
+        assertEquals(Set.of(), log.activeProducersWithLastSequence().keySet());
+
+        // The producer continues from sequence 1 with no state, which is accepted because the log is not empty
+        log.appendAsLeader(LogTestUtils.records(List.of(new SimpleRecord("foo".getBytes())),
+            pid, epoch, 1, 0L), 0);
+        assertEquals(2L, log.logEndOffset());
+    }
+
+    @Test
     public void testTruncateToEndOffsetClearsEpochCache() throws IOException {
         UnifiedLog log = createLog(logDir, new LogConfig(new Properties()));
 
@@ -1459,7 +1623,7 @@ public class UnifiedLogTest {
             public boolean shouldRetainRecord(RecordBatch recordBatch, Record record) {
                 return !record.hasKey();
             }
-        }, filtered, BufferSupplier.NO_CACHING);
+        }, filtered, BufferSupplier.NO_CACHING, Records.SOFT_MAX_ARRAY_LENGTH);
         filtered.flip();
         MemoryRecords filteredRecords = MemoryRecords.readableRecords(filtered);
 
@@ -1511,7 +1675,7 @@ public class UnifiedLogTest {
             @Override public boolean shouldRetainRecord(RecordBatch recordBatch, Record record) {
                 return false;
             }
-        }, filtered, BufferSupplier.NO_CACHING);
+        }, filtered, BufferSupplier.NO_CACHING, Records.SOFT_MAX_ARRAY_LENGTH);
         filtered.flip();
         MemoryRecords filteredRecords = MemoryRecords.readableRecords(filtered);
 
@@ -1564,7 +1728,7 @@ public class UnifiedLogTest {
             @Override public boolean shouldRetainRecord(RecordBatch recordBatch, Record record) {
                 return !record.hasKey();
             }
-        }, filtered, BufferSupplier.NO_CACHING);
+        }, filtered, BufferSupplier.NO_CACHING, Records.SOFT_MAX_ARRAY_LENGTH);
         filtered.flip();
         MemoryRecords filteredRecords = MemoryRecords.readableRecords(filtered);
 
@@ -2362,10 +2526,10 @@ public class UnifiedLogTest {
     }
 
     @Test
-    public void testLogRollAfterLogHandlerClosed() throws IOException {
+    public void testLogRollAfterCloseQuietly() throws IOException {
         LogConfig logConfig = new LogTestUtils.LogConfigBuilder().build();
         UnifiedLog log = createLog(logDir, logConfig);
-        log.closeHandlers();
+        log.closeQuietly();
         assertThrows(KafkaStorageException.class, () -> log.roll(Optional.of(1L)));
     }
 
@@ -2982,6 +3146,62 @@ public class UnifiedLogTest {
         assertThrows(RecordBatchTooLargeException.class, () -> log.appendAsLeader(messageSet, 0));
     }
 
+    @ParameterizedTest
+    @EnumSource(value = AppendOrigin.class, names = "REPLICATION", mode = EnumSource.Mode.EXCLUDE)
+    public void testSegmentSizeCheckForNonReplicationOrigins(AppendOrigin origin) throws IOException {
+        MemoryRecords records = MemoryRecords.withRecords(0, Compression.NONE, 0,
+                new SimpleRecord("You".getBytes()), new SimpleRecord("bethe".getBytes()));
+        log = createLog(logDir, new LogTestUtils.LogConfigBuilder()
+                .segmentBytes(records.sizeInBytes() - 1)
+                .maxMessageBytes(records.sizeInBytes())
+                .build());
+
+        assertThrows(RecordBatchTooLargeException.class, () -> log.appendAsLeader(records, 0, origin));
+    }
+
+    @Test
+    public void testSegmentSizeCheckInAppendAsFollower() throws IOException {
+        MemoryRecords records = MemoryRecords.withRecords(0, Compression.NONE, 0,
+                new SimpleRecord("You".getBytes()), new SimpleRecord("bethe".getBytes()));
+        log = createLog(logDir, new LogTestUtils.LogConfigBuilder()
+                .segmentBytes(records.sizeInBytes() - 1)
+                .maxMessageBytes(records.sizeInBytes())
+                .build());
+
+        log.appendAsFollower(records, Integer.MAX_VALUE);
+
+        assertEquals(2L, log.logEndOffset());
+        assertEquals(1, log.numberOfSegments());
+        assertEquals(records.sizeInBytes(), log.activeSegment().size());
+    }
+
+    @Test
+    public void testSegmentSizeCheckInAppendAsFollowerWithNonEmptySegment() throws IOException {
+        MemoryRecords first = MemoryRecords.withRecords(0, Compression.NONE, 0,
+                new SimpleRecord("small".getBytes()));
+        MemoryRecords oversized = MemoryRecords.withRecords(1, Compression.NONE, 0,
+                new SimpleRecord("This record set is larger than the configured segment size.".getBytes()),
+                new SimpleRecord("More padding for the oversized record set.".getBytes()));
+        MemoryRecords last = MemoryRecords.withRecords(3, Compression.NONE, 0,
+                new SimpleRecord("small".getBytes()));
+        log = createLog(logDir, new LogTestUtils.LogConfigBuilder()
+                .segmentBytes(oversized.sizeInBytes() - 1)
+                .build());
+
+        log.appendAsFollower(first, Integer.MAX_VALUE);
+        log.appendAsFollower(oversized, Integer.MAX_VALUE);
+
+        assertEquals(3L, log.logEndOffset());
+        assertEquals(2, log.numberOfSegments());
+        assertEquals(oversized.sizeInBytes(), log.activeSegment().size());
+
+        log.appendAsFollower(last, Integer.MAX_VALUE);
+
+        assertEquals(4L, log.logEndOffset());
+        assertEquals(3, log.numberOfSegments());
+        assertEquals(last.sizeInBytes(), log.activeSegment().size());
+    }
+
     @Test
     public void testCompactedTopicConstraints() throws IOException {
         SimpleRecord keyedMessage = new SimpleRecord("and here it is".getBytes(), "this message has a key".getBytes());
@@ -3033,6 +3253,37 @@ public class UnifiedLogTest {
         log.appendAsLeader(messageSetWithKeyedMessage, 0);
         log.appendAsLeader(messageSetWithKeyedMessages, 0);
         log.appendAsLeader(messageSetWithCompressedKeyedMessage, 0);
+    }
+
+    /**
+     * End-to-end produce-path enforcement of the per-record decompressed-body-size limit
+     * (max.decompressed.message.bytes): a record that is tiny gzip-compressed on the wire (well
+     * under max.message.bytes) but whose declared decompressed body exceeds the configured limit is
+     * rejected as an invalid record before the body is allocated. A small compressed record and an
+     * equally-large uncompressed record are unaffected.
+     */
+    @Test
+    public void testAppendCompressedRecordExceedingMaxDecompressedMessageBytesIsRejected() throws IOException {
+        LogConfig logConfig = new LogTestUtils.LogConfigBuilder()
+                .maxDecompressedMessageBytes(100)
+                .build();
+        log = createLog(logDir, logConfig);
+
+        MemoryRecords oversizedCompressed = MemoryRecords.withRecords(Compression.gzip().build(),
+                new SimpleRecord("key".getBytes(), new byte[1000]));
+        InvalidRecordException e = assertThrows(InvalidRecordException.class,
+                () -> log.appendAsLeader(oversizedCompressed, 0));
+        assertTrue(e.getMessage().contains("exceeds the configured maximum record size"),
+                "expected the configured-maximum guard, got: " + e.getMessage());
+        assertEquals(0, log.logEndOffset(), "a rejected record must not be appended");
+
+        // The limit bounds only the decompressed per-record body; uncompressed records are bounded
+        // on the wire by max.message.bytes.
+        log.appendAsLeader(MemoryRecords.withRecords(Compression.gzip().build(),
+                new SimpleRecord("key".getBytes(), new byte[64])), 0);
+        log.appendAsLeader(MemoryRecords.withRecords(Compression.NONE,
+                new SimpleRecord("key".getBytes(), new byte[1000])), 0);
+        assertEquals(2, log.logEndOffset());
     }
 
     /**
@@ -4368,16 +4619,6 @@ public class UnifiedLogTest {
                 .orElseThrow(() -> new AssertionError("Unable to find metric " + metricName));
     }
 
-    @SuppressWarnings("unchecked")
-    private Object yammerMetricValue(String name) {
-        Gauge<Object> gauge = (Gauge<Object>) KafkaYammerMetrics.defaultRegistry().allMetrics().entrySet().stream()
-                .filter(e -> e.getKey().getMBeanName().endsWith(name))
-                .findFirst()
-                .get()
-                .getValue();
-        return gauge.value();
-    }
-
     @Test
     public void testTransactionIndexUpdatedThroughReplication() throws IOException {
         short epoch = 0;
@@ -5307,8 +5548,7 @@ public class UnifiedLogTest {
 
         long producerId = 23L;
         short producerEpoch = 1;
-        // For TV1, can start with non-zero sequences even with non-zero epoch when no existing producer state
-        int sequence = appendOrigin == AppendOrigin.CLIENT ? 3 : 0;
+        int sequence = 0;
         LogConfig logConfig = new LogTestUtils.LogConfigBuilder().segmentBytes(TEN_KB).build();
         UnifiedLog log = createLog(logDir, logConfig, psmConfig);
         assertFalse(log.hasOngoingTransaction(producerId, producerEpoch));
@@ -5476,6 +5716,10 @@ public class UnifiedLogTest {
         UnifiedLog log = createLog(logDir, logConfig, psmConfig);
         assertFalse(log.hasOngoingTransaction(producerId, producerEpoch));
         assertEquals(VerificationGuard.SENTINEL, log.verificationGuard(producerId));
+
+        // Seed the log so that it is non-empty. Producer state can only have been lost on a partition which
+        // has had records at some point, and a non-zero first sequence is rejected on an empty log (KAFKA-15591).
+        log.appendAsLeader(singletonRecords("seed".getBytes()), 0);
 
         MemoryRecords transactionalRecords = MemoryRecords.withTransactionalRecords(
                 Compression.NONE, producerId, producerEpoch, sequence,
@@ -6014,5 +6258,70 @@ public class UnifiedLogTest {
         assertTrue(exception.getMessage().contains("smaller than the last seen epoch"));
         assertTrue(exception.getMessage().contains(String.valueOf(originalEpoch)));
         assertTrue(exception.getMessage().contains(String.valueOf(bumpedEpoch)));
+    }
+
+    @Test
+    public void testFetchOffsetByTimestampRejectsCompressedRecordExceedingMaxDecompressedMessageBytes() throws IOException {
+        LogConfig logConfig = new LogTestUtils.LogConfigBuilder()
+                .maxDecompressedMessageBytes(100)
+                .build();
+        log = createLog(logDir, logConfig);
+        long firstTimestamp = mockTime.milliseconds();
+        long secondTimestamp = firstTimestamp + 1;
+        Compression gzip = Compression.gzip().build();
+        // appendAsFollower bypasses produce validation, so the oversized record becomes durable
+        log.appendAsFollower(MemoryRecords.withRecords(0L, gzip, 0,
+                new SimpleRecord(firstTimestamp, "key".getBytes(), new byte[10])), 0);
+        log.appendAsFollower(MemoryRecords.withRecords(1L, gzip, 0,
+                new SimpleRecord(secondTimestamp, "key".getBytes(), new byte[1000])), 0);
+
+        // A lookup that only decompresses the small record succeeds
+        assertEquals(new OffsetResultHolder(new FileRecords.TimestampAndOffset(firstTimestamp, 0L, Optional.of(0))),
+                log.fetchOffsetByTimestamp(firstTimestamp, Optional.empty()));
+        // A lookup that has to decompress the oversized record is rejected before its body is allocated
+        InvalidRecordException e = assertThrows(InvalidRecordException.class,
+                () -> log.fetchOffsetByTimestamp(secondTimestamp, Optional.empty()));
+        assertTrue(e.getMessage().contains("exceeds the configured maximum record size of 100"), e.getMessage());
+    }
+
+    @Test
+    public void testFetchOffsetByMaxTimestampRejectsCompressedRecordExceedingMaxDecompressedMessageBytes() throws IOException {
+        LogConfig logConfig = new LogTestUtils.LogConfigBuilder()
+                .maxDecompressedMessageBytes(100)
+                .build();
+        log = createLog(logDir, logConfig);
+        long firstTimestamp = mockTime.milliseconds();
+        Compression gzip = Compression.gzip().build();
+        // appendAsFollower bypasses produce validation, so the oversized records become durable
+        log.appendAsFollower(MemoryRecords.withRecords(0L, gzip, 0,
+                new SimpleRecord(firstTimestamp, "key".getBytes(), new byte[1000])), 0);
+        log.appendAsFollower(MemoryRecords.withRecords(1L, gzip, 0,
+                new SimpleRecord(firstTimestamp + 1, "key".getBytes(), new byte[10])), 0);
+        // Resolving MAX_TIMESTAMP only decompresses the batch holding the max timestamp, here the small one
+        assertEquals(new OffsetResultHolder(new FileRecords.TimestampAndOffset(firstTimestamp + 1, 1L, Optional.of(0))),
+                log.fetchOffsetByTimestamp(ListOffsetsRequest.MAX_TIMESTAMP, Optional.empty()));
+        // Once the oversized batch holds the max timestamp, the lookup is rejected before its body is allocated
+        log.appendAsFollower(MemoryRecords.withRecords(2L, gzip, 0,
+                new SimpleRecord(firstTimestamp + 2, "key".getBytes(), new byte[1000])), 0);
+        InvalidRecordException e = assertThrows(InvalidRecordException.class,
+                () -> log.fetchOffsetByTimestamp(ListOffsetsRequest.MAX_TIMESTAMP, Optional.empty()));
+        assertTrue(e.getMessage().contains("exceeds the configured maximum record size of 100"), e.getMessage());
+    }
+
+    @Test
+    public void testPrepareActiveSegmentForCloseAppendsTimeIndexAndTrimsIndexes() throws IOException {
+        log = createLog(logDir, new LogConfig(new Properties()));
+        log.appendAsLeader(MemoryRecords.withRecords(
+                Compression.NONE,
+                new SimpleRecord(mockTime.milliseconds(), "key".getBytes(), "value".getBytes())
+        ), 0);
+
+        LogSegment activeSegment = log.activeSegment();
+        assertTrue(activeSegment.timeIndex().sizeInBytes() < activeSegment.timeIndex().maxIndexSize());
+
+        log.prepareActiveSegmentForClose();
+
+        assertEquals(activeSegment.timeIndex().entrySize(), activeSegment.timeIndex().sizeInBytes());
+        assertEquals(activeSegment.timeIndex().sizeInBytes(), activeSegment.timeIndex().length());
     }
 }

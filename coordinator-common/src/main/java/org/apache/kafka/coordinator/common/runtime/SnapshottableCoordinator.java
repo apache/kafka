@@ -18,7 +18,7 @@ package org.apache.kafka.coordinator.common.runtime;
 
 import org.apache.kafka.common.TopicPartition;
 import org.apache.kafka.common.requests.TransactionResult;
-import org.apache.kafka.common.utils.LogContext;
+import org.apache.kafka.common.utils.internals.LogContext;
 import org.apache.kafka.timeline.SnapshotRegistry;
 
 import org.slf4j.Logger;

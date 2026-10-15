@@ -67,11 +67,11 @@ public class FeatureCommandTest {
                 outputWithoutEpoch(features.get(2))
         );
         assertFeatureOutput(
-                "metadata.version", "3.3-IV3", "4.4-IV0", "3.3-IV3",
+                "metadata.version", "3.3-IV3", MetadataVersion.latestTesting().version(), "3.3-IV3",
                 outputWithoutEpoch(features.get(3))
         );
         assertFeatureOutput(
-                "share.version", "0", "1", "0",
+                "share.version", "0", "2", "0",
                 outputWithoutEpoch(features.get(4))
         );
         assertFeatureOutput(
@@ -93,7 +93,6 @@ public class FeatureCommandTest {
 
         List<String> features = Arrays.stream(commandOutput.split("\n")).sorted().toList();
 
-        // Change expected message to reflect latest MetadataVersion (SupportedMaxVersion increases when adding a new version)
         assertFeatureOutput(
                 "eligible.leader.replicas.version", "0", "1", "0",
                 outputWithoutEpoch(features.get(0))
@@ -107,11 +106,11 @@ public class FeatureCommandTest {
                 outputWithoutEpoch(features.get(2))
         );
         assertFeatureOutput(
-                "metadata.version", "3.3-IV3", "4.4-IV0", "3.7-IV0",
+                "metadata.version", "3.3-IV3", MetadataVersion.latestTesting().version(), "3.7-IV0",
                 outputWithoutEpoch(features.get(3))
         );
         assertFeatureOutput(
-                "share.version", "0", "1", "0",
+                "share.version", "0", "2", "0",
                 outputWithoutEpoch(features.get(4))
         );
         assertFeatureOutput(
@@ -150,7 +149,6 @@ public class FeatureCommandTest {
         );
         List<String> featuresWithUnstable = Arrays.stream(commandOutput.split("\n")).sorted().toList();
 
-        // Change expected message to reflect latest MetadataVersion (SupportedMaxVersion increases when adding a new version)
         assertFeatureOutput(
                 "eligible.leader.replicas.version", "0", "1", "0",
                 outputWithoutEpoch(featuresWithUnstable.get(0))
@@ -164,11 +162,11 @@ public class FeatureCommandTest {
                 outputWithoutEpoch(featuresWithUnstable.get(2))
         );
         assertFeatureOutput(
-                "metadata.version", "3.3-IV3", "4.4-IV0", "3.7-IV0",
+                "metadata.version", "3.3-IV3", MetadataVersion.latestTesting().version(), "3.7-IV0",
                 outputWithoutEpoch(featuresWithUnstable.get(3))
         );
         assertFeatureOutput(
-                "share.version", "0", "1", "0",
+                "share.version", "0", "2", "0",
                 outputWithoutEpoch(featuresWithUnstable.get(4))
         );
         assertFeatureOutput(
@@ -201,11 +199,11 @@ public class FeatureCommandTest {
                 outputWithoutEpoch(featuresWithoutUnstable.get(2))
         );
         assertFeatureOutput(
-                "metadata.version", "3.3-IV3", "4.3-IV0", "3.7-IV0",
+                "metadata.version", "3.3-IV3", MetadataVersion.latestProduction().version(), "3.7-IV0",
                 outputWithoutEpoch(featuresWithoutUnstable.get(3))
         );
         assertFeatureOutput(
-                "share.version", "0", "1", "0",
+                "share.version", "0", "2", "0",
                 outputWithoutEpoch(featuresWithoutUnstable.get(4))
         );
         assertFeatureOutput(
@@ -244,7 +242,6 @@ public class FeatureCommandTest {
         );
         List<String> featuresWithUnstable = Arrays.stream(commandOutput.split("\n")).sorted().toList();
 
-        // Change expected message to reflect latest MetadataVersion (SupportedMaxVersion increases when adding a new version)
         assertFeatureOutput(
                 "eligible.leader.replicas.version", "0", "1", "0",
                 outputWithoutEpoch(featuresWithUnstable.get(0))
@@ -258,11 +255,11 @@ public class FeatureCommandTest {
                 outputWithoutEpoch(featuresWithUnstable.get(2))
         );
         assertFeatureOutput(
-                "metadata.version", "3.3-IV3", "4.4-IV0", "3.7-IV0",
+                "metadata.version", "3.3-IV3", MetadataVersion.latestTesting().version(), "3.7-IV0",
                 outputWithoutEpoch(featuresWithUnstable.get(3))
         );
         assertFeatureOutput(
-                "share.version", "0", "1", "0",
+                "share.version", "0", "2", "0",
                 outputWithoutEpoch(featuresWithUnstable.get(4))
         );
         assertFeatureOutput(
@@ -295,11 +292,11 @@ public class FeatureCommandTest {
                 outputWithoutEpoch(featuresWithoutUnstable.get(2))
         );
         assertFeatureOutput(
-                "metadata.version", "3.3-IV3", "4.3-IV0", "3.7-IV0",
+                "metadata.version", "3.3-IV3", MetadataVersion.latestProduction().version(), "3.7-IV0",
                 outputWithoutEpoch(featuresWithoutUnstable.get(3))
         );
         assertFeatureOutput(
-                "share.version", "0", "1", "0",
+                "share.version", "0", "2", "0",
                 outputWithoutEpoch(featuresWithoutUnstable.get(4))
         );
         assertFeatureOutput(

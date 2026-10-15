@@ -24,6 +24,8 @@ import org.mockito.Mockito;
 
 import java.util.concurrent.CompletableFuture;
 
+import static org.junit.jupiter.api.Assertions.assertThrows;
+
 public class SystemTimerReaperTest {
     private static class FutureTimerTask<T> extends TimerTask {
         CompletableFuture<T> future = new CompletableFuture<>();
@@ -66,5 +68,34 @@ public class SystemTimerReaperTest {
         timerReaper.close();
         Mockito.verify(timer, Mockito.times(1)).close();
         TestUtils.waitForCondition(timerReaper::isShutdown, "reaper not shutdown");
+    }
+
+    @Test
+    public void testSharedTimerBetweenConsumers() throws Exception {
+        try (Timer timer = new SystemTimerReaper("shared-reaper", new SystemTimer("shared-timer"))) {
+            // Set up two independent consumer tasks to the same timer
+            CompletableFuture<Void> consumer1Task = add(timer, 100L);
+            CompletableFuture<Void> consumer2Task = add(timer, 200L);
+
+            TestUtils.assertFutureThrows(TimeoutException.class, consumer1Task);
+            TestUtils.assertFutureThrows(TimeoutException.class, consumer2Task);
+
+            // After the first consumer's tasks have completed (simulating one consumer
+            // stopping), the second consumer can still schedule and expire tasks as expected
+            CompletableFuture<Void> consumer2LateTasks = add(timer, 100L);
+            TestUtils.assertFutureThrows(TimeoutException.class, consumer2LateTasks);
+        }
+    }
+
+    @Test
+    public void testRejectsNullName() {
+        assertThrows(NullPointerException.class, () ->
+            new SystemTimerReaper(null, Mockito.mock(Timer.class)));
+    }
+
+    @Test
+    public void testRejectsNullTimer() {
+        assertThrows(NullPointerException.class, () ->
+            new SystemTimerReaper("reaper", null));
     }
 }

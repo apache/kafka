@@ -69,11 +69,11 @@ import org.apache.kafka.common.requests.SyncGroupRequest;
 import org.apache.kafka.common.requests.SyncGroupResponse;
 import org.apache.kafka.common.telemetry.internals.ClientTelemetryProvider;
 import org.apache.kafka.common.telemetry.internals.ClientTelemetryReporter;
-import org.apache.kafka.common.utils.ExponentialBackoff;
-import org.apache.kafka.common.utils.LogContext;
 import org.apache.kafka.common.utils.Time;
 import org.apache.kafka.common.utils.Timer;
 import org.apache.kafka.common.utils.Utils;
+import org.apache.kafka.common.utils.internals.ExponentialBackoff;
+import org.apache.kafka.common.utils.internals.LogContext;
 
 import org.slf4j.Logger;
 
@@ -308,7 +308,7 @@ public abstract class AbstractCoordinator implements Closeable {
                 if (future.isRetriable()) {
                     log.debug("Coordinator discovery failed, refreshing metadata", future.exception());
                     timer.sleep(retryBackoff.backoff(attempts++));
-                    client.awaitMetadataUpdate(timer);
+                    client.awaitMetadataUpdate(timer, disableWakeup);
                 } else {
                     fatalException = future.exception();
                     log.info("FindCoordinator request hit fatal exception", fatalException);
@@ -934,12 +934,8 @@ public abstract class AbstractCoordinator implements Closeable {
             Errors error = Errors.forCode(coordinatorData.errorCode());
             if (error == Errors.NONE) {
                 synchronized (AbstractCoordinator.this) {
-                    // use MAX_VALUE - node.id as the coordinator id to allow separate connections
-                    // for the coordinator in the underlying network client layer
-                    int coordinatorConnectionId = Integer.MAX_VALUE - coordinatorData.nodeId();
-
-                    AbstractCoordinator.this.coordinator = new Node(
-                            coordinatorConnectionId,
+                    AbstractCoordinator.this.coordinator = new GroupCoordinatorNode(
+                            coordinatorData.nodeId(),
                             coordinatorData.host(),
                             coordinatorData.port());
                     log.info("Discovered group coordinator {}", coordinator);
@@ -1575,6 +1571,7 @@ public abstract class AbstractCoordinator implements Closeable {
             } catch (AuthenticationException e) {
                 log.error("An authentication error occurred in the heartbeat thread", e);
                 setFailureCause(e);
+                requestRejoin("authentication error in heartbeat thread");
             } catch (GroupAuthorizationException e) {
                 log.error("A group authorization error occurred in the heartbeat thread", e);
                 setFailureCause(e);

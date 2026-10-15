@@ -480,12 +480,18 @@ public class ConsumerGroupMember extends ModernGroupMember {
         Assignment targetAssignment,
         CoordinatorMetadataImage image
     ) {
+        // The assignment includes both assigned partitions and partitions pending
+        // revocation because the member is still responsible for the latter until
+        // revocation is complete.
+        var topicPartitionsMap = new HashMap<Uuid, ConsumerGroupDescribeResponseData.TopicPartitions>();
+        accumulateTopicPartitions(assignedPartitions, topicPartitionsMap, image);
+        accumulateTopicPartitions(partitionsPendingRevocation, topicPartitionsMap, image);
+
         return new ConsumerGroupDescribeResponseData.Member()
             .setMemberEpoch(memberEpoch)
             .setMemberId(memberId)
             .setAssignment(new ConsumerGroupDescribeResponseData.Assignment()
-                .setTopicPartitions(topicPartitionsFromAssignment(
-                    Utils.toAssignmentWithoutEpochs(assignedPartitions), image)))
+                .setTopicPartitions(new ArrayList<>(topicPartitionsMap.values())))
             .setTargetAssignment(new ConsumerGroupDescribeResponseData.Assignment()
                 .setTopicPartitions(topicPartitionsFromAssignment(
                     targetAssignment != null ? targetAssignment.partitions() : Map.of(),
@@ -498,6 +504,21 @@ public class ConsumerGroupMember extends ModernGroupMember {
             .setSubscribedTopicNames(subscribedTopicNames == null ? null : new ArrayList<>(subscribedTopicNames))
             .setSubscribedTopicRegex(subscribedTopicRegex)
             .setMemberType(useClassicProtocol() ? (byte) 0 : (byte) 1);
+    }
+
+    private static void accumulateTopicPartitions(
+        Map<Uuid, Map<Integer, Integer>> source,
+        Map<Uuid, ConsumerGroupDescribeResponseData.TopicPartitions> target,
+        CoordinatorMetadataImage image
+    ) {
+        source.forEach((topicId, eps) ->
+            image.topicMetadata(topicId).ifPresent(metadata ->
+                target.computeIfAbsent(topicId, __ ->
+                    new ConsumerGroupDescribeResponseData.TopicPartitions()
+                        .setTopicId(topicId)
+                        .setTopicName(metadata.name())
+                        .setPartitions(new ArrayList<>())
+                ).partitions().addAll(eps.keySet())));
     }
 
     private static List<ConsumerGroupDescribeResponseData.TopicPartitions> topicPartitionsFromAssignment(

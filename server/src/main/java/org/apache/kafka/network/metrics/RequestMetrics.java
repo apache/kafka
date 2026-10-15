@@ -192,9 +192,13 @@ public class RequestMetrics {
             tags.put("error", error.name());
         }
 
-        private synchronized Meter getOrCreateMeter() {
+        private Meter getOrCreateMeter() {
             if (meter == null) {
-                meter = metricsGroup.newMeter(ERRORS_PER_SEC, "requests", TimeUnit.SECONDS, tags);
+                synchronized (this) {
+                    if (meter == null) {
+                        meter = metricsGroup.newMeter(ERRORS_PER_SEC, "requests", TimeUnit.SECONDS, tags);
+                    }
+                }
             }
             return meter;
         }

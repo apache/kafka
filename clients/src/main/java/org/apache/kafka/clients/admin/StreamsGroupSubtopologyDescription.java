@@ -16,6 +16,7 @@
  */
 package org.apache.kafka.clients.admin;
 
+import org.apache.kafka.common.annotation.InterfaceAudience;
 import org.apache.kafka.common.annotation.InterfaceStability;
 
 import java.util.List;
@@ -27,6 +28,7 @@ import java.util.stream.Collectors;
  * A detailed description of a subtopology in a streams group.
  */
 @InterfaceStability.Evolving
+@InterfaceAudience.Public
 public class StreamsGroupSubtopologyDescription {
 
     private final String subtopologyId;

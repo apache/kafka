@@ -17,7 +17,7 @@
 
 package org.apache.kafka.shell.node;
 
-import org.apache.kafka.common.utils.AppInfoParser;
+import org.apache.kafka.common.utils.internals.AppInfoParser;
 import org.apache.kafka.image.node.MetadataLeafNode;
 import org.apache.kafka.image.node.MetadataNode;
 

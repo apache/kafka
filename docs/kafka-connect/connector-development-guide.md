@@ -1,6 +1,6 @@
 ---
 title: Connector Development Guide
-description: Connector Development Guide
+description: Guide to building Kafka Connect source and sink connectors.
 weight: 3
 tags: ['kafka', 'docs']
 aliases: 

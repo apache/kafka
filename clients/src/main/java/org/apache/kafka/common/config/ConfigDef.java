@@ -16,6 +16,7 @@
  */
 package org.apache.kafka.common.config;
 
+import org.apache.kafka.common.annotation.InterfaceAudience;
 import org.apache.kafka.common.config.types.Password;
 import org.apache.kafka.common.utils.Utils;
 
@@ -81,6 +82,7 @@ import java.util.stream.Collectors;
  * This class can be used standalone or in combination with {@link AbstractConfig} which provides some additional
  * functionality for accessing configs.
  */
+@InterfaceAudience.Public
 public class ConfigDef {
 
     private static final Pattern COMMA_WITH_WHITESPACE = Pattern.compile("\\s*,\\s*");

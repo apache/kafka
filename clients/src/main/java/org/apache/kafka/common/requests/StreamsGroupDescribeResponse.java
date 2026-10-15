@@ -38,6 +38,12 @@ import java.util.Map;
  */
 public class StreamsGroupDescribeResponse extends AbstractResponse {
 
+    // TopologyDescriptionStatus int8 values (v1+). These values must not change.
+    public static final byte TOPOLOGY_DESCRIPTION_STATUS_NOT_REQUESTED = 0;
+    public static final byte TOPOLOGY_DESCRIPTION_STATUS_NOT_STORED = 1;
+    public static final byte TOPOLOGY_DESCRIPTION_STATUS_ERROR = 2;
+    public static final byte TOPOLOGY_DESCRIPTION_STATUS_AVAILABLE = 3;
+
     private final StreamsGroupDescribeResponseData data;
 
     public StreamsGroupDescribeResponse(StreamsGroupDescribeResponseData data) {

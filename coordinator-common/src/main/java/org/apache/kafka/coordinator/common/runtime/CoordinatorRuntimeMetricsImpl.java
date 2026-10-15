@@ -27,7 +27,7 @@ import org.apache.kafka.common.metrics.stats.Rate;
 import org.apache.kafka.common.metrics.stats.WindowedCount;
 import org.apache.kafka.coordinator.common.runtime.CoordinatorRuntime.CoordinatorState;
 
-import java.util.Arrays;
+import java.util.List;
 import java.util.Objects;
 import java.util.concurrent.TimeUnit;
 import java.util.concurrent.atomic.AtomicLong;
@@ -346,7 +346,7 @@ public class CoordinatorRuntimeMetricsImpl implements CoordinatorRuntimeMetrics 
 
     @Override
     public void close() {
-        Arrays.asList(
+        List.of(
             numPartitionsLoading,
             numPartitionsActive,
             numPartitionsFailed,

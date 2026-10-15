@@ -24,6 +24,7 @@ import org.apache.kafka.common.errors.TopicDeletionDisabledException;
 import org.apache.kafka.common.errors.UnknownTopicOrPartitionException;
 import org.apache.kafka.common.record.internal.MemoryRecords;
 import org.apache.kafka.common.record.internal.SimpleRecord;
+import org.apache.kafka.common.test.AdminUtils;
 import org.apache.kafka.common.test.ClusterInstance;
 import org.apache.kafka.common.test.api.ClusterConfigProperty;
 import org.apache.kafka.common.test.api.ClusterTest;
@@ -66,9 +67,25 @@ public class DeleteTopicTest {
     private final Map<Integer, List<Integer>> expectedReplicaAssignment = Map.of(0, List.of(0, 1, 2));
 
     @ClusterTest
+    public void testCreateAndDeleteTopic(ClusterInstance cluster) throws Exception {
+        String testTopic = "test-topic";
+        try (Admin admin = cluster.admin()) {
+            // Create a test topic
+            cluster.createTopic(testTopic, 1, (short) 3);
+
+            // Delete topic
+            DeleteTopicsResult deleteResult = admin.deleteTopics(List.of(testTopic));
+            deleteResult.all().get();
+
+            // Wait for topic deletion
+            cluster.waitTopicDeletion(testTopic);
+        }
+    }
+
+    @ClusterTest
     public void testDeleteTopicWithAllAliveReplicas(ClusterInstance cluster) throws Exception {
         try (Admin admin = cluster.admin()) {
-            admin.createTopics(List.of(new NewTopic(DEFAULT_TOPIC, expectedReplicaAssignment))).all().get();
+            cluster.createTopicWithAssignment(DEFAULT_TOPIC, expectedReplicaAssignment);
             admin.deleteTopics(List.of(DEFAULT_TOPIC)).all().get();
             cluster.waitTopicDeletion(DEFAULT_TOPIC);
         }
@@ -77,7 +94,7 @@ public class DeleteTopicTest {
     @ClusterTest
     public void testResumeDeleteTopicWithRecoveredFollower(ClusterInstance cluster) throws Exception {
         try (Admin admin = cluster.admin()) {
-            admin.createTopics(List.of(new NewTopic(DEFAULT_TOPIC, expectedReplicaAssignment))).all().get();
+            cluster.createTopicWithAssignment(DEFAULT_TOPIC, expectedReplicaAssignment);
             TopicPartition topicPartition = new TopicPartition(DEFAULT_TOPIC, 0);
             int leaderId = waitUtilLeaderIsKnown(cluster.brokers(), topicPartition);
             KafkaBroker follower = findFollower(cluster.brokers().values(), leaderId);
@@ -100,7 +117,7 @@ public class DeleteTopicTest {
     @ClusterTest(brokers = 4)
     public void testPartitionReassignmentDuringDeleteTopic(ClusterInstance cluster) throws Exception {
         try (Admin admin = cluster.admin()) {
-            admin.createTopics(List.of(new NewTopic(DEFAULT_TOPIC, expectedReplicaAssignment))).all().get();
+            cluster.createTopicWithAssignment(DEFAULT_TOPIC, expectedReplicaAssignment);
             TopicPartition topicPartition = new TopicPartition(DEFAULT_TOPIC, 0);
             Map<Integer, KafkaBroker> servers = findPartitionHostingBrokers(cluster.brokers());
             int leaderId = waitUtilLeaderIsKnown(cluster.brokers(), topicPartition);
@@ -126,7 +143,7 @@ public class DeleteTopicTest {
     @ClusterTest(brokers = 4)
     public void testIncreasePartitionCountDuringDeleteTopic(ClusterInstance cluster) throws Exception {
         try (Admin admin = cluster.admin()) {
-            admin.createTopics(List.of(new NewTopic(DEFAULT_TOPIC, expectedReplicaAssignment))).all().get();
+            cluster.createTopicWithAssignment(DEFAULT_TOPIC, expectedReplicaAssignment);
             TopicPartition topicPartition = new TopicPartition(DEFAULT_TOPIC, 0);
             Map<Integer, KafkaBroker> partitionHostingBrokers = findPartitionHostingBrokers(cluster.brokers());
             waitForReplicaCreated(partitionHostingBrokers, topicPartition, "Replicas for topic test not created.");
@@ -154,7 +171,7 @@ public class DeleteTopicTest {
     @ClusterTest
     public void testDeleteTopicDuringAddPartition(ClusterInstance cluster) throws Exception {
         try (Admin admin = cluster.admin()) {
-            admin.createTopics(List.of(new NewTopic(DEFAULT_TOPIC, expectedReplicaAssignment))).all().get();
+            cluster.createTopicWithAssignment(DEFAULT_TOPIC, expectedReplicaAssignment);
             int leaderId = waitUtilLeaderIsKnown(cluster.brokers(), new TopicPartition(DEFAULT_TOPIC, 0));
             TopicPartition newTopicPartition = new TopicPartition(DEFAULT_TOPIC, 1);
             KafkaBroker follower = findFollower(cluster.brokers().values(), leaderId);
@@ -179,7 +196,7 @@ public class DeleteTopicTest {
     @ClusterTest
     public void testAddPartitionDuringDeleteTopic(ClusterInstance cluster) throws Exception {
         try (Admin admin = cluster.admin()) {
-            admin.createTopics(List.of(new NewTopic(DEFAULT_TOPIC, expectedReplicaAssignment))).all().get();
+            cluster.createTopicWithAssignment(DEFAULT_TOPIC, expectedReplicaAssignment);
             // partitions to be added to the topic later
             TopicPartition newTopicPartition = new TopicPartition(DEFAULT_TOPIC, 1);
             admin.deleteTopics(List.of(DEFAULT_TOPIC)).all().get();
@@ -193,12 +210,12 @@ public class DeleteTopicTest {
     @ClusterTest
     public void testRecreateTopicAfterDeletion(ClusterInstance cluster) throws Exception {
         try (Admin admin = cluster.admin()) {
-            admin.createTopics(List.of(new NewTopic(DEFAULT_TOPIC, expectedReplicaAssignment))).all().get();
+            cluster.createTopicWithAssignment(DEFAULT_TOPIC, expectedReplicaAssignment);
             TopicPartition topicPartition = new TopicPartition(DEFAULT_TOPIC, 0);
             admin.deleteTopics(List.of(DEFAULT_TOPIC)).all().get();
             cluster.waitTopicDeletion(DEFAULT_TOPIC);
             // re-create topic on same replicas
-            admin.createTopics(List.of(new NewTopic(DEFAULT_TOPIC, expectedReplicaAssignment))).all().get();
+            cluster.createTopicWithAssignment(DEFAULT_TOPIC, expectedReplicaAssignment);
             waitForReplicaCreated(cluster.brokers(), topicPartition, "Replicas for topic " + DEFAULT_TOPIC + " not created.");
         }
     }
@@ -206,7 +223,7 @@ public class DeleteTopicTest {
     @ClusterTest
     public void testDeleteNonExistingTopic(ClusterInstance cluster) throws Exception {
         try (Admin admin = cluster.admin()) {
-            admin.createTopics(List.of(new NewTopic(DEFAULT_TOPIC, expectedReplicaAssignment))).all().get();
+            cluster.createTopicWithAssignment(DEFAULT_TOPIC, expectedReplicaAssignment);
             TopicPartition topicPartition = new TopicPartition(DEFAULT_TOPIC, 0);
             String topic = "test2";
             TestUtils.waitForCondition(() -> {
@@ -221,7 +238,7 @@ public class DeleteTopicTest {
             cluster.waitTopicDeletion(topic);
 
             waitForReplicaCreated(cluster.brokers(), topicPartition, "Replicas for topic test not created.");
-            cluster.waitUntilLeaderIsElectedOrChangedWithAdmin(admin, DEFAULT_TOPIC, 0, 1000);
+            AdminUtils.fetchOrWaitForLeader(admin, DEFAULT_TOPIC, 0, 1000);
         }
     }
 
@@ -232,7 +249,7 @@ public class DeleteTopicTest {
     })
     public void testDeleteTopicWithCleaner(ClusterInstance cluster) throws Exception {
         try (Admin admin = cluster.admin()) {
-            admin.createTopics(List.of(new NewTopic(DEFAULT_TOPIC, expectedReplicaAssignment))).all().get();
+            cluster.createTopicWithAssignment(DEFAULT_TOPIC, expectedReplicaAssignment);
             TopicPartition topicPartition = new TopicPartition(DEFAULT_TOPIC, 0);
             // for simplicity, we are validating cleaner offsets on a single broker
             KafkaBroker server = cluster.brokers().values().stream().findFirst().orElseThrow();
@@ -253,7 +270,7 @@ public class DeleteTopicTest {
     @ClusterTest
     public void testDeleteTopicAlreadyMarkedAsDeleted(ClusterInstance cluster) throws Exception {
         try (Admin admin = cluster.admin()) {
-            admin.createTopics(List.of(new NewTopic(DEFAULT_TOPIC, expectedReplicaAssignment))).all().get();
+            cluster.createTopicWithAssignment(DEFAULT_TOPIC, expectedReplicaAssignment);
             admin.deleteTopics(List.of(DEFAULT_TOPIC)).all().get();
 
             TestUtils.waitForCondition(() -> {
@@ -273,7 +290,7 @@ public class DeleteTopicTest {
         serverProperties = {@ClusterConfigProperty(key = ServerConfigs.DELETE_TOPIC_ENABLE_CONFIG, value = "false")})
     public void testDisableDeleteTopic(ClusterInstance cluster) throws Exception {
         try (Admin admin = cluster.admin()) {
-            admin.createTopics(List.of(new NewTopic(DEFAULT_TOPIC, expectedReplicaAssignment))).all().get();
+            cluster.createTopicWithAssignment(DEFAULT_TOPIC, expectedReplicaAssignment);
             TopicPartition topicPartition = new TopicPartition(DEFAULT_TOPIC, 0);
             TestUtils.waitForCondition(() -> {
                 try {

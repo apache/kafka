@@ -76,13 +76,22 @@ public class ClientsTestUtils {
         int numRecords,
         int maxPollRecords
     ) throws InterruptedException {
+        return consumeRecords(consumer, numRecords, maxPollRecords, 60000);
+    }
+
+    public static <K, V> List<ConsumerRecord<K, V>> consumeRecords(
+        Consumer<K, V> consumer,
+        int numRecords,
+        int maxPollRecords,
+        long maxWaitMs
+    ) throws InterruptedException {
         List<ConsumerRecord<K, V>> consumedRecords = new ArrayList<>();
         TestUtils.waitForCondition(() -> {
             var records = consumer.poll(Duration.ofMillis(100));
             records.forEach(consumedRecords::add);
             assertTrue(records.count() <= maxPollRecords);
             return consumedRecords.size() >= numRecords;
-        }, 60000, "Timed out before consuming expected " + numRecords + " records.");
+        }, maxWaitMs, "Timed out before consuming expected " + numRecords + " records.");
 
         return consumedRecords;
     }

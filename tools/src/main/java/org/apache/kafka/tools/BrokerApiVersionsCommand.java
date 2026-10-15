@@ -17,6 +17,7 @@
 package org.apache.kafka.tools;
 
 import org.apache.kafka.clients.ApiVersions;
+import org.apache.kafka.clients.BootstrapConfiguration;
 import org.apache.kafka.clients.ClientDnsLookup;
 import org.apache.kafka.clients.ClientResponse;
 import org.apache.kafka.clients.ClientUtils;
@@ -44,10 +45,10 @@ import org.apache.kafka.common.requests.ApiVersionsResponse;
 import org.apache.kafka.common.requests.MetadataRequest;
 import org.apache.kafka.common.requests.MetadataResponse;
 import org.apache.kafka.common.security.auth.SecurityProtocol;
-import org.apache.kafka.common.utils.Exit;
-import org.apache.kafka.common.utils.LogContext;
 import org.apache.kafka.common.utils.Time;
 import org.apache.kafka.common.utils.Utils;
+import org.apache.kafka.common.utils.internals.Exit;
+import org.apache.kafka.common.utils.internals.LogContext;
 import org.apache.kafka.server.util.CommandDefaultOptions;
 import org.apache.kafka.server.util.CommandLineUtils;
 
@@ -198,7 +199,9 @@ public class BrokerApiVersionsCommand {
                     true,
                     new ApiVersions(),
                     logContext,
-                    MetadataRecoveryStrategy.NONE);
+                    MetadataRecoveryStrategy.NONE,
+                    BootstrapConfiguration.DISABLED,
+                    false);
             ConsumerNetworkClient highLevelClient = new ConsumerNetworkClient(
                     logContext,
                     networkClient,

@@ -17,7 +17,7 @@
 package org.apache.kafka.connect.runtime;
 
 import org.apache.kafka.common.config.ConfigDef;
-import org.apache.kafka.common.utils.AppInfoParser;
+import org.apache.kafka.common.utils.internals.AppInfoParser;
 import org.apache.kafka.connect.source.SourceRecord;
 import org.apache.kafka.connect.transforms.predicates.Predicate;
 

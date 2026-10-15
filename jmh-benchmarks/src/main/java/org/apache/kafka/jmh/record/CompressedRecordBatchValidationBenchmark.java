@@ -21,8 +21,8 @@ import org.apache.kafka.common.compress.Compression;
 import org.apache.kafka.common.record.TimestampType;
 import org.apache.kafka.common.record.internal.CompressionType;
 import org.apache.kafka.common.record.internal.MemoryRecords;
-import org.apache.kafka.common.utils.PrimitiveRef;
 import org.apache.kafka.common.utils.Time;
+import org.apache.kafka.common.utils.internals.PrimitiveRef;
 import org.apache.kafka.storage.internals.log.AppendOrigin;
 import org.apache.kafka.storage.internals.log.LogValidator;
 

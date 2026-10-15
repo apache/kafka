@@ -16,6 +16,7 @@
  */
 package org.apache.kafka.streams.kstream;
 
+import org.apache.kafka.common.annotation.InterfaceAudience;
 import org.apache.kafka.common.utils.Bytes;
 import org.apache.kafka.streams.KafkaStreams;
 import org.apache.kafka.streams.KeyValue;
@@ -42,6 +43,7 @@ import org.apache.kafka.streams.state.TimestampedKeyValueStore;
  * @param <K> the key type of this grouped stream
  * @param <V> the value type of this grouped stream
  */
+@InterfaceAudience.Public
 public interface KGroupedStream<K, V> {
 
     /**

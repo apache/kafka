@@ -32,8 +32,9 @@ import org.apache.kafka.common.test.api.ClusterConfigProperty;
 import org.apache.kafka.common.test.api.ClusterTest;
 import org.apache.kafka.common.test.api.ClusterTestDefaults;
 import org.apache.kafka.common.test.api.ClusterTests;
+import org.apache.kafka.common.test.api.Flaky;
 import org.apache.kafka.common.test.api.Type;
-import org.apache.kafka.common.utils.LogContext;
+import org.apache.kafka.common.utils.internals.LogContext;
 import org.apache.kafka.coordinator.group.GroupCoordinatorConfig;
 import org.apache.kafka.raft.KRaftConfigs;
 import org.apache.kafka.server.IntegrationTestUtils;
@@ -296,7 +297,7 @@ public class ConsumerBounceTest {
         receiveExactRecords(poller2, numRecords, 60000L);
     }
 
-
+    @Flaky("KAFKA-21050")
     @ClusterTest
     public void testClassicClose() throws Exception {
         testClose(GroupProtocol.CLASSIC);

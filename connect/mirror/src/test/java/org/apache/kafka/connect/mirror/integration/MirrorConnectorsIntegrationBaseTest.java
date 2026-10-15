@@ -28,12 +28,12 @@ import org.apache.kafka.clients.admin.OffsetSpec;
 import org.apache.kafka.clients.admin.TopicDescription;
 import org.apache.kafka.clients.consumer.Consumer;
 import org.apache.kafka.clients.consumer.ConsumerConfig;
-import org.apache.kafka.clients.consumer.ConsumerRebalanceListener;
 import org.apache.kafka.clients.consumer.ConsumerRecord;
 import org.apache.kafka.clients.consumer.ConsumerRecords;
 import org.apache.kafka.clients.consumer.KafkaConsumer;
 import org.apache.kafka.clients.consumer.OffsetAndMetadata;
-import org.apache.kafka.clients.producer.KafkaProducer;
+import org.apache.kafka.clients.consumer.RebalanceConsumer;
+import org.apache.kafka.clients.consumer.RebalanceListener;
 import org.apache.kafka.clients.producer.Producer;
 import org.apache.kafka.clients.producer.ProducerRecord;
 import org.apache.kafka.common.MetricName;
@@ -41,10 +41,10 @@ import org.apache.kafka.common.TopicPartition;
 import org.apache.kafka.common.config.ConfigResource;
 import org.apache.kafka.common.config.TopicConfig;
 import org.apache.kafka.common.metrics.KafkaMetric;
-import org.apache.kafka.common.utils.Exit;
 import org.apache.kafka.common.utils.Time;
 import org.apache.kafka.common.utils.Timer;
 import org.apache.kafka.common.utils.Utils;
+import org.apache.kafka.common.utils.internals.Exit;
 import org.apache.kafka.connect.connector.Connector;
 import org.apache.kafka.connect.mirror.Checkpoint;
 import org.apache.kafka.connect.mirror.DefaultConfigPropertyFilter;
@@ -287,6 +287,8 @@ public class MirrorConnectorsIntegrationBaseTest {
             } finally {
                 Exit.resetExitProcedure();
                 Exit.resetHaltProcedure();
+                // Shared by all CollectAllMetricsReporter instances; avoid cross-test accumulation.
+                CollectAllMetricsReporter.METRICS.clear();
             }
         }
     }
@@ -1014,26 +1016,26 @@ public class MirrorConnectorsIntegrationBaseTest {
     }
 
     @Test
-    public void testConnectorMetricsNew() throws InterruptedException, ExecutionException {
+    public void testConnectorMetricsNew() throws InterruptedException {
         testConnectorMetrics(METRIC_NAMES_NEW, () -> assertMetrics(false));
     }
 
     @Test
-    public void testConnectorMetricsLegacy() throws InterruptedException, ExecutionException {
+    public void testConnectorMetricsLegacy() throws InterruptedException {
         testConnectorMetrics(METRIC_NAMES_LEGACY, () -> assertMetrics(true));
     }
 
     @Test
-    public void testConnectorMetricsDefault() throws InterruptedException, ExecutionException {
+    public void testConnectorMetricsDefault() throws InterruptedException {
         testConnectorMetrics(null, () -> assertMetrics(true));
     }
 
     @Test
-    public void testConnectorMetricsNewAndLegacy() throws InterruptedException, ExecutionException {
+    public void testConnectorMetricsNewAndLegacy() throws InterruptedException {
         testConnectorMetrics(METRIC_NAMES_NEW + "," + METRIC_NAMES_LEGACY, () -> assertMetrics(true) && assertMetrics(false));
     }
 
-    private void testConnectorMetrics(String format, Supplier<Boolean> assertions) throws InterruptedException, ExecutionException {
+    private void testConnectorMetrics(String format, Supplier<Boolean> assertions) throws InterruptedException {
         // one way replication from primary to backup
         mm2Props.put(BACKUP_CLUSTER_ALIAS + "->" + PRIMARY_CLUSTER_ALIAS + ".enabled", "false");
         if (format != null) {
@@ -1047,11 +1049,9 @@ public class MirrorConnectorsIntegrationBaseTest {
 
         String topic = "test-topic-metrics";
         primary.kafka().createTopic(topic);
-        try (KafkaProducer<byte[], byte[]> producer = primary.kafka().createProducer(Map.of())) {
-            for (int i = 0; i < NUM_RECORDS_PRODUCED; i++) {
-                producer.send(new ProducerRecord<>(topic, ("value" + i).getBytes())).get();
-            }
-        }
+        primary.kafka().produce(IntStream.range(0, NUM_RECORDS_PRODUCED)
+                .mapToObj(i -> new ProducerRecord<byte[], byte[]>(topic, ("value" + i).getBytes()))
+                .toList());
 
         waitUntilMirrorMakerIsRunning(backup,
                 List.of(MirrorSourceConnector.class, MirrorCheckpointConnector.class),
@@ -1324,8 +1324,9 @@ public class MirrorConnectorsIntegrationBaseTest {
         Timer timer = Time.SYSTEM.timer(RECORD_PRODUCE_DURATION_MS);
 
         try {
-            for (ProducerRecord<byte[], byte[]> record : records) {
-                producer.send(record).get(timer.remainingMs(), TimeUnit.MILLISECONDS);
+            var futures = records.stream().map(producer::send).toList();
+            for (var future : futures) {
+                future.get(timer.remainingMs(), TimeUnit.MILLISECONDS);
                 timer.update();
             }
         } catch (ExecutionException | InterruptedException | TimeoutException e) {
@@ -1534,14 +1535,14 @@ public class MirrorConnectorsIntegrationBaseTest {
 
     private void warmUpConsumer(String clusterName, EmbeddedKafkaCluster kafkaCluster, Map<String, Object> consumerProps, String topic) {
         AtomicBoolean joinedGroup = new AtomicBoolean(false);
-        ConsumerRebalanceListener rebalanceListener = new ConsumerRebalanceListener() {
+        RebalanceListener rebalanceListener = new RebalanceListener() {
             @Override
-            public void onPartitionsRevoked(Collection<TopicPartition> partitions) {
+            public void onPartitionsRevoked(Collection<TopicPartition> partitions, RebalanceConsumer consumer) {
                 // no-op
             }
 
             @Override
-            public void onPartitionsAssigned(Collection<TopicPartition> partitions) {
+            public void onPartitionsAssigned(Collection<TopicPartition> partitions, RebalanceConsumer consumer) {
                 joinedGroup.set(true);
             }
         };
@@ -1627,6 +1628,11 @@ public class MirrorConnectorsIntegrationBaseTest {
         @Override
         public void metricChange(KafkaMetric metric) {
             METRICS.put(metric.metricName(), metric);
+        }
+
+        @Override
+        public void metricRemoval(KafkaMetric metric) {
+            METRICS.remove(metric.metricName());
         }
     }
 }

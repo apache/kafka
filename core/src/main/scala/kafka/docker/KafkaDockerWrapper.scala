@@ -27,7 +27,7 @@ import kafka.utils.Logging
 import net.sourceforge.argparse4j.ArgumentParsers
 import net.sourceforge.argparse4j.impl.Arguments.store
 import net.sourceforge.argparse4j.inf.Namespace
-import org.apache.kafka.common.utils.Exit
+import org.apache.kafka.common.utils.internals.Exit
 import org.apache.kafka.raft.QuorumConfig
 import org.apache.kafka.server.util.TerseFailure
 

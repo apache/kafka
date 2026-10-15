@@ -31,6 +31,7 @@ import org.apache.kafka.common.quota.ClientQuotaEntity.{CLIENT_ID, IP, USER}
 import org.apache.kafka.common.quota.{ClientQuotaAlteration, ClientQuotaEntity}
 import org.apache.kafka.common.security.auth.KafkaPrincipal
 import org.apache.kafka.common.{TopicPartition, Uuid}
+import java.util.Optional
 import org.apache.kafka.coordinator.group.{GroupConfig, GroupCoordinatorConfig}
 import org.apache.kafka.coordinator.share.ShareCoordinatorConfig
 import org.apache.kafka.metadata.MetadataCache
@@ -66,9 +67,8 @@ class DynamicConfigChangeTest extends KafkaServerTestHarness {
     val oldVal: java.lang.Long = 100000L
     val newVal: java.lang.Long = 200000L
     val tp = new TopicPartition("test", 0)
-    val logProps = new Properties()
-    logProps.put(TopicConfig.FLUSH_MESSAGES_INTERVAL_CONFIG, oldVal.toString)
-    createTopic(tp.topic, 1, 1, logProps)
+    val logConfigs = util.Map.of(TopicConfig.FLUSH_MESSAGES_INTERVAL_CONFIG, oldVal.toString)
+    createTopic(tp.topic, 1, 1, logConfigs)
     TestUtils.retry(10000) {
       val logOpt = this.brokers.head.logManager.getLog(tp)
       assertTrue(logOpt.isPresent)
@@ -98,9 +98,8 @@ class DynamicConfigChangeTest extends KafkaServerTestHarness {
   def testDynamicTopicConfigChange(): Unit = {
     val tp = new TopicPartition("test", 0)
     val oldSegmentSize = 2 * 1024 * 1024
-    val logProps = new Properties()
-    logProps.put(TopicConfig.SEGMENT_BYTES_CONFIG, oldSegmentSize.toString)
-    createTopic(tp.topic, 1, 1, logProps)
+    val logConfigs = util.Map.of(TopicConfig.SEGMENT_BYTES_CONFIG, oldSegmentSize.toString)
+    createTopic(tp.topic, 1, 1, logConfigs)
     TestUtils.retry(10000) {
       val logOpt = this.brokers.head.logManager.getLog(tp)
       assertTrue(logOpt.isPresent)
@@ -419,7 +418,7 @@ class DynamicConfigChangeTest extends KafkaServerTestHarness {
     }
 
     val groupConfig = brokerServers.head.groupCoordinator.groupConfig(consumerGroupId).get()
-    assertEquals(newSessionTimeoutMs, groupConfig.consumerSessionTimeoutMs())
+    assertEquals(Optional.of(newSessionTimeoutMs), groupConfig.consumerSessionTimeoutMs())
   }
 
   @Test
@@ -445,7 +444,7 @@ class DynamicConfigChangeTest extends KafkaServerTestHarness {
     }
 
     val groupConfig = brokerServers.head.groupCoordinator.groupConfig(shareGroupId).get()
-    assertEquals(newRecordLockDurationMs, groupConfig.shareRecordLockDurationMs)
+    assertEquals(Optional.of(newRecordLockDurationMs), groupConfig.shareRecordLockDurationMs)
   }
 
   @Test
@@ -574,6 +573,28 @@ class DynamicConfigChangeUnitTest {
 
     //Then
     assertEquals(Seq(), result)
+  }
+
+  @Test
+  def shouldParseMirrorReplicationQuotaProperties(): Unit = {
+    val configHandler: TopicConfigHandler = new TopicConfigHandler(null, null, null)
+    val props: Properties = new Properties()
+
+    props.put(QuotaConfig.MIRROR_REPLICATION_THROTTLED_REPLICAS_CONFIG, "0:101,0:102,1:101,1:102")
+
+    assertEquals(Seq(0, 1), configHandler.parseThrottledPartitions(props, 102, QuotaConfig.MIRROR_REPLICATION_THROTTLED_REPLICAS_CONFIG))
+    assertEquals(Seq(), configHandler.parseThrottledPartitions(props, 103, QuotaConfig.MIRROR_REPLICATION_THROTTLED_REPLICAS_CONFIG))
+  }
+
+  @Test
+  def shouldParseMirrorReplicationQuotaWildcard(): Unit = {
+    val configHandler: TopicConfigHandler = new TopicConfigHandler(null, null, null)
+    val props: Properties = new Properties()
+
+    props.put(QuotaConfig.MIRROR_REPLICATION_THROTTLED_REPLICAS_CONFIG, "*")
+
+    val result = configHandler.parseThrottledPartitions(props, 102, QuotaConfig.MIRROR_REPLICATION_THROTTLED_REPLICAS_CONFIG)
+    assertEquals(ReplicationQuotaManager.ALL_REPLICAS.asScala.map(_.toInt).toSeq, result)
   }
 
   @Test

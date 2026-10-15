@@ -22,7 +22,6 @@ import java.util
 import java.util.{Optional, Properties}
 import java.util.concurrent._
 import java.util.concurrent.atomic.AtomicBoolean
-import kafka.server._
 import kafka.utils._
 import org.apache.kafka.common.config.TopicConfig
 import org.apache.kafka.common.record.internal.{MemoryRecords, SimpleRecord}
@@ -33,7 +32,7 @@ import org.apache.kafka.coordinator.transaction.TransactionLogConfig
 import org.apache.kafka.metadata.{LeaderAndIsr, LeaderRecoveryState, MetadataCache, MockConfigRepository, PartitionRegistration}
 import org.apache.kafka.server.common.{RequestLocal, TopicIdPartition}
 import org.apache.kafka.server.config.ReplicationConfigs
-import org.apache.kafka.server.partition.{AlterPartitionListener, CommittedPartitionState, PendingShrinkIsr}
+import org.apache.kafka.server.partition.{AlterPartitionListener, AlterPartitionManager, CommittedPartitionState, PendingShrinkIsr}
 import org.apache.kafka.server.storage.log.{FetchIsolation, FetchParams}
 import org.apache.kafka.server.util.MockTime
 import org.apache.kafka.storage.internals.checkpoint.OffsetCheckpoints

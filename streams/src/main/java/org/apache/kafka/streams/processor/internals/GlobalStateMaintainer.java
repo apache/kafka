@@ -36,4 +36,6 @@ interface GlobalStateMaintainer {
     void update(ConsumerRecord<byte[], byte[]> record);
 
     void maybeCheckpoint();
+
+    long approximateNumUncommittedBytes();
 }

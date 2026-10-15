@@ -1,6 +1,6 @@
 ---
 title: Configuration Providers
-description: Configuration Providers
+description: Kafka configuration providers for loading configuration values from external sources.
 weight: 12
 tags: ['kafka', 'docs']
 aliases: 

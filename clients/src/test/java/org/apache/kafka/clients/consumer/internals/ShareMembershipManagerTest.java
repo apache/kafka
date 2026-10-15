@@ -27,9 +27,9 @@ import org.apache.kafka.common.metrics.Metrics;
 import org.apache.kafka.common.protocol.Errors;
 import org.apache.kafka.common.requests.ShareGroupHeartbeatRequest;
 import org.apache.kafka.common.requests.ShareGroupHeartbeatResponse;
-import org.apache.kafka.common.utils.LogContext;
 import org.apache.kafka.common.utils.MockTime;
 import org.apache.kafka.common.utils.Time;
+import org.apache.kafka.common.utils.internals.LogContext;
 
 import org.junit.jupiter.api.AfterEach;
 import org.junit.jupiter.api.BeforeEach;
@@ -1288,7 +1288,10 @@ public class ShareMembershipManagerTest {
 
     private void testFenceIsNoOp(ShareMembershipManager membershipManager) {
         assertNotEquals(0, membershipManager.memberEpoch());
-        verify(subscriptionState, never()).rebalanceListener();
+        verify(subscriptionState, never()).hasRebalanceListener();
+        verify(subscriptionState, never()).onPartitionsAssigned(anyCollection());
+        verify(subscriptionState, never()).onPartitionsRevoked(anyCollection());
+        verify(subscriptionState, never()).onPartitionsLost(anyCollection());
     }
 
     private void assertStaleMemberLeavesGroupAndClearsAssignment(ShareMembershipManager membershipManager) {
@@ -1520,7 +1523,7 @@ public class ShareMembershipManagerTest {
         ShareMembershipManager membershipManager = createMembershipManagerJoiningGroup();
         ShareGroupHeartbeatResponse heartbeatResponse = createShareGroupHeartbeatResponse(new Assignment(), membershipManager.memberId());
         when(subscriptionState.hasAutoAssignedPartitions()).thenReturn(true);
-        when(subscriptionState.rebalanceListener()).thenReturn(Optional.empty());
+        when(subscriptionState.hasRebalanceListener()).thenReturn(false);
         membershipManager.onHeartbeatSuccess(heartbeatResponse);
         assertEquals(MemberState.RECONCILING, membershipManager.state());
         membershipManager.poll(time.milliseconds());

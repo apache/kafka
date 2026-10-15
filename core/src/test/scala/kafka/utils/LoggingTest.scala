@@ -17,13 +17,11 @@
 
 package kafka.utils
 
-import org.apache.kafka.server.logger.LoggingController
 import java.lang.management.ManagementFactory
 
 import javax.management.ObjectName
 import org.junit.jupiter.api.Test
 import org.junit.jupiter.api.Assertions.{assertEquals, assertTrue}
-import org.slf4j.LoggerFactory
 
 class LoggingTest extends Logging {
 
@@ -59,23 +57,5 @@ class LoggingTest extends Logging {
     val logging = new TestLogging
 
     assertEquals(logging.getClass.getName, logging.log.underlying.getName)
-  }
-
-  @Test
-  def testLoggerLevelIsResolved(): Unit = {
-    val controller = new LoggingController()
-    val previousLevel = controller.getLogLevel("kafka")
-    try {
-      controller.setLogLevel("kafka", "TRACE")
-      // Do some logging so that the Logger is created within the hierarchy
-      // (until loggers are used only loggers in the config file exist)
-      LoggerFactory.getLogger("kafka.utils.Log4jControllerTest").trace("test")
-      assertEquals("TRACE", controller.getLogLevel("kafka"))
-      assertEquals("TRACE", controller.getLogLevel("kafka.utils.Log4jControllerTest"))
-      assertTrue(controller.getLoggers.contains("kafka=TRACE"))
-      assertTrue(controller.getLoggers.contains("kafka.utils.Log4jControllerTest=TRACE"))
-    } finally {
-      controller.setLogLevel("kafka", previousLevel)
-    }
   }
 }

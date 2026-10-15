@@ -14,10 +14,14 @@
  * See the License for the specific language governing permissions and
  * limitations under the License.
  */
+
 package org.apache.kafka.coordinator.group.api.assignor;
+
+import org.apache.kafka.common.annotation.InterfaceAudience;
 
 /**
  * Server-side partition assignor for consumer groups used by the GroupCoordinator.
  */
+@InterfaceAudience.Public
 public interface ConsumerGroupPartitionAssignor extends PartitionAssignor {
 }

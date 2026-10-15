@@ -14,13 +14,17 @@
  * See the License for the specific language governing permissions and
  * limitations under the License.
  */
+
 package org.apache.kafka.common.errors;
+
+import org.apache.kafka.common.annotation.InterfaceAudience;
 
 /**
  * The request contained a leader epoch which is smaller than that on the broker that received the
  * request. This can happen when an operation is attempted before a pending metadata update has been
  * received. Clients will typically refresh metadata before retrying.
  */
+@InterfaceAudience.Public
 public class FencedLeaderEpochException extends InvalidMetadataException {
     private static final long serialVersionUID = 1L;
 

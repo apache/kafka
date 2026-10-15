@@ -18,6 +18,7 @@ package org.apache.kafka.common.requests;
 
 import org.apache.kafka.common.TopicPartition;
 import org.apache.kafka.common.Uuid;
+import org.apache.kafka.common.message.OffsetCommitRequestData;
 import org.apache.kafka.common.message.OffsetCommitResponseData;
 import org.apache.kafka.common.message.OffsetCommitResponseData.OffsetCommitResponsePartition;
 import org.apache.kafka.common.message.OffsetCommitResponseData.OffsetCommitResponseTopic;
@@ -118,11 +119,6 @@ public class OffsetCommitResponse extends AbstractResponse {
         data.setThrottleTimeMs(throttleTimeMs);
     }
 
-    @Override
-    public boolean shouldClientThrottle(short version) {
-        return version >= 4;
-    }
-
     public static boolean useTopicIds(short version) {
         return version >= 10;
     }
@@ -165,11 +161,11 @@ public class OffsetCommitResponse extends AbstractResponse {
             return this;
         }
 
-        public <P> Builder addPartitions(
+        public Builder addPartitions(
             Uuid topicId,
             String topicName,
-            List<P> partitions,
-            Function<P, Integer> partitionIndex,
+            List<OffsetCommitRequestData.OffsetCommitRequestPartition> partitions,
+            Function<OffsetCommitRequestData.OffsetCommitRequestPartition, Integer> partitionIndex,
             Errors error
         ) {
             final OffsetCommitResponseTopic topicResponse = getOrCreate(topicId, topicName);

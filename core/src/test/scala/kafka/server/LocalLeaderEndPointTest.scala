@@ -17,7 +17,8 @@
 
 package kafka.server
 
-import kafka.server.QuotaFactory.QuotaManagers
+import org.apache.kafka.server.quota.QuotaFactory
+import org.apache.kafka.server.quota.QuotaFactory.QuotaManagers
 import kafka.utils.{Logging, TestUtils}
 import org.apache.kafka.common.compress.Compression
 import org.apache.kafka.common.config.TopicConfig
@@ -35,6 +36,7 @@ import org.apache.kafka.metadata.KRaftMetadataCache
 import org.apache.kafka.server.common.{KRaftVersion, MetadataVersion, OffsetAndEpoch}
 import org.apache.kafka.server.network.BrokerEndPoint
 import org.apache.kafka.server.LeaderEndPoint
+import org.apache.kafka.server.partition.AlterPartitionManager
 import org.apache.kafka.server.util.{MockScheduler, MockTime}
 import org.apache.kafka.storage.internals.log.{AppendOrigin, LogConfig, LogDirFailureChannel}
 import org.junit.jupiter.api.{AfterEach, BeforeEach, Test}

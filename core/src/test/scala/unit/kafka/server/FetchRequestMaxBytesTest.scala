@@ -27,6 +27,7 @@ import org.apache.kafka.server.config.ServerConfigs
 import org.junit.jupiter.api.Assertions._
 import org.junit.jupiter.api.{AfterEach, BeforeEach, Test, TestInfo}
 
+import java.util
 import java.util.{Optional, Properties}
 import scala.jdk.CollectionConverters._
 
@@ -77,12 +78,11 @@ class FetchRequestMaxBytesTest extends BaseRequestTest {
   }
 
   private def createTopics(): Unit = {
-    val topicConfig = new Properties
-    topicConfig.setProperty(TopicConfig.MIN_IN_SYNC_REPLICAS_CONFIG, 1.toString)
+    val topicConfigs = util.Map.of(TopicConfig.MIN_IN_SYNC_REPLICAS_CONFIG, 1.toString)
     createTopic(testTopic,
                 numPartitions = 1, 
                 replicationFactor = 1,
-                topicConfig = topicConfig)
+                topicConfig = topicConfigs)
     // Produce several messages as single batches.
     messages.indices.foreach(i => {
       val record = new ProducerRecord(testTopic, 0, oneByteArray(i.toByte), messages(i))

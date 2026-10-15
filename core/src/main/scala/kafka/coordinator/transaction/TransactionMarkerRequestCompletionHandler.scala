@@ -22,6 +22,7 @@ import org.apache.kafka.clients.{ClientResponse, RequestCompletionHandler}
 import org.apache.kafka.common.TopicPartition
 import org.apache.kafka.common.protocol.Errors
 import org.apache.kafka.common.requests.WriteTxnMarkersResponse
+import org.apache.kafka.coordinator.transaction.PendingCompleteTxnAndMarkerEntry
 
 import scala.collection.mutable
 import scala.jdk.CollectionConverters._

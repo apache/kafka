@@ -18,8 +18,8 @@
 package org.apache.kafka.controller;
 
 import org.apache.kafka.common.Uuid;
-import org.apache.kafka.common.utils.LogContext;
 import org.apache.kafka.common.utils.Utils;
+import org.apache.kafka.common.utils.internals.LogContext;
 import org.apache.kafka.controller.MockRaftClient.LeaderChangeBatch;
 import org.apache.kafka.controller.MockRaftClient.LocalRecordBatch;
 import org.apache.kafka.controller.MockRaftClient.SharedLogData;

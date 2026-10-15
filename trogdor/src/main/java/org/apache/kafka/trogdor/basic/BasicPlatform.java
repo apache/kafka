@@ -17,7 +17,7 @@
 
 package org.apache.kafka.trogdor.basic;
 
-import org.apache.kafka.common.utils.Shell;
+import org.apache.kafka.common.utils.internals.Shell;
 import org.apache.kafka.trogdor.common.Node;
 import org.apache.kafka.trogdor.common.Platform;
 import org.apache.kafka.trogdor.common.Scheduler;

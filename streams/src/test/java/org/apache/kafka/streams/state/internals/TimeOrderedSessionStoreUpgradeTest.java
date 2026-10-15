@@ -28,6 +28,7 @@ import org.apache.kafka.streams.StreamsBuilder;
 import org.apache.kafka.streams.StreamsConfig;
 import org.apache.kafka.streams.TestInputTopic;
 import org.apache.kafka.streams.TopologyTestDriver;
+import org.apache.kafka.streams.TopologyTestDriverBuilder;
 import org.apache.kafka.streams.kstream.Consumed;
 import org.apache.kafka.streams.kstream.EmitStrategy;
 import org.apache.kafka.streams.kstream.Grouped;
@@ -125,8 +126,7 @@ public class TimeOrderedSessionStoreUpgradeTest {
     @Test
     public void shouldMigrateFromWithoutHeadersToWithHeaders() {
         final RocksDbTimeOrderedSessionBytesStoreSupplier oldSupplier =
-            new RocksDbTimeOrderedSessionBytesStoreSupplier(
-                STORE_NAME, RETENTION_MS, true, false);
+            new RocksDbTimeOrderedSessionBytesStoreSupplier(STORE_NAME, RETENTION_MS, true);
 
         final SessionStore<Bytes, byte[]> oldStore = oldSupplier.get();
         oldStore.init(context, oldStore);
@@ -147,9 +147,8 @@ public class TimeOrderedSessionStoreUpgradeTest {
         oldStore.close();
 
         // Reopen with headers
-        final RocksDbTimeOrderedSessionBytesStoreSupplier newSupplier =
-            new RocksDbTimeOrderedSessionBytesStoreSupplier(
-                STORE_NAME, RETENTION_MS, true, true);
+        final RocksDbTimeOrderedSessionHeadersBytesStoreSupplier newSupplier =
+            new RocksDbTimeOrderedSessionHeadersBytesStoreSupplier(STORE_NAME, RETENTION_MS, true);
 
         final SessionStore<Bytes, byte[]> newStore = newSupplier.get();
         newStore.init(context, newStore);
@@ -176,8 +175,7 @@ public class TimeOrderedSessionStoreUpgradeTest {
     @Test
     public void shouldMigrateFromWithIndexToWithIndexAndHeaders() {
         final RocksDbTimeOrderedSessionBytesStoreSupplier oldSupplier =
-            new RocksDbTimeOrderedSessionBytesStoreSupplier(
-                STORE_NAME, RETENTION_MS, true, false);
+            new RocksDbTimeOrderedSessionBytesStoreSupplier(STORE_NAME, RETENTION_MS, true);
 
         final SessionStore<Bytes, byte[]> oldStore = oldSupplier.get();
         oldStore.init(context, oldStore);
@@ -187,9 +185,8 @@ public class TimeOrderedSessionStoreUpgradeTest {
         oldStore.close();
 
         // Upgrade to headers
-        final RocksDbTimeOrderedSessionBytesStoreSupplier newSupplier =
-            new RocksDbTimeOrderedSessionBytesStoreSupplier(
-                STORE_NAME, RETENTION_MS, true, true);
+        final RocksDbTimeOrderedSessionHeadersBytesStoreSupplier newSupplier =
+            new RocksDbTimeOrderedSessionHeadersBytesStoreSupplier(STORE_NAME, RETENTION_MS, true);
 
         final SessionStore<Bytes, byte[]> newStore = newSupplier.get();
         newStore.init(context, newStore);
@@ -205,8 +202,7 @@ public class TimeOrderedSessionStoreUpgradeTest {
     @Test
     public void shouldMigrateFromWithoutIndexToWithIndexAndHeaders() {
         final RocksDbTimeOrderedSessionBytesStoreSupplier oldSupplier =
-            new RocksDbTimeOrderedSessionBytesStoreSupplier(
-                STORE_NAME, RETENTION_MS, false, false);
+            new RocksDbTimeOrderedSessionBytesStoreSupplier(STORE_NAME, RETENTION_MS, false);
 
         final SessionStore<Bytes, byte[]> oldStore = oldSupplier.get();
         oldStore.init(context, oldStore);
@@ -216,9 +212,8 @@ public class TimeOrderedSessionStoreUpgradeTest {
         oldStore.close();
 
         // Upgrade to both index and headers
-        final RocksDbTimeOrderedSessionBytesStoreSupplier newSupplier =
-            new RocksDbTimeOrderedSessionBytesStoreSupplier(
-                STORE_NAME, RETENTION_MS, true, true);
+        final RocksDbTimeOrderedSessionHeadersBytesStoreSupplier newSupplier =
+            new RocksDbTimeOrderedSessionHeadersBytesStoreSupplier(STORE_NAME, RETENTION_MS, true);
 
         final SessionStore<Bytes, byte[]> newStore = newSupplier.get();
         newStore.init(context, newStore);
@@ -234,9 +229,8 @@ public class TimeOrderedSessionStoreUpgradeTest {
     @Test
     public void shouldWriteAndReadWithHeaders() {
         // Start fresh with headers
-        final RocksDbTimeOrderedSessionBytesStoreSupplier supplier =
-            new RocksDbTimeOrderedSessionBytesStoreSupplier(
-                STORE_NAME, RETENTION_MS, true, true);
+        final RocksDbTimeOrderedSessionHeadersBytesStoreSupplier supplier =
+            new RocksDbTimeOrderedSessionHeadersBytesStoreSupplier(STORE_NAME, RETENTION_MS, true);
 
         final SessionStore<Bytes, byte[]> store = supplier.get();
         store.init(context, store);
@@ -347,9 +341,7 @@ public class TimeOrderedSessionStoreUpgradeTest {
     @MethodSource("dslStoreFormats")
     public void shouldAggregateSessionsViaDslWithOnWindowClose(final boolean withHeaders) {
         final Properties dslProps = StreamsTestUtils.getStreamsConfig(Serdes.String(), Serdes.String());
-        if (withHeaders) {
-            dslProps.put(StreamsConfig.DSL_STORE_FORMAT_CONFIG, StreamsConfig.DSL_STORE_FORMAT_HEADERS);
-        }
+        StreamsTestUtils.maybeSetDslStoreFormatHeaders(dslProps, withHeaders);
 
         final StreamsBuilder streamsBuilder = new StreamsBuilder();
         streamsBuilder.stream(INPUT_TOPIC, Consumed.with(Serdes.String(), Serdes.String()))
@@ -359,7 +351,7 @@ public class TimeOrderedSessionStoreUpgradeTest {
             .count(Materialized.<String, Long, SessionStore<Bytes, byte[]>>as(MATERIALIZED_STORE)
                 .withRetention(Duration.ofMinutes(5)));
 
-        try (final TopologyTestDriver driver = new TopologyTestDriver(streamsBuilder.build(), dslProps)) {
+        try (final TopologyTestDriver driver = new TopologyTestDriverBuilder(streamsBuilder.build()).withConfig(dslProps).build()) {
             final TestInputTopic<String, String> inputTopic =
                 driver.createInputTopic(INPUT_TOPIC, new StringSerializer(), new StringSerializer());
 

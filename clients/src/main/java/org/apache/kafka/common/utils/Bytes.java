@@ -16,6 +16,7 @@
  */
 package org.apache.kafka.common.utils;
 
+import org.apache.kafka.common.annotation.InterfaceAudience;
 import org.apache.kafka.common.utils.internals.ByteUtils;
 
 import java.io.Serializable;
@@ -33,6 +34,7 @@ import java.util.Objects;
  * <p>The class caches the hashCode for improved performance when used as keys
  * in hash-based data structures.
  */
+@InterfaceAudience.Public
 public class Bytes implements Comparable<Bytes> {
 
     public static final byte[] EMPTY = new byte[0];

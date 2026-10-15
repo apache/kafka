@@ -18,6 +18,7 @@ package kafka.server
 
 import java.io.File
 import org.apache.kafka.common.metrics.Metrics
+import org.apache.kafka.server.quota.QuotaFactory
 import org.apache.kafka.common.utils.Utils
 import org.apache.kafka.metadata.LeaderRecoveryState
 import org.junit.jupiter.api._
@@ -28,7 +29,7 @@ import org.apache.kafka.common.TopicPartition
 import org.apache.kafka.common.record.internal.SimpleRecord
 import org.apache.kafka.metadata.{KRaftMetadataCache, MockConfigRepository}
 import org.apache.kafka.server.common.KRaftVersion
-import org.apache.kafka.server.util.{KafkaScheduler, MockTime}
+import org.apache.kafka.server.util.{KafkaScheduler, MockTime, MockAlterPartitionManager}
 import org.apache.kafka.storage.internals.log.{CleanerConfig, LogDirFailureChannel}
 
 import java.util.Optional
@@ -50,7 +51,7 @@ class HighwatermarkPersistenceTest {
     new LogDirFailureChannel(config.logDirs.size)
   }
 
-  val alterIsrManager = TestUtils.createAlterIsrManager()
+  val alterIsrManager = new MockAlterPartitionManager()
 
   @AfterEach
   def teardown(): Unit = {

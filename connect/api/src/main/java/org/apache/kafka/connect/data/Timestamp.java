@@ -16,6 +16,7 @@
  */
 package org.apache.kafka.connect.data;
 
+import org.apache.kafka.common.annotation.InterfaceAudience;
 import org.apache.kafka.connect.errors.DataException;
 
 /**
@@ -24,6 +25,7 @@ import org.apache.kafka.connect.errors.DataException;
  *     {@link java.util.Date}. The underlying representation is a long representing the number of milliseconds since Unix epoch.
  * </p>
  */
+@InterfaceAudience.Public
 public class Timestamp {
     public static final String LOGICAL_NAME = "org.apache.kafka.connect.data.Timestamp";
 

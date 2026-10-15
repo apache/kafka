@@ -88,7 +88,7 @@ public abstract class DeleteGroupsHandlerTest {
                     .setResults(new DeletableGroupResultCollection(singletonList(
                             new DeletableGroupResult()
                                 .setErrorCode(error.code())
-                                .setGroupId(groupId1)).iterator())));
+                                .setGroupId(groupId1)))));
     }
 
     private AdminApiHandler.ApiResult<CoordinatorKey, Void> handleWithError(

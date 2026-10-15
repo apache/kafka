@@ -14,9 +14,11 @@
  * See the License for the specific language governing permissions and
  * limitations under the License.
  */
+
 package org.apache.kafka.clients.admin;
 
 import org.apache.kafka.common.KafkaFuture;
+import org.apache.kafka.common.annotation.InterfaceAudience;
 
 import java.util.Map;
 
@@ -25,6 +27,7 @@ import java.util.Map;
  *
  * The API of this class is evolving, see {@link Admin} for details.
  */
+@InterfaceAudience.Public
 public class UpdateFeaturesResult {
     private final Map<String, KafkaFuture<Void>> futures;
 

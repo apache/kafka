@@ -18,11 +18,12 @@ package org.apache.kafka.tools;
 
 import org.apache.kafka.clients.consumer.ConsumerConfig;
 import org.apache.kafka.clients.consumer.ConsumerGroupMetadata;
-import org.apache.kafka.clients.consumer.ConsumerRebalanceListener;
 import org.apache.kafka.clients.consumer.ConsumerRecord;
 import org.apache.kafka.clients.consumer.ConsumerRecords;
 import org.apache.kafka.clients.consumer.KafkaConsumer;
 import org.apache.kafka.clients.consumer.OffsetAndMetadata;
+import org.apache.kafka.clients.consumer.RebalanceConsumer;
+import org.apache.kafka.clients.consumer.RebalanceListener;
 import org.apache.kafka.clients.producer.KafkaProducer;
 import org.apache.kafka.clients.producer.ProducerConfig;
 import org.apache.kafka.clients.producer.ProducerRecord;
@@ -30,8 +31,8 @@ import org.apache.kafka.common.KafkaException;
 import org.apache.kafka.common.TopicPartition;
 import org.apache.kafka.common.errors.ProducerFencedException;
 import org.apache.kafka.common.errors.WakeupException;
-import org.apache.kafka.common.utils.Exit;
 import org.apache.kafka.common.utils.Utils;
+import org.apache.kafka.common.utils.internals.Exit;
 
 import com.fasterxml.jackson.core.JsonProcessingException;
 import com.fasterxml.jackson.databind.ObjectMapper;
@@ -319,13 +320,13 @@ public class TransactionalMessageCopier {
         final AtomicLong numMessagesProcessedSinceLastRebalance = new AtomicLong(0);
         final AtomicLong totalMessageProcessed = new AtomicLong(0);
         if (groupMode) {
-            consumer.subscribe(Set.of(topicName), new ConsumerRebalanceListener() {
+            consumer.setRebalanceListener(new RebalanceListener() {
                 @Override
-                public void onPartitionsRevoked(Collection<TopicPartition> partitions) {
+                public void onPartitionsRevoked(Collection<TopicPartition> partitions, RebalanceConsumer rebalanceConsumer) {
                 }
 
                 @Override
-                public void onPartitionsAssigned(Collection<TopicPartition> partitions) {
+                public void onPartitionsAssigned(Collection<TopicPartition> partitions, RebalanceConsumer rebalanceConsumer) {
                     remainingMessages.set(partitions.stream()
                         .mapToLong(partition -> messagesRemaining(consumer, partition)).sum());
                     numMessagesProcessedSinceLastRebalance.set(0);
@@ -339,6 +340,7 @@ public class TransactionalMessageCopier {
                     ));
                 }
             });
+            consumer.subscribe(Set.of(topicName));
         } else {
             TopicPartition inputPartition = new TopicPartition(topicName, parsedArgs.getInt("inputPartition"));
             consumer.assign(Set.of(inputPartition));

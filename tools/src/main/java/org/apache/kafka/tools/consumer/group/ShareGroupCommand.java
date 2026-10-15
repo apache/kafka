@@ -44,7 +44,10 @@ import org.apache.kafka.common.errors.GroupNotEmptyException;
 import org.apache.kafka.common.protocol.Errors;
 import org.apache.kafka.common.utils.Utils;
 import org.apache.kafka.server.util.CommandLineUtils;
-import org.apache.kafka.tools.OffsetsUtils;
+import org.apache.kafka.tools.GroupOffsetsResetter;
+
+import com.fasterxml.jackson.core.JsonProcessingException;
+import com.fasterxml.jackson.databind.ObjectWriter;
 
 import java.io.IOException;
 import java.util.AbstractMap.SimpleImmutableEntry;
@@ -98,7 +101,13 @@ public class ShareGroupCommand {
             } else if (opts.options.has(opts.deleteOpt)) {
                 shareGroupService.deleteShareGroups();
             } else if (opts.options.has(opts.resetOffsetsOpt)) {
-                shareGroupService.resetOffsets();
+                Map<String, Map<TopicPartition, OffsetAndMetadata>> offsetsToReset = shareGroupService.resetOffsets();
+                if (opts.options.has(opts.exportOpt)) {
+                    String exported = shareGroupService.exportOffsetsToCsv(offsetsToReset);
+                    System.out.println(exported);
+                } else {
+                    GroupOffsetsResetter.printOffsetsToReset(offsetsToReset);
+                }
             } else if (opts.options.has(opts.deleteOffsetsOpt)) {
                 shareGroupService.deleteOffsets();
             }
@@ -129,7 +138,7 @@ public class ShareGroupCommand {
     static class ShareGroupService implements AutoCloseable {
         final ShareGroupCommandOptions opts;
         private final Admin adminClient;
-        private final OffsetsUtils offsetsUtils;
+        private final GroupOffsetsResetter groupOffsetsResetter;
 
         public ShareGroupService(ShareGroupCommandOptions opts, Map<String, String> configOverrides) {
             this.opts = opts;
@@ -138,18 +147,20 @@ public class ShareGroupCommand {
             } catch (IOException e) {
                 throw new RuntimeException(e);
             }
-            this.offsetsUtils = new OffsetsUtils(adminClient, opts.parser, getOffsetsUtilsOptions(opts));
+            this.groupOffsetsResetter = new GroupOffsetsResetter(adminClient, opts.parser, getGroupOffsetsResetterOptions(opts));
         }
 
         public ShareGroupService(ShareGroupCommandOptions opts, Admin adminClient) {
             this.opts = opts;
             this.adminClient = adminClient;
-            this.offsetsUtils = new OffsetsUtils(adminClient, opts.parser, getOffsetsUtilsOptions(opts));
+            this.groupOffsetsResetter = new GroupOffsetsResetter(adminClient, opts.parser, getGroupOffsetsResetterOptions(opts));
         }
 
-        private OffsetsUtils.OffsetsUtilsOptions getOffsetsUtilsOptions(ShareGroupCommandOptions opts) {
+        private GroupOffsetsResetter.GroupOffsetsResetterOptions getGroupOffsetsResetterOptions(ShareGroupCommandOptions opts) {
             return
-                new OffsetsUtils.OffsetsUtilsOptions(opts.options.valuesOf(opts.groupOpt),
+                new GroupOffsetsResetter.GroupOffsetsResetterOptions(opts.options.valuesOf(opts.groupOpt),
+                    opts.options.valuesOf(opts.resetToOffsetOpt),
+                    opts.options.valuesOf(opts.resetFromFileOpt),
                     opts.options.valuesOf(opts.resetToDatetimeOpt),
                     opts.options.valueOf(opts.timeoutMsOpt));
         }
@@ -173,8 +184,15 @@ public class ShareGroupCommand {
                     .timeoutMs(opts.options.valueOf(opts.timeoutMsOpt).intValue()));
                 Collection<GroupListing> listings = result.all().get();
                 return listings.stream().map(GroupListing::groupId).collect(Collectors.toList());
-            } catch (InterruptedException | ExecutionException e) {
-                throw new RuntimeException(e);
+            } catch (InterruptedException ie) {
+                throw new RuntimeException(ie);
+            } catch (ExecutionException ee) {
+                Throwable cause = ee.getCause();
+                if (cause instanceof KafkaException) {
+                    throw (KafkaException) cause;
+                } else {
+                    throw new RuntimeException(cause);
+                }
             }
         }
 
@@ -184,8 +202,15 @@ public class ShareGroupCommand {
                     .timeoutMs(opts.options.valueOf(opts.timeoutMsOpt).intValue()));
                 Collection<GroupListing> listings = result.all().get();
                 return listings.stream().toList();
-            } catch (InterruptedException | ExecutionException e) {
-                throw new RuntimeException(e);
+            } catch (InterruptedException ie) {
+                throw new RuntimeException(ie);
+            } catch (ExecutionException ee) {
+                Throwable cause = ee.getCause();
+                if (cause instanceof KafkaException) {
+                    throw (KafkaException) cause;
+                } else {
+                    throw new RuntimeException(cause);
+                }
             }
         }
 
@@ -242,6 +267,26 @@ public class ShareGroupCommand {
             }
         }
 
+        String exportOffsetsToCsv(Map<String, Map<TopicPartition, OffsetAndMetadata>> offsetsForGroups) {
+            ObjectWriter csvWriter = CsvUtils.writerFor(CsvUtils.CsvRecordNoGroup.class);
+
+            return offsetsForGroups.entrySet().stream().flatMap(e -> {
+                Map<TopicPartition, OffsetAndMetadata> partitionInfo = e.getValue();
+
+                return partitionInfo.entrySet().stream().map(e1 -> {
+                    TopicPartition k = e1.getKey();
+                    OffsetAndMetadata v = e1.getValue();
+                    Object csvRecord = new CsvUtils.CsvRecordNoGroup(k.topic(), k.partition(), v.offset());
+
+                    try {
+                        return csvWriter.writeValueAsString(csvRecord);
+                    } catch (JsonProcessingException err) {
+                        throw new RuntimeException(err);
+                    }
+                });
+            }).collect(Collectors.joining());
+        }
+
         Map<String, Throwable> deleteShareGroups() {
             List<GroupListing> shareGroupIds = listDetailedShareGroups();
             List<String> groupIds = opts.options.has(opts.allGroupsOpt)
@@ -254,7 +299,7 @@ public class ShareGroupCommand {
             for (String groupId : groupIdSet) {
                 Optional<GroupListing> listing = shareGroupIds.stream().filter(item -> item.groupId().equals(groupId)).findAny();
                 if (listing.isEmpty()) {
-                    errGroups.put(groupId, new IllegalArgumentException("Group '" + groupId + "' is not a share group."));
+                    errGroups.put(groupId, new GroupIdNotFoundException("Group '" + groupId + "' is not a share group."));
                 } else {
                     Optional<GroupState> groupState = listing.get().groupState();
                     groupState.ifPresent(state -> {
@@ -382,32 +427,42 @@ public class ShareGroupCommand {
             return new SimpleImmutableEntry<>(topLevelException, topicLevelResult);
         }
 
-        void resetOffsets() {
+        Map<String, Map<TopicPartition, OffsetAndMetadata>> resetOffsets() {
+            Map<String, Map<TopicPartition, OffsetAndMetadata>> result = new HashMap<>();
+
             String groupId = opts.options.valueOf(opts.groupOpt);
             try {
                 ShareGroupDescription shareGroupDescription = describeShareGroups(List.of(groupId)).get(groupId);
                 if (!(GroupState.EMPTY.equals(shareGroupDescription.groupState()) || GroupState.DEAD.equals(shareGroupDescription.groupState()))) {
                     CommandLineUtils.printErrorAndExit(String.format("Share group '%s' is not empty.", groupId));
                 }
-                resetOffsetsForInactiveGroup(groupId);
+                Map<TopicPartition, OffsetAndMetadata> offsetsToReset = resetOffsetsForInactiveGroup(groupId);
+                if (!offsetsToReset.isEmpty()) {
+                    result.put(groupId, offsetsToReset);
+                }
             } catch (InterruptedException ie) {
                 throw new RuntimeException(ie);
             } catch (ExecutionException ee) {
                 Throwable cause = ee.getCause();
                 if (cause instanceof GroupIdNotFoundException) {
-                    resetOffsetsForInactiveGroup(groupId);
+                    Map<TopicPartition, OffsetAndMetadata> offsetsToReset = resetOffsetsForInactiveGroup(groupId);
+                    if (!offsetsToReset.isEmpty()) {
+                        result.put(groupId, offsetsToReset);
+                    }
                 } else if (cause instanceof KafkaException) {
                     CommandLineUtils.printErrorAndExit(cause.getMessage());
                 } else {
                     throw new RuntimeException(cause);
                 }
             }
+
+            return result;
         }
 
-        private void resetOffsetsForInactiveGroup(String groupId) {
+        private Map<TopicPartition, OffsetAndMetadata> resetOffsetsForInactiveGroup(String groupId) {
             try {
                 Collection<TopicPartition> partitionsToReset = getPartitionsToReset(groupId);
-                Map<TopicPartition, OffsetAndMetadata> offsetsToReset = prepareOffsetsToReset(partitionsToReset);
+                Map<TopicPartition, OffsetAndMetadata> offsetsToReset = prepareOffsetsToReset(groupId, partitionsToReset);
                 boolean dryRun = opts.options.has(opts.dryRunOpt) || !opts.options.has(opts.executeOpt);
                 if (!dryRun) {
                     adminClient.alterShareGroupOffsets(groupId,
@@ -418,7 +473,7 @@ public class ShareGroupCommand {
                         withTimeoutMs(new AlterShareGroupOffsetsOptions())
                     ).all().get();
                 }
-                OffsetsUtils.printOffsetsToReset(Map.of(groupId, offsetsToReset));
+                return offsetsToReset;
             } catch (InterruptedException ie) {
                 throw new RuntimeException(ie);
             } catch (ExecutionException ee) {
@@ -435,7 +490,7 @@ public class ShareGroupCommand {
             Collection<TopicPartition> partitionsToReset;
 
             if (opts.options.has(opts.topicOpt)) {
-                partitionsToReset = offsetsUtils.parseTopicPartitionsToReset(opts.options.valuesOf(opts.topicOpt));
+                partitionsToReset = groupOffsetsResetter.parseTopicPartitionsToReset(opts.options.valuesOf(opts.topicOpt));
             } else {
                 Map<String, ListShareGroupOffsetsSpec> groupSpecs = Map.of(groupId, new ListShareGroupOffsetsSpec());
                 Map<TopicPartition, SharePartitionOffsetInfo> offsetsByTopicPartitions = adminClient.listShareGroupOffsets(
@@ -448,17 +503,42 @@ public class ShareGroupCommand {
             return partitionsToReset;
         }
 
-        private Map<TopicPartition, OffsetAndMetadata> prepareOffsetsToReset(Collection<TopicPartition> partitionsToReset) {
-            offsetsUtils.checkAllTopicPartitionsValid(partitionsToReset);
-            if (opts.options.has(opts.resetToEarliestOpt)) {
-                return offsetsUtils.resetToEarliest(partitionsToReset);
+        private Map<TopicPartition, SharePartitionOffsetInfo> getOffsetInfo(String groupId) {
+            try {
+                return adminClient.listShareGroupOffsets(
+                    Map.of(groupId, new ListShareGroupOffsetsSpec()),
+                    withTimeoutMs(new ListShareGroupOffsetsOptions())
+                ).partitionsToOffsetInfo(groupId).get();
+            } catch (InterruptedException ie) {
+                throw new RuntimeException(ie);
+            } catch (ExecutionException ee) {
+                Throwable cause = ee.getCause();
+                if (cause instanceof KafkaException) {
+                    throw (KafkaException) cause;
+                } else {
+                    throw new RuntimeException(cause);
+                }
+            }
+        }
+
+        private Map<TopicPartition, OffsetAndMetadata> prepareOffsetsToReset(String groupId, Collection<TopicPartition> partitionsToReset) {
+            groupOffsetsResetter.checkAllTopicPartitionsValid(partitionsToReset);
+            if (opts.options.has(opts.resetToOffsetOpt)) {
+                return groupOffsetsResetter.resetToOffset(partitionsToReset);
+            } else if (opts.options.has(opts.resetToEarliestOpt)) {
+                return groupOffsetsResetter.resetToEarliest(partitionsToReset);
             } else if (opts.options.has(opts.resetToLatestOpt)) {
-                return offsetsUtils.resetToLatest(partitionsToReset);
+                return groupOffsetsResetter.resetToLatest(partitionsToReset);
             } else if (opts.options.has(opts.resetToDatetimeOpt)) {
-                return offsetsUtils.resetToDateTime(partitionsToReset);
+                return groupOffsetsResetter.resetToDateTime(partitionsToReset);
+            } else if (opts.options.has(opts.resetFromFileOpt)) {
+                return groupOffsetsResetter.resetFromFile(groupId);
+            } else if (opts.options.has(opts.resetToCurrentOpt)) {
+                Map<TopicPartition, SharePartitionOffsetInfo> currentOffsets = getOffsetInfo(groupId);
+                return groupOffsetsResetter.resetToCurrentForShareGroup(partitionsToReset, currentOffsets);
             }
             CommandLineUtils
-                .printUsageAndExit(opts.parser, String.format("Option '%s' requires one of the following scenarios: %s", opts.resetOffsetsOpt, opts.allResetOffsetScenarioOpts));
+                .printUsageAndExit(opts.parser, String.format("Option '%s' requires one of the following scenarios: %s", opts.resetOffsetsOpt, opts.allResetOffsetsScenarioOpts));
             return null;
         }
 
@@ -502,8 +582,15 @@ public class ShareGroupCommand {
                     Set<SharePartitionOffsetInformation> partitionOffsets = mapOffsetInfoToSharePartitionInformation(groupId, offsetInfoMap);
 
                     groupOffsets.put(groupId, new SimpleImmutableEntry<>(shareGroup, partitionOffsets));
-                } catch (InterruptedException | ExecutionException e) {
-                    throw new RuntimeException(e);
+                } catch (InterruptedException ie) {
+                    throw new RuntimeException(ie);
+                } catch (ExecutionException ee) {
+                    Throwable cause = ee.getCause();
+                    if (cause instanceof KafkaException) {
+                        throw (KafkaException) cause;
+                    } else {
+                        throw new RuntimeException(cause);
+                    }
                 }
             });
 

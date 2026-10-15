@@ -23,7 +23,6 @@ import org.apache.kafka.metadata.SupportedConfigChecker;
 import org.apache.kafka.server.metrics.ClientMetricsConfigs;
 import org.apache.kafka.storage.internals.log.LogConfig;
 
-import java.util.HashSet;
 import java.util.Map;
 import java.util.Set;
 import java.util.function.Predicate;
@@ -62,10 +61,10 @@ public final class DefaultSupportedConfigChecker implements SupportedConfigCheck
 
     public DefaultSupportedConfigChecker() {
         this.validConfigsByType = Map.of(
-            ConfigResource.Type.TOPIC, new SetContainsPredicate(new HashSet<>(LogConfig.configNames())),
+            ConfigResource.Type.TOPIC, new SetContainsPredicate(LogConfig.configNames()),
             ConfigResource.Type.BROKER, ignore -> true,
-            ConfigResource.Type.CLIENT_METRICS, new SetContainsPredicate(ClientMetricsConfigs.configDef().names()),
-            ConfigResource.Type.GROUP, new SetContainsPredicate(GroupConfig.CONFIG_DEF.names())
+            ConfigResource.Type.CLIENT_METRICS, new SetContainsPredicate(ClientMetricsConfigs.configNames()),
+            ConfigResource.Type.GROUP, new SetContainsPredicate(GroupConfig.configNames())
         );
     }
 

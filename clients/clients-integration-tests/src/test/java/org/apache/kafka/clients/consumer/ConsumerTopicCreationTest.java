@@ -40,7 +40,7 @@ public class ConsumerTopicCreationTest {
     private static final long POLL_TIMEOUT = 1000;
 
     @ClusterTemplate("autoCreateTopicsConfigs")
-    void testAsyncConsumerTopicCreationIfConsumerAllowToCreateTopic(ClusterInstance cluster) throws Exception {
+    public void testAsyncConsumerTopicCreationIfConsumerAllowToCreateTopic(ClusterInstance cluster) throws Exception {
         try (Consumer<byte[], byte[]> consumer = createConsumer(cluster, GroupProtocol.CONSUMER, true)) {
             subscribeAndPoll(consumer);
             assertTopicCreateBasedOnPermission(cluster);
@@ -48,7 +48,7 @@ public class ConsumerTopicCreationTest {
     }
 
     @ClusterTemplate("autoCreateTopicsConfigs")
-    void testAsyncConsumerTopicCreationIfConsumerDisallowToCreateTopic(ClusterInstance cluster) throws Exception {
+    public void testAsyncConsumerTopicCreationIfConsumerDisallowToCreateTopic(ClusterInstance cluster) throws Exception {
         try (Consumer<byte[], byte[]> consumer = createConsumer(cluster, GroupProtocol.CONSUMER, false)) {
             subscribeAndPoll(consumer);
             assertTopicNotCreate(cluster);
@@ -56,7 +56,7 @@ public class ConsumerTopicCreationTest {
     }
 
     @ClusterTemplate("autoCreateTopicsConfigs")
-    void testClassicConsumerTopicCreationIfConsumerAllowToCreateTopic(ClusterInstance cluster) throws Exception {
+    public void testClassicConsumerTopicCreationIfConsumerAllowToCreateTopic(ClusterInstance cluster) throws Exception {
         try (Consumer<byte[], byte[]> consumer = createConsumer(cluster, GroupProtocol.CLASSIC, true)) {
             subscribeAndPoll(consumer);
             assertTopicCreateBasedOnPermission(cluster);
@@ -64,7 +64,7 @@ public class ConsumerTopicCreationTest {
     }
 
     @ClusterTemplate("autoCreateTopicsConfigs")
-    void testClassicConsumerTopicCreationIfConsumerDisallowToCreateTopic(ClusterInstance cluster) throws Exception {
+    public void testClassicConsumerTopicCreationIfConsumerDisallowToCreateTopic(ClusterInstance cluster) throws Exception {
         try (Consumer<byte[], byte[]> consumer = createConsumer(cluster, GroupProtocol.CLASSIC, false)) {
             subscribeAndPoll(consumer);
             assertTopicNotCreate(cluster);

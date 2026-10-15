@@ -17,6 +17,7 @@
 package org.apache.kafka.streams.kstream.internals.foreignkeyjoin;
 
 import org.apache.kafka.common.errors.UnsupportedVersionException;
+import org.apache.kafka.common.header.Headers;
 import org.apache.kafka.common.serialization.Deserializer;
 import org.apache.kafka.common.serialization.Serde;
 import org.apache.kafka.common.serialization.Serializer;
@@ -94,7 +95,7 @@ public class SubscriptionWrapperSerde<KLeft> extends WrappingNullableSerde<Subsc
         }
 
         @Override
-        public byte[] serialize(final String ignored, final SubscriptionWrapper<KLeft> data) {
+        public byte[] serialize(final String ignored, final Headers headers, final SubscriptionWrapper<KLeft> data) {
             //{1-bit-isHashNull}{7-bits-version}{1-byte-instruction}{Optional-16-byte-Hash}{PK-serialized}{4-bytes-primaryPartition}
 
             if (data.version() < 0) {
@@ -103,27 +104,33 @@ public class SubscriptionWrapperSerde<KLeft> extends WrappingNullableSerde<Subsc
 
             final int version = data.version();
             if (upgradeFromV0 || version == 0) {
-                return serializeV0(data);
+                return serializeV0(data, headers);
             } else if (version == 1) {
-                return serializeV1(data);
+                return serializeV1(data, headers);
             } else {
                 throw new UnsupportedVersionException("Unsupported SubscriptionWrapper version " + data.version());
             }
         }
 
-        private byte[] serializePrimaryKey(final SubscriptionWrapper<KLeft> data) {
+        @Override
+        public byte[] serialize(final String ignored, final SubscriptionWrapper<KLeft> data) {
+            throw new UnsupportedOperationException("SubscriptionWrapperSerializer requires the headers-aware version of serialize");
+        }
+
+        private byte[] serializePrimaryKey(final SubscriptionWrapper<KLeft> data, final Headers headers) {
             if (primaryKeySerializationPseudoTopic == null) {
                 primaryKeySerializationPseudoTopic = primaryKeySerializationPseudoTopicSupplier.get();
             }
 
             return  primaryKeySerializer.serialize(
                 primaryKeySerializationPseudoTopic,
+                headers,
                 data.primaryKey()
             );
         }
 
-        private ByteBuffer serializeCommon(final SubscriptionWrapper<KLeft> data, final byte version, final int extraLength) {
-            final byte[] primaryKeySerializedData = serializePrimaryKey(data);
+        private ByteBuffer serializeCommon(final SubscriptionWrapper<KLeft> data, final Headers headers, final byte version, final int extraLength) {
+            final byte[] primaryKeySerializedData = serializePrimaryKey(data, headers);
             final ByteBuffer buf;
             int dataLength = 2 + primaryKeySerializedData.length + extraLength;
             if (data.hash() != null) {
@@ -145,12 +152,12 @@ public class SubscriptionWrapperSerde<KLeft> extends WrappingNullableSerde<Subsc
             return buf;
         }
 
-        private byte[] serializeV0(final SubscriptionWrapper<KLeft> data) {
-            return serializeCommon(data, (byte) 0, 0).array();
+        private byte[] serializeV0(final SubscriptionWrapper<KLeft> data, final Headers headers) {
+            return serializeCommon(data, headers, (byte) 0, 0).array();
         }
 
-        private byte[] serializeV1(final SubscriptionWrapper<KLeft> data) {
-            final ByteBuffer buf = serializeCommon(data, data.version(), Integer.BYTES);
+        private byte[] serializeV1(final SubscriptionWrapper<KLeft> data, final Headers headers) {
+            final ByteBuffer buf = serializeCommon(data, headers, data.version(), Integer.BYTES);
             buf.putInt(data.primaryPartition());
             return buf.array();
         }
@@ -178,7 +185,7 @@ public class SubscriptionWrapperSerde<KLeft> extends WrappingNullableSerde<Subsc
         }
 
         @Override
-        public SubscriptionWrapper<KLeft> deserialize(final String ignored, final byte[] data) {
+        public SubscriptionWrapper<KLeft> deserialize(final String ignored, final Headers headers, final byte[] data) {
             //{7-bits-version}{1-bit-isHashNull}{1-byte-instruction}{Optional-16-byte-Hash}{PK-serialized}{4-bytes-primaryPartition}
             final ByteBuffer buf = ByteBuffer.wrap(data);
             final byte versionAndIsHashNull = buf.get();
@@ -212,6 +219,7 @@ public class SubscriptionWrapperSerde<KLeft> extends WrappingNullableSerde<Subsc
 
             final KLeft primaryKey = primaryKeyDeserializer.deserialize(
                 primaryKeySerializationPseudoTopic,
+                headers,
                 primaryKeyRaw
             );
             final Integer primaryPartition;
@@ -222,6 +230,11 @@ public class SubscriptionWrapperSerde<KLeft> extends WrappingNullableSerde<Subsc
             }
 
             return new SubscriptionWrapper<>(hash, inst, primaryKey, version, primaryPartition);
+        }
+
+        @Override
+        public SubscriptionWrapper<KLeft> deserialize(final String ignored, final byte[] data) {
+            throw new UnsupportedOperationException("SubscriptionWrapperDeserializer requires the headers-aware version of deserialize");
         }
 
     }

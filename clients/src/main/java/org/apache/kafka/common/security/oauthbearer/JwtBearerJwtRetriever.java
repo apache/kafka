@@ -17,6 +17,8 @@
 
 package org.apache.kafka.common.security.oauthbearer;
 
+import org.apache.kafka.common.annotation.InterfaceAudience;
+import org.apache.kafka.common.annotation.SuppressKafkaInternalApiUsage;
 import org.apache.kafka.common.security.oauthbearer.internals.secured.ConfigurationUtils;
 import org.apache.kafka.common.security.oauthbearer.internals.secured.HttpJwtRetriever;
 import org.apache.kafka.common.security.oauthbearer.internals.secured.HttpRequestFormatter;
@@ -106,6 +108,7 @@ import static org.apache.kafka.common.config.SaslConfigs.SASL_OAUTHBEARER_SCOPE;
  * sasl.oauthbearer.token.endpoint.url=https://example.com/oauth2/v1/token
  * </pre>
  */
+@InterfaceAudience.Public
 public class JwtBearerJwtRetriever implements JwtRetriever {
 
     private static final Logger LOG = LoggerFactory.getLogger(JwtBearerJwtRetriever.class);
@@ -118,6 +121,7 @@ public class JwtBearerJwtRetriever implements JwtRetriever {
         this(Time.SYSTEM);
     }
 
+    @SuppressKafkaInternalApiUsage("KIP-1265: ctor leaks internal Time for test injection — pending KIP review to promote Time or refactor")
     public JwtBearerJwtRetriever(Time time) {
         this.time = time;
     }

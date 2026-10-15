@@ -136,7 +136,7 @@ public class ClientMetricsConfigs extends AbstractConfig {
         return clientMetricsProps;
     }
 
-    public static Set<String> names() {
+    public static Set<String> configNames() {
         return CONFIG.names();
     }
 
@@ -152,7 +152,7 @@ public class ClientMetricsConfigs extends AbstractConfig {
     private static void validateConfigs(Map<?, ?> configs) {
         // Make sure that all the configs are valid
         configs.forEach((key, value) -> {
-            if (!names().contains(key)) {
+            if (!configNames().contains(key)) {
                 throw new InvalidRequestException("Unknown client metrics configuration: " + key);
             }
         });
@@ -195,7 +195,8 @@ public class ClientMetricsConfigs extends AbstractConfig {
 
         Map<String, Pattern> patternsMap = new HashMap<>();
         patterns.forEach(pattern -> {
-            String[] nameValuePair = pattern.split("=");
+            // The pattern value may contain '=' characters, so split only at the first occurrence.
+            String[] nameValuePair = pattern.split("=", 2);
             if (nameValuePair.length != 2) {
                 throw new InvalidConfigurationException("Illegal client matching pattern: " + pattern);
             }

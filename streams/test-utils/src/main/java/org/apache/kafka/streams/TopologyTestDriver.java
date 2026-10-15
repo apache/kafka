@@ -30,6 +30,7 @@ import org.apache.kafka.common.Metric;
 import org.apache.kafka.common.MetricName;
 import org.apache.kafka.common.PartitionInfo;
 import org.apache.kafka.common.TopicPartition;
+import org.apache.kafka.common.annotation.InterfaceAudience;
 import org.apache.kafka.common.header.Headers;
 import org.apache.kafka.common.header.internals.RecordHeaders;
 import org.apache.kafka.common.metrics.MetricConfig;
@@ -39,8 +40,8 @@ import org.apache.kafka.common.record.TimestampType;
 import org.apache.kafka.common.serialization.ByteArraySerializer;
 import org.apache.kafka.common.serialization.Deserializer;
 import org.apache.kafka.common.serialization.Serializer;
-import org.apache.kafka.common.utils.LogContext;
 import org.apache.kafka.common.utils.Time;
+import org.apache.kafka.common.utils.internals.LogContext;
 import org.apache.kafka.streams.TopologyConfig.TaskConfig;
 import org.apache.kafka.streams.errors.LogAndContinueExceptionHandler;
 import org.apache.kafka.streams.errors.ProcessingExceptionHandler;
@@ -49,13 +50,11 @@ import org.apache.kafka.streams.internals.StreamsConfigUtils;
 import org.apache.kafka.streams.kstream.Windowed;
 import org.apache.kafka.streams.processor.PunctuationType;
 import org.apache.kafka.streams.processor.Punctuator;
-import org.apache.kafka.streams.processor.StandbyUpdateListener.SuspendReason;
 import org.apache.kafka.streams.processor.StateRestoreListener;
 import org.apache.kafka.streams.processor.StateStore;
 import org.apache.kafka.streams.processor.StateStoreContext;
 import org.apache.kafka.streams.processor.TaskId;
 import org.apache.kafka.streams.processor.api.ProcessorContext;
-import org.apache.kafka.streams.processor.internals.ChangelogRegister;
 import org.apache.kafka.streams.processor.internals.ClientUtils;
 import org.apache.kafka.streams.processor.internals.GlobalProcessorContextImpl;
 import org.apache.kafka.streams.processor.internals.GlobalStateManager;
@@ -111,7 +110,6 @@ import java.io.Closeable;
 import java.io.IOException;
 import java.time.Duration;
 import java.time.Instant;
-import java.util.Collection;
 import java.util.Collections;
 import java.util.HashMap;
 import java.util.HashSet;
@@ -127,7 +125,6 @@ import java.util.Set;
 import java.util.concurrent.ThreadLocalRandom;
 import java.util.concurrent.TimeUnit;
 import java.util.concurrent.atomic.AtomicLong;
-import java.util.function.Supplier;
 import java.util.regex.Pattern;
 
 import static org.apache.kafka.streams.internals.StreamsConfigUtils.ProcessingMode.EXACTLY_ONCE_V2;
@@ -164,7 +161,9 @@ import static org.apache.kafka.streams.state.ValueAndTimestamp.getValueOrNull;
  * props.setProperty(StreamsConfig.DEFAULT_KEY_SERDE_CLASS_CONFIG, Serdes.String().getClass().getName());
  * props.setProperty(StreamsConfig.DEFAULT_VALUE_SERDE_CLASS_CONFIG, Serdes.String().getClass().getName());
  * Topology topology = ...
- * TopologyTestDriver driver = new TopologyTestDriver(topology, props);
+ * TopologyTestDriver driver = new TopologyTestDriverBuilder(topology)
+ *     .withConfig(props)
+ *     .build();
  * }</pre>
  *
  * <p> Note that the {@code TopologyTestDriver} processes input records synchronously.
@@ -226,6 +225,7 @@ import static org.apache.kafka.streams.state.ValueAndTimestamp.getValueOrNull;
  * @see TestInputTopic
  * @see TestOutputTopic
  */
+@InterfaceAudience.Public
 public class TopologyTestDriver implements Closeable {
 
     private static final Logger log = LoggerFactory.getLogger(TopologyTestDriver.class);
@@ -268,45 +268,53 @@ public class TopologyTestDriver implements Closeable {
     };
 
     /**
-     * Create a new test diver instance.
+     * Create a new test driver instance.
      * Default test properties are used to initialize the driver instance
      *
      * @param topology the topology to be tested
+     * @deprecated Since 4.4. Use {@link TopologyTestDriverBuilder} instead.
      */
+    @Deprecated(since = "4.4")
     public TopologyTestDriver(final Topology topology) {
         this(topology, new Properties());
     }
 
     /**
-     * Create a new test diver instance.
+     * Create a new test driver instance.
      * Initialized the internally mocked wall-clock time with {@link System#currentTimeMillis() current system time}.
      *
      * @param topology the topology to be tested
      * @param config   the configuration for the topology
+     * @deprecated Since 4.4. Use {@link TopologyTestDriverBuilder} instead.
      */
+    @Deprecated(since = "4.4")
     public TopologyTestDriver(final Topology topology,
                               final Properties config) {
         this(topology, config, null);
     }
 
     /**
-     * Create a new test diver instance.
+     * Create a new test driver instance.
      *
      * @param topology the topology to be tested
      * @param initialWallClockTimeMs the initial value of internally mocked wall-clock time
+     * @deprecated Since 4.4. Use {@link TopologyTestDriverBuilder} instead.
      */
+    @Deprecated(since = "4.4")
     public TopologyTestDriver(final Topology topology,
                               final Instant initialWallClockTimeMs) {
         this(topology, new Properties(), initialWallClockTimeMs);
     }
 
     /**
-     * Create a new test diver instance.
+     * Create a new test driver instance.
      *
      * @param topology               the topology to be tested
      * @param config                 the configuration for the topology
      * @param initialWallClockTime   the initial value of internally mocked wall-clock time
+     * @deprecated Since 4.4. Use {@link TopologyTestDriverBuilder} instead.
      */
+    @Deprecated(since = "4.4")
     public TopologyTestDriver(final Topology topology,
                               final Properties config,
                               final Instant initialWallClockTime) {
@@ -317,15 +325,16 @@ public class TopologyTestDriver implements Closeable {
     }
 
     /**
-     * Create a new test diver instance.
+     * Create a new test driver instance. Package-private core constructor shared by the (deprecated)
+     * public constructors and by {@link TopologyTestDriverBuilder}, which is the blessed entry point.
      *
      * @param builder builder for the topology to be tested
      * @param config the configuration for the topology
      * @param initialWallClockTimeMs the initial value of internally mocked wall-clock time
      */
-    private TopologyTestDriver(final InternalTopologyBuilder builder,
-                               final Properties config,
-                               final long initialWallClockTimeMs) {
+    TopologyTestDriver(final InternalTopologyBuilder builder,
+                       final Properties config,
+                       final long initialWallClockTimeMs) {
         final Properties configCopy = new Properties();
         configCopy.putAll(config);
         configCopy.putIfAbsent(StreamsConfig.BOOTSTRAP_SERVERS_CONFIG, "dummy-bootstrap-host:0");
@@ -453,7 +462,7 @@ public class TopologyTestDriver implements Closeable {
 
             @SuppressWarnings("deprecation")
             final boolean globalEnabled = streamsConfig.getBoolean(StreamsConfig.PROCESSING_EXCEPTION_HANDLER_GLOBAL_ENABLED_CONFIG);
-            final ProcessingExceptionHandler processingExceptionHandler = 
+            final ProcessingExceptionHandler processingExceptionHandler =
                 globalEnabled ? streamsConfig.processingExceptionHandler() : null;
 
             globalStateTask = new GlobalStateUpdateTask(
@@ -489,8 +498,10 @@ public class TopologyTestDriver implements Closeable {
                 TASK_ID,
                 Task.TaskType.ACTIVE,
                 StreamsConfig.EXACTLY_ONCE_V2.equals(streamsConfig.getString(StreamsConfig.PROCESSING_GUARANTEE_CONFIG)),
+                streamsConfig.getBoolean(StreamsConfig.TRANSACTIONAL_STATE_STORES_CONFIG),
                 logContext,
                 stateDirectory,
+                mockWallClockTime,
                 processorTopology.storeToChangelogTopic(),
                 new HashSet<>(partitionsByInputTopic.values()));
             final RecordCollector recordCollector = new RecordCollectorImpl(
@@ -605,6 +616,10 @@ public class TopologyTestDriver implements Closeable {
             while (task.hasRecordsQueued() && task.isProcessable(mockWallClockTime.milliseconds())) {
                 // Process the record ...
                 task.process(mockWallClockTime.milliseconds());
+                // flush terminal e2e latency for the record just processed, mirroring the end-of-batch
+                // flush in TaskExecutor; the mock clock only advances via advanceWallClockTime, so this
+                // second read returns the same value the record was processed with
+                task.maybeFlushTerminalE2ELatency(mockWallClockTime.milliseconds());
                 task.maybePunctuateStreamTime();
                 commit(task.prepareCommit(true));
                 task.postCommit(true);
@@ -839,7 +854,8 @@ public class TopologyTestDriver implements Closeable {
         }
         final K key = keyDeserializer.deserialize(record.topic(), record.headers(), record.key());
         final V value = valueDeserializer.deserialize(record.topic(), record.headers(), record.value());
-        return new TestRecord<>(key, value, record.headers(), record.timestamp());
+        final int outputPartition = -1;
+        return new TestRecord<>(key, value, record.headers(), Instant.ofEpochMilli(record.timestamp()), outputPartition);
     }
 
     <K, V> void pipeRecord(final String topic,
@@ -891,12 +907,13 @@ public class TopologyTestDriver implements Closeable {
      * @see #getStateStore(String)
      * @see #getKeyValueStore(String)
      * @see #getTimestampedKeyValueStore(String)
-     * @see #getVersionedKeyValueStore(String)
      * @see #getTimestampedKeyValueStoreWithHeaders(String)
+     * @see #getVersionedKeyValueStore(String)
      * @see #getWindowStore(String)
      * @see #getTimestampedWindowStore(String)
      * @see #getTimestampedWindowStoreWithHeaders(String)
      * @see #getSessionStore(String)
+     * @see #getSessionStoreWithHeaders(String)
      */
     public Map<String, StateStore> getAllStateStores() {
         final Map<String, StateStore> allStores = new HashMap<>();
@@ -924,12 +941,13 @@ public class TopologyTestDriver implements Closeable {
      * @see #getAllStateStores()
      * @see #getKeyValueStore(String)
      * @see #getTimestampedKeyValueStore(String)
-     * @see #getVersionedKeyValueStore(String)
      * @see #getTimestampedKeyValueStoreWithHeaders(String)
+     * @see #getVersionedKeyValueStore(String)
      * @see #getWindowStore(String)
      * @see #getTimestampedWindowStore(String)
      * @see #getTimestampedWindowStoreWithHeaders(String)
      * @see #getSessionStore(String)
+     * @see #getSessionStoreWithHeaders(String)
      */
     public StateStore getStateStore(final String name) throws IllegalArgumentException {
         return getStateStore(name, true);
@@ -938,7 +956,12 @@ public class TopologyTestDriver implements Closeable {
     private StateStore getStateStore(final String name,
                                      final boolean throwForBuiltInStores) {
         if (task != null) {
-            task.processorContext().setRecordContext(new ProcessorRecordContext(0L, -1L, -1, null, new RecordHeaders()));
+            // Accessing a store must not corrupt the task's record context. Only set a dummy
+            // context when none exists yet (i.e. before any record has been processed) so that
+            // direct store operations have a context to work with; never overwrite a live one.
+            if (task.processorContext().recordContext() == null) {
+                task.processorContext().setRecordContext(new ProcessorRecordContext(0L, -1L, -1, null, new RecordHeaders()));
+            }
             final StateStore stateStore = ((ProcessorContextImpl) task.processorContext()).stateManager().store(name);
             if (stateStore != null) {
                 if (throwForBuiltInStores) {
@@ -990,28 +1013,32 @@ public class TopologyTestDriver implements Closeable {
     }
 
     /**
-     * Get the {@link KeyValueStore} or {@link TimestampedKeyValueStore} with the given name.
+     * Get the {@link KeyValueStore}, {@link TimestampedKeyValueStore}, or {@link TimestampedKeyValueStoreWithHeaders}
+     * with the given name.
      * The store can be a "regular" or global store.
      * <p>
-     * If the registered store is a {@link TimestampedKeyValueStore} this method will return a value-only query
-     * interface. <strong>It is highly recommended to update the code for this case to avoid bugs and to use
-     * {@link #getTimestampedKeyValueStore(String)} for full store access instead.</strong>
+     * If the registered store is a {@link TimestampedKeyValueStore} or {@link TimestampedKeyValueStoreWithHeaders}
+     * this method will return a value-only query interface.
+     * <strong>It is highly recommended to update the code for this case to avoid bugs and to use
+     * {@link #getTimestampedKeyValueStore(String)} or {@link #getTimestampedKeyValueStoreWithHeaders(String)}
+     * for full store access instead.</strong>
      * <p>
      * This is often useful in test cases to pre-populate the store before the test case instructs the topology to
      * {@link TestInputTopic#pipeInput(TestRecord) process an input message}, and/or to check the store afterward.
      *
      * @param name the name of the store
-     * @return the key value store, or {@code null} if no {@link KeyValueStore} or {@link TimestampedKeyValueStore}
-     * has been registered with the given name
+     * @return the key value store, or {@code null} if no {@link KeyValueStore}, {@link TimestampedKeyValueStore}, or
+     * {@link TimestampedWindowStoreWithHeaders} has been registered with the given name
      * @see #getAllStateStores()
      * @see #getStateStore(String)
      * @see #getTimestampedKeyValueStore(String)
-     * @see #getVersionedKeyValueStore(String)
      * @see #getTimestampedKeyValueStoreWithHeaders(String)
+     * @see #getVersionedKeyValueStore(String)
      * @see #getWindowStore(String)
      * @see #getTimestampedWindowStore(String)
      * @see #getTimestampedWindowStoreWithHeaders(String)
      * @see #getSessionStore(String)
+     * @see #getSessionStoreWithHeaders(String)
      */
     @SuppressWarnings("unchecked")
     public <K, V> KeyValueStore<K, V> getKeyValueStore(final String name) {
@@ -1028,23 +1055,29 @@ public class TopologyTestDriver implements Closeable {
     }
 
     /**
-     * Get the {@link TimestampedKeyValueStore} with the given name.
+     * Get the {@link TimestampedKeyValueStore} or {@link TimestampedKeyValueStoreWithHeaders} with the given name.
      * The store can be a "regular" or global store.
+     * <p>
+     * If the registered store is a {@link TimestampedKeyValueStoreWithHeaders} this method will return a value-ts-only query interface.
+     * <strong>It is highly recommended to update the code for this case to avoid bugs and to use
+     * {@link #getTimestampedKeyValueStoreWithHeaders(String)} for full store access instead.</strong>
      * <p>
      * This is often useful in test cases to pre-populate the store before the test case instructs the topology to
      * {@link TestInputTopic#pipeInput(TestRecord) process an input message}, and/or to check the store afterward.
      *
      * @param name the name of the store
-     * @return the key value store, or {@code null} if no {@link TimestampedKeyValueStore} has been registered with the given name
+     * @return the key value store, or {@code null} if no {@link TimestampedKeyValueStore} or
+     * {@link TimestampedKeyValueStoreWithHeaders }has been registered with the given name
      * @see #getAllStateStores()
      * @see #getStateStore(String)
      * @see #getKeyValueStore(String)
-     * @see #getVersionedKeyValueStore(String)
      * @see #getTimestampedKeyValueStoreWithHeaders(String)
+     * @see #getVersionedKeyValueStore(String)
      * @see #getWindowStore(String)
      * @see #getTimestampedWindowStore(String)
      * @see #getTimestampedWindowStoreWithHeaders(String)
      * @see #getSessionStore(String)
+     * @see #getSessionStoreWithHeaders(String)
      */
     @SuppressWarnings("unchecked")
     public <K, V> KeyValueStore<K, ValueAndTimestamp<V>> getTimestampedKeyValueStore(final String name) {
@@ -1053,31 +1086,6 @@ public class TopologyTestDriver implements Closeable {
             return new TimestampedKeyValueStoreFacadeForHeaders<>((TimestampedKeyValueStoreWithHeaders<K, V>) store);
         }
         return store instanceof TimestampedKeyValueStore ? (TimestampedKeyValueStore<K, V>) store : null;
-    }
-
-    /**
-     * Get the {@link VersionedKeyValueStore} with the given name.
-     * The store can be a "regular" or global store.
-     * <p>
-     * This is often useful in test cases to pre-populate the store before the test case instructs the topology to
-     * {@link TestInputTopic#pipeInput(TestRecord) process an input message}, and/or to check the store afterward.
-     *
-     * @param name the name of the store
-     * @return the key value store, or {@code null} if no {@link VersionedKeyValueStore} has been registered with the given name
-     * @see #getAllStateStores()
-     * @see #getStateStore(String)
-     * @see #getKeyValueStore(String)
-     * @see #getTimestampedKeyValueStore(String)
-     * @see #getTimestampedKeyValueStoreWithHeaders(String)
-     * @see #getWindowStore(String)
-     * @see #getTimestampedWindowStore(String)
-     * @see #getTimestampedWindowStoreWithHeaders(String)
-     * @see #getSessionStore(String)
-     */
-    @SuppressWarnings("unchecked")
-    public <K, V> VersionedKeyValueStore<K, V> getVersionedKeyValueStore(final String name) {
-        final StateStore store = getStateStore(name, false);
-        return store instanceof VersionedKeyValueStore ? (VersionedKeyValueStore<K, V>) store : null;
     }
 
     /**
@@ -1098,6 +1106,7 @@ public class TopologyTestDriver implements Closeable {
      * @see #getTimestampedWindowStore(String)
      * @see #getTimestampedWindowStoreWithHeaders(String)
      * @see #getSessionStore(String)
+     * @see #getSessionStoreWithHeaders(String)
      */
     @SuppressWarnings("unchecked")
     public <K, V> KeyValueStore<K, ValueTimestampHeaders<V>> getTimestampedKeyValueStoreWithHeaders(final String name) {
@@ -1106,28 +1115,58 @@ public class TopologyTestDriver implements Closeable {
     }
 
     /**
-     * Get the {@link WindowStore} or {@link TimestampedWindowStore} with the given name.
+     * Get the {@link VersionedKeyValueStore} with the given name.
      * The store can be a "regular" or global store.
-     * <p>
-     * If the registered store is a {@link TimestampedWindowStore} this method will return a value-only query
-     * interface. <strong>It is highly recommended to update the code for this case to avoid bugs and to use
-     * {@link #getTimestampedWindowStore(String)} for full store access instead.</strong>
      * <p>
      * This is often useful in test cases to pre-populate the store before the test case instructs the topology to
      * {@link TestInputTopic#pipeInput(TestRecord) process an input message}, and/or to check the store afterward.
      *
      * @param name the name of the store
-     * @return the key value store, or {@code null} if no {@link WindowStore} or {@link TimestampedWindowStore}
-     * has been registered with the given name
+     * @return the versioned store, or {@code null} if no {@link VersionedKeyValueStore} has been registered with the given name
      * @see #getAllStateStores()
      * @see #getStateStore(String)
      * @see #getKeyValueStore(String)
      * @see #getTimestampedKeyValueStore(String)
-     * @see #getVersionedKeyValueStore(String)
      * @see #getTimestampedKeyValueStoreWithHeaders(String)
+     * @see #getWindowStore(String)
      * @see #getTimestampedWindowStore(String)
      * @see #getTimestampedWindowStoreWithHeaders(String)
      * @see #getSessionStore(String)
+     * @see #getSessionStoreWithHeaders(String)
+     */
+    @SuppressWarnings("unchecked")
+    public <K, V> VersionedKeyValueStore<K, V> getVersionedKeyValueStore(final String name) {
+        final StateStore store = getStateStore(name, false);
+        return store instanceof VersionedKeyValueStore ? (VersionedKeyValueStore<K, V>) store : null;
+    }
+
+    /**
+     * Get the {@link WindowStore}, {@link TimestampedWindowStore}, or {@link TimestampedWindowStoreWithHeaders}
+     * with the given name.
+     * The store can be a "regular" or global store.
+     * <p>
+     * If the registered store is a {@link TimestampedWindowStore} or {@link TimestampedWindowStoreWithHeaders}
+     * this method will return a value-only query interface.
+     * <strong>It is highly recommended to update the code for this case to avoid bugs and to use
+     * {@link #getTimestampedWindowStore(String)} or {@link #getTimestampedWindowStoreWithHeaders(String)}
+     * for full store access instead.</strong>
+     * <p>
+     * This is often useful in test cases to pre-populate the store before the test case instructs the topology to
+     * {@link TestInputTopic#pipeInput(TestRecord) process an input message}, and/or to check the store afterward.
+     *
+     * @param name the name of the store
+     * @return the window store, or {@code null} if no {@link WindowStore}, {@link TimestampedWindowStore}, or
+     * {@link TimestampedWindowStoreWithHeaders} has been registered with the given name
+     * @see #getAllStateStores()
+     * @see #getStateStore(String)
+     * @see #getKeyValueStore(String)
+     * @see #getTimestampedKeyValueStore(String)
+     * @see #getTimestampedKeyValueStoreWithHeaders(String)
+     * @see #getVersionedKeyValueStore(String)
+     * @see #getTimestampedWindowStore(String)
+     * @see #getTimestampedWindowStoreWithHeaders(String)
+     * @see #getSessionStore(String)
+     * @see #getSessionStoreWithHeaders(String)
      */
     @SuppressWarnings("unchecked")
     public <K, V> WindowStore<K, V> getWindowStore(final String name) {
@@ -1144,22 +1183,30 @@ public class TopologyTestDriver implements Closeable {
     }
 
     /**
-     * Get the {@link TimestampedWindowStore} with the given name.
+     * Get the {@link TimestampedWindowStore} or {@link TimestampedWindowStoreWithHeaders} with the given name.
      * The store can be a "regular" or global store.
+     * <p>
+     * If the registered store is a {@link TimestampedWindowStoreWithHeaders}
+     * this method will return a value-ts--only query interface.
+     * <strong>It is highly recommended to update the code for this case to avoid bugs and to use
+     * {@link #getTimestampedWindowStoreWithHeaders(String)} for full store access instead.</strong>
      * <p>
      * This is often useful in test cases to pre-populate the store before the test case instructs the topology to
      * {@link TestInputTopic#pipeInput(TestRecord) process an input message}, and/or to check the store afterward.
      *
      * @param name the name of the store
-     * @return the key value store, or {@code null} if no {@link TimestampedWindowStore} has been registered with the given name
+     * @return the window store, or {@code null} if no {@link TimestampedWindowStore} or
+     * {@link TimestampedWindowStoreWithHeaders} has been registered with the given name
      * @see #getAllStateStores()
      * @see #getStateStore(String)
      * @see #getKeyValueStore(String)
      * @see #getTimestampedKeyValueStore(String)
-     * @see #getVersionedKeyValueStore(String)
      * @see #getTimestampedKeyValueStoreWithHeaders(String)
+     * @see #getVersionedKeyValueStore(String)
      * @see #getWindowStore(String)
+     * @see #getTimestampedWindowStoreWithHeaders(String)
      * @see #getSessionStore(String)
+     * @see #getSessionStoreWithHeaders(String)
      */
     @SuppressWarnings("unchecked")
     public <K, V> WindowStore<K, ValueAndTimestamp<V>> getTimestampedWindowStore(final String name) {
@@ -1183,11 +1230,12 @@ public class TopologyTestDriver implements Closeable {
      * @see #getStateStore(String)
      * @see #getKeyValueStore(String)
      * @see #getTimestampedKeyValueStore(String)
-     * @see #getVersionedKeyValueStore(String)
      * @see #getTimestampedKeyValueStoreWithHeaders(String)
+     * @see #getVersionedKeyValueStore(String)
      * @see #getWindowStore(String)
      * @see #getTimestampedWindowStore(String)
      * @see #getSessionStore(String)
+     * @see #getSessionStoreWithHeaders(String)
      */
     @SuppressWarnings("unchecked")
     public <K, V> WindowStore<K, ValueTimestampHeaders<V>> getTimestampedWindowStoreWithHeaders(final String name) {
@@ -1196,23 +1244,30 @@ public class TopologyTestDriver implements Closeable {
     }
 
     /**
-     * Get the {@link SessionStore} with the given name.
+     * Get the {@link SessionStore} or {@link SessionStoreWithHeaders} with the given name.
      * The store can be a "regular" or global store.
+     * <p>
+     * If the registered store is a {@link SessionStoreWithHeaders}
+     * this method will return a value--only query interface.
+     * <strong>It is highly recommended to update the code for this case to avoid bugs and to use
+     * {@link #getSessionStoreWithHeaders(String)} for full store access instead.</strong>
      * <p>
      * This is often useful in test cases to pre-populate the store before the test case instructs the topology to
      * {@link TestInputTopic#pipeInput(TestRecord) process an input message}, and/or to check the store afterward.
      *
      * @param name the name of the store
-     * @return the key value store, or {@code null} if no {@link SessionStore} has been registered with the given name
+     * @return the session store, or {@code null} if no {@link SessionStore} or {@link SessionStoreWithHeaders}
+     * has been registered with the given name
      * @see #getAllStateStores()
      * @see #getStateStore(String)
      * @see #getKeyValueStore(String)
      * @see #getTimestampedKeyValueStore(String)
+     * @see #getTimestampedKeyValueStoreWithHeaders(String)
      * @see #getVersionedKeyValueStore(String)
      * @see #getWindowStore(String)
      * @see #getTimestampedWindowStore(String)
-     * @see #getTimestampedKeyValueStoreWithHeaders(String)
      * @see #getTimestampedWindowStoreWithHeaders(String)
+     * @see #getSessionStoreWithHeaders(String)
      */
     @SuppressWarnings("unchecked")
     public <K, V> SessionStore<K, V> getSessionStore(final String name) {
@@ -1221,6 +1276,32 @@ public class TopologyTestDriver implements Closeable {
             return new SessionStoreFacade<>((SessionStoreWithHeaders<K, V>) store);
         }
         return store instanceof SessionStore ? (SessionStore<K, V>) store : null;
+    }
+
+    /**
+     * Get the {@link SessionStoreWithHeaders} with the given name.
+     * The store can be a "regular" or global store.
+     * <p>
+     * This is often useful in test cases to pre-populate the store before the test case instructs the topology to
+     * {@link TestInputTopic#pipeInput(TestRecord) process an input message}, and/or to check the store afterward.
+     *
+     * @param name the name of the store
+     * @return the session store, or {@code null} if no {@link SessionStoreWithHeaders} has been registered with the given name
+     * @see #getAllStateStores()
+     * @see #getStateStore(String)
+     * @see #getKeyValueStore(String)
+     * @see #getTimestampedKeyValueStore(String)
+     * @see #getTimestampedKeyValueStoreWithHeaders(String)
+     * @see #getVersionedKeyValueStore(String)
+     * @see #getWindowStore(String)
+     * @see #getTimestampedWindowStore(String)
+     * @see #getTimestampedWindowStoreWithHeaders(String)
+     * @see #getSessionStore(String)
+     */
+    @SuppressWarnings("unchecked")
+    public <K, V> SessionStoreWithHeaders<K, V> getSessionStoreWithHeaders(final String name) {
+        final StateStore store = getStateStore(name, false);
+        return store instanceof SessionStoreWithHeaders ? (SessionStoreWithHeaders<K, V>) store : null;
     }
 
     /**
@@ -1249,21 +1330,6 @@ public class TopologyTestDriver implements Closeable {
         producer.close();
         consumer.close();
         stateDirectory.clean();
-    }
-
-    static class MockChangelogRegister implements ChangelogRegister {
-        @Override
-        public void register(final TopicPartition partition, final ProcessorStateManager stateManager) { }
-
-        @Override
-        public void register(final Set<TopicPartition> changelogPartitions, final ProcessorStateManager stateManager) { }
-
-        @Override
-        public void unregister(final Collection<TopicPartition> partitions) { }
-
-        @Override
-        public void unregister(final Collection<TopicPartition> partitions,
-                               final SuspendReason reason) { }
     }
 
     static class MockTime implements Time {
@@ -1297,11 +1363,6 @@ public class TopologyTestDriver implements Closeable {
             }
             timeMs.addAndGet(ms);
             highResTimeNs.addAndGet(TimeUnit.MILLISECONDS.toNanos(ms));
-        }
-
-        @Override
-        public void waitObject(final Object obj, final Supplier<Boolean> condition, final long timeoutMs) {
-            throw new UnsupportedOperationException();
         }
     }
 

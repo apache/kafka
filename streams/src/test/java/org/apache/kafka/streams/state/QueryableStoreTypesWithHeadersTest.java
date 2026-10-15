@@ -30,7 +30,7 @@ public class QueryableStoreTypesWithHeadersTest {
     @Test
     public void shouldAcceptTimestampedKeyValueStoreWithHeadersForTimestampedKeyValueStoreType() {
         final TimestampedKeyValueStoreWithHeaders<String, String> store =
-            Stores.timestampedKeyValueStoreBuilderWithHeaders(
+            Stores.timestampedKeyValueStoreWithHeadersBuilder(
                 Stores.inMemoryKeyValueStore("test-store"),
                 Serdes.String(),
                 Serdes.String())
@@ -45,7 +45,7 @@ public class QueryableStoreTypesWithHeadersTest {
     @Test
     public void shouldAcceptTimestampedKeyValueStoreWithHeadersForKeyValueStoreType() {
         final TimestampedKeyValueStoreWithHeaders<String, String> store =
-            Stores.timestampedKeyValueStoreBuilderWithHeaders(
+            Stores.timestampedKeyValueStoreWithHeadersBuilder(
                 Stores.inMemoryKeyValueStore("test-store"),
                 Serdes.String(),
                 Serdes.String())
@@ -60,7 +60,7 @@ public class QueryableStoreTypesWithHeadersTest {
     @Test
     public void shouldNotAcceptTimestampedKeyValueStoreWithHeadersForWindowStoreType() {
         final TimestampedKeyValueStoreWithHeaders<String, String> store =
-            Stores.timestampedKeyValueStoreBuilderWithHeaders(
+            Stores.timestampedKeyValueStoreWithHeadersBuilder(
                 Stores.inMemoryKeyValueStore("test-store"),
                 Serdes.String(),
                 Serdes.String())
@@ -200,7 +200,7 @@ public class QueryableStoreTypesWithHeadersTest {
     @Test
     public void shouldAcceptSessionStoreWithHeadersForSessionStoreType() {
         final SessionStoreWithHeaders<String, String> store =
-            Stores.sessionStoreBuilderWithHeaders(
+            Stores.sessionStoreWithHeadersBuilder(
                 Stores.inMemorySessionStore(
                     "test-session-store",
                     Duration.ofMillis(100)),

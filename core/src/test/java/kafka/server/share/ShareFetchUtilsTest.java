@@ -34,6 +34,7 @@ import org.apache.kafka.common.record.internal.RecordBatch;
 import org.apache.kafka.common.record.internal.Records;
 import org.apache.kafka.common.record.internal.SimpleRecord;
 import org.apache.kafka.common.requests.FetchRequest;
+import org.apache.kafka.server.share.PartitionMetadataProvider;
 import org.apache.kafka.server.share.SharePartitionKey;
 import org.apache.kafka.server.share.fetch.ShareAcquiredRecords;
 import org.apache.kafka.server.share.fetch.ShareFetch;
@@ -143,7 +144,7 @@ public class ShareFetchUtilsTest {
                 OptionalInt.empty(), false))
         );
         Map<TopicIdPartition, ShareFetchResponseData.PartitionData> resultData =
-                ShareFetchUtils.processFetchResponse(shareFetch, responseData, sharePartitions, mock(ReplicaManager.class), EXCEPTION_HANDLER);
+                ShareFetchUtils.processFetchResponse(shareFetch, responseData, sharePartitions, mock(PartitionMetadataProvider.class), EXCEPTION_HANDLER);
 
         assertEquals(2, resultData.size());
         assertTrue(resultData.containsKey(tp0));
@@ -192,7 +193,7 @@ public class ShareFetchUtilsTest {
                 OptionalInt.empty(), false))
         );
         Map<TopicIdPartition, ShareFetchResponseData.PartitionData> resultData =
-            ShareFetchUtils.processFetchResponse(shareFetch, responseData, sharePartitions, mock(ReplicaManager.class), EXCEPTION_HANDLER);
+            ShareFetchUtils.processFetchResponse(shareFetch, responseData, sharePartitions, mock(PartitionMetadataProvider.class), EXCEPTION_HANDLER);
 
         assertEquals(2, resultData.size());
         assertTrue(resultData.containsKey(tp0));
@@ -255,7 +256,7 @@ public class ShareFetchUtilsTest {
                 OptionalInt.empty(), false))
         );
         Map<TopicIdPartition, ShareFetchResponseData.PartitionData> resultData1 =
-            ShareFetchUtils.processFetchResponse(shareFetch, responseData1, sharePartitions, replicaManager, EXCEPTION_HANDLER);
+            ShareFetchUtils.processFetchResponse(shareFetch, responseData1, sharePartitions, new ReplicaManagerPartitionMetadataProvider(replicaManager), EXCEPTION_HANDLER);
 
         assertEquals(2, resultData1.size());
         assertTrue(resultData1.containsKey(tp0));
@@ -285,7 +286,7 @@ public class ShareFetchUtilsTest {
                 OptionalInt.empty(), false))
         );
         Map<TopicIdPartition, ShareFetchResponseData.PartitionData> resultData2 =
-            ShareFetchUtils.processFetchResponse(shareFetch, responseData2, sharePartitions, replicaManager, EXCEPTION_HANDLER);
+            ShareFetchUtils.processFetchResponse(shareFetch, responseData2, sharePartitions, new ReplicaManagerPartitionMetadataProvider(replicaManager), EXCEPTION_HANDLER);
 
         assertEquals(2, resultData2.size());
         assertTrue(resultData2.containsKey(tp0));
@@ -334,7 +335,7 @@ public class ShareFetchUtilsTest {
                 OptionalInt.empty(), false)));
 
         Map<TopicIdPartition, ShareFetchResponseData.PartitionData> resultData =
-            ShareFetchUtils.processFetchResponse(shareFetch, responseData, sharePartitions, replicaManager, EXCEPTION_HANDLER);
+            ShareFetchUtils.processFetchResponse(shareFetch, responseData, sharePartitions, new ReplicaManagerPartitionMetadataProvider(replicaManager), EXCEPTION_HANDLER);
 
         assertEquals(1, resultData.size());
         assertTrue(resultData.containsKey(tp0));
@@ -349,7 +350,7 @@ public class ShareFetchUtilsTest {
                 records, Optional.empty(), OptionalLong.empty(), Optional.empty(),
                 OptionalInt.empty(), false)));
 
-        resultData = ShareFetchUtils.processFetchResponse(shareFetch, responseData, sharePartitions, replicaManager, EXCEPTION_HANDLER);
+        resultData = ShareFetchUtils.processFetchResponse(shareFetch, responseData, sharePartitions, new ReplicaManagerPartitionMetadataProvider(replicaManager), EXCEPTION_HANDLER);
 
         assertEquals(1, resultData.size());
         assertTrue(resultData.containsKey(tp0));
@@ -416,7 +417,7 @@ public class ShareFetchUtilsTest {
 
         Map<TopicIdPartition, ShareFetchResponseData.PartitionData> resultData =
             ShareFetchUtils.processFetchResponse(shareFetch, responseData, sharePartitions,
-                mock(ReplicaManager.class), EXCEPTION_HANDLER);
+                mock(PartitionMetadataProvider.class), EXCEPTION_HANDLER);
 
         assertEquals(2, resultData.size());
         assertTrue(resultData.containsKey(tp0));
@@ -465,7 +466,7 @@ public class ShareFetchUtilsTest {
         BiConsumer<SharePartitionKey, Throwable> exceptionHandler = mock(BiConsumer.class);
         Map<TopicIdPartition, ShareFetchResponseData.PartitionData> resultData =
             ShareFetchUtils.processFetchResponse(shareFetch, responseData, sharePartitions,
-                replicaManager, exceptionHandler);
+                new ReplicaManagerPartitionMetadataProvider(replicaManager), exceptionHandler);
 
         assertTrue(resultData.isEmpty());
         Mockito.verify(shareFetch, times(1)).addErroneous(tp0, exception);

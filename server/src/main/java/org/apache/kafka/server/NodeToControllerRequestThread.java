@@ -21,10 +21,8 @@ import org.apache.kafka.clients.ClientResponse;
 import org.apache.kafka.clients.KafkaClient;
 import org.apache.kafka.clients.ManualMetadataUpdater;
 import org.apache.kafka.common.Node;
-import org.apache.kafka.common.config.AbstractConfig;
 import org.apache.kafka.common.protocol.Errors;
 import org.apache.kafka.common.utils.Time;
-import org.apache.kafka.server.config.ReplicationConfigs;
 import org.apache.kafka.server.util.InterBrokerSendThread;
 import org.apache.kafka.server.util.RequestAndCompletionHandler;
 
@@ -67,11 +65,11 @@ public class NodeToControllerRequestThread extends InterBrokerSendThread {
     public NodeToControllerRequestThread(KafkaClient initialNetworkClient,
                                          ManualMetadataUpdater metadataUpdater,
                                          Supplier<ControllerInformation> controllerNodeProvider,
-                                         AbstractConfig config,
+                                         int controllerSocketTimeoutMs,
                                          Time time,
                                          String threadName,
                                          Long retryTimeoutMs) {
-        super(threadName, initialNetworkClient, Math.min(Integer.MAX_VALUE, (int) Math.min(config.getInt(ReplicationConfigs.CONTROLLER_SOCKET_TIMEOUT_MS_CONFIG), retryTimeoutMs)), time, false);
+        super(threadName, initialNetworkClient, Math.min(Integer.MAX_VALUE, (int) Math.min(controllerSocketTimeoutMs, retryTimeoutMs)), time, false);
         this.time = time;
         this.controllerNodeProvider = controllerNodeProvider;
         this.metadataUpdater = metadataUpdater;

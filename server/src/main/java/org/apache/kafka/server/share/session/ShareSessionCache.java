@@ -93,10 +93,10 @@ public class ShareSessionCache {
      * Get a session by session key.
      *
      * @param key The share session key.
-     * @return The session, or None if no such session was found.
+     * @return The session, or null if no such session was found.
      */
     public synchronized ShareSession get(ShareSessionKey key) {
-        return sessions.getOrDefault(key, null);
+        return sessions.get(key);
     }
 
     /**
@@ -266,7 +266,7 @@ public class ShareSessionCache {
     }
 
     // Visible for testing.
-    Integer numMembers(String groupId) {
+    public Integer numMembers(String groupId) {
         return numMembersPerGroup.get(groupId);
     }
 

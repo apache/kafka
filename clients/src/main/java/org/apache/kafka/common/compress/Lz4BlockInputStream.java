@@ -18,7 +18,7 @@ package org.apache.kafka.common.compress;
 
 import org.apache.kafka.common.compress.Lz4BlockOutputStream.BD;
 import org.apache.kafka.common.compress.Lz4BlockOutputStream.FLG;
-import org.apache.kafka.common.utils.BufferSupplier;
+import org.apache.kafka.common.utils.internals.BufferSupplier;
 
 import net.jpountz.lz4.LZ4Compressor;
 import net.jpountz.lz4.LZ4Exception;

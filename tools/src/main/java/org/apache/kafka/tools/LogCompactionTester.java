@@ -26,11 +26,12 @@ import org.apache.kafka.clients.consumer.KafkaConsumer;
 import org.apache.kafka.clients.producer.KafkaProducer;
 import org.apache.kafka.clients.producer.ProducerConfig;
 import org.apache.kafka.clients.producer.ProducerRecord;
+import org.apache.kafka.common.TopicPartition;
 import org.apache.kafka.common.config.TopicConfig;
 import org.apache.kafka.common.record.internal.CompressionType;
 import org.apache.kafka.common.serialization.ByteArraySerializer;
 import org.apache.kafka.common.serialization.StringDeserializer;
-import org.apache.kafka.common.utils.Exit;
+import org.apache.kafka.common.utils.internals.Exit;
 import org.apache.kafka.server.util.CommandLineUtils;
 
 import java.io.BufferedReader;
@@ -64,6 +65,8 @@ import joptsimple.OptionSet;
 import joptsimple.OptionSpec;
 
 import static java.util.stream.Collectors.toCollection;
+import static java.util.stream.Collectors.toMap;
+import static java.util.stream.Collectors.toSet;
 
 
 /**
@@ -145,9 +148,9 @@ public class LogCompactionTester {
                     .defaultsTo(0);
 
             sleepSecsOpt = parser
-                    .accepts("sleep", "Time in milliseconds to sleep between production and consumption.")
+                    .accepts("sleep", "Time in seconds to sleep between production and consumption.")
                     .withRequiredArg()
-                    .describedAs("ms")
+                    .describedAs("seconds")
                     .ofType(Integer.class)
                     .defaultsTo(0);
 
@@ -234,6 +237,7 @@ public class LogCompactionTester {
     }
 
     private static final Random RANDOM = new Random();
+    private static final Duration POLL_TIMEOUT = Duration.ofSeconds(20);
 
     public static void main(String[] args) throws Exception {
 
@@ -269,7 +273,7 @@ public class LogCompactionTester {
                 compressionType, compressionLevel,
                 dups, percentDeletes);
         System.out.println("Sleeping for " + sleepSecs + "seconds...");
-        TimeUnit.MILLISECONDS.sleep(sleepSecs * 1000L);
+        TimeUnit.SECONDS.sleep(sleepSecs);
         System.out.println("Consuming messages...");
         Path consumedDataFilePath = consumeMessages(brokerUrl, topics);
 
@@ -456,16 +460,36 @@ public class LogCompactionTester {
     }
 
     private static Path consumeMessages(String brokerUrl, Set<String> topics) throws IOException {
+        try (Consumer<String, String> consumer = createConsumer(brokerUrl)) {
+            return consumeMessages(consumer, topics);
+        }
+    }
+
+    // Visible for testing
+    static Path consumeMessages(Consumer<String, String> consumer, Set<String> topics) throws IOException {
 
         Path consumedFilePath = Files.createTempFile("kafka-log-cleaner-consumed-", ".txt");
         System.out.println("Logging consumed messages to " + consumedFilePath);
 
-        try (Consumer<String, String> consumer = createConsumer(brokerUrl);
-             BufferedWriter consumedWriter = Files.newBufferedWriter(consumedFilePath, StandardCharsets.UTF_8)) {
+        // Each topic has a single partition, see createTopics(). An empty poll does not mean that we reached
+        // the end of the log: after compaction, poll() may move the position past removed records and return
+        // no records. So we read until the position reaches the end offset of every partition, and only give up
+        // when a poll returns nothing and moves no position.
+        Set<TopicPartition> partitions = topics.stream().map(topic -> new TopicPartition(topic, 0)).collect(toSet());
+        Map<TopicPartition, Long> endOffsets = consumer.endOffsets(partitions);
+
+        try (BufferedWriter consumedWriter = Files.newBufferedWriter(consumedFilePath, StandardCharsets.UTF_8)) {
             consumer.subscribe(topics);
-            while (true) {
-                ConsumerRecords<String, String> consumerRecords = consumer.poll(Duration.ofSeconds(20));
-                if (consumerRecords.isEmpty()) return consumedFilePath;
+            Map<TopicPartition, Long> positions = Map.of();
+            while (!reachedEndOffsets(positions, endOffsets)) {
+                ConsumerRecords<String, String> consumerRecords = consumer.poll(POLL_TIMEOUT);
+                Map<TopicPartition, Long> newPositions = consumer.assignment().stream()
+                        .collect(toMap(tp -> tp, consumer::position));
+                if (consumerRecords.isEmpty() && newPositions.equals(positions)) {
+                    throw new RuntimeException("No progress after " + POLL_TIMEOUT + ": positions " + positions
+                            + ", end offsets " + endOffsets);
+                }
+                positions = newPositions;
                 consumerRecords.forEach(
                     record -> {
                         try {
@@ -481,7 +505,13 @@ public class LogCompactionTester {
                     }
                 );
             }
+            return consumedFilePath;
         }
+    }
+
+    private static boolean reachedEndOffsets(Map<TopicPartition, Long> positions, Map<TopicPartition, Long> endOffsets) {
+        return endOffsets.entrySet().stream()
+                .allMatch(e -> positions.getOrDefault(e.getKey(), -1L) >= e.getValue());
     }
 
     private static Consumer<String, String> createConsumer(String brokerUrl) {

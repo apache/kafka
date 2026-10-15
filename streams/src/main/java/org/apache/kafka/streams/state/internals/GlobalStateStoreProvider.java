@@ -26,7 +26,6 @@ import org.apache.kafka.streams.state.TimestampedKeyValueStoreWithHeaders;
 import org.apache.kafka.streams.state.TimestampedWindowStore;
 import org.apache.kafka.streams.state.TimestampedWindowStoreWithHeaders;
 
-import java.util.Collections;
 import java.util.List;
 import java.util.Map;
 
@@ -42,36 +41,31 @@ public class GlobalStateStoreProvider implements StateStoreProvider {
     public <T> List<T> stores(final String storeName, final QueryableStoreType<T> queryableStoreType) {
         final StateStore store = globalStateStores.get(storeName);
         if (store == null || !queryableStoreType.accepts(store)) {
-            return Collections.emptyList();
+            return List.of();
         }
         if (!store.isOpen()) {
             throw new InvalidStateStoreException("the state store, " + storeName + ", is not open.");
         }
         if (store instanceof TimestampedKeyValueStoreWithHeaders) {
             if (queryableStoreType instanceof QueryableStoreTypes.KeyValueStoreType) {
-                return (List<T>) Collections.singletonList(new GenericReadOnlyKeyValueStoreFacade<>((TimestampedKeyValueStoreWithHeaders<Object, Object>) store, ValueConverters.extractValueFromHeaders()));
+                return (List<T>) List.of(new GenericReadOnlyKeyValueStoreFacade<>((TimestampedKeyValueStoreWithHeaders<?, ?>) store, ValueConverters.extractValueFromHeaders()));
             } else if (queryableStoreType instanceof QueryableStoreTypes.TimestampedKeyValueStoreType) {
-                return (List<T>) Collections.singletonList(new GenericReadOnlyKeyValueStoreFacade<>((TimestampedKeyValueStoreWithHeaders<Object, Object>) store, ValueConverters.extractValueAndTimestampFromHeaders()));
-            } else {
-                // For custom query types, return the raw store so they can access headers directly
-                return (List<T>) Collections.singletonList(store);
+                return (List<T>) List.of(new GenericReadOnlyKeyValueStoreFacade<>((TimestampedKeyValueStoreWithHeaders<?, ?>) store, ValueConverters.extractValueAndTimestampFromHeaders()));
             }
         } else if (store instanceof TimestampedKeyValueStore && queryableStoreType instanceof QueryableStoreTypes.KeyValueStoreType) {
-            return (List<T>) Collections.singletonList(new GenericReadOnlyKeyValueStoreFacade<>((TimestampedKeyValueStore<Object, Object>) store, ValueConverters.extractValue()));
+            return (List<T>) List.of(new GenericReadOnlyKeyValueStoreFacade<>((TimestampedKeyValueStore<?, ?>) store, ValueConverters.extractValue()));
         } else if (store instanceof TimestampedWindowStoreWithHeaders) {
             if (queryableStoreType instanceof QueryableStoreTypes.WindowStoreType) {
-                return (List<T>) Collections.singletonList(new GenericReadOnlyWindowStoreFacade<>((TimestampedWindowStoreWithHeaders<Object, Object>) store, ValueConverters.extractValueFromHeaders()));
+                return (List<T>) List.of(new GenericReadOnlyWindowStoreFacade<>((TimestampedWindowStoreWithHeaders<?, ?>) store, ValueConverters.extractValueFromHeaders()));
             } else if (queryableStoreType instanceof QueryableStoreTypes.TimestampedWindowStoreType) {
-                return (List<T>) Collections.singletonList(new GenericReadOnlyWindowStoreFacade<>((TimestampedWindowStoreWithHeaders<Object, Object>) store, ValueConverters.extractValueAndTimestampFromHeaders()));
-            } else {
-                // For custom query types, return the raw store so they can access headers directly
-                return (List<T>) Collections.singletonList(store);
+                return (List<T>) List.of(new GenericReadOnlyWindowStoreFacade<>((TimestampedWindowStoreWithHeaders<?, ?>) store, ValueConverters.extractValueAndTimestampFromHeaders()));
             }
         } else if (store instanceof TimestampedWindowStore && queryableStoreType instanceof QueryableStoreTypes.WindowStoreType) {
-            return (List<T>) Collections.singletonList(new GenericReadOnlyWindowStoreFacade<>((TimestampedWindowStore<Object, Object>) store, ValueConverters.extractValue()));
+            return (List<T>) List.of(new GenericReadOnlyWindowStoreFacade<>((TimestampedWindowStore<?, ?>) store, ValueConverters.extractValue()));
         } else if (store instanceof SessionStoreWithHeaders && queryableStoreType instanceof QueryableStoreTypes.SessionStoreType) {
-            return (List<T>) Collections.singletonList(new ReadOnlySessionStoreFacade<>((SessionStoreWithHeaders<Object, Object>) store));
+            return (List<T>) List.of(new ReadOnlySessionStoreFacade<>((SessionStoreWithHeaders<?, ?>) store));
         }
-        return (List<T>) Collections.singletonList(store);
+
+        return (List<T>) List.of(store);
     }
 }

@@ -102,13 +102,15 @@ public class TimestampedWindowStoreWithHeadersBuilder<K, V>
             return new TimeOrderedCachingWindowStore(
                 inner,
                 storeSupplier.windowSize(),
-                storeSupplier.segmentIntervalMs());
+                storeSupplier.segmentIntervalMs()
+            );
         }
 
         return new CachingWindowStore(
             inner,
             storeSupplier.windowSize(),
-            storeSupplier.segmentIntervalMs());
+            storeSupplier.segmentIntervalMs()
+        );
     }
 
     private boolean isTimeOrderedStore(final StateStore stateStore) {

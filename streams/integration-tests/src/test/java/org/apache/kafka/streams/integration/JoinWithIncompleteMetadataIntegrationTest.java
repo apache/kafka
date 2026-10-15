@@ -98,7 +98,7 @@ public class JoinWithIncompleteMetadataIntegrationTest {
         final String appId = APP_ID + "-" + (useNewProtocol ? "new" : "old");
         STREAMS_CONFIG.put(StreamsConfig.APPLICATION_ID_CONFIG, appId);
         STREAMS_CONFIG.put(StreamsConfig.BOOTSTRAP_SERVERS_CONFIG, CLUSTER.bootstrapServers());
-        
+
         if (useNewProtocol) {
             STREAMS_CONFIG.put(StreamsConfig.GROUP_PROTOCOL_CONFIG, GroupProtocol.STREAMS.name().toLowerCase(Locale.getDefault()));
         }

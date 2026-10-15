@@ -1,6 +1,6 @@
 ---
 title: Hardware and OS
-description: Hardware and OS
+description: Kafka hardware, operating system, disk, and filesystem recommendations.
 weight: 6
 tags: ['kafka', 'docs']
 aliases: 

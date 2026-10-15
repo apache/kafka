@@ -16,9 +16,9 @@
  */
 package org.apache.kafka.connect.cli;
 
-import org.apache.kafka.common.utils.Exit;
 import org.apache.kafka.common.utils.Time;
 import org.apache.kafka.common.utils.Utils;
+import org.apache.kafka.common.utils.internals.Exit;
 import org.apache.kafka.connect.connector.policy.ConnectorClientConfigOverridePolicy;
 import org.apache.kafka.connect.errors.ConnectException;
 import org.apache.kafka.connect.json.JsonConverter;
@@ -90,6 +90,7 @@ public class ConnectStandalone extends AbstractConnectCli<StandaloneHerder, Stan
                 connect.herder().putConnectorConfig(
                     createConnectorRequest.name(), createConnectorRequest.config(),
                     createConnectorRequest.initialTargetState(),
+                    createConnectorRequest.initialOffsetsMap(),
                     false, cb);
                 cb.get();
             }

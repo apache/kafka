@@ -26,8 +26,8 @@ import org.apache.kafka.common.errors.AuthenticationException;
 import org.apache.kafka.common.errors.TimeoutException;
 import org.apache.kafka.common.errors.WakeupException;
 import org.apache.kafka.common.serialization.ByteArrayDeserializer;
-import org.apache.kafka.common.utils.Exit;
 import org.apache.kafka.common.utils.Time;
+import org.apache.kafka.common.utils.internals.Exit;
 
 import org.slf4j.Logger;
 import org.slf4j.LoggerFactory;

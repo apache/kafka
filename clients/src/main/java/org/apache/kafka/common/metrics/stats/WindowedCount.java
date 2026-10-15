@@ -16,6 +16,7 @@
  */
 package org.apache.kafka.common.metrics.stats;
 
+import org.apache.kafka.common.annotation.InterfaceAudience;
 import org.apache.kafka.common.metrics.MetricConfig;
 
 /**
@@ -27,6 +28,7 @@ import org.apache.kafka.common.metrics.MetricConfig;
  *
  * See also {@link CumulativeCount} for a non-sampled version of this metric.
  */
+@InterfaceAudience.Public
 public class WindowedCount extends WindowedSum {
     @Override
     protected void update(Sample sample, MetricConfig config, double value, long now) {

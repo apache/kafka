@@ -16,7 +16,6 @@
  */
 package org.apache.kafka.server.quota;
 
-import org.apache.kafka.common.Cluster;
 import org.apache.kafka.common.MetricName;
 import org.apache.kafka.common.internals.Plugin;
 import org.apache.kafka.common.metrics.MetricConfig;
@@ -28,8 +27,8 @@ import org.apache.kafka.common.metrics.stats.Avg;
 import org.apache.kafka.common.metrics.stats.CumulativeSum;
 import org.apache.kafka.common.metrics.stats.Rate;
 import org.apache.kafka.common.security.auth.KafkaPrincipal;
-import org.apache.kafka.common.utils.Sanitizer;
 import org.apache.kafka.common.utils.Time;
+import org.apache.kafka.common.utils.internals.Sanitizer;
 import org.apache.kafka.network.Session;
 import org.apache.kafka.server.config.ClientQuotaManagerConfig;
 import org.apache.kafka.server.util.ShutdownableThread;
@@ -337,7 +336,7 @@ public class ClientQuotaManager {
             clientSensors.quotaSensor().record(value, timeMs, true);
             return 0;
         } catch (QuotaViolationException e) {
-            var throttleTimeMs = (int) throttleTime(e, timeMs);
+            var throttleTimeMs = (int) Math.min(throttleTime(e, timeMs), Integer.MAX_VALUE);
             if (LOG.isDebugEnabled()) {
                 LOG.debug("Quota violated for sensor ({}). Delay time: ({})",
                         clientSensors.quotaSensor().name(), throttleTimeMs);
@@ -794,12 +793,6 @@ public class ClientQuotaManager {
 
             // /config/clients/<default>
             return overriddenQuotas.get(DEFAULT_CLIENT_ID_QUOTA_ENTITY);
-        }
-
-        @Override
-        public boolean updateClusterMetadata(Cluster cluster) {
-            // The default quota callback does not use any cluster metadata
-            return false;
         }
 
         @Override

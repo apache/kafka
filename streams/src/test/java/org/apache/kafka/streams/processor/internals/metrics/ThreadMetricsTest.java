@@ -31,8 +31,7 @@ import java.util.Map;
 
 import static org.apache.kafka.streams.processor.internals.metrics.StreamsMetricsImpl.LATENCY_SUFFIX;
 import static org.apache.kafka.streams.processor.internals.metrics.StreamsMetricsImpl.RATE_SUFFIX;
-import static org.hamcrest.CoreMatchers.is;
-import static org.hamcrest.MatcherAssert.assertThat;
+import static org.junit.jupiter.api.Assertions.assertEquals;
 import static org.mockito.ArgumentMatchers.eq;
 import static org.mockito.Mockito.mock;
 import static org.mockito.Mockito.mockStatic;
@@ -69,7 +68,7 @@ public class ThreadMetricsTest {
                     ratioDescription
                 )
             );
-            assertThat(sensor, is(expectedSensor));
+            assertEquals(expectedSensor, sensor);
         }
     }
 
@@ -93,7 +92,7 @@ public class ThreadMetricsTest {
                     maxDescription
                 )
             );
-            assertThat(sensor, is(expectedSensor));
+            assertEquals(expectedSensor, sensor);
         }
     }
 
@@ -117,7 +116,7 @@ public class ThreadMetricsTest {
                     maxLatencyDescription
                 )
             );
-            assertThat(sensor, is(expectedSensor));
+            assertEquals(expectedSensor, sensor);
         }
     }
 
@@ -142,7 +141,7 @@ public class ThreadMetricsTest {
                     totalDescription
                 )
             );
-            assertThat(sensor, is(expectedSensor));
+            assertEquals(expectedSensor, sensor);
         }
     }
 
@@ -165,7 +164,7 @@ public class ThreadMetricsTest {
                     ratioDescription
                 )
             );
-            assertThat(sensor, is(expectedSensor));
+            assertEquals(expectedSensor, sensor);
         }
     }
 
@@ -189,7 +188,7 @@ public class ThreadMetricsTest {
                     maxDescription
                 )
             );
-            assertThat(sensor, is(expectedSensor));
+            assertEquals(expectedSensor, sensor);
         }
     }
 
@@ -226,7 +225,7 @@ public class ThreadMetricsTest {
                     maxLatencyDescription
                 )
             );
-            assertThat(sensor, is(expectedSensor));
+            assertEquals(expectedSensor, sensor);
         }
     }
 
@@ -263,7 +262,7 @@ public class ThreadMetricsTest {
                     maxLatencyDescription
                 )
             );
-            assertThat(sensor, is(expectedSensor));
+            assertEquals(expectedSensor, sensor);
         }
     }
 
@@ -286,7 +285,7 @@ public class ThreadMetricsTest {
                     ratioDescription
                 )
             );
-            assertThat(sensor, is(expectedSensor));
+            assertEquals(expectedSensor, sensor);
         }
     }
 
@@ -323,7 +322,7 @@ public class ThreadMetricsTest {
                     maxLatencyDescription
                 )
             );
-            assertThat(sensor, is(expectedSensor));
+            assertEquals(expectedSensor, sensor);
         }
     }
 
@@ -346,7 +345,7 @@ public class ThreadMetricsTest {
                     ratioDescription
                 )
             );
-            assertThat(sensor, is(expectedSensor));
+            assertEquals(expectedSensor, sensor);
         }
     }
 
@@ -370,7 +369,7 @@ public class ThreadMetricsTest {
                     totalDescription
                 )
             );
-            assertThat(sensor, is(expectedSensor));
+            assertEquals(expectedSensor, sensor);
         }
     }
 
@@ -394,7 +393,7 @@ public class ThreadMetricsTest {
                     totalDescription
                 )
             );
-            assertThat(sensor, is(expectedSensor));
+            assertEquals(expectedSensor, sensor);
         }
     }
 
@@ -476,7 +475,7 @@ public class ThreadMetricsTest {
             eq("burger"),
             captor.capture()
         );
-        assertThat(captor.getValue().value(null, 678L), is(startTime));
+        assertEquals(startTime, captor.getValue().value(null, 678L));
     }
 
     @SuppressWarnings("unchecked")

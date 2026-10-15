@@ -90,7 +90,7 @@ public class FetchSession {
 
     static String partitionsToLogString(Collection<TopicIdPartition> partitions, boolean traceEnabled) {
         return traceEnabled
-            ? "(" + String.join(", ", partitions.toString()) + ")"
+            ? partitions.toString()
             : partitions.size() + " partition(s)";
     }
 

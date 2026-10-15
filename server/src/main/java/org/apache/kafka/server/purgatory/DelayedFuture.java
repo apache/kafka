@@ -18,7 +18,7 @@
 package org.apache.kafka.server.purgatory;
 
 import org.apache.kafka.common.errors.TimeoutException;
-import org.apache.kafka.common.utils.LogContext;
+import org.apache.kafka.common.utils.internals.LogContext;
 
 import org.slf4j.Logger;
 
