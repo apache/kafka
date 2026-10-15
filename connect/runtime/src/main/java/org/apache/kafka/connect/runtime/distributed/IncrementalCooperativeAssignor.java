@@ -19,6 +19,7 @@ package org.apache.kafka.connect.runtime.distributed;
 import org.apache.kafka.common.utils.Time;
 import org.apache.kafka.common.utils.internals.ExponentialBackoff;
 import org.apache.kafka.common.utils.internals.LogContext;
+import org.apache.kafka.connect.runtime.TargetState;
 import org.apache.kafka.connect.runtime.distributed.WorkerCoordinator.ConnectorsAndTasks;
 import org.apache.kafka.connect.runtime.distributed.WorkerCoordinator.WorkerLoad;
 import org.apache.kafka.connect.storage.ClusterConfigState;
@@ -267,6 +268,20 @@ public class IncrementalCooperativeAssignor implements ConnectAssignor {
         log.debug("Deleted connectors and tasks to revoke from each worker: {}", deletedToRevoke);
         addAll(toRevoke, deletedToRevoke);
 
+        // Restart connectors whose task configs could not be reconstructed from the config topic.
+        // The existing connector startup path will regenerate and publish their task configs.
+        Set<String> inconsistentStartedConnectors = configSnapshot.inconsistentConnectors().stream()
+                .filter(connector -> configSnapshot.targetState(connector) == TargetState.STARTED)
+                .collect(Collectors.toSet());
+        ConnectorsAndTasks inconsistentConnectors = new ConnectorsAndTasks.Builder()
+                .with(inconsistentStartedConnectors, Set.of())
+                .build();
+        Map<String, ConnectorsAndTasks> inconsistentConnectorsToRevoke =
+                intersection(inconsistentConnectors, memberAssignments);
+        log.debug("Connectors with inconsistent task configs to revoke from each worker: {}",
+                inconsistentConnectorsToRevoke);
+        addAll(toRevoke, inconsistentConnectorsToRevoke);
+
         // Revoking redundant connectors/tasks if the workers have duplicate assignments
         Map<String, ConnectorsAndTasks> duplicatedToRevoke = intersection(duplicated, memberAssignments);
         log.debug("Duplicated connectors and tasks to revoke from each worker: {}", duplicatedToRevoke);
@@ -277,6 +292,7 @@ public class IncrementalCooperativeAssignor implements ConnectAssignor {
         // and load-balancing revocations will be removed from them.
         List<WorkerLoad> nextWorkerAssignment = workerLoads(memberAssignments);
         removeAll(nextWorkerAssignment, deletedToRevoke);
+        removeAll(nextWorkerAssignment, inconsistentConnectorsToRevoke);
         removeAll(nextWorkerAssignment, duplicatedToRevoke);
 
         // Collect the lost assignments that are ready to be reassigned because the workers that were

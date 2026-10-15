@@ -90,6 +90,32 @@ public abstract class InternalClusterResource {
         );
     }
 
+    @POST
+    @Path("/{connector}/tasks/refresh")
+    @Operation(hidden = true, summary = "This operation is only for inter-worker communications")
+    public void refreshTaskConfigs(
+            final @PathParam("connector") String connector,
+            final @Context HttpHeaders headers,
+            final @QueryParam("forward") Boolean forward,
+            final byte[] requestBody) throws Throwable {
+        long expectedConfigOffset = new ObjectMapper().readValue(requestBody, Long.class);
+        FutureCallback<Void> cb = new FutureCallback<>();
+        herderForRequest().refreshTaskConfigs(
+                connector,
+                expectedConfigOffset,
+                cb,
+                InternalRequestSignature.fromHeaders(Crypto.SYSTEM, requestBody, headers)
+        );
+        requestHandler.completeOrForwardRequest(
+                cb,
+                uriInfo.getPath(),
+                "POST",
+                headers,
+                expectedConfigOffset,
+                forward
+        );
+    }
+
     @PUT
     @Path("/{connector}/fence")
     @Operation(hidden = true, summary = "This operation is only for inter-worker communications")
