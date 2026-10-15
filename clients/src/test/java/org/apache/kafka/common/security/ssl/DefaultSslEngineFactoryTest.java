@@ -255,6 +255,16 @@ public class DefaultSslEngineFactoryTest {
         assertArrayEquals(providerDefaults, namedGroups(factory.createClientSslEngine("localhost", 0, "HTTPS")));
     }
 
+    @Test
+    public void testNamedGroupsRequireJava20OrLater() {
+        assumeTrue(Runtime.version().feature() < 20);
+        configs.put(SslConfigs.SSL_NAMED_GROUPS_CONFIG, List.of("secp256r1"));
+        factory.configure(configs);
+
+        assertThrows(InvalidConfigurationException.class,
+                () -> factory.createClientSslEngine("localhost", 0, "HTTPS"));
+    }
+
     private String[] namedGroups(SSLEngine sslEngine) throws Exception {
         Method getNamedGroups = sslEngine.getSSLParameters().getClass().getMethod("getNamedGroups");
         return (String[]) getNamedGroups.invoke(sslEngine.getSSLParameters());

@@ -336,7 +336,7 @@ Other configuration settings that may also be needed depending on our requiremen
 5. ssl.truststore.type=JKS
 6. ssl.keystore.type=JKS
 
-The available named groups depend on the SSL provider and Java runtime. Configuring `ssl.named.groups` requires Java 20 or later. An explicit list overrides the provider defaults, so deployments should include any required fallback groups. For example, a Java runtime that supports post-quantum hybrid TLS key exchange can be configured with:
+The available named groups depend on the SSL provider and Java runtime. Configuring a non-empty `ssl.named.groups` requires Java 20 or later and overrides the JVM-wide `jdk.tls.namedGroups` system property for Kafka-created SSL engines, so deployments should include any required fallback groups. When `ssl.named.groups` is empty or unset, Kafka does not override the named groups and the JVM system property, or otherwise the SSL provider defaults, remains effective. For example, a Java runtime that supports post-quantum hybrid TLS key exchange can be configured with:
 
 ```java-properties
 ssl.named.groups=x25519_mlkem768,x25519,secp256r1
