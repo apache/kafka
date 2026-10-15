@@ -156,6 +156,7 @@ class DynamicBrokerConfig(private val kafkaConfig: KafkaConfig) extends Logging 
   private val lock = new ReentrantReadWriteLock
   private var telemetryExporterPluginOpt: Option[ClientTelemetryExporterPlugin] = _
   private var currentConfig: KafkaConfig = _
+  @volatile private var loadingInitialConfigs = false
 
   private[server] def initialize(clientTelemetryExporterPluginOpt: Option[ClientTelemetryExporterPlugin]): Unit = {
     currentConfig = new KafkaConfig(kafkaConfig.props, false)
@@ -202,7 +203,7 @@ class DynamicBrokerConfig(private val kafkaConfig: KafkaConfig) extends Logging 
     addBrokerReconfigurable(kafkaServer.socketServer)
     addBrokerReconfigurable(new DynamicProducerStateManagerConfig(kafkaServer.logManager.producerStateManagerConfig))
     addBrokerReconfigurable(new DynamicRemoteLogConfig(kafkaServer))
-    addBrokerReconfigurable(new DynamicClusterMirrorConfig(() => kafkaServer.config))
+    addBrokerReconfigurable(new DynamicClusterMirrorConfig(() => kafkaServer.config, () => !kafkaServer.config.isLoadingInitialDynamicConfigs))
   }
 
   /**
@@ -274,6 +275,21 @@ class DynamicBrokerConfig(private val kafkaConfig: KafkaConfig) extends Logging 
   private[server] def clientTelemetryExporterPlugin: Option[ClientTelemetryExporterPlugin] = inReadLock(lock, () => {
     telemetryExporterPluginOpt
   })
+
+  /**
+   * Applies the dynamic configs loaded on startup. Thread count updates are not bounded by the current values here,
+   * since the thread pools were just created from the static configs.
+   */
+  private[server] def loadInitialConfigs(load: => Unit): Unit = {
+    loadingInitialConfigs = true
+    try load
+    finally loadingInitialConfigs = false
+  }
+
+  /**
+   * Whether the dynamic configs loaded on startup are being applied, see `loadInitialConfigs`.
+   */
+  private[kafka] def isLoadingInitialConfigs: Boolean = loadingInitialConfigs
 
   private[server] def updateBrokerConfig(brokerId: Int, persistentProps: Properties, doLog: Boolean = true): Unit = inWriteLock[Exception](lock, () => {
     try {
@@ -660,7 +676,7 @@ class ControllerDynamicThreadPool(controller: ControllerServer) extends BrokerRe
   }
 
   override def validateReconfiguration(newConfig: KafkaConfig): Unit = {
-    DynamicThreadPool.validateReconfiguration(controller.config, newConfig) // common validation
+    DynamicThreadPool.validateReconfiguration(controller.config, newConfig, !controller.config.isLoadingInitialDynamicConfigs) // common validation
   }
 
   override def reconfigure(oldConfig: KafkaConfig, newConfig: KafkaConfig): Unit = {
@@ -676,7 +692,7 @@ class BrokerDynamicThreadPool(server: KafkaBroker) extends BrokerReconfigurable 
   }
 
   override def validateReconfiguration(newConfig: KafkaConfig): Unit = {
-    DynamicThreadPool.validateReconfiguration(server.config, newConfig)
+    DynamicThreadPool.validateReconfiguration(server.config, newConfig, !server.config.isLoadingInitialDynamicConfigs)
   }
 
   override def reconfigure(oldConfig: KafkaConfig, newConfig: KafkaConfig): Unit = {
@@ -931,15 +947,7 @@ class DynamicRemoteLogConfig(server: KafkaBroker) extends BrokerReconfigurable w
           else
             server.config.getInt(k)
         }
-        if (newValue != oldValue) {
-          val errorMsg = s"Dynamic thread count update validation failed for $k=$v"
-          if (newValue <= 0)
-            throw new ConfigException(s"$errorMsg, value should be at least 1")
-          if (newValue < oldValue / 2)
-            throw new ConfigException(s"$errorMsg, value should be at least half the current value $oldValue")
-          if (newValue > oldValue * 2)
-            throw new ConfigException(s"$errorMsg, value should not be greater than double the current value $oldValue")
-        }
+        DynamicThreadPool.validateThreadCount(k, oldValue, newValue, !server.config.isLoadingInitialDynamicConfigs)
       }
     }
   }

@@ -188,6 +188,118 @@ class DynamicBrokerConfigTest {
   }
 
   @Test
+  def testThreadPoolBoundsNotEnforcedWhenLoadingInitialConfigs(): Unit = {
+    val origProps = TestUtils.createBrokerConfig(0, port = 8181)
+    origProps.put(ServerConfigs.NUM_IO_THREADS_CONFIG, "16")
+    origProps.put(ReplicationConfigs.NUM_REPLICA_FETCHERS_CONFIG, "16")
+    origProps.put(ServerLogConfigs.NUM_RECOVERY_THREADS_PER_DATA_DIR_CONFIG, "2")
+    origProps.put(ServerConfigs.BACKGROUND_THREADS_CONFIG, "2")
+
+    val config = KafkaConfig(origProps)
+    val serverMock = mock(classOf[KafkaBroker])
+    val handlerPoolMock = mock(classOf[KafkaRequestHandlerPool])
+    val replicaManagerMock = mock(classOf[ReplicaManager])
+    val logManagerMock = mock(classOf[LogManager])
+    val schedulerMock = mock(classOf[KafkaScheduler])
+    when(serverMock.config).thenReturn(config)
+    when(serverMock.dataPlaneRequestHandlerPool).thenReturn(handlerPoolMock)
+    when(serverMock.replicaManager).thenReturn(replicaManagerMock)
+    when(serverMock.logManager).thenReturn(logManagerMock)
+    when(serverMock.kafkaScheduler).thenReturn(schedulerMock)
+
+    config.dynamicConfig.initialize(None)
+    config.dynamicConfig.addBrokerReconfigurable(new BrokerDynamicThreadPool(serverMock))
+
+    // The dynamic configs loaded on startup are applied, even if they are outside the bounds of the static configs
+    val props = new Properties()
+    props.put(ServerConfigs.NUM_IO_THREADS_CONFIG, "6")
+    props.put(ReplicationConfigs.NUM_REPLICA_FETCHERS_CONFIG, "1")
+    props.put(ServerLogConfigs.NUM_RECOVERY_THREADS_PER_DATA_DIR_CONFIG, "5")
+    props.put(ServerConfigs.BACKGROUND_THREADS_CONFIG, "10")
+    config.dynamicConfig.loadInitialConfigs(config.dynamicConfig.updateDefaultConfig(props))
+    assertFalse(config.isLoadingInitialDynamicConfigs)
+    assertEquals(6, config.numIoThreads)
+    assertEquals(1, config.numReplicaFetchers)
+    assertEquals(5, config.numRecoveryThreadsPerDataDir)
+    assertEquals(10, config.backgroundThreads)
+    verify(handlerPoolMock).resizeThreadPool(newSize = 6)
+    verify(replicaManagerMock).resizeFetcherThreadPool(newSize = 1)
+    verify(logManagerMock).resizeRecoveryThreadPool(5)
+    verify(schedulerMock).resizeThreadPool(10)
+
+    // Later updates must be within the bounds of the current values
+    props.put(ServerConfigs.NUM_IO_THREADS_CONFIG, "2")
+    val e = assertThrows(classOf[ConfigException], () => config.dynamicConfig.validate(props, perBrokerConfig = false))
+    assertTrue(e.getMessage.contains("value should be at least half the current value 6"), e.getMessage)
+    config.dynamicConfig.updateDefaultConfig(props)
+    assertEquals(6, config.numIoThreads)
+
+    verifyNoMoreInteractions(handlerPoolMock, replicaManagerMock, logManagerMock, schedulerMock)
+  }
+
+  @Test
+  def testControllerThreadPoolBoundsNotEnforcedWhenLoadingInitialConfigs(): Unit = {
+    val origProps = TestUtils.createBrokerConfig(0, port = 8181)
+    origProps.put(ServerConfigs.NUM_IO_THREADS_CONFIG, "16")
+
+    val config = KafkaConfig(origProps)
+    val controllerMock = mock(classOf[ControllerServer])
+    val handlerPoolMock = mock(classOf[KafkaRequestHandlerPool])
+    when(controllerMock.config).thenReturn(config)
+    when(controllerMock.controllerApisHandlerPool).thenReturn(handlerPoolMock)
+
+    config.dynamicConfig.initialize(None)
+    config.dynamicConfig.addBrokerReconfigurable(new ControllerDynamicThreadPool(controllerMock))
+
+    // The dynamic configs loaded on startup are applied, even if they are outside the bounds of the static configs
+    val props = new Properties()
+    props.put(ServerConfigs.NUM_IO_THREADS_CONFIG, "6")
+    config.dynamicConfig.loadInitialConfigs(config.dynamicConfig.updateDefaultConfig(props))
+    assertEquals(6, config.numIoThreads)
+    verify(handlerPoolMock).resizeThreadPool(newSize = 6)
+
+    // Later updates must be within the bounds of the current values
+    props.put(ServerConfigs.NUM_IO_THREADS_CONFIG, "13")
+    val e = assertThrows(classOf[ConfigException], () => config.dynamicConfig.validate(props, perBrokerConfig = false))
+    assertTrue(e.getMessage.contains("value should not be greater than double the current value 6"), e.getMessage)
+    config.dynamicConfig.updateDefaultConfig(props)
+    assertEquals(6, config.numIoThreads)
+
+    verifyNoMoreInteractions(handlerPoolMock)
+  }
+
+  @Test
+  def testRemoteLogThreadPoolBoundsNotEnforcedWhenLoadingInitialConfigs(): Unit = {
+    val origProps = TestUtils.createBrokerConfig(0, port = 8181)
+    origProps.put(RemoteLogManagerConfig.REMOTE_LOG_READER_THREADS_PROP, "16")
+    val config = KafkaConfig(origProps)
+
+    val serverMock = mock(classOf[KafkaBroker])
+    val remoteLogManager = mock(classOf[RemoteLogManager])
+    when(serverMock.config).thenReturn(config)
+    when(serverMock.remoteLogManagerOpt).thenReturn(Some(remoteLogManager))
+
+    config.dynamicConfig.initialize(None)
+    config.dynamicConfig.addBrokerReconfigurable(new DynamicRemoteLogConfig(serverMock))
+
+    // The dynamic configs loaded on startup are applied, even if they are outside the bounds of the static configs
+    val props = new Properties()
+    props.put(RemoteLogManagerConfig.REMOTE_LOG_READER_THREADS_PROP, "6")
+    config.dynamicConfig.loadInitialConfigs(config.dynamicConfig.updateDefaultConfig(props))
+    assertEquals(6, config.remoteLogManagerConfig.remoteLogReaderThreads())
+    verify(remoteLogManager).resizeReaderThreadPool(6)
+
+    // Later updates must be within the bounds of the current values
+    props.put(RemoteLogManagerConfig.REMOTE_LOG_READER_THREADS_PROP, "2")
+    val e = assertThrows(classOf[ConfigException], () => config.dynamicConfig.validate(props, perBrokerConfig = false))
+    assertTrue(e.getMessage.contains("value should be at least half the current value 6"), e.getMessage)
+    config.dynamicConfig.updateDefaultConfig(props)
+    assertEquals(6, config.remoteLogManagerConfig.remoteLogReaderThreads())
+
+    verifyNoMoreInteractions(remoteLogManager)
+  }
+
+  @Test
   def testUpdateRemoteLogManagerDynamicThreadPool(): Unit = {
     val origProps = TestUtils.createBrokerConfig(0, port = 8181)
     val config = KafkaConfig(origProps)

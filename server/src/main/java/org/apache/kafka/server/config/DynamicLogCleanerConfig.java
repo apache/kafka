@@ -20,12 +20,15 @@ import org.apache.kafka.storage.internals.log.CleanerConfig;
 import org.apache.kafka.storage.internals.log.LogCleaner;
 
 import java.util.Set;
+import java.util.function.BooleanSupplier;
 
 public class DynamicLogCleanerConfig implements BrokerReconfigurable {
     private final LogCleaner logCleaner;
+    private final BooleanSupplier enforceThreadCountBounds;
 
-    public DynamicLogCleanerConfig(LogCleaner logCleaner) {
+    public DynamicLogCleanerConfig(LogCleaner logCleaner, BooleanSupplier enforceThreadCountBounds) {
         this.logCleaner = logCleaner;
+        this.enforceThreadCountBounds = enforceThreadCountBounds;
     }
 
     @Override
@@ -35,7 +38,7 @@ public class DynamicLogCleanerConfig implements BrokerReconfigurable {
 
     @Override
     public void validateReconfiguration(AbstractKafkaConfig newConfig) {
-        logCleaner.validateReconfiguration(new CleanerConfig(newConfig));
+        logCleaner.validateReconfiguration(new CleanerConfig(newConfig), enforceThreadCountBounds.getAsBoolean());
     }
 
     @Override
