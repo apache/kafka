@@ -772,8 +772,11 @@ org.apache.kafka.connect.runtime.distributed.DistributedHerderTest:
 - testCreateConnectorFailedValidation
 - testCreateConnectorWithInitialOffsets
 - testCreateConnectorWithInitialOffsetsConfigWriteFails
+- testCreateConnectorWithInitialOffsetsCreatedConcurrently
+- testCreateConnectorWithInitialOffsetsNotLeader
 - testCreateConnectorWithInitialOffsetsNullOffsetValue
 - testCreateConnectorWithInitialOffsetsPreconditionRecheckFails
+- testCreateConnectorWithInitialOffsetsReadsLatestConfigsBeforeWritingOffsets
 - testCreateConnectorWithInitialState
 - testDestroyConnector
 - testDoRestartConnectorAndTasksBoth
@@ -1149,8 +1152,8 @@ org.apache.kafka.connect.runtime.rest.entities.CreateConnectorRequestTest:
 - testForValue
 - testInitialOffsetsAbsentIsNull
 - testInitialOffsetsEmptyListIsEmptyMap
+- testInitialOffsetsOmittedWhenNull
 - testInitialOffsetsRoundTrip
-- testThreeArgConstructorLeavesInitialOffsetsNull
 - testToTargetState
 - testUnknownFieldRejected
 org.apache.kafka.connect.runtime.rest.entities.PluginInfoTest:
