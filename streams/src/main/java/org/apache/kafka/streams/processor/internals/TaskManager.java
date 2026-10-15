@@ -2084,7 +2084,7 @@ public class TaskManager {
             e -> {
                 throw e;
             },
-            e -> log.debug("Ignoring error in unclean {}", name));
+            e -> log.warn("Ignoring error in unclean {}", name, e));
     }
 
     private boolean canTryInitializeTask(final TaskId taskId, final long nowMs) {
