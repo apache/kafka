@@ -2603,7 +2603,8 @@ class PartitionTest extends AbstractPartitionTest {
       mockChannelManager,
       mock(classOf[KafkaScheduler]),
       brokerId,
-      () => 0
+      () => 0,
+      () => true
     )
 
     partition = new Partition(topicPartition,

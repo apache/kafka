@@ -310,7 +310,8 @@ class BrokerServer(
         time,
         metrics,
         s"broker-${config.nodeId}-",
-        () => lifecycleManager.brokerEpoch
+        () => lifecycleManager.brokerEpoch,
+        () => metadataCache.metadataVersion().isRequestHeaderV3Supported
       )
       alterPartitionManager.start()
 
