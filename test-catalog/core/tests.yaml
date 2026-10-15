@@ -904,6 +904,8 @@ kafka.log.LogConfigTest:
 - testLocalLogRetentionDerivedProps
 - testLocalLogRetentionProps
 - testMaxDecompressedMessageBytesProps
+- testMirrorUncleanLeaderElectionEnableDefault
+- testMirrorUncleanLeaderElectionEnableExplicit
 - testOverriddenConfigsAsLoggableString
 - testToEnrichedRst
 - testToHtml
