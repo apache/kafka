@@ -593,7 +593,10 @@ class TransactionCoordinator(txnConfig: TransactionConfig,
           val coordinatorEpoch = epochAndTxnMetadata.coordinatorEpoch
 
           txnMetadata.inLock(() => {
-            if (txnMetadata.producerId != producerId)
+            // A transaction kept with InitProducerId(keepPreparedTxn=true) can only be completed with TV2.
+            if (txnMetadata.hasNextProducerEpoch)
+              Left(Errors.INVALID_TXN_STATE)
+            else if (txnMetadata.producerId != producerId)
               Left(Errors.INVALID_PRODUCER_ID_MAPPING)
             // Strict equality is enforced on the client side requests, as they shouldn't bump the producer epoch.
             else if ((isFromClient && producerEpoch != txnMetadata.producerEpoch) || producerEpoch < txnMetadata.producerEpoch)

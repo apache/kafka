@@ -3110,6 +3110,27 @@ class TransactionCoordinatorTest {
   }
 
   @Test
+  def shouldRejectEndTxnWithTV1ForKeptPreparedTxn(): Unit = {
+    // A transaction kept with InitProducerId(keepPreparedTxn=true) can only be completed with TV2.
+    // An EndTxn using TV1 (e.g. from an old client still holding the frozen identity) is rejected.
+    val capturedTransitMetadata = setupPrepared2PcTxnWithBumpedClientEpoch()
+    val transitCount = capturedTransitMetadata.getAllValues.size
+
+    for ((requestEpoch, txnResult) <- Seq(
+      (producerEpoch, TransactionResult.COMMIT),
+      (producerEpoch, TransactionResult.ABORT),
+      ((producerEpoch + 1).toShort, TransactionResult.COMMIT))) {
+      coordinator.handleEndTransaction(transactionalId, producerId, requestEpoch, txnResult, TV_0, endTxnCallback)
+      assertEquals(Errors.INVALID_TXN_STATE, error)
+    }
+
+    val txnMetadata = currentTxnMetadata()
+    assertEquals(TransactionState.ONGOING, txnMetadata.state)
+    assertTrue(txnMetadata.hasNextProducerEpoch)
+    assertEquals(transitCount, capturedTransitMetadata.getAllValues.size)
+  }
+
+  @Test
   def shouldRotateProducerIdWhenClientEpochExhausted(): Unit = {
     // Test that when the client epoch reaches Short.MaxValue, a new producer ID is allocated
     // and the client epoch resets to 0, while the ongoing transaction identity remains unchanged.
