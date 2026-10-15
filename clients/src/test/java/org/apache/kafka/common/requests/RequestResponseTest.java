@@ -1218,7 +1218,7 @@ public class RequestResponseTest {
             case CONSUMER_GROUP_HEARTBEAT: return createConsumerGroupHeartbeatResponse();
             case CONSUMER_GROUP_DESCRIBE: return createConsumerGroupDescribeResponse();
             case CONTROLLER_REGISTRATION: return createControllerRegistrationResponse();
-            case GET_TELEMETRY_SUBSCRIPTIONS: return createGetTelemetrySubscriptionsResponse();
+            case GET_TELEMETRY_SUBSCRIPTIONS: return createGetTelemetrySubscriptionsResponse(version);
             case PUSH_TELEMETRY: return createPushTelemetryResponse();
             case ASSIGN_REPLICAS_TO_DIRS: return createAssignReplicasToDirsResponse();
             case LIST_CONFIG_RESOURCES: return createListConfigResourcesResponse();
@@ -3709,9 +3709,12 @@ public class RequestResponseTest {
         ).build(version);
     }
 
-    private GetTelemetrySubscriptionsResponse createGetTelemetrySubscriptionsResponse() {
+    private GetTelemetrySubscriptionsResponse createGetTelemetrySubscriptionsResponse(short version) {
         GetTelemetrySubscriptionsResponseData response = new GetTelemetrySubscriptionsResponseData();
-        response.setClientInstanceId(Uuid.randomUuid());
+        // Only the v0 response has the client instance ID field.
+        if (version == 0) {
+            response.setClientInstanceId(Uuid.randomUuid());
+        }
         response.setSubscriptionId(1);
         response.setAcceptedCompressionTypes(Collections.singletonList(CompressionType.GZIP.id));
         response.setPushIntervalMs(60 * 1000);
