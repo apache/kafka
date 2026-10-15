@@ -3650,6 +3650,61 @@ class TransactionCoordinatorTest {
       "Should return UNSUPPORTED_VERSION when keepPreparedTxn=true but transaction.version < TV_2")
   }
 
+  private def mockKeepPreparedTxnMetadata(state: TransactionState, timeoutMs: Int): TransactionMetadata = {
+    val txnMetadata = new TransactionMetadata(transactionalId, producerId, producerId, RecordBatch.NO_PRODUCER_ID,
+      producerEpoch, RecordBatch.NO_PRODUCER_EPOCH, RecordBatch.NO_PRODUCER_EPOCH, timeoutMs, state,
+      if (state == TransactionState.ONGOING) partitions else util.Set.of[TopicPartition](),
+      time.milliseconds(), time.milliseconds(), TV_2)
+    when(transactionManager.validateTransactionTimeoutMs(anyBoolean(), anyInt())).thenReturn(true)
+    when(transactionManager.isTransaction2pcEnabled()).thenReturn(true)
+    when(transactionManager.transactionVersionLevel()).thenReturn(TV_2)
+    when(transactionManager.getTransactionState(ArgumentMatchers.eq(transactionalId)))
+      .thenReturn(Right(Some(new CoordinatorEpochAndTxnMetadata(coordinatorEpoch, txnMetadata))))
+    txnMetadata
+  }
+
+  @ParameterizedTest
+  @ValueSource(booleans = Array(false, true))
+  def shouldRejectKeepPreparedTxnWithMismatched2PcSetting(enableTwoPC: Boolean): Unit = {
+    // The kept transaction keeps its timeout, which also determines whether it's a 2PC transaction, and the
+    // timeout is carried over to subsequent transactions.  So InitProducerId(keepPreparedTxn=true) must use
+    // the same 2PC setting as the ongoing transaction.
+    val ongoingTimeoutMs = if (enableTwoPC) txnTimeoutMs else Int.MaxValue
+    val txnMetadata = mockKeepPreparedTxnMetadata(TransactionState.ONGOING, ongoingTimeoutMs)
+    assertEquals(!enableTwoPC, txnMetadata.isDistributedTwoPhaseCommitTxn)
+
+    coordinator.handleInitProducerId(transactionalId, txnTimeoutMs, enableTwoPCFlag = enableTwoPC,
+      keepPreparedTxn = true, None, initProducerIdMockCallback)
+
+    assertEquals(new InitProducerIdResult(-1, -1, Errors.INVALID_TXN_STATE), result)
+    assertEquals(TransactionState.ONGOING, txnMetadata.state)
+    assertFalse(txnMetadata.hasNextProducerEpoch)
+    assertEquals(util.Optional.empty(), txnMetadata.pendingState)
+    verify(transactionManager, never()).appendTransactionToLog(any(), anyInt(), any(), any(), any(), any())
+  }
+
+  @Test
+  def shouldApply2PcSettingOnKeepPreparedTxnWithoutOngoingTransaction(): Unit = {
+    // InitProducerId(keepPreparedTxn=true) without an ongoing transaction doesn't keep anything, so the
+    // 2PC setting of the request is applied like for a regular InitProducerId.
+    mockKeepPreparedTxnMetadata(TransactionState.COMPLETE_COMMIT, txnTimeoutMs)
+    val capturedTransitMetadata: ArgumentCaptor[TxnTransitMetadata] = ArgumentCaptor.forClass(classOf[TxnTransitMetadata])
+    when(transactionManager.appendTransactionToLog(
+      ArgumentMatchers.eq(transactionalId),
+      ArgumentMatchers.eq(coordinatorEpoch),
+      capturedTransitMetadata.capture(),
+      capturedErrorsCallback.capture(),
+      any(),
+      any()
+    )).thenAnswer(_ => capturedErrorsCallback.getValue.apply(Errors.NONE))
+
+    coordinator.handleInitProducerId(transactionalId, txnTimeoutMs, enableTwoPCFlag = true,
+      keepPreparedTxn = true, None, initProducerIdMockCallback)
+
+    assertEquals(new InitProducerIdResult(producerId, (producerEpoch + 1).toShort, Errors.NONE), result)
+    assertEquals(Int.MaxValue, capturedTransitMetadata.getValue.txnTimeoutMs)
+  }
+
   @Test
   def shouldRejectKeepPreparedTxnWithoutOngoingTransaction(): Unit = {
     // Test that keepPreparedTxn=true without an ONGOING transaction returns an

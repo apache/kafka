@@ -183,7 +183,7 @@ class TransactionCoordinator(txnConfig: TransactionConfig,
           val txnMetadata = existingEpochAndMetadata.transactionMetadata
 
           txnMetadata.inLock(() =>
-            prepareInitProducerIdTransit(transactionalId, resolvedTxnTimeoutMs, keepPreparedTxn,
+            prepareInitProducerIdTransit(transactionalId, resolvedTxnTimeoutMs, enableTwoPCFlag, keepPreparedTxn,
               coordinatorEpoch, txnMetadata, expectedProducerIdAndEpoch)
           )
       }
@@ -233,6 +233,7 @@ class TransactionCoordinator(txnConfig: TransactionConfig,
 
   private def prepareInitProducerIdTransit(transactionalId: String,
                                            transactionTimeoutMs: Int,
+                                           enableTwoPCFlag: Boolean,
                                            keepPreparedTxn: Boolean,
                                            coordinatorEpoch: Int,
                                            txnMetadata: TransactionMetadata,
@@ -291,7 +292,15 @@ class TransactionCoordinator(txnConfig: TransactionConfig,
           }
 
         case TransactionState.ONGOING =>
-          if (keepPreparedTxn) {
+          if (keepPreparedTxn && enableTwoPCFlag != txnMetadata.isDistributedTwoPhaseCommitTxn) {
+            // The kept transaction keeps its timeout (which also determines whether it's a 2PC transaction) and
+            // the timeout is carried over to the subsequent transactions, so the 2PC setting of the client must
+            // match the transaction being kept.
+            warn(s"Rejecting InitProducerId(keepPreparedTxn=true) for $transactionalId: enable2Pc=$enableTwoPCFlag " +
+              s"doesn't match the ongoing transaction (2PC=${txnMetadata.isDistributedTwoPhaseCommitTxn}). Use the " +
+              "same 2PC setting as the previous producer, or InitProducerId(keepPreparedTxn=false) to abort it.")
+            Left(Errors.INVALID_TXN_STATE)
+          } else if (keepPreparedTxn) {
             // Note: expectedProducerIdAndEpoch is always empty (we error out earlier).
             val transitMetadataResult = if (txnMetadata.isProducerEpochExhausted) {
               try {
