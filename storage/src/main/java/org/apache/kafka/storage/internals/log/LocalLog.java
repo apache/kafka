@@ -45,8 +45,9 @@ import java.util.List;
 import java.util.Optional;
 import java.util.Set;
 import java.util.UUID;
+import java.util.concurrent.ConcurrentHashMap;
+import java.util.concurrent.ScheduledFuture;
 import java.util.concurrent.atomic.AtomicLong;
-import java.util.function.BiConsumer;
 import java.util.function.Consumer;
 import java.util.function.Supplier;
 import java.util.regex.Pattern;
@@ -84,7 +85,9 @@ public class LocalLog {
     private final Time time;
     private final TopicPartition topicPartition;
     private final LogDirFailureChannel logDirFailureChannel;
-    private final BiConsumer<String, IOException> readFailureHandler;
+    // Segment files with a read check pending, see checkReadAfterTransferFailure
+    private final Set<String> pendingReadChecks = ConcurrentHashMap.newKeySet();
+    private final FileRecords.TransferFailureHandler transferFailureHandler = this::checkReadAfterTransferFailure;
     private final Logger logger;
 
     private volatile LogOffsetMetadata nextOffsetMetadata;
@@ -126,7 +129,6 @@ public class LocalLog {
         this.time = time;
         this.topicPartition = topicPartition;
         this.logDirFailureChannel = logDirFailureChannel;
-        this.readFailureHandler = (msg, e) -> logDirFailureChannel.maybeAddOfflineLogDir(parentDir, msg, e);
         this.logIdent = "[LocalLog partition=" + topicPartition + ", dir=" + dir + "] ";
         this.logger = new LogContext(logIdent).logger(LocalLog.class);
         // Last time the log was flushed
@@ -518,7 +520,7 @@ public class LocalLog {
                         }
                     }
                     if (fetchDataInfo != null) {
-                        return withReadFailureHandler(fetchDataInfo);
+                        return withTransferFailureHandler(fetchDataInfo);
                     } else {
                         // okay we are beyond the end of the last segment with no data fetched although the start offset is in range,
                         // this can happen when all messages with offset larger than start offsets have been deleted.
@@ -531,17 +533,43 @@ public class LocalLog {
 
     /**
      * The records of a fetch are read from the segment only when they are written to the network, after this log
-     * has returned them, so an IOException from that read cannot be caught here. Have the records report it instead,
-     * so that the log directory is marked offline as for any other IOException in this log.
+     * has returned them, so an IOException from that read cannot be caught here. Have the records report a failed
+     * write instead, so that the log directory is marked offline if the segment cannot be read, as for any other
+     * IOException in this log.
      */
-    private FetchDataInfo withReadFailureHandler(FetchDataInfo fetchDataInfo) {
+    private FetchDataInfo withTransferFailureHandler(FetchDataInfo fetchDataInfo) {
         if (!(fetchDataInfo.records instanceof FileRecords fileRecords))
             return fetchDataInfo;
-        return new FetchDataInfo(fetchDataInfo.fetchOffsetMetadata,
-                fileRecords.withReadFailureHandler(readFailureHandler),
-                fetchDataInfo.firstEntryIncomplete,
-                fetchDataInfo.abortedTransactions,
-                fetchDataInfo.delayedRemoteStorageFetch);
+        return fetchDataInfo.withRecords(fileRecords.withTransferFailureHandler(transferFailureHandler));
+    }
+
+    /**
+     * Called on the network thread when writing fetched records failed, which may be a socket or a storage failure.
+     * Re-reading the region tells them apart, so it is done on the scheduler rather than on the network thread, at
+     * most once at a time per segment file so that a burst of failed sends does not queue up re-reads.
+     */
+    private void checkReadAfterTransferFailure(FileRecords records, long position, int count, IOException transferFailure) {
+        String file = records.file().getAbsolutePath();
+        if (logDirFailureChannel.hasOfflineLogDir(parentDir) || !pendingReadChecks.add(file))
+            return;
+        try {
+            ScheduledFuture<?> check = scheduler.scheduleOnce("check-read-after-transfer-failure", () -> {
+                try {
+                    records.readFailure(position, count).ifPresent(readFailure -> {
+                        readFailure.addSuppressed(transferFailure);
+                        logDirFailureChannel.maybeAddOfflineLogDir(parentDir, readFailure.getMessage(), readFailure);
+                    });
+                } finally {
+                    pendingReadChecks.remove(file);
+                }
+            });
+            // A scheduler that is not running ignores the task, which would otherwise stop checking this file for good
+            if (check.isCancelled())
+                pendingReadChecks.remove(file);
+        } catch (RuntimeException e) {
+            pendingReadChecks.remove(file);
+            logger.warn("Could not schedule a read check of {} after a failed transfer", file, e);
+        }
     }
 
     public void append(long lastOffset, MemoryRecords records) throws IOException {

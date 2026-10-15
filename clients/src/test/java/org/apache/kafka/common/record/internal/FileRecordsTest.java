@@ -19,7 +19,6 @@ package org.apache.kafka.common.record.internal;
 import org.apache.kafka.common.InvalidRecordException;
 import org.apache.kafka.common.KafkaException;
 import org.apache.kafka.common.compress.Compression;
-import org.apache.kafka.common.errors.KafkaStorageException;
 import org.apache.kafka.common.header.Header;
 import org.apache.kafka.common.header.internals.RecordHeader;
 import org.apache.kafka.common.network.TransferableChannel;
@@ -37,7 +36,6 @@ import org.mockito.invocation.InvocationOnMock;
 import java.io.File;
 import java.io.IOException;
 import java.nio.ByteBuffer;
-import java.nio.channels.ClosedByInterruptException;
 import java.nio.channels.ClosedChannelException;
 import java.nio.channels.FileChannel;
 import java.util.ArrayList;
@@ -48,7 +46,6 @@ import java.util.Optional;
 import java.util.concurrent.ExecutorService;
 import java.util.concurrent.Executors;
 import java.util.concurrent.Future;
-import java.util.function.BiConsumer;
 import java.util.stream.IntStream;
 
 import static java.util.Arrays.asList;
@@ -528,151 +525,156 @@ public class FileRecordsTest {
     }
 
     /**
-     * A failed send whose file is still readable must be reported exactly as it arrived: the socket was at
-     * fault, and turning that into a storage failure would take a log directory offline because a client
-     * went away.
+     * A failed write is reported to the handler with the region being written, and the exception is rethrown as it
+     * arrived: the handler finds out later whether the file could be read.
      */
     @Test
-    public void testWriteToPreservesExceptionWhenFileIsStillReadable() throws IOException {
-        List<IOException> reported = new ArrayList<>();
-        FileRecords records = fileRecords.withReadFailureHandler((message, e) -> reported.add(e));
+    public void testWriteToNotifiesHandlerAndRethrows() throws IOException {
+        List<List<Object>> notifications = new ArrayList<>();
+        FileRecords records = fileRecords.slice(1, fileRecords.sizeInBytes() - 1)
+            .withTransferFailureHandler(recordingHandler(notifications));
         IOException socketFailure = new IOException("Broken pipe");
 
         IOException thrown = assertThrows(IOException.class,
-            () -> records.writeTo(failingChannel(socketFailure), 0, records.sizeInBytes()));
+            () -> records.writeTo(failingChannel(socketFailure), 2, records.sizeInBytes() - 2));
         assertSame(socketFailure, thrown);
-        assertTrue(reported.isEmpty());
+        assertEquals(List.of(List.of(records, 3L, records.sizeInBytes() - 2, socketFailure)), notifications);
     }
 
     /**
-     * A failed send whose file cannot be read is a storage failure: the handler is told once, and the send
-     * fails with a KafkaStorageException naming the file.
+     * A closed channel means the file was not read, so there is nothing for the handler to find out.
      */
     @Test
-    public void testWriteToReportsStorageFailureWhenRegionIsUnreadable() throws IOException {
+    public void testWriteToDoesNotNotifyHandlerWhenChannelClosed() throws IOException {
+        List<List<Object>> notifications = new ArrayList<>();
+        FileRecords records = fileRecords.slice(0, fileRecords.sizeInBytes())
+            .withTransferFailureHandler(recordingHandler(notifications));
+        IOException closed = new ClosedChannelException();
+
+        IOException thrown = assertThrows(IOException.class,
+            () -> records.writeTo(failingChannel(closed), 0, records.sizeInBytes()));
+        assertSame(closed, thrown);
+        assertTrue(notifications.isEmpty());
+    }
+
+    /**
+     * Getting the size of the file before the transfer is part of writing to the channel, so its failure is
+     * reported too.
+     */
+    @Test
+    public void testWriteToNotifiesHandlerWhenSizeFails() throws IOException {
+        FileChannel fileChannel = fileChannelOfSize(1024);
+        List<List<Object>> notifications = new ArrayList<>();
+        FileRecords records = new FileRecords(mock(File.class), fileChannel, 1024).slice(0, 1024)
+            .withTransferFailureHandler(recordingHandler(notifications));
+        IOException sizeFailure = new IOException("Input/output error");
+        when(fileChannel.size()).thenThrow(sizeFailure);
+        TransferableChannel channel = mock(TransferableChannel.class);
+
+        IOException thrown = assertThrows(IOException.class, () -> records.writeTo(channel, 0, 1024));
+        assertSame(sizeFailure, thrown);
+        assertEquals(List.of(List.of(records, 0L, 1024, sizeFailure)), notifications);
+        verify(channel, never()).transferFrom(any(), anyLong(), anyLong());
+    }
+
+    @Test
+    public void testTransferFailureHandlerIsKeptBySlices() {
+        FileRecords.TransferFailureHandler handler = (records, position, count, e) -> { };
+        FileRecords slice = fileRecords.slice(0, fileRecords.sizeInBytes());
+        FileRecords records = slice.withTransferFailureHandler(handler);
+
+        assertSame(handler, records.transferFailureHandler());
+        assertSame(handler, records.slice(1, records.sizeInBytes() - 1).transferFailureHandler());
+        assertEquals(slice.sizeInBytes(), records.sizeInBytes());
+        assertNull(slice.transferFailureHandler());
+    }
+
+    /**
+     * Only slices are written to a channel; the records of a whole segment keep growing.
+     */
+    @Test
+    public void testTransferFailureHandlerCannotBeSetOnNonSlice() {
+        assertThrows(IllegalStateException.class,
+            () -> fileRecords.withTransferFailureHandler((records, position, count, e) -> { }));
+    }
+
+    @Test
+    public void testReadFailureIsEmptyWhenRegionIsReadable() {
+        assertEquals(Optional.empty(), fileRecords.readFailure(0, fileRecords.sizeInBytes()));
+    }
+
+    @Test
+    public void testReadFailureAtStartOfRegion() throws IOException {
         FileChannel fileChannel = fileChannelOfSize(1024);
         IOException readFailure = new IOException("Input/output error");
         when(fileChannel.read(any(ByteBuffer.class), anyLong())).thenThrow(readFailure);
-        List<IOException> reported = new ArrayList<>();
-        FileRecords records = recordsWithReadFailureHandler(fileChannel, 1024, reported);
-        IOException transferFailure = new IOException("Input/output error");
 
-        KafkaStorageException thrown = assertThrows(KafkaStorageException.class,
-            () -> records.writeTo(failingChannel(transferFailure), 0, 1024));
-        assertSame(transferFailure, thrown.getCause());
-        assertSame(readFailure, thrown.getSuppressed()[0]);
-        assertTrue(thrown.getMessage().contains(LOG_FILE_PATH));
-        assertEquals(List.of(readFailure), reported);
+        IOException failure = recordsOn(fileChannel, 1024).readFailure(0, 1024).orElseThrow();
+        assertSame(readFailure, failure.getCause());
+        assertTrue(failure.getMessage().contains(LOG_FILE_PATH + " at position 0"));
     }
 
     /**
-     * Depending on the platform, the transfer may fail anywhere within the region without reporting
-     * progress, so a failure past the first bytes of the region must be found as well.
+     * Depending on the platform, the transfer may fail anywhere within the region without reporting progress, so a
+     * failure past the first bytes of the region must be found as well.
      */
     @Test
-    public void testWriteToReportsStorageFailureInsideRegion() throws IOException {
-        int size = 64 * 1024;
+    public void testReadFailureInsideRegion() throws IOException {
+        int size = 2 * FileRecords.REREAD_BUFFER_SIZE;
         FileChannel fileChannel = fileChannelOfSize(size);
         IOException readFailure = new IOException("Input/output error");
         when(fileChannel.read(any(ByteBuffer.class), anyLong()))
             .thenAnswer(FileRecordsTest::fillBuffer)
             .thenThrow(readFailure);
-        List<IOException> reported = new ArrayList<>();
-        FileRecords records = recordsWithReadFailureHandler(fileChannel, size, reported);
 
-        KafkaStorageException thrown = assertThrows(KafkaStorageException.class,
-            () -> records.writeTo(failingChannel(new IOException("Input/output error")), 0, size));
-        assertTrue(thrown.getMessage().contains("at position " + size / 2));
+        IOException failure = recordsOn(fileChannel, size).readFailure(0, size).orElseThrow();
+        assertSame(readFailure, failure.getCause());
+        assertTrue(failure.getMessage().contains("at position " + FileRecords.REREAD_BUFFER_SIZE));
         verify(fileChannel).read(any(ByteBuffer.class), eq(0L));
-        verify(fileChannel).read(any(ByteBuffer.class), eq((long) size / 2));
-        assertEquals(List.of(readFailure), reported);
+        verify(fileChannel).read(any(ByteBuffer.class), eq((long) FileRecords.REREAD_BUFFER_SIZE));
     }
 
     /**
-     * The log can be truncated while the region is re-read, for instance when the replica becomes a
-     * follower while a fetch is being served. The end of the file then says nothing about the medium, so
-     * the original exception must survive.
+     * The log can be truncated while the region is re-read, for instance when the replica becomes a follower while
+     * a fetch is being served. The end of the file says nothing about the medium.
      */
     @Test
-    public void testWriteToPreservesExceptionWhenTruncatedDuringReRead() throws IOException {
-        int size = 64 * 1024;
+    public void testReadFailureIsEmptyWhenTruncatedDuringRead() throws IOException {
+        int size = 2 * FileRecords.REREAD_BUFFER_SIZE;
         FileChannel fileChannel = fileChannelOfSize(size);
         when(fileChannel.read(any(ByteBuffer.class), anyLong()))
             .thenAnswer(FileRecordsTest::fillBuffer)
             .thenReturn(-1);
-        List<IOException> reported = new ArrayList<>();
-        FileRecords records = recordsWithReadFailureHandler(fileChannel, size, reported);
-        IOException transferFailure = new IOException("Broken pipe");
 
-        IOException thrown = assertThrows(IOException.class,
-            () -> records.writeTo(failingChannel(transferFailure), 0, size));
-        assertSame(transferFailure, thrown);
-        assertTrue(reported.isEmpty());
+        assertEquals(Optional.empty(), recordsOn(fileChannel, size).readFailure(0, size));
     }
 
     /**
-     * A channel closed while the region is re-read, by a deletion of the segment, a shutdown or an
-     * interrupt, says nothing about the medium, so the original exception must survive.
+     * A channel closed while the region is re-read, by a deletion of the segment or a shutdown, says nothing about
+     * the medium.
      */
     @Test
-    public void testWriteToPreservesExceptionWhenChannelClosedDuringReRead() throws IOException {
-        for (IOException closed : List.of(new ClosedChannelException(), new ClosedByInterruptException())) {
-            FileChannel fileChannel = fileChannelOfSize(1024);
-            when(fileChannel.read(any(ByteBuffer.class), anyLong())).thenThrow(closed);
-            List<IOException> reported = new ArrayList<>();
-            FileRecords records = recordsWithReadFailureHandler(fileChannel, 1024, reported);
-            IOException transferFailure = new IOException("Broken pipe");
+    public void testReadFailureIsEmptyWhenChannelClosedDuringRead() throws IOException {
+        FileChannel fileChannel = fileChannelOfSize(1024);
+        when(fileChannel.read(any(ByteBuffer.class), anyLong())).thenThrow(new ClosedChannelException());
 
-            IOException thrown = assertThrows(IOException.class,
-                () -> records.writeTo(failingChannel(transferFailure), 0, 1024));
-            assertSame(transferFailure, thrown);
-            assertTrue(reported.isEmpty());
-        }
+        assertEquals(Optional.empty(), recordsOn(fileChannel, 1024).readFailure(0, 1024));
     }
 
     /**
-     * A re-read that makes no progress cannot conclude anything, and must not spin.
+     * A read that makes no progress cannot conclude anything, and must not spin.
      */
     @Test
-    public void testWriteToPreservesExceptionWhenReReadMakesNoProgress() throws IOException {
+    public void testReadFailureIsEmptyWhenReadMakesNoProgress() throws IOException {
         FileChannel fileChannel = fileChannelOfSize(1024);
         when(fileChannel.read(any(ByteBuffer.class), anyLong())).thenReturn(0);
-        List<IOException> reported = new ArrayList<>();
-        FileRecords records = recordsWithReadFailureHandler(fileChannel, 1024, reported);
-        IOException transferFailure = new IOException("Broken pipe");
 
-        IOException thrown = assertThrows(IOException.class,
-            () -> records.writeTo(failingChannel(transferFailure), 0, 1024));
-        assertSame(transferFailure, thrown);
-        assertTrue(reported.isEmpty());
+        assertEquals(Optional.empty(), recordsOn(fileChannel, 1024).readFailure(0, 1024));
     }
 
-    /**
-     * Without a handler nobody acts on a storage failure, so the region is not re-read and the original
-     * exception is thrown, as before.
-     */
-    @Test
-    public void testWriteToWithoutReadFailureHandlerDoesNotReRead() throws IOException {
-        FileChannel fileChannel = fileChannelOfSize(1024);
-        FileRecords records = new FileRecords(mock(File.class), fileChannel, 1024);
-        IOException transferFailure = new IOException("Input/output error");
-
-        IOException thrown = assertThrows(IOException.class,
-            () -> records.writeTo(failingChannel(transferFailure), 0, 1024));
-        assertSame(transferFailure, thrown);
-        verify(fileChannel, never()).read(any(ByteBuffer.class), anyLong());
-    }
-
-    @Test
-    public void testReadFailureHandlerIsKeptBySlices() {
-        BiConsumer<String, IOException> handler = (message, e) -> { };
-        FileRecords records = fileRecords.withReadFailureHandler(handler);
-
-        assertSame(handler, records.readFailureHandler());
-        assertSame(handler, records.slice(1, records.sizeInBytes() - 1).readFailureHandler());
-        assertEquals(fileRecords.sizeInBytes(), records.sizeInBytes());
-        assertNull(fileRecords.readFailureHandler());
-        assertNull(fileRecords.slice(1, fileRecords.sizeInBytes() - 1).readFailureHandler());
+    // Records each notification as a list of the handler's arguments
+    private static FileRecords.TransferFailureHandler recordingHandler(List<List<Object>> notifications) {
+        return (records, position, count, e) -> notifications.add(List.of(records, position, count, e));
     }
 
     private static FileChannel fileChannelOfSize(long size) throws IOException {
@@ -681,11 +683,10 @@ public class FileRecordsTest {
         return fileChannel;
     }
 
-    private static FileRecords recordsWithReadFailureHandler(FileChannel fileChannel, int size,
-                                                             List<IOException> reported) throws IOException {
+    private static FileRecords recordsOn(FileChannel fileChannel, int size) throws IOException {
         File file = mock(File.class);
         when(file.getAbsolutePath()).thenReturn(LOG_FILE_PATH);
-        return new FileRecords(file, fileChannel, size).withReadFailureHandler((message, e) -> reported.add(e));
+        return new FileRecords(file, fileChannel, size);
     }
 
     private static TransferableChannel failingChannel(IOException failure) throws IOException {
