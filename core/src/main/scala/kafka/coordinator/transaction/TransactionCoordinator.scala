@@ -853,42 +853,51 @@ class TransactionCoordinator(txnConfig: TransactionConfig,
               // Note that, it can only happen when the current state is Ongoing.
               isEpochFence = txnMetadata.pendingState.filter(s => s == TransactionState.PREPARE_EPOCH_FENCE).isPresent
 
-              // Calculate retry conditions, note that they are going to be used only
-              // in CompleteCommit / CompleteAbort states, so we can use the semantics
-              // of the producerId / epoch that's applicable in those states.
-              // Also note that the retry-on-overflow condition happens only when
-              // overflow happens during last commit / abort, overflows during
-              // InitProducerId(keepPreparedTxn=true) go through retry-on-epoch-bump
-              // path.  Example:
-              //  1. State ONGOING, {pid, epoch} = {42, 10}, {nextPid, nextEpoch} = {73, 85} -- the client-facing epoch has overflown
+              // Calculate retry conditions.  A retry is only possible in CompleteCommit / CompleteAbort states (the
+              // endTxn request that is being retried bumped the epoch), so the retry conditions only apply to these
+              // states.  In these states the client-facing producerId / epoch are the same as producerId / epoch.
+              // Note that the retry-on-overflow condition happens only when the producer id is rotated during the
+              // last commit / abort, rotations during InitProducerId(keepPreparedTxn=true) go through the
+              // retry-on-epoch-bump path.  Example:
+              //  1. State ONGOING, {pid, epoch} = {42, 10}, {nextPid, nextEpoch} = {73, 85} -- the client-facing producer id was rotated
               //  2. Commit transitions to {pid, epoch} = {73, 86} and the client retries with {73, 85} -- retryOnEpochBump
-              // Another example where we overflow during commit after going through overflow with keepPreparedTxn = true
+              // Another example where the producer id is rotated during commit after it was rotated with keepPreparedTxn = true
               //  1. State ONGOING, {pid, epoch} = {42, 10}, {nextPid, nextEpoch} = {73, 32766}
               //  2. Commit transitions to {pid, epoch} = {85, 0}, prevPid = 73 and the client retries with {73, 32766} -- retryOnOverflow
+              val isCompleteState = txnMetadata.state == TransactionState.COMPLETE_COMMIT ||
+                txnMetadata.state == TransactionState.COMPLETE_ABORT
 
-              // True if the client retried a request that had overflowed the epoch, and a new producer ID is stored in the txnMetadata
-              val retryOnOverflow = !isEpochFence && txnMetadata.prevProducerId == producerId &&
-                producerEpoch == Short.MaxValue - 1 && txnMetadata.producerEpoch == 0
+              // True if the client retried an endTxn request that rotated the producer id on epoch overflow, the new
+              // producer id is stored in the txnMetadata and the client's producer id in prevProducerId.
+              val retryOnOverflow = isCompleteState && !isEpochFence && producerId != RecordBatch.NO_PRODUCER_ID &&
+                txnMetadata.prevProducerId == producerId && producerEpoch == Short.MaxValue - 1 && txnMetadata.producerEpoch == 0
               // True if the client retried an endTxn request, and the bumped producer epoch is stored in the txnMetadata.
-              val retryOnEpochBump = !isEpochFence && txnMetadata.producerEpoch == producerEpoch + 1
+              val retryOnEpochBump = isCompleteState && !isEpochFence && txnMetadata.producerEpoch == producerEpoch + 1
 
               val isValidEpoch = {
-                if (!isEpochFence) {
-                  // With transactions V2, state + same epoch is not sufficient to determine if a retry transition is valid. If the epoch is the
-                  // same it actually indicates the next endTransaction call. Instead, we want to check the epoch matches with the epoch in the retry conditions.
-                  // Return producer fenced even in the cases where the epoch is higher and could indicate an invalid state transition.
-                  // Use the following criteria to determine if a v2 retry is valid:
+                if (isEpochFence) {
+                  // If the epoch is going to be fenced, it bumps the epoch differently with TV2: the coordinator
+                  // fences with a bumped client-facing epoch, and the client must use the current one.
+                  if (isFromClient)
+                    producerEpoch == txnMetadata.clientProducerEpoch
+                  else
+                    producerEpoch >= txnMetadata.clientProducerEpoch
+                } else {
+                  // With transactions V2, every endTxn request bumps the epoch, so the expected epoch depends on the state.
+                  // In Ongoing / Empty the request must use the current client-facing epoch.  In CompleteCommit /
+                  // CompleteAbort the request either uses the current epoch (the next endTxn request, e.g. an abort of an
+                  // empty transaction) or is a retry of the endTxn request that completed the transaction (see the retry
+                  // conditions above).  Return producer fenced for other epochs, even in the cases where the epoch is higher
+                  // and could indicate an invalid state transition.
                   txnMetadata.state match {
                     case TransactionState.ONGOING | TransactionState.EMPTY | TransactionState.DEAD | TransactionState.PREPARE_EPOCH_FENCE =>
                       producerEpoch == txnMetadata.clientProducerEpoch
                     case TransactionState.PREPARE_COMMIT | TransactionState.PREPARE_ABORT =>
-                      retryOnEpochBump
+                      throw new IllegalStateException(s"Unexpected state ${txnMetadata.state} for $transactionalId, " +
+                        "it should've been handled earlier")
                     case TransactionState.COMPLETE_COMMIT | TransactionState.COMPLETE_ABORT =>
                       retryOnEpochBump || retryOnOverflow || producerEpoch == txnMetadata.producerEpoch
                   }
-                } else {
-                  // If the epoch is going to be fenced, it bumps the epoch differently with TV2.
-                  (!isFromClient || producerEpoch == txnMetadata.clientProducerEpoch) && producerEpoch >= txnMetadata.clientProducerEpoch
                 }
               }
 

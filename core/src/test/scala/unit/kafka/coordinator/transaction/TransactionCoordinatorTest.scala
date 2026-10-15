@@ -3131,6 +3131,77 @@ class TransactionCoordinatorTest {
   }
 
   @Test
+  def shouldRetryEndTxnAfterDoubleProducerIdRotation(): Unit = {
+    // The client-facing producer id is rotated by InitProducerId(keepPreparedTxn=true) and then rotated again
+    // on epoch overflow during EndTransaction.  prevProducerId must track the client's producer id (not the
+    // frozen producer id of the kept transaction), so that the client's retry is recognized.
+    val (_, rotatedProducerId) = setupPrepared2PcTxnWithRotatedClientProducerId()
+    val txnMetadata = currentTxnMetadata()
+    val exhaustedEpoch = (Short.MaxValue - 1).toShort
+    txnMetadata.setNextProducerEpoch(exhaustedEpoch)
+    val completedProducerId = nextPid
+
+    coordinator.handleEndTransaction(transactionalId, rotatedProducerId, exhaustedEpoch, TransactionResult.COMMIT,
+      TV_2, endTxnCallback)
+    assertEquals(Errors.NONE, error)
+    assertEquals(completedProducerId, newProducerId)
+    assertEquals(0.toShort, newEpoch)
+
+    // Complete the transaction with the COMPLETE_COMMIT transition passed with the markers.
+    val completeMetadataCaptor: ArgumentCaptor[TxnTransitMetadata] = ArgumentCaptor.forClass(classOf[TxnTransitMetadata])
+    verify(transactionMarkerChannelManager).addTxnMarkersToSend(ArgumentMatchers.eq(coordinatorEpoch),
+      ArgumentMatchers.eq(TransactionResult.COMMIT), any[TransactionMetadata], completeMetadataCaptor.capture())
+    val completeMetadata = completeMetadataCaptor.getValue
+    assertEquals(TransactionState.COMPLETE_COMMIT, completeMetadata.txnState)
+    assertEquals(completedProducerId, completeMetadata.producerId)
+    assertEquals(0.toShort, completeMetadata.producerEpoch)
+    assertEquals(rotatedProducerId, completeMetadata.prevProducerId)
+    txnMetadata.completeTransitionTo(completeMetadata)
+
+    // The client lost the response and retries with the same identity.
+    coordinator.handleEndTransaction(transactionalId, rotatedProducerId, exhaustedEpoch, TransactionResult.COMMIT,
+      TV_2, endTxnCallback)
+    assertEquals(Errors.NONE, error)
+    assertEquals(completedProducerId, newProducerId)
+    assertEquals(0.toShort, newEpoch)
+
+    // InitProducerId with the client's identity is also recognized as a retry.
+    coordinator.handleInitProducerId(transactionalId, txnTimeoutMs, enableTwoPCFlag = true, keepPreparedTxn = false,
+      Some(new ProducerIdAndEpoch(rotatedProducerId, exhaustedEpoch)), initProducerIdMockCallback)
+    assertEquals(new InitProducerIdResult(completedProducerId, 0, Errors.NONE), result)
+  }
+
+  @Test
+  def shouldRejectEndTxnOverflowRetryWithoutPrevProducerId(): Unit = {
+    // A COMPLETE_COMMIT record written before previousProducerId was persisted is loaded with
+    // prevProducerId = -1.  A request with producerId = -1 must not be treated as a retry after overflow.
+    val txnMetadata = new TransactionMetadata(transactionalId, producerId2, RecordBatch.NO_PRODUCER_ID,
+      RecordBatch.NO_PRODUCER_ID, 0, (Short.MaxValue - 1).toShort, RecordBatch.NO_PRODUCER_EPOCH, txnTimeoutMs,
+      TransactionState.COMPLETE_COMMIT, util.Set.of, time.milliseconds(), time.milliseconds(), TV_2)
+    when(transactionManager.getTransactionState(ArgumentMatchers.eq(transactionalId)))
+      .thenReturn(Right(Some(new CoordinatorEpochAndTxnMetadata(coordinatorEpoch, txnMetadata))))
+
+    coordinator.handleEndTransaction(transactionalId, RecordBatch.NO_PRODUCER_ID, (Short.MaxValue - 1).toShort,
+      TransactionResult.COMMIT, TV_2, endTxnCallback)
+    assertEquals(Errors.INVALID_PRODUCER_ID_MAPPING, error)
+  }
+
+  @Test
+  def shouldRequireCurrentProducerIdForEndTxnOutsideCompleteState(): Unit = {
+    // The retry conditions only apply in COMPLETE_* states: after the producer id is rotated by
+    // InitProducerId (EMPTY state), a request with the previous producer id is an invalid mapping.
+    val txnMetadata = new TransactionMetadata(transactionalId, producerId2, producerId,
+      RecordBatch.NO_PRODUCER_ID, 0, (Short.MaxValue - 1).toShort, RecordBatch.NO_PRODUCER_EPOCH, txnTimeoutMs,
+      TransactionState.EMPTY, util.Set.of, time.milliseconds(), time.milliseconds(), TV_2)
+    when(transactionManager.getTransactionState(ArgumentMatchers.eq(transactionalId)))
+      .thenReturn(Right(Some(new CoordinatorEpochAndTxnMetadata(coordinatorEpoch, txnMetadata))))
+
+    coordinator.handleEndTransaction(transactionalId, producerId, (Short.MaxValue - 1).toShort,
+      TransactionResult.ABORT, TV_2, endTxnCallback)
+    assertEquals(Errors.INVALID_PRODUCER_ID_MAPPING, error)
+  }
+
+  @Test
   def shouldRotateProducerIdWhenClientEpochExhausted(): Unit = {
     // Test that when the client epoch reaches Short.MaxValue, a new producer ID is allocated
     // and the client epoch resets to 0, while the ongoing transaction identity remains unchanged.
@@ -3342,7 +3413,7 @@ class TransactionCoordinatorTest {
       // state should have:
       //  - A new producerId (different from the original testProducerId)
       //  - Epoch determined by when rotation occurred (see scenarios below)
-      //  - prevProducerId set to the original testProducerId for retry detection
+      //  - prevProducerId set to the client's producer id (used for EndTransaction) for retry detection
       assertNotEquals(testProducerId, txnTransitMetadata.producerId,
         "Producer ID should have rotated by transaction completion")
 
@@ -3367,8 +3438,8 @@ class TransactionCoordinatorTest {
         s"Should have 3 total epoch increments: finalEpoch=${txnTransitMetadata.producerEpoch} + " +
         s"(MaxValue=${Short.MaxValue} - startEpoch=$startEpoch) = $totalIncrements")
 
-      assertEquals(testProducerId, txnTransitMetadata.prevProducerId,
-        "prevProducerId should track original ID for retry detection")
+      assertEquals(clientProducerId, txnTransitMetadata.prevProducerId,
+        "prevProducerId should track the client's producer ID for retry detection")
 
       // Retry EndTransaction with same client credentials - should succeed as a retry
       coordinator.handleEndTransaction(
