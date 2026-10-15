@@ -25,7 +25,7 @@ import java.util.Optional
 import java.util.concurrent._
 import java.util.concurrent.atomic._
 import org.apache.kafka.network.{CloseConnectionResponse, EndThrottlingResponse, NoOpResponse, Response, SendResponse, StartThrottlingResponse}
-import kafka.server.{BrokerReconfigurable, KafkaConfig}
+import kafka.server.KafkaConfig
 import org.apache.kafka.common.message.ApiMessageType.ListenerType
 import kafka.utils._
 import org.apache.kafka.common.config.ConfigException
@@ -43,7 +43,7 @@ import org.apache.kafka.common.{Endpoint, KafkaException, MetricName, Reconfigur
 import org.apache.kafka.network.{ConnectionQuotaEntity, ConnectionThrottledException, Processor => JProcessor, Request, SocketServer => JSocketServer, SocketServerConfigs, TooManyConnectionsException}
 import org.apache.kafka.security.CredentialProvider
 import org.apache.kafka.server.{ApiVersionManager, ServerSocketFactory}
-import org.apache.kafka.server.config.QuotaConfig
+import org.apache.kafka.server.config.{AbstractKafkaConfig, BrokerReconfigurable, QuotaConfig}
 import org.apache.kafka.common.metrics.internals.MetricsUtils
 import org.apache.kafka.common.utils.internals.KafkaThread
 import org.apache.kafka.server.metrics.KafkaMetricsGroup
@@ -312,11 +312,11 @@ class SocketServer(
 
   override def reconfigurableConfigs: util.Set[String] = JSocketServer.RECONFIGURABLE_CONFIGS
 
-  override def validateReconfiguration(newConfig: KafkaConfig): Unit = {
+  override def validateReconfiguration(newConfig: AbstractKafkaConfig): Unit = {
 
   }
 
-  override def reconfigure(oldConfig: KafkaConfig, newConfig: KafkaConfig): Unit = {
+  override def reconfigure(oldConfig: AbstractKafkaConfig, newConfig: AbstractKafkaConfig): Unit = {
     val maxConnectionsPerIp = newConfig.maxConnectionsPerIp
     if (maxConnectionsPerIp != oldConfig.maxConnectionsPerIp) {
       info(s"Updating maxConnectionsPerIp: $maxConnectionsPerIp")
