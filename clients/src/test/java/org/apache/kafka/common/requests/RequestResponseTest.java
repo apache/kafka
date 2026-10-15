@@ -1298,7 +1298,7 @@ public class RequestResponseTest {
                                                 ))
                                 ))
                 ));
-        return new AssignReplicasToDirsRequest.Builder(data).build(version);
+        return new AssignReplicasToDirsRequest.Builder(data, true).build(version);
     }
 
     private AssignReplicasToDirsResponse createAssignReplicasToDirsResponse() {

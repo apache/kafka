@@ -1294,7 +1294,7 @@ class ControllerApisTest {
     val authorizer = mock(classOf[Authorizer])
     val authorizerPlugin = Plugin.wrapInstance(authorizer, null, "authorizer.class.name")
     controllerApis = createControllerApis(Some(authorizerPlugin), controller)
-    val request = new AssignReplicasToDirsRequest.Builder(new AssignReplicasToDirsRequestData()).build()
+    val request = new AssignReplicasToDirsRequest.Builder(new AssignReplicasToDirsRequestData(), false).build()
 
     when(authorizer.authorize(any[RequestContext], ArgumentMatchers.eq(Collections.singletonList(new Action(
       AclOperation.CLUSTER_ACTION,

@@ -28,6 +28,7 @@ import org.apache.kafka.common.metadata.FeatureLevelRecord;
 import org.apache.kafka.common.metadata.PartitionRecord;
 import org.apache.kafka.common.metadata.RegisterBrokerRecord;
 import org.apache.kafka.common.metadata.TopicRecord;
+import org.apache.kafka.common.protocol.ApiKeys;
 import org.apache.kafka.common.protocol.Errors;
 import org.apache.kafka.common.requests.AbstractRequest;
 import org.apache.kafka.common.requests.ApiVersionsResponse;
@@ -142,8 +143,16 @@ public class AssignmentsManagerTest {
         TEST_IMAGE = delta.apply(MetadataProvenance.EMPTY);
     }
 
+    private static MetadataImage withMetadataVersion(MetadataVersion metadataVersion) {
+        MetadataDelta delta = new MetadataDelta.Builder().setImage(TEST_IMAGE).build();
+        delta.replay(new FeatureLevelRecord().
+            setName(MetadataVersion.FEATURE_NAME).
+            setFeatureLevel(metadataVersion.featureLevel()));
+        return delta.apply(MetadataProvenance.EMPTY);
+    }
+
     static class MockNodeToControllerChannelManager implements NodeToControllerChannelManager {
-        LinkedBlockingDeque<Map.Entry<AssignReplicasToDirsRequestData, ControllerRequestCompletionHandler>> callbacks =
+        LinkedBlockingDeque<Map.Entry<AssignReplicasToDirsRequest, ControllerRequestCompletionHandler>> callbacks =
             new LinkedBlockingDeque<>();
 
         @Override
@@ -166,7 +175,7 @@ public class AssignmentsManagerTest {
         ) {
             AssignReplicasToDirsRequest inputRequest = (AssignReplicasToDirsRequest) request.build();
             synchronized (this) {
-                callbacks.add(new AbstractMap.SimpleEntry<>(inputRequest.data(), callback));
+                callbacks.add(new AbstractMap.SimpleEntry<>(inputRequest, callback));
             }
         }
 
@@ -176,8 +185,8 @@ public class AssignmentsManagerTest {
         }
 
         void completeCallback(Function<AssignReplicasToDirsRequestData, Optional<ClientResponse>> completionist) throws InterruptedException {
-            Map.Entry<AssignReplicasToDirsRequestData, ControllerRequestCompletionHandler> entry = callbacks.take();
-            Optional<ClientResponse> clientResponse = completionist.apply(entry.getKey());
+            Map.Entry<AssignReplicasToDirsRequest, ControllerRequestCompletionHandler> entry = callbacks.take();
+            Optional<ClientResponse> clientResponse = completionist.apply(entry.getKey().data());
             if (clientResponse.isPresent()) {
                 entry.getValue().onComplete(clientResponse.get());
             } else {
@@ -194,10 +203,14 @@ public class AssignmentsManagerTest {
         final Map<TopicIdPartition, Integer> successes;
 
         TestEnv() {
+            this(TEST_IMAGE);
+        }
+
+        TestEnv(MetadataImage image) {
             this.backoff = new ExponentialBackoff(1, 2, 4, 0);
             this.channelManager = new MockNodeToControllerChannelManager();
             this.assignmentsManager = new AssignmentsManager(
-                    backoff, Time.SYSTEM, channelManager, 1, () -> TEST_IMAGE,
+                    backoff, Time.SYSTEM, channelManager, 1, () -> image,
                     Uuid::toString, metricsRegistry);
             this.successes = new HashMap<>();
         }
@@ -303,6 +316,25 @@ public class AssignmentsManagerTest {
                 assertEquals(1, testEnv.success(new TopicIdPartition(TOPIC_1, 0)));
             });
             assertEquals(0, testEnv.assignmentsManager.previousGlobalFailures());
+        }
+    }
+
+    @ParameterizedTest
+    @ValueSource(booleans = {true, false})
+    public void testRequestVersionGatedByRequestHeaderV3Supported(boolean requestHeaderV3Supported) throws Exception {
+        MetadataVersion metadataVersion = requestHeaderV3Supported ? MetadataVersion.IBP_4_5_IV0 : MetadataVersion.IBP_4_4_IV2;
+        try (TestEnv testEnv = new TestEnv(withMetadataVersion(metadataVersion))) {
+            testEnv.onAssignment(new TopicIdPartition(TOPIC_1, 0), DIR_1);
+            TestUtils.retryOnExceptionWithTimeout(60_000, () -> assertEquals(1, testEnv.assignmentsManager.numInFlight()));
+
+            short requestVersion = testEnv.channelManager.callbacks.peek().getKey().version();
+            short expectedVersion = requestHeaderV3Supported
+                ? ApiKeys.ASSIGN_REPLICAS_TO_DIRS.latestVersion()
+                : (short) 0;
+            assertEquals(expectedVersion, requestVersion);
+
+            short expectedHeaderVersion = requestHeaderV3Supported ? (short) 3 : (short) 2;
+            assertEquals(expectedHeaderVersion, ApiKeys.ASSIGN_REPLICAS_TO_DIRS.requestHeaderVersion(requestVersion));
         }
     }
 

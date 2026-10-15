@@ -32,12 +32,20 @@ public class AssignReplicasToDirsRequest extends AbstractRequest {
      */
     public static final int MAX_ASSIGNMENTS_PER_REQUEST = 2250;
 
+    private static final short LAST_VERSION_BEFORE_REQUEST_HEADER_V3 = 0;
+
     public static class Builder extends AbstractRequest.Builder<AssignReplicasToDirsRequest> {
 
         private final AssignReplicasToDirsRequestData data;
 
-        public Builder(AssignReplicasToDirsRequestData data) {
-            super(ApiKeys.ASSIGN_REPLICAS_TO_DIRS);
+        /**
+         * @param data               the request data
+         * @param useRequestHeaderV3 whether the versions which use request header v3 may be used
+         */
+        public Builder(AssignReplicasToDirsRequestData data, boolean useRequestHeaderV3) {
+            super(ApiKeys.ASSIGN_REPLICAS_TO_DIRS,
+                ApiKeys.ASSIGN_REPLICAS_TO_DIRS.oldestVersion(),
+                useRequestHeaderV3 ? ApiKeys.ASSIGN_REPLICAS_TO_DIRS.latestVersion() : LAST_VERSION_BEFORE_REQUEST_HEADER_V3);
             this.data = data;
         }
 
