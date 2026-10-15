@@ -31,21 +31,21 @@ import java.util.function.IntPredicate;
  * deciding the quotas. The quotas start at the minimum quota, to which a test adds the extra
  * partitions it starts from. The members and topics are referred to by their ids.
  */
-final class QuotasFixture {
+public final class QuotasFixture {
     /**
      * The members and topics of the group.
      */
-    final IndexedGroup group;
+    public final IndexedGroup group;
 
     /**
      * The current assignment of the group.
      */
-    final CurrentAssignment currentAssignment;
+    public final CurrentAssignment currentAssignment;
 
     /**
      * The quotas of the members.
      */
-    final Quotas quotas;
+    public final Quotas quotas;
 
     /**
      * Creates the fixture, with the quotas at the minimum quota.
@@ -53,7 +53,7 @@ final class QuotasFixture {
      * @param groupSpec The group spec.
      * @param describer The describer of the topics.
      */
-    QuotasFixture(GroupSpec groupSpec, SubscribedTopicDescriber describer) {
+    public QuotasFixture(GroupSpec groupSpec, SubscribedTopicDescriber describer) {
         group = new IndexedGroup.Builder(groupSpec, describer).build();
         currentAssignment = new CurrentAssignment(groupSpec, group);
         quotas = new Quotas(group);
@@ -62,7 +62,7 @@ final class QuotasFixture {
     /**
      * @return The index of the member.
      */
-    int member(String memberId) {
+    public int member(String memberId) {
         for (int member = 0; member < group.memberCount(); member++) {
             if (group.memberId(member).equals(memberId)) {
                 return member;
@@ -74,7 +74,7 @@ final class QuotasFixture {
     /**
      * @return The index of the topic.
      */
-    int topic(Uuid topicId) {
+    public int topic(Uuid topicId) {
         return group.topicIndex(topicId);
     }
 
@@ -82,7 +82,7 @@ final class QuotasFixture {
      * Gives the member an extra partition of each of the topics. It must not have an extra
      * partition of any of them yet.
      */
-    void addExtras(String memberId, Uuid... topicIds) {
+    public void addExtras(String memberId, Uuid... topicIds) {
         for (Uuid topicId : topicIds) {
             if (quotas.membersWithExtraPartition(topic(topicId)).indexOf(member(memberId)) >= 0) {
                 throw new IllegalArgumentException(memberId + " already has an extra partition of " + topicId);
@@ -95,7 +95,7 @@ final class QuotasFixture {
      * @return Per topic, the members which have an extra partition of it, in member order. The
      *         topics where no member has an extra partition are left out.
      */
-    Map<Uuid, List<String>> membersWithExtraPartition() {
+    public Map<Uuid, List<String>> membersWithExtraPartition() {
         var result = new HashMap<Uuid, List<String>>();
         for (int topic = 0; topic < group.topicCount(); topic++) {
             var members = quotas.membersWithExtraPartition(topic);
@@ -114,7 +114,7 @@ final class QuotasFixture {
     /**
      * @return The members for which the predicate holds, in member id order.
      */
-    List<String> members(IntPredicate predicate) {
+    public List<String> members(IntPredicate predicate) {
         var memberIds = new ArrayList<String>();
         for (int member = 0; member < group.memberCount(); member++) {
             if (predicate.test(member)) {
@@ -127,7 +127,7 @@ final class QuotasFixture {
     /**
      * @return The assignment sizes of the members, in member id order.
      */
-    List<Integer> assignmentSizes() {
+    public List<Integer> assignmentSizes() {
         var sizes = new ArrayList<Integer>();
         for (int member = 0; member < group.memberCount(); member++) {
             sizes.add(quotas.assignmentSize(member));

@@ -14,9 +14,12 @@
  * See the License for the specific language governing permissions and
  * limitations under the License.
  */
-package org.apache.kafka.coordinator.group.assignor.uniform2;
+package org.apache.kafka.coordinator.group.assignor.uniform2.steps;
 
 import org.apache.kafka.common.Uuid;
+import org.apache.kafka.coordinator.group.assignor.uniform2.GroupSpecFixture;
+import org.apache.kafka.coordinator.group.assignor.uniform2.QuotasFixture;
+import org.apache.kafka.coordinator.group.assignor.uniform2.TopicsFixture;
 
 import org.junit.jupiter.api.Test;
 
