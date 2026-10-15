@@ -62,7 +62,7 @@ public final class QuotasFixture {
     /**
      * @return The index of the member.
      */
-    int member(String memberId) {
+    public int member(String memberId) {
         for (int member = 0; member < group.memberCount(); member++) {
             if (group.memberId(member).equals(memberId)) {
                 return member;
@@ -74,7 +74,7 @@ public final class QuotasFixture {
     /**
      * @return The index of the topic.
      */
-    int topic(Uuid topicId) {
+    public int topic(Uuid topicId) {
         return group.topicIndex(topicId);
     }
 
@@ -114,7 +114,7 @@ public final class QuotasFixture {
     /**
      * @return The members for which the predicate holds, in member id order.
      */
-    List<String> members(IntPredicate predicate) {
+    public List<String> members(IntPredicate predicate) {
         var memberIds = new ArrayList<String>();
         for (int member = 0; member < group.memberCount(); member++) {
             if (predicate.test(member)) {

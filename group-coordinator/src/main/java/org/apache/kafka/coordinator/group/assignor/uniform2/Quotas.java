@@ -74,7 +74,7 @@ public final class Quotas {
      *
      * @param group The members and topics of the group.
      */
-    Quotas(IndexedGroup group) {
+    public Quotas(IndexedGroup group) {
         this.group = group;
         int topicCount = group.topicCount();
         minQuotas = new int[topicCount];
@@ -160,7 +160,7 @@ public final class Quotas {
      *
      * @throws IndexOutOfBoundsException If the giver has no extra partition of the topic.
      */
-    void moveExtraPartition(int giver, int topic, int receiver) {
+    public void moveExtraPartition(int giver, int topic, int receiver) {
         var members = membersWithExtraPartition[topic];
         members.set(members.indexOf(giver), receiver);
         extraPartitionCounts[giver]--;

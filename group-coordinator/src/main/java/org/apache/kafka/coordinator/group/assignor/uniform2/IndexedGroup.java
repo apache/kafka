@@ -58,7 +58,7 @@ public final class IndexedGroup {
      *
      * <p>A builder builds a single group: a second call to {@link #build()} throws.
      */
-    static final class Builder {
+    public static final class Builder {
         /**
          * The group spec, which gives the subscription of every member.
          */
@@ -134,7 +134,7 @@ public final class IndexedGroup {
          * @param groupSpec                The group spec.
          * @param subscribedTopicDescriber The describer of the subscribed topics.
          */
-        Builder(GroupSpec groupSpec, SubscribedTopicDescriber subscribedTopicDescriber) {
+        public Builder(GroupSpec groupSpec, SubscribedTopicDescriber subscribedTopicDescriber) {
             this(groupSpec, subscribedTopicDescriber, -1L);
         }
 
@@ -143,7 +143,7 @@ public final class IndexedGroup {
          * @param subscribedTopicDescriber The describer of the subscribed topics.
          * @param hashMask                 The mask applied to the hash of every subscription.
          */
-        Builder(
+        public Builder(
             GroupSpec groupSpec,
             SubscribedTopicDescriber subscribedTopicDescriber,
             long hashMask
@@ -162,7 +162,7 @@ public final class IndexedGroup {
          * @return The group.
          * @throws IllegalStateException If the group is already built.
          */
-        IndexedGroup build() {
+        public IndexedGroup build() {
             if (built) {
                 throw new IllegalStateException("The group is already built");
             }
@@ -505,7 +505,7 @@ public final class IndexedGroup {
     /**
      * @return The id of the member.
      */
-    String memberId(int member) {
+    public String memberId(int member) {
         return memberIds[member];
     }
 
@@ -526,14 +526,14 @@ public final class IndexedGroup {
     /**
      * @return The id of the topic.
      */
-    Uuid topicId(int topic) {
+    public Uuid topicId(int topic) {
         return topicIds[topic];
     }
 
     /**
      * @return The index of the topic, or -1 if nobody subscribes to it or it does not exist.
      */
-    int topicIndex(Uuid topicId) {
+    public int topicIndex(Uuid topicId) {
         var topic = topicIndices.get(topicId);
         return topic == null ? -1 : topic;
     }
@@ -541,7 +541,7 @@ public final class IndexedGroup {
     /**
      * @return The number of partitions of the topic.
      */
-    int partitionCount(int topic) {
+    public int partitionCount(int topic) {
         return partitionCounts[topic];
     }
 
@@ -578,14 +578,14 @@ public final class IndexedGroup {
     /**
      * @return The topics of the cohort, in topic order. The array must not be changed.
      */
-    int[] topicsOf(int cohort) {
+    public int[] topicsOf(int cohort) {
         return cohortTopics[cohort];
     }
 
     /**
      * @return {@code true} if the member subscribes to the topic.
      */
-    boolean subscribes(int member, int topic) {
+    public boolean subscribes(int member, int topic) {
         return Arrays.binarySearch(cohortTopics[cohortOfMember[member]], topic) >= 0;
     }
 }

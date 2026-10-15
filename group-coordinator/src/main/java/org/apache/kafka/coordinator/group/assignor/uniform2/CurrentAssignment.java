@@ -59,7 +59,7 @@ public final class CurrentAssignment {
      * @param groupSpec The group spec.
      * @param group     The members and topics of the group.
      */
-    CurrentAssignment(GroupSpec groupSpec, IndexedGroup group) {
+    public CurrentAssignment(GroupSpec groupSpec, IndexedGroup group) {
         int memberCount = group.memberCount();
         int topicCount = group.topicCount();
         assignments = new ArrayList<>(memberCount);
@@ -118,14 +118,14 @@ public final class CurrentAssignment {
     /**
      * @return The current assignment of the member, as given by the spec.
      */
-    Map<Uuid, Set<Integer>> assignment(int member) {
+    public Map<Uuid, Set<Integer>> assignment(int member) {
         return assignments.get(member);
     }
 
     /**
      * @return {@code true} if the member holds stale partitions.
      */
-    boolean holdsStalePartitions(int member) {
+    public boolean holdsStalePartitions(int member) {
         return holdsStalePartitions[member];
     }
 
@@ -133,7 +133,7 @@ public final class CurrentAssignment {
      * @return Per partition of the topic, its owner, or -1 if it has none; or null if no
      *         partition of the topic has an owner. The array must not be changed.
      */
-    int[] owners(int topic) {
+    public int[] owners(int topic) {
         return owners[topic];
     }
 
