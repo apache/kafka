@@ -468,16 +468,16 @@ class TransactionCoordinator(txnConfig: TransactionConfig,
               // With TV2, we may be transitioning over a producer epoch overflow, and the producer may be using the
               // new producer ID that is still only in pending state.
               Left(Errors.CONCURRENT_TRANSACTIONS)
+            } else if (txnMetadata.hasNextProducerEpoch) {
+              // InitProducerId(keepPreparedTxn=true) kept the ongoing transaction, it can only be committed
+              // or aborted, so adding partitions is not allowed regardless of the identity in the request
+              // (including the frozen producerId / producerEpoch used for the markers).  A well-behaving
+              // client never adds partitions in this state.
+              Left(Errors.INVALID_TXN_STATE)
             } else if (txnMetadata.producerId != producerId) {
               Left(Errors.INVALID_PRODUCER_ID_MAPPING)
             } else if (txnMetadata.producerEpoch != producerEpoch) {
-              // Check if client is using the client-facing epoch (nextProducerEpoch) after calling
-              // InitProducerId(keepPreparedTxn=true).  Adding partitions is not allowed in this state.
-              if (txnMetadata.hasNextProducerEpoch() && txnMetadata.nextProducerEpoch() == producerEpoch) {
-                Left(Errors.INVALID_TXN_STATE)
-              } else {
-                Left(Errors.PRODUCER_FENCED)
-              }
+              Left(Errors.PRODUCER_FENCED)
             } else if (txnMetadata.state == TransactionState.PREPARE_COMMIT || txnMetadata.state == TransactionState.PREPARE_ABORT) {
               Left(Errors.CONCURRENT_TRANSACTIONS)
             } else if (txnMetadata.state == TransactionState.ONGOING && txnMetadata.topicPartitions.containsAll(partitions)) {
