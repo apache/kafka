@@ -147,7 +147,7 @@ public class RackAwareStandbyPickerTest {
 
     @Test
     public void shouldMatchAScanOverAllProcesses() {
-        // Random trees and holders, with loads that only grow and room that only shrinks between picks. Every query is
+        // Random trees and holders, with loads and room that change in both directions between picks. Every query is
         // checked against a scan over all processes in their order.
         final Random random = new Random(42);
         for (int round = 0; round < 300; round++) {
@@ -168,10 +168,14 @@ public class RackAwareStandbyPickerTest {
                 for (int pick = 0; pick < 3; pick++) {
                     assertPickMatchesScan(tagKeys, clientTags, holders, "round " + round + ", task " + task + ", pick " + pick);
 
-                    // Before the next pick, a load grows and sometimes a process runs out of room.
-                    loads.merge(processes.get(random.nextInt(processes.size())), 1.0 + random.nextInt(2), Double::sum);
-                    if (random.nextInt(3) == 0) {
-                        processesWithoutRoom.add(processes.get(random.nextInt(processes.size())));
+                    // Before the next pick, one change reported with updated, or up to three with updatedAll.
+                    if (random.nextInt(4) == 0) {
+                        for (int change = 0, numChanges = 1 + random.nextInt(3); change < numChanges; change++) {
+                            changeLoadAndRoom(random);
+                        }
+                        picker.updatedAll();
+                    } else {
+                        picker.updated(changeLoadAndRoom(random));
                     }
                 }
             }
@@ -192,6 +196,16 @@ public class RackAwareStandbyPickerTest {
 
     private void hold(final String process) {
         picker.markUsed(process);
+    }
+
+    /** Gives a random process a new load, lower or higher, and sometimes flips its room; returns the process. */
+    private String changeLoadAndRoom(final Random random) {
+        final String process = processes.get(random.nextInt(processes.size()));
+        loads.put(process, (double) random.nextInt(4));
+        if (random.nextInt(3) == 0 && !processesWithoutRoom.remove(process)) {
+            processesWithoutRoom.add(process);
+        }
+        return process;
     }
 
     /** The candidate processes of a new pick, empty when nothing is picked. */
@@ -244,7 +258,6 @@ public class RackAwareStandbyPickerTest {
         final Set<String> holders,
         final String context
     ) {
-        picker.clearCache();
         for (final String tagKey : tagKeys) {
             assertEquals(scanHasUnusedValue(clientTags, holders, tagKey), picker.hasUnusedValue(key(tagKey)), context);
         }

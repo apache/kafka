@@ -26,7 +26,7 @@ import java.util.Comparator;
 import java.util.HashMap;
 import java.util.List;
 import java.util.Map;
-import java.util.PriorityQueue;
+import java.util.TreeSet;
 import java.util.function.Function;
 import java.util.function.Predicate;
 import java.util.function.ToDoubleFunction;
@@ -35,18 +35,17 @@ import java.util.function.ToDoubleFunction;
  * Picks the conditions for the next standby of one task: the most tag keys that a process with room can meet,
  * preferring the keys earlier in {@code rack.aware.assignment.tags}. A process meets a tag key when it has a value
  * for it that no holder of the task has yet. It can then tell whether a process meets the conditions and return the
- * least-loaded process with room among those that do. It assumes that loads only grow and room only shrinks.
+ * least-loaded process with room among those that do. The caller reports every change to a load or room with
+ * {@link #updated(Object)} or {@link #updatedAll()}.
  * <p>
  * The processes sit in a tree with one level per tag key, those with the same values sharing a leaf. Scanning every
- * leaf per standby is too slow once there are many, e.g. one per process for a host tag. A query skips a subtree
- * whose own value is used and takes a subtree with no used value without looking inside.
+ * leaf per standby is too slow once there are many, e.g. one per process for a host tag. Each node keeps its
+ * least-loaded process with room, and its children are ordered by theirs. A query skips a subtree whose own value is
+ * used and takes a subtree with no used value without looking inside.
  *
  * @param <P> The assignor's process type.
  */
 final class RackAwareStandbyPicker<P> {
-
-    // No conditions, for the least-loaded process below a node. Never modified.
-    private static final BitSet NO_CONDITIONS = new BitSet();
 
     private final ToDoubleFunction<P> processLoad;
     private final Predicate<P> processHasRoom;
@@ -57,14 +56,13 @@ final class RackAwareStandbyPicker<P> {
     // Per level from the top, the index of its key. The priority of a key is still its order in
     // rack.aware.assignment.tags, not this one.
     private final int[] tagKeysInTreeOrder;
-    private final Map<P, Node<P>> leafByProcess;
+    // Per process, its current entry, which knows its leaf.
+    private final Map<P, QueuedProcess<P>> queuedByProcess;
     private final Node<P> root;
 
     // Per key index, one bit per value index, set once a holder of the task carries that value.
     // Cleared by startTask.
     private final BitSet[] usedValues;
-    // The nodes with a cached least-loaded process, to clear on clearCache: loads do not change during a pick.
-    private final List<Node<P>> cachedNodes = new ArrayList<>();
     // A process meeting the conditions the last pick returned, which leastLoaded starts from.
     private QueuedProcess<P> foundByPick;
 
@@ -102,19 +100,19 @@ final class RackAwareStandbyPicker<P> {
         }
         tagKeysInTreeOrder = tagKeysInTreeOrder(numValues);
 
-        root = new Node<>(-1, -1, treeHeight, false);
-        leafByProcess = Utils.newHashMap(processes.size());
+        root = new Node<>(null, -1, -1, treeHeight, false);
+        queuedByProcess = Utils.newHashMap(processes.size());
         // The children of each inner node by their value index, only needed to build the tree.
         final Map<Node<P>, Map<Integer, Node<P>>> childrenByValueIndex = new HashMap<>();
         int processIndex = 0;
         for (final P process : processes) {
             insert(
-                new QueuedProcess<>(process, processIndex++, load.applyAsDouble(process)),
+                process,
+                processIndex++,
                 valueIndexes(clientTags.apply(process), tagKeys, indexOfValues),
                 childrenByValueIndex
             );
         }
-        buildInnerNodes(root, childrenByValueIndex);
     }
 
     /** Per key, the index of each of its values, in the order the values first appear on the processes. */
@@ -149,26 +147,36 @@ final class RackAwareStandbyPicker<P> {
 
     /** Adds the process to the leaf of its values, creating the leaf and the inner nodes on its path. */
     private void insert(
-        final QueuedProcess<P> process,
+        final P process,
+        final int processIndex,
         final int[] valueIndexes,
         final Map<Node<P>, Map<Integer, Node<P>>> childrenByValueIndex
     ) {
         final int treeHeight = tagKeysInTreeOrder.length;
         Node<P> node = root;
         for (int level = 0; level < treeHeight; level++) {
+            // The values of the process on this level and the ones below are below the node.
+            for (int levelBelow = level; levelBelow < treeHeight; levelBelow++) {
+                final int keyIndexBelow = tagKeysInTreeOrder[levelBelow];
+                node.valuesBelowOf(keyIndexBelow).set(valueIndexes[keyIndexBelow]);
+            }
             final int keyIndex = tagKeysInTreeOrder[level];
             final int valueIndex = valueIndexes[keyIndex];
             final Map<Integer, Node<P>> children = childrenByValueIndex.computeIfAbsent(node, __ -> new HashMap<>());
             Node<P> child = children.get(valueIndex);
             if (child == null) {
-                child = new Node<>(keyIndex, valueIndex, treeHeight, level == treeHeight - 1);
+                child = new Node<>(node, keyIndex, valueIndex, treeHeight, level == treeHeight - 1);
                 children.put(valueIndex, child);
             }
             node = child;
         }
         node.valueIndexes = valueIndexes;
-        node.processesByLoad.add(process);
-        leafByProcess.put(process.process, node);
+        final QueuedProcess<P> queued = new QueuedProcess<>(process, processIndex, node, processLoad.applyAsDouble(process));
+        if (processHasRoom.test(process)) {
+            node.processesByLoad.add(queued);
+            repairPath(node);
+        }
+        queuedByProcess.put(process, queued);
     }
 
     /** The key indexes as the levels from the top, fewest values first; the order affects speed, not results. */
@@ -186,32 +194,6 @@ final class RackAwareStandbyPicker<P> {
             tagKeysInTreeOrder[level] = keyIndexes[level];
         }
         return tagKeysInTreeOrder;
-    }
-
-    /** Fills in the values below and the child queues of the node and of every inner node under it. */
-    private void buildInnerNodes(final Node<P> node, final Map<Node<P>, Map<Integer, Node<P>>> childrenByValueIndex) {
-        if (node.isLeaf) {
-            return;
-        }
-        for (final Node<P> child : childrenByValueIndex.get(node).values()) {
-            buildInnerNodes(child, childrenByValueIndex);
-            // The child's own value, then the values below it; a leaf has none below.
-            node.valuesBelowOf(child.keyIndex).set(child.valueIndex);
-            if (!child.isLeaf) {
-                for (int keyIndex = 0; keyIndex < child.valuesBelow.length; keyIndex++) {
-                    if (child.valuesBelow[keyIndex] != null) {
-                        node.valuesBelowOf(keyIndex).or(child.valuesBelow[keyIndex]);
-                    }
-                }
-            }
-            // A child without room below never gets room again, so it is not queued.
-            final QueuedProcess<P> childLeastLoaded = leastLoadedProcessBelow(child);
-            if (childLeastLoaded != null) {
-                child.queuedLoad = childLeastLoaded.load;
-                child.queuedProcessIndex = childLeastLoaded.processIndex;
-                node.childrenByLeastLoaded.add(child);
-            }
-        }
     }
 
     /** The tag keys in priority order: that of {@code rack.aware.assignment.tags}, not of the levels. */
@@ -235,10 +217,20 @@ final class RackAwareStandbyPicker<P> {
 
     /** Records the tag values of a new holder of the task as used. */
     void markUsed(final P holder) {
-        final int[] valueIndexes = leafByProcess.get(holder).valueIndexes;
+        final int[] valueIndexes = queuedByProcess.get(holder).leaf.valueIndexes;
         for (int keyIndex = 0; keyIndex < keys.size(); keyIndex++) {
             usedValues[keyIndex].set(valueIndexes[keyIndex]);
         }
+    }
+
+    /** Reads the load and room of the process again; call it after either changes. */
+    void updated(final P process) {
+        queuedByProcess.put(process, requeue(queuedByProcess.get(process)));
+    }
+
+    /** Reads the load and room of every process again; call it after a change that may affect many. */
+    void updatedAll() {
+        queuedByProcess.replaceAll((process, queued) -> requeue(queued));
     }
 
     /** The conditions for the next standby, or empty once no process with room can make the task more diverse. */
@@ -254,9 +246,8 @@ final class RackAwareStandbyPicker<P> {
         if (tagKeysWithUnusedValue.isEmpty()) {
             return List.of();
         }
-        clearCache();
         // No process has room for the standby.
-        if (leastLoadedProcessBelow(root) == null) {
+        if (root.leastLoaded == null) {
             return List.of();
         }
 
@@ -307,7 +298,7 @@ final class RackAwareStandbyPicker<P> {
 
     /** Whether the values of the process for {@code conditions} are all unused. */
     boolean meets(final P process, final List<TagKey> conditions) {
-        final int[] valueIndexes = leafByProcess.get(process).valueIndexes;
+        final int[] valueIndexes = queuedByProcess.get(process).leaf.valueIndexes;
         for (final TagKey key : conditions) {
             if (isUsed(key.index, valueIndexes[key.index])) {
                 return false;
@@ -324,14 +315,6 @@ final class RackAwareStandbyPicker<P> {
     /** Whether the value is used: a holder of the task carries it, or it is missing. */
     private boolean isUsed(final int keyIndex, final int valueIndex) {
         return valueIndex == missingValueIndex(keyIndex) || usedValues[keyIndex].get(valueIndex);
-    }
-
-    /** Clears the cache, since loads and room may have changed since the last pick. */
-    void clearCache() {
-        for (final Node<P> node : cachedNodes) {
-            node.isCached = false;
-        }
-        cachedNodes.clear();
     }
 
     /** The first process found with room meeting {@code conditions}, or null if none. */
@@ -359,15 +342,18 @@ final class RackAwareStandbyPicker<P> {
     /** The first process found with room below the node meeting {@code conditionBits}, or null if none. */
     private QueuedProcess<P> anyProcessBelowMeeting(final Node<P> node, final BitSet conditionBits) {
         if (valuesBelowAllMeeting(node, conditionBits)) {
-            return leastLoadedProcessBelow(node);
+            return node.leastLoaded;
         }
-        // Walk into the children in queue order until one has a process meeting the conditions.
-        QueuedProcess<P> found = null;
-        while (found == null && nextChildMeeting(node, conditionBits, null) != null) {
-            found = anyProcessBelowMeeting(setAsideHead(node), conditionBits);
+        // Walk into the children in order until one has a process meeting the conditions.
+        for (final Node<P> child : node.childrenByLeastLoaded) {
+            if (ownValueMeeting(child, conditionBits)) {
+                final QueuedProcess<P> found = anyProcessBelowMeeting(child, conditionBits);
+                if (found != null) {
+                    return found;
+                }
+            }
         }
-        putBackSetAsideChildren(node);
-        return found;
+        return null;
     }
 
     /**
@@ -382,28 +368,24 @@ final class RackAwareStandbyPicker<P> {
         // Every process below the node meets the conditions. The node is the root, with bound below it, or a child
         // walked into for being lighter than bound, so its least-loaded process is never heavier than bound.
         if (valuesBelowAllMeeting(node, conditionBits)) {
-            return leastLoadedProcessBelow(node);
+            return node.leastLoaded;
         }
-        // Walk into the children in queue order until the next one cannot beat the best found.
+        // Walk into the children in order until the next one cannot beat the best found.
         QueuedProcess<P> leastLoaded = bound;
-        while (nextChildMeeting(node, conditionBits, leastLoaded) != null) {
-            leastLoaded = leastLoadedProcessBelowMeeting(setAsideHead(node), conditionBits, leastLoaded);
+        for (final Node<P> child : node.childrenByLeastLoaded) {
+            if (QueuedProcess.ORDER.compare(child.leastLoaded, leastLoaded) >= 0) {
+                break;
+            }
+            if (ownValueMeeting(child, conditionBits)) {
+                leastLoaded = leastLoadedProcessBelowMeeting(child, conditionBits, leastLoaded);
+            }
         }
-        putBackSetAsideChildren(node);
         return leastLoaded;
     }
 
-    /** Takes the child at the head of the node's queue out of it until {@link #putBackSetAsideChildren(Node)}. */
-    private Node<P> setAsideHead(final Node<P> node) {
-        final Node<P> head = node.childrenByLeastLoaded.poll();
-        node.setAsideChildren.add(head);
-        return head;
-    }
-
-    /** Puts the children that a query set aside back in the node's queue. */
-    private void putBackSetAsideChildren(final Node<P> node) {
-        node.childrenByLeastLoaded.addAll(node.setAsideChildren);
-        node.setAsideChildren.clear();
+    /** Whether the node's own value meets {@code conditionBits}; every process below the node carries it. */
+    private boolean ownValueMeeting(final Node<P> node, final BitSet conditionBits) {
+        return !conditionBits.get(node.keyIndex) || !isUsed(node.keyIndex, node.valueIndex);
     }
 
     /** Whether every value below the node meets {@code conditionBits}. */
@@ -425,71 +407,45 @@ final class RackAwareStandbyPicker<P> {
         return true;
     }
 
-    /** The least-loaded process with room below the node, or null if none; computed once per pick. */
-    private QueuedProcess<P> leastLoadedProcessBelow(final Node<P> node) {
-        if (!node.isCached) {
-            if (node.isLeaf) {
-                node.cachedLeastLoaded = leastLoadedInLeaf(node);
-            } else {
-                // With no conditions, the next child is the one with the least-loaded process below it.
-                final Node<P> head = nextChildMeeting(node, NO_CONDITIONS, null);
-                node.cachedLeastLoaded = head == null ? null : leastLoadedProcessBelow(head);
-            }
-            node.isCached = true;
-            cachedNodes.add(node);
-        }
-        return node.cachedLeastLoaded;
-    }
-
-    /** The least-loaded process with room of the leaf, or null if none. A stale head is queued again, one without room dropped. */
-    private QueuedProcess<P> leastLoadedInLeaf(final Node<P> leaf) {
-        while (!leaf.processesByLoad.isEmpty()) {
-            final QueuedProcess<P> head = leaf.processesByLoad.peek();
-            final double currentLoad = processLoad.applyAsDouble(head.process);
-            if (head.load != currentLoad) {
-                leaf.processesByLoad.poll();
-                head.load = currentLoad;
-                leaf.processesByLoad.add(head);
-            } else if (!processHasRoom.test(head.process)) {
-                leaf.processesByLoad.poll();
-            } else {
-                return head;
-            }
-        }
-        return null;
-    }
-
     /**
-     * Brings the next child whose own value meets {@code conditionBits} to the head of the queue and returns it, or
-     * null if none left can beat {@code bound}.
+     * Queues the process with its current load while it has room and repairs its path; returns the entry it is
+     * queued with, a new one if its load or room changed.
      */
-    private Node<P> nextChildMeeting(final Node<P> node, final BitSet conditionBits, final QueuedProcess<P> bound) {
-        while (!node.childrenByLeastLoaded.isEmpty()) {
-            final Node<P> child = node.childrenByLeastLoaded.peek();
-            // The process a child is queued with may be stale, but a stale one is only lighter than its current one.
-            if (bound != null && QueuedProcess.compare(child.queuedLoad, child.queuedProcessIndex, bound.load, bound.processIndex) >= 0) {
-                return null;
-            }
-            // Every process below carries its value, so none meets the conditions: set it aside for this query.
-            if (conditionBits.get(child.keyIndex) && isUsed(child.keyIndex, child.valueIndex)) {
-                setAsideHead(node);
-                continue;
-            }
-            final QueuedProcess<P> childLeastLoaded = leastLoadedProcessBelow(child);
-            if (childLeastLoaded == null) {
-                // No room below, and room only shrinks: drop it for good.
-                node.childrenByLeastLoaded.poll();
-            } else if (childLeastLoaded.load != child.queuedLoad || childLeastLoaded.processIndex != child.queuedProcessIndex) {
-                // Queued with a stale process: requeue it with the current one.
-                node.childrenByLeastLoaded.poll();
-                child.queuedLoad = childLeastLoaded.load;
-                child.queuedProcessIndex = childLeastLoaded.processIndex;
-                node.childrenByLeastLoaded.add(child);
-            } else {
-                return child;
-            }
+    private QueuedProcess<P> requeue(final QueuedProcess<P> queued) {
+        final double load = processLoad.applyAsDouble(queued.process);
+        final boolean hasRoom = processHasRoom.test(queued.process);
+        final TreeSet<QueuedProcess<P>> processesByLoad = queued.leaf.processesByLoad;
+        if (load == queued.load && hasRoom == processesByLoad.contains(queued)) {
+            return queued;
         }
-        return null;
+        processesByLoad.remove(queued);
+        final QueuedProcess<P> requeued = new QueuedProcess<>(queued.process, queued.processIndex, queued.leaf, load);
+        if (hasRoom) {
+            processesByLoad.add(requeued);
+        }
+        repairPath(queued.leaf);
+        return requeued;
+    }
+
+    /** Updates the least-loaded process of the node and its ancestors, up to the first whose stays the same. */
+    private void repairPath(final Node<P> leaf) {
+        Node<P> node = leaf;
+        while (node != null) {
+            final QueuedProcess<P> leastLoaded = node.leastLoadedInQueue();
+            if (leastLoaded == node.leastLoaded) {
+                return;
+            }
+            // The parent orders its children by their least-loaded process, so the node leaves it while that changes.
+            final Node<P> parent = node.parent;
+            if (parent != null && node.leastLoaded != null) {
+                parent.childrenByLeastLoaded.remove(node);
+            }
+            node.leastLoaded = leastLoaded;
+            if (parent != null && leastLoaded != null) {
+                parent.childrenByLeastLoaded.add(node);
+            }
+            node = parent;
+        }
     }
 
     /** A key of {@code rack.aware.assignment.tags}. */
@@ -508,32 +464,33 @@ final class RackAwareStandbyPicker<P> {
         }
     }
 
-    /** A process with its index in {@code processes} and the load it was queued with. */
+    /** A process with its index in {@code processes}, its leaf and the load it is queued with; replaced on a change. */
     static final class QueuedProcess<P> {
-        static final Comparator<QueuedProcess<?>> ORDER = (process1, process2) ->
-            compare(process1.load, process1.processIndex, process2.load, process2.processIndex);
+        // By load, then by process index.
+        static final Comparator<QueuedProcess<?>> ORDER = (process1, process2) -> {
+            final int byLoad = Double.compare(process1.load, process2.load);
+            return byLoad != 0 ? byLoad : Integer.compare(process1.processIndex, process2.processIndex);
+        };
 
         final P process;
         final int processIndex;
-        double load;
+        private final Node<P> leaf;
+        final double load;
 
-        private QueuedProcess(final P process, final int processIndex, final double load) {
+        private QueuedProcess(final P process, final int processIndex, final Node<P> leaf, final double load) {
             this.process = process;
             this.processIndex = processIndex;
+            this.leaf = leaf;
             this.load = load;
-        }
-
-        /** Orders by load, then by process index. */
-        static int compare(final double load1, final int processIndex1, final double load2, final int processIndex2) {
-            final int byLoad = Double.compare(load1, load2);
-            return byLoad != 0 ? byLoad : Integer.compare(processIndex1, processIndex2);
         }
     }
 
     private static final class Node<P> {
         private static final Comparator<Node<?>> BY_LEAST_LOADED = (node1, node2) ->
-            QueuedProcess.compare(node1.queuedLoad, node1.queuedProcessIndex, node2.queuedLoad, node2.queuedProcessIndex);
+            QueuedProcess.ORDER.compare(node1.leastLoaded, node2.leastLoaded);
 
+        // Null for the root.
+        private final Node<P> parent;
         // The key index and value index of the node's own value, -1 for the root.
         private final int keyIndex;
         private final int valueIndex;
@@ -541,30 +498,31 @@ final class RackAwareStandbyPicker<P> {
         // Inner nodes only: per key index, the value indexes of the nodes below this one, not its own; null for a key
         // with none.
         private final BitSet[] valuesBelow;
-        // Inner nodes only: the children with room, by the least-loaded process they are queued with.
-        private final PriorityQueue<Node<P>> childrenByLeastLoaded;
-        // Inner nodes only: the children a query took out of the queue, put back before the query leaves this node.
-        private final List<Node<P>> setAsideChildren;
-        // Leaves only: the processes that may still have room, by the load each was queued with.
-        private final PriorityQueue<QueuedProcess<P>> processesByLoad;
+        // Inner nodes only: the children with room below, by their least-loaded process.
+        private final TreeSet<Node<P>> childrenByLeastLoaded;
+        // Leaves only: the processes with room, by load.
+        private final TreeSet<QueuedProcess<P>> processesByLoad;
         // Leaves only: the value index of the processes for each key.
         private int[] valueIndexes;
-        // The least-loaded process below this node when it was last queued in its parent; a stale one is only lighter.
-        private double queuedLoad;
-        private int queuedProcessIndex;
-        // Set once the head of the queue is current: cachedLeastLoaded is then the least-loaded process with room below
-        // this node, or null. Cleared by clearCache.
-        private boolean isCached;
-        private QueuedProcess<P> cachedLeastLoaded;
+        // The least-loaded process with room below this node, or null if none.
+        private QueuedProcess<P> leastLoaded;
 
-        private Node(final int keyIndex, final int valueIndex, final int numKeys, final boolean isLeaf) {
+        private Node(final Node<P> parent, final int keyIndex, final int valueIndex, final int numKeys, final boolean isLeaf) {
+            this.parent = parent;
             this.keyIndex = keyIndex;
             this.valueIndex = valueIndex;
             this.isLeaf = isLeaf;
             this.valuesBelow = isLeaf ? null : new BitSet[numKeys];
-            this.childrenByLeastLoaded = isLeaf ? null : new PriorityQueue<>(BY_LEAST_LOADED);
-            this.setAsideChildren = isLeaf ? null : new ArrayList<>();
-            this.processesByLoad = isLeaf ? new PriorityQueue<>(QueuedProcess.ORDER) : null;
+            this.childrenByLeastLoaded = isLeaf ? null : new TreeSet<>(BY_LEAST_LOADED);
+            this.processesByLoad = isLeaf ? new TreeSet<>(QueuedProcess.ORDER) : null;
+        }
+
+        /** The least-loaded process with room below this node, from the head of its queue. */
+        private QueuedProcess<P> leastLoadedInQueue() {
+            if (isLeaf) {
+                return processesByLoad.isEmpty() ? null : processesByLoad.first();
+            }
+            return childrenByLeastLoaded.isEmpty() ? null : childrenByLeastLoaded.first().leastLoaded;
         }
 
         /** The value indexes below this node for the key, created on first use. */
