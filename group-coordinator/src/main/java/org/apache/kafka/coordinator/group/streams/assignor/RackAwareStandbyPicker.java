@@ -276,7 +276,7 @@ final class RackAwareStandbyPicker<P> {
 
     /**
      * The least-loaded process with room of the candidates; call it before placing the standby. Only valid for the
-     * non-empty conditions {@link #pick()} returned: without conditions, nothing keeps out the holders of the task.
+     * non-empty conditions {@link #pick()} returned: otherwise the pick found no process.
      */
     P leastLoaded(final List<TagKey> conditions) {
         if (conditions.isEmpty()) {
@@ -424,9 +424,9 @@ final class RackAwareStandbyPicker<P> {
         };
 
         final P process;
-        final int processIndex;
+        private final int processIndex;
         private final Node<P> leaf;
-        final double load;
+        private final double load;
 
         private QueuedProcess(final P process, final int processIndex, final Node<P> leaf, final double load) {
             this.process = process;

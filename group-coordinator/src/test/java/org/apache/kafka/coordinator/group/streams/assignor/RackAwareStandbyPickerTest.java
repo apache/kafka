@@ -164,10 +164,10 @@ public class RackAwareStandbyPickerTest {
                 }
                 picker.startTask(holders);
 
-                for (int pick = 0; pick < 3; pick++) {
-                    assertPickMatchesScan(tagKeys, clientTags, holders, "round " + round + ", task " + task + ", pick " + pick);
+                for (int check = 0; check < 3; check++) {
+                    assertQueriesMatchScan(tagKeys, clientTags, holders, "round " + round + ", task " + task + ", check " + check);
 
-                    // Before the next pick, one change reported with updated, or up to three with updatedAll.
+                    // Before the next check, one change reported with updated, or up to three with updatedAll.
                     if (random.nextInt(4) == 0) {
                         for (int change = 0, numChanges = 1 + random.nextInt(3); change < numChanges; change++) {
                             changeLoadAndRoom(random);
@@ -246,8 +246,8 @@ public class RackAwareStandbyPickerTest {
         return clientTags;
     }
 
-    /** Checks every query of a new pick, for every set of conditions, against a scan over all processes. */
-    private void assertPickMatchesScan(
+    /** Checks every query, for every set of conditions, against a scan over all processes. */
+    private void assertQueriesMatchScan(
         final List<String> tagKeys,
         final Map<String, Map<String, String>> clientTags,
         final Set<String> holders,
