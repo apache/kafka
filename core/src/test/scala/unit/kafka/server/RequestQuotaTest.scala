@@ -692,7 +692,7 @@ class RequestQuotaTest extends BaseRequestTest {
           new PushTelemetryRequest.Builder(new PushTelemetryRequestData())
 
         case ApiKeys.ASSIGN_REPLICAS_TO_DIRS =>
-          new AssignReplicasToDirsRequest.Builder(new AssignReplicasToDirsRequestData())
+          new AssignReplicasToDirsRequest.Builder(new AssignReplicasToDirsRequestData(), false)
 
         case ApiKeys.LIST_CONFIG_RESOURCES =>
           new ListConfigResourcesRequest.Builder(new ListConfigResourcesRequestData())
