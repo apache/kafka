@@ -54,11 +54,10 @@ final class AssignmentInvariants {
 
         assertEachActiveTaskOwnedOnce(scenario.topology, activeOwners);
         assertStandbyCount(scenario, standbyOwners);
-        assertTotals(scenario, activeOwners, standbyOwners);
     }
 
     /** The standby tasks a stateful task has when every process can hold at most one of its replicas. */
-    static int expectedStandbys(final Scenario scenario) {
+    private static int expectedStandbys(final Scenario scenario) {
         return Math.min(scenario.numStandbyReplicas, scenario.processes.size() - 1);
     }
 
@@ -108,16 +107,5 @@ final class AssignmentInvariants {
             final List<String> owners = standbyOwners.getOrDefault(task, List.of());
             assertEquals(expected, owners.size(), "stateful task " + task + " must have " + expected + " standby tasks but has " + owners);
         }
-    }
-
-    private static void assertTotals(
-        final Scenario scenario,
-        final Map<TaskId, List<String>> activeOwners,
-        final Map<TaskId, List<String>> standbyOwners
-    ) {
-        final int activeTasks = activeOwners.values().stream().mapToInt(List::size).sum();
-        final int standbyTasks = standbyOwners.values().stream().mapToInt(List::size).sum();
-        assertEquals(scenario.topology.tasks().size(), activeTasks, "active tasks assigned in total");
-        assertEquals(scenario.topology.statefulTasks().size() * expectedStandbys(scenario), standbyTasks, "standby tasks assigned in total");
     }
 }

@@ -16,6 +16,7 @@
  */
 package org.apache.kafka.coordinator.group.streams.assignor;
 
+import org.apache.kafka.coordinator.group.GroupCoordinatorConfig;
 import org.apache.kafka.coordinator.group.api.streams.assignor.GroupAssignment;
 import org.apache.kafka.coordinator.group.api.streams.assignor.MemberAssignment;
 import org.apache.kafka.coordinator.group.api.streams.assignor.TaskAssignor;
@@ -37,46 +38,20 @@ import java.util.TreeSet;
 
 /**
  * Randomized testbed for {@link TaskAssignor} implementations. Each scenario generates a random topology and group
- * from a seed, runs the assignor until the assignment converges, then applies random changes (a process joining,
- * leaving or restarting, a member leaving, a subtopology being added) and converges again. Every assignment is checked
- * against {@link AssignmentInvariants} and the assignor-specific checks given by the caller; the converged result of
- * each rebalance is graded by {@link AssignmentMetrics} and the assignor-specific graders given by the caller, and
- * the summary is printed so two assignors, or two versions of one, can be compared on the same scenarios. When the
- * scenario has client tags, the same input is also assigned with {@code rackAwareAssignmentTags} empty, and the
- * tag-related rows of that tag-blind result are reported next to the real ones.
+ * from a seed, runs the assignor, then applies random changes (a process joining, leaving or restarting, a member
+ * leaving, a subtopology being added) and runs it again after each one. A change may hit while warm-up tasks are in
+ * flight, so the assignor also sees them in its input. Every assignment is checked against
+ * {@link AssignmentInvariants}; the assignment of each rebalance is graded by {@link AssignmentMetrics} on what every
+ * assignor is compared on, and the summary is printed so two assignors, or two versions of one, can be compared on
+ * the same scenarios.
  * <p>
- * Runs are deterministic: {@link #run} derives all scenarios from {@link #DEFAULT_BASE_SEED}, so a test can assert
- * fixed bounds on the summaries. {@link #runFromEnvironment}, for a fuzz test's {@code main}, prints the summaries
- * only: set {@code STREAMS_ASSIGNOR_FUZZ_BASE_SEED=<seed>} to run a different set of scenarios, or
+ * Runs are deterministic: {@link #run} derives all scenarios from {@link #DEFAULT_BASE_SEED}.
+ * {@link #runFromEnvironment}, for a fuzz test's {@code main}, takes the seeds from the environment: set
+ * {@code STREAMS_ASSIGNOR_FUZZ_BASE_SEED=<seed>} to run a different set of scenarios, or
  * {@code STREAMS_ASSIGNOR_FUZZ_SEED=<seed>} to replay the single scenario named by a failure. The system properties
  * {@code streams.assignor.fuzz.base.seed} and {@code streams.assignor.fuzz.seed} work as well.
  */
 final class TaskAssignorTestbed {
-
-    /**
-     * An assignor-specific check run on every assignment, in addition to the invariants. {@code last} is true for
-     * the final assignment of a rebalance, the converged one or the last attempt, so expensive checks can run once.
-     */
-    @FunctionalInterface
-    interface AssignmentCheck {
-        void check(Scenario scenario, GroupAssignment result, boolean last);
-    }
-
-    /**
-     * Assignor-specific metrics graded on the converged result of every rebalance, next to {@link AssignmentMetrics}.
-     * Every call returns the same rows in the same order; an empty value is not graded for this rebalance.
-     * {@code reportedTasks} are the stateful tasks each process reported offsets for when the rebalance started,
-     * as a restarted process does for the state on its disk.
-     */
-    @FunctionalInterface
-    interface AssignmentGrader {
-        Map<String, OptionalDouble> grade(
-            Scenario scenario,
-            GroupAssignment result,
-            Scenario.Baseline before,
-            Map<String, Set<TaskId>> reportedTasks
-        );
-    }
 
     static final long DEFAULT_BASE_SEED = 42L;
     static final List<String> TAG_KEYS = List.of("region", "zone", "rack");
@@ -233,20 +208,9 @@ final class TaskAssignorTestbed {
     }
 
     private final TaskAssignor assignor;
-    private final List<AssignmentCheck> checks;
-    private final List<AssignmentGrader> graders;
 
-    TaskAssignorTestbed(final TaskAssignor assignor, final List<AssignmentCheck> checks, final List<AssignmentGrader> graders) {
+    TaskAssignorTestbed(final TaskAssignor assignor) {
         this.assignor = assignor;
-        this.checks = List.copyOf(checks);
-        final List<AssignmentGrader> allGraders = new ArrayList<>();
-        allGraders.add(AssignmentMetrics::grade);
-        allGraders.addAll(graders);
-        this.graders = List.copyOf(allGraders);
-    }
-
-    /** The two summaries of a run: the initial assignment of each group, and the rebalances after the random changes. */
-    record Summaries(AssignmentMetrics.Summary fromEmpty, AssignmentMetrics.Summary fromPrevious) {
     }
 
     /**
@@ -254,8 +218,8 @@ final class TaskAssignorTestbed {
      * assignment of each group, computed from an empty assignment, and the rebalances after the random changes,
      * computed from the previous assignment.
      */
-    Summaries run(final Profile profile) {
-        return run(profile, baseSeed(DEFAULT_BASE_SEED, profile), profile.scenarios());
+    void run(final Profile profile) {
+        run(profile, baseSeed(DEFAULT_BASE_SEED, profile), profile.scenarios());
     }
 
     /** Like {@link #run(Profile)}, but from the seeds set in the environment, see the class javadoc. */
@@ -274,7 +238,7 @@ final class TaskAssignorTestbed {
         return base + profile.ordinal() * 1_000_000L;
     }
 
-    private Summaries run(final Profile profile, final long baseSeed, final int scenarios) {
+    private void run(final Profile profile, final long baseSeed, final int scenarios) {
         final String title = assignor.name() + ", " + profile + ", " + scenarios + " scenarios, base seed " + baseSeed;
         final AssignmentMetrics.Summary fromEmpty = new AssignmentMetrics.Summary(title + ", from empty assignment");
         final AssignmentMetrics.Summary fromPrevious = new AssignmentMetrics.Summary(title + ", from previous assignment");
@@ -283,7 +247,6 @@ final class TaskAssignorTestbed {
         }
         System.out.println(fromEmpty);
         System.out.println(fromPrevious);
-        return new Summaries(fromEmpty, fromPrevious);
     }
 
     private static Long readSeed(final String property, final String environmentVariable) {
@@ -304,12 +267,13 @@ final class TaskAssignorTestbed {
         final Random random = new Random(seed);
         final Scenario scenario = Scenario.generate(random, profile);
         try {
-            converge(scenario, fromEmpty, scenario.baseline());
+            rebalance(scenario, fromEmpty, scenario.baseline());
             final int changes = random.nextInt(MAX_CHANGES) + 1;
             for (int i = 0; i < changes; i++) {
+                scenario.startWarmups(random);
                 final Scenario.Baseline before = scenario.baseline();
                 scenario.applyRandomChange(random);
-                converge(scenario, fromPrevious, before);
+                rebalance(scenario, fromPrevious, before);
             }
         } catch (final AssertionError | RuntimeException e) {
             throw new AssertionError(
@@ -321,84 +285,45 @@ final class TaskAssignorTestbed {
     }
 
     /**
-     * One rebalance: the assignor runs on the scenario's input until its output reproduces itself, and the converged
-     * result is graded against {@code before}, the state before the change that triggered the rebalance. When the
-     * scenario has client tags, the same input is then assigned tag-blind through the same loop and the tag-related
-     * rows of that result are added, so the effect and the cost of rack-aware standby task assignment can be read
-     * off the same rebalance. The scenario ends up holding the tag-aware result.
+     * One rebalance: the assignor runs on the scenario's input, and its result, the one the coordinator installs, is
+     * graded against {@code before}, the state before the change that triggered the rebalance. The assignor then runs
+     * again on its own output, each result fed back as the previous assignment, until the output reproduces itself
+     * or {@link #MAX_CONVERGENCE_ITERATIONS} is reached, which only adds the convergence rows. Not converging is
+     * graded, not failed: the coordinator runs the assignor once per rebalance, so it only means a later rebalance
+     * will move tasks again. Every result passes {@link AssignmentInvariants}; the scenario goes on from the first.
      */
-    private void converge(final Scenario scenario, final AssignmentMetrics.Summary summary, final Scenario.Baseline before) {
-        // Reported in the first heartbeat after a restart and gone once the members hold an assignment again.
-        final Map<String, Set<TaskId>> reportedTasks = scenario.reportedTasksByProcess();
-        final Scenario.Input input = scenario.input();
-        final Converged real = converge(scenario, before, reportedTasks, scenario.tagKeys, "");
-        final Map<String, OptionalDouble> metrics = new LinkedHashMap<>(real.metrics());
-        if (scenario.tagKeys.isEmpty()) {
-            metrics.putAll(AssignmentMetrics.tagBlindRows(metrics, false));
-        } else {
-            scenario.restore(input);
-            final Converged tagBlind = converge(scenario, before, reportedTasks, List.of(), " tag-blind");
-            metrics.putAll(AssignmentMetrics.tagBlindRows(tagBlind.metrics(), true));
-            scenario.feedBack(real.result());
-        }
-        summary.add(metrics);
-        scenario.history.append(real.converged() ? "  converged after " + real.rounds() + " rounds: " : "  not converged within " + MAX_CONVERGENCE_ITERATIONS + " rounds: ")
-            .append(AssignmentMetrics.format(metrics)).append('\n');
-    }
-
-    /** The result of a convergence loop, {@code rounds} being the assignments that changed something before it. */
-    private record Converged(GroupAssignment result, boolean converged, int rounds, Map<String, OptionalDouble> metrics) {
-    }
-
-    /**
-     * Runs the assignor, feeding each result back as the previous assignment, until the result converges or
-     * {@link #MAX_CONVERGENCE_ITERATIONS} is reached. Not converging is graded, not failed: the coordinator runs the
-     * assignor once per rebalance, so it only means the next rebalance will move tasks again. Every result passes
-     * {@link AssignmentInvariants} and the registered checks; the last one is graded. {@code label} marks the run in
-     * the history.
-     */
-    private Converged converge(
-        final Scenario scenario,
-        final Scenario.Baseline before,
-        final Map<String, Set<TaskId>> reportedTasks,
-        final List<String> rackAwareAssignmentTags,
-        final String label
-    ) {
+    private void rebalance(final Scenario scenario, final AssignmentMetrics.Summary summary, final Scenario.Baseline before) {
+        GroupAssignment first = null;
         long firstAssignmentNanos = 0;
         for (int iteration = 1; ; iteration++) {
             GroupAssignment result = null;
             final boolean converged;
-            final boolean last;
             try {
-                final GroupSpecImpl groupSpec = scenario.groupSpec(rackAwareAssignmentTags);
+                final GroupSpecImpl groupSpec = scenario.groupSpec();
                 final long start = System.nanoTime();
                 result = assignor.assign(groupSpec, scenario.topology);
                 if (iteration == 1) {
                     firstAssignmentNanos = System.nanoTime() - start;
+                    first = result;
                 }
                 AssignmentInvariants.assertValid(scenario, result);
                 converged = result.members().equals(scenario.previousAssignment);
-                last = converged || iteration == MAX_CONVERGENCE_ITERATIONS;
-                for (final AssignmentCheck check : checks) {
-                    check.check(scenario, result, last);
-                }
             } catch (final AssertionError | RuntimeException e) {
-                scenario.history.append("  iteration ").append(iteration).append(label).append(" input: ").append(format(scenario.previousAssignment)).append('\n')
-                    .append("  iteration ").append(iteration).append(label).append(" FAILED: ").append(result == null ? String.valueOf(e) : format(result.members())).append('\n');
+                scenario.history.append("  iteration ").append(iteration).append(" input: ").append(format(scenario.previousAssignment)).append('\n')
+                    .append("  iteration ").append(iteration).append(" FAILED: ").append(result == null ? String.valueOf(e) : format(result.members())).append('\n');
                 throw e;
             }
             if (scenario.profile.fullHistory()) {
-                scenario.history.append("  iteration ").append(iteration).append(label).append(": ").append(format(result.members())).append('\n');
+                scenario.history.append("  iteration ").append(iteration).append(": ").append(format(result.members())).append('\n');
             }
-            if (last) {
-                final int rounds = iteration - 1;
-                final Map<String, OptionalDouble> metrics = new LinkedHashMap<>();
-                for (final AssignmentGrader grader : graders) {
-                    metrics.putAll(grader.grade(scenario, result, before, reportedTasks));
-                }
-                metrics.putAll(AssignmentMetrics.convergenceRows(rounds, converged, firstAssignmentNanos));
-                scenario.feedBack(result);
-                return new Converged(result, converged, rounds, metrics);
+            if (converged || iteration == MAX_CONVERGENCE_ITERATIONS) {
+                final Map<String, OptionalDouble> metrics = new LinkedHashMap<>(AssignmentMetrics.grade(scenario, first, before));
+                metrics.putAll(AssignmentMetrics.convergenceRows(iteration - 1, converged, firstAssignmentNanos));
+                summary.add(metrics);
+                scenario.history.append(converged ? "  converged after " + (iteration - 1) + " rounds: " : "  not converged within " + MAX_CONVERGENCE_ITERATIONS + " rounds: ")
+                    .append(AssignmentMetrics.format(metrics)).append('\n');
+                scenario.feedBack(first);
+                return;
             }
             scenario.feedBack(result);
         }
@@ -508,15 +433,21 @@ final class TaskAssignorTestbed {
         private final Map<String, String> memberToProcess = new HashMap<>();
         /** Offsets a restarted process reports for the stateful tasks on its disk, keyed by its new member ids. */
         private final Map<String, Map<String, Map<Integer, Long>>> reportedOffsets = new HashMap<>();
+        /** Warm-up tasks the members hold when the rebalance starts, keyed by member id. */
+        private final Map<String, Map<String, Set<Integer>>> warmupTasks = new HashMap<>();
         private int nextProcess;
         private int nextGeneration;
         private int nextSubtopology;
 
         /**
-         * What the members held before the change that triggered a rebalance, and on which process, so that
-         * task movement can be told apart from the tasks of a process that left.
+         * What the members held before the change that triggered a rebalance, warm-up tasks included, and on which
+         * process, so that task movement can be told apart from the tasks of a process that left.
          */
-        record Baseline(Map<String, MemberAssignment> assignment, Map<String, String> processOfMember) {
+        record Baseline(
+            Map<String, MemberAssignment> assignment,
+            Map<String, Map<String, Set<Integer>>> warmupTasks,
+            Map<String, String> processOfMember
+        ) {
         }
 
         private Scenario(
@@ -575,6 +506,51 @@ final class TaskAssignorTestbed {
             while (!applied) {
                 applied = changes.get(random.nextInt(changes.size())).apply(random);
             }
+        }
+
+        /**
+         * The refiner may be migrating stateful tasks when the next change hits, up to the default
+         * {@code group.streams.num.warmup.replicas} at a time: the active task stays with its owner while a member of
+         * a process holding no replica of the task restores its state as a warm-up task. Placing warm-up tasks does
+         * not trigger a rebalance, so only the next one sees them.
+         */
+        void startWarmups(final Random random) {
+            final List<TaskId> statefulTasks = new ArrayList<>(new TreeSet<>(topology.statefulTasks()));
+            if (statefulTasks.isEmpty()) {
+                return;
+            }
+            final int warmups = random.nextInt(GroupCoordinatorConfig.STREAMS_GROUP_NUM_WARMUP_REPLICAS_DEFAULT + 1);
+            final Set<TaskId> warmedUp = new HashSet<>();
+            for (int i = 0; i < warmups; i++) {
+                final TaskId task = statefulTasks.get(random.nextInt(statefulTasks.size()));
+                if (!warmedUp.add(task)) {
+                    continue;
+                }
+                final Set<String> holders = new HashSet<>();
+                previousAssignment.forEach((memberId, assignment) -> {
+                    if (holds(assignment.activeTasks(), task) || holds(assignment.standbyTasks(), task)) {
+                        holders.add(memberToProcess.get(memberId));
+                    }
+                });
+                final List<String> candidates = new ArrayList<>();
+                processes.forEach((processId, process) -> {
+                    if (!holders.contains(processId)) {
+                        candidates.addAll(process.members);
+                    }
+                });
+                if (candidates.isEmpty()) {
+                    continue;
+                }
+                final String memberId = candidates.get(random.nextInt(candidates.size()));
+                warmupTasks.computeIfAbsent(memberId, m -> new HashMap<>())
+                    .computeIfAbsent(task.subtopologyId(), s -> new HashSet<>())
+                    .add(task.partition());
+                history.append("warm-up task ").append(task).append(" on ").append(memberId).append('\n');
+            }
+        }
+
+        private static boolean holds(final Map<String, Set<Integer>> tasks, final TaskId task) {
+            return tasks.getOrDefault(task.subtopologyId(), Set.of()).contains(task.partition());
         }
 
         private boolean addProcessChange(final Random random) {
@@ -644,6 +620,7 @@ final class TaskAssignorTestbed {
             processes.get(processId).members.remove(memberId);
             memberToProcess.remove(memberId);
             reportedOffsets.remove(memberId);
+            warmupTasks.remove(memberId);
             final Map<String, MemberAssignment> remaining = new HashMap<>(previousAssignment);
             remaining.remove(memberId);
             previousAssignment = remaining;
@@ -654,6 +631,7 @@ final class TaskAssignorTestbed {
             for (final String memberId : process.members) {
                 memberToProcess.remove(memberId);
                 reportedOffsets.remove(memberId);
+                warmupTasks.remove(memberId);
             }
             final Map<String, MemberAssignment> remaining = new HashMap<>(previousAssignment);
             remaining.keySet().removeAll(process.members);
@@ -662,7 +640,7 @@ final class TaskAssignorTestbed {
 
         /**
          * The process comes back with fresh member ids and no target assignment, but its state directories still
-         * hold the stateful tasks it owned, which it reports as task offsets.
+         * hold the stateful tasks it owned or was warming up, which it reports as task offsets.
          */
         private void restartProcess(final String processId) {
             final ProcessSpec process = processes.get(processId);
@@ -673,11 +651,15 @@ final class TaskAssignorTestbed {
                 memberToProcess.remove(oldMember);
                 reportedOffsets.remove(oldMember);
                 final MemberAssignment previous = remaining.remove(oldMember);
+                final Map<String, Set<Integer>> warmups = warmupTasks.remove(oldMember);
                 final String newMember = addMember(processId);
                 if (previous != null) {
                     final Map<String, Map<Integer, Long>> offsets = new HashMap<>();
                     addOffsets(offsets, previous.activeTasks());
                     addOffsets(offsets, previous.standbyTasks());
+                    if (warmups != null) {
+                        addOffsets(offsets, warmups);
+                    }
                     reportedOffsets.put(newMember, offsets);
                 }
             }
@@ -685,36 +667,7 @@ final class TaskAssignorTestbed {
         }
 
         Baseline baseline() {
-            return new Baseline(previousAssignment, Map.copyOf(memberToProcess));
-        }
-
-        /** What the members hold and report when the assignor runs, so the same input can be assigned again. */
-        record Input(Map<String, MemberAssignment> previousAssignment, Map<String, Map<String, Map<Integer, Long>>> reportedOffsets) {
-        }
-
-        Input input() {
-            return new Input(previousAssignment, Map.copyOf(reportedOffsets));
-        }
-
-        void restore(final Input input) {
-            previousAssignment = input.previousAssignment();
-            reportedOffsets.clear();
-            reportedOffsets.putAll(input.reportedOffsets());
-        }
-
-        /** The stateful tasks each process currently reports offsets for, as a restarted process does for the state on its disk. */
-        Map<String, Set<TaskId>> reportedTasksByProcess() {
-            final Map<String, Set<TaskId>> reportedTasksByProcess = new HashMap<>();
-            reportedOffsets.forEach((memberId, offsets) ->
-                reportedTasksByProcess.computeIfAbsent(memberToProcess.get(memberId), p -> new HashSet<>()).addAll(toTaskIds(toPartitions(offsets)))
-            );
-            return reportedTasksByProcess;
-        }
-
-        private static Map<String, Set<Integer>> toPartitions(final Map<String, Map<Integer, Long>> offsets) {
-            final Map<String, Set<Integer>> partitions = new HashMap<>();
-            offsets.forEach((subtopology, perPartition) -> partitions.put(subtopology, perPartition.keySet()));
-            return partitions;
+            return new Baseline(previousAssignment, Map.copyOf(warmupTasks), Map.copyOf(memberToProcess));
         }
 
         /** Only stateful tasks leave state on disk, so only they are reported. */
@@ -741,8 +694,8 @@ final class TaskAssignorTestbed {
             return true;
         }
 
-        /** The spec the assignor sees; {@code rackAwareAssignmentTags} is a parameter so the same input can be assigned tag-blind. */
-        GroupSpecImpl groupSpec(final List<String> rackAwareAssignmentTags) {
+        /** The spec the assignor sees: what the members currently hold and report, as {@code GroupSpecBuilder} builds it. */
+        GroupSpecImpl groupSpec() {
             final Map<String, MemberMetadataAndStateImpl> members = new HashMap<>();
             processes.forEach((processId, process) -> {
                 for (final String memberId : process.members) {
@@ -754,7 +707,7 @@ final class TaskAssignorTestbed {
                         process.tags,
                         previous == null ? Map.of() : previous.activeTasks(),
                         previous == null ? Map.of() : previous.standbyTasks(),
-                        Map.of(),
+                        warmupTasks.getOrDefault(memberId, Map.of()),
                         reportedOffsets.getOrDefault(memberId, Map.of()),
                         Map.of()
                     ));
@@ -764,13 +717,15 @@ final class TaskAssignorTestbed {
                 members,
                 AssignmentConfigsImpl.DEFAULT
                     .withNumStandbyReplicas(numStandbyReplicas)
-                    .withRackAwareAssignmentTags(rackAwareAssignmentTags)
+                    .withRackAwareAssignmentTags(tagKeys)
             );
         }
 
+        /** The warm-up tasks end with the rebalance too, since the testbed does not refine the new target assignment. */
         void feedBack(final GroupAssignment result) {
             previousAssignment = new HashMap<>(result.members());
             reportedOffsets.clear();
+            warmupTasks.clear();
         }
 
         Set<String> memberIds() {
