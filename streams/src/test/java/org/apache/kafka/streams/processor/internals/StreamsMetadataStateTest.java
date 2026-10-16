@@ -16,6 +16,7 @@
  */
 package org.apache.kafka.streams.processor.internals;
 
+import org.apache.kafka.clients.producer.internals.BuiltInPartitioner;
 import org.apache.kafka.common.PartitionInfo;
 import org.apache.kafka.common.TopicPartition;
 import org.apache.kafka.common.header.Headers;
@@ -504,6 +505,48 @@ public class StreamsMetadataStateTest {
         }
 
         assertFalse(metadataState.allMetadata().isEmpty(), "encapsulation broken");
+    }
+
+    /**
+     * When a partition is missing from the host map (streams-protocol revocation, or
+     * {@code application.server=null}), hashing must still use the true partition count.
+     * The missing partition's keys must resolve to {@link HostInfo#unavailable()}, not to a
+     * different live host.
+     */
+    @Test
+    public void shouldReturnUnavailableHostWhenPartitionIsOmittedFromHostMetadataIfPartitionCountIsKnown() {
+        final TopicPartition topic1P2 = new TopicPartition("topic-one", 2);
+
+        final Map<HostInfo, Set<TopicPartition>> incompleteHostMap = new HashMap<>();
+        incompleteHostMap.put(hostOne, Set.of(topic1P0, topic1P1));
+        incompleteHostMap.put(hostTwo, Set.of(topic1P2));
+
+        metadataState.onChange(
+            incompleteHostMap,
+            Collections.emptyMap(),
+            StreamThread.getTopicPartitionInfo(incompleteHostMap, Map.of("topic-one", 4))
+        );
+
+        final Serializer<String> serializer = Serdes.String().serializer();
+        String keyOnPartition3 = null;
+        for (int i = 0; i < 10_000; i++) {
+            final String key = "key-" + i;
+            if (BuiltInPartitioner.partitionForKey(serializer.serialize("topic-one", key), 4) == 3) {
+                keyOnPartition3 = key;
+                break;
+            }
+        }
+        assertNotNull(keyOnPartition3);
+
+        final KeyQueryMetadata actual = metadataState.keyQueryMetadataForKey(
+            "table-one",
+            keyOnPartition3,
+            new RecordHeaders(),
+            serializer
+        );
+        assertEquals(3, actual.partition());
+        assertEquals(HostInfo.unavailable(), actual.activeHost());
+        assertTrue(actual.standbyHosts().isEmpty());
     }
 
     private static class MultiValuedPartitioner implements StreamPartitioner<String, Object> {
