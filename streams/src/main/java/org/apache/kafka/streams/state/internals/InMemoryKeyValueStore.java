@@ -248,13 +248,16 @@ public class InMemoryKeyValueStore implements KeyValueStore<Bytes, byte[]> {
                                                                                      final IsolationLevel isolationLevel) {
         // headers aren't needed because the prefix already arrives serialized
         final Bytes from = Bytes.wrap(prefixKeySerializer.serialize(null, prefix));
-        final Bytes to = ByteUtils.increment(from);
+        final Bytes to = ByteUtils.incrementWithoutOverflow(from);
 
         if (transactionBuffer != null) {
             return transactionBuffer.range(from, to, true, false, isolationLevel);
         }
         synchronized (this) {
-            return new InMemoryKeyValueIterator(map.subMap(from, true, to, false).keySet(), true);
+            final NavigableMap<Bytes, byte[]> subMap = to == null
+                ? map.tailMap(from, true)
+                : map.subMap(from, true, to, false);
+            return new InMemoryKeyValueIterator(subMap.keySet(), true);
         }
     }
 
