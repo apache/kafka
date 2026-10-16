@@ -913,6 +913,31 @@ public class RecordCollectorTest {
         collector.closeDirty();
     }
 
+    @Test
+    public void shouldClearOffsetsOnCloseDirtyIfAbortTransactionThrows() {
+        streamsProducer = new StreamsProducer(
+            new MockProducer<>(cluster, true, null, byteArraySerializer, byteArraySerializer) {
+                @Override
+                public void abortTransaction() {
+                    // what the producer throws while a timed-out commitTransaction() is still pending
+                    throw new IllegalStateException("Cannot attempt operation `abortTransaction` because the previous "
+                        + "call to `commitTransaction` timed out and must be retried");
+                }
+            },
+            EXACTLY_ONCE_V2,
+            Time.SYSTEM,
+            logContext
+        );
+        final RecordCollector collector = newRecordCollector(productionExceptionHandler);
+        collector.initialize();
+        collector.send(topic, "key", "value", null, 0, null, stringSerializer, stringSerializer, sinkNodeName, context);
+        assertFalse(collector.offsets().isEmpty());
+
+        assertThrows(IllegalStateException.class, collector::closeDirty);
+
+        assertTrue(collector.offsets().isEmpty());
+    }
+
     @SuppressWarnings({"unchecked", "rawtypes"})
     @Test
     public void shouldThrowInformativeStreamsExceptionOnKeyClassCastException() {

@@ -42,7 +42,7 @@ import java.util.Map;
  *
  * <p>Only topics subscribed by at least one member and which exist are retained.
  */
-final class IndexedGroup {
+public final class IndexedGroup {
     /**
      * Builds the {@link IndexedGroup} of a group spec.
      *
@@ -58,7 +58,7 @@ final class IndexedGroup {
      *
      * <p>A builder builds a single group: a second call to {@link #build()} throws.
      */
-    static final class Builder {
+    public static final class Builder {
         /**
          * The group spec, which gives the subscription of every member.
          */
@@ -134,7 +134,7 @@ final class IndexedGroup {
          * @param groupSpec                The group spec.
          * @param subscribedTopicDescriber The describer of the subscribed topics.
          */
-        Builder(GroupSpec groupSpec, SubscribedTopicDescriber subscribedTopicDescriber) {
+        public Builder(GroupSpec groupSpec, SubscribedTopicDescriber subscribedTopicDescriber) {
             this(groupSpec, subscribedTopicDescriber, -1L);
         }
 
@@ -143,7 +143,7 @@ final class IndexedGroup {
          * @param subscribedTopicDescriber The describer of the subscribed topics.
          * @param hashMask                 The mask applied to the hash of every subscription.
          */
-        Builder(
+        public Builder(
             GroupSpec groupSpec,
             SubscribedTopicDescriber subscribedTopicDescriber,
             long hashMask
@@ -162,7 +162,7 @@ final class IndexedGroup {
          * @return The group.
          * @throws IllegalStateException If the group is already built.
          */
-        IndexedGroup build() {
+        public IndexedGroup build() {
             if (built) {
                 throw new IllegalStateException("The group is already built");
             }
@@ -498,42 +498,42 @@ final class IndexedGroup {
     /**
      * @return The number of members.
      */
-    int memberCount() {
+    public int memberCount() {
         return memberIds.length;
     }
 
     /**
      * @return The id of the member.
      */
-    String memberId(int member) {
+    public String memberId(int member) {
         return memberIds[member];
     }
 
     /**
      * @return The cohort of the member.
      */
-    int cohortOf(int member) {
+    public int cohortOf(int member) {
         return cohortOfMember[member];
     }
 
     /**
      * @return The number of topics.
      */
-    int topicCount() {
+    public int topicCount() {
         return topicIds.length;
     }
 
     /**
      * @return The id of the topic.
      */
-    Uuid topicId(int topic) {
+    public Uuid topicId(int topic) {
         return topicIds[topic];
     }
 
     /**
      * @return The index of the topic, or -1 if nobody subscribes to it or it does not exist.
      */
-    int topicIndex(Uuid topicId) {
+    public int topicIndex(Uuid topicId) {
         var topic = topicIndices.get(topicId);
         return topic == null ? -1 : topic;
     }
@@ -541,7 +541,7 @@ final class IndexedGroup {
     /**
      * @return The number of partitions of the topic.
      */
-    int partitionCount(int topic) {
+    public int partitionCount(int topic) {
         return partitionCounts[topic];
     }
 
@@ -549,7 +549,7 @@ final class IndexedGroup {
      * @return The number of members subscribing to the topic. Always at least one for topics
      *         retained by the class.
      */
-    int subscriberCount(int topic) {
+    public int subscriberCount(int topic) {
         return subscriberCounts[topic];
     }
 
@@ -557,35 +557,35 @@ final class IndexedGroup {
      * @return The cohorts subscribing to the topic, in cohort order. The array must not be
      *         changed.
      */
-    int[] cohortsOf(int topic) {
+    public int[] cohortsOf(int topic) {
         return cohortsOfTopic[topic];
     }
 
     /**
      * @return The number of cohorts.
      */
-    int cohortCount() {
+    public int cohortCount() {
         return cohortMembers.length;
     }
 
     /**
      * @return The members of the cohort, in member order. The array must not be changed.
      */
-    int[] membersOf(int cohort) {
+    public int[] membersOf(int cohort) {
         return cohortMembers[cohort];
     }
 
     /**
      * @return The topics of the cohort, in topic order. The array must not be changed.
      */
-    int[] topicsOf(int cohort) {
+    public int[] topicsOf(int cohort) {
         return cohortTopics[cohort];
     }
 
     /**
      * @return {@code true} if the member subscribes to the topic.
      */
-    boolean subscribes(int member, int topic) {
+    public boolean subscribes(int member, int topic) {
         return Arrays.binarySearch(cohortTopics[cohortOfMember[member]], topic) >= 0;
     }
 }

@@ -36,7 +36,7 @@ import java.util.List;
 import java.util.Properties;
 
 import static org.junit.jupiter.api.Assertions.assertEquals;
-import static org.junit.jupiter.api.Assertions.fail;
+import static org.junit.jupiter.api.Assertions.assertThrows;
 
 public class KStreamPeekTest {
 
@@ -68,12 +68,11 @@ public class KStreamPeekTest {
     public void shouldNotAllowNullAction() {
         final StreamsBuilder builder = new StreamsBuilder();
         final KStream<Integer, String> stream = builder.stream(topicName, Consumed.with(Serdes.Integer(), Serdes.String()));
-        try {
-            stream.peek(null);
-            fail("expected null action to throw NPE");
-        } catch (final NullPointerException expected) {
-            // do nothing
-        }
+        assertThrows(
+            NullPointerException.class,
+            () -> stream.peek(null),
+            "expected null action to throw NPE"
+        );
     }
 
     private static <K, V> ForeachAction<K, V> collect(final List<KeyValue<K, V>> into) {

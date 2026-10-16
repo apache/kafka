@@ -125,8 +125,8 @@ def detect_docs_release_version(version):
 
 def command_stage_docs():
     kafka_site_repo_path = sys.argv[2] if len(sys.argv) > 2 else os.path.join(repo_dir, "..", "kafka-site")
-    if not os.path.exists(kafka_site_repo_path) or not os.path.exists(os.path.join(kafka_site_repo_path, "powered-by.html")):
-        fail("{kafka_site_repo_path} doesn't exist or does not appear to be the kafka-site repository")
+    if not os.path.exists(kafka_site_repo_path) or not os.path.exists(os.path.join(kafka_site_repo_path, "hugo.yaml")):
+        fail(f"{kafka_site_repo_path} doesn't exist or does not appear to be the kafka-site repository")
 
     jdk25_env = get_jdk(25)
 
@@ -139,20 +139,32 @@ def command_stage_docs():
     # Disable parallel execution for aggregatedJavadoc due to Gradle 9 issues
     cmd("Building docs", f"./gradlew -Pversion={gradle_version_override} aggregatedJavadoc --no-parallel", cwd=repo_dir, env=jdk25_env,)
 
-
     docs_tar = os.path.join(repo_dir, "core", "build", "distributions", f"kafka_2.13-{gradle_version_override}-site-docs.tgz")
 
-    versioned_docs_path = os.path.join(kafka_site_repo_path, docs_version(project_version))
-    if not os.path.exists(versioned_docs_path):
-        os.mkdir(versioned_docs_path, 0o755)
+    # Hugo layout: markdown/content pages live under content/en/<version>,
+    # javadoc and other static assets live under static/<version>
+    docs_slot = docs_version(project_version)
+    content_docs_path = os.path.join(kafka_site_repo_path, "content", "en", docs_slot)
+    static_docs_path = os.path.join(kafka_site_repo_path, "static", docs_slot)
+    if not os.path.exists(content_docs_path):
+        os.makedirs(content_docs_path, 0o755)
+    if not os.path.exists(static_docs_path):
+        os.makedirs(static_docs_path, 0o755)
 
     # The contents of the docs jar are site-docs/<docs dir>. We need to get rid of the site-docs prefix and dump everything
     # inside it into the docs version subdirectory in the kafka-site repo
-    cmd("Extracting site-docs", f"tar xf {docs_tar} --strip-components 1", cwd=versioned_docs_path)
+    cmd("Extracting site-docs", f"tar xf {docs_tar} --strip-components 1", cwd=content_docs_path)
+
+    # Images come bundled in the tar, but belong under static/<version>, not
+    # content/en/<version>. Move them out after extraction.
+    content_images_path = os.path.join(content_docs_path, "images")
+    if os.path.exists(content_images_path):
+        static_images_path = os.path.join(static_docs_path, "images")
+        cmd("Moving images to static assets", f"mkdir -p {static_images_path} && cp -R {content_images_path}/. {static_images_path} && rm -rf {content_images_path}", shell=True)
 
     javadocs_src_dir = os.path.join(repo_dir, "build", "docs", "javadoc")
 
-    cmd("Copying javadocs", f"cp -R {javadocs_src_dir} {versioned_docs_path}")
+    cmd("Copying javadocs", f"cp -R {javadocs_src_dir} {static_docs_path}")
 
     sys.exit(0)
 
