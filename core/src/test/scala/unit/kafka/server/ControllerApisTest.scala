@@ -1322,7 +1322,6 @@ class ControllerApisTest {
 
   @Test
   def testDescribeClusterWhenClusterIdNotKnown(): Unit = {
-    // Until the cluster ID is known the MetadataVersion is unknown too, but the cluster ID error should win.
     controllerApis = createControllerApis(None, new MockController.Builder().build(),
       clusterId = DeferredValue.incomplete[String](null),
       features = FinalizedFeatures.unknown())
