@@ -120,7 +120,9 @@ public class DescribeConfigsResponse extends AbstractResponse {
         DEFAULT_CONFIG((byte) 5, org.apache.kafka.clients.admin.ConfigEntry.ConfigSource.DEFAULT_CONFIG),
         DYNAMIC_BROKER_LOGGER_CONFIG((byte) 6, org.apache.kafka.clients.admin.ConfigEntry.ConfigSource.DYNAMIC_BROKER_LOGGER_CONFIG),
         CLIENT_METRICS_CONFIG((byte) 7, org.apache.kafka.clients.admin.ConfigEntry.ConfigSource.DYNAMIC_CLIENT_METRICS_CONFIG),
-        GROUP_CONFIG((byte) 8, org.apache.kafka.clients.admin.ConfigEntry.ConfigSource.DYNAMIC_GROUP_CONFIG);
+        GROUP_CONFIG((byte) 8, org.apache.kafka.clients.admin.ConfigEntry.ConfigSource.DYNAMIC_GROUP_CONFIG),
+        DYNAMIC_CONTROLLER_CONFIG((byte) 9, org.apache.kafka.clients.admin.ConfigEntry.ConfigSource.DYNAMIC_CONTROLLER_CONFIG),
+        DYNAMIC_DEFAULT_CONTROLLER_CONFIG((byte) 10, org.apache.kafka.clients.admin.ConfigEntry.ConfigSource.DYNAMIC_DEFAULT_CONTROLLER_CONFIG);
 
         final byte id;
         private final org.apache.kafka.clients.admin.ConfigEntry.ConfigSource source;
