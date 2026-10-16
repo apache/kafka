@@ -16,6 +16,10 @@
  */
 package org.apache.kafka.common.errors;
 
+/**
+ * The client is not authorized to perform the requested operation on the cluster mirror.
+ * This error occurs when cluster mirroring operations are attempted without the necessary permissions.
+ */
 public class ClusterMirrorAuthorizationException extends AuthorizationException {
     private static final long serialVersionUID = 1L;
 

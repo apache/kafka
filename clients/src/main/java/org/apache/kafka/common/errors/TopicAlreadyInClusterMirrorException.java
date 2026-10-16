@@ -16,6 +16,10 @@
  */
 package org.apache.kafka.common.errors;
 
+/**
+ * The topic is already assigned to the specified cluster mirror.
+ * This error occurs when attempting to add a topic to a cluster mirror when it has already been assigned.
+ */
 public class TopicAlreadyInClusterMirrorException extends ApiException {
     private static final long serialVersionUID = 1L;
 

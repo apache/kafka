@@ -16,6 +16,10 @@
  */
 package org.apache.kafka.common.errors;
 
+/**
+ * The cluster mirror with the given name already exists.
+ * This error occurs when attempting to create a cluster mirror that has already been created.
+ */
 public class ClusterMirrorAlreadyExistsException extends ApiException {
     private static final long serialVersionUID = 1L;
 

@@ -16,6 +16,10 @@
  */
 package org.apache.kafka.common.errors;
 
+/**
+ * The cluster mirror is in an invalid state for the requested operation.
+ * This error occurs when attempting an operation on a cluster mirror that is not in the appropriate state.
+ */
 public class InvalidMirrorStateException extends ApiException {
     private static final long serialVersionUID = 1L;
 
