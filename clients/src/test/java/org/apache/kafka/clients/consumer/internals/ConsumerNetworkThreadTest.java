@@ -152,9 +152,7 @@ public class ConsumerNetworkThreadTest {
             assertTrue(Thread.currentThread().isInterrupted(),
                 "close() should restore the interrupt status cleared by Thread.join()");
         } finally {
-            // Clear the status restored by close() before waiting again. Thread.join() throws
-            // if it is still set, which would hide the assertion result.
-            Thread.interrupted();
+            Thread.interrupted(); // join() below throws while the restored status is still set
             release.countDown();
             blockingThread.join(DEFAULT_MAX_WAIT_MS);
         }
