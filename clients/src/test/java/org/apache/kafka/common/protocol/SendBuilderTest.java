@@ -16,6 +16,7 @@
  */
 package org.apache.kafka.common.protocol;
 
+import org.apache.kafka.clients.producer.internals.CompositeMemoryRecords;
 import org.apache.kafka.common.compress.Compression;
 import org.apache.kafka.common.network.Send;
 import org.apache.kafka.common.record.TimestampType;
@@ -29,6 +30,7 @@ import org.apache.kafka.common.utils.Utils;
 import org.junit.jupiter.api.Test;
 
 import java.nio.ByteBuffer;
+import java.util.List;
 
 import static org.junit.jupiter.api.Assertions.assertEquals;
 
@@ -133,6 +135,34 @@ public class SendBuilderTest {
         assertEquals(15, readBuffer.getInt());
     }
 
+    @Test
+    public void testZeroCopyCompositeRecords() {
+        ByteBuffer buffer = ByteBuffer.allocate(128);
+        MemoryRecords records = createRecords(buffer, "foo");
+
+        ByteBuffer buffer1 = records.buffer().duplicate();
+        buffer1.limit(buffer1.limit() / 2);
+
+        ByteBuffer buffer2 = records.buffer().duplicate();
+        buffer2.position(buffer2.limit() / 2);
+
+        CompositeMemoryRecords composite = new CompositeMemoryRecords(List.of(buffer1, buffer2));
+
+        SendBuilder builder = new SendBuilder(8);
+        builder.writeInt(5);
+        builder.writeRecords(composite);
+        builder.writeInt(15);
+        Send send = builder.build();
+
+        // Overwrite the original buffer in order to prove the data was not copied
+        buffer.rewind();
+        MemoryRecords overwrittenRecords = createRecords(buffer, "bar");
+
+        ByteBuffer readBuffer = ByteBufferChannel.toBuffer(send);
+        assertEquals(5, readBuffer.getInt());
+        assertEquals(overwrittenRecords, getRecords(readBuffer, records.sizeInBytes()));
+        assertEquals(15, readBuffer.getInt());
+    }
 
     private String getString(ByteBuffer buffer, int size) {
         byte[] readData = new byte[size];

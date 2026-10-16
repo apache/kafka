@@ -20,6 +20,7 @@ import org.apache.kafka.common.utils.internals.ByteBufferOutputStream;
 
 import java.nio.ByteBuffer;
 import java.util.ArrayList;
+import java.util.Collections;
 import java.util.List;
 
 /**
@@ -33,9 +34,6 @@ import java.util.List;
  *     across all attached chunks throws {@link IllegalStateException}, so the caller must attach
  *     enough chunks before any such write.
  *     TODO: KAFKA-20579 (automatic mid-write growth for compression support).</li>
- * <li>{@link #buffer()} returns the written bytes as a single contiguous {@link ByteBuffer},
- *     flattening all chunks into a new buffer with an extra copy.
- *     TODO: KAFKA-20580 (remove the extra copy on send, scatter-gather send).</li>
  * </ul>
  */
 public class ChunkedByteBufferOutputStream extends ByteBufferOutputStream {
@@ -47,9 +45,6 @@ public class ChunkedByteBufferOutputStream extends ByteBufferOutputStream {
     private int currentChunkIndex;
     // Set once the stream is closed for appends via close(); no further writes or addBuffers are allowed.
     private boolean closed;
-    // Single-buffer view produced by flatten() and cached here so repeat buffer() calls
-    // return the same instance. To be removed once scatter-gather (KAFKA-20580) is implemented.
-    private ByteBuffer flattenedBuffer;
 
     /**
      * Constructs a chunked output stream backed by the given pre-allocated chunks. Ownership of
@@ -177,46 +172,26 @@ public class ChunkedByteBufferOutputStream extends ByteBufferOutputStream {
     }
 
     /**
-     * Returns the written bytes as a {@link ByteBuffer}. Must be called only after the stream is
-     * {@link #close() closed for appends}.
-     * <p>
-     * Currently the chunks are flattened into a single new buffer, built once and cached so repeat
-     * calls return the same instance, which callers such as
-     * {@code MemoryRecordsBuilder#writeDefaultBatchHeader} rely on when they write the batch header
-     * directly into the returned buffer.
+     * Returns flipped views (position=0, limit=bytes-written) of the data-bearing chunks, in order.
+     * Each is a {@link ByteBuffer#duplicate() duplicate}, so iterating does not disturb the chunks
+     * themselves. Suitable for building a multi-buffer records view that reads from the chunks
+     * directly without a consolidating copy (scatter-gather send, KAFKA-20580). Must be called only
+     * after the stream is {@link #close() closed for appends}.
      *
      * @throws IllegalStateException if the stream has not been closed for appends
      */
-    @Override
-    public ByteBuffer buffer() {
+    public List<ByteBuffer> flippedChunks() {
         ensureNotDeallocated();
-        if (!closed)
-            throw new IllegalStateException("buffer() must not be called before the stream is closed for appends");
-        if (flattenedBuffer == null)
-            flattenedBuffer = flatten();
-        return flattenedBuffer;
-    }
-
-    /**
-     * Flattens the written bytes across the data-bearing chunks into a single new buffer (an extra
-     * copy). This will be removed once scatter-gather send (KAFKA-20580) is implemented.
-     */
-    private ByteBuffer flatten() {
-        // Written bytes only live in chunks up to currentChunk, later chunks are untouched.
-        int totalSize = 0;
-        for (int i = 0; i <= currentChunkIndex; i++) {
-            totalSize += chunks.get(i).position();
+        if (!closed) {
+            throw new IllegalStateException("flippedChunks() must not be called before the stream is closed for appends");
         }
-        ByteBuffer flattened = ByteBuffer.allocate(totalSize);
+        List<ByteBuffer> result = new ArrayList<>(currentChunkIndex + 1);
         for (int i = 0; i <= currentChunkIndex; i++) {
-            ByteBuffer chunk = chunks.get(i);
-            int chunkPos = chunk.position();
-            chunk.flip();
-            flattened.put(chunk);
-            chunk.limit(chunk.capacity());
-            chunk.position(chunkPos);
+            ByteBuffer dup = chunks.get(i).duplicate();
+            dup.flip();
+            result.add(dup);
         }
-        return flattened;
+        return Collections.unmodifiableList(result);
     }
 
     /**
@@ -298,6 +273,14 @@ public class ChunkedByteBufferOutputStream extends ByteBufferOutputStream {
     }
 
     /**
+     * Number of chunks currently attached to this stream.
+     */
+    int chunkCount() {
+        ensureNotDeallocated();
+        return chunks.size();
+    }
+
+    /**
      * Total bytes available across the current chunk and every queued (not-yet-active) chunk.
      */
     @Override
@@ -344,7 +327,6 @@ public class ChunkedByteBufferOutputStream extends ByteBufferOutputStream {
         chunks.clear();
         currentChunk = null;
         currentChunkIndex = -1;
-        flattenedBuffer = null;
     }
 
     void deallocate() {
