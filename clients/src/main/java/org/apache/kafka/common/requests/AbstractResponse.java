@@ -264,6 +264,10 @@ public abstract class AbstractResponse implements AbstractRequestResponse {
                 return ShareFetchResponse.parse(readable, version);
             case SHARE_ACKNOWLEDGE:
                 return ShareAcknowledgeResponse.parse(readable, version);
+            case TXN_SHARE_ACKNOWLEDGE:
+                return TxnShareAcknowledgeResponse.parse(readable, version);
+            case VALIDATE_SHARE_GROUP_MEMBER:
+                return ValidateShareGroupMemberResponse.parse(readable, version);
             case ADD_RAFT_VOTER:
                 return AddRaftVoterResponse.parse(readable, version);
             case REMOVE_RAFT_VOTER:

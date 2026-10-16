@@ -31,6 +31,14 @@ import static org.junit.jupiter.api.Assertions.assertThrows;
 import static org.junit.jupiter.api.Assertions.assertTrue;
 
 public class FeatureTest {
+    @Test
+    public void testTransactionalShareAcknowledgementsRemainExperimental() {
+        assertEquals(ShareVersion.SV_2, Feature.SHARE_VERSION.defaultVersion(MetadataVersion.LATEST_PRODUCTION));
+        assertEquals(ShareVersion.SV_3, Feature.SHARE_VERSION.defaultVersion(MetadataVersion.IBP_4_5_IV0));
+        assertThrows(IllegalArgumentException.class, () -> Feature.SHARE_VERSION.fromFeatureLevel((short) 3, false));
+        assertEquals(ShareVersion.SV_3, Feature.SHARE_VERSION.fromFeatureLevel((short) 3, true));
+    }
+
     @ParameterizedTest
     @EnumSource(value = Feature.class, names = {
         "UNIT_TEST_VERSION_0",
