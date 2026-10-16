@@ -33,6 +33,7 @@ import org.apache.kafka.coordinator.group.modern.MemberSubscriptionAndAssignment
 import org.apache.kafka.coordinator.group.modern.SubscribedTopicDescriberImpl;
 import org.apache.kafka.image.MetadataImage;
 
+import org.junit.jupiter.api.Disabled;
 import org.junit.jupiter.api.Test;
 import org.junit.jupiter.params.ParameterizedTest;
 import org.junit.jupiter.params.provider.CsvSource;
@@ -70,8 +71,31 @@ public class RangeAssignorTest {
         "HETEROGENEOUS, false",
         "HETEROGENEOUS, true"
     })
-    public void testReassignmentStickiness(SubscriptionType subscriptionType, boolean rackAware) {
-        CommonAssignorTests.testReassignmentStickiness(assignor, subscriptionType, rackAware);
+    public void testIterationOrderStickiness(SubscriptionType subscriptionType, boolean rackAware) {
+        CommonAssignorTests.testIterationOrderStickiness(assignor, subscriptionType, rackAware);
+    }
+
+    @ParameterizedTest
+    @CsvSource({
+        "HOMOGENEOUS, false",
+        "HOMOGENEOUS, true",
+        "HETEROGENEOUS, false",
+        "HETEROGENEOUS, true"
+    })
+    public void testStaticMemberReplacementStickiness(SubscriptionType subscriptionType, boolean rackAware) {
+        CommonAssignorTests.testStaticMemberReplacementStickiness(assignor, subscriptionType, rackAware);
+    }
+
+    @Disabled("RangeAssignor is not currently sticky when members are replaced.")
+    @ParameterizedTest
+    @CsvSource({
+        "HOMOGENEOUS, false",
+        "HOMOGENEOUS, true",
+        "HETEROGENEOUS, false",
+        "HETEROGENEOUS, true"
+    })
+    public void testMemberReplacementStickiness(SubscriptionType subscriptionType, boolean rackAware) {
+        CommonAssignorTests.testMemberReplacementStickiness(assignor, subscriptionType, rackAware);
     }
 
     @Test
@@ -308,72 +332,6 @@ public class RangeAssignorTest {
         ));
 
         assertAssignment(expectedAssignment, computedAssignment);
-    }
-
-    @Test
-    public void testStaticMembership() throws PartitionAssignorException {
-        MetadataImage metadataImage = new MetadataImageBuilder()
-            .addTopic(topic1Uuid, topic1Name, 3)
-            .build();
-        SubscribedTopicDescriber subscribedTopicMetadata = new SubscribedTopicDescriberImpl(
-            new KRaftCoordinatorMetadataImage(metadataImage)
-        );
-
-        Map<String, MemberSubscriptionAndAssignmentImpl> members = new TreeMap<>();
-        members.put(memberA, new MemberSubscriptionAndAssignmentImpl(
-            Optional.empty(),
-            Optional.of("instanceA"),
-            Set.of(topic1Uuid),
-            Assignment.EMPTY
-        ));
-        members.put(memberB, new MemberSubscriptionAndAssignmentImpl(
-            Optional.empty(),
-            Optional.of("instanceB"),
-            Set.of(topic1Uuid),
-            Assignment.EMPTY
-        ));
-
-        GroupSpec groupSpec = new GroupSpecImpl(
-            members,
-            SubscriptionType.HOMOGENEOUS,
-            invertedTargetAssignment(members)
-        );
-
-        GroupAssignment initialAssignment = assignor.assign(
-            groupSpec,
-            subscribedTopicMetadata
-        );
-
-        // Remove static memberA and add it back with a different member Id but same instance Id.
-        members.remove(memberA);
-        members.put("memberA1", new MemberSubscriptionAndAssignmentImpl(
-            Optional.empty(),
-            Optional.of("instanceA"),
-            Set.of(topic1Uuid),
-            Assignment.EMPTY
-        ));
-
-        groupSpec = new GroupSpecImpl(
-            members,
-            SubscriptionType.HOMOGENEOUS,
-            invertedTargetAssignment(members)
-        );
-
-        GroupAssignment reassignedAssignment = assignor.assign(
-            groupSpec,
-            subscribedTopicMetadata
-        );
-
-        // Assert that the assignment did not change
-        assertEquals(
-            initialAssignment.members().get(memberA).partitions(),
-            reassignedAssignment.members().get("memberA1").partitions()
-        );
-
-        assertEquals(
-            initialAssignment.members().get(memberB).partitions(),
-            reassignedAssignment.members().get(memberB).partitions()
-        );
     }
 
     @Test
