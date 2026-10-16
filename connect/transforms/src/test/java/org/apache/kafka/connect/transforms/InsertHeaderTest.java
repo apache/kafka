@@ -20,14 +20,17 @@ import org.apache.kafka.common.config.ConfigException;
 import org.apache.kafka.common.utils.internals.AppInfoParser;
 import org.apache.kafka.connect.data.Schema;
 import org.apache.kafka.connect.header.ConnectHeaders;
+import org.apache.kafka.connect.header.Header;
 import org.apache.kafka.connect.header.Headers;
 import org.apache.kafka.connect.source.SourceRecord;
 
 import org.junit.jupiter.api.Test;
 
+import java.nio.charset.StandardCharsets;
 import java.util.HashMap;
 import java.util.Map;
 
+import static org.junit.jupiter.api.Assertions.assertArrayEquals;
 import static org.junit.jupiter.api.Assertions.assertEquals;
 import static org.junit.jupiter.api.Assertions.assertThrows;
 
@@ -36,9 +39,16 @@ public class InsertHeaderTest {
     private final InsertHeader<SourceRecord> xform = new InsertHeader<>();
 
     private Map<String, ?> config(String header, String valueLiteral) {
+        return config(header, valueLiteral, null);
+    }
+
+    private Map<String, ?> config(String header, String valueLiteral, String valueType) {
         Map<String, String> result = new HashMap<>();
         result.put(InsertHeader.HEADER_FIELD, header);
         result.put(InsertHeader.VALUE_LITERAL_FIELD, valueLiteral);
+        if (valueType != null) {
+            result.put(InsertHeader.VALUE_TYPE_FIELD, valueType);
+        }
         return result;
     }
 
@@ -82,6 +92,20 @@ public class InsertHeaderTest {
     }
 
     @Test
+    public void insertionWithExplicitTypes() {
+        assertInsertionWithExplicitType("int8", "1", Schema.INT8_SCHEMA, (byte) 1);
+        assertInsertionWithExplicitType("int16", "2", Schema.INT16_SCHEMA, (short) 2);
+        assertInsertionWithExplicitType("int32", "3", Schema.INT32_SCHEMA, 3);
+        assertInsertionWithExplicitType("int64", "4", Schema.INT64_SCHEMA, 4L);
+        assertInsertionWithExplicitType("float32", "1.5", Schema.FLOAT32_SCHEMA, 1.5f);
+        assertInsertionWithExplicitType("float64", "2.5", Schema.FLOAT64_SCHEMA, 2.5d);
+        assertInsertionWithExplicitType("boolean", "true", Schema.BOOLEAN_SCHEMA, true);
+        assertInsertionWithExplicitType("string", "1", Schema.STRING_SCHEMA, "1");
+        assertInsertionWithExplicitType("bytes", "bytes-value", Schema.BYTES_SCHEMA,
+                "bytes-value".getBytes(StandardCharsets.UTF_8));
+    }
+
+    @Test
     public void configRejectsNullHeaderKey() {
         assertThrows(ConfigException.class, () -> xform.configure(config(null, "1")));
     }
@@ -89,6 +113,31 @@ public class InsertHeaderTest {
     @Test
     public void configRejectsNullHeaderValue() {
         assertThrows(ConfigException.class, () -> xform.configure(config("inserted", null)));
+    }
+
+    @Test
+    public void configRejectsInvalidValueType() {
+        assertThrows(ConfigException.class, () -> xform.configure(config("inserted", "1", "invalid")));
+    }
+
+    private void assertInsertionWithExplicitType(String valueType, String valueLiteral, Schema schema,
+                                                Object expectedValue) {
+        xform.configure(config("inserted", valueLiteral, valueType));
+        ConnectHeaders headers = new ConnectHeaders();
+        headers.addString("existing", "existing-value");
+
+        SourceRecord original = sourceRecord(headers);
+        SourceRecord xformed = xform.apply(original);
+        assertNonHeaders(original, xformed);
+        assertEquals("existing-value", xformed.headers().lastWithName("existing").value());
+
+        Header inserted = xformed.headers().lastWithName("inserted");
+        assertEquals(schema, inserted.schema());
+        if (expectedValue instanceof byte[] expectedBytes) {
+            assertArrayEquals(expectedBytes, (byte[]) inserted.value());
+        } else {
+            assertEquals(expectedValue, inserted.value());
+        }
     }
 
     private void assertNonHeaders(SourceRecord original, SourceRecord xformed) {
