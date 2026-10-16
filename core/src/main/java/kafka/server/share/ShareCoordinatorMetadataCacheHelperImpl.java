@@ -177,6 +177,11 @@ public class ShareCoordinatorMetadataCacheHelperImpl implements ShareCoordinator
     }
 
     @Override
+    public boolean isRequestHeaderV3Supported() {
+        return metadataCache.metadataVersion().isRequestHeaderV3Supported();
+    }
+
+    @Override
     public Optional<String> topicName(Uuid topicId) {
         try {
             return metadataCache.getTopicName(topicId);

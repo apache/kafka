@@ -17,7 +17,7 @@
   "apiKey": 84,
   "type": "response",
   "name": "ReadShareGroupStateResponse",
-  "validVersions": "0",
+  "validVersions": "0-1",
   "flexibleVersions": "0+",
   "headerVersions": {
     "0+": "1"
