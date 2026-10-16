@@ -3022,12 +3022,19 @@ public class KafkaAdminClientConsumerGroupTest extends KafkaAdminClientTestBase 
             env.kafkaClient().prepareResponse(prepareFindCoordinatorResponse(Errors.NONE, env.cluster().controller()));
             env.kafkaClient().prepareResponse(new DescribeGroupsResponse(data));
 
+            // Responses for the coordinator lookup and LeaveGroup that must NOT be consumed
+            env.kafkaClient().prepareResponse(prepareFindCoordinatorResponse(Errors.NONE, env.cluster().controller()));
+            env.kafkaClient().prepareResponse(new LeaveGroupResponse(
+                new LeaveGroupResponseData().setErrorCode(Errors.NONE.code()).setMembers(List.of())));
+
             final RemoveMembersFromConsumerGroupResult result = env.adminClient().removeMembersFromConsumerGroup(
                 GROUP_ID,
                 new RemoveMembersFromConsumerGroupOptions()
             );
 
             assertNull(result.all().get());
+            assertEquals(2, env.kafkaClient().numAwaitingResponses(),
+                "No coordinator lookup or LeaveGroup request should have been sent for an empty group");
         }
     }
 
