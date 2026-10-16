@@ -271,6 +271,26 @@ public class StreamsMembershipManager implements RequestManager {
     private LocalAssignment currentAssignment = LocalAssignment.NONE;
 
     /**
+     * Target assignment captured when reconciliation starts. Used to record the applied tasks
+     * even if a heartbeat updates {@link #targetAssignment} while this attempt is in progress.
+     */
+    private LocalAssignment reconcilingAssignment = LocalAssignment.NONE;
+
+    /**
+     * Active tasks whose partitions are currently assigned to the consumer. Updated before the
+     * assignment callback runs, so this may differ from {@link #currentAssignment} after a failure.
+     */
+    private Map<String, SortedSet<Integer>> appliedActiveTasks = Collections.emptyMap();
+
+    /**
+     * Active tasks whose revocation callbacks succeeded since the last consumer assignment was applied.
+     * Their partitions remain assigned until the next assignment is applied. Preserve this history
+     * across failed attempts to avoid duplicate revocations during reconciliation or leave.
+     * Applying a new assignment clears the history so reassigned tasks can be revoked again.
+     */
+    private final SortedSet<StreamsRebalanceData.TaskId> revokedTasksSinceApply = new TreeSet<>();
+
+    /**
      * AtomicBoolean to track whether the subscription is updated.
      * If it's true and subscription state is UNSUBSCRIBED, the next {@link #onConsumerPoll()} will change member state to JOINING.
      */
@@ -440,6 +460,8 @@ public class StreamsMembershipManager implements RequestManager {
      */
     public void applyAssignment(Set<TopicPartition> assignedPartitions, Set<TopicPartition> addedPartitions) {
         subscriptionState.assignFromSubscribedAwaitingCallback(assignedPartitions, addedPartitions);
+        appliedActiveTasks = reconcilingAssignment.activeTasks;
+        revokedTasksSinceApply.clear();
         notifyAssignmentChange(assignedPartitions);
     }
 
@@ -658,6 +680,8 @@ public class StreamsMembershipManager implements RequestManager {
      */
     private void clearTaskAndPartitionAssignment() {
         subscriptionState.assignFromSubscribed(Collections.emptySet());
+        appliedActiveTasks = Collections.emptyMap();
+        revokedTasksSinceApply.clear();
         notifyAssignmentChange(Collections.emptySet());
         currentAssignment = LocalAssignment.NONE;
         targetAssignment = LocalAssignment.NONE;
@@ -1053,7 +1077,9 @@ public class StreamsMembershipManager implements RequestManager {
 
     private CompletableFuture<Void> releaseActiveTasks() {
         if (memberEpoch > 0) {
-            return revokeActiveTasks(toTaskIdSet(currentAssignment.activeTasks));
+            SortedSet<StreamsRebalanceData.TaskId> activeTasksToRelease = toTaskIdSet(appliedActiveTasks);
+            activeTasksToRelease.removeAll(revokedTasksSinceApply);
+            return revokeActiveTasks(activeTasksToRelease);
         } else {
             return releaseLostActiveTasks();
         }
@@ -1155,76 +1181,85 @@ public class StreamsMembershipManager implements RequestManager {
 
         markReconciliationInProgress();
 
-        SortedSet<StreamsRebalanceData.TaskId> assignedActiveTasks = toTaskIdSet(targetAssignment.activeTasks);
-        SortedSet<StreamsRebalanceData.TaskId> ownedActiveTasks = toTaskIdSet(currentAssignment.activeTasks);
-        SortedSet<StreamsRebalanceData.TaskId> activeTasksToRevoke = new TreeSet<>(ownedActiveTasks);
-        activeTasksToRevoke.removeAll(assignedActiveTasks);
-        SortedSet<StreamsRebalanceData.TaskId> assignedStandbyTasks = toTaskIdSet(targetAssignment.standbyTasks);
-        SortedSet<StreamsRebalanceData.TaskId> ownedStandbyTasks = toTaskIdSet(currentAssignment.standbyTasks);
-        SortedSet<StreamsRebalanceData.TaskId> assignedWarmupTasks = toTaskIdSet(targetAssignment.warmupTasks);
-        SortedSet<StreamsRebalanceData.TaskId> ownedWarmupTasks = toTaskIdSet(currentAssignment.warmupTasks);
-        boolean isGroupReady = targetAssignment.isGroupReady;
+        try {
+            SortedSet<StreamsRebalanceData.TaskId> assignedActiveTasks = toTaskIdSet(targetAssignment.activeTasks);
+            SortedSet<StreamsRebalanceData.TaskId> ownedActiveTasks = toTaskIdSet(appliedActiveTasks);
+            SortedSet<StreamsRebalanceData.TaskId> activeTasksToRevoke = new TreeSet<>(ownedActiveTasks);
+            activeTasksToRevoke.removeAll(assignedActiveTasks);
+            activeTasksToRevoke.removeAll(revokedTasksSinceApply);
+            SortedSet<StreamsRebalanceData.TaskId> assignedStandbyTasks = toTaskIdSet(targetAssignment.standbyTasks);
+            SortedSet<StreamsRebalanceData.TaskId> ownedStandbyTasks = toTaskIdSet(currentAssignment.standbyTasks);
+            SortedSet<StreamsRebalanceData.TaskId> assignedWarmupTasks = toTaskIdSet(targetAssignment.warmupTasks);
+            SortedSet<StreamsRebalanceData.TaskId> ownedWarmupTasks = toTaskIdSet(currentAssignment.warmupTasks);
+            boolean isGroupReady = targetAssignment.isGroupReady;
 
-        log.info("Assigned tasks with local epoch {} and group {}\n" +
-                "\tMember:                        {}\n" +
-                "\tAssigned active tasks:         {}\n" +
-                "\tOwned active tasks:            {}\n" +
-                "\tActive tasks to revoke:        {}\n" +
-                "\tAssigned standby tasks:        {}\n" +
-                "\tOwned standby tasks:           {}\n" +
-                "\tAssigned warm-up tasks:        {}\n" +
-                "\tOwned warm-up tasks:           {}\n",
-            targetAssignment.localEpoch,
-            isGroupReady ? "is ready" : "is not ready",
-            memberId,
-            assignedActiveTasks,
-            ownedActiveTasks,
-            activeTasksToRevoke,
-            assignedStandbyTasks,
-            ownedStandbyTasks,
-            assignedWarmupTasks,
-            ownedWarmupTasks
-        );
+            log.info("Assigned tasks with local epoch {} and group {}\n" +
+                    "\tMember:                        {}\n" +
+                    "\tAssigned active tasks:         {}\n" +
+                    "\tOwned active tasks:            {}\n" +
+                    "\tActive tasks to revoke:        {}\n" +
+                    "\tAssigned standby tasks:        {}\n" +
+                    "\tOwned standby tasks:           {}\n" +
+                    "\tAssigned warm-up tasks:        {}\n" +
+                    "\tOwned warm-up tasks:           {}\n",
+                targetAssignment.localEpoch,
+                isGroupReady ? "is ready" : "is not ready",
+                memberId,
+                assignedActiveTasks,
+                ownedActiveTasks,
+                activeTasksToRevoke,
+                assignedStandbyTasks,
+                ownedStandbyTasks,
+                assignedWarmupTasks,
+                ownedWarmupTasks
+            );
 
-        SortedSet<TopicPartition> ownedTopicPartitionsFromSubscriptionState = new TreeSet<>(TOPIC_PARTITION_COMPARATOR);
-        ownedTopicPartitionsFromSubscriptionState.addAll(subscriptionState.assignedPartitions());
-        SortedSet<TopicPartition> ownedTopicPartitionsFromAssignedTasks =
-            topicPartitionsForActiveTasks(currentAssignment.activeTasks);
-        if (!ownedTopicPartitionsFromAssignedTasks.equals(ownedTopicPartitionsFromSubscriptionState)) {
-            throw new IllegalStateException("Owned partitions from subscription state and owned partitions from " +
-                "assigned active tasks are not equal. " +
-                "Owned partitions from subscription state: " + ownedTopicPartitionsFromSubscriptionState + ", " +
-                "Owned partitions from assigned active tasks: " + ownedTopicPartitionsFromAssignedTasks);
-        }
-        SortedSet<TopicPartition> assignedTopicPartitions = topicPartitionsForActiveTasks(targetAssignment.activeTasks);
-        SortedSet<TopicPartition> partitionsToRevoke = new TreeSet<>(ownedTopicPartitionsFromSubscriptionState);
-        partitionsToRevoke.removeAll(assignedTopicPartitions);
-
-        final CompletableFuture<Void> tasksRevoked = revokeActiveTasks(activeTasksToRevoke);
-
-        final CompletableFuture<Void> tasksRevokedAndAssigned = tasksRevoked.thenCompose(__ -> {
-            if (!maybeAbortReconciliation()) {
-                return assignTasks(assignedActiveTasks, ownedActiveTasks, assignedStandbyTasks, assignedWarmupTasks, isGroupReady);
+            SortedSet<TopicPartition> ownedTopicPartitionsFromSubscriptionState = new TreeSet<>(TOPIC_PARTITION_COMPARATOR);
+            ownedTopicPartitionsFromSubscriptionState.addAll(subscriptionState.assignedPartitions());
+            SortedSet<TopicPartition> ownedTopicPartitionsFromAssignedTasks =
+                topicPartitionsForActiveTasks(appliedActiveTasks);
+            if (!ownedTopicPartitionsFromAssignedTasks.equals(ownedTopicPartitionsFromSubscriptionState)) {
+                throw new IllegalStateException("Owned partitions from subscription state and owned partitions from " +
+                    "assigned active tasks are not equal. " +
+                    "Owned partitions from subscription state: " + ownedTopicPartitionsFromSubscriptionState + ", " +
+                    "Owned partitions from assigned active tasks: " + ownedTopicPartitionsFromAssignedTasks);
             }
-            return CompletableFuture.completedFuture(null);
-        });
+            SortedSet<TopicPartition> assignedTopicPartitions = topicPartitionsForActiveTasks(targetAssignment.activeTasks);
+            SortedSet<TopicPartition> partitionsToRevoke = new TreeSet<>(ownedTopicPartitionsFromSubscriptionState);
+            partitionsToRevoke.removeAll(assignedTopicPartitions);
 
-        // The current target assignment is captured to ensure that acknowledging the current assignment is done with
-        // the same target assignment that was used when this reconciliation was initiated.
-        LocalAssignment currentTargetAssignment = targetAssignment;
-        tasksRevokedAndAssigned.whenComplete((__, callbackError) -> {
-            if (callbackError != null) {
-                log.error("Reconciliation failed for tasks {}",
-                    currentTargetAssignment, callbackError);
-                markReconciliationCompleted();
-            } else {
-                if (reconciliationInProgress && !maybeAbortReconciliation()) {
-                    currentAssignment = currentTargetAssignment;
-                    transitionTo(MemberState.ACKNOWLEDGING);
-                    markReconciliationCompleted();
+            final CompletableFuture<Void> tasksRevoked = revokeActiveTasks(activeTasksToRevoke);
+
+            final CompletableFuture<Void> tasksRevokedAndAssigned = tasksRevoked.thenCompose(__ -> {
+                if (!maybeAbortReconciliation()) {
+                    revokedTasksSinceApply.addAll(activeTasksToRevoke);
+                    return assignTasks(assignedActiveTasks, ownedActiveTasks, assignedStandbyTasks, assignedWarmupTasks, isGroupReady);
                 }
-            }
-        });
+                return CompletableFuture.completedFuture(null);
+            });
+
+            // The current target assignment is captured to ensure that acknowledging the current assignment is done with
+            // the same target assignment that was used when this reconciliation was initiated.
+            LocalAssignment currentTargetAssignment = targetAssignment;
+            tasksRevokedAndAssigned.whenComplete((__, callbackError) -> {
+                if (callbackError != null) {
+                    log.error("Reconciliation failed for tasks {}",
+                        currentTargetAssignment, callbackError);
+                    markReconciliationCompleted();
+                } else {
+                    if (reconciliationInProgress && !maybeAbortReconciliation()) {
+                        // Retained partitions may still be marked for revocation by an earlier failed attempt.
+                        subscriptionState.clearPendingRevocation(assignedTopicPartitions);
+                        currentAssignment = currentTargetAssignment;
+                        transitionTo(MemberState.ACKNOWLEDGING);
+                        markReconciliationCompleted();
+                    }
+                }
+            });
+        } catch (Exception e) {
+            markReconciliationCompleted();
+            throw e;
+        }
     }
 
     private CompletableFuture<Void> revokeActiveTasks(final SortedSet<StreamsRebalanceData.TaskId> activeTasksToRevoke) {
@@ -1304,7 +1339,7 @@ public class StreamsMembershipManager implements RequestManager {
     }
 
     private CompletableFuture<Void> releaseLostActiveTasks() {
-        final SortedSet<StreamsRebalanceData.TaskId> activeTasksToRelease = toTaskIdSet(currentAssignment.activeTasks);
+        final SortedSet<StreamsRebalanceData.TaskId> activeTasksToRelease = toTaskIdSet(appliedActiveTasks);
         log.info("Revoking previously assigned and now lost active tasks {}", activeTasksToRelease.stream()
             .map(StreamsRebalanceData.TaskId::toString)
             .collect(Collectors.joining(", ")));
@@ -1353,8 +1388,11 @@ public class StreamsMembershipManager implements RequestManager {
     }
 
     private void markReconciliationCompleted() {
+        // Preserve appliedActiveTasks and revokedTasksSinceApply so retries and leave can account
+        // for assignment changes and revocations completed before a failure.
         reconciliationInProgress = false;
         rejoinedWhileReconciliationInProgress = false;
+        reconcilingAssignment = LocalAssignment.NONE;
     }
 
     private boolean maybeAbortReconciliation() {
@@ -1370,6 +1408,7 @@ public class StreamsMembershipManager implements RequestManager {
     }
 
     private void markReconciliationInProgress() {
+        reconcilingAssignment = targetAssignment;
         reconciliationInProgress = true;
         rejoinedWhileReconciliationInProgress = false;
     }
