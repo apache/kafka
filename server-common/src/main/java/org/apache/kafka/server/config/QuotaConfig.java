@@ -21,6 +21,7 @@ import org.apache.kafka.common.config.ConfigDef;
 import org.apache.kafka.common.security.scram.internals.ScramMechanism;
 
 import java.util.List;
+import java.util.Locale;
 import java.util.Set;
 
 import static org.apache.kafka.common.config.ConfigDef.Importance.LOW;
@@ -80,12 +81,12 @@ public class QuotaConfig {
 
     public static final String LEADER_REPLICATION_THROTTLED_RATE_CONFIG = "leader.replication.throttled.rate";
     public static final String LEADER_REPLICATION_THROTTLED_RATE_DOC = "A long representing the upper bound (bytes/sec) on replication traffic for leaders enumerated in the " +
-            String.format("property %s (for each topic). This property can be only set dynamically. It is suggested that the ", LEADER_REPLICATION_THROTTLED_REPLICAS_CONFIG) +
+            String.format(Locale.ROOT, "property %s (for each topic). This property can be only set dynamically. It is suggested that the ", LEADER_REPLICATION_THROTTLED_REPLICAS_CONFIG) +
             "limit be kept above 1MB/s for accurate behaviour.";
 
     public static final String FOLLOWER_REPLICATION_THROTTLED_RATE_CONFIG = "follower.replication.throttled.rate";
     public static final String FOLLOWER_REPLICATION_THROTTLED_RATE_DOC = "A long representing the upper bound (bytes/sec) on replication traffic for followers enumerated in the " +
-            String.format("property %s (for each topic). This property can be only set dynamically. It is suggested that the ", FOLLOWER_REPLICATION_THROTTLED_REPLICAS_CONFIG) +
+            String.format(Locale.ROOT, "property %s (for each topic). This property can be only set dynamically. It is suggested that the ", FOLLOWER_REPLICATION_THROTTLED_REPLICAS_CONFIG) +
             "limit be kept above 1MB/s for accurate behaviour.";
 
     public static final String MIRROR_REPLICATION_THROTTLED_RATE_CONFIG = "mirror.replication.throttled.rate";
