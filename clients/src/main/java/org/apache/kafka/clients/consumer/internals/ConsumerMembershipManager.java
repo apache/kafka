@@ -18,7 +18,7 @@ package org.apache.kafka.clients.consumer.internals;
 
 import org.apache.kafka.clients.consumer.CloseOptions;
 import org.apache.kafka.clients.consumer.ConsumerConfig;
-import org.apache.kafka.clients.consumer.ConsumerRebalanceListener;
+import org.apache.kafka.clients.consumer.RebalanceListener;
 import org.apache.kafka.clients.consumer.internals.events.ApplyAssignmentEvent;
 import org.apache.kafka.clients.consumer.internals.events.BackgroundEventHandler;
 import org.apache.kafka.clients.consumer.internals.events.CompletableBackgroundEvent;
@@ -400,7 +400,7 @@ public class ConsumerMembershipManager extends AbstractMembershipManager<Consume
 
     /**
      * Enqueue a {@link PartitionsRemovedEvent} to trigger the execution of either
-     * {@link ConsumerRebalanceListener#onPartitionsRevoked} or {@link ConsumerRebalanceListener#onPartitionsLost}
+     * {@link RebalanceListener#onPartitionsRevoked} or {@link RebalanceListener#onPartitionsLost}
      * on the application thread.
      *
      * <p/>
@@ -441,9 +441,9 @@ public class ConsumerMembershipManager extends AbstractMembershipManager<Consume
     }
 
     /**
-     * Signals that a {@link ConsumerRebalanceListener} callback has completed. This is invoked when the
+     * Signals that a {@link RebalanceListener} callback has completed. This is invoked when the
      * application thread has completed the callback and has submitted a
-     * {@link ConsumerRebalanceListenerCallbackCompletedEvent} to the network I/O thread. At this point, we
+     * {@link RebalanceListenerCallbackCompletedEvent} to the network I/O thread. At this point, we
      * notify the state machine that it's complete so that it can move to the next appropriate step of the
      * rebalance process.
      *
