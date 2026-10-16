@@ -1466,6 +1466,7 @@ public class QuorumControllerTest {
             !stateInLog.isPresent(),
             -1L,
             zkMigrationEnabled,
+            Collections.emptySet(),
             BootstrapMetadata.fromVersion(metadataVersion, "test"),
             featureControlManager);
         RecordTestUtils.replayAll(featureControlManager, result.records());
@@ -1559,6 +1560,7 @@ public class QuorumControllerTest {
             true,
             0L,
             zkMigrationEnabled,
+            Collections.emptySet(),
             BootstrapMetadata.fromVersion(MetadataVersion.IBP_3_6_IV1, "test"),
             featureControlManager);
         assertFalse(result.isAtomic());
@@ -1635,6 +1637,7 @@ public class QuorumControllerTest {
             false,
             offsetControlManager.transactionStartOffset(),
             false,
+            Collections.emptySet(),
             BootstrapMetadata.fromVersion(MetadataVersion.IBP_3_6_IV1, "test"),
             featureControlManager);
 
@@ -1665,6 +1668,7 @@ public class QuorumControllerTest {
                 false,
                 offsetControlManager.transactionStartOffset(),
                 false,
+                Collections.emptySet(),
                 BootstrapMetadata.fromVersion(MetadataVersion.IBP_3_6_IV0, "test"),
                 featureControlManager)
         );
