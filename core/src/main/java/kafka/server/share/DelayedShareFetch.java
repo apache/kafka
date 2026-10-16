@@ -543,9 +543,9 @@ public class DelayedShareFetch extends DelayedOperation {
             if (sharePartition.maybeAcquireFetchLock(fetchId)) {
                 try {
                     log.trace("Fetch lock for share partition {}-{} has been acquired by {}", shareFetch.groupId(), topicIdPartition, fetchId);
-                    // If the share partition is already at capacity, we should not attempt to fetch.
-                    if (sharePartition.canAcquireRecords()) {
-                        topicPartitionData.put(topicIdPartition, sharePartition.nextFetchOffset());
+                    OptionalLong nextFetchOffset = sharePartition.nextFetchOffsetIfAcquirable();
+                    if (nextFetchOffset.isPresent()) {
+                        topicPartitionData.put(topicIdPartition, nextFetchOffset.getAsLong());
                     } else {
                         sharePartition.releaseFetchLock(fetchId);
                         log.trace("Record lock partition limit exceeded for SharePartition {}-{}, " +

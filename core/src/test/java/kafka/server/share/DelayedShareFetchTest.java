@@ -145,8 +145,8 @@ public class DelayedShareFetchTest {
         TopicIdPartition tp0 = new TopicIdPartition(topicId, new TopicPartition("foo", 0));
         TopicIdPartition tp1 = new TopicIdPartition(topicId, new TopicPartition("foo", 1));
 
-        SharePartition sp0 = mock(SharePartition.class);
-        SharePartition sp1 = mock(SharePartition.class);
+        SharePartition sp0 = mockSharePartition();
+        SharePartition sp1 = mockSharePartition();
 
         LinkedHashMap<TopicIdPartition, SharePartition> sharePartitions = new LinkedHashMap<>();
         sharePartitions.put(tp0, sp0);
@@ -203,8 +203,8 @@ public class DelayedShareFetchTest {
         TopicIdPartition tp0 = new TopicIdPartition(topicId, new TopicPartition("foo", 0));
         TopicIdPartition tp1 = new TopicIdPartition(topicId, new TopicPartition("foo", 1));
 
-        SharePartition sp0 = mock(SharePartition.class);
-        SharePartition sp1 = mock(SharePartition.class);
+        SharePartition sp0 = mockSharePartition();
+        SharePartition sp1 = mockSharePartition();
 
         LinkedHashMap<TopicIdPartition, SharePartition> sharePartitions = new LinkedHashMap<>();
         sharePartitions.put(tp0, sp0);
@@ -285,8 +285,8 @@ public class DelayedShareFetchTest {
         TopicIdPartition tp0 = new TopicIdPartition(topicId, new TopicPartition("foo", 0));
         TopicIdPartition tp1 = new TopicIdPartition(topicId, new TopicPartition("foo", 1));
 
-        SharePartition sp0 = mock(SharePartition.class);
-        SharePartition sp1 = mock(SharePartition.class);
+        SharePartition sp0 = mockSharePartition();
+        SharePartition sp1 = mockSharePartition();
 
         LinkedHashMap<TopicIdPartition, SharePartition> sharePartitions = new LinkedHashMap<>();
         sharePartitions.put(tp0, sp0);
@@ -349,8 +349,8 @@ public class DelayedShareFetchTest {
         TopicIdPartition tp0 = new TopicIdPartition(topicId, new TopicPartition("foo", 0));
         TopicIdPartition tp1 = new TopicIdPartition(topicId, new TopicPartition("foo", 1));
 
-        SharePartition sp0 = mock(SharePartition.class);
-        SharePartition sp1 = mock(SharePartition.class);
+        SharePartition sp0 = mockSharePartition();
+        SharePartition sp1 = mockSharePartition();
 
         LinkedHashMap<TopicIdPartition, SharePartition> sharePartitions = new LinkedHashMap<>();
         sharePartitions.put(tp0, sp0);
@@ -417,8 +417,8 @@ public class DelayedShareFetchTest {
         TopicIdPartition tp0 = new TopicIdPartition(topicId, new TopicPartition("foo", 0));
         TopicIdPartition tp1 = new TopicIdPartition(topicId, new TopicPartition("foo", 1));
 
-        SharePartition sp0 = mock(SharePartition.class);
-        SharePartition sp1 = mock(SharePartition.class);
+        SharePartition sp0 = mockSharePartition();
+        SharePartition sp1 = mockSharePartition();
 
         LinkedHashMap<TopicIdPartition, SharePartition> sharePartitions = new LinkedHashMap<>();
         sharePartitions.put(tp0, sp0);
@@ -474,8 +474,8 @@ public class DelayedShareFetchTest {
         TopicIdPartition tp0 = new TopicIdPartition(topicId, new TopicPartition("foo", 0));
         TopicIdPartition tp1 = new TopicIdPartition(topicId, new TopicPartition("foo", 1));
 
-        SharePartition sp0 = mock(SharePartition.class);
-        SharePartition sp1 = mock(SharePartition.class);
+        SharePartition sp0 = mockSharePartition();
+        SharePartition sp1 = mockSharePartition();
 
         LinkedHashMap<TopicIdPartition, SharePartition> sharePartitions = new LinkedHashMap<>();
         sharePartitions.put(tp0, sp0);
@@ -543,7 +543,7 @@ public class DelayedShareFetchTest {
         ReplicaManager replicaManager = mock(ReplicaManager.class);
         TopicIdPartition tp0 = new TopicIdPartition(topicId, new TopicPartition("foo", 0));
 
-        SharePartition sp0 = mock(SharePartition.class);
+        SharePartition sp0 = mockSharePartition();
 
         LinkedHashMap<TopicIdPartition, SharePartition> sharePartitions = new LinkedHashMap<>();
         sharePartitions.put(tp0, sp0);
@@ -602,9 +602,9 @@ public class DelayedShareFetchTest {
         TopicIdPartition tp2 = new TopicIdPartition(topicId, new TopicPartition("foo", 2));
         List<TopicIdPartition> topicIdPartitions1 = List.of(tp0, tp1);
 
-        SharePartition sp0 = mock(SharePartition.class);
-        SharePartition sp1 = mock(SharePartition.class);
-        SharePartition sp2 = mock(SharePartition.class);
+        SharePartition sp0 = mockSharePartition();
+        SharePartition sp1 = mockSharePartition();
+        SharePartition sp2 = mockSharePartition();
 
         LinkedHashMap<TopicIdPartition, SharePartition> sharePartitions1 = new LinkedHashMap<>();
         sharePartitions1.put(tp0, sp0);
@@ -716,9 +716,9 @@ public class DelayedShareFetchTest {
         TopicIdPartition tp2 = new TopicIdPartition(topicId, new TopicPartition("foo", 2));
         List<TopicIdPartition> topicIdPartitions1 = List.of(tp0, tp1);
 
-        SharePartition sp0 = mock(SharePartition.class);
-        SharePartition sp1 = mock(SharePartition.class);
-        SharePartition sp2 = mock(SharePartition.class);
+        SharePartition sp0 = mockSharePartition();
+        SharePartition sp1 = mockSharePartition();
+        SharePartition sp2 = mockSharePartition();
 
         LinkedHashMap<TopicIdPartition, SharePartition> sharePartitions1 = new LinkedHashMap<>();
         sharePartitions1.put(tp0, sp0);
@@ -819,8 +819,8 @@ public class DelayedShareFetchTest {
         TopicIdPartition tp0 = new TopicIdPartition(Uuid.randomUuid(), new TopicPartition("foo", 0));
         TopicIdPartition tp1 = new TopicIdPartition(Uuid.randomUuid(), new TopicPartition("foo", 1));
 
-        SharePartition sp0 = mock(SharePartition.class);
-        SharePartition sp1 = mock(SharePartition.class);
+        SharePartition sp0 = mockSharePartition();
+        SharePartition sp1 = mockSharePartition();
 
         LinkedHashMap<TopicIdPartition, SharePartition> sharePartitions = new LinkedHashMap<>();
         sharePartitions.put(tp0, sp0);
@@ -876,7 +876,7 @@ public class DelayedShareFetchTest {
         ReplicaManager replicaManager = mock(ReplicaManager.class);
         TopicIdPartition tp0 = new TopicIdPartition(topicId, new TopicPartition("foo", 0));
 
-        SharePartition sp0 = mock(SharePartition.class);
+        SharePartition sp0 = mockSharePartition();
 
         LinkedHashMap<TopicIdPartition, SharePartition> sharePartitions = new LinkedHashMap<>();
         sharePartitions.put(tp0, sp0);
@@ -962,7 +962,7 @@ public class DelayedShareFetchTest {
         ReplicaManager replicaManager = mock(ReplicaManager.class);
         TopicIdPartition tp0 = new TopicIdPartition(Uuid.randomUuid(), new TopicPartition("foo", 0));
 
-        SharePartition sp0 = mock(SharePartition.class);
+        SharePartition sp0 = mockSharePartition();
         when(sp0.canAcquireRecords()).thenReturn(true);
         // Empty fetch offset metadata forces maybeReadFromLog to actually read from the log.
         when(sp0.fetchOffsetMetadata(anyLong())).thenReturn(Optional.empty());
@@ -1017,7 +1017,7 @@ public class DelayedShareFetchTest {
         ReplicaManager replicaManager = mock(ReplicaManager.class);
         TopicIdPartition tp0 = new TopicIdPartition(Uuid.randomUuid(), new TopicPartition("foo", 0));
 
-        SharePartition sp0 = mock(SharePartition.class);
+        SharePartition sp0 = mockSharePartition();
         when(sp0.canAcquireRecords()).thenReturn(true);
         when(sp0.fetchOffsetMetadata(anyLong())).thenReturn(Optional.of(new LogOffsetMetadata(0, 1, 0)));
 
@@ -1058,7 +1058,7 @@ public class DelayedShareFetchTest {
         String groupId = "grp";
         TopicIdPartition tp0 = new TopicIdPartition(Uuid.randomUuid(), new TopicPartition("foo", 0));
 
-        SharePartition sp0 = mock(SharePartition.class);
+        SharePartition sp0 = mockSharePartition();
         when(sp0.canAcquireRecords()).thenReturn(true);
 
         LinkedHashMap<TopicIdPartition, SharePartition> sharePartitions1 = new LinkedHashMap<>();
@@ -1098,7 +1098,7 @@ public class DelayedShareFetchTest {
         String groupId = "grp";
         TopicIdPartition tp0 = new TopicIdPartition(Uuid.randomUuid(), new TopicPartition("foo", 0));
 
-        SharePartition sp0 = mock(SharePartition.class);
+        SharePartition sp0 = mockSharePartition();
         when(sp0.canAcquireRecords()).thenThrow(new RuntimeException("Acquire exception"));
 
         LinkedHashMap<TopicIdPartition, SharePartition> sharePartitions = new LinkedHashMap<>();
@@ -1135,7 +1135,7 @@ public class DelayedShareFetchTest {
     public void testTryCompleteWhenPartitionMaxBytesStrategyThrowsException() {
         String groupId = "grp";
         TopicIdPartition tp0 = new TopicIdPartition(Uuid.randomUuid(), new TopicPartition("foo", 0));
-        SharePartition sp0 = mock(SharePartition.class);
+        SharePartition sp0 = mockSharePartition();
 
         when(sp0.canAcquireRecords()).thenReturn(true);
         LinkedHashMap<TopicIdPartition, SharePartition> sharePartitions = new LinkedHashMap<>();
@@ -1188,11 +1188,11 @@ public class DelayedShareFetchTest {
         TopicIdPartition tp3 = new TopicIdPartition(Uuid.randomUuid(), new TopicPartition("foo", 3));
         TopicIdPartition tp4 = new TopicIdPartition(Uuid.randomUuid(), new TopicPartition("foo", 4));
 
-        SharePartition sp0 = mock(SharePartition.class);
-        SharePartition sp1 = mock(SharePartition.class);
-        SharePartition sp2 = mock(SharePartition.class);
-        SharePartition sp3 = mock(SharePartition.class);
-        SharePartition sp4 = mock(SharePartition.class);
+        SharePartition sp0 = mockSharePartition();
+        SharePartition sp1 = mockSharePartition();
+        SharePartition sp2 = mockSharePartition();
+        SharePartition sp3 = mockSharePartition();
+        SharePartition sp4 = mockSharePartition();
 
         when(sp0.canAcquireRecords()).thenReturn(true);
         when(sp1.canAcquireRecords()).thenReturn(true);
@@ -1291,11 +1291,11 @@ public class DelayedShareFetchTest {
         TopicIdPartition tp3 = new TopicIdPartition(Uuid.randomUuid(), new TopicPartition("foo", 3));
         TopicIdPartition tp4 = new TopicIdPartition(Uuid.randomUuid(), new TopicPartition("foo", 4));
 
-        SharePartition sp0 = mock(SharePartition.class);
-        SharePartition sp1 = mock(SharePartition.class);
-        SharePartition sp2 = mock(SharePartition.class);
-        SharePartition sp3 = mock(SharePartition.class);
-        SharePartition sp4 = mock(SharePartition.class);
+        SharePartition sp0 = mockSharePartition();
+        SharePartition sp1 = mockSharePartition();
+        SharePartition sp2 = mockSharePartition();
+        SharePartition sp3 = mockSharePartition();
+        SharePartition sp4 = mockSharePartition();
 
         when(sp0.canAcquireRecords()).thenReturn(true);
         when(sp1.canAcquireRecords()).thenReturn(true);
@@ -1384,9 +1384,9 @@ public class DelayedShareFetchTest {
         TopicIdPartition tp1 = new TopicIdPartition(Uuid.randomUuid(), new TopicPartition("foo", 1));
         TopicIdPartition tp2 = new TopicIdPartition(Uuid.randomUuid(), new TopicPartition("foo", 2));
 
-        SharePartition sp0 = mock(SharePartition.class);
-        SharePartition sp1 = mock(SharePartition.class);
-        SharePartition sp2 = mock(SharePartition.class);
+        SharePartition sp0 = mockSharePartition();
+        SharePartition sp1 = mockSharePartition();
+        SharePartition sp2 = mockSharePartition();
 
         LinkedHashMap<TopicIdPartition, SharePartition> sharePartitions = new LinkedHashMap<>();
         sharePartitions.put(tp0, sp0);
@@ -1475,9 +1475,9 @@ public class DelayedShareFetchTest {
         TopicIdPartition tp1 = new TopicIdPartition(Uuid.randomUuid(), new TopicPartition("foo", 1));
         TopicIdPartition tp2 = new TopicIdPartition(Uuid.randomUuid(), new TopicPartition("foo", 2));
 
-        SharePartition sp0 = mock(SharePartition.class);
-        SharePartition sp1 = mock(SharePartition.class);
-        SharePartition sp2 = mock(SharePartition.class);
+        SharePartition sp0 = mockSharePartition();
+        SharePartition sp1 = mockSharePartition();
+        SharePartition sp2 = mockSharePartition();
 
         when(sp0.canAcquireRecords()).thenReturn(true);
         when(sp1.canAcquireRecords()).thenReturn(true);
@@ -1558,7 +1558,7 @@ public class DelayedShareFetchTest {
     public void testTryCompleteWithPendingRemoteFetchInFlight() {
         ReplicaManager replicaManager = mock(ReplicaManager.class);
         TopicIdPartition tp0 = new TopicIdPartition(Uuid.randomUuid(), new TopicPartition("foo", 0));
-        SharePartition sp0 = mock(SharePartition.class);
+        SharePartition sp0 = mockSharePartition();
         when(sp0.canAcquireRecords()).thenReturn(true);
         when(sp0.nextFetchOffset()).thenReturn(10L);
         when(sp0.fetchOffsetMetadata(anyLong())).thenReturn(Optional.empty());
@@ -1634,7 +1634,7 @@ public class DelayedShareFetchTest {
         ReplicaManager replicaManager = mock(ReplicaManager.class);
         TopicIdPartition tp0 = new TopicIdPartition(Uuid.randomUuid(), new TopicPartition("foo", 0));
 
-        SharePartition sp0 = mock(SharePartition.class);
+        SharePartition sp0 = mockSharePartition();
 
         when(sp0.canAcquireRecords()).thenReturn(true);
 
@@ -1701,9 +1701,9 @@ public class DelayedShareFetchTest {
         TopicIdPartition tp1 = new TopicIdPartition(Uuid.randomUuid(), new TopicPartition("foo", 1));
         TopicIdPartition tp2 = new TopicIdPartition(Uuid.randomUuid(), new TopicPartition("foo", 2));
 
-        SharePartition sp0 = mock(SharePartition.class);
-        SharePartition sp1 = mock(SharePartition.class);
-        SharePartition sp2 = mock(SharePartition.class);
+        SharePartition sp0 = mockSharePartition();
+        SharePartition sp1 = mockSharePartition();
+        SharePartition sp2 = mockSharePartition();
 
         when(sp0.canAcquireRecords()).thenReturn(true);
         when(sp1.canAcquireRecords()).thenReturn(true);
@@ -1788,9 +1788,9 @@ public class DelayedShareFetchTest {
         TopicIdPartition tp1 = new TopicIdPartition(Uuid.randomUuid(), new TopicPartition("foo", 1));
         TopicIdPartition tp2 = new TopicIdPartition(Uuid.randomUuid(), new TopicPartition("foo", 2));
 
-        SharePartition sp0 = mock(SharePartition.class);
-        SharePartition sp1 = mock(SharePartition.class);
-        SharePartition sp2 = mock(SharePartition.class);
+        SharePartition sp0 = mockSharePartition();
+        SharePartition sp1 = mockSharePartition();
+        SharePartition sp2 = mockSharePartition();
 
         when(sp0.canAcquireRecords()).thenReturn(true);
         when(sp1.canAcquireRecords()).thenReturn(true);
@@ -1890,8 +1890,8 @@ public class DelayedShareFetchTest {
         TopicIdPartition tp0 = new TopicIdPartition(Uuid.randomUuid(), new TopicPartition("foo", 0));
         TopicIdPartition tp1 = new TopicIdPartition(Uuid.randomUuid(), new TopicPartition("foo", 1));
 
-        SharePartition sp0 = mock(SharePartition.class);
-        SharePartition sp1 = mock(SharePartition.class);
+        SharePartition sp0 = mockSharePartition();
+        SharePartition sp1 = mockSharePartition();
 
         when(sp0.canAcquireRecords()).thenReturn(true);
         when(sp1.canAcquireRecords()).thenReturn(false);
@@ -1977,7 +1977,7 @@ public class DelayedShareFetchTest {
         ReplicaManager replicaManager = mock(ReplicaManager.class);
         TopicIdPartition tp0 = new TopicIdPartition(Uuid.randomUuid(), new TopicPartition("foo", 0));
 
-        SharePartition sp0 = mock(SharePartition.class);
+        SharePartition sp0 = mockSharePartition();
 
         when(sp0.canAcquireRecords()).thenReturn(true);
 
@@ -2056,9 +2056,9 @@ public class DelayedShareFetchTest {
         TopicIdPartition tp1 = new TopicIdPartition(Uuid.randomUuid(), new TopicPartition("foo", 1));
         TopicIdPartition tp2 = new TopicIdPartition(Uuid.randomUuid(), new TopicPartition("foo", 2));
 
-        SharePartition sp0 = mock(SharePartition.class);
-        SharePartition sp1 = mock(SharePartition.class);
-        SharePartition sp2 = mock(SharePartition.class);
+        SharePartition sp0 = mockSharePartition();
+        SharePartition sp1 = mockSharePartition();
+        SharePartition sp2 = mockSharePartition();
 
         when(sp0.canAcquireRecords()).thenReturn(true);
         when(sp1.canAcquireRecords()).thenReturn(true);
@@ -2173,9 +2173,9 @@ public class DelayedShareFetchTest {
         TopicIdPartition tp1 = new TopicIdPartition(Uuid.randomUuid(), new TopicPartition("foo", 1));
         TopicIdPartition tp2 = new TopicIdPartition(Uuid.randomUuid(), new TopicPartition("foo", 2));
 
-        SharePartition sp0 = mock(SharePartition.class);
-        SharePartition sp1 = mock(SharePartition.class);
-        SharePartition sp2 = mock(SharePartition.class);
+        SharePartition sp0 = mockSharePartition();
+        SharePartition sp1 = mockSharePartition();
+        SharePartition sp2 = mockSharePartition();
         when(sp0.canAcquireRecords()).thenReturn(true);
         when(sp1.canAcquireRecords()).thenReturn(true);
         when(sp2.canAcquireRecords()).thenReturn(true);
@@ -2292,8 +2292,8 @@ public class DelayedShareFetchTest {
         TopicIdPartition tp0 = new TopicIdPartition(Uuid.randomUuid(), new TopicPartition("foo", 0)); // remote
         TopicIdPartition tp1 = new TopicIdPartition(Uuid.randomUuid(), new TopicPartition("foo", 1)); // non-remote
 
-        SharePartition sp0 = mock(SharePartition.class);
-        SharePartition sp1 = mock(SharePartition.class);
+        SharePartition sp0 = mockSharePartition();
+        SharePartition sp1 = mockSharePartition();
         when(sp0.canAcquireRecords()).thenReturn(true);
         when(sp1.canAcquireRecords()).thenReturn(true);
         when(sp0.nextFetchOffset()).thenReturn(10L);
@@ -2384,8 +2384,8 @@ public class DelayedShareFetchTest {
         TopicIdPartition tp0 = new TopicIdPartition(Uuid.randomUuid(), new TopicPartition("foo", 0));
         TopicIdPartition tp1 = new TopicIdPartition(Uuid.randomUuid(), new TopicPartition("foo", 1));
 
-        SharePartition sp0 = mock(SharePartition.class);
-        SharePartition sp1 = mock(SharePartition.class);
+        SharePartition sp0 = mockSharePartition();
+        SharePartition sp1 = mockSharePartition();
 
         when(sp0.canAcquireRecords()).thenReturn(true);
         when(sp1.canAcquireRecords()).thenReturn(true);
@@ -2477,7 +2477,7 @@ public class DelayedShareFetchTest {
     public void testRemoteStorageFetchCompletionPostRegisteringCallbackByPendingFetchesCompletion() {
         ReplicaManager replicaManager = mock(ReplicaManager.class);
         TopicIdPartition tp0 = new TopicIdPartition(Uuid.randomUuid(), new TopicPartition("foo", 0));
-        SharePartition sp0 = mock(SharePartition.class);
+        SharePartition sp0 = mockSharePartition();
 
         when(sp0.canAcquireRecords()).thenReturn(true);
         when(sp0.nextFetchOffset()).thenReturn(10L);
@@ -2558,7 +2558,7 @@ public class DelayedShareFetchTest {
     public void testRemoteStorageFetchCompletionPostRegisteringCallbackByTimerTaskCompletion() {
         ReplicaManager replicaManager = mock(ReplicaManager.class);
         TopicIdPartition tp0 = new TopicIdPartition(Uuid.randomUuid(), new TopicPartition("foo", 0));
-        SharePartition sp0 = mock(SharePartition.class);
+        SharePartition sp0 = mockSharePartition();
 
         when(sp0.canAcquireRecords()).thenReturn(true);
         when(sp0.nextFetchOffset()).thenReturn(10L);
@@ -2642,7 +2642,7 @@ public class DelayedShareFetchTest {
     public void testRemoteStorageFetchCompletionNotTriggerActionsQueue() {
         ReplicaManager replicaManager = mock(ReplicaManager.class);
         TopicIdPartition tp0 = new TopicIdPartition(Uuid.randomUuid(), new TopicPartition("foo", 0));
-        SharePartition sp0 = mock(SharePartition.class);
+        SharePartition sp0 = mockSharePartition();
 
         when(sp0.canAcquireRecords()).thenReturn(true);
         when(sp0.nextFetchOffset()).thenReturn(10L);
@@ -2732,7 +2732,7 @@ public class DelayedShareFetchTest {
         ReplicaManager replicaManager = mock(ReplicaManager.class);
         TopicIdPartition tp0 = new TopicIdPartition(topicId, new TopicPartition("foo", 0));
 
-        SharePartition sp0 = mock(SharePartition.class);
+        SharePartition sp0 = mockSharePartition();
         LinkedHashMap<TopicIdPartition, SharePartition> sharePartitions = new LinkedHashMap<>();
         sharePartitions.put(tp0, sp0);
 
@@ -2809,7 +2809,7 @@ public class DelayedShareFetchTest {
         ReplicaManager replicaManager = mock(ReplicaManager.class);
         TopicIdPartition tp0 = new TopicIdPartition(topicId, new TopicPartition("foo", 0));
 
-        SharePartition sp0 = mock(SharePartition.class);
+        SharePartition sp0 = mockSharePartition();
         LinkedHashMap<TopicIdPartition, SharePartition> sharePartitions = new LinkedHashMap<>();
         sharePartitions.put(tp0, sp0);
 
@@ -2878,7 +2878,7 @@ public class DelayedShareFetchTest {
         ReplicaManager replicaManager = mock(ReplicaManager.class);
         TopicIdPartition tp0 = new TopicIdPartition(topicId, new TopicPartition("foo", 0));
 
-        SharePartition sp0 = mock(SharePartition.class);
+        SharePartition sp0 = mockSharePartition();
         LinkedHashMap<TopicIdPartition, SharePartition> sharePartitions = new LinkedHashMap<>();
         sharePartitions.put(tp0, sp0);
 
@@ -2941,7 +2941,7 @@ public class DelayedShareFetchTest {
         PartitionMetadataProvider metadataProvider = mock(PartitionMetadataProvider.class);
         TopicIdPartition tp0 = new TopicIdPartition(topicId, new TopicPartition("foo", 0));
 
-        SharePartition sp0 = mock(SharePartition.class);
+        SharePartition sp0 = mockSharePartition();
         LinkedHashMap<TopicIdPartition, SharePartition> sharePartitions = new LinkedHashMap<>();
         sharePartitions.put(tp0, sp0);
 
@@ -3009,7 +3009,7 @@ public class DelayedShareFetchTest {
         PartitionMetadataProvider metadataProvider = mock(PartitionMetadataProvider.class);
         TopicIdPartition tp0 = new TopicIdPartition(topicId, new TopicPartition("foo", 0));
 
-        SharePartition sp0 = mock(SharePartition.class);
+        SharePartition sp0 = mockSharePartition();
         LinkedHashMap<TopicIdPartition, SharePartition> sharePartitions = new LinkedHashMap<>();
         sharePartitions.put(tp0, sp0);
 
@@ -3097,7 +3097,7 @@ public class DelayedShareFetchTest {
         PartitionMetadataProvider metadataProvider = mock(PartitionMetadataProvider.class);
         TopicIdPartition tp0 = new TopicIdPartition(topicId, new TopicPartition("foo", 0));
 
-        SharePartition sp0 = mock(SharePartition.class);
+        SharePartition sp0 = mockSharePartition();
         LinkedHashMap<TopicIdPartition, SharePartition> sharePartitions = new LinkedHashMap<>();
         sharePartitions.put(tp0, sp0);
 
@@ -3179,9 +3179,9 @@ public class DelayedShareFetchTest {
         TopicIdPartition tp1 = new TopicIdPartition(Uuid.randomUuid(), new TopicPartition("foo", 1));
         TopicIdPartition tp2 = new TopicIdPartition(Uuid.randomUuid(), new TopicPartition("foo", 2));
 
-        SharePartition sp0 = mock(SharePartition.class);
-        SharePartition sp1 = mock(SharePartition.class);
-        SharePartition sp2 = mock(SharePartition.class);
+        SharePartition sp0 = mockSharePartition();
+        SharePartition sp1 = mockSharePartition();
+        SharePartition sp2 = mockSharePartition();
         when(sp0.canAcquireRecords()).thenReturn(true);
         when(sp1.canAcquireRecords()).thenReturn(true);
         when(sp2.canAcquireRecords()).thenReturn(true);
@@ -3334,6 +3334,15 @@ public class DelayedShareFetchTest {
     @SuppressWarnings("unchecked")
     private static BiConsumer<SharePartitionKey, Throwable> mockExceptionHandler() {
         return mock(BiConsumer.class);
+    }
+
+    private static SharePartition mockSharePartition() {
+        SharePartition sharePartition = Mockito.mock(SharePartition.class);
+        when(sharePartition.nextFetchOffsetIfAcquirable()).thenAnswer(invocation ->
+            sharePartition.canAcquireRecords()
+                ? OptionalLong.of(sharePartition.nextFetchOffset())
+                : OptionalLong.empty());
+        return sharePartition;
     }
 
     private static LinkedHashMap<TopicIdPartition, LogReadResult> buildLogReadResultMap(List<TopicIdPartition> topicIdPartitions) {
