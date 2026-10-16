@@ -137,12 +137,21 @@ public final class RecordsIterator<T> implements Iterator<Batch<T>>, AutoCloseab
         MemoryRecords memoryRecords = readFileRecords(fileRecords, buffer);
 
         Integer firstBatchSize = memoryRecords.firstBatchSize();
-        // firstBatchSize is null when fewer than HEADER_SIZE_UP_TO_MAGIC bytes were read, which only
-        // happens at the end of the records. Once all records have been read, a trailing partial
-        // batch can't be completed, so return the records read so far instead of growing the buffer.
-        if (firstBatchSize == null || firstBatchSize <= buffer.remaining() ||
-            bytesRead >= fileRecords.sizeInBytes()
-        ) {
+        if (firstBatchSize != null && firstBatchSize <= buffer.remaining()) {
+            // The buffer contains at least one complete batch
+            return memoryRecords;
+        } else if (firstBatchSize == null || bytesRead >= fileRecords.sizeInBytes()) {
+            // No more bytes can be read, but the buffer doesn't contain a complete batch. firstBatchSize
+            // is null when fewer than HEADER_SIZE_UP_TO_MAGIC bytes are left. Callers are expected to
+            // pass records that end on a batch boundary, so the records were cut in the middle of a
+            // batch or are corrupt. The partial batch can't be completed, so don't grow the buffer.
+            logger.error(
+                "Ignoring a partial batch of {} bytes at position {} of {}; the batch size is {}",
+                buffer.remaining(),
+                bytesRead - buffer.remaining(),
+                fileRecords,
+                firstBatchSize == null ? "unknown" : firstBatchSize
+            );
             return memoryRecords;
         } else {
             logger.info(

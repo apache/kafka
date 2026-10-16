@@ -133,7 +133,7 @@ public class FileRecords extends AbstractRecords implements Closeable {
      * @param position Position to start reading from, relative to the start of this FileRecords object
      * @throws IOException If an I/O error occurs, see {@link FileChannel#read(ByteBuffer, long)} for details on the
      * possible exceptions.
-     * @throws IllegalArgumentException If position is negative or greater than {@link #sizeInBytes()}}
+     * @throws IllegalArgumentException If position is negative or greater than {@link #sizeInBytes()}
      */
     public void readInto(ByteBuffer buffer, int position) throws IOException {
         int currentSize = sizeInBytes();
