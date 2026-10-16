@@ -31,6 +31,7 @@ import org.apache.kafka.common.TopicPartitionInfo;
 import org.apache.kafka.common.config.ConfigResource;
 import org.apache.kafka.common.config.ConfigResource.Type;
 import org.apache.kafka.common.config.TopicConfig;
+import org.apache.kafka.common.errors.BootstrapResolutionException;
 import org.apache.kafka.common.errors.InterruptException;
 import org.apache.kafka.common.errors.LeaderNotAvailableException;
 import org.apache.kafka.common.errors.TimeoutException;
@@ -62,6 +63,8 @@ import java.util.Set;
 import java.util.concurrent.ExecutionException;
 import java.util.function.BiConsumer;
 import java.util.stream.Collectors;
+
+import static org.apache.kafka.streams.processor.internals.ClientUtils.findBootstrapResolutionException;
 
 
 
@@ -250,6 +253,12 @@ public class InternalTopicManager {
                         log.info("The leader of internal topic {} is not available.", topicName);
                     } else if (cause instanceof TimeoutException) {
                         log.info("Retrieving data for internal topic {} timed out.", topicName);
+                    } else if (findBootstrapResolutionException(cause) != null) {
+                        final BootstrapResolutionException bre = findBootstrapResolutionException(cause);
+                        log.error("Internal topic validation failed because the Kafka cluster's bootstrap servers " +
+                            "could not be resolved within bootstrap.resolve.timeout.ms: {}", bre.getMessage());
+                        throw new StreamsException(String.format("Could not validate internal topic %s because bootstrap servers could not be resolved: %s",
+                                topicName, bre.getMessage()), bre);
                     } else {
                         log.error("Unexpected error during internal topic validation: ", cause);
                         throw new StreamsException(
@@ -575,7 +584,14 @@ public class InternalTopicManager {
                     log.error("Unexpected error during topic creation for {}.\n" +
                             "Error message was: {}", topicName, cause.toString());
 
-                    if (cause instanceof UnsupportedProtocolFieldException) {
+                    final BootstrapResolutionException bre = findBootstrapResolutionException(cause);
+                    if (bre != null) {
+                        log.error("Topic creation for {} failed because the Kafka cluster's bootstrap servers " +
+                                "could not be resolved within bootstrap.resolve.timeout.ms: {}", topicName, bre.getMessage());
+                        throw new StreamsException(
+                                String.format("Could not create topic %s because bootstrap servers could not be resolved: %s",
+                                        topicName, bre.getMessage()), bre);
+                    } else if (cause instanceof UnsupportedProtocolFieldException) {
                         // An older broker rejected a field we rely on (e.g. the default
                         // replication.factor=-1, which requires CreateTopics request version 4+).
                         throw new StreamsException(String.format(
@@ -656,6 +672,13 @@ public class InternalTopicManager {
                     }
                     log.debug("Describing topic {} (to get number of partitions) timed out.\n" +
                             "Error message was: {}", topicName, cause.toString());
+                } else if (findBootstrapResolutionException(cause) != null) {
+                    final BootstrapResolutionException bre = findBootstrapResolutionException(cause);
+                    log.error("Topic description for {} failed because the Kafka cluster's bootstrap servers " +
+                        "could not be resolved within bootstrap.resolve.timeout.ms: {}", topicName, bre.getMessage());
+                    throw new StreamsException(
+                        String.format("Could not describe topic %s because bootstrap servers could not be resolved: %s",
+                            topicName, bre.getMessage()), bre);
                 } else {
                     log.error("Unexpected error during topic description for {}.\n" +
                         "Error message was: {}", topicName, cause.toString());

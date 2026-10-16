@@ -29,6 +29,7 @@ import org.apache.kafka.common.KafkaFuture;
 import org.apache.kafka.common.Metric;
 import org.apache.kafka.common.MetricName;
 import org.apache.kafka.common.TopicPartition;
+import org.apache.kafka.common.errors.BootstrapResolutionException;
 import org.apache.kafka.common.errors.TimeoutException;
 import org.apache.kafka.common.header.Header;
 import org.apache.kafka.common.header.Headers;
@@ -236,5 +237,21 @@ public class ClientUtils {
             Utils.utf8(topic).length +
             4L + // partition
             headerSizeInBytes;
+    }
+
+    /**
+     * Walks the causal chain looking for a {@link BootstrapResolutionException}.
+     *
+     * @param throwable the root throwable to inspect
+     * @return the first {@link BootstrapResolutionException} in the cause chain, or {@code null} if none is found
+     */
+    public static BootstrapResolutionException findBootstrapResolutionException(final Throwable throwable) {
+        Throwable t = throwable;
+        for (int i = 0; t != null && i < 20; i++, t = t.getCause()) {
+            if (t instanceof BootstrapResolutionException) {
+                return (BootstrapResolutionException) t;
+            }
+        }
+        return null;
     }
 }

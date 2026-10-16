@@ -29,6 +29,7 @@ import org.apache.kafka.common.Uuid;
 import org.apache.kafka.common.annotation.InterfaceAudience;
 import org.apache.kafka.common.annotation.InterfaceStability.Evolving;
 import org.apache.kafka.common.annotation.SuppressKafkaInternalApiUsage;
+import org.apache.kafka.common.errors.BootstrapResolutionException;
 import org.apache.kafka.common.errors.TimeoutException;
 import org.apache.kafka.common.header.Headers;
 import org.apache.kafka.common.header.internals.RecordHeaders;
@@ -526,6 +527,19 @@ public class KafkaStreams implements AutoCloseable {
     private void handleStreamsUncaughtException(final Throwable throwable,
                                                 final StreamsUncaughtExceptionHandler streamsUncaughtExceptionHandler,
                                                 final boolean skipThreadReplacement) {
+        final BootstrapResolutionException bootstrapResolutionException = ClientUtils.findBootstrapResolutionException(throwable);
+        if (bootstrapResolutionException != null) {
+            log.error(
+                "Encountered fatal bootstrap resolution failure. The Kafka cluster's bootstrap servers could not be " +
+                    "resolved within bootstrap.resolve.timeout.ms: {}. " +
+                    "The streams client cannot recover and is shutting down now.",
+                bootstrapResolutionException.getMessage(),
+                throwable
+            );
+            closeToError();
+            return;
+        }
+
         final StreamsUncaughtExceptionHandler.StreamThreadExceptionResponse action = streamsUncaughtExceptionHandler.handle(throwable);
 
         switch (action) {
