@@ -91,12 +91,8 @@ public class DeleteTopicTest {
             // Wait for topic deletion
             cluster.waitTopicDeletion(testTopic);
             // Ensure that the topic directories are hard-deleted
-            TestUtils.waitForCondition(() -> cluster.brokers().values().stream().allMatch(broker ->
-                broker.config().logDirs().stream().allMatch(logDir ->
-                    Arrays.stream(Objects.requireNonNull(new File(logDir).list())).noneMatch(partitionDirectoryName ->
-                        partitionDirectoryName.startsWith(topicPartition.topic() + "-" + topicPartition.partition()) &&
-                            partitionDirectoryName.endsWith(UnifiedLog.DELETE_DIR_SUFFIX)))
-            ), "Failed to hard-delete the delete directory");
+            TestUtils.waitForCondition(() -> topicDirectories(cluster, testTopic).isEmpty(),
+                "Failed to hard-delete the delete directory");
         }
     }
 
