@@ -17,6 +17,7 @@
 package org.apache.kafka.connect.mirror;
 
 import org.apache.kafka.clients.consumer.OffsetAndMetadata;
+import org.apache.kafka.common.GroupState;
 import org.apache.kafka.common.TopicPartition;
 import org.apache.kafka.connect.source.SourceRecord;
 
@@ -126,6 +127,7 @@ public class MirrorCheckpointTaskTest {
     public void testSyncOffset() throws ExecutionException, InterruptedException {
         Map<String, Map<TopicPartition, OffsetAndMetadata>> idleConsumerGroupsOffset = new HashMap<>();
         Map<String, Map<TopicPartition, Checkpoint>> checkpointsPerConsumerGroup = new HashMap<>();
+        Map<String, GroupState> targetConsumerGroupStates = new HashMap<>();
 
         String consumer1 = "consumer1";
         String consumer2 = "consumer2";
@@ -148,6 +150,10 @@ public class MirrorCheckpointTaskTest {
         idleConsumerGroupsOffset.put(consumer1, c1t1);
         idleConsumerGroupsOffset.put(consumer2, c2t2);
 
+        // both groups are idle (EMPTY) on the target cluster, so their offsets are eligible to be synced
+        targetConsumerGroupStates.put(consumer1, GroupState.EMPTY);
+        targetConsumerGroupStates.put(consumer2, GroupState.EMPTY);
+
         // 'cpC1T1P0' denotes 'checkpoint' of topic1, partition 0 for consumer1
         Checkpoint cpC1T1P0 = new Checkpoint(consumer1, new TopicPartition(topic1, 0), 200, 101, "metadata");
 
@@ -167,7 +173,7 @@ public class MirrorCheckpointTaskTest {
 
         MirrorCheckpointTask mirrorCheckpointTask = new MirrorCheckpointTask("source1", "target2",
             new DefaultReplicationPolicy(), null, Set.of(), idleConsumerGroupsOffset,
-            new CheckpointStore(checkpointsPerConsumerGroup));
+            targetConsumerGroupStates, new CheckpointStore(checkpointsPerConsumerGroup));
 
         Map<String, Map<TopicPartition, OffsetAndMetadata>> output = mirrorCheckpointTask.syncGroupOffset();
 
@@ -181,6 +187,7 @@ public class MirrorCheckpointTaskTest {
     public void testSyncOffsetForTargetGroupWithNullOffsetAndMetadata() throws ExecutionException, InterruptedException {
         Map<String, Map<TopicPartition, OffsetAndMetadata>> idleConsumerGroupsOffset = new HashMap<>();
         Map<String, Map<TopicPartition, Checkpoint>> checkpointsPerConsumerGroup = new HashMap<>();
+        Map<String, GroupState> targetConsumerGroupStates = new HashMap<>();
 
         String consumer = "consumer";
         String topic = "topic";
@@ -196,13 +203,129 @@ public class MirrorCheckpointTaskTest {
         checkpointMap.put(cp.topicPartition(), cp);
         checkpointsPerConsumerGroup.put(consumer, checkpointMap);
 
+        // the group is idle (EMPTY) on the target cluster, so its offsets are eligible to be synced
+        targetConsumerGroupStates.put(consumer, GroupState.EMPTY);
+
         MirrorCheckpointTask mirrorCheckpointTask = new MirrorCheckpointTask("source", "target",
                 new DefaultReplicationPolicy(), null, Set.of(), idleConsumerGroupsOffset,
-                new CheckpointStore(checkpointsPerConsumerGroup));
+                targetConsumerGroupStates, new CheckpointStore(checkpointsPerConsumerGroup));
 
         Map<String, Map<TopicPartition, OffsetAndMetadata>> output = mirrorCheckpointTask.syncGroupOffset();
 
         assertEquals(101, output.get(consumer).get(tp).offset(), "Consumer " + topic + " failed");
+    }
+
+    @Test
+    public void testSyncOffsetForNewGroupOnTarget() throws ExecutionException, InterruptedException {
+        // A consumer group that does not exist on the target cluster is reported as DEAD. Its offsets
+        // should be synced (creating the group) even though there is no idle offset snapshot for it.
+        Map<String, Map<TopicPartition, OffsetAndMetadata>> idleConsumerGroupsOffset = new HashMap<>();
+        Map<String, Map<TopicPartition, Checkpoint>> checkpointsPerConsumerGroup = new HashMap<>();
+        Map<String, GroupState> targetConsumerGroupStates = new HashMap<>();
+
+        String consumer = "consumer";
+        String topic = "topic";
+        TopicPartition tp = new TopicPartition(topic, 0);
+
+        Checkpoint cp = new Checkpoint(consumer, tp, 200, 101, "metadata");
+        Map<TopicPartition, Checkpoint> checkpointMap = new HashMap<>();
+        checkpointMap.put(cp.topicPartition(), cp);
+        checkpointsPerConsumerGroup.put(consumer, checkpointMap);
+
+        targetConsumerGroupStates.put(consumer, GroupState.DEAD);
+
+        MirrorCheckpointTask mirrorCheckpointTask = new MirrorCheckpointTask("source", "target",
+                new DefaultReplicationPolicy(), null, Set.of(), idleConsumerGroupsOffset,
+                targetConsumerGroupStates, new CheckpointStore(checkpointsPerConsumerGroup));
+
+        Map<String, Map<TopicPartition, OffsetAndMetadata>> output = mirrorCheckpointTask.syncGroupOffset();
+
+        assertEquals(101, output.get(consumer).get(tp).offset(), "Consumer " + topic + " failed");
+    }
+
+    @Test
+    public void testNoSyncOffsetForActiveGroupOnTarget() throws ExecutionException, InterruptedException {
+        // A consumer group that is actively consuming on the target cluster (e.g. STABLE) must not have
+        // its offsets synced, even though there is no idle offset snapshot for it.
+        Map<String, Map<TopicPartition, OffsetAndMetadata>> idleConsumerGroupsOffset = new HashMap<>();
+        Map<String, Map<TopicPartition, Checkpoint>> checkpointsPerConsumerGroup = new HashMap<>();
+        Map<String, GroupState> targetConsumerGroupStates = new HashMap<>();
+
+        String consumer = "consumer";
+        String topic = "topic";
+        TopicPartition tp = new TopicPartition(topic, 0);
+
+        Checkpoint cp = new Checkpoint(consumer, tp, 200, 101, "metadata");
+        Map<TopicPartition, Checkpoint> checkpointMap = new HashMap<>();
+        checkpointMap.put(cp.topicPartition(), cp);
+        checkpointsPerConsumerGroup.put(consumer, checkpointMap);
+
+        targetConsumerGroupStates.put(consumer, GroupState.STABLE);
+
+        MirrorCheckpointTask mirrorCheckpointTask = new MirrorCheckpointTask("source", "target",
+                new DefaultReplicationPolicy(), null, Set.of(), idleConsumerGroupsOffset,
+                targetConsumerGroupStates, new CheckpointStore(checkpointsPerConsumerGroup));
+
+        Map<String, Map<TopicPartition, OffsetAndMetadata>> output = mirrorCheckpointTask.syncGroupOffset();
+
+        assertTrue(output.isEmpty(), "Offsets should not be synced for an actively consumed target group");
+    }
+
+    @Test
+    public void testNoSyncOffsetForGroupWithoutRefreshedState() throws ExecutionException, InterruptedException {
+        // If the state/offsets of a consumer group could not be refreshed on the target cluster (e.g. due to
+        // a transient timeout, or a listConsumerGroupOffsets failure for an EMPTY group), the group is absent
+        // from both idleConsumerGroupsOffset and targetConsumerGroupStates and its offsets must not be synced.
+        Map<String, Map<TopicPartition, OffsetAndMetadata>> idleConsumerGroupsOffset = new HashMap<>();
+        Map<String, Map<TopicPartition, Checkpoint>> checkpointsPerConsumerGroup = new HashMap<>();
+        Map<String, GroupState> targetConsumerGroupStates = new HashMap<>();
+
+        String consumer = "consumer";
+        String topic = "topic";
+        TopicPartition tp = new TopicPartition(topic, 0);
+
+        Checkpoint cp = new Checkpoint(consumer, tp, 200, 101, "metadata");
+        Map<TopicPartition, Checkpoint> checkpointMap = new HashMap<>();
+        checkpointMap.put(cp.topicPartition(), cp);
+        checkpointsPerConsumerGroup.put(consumer, checkpointMap);
+
+        MirrorCheckpointTask mirrorCheckpointTask = new MirrorCheckpointTask("source", "target",
+                new DefaultReplicationPolicy(), null, Set.of(), idleConsumerGroupsOffset,
+                targetConsumerGroupStates, new CheckpointStore(checkpointsPerConsumerGroup));
+
+        Map<String, Map<TopicPartition, OffsetAndMetadata>> output = mirrorCheckpointTask.syncGroupOffset();
+
+        assertTrue(output.isEmpty(), "Offsets should not be synced for a group whose state could not be refreshed");
+    }
+
+    @Test
+    public void testNoSyncOffsetForEmptyGroupWithoutOffsetSnapshot() throws ExecutionException, InterruptedException {
+        // A group reported as EMPTY but whose target offsets could not be fetched (e.g. listConsumerGroupOffsets
+        // threw during the refresh) is absent from idleConsumerGroupsOffset. It must not be treated as a new
+        // group and have all its offsets synced, since that could rewind it if it later becomes active.
+        Map<String, Map<TopicPartition, OffsetAndMetadata>> idleConsumerGroupsOffset = new HashMap<>();
+        Map<String, Map<TopicPartition, Checkpoint>> checkpointsPerConsumerGroup = new HashMap<>();
+        Map<String, GroupState> targetConsumerGroupStates = new HashMap<>();
+
+        String consumer = "consumer";
+        String topic = "topic";
+        TopicPartition tp = new TopicPartition(topic, 0);
+
+        Checkpoint cp = new Checkpoint(consumer, tp, 200, 101, "metadata");
+        Map<TopicPartition, Checkpoint> checkpointMap = new HashMap<>();
+        checkpointMap.put(cp.topicPartition(), cp);
+        checkpointsPerConsumerGroup.put(consumer, checkpointMap);
+
+        // state is EMPTY but there is no offset snapshot for the group
+        targetConsumerGroupStates.put(consumer, GroupState.EMPTY);
+
+        MirrorCheckpointTask mirrorCheckpointTask = new MirrorCheckpointTask("source", "target",
+                new DefaultReplicationPolicy(), null, Set.of(), idleConsumerGroupsOffset,
+                targetConsumerGroupStates, new CheckpointStore(checkpointsPerConsumerGroup));
+
+        Map<String, Map<TopicPartition, OffsetAndMetadata>> output = mirrorCheckpointTask.syncGroupOffset();
+
+        assertTrue(output.isEmpty(), "Offsets should not be synced for an EMPTY group without a refreshed offset snapshot");
     }
 
     @Test
