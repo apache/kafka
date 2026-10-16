@@ -1466,7 +1466,15 @@ public final class KafkaRaftClient<T> implements RaftClient<T> {
         if (requestClusterId == null) {
             return true;
         }
-        return clusterId.equals(requestClusterId);
+        if (!clusterId.equals(requestClusterId)) {
+            logger.warn(
+                "Received request with cluster id \"{}\", which does not match the local cluster id \"{}\"",
+                requestClusterId,
+                clusterId
+            );
+            return false;
+        }
+        return true;
     }
 
     /**
