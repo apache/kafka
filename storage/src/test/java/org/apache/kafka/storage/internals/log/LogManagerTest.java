@@ -86,6 +86,7 @@ import static org.junit.jupiter.api.Assertions.assertThrows;
 import static org.junit.jupiter.api.Assertions.assertTimeoutPreemptively;
 import static org.junit.jupiter.api.Assertions.assertTrue;
 import static org.mockito.ArgumentMatchers.any;
+import static org.mockito.ArgumentMatchers.anyInt;
 import static org.mockito.ArgumentMatchers.anyMap;
 import static org.mockito.ArgumentMatchers.eq;
 import static org.mockito.Mockito.doAnswer;
@@ -1094,14 +1095,15 @@ public class LogManagerTest {
             any(LogConfig.class), anyMap(), any(ConcurrentMap.class), any(Function.class));
 
         // do nothing for removeLogRecoveryMetrics for metrics verification
-        doNothing().when(spyLogManager).removeLogRecoveryMetrics();
+        doNothing().when(spyLogManager).removeLogRecoveryMetrics(anyInt());
 
         // start the logManager to do log recovery
         spyLogManager.startup(Set.of());
 
         // make sure log recovery metrics are added and removed
-        verify(spyLogManager, times(1)).addLogRecoveryMetrics(any(ConcurrentMap.class), any(ConcurrentMap.class));
-        verify(spyLogManager, times(1)).removeLogRecoveryMetrics();
+        verify(spyLogManager, times(1)).addLogRecoveryMetrics(
+                any(ConcurrentMap.class), any(ConcurrentMap.class), eq(recoveryThreadsPerDataDir));
+        verify(spyLogManager, times(1)).removeLogRecoveryMetrics(recoveryThreadsPerDataDir);
         // Verify loadLog was called for all 4 partitions
         verify(spyLogManager, times(4)).loadLog(any(File.class), any(Boolean.class), anyMap(), any(),
                 any(LogConfig.class), anyMap(), any(ConcurrentMap.class), any(Function.class));
@@ -1137,9 +1139,44 @@ public class LogManagerTest {
         spyLogManager.startup(Set.of());
 
         // make sure log recovery metrics are added and removed once
-        verify(spyLogManager, times(1)).addLogRecoveryMetrics(any(ConcurrentMap.class), any(ConcurrentMap.class));
-        verify(spyLogManager, times(1)).removeLogRecoveryMetrics();
+        verify(spyLogManager, times(1)).addLogRecoveryMetrics(
+                any(ConcurrentMap.class), any(ConcurrentMap.class), eq(recoveryThreadsPerDataDir));
+        verify(spyLogManager, times(1)).removeLogRecoveryMetrics(recoveryThreadsPerDataDir);
 
+        verifyLogRecoverMetricsRemoved();
+    }
+
+    @Test
+    public void testLogRecoveryMetricsUseOriginalRecoveryThreadCountWhenThreadPoolShrinksDuringRecovery() throws Exception {
+        logManager.shutdown();
+        File logDir1 = TestUtils.tempDirectory();
+        List<File> logDirs = List.of(logDir1);
+        int recoveryThreadsPerDataDir = 2;
+        // Create a LogManager with two recovery threads per data directory.
+        logManager = createLogManager(logDirs, recoveryThreadsPerDataDir);
+        LogManager spyLogManager = spy(logManager);
+
+        // Simulate a dynamic config update that shrinks the recovery thread pool from 2 to 1
+        // after the recovery metrics are registered.
+        doAnswer(invocation -> {
+            Object result = invocation.callRealMethod();
+            spyLogManager.resizeRecoveryThreadPool(1);
+            return result;
+        }).when(spyLogManager).addLogRecoveryMetrics(
+            any(ConcurrentMap.class),
+            any(ConcurrentMap.class),
+            eq(recoveryThreadsPerDataDir));
+
+        spyLogManager.startup(Set.of());
+
+        // The current recovery cycle should keep using the original thread count snapshot
+        // for both metric registration and cleanup.
+        verify(spyLogManager, times(1)).addLogRecoveryMetrics(
+            any(ConcurrentMap.class),
+            any(ConcurrentMap.class),
+            eq(recoveryThreadsPerDataDir));
+        verify(spyLogManager, times(1)).removeLogRecoveryMetrics(anyInt());
+        verify(spyLogManager, times(1)).removeLogRecoveryMetrics(recoveryThreadsPerDataDir);
         verifyLogRecoverMetricsRemoved();
     }
 
