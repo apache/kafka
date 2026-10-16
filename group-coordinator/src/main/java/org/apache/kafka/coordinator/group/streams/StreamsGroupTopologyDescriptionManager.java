@@ -29,6 +29,7 @@ import org.apache.kafka.common.requests.ApiError;
 import org.apache.kafka.common.requests.StreamsGroupHeartbeatResponse.Status;
 import org.apache.kafka.common.utils.Time;
 import org.apache.kafka.common.utils.internals.LogContext;
+import org.apache.kafka.coordinator.group.Utils;
 import org.apache.kafka.coordinator.group.api.streams.StreamsGroupTopologyDescription;
 import org.apache.kafka.coordinator.group.api.streams.StreamsGroupTopologyDescriptionPlugin;
 import org.apache.kafka.coordinator.group.api.streams.StreamsTopologyDescriptionPermanentFailureException;
@@ -396,7 +397,7 @@ public class StreamsGroupTopologyDescriptionManager implements AutoCloseable {
         recordPluginDeleteOutcome(stillEligible.size(), failures.size());
         // Shutdown can have started between the plugin call and this follow-up write.
         if (!running.get()) return CompletableFuture.completedFuture(null);
-        Set<String> toFinalize = new LinkedHashSet<>(stillEligible.size());
+        Set<String> toFinalize = Utils.newLinkedHashSet(stillEligible.size());
         for (String groupId : stillEligible) {
             if (failures.containsKey(groupId)) continue;
             clearBackoffGroup(groupId);
