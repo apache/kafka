@@ -20,6 +20,7 @@ package org.apache.kafka.controller;
 import org.apache.kafka.common.metadata.AbortTransactionRecord;
 import org.apache.kafka.common.metadata.BeginTransactionRecord;
 import org.apache.kafka.common.metadata.EndTransactionRecord;
+import org.apache.kafka.common.metadata.FeatureLevelRecord;
 import org.apache.kafka.metadata.bootstrap.BootstrapMetadata;
 import org.apache.kafka.metadata.migration.ZkMigrationState;
 import org.apache.kafka.server.common.ApiMessageAndVersion;
@@ -121,7 +122,8 @@ public class ActivationRecordsGenerator {
         long transactionStartOffset,
         boolean zkMigrationEnabled,
         FeatureControlManager featureControl,
-        MetadataVersion metadataVersion
+        MetadataVersion metadataVersion,
+        BootstrapMetadata bootstrapMetadata
     ) {
         StringBuilder logMessageBuilder = new StringBuilder("Performing controller activation. ");
 
@@ -145,10 +147,16 @@ public class ActivationRecordsGenerator {
         }
 
         if (metadataVersion.equals(MetadataVersion.MINIMUM_KRAFT_VERSION)) {
+            MetadataVersion bootstrapVersion = bootstrapMetadata.metadataVersion();
             logMessageBuilder.append("No metadata.version feature level record was found in the log. ")
-                .append("Treating the log as version ")
-                .append(MetadataVersion.MINIMUM_KRAFT_VERSION)
-                .append(". ");
+                .append("Writing metadata.version ")
+                .append(bootstrapVersion)
+                .append(" from bootstrap source '")
+                .append(bootstrapMetadata.source())
+                .append("'. ");
+            records.add(new ApiMessageAndVersion(new FeatureLevelRecord()
+                .setName(MetadataVersion.FEATURE_NAME)
+                .setFeatureLevel(bootstrapVersion.featureLevel()), (short) 0));
         }
 
         // In 3.9, we moved the minimum MV for migrations to 3.6. For non-empty logs, we allow the older 3.4 MV
@@ -232,7 +240,7 @@ public class ActivationRecordsGenerator {
                 bootstrapMetadata, bootstrapMetadata.metadataVersion());
         } else {
             return recordsForNonEmptyLog(activationMessageConsumer, transactionStartOffset, zkMigrationEnabled,
-                featureControl, featureControl.metadataVersion());
+                featureControl, featureControl.metadataVersion(), bootstrapMetadata);
         }
     }
 }
