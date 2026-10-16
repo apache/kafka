@@ -18,6 +18,8 @@ package org.apache.kafka.server.quota;
 
 import org.apache.kafka.common.MetricName;
 import org.apache.kafka.common.internals.Plugin;
+import org.apache.kafka.common.metrics.KafkaMetric;
+import org.apache.kafka.common.metrics.MeasurableStat;
 import org.apache.kafka.common.metrics.MetricConfig;
 import org.apache.kafka.common.metrics.Metrics;
 import org.apache.kafka.common.metrics.Quota;
@@ -469,10 +471,15 @@ public class ClientQuotaManager {
     }
 
     protected void registerQuotaMetrics(Map<String, String> metricTags, Sensor sensor) {
+        MetricName quotaMetricName = clientQuotaMetricName(metricTags);
         sensor.add(
-                clientQuotaMetricName(metricTags),
+                quotaMetricName,
                 new Rate(),
                 getQuotaMetricConfig(metricTags)
+        );
+        sensor.add(
+                quotaUtilizationMetricName(metricTags),
+                new QuotaUtilization(metrics.metric(quotaMetricName))
         );
     }
 
@@ -687,11 +694,40 @@ public class ClientQuotaManager {
                 quotaMetricTags);
     }
 
+    private MetricName quotaUtilizationMetricName(Map<String, String> quotaMetricTags) {
+        return metrics.metricName("quota-utilization", quotaType.toString(),
+                "Tracking quota utilization percentage per user/client-id",
+                quotaMetricTags);
+    }
+
     private MetricName throttleMetricName(Map<String, String> quotaMetricTags) {
         return metrics.metricName("throttle-time",
                 quotaType.toString(),
                 "Tracking average throttle-time per user/client-id",
                 quotaMetricTags);
+    }
+
+    private static class QuotaUtilization implements MeasurableStat {
+        private final KafkaMetric quotaMetric;
+
+        private QuotaUtilization(KafkaMetric quotaMetric) {
+            this.quotaMetric = quotaMetric;
+        }
+
+        @Override
+        public void record(MetricConfig config, double value, long timeMs) {
+            // The quota rate metric on the same sensor records the value.
+        }
+
+        @Override
+        public double measure(MetricConfig config, long now) {
+            MetricConfig quotaMetricConfig = quotaMetric.config();
+            Quota quota = quotaMetricConfig.quota();
+            if (quota == null || quota.bound() <= 0 || quota.bound() >= Long.MAX_VALUE) {
+                return Double.NaN;
+            }
+            return quotaMetric.measurable().measure(quotaMetricConfig, now) / quota.bound() * 100;
+        }
     }
 
     public void initiateShutdown() {
