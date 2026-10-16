@@ -398,14 +398,14 @@ public class ConsumerAssignorBenchmark {
                 if (memberAssignment != null) {
                     // The coordinator hands the assignor the target assignment replayed from its
                     // records, not its output, so the partitions are rebuilt as
-                    // Assignment#fromRecord does: in a HashMap with a HashSet per topic.
+                    // Assignment#fromRecord does: in a HashMap with an immutable set per topic.
                     var partitions = new HashMap<Uuid, Set<Integer>>();
                     memberAssignment.partitions().forEach((topicId, topicPartitions) -> {
-                        partitions.put(topicId, new HashSet<>(topicPartitions));
+                        partitions.put(topicId, Set.copyOf(topicPartitions));
                         var owners = invertedTargetAssignment.computeIfAbsent(topicId, id -> new HashMap<>());
                         topicPartitions.forEach(partition -> owners.put(partition, memberId));
                     });
-                    assignment = new Assignment(partitions);
+                    assignment = Assignment.of(partitions);
                 }
                 members.put(memberId, new MemberSubscriptionAndAssignmentImpl(
                     rack == Rack.NONE ? Optional.empty() : Optional.of(rackId(i)),

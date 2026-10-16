@@ -70,21 +70,21 @@ public class TargetAssignmentRecordsBuilderTest {
                 .withUnchangedStaticMembers()
                 .withCurrentMemberIds(Set.of("member-1", "member-2"))
                 .withCurrentTargetAssignment(Map.of(
-                    "member-1", new Assignment(mkAssignment(
+                    "member-1", Assignment.of(mkAssignment(
                         mkTopicAssignment(fooTopicId, 0, 1, 2),
                         mkTopicAssignment(barTopicId, 0, 1, 2)
                     )),
-                    "member-2", new Assignment(mkAssignment(
+                    "member-2", Assignment.of(mkAssignment(
                         mkTopicAssignment(fooTopicId, 3, 4, 5),
                         mkTopicAssignment(barTopicId, 3, 4, 5)
                     ))
                 ))
                 .withNewTargetAssignment(Map.of(
-                    "member-1", new Assignment(mkAssignment(
+                    "member-1", Assignment.of(mkAssignment(
                         mkTopicAssignment(fooTopicId, 0, 1, 2),
                         mkTopicAssignment(barTopicId, 0, 1, 2)
                     )),
-                    "member-2", new Assignment(mkAssignment(
+                    "member-2", Assignment.of(mkAssignment(
                         mkTopicAssignment(fooTopicId, 3, 4, 5),
                         mkTopicAssignment(barTopicId, 3, 4, 5)
                     ))
@@ -107,21 +107,21 @@ public class TargetAssignmentRecordsBuilderTest {
                 .withUnchangedStaticMembers()
                 .withCurrentMemberIds(Set.of("member-1", "member-2"))
                 .withCurrentTargetAssignment(Map.of(
-                    "member-1", new Assignment(mkAssignment(
+                    "member-1", Assignment.of(mkAssignment(
                         mkTopicAssignment(fooTopicId, 0, 1, 2),
                         mkTopicAssignment(barTopicId, 0, 1, 2)
                     )),
-                    "member-2", new Assignment(mkAssignment(
+                    "member-2", Assignment.of(mkAssignment(
                         mkTopicAssignment(fooTopicId, 3, 4, 5),
                         mkTopicAssignment(barTopicId, 3, 4, 5)
                     ))
                 ))
                 .withNewTargetAssignment(Map.of(
-                    "member-1", new Assignment(mkAssignment(
+                    "member-1", Assignment.of(mkAssignment(
                         mkTopicAssignment(fooTopicId, 3, 4, 5),
                         mkTopicAssignment(barTopicId, 3, 4, 5)
                     )),
-                    "member-2", new Assignment(mkAssignment(
+                    "member-2", Assignment.of(mkAssignment(
                         mkTopicAssignment(fooTopicId, 0, 1, 2),
                         mkTopicAssignment(barTopicId, 0, 1, 2)
                     ))
@@ -154,29 +154,29 @@ public class TargetAssignmentRecordsBuilderTest {
                 .withUnchangedStaticMembers()
                 .withCurrentMemberIds(Set.of("member-1", "member-2", "member-3"))
                 .withCurrentTargetAssignment(Map.of(
-                    "member-1", new Assignment(mkAssignment(
+                    "member-1", Assignment.of(mkAssignment(
                         mkTopicAssignment(fooTopicId, 0, 1),
                         mkTopicAssignment(barTopicId, 0, 1)
                     )),
-                    "member-2", new Assignment(mkAssignment(
+                    "member-2", Assignment.of(mkAssignment(
                         mkTopicAssignment(fooTopicId, 2, 3),
                         mkTopicAssignment(barTopicId, 2, 3)
                     )),
-                    "member-3", new Assignment(mkAssignment(
+                    "member-3", Assignment.of(mkAssignment(
                         mkTopicAssignment(fooTopicId, 4, 5),
                         mkTopicAssignment(barTopicId, 4, 5)
                     ))
                 ))
                 .withNewTargetAssignment(Map.of(
-                    "member-1", new Assignment(mkAssignment(
+                    "member-1", Assignment.of(mkAssignment(
                         mkTopicAssignment(fooTopicId, 0, 1),
                         mkTopicAssignment(barTopicId, 0, 1)
                     )),
-                    "member-2", new Assignment(mkAssignment(
+                    "member-2", Assignment.of(mkAssignment(
                         mkTopicAssignment(fooTopicId, 2, 3, 4),
                         mkTopicAssignment(barTopicId, 2, 3, 4)
                     )),
-                    "member-3", new Assignment(mkAssignment(
+                    "member-3", Assignment.of(mkAssignment(
                         mkTopicAssignment(fooTopicId, 5),
                         mkTopicAssignment(barTopicId, 5)
                     ))
@@ -229,15 +229,15 @@ public class TargetAssignmentRecordsBuilderTest {
                 .withUnchangedStaticMembers()
                 .withCurrentMemberIds(Set.of("member-1"))
                 .withCurrentTargetAssignment(Map.of(
-                    "member-1", new Assignment(mkAssignment(
+                    "member-1", Assignment.of(mkAssignment(
                         mkTopicAssignment(topicId, 0, 1, 2, 3)
                     ))
                 ))
                 .withNewTargetAssignment(Map.of(
-                    "member-1", new Assignment(mkAssignment(
+                    "member-1", Assignment.of(mkAssignment(
                         mkTopicAssignment(topicId, 0, 1)
                     )),
-                    "member-2", new Assignment(mkAssignment(
+                    "member-2", Assignment.of(mkAssignment(
                         mkTopicAssignment(topicId, 2, 3)
                     ))
                 ))
@@ -265,12 +265,12 @@ public class TargetAssignmentRecordsBuilderTest {
                 .withUnchangedStaticMembers()
                 .withCurrentMemberIds(Set.of("member-1", "member-2"))
                 .withCurrentTargetAssignment(Map.of(
-                    "member-1", new Assignment(mkAssignment(
+                    "member-1", Assignment.of(mkAssignment(
                         mkTopicAssignment(topicId, 0, 1, 2)
                     ))
                 ))
                 .withNewTargetAssignment(Map.of(
-                    "member-1", new Assignment(mkAssignment(
+                    "member-1", Assignment.of(mkAssignment(
                         mkTopicAssignment(topicId, 0, 1, 2)
                     ))
                 ))
@@ -297,18 +297,18 @@ public class TargetAssignmentRecordsBuilderTest {
                 )
                 .withCurrentMemberIds(Set.of("member-1", "member-3"))
                 .withCurrentTargetAssignment(Map.of(
-                    "member-1", new Assignment(mkAssignment(
+                    "member-1", Assignment.of(mkAssignment(
                         mkTopicAssignment(topicId, 0, 1, 2)
                     )),
-                    "member-3", new Assignment(mkAssignment(
+                    "member-3", Assignment.of(mkAssignment(
                         mkTopicAssignment(topicId, 3, 4, 5)
                     ))
                 ))
                 .withNewTargetAssignment(Map.of(
-                    "member-1", new Assignment(mkAssignment(
+                    "member-1", Assignment.of(mkAssignment(
                         mkTopicAssignment(topicId, 0, 1, 2)
                     )),
-                    "member-2", new Assignment(mkAssignment(
+                    "member-2", Assignment.of(mkAssignment(
                         mkTopicAssignment(topicId, 3, 4, 5, 6)
                     ))
                 ))
@@ -345,13 +345,13 @@ public class TargetAssignmentRecordsBuilderTest {
                 .withCurrentMemberIds(Set.of("member-1", "member-2", "member-4"))
                 .withCurrentTargetAssignment(Map.of())
                 .withNewTargetAssignment(Map.of(
-                    "member-1", new Assignment(mkAssignment(
+                    "member-1", Assignment.of(mkAssignment(
                         mkTopicAssignment(topicId1, 0, 1, 2, 3)
                     )),
-                    "member-3", new Assignment(mkAssignment(
+                    "member-3", Assignment.of(mkAssignment(
                         mkTopicAssignment(topicId2, 0, 1, 2, 3)
                     )),
-                    "member-4", new Assignment(mkAssignment(
+                    "member-4", Assignment.of(mkAssignment(
                         mkTopicAssignment(topicId2, 4, 5, 6, 7)
                     ))
                 ))
@@ -407,10 +407,10 @@ public class TargetAssignmentRecordsBuilderTest {
                     .withUnchangedStaticMembers()
                     .withCurrentMemberIds(Set.of("member-1"))
                     .withCurrentTargetAssignment(Map.of(
-                        "member-1", new Assignment(mkAssignment(mkTopicAssignment(topicId, 0)))
+                        "member-1", Assignment.of(mkAssignment(mkTopicAssignment(topicId, 0)))
                     ))
                     .withNewTargetAssignment(Map.of(
-                        "member-1", new Assignment(mkAssignment(mkTopicAssignment(topicId, 0, 1, 2, 3)))
+                        "member-1", Assignment.of(mkAssignment(mkTopicAssignment(topicId, 0, 1, 2, 3)))
                     ))
                     .build();
 
@@ -454,10 +454,10 @@ public class TargetAssignmentRecordsBuilderTest {
                     .withUnchangedStaticMembers()
                     .withCurrentMemberIds(Set.of("member-1"))
                     .withCurrentTargetAssignment(Map.of(
-                        "member-1", new Assignment(mkAssignment(mkTopicAssignment(topicId, 0, 1)))
+                        "member-1", Assignment.of(mkAssignment(mkTopicAssignment(topicId, 0, 1)))
                     ))
                     .withNewTargetAssignment(Map.of(
-                        "member-1", new Assignment(mkAssignment(mkTopicAssignment(topicId, 0, 1, 2, 3)))
+                        "member-1", Assignment.of(mkAssignment(mkTopicAssignment(topicId, 0, 1, 2, 3)))
                     ))
                     .build();
 

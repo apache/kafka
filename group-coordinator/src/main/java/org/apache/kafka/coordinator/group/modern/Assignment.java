@@ -22,7 +22,7 @@ import org.apache.kafka.coordinator.group.generated.ConsumerGroupTargetAssignmen
 import org.apache.kafka.coordinator.group.generated.ShareGroupTargetAssignmentMemberValue;
 
 import java.util.Collections;
-import java.util.HashSet;
+import java.util.HashMap;
 import java.util.Map;
 import java.util.Objects;
 import java.util.Set;
@@ -39,12 +39,47 @@ public class Assignment implements MemberAssignment {
      */
     private final Map<Uuid, Set<Integer>> partitions;
 
-    public Assignment(
+    private Assignment(
         Map<Uuid, Set<Integer>> partitions
     ) {
         // Assignments are used as input to assignors, which expect to receive immutable
         // assignment maps, otherwise they will be modified in place.
-        this.partitions = Collections.unmodifiableMap(Objects.requireNonNull(partitions));
+        this.partitions = Collections.unmodifiableMap(partitions);
+    }
+
+    /**
+     * Creates an assignment without copying the provided map or its partition sets.
+     * The caller must ensure that neither the map nor its partition sets are modified
+     * after this call.
+     *
+     * <p>The returned assignment exposes an unmodifiable map, but this method does not
+     * make its partition sets unmodifiable.
+     *
+     * @param partitions The assigned partitions.
+     * @return An assignment backed by the provided map.
+     */
+    public static Assignment of(Map<Uuid, Set<Integer>> partitions) {
+        Objects.requireNonNull(partitions);
+        return new Assignment(partitions);
+    }
+
+    /**
+     * Creates an immutable assignment with a defensive copy of the provided map
+     * and immutable copies of its partition sets. Subsequent changes to the original
+     * map or its partition sets do not affect the returned assignment.
+     *
+     * @param partitions The assigned partitions.
+     * @return An immutable assignment independent of subsequent changes to the input.
+     */
+    public static Assignment copyOf(Map<Uuid, Set<Integer>> partitions) {
+        Objects.requireNonNull(partitions);
+        // Assignments are used as input to assignors, which expect to receive immutable
+        // assignment maps, otherwise they will be modified in place.
+        Map<Uuid, Set<Integer>> copy = new HashMap<>(partitions.size());
+        partitions.forEach(
+            (topicId, partitionsIds) -> copy.put(topicId, Set.copyOf(partitionsIds))
+        );
+        return new Assignment(copy);
     }
 
     /**
@@ -82,10 +117,10 @@ public class Assignment implements MemberAssignment {
     public static Assignment fromRecord(
         ConsumerGroupTargetAssignmentMemberValue record
     ) {
-        return new Assignment(
+        return Assignment.of(
             record.topicPartitions().stream().collect(Collectors.toMap(
                 ConsumerGroupTargetAssignmentMemberValue.TopicPartition::topicId,
-                topicPartitions -> new HashSet<>(topicPartitions.partitions())))
+                topicPartitions -> Set.copyOf(topicPartitions.partitions())))
         );
     }
 
@@ -98,10 +133,10 @@ public class Assignment implements MemberAssignment {
     public static Assignment fromRecord(
         ShareGroupTargetAssignmentMemberValue record
     ) {
-        return new Assignment(
+        return Assignment.of(
             record.topicPartitions().stream().collect(Collectors.toMap(
                 ShareGroupTargetAssignmentMemberValue.TopicPartition::topicId,
-                topicPartitions -> new HashSet<>(topicPartitions.partitions())))
+                topicPartitions -> Set.copyOf(topicPartitions.partitions())))
         );
     }
 }

@@ -77,15 +77,15 @@ public class GroupSpecBuilderTest {
 
         TopicIds.TopicResolver topicResolver = new TopicIds.CachedTopicResolver(metadataImage);
 
-        Assignment assignment1 = new Assignment(Map.of(
+        Assignment assignment1 = Assignment.of(Map.of(
             fooTopicId, Set.of(1, 2),
             barTopicId, Set.of(1, 2)
         ));
-        Assignment assignment2 = new Assignment(Map.of(
+        Assignment assignment2 = Assignment.of(Map.of(
             fooTopicId, Set.of(3, 4),
             barTopicId, Set.of(3, 4)
         ));
-        Assignment assignment3 = new Assignment(Map.of(
+        Assignment assignment3 = Assignment.of(Map.of(
             fooTopicId, Set.of(5, 6),
             barTopicId, Set.of(5, 6)
         ));
@@ -263,7 +263,7 @@ public class GroupSpecBuilderTest {
         ));
 
         Map<String, Assignment> targetAssignment = new HashMap<>(Map.of(
-            "member-1", new Assignment(mkAssignment(
+            "member-1", Assignment.of(mkAssignment(
                 mkTopicAssignment(fooTopicId, 1, 2)
             ))
         ));
@@ -321,7 +321,7 @@ public class GroupSpecBuilderTest {
                         new TopicIds.CachedTopicResolver(metadataImage)
                     ),
                     // targetAssignment
-                    new Assignment(mkAssignment(mkTopicAssignment(fooTopicId, 1, 2)))
+                    Assignment.of(mkAssignment(mkTopicAssignment(fooTopicId, 1, 2)))
                 )),
                 HOMOGENEOUS,
                 // invertedTargetAssignment

@@ -58,7 +58,7 @@ public class ShareGroupAssignmentBuilderTest {
 
         ShareGroupMember updatedMember = new ShareGroupAssignmentBuilder(member)
             .withMetadataImage(metadataImage)
-            .withTargetAssignment(11, new Assignment(mkAssignment(
+            .withTargetAssignment(11, Assignment.of(mkAssignment(
                 mkTopicAssignment(topicId1, 1, 2, 3),
                 mkTopicAssignment(topicId2, 4, 5, 6))))
             .build();
@@ -101,7 +101,7 @@ public class ShareGroupAssignmentBuilderTest {
 
         ShareGroupMember updatedMember = new ShareGroupAssignmentBuilder(member)
             .withMetadataImage(metadataImage)
-            .withTargetAssignment(11, new Assignment(mkAssignment(
+            .withTargetAssignment(11, Assignment.of(mkAssignment(
                 mkTopicAssignment(topicId1, 1, 2, 3, 4),
                 mkTopicAssignment(topicId2, 4, 5, 6, 7))))
             .build();
@@ -153,7 +153,7 @@ public class ShareGroupAssignmentBuilderTest {
 
         ShareGroupMember updatedMember = new ShareGroupAssignmentBuilder(member)
             .withMetadataImage(metadataImage)
-            .withTargetAssignment(targetAssignmentEpoch, new Assignment(mkAssignment(
+            .withTargetAssignment(targetAssignmentEpoch, Assignment.of(mkAssignment(
                 mkTopicAssignment(topicId1, 1, 2, 3),
                 mkTopicAssignment(topicId2, 4, 5, 6))))
             .withHasSubscriptionChanged(hasSubscriptionChanged)

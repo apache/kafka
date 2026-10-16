@@ -1437,10 +1437,10 @@ public class ClassicGroupTest {
         consumerGroup.setGroupEpoch(10);
         consumerGroup.setTargetAssignmentMetadata(10, time.milliseconds());
 
-        consumerGroup.updateTargetAssignment(memberId1, new Assignment(mkAssignment(
+        consumerGroup.updateTargetAssignment(memberId1, Assignment.of(mkAssignment(
             mkTopicAssignment(fooTopicId, 0)
         )));
-        consumerGroup.updateTargetAssignment(memberId2, new Assignment(mkAssignment(
+        consumerGroup.updateTargetAssignment(memberId2, Assignment.of(mkAssignment(
             mkTopicAssignment(fooTopicId, 1)
         )));
 
@@ -1589,10 +1589,10 @@ public class ClassicGroupTest {
         );
         consumerGroup.setGroupEpoch(10);
         consumerGroup.setTargetAssignmentMetadata(10, time.milliseconds());
-        consumerGroup.updateTargetAssignment(memberId1, new Assignment(mkAssignment(
+        consumerGroup.updateTargetAssignment(memberId1, Assignment.of(mkAssignment(
             mkTopicAssignment(fooTopicId, 0)
         )));
-        consumerGroup.updateTargetAssignment(memberId2, new Assignment(mkAssignment(
+        consumerGroup.updateTargetAssignment(memberId2, Assignment.of(mkAssignment(
             mkTopicAssignment(fooTopicId, 1)
         )));
 

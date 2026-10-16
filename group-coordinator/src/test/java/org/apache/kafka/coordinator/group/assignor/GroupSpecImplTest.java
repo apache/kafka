@@ -103,7 +103,7 @@ public class GroupSpecImplTest {
             Optional.empty(),
             Optional.empty(),
             Set.of(topicId),
-            new Assignment(topicPartitions)
+            Assignment.copyOf(topicPartitions)
         ));
 
         assertEquals(topicPartitions, groupSpec.memberAssignment(TEST_MEMBER).partitions());

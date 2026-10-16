@@ -185,7 +185,7 @@ public class ShareGroupAssignorBenchmark {
                 groupSpec.memberSubscription(memberId).rackId(),
                 Optional.empty(),
                 groupSpec.memberSubscription(memberId).subscribedTopicIds(),
-                new Assignment(Map.copyOf(memberAssignment.partitions()))
+                Assignment.copyOf(memberAssignment.partitions())
             ));
         }
 

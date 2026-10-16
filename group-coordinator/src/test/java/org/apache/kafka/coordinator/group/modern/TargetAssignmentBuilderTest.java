@@ -23,11 +23,16 @@ import org.apache.kafka.coordinator.common.runtime.MetadataImageBuilder;
 import org.apache.kafka.coordinator.group.TargetAssignmentMetadata;
 import org.apache.kafka.coordinator.group.api.assignor.GroupAssignment;
 import org.apache.kafka.coordinator.group.api.assignor.GroupSpec;
+import org.apache.kafka.coordinator.group.api.assignor.MemberAssignment;
 import org.apache.kafka.coordinator.group.api.assignor.PartitionAssignor;
 
 import org.junit.jupiter.api.Test;
+import org.junit.jupiter.params.ParameterizedTest;
+import org.junit.jupiter.params.provider.ValueSource;
 
+import java.util.Collections;
 import java.util.HashMap;
+import java.util.HashSet;
 import java.util.Map;
 import java.util.Optional;
 import java.util.Set;
@@ -37,6 +42,8 @@ import static org.apache.kafka.coordinator.group.AssignmentTestUtil.mkTopicAssig
 import static org.apache.kafka.coordinator.group.api.assignor.SubscriptionType.HETEROGENEOUS;
 import static org.apache.kafka.coordinator.group.api.assignor.SubscriptionType.HOMOGENEOUS;
 import static org.junit.jupiter.api.Assertions.assertEquals;
+import static org.junit.jupiter.api.Assertions.assertSame;
+import static org.junit.jupiter.api.Assertions.assertThrows;
 import static org.mockito.Mockito.any;
 import static org.mockito.Mockito.mock;
 import static org.mockito.Mockito.times;
@@ -170,20 +177,91 @@ public class TargetAssignmentBuilderTest {
             .assign(groupSpec, new SubscribedTopicDescriberImpl(metadataImage));
 
         Map<String, Assignment> expectedAssignment = new HashMap<>();
-        expectedAssignment.put("member-1", new Assignment(mkAssignment(
+        expectedAssignment.put("member-1", Assignment.of(mkAssignment(
             mkTopicAssignment(fooTopicId, 1, 2),
             mkTopicAssignment(barTopicId, 1, 2)
         )));
-        expectedAssignment.put("member-2", new Assignment(mkAssignment(
+        expectedAssignment.put("member-2", Assignment.of(mkAssignment(
             mkTopicAssignment(fooTopicId, 3, 4, 5),
             mkTopicAssignment(barTopicId, 3, 4, 5)
         )));
-        expectedAssignment.put("member-3", new Assignment(mkAssignment(
+        expectedAssignment.put("member-3", Assignment.of(mkAssignment(
             mkTopicAssignment(fooTopicId, 6),
             mkTopicAssignment(barTopicId, 6)
         )));
 
         assertEquals(expectedAssignment, result.targetAssignment());
         assertEquals(new TargetAssignmentMetadata(20, 12345L), result.targetAssignmentMetadata());
+    }
+
+    @Test
+    public void testUnchangedAssignmentReusesPartitionSets() {
+        Uuid topicId = Uuid.randomUuid();
+        Assignment previousAssignment = Assignment.of(mkAssignment(mkTopicAssignment(topicId, 0, 1)));
+
+        Assignment assignment = buildTargetAssignment(previousAssignment, Map.of(
+            "member", new MemberAssignmentImpl(previousAssignment.partitions())
+        ));
+
+        assertEquals(previousAssignment, assignment);
+        assertSame(previousAssignment.partitions().get(topicId), assignment.partitions().get(topicId));
+        assertThrows(UnsupportedOperationException.class, () -> assignment.partitions().clear());
+        assertThrows(UnsupportedOperationException.class, () -> assignment.partitions().get(topicId).remove(0));
+    }
+
+    @ParameterizedTest
+    @ValueSource(booleans = {false, true})
+    public void testAssignmentReusesAssignorResultPartitionSets(boolean unmodifiableMap) {
+        Uuid topicId = Uuid.randomUuid();
+        Assignment previousAssignment = Assignment.of(mkAssignment(mkTopicAssignment(topicId, 0, 1)));
+        Set<Integer> partitionIds = new HashSet<>(Set.of(0, 1));
+        Map<Uuid, Set<Integer>> partitions = new HashMap<>();
+        partitions.put(topicId, partitionIds);
+
+        Map<Uuid, Set<Integer>> returnedPartitions = unmodifiableMap
+            ? Collections.unmodifiableMap(partitions)
+            : partitions;
+        Assignment assignment = buildTargetAssignment(previousAssignment, Map.of(
+            "member", new MemberAssignmentImpl(returnedPartitions)
+        ));
+
+        assertEquals(previousAssignment, assignment);
+        assertSame(partitionIds, assignment.partitions().get(topicId));
+        assertThrows(UnsupportedOperationException.class, () -> assignment.partitions().clear());
+    }
+
+    @Test
+    public void testMissingMemberAssignmentReturnsEmpty() {
+        Assignment previousAssignment = Assignment.of(mkAssignment(
+            mkTopicAssignment(Uuid.randomUuid(), 0, 1)
+        ));
+
+        assertSame(Assignment.EMPTY, buildTargetAssignment(previousAssignment, Map.of()));
+    }
+
+    private Assignment buildTargetAssignment(
+        Assignment previousAssignment,
+        Map<String, MemberAssignment> memberAssignments
+    ) {
+        GroupSpec groupSpec = new GroupSpecImpl(
+            Map.of("member", new MemberSubscriptionAndAssignmentImpl(
+                Optional.empty(),
+                Optional.empty(),
+                previousAssignment.partitions().keySet(),
+                previousAssignment
+            )),
+            HOMOGENEOUS,
+            Map.of()
+        );
+        PartitionAssignor assignor = mock(PartitionAssignor.class);
+        when(assignor.assign(any(), any())).thenReturn(new GroupAssignment(memberAssignments));
+
+        return new TargetAssignmentBuilder(20, assignor)
+            .withTime(new MockTime())
+            .withMetadataImage(new MetadataImageBuilder().buildCoordinatorMetadataImage())
+            .withGroupSpec(groupSpec)
+            .build()
+            .targetAssignment()
+            .get("member");
     }
 }
