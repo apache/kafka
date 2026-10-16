@@ -417,12 +417,12 @@ class KafkaApis(val requestChannel: RequestChannel,
     val topicIdToPartitionData = new mutable.ArrayBuffer[(TopicIdPartition, ProduceRequestData.PartitionProduceData)]
 
     produceRequest.data.topicData.forEach { topic =>
+      val topicId = topic.topicId()
+      val topicName =
+        if (topicId.equals(Uuid.ZERO_UUID)) topic.name()
+        else metadataCache.getTopicName(topicId).orElse(topic.name)
+
       topic.partitionData.forEach { partition =>
-        val (topicName, topicId) = if (topic.topicId().equals(Uuid.ZERO_UUID)) {
-          (topic.name(), metadataCache.getTopicId(topic.name()))
-        } else {
-          (metadataCache.getTopicName(topic.topicId).orElse(topic.name), topic.topicId())
-        }
 
         val topicPartition = new TopicPartition(topicName, partition.index())
         // To be compatible with the old version, only return UNKNOWN_TOPIC_ID if request version uses topicId, but the corresponding topic name can't be found.
