@@ -689,10 +689,6 @@ For a detailed description of spotbugs bug categories, see https://spotbugs.read
             <Class name="kafka.server.addPartition"/>
             <Class name="kafka.server.defaultError"/>
             <Class name="kafka.server.genericErrorSupported"/>
-            <Class name="kafka.server.metadata.DefaultClientIdEntity"/>
-            <Class name="kafka.server.metadata.DefaultIpEntity"/>
-            <Class name="kafka.server.metadata.DefaultUserDefaultClientIdEntity"/>
-            <Class name="kafka.server.metadata.DefaultUserEntity"/>
             <Class name="org.apache.kafka.connect.runtime.SinkConnectorConfig"/>
             <Class name="org.apache.kafka.connect.runtime.SourceConnectorConfig"/>
         </Or>
