@@ -944,36 +944,43 @@ public abstract class AbstractMembershipManager<R extends AbstractResponse> impl
                 revokedPartitions
         );
 
-        // Mark partitions as pending revocation to stop fetching from the partitions (no new
-        // fetches sent out, and no in-flight fetches responses processed).
-        markPendingRevocationToPauseFetching(revokedPartitions);
+        try {
+            // Mark partitions as pending revocation to stop fetching from the partitions (no new
+            // fetches sent out, and no in-flight fetches responses processed).
+            markPendingRevocationToPauseFetching(revokedPartitions);
 
-        // Commit offsets if auto-commit enabled before reconciling a new assignment. Request will
-        // be retried until it succeeds, fails with non-retriable error, or timer expires.
-        CompletableFuture<Void> commitResult = signalReconciliationStarted();
+            // Commit offsets if auto-commit enabled before reconciling a new assignment. Request will
+            // be retried until it succeeds, fails with non-retriable error, or timer expires.
+            CompletableFuture<Void> commitResult = signalReconciliationStarted();
 
-        // Execute commit -> onPartitionsRevoked -> onPartitionsAssigned.
-        commitResult.whenComplete((__, commitReqError) -> {
-            if (commitReqError != null) {
-                // The call to commit, that includes retry logic for retriable errors, failed to
-                // complete within the time boundaries (fatal error or retriable that did not
-                // recover). Proceed with the revocation.
-                log.error("Auto-commit request before reconciling new assignment failed. " +
-                    "Will proceed with the reconciliation anyway.", commitReqError);
-            } else {
-                log.debug("Auto-commit before reconciling new assignment completed successfully.");
-            }
+            // Execute commit -> onPartitionsRevoked -> onPartitionsAssigned.
+            commitResult.whenComplete((__, commitReqError) -> {
+                try {
+                    if (commitReqError != null) {
+                        // The call to commit, that includes retry logic for retriable errors, failed to
+                        // complete within the time boundaries (fatal error or retriable that did not
+                        // recover). Proceed with the revocation.
+                        log.error("Auto-commit request before reconciling new assignment failed. " +
+                            "Will proceed with the reconciliation anyway.", commitReqError);
+                    } else {
+                        log.debug("Auto-commit before reconciling new assignment completed successfully.");
+                    }
 
-            if (!maybeAbortReconciliation()) {
-                revokeAndAssign(resolvedAssignment, assignedTopicIdPartitions, revokedPartitions, addedPartitions);
-            }
+                    if (!maybeAbortReconciliation()) {
+                        revokeAndAssign(resolvedAssignment, assignedTopicIdPartitions, revokedPartitions, addedPartitions);
+                    }
+                } catch (RuntimeException error) {
+                    handleReconciliationFailure(error);
+                }
+            });
+        } catch (RuntimeException error) {
+            handleReconciliationFailure(error);
+        }
+    }
 
-        }).exceptionally(error -> {
-            if (error != null) {
-                log.error("Reconciliation failed.", error);
-            }
-            return null;
-        });
+    private void handleReconciliationFailure(RuntimeException error) {
+        log.error("Reconciliation failed.", error);
+        markReconciliationCompleted();
     }
 
     long getDeadlineMsForTimeout(final long timeoutMs) {
