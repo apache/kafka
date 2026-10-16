@@ -470,10 +470,11 @@ Set to a positive integer value if you wish to allow up to some number of positi
    };
    ```
 
-2. Pass the JAAS config file location as JVM parameter to each Kafka broker: 
+2. Pass the JAAS config file location as JVM parameter to each Kafka broker. The JWKS endpoint and token endpoint URLs must also be listed in the `org.apache.kafka.sasl.oauthbearer.allowed.urls` system property, which defaults to an empty list:
 
    ```text
    -Djava.security.auth.login.config=/etc/kafka/kafka_server_jaas.conf
+   -Dorg.apache.kafka.sasl.oauthbearer.allowed.urls=https://example.com/oauth2/v1/keys,https://example.com/oauth2/v1/token
    ```
 
 3. Configure SASL port and SASL mechanisms in server.properties as described here. For example: 
@@ -487,9 +488,15 @@ Set to a positive integer value if you wish to allow up to some number of positi
    listener.name.<listener name>.oauthbearer.sasl.oauthbearer.jwks.endpoint.url=https://example.com/oauth2/v1/keys
    listener.name.<listener name>.oauthbearer.sasl.oauthbearer.expected.audience=my-kafka-cluster
    listener.name.<listener name>.oauthbearer.sasl.oauthbearer.expected.issuer=https://example.com
+   listener.name.<listener name>.oauthbearer.sasl.login.callback.handler.class=org.apache.kafka.common.security.oauthbearer.OAuthBearerLoginCallbackHandler
+   listener.name.<listener name>.oauthbearer.sasl.oauthbearer.token.endpoint.url=https://example.com/oauth2/v1/token
+   listener.name.<listener name>.oauthbearer.sasl.oauthbearer.client.credentials.client.id=kafka-broker
+   listener.name.<listener name>.oauthbearer.sasl.oauthbearer.client.credentials.client.secret=$3cr3+
    ```
 
    When `sasl.oauthbearer.jwks.endpoint.url` is set, the broker fails at startup unless `sasl.oauthbearer.expected.audience` and `sasl.oauthbearer.expected.issuer` are also set. To accept tokens without verifying the `aud` or `iss` claim, set `sasl.oauthbearer.allow.unverified.audience` or `sasl.oauthbearer.allow.unverified.issuer` to `true` instead. This is insecure and strongly discouraged.
+
+   Since OAUTHBEARER is also the inter-broker protocol, each broker needs a token of its own to connect to other brokers. `sasl.login.callback.handler.class` must be set to `OAuthBearerLoginCallbackHandler` so that the broker retrieves the token from the OAuth identity provider; otherwise, no token is available and inter-broker connections fail to authenticate. The token issued to the broker must carry the `aud` and `iss` claims expected by the other brokers.
 
 The OAUTHBEARER broker configuration includes: 
    * sasl.oauthbearer.allow.unverified.audience
@@ -612,13 +619,14 @@ To configure SASL authentication on the clients:
 
 JAAS configuration for clients may alternatively be specified as a JVM parameter similar to brokers as described here. Clients use the login section named `KafkaClient`. This option allows only one user for all client connections from a JVM.
 
-2. Configure the following properties in producer.properties or consumer.properties. The `sasl.oauthbearer.jwt.retriever.class` property defaults to `DefaultJwtRetriever`, which automatically delegates to `ClientCredentialsJwtRetriever` for HTTP/HTTPS token endpoint URLs and `FileJwtRetriever` for `file://` URLs. In most cases, this property does not need to be set explicitly.
+2. Configure the following properties in producer.properties or consumer.properties. `sasl.login.callback.handler.class` must be set to `OAuthBearerLoginCallbackHandler` so that the client retrieves a token from the OAuth identity provider; otherwise, the client has no token and fails to authenticate. The token endpoint URL must also be listed in the `org.apache.kafka.sasl.oauthbearer.allowed.urls` system property, which defaults to an empty list (for example, `-Dorg.apache.kafka.sasl.oauthbearer.allowed.urls=https://example.com/oauth2/v1/token`). The `sasl.oauthbearer.jwt.retriever.class` property defaults to `DefaultJwtRetriever`, which automatically delegates to `ClientCredentialsJwtRetriever` for HTTP/HTTPS token endpoint URLs and `FileJwtRetriever` for `file://` URLs. In most cases, this property does not need to be set explicitly.
 
 For example, if using the OAuth `client_credentials` grant type with a client secret to communicate with the OAuth identity provider, the configuration might look like this:
 
    ```java-properties
    security.protocol=SASL_SSL
    sasl.mechanism=OAUTHBEARER
+   sasl.login.callback.handler.class=org.apache.kafka.common.security.oauthbearer.OAuthBearerLoginCallbackHandler
    sasl.oauthbearer.client.credentials.client.id=jdoe
    sasl.oauthbearer.client.credentials.client.secret=$3cr3+
    sasl.oauthbearer.scope=my-application-scope
@@ -632,6 +640,7 @@ When using client assertion with dynamically-generated JWTs (recommended), the c
    ```java-properties
    security.protocol=SASL_SSL
    sasl.mechanism=OAUTHBEARER
+   sasl.login.callback.handler.class=org.apache.kafka.common.security.oauthbearer.OAuthBearerLoginCallbackHandler
    sasl.oauthbearer.token.endpoint.url=https://example.com/oauth2/v1/token
    sasl.oauthbearer.assertion.private.key.file=/path/to/private-key.pem
    sasl.oauthbearer.assertion.algorithm=RS256
@@ -648,6 +657,7 @@ Alternatively, a pre-generated JWT assertion can be read from a file. This is us
    ```java-properties
    security.protocol=SASL_SSL
    sasl.mechanism=OAUTHBEARER
+   sasl.login.callback.handler.class=org.apache.kafka.common.security.oauthbearer.OAuthBearerLoginCallbackHandler
    sasl.oauthbearer.token.endpoint.url=https://example.com/oauth2/v1/token
    sasl.oauthbearer.assertion.file=/path/to/assertion.jwt
    sasl.oauthbearer.scope=my-application-scope
@@ -681,6 +691,7 @@ Or, if using the OAuth `urn:ietf:params:oauth:grant-type:jwt-bearer` grant type 
    ```java-properties
    security.protocol=SASL_SSL
    sasl.mechanism=OAUTHBEARER
+   sasl.login.callback.handler.class=org.apache.kafka.common.security.oauthbearer.OAuthBearerLoginCallbackHandler
    sasl.oauthbearer.jwt.retriever.class=org.apache.kafka.common.security.oauthbearer.JwtBearerJwtRetriever
    sasl.oauthbearer.assertion.private.key.file=/path/to/private.key
    sasl.oauthbearer.assertion.algorithm=RS256
