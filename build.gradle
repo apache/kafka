@@ -1985,8 +1985,10 @@ project(':mirror-coordinator') {
   }
 
   dependencies {
+    implementation libs.re2j
     implementation libs.jacksonDatabind
     implementation project(':clients')
+    implementation project(':server-common')
     implementation project(':coordinator-common')
 
     testImplementation project(':server-common')
