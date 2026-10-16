@@ -19,6 +19,7 @@ package org.apache.kafka.clients.producer.internals;
 import org.apache.kafka.clients.producer.Callback;
 import org.apache.kafka.common.TopicPartition;
 import org.apache.kafka.common.header.Header;
+import org.apache.kafka.common.record.internal.CompressionType;
 import org.apache.kafka.common.record.internal.MemoryRecordsBuilder;
 
 import java.nio.ByteBuffer;
@@ -74,17 +75,39 @@ public class ChunkedProducerBatch extends ProducerBatch {
      * {@code ChunkedRecordAccumulator.tryAppend}, which evaluates {@link #extensionBytesNeeded}
      * itself and attaches chunks before retrying, so repeating the check for those would size the
      * record a second time on every append for no added safety.
+     * <p>
+     * The check applies only to uncompressed batches, where the pre-size and the demand are the same
+     * upper bound. For a compressed batch the demand scales with the topic's compression ratio
+     * estimate, which can exceed 1.0 for incompressible data and can change between pre-sizing and
+     * batch creation, so the pre-size is only a heuristic; any overshoot is absorbed by the stream
+     * growing mid-write (see {@link ChunkedByteBufferOutputStream}).
+     * <p>
+     * If that growth had to fall back to the heap because the pool was exhausted, the record is still
+     * appended but the batch is then closed for record appends, so it is sent early rather than taking
+     * further records that would keep growing on the heap past buffer.memory.
      *
      * @return the record's future, or null if the batch is at its batch-size limit
-     * @throws IllegalStateException if the stream was not pre-sized to hold the batch's first record
+     * @throws IllegalStateException if the uncompressed stream was not pre-sized to hold the batch's first record
      */
     @Override
     public FutureRecordMetadata tryAppend(long timestamp, byte[] key, byte[] value, Header[] headers, Callback callback, long now) {
-        if (recordCount == 0 && extensionBytesNeeded(timestamp, key, value, headers) != 0)
+        if (recordCount == 0 && recordsBuilder.compression().type() == CompressionType.NONE
+                && extensionBytesNeeded(timestamp, key, value, headers) != 0)
             throw new IllegalStateException(
                     "Unexpected append to a chunked batch whose chunks lack capacity for the record; " +
                             "the stream should have been pre-sized for the batch's first record");
-        return super.tryAppend(timestamp, key, value, headers, callback, now);
+        FutureRecordMetadata future = super.tryAppend(timestamp, key, value, headers, callback, now);
+        if (future != null && stream().fallbackAllocations() > 0) {
+            // The stream grew on the heap mid-record: the pool is exhausted, and the builder's fullness checks
+            // trust a compression ratio estimate that has proven too low. Close for appends so later records
+            // go to a new batch (which blocks for pool memory) instead of growing this one further on the heap.
+            // The caller's append result reads isFull(), now true, so the sender is woken to send it early, and
+            // the drain's close() then feeds the observed ratio back to the estimator sooner. The compressor flush in
+            // closeForRecordAppends may fall back once more, which is bounded since nothing is appended after
+            // it. Closing is idempotent, and matches how the extension path closes a batch on pool exhaustion.
+            closeForRecordAppends();
+        }
+        return future;
     }
 
     /**

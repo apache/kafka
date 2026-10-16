@@ -23,11 +23,14 @@ import org.apache.kafka.common.Cluster;
 import org.apache.kafka.common.Node;
 import org.apache.kafka.common.TopicPartition;
 import org.apache.kafka.common.compress.Compression;
+import org.apache.kafka.common.errors.RecordBatchTooLargeException;
 import org.apache.kafka.common.errors.TimeoutException;
 import org.apache.kafka.common.metrics.KafkaMetric;
 import org.apache.kafka.common.metrics.Metrics;
 import org.apache.kafka.common.protocol.Errors;
 import org.apache.kafka.common.record.TimestampType;
+import org.apache.kafka.common.record.internal.CompressionRatioEstimator;
+import org.apache.kafka.common.record.internal.CompressionType;
 import org.apache.kafka.common.record.internal.MemoryRecords;
 import org.apache.kafka.common.record.internal.MemoryRecordsBuilder;
 import org.apache.kafka.common.record.internal.Record;
@@ -43,13 +46,16 @@ import org.junit.jupiter.params.provider.ValueSource;
 
 import java.nio.ByteBuffer;
 import java.util.ArrayList;
+import java.util.Arrays;
 import java.util.Collections;
 import java.util.Deque;
 import java.util.IdentityHashMap;
 import java.util.List;
 import java.util.Map;
 import java.util.Optional;
+import java.util.Random;
 import java.util.Set;
+import java.util.concurrent.ExecutionException;
 import java.util.concurrent.atomic.AtomicBoolean;
 import java.util.concurrent.atomic.AtomicInteger;
 import java.util.concurrent.atomic.AtomicLong;
@@ -58,9 +64,13 @@ import java.util.function.BooleanSupplier;
 import java.util.stream.Collectors;
 import java.util.stream.Stream;
 
+import static org.junit.jupiter.api.Assertions.assertArrayEquals;
 import static org.junit.jupiter.api.Assertions.assertEquals;
 import static org.junit.jupiter.api.Assertions.assertFalse;
+import static org.junit.jupiter.api.Assertions.assertInstanceOf;
 import static org.junit.jupiter.api.Assertions.assertNotNull;
+import static org.junit.jupiter.api.Assertions.assertNotSame;
+import static org.junit.jupiter.api.Assertions.assertNull;
 import static org.junit.jupiter.api.Assertions.assertThrows;
 import static org.junit.jupiter.api.Assertions.assertTrue;
 
@@ -169,23 +179,564 @@ public class ChunkedRecordAccumulatorTest {
     }
 
     /**
-     * Pool that adds one append right after a chunk allocation returns, mocking a concurrent
-     * appender racing the same batch.
+     * End-to-end compression on the incremental path: records appended with each codec build a valid
+     * compressed batch (the flatten-close writes the header and CRC over the compressed buffer) that
+     * declares the codec on the wire and decodes back to exactly the bytes appended.
+     */
+    @ParameterizedTest
+    @ValueSource(strings = {"none", "gzip", "snappy", "lz4", "zstd"})
+    public void testCompressedRecordsRoundTripThroughChunkedBatch(String codec) throws Exception {
+        int chunkSize = 256;
+        Compression compression = Compression.of(CompressionType.forName(codec)).build();
+        ChunkedRecordAccumulator accum = newAccumulator(8192, chunkSize, 64L * chunkSize, compression);
+
+        // Enough sizeable records that the batch spans several chunks, so the compressor writes
+        // across chunk boundaries rather than fitting in the first chunk.
+        int recordCount = 20;
+        List<byte[]> values = new ArrayList<>();
+        for (int i = 0; i < recordCount; i++) {
+            byte[] value = new byte[300];
+            Arrays.fill(value, (byte) i);
+            values.add(value);
+            accum.append(topic, partition1, i, key, value, Record.EMPTY_HEADERS, null,
+                    maxBlockTimeMs, time.milliseconds(), cluster);
+        }
+
+        Deque<ProducerBatch> dq = batchesFor(accum, tp1);
+        assertEquals(1, dq.size());
+        ProducerBatch batch = dq.peekFirst();
+        assertNotNull(batch);
+        assertEquals(recordCount, batch.recordCount);
+
+        // Finalize the batch: the flatten-close path writes the header + CRC over the (compressed)
+        // contiguous buffer.
+        batch.close();
+        MemoryRecords records = batch.records();
+
+        // The built batch must declare the configured codec on the wire.
+        for (RecordBatch rb : records.batches())
+            assertEquals(compression.type(), rb.compressionType());
+
+        // Every record must decode back to exactly the bytes appended, in order.
+        int i = 0;
+        for (Record r : records.records()) {
+            assertArrayEquals(key, readBytes(r.key()));
+            assertArrayEquals(values.get(i), readBytes(r.value()));
+            i++;
+        }
+        assertEquals(recordCount, i, "all appended records must be present");
+
+        accum.deallocate(batch);
+        accum.close();
+    }
+
+    /**
+     * A topic whose data doesn't compress drives its compression ratio estimate above 1.0 (from the
+     * initial 1.0, a single such batch, whose observed ratio is just above 1.0 once the batch header is
+     * counted, raises it by at least COMPRESSION_RATIO_DETERIORATE_STEP). The first record of a new batch
+     * must still append: its chunks are pre-sized to the uncompressed upper bound, and any compressor
+     * overshoot must be absorbed by mid-write growth rather than rejected up front. The estimate here is
+     * set straight to 1.3, above the ~1.0 this batch then observes, so closing the batch lowers it by
+     * COMPRESSION_RATIO_IMPROVING_STEP to exactly 1.295 rather than raising it.
+     */
+    @ParameterizedTest
+    @ValueSource(strings = {"gzip", "snappy", "lz4", "zstd"})
+    public void testLargeFirstRecordAppendsWhenCompressionRatioEstimateAboveOne(String codec) throws Exception {
+        int chunkSize = 256;
+        Compression compression = Compression.of(CompressionType.forName(codec)).build();
+        ChunkedRecordAccumulator accum = newAccumulator(8192, chunkSize, 1024L * chunkSize, compression);
+        CompressionRatioEstimator.setEstimation(topic, compression.type(), 1.3f);
+        try {
+            // Random bytes don't compress, and the record spans many chunks so the estimate's
+            // inflation isn't absorbed by rounding up to a whole chunk.
+            byte[] value = new byte[20_000];
+            new Random(42).nextBytes(value);
+            accum.append(topic, partition1, 0L, key, value, Record.EMPTY_HEADERS, null,
+                    maxBlockTimeMs, time.milliseconds(), cluster);
+
+            Deque<ProducerBatch> dq = batchesFor(accum, tp1);
+            assertEquals(1, dq.size());
+            ProducerBatch batch = dq.peekFirst();
+            assertNotNull(batch);
+            assertEquals(1, batch.recordCount);
+
+            batch.close();
+            Record record = batch.records().records().iterator().next();
+            assertArrayEquals(value, readBytes(record.value()));
+
+            // The observed ratio (about 1.0) is well below the 1.3 estimate, so the estimator lowers the
+            // estimate by one COMPRESSION_RATIO_IMPROVING_STEP (0.005) to 1.295.
+            float observed = (float) batch.compressionRatio();
+            assertTrue(observed < 1.295f, "random data should not inflate by 29.5%, but the observed ratio was " + observed);
+            assertEquals(1.295f, CompressionRatioEstimator.estimation(topic, compression.type()), 1e-6f);
+
+            accum.deallocate(batch);
+        } finally {
+            CompressionRatioEstimator.resetEstimation(topic);
+            accum.close();
+        }
+    }
+
+    /**
+     * The opposite of an estimate above 1.0: a topic whose compression ratio estimate is far below 1.0
+     * but whose data doesn't compress. The batch's fullness checks trust the estimate, so the batch admits
+     * many times batch.size of uncompressed data, and the compressor then writes roughly all of it. With
+     * ample pool memory that overshoot is absorbed by mid-write growth from the pool (mostly as the
+     * compressor flushes on close), so the batch stays open for every record and never touches the heap.
+     * The batch must decode back to every record appended, and every chunk must go back to the pool.
+     * Closing the batch must also feed its observed ratio (about 1.0) back to the estimator, which is far
+     * more than one COMPRESSION_RATIO_DETERIORATE_STEP above 0.05, so the estimate jumps straight to it.
+     * {@link #testMidRecordHeapFallbackClosesBatchForAppends} covers the same growth past an exhausted pool.
+     */
+    @ParameterizedTest
+    @ValueSource(strings = {"gzip", "snappy", "lz4", "zstd"})
+    public void testIncompressibleDataWithLowCompressionRatioEstimateGrowsPastBatchSize(String codec) throws Exception {
+        int chunkSize = 256;
+        int batchSize = 8192;
+        long totalMemory = 1024L * chunkSize;
+        Compression compression = Compression.of(CompressionType.forName(codec)).build();
+        BufferPool pool = new BufferPool(totalMemory, chunkSize, metrics, time, "producer-metrics",
+                BufferPool.AllocationMode.INCREMENTAL);
+        ChunkedRecordAccumulator accum = newAccumulator(batchSize, compression, pool);
+        // Read by the batch on construction, so it must be set before the first append.
+        CompressionRatioEstimator.setEstimation(topic, compression.type(), 0.05f);
+        try {
+            // Random bytes don't compress, totalling several times batch.size.
+            int recordCount = 100;
+            Random random = new Random(42);
+            List<byte[]> values = new ArrayList<>();
+            for (int i = 0; i < recordCount; i++) {
+                byte[] value = new byte[500];
+                random.nextBytes(value);
+                values.add(value);
+                accum.append(topic, partition1, i, key, value, Record.EMPTY_HEADERS, null,
+                        maxBlockTimeMs, time.milliseconds(), cluster);
+            }
+
+            // The estimate let every record into the one batch.
+            Deque<ProducerBatch> dq = batchesFor(accum, tp1);
+            assertEquals(1, dq.size());
+            ProducerBatch batch = dq.peekFirst();
+            assertNotNull(batch);
+            assertEquals(recordCount, batch.recordCount);
+
+            // Compressors buffer internally, so much of the growth happens as they flush on close.
+            batch.close();
+            MemoryRecords records = batch.records();
+            assertTrue(records.sizeInBytes() > 4 * batchSize,
+                    "the compressed batch should be several times batch.size, but was " + records.sizeInBytes());
+
+            // The observed ratio (about 1.0) is far above 0.05 + COMPRESSION_RATIO_DETERIORATE_STEP (0.1),
+            // so the estimate becomes exactly the observed ratio.
+            float observed = (float) batch.compressionRatio();
+            assertTrue(observed > 0.9f, "random data should not compress, but the observed ratio was " + observed);
+            assertEquals(observed, CompressionRatioEstimator.estimation(topic, compression.type()));
+            int i = 0;
+            for (Record r : records.records()) {
+                assertArrayEquals(values.get(i), readBytes(r.value()));
+                i++;
+            }
+            assertEquals(recordCount, i, "all appended records must be present");
+
+            // The pool had room for all the growth, so none of it fell back to the heap.
+            ChunkedByteBufferOutputStream stream = (ChunkedByteBufferOutputStream) batch.recordsBuilder.bufferStream();
+            assertEquals(0, stream.fallbackAllocations());
+
+            accum.deallocate(batch);
+            assertEquals(totalMemory, pool.availableMemory());
+        } finally {
+            CompressionRatioEstimator.resetEstimation(topic);
+            accum.close();
+        }
+    }
+
+    /**
+     * KIP-1332's compressed mid-record growth path: when the compressor grows the stream mid-record and
+     * the pool is exhausted, the stream falls back to the heap and the batch is closed for early send.
+     * Setup as in {@link #testIncompressibleDataWithLowCompressionRatioEstimateGrowsPastBatchSize}, but the
+     * pool covers the chunks the appends reserve from the (far too low) estimate and not the compressor's
+     * actual output, so its first large flush during an append exhausts the pool. That append must still
+     * succeed, but must close the batch and report it full so the sender is woken, rather than leaving it
+     * open to keep growing on the heap. The next record must go to a new batch, every record must decode
+     * across both batches, and only pool chunks (no heap fallback chunk) must go back to the pool.
+     */
+    @ParameterizedTest
+    @ValueSource(strings = {"gzip", "snappy", "lz4", "zstd"})
+    public void testMidRecordHeapFallbackClosesBatchForAppends(String codec) throws Exception {
+        int chunkSize = 256;
+        // zstd buffers the most before its first output, a full 128KB block plus its 16KB input buffer. The
+        // batch size and pool are sized so the estimate admits that much input (about 8KB estimated) without
+        // the extension path exhausting the pool first, while the first flush of any codec exceeds the pool.
+        int batchSize = 16384;
+        long totalMemory = 64L * chunkSize;
+        Compression compression = Compression.of(CompressionType.forName(codec)).build();
+        BufferPool pool = new BufferPool(totalMemory, chunkSize, metrics, time, "producer-metrics",
+                BufferPool.AllocationMode.INCREMENTAL);
+        ChunkedRecordAccumulator accum = newAccumulator(batchSize, compression, pool);
+        // Read by the batch on construction, so it must be set before the first append.
+        CompressionRatioEstimator.setEstimation(topic, compression.type(), 0.05f);
+        try {
+            Random random = new Random(42);
+            List<byte[]> values = new ArrayList<>();
+            // Append incompressible records until one falls back to the heap mid-record. How much input
+            // that takes depends on how much each codec buffers before flushing, so bound it generously.
+            // Every codec falls back mid-append here; none defers all its output to close.
+            int maxRecords = 2000;
+            ProducerBatch batch = null;
+            ChunkedByteBufferOutputStream stream = null;
+            RecordAccumulator.RecordAppendResult result = null;
+            while (values.size() < maxRecords) {
+                byte[] value = new byte[500];
+                random.nextBytes(value);
+                values.add(value);
+                result = accum.append(topic, partition1, values.size() - 1, key, value, Record.EMPTY_HEADERS,
+                        null, maxBlockTimeMs, time.milliseconds(), cluster);
+                Deque<ProducerBatch> dq = batchesFor(accum, tp1);
+                assertEquals(1, dq.size(), "every record up to the heap fallback belongs in the first batch");
+                batch = dq.peekFirst();
+                stream = (ChunkedByteBufferOutputStream) batch.recordsBuilder.bufferStream();
+                if (stream.fallbackAllocations() > 0)
+                    break;
+                assertFalse(result.batchIsFull, "the batch should stay open until an append falls back to the heap");
+            }
+            assertNotNull(batch);
+            assertTrue(stream.fallbackAllocations() > 0,
+                    "no append fell back to the heap within " + maxRecords + " records");
+
+            // The append that fell back was accepted, then closed the batch for appends and reported it full.
+            assertTrue(result.appended());
+            assertEquals(values.size(), batch.recordCount);
+            assertTrue(result.batchIsFull, "the append that fell back should report the batch full for early send");
+            assertTrue(batch.isFull());
+            assertNull(batch.tryAppend(time.milliseconds(), key, new byte[1], Record.EMPTY_HEADERS, null,
+                    time.milliseconds()), "the batch should be closed for appends");
+
+            // Drain it as the woken sender would, then complete it, returning its pool chunks.
+            Map<Integer, List<ProducerBatch>> drained =
+                    accum.drain(metadataCache, Set.of(node1), Integer.MAX_VALUE, time.milliseconds());
+            assertEquals(List.of(batch), drained.get(node1.id()));
+            List<byte[]> decoded = new ArrayList<>();
+            batch.records().records().forEach(r -> decoded.add(readBytes(r.value())));
+            accum.deallocate(batch);
+
+            // The next record starts a new batch.
+            byte[] next = new byte[500];
+            random.nextBytes(next);
+            values.add(next);
+            accum.append(topic, partition1, values.size() - 1, key, next, Record.EMPTY_HEADERS, null,
+                    maxBlockTimeMs, time.milliseconds(), cluster);
+            Deque<ProducerBatch> dq = batchesFor(accum, tp1);
+            assertEquals(1, dq.size());
+            ProducerBatch second = dq.peekFirst();
+            assertNotSame(batch, second);
+            assertEquals(1, second.recordCount);
+            second.close();
+            second.records().records().forEach(r -> decoded.add(readBytes(r.value())));
+
+            assertEquals(values.size(), decoded.size(), "all appended records must be present");
+            for (int i = 0; i < values.size(); i++)
+                assertArrayEquals(values.get(i), decoded.get(i));
+
+            // Every pool chunk returns to the pool, and no heap fallback chunk is added to it.
+            accum.deallocate(second);
+            assertEquals(totalMemory, pool.availableMemory());
+        } finally {
+            CompressionRatioEstimator.resetEstimation(topic);
+            accum.close();
+        }
+    }
+
+    /**
+     * A compressed chunked batch rejected with MESSAGE_TOO_LARGE is split and re-enqueued. The split
+     * batches are plain heap-backed {@link ProducerBatch}es, so they must carry every record exactly once
+     * and in order, the original batch's chunks must all go back to the pool while deallocating the split
+     * batches leaves the pool untouched, and a later append must start a new chunked batch behind them
+     * rather than try to chunk-extend a split batch.
+     * <p>
+     * A 0.05 estimate lets 30 incompressible 500-byte records (~15KB) into a single batch of a 4096-byte
+     * batch.size, spanning many 256-byte chunks. The split resets the estimate to about 1.0 and splits at
+     * that same batch.size, so each split batch takes about 7 records, giving several split batches.
+     */
+    @ParameterizedTest
+    @ValueSource(strings = {"gzip", "snappy", "lz4", "zstd"})
+    public void testSplitAndReenqueueCompressedChunkedBatch(String codec) throws Exception {
+        int chunkSize = 256;
+        int batchSize = 4096;
+        long totalMemory = 1024L * chunkSize;
+        Compression compression = Compression.of(CompressionType.forName(codec)).build();
+        BufferPool pool = new BufferPool(totalMemory, chunkSize, metrics, time, "producer-metrics",
+                BufferPool.AllocationMode.INCREMENTAL);
+        ChunkedRecordAccumulator accum = newAccumulator(batchSize, compression, pool);
+        // Read by the batch on construction, so it must be set before the first append. splitAndReenqueue
+        // also sets the estimate, so the reset in the finally block is needed regardless.
+        CompressionRatioEstimator.setEstimation(topic, compression.type(), 0.05f);
+        try {
+            int recordCount = 30;
+            Random random = new Random(42);
+            List<byte[]> keys = new ArrayList<>();
+            List<byte[]> values = new ArrayList<>();
+            List<FutureRecordMetadata> futures = new ArrayList<>();
+            for (int i = 0; i < recordCount; i++) {
+                byte[] recordKey = ("key-" + i).getBytes();
+                byte[] value = new byte[500];
+                random.nextBytes(value);
+                keys.add(recordKey);
+                values.add(value);
+                RecordAccumulator.RecordAppendResult result = accum.append(topic, partition1, i, recordKey, value,
+                        Record.EMPTY_HEADERS, null, maxBlockTimeMs, time.milliseconds(), cluster);
+                assertTrue(result.appended());
+                futures.add(result.future);
+            }
+            Deque<ProducerBatch> dq = batchesFor(accum, tp1);
+            assertEquals(1, dq.size(), "the low estimate should let every record into one batch");
+            ProducerBatch bigBatch = dq.peekFirst();
+            assertInstanceOf(ChunkedProducerBatch.class, bigBatch);
+            assertEquals(recordCount, bigBatch.recordCount);
+
+            // Drain it as the sender would: off the deque, and closed.
+            Map<Integer, List<ProducerBatch>> drained =
+                    accum.drain(metadataCache, Set.of(node1), Integer.MAX_VALUE, time.milliseconds());
+            assertEquals(List.of(bigBatch), drained.get(node1.id()));
+            assertTrue(dq.isEmpty());
+            assertTrue(bigBatch.records().sizeInBytes() > 4 * chunkSize,
+                    "the batch should span many chunks, but was " + bigBatch.records().sizeInBytes() + " bytes");
+
+            // What the sender does on MESSAGE_TOO_LARGE for a compressed batch.
+            int numSplit = accum.splitAndReenqueue(bigBatch);
+            assertTrue(numSplit >= 2, "the split should produce at least two batches, but produced " + numSplit);
+            assertEquals(numSplit, dq.size());
+            List<ProducerBatch> splitBatches = new ArrayList<>(dq);
+            for (ProducerBatch split : splitBatches) {
+                assertEquals(ProducerBatch.class, split.getClass(), "split batches must be plain, heap-backed batches");
+                assertTrue(split.isSplitBatch());
+            }
+
+            // The original batch's result fails with RecordBatchTooLargeException, while the record futures
+            // are chained to the split batches and stay pending until those complete.
+            assertTrue(bigBatch.produceFuture.completed());
+            assertInstanceOf(RecordBatchTooLargeException.class, bigBatch.produceFuture.error(0));
+            for (FutureRecordMetadata future : futures)
+                assertFalse(future.isDone(), "record futures should follow the split batches");
+
+            // The original batch returns every chunk it held, and deallocating a split batch is a no-op for the pool.
+            accum.deallocate(bigBatch);
+            assertEquals(totalMemory, pool.availableMemory());
+            for (ProducerBatch split : splitBatches) {
+                accum.deallocate(split);
+                assertEquals(totalMemory, pool.availableMemory(), "split batches are allocated outside the pool");
+            }
+
+            // A later append sees a closed split batch at the tail and must start a new chunked batch behind it.
+            byte[] nextKey = "key-next".getBytes();
+            byte[] next = new byte[500];
+            random.nextBytes(next);
+            RecordAccumulator.RecordAppendResult nextResult = accum.append(topic, partition1, recordCount, nextKey,
+                    next, Record.EMPTY_HEADERS, null, maxBlockTimeMs, time.milliseconds(), cluster);
+            assertTrue(nextResult.appended());
+            assertTrue(nextResult.newBatchCreated);
+            assertEquals(numSplit + 1, dq.size());
+            ProducerBatch newBatch = dq.peekLast();
+            assertInstanceOf(ChunkedProducerBatch.class, newBatch);
+            assertEquals(1, newBatch.recordCount);
+            assertTrue(pool.availableMemory() < totalMemory, "the new batch should take its chunks from the pool");
+
+            // Every original record is present exactly once, in order, across the split batches.
+            List<Record> splitRecords = new ArrayList<>();
+            for (ProducerBatch split : splitBatches) {
+                split.close();
+                split.records().records().forEach(splitRecords::add);
+            }
+            assertEquals(recordCount, splitRecords.size(), "all original records must be present exactly once");
+            for (int i = 0; i < recordCount; i++) {
+                assertArrayEquals(keys.get(i), readBytes(splitRecords.get(i).key()));
+                assertArrayEquals(values.get(i), readBytes(splitRecords.get(i).value()));
+            }
+            int splitRecordCount = splitBatches.stream().mapToInt(b -> b.recordCount).sum();
+            assertEquals(recordCount, splitRecordCount);
+
+            newBatch.close();
+            Record nextRecord = newBatch.records().records().iterator().next();
+            assertArrayEquals(nextKey, readBytes(nextRecord.key()));
+            assertArrayEquals(next, readBytes(nextRecord.value()));
+            accum.deallocate(newBatch);
+            assertEquals(totalMemory, pool.availableMemory());
+        } finally {
+            CompressionRatioEstimator.resetEstimation(topic);
+            accum.close();
+        }
+    }
+
+    /**
+     * Appends a single batch of incompressible data that a compression ratio estimate far below 1.0
+     * lets grow past its attached chunks, so the compressor still has to grow the stream when it
+     * flushes on close. Returns the append result of the last record.
+     */
+    private RecordAccumulator.RecordAppendResult appendIncompressibleBatch(ChunkedRecordAccumulator accum,
+                                                                           List<byte[]> values) throws Exception {
+        Random random = new Random(42);
+        RecordAccumulator.RecordAppendResult result = null;
+        for (int i = 0; i < 100; i++) {
+            byte[] value = new byte[500];
+            random.nextBytes(value);
+            values.add(value);
+            result = accum.append(topic, partition1, i, key, value, Record.EMPTY_HEADERS, null,
+                    maxBlockTimeMs, time.milliseconds(), cluster);
+        }
+        assertEquals(1, batchesFor(accum, tp1).size());
+        return result;
+    }
+
+    /**
+     * A graceful producer close closes the pool before the sender drains the remaining batches. Draining
+     * a compressed batch closes it, and the compressor's flush can still grow the stream at that point. That
+     * growth must not fail on the closed pool: the batch would already be off its deque, so it would be
+     * neither sent nor re-enqueued and its callbacks would never fire. It must instead fall back to the
+     * heap, as growth past an exhausted pool does, so the drained batch decodes to every record appended.
+     */
+    @ParameterizedTest
+    @ValueSource(strings = {"gzip", "snappy", "lz4", "zstd"})
+    public void testDrainAfterCloseGrowsCompressedBatchOnHeap(String codec) throws Exception {
+        int chunkSize = 256;
+        // Ample memory, so any growth before close is served by the pool.
+        long totalMemory = 1024L * chunkSize;
+        Compression compression = Compression.of(CompressionType.forName(codec)).build();
+        BufferPool pool = new BufferPool(totalMemory, chunkSize, metrics, time, "producer-metrics",
+                BufferPool.AllocationMode.INCREMENTAL);
+        ChunkedRecordAccumulator accum = newAccumulator(8192, compression, pool);
+        // Read by the batch on construction, so it must be set before the first append.
+        CompressionRatioEstimator.setEstimation(topic, compression.type(), 0.05f);
+        try {
+            List<byte[]> values = new ArrayList<>();
+            appendIncompressibleBatch(accum, values);
+
+            // What Sender.initiateClose does, followed by the sender's shutdown drain.
+            accum.close();
+            Map<Integer, List<ProducerBatch>> drained =
+                    accum.drain(metadataCache, Set.of(node1), Integer.MAX_VALUE, time.milliseconds());
+
+            List<ProducerBatch> batches = drained.get(node1.id());
+            assertEquals(1, batches.size());
+            assertFalse(accum.hasUndrained());
+            ProducerBatch batch = batches.get(0);
+            int i = 0;
+            for (Record r : batch.records().records()) {
+                assertArrayEquals(values.get(i), readBytes(r.value()));
+                i++;
+            }
+            assertEquals(values.size(), i, "all appended records must be present");
+
+            // The pool had room for all growth before close, so a heap chunk can only come from growth after close.
+            ChunkedByteBufferOutputStream stream = (ChunkedByteBufferOutputStream) batch.recordsBuilder.bufferStream();
+            assertTrue(stream.fallbackAllocations() > 0, "growth after close should have fallen back to the heap");
+
+            // Every pool chunk returns to the closed pool, and no heap fallback chunk is added to it.
+            accum.deallocate(batch);
+            assertEquals(totalMemory, pool.availableMemory());
+        } finally {
+            CompressionRatioEstimator.resetEstimation(topic);
+        }
+    }
+
+    /**
+     * The forced-close counterpart of {@link #testDrainAfterCloseGrowsCompressedBatchOnHeap}: aborting a
+     * compressed batch after the pool is closed also flushes the compressor, which can still grow the stream.
+     * The abort must still complete the batch's futures and return its chunks to the pool.
+     */
+    @ParameterizedTest
+    @ValueSource(strings = {"gzip", "snappy", "lz4", "zstd"})
+    public void testAbortAfterCloseCompletesCompressedBatchThatGrows(String codec) throws Exception {
+        int chunkSize = 256;
+        long totalMemory = 1024L * chunkSize;
+        Compression compression = Compression.of(CompressionType.forName(codec)).build();
+        BufferPool pool = new BufferPool(totalMemory, chunkSize, metrics, time, "producer-metrics",
+                BufferPool.AllocationMode.INCREMENTAL);
+        ChunkedRecordAccumulator accum = newAccumulator(8192, compression, pool);
+        CompressionRatioEstimator.setEstimation(topic, compression.type(), 0.05f);
+        try {
+            RecordAccumulator.RecordAppendResult result = appendIncompressibleBatch(accum, new ArrayList<>());
+
+            // What Sender.forceClose does, followed by the sender's forced-shutdown abort.
+            accum.close();
+            accum.abortIncompleteBatches();
+
+            assertTrue(result.future.isDone(), "the aborted batch's futures must complete");
+            assertThrows(ExecutionException.class, result.future::get);
+            assertFalse(accum.hasIncomplete());
+            assertEquals(totalMemory, pool.availableMemory());
+        } finally {
+            CompressionRatioEstimator.resetEstimation(topic);
+        }
+    }
+
+    /**
+     * The first-record capacity check in {@link ChunkedProducerBatch#tryAppend} still guards
+     * uncompressed batches, where the pre-size is an exact upper bound, but not compressed ones,
+     * whose pre-size is only a heuristic and which instead grow mid-write.
+     */
+    @ParameterizedTest
+    @ValueSource(strings = {"none", "gzip", "snappy", "lz4", "zstd"})
+    public void testFirstRecordCapacityCheckOnlyAppliesToUncompressedBatches(String codec) {
+        int chunkSize = 256;
+        Compression compression = Compression.of(CompressionType.forName(codec)).build();
+        BufferPool pool = new BufferPool(64L * chunkSize, chunkSize, metrics, time, "producer-metrics",
+                BufferPool.AllocationMode.INCREMENTAL);
+        // Deliberately under-sized: a single chunk for a record that needs several.
+        ChunkedByteBufferOutputStream stream = new ChunkedByteBufferOutputStream(
+                List.of(ByteBuffer.allocate(chunkSize)), chunkSize, pool);
+        MemoryRecordsBuilder builder = new MemoryRecordsBuilder(stream, RecordBatch.CURRENT_MAGIC_VALUE,
+                compression, TimestampType.CREATE_TIME, 0L, RecordBatch.NO_TIMESTAMP, RecordBatch.NO_PRODUCER_ID,
+                RecordBatch.NO_PRODUCER_EPOCH, RecordBatch.NO_SEQUENCE, false, false,
+                RecordBatch.NO_PARTITION_LEADER_EPOCH, 8192);
+        ChunkedProducerBatch batch = new ChunkedProducerBatch(tp1, builder, time.milliseconds());
+        byte[] value = new byte[4 * chunkSize];
+
+        if (compression.type() == CompressionType.NONE) {
+            assertThrows(IllegalStateException.class, () ->
+                    batch.tryAppend(0L, key, value, Record.EMPTY_HEADERS, null, time.milliseconds()));
+        } else {
+            assertNotNull(batch.tryAppend(0L, key, value, Record.EMPTY_HEADERS, null, time.milliseconds()));
+            assertEquals(1, batch.recordCount);
+        }
+    }
+
+    private static byte[] readBytes(ByteBuffer buf) {
+        byte[] out = new byte[buf.remaining()];
+        buf.duplicate().get(out);
+        return out;
+    }
+
+    /**
+     * Pool that adds one append right after a non-blocking (extension) chunk allocation returns, mocking a
+     * concurrent appender racing the same batch.
      */
     private BufferPool poolMockingConcurrentChunkAllocation(int chunkSize, long totalMemory,
                                                             AtomicReference<ChunkedRecordAccumulator> injectAppendOnce,
                                                             byte[] injectedValue) {
         return new BufferPool(totalMemory, chunkSize, metrics, time, "producer-metrics", BufferPool.AllocationMode.INCREMENTAL) {
             @Override
-            public List<ByteBuffer> allocateChunks(int totalSize, long maxTimeToBlockMs) throws InterruptedException {
-                List<ByteBuffer> chunks = super.allocateChunks(totalSize, maxTimeToBlockMs);
+            public List<ByteBuffer> tryAllocateChunks(int totalSize) {
+                List<ByteBuffer> chunks = super.tryAllocateChunks(totalSize);
                 ChunkedRecordAccumulator toInject = injectAppendOnce.getAndSet(null);
                 if (toInject != null)
-                    toInject.append(topic, partition1, 0L, key, injectedValue, Record.EMPTY_HEADERS, null,
-                            maxBlockTimeMs, time.milliseconds(), cluster);
+                    appendFromPoolOverride(toInject, injectedValue);
                 return chunks;
             }
         };
+    }
+
+    /**
+     * Appends to {@code partition1} from inside a {@link BufferPool#tryAllocateChunks} override, standing in
+     * for a concurrent appender. The override cannot throw the checked {@link InterruptedException} that
+     * {@code append} declares, so it is rethrown unchecked.
+     */
+    private void appendFromPoolOverride(ChunkedRecordAccumulator accum, byte[] value) {
+        try {
+            accum.append(topic, partition1, 0L, key, value, Record.EMPTY_HEADERS, null,
+                    maxBlockTimeMs, time.milliseconds(), cluster);
+        } catch (InterruptedException e) {
+            Thread.currentThread().interrupt();
+            throw new RuntimeException(e);
+        }
     }
 
     /**
@@ -246,12 +797,11 @@ public class ChunkedRecordAccumulatorTest {
 
         BufferPool pool = new BufferPool(64L * chunkSize, chunkSize, metrics, time, "producer-metrics", BufferPool.AllocationMode.INCREMENTAL) {
             @Override
-            public List<ByteBuffer> allocateChunks(int totalSize, long maxTimeToBlockMs) throws InterruptedException {
-                List<ByteBuffer> chunks = super.allocateChunks(totalSize, maxTimeToBlockMs);
+            public List<ByteBuffer> tryAllocateChunks(int totalSize) {
+                List<ByteBuffer> chunks = super.tryAllocateChunks(totalSize);
                 ChunkedRecordAccumulator toInject = injectAppendOnce.getAndSet(null);
                 if (toInject != null)
-                    toInject.append(topic, partition1, 0L, key, value, Record.EMPTY_HEADERS, null,
-                            maxBlockTimeMs, time.milliseconds(), cluster);
+                    appendFromPoolOverride(toInject, value);
                 return chunks;
             }
 
@@ -310,10 +860,11 @@ public class ChunkedRecordAccumulatorTest {
 
         BufferPool pool = new BufferPool(totalMemory, chunkSize, metrics, time, "producer-metrics", BufferPool.AllocationMode.INCREMENTAL) {
             @Override
-            public List<ByteBuffer> allocateChunks(int totalSize, long maxTimeToBlockMs) throws InterruptedException {
-                List<ByteBuffer> chunks = super.allocateChunks(totalSize, maxTimeToBlockMs);
-                // The mid-batch extension path is the only non-blocking caller.
-                if (maxTimeToBlockMs == 0L)
+            public List<ByteBuffer> tryAllocateChunks(int totalSize) {
+                List<ByteBuffer> chunks = super.tryAllocateChunks(totalSize);
+                // Uncompressed, the mid-batch extension is the only caller of tryAllocateChunks: the
+                // stream is pre-sized for every record, so it never grows itself mid-write.
+                if (chunks != null)
                     extensionAllocated.set(true);
                 return chunks;
             }
@@ -412,35 +963,34 @@ public class ChunkedRecordAccumulatorTest {
         return accum.getDeque(tp);
     }
 
-    private boolean hasOpenBatch(RecordAccumulator accum) {
-        Deque<ProducerBatch> dq = batchesFor(accum, tp1);
-        synchronized (dq) {
-            return !dq.isEmpty();
-        }
-    }
-
     /**
      * When the pool is exhausted during a mid-batch extension, the append must not busy-loop
      * retrying the non-blocking acquire: after a single failed extension acquire
-     * (maxTimeToBlockMs = 0), the open batch is closed and the very next pool call is the
-     * blocking new-batch acquire (maxTimeToBlockMs > 0), where the record lands in a new batch.
+     * ({@link BufferPool#tryAllocateChunks}), the open batch is closed and the very next pool call is the
+     * blocking new-batch acquire ({@link BufferPool#allocateChunks}), where the record lands in a new batch.
      */
     @Test
     public void testExhaustedExtensionFallsBackToBlockingNewBatchPath() throws Exception {
         int chunkSize = 256;
-        List<Long> allocTimeouts = new ArrayList<>();
+        // Every pool acquire in call order: "blocking:<maxTimeToBlockMs>" or "non-blocking".
+        List<String> acquires = new ArrayList<>();
         AtomicInteger closeForAppendsCalls = new AtomicInteger();
         List<Integer> closeCallsAtAlloc = new ArrayList<>();
 
         BufferPool pool = new BufferPool(16L * chunkSize, chunkSize, metrics, time, "producer-metrics", BufferPool.AllocationMode.INCREMENTAL) {
             @Override
             public List<ByteBuffer> allocateChunks(int totalSize, long maxTimeToBlockMs) throws InterruptedException {
-                allocTimeouts.add(maxTimeToBlockMs);
+                acquires.add("blocking:" + maxTimeToBlockMs);
+                closeCallsAtAlloc.add(closeForAppendsCalls.get());
+                return super.allocateChunks(totalSize, maxTimeToBlockMs);
+            }
+
+            @Override
+            public List<ByteBuffer> tryAllocateChunks(int totalSize) {
+                acquires.add("non-blocking");
                 closeCallsAtAlloc.add(closeForAppendsCalls.get());
                 // Simulate an exhausted pool for the non-blocking extension acquire only.
-                if (maxTimeToBlockMs == 0L)
-                    throw new BufferExhaustedException("injected: pool exhausted");
-                return super.allocateChunks(totalSize, maxTimeToBlockMs);
+                return null;
             }
         };
         ChunkedRecordAccumulator accum = new ChunkedRecordAccumulator(logContext, 8192, Compression.NONE,
@@ -471,7 +1021,7 @@ public class ChunkedRecordAccumulatorTest {
                     new byte[100], Record.EMPTY_HEADERS, null, maxBlockTimeMs, time.milliseconds(), cluster);
 
             // Validate the expected call sequence: blocking (first batch), non-blocking (failed extension), blocking (new batch).
-            assertEquals(List.of(maxBlockTimeMs, 0L, maxBlockTimeMs), allocTimeouts,
+            assertEquals(List.of("blocking:" + maxBlockTimeMs, "non-blocking", "blocking:" + maxBlockTimeMs), acquires,
                     "expected a single failed extension acquire followed directly by the blocking new-batch acquire");
             assertEquals(0, closeCallsAtAlloc.get(0), "no close before the first-record acquire");
             assertEquals(0, closeCallsAtAlloc.get(1), "no close before the extension acquire");
@@ -509,15 +1059,16 @@ public class ChunkedRecordAccumulatorTest {
 
         BufferPool pool = new BufferPool(16L * chunkSize, chunkSize, metrics, time, "producer-metrics", BufferPool.AllocationMode.INCREMENTAL) {
             @Override
-            public List<ByteBuffer> allocateChunks(int totalSize, long maxTimeToBlockMs) throws InterruptedException {
+            public List<ByteBuffer> tryAllocateChunks(int totalSize) {
                 // Only the first non-blocking (extension) acquire is intercepted; the deque lock is not
                 // held here, which is exactly what lets the open batch change under the appender.
-                if (maxTimeToBlockMs == 0L && injected.compareAndSet(false, true)) {
+                if (injected.compareAndSet(false, true)) {
                     // From here on dq.peekLast() is no longer the batch the gap was sized against.
                     drainedRef.set(simulateConcurrentDrainAndReplace(accumRef.get()));
-                    throw new BufferExhaustedException("injected: pool exhausted");
+                    // Simulate an exhausted pool.
+                    return null;
                 }
-                return super.allocateChunks(totalSize, maxTimeToBlockMs);
+                return super.tryAllocateChunks(totalSize);
             }
         };
         ChunkedRecordAccumulator accum = new ChunkedRecordAccumulator(logContext, 8192, Compression.NONE,
@@ -567,11 +1118,12 @@ public class ChunkedRecordAccumulatorTest {
     /**
      * Simulates the concurrent activity that can move the deque while an extension acquire runs off
      * the deque lock: the sender drains the open batch, returning its chunks to the pool, and another
-     * appender claims that memory for a fresh batch in its place.
+     * appender claims that memory for a fresh batch in its place. Called from a
+     * {@link BufferPool#tryAllocateChunks} override, so it appends via {@link #appendFromPoolOverride}.
      *
      * @return the batch that was drained
      */
-    private ProducerBatch simulateConcurrentDrainAndReplace(ChunkedRecordAccumulator accum) throws InterruptedException {
+    private ProducerBatch simulateConcurrentDrainAndReplace(ChunkedRecordAccumulator accum) {
         Deque<ProducerBatch> dq = batchesFor(accum, tp1);
         ProducerBatch drained;
         synchronized (dq) {
@@ -579,8 +1131,7 @@ public class ChunkedRecordAccumulatorTest {
         }
         assertNotNull(drained, "there must be an open batch to drain");
         accum.deallocate(drained);
-        accum.append(topic, partition1, 0L, key, new byte[100], Record.EMPTY_HEADERS, null,
-                maxBlockTimeMs, time.milliseconds(), cluster);
+        appendFromPoolOverride(accum, new byte[100]);
         return drained;
     }
 
@@ -604,19 +1155,17 @@ public class ChunkedRecordAccumulatorTest {
         final int retrySafetyLimit = 5;
         return new BufferPool(16L * chunkSize, chunkSize, metrics, time, "producer-metrics", BufferPool.AllocationMode.INCREMENTAL) {
             @Override
-            public List<ByteBuffer> allocateChunks(int totalSize, long maxTimeToBlockMs) throws InterruptedException {
-                // The extension acquire always passes a zero timeout, and a new-batch acquire does too once no
-                // time is left — but only with an empty deque here, since these tests always create the first
-                // batch with a blocking acquire.
-                boolean isExtensionPath = maxTimeToBlockMs == 0L && hasOpenBatch(accumRef.get());
-                if (isExtensionPath && refusals.get() < retrySafetyLimit) {
+            public List<ByteBuffer> tryAllocateChunks(int totalSize) {
+                // Only the extension acquire is non-blocking; new-batch acquires go through allocateChunks.
+                if (refusals.get() < retrySafetyLimit) {
                     refusals.incrementAndGet();
                     simulateConcurrentDrainAndReplace(accumRef.get());
                     if (sleepOnRefusalMs > 0)
                         time.sleep(sleepOnRefusalMs);
-                    throw new BufferExhaustedException("injected: pool exhausted");
+                    // Simulate an exhausted pool.
+                    return null;
                 }
-                return super.allocateChunks(totalSize, maxTimeToBlockMs);
+                return super.tryAllocateChunks(totalSize);
             }
         };
     }
@@ -716,15 +1265,14 @@ public class ChunkedRecordAccumulatorTest {
 
         BufferPool pool = new BufferPool(64L * chunkSize, chunkSize, metrics, time, "producer-metrics", BufferPool.AllocationMode.INCREMENTAL) {
             @Override
-            public List<ByteBuffer> allocateChunks(int totalSize, long maxTimeToBlockMs) throws InterruptedException {
-                List<ByteBuffer> chunks = super.allocateChunks(totalSize, maxTimeToBlockMs);
-                if (maxTimeToBlockMs == 0L && injecting.compareAndSet(false, true)) {
+            public List<ByteBuffer> tryAllocateChunks(int totalSize) {
+                List<ByteBuffer> chunks = super.tryAllocateChunks(totalSize);
+                if (injecting.compareAndSet(false, true)) {
                     try {
                         extensionAcquires.incrementAndGet();
                         // Takes the capacity this acquire was sized against, so the attach that follows is
                         // too small and the append has to come back for more.
-                        accumRef.get().append(topic, partition1, 0L, key, value, Record.EMPTY_HEADERS, null,
-                                maxBlockTimeMs, time.milliseconds(), cluster);
+                        appendFromPoolOverride(accumRef.get(), value);
                         // Leave the append with no max.block.ms left, so its retry is refused.
                         time.sleep(maxBlockTimeMs + 1);
                     } finally {
@@ -779,17 +1327,22 @@ public class ChunkedRecordAccumulatorTest {
 
         BufferPool pool = new BufferPool(16L * chunkSize, chunkSize, metrics, time, "producer-metrics", BufferPool.AllocationMode.INCREMENTAL) {
             @Override
-            public List<ByteBuffer> allocateChunks(int totalSize, long maxTimeToBlockMs) throws InterruptedException {
+            public List<ByteBuffer> tryAllocateChunks(int totalSize) {
                 // The extension is the only acquire that does not block.
-                boolean isExtensionPath = maxTimeToBlockMs == 0L;
-                if (isExtensionPath && injected.compareAndSet(false, true)) {
+                if (injected.compareAndSet(false, true)) {
                     // The open batch is left in place, so this failure closes it and the retry falls
                     // through to the blocking new-batch acquire below.
                     time.sleep(spentInExtensionMs);
-                    throw new BufferExhaustedException("injected: pool exhausted");
+                    // Simulate an exhausted pool.
+                    return null;
                 }
+                return super.tryAllocateChunks(totalSize);
+            }
+
+            @Override
+            public List<ByteBuffer> allocateChunks(int totalSize, long maxTimeToBlockMs) throws InterruptedException {
                 // The first blocking acquire after that failure is the new-batch one under test.
-                if (injected.get() && !isExtensionPath)
+                if (injected.get())
                     blockingAcquireTimeout.compareAndSet(-1, maxTimeToBlockMs);
                 return super.allocateChunks(totalSize, maxTimeToBlockMs);
             }
@@ -872,7 +1425,7 @@ public class ChunkedRecordAccumulatorTest {
     /**
      * A single dropped record is counted exactly once even when it first fails the extension attempt
      * (recovered) and then fails the new-batch acquire.
-     * Uses a real (non-overridden) pool so the actual allocateChunks path runs on both acquires.
+     * Uses a real (non-overridden) pool so the actual tryAllocateChunks and allocateChunks paths run.
      */
     @Test
     public void testBufferExhaustedNotDoubleCountedAcrossExtensionAndNewBatch() throws Exception {
@@ -1045,10 +1598,10 @@ public class ChunkedRecordAccumulatorTest {
         BufferPool pool = new BufferPool(64L * chunkSize, chunkSize, metrics, time, "producer-metrics",
                 BufferPool.AllocationMode.INCREMENTAL) {
             @Override
-            public List<ByteBuffer> allocateChunks(int totalSize, long maxTimeToBlockMs) throws InterruptedException {
-                List<ByteBuffer> chunks = super.allocateChunks(totalSize, maxTimeToBlockMs);
+            public List<ByteBuffer> tryAllocateChunks(int totalSize) {
+                List<ByteBuffer> chunks = super.tryAllocateChunks(totalSize);
                 // The extension acquire is the only non-blocking one (see allocateExtensionChunks).
-                if (maxTimeToBlockMs == 0L)
+                if (chunks != null)
                     extensionChunks.addAll(chunks);
                 Deque<ProducerBatch> dq = dqRef.get();
                 // Mock a concurrent appender that found the batch full: RecordAccumulator.tryAppend
@@ -1162,7 +1715,7 @@ public class ChunkedRecordAccumulatorTest {
         int chunkSize = 256;
         ChunkedRecordAccumulator accum = newAccumulator(8192, chunkSize, 16L * chunkSize, Compression.NONE);
         try {
-            // First record creates the batch; the acquire is non-blocking but the memory is there.
+            // First record creates the batch; the acquire has no time to wait, but the memory is there.
             accum.append(topic, partition1, 0L, key, new byte[100], Record.EMPTY_HEADERS, null,
                     /* maxTimeToBlock */ 0L, time.milliseconds(), cluster);
             // Second record overflows the batch's chunk, so it needs an extension — also non-blocking, also
