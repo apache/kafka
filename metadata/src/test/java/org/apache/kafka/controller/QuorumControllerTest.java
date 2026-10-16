@@ -162,7 +162,6 @@ import static org.apache.kafka.controller.ConfigurationControlManagerTest.entry;
 import static org.apache.kafka.controller.ControllerRequestContextUtil.ANONYMOUS_CONTEXT;
 import static org.apache.kafka.controller.ControllerRequestContextUtil.anonymousContextFor;
 import static org.apache.kafka.controller.QuorumControllerIntegrationTestUtils.brokerFeatures;
-import static org.apache.kafka.controller.QuorumControllerIntegrationTestUtils.forceRenounce;
 import static org.apache.kafka.controller.QuorumControllerIntegrationTestUtils.pause;
 import static org.apache.kafka.controller.QuorumControllerIntegrationTestUtils.registerBrokersAndUnfence;
 import static org.apache.kafka.controller.QuorumControllerIntegrationTestUtils.sendBrokerHeartbeatToUnfenceBrokers;
@@ -1701,7 +1700,7 @@ public class QuorumControllerTest {
             ZkRecordConsumer migrationConsumer = active.zkRecordConsumer();
             migrationConsumer.beginMigration().get(30, TimeUnit.SECONDS);
             migrationConsumer.acceptBatch(ZK_MIGRATION_RECORDS).get(30, TimeUnit.SECONDS);
-            forceRenounce(active);
+            active.forceRenounce().get(30, TimeUnit.SECONDS);
 
             // Ensure next controller doesn't see the topic from partial migration
             QuorumController newActive = controlEnv.activeController(true);
@@ -1787,6 +1786,53 @@ public class QuorumControllerTest {
                     setWantFence(false).setBrokerEpoch(reply.epoch()).setBrokerId(0).
                     setCurrentMetadataOffset(100100L)).get());
 
+        }
+    }
+
+    @Test
+    public void testForceRenounceResignsActiveController() throws Throwable {
+        try (
+                LocalLogManagerTestEnv logEnv = new LocalLogManagerTestEnv.Builder(3).
+                        build();
+                QuorumControllerTestEnv controlEnv = new QuorumControllerTestEnv.Builder(logEnv).
+                        build()
+        ) {
+            QuorumController active = controlEnv.activeController(true);
+            int previousEpoch = active.curClaimEpoch();
+
+            active.forceRenounce().get(20, TimeUnit.SECONDS);
+
+            assertEquals(-1, active.curClaimEpoch());
+
+            // A new election should follow, electing either the same node at a higher epoch or a different node.
+            QuorumController newActive = controlEnv.activeController(true);
+            assertTrue(newActive.curClaimEpoch() > previousEpoch);
+        }
+    }
+
+    @Test
+    public void testForceRenounceIsNoOpForInactiveController() throws Throwable {
+        try (
+                LocalLogManagerTestEnv logEnv = new LocalLogManagerTestEnv.Builder(3).
+                        build();
+                QuorumControllerTestEnv controlEnv = new QuorumControllerTestEnv.Builder(logEnv).
+                        build()
+        ) {
+            QuorumController active = controlEnv.activeController(true);
+            QuorumController inactive = controlEnv.controllers().stream()
+                    .filter(controller -> controller.nodeId() != active.nodeId())
+                    .findAny()
+                    .get();
+            assertEquals(-1, inactive.curClaimEpoch());
+
+            int previousEpoch = active.curClaimEpoch();
+
+            // Should complete without error, and without attempting to resign, since it's not the active controller.
+            inactive.forceRenounce().get(20, TimeUnit.SECONDS);
+
+            assertEquals(-1, inactive.curClaimEpoch());
+            // The real active controller is unaffected.
+            assertEquals(previousEpoch, active.curClaimEpoch());
         }
     }
 }
