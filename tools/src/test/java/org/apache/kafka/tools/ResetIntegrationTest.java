@@ -208,7 +208,7 @@ public class ResetIntegrationTest {
     }
 
     @ClusterTest
-    public void shouldDefaultToClassicGroupProtocol(ClusterInstance cluster) throws Exception {
+    public void shouldDefaultToClassicGroupProtocol(ClusterInstance cluster) {
         final String appId = generateAppId();
         cluster.createTopic(INPUT_TOPIC, 1, (short) 1);
         final String[] parameters = new String[] {
@@ -226,7 +226,7 @@ public class ResetIntegrationTest {
     }
 
     @ClusterTest
-    public void shouldAllowGroupProtocolClassic(ClusterInstance cluster) throws Exception {
+    public void shouldAllowGroupProtocolClassic(ClusterInstance cluster) {
         final String appId = generateAppId();
         cluster.createTopic(INPUT_TOPIC, 1, (short) 1);
         final String[] parameters = new String[] {
@@ -245,7 +245,7 @@ public class ResetIntegrationTest {
     }
 
     @ClusterTest
-    public void shouldOverwriteGroupProtocolOtherThanClassic(ClusterInstance cluster) throws Exception {
+    public void shouldOverwriteGroupProtocolOtherThanClassic(ClusterInstance cluster) {
         final String appId = generateAppId();
         cluster.createTopic(INPUT_TOPIC, 1, (short) 1);
         final String[] parameters = new String[] {
@@ -296,7 +296,7 @@ public class ResetIntegrationTest {
     }
 
     @ClusterTest
-    public void shouldNotAllowToResetWhenSpecifiedInternalTopicIsNotInternal(ClusterInstance cluster) throws Exception {
+    public void shouldNotAllowToResetWhenSpecifiedInternalTopicIsNotInternal(ClusterInstance cluster) {
         final String appId = generateAppId();
         cluster.createTopic(INPUT_TOPIC, 1, (short) 1);
         final String[] parameters = new String[] {
@@ -560,7 +560,7 @@ public class ResetIntegrationTest {
         return APP_ID_PREFIX + "-" + TestUtils.randomString(10);
     }
 
-    private void prepare(final ClusterInstance cluster, final Map<String, Object> sslConfig, final String appId) throws Exception {
+    private void prepare(final ClusterInstance cluster, final Map<String, Object> sslConfig, final String appId) {
         prepareConfigs(cluster, sslConfig, appId);
         // align time to seconds to get clean window boundaries and thus ensure the same result for each run
         recordTimestamp = (System.currentTimeMillis() / 1000 + 1) * 1000;

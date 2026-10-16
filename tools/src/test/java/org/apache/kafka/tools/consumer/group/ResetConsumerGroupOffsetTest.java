@@ -154,7 +154,7 @@ public class ResetConsumerGroupOffsetTest {
             @ClusterConfigProperty(key = OFFSETS_TOPIC_REPLICATION_FACTOR_CONFIG, value = "2"),
         }
     )
-    public void testResetOffsetsWithOfflinePartitionNotInResetTarget(ClusterInstance cluster) throws Exception {
+    public void testResetOffsetsWithOfflinePartitionNotInResetTarget(ClusterInstance cluster) {
         String topic = generateRandomTopic();
         String group = "new.group";
         String[] args = buildArgsForGroup(cluster, group, "--to-earliest", "--execute", "--topic", topic + ":0");
