@@ -16,8 +16,10 @@
  */
 package org.apache.kafka.tools;
 
+import org.apache.kafka.clients.CommonClientConfigs;
 import org.apache.kafka.common.Metric;
 import org.apache.kafka.common.MetricName;
+import org.apache.kafka.common.config.ConfigDef;
 import org.apache.kafka.common.utils.Utils;
 
 import java.io.PrintStream;
@@ -25,9 +27,13 @@ import java.util.Arrays;
 import java.util.HashSet;
 import java.util.List;
 import java.util.Map;
+import java.util.Properties;
 import java.util.Set;
 import java.util.TreeMap;
 import java.util.stream.Collectors;
+
+import joptsimple.OptionSet;
+import joptsimple.OptionSpec;
 
 public class ToolsUtils {
     /**
@@ -153,5 +159,14 @@ public class ToolsUtils {
         for (T t : toRemove)
             res.remove(t);
         return res;
+    }
+
+    public static long groupCommandTimeoutMs(OptionSet options, OptionSpec<Long> timeoutMsOpt, Properties adminClientProps) {
+        if (options.has(timeoutMsOpt))
+            return options.valueOf(timeoutMsOpt);
+        String defaultApiTimeoutMs = adminClientProps.getProperty(CommonClientConfigs.DEFAULT_API_TIMEOUT_MS_CONFIG);
+        if (defaultApiTimeoutMs != null)
+            return (Integer) ConfigDef.parseType(CommonClientConfigs.DEFAULT_API_TIMEOUT_MS_CONFIG, defaultApiTimeoutMs, ConfigDef.Type.INT);
+        return options.valueOf(timeoutMsOpt);
     }
 }
