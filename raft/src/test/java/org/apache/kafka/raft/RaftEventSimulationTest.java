@@ -48,6 +48,8 @@ import org.apache.kafka.snapshot.SnapshotReader;
 
 import org.junit.jupiter.api.Tag;
 import org.junit.jupiter.api.Test;
+import org.junit.jupiter.params.ParameterizedTest;
+import org.junit.jupiter.params.provider.ValueSource;
 import org.mockito.Mockito;
 
 import java.net.InetSocketAddress;
@@ -201,6 +203,83 @@ public class RaftEventSimulationTest {
             cluster.start(leaderId);
             scheduler.runUntil(() -> cluster.allReachedHighWatermark(highWatermark + 10));
         });
+    }
+
+    @ParameterizedTest
+    @ValueSource(ints = {4, 5, 6, 7, 8, 9})
+    void preferredSuccessorWinsElectionAfterGracefulLeaderShutdown(int numVoters) {
+        Cluster cluster = new Cluster(numVoters, 0, 1234L);
+        /* The other simulations lower this to keep their runtime down, but here the whole point is
+         * that the nominated successors stand for election one at a time, so use the production
+         * default to keep the gap between them wide enough to be meaningful.
+         */
+        cluster.electionBackoffMaxMs = QuorumConfig.DEFAULT_QUORUM_ELECTION_BACKOFF_MAX_MS;
+        MessageRouter router = new MessageRouter(cluster);
+        EventScheduler scheduler = schedulerWithDefaultInvariants(cluster);
+
+        cluster.startAll();
+        schedulePolling(scheduler, cluster, 3, 5);
+        scheduler.schedule(router::deliverAll, 0, 2, 1);
+        scheduler.runUntil(cluster::hasConsistentLeader);
+        // Every replica has fetched from the leader and is caught up with it
+        scheduler.runUntil(() -> cluster.allReachedHighWatermark(1));
+
+        int leaderId = cluster.latestLeader().orElseThrow(() ->
+            new AssertionError("Failed to find current leader")
+        );
+
+        // Read the ranking that the leader will put into its EndQuorumEpoch requests
+        LeaderState<Integer> leaderState = cluster
+            .nodeIfRunning(leaderId)
+            .orElseThrow(() -> new AssertionError("Leader " + leaderId + " is not running"))
+            .client
+            .quorum()
+            .leaderStateOrThrow();
+        List<Integer> preferredSuccessors = leaderState
+            .nonLeaderVotersByDescendingFetchOffset()
+            .stream()
+            .map(ReplicaKey::id)
+            .collect(Collectors.toList());
+
+        // A clean shutdown, so the leader resigns and nominates the successors above
+        long resignedAtMs = cluster.time.milliseconds();
+        cluster.shutdown(leaderId);
+
+        scheduler.runUntil(() ->
+            cluster.latestLeader().isPresent() && cluster.latestLeader().getAsInt() != leaderId
+        );
+
+        int newLeaderId = cluster.latestLeader().getAsInt();
+        long electionDurationMs = cluster.time.milliseconds() - resignedAtMs;
+        int position = preferredSuccessors.indexOf(newLeaderId);
+        int backoffBaseMs = cluster.electionBackoffMaxMs >> (preferredSuccessors.size() - 1);
+        long backoffOfWinnerMs = position <= 0 ? 0 : (long) backoffBaseMs << (position - 1);
+
+        System.out.printf(
+            "%s voters: leader %s resigned nominating %s. Node %s won at position %s, whose " +
+            "election backoff is %s ms, and the election took %s ms%n",
+            numVoters,
+            leaderId,
+            preferredSuccessors,
+            newLeaderId,
+            position,
+            backoffOfWinnerMs,
+            electionDurationMs
+        );
+
+        assertEquals(
+            preferredSuccessors.get(0).intValue(),
+            newLeaderId,
+            String.format(
+                "Leader %s resigned nominating %s in order of preference, so the first entry was " +
+                "expected to win, but %s won instead at position %s of that list, after %s ms",
+                leaderId,
+                preferredSuccessors,
+                newLeaderId,
+                position,
+                electionDurationMs
+            )
+        );
     }
 
     @Test
@@ -598,6 +677,7 @@ public class RaftEventSimulationTest {
         final Map<Integer, Node> voters = new HashMap<>();
         final Map<Integer, PersistentState> nodes = new HashMap<>();
         final Map<Integer, RaftNode> running = new HashMap<>();
+        int electionBackoffMaxMs = ELECTION_JITTER_MS;
 
         private Cluster(int numVoters, int numObservers, long seed) {
             this.random = new Random(seed);
@@ -828,7 +908,7 @@ public class RaftEventSimulationTest {
             configMap.put(QuorumConfig.QUORUM_REQUEST_TIMEOUT_MS_CONFIG, REQUEST_TIMEOUT_MS);
             configMap.put(QuorumConfig.QUORUM_RETRY_BACKOFF_MS_CONFIG, RETRY_BACKOFF_MS);
             configMap.put(QuorumConfig.QUORUM_ELECTION_TIMEOUT_MS_CONFIG, ELECTION_TIMEOUT_MS);
-            configMap.put(QuorumConfig.QUORUM_ELECTION_BACKOFF_MAX_MS_CONFIG, ELECTION_JITTER_MS);
+            configMap.put(QuorumConfig.QUORUM_ELECTION_BACKOFF_MAX_MS_CONFIG, electionBackoffMaxMs);
             configMap.put(QuorumConfig.QUORUM_FETCH_TIMEOUT_MS_CONFIG, FETCH_TIMEOUT_MS);
             configMap.put(QuorumConfig.QUORUM_LINGER_MS_CONFIG, LINGER_MS);
             QuorumConfig quorumConfig = new QuorumConfig(new AbstractConfig(QuorumConfig.CONFIG_DEF, configMap));

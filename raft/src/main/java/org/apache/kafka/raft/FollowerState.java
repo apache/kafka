@@ -49,6 +49,10 @@ public final class FollowerState implements EpochState {
      * it may be able to grant PreVotes.
      */
     private boolean hasFetchedFromLeader = false;
+    /* Used to track if the leader has resigned in this epoch. Once it has, granting a PreVote is
+     * no longer disruptive, so the replica may grant one even if it has already fetched.
+     */
+    private boolean hasLeaderResigned = false;
     private Optional<LogOffsetMetadata> highWatermark;
     /* For kraft.version 0, track if the leader has received updated voter information from this
      * follower.
@@ -154,6 +158,14 @@ public final class FollowerState implements EpochState {
         fetchTimer.reset(timeoutMs);
     }
 
+    /**
+     * Record that the leader of this epoch has resigned, after receiving an `EndQuorumEpoch`
+     * request from it.
+     */
+    public void setLeaderHasResigned() {
+        hasLeaderResigned = true;
+    }
+
     private long updateVoterPeriodMs() {
         /* Allow for a few rounds of fetch requests before attempting to update the voter state.
          *
@@ -237,17 +249,18 @@ public final class FollowerState implements EpochState {
 
     @Override
     public boolean canGrantVote(ReplicaKey replicaKey, boolean isLogUpToDate, boolean isPreVote) {
-        if (isPreVote && !hasFetchedFromLeader && isLogUpToDate) {
+        if (isPreVote && (!hasFetchedFromLeader || hasLeaderResigned) && isLogUpToDate) {
             return true;
         }
         log.debug(
             "Rejecting Vote request (preVote={}) from replica ({}) since we are in FollowerState with leader {} in " +
-                "epoch {}, hasFetchedFromLeader={}, replica's log is up-to-date={}",
+                "epoch {}, hasFetchedFromLeader={}, hasLeaderResigned={}, replica's log is up-to-date={}",
             isPreVote,
             replicaKey,
             leaderId,
             epoch,
             hasFetchedFromLeader,
+            hasLeaderResigned,
             isLogUpToDate
         );
         return false;
