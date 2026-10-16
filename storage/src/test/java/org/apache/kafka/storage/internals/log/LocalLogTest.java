@@ -326,12 +326,12 @@ class LocalLogTest {
             TestUtils.randomPartitionLogDir(TestUtils.tempDirectory()), config, scheduler);
         try {
             FileRecords first = fetchedRecords(firstLog);
-            FileRecords readable = spy(first);
+            FileRecords spiedFirst = spy(first);
             FileRecords second = fetchedRecords(secondLog);
             FileRecords otherDir = fetchedRecords(otherDirLog);
 
             for (int i = 0; i < 3; i++) {
-                first.transferFailureHandler().onTransferFailure(readable, 0, 10, new IOException("Broken pipe"));
+                first.transferFailureHandler().onTransferFailure(spiedFirst, 0, 10, new IOException("Broken pipe"));
                 second.transferFailureHandler().onTransferFailure(second, 0, 10, new IOException("Broken pipe"));
             }
             assertEquals(1, scheduled.size());
@@ -339,7 +339,7 @@ class LocalLogTest {
             assertEquals(2, scheduled.size());
 
             scheduled.get(0).run();
-            verify(readable).readFailure(0, 10);
+            verify(spiedFirst).readFailure(0, 10);
             second.transferFailureHandler().onTransferFailure(second, 0, 10, new IOException("Broken pipe"));
             assertEquals(3, scheduled.size());
         } finally {

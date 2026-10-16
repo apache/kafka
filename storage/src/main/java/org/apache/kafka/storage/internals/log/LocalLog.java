@@ -548,7 +548,7 @@ public class LocalLog {
      */
     private void checkReadAfterTransferFailure(FileRecords records, long position, int count, IOException transferFailure) {
         String logDir = parentDir;
-        if (logDirFailureChannel.hasOfflineLogDir(logDir) || !logDirFailureChannel.tryStartReadCheck(logDir))
+        if (!logDirFailureChannel.tryStartReadCheck(logDir))
             return;
         try {
             ScheduledFuture<?> check = scheduler.scheduleOnce("check-read-after-transfer-failure", () -> {
