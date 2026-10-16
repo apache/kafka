@@ -17,17 +17,24 @@
 package org.apache.kafka.clients.consumer;
 
 import org.apache.kafka.clients.ClientsTestUtils;
+import org.apache.kafka.clients.admin.RemoveMembersFromConsumerGroupOptions;
 import org.apache.kafka.common.TopicPartition;
 import org.apache.kafka.common.test.ClusterInstance;
 import org.apache.kafka.common.test.api.ClusterTest;
 import org.apache.kafka.common.test.api.ClusterTestDefaults;
 import org.apache.kafka.common.test.api.Type;
+import org.apache.kafka.test.TestUtils;
 
+import java.time.Duration;
+import java.util.ArrayList;
 import java.util.Collection;
+import java.util.Collections;
+import java.util.HashMap;
 import java.util.List;
 import java.util.Locale;
 import java.util.Map;
 import java.util.Set;
+import java.util.concurrent.TimeUnit;
 import java.util.concurrent.atomic.AtomicBoolean;
 import java.util.concurrent.atomic.AtomicReference;
 import java.util.function.BiConsumer;
@@ -613,6 +620,344 @@ public class PlaintextConsumerCallbackTest {
             );
         }
         assertTrue(partitionsRevoked.get());
+    }
+
+    @ClusterTest
+    public void testClassicEagerUnsubscribeCallbacks() throws Exception {
+        testUnsubscribeCallbacks(CallbackMode.CLASSIC_EAGER);
+    }
+
+    @ClusterTest
+    public void testClassicEagerEmptySubscriptionCallbacks() throws Exception {
+        testEmptySubscriptionCallbacks(CallbackMode.CLASSIC_EAGER);
+    }
+
+    @ClusterTest
+    public void testClassicEagerHandoffCallbacks() throws Exception {
+        testHandoffCallbacks(CallbackMode.CLASSIC_EAGER);
+    }
+
+    @ClusterTest
+    public void testClassicEagerEmptyAssignmentCallbacks() throws Exception {
+        testEmptyAssignmentCallbacks(CallbackMode.CLASSIC_EAGER);
+    }
+
+    @ClusterTest
+    public void testClassicEagerLostCallbacks() throws Exception {
+        testLostCallbacks(CallbackMode.CLASSIC_EAGER);
+    }
+
+    @ClusterTest
+    public void testClassicEagerShrinkingSubscriptionCallbacks() throws Exception {
+        testShrinkingSubscriptionCallbacks(CallbackMode.CLASSIC_EAGER);
+    }
+
+    @ClusterTest
+    public void testClassicCooperativeUnsubscribeCallbacks() throws Exception {
+        testUnsubscribeCallbacks(CallbackMode.CLASSIC_COOPERATIVE);
+    }
+
+    @ClusterTest
+    public void testClassicCooperativeEmptySubscriptionCallbacks() throws Exception {
+        testEmptySubscriptionCallbacks(CallbackMode.CLASSIC_COOPERATIVE);
+    }
+
+    @ClusterTest
+    public void testClassicCooperativeHandoffCallbacks() throws Exception {
+        testHandoffCallbacks(CallbackMode.CLASSIC_COOPERATIVE);
+    }
+
+    @ClusterTest
+    public void testClassicCooperativeEmptyAssignmentCallbacks() throws Exception {
+        testEmptyAssignmentCallbacks(CallbackMode.CLASSIC_COOPERATIVE);
+    }
+
+    @ClusterTest
+    public void testClassicCooperativeLostCallbacks() throws Exception {
+        testLostCallbacks(CallbackMode.CLASSIC_COOPERATIVE);
+    }
+
+    @ClusterTest
+    public void testClassicCooperativeShrinkingSubscriptionCallbacks() throws Exception {
+        testShrinkingSubscriptionCallbacks(CallbackMode.CLASSIC_COOPERATIVE);
+    }
+
+    @ClusterTest
+    public void testConsumerUnsubscribeCallbacks() throws Exception {
+        testUnsubscribeCallbacks(CallbackMode.CONSUMER);
+    }
+
+    @ClusterTest
+    public void testConsumerEmptySubscriptionCallbacks() throws Exception {
+        testEmptySubscriptionCallbacks(CallbackMode.CONSUMER);
+    }
+
+    @ClusterTest
+    public void testConsumerHandoffCallbacks() throws Exception {
+        testHandoffCallbacks(CallbackMode.CONSUMER);
+    }
+
+    @ClusterTest
+    public void testConsumerEmptyAssignmentCallbacks() throws Exception {
+        testEmptyAssignmentCallbacks(CallbackMode.CONSUMER);
+    }
+
+    @ClusterTest
+    public void testConsumerLostCallbacks() throws Exception {
+        testLostCallbacks(CallbackMode.CONSUMER);
+    }
+
+    @ClusterTest
+    public void testConsumerShrinkingSubscriptionCallbacks() throws Exception {
+        testShrinkingSubscriptionCallbacks(CallbackMode.CONSUMER);
+    }
+
+    @ClusterTest
+    public void testClassicEagerAssignmentBecomesEmptyCallbacks() throws Exception {
+        testAssignmentBecomesEmptyCallbacks(CallbackMode.CLASSIC_EAGER);
+    }
+
+    @ClusterTest
+    public void testClassicCooperativeAssignmentBecomesEmptyCallbacks() throws Exception {
+        testAssignmentBecomesEmptyCallbacks(CallbackMode.CLASSIC_COOPERATIVE);
+    }
+
+    @ClusterTest
+    public void testConsumerAssignmentBecomesEmptyCallbacks() throws Exception {
+        testAssignmentBecomesEmptyCallbacks(CallbackMode.CONSUMER);
+    }
+
+    private Consumer<byte[], byte[]> createCallbackConsumer(CallbackMode mode) {
+        return createCallbackConsumer(mode, null);
+    }
+
+    private Consumer<byte[], byte[]> createCallbackConsumer(CallbackMode mode, String instanceId) {
+        Map<String, Object> config = new HashMap<>();
+        if (instanceId != null) {
+            config.put(ConsumerConfig.GROUP_INSTANCE_ID_CONFIG, instanceId);
+        }
+        config.put(ConsumerConfig.GROUP_ID_CONFIG, "callback-group");
+        config.put(GROUP_PROTOCOL_CONFIG, mode == CallbackMode.CONSUMER ? "consumer" : "classic");
+        config.put(ENABLE_AUTO_COMMIT_CONFIG, false);
+        if (mode != CallbackMode.CONSUMER) {
+            config.put(ConsumerConfig.PARTITION_ASSIGNMENT_STRATEGY_CONFIG,
+                    mode == CallbackMode.CLASSIC_COOPERATIVE ? CooperativeStickyAssignor.class.getName() : RangeAssignor.class.getName());
+        }
+        return cluster.consumer(config);
+    }
+
+    private enum CallbackMode {
+        CLASSIC_EAGER, CLASSIC_COOPERATIVE, CONSUMER
+    }
+
+    private enum CallbackType {
+        ASSIGNED, REVOKED, LOST
+    }
+
+    private static class CallbackEvent {
+        private final String member;
+        private final CallbackType type;
+        private final Set<TopicPartition> partitions;
+
+        CallbackEvent(String member, CallbackType type, Collection<TopicPartition> partitions) {
+            this.member = member;
+            this.type = type;
+            this.partitions = Set.copyOf(partitions);
+        }
+
+        @Override
+        public String toString() {
+            return member + ":" + type + partitions;
+        }
+    }
+
+    private static RebalanceListener recordingListener(String member, List<CallbackEvent> events) {
+        return new RebalanceListener() {
+            @Override
+            public void onPartitionsAssigned(Collection<TopicPartition> partitions, RebalanceConsumer consumer) {
+                events.add(new CallbackEvent(member, CallbackType.ASSIGNED, partitions));
+            }
+
+            @Override
+            public void onPartitionsRevoked(Collection<TopicPartition> partitions, RebalanceConsumer consumer) {
+                events.add(new CallbackEvent(member, CallbackType.REVOKED, partitions));
+            }
+
+            @Override
+            public void onPartitionsLost(Collection<TopicPartition> partitions, RebalanceConsumer consumer) {
+                events.add(new CallbackEvent(member, CallbackType.LOST, partitions));
+            }
+        };
+    }
+
+    private static void awaitAssignment(Consumer<byte[], byte[]> consumer, Set<TopicPartition> expected) throws InterruptedException {
+        ClientsTestUtils.pollUntilTrue(consumer, () -> consumer.assignment().equals(expected), "Expected assignment " + expected);
+    }
+
+    private void testUnsubscribeCallbacks(CallbackMode mode) throws Exception {
+        testUnsubscribeCallbacks(mode, false);
+    }
+
+    private void testEmptySubscriptionCallbacks(CallbackMode mode) throws Exception {
+        testUnsubscribeCallbacks(mode, true);
+    }
+
+    private void testUnsubscribeCallbacks(CallbackMode mode, boolean emptySubscription) throws Exception {
+        cluster.createTopic(topic, 2, (short) 1);
+        Set<TopicPartition> expected = Set.of(tp, new TopicPartition(topic, 1));
+        List<CallbackEvent> events = new ArrayList<>();
+        try (var consumer = createCallbackConsumer(mode)) {
+            consumer.setRebalanceListener(recordingListener("first", events));
+            consumer.subscribe(List.of(topic));
+            awaitAssignment(consumer, expected);
+            events.clear();
+            if (emptySubscription) {
+                consumer.subscribe(List.of());
+            } else {
+                consumer.unsubscribe();
+            }
+            assertEquals(Set.of(), consumer.assignment());
+            assertEquals(1, events.size(), events.toString());
+            assertEquals(CallbackType.REVOKED, events.get(0).type);
+            assertEquals(expected, events.get(0).partitions);
+        }
+    }
+
+    private void testHandoffCallbacks(CallbackMode mode) throws Exception {
+        cluster.createTopic(topic, 2, (short) 1);
+        Set<TopicPartition> all = Set.of(tp, new TopicPartition(topic, 1));
+        List<CallbackEvent> events = new ArrayList<>();
+        try (var first = createCallbackConsumer(mode); var second = createCallbackConsumer(mode)) {
+            first.setRebalanceListener(recordingListener("first", events));
+            second.setRebalanceListener(recordingListener("second", events));
+            first.subscribe(List.of(topic));
+            awaitAssignment(first, all);
+            events.clear();
+            second.subscribe(List.of(topic));
+            TestUtils.waitForCondition(() -> {
+                first.poll(Duration.ofMillis(100));
+                second.poll(Duration.ofMillis(100));
+                return first.assignment().size() == 1 && second.assignment().size() == 1;
+            }, "Expected partitions to be shared between both consumers");
+            Set<TopicPartition> moved = Set.copyOf(second.assignment());
+            assertTrue(Collections.disjoint(first.assignment(), moved));
+            var revoked = events.stream().filter(e -> e.member.equals("first") && e.type == CallbackType.REVOKED).toList();
+            assertEquals(1, revoked.size(), events.toString());
+            assertEquals(mode == CallbackMode.CLASSIC_EAGER ? all : moved, revoked.get(0).partitions);
+            var assigned = events.stream().filter(e -> e.member.equals("second") && e.type == CallbackType.ASSIGNED && e.partitions.equals(moved)).toList();
+            assertEquals(1, assigned.size(), events.toString());
+            assertTrue(events.indexOf(revoked.get(0)) < events.indexOf(assigned.get(0)), events.toString());
+            assertTrue(events.stream().noneMatch(e -> e.type == CallbackType.LOST), events.toString());
+        }
+    }
+
+    private void testEmptyAssignmentCallbacks(CallbackMode mode) throws Exception {
+        // Fix RangeAssignor ordering so the joining member gets no partitions.
+        // Sticky assignors retain the partition on its original owner.
+        cluster.createTopic(topic, 1, (short) 1);
+        List<CallbackEvent> events = new ArrayList<>();
+        try (var first = createCallbackConsumer(mode, "a"); var second = createCallbackConsumer(mode, "z")) {
+            first.setRebalanceListener(recordingListener("first", events));
+            second.setRebalanceListener(recordingListener("second", events));
+            first.subscribe(List.of(topic));
+            awaitAssignment(first, Set.of(tp));
+            events.clear();
+            second.subscribe(List.of(topic));
+            TestUtils.waitForCondition(() -> {
+                first.poll(Duration.ofMillis(100));
+                second.poll(Duration.ofMillis(100));
+                return events.stream().anyMatch(e -> e.member.equals("second") && e.type == CallbackType.ASSIGNED && e.partitions.isEmpty());
+            }, "Expected an empty assignment callback");
+            var empty = events.stream().filter(e -> e.member.equals("second") && e.type == CallbackType.ASSIGNED && e.partitions.isEmpty()).toList();
+            assertEquals(1, empty.size(), events.toString());
+            assertTrue(second.assignment().isEmpty());
+            assertEquals(Set.of(tp), first.assignment());
+            assertTrue(events.stream().noneMatch(e -> e.type == CallbackType.LOST), events.toString());
+        }
+    }
+
+    private void testAssignmentBecomesEmptyCallbacks(CallbackMode mode) throws Exception {
+        String other = "other";
+        TopicPartition retained = new TopicPartition(other, 0);
+        cluster.createTopic(topic, 1, (short) 1);
+        cluster.createTopic(other, 1, (short) 1);
+        List<CallbackEvent> events = new ArrayList<>();
+        // RangeAssignor orders static members by instance ID. Cooperative assignors keep
+        // the other partition on its existing owner when the first member drops topic.
+        try (var first = createCallbackConsumer(mode, "z"); var second = createCallbackConsumer(mode, "a")) {
+            first.setRebalanceListener(recordingListener("first", events));
+            second.setRebalanceListener(recordingListener("second", events));
+            second.subscribe(List.of(other));
+            awaitAssignment(second, Set.of(retained));
+            first.subscribe(List.of(topic, other));
+            TestUtils.waitForCondition(() -> {
+                first.poll(Duration.ofMillis(100));
+                second.poll(Duration.ofMillis(100));
+                return first.assignment().equals(Set.of(tp)) && second.assignment().equals(Set.of(retained));
+            }, "Expected separate initial assignments");
+            events.clear();
+            first.subscribe(List.of(other));
+            TestUtils.waitForCondition(() -> {
+                first.poll(Duration.ofMillis(100));
+                second.poll(Duration.ofMillis(100));
+                return events.stream().anyMatch(e -> e.member.equals("first") && e.type == CallbackType.ASSIGNED && e.partitions.isEmpty());
+            }, "Expected the original owner to receive an empty assignment callback");
+            var firstEvents = events.stream().filter(e -> e.member.equals("first")).toList();
+            assertEquals(2, firstEvents.size(), events.toString());
+            assertEquals(CallbackType.REVOKED, firstEvents.get(0).type);
+            assertEquals(Set.of(tp), firstEvents.get(0).partitions);
+            assertEquals(CallbackType.ASSIGNED, firstEvents.get(1).type);
+            assertEquals(Set.of(), firstEvents.get(1).partitions);
+            assertTrue(first.assignment().isEmpty());
+            assertEquals(Set.of(retained), second.assignment());
+            assertTrue(events.stream().noneMatch(e -> e.type == CallbackType.LOST), events.toString());
+        }
+    }
+
+    private void testLostCallbacks(CallbackMode mode) throws Exception {
+        cluster.createTopic(topic, 2, (short) 1);
+        Set<TopicPartition> expected = Set.of(tp, new TopicPartition(topic, 1));
+        List<CallbackEvent> events = new ArrayList<>();
+        try (var consumer = createCallbackConsumer(mode); var admin = cluster.admin()) {
+            consumer.setRebalanceListener(recordingListener("first", events));
+            consumer.subscribe(List.of(topic));
+            awaitAssignment(consumer, expected);
+            events.clear();
+            admin.removeMembersFromConsumerGroup(consumer.groupMetadata().groupId(), new RemoveMembersFromConsumerGroupOptions()).all().get(30, TimeUnit.SECONDS);
+            ClientsTestUtils.pollUntilTrue(consumer,
+                    () -> events.stream().anyMatch(e -> e.type == CallbackType.LOST) &&
+                            events.stream().anyMatch(e -> e.type == CallbackType.ASSIGNED),
+                    "Expected partition loss followed by rejoining the group");
+            assertEquals(2, events.size(), events.toString());
+            assertEquals(CallbackType.LOST, events.get(0).type);
+            assertEquals(expected, events.get(0).partitions);
+            assertEquals(CallbackType.ASSIGNED, events.get(1).type);
+            assertEquals(expected, events.get(1).partitions);
+            assertEquals(expected, consumer.assignment());
+        }
+    }
+
+    private void testShrinkingSubscriptionCallbacks(CallbackMode mode) throws Exception {
+        String other = "other";
+        TopicPartition removed = new TopicPartition(other, 0);
+        cluster.createTopic(topic, 1, (short) 1);
+        cluster.createTopic(other, 1, (short) 1);
+        List<CallbackEvent> events = new ArrayList<>();
+        try (var consumer = createCallbackConsumer(mode)) {
+            consumer.setRebalanceListener(recordingListener("first", events));
+            consumer.subscribe(List.of(topic, other));
+            awaitAssignment(consumer, Set.of(tp, removed));
+            events.clear();
+            consumer.subscribe(List.of(topic));
+            ClientsTestUtils.pollUntilTrue(consumer,
+                    () -> consumer.assignment().equals(Set.of(tp)) && events.stream().anyMatch(e -> e.type == CallbackType.ASSIGNED),
+                    "Expected subscription change callbacks");
+            assertEquals(2, events.size(), events.toString());
+            assertEquals(CallbackType.REVOKED, events.get(0).type);
+            assertEquals(mode == CallbackMode.CLASSIC_EAGER ? Set.of(tp, removed) : Set.of(removed), events.get(0).partitions);
+            assertEquals(CallbackType.ASSIGNED, events.get(1).type);
+            assertEquals(mode == CallbackMode.CLASSIC_EAGER ? Set.of(tp) : Set.of(), events.get(1).partitions);
+        }
     }
 
     private Consumer<byte[], byte[]> createConsumer(GroupProtocol protocol) {
