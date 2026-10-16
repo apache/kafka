@@ -167,17 +167,17 @@ Note: These examples use `QueryableStoreTypes.keyValueStore()` and `ReadOnlyKeyV
     
     // Define the processing topology (here: WordCount)
     KGroupedStream<String, String> groupedByWord = textLines
-      .flatMapValues(value -> Arrays.asList(value.toLowerCase().split("\W+")))
+      .flatMapValues(value -> Arrays.asList(value.toLowerCase().split("\\W+")))
       .groupBy((key, word) -> word, Grouped.with(stringSerde, stringSerde));
     
     // Create a key-value store named "CountsKeyValueStore" for the all-time word counts
-    groupedByWord.count(Materialized.<String, String, KeyValueStore<Bytes, byte[]>as("CountsKeyValueStore"));
+    groupedByWord.count(Materialized.<String, Long, KeyValueStore<Bytes, byte[]>>as("CountsKeyValueStore"));
     
     // Start an instance of the topology
-    KafkaStreams streams = new KafkaStreams(builder, props);
+    KafkaStreams streams = new KafkaStreams(builder.build(), props);
     streams.start();
 
-After the application has started, you can get access to "CountsKeyValueStore" and then query it via the [ReadOnlyKeyValueStore](https://github.com/apache/kafka/blob/4.3/streams/src/main/java/org/apache/kafka/streams/state/ReadOnlyKeyValueStore.java) API:
+After the application has started, you can get access to "CountsKeyValueStore" and then query it via the [ReadOnlyKeyValueStore](/{version}/javadoc/org/apache/kafka/streams/state/ReadOnlyKeyValueStore.html) API:
     
     
     // Get the key-value store CountsKeyValueStore
@@ -231,14 +231,14 @@ Note: These examples use `QueryableStoreTypes.windowStore()` and `ReadOnlyWindow
     
     // Define the processing topology (here: WordCount)
     KGroupedStream<String, String> groupedByWord = textLines
-      .flatMapValues(value -> Arrays.asList(value.toLowerCase().split("\W+")))
+      .flatMapValues(value -> Arrays.asList(value.toLowerCase().split("\\W+")))
       .groupBy((key, word) -> word, Grouped.with(stringSerde, stringSerde));
     
     // Create a window state store named "CountsWindowStore" that contains the word counts for every minute
     groupedByWord.windowedBy(TimeWindows.ofSizeWithNoGrace(Duration.ofSeconds(60)))
-      .count(Materialized.<String, Long, WindowStore<Bytes, byte[]>as("CountsWindowStore"));
+      .count(Materialized.<String, Long, WindowStore<Bytes, byte[]>>as("CountsWindowStore"));
 
-After the application has started, you can get access to "CountsWindowStore" and then query it via the [ReadOnlyWindowStore](https://github.com/apache/kafka/blob/4.3/streams/src/main/java/org/apache/kafka/streams/state/ReadOnlyWindowStore.java) API:
+After the application has started, you can get access to "CountsWindowStore" and then query it via the [ReadOnlyWindowStore](/{version}/javadoc/org/apache/kafka/streams/state/ReadOnlyWindowStore.html) API:
     
     
     // Get the window store named "CountsWindowStore"
@@ -526,7 +526,7 @@ The class/interface hierarchy for your custom store might look something like:
 
 To make this store queryable you must:
 
-  * Provide an implementation of [QueryableStoreType](https://github.com/apache/kafka/blob/4.3/streams/src/main/java/org/apache/kafka/streams/state/QueryableStoreType.java).
+  * Provide an implementation of [QueryableStoreType](/{version}/javadoc/org/apache/kafka/streams/state/QueryableStoreType.html).
   * Provide a wrapper class that has access to all of the underlying instances of the store and is used for querying.
 
 
@@ -549,7 +549,7 @@ Here is how to implement `QueryableStoreType`:
 
 A wrapper class is required because each instance of a Kafka Streams application may run multiple stream tasks and manage multiple local instances of a particular state store. The wrapper class hides this complexity and lets you query a "logical" state store by name without having to know about all of the underlying local instances of that state store.
 
-When implementing your wrapper class you must use the [StateStoreProvider](https://github.com/apache/kafka/blob/4.3/streams/src/main/java/org/apache/kafka/streams/state/internals/StateStoreProvider.java) interface to get access to the underlying instances of your store. `StateStoreProvider#stores(String storeName, QueryableStoreType<T> queryableStoreType)` returns a `List` of state stores with the given storeName and of the type as defined by `queryableStoreType`.
+When implementing your wrapper class you must use the [StateStoreProvider](https://github.com/apache/kafka/blob/trunk/streams/src/main/java/org/apache/kafka/streams/state/internals/StateStoreProvider.java) interface to get access to the underlying instances of your store. `StateStoreProvider#stores(String storeName, QueryableStoreType<T> queryableStoreType)` returns a `List` of state stores with the given storeName and of the type as defined by `queryableStoreType`.
 
 Here is an example implementation of the wrapper:
     
@@ -844,7 +844,7 @@ There are many ways to add an RPC layer. The only requirements are that the RPC 
 
 ## Exposing the RPC endpoints of your application
 
-To enable remote state store discovery in a distributed Kafka Streams application, you must set the [configuration property](../config-streams#streams-developer-guide-required-configs) in the config properties. The `application.server` property defines a unique `host:port` pair that points to the RPC endpoint of the respective instance of a Kafka Streams application. The value of this configuration property will vary across the instances of your application. When this property is set, Kafka Streams will keep track of the RPC endpoint information for every instance of an application, its state stores, and assigned stream partitions through instances of [StreamsMetadata](/{version}/javadoc/org/apache/kafka/streams/state/StreamsMetadata.html).
+To enable remote state store discovery in a distributed Kafka Streams application, you must set the [configuration property](../config-streams#streams-developer-guide-required-configs) in the config properties. The `application.server` property defines a unique `host:port` pair that points to the RPC endpoint of the respective instance of a Kafka Streams application. The value of this configuration property will vary across the instances of your application. When this property is set, Kafka Streams will keep track of the RPC endpoint information for every instance of an application, its state stores, and assigned stream partitions through instances of [StreamsMetadata](/{version}/javadoc/org/apache/kafka/streams/StreamsMetadata.html).
 
 **Tip**
 
@@ -863,18 +863,18 @@ This example shows how to configure and run a Kafka Streams application that sup
     
     StreamsBuilder builder = new StreamsBuilder();
     
-    KStream<String, String> textLines = builder.stream(stringSerde, stringSerde, "word-count-input");
+    KStream<String, String> textLines = builder.stream("word-count-input", Consumed.with(stringSerde, stringSerde));
     
     final KGroupedStream<String, String> groupedByWord = textLines
-        .flatMapValues(value -> Arrays.asList(value.toLowerCase().split("\W+")))
+        .flatMapValues(value -> Arrays.asList(value.toLowerCase().split("\\W+")))
         .groupBy((key, word) -> word, Grouped.with(stringSerde, stringSerde));
     
     // This call to `count()` creates a state store named "word-count".
     // The state store is discoverable and can be queried interactively.
-    groupedByWord.count(Materialized.<String, Long, KeyValueStore<Bytes, byte[]>as("word-count"));
+    groupedByWord.count(Materialized.<String, Long, KeyValueStore<Bytes, byte[]>>as("word-count"));
     
     // Start an instance of the topology
-    KafkaStreams streams = new KafkaStreams(builder, props);
+    KafkaStreams streams = new KafkaStreams(builder.build(), props);
     streams.start();
     
     // Then, create and start the actual RPC service for remote access to this
@@ -889,25 +889,28 @@ This example shows how to configure and run a Kafka Streams application that sup
 
 ## Discovering and accessing application instances and their local state stores
 
-The following methods return [StreamsMetadata](/{version}/javadoc/org/apache/kafka/streams/state/StreamsMetadata.html) objects, which provide meta-information about application instances such as their RPC endpoint and locally available state stores.
+The following methods return [StreamsMetadata](/{version}/javadoc/org/apache/kafka/streams/StreamsMetadata.html) objects, which provide meta-information about application instances such as their RPC endpoint and locally available state stores.
 
-  * `KafkaStreams#allMetadata()`: find all instances of this application
-  * `KafkaStreams#allMetadataForStore(String storeName)`: find those applications instances that manage local instances of the state store "storeName"
-  * `KafkaStreams#metadataForKey(String storeName, K key, Serializer<K> keySerializer)`: using the default stream partitioning strategy, find the one application instance that holds the data for the given key in the given state store
-  * `KafkaStreams#metadataForKey(String storeName, K key, StreamPartitioner<K, ?> partitioner)`: using `partitioner`, find the one application instance that holds the data for the given key in the given state store
+  * `KafkaStreams#metadataForAllStreamsClients()`: find all instances of this application
+  * `KafkaStreams#streamsMetadataForStore(String storeName)`: find those applications instances that manage local instances of the state store "storeName"
+
+The following methods return [KeyQueryMetadata](/{version}/javadoc/org/apache/kafka/streams/KeyQueryMetadata.html), which provides the active and standby application instances for a key.
+
+  * `KafkaStreams#queryMetadataForKey(String storeName, K key, Serializer<K> keySerializer)`: using the default stream partitioning strategy, find the one application instance that holds the data for the given key in the given state store
+  * `KafkaStreams#queryMetadataForKey(String storeName, K key, StreamPartitioner<K, ?> partitioner)`: using `partitioner`, find the one application instance that holds the data for the given key in the given state store
 
 
 
 Attention
 
-If `application.server` is not configured for an application instance, then the above methods will not find any [StreamsMetadata](/{version}/javadoc/org/apache/kafka/streams/state/StreamsMetadata.html) for it.
+If `application.server` is not configured for an application instance, then `metadataForAllStreamsClients()` and `streamsMetadataForStore()` will not find any [StreamsMetadata](/{version}/javadoc/org/apache/kafka/streams/StreamsMetadata.html) for it. `queryMetadataForKey()` cannot provide a usable host for a key assigned to that instance.
 
 For example, we can now find the `StreamsMetadata` for the state store named "word-count" that we defined in the code example shown in the previous section:
     
     
     KafkaStreams streams = ...;
     // Find all the locations of local instances of the state store named "word-count"
-    Collection<StreamsMetadata> wordCountHosts = streams.allMetadataForStore("word-count");
+    Collection<StreamsMetadata> wordCountHosts = streams.streamsMetadataForStore("word-count");
     
     // For illustrative purposes, we assume using an HTTP client to talk to remote app instances.
     HttpClient http = ...;
@@ -915,19 +918,19 @@ For example, we can now find the `StreamsMetadata` for the state store named "wo
     // Get the word count for word (aka key) 'alice': Approach 1
     //
     // We first find the one app instance that manages the count for 'alice' in its local state stores.
-    StreamsMetadata metadata = streams.metadataForKey("word-count", "alice", Serdes.String().serializer());
+    KeyQueryMetadata metadata = streams.queryMetadataForKey("word-count", "alice", Serdes.String().serializer());
     // Then, we query only that single app instance for the latest count of 'alice'.
     // Note: The RPC URL shown below is fictitious and only serves to illustrate the idea.  Ultimately,
     // the URL (or, in general, the method of communication) will depend on the RPC layer you opted to
     // implement.  Again, we provide end-to-end demo applications (such as KafkaMusicExample) that showcase
     // how to implement such an RPC layer.
-    Long result = http.getLong("http://" + metadata.host() + ":" + metadata.port() + "/word-count/alice");
+    Long result = http.getLong("http://" + metadata.activeHost().host() + ":" + metadata.activeHost().port() + "/word-count/alice");
     
     // Get the word count for word (aka key) 'alice': Approach 2
     //
     // Alternatively, we could also choose (say) a brute-force approach where we query every app instance
     // until we find the one that happens to know about 'alice'.
-    Optional<Long> result = streams.allMetadataForStore("word-count")
+    Optional<Long> result = streams.streamsMetadataForStore("word-count")
         .stream()
         .map(streamsMetadata -> {
             // Construct the (fictituous) full endpoint URL to query the current remote application instance
