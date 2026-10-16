@@ -162,11 +162,28 @@ public class DefaultTaskManagerTest {
         awaitingThread.start();
         verify(tasks, timeout(VERIFICATION_TIMEOUT).atLeastOnce()).activeInitializedTasks();
 
+        ensureTaskMakesProgress();
         taskManager.signalTaskExecutors();
 
         assertTrue(awaitingRunnable.awaitDone.await(VERIFICATION_TIMEOUT, TimeUnit.MILLISECONDS));
 
         awaitingRunnable.shutdown();
+        awaitingThread.join();
+    }
+
+    @Test
+    public void shouldContinueAwaitingAfterSignalWithoutProcessableTasks() throws InterruptedException {
+        final AwaitingRunnable awaitingRunnable = new AwaitingRunnable();
+        final Thread awaitingThread = new Thread(awaitingRunnable);
+        awaitingThread.start();
+        verify(tasks, timeout(VERIFICATION_TIMEOUT).atLeastOnce()).activeInitializedTasks();
+
+        taskManager.signalTaskExecutors();
+
+        assertFalse(awaitingRunnable.awaitDone.await(100, TimeUnit.MILLISECONDS));
+
+        awaitingRunnable.shutdown();
+        assertTrue(awaitingRunnable.awaitDone.await(VERIFICATION_TIMEOUT, TimeUnit.MILLISECONDS));
         awaitingThread.join();
     }
 
@@ -197,6 +214,7 @@ public class DefaultTaskManagerTest {
         awaitingThread.start();
         verify(tasks, timeout(VERIFICATION_TIMEOUT).atLeastOnce()).activeInitializedTasks();
 
+        ensureTaskMakesProgress();
         taskManager.add(Collections.singleton(task));
 
         assertTrue(awaitingRunnable.awaitDone.await(VERIFICATION_TIMEOUT, TimeUnit.MILLISECONDS));
@@ -209,6 +227,7 @@ public class DefaultTaskManagerTest {
     public void shouldReturnFromAwaitOnUnlocking() throws InterruptedException {
         taskManager.add(Collections.singleton(task));
         taskManager.lockTasks(Collections.singleton(task.id()));
+        ensureTaskMakesProgress();
         final AwaitingRunnable awaitingRunnable = new AwaitingRunnable();
         final Thread awaitingThread = new Thread(awaitingRunnable);
         awaitingThread.start();
