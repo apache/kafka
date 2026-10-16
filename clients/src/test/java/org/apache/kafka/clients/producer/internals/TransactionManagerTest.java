@@ -736,6 +736,40 @@ public class TransactionManagerTest {
 
     @ParameterizedTest
     @ValueSource(booleans = {true, false})
+    public void testSplitOfBatchBehindOldestInflightBatchIsNotCountedTwiceInBrokerDeduplicationWindow(boolean transactionV2Enabled) {
+        initializeTransactionManager(Optional.empty(), transactionV2Enabled);
+        initializeIdempotentProducerId(producerId, epoch);
+        transactionManager.maybeUpdateProducerIdAndEpoch(tp0);
+
+        // A batch at sequence 0, a batch with two records at sequence 1, and a batch at sequence 3.
+        ProducerBatch first = writeIdempotentBatchWithValue(transactionManager, tp0, "0");
+        ProducerBatch bigBatch = writeBatchWithValues(transactionManager, tp0, false, "1", "2");
+        ProducerBatch third = writeIdempotentBatchWithValue(transactionManager, tp0, "3");
+        assertEquals(0, first.baseSequence());
+        assertEquals(1, bigBatch.baseSequence());
+        assertEquals(2, bigBatch.recordCount);
+        assertEquals(3, third.baseSequence());
+
+        // The third batch is acknowledged, then the big batch is rejected as too large and split while the first
+        // batch is still in flight. The big batch is removed and re-added with the sequences it had, so it must
+        // not be counted both as completed and as in flight.
+        completeIdempotentBatch(third, 500L);
+        transactionManager.removeInFlightBatch(bigBatch);
+        for (int sequence = bigBatch.baseSequence(); sequence < bigBatch.baseSequence() + bigBatch.recordCount; sequence++) {
+            ProducerBatch splitBatch = batchWithValue(tp0, String.valueOf(sequence));
+            splitBatch.setProducerState(transactionManager.producerIdAndEpoch(), sequence, false);
+            transactionManager.addInFlightBatch(splitBatch);
+            splitBatch.close();
+        }
+
+        // Sequences 1, 2 and 3 were sent after the first batch, so one more batch fits in the window.
+        assertFalse(transactionManager.wouldExceedBrokerDeduplicationWindow(tp0));
+        writeIdempotentBatchWithValue(transactionManager, tp0, "4");
+        assertTrue(transactionManager.wouldExceedBrokerDeduplicationWindow(tp0));
+    }
+
+    @ParameterizedTest
+    @ValueSource(booleans = {true, false})
     public void testFatallyFailedBatchShiftsBatchesCompletedAheadOfOldestInflightBatch(boolean transactionV2Enabled) {
         initializeTransactionManager(Optional.of(transactionalId), transactionV2Enabled);
         doInitTransactions();
