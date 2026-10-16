@@ -145,15 +145,15 @@ public class MockConsumerTest {
     public void testRebalanceListener() {
         final List<TopicPartition> revoked = new ArrayList<>();
         final List<TopicPartition> assigned = new ArrayList<>();
-        ConsumerRebalanceListener consumerRebalanceListener = new ConsumerRebalanceListener() {
+        RebalanceListener rebalanceListener = new RebalanceListener() {
             @Override
-            public void onPartitionsRevoked(Collection<TopicPartition> partitions) {
+            public void onPartitionsRevoked(Collection<TopicPartition> partitions, RebalanceConsumer rebalanceConsumer) {
                 revoked.clear();
                 revoked.addAll(partitions);
             }
 
             @Override
-            public void onPartitionsAssigned(Collection<TopicPartition> partitions) {
+            public void onPartitionsAssigned(Collection<TopicPartition> partitions, RebalanceConsumer rebalanceConsumer) {
                 if (partitions.isEmpty()) {
                     return;
                 }
@@ -163,7 +163,8 @@ public class MockConsumerTest {
         };
 
 
-        consumer.subscribe(Collections.singleton("test"), consumerRebalanceListener);
+        consumer.setRebalanceListener(rebalanceListener);
+        consumer.subscribe(Collections.singleton("test"));
         assertEquals(0, consumer.poll(Duration.ZERO).count());
         List<TopicPartition> topicPartitionList = Arrays.asList(new TopicPartition("test", 0), new TopicPartition("test", 1));
         consumer.rebalance(topicPartitionList);
@@ -239,18 +240,19 @@ public class MockConsumerTest {
 
         List<TopicPartition> lost = new ArrayList<>();
         List<TopicPartition> revoked = new ArrayList<>();
-        consumer.subscribe(List.of("test"), new ConsumerRebalanceListener() {
+        consumer.setRebalanceListener(new RebalanceListener() {
             @Override
-            public void onPartitionsRevoked(Collection<TopicPartition> partitions) {
+            public void onPartitionsRevoked(Collection<TopicPartition> partitions, RebalanceConsumer rebalanceConsumer) {
                 revoked.addAll(partitions);
             }
             @Override
-            public void onPartitionsAssigned(Collection<TopicPartition> partitions) {}
+            public void onPartitionsAssigned(Collection<TopicPartition> partitions, RebalanceConsumer rebalanceConsumer) {}
             @Override
-            public void onPartitionsLost(Collection<TopicPartition> partitions) {
+            public void onPartitionsLost(Collection<TopicPartition> partitions, RebalanceConsumer rebalanceConsumer) {
                 lost.addAll(partitions);
             }
         });
+        consumer.subscribe(List.of("test"));
 
         consumer.rebalance(assigned);
         consumer.losePartitions(List.of(tp0));

@@ -1164,13 +1164,13 @@ public class ConsumerSubscriptionStateTest {
     @Test
     public void testExceptionFromCallbackPropagates() {
         RuntimeException expected = new RuntimeException("boom");
-        ConsumerRebalanceListener userListener = new ConsumerRebalanceListener() {
+        RebalanceListener userListener = new RebalanceListener() {
             @Override
-            public void onPartitionsAssigned(Collection<TopicPartition> partitions) {
+            public void onPartitionsAssigned(Collection<TopicPartition> partitions, RebalanceConsumer rc) {
                 throw expected;
             }
             @Override
-            public void onPartitionsRevoked(Collection<TopicPartition> partitions) {}
+            public void onPartitionsRevoked(Collection<TopicPartition> partitions, RebalanceConsumer rc) {}
         };
 
         state = new ConsumerSubscriptionState(new LogContext(), AutoOffsetResetStrategy.NONE);
