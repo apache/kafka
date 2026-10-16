@@ -507,35 +507,6 @@ public class KafkaAdminClientTest extends KafkaAdminClientTestBase {
         }
     }
 
-    private static DescribeClusterResponse prepareDescribeClusterResponse(
-        int throttleTimeMs,
-        Collection<Node> brokers,
-        String clusterId,
-        int controllerId,
-        int clusterAuthorizedOperations,
-        boolean sentToController
-    ) {
-        DescribeClusterResponseData data = new DescribeClusterResponseData()
-            .setErrorCode(Errors.NONE.code())
-            .setThrottleTimeMs(throttleTimeMs)
-            .setControllerId(controllerId)
-            .setClusterId(clusterId)
-            .setClusterAuthorizedOperations(clusterAuthorizedOperations);
-
-        if (sentToController) {
-            data.setEndpointType(EndpointType.CONTROLLER.id());
-        }
-
-        brokers.forEach(broker ->
-            data.brokers().add(new DescribeClusterBroker()
-                .setHost(broker.host())
-                .setPort(broker.port())
-                .setBrokerId(broker.id())
-                .setRack(broker.rack())));
-
-        return new DescribeClusterResponse(data);
-    }
-
     @Test
     public void testDescribeClusterFailBack() throws Exception {
         try (AdminClientUnitTestEnv env = new AdminClientUnitTestEnv(mockCluster(4, 0),

@@ -828,7 +828,7 @@ public final class KafkaRaftClient<T> implements RaftClient<T> {
      * Handle a Vote request. This API may return the following errors:
      *
      * - {@link Errors#INCONSISTENT_CLUSTER_ID} if the cluster id is presented in request
-     *      but different from this node
+     *      but different from this node and this node knows its cluster id
      * - {@link Errors#BROKER_NOT_AVAILABLE} if this node is currently shutting down
      * - {@link Errors#FENCED_LEADER_EPOCH} if the epoch is smaller than this node's epoch
      * - {@link Errors#INVALID_REQUEST} if the last epoch or offset are invalid
@@ -1094,7 +1094,7 @@ public final class KafkaRaftClient<T> implements RaftClient<T> {
      * Handle a BeginEpoch request. This API may return the following errors:
      *
      * - {@link Errors#INCONSISTENT_CLUSTER_ID} if the cluster id is presented in request
-     *      but different from this node
+     *      but different from this node and this node knows its cluster id
      * - {@link Errors#BROKER_NOT_AVAILABLE} if this node is currently shutting down
      * - {@link Errors#FENCED_LEADER_EPOCH} if the epoch is smaller than this node's epoch
      */
@@ -1250,7 +1250,7 @@ public final class KafkaRaftClient<T> implements RaftClient<T> {
      * Handle an EndEpoch request. This API may return the following errors:
      *
      * - {@link Errors#INCONSISTENT_CLUSTER_ID} if the cluster id is presented in request
-     *      but different from this node
+     *      but different from this node and this node knows its cluster id
      * - {@link Errors#BROKER_NOT_AVAILABLE} if this node is currently shutting down
      * - {@link Errors#FENCED_LEADER_EPOCH} if the epoch is smaller than this node's epoch
      */
@@ -1463,8 +1463,9 @@ public final class KafkaRaftClient<T> implements RaftClient<T> {
     }
 
     private boolean hasValidClusterId(String requestClusterId) {
-        // We don't enforce the cluster id if it is not provided.
-        if (requestClusterId == null) {
+        // We don't enforce the cluster id if it is not provided, or if the current
+        // node's cluster id is not known.
+        if (requestClusterId == null || !clusterId.isDone()) {
             return true;
         }
         return requestClusterId.equals(clusterId.getNow());
@@ -1479,7 +1480,7 @@ public final class KafkaRaftClient<T> implements RaftClient<T> {
      * This API may return the following errors:
      *
      * - {@link Errors#INCONSISTENT_CLUSTER_ID} if the cluster id is presented in request
-     *     but different from this node
+     *     but different from this node and this node knows its cluster id
      * - {@link Errors#BROKER_NOT_AVAILABLE} if this node is currently shutting down
      * - {@link Errors#FENCED_LEADER_EPOCH} if the epoch is smaller than this node's epoch
      * - {@link Errors#INVALID_REQUEST} if the request epoch is larger than the leader's current epoch
@@ -1916,7 +1917,7 @@ public final class KafkaRaftClient<T> implements RaftClient<T> {
      * This API may return the following errors:
      *
      * - {@link Errors#INCONSISTENT_CLUSTER_ID} if the cluster id is presented in request
-     *     but different from this node
+     *     but different from this node and this node knows its cluster id
      * - {@link Errors#BROKER_NOT_AVAILABLE} if this node is currently shutting down
      * - {@link Errors#FENCED_LEADER_EPOCH} if the epoch is smaller than this node's epoch
      * - {@link Errors#INVALID_REQUEST} if the request epoch is larger than the leader's current epoch
@@ -3472,7 +3473,10 @@ public final class KafkaRaftClient<T> implements RaftClient<T> {
         );
     }
 
-    private RemoveRaftVoterRequestData buildRemoveVoterRequest(ReplicaKey replicaKey, String clusterId) {
+    private RemoveRaftVoterRequestData buildRemoveVoterRequest(
+        ReplicaKey replicaKey,
+        String clusterId
+    ) {
         return RaftUtil.removeVoterRequest(
             clusterId,
             replicaKey

@@ -100,7 +100,7 @@ public final class KafkaAuthorizerServerInfo implements AuthorizerServerInfo {
     @Override
     public String toString() {
         return "KafkaAuthorizerServerInfo(" +
-                "clusterResource=" + clusterId +
+                clusterResource() +
                 ", brokerId=" + brokerId +
                 ", endpoints=" + endpoints +
                 ", earlyStartListeners=" + earlyStartListeners +

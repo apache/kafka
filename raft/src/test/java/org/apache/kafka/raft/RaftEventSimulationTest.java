@@ -595,7 +595,8 @@ public class RaftEventSimulationTest {
         final Random random;
         final AtomicInteger correlationIdCounter = new AtomicInteger();
         final MockTime time = new MockTime();
-        final DeferredValue<String> clusterId = DeferredValue.completed(Uuid.randomUuid().toString());
+        final DeferredValue<String> clusterId =
+            DeferredValue.completed(Uuid.randomUuid().toString());
         final Map<Integer, Node> voters = new HashMap<>();
         final Map<Integer, PersistentState> nodes = new HashMap<>();
         final Map<Integer, RaftNode> running = new HashMap<>();

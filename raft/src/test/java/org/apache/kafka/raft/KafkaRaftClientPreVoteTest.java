@@ -431,17 +431,33 @@ public class KafkaRaftClientPreVoteTest {
         )
             .withStartingVoters(VoterSetTest.voterSet(Stream.of(localKey, otherNodeKey)), kraftVersion)
             .withRaftProtocol(KIP_996_PROTOCOL)
+            .withEmptyClusterId()
             .build();
 
         context.unattachedToLeader();
         int epoch = context.currentEpoch();
+
+        // null cluster id is accepted even when local cluster id is not yet set
+        context.deliverRequest(context.voteRequest(null, epoch, otherNodeKey, epoch, 0, true));
+        context.pollUntilResponse();
+        context.assertSentVoteResponse(Errors.NONE, epoch, OptionalInt.of(localId), false);
+
+        // any non-null cluster id is accepted when local cluster id is not yet set
+        context.deliverRequest(
+            context.voteRequest("some-cluster-id", epoch, otherNodeKey, epoch, 0, true)
+        );
+        context.pollUntilResponse();
+        context.assertSentVoteResponse(Errors.NONE, epoch, OptionalInt.of(localId), false);
+
+        // complete the cluster id
+        context.clusterId.complete(Uuid.randomUuid().toString());
 
         // valid cluster id is accepted
         context.deliverRequest(context.preVoteRequest(epoch, otherNodeKey, epoch, 0));
         context.pollUntilResponse();
         context.assertSentVoteResponse(Errors.NONE, epoch, OptionalInt.of(localId), false);
 
-        // null cluster id is accepted
+        // null cluster id is still accepted
         context.deliverRequest(context.voteRequest(null, epoch, otherNodeKey, epoch, 0, true));
         context.pollUntilResponse();
         context.assertSentVoteResponse(Errors.NONE, epoch, OptionalInt.of(localId), false);

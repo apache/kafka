@@ -187,7 +187,8 @@ public final class RaftClientTestContext {
         private Endpoints localListeners = Endpoints.empty();
         private boolean isStartingVotersStatic = false;
         private boolean autoJoin = false;
-        private DeferredValue<String> clusterId = DeferredValue.completed(Uuid.randomUuid().toString());
+        private DeferredValue<String> clusterId =
+            DeferredValue.completed(Uuid.randomUuid().toString());
         private int fetchSnapshotMaxBytes = QuorumConfig.DEFAULT_QUORUM_FETCH_SNAPSHOT_MAX_BYTES;
         private int fetchMaxBytes = QuorumConfig.DEFAULT_QUORUM_FETCH_MAX_BYTES;
 
@@ -2094,7 +2095,13 @@ public final class RaftClientTestContext {
         SupportedVersionRange supportedVersions,
         Endpoints endpoints
     ) {
-        return updateVoterRequest(clusterId.getNow(), voter, currentEpoch(), supportedVersions, endpoints);
+        return updateVoterRequest(
+            clusterId.getNow(),
+            voter,
+            currentEpoch(),
+            supportedVersions,
+            endpoints
+        );
     }
 
     UpdateRaftVoterRequestData updateVoterRequest(
