@@ -37,6 +37,7 @@ import java.util.SortedSet;
 import java.util.TreeSet;
 
 import io.github.classgraph.ClassGraph;
+import io.github.classgraph.ClassInfo;
 import io.github.classgraph.ClassInfoList;
 import io.github.classgraph.ScanResult;
 
@@ -78,8 +79,11 @@ public class ReflectionScanner extends PluginScanner {
 
     @Override
     protected PluginScanResult scanPlugins(PluginSource source) {
+        // Scan exactly the given classloader chain. Since that chain includes the application classloader,
+        // also scan the non-system modules, as ClassGraph 4.x did implicitly in that case.
         ClassGraph classGraphBuilder = new ClassGraph()
-                .overrideClassLoaders(classLoaderOrder(source))
+                .enableClassLoaders(classLoaderOrder(source))
+                .enableNonSystemModules()
                 .enableExternalClasses()
                 .enableClassInfo();
         try (ScanResult classGraph = classGraphBuilder.scan()) {
@@ -132,9 +136,9 @@ public class ReflectionScanner extends PluginScanner {
         Class<T> klass = (Class<T>) type.superClass();
         try {
             if (klass.isInterface()) {
-                plugins = classGraph.getClassesImplementing(klass.getName());
+                plugins = classGraph.getAllClassesImplementing(klass.getName());
             } else {
-                plugins = classGraph.getSubclasses(klass.getName());
+                plugins = classGraph.getAllSubclasses(klass.getName());
             }
         } catch (Exception e) {
             log.debug("Reflections scanner could not find any {} in {} for URLs: {}",
@@ -143,7 +147,7 @@ public class ReflectionScanner extends PluginScanner {
         }
 
         SortedSet<PluginDesc<T>> result = new TreeSet<>();
-        for (Class<? extends T> pluginKlass : plugins.getStandardClasses().loadClasses(klass, true)) {
+        for (Class<? extends T> pluginKlass : loadClasses(plugins.getStandardClasses(), klass, source)) {
             if (!PluginUtils.isConcrete(pluginKlass)) {
                 log.debug("Skipping {} in {} as it is not concrete implementation", pluginKlass, source);
                 continue;
@@ -162,5 +166,24 @@ public class ReflectionScanner extends PluginScanner {
             }
         }
         return result;
+    }
+
+    private static <T> List<Class<? extends T>> loadClasses(ClassInfoList classInfos, Class<T> klass, PluginSource source) {
+        // ClassGraph only reads classfiles, so the classes are loaded here, without initialization, by the isolated
+        // classloader at the head of the chain that was scanned. Classes which cannot be loaded are skipped.
+        List<Class<? extends T>> classes = new ArrayList<>();
+        for (ClassInfo classInfo : classInfos) {
+            try {
+                Class<?> loaded = Class.forName(classInfo.getName(), false, source.loader());
+                if (klass.isAssignableFrom(loaded)) {
+                    classes.add(loaded.asSubclass(klass));
+                } else {
+                    log.debug("Skipping {} in {} as it is not a subtype of {}", loaded, source, klass);
+                }
+            } catch (ClassNotFoundException | LinkageError e) {
+                log.debug("Skipping {} in {} as it could not be loaded", classInfo.getName(), source, e);
+            }
+        }
+        return classes;
     }
 }

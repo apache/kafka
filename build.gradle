@@ -3949,7 +3949,10 @@ project(':connect:runtime') {
 
   tasks.register('genConnectOpenAPIDocs', io.swagger.v3.plugins.gradle.tasks.ResolveTask) {
     dependsOn setVersionInOpenAPISpec
-    classpath = sourceSets.main.runtimeClasspath
+    // swagger-jaxrs2 is built against ClassGraph 4.x, so keep the runtime's ClassGraph 5.x jars off this classpath
+    // and let the swagger configuration supply its own ClassGraph version.
+    // This workaround can be dropped once a Swagger release supports ClassGraph 5.x.
+    classpath = sourceSets.main.runtimeClasspath.filter { !it.name.startsWith('classgraph') }
 
     buildClasspath = classpath + configurations.swagger
     outputFileName = 'connect_rest'

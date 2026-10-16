@@ -290,7 +290,10 @@ see: licenses/CDDL+GPL-1.1
 MIT License
 
 - argparse4j-0.7.0, see: licenses/argparse-MIT
-- classgraph-4.8.196, see: licenses/classgraph-MIT
+- classgraph-5.0.0, see: licenses/classgraph-MIT
+- classgraph-base-5.0.0, see: licenses/classgraph-MIT
+- classgraph-classpath-5.0.0, see: licenses/classgraph-MIT
+- classgraph-vfs-5.0.0, see: licenses/classgraph-MIT
 - jopt-simple-5.0.4, see: licenses/jopt-simple-MIT
 - slf4j-api-1.7.36, see: licenses/slf4j-MIT
 - pcollections-4.0.2, see: licenses/pcollections-MIT
