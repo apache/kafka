@@ -185,6 +185,16 @@ org.apache.kafka.clients.consumer.PlaintextConsumerAssignTest:
 - testClassicAssignAndFetchCommittedOffsets
 - testClassicAssignAndRetrievingCommittedOffsetsMultipleTimes
 - testClassicPollAfterTopicDeleted
+org.apache.kafka.clients.consumer.PlaintextConsumerAssignorsTest:
+- testMultiConsumerDefaultAssignor
+- testMultiConsumerDefaultAssignorAndVerifyAssignment
+- testMultiConsumerRoundRobinAssignor
+- testMultiConsumerStickyAssignor
+- testRebalanceAndRejoinWithCooperativeStickyAssignor
+- testRebalanceAndRejoinWithRangeAssignor
+- testRemoteAssignorInvalid
+- testRemoteAssignorRange
+- testRoundRobinAssignment
 org.apache.kafka.clients.consumer.PlaintextConsumerCallbackTest:
 - testAsyncConsumerAwareAssignmentVisibleOnPartitionsAssigned
 - testAsyncConsumerAwareBeginningOffsetsOnPartitionsAssigned

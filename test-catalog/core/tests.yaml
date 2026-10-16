@@ -382,15 +382,6 @@ kafka.api.PlaintextAdminIntegrationTest:
 - testSeekAfterDeleteRecords
 - testShareGroups
 - testValidIncrementalAlterConfigs
-kafka.api.PlaintextConsumerAssignorsTest:
-- testMultiConsumerDefaultAssignor
-- testMultiConsumerDefaultAssignorAndVerifyAssignment
-- testMultiConsumerRoundRobinAssignor
-- testMultiConsumerStickyAssignor
-- testRebalanceAndRejoin
-- testRemoteAssignorInvalid
-- testRemoteAssignorRange
-- testRoundRobinAssignment
 kafka.api.PlaintextEndToEndAuthorizationTest:
 - testListenerName
 - testNoConsumeWithDescribeAclViaAssign
