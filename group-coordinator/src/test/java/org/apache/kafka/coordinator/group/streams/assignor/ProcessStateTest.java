@@ -121,4 +121,18 @@ public class ProcessStateTest {
         assertTrue(assignedTasks.contains(activeTaskId));
         assertTrue(assignedTasks.contains(standbyTaskId));
     }
+
+    @Test
+    void shouldRecomputeLeastLoadedMemberAfterAddingTask() {
+        ProcessState processState = new ProcessState("process1");
+        processState.addMember("member1");
+        processState.addMember("member2");
+        processState.addTask("member1", new TaskId("id1", 0), true, true);
+        assertEquals("member2", processState.leastLoadedMember());
+
+        processState.addTask("member2", new TaskId("id1", 1), false, true);
+        processState.addTask("member2", new TaskId("id1", 2), false, true);
+
+        assertEquals("member1", processState.leastLoadedMember());
+    }
 }
