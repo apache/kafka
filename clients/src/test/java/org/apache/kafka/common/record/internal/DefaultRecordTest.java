@@ -532,20 +532,16 @@ public class DefaultRecordTest {
         }
     }
 
+    // The partial read allocates nothing for the body, so only a negative size is rejected up front. An oversized
+    // declared size needs no limit: the stream simply ends before the record does.
     @Test
     public void testReadPartiallyFromStreamRejectsInvalidBodySize() throws IOException {
-        assertReadPartiallyFromStreamRejectsBodySize(-1, "is negative");
-        assertReadPartiallyFromStreamRejectsBodySize(Integer.MAX_VALUE, "exceeds the configured maximum record size");
-        assertReadPartiallyFromStreamRejectsBodySize(Records.SOFT_MAX_ARRAY_LENGTH + 1, "exceeds the configured maximum record size");
-    }
-
-    private static void assertReadPartiallyFromStreamRejectsBodySize(int declaredBodySize, String expectedMessage) throws IOException {
-        byte[] rec = recordWithForgedBodySize(declaredBodySize);
-        try (InputStream in = new ByteBufferInputStream(ByteBuffer.wrap(rec))) {
-            InvalidRecordException ex = assertThrows(InvalidRecordException.class,
-                () -> DefaultRecord.readPartiallyFrom(in, 0L, 0L, RecordBatch.NO_SEQUENCE, null, Records.SOFT_MAX_ARRAY_LENGTH));
-            assertTrue(ex.getMessage().contains(expectedMessage),
-                "expected '" + expectedMessage + "', got: " + ex.getMessage());
+        for (int declaredBodySize : new int[] {-1, Integer.MAX_VALUE, Records.SOFT_MAX_ARRAY_LENGTH + 1}) {
+            byte[] rec = recordWithForgedBodySize(declaredBodySize);
+            try (InputStream in = new ByteBufferInputStream(ByteBuffer.wrap(rec))) {
+                assertThrows(InvalidRecordException.class,
+                    () -> DefaultRecord.readPartiallyFrom(in, 0L, 0L, RecordBatch.NO_SEQUENCE, null));
+            }
         }
     }
 
@@ -557,17 +553,6 @@ public class DefaultRecordTest {
         try (InputStream in = new ByteBufferInputStream(ByteBuffer.wrap(rec))) {
             InvalidRecordException ex = assertThrows(InvalidRecordException.class,
                 () -> DefaultRecord.readFrom(in, 0L, 0L, RecordBatch.NO_SEQUENCE, null, 100));
-            assertTrue(ex.getMessage().contains("exceeds the configured maximum record size"),
-                "expected the configured-maximum guard, got: " + ex.getMessage());
-        }
-    }
-
-    @Test
-    public void testReadPartiallyFromStreamRejectsBodySizeExceedingConfiguredMax() throws IOException {
-        byte[] rec = recordWithForgedBodySize(1000);
-        try (InputStream in = new ByteBufferInputStream(ByteBuffer.wrap(rec))) {
-            InvalidRecordException ex = assertThrows(InvalidRecordException.class,
-                () -> DefaultRecord.readPartiallyFrom(in, 0L, 0L, RecordBatch.NO_SEQUENCE, null, 100));
             assertTrue(ex.getMessage().contains("exceeds the configured maximum record size"),
                 "expected the configured-maximum guard, got: " + ex.getMessage());
         }
@@ -602,7 +587,7 @@ public class DefaultRecordTest {
     private static void assertPartiallyDecodingRecordsFromBufferThrowsInvalidRecordException(ByteBuffer buf) throws IOException {
         try (InputStream inputStream = new ByteBufferInputStream(buf)) {
             assertThrows(InvalidRecordException.class,
-                () -> DefaultRecord.readPartiallyFrom(inputStream, 0L, 0L, RecordBatch.NO_SEQUENCE, null, Records.SOFT_MAX_ARRAY_LENGTH));
+                () -> DefaultRecord.readPartiallyFrom(inputStream, 0L, 0L, RecordBatch.NO_SEQUENCE, null));
         }
     }
 
