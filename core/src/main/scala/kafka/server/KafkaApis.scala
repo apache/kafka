@@ -417,10 +417,11 @@ class KafkaApis(val requestChannel: RequestChannel,
     val topicIdToPartitionData = new mutable.ArrayBuffer[(TopicIdPartition, ProduceRequestData.PartitionProduceData)]
 
     produceRequest.data.topicData.forEach { topic =>
-      val topicId = topic.topicId()
-      val topicName =
-        if (topicId.equals(Uuid.ZERO_UUID)) topic.name()
-        else metadataCache.getTopicName(topicId).orElse(topic.name)
+      val (topicName, topicId) = if (topic.topicId().equals(Uuid.ZERO_UUID)) {
+        (topic.name(), metadataCache.getTopicId(topic.name()))
+      } else {
+        (metadataCache.getTopicName(topic.topicId).orElse(topic.name), topic.topicId())
+      }
 
       topic.partitionData.forEach { partition =>
 
