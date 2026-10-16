@@ -26,9 +26,11 @@ import org.apache.kafka.clients.admin.StreamsGroupTopologyDescription.Subtopolog
 
 import org.junit.jupiter.api.Test;
 
+import java.util.Arrays;
 import java.util.List;
 import java.util.Optional;
 import java.util.Set;
+import java.util.stream.Collectors;
 
 import static org.junit.jupiter.api.Assertions.assertEquals;
 
@@ -105,6 +107,47 @@ public class TopologyDescriptionFormatterTest {
     }
 
     @Test
+    public void testFormatGlobalStoreDefinedBeforeSubtopologiesDoesNotCollide() {
+        StreamsGroupTopologyDescription topology = new StreamsGroupTopologyDescription(
+            List.of(subtopology("1"), subtopology("2")),
+            List.of(globalStore("g")));
+
+        assertEquals(List.of(
+            "Sub-topology: 1",
+            "Sub-topology: 2",
+            "Sub-topology: 0 for global store (will not generate tasks)"),
+            subtopologyHeaders(TopologyDescriptionFormatter.format(topology)));
+    }
+
+    @Test
+    public void testFormatGlobalStoresInterleavedWithSubtopologiesFillUnusedIds() {
+        StreamsGroupTopologyDescription topology = new StreamsGroupTopologyDescription(
+            List.of(subtopology("1"), subtopology("3")),
+            List.of(globalStore("g0"), globalStore("g1"), globalStore("g2")));
+
+        assertEquals(List.of(
+            "Sub-topology: 1",
+            "Sub-topology: 3",
+            "Sub-topology: 0 for global store (will not generate tasks)",
+            "Sub-topology: 2 for global store (will not generate tasks)",
+            "Sub-topology: 4 for global store (will not generate tasks)"),
+            subtopologyHeaders(TopologyDescriptionFormatter.format(topology)));
+    }
+
+    @Test
+    public void testFormatGlobalStoreIgnoresNonNumericSubtopologyIds() {
+        StreamsGroupTopologyDescription topology = new StreamsGroupTopologyDescription(
+            List.of(subtopology("a"), subtopology("0")),
+            List.of(globalStore("g")));
+
+        assertEquals(List.of(
+            "Sub-topology: a",
+            "Sub-topology: 0",
+            "Sub-topology: 1 for global store (will not generate tasks)"),
+            subtopologyHeaders(TopologyDescriptionFormatter.format(topology)));
+    }
+
+    @Test
     public void testFormatMultipleSubtopologiesAreIndentedConsistently() {
         Source source0 = new Source("source-0", Set.of("input-0"), Set.of(), Set.of());
         Source source1 = new Source("source-1", Set.of("input-1"), Set.of(), Set.of());
@@ -163,5 +206,22 @@ public class TopologyDescriptionFormatterTest {
             "    Sink: sink (topic: null)\n" +
             "      <-- source\n" +
             "\n", formatted);
+    }
+
+    private static Subtopology subtopology(String id) {
+        return new Subtopology(id, List.<Node>of(new Source("source-" + id, Set.of("input-" + id), Set.of(), Set.of())));
+    }
+
+    private static GlobalStore globalStore(String name) {
+        return new GlobalStore(
+            new Source(name + "-source", Set.of(name + "-topic"), Set.of(name + "-processor"), Set.of()),
+            new Processor(name + "-processor", Set.of(name + "-store"), Set.of(), Set.of(name + "-source")));
+    }
+
+    private static List<String> subtopologyHeaders(String formatted) {
+        return Arrays.stream(formatted.split("\n"))
+            .map(String::trim)
+            .filter(line -> line.startsWith("Sub-topology:"))
+            .collect(Collectors.toList());
     }
 }

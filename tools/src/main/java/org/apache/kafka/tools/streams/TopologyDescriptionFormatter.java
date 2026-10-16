@@ -25,6 +25,8 @@ import org.apache.kafka.clients.admin.StreamsGroupTopologyDescription.Source;
 import org.apache.kafka.clients.admin.StreamsGroupTopologyDescription.Subtopology;
 
 import java.util.Collection;
+import java.util.HashSet;
+import java.util.Set;
 import java.util.TreeSet;
 
 /**
@@ -44,12 +46,30 @@ public final class TopologyDescriptionFormatter {
             sb.append("   ");
             appendSubtopology(sb, subtopology);
         }
-        int globalStoreId = topology.subtopologies().size();
+        // Kafka Streams numbers subtopologies and global stores from a single counter, and both lists are sent
+        // sorted by id, so the global store ids are exactly the ids not taken by a subtopology, in ascending order.
+        final Set<Integer> subtopologyIds = numericIds(topology.subtopologies());
+        int globalStoreId = 0;
         for (final GlobalStore globalStore : topology.globalStores()) {
+            while (subtopologyIds.contains(globalStoreId)) {
+                globalStoreId++;
+            }
             sb.append("   ");
             appendGlobalStore(sb, globalStore, globalStoreId++);
         }
         return sb.toString();
+    }
+
+    private static Set<Integer> numericIds(final Collection<Subtopology> subtopologies) {
+        final Set<Integer> ids = new HashSet<>();
+        for (final Subtopology subtopology : subtopologies) {
+            try {
+                ids.add(Integer.parseInt(subtopology.id()));
+            } catch (final NumberFormatException e) {
+                // a non-numeric id cannot collide with a numeric global store label
+            }
+        }
+        return ids;
     }
 
     private static void appendSubtopology(final StringBuilder sb, final Subtopology subtopology) {
