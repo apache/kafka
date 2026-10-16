@@ -642,12 +642,13 @@ public class ProducerConfig extends AbstractConfig {
 
     private void postProcessAndValidateIdempotenceConfigs(final Map<String, Object> configs) {
         final Map<String, Object> originalConfigs = this.originals();
-        final String acksStr = parseAcks(this.getString(ACKS_CONFIG));
-        configs.put(ACKS_CONFIG, acksStr);
+        String acksConfig = this.getString(ACKS_CONFIG);
+        final Short acks = parseAcks(acksConfig);
+        configs.put(ACKS_CONFIG, Short.toString(acks));
         final boolean userConfiguredIdempotence = this.originals().containsKey(ENABLE_IDEMPOTENCE_CONFIG);
         boolean idempotenceEnabled = this.getBoolean(ENABLE_IDEMPOTENCE_CONFIG);
         boolean shouldDisableIdempotence = false;
-
+        
         // For idempotence producers, values for `retries` and `acks` and `max.in.flight.requests.per.connection` need validation
         if (idempotenceEnabled) {
             final int retries = this.getInt(RETRIES_CONFIG);
@@ -659,7 +660,7 @@ public class ProducerConfig extends AbstractConfig {
                 shouldDisableIdempotence = true;
             }
 
-            final short acks = Short.parseShort(acksStr);
+            
             if (acks != (short) -1) {
                 if (userConfiguredIdempotence) {
                     throw new ConfigException("Must set " + ACKS_CONFIG + " to all in order to use the idempotent " +
@@ -700,15 +701,31 @@ public class ProducerConfig extends AbstractConfig {
                 " is set to true. Transactions will not expire with two-phase commit enabled."
             );
         }
+        log.info("Producer configs after post-processing: {}", configs);
+
     }
 
-    private static String parseAcks(String acksString) {
-        try {
-            return acksString.trim().equalsIgnoreCase("all") ? "-1" : Short.parseShort(acksString.trim()) + "";
-        } catch (NumberFormatException e) {
-            throw new ConfigException("Invalid configuration value for 'acks': " + acksString);
+    private static short parseAcks(String acksString) {
+        if (acksString == null) {
+            throw new ConfigException("acks must be set");
         }
+
+        String value = acksString.trim();
+
+        if (value.equalsIgnoreCase("all") || value.equals("-1")) {
+            return (short) -1;
+        }
+
+        if (value.equals("0") || value.equals("1")) {
+            return Short.parseShort(value);
+        }
+
+        throw new ConfigException(
+            "Invalid value for 'acks': " + acksString +
+            ". Valid values are '0', '1', '-1', or 'all'."
+        );
     }
+
 
     static Map<String, Object> appendSerializerToConfig(Map<String, Object> configs,
             Serializer<?> keySerializer,
