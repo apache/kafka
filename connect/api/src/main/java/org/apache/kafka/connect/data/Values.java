@@ -403,7 +403,8 @@ public class Values {
      * Parse the specified string representation of a value into its schema and value.
      *
      * @param value the string form of the value
-     * @return the schema and value; never null, but whose schema and value may be null
+     * @return the schema and value; never null, but whose schema and value may be null. If a container cannot be represented by a
+     *         single Connect schema, the original input is returned as a string value.
      * @see #convertToString
      */
     public static SchemaAndValue parseString(String value) {
@@ -905,14 +906,12 @@ public class Values {
             SchemaMerger elementSchema = new SchemaMerger();
             while (parser.hasNext()) {
                 if (parser.canConsume(ARRAY_END_DELIMITER)) {
-                    Schema listSchema;
-                    if (elementSchema.hasCommonSchema()) {
-                        listSchema = SchemaBuilder.array(elementSchema.schema()).schema();
-                        result = alignListEntriesWithSchema(listSchema, result);
-                    } else {
-                        // Every value is null
-                        listSchema = SchemaBuilder.arrayOfNull().build();
+                    if (!elementSchema.hasCommonSchema()) {
+                        throw new DataException("Unable to infer a common schema for array elements");
                     }
+
+                    Schema listSchema = SchemaBuilder.array(elementSchema.schema()).schema();
+                    result = alignListEntriesWithSchema(listSchema, result);
                     return new SchemaAndValue(listSchema, result);
                 }
 
@@ -944,16 +943,12 @@ public class Values {
             SchemaMerger valueSchema = new SchemaMerger();
             while (parser.hasNext()) {
                 if (parser.canConsume(MAP_END_DELIMITER)) {
-                    Schema mapSchema;
-                    if (keySchema.hasCommonSchema() && valueSchema.hasCommonSchema()) {
-                        mapSchema = SchemaBuilder.map(keySchema.schema(), valueSchema.schema()).build();
-                        result = alignMapKeysAndValuesWithSchema(mapSchema, result);
-                    } else if (keySchema.hasCommonSchema()) {
-                        mapSchema = SchemaBuilder.mapWithNullValues(keySchema.schema());
-                        result = alignMapKeysWithSchema(mapSchema, result);
-                    } else {
-                        mapSchema = SchemaBuilder.mapOfNull().build();
+                    if (!keySchema.hasCommonSchema() || !valueSchema.hasCommonSchema()) {
+                        throw new DataException("Unable to infer a common schema for map keys and values");
                     }
+
+                    Schema mapSchema = SchemaBuilder.map(keySchema.schema(), valueSchema.schema()).build();
+                    result = alignMapKeysAndValuesWithSchema(mapSchema, result);
                     return new SchemaAndValue(mapSchema, result);
                 }
 
