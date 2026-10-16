@@ -28,7 +28,7 @@ import org.apache.kafka.common.protocol.ApiKeys.{BROKER_HEARTBEAT, BROKER_REGIST
 import org.apache.kafka.common.security.auth.SecurityProtocol
 import org.apache.kafka.common.utils.internals.LogContext
 import org.apache.kafka.server.util.MockTime
-import org.apache.kafka.server.ControllerInformation
+import org.apache.kafka.server.{ControllerInformation, MockNodeToControllerChannelManager}
 
 import java.util.{Optional, Properties}
 import java.util.concurrent.atomic.{AtomicInteger, AtomicLong, AtomicReference}

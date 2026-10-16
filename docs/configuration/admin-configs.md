@@ -1,6 +1,6 @@
 ---
 title: Admin Configs
-description: Admin Configs
+description: Kafka Admin client configuration reference.
 weight: 8
 tags: ['kafka', 'docs']
 aliases: 

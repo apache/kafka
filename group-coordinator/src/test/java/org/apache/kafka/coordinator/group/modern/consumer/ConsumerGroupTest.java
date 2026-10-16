@@ -1004,7 +1004,7 @@ public class ConsumerGroupTest {
                 builder.add(Arguments.of(false, version, type));
             }
         }
-        for (short version = ApiKeys.TXN_OFFSET_COMMIT.oldestVersion(); version <= ApiKeys.TXN_OFFSET_COMMIT.latestVersion(true); version++) {
+        for (short version = ApiKeys.TXN_OFFSET_COMMIT.oldestVersion(); version <= ApiKeys.TXN_OFFSET_COMMIT.latestVersion(); version++) {
             for (PartitionAssignmentType type : PartitionAssignmentType.values()) {
                 builder.add(Arguments.of(true, version, type));
             }
@@ -1098,7 +1098,7 @@ public class ConsumerGroupTest {
         for (short version = ApiKeys.OFFSET_COMMIT.oldestVersion(); version <= ApiKeys.OFFSET_COMMIT.latestVersion(true); version++) {
             builder.add(Arguments.of(false, version));
         }
-        for (short version = ApiKeys.TXN_OFFSET_COMMIT.oldestVersion(); version <= ApiKeys.TXN_OFFSET_COMMIT.latestVersion(true); version++) {
+        for (short version = ApiKeys.TXN_OFFSET_COMMIT.oldestVersion(); version <= ApiKeys.TXN_OFFSET_COMMIT.latestVersion(); version++) {
             builder.add(Arguments.of(true, version));
         }
 

@@ -41,10 +41,11 @@ import org.mockito.quality.Strictness;
 import java.util.Map;
 
 import static org.apache.kafka.streams.state.internals.KeyValueStoreWrapper.PUT_RETURN_CODE_IS_LATEST;
-import static org.hamcrest.CoreMatchers.equalTo;
-import static org.hamcrest.CoreMatchers.nullValue;
-import static org.hamcrest.MatcherAssert.assertThat;
+import static org.junit.jupiter.api.Assertions.assertEquals;
+import static org.junit.jupiter.api.Assertions.assertFalse;
+import static org.junit.jupiter.api.Assertions.assertNull;
 import static org.junit.jupiter.api.Assertions.assertThrows;
+import static org.junit.jupiter.api.Assertions.assertTrue;
 import static org.mockito.Mockito.mock;
 import static org.mockito.Mockito.verify;
 import static org.mockito.Mockito.when;
@@ -89,7 +90,7 @@ public class KeyValueStoreWrapperTest {
         givenWrapperWithHeadersStore();
         when(headersStore.get(KEY)).thenReturn(VALUE_TIMESTAMP_HEADERS);
 
-        assertThat(wrapper.get(KEY), equalTo(VALUE_TIMESTAMP_HEADERS));
+        assertEquals(VALUE_TIMESTAMP_HEADERS, wrapper.get(KEY));
     }
 
     @Test
@@ -101,7 +102,7 @@ public class KeyValueStoreWrapperTest {
                 VALUE_TIMESTAMP_HEADERS.timestamp())
         );
 
-        assertThat(wrapper.get(KEY), equalTo(VALUE_TIMESTAMP_HEADERS));
+        assertEquals(VALUE_TIMESTAMP_HEADERS, wrapper.get(KEY));
     }
 
     @Test
@@ -109,7 +110,7 @@ public class KeyValueStoreWrapperTest {
         givenWrapperWithHeadersStore();
         when(headersStore.get(KEY)).thenReturn(null);
 
-        assertThat(wrapper.get(KEY), nullValue());
+        assertNull(wrapper.get(KEY));
     }
 
     @Test
@@ -117,7 +118,7 @@ public class KeyValueStoreWrapperTest {
         givenWrapperWithVersionedStore();
         when(versionedStore.get(KEY)).thenReturn(null);
 
-        assertThat(wrapper.get(KEY), nullValue());
+        assertNull(wrapper.get(KEY));
     }
 
     @Test
@@ -126,7 +127,7 @@ public class KeyValueStoreWrapperTest {
 
         final long putReturnCode = wrapper.put(KEY, VALUE_TIMESTAMP_HEADERS.value(), VALUE_TIMESTAMP_HEADERS.timestamp(), VALUE_TIMESTAMP_HEADERS.headers());
 
-        assertThat(putReturnCode, equalTo(PUT_RETURN_CODE_IS_LATEST));
+        assertEquals(PUT_RETURN_CODE_IS_LATEST, putReturnCode);
         verify(headersStore).put(KEY, VALUE_TIMESTAMP_HEADERS);
     }
 
@@ -137,7 +138,7 @@ public class KeyValueStoreWrapperTest {
 
         final long putReturnCode = wrapper.put(KEY, VALUE_TIMESTAMP_HEADERS.value(), VALUE_TIMESTAMP_HEADERS.timestamp(), VALUE_TIMESTAMP_HEADERS.headers());
 
-        assertThat(putReturnCode, equalTo(12L));
+        assertEquals(12L, putReturnCode);
     }
 
     @Test
@@ -146,7 +147,7 @@ public class KeyValueStoreWrapperTest {
 
         final long putReturnCode = wrapper.put(KEY, null, VALUE_TIMESTAMP_HEADERS.timestamp(), VALUE_TIMESTAMP_HEADERS.headers());
 
-        assertThat(putReturnCode, equalTo(PUT_RETURN_CODE_IS_LATEST));
+        assertEquals(PUT_RETURN_CODE_IS_LATEST, putReturnCode);
         verify(headersStore).put(KEY, null);
     }
 
@@ -157,21 +158,21 @@ public class KeyValueStoreWrapperTest {
 
         final long putReturnCode = wrapper.put(KEY, null, VALUE_TIMESTAMP_HEADERS.timestamp(), VALUE_TIMESTAMP_HEADERS.headers());
 
-        assertThat(putReturnCode, equalTo(12L));
+        assertEquals(12L, putReturnCode);
     }
 
     @Test
     public void shouldGetHeadersStore() {
         givenWrapperWithHeadersStore();
 
-        assertThat(wrapper.store(), equalTo(headersStore));
+        assertEquals(headersStore, wrapper.store());
     }
 
     @Test
     public void shouldGetVersionedStore() {
         givenWrapperWithVersionedStore();
 
-        assertThat(wrapper.store(), equalTo(versionedStore));
+        assertEquals(versionedStore, wrapper.store());
     }
 
     @Test
@@ -179,7 +180,7 @@ public class KeyValueStoreWrapperTest {
         givenWrapperWithHeadersStore();
         when(headersStore.name()).thenReturn(STORE_NAME);
 
-        assertThat(wrapper.name(), equalTo(STORE_NAME));
+        assertEquals(STORE_NAME, wrapper.name());
     }
 
     @Test
@@ -187,7 +188,7 @@ public class KeyValueStoreWrapperTest {
         givenWrapperWithVersionedStore();
         when(versionedStore.name()).thenReturn(STORE_NAME);
 
-        assertThat(wrapper.name(), equalTo(STORE_NAME));
+        assertEquals(STORE_NAME, wrapper.name());
     }
 
     @Test
@@ -252,11 +253,11 @@ public class KeyValueStoreWrapperTest {
 
         // test "persistent = true"
         when(headersStore.persistent()).thenReturn(true);
-        assertThat(wrapper.persistent(), equalTo(true));
+        assertTrue(wrapper.persistent());
 
         // test "persistent = false"
         when(headersStore.persistent()).thenReturn(false);
-        assertThat(wrapper.persistent(), equalTo(false));
+        assertFalse(wrapper.persistent());
     }
 
     @Test
@@ -265,11 +266,11 @@ public class KeyValueStoreWrapperTest {
 
         // test "persistent = true"
         when(versionedStore.persistent()).thenReturn(true);
-        assertThat(wrapper.persistent(), equalTo(true));
+        assertTrue(wrapper.persistent());
 
         // test "persistent = false"
         when(versionedStore.persistent()).thenReturn(false);
-        assertThat(wrapper.persistent(), equalTo(false));
+        assertFalse(wrapper.persistent());
     }
 
     @Test
@@ -278,11 +279,11 @@ public class KeyValueStoreWrapperTest {
 
         // test "isOpen = true"
         when(headersStore.isOpen()).thenReturn(true);
-        assertThat(wrapper.isOpen(), equalTo(true));
+        assertTrue(wrapper.isOpen());
 
         // test "isOpen = false"
         when(headersStore.isOpen()).thenReturn(false);
-        assertThat(wrapper.isOpen(), equalTo(false));
+        assertFalse(wrapper.isOpen());
     }
 
     @Test
@@ -291,11 +292,11 @@ public class KeyValueStoreWrapperTest {
 
         // test "isOpen = true"
         when(versionedStore.isOpen()).thenReturn(true);
-        assertThat(wrapper.isOpen(), equalTo(true));
+        assertTrue(wrapper.isOpen());
 
         // test "isOpen = false"
         when(versionedStore.isOpen()).thenReturn(false);
-        assertThat(wrapper.isOpen(), equalTo(false));
+        assertFalse(wrapper.isOpen());
     }
 
     @SuppressWarnings({"rawtypes", "unchecked"})
@@ -304,7 +305,7 @@ public class KeyValueStoreWrapperTest {
         givenWrapperWithHeadersStore();
         when(headersStore.query(query, positionBound, queryConfig)).thenReturn((QueryResult) result);
 
-        assertThat(wrapper.query(query, positionBound, queryConfig), equalTo(result));
+        assertEquals(result, wrapper.query(query, positionBound, queryConfig));
     }
 
     @SuppressWarnings({"rawtypes", "unchecked"})
@@ -313,7 +314,7 @@ public class KeyValueStoreWrapperTest {
         givenWrapperWithVersionedStore();
         when(versionedStore.query(query, positionBound, queryConfig)).thenReturn((QueryResult) result);
 
-        assertThat(wrapper.query(query, positionBound, queryConfig), equalTo(result));
+        assertEquals(result, wrapper.query(query, positionBound, queryConfig));
     }
 
     @Test
@@ -321,7 +322,7 @@ public class KeyValueStoreWrapperTest {
         givenWrapperWithHeadersStore();
         when(headersStore.getPosition()).thenReturn(position);
 
-        assertThat(wrapper.getPosition(), equalTo(position));
+        assertEquals(position, wrapper.getPosition());
     }
 
     @Test
@@ -329,7 +330,7 @@ public class KeyValueStoreWrapperTest {
         givenWrapperWithVersionedStore();
         when(versionedStore.getPosition()).thenReturn(position);
 
-        assertThat(wrapper.getPosition(), equalTo(position));
+        assertEquals(position, wrapper.getPosition());
     }
 
     private void givenWrapperWithHeadersStore() {

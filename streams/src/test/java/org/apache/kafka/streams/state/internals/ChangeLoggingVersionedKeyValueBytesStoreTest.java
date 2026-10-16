@@ -42,9 +42,9 @@ import java.util.Collections;
 import java.util.List;
 
 import static org.apache.kafka.streams.state.VersionedKeyValueStore.PUT_RETURN_CODE_VALID_TO_UNDEFINED;
-import static org.hamcrest.CoreMatchers.equalTo;
-import static org.hamcrest.CoreMatchers.nullValue;
-import static org.hamcrest.MatcherAssert.assertThat;
+import static org.junit.jupiter.api.Assertions.assertArrayEquals;
+import static org.junit.jupiter.api.Assertions.assertEquals;
+import static org.junit.jupiter.api.Assertions.assertNull;
 import static org.junit.jupiter.api.Assertions.assertThrows;
 import static org.mockito.Mockito.mock;
 import static org.mockito.Mockito.verify;
@@ -114,12 +114,12 @@ public class ChangeLoggingVersionedKeyValueBytesStoreTest {
 
         final long validTo = store.put(rawKey, rawBytes(value), timestamp);
 
-        assertThat(validTo, equalTo(PUT_RETURN_CODE_VALID_TO_UNDEFINED));
-        assertThat(inner.get(rawKey), equalTo(rawValueAndTimestamp(value, timestamp)));
-        assertThat(collector.collected().size(), equalTo(1));
-        assertThat(collector.collected().get(0).key(), equalTo(rawKey));
-        assertThat(collector.collected().get(0).value(), equalTo(rawBytes(value)));
-        assertThat(collector.collected().get(0).timestamp(), equalTo(timestamp));
+        assertEquals(PUT_RETURN_CODE_VALID_TO_UNDEFINED, validTo);
+        assertArrayEquals(rawValueAndTimestamp(value, timestamp), inner.get(rawKey));
+        assertEquals(1, collector.collected().size());
+        assertEquals(rawKey, collector.collected().get(0).key());
+        assertArrayEquals(rawBytes(value), (byte[]) collector.collected().get(0).value());
+        assertEquals(timestamp, collector.collected().get(0).timestamp());
     }
 
     @Test
@@ -128,16 +128,16 @@ public class ChangeLoggingVersionedKeyValueBytesStoreTest {
         final long timestamp = 10L;
         // put initial record to inner, so that later verification confirms that store.put() has an effect
         inner.put(rawKey, rawBytes("foo"), timestamp - 1);
-        assertThat(inner.get(rawKey), equalTo(rawValueAndTimestamp("foo", timestamp - 1)));
+        assertArrayEquals(rawValueAndTimestamp("foo", timestamp - 1), inner.get(rawKey));
 
         final long validTo = store.put(rawKey, null, timestamp);
 
-        assertThat(validTo, equalTo(PUT_RETURN_CODE_VALID_TO_UNDEFINED));
-        assertThat(inner.get(rawKey), nullValue());
-        assertThat(collector.collected().size(), equalTo(1));
-        assertThat(collector.collected().get(0).key(), equalTo(rawKey));
-        assertThat(collector.collected().get(0).value(), nullValue());
-        assertThat(collector.collected().get(0).timestamp(), equalTo(timestamp));
+        assertEquals(PUT_RETURN_CODE_VALID_TO_UNDEFINED, validTo);
+        assertNull(inner.get(rawKey));
+        assertEquals(1, collector.collected().size());
+        assertEquals(rawKey, collector.collected().get(0).key());
+        assertNull(collector.collected().get(0).value());
+        assertEquals(timestamp, collector.collected().get(0).timestamp());
     }
 
     @Test
@@ -147,16 +147,16 @@ public class ChangeLoggingVersionedKeyValueBytesStoreTest {
         final byte[] rawValueAndTimestamp = rawValueAndTimestamp("foo", timestamp - 1);
         // put initial record to inner, so that later verification confirms that store.put() has an effect
         inner.put(rawKey, rawBytes("foo"), timestamp - 1);
-        assertThat(inner.get(rawKey), equalTo(rawValueAndTimestamp));
+        assertArrayEquals(rawValueAndTimestamp, inner.get(rawKey));
 
         final byte[] result = store.delete(rawKey, timestamp);
 
-        assertThat(result, equalTo(rawValueAndTimestamp));
-        assertThat(inner.get(rawKey), nullValue());
-        assertThat(collector.collected().size(), equalTo(1));
-        assertThat(collector.collected().get(0).key(), equalTo(rawKey));
-        assertThat(collector.collected().get(0).value(), nullValue());
-        assertThat(collector.collected().get(0).timestamp(), equalTo(timestamp));
+        assertArrayEquals(rawValueAndTimestamp, result);
+        assertNull(inner.get(rawKey));
+        assertEquals(1, collector.collected().size());
+        assertEquals(rawKey, collector.collected().get(0).key());
+        assertNull(collector.collected().get(0).value());
+        assertEquals(timestamp, collector.collected().get(0).timestamp());
     }
 
     @Test
@@ -165,7 +165,7 @@ public class ChangeLoggingVersionedKeyValueBytesStoreTest {
         assertThrows(UnsupportedOperationException.class, () -> inner.delete(rawKey));
 
         assertThrows(UnsupportedOperationException.class, () -> store.delete(rawKey));
-        assertThat(collector.collected().size(), equalTo(0));
+        assertEquals(0, collector.collected().size());
     }
 
     @Test
@@ -176,7 +176,7 @@ public class ChangeLoggingVersionedKeyValueBytesStoreTest {
         assertThrows(UnsupportedOperationException.class, () -> inner.putAll(entries));
 
         assertThrows(UnsupportedOperationException.class, () -> store.putAll(entries));
-        assertThat(collector.collected().size(), equalTo(0));
+        assertEquals(0, collector.collected().size());
     }
 
     @Test
@@ -186,7 +186,7 @@ public class ChangeLoggingVersionedKeyValueBytesStoreTest {
         assertThrows(UnsupportedOperationException.class, () -> inner.putIfAbsent(rawKey, rawValue));
 
         assertThrows(UnsupportedOperationException.class, () -> store.putIfAbsent(rawKey, rawValue));
-        assertThat(collector.collected().size(), equalTo(0));
+        assertEquals(0, collector.collected().size());
     }
 
     @Test
@@ -194,7 +194,7 @@ public class ChangeLoggingVersionedKeyValueBytesStoreTest {
         final Bytes rawKey = Bytes.wrap(rawBytes("k"));
         inner.put(rawKey, rawBytes("v"), 8L);
 
-        assertThat(store.get(rawKey), equalTo(rawValueAndTimestamp("v", 8L)));
+        assertArrayEquals(rawValueAndTimestamp("v", 8L), store.get(rawKey));
     }
 
     @Test
@@ -202,7 +202,7 @@ public class ChangeLoggingVersionedKeyValueBytesStoreTest {
         final Bytes rawKey = Bytes.wrap(rawBytes("k"));
         inner.put(rawKey, rawBytes("v"), 8L);
 
-        assertThat(store.get(rawKey, 10L), equalTo(rawValueAndTimestamp("v", 8L)));
+        assertArrayEquals(rawValueAndTimestamp("v", 8L), store.get(rawKey, 10L));
     }
 
     private static byte[] rawBytes(final String s) {

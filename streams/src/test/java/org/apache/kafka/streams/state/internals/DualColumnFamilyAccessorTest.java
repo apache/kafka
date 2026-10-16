@@ -91,6 +91,19 @@ public class DualColumnFamilyAccessorTest extends AbstractColumnFamilyAccessorTe
         return new DualColumnFamilyAccessor(offsetsCF, oldCF, newCF, valueConverter, store, storeOpen);
     }
 
+    @Override
+    AbstractColumnFamilyAccessor createTransactionalColumnFamilyAccessor() {
+        final RocksDBStore store = mock(RocksDBStore.class);
+        store.position = Position.emptyPosition();
+        store.context = mock(StateStoreContext.class);
+        store.isTransactional = true;
+        lenient().when(store.name()).thenReturn(STORE_NAME);
+        if (valueConverter == null) {
+            valueConverter = oldValue -> oldValue == null ? null
+                    : ByteBuffer.allocate(oldValue.length + 10).put("converted:".getBytes()).put(oldValue).array();
+        }
+        return new DualColumnFamilyAccessor(offsetsCF, oldCF, newCF, valueConverter, store, storeOpen);
+    }
 
     @Test
     public void shouldPutValueToNewColumnFamilyAndDeleteFromOld() throws RocksDBException {

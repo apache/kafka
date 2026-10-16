@@ -85,6 +85,16 @@ public interface ShareGroupDLQMetadataCacheHelper {
     boolean containsTopic(String topic);
 
     /**
+     * Get the max message size, in bytes, allowed to be produced to the given topic. Honors
+     * a topic-level {@code max.message.bytes} override when present, otherwise falls back to
+     * the broker's configured {@code message.max.bytes}.
+     *
+     * @param topic The name of the topic
+     * @return The maximum message size, in bytes, allowed for the topic
+     */
+    int dlqTopicMaxMessageBytes(String topic);
+
+    /**
      * Get all nodes in the kafka cluster encapsulated in the {@link Node} object.
      *
      * @return List of nodes representing the cluster nodes

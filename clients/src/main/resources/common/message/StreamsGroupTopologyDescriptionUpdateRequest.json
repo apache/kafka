@@ -18,11 +18,11 @@
   "type": "request",
   "listeners": ["broker"],
   "name": "StreamsGroupTopologyDescriptionUpdateRequest",
-  // The broker handler is a stub returning UNSUPPORTED_VERSION; the real handler lands in a
-  // later sub-task of KIP-1331. Flip to false before release.
-  "latestVersionUnstable": true,
   "validVersions": "0",
   "flexibleVersions": "0+",
+  "headerVersions": {
+    "0+": "2"
+  },
   "fields": [
     { "name": "GroupId", "type": "string", "versions": "0+", "entityType": "groupId",
       "about": "The streams group identifier." },

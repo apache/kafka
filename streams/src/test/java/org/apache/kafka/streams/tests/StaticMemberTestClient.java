@@ -24,6 +24,9 @@ import org.apache.kafka.streams.KafkaStreams;
 import org.apache.kafka.streams.StreamsBuilder;
 import org.apache.kafka.streams.StreamsConfig;
 import org.apache.kafka.streams.kstream.KStream;
+import org.apache.kafka.streams.kstream.Materialized;
+import org.apache.kafka.streams.state.KeyValueBytesStoreSupplier;
+import org.apache.kafka.streams.state.Stores;
 
 import java.util.Objects;
 import java.util.Properties;
@@ -31,6 +34,7 @@ import java.util.Properties;
 public class StaticMemberTestClient {
 
     private static final String TEST_NAME = "StaticMemberTestClient";
+    private static final String PERSISTENT_PROCESS_ID_STORE_ENABLED = "persistent.process.id.store.enabled";
 
     @SuppressWarnings("unchecked")
     public static void main(final String[] args) throws Exception {
@@ -55,6 +59,15 @@ public class StaticMemberTestClient {
 
         final KStream<String, String> dataStream = builder.stream(inputTopic);
         dataStream.peek((k, v) ->  System.out.printf("PROCESSED key=%s value=%s%n", k, v));
+
+        final boolean persistentProcessIdStoreEnabled = Boolean.parseBoolean(
+            (String) streamsProperties.remove(PERSISTENT_PROCESS_ID_STORE_ENABLED)
+        );
+        if (persistentProcessIdStoreEnabled) {
+            final KeyValueBytesStoreSupplier persistentStoreSupplier =
+                Stores.persistentKeyValueStore("process-id-store");
+            dataStream.groupByKey().count(Materialized.as(persistentStoreSupplier));
+        }
 
         final Properties config = new Properties();
         config.setProperty(StreamsConfig.APPLICATION_ID_CONFIG, TEST_NAME);

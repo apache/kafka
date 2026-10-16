@@ -16,16 +16,13 @@
  */
 package org.apache.kafka.tiered.storage.integration;
 
-import org.apache.kafka.clients.consumer.ConsumerConfig;
 import org.apache.kafka.clients.consumer.GroupProtocol;
 import org.apache.kafka.common.config.TopicConfig;
 import org.apache.kafka.common.test.ClusterInstance;
 import org.apache.kafka.common.test.api.ClusterConfig;
 import org.apache.kafka.common.test.api.ClusterTemplate;
 import org.apache.kafka.common.test.api.Type;
-import org.apache.kafka.tiered.storage.TieredStorageTestAction;
 import org.apache.kafka.tiered.storage.TieredStorageTestBuilder;
-import org.apache.kafka.tiered.storage.TieredStorageTestContext;
 import org.apache.kafka.tiered.storage.specs.KeyValueSpec;
 
 import java.util.List;
@@ -96,6 +93,9 @@ public final class DeleteSegmentsTest {
         final int beginEpoch = 0;
         final long startOffset = 3;
 
+        boolean timeBasedRetention = configsToBeAdded.containsKey(TopicConfig.RETENTION_MS_CONFIG);
+        int expectedFetchFromTieredStorage = timeBasedRetention ? 1 : 0;
+
         TieredStorageTestBuilder builder = new TieredStorageTestBuilder();
 
         // Create topicA with 1 partition, 1 RF and enabled with remote storage.
@@ -106,32 +106,29 @@ public final class DeleteSegmentsTest {
                 .expectSegmentToBeOffloaded(broker0, topicA, p0, 1, new KeyValueSpec("k1", "v1"))
                 .expectSegmentToBeOffloaded(broker0, topicA, p0, 2, new KeyValueSpec("k2", "v2"))
                 .expectEarliestLocalOffsetInLogDirectory(topicA, p0, 3L)
+                // k3 has a future timestamp: with retention.bytes it stays in the local active segment; with
+                // retention.ms it is anchored on lastModified (KAFKA-20609), offloaded and deleted locally, and
+                // then served from tiered storage (its remote copy survives the future-timestamp retention check).
                 .produceWithTimestamp(topicA, p0, new KeyValueSpec("k0", "v0"), new KeyValueSpec("k1", "v1"),
-                        // testDeleteSegmentsByRetentionTime* uses a tiny retention time, which could cause the active
-                        // segment to be rolled and deleted. We use a future timestamp to prevent that from happening.
                         new KeyValueSpec("k2", "v2"), new KeyValueSpec("k3", "v3", System.currentTimeMillis() + TimeUnit.HOURS.toMillis(1)))
                 // update the topic config such that it triggers the deletion of segments
                 .updateTopicConfig(topicA, configsToBeAdded, List.of())
                 // expect that the three offloaded remote log segments are deleted
                 .expectDeletionInRemoteStorage(broker0, topicA, p0, DELETE_SEGMENT, 3)
-                .waitForRemoteLogSegmentDeletion(topicA)
+                .waitForRemoteLogSegmentDeletion(topicA);
+
+        if (timeBasedRetention) {
+            // wait for k3's segment to be offloaded and removed locally before consuming it from tiered storage
+            builder.waitForEarliestLocalOffset(topicA, p0, 4L);
+        }
+
+        builder
                 // expect that the leader epoch checkpoint is updated
                 .expectLeaderEpochCheckpoint(broker0, topicA, p0, beginEpoch, startOffset)
                 // consume from the beginning of the topic to read data from local and remote storage
-                .expectFetchFromTieredStorage(broker0, topicA, p0, 0)
-                .consume(topicA, p0, 0L, 1, 0);
+                .expectFetchFromTieredStorage(broker0, topicA, p0, expectedFetchFromTieredStorage)
+                .consume(topicA, p0, 0L, 1, expectedFetchFromTieredStorage);
 
-        Map<String, Object> extraConsumerProps = Map.of(
-                ConsumerConfig.GROUP_PROTOCOL_CONFIG, groupProtocol.name().toLowerCase(Locale.ROOT)
-        );
-        try (TieredStorageTestContext context = new TieredStorageTestContext(clusterInstance, extraConsumerProps)) {
-            try {
-                for (TieredStorageTestAction action : builder.complete()) {
-                    action.execute(context);
-                }
-            } finally {
-                context.printReport(System.out);
-            }
-        }
+        builder.build().execute(clusterInstance, groupProtocol);
     }
 }

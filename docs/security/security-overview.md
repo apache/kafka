@@ -1,6 +1,6 @@
 ---
 title: Security Overview
-description: Security Overview
+description: Supported security protocols and features available in Kafka.
 weight: 1
 tags: ['kafka', 'docs']
 aliases: 

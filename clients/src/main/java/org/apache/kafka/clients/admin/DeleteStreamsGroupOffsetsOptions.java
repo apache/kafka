@@ -16,6 +16,7 @@
  */
 package org.apache.kafka.clients.admin;
 
+import org.apache.kafka.common.annotation.InterfaceAudience;
 import org.apache.kafka.common.annotation.InterfaceStability;
 
 import java.util.Set;
@@ -26,6 +27,7 @@ import java.util.Set;
  * The API of this class is evolving, see {@link Admin} for details.
  */
 @InterfaceStability.Evolving
+@InterfaceAudience.Public
 public class DeleteStreamsGroupOffsetsOptions extends AbstractOptions<DeleteStreamsGroupOffsetsOptions> {
 
 }

@@ -18,6 +18,7 @@ package org.apache.kafka.common.config;
 
 import org.apache.kafka.common.Configurable;
 import org.apache.kafka.common.KafkaException;
+import org.apache.kafka.common.annotation.InterfaceAudience;
 import org.apache.kafka.common.config.provider.ConfigProvider;
 import org.apache.kafka.common.config.types.Password;
 import org.apache.kafka.common.utils.Utils;
@@ -43,6 +44,7 @@ import java.util.stream.Collectors;
  * <p>
  * This class holds both the original configuration that was provided as well as the parsed
  */
+@InterfaceAudience.Public
 public class AbstractConfig {
 
     private static final Logger log = LoggerFactory.getLogger(AbstractConfig.class);
@@ -553,13 +555,16 @@ public class AbstractConfig {
         Map<String, ConfigProvider> providers = instantiateConfigProviders(providerConfigString, configProperties, classNameFilter);
 
         if (!providers.isEmpty()) {
-            ConfigTransformer configTransformer = new ConfigTransformer(providers);
-            ConfigTransformerResult result = configTransformer.transform(indirectVariables);
-            if (!result.data().isEmpty()) {
-                resolvedOriginals.putAll(result.data());
+            try {
+                ConfigTransformer configTransformer = new ConfigTransformer(providers);
+                ConfigTransformerResult result = configTransformer.transform(indirectVariables);
+                if (!result.data().isEmpty()) {
+                    resolvedOriginals.putAll(result.data());
+                }
+            } finally {
+                providers.values().forEach(x -> Utils.closeQuietly(x, "config provider"));
             }
         }
-        providers.values().forEach(x -> Utils.closeQuietly(x, "config provider"));
 
         return new ResolvingMap<>(resolvedOriginals, originals);
     }
@@ -625,17 +630,23 @@ public class AbstractConfig {
         }
         // Instantiate Config Providers
         Map<String, ConfigProvider> configProviderInstances = new HashMap<>();
-        for (Map.Entry<String, String> entry : providerMap.entrySet()) {
-            try {
+        try {
+            for (Map.Entry<String, String> entry : providerMap.entrySet()) {
                 String prefix = CONFIG_PROVIDERS_CONFIG + "." + entry.getKey() + CONFIG_PROVIDERS_PARAM;
                 Map<String, ?> configProperties = configProviderProperties(prefix, providerConfigProperties);
-                ConfigProvider provider = Utils.newInstance(entry.getValue(), ConfigProvider.class);
-                provider.configure(configProperties);
+                ConfigProvider provider;
+                try {
+                    provider = Utils.newInstance(entry.getValue(), ConfigProvider.class);
+                } catch (ClassNotFoundException e) {
+                    log.error("Could not load config provider class {}", entry.getValue(), e);
+                    throw new ConfigException(providerClassProperty(entry.getKey()), entry.getValue(), "Could not load config provider class or one of its dependencies");
+                }
                 configProviderInstances.put(entry.getKey(), provider);
-            } catch (ClassNotFoundException e) {
-                log.error("Could not load config provider class {}", entry.getValue(), e);
-                throw new ConfigException(providerClassProperty(entry.getKey()), entry.getValue(), "Could not load config provider class or one of its dependencies");
+                provider.configure(configProperties);
             }
+        } catch (RuntimeException | Error e) {
+            configProviderInstances.values().forEach(x -> Utils.closeQuietly(x, "config provider"));
+            throw e;
         }
 
         return configProviderInstances;

@@ -18,25 +18,8 @@
 package kafka.utils
 
 import com.typesafe.scalalogging.Logger
-import org.apache.kafka.common.utils.Utils
-import org.apache.kafka.server.logger.LoggingController
+import org.apache.kafka.server.logger.Log4jControllerRegistration
 import org.slf4j.{LoggerFactory, Marker, MarkerFactory}
-
-object Log4jControllerRegistration {
-  private val logger = Logger(this.getClass.getName)
-
-  private val loggingMBean = new LoggingController
-  registerMBean(loggingMBean, "kafka.Log4jController")
-
-  private def registerMBean(mbean: LoggingController, typeAttr: String): Unit = {
-    try {
-      Utils.registerMBean(mbean, s"kafka:type=$typeAttr")
-      logger.info("Registered `kafka:type={}` MBean", typeAttr)
-    } catch {
-      case e: Exception => logger.warn("Couldn't register `kafka:type={}` MBean", typeAttr, e)
-    }
-  }
-}
 
 private object Logging {
   private val FatalMarker: Marker = MarkerFactory.getMarker("FATAL")
@@ -48,7 +31,7 @@ trait Logging {
 
   protected var logIdent: String = _
 
-  Log4jControllerRegistration
+  Log4jControllerRegistration.register()
 
   protected def loggerName: String = getClass.getName
 

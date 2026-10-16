@@ -17,7 +17,6 @@
 package org.apache.kafka.tiered.storage.integration;
 
 import org.apache.kafka.clients.admin.OffsetSpec;
-import org.apache.kafka.clients.consumer.ConsumerConfig;
 import org.apache.kafka.clients.consumer.GroupProtocol;
 import org.apache.kafka.common.test.ClusterInstance;
 import org.apache.kafka.common.test.api.ClusterConfig;
@@ -26,9 +25,7 @@ import org.apache.kafka.common.test.api.Type;
 import org.apache.kafka.common.utils.MockTime;
 import org.apache.kafka.common.utils.Time;
 import org.apache.kafka.storage.internals.log.EpochEntry;
-import org.apache.kafka.tiered.storage.TieredStorageTestAction;
 import org.apache.kafka.tiered.storage.TieredStorageTestBuilder;
-import org.apache.kafka.tiered.storage.TieredStorageTestContext;
 import org.apache.kafka.tiered.storage.specs.KeyValueSpec;
 
 import java.util.List;
@@ -137,17 +134,6 @@ public final class ListOffsetsTest {
                 .expectListOffsets(topicA, p0, OffsetSpec.latestTiered(), new EpochEntry(NO_PARTITION_LEADER_EPOCH, 3))
                 .expectListOffsets(topicA, p0, OffsetSpec.latest(), new EpochEntry(1, 6));
 
-        Map<String, Object> extraConsumerProps = Map.of(
-                ConsumerConfig.GROUP_PROTOCOL_CONFIG, groupProtocol.name().toLowerCase(Locale.ROOT)
-        );
-        try (TieredStorageTestContext context = new TieredStorageTestContext(clusterInstance, extraConsumerProps)) {
-            try {
-                for (TieredStorageTestAction action : builder.complete()) {
-                    action.execute(context);
-                }
-            } finally {
-                context.printReport(System.out);
-            }
-        }
+        builder.build().execute(clusterInstance, groupProtocol);
     }
 }

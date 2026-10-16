@@ -16,6 +16,7 @@
  */
 package org.apache.kafka.streams.state;
 
+import org.apache.kafka.common.annotation.InterfaceAudience;
 import org.apache.kafka.common.utils.Bytes;
 
 /**
@@ -28,6 +29,7 @@ import org.apache.kafka.common.utils.Bytes;
  *   <li>{@code null} value bytes should never be returned in range query results.</li>
  * </ol>
  */
+@InterfaceAudience.Public
 public interface SessionBytesStoreSupplier extends StoreSupplier<SessionStore<Bytes, byte[]>> {
 
     /**

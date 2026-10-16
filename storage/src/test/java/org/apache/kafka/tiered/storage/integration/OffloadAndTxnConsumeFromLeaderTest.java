@@ -24,9 +24,7 @@ import org.apache.kafka.common.test.api.ClusterConfig;
 import org.apache.kafka.common.test.api.ClusterTemplate;
 import org.apache.kafka.common.test.api.Type;
 import org.apache.kafka.server.log.remote.storage.RemoteLogManagerConfig;
-import org.apache.kafka.tiered.storage.TieredStorageTestAction;
 import org.apache.kafka.tiered.storage.TieredStorageTestBuilder;
-import org.apache.kafka.tiered.storage.TieredStorageTestContext;
 import org.apache.kafka.tiered.storage.specs.FetchCountAndOp;
 import org.apache.kafka.tiered.storage.specs.KeyValueSpec;
 import org.apache.kafka.tiered.storage.specs.RemoteFetchCount;
@@ -111,15 +109,8 @@ public final class OffloadAndTxnConsumeFromLeaderTest {
                 ConsumerConfig.GROUP_PROTOCOL_CONFIG, groupProtocol.name().toLowerCase(Locale.ROOT),
                 ConsumerConfig.ISOLATION_LEVEL_CONFIG, IsolationLevel.READ_COMMITTED.toString()
         );
-        try (TieredStorageTestContext context = new TieredStorageTestContext(clusterInstance, extraConsumerProps)) {
-            try {
-                for (TieredStorageTestAction action : builder.complete()) {
-                    action.execute(context);
-                }
-            } finally {
-                context.printReport(System.out);
-            }
-        }
+
+        builder.build().execute(clusterInstance, extraConsumerProps);
     }
 
     private static RemoteFetchCount getRemoteFetchCount() {

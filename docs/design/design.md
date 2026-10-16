@@ -1,6 +1,6 @@
 ---
 title: Design
-description: 
+description: Kafka architecture design and the principles behind its core features.
 weight: 1
 tags: ['kafka', 'docs']
 aliases: 
@@ -302,7 +302,7 @@ In distributed systems terminology we only attempt to handle a "fail/recover" mo
 Only committed messages are ever given out to the consumer. This means that the consumer need not worry about potentially seeing a message that could be lost if the leader fails. Producers, on the other hand, have the option of either waiting for the message to be committed or not, depending on their preference for tradeoff between latency and durability. This preference is controlled by the `acks` setting that the producer uses. Note that topics have a setting for the minimum number of in-sync replicas (`min.insync.replicas`) that is checked when the producer requests acknowledgment that a message has been written to the full set of in-sync replicas. If a less stringent acknowledgment is requested by the producer, then the message is committed asynchronously across the set of in-sync replicas if `acks=0`, or synchronously only on the leader if `acks=1`. Regardless of the `acks` setting, the messages will not be visible to the consumers until all the following conditions are met: 
 
   1. The messages are replicated to all the in-sync replicas.
-  2. The number of the in-sync replicas is no less than the `min.insync.replicas` setting.
+  2. The number of the in-sync replicas is no less than the effective minimum in-sync replica count, `min(min.insync.replicas, replica count)`. If `min.insync.replicas` is configured higher than the partition's replica count, the replica count is used instead, since the ISR can never exceed it.
 
 
 
@@ -404,7 +404,7 @@ This functionality is inspired by one of LinkedIn's oldest and most successful p
 
 Here is a high-level picture that shows the logical structure of a Kafka log with the offset for each message. 
 
-![](/43/images/log_cleaner_anatomy.png)
+![](/{version}/images/log_cleaner_anatomy.png)
 
 The head of the log is identical to a traditional Kafka log. It has dense, sequential offsets and retains all messages. Log compaction adds an option for handling the tail of the log. The picture above shows a log with a compacted tail. Note that the messages in the tail of the log retain the original offset assigned when they were first written--that never changes. Note also that all offsets remain valid positions in the log, even if the message with that offset has been compacted away; in this case this position is indistinguishable from the next highest offset that does appear in the log. For example, in the picture above the offsets 36, 37, and 38 are all equivalent positions and a read beginning at any of these offsets would return a message set beginning with 38. 
 
@@ -412,7 +412,7 @@ Compaction also allows for deletes. A message with a key and a null payload will
 
 The compaction is done in the background by periodically recopying log segments. Cleaning does not block reads and can be throttled to use no more than a configurable amount of I/O throughput to avoid impacting producers and consumers. The actual process of compacting a log segment looks something like this: 
 
-![](/43/images/log_compaction.png)
+![](/{version}/images/log_compaction.png)
 
 ### What guarantees does log compaction provide? 
 
@@ -454,7 +454,11 @@ This can be used to prevent messages newer than a minimum message age from being
 log.cleaner.max.compaction.lag.ms
 ```
 
-This can be used to prevent log with low produce rate from remaining ineligible for compaction for an unbounded duration. If not set, logs that do not exceed min.cleanable.dirty.ratio are not compacted. Note that this compaction deadline is not a hard guarantee since it is still subjected to the availability of log cleaner threads and the actual compaction time. You will want to monitor the uncleanable-partitions-count, max-clean-time-secs and max-compaction-delay-secs metrics. 
+This can be used to prevent log with low produce rate from remaining ineligible for compaction for an unbounded duration. If not set, logs that do not exceed min.cleanable.dirty.ratio are not compacted.
+
+Because the active segment is never compacted (as noted above), records become eligible for compaction only through active segment rolling. For a compacted topic the active segment is rolled when the first of these is reached: it grows to segment.bytes, or its age reaches the smaller of segment.ms and max.compaction.lag.ms. So max.compaction.lag.ms governs two distinct things. First, it triggers active segment rolling by lowering the effective time-based roll threshold to the smaller of segment.ms and max.compaction.lag.ms, moving older records out of the active segment. Second, max.compaction.lag.ms then makes the rolled records eligible for compaction even when the log's dirty ratio is below min.cleanable.dirty.ratio.
+
+Note that this compaction deadline is not a hard guarantee since it is still subjected to the availability of log cleaner threads and the actual compaction time. You will want to monitor the uncleanable-partitions-count, max-clean-time-secs and max-compaction-delay-secs metrics. 
 
 Further cleaner configurations are described [here](/documentation.html#brokerconfigs). 
 

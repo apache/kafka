@@ -17,9 +17,12 @@
 
 package org.apache.kafka.clients.admin;
 
+import org.apache.kafka.common.annotation.InterfaceAudience;
+
 /**
  * Identifies the endpoint type, as specified by KIP-919.
  */
+@InterfaceAudience.Public
 public enum EndpointType {
     UNKNOWN((byte) 0),
     BROKER((byte) 1),

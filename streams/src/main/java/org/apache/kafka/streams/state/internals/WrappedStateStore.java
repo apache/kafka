@@ -175,6 +175,11 @@ public abstract class WrappedStateStore<S extends StateStore, K, V> implements S
     }
 
     @Override
+    public long approximateNumUncommittedBytes() {
+        return wrapped.approximateNumUncommittedBytes();
+    }
+
+    @Override
     public Position getPosition() {
         return wrapped.getPosition();
     }

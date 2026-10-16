@@ -108,12 +108,20 @@ class MetricsTest extends KafkaServerTestHarness with Logging {
 
   @Test
   def testLinuxIoMetrics(): Unit = {
-    // Check if linux-disk-{read,write}-bytes metrics either do or do not exist depending on whether we are or are not
+    // Check if the linux-disk-* I/O metrics either do or do not exist depending on whether we are or are not
     // able to collect those metrics on the platform where this test is running.
     val usable = new LinuxIoMetricsCollector("/proc", Time.SYSTEM).usable()
     val expectedCount = if (usable) 1 else 0
     val metrics = KafkaYammerMetrics.defaultRegistry.allMetrics
-    Set("linux-disk-read-bytes", "linux-disk-write-bytes").foreach(name =>
+    Set(
+      "linux-disk-read-bytes",
+      "linux-disk-write-bytes",
+      "linux-disk-rchar",
+      "linux-disk-wchar",
+      "linux-disk-syscr",
+      "linux-disk-syscw",
+      "linux-disk-cancelled-write-bytes"
+    ).foreach(name =>
       assertEquals(metrics.keySet.asScala.count(_.getMBeanName == s"$requiredKafkaServerPrefix=$name"), expectedCount))
   }
 
@@ -175,9 +183,8 @@ class MetricsTest extends KafkaServerTestHarness with Logging {
     val bytesIn = s"${BrokerTopicMetrics.BYTES_IN_PER_SEC},topic=$topic"
     val bytesOut = s"${BrokerTopicMetrics.BYTES_OUT_PER_SEC},topic=$topic"
 
-    val topicConfig = new Properties
-    topicConfig.setProperty(TopicConfig.MIN_IN_SYNC_REPLICAS_CONFIG, "2")
-    createTopic(topic, 1, numNodes, topicConfig)
+    val topicConfigs = util.Map.of(TopicConfig.MIN_IN_SYNC_REPLICAS_CONFIG, "2")
+    createTopic(topic, 1, numNodes, topicConfigs)
     // Produce a few messages to create the metrics
     TestUtils.generateAndProduceMessages(brokers, topic, nMessages)
 

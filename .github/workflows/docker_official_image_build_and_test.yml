@@ -53,7 +53,7 @@ jobs:
       run: |
         python docker_official_image_build_test.py kafka/test -tag=test -type=$IMAGE_TYPE -v=$KAFKA_VERSION
     - name: Run CVE scan
-      uses: lhotari/sandboxed-trivy-action@555963036b2012b44c1071508a236e569db28ebb # v1.0.1
+      uses: lhotari/sandboxed-trivy-action@f01374b6cc3bf7264ab238293e94f6db7ada6dd0 # v1.0.2
       with:
         scan-type: 'image'
         scan-ref: 'kafka/test:test'

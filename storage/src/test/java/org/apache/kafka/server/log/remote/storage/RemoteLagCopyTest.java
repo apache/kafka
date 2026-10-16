@@ -44,7 +44,6 @@ import java.util.HashMap;
 import java.util.List;
 import java.util.Map;
 import java.util.Optional;
-import java.util.Properties;
 import java.util.concurrent.atomic.AtomicLong;
 
 import static org.apache.kafka.server.log.remote.storage.RemoteLogManagerConfig.DEFAULT_REMOTE_LOG_METADATA_MANAGER_CONFIG_PREFIX;
@@ -85,7 +84,6 @@ public class RemoteLagCopyTest {
     private final UnifiedLog mockLog = mock(UnifiedLog.class);
 
     private final Metrics metrics = new Metrics(time);
-    private final Properties brokerConfig = kafka.utils.TestUtils.createDummyBrokerConfig();
     private final TopicIdPartition leaderTopicIdPartition =
             new TopicIdPartition(Uuid.randomUuid(), new TopicPartition("Leader", 0));
     private final Optional<Endpoint> endPoint =
@@ -97,11 +95,19 @@ public class RemoteLagCopyTest {
 
     @BeforeEach
     void setUp() throws Exception {
-        Properties props = brokerConfig;
-        props.setProperty(RemoteLogManagerConfig.REMOTE_LOG_STORAGE_SYSTEM_ENABLE_PROP, "true");
-        props.setProperty(RemoteLogManagerConfig.REMOTE_LOG_MANAGER_TASK_INTERVAL_MS_PROP, "100");
-        appendRLMConfig(props);
-        config = new RemoteLogManagerConfig(new AbstractConfig(RemoteLogManagerConfig.configDef(), props));
+        Map<String, Object> configs = Map.of(
+            RemoteLogManagerConfig.REMOTE_LOG_STORAGE_SYSTEM_ENABLE_PROP, true,
+            RemoteLogManagerConfig.REMOTE_LOG_MANAGER_TASK_INTERVAL_MS_PROP, 100,
+            RemoteLogManagerConfig.REMOTE_STORAGE_MANAGER_CLASS_NAME_PROP, NoOpRemoteStorageManager.class.getName(),
+            RemoteLogManagerConfig.REMOTE_LOG_METADATA_MANAGER_CLASS_NAME_PROP, NoOpRemoteLogMetadataManager.class.getName(),
+            DEFAULT_REMOTE_STORAGE_MANAGER_CONFIG_PREFIX + remoteLogStorageTestProp, remoteLogStorageTestVal,
+            DEFAULT_REMOTE_LOG_METADATA_MANAGER_CONFIG_PREFIX + TopicBasedRemoteLogMetadataManagerConfig.REMOTE_LOG_METADATA_TOPIC_PARTITIONS_PROP, remoteLogMetadataTopicPartitionsNum,
+            DEFAULT_REMOTE_LOG_METADATA_MANAGER_CONFIG_PREFIX + remoteLogMetadataTestProp, remoteLogMetadataTestVal,
+            DEFAULT_REMOTE_LOG_METADATA_MANAGER_CONFIG_PREFIX + remoteLogMetadataCommonClientTestProp, remoteLogMetadataCommonClientTestVal,
+            DEFAULT_REMOTE_LOG_METADATA_MANAGER_CONFIG_PREFIX + remoteLogMetadataConsumerTestProp, remoteLogMetadataConsumerTestVal,
+            DEFAULT_REMOTE_LOG_METADATA_MANAGER_CONFIG_PREFIX + remoteLogMetadataProducerTestProp, remoteLogMetadataProducerTestVal
+        );
+        config = new RemoteLogManagerConfig(new AbstractConfig(RemoteLogManagerConfig.configDef(), configs));
         brokerTopicStats = new BrokerTopicStats(config.isRemoteStorageSystemEnabled());
 
         remoteLogManager = new RemoteLogManager(config, brokerId, logDir, clusterId, time,
@@ -288,9 +294,9 @@ public class RemoteLagCopyTest {
 
         Map<String, Long> logProps = new HashMap<>();
         logProps.put(TopicConfig.RETENTION_MS_CONFIG, 10_000L);
-        logProps.put(TopicConfig.REMOTE_COPY_LAG_MS_CONFIG, LogConfig.DEFAULT_REMOTE_COPY_LAG_MS);
+        logProps.put(TopicConfig.REMOTE_COPY_LAG_MS_CONFIG, RemoteLogManagerConfig.DEFAULT_LOG_REMOTE_COPY_LAG_MS);
         logProps.put(TopicConfig.RETENTION_BYTES_CONFIG, 10_000L);
-        logProps.put(TopicConfig.REMOTE_COPY_LAG_BYTES_CONFIG, LogConfig.DEFAULT_REMOTE_COPY_LAG_BYTES);
+        logProps.put(TopicConfig.REMOTE_COPY_LAG_BYTES_CONFIG, RemoteLogManagerConfig.DEFAULT_LOG_REMOTE_COPY_LAG_BYTES);
         LogConfig logConfig = new LogConfig(logProps);
         when(log.config()).thenReturn(logConfig);
         when(log.logSegments(5L, Long.MAX_VALUE)).thenReturn(List.of(segment1, segment2, activeSegment));
@@ -803,24 +809,5 @@ public class RemoteLagCopyTest {
         );
         List<RemoteLogManager.EnrichedLogSegment> actual = task.candidateLogSegments(log, 5L, 20L);
         assertEquals(expected, actual);
-    }
-
-    private void appendRLMConfig(Properties props) {
-        props.put(RemoteLogManagerConfig.REMOTE_LOG_STORAGE_SYSTEM_ENABLE_PROP, true);
-        props.put(RemoteLogManagerConfig.REMOTE_STORAGE_MANAGER_CLASS_NAME_PROP,
-                NoOpRemoteStorageManager.class.getName());
-        props.put(RemoteLogManagerConfig.REMOTE_LOG_METADATA_MANAGER_CLASS_NAME_PROP,
-                NoOpRemoteLogMetadataManager.class.getName());
-        props.put(DEFAULT_REMOTE_STORAGE_MANAGER_CONFIG_PREFIX + remoteLogStorageTestProp, remoteLogStorageTestVal);
-        props.put(DEFAULT_REMOTE_LOG_METADATA_MANAGER_CONFIG_PREFIX
-                        + TopicBasedRemoteLogMetadataManagerConfig.REMOTE_LOG_METADATA_TOPIC_PARTITIONS_PROP,
-                remoteLogMetadataTopicPartitionsNum);
-        props.put(DEFAULT_REMOTE_LOG_METADATA_MANAGER_CONFIG_PREFIX + remoteLogMetadataTestProp, remoteLogMetadataTestVal);
-        props.put(DEFAULT_REMOTE_LOG_METADATA_MANAGER_CONFIG_PREFIX + remoteLogMetadataCommonClientTestProp,
-                remoteLogMetadataCommonClientTestVal);
-        props.put(DEFAULT_REMOTE_LOG_METADATA_MANAGER_CONFIG_PREFIX + remoteLogMetadataConsumerTestProp,
-                remoteLogMetadataConsumerTestVal);
-        props.put(DEFAULT_REMOTE_LOG_METADATA_MANAGER_CONFIG_PREFIX + remoteLogMetadataProducerTestProp,
-                remoteLogMetadataProducerTestVal);
     }
 }

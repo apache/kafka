@@ -41,7 +41,7 @@ import static org.apache.kafka.raft.QuorumState.unattachedOrProspectiveCanGrantV
  * request from the leader.
  */
 
-public class UnattachedState implements EpochState {
+public final class UnattachedState implements EpochState {
     private final int epoch;
     private final OptionalInt leaderId;
     private final Optional<ReplicaKey> votedKey;
@@ -85,6 +85,11 @@ public class UnattachedState implements EpochState {
     @Override
     public int epoch() {
         return epoch;
+    }
+
+    @Override
+    public LeaderAndEpoch leaderAndEpoch() {
+        return new LeaderAndEpoch(leaderId, epoch);
     }
 
     @Override

@@ -55,6 +55,11 @@ public interface ChangelogReader extends ChangelogRegister {
     Set<TopicPartition> completedChangelogs();
 
     /**
+     * @return the logical changelog partitions end-offsets
+     */
+    Map<TopicPartition, Long> logicalChangelogEndOffsets();
+
+    /**
      * Returns whether all changelog partitions were completely read.
      *
      * Since changelog partitions for standby tasks are never completely read, this method will always return

@@ -19,6 +19,7 @@ package org.apache.kafka.server.share.dlq;
 
 import org.apache.kafka.clients.KafkaClient;
 import org.apache.kafka.common.utils.Time;
+import org.apache.kafka.server.share.LogReader;
 import org.apache.kafka.server.share.metrics.ShareGroupMetrics;
 import org.apache.kafka.server.util.timer.Timer;
 
@@ -45,9 +46,10 @@ public class DefaultShareGroupDLQManager implements ShareGroupDLQManager {
         ShareGroupDLQMetadataCacheHelper cacheHelper,
         Time time,
         Timer timer,
-        ShareGroupMetrics metrics
+        ShareGroupMetrics shareGroupMetrics,
+        LogReader logReader
     ) {
-        DefaultShareGroupDLQManager instance = new DefaultShareGroupDLQManager(client, cacheHelper, time, timer, metrics);
+        DefaultShareGroupDLQManager instance = new DefaultShareGroupDLQManager(client, cacheHelper, time, timer, shareGroupMetrics, logReader);
         instance.start();
         return instance;
     }
@@ -57,24 +59,25 @@ public class DefaultShareGroupDLQManager implements ShareGroupDLQManager {
         ShareGroupDLQMetadataCacheHelper cacheHelper,
         Time time,
         Timer timer,
-        ShareGroupMetrics shareGroupMetrics
+        ShareGroupMetrics shareGroupMetrics,
+        LogReader logReader
     ) {
-        this.stateManager = new ShareGroupDLQStateManager(client, cacheHelper, time, timer, shareGroupMetrics);
+        stateManager = new ShareGroupDLQStateManager(client, cacheHelper, time, timer, shareGroupMetrics, logReader);
     }
 
     private void start() {
-        this.stateManager.start();
+        stateManager.start();
     }
 
     @Override
     public CompletableFuture<Void> enqueue(ShareGroupDLQRecordParameter param) {
         try {
-            validate(param);
+            ShareGroupDLQValidator.validateParam(param);
+            return stateManager.dlq(param);
         } catch (Exception e) {
-            log.error("Unable to validate dlq record parameters", e);
+            log.error("Unable to enqueue DLQ request", e);
             return CompletableFuture.failedFuture(e);
         }
-        return stateManager.dlq(param);
     }
 
     @Override
@@ -83,41 +86,6 @@ public class DefaultShareGroupDLQManager implements ShareGroupDLQManager {
             stateManager.stop();
         } catch (Exception e) {
             log.error("Unable to stop DLQ state manager", e);
-        }
-    }
-
-    private static void validate(ShareGroupDLQRecordParameter param) {
-        String prefix = "DLQ records parameters";
-        if (param == null) {
-            throw new IllegalArgumentException(prefix + " cannot be null.");
-        }
-
-        if (param.groupId() == null || param.groupId().isEmpty()) {
-            throw new IllegalArgumentException(prefix + " group cannot be null or empty.");
-        }
-
-        if (param.topicIdPartition() == null) {
-            throw new IllegalArgumentException(prefix + " topic/partition data cannot be null or empty.");
-        }
-
-        if (param.topicIdPartition().topicId() == null) {
-            throw new IllegalArgumentException(prefix + " topic id data cannot be null or empty.");
-        }
-
-        if (param.topicIdPartition().partition() < 0) {
-            throw new IllegalArgumentException(prefix + " partition cannot be negative.");
-        }
-
-        if (param.lastOffset() < param.firstOffset()) {
-            throw new IllegalArgumentException(prefix + " last offset cannot be less than first offset.");
-        }
-
-        if (param.firstOffset() < 0) {
-            throw new IllegalArgumentException(prefix + " first offset cannot be negative.");
-        }
-
-        if (param.lastOffset() < 0) {
-            throw new IllegalArgumentException(prefix + " last offset cannot be negative.");
         }
     }
 }

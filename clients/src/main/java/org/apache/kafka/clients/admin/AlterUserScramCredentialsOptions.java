@@ -17,10 +17,13 @@
 
 package org.apache.kafka.clients.admin;
 
+import org.apache.kafka.common.annotation.InterfaceAudience;
+
 import java.util.List;
 
 /**
  * Options for {@link AdminClient#alterUserScramCredentials(List, AlterUserScramCredentialsOptions)}
  */
+@InterfaceAudience.Public
 public class AlterUserScramCredentialsOptions extends AbstractOptions<AlterUserScramCredentialsOptions> {
 }

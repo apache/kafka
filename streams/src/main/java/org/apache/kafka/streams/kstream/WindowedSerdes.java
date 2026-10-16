@@ -16,11 +16,13 @@
  */
 package org.apache.kafka.streams.kstream;
 
+import org.apache.kafka.common.annotation.InterfaceAudience;
 import org.apache.kafka.common.serialization.Deserializer;
 import org.apache.kafka.common.serialization.Serde;
 import org.apache.kafka.common.serialization.Serdes;
 import org.apache.kafka.common.serialization.Serializer;
 
+@InterfaceAudience.Public
 public class WindowedSerdes {
 
     public static class TimeWindowedSerde<T> extends Serdes.WrapperSerde<Windowed<T>> {

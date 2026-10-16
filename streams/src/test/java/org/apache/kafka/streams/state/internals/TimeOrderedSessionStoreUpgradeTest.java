@@ -28,6 +28,7 @@ import org.apache.kafka.streams.StreamsBuilder;
 import org.apache.kafka.streams.StreamsConfig;
 import org.apache.kafka.streams.TestInputTopic;
 import org.apache.kafka.streams.TopologyTestDriver;
+import org.apache.kafka.streams.TopologyTestDriverBuilder;
 import org.apache.kafka.streams.kstream.Consumed;
 import org.apache.kafka.streams.kstream.EmitStrategy;
 import org.apache.kafka.streams.kstream.Grouped;
@@ -350,7 +351,7 @@ public class TimeOrderedSessionStoreUpgradeTest {
             .count(Materialized.<String, Long, SessionStore<Bytes, byte[]>>as(MATERIALIZED_STORE)
                 .withRetention(Duration.ofMinutes(5)));
 
-        try (final TopologyTestDriver driver = new TopologyTestDriver(streamsBuilder.build(), dslProps)) {
+        try (final TopologyTestDriver driver = new TopologyTestDriverBuilder(streamsBuilder.build()).withConfig(dslProps).build()) {
             final TestInputTopic<String, String> inputTopic =
                 driver.createInputTopic(INPUT_TOPIC, new StringSerializer(), new StringSerializer());
 

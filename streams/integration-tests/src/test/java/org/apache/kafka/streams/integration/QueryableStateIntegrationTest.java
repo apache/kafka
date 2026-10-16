@@ -30,7 +30,6 @@ import org.apache.kafka.common.utils.Bytes;
 import org.apache.kafka.server.util.MockTime;
 import org.apache.kafka.streams.KafkaStreams;
 import org.apache.kafka.streams.KafkaStreams.State;
-import org.apache.kafka.streams.KafkaStreamsTest;
 import org.apache.kafka.streams.KeyQueryMetadata;
 import org.apache.kafka.streams.KeyValue;
 import org.apache.kafka.streams.LagInfo;
@@ -60,7 +59,6 @@ import org.apache.kafka.test.MockMapper;
 import org.apache.kafka.test.NoRetryException;
 import org.apache.kafka.test.TestUtils;
 
-import org.hamcrest.Matchers;
 import org.junit.jupiter.api.AfterAll;
 import org.junit.jupiter.api.AfterEach;
 import org.junit.jupiter.api.BeforeAll;
@@ -84,6 +82,7 @@ import java.util.ArrayList;
 import java.util.Arrays;
 import java.util.Collections;
 import java.util.Comparator;
+import java.util.HashMap;
 import java.util.HashSet;
 import java.util.List;
 import java.util.Map;
@@ -111,12 +110,12 @@ import static org.apache.kafka.streams.state.QueryableStoreTypes.sessionStore;
 import static org.apache.kafka.streams.utils.TestUtils.safeUniqueTestName;
 import static org.apache.kafka.streams.utils.TestUtils.waitForApplicationState;
 import static org.apache.kafka.test.TestUtils.retryOnExceptionWithTimeout;
-import static org.hamcrest.MatcherAssert.assertThat;
-import static org.hamcrest.Matchers.is;
-import static org.hamcrest.core.IsEqual.equalTo;
 import static org.junit.jupiter.api.Assertions.assertEquals;
+import static org.junit.jupiter.api.Assertions.assertFalse;
+import static org.junit.jupiter.api.Assertions.assertNotNull;
 import static org.junit.jupiter.api.Assertions.assertNull;
 import static org.junit.jupiter.api.Assertions.assertThrows;
+import static org.junit.jupiter.api.Assertions.assertTrue;
 
 @Timeout(600)
 @Tag("integration")
@@ -285,16 +284,16 @@ public class QueryableStateIntegrationTest {
         for (int i = 0; i < streamsList.size(); i++) {
             final Map<String, Map<Integer, LagInfo>> localLags = streamsList.get(i).allLocalStorePartitionLags();
             final int expectedPartitions = partitionsPerStreamsInstance.get(i);
-            assertThat(localLags.values().stream().mapToInt(Map::size).sum(), equalTo(expectedPartitions));
+            assertEquals(expectedPartitions, localLags.values().stream().mapToInt(Map::size).sum());
             if (expectedPartitions > 0) {
-                assertThat(localLags.keySet(), equalTo(stores));
+                assertEquals(stores, localLags.keySet());
             }
         }
     }
 
     private void verifyAllKVKeys(final List<KafkaStreams> streamsList,
                                  final KafkaStreams streams,
-                                 final KafkaStreamsTest.StateListenerStub stateListener,
+                                 final StateListenerStub stateListener,
                                  final Set<String> keys,
                                  final String storeName,
                                  final long timeout,
@@ -314,7 +313,7 @@ public class QueryableStateIntegrationTest {
                         continue;
                     }
                     if (!pickInstanceByPort) {
-                        assertThat("Should have standbys to query from", !queryMetadata.standbyHosts().isEmpty());
+                        assertFalse(queryMetadata.standbyHosts().isEmpty(), "Should have standbys to query from");
                     }
 
                     final int index = queryMetadata.activeHost().port();
@@ -346,7 +345,7 @@ public class QueryableStateIntegrationTest {
 
     private void verifyAllWindowedKeys(final List<KafkaStreams> streamsList,
                                        final KafkaStreams streams,
-                                       final KafkaStreamsTest.StateListenerStub stateListenerStub,
+                                       final StateListenerStub stateListenerStub,
                                        final Set<String> keys,
                                        final String storeName,
                                        final Long from,
@@ -368,9 +367,9 @@ public class QueryableStateIntegrationTest {
                         continue;
                     }
                     if (pickInstanceByPort) {
-                        assertThat(queryMetadata.standbyHosts().size(), equalTo(0));
+                        assertEquals(0, queryMetadata.standbyHosts().size());
                     } else {
-                        assertThat("Should have standbys to query from", !queryMetadata.standbyHosts().isEmpty());
+                        assertFalse(queryMetadata.standbyHosts().isEmpty(), "Should have standbys to query from");
                     }
 
                     final int index = queryMetadata.activeHost().port();
@@ -437,8 +436,9 @@ public class QueryableStateIntegrationTest {
             }
         }
 
-        assertThat(reason.toString(),
-            noMetadataKeys.isEmpty() && nullStoreKeys.isEmpty() && nullValueKeys.isEmpty() && exceptionalKeys.isEmpty());
+        assertTrue(
+            noMetadataKeys.isEmpty() && nullStoreKeys.isEmpty() && nullValueKeys.isEmpty() && exceptionalKeys.isEmpty(),
+            reason.toString());
     }
 
     @Test
@@ -466,15 +466,15 @@ public class QueryableStateIntegrationTest {
         try (final KafkaStreams streams = getRunningStreams(properties, builder, true)) {
             final ReadOnlyKeyValueStore<String, String> store =
                 streams.store(fromNameAndType(storeName, keyValueStore()));
-            assertThat(store, Matchers.notNullValue());
+            assertNotNull(store);
 
             final UnknownStateStoreException exception = assertThrows(
                 UnknownStateStoreException.class,
                 () -> streams.store(fromNameAndType("no-table", keyValueStore()))
             );
-            assertThat(
-                exception.getMessage(),
-                is("Cannot get state store no-table because no such store is registered in the topology.")
+            assertEquals(
+                "Cannot get state store no-table because no such store is registered in the topology.",
+                exception.getMessage()
             );
         }
     }
@@ -504,7 +504,7 @@ public class QueryableStateIntegrationTest {
         try (final KafkaStreams streams = getRunningStreams(properties, builder, true)) {
             final ReadOnlyKeyValueStore<String, String> store =
                 streams.store(fromNameAndType(storeName, keyValueStore()));
-            assertThat(store, Matchers.notNullValue());
+            assertNotNull(store);
 
             // Note that to check the type we actually need a store reference,
             // so we can't check when you get the IQ store, only when you
@@ -515,14 +515,12 @@ public class QueryableStateIntegrationTest {
                 InvalidStateStoreException.class,
                 () -> sessionStore.fetch("a")
             );
-            assertThat(
-                exception.getMessage(),
-                is(
-                    "Cannot get state store " + storeName + " because the queryable store type" +
-                        " [class org.apache.kafka.streams.state.QueryableStoreTypes$SessionStoreType]" +
-                        " does not accept the actual store type" +
-                        " [class org.apache.kafka.streams.state.internals.MeteredTimestampedKeyValueStore]."
-                )
+            assertEquals(
+                "Cannot get state store " + storeName + " because the queryable store type" +
+                    " [class org.apache.kafka.streams.state.QueryableStoreTypes$SessionStoreType]" +
+                    " does not accept the actual store type" +
+                    " [class org.apache.kafka.streams.state.internals.MeteredTimestampedKeyValueStore].",
+                exception.getMessage()
             );
         }
     }
@@ -531,7 +529,7 @@ public class QueryableStateIntegrationTest {
     public void shouldBeAbleToQueryDuringRebalance() throws Exception {
         final int numThreads = STREAM_TWO_PARTITIONS;
         final List<KafkaStreams> streamsList = new ArrayList<>(numThreads);
-        final List<KafkaStreamsTest.StateListenerStub> listeners = new ArrayList<>(numThreads);
+        final List<StateListenerStub> listeners = new ArrayList<>(numThreads);
 
         final ProducerRunnable producerRunnable = new ProducerRunnable(streamThree, inputValues, 1);
         producerRunnable.run();
@@ -546,7 +544,7 @@ public class QueryableStateIntegrationTest {
             props.put(StreamsConfig.CLIENT_ID_CONFIG, "instance-" + i);
             final KafkaStreams streams =
                 createCountStream(streamThree, outputTopicThree, outputTopicConcurrentWindowed, storeName, windowStoreName, props);
-            final KafkaStreamsTest.StateListenerStub listener = new KafkaStreamsTest.StateListenerStub();
+            final StateListenerStub listener = new StateListenerStub();
             streams.setStateListener(listener);
             listeners.add(listener);
             streamsList.add(streams);
@@ -585,8 +583,8 @@ public class QueryableStateIntegrationTest {
             // kill N-1 threads
             for (int i = 1; i < streamsList.size(); i++) {
                 final Duration closeTimeout = Duration.ofSeconds(60);
-                assertThat(String.format("Streams instance %s did not close in %d ms", i, closeTimeout.toMillis()),
-                    streamsList.get(i).close(closeTimeout));
+                assertTrue(streamsList.get(i).close(closeTimeout),
+                    String.format("Streams instance %s did not close in %d ms", i, closeTimeout.toMillis()));
             }
 
             waitForApplicationState(streamsList.subList(1, numThreads), State.NOT_RUNNING, Duration.ofSeconds(60));
@@ -632,7 +630,7 @@ public class QueryableStateIntegrationTest {
     public void shouldBeAbleQueryStandbyStateDuringRebalance() throws Exception {
         final int numThreads = STREAM_TWO_PARTITIONS;
         final List<KafkaStreams> streamsList = new ArrayList<>(numThreads);
-        final List<KafkaStreamsTest.StateListenerStub> listeners = new ArrayList<>(numThreads);
+        final List<StateListenerStub> listeners = new ArrayList<>(numThreads);
 
         final ProducerRunnable producerRunnable = new ProducerRunnable(streamThree, inputValues, 1);
         producerRunnable.run();
@@ -649,7 +647,7 @@ public class QueryableStateIntegrationTest {
             props.put(StreamsConfig.STATE_DIR_CONFIG, TestUtils.tempDirectory("shouldBeAbleQueryStandbyStateDuringRebalance-" + i).getPath());
             final KafkaStreams streams =
                 createCountStream(streamThree, outputTopicThree, outputTopicConcurrentWindowed, storeName, windowStoreName, props);
-            final KafkaStreamsTest.StateListenerStub listener = new KafkaStreamsTest.StateListenerStub();
+            final StateListenerStub listener = new StateListenerStub();
             streams.setStateListener(listener);
             listeners.add(listener);
             streamsList.add(streams);
@@ -687,8 +685,8 @@ public class QueryableStateIntegrationTest {
             // kill N-1 threads
             for (int i = 1; i < streamsList.size(); i++) {
                 final Duration closeTimeout = Duration.ofSeconds(60);
-                assertThat(String.format("Streams instance %s did not close in %d ms", i, closeTimeout.toMillis()),
-                    streamsList.get(i).close(closeTimeout));
+                assertTrue(streamsList.get(i).close(closeTimeout),
+                    String.format("Streams instance %s did not close in %d ms", i, closeTimeout.toMillis()));
             }
 
             waitForApplicationState(streamsList.subList(1, numThreads), State.NOT_RUNNING, Duration.ofSeconds(60));
@@ -1189,8 +1187,8 @@ public class QueryableStateIntegrationTest {
             }
         }
 
-        assertThat(countRangeResults, equalTo(expectedRangeResults));
-        assertThat(countAllResults, equalTo(expectedCount));
+        assertEquals(expectedRangeResults, countRangeResults);
+        assertEquals(expectedCount, countAllResults);
     }
 
     private void verifyCanGetByKey(final String[] keys,
@@ -1214,8 +1212,8 @@ public class QueryableStateIntegrationTest {
                 }
             }
         }
-        assertThat(windowState, equalTo(expectedWindowState));
-        assertThat(countState, equalTo(expectedCount));
+        assertEquals(expectedWindowState, windowState);
+        assertEquals(expectedCount, countState);
     }
 
     private void waitUntilAtLeastNumRecordProcessed(final String topic,
@@ -1290,6 +1288,20 @@ public class QueryableStateIntegrationTest {
                     incrementIteration();
                 }
             }
+        }
+    }
+
+    /**
+     * A state listener that records how many times each state was entered, so that tests can assert
+     * a rebalance has happened.
+     */
+    private static class StateListenerStub implements KafkaStreams.StateListener {
+        private final Map<KafkaStreams.State, Long> mapStates = new HashMap<>();
+
+        @Override
+        public void onChange(final KafkaStreams.State newState,
+                             final KafkaStreams.State oldState) {
+            mapStates.merge(newState, 1L, Long::sum);
         }
     }
 

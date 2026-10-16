@@ -1,6 +1,6 @@
 ---
 title: System Properties
-description: System Properties
+description: Java system properties used to configure Kafka components.
 weight: 10
 tags: ['kafka', 'docs']
 aliases: 

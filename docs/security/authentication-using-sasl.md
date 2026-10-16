@@ -1,6 +1,6 @@
 ---
 title: Authentication using SASL
-description: Authentication using SASL
+description: Kafka SASL authentication configuration for brokers and clients.
 weight: 4
 tags: ['kafka', 'docs']
 aliases: 
@@ -485,9 +485,15 @@ Set to a positive integer value if you wish to allow up to some number of positi
    sasl.enabled.mechanisms=OAUTHBEARER
    listener.name.<listener name>.oauthbearer.sasl.server.callback.handler.class=org.apache.kafka.common.security.oauthbearer.OAuthBearerValidatorCallbackHandler
    listener.name.<listener name>.oauthbearer.sasl.oauthbearer.jwks.endpoint.url=https://example.com/oauth2/v1/keys
+   listener.name.<listener name>.oauthbearer.sasl.oauthbearer.expected.audience=my-kafka-cluster
+   listener.name.<listener name>.oauthbearer.sasl.oauthbearer.expected.issuer=https://example.com
    ```
 
+   When `sasl.oauthbearer.jwks.endpoint.url` is set, the broker fails at startup unless `sasl.oauthbearer.expected.audience` and `sasl.oauthbearer.expected.issuer` are also set. To accept tokens without verifying the `aud` or `iss` claim, set `sasl.oauthbearer.allow.unverified.audience` or `sasl.oauthbearer.allow.unverified.issuer` to `true` instead. This is insecure and strongly discouraged.
+
 The OAUTHBEARER broker configuration includes: 
+   * sasl.oauthbearer.allow.unverified.audience
+   * sasl.oauthbearer.allow.unverified.issuer
    * sasl.oauthbearer.clock.skew.seconds
    * sasl.oauthbearer.expected.audience
    * sasl.oauthbearer.expected.issuer
@@ -810,7 +816,7 @@ Tokens can also be cancelled explicitly. If a token is not renewed by the tokenâ
 
 #### Creating Delegation Tokens
 
-Tokens can be created by using Admin APIs or using `kafka-delegation-tokens.sh` script. Delegation token requests (create/renew/expire/describe) should be issued only on SASL or SSL authenticated channels. Tokens can not be requests if the initial authentication is done through delegation token. A token can be created by the user for that user or others as well by specifying the `--owner-principal` parameter. Owner/Renewers can renew or expire tokens. Owner/renewers can always describe their own tokens. To describe other tokens, a DESCRIBE_TOKEN permission needs to be added on the User resource representing the owner of the token. `kafka-delegation-tokens.sh` script examples are given below.
+Tokens can be created by using Admin APIs or using `kafka-delegation-tokens.sh` script. Delegation token requests (create/renew/expire/describe) should be issued only on SASL or SSL authenticated channels. Tokens cannot be requested if the initial authentication is done through delegation token. A token can be created by the user for that user or others as well by specifying the `--owner-principal` parameter. Owners/renewers can renew or expire tokens. Owner/renewers can always describe their own tokens. To describe other tokens, a DESCRIBE_TOKEN permission needs to be added on the User resource representing the owner of the token. `kafka-delegation-tokens.sh` script examples are given below.
 
 Create a delegation token: 
 

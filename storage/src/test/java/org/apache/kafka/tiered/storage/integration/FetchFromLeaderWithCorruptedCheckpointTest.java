@@ -18,7 +18,6 @@ package org.apache.kafka.tiered.storage.integration;
 
 import kafka.server.ReplicaManager;
 
-import org.apache.kafka.clients.consumer.ConsumerConfig;
 import org.apache.kafka.clients.consumer.GroupProtocol;
 import org.apache.kafka.common.test.ClusterInstance;
 import org.apache.kafka.common.test.api.ClusterConfig;
@@ -26,9 +25,7 @@ import org.apache.kafka.common.test.api.ClusterTemplate;
 import org.apache.kafka.common.test.api.Type;
 import org.apache.kafka.storage.internals.checkpoint.CleanShutdownFileHandler;
 import org.apache.kafka.storage.internals.log.LogManager;
-import org.apache.kafka.tiered.storage.TieredStorageTestAction;
 import org.apache.kafka.tiered.storage.TieredStorageTestBuilder;
-import org.apache.kafka.tiered.storage.TieredStorageTestContext;
 import org.apache.kafka.tiered.storage.specs.KeyValueSpec;
 
 import java.util.List;
@@ -109,17 +106,6 @@ public final class FetchFromLeaderWithCorruptedCheckpointTest {
                 .expectFetchFromTieredStorage(broker0, topicA, p0, 4)
                 .consume(topicA, p0, 0L, 5, 4);
 
-        final Map<String, Object> extraConsumerProps = Map.of(
-                ConsumerConfig.GROUP_PROTOCOL_CONFIG, groupProtocol.name().toLowerCase(Locale.ROOT)
-        );
-        try (TieredStorageTestContext context = new TieredStorageTestContext(clusterInstance, extraConsumerProps)) {
-            try {
-                for (TieredStorageTestAction action : builder.complete()) {
-                    action.execute(context);
-                }
-            } finally {
-                context.printReport(System.out);
-            }
-        }
+        builder.build().execute(clusterInstance, groupProtocol);
     }
 }

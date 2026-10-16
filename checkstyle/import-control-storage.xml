@@ -27,13 +27,11 @@
     <allow pkg="javax.management" />
     <allow pkg="org.slf4j" />
     <allow pkg="org.junit" />
-    <allow pkg="org.hamcrest" />
     <allow pkg="org.mockito" />
     <allow pkg="org.opentest4j" />
     <allow pkg="java.security" />
     <allow pkg="javax.net.ssl" />
     <allow pkg="javax.security" />
-    <allow pkg="net.jqwik.api" />
 
     <!-- no one depends on the server -->
     <disallow pkg="kafka" />

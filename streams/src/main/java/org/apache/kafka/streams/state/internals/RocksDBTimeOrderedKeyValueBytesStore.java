@@ -17,6 +17,7 @@
 package org.apache.kafka.streams.state.internals;
 
 import org.apache.kafka.clients.consumer.ConsumerRecord;
+import org.apache.kafka.common.IsolationLevel;
 import org.apache.kafka.common.utils.Bytes;
 import org.apache.kafka.streams.KeyValue;
 import org.apache.kafka.streams.state.internals.PrefixedWindowKeySchemas.TimeFirstWindowKeySchema;
@@ -57,7 +58,8 @@ public class RocksDBTimeOrderedKeyValueBytesStore extends AbstractRocksDBTimeOrd
     }
 
     @Override
-    protected IndexToBaseStoreIterator getIndexToBaseStoreIterator(final SegmentIterator<KeyValueSegment> segmentIterator) {
+    protected IndexToBaseStoreIterator getIndexToBaseStoreIterator(final SegmentIterator<KeyValueSegment> segmentIterator,
+                                                                   final IsolationLevel isolationLevel) {
         throw new UnsupportedOperationException("Do not use for TimeOrderedKeyValueStore");
     }
 

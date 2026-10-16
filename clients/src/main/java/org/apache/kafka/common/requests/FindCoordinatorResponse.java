@@ -115,11 +115,6 @@ public class FindCoordinatorResponse extends AbstractResponse {
         return data.toString();
     }
 
-    @Override
-    public boolean shouldClientThrottle(short version) {
-        return version >= 2;
-    }
-
     public List<FindCoordinatorResponseData.Coordinator> coordinators() {
         if (!data.coordinators().isEmpty())
             return data.coordinators();

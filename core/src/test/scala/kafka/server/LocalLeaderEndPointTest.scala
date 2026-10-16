@@ -17,7 +17,8 @@
 
 package kafka.server
 
-import kafka.server.QuotaFactory.QuotaManagers
+import org.apache.kafka.server.quota.QuotaFactory
+import org.apache.kafka.server.quota.QuotaFactory.QuotaManagers
 import kafka.utils.{Logging, TestUtils}
 import org.apache.kafka.common.compress.Compression
 import org.apache.kafka.common.config.TopicConfig

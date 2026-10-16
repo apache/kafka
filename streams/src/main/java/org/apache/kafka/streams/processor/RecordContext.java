@@ -16,6 +16,7 @@
  */
 package org.apache.kafka.streams.processor;
 
+import org.apache.kafka.common.annotation.InterfaceAudience;
 import org.apache.kafka.common.header.Headers;
 import org.apache.kafka.streams.kstream.ValueTransformerWithKeySupplier;
 
@@ -23,6 +24,7 @@ import org.apache.kafka.streams.kstream.ValueTransformerWithKeySupplier;
  * The context associated with the current record being processed by
  * a {@link org.apache.kafka.streams.processor.api.Processor}
  */
+@InterfaceAudience.Public
 public interface RecordContext {
 
     /**

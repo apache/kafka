@@ -17,9 +17,12 @@
 package org.apache.kafka.tiered.storage;
 
 import org.apache.kafka.clients.admin.OffsetSpec;
+import org.apache.kafka.clients.consumer.ConsumerConfig;
+import org.apache.kafka.clients.consumer.GroupProtocol;
 import org.apache.kafka.clients.producer.ProducerRecord;
 import org.apache.kafka.common.TopicPartition;
 import org.apache.kafka.common.config.TopicConfig;
+import org.apache.kafka.common.test.ClusterInstance;
 import org.apache.kafka.server.log.remote.storage.LocalTieredStorageEvent;
 import org.apache.kafka.storage.internals.log.EpochEntry;
 import org.apache.kafka.tiered.storage.actions.AlterLogDirAction;
@@ -41,6 +44,7 @@ import org.apache.kafka.tiered.storage.actions.ShrinkReplicaAction;
 import org.apache.kafka.tiered.storage.actions.StartBrokerAction;
 import org.apache.kafka.tiered.storage.actions.StopBrokerAction;
 import org.apache.kafka.tiered.storage.actions.UpdateTopicConfigAction;
+import org.apache.kafka.tiered.storage.actions.WaitForEarliestLocalOffsetAction;
 import org.apache.kafka.tiered.storage.specs.ConsumableSpec;
 import org.apache.kafka.tiered.storage.specs.DeletableSpec;
 import org.apache.kafka.tiered.storage.specs.ExpandPartitionCountSpec;
@@ -58,6 +62,7 @@ import java.io.FilenameFilter;
 import java.util.ArrayList;
 import java.util.HashMap;
 import java.util.List;
+import java.util.Locale;
 import java.util.Map;
 
 import static org.junit.jupiter.api.Assertions.assertFalse;
@@ -228,6 +233,15 @@ public final class TieredStorageTestBuilder {
         return this;
     }
 
+    public TieredStorageTestBuilder waitForEarliestLocalOffset(String topic,
+                                                               int partition,
+                                                               long earliestLocalOffset) {
+        assertTrue(partition >= 0, "Partition must be >= 0");
+        assertTrue(earliestLocalOffset >= 0, "Record offset must be >= 0");
+        actions.add(new WaitForEarliestLocalOffsetAction(new TopicPartition(topic, partition), earliestLocalOffset));
+        return this;
+    }
+
     public TieredStorageTestBuilder expectLeaderEpochCheckpoint(int brokerId,
                                                                 String topic,
                                                                 int partition,
@@ -314,8 +328,39 @@ public final class TieredStorageTestBuilder {
         return this;
     }
 
-    public List<TieredStorageTestAction> complete() {
-        return actions;
+    /**
+     * Builds an executable test plan from the actions described so far.
+     */
+    public TieredStorageTestPlan build() {
+        return new TieredStorageTestPlan(actions);
+    }
+
+    public static final class TieredStorageTestPlan {
+
+        private final List<TieredStorageTestAction> actions;
+
+        private TieredStorageTestPlan(List<TieredStorageTestAction> actions) {
+            this.actions = List.copyOf(actions);
+        }
+
+        public void execute(ClusterInstance clusterInstance, GroupProtocol groupProtocol) throws Exception {
+            execute(clusterInstance, Map.of(
+                    ConsumerConfig.GROUP_PROTOCOL_CONFIG,
+                    groupProtocol.name().toLowerCase(Locale.ROOT)
+            ));
+        }
+
+        public void execute(ClusterInstance clusterInstance, Map<String, Object> extraConsumerProps) throws Exception {
+            try (TieredStorageTestContext context = new TieredStorageTestContext(clusterInstance, extraConsumerProps)) {
+                try {
+                    for (TieredStorageTestAction action : actions) {
+                        action.execute(context);
+                    }
+                } finally {
+                    context.printReport(System.out);
+                }
+            }
+        }
     }
 
     private void createProduceAction() {

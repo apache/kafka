@@ -17,7 +17,6 @@
 
 package kafka.server.handlers;
 
-import kafka.server.AuthHelper;
 import kafka.server.KafkaConfig;
 import kafka.utils.TestUtils;
 
@@ -62,6 +61,7 @@ import org.apache.kafka.network.SocketServerConfigs;
 import org.apache.kafka.network.metrics.RequestChannelMetrics;
 import org.apache.kafka.raft.KRaftConfigs;
 import org.apache.kafka.raft.QuorumConfig;
+import org.apache.kafka.server.AuthHelper;
 import org.apache.kafka.server.authorizer.Action;
 import org.apache.kafka.server.authorizer.AuthorizationResult;
 import org.apache.kafka.server.authorizer.Authorizer;
@@ -192,7 +192,7 @@ class DescribeTopicPartitionsRequestHandlerTest {
         KRaftMetadataCache metadataCache = new KRaftMetadataCache(0, () -> KRaftVersion.KRAFT_VERSION_1);
         updateKraftMetadataCache(metadataCache, records);
         DescribeTopicPartitionsRequestHandler handler =
-            new DescribeTopicPartitionsRequestHandler(metadataCache, new AuthHelper(scala.Option.apply(authorizerPlugin)), createKafkaDefaultConfig());
+            new DescribeTopicPartitionsRequestHandler(metadataCache, new AuthHelper(Optional.ofNullable(authorizerPlugin)), createKafkaDefaultConfig());
 
         // 3.1 Basic test
         DescribeTopicPartitionsRequest describeTopicPartitionsRequest = new DescribeTopicPartitionsRequest(
@@ -390,7 +390,7 @@ class DescribeTopicPartitionsRequestHandlerTest {
         KRaftMetadataCache metadataCache = new KRaftMetadataCache(0, () -> KRaftVersion.KRAFT_VERSION_1);
         updateKraftMetadataCache(metadataCache, records);
         DescribeTopicPartitionsRequestHandler handler =
-            new DescribeTopicPartitionsRequestHandler(metadataCache, new AuthHelper(scala.Option.apply(authorizerPlugin)), createKafkaDefaultConfig());
+            new DescribeTopicPartitionsRequestHandler(metadataCache, new AuthHelper(Optional.ofNullable(authorizerPlugin)), createKafkaDefaultConfig());
 
         // 3.1 With cursor point to the first one
         DescribeTopicPartitionsRequest describeTopicPartitionsRequest = new DescribeTopicPartitionsRequest(new DescribeTopicPartitionsRequestData()

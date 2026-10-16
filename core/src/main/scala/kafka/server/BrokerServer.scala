@@ -23,7 +23,7 @@ import kafka.log.LogManager
 import kafka.network.SocketServer
 import kafka.raft.KafkaRaftManager
 import kafka.server.metadata._
-import kafka.server.share.{ReplicaManagerPartitionMetadataProvider, ReplicaManagerLogReader, ShareCoordinatorMetadataCacheHelperImpl, SharePartitionManager}
+import kafka.server.share.{ReplicaManagerLogReader, ReplicaManagerPartitionMetadataProvider, ShareCoordinatorMetadataCacheHelperImpl, SharePartitionManager}
 import org.apache.kafka.common.config.ConfigException
 import org.apache.kafka.common.internals.Plugin
 import org.apache.kafka.common.message.ApiMessageType.ListenerType
@@ -47,6 +47,7 @@ import org.apache.kafka.metadata.publisher.{AclPublisher, DelegationTokenPublish
 import org.apache.kafka.security.{CredentialProvider, DelegationTokenManager}
 import org.apache.kafka.server.FetchSession.FetchSessionCache
 import org.apache.kafka.server.authorizer.Authorizer
+import org.apache.kafka.server.quota.QuotaFactory
 import org.apache.kafka.server.common.{ApiMessageAndVersion, DirectoryEventHandler, NodeToControllerChannelManager, ShareVersion, TopicIdPartition}
 import org.apache.kafka.server.config.{ConfigType, DelegationTokenManagerConfigs}
 import org.apache.kafka.server.log.remote.metadata.storage.BrokerReadyCallback
@@ -58,7 +59,7 @@ import org.apache.kafka.server.share.persister.{DefaultStatePersister, NoOpState
 import org.apache.kafka.server.share.session.ShareSessionCache
 import org.apache.kafka.server.util.timer.{SystemTimer, SystemTimerReaper, Timer}
 import org.apache.kafka.server.util.{Deadline, FutureUtils, KafkaScheduler, NetworkPartitionMetadataClient, PartitionMetadataClient}
-import org.apache.kafka.server.{AssignmentsManager, AutoTopicCreationManager, BrokerFeatures, BrokerLifecycleManager, ClientMetricsManager, DefaultApiVersionManager, DefaultAutoTopicCreationManager, DelayedActionQueue, FetchManager, FetchSessionCacheShard, KRaftTopicCreator, NodeToControllerChannelManagerImpl, ProcessRole, RaftControllerNodeProvider}
+import org.apache.kafka.server.{AssignmentsManager, AutoTopicCreationManager, BrokerFeatures, BrokerLifecycleManager, ClientMetricsManager, DefaultApiVersionManager, DefaultAutoTopicCreationManager, DelayedActionQueue, FetchManager, FetchSessionCacheShard, ForwardingManager, ForwardingManagerImpl, KRaftTopicCreator, NodeToControllerChannelManagerImpl, ProcessRole, RaftControllerNodeProvider}
 import org.apache.kafka.server.transaction.AddPartitionsToTxnManager
 import org.apache.kafka.storage.internals.log.{LogDirFailureChannel, LogManager => JLogManager}
 import org.apache.kafka.storage.log.metrics.BrokerTopicStats
@@ -176,6 +177,8 @@ class BrokerServer(
   private var shareGroupTimer: Timer = _
 
   private var shareGroupDLQManager: ShareGroupDLQManager = _
+
+  private var shareGroupLogReader: ReplicaManagerLogReader = _
 
   private def maybeChangeStatus(from: ProcessStatus, to: ProcessStatus): Boolean = {
     lock.lock()
@@ -396,6 +399,9 @@ class BrokerServer(
       /* create metrics object to be shared with share DLQ manager share partition manager*/
       shareGroupMetrics = new ShareGroupMetrics(time)
 
+      /* create log reader object to share with share group DLQ manager and SharePartitionManager */
+      shareGroupLogReader = new ReplicaManagerLogReader(replicaManager)
+
       /* create share group DLQ manager */
       shareGroupDLQManager = createShareGroupDLQManager()
 
@@ -467,7 +473,7 @@ class BrokerServer(
 
       sharePartitionManager = new SharePartitionManager(
         replicaManager,
-        new ReplicaManagerLogReader(replicaManager),
+        shareGroupLogReader,
         new ReplicaManagerPartitionMetadataProvider(replicaManager),
         (key: DelayedShareFetchKey) => replicaManager.completeDelayedShareFetchRequest(key),
         time,
@@ -745,16 +751,16 @@ class BrokerServer(
   }
 
   private def createShareStatePersister(): Persister = {
-    if (config.shareGroupConfig.shareGroupPersisterClassName.nonEmpty) {
-      val klass = Utils.loadClass(config.shareGroupConfig.shareGroupPersisterClassName, classOf[Object]).asInstanceOf[Class[Persister]]
-      if (klass.getName.equals(classOf[DefaultStatePersister].getName)) {
+    val className = config.shareGroupConfig.shareGroupPersisterClassName
+    if (className.nonEmpty) {
+      if (className.equals(classOf[DefaultStatePersister].getName)) {
         DefaultStatePersister.instance(
           NetworkUtils.buildNetworkClient("Persister", config, metrics, Time.SYSTEM, new LogContext(s"[Persister broker=${config.brokerId}]")),
-          new ShareCoordinatorMetadataCacheHelperImpl(metadataCache, key => shareCoordinator.partitionFor(key), config.interBrokerListenerName, groupConfigManager),
+          new ShareCoordinatorMetadataCacheHelperImpl(metadataCache, key => shareCoordinator.partitionFor(key), config.interBrokerListenerName, groupConfigManager, () => config.messageMaxBytes),
           Time.SYSTEM,
           shareGroupTimer
         )
-      } else if (klass.getName.equals(classOf[NoOpStatePersister].getName)) {
+      } else if (className.equals(classOf[NoOpStatePersister].getName)) {
         info("Using no-op persister")
         new NoOpStatePersister()
       } else {
@@ -769,17 +775,18 @@ class BrokerServer(
   }
 
   private def createShareGroupDLQManager(): ShareGroupDLQManager = {
-    if (config.shareGroupConfig.shareGroupDLQManagerClassName.nonEmpty) {
-      val klass = Utils.loadClass(config.shareGroupConfig.shareGroupDLQManagerClassName, classOf[Object]).asInstanceOf[Class[ShareGroupDLQManager]]
-      if (klass.getName.equals(classOf[DefaultShareGroupDLQManager].getName)) {
+    val className = config.shareGroupConfig.shareGroupDLQManagerClassName
+    if (className.nonEmpty) {
+      if (className.equals(classOf[DefaultShareGroupDLQManager].getName)) {
         DefaultShareGroupDLQManager.instance(
           NetworkUtils.buildNetworkClient("ShareGroupDLQManager", config, metrics, Time.SYSTEM, new LogContext(s"[ShareGroupDLQManager broker=${config.brokerId}]")),
-          new ShareCoordinatorMetadataCacheHelperImpl(metadataCache, key => shareCoordinator.partitionFor(key), config.interBrokerListenerName, groupConfigManager),
+          new ShareCoordinatorMetadataCacheHelperImpl(metadataCache, key => shareCoordinator.partitionFor(key), config.interBrokerListenerName, groupConfigManager, () => config.messageMaxBytes),
           Time.SYSTEM,
           shareGroupTimer,
-          shareGroupMetrics
+          shareGroupMetrics,
+          shareGroupLogReader
         )
-      } else if (klass.getName.equals(classOf[NoOpShareGroupDLQManager].getName)) {
+      } else if (className.equals(classOf[NoOpShareGroupDLQManager].getName)) {
         info("Using no-op share group DLQ manager")
         new NoOpShareGroupDLQManager()
       } else {
@@ -923,9 +930,16 @@ class BrokerServer(
       Utils.closeQuietly(brokerTopicStats, "broker topic stats")
       Utils.closeQuietly(sharePartitionManager, "share partition manager")
 
+      // The order of closing sharePartitionManager, groupCoordinator and persister matters.
+      // groupCoordinator, sharePartitionManager must be closed before the persister so that
+      // new requests from sharePartitionManager, groupCoordinator do not encounter a stopped
+      // persister.
       if (persister != null)
         Utils.swallow(this.logger.underlying, () => persister.stop())
 
+      // The order of closing sharePartitionManager and shareGroupDLQManager matters.
+      // sharePartitionManager must be closed before the shareGroupDLQManager so any new
+      // requests from sharePartitionManager do not encounter a stopped shareGroupDLQManager.
       if (shareGroupDLQManager != null)
         Utils.swallow(this.logger.underlying, () => shareGroupDLQManager.stop())
 

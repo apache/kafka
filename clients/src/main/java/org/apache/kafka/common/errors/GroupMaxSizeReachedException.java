@@ -14,11 +14,15 @@
  * See the License for the specific language governing permissions and
  * limitations under the License.
  */
+
 package org.apache.kafka.common.errors;
+
+import org.apache.kafka.common.annotation.InterfaceAudience;
 
 /**
  * Indicates that a group is already at its configured maximum capacity and cannot accommodate more members
  */
+@InterfaceAudience.Public
 public class GroupMaxSizeReachedException extends ApiException {
     private static final long serialVersionUID = 1L;
 

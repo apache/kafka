@@ -24,6 +24,7 @@ import org.apache.kafka.clients.consumer.internals.metrics.RebalanceMetricsManag
 import org.apache.kafka.common.KafkaException;
 import org.apache.kafka.common.TopicPartition;
 import org.apache.kafka.common.Uuid;
+import org.apache.kafka.common.protocol.Errors;
 import org.apache.kafka.common.requests.AbstractResponse;
 import org.apache.kafka.common.utils.Time;
 
@@ -289,10 +290,69 @@ public abstract class AbstractMembershipManager<R extends AbstractResponse> impl
 
     /**
      * Update member info and transition member state based on a successful heartbeat response.
+     * The common response handling lives here. Group type specifics are
+     * provided through {@link #errorCode(AbstractResponse)}, {@link #memberEpoch(AbstractResponse)}
+     * and {@link #extractAssignment(AbstractResponse)}.
      *
      * @param response Heartbeat response to extract member info and errors from.
      */
-    public abstract void onHeartbeatSuccess(R response);
+    public final void onHeartbeatSuccess(R response) {
+        throwIfUnexpectedError(response);
+
+        MemberState state = state();
+        if (state == MemberState.LEAVING) {
+            log.debug("Ignoring heartbeat response received from broker. Member {} with epoch {} is " +
+                    "already leaving the group.", memberId, memberEpoch);
+            return;
+        }
+
+        if (state == MemberState.UNSUBSCRIBED && memberEpoch(response) < 0 && maybeCompleteLeaveInProgress()) {
+            log.debug("Member {} with epoch {} received a successful response to the heartbeat " +
+                    "to leave the group and completed the leave operation. ", memberId, memberEpoch);
+            return;
+        }
+        if (isNotInGroup()) {
+            log.debug("Ignoring heartbeat response received from broker. Member {} is in {} state" +
+                    " so it's not a member of the group. ", memberId, state);
+            return;
+        }
+        if (memberEpoch(response) < 0) {
+            log.debug("Ignoring heartbeat response received from broker. Member {} with epoch {} " +
+                    "is in {} state and the member epoch is invalid: {}. ", memberId, memberEpoch, state,
+                    memberEpoch(response));
+            maybeCompleteLeaveInProgress();
+            return;
+        }
+
+        updateMemberEpoch(memberEpoch(response));
+
+        Optional<Map<Uuid, SortedSet<Integer>>> assignment = extractAssignment(response);
+        if (assignment.isPresent()) {
+            if (!state.canHandleNewAssignment()) {
+                // New assignment received but member is in a state where it cannot take new
+                // assignments (ex. preparing to leave the group)
+                log.debug("Ignoring new assignment {} received from server because member is in {} state.",
+                        assignment.get(), state);
+                return;
+            }
+            processAssignmentReceived(assignment.get());
+        }
+    }
+
+    private void throwIfUnexpectedError(R response) {
+        short errorCode = errorCode(response);
+        if (errorCode != Errors.NONE.code()) {
+            throw new IllegalArgumentException(String.format(
+                    "Unexpected error in Heartbeat response. Expected no error, but received: %s",
+                    Errors.forCode(errorCode)));
+        }
+    }
+
+    protected abstract short errorCode(R response);
+
+    protected abstract int memberEpoch(R response);
+
+    protected abstract Optional<Map<Uuid, SortedSet<Integer>>> extractAssignment(R response);
 
     /**
      * Notify the member that an error heartbeat response was received.
@@ -890,9 +950,7 @@ public abstract class AbstractMembershipManager<R extends AbstractResponse> impl
 
         // Commit offsets if auto-commit enabled before reconciling a new assignment. Request will
         // be retried until it succeeds, fails with non-retriable error, or timer expires.
-        CompletableFuture<Void> commitResult;
-
-        commitResult = signalReconciliationStarted();
+        CompletableFuture<Void> commitResult = signalReconciliationStarted();
 
         // Execute commit -> onPartitionsRevoked -> onPartitionsAssigned.
         commitResult.whenComplete((__, commitReqError) -> {

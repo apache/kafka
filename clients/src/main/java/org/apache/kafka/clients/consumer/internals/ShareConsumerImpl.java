@@ -55,6 +55,7 @@ import org.apache.kafka.common.Metric;
 import org.apache.kafka.common.MetricName;
 import org.apache.kafka.common.TopicIdPartition;
 import org.apache.kafka.common.Uuid;
+import org.apache.kafka.common.errors.BootstrapResolutionException;
 import org.apache.kafka.common.errors.GroupAuthorizationException;
 import org.apache.kafka.common.errors.InterruptException;
 import org.apache.kafka.common.errors.InvalidGroupIdException;
@@ -77,7 +78,6 @@ import org.apache.kafka.common.utils.internals.LogContext;
 import org.slf4j.Logger;
 import org.slf4j.event.Level;
 
-import java.net.InetSocketAddress;
 import java.time.Duration;
 import java.util.Arrays;
 import java.util.Collection;
@@ -259,7 +259,8 @@ public class ShareConsumerImpl<K, V> implements ShareConsumerDelegate<K, V> {
             this.defaultApiTimeoutMs = config.getInt(ConsumerConfig.DEFAULT_API_TIMEOUT_MS_CONFIG);
             this.time = time;
             List<MetricsReporter> reporters = CommonClientConfigs.metricsReporters(clientId, config);
-            this.clientTelemetryReporter = CommonClientConfigs.telemetryReporter(clientId, config);
+            Uuid clientInstanceId = Uuid.randomUuid();
+            this.clientTelemetryReporter = CommonClientConfigs.telemetryReporter(clientId, clientInstanceId, config);
             this.clientTelemetryReporter.ifPresent(reporters::add);
             this.metrics = createMetrics(config, time, reporters);
             this.asyncConsumerMetrics = new AsyncConsumerMetrics(metrics, CONSUMER_SHARE_METRIC_GROUP);
@@ -272,8 +273,8 @@ public class ShareConsumerImpl<K, V> implements ShareConsumerDelegate<K, V> {
                     metrics.reporters(),
                     Arrays.asList(deserializers.keyDeserializer(), deserializers.valueDeserializer()));
             this.metadata = new ShareConsumerMetadata(config, subscriptions, logContext, clusterResourceListeners);
-            final List<InetSocketAddress> addresses = ClientUtils.parseAndValidateAddresses(config);
-            metadata.bootstrap(addresses);
+            ClientUtils.maybeBootstrapMetadataSynchronously(config,
+                config.getList(CommonClientConfigs.BOOTSTRAP_SERVERS_CONFIG), this.metadata);
 
             this.shareFetchMetricsManager = createShareFetchMetricsManager(metrics);
             ApiVersions apiVersions = new ApiVersions();
@@ -290,6 +291,7 @@ public class ShareConsumerImpl<K, V> implements ShareConsumerDelegate<K, V> {
                     metadata,
                     config,
                     apiVersions,
+                    clientInstanceId,
                     metrics,
                     shareFetchMetricsManager.throttleTimeSensor(),
                     clientTelemetryReporter.map(ClientTelemetryReporter::telemetrySender).orElse(null),
@@ -1095,8 +1097,11 @@ public class ShareConsumerImpl<K, V> implements ShareConsumerDelegate<K, V> {
         try {
             // If users have fatal error, they will get some exceptions in the background queue.
             // When running unsubscribe, these exceptions should be ignored, or users can't unsubscribe successfully.
+            // BootstrapResolutionException is also ignored here: a permanent DNS failure prevents the
+            // unsubscribe from completing normally, but it is not actionable during close.
             processBackgroundEvents(unsubscribeEvent.future(), timer, e -> (e instanceof GroupAuthorizationException
-                || e instanceof TopicAuthorizationException || e instanceof InvalidTopicException));
+                || e instanceof TopicAuthorizationException || e instanceof InvalidTopicException
+                || e instanceof BootstrapResolutionException));
             log.info("Completed releasing assignment and leaving group to close consumer.");
         } catch (TimeoutException e) {
             log.warn("Consumer triggered an unsubscribe event to leave the group but couldn't " +
@@ -1124,6 +1129,12 @@ public class ShareConsumerImpl<K, V> implements ShareConsumerDelegate<K, V> {
         if (this.closed) {
             release();
             throw new IllegalStateException("This consumer has already been closed.");
+        }
+        try {
+            metadata.maybeThrowBootstrapFatalException();
+        } catch (RuntimeException e) {
+            release();
+            throw e;
         }
     }
 

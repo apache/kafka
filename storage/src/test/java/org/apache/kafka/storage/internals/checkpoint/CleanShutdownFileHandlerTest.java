@@ -19,6 +19,7 @@ package org.apache.kafka.storage.internals.checkpoint;
 
 import org.junit.jupiter.api.Test;
 import org.junit.jupiter.api.Timeout;
+import org.junit.jupiter.api.io.TempDir;
 
 import java.io.BufferedWriter;
 import java.io.File;
@@ -26,7 +27,7 @@ import java.io.FileOutputStream;
 import java.io.IOException;
 import java.io.OutputStreamWriter;
 import java.nio.charset.StandardCharsets;
-import java.nio.file.Files;
+import java.nio.file.Path;
 import java.util.OptionalLong;
 
 import static org.junit.jupiter.api.Assertions.assertDoesNotThrow;
@@ -37,10 +38,12 @@ import static org.junit.jupiter.api.Assertions.assertTrue;
 
 @Timeout(value = 10)
 class CleanShutdownFileHandlerTest {
+    @TempDir
+    private Path tempDir;
+
     @Test
     public void testCleanShutdownFileBasic() {
-        File logDir;
-        logDir = assertDoesNotThrow(() -> Files.createTempDirectory("kafka-cleanShutdownFile").toFile());
+        File logDir = tempDir.toFile();
         CleanShutdownFileHandler cleanShutdownFileHandler = new CleanShutdownFileHandler(logDir.getPath());
         assertDoesNotThrow(() -> cleanShutdownFileHandler.write(10L));
         assertTrue(cleanShutdownFileHandler.exists());
@@ -51,8 +54,7 @@ class CleanShutdownFileHandlerTest {
 
     @Test
     public void testCleanShutdownFileNonExist() {
-        File logDir;
-        logDir = assertDoesNotThrow(() -> Files.createTempDirectory("kafka-cleanShutdownFile").toFile());
+        File logDir = tempDir.toFile();
         CleanShutdownFileHandler cleanShutdownFileHandler = new CleanShutdownFileHandler(logDir.getPath());
         assertDoesNotThrow(() -> cleanShutdownFileHandler.write(10L, 0));
         assertTrue(cleanShutdownFileHandler.exists());
@@ -63,8 +65,7 @@ class CleanShutdownFileHandlerTest {
 
     @Test
     public void testCleanShutdownFileCanParseWithUnknownFields() throws IOException {
-        File logDir;
-        logDir = assertDoesNotThrow(() -> Files.createTempDirectory("kafka-cleanShutdownFile").toFile());
+        File logDir = tempDir.toFile();
         CleanShutdownFileHandler cleanShutdownFileHandler = new CleanShutdownFileHandler(logDir.getPath());
 
         FileOutputStream os = new FileOutputStream(cleanShutdownFileHandler.cleanShutdownFile);

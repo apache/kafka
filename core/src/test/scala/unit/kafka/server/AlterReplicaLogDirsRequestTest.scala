@@ -17,6 +17,7 @@
 
 package kafka.server
 
+import java.util
 import java.io.File
 import kafka.utils._
 import org.apache.kafka.common.TopicPartition
@@ -138,15 +139,15 @@ class AlterReplicaLogDirsRequestTest extends BaseRequestTest {
     assertEquals(Errors.UNKNOWN_TOPIC_OR_PARTITION, findErrorForPartition(alterReplicaLogDirsResponse1, tp))
     assertTrue(brokers.head.logManager.getLog(tp).isEmpty)
 
-    val topicProperties = new Properties()
-    topicProperties.put(TopicConfig.RETENTION_BYTES_CONFIG, "1024")
-    // This test needs enough time to wait for dir movement happened.
-    // We don't want files with `.deleted` suffix are removed too fast,
-    // so we can validate there will be orphan files and orphan files will be removed eventually.
-    topicProperties.put(TopicConfig.FILE_DELETE_DELAY_MS_CONFIG, "10000")
-    topicProperties.put(LogConfig.INTERNAL_SEGMENT_BYTES_CONFIG, "1024")
+    val topicConfigs = util.Map.of(
+      TopicConfig.RETENTION_BYTES_CONFIG, "1024",
+      // This test needs enough time to wait for dir movement happened.
+      // We don't want files with `.deleted` suffix are removed too fast,
+      // so we can validate there will be orphan files and orphan files will be removed eventually.
+      TopicConfig.FILE_DELETE_DELAY_MS_CONFIG, "10000",
+      LogConfig.INTERNAL_SEGMENT_BYTES_CONFIG, "1024")
 
-    createTopic(topic, partitionNum, 1, topicProperties)
+    createTopic(topic, partitionNum, 1, topicConfigs)
     assertEquals(logDir1, brokers.head.logManager.getLog(tp).get.dir.getParent)
 
     // send enough records to trigger log rolling

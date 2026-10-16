@@ -14,9 +14,11 @@
  * See the License for the specific language governing permissions and
  * limitations under the License.
  */
+
 package org.apache.kafka.common.security.auth;
 
 import org.apache.kafka.common.Configurable;
+import org.apache.kafka.common.annotation.InterfaceAudience;
 
 import java.security.Provider;
 import java.util.Map;
@@ -24,6 +26,7 @@ import java.util.Map;
 /**
  * An interface for generating security providers.
  */
+@InterfaceAudience.Public
 public interface SecurityProviderCreator extends Configurable {
 
     /**

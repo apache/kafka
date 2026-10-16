@@ -14,7 +14,10 @@
  * See the License for the specific language governing permissions and
  * limitations under the License.
  */
+
 package org.apache.kafka.common.security.oauthbearer;
+
+import org.apache.kafka.common.annotation.InterfaceAudience;
 
 import java.util.Objects;
 
@@ -32,6 +35,7 @@ import javax.security.auth.callback.Callback;
  * OAuth Extensions Error Registry</a>. Callback handlers should communicate
  * other problems by raising an {@code IOException}.
  */
+@InterfaceAudience.Public
 public class OAuthBearerValidatorCallback implements Callback {
     private final String tokenValue;
     private OAuthBearerToken token = null;

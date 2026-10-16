@@ -16,25 +16,23 @@
  */
 package org.apache.kafka.clients.consumer.internals;
 
-import org.apache.kafka.clients.consumer.ConsumerRebalanceListener;
 import org.apache.kafka.clients.consumer.internals.metrics.RebalanceCallbackMetricsManager;
 import org.apache.kafka.common.TopicPartition;
 import org.apache.kafka.common.errors.InterruptException;
 import org.apache.kafka.common.errors.WakeupException;
-import org.apache.kafka.common.metrics.Sensor;
 import org.apache.kafka.common.utils.Time;
 import org.apache.kafka.common.utils.internals.LogContext;
 
 import org.slf4j.Logger;
 
-import java.util.Optional;
 import java.util.Set;
 import java.util.SortedSet;
 
 /**
- * This class encapsulates the invocation of the callback methods defined in the {@link ConsumerRebalanceListener}
- * interface. When consumer group partition assignment changes, these methods are invoked. This class wraps those
- * callback calls with some logging, optional {@link Sensor} updates, etc.
+ * This class encapsulates the invocation of the callback methods defined in the
+ * {@link org.apache.kafka.clients.consumer.ConsumerRebalanceListener} interface. When consumer
+ * group partition assignment changes, these methods are invoked. This class wraps those callback
+ * calls with logging, metrics recording, and exception handling.
  */
 public class ConsumerRebalanceListenerInvoker {
 
@@ -56,19 +54,17 @@ public class ConsumerRebalanceListenerInvoker {
     public Exception invokePartitionsAssigned(final SortedSet<TopicPartition> assignedPartitions) {
         log.info("Adding newly assigned partitions: {}", assignedPartitions);
 
-        Optional<ConsumerRebalanceListener> listener = subscriptions.rebalanceListener();
-
-        if (listener.isPresent()) {
+        if (subscriptions.hasRebalanceListener()) {
             try {
                 final long startMs = time.milliseconds();
-                listener.get().onPartitionsAssigned(assignedPartitions);
+                subscriptions.onPartitionsAssigned(assignedPartitions);
                 metricsManager.recordPartitionsAssignedLatency(time.milliseconds() - startMs);
             } catch (WakeupException | InterruptException e) {
                 throw e;
             } catch (Exception e) {
                 log.error(
                     "User provided listener {} failed on invocation of onPartitionsAssigned for partitions {}",
-                    listener.get().getClass().getName(),
+                    subscriptions.listenerName(),
                     assignedPartitions,
                     e
                 );
@@ -86,19 +82,17 @@ public class ConsumerRebalanceListenerInvoker {
         if (!revokePausedPartitions.isEmpty())
             log.info("The pause flag in partitions {} will be removed due to revocation.", revokePausedPartitions);
 
-        Optional<ConsumerRebalanceListener> listener = subscriptions.rebalanceListener();
-
-        if (listener.isPresent()) {
+        if (subscriptions.hasRebalanceListener()) {
             try {
                 final long startMs = time.milliseconds();
-                listener.get().onPartitionsRevoked(revokedPartitions);
+                subscriptions.onPartitionsRevoked(revokedPartitions);
                 metricsManager.recordPartitionsRevokedLatency(time.milliseconds() - startMs);
             } catch (WakeupException | InterruptException e) {
                 throw e;
             } catch (Exception e) {
                 log.error(
                     "User provided listener {} failed on invocation of onPartitionsRevoked for partitions {}",
-                    listener.get().getClass().getName(),
+                    subscriptions.listenerName(),
                     revokedPartitions,
                     e
                 );
@@ -116,19 +110,17 @@ public class ConsumerRebalanceListenerInvoker {
         if (!lostPausedPartitions.isEmpty())
             log.info("The pause flag in partitions {} will be removed due to partition lost.", lostPartitions);
 
-        Optional<ConsumerRebalanceListener> listener = subscriptions.rebalanceListener();
-
-        if (listener.isPresent()) {
+        if (subscriptions.hasRebalanceListener()) {
             try {
                 final long startMs = time.milliseconds();
-                listener.get().onPartitionsLost(lostPartitions);
+                subscriptions.onPartitionsLost(lostPartitions);
                 metricsManager.recordPartitionsLostLatency(time.milliseconds() - startMs);
             } catch (WakeupException | InterruptException e) {
                 throw e;
             } catch (Exception e) {
                 log.error(
                     "User provided listener {} failed on invocation of onPartitionsLost for partitions {}",
-                    listener.get().getClass().getName(),
+                    subscriptions.listenerName(),
                     lostPartitions,
                     e
                 );

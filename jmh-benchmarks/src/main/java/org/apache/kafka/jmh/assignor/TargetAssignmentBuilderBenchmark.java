@@ -17,7 +17,10 @@
 package org.apache.kafka.jmh.assignor;
 
 import org.apache.kafka.common.Uuid;
+import org.apache.kafka.common.utils.Time;
+import org.apache.kafka.common.utils.internals.LogContext;
 import org.apache.kafka.coordinator.common.runtime.CoordinatorMetadataImage;
+import org.apache.kafka.coordinator.group.TargetAssignmentRecordsBuilder;
 import org.apache.kafka.coordinator.group.api.assignor.GroupAssignment;
 import org.apache.kafka.coordinator.group.api.assignor.GroupSpec;
 import org.apache.kafka.coordinator.group.api.assignor.MemberAssignment;
@@ -26,10 +29,12 @@ import org.apache.kafka.coordinator.group.api.assignor.SubscribedTopicDescriber;
 import org.apache.kafka.coordinator.group.api.assignor.SubscriptionType;
 import org.apache.kafka.coordinator.group.assignor.UniformAssignor;
 import org.apache.kafka.coordinator.group.modern.Assignment;
+import org.apache.kafka.coordinator.group.modern.GroupSpecBuilder;
 import org.apache.kafka.coordinator.group.modern.SubscribedTopicDescriberImpl;
 import org.apache.kafka.coordinator.group.modern.TargetAssignmentBuilder;
 import org.apache.kafka.coordinator.group.modern.TopicIds;
 import org.apache.kafka.coordinator.group.modern.consumer.ConsumerGroupMember;
+import org.apache.kafka.coordinator.group.util.UpdatedMembersAndTargetAssignmentView;
 
 import org.openjdk.jmh.annotations.Benchmark;
 import org.openjdk.jmh.annotations.BenchmarkMode;
@@ -44,6 +49,7 @@ import org.openjdk.jmh.annotations.Setup;
 import org.openjdk.jmh.annotations.State;
 import org.openjdk.jmh.annotations.Threads;
 import org.openjdk.jmh.annotations.Warmup;
+import org.slf4j.Logger;
 
 import java.util.HashMap;
 import java.util.List;
@@ -74,13 +80,21 @@ public class TargetAssignmentBuilderBenchmark {
     @Param({"HOMOGENEOUS", "HETEROGENEOUS"})
     private SubscriptionType subscriptionType;
 
+    private static final Logger LOG = new LogContext().logger(TargetAssignmentBuilderBenchmark.class);
+
     private static final String GROUP_ID = "benchmark-group";
 
     private static final int GROUP_EPOCH = 0;
 
     private PartitionAssignor partitionAssignor;
 
-    private TargetAssignmentBuilder.ConsumerTargetAssignmentBuilder targetAssignmentBuilder;
+    private UpdatedMembersAndTargetAssignmentView<ConsumerGroupMember, Assignment> updatedMembersAndTargetAssignment;
+
+    private GroupSpecBuilder.ConsumerGroupSpecBuilder groupSpecBuilder;
+
+    private TargetAssignmentBuilder targetAssignmentBuilder;
+
+    private TargetAssignmentRecordsBuilder<Assignment> targetAssignmentRecordsBuilder;
 
     /** The number of homogeneous subgroups to create for the heterogeneous subscription case. */
     private static final int MAX_BUCKET_COUNT = 5;
@@ -112,13 +126,25 @@ public class TargetAssignmentBuilderBenchmark {
             .setSubscribedTopicNames(allTopicNames)
             .build();
 
-        targetAssignmentBuilder = new TargetAssignmentBuilder.ConsumerTargetAssignmentBuilder(GROUP_ID, GROUP_EPOCH, partitionAssignor)
-            .withMembers(members)
+        updatedMembersAndTargetAssignment = new UpdatedMembersAndTargetAssignmentView<>(members, Map.of(), existingTargetAssignment, ConsumerGroupMember::instanceId);
+        updatedMembersAndTargetAssignment.addOrUpdateMember(newMember.memberId(), newMember);
+
+        groupSpecBuilder = new GroupSpecBuilder.ConsumerGroupSpecBuilder()
+            .withMembers(updatedMembersAndTargetAssignment.members())
             .withSubscriptionType(subscriptionType)
-            .withTargetAssignment(existingTargetAssignment)
+            .withTargetAssignment(updatedMembersAndTargetAssignment.targetAssignment())
             .withInvertedTargetAssignment(invertedTargetAssignment)
-            .withMetadataImage(metadataImage)
-            .addOrUpdateMember(newMember.memberId(), newMember);
+            .withMetadataImage(metadataImage);
+
+        targetAssignmentBuilder = new TargetAssignmentBuilder(GROUP_EPOCH, partitionAssignor)
+            .withTime(Time.SYSTEM)
+            .withMetadataImage(metadataImage);
+
+        targetAssignmentRecordsBuilder =
+            new TargetAssignmentRecordsBuilder.ConsumerTargetAssignmentRecordsBuilder(LOG, GROUP_ID)
+                .withCurrentMemberIds(updatedMembersAndTargetAssignment.members().keySet())
+                .withUnchangedStaticMembers()
+                .withCurrentTargetAssignment(updatedMembersAndTargetAssignment.targetAssignment());
     }
 
     private void setupTopics() {
@@ -189,6 +215,15 @@ public class TargetAssignmentBuilderBenchmark {
     @Threads(1)
     @OutputTimeUnit(TimeUnit.MILLISECONDS)
     public void build() {
-        targetAssignmentBuilder.build();
+        GroupSpec groupSpec = groupSpecBuilder.build();
+
+        TargetAssignmentBuilder.TargetAssignmentResult assignmentResult = targetAssignmentBuilder
+            .withGroupSpec(groupSpec)
+            .build();
+
+        targetAssignmentRecordsBuilder
+            .withTargetAssignmentMetadata(assignmentResult.targetAssignmentMetadata())
+            .withNewTargetAssignment(assignmentResult.targetAssignment())
+            .build();
     }
 }
