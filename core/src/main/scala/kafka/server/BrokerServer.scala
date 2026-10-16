@@ -414,7 +414,8 @@ class BrokerServer(
         config.brokerId,
         time,
         () => lifecycleManager.brokerEpoch,
-        clientToControllerChannelManager
+        clientToControllerChannelManager,
+        () => metadataCache.metadataVersion().isRequestHeaderV3Supported
       )
 
       // Create transaction coordinator, but don't start it until we've started replica manager.

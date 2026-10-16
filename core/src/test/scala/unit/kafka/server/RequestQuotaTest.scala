@@ -677,7 +677,7 @@ class RequestQuotaTest extends BaseRequestTest {
           new ListTransactionsRequest.Builder(new ListTransactionsRequestData())
 
         case ApiKeys.ALLOCATE_PRODUCER_IDS =>
-          new AllocateProducerIdsRequest.Builder(new AllocateProducerIdsRequestData())
+          new AllocateProducerIdsRequest.Builder(new AllocateProducerIdsRequestData(), false)
 
         case ApiKeys.CONSUMER_GROUP_HEARTBEAT =>
           new ConsumerGroupHeartbeatRequest.Builder(new ConsumerGroupHeartbeatRequestData())
