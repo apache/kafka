@@ -34,7 +34,14 @@
 
     <subpackage name="coordinator">
         <subpackage name="mirror">
+            <allow pkg="com.google.re2j"/>
+            <allow pkg="org.apache.kafka.clients" />
+            <allow pkg="org.apache.kafka.common.acl" />
+            <allow pkg="org.apache.kafka.common.config" />
+            <allow pkg="org.apache.kafka.common.resource" />
+            <allow pkg="org.apache.kafka.common.security" />
             <allow pkg="org.apache.kafka.coordinator.mirror" />
+            <allow pkg="org.apache.kafka.server.util" />
         </subpackage>
     </subpackage>
 </import-control>

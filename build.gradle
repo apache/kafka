@@ -1976,7 +1976,9 @@ project(':mirror-coordinator') {
   }
 
   dependencies {
+    implementation libs.re2j
     implementation project(':clients')
+    implementation project(':server-common')
 
     testImplementation libs.junitJupiter
     testImplementation libs.mockitoCore
@@ -2405,6 +2407,7 @@ project(':server-common') {
     implementation libs.joptSimple
     implementation libs.jacksonDatabind
     implementation libs.pcollections
+    implementation libs.re2j
     implementation libs.slf4jApi
 
     testFixturesImplementation testFixtures(project(':clients'))
