@@ -21,6 +21,7 @@ import org.apache.kafka.common.errors.FencedInstanceIdException;
 import org.apache.kafka.common.errors.FencedMemberEpochException;
 import org.apache.kafka.common.errors.GroupIdNotFoundException;
 import org.apache.kafka.common.errors.GroupMaxSizeReachedException;
+import org.apache.kafka.common.errors.InvalidRequestException;
 import org.apache.kafka.common.errors.UnknownMemberIdException;
 import org.apache.kafka.common.errors.UnreleasedInstanceIdException;
 import org.apache.kafka.common.message.StreamsGroupHeartbeatRequestData;
@@ -45,6 +46,7 @@ import org.apache.kafka.coordinator.group.streams.StreamsGroupMember;
 import org.apache.kafka.coordinator.group.streams.StreamsTopology;
 import org.apache.kafka.coordinator.group.streams.TasksTuple;
 import org.apache.kafka.coordinator.group.streams.TasksTupleWithEpochs;
+import org.apache.kafka.coordinator.group.streams.assignor.AssignmentConfigsImpl;
 
 import org.junit.jupiter.api.Test;
 import org.junit.jupiter.params.ParameterizedTest;
@@ -68,7 +70,6 @@ import static org.apache.kafka.coordinator.group.GroupMetadataManager.groupSessi
 import static org.apache.kafka.coordinator.group.GroupMetadataManagerTestContext.DEFAULT_CLIENT_ADDRESS;
 import static org.apache.kafka.coordinator.group.GroupMetadataManagerTestContext.DEFAULT_CLIENT_ID;
 import static org.apache.kafka.coordinator.group.GroupMetadataManagerTestContext.DEFAULT_PROCESS_ID;
-import static org.apache.kafka.coordinator.group.StreamsGroupTestUtil.getDefaultAssignmentConfigs;
 import static org.apache.kafka.coordinator.group.StreamsGroupTestUtil.resetAssignedTasksEpochsToZero;
 import static org.apache.kafka.coordinator.group.StreamsGroupTestUtil.staticHeartbeat;
 import static org.apache.kafka.coordinator.group.StreamsGroupTestUtil.staticJoinHeartbeat;
@@ -76,6 +77,7 @@ import static org.apache.kafka.coordinator.group.StreamsGroupTestUtil.streamsGro
 import static org.apache.kafka.coordinator.group.StreamsGroupTestUtil.streamsTopicFixture;
 import static org.junit.jupiter.api.Assertions.assertDoesNotThrow;
 import static org.junit.jupiter.api.Assertions.assertEquals;
+import static org.junit.jupiter.api.Assertions.assertFalse;
 import static org.junit.jupiter.api.Assertions.assertNotNull;
 import static org.junit.jupiter.api.Assertions.assertThrows;
 import static org.junit.jupiter.api.Assertions.assertTrue;
@@ -109,7 +111,7 @@ class StreamsGroupStaticMemberGroupMetadataManagerTest {
                 .withTopology(StreamsTopology.fromHeartbeatRequest(topic.topology()))
                 .withValidatedTopologyEpoch(0)
                 .withMetadataHash(topic.metadataHash())
-                .withLastAssignmentConfigs(getDefaultAssignmentConfigs()))
+                .withLastAssignmentConfigs(AssignmentConfigsImpl.DEFAULT))
             .withConfig(GroupCoordinatorConfig.STREAMS_GROUP_INITIAL_REBALANCE_DELAY_MS_CONFIG, GroupCoordinatorConfig.STREAMS_GROUP_INITIAL_REBALANCE_DELAY_MS_DEFAULT)
             .build();
 
@@ -216,7 +218,7 @@ class StreamsGroupStaticMemberGroupMetadataManagerTest {
                 .withTopology(StreamsTopology.fromHeartbeatRequest(topic.topology()))
                 .withMetadataHash(topic.metadataHash())
                 .withValidatedTopologyEpoch(0)
-                .withLastAssignmentConfigs(getDefaultAssignmentConfigs())
+                .withLastAssignmentConfigs(AssignmentConfigsImpl.DEFAULT)
             )
             .build();
 
@@ -259,7 +261,7 @@ class StreamsGroupStaticMemberGroupMetadataManagerTest {
                 .withTopology(StreamsTopology.fromHeartbeatRequest(topic.topology()))
                 .withMetadataHash(topic.metadataHash())
                 .withValidatedTopologyEpoch(0)
-                .withLastAssignmentConfigs(getDefaultAssignmentConfigs())
+                .withLastAssignmentConfigs(AssignmentConfigsImpl.DEFAULT)
             )
             .build();
 
@@ -305,7 +307,7 @@ class StreamsGroupStaticMemberGroupMetadataManagerTest {
                 .withTopology(StreamsTopology.fromHeartbeatRequest(topic.topology()))
                 .withMetadataHash(topic.metadataHash())
                 .withValidatedTopologyEpoch(0)
-                .withLastAssignmentConfigs(getDefaultAssignmentConfigs())
+                .withLastAssignmentConfigs(AssignmentConfigsImpl.DEFAULT)
             )
             .build();
 
@@ -436,6 +438,9 @@ class StreamsGroupStaticMemberGroupMetadataManagerTest {
                 .setHeartbeatIntervalMs(5000)
                 .setTaskOffsetIntervalMs(60000)
                 .setAcceptableRecoveryLag(10000)
+                .setActiveTasks(topic.responseTasks(0, 1))
+                .setWarmupTasks(List.of())
+                .setStandbyTasks(List.of())
                 .setStatus(List.of()),
             revokeAckResult.response().data()
         );
@@ -527,7 +532,7 @@ class StreamsGroupStaticMemberGroupMetadataManagerTest {
                 .withTopology(StreamsTopology.fromHeartbeatRequest(topic.topology()))
                 .withValidatedTopologyEpoch(0)
                 .withMetadataHash(topic.metadataHash())
-                .withLastAssignmentConfigs(getDefaultAssignmentConfigs()))
+                .withLastAssignmentConfigs(AssignmentConfigsImpl.DEFAULT))
             .withConfig(GroupCoordinatorConfig.STREAMS_GROUP_INITIAL_REBALANCE_DELAY_MS_CONFIG, GroupCoordinatorConfig.STREAMS_GROUP_INITIAL_REBALANCE_DELAY_MS_DEFAULT)
             .build();
 
@@ -555,15 +560,16 @@ class StreamsGroupStaticMemberGroupMetadataManagerTest {
                 bumpedGroupEpoch,
                 topic.metadataHash(),
                 0,
-                getDefaultAssignmentConfigs(),
+                AssignmentConfigsImpl.DEFAULT,
                 -1,
                 -1
             )
         ));
     }
 
-    @Test
-    public void testStaticMemberRejoinWithSameProcessIdDoesNotBumpStreamsGroupEpoch() throws UnknownHostException {
+    @ParameterizedTest
+    @MethodSource("rackIdCases")
+    public void testStaticMemberRejoinWithSameProcessIdDoesNotBumpStreamsGroupEpoch(String rackId) throws UnknownHostException {
         String groupId = "fooup";
         int groupEpoch = DEFAULT_GROUP_EPOCH;
 
@@ -591,6 +597,7 @@ class StreamsGroupStaticMemberGroupMetadataManagerTest {
                     .setMemberEpoch(LEAVE_GROUP_STATIC_MEMBER_EPOCH)
                     .setPreviousMemberEpoch(groupEpoch)
                     .setProcessId(processId)
+                    .setRackId(rackId)
                     .setAssignedTasks(assignedTasks)
                     .build())
                 .withTargetAssignment(oldMemberId, targetAssignment)
@@ -598,16 +605,19 @@ class StreamsGroupStaticMemberGroupMetadataManagerTest {
                 .withTopology(StreamsTopology.fromHeartbeatRequest(topic.topology()))
                 .withValidatedTopologyEpoch(0)
                 .withMetadataHash(topic.metadataHash())
-                .withLastAssignmentConfigs(getDefaultAssignmentConfigs()))
+                .withLastAssignmentConfigs(AssignmentConfigsImpl.DEFAULT))
             .withConfig(GroupCoordinatorConfig.STREAMS_GROUP_INITIAL_REBALANCE_DELAY_MS_CONFIG, GroupCoordinatorConfig.STREAMS_GROUP_INITIAL_REBALANCE_DELAY_MS_DEFAULT)
             .build();
 
         CoordinatorResult<StreamsGroupHeartbeatResult, CoordinatorRecord> result = context.streamsGroupHeartbeat(
-            staticJoinHeartbeat(groupId, rejoinMemberId, instanceId, processId),
+            staticJoinHeartbeat(groupId, rejoinMemberId, instanceId, processId)
+                .setRackId(rackId),
             newClientId,
             newClientAddress
         );
         
+        assertEquals(groupEpoch, context.groupMetadataManager.streamsGroup(groupId).groupEpoch());
+        assertEquals(Optional.ofNullable(rackId), context.groupMetadataManager.streamsGroup(groupId).getMemberOrThrow(rejoinMemberId).rackId());
         assertEquals(rejoinMemberId, result.response().data().memberId());
         assertEquals(groupEpoch, result.response().data().memberEpoch());
 
@@ -666,7 +676,7 @@ class StreamsGroupStaticMemberGroupMetadataManagerTest {
                 .withTopology(StreamsTopology.fromHeartbeatRequest(topic.topology()))
                 .withValidatedTopologyEpoch(0)
                 .withMetadataHash(topic.metadataHash())
-                .withLastAssignmentConfigs(getDefaultAssignmentConfigs()))
+                .withLastAssignmentConfigs(AssignmentConfigsImpl.DEFAULT))
             .withConfig(GroupCoordinatorConfig.STREAMS_GROUP_INITIAL_REBALANCE_DELAY_MS_CONFIG, GroupCoordinatorConfig.STREAMS_GROUP_INITIAL_REBALANCE_DELAY_MS_DEFAULT)
             .build();
 
@@ -687,7 +697,7 @@ class StreamsGroupStaticMemberGroupMetadataManagerTest {
                 StreamsCoordinatorRecordHelpers.newStreamsGroupCurrentAssignmentTombstoneRecord(groupId, memberId),
                 StreamsCoordinatorRecordHelpers.newStreamsGroupTargetAssignmentTombstoneRecord(groupId, memberId),
                 StreamsCoordinatorRecordHelpers.newStreamsGroupMemberTombstoneRecord(groupId, memberId),
-                StreamsCoordinatorRecordHelpers.newStreamsGroupMetadataRecord(groupId, bumpedGroupEpoch, topic.metadataHash(), 0, getDefaultAssignmentConfigs(), -1, -1),
+                StreamsCoordinatorRecordHelpers.newStreamsGroupMetadataRecord(groupId, bumpedGroupEpoch, topic.metadataHash(), 0, AssignmentConfigsImpl.DEFAULT, -1, -1),
                 StreamsCoordinatorRecordHelpers.newStreamsGroupTargetAssignmentMetadataRecord(groupId, bumpedGroupEpoch, 0L)
             ),
             result.records()
@@ -723,7 +733,7 @@ class StreamsGroupStaticMemberGroupMetadataManagerTest {
                 .withTopology(StreamsTopology.fromHeartbeatRequest(topic.topology()))
                 .withValidatedTopologyEpoch(0)
                 .withMetadataHash(topic.metadataHash())
-                .withLastAssignmentConfigs(getDefaultAssignmentConfigs()))
+                .withLastAssignmentConfigs(AssignmentConfigsImpl.DEFAULT))
             .withConfig(GroupCoordinatorConfig.STREAMS_GROUP_INITIAL_REBALANCE_DELAY_MS_CONFIG, GroupCoordinatorConfig.STREAMS_GROUP_INITIAL_REBALANCE_DELAY_MS_DEFAULT)
             .build();
 
@@ -787,7 +797,7 @@ class StreamsGroupStaticMemberGroupMetadataManagerTest {
                 .withTopology(StreamsTopology.fromHeartbeatRequest(topic.topology()))
                 .withValidatedTopologyEpoch(0)
                 .withMetadataHash(topic.metadataHash())
-                .withLastAssignmentConfigs(getDefaultAssignmentConfigs()))
+                .withLastAssignmentConfigs(AssignmentConfigsImpl.DEFAULT))
             .withConfig(GroupCoordinatorConfig.STREAMS_GROUP_INITIAL_REBALANCE_DELAY_MS_CONFIG, GroupCoordinatorConfig.STREAMS_GROUP_INITIAL_REBALANCE_DELAY_MS_DEFAULT)
             .build();
         
@@ -830,7 +840,8 @@ class StreamsGroupStaticMemberGroupMetadataManagerTest {
          * Verifies:
          * 1. leave(-2) does not bump group epoch.
          * 2. rejoin restores member epoch and assignment.
-         * 3. replacement/tombstone records are written as expected.
+         * 3. replacement/tombstone records are written when the member id changes, and only the
+         *    reconciled member is written when the member rejoins with its own member id.
          */
 
         int leaveEpoch = LEAVE_GROUP_STATIC_MEMBER_EPOCH;
@@ -859,7 +870,7 @@ class StreamsGroupStaticMemberGroupMetadataManagerTest {
                 .withTopology(StreamsTopology.fromHeartbeatRequest(topic.topology()))
                 .withValidatedTopologyEpoch(0)
                 .withMetadataHash(topic.metadataHash())
-                .withLastAssignmentConfigs(getDefaultAssignmentConfigs()))
+                .withLastAssignmentConfigs(AssignmentConfigsImpl.DEFAULT))
             .withConfig(GroupCoordinatorConfig.STREAMS_GROUP_INITIAL_REBALANCE_DELAY_MS_CONFIG, GroupCoordinatorConfig.STREAMS_GROUP_INITIAL_REBALANCE_DELAY_MS_DEFAULT)
             .build();
         
@@ -936,17 +947,32 @@ class StreamsGroupStaticMemberGroupMetadataManagerTest {
             .setAssignedTasks(resetAssignedTasksEpochsToZero(givenAssignedTasks))
             .build();
 
-        assertRecordsEquals(
-            List.of(
-                StreamsCoordinatorRecordHelpers.newStreamsGroupCurrentAssignmentTombstoneRecord(groupId, oldMemberId),
-                StreamsCoordinatorRecordHelpers.newStreamsGroupTargetAssignmentTombstoneRecord(groupId, oldMemberId),
-                StreamsCoordinatorRecordHelpers.newStreamsGroupMemberTombstoneRecord(groupId, oldMemberId),
-                StreamsCoordinatorRecordHelpers.newStreamsGroupMemberRecord(groupId, newJoinStaticMember),
-                StreamsCoordinatorRecordHelpers.newStreamsGroupTargetAssignmentRecord(groupId, newJoinStaticMember.memberId(), givenTargetAssignment),
-                StreamsCoordinatorRecordHelpers.newStreamsGroupCurrentAssignmentRecord(groupId, newJoinStaticMember),
-                StreamsCoordinatorRecordHelpers.newStreamsGroupCurrentAssignmentRecord(groupId, withPrevMemberId)
-            ),
-            rejoinResult.records()
+        if (oldMemberId.equals(newMemberId)) {
+            // The member rejoins with its own member id. It is not replaced, its epoch is reset
+            // and it is reconciled to the target assignment epoch.
+            assertRecordsEquals(
+                List.of(
+                    StreamsCoordinatorRecordHelpers.newStreamsGroupCurrentAssignmentRecord(groupId, withPrevMemberId)
+                ),
+                rejoinResult.records()
+            );
+        } else {
+            assertRecordsEquals(
+                List.of(
+                    StreamsCoordinatorRecordHelpers.newStreamsGroupCurrentAssignmentTombstoneRecord(groupId, oldMemberId),
+                    StreamsCoordinatorRecordHelpers.newStreamsGroupTargetAssignmentTombstoneRecord(groupId, oldMemberId),
+                    StreamsCoordinatorRecordHelpers.newStreamsGroupMemberTombstoneRecord(groupId, oldMemberId),
+                    StreamsCoordinatorRecordHelpers.newStreamsGroupMemberRecord(groupId, newJoinStaticMember),
+                    StreamsCoordinatorRecordHelpers.newStreamsGroupTargetAssignmentRecord(groupId, newJoinStaticMember.memberId(), givenTargetAssignment),
+                    StreamsCoordinatorRecordHelpers.newStreamsGroupCurrentAssignmentRecord(groupId, newJoinStaticMember),
+                    StreamsCoordinatorRecordHelpers.newStreamsGroupCurrentAssignmentRecord(groupId, withPrevMemberId)
+                ),
+                rejoinResult.records()
+            );
+        }
+        assertEquals(
+            Map.of(instanceId, newMemberId),
+            context.groupMetadataManager.streamsGroup(groupId).staticMembers()
         );
     }
 
@@ -983,7 +1009,7 @@ class StreamsGroupStaticMemberGroupMetadataManagerTest {
                 .withTopology(StreamsTopology.fromHeartbeatRequest(topic.topology()))
                 .withValidatedTopologyEpoch(0)
                 .withMetadataHash(topic.metadataHash())
-                .withLastAssignmentConfigs(getDefaultAssignmentConfigs()))
+                .withLastAssignmentConfigs(AssignmentConfigsImpl.DEFAULT))
             .withConfig(GroupCoordinatorConfig.STREAMS_GROUP_INITIAL_REBALANCE_DELAY_MS_CONFIG, GroupCoordinatorConfig.STREAMS_GROUP_INITIAL_REBALANCE_DELAY_MS_DEFAULT)
             .build();
 
@@ -1047,7 +1073,7 @@ class StreamsGroupStaticMemberGroupMetadataManagerTest {
                 .withTopology(StreamsTopology.fromHeartbeatRequest(topic.topology()))
                 .withValidatedTopologyEpoch(0)
                 .withMetadataHash(topic.metadataHash())
-                .withLastAssignmentConfigs(getDefaultAssignmentConfigs()))
+                .withLastAssignmentConfigs(AssignmentConfigsImpl.DEFAULT))
             .withConfig(GroupCoordinatorConfig.STREAMS_GROUP_INITIAL_REBALANCE_DELAY_MS_CONFIG, GroupCoordinatorConfig.STREAMS_GROUP_INITIAL_REBALANCE_DELAY_MS_DEFAULT)
             .build();
 
@@ -1105,7 +1131,7 @@ class StreamsGroupStaticMemberGroupMetadataManagerTest {
                 .withTopology(StreamsTopology.fromHeartbeatRequest(topic.topology()))
                 .withValidatedTopologyEpoch(0)
                 .withMetadataHash(topic.metadataHash())
-                .withLastAssignmentConfigs(getDefaultAssignmentConfigs()))
+                .withLastAssignmentConfigs(AssignmentConfigsImpl.DEFAULT))
             .withConfig(GroupCoordinatorConfig.STREAMS_GROUP_INITIAL_REBALANCE_DELAY_MS_CONFIG, GroupCoordinatorConfig.STREAMS_GROUP_INITIAL_REBALANCE_DELAY_MS_DEFAULT)
             .build();
 
@@ -1188,7 +1214,7 @@ class StreamsGroupStaticMemberGroupMetadataManagerTest {
                 .withTopology(StreamsTopology.fromHeartbeatRequest(topic.topology()))
                 .withValidatedTopologyEpoch(0)
                 .withMetadataHash(topic.metadataHash())
-                .withLastAssignmentConfigs(getDefaultAssignmentConfigs()))
+                .withLastAssignmentConfigs(AssignmentConfigsImpl.DEFAULT))
             .withConfig(GroupCoordinatorConfig.STREAMS_GROUP_INITIAL_REBALANCE_DELAY_MS_CONFIG, GroupCoordinatorConfig.STREAMS_GROUP_INITIAL_REBALANCE_DELAY_MS_DEFAULT)
             .build();
 
@@ -1254,7 +1280,7 @@ class StreamsGroupStaticMemberGroupMetadataManagerTest {
                 .withTopology(StreamsTopology.fromHeartbeatRequest(topic.topology()))
                 .withValidatedTopologyEpoch(0)
                 .withMetadataHash(topic.metadataHash())
-                .withLastAssignmentConfigs(getDefaultAssignmentConfigs()))
+                .withLastAssignmentConfigs(AssignmentConfigsImpl.DEFAULT))
             .withConfig(GroupCoordinatorConfig.STREAMS_GROUP_INITIAL_REBALANCE_DELAY_MS_CONFIG, GroupCoordinatorConfig.STREAMS_GROUP_INITIAL_REBALANCE_DELAY_MS_DEFAULT)
             .build();
 
@@ -1314,8 +1340,9 @@ class StreamsGroupStaticMemberGroupMetadataManagerTest {
     }
 
 
-    @Test
-    public void testStaticMemberLeaveWithLeaveGroupStaticMemberEpochAndRejoinAndOtherRackIdThenGroupBumpOccur() {
+    @ParameterizedTest
+    @MethodSource("rackIdCases")
+    public void testStaticMemberLeaveWithLeaveGroupStaticMemberEpochAndRejoinAndOtherRackIdThenGroupBumpOccur(String newRackId) {
         int leaveEpoch = LEAVE_GROUP_STATIC_MEMBER_EPOCH;
         int memberEpoch = DEFAULT_MEMBER_EPOCH;
         int groupEpoch = DEFAULT_GROUP_EPOCH;
@@ -1346,13 +1373,12 @@ class StreamsGroupStaticMemberGroupMetadataManagerTest {
                 .withTopology(StreamsTopology.fromHeartbeatRequest(topic.topology()))
                 .withValidatedTopologyEpoch(0)
                 .withMetadataHash(topic.metadataHash())
-                .withLastAssignmentConfigs(getDefaultAssignmentConfigs()))
+                .withLastAssignmentConfigs(AssignmentConfigsImpl.DEFAULT))
             .withConfig(GroupCoordinatorConfig.STREAMS_GROUP_INITIAL_REBALANCE_DELAY_MS_CONFIG, GroupCoordinatorConfig.STREAMS_GROUP_INITIAL_REBALANCE_DELAY_MS_DEFAULT)
             .build();
 
         CoordinatorResult<StreamsGroupHeartbeatResult, CoordinatorRecord> normalHeartbeatResult = context.streamsGroupHeartbeat(
             staticHeartbeat(groupId, memberId, instanceId, memberEpoch)
-                .setRackId(rackId)
         );
 
         assertResponseEquals(
@@ -1367,6 +1393,7 @@ class StreamsGroupStaticMemberGroupMetadataManagerTest {
                 .setStandbyTasks(null), 
             normalHeartbeatResult.response().data());
         assertEquals(groupEpoch, context.groupMetadataManager.streamsGroup(groupId).groupEpoch());
+        assertEquals(Optional.of(rackId), context.groupMetadataManager.streamsGroup(groupId).getMemberOrThrow(memberId).rackId());
 
         CoordinatorResult<StreamsGroupHeartbeatResult, CoordinatorRecord> leaveResult = context.streamsGroupHeartbeat(
             staticHeartbeat(groupId, memberId, instanceId, leaveEpoch)
@@ -1386,7 +1413,6 @@ class StreamsGroupStaticMemberGroupMetadataManagerTest {
         assertEquals(groupEpoch, context.groupMetadataManager.streamsGroup(groupId).groupEpoch());
 
         String newMemberId = Uuid.randomUuid().toString();
-        String newRackId = Uuid.randomUuid().toString();
         assignor.prepareGroupAssignment(Map.of(newMemberId, givenTargetAssignment));
 
         int bumpedGroupEpoch = groupEpoch + 1;
@@ -1414,6 +1440,7 @@ class StreamsGroupStaticMemberGroupMetadataManagerTest {
             rejoinResult.response().data()
         );
         assertEquals(bumpedGroupEpoch, context.groupMetadataManager.streamsGroup(groupId).groupEpoch());
+        assertEquals(Optional.ofNullable(newRackId), context.groupMetadataManager.streamsGroup(groupId).getMemberOrThrow(newMemberId).rackId());
 
         StreamsGroupMember transationStaticInitMember = streamsGroupMemberBuilderWithDefaults(newMemberId, instanceId)
             .setMemberEpoch(JOIN_GROUP_MEMBER_EPOCH)
@@ -1449,7 +1476,7 @@ class StreamsGroupStaticMemberGroupMetadataManagerTest {
                 // From hasStreamsMemberMetadataChanged
                 StreamsCoordinatorRecordHelpers.newStreamsGroupMemberRecord(groupId, newJoinStaticMember),
 
-                StreamsCoordinatorRecordHelpers.newStreamsGroupMetadataRecord(groupId, bumpedGroupEpoch, topic.metadataHash(), 0, getDefaultAssignmentConfigs(), -1, -1),
+                StreamsCoordinatorRecordHelpers.newStreamsGroupMetadataRecord(groupId, bumpedGroupEpoch, topic.metadataHash(), 0, AssignmentConfigsImpl.DEFAULT, -1, -1),
                 StreamsCoordinatorRecordHelpers.newStreamsGroupTargetAssignmentMetadataRecord(groupId, bumpedGroupEpoch, context.time.milliseconds()),
                 StreamsCoordinatorRecordHelpers.newStreamsGroupCurrentAssignmentRecord(groupId, reconciledMember)
             ),
@@ -1457,6 +1484,13 @@ class StreamsGroupStaticMemberGroupMetadataManagerTest {
         );
     }
 
+
+    private static Stream<Arguments> rackIdCases() {
+        return Stream.of(
+            Arguments.of("rack-b"), // Give other rack id.
+            Arguments.of((String) null) // Give no rack id.
+        );
+    }
 
     @Test
     public void testStaticMemberRejoinWritesReplacementRecordsInStreamsGroup() {
@@ -1488,7 +1522,7 @@ class StreamsGroupStaticMemberGroupMetadataManagerTest {
                 .withTopology(StreamsTopology.fromHeartbeatRequest(topic.topology()))
                 .withValidatedTopologyEpoch(0)
                 .withMetadataHash(topic.metadataHash())
-                .withLastAssignmentConfigs(getDefaultAssignmentConfigs()))
+                .withLastAssignmentConfigs(AssignmentConfigsImpl.DEFAULT))
             .withConfig(GroupCoordinatorConfig.STREAMS_GROUP_INITIAL_REBALANCE_DELAY_MS_CONFIG, GroupCoordinatorConfig.STREAMS_GROUP_INITIAL_REBALANCE_DELAY_MS_DEFAULT)
             .build();
 
@@ -1525,7 +1559,178 @@ class StreamsGroupStaticMemberGroupMetadataManagerTest {
     }
 
     @Test
-    public void testStaticMemberRejoinsWithSameMemberIdAndDifferentInstanceId() {
+    public void testStaticMemberReplacementRelabelsCachedRefinedAssignment() {
+        int groupEpoch = DEFAULT_GROUP_EPOCH;
+
+        String groupId = "fooup";
+        String oldMemberId = Uuid.randomUuid().toString();
+        String rejoinMemberId = Uuid.randomUuid().toString();
+        String instanceId = Uuid.randomUuid().toString();
+
+        StreamsTopicFixture topic = streamsTopicFixture("subtopology1", "foo", 4);
+        TasksTuple oldTargetAssignment = topic.targetAssignment(0, 1, 2, 3);
+        TasksTupleWithEpochs assignedTasks = topic.assignedTasks(groupEpoch, 0, 1, 2, 3);
+
+        StreamsGroupMember oldMember = streamsGroupMemberBuilderWithDefaults(oldMemberId, instanceId)
+            .setMemberEpoch(LEAVE_GROUP_STATIC_MEMBER_EPOCH)
+            .setPreviousMemberEpoch(groupEpoch)
+            .setAssignedTasks(resetAssignedTasksEpochsToZero(assignedTasks))
+            .build();
+
+        GroupMetadataManagerTestContext context = new GroupMetadataManagerTestContext.Builder()
+            .withStreamsGroupTaskAssignors(List.of(new MockTaskAssignor("sticky")))
+            .withMetadataImage(topic.metadataImage())
+            .withStreamsGroup(new StreamsGroupBuilder(groupId, groupEpoch)
+                .withMember(oldMember)
+                .withTargetAssignment(oldMemberId, oldTargetAssignment)
+                .withTargetAssignmentEpoch(groupEpoch)
+                .withTopology(StreamsTopology.fromHeartbeatRequest(topic.topology()))
+                .withValidatedTopologyEpoch(0)
+                .withMetadataHash(topic.metadataHash())
+                .withLastAssignmentConfigs(AssignmentConfigsImpl.DEFAULT))
+            .withConfig(GroupCoordinatorConfig.STREAMS_GROUP_INITIAL_REBALANCE_DELAY_MS_CONFIG, GroupCoordinatorConfig.STREAMS_GROUP_INITIAL_REBALANCE_DELAY_MS_DEFAULT)
+            .build();
+
+        // Prime the frozen intermediate assignment for the current assignment epoch, keyed by the OLD member ID, as a
+        // previous heartbeat of the departed member would have left it.
+        StreamsGroup streamsGroup = context.groupMetadataManager.streamsGroup(groupId);
+        streamsGroup.setRefinedAssignment(groupEpoch, Map.of(oldMemberId, oldTargetAssignment));
+
+        CoordinatorResult<StreamsGroupHeartbeatResult, CoordinatorRecord> result = context.streamsGroupHeartbeat(
+            staticJoinHeartbeat(groupId, rejoinMemberId, instanceId, DEFAULT_PROCESS_ID)
+        );
+
+        // A static replacement relabels the target assignment oldMemberId -> rejoinMemberId WITHOUT advancing the
+        // assignment epoch, so the epoch alone cannot tell the cached entry apart from a still-valid one. Unless the
+        // cached entry is re-keyed too, the replacing member is sliced out of a map that only knows the old ID and gets
+        // no tasks at all.
+        assertEquals(groupEpoch, result.response().data().memberEpoch());
+        assertEquals(
+            oldTargetAssignment.activeTasks(),
+            streamsGroup.refinedAssignment(groupEpoch).get(rejoinMemberId).activeTasks()
+        );
+        assertFalse(streamsGroup.refinedAssignment(groupEpoch).containsKey(oldMemberId));
+    }
+
+    @Test
+    public void testRejectedJoinDoesNotRelabelCachedRefinedAssignment() {
+        int groupEpoch = DEFAULT_GROUP_EPOCH;
+
+        String groupId = "fooup";
+        String memberId1 = Uuid.randomUuid().toString();
+        String memberId2 = Uuid.randomUuid().toString();
+        String instanceId1 = "instance-1";
+        String instanceId2 = "instance-2";
+
+        StreamsTopicFixture topic = streamsTopicFixture("subtopology1", "foo", 4);
+        TasksTuple targetAssignment1 = topic.targetAssignment(0, 1);
+        TasksTuple targetAssignment2 = topic.targetAssignment(2, 3);
+
+        // Streams group with two static members. Member 2 has left the group and released
+        // instance id 2.
+        GroupMetadataManagerTestContext context = new GroupMetadataManagerTestContext.Builder()
+            .withStreamsGroupTaskAssignors(List.of(new MockTaskAssignor("sticky")))
+            .withMetadataImage(topic.metadataImage())
+            .withStreamsGroup(new StreamsGroupBuilder(groupId, groupEpoch)
+                .withMember(streamsGroupMemberBuilderWithDefaults(memberId1, instanceId1)
+                    .setMemberEpoch(groupEpoch)
+                    .setPreviousMemberEpoch(groupEpoch - 1)
+                    .setAssignedTasks(topic.assignedTasks(groupEpoch, 0, 1))
+                    .build())
+                .withMember(streamsGroupMemberBuilderWithDefaults(memberId2, instanceId2)
+                    .setMemberEpoch(LEAVE_GROUP_STATIC_MEMBER_EPOCH)
+                    .setPreviousMemberEpoch(groupEpoch - 1)
+                    .setAssignedTasks(topic.assignedTasks(groupEpoch, 2, 3))
+                    .build())
+                .withTargetAssignment(memberId1, targetAssignment1)
+                .withTargetAssignment(memberId2, targetAssignment2)
+                .withTargetAssignmentEpoch(groupEpoch)
+                .withTopology(StreamsTopology.fromHeartbeatRequest(topic.topology()))
+                .withValidatedTopologyEpoch(0)
+                .withMetadataHash(topic.metadataHash())
+                .withLastAssignmentConfigs(AssignmentConfigsImpl.DEFAULT))
+            .withConfig(GroupCoordinatorConfig.STREAMS_GROUP_INITIAL_REBALANCE_DELAY_MS_CONFIG, GroupCoordinatorConfig.STREAMS_GROUP_INITIAL_REBALANCE_DELAY_MS_DEFAULT)
+            .build();
+
+        // Prime the cached intermediate assignment for the current assignment epoch with an entry
+        // for each member.
+        StreamsGroup streamsGroup = context.groupMetadataManager.streamsGroup(groupId);
+        Map<String, TasksTuple> refinedAssignment = Map.of(
+            memberId1, targetAssignment1,
+            memberId2, targetAssignment2
+        );
+        streamsGroup.setRefinedAssignment(groupEpoch, refinedAssignment);
+
+        // Member 1 rejoins with its own member id and the released instance id 2. The join is
+        // rejected and the cached intermediate assignment must be left untouched. In particular,
+        // member 2's entry must not be re-keyed to member 1, which would overwrite member 1's own
+        // entry, because the cache is not rolled back when the request is rejected.
+        assertThrows(InvalidRequestException.class, () -> context.streamsGroupHeartbeat(
+            staticJoinHeartbeat(groupId, memberId1, instanceId2, topic)
+        ));
+
+        assertEquals(refinedAssignment, streamsGroup.refinedAssignment(groupEpoch));
+    }
+
+    @Test
+    public void testFencedHeartbeatDoesNotRelabelCachedRefinedAssignment() {
+        int groupEpoch = DEFAULT_GROUP_EPOCH;
+
+        String groupId = "fooup";
+        String memberId1 = Uuid.randomUuid().toString();
+        String memberId2 = Uuid.randomUuid().toString();
+        String instanceId1 = "instance-1";
+        String instanceId2 = "instance-2";
+
+        StreamsTopicFixture topic = streamsTopicFixture("subtopology1", "foo", 4);
+        TasksTuple targetAssignment1 = topic.targetAssignment(0, 1);
+        TasksTuple targetAssignment2 = topic.targetAssignment(2, 3);
+
+        // Streams group with two active static members.
+        GroupMetadataManagerTestContext context = new GroupMetadataManagerTestContext.Builder()
+            .withStreamsGroupTaskAssignors(List.of(new MockTaskAssignor("sticky")))
+            .withMetadataImage(topic.metadataImage())
+            .withStreamsGroup(new StreamsGroupBuilder(groupId, groupEpoch)
+                .withMember(streamsGroupMemberBuilderWithDefaults(memberId1, instanceId1)
+                    .setMemberEpoch(groupEpoch)
+                    .setPreviousMemberEpoch(groupEpoch - 1)
+                    .setAssignedTasks(topic.assignedTasks(groupEpoch, 0, 1))
+                    .build())
+                .withMember(streamsGroupMemberBuilderWithDefaults(memberId2, instanceId2)
+                    .setMemberEpoch(groupEpoch)
+                    .setPreviousMemberEpoch(groupEpoch - 1)
+                    .setAssignedTasks(topic.assignedTasks(groupEpoch, 2, 3))
+                    .build())
+                .withTargetAssignment(memberId1, targetAssignment1)
+                .withTargetAssignment(memberId2, targetAssignment2)
+                .withTargetAssignmentEpoch(groupEpoch)
+                .withTopology(StreamsTopology.fromHeartbeatRequest(topic.topology()))
+                .withValidatedTopologyEpoch(0)
+                .withMetadataHash(topic.metadataHash())
+                .withLastAssignmentConfigs(AssignmentConfigsImpl.DEFAULT))
+            .withConfig(GroupCoordinatorConfig.STREAMS_GROUP_INITIAL_REBALANCE_DELAY_MS_CONFIG, GroupCoordinatorConfig.STREAMS_GROUP_INITIAL_REBALANCE_DELAY_MS_DEFAULT)
+            .build();
+
+        // Prime the cached intermediate assignment for the current assignment epoch with an entry
+        // for each member.
+        StreamsGroup streamsGroup = context.groupMetadataManager.streamsGroup(groupId);
+        Map<String, TasksTuple> refinedAssignment = Map.of(
+            memberId1, targetAssignment1,
+            memberId2, targetAssignment2
+        );
+        streamsGroup.setRefinedAssignment(groupEpoch, refinedAssignment);
+
+        // Member 1 heartbeats with instance id 2, which is owned by member 2. The heartbeat is
+        // fenced and the cached intermediate assignment must be left untouched.
+        assertThrows(FencedInstanceIdException.class, () -> context.streamsGroupHeartbeat(
+            staticHeartbeat(groupId, memberId1, instanceId2, groupEpoch)
+        ));
+
+        assertEquals(refinedAssignment, streamsGroup.refinedAssignment(groupEpoch));
+    }
+
+    @Test
+    public void testStaticMemberCannotRejoinWithDifferentInstanceId() {
         int groupEpoch = DEFAULT_GROUP_EPOCH;
 
         String groupId = "fooup";
@@ -1552,7 +1757,7 @@ class StreamsGroupStaticMemberGroupMetadataManagerTest {
                 .withTopology(StreamsTopology.fromHeartbeatRequest(topic.topology()))
                 .withValidatedTopologyEpoch(0)
                 .withMetadataHash(topic.metadataHash())
-                .withLastAssignmentConfigs(getDefaultAssignmentConfigs()))
+                .withLastAssignmentConfigs(AssignmentConfigsImpl.DEFAULT))
             .withConfig(GroupCoordinatorConfig.STREAMS_GROUP_INITIAL_REBALANCE_DELAY_MS_CONFIG, GroupCoordinatorConfig.STREAMS_GROUP_INITIAL_REBALANCE_DELAY_MS_DEFAULT)
             .build();
 
@@ -1561,13 +1766,334 @@ class StreamsGroupStaticMemberGroupMetadataManagerTest {
             context.groupMetadataManager.streamsGroup(groupId).staticMembers()
         );
 
-        // Member rejoins with the same member id and a different instance id.
-        context.streamsGroupHeartbeat(
+        // Member rejoins with the same member id and a different instance id. A member id
+        // must never acquire a different instance id.
+        InvalidRequestException e = assertThrows(InvalidRequestException.class, () -> context.streamsGroupHeartbeat(
             staticJoinHeartbeat(groupId, memberId, instanceId2, topic)
-        );
+        ));
+        assertEquals(String.format("Member %s with instance id %s cannot join the group because the member id is " +
+            "already used by a static member with instance id %s.", memberId, instanceId2, instanceId1), e.getMessage());
 
         assertEquals(
-            Map.of(instanceId2, memberId),
+            Map.of(instanceId1, memberId),
+            context.groupMetadataManager.streamsGroup(groupId).staticMembers()
+        );
+    }
+
+    @Test
+    public void testDynamicMemberCannotRejoinWithInstanceId() {
+        int groupEpoch = DEFAULT_GROUP_EPOCH;
+
+        String groupId = "fooup";
+        String memberId = Uuid.randomUuid().toString();
+        String instanceId = "instance-1";
+
+        StreamsTopicFixture topic = streamsTopicFixture("subtopology1", "foo", 4);
+        TasksTuple targetAssignment = topic.targetAssignment(0, 1, 2, 3);
+        TasksTupleWithEpochs assignedTasks = topic.assignedTasks(groupEpoch, 0, 1, 2, 3);
+
+        // Streams group with one dynamic member.
+        GroupMetadataManagerTestContext context = new GroupMetadataManagerTestContext.Builder()
+            .withStreamsGroupTaskAssignors(List.of(new MockTaskAssignor("sticky")))
+            .withMetadataImage(topic.metadataImage())
+            .withStreamsGroup(new StreamsGroupBuilder(groupId, groupEpoch)
+                .withMember(streamsGroupMemberBuilderWithDefaults(memberId)
+                    .setMemberEpoch(groupEpoch)
+                    .setPreviousMemberEpoch(groupEpoch - 1)
+                    .setAssignedTasks(assignedTasks)
+                    .build())
+                .withTargetAssignment(memberId, targetAssignment)
+                .withTargetAssignmentEpoch(groupEpoch)
+                .withTopology(StreamsTopology.fromHeartbeatRequest(topic.topology()))
+                .withValidatedTopologyEpoch(0)
+                .withMetadataHash(topic.metadataHash())
+                .withLastAssignmentConfigs(AssignmentConfigsImpl.DEFAULT))
+            .withConfig(GroupCoordinatorConfig.STREAMS_GROUP_INITIAL_REBALANCE_DELAY_MS_CONFIG, GroupCoordinatorConfig.STREAMS_GROUP_INITIAL_REBALANCE_DELAY_MS_DEFAULT)
+            .build();
+
+        assertEquals(Map.of(), context.groupMetadataManager.streamsGroup(groupId).staticMembers());
+
+        // Member rejoins with the same member id and an instance id. A dynamic member must
+        // never become a static member.
+        InvalidRequestException e = assertThrows(InvalidRequestException.class, () -> context.streamsGroupHeartbeat(
+            staticJoinHeartbeat(groupId, memberId, instanceId, topic)
+        ));
+        assertEquals(String.format("Member %s with instance id %s cannot join the group because the member id is " +
+            "already used by a dynamic member.", memberId, instanceId), e.getMessage());
+
+        assertEquals(Map.of(), context.groupMetadataManager.streamsGroup(groupId).staticMembers());
+    }
+
+    @Test
+    public void testStaticMemberCannotRejoinWithReleasedInstanceId() {
+        int groupEpoch = DEFAULT_GROUP_EPOCH;
+
+        String groupId = "fooup";
+        String memberId1 = Uuid.randomUuid().toString();
+        String memberId2 = Uuid.randomUuid().toString();
+        String instanceId1 = "instance-1";
+        String instanceId2 = "instance-2";
+
+        StreamsTopicFixture topic = streamsTopicFixture("subtopology1", "foo", 4);
+
+        // Streams group with two static members. Member 2 has left the group and released
+        // instance id 2.
+        GroupMetadataManagerTestContext context = new GroupMetadataManagerTestContext.Builder()
+            .withStreamsGroupTaskAssignors(List.of(new MockTaskAssignor("sticky")))
+            .withMetadataImage(topic.metadataImage())
+            .withStreamsGroup(new StreamsGroupBuilder(groupId, groupEpoch)
+                .withMember(streamsGroupMemberBuilderWithDefaults(memberId1, instanceId1)
+                    .setMemberEpoch(groupEpoch)
+                    .setPreviousMemberEpoch(groupEpoch - 1)
+                    .setAssignedTasks(topic.assignedTasks(groupEpoch, 0, 1))
+                    .build())
+                .withMember(streamsGroupMemberBuilderWithDefaults(memberId2, instanceId2)
+                    .setMemberEpoch(LEAVE_GROUP_STATIC_MEMBER_EPOCH)
+                    .setPreviousMemberEpoch(groupEpoch - 1)
+                    .setAssignedTasks(topic.assignedTasks(groupEpoch, 2, 3))
+                    .build())
+                .withTargetAssignment(memberId1, topic.targetAssignment(0, 1))
+                .withTargetAssignment(memberId2, topic.targetAssignment(2, 3))
+                .withTargetAssignmentEpoch(groupEpoch)
+                .withTopology(StreamsTopology.fromHeartbeatRequest(topic.topology()))
+                .withValidatedTopologyEpoch(0)
+                .withMetadataHash(topic.metadataHash())
+                .withLastAssignmentConfigs(AssignmentConfigsImpl.DEFAULT))
+            .withConfig(GroupCoordinatorConfig.STREAMS_GROUP_INITIAL_REBALANCE_DELAY_MS_CONFIG, GroupCoordinatorConfig.STREAMS_GROUP_INITIAL_REBALANCE_DELAY_MS_DEFAULT)
+            .build();
+
+        assertEquals(
+            Map.of(instanceId1, memberId1, instanceId2, memberId2),
+            context.groupMetadataManager.streamsGroup(groupId).staticMembers()
+        );
+
+        // Member 1 rejoins with its own member id and the released instance id 2. The released
+        // instance id may only be taken by a new member id.
+        InvalidRequestException e = assertThrows(InvalidRequestException.class, () -> context.streamsGroupHeartbeat(
+            staticJoinHeartbeat(groupId, memberId1, instanceId2, topic)
+        ));
+        assertEquals(String.format("Member %s with instance id %s cannot join the group because the member id is " +
+            "already used by a static member with instance id %s.", memberId1, instanceId2, instanceId1), e.getMessage());
+
+        assertEquals(
+            Map.of(instanceId1, memberId1, instanceId2, memberId2),
+            context.groupMetadataManager.streamsGroup(groupId).staticMembers()
+        );
+    }
+
+    @Test
+    public void testStaticMemberCannotRejoinWithUnreleasedInstanceId() {
+        int groupEpoch = DEFAULT_GROUP_EPOCH;
+
+        String groupId = "fooup";
+        String memberId1 = Uuid.randomUuid().toString();
+        String memberId2 = Uuid.randomUuid().toString();
+        String instanceId1 = "instance-1";
+        String instanceId2 = "instance-2";
+
+        StreamsTopicFixture topic = streamsTopicFixture("subtopology1", "foo", 4);
+
+        // Streams group with two active static members.
+        GroupMetadataManagerTestContext context = new GroupMetadataManagerTestContext.Builder()
+            .withStreamsGroupTaskAssignors(List.of(new MockTaskAssignor("sticky")))
+            .withMetadataImage(topic.metadataImage())
+            .withStreamsGroup(new StreamsGroupBuilder(groupId, groupEpoch)
+                .withMember(streamsGroupMemberBuilderWithDefaults(memberId1, instanceId1)
+                    .setMemberEpoch(groupEpoch)
+                    .setPreviousMemberEpoch(groupEpoch - 1)
+                    .setAssignedTasks(topic.assignedTasks(groupEpoch, 0, 1))
+                    .build())
+                .withMember(streamsGroupMemberBuilderWithDefaults(memberId2, instanceId2)
+                    .setMemberEpoch(groupEpoch)
+                    .setPreviousMemberEpoch(groupEpoch - 1)
+                    .setAssignedTasks(topic.assignedTasks(groupEpoch, 2, 3))
+                    .build())
+                .withTargetAssignment(memberId1, topic.targetAssignment(0, 1))
+                .withTargetAssignment(memberId2, topic.targetAssignment(2, 3))
+                .withTargetAssignmentEpoch(groupEpoch)
+                .withTopology(StreamsTopology.fromHeartbeatRequest(topic.topology()))
+                .withValidatedTopologyEpoch(0)
+                .withMetadataHash(topic.metadataHash())
+                .withLastAssignmentConfigs(AssignmentConfigsImpl.DEFAULT))
+            .withConfig(GroupCoordinatorConfig.STREAMS_GROUP_INITIAL_REBALANCE_DELAY_MS_CONFIG, GroupCoordinatorConfig.STREAMS_GROUP_INITIAL_REBALANCE_DELAY_MS_DEFAULT)
+            .build();
+
+        assertEquals(
+            Map.of(instanceId1, memberId1, instanceId2, memberId2),
+            context.groupMetadataManager.streamsGroup(groupId).staticMembers()
+        );
+
+        // Member 1 rejoins with its own member id and instance id 2, which is owned by an active
+        // member. The join is rejected because member 1 changes its instance id, before the
+        // ownership of the instance id is even considered.
+        InvalidRequestException e = assertThrows(InvalidRequestException.class, () -> context.streamsGroupHeartbeat(
+            staticJoinHeartbeat(groupId, memberId1, instanceId2, topic)
+        ));
+        assertEquals(String.format("Member %s with instance id %s cannot join the group because the member id is " +
+            "already used by a static member with instance id %s.", memberId1, instanceId2, instanceId1), e.getMessage());
+
+        assertEquals(
+            Map.of(instanceId1, memberId1, instanceId2, memberId2),
+            context.groupMetadataManager.streamsGroup(groupId).staticMembers()
+        );
+    }
+
+    @Test
+    public void testDynamicMemberCannotRejoinWithReleasedInstanceId() {
+        int groupEpoch = DEFAULT_GROUP_EPOCH;
+
+        String groupId = "fooup";
+        String memberId1 = Uuid.randomUuid().toString();
+        String memberId2 = Uuid.randomUuid().toString();
+        String instanceId2 = "instance-2";
+
+        StreamsTopicFixture topic = streamsTopicFixture("subtopology1", "foo", 4);
+
+        // Streams group with a dynamic member and a static member. The static member has left
+        // the group and released instance id 2.
+        GroupMetadataManagerTestContext context = new GroupMetadataManagerTestContext.Builder()
+            .withStreamsGroupTaskAssignors(List.of(new MockTaskAssignor("sticky")))
+            .withMetadataImage(topic.metadataImage())
+            .withStreamsGroup(new StreamsGroupBuilder(groupId, groupEpoch)
+                .withMember(streamsGroupMemberBuilderWithDefaults(memberId1)
+                    .setMemberEpoch(groupEpoch)
+                    .setPreviousMemberEpoch(groupEpoch - 1)
+                    .setAssignedTasks(topic.assignedTasks(groupEpoch, 0, 1))
+                    .build())
+                .withMember(streamsGroupMemberBuilderWithDefaults(memberId2, instanceId2)
+                    .setMemberEpoch(LEAVE_GROUP_STATIC_MEMBER_EPOCH)
+                    .setPreviousMemberEpoch(groupEpoch - 1)
+                    .setAssignedTasks(topic.assignedTasks(groupEpoch, 2, 3))
+                    .build())
+                .withTargetAssignment(memberId1, topic.targetAssignment(0, 1))
+                .withTargetAssignment(memberId2, topic.targetAssignment(2, 3))
+                .withTargetAssignmentEpoch(groupEpoch)
+                .withTopology(StreamsTopology.fromHeartbeatRequest(topic.topology()))
+                .withValidatedTopologyEpoch(0)
+                .withMetadataHash(topic.metadataHash())
+                .withLastAssignmentConfigs(AssignmentConfigsImpl.DEFAULT))
+            .withConfig(GroupCoordinatorConfig.STREAMS_GROUP_INITIAL_REBALANCE_DELAY_MS_CONFIG, GroupCoordinatorConfig.STREAMS_GROUP_INITIAL_REBALANCE_DELAY_MS_DEFAULT)
+            .build();
+
+        // Member 1 rejoins with its own member id and the released instance id 2. The released
+        // instance id may only be taken by a new member id.
+        InvalidRequestException e = assertThrows(InvalidRequestException.class, () -> context.streamsGroupHeartbeat(
+            staticJoinHeartbeat(groupId, memberId1, instanceId2, topic)
+        ));
+        assertEquals(String.format("Member %s with instance id %s cannot join the group because the member id is " +
+            "already used by a dynamic member.", memberId1, instanceId2), e.getMessage());
+
+        assertEquals(
+            Map.of(instanceId2, memberId2),
+            context.groupMetadataManager.streamsGroup(groupId).staticMembers()
+        );
+    }
+
+    @Test
+    public void testDynamicMemberCannotRejoinWithUnreleasedInstanceId() {
+        int groupEpoch = DEFAULT_GROUP_EPOCH;
+
+        String groupId = "fooup";
+        String memberId1 = Uuid.randomUuid().toString();
+        String memberId2 = Uuid.randomUuid().toString();
+        String instanceId2 = "instance-2";
+
+        StreamsTopicFixture topic = streamsTopicFixture("subtopology1", "foo", 4);
+
+        // Streams group with a dynamic member and an active static member using instance id 2.
+        GroupMetadataManagerTestContext context = new GroupMetadataManagerTestContext.Builder()
+            .withStreamsGroupTaskAssignors(List.of(new MockTaskAssignor("sticky")))
+            .withMetadataImage(topic.metadataImage())
+            .withStreamsGroup(new StreamsGroupBuilder(groupId, groupEpoch)
+                .withMember(streamsGroupMemberBuilderWithDefaults(memberId1)
+                    .setMemberEpoch(groupEpoch)
+                    .setPreviousMemberEpoch(groupEpoch - 1)
+                    .setAssignedTasks(topic.assignedTasks(groupEpoch, 0, 1))
+                    .build())
+                .withMember(streamsGroupMemberBuilderWithDefaults(memberId2, instanceId2)
+                    .setMemberEpoch(groupEpoch)
+                    .setPreviousMemberEpoch(groupEpoch - 1)
+                    .setAssignedTasks(topic.assignedTasks(groupEpoch, 2, 3))
+                    .build())
+                .withTargetAssignment(memberId1, topic.targetAssignment(0, 1))
+                .withTargetAssignment(memberId2, topic.targetAssignment(2, 3))
+                .withTargetAssignmentEpoch(groupEpoch)
+                .withTopology(StreamsTopology.fromHeartbeatRequest(topic.topology()))
+                .withValidatedTopologyEpoch(0)
+                .withMetadataHash(topic.metadataHash())
+                .withLastAssignmentConfigs(AssignmentConfigsImpl.DEFAULT))
+            .withConfig(GroupCoordinatorConfig.STREAMS_GROUP_INITIAL_REBALANCE_DELAY_MS_CONFIG, GroupCoordinatorConfig.STREAMS_GROUP_INITIAL_REBALANCE_DELAY_MS_DEFAULT)
+            .build();
+
+        // Member 1 rejoins with its own member id and instance id 2, which is owned by an active
+        // member. The join is rejected because member 1 changes its instance id, before the
+        // ownership of the instance id is even considered.
+        InvalidRequestException e = assertThrows(InvalidRequestException.class, () -> context.streamsGroupHeartbeat(
+            staticJoinHeartbeat(groupId, memberId1, instanceId2, topic)
+        ));
+        assertEquals(String.format("Member %s with instance id %s cannot join the group because the member id is " +
+            "already used by a dynamic member.", memberId1, instanceId2), e.getMessage());
+
+        assertEquals(
+            Map.of(instanceId2, memberId2),
+            context.groupMetadataManager.streamsGroup(groupId).staticMembers()
+        );
+    }
+
+    @Test
+    public void testStaticMemberRejoinsWithSameMemberIdWhileActive() {
+        int groupEpoch = DEFAULT_GROUP_EPOCH;
+
+        String groupId = "fooup";
+        String memberId = Uuid.randomUuid().toString();
+        String instanceId = "instance-1";
+
+        StreamsTopicFixture topic = streamsTopicFixture("subtopology1", "foo", 4);
+        TasksTuple targetAssignment = topic.targetAssignment(0, 1, 2, 3);
+        TasksTupleWithEpochs assignedTasks = topic.assignedTasks(groupEpoch, 0, 1, 2, 3);
+
+        // Streams group with one active static member.
+        StreamsGroupMember activeMember = streamsGroupMemberBuilderWithDefaults(memberId, instanceId)
+            .setMemberEpoch(groupEpoch)
+            .setPreviousMemberEpoch(groupEpoch - 1)
+            .setAssignedTasks(assignedTasks)
+            .build();
+
+        GroupMetadataManagerTestContext context = new GroupMetadataManagerTestContext.Builder()
+            .withStreamsGroupTaskAssignors(List.of(new MockTaskAssignor("sticky")))
+            .withMetadataImage(topic.metadataImage())
+            .withStreamsGroup(new StreamsGroupBuilder(groupId, groupEpoch)
+                .withMember(activeMember)
+                .withTargetAssignment(memberId, targetAssignment)
+                .withTargetAssignmentEpoch(groupEpoch)
+                .withTopology(StreamsTopology.fromHeartbeatRequest(topic.topology()))
+                .withValidatedTopologyEpoch(0)
+                .withMetadataHash(topic.metadataHash())
+                .withLastAssignmentConfigs(AssignmentConfigsImpl.DEFAULT))
+            .withConfig(GroupCoordinatorConfig.STREAMS_GROUP_INITIAL_REBALANCE_DELAY_MS_CONFIG, GroupCoordinatorConfig.STREAMS_GROUP_INITIAL_REBALANCE_DELAY_MS_DEFAULT)
+            .build();
+
+        // The member joins again with the same member id and instance id while it is still
+        // active, e.g. because the response to its join was lost or because it was fenced.
+        // Like a dynamic member, it is not fenced by its own instance id and gets its current
+        // state back.
+        CoordinatorResult<StreamsGroupHeartbeatResult, CoordinatorRecord> result = context.streamsGroupHeartbeat(
+            staticJoinHeartbeat(groupId, memberId, instanceId, topic)
+        );
+
+        assertEquals(memberId, result.response().data().memberId());
+        assertEquals(groupEpoch, result.response().data().memberEpoch());
+
+        // Nothing changed, so nothing is written.
+        assertRecordsEquals(List.of(), result.records());
+
+        // The member keeps its epoch and its assignment.
+        StreamsGroupMember member = context.groupMetadataManager.streamsGroup(groupId).getMemberOrThrow(memberId);
+        assertEquals(groupEpoch, member.memberEpoch());
+        assertEquals(assignedTasks, member.assignedTasks());
+
+        assertEquals(
+            Map.of(instanceId, memberId),
             context.groupMetadataManager.streamsGroup(groupId).staticMembers()
         );
     }
@@ -1674,7 +2200,7 @@ class StreamsGroupStaticMemberGroupMetadataManagerTest {
                 .withTopology(StreamsTopology.fromHeartbeatRequest(topic.topology()))
                 .withValidatedTopologyEpoch(0)
                 .withMetadataHash(topic.metadataHash())
-                .withLastAssignmentConfigs(getDefaultAssignmentConfigs()))
+                .withLastAssignmentConfigs(AssignmentConfigsImpl.DEFAULT))
             .withConfig(GroupCoordinatorConfig.STREAMS_GROUP_INITIAL_REBALANCE_DELAY_MS_CONFIG, GroupCoordinatorConfig.STREAMS_GROUP_INITIAL_REBALANCE_DELAY_MS_DEFAULT)
             .build();
         
@@ -1742,7 +2268,7 @@ class StreamsGroupStaticMemberGroupMetadataManagerTest {
             StreamsCoordinatorRecordHelpers.newStreamsGroupCurrentAssignmentTombstoneRecord(groupId, memberId),
             StreamsCoordinatorRecordHelpers.newStreamsGroupTargetAssignmentTombstoneRecord(groupId, memberId),
             StreamsCoordinatorRecordHelpers.newStreamsGroupMemberTombstoneRecord(groupId, memberId),
-            StreamsCoordinatorRecordHelpers.newStreamsGroupMetadataRecord(groupId, 3, topic.metadataHash(), 0, getDefaultAssignmentConfigs(), -1, -1),
+            StreamsCoordinatorRecordHelpers.newStreamsGroupMetadataRecord(groupId, 3, topic.metadataHash(), 0, AssignmentConfigsImpl.DEFAULT, -1, -1),
             StreamsCoordinatorRecordHelpers.newStreamsGroupTargetAssignmentMetadataRecord(groupId, 3, 0L)
         );
         assertEquals(
@@ -1830,7 +2356,7 @@ class StreamsGroupStaticMemberGroupMetadataManagerTest {
                 .withValidatedTopologyEpoch(0)
                 .withMetadataHash(topic.metadataHash())
                 .withTargetAssignment(oldMemberId, targetAssignment)
-                .withLastAssignmentConfigs(getDefaultAssignmentConfigs()))
+                .withLastAssignmentConfigs(AssignmentConfigsImpl.DEFAULT))
             .withConfig(GroupCoordinatorConfig.STREAMS_GROUP_INITIAL_REBALANCE_DELAY_MS_CONFIG, 0)
             .build();
         

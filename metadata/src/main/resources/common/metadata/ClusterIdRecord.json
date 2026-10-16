@@ -14,7 +14,7 @@
 // limitations under the License.
 
 {
-  "apiKey": 29,
+  "apiKey": 30,
   "type": "metadata",
   "name": "ClusterIdRecord",
   "validVersions": "0",

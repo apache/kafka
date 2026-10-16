@@ -17,6 +17,7 @@
 package kafka.server;
 
 import org.apache.kafka.clients.ApiVersions;
+import org.apache.kafka.clients.BootstrapConfiguration;
 import org.apache.kafka.clients.ManualMetadataUpdater;
 import org.apache.kafka.clients.MetadataRecoveryStrategy;
 import org.apache.kafka.clients.NetworkClient;
@@ -86,6 +87,7 @@ public class NetworkUtils {
             new ApiVersions(),
             logContext,
             MetadataRecoveryStrategy.NONE,
+            BootstrapConfiguration.DISABLED,
             false
         );
     }

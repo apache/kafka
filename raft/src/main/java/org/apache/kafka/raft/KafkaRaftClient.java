@@ -397,6 +397,7 @@ public final class KafkaRaftClient<T> implements RaftClient<T> {
     private void maybeNotifyVoterHandlerOnHWmUpdate(LeaderState<T> state, long highWatermark) {
         addVoterHandler.highWatermarkUpdated(state, highWatermark);
         removeVoterHandler.highWatermarkUpdated(state, highWatermark);
+        updateVoterHandler.highWatermarkUpdated(state, highWatermark);
     }
 
     private void updateListenersProgress(long highWatermark) {
@@ -498,7 +499,6 @@ public final class KafkaRaftClient<T> implements RaftClient<T> {
         partitionState = new KRaftControlRecordStateMachine(
             staticVoters,
             log,
-            serde,
             MAX_BATCH_SIZE_BYTES,
             logContext,
             kafkaRaftMetrics,
@@ -579,15 +579,17 @@ public final class KafkaRaftClient<T> implements RaftClient<T> {
             onBecomeFollower(currentTimeMs);
         }
 
+        var requestSender = new DefaultRequestSender(
+            requestManager,
+            channel,
+            messageQueue,
+            logContext
+        );
+
         // Specialized add voter handler
         this.addVoterHandler = new AddVoterHandler(
             partitionState,
-            new DefaultRequestSender(
-                requestManager,
-                channel,
-                messageQueue,
-                logContext
-            ),
+            requestSender,
             time,
             logContext
         );
@@ -605,7 +607,8 @@ public final class KafkaRaftClient<T> implements RaftClient<T> {
         // Specialized update voter handler
         this.updateVoterHandler = new UpdateVoterHandler(
             partitionState,
-            channel.listenerName(),
+            requestSender,
+            time,
             logContext
         );
     }
@@ -1930,7 +1933,7 @@ public final class KafkaRaftClient<T> implements RaftClient<T> {
             return new FetchSnapshotResponseData().setErrorCode(Errors.INCONSISTENT_CLUSTER_ID.code());
         }
 
-        if (data.topics().size() != 1 && data.topics().get(0).partitions().size() != 1) {
+        if (!hasValidTopicPartition(data)) {
             return FetchSnapshotResponse.withTopLevelError(Errors.INVALID_REQUEST);
         }
 
@@ -2086,7 +2089,7 @@ public final class KafkaRaftClient<T> implements RaftClient<T> {
             return handleTopLevelError(topLevelError, responseMetadata);
         }
 
-        if (data.topics().size() != 1 && data.topics().get(0).partitions().size() != 1) {
+        if (!hasValidTopicPartition(data)) {
             return false;
         }
 
@@ -2317,19 +2320,37 @@ public final class KafkaRaftClient<T> implements RaftClient<T> {
             return true;
         }
 
+        var leaderState = quorum.leaderStateOrThrow();
+
         ApiVersionsResponseData response = (ApiVersionsResponseData) responseMetadata.data();
 
         Errors error = Errors.forCode(response.errorCode());
         Optional<ApiVersionsResponseData.SupportedFeatureKey> supportedKraftVersions =
             Optional.ofNullable(response.supportedFeatures().find(KRaftVersion.FEATURE_NAME));
 
-        return addVoterHandler.handleApiVersionsResponse(
-            quorum.leaderStateOrThrow(),
-            responseMetadata.source(),
-            error,
-            supportedKraftVersions,
-            currentTimeMs
-        );
+        if (leaderState.changeVoterState().addVoterHandlerState().isPresent()) {
+            return addVoterHandler.handleApiVersionsResponse(
+                leaderState,
+                responseMetadata.source(),
+                error,
+                supportedKraftVersions,
+                currentTimeMs
+            );
+        } else if (leaderState.changeVoterState().updateVoterHandlerState().isPresent()) {
+            return updateVoterHandler.handleApiVersionsResponse(
+                leaderState,
+                responseMetadata.source(),
+                error,
+                supportedKraftVersions,
+                currentTimeMs
+            );
+        } else {
+            logger.debug(
+                "Received API_VERSIONS response from {} but no voter change operation is pending",
+                responseMetadata.source()
+            );
+            return true;
+        }
     }
 
     private boolean handleAddVoterResponse(
@@ -2511,18 +2532,6 @@ public final class KafkaRaftClient<T> implements RaftClient<T> {
             );
         }
 
-        Endpoints voterEndpoints = Endpoints.fromUpdateVoterRequest(data.listeners());
-        if (voterEndpoints.address(channel.listenerName()).isEmpty()) {
-            return completedFuture(
-                RaftUtil.updateVoterResponse(
-                    Errors.INVALID_REQUEST,
-                    requestMetadata.listenerName(),
-                    quorum.leaderAndEpoch(),
-                    quorum.leaderEndpoints()
-                )
-            );
-        }
-
         UpdateRaftVoterRequestData.KRaftVersionFeature supportedKraftVersions = data.kRaftVersionFeature();
         if (supportedKraftVersions.minSupportedVersion() < 0 ||
             supportedKraftVersions.maxSupportedVersion() < 0 ||
@@ -2542,7 +2551,7 @@ public final class KafkaRaftClient<T> implements RaftClient<T> {
             quorum.leaderStateOrThrow(),
             requestMetadata.listenerName(),
             voter.get(),
-            voterEndpoints,
+            Endpoints.fromUpdateVoterRequest(data.listeners()),
             supportedKraftVersions,
             currentTimeMs
         );
@@ -3180,9 +3189,14 @@ public final class KafkaRaftClient<T> implements RaftClient<T> {
             return 0L;
         }
 
-        long timeUntilVoterChangeExpires = state
-            .changeVoterState()
-            .maybeExpirePendingOperation(currentTimeMs);
+        var changeVoterState = state.changeVoterState();
+        long timeUntilVoterChangeExpires = changeVoterState.hasPendingOperation() ?
+            changeVoterState.maybeExpirePendingOperation(
+                quorum.leaderAndEpoch(),
+                quorum.leaderEndpoints(),
+                currentTimeMs
+            ) :
+            Long.MAX_VALUE;
 
         long timeUntilFlush = maybeAppendBatches(
             state,
@@ -3853,6 +3867,15 @@ public final class KafkaRaftClient<T> implements RaftClient<T> {
             .flatMap(LeaderState::requestedKRaftVersion)
             .map(KRaftVersionUpgrade.Version::kraftVersion)
             .orElseGet(partitionState::lastKraftVersion);
+    }
+
+    @Override
+    public VoterSet latestVoterSet() {
+        if (!isInitialized()) {
+            throw new IllegalStateException("Cannot read the voter set before the replica has been initialized");
+        }
+
+        return partitionState.lastVoterSet();
     }
 
     @Override

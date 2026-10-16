@@ -19,7 +19,6 @@ package org.apache.kafka.streams;
 import org.apache.kafka.common.annotation.InterfaceAudience;
 import org.apache.kafka.streams.state.HostInfo;
 
-import java.util.Collections;
 import java.util.Objects;
 import java.util.Set;
 
@@ -37,7 +36,7 @@ public class KeyQueryMetadata {
      * operations.
      */
     public static final KeyQueryMetadata NOT_AVAILABLE =
-        new KeyQueryMetadata(HostInfo.unavailable(), Collections.emptySet(), -1);
+        new KeyQueryMetadata(HostInfo.unavailable(), Set.of(), -1);
 
     private final HostInfo activeHost;
 

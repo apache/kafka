@@ -47,10 +47,10 @@ import java.util.List;
 import java.util.Map;
 import java.util.Map.Entry;
 import java.util.Optional;
+import java.util.Set;
 import java.util.function.Consumer;
 
 import static org.apache.kafka.common.metadata.MetadataRecordType.FEATURE_LEVEL_RECORD;
-import static org.apache.kafka.controller.QuorumController.MAX_RECORDS_PER_USER_OP;
 
 
 public class FeatureControlManager {
@@ -59,6 +59,7 @@ public class FeatureControlManager {
         private SnapshotRegistry snapshotRegistry = null;
         private QuorumFeatures quorumFeatures = null;
         private KRaftVersionAccessor kraftVersionAccessor = null;
+        private int maxRecordsPerBatch;
         private String clusterId = null;
 
         private ClusterFeatureSupportDescriber clusterSupportDescriber = new ClusterFeatureSupportDescriber() {
@@ -103,7 +104,16 @@ public class FeatureControlManager {
             return this;
         }
 
+        Builder setMaxRecordsPerBatch(int maxRecordsPerBatch) {
+            this.maxRecordsPerBatch = maxRecordsPerBatch;
+            return this;
+        }
+
         public FeatureControlManager build() {
+            if (maxRecordsPerBatch <= 0) {
+                throw new IllegalStateException("Max records per batch must be greater than zero");
+            }
+            // set reasonable defaults for fields when this object is built in testing
             if (logContext == null) logContext = new LogContext();
             if (snapshotRegistry == null) snapshotRegistry = new SnapshotRegistry(logContext);
             if (quorumFeatures == null) {
@@ -111,7 +121,7 @@ public class FeatureControlManager {
                 localSupportedFeatures.put(MetadataVersion.FEATURE_NAME, VersionRange.of(
                         MetadataVersion.MINIMUM_VERSION.featureLevel(),
                         MetadataVersion.latestProduction().featureLevel()));
-                quorumFeatures = new QuorumFeatures(0, localSupportedFeatures, List.of(0));
+                quorumFeatures = new QuorumFeatures(0, localSupportedFeatures, () -> Set.of(0));
             }
             if (kraftVersionAccessor == null) {
                 kraftVersionAccessor = new KRaftVersionAccessor() {
@@ -137,6 +147,7 @@ public class FeatureControlManager {
                 snapshotRegistry,
                 clusterSupportDescriber,
                 kraftVersionAccessor,
+                maxRecordsPerBatch,
                 clusterId
             );
         }
@@ -169,6 +180,8 @@ public class FeatureControlManager {
      */
     private final KRaftVersionAccessor kraftVersionAccessor;
 
+    private final int maxRecordsPerBatch;
+
     /**
      * The cluster ID, used when generating ClusterIdRecord during upgrade.
      * This comes from the leader's meta.properties file.
@@ -181,6 +194,7 @@ public class FeatureControlManager {
         SnapshotRegistry snapshotRegistry,
         ClusterFeatureSupportDescriber clusterSupportDescriber,
         KRaftVersionAccessor kraftVersionAccessor,
+        int maxRecordsPerBatch,
         String clusterId
     ) {
         this.log = logContext.logger(FeatureControlManager.class);
@@ -189,6 +203,7 @@ public class FeatureControlManager {
         this.metadataVersion = new TimelineObject<>(snapshotRegistry, Optional.empty());
         this.clusterSupportDescriber = clusterSupportDescriber;
         this.kraftVersionAccessor = kraftVersionAccessor;
+        this.maxRecordsPerBatch = maxRecordsPerBatch;
         this.clusterId = clusterId;
     }
 
@@ -199,7 +214,7 @@ public class FeatureControlManager {
         int currentClaimedEpoch
     ) {
         List<ApiMessageAndVersion> records =
-                BoundedList.newArrayBacked(MAX_RECORDS_PER_USER_OP);
+                BoundedList.newArrayBacked(maxRecordsPerBatch);
 
         Map<String, Short> proposedUpdatedVersions = new HashMap<>(finalizedVersions);
         proposedUpdatedVersions.put(MetadataVersion.FEATURE_NAME, metadataVersionOrThrow().featureLevel());
@@ -373,7 +388,7 @@ public class FeatureControlManager {
                 foundControllers.add(entry.getKey());
                 numControllersChecked++;
             }
-            for (int id : quorumFeatures.quorumNodeIds()) {
+            for (int id : quorumFeatures.voterIds()) {
                 if (!foundControllers.contains(id)) {
                     return Optional.of("controller " + id + " has not registered, and may not " +
                         "support this feature");
@@ -517,8 +532,8 @@ public class FeatureControlManager {
         }
     }
 
-    boolean isControllerId(int nodeId) {
-        return quorumFeatures.isControllerId(nodeId);
+    boolean isVoterId(int nodeId) {
+        return quorumFeatures.isVoterId(nodeId);
     }
 
     boolean isElrFeatureEnabled() {

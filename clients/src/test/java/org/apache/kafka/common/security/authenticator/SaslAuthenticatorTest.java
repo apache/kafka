@@ -178,6 +178,7 @@ public class SaslAuthenticatorTest {
         saslClientConfigs = clientCertStores.getTrustingConfig(serverCertStores);
         credentialCache = new CredentialCache();
         TestLogin.loginCount.set(0);
+        CountingKafkaPrincipalBuilder.buildCount = 0;
     }
 
     @AfterEach
@@ -215,6 +216,31 @@ public class SaslAuthenticatorTest {
 
         server = createEchoServer(securityProtocol);
         checkAuthenticationAndReauthentication(securityProtocol, node);
+    }
+
+    @Test
+    public void testPrincipalBuiltOncePerAuthentication() throws Exception {
+        String node = "0";
+        time = new MockTime();
+        SecurityProtocol securityProtocol = SecurityProtocol.SASL_PLAINTEXT;
+        configureMechanisms("PLAIN", Collections.singletonList("PLAIN"));
+        saslServerConfigs.put(BrokerSecurityConfigs.PRINCIPAL_BUILDER_CLASS_CONFIG,
+                CountingKafkaPrincipalBuilder.class);
+
+        server = createEchoServer(securityProtocol);
+        createClientConnection(securityProtocol, node);
+        checkClientConnection(node);
+        server.selector().channels().get(0).principal();
+        server.selector().channels().get(0).principal();
+        assertEquals(1, CountingKafkaPrincipalBuilder.buildCount,
+                "Principal should be built only once for repeated access on a connection");
+
+        time.sleep((long) (CONNECTIONS_MAX_REAUTH_MS_VALUE * 1.1));
+        checkClientConnection(node);
+        server.verifyReauthenticationMetrics(1, 0);
+        server.selector().channels().get(0).principal();
+        assertEquals(2, CountingKafkaPrincipalBuilder.buildCount,
+                "A successful re-authentication should build and cache a new principal");
     }
 
     /**
@@ -334,12 +360,7 @@ public class SaslAuthenticatorTest {
         server = createEchoServer(securityProtocol);
         createSelector(securityProtocol, saslClientConfigs);
         InetSocketAddress addr = new InetSocketAddress("localhost", server.port());
-        try {
-            selector.connect(node, addr, BUFFER_SIZE, BUFFER_SIZE);
-            fail("SASL/PLAIN channel created without password");
-        } catch (IOException e) {
-            // Expected exception
-        }
+        assertThrows(IOException.class, () -> selector.connect(node, addr, BUFFER_SIZE, BUFFER_SIZE), "SASL/PLAIN channel created without password");
     }
 
     /**
@@ -1058,12 +1079,7 @@ public class SaslAuthenticatorTest {
 
         SecurityProtocol securityProtocol = SecurityProtocol.SASL_SSL;
         server = createEchoServer(securityProtocol);
-        try {
-            createSelector(securityProtocol, saslClientConfigs);
-            fail("SASL/PLAIN channel created without valid login module");
-        } catch (KafkaException e) {
-            // Expected exception
-        }
+        assertThrows(KafkaException.class, () -> createSelector(securityProtocol, saslClientConfigs), "SASL/PLAIN channel created without valid login module");
     }
 
     /**
@@ -1227,13 +1243,7 @@ public class SaslAuthenticatorTest {
         saslServerConfigs.put(prefix + BrokerSecurityConfigs.SASL_SERVER_CALLBACK_HANDLER_CLASS_CONFIG,
                 TestServerCallbackHandler.class);
         Class<?> loginCallback = TestLoginCallbackHandler.class;
-
-        try {
-            createEchoServer(securityProtocol);
-            fail("Should have failed to create server with default login handler");
-        } catch (KafkaException e) {
-            // Expected exception
-        }
+        assertThrows(KafkaException.class, () -> createEchoServer(securityProtocol), "Should have failed to create server with default login handler");
 
         try {
             saslServerConfigs.put(SaslConfigs.SASL_LOGIN_CALLBACK_HANDLER_CLASS, loginCallback);
@@ -1348,12 +1358,7 @@ public class SaslAuthenticatorTest {
         String module1 = TestJaasConfig.jaasConfigProperty("PLAIN", "user1", "user1-secret").value();
         String module2 = TestJaasConfig.jaasConfigProperty("PLAIN", "user2", "user2-secret").value();
         saslClientConfigs.put(SaslConfigs.SASL_JAAS_CONFIG, new Password(module1 + " " + module2));
-        try {
-            createClientConnection(securityProtocol, "1");
-            fail("Connection created with multiple login modules in sasl.jaas.config");
-        } catch (IllegalArgumentException e) {
-            // Expected
-        }
+        assertThrows(IllegalArgumentException.class, () -> createClientConnection(securityProtocol, "1"), "Connection created with multiple login modules in sasl.jaas.config");
     }
 
     /**
@@ -2761,6 +2766,27 @@ public class SaslAuthenticatorTest {
 
         static KafkaPrincipal saslSslPrincipal(String saslPrincipal, String sslPrincipal) {
             return new KafkaPrincipal(KafkaPrincipal.USER_TYPE, saslPrincipal + ":" + sslPrincipal);
+        }
+
+        @Override
+        public byte[] serialize(KafkaPrincipal principal) {
+            return new byte[0];
+        }
+
+        @Override
+        public KafkaPrincipal deserialize(byte[] bytes) {
+            return null;
+        }
+    }
+
+    public static class CountingKafkaPrincipalBuilder implements KafkaPrincipalBuilder {
+        private static int buildCount;
+
+        @Override
+        public KafkaPrincipal build(AuthenticationContext context) {
+            SaslAuthenticationContext saslContext = (SaslAuthenticationContext) context;
+            buildCount++;
+            return new KafkaPrincipal(KafkaPrincipal.USER_TYPE, saslContext.server().getAuthorizationID());
         }
 
         @Override

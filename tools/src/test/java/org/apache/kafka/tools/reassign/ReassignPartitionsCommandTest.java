@@ -24,7 +24,6 @@ import org.apache.kafka.clients.admin.Config;
 import org.apache.kafka.clients.admin.ConfigEntry;
 import org.apache.kafka.clients.admin.DescribeLogDirsResult;
 import org.apache.kafka.clients.admin.ListOffsetsResult.ListOffsetsResultInfo;
-import org.apache.kafka.clients.admin.NewTopic;
 import org.apache.kafka.clients.admin.OffsetSpec;
 import org.apache.kafka.clients.admin.TopicDescription;
 import org.apache.kafka.clients.consumer.Consumer;
@@ -546,25 +545,20 @@ public class ReassignPartitionsCommandTest {
     }
     
     private void createTopics() {
-        try (Admin admin = Admin.create(Map.of(CommonClientConfigs.BOOTSTRAP_SERVERS_CONFIG, clusterInstance.bootstrapServers()))) {
-            Map<Integer, List<Integer>> fooReplicasAssignments = new HashMap<>();
-            fooReplicasAssignments.put(0, List.of(0, 1, 2));
-            fooReplicasAssignments.put(1, List.of(1, 2, 3));
-            Assertions.assertDoesNotThrow(() -> admin.createTopics(List.of(new NewTopic("foo", fooReplicasAssignments))).topicId("foo").get());
-            Assertions.assertDoesNotThrow(() -> clusterInstance.waitTopicCreation("foo", fooReplicasAssignments.size()));
+        Map<Integer, List<Integer>> fooReplicasAssignments = new HashMap<>();
+        fooReplicasAssignments.put(0, List.of(0, 1, 2));
+        fooReplicasAssignments.put(1, List.of(1, 2, 3));
+        Assertions.assertDoesNotThrow(() -> clusterInstance.createTopicWithAssignment("foo", fooReplicasAssignments));
 
-            Map<Integer, List<Integer>> barReplicasAssignments = new HashMap<>();
-            barReplicasAssignments.put(0, List.of(3, 2, 1));
-            Assertions.assertDoesNotThrow(() -> admin.createTopics(List.of(new NewTopic("bar", barReplicasAssignments))).topicId("bar").get());
-            Assertions.assertDoesNotThrow(() -> clusterInstance.waitTopicCreation("bar", barReplicasAssignments.size()));
+        Map<Integer, List<Integer>> barReplicasAssignments = new HashMap<>();
+        barReplicasAssignments.put(0, List.of(3, 2, 1));
+        Assertions.assertDoesNotThrow(() -> clusterInstance.createTopicWithAssignment("bar", barReplicasAssignments));
 
-            Map<Integer, List<Integer>> bazReplicasAssignments = new HashMap<>();
-            bazReplicasAssignments.put(0, List.of(1, 0, 2));
-            bazReplicasAssignments.put(1, List.of(2, 0, 1));
-            bazReplicasAssignments.put(2, List.of(0, 2, 1));
-            Assertions.assertDoesNotThrow(() -> admin.createTopics(List.of(new NewTopic("baz", bazReplicasAssignments))).topicId("baz").get());
-            Assertions.assertDoesNotThrow(() -> clusterInstance.waitTopicCreation("baz", bazReplicasAssignments.size()));
-        }
+        Map<Integer, List<Integer>> bazReplicasAssignments = new HashMap<>();
+        bazReplicasAssignments.put(0, List.of(1, 0, 2));
+        bazReplicasAssignments.put(1, List.of(2, 0, 1));
+        bazReplicasAssignments.put(2, List.of(0, 2, 1));
+        Assertions.assertDoesNotThrow(() -> clusterInstance.createTopicWithAssignment("baz", bazReplicasAssignments));
     }
 
     private void produceMessages(String topic, int partition, int numMessages) {

@@ -39,10 +39,9 @@ import org.mockito.quality.Strictness;
 
 import java.util.Arrays;
 
-import static org.hamcrest.CoreMatchers.equalTo;
-import static org.hamcrest.CoreMatchers.is;
-import static org.hamcrest.CoreMatchers.nullValue;
-import static org.hamcrest.MatcherAssert.assertThat;
+import static org.junit.jupiter.api.Assertions.assertArrayEquals;
+import static org.junit.jupiter.api.Assertions.assertEquals;
+import static org.junit.jupiter.api.Assertions.assertNull;
 import static org.mockito.Mockito.mock;
 import static org.mockito.Mockito.verify;
 
@@ -98,19 +97,19 @@ public class ChangeLoggingTimestampedKeyValueBytesStoreTest {
     public void shouldWriteKeyValueBytesToInnerStoreOnPut() {
         store.put(hi, rawThere);
 
-        assertThat(root.get(hi), equalTo(rawThere));
-        assertThat(collector.collected().size(), equalTo(1));
-        assertThat(collector.collected().get(0).key(), equalTo(hi));
-        assertThat(collector.collected().get(0).value(), equalTo(there.value()));
-        assertThat(collector.collected().get(0).timestamp(), equalTo(there.timestamp()));
+        assertArrayEquals(rawThere, root.get(hi));
+        assertEquals(1, collector.collected().size());
+        assertEquals(hi, collector.collected().get(0).key());
+        assertArrayEquals(there.value(), (byte[]) collector.collected().get(0).value());
+        assertEquals(there.timestamp(), collector.collected().get(0).timestamp());
     }
 
     @Test
     public void shouldWriteAllKeyValueToInnerStoreOnPutAll() {
         store.putAll(Arrays.asList(KeyValue.pair(hi, rawThere),
                                    KeyValue.pair(hello, rawWorld)));
-        assertThat(root.get(hi), equalTo(rawThere));
-        assertThat(root.get(hello), equalTo(rawWorld));
+        assertArrayEquals(rawThere, root.get(hi));
+        assertArrayEquals(rawWorld, root.get(hello));
     }
 
     @Test
@@ -118,27 +117,27 @@ public class ChangeLoggingTimestampedKeyValueBytesStoreTest {
         store.putAll(Arrays.asList(KeyValue.pair(hi, rawThere),
                                    KeyValue.pair(hello, rawWorld)));
 
-        assertThat(collector.collected().size(), equalTo(2));
-        assertThat(collector.collected().get(0).key(), equalTo(hi));
-        assertThat(collector.collected().get(0).value(), equalTo(there.value()));
-        assertThat(collector.collected().get(0).timestamp(), equalTo(there.timestamp()));
-        assertThat(collector.collected().get(1).key(), equalTo(hello));
-        assertThat(collector.collected().get(1).value(), equalTo(world.value()));
-        assertThat(collector.collected().get(1).timestamp(), equalTo(world.timestamp()));
+        assertEquals(2, collector.collected().size());
+        assertEquals(hi, collector.collected().get(0).key());
+        assertArrayEquals(there.value(), (byte[]) collector.collected().get(0).value());
+        assertEquals(there.timestamp(), collector.collected().get(0).timestamp());
+        assertEquals(hello, collector.collected().get(1).key());
+        assertArrayEquals(world.value(), (byte[]) collector.collected().get(1).value());
+        assertEquals(world.timestamp(), collector.collected().get(1).timestamp());
     }
 
     @Test
     public void shouldPropagateDelete() {
         store.put(hi, rawThere);
         store.delete(hi);
-        assertThat(root.approximateNumEntries(), equalTo(0L));
-        assertThat(root.get(hi), nullValue());
+        assertEquals(0L, root.approximateNumEntries());
+        assertNull(root.get(hi));
     }
 
     @Test
     public void shouldReturnOldValueOnDelete() {
         store.put(hi, rawThere);
-        assertThat(store.delete(hi), equalTo(rawThere));
+        assertArrayEquals(rawThere, store.delete(hi));
     }
 
     @Test
@@ -146,37 +145,37 @@ public class ChangeLoggingTimestampedKeyValueBytesStoreTest {
         store.put(hi, rawThere);
         store.delete(hi);
 
-        assertThat(collector.collected().size(), equalTo(2));
-        assertThat(collector.collected().get(0).key(), equalTo(hi));
-        assertThat(collector.collected().get(0).value(), equalTo(there.value()));
-        assertThat(collector.collected().get(0).timestamp(), equalTo(there.timestamp()));
-        assertThat(collector.collected().get(1).key(), equalTo(hi));
-        assertThat(collector.collected().get(1).value(), nullValue());
-        assertThat(collector.collected().get(1).timestamp(), equalTo(0L));
+        assertEquals(2, collector.collected().size());
+        assertEquals(hi, collector.collected().get(0).key());
+        assertArrayEquals(there.value(), (byte[]) collector.collected().get(0).value());
+        assertEquals(there.timestamp(), collector.collected().get(0).timestamp());
+        assertEquals(hi, collector.collected().get(1).key());
+        assertNull(collector.collected().get(1).value());
+        assertEquals(0L, collector.collected().get(1).timestamp());
 
     }
 
     @Test
     public void shouldWriteToInnerOnPutIfAbsentNoPreviousValue() {
         store.putIfAbsent(hi, rawThere);
-        assertThat(root.get(hi), equalTo(rawThere));
+        assertArrayEquals(rawThere, root.get(hi));
     }
 
     @Test
     public void shouldNotWriteToInnerOnPutIfAbsentWhenValueForKeyExists() {
         store.put(hi, rawThere);
         store.putIfAbsent(hi, rawWorld);
-        assertThat(root.get(hi), equalTo(rawThere));
+        assertArrayEquals(rawThere, root.get(hi));
     }
 
     @Test
     public void shouldWriteToChangelogOnPutIfAbsentWhenNoPreviousValue() {
         store.putIfAbsent(hi, rawThere);
 
-        assertThat(collector.collected().size(), equalTo(1));
-        assertThat(collector.collected().get(0).key(), equalTo(hi));
-        assertThat(collector.collected().get(0).value(), equalTo(there.value()));
-        assertThat(collector.collected().get(0).timestamp(), equalTo(there.timestamp()));
+        assertEquals(1, collector.collected().size());
+        assertEquals(hi, collector.collected().get(0).key());
+        assertArrayEquals(there.value(), (byte[]) collector.collected().get(0).value());
+        assertEquals(there.timestamp(), collector.collected().get(0).timestamp());
     }
 
     @Test
@@ -184,31 +183,31 @@ public class ChangeLoggingTimestampedKeyValueBytesStoreTest {
         store.put(hi, rawThere);
         store.putIfAbsent(hi, rawWorld);
 
-        assertThat(collector.collected().size(), equalTo(1));
-        assertThat(collector.collected().get(0).key(), equalTo(hi));
-        assertThat(collector.collected().get(0).value(), equalTo(there.value()));
-        assertThat(collector.collected().get(0).timestamp(), equalTo(there.timestamp()));
+        assertEquals(1, collector.collected().size());
+        assertEquals(hi, collector.collected().get(0).key());
+        assertArrayEquals(there.value(), (byte[]) collector.collected().get(0).value());
+        assertEquals(there.timestamp(), collector.collected().get(0).timestamp());
     }
 
     @Test
     public void shouldReturnCurrentValueOnPutIfAbsent() {
         store.put(hi, rawThere);
-        assertThat(store.putIfAbsent(hi, rawWorld), equalTo(rawThere));
+        assertArrayEquals(rawThere, store.putIfAbsent(hi, rawWorld));
     }
 
     @Test
     public void shouldReturnNullOnPutIfAbsentWhenNoPreviousValue() {
-        assertThat(store.putIfAbsent(hi, rawThere), is(nullValue()));
+        assertNull(store.putIfAbsent(hi, rawThere));
     }
 
     @Test
     public void shouldReturnValueOnGetWhenExists() {
         store.put(hello, rawWorld);
-        assertThat(store.get(hello), equalTo(rawWorld));
+        assertArrayEquals(rawWorld, store.get(hello));
     }
 
     @Test
     public void shouldReturnNullOnGetWhenDoesntExist() {
-        assertThat(store.get(hello), is(nullValue()));
+        assertNull(store.get(hello));
     }
 }

@@ -21,9 +21,9 @@ import org.apache.kafka.clients.admin.AlterConfigOp;
 import org.apache.kafka.clients.admin.AlterConfigsOptions;
 import org.apache.kafka.clients.admin.Config;
 import org.apache.kafka.clients.admin.ConfigEntry;
-import org.apache.kafka.clients.admin.NewTopic;
 import org.apache.kafka.clients.admin.OffsetSpec;
 import org.apache.kafka.clients.producer.Producer;
+import org.apache.kafka.clients.producer.ProducerConfig;
 import org.apache.kafka.clients.producer.ProducerRecord;
 import org.apache.kafka.common.TopicPartition;
 import org.apache.kafka.common.config.ConfigResource;
@@ -42,6 +42,7 @@ import com.yammer.metrics.core.Meter;
 import java.nio.charset.StandardCharsets;
 import java.time.Duration;
 import java.util.ArrayList;
+import java.util.Arrays;
 import java.util.HashSet;
 import java.util.List;
 import java.util.Map;
@@ -499,16 +500,11 @@ public class ShareConsumerDLQTest extends ShareConsumerTestBase {
         // so a single record's DLQ copy cleanly fits under the limit but two together clearly don't.
         int payloadSize = dlqMaxMessageBytes - 2_000;
 
-        try (Admin admin = createAdminClient()) {
-            admin.createTopics(Set.of(
-                new NewTopic(sourceTopic, 1, (short) 1)
-                    .configs(Map.of(TopicConfig.MAX_MESSAGE_BYTES_CONFIG, Integer.toString(sourceMaxMessageBytes))),
-                new NewTopic(dlqTopic, 1, (short) 1)
-                    .configs(Map.of(
-                        TopicConfig.ERRORS_DEADLETTERQUEUE_GROUP_ENABLE_CONFIG, "true",
-                        TopicConfig.MAX_MESSAGE_BYTES_CONFIG, Integer.toString(dlqMaxMessageBytes)))
-            )).all().get();
-        }
+        cluster.createTopic(sourceTopic, 1, (short) 1,
+            Map.of(TopicConfig.MAX_MESSAGE_BYTES_CONFIG, Integer.toString(sourceMaxMessageBytes)));
+        cluster.createTopic(dlqTopic, 1, (short) 1, Map.of(
+            TopicConfig.ERRORS_DEADLETTERQUEUE_GROUP_ENABLE_CONFIG, "true",
+            TopicConfig.MAX_MESSAGE_BYTES_CONFIG, Integer.toString(dlqMaxMessageBytes)));
 
         alterShareAutoOffsetReset(groupId, "earliest");
         alterShareGroupConfig(groupId, GroupConfig.ERRORS_DEADLETTERQUEUE_TOPIC_NAME_CONFIG, dlqTopic);
@@ -581,6 +577,10 @@ public class ShareConsumerDLQTest extends ShareConsumerTestBase {
             }, DEFAULT_MAX_WAIT_MS, 100L, () -> "Raised max.message.bytes did not propagate on the DLQ topic");
         }
 
+        // Hook for any subclasses whose DLQ manager caches topic config (e.g. max.message.bytes)
+        // and needs time for the raised value to propagate before the next produce batch.
+        waitForDlqTopicConfigRefresh();
+
         try (Producer<byte[], byte[]> producer = createProducer()) {
             for (int i = 0; i < recordCount; i++) {
                 producer.send(new ProducerRecord<>(sourceTopic, 0, "key".getBytes(StandardCharsets.UTF_8), payload));
@@ -597,6 +597,102 @@ public class ShareConsumerDLQTest extends ShareConsumerTestBase {
             DEFAULT_MAX_WAIT_MS, 200L,
             () -> "Expected exactly 1 additional DLQ produce request for the second batch (budget no longer forces "
                 + "chunking), count went from " + produceCountBeforeRaise + " to " + dlqMeterCount(METRIC_DLQ_PRODUCE_TOTAL, groupId));
+    }
+
+    /**
+     * Guards against a decompression-bomb-shaped source record: a highly compressible record that is tiny
+     * on the wire but expands to a much larger size once decompressed. The DLQ record fetcher bounds the
+     * decompression budget it will spend copying a record by the DLQ topic's own {@code max.message.bytes}
+     * (there is no point retaining more decompressed data than the DLQ topic could ever accept anyway).
+     *
+     * <p>Phase 1: the DLQ topic is configured with a deliberately low {@code max.message.bytes}. Two records
+     * with a highly compressible ~200KB payload (tiny once gzip-compressed) are rejected with record copy
+     * enabled. The decompression budget (derived from the low limit) is exhausted well before the payload can
+     * be fully decompressed, so the copy is skipped - but the DLQ write itself still succeeds, headers-only
+     * (same degraded outcome as record-copy-disabled): the DLQ metrics still fire and the records still land
+     * on the DLQ topic, just without a key/value.
+     *
+     * <p>Phase 2: the DLQ topic's {@code max.message.bytes} is raised comfortably above the decompressed
+     * payload size, and a fresh batch of the same records is rejected. This time the decompression budget is
+     * sufficient, so the copy succeeds and the new DLQ records carry the original key/value.
+     */
+    @ClusterTest
+    public void testDlqCopyRecordSkippedWhenDecompressedSizeExceedsDlqMaxMessageBytes() throws Exception {
+        String groupId = "dlq-decompress-cap-group";
+        String sourceTopic = "dlq-decompress-cap-source";
+        String dlqTopic = "dlq.decompress-cap";
+        int recordCount = 2;
+        int payloadSize = 200_000;
+        int lowDlqMaxMessageBytes = 2_000;
+        // Comfortably above the two records' combined decompressed payload (2 * payloadSize = 400,000 bytes)
+        // plus batch/record framing overhead.
+        int highDlqMaxMessageBytes = 500_000;
+
+        cluster.createTopic(sourceTopic, 1, (short) 1);
+        cluster.createTopic(dlqTopic, 1, (short) 1, Map.of(
+            TopicConfig.ERRORS_DEADLETTERQUEUE_GROUP_ENABLE_CONFIG, "true",
+            TopicConfig.MAX_MESSAGE_BYTES_CONFIG, Integer.toString(lowDlqMaxMessageBytes)));
+
+        alterShareAutoOffsetReset(groupId, "earliest");
+        alterShareGroupConfig(groupId, GroupConfig.ERRORS_DEADLETTERQUEUE_TOPIC_NAME_CONFIG, dlqTopic);
+        alterShareGroupConfig(groupId, GroupConfig.ERRORS_DEADLETTERQUEUE_COPY_RECORD_ENABLE_CONFIG, "true");
+
+        // Highly compressible payload: tiny on the wire (comfortably under any max.message.bytes involved),
+        // but decompresses to `payloadSize` bytes - large enough to blow past lowDlqMaxMessageBytes once the
+        // DLQ record fetcher tries to decompress it for copying.
+        byte[] payload = new byte[payloadSize];
+        Arrays.fill(payload, (byte) 'a');
+        try (Producer<byte[], byte[]> producer = createProducer(Map.of(ProducerConfig.COMPRESSION_TYPE_CONFIG, "gzip"))) {
+            for (int i = 0; i < recordCount; i++) {
+                producer.send(new ProducerRecord<>(sourceTopic, 0, "key".getBytes(StandardCharsets.UTF_8), payload));
+            }
+            producer.flush();
+        }
+        rejectRecords(groupId, sourceTopic, recordCount);
+
+        // Phase 1: DLQ write succeeds (headers-only) despite the low limit - copy is skipped, not the write.
+        waitForCondition(() -> dlqMeterCount(METRIC_DLQ_RECORD_COUNT, groupId) == recordCount,
+            DEFAULT_MAX_WAIT_MS, 200L,
+            () -> "Expected " + recordCount + " DLQ records, was " + dlqMeterCount(METRIC_DLQ_RECORD_COUNT, groupId));
+        List<ConsumerRecord<byte[], byte[]>> dlqRecords = readDlqPartition(dlqTopic, 0, recordCount);
+        assertEquals(recordCount, dlqRecords.size(), "Unexpected number of records on the DLQ topic");
+        for (ConsumerRecord<byte[], byte[]> record : dlqRecords) {
+            assertNull(record.key(), "DLQ record key should be absent - record copy must have been skipped");
+            assertNull(record.value(), "DLQ record value should be absent - record copy must have been skipped");
+            assertEquals(groupId, headerValue(record, HEADER_DLQ_ERRORS_GROUP));
+            assertEquals(sourceTopic, headerValue(record, HEADER_DLQ_ERRORS_TOPIC));
+        }
+
+        // Phase 2: point the group at a second, freshly-created DLQ topic whose max.message.bytes is set
+        // comfortably above the decompressed payload size up front - simpler than altering the first
+        // topic's config and waiting for it to propagate.
+        String dlqTopic2 = "dlq.decompress-cap-2";
+        cluster.createTopic(dlqTopic2, 1, (short) 1, Map.of(
+            TopicConfig.ERRORS_DEADLETTERQUEUE_GROUP_ENABLE_CONFIG, "true",
+            TopicConfig.MAX_MESSAGE_BYTES_CONFIG, Integer.toString(highDlqMaxMessageBytes)));
+        alterShareGroupConfig(groupId, GroupConfig.ERRORS_DEADLETTERQUEUE_TOPIC_NAME_CONFIG, dlqTopic2);
+
+        try (Producer<byte[], byte[]> producer = createProducer(Map.of(ProducerConfig.COMPRESSION_TYPE_CONFIG, "gzip"))) {
+            for (int i = 0; i < recordCount; i++) {
+                producer.send(new ProducerRecord<>(sourceTopic, 0, "key".getBytes(StandardCharsets.UTF_8), payload));
+            }
+            producer.flush();
+        }
+        rejectRecords(groupId, sourceTopic, recordCount);
+
+        // The budget is now sufficient, so the second batch's DLQ records (on the new topic) must carry the
+        // copied payload. The per-group metric accumulates across both DLQ topics used by this group.
+        waitForCondition(() -> dlqMeterCount(METRIC_DLQ_RECORD_COUNT, groupId) == recordCount * 2,
+            DEFAULT_MAX_WAIT_MS, 200L,
+            () -> "Expected " + (recordCount * 2) + " DLQ records, was " + dlqMeterCount(METRIC_DLQ_RECORD_COUNT, groupId));
+        List<ConsumerRecord<byte[], byte[]>> secondBatchDlqRecords = readDlqPartition(dlqTopic2, 0, recordCount);
+        assertEquals(recordCount, secondBatchDlqRecords.size(),
+            "Unexpected number of records on the second DLQ topic");
+        for (ConsumerRecord<byte[], byte[]> record : secondBatchDlqRecords) {
+            assertArrayEquals(payload, record.value(), "DLQ record value should be the copied payload");
+            assertEquals(groupId, headerValue(record, HEADER_DLQ_ERRORS_GROUP));
+            assertEquals(sourceTopic, headerValue(record, HEADER_DLQ_ERRORS_TOPIC));
+        }
     }
 
     /**
@@ -777,6 +873,8 @@ public class ShareConsumerDLQTest extends ShareConsumerTestBase {
             "Expected at least one DLQ produce request to have been enqueued");
     }
 
+    protected void waitForDlqTopicConfigRefresh() throws InterruptedException {}
+
     // Verifies the DLQ topic was auto-created by the broker and has the DLQ-enable topic config set.
     private void verifyDlqTopicCreated(String dlqTopic) throws Exception {
         try (Admin admin = createAdminClient()) {
@@ -858,13 +956,8 @@ public class ShareConsumerDLQTest extends ShareConsumerTestBase {
     }
 
     private void createDlqTopic(String topicName, int numPartitions) {
-        assertDoesNotThrow(() -> {
-            try (Admin admin = createAdminClient()) {
-                NewTopic newTopic = new NewTopic(topicName, numPartitions, (short) 1)
-                    .configs(Map.of(TopicConfig.ERRORS_DEADLETTERQUEUE_GROUP_ENABLE_CONFIG, "true"));
-                admin.createTopics(Set.of(newTopic)).all().get();
-            }
-        }, "Failed to create DLQ topic");
+        assertDoesNotThrow(() -> cluster.createTopic(topicName, numPartitions, (short) 1,
+            Map.of(TopicConfig.ERRORS_DEADLETTERQUEUE_GROUP_ENABLE_CONFIG, "true")), "Failed to create DLQ topic");
     }
 
     // Creates a single-partition source topic with tiered storage enabled and one log segment per record (via
@@ -873,18 +966,15 @@ public class ShareConsumerDLQTest extends ShareConsumerTestBase {
     // storage; the total retention (`retentionMs`) is kept generous so the remote segments are not deleted while
     // the test is still running.
     private void createRemoteStorageSourceTopic(String topic, long retentionMs, long localRetentionMs) {
-        assertDoesNotThrow(() -> {
-            try (Admin admin = createAdminClient()) {
-                Map<String, String> configs = Map.of(
-                    TopicConfig.REMOTE_LOG_STORAGE_ENABLE_CONFIG, "true",
-                    TopicConfig.RETENTION_MS_CONFIG, Long.toString(retentionMs),
-                    TopicConfig.LOCAL_LOG_RETENTION_MS_CONFIG, Long.toString(localRetentionMs),
-                    // Roll a segment for every record so each inactive segment can be offloaded then deleted locally.
-                    TopicConfig.INDEX_INTERVAL_BYTES_CONFIG, "1",
-                    TopicConfig.SEGMENT_INDEX_BYTES_CONFIG, "12");
-                admin.createTopics(Set.of(new NewTopic(topic, 1, (short) 1).configs(configs))).all().get();
-            }
-        }, "Failed to create remote-storage source topic");
+        Map<String, String> configs = Map.of(
+            TopicConfig.REMOTE_LOG_STORAGE_ENABLE_CONFIG, "true",
+            TopicConfig.RETENTION_MS_CONFIG, Long.toString(retentionMs),
+            TopicConfig.LOCAL_LOG_RETENTION_MS_CONFIG, Long.toString(localRetentionMs),
+            // Roll a segment for every record so each inactive segment can be offloaded then deleted locally.
+            TopicConfig.INDEX_INTERVAL_BYTES_CONFIG, "1",
+            TopicConfig.SEGMENT_INDEX_BYTES_CONFIG, "12");
+        assertDoesNotThrow(() -> cluster.createTopic(topic, 1, (short) 1, configs),
+            "Failed to create remote-storage source topic");
     }
 
     // The earliest offset still held in local storage. Offsets below this have been removed locally (e.g. after

@@ -38,6 +38,7 @@ import javax.security.auth.callback.UnsupportedCallbackException;
 
 import static org.junit.jupiter.api.Assertions.assertEquals;
 import static org.junit.jupiter.api.Assertions.assertNotNull;
+import static org.junit.jupiter.api.Assertions.assertNull;
 import static org.junit.jupiter.api.Assertions.assertThrows;
 
 public class OAuthBearerUnsecuredLoginCallbackHandlerTest {
@@ -74,6 +75,32 @@ public class OAuthBearerUnsecuredLoginCallbackHandlerTest {
         assertThrows(IOException.class, () -> callbackHandler.handle(new Callback[] {callback}));
     }
 
+    /**
+     * KAFKA-21143: When the JAAS module options contain only non-unsecured-login
+     * options (e.g. ssl.* for JWKS endpoint TLS trust), the handler should
+     * produce a tokenless (null) login instead of attempting to mint an unsecured JWS.
+     */
+    @Test
+    public void sslOnlyModuleOptionsProduceTokenlessLogin() throws IOException, UnsupportedCallbackException {
+        Map<String, String> options = new HashMap<>();
+        options.put("ssl.truststore.location", "/path/to/truststore.jks");
+        options.put("ssl.truststore.type", "JKS");
+        options.put("ssl.truststore.password", "changeit");
+        OAuthBearerUnsecuredLoginCallbackHandler callbackHandler = createCallbackHandler(options, new MockTime());
+        OAuthBearerTokenCallback callback = new OAuthBearerTokenCallback();
+        callbackHandler.handle(new Callback[] {callback});
+        assertNull(callback.token(), "SSL-only module options should result in a tokenless login");
+    }
+
+    @Test
+    public void emptyModuleOptionsProduceTokenlessLogin() throws IOException, UnsupportedCallbackException {
+        Map<String, String> options = new HashMap<>();
+        OAuthBearerUnsecuredLoginCallbackHandler callbackHandler = createCallbackHandler(options, new MockTime());
+        OAuthBearerTokenCallback callback = new OAuthBearerTokenCallback();
+        callbackHandler.handle(new Callback[] {callback});
+        assertNull(callback.token(), "Empty module options should result in a tokenless login");
+    }
+
     @Test
     public void minimalToken() throws IOException, UnsupportedCallbackException {
         Map<String, String> options = new HashMap<>();
@@ -88,6 +115,22 @@ public class OAuthBearerUnsecuredLoginCallbackHandlerTest {
         long startMs = mockTime.milliseconds();
         confirmCorrectValues(jws, user, startMs, 1000 * 60 * 60);
         assertEquals(Set.of("sub", "iat", "exp"), jws.claims().keySet());
+    }
+
+    @Test
+    public void unsecuredLoginWithSslOptionsStillProducesToken() throws IOException, UnsupportedCallbackException {
+        Map<String, String> options = new HashMap<>();
+        String user = "user";
+        options.put("unsecuredLoginStringClaim_sub", user);
+        options.put("ssl.truststore.location", "/path/to/truststore.jks");
+        options.put("ssl.truststore.type", "JKS");
+        MockTime mockTime = new MockTime();
+        OAuthBearerUnsecuredLoginCallbackHandler callbackHandler = createCallbackHandler(options, mockTime);
+        OAuthBearerTokenCallback callback = new OAuthBearerTokenCallback();
+        callbackHandler.handle(new Callback[] {callback});
+        OAuthBearerUnsecuredJws jws = (OAuthBearerUnsecuredJws) callback.token();
+        assertNotNull(jws, "Token should be created when unsecuredLogin options are present alongside ssl options");
+        assertEquals(user, jws.principalName());
     }
 
     @SuppressWarnings("unchecked")

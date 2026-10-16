@@ -20,6 +20,8 @@ import org.apache.kafka.clients.admin.DeleteConsumerGroupOffsetsResult;
 import org.apache.kafka.common.TopicPartition;
 import org.apache.kafka.common.errors.GroupIdNotFoundException;
 import org.apache.kafka.common.errors.GroupSubscribedToTopicException;
+import org.apache.kafka.common.header.Headers;
+import org.apache.kafka.common.header.internals.RecordHeaders;
 import org.apache.kafka.common.internals.KafkaFutureImpl;
 import org.apache.kafka.common.serialization.Serializer;
 import org.apache.kafka.common.utils.internals.LogContext;
@@ -46,7 +48,6 @@ import org.slf4j.Logger;
 
 import java.util.ArrayList;
 import java.util.Collection;
-import java.util.Collections;
 import java.util.HashSet;
 import java.util.List;
 import java.util.Map;
@@ -94,7 +95,7 @@ public class KafkaStreamsNamedTopologyWrapper extends KafkaStreams {
      * Start up Streams with a single initial NamedTopology
      */
     public void start(final NamedTopology initialTopology) {
-        start(Collections.singleton(initialTopology));
+        start(Set.of(initialTopology));
     }
 
     /**
@@ -418,7 +419,7 @@ public class KafkaStreamsNamedTopologyWrapper extends KafkaStreams {
     }
 
     /**
-     * See {@link KafkaStreams#queryMetadataForKey(String, Object, Serializer)}
+     * See {@link KafkaStreams#queryMetadataForKey(String, Object, Headers, Serializer)}
      */
     public <K> KeyQueryMetadata queryMetadataForKey(final String storeName,
                                                     final K key,
@@ -426,7 +427,7 @@ public class KafkaStreamsNamedTopologyWrapper extends KafkaStreams {
                                                     final String topologyName) {
         verifyTopologyStateStore(topologyName, storeName);
         validateIsRunningOrRebalancing();
-        return streamsMetadataState.keyQueryMetadataForKey(storeName, key, keySerializer, topologyName);
+        return streamsMetadataState.keyQueryMetadataForKey(storeName, key, new RecordHeaders(), keySerializer, topologyName);
     }
 
     /**

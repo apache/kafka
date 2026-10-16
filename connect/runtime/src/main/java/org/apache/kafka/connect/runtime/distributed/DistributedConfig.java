@@ -20,6 +20,7 @@ import org.apache.kafka.clients.CommonClientConfigs;
 import org.apache.kafka.clients.MetadataRecoveryStrategy;
 import org.apache.kafka.clients.producer.ProducerConfig;
 import org.apache.kafka.common.config.ConfigDef;
+import org.apache.kafka.common.config.ConfigDef.Type;
 import org.apache.kafka.common.config.ConfigException;
 import org.apache.kafka.common.config.TopicConfig;
 import org.apache.kafka.common.security.auth.SecurityProtocol;
@@ -35,6 +36,7 @@ import java.security.Provider;
 import java.security.Security;
 import java.util.ArrayList;
 import java.util.Arrays;
+import java.util.HashMap;
 import java.util.HashSet;
 import java.util.List;
 import java.util.Locale;
@@ -186,6 +188,13 @@ public final class DistributedConfig extends WorkerConfig {
     public static final String CONNECT_PROTOCOL_CONFIG = "connect.protocol";
     public static final String CONNECT_PROTOCOL_DOC = "Compatibility mode for Kafka Connect Protocol";
     public static final String CONNECT_PROTOCOL_DEFAULT = ConnectProtocolCompatibility.SESSIONED.toString();
+
+
+    public static final String INTERNAL_TOPICS_AUTOMATIC_CREATION_ENABLE_CONFIG = "internal.topics.automatic.creation.enable";
+    private static final String INTERNAL_TOPICS_AUTOMATIC_CREATION_ENABLE_DOC = "Whether to automatically create internal topics used by Connect. "
+            + "This includes the offset, config, and status topics, as well as connector-specific offset topics "
+            + "configured via 'offsets.storage.topic' in the source connector configuration.";
+    public static final boolean INTERNAL_TOPICS_AUTOMATIC_CREATION_ENABLE_DEFAULT = true;
 
     /**
      * <code>scheduled.rebalance.max.delay.ms</code>
@@ -397,6 +406,13 @@ public final class DistributedConfig extends WorkerConfig {
                     atLeast(0L),
                     ConfigDef.Importance.LOW,
                     CommonClientConfigs.RETRY_BACKOFF_MAX_MS_DOC)
+            .define(CommonClientConfigs.BOOTSTRAP_RESOLVE_TIMEOUT_MS_CONFIG,
+                    ConfigDef.Type.LONG,
+                    CommonClientConfigs.DEFAULT_BOOTSTRAP_RESOLVE_TIMEOUT_MS,
+                    atLeast(0L),
+                    ConfigDef.Importance.LOW,
+                    "Kafka Connect does not support asynchronous bootstrap resolution;" +
+                            " this configuration is ignored and always treated as <code>0</code> (synchronous resolution).")
             .define(CommonClientConfigs.REQUEST_TIMEOUT_MS_CONFIG,
                     ConfigDef.Type.INT,
                     Math.toIntExact(TimeUnit.SECONDS.toMillis(40)),
@@ -427,6 +443,12 @@ public final class DistributedConfig extends WorkerConfig {
                     WORKER_UNSYNC_BACKOFF_MS_DEFAULT,
                     ConfigDef.Importance.MEDIUM,
                     WORKER_UNSYNC_BACKOFF_MS_DOC)
+            .define(
+                    INTERNAL_TOPICS_AUTOMATIC_CREATION_ENABLE_CONFIG,
+                    Type.BOOLEAN,
+                    INTERNAL_TOPICS_AUTOMATIC_CREATION_ENABLE_DEFAULT,
+                    ConfigDef.Importance.MEDIUM,
+                    INTERNAL_TOPICS_AUTOMATIC_CREATION_ENABLE_DOC)
             .define(OFFSET_STORAGE_TOPIC_CONFIG,
                     ConfigDef.Type.STRING,
                     ConfigDef.Importance.HIGH,
@@ -591,6 +613,11 @@ public final class DistributedConfig extends WorkerConfig {
     }
 
     @Override
+    public boolean internalTopicsCreationEnabled() {
+        return Boolean.TRUE.equals(getBoolean(INTERNAL_TOPICS_AUTOMATIC_CREATION_ENABLE_CONFIG));
+    }
+
+    @Override
     public String groupId() {
         return getString(GROUP_ID_CONFIG);
     }
@@ -599,7 +626,15 @@ public final class DistributedConfig extends WorkerConfig {
     protected Map<String, Object> postProcessParsedConfig(final Map<String, Object> parsedValues) {
         CommonClientConfigs.warnDisablingExponentialBackoff(this);
         warnIfConnectionsMaxIdleMsLowerThanRebalanceTimeoutMs();
-        return super.postProcessParsedConfig(parsedValues);
+        Map<String, Object> configUpdates = new HashMap<>(super.postProcessParsedConfig(parsedValues));
+        Object bootstrapResolveTimeoutMs = parsedValues.get(CommonClientConfigs.BOOTSTRAP_RESOLVE_TIMEOUT_MS_CONFIG);
+        if (bootstrapResolveTimeoutMs != null && !bootstrapResolveTimeoutMs.equals(0L)) {
+            log.warn("The value {} for the {} property will be ignored as Kafka Connect does not support" +
+                            " asynchronous bootstrap resolution. The value 0 will be used instead.",
+                    bootstrapResolveTimeoutMs, CommonClientConfigs.BOOTSTRAP_RESOLVE_TIMEOUT_MS_CONFIG);
+            configUpdates.put(CommonClientConfigs.BOOTSTRAP_RESOLVE_TIMEOUT_MS_CONFIG, 0L);
+        }
+        return configUpdates;
     }
 
     private void warnIfConnectionsMaxIdleMsLowerThanRebalanceTimeoutMs() {

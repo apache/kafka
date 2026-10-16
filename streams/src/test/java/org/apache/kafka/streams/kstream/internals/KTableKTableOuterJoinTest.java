@@ -47,9 +47,6 @@ import java.util.Collection;
 import java.util.Properties;
 import java.util.Set;
 
-import static org.hamcrest.CoreMatchers.equalTo;
-import static org.hamcrest.CoreMatchers.hasItem;
-import static org.hamcrest.MatcherAssert.assertThat;
 import static org.junit.jupiter.api.Assertions.assertEquals;
 import static org.junit.jupiter.api.Assertions.assertFalse;
 import static org.junit.jupiter.api.Assertions.assertTrue;
@@ -432,10 +429,9 @@ public class KTableKTableOuterJoinTest {
         try (final LogCaptureAppender appender = LogCaptureAppender.createAndRegister(KTableKTableOuterJoin.class)) {
             join.process(new Record<>(null, new Change<>("new", "old"), 0));
 
-            assertThat(
-                appender.getMessages(),
-                hasItem("Skipping record due to null key. topic=[left] partition=[-1] offset=[-2]")
-            );
+            assertTrue(appender.getMessages().contains(
+                "Skipping record due to null key. topic=[left] partition=[-1] offset=[-2]"
+            ));
         }
     }
 
@@ -443,7 +439,7 @@ public class KTableKTableOuterJoinTest {
                                                final Integer expectedKey,
                                                final String expectedValue,
                                                final long expectedTimestamp) {
-        assertThat(outputTopic.readRecord(), equalTo(new TestRecord<>(expectedKey, expectedValue, null, expectedTimestamp)));
+        assertEquals(new TestRecord<>(expectedKey, expectedValue, null, expectedTimestamp), outputTopic.readRecord());
     }
 
     /**
