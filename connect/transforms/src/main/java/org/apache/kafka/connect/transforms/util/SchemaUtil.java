@@ -27,6 +27,8 @@ public class SchemaUtil {
         SchemaBuilder builder;
         if (source.type() == Schema.Type.ARRAY) {
             builder = SchemaBuilder.array(source.valueSchema());
+        } else if (source.type() == Schema.Type.MAP) {
+            builder = SchemaBuilder.map(source.keySchema(), source.valueSchema());
         } else {
             builder = new SchemaBuilder(source.type());
         }
