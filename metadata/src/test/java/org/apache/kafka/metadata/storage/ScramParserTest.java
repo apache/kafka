@@ -32,6 +32,7 @@ import java.util.OptionalInt;
 
 import static org.junit.jupiter.api.Assertions.assertArrayEquals;
 import static org.junit.jupiter.api.Assertions.assertEquals;
+import static org.junit.jupiter.api.Assertions.assertInstanceOf;
 import static org.junit.jupiter.api.Assertions.assertNotEquals;
 import static org.junit.jupiter.api.Assertions.assertThrows;
 
@@ -256,6 +257,25 @@ public class ScramParserTest {
                 new PerMechanismData(ScramMechanism.SCRAM_SHA_256,
                     "name=alice,salt=\"MWx2NHBkbnc0ZndxN25vdGN4bTB5eTFrN3E=\"," +
                         "saltedpassword=\"mT0yyUUxnlJaC99HXgRTSYlbuqa4FSGtJCJfTMvjYCE=\""));
+    }
+
+    @Test
+    public void testParsePerMechanismDataFailsWithInvalidSaltedPasswordBase64() {
+        FormatterException e = assertThrows(FormatterException.class,
+            () -> new PerMechanismData(ScramMechanism.SCRAM_SHA_256,
+                "name=alice,salt=\"MWx2NHBkbnc0ZndxN25vdGN4bTB5eTFrN3E=\"," +
+                    "saltedpassword=\"not-valid-base64!!!\""));
+        assertEquals("Failed to decode given saltedPassword", e.getMessage());
+        assertInstanceOf(IllegalArgumentException.class, e.getCause());
+    }
+
+    @Test
+    public void testParsePerMechanismDataFailsWithInvalidSaltBase64() {
+        FormatterException e = assertThrows(FormatterException.class,
+            () -> new PerMechanismData(ScramMechanism.SCRAM_SHA_256,
+                "name=alice,password=mypass,salt=\"%%%\""));
+        assertEquals("Failed to decode given salt", e.getMessage());
+        assertInstanceOf(IllegalArgumentException.class, e.getCause());
     }
 
     @Test
