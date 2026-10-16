@@ -40,6 +40,17 @@
     // ApiVersionsRequest, even if it is from a newer version.
     // Since the client is sending the ApiVersionsRequest in order to discover what
     // versions are supported, the client does not know the best version to use.
+    //
+    // Currently, we can't add new non-tagged fields to the request header for ApiVersionsRequest.
+    // This is because the old releases have a bug on the broker that parses an unknown request header
+    // with the first 4 fields and the tagged fields. If a new client sends an ApiVersionsRequest with a
+    // new non-tagged field in the header to an old broker, the old broker will fail parsing the new field
+    // as the tagged fields and will throw an InvalidRequestException instead of sending a v0 response.
+    // Therefore, the new client can never discover the supported API versions on the old broker.
+    // In 4.5.0, we have fixed the broker to parse an unsupported request header with only the first 4 fields.
+    // This will allow us to add non-tagged fields to the request header in the future, as long as the
+    // order of the first 4 fields is preserved. However, we need to wait until all releases before
+    // 4.5.0 are no longer supported. See KAFKA-21160 for more details.
     { "name": "ClientId", "type": "string", "versions": "1+", "nullableVersions": "1+", "flexibleVersions": "none",
       "about": "The client ID, for identifying an application." },
     { "name": "ClientInstanceId", "type": "uuid", "versions": "3+", "taggedVersions": "3+", "tag": 0,

@@ -17,6 +17,7 @@
 package org.apache.kafka.common.requests;
 
 import org.apache.kafka.common.errors.InvalidRequestException;
+import org.apache.kafka.common.errors.UnsupportedVersionException;
 import org.apache.kafka.common.message.ApiVersionsRequestData;
 import org.apache.kafka.common.network.ClientInformation;
 import org.apache.kafka.common.network.ListenerName;
@@ -109,11 +110,32 @@ public class RequestContext implements AuthorizableRequestContext {
         this.principalSerde = principalSerde;
     }
 
+    /**
+     * Parses the request body from the given buffer, which must be positioned at the start of the request body.
+     * If the header indicates the request version is unsupported, the request body is not parsed. For all unsupported
+     * requests other than {@link ApiVersionsRequest}, an UnsupportedVersionException is thrown. An unsupported
+     * {@link ApiVersionsRequest} could come from new clients and is treated specially as a v0 request. The broker
+     * responds with a v0 {@link ApiVersionsResponse} including the supported versions of {@link ApiVersionsRequest}.
+     * If the client can't parse the response with the version in the original request it sent, it falls back to
+     * parsing the response as v0. This allows the new client to discover the version of {@link ApiVersionsRequest}
+     * supported by the broker.
+     *
+     * @param buffer the buffer containing the request body
+     * @return the parsed request and its size
+     * @throws UnsupportedVersionException if the request api version is not supported, except for {@link ApiVersionsRequest}
+     * @throws InvalidRequestException if the request body cannot be parsed
+     */
     public RequestAndSize parseRequest(ByteBuffer buffer) {
         if (isUnsupportedApiVersionsRequest()) {
             // Unsupported ApiVersion requests are treated as v0 requests and are not parsed
             ApiVersionsRequest apiVersionsRequest = new ApiVersionsRequest(new ApiVersionsRequestData(), (short) 0, header.apiVersion());
             return new RequestAndSize(apiVersionsRequest, 0);
+        } else if (!header.isApiVersionSupported()) {
+            // The request header is only partially parsed for unsupported versions (see RequestHeader#parse),
+            // so the buffer is not positioned at the start of the request body and must not be parsed.
+            throw new UnsupportedVersionException("Unsupported version " + header.apiVersion() + " for apiKey: " +
+                    header.apiKey() + ", connectionId: " + connectionId + ", listenerName: " + listenerName +
+                    ", principal: " + principal);
         } else {
             ApiKeys apiKey = header.apiKey();
             try {
