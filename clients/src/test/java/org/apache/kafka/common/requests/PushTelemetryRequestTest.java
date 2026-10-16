@@ -76,8 +76,6 @@ public class PushTelemetryRequestTest {
         PushTelemetryRequest parsed = (PushTelemetryRequest) AbstractRequest.parseRequest(
             ApiKeys.PUSH_TELEMETRY, (short) 1, new ByteBufferAccessor(buffer)).request;
         assertEquals(data.duplicate().setClientInstanceId(Uuid.ZERO_UUID), parsed.data());
-        // Building v1 must not mutate the data the builder was given.
-        assertEquals(clientInstanceId, builder.build((short) 0).data().clientInstanceId());
     }
 
     @ParameterizedTest

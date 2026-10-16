@@ -634,7 +634,7 @@ public class ClientTelemetryReporter implements MetricsReporter {
             /*
              The client generates its own client instance ID (KIP-1313). In v0 it is sent in the request
              body, where the broker adopts it instead of assigning one; in v1 it travels in the request
-             header and the request Builder clears it from the body.
+             header, and the ignorable body field is dropped when the request is written.
             */
             log.debug("Creating telemetry subscription request with client instance id {}", clientInstanceId);
 
