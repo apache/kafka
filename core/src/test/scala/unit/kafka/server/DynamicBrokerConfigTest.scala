@@ -24,18 +24,18 @@ import java.util.concurrent.{CompletionStage, TimeUnit}
 import java.util.concurrent.atomic.AtomicReference
 import kafka.network.{DataPlaneAcceptor, SocketServer}
 import kafka.utils.TestUtils
-import org.apache.kafka.common.{Endpoint, Reconfigurable, Uuid}
 import org.apache.kafka.common.acl.{AclBinding, AclBindingFilter}
-import org.apache.kafka.common.config.{AbstractConfig, ConfigException, SslConfigs}
 import org.apache.kafka.common.config.provider.FileConfigProvider
+import org.apache.kafka.common.config.{AbstractConfig, ConfigException, SslConfigs}
 import org.apache.kafka.common.internals.Plugin
 import org.apache.kafka.common.metrics.{JmxReporter, KafkaMetric, Metrics, MetricsReporter}
 import org.apache.kafka.common.network.ListenerName
 import org.apache.kafka.common.security.auth.SecurityProtocol
+import org.apache.kafka.common.{Endpoint, Reconfigurable, Uuid}
 import org.apache.kafka.coordinator.group.GroupCoordinatorConfig
 import org.apache.kafka.coordinator.share.ShareCoordinatorConfig
-import org.apache.kafka.raft.{KRaftConfigs, QuorumConfig}
 import org.apache.kafka.network.{SocketServerConfigs, SocketServer => JSocketServer}
+import org.apache.kafka.raft.{KRaftConfigs, QuorumConfig}
 import org.apache.kafka.server.DynamicThreadPool
 import org.apache.kafka.server.authorizer._
 import org.apache.kafka.server.common.DirectoryEventHandler
@@ -43,18 +43,18 @@ import org.apache.kafka.server.config.{ReplicationConfigs, ServerConfigs, Server
 import org.apache.kafka.server.log.remote.storage.{RemoteLogManager, RemoteLogManagerConfig}
 import org.apache.kafka.server.metrics.{ClientTelemetryExporterPlugin, KafkaYammerMetrics, MetricConfigs}
 import org.apache.kafka.server.quota.QuotaFactory
-import org.apache.kafka.server.telemetry.{ClientTelemetry, ClientTelemetryContext, ClientTelemetryExporter, ClientTelemetryExporterProvider, ClientTelemetryPayload, ClientTelemetryReceiver}
+import org.apache.kafka.server.telemetry._
 import org.apache.kafka.server.util.KafkaScheduler
 import org.apache.kafka.storage.internals.log.{CleanerConfig, LogConfig, LogManager, ProducerStateManagerConfig}
 import org.apache.kafka.test.MockMetricsReporter
 import org.junit.jupiter.api.Assertions._
 import org.junit.jupiter.api.Test
 import org.mockito.ArgumentMatchers.{anySet, anyString}
+import org.mockito.Mockito._
 import org.mockito.{ArgumentCaptor, ArgumentMatchers, Mockito}
-import org.mockito.Mockito.{mock, never, times, verify, verifyNoMoreInteractions, when}
 
-import scala.jdk.CollectionConverters._
 import scala.collection.Set
+import scala.jdk.CollectionConverters._
 
 class DynamicBrokerConfigTest {
 
@@ -1133,12 +1133,8 @@ class DynamicBrokerConfigTest {
   def testEnableFollowerFetchLastTieredOffset(): Unit = {
     val props = TestUtils.createBrokerConfig(0, port = 9092)
     val config = KafkaConfig.fromProps(props)
-    val serverMock: KafkaBroker = mock(classOf[KafkaBroker])
-
-    Mockito.when(serverMock.config).thenReturn(config)
 
     config.dynamicConfig.initialize(None)
-    config.dynamicConfig.addBrokerReconfigurable(new DynamicReplicationConfig(serverMock))
 
     assertEquals(ReplicationConfigs.FOLLOWER_FETCH_LAST_TIERED_OFFSET_ENABLE_DEFAULT,
       config.followerFetchLastTieredOffsetEnable)

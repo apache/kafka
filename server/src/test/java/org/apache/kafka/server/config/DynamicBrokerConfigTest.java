@@ -17,9 +17,13 @@
 package org.apache.kafka.server.config;
 
 import org.apache.kafka.common.config.AbstractConfig;
+import org.apache.kafka.common.config.ConfigException;
 import org.apache.kafka.common.config.provider.FileConfigProvider;
+import org.apache.kafka.coordinator.mirror.ClusterMirrorConfigs;
+import org.apache.kafka.server.config.DynamicBrokerConfig.DynamicClusterMirrorConfig;
 
 import org.junit.jupiter.api.Test;
+import org.junit.jupiter.api.io.TempDir;
 
 import java.io.IOException;
 import java.nio.file.Files;
@@ -29,23 +33,26 @@ import java.util.Properties;
 
 import static org.junit.jupiter.api.Assertions.assertDoesNotThrow;
 import static org.junit.jupiter.api.Assertions.assertEquals;
+import static org.junit.jupiter.api.Assertions.assertThrows;
+import static org.junit.jupiter.api.Assertions.assertTrue;
+import static org.mockito.Mockito.mock;
+import static org.mockito.Mockito.when;
 
 public class DynamicBrokerConfigTest {
 
+    @TempDir
+    private Path tempDir;
+
     @Test
     public void testValidateConfigTypesResolvesConfigProviders() throws IOException {
-        Path providerFile = Files.createTempFile("provider", ".properties");
-        try {
-            Files.writeString(providerFile, "token=42");
-            Properties props = new Properties();
-            props.setProperty(AbstractConfig.CONFIG_PROVIDERS_CONFIG, "file");
-            props.setProperty(AbstractConfig.CONFIG_PROVIDERS_CONFIG + ".file.class", FileConfigProvider.class.getName());
-            props.setProperty(ServerConfigs.NUM_IO_THREADS_CONFIG, "${file:" + providerFile.toAbsolutePath() + ":token}");
+        Path providerFile = Files.createFile(tempDir.resolve("provider.properties"));
+        Files.writeString(providerFile, "token=42");
+        Properties props = new Properties();
+        props.setProperty(AbstractConfig.CONFIG_PROVIDERS_CONFIG, "file");
+        props.setProperty(AbstractConfig.CONFIG_PROVIDERS_CONFIG + ".file.class", FileConfigProvider.class.getName());
+        props.setProperty(ServerConfigs.NUM_IO_THREADS_CONFIG, "${file:" + providerFile.toAbsolutePath() + ":token}");
 
-            assertDoesNotThrow(() -> DynamicBrokerConfig.validateConfigTypes(props));
-        } finally {
-            Files.deleteIfExists(providerFile);
-        }
+        assertDoesNotThrow(() -> DynamicBrokerConfig.validateConfigTypes(props));
     }
 
     @Test
@@ -78,5 +85,37 @@ public class DynamicBrokerConfigTest {
         assertEquals(List.of("listener.name.CONFIG"), DynamicBrokerConfig.brokerConfigSynonyms("listener.name.CONFIG", false));
 
         assertEquals(List.of("anything"), DynamicBrokerConfig.brokerConfigSynonyms("anything", false));
+    }
+
+    @Test
+    public void testDynamicClusterMirrorConfigReconfigurableConfigs() {
+        assertTrue(DynamicClusterMirrorConfig.RECONFIGURABLE_CONFIGS.contains(
+                ClusterMirrorConfigs.MIRROR_NUM_REPLICA_FETCHERS_CONFIG));
+        assertTrue(DynamicClusterMirrorConfig.RECONFIGURABLE_CONFIGS.contains(
+                ClusterMirrorConfigs.MIRROR_METADATA_REFRESH_INTERVAL_MS_CONFIG));
+    }
+
+    @Test
+    public void testDynamicClusterMirrorConfigValidation() {
+        AbstractKafkaConfig currentConfig = mockConfig(4);
+        DynamicClusterMirrorConfig dynamicConfig = new DynamicClusterMirrorConfig(() -> currentConfig);
+
+        assertDoesNotThrow(() -> dynamicConfig.validateReconfiguration(mockConfig(6)));
+
+        ConfigException err1 = assertThrows(ConfigException.class,
+                () -> dynamicConfig.validateReconfiguration(mockConfig(1)));
+        assertTrue(err1.getMessage().contains("Value should be at least half the current value 4"));
+
+        ConfigException err2 = assertThrows(ConfigException.class,
+                () -> dynamicConfig.validateReconfiguration(mockConfig(9)));
+        assertTrue(err2.getMessage().contains("Value should not be greater than double the current value 4"));
+
+        assertDoesNotThrow(() -> dynamicConfig.validateReconfiguration(mockConfig(4)));
+    }
+
+    private static AbstractKafkaConfig mockConfig(int fetchers) {
+        AbstractKafkaConfig config = mock(AbstractKafkaConfig.class);
+        when(config.getInt(ClusterMirrorConfigs.MIRROR_NUM_REPLICA_FETCHERS_CONFIG)).thenReturn(fetchers);
+        return config;
     }
 }

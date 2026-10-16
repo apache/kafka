@@ -55,6 +55,7 @@ import org.apache.kafka.test.MockInitializer;
 import org.apache.kafka.test.MockReducer;
 import org.apache.kafka.test.StreamsTestUtils;
 
+import org.apache.logging.log4j.Level;
 import org.junit.jupiter.params.ParameterizedTest;
 import org.junit.jupiter.params.provider.Arguments;
 import org.junit.jupiter.params.provider.MethodSource;
@@ -1482,7 +1483,7 @@ public class KStreamSlidingWindowAggregateTest {
             final TestInputTopic<String, String> inputTopic =
                     driver.createInputTopic(topic, new StringSerializer(), new StringSerializer());
             inputTopic.pipeInput(null, "1");
-            assertTrue(appender.getMessages("WARN").contains(
+            assertTrue(appender.getMessages(Level.WARN).contains(
                 "Skipping record due to null key or value. topic=[topic] partition=[0] offset=[0]"));
         }
     }

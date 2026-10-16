@@ -917,7 +917,7 @@ public class SslTransportLayer implements TransportLayer {
     //      unable to process the server message and an SSLException is thrown:
     //      javax.net.ssl.SSLException: Unrecognized SSL message, plaintext connection?
     //   b) If server closes the connection gracefully during handshake, client may receive close_notify
-    //      and and an SSLException is thrown:
+    //      and an SSLException is thrown:
     //      javax.net.ssl.SSLException: Received close_notify during handshake
     // We want to handle a) as a non-retriable SslAuthenticationException and b) as a retriable IOException.
     // To do this we need to rely on the exception string. Since it is safer to throw a retriable exception

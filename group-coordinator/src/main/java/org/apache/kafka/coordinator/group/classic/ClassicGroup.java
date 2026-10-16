@@ -847,7 +847,7 @@ public class ClassicGroup implements Group {
         }
 
         if (generationId >= 0 || !memberId.isEmpty() || groupInstanceId != null) {
-            validateMember(memberId, groupInstanceId, isTransactional ? "offset-commit" : "txn-offset-commit");
+            validateMember(memberId, groupInstanceId, isTransactional ? "txn-offset-commit" : "offset-commit");
 
             if (generationId != this.generationId) {
                 throw Errors.ILLEGAL_GENERATION.exception();

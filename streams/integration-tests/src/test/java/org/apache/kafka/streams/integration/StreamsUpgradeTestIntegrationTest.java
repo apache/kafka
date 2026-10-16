@@ -16,6 +16,7 @@
  */
 package org.apache.kafka.streams.integration;
 
+import org.apache.kafka.streams.CloseOptions;
 import org.apache.kafka.streams.KafkaStreams;
 import org.apache.kafka.streams.StreamsConfig;
 import org.apache.kafka.streams.integration.utils.EmbeddedKafkaCluster;
@@ -29,7 +30,6 @@ import org.junit.jupiter.api.Test;
 import org.junit.jupiter.api.Timeout;
 
 import java.io.IOException;
-import java.time.Duration;
 import java.util.Properties;
 import java.util.concurrent.CountDownLatch;
 import java.util.concurrent.atomic.AtomicInteger;
@@ -37,6 +37,7 @@ import java.util.concurrent.atomic.AtomicInteger;
 import static org.apache.kafka.common.utils.Utils.mkEntry;
 import static org.apache.kafka.common.utils.Utils.mkMap;
 import static org.apache.kafka.common.utils.Utils.mkProperties;
+import static org.apache.kafka.streams.CloseOptions.GroupMembershipOperation.LEAVE_GROUP;
 import static org.apache.kafka.streams.processor.internals.assignment.StreamsAssignmentProtocolVersions.LATEST_SUPPORTED_VERSION;
 import static org.apache.kafka.test.TestUtils.retryOnExceptionWithTimeout;
 import static org.junit.jupiter.api.Assertions.assertEquals;
@@ -60,6 +61,9 @@ public class StreamsUpgradeTestIntegrationTest {
 
     @Test
     public void testVersionProbingUpgrade() throws InterruptedException {
+
+        // Explicitly leave the group so each rolling replacement can proceed without waiting for the session timeout.
+        final CloseOptions leave = CloseOptions.groupMembershipOperation(LEAVE_GROUP);
         final KafkaStreams kafkaStreams1 = StreamsUpgradeTest.buildStreams(mkProperties(
             mkMap(
                 mkEntry(StreamsConfig.BOOTSTRAP_SERVERS_CONFIG, CLUSTER.bootstrapServers())
@@ -78,21 +82,21 @@ public class StreamsUpgradeTestIntegrationTest {
         startSync(kafkaStreams1, kafkaStreams2, kafkaStreams3);
 
         // first roll
-        kafkaStreams1.close();
+        kafkaStreams1.close(leave);
         final AtomicInteger usedVersion4 = new AtomicInteger();
         final KafkaStreams kafkaStreams4 = buildFutureStreams(usedVersion4);
         startSync(kafkaStreams4);
         assertEquals(LATEST_SUPPORTED_VERSION, usedVersion4.get());
 
         // second roll
-        kafkaStreams2.close();
+        kafkaStreams2.close(leave);
         final AtomicInteger usedVersion5 = new AtomicInteger();
         final KafkaStreams kafkaStreams5 = buildFutureStreams(usedVersion5);
         startSync(kafkaStreams5);
         assertEquals(LATEST_SUPPORTED_VERSION, usedVersion5.get());
 
         // third roll, upgrade complete
-        kafkaStreams3.close();
+        kafkaStreams3.close(leave);
         final AtomicInteger usedVersion6 = new AtomicInteger();
         final KafkaStreams kafkaStreams6 = buildFutureStreams(usedVersion6);
         startSync(kafkaStreams6);
@@ -100,12 +104,9 @@ public class StreamsUpgradeTestIntegrationTest {
         retryOnExceptionWithTimeout(() -> assertEquals(LATEST_SUPPORTED_VERSION + 1, usedVersion5.get()));
         retryOnExceptionWithTimeout(() -> assertEquals(LATEST_SUPPORTED_VERSION + 1, usedVersion4.get()));
 
-        kafkaStreams4.close(Duration.ZERO);
-        kafkaStreams5.close(Duration.ZERO);
-        kafkaStreams6.close(Duration.ZERO);
-        kafkaStreams4.close();
-        kafkaStreams5.close();
-        kafkaStreams6.close();
+        kafkaStreams4.close(leave);
+        kafkaStreams5.close(leave);
+        kafkaStreams6.close(leave);
     }
 
     private static KafkaStreams buildFutureStreams(final AtomicInteger usedVersion4) {
