@@ -67,6 +67,11 @@ public class AssignmentRefinerImpl implements AssignmentRefiner {
         final Map<String, ProcessLoad> processLoad = indexProcessLoad(members, subtopologies);
         final TaskDecisions decisions =
             analyzeTasks(currentAssignment, targetAssignment, members, heartbeatVersions, subtopologies, processLoad);
+        if (decisions.stagedMigrations().isEmpty()) {
+            // Nothing is held back, so the remaining passes would patch nothing: warm-up tasks and withheld standbys
+            // only ever follow from a staged migration, and a granted task needs no patch (see assemble).
+            return targetAssignment;
+        }
         final WarmupPlan warmupPlan =
             planWarmups(decisions, currentAssignment, members, processLoad, numWarmupReplicas);
         final SortedMap<String, SortedSet<TaskId>> withheldStandbys =
