@@ -63,16 +63,12 @@ public class DescribeTopicPartitionsRequestHandler {
         String cursorTopicName = cursor != null ? cursor.topicName() : "";
         if (fetchAllTopics) {
             metadataCache.getAllTopics().forEach(topicName -> {
-                if (topicName.compareTo(cursorTopicName) >= 0) {
-                    topics.add(topicName);
-                }
+                addTopicIfAtOrAfterCursor(topics, topicName, cursorTopicName);
             });
         } else {
             request.topics().forEach(topic -> {
                 String topicName = topic.name();
-                if (topicName.compareTo(cursorTopicName) >= 0) {
-                    topics.add(topicName);
-                }
+                addTopicIfAtOrAfterCursor(topics, topicName, cursorTopicName);
             });
 
             if (cursor != null && !topics.contains(cursor.topicName())) {
@@ -130,5 +126,11 @@ public class DescribeTopicPartitionsRequestHandler {
             .setTopicId(topicId)
             .setIsInternal(isInternal)
             .setPartitions(partitionData);
+    }
+
+    private void addTopicIfAtOrAfterCursor(Set<String> topics, String topicName, String cursorTopicName) {
+        if (topicName.compareTo(cursorTopicName) >= 0) {
+            topics.add(topicName);
+        }
     }
 }
