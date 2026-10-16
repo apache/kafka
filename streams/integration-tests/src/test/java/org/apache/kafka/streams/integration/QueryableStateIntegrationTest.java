@@ -46,14 +46,20 @@ import org.apache.kafka.streams.kstream.KTable;
 import org.apache.kafka.streams.kstream.Materialized;
 import org.apache.kafka.streams.kstream.Predicate;
 import org.apache.kafka.streams.kstream.Produced;
+import org.apache.kafka.streams.kstream.SessionWindows;
 import org.apache.kafka.streams.kstream.TimeWindows;
 import org.apache.kafka.streams.kstream.ValueMapper;
+import org.apache.kafka.streams.kstream.Windowed;
+import org.apache.kafka.streams.state.AggregationWithHeaders;
 import org.apache.kafka.streams.state.KeyValueIterator;
 import org.apache.kafka.streams.state.KeyValueStore;
 import org.apache.kafka.streams.state.QueryableStoreTypes;
 import org.apache.kafka.streams.state.ReadOnlyKeyValueStore;
 import org.apache.kafka.streams.state.ReadOnlySessionStore;
 import org.apache.kafka.streams.state.ReadOnlyWindowStore;
+import org.apache.kafka.streams.state.Stores;
+import org.apache.kafka.streams.state.ValueAndTimestamp;
+import org.apache.kafka.streams.state.ValueTimestampHeaders;
 import org.apache.kafka.streams.state.WindowStoreIterator;
 import org.apache.kafka.test.MockMapper;
 import org.apache.kafka.test.NoRetryException;
@@ -78,6 +84,7 @@ import java.io.IOException;
 import java.io.PrintStream;
 import java.io.StringReader;
 import java.time.Duration;
+import java.time.Instant;
 import java.util.ArrayList;
 import java.util.Arrays;
 import java.util.Collections;
@@ -1288,6 +1295,866 @@ public class QueryableStateIntegrationTest {
                     incrementIteration();
                 }
             }
+        }
+    }
+
+    @Test
+    public void shouldQueryHeadersAwareKeyValueStoreBasicOperations(final TestInfo testInfo) throws Exception {
+        final String uniqueTestName = safeUniqueTestName(testInfo);
+        final String inputTopic = uniqueTestName + "-input";
+        final String storeName = uniqueTestName + "-store";
+
+        CLUSTER.createTopic(inputTopic);
+
+        final StreamsBuilder builder = new StreamsBuilder();
+        builder.table(
+            inputTopic,
+            Consumed.with(Serdes.String(), Serdes.String()),
+            Materialized.<String, String>as(
+                Stores.persistentTimestampedKeyValueStoreWithHeaders(storeName))
+                .withKeySerde(Serdes.String())
+                .withValueSerde(Serdes.String())
+        );
+
+        final Properties properties = mkProperties(mkMap(
+            mkEntry(StreamsConfig.APPLICATION_ID_CONFIG, uniqueTestName + "-app"),
+            mkEntry(StreamsConfig.BOOTSTRAP_SERVERS_CONFIG, CLUSTER.bootstrapServers())
+        ));
+
+        try (final KafkaStreams streams = getRunningStreams(properties, builder, true)) {
+            IntegrationTestUtils.produceKeyValuesSynchronously(
+                inputTopic,
+                Arrays.asList(
+                    new KeyValue<>("alpha", "a1"),
+                    new KeyValue<>("beta", "b1"),
+                    new KeyValue<>("gamma", "g1"),
+                    new KeyValue<>("delta", "d1"),
+                    new KeyValue<>("epsilon", "e1")
+                ),
+                TestUtils.producerConfig(
+                    CLUSTER.bootstrapServers(),
+                    StringSerializer.class,
+                    StringSerializer.class,
+                    new Properties()),
+                CLUSTER.time
+            );
+
+            retryOnExceptionWithTimeout(30_000, () -> {
+                final ReadOnlyKeyValueStore<String, ValueTimestampHeaders<String>> store =
+                    streams.store(fromNameAndType(storeName, QueryableStoreTypes.timestampedKeyValueStoreWithHeaders()));
+                assertNotNull(store);
+
+                final ValueTimestampHeaders<String> result = store.get("alpha");
+                assertNotNull(result);
+                assertEquals("a1", result.value());
+                assertTrue(result.timestamp() > 0);
+                assertNotNull(result.headers());
+
+                assertNull(store.get("nonexistent"));
+
+                assertEquals(5L, store.approximateNumEntries());
+
+                final ReadOnlyKeyValueStore<String, ValueAndTimestamp<String>> tsStore =
+                    streams.store(fromNameAndType(storeName, QueryableStoreTypes.timestampedKeyValueStore()));
+                assertNotNull(tsStore);
+                final ValueAndTimestamp<String> tsResult = tsStore.get("beta");
+                assertNotNull(tsResult);
+                assertEquals("b1", tsResult.value());
+            });
+        }
+    }
+
+    @Test
+    public void shouldQueryHeadersAwareKeyValueStoreIterationOperations(final TestInfo testInfo) throws Exception {
+        final String uniqueTestName = safeUniqueTestName(testInfo);
+        final String inputTopic = uniqueTestName + "-input";
+        final String storeName = uniqueTestName + "-store";
+
+        CLUSTER.createTopic(inputTopic);
+
+        final StreamsBuilder builder = new StreamsBuilder();
+        builder.table(
+            inputTopic,
+            Consumed.with(Serdes.String(), Serdes.String()),
+            Materialized.<String, String>as(
+                Stores.persistentTimestampedKeyValueStoreWithHeaders(storeName))
+                .withKeySerde(Serdes.String())
+                .withValueSerde(Serdes.String())
+        );
+
+        final Properties properties = mkProperties(mkMap(
+            mkEntry(StreamsConfig.APPLICATION_ID_CONFIG, uniqueTestName + "-app"),
+            mkEntry(StreamsConfig.BOOTSTRAP_SERVERS_CONFIG, CLUSTER.bootstrapServers())
+        ));
+
+        try (final KafkaStreams streams = getRunningStreams(properties, builder, true)) {
+            IntegrationTestUtils.produceKeyValuesSynchronously(
+                inputTopic,
+                Arrays.asList(
+                    new KeyValue<>("apple", "fruit"),
+                    new KeyValue<>("banana", "fruit"),
+                    new KeyValue<>("carrot", "vegetable"),
+                    new KeyValue<>("date", "fruit"),
+                    new KeyValue<>("eggplant", "vegetable")
+                ),
+                TestUtils.producerConfig(
+                    CLUSTER.bootstrapServers(),
+                    StringSerializer.class,
+                    StringSerializer.class,
+                    new Properties()),
+                CLUSTER.time
+            );
+
+            retryOnExceptionWithTimeout(30_000, () -> {
+                final ReadOnlyKeyValueStore<String, ValueTimestampHeaders<String>> store =
+                    streams.store(fromNameAndType(storeName, QueryableStoreTypes.timestampedKeyValueStoreWithHeaders()));
+                assertNotNull(store);
+                assertNotNull(store.get("apple"));
+
+                int rangeCount = 0;
+                try (final KeyValueIterator<String, ValueTimestampHeaders<String>> range = store.range("banana", "date")) {
+                    while (range.hasNext()) {
+                        final KeyValue<String, ValueTimestampHeaders<String>> entry = range.next();
+                        assertNotNull(entry.value);
+                        assertNotNull(entry.value.headers());
+                        rangeCount++;
+                    }
+                }
+                assertEquals(3, rangeCount);
+
+                int allCount = 0;
+                try (final KeyValueIterator<String, ValueTimestampHeaders<String>> all = store.all()) {
+                    while (all.hasNext()) {
+                        final KeyValue<String, ValueTimestampHeaders<String>> entry = all.next();
+                        assertNotNull(entry.value);
+                        assertNotNull(entry.value.headers());
+                        allCount++;
+                    }
+                }
+                assertEquals(5, allCount);
+
+                int prefixCount = 0;
+                try (final KeyValueIterator<String, ValueTimestampHeaders<String>> prefix =
+                         store.prefixScan("ba", new StringSerializer())) {
+                    while (prefix.hasNext()) {
+                        final KeyValue<String, ValueTimestampHeaders<String>> entry = prefix.next();
+                        assertEquals("banana", entry.key);
+                        assertEquals("fruit", entry.value.value());
+                        assertNotNull(entry.value.headers());
+                        prefixCount++;
+                    }
+                }
+                assertEquals(1, prefixCount);
+            });
+        }
+    }
+
+    @Test
+    public void shouldQueryHeadersAwareKeyValueStoreViaDslConfig(final TestInfo testInfo) throws Exception {
+        final String uniqueTestName = safeUniqueTestName(testInfo);
+        final String inputTopic = uniqueTestName + "-input";
+        final String storeName = uniqueTestName + "-store";
+
+        CLUSTER.createTopic(inputTopic);
+
+        final StreamsBuilder builder = new StreamsBuilder();
+        builder.table(
+            inputTopic,
+            Consumed.with(Serdes.String(), Serdes.String()),
+            Materialized.<String, String, KeyValueStore<Bytes, byte[]>>as(storeName)
+                .withKeySerde(Serdes.String())
+                .withValueSerde(Serdes.String())
+        );
+
+        final Properties properties = mkProperties(mkMap(
+            mkEntry(StreamsConfig.APPLICATION_ID_CONFIG, uniqueTestName + "-app"),
+            mkEntry(StreamsConfig.BOOTSTRAP_SERVERS_CONFIG, CLUSTER.bootstrapServers()),
+            mkEntry(StreamsConfig.DSL_STORE_FORMAT_CONFIG, "headers")
+        ));
+
+        try (final KafkaStreams streams = getRunningStreams(properties, builder, true)) {
+            IntegrationTestUtils.produceKeyValuesSynchronously(
+                inputTopic,
+                Collections.singletonList(new KeyValue<>("key1", "val1")),
+                TestUtils.producerConfig(
+                    CLUSTER.bootstrapServers(),
+                    StringSerializer.class,
+                    StringSerializer.class,
+                    new Properties()),
+                CLUSTER.time
+            );
+
+            retryOnExceptionWithTimeout(30_000, () -> {
+                final ReadOnlyKeyValueStore<String, ValueTimestampHeaders<String>> store =
+                    streams.store(fromNameAndType(storeName, QueryableStoreTypes.timestampedKeyValueStoreWithHeaders()));
+                assertNotNull(store);
+                final ValueTimestampHeaders<String> result = store.get("key1");
+                assertNotNull(result);
+                assertEquals("val1", result.value());
+                assertNotNull(result.headers());
+
+                final ReadOnlyKeyValueStore<String, ValueAndTimestamp<String>> tsStore =
+                    streams.store(fromNameAndType(storeName, QueryableStoreTypes.timestampedKeyValueStore()));
+                assertNotNull(tsStore);
+                final ValueAndTimestamp<String> tsResult = tsStore.get("key1");
+                assertNotNull(tsResult);
+                assertEquals("val1", tsResult.value());
+            });
+        }
+    }
+
+    @Test
+    public void shouldQueryHeadersAwareWindowStoreOperations(final TestInfo testInfo) throws Exception {
+        final String uniqueTestName = safeUniqueTestName(testInfo);
+        final String inputTopic = uniqueTestName + "-input";
+        final String storeName = uniqueTestName + "-window-store";
+
+        CLUSTER.createTopic(inputTopic);
+
+        final StreamsBuilder builder = new StreamsBuilder();
+        builder.stream(inputTopic, Consumed.with(Serdes.String(), Serdes.String()))
+            .groupByKey()
+            .windowedBy(TimeWindows.ofSizeWithNoGrace(ofMillis(WINDOW_SIZE)))
+            .count(Materialized.<String, Long>as(
+                Stores.persistentTimestampedWindowStoreWithHeaders(storeName, ofMillis(WINDOW_SIZE), ofMillis(WINDOW_SIZE), false))
+                .withKeySerde(Serdes.String())
+                .withValueSerde(Serdes.Long()));
+
+        final Properties properties = mkProperties(mkMap(
+            mkEntry(StreamsConfig.APPLICATION_ID_CONFIG, uniqueTestName + "-app"),
+            mkEntry(StreamsConfig.BOOTSTRAP_SERVERS_CONFIG, CLUSTER.bootstrapServers())
+        ));
+
+        try (final KafkaStreams streams = getRunningStreams(properties, builder, true)) {
+            IntegrationTestUtils.produceKeyValuesSynchronously(
+                inputTopic,
+                Arrays.asList(
+                    new KeyValue<>("w-key1", "v1"),
+                    new KeyValue<>("w-key1", "v2"),
+                    new KeyValue<>("w-key2", "v3")
+                ),
+                TestUtils.producerConfig(
+                    CLUSTER.bootstrapServers(),
+                    StringSerializer.class,
+                    StringSerializer.class,
+                    new Properties()),
+                CLUSTER.time
+            );
+
+            retryOnExceptionWithTimeout(30_000, () -> {
+                final ReadOnlyWindowStore<String, ValueTimestampHeaders<Long>> store =
+                    streams.store(fromNameAndType(storeName, QueryableStoreTypes.timestampedWindowStoreWithHeaders()));
+                assertNotNull(store);
+
+                int fetchCount = 0;
+                try (final WindowStoreIterator<ValueTimestampHeaders<Long>> iter =
+                         store.fetch("w-key1", ofEpochMilli(0), ofEpochMilli(System.currentTimeMillis() + WINDOW_SIZE))) {
+                    while (iter.hasNext()) {
+                        final KeyValue<Long, ValueTimestampHeaders<Long>> entry = iter.next();
+                        assertNotNull(entry.value);
+                        assertEquals(2L, entry.value.value());
+                        assertNotNull(entry.value.headers());
+                        fetchCount++;
+                    }
+                }
+                assertTrue(fetchCount > 0);
+
+                int allCount = 0;
+                try (final KeyValueIterator<Windowed<String>, ValueTimestampHeaders<Long>> all = store.all()) {
+                    while (all.hasNext()) {
+                        final KeyValue<Windowed<String>, ValueTimestampHeaders<Long>> entry = all.next();
+                        assertNotNull(entry.value);
+                        assertNotNull(entry.value.headers());
+                        allCount++;
+                    }
+                }
+                assertEquals(2, allCount);
+
+                final ReadOnlyWindowStore<String, ValueAndTimestamp<Long>> tsStore =
+                    streams.store(fromNameAndType(storeName, QueryableStoreTypes.timestampedWindowStore()));
+                assertNotNull(tsStore);
+                try (final WindowStoreIterator<ValueAndTimestamp<Long>> tsIter =
+                         tsStore.fetch("w-key2", ofEpochMilli(0), ofEpochMilli(System.currentTimeMillis() + WINDOW_SIZE))) {
+                    assertTrue(tsIter.hasNext());
+                    assertEquals(1L, tsIter.next().value.value());
+                }
+            });
+        }
+    }
+
+    @Test
+    public void shouldQueryHeadersAwareSessionStoreOperations(final TestInfo testInfo) throws Exception {
+        final String uniqueTestName = safeUniqueTestName(testInfo);
+        final String inputTopic = uniqueTestName + "-input";
+        final String storeName = uniqueTestName + "-session-store";
+
+        CLUSTER.createTopic(inputTopic);
+
+        final StreamsBuilder builder = new StreamsBuilder();
+        builder.stream(inputTopic, Consumed.with(Serdes.String(), Serdes.String()))
+            .groupByKey()
+            .windowedBy(SessionWindows.ofInactivityGapWithNoGrace(ofMillis(WINDOW_SIZE)))
+            .count(Materialized.<String, Long>as(
+                Stores.persistentSessionStoreWithHeaders(storeName, ofMillis(WINDOW_SIZE)))
+                .withKeySerde(Serdes.String())
+                .withValueSerde(Serdes.Long()));
+
+        final Properties properties = mkProperties(mkMap(
+            mkEntry(StreamsConfig.APPLICATION_ID_CONFIG, uniqueTestName + "-app"),
+            mkEntry(StreamsConfig.BOOTSTRAP_SERVERS_CONFIG, CLUSTER.bootstrapServers())
+        ));
+
+        try (final KafkaStreams streams = getRunningStreams(properties, builder, true)) {
+            IntegrationTestUtils.produceKeyValuesSynchronously(
+                inputTopic,
+                Arrays.asList(
+                    new KeyValue<>("s-key1", "v1"),
+                    new KeyValue<>("s-key1", "v2"),
+                    new KeyValue<>("s-key2", "v3")
+                ),
+                TestUtils.producerConfig(
+                    CLUSTER.bootstrapServers(),
+                    StringSerializer.class,
+                    StringSerializer.class,
+                    new Properties()),
+                CLUSTER.time
+            );
+
+            retryOnExceptionWithTimeout(30_000, () -> {
+                final ReadOnlySessionStore<String, AggregationWithHeaders<Long>> store =
+                    streams.store(fromNameAndType(storeName, QueryableStoreTypes.sessionStoreWithHeaders()));
+                assertNotNull(store);
+
+                int sessionCount = 0;
+                try (final KeyValueIterator<Windowed<String>, AggregationWithHeaders<Long>> iter = store.fetch("s-key1")) {
+                    while (iter.hasNext()) {
+                        final KeyValue<Windowed<String>, AggregationWithHeaders<Long>> entry = iter.next();
+                        assertNotNull(entry.value);
+                        assertEquals(2L, entry.value.aggregation());
+                        assertNotNull(entry.value.headers());
+                        sessionCount++;
+                    }
+                }
+                assertEquals(1, sessionCount);
+
+                final ReadOnlySessionStore<String, Long> plainStore =
+                    streams.store(fromNameAndType(storeName, sessionStore()));
+                assertNotNull(plainStore);
+                try (final KeyValueIterator<Windowed<String>, Long> plainIter = plainStore.fetch("s-key2")) {
+                    assertTrue(plainIter.hasNext());
+                    assertEquals(1L, plainIter.next().value);
+                }
+            });
+        }
+    }
+
+    @Test
+    public void shouldQueryHeadersAwareKeyValueStoreAfterRestart(final TestInfo testInfo) throws Exception {
+        final String uniqueTestName = safeUniqueTestName(testInfo);
+        final String inputTopic = uniqueTestName + "-input";
+        final String storeName = uniqueTestName + "-store";
+        final String stateDir = TestUtils.tempDirectory("headers-restart-test").getPath();
+
+        CLUSTER.createTopic(inputTopic);
+
+        final StreamsBuilder builder = new StreamsBuilder();
+        builder.table(
+            inputTopic,
+            Consumed.with(Serdes.String(), Serdes.String()),
+            Materialized.<String, String>as(
+                Stores.persistentTimestampedKeyValueStoreWithHeaders(storeName))
+                .withKeySerde(Serdes.String())
+                .withValueSerde(Serdes.String())
+        );
+
+        final Properties properties = mkProperties(mkMap(
+            mkEntry(StreamsConfig.APPLICATION_ID_CONFIG, uniqueTestName + "-app"),
+            mkEntry(StreamsConfig.BOOTSTRAP_SERVERS_CONFIG, CLUSTER.bootstrapServers()),
+            mkEntry(StreamsConfig.STATE_DIR_CONFIG, stateDir)
+        ));
+
+        try (final KafkaStreams streams = getRunningStreams(properties, builder, true)) {
+            IntegrationTestUtils.produceKeyValuesSynchronously(
+                inputTopic,
+                Arrays.asList(
+                    new KeyValue<>("r-key1", "val1"),
+                    new KeyValue<>("r-key2", "val2")
+                ),
+                TestUtils.producerConfig(
+                    CLUSTER.bootstrapServers(),
+                    StringSerializer.class,
+                    StringSerializer.class,
+                    new Properties()),
+                CLUSTER.time
+            );
+
+            retryOnExceptionWithTimeout(30_000, () -> {
+                final ReadOnlyKeyValueStore<String, ValueTimestampHeaders<String>> store =
+                    streams.store(fromNameAndType(storeName, QueryableStoreTypes.timestampedKeyValueStoreWithHeaders()));
+                assertNotNull(store.get("r-key1"));
+                assertEquals("val1", store.get("r-key1").value());
+            });
+        }
+
+        final StreamsBuilder builder2 = new StreamsBuilder();
+        builder2.table(
+            inputTopic,
+            Consumed.with(Serdes.String(), Serdes.String()),
+            Materialized.<String, String>as(
+                Stores.persistentTimestampedKeyValueStoreWithHeaders(storeName))
+                .withKeySerde(Serdes.String())
+                .withValueSerde(Serdes.String())
+        );
+
+        try (final KafkaStreams streams2 = getRunningStreams(properties, builder2, true)) {
+            retryOnExceptionWithTimeout(30_000, () -> {
+                final ReadOnlyKeyValueStore<String, ValueTimestampHeaders<String>> store =
+                    streams2.store(fromNameAndType(storeName, QueryableStoreTypes.timestampedKeyValueStoreWithHeaders()));
+                assertNotNull(store);
+                final ValueTimestampHeaders<String> result = store.get("r-key1");
+                assertNotNull(result);
+                assertEquals("val1", result.value());
+                assertNotNull(result.headers());
+
+                final ValueTimestampHeaders<String> result2 = store.get("r-key2");
+                assertNotNull(result2);
+                assertEquals("val2", result2.value());
+            });
+        }
+    }
+
+    @Test
+    public void shouldQueryHeadersAwareKeyValueStoreReverseOperations(final TestInfo testInfo) throws Exception {
+        final String uniqueTestName = safeUniqueTestName(testInfo);
+        final String inputTopic = uniqueTestName + "-input";
+        final String storeName = uniqueTestName + "-store";
+
+        CLUSTER.createTopic(inputTopic);
+
+        final StreamsBuilder builder = new StreamsBuilder();
+        builder.table(
+            inputTopic,
+            Consumed.with(Serdes.String(), Serdes.String()),
+            Materialized.<String, String>as(
+                Stores.persistentTimestampedKeyValueStoreWithHeaders(storeName))
+                .withKeySerde(Serdes.String())
+                .withValueSerde(Serdes.String())
+        );
+
+        final Properties properties = mkProperties(mkMap(
+            mkEntry(StreamsConfig.APPLICATION_ID_CONFIG, uniqueTestName + "-app"),
+            mkEntry(StreamsConfig.BOOTSTRAP_SERVERS_CONFIG, CLUSTER.bootstrapServers())
+        ));
+
+        try (final KafkaStreams streams = getRunningStreams(properties, builder, true)) {
+            IntegrationTestUtils.produceKeyValuesSynchronously(
+                inputTopic,
+                Arrays.asList(
+                    new KeyValue<>("alpha", "a1"),
+                    new KeyValue<>("beta", "b1"),
+                    new KeyValue<>("gamma", "g1"),
+                    new KeyValue<>("delta", "d1"),
+                    new KeyValue<>("epsilon", "e1")
+                ),
+                TestUtils.producerConfig(
+                    CLUSTER.bootstrapServers(),
+                    StringSerializer.class,
+                    StringSerializer.class,
+                    new Properties()),
+                CLUSTER.time
+            );
+
+            retryOnExceptionWithTimeout(30_000, () -> {
+                final ReadOnlyKeyValueStore<String, ValueTimestampHeaders<String>> store =
+                    streams.store(fromNameAndType(storeName, QueryableStoreTypes.timestampedKeyValueStoreWithHeaders()));
+                assertNotNull(store.get("alpha"));
+
+                final List<String> reverseRangeKeys = new ArrayList<>();
+                try (final KeyValueIterator<String, ValueTimestampHeaders<String>> iter = store.reverseRange("beta", "epsilon")) {
+                    while (iter.hasNext()) {
+                        final KeyValue<String, ValueTimestampHeaders<String>> entry = iter.next();
+                        assertNotNull(entry.value.headers());
+                        reverseRangeKeys.add(entry.key);
+                    }
+                }
+                assertEquals(Arrays.asList("epsilon", "delta", "beta"), reverseRangeKeys);
+
+                final List<String> reverseAllKeys = new ArrayList<>();
+                try (final KeyValueIterator<String, ValueTimestampHeaders<String>> iter = store.reverseAll()) {
+                    while (iter.hasNext()) {
+                        final KeyValue<String, ValueTimestampHeaders<String>> entry = iter.next();
+                        assertNotNull(entry.value.headers());
+                        reverseAllKeys.add(entry.key);
+                    }
+                }
+                assertEquals(Arrays.asList("gamma", "epsilon", "delta", "beta", "alpha"), reverseAllKeys);
+            });
+        }
+    }
+
+    private <K, V> int countAndVerifyHeaders(final KeyValueIterator<K, V> iter,
+                                              final java.util.function.Function<V, Object> headersExtractor) {
+        int count = 0;
+        try (iter) {
+            while (iter.hasNext()) {
+                final KeyValue<K, V> entry = iter.next();
+                assertNotNull(headersExtractor.apply(entry.value));
+                count++;
+            }
+        }
+        return count;
+    }
+
+    private <V> int countAndVerifyWindowHeaders(final WindowStoreIterator<V> iter,
+                                                 final java.util.function.Function<V, Object> headersExtractor) {
+        int count = 0;
+        try (iter) {
+            while (iter.hasNext()) {
+                final KeyValue<Long, V> entry = iter.next();
+                assertNotNull(headersExtractor.apply(entry.value));
+                count++;
+            }
+        }
+        return count;
+    }
+
+    @Test
+    public void shouldQueryHeadersAwareWindowStoreBackwardAndFetchAllOperations(final TestInfo testInfo) throws Exception {
+        final String uniqueTestName = safeUniqueTestName(testInfo);
+        final String inputTopic = uniqueTestName + "-input";
+        final String storeName = uniqueTestName + "-window-store";
+
+        CLUSTER.createTopic(inputTopic);
+
+        final StreamsBuilder builder = new StreamsBuilder();
+        builder.stream(inputTopic, Consumed.with(Serdes.String(), Serdes.String()))
+            .groupByKey()
+            .windowedBy(TimeWindows.ofSizeWithNoGrace(ofMillis(WINDOW_SIZE)))
+            .count(Materialized.<String, Long>as(
+                Stores.persistentTimestampedWindowStoreWithHeaders(storeName, ofMillis(WINDOW_SIZE), ofMillis(WINDOW_SIZE), false))
+                .withKeySerde(Serdes.String())
+                .withValueSerde(Serdes.Long()));
+
+        final Properties properties = mkProperties(mkMap(
+            mkEntry(StreamsConfig.APPLICATION_ID_CONFIG, uniqueTestName + "-app"),
+            mkEntry(StreamsConfig.BOOTSTRAP_SERVERS_CONFIG, CLUSTER.bootstrapServers())
+        ));
+
+        try (final KafkaStreams streams = getRunningStreams(properties, builder, true)) {
+            IntegrationTestUtils.produceKeyValuesSynchronously(
+                inputTopic,
+                Arrays.asList(
+                    new KeyValue<>("wa", "v1"),
+                    new KeyValue<>("wb", "v2"),
+                    new KeyValue<>("wc", "v3")
+                ),
+                TestUtils.producerConfig(
+                    CLUSTER.bootstrapServers(),
+                    StringSerializer.class,
+                    StringSerializer.class,
+                    new Properties()),
+                CLUSTER.time
+            );
+
+            retryOnExceptionWithTimeout(30_000, () -> {
+                final ReadOnlyWindowStore<String, ValueTimestampHeaders<Long>> store =
+                    streams.store(fromNameAndType(storeName, QueryableStoreTypes.timestampedWindowStoreWithHeaders()));
+                assertNotNull(store);
+
+                final Instant timeFrom = ofEpochMilli(0);
+                final Instant timeTo = ofEpochMilli(System.currentTimeMillis() + WINDOW_SIZE);
+                final java.util.function.Function<ValueTimestampHeaders<Long>, Object> h = ValueTimestampHeaders::headers;
+
+                assertTrue(countAndVerifyWindowHeaders(store.backwardFetch("wa", timeFrom, timeTo), h) > 0);
+                assertEquals(3, countAndVerifyHeaders(store.fetchAll(timeFrom, timeTo), h));
+                assertEquals(3, countAndVerifyHeaders(store.backwardFetchAll(timeFrom, timeTo), h));
+                assertEquals(3, countAndVerifyHeaders(store.backwardAll(), h));
+                assertEquals(3, countAndVerifyHeaders(store.fetch("wa", "wc", timeFrom, timeTo), h));
+                assertEquals(3, countAndVerifyHeaders(store.backwardFetch("wa", "wc", timeFrom, timeTo), h));
+            });
+        }
+    }
+
+    @Test
+    public void shouldQueryHeadersAwareWindowStoreSinglePointLookup(final TestInfo testInfo) throws Exception {
+        final String uniqueTestName = safeUniqueTestName(testInfo);
+        final String inputTopic = uniqueTestName + "-input";
+        final String storeName = uniqueTestName + "-window-store";
+
+        CLUSTER.createTopic(inputTopic);
+
+        final StreamsBuilder builder = new StreamsBuilder();
+        builder.stream(inputTopic, Consumed.with(Serdes.String(), Serdes.String()))
+            .groupByKey()
+            .windowedBy(TimeWindows.ofSizeWithNoGrace(ofMillis(WINDOW_SIZE)))
+            .count(Materialized.<String, Long>as(
+                Stores.persistentTimestampedWindowStoreWithHeaders(storeName, ofMillis(WINDOW_SIZE), ofMillis(WINDOW_SIZE), false))
+                .withKeySerde(Serdes.String())
+                .withValueSerde(Serdes.Long()));
+
+        final Properties properties = mkProperties(mkMap(
+            mkEntry(StreamsConfig.APPLICATION_ID_CONFIG, uniqueTestName + "-app"),
+            mkEntry(StreamsConfig.BOOTSTRAP_SERVERS_CONFIG, CLUSTER.bootstrapServers())
+        ));
+
+        try (final KafkaStreams streams = getRunningStreams(properties, builder, true)) {
+            IntegrationTestUtils.produceKeyValuesSynchronously(
+                inputTopic,
+                Collections.singletonList(new KeyValue<>("wpt-key", "v1")),
+                TestUtils.producerConfig(
+                    CLUSTER.bootstrapServers(),
+                    StringSerializer.class,
+                    StringSerializer.class,
+                    new Properties()),
+                CLUSTER.time
+            );
+
+            retryOnExceptionWithTimeout(30_000, () -> {
+                final ReadOnlyWindowStore<String, ValueTimestampHeaders<Long>> store =
+                    streams.store(fromNameAndType(storeName, QueryableStoreTypes.timestampedWindowStoreWithHeaders()));
+                assertNotNull(store);
+
+                Long windowStart = null;
+                try (final WindowStoreIterator<ValueTimestampHeaders<Long>> iter =
+                         store.fetch("wpt-key", ofEpochMilli(0), ofEpochMilli(System.currentTimeMillis() + WINDOW_SIZE))) {
+                    assertTrue(iter.hasNext());
+                    windowStart = iter.next().key;
+                }
+                assertNotNull(windowStart);
+
+                final ValueTimestampHeaders<Long> pointResult = store.fetch("wpt-key", windowStart);
+                assertNotNull(pointResult);
+                assertEquals(1L, pointResult.value());
+                assertNotNull(pointResult.headers());
+            });
+        }
+    }
+
+    @Test
+    public void shouldQueryHeadersAwareSessionStoreBackwardAndFindSessionsOperations(final TestInfo testInfo) throws Exception {
+        final String uniqueTestName = safeUniqueTestName(testInfo);
+        final String inputTopic = uniqueTestName + "-input";
+        final String storeName = uniqueTestName + "-session-store";
+
+        CLUSTER.createTopic(inputTopic);
+
+        final StreamsBuilder builder = new StreamsBuilder();
+        builder.stream(inputTopic, Consumed.with(Serdes.String(), Serdes.String()))
+            .groupByKey()
+            .windowedBy(SessionWindows.ofInactivityGapWithNoGrace(ofMillis(WINDOW_SIZE)))
+            .count(Materialized.<String, Long>as(
+                Stores.persistentSessionStoreWithHeaders(storeName, ofMillis(WINDOW_SIZE)))
+                .withKeySerde(Serdes.String())
+                .withValueSerde(Serdes.Long()));
+
+        final Properties properties = mkProperties(mkMap(
+            mkEntry(StreamsConfig.APPLICATION_ID_CONFIG, uniqueTestName + "-app"),
+            mkEntry(StreamsConfig.BOOTSTRAP_SERVERS_CONFIG, CLUSTER.bootstrapServers())
+        ));
+
+        try (final KafkaStreams streams = getRunningStreams(properties, builder, true)) {
+            IntegrationTestUtils.produceKeyValuesSynchronously(
+                inputTopic,
+                Arrays.asList(
+                    new KeyValue<>("sa", "v1"),
+                    new KeyValue<>("sa", "v2"),
+                    new KeyValue<>("sb", "v3"),
+                    new KeyValue<>("sc", "v4")
+                ),
+                TestUtils.producerConfig(
+                    CLUSTER.bootstrapServers(),
+                    StringSerializer.class,
+                    StringSerializer.class,
+                    new Properties()),
+                CLUSTER.time
+            );
+
+            retryOnExceptionWithTimeout(30_000, () -> {
+                final ReadOnlySessionStore<String, AggregationWithHeaders<Long>> store =
+                    streams.store(fromNameAndType(storeName, QueryableStoreTypes.sessionStoreWithHeaders()));
+                assertNotNull(store);
+
+                int backwardFetchCount = 0;
+                try (final KeyValueIterator<Windowed<String>, AggregationWithHeaders<Long>> iter = store.backwardFetch("sa")) {
+                    while (iter.hasNext()) {
+                        final KeyValue<Windowed<String>, AggregationWithHeaders<Long>> entry = iter.next();
+                        assertNotNull(entry.value.headers());
+                        assertEquals(2L, entry.value.aggregation());
+                        backwardFetchCount++;
+                    }
+                }
+                assertEquals(1, backwardFetchCount);
+
+                int findSessionsCount = 0;
+                try (final KeyValueIterator<Windowed<String>, AggregationWithHeaders<Long>> iter =
+                         store.findSessions("sa", 0L, System.currentTimeMillis() + WINDOW_SIZE)) {
+                    while (iter.hasNext()) {
+                        final KeyValue<Windowed<String>, AggregationWithHeaders<Long>> entry = iter.next();
+                        assertNotNull(entry.value.headers());
+                        findSessionsCount++;
+                    }
+                }
+                assertEquals(1, findSessionsCount);
+
+                int backwardFindSessionsCount = 0;
+                try (final KeyValueIterator<Windowed<String>, AggregationWithHeaders<Long>> iter =
+                         store.backwardFindSessions("sa", 0L, System.currentTimeMillis() + WINDOW_SIZE)) {
+                    while (iter.hasNext()) {
+                        final KeyValue<Windowed<String>, AggregationWithHeaders<Long>> entry = iter.next();
+                        assertNotNull(entry.value.headers());
+                        backwardFindSessionsCount++;
+                    }
+                }
+                assertEquals(1, backwardFindSessionsCount);
+
+                int multiKeyFetchCount = 0;
+                try (final KeyValueIterator<Windowed<String>, AggregationWithHeaders<Long>> iter = store.fetch("sa", "sc")) {
+                    while (iter.hasNext()) {
+                        final KeyValue<Windowed<String>, AggregationWithHeaders<Long>> entry = iter.next();
+                        assertNotNull(entry.value.headers());
+                        multiKeyFetchCount++;
+                    }
+                }
+                assertEquals(3, multiKeyFetchCount);
+
+                int multiKeyBackwardCount = 0;
+                try (final KeyValueIterator<Windowed<String>, AggregationWithHeaders<Long>> iter = store.backwardFetch("sa", "sc")) {
+                    while (iter.hasNext()) {
+                        final KeyValue<Windowed<String>, AggregationWithHeaders<Long>> entry = iter.next();
+                        assertNotNull(entry.value.headers());
+                        multiKeyBackwardCount++;
+                    }
+                }
+                assertEquals(3, multiKeyBackwardCount);
+            });
+        }
+    }
+
+    @Test
+    public void shouldQueryHeadersAwareKeyValueStoreWithRecordUpdate(final TestInfo testInfo) throws Exception {
+        final String uniqueTestName = safeUniqueTestName(testInfo);
+        final String inputTopic = uniqueTestName + "-input";
+        final String storeName = uniqueTestName + "-store";
+
+        CLUSTER.createTopic(inputTopic);
+
+        final StreamsBuilder builder = new StreamsBuilder();
+        builder.table(
+            inputTopic,
+            Consumed.with(Serdes.String(), Serdes.String()),
+            Materialized.<String, String>as(
+                Stores.persistentTimestampedKeyValueStoreWithHeaders(storeName))
+                .withKeySerde(Serdes.String())
+                .withValueSerde(Serdes.String())
+        );
+
+        final Properties properties = mkProperties(mkMap(
+            mkEntry(StreamsConfig.APPLICATION_ID_CONFIG, uniqueTestName + "-app"),
+            mkEntry(StreamsConfig.BOOTSTRAP_SERVERS_CONFIG, CLUSTER.bootstrapServers())
+        ));
+
+        try (final KafkaStreams streams = getRunningStreams(properties, builder, true)) {
+            IntegrationTestUtils.produceKeyValuesSynchronously(
+                inputTopic,
+                Collections.singletonList(new KeyValue<>("upd-key", "v1")),
+                TestUtils.producerConfig(
+                    CLUSTER.bootstrapServers(),
+                    StringSerializer.class,
+                    StringSerializer.class,
+                    new Properties()),
+                CLUSTER.time
+            );
+
+            retryOnExceptionWithTimeout(30_000, () -> {
+                final ReadOnlyKeyValueStore<String, ValueTimestampHeaders<String>> store =
+                    streams.store(fromNameAndType(storeName, QueryableStoreTypes.timestampedKeyValueStoreWithHeaders()));
+                final ValueTimestampHeaders<String> result = store.get("upd-key");
+                assertNotNull(result);
+                assertEquals("v1", result.value());
+            });
+
+            IntegrationTestUtils.produceKeyValuesSynchronously(
+                inputTopic,
+                Collections.singletonList(new KeyValue<>("upd-key", "v2")),
+                TestUtils.producerConfig(
+                    CLUSTER.bootstrapServers(),
+                    StringSerializer.class,
+                    StringSerializer.class,
+                    new Properties()),
+                CLUSTER.time
+            );
+
+            retryOnExceptionWithTimeout(30_000, () -> {
+                final ReadOnlyKeyValueStore<String, ValueTimestampHeaders<String>> store =
+                    streams.store(fromNameAndType(storeName, QueryableStoreTypes.timestampedKeyValueStoreWithHeaders()));
+                final ValueTimestampHeaders<String> result = store.get("upd-key");
+                assertNotNull(result);
+                assertEquals("v2", result.value());
+                assertNotNull(result.headers());
+                assertEquals(1L, store.approximateNumEntries());
+            });
+        }
+    }
+
+    @Test
+    public void shouldQueryHeadersAwareKeyValueStoreWithTombstone(final TestInfo testInfo) throws Exception {
+        final String uniqueTestName = safeUniqueTestName(testInfo);
+        final String inputTopic = uniqueTestName + "-input";
+        final String storeName = uniqueTestName + "-store";
+
+        CLUSTER.createTopic(inputTopic);
+
+        final StreamsBuilder builder = new StreamsBuilder();
+        builder.table(
+            inputTopic,
+            Consumed.with(Serdes.String(), Serdes.String()),
+            Materialized.<String, String>as(
+                Stores.persistentTimestampedKeyValueStoreWithHeaders(storeName))
+                .withKeySerde(Serdes.String())
+                .withValueSerde(Serdes.String())
+        );
+
+        final Properties properties = mkProperties(mkMap(
+            mkEntry(StreamsConfig.APPLICATION_ID_CONFIG, uniqueTestName + "-app"),
+            mkEntry(StreamsConfig.BOOTSTRAP_SERVERS_CONFIG, CLUSTER.bootstrapServers())
+        ));
+
+        try (final KafkaStreams streams = getRunningStreams(properties, builder, true)) {
+            IntegrationTestUtils.produceKeyValuesSynchronously(
+                inputTopic,
+                Collections.singletonList(new KeyValue<>("tomb-key", "alive")),
+                TestUtils.producerConfig(
+                    CLUSTER.bootstrapServers(),
+                    StringSerializer.class,
+                    StringSerializer.class,
+                    new Properties()),
+                CLUSTER.time
+            );
+
+            retryOnExceptionWithTimeout(30_000, () -> {
+                final ReadOnlyKeyValueStore<String, ValueTimestampHeaders<String>> store =
+                    streams.store(fromNameAndType(storeName, QueryableStoreTypes.timestampedKeyValueStoreWithHeaders()));
+                final ValueTimestampHeaders<String> result = store.get("tomb-key");
+                assertNotNull(result);
+                assertEquals("alive", result.value());
+            });
+
+            IntegrationTestUtils.produceKeyValuesSynchronously(
+                inputTopic,
+                Collections.singletonList(new KeyValue<>("tomb-key", (String) null)),
+                TestUtils.producerConfig(
+                    CLUSTER.bootstrapServers(),
+                    StringSerializer.class,
+                    StringSerializer.class,
+                    new Properties()),
+                CLUSTER.time
+            );
+
+            retryOnExceptionWithTimeout(30_000, () -> {
+                final ReadOnlyKeyValueStore<String, ValueTimestampHeaders<String>> store =
+                    streams.store(fromNameAndType(storeName, QueryableStoreTypes.timestampedKeyValueStoreWithHeaders()));
+                assertNull(store.get("tomb-key"));
+            });
         }
     }
 
