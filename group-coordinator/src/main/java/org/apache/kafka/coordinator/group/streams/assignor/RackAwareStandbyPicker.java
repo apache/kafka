@@ -34,9 +34,9 @@ import java.util.stream.IntStream;
 /**
  * Picks the conditions for the next standby of one task: the most tag keys that a process with room can meet,
  * preferring the keys earlier in {@code rack.aware.assignment.tags}. A process meets a tag key when it has a value
- * for it that no holder of the task has yet. It can then tell whether a process meets the conditions and return the
- * least-loaded process with room among those that do. The caller reports every change to a load or room with
- * {@link #updated(Object)} or {@link #updatedAll()}.
+ * for it that no holder of the task has yet. A pick also returns the least-loaded process with room that meets the
+ * conditions, and the picker can tell whether a process meets them. The caller reports every change to a load or room
+ * with {@link #updated(Object)} or {@link #updatedAll()}.
  * <p>
  * The processes sit in a tree with one level per tag key, those with the same values sharing a leaf. Scanning every
  * leaf per standby is too slow once there are many, e.g. one per process for a host tag. Each node keeps its
@@ -71,7 +71,7 @@ final class RackAwareStandbyPicker<P> {
 
     /**
      * @param tagKeys    The keys of {@code rack.aware.assignment.tags}; not empty, since without them there is nothing to pick.
-     * @param processes  All processes of the streams group; an earlier one wins a load tie.
+     * @param processes  All processes of the streams group, distinct; an earlier one wins a load tie.
      * @param clientTags The client tags of a process.
      * @param load       The load of a process.
      * @param hasRoom    Whether a process can take another task; {@code process -> true} without a limit.
@@ -214,11 +214,14 @@ final class RackAwareStandbyPicker<P> {
         queuedByProcess.replaceAll((process, queued) -> requeue(queued));
     }
 
-    /** The conditions for the next standby, or empty once no process with room can make the task more diverse. */
-    List<TagKey> pick() {
+    /**
+     * The conditions for the next standby and the least-loaded candidate under them, or null once no process with
+     * room can make the task more diverse.
+     */
+    Pick<P> pick() {
         // No process has room for the standby.
         if (root.leastLoaded == null) {
-            return List.of();
+            return null;
         }
         // Only if a tag key has an unused value is it possible to choose a process that makes the task more diverse
         // in this tag key.
@@ -229,35 +232,36 @@ final class RackAwareStandbyPicker<P> {
             }
         }
         if (tagKeysWithUnusedValue.isEmpty()) {
-            return List.of();
+            return null;
         }
 
         // Most picks find a process with room that meets the condition of every such tag key.
-        if (leastLoadedProcessMeeting(tagKeysWithUnusedValue) != null) {
-            return tagKeysWithUnusedValue;
+        final QueuedProcess<P> meetingAll = leastLoadedProcessMeeting(tagKeysWithUnusedValue);
+        if (meetingAll != null) {
+            return new Pick<>(tagKeysWithUnusedValue, meetingAll.process);
         }
         // Otherwise the tag keys are added in priority order; a tag key is given up when no process with room
         // meets it together with the tag keys kept so far.
         List<TagKey> conditions = new ArrayList<>();
+        QueuedProcess<P> leastLoaded = null;
         for (final TagKey tagKey : tagKeysWithUnusedValue) {
             final List<TagKey> withTagKey = new ArrayList<>(conditions);
             withTagKey.add(tagKey);
             // If withTagKey holds every tag key, the query above already found no process for it.
-            if (withTagKey.size() < tagKeysWithUnusedValue.size() && leastLoadedProcessMeeting(withTagKey) != null) {
-                conditions = withTagKey;
+            if (withTagKey.size() < tagKeysWithUnusedValue.size()) {
+                final QueuedProcess<P> meeting = leastLoadedProcessMeeting(withTagKey);
+                if (meeting != null) {
+                    conditions = withTagKey;
+                    leastLoaded = meeting;
+                }
             }
         }
-        return conditions;
+        return leastLoaded == null ? null : new Pick<>(conditions, leastLoaded.process);
     }
 
     /** Whether a process is a candidate under the conditions of a pick: it meets them and has room. */
     boolean isCandidate(final P process, final List<TagKey> conditions) {
         return meets(process, conditions) && processHasRoom.test(process);
-    }
-
-    /** The least-loaded process with room of the candidates, for the non-empty conditions {@link #pick()} returned. */
-    P leastLoaded(final List<TagKey> conditions) {
-        return leastLoadedProcessMeeting(conditions).process;
     }
 
     /** Whether some value of the key is not used yet. */
@@ -335,7 +339,7 @@ final class RackAwareStandbyPicker<P> {
         final double load = processLoad.applyAsDouble(queued.process);
         final boolean hasRoom = processHasRoom.test(queued.process);
         final TreeSet<QueuedProcess<P>> processesByLoad = queued.leaf.processesByLoad;
-        if (load == queued.load && hasRoom == processesByLoad.contains(queued)) {
+        if (Double.compare(load, queued.load) == 0 && hasRoom == processesByLoad.contains(queued)) {
             return queued;
         }
         processesByLoad.remove(queued);
@@ -367,6 +371,9 @@ final class RackAwareStandbyPicker<P> {
             node = parent;
         }
     }
+
+    /** The conditions of a pick and the least-loaded candidate under them. */
+    record Pick<P>(List<TagKey> conditions, P leastLoaded) { }
 
     /** A key of {@code rack.aware.assignment.tags}. */
     static final class TagKey {

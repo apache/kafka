@@ -16,6 +16,7 @@
  */
 package org.apache.kafka.coordinator.group.streams.assignor;
 
+import org.apache.kafka.coordinator.group.streams.assignor.RackAwareStandbyPicker.Pick;
 import org.apache.kafka.coordinator.group.streams.assignor.RackAwareStandbyPicker.QueuedProcess;
 import org.apache.kafka.coordinator.group.streams.assignor.RackAwareStandbyPicker.TagKey;
 
@@ -38,8 +39,8 @@ public class RackAwareStandbyPickerTest {
     private final Set<String> processesWithoutRoom = new HashSet<>();
     private List<String> processes;
     private RackAwareStandbyPicker<String> picker;
-    // The conditions of the last pick by candidates().
-    private List<TagKey> conditions;
+    // The last pick by candidates(), null when nothing is picked.
+    private Pick<String> pick;
 
     @Test
     public void shouldOnlyPickEligibleProcessesWithNewValueForPriorityKey() {
@@ -74,7 +75,7 @@ public class RackAwareStandbyPickerTest {
 
         assertEquals(Set.of("X", "Z"), candidates());
         assertEquals(List.of("cluster", "zone"), conditionNames());
-        assertEquals("Z", picker.leastLoaded(conditions));
+        assertEquals("Z", pick.leastLoaded());
     }
 
     @Test
@@ -205,11 +206,11 @@ public class RackAwareStandbyPickerTest {
 
     /** The candidate processes of a new pick, empty when nothing is picked. */
     private Set<String> candidates() {
-        conditions = picker.pick();
+        pick = picker.pick();
         final Set<String> candidates = new HashSet<>();
-        if (!conditions.isEmpty()) {
+        if (pick != null) {
             for (final String process : processes) {
-                if (picker.isCandidate(process, conditions)) {
+                if (picker.isCandidate(process, pick.conditions())) {
                     candidates.add(process);
                 }
             }
@@ -220,8 +221,10 @@ public class RackAwareStandbyPickerTest {
     /** The names of the tag keys in the conditions of the last pick by candidates(). */
     private List<String> conditionNames() {
         final List<String> names = new ArrayList<>();
-        for (final TagKey tagKey : conditions) {
-            names.add(tagKey.toString());
+        if (pick != null) {
+            for (final TagKey tagKey : pick.conditions()) {
+                names.add(tagKey.toString());
+            }
         }
         return names;
     }
