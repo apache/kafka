@@ -14,6 +14,8 @@ org.apache.kafka.streams.integration.AtLeastOnceDeliveryMessageLossIntegrationTe
 - shouldCommitOffsetsAndProduceOutputRecordsWhenProducerFailsWithMessageTooLarge
 org.apache.kafka.streams.integration.ColdStartStickinessIntegrationTest:
 - shouldStickToLocalStateOnColdStart
+org.apache.kafka.streams.integration.CommitTimeoutDirtyCloseIntegrationTest:
+- shouldFullyRestoreStoreAfterAbortFailsOnTimedOutCommit
 org.apache.kafka.streams.integration.ConsistencyVectorIntegrationTest:
 - shouldHaveSamePositionBoundActiveAndStandBy
 org.apache.kafka.streams.integration.DeadLetterQueueIntegrationTest:
