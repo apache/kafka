@@ -1,0 +1,559 @@
+{
+  "configuration" : { },
+  "description" : "C4 Model for Apache Kafka Architecture",
+  "documentation" : { },
+  "id" : 1,
+  "lastModifiedAgent" : "structurizr-ui",
+  "lastModifiedDate" : "2026-02-08T10:28:30Z",
+  "model" : {
+    "people" : [ {
+      "description" : "Application that publishes messages to Kafka topics",
+      "id" : "1",
+      "name" : "Producer Application",
+      "properties" : {
+        "structurizr.dsl.identifier" : "producer"
+      },
+      "relationships" : [ {
+        "description" : "Uses",
+        "destinationId" : "8",
+        "id" : "15",
+        "sourceId" : "1",
+        "tags" : "Relationship"
+      }, {
+        "description" : "Uses",
+        "destinationId" : "4",
+        "id" : "16",
+        "linkedRelationshipId" : "15",
+        "sourceId" : "1"
+      } ],
+      "tags" : "Element,Person"
+    }, {
+      "description" : "Application that subscribes to and processes messages from Kafka topics",
+      "id" : "2",
+      "name" : "Consumer Application",
+      "properties" : {
+        "structurizr.dsl.identifier" : "consumer"
+      },
+      "relationships" : [ {
+        "description" : "Uses",
+        "destinationId" : "9",
+        "id" : "18",
+        "sourceId" : "2",
+        "tags" : "Relationship"
+      }, {
+        "description" : "Uses",
+        "destinationId" : "4",
+        "id" : "19",
+        "linkedRelationshipId" : "18",
+        "sourceId" : "2"
+      } ],
+      "tags" : "Element,Person"
+    }, {
+      "description" : "Administrator who manages Kafka cluster configuration",
+      "id" : "3",
+      "name" : "Kafka Admin",
+      "properties" : {
+        "structurizr.dsl.identifier" : "admin"
+      },
+      "relationships" : [ {
+        "description" : "Uses",
+        "destinationId" : "10",
+        "id" : "21",
+        "sourceId" : "3",
+        "tags" : "Relationship"
+      }, {
+        "description" : "Uses",
+        "destinationId" : "4",
+        "id" : "22",
+        "linkedRelationshipId" : "21",
+        "sourceId" : "3"
+      } ],
+      "tags" : "Element,Person"
+    } ],
+    "softwareSystems" : [ {
+      "containers" : [ {
+        "description" : "Handles message storage and serving",
+        "documentation" : { },
+        "id" : "5",
+        "name" : "Kafka Broker",
+        "properties" : {
+          "structurizr.dsl.identifier" : "broker"
+        },
+        "relationships" : [ {
+          "description" : "Persists messages to",
+          "destinationId" : "7",
+          "id" : "24",
+          "sourceId" : "5",
+          "tags" : "Relationship"
+        }, {
+          "description" : "Reports metadata to",
+          "destinationId" : "6",
+          "id" : "25",
+          "sourceId" : "5",
+          "tags" : "Relationship",
+          "technology" : "TCP/9093"
+        }, {
+          "description" : "Exposes metrics to",
+          "destinationId" : "14",
+          "id" : "31",
+          "sourceId" : "5",
+          "tags" : "Relationship",
+          "technology" : "JMX/HTTP"
+        } ],
+        "tags" : "Element,Container,Broker",
+        "technology" : "Scala/Java"
+      }, {
+        "description" : "Manages cluster metadata and leader election",
+        "documentation" : { },
+        "id" : "6",
+        "name" : "KRaft Controller",
+        "properties" : {
+          "structurizr.dsl.identifier" : "controller"
+        },
+        "relationships" : [ {
+          "description" : "Manages leadership for",
+          "destinationId" : "5",
+          "id" : "26",
+          "sourceId" : "6",
+          "tags" : "Relationship"
+        } ],
+        "tags" : "Element,Container,Controller",
+        "technology" : "Scala/Java"
+      }, {
+        "description" : "Append-only log files for message storage",
+        "documentation" : { },
+        "id" : "7",
+        "name" : "Log Segments",
+        "properties" : {
+          "structurizr.dsl.identifier" : "logSegment"
+        },
+        "tags" : "Element,Container,Storage",
+        "technology" : "File System"
+      }, {
+        "description" : "Client library for publishing messages",
+        "documentation" : { },
+        "id" : "8",
+        "name" : "Producer API",
+        "properties" : {
+          "structurizr.dsl.identifier" : "producerApi"
+        },
+        "relationships" : [ {
+          "description" : "Publishes messages to",
+          "destinationId" : "5",
+          "id" : "17",
+          "sourceId" : "8",
+          "tags" : "Relationship",
+          "technology" : "TCP/9092"
+        } ],
+        "tags" : "Element,Container,API",
+        "technology" : "Java"
+      }, {
+        "description" : "Client library for consuming messages",
+        "documentation" : { },
+        "id" : "9",
+        "name" : "Consumer API",
+        "properties" : {
+          "structurizr.dsl.identifier" : "consumerApi"
+        },
+        "relationships" : [ {
+          "description" : "Consumes messages from",
+          "destinationId" : "5",
+          "id" : "20",
+          "sourceId" : "9",
+          "tags" : "Relationship",
+          "technology" : "TCP/9092"
+        } ],
+        "tags" : "Element,Container,API",
+        "technology" : "Java"
+      }, {
+        "description" : "Client library for cluster administration",
+        "documentation" : { },
+        "id" : "10",
+        "name" : "Admin API",
+        "properties" : {
+          "structurizr.dsl.identifier" : "adminApi"
+        },
+        "relationships" : [ {
+          "description" : "Manages",
+          "destinationId" : "5",
+          "id" : "23",
+          "sourceId" : "10",
+          "tags" : "Relationship",
+          "technology" : "TCP/9092"
+        } ],
+        "tags" : "Element,Container,API",
+        "technology" : "Java"
+      }, {
+        "description" : "Framework for connecting external systems",
+        "documentation" : { },
+        "id" : "11",
+        "name" : "Kafka Connect",
+        "properties" : {
+          "structurizr.dsl.identifier" : "connect"
+        },
+        "relationships" : [ {
+          "description" : "Reads/writes data",
+          "destinationId" : "5",
+          "id" : "27",
+          "sourceId" : "11",
+          "tags" : "Relationship"
+        }, {
+          "description" : "Syncs data with",
+          "destinationId" : "13",
+          "id" : "28",
+          "sourceId" : "11",
+          "tags" : "Relationship"
+        } ],
+        "tags" : "Element,Container,Connect",
+        "technology" : "Java"
+      }, {
+        "description" : "Stream processing library",
+        "documentation" : { },
+        "id" : "12",
+        "name" : "Kafka Streams",
+        "properties" : {
+          "structurizr.dsl.identifier" : "streams"
+        },
+        "relationships" : [ {
+          "description" : "Processes streams from",
+          "destinationId" : "5",
+          "id" : "30",
+          "sourceId" : "12",
+          "tags" : "Relationship"
+        } ],
+        "tags" : "Element,Container,Streams",
+        "technology" : "Java"
+      } ],
+      "description" : "Distributed event streaming platform",
+      "documentation" : { },
+      "id" : "4",
+      "name" : "Apache Kafka",
+      "properties" : {
+        "structurizr.dsl.identifier" : "kafka"
+      },
+      "relationships" : [ {
+        "description" : "Syncs data with",
+        "destinationId" : "13",
+        "id" : "29",
+        "linkedRelationshipId" : "28",
+        "sourceId" : "4"
+      }, {
+        "description" : "Exposes metrics to",
+        "destinationId" : "14",
+        "id" : "32",
+        "linkedRelationshipId" : "31",
+        "sourceId" : "4",
+        "technology" : "JMX/HTTP"
+      } ],
+      "tags" : "Element,Software System"
+    }, {
+      "description" : "Source or sink for Kafka Connect",
+      "documentation" : { },
+      "id" : "13",
+      "name" : "External Database",
+      "properties" : {
+        "structurizr.dsl.identifier" : "externalDb"
+      },
+      "tags" : "Element,Software System,External"
+    }, {
+      "description" : "Prometheus, Grafana for metrics",
+      "documentation" : { },
+      "id" : "14",
+      "name" : "Monitoring System",
+      "properties" : {
+        "structurizr.dsl.identifier" : "monitoringSystem"
+      },
+      "tags" : "Element,Software System,External"
+    } ]
+  },
+  "name" : "Apache Kafka",
+  "properties" : {
+    "structurizr.inspection.info" : "0",
+    "structurizr.inspection.ignore" : "0",
+    "structurizr.inspection.error" : "15",
+    "structurizr.inspection.warning" : "0",
+    "structurizr.dsl" : "d29ya3NwYWNlICJBcGFjaGUgS2Fma2EiICJDNCBNb2RlbCBmb3IgQXBhY2hlIEthZmthIEFyY2hpdGVjdHVyZSIgewoKICAgIG1vZGVsIHsKICAgICAgICAjIEV4dGVybmFsIGFjdG9ycwogICAgICAgIHByb2R1Y2VyID0gcGVyc29uICJQcm9kdWNlciBBcHBsaWNhdGlvbiIgIkFwcGxpY2F0aW9uIHRoYXQgcHVibGlzaGVzIG1lc3NhZ2VzIHRvIEthZmthIHRvcGljcyIKICAgICAgICBjb25zdW1lciA9IHBlcnNvbiAiQ29uc3VtZXIgQXBwbGljYXRpb24iICJBcHBsaWNhdGlvbiB0aGF0IHN1YnNjcmliZXMgdG8gYW5kIHByb2Nlc3NlcyBtZXNzYWdlcyBmcm9tIEthZmthIHRvcGljcyIKICAgICAgICBhZG1pbiA9IHBlcnNvbiAiS2Fma2EgQWRtaW4iICJBZG1pbmlzdHJhdG9yIHdobyBtYW5hZ2VzIEthZmthIGNsdXN0ZXIgY29uZmlndXJhdGlvbiIKCiAgICAgICAgIyBLYWZrYSBTb2Z0d2FyZSBTeXN0ZW0KICAgICAgICBrYWZrYSA9IHNvZnR3YXJlU3lzdGVtICJBcGFjaGUgS2Fma2EiICJEaXN0cmlidXRlZCBldmVudCBzdHJlYW1pbmcgcGxhdGZvcm0iIHsKCiAgICAgICAgICAgICMgQ29yZSBjb250YWluZXJzCiAgICAgICAgICAgIGJyb2tlciA9IGNvbnRhaW5lciAiS2Fma2EgQnJva2VyIiAiSGFuZGxlcyBtZXNzYWdlIHN0b3JhZ2UgYW5kIHNlcnZpbmciICJTY2FsYS9KYXZhIiAiQnJva2VyIgogICAgICAgICAgICBjb250cm9sbGVyID0gY29udGFpbmVyICJLUmFmdCBDb250cm9sbGVyIiAiTWFuYWdlcyBjbHVzdGVyIG1ldGFkYXRhIGFuZCBsZWFkZXIgZWxlY3Rpb24iICJTY2FsYS9KYXZhIiAiQ29udHJvbGxlciIKCiAgICAgICAgICAgICMgU3RvcmFnZQogICAgICAgICAgICBsb2dTZWdtZW50ID0gY29udGFpbmVyICJMb2cgU2VnbWVudHMiICJBcHBlbmQtb25seSBsb2cgZmlsZXMgZm9yIG1lc3NhZ2Ugc3RvcmFnZSIgIkZpbGUgU3lzdGVtIiAiU3RvcmFnZSIKCiAgICAgICAgICAgICMgQ2xpZW50IGxpYnJhcmllcwogICAgICAgICAgICBwcm9kdWNlckFwaSA9IGNvbnRhaW5lciAiUHJvZHVjZXIgQVBJIiAiQ2xpZW50IGxpYnJhcnkgZm9yIHB1Ymxpc2hpbmcgbWVzc2FnZXMiICJKYXZhIiAiQVBJIgogICAgICAgICAgICBjb25zdW1lckFwaSA9IGNvbnRhaW5lciAiQ29uc3VtZXIgQVBJIiAiQ2xpZW50IGxpYnJhcnkgZm9yIGNvbnN1bWluZyBtZXNzYWdlcyIgIkphdmEiICJBUEkiCiAgICAgICAgICAgIGFkbWluQXBpID0gY29udGFpbmVyICJBZG1pbiBBUEkiICJDbGllbnQgbGlicmFyeSBmb3IgY2x1c3RlciBhZG1pbmlzdHJhdGlvbiIgIkphdmEiICJBUEkiCgogICAgICAgICAgICAjIEthZmthIENvbm5lY3QKICAgICAgICAgICAgY29ubmVjdCA9IGNvbnRhaW5lciAiS2Fma2EgQ29ubmVjdCIgIkZyYW1ld29yayBmb3IgY29ubmVjdGluZyBleHRlcm5hbCBzeXN0ZW1zIiAiSmF2YSIgIkNvbm5lY3QiCgogICAgICAgICAgICAjIEthZmthIFN0cmVhbXMKICAgICAgICAgICAgc3RyZWFtcyA9IGNvbnRhaW5lciAiS2Fma2EgU3RyZWFtcyIgIlN0cmVhbSBwcm9jZXNzaW5nIGxpYnJhcnkiICJKYXZhIiAiU3RyZWFtcyIKICAgICAgICB9CgogICAgICAgICMgRXh0ZXJuYWwgc3lzdGVtcwogICAgICAgIGV4dGVybmFsRGIgPSBzb2Z0d2FyZVN5c3RlbSAiRXh0ZXJuYWwgRGF0YWJhc2UiICJTb3VyY2Ugb3Igc2luayBmb3IgS2Fma2EgQ29ubmVjdCIgIkV4dGVybmFsIgogICAgICAgIG1vbml0b3JpbmdTeXN0ZW0gPSBzb2Z0d2FyZVN5c3RlbSAiTW9uaXRvcmluZyBTeXN0ZW0iICJQcm9tZXRoZXVzLCBHcmFmYW5hIGZvciBtZXRyaWNzIiAiRXh0ZXJuYWwiCgogICAgICAgICMgUmVsYXRpb25zaGlwcwogICAgICAgIHByb2R1Y2VyIC0+IHByb2R1Y2VyQXBpICJVc2VzIgogICAgICAgIHByb2R1Y2VyQXBpIC0+IGJyb2tlciAiUHVibGlzaGVzIG1lc3NhZ2VzIHRvIiAiVENQLzkwOTIiCgogICAgICAgIGNvbnN1bWVyIC0+IGNvbnN1bWVyQXBpICJVc2VzIgogICAgICAgIGNvbnN1bWVyQXBpIC0+IGJyb2tlciAiQ29uc3VtZXMgbWVzc2FnZXMgZnJvbSIgIlRDUC85MDkyIgoKICAgICAgICBhZG1pbiAtPiBhZG1pbkFwaSAiVXNlcyIKICAgICAgICBhZG1pbkFwaSAtPiBicm9rZXIgIk1hbmFnZXMiICJUQ1AvOTA5MiIKCiAgICAgICAgYnJva2VyIC0+IGxvZ1NlZ21lbnQgIlBlcnNpc3RzIG1lc3NhZ2VzIHRvIgogICAgICAgIGJyb2tlciAtPiBjb250cm9sbGVyICJSZXBvcnRzIG1ldGFkYXRhIHRvIiAiVENQLzkwOTMiCiAgICAgICAgY29udHJvbGxlciAtPiBicm9rZXIgIk1hbmFnZXMgbGVhZGVyc2hpcCBmb3IiCgogICAgICAgIGNvbm5lY3QgLT4gYnJva2VyICJSZWFkcy93cml0ZXMgZGF0YSIKICAgICAgICBjb25uZWN0IC0+IGV4dGVybmFsRGIgIlN5bmNzIGRhdGEgd2l0aCIKCiAgICAgICAgc3RyZWFtcyAtPiBicm9rZXIgIlByb2Nlc3NlcyBzdHJlYW1zIGZyb20iCgogICAgICAgIGJyb2tlciAtPiBtb25pdG9yaW5nU3lzdGVtICJFeHBvc2VzIG1ldHJpY3MgdG8iICJKTVgvSFRUUCIKICAgIH0KCiAgICB2aWV3cyB7CiAgICAgICAgIyBTeXN0ZW0gQ29udGV4dAogICAgICAgIHN5c3RlbUNvbnRleHQga2Fma2EgIkthZmthQ29udGV4dCIgewogICAgICAgICAgICBpbmNsdWRlICoKICAgICAgICAgICAgYXV0b0xheW91dAogICAgICAgICAgICBkZXNjcmlwdGlvbiAiU3lzdGVtIGNvbnRleHQgZGlhZ3JhbSBmb3IgQXBhY2hlIEthZmthIgogICAgICAgIH0KCiAgICAgICAgIyBDb250YWluZXIgVmlldwogICAgICAgIGNvbnRhaW5lciBrYWZrYSAiS2Fma2FDb250YWluZXJzIiB7CiAgICAgICAgICAgIGluY2x1ZGUgKgogICAgICAgICAgICBhdXRvTGF5b3V0CiAgICAgICAgICAgIGRlc2NyaXB0aW9uICJDb250YWluZXIgZGlhZ3JhbSBzaG93aW5nIEthZmthIGludGVybmFsIGNvbXBvbmVudHMiCiAgICAgICAgfQoKICAgICAgICAjIER5bmFtaWMgdmlldzogTWVzc2FnZSBmbG93CiAgICAgICAgZHluYW1pYyBrYWZrYSAiTWVzc2FnZUZsb3ciICJTaG93cyB0aGUgZmxvdyBvZiBhIG1lc3NhZ2UgZnJvbSBwcm9kdWNlciB0byBjb25zdW1lciIgewogICAgICAgICAgICBwcm9kdWNlciAtPiBwcm9kdWNlckFwaSAiMS4gQ3JlYXRlcyBtZXNzYWdlIgogICAgICAgICAgICBwcm9kdWNlckFwaSAtPiBicm9rZXIgIjIuIFNlbmRzIHRvIHBhcnRpdGlvbiBsZWFkZXIiCiAgICAgICAgICAgIGJyb2tlciAtPiBsb2dTZWdtZW50ICIzLiBBcHBlbmRzIHRvIGxvZyIKICAgICAgICAgICAgYnJva2VyIC0+IGNvbnN1bWVyQXBpICI0LiBDb25zdW1lciBmZXRjaGVzIgogICAgICAgICAgICBjb25zdW1lckFwaSAtPiBjb25zdW1lciAiNS4gRGVsaXZlcnMgbWVzc2FnZSIKICAgICAgICAgICAgYXV0b0xheW91dAogICAgICAgIH0KCiAgICAgICAgc3R5bGVzIHsKICAgICAgICAgICAgZWxlbWVudCAiU29mdHdhcmUgU3lzdGVtIiB7CiAgICAgICAgICAgICAgICBiYWNrZ3JvdW5kICMxMTY4YmQKICAgICAgICAgICAgICAgIGNvbG9yICNmZmZmZmYKICAgICAgICAgICAgICAgIHNoYXBlIFJvdW5kZWRCb3gKICAgICAgICAgICAgfQogICAgICAgICAgICBlbGVtZW50ICJFeHRlcm5hbCIgewogICAgICAgICAgICAgICAgYmFja2dyb3VuZCAjOTk5OTk5CiAgICAgICAgICAgICAgICBjb2xvciAjZmZmZmZmCiAgICAgICAgICAgIH0KICAgICAgICAgICAgZWxlbWVudCAiQ29udGFpbmVyIiB7CiAgICAgICAgICAgICAgICBiYWNrZ3JvdW5kICM0MzhkZDUKICAgICAgICAgICAgICAgIGNvbG9yICNmZmZmZmYKICAgICAgICAgICAgfQogICAgICAgICAgICBlbGVtZW50ICJCcm9rZXIiIHsKICAgICAgICAgICAgICAgIGJhY2tncm91bmQgI2ZmNjYwMAogICAgICAgICAgICAgICAgY29sb3IgI2ZmZmZmZgogICAgICAgICAgICAgICAgc2hhcGUgSGV4YWdvbgogICAgICAgICAgICB9CiAgICAgICAgICAgIGVsZW1lbnQgIkNvbnRyb2xsZXIiIHsKICAgICAgICAgICAgICAgIGJhY2tncm91bmQgIzAwY2M2NgogICAgICAgICAgICAgICAgY29sb3IgI2ZmZmZmZgogICAgICAgICAgICAgICAgc2hhcGUgSGV4YWdvbgogICAgICAgICAgICB9CiAgICAgICAgICAgIGVsZW1lbnQgIlN0b3JhZ2UiIHsKICAgICAgICAgICAgICAgIGJhY2tncm91bmQgIzY2NjY2NgogICAgICAgICAgICAgICAgY29sb3IgI2ZmZmZmZgogICAgICAgICAgICAgICAgc2hhcGUgQ3lsaW5kZXIKICAgICAgICAgICAgfQogICAgICAgICAgICBlbGVtZW50ICJBUEkiIHsKICAgICAgICAgICAgICAgIGJhY2tncm91bmQgIzg1YmJmMAogICAgICAgICAgICAgICAgY29sb3IgIzAwMDAwMAogICAgICAgICAgICB9CiAgICAgICAgICAgIGVsZW1lbnQgIkNvbm5lY3QiIHsKICAgICAgICAgICAgICAgIGJhY2tncm91bmQgIzk5MzNmZgogICAgICAgICAgICAgICAgY29sb3IgI2ZmZmZmZgogICAgICAgICAgICB9CiAgICAgICAgICAgIGVsZW1lbnQgIlN0cmVhbXMiIHsKICAgICAgICAgICAgICAgIGJhY2tncm91bmQgI2ZmMzM5OQogICAgICAgICAgICAgICAgY29sb3IgI2ZmZmZmZgogICAgICAgICAgICB9CiAgICAgICAgICAgIGVsZW1lbnQgIlBlcnNvbiIgewogICAgICAgICAgICAgICAgYmFja2dyb3VuZCAjMDg0MjdiCiAgICAgICAgICAgICAgICBjb2xvciAjZmZmZmZmCiAgICAgICAgICAgICAgICBzaGFwZSBQZXJzb24KICAgICAgICAgICAgfQogICAgICAgICAgICByZWxhdGlvbnNoaXAgIlJlbGF0aW9uc2hpcCIgewogICAgICAgICAgICAgICAgdGhpY2tuZXNzIDIKICAgICAgICAgICAgfQogICAgICAgIH0KICAgIH0KfQ=="
+  },
+  "views" : {
+    "configuration" : {
+      "branding" : { },
+      "lastSavedView" : "KafkaContext",
+      "metadataSymbols" : "SquareBrackets",
+      "styles" : {
+        "elements" : [ {
+          "background" : "#85bbf0",
+          "color" : "#000000",
+          "tag" : "API"
+        }, {
+          "background" : "#ff6600",
+          "color" : "#ffffff",
+          "shape" : "Hexagon",
+          "tag" : "Broker"
+        }, {
+          "background" : "#9933ff",
+          "color" : "#ffffff",
+          "tag" : "Connect"
+        }, {
+          "background" : "#438dd5",
+          "color" : "#ffffff",
+          "tag" : "Container"
+        }, {
+          "background" : "#00cc66",
+          "color" : "#ffffff",
+          "shape" : "Hexagon",
+          "tag" : "Controller"
+        }, {
+          "background" : "#999999",
+          "color" : "#ffffff",
+          "tag" : "External"
+        }, {
+          "background" : "#08427b",
+          "color" : "#ffffff",
+          "shape" : "Person",
+          "tag" : "Person"
+        }, {
+          "background" : "#1168bd",
+          "color" : "#ffffff",
+          "shape" : "RoundedBox",
+          "tag" : "Software System"
+        }, {
+          "background" : "#666666",
+          "color" : "#ffffff",
+          "shape" : "Cylinder",
+          "tag" : "Storage"
+        }, {
+          "background" : "#ff3399",
+          "color" : "#ffffff",
+          "tag" : "Streams"
+        } ],
+        "relationships" : [ {
+          "tag" : "Relationship",
+          "thickness" : 2
+        } ]
+      },
+      "terminology" : { }
+    },
+    "containerViews" : [ {
+      "automaticLayout" : {
+        "applied" : false,
+        "edgeSeparation" : 0,
+        "implementation" : "Graphviz",
+        "nodeSeparation" : 300,
+        "rankDirection" : "TopBottom",
+        "rankSeparation" : 300,
+        "vertices" : false
+      },
+      "description" : "Container diagram showing Kafka internal components",
+      "elements" : [ {
+        "id" : "1",
+        "x" : 0,
+        "y" : 0
+      }, {
+        "id" : "2",
+        "x" : 0,
+        "y" : 0
+      }, {
+        "id" : "3",
+        "x" : 0,
+        "y" : 0
+      }, {
+        "id" : "5",
+        "x" : 0,
+        "y" : 0
+      }, {
+        "id" : "6",
+        "x" : 0,
+        "y" : 0
+      }, {
+        "id" : "7",
+        "x" : 0,
+        "y" : 0
+      }, {
+        "id" : "8",
+        "x" : 0,
+        "y" : 0
+      }, {
+        "id" : "9",
+        "x" : 0,
+        "y" : 0
+      }, {
+        "id" : "10",
+        "x" : 0,
+        "y" : 0
+      }, {
+        "id" : "11",
+        "x" : 0,
+        "y" : 0
+      }, {
+        "id" : "12",
+        "x" : 0,
+        "y" : 0
+      }, {
+        "id" : "13",
+        "x" : 0,
+        "y" : 0
+      }, {
+        "id" : "14",
+        "x" : 0,
+        "y" : 0
+      } ],
+      "externalSoftwareSystemBoundariesVisible" : false,
+      "key" : "KafkaContainers",
+      "name" : "Container View: Apache Kafka",
+      "order" : 2,
+      "relationships" : [ {
+        "id" : "15"
+      }, {
+        "id" : "17"
+      }, {
+        "id" : "18"
+      }, {
+        "id" : "20"
+      }, {
+        "id" : "21"
+      }, {
+        "id" : "23"
+      }, {
+        "id" : "24"
+      }, {
+        "id" : "25"
+      }, {
+        "id" : "26"
+      }, {
+        "id" : "27"
+      }, {
+        "id" : "28"
+      }, {
+        "id" : "30"
+      }, {
+        "id" : "31"
+      } ],
+      "softwareSystemId" : "4"
+    } ],
+    "dynamicViews" : [ {
+      "automaticLayout" : {
+        "applied" : false,
+        "edgeSeparation" : 0,
+        "implementation" : "Graphviz",
+        "nodeSeparation" : 300,
+        "rankDirection" : "TopBottom",
+        "rankSeparation" : 300,
+        "vertices" : false
+      },
+      "description" : "Shows the flow of a message from producer to consumer",
+      "elementId" : "4",
+      "elements" : [ {
+        "id" : "1",
+        "x" : 0,
+        "y" : 0
+      }, {
+        "id" : "2",
+        "x" : 0,
+        "y" : 0
+      }, {
+        "id" : "5",
+        "x" : 0,
+        "y" : 0
+      }, {
+        "id" : "7",
+        "x" : 0,
+        "y" : 0
+      }, {
+        "id" : "8",
+        "x" : 0,
+        "y" : 0
+      }, {
+        "id" : "9",
+        "x" : 0,
+        "y" : 0
+      } ],
+      "externalBoundariesVisible" : false,
+      "key" : "MessageFlow",
+      "name" : "Dynamic View: Apache Kafka",
+      "order" : 3,
+      "relationships" : [ {
+        "description" : "1. Creates message",
+        "id" : "15",
+        "order" : "1",
+        "response" : false
+      }, {
+        "description" : "2. Sends to partition leader",
+        "id" : "17",
+        "order" : "2",
+        "response" : false
+      }, {
+        "description" : "3. Appends to log",
+        "id" : "24",
+        "order" : "3",
+        "response" : false
+      }, {
+        "description" : "4. Consumer fetches",
+        "id" : "20",
+        "order" : "4",
+        "response" : true
+      }, {
+        "description" : "5. Delivers message",
+        "id" : "18",
+        "order" : "5",
+        "response" : true
+      } ]
+    } ],
+    "systemContextViews" : [ {
+      "automaticLayout" : {
+        "applied" : true,
+        "edgeSeparation" : 0,
+        "implementation" : "Graphviz",
+        "nodeSeparation" : 300,
+        "rankDirection" : "TopBottom",
+        "rankSeparation" : 300,
+        "vertices" : false
+      },
+      "description" : "System context diagram for Apache Kafka",
+      "dimensions" : {
+        "height" : 2000,
+        "width" : 2200
+      },
+      "elements" : [ {
+        "id" : "1",
+        "x" : 200,
+        "y" : 143
+      }, {
+        "id" : "2",
+        "x" : 900,
+        "y" : 143
+      }, {
+        "id" : "3",
+        "x" : 1600,
+        "y" : 143
+      }, {
+        "id" : "4",
+        "x" : 875,
+        "y" : 843
+      }, {
+        "id" : "13",
+        "x" : 500,
+        "y" : 1443
+      }, {
+        "id" : "14",
+        "x" : 1250,
+        "y" : 1443
+      } ],
+      "enterpriseBoundaryVisible" : true,
+      "key" : "KafkaContext",
+      "name" : "System Context View: Apache Kafka",
+      "order" : 1,
+      "relationships" : [ {
+        "id" : "16"
+      }, {
+        "id" : "19"
+      }, {
+        "id" : "22"
+      }, {
+        "id" : "29"
+      }, {
+        "id" : "32"
+      } ],
+      "softwareSystemId" : "4"
+    } ]
+  }
+}
