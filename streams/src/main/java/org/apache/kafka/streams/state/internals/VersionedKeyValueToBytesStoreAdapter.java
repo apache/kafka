@@ -18,6 +18,7 @@ package org.apache.kafka.streams.state.internals;
 
 import org.apache.kafka.common.IsolationLevel;
 import org.apache.kafka.common.TopicPartition;
+import org.apache.kafka.common.header.Headers;
 import org.apache.kafka.common.serialization.Serde;
 import org.apache.kafka.common.serialization.Serdes.ByteArraySerde;
 import org.apache.kafka.common.serialization.Serializer;
@@ -37,6 +38,7 @@ import org.apache.kafka.streams.state.KeyValueStore;
 import org.apache.kafka.streams.state.ValueAndTimestamp;
 import org.apache.kafka.streams.state.VersionedBytesStore;
 import org.apache.kafka.streams.state.VersionedKeyValueStore;
+import org.apache.kafka.streams.state.VersionedKeyValueStoreWithHeaders;
 import org.apache.kafka.streams.state.VersionedRecord;
 
 import java.util.List;
@@ -57,13 +59,29 @@ public class VersionedKeyValueToBytesStoreAdapter implements VersionedBytesStore
         = VALUE_AND_TIMESTAMP_SERDE.serializer();
 
     final VersionedKeyValueStore<Bytes, byte[]> inner;
+    private final boolean includeHeaders;
 
     public VersionedKeyValueToBytesStoreAdapter(final VersionedKeyValueStore<Bytes, byte[]> inner) {
+        this(inner, false);
+    }
+
+    public VersionedKeyValueToBytesStoreAdapter(final VersionedKeyValueStore<Bytes, byte[]> inner,
+                                                final boolean includeHeaders) {
         this.inner = Objects.requireNonNull(inner);
+        this.includeHeaders = includeHeaders;
     }
 
     @Override
     public long put(final Bytes key, final byte[] value, final long timestamp) {
+        return inner.put(key, value, timestamp);
+    }
+
+    @Override
+    @SuppressWarnings("unchecked")
+    public long put(final Bytes key, final byte[] value, final long timestamp, final Headers headers) {
+        if (inner instanceof VersionedKeyValueStoreWithHeaders) {
+            return ((VersionedKeyValueStoreWithHeaders<Bytes, byte[]>) inner).put(key, value, timestamp, headers);
+        }
         return inner.put(key, value, timestamp);
     }
 
@@ -87,7 +105,7 @@ public class VersionedKeyValueToBytesStoreAdapter implements VersionedBytesStore
 
     @Override
     public VersionedBytesStore readOnly(final IsolationLevel isolationLevel) {
-        return new VersionedKeyValueToBytesStoreAdapter(inner.readOnly(isolationLevel));
+        return new VersionedKeyValueToBytesStoreAdapter(inner.readOnly(isolationLevel), includeHeaders);
     }
 
     @Override
@@ -196,9 +214,16 @@ public class VersionedKeyValueToBytesStoreAdapter implements VersionedBytesStore
         throw new UnsupportedOperationException("Versioned key-value stores do not support approximateNumEntries()");
     }
 
-    private static byte[] serializeAsBytes(final VersionedRecord<byte[]> versionedRecord) {
+    private byte[] serializeAsBytes(final VersionedRecord<byte[]> versionedRecord) {
         if (versionedRecord == null) {
             return null;
+        }
+        if (includeHeaders) {
+            return RecordConverters.reconstructFromRaw(
+                versionedRecord.value(),
+                versionedRecord.timestamp(),
+                versionedRecord.headers()
+            );
         }
         return VALUE_AND_TIMESTAMP_SERIALIZER.serialize(
             null,

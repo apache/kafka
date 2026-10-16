@@ -30,6 +30,7 @@ import org.apache.kafka.streams.state.internals.RocksDBKeyValueHeadersBytesStore
 import org.apache.kafka.streams.state.internals.RocksDbSessionBytesStoreSupplier;
 import org.apache.kafka.streams.state.internals.RocksDbSessionHeadersBytesStoreSupplier;
 import org.apache.kafka.streams.state.internals.RocksDbVersionedKeyValueBytesStoreSupplier;
+import org.apache.kafka.streams.state.internals.RocksDbVersionedKeyValueBytesStoreWithHeadersSupplier;
 import org.apache.kafka.streams.state.internals.RocksDbWindowBytesStoreSupplier;
 import org.apache.kafka.streams.state.internals.RocksDbWindowHeadersBytesStoreSupplier;
 import org.apache.kafka.streams.state.internals.SessionStoreBuilder;
@@ -39,6 +40,7 @@ import org.apache.kafka.streams.state.internals.TimestampedKeyValueStoreBuilderW
 import org.apache.kafka.streams.state.internals.TimestampedWindowStoreBuilder;
 import org.apache.kafka.streams.state.internals.TimestampedWindowStoreWithHeadersBuilder;
 import org.apache.kafka.streams.state.internals.VersionedKeyValueStoreBuilder;
+import org.apache.kafka.streams.state.internals.VersionedKeyValueStoreBuilderWithHeaders;
 import org.apache.kafka.streams.state.internals.WindowStoreBuilder;
 
 import java.time.Duration;
@@ -732,5 +734,42 @@ public final class Stores {
     ) {
         Objects.requireNonNull(supplier, "supplier cannot be null");
         return new SessionStoreWithHeadersBuilder<>(supplier, keySerde, valueSerde, Time.SYSTEM);
+    }
+
+    /**
+     * Creates a {@link VersionedBytesStoreSupplier} that also supports headers, backed by RocksDB.
+     *
+     * @param name              name of the store (cannot be {@code null})
+     * @param historyRetention  length of time that old record versions are available for query
+     * @return an instance of {@link VersionedBytesStoreSupplier} that also implements {@link HeadersBytesStoreSupplier}
+     */
+    public static VersionedBytesStoreSupplier persistentVersionedKeyValueStoreWithHeaders(final String name,
+                                                                                           final Duration historyRetention) {
+        Objects.requireNonNull(name, "name cannot be null");
+        final String msgPrefix = prepareMillisCheckFailMsgPrefix(historyRetention, "historyRetention");
+        final long historyRetentionMs = validateMillisecondDuration(historyRetention, msgPrefix);
+        if (historyRetentionMs < 0L) {
+            throw new IllegalArgumentException("historyRetention cannot be negative");
+        }
+        return new RocksDbVersionedKeyValueBytesStoreWithHeadersSupplier(name, historyRetentionMs);
+    }
+
+    /**
+     * Creates a {@link StoreBuilder} that can be used to build a {@link VersionedKeyValueStoreWithHeaders}
+     * with headers support.
+     *
+     * @param supplier      a {@link VersionedBytesStoreSupplier} (cannot be {@code null})
+     * @param keySerde      the key serde to use
+     * @param valueSerde    the value serde to use
+     * @param <K>           key type
+     * @param <V>           value type
+     * @return an instance of a {@link StoreBuilder} that can build a {@link VersionedKeyValueStoreWithHeaders}
+     */
+    public static <K, V> StoreBuilder<VersionedKeyValueStoreWithHeaders<K, V>> versionedKeyValueStoreBuilderWithHeaders(
+            final VersionedBytesStoreSupplier supplier,
+            final Serde<K> keySerde,
+            final Serde<V> valueSerde) {
+        Objects.requireNonNull(supplier, "supplier cannot be null");
+        return new VersionedKeyValueStoreBuilderWithHeaders<>(supplier, keySerde, valueSerde, Time.SYSTEM);
     }
 }
