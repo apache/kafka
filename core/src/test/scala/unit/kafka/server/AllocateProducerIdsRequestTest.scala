@@ -67,7 +67,8 @@ class AllocateProducerIdsRequestTest(cluster: ClusterInstance) {
     val allocateRequest = new AllocateProducerIdsRequest.Builder(
       new AllocateProducerIdsRequestData()
         .setBrokerId(sourceBroker.config.brokerId)
-        .setBrokerEpoch(sourceBroker.lifecycleManager.brokerEpoch)
+        .setBrokerEpoch(sourceBroker.lifecycleManager.brokerEpoch),
+      false
     ).build()
 
     connectAndReceive(

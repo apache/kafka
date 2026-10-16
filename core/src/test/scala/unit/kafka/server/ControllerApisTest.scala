@@ -764,7 +764,7 @@ class ControllerApisTest {
     assertThrows(classOf[ClusterAuthorizationException], () => {
       controllerApis = createControllerApis(Some(createDenyAllAuthorizer()), new MockController.Builder().build())
       controllerApis.handleAllocateProducerIdsRequest(buildRequest(new AllocateProducerIdsRequest.Builder(
-        new AllocateProducerIdsRequestData()).build()))
+        new AllocateProducerIdsRequestData(), false).build()))
     })
   }
 
@@ -1276,7 +1276,8 @@ class ControllerApisTest {
     val request = new AllocateProducerIdsRequest.Builder(
       new AllocateProducerIdsRequestData()
         .setBrokerId(4)
-        .setBrokerEpoch(93234)
+        .setBrokerEpoch(93234),
+      false
     ).build()
 
     when(controller.allocateProducerIds(

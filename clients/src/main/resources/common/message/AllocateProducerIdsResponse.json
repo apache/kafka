@@ -17,7 +17,8 @@
   "apiKey": 67,
   "type": "response",
   "name": "AllocateProducerIdsResponse",
-  "validVersions": "0",
+  // Version 1 is the same as version 0.
+  "validVersions": "0-1",
   "flexibleVersions": "0+",
   "headerVersions": {
     "0+": "1"
