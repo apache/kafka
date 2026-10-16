@@ -16,20 +16,21 @@
  */
 package org.apache.kafka.streams.state.internals;
 
-import org.apache.kafka.streams.processor.StateStore;
-import org.apache.kafka.streams.query.Position;
-import org.apache.kafka.streams.query.PositionBound;
-import org.apache.kafka.streams.query.Query;
-import org.apache.kafka.streams.query.QueryConfig;
-import org.apache.kafka.streams.query.QueryResult;
 import org.apache.kafka.streams.state.HeadersBytesStore;
 
 /**
  * RocksDB-backed time-ordered session store with support for record headers.
  * <p>
- * This store extends {@link RocksDBTimeOrderedSessionStore} and returns
- * {@link QueryResult#forUnknownQueryType(Query, StateStore)} for all queries,
- * as IQv2 query handling is done at the metered layer.
+ * This store extends {@link RocksDBTimeOrderedSessionStore} and relies on its inherited IQv2 query
+ * handling (via {@code StoreQueryUtils}); header-aware value (de)serialization is performed at the
+ * metered layer.
+ * <p>
+ * There is deliberately no {@code query()} override to gate query types: the metered wrapper
+ * ({@code MeteredSessionStoreWithHeaders}) intercepts and deserializes every query that would
+ * otherwise be served from this store's raw header-format bytes, delegating downward only queries
+ * that {@code StoreQueryUtils} rejects as {@code UNKNOWN_QUERY_TYPE}. So raw header-format value
+ * bytes are never returned directly to a caller; teaching {@code StoreQueryUtils} to serve a new
+ * query type from session stores would require matching interception at the metered layer.
  * <p>
  * The storage format for values is: [headersSize(varint)][headersBytes][aggregationBytes]
  *
@@ -39,26 +40,5 @@ class RocksDBTimeOrderedSessionStoreWithHeaders extends RocksDBTimeOrderedSessio
 
     RocksDBTimeOrderedSessionStoreWithHeaders(final RocksDBTimeOrderedSessionSegmentedBytesStoreWithHeaders store) {
         super(store);
-    }
-
-    @Override
-    public <R> QueryResult<R> query(final Query<R> query,
-                                    final PositionBound positionBound,
-                                    final QueryConfig config) {
-        final long start = config.isCollectExecutionInfo() ? System.nanoTime() : -1L;
-        final QueryResult<R> result;
-        final Position position = getPosition();
-
-        synchronized (position) {
-            result = QueryResult.forUnknownQueryType(query, this);
-
-            if (config.isCollectExecutionInfo()) {
-                result.addExecutionInfo(
-                    "Handled in " + this.getClass() + " in " + (System.nanoTime() - start) + "ns"
-                );
-            }
-            result.setPosition(position.copy());
-        }
-        return result;
     }
 }

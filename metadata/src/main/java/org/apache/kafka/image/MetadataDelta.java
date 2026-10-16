@@ -38,6 +38,7 @@ import org.apache.kafka.common.metadata.RemoveUserScramCredentialRecord;
 import org.apache.kafka.common.metadata.TopicRecord;
 import org.apache.kafka.common.metadata.UnfenceBrokerRecord;
 import org.apache.kafka.common.metadata.UnregisterBrokerRecord;
+import org.apache.kafka.common.metadata.UnregisterControllerRecord;
 import org.apache.kafka.common.metadata.UserScramCredentialRecord;
 import org.apache.kafka.common.protocol.ApiMessage;
 import org.apache.kafka.metadata.SupportedConfigChecker;
@@ -267,6 +268,9 @@ public final class MetadataDelta {
             case REGISTER_CONTROLLER_RECORD:
                 replay((RegisterControllerRecord) record);
                 break;
+            case UNREGISTER_CONTROLLER_RECORD:
+                replay((UnregisterControllerRecord) record);
+                break;
             default:
                 throw new RuntimeException("Unknown metadata record type " + type);
         }
@@ -365,6 +369,10 @@ public final class MetadataDelta {
     }
 
     public void replay(RegisterControllerRecord record) {
+        getOrCreateClusterDelta().replay(record);
+    }
+
+    public void replay(UnregisterControllerRecord record) {
         getOrCreateClusterDelta().replay(record);
     }
 

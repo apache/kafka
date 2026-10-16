@@ -29,8 +29,7 @@ import java.util.concurrent._
 import javax.management.ObjectName
 import com.yammer.metrics.core.MetricName
 import kafka.api.SaslSetup
-import kafka.network.{DataPlaneAcceptor, Processor, RequestChannel}
-import kafka.security.JaasTestUtils
+import kafka.network.{DataPlaneAcceptor, RequestChannel}
 import kafka.utils._
 import kafka.utils.Implicits._
 import org.apache.kafka.clients.CommonClientConfigs
@@ -54,11 +53,11 @@ import org.apache.kafka.common.record.TimestampType
 import org.apache.kafka.common.security.auth.SecurityProtocol
 import org.apache.kafka.common.serialization.{StringDeserializer, StringSerializer}
 import org.apache.kafka.coordinator.transaction.TransactionLogConfig
-import org.apache.kafka.network.SocketServerConfigs
+import org.apache.kafka.network.{Processor, SocketServerConfigs}
 import org.apache.kafka.raft.MetadataLogConfig
+import org.apache.kafka.security.JaasTestUtils
 import org.apache.kafka.server.config.{ReplicationConfigs, ServerConfigs, ServerLogConfigs, ServerTopicConfigSynonyms}
 import org.apache.kafka.server.metrics.{KafkaYammerMetrics, MetricConfigs}
-import org.apache.kafka.server.ReplicaState
 import org.apache.kafka.server.record.BrokerCompressionType
 import org.apache.kafka.server.util.ShutdownableThread
 import org.apache.kafka.server.quota.{ClientQuotaEntity, ClientQuotaManager}
@@ -879,12 +878,11 @@ class DynamicBrokerReconfigurationTest extends QuorumTestHarness with SaslSetup 
     verifyThreads("data-plane-kafka-socket-acceptor-", config.listeners.size, 1)
 
     verifyProcessorMetrics()
-    verifyMarkPartitionsForTruncation()
   }
 
   private def isProcessorMetric(metricName: MetricName): Boolean = {
     val mbeanName = metricName.getMBeanName
-    mbeanName.contains(s"${Processor.NetworkProcessorMetricTag}=") || mbeanName.contains(s"${RequestChannel.ProcessorMetricTag}=")
+    mbeanName.contains(s"${Processor.NETWORK_PROCESSOR_METRIC_TAG}=") || mbeanName.contains(s"${RequestChannel.ProcessorMetricTag}=")
   }
 
   private def clearLeftOverProcessorMetrics(): Unit = {
@@ -899,45 +897,18 @@ class DynamicBrokerReconfigurationTest extends QuorumTestHarness with SaslSetup 
     val numProcessors = servers.head.config.numNetworkThreads * 2 // 2 listeners
 
     val kafkaMetrics = servers.head.metrics.metrics().keySet.asScala
-      .filter(_.tags.containsKey(Processor.NetworkProcessorMetricTag))
-      .groupBy(_.tags.get(Processor.ListenerMetricTag))
+      .filter(_.tags.containsKey(Processor.NETWORK_PROCESSOR_METRIC_TAG))
+      .groupBy(_.tags.get(Processor.LISTENER_METRIC_TAG))
 
     assertEquals(2, kafkaMetrics.size) // 2 listeners
     // 2 threads per listener
-    assertEquals(2, kafkaMetrics("INTERNAL").groupBy(_.tags().get(Processor.NetworkProcessorMetricTag)).size)
-    assertEquals(2, kafkaMetrics("EXTERNAL").groupBy(_.tags().get(Processor.NetworkProcessorMetricTag)).size)
+    assertEquals(2, kafkaMetrics("INTERNAL").groupBy(_.tags().get(Processor.NETWORK_PROCESSOR_METRIC_TAG)).size)
+    assertEquals(2, kafkaMetrics("EXTERNAL").groupBy(_.tags().get(Processor.NETWORK_PROCESSOR_METRIC_TAG)).size)
 
     KafkaYammerMetrics.defaultRegistry.allMetrics.keySet.asScala
       .filter(isProcessorMetric)
       .groupBy(_.getName)
       .foreach { case (name, set) => assertEquals(numProcessors, set.size, s"Metrics not deleted $name") }
-  }
-
-  // Verify that replicaFetcherManager.markPartitionsForTruncation uses the current fetcher thread size
-  // to obtain partition assignment
-  private def verifyMarkPartitionsForTruncation(): Unit = {
-    val leaderId = 0
-    val topicDescription = adminClients.head.
-      describeTopics(java.util.List.of(topic)).
-      allTopicNames().
-      get(3, TimeUnit.MINUTES).get(topic)
-    val partitions = topicDescription.partitions().asScala.
-      filter(p => p.leader().id() == leaderId).
-      map(p => new TopicPartition(topic, p.partition()))
-    assertTrue(partitions.nonEmpty, s"Partitions not found with leader $leaderId")
-    partitions.foreach { tp =>
-      (1 to 2).foreach { i =>
-        val replicaFetcherManager = servers(i).replicaManager.replicaFetcherManager
-        val truncationOffset = tp.partition
-        replicaFetcherManager.markPartitionsForTruncation(leaderId, tp, truncationOffset)
-        val fetcherThreads = replicaFetcherManager.fetcherThreadMap.filter(_._2.fetchState(tp).isDefined)
-        assertEquals(1, fetcherThreads.size)
-        assertEquals(replicaFetcherManager.getFetcherId(tp), fetcherThreads.head._1.fetcherId)
-        val thread = fetcherThreads.head._2
-        assertEquals(Some(truncationOffset), thread.fetchState(tp).map(_.fetchOffset))
-        assertEquals(Some(ReplicaState.TRUNCATING), thread.fetchState(tp).map(_.state))
-      }
-    }
   }
 
   @ParameterizedTest(name = TestInfoUtils.TestWithParameterizedGroupProtocolNames)
@@ -1137,6 +1108,11 @@ class DynamicBrokerReconfigurationTest extends QuorumTestHarness with SaslSetup 
     TestNumReplicaFetcherMetricsReporter.testReporters.clear()
 
     val invalidStaticConfigs = defaultStaticConfig(newBroker.config.brokerId)
+    // defaultStaticConfig() is not idempotent for the log dir: each call generates a fresh temp
+    // log.dir. Carry over the original broker's log.dir so the restarted broker points at the same
+    // metadata log directory, otherwise we point the broker at a new empty dir.
+    // This is a workaround; we should make the defaultStaticConfig() idempotent in future.
+    invalidStaticConfigs.put(ServerLogConfigs.LOG_DIR_CONFIG, props.getProperty(ServerLogConfigs.LOG_DIR_CONFIG))
     invalidStaticConfigs.putAll(securityProps(invalidSslConfigs, KEYSTORE_PROPS, listenerPrefix(SecureExternal)))
     newBroker.config.updateCurrentConfig(KafkaConfig.fromProps(invalidStaticConfigs))
 

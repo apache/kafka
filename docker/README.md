@@ -108,7 +108,7 @@ supported_image_tag: ['3.6.1', 'latest', '3.7.0-rc1']
 Local Setup
 -----------
 
-Make sure you have python (>= 3.7.x) and java (>= 17) (java needed only for running tests) installed before running the tests and scripts.
+Make sure you have python (>= 3.10.x) and java (>= 17) (java needed only for running tests) installed before running the tests and scripts.
 
 Run `pip install -r requirements.txt` to get all the requirements for running the scripts.
 
@@ -129,6 +129,10 @@ python docker_build_test.py kafka/test --image-tag=3.6.0 --image-type=jvm --kafk
 - Example(native) :- To build and test an image named test under kafka namespace with 3.8.0 tag and native image type ensuring kafka to be containerised should be https://downloads.apache.org/kafka/3.8.0/kafka_2.13-3.8.0.tgz (it is recommended to use scala 2.13 binary tarball), following command can be used
 ```
 python docker_build_test.py kafka/test --image-tag=3.8.0 --image-type=native --kafka-url=https://archive.apache.org/dist/kafka/3.8.0/kafka_2.13-3.8.0.tgz
+```
+- Example(jvm, custom base image) :- The jvm image is built on `eclipse-temurin:25-jre-alpine` by default. Any Alpine-based image carrying a JRE can be used instead, e.g. to build on a different JDK version, by passing `--base-image`
+```
+python docker_build_test.py kafka/test --image-tag=3.6.0 --image-type=jvm --base-image=docker.io/library/eclipse-temurin:21-jre-alpine --kafka-url=https://archive.apache.org/dist/kafka/3.6.0/kafka_2.13-3.6.0.tgz
 ```
 - Example(local build archive with jvm or native image type) :- To build and test an image named test with local build archive
 ```
@@ -216,4 +220,3 @@ python generate_kafka_pr_template.py --image-type=jvm
 - kafka-version - This is the version to create the Docker official images static Dockerfile and assets for, as well as the version to build and test the Docker official image for.
 - image-type - This is the type of image that we intend to build. This will be dropdown menu type selection in the workflow. `jvm` image type is for official docker image (to be hosted on apache/kafka) as described in [KIP-975](https://cwiki.apache.org/confluence/x/z5izDw). 
   - **NOTE:** As of now [KIP-1028](https://cwiki.apache.org/confluence/x/0AmpEQ) only aims to release JVM based Docker Official Images and not GraalVM based native Apache Kafka docker image.
-

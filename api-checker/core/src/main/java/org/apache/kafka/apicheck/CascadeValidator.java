@@ -444,10 +444,16 @@ final class CascadeValidator {
     private static PublicApiViolation asSuppression(PublicApiViolation original, String reason) {
         boolean noReason = reason.isEmpty();
         String prettyReason = noReason ? PublicApiViolation.NO_REASON_MARKER : reason;
+        // Class-level cascade findings (e.g. INVALID_SUPERTYPE) carry a null memberName; only
+        // append "#member" when we actually have one, so class-scope suppressions render as
+        // "Suppressed INVALID_SUPERTYPE in org.apache.kafka…Owner" rather than "…Owner#null".
+        String location = original.getMemberName() != null
+                ? original.getClassName() + "#" + original.getMemberName()
+                : original.getClassName();
         String description = "Suppressed " + original.getViolationType() + " in "
-                + original.getClassName() + "#" + original.getMemberName()
-                + " — " + original.getDescription()
-                + " — reason: " + prettyReason;
+                + location
+                + " - " + original.getDescription()
+                + " - reason: " + prettyReason;
         return new PublicApiViolation(original.getClassName(), "SUPPRESSED",
                 description, original.getMemberName(), noReason);
     }

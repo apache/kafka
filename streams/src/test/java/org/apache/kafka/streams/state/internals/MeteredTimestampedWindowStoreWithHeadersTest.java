@@ -37,6 +37,7 @@ import org.apache.kafka.streams.errors.StreamsException;
 import org.apache.kafka.streams.kstream.Windowed;
 import org.apache.kafka.streams.kstream.internals.TimeWindow;
 import org.apache.kafka.streams.processor.TaskId;
+import org.apache.kafka.streams.processor.api.ReadOnlyRecord;
 import org.apache.kafka.streams.processor.internals.ProcessorRecordContext;
 import org.apache.kafka.streams.processor.internals.ProcessorStateManager;
 import org.apache.kafka.streams.processor.internals.metrics.StreamsMetricsImpl;
@@ -46,7 +47,9 @@ import org.apache.kafka.streams.query.Query;
 import org.apache.kafka.streams.query.QueryConfig;
 import org.apache.kafka.streams.query.QueryResult;
 import org.apache.kafka.streams.query.TimestampedWindowKeyWithHeadersQuery;
+import org.apache.kafka.streams.query.TimestampedWindowRangeWithHeadersQuery;
 import org.apache.kafka.streams.query.WindowKeyQuery;
+import org.apache.kafka.streams.query.WindowRangeQuery;
 import org.apache.kafka.streams.state.KeyValueIterator;
 import org.apache.kafka.streams.state.ReadOnlyRecordIterator;
 import org.apache.kafka.streams.state.ReadOnlyWindowStore;
@@ -71,6 +74,7 @@ import java.time.Instant;
 import java.util.Iterator;
 import java.util.List;
 import java.util.Optional;
+import java.util.concurrent.TimeUnit;
 
 import static org.junit.jupiter.api.Assertions.assertEquals;
 import static org.junit.jupiter.api.Assertions.assertFalse;
@@ -107,6 +111,7 @@ public class MeteredTimestampedWindowStoreWithHeadersTest {
     private WindowStore<Bytes, byte[]> innerStoreMock;
     private final Metrics metrics = new Metrics(new MetricConfig().recordLevel(Sensor.RecordingLevel.DEBUG));
     private MeteredTimestampedWindowStoreWithHeaders<String, String> store;
+    private MockTime mockTime;
     private Deserializer<String> keyDeserializer;
 
     public void setUp() {
@@ -127,11 +132,12 @@ public class MeteredTimestampedWindowStoreWithHeadersTest {
 
         when(innerStoreMock.name()).thenReturn(STORE_NAME);
 
+        mockTime = new MockTime();
         store = new MeteredTimestampedWindowStoreWithHeaders<>(
             innerStoreMock,
             WINDOW_SIZE_MS, // any size
             STORE_TYPE,
-            new MockTime(),
+            mockTime,
             Serdes.String(),
             new ValueTimestampHeadersSerde<>(new SerdeThatDoesntHandleNull())
         );
@@ -573,7 +579,7 @@ public class MeteredTimestampedWindowStoreWithHeadersTest {
         setUp();
         store.init(context, store);
         when(innerStoreMock.query(any(), any(PositionBound.class), any(QueryConfig.class)))
-            .thenReturn((QueryResult) QueryResult.forResult(windowStoreIterator(List.of())));
+            .thenReturn((QueryResult) QueryResult.forResult(windowKeyIterator(List.of())));
 
         final KafkaMetric openIterators = numOpenIteratorsMetric();
         assertEquals(0L, (Long) openIterators.metricValue());
@@ -598,7 +604,7 @@ public class MeteredTimestampedWindowStoreWithHeadersTest {
         setUp();
         store.init(context, store);
         when(innerStoreMock.query(any(), any(PositionBound.class), any(QueryConfig.class)))
-            .thenReturn((QueryResult) QueryResult.forResult(windowStoreIterator(List.of())));
+            .thenReturn((QueryResult) QueryResult.forResult(windowKeyIterator(List.of())));
 
         final KafkaMetric openIterators = numOpenIteratorsMetric();
         final ReadOnlyRecordIterator<Windowed<String>, String> iterator = store.query(
@@ -616,6 +622,84 @@ public class MeteredTimestampedWindowStoreWithHeadersTest {
         assertEquals(-1L, (Long) openIterators.metricValue());
     }
 
+    // The window store previously had no iterator-duration coverage at all. This mirrors the
+    // session/KV shouldTimeIteratorDuration: it goes through store.all() -> the KeyValueIterator
+    // sibling, whose close() records the operation (fetch) and iterator-duration sensors via the
+    // shared AbstractMeteredIterator lifecycle.
+    @Test
+    public void shouldTimeIteratorDuration() {
+        setUp();
+        store.init(context, store);
+        when(innerStoreMock.all()).thenReturn(windowRangeIterator(List.of()), windowRangeIterator(List.of()));
+
+        final KafkaMetric iteratorDurationAvg = metric("iterator-duration-avg");
+        final KafkaMetric iteratorDurationMax = metric("iterator-duration-max");
+        assertEquals(Double.NaN, (Double) iteratorDurationAvg.metricValue());
+        assertEquals(Double.NaN, (Double) iteratorDurationMax.metricValue());
+
+        // Two samples (2ms then 3ms) so avg (2.5ms) and max (3ms) differ -- one sample would leave them
+        // identical and not actually pin avg.
+        try (KeyValueIterator<Windowed<String>, ValueTimestampHeaders<String>> iterator = store.all()) {
+            mockTime.sleep(2);
+        }
+
+        assertEquals(2.0 * TimeUnit.MILLISECONDS.toNanos(1), (double) iteratorDurationAvg.metricValue());
+        assertEquals(2.0 * TimeUnit.MILLISECONDS.toNanos(1), (double) iteratorDurationMax.metricValue());
+
+        try (KeyValueIterator<Windowed<String>, ValueTimestampHeaders<String>> iterator = store.all()) {
+            mockTime.sleep(3);
+        }
+
+        assertEquals(2.5 * TimeUnit.MILLISECONDS.toNanos(1), (double) iteratorDurationAvg.metricValue());
+        assertEquals(3.0 * TimeUnit.MILLISECONDS.toNanos(1), (double) iteratorDurationMax.metricValue());
+    }
+
+    // The above shouldTimeIteratorDuration goes through store.all() -> the KeyValueIterator sibling.
+    // This pins the same close()-path recording for the ReadOnlyRecordIterator that backs
+    // TimestampedWindowKeyWithHeadersQuery, whose close() records both the operation sensor (fetch)
+    // and the iterator-duration sensor via the shared AbstractMeteredIterator lifecycle.
+    @SuppressWarnings({"unchecked", "rawtypes"})
+    @Test
+    public void shouldTimeIteratorDurationForTimestampedWindowKeyWithHeadersQuery() {
+        setUp();
+        store.init(context, store);
+        when(innerStoreMock.query(any(), any(PositionBound.class), any(QueryConfig.class)))
+            .thenReturn(
+                (QueryResult) QueryResult.forResult(windowKeyIterator(List.of())),
+                (QueryResult) QueryResult.forResult(windowKeyIterator(List.of())));
+
+        final KafkaMetric iteratorDurationAvg = metric("iterator-duration-avg");
+        final KafkaMetric iteratorDurationMax = metric("iterator-duration-max");
+        final KafkaMetric fetchLatencyAvg = metric("fetch-latency-avg");
+        assertEquals(Double.NaN, (Double) iteratorDurationAvg.metricValue());
+        assertEquals(Double.NaN, (Double) iteratorDurationMax.metricValue());
+
+        // Two samples (2ms then 3ms) so avg (2.5ms) and max (3ms) differ -- one sample would leave them
+        // identical and not actually pin avg. Mirrors the sibling shouldTimeIteratorDuration above.
+        try (ReadOnlyRecordIterator<Windowed<String>, String> iterator = store.query(
+                TimestampedWindowKeyWithHeadersQuery.<String, String>withKeyAndWindowStartRange(
+                    KEY, Instant.ofEpochMilli(5), Instant.ofEpochMilli(100)),
+                PositionBound.unbounded(), new QueryConfig(false)).getResult()) {
+            mockTime.sleep(2);
+        }
+
+        assertEquals(2.0 * TimeUnit.MILLISECONDS.toNanos(1), (double) iteratorDurationAvg.metricValue());
+        assertEquals(2.0 * TimeUnit.MILLISECONDS.toNanos(1), (double) iteratorDurationMax.metricValue());
+
+        try (ReadOnlyRecordIterator<Windowed<String>, String> iterator = store.query(
+                TimestampedWindowKeyWithHeadersQuery.<String, String>withKeyAndWindowStartRange(
+                    KEY, Instant.ofEpochMilli(5), Instant.ofEpochMilli(100)),
+                PositionBound.unbounded(), new QueryConfig(false)).getResult()) {
+            mockTime.sleep(3);
+        }
+
+        assertEquals(2.5 * TimeUnit.MILLISECONDS.toNanos(1), (double) iteratorDurationAvg.metricValue());
+        assertEquals(3.0 * TimeUnit.MILLISECONDS.toNanos(1), (double) iteratorDurationMax.metricValue());
+        // fetchSensor is recorded only from the iterator's close() on this path, so the two samples
+        // (2ms, 3ms) average to exactly 2.5ms.
+        assertEquals(2.5 * TimeUnit.MILLISECONDS.toNanos(1), (double) fetchLatencyAvg.metricValue());
+    }
+
     @SuppressWarnings({"unchecked", "rawtypes"})
     @Test
     public void shouldLeaveIteratorOpenWhenNextThrowsAndNotClosed() {
@@ -626,7 +710,7 @@ public class MeteredTimestampedWindowStoreWithHeadersTest {
             .serialize("topic", ValueTimestampHeaders.make("value", -1L, HEADERS));
         when(innerStoreMock.query(any(), any(PositionBound.class), any(QueryConfig.class)))
             .thenReturn((QueryResult) QueryResult.forResult(
-                windowStoreIterator(List.of(KeyValue.pair(5L, negativeTimestampBytes)))));
+                windowKeyIterator(List.of(KeyValue.pair(5L, negativeTimestampBytes)))));
 
         final KafkaMetric openIterators = numOpenIteratorsMetric();
         final ReadOnlyRecordIterator<Windowed<String>, String> iterator = store.query(
@@ -647,14 +731,15 @@ public class MeteredTimestampedWindowStoreWithHeadersTest {
     @SuppressWarnings({"unchecked", "rawtypes"})
     private WindowKeyQuery<?, ?> forwardedRawWindowKeyQuery(final Query<?> query) {
         when(innerStoreMock.query(any(), any(PositionBound.class), any(QueryConfig.class)))
-            .thenReturn((QueryResult) QueryResult.forResult(windowStoreIterator(List.of())));
-        store.query(query, PositionBound.unbounded(), new QueryConfig(false));
+            .thenReturn((QueryResult) QueryResult.forResult(windowKeyIterator(List.of())));
+        // Close the iterator the query opens so num-open-iterators returns to 0.
+        ((ReadOnlyRecordIterator<?, ?>) store.query(query, PositionBound.unbounded(), new QueryConfig(false)).getResult()).close();
         final ArgumentCaptor<WindowKeyQuery> captor = ArgumentCaptor.forClass(WindowKeyQuery.class);
         verify(innerStoreMock).query(captor.capture(), any(PositionBound.class), any(QueryConfig.class));
         return captor.getValue();
     }
 
-    private static WindowStoreIterator<byte[]> windowStoreIterator(final List<KeyValue<Long, byte[]>> data) {
+    private static WindowStoreIterator<byte[]> windowKeyIterator(final List<KeyValue<Long, byte[]>> data) {
         final Iterator<KeyValue<Long, byte[]>> iterator = data.iterator();
         return new WindowStoreIterator<>() {
             @Override
@@ -677,11 +762,222 @@ public class MeteredTimestampedWindowStoreWithHeadersTest {
         };
     }
 
+    @Test
+    public void shouldPropagateWindowRangeBoundsForTimestampedWindowRangeWithHeadersQuery() {
+        setUp();
+        store.init(context, store);
+
+        final Instant timeFrom = Instant.ofEpochMilli(5);
+        final Instant timeTo = Instant.ofEpochMilli(100);
+        final WindowRangeQuery<?, ?> rawQuery = forwardedRawRangeQuery(
+            TimestampedWindowRangeWithHeadersQuery.<String, String>withWindowStartRange(timeFrom, timeTo));
+
+        // The typed query is translated into a raw byte-level WindowRangeQuery.withWindowStartRange
+        // with the same window-start range, forwarded to the wrapped store.
+        assertEquals(Optional.empty(), rawQuery.getKey());
+        assertEquals(Optional.of(timeFrom), rawQuery.getTimeFrom());
+        assertEquals(Optional.of(timeTo), rawQuery.getTimeTo());
+    }
+
+    @Test
+    public void shouldRejectWithKeyFormForTimestampedWindowRangeWithHeadersQuery() {
+        setUp();
+        store.init(context, store);
+
+        final QueryResult<ReadOnlyRecordIterator<Windowed<String>, String>> result = store.query(
+            TimestampedWindowRangeWithHeadersQuery.<String, String>withKey(KEY),
+            PositionBound.unbounded(),
+            new QueryConfig(false));
+
+        assertFalse(result.isSuccess());
+        assertEquals(FailureReason.UNKNOWN_QUERY_TYPE, result.getFailureReason());
+        assertTrue(
+            result.getFailureMessage().contains("WindowStores only supports TimestampedWindowRangeWithHeadersQuery.withWindowStartRange"),
+            "unexpected message: " + result.getFailureMessage());
+    }
+
+    @SuppressWarnings({"unchecked", "rawtypes"})
+    @Test
+    public void shouldPropagateWrappedStoreFailureForTimestampedWindowRangeWithHeadersQuery() {
+        setUp();
+        store.init(context, store);
+        when(innerStoreMock.query(any(), any(PositionBound.class), any(QueryConfig.class)))
+                .thenReturn((QueryResult) QueryResult.forFailure(FailureReason.STORE_EXCEPTION, "boom"));
+
+        final QueryResult<ReadOnlyRecordIterator<Windowed<String>, String>> result = store.query(
+                TimestampedWindowRangeWithHeadersQuery.<String, String>withWindowStartRange(
+                        Instant.ofEpochMilli(5), Instant.ofEpochMilli(100)),
+                PositionBound.unbounded(),
+                new QueryConfig(false));
+
+        assertFalse(result.isSuccess());
+        assertEquals(FailureReason.STORE_EXCEPTION, result.getFailureReason());
+        assertEquals("boom", result.getFailureMessage());
+    }
+
+    @SuppressWarnings({"unchecked", "rawtypes"})
+    @Test
+    public void shouldTrackNumOpenIteratorsForTimestampedWindowRangeWithHeadersQuery() {
+        setUp();
+        store.init(context, store);
+        when(innerStoreMock.query(any(), any(PositionBound.class), any(QueryConfig.class)))
+            .thenReturn((QueryResult) QueryResult.forResult(windowRangeIterator(List.of())));
+
+        final KafkaMetric openIterators = numOpenIteratorsMetric();
+        assertEquals(0L, (Long) openIterators.metricValue());
+
+        final QueryResult<ReadOnlyRecordIterator<Windowed<String>, String>> result = store.query(
+            TimestampedWindowRangeWithHeadersQuery.<String, String>withWindowStartRange(
+                Instant.ofEpochMilli(5), Instant.ofEpochMilli(100)),
+            PositionBound.unbounded(),
+            new QueryConfig(false));
+        assertTrue(result.isSuccess());
+
+        // The query's ReadOnlyRecordIterator registers itself on open and deregisters on close.
+        try (ReadOnlyRecordIterator<Windowed<String>, String> iterator = result.getResult()) {
+            assertEquals(1L, (Long) openIterators.metricValue());
+        }
+        assertEquals(0L, (Long) openIterators.metricValue());
+    }
+
+    @SuppressWarnings({"unchecked", "rawtypes"})
+    @Test
+    public void shouldDecrementOpenIteratorsTwiceWhenClosedTwiceForTimestampedWindowRangeWithHeadersQuery() {
+        setUp();
+        store.init(context, store);
+        when(innerStoreMock.query(any(), any(PositionBound.class), any(QueryConfig.class)))
+            .thenReturn((QueryResult) QueryResult.forResult(windowRangeIterator(List.of())));
+
+        final KafkaMetric openIterators = numOpenIteratorsMetric();
+        final ReadOnlyRecordIterator<Windowed<String>, String> iterator = store.query(
+            TimestampedWindowRangeWithHeadersQuery.<String, String>withWindowStartRange(
+                Instant.ofEpochMilli(5), Instant.ofEpochMilli(100)),
+            PositionBound.unbounded(),
+            new QueryConfig(false)).getResult();
+
+        assertEquals(1L, (Long) openIterators.metricValue());
+        iterator.close();
+        assertEquals(0L, (Long) openIterators.metricValue());
+        // close() is intentionally not idempotent (matching the sibling metered iterators): each call
+        // decrements, so a repeated close drives the gauge below zero. Callers must close exactly once.
+        iterator.close();
+        assertEquals(-1L, (Long) openIterators.metricValue());
+    }
+
+    @SuppressWarnings({"unchecked", "rawtypes"})
+    @Test
+    public void shouldLeaveIteratorOpenWhenNextThrowsAndNotClosedForTimestampedWindowRangeWithHeadersQuery() {
+        setUp();
+        store.init(context, store);
+        // A stored entry with a negative timestamp cannot be represented as a ReadOnlyRecord, so next() throws.
+        final byte[] negativeTimestampBytes = new ValueTimestampHeadersSerializer<>(new StringSerializer())
+            .serialize("topic", ValueTimestampHeaders.make("value", -1L, HEADERS));
+        final Windowed<Bytes> windowedKeyBytes = new Windowed<>(KEY_BYTES, new TimeWindow(5L, 5L + WINDOW_SIZE_MS));
+        when(innerStoreMock.query(any(), any(PositionBound.class), any(QueryConfig.class)))
+            .thenReturn((QueryResult) QueryResult.forResult(
+                windowRangeIterator(List.of(KeyValue.pair(windowedKeyBytes, negativeTimestampBytes)))));
+
+        final KafkaMetric openIterators = numOpenIteratorsMetric();
+        final ReadOnlyRecordIterator<Windowed<String>, String> iterator = store.query(
+            TimestampedWindowRangeWithHeadersQuery.<String, String>withWindowStartRange(
+                Instant.ofEpochMilli(5), Instant.ofEpochMilli(100)),
+            PositionBound.unbounded(),
+            new QueryConfig(false)).getResult();
+
+        assertEquals(1L, (Long) openIterators.metricValue());
+        assertThrows(StreamsException.class, iterator::next);
+        assertEquals(1L, (Long) openIterators.metricValue());
+        iterator.close();
+        assertEquals(0L, (Long) openIterators.metricValue());
+    }
+
+    @SuppressWarnings({"unchecked", "rawtypes"})
+    @Test
+    public void shouldUseWindowFromRawResultForTimestampedWindowRangeWithHeadersQuery() {
+        setUp();
+        store.init(context, store);
+        // Deliberately a window whose length differs from WINDOW_SIZE_MS, proving the returned
+        // Windowed<K> comes straight from the raw range result rather than being reconstructed from
+        // windowSizeMs (unlike the single-key point query, which only gets a window-start Long back).
+        final Windowed<Bytes> windowedKeyBytes = new Windowed<>(KEY_BYTES, new TimeWindow(1_000L, 5_000L));
+        final KeyValue<Windowed<Bytes>, byte[]> testData = KeyValue.pair(windowedKeyBytes, VALUE_TIMESTAMP_HEADERS_BYTES);
+        when(innerStoreMock.query(any(), any(PositionBound.class), any(QueryConfig.class)))
+            .thenReturn((QueryResult) QueryResult.forResult(windowRangeIterator(List.of(testData))));
+
+        final QueryResult<ReadOnlyRecordIterator<Windowed<String>, String>> result = store.query(
+            TimestampedWindowRangeWithHeadersQuery.<String, String>withWindowStartRange(
+                Instant.ofEpochMilli(0), Instant.ofEpochMilli(10_000)),
+            PositionBound.unbounded(),
+            new QueryConfig(false));
+
+        assertTrue(result.isSuccess());
+        try (ReadOnlyRecordIterator<Windowed<String>, String> iterator = result.getResult()) {
+            assertTrue(iterator.hasNext());
+            final ReadOnlyRecord<Windowed<String>, String> record = iterator.next();
+            assertEquals(KEY, record.key().key());
+            assertEquals(1_000L, record.key().window().start());
+            assertEquals(5_000L, record.key().window().end());
+            assertEquals("value", record.value());
+            assertEquals(TIMESTAMP, record.timestamp());
+            assertEquals(HEADERS, record.headers());
+            // returned headers are a read-only snapshot: neither add nor remove is allowed
+            assertThrows(IllegalStateException.class, () -> record.headers().add("x", new byte[0]));
+            assertThrows(IllegalStateException.class, () -> record.headers().remove("header-key"));
+            assertFalse(iterator.hasNext());
+        }
+    }
+
+    @SuppressWarnings({"unchecked", "rawtypes"})
+    @Test
+    public void shouldThrowForNullStoredValueForTimestampedWindowRangeWithHeadersQuery() {
+        setUp();
+        store.init(context, store);
+
+        // A ReadOnlyRecord carries the stored event-time; a value that deserializes to null has none,
+        // so the entry cannot be represented and next() throws (rather than NPE-ing on the null value).
+        final Windowed<Bytes> windowedKeyBytes = new Windowed<>(KEY_BYTES, new TimeWindow(1_000L, 5_000L));
+        when(innerStoreMock.query(any(), any(PositionBound.class), any(QueryConfig.class)))
+            .thenReturn((QueryResult) QueryResult.forResult(
+                windowRangeIterator(List.of(KeyValue.pair(windowedKeyBytes, (byte[]) null)))));
+
+        final QueryResult<ReadOnlyRecordIterator<Windowed<String>, String>> result = store.query(
+            TimestampedWindowRangeWithHeadersQuery.<String, String>withWindowStartRange(
+                Instant.ofEpochMilli(0), Instant.ofEpochMilli(10_000)),
+            PositionBound.unbounded(),
+            new QueryConfig(false));
+
+        assertTrue(result.isSuccess());
+        try (ReadOnlyRecordIterator<Windowed<String>, String> iterator = result.getResult()) {
+            assertTrue(iterator.hasNext());
+            final StreamsException exception = assertThrows(StreamsException.class, iterator::next);
+            assertTrue(exception.getMessage().contains("its value is null"), exception.getMessage());
+        }
+    }
+
+    @SuppressWarnings({"unchecked", "rawtypes"})
+    private WindowRangeQuery<?, ?> forwardedRawRangeQuery(final Query<?> query) {
+        when(innerStoreMock.query(any(), any(PositionBound.class), any(QueryConfig.class)))
+            .thenReturn((QueryResult) QueryResult.forResult(windowRangeIterator(List.of())));
+        // Close the iterator the query opens so num-open-iterators returns to 0.
+        ((ReadOnlyRecordIterator<?, ?>) store.query(query, PositionBound.unbounded(), new QueryConfig(false)).getResult()).close();
+        final ArgumentCaptor<WindowRangeQuery> captor = ArgumentCaptor.forClass(WindowRangeQuery.class);
+        verify(innerStoreMock).query(captor.capture(), any(PositionBound.class), any(QueryConfig.class));
+        return captor.getValue();
+    }
+
+    private static KeyValueIterator<Windowed<Bytes>, byte[]> windowRangeIterator(final List<KeyValue<Windowed<Bytes>, byte[]>> data) {
+        return new KeyValueIteratorStub<>(data.iterator());
+    }
+
     private KafkaMetric numOpenIteratorsMetric() {
+        return metric("num-open-iterators");
+    }
+
+    private KafkaMetric metric(final String name) {
         return metrics.metrics().entrySet().stream()
-                .filter(entry -> entry.getKey().name().equals("num-open-iterators"))
+                .filter(entry -> entry.getKey().name().equals(name))
                 .findFirst()
-                .orElseThrow(() -> new AssertionError("num-open-iterators metric not registered"))
+                .orElseThrow(() -> new AssertionError(name + " metric not registered"))
                 .getValue();
     }
 }

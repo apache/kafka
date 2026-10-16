@@ -22,13 +22,10 @@ import org.apache.kafka.clients.CommonClientConfigs;
 import org.apache.kafka.clients.KafkaClient;
 import org.apache.kafka.clients.RequestCompletionHandler;
 import org.apache.kafka.common.Node;
-import org.apache.kafka.common.TopicIdPartition;
 import org.apache.kafka.common.Uuid;
 import org.apache.kafka.common.compress.Compression;
 import org.apache.kafka.common.config.ConfigException;
 import org.apache.kafka.common.config.TopicConfig;
-import org.apache.kafka.common.header.Header;
-import org.apache.kafka.common.header.internals.RecordHeader;
 import org.apache.kafka.common.message.CreateTopicsRequestData;
 import org.apache.kafka.common.message.CreateTopicsResponseData;
 import org.apache.kafka.common.message.ProduceRequestData;
@@ -36,8 +33,6 @@ import org.apache.kafka.common.message.ProduceResponseData;
 import org.apache.kafka.common.protocol.ApiKeys;
 import org.apache.kafka.common.protocol.Errors;
 import org.apache.kafka.common.record.TimestampType;
-import org.apache.kafka.common.record.internal.DefaultRecord;
-import org.apache.kafka.common.record.internal.DefaultRecordBatch;
 import org.apache.kafka.common.record.internal.MemoryRecords;
 import org.apache.kafka.common.record.internal.Record;
 import org.apache.kafka.common.record.internal.SimpleRecord;
@@ -59,8 +54,6 @@ import org.apache.kafka.server.util.timer.TimerTask;
 import org.slf4j.Logger;
 import org.slf4j.LoggerFactory;
 
-import java.nio.ByteBuffer;
-import java.nio.charset.StandardCharsets;
 import java.util.ArrayList;
 import java.util.Collection;
 import java.util.Collections;
@@ -76,6 +69,7 @@ import java.util.Set;
 import java.util.concurrent.CompletableFuture;
 import java.util.concurrent.ConcurrentLinkedQueue;
 import java.util.concurrent.atomic.AtomicBoolean;
+import java.util.function.Function;
 
 /**
  * Core implementation of RPC send logic for the dlq manager.
@@ -97,13 +91,6 @@ public class ShareGroupDLQStateManager {
     private static final int RETRY_BACKOFF_EXP_BASE = CommonClientConfigs.RETRY_BACKOFF_EXP_BASE;
     private static final double RETRY_BACKOFF_JITTER = CommonClientConfigs.RETRY_BACKOFF_JITTER;
 
-    /**
-     * In most cases we expect the records getting DLQ'ed will be single offsets and
-     * not complete batches. Hence, using a large upper limit while reading from the log
-     * would be fruitless in most cases. Therefore, the value of 1 MB has been chosen
-     * for the DLQ related log reads.
-     */
-    private static final int DLQ_MAX_FETCH_BYTES = 1024 * 1024;
     private static final Logger log = LoggerFactory.getLogger(ShareGroupDLQStateManager.class);
 
     private final Set<Node> inFlight = new HashSet<>();
@@ -198,14 +185,14 @@ public class ShareGroupDLQStateManager {
             return future;
         }
 
-        // Resolve the source records once, here - on the calling thread for local offsets and, for
+        // Resolve round 1's source records here - on the calling thread for local offsets and, for
         // tiered offsets, asynchronously on the remote-storage reader pool - and enqueue only once
-        // resolution finishes. This keeps both the local and remote reads off the single sender
-        // thread, and the memoized result is reused on every (re)send so retries never re-fetch.
-        // Records are only read when copy is enabled for the group and the DLQ is correctly
+        // resolution finishes. Later rounds (if the range needs more than one produce request) are
+        // resolved the same way from handleProduceResponse(), each with its own fresh decompression
+        // budget. Records are only read when copy is enabled for the group and the DLQ is correctly
         // configured (validated above); otherwise we enqueue immediately.
         if (cacheHelper.isShareGroupDlqCopyRecordEnabled(param.groupId())) {
-            requestHandler.resolveRecords().whenComplete((ignored, ignoredError) -> enqueue(requestHandler));
+            requestHandler.resolveRound().whenComplete((ignored, ignoredError) -> enqueue(requestHandler));
         } else {
             enqueue(requestHandler);
         }
@@ -246,6 +233,26 @@ public class ShareGroupDLQStateManager {
         sender.wakeup();
     }
 
+    /**
+     * Invokes {@code handler.onComplete(response)}, isolating this one handler's failure from
+     * whatever else is being processed in the same batch (see the coalesced-response callback in
+     * {@link SendThread#generateRequests}, which invokes this once per handler in a shared
+     * produce response). An uncaught exception here must not prevent the rest of that batch's
+     * handlers from being notified - which would otherwise leave their {@link #dlq} futures
+     * hanging forever - so it's caught, logged, and the offending handler's own future is
+     * explicitly failed too, in case the exception happened before {@code onComplete} reached its
+     * own completion call.
+     */
+    // Visibility for tests
+    static void completeHandlerSafely(ProduceRequestHandler handler, ClientResponse response) {
+        try {
+            handler.onComplete(response);
+        } catch (Exception e) {
+            log.error("Uncaught error handling produce response for handler {}.", handler, e);
+            handler.requestErrorResponse(e);
+        }
+    }
+
     // Visibility for tests
     class ProduceRequestHandler implements RequestCompletionHandler {
         private final CompletableFuture<Void> result;
@@ -259,12 +266,22 @@ public class ShareGroupDLQStateManager {
         private volatile Node dlqPartitionLeaderNode;
         private volatile int dlqDestinationPartition;
         private volatile ShareGroupDLQMetadataCacheHelper.TopicPartitionData dlqTopicPartitionData;
-        // The original source records, resolved once before this handler is enqueued (see resolveRecords()).
-        // Volatile because resolution runs off the sender thread - on the calling thread for local offsets
-        // and, for tiered offsets, on the remote-storage reader pool - while this value is read on the
-        // sender thread when the produce request is built. Memoized: set once and reused for every (re)send,
-        // so retries never re-fetch.
+        // The original source records for the CURRENT round only, resolved before this round is added
+        // to the node map (see resolveRound()): once for round 1 (before this handler is first
+        // enqueued), then again for each subsequent round after a successful produce response advances
+        // nextOffsetToSend. Volatile because resolution runs off the sender thread - on the calling
+        // thread for local offsets and, for tiered offsets, on the remote-storage reader pool - while
+        // this value is read on the sender thread when the produce request is built. Memoized per round:
+        // set once per round and reused for every retry of that round, so retries never re-fetch.
         private volatile Map<Long, Record> resolvedRecordData = Map.of();
+        // The largest offset such that everything from this round's start through it has a definitive
+        // outcome (real content, or a permanently-excluded gap) per the fetch behind resolvedRecordData -
+        // see ShareGroupDLQRecordFetcher.FetchResult. Caps topicProduceData()'s walk so it never packs in
+        // offsets the fetch never got to attempt this round as headers-only; those stay untouched for a
+        // fresh round (with a fresh decompression budget) to retry. Defaults to param.lastOffset() so a
+        // handler that never calls resolveRound() (copy-record disabled) still leaves the full range fair
+        // game for topicProduceData()'s own size-based packing.
+        private volatile long lastResolvedOffsetThisRound;
         // The next offset that has not yet been included in a produce request. Starts at
         // param.firstOffset() and advances past whatever topicProduceData() managed to fit within
         // dlqTopicMaxMessageBytes() on each successful send, so a range that doesn't fit in a single
@@ -277,13 +294,6 @@ public class ShareGroupDLQStateManager {
         // so coalesceProduceRequests()'s partition-budget check reuses the exact same value.
         private volatile int lastMaxMessageBytes;
 
-        public static final String HEADER_DLQ_ERRORS_TOPIC = "__dlq.errors.topic";
-        public static final String HEADER_DLQ_ERRORS_PARTITION = "__dlq.errors.partition";
-        public static final String HEADER_DLQ_ERRORS_OFFSET = "__dlq.errors.offset";
-        public static final String HEADER_DLQ_ERRORS_GROUP = "__dlq.errors.group";
-        public static final String HEADER_DLQ_ERRORS_DELIVERY_COUNT = "__dlq.errors.delivery.count";
-        public static final String HEADER_DLQ_ERRORS_MESSAGE = "__dlq.errors.message";
-
         public ProduceRequestHandler(
             ShareGroupDLQRecordParameter param,
             CompletableFuture<Void> result,
@@ -295,6 +305,7 @@ public class ShareGroupDLQStateManager {
             this.result = result;
             this.nextOffsetToSend = param.firstOffset();
             this.lastOffsetIncludedThisRound = param.firstOffset() - 1;
+            this.lastResolvedOffsetThisRound = param.lastOffset();
             this.createTopicsBackoff = new ExponentialBackoffManager(
                 maxRPCRetryAttempts,
                 backoffMs,
@@ -388,7 +399,8 @@ public class ShareGroupDLQStateManager {
                 throw new ConfigException(String.format("DLQ topic partition leaders for share group %s with DLQ topic %s could not be found.", param.groupId(), dlqTopic.get()));
             }
 
-            this.dlqDestinationPartition = param.topicIdPartition().partition() % tpData.numPartitions().get();
+            this.dlqDestinationPartition = ShareGroupDLQRecordHelper.dlqDestinationPartition(
+                    param.topicIdPartition().partition(), tpData.numPartitions().get());
             this.dlqPartitionLeaderNode = tpData.partitionLeaderNodes().get(dlqDestinationPartition);
 
             if (this.dlqPartitionLeaderNode == null || this.dlqPartitionLeaderNode.equals(Node.noNode())) {
@@ -399,59 +411,16 @@ public class ShareGroupDLQStateManager {
         }
 
         public ProduceRequestData.TopicProduceData topicProduceData() {
-            // Records have already been resolved (including any remote storage reads) before this
-            // handler was added to the node map, so no blocking fetch happens on the sender thread here.
-            Map<Long, Record> originalRecordData = resolvedRecordData;
             int maxMessageBytes = dlqTopicMaxMessageBytes();
+            String sourceTopic = ShareGroupDLQRecordHelper.resolveSourceTopicName(
+                    param.topicIdPartition(), topicId -> cacheHelper.topicName(topicId));
 
-            // In most cases the offset range is a single offset (see DLQ_MAX_FETCH_BYTES). Track the
-            // running batch size incrementally via DefaultRecord.sizeInBytes() - the same formula
-            // MemoryRecords itself uses - instead of re-serializing the whole batch-so-far on every
-            // offset, which would make this loop quadratic in the number of offsets.
-            List<SimpleRecord> simpleRecords = new ArrayList<>();
-            int batchSize = DefaultRecordBatch.RECORD_BATCH_OVERHEAD;
-            Long baseTimestamp = null;
-            for (long offset = nextOffsetToSend; offset <= param.lastOffset(); offset++) {
-                // Must be wall-clock (epoch) time: log retention decides whether to delete this
-                // record's segment by comparing its timestamp against the current wall-clock time.
-                long timestamp = time.milliseconds();
-                ByteBuffer key = null;
-                ByteBuffer value = null;
-                Record record = originalRecordData.get(offset);
-                if (record != null) {
-                    key = record.hasKey() ? record.key() : null;
-                    value = record.hasValue() ? record.value() : null;
-                }
-                Header[] recordHeaders = headers(offset);
-                if (baseTimestamp == null) {
-                    baseTimestamp = timestamp;
-                }
-                int recordSize = DefaultRecord.sizeInBytes(simpleRecords.size(), timestamp - baseTimestamp, key, value, recordHeaders);
+            ShareGroupDLQRecordHelper.BuildResult buildResult = ShareGroupDLQRecordHelper.buildDLQRecords(
+                    param, resolvedRecordData, nextOffsetToSend, lastResolvedOffsetThisRound,
+                    maxMessageBytes, time, sourceTopic);
 
-                if (batchSize + recordSize > maxMessageBytes && !simpleRecords.isEmpty()) {
-                    // Adding this record would exceed the limit and the batch already has at least one
-                    // record - stop here and send the rest in a follow-up request.
-                    break;
-                }
-                simpleRecords.add(new SimpleRecord(timestamp, key, value, recordHeaders));
-                batchSize += recordSize;
-                if (batchSize > maxMessageBytes) {
-                    // A single record (with its DLQ headers) already exceeds the limit on its own;
-                    // nothing to be gained by holding it back, so send it and let the broker
-                    // enforce/report the ultimate limit for this one, rather than stalling forever.
-                    break;
-                }
-            }
-            lastOffsetIncludedThisRound = nextOffsetToSend + simpleRecords.size() - 1;
-            // Cached so coalesceProduceRequests()'s partition-budget check can reuse the exact value
-            // used above to build this batch, instead of looking it up (and dynamically re-resolving
-            // it) a second time for the same round.
+            lastOffsetIncludedThisRound = buildResult.lastOffsetIncluded();
             this.lastMaxMessageBytes = maxMessageBytes;
-
-            MemoryRecords records = MemoryRecords.withRecords(
-                Compression.NONE,
-                simpleRecords.toArray(new SimpleRecord[]{})
-            );
 
             return new ProduceRequestData.TopicProduceData()
                 .setName(dlqTopicPartitionData.topicName())
@@ -459,7 +428,7 @@ public class ShareGroupDLQStateManager {
                 .setPartitionData(List.of(
                     new ProduceRequestData.PartitionProduceData()
                         .setIndex(dlqDestinationPartition)  // partition
-                        .setRecords(records)
+                        .setRecords(buildResult.records())
                 ));
         }
 
@@ -481,34 +450,22 @@ public class ShareGroupDLQStateManager {
 
         public Optional<Throwable> validateDlqTopic() {
             Optional<String> topicNameOpt = cacheHelper.shareGroupDlqTopic(param.groupId());
-            Optional<String> topicPrefix = cacheHelper.shareGroupDlqTopicPrefix();
 
-            // Verify that DLQ topic for the share group is set and is correctly named.
+            // Verify that DLQ topic for the share group is set.
             if (topicNameOpt.isEmpty()) {
                 return Optional.of(new ConfigException(String.format("Configured DLQ topic name in share group: %s is empty.", param.groupId())));
-            } else if (topicNameOpt.get().startsWith("__")) {
-                return Optional.of(new ConfigException(String.format("Configured DLQ topic name in share group: %s cannot start with __, topic: %s.", param.groupId(), topicNameOpt.get())));
             }
 
             String topicName = topicNameOpt.get();
 
-            // Verify that DLQ is enabled on a correctly named topic, configured on a share group.
-            if (cacheHelper.containsTopic(topicName) && !cacheHelper.isDlqEnabledOnTopic(topicName)) {
-                return Optional.of(new ConfigException(String.format("DLQ is not enabled on configured DLQ topic for share group: %s, topic: %s.", param.groupId(), topicName)));
-            }
-
-            // Verify that for a non-existent correctly named DLQ topic, auto create should be enabled.
+            // Verify topic existence (or that auto create is enabled) before the config-only checks in
+            // validateDlqTopicConfig, so a missing topic is reported as missing rather than being masked
+            // by an also-true-but-less-actionable naming/enablement error from that method.
             if (!cacheHelper.containsTopic(topicName) && !cacheHelper.isDlqAutoTopicCreateEnabled()) {
                 return Optional.of(new ConfigException(String.format("DLQ topic does not exist and auto create is disabled on cluster for share group: %s, topic: %s.", param.groupId(), topicName)));
             }
 
-            // Verify that if configured, the DLQ topic name prefix aligns with the topic name.
-            return topicPrefix.map(prefix -> {
-                if (!prefix.isEmpty() && !topicName.startsWith(prefix)) {
-                    return new ConfigException(String.format("Configured DLQ topic name does not comply with the DLQ topic prefix in share group: %s, topic: %s, prefix: %s.", param.groupId(), topicName, prefix));
-                }
-                return null;
-            });
+            return ShareGroupDLQValidator.validateDlqTopicConfig(param.groupId(), topicName, topicName, cacheHelper);
         }
 
         public boolean dlqTopicExists() {
@@ -520,7 +477,11 @@ public class ShareGroupDLQStateManager {
                 } catch (ConfigException e) {
                     return false;
                 }
-                // Source records were already resolved before enqueue; just add to the node map.
+                // This path handles both round 1 (dlq() already resolved its records before enqueue)
+                // and a retry of whichever round is currently in flight (nextOffsetToSend is untouched
+                // by a failed produce, so that round's records - resolved when it was first entered -
+                // are still valid); either way, this round's data is already resolved, so just add to
+                // the node map without fetching again.
                 addRequestToNodeMap(dlqPartitionLeaderNode, this);
             }
             return isDlqTopicPresent;
@@ -534,32 +495,6 @@ public class ShareGroupDLQStateManager {
                 ")";
         }
 
-        private Header[] headers(long offset) {
-            List<Header> headers = new ArrayList<>();
-            headers.add(new RecordHeader(HEADER_DLQ_ERRORS_TOPIC, recordTopic().getBytes(StandardCharsets.UTF_8)));
-            headers.add(new RecordHeader(HEADER_DLQ_ERRORS_PARTITION, Integer.toString(param.topicIdPartition().partition()).getBytes(StandardCharsets.UTF_8)));
-            headers.add(new RecordHeader(HEADER_DLQ_ERRORS_OFFSET, Long.toString(offset).getBytes(StandardCharsets.UTF_8)));
-            headers.add(new RecordHeader(HEADER_DLQ_ERRORS_GROUP, param.groupId().getBytes(StandardCharsets.UTF_8)));
-            param.deliveryCount().ifPresent(deliveryCount -> headers.add(
-                new RecordHeader(HEADER_DLQ_ERRORS_DELIVERY_COUNT, Short.toString(deliveryCount).getBytes(StandardCharsets.UTF_8))));
-            param.cause().ifPresent(cause -> {
-                if (cause.getMessage() != null) {
-                    headers.add(new RecordHeader(HEADER_DLQ_ERRORS_MESSAGE, cause.getMessage().getBytes(StandardCharsets.UTF_8)));
-                }
-            });
-
-            return headers.toArray(new Header[0]);
-        }
-
-        private String recordTopic() {
-            TopicIdPartition topicIdPartition = param.topicIdPartition();
-            String recordTopicName = param.topicIdPartition().topic();
-            if (recordTopicName == null || recordTopicName.isEmpty()) {
-                // If topic name lookup fails, use topic id as a String in the header.
-                recordTopicName = cacheHelper.topicName(param.topicIdPartition().topicId()).orElse(topicIdPartition.topicId().toString());
-            }
-            return recordTopicName;
-        }
 
         // Visibility for testing
         Optional<Errors> checkResponseError(ClientResponse response) {
@@ -615,7 +550,9 @@ public class ShareGroupDLQStateManager {
                             try {
                                 populateDLQTopicData();
                                 createTopicsBackoff.resetAttempts();
-                                // Source records were already resolved before enqueue; just add to the node map.
+                                // This path is only ever reached for round 1 (a brand-new handler still
+                                // waiting on topic creation), whose records dlq() already resolved before
+                                // enqueue; just add to the node map.
                                 addRequestToNodeMap(this.dlqPartitionLeaderNode, this);
                             } catch (ConfigException e) {
                                 LOG.error("Error enqueueing after DLQ create topic response {}.", this, e);
@@ -715,8 +652,11 @@ public class ShareGroupDLQStateManager {
                             if (lastOffsetIncludedThisRound < param.lastOffset()) {
                                 // Only part of the offset range fit within dlqTopicMaxMessageBytes - continue
                                 // sending the remainder as a follow-up produce request instead of completing.
+                                // Resolve the next round's source records (a fresh decompression budget, scoped
+                                // to what's left to send) before rejoining the node map, mirroring the
+                                // "resolved before eligible for coalescing" invariant dlq() establishes for round 1.
                                 nextOffsetToSend = lastOffsetIncludedThisRound + 1;
-                                addRequestToNodeMap(dlqPartitionLeaderNode(), this);
+                                resolveRound().whenComplete((ignored, err) -> addRequestToNodeMap(dlqPartitionLeaderNode(), this));
                             } else {
                                 this.result.complete(null);
                             }
@@ -765,36 +705,60 @@ public class ShareGroupDLQStateManager {
         }
 
         /**
-         * Resolves the original source records for this handler once, before it is enqueued - reading
-         * from the local log on the calling thread and, for any offsets tiered to remote storage,
-         * asynchronously on the remote-storage reader pool. The result is memoized in
-         * {@link #resolvedRecordData} and reused for every (re)send, so the single sender thread never
-         * reads the log (neither local nor remote) and retries do not re-fetch.
+         * Resolves the source records for the CURRENT round only - the window starting at
+         * {@link #nextOffsetToSend} - reading from the local log on the calling thread and, for any
+         * offsets tiered to remote storage, asynchronously on the remote-storage reader pool. The result
+         * is memoized in {@link #resolvedRecordData} and reused for every retry of this same round (this
+         * method is only ever called once per round - see {@link #dlq} for round 1 and
+         * {@link #handleProduceResponse} for subsequent rounds - so a round's data is never re-fetched by
+         * a retry of that round).
          *
-         * <p>A failed fetch is non-fatal: {@link #resolvedRecordData} stays empty and the DLQ record is
-         * produced with headers only (no key/value), mirroring how individually unavailable offsets are skipped.
+         * <p>A failed fetch is non-fatal: {@link #resolvedRecordData} stays empty, {@link
+         * #lastResolvedOffsetThisRound} is set to {@code param.lastOffset()} so {@code topicProduceData()}
+         * treats the whole remaining range as settled, and the DLQ record is produced with headers only
+         * (no key/value) for it - mirroring how individually unavailable offsets are skipped. Unlike a
+         * fetch that partially succeeds (see {@link ShareGroupDLQRecordFetcher.FetchResult}), a total
+         * failure here isn't a decompression-budget gap a fresh round could resolve, so there's no reason
+         * to hold any of the range back for a retry. This applies equally to an unexpected error thrown
+         * synchronously by {@link #maybeFetchRecordData} itself (e.g. a cache-helper lookup) - not just
+         * one carried by the returned future's exceptional completion - since this method is called
+         * directly from {@link #handleProduceResponse} (on the sender thread, inside a
+         * {@code RequestCompletionHandler} callback) for round 2 onward: letting an exception escape
+         * from here would propagate out of {@code onComplete()}, which - depending on which internal
+         * path delivers the response - is not guaranteed to be caught before reaching the broker's
+         * fatal-error handling.
          *
-         * @return A future that always completes normally, once resolution has finished.
+         * @return A future that always completes normally, once this round's resolution has finished.
          */
-        CompletableFuture<Void> resolveRecords() {
+        CompletableFuture<Void> resolveRound() {
+            long roundStart = nextOffsetToSend;
             CompletableFuture<Void> resolved = new CompletableFuture<>();
-            maybeFetchRecordData().whenComplete((records, exception) -> {
-                if (exception != null || records == null) {
-                    LOG.warn("Unable to fetch original record data for handler {}. DLQ records will be produced with headers only.", this, exception);
-                    this.resolvedRecordData = Map.of();
-                } else {
-                    this.resolvedRecordData = records;
-                }
+            try {
+                maybeFetchRecordData(roundStart).whenComplete((fetchResult, exception) -> {
+                    if (exception != null || fetchResult == null) {
+                        LOG.warn("Unable to fetch original record data for handler {} for the round starting at offset {}. " +
+                            "DLQ records will be produced with headers only for this round.", this, roundStart, exception);
+                        this.resolvedRecordData = Map.of();
+                        this.lastResolvedOffsetThisRound = param.lastOffset();
+                    } else {
+                        this.resolvedRecordData = fetchResult.records();
+                        this.lastResolvedOffsetThisRound = fetchResult.lastResolvedOffset();
+                    }
+                    resolved.complete(null);
+                });
+            } catch (Throwable t) {
+                LOG.warn("Unexpected error resolving round starting at offset {} for {}. " +
+                    "DLQ records will be produced with headers only for this round.", roundStart, this, t);
+                this.resolvedRecordData = Map.of();
+                this.lastResolvedOffsetThisRound = param.lastOffset();
                 resolved.complete(null);
-            });
+            }
             return resolved;
         }
 
-        private CompletableFuture<Map<Long, Record>> maybeFetchRecordData() {
-            if (!cacheHelper.isShareGroupDlqCopyRecordEnabled(param.groupId())) {
-                return CompletableFuture.completedFuture(Map.of());
-            }
-            return new ShareGroupDLQRecordFetcher(logReader, time, param, DLQ_MAX_FETCH_BYTES).fetch();
+        private CompletableFuture<ShareGroupDLQRecordFetcher.FetchResult> maybeFetchRecordData(long fromOffset) {
+            return ShareGroupDLQRecordHelper.maybeFetchSourceRecords(
+                    param, fromOffset, cacheHelper, logReader, time, Function.identity());
         }
     }
 
@@ -891,7 +855,7 @@ public class ShareGroupDLQStateManager {
                                 // now the combined request has completed
                                 // we need to create responses for individual
                                 // requests which composed the combined request
-                                results.liveHandlers().forEach(handler -> handler.onComplete(response));
+                                results.liveHandlers().forEach(handler -> completeHandlerSafely(handler, response));
                                 wakeup();
                             }));
                         sending.add(destNode);

@@ -127,10 +127,10 @@ public enum Feature {
         return featureVersions[featureVersions.length - 1].featureLevel();
     }
 
-    public SupportedVersionRange supportedVersionRange() {
+    public SupportedVersionRange supportedVersionRange(boolean includeUnstable) {
         return new SupportedVersionRange(
             minimumProduction(),
-            latestTesting()
+            includeUnstable ? latestTesting() : latestProduction()
         );
     }
 

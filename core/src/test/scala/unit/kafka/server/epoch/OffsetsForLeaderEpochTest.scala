@@ -16,7 +16,8 @@
   */
 package kafka.server.epoch
 
-import kafka.server.QuotaFactory.QuotaManagers
+import org.apache.kafka.server.quota.QuotaFactory
+import org.apache.kafka.server.quota.QuotaFactory.QuotaManagers
 import kafka.server._
 import kafka.utils.TestUtils
 import org.apache.kafka.common.TopicPartition

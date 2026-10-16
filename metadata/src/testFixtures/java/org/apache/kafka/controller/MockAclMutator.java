@@ -24,6 +24,7 @@ import org.apache.kafka.metadata.RecordTestUtils;
 import org.apache.kafka.metadata.authorizer.AclMutator;
 import org.apache.kafka.metadata.authorizer.StandardAcl;
 import org.apache.kafka.metadata.authorizer.StandardAuthorizer;
+import org.apache.kafka.raft.KRaftConfigs;
 import org.apache.kafka.server.authorizer.AclCreateResult;
 import org.apache.kafka.server.authorizer.AclDeleteResult;
 import org.apache.kafka.server.common.MetadataVersion;
@@ -48,7 +49,9 @@ public class MockAclMutator implements AclMutator {
         StandardAuthorizer authorizer
     ) {
         this.authorizer = authorizer;
-        this.aclControl = new AclControlManager.Builder().build();
+        this.aclControl = new AclControlManager.Builder().
+            setMaxRecordsPerBatch(KRaftConfigs.CONTROLLER_MAX_RECORDS_PER_BATCH_DEFAULT).
+            build();
     }
 
     private void syncIdToAcl(

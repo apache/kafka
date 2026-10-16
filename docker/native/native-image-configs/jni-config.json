@@ -10,6 +10,10 @@
   "fields":[{"name":"dstPos"}, {"name":"srcPos"}]
 },
 {
+  "name":"com.github.luben.zstd.ZstdOutputStreamNoFinalizer",
+  "fields":[{"name":"dstPos"}, {"name":"srcPos"}]
+},
+{
   "name":"com.sun.management.internal.DiagnosticCommandArgumentInfo",
   "methods":[{"name":"<init>","parameterTypes":["java.lang.String","java.lang.String","java.lang.String","java.lang.String","boolean","boolean","boolean","int"] }]
 },

@@ -21,6 +21,10 @@ import org.apache.kafka.common.annotation.InterfaceAudience;
 
 /**
  * Server-side partition assignor used by the GroupCoordinator.
+ *
+ * <p>Implementations must be thread-safe. The group coordinator uses a single instance of each
+ * configured assignor for all the groups, so {@link #assign(GroupSpec, SubscribedTopicDescriber)}
+ * may be called concurrently from several threads.
  */
 @InterfaceAudience.Public
 public interface PartitionAssignor {

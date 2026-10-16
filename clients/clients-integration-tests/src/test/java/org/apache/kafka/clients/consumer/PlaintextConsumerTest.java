@@ -855,9 +855,11 @@ public class PlaintextConsumerTest {
         sendRecords(cluster, new TopicPartition(topic1, 0), 1);
 
         try (var consumer = cluster.consumer(consumerConfig)) {
-            // consumer some messages, and we can list the internal topic __consumer_offsets
             consumer.subscribe(List.of(topic1));
-            consumer.poll(Duration.ofMillis(100));
+            TestUtils.waitForCondition(() -> {
+                consumer.poll(Duration.ofMillis(100));
+                return consumer.listTopics().size() == 4;
+            }, "Timed out waiting for 4 topics to be visible");
             var topics = consumer.listTopics();
             assertNotNull(topics);
             assertEquals(4, topics.size());
@@ -938,7 +940,8 @@ public class PlaintextConsumerTest {
             // Test subscribe
             // Create a consumer and consumer some messages.
             var listener = new TestConsumerReassignmentListener();
-            consumer.subscribe(List.of(TOPIC, topic2), listener);
+            consumer.setRebalanceListener(listener);
+            consumer.subscribe(List.of(TOPIC, topic2));
             var records = awaitNonEmptyRecords(consumer, TP);
             assertEquals(1, listener.callsToAssigned, "should be assigned once");
 
@@ -960,7 +963,8 @@ public class PlaintextConsumerTest {
             assertEquals((double) records.count(), fetchLead0.metricValue(), "The lead should be " + records.count());
 
             // Remove topic from subscription and wait for metrics cleanup.
-            consumer.subscribe(List.of(topic2), listener);
+            consumer.setRebalanceListener(listener);
+            consumer.subscribe(List.of(topic2));
             awaitMetricsCleanup(consumer, "records-lead", tags1, tags2);
         }
     }
@@ -1001,7 +1005,8 @@ public class PlaintextConsumerTest {
             // Test subscribe
             // Create a consumer and consumer some messages.
             var listener = new TestConsumerReassignmentListener();
-            consumer.subscribe(List.of(TOPIC, topic2), listener);
+            consumer.setRebalanceListener(listener);
+            consumer.subscribe(List.of(TOPIC, topic2));
             var records = awaitNonEmptyRecords(consumer, TP);
             assertEquals(1, listener.callsToAssigned, "should be assigned once");
 
@@ -1024,7 +1029,8 @@ public class PlaintextConsumerTest {
             assertEquals(expectedLag, (double) fetchLag0.metricValue(), EPSILON, "The lag should be " + expectedLag);
 
             // Remove topic from subscription and wait for metrics cleanup.
-            consumer.subscribe(List.of(topic2), listener);
+            consumer.setRebalanceListener(listener);
+            consumer.subscribe(List.of(topic2));
             awaitMetricsCleanup(consumer, "records-lag", tags1, tags2);
         }
     }
@@ -1832,8 +1838,10 @@ public class PlaintextConsumerTest {
         try (Consumer<byte[], byte[]> consumer1 = cluster.consumer(consumer1Config);
              Consumer<byte[], byte[]> consumer2 = cluster.consumer(consumer2Config)) {
 
-            consumer1.subscribe(List.of(topicName), listener1);
-            consumer2.subscribe(List.of(topicName), listener2);
+            consumer1.setRebalanceListener(listener1);
+            consumer1.subscribe(List.of(topicName));
+            consumer2.setRebalanceListener(listener2);
+            consumer2.subscribe(List.of(topicName));
 
             awaitRebalance(consumer1, listener1);
             awaitRebalance(consumer2, listener2);

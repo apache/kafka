@@ -41,9 +41,8 @@ import java.util.List;
 import java.util.Map;
 import java.util.Properties;
 
-import static org.hamcrest.CoreMatchers.equalTo;
-import static org.hamcrest.CoreMatchers.is;
-import static org.hamcrest.MatcherAssert.assertThat;
+import static org.junit.jupiter.api.Assertions.assertEquals;
+import static org.junit.jupiter.api.Assertions.assertTrue;
 
 /**
  * Unit test of {@link WordCountDemo} stream using TopologyTestDriver.
@@ -78,9 +77,9 @@ public class WordCountDemoTest {
         //Feed word "Hello" to inputTopic and no kafka key, timestamp is irrelevant in this case
         inputTopic.pipeInput("Hello");
         //Read and validate output to match word as key and count as value
-        assertThat(outputTopic.readKeyValue(), equalTo(new KeyValue<>("hello", 1L)));
+        assertEquals(new KeyValue<>("hello", 1L), outputTopic.readKeyValue());
         //No more output in topic
-        assertThat(outputTopic.isEmpty(), is(true));
+        assertTrue(outputTopic.isEmpty());
     }
 
     /**
@@ -108,7 +107,7 @@ public class WordCountDemoTest {
 
         inputTopic.pipeValueList(inputValues);
         final Map<String, Long> actualWordCounts = outputTopic.readKeyValuesToMap();
-        assertThat(actualWordCounts, equalTo(expectedWordCounts));
+        assertEquals(expectedWordCounts, actualWordCounts);
     }
 
     @Test
@@ -116,10 +115,10 @@ public class WordCountDemoTest {
         final File tmp = TestUtils.tempFile("bootstrap.servers=localhost:1234");
         try {
             Properties config = WordCountDemo.streamsConfig(new String[] {tmp.getPath()});
-            assertThat("localhost:1234", equalTo(config.getProperty(CommonClientConfigs.BOOTSTRAP_SERVERS_CONFIG)));
+            assertEquals("localhost:1234", config.getProperty(CommonClientConfigs.BOOTSTRAP_SERVERS_CONFIG));
 
             config = WordCountDemo.streamsConfig(new String[] {tmp.getPath(), "extra", "args"});
-            assertThat("localhost:1234", equalTo(config.getProperty(CommonClientConfigs.BOOTSTRAP_SERVERS_CONFIG)));
+            assertEquals("localhost:1234", config.getProperty(CommonClientConfigs.BOOTSTRAP_SERVERS_CONFIG));
         } finally {
             Files.deleteIfExists(tmp.toPath());
         }

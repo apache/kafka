@@ -32,6 +32,7 @@ import org.apache.kafka.common.record.internal.MemoryRecordsBuilder.RecordsInfo;
 import org.apache.kafka.common.record.internal.MutableRecordBatch;
 import org.apache.kafka.common.record.internal.Record;
 import org.apache.kafka.common.record.internal.RecordBatch;
+import org.apache.kafka.common.record.internal.Records;
 import org.apache.kafka.common.requests.ProduceResponse.RecordError;
 import org.apache.kafka.common.utils.Time;
 import org.apache.kafka.common.utils.internals.BufferSupplier;
@@ -78,6 +79,7 @@ public class LogValidator {
     private final long timestampAfterMaxMs;
     private final int partitionLeaderEpoch;
     private final AppendOrigin origin;
+    private final int maxRecordBodySize;
 
     public LogValidator(MemoryRecords records,
                         TopicPartition topicPartition,
@@ -91,6 +93,24 @@ public class LogValidator {
                         long timestampAfterMaxMs,
                         int partitionLeaderEpoch,
                         AppendOrigin origin) {
+        this(records, topicPartition, time, sourceCompressionType, targetCompression, compactedTopic, toMagic,
+            timestampType, timestampBeforeMaxMs, timestampAfterMaxMs, partitionLeaderEpoch, origin,
+            Records.SOFT_MAX_ARRAY_LENGTH);
+    }
+
+    public LogValidator(MemoryRecords records,
+                        TopicPartition topicPartition,
+                        Time time,
+                        CompressionType sourceCompressionType,
+                        Compression targetCompression,
+                        boolean compactedTopic,
+                        byte toMagic,
+                        TimestampType timestampType,
+                        long timestampBeforeMaxMs,
+                        long timestampAfterMaxMs,
+                        int partitionLeaderEpoch,
+                        AppendOrigin origin,
+                        int maxRecordBodySize) {
         this.records = records;
         this.topicPartition = topicPartition;
         this.time = time;
@@ -103,6 +123,7 @@ public class LogValidator {
         this.timestampAfterMaxMs = timestampAfterMaxMs;
         this.partitionLeaderEpoch = partitionLeaderEpoch;
         this.origin = origin;
+        this.maxRecordBodySize = maxRecordBodySize;
     }
 
     /**
@@ -312,9 +333,9 @@ public class LogValidator {
             // then we can optimize the iterator to skip key / value / headers since they would not be used at all
             CloseableIterator<Record> recordsIterator;
             if (inPlaceAssignment && firstBatch.magic() >= RecordBatch.MAGIC_VALUE_V2)
-                recordsIterator = batch.skipKeyValueIterator(bufferSupplier);
+                recordsIterator = batch.skipKeyValueIterator(bufferSupplier, maxRecordBodySize);
             else
-                recordsIterator = batch.streamingIterator(bufferSupplier);
+                recordsIterator = batch.streamingIterator(bufferSupplier, maxRecordBodySize);
 
             try {
                 List<ApiRecordError> recordErrors = new ArrayList<>(0);

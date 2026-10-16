@@ -20,7 +20,6 @@ import org.apache.kafka.common.TopicPartition;
 import org.apache.kafka.common.message.StreamsGroupHeartbeatResponseData;
 import org.apache.kafka.common.message.StreamsGroupTopologyDescriptionUpdateRequestData;
 
-import java.util.ArrayList;
 import java.util.Collection;
 import java.util.Collections;
 import java.util.Comparator;
@@ -131,17 +130,36 @@ public class StreamsRebalanceData {
 
         public EndpointPartitions(final List<TopicPartition> activePartitions,
                                   final List<TopicPartition> standbyPartitions) {
-            this.activePartitions = activePartitions;
-            this.standbyPartitions = standbyPartitions;
+            this.activePartitions = List.copyOf(Objects.requireNonNull(activePartitions, "Active partitions cannot be null"));
+            this.standbyPartitions = List.copyOf(Objects.requireNonNull(standbyPartitions, "Standby partitions cannot be null"));
         }
 
         public List<TopicPartition> activePartitions() {
-            return new ArrayList<>(activePartitions);
+            return activePartitions;
         }
 
         public List<TopicPartition> standbyPartitions() {
-            return new ArrayList<>(standbyPartitions);
+            return standbyPartitions;
         }
+
+        @Override
+        public boolean equals(final Object o) {
+            if (this == o) {
+                return true;
+            }
+            if (o == null || getClass() != o.getClass()) {
+                return false;
+            }
+            final EndpointPartitions that = (EndpointPartitions) o;
+            return Objects.equals(activePartitions, that.activePartitions)
+                && Objects.equals(standbyPartitions, that.standbyPartitions);
+        }
+
+        @Override
+        public int hashCode() {
+            return Objects.hash(activePartitions, standbyPartitions);
+        }
+
         @Override
         public String toString() {
             return "EndpointPartitions {"

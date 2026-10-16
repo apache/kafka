@@ -44,8 +44,10 @@ import java.util.List;
 import java.util.Map;
 import java.util.stream.Stream;
 
+import static org.apache.kafka.common.requests.ShareRequestMetadata.FINAL_EPOCH;
 import static org.apache.kafka.common.requests.ShareRequestMetadata.INITIAL_EPOCH;
 import static org.junit.jupiter.api.Assertions.assertEquals;
+import static org.junit.jupiter.api.Assertions.assertFalse;
 import static org.junit.jupiter.api.Assertions.assertNotNull;
 import static org.junit.jupiter.api.Assertions.assertNull;
 import static org.junit.jupiter.api.Assertions.assertTrue;
@@ -617,6 +619,44 @@ public class ShareSessionHandlerTest {
                 .flatMap(topic -> topic.partitions().stream())
                 .findFirst().get();
         assertEquals(1, barPartition.acknowledgementBatches().size());
+    }
+
+    @ParameterizedTest
+    @MethodSource("shareFetchConfigProvider")
+    public void testCloseEmptySessionBuildsFinalEpochShareFetch(ShareFetchConfig shareFetchConfig) {
+        String groupId = "G1";
+        Uuid memberId = Uuid.randomUuid();
+        ShareSessionHandler handler = new ShareSessionHandler(LOG_CONTEXT, 1, memberId);
+
+        Map<Uuid, String> topicNames = new HashMap<>();
+        Uuid fooId = addTopicId(topicNames, "foo");
+        TopicIdPartition foo0 = new TopicIdPartition(fooId, 0, "foo");
+
+        // Establish the session with foo0.
+        handler.addPartitionToFetch(foo0, null);
+        assertNotNull(handler.newShareFetchBuilder(groupId, shareFetchConfig, false));
+        assertFalse(handler.isSessionEmpty());
+        ShareFetchResponse resp = ShareFetchResponse.of(Errors.NONE,
+            0,
+            buildResponseData(new RespEntry("foo", 0, fooId)),
+            List.of(),
+            0);
+        handler.handleResponse(resp, ApiKeys.SHARE_FETCH.latestVersion());
+
+        // Remove the only partition by building without adding the partition, emptying it.
+        assertNotNull(handler.newShareFetchBuilder(groupId, shareFetchConfig, false));
+        handler.handleResponse(ShareFetchResponse.of(Errors.NONE, 0, new LinkedHashMap<>(), List.of(), 0), ApiKeys.SHARE_FETCH.latestVersion());
+        assertTrue(handler.isSessionEmpty());
+
+        // Closing the empty session builds a ShareFetch request with the final epoch to close it on the broker.
+        handler.notifyClose();
+        ShareFetchRequest.Builder builder = handler.newShareFetchBuilder(groupId, shareFetchConfig, true);
+        assertNotNull(builder);
+        ShareFetchRequestData requestData = builder.build().data();
+        assertEquals(memberId.toString(), requestData.memberId());
+        assertEquals(FINAL_EPOCH, requestData.shareSessionEpoch());
+        assertTrue(requestData.topics().isEmpty());
+        assertTrue(requestData.forgottenTopicsData().isEmpty());
     }
 
     private Uuid addTopicId(Map<Uuid, String> topicNames, String name) {

@@ -101,9 +101,7 @@ import static java.time.Duration.ofMinutes;
 import static java.time.Instant.ofEpochMilli;
 import static org.apache.kafka.common.utils.Utils.mkProperties;
 import static org.apache.kafka.streams.utils.TestUtils.safeUniqueTestName;
-import static org.hamcrest.CoreMatchers.equalTo;
-import static org.hamcrest.MatcherAssert.assertThat;
-import static org.hamcrest.core.Is.is;
+import static org.junit.jupiter.api.Assertions.assertEquals;
 import static org.junit.jupiter.api.Assertions.assertFalse;
 import static org.junit.jupiter.api.Assertions.assertTrue;
 
@@ -225,9 +223,8 @@ public class KStreamAggregationIntegrationTest {
 
         results.sort(KStreamAggregationIntegrationTest::compare);
 
-        assertThat(
-            results,
-            is(Arrays.asList(
+        assertEquals(
+            List.of(
                 new KeyValueTimestamp<>("A", "A", mockTime.milliseconds()),
                 new KeyValueTimestamp<>("A", "A:A", mockTime.milliseconds()),
                 new KeyValueTimestamp<>("B", "B", mockTime.milliseconds()),
@@ -237,9 +234,8 @@ public class KStreamAggregationIntegrationTest {
                 new KeyValueTimestamp<>("D", "D", mockTime.milliseconds()),
                 new KeyValueTimestamp<>("D", "D:D", mockTime.milliseconds()),
                 new KeyValueTimestamp<>("E", "E", mockTime.milliseconds()),
-                new KeyValueTimestamp<>("E", "E:E", mockTime.milliseconds())
-            ))
-        );
+                new KeyValueTimestamp<>("E", "E:E", mockTime.milliseconds())),
+            results);
     }
 
     private static <K extends Comparable<K>, V extends Comparable<V>> int compare(final KeyValueTimestamp<K, V> o1,
@@ -323,7 +319,7 @@ public class KStreamAggregationIntegrationTest {
             new KeyValueTimestamp<>(new Windowed<>("E", new TimeWindow(secondBatchWindowStart, secondBatchWindowEnd)), "E", secondBatchTimestamp),
             new KeyValueTimestamp<>(new Windowed<>("E", new TimeWindow(secondBatchWindowStart, secondBatchWindowEnd)), "E:E", secondBatchTimestamp)
         );
-        assertThat(windowedOutput, is(expectResult));
+        assertEquals(expectResult, windowedOutput);
 
         final Set<String> expectResultString = new HashSet<>(expectResult.size());
         for (final KeyValueTimestamp<Windowed<String>, String> eachRecord: expectResult) {
@@ -364,9 +360,8 @@ public class KStreamAggregationIntegrationTest {
 
         results.sort(KStreamAggregationIntegrationTest::compare);
 
-        assertThat(
-            results,
-            is(Arrays.asList(
+        assertEquals(
+            List.of(
                 new KeyValueTimestamp<>("A", 1, mockTime.milliseconds()),
                 new KeyValueTimestamp<>("A", 2, mockTime.milliseconds()),
                 new KeyValueTimestamp<>("B", 1, mockTime.milliseconds()),
@@ -376,9 +371,8 @@ public class KStreamAggregationIntegrationTest {
                 new KeyValueTimestamp<>("D", 1, mockTime.milliseconds()),
                 new KeyValueTimestamp<>("D", 2, mockTime.milliseconds()),
                 new KeyValueTimestamp<>("E", 1, mockTime.milliseconds()),
-                new KeyValueTimestamp<>("E", 2, mockTime.milliseconds())
-           ))
-        );
+                new KeyValueTimestamp<>("E", 2, mockTime.milliseconds())),
+            results);
     }
 
     @ParameterizedTest
@@ -448,7 +442,7 @@ public class KStreamAggregationIntegrationTest {
             new KeyValueTimestamp<>(new Windowed<>("E", new TimeWindow(secondWindowStart, secondWindowEnd)), 2, secondTimestamp)
         );
 
-        assertThat(windowedMessages, is(expectResult));
+        assertEquals(expectResult, windowedMessages);
 
         final Set<String> expectResultString = new HashSet<>(expectResult.size());
         for (final KeyValueTimestamp<Windowed<String>, Integer> eachRecord: expectResult) {
@@ -475,9 +469,8 @@ public class KStreamAggregationIntegrationTest {
         );
         results.sort(KStreamAggregationIntegrationTest::compare);
 
-        assertThat(
-            results,
-            is(Arrays.asList(
+        assertEquals(
+            List.of(
                 new KeyValueTimestamp<>("A", 1L, mockTime.milliseconds()),
                 new KeyValueTimestamp<>("A", 2L, mockTime.milliseconds()),
                 new KeyValueTimestamp<>("B", 1L, mockTime.milliseconds()),
@@ -487,9 +480,8 @@ public class KStreamAggregationIntegrationTest {
                 new KeyValueTimestamp<>("D", 1L, mockTime.milliseconds()),
                 new KeyValueTimestamp<>("D", 2L, mockTime.milliseconds()),
                 new KeyValueTimestamp<>("E", 1L, mockTime.milliseconds()),
-                new KeyValueTimestamp<>("E", 2L, mockTime.milliseconds())
-            ))
-        );
+                new KeyValueTimestamp<>("E", 2L, mockTime.milliseconds())),
+            results);
     }
 
     @ParameterizedTest
@@ -545,9 +537,8 @@ public class KStreamAggregationIntegrationTest {
         results.sort(KStreamAggregationIntegrationTest::compare);
 
         final long window = timestamp / 500 * 500;
-        assertThat(
-            results,
-            is(Arrays.asList(
+        assertEquals(
+            List.of(
                 new KeyValueTimestamp<>("1@" + window, 1L, timestamp),
                 new KeyValueTimestamp<>("1@" + window, 2L, timestamp),
                 new KeyValueTimestamp<>("2@" + window, 1L, timestamp),
@@ -557,9 +548,8 @@ public class KStreamAggregationIntegrationTest {
                 new KeyValueTimestamp<>("4@" + window, 1L, timestamp),
                 new KeyValueTimestamp<>("4@" + window, 2L, timestamp),
                 new KeyValueTimestamp<>("5@" + window, 1L, timestamp),
-                new KeyValueTimestamp<>("5@" + window, 2L, timestamp)
-            ))
-        );
+                new KeyValueTimestamp<>("5@" + window, 2L, timestamp)),
+            results);
     }
 
     @ParameterizedTest
@@ -657,7 +647,7 @@ public class KStreamAggregationIntegrationTest {
             new KeyValueTimestamp<>(new Windowed<>("E", new TimeWindow(firstBatchRightWindowStart, firstBatchRightWindowEnd)), "E:E", thirdBatchTimestamp),
             new KeyValueTimestamp<>(new Windowed<>("E", new TimeWindow(thirdBatchLeftWindowStart, thirdBatchLeftWindowEnd)), "E:E:E", thirdBatchTimestamp)
         );
-        assertThat(windowedOutput, is(expectResult));
+        assertEquals(expectResult, windowedOutput);
 
         final Set<String> expectResultString = new HashSet<>(expectResult.size());
         for (final KeyValueTimestamp<Windowed<String>, String> eachRecord: expectResult) {
@@ -772,7 +762,7 @@ public class KStreamAggregationIntegrationTest {
             new KeyValueTimestamp<>(new Windowed<>("E", new TimeWindow(thirdBatchLeftWindowStart, thirdBatchLeftWindowEnd)), 3, thirdBatchTimestamp)
         );
 
-        assertThat(windowedMessages, is(expectResult));
+        assertEquals(expectResult, windowedMessages);
 
         final Set<String> expectResultString = new HashSet<>(expectResult.size());
         for (final KeyValueTimestamp<Windowed<String>, Integer> eachRecord: expectResult) {
@@ -881,13 +871,13 @@ public class KStreamAggregationIntegrationTest {
         startStreams();
         latch.await(30, TimeUnit.SECONDS);
 
-        assertThat(results.get(new Windowed<>("bob", new SessionWindow(t1, t1))), equalTo(KeyValue.pair(1L, t1)));
-        assertThat(results.get(new Windowed<>("penny", new SessionWindow(t1, t1))), equalTo(KeyValue.pair(1L, t1)));
-        assertThat(results.get(new Windowed<>("jo", new SessionWindow(t1, t1))), equalTo(KeyValue.pair(1L, t1)));
-        assertThat(results.get(new Windowed<>("jo", new SessionWindow(t5, t4))), equalTo(KeyValue.pair(2L, t4)));
-        assertThat(results.get(new Windowed<>("emily", new SessionWindow(t1, t2))), equalTo(KeyValue.pair(2L, t2)));
-        assertThat(results.get(new Windowed<>("bob", new SessionWindow(t3, t4))), equalTo(KeyValue.pair(2L, t4)));
-        assertThat(results.get(new Windowed<>("penny", new SessionWindow(t3, t3))), equalTo(KeyValue.pair(1L, t3)));
+        assertEquals(KeyValue.pair(1L, t1), results.get(new Windowed<>("bob", new SessionWindow(t1, t1))));
+        assertEquals(KeyValue.pair(1L, t1), results.get(new Windowed<>("penny", new SessionWindow(t1, t1))));
+        assertEquals(KeyValue.pair(1L, t1), results.get(new Windowed<>("jo", new SessionWindow(t1, t1))));
+        assertEquals(KeyValue.pair(2L, t4), results.get(new Windowed<>("jo", new SessionWindow(t5, t4))));
+        assertEquals(KeyValue.pair(2L, t2), results.get(new Windowed<>("emily", new SessionWindow(t1, t2))));
+        assertEquals(KeyValue.pair(2L, t4), results.get(new Windowed<>("bob", new SessionWindow(t3, t4))));
+        assertEquals(KeyValue.pair(1L, t3), results.get(new Windowed<>("penny", new SessionWindow(t3, t3))));
     }
 
     @ParameterizedTest
@@ -932,13 +922,13 @@ public class KStreamAggregationIntegrationTest {
         latch.await(30, TimeUnit.SECONDS);
 
         // verify correct data received
-        assertThat(results.get(new Windowed<>("bob", new SessionWindow(t1, t1))), equalTo(KeyValue.pair("start", t1)));
-        assertThat(results.get(new Windowed<>("penny", new SessionWindow(t1, t1))), equalTo(KeyValue.pair("start", t1)));
-        assertThat(results.get(new Windowed<>("jo", new SessionWindow(t1, t1))), equalTo(KeyValue.pair("pause", t1)));
-        assertThat(results.get(new Windowed<>("jo", new SessionWindow(t5, t4))), equalTo(KeyValue.pair("resume:late", t4)));
-        assertThat(results.get(new Windowed<>("emily", new SessionWindow(t1, t2))), equalTo(KeyValue.pair("pause:resume", t2)));
-        assertThat(results.get(new Windowed<>("bob", new SessionWindow(t3, t4))), equalTo(KeyValue.pair("pause:resume", t4)));
-        assertThat(results.get(new Windowed<>("penny", new SessionWindow(t3, t3))), equalTo(KeyValue.pair("stop", t3)));
+        assertEquals(KeyValue.pair("start", t1), results.get(new Windowed<>("bob", new SessionWindow(t1, t1))));
+        assertEquals(KeyValue.pair("start", t1), results.get(new Windowed<>("penny", new SessionWindow(t1, t1))));
+        assertEquals(KeyValue.pair("pause", t1), results.get(new Windowed<>("jo", new SessionWindow(t1, t1))));
+        assertEquals(KeyValue.pair("resume:late", t4), results.get(new Windowed<>("jo", new SessionWindow(t5, t4))));
+        assertEquals(KeyValue.pair("pause:resume", t2), results.get(new Windowed<>("emily", new SessionWindow(t1, t2))));
+        assertEquals(KeyValue.pair("pause:resume", t4), results.get(new Windowed<>("bob", new SessionWindow(t3, t4))));
+        assertEquals(KeyValue.pair("stop", t3), results.get(new Windowed<>("penny", new SessionWindow(t3, t3))));
 
         verifySessionStore(userSessionsStore, t1, t3, t4);
 
@@ -996,8 +986,8 @@ public class KStreamAggregationIntegrationTest {
             IntegrationTestUtils.getStore(storeName, kafkaStreams, QueryableStoreTypes.sessionStore());
 
         try (final KeyValueIterator<Windowed<String>, String> bob = sessionStore.fetch("bob")) {
-            assertThat(bob.next(), equalTo(KeyValue.pair(new Windowed<>("bob", new SessionWindow(t1, t1)), "start")));
-            assertThat(bob.next(), equalTo(KeyValue.pair(new Windowed<>("bob", new SessionWindow(t3, t4)), "pause:resume")));
+            assertEquals(KeyValue.pair(new Windowed<>("bob", new SessionWindow(t1, t1)), "start"), bob.next());
+            assertEquals(KeyValue.pair(new Windowed<>("bob", new SessionWindow(t3, t4)), "pause:resume"), bob.next());
             assertFalse(bob.hasNext());
         }
     }
@@ -1079,10 +1069,10 @@ public class KStreamAggregationIntegrationTest {
         startStreams();
         assertTrue(latch.await(30, TimeUnit.SECONDS));
 
-        assertThat(results.get(new Windowed<>("bob", new UnlimitedWindow(startTime))), equalTo(KeyValue.pair(2L, t4)));
-        assertThat(results.get(new Windowed<>("penny", new UnlimitedWindow(startTime))), equalTo(KeyValue.pair(1L, t3)));
-        assertThat(results.get(new Windowed<>("jo", new UnlimitedWindow(startTime))), equalTo(KeyValue.pair(1L, t4)));
-        assertThat(results.get(new Windowed<>("emily", new UnlimitedWindow(startTime))), equalTo(KeyValue.pair(1L, t2)));
+        assertEquals(KeyValue.pair(2L, t4), results.get(new Windowed<>("bob", new UnlimitedWindow(startTime))));
+        assertEquals(KeyValue.pair(1L, t3), results.get(new Windowed<>("penny", new UnlimitedWindow(startTime))));
+        assertEquals(KeyValue.pair(1L, t4), results.get(new Windowed<>("jo", new UnlimitedWindow(startTime))));
+        assertEquals(KeyValue.pair(1L, t2), results.get(new Windowed<>("emily", new UnlimitedWindow(startTime))));
     }
 
 

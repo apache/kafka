@@ -140,7 +140,8 @@ public class PlaintextConsumerSubscriptionTest {
 
             assertEquals(0, consumer.assignment().size());
             var pattern = Pattern.compile("t.*c");
-            consumer.subscribe(pattern, new TestConsumerReassignmentListener());
+            consumer.setRebalanceListener(new TestConsumerReassignmentListener());
+            consumer.subscribe(pattern);
 
             Set<TopicPartition> assignment = new HashSet<>();
             assignment.add(new TopicPartition(topic, 0));
@@ -212,7 +213,8 @@ public class PlaintextConsumerSubscriptionTest {
             assertEquals(0, consumer.assignment().size());
 
             var pattern = Pattern.compile(".*o.*"); // only 'topic' and 'foo' match this
-            consumer.subscribe(pattern, new TestConsumerReassignmentListener());
+            consumer.setRebalanceListener(new TestConsumerReassignmentListener());
+            consumer.subscribe(pattern);
 
             Set<TopicPartition> assignment = new HashSet<>();
             assignment.add(new TopicPartition(topic, 0));
@@ -226,7 +228,8 @@ public class PlaintextConsumerSubscriptionTest {
             sendRecords(producer, new TopicPartition(barTopic, 0), 1000, System.currentTimeMillis());
 
             var pattern2 = Pattern.compile("..."); // only 'foo' and 'bar' match this
-            consumer.subscribe(pattern2, new TestConsumerReassignmentListener());
+            consumer.setRebalanceListener(new TestConsumerReassignmentListener());
+            consumer.subscribe(pattern2);
 
             // Remove topic partitions from assignment
             assignment.remove(new TopicPartition(topic, 0));
@@ -281,7 +284,8 @@ public class PlaintextConsumerSubscriptionTest {
 
             assertEquals(0, consumer.assignment().size());
 
-            consumer.subscribe(Pattern.compile("t.*c"), new TestConsumerReassignmentListener());
+            consumer.setRebalanceListener(new TestConsumerReassignmentListener());
+            consumer.subscribe(Pattern.compile("t.*c"));
 
             Set<TopicPartition> assignment = Set.of(
                 new TopicPartition(topic, 0),
@@ -625,7 +629,8 @@ public class PlaintextConsumerSubscriptionTest {
     public void testUnsubscribeTopic(Map<String, Object> config) throws InterruptedException {
         try (Consumer<byte[], byte[]> consumer = cluster.consumer(config)) {
             var listener = new TestConsumerReassignmentListener();
-            consumer.subscribe(List.of(topic), listener);
+            consumer.setRebalanceListener(listener);
+            consumer.subscribe(List.of(topic));
 
             // the initial subscription should cause a callback execution
             awaitRebalance(consumer, listener);
