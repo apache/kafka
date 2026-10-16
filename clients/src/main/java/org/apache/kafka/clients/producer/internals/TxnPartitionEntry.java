@@ -23,7 +23,9 @@ import org.apache.kafka.common.requests.ProduceResponse;
 import org.apache.kafka.common.utils.internals.PrimitiveRef;
 import org.apache.kafka.common.utils.internals.ProducerIdAndEpoch;
 
+import java.util.ArrayList;
 import java.util.Comparator;
+import java.util.List;
 import java.util.OptionalInt;
 import java.util.OptionalLong;
 import java.util.SortedSet;
@@ -51,7 +53,7 @@ class TxnPartitionEntry {
     // (either successfully or through a fatal failure).
     private SortedSet<ProducerBatch> inflightBatchesBySequence;
 
-    // Base sequences of batches that completed while an older batch was still in flight. The broker may have
+    // Base sequences of completed batches that may still be ahead of an in-flight batch. The broker may have
     // appended them after that older batch, so they still take up room in its deduplication window. Entries
     // are dropped lazily in `numBatchesAheadOfOldestInflight` once no older batch is in flight.
     private final TreeSet<Integer> completedSequencesAheadOfOldestInflight;
@@ -112,20 +114,13 @@ class TxnPartitionEntry {
      * it is not yet known which completed batches are still ahead of something in flight.
      */
     int numBatchesAheadOfOldestInflight() {
-        forgetCompletedSequencesNotAheadOfInflightBatches();
-        if (inflightBatchesBySequence.isEmpty()) {
-            return 0;
-        }
-        return inflightBatchesBySequence.size() - 1 + completedSequencesAheadOfOldestInflight.size();
-    }
-
-    private void forgetCompletedSequencesNotAheadOfInflightBatches() {
         if (inflightBatchesBySequence.isEmpty()) {
             completedSequencesAheadOfOldestInflight.clear();
-        } else {
-            int oldestSequence = inflightBatchesBySequence.first().baseSequence();
-            completedSequencesAheadOfOldestInflight.headSet(oldestSequence, true).clear();
+            return 0;
         }
+        int oldestSequence = inflightBatchesBySequence.first().baseSequence();
+        completedSequencesAheadOfOldestInflight.headSet(oldestSequence, true).clear();
+        return inflightBatchesBySequence.size() - 1 + completedSequencesAheadOfOldestInflight.size();
     }
 
     ProducerBatch nextBatchBySequence() {
@@ -138,6 +133,8 @@ class TxnPartitionEntry {
 
     void addInflightBatch(ProducerBatch batch) {
         inflightBatchesBySequence.add(batch);
+        // A batch that is split after being rejected as too large comes back with the sequence it was removed with.
+        completedSequencesAheadOfOldestInflight.remove(batch.baseSequence());
     }
 
     void setLastAckedOffset(long lastAckedOffset) {
@@ -167,17 +164,13 @@ class TxnPartitionEntry {
     }
 
     void removeInFlightBatch(ProducerBatch batch) {
-        if (!inflightBatchesBySequence.remove(batch)) {
-            return;
-        }
-        if (!inflightBatchesBySequence.isEmpty()
-                && batch.baseSequence() > inflightBatchesBySequence.first().baseSequence()) {
-            // Completed while an older batch is still in flight, see `completedSequencesAheadOfOldestInflight`.
+        if (inflightBatchesBySequence.remove(batch)) {
+            // Dropped again by `numBatchesAheadOfOldestInflight` once no older batch is in flight.
             completedSequencesAheadOfOldestInflight.add(batch.baseSequence());
         }
     }
 
-    void adjustSequencesDueToFailedBatch(long baseSequence, int recordCount) {
+    void adjustSequencesDueToFailedBatch(int baseSequence, int recordCount) {
         decrementSequence(recordCount);
         resetSequenceNumbers(inFlightBatch -> {
             if (inFlightBatch.baseSequence() < baseSequence)
@@ -194,8 +187,8 @@ class TxnPartitionEntry {
         // The failed batch was never appended, so it no longer occupies a sequence range, and the completed batches
         // after it move down along with the in-flight ones. The failed batch itself may have been recorded as
         // completed ahead of the oldest in-flight batch when it was removed from the in-flight set, so drop it first.
-        completedSequencesAheadOfOldestInflight.remove((int) baseSequence);
-        TreeSet<Integer> adjustedSequences = new TreeSet<>();
+        completedSequencesAheadOfOldestInflight.remove(baseSequence);
+        List<Integer> adjustedSequences = new ArrayList<>(completedSequencesAheadOfOldestInflight.size());
         for (int completedSequence : completedSequencesAheadOfOldestInflight) {
             adjustedSequences.add(completedSequence > baseSequence ? completedSequence - recordCount : completedSequence);
         }
