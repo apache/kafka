@@ -47,9 +47,9 @@ import java.util.Arrays;
  * <p>Every move goes from a member to one with at least two partitions fewer, so it lowers the sum
  * of the squares of the assignment sizes by at least two, and the step ends. It ends when no extra
  * partition can move to a subscriber with at least two partitions fewer, which is the balance
- * property. With a single subscription, all assignment sizes are then within one of each other,
- * since a member with two partitions more than another has an extra partition of a topic the other
- * does not have. Nothing moves when the assignment already has the property.
+ * property. With every member subscribed to the same topics, all assignment sizes are then within
+ * one of each other, since a member with two partitions more than another has an extra partition
+ * of a topic the other does not have. Nothing moves when the assignment already has the property.
  *
  * <p>Pairing the largest member with the smallest one across cohorts lets a member give an extra
  * partition to a member of another cohort that needs one. Balancing each cohort on its own could
@@ -359,7 +359,9 @@ public final class BalanceExtraPartitions {
 
     /**
      * Tells whether an extra partition may move, which needs a member at least two partitions
-     * larger than another.
+     * larger than another. With every member subscribed to the same topics, an extra partition can
+     * then always move. Otherwise it may not, for example when the two members subscribe to
+     * different topics. The step then builds its state and moves nothing.
      *
      * @return {@code false} when all assignment sizes are within one of each other, in which case
      *         nothing can move.
@@ -463,7 +465,9 @@ public final class BalanceExtraPartitions {
         receivers = new LongHeap[group.cohortCount()];
         for (int cohort = 0; cohort < group.cohortCount(); cohort++) {
             var members = group.membersOf(cohort);
-            var receiverKeys = new long[members.length];
+            // The heap keeps this array as its storage. Every move adds its giver and its receiver
+            // again to the heaps of their cohorts, so the array has room for as many entries again.
+            var receiverKeys = new long[2 * members.length];
             for (int i = 0; i < members.length; i++) {
                 receiverKeys[i] = receiverKey(members[i]);
                 if (quotas.extraPartitionCount(members[i]) > 0) {
