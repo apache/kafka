@@ -170,6 +170,31 @@ public class KafkaConfigSchemaTest {
     }
 
     @Test
+    public void testResolveEffectiveTopicConfigNormalizesValues() {
+        Map<String, String> dynamicTopicConfigs = Map.of(
+            "abc", "a, b",
+            "def", "0100",
+            "ghi", "TRUE",
+            "xyz", " secret "
+        );
+        Map<String, ConfigEntry> expected = Map.of(
+            "abc", new ConfigEntry("abc", "a,b",
+                    ConfigEntry.ConfigSource.DYNAMIC_TOPIC_CONFIG, false, false, List.of(),
+                    ConfigEntry.ConfigType.LIST, "abc doc"),
+            "def", new ConfigEntry("def", "100",
+                    ConfigEntry.ConfigSource.DYNAMIC_TOPIC_CONFIG, false, false, List.of(),
+                    ConfigEntry.ConfigType.LONG, "def doc"),
+            "ghi", new ConfigEntry("ghi", "true",
+                    ConfigEntry.ConfigSource.DYNAMIC_TOPIC_CONFIG, false, false, List.of(),
+                    ConfigEntry.ConfigType.BOOLEAN, "ghi doc"),
+            "xyz", new ConfigEntry("xyz", " secret ",
+                    ConfigEntry.ConfigSource.DYNAMIC_TOPIC_CONFIG, true, false, List.of(),
+                    ConfigEntry.ConfigType.PASSWORD, "xyz doc")
+        );
+        assertEquals(expected, SCHEMA.resolveEffectiveTopicConfigs(Map.of(), Map.of(), Map.of(), dynamicTopicConfigs));
+    }
+
+    @Test
     public void testResolveEffectiveDynamicInternalTopicConfig() {
         Map<String, String> dynamicTopicConfigs = Map.of(
             "ghi", "true",
