@@ -34,6 +34,7 @@ public enum TransactionState {
      * <p>
      * transition: received AddPartitionsToTxnRequest => Ongoing
      *             received AddOffsetsToTxnRequest => Ongoing
+     *             received EndTxnRequest with commit and TransactionV2 enabled => PrepareCommit
      *             received EndTxnRequest with abort and TransactionV2 enabled => PrepareAbort
      */
     EMPTY((byte) 0, org.apache.kafka.clients.admin.TransactionState.EMPTY.toString(), true),
@@ -48,7 +49,13 @@ public enum TransactionState {
     ONGOING((byte) 1, org.apache.kafka.clients.admin.TransactionState.ONGOING.toString(), false),
     /**
      * Group is preparing to commit
+     * <p>
      * transition: received acks from all partitions => CompleteCommit
+     * <p>
+     * Note, In transaction v2, we allow Empty, CompleteCommit, CompleteAbort to transition to PrepareCommit. A
+     * coordinator that has lost leadership but not yet applied the metadata change sees the transaction as having no
+     * partitions, so it commits an empty transaction, which fails with a retriable error since the write cannot be
+     * replicated, rather than returning a fatal error to the client.
      */
     PREPARE_COMMIT((byte) 2, org.apache.kafka.clients.admin.TransactionState.PREPARE_COMMIT.toString(), false),
     /**

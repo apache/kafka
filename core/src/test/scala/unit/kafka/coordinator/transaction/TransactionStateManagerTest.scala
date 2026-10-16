@@ -735,15 +735,17 @@ class TransactionStateManagerTest {
     verifyWritesTxnMarkersInPrepareState(TransactionState.PREPARE_ABORT)
   }
 
-  @Test
-  def shouldCompleteEmptyPrepareCommitOnLoad(): Unit = {
-    // With transaction V2, committing a transaction with no partitions writes PrepareCommit with no partitions.
-    // On load, it must be completed the same way as an empty PrepareAbort.
+  @ParameterizedTest
+  @EnumSource(value = classOf[TransactionState], names = Array("PREPARE_COMMIT", "PREPARE_ABORT"))
+  def shouldCompleteEmptyPreparedTransactionOnLoad(state: TransactionState): Unit = {
+    // With transaction V2, ending a transaction with no partitions writes PrepareCommit or PrepareAbort with no
+    // partitions. On load, it must still be completed.
+    val (expectedResult, expectedCompleteState) =
+      if (state == TransactionState.PREPARE_COMMIT) (TransactionResult.COMMIT, TransactionState.COMPLETE_COMMIT)
+      else (TransactionResult.ABORT, TransactionState.COMPLETE_ABORT)
     val txnMetadata = new TransactionMetadata(transactionalId1, producerIds(transactionalId1), RecordBatch.NO_PRODUCER_ID,
-      RecordBatch.NO_PRODUCER_ID, 0.toShort, RecordBatch.NO_PRODUCER_EPOCH, transactionTimeoutMs, TransactionState.COMPLETE_COMMIT,
+      RecordBatch.NO_PRODUCER_ID, 1.toShort, RecordBatch.NO_PRODUCER_EPOCH, transactionTimeoutMs, state,
       util.Set.of, time.milliseconds(), time.milliseconds(), TV_2)
-    txnMetadata.completeTransitionTo(txnMetadata.prepareAbortOrCommit(TransactionState.PREPARE_COMMIT, TV_2,
-      RecordBatch.NO_PRODUCER_ID, time.milliseconds(), true))
 
     txnRecords += new SimpleRecord(txnMessageKeyBytes1, TransactionLog.valueToBytes(txnMetadata.prepareNoTransit(), TV_2))
     prepareTxnLog(topicPartition, 0, MemoryRecords.withRecords(0L, Compression.NONE, txnRecords.toArray: _*))
@@ -758,14 +760,14 @@ class TransactionStateManagerTest {
     })
     scheduler.tick()
 
-    assertEquals(TransactionResult.COMMIT, txnResult)
-    assertEquals(TransactionState.PREPARE_COMMIT, loadedMetadata.state)
+    assertEquals(expectedResult, txnResult)
+    assertEquals(state, loadedMetadata.state)
     assertEquals(1.toShort, loadedMetadata.producerEpoch)
     assertTrue(loadedMetadata.topicPartitions.isEmpty)
-    assertEquals(TransactionState.COMPLETE_COMMIT, completeMetadata.txnState)
+    assertEquals(expectedCompleteState, completeMetadata.txnState)
 
     loadedMetadata.completeTransitionTo(completeMetadata)
-    assertEquals(TransactionState.COMPLETE_COMMIT, loadedMetadata.state)
+    assertEquals(expectedCompleteState, loadedMetadata.state)
     assertEquals(1.toShort, loadedMetadata.producerEpoch)
   }
 

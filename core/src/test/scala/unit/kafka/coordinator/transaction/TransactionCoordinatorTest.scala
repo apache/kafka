@@ -881,7 +881,7 @@ class TransactionCoordinatorTest {
 
   @ParameterizedTest
   @EnumSource(value = classOf[TransactionState], names = Array("EMPTY", "COMPLETE_COMMIT", "COMPLETE_ABORT"))
-  def shouldCompleteEmptyCommitWithoutMarkersInV2(state: TransactionState): Unit = {
+  def shouldPrepareEmptyCommitInV2(state: TransactionState): Unit = {
     val txnMetadata = new TransactionMetadata(transactionalId, producerId, producerId, RecordBatch.NO_PRODUCER_ID,
       producerEpoch, (producerEpoch - 1).toShort, 1, state, util.Set.of, 0, time.milliseconds(), TV_2)
     when(transactionManager.getTransactionState(ArgumentMatchers.eq(transactionalId)))
@@ -991,7 +991,7 @@ class TransactionCoordinatorTest {
   }
 
   @Test
-  def shouldReturnInvalidTxnRequestOnEndTxnV2IfNotEndTxnV2Retry(): Unit = {
+  def shouldTreatEndTxnV2AtCurrentEpochAsNextRequestNotRetry(): Unit = {
     when(transactionManager.getTransactionState(ArgumentMatchers.eq(transactionalId)))
       .thenReturn(Right(Some(new CoordinatorEpochAndTxnMetadata(coordinatorEpoch, new TransactionMetadata(transactionalId, producerId, producerId,
         RecordBatch.NO_PRODUCER_ID, producerEpoch, RecordBatch.NO_PRODUCER_EPOCH, 1, TransactionState.PREPARE_COMMIT, util.Set.of, 0, time.milliseconds(), TV_2)))))
