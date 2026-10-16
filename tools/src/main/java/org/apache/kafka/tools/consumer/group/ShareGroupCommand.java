@@ -43,6 +43,7 @@ import org.apache.kafka.common.errors.GroupIdNotFoundException;
 import org.apache.kafka.common.errors.GroupNotEmptyException;
 import org.apache.kafka.common.protocol.Errors;
 import org.apache.kafka.common.utils.Utils;
+import org.apache.kafka.common.utils.internals.Exit;
 import org.apache.kafka.server.util.CommandLineUtils;
 import org.apache.kafka.tools.GroupOffsetsResetter;
 
@@ -69,30 +70,44 @@ import java.util.concurrent.ExecutionException;
 import java.util.stream.Collectors;
 import java.util.stream.Stream;
 
-import joptsimple.OptionException;
 
 public class ShareGroupCommand {
 
     static final String MISSING_COLUMN_VALUE = "-";
 
     public static void main(String[] args) {
-        ShareGroupCommandOptions opts = new ShareGroupCommandOptions(args);
+        Exit.exit(mainNoExit(args));
+    }
+
+    static int mainNoExit(String[] args) {
         try {
+            ShareGroupCommandOptions opts = new ShareGroupCommandOptions(args);
             opts.checkArgs();
-            CommandLineUtils.maybePrintHelpOrVersion(opts, "This tool helps to list all share groups, describe a share group, delete share group info, or reset share group offsets.");
 
             // should have exactly one action
             long actions = Stream.of(opts.listOpt, opts.describeOpt, opts.deleteOpt, opts.resetOffsetsOpt, opts.deleteOffsetsOpt).filter(opts.options::has).count();
-            if (actions != 1)
-                CommandLineUtils.printUsageAndExit(opts.parser, "Command must include exactly one action: --list, --describe, --delete, --reset-offsets, --delete-offsets.");
+            if (actions != 1) {
+                CommandLineUtils.printUsageAndThrow(opts.parser,
+                    "Command must include exactly one action: --list, --describe, --delete, --reset-offsets, --delete-offsets.");
+            }
 
             run(opts);
-        } catch (OptionException e) {
-            CommandLineUtils.printUsageAndExit(opts.parser, e.getMessage());
+            return 0;
+        } catch (CommandLineUtils.HelpOrVersionException e) {
+            if (e.getMessage() != null) {
+                System.err.println(e.getMessage());
+            }
+            return 0;
+        } catch (IllegalArgumentException e) {
+            System.err.println(e.getMessage());
+            return 1;
+        } catch (Throwable e) {
+            printError("Executing share group command failed due to " + e.getMessage(), Optional.of(e));
+            return 1;
         }
     }
 
-    public static void run(ShareGroupCommandOptions opts) {
+    static void run(ShareGroupCommandOptions opts) throws Exception {
         try (ShareGroupService shareGroupService = new ShareGroupService(opts, Map.of())) {
             if (opts.options.has(opts.listOpt)) {
                 shareGroupService.listGroups();
@@ -111,10 +126,6 @@ public class ShareGroupCommand {
             } else if (opts.options.has(opts.deleteOffsetsOpt)) {
                 shareGroupService.deleteOffsets();
             }
-        } catch (IllegalArgumentException e) {
-            CommandLineUtils.printUsageAndExit(opts.parser, e.getMessage());
-        } catch (Throwable e) {
-            printError("Executing share group command failed due to " + e.getMessage(), Optional.of(e));
         }
     }
 
@@ -434,7 +445,7 @@ public class ShareGroupCommand {
             try {
                 ShareGroupDescription shareGroupDescription = describeShareGroups(List.of(groupId)).get(groupId);
                 if (!(GroupState.EMPTY.equals(shareGroupDescription.groupState()) || GroupState.DEAD.equals(shareGroupDescription.groupState()))) {
-                    CommandLineUtils.printErrorAndExit(String.format("Share group '%s' is not empty.", groupId));
+                    throw new IllegalArgumentException(String.format("Share group '%s' is not empty.", groupId));
                 }
                 Map<TopicPartition, OffsetAndMetadata> offsetsToReset = resetOffsetsForInactiveGroup(groupId);
                 if (!offsetsToReset.isEmpty()) {
@@ -450,7 +461,7 @@ public class ShareGroupCommand {
                         result.put(groupId, offsetsToReset);
                     }
                 } else if (cause instanceof KafkaException) {
-                    CommandLineUtils.printErrorAndExit(cause.getMessage());
+                    throw (KafkaException) cause;
                 } else {
                     throw new RuntimeException(cause);
                 }
@@ -538,7 +549,7 @@ public class ShareGroupCommand {
                 return groupOffsetsResetter.resetToCurrentForShareGroup(partitionsToReset, currentOffsets);
             }
             CommandLineUtils
-                .printUsageAndExit(opts.parser, String.format("Option '%s' requires one of the following scenarios: %s", opts.resetOffsetsOpt, opts.allResetOffsetsScenarioOpts));
+                .printUsageAndThrow(opts.parser, String.format("Option '%s' requires one of the following scenarios: %s", opts.resetOffsetsOpt, opts.allResetOffsetsScenarioOpts));
             return null;
         }
 

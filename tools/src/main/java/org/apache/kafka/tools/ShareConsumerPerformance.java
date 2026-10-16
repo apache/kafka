@@ -110,6 +110,13 @@ public class ShareConsumerPerformance {
             shareConsumersMetrics.forEach(ToolsUtils::printMetrics);
 
             shareConsumers.forEach(shareConsumer -> shareConsumer.close(Duration.ofMillis(500)));
+        } catch (CommandLineUtils.HelpOrVersionException e) {
+            if (e.getMessage() != null) {
+                System.err.println(e.getMessage());
+            }
+        } catch (IllegalArgumentException e) {
+            System.err.println(e.getMessage());
+            Exit.exit(1);
         } catch (Throwable e) {
             System.err.println(e.getMessage());
             System.err.println(Utils.stackTrace(e));
@@ -407,23 +414,20 @@ public class ShareConsumerPerformance {
             try {
                 options = parser.parse(args);
             } catch (OptionException e) {
-                CommandLineUtils.printUsageAndExit(parser, e.getMessage());
-                return;
+                CommandLineUtils.printUsageAndThrow(parser, e.getMessage());
             }
-            if (options != null) {
-                CommandLineUtils.maybePrintHelpOrVersion(this, "This tool is used to verify the share consumer performance.");
-                CommandLineUtils.checkRequiredArgs(parser, options, topicOpt, bootstrapServerOpt);
+            CommandLineUtils.maybePrintHelpOrVersion(this, "This tool is used to verify the share consumer performance.");
+            CommandLineUtils.checkRequiredArgs(parser, options, topicOpt, bootstrapServerOpt);
 
-                CommandLineUtils.checkOneOfArgs(parser, options, numMessagesOpt, numRecordsOpt);
-                CommandLineUtils.checkInvalidArgs(parser, options, consumerConfigOpt, commandConfigOpt);
+            CommandLineUtils.checkOneOfArgs(parser, options, numMessagesOpt, numRecordsOpt);
+            CommandLineUtils.checkInvalidArgs(parser, options, consumerConfigOpt, commandConfigOpt);
 
-                if (options.has(numMessagesOpt)) {
-                    System.out.println("Warning: --messages is deprecated. Use --num-records instead.");
-                }
+            if (options.has(numMessagesOpt)) {
+                System.out.println("Warning: --messages is deprecated. Use --num-records instead.");
+            }
 
-                if (options.has(consumerConfigOpt)) {
-                    System.out.println("Warning: --consumer.config is deprecated. Use --command-config instead.");
-                }
+            if (options.has(consumerConfigOpt)) {
+                System.out.println("Warning: --consumer.config is deprecated. Use --command-config instead.");
             }
         }
 

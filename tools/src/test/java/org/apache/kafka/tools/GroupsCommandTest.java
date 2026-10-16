@@ -610,15 +610,7 @@ public class GroupsCommandTest {
     }
 
     private void assertInitializeInvalidOptionsExitCode(int expected, String[] options) {
-        Exit.setExitProcedure((exitCode, message) -> {
-            assertEquals(expected, exitCode);
-            throw new RuntimeException();
-        });
-        try {
-            assertThrows(RuntimeException.class, () -> new GroupsCommand.GroupsCommandOptions(options));
-        } finally {
-            Exit.resetExitProcedure();
-        }
+        assertThrows(IllegalArgumentException.class, () -> new GroupsCommand.GroupsCommandOptions(options));
     }
 
     private void assertCapturedListOutput(String capturedOutput, String[]... expectedLines) {

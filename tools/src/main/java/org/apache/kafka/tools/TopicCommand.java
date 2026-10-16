@@ -89,18 +89,26 @@ public abstract class TopicCommand {
         try {
             execute(args);
             return 0;
-        } catch (Throwable e) {
+        } catch (CommandLineUtils.HelpOrVersionException e) {
+            if (e.getMessage() != null) {
+                System.err.println(e.getMessage());
+            }
+            return 0;
+        } catch (IllegalArgumentException e) {
             System.err.println(e.getMessage());
-            System.err.println(Utils.stackTrace(e));
+            return 1;
+        } catch (ExecutionException e) {
+            printException(Objects.requireNonNullElse(e.getCause(), e));
+            return 1;
+        } catch (Throwable e) {
+            printException(e);
             return 1;
         }
     }
 
     static void execute(String... args) throws Exception {
         TopicCommandOptions opts = new TopicCommandOptions(args);
-        TopicService topicService = new TopicService(opts.commandConfig(), opts.bootstrapServer());
-        int exitCode = 0;
-        try {
+        try (TopicService topicService = new TopicService(opts.commandConfig(), opts.bootstrapServer())) {
             if (opts.hasCreateOption()) {
                 topicService.createTopic(opts);
             } else if (opts.hasAlterOption()) {
@@ -112,16 +120,6 @@ public abstract class TopicCommand {
             } else if (opts.hasDeleteOption()) {
                 topicService.deleteTopic(opts);
             }
-        } catch (ExecutionException e) {
-            Throwable cause = e.getCause();
-            printException(Objects.requireNonNullElse(cause, e));
-            exitCode = 1;
-        } catch (Throwable e) {
-            printException(e);
-            exitCode = 1;
-        } finally {
-            topicService.close();
-            Exit.exit(exitCode);
         }
     }
 
@@ -900,7 +898,7 @@ public abstract class TopicCommand {
 
         private void checkArgs() {
             if (args.length == 0)
-                CommandLineUtils.printUsageAndExit(parser, "Create, delete, describe, or change a topic.");
+                CommandLineUtils.printUsageAndThrow(parser, "Create, delete, describe, or change a topic.");
 
             CommandLineUtils.maybePrintHelpOrVersion(this, "This tool helps to create, delete, describe, or change a topic.");
 
@@ -908,7 +906,7 @@ public abstract class TopicCommand {
             long actions = Stream.of(createOpt, listOpt, alterOpt, describeOpt, deleteOpt).filter(options::has).count();
 
             if (actions != 1)
-                CommandLineUtils.printUsageAndExit(parser, "Command must include exactly one action: --list, --describe, --create, --alter or --delete");
+                CommandLineUtils.printUsageAndThrow(parser, "Command must include exactly one action: --list, --describe, --create, --alter or --delete");
 
             if (has(deleteConfigOpt)) {
                 System.err.println("delete-config option is no longer supported and deprecated since version 4.0. The config will be fully removed in future releases.");
@@ -924,7 +922,7 @@ public abstract class TopicCommand {
                 throw new IllegalArgumentException("--bootstrap-server must be specified");
             if (has(describeOpt) && has(ifExistsOpt)) {
                 if (!has(topicOpt) && !has(topicIdOpt))
-                    CommandLineUtils.printUsageAndExit(parser, "--topic or --topic-id is required to describe a topic");
+                    CommandLineUtils.printUsageAndThrow(parser, "--topic or --topic-id is required to describe a topic");
                 if (has(topicOpt) && has(topicIdOpt))
                     System.out.println("Only topic id will be used when both --topic and --topic-id are specified and topicId is not Uuid.ZERO_UUID");
             }
