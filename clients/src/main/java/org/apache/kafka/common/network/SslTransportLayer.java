@@ -1031,39 +1031,33 @@ public class SslTransportLayer implements TransportLayer {
 
         int totalBytesWritten = 0;
         long pos = position;
-        try {
-            while (totalBytesWritten < totalBytesToWrite) {
-                if (!fileChannelBuffer.hasRemaining()) {
-                    fileChannelBuffer.clear();
-                    int bytesRemaining = totalBytesToWrite - totalBytesWritten;
-                    if (bytesRemaining < fileChannelBuffer.limit())
-                        fileChannelBuffer.limit(bytesRemaining);
-                    int bytesRead;
-                    try {
-                        bytesRead = fileChannel.read(fileChannelBuffer, pos);
-                    } finally {
-                        // Holds exactly what was read, nothing if the read failed: otherwise the next call would
-                        // send the previous read as the contents of this position.
-                        fileChannelBuffer.flip();
-                    }
-                    if (bytesRead <= 0)
-                        break;
+        while (totalBytesWritten < totalBytesToWrite) {
+            if (!fileChannelBuffer.hasRemaining()) {
+                fileChannelBuffer.clear();
+                int bytesRemaining = totalBytesToWrite - totalBytesWritten;
+                if (bytesRemaining < fileChannelBuffer.limit())
+                    fileChannelBuffer.limit(bytesRemaining);
+                int bytesRead;
+                try {
+                    bytesRead = fileChannel.read(fileChannelBuffer, pos);
+                } finally {
+                    // Holds exactly what was read, nothing if the read failed or reached the end of the file:
+                    // otherwise the next call would send the previous read as the contents of this position.
+                    fileChannelBuffer.flip();
                 }
-                int networkBytesWritten = write(fileChannelBuffer);
-                totalBytesWritten += networkBytesWritten;
-                // In the case of a partial write we only return the written bytes to the caller. As a result, the
-                // `position` passed in the next `transferFrom` call won't include the bytes remaining in
-                // `fileChannelBuffer`. By draining `fileChannelBuffer` first, we ensure we update `pos` before
-                // we invoke `fileChannel.read`.
-                if (fileChannelBuffer.hasRemaining())
+                if (bytesRead <= 0)
                     break;
-                pos += networkBytesWritten;
             }
-            return totalBytesWritten;
-        } catch (IOException e) {
-            if (totalBytesWritten > 0)
-                return totalBytesWritten;
-            throw e;
+            int networkBytesWritten = write(fileChannelBuffer);
+            totalBytesWritten += networkBytesWritten;
+            // In the case of a partial write we only return the written bytes to the caller. As a result, the
+            // `position` passed in the next `transferFrom` call won't include the bytes remaining in
+            // `fileChannelBuffer`. By draining `fileChannelBuffer` first, we ensure we update `pos` before
+            // we invoke `fileChannel.read`.
+            if (fileChannelBuffer.hasRemaining())
+                break;
+            pos += networkBytesWritten;
         }
+        return totalBytesWritten;
     }
 }

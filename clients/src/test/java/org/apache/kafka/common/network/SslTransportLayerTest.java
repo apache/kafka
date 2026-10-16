@@ -1291,8 +1291,8 @@ public class SslTransportLayerTest {
     }
 
     /**
-     * A failed read of the file being transferred must not leave the previous read in the buffer to be sent as the
-     * contents of the failed position: the next transfer has to read again, and fail.
+     * A failed read of the file being transferred is rethrown, even after part of the transfer was sent, and must not
+     * leave the previous read in the buffer to be sent as the contents of the failed position.
      */
     @ParameterizedTest
     @ArgumentsSource(SslTransportLayerArgumentsProvider.class)
@@ -1303,15 +1303,16 @@ public class SslTransportLayerTest {
             throw new IOException("Input/output error");
         });
 
-        // The readable part is sent, then the read of the next part fails after progress was made
-        assertEquals(TRANSFER_SIZE, layer.transferFrom(fileChannel, 0, 3 * TRANSFER_SIZE));
-        // The next transfer starts at the unreadable position: it must fail instead of sending what was read before
+        // The readable part is sent, then the read of the next part fails
+        assertThrows(IOException.class, () -> layer.transferFrom(fileChannel, 0, 3 * TRANSFER_SIZE));
+        // A transfer from the unreadable position must fail as well instead of sending what was read before
         assertThrows(IOException.class, () -> layer.transferFrom(fileChannel, TRANSFER_SIZE, 2 * TRANSFER_SIZE));
         assertArrayEquals(fileContents(TRANSFER_SIZE), sent.toByteArray());
     }
 
     /**
-     * The same holds when the file ends early, for instance because it was truncated during the transfer.
+     * Nor must the previous read be sent when the file ends early, for instance because it was truncated during the
+     * transfer: that throws nothing.
      */
     @ParameterizedTest
     @ArgumentsSource(SslTransportLayerArgumentsProvider.class)
