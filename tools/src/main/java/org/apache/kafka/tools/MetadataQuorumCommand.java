@@ -16,9 +16,11 @@
  */
 package org.apache.kafka.tools;
 
+import org.apache.kafka.clients.admin.AddRaftVoterOptions;
 import org.apache.kafka.clients.admin.Admin;
 import org.apache.kafka.clients.admin.QuorumInfo;
 import org.apache.kafka.clients.admin.RaftVoterEndpoint;
+import org.apache.kafka.clients.admin.RemoveRaftVoterOptions;
 import org.apache.kafka.common.Endpoint;
 import org.apache.kafka.common.KafkaException;
 import org.apache.kafka.common.Uuid;
@@ -110,7 +112,8 @@ public class MetadataQuorumCommand {
         parser.addArgument("--command-config")
             .type(Arguments.fileType())
             .help("Property file containing configs to be passed to Admin Client. " +
-                "For add-controller, the file is used to specify the controller properties as well.");
+                "For add-controller, the file is used to specify the controller properties as well " +
+                "unless --controller-id is provided.");
         Subparsers subparsers = parser.addSubparsers().dest("command");
         addDescribeSubParser(subparsers);
         addAddControllerSubParser(subparsers);
@@ -145,13 +148,19 @@ public class MetadataQuorumCommand {
                     }
                 }
                 case "add-controller" -> {
-                    if (optionalCommandConfig == null) {
-                        throw new TerseException("You must supply the configuration file of the controller you are " +
-                            "adding when using add-controller.");
+                    Integer controllerId = namespace.getInt("controller_id");
+                    if (controllerId != null) {
+                        handleAddControllerById(admin,
+                            namespace.getBoolean("dry_run"),
+                            controllerId);
+                    } else if (optionalCommandConfig != null) {
+                        handleAddController(admin,
+                            namespace.getBoolean("dry_run"),
+                            props);
+                    } else {
+                        throw new TerseException(
+                            "You must use --command-config or --controller-id to add a controller.");
                     }
-                    handleAddController(admin,
-                        namespace.getBoolean("dry_run"),
-                        props);
                 }
                 case "remove-controller" -> handleRemoveController(admin,
                     namespace.getInt("controller_id"),
@@ -337,6 +346,14 @@ public class MetadataQuorumCommand {
             .help("Add a controller to the KRaft controller cluster");
 
         addControllerParser
+            .addArgument("--controller-id", "-i")
+            .help("The node ID of the controller to add. When provided the server derives the " +
+                "directory ID and endpoints from its in-memory state, so --command-config is not " +
+                "required for controller properties.")
+            .type(Integer.class)
+            .action(Arguments.store());
+
+        addControllerParser
             .addArgument("--dry-run")
             .help("True if we should print what would be done, but not do it.")
             .action(Arguments.storeTrue());
@@ -419,6 +436,22 @@ public class MetadataQuorumCommand {
         return results;
     }
 
+    static void handleAddControllerById(
+        Admin admin,
+        boolean dryRun,
+        int controllerId
+    ) throws TerseException, ExecutionException, InterruptedException {
+        if (controllerId < 0) {
+            throw new TerseException("Invalid negative --controller-id: " + controllerId);
+        }
+        if (!dryRun) {
+            admin.addRaftVoter(controllerId).all().get();
+        }
+        System.out.printf("%s KRaft controller %d%n",
+            dryRun ? "DRY RUN of adding" : "Added",
+            controllerId);
+    }
+
     static void handleAddController(
         Admin admin,
         boolean dryRun,
@@ -429,8 +462,9 @@ public class MetadataQuorumCommand {
         Uuid directoryId = getMetadataDirectoryId(metadataDirectory);
         Set<RaftVoterEndpoint> endpoints = getControllerAdvertisedListeners(props);
         if (!dryRun) {
-            admin.addRaftVoter(controllerId, directoryId, endpoints).
-                all().get();
+            admin.addRaftVoter(controllerId, new AddRaftVoterOptions()
+                .setVoterDirectoryId(Optional.of(directoryId))
+                .setEndpoints(endpoints)).all().get();
         }
         StringBuilder output = new StringBuilder();
         if (dryRun) {
@@ -471,8 +505,8 @@ public class MetadataQuorumCommand {
 
         removeControllerParser
             .addArgument("--controller-directory-id", "-d")
-            .help("The directory ID of the controller to remove.")
-            .required(true)
+            .help("The directory ID of the controller to remove. If not provided the server " +
+                "will derive the directory ID from its in-memory state.")
             .action(Arguments.store());
 
         removeControllerParser
@@ -496,19 +530,14 @@ public class MetadataQuorumCommand {
         if (controllerId < 0) {
             throw new TerseException("Invalid negative --controller-id: " + controllerId);
         }
-        Uuid directoryId;
-        try {
-            directoryId = Uuid.fromString(controllerDirectoryIdString);
-        } catch (IllegalArgumentException e) {
-            throw new TerseException("Failed to parse --controller-directory-id: " + e.getMessage());
-        }
+        Uuid directoryId = parseControllerDirectoryId(controllerDirectoryIdString);
         if (!dryRun) {
             removeRaftVoter(admin, controllerId, directoryId, unregister);
         }
-        System.out.printf("%sKRaft controller %d with directory id %s%n",
-            dryRun ? "DRY RUN of removing " : "Removed ",
+        System.out.printf("%s KRaft controller %d%s%n",
+            dryRun ? "DRY RUN of removing" : "Removed",
             controllerId,
-            directoryId);
+            directoryId == null ? "" : " with directory id " + directoryId);
         if (unregister) {
             if (!dryRun) {
                 unregisterController(admin, controllerId);
@@ -519,6 +548,20 @@ public class MetadataQuorumCommand {
         }
     }
 
+    private static Uuid parseControllerDirectoryId(String controllerDirectoryIdString) throws TerseException {
+        // if controllerDirectoryIdString is null or empty, which means no directory ID provided:
+        // let the server derive it from its in-memory state.
+        if (controllerDirectoryIdString == null || controllerDirectoryIdString.isEmpty()) {
+            return null;
+        }
+
+        try {
+            return Uuid.fromString(controllerDirectoryIdString);
+        } catch (IllegalArgumentException e) {
+            throw new TerseException("Failed to parse --controller-directory-id: " + e.getMessage());
+        }
+    }
+
     private static void removeRaftVoter(
         Admin admin,
         int controllerId,
@@ -526,7 +569,9 @@ public class MetadataQuorumCommand {
         boolean unregister
     ) throws TerseException, ExecutionException, InterruptedException {
         try {
-            admin.removeRaftVoter(controllerId, directoryId).all().get();
+            admin.removeRaftVoter(controllerId,
+                new RemoveRaftVoterOptions().setVoterDirectoryId(Optional.ofNullable(directoryId))
+            ).all().get();
         } catch (ExecutionException e) {
             Throwable cause = e.getCause();
             if (unregister && (cause instanceof UnsupportedVersionException ||
