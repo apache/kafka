@@ -25,6 +25,7 @@ import org.apache.kafka.common.record.TimestampType;
 import org.apache.kafka.common.record.internal.AbstractRecords;
 import org.apache.kafka.common.record.internal.CompressionRatioEstimator;
 import org.apache.kafka.common.record.internal.CompressionType;
+import org.apache.kafka.common.record.internal.DefaultRecordBatch;
 import org.apache.kafka.common.record.internal.MemoryRecords;
 import org.apache.kafka.common.record.internal.MemoryRecordsBuilder;
 import org.apache.kafka.common.record.internal.MutableRecordBatch;
@@ -419,7 +420,7 @@ public class ProducerBatch {
             ProducerIdAndEpoch producerIdAndEpoch = new ProducerIdAndEpoch(producerId(), producerEpoch());
             for (ProducerBatch newBatch : batches) {
                 newBatch.setProducerState(producerIdAndEpoch, sequence, isTransactional());
-                sequence += newBatch.recordCount;
+				sequence = DefaultRecordBatch.incrementSequence(sequence, newBatch.recordCount);
             }
         }
     }
