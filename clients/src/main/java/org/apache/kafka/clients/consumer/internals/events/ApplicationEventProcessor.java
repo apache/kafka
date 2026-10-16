@@ -256,6 +256,7 @@ public class ApplicationEventProcessor implements EventProcessor<ApplicationEven
         try {
             CommitRequestManager manager = requestManagers.commitRequestManager.get();
             Map<TopicPartition, OffsetAndMetadata> offsets = event.offsets().orElseGet(subscriptions::allConsumed);
+            event.updateCalculatedOffsets(offsets);
             event.markOffsetsReady();
             CompletableFuture<Map<TopicPartition, OffsetAndMetadata>> future = manager.commitAsync(offsets);
             future.whenComplete(complete(event.future()));
@@ -274,6 +275,7 @@ public class ApplicationEventProcessor implements EventProcessor<ApplicationEven
         try {
             CommitRequestManager manager = requestManagers.commitRequestManager.get();
             Map<TopicPartition, OffsetAndMetadata> offsets = event.offsets().orElseGet(subscriptions::allConsumed);
+            event.updateCalculatedOffsets(offsets);
             event.markOffsetsReady();
             CompletableFuture<Map<TopicPartition, OffsetAndMetadata>> future = manager.commitSync(offsets, event.deadlineMs());
             future.whenComplete(complete(event.future()));

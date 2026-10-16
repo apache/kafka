@@ -20,6 +20,7 @@ import org.apache.kafka.clients.consumer.OffsetAndMetadata;
 import org.apache.kafka.common.TopicPartition;
 
 import java.util.Collections;
+import java.util.HashMap;
 import java.util.Map;
 import java.util.Optional;
 import java.util.concurrent.CompletableFuture;
@@ -32,6 +33,11 @@ public abstract class CommitEvent extends CompletableApplicationEvent<Map<TopicP
     private final Optional<Map<TopicPartition, OffsetAndMetadata>> offsets;
 
     /**
+     * Offsets that is calculated.
+     */
+    private volatile Optional<Map<TopicPartition, OffsetAndMetadata>> calculatedOffsets;
+
+    /**
      * Future that completes when allConsumed offsets have been calculated.
      * The app thread waits for this future before returning control to ensure
      * the offsets to be committed are up-to-date.
@@ -41,6 +47,7 @@ public abstract class CommitEvent extends CompletableApplicationEvent<Map<TopicP
     protected CommitEvent(final Type type, final Optional<Map<TopicPartition, OffsetAndMetadata>> offsets, final long deadlineMs) {
         super(type, deadlineMs);
         this.offsets = validate(offsets);
+        this.calculatedOffsets = Optional.of(new HashMap<>());
     }
 
     /**
@@ -71,6 +78,14 @@ public abstract class CommitEvent extends CompletableApplicationEvent<Map<TopicP
 
     public void markOffsetsReady() {
         offsetsReady.complete(null);
+    }
+
+    public void updateCalculatedOffsets(final Map<TopicPartition, OffsetAndMetadata> calculatedOffsets) {
+        this.calculatedOffsets = Optional.of(calculatedOffsets);
+    }
+
+    public Optional<Map<TopicPartition, OffsetAndMetadata>> calculatedOffsets() {
+        return calculatedOffsets;
     }
 
     @Override
