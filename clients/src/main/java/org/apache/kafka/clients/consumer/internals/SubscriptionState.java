@@ -819,9 +819,15 @@ public class SubscriptionState {
     public synchronized Map<TopicPartition, OffsetAndMetadata> allConsumed() {
         Map<TopicPartition, OffsetAndMetadata> allConsumed = new HashMap<>();
         assignment.forEach((topicPartition, partitionState) -> {
-            if (partitionState.hasValidPosition())
+            if (partitionState.hasValidPosition()) {
+                Optional<Integer> epoch = partitionState.position.offsetEpoch;
+                Optional<Integer> currentLeaderEpoch = partitionState.position.currentLeader.epoch;
+                Optional<Integer> leaderEpoch = epoch.isPresent() && currentLeaderEpoch.isPresent() ?
+                        Optional.of(Math.max(epoch.get(), currentLeaderEpoch.get())) :
+                        currentLeaderEpoch.isPresent() ? currentLeaderEpoch : epoch;
                 allConsumed.put(topicPartition, new OffsetAndMetadata(partitionState.position.offset,
-                        partitionState.position.offsetEpoch, ""));
+                        leaderEpoch, ""));
+            }
         });
         return allConsumed;
     }
