@@ -2497,6 +2497,7 @@ public class KafkaRaftClientReconfigTest {
             .withBootstrapSnapshot(Optional.of(voters))
             .withElectedLeader(epoch, voter1.id())
             .withLocalListeners(localListeners)
+            .withCanBecomeVoter(true)
             .build();
 
         // waiting for FETCH requests until the UpdateRaftVoter request is sent
@@ -2519,6 +2520,42 @@ public class KafkaRaftClientReconfigTest {
         );
 
         // after sending an update voter the next request should be a fetch
+        context.pollUntilRequest();
+        RaftRequest.Outbound fetchRequest = context.assertSentFetchRequest();
+        context.assertFetchRequestData(fetchRequest, epoch, 0L, 0, context.client.highWatermark());
+    }
+
+    @Test
+    void testFollowerDoesNotSendUpdateVoterWhenItCannotBecomeVoter() throws Exception {
+        ReplicaKey local = replicaKey(randomReplicaId(), true);
+        ReplicaKey voter1 = replicaKey(local.id() + 1, true);
+        ReplicaKey voter2 = replicaKey(local.id() + 2, true);
+
+        VoterSet voters = VoterSetTest.voterSet(Stream.of(local, voter1, voter2));
+        int epoch = 4;
+
+        HashMap<ListenerName, InetSocketAddress> listenersMap = new HashMap<>(2);
+        listenersMap.put(
+            VoterSetTest.DEFAULT_LISTENER_NAME,
+            InetSocketAddress.createUnresolved("localhost", 9990 + local.id())
+        );
+        listenersMap.put(
+            ListenerName.normalised("ANOTHER_LISTENER"),
+            InetSocketAddress.createUnresolved("localhost", 8990 + local.id())
+        );
+        Endpoints localListeners = Endpoints.fromInetSocketAddresses(listenersMap);
+
+        RaftClientTestContext context = new RaftClientTestContext.Builder(local.id(), local.directoryId().get())
+            .withKip853Rpc(true)
+            .withBootstrapSnapshot(Optional.of(voters))
+            .withElectedLeader(epoch, voter1.id())
+            .withLocalListeners(localListeners)
+            .withCanBecomeVoter(false)
+            .build();
+
+        // waiting for FETCH requests until the UpdateRaftVoter request would be sent
+        context.advanceTimeAndCompleteFetch(epoch, voter1.id(), true);
+
         context.pollUntilRequest();
         RaftRequest.Outbound fetchRequest = context.assertSentFetchRequest();
         context.assertFetchRequestData(fetchRequest, epoch, 0L, 0, context.client.highWatermark());
@@ -2550,6 +2587,7 @@ public class KafkaRaftClientReconfigTest {
             .withStaticVoters(voters)
             .withElectedLeader(epoch, voter1.id())
             .withLocalListeners(localListeners)
+            .withCanBecomeVoter(true)
             .build();
 
         // waiting for FETCH request until the UpdateRaftVoter request is set
@@ -2621,6 +2659,7 @@ public class KafkaRaftClientReconfigTest {
             .withStaticVoters(voters)
             .withElectedLeader(epoch, voter1.id())
             .withLocalListeners(localListeners)
+            .withCanBecomeVoter(true)
             .build();
 
         // waiting for FETCH request until the UpdateRaftVoter request is set
@@ -2951,6 +2990,7 @@ public class KafkaRaftClientReconfigTest {
             .withKip853Rpc(true)
             .withBootstrapSnapshot(Optional.of(voters))
             .withElectedLeader(epoch, voter1.id())
+            .withCanBecomeVoter(true)
             .build();
 
         // waiting for FETCH request until the UpdateRaftVoter request is set
@@ -2992,6 +3032,7 @@ public class KafkaRaftClientReconfigTest {
             .withBootstrapSnapshot(Optional.of(voters))
             .withElectedLeader(epoch, voter1.id())
             .withLocalListeners(localListeners)
+            .withCanBecomeVoter(true)
             .build();
 
         // waiting up to the last FETCH request before the UpdateRaftVoter request is set
@@ -3053,6 +3094,7 @@ public class KafkaRaftClientReconfigTest {
             .withBootstrapSnapshot(Optional.of(voters))
             .withElectedLeader(epoch, voter1.id())
             .withLocalListeners(localListeners)
+            .withCanBecomeVoter(true)
             .build();
 
         // waiting for FETCH request until the UpdateRaftVoter request is set
