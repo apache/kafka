@@ -29,6 +29,7 @@ import org.apache.kafka.common.TopicPartition;
 import org.apache.kafka.common.config.ConfigResource;
 import org.apache.kafka.common.config.TopicConfig;
 import org.apache.kafka.common.header.Header;
+import org.apache.kafka.common.header.internals.RecordHeader;
 import org.apache.kafka.common.test.ClusterInstance;
 import org.apache.kafka.common.test.api.ClusterConfigProperty;
 import org.apache.kafka.common.test.api.ClusterTest;
@@ -269,6 +270,94 @@ public class ShareConsumerDLQTest extends ShareConsumerTestBase {
         rejectRecords(groupId, recordCount);
 
         verifyDlqTopicRecords(dlqTopic, groupId, expectedSourceOffsets(recordCount), true);
+        verifyDlqMetrics(groupId, recordCount);
+    }
+
+    /**
+     * As {@link #testRejectedRecordsWrittenToDlqWithCopyRecordEnabled()}, but the source records also carry
+     * a custom header. Verifies that with record copy enabled, the original record's headers are preserved
+     * on the DLQ record alongside the standard DLQ context headers.
+     */
+    @ClusterTest
+    public void testDlqCopiesOriginalRecordHeaders() throws Exception {
+        String groupId = "dlq-copy-headers-group";
+        String dlqTopic = "dlq.copy.headers";
+        int recordCount = 3;
+        String originalHeaderKey = "original-header";
+        String originalHeaderValue = "original-value";
+
+        alterShareAutoOffsetReset(groupId, "earliest");
+        createDlqTopic(dlqTopic);
+        alterShareGroupConfig(groupId, GroupConfig.ERRORS_DEADLETTERQUEUE_TOPIC_NAME_CONFIG, dlqTopic);
+        // Enable record copy so the original key/value/headers are written onto the DLQ record.
+        alterShareGroupConfig(groupId, GroupConfig.ERRORS_DEADLETTERQUEUE_COPY_RECORD_ENABLE_CONFIG, "true");
+
+        Header originalHeader = new RecordHeader(originalHeaderKey, originalHeaderValue.getBytes(StandardCharsets.UTF_8));
+        try (Producer<byte[], byte[]> producer = createProducer()) {
+            for (int i = 0; i < recordCount; i++) {
+                producer.send(new ProducerRecord<>(tp.topic(), tp.partition(), "key".getBytes(StandardCharsets.UTF_8),
+                    "value".getBytes(StandardCharsets.UTF_8), List.of(originalHeader)));
+            }
+            producer.flush();
+        }
+        rejectRecords(groupId, recordCount);
+
+        List<ConsumerRecord<byte[], byte[]>> dlqRecords = readDlqPartition(dlqTopic, 0, recordCount);
+        assertEquals(recordCount, dlqRecords.size(), "Unexpected number of records on the DLQ topic");
+        for (ConsumerRecord<byte[], byte[]> record : dlqRecords) {
+            assertEquals(originalHeaderValue, headerValue(record, originalHeaderKey),
+                "DLQ record should carry the original record's header");
+            // The original header must coexist with (not replace) the standard DLQ context headers.
+            assertEquals(groupId, headerValue(record, HEADER_DLQ_ERRORS_GROUP));
+            assertEquals(tp.topic(), headerValue(record, HEADER_DLQ_ERRORS_TOPIC));
+        }
+        verifyDlqMetrics(groupId, recordCount);
+    }
+
+    /**
+     * As {@link #testDlqCopiesOriginalRecordHeaders()}, but the source record's custom header reuses one
+     * of the standard DLQ context header keys. Verifies the original header is dropped entirely by
+     * ShareGroupDLQRecordHelper.headers() - not merely shadowed - so only the DLQ-computed value for
+     * that key reaches the DLQ record.
+     */
+    @ClusterTest
+    public void testDlqOriginalHeaderCollidingWithDlqHeaderIsOverwritten() throws Exception {
+        String groupId = "dlq-copy-collide-group";
+        String dlqTopic = "dlq.copy.collide";
+        int recordCount = 3;
+
+        alterShareAutoOffsetReset(groupId, "earliest");
+        createDlqTopic(dlqTopic);
+        alterShareGroupConfig(groupId, GroupConfig.ERRORS_DEADLETTERQUEUE_TOPIC_NAME_CONFIG, dlqTopic);
+        alterShareGroupConfig(groupId, GroupConfig.ERRORS_DEADLETTERQUEUE_COPY_RECORD_ENABLE_CONFIG, "true");
+
+        // Reuses the "group" DLQ header's key, with a bogus value that must not survive.
+        Header collidingHeader = new RecordHeader(HEADER_DLQ_ERRORS_GROUP, "bogus-group".getBytes(StandardCharsets.UTF_8));
+        try (Producer<byte[], byte[]> producer = createProducer()) {
+            for (int i = 0; i < recordCount; i++) {
+                producer.send(new ProducerRecord<>(tp.topic(), tp.partition(), "key".getBytes(StandardCharsets.UTF_8),
+                    "value".getBytes(StandardCharsets.UTF_8), List.of(collidingHeader)));
+            }
+            producer.flush();
+        }
+        rejectRecords(groupId, recordCount);
+
+        List<ConsumerRecord<byte[], byte[]>> dlqRecords = readDlqPartition(dlqTopic, 0, recordCount);
+        assertEquals(recordCount, dlqRecords.size(), "Unexpected number of records on the DLQ topic");
+        for (ConsumerRecord<byte[], byte[]> record : dlqRecords) {
+            assertEquals(groupId, headerValue(record, HEADER_DLQ_ERRORS_GROUP),
+                "The DLQ-computed header must win over the original record's colliding, bogus header");
+            // Confirm the original header was dropped, not merely shadowed: exactly one header under
+            // this key, not two.
+            long matchingHeaderCount = 0;
+            for (Header h : record.headers()) {
+                if (h.key().equals(HEADER_DLQ_ERRORS_GROUP)) {
+                    matchingHeaderCount++;
+                }
+            }
+            assertEquals(1, matchingHeaderCount,
+                "Expected exactly one '" + HEADER_DLQ_ERRORS_GROUP + "' header, found " + matchingHeaderCount);
+        }
         verifyDlqMetrics(groupId, recordCount);
     }
 
