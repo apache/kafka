@@ -299,7 +299,7 @@ public class ApplicationEventProcessorTest {
         when(fetchRequestManager.createFetchRequests()).thenReturn(CompletableFuture.completedFuture(null));
         processor.process(event);
         assertTrue(event.isComplete());
-        verify(commitRequestManager).updateTimerAndMaybeCommit(event.pollTimeMs());
+        verify(commitRequestManager).updateTimerAndMaybeCommit(event.pollTimeMs(), event.offsetsToCommitSnapshot());
         verify(membershipManager).onConsumerPoll();
         verify(heartbeatRequestManager).resetPollTimer(event.pollTimeMs());
         verify(offsetsRequestManager).updateFetchPositions(event.deadlineMs());

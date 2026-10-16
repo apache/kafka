@@ -17,13 +17,16 @@
 package org.apache.kafka.clients.consumer.internals.events;
 
 import org.apache.kafka.clients.consumer.Consumer;
+import org.apache.kafka.clients.consumer.OffsetAndMetadata;
 import org.apache.kafka.clients.consumer.internals.AsyncKafkaConsumer;
 import org.apache.kafka.clients.consumer.internals.ClassicKafkaConsumer;
 import org.apache.kafka.clients.consumer.internals.ConsumerUtils;
 import org.apache.kafka.common.KafkaException;
+import org.apache.kafka.common.TopicPartition;
 import org.apache.kafka.common.utils.Time;
 
 import java.time.Duration;
+import java.util.Map;
 import java.util.Optional;
 import java.util.concurrent.CompletableFuture;
 
@@ -49,6 +52,7 @@ public class AsyncPollEvent extends ApplicationEvent implements MetadataErrorNot
     private volatile boolean isComplete;
     private volatile boolean isValidatePositionsComplete;
     private final CompletableFuture<Void> reconciliationCheckFuture = new CompletableFuture<>();
+    private final Optional<AsyncPollEventOffsetsToCommit> maybeOffsetsToCommitSnapshot;
 
     /**
      * Creates a new event to signify a multi-stage processing of {@link Consumer#poll(Duration)} logic.
@@ -58,9 +62,21 @@ public class AsyncPollEvent extends ApplicationEvent implements MetadataErrorNot
      * @param pollTimeMs        Time, in milliseconds, at which point the event was created
      */
     public AsyncPollEvent(long deadlineMs, long pollTimeMs) {
+        this(deadlineMs, pollTimeMs, null, null);
+    }
+
+    public AsyncPollEvent(long deadlineMs, long pollTimeMs, Integer assignmentId, Map<TopicPartition, OffsetAndMetadata> offsets) {
         super(Type.ASYNC_POLL);
         this.deadlineMs = deadlineMs;
         this.pollTimeMs = pollTimeMs;
+
+        this.maybeOffsetsToCommitSnapshot = assignmentId != null && offsets != null
+            ? Optional.of(new AsyncPollEventOffsetsToCommit(assignmentId, offsets))
+            : Optional.empty();
+    }
+
+    public Optional<AsyncPollEventOffsetsToCommit> offsetsToCommitSnapshot() {
+        return maybeOffsetsToCommitSnapshot;
     }
 
     public long deadlineMs() {

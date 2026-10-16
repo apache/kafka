@@ -737,7 +737,7 @@ public class ApplicationEventProcessor implements EventProcessor<ApplicationEven
 
         if (requestManagers.commitRequestManager.isPresent()) {
             CommitRequestManager commitRequestManager = requestManagers.commitRequestManager.get();
-            commitRequestManager.updateTimerAndMaybeCommit(event.pollTimeMs());
+            commitRequestManager.updateTimerAndMaybeCommit(event.pollTimeMs(), event.offsetsToCommitSnapshot());
 
             requestManagers.consumerHeartbeatRequestManager.ifPresent(hrm -> {
                 ConsumerMembershipManager membershipManager = hrm.membershipManager();
