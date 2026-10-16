@@ -20,6 +20,8 @@ import org.apache.kafka.common.DirectoryId;
 import org.apache.kafka.common.KafkaException;
 import org.apache.kafka.common.TopicPartition;
 import org.apache.kafka.common.Uuid;
+import org.apache.kafka.common.config.AbstractConfig;
+import org.apache.kafka.common.config.ConfigException;
 import org.apache.kafka.common.config.TopicConfig;
 import org.apache.kafka.common.errors.KafkaStorageException;
 import org.apache.kafka.common.errors.OffsetOutOfRangeException;
@@ -33,6 +35,9 @@ import org.apache.kafka.metadata.properties.MetaProperties;
 import org.apache.kafka.metadata.properties.MetaPropertiesEnsemble;
 import org.apache.kafka.metadata.properties.MetaPropertiesVersion;
 import org.apache.kafka.metadata.properties.PropertiesUtils;
+import org.apache.kafka.server.config.AbstractKafkaConfig;
+import org.apache.kafka.server.config.ServerLogConfigs;
+import org.apache.kafka.server.log.remote.storage.RemoteLogManagerConfig;
 import org.apache.kafka.server.metrics.KafkaYammerMetrics;
 import org.apache.kafka.server.storage.log.FetchIsolation;
 import org.apache.kafka.server.util.FileLock;
@@ -50,17 +55,21 @@ import com.yammer.metrics.core.MetricName;
 import org.junit.jupiter.api.AfterEach;
 import org.junit.jupiter.api.BeforeEach;
 import org.junit.jupiter.api.Test;
+import org.junit.jupiter.params.ParameterizedTest;
+import org.junit.jupiter.params.provider.ValueSource;
 import org.mockito.ArgumentCaptor;
 
 import java.io.File;
 import java.io.IOException;
 import java.lang.reflect.Field;
 import java.nio.file.Files;
+import java.nio.file.Path;
 import java.nio.file.attribute.PosixFilePermission;
 import java.time.Duration;
 import java.util.ArrayList;
 import java.util.Arrays;
 import java.util.Collections;
+import java.util.HashMap;
 import java.util.HashSet;
 import java.util.List;
 import java.util.Map;
@@ -82,6 +91,8 @@ import static org.junit.jupiter.api.Assertions.assertDoesNotThrow;
 import static org.junit.jupiter.api.Assertions.assertEquals;
 import static org.junit.jupiter.api.Assertions.assertFalse;
 import static org.junit.jupiter.api.Assertions.assertNotEquals;
+import static org.junit.jupiter.api.Assertions.assertNull;
+import static org.junit.jupiter.api.Assertions.assertSame;
 import static org.junit.jupiter.api.Assertions.assertThrows;
 import static org.junit.jupiter.api.Assertions.assertTimeoutPreemptively;
 import static org.junit.jupiter.api.Assertions.assertTrue;
@@ -96,6 +107,7 @@ import static org.mockito.Mockito.never;
 import static org.mockito.Mockito.spy;
 import static org.mockito.Mockito.times;
 import static org.mockito.Mockito.verify;
+import static org.mockito.Mockito.verifyNoInteractions;
 import static org.mockito.Mockito.when;
 
 public class LogManagerTest {
@@ -137,6 +149,73 @@ public class LogManagerTest {
                 Utils.delete(dir);
             }
         }
+    }
+
+    @SuppressWarnings("removal")
+    @ParameterizedTest
+    @ValueSource(booleans = {true, false})
+    public void testCreateFromBrokerConfig(boolean useLogDirs) throws Exception {
+        logManager.shutdown();
+        logManager = null;
+        String relativeLogDir = Path.of("").toAbsolutePath().relativize(logDir.toPath()).toString();
+        String relativeOfflineDir = Path.of("").toAbsolutePath().relativize(logDir2.toPath()).toString();
+        Map<String, Object> props = new HashMap<>();
+        props.put("process.roles", "broker");
+        props.put("node.id", 0);
+        props.put("controller.listener.names", "CONTROLLER");
+        props.put(ServerLogConfigs.LOG_DIR_CONFIG, useLogDirs ? relativeOfflineDir : relativeLogDir);
+        if (useLogDirs) {
+            props.put(ServerLogConfigs.LOG_DIRS_CONFIG, List.of(relativeLogDir, relativeOfflineDir));
+        }
+        props.put(CleanerConfig.LOG_CLEANER_ENABLE_PROP, false);
+        props.put(ServerLogConfigs.LOG_RETENTION_TIME_HOURS_CONFIG, 2);
+        props.put(ServerLogConfigs.LOG_FLUSH_SCHEDULER_INTERVAL_MS_CONFIG, 101L);
+        props.put(ServerLogConfigs.LOG_FLUSH_OFFSET_CHECKPOINT_INTERVAL_MS_CONFIG, 102);
+        props.put(ServerLogConfigs.LOG_FLUSH_START_OFFSET_CHECKPOINT_INTERVAL_MS_CONFIG, 103);
+        props.put(ServerLogConfigs.LOG_CLEANUP_INTERVAL_MS_CONFIG, 104L);
+        if (useLogDirs) props.put(ServerLogConfigs.LOG_INITIAL_TASK_DELAY_MS_CONFIG, 105L);
+        long initialDelayMs = useLogDirs ? 105L : ServerLogConfigs.LOG_INITIAL_TASK_DELAY_MS_DEFAULT;
+        AbstractConfig config = new AbstractConfig(AbstractKafkaConfig.CONFIG_DEF, props, false);
+        Scheduler scheduler = mock(Scheduler.class);
+        ProducerStateManagerConfig producerConfig = new ProducerStateManagerConfig(106, false);
+
+        logManager = LogManager.create(config, Set.of(relativeOfflineDir), new MockConfigRepository(),
+            scheduler, time, new BrokerTopicStats(), new LogDirFailureChannel(2), 107, producerConfig, 108);
+
+        assertEquals(List.of(new File(relativeLogDir).getAbsoluteFile()), List.copyOf(logManager.liveLogDirs()));
+        assertEquals(useLogDirs, logManager.hasOfflineLogDirs());
+        assertEquals(7200000L, logManager.initialDefaultConfig().retentionMs);
+        assertEquals(initialDelayMs, logManager.initialTaskDelayMs());
+        assertEquals(107, logManager.maxTransactionTimeoutMs());
+        assertEquals(108, logManager.producerIdExpirationCheckIntervalMs());
+        assertSame(producerConfig, logManager.producerStateManagerConfig());
+        assertNull(logManager.cleaner());
+        verifyNoInteractions(scheduler);
+
+        logManager.startup(Set.of());
+        verify(scheduler).schedule(eq("kafka-log-flusher"), any(Runnable.class), eq(initialDelayMs), eq(101L));
+        verify(scheduler).schedule(eq("kafka-recovery-point-checkpoint"), any(Runnable.class), eq(initialDelayMs), eq(102L));
+        verify(scheduler).schedule(eq("kafka-log-start-offset-checkpoint"), any(Runnable.class), eq(initialDelayMs), eq(103L));
+        verify(scheduler).schedule(eq("kafka-log-retention"), any(Runnable.class), eq(initialDelayMs), eq(104L));
+    }
+
+    @Test
+    public void testCreateValidatesRemoteRetentionBeforeCreatingDirectories() {
+        File unusedLogDir = new File(logDir, "invalid-config");
+        AbstractConfig config = new AbstractConfig(AbstractKafkaConfig.CONFIG_DEF, Map.of(
+            "process.roles", "broker",
+            "node.id", 0,
+            "controller.listener.names", "CONTROLLER",
+            ServerLogConfigs.LOG_DIRS_CONFIG, List.of(unusedLogDir.getAbsolutePath()),
+            RemoteLogManagerConfig.REMOTE_LOG_STORAGE_SYSTEM_ENABLE_PROP, true,
+            ServerLogConfigs.LOG_RETENTION_BYTES_CONFIG, 1024L,
+            RemoteLogManagerConfig.LOG_LOCAL_RETENTION_BYTES_PROP, 2048L
+        ), false);
+
+        assertThrows(ConfigException.class, () -> LogManager.create(config, Set.of(), new MockConfigRepository(),
+            time.scheduler, time, new BrokerTopicStats(), new LogDirFailureChannel(1),
+            1000, new ProducerStateManagerConfig(1000, false), 1000));
+        assertFalse(unusedLogDir.exists());
     }
 
     /**

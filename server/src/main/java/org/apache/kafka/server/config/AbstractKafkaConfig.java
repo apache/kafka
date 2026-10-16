@@ -608,21 +608,15 @@ public abstract class AbstractKafkaConfig extends AbstractConfig {
     }
 
     public Long logRollTimeMillis() {
-        Long millis = getLong(ServerLogConfigs.LOG_ROLL_TIME_MILLIS_CONFIG);
-        if (millis != null) return millis;
-        return 60L * 60L * 1000L * getInt(ServerLogConfigs.LOG_ROLL_TIME_HOURS_CONFIG);
+        return LogConfig.logRollTimeMillis(this);
     }
 
     public Long logRollTimeJitterMillis() {
-        Long millis = getLong(ServerLogConfigs.LOG_ROLL_TIME_JITTER_MILLIS_CONFIG);
-        if (millis != null) return millis;
-        return TimeUnit.HOURS.toMillis(getInt(ServerLogConfigs.LOG_ROLL_TIME_JITTER_HOURS_CONFIG));
+        return LogConfig.logRollTimeJitterMillis(this);
     }
 
     public Long logFlushIntervalMs() {
-        Long millis = getLong(ServerLogConfigs.LOG_FLUSH_INTERVAL_MS_CONFIG);
-        if (millis != null) return millis;
-        return getLong(ServerLogConfigs.LOG_FLUSH_SCHEDULER_INTERVAL_MS_CONFIG);
+        return LogConfig.logFlushIntervalMs(this);
     }
 
     public Integer minInSyncReplicas() {
@@ -656,17 +650,7 @@ public abstract class AbstractKafkaConfig extends AbstractConfig {
     }
 
     public Long logRetentionTimeMillis() {
-        Long millis = getLong(ServerLogConfigs.LOG_RETENTION_TIME_MILLIS_CONFIG);
-        if (millis == null) {
-            Integer mins = getInt(ServerLogConfigs.LOG_RETENTION_TIME_MINUTES_CONFIG);
-            if (mins != null) {
-                millis = TimeUnit.MINUTES.toMillis(mins);
-            } else {
-                millis = TimeUnit.HOURS.toMillis(getInt(ServerLogConfigs.LOG_RETENTION_TIME_HOURS_CONFIG));
-            }
-        }
-
-        return millis < 0 ? Long.valueOf(-1) : millis;
+        return LogConfig.logRetentionTimeMillis(this);
     }
 
     /**
