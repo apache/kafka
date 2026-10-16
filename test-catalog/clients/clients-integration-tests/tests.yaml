@@ -90,6 +90,7 @@ org.apache.kafka.clients.admin.DeleteTopicTest:
 - testDeleteNonExistingTopic
 - testDeleteTopicAlreadyMarkedAsDeleted
 - testDeleteTopicDuringAddPartition
+- testDeleteTopicFilesAfterBrokerRestart
 - testDeleteTopicWithAllAliveReplicas
 - testDeleteTopicWithCleaner
 - testDisableDeleteTopic
