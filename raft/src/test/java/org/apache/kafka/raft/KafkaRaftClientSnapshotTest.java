@@ -885,7 +885,7 @@ public final class KafkaRaftClientSnapshotTest {
         int epoch = context.currentEpoch();
 
         FetchSnapshotRequestData voter1FetchSnapshotRequest = fetchSnapshotRequest(
-                context.clusterId,
+                context.clusterId.getOrThrow(),
                 voter1,
                 context.metadataPartition,
                 epoch,
@@ -895,7 +895,7 @@ public final class KafkaRaftClientSnapshotTest {
         );
 
         FetchSnapshotRequestData voter2FetchSnapshotRequest = fetchSnapshotRequest(
-                context.clusterId,
+                context.clusterId.getOrThrow(),
                 voter2,
                 context.metadataPartition,
                 epoch,
@@ -905,7 +905,7 @@ public final class KafkaRaftClientSnapshotTest {
         );
 
         FetchSnapshotRequestData observerFetchSnapshotRequest = fetchSnapshotRequest(
-                context.clusterId,
+                context.clusterId.getOrThrow(),
                 observer3,
                 context.metadataPartition,
                 epoch,
@@ -1991,15 +1991,16 @@ public final class KafkaRaftClientSnapshotTest {
         RaftClientTestContext context = new RaftClientTestContext.Builder(localId, voters)
             .withUnknownLeader(4)
             .withKip853Rpc(withKip853Rpc)
+            .withEmptyClusterId()
             .build();
 
         context.unattachedToLeader();
         int epoch = context.currentEpoch();
 
-        // valid cluster id is accepted
+        // null cluster id is accepted even when local cluster id is not yet set
         context.deliverRequest(
             fetchSnapshotRequest(
-                context.clusterId,
+                null,
                 otherNode,
                 context.metadataPartition,
                 epoch,
@@ -2011,7 +2012,41 @@ public final class KafkaRaftClientSnapshotTest {
         context.pollUntilResponse();
         context.assertSentFetchSnapshotResponse(context.metadataPartition);
 
-        // null cluster id is accepted
+        // any non-null cluster id is accepted when local cluster id is not yet set
+        context.deliverRequest(
+            fetchSnapshotRequest(
+                "some-cluster-id",
+                otherNode,
+                context.metadataPartition,
+                epoch,
+                Snapshots.BOOTSTRAP_SNAPSHOT_ID,
+                Integer.MAX_VALUE,
+                0
+            )
+        );
+        context.pollUntilResponse();
+        context.assertSentFetchSnapshotResponse(context.metadataPartition);
+
+        // complete the cluster id
+        String validClusterId = Uuid.randomUuid().toString();
+        context.clusterId.complete(validClusterId);
+
+        // valid cluster id is accepted
+        context.deliverRequest(
+            fetchSnapshotRequest(
+                validClusterId,
+                otherNode,
+                context.metadataPartition,
+                epoch,
+                Snapshots.BOOTSTRAP_SNAPSHOT_ID,
+                Integer.MAX_VALUE,
+                0
+            )
+        );
+        context.pollUntilResponse();
+        context.assertSentFetchSnapshotResponse(context.metadataPartition);
+
+        // null cluster id is still accepted
         context.deliverRequest(
             fetchSnapshotRequest(
                 null,

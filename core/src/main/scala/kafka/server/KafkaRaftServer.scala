@@ -59,7 +59,7 @@ class KafkaRaftServer(
   private val metrics = Server.initializeMetrics(
     config,
     time,
-    metaPropsEnsemble.clusterId().get()
+    metaPropsEnsemble.clusterId().orElse("")
   )
 
   private val sharedServer = new SharedServer(

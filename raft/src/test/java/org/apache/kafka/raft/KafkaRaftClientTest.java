@@ -29,6 +29,7 @@ import org.apache.kafka.common.message.VoteResponseData;
 import org.apache.kafka.common.metrics.KafkaMetric;
 import org.apache.kafka.common.metrics.Metrics;
 import org.apache.kafka.common.network.ListenerName;
+import org.apache.kafka.common.protocol.ApiKeys;
 import org.apache.kafka.common.protocol.Errors;
 import org.apache.kafka.common.record.internal.MemoryRecords;
 import org.apache.kafka.common.record.internal.MutableRecordBatch;
@@ -2480,36 +2481,156 @@ class KafkaRaftClientTest {
         RaftClientTestContext context = new RaftClientTestContext.Builder(localId, voters)
             .withUnknownLeader(4)
             .withKip853Rpc(withKip853Rpc)
+            .withEmptyClusterId()
             .build();
 
         context.unattachedToLeader();
         int epoch = context.currentEpoch();
 
-        // valid cluster id is accepted
-        context.deliverRequest(context.fetchRequest(epoch, otherNodeKey, -5L, 0, 0));
-        context.pollUntilResponse();
-        context.assertSentFetchPartitionResponse(Errors.INVALID_REQUEST, epoch, OptionalInt.of(localId));
-
-        // null cluster id is accepted
+        // null cluster id is accepted even when local cluster id is not yet set
         context.deliverRequest(
-            context.fetchRequest(epoch, null, otherNodeKey, -5L, 0, OptionalLong.of(Long.MAX_VALUE), 0)
+            context.fetchRequest(
+                epoch,
+                null,
+                otherNodeKey,
+                -5L,
+                0,
+                OptionalLong.of(Long.MAX_VALUE),
+                0
+            )
+        );
+        context.pollUntilResponse();
+        context.assertSentFetchPartitionResponse(
+            Errors.INVALID_REQUEST,
+            epoch,
+            OptionalInt.of(localId)
+        );
+
+        // any non-null cluster id is accepted when local cluster id is not yet set
+        context.deliverRequest(
+            context.fetchRequest(
+                epoch,
+                "some-cluster-id",
+                otherNodeKey,
+                -5L,
+                0,
+                OptionalLong.of(Long.MAX_VALUE),
+                0
+            )
+        );
+        context.pollUntilResponse();
+        context.assertSentFetchPartitionResponse(
+            Errors.INVALID_REQUEST,
+            epoch,
+            OptionalInt.of(localId)
+        );
+
+        // complete the cluster id
+        String validClusterId = Uuid.randomUuid().toString();
+        context.clusterId.complete(validClusterId);
+
+        // valid cluster id is accepted
+        context.deliverRequest(
+            context.fetchRequest(
+                epoch,
+                validClusterId,
+                otherNodeKey,
+                -5L,
+                0,
+                OptionalLong.of(Long.MAX_VALUE),
+                0
+            )
+        );
+        context.pollUntilResponse();
+        context.assertSentFetchPartitionResponse(
+            Errors.INVALID_REQUEST,
+            epoch,
+            OptionalInt.of(localId)
+        );
+
+        // null cluster id is still accepted
+        context.deliverRequest(
+            context.fetchRequest(
+                epoch,
+                null,
+                otherNodeKey,
+                -5L,
+                0,
+                OptionalLong.of(Long.MAX_VALUE),
+                0
+            )
         );
         context.pollUntilResponse();
         context.assertSentFetchPartitionResponse(Errors.INVALID_REQUEST, epoch, OptionalInt.of(localId));
 
         // empty cluster id is rejected
         context.deliverRequest(
-            context.fetchRequest(epoch, "", otherNodeKey, -5L, 0, OptionalLong.of(Long.MAX_VALUE), 0)
+            context.fetchRequest(
+                epoch,
+                "",
+                otherNodeKey,
+                -5L,
+                0,
+                OptionalLong.of(Long.MAX_VALUE),
+                0
+            )
         );
         context.pollUntilResponse();
         context.assertSentFetchPartitionResponse(Errors.INCONSISTENT_CLUSTER_ID);
 
         // invalid cluster id is rejected
         context.deliverRequest(
-            context.fetchRequest(epoch, "invalid-uuid", otherNodeKey, -5L, 0, OptionalLong.of(Long.MAX_VALUE), 0)
+            context.fetchRequest(
+                epoch,
+                "invalid-uuid",
+                otherNodeKey,
+                -5L,
+                0,
+                OptionalLong.of(Long.MAX_VALUE),
+                0
+            )
         );
         context.pollUntilResponse();
         context.assertSentFetchPartitionResponse(Errors.INCONSISTENT_CLUSTER_ID);
+    }
+
+    @ParameterizedTest
+    @ValueSource(booleans = { true, false })
+    public void testLeaderWithUnknownClusterIdAdvancesHighWatermark(
+        boolean withKip853Rpc
+    ) throws Exception {
+        int localId = randomReplicaId();
+        ReplicaKey followerKey = replicaKey(localId + 1, withKip853Rpc);
+        Set<Integer> voters = Set.of(localId, followerKey.id());
+
+        RaftClientTestContext context = new RaftClientTestContext.Builder(localId, voters)
+            .withUnknownLeader(4)
+            .withKip853Rpc(withKip853Rpc)
+            .withEmptyClusterId()
+            .build();
+
+        context.unattachedToLeader();
+        int epoch = context.currentEpoch();
+
+        context.poll();
+        assertEquals(OptionalLong.empty(), context.client.highWatermark());
+
+        // a fetch from a follower that knows the cluster id counts towards the high watermark
+        long endOffset = context.log.endOffset().offset();
+        context.deliverRequest(
+            context.fetchRequest(
+                epoch,
+                Uuid.randomUuid().toString(),
+                followerKey,
+                endOffset,
+                epoch,
+                OptionalLong.of(Long.MAX_VALUE),
+                0
+            )
+        );
+        context.pollUntilResponse();
+        context.assertSentFetchPartitionResponse(Errors.NONE, epoch, OptionalInt.of(localId));
+        assertEquals(OptionalLong.of(endOffset), context.client.highWatermark());
     }
 
     @ParameterizedTest
@@ -2521,17 +2642,36 @@ class KafkaRaftClientTest {
 
         RaftClientTestContext context = new RaftClientTestContext.Builder(localId, voters)
             .withKip853Rpc(withKip853Rpc)
+            .withEmptyClusterId()
             .build();
 
         context.unattachedToLeader();
         int epoch = context.currentEpoch();
 
-        // valid cluster id is accepted
-        context.deliverRequest(context.voteRequest(epoch, otherNodeKey, 0, 0));
+        // null cluster id is accepted even when local cluster id is not yet set
+        context.deliverRequest(context.voteRequest(null, epoch, otherNodeKey, 0, 0, false));
         context.pollUntilResponse();
         context.assertSentVoteResponse(Errors.NONE, epoch, OptionalInt.of(localId), false);
 
-        // null cluster id is accepted
+        // any non-null cluster id is accepted when local cluster id is not yet set
+        context.deliverRequest(
+            context.voteRequest("some-cluster-id", epoch, otherNodeKey, 0, 0, false)
+        );
+        context.pollUntilResponse();
+        context.assertSentVoteResponse(Errors.NONE, epoch, OptionalInt.of(localId), false);
+
+        // complete the cluster id
+        String validClusterId = Uuid.randomUuid().toString();
+        context.clusterId.complete(validClusterId);
+
+        // valid cluster id is accepted
+        context.deliverRequest(
+            context.voteRequest(validClusterId, epoch, otherNodeKey, 0, 0, false)
+        );
+        context.pollUntilResponse();
+        context.assertSentVoteResponse(Errors.NONE, epoch, OptionalInt.of(localId), false);
+
+        // null cluster id is still accepted
         context.deliverRequest(context.voteRequest(null, epoch, otherNodeKey, 0, 0, false));
         context.pollUntilResponse();
         context.assertSentVoteResponse(Errors.NONE, epoch, OptionalInt.of(localId), false);
@@ -2545,6 +2685,67 @@ class KafkaRaftClientTest {
         context.deliverRequest(context.voteRequest("invalid-uuid", epoch, otherNodeKey, 0, 0, false));
         context.pollUntilResponse();
         context.assertSentVoteResponse(Errors.INCONSISTENT_CLUSTER_ID);
+    }
+
+    @ParameterizedTest
+    @ValueSource(booleans = { true, false })
+    public void testVoterWithUnknownClusterIdElectsCandidateWithClusterId(
+        boolean withKip853Rpc
+    ) throws Exception {
+        int localId = randomReplicaId();
+        ReplicaKey candidateKey = replicaKey(localId + 1, withKip853Rpc);
+        int epoch = 5;
+        Set<Integer> voters = Set.of(localId, candidateKey.id());
+
+        RaftClientTestContext context = new RaftClientTestContext.Builder(localId, voters)
+            .withUnknownLeader(epoch)
+            .withKip853Rpc(withKip853Rpc)
+            .withEmptyClusterId()
+            .build();
+        context.assertUnknownLeaderAndNoVotedCandidate(epoch);
+
+        // the vote is granted to a candidate that knows the cluster id
+        String candidateClusterId = Uuid.randomUuid().toString();
+        context.deliverRequest(
+            context.voteRequest(
+                candidateClusterId,
+                epoch + 1,
+                candidateKey,
+                context.log.lastFetchedEpoch(),
+                context.log.endOffset().offset(),
+                false
+            )
+        );
+        context.pollUntilResponse();
+        context.assertSentVoteResponse(Errors.NONE, epoch + 1, OptionalInt.empty(), true);
+        context.assertVotedCandidate(epoch + 1, candidateKey);
+
+        // the elected candidate is accepted as the leader
+        context.deliverRequest(
+            context.beginEpochRequest(candidateClusterId, epoch + 1, candidateKey.id())
+        );
+        context.pollUntilResponse();
+        context.assertSentBeginQuorumEpochResponse(
+            Errors.NONE,
+            epoch + 1,
+            OptionalInt.of(candidateKey.id())
+        );
+        context.assertElectedLeaderAndVotedKey(epoch + 1, candidateKey.id(), candidateKey);
+
+        // the follower fetches from the leader, and every fetch (including the ones sent to the
+        // bootstrap servers while the leader was unknown) omits the cluster id
+        context.pollUntilRequest();
+        List<RaftRequest.Outbound> fetchRequests = context.channel.drainSentRequests(
+            Optional.of(ApiKeys.FETCH)
+        );
+        assertTrue(
+            fetchRequests
+                .stream()
+                .anyMatch(request -> request.destination().id() == candidateKey.id())
+        );
+        for (RaftRequest.Outbound request : fetchRequests) {
+            assertNull(((FetchRequestData) request.data()).clusterId());
+        }
     }
 
     @Test
@@ -2563,7 +2764,7 @@ class KafkaRaftClientTest {
         // invalid voter id is rejected
         context.deliverRequest(
             context.voteRequest(
-                context.clusterId,
+                context.clusterId.getOrThrow(),
                 epoch + 1,
                 otherNodeKey,
                 ReplicaKey.of(10, Uuid.randomUuid()),
@@ -2578,7 +2779,7 @@ class KafkaRaftClientTest {
         // invalid voter directory id is rejected
         context.deliverRequest(
             context.voteRequest(
-                context.clusterId,
+                context.clusterId.getOrThrow(),
                 epoch + 2,
                 otherNodeKey,
                 ReplicaKey.of(0, Uuid.randomUuid()),
@@ -2608,7 +2809,7 @@ class KafkaRaftClientTest {
         // Leader voter3 sends a begin quorum epoch request with incorrect voter id
         context.deliverRequest(
             context.beginEpochRequest(
-                context.clusterId,
+                context.clusterId.getOrThrow(),
                 epoch,
                 voter3,
                 ReplicaKey.of(10, Uuid.randomUuid())
@@ -2621,7 +2822,7 @@ class KafkaRaftClientTest {
         // Leader voter3 sends a begin quorum epoch request with incorrect voter directory id
         context.deliverRequest(
             context.beginEpochRequest(
-                context.clusterId,
+                context.clusterId.getOrThrow(),
                 epoch,
                 voter3,
                 ReplicaKey.of(localId, Uuid.randomUuid())
@@ -2634,7 +2835,7 @@ class KafkaRaftClientTest {
         // Leader voter3 sends a begin quorum epoch request with incorrect voter directory id
         context.deliverRequest(
             context.beginEpochRequest(
-                context.clusterId,
+                context.clusterId.getOrThrow(),
                 epoch,
                 voter3,
                 context.localReplicaKey()
@@ -2654,18 +2855,33 @@ class KafkaRaftClientTest {
         RaftClientTestContext context = new RaftClientTestContext.Builder(localId, voters)
             .withUnknownLeader(4)
             .withKip853Rpc(withKip853Rpc)
+            .withEmptyClusterId()
             .build();
 
         context.unattachedToLeader();
         int epoch = context.currentEpoch();
 
-        // valid cluster id is accepted
-        context.deliverRequest(context.beginEpochRequest(context.clusterId, epoch, localId));
+        // null cluster id is accepted even when local cluster id is not yet set
+        context.deliverRequest(context.beginEpochRequest(null, epoch, localId));
         context.pollUntilResponse();
         context.assertSentBeginQuorumEpochResponse(Errors.NONE, epoch, OptionalInt.of(localId));
 
-        // null cluster id is accepted
-        context.deliverRequest(context.beginEpochRequest(epoch, localId));
+        // any non-null cluster id is accepted when local cluster id is not yet set
+        context.deliverRequest(context.beginEpochRequest("some-cluster-id", epoch, localId));
+        context.pollUntilResponse();
+        context.assertSentBeginQuorumEpochResponse(Errors.NONE, epoch, OptionalInt.of(localId));
+
+        // complete the cluster id
+        String validClusterId = Uuid.randomUuid().toString();
+        context.clusterId.complete(validClusterId);
+
+        // valid cluster id is accepted
+        context.deliverRequest(context.beginEpochRequest(validClusterId, epoch, localId));
+        context.pollUntilResponse();
+        context.assertSentBeginQuorumEpochResponse(Errors.NONE, epoch, OptionalInt.of(localId));
+
+        // null cluster id is still accepted
+        context.deliverRequest(context.beginEpochRequest(null, epoch, localId));
         context.pollUntilResponse();
         context.assertSentBeginQuorumEpochResponse(Errors.NONE, epoch, OptionalInt.of(localId));
 
@@ -2690,17 +2906,38 @@ class KafkaRaftClientTest {
         RaftClientTestContext context = new RaftClientTestContext.Builder(localId, voters)
             .withUnknownLeader(4)
             .withKip853Rpc(withKip853Rpc)
+            .withEmptyClusterId()
             .build();
 
         context.unattachedToLeader();
         int epoch = context.currentEpoch();
 
-        // valid cluster id is accepted
-        context.deliverRequest(context.endEpochRequest(epoch, localId, List.of(otherNodeKey)));
+        // null cluster id is accepted even when local cluster id is not yet set
+        context.deliverRequest(
+            context.endEpochRequest(null, epoch, localId, List.of(otherNodeKey))
+        );
         context.pollUntilResponse();
         context.assertSentEndQuorumEpochResponse(Errors.NONE, epoch, OptionalInt.of(localId));
 
-        // null cluster id is accepted
+        // any non-null cluster id is accepted when local cluster id is not yet set
+        context.deliverRequest(
+            context.endEpochRequest("some-cluster-id", epoch, localId, List.of(otherNodeKey))
+        );
+        context.pollUntilResponse();
+        context.assertSentEndQuorumEpochResponse(Errors.NONE, epoch, OptionalInt.of(localId));
+
+        // complete the cluster id
+        String validClusterId = Uuid.randomUuid().toString();
+        context.clusterId.complete(validClusterId);
+
+        // valid cluster id is accepted
+        context.deliverRequest(
+            context.endEpochRequest(validClusterId, epoch, localId, List.of(otherNodeKey))
+        );
+        context.pollUntilResponse();
+        context.assertSentEndQuorumEpochResponse(Errors.NONE, epoch, OptionalInt.of(localId));
+
+        // null cluster id is still accepted
         context.deliverRequest(context.endEpochRequest(null, epoch, localId, List.of(otherNodeKey)));
         context.pollUntilResponse();
         context.assertSentEndQuorumEpochResponse(Errors.NONE, epoch, OptionalInt.of(localId));
