@@ -20,8 +20,8 @@ package kafka.server
 import org.apache.kafka.common.{Node, Uuid}
 import org.apache.kafka.common.message.ControllerRegistrationResponseData
 import org.apache.kafka.common.metadata.{FeatureLevelRecord, RegisterControllerRecord, UnregisterControllerRecord}
-import org.apache.kafka.common.protocol.Errors
-import org.apache.kafka.common.requests.ControllerRegistrationResponse
+import org.apache.kafka.common.protocol.{ApiKeys, Errors}
+import org.apache.kafka.common.requests.{AbstractRequest, ControllerRegistrationRequest, ControllerRegistrationResponse}
 import org.apache.kafka.common.utils.internals.ExponentialBackoff
 import org.apache.kafka.image.loader.{LogDeltaManifest, SnapshotManifest}
 import org.apache.kafka.image.{MetadataDelta, MetadataImage, MetadataProvenance}
@@ -218,6 +218,45 @@ class ControllerRegistrationManagerTest {
         )
         assertTrue(registeredInLog(manager))
       }
+    } finally {
+      manager.close()
+    }
+  }
+
+  @ParameterizedTest
+  @ValueSource(booleans = Array(false, true))
+  def testRequestVersionGatedByRequestHeaderV3Supported(requestHeaderV3Supported: Boolean): Unit = {
+    val context = new RegistrationTestContext(configProperties)
+    val metadataVersion = if (requestHeaderV3Supported) {
+      MetadataVersion.IBP_4_5_IV0
+    } else {
+      MetadataVersion.IBP_4_4_IV2
+    }
+    val manager = newControllerRegistrationManager(context)
+    try {
+      context.controllerNodeProvider.node.set(controller1)
+      val request = new CompletableFuture[ControllerRegistrationRequest]
+      context.mockClient.prepareResponseFrom(
+        (body: AbstractRequest) => request.complete(body.asInstanceOf[ControllerRegistrationRequest]),
+        new ControllerRegistrationResponse(new ControllerRegistrationResponseData()),
+        controller1)
+      manager.start(context.mockChannelManager)
+      doMetadataUpdate(MetadataImage.EMPTY,
+        manager,
+        metadataVersion,
+        r => if (r.controllerId() == 1) None else Some(r),
+        _ => None
+      )
+      TestUtils.retryOnExceptionWithTimeout(30000, () => {
+        context.mockChannelManager.poll()
+        assertTrue(request.isDone)
+      })
+
+      val requestVersion = request.get.version
+      val expectedVersion = if (requestHeaderV3Supported) ApiKeys.CONTROLLER_REGISTRATION.latestVersion else 0.toShort
+      assertEquals(expectedVersion, requestVersion)
+      val expectedHeaderVersion = if (requestHeaderV3Supported) 3.toShort else 2.toShort
+      assertEquals(expectedHeaderVersion, ApiKeys.CONTROLLER_REGISTRATION.requestHeaderVersion(requestVersion))
     } finally {
       manager.close()
     }
