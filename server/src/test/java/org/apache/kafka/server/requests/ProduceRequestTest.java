@@ -44,6 +44,7 @@ import org.apache.kafka.common.test.api.ClusterConfigProperty;
 import org.apache.kafka.common.test.api.ClusterTest;
 import org.apache.kafka.common.test.api.ClusterTestDefaults;
 import org.apache.kafka.server.IntegrationTestUtils;
+import org.apache.kafka.server.config.ServerConfigs;
 import org.apache.kafka.server.metrics.KafkaYammerMetrics;
 import org.apache.kafka.test.TestUtils;
 
@@ -385,6 +386,31 @@ public class ProduceRequestTest {
             15000L,
             "the lowered cluster-wide broker-default " + TopicConfig.MAX_DECOMPRESSED_MESSAGE_BYTES_CONFIG
                 + " was not applied to the produce path");
+    }
+
+    @ClusterTest
+    public void testDisabledCompressionTypesIsDynamicallyReconfigurable() throws Exception {
+        cluster.createTopic(TOPIC, 1, (short) 1);
+        int leaderId = cluster.getLeaderBrokerId(new TopicPartition(TOPIC, 0));
+        Uuid topicId = getTopicId();
+
+        var before = onlyPartitionResponse(sendProduceRequest(leaderId,
+            produceRequest(topicId, singleRecord(Compression.gzip().build(), UNDERSIZED_VALUE_BYTES))));
+        assertEquals(Errors.NONE.code(), before.errorCode());
+
+        try (Admin admin = cluster.admin()) {
+            ConfigResource resource = new ConfigResource(ConfigResource.Type.BROKER, "");
+            admin.incrementalAlterConfigs(Map.of(resource, List.of(new AlterConfigOp(
+                new ConfigEntry(ServerConfigs.COMPRESSION_DISABLED_TYPES_CONFIG, "gzip"),
+                AlterConfigOp.OpType.SET)))).all().get();
+        }
+
+        TestUtils.waitForCondition(
+            () -> onlyPartitionResponse(sendProduceRequest(leaderId,
+                produceRequest(topicId, singleRecord(Compression.gzip().build(), UNDERSIZED_VALUE_BYTES))))
+                .errorCode() == Errors.UNSUPPORTED_COMPRESSION_TYPE.code(),
+            15000L,
+            ServerConfigs.COMPRESSION_DISABLED_TYPES_CONFIG + " was not applied to the produce path");
     }
 
     private ProduceRequest produceRequest(Uuid topicId, MemoryRecords records) {

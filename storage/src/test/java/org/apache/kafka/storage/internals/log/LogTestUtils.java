@@ -630,6 +630,11 @@ public class LogTestUtils {
             return this;
         }
 
+        public LogConfigBuilder disabledCompressionTypes(String... disabledCompressionTypes) {
+            configs.put(LogConfig.INTERNAL_COMPRESSION_DISABLED_TYPES_CONFIG, List.of(disabledCompressionTypes));
+            return this;
+        }
+
         public LogConfigBuilder indexIntervalBytes(int indexIntervalBytes) {
             configs.put(TopicConfig.INDEX_INTERVAL_BYTES_CONFIG, indexIntervalBytes);
             return this;

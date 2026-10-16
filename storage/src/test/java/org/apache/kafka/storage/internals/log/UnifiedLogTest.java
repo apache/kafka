@@ -32,6 +32,7 @@ import org.apache.kafka.common.errors.OutOfOrderSequenceException;
 import org.apache.kafka.common.errors.RecordBatchTooLargeException;
 import org.apache.kafka.common.errors.RecordTooLargeException;
 import org.apache.kafka.common.errors.TransactionCoordinatorFencedException;
+import org.apache.kafka.common.errors.UnsupportedCompressionTypeException;
 import org.apache.kafka.common.internals.Topic;
 import org.apache.kafka.common.message.AbortedTxn;
 import org.apache.kafka.common.message.DescribeProducersResponseData;
@@ -99,6 +100,7 @@ import java.nio.file.Path;
 import java.security.DigestException;
 import java.util.ArrayList;
 import java.util.Arrays;
+import java.util.HashMap;
 import java.util.Iterator;
 import java.util.List;
 import java.util.Map;
@@ -3284,6 +3286,54 @@ public class UnifiedLogTest {
         log.appendAsLeader(MemoryRecords.withRecords(Compression.NONE,
                 new SimpleRecord("key".getBytes(), new byte[1000])), 0);
         assertEquals(2, log.logEndOffset());
+    }
+
+    @ParameterizedTest
+    @EnumSource(value = CompressionType.class, names = {"GZIP", "SNAPPY", "LZ4", "ZSTD"})
+    public void testAppendRejectsDisabledProducerCompressionType(CompressionType compressionType) throws IOException {
+        LogConfig logConfig = new LogTestUtils.LogConfigBuilder()
+                .disabledCompressionTypes(compressionType.name)
+                .build();
+        log = createLog(logDir, logConfig);
+        MemoryRecords records = MemoryRecords.withRecords(Compression.of(compressionType.name).build(),
+                new SimpleRecord("value".getBytes()));
+
+        UnsupportedCompressionTypeException exception = assertThrows(UnsupportedCompressionTypeException.class,
+                () -> log.appendAsLeader(records, 0));
+
+        assertTrue(exception.getMessage().contains("used by the producer"));
+        assertEquals(0, log.logEndOffset());
+    }
+
+    @Test
+    public void testAppendRejectsDisabledBrokerCompressionType() throws IOException {
+        LogConfig logConfig = new LogTestUtils.LogConfigBuilder()
+                .disabledCompressionTypes(CompressionType.GZIP.name)
+                .build();
+        Map<String, Object> props = new HashMap<>(logConfig.originals());
+        props.put(TopicConfig.COMPRESSION_TYPE_CONFIG, CompressionType.GZIP.name);
+        log = createLog(logDir, new LogConfig(props));
+
+        UnsupportedCompressionTypeException exception = assertThrows(UnsupportedCompressionTypeException.class,
+                () -> log.appendAsLeader(MemoryRecords.withRecords(Compression.NONE,
+                        new SimpleRecord("value".getBytes())), 0));
+
+        assertTrue(exception.getMessage().contains("used by the broker"));
+        assertEquals(0, log.logEndOffset());
+    }
+
+    @Test
+    public void testAppendAsFollowerAllowsDisabledCompressionType() throws IOException {
+        LogConfig logConfig = new LogTestUtils.LogConfigBuilder()
+                .disabledCompressionTypes(CompressionType.GZIP.name)
+                .build();
+        log = createLog(logDir, logConfig);
+        MemoryRecords records = MemoryRecords.withRecords(0L, Compression.gzip().build(), 0,
+                new SimpleRecord("value".getBytes()));
+
+        log.appendAsFollower(records, 0);
+
+        assertEquals(1, log.logEndOffset());
     }
 
     /**

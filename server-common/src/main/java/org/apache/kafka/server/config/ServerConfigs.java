@@ -90,6 +90,12 @@ public class ServerConfigs {
             "('gzip', 'snappy', 'lz4', 'zstd'). It additionally accepts 'uncompressed' which is equivalent to no compression; and " +
             "'producer' which means retain the original compression codec set by the producer.";
 
+    public static final String COMPRESSION_DISABLED_TYPES_CONFIG = "compression.disabled.types";
+    public static final List<String> COMPRESSION_DISABLED_TYPES_DEFAULT = List.of();
+    public static final String COMPRESSION_DISABLED_TYPES_DOC = "A list of compression types which are not allowed for new client writes. " +
+            "Supported values are 'gzip', 'snappy', 'lz4', and 'zstd'. This setting does not prevent brokers from reading existing records " +
+            "or replicating records that use a disabled compression type.";
+
     public static final String COMPRESSION_GZIP_LEVEL_CONFIG = ServerTopicConfigSynonyms.serverSynonym(TopicConfig.COMPRESSION_GZIP_LEVEL_CONFIG);
     public static final String COMPRESSION_GZIP_LEVEL_DOC = "The compression level to use if " + COMPRESSION_TYPE_CONFIG + " is set to 'gzip'.";
     public static final String COMPRESSION_LZ4_LEVEL_CONFIG = ServerTopicConfigSynonyms.serverSynonym(TopicConfig.COMPRESSION_LZ4_LEVEL_CONFIG);
@@ -154,6 +160,9 @@ public class ServerConfigs {
             .define(CONTROLLED_SHUTDOWN_ENABLE_CONFIG, BOOLEAN, CONTROLLED_SHUTDOWN_ENABLE_DEFAULT, MEDIUM, CONTROLLED_SHUTDOWN_ENABLE_DOC)
             .define(DELETE_TOPIC_ENABLE_CONFIG, BOOLEAN, DELETE_TOPIC_ENABLE_DEFAULT, HIGH, DELETE_TOPIC_ENABLE_DOC)
             .define(COMPRESSION_TYPE_CONFIG, STRING, ServerLogConfigs.COMPRESSION_TYPE_DEFAULT, ConfigDef.ValidString.in(BrokerCompressionType.names().toArray(new String[0])), HIGH, COMPRESSION_TYPE_DOC)
+            .define(COMPRESSION_DISABLED_TYPES_CONFIG, LIST, COMPRESSION_DISABLED_TYPES_DEFAULT,
+                    ConfigDef.ValidList.in(CompressionType.GZIP.name, CompressionType.SNAPPY.name, CompressionType.LZ4.name, CompressionType.ZSTD.name),
+                    HIGH, COMPRESSION_DISABLED_TYPES_DOC)
             .define(COMPRESSION_GZIP_LEVEL_CONFIG, INT, CompressionType.GZIP.defaultLevel(), CompressionType.GZIP.levelValidator(), MEDIUM, COMPRESSION_GZIP_LEVEL_DOC)
             .define(COMPRESSION_LZ4_LEVEL_CONFIG, INT, CompressionType.LZ4.defaultLevel(), CompressionType.LZ4.levelValidator(), MEDIUM, COMPRESSION_LZ4_LEVEL_DOC)
             .define(COMPRESSION_ZSTD_LEVEL_CONFIG, INT, CompressionType.ZSTD.defaultLevel(), CompressionType.ZSTD.levelValidator(), MEDIUM, COMPRESSION_ZSTD_LEVEL_DOC)
