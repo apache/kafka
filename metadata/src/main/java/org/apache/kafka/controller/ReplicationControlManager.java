@@ -701,10 +701,17 @@ public class ReplicationControlManager {
         for (CreatableTopic topic : request.topics()) {
             ApiError error = topicErrors.get(topic.name());
             if (error != null) {
-                data.topics().add(new CreatableTopicResult().
+                CreatableTopicResult errorResult = new CreatableTopicResult().
                     setName(topic.name()).
                     setErrorCode(error.error().code()).
-                    setErrorMessage(error.message()));
+                    setErrorMessage(error.message());
+                if (error.error() == Errors.TOPIC_ALREADY_EXISTS) {
+                    Uuid topicId = topicsByName.get(topic.name());
+                    if (topicId != null) {
+                        errorResult.setTopicId(topicId);
+                    }
+                }
+                data.topics().add(errorResult);
                 resultsBuilder.append(resultsPrefix).append(topic).append(": ").
                     append(error.error()).append(" (").append(error.message()).append(")");
                 resultsPrefix = ", ";
