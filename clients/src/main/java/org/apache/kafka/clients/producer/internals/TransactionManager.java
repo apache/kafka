@@ -790,6 +790,11 @@ public class TransactionManager {
     }
 
     public synchronized void maybeTransitionToErrorState(RuntimeException exception) {
+        // Prevent any state transitions if we're already in FATAL state since it's a terminal state
+        if (currentState == State.FATAL_ERROR) {
+            return;
+        }
+
         if (exception instanceof ClusterAuthorizationException
                 || exception instanceof TransactionalIdAuthorizationException
                 || exception instanceof ProducerFencedException
