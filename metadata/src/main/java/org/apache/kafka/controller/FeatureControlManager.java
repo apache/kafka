@@ -19,6 +19,7 @@ package org.apache.kafka.controller;
 
 import org.apache.kafka.clients.admin.FeatureUpdate;
 import org.apache.kafka.common.errors.ApiException;
+import org.apache.kafka.common.metadata.ClusterIdRecord;
 import org.apache.kafka.common.metadata.FeatureLevelRecord;
 import org.apache.kafka.common.metadata.NoOpRecord;
 import org.apache.kafka.common.protocol.Errors;
@@ -59,6 +60,7 @@ public class FeatureControlManager {
         private QuorumFeatures quorumFeatures = null;
         private KRaftVersionAccessor kraftVersionAccessor = null;
         private int maxRecordsPerBatch;
+        private String clusterId = null;
 
         private ClusterFeatureSupportDescriber clusterSupportDescriber = new ClusterFeatureSupportDescriber() {
             @Override
@@ -94,6 +96,11 @@ public class FeatureControlManager {
 
         Builder setKRaftVersionAccessor(KRaftVersionAccessor kraftVersionAccessor) {
             this.kraftVersionAccessor = kraftVersionAccessor;
+            return this;
+        }
+
+        Builder setClusterId(String clusterId) {
+            this.clusterId = clusterId;
             return this;
         }
 
@@ -140,7 +147,8 @@ public class FeatureControlManager {
                 snapshotRegistry,
                 clusterSupportDescriber,
                 kraftVersionAccessor,
-                maxRecordsPerBatch
+                maxRecordsPerBatch,
+                clusterId
             );
         }
     }
@@ -174,13 +182,20 @@ public class FeatureControlManager {
 
     private final int maxRecordsPerBatch;
 
+    /**
+     * The cluster ID, used when generating ClusterIdRecord during upgrade.
+     * This comes from the leader's meta.properties file.
+     */
+    private final String clusterId;
+
     private FeatureControlManager(
         LogContext logContext,
         QuorumFeatures quorumFeatures,
         SnapshotRegistry snapshotRegistry,
         ClusterFeatureSupportDescriber clusterSupportDescriber,
         KRaftVersionAccessor kraftVersionAccessor,
-        int maxRecordsPerBatch
+        int maxRecordsPerBatch,
+        String clusterId
     ) {
         this.log = logContext.logger(FeatureControlManager.class);
         this.quorumFeatures = quorumFeatures;
@@ -189,6 +204,7 @@ public class FeatureControlManager {
         this.clusterSupportDescriber = clusterSupportDescriber;
         this.kraftVersionAccessor = kraftVersionAccessor;
         this.maxRecordsPerBatch = maxRecordsPerBatch;
+        this.clusterId = clusterId;
     }
 
     ControllerResult<ApiError> updateFeatures(
@@ -429,12 +445,43 @@ public class FeatureControlManager {
             log.warn("Upgrading metadata.version from {} to {}.", currentVersion, newVersion);
         }
 
+        generateMetadataVersionUpgradeRecords(currentVersion, newVersion, recordConsumer);
+
+        return ApiError.NONE;
+    }
+
+    /**
+     * Generate records required when upgrading from one metadata version to another.
+     * This provides a generic mechanism for adding records that must accompany certain MV upgrades.
+     * <p>
+     * For example, all valid metadata version upgrades write a FeatureLevelRecord for MetadataVersion.
+     * However, when upgrading to IBP_4_4_IV2 or later, a ClusterIdRecord must be written because
+     * one does not already exist. This ensures that a cluster whose MV supports ClusterIdRecord
+     * will have one in the log.
+     *
+     * // TODO: Maybe this needs to be in a transaction/atomic batch if there are multiple records like the bootstrap write
+     * <p>
+     */
+    private void generateMetadataVersionUpgradeRecords(
+        MetadataVersion currentVersion,
+        MetadataVersion newVersion,
+        Consumer<ApiMessageAndVersion> recordConsumer
+    ) {
         recordConsumer.accept(new ApiMessageAndVersion(
             new FeatureLevelRecord()
                 .setName(MetadataVersion.FEATURE_NAME)
-                .setFeatureLevel(newVersionLevel), FEATURE_LEVEL_RECORD.lowestSupportedVersion()));
+                .setFeatureLevel(newVersion.featureLevel()), FEATURE_LEVEL_RECORD.lowestSupportedVersion()));
 
-        return ApiError.NONE;
+        if (!currentVersion.isClusterIdSupported() && newVersion.isClusterIdSupported()) {
+            if (clusterId == null) {
+                throw new IllegalStateException("Cannot generate ClusterIdRecord during upgrade: " +
+                    "clusterId is not configured.");
+            }
+            log.info("Generating ClusterIdRecord with clusterId {} as part of metadata version upgrade " +
+                "from {} to {}.", clusterId, currentVersion, newVersion);
+            recordConsumer.accept(new ApiMessageAndVersion(
+                new ClusterIdRecord().setClusterId(clusterId), (short) 0));
+        }
     }
 
     private ApiError invalidMetadataVersion(short version, String message) {

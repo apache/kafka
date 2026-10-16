@@ -1322,6 +1322,9 @@ public final class QuorumController implements Controller {
             case CLEAR_ELR_RECORD:
                 replicationControl.replay((ClearElrRecord) message);
                 break;
+            case CLUSTER_ID_RECORD:
+                // KIP-1262: This record type is ignored because the active controller must have a cluster id to start-up
+                break;
             default:
                 throw new RuntimeException("Unhandled record type " + type);
         }
@@ -1561,6 +1564,7 @@ public final class QuorumController implements Controller {
             setClusterFeatureSupportDescriber(clusterSupportDescriber).
             setKRaftVersionAccessor(new RaftClientKRaftVersionAccessor(raftClient)).
             setMaxRecordsPerBatch(maxRecordsPerBatch).
+            setClusterId(clusterId).
             build();
         this.clusterControl = new ClusterControlManager.Builder().
             setLogContext(logContext).

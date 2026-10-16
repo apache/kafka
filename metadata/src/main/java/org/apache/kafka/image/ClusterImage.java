@@ -17,29 +17,39 @@
 
 package org.apache.kafka.image;
 
+import org.apache.kafka.common.metadata.ClusterIdRecord;
 import org.apache.kafka.image.node.ClusterImageNode;
 import org.apache.kafka.image.writer.ImageWriter;
 import org.apache.kafka.image.writer.ImageWriterOptions;
 import org.apache.kafka.metadata.BrokerRegistration;
 import org.apache.kafka.metadata.ControllerRegistration;
+import org.apache.kafka.server.common.ApiMessageAndVersion;
 
 import java.util.Collections;
 import java.util.Map;
+import java.util.Optional;
 
 /**
  * Represents the cluster in the metadata image.
  * <p>
  * This class is thread-safe.
  */
-public record ClusterImage(Map<Integer, BrokerRegistration> brokers, Map<Integer, ControllerRegistration> controllers) {
+public record ClusterImage(
+    Optional<String> clusterId,
+    Map<Integer, BrokerRegistration> brokers,
+    Map<Integer, ControllerRegistration> controllers
+) {
     public static final ClusterImage EMPTY = new ClusterImage(
+        Optional.empty(),
         Map.of(),
         Map.of());
 
     public ClusterImage(
+        Optional<String> clusterId,
         Map<Integer, BrokerRegistration> brokers,
         Map<Integer, ControllerRegistration> controllers
     ) {
+        this.clusterId = clusterId;
         this.brokers = Collections.unmodifiableMap(brokers);
         this.controllers = Collections.unmodifiableMap(controllers);
     }
@@ -61,6 +71,15 @@ public record ClusterImage(Map<Integer, BrokerRegistration> brokers, Map<Integer
     }
 
     public void write(ImageWriter writer, ImageWriterOptions options) {
+        if (clusterId.isPresent()) {
+            if (!options.metadataVersion().isClusterIdSupported()) {
+                options.handleLoss("cluster id data");
+            } else {
+                writer.write(new ApiMessageAndVersion(
+                    new ClusterIdRecord().setClusterId(clusterId.get()),
+                    (short) 0));
+            }
+        }
         for (BrokerRegistration broker : brokers.values()) {
             writer.write(broker.toRecord(options));
         }
