@@ -247,6 +247,7 @@ public class StreamThreadTest {
     private final TaskId task1 = new TaskId(0, 1);
     private final TaskId task2 = new TaskId(0, 2);
 
+    @SuppressWarnings("deprecation")
     private Properties configProps(final boolean enableEoS, final boolean processingThreadsEnabled) {
         return mkProperties(mkMap(
             mkEntry(StreamsConfig.APPLICATION_ID_CONFIG, APPLICATION_ID),
@@ -325,6 +326,7 @@ public class StreamThreadTest {
             streamsMetadataState,
             0,
             -1L,
+            Long.MAX_VALUE,
             stateDirectory,
             new MockStateRestoreListener(),
             new MockStandbyUpdateListener(),
@@ -661,7 +663,7 @@ public class StreamThreadTest {
             topologyMetadata,
             PROCESS_ID, CLIENT_ID, new LogContext(""),
             new AtomicInteger(), new AtomicLong(Long.MAX_VALUE), new LinkedList<>(),
-            null, HANDLER, null,
+            null, HANDLER, null, Long.MAX_VALUE,
             Optional.of(streamsRebalanceData), mock(StreamsMetadataState.class), null, -1L
         ).updateThreadMetadata(adminClientId(CLIENT_ID));
         thread.setState(State.STARTING);
@@ -719,6 +721,125 @@ public class StreamThreadTest {
         runOnce(false);
 
         Mockito.verify(taskManager).process(Mockito.anyInt(), Mockito.any());
+    }
+
+    @Test
+    public void shouldPauseNonEmptyPartitionsWhenInputBufferBytesAboveThreshold() {
+        final Properties props = configProps(false, false);
+        final StreamsConfig config = new StreamsConfig(props);
+        when(mainConsumer.poll(Mockito.any())).thenReturn(ConsumerRecords.empty());
+        final ConsumerGroupMetadata consumerGroupMetadata = Mockito.mock(ConsumerGroupMetadata.class);
+        when(mainConsumer.groupMetadata()).thenReturn(consumerGroupMetadata);
+        when(consumerGroupMetadata.groupInstanceId()).thenReturn(Optional.empty());
+        final TaskManager taskManager = mockTaskManager();
+        final TopicPartition tp = new TopicPartition("topic", 0);
+        when(taskManager.getInputBufferSizeInBytes()).thenReturn(2_000L);
+        when(taskManager.nonEmptyPartitions()).thenReturn(Set.of(tp));
+        when(mainConsumer.assignment()).thenReturn(Set.of(tp));
+
+        final TopologyMetadata topologyMetadata = new TopologyMetadata(internalTopologyBuilder, config);
+        topologyMetadata.buildAndRewriteTopology();
+        thread = buildStreamThreadWithBufferCap(mainConsumer, taskManager, config, topologyMetadata, 1_000L);
+        thread.updateThreadMetadata("admin");
+        thread.setState(State.STARTING);
+        thread.setState(State.PARTITIONS_ASSIGNED);
+        thread.setState(State.RUNNING);
+        runOnce(false);
+
+        Mockito.verify(mainConsumer).pause(Set.of(tp));
+    }
+
+    @Test
+    public void shouldResumeOnlyPartitionsWePausedWhenBytesDropBelowThreshold() {
+        // resume must not undo pauses from rebalance settle / offset reset.
+        final Properties props = configProps(false, false);
+        final StreamsConfig config = new StreamsConfig(props);
+        when(mainConsumer.poll(Mockito.any())).thenReturn(ConsumerRecords.empty());
+        final ConsumerGroupMetadata consumerGroupMetadata = Mockito.mock(ConsumerGroupMetadata.class);
+        when(mainConsumer.groupMetadata()).thenReturn(consumerGroupMetadata);
+        when(consumerGroupMetadata.groupInstanceId()).thenReturn(Optional.empty());
+        final TaskManager taskManager = mockTaskManager();
+        final TopicPartition pausedByBytes = new TopicPartition("topic", 0);
+        // runOnce 1 stays above the cap (pause fires); runOnce 2 drops below it (resume fires).
+        // The trailing 100L covers any extra reads from the top-of-loop resume check.
+        when(taskManager.getInputBufferSizeInBytes()).thenReturn(2_000L, 2_000L, 100L, 100L, 100L);
+        when(taskManager.nonEmptyPartitions()).thenReturn(Set.of(pausedByBytes));
+        when(mainConsumer.assignment()).thenReturn(Set.of(pausedByBytes));
+
+        final TopologyMetadata topologyMetadata = new TopologyMetadata(internalTopologyBuilder, config);
+        topologyMetadata.buildAndRewriteTopology();
+        thread = buildStreamThreadWithBufferCap(mainConsumer, taskManager, config, topologyMetadata, 1_000L);
+        thread.updateThreadMetadata("admin");
+        thread.setState(State.STARTING);
+        thread.setState(State.PARTITIONS_ASSIGNED);
+        thread.setState(State.RUNNING);
+        runOnce(false);
+        Mockito.verify(mainConsumer).pause(Set.of(pausedByBytes));
+        runOnce(false);
+        Mockito.verify(mainConsumer).resume(Set.of(pausedByBytes));
+    }
+
+    @Test
+    public void shouldNotResumeUnassignedPartitionsAfterRebalance() {
+        final Properties props = configProps(false, false);
+        final StreamsConfig config = new StreamsConfig(props);
+        when(mainConsumer.poll(Mockito.any())).thenReturn(ConsumerRecords.empty());
+        final ConsumerGroupMetadata consumerGroupMetadata = Mockito.mock(ConsumerGroupMetadata.class);
+        when(mainConsumer.groupMetadata()).thenReturn(consumerGroupMetadata);
+        when(consumerGroupMetadata.groupInstanceId()).thenReturn(Optional.empty());
+        final TaskManager taskManager = mockTaskManager();
+        final TopicPartition stillOwned = new TopicPartition("topic", 0);
+        final TopicPartition revoked = new TopicPartition("topic", 1);
+        // runOnce 1 stays above the cap (pause both, both still assigned); runOnce 2 drops below it,
+        // but `revoked` has since left the assignment, so only `stillOwned` is resumed.
+        when(taskManager.getInputBufferSizeInBytes()).thenReturn(2_000L, 2_000L, 100L, 100L, 100L);
+        when(taskManager.nonEmptyPartitions()).thenReturn(Set.of(stillOwned, revoked));
+        // both assigned while pausing; `revoked` gone by the time we resume.
+        when(mainConsumer.assignment()).thenReturn(Set.of(stillOwned, revoked), Set.of(stillOwned));
+
+        final TopologyMetadata topologyMetadata = new TopologyMetadata(internalTopologyBuilder, config);
+        topologyMetadata.buildAndRewriteTopology();
+        thread = buildStreamThreadWithBufferCap(mainConsumer, taskManager, config, topologyMetadata, 1_000L);
+        thread.updateThreadMetadata("admin");
+        thread.setState(State.STARTING);
+        thread.setState(State.PARTITIONS_ASSIGNED);
+        thread.setState(State.RUNNING);
+        runOnce(false);
+        Mockito.verify(mainConsumer).pause(Set.of(stillOwned, revoked));
+        runOnce(false);
+        Mockito.verify(mainConsumer).resume(Set.of(stillOwned));
+    }
+
+    @Test
+    public void shouldNotResumePartitionsPrunedFromBufferOverflowTrackingOnRevoke() {
+        final Properties props = configProps(false, false);
+        final StreamsConfig config = new StreamsConfig(props);
+        when(mainConsumer.poll(Mockito.any())).thenReturn(ConsumerRecords.empty());
+        final ConsumerGroupMetadata consumerGroupMetadata = Mockito.mock(ConsumerGroupMetadata.class);
+        when(mainConsumer.groupMetadata()).thenReturn(consumerGroupMetadata);
+        when(consumerGroupMetadata.groupInstanceId()).thenReturn(Optional.empty());
+        final TaskManager taskManager = mockTaskManager();
+        final TopicPartition pausedByBytes = new TopicPartition("topic", 0);
+        when(taskManager.getInputBufferSizeInBytes()).thenReturn(2_000L, 2_000L, 100L, 100L, 100L);
+        when(taskManager.nonEmptyPartitions()).thenReturn(Set.of(pausedByBytes));
+        when(mainConsumer.assignment()).thenReturn(Set.of(pausedByBytes));
+
+        final TopologyMetadata topologyMetadata = new TopologyMetadata(internalTopologyBuilder, config);
+        topologyMetadata.buildAndRewriteTopology();
+        thread = buildStreamThreadWithBufferCap(mainConsumer, taskManager, config, topologyMetadata, 1_000L);
+        thread.updateThreadMetadata("admin");
+        thread.setState(State.STARTING);
+        thread.setState(State.PARTITIONS_ASSIGNED);
+        thread.setState(State.RUNNING);
+        runOnce(false);
+        Mockito.verify(mainConsumer).pause(Set.of(pausedByBytes));
+
+        // partition is revoked before the buffer drains — prune it from tracking.
+        thread.removePartitionsFromBufferOverflowTracking(Set.of(pausedByBytes));
+
+        // buffer now drains below the cap, but the bytes guard must not resume the revoked partition.
+        runOnce(false);
+        Mockito.verify(mainConsumer, Mockito.never()).resume(Set.of(pausedByBytes));
     }
 
     @Test
@@ -804,6 +925,7 @@ public class StreamThreadTest {
             streamsMetadataState,
             0,
             -1L,
+            Long.MAX_VALUE,
             stateDirectory,
             new MockStateRestoreListener(),
             new MockStandbyUpdateListener(),
@@ -867,6 +989,7 @@ public class StreamThreadTest {
             streamsMetadataState,
             0,
             -1L,
+            Long.MAX_VALUE,
             stateDirectory,
             new MockStateRestoreListener(),
             new MockStandbyUpdateListener(),
@@ -1650,6 +1773,7 @@ public class StreamThreadTest {
             null,
             HANDLER,
             null,
+            Long.MAX_VALUE,
             Optional.empty(),
             null,
             null,
@@ -1748,7 +1872,7 @@ public class StreamThreadTest {
             new TopologyMetadata(internalTopologyBuilder, config),
             PROCESS_ID, CLIENT_ID, new LogContext(""),
             null, new AtomicLong(Long.MAX_VALUE), new LinkedList<>(),
-            null, HANDLER, null,
+            null, HANDLER, null, Long.MAX_VALUE,
             Optional.of(streamsRebalanceData), null, null, -1L
         ).updateThreadMetadata(adminClientId(CLIENT_ID));
 
@@ -1781,7 +1905,7 @@ public class StreamThreadTest {
             new TopologyMetadata(internalTopologyBuilder, config),
             PROCESS_ID, CLIENT_ID, new LogContext(""),
             null, new AtomicLong(Long.MAX_VALUE), new LinkedList<>(),
-            null, HANDLER, null,
+            null, HANDLER, null, Long.MAX_VALUE,
             Optional.of(streamsRebalanceData), null, null, -1L
         ).updateThreadMetadata(adminClientId(CLIENT_ID));
 
@@ -1848,6 +1972,7 @@ public class StreamThreadTest {
             streamsMetadataState,
             0,
             -1L,
+            Long.MAX_VALUE,
             stateDirectory,
             new MockStateRestoreListener(),
             new MockStandbyUpdateListener(),
@@ -2319,6 +2444,7 @@ public class StreamThreadTest {
             streamsMetadataState,
             0,
             -1L,
+            Long.MAX_VALUE,
             stateDirectory,
             new MockStateRestoreListener(),
             new MockStandbyUpdateListener(),
@@ -2880,6 +3006,7 @@ public class StreamThreadTest {
             null,
             HANDLER,
             null,
+            Long.MAX_VALUE,
             Optional.empty(),
             null,
             null,
@@ -2943,6 +3070,7 @@ public class StreamThreadTest {
             null,
             HANDLER,
             null,
+            Long.MAX_VALUE,
             Optional.empty(),
             null,
             null,
@@ -3014,6 +3142,7 @@ public class StreamThreadTest {
             null,
             HANDLER,
             null,
+            Long.MAX_VALUE,
             Optional.empty(),
             null,
             null,
@@ -3082,6 +3211,7 @@ public class StreamThreadTest {
             null,
             HANDLER,
             null,
+            Long.MAX_VALUE,
             Optional.empty(),
             null,
             null,
@@ -3157,6 +3287,7 @@ public class StreamThreadTest {
             null,
             HANDLER,
             null,
+            Long.MAX_VALUE,
             Optional.of(streamsRebalanceData),
             null,
             null,
@@ -3225,6 +3356,7 @@ public class StreamThreadTest {
             null,
             HANDLER,
             null,
+            Long.MAX_VALUE,
             Optional.empty(),
             null,
             null,
@@ -3459,6 +3591,7 @@ public class StreamThreadTest {
             null,
             HANDLER,
             null,
+            Long.MAX_VALUE,
             Optional.empty(),
             null,
             null,
@@ -3520,6 +3653,7 @@ public class StreamThreadTest {
             null,
             (e, b) -> { },
             null,
+            Long.MAX_VALUE,
             Optional.empty(),
             null,
             null,
@@ -3896,7 +4030,8 @@ public class StreamThreadTest {
                 mockTime,
                 streamsMetadataState,
                 0,
-            -1L,
+                -1L,
+                Long.MAX_VALUE,
                 stateDirectory,
                 new MockStateRestoreListener(),
                 new MockStandbyUpdateListener(),
@@ -3955,7 +4090,8 @@ public class StreamThreadTest {
                 mockTime,
                 streamsMetadataState,
                 0,
-            -1L,
+                -1L,
+                Long.MAX_VALUE,
                 stateDirectory,
                 new MockStateRestoreListener(),
                 new MockStandbyUpdateListener(),
@@ -4026,6 +4162,7 @@ public class StreamThreadTest {
             streamsMetadataState,
             0,
             -1L,
+            Long.MAX_VALUE,
             stateDirectory,
             new MockStateRestoreListener(),
             new MockStandbyUpdateListener(),
@@ -4112,6 +4249,7 @@ public class StreamThreadTest {
             shutdownErrorHook,
             HANDLER,
             null,
+            Long.MAX_VALUE,
             Optional.of(streamsRebalanceData),
             streamsMetadataState,
             null,
@@ -4174,6 +4312,7 @@ public class StreamThreadTest {
             mock(Runnable.class),
             HANDLER,
             null,
+            Long.MAX_VALUE,
             Optional.of(streamsRebalanceData),
             streamsMetadataState,
             null,
@@ -4222,6 +4361,7 @@ public class StreamThreadTest {
             mock(Runnable.class),
             HANDLER,
             null,
+            Long.MAX_VALUE,
             Optional.empty(),
             streamsMetadataState,
             null,
@@ -4268,6 +4408,7 @@ public class StreamThreadTest {
             mock(Runnable.class),
             HANDLER,
             null,
+            Long.MAX_VALUE,
             Optional.empty(),
             streamsMetadataState,
             null,
@@ -4332,6 +4473,7 @@ public class StreamThreadTest {
                 shutdownErrorHook,
                 HANDLER,
                 null,
+                Long.MAX_VALUE,
                 Optional.of(streamsRebalanceData),
                 streamsMetadataState,
                 null,
@@ -4406,6 +4548,7 @@ public class StreamThreadTest {
                 shutdownErrorHook,
                 HANDLER,
                 null,
+                Long.MAX_VALUE,
                 Optional.of(streamsRebalanceData),
                 streamsMetadataState,
                 null,
@@ -4471,6 +4614,7 @@ public class StreamThreadTest {
             shutdownErrorHook,
             HANDLER,
             null,
+            Long.MAX_VALUE,
             Optional.of(streamsRebalanceData),
             streamsMetadataState,
             null,
@@ -4536,6 +4680,7 @@ public class StreamThreadTest {
                 shutdownErrorHook,
                 HANDLER,
                 null,
+                Long.MAX_VALUE,
                 Optional.of(streamsRebalanceData),
                 streamsMetadataState,
                 null,
@@ -4610,6 +4755,7 @@ public class StreamThreadTest {
                 shutdownErrorHook,
                 HANDLER,
                 null,
+                Long.MAX_VALUE,
                 Optional.of(streamsRebalanceData),
                 streamsMetadataState,
                 null,
@@ -4780,6 +4926,7 @@ public class StreamThreadTest {
             null,
             null,
             null,
+            Long.MAX_VALUE,
             Optional.empty(),
             null,
             null,
@@ -4871,11 +5018,30 @@ public class StreamThreadTest {
         return buildStreamThread(consumer, taskManager, config, topologyMetadata, -1L);
     }
 
+    // trunk overload: 5th arg is the per-thread uncommitted-bytes limit (statestore.uncommitted.max.bytes)
     private StreamThread buildStreamThread(final Consumer<byte[], byte[]> consumer,
                                            final TaskManager taskManager,
                                            final StreamsConfig config,
                                            final TopologyMetadata topologyMetadata,
                                            final long maxUncommittedBytesPerThread) {
+        return buildStreamThreadWithBufferCap(consumer, taskManager, config, topologyMetadata, Long.MAX_VALUE, maxUncommittedBytesPerThread);
+    }
+
+    // our overload: 5th arg is the per-thread input buffer cap (input.buffer.max.bytes)
+    private StreamThread buildStreamThreadWithBufferCap(final Consumer<byte[], byte[]> consumer,
+                                                        final TaskManager taskManager,
+                                                        final StreamsConfig config,
+                                                        final TopologyMetadata topologyMetadata,
+                                                        final long maxBufferSizeInBytes) {
+        return buildStreamThreadWithBufferCap(consumer, taskManager, config, topologyMetadata, maxBufferSizeInBytes, -1L);
+    }
+
+    private StreamThread buildStreamThreadWithBufferCap(final Consumer<byte[], byte[]> consumer,
+                                                        final TaskManager taskManager,
+                                                        final StreamsConfig config,
+                                                        final TopologyMetadata topologyMetadata,
+                                                        final long maxBufferSizeInBytes,
+                                                        final long maxUncommittedBytesPerThread) {
         final StreamsMetricsImpl streamsMetrics =
             new StreamsMetricsImpl(metrics, CLIENT_ID, mockTime);
 
@@ -4900,6 +5066,7 @@ public class StreamThreadTest {
             null,
             HANDLER,
             null,
+            maxBufferSizeInBytes,
             Optional.empty(),
             null,
             null,

@@ -57,6 +57,7 @@ public class RecordQueue {
     private final Sensor droppedRecordsSensor;
     private final Sensor consumedSensor;
     private long headRecordSizeInBytes;
+    private long totalBytesBuffered;
 
     RecordQueue(final TopicPartition partition,
                 final SourceNode<?, ?> source,
@@ -91,6 +92,7 @@ public class RecordQueue {
         );
         this.log = logContext.logger(RecordQueue.class);
         this.headRecordSizeInBytes = 0L;
+        this.totalBytesBuffered = 0L;
     }
 
     void setPartitionTime(final long partitionTime) {
@@ -124,6 +126,7 @@ public class RecordQueue {
     int addRawRecords(final Iterable<ConsumerRecord<byte[], byte[]>> rawRecords) {
         for (final ConsumerRecord<byte[], byte[]> rawRecord : rawRecords) {
             fifoQueue.addLast(rawRecord);
+            totalBytesBuffered += consumerRecordSizeInBytes(rawRecord);
         }
 
         updateHead();
@@ -140,6 +143,7 @@ public class RecordQueue {
         final StampedRecord recordToReturn = headRecord;
 
         consumedSensor.record(headRecordSizeInBytes, wallClockTime);
+        totalBytesBuffered -= headRecordSizeInBytes;
 
         headRecord = null;
         headRecordSizeInBytes = 0L;
@@ -200,6 +204,7 @@ public class RecordQueue {
         fifoQueue.clear();
         headRecord = null;
         headRecordSizeInBytes = 0L;
+        totalBytesBuffered = 0L;
         partitionTime = UNKNOWN;
     }
 
@@ -209,6 +214,7 @@ public class RecordQueue {
 
     private void updateHead() {
         ConsumerRecord<byte[], byte[]> lastCorruptedRecord = null;
+        long lastCorruptedRecordSize = 0L;
 
         while (headRecord == null && !fifoQueue.isEmpty()) {
             final ConsumerRecord<byte[], byte[]> raw = fifoQueue.pollFirst();
@@ -217,7 +223,11 @@ public class RecordQueue {
 
             if (deserialized == null) {
                 // this only happens if the deserializer decides to skip. It has already logged the reason.
+                if (lastCorruptedRecord != null) {
+                    totalBytesBuffered -= lastCorruptedRecordSize;
+                }
                 lastCorruptedRecord = raw;
+                lastCorruptedRecordSize = consumerRecordSizeInBytes(raw);
                 continue;
             }
 
@@ -240,17 +250,25 @@ public class RecordQueue {
                         deserialized.topic(), deserialized.partition(), deserialized.offset(), timestamp, timestampExtractor.getClass().getCanonicalName()
                 );
                 droppedRecordsSensor.record();
+                if (lastCorruptedRecord != null) {
+                    totalBytesBuffered -= lastCorruptedRecordSize;
+                }
                 lastCorruptedRecord = raw;
+                lastCorruptedRecordSize = consumerRecordSizeInBytes(raw);
                 continue;
             }
             headRecord = new StampedRecord(deserialized, timestamp, raw.key(), raw.value());
             headRecordSizeInBytes = consumerRecordSizeInBytes(raw);
+            if (lastCorruptedRecord != null) {
+                totalBytesBuffered -= lastCorruptedRecordSize;
+            }
         }
 
         // if all records in the FIFO queue are corrupted, make the last one the headRecord
         // This record is used to update the offsets. See KAFKA-6502 for more details.
         if (headRecord == null && lastCorruptedRecord != null) {
             headRecord = new CorruptedRecord(lastCorruptedRecord);
+            headRecordSizeInBytes = lastCorruptedRecordSize;
         }
     }
 
@@ -259,5 +277,13 @@ public class RecordQueue {
      */
     long partitionTime() {
         return partitionTime;
+    }
+
+    long getTotalBytesBuffered() {
+        return totalBytesBuffered;
+    }
+
+    boolean headRecordIsCorrupted() {
+        return headRecord instanceof CorruptedRecord;
     }
 }
