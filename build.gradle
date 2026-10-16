@@ -1242,6 +1242,7 @@ project(':core') {
     testImplementation libs.apachedsLdifPartition
     testImplementation libs.apachedsMavibotPartition
     testImplementation libs.apachedsJdbmPartition
+    testImplementation libs.classgraph
     testImplementation libs.junitJupiter
     testImplementation testLog4j2Libs
     testImplementation libs.mockOAuth2Server
@@ -1257,6 +1258,7 @@ project(':core') {
       testCompileClasspath.exclude group: 'junit', module: 'junit'
     }
 
+    testRuntimeOnly project(':tools')
     testRuntimeOnly(libs.apacheda) {
       exclude group: 'xml-apis', module: 'xml-apis'
       // `mina-core` is a transitive dependency for `apacheds` and `apacheda`.
