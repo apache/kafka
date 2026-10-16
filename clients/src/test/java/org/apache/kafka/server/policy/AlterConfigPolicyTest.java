@@ -23,6 +23,9 @@ import org.apache.kafka.server.policy.AlterConfigPolicy.RequestMetadata;
 import org.junit.jupiter.api.Test;
 
 import java.util.Collections;
+import java.util.HashMap;
+import java.util.Map;
+import java.util.Set;
 
 import static org.junit.jupiter.api.Assertions.assertEquals;
 import static org.junit.jupiter.api.Assertions.assertNotEquals;
@@ -48,5 +51,25 @@ public class AlterConfigPolicyTest {
             new ConfigResource(Type.BROKER, "0"),
             Collections.emptyMap()
         ));
+        assertNotEquals(requestMetadata, new RequestMetadata(
+            new ConfigResource(Type.BROKER, "0"),
+            Collections.singletonMap("foo", "bar"),
+            Set.of("foo")
+        ));
+    }
+
+    @Test
+    public void testRequestMetadataDeletedConfigsAndNonNullConfigs() {
+        Map<String, String> configs = new HashMap<>();
+        configs.put("foo", "bar");
+        configs.put("baz", null);
+        RequestMetadata requestMetadata = new RequestMetadata(
+            new ConfigResource(Type.TOPIC, "topic"), configs, Set.of("baz", "quux"));
+
+        assertEquals(Set.of("baz", "quux"), requestMetadata.deletedConfigs());
+        assertEquals(Map.of("foo", "bar"), requestMetadata.configsWithoutNullValues());
+        assertEquals(configs, requestMetadata.configs());
+        assertEquals(Set.of(), new RequestMetadata(
+            new ConfigResource(Type.TOPIC, "topic"), configs).deletedConfigs());
     }
 }
