@@ -18,6 +18,7 @@ from io import BytesIO
 import json
 import logging
 import os
+import re
 import subprocess
 import shlex
 import sys
@@ -25,7 +26,9 @@ import tempfile
 import textwrap
 from typing import Dict, Optional, TextIO
 
-logger = logging.getLogger()
+from markdown_it import MarkdownIt
+
+logger = logging.getLogger("pr-format")
 logger.setLevel(logging.DEBUG)
 handler = logging.StreamHandler(sys.stderr)
 handler.setLevel(logging.DEBUG)
@@ -78,29 +81,70 @@ def parse_trailers(title, body) -> Dict:
     return trailers
 
 
-def split_paragraphs(text: str):
+def format_body(body: str) -> str:
     """
-    Split the given text into a generator of paragraph lines and a boolean "markdown" flag.
+    Wrap plain top-level prose, copying all other Markdown from the source.
 
-    If any line of a paragraph starts with a markdown character, we will assume the whole paragraph
-    contains markdown.
+    Token line maps identify paragraphs without reserializing Markdown. In
+    particular, paragraphs inside lists and quotes and code containing blank
+    lines must retain their original indentation, whitespace and line breaks.
     """
-    lines = text.splitlines(keepends=True)
-    paragraph = []
-    markdown = False
-    for line in lines:
-        if line.strip() == "":
-            if len(paragraph) > 0:
-                yield paragraph, markdown
-                paragraph.clear()
-                markdown = False
-        else:
-            if line[0] in ("#", "*", "-", "=") or line[0].isdigit():
-                markdown = True
-            if "```" in line:
-                markdown = True
-            paragraph.append(line)
-    yield paragraph, markdown
+    # Match CommonMark line endings; str.splitlines also splits Unicode
+    # separators, which would make the parser's source maps point at wrong lines.
+    lines = re.findall(r"[^\r\n]*(?:\r\n|\r|\n|$)", body)
+    if lines and lines[-1] == "":
+        lines.pop()
+    parser = MarkdownIt("commonmark").enable(["table", "strikethrough"])
+    tokens = parser.parse(body)
+    result = []
+    cursor = 0
+    for index, token in enumerate(tokens):
+        if token.type != "paragraph_open" or token.level != 0:
+            continue
+        start, end = token.map
+        source = lines[start:end]
+        reviewers = source[0].startswith("Reviewers:")
+        # Preserve inline Markdown and explicit hard breaks as well as blocks.
+        # Email autolinks in reviewer trailers can still be wrapped as prose.
+        def plain_inline(inline):
+            return all(
+                child.type in ("text", "softbreak") or (
+                    reviewers and child.type in ("link_open", "link_close")
+                    and child.markup == "autolink"
+                )
+                for child in inline.children
+            )
+
+        if not plain_inline(tokens[index + 1]):
+            continue
+        # Indentation can have meaning even in paragraphs. Reviewers trailers
+        # are the exception: git interpret-trailers needs indented continuations.
+        if not reviewers and any(line.startswith((" ", "\t")) for line in source):
+            continue
+        first_ending = re.search(r"(\r\n|\r|\n)$", source[0])
+        newline = first_ending.group() if first_ending else "\n"
+        last_ending = re.search(r"(\r\n|\r|\n)$", source[-1])
+        ending = last_ending.group() if last_ending else ""
+        wrapped = textwrap.fill(
+            "".join(source), subsequent_indent=" " if reviewers else "",
+            width=72, break_long_words=False, break_on_hyphens=False,
+            replace_whitespace=True,
+        ).replace("\n", newline) + ending
+        # A newly wrapped line can start a Markdown block (e.g. '- item').
+        # Keep the source if wrapping would change the paragraph's structure.
+        environment = {}
+        wrapped_tokens = parser.parse(wrapped, environment)
+        if (
+            [t.type for t in wrapped_tokens] != ["paragraph_open", "inline", "paragraph_close"]
+            or environment.get("references")
+            or not plain_inline(wrapped_tokens[1])
+        ):
+            continue
+        result.extend(lines[cursor:start])
+        result.append(wrapped)
+        cursor = end
+    result.extend(lines[cursor:])
+    return "".join(result)
 
 
 if __name__ == "__main__":
@@ -154,24 +198,12 @@ if __name__ == "__main__":
     check("Delete this text and replace" not in body, "PR template text not present", "PR template text should be removed")
     check("Committer Checklist" not in body, "PR template text not present", "Old PR template text should be removed")
 
-    paragraph_iter = split_paragraphs(body)
-    new_paragraphs = []
-    for p, markdown in paragraph_iter:
-        if markdown:
-            # If a paragraph looks like it has markdown in it, wrap each line separately.
-            new_lines = []
-            for line in p:
-                new_lines.append(textwrap.fill(line, width=72, break_long_words=False, break_on_hyphens=False, replace_whitespace=False))
-            rewrapped_p = "\n".join(new_lines)
-        else:
-            indent = ""
-            if len(p) > 0 and p[0].startswith("Reviewers:"):
-                indent = " "
-            rewrapped_p = textwrap.fill("".join(p), subsequent_indent=indent, width=72, break_long_words=False, break_on_hyphens=False, replace_whitespace=True)
-        new_paragraphs.append(rewrapped_p + "\n")
-    body = "\n".join(new_paragraphs)
+    original_body = body
+    body = format_body(body)
 
-    if get_env("GITHUB_ACTIONS"):
+    if body == original_body:
+        logger.info(f"PR {pr_number} body is already formatted.")
+    elif get_env("GITHUB_ACTIONS"):
         with tempfile.NamedTemporaryFile() as fp:
             fp.write(body.encode())
             fp.flush()
