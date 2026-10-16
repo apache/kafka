@@ -39,6 +39,7 @@ public class CapturingTopicMigrationClient implements TopicMigrationClient {
 
     public void reset() {
         createdTopics.clear();
+        newTopicPartitions.clear();
         updatedTopicPartitions.clear();
         deletedTopics.clear();
         updatedTopics.clear();

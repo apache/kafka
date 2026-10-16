@@ -22,8 +22,9 @@ import kafka.coordinator.transaction.{ProducerIdManager, ZkProducerIdManager}
 import org.apache.kafka.common.config.{ConfigResource, SslConfigs, TopicConfig}
 import org.apache.kafka.common.errors.ControllerMovedException
 import org.apache.kafka.common.metadata.{ConfigRecord, MetadataRecordType, PartitionRecord, ProducerIdsRecord, TopicRecord}
-import org.apache.kafka.common.{DirectoryId, TopicPartition, Uuid}
+import org.apache.kafka.common.{DirectoryId, TopicIdPartition, TopicPartition, Uuid}
 import org.apache.kafka.image.{MetadataDelta, MetadataImage, MetadataProvenance}
+import org.apache.kafka.metadata.migration.TopicMigrationClient.{TopicVisitor, TopicVisitorInterest}
 import org.apache.kafka.metadata.migration.{KRaftMigrationZkWriter, ZkMigrationLeadershipState}
 import org.apache.kafka.metadata.{LeaderRecoveryState, PartitionRegistration}
 import org.apache.kafka.server.config.ReplicationConfigs
@@ -33,7 +34,7 @@ import org.junit.jupiter.api.Assertions.{assertEquals, assertThrows, assertTrue,
 import org.junit.jupiter.api.Test
 
 import java.util.Properties
-import scala.collection.Map
+import scala.collection.{Map, mutable}
 import scala.jdk.CollectionConverters._
 import scala.util.{Failure, Success}
 
@@ -511,6 +512,163 @@ class ZkMigrationClientTest extends ZkMigrationTestHarness {
       assertEquals(expectedPartition.leaderEpoch, part.leaderAndIsr.leaderEpoch)
       assertEquals(expectedPartition.leaderRecoveryState, part.leaderAndIsr.leaderRecoveryState)
       assertEquals(expectedPartition.isr.toList, part.leaderAndIsr.isr)
+    }
+  }
+
+  /**
+   * A partition can be present in a topic's replica assignment without having any partition state, for
+   * instance when a controller fails in between writing the two. Verify that such partitions are visited
+   * through visitPartitionWithoutState rather than visitPartition, and that the other partitions and topics
+   * are visited as usual.
+   */
+  @Test
+  def testIterateTopicsWithMissingPartitionState(): Unit = {
+    val topicNames = createTopicsWithMissingPartitionState()
+
+    val visitor = new CapturingTopicVisitor()
+    migrationClient.topicClient().iterateTopics(
+      java.util.EnumSet.of(TopicVisitorInterest.TOPICS, TopicVisitorInterest.PARTITIONS),
+      visitor)
+    assertEquals(topicNames.toSet, visitor.visitedTopics.toSet)
+    assertEquals(
+      topicNames.map(new TopicPartition(_, 0)).toSet,
+      visitor.visitedPartitions.keySet.toSet)
+    assertEquals(
+      topicNames.map(new TopicPartition(_, 1)).toSet,
+      visitor.visitedPartitionsWithoutState.keySet.toSet)
+    topicNames.foreach { topicName =>
+      val record = visitor.visitedPartitionsWithoutState(new TopicPartition(topicName, 1))
+      assertEquals(1, record.partitionId)
+      assertEquals(Seq(1, 2, 3), record.replicas.asScala.map(_.toInt))
+    }
+  }
+
+  /**
+   * ZooKeeper is the source of truth during the migration, so a partition without any state in ZK must be
+   * migrated with a synthetic leader and ISR rather than being left out of the migrated metadata.
+   */
+  @Test
+  def testMigrateTopicsWithMissingPartitionState(): Unit = {
+    val topicNames = createTopicsWithMissingPartitionState()
+
+    val batches = new java.util.ArrayList[java.util.List[ApiMessageAndVersion]]()
+    migrationClient.readAllMetadata(batch => batches.add(batch), _ => ())
+    val partitionRecords = batches.asScala.flatMap(_.asScala).map(_.message).collect {
+      case record: PartitionRecord => record
+    }
+    val topicIds = zkClient.getTopicIdsForTopics(topicNames.toSet)
+
+    topicNames.foreach { topicName =>
+      val topicRecords = partitionRecords.filter(_.topicId == topicIds(topicName))
+      assertEquals(Set(0, 1), topicRecords.map(_.partitionId).toSet)
+      val synthesized = topicRecords.find(_.partitionId == 1).get
+      assertEquals(1, synthesized.leader)
+      assertEquals(Seq(1, 2, 3), synthesized.isr.asScala.map(_.toInt))
+      assertEquals(0, synthesized.leaderEpoch)
+      assertEquals(0, synthesized.partitionEpoch)
+      assertEquals(LeaderRecoveryState.RECOVERED.value, synthesized.leaderRecoveryState)
+    }
+  }
+
+  /**
+   * Create two topics with two partitions each, where only partition 0 of each topic has partition state.
+   */
+  private def createTopicsWithMissingPartitionState(): Seq[String] = {
+    val topicNames = Seq("test-a", "test-b")
+    topicNames.foreach { topicName =>
+      val assignment = Map(
+        new TopicPartition(topicName, 0) -> List(0, 1, 2),
+        new TopicPartition(topicName, 1) -> List(1, 2, 3)
+      )
+      zkClient.createTopicAssignment(topicName, Some(Uuid.randomUuid()), assignment)
+      zkClient.createTopicPartitionStatesRaw(Map(
+        new TopicPartition(topicName, 0) -> LeaderIsrAndControllerEpoch(
+          LeaderAndIsr(0, 5, List(0, 1, 2), LeaderRecoveryState.RECOVERED, -1), 1)
+      ), 0)
+    }
+    topicNames
+  }
+
+  /**
+   * Simulate a controller that failed after writing a new partition to the topic assignment in ZK, but
+   * before writing that partition's state. The next controller must create the missing partition state
+   * when it syncs the KRaft state to ZK (KAFKA-21142).
+   */
+  @Test
+  def testSnapshotCreatesMissingPartitionState(): Unit = {
+    val topicName = "test"
+    val topicId = Uuid.randomUuid()
+    val newPartition = new TopicPartition(topicName, 2)
+    val assignment = Map(
+      new TopicPartition(topicName, 0) -> List(0, 1, 2),
+      new TopicPartition(topicName, 1) -> List(1, 2, 3),
+      newPartition -> List(2, 3, 4)
+    )
+    zkClient.createTopicAssignment(topicName, Some(topicId), assignment)
+    zkClient.createTopicPartitionStatesRaw(Map(
+      new TopicPartition(topicName, 0) -> LeaderIsrAndControllerEpoch(
+        LeaderAndIsr(0, 5, List(0, 1, 2), LeaderRecoveryState.RECOVERED, -1), 1),
+      new TopicPartition(topicName, 1) -> LeaderIsrAndControllerEpoch(
+        LeaderAndIsr(1, 5, List(1, 2, 3), LeaderRecoveryState.RECOVERED, -1), 1)
+    ), 0)
+    assertTrue(zkClient.getTopicPartitionState(newPartition).isEmpty)
+
+    val delta = new MetadataDelta(MetadataImage.EMPTY)
+    delta.replay(new TopicRecord().setTopicId(topicId).setName(topicName))
+    assignment.foreach { case (topicPartition, replicas) =>
+      delta.replay(new PartitionRecord()
+        .setTopicId(topicId)
+        .setPartitionId(topicPartition.partition())
+        .setReplicas(replicas.map(int2Integer).asJava)
+        .setAddingReplicas(List.empty.asJava)
+        .setRemovingReplicas(List.empty.asJava)
+        .setIsr(replicas.map(int2Integer).asJava)
+        .setLeader(replicas.head)
+        .setLeaderEpoch(5)
+        .setPartitionEpoch(10)
+        .setLeaderRecoveryState(LeaderRecoveryState.RECOVERED.value()))
+    }
+
+    val kraftWriter = new KRaftMigrationZkWriter(migrationClient, fail(_))
+    kraftWriter.handleSnapshot(delta.apply(MetadataProvenance.EMPTY), (_, _, operation) => {
+      migrationState = operation(migrationState)
+    })
+
+    val newPartitionState = zkClient.getTopicPartitionState(newPartition)
+    assertTrue(newPartitionState.isDefined, s"Expected $newPartition to have been created in ZK")
+    newPartitionState.foreach { state =>
+      assertEquals(2, state.leaderAndIsr.leader)
+      assertEquals(5, state.leaderAndIsr.leaderEpoch)
+      assertEquals(List(2, 3, 4), state.leaderAndIsr.isr)
+      assertEquals(LeaderRecoveryState.RECOVERED, state.leaderAndIsr.leaderRecoveryState)
+    }
+  }
+
+  private class CapturingTopicVisitor extends TopicVisitor {
+    val visitedTopics = new mutable.ArrayBuffer[String]()
+    val visitedPartitions = new mutable.HashMap[TopicPartition, PartitionRegistration]()
+    val visitedPartitionsWithoutState = new mutable.HashMap[TopicPartition, PartitionRecord]()
+
+    override def visitTopic(
+      topicName: String,
+      topicId: Uuid,
+      assignments: java.util.Map[Integer, java.util.List[Integer]]
+    ): Unit = {
+      visitedTopics += topicName
+    }
+
+    override def visitPartition(
+      topicIdPartition: TopicIdPartition,
+      partitionRegistration: PartitionRegistration
+    ): Unit = {
+      visitedPartitions.put(topicIdPartition.topicPartition(), partitionRegistration)
+    }
+
+    override def visitPartitionWithoutState(
+      topicIdPartition: TopicIdPartition,
+      partitionRecord: PartitionRecord
+    ): Unit = {
+      visitedPartitionsWithoutState.put(topicIdPartition.topicPartition(), partitionRecord)
     }
   }
 }

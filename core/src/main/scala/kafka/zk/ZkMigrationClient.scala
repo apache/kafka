@@ -28,8 +28,7 @@ import org.apache.kafka.common.metadata._
 import org.apache.kafka.common.resource.ResourcePattern
 import org.apache.kafka.common.security.scram.ScramCredential
 import org.apache.kafka.common.{TopicIdPartition, Uuid}
-import org.apache.kafka.metadata.DelegationTokenData
-import org.apache.kafka.metadata.PartitionRegistration
+import org.apache.kafka.metadata.{DelegationTokenData, LeaderRecoveryState, PartitionRegistration}
 import org.apache.kafka.metadata.migration.ConfigMigrationClient.ClientQuotaVisitor
 import org.apache.kafka.metadata.migration.TopicMigrationClient.{TopicVisitor, TopicVisitorInterest}
 import org.apache.kafka.metadata.migration._
@@ -187,6 +186,24 @@ class ZkMigrationClient(
           partitionRegistration.replicas.foreach(brokerIdConsumer.accept(_))
           partitionRegistration.addingReplicas.foreach(brokerIdConsumer.accept(_))
           topicBatch.add(new ApiMessageAndVersion(record, 0.toShort))
+        }
+
+
+        /**
+         * ZooKeeper is the source of truth during the migration, so partitions without any state in ZK are
+         * migrated with a synthetic leader and ISR rather than being left out of the migrated metadata.
+         */
+        override def visitPartitionWithoutState(topicIdPartition: TopicIdPartition, partitionRecord: PartitionRecord): Unit = {
+          val replicaList = partitionRecord.replicas()
+          warn(s"Initializing partition $topicIdPartition with ISR={$replicaList} and leaderEpoch=0 since it " +
+            "has no partition state in ZK.")
+          partitionRecord
+            .setIsr(replicaList)
+            .setLeader(replicaList.get(0))
+            .setLeaderEpoch(0)
+            .setPartitionEpoch(0)
+            .setLeaderRecoveryState(LeaderRecoveryState.RECOVERED.value())
+          visitPartition(topicIdPartition, new PartitionRegistration(partitionRecord))
         }
       }
     )
