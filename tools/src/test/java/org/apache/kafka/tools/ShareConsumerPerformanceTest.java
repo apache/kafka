@@ -17,8 +17,11 @@
 package org.apache.kafka.tools;
 
 import org.apache.kafka.clients.consumer.ConsumerConfig;
+import org.apache.kafka.clients.consumer.ConsumerRecord;
+import org.apache.kafka.clients.consumer.ConsumerRecords;
 import org.apache.kafka.clients.consumer.MockShareConsumer;
 import org.apache.kafka.clients.consumer.ShareConsumer;
+import org.apache.kafka.common.errors.InterruptException;
 import org.apache.kafka.common.utils.Utils;
 import org.apache.kafka.common.utils.internals.Exit;
 
@@ -33,6 +36,7 @@ import java.io.PrintWriter;
 import java.nio.file.Files;
 import java.nio.file.Path;
 import java.text.SimpleDateFormat;
+import java.time.Duration;
 import java.util.Properties;
 import java.util.function.Function;
 
@@ -253,6 +257,41 @@ public class ShareConsumerPerformanceTest {
         Function<Properties, ShareConsumer<byte[], byte[]>> shareConsumerCreator = properties -> new MockShareConsumer<>();
 
         String err = ToolsTestUtils.captureStandardErr(() -> ShareConsumerPerformance.run(args, shareConsumerCreator));
+        assertTrue(Utils.isBlank(err), "Should be no stderr message, but was \"" + err + "\"");
+    }
+
+    @Test
+    public void testTimeoutIsMaxTimeBetweenRecordsNotTotalTime() {
+        // Each poll returns one record after 150 ms, so the gap between records stays well below
+        // --timeout, but consuming all records takes longer than --timeout in total.
+        String[] args = new String[]{
+            "--bootstrap-server", "localhost:9092",
+            "--topic", "test",
+            "--num-records", "10",
+            "--timeout", "1000"
+        };
+
+        Function<Properties, ShareConsumer<byte[], byte[]>> shareConsumerCreator = properties -> new MockShareConsumer<>() {
+            private long offset = 0;
+
+            @Override
+            public synchronized ConsumerRecords<byte[], byte[]> poll(Duration timeout) {
+                try {
+                    Thread.sleep(150);
+                } catch (InterruptedException e) {
+                    throw new InterruptException(e);
+                }
+                addRecord(new ConsumerRecord<>("test", 0, offset++, null, new byte[1]));
+                return super.poll(timeout);
+            }
+        };
+
+        String err = ToolsTestUtils.captureStandardErr(() -> {
+            String out = ToolsTestUtils.captureStandardOut(() -> ShareConsumerPerformance.run(args, shareConsumerCreator));
+            String[] lines = out.split("\n");
+            assertEquals(2, lines.length, "Expected header and stats line, but was \"" + out + "\"");
+            assertEquals("10", lines[1].split(",\\s")[5]);
+        });
         assertTrue(Utils.isBlank(err), "Should be no stderr message, but was \"" + err + "\"");
     }
 
