@@ -123,6 +123,7 @@ import org.slf4j.LoggerFactory;
 
 import java.io.File;
 import java.nio.file.Path;
+import java.util.ArrayList;
 import java.util.Arrays;
 import java.util.Collection;
 import java.util.HashMap;
@@ -1602,12 +1603,26 @@ public class QuorumControllerTest {
 
         @Override
         public Long apply(List<ApiMessageAndVersion> apiMessageAndVersions) {
+            assertFalse(apiMessageAndVersions.isEmpty(), "appender must never receive an empty batch");
             for (ApiMessageAndVersion apiMessageAndVersion : apiMessageAndVersions) {
                 BrokerRegistrationChangeRecord record =
                         (BrokerRegistrationChangeRecord) apiMessageAndVersion.message();
                 assertEquals((int) offset, record.brokerId());
                 offset++;
             }
+            return offset;
+        }
+    }
+
+    static class RecordingAppender implements Function<List<ApiMessageAndVersion>, Long> {
+        private final List<Integer> batchSizes = new ArrayList<>();
+        private long offset = 0;
+
+        @Override
+        public Long apply(List<ApiMessageAndVersion> records) {
+            assertFalse(records.isEmpty(), "appender must never receive an empty batch");
+            batchSizes.add(records.size());
+            offset += records.size();
             return offset;
         }
     }
@@ -1635,6 +1650,54 @@ public class QuorumControllerTest {
                         ControllerResult.atomicOf(List.of(rec(0), rec(1), rec(2), rec(3), rec(4)), null),
                         2,
                         appender)).getMessage());
+    }
+
+    @ParameterizedTest(name = "numRecords={0}, maxRecordsPerBatch={1}")
+    @CsvSource({
+        "1, 1",
+        "5, 1",
+        "5, 10",
+        "10, 10",
+        "15, 10",
+        "20, 10"
+    })
+    public void testAppendRecordsNonAtomicBatching(int numRecords, int maxRecordsPerBatch) {
+        List<ApiMessageAndVersion> records = new ArrayList<>();
+        for (int i = 0; i < numRecords; i++) {
+            records.add(rec(i));
+        }
+        RecordingAppender appender = new RecordingAppender();
+        long returned = QuorumController.appendRecords(log,
+            ControllerResult.of(records, null), maxRecordsPerBatch, appender);
+
+        List<Integer> expectedSizes = new ArrayList<>();
+        for (int i = 0; i < numRecords; i += maxRecordsPerBatch) {
+            expectedSizes.add(Math.min(maxRecordsPerBatch, numRecords - i));
+        }
+        assertEquals(expectedSizes, appender.batchSizes,
+            "batches should be exactly maxRecordsPerBatch-sized except the final one");
+        assertTrue(appender.batchSizes.stream().allMatch(s -> s > 0 && s <= maxRecordsPerBatch),
+            "every batch should be non-empty and no larger than maxRecordsPerBatch");
+        assertEquals(numRecords, appender.batchSizes.stream().mapToLong(Integer::longValue).sum(),
+            "no record should be dropped or duplicated");
+        assertEquals((long) numRecords, returned);
+    }
+
+    @Test
+    public void testNonAtomicWriteDoesNotTriggerControllerFailover() throws Throwable {
+        try (
+            MockRaftClientTestEnv clientEnv = new MockRaftClientTestEnv.Builder(1).build();
+            QuorumControllerTestEnv controlEnv = new QuorumControllerTestEnv.Builder(clientEnv)
+                .setControllerBuilderInitializer(b -> b.setControllerMaxRecordsPerBatch(1))
+                .build()
+        ) {
+            QuorumController controller = controlEnv.activeController(true);
+            int epochBefore = controller.curClaimEpoch();
+
+            registerBrokersAndUnfence(controller, 1);
+
+            assertEquals(epochBefore, controller.curClaimEpoch(), "controller must not renounce leadership");
+        }
     }
 
     FeatureControlManager getActivationRecords(MetadataVersion metadataVersion) {
