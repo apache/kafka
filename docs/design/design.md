@@ -436,13 +436,13 @@ Log compaction is handled by the log cleaner, a pool of background threads that 
 
 ### Configuring The Log Cleaner
 
-The log cleaner is enabled by default, which starts the pool of cleaner threads. Compaction runs only for topics whose cleanup policy includes `compact`. To make compaction the broker default for topics that do not set their own cleanup policy, add the following broker configuration to `server.properties`:
+The log cleaner is enabled by default, which starts the pool of cleaner threads. Compaction runs only for topics whose cleanup policy includes `compact`. To make compaction the broker default for topics that do not set their own cleanup policy, add the following broker configuration, [`log.cleanup.policy`](/{version}/configuration/broker-configs#brokerconfigs_log.cleanup.policy), to `server.properties`:
 
 ```properties
 log.cleanup.policy=compact
 ```
 
-To enable compaction for an individual topic, set the topic configuration `cleanup.policy=compact` when creating or altering the topic. Topic-level configuration overrides the broker default, as documented [here](/documentation.html#topicconfigs). The log cleaner can be configured to retain a minimum amount of the uncompacted "head" of the log. This is enabled by setting the compaction time lag.
+To enable compaction for an individual topic, set the topic configuration `cleanup.policy=compact` when creating the topic or alter it later using the `kafka-configs.sh` tool. Topic-level configuration overrides the broker default, as documented in the [topic configuration](/{version}/configuration/topic-configs#topicconfigs_cleanup.policy) documentation. The log cleaner can be configured to retain a minimum amount of the uncompacted "head" of the log. This is enabled by setting the compaction time lag.
 
 ```properties
 log.cleaner.min.compaction.lag.ms
@@ -460,7 +460,7 @@ Because the active segment is never compacted (as noted above), records become e
 
 Note that this compaction deadline is not a hard guarantee since it is still subjected to the availability of log cleaner threads and the actual compaction time. You will want to monitor the uncleanable-partitions-count, max-clean-time-secs and max-compaction-delay-secs metrics. 
 
-Further cleaner configurations are described [here](/documentation.html#brokerconfigs). 
+Further cleaner configurations are described in the [broker configuration](/{version}/configuration/broker-configs) documentation.
 
 ## Quotas
 
