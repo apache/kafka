@@ -199,8 +199,10 @@ jobs:
           develocity-access-key: ${{ secrets.DEVELOCITY_ACCESS_KEY }}
 
       - name: Run API checker checks
+        env:
+          SCAN_ARG: ${{ inputs.is-public-fork && '--no-scan' || '--scan' }}
         run: |
-          ./gradlew --no-build-cache --continue --no-scan \
+          ./gradlew --build-cache --continue "$SCAN_ARG" \
             :api-checker:core:check \
             :api-checker:gradle-plugins:check \
             :api-checker:maven-plugin:check
