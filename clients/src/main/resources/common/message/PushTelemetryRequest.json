@@ -27,7 +27,7 @@
     "1+": "3"
   },
   "fields": [
-    { "name": "ClientInstanceId", "type": "uuid", "versions": "0",
+    { "name": "ClientInstanceId", "type": "uuid", "versions": "0", "ignorable": true,
       "about": "Unique id for this client instance." },
     { "name": "SubscriptionId", "type": "int32", "versions": "0+",
       "about": "Unique identifier for the current subscription." },

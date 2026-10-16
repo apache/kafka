@@ -27,7 +27,7 @@
     "1+": "3"
   },
   "fields": [
-    { "name": "ClientInstanceId", "type": "uuid", "versions": "0",
+    { "name": "ClientInstanceId", "type": "uuid", "versions": "0", "ignorable": true,
       "about": "Unique id for this client instance, must be set to 0 on the first request." }
   ]
 }
