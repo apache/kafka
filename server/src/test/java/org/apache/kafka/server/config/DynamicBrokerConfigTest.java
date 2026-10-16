@@ -19,7 +19,7 @@ package org.apache.kafka.server.config;
 import org.apache.kafka.common.config.AbstractConfig;
 import org.apache.kafka.common.config.ConfigException;
 import org.apache.kafka.common.config.provider.FileConfigProvider;
-import org.apache.kafka.coordinator.mirror.ClusterMirrorConfigs;
+import org.apache.kafka.coordinator.mirror.ClusterMirrorConfig;
 import org.apache.kafka.server.config.DynamicBrokerConfig.DynamicClusterMirrorConfig;
 
 import org.junit.jupiter.api.Test;
@@ -90,9 +90,9 @@ public class DynamicBrokerConfigTest {
     @Test
     public void testDynamicClusterMirrorConfigReconfigurableConfigs() {
         assertTrue(DynamicClusterMirrorConfig.RECONFIGURABLE_CONFIGS.contains(
-                ClusterMirrorConfigs.MIRROR_NUM_REPLICA_FETCHERS_CONFIG));
+                ClusterMirrorConfig.MIRROR_NUM_REPLICA_FETCHERS_CONFIG));
         assertTrue(DynamicClusterMirrorConfig.RECONFIGURABLE_CONFIGS.contains(
-                ClusterMirrorConfigs.MIRROR_METADATA_REFRESH_INTERVAL_MS_CONFIG));
+                ClusterMirrorConfig.MIRROR_METADATA_REFRESH_INTERVAL_MS_CONFIG));
     }
 
     @Test
@@ -115,7 +115,7 @@ public class DynamicBrokerConfigTest {
 
     private static AbstractKafkaConfig mockConfig(int fetchers) {
         AbstractKafkaConfig config = mock(AbstractKafkaConfig.class);
-        when(config.getInt(ClusterMirrorConfigs.MIRROR_NUM_REPLICA_FETCHERS_CONFIG)).thenReturn(fetchers);
+        when(config.getInt(ClusterMirrorConfig.MIRROR_NUM_REPLICA_FETCHERS_CONFIG)).thenReturn(fetchers);
         return config;
     }
 }
