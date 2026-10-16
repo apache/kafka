@@ -30,6 +30,7 @@ import static org.junit.jupiter.api.Assertions.assertThrows;
 import static org.junit.jupiter.api.Assertions.assertTrue;
 import static org.mockito.Mockito.mock;
 
+@SuppressWarnings("removal")   // this suite exists to cover the deprecated bridge
 public class ConsumerRebalanceListenerTest {
 
     private static final TopicPartition TP0 = new TopicPartition("topic", 0);
