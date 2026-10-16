@@ -31,6 +31,7 @@ import org.apache.kafka.server.authorizer.AuthorizableRequestContext;
 import java.net.InetAddress;
 import java.nio.ByteBuffer;
 import java.util.Optional;
+import java.util.concurrent.atomic.AtomicBoolean;
 
 import static org.apache.kafka.common.protocol.ApiKeys.API_VERSIONS;
 
@@ -42,7 +43,8 @@ public class RequestContext implements AuthorizableRequestContext {
     public final KafkaPrincipal principal;
     public final ListenerName listenerName;
     public final SecurityProtocol securityProtocol;
-    public final ClientInformation clientInformation;
+    private ClientInformation clientInformation;
+    private final AtomicBoolean hasUpdatedClientInformation = new AtomicBoolean(false);
     public final boolean fromPrivilegedListener;
     public final Optional<KafkaPrincipalSerde> principalSerde;
 
@@ -164,6 +166,22 @@ public class RequestContext implements AuthorizableRequestContext {
 
     public String connectionId() {
         return connectionId;
+    }
+
+    public void setClientInformation(ClientInformation clientInformation) {
+        // We only allow updating the client information once, and only if the
+        // current client information is UNKNOWN. This ensures that a malicious
+        // client cannot override a well-known client information with an
+        // arbitrary one.
+        if (hasUpdatedClientInformation.compareAndSet(false, true)) {
+            if (this.clientInformation == ClientInformation.EMPTY) {
+                this.clientInformation = clientInformation;
+            }
+        }
+    }
+
+    public ClientInformation clientInformation() {
+        return clientInformation;
     }
 
     @Override
