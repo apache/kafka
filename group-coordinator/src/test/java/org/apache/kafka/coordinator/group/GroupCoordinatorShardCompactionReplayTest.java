@@ -32,7 +32,6 @@ import org.apache.kafka.coordinator.group.metrics.GroupCoordinatorMetrics;
 import org.apache.kafka.coordinator.group.streams.MockTaskAssignor;
 
 import org.junit.jupiter.api.BeforeEach;
-import org.junit.jupiter.api.Disabled;
 import org.junit.jupiter.api.Test;
 
 import java.util.HashSet;
@@ -330,7 +329,6 @@ public class GroupCoordinatorShardCompactionReplayTest {
      *  Classic group commits an offset
      */
     @Test
-    @Disabled("KAFKA-21117: Consumer group loading can fail with online downgrade")
     public void testConsumerGroupDowngradeByLeave() throws Exception {
         CompactionReplayTestContext context = newContext();
         String groupId = "consumer-downgrade-by-leave-group";
@@ -403,7 +401,6 @@ public class GroupCoordinatorShardCompactionReplayTest {
      *  Classic group commits an offset
      */
     @Test
-    @Disabled("KAFKA-21117: Consumer group loading can fail with online downgrade")
     public void testConsumerGroupDowngradeByStaticMemberReplacement() throws Exception {
         CompactionReplayTestContext context = newContext();
         String groupId = "consumer-downgrade-by-replacement-group";
