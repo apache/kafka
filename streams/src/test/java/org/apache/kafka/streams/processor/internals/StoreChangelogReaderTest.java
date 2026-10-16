@@ -1230,6 +1230,144 @@ public class StoreChangelogReaderTest {
         assertNull(changelogReader.logicalChangelogEndOffsets().get(tp));
     }
 
+    private Map<TaskId, Task> setupSourceChangelogStandby() {
+        setupStandbyStateManager();
+        setupStoreMetadata();
+        @SuppressWarnings("unchecked")
+        final Map<TaskId, Task> mockTasks = mock(Map.class);
+        when(mockTasks.get(null)).thenReturn(mock(Task.class));
+        when(mockTasks.containsKey(null)).thenReturn(true);
+        when(standbyStateManager.changelogAsSource(tp)).thenReturn(true);
+        when(storeMetadata.offset()).thenReturn(3L);
+        return mockTasks;
+    }
+
+    @Test
+    public void shouldStopFetchingSourceChangelogStandbyBeyondLimit() {
+        final Map<TaskId, Task> mockTasks = setupSourceChangelogStandby();
+        changelogReader.transitToUpdateStandby();
+
+        consumer.updateBeginningOffsets(Collections.singletonMap(tp, 0L));
+        // the active task has committed up to offset 7 and makes no further progress
+        adminClient.updateConsumerGroupOffsets(Collections.singletonMap(tp, 7L));
+        changelogReader.register(tp, standbyStateManager);
+        changelogReader.restore(mockTasks);
+        assertEquals(7L, (long) changelogReader.changelogMetadata(tp).endOffset());
+
+        long nextOffset = 10L;
+        for (int round = 1; round <= 2; round++) {
+            for (int i = 0; i < 100; i++) {
+                consumer.addRecord(changelogRecord(tp, nextOffset++, 0L));
+            }
+            changelogReader.restore(mockTasks);
+
+            // only the first poll is buffered, then the partition is paused
+            assertEquals(0L, changelogReader.changelogMetadata(tp).totalRestored());
+            assertEquals(100, changelogReader.changelogMetadata(tp).bufferedRecords().size());
+        }
+        assertEquals(Collections.singleton(tp), consumer.paused());
+    }
+
+    @Test
+    public void shouldResumeSourceChangelogStandbyOnceLimitPassesBufferedRecords() {
+        final Map<TaskId, Task> mockTasks = setupSourceChangelogStandby();
+        setupStore();
+        when(storeMetadata.endOffset()).thenReturn(1000L);
+        final Properties properties = new Properties();
+        properties.put(StreamsConfig.COMMIT_INTERVAL_MS_CONFIG, 100L);
+        final StreamsConfig config = new StreamsConfig(StreamsTestUtils.getStreamsConfig("test-reader", properties));
+        final StoreChangelogReader changelogReader =
+            new StoreChangelogReader(time, config, logContext, adminClient, consumer, callback, standbyListener);
+        changelogReader.transitToUpdateStandby();
+
+        final long now = time.milliseconds();
+        consumer.updateBeginningOffsets(Collections.singletonMap(tp, 0L));
+        adminClient.updateConsumerGroupOffsets(Collections.singletonMap(tp, 7L));
+        changelogReader.register(tp, standbyStateManager);
+        changelogReader.restore(mockTasks);
+
+        for (long offset = 10L; offset < 50L; offset++) {
+            consumer.addRecord(changelogRecord(tp, offset, 0L));
+        }
+        // MockConsumer returns everything that is available in one poll
+        changelogReader.restore(mockTasks);
+        assertEquals(40, changelogReader.changelogMetadata(tp).bufferedRecords().size());
+        for (long offset = 50L; offset < 60L; offset++) {
+            consumer.addRecord(changelogRecord(tp, offset, 0L));
+        }
+        changelogReader.restore(mockTasks);
+        assertEquals(Collections.singleton(tp), consumer.paused());
+        assertEquals(40, changelogReader.changelogMetadata(tp).bufferedRecords().size());
+
+        // the limit moves to 25 although the partition is paused; 25 buffered records are still beyond it
+        adminClient.updateConsumerGroupOffsets(Collections.singletonMap(tp, 25L));
+        time.setCurrentTimeMs(now + 101L);
+        changelogReader.restore(mockTasks);
+        changelogReader.restore(mockTasks);
+        assertEquals(15L, changelogReader.changelogMetadata(tp).totalRestored());
+        assertEquals(25, changelogReader.changelogMetadata(tp).bufferedRecords().size());
+        changelogReader.restore(mockTasks);
+        assertEquals(Collections.singleton(tp), consumer.paused());
+
+        // the limit passes all buffered records: they are applied and the partition is fetched again
+        adminClient.updateConsumerGroupOffsets(Collections.singletonMap(tp, 55L));
+        time.setCurrentTimeMs(now + 202L);
+        changelogReader.restore(mockTasks);
+        // every buffered record is now below the limit, so the partition is resumed before this poll:
+        // offsets 50..54 are fetched and applied together with the buffered ones, 55..59 stay buffered
+        changelogReader.restore(mockTasks);
+        assertEquals(45L, changelogReader.changelogMetadata(tp).totalRestored());
+        assertEquals(5, changelogReader.changelogMetadata(tp).bufferedRecords().size());
+        changelogReader.restore(mockTasks);
+        assertEquals(Collections.singleton(tp), consumer.paused());
+    }
+
+    @Test
+    public void shouldPauseSourceChangelogStandbyAgainAfterActiveRestoration() {
+        final Map<TaskId, Task> mockTasks = setupSourceChangelogStandby();
+        setupStore();
+        when(activeStateManager.storeMetadata(tp1)).thenReturn(storeMetadataOne);
+        when(activeStateManager.taskType()).thenReturn(ACTIVE);
+        when(storeMetadataOne.changelogPartition()).thenReturn(tp1);
+        when(storeMetadataOne.store()).thenReturn(store);
+        when(storeMetadataOne.offset()).thenReturn(0L);
+        changelogReader.transitToUpdateStandby();
+
+        consumer.updateBeginningOffsets(mkMap(mkEntry(tp, 0L), mkEntry(tp1, 0L)));
+        adminClient.updateConsumerGroupOffsets(Collections.singletonMap(tp, 7L));
+        adminClient.updateEndOffsets(Collections.singletonMap(tp1, 6L));
+        changelogReader.register(tp, standbyStateManager);
+        changelogReader.restore(mockTasks);
+
+        for (long offset = 10L; offset < 30L; offset++) {
+            consumer.addRecord(changelogRecord(tp, offset, 0L));
+        }
+        changelogReader.restore(mockTasks);
+        assertEquals(20, changelogReader.changelogMetadata(tp).bufferedRecords().size());
+
+        changelogReader.enforceRestoreActive();
+        changelogReader.register(tp1, activeStateManager);
+        changelogReader.restore(mockTasks);
+        for (long offset = 1L; offset < 6L; offset++) {
+            consumer.addRecord(changelogRecord(tp1, offset, 0L));
+        }
+        changelogReader.restore(mockTasks);
+
+        assertEquals(5L, changelogReader.changelogMetadata(tp1).totalRestored());
+        assertEquals(StoreChangelogReader.ChangelogState.COMPLETED, changelogReader.changelogMetadata(tp1).state());
+        assertEquals(20, changelogReader.changelogMetadata(tp).bufferedRecords().size());
+
+        // going back to standby updating resumes every standby partition, but the one at its limit must be paused
+        // again before the next poll
+        changelogReader.transitToUpdateStandby();
+        for (long offset = 30L; offset < 40L; offset++) {
+            consumer.addRecord(changelogRecord(tp, offset, 0L));
+        }
+        changelogReader.restore(mockTasks);
+        assertTrue(consumer.paused().contains(tp));
+        assertEquals(20, changelogReader.changelogMetadata(tp).bufferedRecords().size());
+    }
+
     @Test
     public void shouldRestoreToLimitInStandbyState() {
         setupStandbyStateManager();
