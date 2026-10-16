@@ -18,13 +18,14 @@ package org.apache.kafka.server.metrics;
 
 import org.apache.kafka.common.Uuid;
 
+import com.google.re2j.Pattern;
+
 import org.junit.jupiter.api.Test;
 
 import java.net.InetAddress;
 import java.net.UnknownHostException;
 import java.util.HashMap;
 import java.util.Map;
-import java.util.regex.Pattern;
 
 import static org.junit.jupiter.api.Assertions.assertFalse;
 import static org.junit.jupiter.api.Assertions.assertTrue;
@@ -39,23 +40,23 @@ public class ClientMetricsInstanceMetadataTest {
         assertTrue(instanceMetadata.isMatch(Map.of()));
 
         assertTrue(instanceMetadata.isMatch(
-            Map.of(ClientMetricsConfigs.CLIENT_ID, Pattern.compile(".*"))));
+            Map.of(ClientMetricsConfigs.CLIENT_ID, ClientMatchPattern.ofRe2(Pattern.compile(".*")))));
         assertTrue(instanceMetadata.isMatch(
-            Map.of(ClientMetricsConfigs.CLIENT_ID, Pattern.compile("producer-1"))));
+            Map.of(ClientMetricsConfigs.CLIENT_ID, ClientMatchPattern.ofRe2(Pattern.compile("producer-1")))));
         assertTrue(instanceMetadata.isMatch(
-            Map.of(ClientMetricsConfigs.CLIENT_ID, Pattern.compile("producer.*"))));
+            Map.of(ClientMetricsConfigs.CLIENT_ID, ClientMatchPattern.ofRe2(Pattern.compile("producer.*")))));
         assertTrue(instanceMetadata.isMatch(
-            Map.of(ClientMetricsConfigs.CLIENT_INSTANCE_ID, Pattern.compile(uuid.toString()))));
+            Map.of(ClientMetricsConfigs.CLIENT_INSTANCE_ID, ClientMatchPattern.ofRe2(Pattern.compile(uuid.toString())))));
         assertTrue(instanceMetadata.isMatch(
-            Map.of(ClientMetricsConfigs.CLIENT_SOFTWARE_NAME, Pattern.compile("apache-kafka-java"))));
+            Map.of(ClientMetricsConfigs.CLIENT_SOFTWARE_NAME, ClientMatchPattern.ofRe2(Pattern.compile("apache-kafka-java")))));
         assertTrue(instanceMetadata.isMatch(
-            Map.of(ClientMetricsConfigs.CLIENT_SOFTWARE_VERSION, Pattern.compile("3.5.2"))));
+            Map.of(ClientMetricsConfigs.CLIENT_SOFTWARE_VERSION, ClientMatchPattern.ofRe2(Pattern.compile("3.5.2")))));
         assertTrue(instanceMetadata.isMatch(
-            Map.of(ClientMetricsConfigs.CLIENT_SOURCE_ADDRESS, Pattern.compile(
-                InetAddress.getLocalHost().getHostAddress()))));
+            Map.of(ClientMetricsConfigs.CLIENT_SOURCE_ADDRESS, ClientMatchPattern.ofRe2(Pattern.compile(
+                InetAddress.getLocalHost().getHostAddress())))));
         assertTrue(instanceMetadata.isMatch(
-            Map.of(ClientMetricsConfigs.CLIENT_SOURCE_PORT, Pattern.compile(
-                String.valueOf(ClientMetricsTestUtils.CLIENT_PORT)))));
+            Map.of(ClientMetricsConfigs.CLIENT_SOURCE_PORT, ClientMatchPattern.ofRe2(Pattern.compile(
+                String.valueOf(ClientMetricsTestUtils.CLIENT_PORT))))));
     }
 
     @Test
@@ -64,13 +65,13 @@ public class ClientMetricsInstanceMetadataTest {
         ClientMetricsInstanceMetadata instanceMetadata = new ClientMetricsInstanceMetadata(uuid,
             ClientMetricsTestUtils.requestContext());
 
-        Map<String, Pattern> patternMap = Map.of(
-                ClientMetricsConfigs.CLIENT_ID, Pattern.compile("producer-1"),
-                ClientMetricsConfigs.CLIENT_INSTANCE_ID, Pattern.compile(uuid.toString()),
-                ClientMetricsConfigs.CLIENT_SOFTWARE_NAME, Pattern.compile("apache-kafka-.*"),
-                ClientMetricsConfigs.CLIENT_SOFTWARE_VERSION, Pattern.compile("3.5.2"),
-                ClientMetricsConfigs.CLIENT_SOURCE_ADDRESS, Pattern.compile(InetAddress.getLocalHost().getHostAddress()),
-                ClientMetricsConfigs.CLIENT_SOURCE_PORT, Pattern.compile(String.valueOf(ClientMetricsTestUtils.CLIENT_PORT))
+        Map<String, ClientMatchPattern> patternMap = Map.of(
+                ClientMetricsConfigs.CLIENT_ID, ClientMatchPattern.ofRe2(Pattern.compile("producer-1")),
+                ClientMetricsConfigs.CLIENT_INSTANCE_ID, ClientMatchPattern.ofRe2(Pattern.compile(uuid.toString())),
+                ClientMetricsConfigs.CLIENT_SOFTWARE_NAME, ClientMatchPattern.ofRe2(Pattern.compile("apache-kafka-.*")),
+                ClientMetricsConfigs.CLIENT_SOFTWARE_VERSION, ClientMatchPattern.ofRe2(Pattern.compile("3.5.2")),
+                ClientMetricsConfigs.CLIENT_SOURCE_ADDRESS, ClientMatchPattern.ofRe2(Pattern.compile(InetAddress.getLocalHost().getHostAddress())),
+                ClientMetricsConfigs.CLIENT_SOURCE_PORT, ClientMatchPattern.ofRe2(Pattern.compile(String.valueOf(ClientMetricsTestUtils.CLIENT_PORT)))
         );
 
         assertTrue(instanceMetadata.isMatch(patternMap));
@@ -82,39 +83,39 @@ public class ClientMetricsInstanceMetadataTest {
         ClientMetricsInstanceMetadata instanceMetadata = new ClientMetricsInstanceMetadata(uuid,
             ClientMetricsTestUtils.requestContext());
 
-        Map<String, Pattern> patternMap = new HashMap<>();
-        patternMap.put(ClientMetricsConfigs.CLIENT_INSTANCE_ID, Pattern.compile(uuid.toString()));
-        patternMap.put(ClientMetricsConfigs.CLIENT_SOFTWARE_NAME, Pattern.compile("apache-kafka-.*"));
-        patternMap.put(ClientMetricsConfigs.CLIENT_SOFTWARE_VERSION, Pattern.compile("3.5.2"));
-        patternMap.put(ClientMetricsConfigs.CLIENT_SOURCE_ADDRESS, Pattern.compile(InetAddress.getLocalHost().getHostAddress()));
+        Map<String, ClientMatchPattern> patternMap = new HashMap<>();
+        patternMap.put(ClientMetricsConfigs.CLIENT_INSTANCE_ID, ClientMatchPattern.ofRe2(Pattern.compile(uuid.toString())));
+        patternMap.put(ClientMetricsConfigs.CLIENT_SOFTWARE_NAME, ClientMatchPattern.ofRe2(Pattern.compile("apache-kafka-.*")));
+        patternMap.put(ClientMetricsConfigs.CLIENT_SOFTWARE_VERSION, ClientMatchPattern.ofRe2(Pattern.compile("3.5.2")));
+        patternMap.put(ClientMetricsConfigs.CLIENT_SOURCE_ADDRESS, ClientMatchPattern.ofRe2(Pattern.compile(InetAddress.getLocalHost().getHostAddress())));
 
         // Client id is different.
-        patternMap.put(ClientMetricsConfigs.CLIENT_ID, Pattern.compile("producer-2"));
+        patternMap.put(ClientMetricsConfigs.CLIENT_ID, ClientMatchPattern.ofRe2(Pattern.compile("producer-2")));
         assertFalse(instanceMetadata.isMatch(patternMap));
 
         // Client instance id is different.
-        patternMap.put(ClientMetricsConfigs.CLIENT_ID, Pattern.compile("producer-1"));
-        patternMap.put(ClientMetricsConfigs.CLIENT_INSTANCE_ID, Pattern.compile(uuid + "random"));
+        patternMap.put(ClientMetricsConfigs.CLIENT_ID, ClientMatchPattern.ofRe2(Pattern.compile("producer-1")));
+        patternMap.put(ClientMetricsConfigs.CLIENT_INSTANCE_ID, ClientMatchPattern.ofRe2(Pattern.compile(uuid + "random")));
         assertFalse(instanceMetadata.isMatch(patternMap));
 
         // Software name is different.
-        patternMap.put(ClientMetricsConfigs.CLIENT_INSTANCE_ID, Pattern.compile(uuid.toString()));
-        patternMap.put(ClientMetricsConfigs.CLIENT_SOFTWARE_NAME, Pattern.compile("apache-kafka-java-1"));
+        patternMap.put(ClientMetricsConfigs.CLIENT_INSTANCE_ID, ClientMatchPattern.ofRe2(Pattern.compile(uuid.toString())));
+        patternMap.put(ClientMetricsConfigs.CLIENT_SOFTWARE_NAME, ClientMatchPattern.ofRe2(Pattern.compile("apache-kafka-java-1")));
         assertFalse(instanceMetadata.isMatch(patternMap));
 
         // Software version is different.
-        patternMap.put(ClientMetricsConfigs.CLIENT_SOFTWARE_NAME, Pattern.compile("apache-kafka-java"));
-        patternMap.put(ClientMetricsConfigs.CLIENT_SOFTWARE_VERSION, Pattern.compile("3.5.x"));
+        patternMap.put(ClientMetricsConfigs.CLIENT_SOFTWARE_NAME, ClientMatchPattern.ofRe2(Pattern.compile("apache-kafka-java")));
+        patternMap.put(ClientMetricsConfigs.CLIENT_SOFTWARE_VERSION, ClientMatchPattern.ofRe2(Pattern.compile("3.5.x")));
         assertFalse(instanceMetadata.isMatch(patternMap));
 
         // Source address is different.
-        patternMap.put(ClientMetricsConfigs.CLIENT_SOFTWARE_VERSION, Pattern.compile("3.5.2"));
-        patternMap.put(ClientMetricsConfigs.CLIENT_SOURCE_ADDRESS, Pattern.compile("1.2.3.4"));
+        patternMap.put(ClientMetricsConfigs.CLIENT_SOFTWARE_VERSION, ClientMatchPattern.ofRe2(Pattern.compile("3.5.2")));
+        patternMap.put(ClientMetricsConfigs.CLIENT_SOURCE_ADDRESS, ClientMatchPattern.ofRe2(Pattern.compile("1.2.3.4")));
         assertFalse(instanceMetadata.isMatch(patternMap));
 
         // Source port is different.
-        patternMap.put(ClientMetricsConfigs.CLIENT_SOURCE_ADDRESS, Pattern.compile(InetAddress.getLocalHost().getHostAddress()));
-        patternMap.put(ClientMetricsConfigs.CLIENT_SOURCE_PORT, Pattern.compile("8080"));
+        patternMap.put(ClientMetricsConfigs.CLIENT_SOURCE_ADDRESS, ClientMatchPattern.ofRe2(Pattern.compile(InetAddress.getLocalHost().getHostAddress())));
+        patternMap.put(ClientMetricsConfigs.CLIENT_SOURCE_PORT, ClientMatchPattern.ofRe2(Pattern.compile("8080")));
         assertFalse(instanceMetadata.isMatch(patternMap));
     }
 
@@ -125,9 +126,9 @@ public class ClientMetricsInstanceMetadataTest {
             ClientMetricsTestUtils.requestContext());
 
         // Unknown key in pattern map
-        assertFalse(instanceMetadata.isMatch(Map.of("unknown", Pattern.compile(".*"))));
+        assertFalse(instanceMetadata.isMatch(Map.of("unknown", ClientMatchPattern.ofRe2(Pattern.compile(".*")))));
         // '*' key is considered as invalid regex pattern
-        assertFalse(instanceMetadata.isMatch(Map.of("*", Pattern.compile(".*"))));
+        assertFalse(instanceMetadata.isMatch(Map.of("*", ClientMatchPattern.ofRe2(Pattern.compile(".*")))));
     }
 
     @Test
@@ -137,8 +138,8 @@ public class ClientMetricsInstanceMetadataTest {
             ClientMetricsTestUtils.requestContextWithNullClientInfo());
 
         assertFalse(instanceMetadata.isMatch(Map.of(ClientMetricsConfigs.CLIENT_SOFTWARE_NAME,
-            Pattern.compile(".*"))));
+            ClientMatchPattern.ofRe2(Pattern.compile(".*")))));
         assertFalse(instanceMetadata.isMatch(Map.of(ClientMetricsConfigs.CLIENT_SOFTWARE_VERSION,
-            Pattern.compile(".*"))));
+            ClientMatchPattern.ofRe2(Pattern.compile(".*")))));
     }
 }
