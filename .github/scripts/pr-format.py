@@ -26,8 +26,6 @@ import tempfile
 import textwrap
 from typing import Dict, Optional, TextIO
 
-from markdown_it import MarkdownIt
-
 logger = logging.getLogger("pr-format")
 logger.setLevel(logging.DEBUG)
 handler = logging.StreamHandler(sys.stderr)
@@ -81,70 +79,85 @@ def parse_trailers(title, body) -> Dict:
     return trailers
 
 
+_FENCE_START = re.compile(r"^ {0,3}(`{3,}|~{3,})")
+_BLOCK_START = re.compile(
+    r"^ {0,3}(?:#{1,6}(?:\s|$)|>|[-+*]\s+|\d+[.)]\s+|<|\[[^\]]+\]:)"
+)
+_THEMATIC_BREAK = re.compile(
+    r"^ {0,3}(?:(?:\*\s*){3,}|(?:-\s*){3,}|(?:_\s*){3,}|(?:=\s*){3,})$"
+)
+_TRAILER = re.compile(r"^[A-Za-z0-9-]+:")
+_REVIEWER_EMAIL = re.compile(r"<[^<>\s@]+@[^<>\s@]+>")
+
+
+def _wrap_paragraph(lines) -> str:
+    text = [line.rstrip("\r\n") for line in lines]
+    reviewers = text[0].startswith("Reviewers:")
+    if any(line.startswith((" ", "\t")) for line in text[1 if reviewers else 0:]):
+        return "".join(lines)
+    if any(_BLOCK_START.match(line) or _THEMATIC_BREAK.match(line) for line in text):
+        return "".join(lines)
+    if _TRAILER.match(text[0]) and not reviewers:
+        return "".join(lines)
+    searchable = text[:]
+    if reviewers:
+        searchable = [_REVIEWER_EMAIL.sub("", line) for line in searchable]
+    if any(re.search(r"[`*_~\[\]\\|<>]| {2,}$", line) for line in searchable):
+        return "".join(lines)
+
+    endings = [line[len(content):] for line, content in zip(lines, text)]
+    distinct_endings = {ending for ending in endings if ending}
+    if len(distinct_endings) > 1:
+        return "".join(lines)
+    newline = next(iter(distinct_endings), "\n")
+    wrapped = textwrap.fill(
+        " ".join(line.strip() for line in text),
+        subsequent_indent=" " if reviewers else "",
+        width=72,
+        break_long_words=False,
+        break_on_hyphens=False,
+    )
+    if any(
+        (_BLOCK_START.match(line) and not (
+            reviewers and _REVIEWER_EMAIL.match(line.lstrip())
+        )) or _THEMATIC_BREAK.match(line)
+        for line in wrapped.splitlines()
+    ):
+        return "".join(lines)
+    return wrapped.replace("\n", newline) + endings[-1]
+
+
 def format_body(body: str) -> str:
-    """
-    Wrap plain top-level prose, copying all other Markdown from the source.
+    """Wrap plain prose while preserving Markdown blocks and ambiguous text."""
+    output = []
+    paragraph = []
+    fence = None
 
-    Token line maps identify paragraphs without reserializing Markdown. In
-    particular, paragraphs inside lists and quotes and code containing blank
-    lines must retain their original indentation, whitespace and line breaks.
-    """
-    # Match CommonMark line endings; str.splitlines also splits Unicode
-    # separators, which would make the parser's source maps point at wrong lines.
-    lines = re.findall(r"[^\r\n]*(?:\r\n|\r|\n|$)", body)
-    if lines and lines[-1] == "":
-        lines.pop()
-    parser = MarkdownIt("commonmark").enable(["table", "strikethrough"])
-    tokens = parser.parse(body)
-    result = []
-    cursor = 0
-    for index, token in enumerate(tokens):
-        if token.type != "paragraph_open" or token.level != 0:
-            continue
-        start, end = token.map
-        source = lines[start:end]
-        reviewers = source[0].startswith("Reviewers:")
-        # Preserve inline Markdown and explicit hard breaks as well as blocks.
-        # Email autolinks in reviewer trailers can still be wrapped as prose.
-        def plain_inline(inline):
-            return all(
-                child.type in ("text", "softbreak") or (
-                    reviewers and child.type in ("link_open", "link_close")
-                    and child.markup == "autolink"
-                )
-                for child in inline.children
-            )
+    def flush_paragraph():
+        if paragraph:
+            output.append(_wrap_paragraph(paragraph))
+            paragraph.clear()
 
-        if not plain_inline(tokens[index + 1]):
-            continue
-        # Indentation can have meaning even in paragraphs. Reviewers trailers
-        # are the exception: git interpret-trailers needs indented continuations.
-        if not reviewers and any(line.startswith((" ", "\t")) for line in source):
-            continue
-        first_ending = re.search(r"(\r\n|\r|\n)$", source[0])
-        newline = first_ending.group() if first_ending else "\n"
-        last_ending = re.search(r"(\r\n|\r|\n)$", source[-1])
-        ending = last_ending.group() if last_ending else ""
-        wrapped = textwrap.fill(
-            "".join(source), subsequent_indent=" " if reviewers else "",
-            width=72, break_long_words=False, break_on_hyphens=False,
-            replace_whitespace=True,
-        ).replace("\n", newline) + ending
-        # A newly wrapped line can start a Markdown block (e.g. '- item').
-        # Keep the source if wrapping would change the paragraph's structure.
-        environment = {}
-        wrapped_tokens = parser.parse(wrapped, environment)
-        if (
-            [t.type for t in wrapped_tokens] != ["paragraph_open", "inline", "paragraph_close"]
-            or environment.get("references")
-            or not plain_inline(wrapped_tokens[1])
-        ):
-            continue
-        result.extend(lines[cursor:start])
-        result.append(wrapped)
-        cursor = end
-    result.extend(lines[cursor:])
-    return "".join(result)
+    for line in body.splitlines(keepends=True):
+        text = line.rstrip("\r\n")
+        if fence:
+            output.append(line)
+            if re.match(rf"^ {{0,3}}{re.escape(fence[0])}{{{len(fence)},}}\s*$", text):
+                fence = None
+        else:
+            match = _FENCE_START.match(text)
+            if match:
+                flush_paragraph()
+                fence = match.group(1)
+                output.append(line)
+            elif text.strip() == "":
+                flush_paragraph()
+                output.append(line)
+            else:
+                paragraph.append(line)
+
+    flush_paragraph()
+    return "".join(output)
 
 
 if __name__ == "__main__":
