@@ -43,7 +43,7 @@ public final class GlobComponent {
      */
     private static boolean isGlobSpecialCharacter(char ch) {
         return switch (ch) {
-            case '*', '?', '\\', '{', '}' -> true;
+            case '*', '?', '\\', '{', '}', '[', ']' -> true;
             default -> false;
         };
     }
@@ -107,7 +107,10 @@ public final class GlobComponent {
                         output.append(c);
                     }
                     break;
-                // TODO: handle character ranges
+                case '[':
+                    literal = false;
+                    i = processCharacterRange(glob, i, output);
+                    break;
                 default:
                     if (isRegularExpressionSpecialCharacter(c)) {
                         output.append('\\');
@@ -123,6 +126,49 @@ public final class GlobComponent {
         }
         output.append('$');
         return output.toString();
+    }
+
+    private static int processCharacterRange(String glob, int i, StringBuilder output) {
+        output.append('[');
+        if (i == glob.length()) {
+            throw new RuntimeException("Unterminated character range.");
+        }
+        char first = glob.charAt(i);
+        if (first == '!' || first == '^') {
+            output.append('^');
+            i++;
+        }
+        if (i < glob.length() && glob.charAt(i) == ']') {
+            output.append("\\]");
+            i++;
+        }
+        boolean rangeClosed = false;
+        while (i < glob.length()) {
+            char rc = glob.charAt(i++);
+            if (rc == ']') {
+                output.append(']');
+                rangeClosed = true;
+                break;
+            } else if (rc == '\\') {
+                if (i == glob.length()) {
+                    output.append('\\');
+                } else {
+                    char escaped = glob.charAt(i++);
+                    if (escaped == '\\' || escaped == ']' || escaped == '[' || escaped == '-' || escaped == '^') {
+                        output.append('\\');
+                    }
+                    output.append(escaped);
+                }
+            } else if (rc == '[') {
+                output.append("\\[");
+            } else {
+                output.append(rc);
+            }
+        }
+        if (!rangeClosed) {
+            throw new RuntimeException("Unterminated character range.");
+        }
+        return i;
     }
 
     private final String component;

@@ -50,6 +50,10 @@ public class GlobComponentTest {
         assertEquals("^\\$blah.*$", GlobComponent.toRegularExpression("$blah*"));
         assertEquals("^.*$", GlobComponent.toRegularExpression("*"));
         assertEquals("^foo(?:(?:bar)|(?:baz))$", GlobComponent.toRegularExpression("foo{bar,baz}"));
+        assertEquals("^[abc]$", GlobComponent.toRegularExpression("[abc]"));
+        assertEquals("^[a-z]$", GlobComponent.toRegularExpression("[a-z]"));
+        assertEquals("^[^0-9]$", GlobComponent.toRegularExpression("[!0-9]"));
+        assertEquals("^[^a-z]$", GlobComponent.toRegularExpression("[^a-z]"));
     }
 
     @Test
@@ -71,5 +75,47 @@ public class GlobComponentTest {
         assertFalse(foobarOrFoobaz.matches("foobah"));
         assertFalse(foobarOrFoobaz.matches("foo"));
         assertFalse(foobarOrFoobaz.matches("baz"));
+    }
+
+    @Test
+    public void testCharacterRanges() {
+        GlobComponent charSet = new GlobComponent("[abc]");
+        assertFalse(charSet.literal());
+        assertTrue(charSet.matches("a"));
+        assertTrue(charSet.matches("b"));
+        assertTrue(charSet.matches("c"));
+        assertFalse(charSet.matches("d"));
+        assertFalse(charSet.matches("ab"));
+
+        GlobComponent range = new GlobComponent("node[1-3]");
+        assertFalse(range.literal());
+        assertTrue(range.matches("node1"));
+        assertTrue(range.matches("node2"));
+        assertTrue(range.matches("node3"));
+        assertFalse(range.matches("node0"));
+        assertFalse(range.matches("node4"));
+        assertFalse(range.matches("node12"));
+
+        GlobComponent negated = new GlobComponent("[!a-z]");
+        assertFalse(negated.literal());
+        assertTrue(negated.matches("1"));
+        assertTrue(negated.matches("A"));
+        assertFalse(negated.matches("a"));
+        assertFalse(negated.matches("z"));
+
+        GlobComponent negatedCaret = new GlobComponent("[^0-9]");
+        assertFalse(negatedCaret.literal());
+        assertTrue(negatedCaret.matches("a"));
+        assertFalse(negatedCaret.matches("5"));
+
+        GlobComponent escaped = new GlobComponent("\\[a-z\\]*");
+        assertFalse(escaped.literal());
+        assertTrue(escaped.matches("[a-z]"));
+        assertTrue(escaped.matches("[a-z]foo"));
+        assertFalse(escaped.matches("a"));
+
+        GlobComponent unterminated = new GlobComponent("[a-z");
+        assertTrue(unterminated.literal());
+        assertTrue(unterminated.matches("[a-z"));
     }
 }
