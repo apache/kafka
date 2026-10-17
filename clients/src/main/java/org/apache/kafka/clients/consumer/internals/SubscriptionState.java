@@ -372,7 +372,6 @@ public class SubscriptionState {
         this.assignedTopicIds = Collections.emptySet();
         this.subscribedPattern = null;
         this.subscriptionType = SubscriptionType.NONE;
-        this.listenerContext.set(ListenerContext.NULL_LISTENER);
         this.assignmentId++;
     }
 
