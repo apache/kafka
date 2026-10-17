@@ -159,4 +159,12 @@ public class ShareSubscriptionState implements AbstractSubscriptionState {
         assignedTopicIds = Collections.emptySet();
         subscribedToShareGroup = false;
     }
+
+    @Override
+    public void enablePartitionsAwaitingCallback(Collection<TopicPartition> partitions) {
+    }
+
+    @Override
+    public void markPendingRevocation(Set<TopicPartition> tps) {
+    }
 }

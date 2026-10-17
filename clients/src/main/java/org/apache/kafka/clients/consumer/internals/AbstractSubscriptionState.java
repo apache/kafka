@@ -24,10 +24,11 @@ import java.util.Set;
 
 /**
  * The subscription-state surface required by {@link AbstractMembershipManager} while it drives
- * reconciliation of a group member's assignment. Both the classic consumer
- * ({@link ConsumerSubscriptionState}) and the share consumer ({@link ShareSubscriptionState})
- * implement this interface, allowing the shared membership-manager logic to operate over either
- * without depending on the offset/position/fetch machinery that only the classic consumer needs.
+ * group-related operations such as reconciliation of a group member's assignment and leaving
+ * the group. Both the regular consumer ({@link ConsumerSubscriptionState}) and the share consumer
+ * ({@link ShareSubscriptionState}) implement this interface, allowing the shared membership-manager
+ * logic to operate over either without depending on the offset/position/fetch machinery that
+ * only the regular consumer needs.
  */
 public interface AbstractSubscriptionState {
 
@@ -60,10 +61,10 @@ public interface AbstractSubscriptionState {
     /**
      * Enable fetching for the given partitions once any assignment callback has completed.
      */
-    default void enablePartitionsAwaitingCallback(Collection<TopicPartition> partitions) {}
+    void enablePartitionsAwaitingCallback(Collection<TopicPartition> partitions);
 
     /**
      * Mark the given partitions as pending revocation so that fetching for them stops.
      */
-    default void markPendingRevocation(Set<TopicPartition> tps) {}
+    void markPendingRevocation(Set<TopicPartition> tps);
 }

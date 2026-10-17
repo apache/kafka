@@ -233,7 +233,7 @@ public final class OffsetsRequestManager implements RequestManager, ClusterResou
      * If the end offset is not known, this issues a <code>LIST_OFFSETS</code> request in the background so that
      * the lag may be available on a subsequent call, and returns an empty result for now. Only one such request
      * is allowed in flight per partition at a time; that is tracked by the 'end offset requested' flag in
-     * {@link SubscriptionState}, which is set here and cleared when the request completes, however it completes.
+     * {@link ConsumerSubscriptionState}, which is set here and cleared when the request completes, however it completes.
      *
      * @param topicPartition Partition to retrieve the lag for
      * @param isolationLevel Isolation level the lag should be calculated against
