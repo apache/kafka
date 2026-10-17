@@ -796,6 +796,7 @@ public class RecordAccumulator {
             boolean backingOff = false;
             int backoffAttempts = 0;
             boolean full = false;
+            boolean newBatch = false;
             final int dequeSize;
 
             // This loop is especially hot with large partition counts. So -
@@ -829,6 +830,7 @@ public class RecordAccumulator {
                     backingOff = shouldBackoff(batch.hasLeaderChangedForTheOngoingRetry(), batch, waitedTimeMs);
                     backoffAttempts = batch.attempts();
                     full = dequeSize > 1 || batch.isFull();
+                    newBatch = !batch.hasSequence();
                 }
             }
 
@@ -852,6 +854,14 @@ public class RecordAccumulator {
                                 --queueSizesIndex;
                         }
                     }
+                }
+
+                // A new batch that must wait for the partition's first ack (see drainBatchesForOneNode) does not make
+                // the leader ready, as a muted partition does not. Otherwise the sender would find the node ready,
+                // drain nothing from it, and poll without a timeout until the ack arrives.
+                if (checkBatchReady && newBatch && transactionManager != null
+                        && transactionManager.isAwaitingFirstAck(part)) {
+                    checkBatchReady = false;
                 }
 
                 if (checkBatchReady) {
@@ -1003,6 +1013,16 @@ public class RecordAccumulator {
                 ProducerBatch first = deque.peekFirst();
                 if (first == null)
                     continue;
+
+                // Don't assign a sequence to a new batch while the partition's first batch of the producer epoch is
+                // in flight and not acknowledged. If that batch fails with a retriable error, the broker, which has
+                // no state for the producer yet, would accept the new batch as the first one, and every retry of the
+                // first batch would then fail with OUT_OF_ORDER_SEQUENCE_NUMBER (KAFKA-14359). Skip only this
+                // partition: stopping the drain here would hold back every other partition on the node too.
+                if (transactionManager != null && !first.hasSequence()
+                        && transactionManager.isAwaitingFirstAck(tp)) {
+                    continue;
+                }
 
                 // first != null
                 // Only drain the batch if it is not during backoff period.
