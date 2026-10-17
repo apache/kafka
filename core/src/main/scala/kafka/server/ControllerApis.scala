@@ -779,13 +779,13 @@ class ControllerApis(
           val config = configs.next()
           val opType = AlterConfigOp.OpType.forId(config.configOperation)
           if (opType == null) {
-            apiError = new ApiError(INVALID_REQUEST, s"Unknown operations type ${config.configOperation}")
+            apiError = new ApiError(INVALID_REQUEST, s"Unknown operation type ${config.configOperation}")
           } else {
             altersByName.put(config.name, new util.AbstractMap.SimpleEntry[AlterConfigOp.OpType, String](
               opType, config.value))
           }
         }
-        if (!apiError.isFailure && configChanges.put(configResource, altersByName) != null) {
+        if (apiError.isSuccess && configChanges.put(configResource, altersByName) != null) {
           apiError = new ApiError(INVALID_REQUEST, "Duplicate resource.")
         }
         if (apiError.isFailure) {
