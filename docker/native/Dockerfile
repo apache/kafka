@@ -34,7 +34,7 @@ COPY *kafka.tgz /app
 
 RUN set -eux ; \
     if [ -n "$kafka_url" ]; then \
-        microdnf install wget; \
+        microdnf install wget gnupg2; \
         wget -nv -O kafka.tgz "$kafka_url"; \
         wget -nv -O kafka.tgz.asc "$kafka_url.asc"; \
         wget -nv -O KEYS https://downloads.apache.org/kafka/KEYS; \

@@ -55,8 +55,7 @@ import java.util.stream.Stream;
 import static java.time.Duration.ofMillis;
 import static org.apache.kafka.streams.StoreQueryParameters.fromNameAndType;
 import static org.apache.kafka.streams.state.QueryableStoreTypes.keyValueStore;
-import static org.hamcrest.MatcherAssert.assertThat;
-import static org.hamcrest.Matchers.is;
+import static org.junit.jupiter.api.Assertions.assertEquals;
 import static org.junit.jupiter.api.Assertions.assertThrows;
 
 @SuppressWarnings("deprecation")
@@ -134,10 +133,9 @@ public class JoinStoreIntegrationTest {
                     UnknownStateStoreException.class,
                     () -> kafkaStreams.store(fromNameAndType("join-store", keyValueStore()))
                 );
-            assertThat(
-                exception.getMessage(),
-                is("Cannot get state store join-store because no such store is registered in the topology.")
-            );
+            assertEquals(
+                "Cannot get state store join-store because no such store is registered in the topology.",
+                exception.getMessage());
         }
     }
 
@@ -179,12 +177,7 @@ public class JoinStoreIntegrationTest {
 
             final Map<ConfigResource, org.apache.kafka.clients.admin.Config> topicConfig
                 = admin.describeConfigs(changelogTopics).all().get();
-            topicConfig.values().forEach(
-                tc -> assertThat(
-                    tc.get("cleanup.policy").value(),
-                    is("delete")
-                )
-            );
+            topicConfig.values().forEach(tc -> assertEquals("delete", tc.get("cleanup.policy").value()));
         }
     }
 }

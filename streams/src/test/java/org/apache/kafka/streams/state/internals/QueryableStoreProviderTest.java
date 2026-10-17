@@ -32,8 +32,6 @@ import org.junit.jupiter.api.Test;
 import java.util.HashMap;
 import java.util.concurrent.atomic.AtomicReference;
 
-import static org.hamcrest.MatcherAssert.assertThat;
-import static org.hamcrest.core.IsEqual.equalTo;
 import static org.junit.jupiter.api.Assertions.assertEquals;
 import static org.junit.jupiter.api.Assertions.assertNotNull;
 import static org.junit.jupiter.api.Assertions.assertThrows;
@@ -136,7 +134,7 @@ public class QueryableStoreProviderTest {
                                 .fromNameAndType(keyValueStore, QueryableStoreTypes.keyValueStore())
                                 .withPartition(partition)).get("1")
         );
-        assertThat(thrown.getMessage(), equalTo(String.format("The specified partition %d for store %s does not exist.", partition, keyValueStore)));
+        assertEquals(String.format("The specified partition %d for store %s does not exist.", partition, keyValueStore), thrown.getMessage());
     }
 
     @Test
@@ -153,6 +151,6 @@ public class QueryableStoreProviderTest {
                                 .fromNameAndType(windowStore, QueryableStoreTypes.windowStore())
                                 .withPartition(partition)).fetch("1", System.currentTimeMillis())
         );
-        assertThat(thrown.getMessage(), equalTo(String.format("The specified partition %d for store %s does not exist.", partition, windowStore)));
+        assertEquals(String.format("The specified partition %d for store %s does not exist.", partition, windowStore), thrown.getMessage());
     }
 }

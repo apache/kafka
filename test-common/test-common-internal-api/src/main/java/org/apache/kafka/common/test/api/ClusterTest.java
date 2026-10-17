@@ -33,6 +33,13 @@ import static java.lang.annotation.RetentionPolicy.RUNTIME;
 import static org.apache.kafka.common.test.api.TestKitDefaults.DEFAULT_BROKER_LISTENER_NAME;
 import static org.apache.kafka.common.test.api.TestKitDefaults.DEFAULT_CONTROLLER_LISTENER_NAME;
 
+/**
+ * Marks a test method as an integration test that runs against a Kafka cluster.
+ *
+ * The cluster runs in-process using {@link org.apache.kafka.common.test.KafkaClusterTestKit},
+ * which starts real broker and controller instances inside the test JVM for fast startup and direct access
+ * to server internals.
+ */
 @Documented
 @Target({METHOD})
 @Retention(RUNTIME)

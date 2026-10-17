@@ -26,6 +26,7 @@ import org.apache.kafka.common.serialization.Serializer;
 import org.apache.kafka.common.serialization.StringDeserializer;
 import org.apache.kafka.common.serialization.StringSerializer;
 import org.apache.kafka.common.utils.Bytes;
+import org.apache.kafka.streams.CloseOptions;
 import org.apache.kafka.streams.KafkaStreams;
 import org.apache.kafka.streams.KeyValueTimestamp;
 import org.apache.kafka.streams.StreamsBuilder;
@@ -75,9 +76,7 @@ import static org.apache.kafka.streams.integration.utils.IntegrationTestUtils.qu
 import static org.apache.kafka.streams.kstream.Suppressed.BufferConfig.maxRecords;
 import static org.apache.kafka.streams.kstream.Suppressed.untilTimeLimit;
 import static org.apache.kafka.streams.utils.TestUtils.safeUniqueTestName;
-import static org.hamcrest.CoreMatchers.is;
-import static org.hamcrest.MatcherAssert.assertThat;
-import static org.hamcrest.Matchers.equalTo;
+import static org.junit.jupiter.api.Assertions.assertEquals;
 
 @Tag("integration")
 @Timeout(600)
@@ -189,7 +188,7 @@ public class SuppressionDurabilityIntegrationTest {
                     new KeyValueTimestamp<>("k3", 1L, scaledTime(3L))
                 )
             );
-            assertThat(eventCount.get(), is(0));
+            assertEquals(0, eventCount.get());
 
             // flush two of the first three events out.
             produceSynchronouslyToPartitionZero(
@@ -206,7 +205,7 @@ public class SuppressionDurabilityIntegrationTest {
                     new KeyValueTimestamp<>("k5", 1L, scaledTime(5L))
                 )
             );
-            assertThat(eventCount.get(), is(2));
+            assertEquals(2, eventCount.get());
             verifyOutput(
                 outputSuppressed,
                 asList(
@@ -219,8 +218,8 @@ public class SuppressionDurabilityIntegrationTest {
             // get restored properly. (i.e., we shouldn't see those first events again)
 
             // restart the driver
-            driver.close();
-            assertThat(driver.state(), is(KafkaStreams.State.NOT_RUNNING));
+            driver.close(CloseOptions.groupMembershipOperation(CloseOptions.GroupMembershipOperation.LEAVE_GROUP));
+            assertEquals(KafkaStreams.State.NOT_RUNNING, driver.state());
             driver = getStartedStreams(streamsConfig, builder, false);
 
 
@@ -241,8 +240,8 @@ public class SuppressionDurabilityIntegrationTest {
                     new KeyValueTimestamp<>("k8", 1L, scaledTime(8L))
                 )
             );
-            assertThat("suppress has apparently produced some duplicates. There should only be 5 output events.",
-                       eventCount.get(), is(5));
+            assertEquals(5, eventCount.get(),
+                "suppress has apparently produced some duplicates. There should only be 5 output events.");
 
             verifyOutput(
                 outputSuppressed,
@@ -283,7 +282,7 @@ public class SuppressionDurabilityIntegrationTest {
                 @Override
                 public void process(final Record<String, Long> record) {
                     try {
-                        assertThat(context.recordMetadata().get().topic(), equalTo(topic));
+                        assertEquals(topic, context.recordMetadata().get().topic());
                     } catch (final Throwable e) {
                         firstException.compareAndSet(null, e);
                         LOG.error("Validation Failed", e);

@@ -377,6 +377,10 @@ public class StreamThread extends Thread implements ProcessingThread {
     private final AtomicLong cacheResizeSize = new AtomicLong(-1L);
     private final AtomicReference<org.apache.kafka.streams.CloseOptions.GroupMembershipOperation> leaveGroupRequested =
         new AtomicReference<>(org.apache.kafka.streams.CloseOptions.GroupMembershipOperation.DEFAULT);
+    // Makes the shutdown-state transition and the operation write atomic, so that the
+    // failure-path default cannot overwrite the operation of a caller that already initiated
+    // this thread's shutdown: the owner of the transition to PENDING_SHUTDOWN decides.
+    private final Object leaveGroupRequestedLock = new Object();
     private final AtomicLong lastShutdownWarningTimestamp = new AtomicLong(0L);
     private final boolean eosEnabled;
     private final boolean processingThreadsEnabled;
@@ -954,7 +958,7 @@ public class StreamThread extends Thread implements ProcessingThread {
             cleanRun = runLoop();
         } catch (final Throwable e) {
             failedStreamThreadSensor.record();
-            leaveGroupRequested.set(org.apache.kafka.streams.CloseOptions.GroupMembershipOperation.LEAVE_GROUP);
+            requestLeaveGroupOnFailure();
             streamsUncaughtExceptionHandler.accept(e, false);
             // Note: the above call currently rethrows the exception, so nothing below this line will be executed
         } finally {
@@ -1926,14 +1930,42 @@ public class StreamThread extends Thread implements ProcessingThread {
      * (e.g., in testing), hence the state is set only the first time
      *
      * @param operation the group membership operation to apply on shutdown. Must be one of LEAVE_GROUP or REMAIN_IN_GROUP.
+     * @return true if this call initiated the shutdown, i.e., transitioned the thread to
+     *         {@code PENDING_SHUTDOWN}; false if the thread was already shutting down or dead,
+     *         in which case the group membership operation of the earlier shutdown request is kept
      */
-    public void shutdown(final org.apache.kafka.streams.CloseOptions.GroupMembershipOperation operation) {
+    public boolean shutdown(final org.apache.kafka.streams.CloseOptions.GroupMembershipOperation operation) {
         log.info("Informed to shut down");
-        final State oldState = setState(State.PENDING_SHUTDOWN);
-        leaveGroupRequested.set(operation);
+        final State oldState;
+        synchronized (leaveGroupRequestedLock) {
+            oldState = setState(State.PENDING_SHUTDOWN);
+            if (oldState == null) {
+                // Shutdown was already requested by another caller (a concurrent removal, thread
+                // replacement, or client close); that caller owns this thread's death.
+                return false;
+            }
+            leaveGroupRequested.set(operation);
+        }
         if (oldState == State.CREATED) {
             // The thread may not have been started. Take responsibility for shutting down
             completeShutdown(true);
+        }
+        return true;
+    }
+
+    /**
+     * A failing thread leaves the group by default so that its tasks are reassigned promptly.
+     * The write goes through the same protocol as every other operation update: if another
+     * caller already initiated this thread's shutdown, that caller's operation takes precedence
+     * and the default is not applied.
+     */
+    private void requestLeaveGroupOnFailure() {
+        synchronized (leaveGroupRequestedLock) {
+            final State currentState = state();
+            if (currentState == State.PENDING_SHUTDOWN || currentState == State.DEAD) {
+                return;
+            }
+            leaveGroupRequested.set(org.apache.kafka.streams.CloseOptions.GroupMembershipOperation.LEAVE_GROUP);
         }
     }
 
