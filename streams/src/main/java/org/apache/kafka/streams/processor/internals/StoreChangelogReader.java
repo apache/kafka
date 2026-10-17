@@ -667,7 +667,11 @@ public class StoreChangelogReader implements ChangelogReader {
             // we only need the limit when processing new records
             // for other changelog partitions we do not need to update limit offset at all since we never need to
             // check when it completes based on limit offset anyways: the end offset would keep increasing and the
-            // standby never need to stop
+            // standby never need to stop.
+            //
+            // This update is also what resumes a partition paused by shouldPause().
+            // Such a partition always has buffered records, so it passes the check below.
+            // It stays paused until bufferedLimitIndex moves past all of them.
             final Set<TopicPartition> changelogsWithLimitOffsets = changelogs.entrySet().stream()
                 .filter(entry -> entry.getValue().stateManager.taskType() == Task.TaskType.STANDBY &&
                     entry.getValue().stateManager.changelogAsSource(entry.getKey()))

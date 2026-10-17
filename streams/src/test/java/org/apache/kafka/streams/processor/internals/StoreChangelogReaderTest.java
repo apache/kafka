@@ -1215,7 +1215,8 @@ public class StoreChangelogReaderTest {
         assertEquals(Collections.singleton(tp), consumer.paused());
         assertEquals(40, changelogReader.changelogMetadata(tp).bufferedRecords().size());
 
-        // the limit moves to 25 although the partition is paused; 25 buffered records are still beyond it
+        // the limit moves to 25 although the partition is paused; 25 buffered records are still beyond it.
+        // if the limit were not updated for a paused partition, it would stay paused forever and this would fail
         adminClient.updateConsumerGroupOffsets(Collections.singletonMap(tp, 25L));
         time.setCurrentTimeMs(now + 101L);
         changelogReader.restore(mockTasks);
