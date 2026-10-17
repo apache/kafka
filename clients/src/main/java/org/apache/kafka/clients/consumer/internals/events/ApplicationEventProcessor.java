@@ -301,20 +301,16 @@ public class ApplicationEventProcessor implements EventProcessor<ApplicationEven
     }
 
     /**
-     * Commit all consumed if auto-commit is enabled. Note this will trigger an async commit,
-     * that will not be retried if the commit request fails.
+     * Fire best-effort auto-commit for previously-assigned partitions (non-blocking),
+     * then update the assignment. assign() does not wait for the commit to finish.
      */
     private void process(final AssignmentChangeEvent event) {
-        if (requestManagers.commitRequestManager.isPresent()) {
-            CommitRequestManager manager = requestManagers.commitRequestManager.get();
-            manager.updateTimerAndMaybeCommit(event.currentTimeMs());
-        }
+        requestManagers.commitRequestManager.ifPresent(CommitRequestManager::maybeAutoCommitOnAssignment);
 
         log.info("Assigned to partition(s): {}", event.partitions());
         try {
             if (subscriptions.assignFromUser(new HashSet<>(event.partitions())))
                 metadata.requestUpdateForNewTopics();
-
             event.future().complete(null);
         } catch (Exception e) {
             event.future().completeExceptionally(e);
