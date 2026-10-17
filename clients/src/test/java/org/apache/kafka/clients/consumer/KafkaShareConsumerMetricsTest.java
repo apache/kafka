@@ -260,7 +260,7 @@ public class KafkaShareConsumerMetricsTest {
         try (MockedStatic<CommonClientConfigs> mockedCommonClientConfigs = mockStatic(CommonClientConfigs.class, new CallsRealMethods())) {
             ClientTelemetryReporter clientTelemetryReporter = mock(ClientTelemetryReporter.class);
             clientTelemetryReporter.configure(any());
-            mockedCommonClientConfigs.when(() -> CommonClientConfigs.telemetryReporter(anyString(), any())).thenReturn(Optional.of(clientTelemetryReporter));
+            mockedCommonClientConfigs.when(() -> CommonClientConfigs.telemetryReporter(anyString(), any(), any())).thenReturn(Optional.of(clientTelemetryReporter));
 
             Time time = new MockTime(1L);
             ShareConsumerMetadata metadata = createMetadata(subscription);
@@ -281,7 +281,7 @@ public class KafkaShareConsumerMetricsTest {
         try (MockedStatic<CommonClientConfigs> mockedCommonClientConfigs = mockStatic(CommonClientConfigs.class, new CallsRealMethods())) {
             ClientTelemetryReporter clientTelemetryReporter = mock(ClientTelemetryReporter.class);
             clientTelemetryReporter.configure(any());
-            mockedCommonClientConfigs.when(() -> CommonClientConfigs.telemetryReporter(anyString(), any())).thenReturn(Optional.of(clientTelemetryReporter));
+            mockedCommonClientConfigs.when(() -> CommonClientConfigs.telemetryReporter(anyString(), any(), any())).thenReturn(Optional.of(clientTelemetryReporter));
 
             Time time = new MockTime(1L);
             ShareConsumerMetadata metadata = createMetadata(subscription);

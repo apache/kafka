@@ -246,7 +246,7 @@ public class ShareFetchCollectorTest {
     }
 
     @Test
-    public void testRepeatedFetchesForSamePartitionDoNoAccumulateRetainedFetches() {
+    public void testRepeatedFetchesForSamePartitionDoesNotAccumulateRetainedFetches() {
         buildDependencies();
         subscribeAndAssign(topicAPartition0);
 

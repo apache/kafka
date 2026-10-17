@@ -220,7 +220,12 @@ class ConfigHelper(metadataCache: MetadataCache, config: KafkaConfig, configRepo
                             (name: String, value: Any): DescribeConfigsResponseData.DescribeConfigsResourceResult = {
     val configEntryType = LogConfig.configType(name).toScala
     val isSensitive = KafkaConfig.maybeSensitive(configEntryType)
-    val valueAsString = if (isSensitive) null else ConfigDef.convertToString(value, configEntryType.orNull)
+    val valueAsString = if (isSensitive)
+      null
+    else value match {
+      case v: String => v
+      case _ => ConfigDef.convertToString(value, configEntryType.orNull)
+    }
     val allSynonyms = {
       val list = Option(ServerTopicConfigSynonyms.TOPIC_CONFIG_SYNONYMS.get(name))
         .map(s => configSynonyms(s, brokerSynonyms(s), isSensitive))

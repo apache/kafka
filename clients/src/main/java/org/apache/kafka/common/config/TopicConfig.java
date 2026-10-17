@@ -215,21 +215,34 @@ public class TopicConfig {
         "thread to trigger election periodically (default is 5 minutes). Please run <code>kafka-leader-election.sh</code> with <code>unclean</code> option " +
          "to trigger the unclean leader election immediately if needed.</p>";
 
+    public static final String MIRROR_UNCLEAN_LEADER_ELECTION_ENABLE_CONFIG = "mirror.unclean.leader.election.enable";
+    public static final String MIRROR_UNCLEAN_LEADER_ELECTION_ENABLE_DOC = "When enabled, this property allows the mirror to support " +
+        "unclean leader elections on the source cluster. During log truncation, it forces the mirror to wait for all assigned replicas, " +
+        "not just active ISR members, to complete truncation. While this guarantees absolute cross-cluster consistency, a single stuck " +
+        "replica will block the partition indefinitely. Conversely, when disabled, the mirror will bypass recovery entirely during a ULE, " +
+        "immediately dropping the partition into a FAILED state and halting replication.";
+    public static final Boolean MIRROR_UNCLEAN_LEADER_ELECTION_ENABLE_DEFAULT = false;
+
     public static final String MIN_IN_SYNC_REPLICAS_CONFIG = "min.insync.replicas";
     public static final String MIN_IN_SYNC_REPLICAS_DOC = "Specifies the <i>minimum</i> number of in-sync replicas (including the leader) " +
         "required for a write to succeed when a producer sets <code>acks</code> to \"all\" (or \"-1\"). In the <code>acks=all</code> " +
         "case, every in-sync replica must acknowledge a write for it to be considered successful. E.g., if a topic has " +
         "<code>replication.factor</code> of 3 and the ISR set includes all three replicas, then all three replicas must acknowledge an " +
         "<code>acks=all</code> write for it to succeed, even if <code>min.insync.replicas</code> happens to be less than 3. " +
-        "If <code>acks=all</code> and the current ISR set contains fewer than <code>min.insync.replicas</code> members, then the producer " +
+        "The effective minimum ISR size Kafka actually enforces is <code>min(min.insync.replicas, replica count)</code>, not the raw configured value: if " +
+        "<code>min.insync.replicas</code> is set higher than the partition's current replica count, the broker uses the " +
+        "replica count instead, since the ISR can never exceed it. " +
+        "If <code>acks=all</code> and the current ISR set is smaller than this effective minimum, then the producer " +
         "will raise an exception (either <code>NotEnoughReplicas</code> or <code>NotEnoughReplicasAfterAppend</code>).<br> " +
         "Regardless of the <code>acks</code> setting, the messages will not be visible to the consumers until " +
-        "they are replicated to all in-sync replicas and the <code>min.insync.replicas</code> condition is met.<br> " +
+        "they are replicated to all in-sync replicas and the ISR size meets this same effective minimum.<br> " +
         "When used together, <code>min.insync.replicas</code> and <code>acks</code> allow you to enforce greater durability guarantees. " +
         "A typical scenario would be to create a topic with a replication factor of 3, " +
         "set <code>min.insync.replicas</code> to 2, and produce with <code>acks</code> of \"all\". " +
         "This ensures that a majority of replicas must persist a write before it's considered successful by the producer and it's visible to consumers." +
-        "<p>Note that when the Eligible Leader Replicas feature is enabled, the semantics of this config changes. Please refer to <a href=\"https://kafka.apache.org/documentation/#eligible_leader_replicas\">the ELR section</a> for more info.</p>";
+        "<p>Note that the effective minimum ISR bound above applies regardless of whether the Eligible Leader Replicas feature is enabled; " +
+        "however, when the Eligible Leader Replicas feature is enabled, additional configuration rules apply to this setting " +
+        "(for example, it cannot be set for individual brokers). Please refer to <a href=\"https://kafka.apache.org/documentation/#eligible_leader_replicas\">the ELR section</a> for more info.</p>";
 
     public static final String COMPRESSION_TYPE_CONFIG = "compression.type";
     public static final String COMPRESSION_TYPE_DOC = "Specify the final compression type for a given topic. " +
@@ -264,7 +277,11 @@ public class TopicConfig {
         "difference between the message timestamp and the broker's timestamp. The message timestamp can be later than " +
         "or equal to the broker's timestamp, with the maximum allowable difference determined by the value set in this " +
         "configuration. If message.timestamp.type=CreateTime, the message will be rejected if the difference in " +
-        "timestamps exceeds this specified threshold. This configuration is ignored if message.timestamp.type=LogAppendTime.";
+        "timestamps exceeds this specified threshold. This configuration is ignored if message.timestamp.type=LogAppendTime. " +
+        "Note that time-based retention (" + RETENTION_MS_CONFIG + ") is based on the largest message timestamp in a segment, " +
+        "so a segment containing a message with a future timestamp is not eligible for time-based deletion until that " +
+        "timestamp plus the retention time has passed. Increasing this value above the default allows more " +
+        "future-timestamped messages and can delay segment deletion, increasing disk usage.";
 
     /**
      * @deprecated down-conversion is not possible in Apache Kafka 4.0 and newer, hence this configuration is a no-op,
