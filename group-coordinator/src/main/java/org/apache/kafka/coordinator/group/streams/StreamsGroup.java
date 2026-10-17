@@ -1353,9 +1353,16 @@ public class StreamsGroup implements Group {
             currentTasksProcessId.compute(subtopologyId, (__, partitionsOrNull) -> {
                 if (partitionsOrNull != null) {
                     assignedPartitions.forEach(partitionId -> {
-                        if (!partitionsOrNull.containsKey(partitionId) || !partitionsOrNull.get(partitionId).remove(processIdToRemove)) {
+                        if (!partitionsOrNull.containsKey(partitionId)) {
                             log.debug("[GroupId {}] Cannot remove the process ID {} from task {}_{} because the task is " +
                                     "not owned by this process ID", groupId, processIdToRemove, subtopologyId, partitionId);
+                        } else  if (partitionsOrNull.get(partitionId).contains(processIdToRemove)) {
+                            Set<String> updated = new HashSet<>(partitionsOrNull.get(partitionId));
+                            updated.remove(processIdToRemove);
+                            partitionsOrNull.put(partitionId, updated);
+                        } else {
+                            log.debug("[GroupId {}] Cannot remove the process ID {} from task {}_{} because the task is " +
+                                "not owned by this process ID", groupId, processIdToRemove, subtopologyId, partitionId);
                         }
                     });
                     if (partitionsOrNull.isEmpty()) {
@@ -1423,7 +1430,17 @@ public class StreamsGroup implements Group {
                     partitionsOrNull = new TimelineHashMap<>(snapshotRegistry, assignedTaskPartitions.size());
                 }
                 for (Integer partitionId : assignedTaskPartitions) {
-                    partitionsOrNull.computeIfAbsent(partitionId, ___ -> new HashSet<>()).add(processId);
+                    Set<String> maybeUpdated;
+                    if (partitionsOrNull.containsKey(partitionId) && !partitionsOrNull.get(partitionId).contains(processId)) {
+                        maybeUpdated = new HashSet<>(partitionsOrNull.get(partitionId));
+                        maybeUpdated.add(processId);
+                    } else if (!partitionsOrNull.containsKey(partitionId)) {
+                        maybeUpdated = new HashSet<>();
+                        maybeUpdated.add(processId);
+                    } else {
+                        maybeUpdated = partitionsOrNull.get(partitionId);
+                    }
+                    partitionsOrNull.put(partitionId, maybeUpdated);
                 }
                 return partitionsOrNull;
             });
