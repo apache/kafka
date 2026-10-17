@@ -110,6 +110,8 @@ public class TaskManager {
 
     private final Map<TaskId, BackoffRecord> taskIdToBackoffRecord = new HashMap<>();
 
+    private final Map<TaskId, Set<TopicPartition>> pendingOffsetsResets = new HashMap<>();
+    
     // Published by the stream thread (via maybeUpdateTaskOffsetSumSnapshot) and read lock-free by the
     // streams-protocol heartbeat thread. Covers standby, warmup, restoring-active and dormant tasks; running-active
     // tasks are omitted (their assignment is not offset-driven, and they are caught up by definition).
@@ -377,6 +379,10 @@ public class TaskManager {
             logPrefix
         );
 
+        // Before create new active task instances, we should keep the previous offset reset events. 
+        // Otherwise, some records can be skipped. 
+        updatePendingOffsetResets(activeTasks);
+        
         final Map<TaskId, Set<TopicPartition>> activeTasksToCreate = new HashMap<>(activeTasks);
         final Map<TaskId, Set<TopicPartition>> standbyTasksToCreate = new HashMap<>(standbyTasks);
         final Map<Task, Set<TopicPartition>> tasksToRecycle = new HashMap<>();
@@ -968,6 +974,12 @@ public class TaskManager {
         final long nowMs = time.milliseconds();
         try {
             if (canTryInitializeTask(task.id(), nowMs)) {
+                final Set<TopicPartition> resets = pendingOffsetsResets.get(task.id());
+                if (resets != null) {
+                    task.addPartitionsForOffsetReset(resets);
+                    pendingOffsetsResets.remove(task.id());
+                }
+
                 task.initializeIfNeeded();
                 task.clearTaskTimeout();
                 taskIdToBackoffRecord.remove(task.id());
@@ -1228,6 +1240,7 @@ public class TaskManager {
     void handleLostAll() {
         log.debug("Closing lost active tasks as zombies.");
 
+        pendingOffsetsResets.clear();
         closeRunningTasksDirty();
         removeLostActiveTasksFromStateUpdaterAndPendingTasksToInit();
 
@@ -2217,6 +2230,34 @@ public class TaskManager {
         } else {
             taskIdToBackoffRecord.put(taskId, new BackoffRecord(nowMs));
         }
+    }
+
+    private void updatePendingOffsetResets(final Map<TaskId, Set<TopicPartition>> activeAssignment) {
+        for (final Task task : tasks.pendingTasksToInit()) {
+            if (!task.isActive()) {
+                continue;
+            }
+
+            if (task instanceof StreamTask) {
+                final Set<TopicPartition> resets = ((StreamTask) task).partitionsForOffsetReset();
+                if (!resets.isEmpty()) {
+                    pendingOffsetsResets
+                        .computeIfAbsent(task.id(), ignored -> new HashSet<>())
+                        .addAll(resets);
+                }
+            }
+        }
+
+        pendingOffsetsResets.entrySet().removeIf(entry -> {
+            final Set<TopicPartition> assignedPartitions = activeAssignment.getOrDefault(entry.getKey(), Collections.emptySet());
+            entry.getValue().retainAll(assignedPartitions);
+            return entry.getValue().isEmpty();
+        });
+    }
+
+    //VisibleForTesting
+    Map<TaskId, Set<TopicPartition>> pendingOffsetsResets() {
+        return pendingOffsetsResets;
     }
 
     public static class BackoffRecord {

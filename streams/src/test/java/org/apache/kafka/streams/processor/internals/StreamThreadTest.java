@@ -111,9 +111,11 @@ import org.junit.jupiter.api.extension.ExtendWith;
 import org.junit.jupiter.params.ParameterizedTest;
 import org.junit.jupiter.params.provider.CsvSource;
 import org.junit.jupiter.params.provider.ValueSource;
+import org.mockito.AdditionalAnswers;
 import org.mockito.ArgumentCaptor;
 import org.mockito.InOrder;
 import org.mockito.Mock;
+import org.mockito.MockedConstruction;
 import org.mockito.Mockito;
 import org.mockito.junit.jupiter.MockitoExtension;
 import org.mockito.junit.jupiter.MockitoSettings;
@@ -4905,6 +4907,119 @@ public class StreamThreadTest {
             null,
             maxUncommittedBytesPerThread
         );
+    }
+
+    @ParameterizedTest(name = "commitTimeout={0}")
+    @ValueSource(booleans = {true, false})
+    public void shouldPreserveRecordsForRetainedTaskAfterPartialRevocation(final boolean commitTimeout) throws Exception {
+        internalTopologyBuilder.addSource(null, "source", null, null, null, topic1);
+        internalTopologyBuilder.addSink("sink", "output", null, null, null, "source");
+        final Properties props = configProps(true, false);
+        props.setProperty(StreamsConfig.GROUP_PROTOCOL_CONFIG, GroupProtocol.STREAMS.toString());
+        props.setProperty(StreamsConfig.COMMIT_INTERVAL_MS_CONFIG, "10000");
+        // The streams protocol constructs its consumer directly instead of using KafkaClientSupplier.
+        try (MockedConstruction<?> construction = Mockito.mockConstruction(AsyncKafkaConsumer.class,
+            Mockito.withSettings().defaultAnswer(AdditionalAnswers.delegatesTo(clientSupplier.consumer)))) {
+            thread = createStreamThread(CLIENT_ID, new StreamsConfig(props));
+            assertEquals(1, construction.constructed().size());
+        }
+        final MockConsumer<byte[], byte[]> consumer = clientSupplier.consumer;
+        final MockProducer<byte[], byte[]> producer = clientSupplier.producers.get(0);
+        final DefaultStreamsRebalanceListener listener = new DefaultStreamsRebalanceListener(
+            new LogContext().logger(DefaultStreamsRebalanceListener.class), mockTime,
+            thread.streamsRebalanceData().orElseThrow(), thread, thread.taskManager(),
+            thread.streamsMetrics(), thread.getName());
+        final StreamsRebalanceData.TaskId revokedId = new StreamsRebalanceData.TaskId("0", 1);
+        final StreamsRebalanceData.TaskId retainedId = new StreamsRebalanceData.TaskId("0", 2);
+
+        thread.setState(State.STARTING);
+        thread.taskManager().init();
+        consumer.assign(Set.of(t1p1, t1p2));
+        consumer.updateBeginningOffsets(Map.of(t1p1, 0L, t1p2, 0L));
+        consumer.seek(t1p1, 99L);
+        consumer.seek(t1p2, 99L);
+        listener.onTasksAssigned(new StreamsRebalanceData.Assignment(
+            Set.of(revokedId, retainedId), emptySet(), emptySet(), true));
+        assertTrue(runUntilTimeoutOrCondition(() -> runOnce(false), () -> thread.state() == State.RUNNING));
+
+        // Establish a successful transaction with committed next offset 100 for both tasks.
+        for (final TopicPartition partition : Set.of(t1p1, t1p2)) {
+            consumer.addRecord(new ConsumerRecord<>(topic1, partition.partition(), 99L,
+                new byte[] {(byte) partition.partition()}, new byte[] {99}));
+        }
+        assertTrue(runUntilTimeoutOrCondition(() -> runOnce(false), () -> producer.uncommittedRecords().size() == 2));
+        assertEquals(2, thread.taskManager().commitAll());
+        // MockProducer and MockConsumer have no shared broker: publish only successful transaction offsets.
+        consumer.commitSync(producer.consumerGroupOffsetsHistory().get(0).get(consumer.groupMetadata().groupId()));
+        assertEquals(100L, consumer.committed(Set.of(t1p2)).get(t1p2).offset());
+        final Task retainedBefore = thread.taskManager().activeTaskMap().get(task2);
+
+        for (long offset = 100L; offset < 110L; offset++) {
+            for (final TopicPartition partition : Set.of(t1p1, t1p2)) {
+                consumer.addRecord(new ConsumerRecord<>(topic1, partition.partition(), offset,
+                    new byte[] {(byte) partition.partition()}, new byte[] {(byte) offset}));
+            }
+        }
+        assertTrue(runUntilTimeoutOrCondition(() -> runOnce(false), () -> producer.uncommittedRecords().size() == 20));
+        assertEquals(110L, consumer.position(t1p2));
+        assertTrue(retainedBefore.commitNeeded());
+        if (commitTimeout) {
+            producer.sendOffsetsToTransactionException = new TimeoutException("injected sendOffsetsToTransaction timeout");
+        }
+        listener.onTasksRevoked(Set.of(revokedId));
+        assertEquals(State.PARTITIONS_REVOKED, thread.state());
+        producer.sendOffsetsToTransactionException = null;
+        assertTrue(producer.uncommittedRecords().isEmpty());
+        if (commitTimeout) {
+            assertTrue(producer.transactionAborted());
+            assertEquals(1L, producer.commitCount());
+            assertEquals(Task.State.CREATED, retainedBefore.state());
+            assertEquals(100L, consumer.committed(Set.of(t1p2)).get(t1p2).offset());
+        } else {
+            consumer.commitSync(producer.consumerGroupOffsetsHistory().get(1).get(consumer.groupMetadata().groupId()));
+        }
+
+        // A separate poll in PARTITIONS_REVOKED must not initialize the revived task early.
+        runOnce(false);
+        assertEquals(State.PARTITIONS_REVOKED, thread.state());
+        assertEquals(110L, consumer.position(t1p2));
+        // MockConsumer.assign clears its local committed map; a real broker retains these offsets.
+        final Map<TopicPartition, OffsetAndMetadata> brokerOffsets = consumer.committed(Set.of(t1p2));
+        consumer.assign(Set.of(t1p2));
+        consumer.commitSync(brokerOffsets);
+        assertEquals(commitTimeout ? 100L : 110L, consumer.committed(Set.of(t1p2)).get(t1p2).offset());
+        assertEquals(110L, consumer.position(t1p2));
+        listener.onTasksAssigned(new StreamsRebalanceData.Assignment(
+            Set.of(retainedId), emptySet(), emptySet(), true));
+        assertTrue(runUntilTimeoutOrCondition(() -> runOnce(false), () -> thread.state() == State.RUNNING));
+        final Task retainedAfter = thread.taskManager().activeTaskMap().get(task2);
+        assertEquals(Task.State.RUNNING, retainedAfter.state());
+        // Aborted input must be replayed; a successful commit must retain the current position.
+        assertEquals(commitTimeout ? 100L : 110L, consumer.position(t1p2));
+        assertFalse(consumer.paused().contains(t1p2));
+
+        verifyRetainedTaskOutputAfterRevocation(consumer, producer, commitTimeout);
+    }
+
+    private void verifyRetainedTaskOutputAfterRevocation(final MockConsumer<byte[], byte[]> consumer,
+                                                        final MockProducer<byte[], byte[]> producer,
+                                                        final boolean commitTimeout) throws Exception {
+        // Offer the full broker range again. MockConsumer filters records below its current position.
+        for (long offset = 100L; offset <= 110L; offset++) {
+            consumer.addRecord(new ConsumerRecord<>(topic1, 2, offset, new byte[] {2}, new byte[] {(byte) offset}));
+        }
+        final int expectedNewRecords = commitTimeout ? 11 : 1;
+        assertTrue(runUntilTimeoutOrCondition(() -> runOnce(false),
+            () -> producer.uncommittedRecords().size() == expectedNewRecords));
+        assertEquals(1, thread.taskManager().commitAll());
+        final int lastCommit = producer.consumerGroupOffsetsHistory().size() - 1;
+        consumer.commitSync(producer.consumerGroupOffsetsHistory().get(lastCommit).get(consumer.groupMetadata().groupId()));
+        assertEquals(111L, consumer.committed(Set.of(t1p2)).get(t1p2).offset());
+        final List<Integer> retainedOutput = producer.history().stream()
+            .filter(record -> record.key()[0] == 2)
+            .map(record -> (int) record.value()[0])
+            .collect(Collectors.toList());
+        assertEquals(List.of(99, 100, 101, 102, 103, 104, 105, 106, 107, 108, 109, 110), retainedOutput);
     }
 
     private void runOnce(final boolean processingThreadsEnabled) {
