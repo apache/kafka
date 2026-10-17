@@ -85,6 +85,8 @@ public class DescribeConfigsTest {
         }
     }
 
+    // Cluster-wide configs are described from DynamicBrokerConfig#currentDynamicDefaultConfigs, which holds raw
+    // strings. A LIST config must be returned as the raw string instead of being cast to a List.
     @ClusterTest
     public void testDescribeConfigsClusterWideListConfig(ClusterInstance cluster) throws Exception {
         ConfigResource clusterResource = new ConfigResource(ConfigResource.Type.BROKER, "");
@@ -102,6 +104,8 @@ public class DescribeConfigsTest {
         }
     }
 
+    // Listener-prefixed configs are not defined in the ConfigDef, so they are described from the raw strings in
+    // originals(). The type still resolves to LIST through the base config, so the raw string must not be cast to a List.
     @ClusterTest(serverProperties = {
         @ClusterConfigProperty(key = PREFIXED_SSL_ENABLED_PROTOCOLS_CONFIG, value = "TLSv1.2,TLSv1.3")
     })
