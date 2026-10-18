@@ -41,9 +41,8 @@ task bootstrapWrapper() {
         // fetch the jar.
         // The jar is fetched from a pinned commit rather than the release tag: a release tag contains
         // the bootstrap jar Gradle uses to build itself, which may be from the previous version and then
-        // doesn't match the published wrapper checksum (see https://github.com/gradle/gradle/issues/39471).
-        // IMPORTANT: The commit and checksum **must** be updated whenever the Gradle version changes.
-        // Commit in gradle/gradle that updated gradle/wrapper/gradle-wrapper.jar to this Gradle version.
+        // doesn't match the published wrapper checksum; for more details see gradle/wrapper/README.md
+        // and https://issues.apache.org/jira/browse/KAFKA-21299
         String wrapperJarCommit = "dcc5ee0ec88270575344e6afd490f96d96f84ab3"
         String wrapperChecksum = "3b8a25775a69158b5ad2b1d17a80a88dc7b40a352a73eb27d06c612a7ce68e98"
         def wrapperJarUrl = "https://raw.githubusercontent.com/gradle/gradle/$wrapperJarCommit/gradle/wrapper/gradle-wrapper.jar"

@@ -13,13 +13,11 @@ When upgrading the Gradle version used by the Kafka project, update the followin
 
 2. **Update wrapper JAR commit and checksum** in `wrapper.gradle`:
    - Find the ***Wrapper JAR Checksum*** at https://gradle.org/release-checksums/
-   - Find the commit in the Gradle repository that updated the wrapper JAR to the new version
-     (usually titled "Update to Gradle <gradle-version>"):
-     https://api.github.com/repos/gradle/gradle/commits?path=gradle/wrapper/gradle-wrapper.jar
-
-     Do not use the release tag (`v<gradle-version>`): it may contain the wrapper JAR of the previous
-     Gradle version, see https://github.com/gradle/gradle/issues/39471.
-   - Update the `wrapperJarCommit` and `wrapperChecksum` variables:
+   - if the Wrapper JAR checksum was changed between Gradle versions (old and new) you will have to change two things:
+   - `wrapperChecksum`to a new value
+   - `wrapperJarCommit` to a specific commit that could be found here: https://github.com/gradle/gradle/commits/master/gradle/wrapper/gradle-wrapper.jar
+     ***Do not use the release tag*** (`v<gradle-version>`): it may contain the wrapper JAR of the previous
+     Gradle version, see https://issues.apache.org/jira/browse/KAFKA-21299
    ```groovy
    task bootstrapWrapper() {
        // ... (other code)
