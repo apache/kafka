@@ -16,11 +16,14 @@
  */
 package org.apache.kafka.common.errors;
 
+import org.apache.kafka.common.annotation.InterfaceAudience;
+
 /**
  * Mirror configuration metadata is not yet available on the broker.
  * This error is retriable because the broker will eventually receive the metadata update.
  * Clients should backoff and retry when this error is encountered.
  */
+@InterfaceAudience.Private
 public class MirrorConfigNotAvailableException extends InvalidMetadataException {
     private static final long serialVersionUID = 1L;
 

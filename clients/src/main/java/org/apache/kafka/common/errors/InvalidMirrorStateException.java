@@ -16,10 +16,13 @@
  */
 package org.apache.kafka.common.errors;
 
+import org.apache.kafka.common.annotation.InterfaceAudience;
+
 /**
  * The cluster mirror is in an invalid state for the requested operation.
  * This error occurs when attempting an operation on a cluster mirror that is not in the appropriate state.
  */
+@InterfaceAudience.Private
 public class InvalidMirrorStateException extends ApiException {
     private static final long serialVersionUID = 1L;
 

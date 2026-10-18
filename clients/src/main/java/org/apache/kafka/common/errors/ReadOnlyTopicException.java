@@ -16,11 +16,14 @@
  */
 package org.apache.kafka.common.errors;
 
+import org.apache.kafka.common.annotation.InterfaceAudience;
+
 /**
  * The topic cannot be written to because it is marked as read-only.
  * This error typically occurs in cluster mirroring scenarios where a topic
  * is designated as read-only to maintain consistency across mirrored clusters.
  */
+@InterfaceAudience.Private
 public class ReadOnlyTopicException extends ApiException {
     private static final long serialVersionUID = 1L;
 

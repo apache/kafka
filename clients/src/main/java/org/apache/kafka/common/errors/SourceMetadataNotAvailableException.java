@@ -16,11 +16,14 @@
  */
 package org.apache.kafka.common.errors;
 
+import org.apache.kafka.common.annotation.InterfaceAudience;
+
 /**
  * Source cluster metadata is not yet available during cluster mirroring.
  * This error occurs when the source cluster metadata has not yet been retrieved.
  * Clients should backoff and retry when this error is encountered.
  */
+@InterfaceAudience.Private
 public class SourceMetadataNotAvailableException extends InvalidMetadataException {
     private static final long serialVersionUID = 1L;
 

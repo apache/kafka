@@ -16,10 +16,13 @@
  */
 package org.apache.kafka.common.errors;
 
+import org.apache.kafka.common.annotation.InterfaceAudience;
+
 /**
  * The cluster mirror with the specified name does not exist.
  * This error occurs when attempting to access or modify a cluster mirror that has not been created.
  */
+@InterfaceAudience.Private
 public class UnknownClusterMirrorException extends ApiException {
     private static final long serialVersionUID = 1L;
 

@@ -16,10 +16,13 @@
  */
 package org.apache.kafka.common.errors;
 
+import org.apache.kafka.common.annotation.InterfaceAudience;
+
 /**
  * The topic does not belong to the specified cluster mirror.
  * This error occurs when attempting to access or modify a topic that is not assigned to the target cluster mirror.
  */
+@InterfaceAudience.Private
 public class TopicNotInClusterMirrorException extends ApiException {
     private static final long serialVersionUID = 1L;
 
