@@ -19,11 +19,9 @@ package org.apache.kafka.coordinator.group.assignor.uniform2;
 import org.apache.kafka.common.Uuid;
 import org.apache.kafka.coordinator.group.api.assignor.SubscribedTopicDescriber;
 import org.apache.kafka.coordinator.group.api.assignor.SubscriptionType;
-import org.apache.kafka.coordinator.group.assignor.uniform2.util.IntList;
 
 import org.junit.jupiter.api.Test;
 
-import java.util.ArrayList;
 import java.util.Arrays;
 import java.util.LinkedHashSet;
 import java.util.List;
@@ -31,10 +29,11 @@ import java.util.Set;
 import java.util.stream.IntStream;
 
 import static org.junit.jupiter.api.Assertions.assertEquals;
+import static org.junit.jupiter.api.Assertions.assertThrows;
 
 /**
- * Tests of {@link IndexedGroup}: the numbering of the members, the numbering of the topics, and the
- * cohorts.
+ * Tests of {@link IndexedGroup.Builder}: the numbering of the members, the numbering of the topics,
+ * and the cohorts of the {@link IndexedGroup} it builds.
  *
  * <p>The members are added to the specs, and the subscriptions list their topics, out of id order,
  * so that the indices cannot come from the iteration order of the spec.
@@ -64,7 +63,7 @@ public class IndexedGroupTest {
             .withMember("m1", Set.of(T1))
             .build();
 
-        var group = new IndexedGroup(spec, DESCRIBER);
+        var group = new IndexedGroup.Builder(spec, DESCRIBER).build();
 
         assertEquals(List.of("m1", "m10", "m2"), memberIds(group));
     }
@@ -82,7 +81,7 @@ public class IndexedGroupTest {
             .withMember("A", orderedSet(T3, T1))
             .build();
 
-        var group = new IndexedGroup(spec, DESCRIBER);
+        var group = new IndexedGroup.Builder(spec, DESCRIBER).build();
 
         assertEquals(List.of(T1, T2, T3), topicIds(group));
         assertEquals(List.of(0, 1, 2), topicIndices(group, T1, T2, T3));
@@ -100,7 +99,7 @@ public class IndexedGroupTest {
             .withMember("A", Set.of(T1))
             .build();
 
-        var group = new IndexedGroup(spec, DESCRIBER);
+        var group = new IndexedGroup.Builder(spec, DESCRIBER).build();
 
         assertEquals(List.of(T1), topicIds(group));
         assertEquals(List.of(0, -1), topicIndices(group, T1, T2));
@@ -122,7 +121,7 @@ public class IndexedGroupTest {
             .withMember("A", orderedSet(MISSING, T1))
             .build();
 
-        var group = new IndexedGroup(spec, DESCRIBER);
+        var group = new IndexedGroup.Builder(spec, DESCRIBER).build();
 
         assertEquals(List.of(T1), topicIds(group));
         assertEquals(List.of(0, -1), topicIndices(group, T1, MISSING));
@@ -141,7 +140,7 @@ public class IndexedGroupTest {
     public void testEmptyGroup() {
         var spec = new GroupSpecFixture().build();
 
-        var group = new IndexedGroup(spec, DESCRIBER);
+        var group = new IndexedGroup.Builder(spec, DESCRIBER).build();
 
         assertEquals(List.of(), cohorts(group));
         assertEquals(List.of(List.of()), membersOfCohorts(group));
@@ -160,7 +159,7 @@ public class IndexedGroupTest {
             .withMember("A", orderedSet(T2, T1))
             .build();
 
-        var group = new IndexedGroup(spec, DESCRIBER);
+        var group = new IndexedGroup.Builder(spec, DESCRIBER).build();
 
         assertEquals(List.of(0), cohorts(group));
         assertEquals(List.of(List.of(0)), membersOfCohorts(group));
@@ -183,7 +182,7 @@ public class IndexedGroupTest {
             .build();
         assertEquals(SubscriptionType.HOMOGENEOUS, spec.subscriptionType());
 
-        var group = new IndexedGroup(spec, DESCRIBER);
+        var group = new IndexedGroup.Builder(spec, DESCRIBER).build();
 
         assertEquals(List.of(0, 0, 0), cohorts(group));
         assertEquals(List.of(List.of(0, 1, 2)), membersOfCohorts(group));
@@ -209,7 +208,7 @@ public class IndexedGroupTest {
             .build();
         assertEquals(SubscriptionType.HETEROGENEOUS, spec.subscriptionType());
 
-        var group = new IndexedGroup(spec, DESCRIBER);
+        var group = new IndexedGroup.Builder(spec, DESCRIBER).build();
 
         assertEquals(List.of(0, 1, 0, 2), cohorts(group));
         assertEquals(List.of(List.of(0, 2), List.of(1), List.of(3)), membersOfCohorts(group));
@@ -221,27 +220,40 @@ public class IndexedGroupTest {
 
     /**
      * With every hash masked to 0, all the subscriptions have the same hash, and the cohorts are
-     * told apart by comparing their topics: {0} and {0, 1} have different numbers of topics, {1}
-     * and {0} different topics, and {0} and {1, 0} find their cohorts again.
+     * told apart by comparing their topics: A {T1} and B {T1, T2} have different numbers of
+     * topics, C {T2} and A different topics, D {T1} and F {T2, T1} find the cohorts of A and B,
+     * and E {} starts a cohort without topics.
      */
     @Test
     public void testCohortsWithTheSameHashAreComparedExactly() {
-        var cohorts = new IndexedGroup.CohortsBySubscription(0L);
+        var spec = new GroupSpecFixture()
+            .withMember("F", orderedSet(T2, T1))
+            .withMember("E", Set.of())
+            .withMember("D", Set.of(T1))
+            .withMember("C", Set.of(T2))
+            .withMember("B", orderedSet(T1, T2))
+            .withMember("A", Set.of(T1))
+            .build();
+        assertEquals(SubscriptionType.HETEROGENEOUS, spec.subscriptionType());
 
-        var found = new ArrayList<Integer>();
-        for (var topics : List.of(List.of(0), List.of(0, 1), List.of(1), List.of(0), List.<Integer>of(), List.of(1, 0))) {
-            found.add(cohorts.getOrCreateCohort(intList(topics)));
-        }
+        var group = new IndexedGroup.Builder(spec, DESCRIBER, 0L).build();
 
-        assertEquals(List.of(0, 1, 2, 0, 3, 1), found);
-        assertEquals(List.of(List.of(0), List.of(0, 1), List.of(1), List.of()),
-            cohorts.subscriptions().stream().map(IndexedGroupTest::boxed).toList());
+        assertEquals(List.of(0, 1, 2, 0, 3, 1), cohorts(group));
+        assertEquals(List.of(List.of(0), List.of(0, 1), List.of(1), List.of()), topicsOfCohorts(group));
     }
 
-    private static IntList intList(List<Integer> values) {
-        var list = new IntList(values.size());
-        values.forEach(list::add);
-        return list;
+    /**
+     * A builder builds a single group: the second build throws.
+     */
+    @Test
+    public void testSecondBuildThrows() {
+        var spec = new GroupSpecFixture()
+            .withMember("A", Set.of(T1))
+            .build();
+        var builder = new IndexedGroup.Builder(spec, DESCRIBER);
+        builder.build();
+
+        assertThrows(IllegalStateException.class, builder::build);
     }
 
     private static List<String> memberIds(IndexedGroup group) {

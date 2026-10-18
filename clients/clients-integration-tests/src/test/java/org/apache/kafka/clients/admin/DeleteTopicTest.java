@@ -39,18 +39,26 @@ import org.apache.kafka.storage.internals.log.UnifiedLog;
 import org.apache.kafka.storage.internals.log.VerificationGuard;
 import org.apache.kafka.test.TestUtils;
 
+import java.io.File;
 import java.util.ArrayList;
+import java.util.Arrays;
 import java.util.Collection;
 import java.util.List;
 import java.util.Map;
+import java.util.Objects;
 import java.util.Optional;
 import java.util.Properties;
 import java.util.concurrent.ExecutionException;
 import java.util.function.Supplier;
 import java.util.stream.Collectors;
 
+import static org.apache.kafka.server.config.ServerLogConfigs.LOG_DELETE_DELAY_MS_CONFIG;
+import static org.apache.kafka.server.config.ServerLogConfigs.LOG_INITIAL_TASK_DELAY_MS_CONFIG;
+import static org.apache.kafka.storage.internals.log.LogFileUtils.DELETE_DIR_SUFFIX;
 import static org.junit.jupiter.api.Assertions.assertDoesNotThrow;
+import static org.junit.jupiter.api.Assertions.assertEquals;
 import static org.junit.jupiter.api.Assertions.assertThrows;
+import static org.junit.jupiter.api.Assertions.assertTrue;
 import static org.junit.jupiter.api.Assertions.fail;
 
 
@@ -58,20 +66,23 @@ import static org.junit.jupiter.api.Assertions.fail;
     brokers = 3,
     serverProperties = {
         @ClusterConfigProperty(key = GroupCoordinatorConfig.OFFSETS_TOPIC_PARTITIONS_CONFIG, value = "1"),
-        @ClusterConfigProperty(key = GroupCoordinatorConfig.OFFSETS_TOPIC_REPLICATION_FACTOR_CONFIG, value = "1"),
-        @ClusterConfigProperty(key = "log.initial.task.delay.ms", value = "100"),
-        @ClusterConfigProperty(key = "log.segment.delete.delay.ms", value = "1000")
+        @ClusterConfigProperty(key = GroupCoordinatorConfig.OFFSETS_TOPIC_REPLICATION_FACTOR_CONFIG, value = "1")
     })
 public class DeleteTopicTest {
     private static final String DEFAULT_TOPIC = "topic";
     private final Map<Integer, List<Integer>> expectedReplicaAssignment = Map.of(0, List.of(0, 1, 2));
 
-    @ClusterTest
+    @ClusterTest(serverProperties = {
+        @ClusterConfigProperty(key = LOG_INITIAL_TASK_DELAY_MS_CONFIG, value = "100"),
+        @ClusterConfigProperty(key = "log.segment.delete.delay.ms", value = "1000")
+    })
     public void testCreateAndDeleteTopic(ClusterInstance cluster) throws Exception {
         String testTopic = "test-topic";
         try (Admin admin = cluster.admin()) {
             // Create a test topic
             cluster.createTopic(testTopic, 1, (short) 3);
+            TopicPartition topicPartition = new TopicPartition(testTopic, 0);
+            waitForReplicaCreated(cluster.brokers(), topicPartition, "Replicas were not created");
 
             // Delete topic
             DeleteTopicsResult deleteResult = admin.deleteTopics(List.of(testTopic));
@@ -79,6 +90,40 @@ public class DeleteTopicTest {
 
             // Wait for topic deletion
             cluster.waitTopicDeletion(testTopic);
+            // Ensure that the topic directories are hard-deleted
+            TestUtils.waitForCondition(() -> topicDirectories(cluster, testTopic).isEmpty(),
+                "Failed to hard-delete the delete directory");
+        }
+    }
+
+    @ClusterTest(brokers = 1, serverProperties = {
+        @ClusterConfigProperty(key = "log.segment.delete.delay.ms", value = "3600000")
+    })
+    public void testDeleteTopicFilesAfterBrokerRestart(ClusterInstance cluster) throws Exception {
+        try (Admin admin = cluster.admin()) {
+            cluster.createTopic(DEFAULT_TOPIC, 1, (short) 1);
+            TopicPartition topicPartition = new TopicPartition(DEFAULT_TOPIC, 0);
+            waitForReplicaCreated(cluster.brokers(), topicPartition, "Replica was not created");
+
+            admin.deleteTopics(List.of(DEFAULT_TOPIC)).all().get();
+            cluster.waitTopicDeletion(DEFAULT_TOPIC);
+            TestUtils.waitForCondition(() -> {
+                List<File> directories = topicDirectories(cluster, DEFAULT_TOPIC);
+                return directories.size() == 1 && directories.stream().allMatch(dir -> dir.getName().endsWith(DELETE_DIR_SUFFIX));
+            }, "Topic directory was not renamed for deletion");
+
+            // The long deletion delay keeps the renamed directories on disk until the broker restarts.
+            cluster.shutdownBroker(0);
+            List<File> deletedDirectories = topicDirectories(cluster, DEFAULT_TOPIC);
+            assertEquals(1, deletedDirectories.size(), "Topic directory should remain on disk until the broker restarts");
+            deletedDirectories.forEach(dir -> assertTrue(dir.getName().endsWith(DELETE_DIR_SUFFIX)));
+
+            cluster.restartBroker(0, Map.of(
+                LOG_INITIAL_TASK_DELAY_MS_CONFIG, "100",
+                LOG_DELETE_DELAY_MS_CONFIG, "1000"
+            ));
+            TestUtils.waitForCondition(() -> deletedDirectories.stream().noneMatch(File::exists),
+                "Topic directories were not deleted from disk after the broker restarted");
         }
     }
 
@@ -305,6 +350,14 @@ public class DeleteTopicTest {
             assertDoesNotThrow(() -> admin.describeTopics(List.of(DEFAULT_TOPIC)).allTopicNames().get());
             assertDoesNotThrow(() -> waitUtilLeaderIsKnown(cluster.brokers(), topicPartition));
         }
+    }
+
+    private List<File> topicDirectories(ClusterInstance cluster, String topic) {
+        return cluster.brokers().values().stream()
+            .flatMap(broker -> broker.config().logDirs().stream())
+            .flatMap(logDir -> Arrays.stream(Objects.requireNonNull(new File(logDir).listFiles())))
+            .filter(dir -> dir.getName().startsWith(topic + "-"))
+            .toList();
     }
 
     private int waitUtilLeaderIsKnown(Map<Integer, KafkaBroker> idToBroker,
