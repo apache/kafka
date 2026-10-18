@@ -51,9 +51,10 @@ A **Streams group** is a broker‑coordinated group type for Kafka Streams that 
 # Usage
 
 The script is located in `bin/kafka-streams-groups.sh` and connects to your cluster via `--bootstrap-server`. For secured clusters, pass AdminClient properties using `--command-config`.
-    
-    
-    $ kafka-streams-groups.sh --bootstrap-server <host:port> [COMMAND] [OPTIONS]
+
+```bash
+$ kafka-streams-groups.sh --bootstrap-server <host:port> [COMMAND] [OPTIONS]
+```
 
 **Note:** `kafka-streams-groups.sh` complements the Streams Admin API for Streams groups. The CLI exposes list/describe/delete operations and offset management similar in spirit to consumer-group tools, but tailored to Streams groups defined in KIP‑1071. 
 
@@ -62,47 +63,50 @@ The script is located in `bin/kafka-streams-groups.sh` and connects to your clus
 ## List Streams groups
 
 Discovering groups
-    
-    
-    # List all Streams groups
-    kafka-streams-groups.sh --bootstrap-server localhost:9092 --list
-    
+
+```bash
+# List all Streams groups
+kafka-streams-groups.sh --bootstrap-server localhost:9092 --list
+```
+
 
 ## Describe Streams groups
 
 Inspecting group's state, members, and lag
-    
-    
-    # Describe a group: state + epochs
-    kafka-streams-groups.sh --bootstrap-server localhost:9092 \
-      --describe --group my-streams-app --state --verbose
-    
-    # Describe a group: members (assignments vs target, classic/streams)
-    kafka-streams-groups.sh --bootstrap-server localhost:9092 \
-      --describe --group my-streams-app --members --verbose
-    
-    # Describe a group: input-topic offsets and lag
-    kafka-streams-groups.sh --bootstrap-server localhost:9092 \
-      --describe --group my-streams-app --offsets
 
-    # Describe a group: processing topology
-    kafka-streams-groups.sh --bootstrap-server localhost:9092 \
-      --describe --group my-streams-app --topology
-    
+```bash
+# Describe a group: state + epochs
+kafka-streams-groups.sh --bootstrap-server localhost:9092 \
+  --describe --group my-streams-app --state --verbose
+
+# Describe a group: members (assignments vs target, classic/streams)
+kafka-streams-groups.sh --bootstrap-server localhost:9092 \
+  --describe --group my-streams-app --members --verbose
+
+# Describe a group: input-topic offsets and lag
+kafka-streams-groups.sh --bootstrap-server localhost:9092 \
+  --describe --group my-streams-app --offsets
+
+# Describe a group: processing topology
+kafka-streams-groups.sh --bootstrap-server localhost:9092 \
+  --describe --group my-streams-app --topology
+```
+
 
 ### Describing the processing topology {#describe-topology}
 
 The `--topology` option prints the processing topology of the group, as recorded by the broker's [topology description plugin](/{version}/streams/developer-guide/topology-description-plugin/), in a format that mirrors `Topology#describe()`:
 
-    
-    Topologies:
-       Sub-topology: 0
-        Source: KSTREAM-SOURCE-0000000000 (topics: [streams-plaintext-input])
-          --> KSTREAM-FLATMAPVALUES-0000000001
-        Processor: KSTREAM-FLATMAPVALUES-0000000001 (stores: [])
-          --> KSTREAM-AGGREGATE-0000000002
-          <-- KSTREAM-SOURCE-0000000000
-        ...
+```text
+Topologies:
+   Sub-topology: 0
+    Source: KSTREAM-SOURCE-0000000000 (topics: [streams-plaintext-input])
+      --> KSTREAM-FLATMAPVALUES-0000000001
+    Processor: KSTREAM-FLATMAPVALUES-0000000001 (stores: [])
+      --> KSTREAM-AGGREGATE-0000000002
+      <-- KSTREAM-SOURCE-0000000000
+    ...
+```
 
 This requires brokers running Apache Kafka 4.4 or newer with the broker configuration `group.streams.topology.description.plugin.class` set; against older brokers the command fails with `UnsupportedVersionException`. If no topology description is available, the tool prints one of the following messages and exits with a non-zero exit code:
 
@@ -114,51 +118,54 @@ See the [Topology Description Plugin](/{version}/streams/developer-guide/topolog
 ## Reset input-topic offsets (preview, then apply) {#reset-offsets}
 
 Ensure all application instances are stopped/inactive. Always preview changes with `--dry-run` before using `--execute`.
-    
-    
-    # Preview resetting all input topics to a specific timestamp
-    kafka-streams-groups.sh --bootstrap-server localhost:9092 \
-      --group my-streams-app \
-      --reset-offsets --all-input-topics --to-datetime 2025-01-31T23:57:00.000 \
-      --dry-run
-    
-    # Apply the reset
-    kafka-streams-groups.sh --bootstrap-server localhost:9092 \
-      --group my-streams-app \
-      --reset-offsets --all-input-topics --to-datetime 2025-01-31T23:57:00.000 \
-      --execute
-    
+
+```bash
+# Preview resetting all input topics to a specific timestamp
+kafka-streams-groups.sh --bootstrap-server localhost:9092 \
+  --group my-streams-app \
+  --reset-offsets --all-input-topics --to-datetime 2025-01-31T23:57:00.000 \
+  --dry-run
+
+# Apply the reset
+kafka-streams-groups.sh --bootstrap-server localhost:9092 \
+  --group my-streams-app \
+  --reset-offsets --all-input-topics --to-datetime 2025-01-31T23:57:00.000 \
+  --execute
+```
+
 
 ## Delete offsets to force re-consumption
 
 Delete offsets for all or specific input topics to have the group re-read data on restart.
-    
-    
-    # Delete offsets for all input topics
-    kafka-streams-groups.sh --bootstrap-server localhost:9092 \
-      --group my-streams-app \
-      --delete-offsets --all-input-topics
-    
-    # Delete offsets for specific topics
-    kafka-streams-groups.sh --bootstrap-server localhost:9092 \
-      --group my-streams-app \
-      --delete-offsets --input-topic input-a --input-topic input-b
-    
+
+```bash
+# Delete offsets for all input topics
+kafka-streams-groups.sh --bootstrap-server localhost:9092 \
+  --group my-streams-app \
+  --delete-offsets --all-input-topics
+
+# Delete offsets for specific topics
+kafka-streams-groups.sh --bootstrap-server localhost:9092 \
+  --group my-streams-app \
+  --delete-offsets --input-topic input-a --input-topic input-b
+```
+
 
 ## Delete a Streams group (cleanup)
 
 Delete broker-side Streams metadata for a group and optionally remove internal topics.
-    
-    
-    # Delete Streams group metadata
-    kafka-streams-groups.sh --bootstrap-server localhost:9092 \
-      --delete --group my-streams-app
-    
-    # Delete all internal topics alongside the group (use with care)
-    kafka-streams-groups.sh --bootstrap-server localhost:9092 \
-      --delete --group my-streams-app \
-      --delete-all-internal-topics
-    
+
+```bash
+# Delete Streams group metadata
+kafka-streams-groups.sh --bootstrap-server localhost:9092 \
+  --delete --group my-streams-app
+
+# Delete all internal topics alongside the group (use with care)
+kafka-streams-groups.sh --bootstrap-server localhost:9092 \
+  --delete --group my-streams-app \
+  --delete-all-internal-topics
+```
+
 
 # All options and flags
 

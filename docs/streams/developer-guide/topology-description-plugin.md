@@ -111,14 +111,14 @@ The returned `StreamsGroupTopologyDescription` mirrors `org.apache.kafka.streams
 
 Use the `--topology` option of `bin/kafka-streams-groups.sh` together with `--describe`:
 
-```
+```bash
 kafka-streams-groups.sh --bootstrap-server localhost:9092 \
   --describe --group my-streams-app --topology
 ```
 
 When a description is available, the output mirrors the format of `Topology#describe()`:
 
-```
+```text
 Topologies:
    Sub-topology: 0
     Source: KSTREAM-SOURCE-0000000000 (topics: [streams-plaintext-input])
