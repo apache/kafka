@@ -26,7 +26,7 @@ import tempfile
 import textwrap
 from typing import Dict, Optional, TextIO
 
-logger = logging.getLogger("pr-format")
+logger = logging.getLogger()
 logger.setLevel(logging.DEBUG)
 handler = logging.StreamHandler(sys.stderr)
 handler.setLevel(logging.DEBUG)
@@ -81,54 +81,46 @@ def parse_trailers(title, body) -> Dict:
 
 _FENCE_START = re.compile(r"^ {0,3}(`{3,}|~{3,})")
 _BLOCK_START = re.compile(
-    r"^ {0,3}(?:#{1,6}(?:\s|$)|>|[-+*]\s+|\d+[.)]\s+|<|\[[^\]]+\]:)"
+    r"^ {0,3}(?:#{1,6}(?:\s|$)|>|[-+*]|\d+[.)]\s+|<|\[[^\]]+\]:)"
 )
 _THEMATIC_BREAK = re.compile(
     r"^ {0,3}(?:(?:\*\s*){3,}|(?:-\s*){3,}|(?:_\s*){3,}|(?:=\s*){3,})$"
 )
 _TRAILER = re.compile(r"^[A-Za-z0-9-]+:")
-_REVIEWER_EMAIL = re.compile(r"<[^<>\s@]+@[^<>\s@]+>")
 
 
 def _wrap_paragraph(lines) -> str:
-    text = [line.rstrip("\r\n") for line in lines]
+    text = [line.rstrip("\n") for line in lines]
     reviewers = text[0].startswith("Reviewers:")
-    if any(line.startswith((" ", "\t")) for line in text[1 if reviewers else 0:]):
-        return "".join(lines)
-    if any(_BLOCK_START.match(line) or _THEMATIC_BREAK.match(line) for line in text):
-        return "".join(lines)
-    if _TRAILER.match(text[0]) and not reviewers:
-        return "".join(lines)
-    searchable = text[:]
-    if reviewers:
-        searchable = [_REVIEWER_EMAIL.sub("", line) for line in searchable]
-    if any(re.search(r"[`*_~\[\]\\|<>]| {2,}$", line) for line in searchable):
-        return "".join(lines)
+    if not reviewers:
+        if any(line.startswith((" ", "\t")) for line in text):
+            return "".join(lines)
+        if any(_BLOCK_START.match(line) or _THEMATIC_BREAK.match(line) for line in text):
+            return "".join(lines)
+        if _TRAILER.match(text[0]):
+            return "".join(lines)
+        if any(re.search(r"[\\|<>]| {2,}$", line) for line in text):
+            return "".join(lines)
 
-    endings = [line[len(content):] for line, content in zip(lines, text)]
-    distinct_endings = {ending for ending in endings if ending}
-    if len(distinct_endings) > 1:
-        return "".join(lines)
-    newline = next(iter(distinct_endings), "\n")
     wrapped = textwrap.fill(
-        " ".join(line.strip() for line in text),
+        " ".join(re.sub(r"[ \t]+", " ", line.strip()) for line in text),
         subsequent_indent=" " if reviewers else "",
         width=72,
         break_long_words=False,
         break_on_hyphens=False,
     )
-    if any(
-        (_BLOCK_START.match(line) and not (
-            reviewers and _REVIEWER_EMAIL.match(line.lstrip())
-        )) or _THEMATIC_BREAK.match(line)
+    if not reviewers and any(
+        _BLOCK_START.match(line) or _THEMATIC_BREAK.match(line)
+        or _FENCE_START.match(line) or _TRAILER.match(line)
         for line in wrapped.splitlines()
     ):
         return "".join(lines)
-    return wrapped.replace("\n", newline) + endings[-1]
+    return wrapped + ("\n" if lines[-1].endswith("\n") else "")
 
 
 def format_body(body: str) -> str:
-    """Wrap plain prose while preserving Markdown blocks and ambiguous text."""
+    """Normalize line endings and wrap prose while preserving Markdown blocks."""
+    body = body.replace("\r\n", "\n").replace("\r", "\n")
     output = []
     paragraph = []
     fence = None
@@ -154,6 +146,11 @@ def format_body(body: str) -> str:
                 flush_paragraph()
                 output.append(line)
             else:
+                if _TRAILER.match(text) or (
+                    paragraph and _TRAILER.match(paragraph[0])
+                    and not text.startswith((" ", "\t"))
+                ):
+                    flush_paragraph()
                 paragraph.append(line)
 
     flush_paragraph()
