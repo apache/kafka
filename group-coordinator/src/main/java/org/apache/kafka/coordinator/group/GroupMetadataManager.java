@@ -1039,41 +1039,29 @@ public class GroupMetadataManager {
      *                          created if it does not exist.
      *
      * @return A ConsumerGroup.
-     * @throws GroupIdNotFoundException if createIfNotExists is false and the group is absent or classic.
-     * @throws IllegalStateException    if the group is neither a consumer group nor a classic group.
+     * @throws GroupIdNotFoundException if createIfNotExists is false and the group is absent or has another type.
      * Package private for testing.
      */
     ConsumerGroup getOrMaybeCreatePersistedConsumerGroup(
         String groupId,
         boolean createIfNotExists
-    ) throws GroupIdNotFoundException, IllegalStateException {
+    ) throws GroupIdNotFoundException {
         Group group = groups.get(groupId);
-
-        if (group == null && !createIfNotExists) {
-            throw new GroupIdNotFoundException(String.format("Consumer group %s not found.", groupId));
+        if (group != null && group.type() != CONSUMER) {
+            // Compaction may have removed the previous group's tombstones.
+            removeGroup(groupId);
+            group = null;
         }
 
         if (group == null) {
-            ConsumerGroup consumerGroup = new ConsumerGroup(logContext, snapshotRegistry, groupId);
-            groups.put(groupId, consumerGroup);
-            return consumerGroup;
-        } else if (group.type() == CONSUMER) {
-            return (ConsumerGroup) group;
-        } else if (group.type() == CLASSIC) {
             if (!createIfNotExists) {
-                // A consumer tombstone must not replace or delete a classic group.
                 throw new GroupIdNotFoundException(String.format("Consumer group %s not found.", groupId));
             }
-            // During a concurrent load and compaction, the loader may read classic metadata
-            // before its upgrade tombstone is compacted away by a subsequent downgrade.
-            // Consumer values must therefore be allowed to replace the classic group.
-            // This also handles simple classic groups created by offset commit records.
             ConsumerGroup consumerGroup = new ConsumerGroup(logContext, snapshotRegistry, groupId);
             groups.put(groupId, consumerGroup);
             return consumerGroup;
-        } else {
-            throw new IllegalStateException(String.format("Group %s is not a consumer group", groupId));
         }
+        return (ConsumerGroup) group;
     }
 
     /**
@@ -1085,41 +1073,29 @@ public class GroupMetadataManager {
      *                          created if it does not exist.
      *
      * @return A StreamsGroup.
-     * @throws GroupIdNotFoundException if the group does not exist and createIfNotExists is false or
-     *                                  if the group is not a streams group.
-     * @throws IllegalStateException    if the group does not have the expected type.
+     * @throws GroupIdNotFoundException if createIfNotExists is false and the group is absent or has another type.
      * Package private for testing.
      */
     StreamsGroup getOrMaybeCreatePersistedStreamsGroup(
         String groupId,
         boolean createIfNotExists
-    ) throws GroupIdNotFoundException, IllegalStateException {
+    ) throws GroupIdNotFoundException {
         Group group = groups.get(groupId);
-
-        if (group == null && !createIfNotExists) {
-            throw new GroupIdNotFoundException(String.format("Streams group %s not found.", groupId));
+        if (group != null && group.type() != STREAMS) {
+            // Compaction may have removed the previous group's tombstones.
+            removeGroup(groupId);
+            group = null;
         }
 
         if (group == null) {
+            if (!createIfNotExists) {
+                throw new GroupIdNotFoundException(String.format("Streams group %s not found.", groupId));
+            }
             StreamsGroup streamsGroup = new StreamsGroup(logContext, snapshotRegistry, groupId);
             groups.put(groupId, streamsGroup);
             return streamsGroup;
-        } else if (group.type() == STREAMS) {
-            return (StreamsGroup) group;
-        } else if (group.type() == CLASSIC && ((ClassicGroup) group).isSimpleGroup()) {
-            // If the group is a simple classic group, it was automatically created to hold committed
-            // offsets when no group-metadata-backed group existed. Simple classic groups do not have
-            // any GroupMetadataKey/Value records in the __consumer_offsets topic, only offset commit
-            // records, so the in-memory group can be safely replaced here. Without this, replaying
-            // streams group records after offset commit records would not work.
-            StreamsGroup streamsGroup = new StreamsGroup(logContext, snapshotRegistry, groupId);
-            groups.put(groupId, streamsGroup);
-            return streamsGroup;
-        } else {
-            // We don't support upgrading/downgrading between protocols at the moment, so
-            // we throw an exception if a group exists with the wrong type.
-            throw new IllegalStateException(String.format("Group %s is not a streams group.", groupId));
         }
+        return (StreamsGroup) group;
     }
 
     /**
@@ -1224,8 +1200,7 @@ public class GroupMetadataManager {
      *                          created if it does not exist.
      *
      * @return A ShareGroup.
-     * @throws GroupIdNotFoundException if the group does not exist and createIfNotExists is false.
-     * @throws IllegalStateException    if the group does not have the expected type.
+     * @throws GroupIdNotFoundException if createIfNotExists is false and the group is absent or has another type.
      *
      * Package private for testing.
      */
@@ -1234,24 +1209,21 @@ public class GroupMetadataManager {
         boolean createIfNotExists
     ) throws GroupIdNotFoundException {
         Group group = groups.get(groupId);
-
-        if (group == null && !createIfNotExists) {
-            throw new GroupIdNotFoundException(String.format("Share group %s not found.", groupId));
+        if (group != null && group.type() != SHARE) {
+            // Compaction may have removed the previous group's tombstones.
+            removeGroup(groupId);
+            group = null;
         }
 
         if (group == null) {
+            if (!createIfNotExists) {
+                throw new GroupIdNotFoundException(String.format("Share group %s not found.", groupId));
+            }
             ShareGroup shareGroup = new ShareGroup(snapshotRegistry, groupId);
             groups.put(groupId, shareGroup);
             return shareGroup;
-        } else {
-            if (group.type() == SHARE) {
-                return (ShareGroup) group;
-            } else {
-                // We don't support upgrading/downgrading between protocols at the moment so
-                // we throw an exception if a group exists with the wrong type.
-                throw new IllegalStateException(String.format("Group %s is not a share group.", groupId));
-            }
         }
+        return (ShareGroup) group;
     }
 
     /**
@@ -7167,6 +7139,10 @@ public class GroupMetadataManager {
             );
 
             loadedMembers.forEach(member -> classicGroup.add(member, null));
+            Group group = groups.get(groupId);
+            if (group != null && group.type() != CLASSIC) {
+                removeGroup(groupId);
+            }
             groups.put(groupId, classicGroup);
 
             classicGroup.setSubscribedTopics(

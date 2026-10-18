@@ -82,6 +82,7 @@ import org.apache.kafka.common.protocol.ApiKeys;
 import org.apache.kafka.common.protocol.ByteBufferAccessor;
 import org.apache.kafka.common.protocol.Errors;
 import org.apache.kafka.common.protocol.MessageUtil;
+import org.apache.kafka.common.record.internal.RecordBatch;
 import org.apache.kafka.common.requests.StreamsGroupHeartbeatResponse.Status;
 import org.apache.kafka.common.utils.LogCaptureAppender;
 import org.apache.kafka.common.utils.MockTime;
@@ -113,6 +114,8 @@ import org.apache.kafka.coordinator.group.generated.ConsumerGroupMemberMetadataV
 import org.apache.kafka.coordinator.group.generated.ConsumerGroupPartitionMetadataKey;
 import org.apache.kafka.coordinator.group.generated.ConsumerGroupPartitionMetadataValue;
 import org.apache.kafka.coordinator.group.generated.GroupMetadataValue;
+import org.apache.kafka.coordinator.group.generated.OffsetCommitKey;
+import org.apache.kafka.coordinator.group.generated.OffsetCommitValue;
 import org.apache.kafka.coordinator.group.generated.ShareGroupCurrentMemberAssignmentKey;
 import org.apache.kafka.coordinator.group.generated.ShareGroupCurrentMemberAssignmentValue;
 import org.apache.kafka.coordinator.group.generated.ShareGroupMemberMetadataKey;
@@ -6574,6 +6577,20 @@ public class GroupMetadataManagerTest {
         assertEquals(expectedGroup.currentState(), group.currentState());
         assertEquals(expectedGroup.currentStateTimestampOrDefault(), group.currentStateTimestampOrDefault());
         assertEquals(expectedGroup.currentClassicGroupMembers(), group.currentClassicGroupMembers());
+    }
+
+    @ParameterizedTest
+    @ValueSource(strings = {"consumer", "share", "streams"})
+    public void testReplayGroupMetadataWithOtherGroupType(String previousGroupType) {
+        assertReplayWithOtherGroupType(previousGroupType, "classic",
+            groupReplayRecords("classic", "new-topic").findFirst().orElseThrow());
+    }
+
+    @ParameterizedTest
+    @ValueSource(strings = {"consumer", "share", "streams"})
+    public void testReplayGroupMetadataTombstoneWithOtherGroupType(String previousGroupType) {
+        assertReplayWithOtherGroupType(previousGroupType, "classic",
+            GroupCoordinatorRecordHelpers.newGroupMetadataTombstoneRecord("group-id"));
     }
 
     @Test
@@ -25244,62 +25261,130 @@ public class GroupMetadataManagerTest {
             result.response().data().taskOffsetIntervalMs());
     }
 
-    private static Stream<CoordinatorRecord> consumerGroupReplayValues() {
+    private static Stream<CoordinatorRecord> groupReplayRecords(String groupType, String topicName) {
         String groupId = "group-id";
-        ConsumerGroupMember member = new ConsumerGroupMember.Builder("member-id")
-            .setSubscribedTopicNames(List.of("foo"))
-            .setMemberEpoch(10)
-            .build();
-        return Stream.of(
-            GroupCoordinatorRecordHelpers.newConsumerGroupMemberSubscriptionRecord(groupId, member),
-            GroupCoordinatorRecordHelpers.newConsumerGroupEpochRecord(groupId, 10, 0),
-            CoordinatorRecord.record(
-                new ConsumerGroupPartitionMetadataKey().setGroupId(groupId),
-                new ApiMessageAndVersion(new ConsumerGroupPartitionMetadataValue(), (short) 0)
-            ),
-            GroupCoordinatorRecordHelpers.newConsumerGroupTargetAssignmentRecord(groupId, "member-id", Map.of()),
-            GroupCoordinatorRecordHelpers.newConsumerGroupTargetAssignmentMetadataRecord(groupId, 10, 12345L),
-            GroupCoordinatorRecordHelpers.newConsumerGroupCurrentAssignmentRecord(groupId, member),
-            GroupCoordinatorRecordHelpers.newConsumerGroupRegularExpressionRecord(
-                groupId, "foo.*", new ResolvedRegularExpression(Set.of("foo"), 1, 12345L))
-        );
+        String memberId = "member-id";
+        return switch (groupType) {
+            case "classic" -> Stream.of(GroupMetadataManagerTestContext.newGroupMetadataRecord(groupId,
+                new GroupMetadataValue().setProtocolType("consumer").setGeneration(1)));
+            case "consumer" -> {
+                ConsumerGroupMember member = new ConsumerGroupMember.Builder(memberId)
+                    .setSubscribedTopicNames(List.of(topicName))
+                    .setMemberEpoch(10)
+                    .build();
+                yield Stream.of(
+                    GroupCoordinatorRecordHelpers.newConsumerGroupMemberSubscriptionRecord(groupId, member),
+                    GroupCoordinatorRecordHelpers.newConsumerGroupEpochRecord(groupId, 10, 0),
+                    CoordinatorRecord.record(new ConsumerGroupPartitionMetadataKey().setGroupId(groupId),
+                        new ApiMessageAndVersion(new ConsumerGroupPartitionMetadataValue(), (short) 0)),
+                    GroupCoordinatorRecordHelpers.newConsumerGroupTargetAssignmentRecord(groupId, memberId, Map.of()),
+                    GroupCoordinatorRecordHelpers.newConsumerGroupTargetAssignmentMetadataRecord(groupId, 10, 12345L),
+                    GroupCoordinatorRecordHelpers.newConsumerGroupCurrentAssignmentRecord(groupId, member),
+                    GroupCoordinatorRecordHelpers.newConsumerGroupRegularExpressionRecord(
+                        groupId, topicName + ".*", new ResolvedRegularExpression(Set.of(topicName), 1, 12345L))
+                );
+            }
+            case "share" -> {
+                ShareGroupMember member = new ShareGroupMember.Builder(memberId)
+                    .setSubscribedTopicNames(List.of(topicName))
+                    .setMemberEpoch(10)
+                    .build();
+                yield Stream.of(
+                    GroupCoordinatorRecordHelpers.newShareGroupMemberSubscriptionRecord(groupId, member),
+                    GroupCoordinatorRecordHelpers.newShareGroupEpochRecord(groupId, 10, 0),
+                    GroupCoordinatorRecordHelpers.newShareGroupTargetAssignmentRecord(groupId, memberId, Map.of()),
+                    GroupCoordinatorRecordHelpers.newShareGroupTargetAssignmentMetadataRecord(groupId, 10, 12345L),
+                    GroupCoordinatorRecordHelpers.newShareGroupCurrentAssignmentRecord(groupId, member),
+                    GroupCoordinatorRecordHelpers.newShareGroupStatePartitionMetadataRecord(groupId, Map.of(),
+                        Map.of(Uuid.ZERO_UUID, new InitMapValue(topicName, Set.of(0), 1)), Map.of())
+                );
+            }
+            case "streams" -> {
+                StreamsGroupMember member = GroupMetadataManagerTestContext.streamsGroupMemberBuilderWithDefaults(memberId)
+                    .setMemberEpoch(10)
+                    .setPreviousMemberEpoch(9)
+                    .build();
+                yield Stream.of(
+                    StreamsCoordinatorRecordHelpers.newStreamsGroupMemberRecord(groupId, member),
+                    StreamsCoordinatorRecordHelpers.newStreamsGroupMetadataRecord(groupId, 10, 0, 0, Map.of(), 0, 0),
+                    StreamsCoordinatorRecordHelpers.newStreamsGroupTargetAssignmentRecord(
+                        groupId, memberId, new TasksTuple(Map.of(), Map.of(), Map.of())),
+                    StreamsCoordinatorRecordHelpers.newStreamsGroupTargetAssignmentMetadataRecord(groupId, 10, 12345L),
+                    StreamsCoordinatorRecordHelpers.newStreamsGroupCurrentAssignmentRecord(groupId, member),
+                    StreamsCoordinatorRecordHelpers.newStreamsGroupTopologyRecord(groupId, new StreamsGroupTopologyValue()
+                        .setEpoch(10)
+                        .setSubtopologies(List.of(new StreamsGroupTopologyValue.Subtopology()
+                            .setSubtopologyId("subtopology")
+                            .setSourceTopics(List.of(topicName)))))
+                );
+            }
+            default -> throw new IllegalArgumentException("Unexpected group type " + groupType);
+        };
     }
 
-    private static Stream<CoordinatorRecord> consumerGroupReplayTombstones() {
-        return consumerGroupReplayValues().map(record -> CoordinatorRecord.tombstone(record.key()));
+    private static Stream<Arguments> recordsWithOtherGroupType(String groupType) {
+        return Stream.of("classic", "simple", "consumer", "share", "streams")
+            .filter(previousGroupType -> !previousGroupType.equals(groupType))
+            .flatMap(previousGroupType -> groupReplayRecords(groupType, "new-topic")
+                .map(record -> Arguments.of(previousGroupType, record)));
     }
 
-    @ParameterizedTest
-    @MethodSource("consumerGroupReplayValues")
-    public void testReplayConsumerGroupValueAfterClassicGroup(CoordinatorRecord record) {
+    private static Stream<Arguments> consumerGroupRecordsWithOtherGroupType() {
+        return recordsWithOtherGroupType("consumer");
+    }
+
+    private static Stream<Arguments> shareGroupRecordsWithOtherGroupType() {
+        return recordsWithOtherGroupType("share");
+    }
+
+    private static Stream<Arguments> streamsGroupRecordsWithOtherGroupType() {
+        return recordsWithOtherGroupType("streams");
+    }
+
+    private void assertReplayWithOtherGroupType(String previousGroupType, String groupType, CoordinatorRecord record) {
+        String groupId = "group-id";
         GroupMetadataManagerTestContext context = new GroupMetadataManagerTestContext.Builder().build();
-        context.replay(GroupMetadataManagerTestContext.newGroupMetadataRecord("group-id",
-            new GroupMetadataValue().setProtocolType("consumer").setGeneration(1)));
-        ClassicGroup classicGroup = context.groupMetadataManager.getOrMaybeCreateClassicGroup("group-id", false);
-        assertFalse(classicGroup.isSimpleGroup());
+        if (previousGroupType.equals("simple")) {
+            OffsetMetadataManager offsets = new OffsetMetadataManager.Builder()
+                .withSnapshotRegistry(context.snapshotRegistry)
+                .withGroupMetadataManager(context.groupMetadataManager)
+                .withGroupCoordinatorConfig(GroupCoordinatorConfig.fromProps(Map.of()))
+                .withGroupCoordinatorMetricsShard(context.metrics)
+                .build();
+            OffsetCommitKey key = new OffsetCommitKey().setGroup(groupId).setTopic("old-topic").setPartition(0);
+            offsets.replay(0, RecordBatch.NO_PRODUCER_ID, key, new OffsetCommitValue().setOffset(10));
+            offsets.replay(1, RecordBatch.NO_PRODUCER_ID, key, null);
+            assertTrue(context.groupMetadataManager.getOrMaybeCreateClassicGroup(groupId, false).isSimpleGroup());
+            context.snapshotRegistry.idempotentCreateSnapshot(++context.lastWrittenOffset);
+        } else {
+            groupReplayRecords(previousGroupType, "old-topic").forEach(context::replay);
+        }
+        Group previousGroup = context.groupMetadataManager.group(groupId);
+        Set<String> previousSubscriptions = Set.copyOf(context.groupMetadataManager.groupsSubscribedToTopic("old-topic"));
+        var previousShareState = context.groupMetadataManager.shareGroupStatePartitionMetadata().get(groupId);
+        if (!previousGroupType.equals("classic") && !previousGroupType.equals("simple")) {
+            assertEquals(Set.of(groupId), previousSubscriptions);
+        }
+        if (previousGroupType.equals("share")) {
+            assertNotNull(previousShareState);
+        }
         context.commit();
 
-        // The loader may have read the classic record before compaction removed the
-        // upgrade tombstone. Each consumer value must be able to recreate the group.
         context.replay(record);
-        assertEquals(Group.GroupType.CONSUMER, context.groupMetadataManager.group("group-id").type());
+        if (record.value() == null) {
+            assertThrows(GroupIdNotFoundException.class, () -> context.groupMetadataManager.group(groupId));
+        } else {
+            assertEquals(groupType, context.groupMetadataManager.group(groupId).type().toString());
+        }
+        assertEquals(Set.of(), context.groupMetadataManager.groupsSubscribedToTopic("old-topic"));
+        if (previousGroupType.equals("share")) {
+            assertFalse(context.groupMetadataManager.shareGroupStatePartitionMetadata().containsKey(groupId));
+        }
 
-        // Replacing the group during replay must also respect snapshot rollback.
         context.rollback();
-        assertSame(classicGroup, context.groupMetadataManager.group("group-id"));
-    }
-
-    @ParameterizedTest
-    @MethodSource("consumerGroupReplayTombstones")
-    public void testReplayConsumerGroupTombstoneAfterClassicGroup(CoordinatorRecord record) {
-        GroupMetadataManagerTestContext context = new GroupMetadataManagerTestContext.Builder().build();
-        context.replay(GroupMetadataManagerTestContext.newGroupMetadataRecord("group-id",
-            new GroupMetadataValue().setProtocolType("consumer").setGeneration(1)));
-        ClassicGroup classicGroup = context.groupMetadataManager.getOrMaybeCreateClassicGroup("group-id", false);
-
-        context.replay(record);
-        assertSame(classicGroup, context.groupMetadataManager.group("group-id"));
-        assertEquals(1, classicGroup.generationId());
+        assertSame(previousGroup, context.groupMetadataManager.group(groupId));
+        assertEquals(previousSubscriptions, context.groupMetadataManager.groupsSubscribedToTopic("old-topic"));
+        assertSame(previousShareState, context.groupMetadataManager.shareGroupStatePartitionMetadata().get(groupId));
     }
 
     @Test
@@ -25587,6 +25672,18 @@ public class GroupMetadataManagerTest {
         assertThrows(GroupIdNotFoundException.class, () -> context.groupMetadataManager.consumerGroup("bar"));
     }
 
+    @ParameterizedTest
+    @MethodSource("consumerGroupRecordsWithOtherGroupType")
+    public void testReplayConsumerGroupRecordWithOtherGroupType(String previousGroupType, CoordinatorRecord record) {
+        assertReplayWithOtherGroupType(previousGroupType, "consumer", record);
+    }
+
+    @ParameterizedTest
+    @MethodSource("consumerGroupRecordsWithOtherGroupType")
+    public void testReplayConsumerGroupRecordTombstoneWithOtherGroupType(String previousGroupType, CoordinatorRecord record) {
+        assertReplayWithOtherGroupType(previousGroupType, "consumer", CoordinatorRecord.tombstone(record.key()));
+    }
+
     @Test
     public void testReplayShareGroupMemberMetadataTombstone() {
         GroupMetadataManagerTestContext context = new GroupMetadataManagerTestContext.Builder()
@@ -25770,6 +25867,18 @@ public class GroupMetadataManagerTest {
         // should be a no-op.
         context.replay(GroupCoordinatorRecordHelpers.newShareGroupCurrentAssignmentTombstoneRecord("bar", "m1"));
         assertThrows(GroupIdNotFoundException.class, () -> context.groupMetadataManager.shareGroup("bar"));
+    }
+
+    @ParameterizedTest
+    @MethodSource("shareGroupRecordsWithOtherGroupType")
+    public void testReplayShareGroupRecordWithOtherGroupType(String previousGroupType, CoordinatorRecord record) {
+        assertReplayWithOtherGroupType(previousGroupType, "share", record);
+    }
+
+    @ParameterizedTest
+    @MethodSource("shareGroupRecordsWithOtherGroupType")
+    public void testReplayShareGroupRecordTombstoneWithOtherGroupType(String previousGroupType, CoordinatorRecord record) {
+        assertReplayWithOtherGroupType(previousGroupType, "share", CoordinatorRecord.tombstone(record.key()));
     }
 
     @Test
@@ -26202,6 +26311,18 @@ public class GroupMetadataManagerTest {
         context.replay(StreamsCoordinatorRecordHelpers.newStreamsGroupTopologyRecordTombstone("foo"));
 
         assertTrue(context.groupMetadataManager.streamsGroup("foo").topology().isEmpty());
+    }
+
+    @ParameterizedTest
+    @MethodSource("streamsGroupRecordsWithOtherGroupType")
+    public void testReplayStreamsGroupRecordWithOtherGroupType(String previousGroupType, CoordinatorRecord record) {
+        assertReplayWithOtherGroupType(previousGroupType, "streams", record);
+    }
+
+    @ParameterizedTest
+    @MethodSource("streamsGroupRecordsWithOtherGroupType")
+    public void testReplayStreamsGroupRecordTombstoneWithOtherGroupType(String previousGroupType, CoordinatorRecord record) {
+        assertReplayWithOtherGroupType(previousGroupType, "streams", CoordinatorRecord.tombstone(record.key()));
     }
 
     @Test
