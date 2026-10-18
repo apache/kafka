@@ -24,6 +24,7 @@ import org.apache.kafka.connect.runtime.isolation.PluginUtils;
 import org.apache.kafka.connect.runtime.rest.RestRequestTimeout;
 import org.apache.kafka.connect.runtime.rest.entities.ConfigInfos;
 import org.apache.kafka.connect.runtime.rest.entities.ConfigKeyInfo;
+import org.apache.kafka.connect.runtime.rest.entities.ErrorMessage;
 import org.apache.kafka.connect.runtime.rest.entities.PluginInfo;
 import org.apache.kafka.connect.runtime.rest.errors.ConnectRestException;
 import org.apache.kafka.connect.util.FutureCallback;
@@ -44,6 +45,12 @@ import java.util.concurrent.TimeoutException;
 
 import io.swagger.v3.oas.annotations.Operation;
 import io.swagger.v3.oas.annotations.Parameter;
+import io.swagger.v3.oas.annotations.media.ArraySchema;
+import io.swagger.v3.oas.annotations.media.Content;
+import io.swagger.v3.oas.annotations.media.Schema;
+import io.swagger.v3.oas.annotations.parameters.RequestBody;
+import io.swagger.v3.oas.annotations.responses.ApiResponse;
+import io.swagger.v3.oas.annotations.responses.ApiResponses;
 import jakarta.inject.Inject;
 import jakarta.ws.rs.BadRequestException;
 import jakarta.ws.rs.Consumes;
@@ -90,9 +97,45 @@ public class ConnectorPluginsResource {
 
     @PUT
     @Path("/{pluginName}/config/validate")
-    @Operation(summary = "Validate the provided configuration against the configuration definition for the specified pluginName")
+    @Operation(
+        summary = "Validate the provided configuration against the configuration definition for the specified pluginName",
+        requestBody = @RequestBody(
+            description = "The connector configuration properties to validate",
+            required = true,
+            content = @Content(
+                mediaType = MediaType.APPLICATION_JSON,
+                schema = @Schema(type = "object", additionalPropertiesSchema = String.class)
+            )
+        )
+    )
+    @ApiResponses({
+        @ApiResponse(
+            responseCode = "200",
+            description = "Configuration validation result returned successfully",
+            content = @Content(
+                mediaType = MediaType.APPLICATION_JSON,
+                schema = @Schema(implementation = ConfigInfos.class)
+            )
+        ),
+        @ApiResponse(
+            responseCode = "400",
+            description = "Invalid connector validation request",
+            content = @Content(
+                mediaType = MediaType.APPLICATION_JSON,
+                schema = @Schema(implementation = ErrorMessage.class)
+            )
+        ),
+        @ApiResponse(
+            responseCode = "500",
+            description = "Configuration validation timed out or was interrupted",
+            content = @Content(
+                mediaType = MediaType.APPLICATION_JSON,
+                schema = @Schema(implementation = ErrorMessage.class)
+            )
+        )
+    })
     public ConfigInfos validateConfigs(
-        final @PathParam("pluginName") String pluginName,
+        final @PathParam("pluginName") @Parameter(description = "The name of the connector plugin") String pluginName,
         final Map<String, String> connectorConfig
     ) throws Throwable {
         String includedConnType = connectorConfig.get(ConnectorConfig.CONNECTOR_CLASS_CONFIG);
@@ -137,6 +180,14 @@ public class ConnectorPluginsResource {
 
     @GET
     @Operation(summary = "List all connector plugins installed")
+    @ApiResponse(
+        responseCode = "200",
+        description = "Connector plugins retrieved successfully",
+        content = @Content(
+            mediaType = MediaType.APPLICATION_JSON,
+            array = @ArraySchema(schema = @Schema(implementation = PluginInfo.class))
+        )
+    )
     public List<PluginInfo> listConnectorPlugins(
             @DefaultValue("true") @QueryParam("connectorsOnly") @Parameter(description = "Whether to list only connectors instead of all plugins") boolean connectorsOnly
     ) {
@@ -154,8 +205,44 @@ public class ConnectorPluginsResource {
     @GET
     @Path("/{pluginName}/config")
     @Operation(summary = "Get the configuration definition for the specified pluginName")
-    public List<ConfigKeyInfo> getConnectorConfigDef(final @PathParam("pluginName") String pluginName,
-                                                     final @QueryParam("version") @DefaultValue("latest") String version) {
+    @ApiResponses({
+        @ApiResponse(
+            responseCode = "200",
+            description = "Connector plugin configuration definition retrieved successfully",
+            content = @Content(
+                mediaType = MediaType.APPLICATION_JSON,
+                array = @ArraySchema(schema = @Schema(implementation = ConfigKeyInfo.class))
+            )
+        ),
+        @ApiResponse(
+            responseCode = "400",
+            description = "Invalid plugin version or type",
+            content = @Content(
+                mediaType = MediaType.APPLICATION_JSON,
+                schema = @Schema(implementation = ErrorMessage.class)
+            )
+        ),
+        @ApiResponse(
+            responseCode = "404",
+            description = "Connector plugin not found",
+            content = @Content(
+                mediaType = MediaType.APPLICATION_JSON,
+                schema = @Schema(implementation = ErrorMessage.class)
+            )
+        ),
+        @ApiResponse(
+            responseCode = "500",
+            description = "Failed to load connector plugin class or dependencies",
+            content = @Content(
+                mediaType = MediaType.APPLICATION_JSON,
+                schema = @Schema(implementation = ErrorMessage.class)
+            )
+        )
+    })
+    public List<ConfigKeyInfo> getConnectorConfigDef(final @PathParam("pluginName") @Parameter(description = "The name of the connector plugin") String pluginName,
+                                                     final @QueryParam("version") @DefaultValue("latest")
+                                                     @Parameter(description = "The version requirement for the connector plugin")
+                                                     String version) {
 
         VersionRange range;
         try {
