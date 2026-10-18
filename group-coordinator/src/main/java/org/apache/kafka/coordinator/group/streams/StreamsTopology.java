@@ -19,12 +19,14 @@ package org.apache.kafka.coordinator.group.streams;
 import org.apache.kafka.common.message.StreamsGroupDescribeResponseData;
 import org.apache.kafka.common.message.StreamsGroupHeartbeatRequestData;
 import org.apache.kafka.coordinator.group.generated.StreamsGroupTopologyValue;
+import org.apache.kafka.coordinator.group.generated.StreamsGroupTopologyValue.CopartitionGroup;
 import org.apache.kafka.coordinator.group.generated.StreamsGroupTopologyValue.Subtopology;
 import org.apache.kafka.coordinator.group.generated.StreamsGroupTopologyValue.TopicInfo;
 
 import java.util.Collections;
 import java.util.Comparator;
 import java.util.HashMap;
+import java.util.List;
 import java.util.Map;
 import java.util.Objects;
 import java.util.Set;
@@ -111,7 +113,9 @@ public record StreamsTopology(int topologyEpoch,
     public static StreamsTopology fromRecord(StreamsGroupTopologyValue record) {
         return new StreamsTopology(
             record.epoch(),
-            record.subtopologies().stream().collect(Collectors.toMap(Subtopology::subtopologyId, x -> x))
+            record.subtopologies().stream()
+                .map(StreamsTopology::normalizeCopartitionGroups)
+                .collect(Collectors.toMap(Subtopology::subtopologyId, x -> x))
         );
     }
 
@@ -122,10 +126,38 @@ public record StreamsTopology(int topologyEpoch,
      * @return The instance of StreamsTopology created from the request.
      */
     public static StreamsTopology fromHeartbeatRequest(StreamsGroupHeartbeatRequestData.Topology topology) {
-        StreamsGroupTopologyValue recordValue = StreamsCoordinatorRecordHelpers.convertToStreamsGroupTopologyRecord(topology);
-        final Map<String, StreamsGroupTopologyValue.Subtopology> subtopologyMap = recordValue.subtopologies().stream()
-            .collect(Collectors.toMap(StreamsGroupTopologyValue.Subtopology::subtopologyId, x -> x));
-        return new StreamsTopology(topology.epoch(), subtopologyMap);
+        return fromRecord(StreamsCoordinatorRecordHelpers.convertToStreamsGroupTopologyRecord(topology));
+    }
+
+    private static Subtopology normalizeCopartitionGroups(Subtopology subtopology) {
+        // Copartition constraints are independent of both the index order and the group order.
+        // For example, showing only source topic indexes:
+        //   [[3, 2], [1, 0]] -> [[2, 3], [0, 1]] -> [[0, 1], [2, 3]]
+        // The first step sorts indexes within each group; the second sorts the groups.
+        // The referenced topic lists stay unchanged, so each index still identifies the same topic.
+        // Copy before sorting to avoid mutating a replayed record or the heartbeat request.
+        Subtopology copy = subtopology.duplicate();
+        for (CopartitionGroup group : copy.copartitionGroups()) {
+            Collections.sort(group.sourceTopics());
+            Collections.sort(group.sourceTopicRegex());
+            Collections.sort(group.repartitionSourceTopics());
+        }
+        copy.copartitionGroups().sort(
+            Comparator.comparing(CopartitionGroup::sourceTopics, StreamsTopology::compareTopicIndexes)
+                .thenComparing(CopartitionGroup::sourceTopicRegex, StreamsTopology::compareTopicIndexes)
+                .thenComparing(CopartitionGroup::repartitionSourceTopics, StreamsTopology::compareTopicIndexes)
+        );
+        return copy;
+    }
+
+    private static int compareTopicIndexes(List<Short> first, List<Short> second) {
+        for (int i = 0; i < Math.min(first.size(), second.size()); i++) {
+            int comparison = Short.compare(first.get(i), second.get(i));
+            if (comparison != 0) {
+                return comparison;
+            }
+        }
+        return Integer.compare(first.size(), second.size());
     }
 
     public StreamsGroupDescribeResponseData.Topology asStreamsGroupDescribeTopology() {

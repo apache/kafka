@@ -23,8 +23,11 @@ import org.apache.kafka.coordinator.group.generated.StreamsGroupTopologyValue.Su
 import org.apache.kafka.coordinator.group.generated.StreamsGroupTopologyValue.TopicInfo;
 
 import org.junit.jupiter.api.Test;
+import org.junit.jupiter.params.ParameterizedTest;
+import org.junit.jupiter.params.provider.ValueSource;
 
 import java.util.Arrays;
+import java.util.Collections;
 import java.util.Comparator;
 import java.util.List;
 import java.util.Map;
@@ -33,6 +36,8 @@ import java.util.Set;
 import static org.apache.kafka.common.utils.Utils.mkEntry;
 import static org.apache.kafka.common.utils.Utils.mkMap;
 import static org.junit.jupiter.api.Assertions.assertEquals;
+import static org.junit.jupiter.api.Assertions.assertNotEquals;
+import static org.junit.jupiter.api.Assertions.assertSame;
 import static org.junit.jupiter.api.Assertions.assertThrows;
 import static org.junit.jupiter.api.Assertions.assertTrue;
 
@@ -120,6 +125,93 @@ public class StreamsTopologyTest {
         assertEquals(mkSubtopology1(), topology.subtopologies().get(SUBTOPOLOGY_ID_1));
         assertTrue(topology.subtopologies().containsKey(SUBTOPOLOGY_ID_2));
         assertEquals(mkSubtopology2(), topology.subtopologies().get(SUBTOPOLOGY_ID_2));
+    }
+
+    @ParameterizedTest
+    @ValueSource(strings = {"source", "regex", "repartition"})
+    public void copartitionOrderShouldNotAffectTopologyEquality(String topicType) {
+        StreamsGroupHeartbeatRequestData.Topology request = topologyWithCopartitionGroups(topicType);
+        StreamsGroupHeartbeatRequestData.Topology originalRequest = request.duplicate();
+        StreamsGroupTopologyValue record = StreamsCoordinatorRecordHelpers.convertToStreamsGroupTopologyRecord(request).duplicate();
+        List<StreamsGroupTopologyValue.CopartitionGroup> groups = record.subtopologies().get(0).copartitionGroups();
+        Collections.reverse(groups);
+        for (StreamsGroupTopologyValue.CopartitionGroup group : groups) {
+            Collections.reverse(group.sourceTopics());
+            Collections.reverse(group.sourceTopicRegex());
+            Collections.reverse(group.repartitionSourceTopics());
+        }
+        StreamsGroupTopologyValue originalRecord = record.duplicate();
+
+        StreamsTopology replayed = StreamsTopology.fromRecord(record);
+        StreamsTopology received = StreamsTopology.fromHeartbeatRequest(request);
+
+        assertEquals(received, replayed);
+        assertEquals(received.hashCode(), replayed.hashCode());
+        assertEquals(originalRecord, record);
+        assertEquals(originalRequest, request);
+        // The lookup map must also refer to the normalized subtopology.
+        assertSame(replayed.subtopologies().get(SUBTOPOLOGY_ID_1), replayed.sourceTopicMap().get("z"));
+        assertEquals(List.of("z", "y", "x", "w"), replayed.subtopologies().get(SUBTOPOLOGY_ID_1).sourceTopics());
+        assertEquals(originalRecord.subtopologies().get(0).sourceTopicRegex(),
+            replayed.subtopologies().get(SUBTOPOLOGY_ID_1).sourceTopicRegex());
+        assertEquals(originalRecord.subtopologies().get(0).repartitionSourceTopics(),
+            replayed.subtopologies().get(SUBTOPOLOGY_ID_1).repartitionSourceTopics());
+
+        // Exercise normalization of an unsorted heartbeat as well as an unsorted stored record.
+        StreamsGroupHeartbeatRequestData.Topology reorderedRequest = request.duplicate();
+        Collections.reverse(reorderedRequest.subtopologies().get(0).copartitionGroups());
+        reorderedRequest.subtopologies().get(0).copartitionGroups().forEach(group -> {
+            Collections.reverse(group.sourceTopics());
+            Collections.reverse(group.sourceTopicRegex());
+            Collections.reverse(group.repartitionSourceTopics());
+        });
+        StreamsGroupHeartbeatRequestData.Topology originalReorderedRequest = reorderedRequest.duplicate();
+        assertEquals(received, StreamsTopology.fromHeartbeatRequest(reorderedRequest));
+        assertEquals(originalReorderedRequest, reorderedRequest);
+    }
+
+    @ParameterizedTest
+    @ValueSource(strings = {"source", "regex", "repartition"})
+    public void differentCopartitionConstraintsShouldNotBeEqual(String topicType) {
+        StreamsGroupHeartbeatRequestData.Topology request = topologyWithCopartitionGroups(topicType);
+        StreamsTopology original = StreamsTopology.fromHeartbeatRequest(request);
+        StreamsGroupHeartbeatRequestData.Topology changed = request.duplicate();
+        changed.subtopologies().get(0).copartitionGroups().set(2,
+            copartitionGroup(topicType, List.of((short) 1, (short) 3)));
+
+        assertNotEquals(original, StreamsTopology.fromHeartbeatRequest(changed));
+        assertNotEquals(original, StreamsTopology.fromHeartbeatRequest(request.duplicate().setEpoch(2)));
+    }
+
+    private StreamsGroupHeartbeatRequestData.Topology topologyWithCopartitionGroups(String topicType) {
+        return new StreamsGroupHeartbeatRequestData.Topology()
+            .setEpoch(1)
+            .setSubtopologies(List.of(new StreamsGroupHeartbeatRequestData.Subtopology()
+                .setSubtopologyId(SUBTOPOLOGY_ID_1)
+                // Keep these unsorted to verify that index targets are preserved.
+                .setSourceTopics(List.of("z", "y", "x", "w"))
+                .setSourceTopicRegex(List.of("z.*", "y.*", "x.*", "w.*"))
+                .setRepartitionSourceTopics(List.of(
+                    new StreamsGroupHeartbeatRequestData.TopicInfo().setName("repartition-z"),
+                    new StreamsGroupHeartbeatRequestData.TopicInfo().setName("repartition-y"),
+                    new StreamsGroupHeartbeatRequestData.TopicInfo().setName("repartition-x"),
+                    new StreamsGroupHeartbeatRequestData.TopicInfo().setName("repartition-w")
+                ))
+                .setCopartitionGroups(List.of(
+                    copartitionGroup(topicType, List.of((short) 0)),
+                    copartitionGroup(topicType, List.of((short) 0, (short) 1)),
+                    copartitionGroup(topicType, List.of((short) 2, (short) 3))
+                ))));
+    }
+
+    private StreamsGroupHeartbeatRequestData.CopartitionGroup copartitionGroup(String topicType, List<Short> indexes) {
+        StreamsGroupHeartbeatRequestData.CopartitionGroup group = new StreamsGroupHeartbeatRequestData.CopartitionGroup();
+        return switch (topicType) {
+            case "source" -> group.setSourceTopics(indexes);
+            case "regex" -> group.setSourceTopicRegex(indexes);
+            case "repartition" -> group.setRepartitionSourceTopics(indexes);
+            default -> throw new IllegalArgumentException("Unknown topic type: " + topicType);
+        };
     }
 
     @Test

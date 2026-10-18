@@ -21331,6 +21331,54 @@ public class GroupMetadataManagerTest {
     }
 
     @Test
+    public void testStreamsGroupMemberJoiningWithReorderedCopartitionGroups() {
+        String groupId = "fooup";
+        String memberId = Uuid.randomUuid().toString();
+        Topology topology = new Topology().setSubtopologies(List.of(
+            new Subtopology()
+                .setSubtopologyId("subtopology1")
+                .setSourceTopics(List.of("foo", "bar", "baz", "qux"))
+                .setCopartitionGroups(List.of(
+                    new CopartitionGroup().setSourceTopics(List.of((short) 3, (short) 2)),
+                    new CopartitionGroup().setSourceTopics(List.of((short) 1, (short) 0))
+                ))
+        ));
+        MockTaskAssignor assignor = new MockTaskAssignor("sticky");
+        GroupMetadataManagerTestContext context = new GroupMetadataManagerTestContext.Builder()
+            .withStreamsGroupTaskAssignors(List.of(assignor))
+            .withMetadataImage(new MetadataImageBuilder()
+                .addTopic(Uuid.randomUuid(), "foo", 3)
+                .addTopic(Uuid.randomUuid(), "bar", 3)
+                .addTopic(Uuid.randomUuid(), "baz", 3)
+                .addTopic(Uuid.randomUuid(), "qux", 3)
+                .buildCoordinatorMetadataImage())
+            .withConfig(GroupCoordinatorConfig.STREAMS_GROUP_INITIAL_REBALANCE_DELAY_MS_CONFIG, 0)
+            .build();
+        assignor.prepareGroupAssignment(Map.of(memberId, TasksTuple.EMPTY));
+        context.replay(StreamsCoordinatorRecordHelpers.newStreamsGroupTopologyRecord(groupId, topology));
+
+        Topology reorderedTopology = topology.duplicate();
+        reorderedTopology.subtopologies().get(0).setCopartitionGroups(List.of(
+            new CopartitionGroup().setSourceTopics(List.of((short) 1, (short) 0)),
+            new CopartitionGroup().setSourceTopics(List.of((short) 2, (short) 3))
+        ));
+        CoordinatorResult<StreamsGroupHeartbeatResult, CoordinatorRecord> result = context.streamsGroupHeartbeat(
+            new StreamsGroupHeartbeatRequestData()
+                .setGroupId(groupId)
+                .setMemberId(memberId)
+                .setMemberEpoch(0)
+                .setRebalanceTimeoutMs(1500)
+                .setTopology(reorderedTopology)
+                .setProcessId(DEFAULT_PROCESS_ID)
+                .setActiveTasks(List.of())
+                .setStandbyTasks(List.of())
+                .setWarmupTasks(List.of()));
+
+        assertEquals(Errors.NONE.code(), result.response().data().errorCode());
+        assertTrue(result.response().data().memberEpoch() > 0);
+    }
+
+    @Test
     public void testStreamsGroupMemberJoiningWithStaleTopology() {
         String groupId = "fooup";
         String memberId = Uuid.randomUuid().toString();
