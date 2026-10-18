@@ -82,7 +82,7 @@ object StorageTool extends Logging {
     command match {
       case "info" =>
         val directories = configToLogDirectories(config.get)
-        infoCommand(printStream, config.get.processRoles.nonEmpty, directories)
+        infoCommand(printStream, !config.get.processRoles.isEmpty, directories)
 
       case "format" =>
         runFormatCommand(namespace, config.get, printStream)

@@ -2208,11 +2208,11 @@ public class RemoteLogManagerTest {
         // Each remote log segment size is 1000 bytes.
         // totalSize = 500 (local) + 1000 (remote) = 1500. retentionSize = 1000.
         AtomicInteger invocationCount = new AtomicInteger(0);
-        RemoteLogSegmentMetadata segmentMetadata = createRemoteLogSegmentMetadata(0, 50, Collections.singletonMap(0, 0L));
+        RemoteLogSegmentMetadata segmentMetadata = createRemoteLogSegmentMetadata(0, 50, Map.of(0, 0L));
         when(remoteLogMetadataManager.listRemoteLogSegments(eq(leaderTopicIdPartition), eq(0)))
                 .thenAnswer(invocation -> {
                     invocationCount.incrementAndGet();
-                    return Collections.singletonList(segmentMetadata).iterator();
+                    return List.of(segmentMetadata).iterator();
                 });
 
         result = expirationTask

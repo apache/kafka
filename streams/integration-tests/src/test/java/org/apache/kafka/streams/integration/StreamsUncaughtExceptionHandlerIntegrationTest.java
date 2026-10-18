@@ -378,7 +378,7 @@ public class StreamsUncaughtExceptionHandlerIntegrationTest {
 
             assertEquals(1, processorValueCollector.size());
             assertEquals(1L,
-                logCaptureAppender.getMessages("WARN").stream().filter(msg -> msg.contains("Detected that shutdown was requested")).count(),
+                logCaptureAppender.getMessages(Level.WARN).stream().filter(msg -> msg.contains("Detected that shutdown was requested")).count(),
                 "Shutdown warning log message should be exported exactly once");
         }
     }

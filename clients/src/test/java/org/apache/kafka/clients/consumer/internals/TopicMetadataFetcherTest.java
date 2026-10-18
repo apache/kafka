@@ -131,7 +131,7 @@ public class TopicMetadataFetcherTest {
         buildFetcher();
         assignFromUser(singleton(tp0));
         client.prepareResponse(newMetadataResponse(Errors.TOPIC_AUTHORIZATION_FAILED));
-        TopicAuthorizationException e = assertThrows(TopicAuthorizationException.class, () -> topicMetadataFetcher.getAllTopicMetadata(time.timer(50L)));
+        TopicAuthorizationException e = assertThrows(TopicAuthorizationException.class, () -> topicMetadataFetcher.getAllTopicMetadata(time.timer(10L)));
         assertEquals(singleton(topicName), e.unauthorizedTopics());
     }
 

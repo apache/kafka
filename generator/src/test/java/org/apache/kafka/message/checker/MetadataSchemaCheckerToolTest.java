@@ -64,7 +64,7 @@ public class MetadataSchemaCheckerToolTest {
         try (ByteArrayOutputStream stream = new ByteArrayOutputStream()) {
             String path = messageSpecStringToTempFile(
                 "{'apiKey':62, 'type': 'request', 'name': 'BrokerRegistrationRequest', " +
-                "'validVersions': '0-2', 'flexibleVersions': '0+', " +
+                "'validVersions': '0-2', 'flexibleVersions': '0+', 'headerVersions': {'0+': '2'}, " +
                 "'fields': [{'name': 'BrokerId', 'type': 'int32', 'versions': '0+'}]}");
             MetadataSchemaCheckerTool.run(new String[] {"parse", "--path", path}, new PrintStream(stream));
             assertEquals("Successfully parsed file as MessageSpec: " + path, stream.toString().trim());
@@ -76,7 +76,7 @@ public class MetadataSchemaCheckerToolTest {
         try (ByteArrayOutputStream stream = new ByteArrayOutputStream()) {
             String path = messageSpecStringToTempFile(
                 "{'apiKey':62, 'type': 'request', 'name': 'BrokerRegistrationRequest', " +
-                "'validVersions': '0-2', 'flexibleVersions': '0+', " +
+                "'validVersions': '0-2', 'flexibleVersions': '0+', 'headerVersions': {'0+': '2'}, " +
                 "'fields': [{'name': 'BrokerId', 'type': 'int32', 'versions': '0+'}]}");
             MetadataSchemaCheckerTool.run(new String[] {"verify-evolution",
                 "--path", path, "--parent_path", path}, new PrintStream(stream));

@@ -88,7 +88,7 @@ import org.apache.kafka.coordinator.common.runtime.CoordinatorRecord;
 import org.apache.kafka.coordinator.common.runtime.CoordinatorResult;
 import org.apache.kafka.coordinator.common.runtime.CoordinatorTimer;
 import org.apache.kafka.coordinator.group.api.assignor.ConsumerGroupPartitionAssignor;
-import org.apache.kafka.coordinator.group.api.assignor.MemberAssignment;
+import org.apache.kafka.coordinator.group.api.assignor.GroupSpec;
 import org.apache.kafka.coordinator.group.api.assignor.PartitionAssignorException;
 import org.apache.kafka.coordinator.group.api.assignor.ShareGroupPartitionAssignor;
 import org.apache.kafka.coordinator.group.api.assignor.SubscriptionType;
@@ -140,6 +140,7 @@ import org.apache.kafka.coordinator.group.generated.StreamsGroupTopologyKey;
 import org.apache.kafka.coordinator.group.generated.StreamsGroupTopologyValue;
 import org.apache.kafka.coordinator.group.metrics.GroupCoordinatorMetricsShard;
 import org.apache.kafka.coordinator.group.modern.Assignment;
+import org.apache.kafka.coordinator.group.modern.GroupSpecBuilder;
 import org.apache.kafka.coordinator.group.modern.MemberState;
 import org.apache.kafka.coordinator.group.modern.ModernGroup;
 import org.apache.kafka.coordinator.group.modern.SubscriptionCount;
@@ -1511,7 +1512,22 @@ public class GroupMetadataManager {
     private void removeGroup(
         String groupId
     ) {
-        groups.remove(groupId);
+        Group group = groups.remove(groupId);
+
+        // Clean up the state kept outside of the group. The group may still be subscribed to
+        // topics or have share state partition metadata here: when the group coordinator loads
+        // concurrently with compaction, intermediate tombstone records can be missed, so the
+        // group metadata tombstone is treated as authoritative.
+        if (group instanceof ModernGroup<?> modernGroup) {
+            modernGroup.subscribedTopicNames().keySet()
+                .forEach(topicName -> unsubscribeGroupFromTopic(groupId, topicName));
+        } else if (group instanceof StreamsGroup streamsGroup) {
+            streamsGroup.topology().ifPresent(topology -> topology.requiredTopics()
+                .forEach(topicName -> unsubscribeGroupFromTopic(groupId, topicName)));
+        }
+        if (group instanceof ShareGroup) {
+            shareGroupStatePartitionMetadata.remove(groupId);
+        }
     }
 
     /**
@@ -1808,6 +1824,36 @@ public class GroupMetadataManager {
         }
     }
     
+    /**
+     * Validates that the member id received in a join request does not already belong to a member
+     * with a different instance id. An instance id may move to a new member id when a static member
+     * is replaced but a member id must never acquire a different instance id.
+     *
+     * @param groupId               The group id.
+     * @param receivedMemberId      The member id received in the request.
+     * @param existingInstanceId    The instance id of the existing member with the received
+     *                              member id, or null if the existing member is a dynamic member.
+     * @param receivedInstanceId    The instance id received in the request.
+     *
+     * @throws InvalidRequestException if the received instance id differs from the instance id
+     *                                 of the existing member.
+     */
+    private void throwIfMemberIdHasDifferentInstanceId(
+        String groupId,
+        String receivedMemberId,
+        String existingInstanceId,
+        String receivedInstanceId
+    ) {
+        if (!receivedInstanceId.equals(existingInstanceId)) {
+            String existingMemberDescription = existingInstanceId == null ?
+                "a dynamic member" : "a static member with instance id " + existingInstanceId;
+            log.info("[GroupId {}] Member {} with instance id {} cannot join the group because the member id is already" +
+                " used by {}.", groupId, receivedMemberId, receivedInstanceId, existingMemberDescription);
+            throw Errors.INVALID_REQUEST.exception("Member " + receivedMemberId + " with instance id " + receivedInstanceId
+                + " cannot join the group because the member id is already used by " + existingMemberDescription + ".");
+        }
+    }
+
     /**
      * Validates if the received instanceId has been released from the group
      *
@@ -2138,13 +2184,6 @@ public class GroupMetadataManager {
             StreamsGroupMember maybeOldStaticMember = group.staticMember(instanceId);
             if (maybeOldStaticMember != null && !maybeOldStaticMember.memberId().equals(memberId)) {
                 replaceStaticOldMember = maybeOldStaticMember;
-                // Replacing a static member relabels its target assignment from the old to the new member ID without
-                // bumping the assignment epoch, so an intermediate assignment derived for this epoch no longer matches
-                // the members it was derived for. Re-key it rather than dropping it: the replacement copies the old
-                // member's state, so the decisions of this epoch still hold, and deriving a new one here would re-plan
-                // mid-epoch and could revise the slice of a member that already reconciled and is therefore not
-                // reconciled again within this epoch.
-                group.relabelRefinedAssignment(maybeOldStaticMember.memberId(), memberId);
             }
             member = getOrMaybeCreateStaticStreamsGroupMember(
                 group,
@@ -3406,8 +3445,24 @@ public class GroupMetadataManager {
     }
 
     /**
-     * Gets or subscribes a static consumer group member. This method also replaces the
-     * previous static member if allowed.
+     * Gets or subscribes a static consumer group member.
+     *
+     * When the member joins (epoch 0), the following cases are handled:
+     * <ul>
+     *   <li>The member id is known and owns the instance id: the same member is back. If it had
+     *       left with epoch -2, its epoch is reset to 0 so that it is reconciled from scratch.
+     *       Otherwise, e.g. the join response was lost or the member was fenced, it gets its
+     *       current state back like a dynamic member would.</li>
+     *   <li>The member id is known but does not own the instance id: rejected, a member id must
+     *       never acquire a different instance id.</li>
+     *   <li>The member id is unknown and nobody owns the instance id: a new static member.</li>
+     *   <li>The member id is unknown and another member owns the instance id: the previous
+     *       member is replaced if it has left (or if either side uses the classic protocol),
+     *       otherwise the join is rejected.</li>
+     * </ul>
+     *
+     * When the member does not join, the static member owning the instance id must exist and
+     * have the received member id.
      *
      * @param group                 The consumer group.
      * @param memberId              The member id.
@@ -3431,58 +3486,92 @@ public class GroupMetadataManager {
         boolean useClassicProtocol,
         List<CoordinatorRecord> records
     ) {
-        ConsumerGroupMember existingStaticMemberOrNull = group.staticMember(instanceId);
+        String protocol = useClassicProtocol ? "classic" : "consumer";
 
-        if (createIfNotExists) {
-            // A new static member joins or the existing static member rejoins.
-            if (existingStaticMemberOrNull == null) {
-                // New static member.
-                ConsumerGroupMember newMember = group.getOrMaybeCreateMember(memberId, true);
-                log.info("[GroupId {}] Static member {} with instance id {} joins the consumer group using the {} protocol.",
-                    group.groupId(), memberId, instanceId, useClassicProtocol ? "classic" : "consumer");
-                return newMember;
-            } else {
-                if (!useClassicProtocol && !existingStaticMemberOrNull.useClassicProtocol()) {
-                    // If both the rejoining static member and the existing static member use the consumer
-                    // protocol, replace the previous instance iff the previous member had sent a leave group.
-                    throwIfInstanceIdIsUnreleased(existingStaticMemberOrNull, group.groupId(), memberId, instanceId);
-                }
+        if (!createIfNotExists) {
+            ConsumerGroupMember staticMember = group.staticMember(instanceId);
+            throwIfStaticMemberIsUnknown(staticMember, instanceId);
+            throwIfInstanceIdIsFenced(staticMember, group.groupId(), memberId, instanceId);
+            if (!useClassicProtocol) {
+                throwIfConsumerGroupMemberEpochIsInvalid(staticMember, memberEpoch, ownedTopicPartitions);
+            }
+            return staticMember;
+        }
 
-                // Copy the member but with its new member id.
-                ConsumerGroupMember newMember = new ConsumerGroupMember.Builder(existingStaticMemberOrNull, memberId)
+        ConsumerGroupMember existingMemberOrNull = group.members().get(memberId);
+        if (existingMemberOrNull != null) {
+            // The member id is known. A member id must never acquire a different instance id, so
+            // the member must be the static member owning the instance id.
+            throwIfMemberIdHasDifferentInstanceId(group.groupId(), memberId, existingMemberOrNull.instanceId(), instanceId);
+
+            if (existingMemberOrNull.memberEpoch() == LEAVE_GROUP_STATIC_MEMBER_EPOCH) {
+                // The static member re-joins after leaving the group. Its epoch is reset so that
+                // it is reconciled from scratch, like a member replacing it would be.
+                log.info("[GroupId {}] Static member {} with instance id {} re-joins the consumer group " +
+                    "using the {} protocol after leaving it.", group.groupId(), memberId, instanceId, protocol);
+                return new ConsumerGroupMember.Builder(existingMemberOrNull)
                     .setMemberEpoch(0)
                     .setPreviousMemberEpoch(0)
                     .build();
-
-                // Generate the records to replace the member. We don't care about the regular expression
-                // here because it is taken care of later after the static membership replacement.
-                replaceMember(records, group, existingStaticMemberOrNull, newMember);
-
-                log.info("[GroupId {}] Static member with instance id {} re-joins the consumer group " +
-                    "using the {} protocol. Created a new member {} to replace the existing member {}.",
-                    group.groupId(), instanceId, useClassicProtocol ? "classic" : "consumer", memberId, existingStaticMemberOrNull.memberId());
-
-                return newMember;
+            } else {
+                // The static member joins again while it is still active, e.g. because the response
+                // to its join was lost or because it was fenced. Like a dynamic member, it gets its
+                // current state back.
+                log.info("[GroupId {}] Static member {} with instance id {} joins the consumer group " +
+                    "using the {} protocol again.", group.groupId(), memberId, instanceId, protocol);
+                return existingMemberOrNull;
             }
-        } else {
-            throwIfStaticMemberIsUnknown(existingStaticMemberOrNull, instanceId);
-            throwIfInstanceIdIsFenced(existingStaticMemberOrNull, group.groupId(), memberId, instanceId);
-            if (!useClassicProtocol) {
-                throwIfConsumerGroupMemberEpochIsInvalid(existingStaticMemberOrNull, memberEpoch, ownedTopicPartitions);
-            }
-            return existingStaticMemberOrNull;
         }
+
+        ConsumerGroupMember previousStaticMemberOrNull = group.staticMember(instanceId);
+        if (previousStaticMemberOrNull == null) {
+            // New static member.
+            log.info("[GroupId {}] Static member {} with instance id {} joins the consumer group using the {} protocol.",
+                group.groupId(), memberId, instanceId, protocol);
+            return new ConsumerGroupMember.Builder(memberId).build();
+        }
+
+        if (!useClassicProtocol && !previousStaticMemberOrNull.useClassicProtocol()) {
+            // If both the rejoining static member and the previous static member use the consumer
+            // protocol, replace the previous member iff it had sent a leave group.
+            throwIfInstanceIdIsUnreleased(previousStaticMemberOrNull, group.groupId(), memberId, instanceId);
+        }
+
+        // Copy the previous member but with the new member id.
+        ConsumerGroupMember newMember = new ConsumerGroupMember.Builder(previousStaticMemberOrNull, memberId)
+            .setMemberEpoch(0)
+            .setPreviousMemberEpoch(0)
+            .build();
+
+        // Generate the records to replace the member. We don't care about the regular expression
+        // here because it is taken care of later after the static membership replacement.
+        replaceMember(records, group, previousStaticMemberOrNull, newMember);
+
+        log.info("[GroupId {}] Static member with instance id {} re-joins the consumer group " +
+            "using the {} protocol. Created a new member {} to replace the existing member {}.",
+            group.groupId(), instanceId, protocol, memberId, previousStaticMemberOrNull.memberId());
+
+        return newMember;
     }
 
     /**
      * Gets an existing static Streams group member or creates/replaces one for static membership.
      *
-     * If the member is joining:
-     * 1. Creates a new static member when no member exists for the instance ID.
-     * 2. Replaces the previous static member when the instance ID is released.
+     * When the member joins (epoch 0), the following cases are handled:
+     * <ul>
+     *   <li>The member id is known and owns the instance id: the same member is back. If it had
+     *       left with epoch -2, its epoch is reset to 0 so that it is reconciled from scratch.
+     *       Otherwise, e.g. the join response was lost or the member was fenced, it gets its
+     *       current state back like a dynamic member would.</li>
+     *   <li>The member id is known but does not own the instance id: rejected, a member id must
+     *       never acquire a different instance id.</li>
+     *   <li>The member id is unknown and nobody owns the instance id: a new static member.</li>
+     *   <li>The member id is unknown and another member owns the instance id: the previous
+     *       member is replaced if it has left, otherwise the join is rejected.</li>
+     * </ul>
      *
-     * If the member is not joining, validates static member identity and member epoch
-     * and returns the existing static member.
+     * When the member does not join, the static member owning the instance id must exist and
+     * have the received member id, and the member epoch is validated.
      *
      * @param group                 The streams group.
      * @param memberId              The member id from the request.
@@ -3507,44 +3596,79 @@ public class GroupMetadataManager {
         boolean memberIsJoining,
         List<CoordinatorRecord> records
     ) {
-        StreamsGroupMember existingStaticMemberOrNull = group.staticMember(instanceId);
-        if (memberIsJoining) {
-            // A new static member joins or the existing static member rejoins.
-            if (existingStaticMemberOrNull == null) {
-                // New static member.
-                StreamsGroupMember newMember = group.getOrCreateDefaultMember(memberId);
-                log.info("[GroupId {}][MemberId {}] Static member {} with instance id {} joins the streams group.",
-                    group.groupId(), memberId, memberId, instanceId);
-                return newMember;
-            } else {
-                throwIfInstanceIdIsUnreleased(existingStaticMemberOrNull, group.groupId(), memberId, instanceId);
-
-                // Copy the member but with its new member id.
-                StreamsGroupMember newMember = new StreamsGroupMember.Builder(existingStaticMemberOrNull, memberId)
-                    .setMemberEpoch(0)
-                    .setPreviousMemberEpoch(0)
-                    .build();
-
-                replaceStreamsMember(records, group, existingStaticMemberOrNull, newMember);
-
-                log.info("[GroupId {}][MemberId {}] Static member with instance id {} re-joins the streams group " +
-                        "using the streams protocol. Created a new member {} to replace the existing member {}.",
-                    group.groupId(), memberId, instanceId, memberId, existingStaticMemberOrNull.memberId());
-
-                return newMember;
-            }
-        } else {
-            throwIfStaticMemberIsUnknown(existingStaticMemberOrNull, instanceId);
-            throwIfInstanceIdIsFenced(existingStaticMemberOrNull, group.groupId(), memberId, instanceId);
+        if (!memberIsJoining) {
+            StreamsGroupMember staticMember = group.staticMember(instanceId);
+            throwIfStaticMemberIsUnknown(staticMember, instanceId);
+            throwIfInstanceIdIsFenced(staticMember, group.groupId(), memberId, instanceId);
             throwIfStreamsGroupMemberEpochIsInvalid(
-                existingStaticMemberOrNull,
+                staticMember,
                 memberEpoch,
                 ownedActiveTasks,
                 ownedStandbyTasks,
                 ownedWarmupTasks
             );
-            return existingStaticMemberOrNull;
+            return staticMember;
         }
+
+        StreamsGroupMember existingMemberOrNull = group.members().get(memberId);
+        if (existingMemberOrNull != null) {
+            // The member id is known. A member id must never acquire a different instance id, so
+            // the member must be the static member owning the instance id.
+            String existingInstanceId = existingMemberOrNull.instanceId() == null ?
+                null : existingMemberOrNull.instanceId().orElse(null);
+            throwIfMemberIdHasDifferentInstanceId(group.groupId(), memberId, existingInstanceId, instanceId);
+
+            if (existingMemberOrNull.memberEpoch() == LEAVE_GROUP_STATIC_MEMBER_EPOCH) {
+                // The static member re-joins after leaving the group. Its epoch is reset so that
+                // it is reconciled from scratch, like a member replacing it would be.
+                log.info("[GroupId {}][MemberId {}] Static member with instance id {} re-joins the streams group " +
+                    "after leaving it.", group.groupId(), memberId, instanceId);
+                return new StreamsGroupMember.Builder(existingMemberOrNull)
+                    .setMemberEpoch(0)
+                    .setPreviousMemberEpoch(0)
+                    .build();
+            } else {
+                // The static member joins again while it is still active, e.g. because the response
+                // to its join was lost or because it was fenced. Like a dynamic member, it gets its
+                // current state back.
+                log.info("[GroupId {}][MemberId {}] Static member with instance id {} joins the streams group again.",
+                    group.groupId(), memberId, instanceId);
+                return existingMemberOrNull;
+            }
+        }
+
+        StreamsGroupMember previousStaticMemberOrNull = group.staticMember(instanceId);
+        if (previousStaticMemberOrNull == null) {
+            // New static member.
+            log.info("[GroupId {}][MemberId {}] Static member with instance id {} joins the streams group.",
+                group.groupId(), memberId, instanceId);
+            return StreamsGroupMember.Builder.withDefaults(memberId).build();
+        }
+
+        throwIfInstanceIdIsUnreleased(previousStaticMemberOrNull, group.groupId(), memberId, instanceId);
+
+        // Copy the previous member but with the new member id.
+        StreamsGroupMember newMember = new StreamsGroupMember.Builder(previousStaticMemberOrNull, memberId)
+            .setMemberEpoch(0)
+            .setPreviousMemberEpoch(0)
+            .build();
+
+        replaceStreamsMember(records, group, previousStaticMemberOrNull, newMember);
+
+        // Replacing a static member relabels its target assignment from the old to the new member ID without
+        // bumping the assignment epoch, so an intermediate assignment derived for this epoch no longer matches
+        // the members it was derived for. Re-key it rather than dropping it: the replacement copies the old
+        // member's state, so the decisions of this epoch still hold, and deriving a new one here would re-plan
+        // mid-epoch and could revise the slice of a member that already reconciled and is therefore not
+        // reconciled again within this epoch. This must only happen once the replacement is certain, because
+        // the cache is mutated directly and is not rolled back if the request is rejected.
+        group.relabelRefinedAssignment(previousStaticMemberOrNull.memberId(), memberId);
+
+        log.info("[GroupId {}][MemberId {}] Static member with instance id {} re-joins the streams group " +
+                "using the streams protocol. Created a new member {} to replace the existing member {}.",
+            group.groupId(), memberId, instanceId, memberId, previousStaticMemberOrNull.memberId());
+
+        return newMember;
     }
 
     /**
@@ -4275,17 +4399,22 @@ public class GroupMetadataManager {
                 );
             updatedMembersAndTargetAssignment.addOrUpdateMember(updatedMember.memberId(), updatedMember);
 
-            TargetAssignmentBuilder.ConsumerTargetAssignmentBuilder assignmentResultBuilder =
-                new TargetAssignmentBuilder.ConsumerTargetAssignmentBuilder(group.groupId(), groupEpoch, consumerGroupAssignors.get(preferredServerAssignor))
-                    .withTime(time)
-                    .withMembers(updatedMembersAndTargetAssignment.members())
-                    .withSubscriptionType(subscriptionType)
-                    .withTargetAssignment(updatedMembersAndTargetAssignment.targetAssignment())
-                    .withInvertedTargetAssignment(group.invertedTargetAssignment())
-                    .withMetadataImage(metadataImage)
-                    .withResolvedRegularExpressions(group.resolvedRegularExpressions());
-
             long startTimeMs = time.milliseconds();
+            GroupSpec groupSpec = new GroupSpecBuilder.ConsumerGroupSpecBuilder()
+                .withMembers(updatedMembersAndTargetAssignment.members())
+                .withSubscriptionType(subscriptionType)
+                .withTargetAssignment(updatedMembersAndTargetAssignment.targetAssignment())
+                .withInvertedTargetAssignment(group.invertedTargetAssignment())
+                .withMetadataImage(metadataImage)
+                .withResolvedRegularExpressions(group.resolvedRegularExpressions())
+                .build();
+
+            TargetAssignmentBuilder assignmentResultBuilder =
+                new TargetAssignmentBuilder(groupEpoch, consumerGroupAssignors.get(preferredServerAssignor))
+                    .withTime(time)
+                    .withMetadataImage(metadataImage)
+                    .withGroupSpec(groupSpec);
+
             TargetAssignmentBuilder.TargetAssignmentResult assignmentResult =
                 assignmentResultBuilder.build();
             long assignorTimeMs = time.milliseconds() - startTimeMs;
@@ -4298,11 +4427,17 @@ public class GroupMetadataManager {
                     group.groupId(), groupEpoch, preferredServerAssignor, assignorTimeMs);
             }
 
-            records.addAll(assignmentResult.records());
+            new TargetAssignmentRecordsBuilder.ConsumerTargetAssignmentRecordsBuilder(log, group.groupId())
+                .withTargetAssignmentMetadata(assignmentResult.targetAssignmentMetadata())
+                .withCurrentMemberIds(updatedMembersAndTargetAssignment.members().keySet())
+                .withUnchangedStaticMembers()
+                .withCurrentTargetAssignment(updatedMembersAndTargetAssignment.targetAssignment())
+                .withNewTargetAssignment(assignmentResult.targetAssignment())
+                .build(records);
 
-            MemberAssignment newMemberAssignment = assignmentResult.targetAssignment().get(updatedMember.memberId());
+            Assignment newMemberAssignment = assignmentResult.targetAssignment().get(updatedMember.memberId());
             if (newMemberAssignment != null) {
-                return new UpdateTargetAssignmentResult<>(groupEpoch, new Assignment(newMemberAssignment.partitions()));
+                return new UpdateTargetAssignmentResult<>(groupEpoch, newMemberAssignment);
             } else {
                 return new UpdateTargetAssignmentResult<>(groupEpoch, Assignment.EMPTY);
             }
@@ -4359,17 +4494,22 @@ public class GroupMetadataManager {
                 );
             updatedMembersAndTargetAssignment.addOrUpdateMember(updatedMember.memberId(), updatedMember);
 
-            TargetAssignmentBuilder.ShareTargetAssignmentBuilder assignmentResultBuilder =
-                new TargetAssignmentBuilder.ShareTargetAssignmentBuilder(group.groupId(), groupEpoch, shareGroupAssignor)
-                    .withTime(time)
-                    .withMembers(updatedMembersAndTargetAssignment.members())
-                    .withSubscriptionType(subscriptionType)
-                    .withTargetAssignment(updatedMembersAndTargetAssignment.targetAssignment())
-                    .withTopicAssignablePartitionsMap(initializedTopicPartitions)
-                    .withInvertedTargetAssignment(group.invertedTargetAssignment())
-                    .withMetadataImage(metadataImage);
-
             long startTimeMs = time.milliseconds();
+            GroupSpec groupSpec = new GroupSpecBuilder.ShareGroupSpecBuilder()
+                .withMembers(updatedMembersAndTargetAssignment.members())
+                .withSubscriptionType(subscriptionType)
+                .withTargetAssignment(updatedMembersAndTargetAssignment.targetAssignment())
+                .withTopicAssignablePartitionsMap(initializedTopicPartitions)
+                .withInvertedTargetAssignment(group.invertedTargetAssignment())
+                .withMetadataImage(metadataImage)
+                .build();
+
+            TargetAssignmentBuilder assignmentResultBuilder =
+                new TargetAssignmentBuilder(groupEpoch, shareGroupAssignor)
+                    .withTime(time)
+                    .withMetadataImage(metadataImage)
+                    .withGroupSpec(groupSpec);
+
             TargetAssignmentBuilder.TargetAssignmentResult assignmentResult =
                 assignmentResultBuilder.build();
             long assignorTimeMs = time.milliseconds() - startTimeMs;
@@ -4382,11 +4522,17 @@ public class GroupMetadataManager {
                     group.groupId(), groupEpoch, shareGroupAssignor, assignorTimeMs);
             }
 
-            records.addAll(assignmentResult.records());
+            new TargetAssignmentRecordsBuilder.ShareTargetAssignmentRecordsBuilder(log, group.groupId())
+                .withTargetAssignmentMetadata(assignmentResult.targetAssignmentMetadata())
+                .withCurrentMemberIds(updatedMembersAndTargetAssignment.members().keySet())
+                .withUnchangedStaticMembers()
+                .withCurrentTargetAssignment(updatedMembersAndTargetAssignment.targetAssignment())
+                .withNewTargetAssignment(assignmentResult.targetAssignment())
+                .build(records);
 
-            MemberAssignment newMemberAssignment = assignmentResult.targetAssignment().get(updatedMember.memberId());
+            Assignment newMemberAssignment = assignmentResult.targetAssignment().get(updatedMember.memberId());
             if (newMemberAssignment != null) {
-                return new UpdateTargetAssignmentResult<>(groupEpoch, new Assignment(newMemberAssignment.partitions()));
+                return new UpdateTargetAssignmentResult<>(groupEpoch, newMemberAssignment);
             } else {
                 return new UpdateTargetAssignmentResult<>(groupEpoch, Assignment.EMPTY);
             }
@@ -4496,21 +4642,20 @@ public class GroupMetadataManager {
 
         TaskAssignor assignor = streamsGroupAssignor(group.groupId(), true);
         try {
-            org.apache.kafka.coordinator.group.streams.TargetAssignmentBuilder assignmentResultBuilder =
-                new org.apache.kafka.coordinator.group.streams.TargetAssignmentBuilder(
-                    group.groupId(),
-                    groupEpoch,
-                    assignor,
-                    assignmentConfigs
-                )
-                .withTime(time)
-                .withMembers(updatedMembersAndTargetAssignment.members())
-                .withTopology(configuredTopology)
-                .withMetadataImage(metadataImage)
-                .withTargetAssignment(updatedMembersAndTargetAssignment.targetAssignment())
-                .withTaskOffsets(group.taskOffsets());
-
             long startTimeMs = time.milliseconds();
+            org.apache.kafka.coordinator.group.api.streams.assignor.GroupSpec groupSpec =
+                new org.apache.kafka.coordinator.group.streams.GroupSpecBuilder(assignmentConfigs)
+                    .withMembers(updatedMembersAndTargetAssignment.members())
+                    .withTaskOffsets(group.taskOffsets())
+                    .build();
+
+            org.apache.kafka.coordinator.group.streams.TargetAssignmentBuilder assignmentResultBuilder =
+                new org.apache.kafka.coordinator.group.streams.TargetAssignmentBuilder(groupEpoch, assignor)
+                    .withTime(time)
+                    .withTopology(configuredTopology)
+                    .withMetadataImage(metadataImage)
+                    .withGroupSpec(groupSpec);
+
             org.apache.kafka.coordinator.group.streams.TargetAssignmentBuilder.TargetAssignmentResult assignmentResult =
                 assignmentResultBuilder.build();
             long assignorTimeMs = time.milliseconds() - startTimeMs;
@@ -4523,7 +4668,13 @@ public class GroupMetadataManager {
                     group.groupId(), groupEpoch, assignor, assignorTimeMs);
             }
 
-            records.addAll(assignmentResult.records());
+            new TargetAssignmentRecordsBuilder.StreamsTargetAssignmentRecordsBuilder(log, group.groupId())
+                .withTargetAssignmentMetadata(assignmentResult.targetAssignmentMetadata())
+                .withCurrentMemberIds(updatedMembersAndTargetAssignment.members().keySet())
+                .withUnchangedStaticMembers()
+                .withCurrentTargetAssignment(updatedMembersAndTargetAssignment.targetAssignment())
+                .withNewTargetAssignment(assignmentResult.targetAssignment())
+                .build(records);
 
             return new UpdateTargetAssignmentResult<>(groupEpoch, assignmentResult.targetAssignment());
         } catch (TaskAssignorException ex) {
@@ -5931,14 +6082,19 @@ public class GroupMetadataManager {
                 return;
             }
 
+            List<String> inconsistencies = new ArrayList<>();
             if (oldMember.memberEpoch() != LEAVE_GROUP_MEMBER_EPOCH) {
-                throw new IllegalStateException("Received a tombstone record to delete member " + memberId
-                    + " but did not receive ConsumerGroupCurrentMemberAssignmentValue tombstone.");
+                inconsistencies.add("still has a current assignment");
             }
             if (consumerGroup.targetAssignment().containsKey(memberId)) {
-                throw new IllegalStateException("Received a tombstone record to delete member " + memberId
-                    + " but did not receive ConsumerGroupTargetAssignmentMetadataValue tombstone.");
+                inconsistencies.add("still has a target assignment");
             }
+            if (!inconsistencies.isEmpty()) {
+                log.debug("[GroupId {}] Received a tombstone record to delete consumer group member {} but the member {};"
+                    + " the missing tombstones were likely removed by compaction.",
+                    groupId, memberId, String.join(" and ", inconsistencies));
+            }
+
             consumerGroup.removeMember(memberId);
         }
 
@@ -6049,19 +6205,22 @@ public class GroupMetadataManager {
                 return;
             }
 
+            List<String> inconsistencies = new ArrayList<>();
             if (!consumerGroup.members().isEmpty()) {
-                throw new IllegalStateException("Received a tombstone record to delete group " + groupId
-                    + " but the group still has " + consumerGroup.members().size() + " members.");
+                inconsistencies.add(consumerGroup.members().size() + " members");
             }
             if (!consumerGroup.targetAssignment().isEmpty()) {
-                throw new IllegalStateException("Received a tombstone record to delete group " + groupId
-                    + " but the target assignment still has " + consumerGroup.targetAssignment().size()
-                    + " members.");
+                inconsistencies.add(consumerGroup.targetAssignment().size() + " target assignments");
             }
             if (consumerGroup.assignmentEpoch() != -1) {
-                throw new IllegalStateException("Received a tombstone record to delete group " + groupId
-                    + " but did not receive ConsumerGroupTargetAssignmentMetadataValue tombstone.");
+                inconsistencies.add("target assignment epoch " + consumerGroup.assignmentEpoch());
             }
+            if (!inconsistencies.isEmpty()) {
+                log.debug("[GroupId {}] Received a tombstone record to delete the consumer group but the group still has {};"
+                    + " the missing tombstones were likely removed by compaction.",
+                    groupId, String.join(" and ", inconsistencies));
+            }
+
             removeGroup(groupId);
         }
 
@@ -6149,8 +6308,10 @@ public class GroupMetadataManager {
                 return;
             }
             if (!group.targetAssignment().isEmpty()) {
-                throw new IllegalStateException("Received a tombstone record to delete target assignment of " + groupId
-                    + " but the assignment still has " + group.targetAssignment().size() + " members.");
+                log.debug("[GroupId {}] Received a tombstone record to delete the target assignment metadata of the consumer group"
+                    + " but the assignment still has {} members; the missing tombstones were likely removed by compaction.",
+                    groupId, group.targetAssignment().size());
+                group.clearTargetAssignment();
             }
             group.setTargetAssignmentMetadata(-1, 0L);
         }
@@ -6287,14 +6448,22 @@ public class GroupMetadataManager {
                 return;
             }
 
+            List<String> inconsistencies = new ArrayList<>();
             if (!streamsGroup.members().isEmpty()) {
-                throw new IllegalStateException("Received a tombstone record to delete group " + groupId
-                    + " but the group still has " + streamsGroup.members().size() + " members.");
+                inconsistencies.add(streamsGroup.members().size() + " members");
+            }
+            if (!streamsGroup.targetAssignment().isEmpty()) {
+                inconsistencies.add(streamsGroup.targetAssignment().size() + " target assignments");
             }
             if (streamsGroup.assignmentEpoch() != -1) {
-                throw new IllegalStateException("Received a tombstone record to delete group " + groupId
-                    + " but did not receive StreamsGroupTargetAssignmentMetadataValue tombstone.");
+                inconsistencies.add("target assignment epoch " + streamsGroup.assignmentEpoch());
             }
+            if (!inconsistencies.isEmpty()) {
+                log.debug("[GroupId {}] Received a tombstone record to delete the streams group but the group still has {};"
+                    + " the missing tombstones were likely removed by compaction.",
+                    groupId, String.join(" and ", inconsistencies));
+            }
+
             removeGroup(groupId);
         }
 
@@ -6335,14 +6504,19 @@ public class GroupMetadataManager {
                 .updateWith(value)
                 .build());
         } else {
+            List<String> inconsistencies = new ArrayList<>();
             if (oldMember.memberEpoch() != LEAVE_GROUP_MEMBER_EPOCH) {
-                throw new IllegalStateException("Received a tombstone record to delete member " + memberId
-                    + " with invalid leave group epoch.");
+                inconsistencies.add("still has a current assignment");
             }
             if (shareGroup.targetAssignment().containsKey(memberId)) {
-                throw new IllegalStateException("Received a tombstone record to delete member " + memberId
-                    + " but member exists in target assignment.");
+                inconsistencies.add("still has a target assignment");
             }
+            if (!inconsistencies.isEmpty()) {
+                log.debug("[GroupId {}] Received a tombstone record to delete share group member {} but the member {};"
+                    + " the missing tombstones were likely removed by compaction.",
+                    groupId, memberId, String.join(" and ", inconsistencies));
+            }
+
             shareGroup.removeMember(memberId);
         }
 
@@ -6375,19 +6549,22 @@ public class GroupMetadataManager {
             shareGroup.setGroupEpoch(value.epoch());
             shareGroup.setMetadataHash(value.metadataHash());
         } else {
+            List<String> inconsistencies = new ArrayList<>();
             if (!shareGroup.members().isEmpty()) {
-                throw new IllegalStateException("Received a tombstone record to delete group " + groupId
-                    + " but the group still has " + shareGroup.members().size() + " members.");
+                inconsistencies.add(shareGroup.members().size() + " members");
             }
             if (!shareGroup.targetAssignment().isEmpty()) {
-                throw new IllegalStateException("Received a tombstone record to delete group " + groupId
-                    + " but the target assignment still has " + shareGroup.targetAssignment().size()
-                    + " members.");
+                inconsistencies.add(shareGroup.targetAssignment().size() + " target assignments");
             }
             if (shareGroup.assignmentEpoch() != -1) {
-                throw new IllegalStateException("Received a tombstone record to delete group " + groupId
-                    + " but target assignment epoch in invalid.");
+                inconsistencies.add("target assignment epoch " + shareGroup.assignmentEpoch());
             }
+            if (!inconsistencies.isEmpty()) {
+                log.debug("[GroupId {}] Received a tombstone record to delete the share group but the group still has {};"
+                    + " the missing tombstones were likely removed by compaction.",
+                    groupId, String.join(" and ", inconsistencies));
+            }
+
             removeGroup(groupId);
         }
     }
@@ -6429,14 +6606,19 @@ public class GroupMetadataManager {
                 return;
             }
 
+            List<String> inconsistencies = new ArrayList<>();
             if (oldMember.memberEpoch() != LEAVE_GROUP_MEMBER_EPOCH) {
-                throw new IllegalStateException("Received a tombstone record to delete member " + memberId
-                    + " but did not receive StreamsGroupCurrentMemberAssignmentValue tombstone.");
+                inconsistencies.add("still has a current assignment");
             }
             if (streamsGroup.targetAssignment().containsKey(memberId)) {
-                throw new IllegalStateException("Received a tombstone record to delete member " + memberId
-                    + " but did not receive StreamsGroupTargetAssignmentMetadataValue tombstone.");
+                inconsistencies.add("still has a target assignment");
             }
+            if (!inconsistencies.isEmpty()) {
+                log.debug("[GroupId {}] Received a tombstone record to delete streams group member {} but the member {};"
+                    + " the missing tombstones were likely removed by compaction.",
+                    groupId, memberId, String.join(" and ", inconsistencies));
+            }
+
             streamsGroup.removeMember(memberId);
         }
     }
@@ -6467,8 +6649,10 @@ public class GroupMetadataManager {
                 return;
             }
             if (!streamsGroup.targetAssignment().isEmpty()) {
-                throw new IllegalStateException("Received a tombstone record to delete target assignment of " + groupId
-                    + " but the assignment still has " + streamsGroup.targetAssignment().size() + " members.");
+                log.debug("[GroupId {}] Received a tombstone record to delete the target assignment metadata of the streams group"
+                    + " but the assignment still has {} members; the missing tombstones were likely removed by compaction.",
+                    groupId, streamsGroup.targetAssignment().size());
+                streamsGroup.clearTargetAssignment();
             }
             streamsGroup.setTargetAssignmentMetadata(-1, 0L);
         }
@@ -6608,8 +6792,10 @@ public class GroupMetadataManager {
             group.setTargetAssignmentMetadata(value.assignmentEpoch(), value.assignmentTimestamp());
         } else {
             if (!group.targetAssignment().isEmpty()) {
-                throw new IllegalStateException("Received a tombstone record to delete target assignment of " + groupId
-                        + " but the assignment still has " + group.targetAssignment().size() + " members.");
+                log.debug("[GroupId {}] Received a tombstone record to delete the target assignment metadata of the share group"
+                    + " but the assignment still has {} members; the missing tombstones were likely removed by compaction.",
+                    groupId, group.targetAssignment().size());
+                group.clearTargetAssignment();
             }
             group.setTargetAssignmentMetadata(-1, 0L);
         }
