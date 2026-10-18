@@ -336,15 +336,11 @@ public class SaslAuthenticatorTest {
         server = createEchoServer(securityProtocol);
         createSelector(securityProtocol, saslClientConfigs);
         InetSocketAddress addr = new InetSocketAddress("localhost", server.port());
-        try {
-            selector.connect(node, addr, BUFFER_SIZE, BUFFER_SIZE);
-            fail("SASL/PLAIN channel created without username");
-        } catch (IOException e) {
-            // Expected exception
-            assertTrue(selector.channels().isEmpty(), "Channels not closed");
-            for (SelectionKey key : selector.keys())
-                assertFalse(key.isValid(), "Key not cancelled");
-        }
+        assertThrows(IOException.class, () -> selector.connect(node, addr, BUFFER_SIZE, BUFFER_SIZE),
+                "SASL/PLAIN channel created without username");
+        assertTrue(selector.channels().isEmpty(), "Channels not closed");
+        for (SelectionKey key : selector.keys())
+            assertFalse(key.isValid(), "Key not cancelled");
     }
 
     /**
