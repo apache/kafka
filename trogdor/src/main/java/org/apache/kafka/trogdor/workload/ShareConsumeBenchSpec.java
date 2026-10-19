@@ -66,6 +66,14 @@ import java.util.Set;
  * share consumers use implicit acknowledgement. Note that with "RELEASE" the records are redelivered, so the
  * "maxMessages" field bounds the total number of deliveries rather than the number of distinct records.
  *
+ * The optional "recordAcknowledger" field is like "acknowledgeType", but lets the acknowledge type be decided per record
+ * by a `RecordAcknowledger`. It also makes the share consumers use explicit acknowledgement mode, and cannot be
+ * combined with "acknowledgeType".
+ *
+ * The optional "shareGroupDLQConfig" field sets up a dead-letter queue for the share group before the consumers start.
+ * See `ShareGroupDLQConfig`. Records rejected, or released until their delivery attempts are exhausted, are then written
+ * to the DLQ topic.
+ *
  * An example JSON representation which will result in a share consumer that is part of the share group "sg" and
  * subscribed to topics foo1, foo2, foo3 and bar.
  * #{@code
@@ -96,6 +104,8 @@ public final class ShareConsumeBenchSpec extends TaskSpec {
     private final int threadsPerWorker;
     private final Optional<RecordProcessor> recordProcessor;
     private final Optional<AcknowledgeType> acknowledgeType;
+    private final Optional<RecordAcknowledger> recordAcknowledger;
+    private final Optional<ShareGroupDLQConfig> shareGroupDLQConfig;
 
     @JsonCreator
     public ShareConsumeBenchSpec(@JsonProperty("startMs") long startMs,
@@ -111,7 +121,9 @@ public final class ShareConsumeBenchSpec extends TaskSpec {
                             @JsonProperty("threadsPerWorker") Integer threadsPerWorker,
                             @JsonProperty("recordProcessor") Optional<RecordProcessor> recordProcessor,
                             @JsonProperty("activeTopics") List<String> activeTopics,
-                            @JsonProperty("acknowledgeType") AcknowledgeType acknowledgeType) {
+                            @JsonProperty("acknowledgeType") Optional<AcknowledgeType> acknowledgeType,
+                            @JsonProperty("recordAcknowledger") Optional<RecordAcknowledger> recordAcknowledger,
+                            @JsonProperty("shareGroupDLQConfig") Optional<ShareGroupDLQConfig> shareGroupDLQConfig) {
         super(startMs, durationMs);
         this.consumerNode = (consumerNode == null) ? "" : consumerNode;
         this.bootstrapServers = (bootstrapServers == null) ? "" : bootstrapServers;
@@ -124,10 +136,24 @@ public final class ShareConsumeBenchSpec extends TaskSpec {
         this.shareGroup = shareGroup == null ? DEFAULT_SHARE_GROUP_NAME : shareGroup;
         this.threadsPerWorker = threadsPerWorker == null ? 1 : threadsPerWorker;
         this.recordProcessor = recordProcessor;
-        if (acknowledgeType == AcknowledgeType.RENEW) {
-            throw new IllegalArgumentException("acknowledgeType must be ACCEPT, REJECT or RELEASE, but was " + acknowledgeType);
+        this.acknowledgeType = orEmpty(acknowledgeType);
+        this.recordAcknowledger = orEmpty(recordAcknowledger);
+        this.shareGroupDLQConfig = orEmpty(shareGroupDLQConfig);
+        validateAcknowledgement(this.acknowledgeType, this.recordAcknowledger);
+    }
+
+    private static <T> Optional<T> orEmpty(Optional<T> optional) {
+        return optional == null ? Optional.empty() : optional;
+    }
+
+    private static void validateAcknowledgement(Optional<AcknowledgeType> acknowledgeType,
+                                                Optional<RecordAcknowledger> recordAcknowledger) {
+        if (acknowledgeType.filter(type -> type == AcknowledgeType.RENEW).isPresent()) {
+            throw new IllegalArgumentException("acknowledgeType must be ACCEPT, REJECT or RELEASE, but was " + AcknowledgeType.RENEW);
         }
-        this.acknowledgeType = Optional.ofNullable(acknowledgeType);
+        if (acknowledgeType.isPresent() && recordAcknowledger.isPresent()) {
+            throw new IllegalArgumentException("acknowledgeType and recordAcknowledger cannot both be set");
+        }
     }
 
     @JsonProperty
@@ -168,6 +194,16 @@ public final class ShareConsumeBenchSpec extends TaskSpec {
     @JsonProperty
     public Optional<AcknowledgeType> acknowledgeType() {
         return acknowledgeType;
+    }
+
+    @JsonProperty
+    public Optional<RecordAcknowledger> recordAcknowledger() {
+        return recordAcknowledger;
+    }
+
+    @JsonProperty
+    public Optional<ShareGroupDLQConfig> shareGroupDLQConfig() {
+        return shareGroupDLQConfig;
     }
 
     @JsonProperty
