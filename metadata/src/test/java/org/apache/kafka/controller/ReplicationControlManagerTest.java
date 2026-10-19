@@ -1719,8 +1719,10 @@ public class ReplicationControlManagerTest {
         ReplicationControlManager replicationControl = ctx.replicationControl;
         ctx.registerBrokers(0, 1, 2);
         ctx.unfenceBrokers(0, 1, 2);
-        // Use enough partitions that iterating over them does not start at partition 0.
-        int[][] replicas = new int[20][];
+        // The partitions are kept in a hash map. With 3 partitions, iterating over it does not
+        // start at partition 0, so this test fails if the controller uses the iterator's first
+        // partition instead of partition 0.
+        int[][] replicas = new int[3][];
         for (int i = 0; i < replicas.length; i++) {
             replicas[i] = new int[] {i % 3};
         }
@@ -1736,14 +1738,14 @@ public class ReplicationControlManagerTest {
 
         ControllerRequestContext requestContext = anonymousContextFor(ApiKeys.CREATE_PARTITIONS);
         ControllerResult<List<CreatePartitionsTopicResult>> result = replicationControl.createPartitions(
-            requestContext, List.of(new CreatePartitionsTopic().setName("foo").setCount(21).setAssignments(null)));
+            requestContext, List.of(new CreatePartitionsTopic().setName("foo").setCount(4).setAssignments(null)));
         assertEquals(NONE.code(), result.response().get(0).errorCode());
         ctx.replay(result.records());
-        assertEquals(3, replicationControl.getPartition(fooId, 20).replicas.length);
+        assertEquals(3, replicationControl.getPartition(fooId, 3).replicas.length);
 
         // Manual assignments are also validated against partition 0.
         result = replicationControl.createPartitions(requestContext, List.of(new CreatePartitionsTopic().
-            setName("foo").setCount(22).setAssignments(List.of(
+            setName("foo").setCount(5).setAssignments(List.of(
                 new CreatePartitionsAssignment().setBrokerIds(List.of(0))))));
         assertEquals(INVALID_REPLICA_ASSIGNMENT.code(), result.response().get(0).errorCode());
     }

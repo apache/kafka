@@ -186,8 +186,10 @@ public class AddPartitionsTest {
     @ClusterTest
     public void testIncreasePartitionsUsesReplicationFactorOfPartitionZero(ClusterInstance cluster) throws Exception {
         try (Admin admin = cluster.admin()) {
-            // Use enough partitions that iterating over them does not start at partition 0.
-            Map<Integer, List<Integer>> assignment = IntStream.range(0, 20).boxed()
+            // The partitions are kept in a hash map. With 3 partitions, iterating over it does not
+            // start at partition 0, so this test fails if the controller uses the iterator's first
+            // partition instead of partition 0.
+            Map<Integer, List<Integer>> assignment = IntStream.range(0, 3).boxed()
                 .collect(Collectors.toMap(p -> p, p -> List.of(p % 4)));
             cluster.createTopicWithAssignment("foo", assignment);
 
@@ -198,13 +200,13 @@ public class AddPartitionsTest {
                 partition(admin, "foo", 0).replicas().size() == 3,
                 "Timed out waiting for the reassignment of partition 0");
 
-            admin.createPartitions(Map.of("foo", NewPartitions.increaseTo(21))).all().get();
-            cluster.waitTopicCreation("foo", 21);
-            assertEquals(3, partition(admin, "foo", 20).replicas().size());
+            admin.createPartitions(Map.of("foo", NewPartitions.increaseTo(4))).all().get();
+            cluster.waitTopicCreation("foo", 4);
+            assertEquals(3, partition(admin, "foo", 3).replicas().size());
 
             // Manual assignments are also validated against partition 0.
             ExecutionException e = assertThrows(ExecutionException.class, () -> admin.createPartitions(Map.of("foo",
-                NewPartitions.increaseTo(22, List.of(List.of(0))))).all().get());
+                NewPartitions.increaseTo(5, List.of(List.of(0))))).all().get());
             assertInstanceOf(InvalidReplicaAssignmentException.class, e.getCause());
         }
     }
