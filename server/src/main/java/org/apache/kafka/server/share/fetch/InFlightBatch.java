@@ -18,6 +18,7 @@ package org.apache.kafka.server.share.fetch;
 
 import org.apache.kafka.common.utils.Time;
 import org.apache.kafka.server.share.metrics.SharePartitionMetrics;
+import org.apache.kafka.server.share.persister.PersisterStateBatch;
 import org.apache.kafka.server.util.timer.Timer;
 
 import java.util.NavigableMap;
@@ -32,6 +33,18 @@ import static org.apache.kafka.server.share.fetch.InFlightState.EMPTY_MEMBER_ID;
  * are expected.
  */
 public class InFlightBatch {
+    public boolean hasPendingTransactionalRecords() {
+        if (offsetState == null) {
+            return batchState.state() == RecordState.TX_PENDING;
+        }
+        for (InFlightState state : offsetState.values()) {
+            if (state.state() == RecordState.TX_PENDING) {
+                return true;
+            }
+        }
+        return false;
+    }
+
     // The timer is used to schedule the acquisition lock timeout task for the batch.
     private final Timer timer;
     // The time is used to get the current time in milliseconds.
@@ -69,13 +82,81 @@ public class InFlightBatch {
         AcquisitionLockTimeoutHandler timeoutHandler,
         SharePartitionMetrics sharePartitionMetrics
     ) {
+        this(
+            timer,
+            time,
+            memberId,
+            firstOffset,
+            lastOffset,
+            state,
+            deliveryCount,
+            acquisitionLockTimeoutTask,
+            timeoutHandler,
+            sharePartitionMetrics,
+            -1L,
+            (short) -1,
+            (byte) -1
+        );
+    }
+
+    public InFlightBatch(
+        Timer timer,
+        Time time,
+        String memberId,
+        long firstOffset,
+        long lastOffset,
+        RecordState state,
+        int deliveryCount,
+        AcquisitionLockTimerTask acquisitionLockTimeoutTask,
+        AcquisitionLockTimeoutHandler timeoutHandler,
+        SharePartitionMetrics sharePartitionMetrics,
+        long stagedTxnOwnerId,
+        short stagedTxnOwnerEpoch,
+        byte stagedAckType
+    ) {
         this.timer = timer;
         this.time = time;
         this.firstOffset = firstOffset;
         this.lastOffset = lastOffset;
         this.timeoutHandler = timeoutHandler;
         this.sharePartitionMetrics = sharePartitionMetrics;
-        this.batchState = new InFlightState(state, deliveryCount, memberId, acquisitionLockTimeoutTask);
+        this.batchState = new InFlightState(
+            state,
+            deliveryCount,
+            memberId,
+            acquisitionLockTimeoutTask,
+            stagedTxnOwnerId,
+            stagedTxnOwnerEpoch,
+            stagedAckType,
+            PersisterStateBatch.NO_STAGED_DELIVERY_STATE
+        );
+    }
+
+    public InFlightBatch(
+        Timer timer,
+        Time time,
+        String memberId,
+        PersisterStateBatch stateBatch,
+        AcquisitionLockTimerTask acquisitionLockTimeoutTask,
+        AcquisitionLockTimeoutHandler timeoutHandler,
+        SharePartitionMetrics sharePartitionMetrics
+    ) {
+        this.timer = timer;
+        this.time = time;
+        this.firstOffset = stateBatch.firstOffset();
+        this.lastOffset = stateBatch.lastOffset();
+        this.timeoutHandler = timeoutHandler;
+        this.sharePartitionMetrics = sharePartitionMetrics;
+        this.batchState = new InFlightState(
+            RecordState.forId(stateBatch.deliveryState()),
+            stateBatch.deliveryCount(),
+            memberId,
+            acquisitionLockTimeoutTask,
+            stateBatch.stagedProducerId(),
+            stateBatch.stagedProducerEpoch(),
+            stateBatch.stagedAckType(),
+            stateBatch.stagedDeliveryState()
+        );
     }
 
     /**
@@ -170,6 +251,57 @@ public class InFlightBatch {
      * @return {@code InFlightState} if update succeeds, null otherwise. Returning state helps update chaining.
      * @throws IllegalStateException if the offset state is maintained and the batch state is not available.
      */
+    public InFlightState stageBatchTxnAcknowledge(
+        long txnOwnerId,
+        short txnOwnerEpoch,
+        byte ackType,
+        RecordState stagedDeliveryState
+    ) {
+        return inFlightState().stageTxnAcknowledge(txnOwnerId, txnOwnerEpoch, ackType, stagedDeliveryState);
+    }
+
+    public InFlightState applyBatchTxnMarker(
+        long txnOwnerId,
+        short txnOwnerEpoch,
+        org.apache.kafka.common.requests.TransactionResult result,
+        boolean dlqSupportEnabled
+    ) {
+        return inFlightState().applyTxnMarker(txnOwnerId, txnOwnerEpoch, result, dlqSupportEnabled);
+    }
+
+    public boolean revertBatchStagedTxnAcknowledge(long txnOwnerId, short txnOwnerEpoch) {
+        return inFlightState().revertStagedTxnAcknowledge(txnOwnerId, txnOwnerEpoch);
+    }
+
+    public InFlightState applyPersistedTxnState(long txnOwnerId, short txnOwnerEpoch, RecordState state) {
+        return inFlightState().applyPersistedTxnState(txnOwnerId, txnOwnerEpoch, state);
+    }
+
+    // Visible for testing.
+    public long batchStagedTxnOwnerId() {
+        return inFlightState().stagedTxnOwnerId();
+    }
+
+    public short batchStagedTxnOwnerEpoch() {
+        return inFlightState().stagedTxnOwnerEpoch();
+    }
+
+    public long batchStagedProducerId() {
+        return batchStagedTxnOwnerId();
+    }
+
+    public short batchStagedProducerEpoch() {
+        return batchStagedTxnOwnerEpoch();
+    }
+
+    public byte batchStagedAckType() {
+        return inFlightState().stagedAckType();
+    }
+
+    public byte batchStagedDeliveryState() {
+        return inFlightState().stagedDeliveryState();
+    }
+
     public InFlightState tryUpdateBatchState(RecordState newState, DeliveryCountOps ops, int maxDeliveryCount, String newMemberId, boolean dlqSupportEnabled) {
         return inFlightState().tryUpdateState(newState, ops, maxDeliveryCount, newMemberId, dlqSupportEnabled);
     }
