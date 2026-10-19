@@ -39,7 +39,7 @@ import java.util.Set;
 import java.util.TreeMap;
 
 import static org.apache.kafka.coordinator.group.AssignmentTestUtil.assertAssignment;
-import static org.apache.kafka.coordinator.group.AssignmentTestUtil.invertedTargetAssignment;
+import static org.apache.kafka.coordinator.group.AssignmentTestUtil.assignedPartitions;
 import static org.apache.kafka.coordinator.group.AssignmentTestUtil.mkAssignment;
 import static org.apache.kafka.coordinator.group.AssignmentTestUtil.mkTopicAssignment;
 import static org.apache.kafka.coordinator.group.api.assignor.SubscriptionType.HETEROGENEOUS;
@@ -294,7 +294,7 @@ public class UniformHeterogeneousAssignmentBuilderTest {
         GroupSpec groupSpec = new GroupSpecImpl(
             members,
             HETEROGENEOUS,
-            invertedTargetAssignment(members)
+            assignedPartitions(members)
         );
         SubscribedTopicDescriberImpl subscribedTopicMetadata = new SubscribedTopicDescriberImpl(
             new KRaftCoordinatorMetadataImage(metadataImage)
@@ -358,7 +358,7 @@ public class UniformHeterogeneousAssignmentBuilderTest {
         GroupSpec groupSpec = new GroupSpecImpl(
             members,
             HETEROGENEOUS,
-            invertedTargetAssignment(members)
+            assignedPartitions(members)
         );
         SubscribedTopicDescriberImpl subscribedTopicMetadata = new SubscribedTopicDescriberImpl(
             new KRaftCoordinatorMetadataImage(metadataImage)
@@ -423,7 +423,7 @@ public class UniformHeterogeneousAssignmentBuilderTest {
         GroupSpec groupSpec = new GroupSpecImpl(
             members,
             HETEROGENEOUS,
-            invertedTargetAssignment(members)
+            assignedPartitions(members)
         );
         SubscribedTopicDescriberImpl subscribedTopicMetadata = new SubscribedTopicDescriberImpl(
             new KRaftCoordinatorMetadataImage(metadataImage)
@@ -483,7 +483,7 @@ public class UniformHeterogeneousAssignmentBuilderTest {
         GroupSpec groupSpec = new GroupSpecImpl(
             members,
             HETEROGENEOUS,
-            invertedTargetAssignment(members)
+            assignedPartitions(members)
         );
         SubscribedTopicDescriberImpl subscribedTopicMetadata = new SubscribedTopicDescriberImpl(
             new KRaftCoordinatorMetadataImage(metadataImage)
@@ -539,7 +539,7 @@ public class UniformHeterogeneousAssignmentBuilderTest {
         GroupSpec groupSpec = new GroupSpecImpl(
             members,
             HETEROGENEOUS,
-            invertedTargetAssignment(members)
+            assignedPartitions(members)
         );
         SubscribedTopicDescriberImpl subscribedTopicMetadata = new SubscribedTopicDescriberImpl(
             new KRaftCoordinatorMetadataImage(metadataImage)
@@ -598,7 +598,7 @@ public class UniformHeterogeneousAssignmentBuilderTest {
         GroupSpec groupSpec = new GroupSpecImpl(
             members,
             HETEROGENEOUS,
-            invertedTargetAssignment(members)
+            assignedPartitions(members)
         );
         SubscribedTopicDescriberImpl subscribedTopicMetadata = new SubscribedTopicDescriberImpl(
             new KRaftCoordinatorMetadataImage(metadataImage)

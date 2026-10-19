@@ -38,6 +38,7 @@ import org.apache.kafka.image.MetadataProvenance;
 
 import java.util.ArrayList;
 import java.util.HashMap;
+import java.util.HashSet;
 import java.util.List;
 import java.util.Map;
 import java.util.Optional;
@@ -47,31 +48,21 @@ import java.util.function.Function;
 
 public class AssignorBenchmarkUtils {
     /**
-     * Generate a reverse look up map of partition to member target assignments from the given member spec.
+     * Generate a map of topics to assigned partitions from the given group assignment.
      *
      * @param groupAssignment       The group assignment.
-     * @return Map of topic partition to member assignments.
+     * @return Map of topics to assigned partitions.
      */
-    public static Map<Uuid, Map<Integer, String>> computeInvertedTargetAssignment(
+    public static Map<Uuid, Set<Integer>> computeAssignedPartitions(
         GroupAssignment groupAssignment
     ) {
-        Map<Uuid, Map<Integer, String>> invertedTargetAssignment = new HashMap<>();
-        for (Map.Entry<String, MemberAssignment> memberEntry : groupAssignment.members().entrySet()) {
-            String memberId = memberEntry.getKey();
-            Map<Uuid, Set<Integer>> topicsAndPartitions = memberEntry.getValue().partitions();
-
-            for (Map.Entry<Uuid, Set<Integer>> topicEntry : topicsAndPartitions.entrySet()) {
-                Uuid topicId = topicEntry.getKey();
-                Set<Integer> partitions = topicEntry.getValue();
-
-                Map<Integer, String> partitionMap = invertedTargetAssignment.computeIfAbsent(topicId, k -> new HashMap<>());
-
-                for (Integer partitionId : partitions) {
-                    partitionMap.put(partitionId, memberId);
-                }
+        Map<Uuid, Set<Integer>> assignedPartitions = new HashMap<>();
+        for (MemberAssignment memberAssignment : groupAssignment.members().values()) {
+            for (Map.Entry<Uuid, Set<Integer>> topicEntry : memberAssignment.partitions().entrySet()) {
+                assignedPartitions.computeIfAbsent(topicEntry.getKey(), k -> new HashSet<>()).addAll(topicEntry.getValue());
             }
         }
-        return invertedTargetAssignment;
+        return assignedPartitions;
     }
 
     /**

@@ -43,7 +43,7 @@ import java.util.Optional;
 import java.util.Set;
 import java.util.TreeMap;
 
-import static org.apache.kafka.coordinator.group.AssignmentTestUtil.invertedTargetAssignment;
+import static org.apache.kafka.coordinator.group.AssignmentTestUtil.assignedPartitions;
 import static org.apache.kafka.coordinator.group.AssignmentTestUtil.mkAssignment;
 import static org.apache.kafka.coordinator.group.AssignmentTestUtil.mkTopicAssignment;
 import static org.apache.kafka.coordinator.group.api.assignor.SubscriptionType.HETEROGENEOUS;
@@ -164,7 +164,7 @@ public class RangeAssignorTest {
         GroupSpec groupSpec = new GroupSpecImpl(
             members,
             HOMOGENEOUS,
-            invertedTargetAssignment(members)
+            assignedPartitions(members)
         );
         SubscribedTopicDescriberImpl subscribedTopicMetadata = new SubscribedTopicDescriberImpl(
             new KRaftCoordinatorMetadataImage(metadataImage)
@@ -222,7 +222,7 @@ public class RangeAssignorTest {
         GroupSpec groupSpec = new GroupSpecImpl(
             members,
             HETEROGENEOUS,
-            invertedTargetAssignment(members)
+            assignedPartitions(members)
         );
         SubscribedTopicDescriberImpl subscribedTopicMetadata = new SubscribedTopicDescriberImpl(
             new KRaftCoordinatorMetadataImage(metadataImage)
@@ -282,7 +282,7 @@ public class RangeAssignorTest {
         GroupSpec groupSpec = new GroupSpecImpl(
             members,
             HOMOGENEOUS,
-            invertedTargetAssignment(members)
+            assignedPartitions(members)
         );
         SubscribedTopicDescriberImpl subscribedTopicMetadata = new SubscribedTopicDescriberImpl(
             new KRaftCoordinatorMetadataImage(metadataImage)
@@ -336,7 +336,7 @@ public class RangeAssignorTest {
         GroupSpec groupSpec = new GroupSpecImpl(
             members,
             SubscriptionType.HOMOGENEOUS,
-            invertedTargetAssignment(members)
+            assignedPartitions(members)
         );
 
         GroupAssignment initialAssignment = assignor.assign(
@@ -356,7 +356,7 @@ public class RangeAssignorTest {
         groupSpec = new GroupSpecImpl(
             members,
             SubscriptionType.HOMOGENEOUS,
-            invertedTargetAssignment(members)
+            assignedPartitions(members)
         );
 
         GroupAssignment reassignedAssignment = assignor.assign(
@@ -411,7 +411,7 @@ public class RangeAssignorTest {
         GroupSpec groupSpec = new GroupSpecImpl(
             members,
             SubscriptionType.HOMOGENEOUS,
-            invertedTargetAssignment(members)
+            assignedPartitions(members)
         );
 
         GroupAssignment initialAssignment = assignor.assign(
@@ -431,7 +431,7 @@ public class RangeAssignorTest {
         groupSpec = new GroupSpecImpl(
             members,
             SubscriptionType.HOMOGENEOUS,
-            invertedTargetAssignment(members)
+            assignedPartitions(members)
         );
 
         GroupAssignment reassignedAssignment = assignor.assign(
@@ -496,7 +496,7 @@ public class RangeAssignorTest {
         GroupSpec groupSpec = new GroupSpecImpl(
             members,
             HOMOGENEOUS,
-            invertedTargetAssignment(members)
+            assignedPartitions(members)
         );
         SubscribedTopicDescriberImpl subscribedTopicMetadata = new SubscribedTopicDescriberImpl(
             new KRaftCoordinatorMetadataImage(metadataImage)
@@ -555,7 +555,7 @@ public class RangeAssignorTest {
         GroupSpec groupSpec = new GroupSpecImpl(
             members,
             HOMOGENEOUS,
-            invertedTargetAssignment(members)
+            assignedPartitions(members)
         );
         SubscribedTopicDescriberImpl subscribedTopicMetadata = new SubscribedTopicDescriberImpl(
             new KRaftCoordinatorMetadataImage(metadataImage)
@@ -619,7 +619,7 @@ public class RangeAssignorTest {
         GroupSpec groupSpec = new GroupSpecImpl(
             members,
             HOMOGENEOUS,
-            invertedTargetAssignment(members)
+            assignedPartitions(members)
         );
         SubscribedTopicDescriberImpl subscribedTopicMetadata = new SubscribedTopicDescriberImpl(
             new KRaftCoordinatorMetadataImage(metadataImage)
@@ -688,7 +688,7 @@ public class RangeAssignorTest {
         GroupSpec groupSpec = new GroupSpecImpl(
             members,
             HETEROGENEOUS,
-            invertedTargetAssignment(members)
+            assignedPartitions(members)
         );
         SubscribedTopicDescriberImpl subscribedTopicMetadata = new SubscribedTopicDescriberImpl(
             new KRaftCoordinatorMetadataImage(metadataImage)
@@ -739,7 +739,7 @@ public class RangeAssignorTest {
         GroupSpec groupSpec = new GroupSpecImpl(
             members,
             HOMOGENEOUS,
-            invertedTargetAssignment(members)
+            assignedPartitions(members)
         );
         SubscribedTopicDescriberImpl subscribedTopicMetadata = new SubscribedTopicDescriberImpl(
             new KRaftCoordinatorMetadataImage(metadataImage)
@@ -803,7 +803,7 @@ public class RangeAssignorTest {
         GroupSpec groupSpec = new GroupSpecImpl(
             members,
             HETEROGENEOUS,
-            invertedTargetAssignment(members)
+            assignedPartitions(members)
         );
         SubscribedTopicDescriberImpl subscribedTopicMetadata = new SubscribedTopicDescriberImpl(
             new KRaftCoordinatorMetadataImage(metadataImage)

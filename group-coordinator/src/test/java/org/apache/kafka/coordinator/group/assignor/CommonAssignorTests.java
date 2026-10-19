@@ -37,7 +37,7 @@ import java.util.Optional;
 import java.util.Set;
 
 import static org.apache.kafka.coordinator.group.AssignmentTestUtil.assertAssignment;
-import static org.apache.kafka.coordinator.group.AssignmentTestUtil.invertedTargetAssignment;
+import static org.apache.kafka.coordinator.group.AssignmentTestUtil.assignedPartitions;
 import static org.junit.jupiter.api.Assertions.assertSame;
 
 public class CommonAssignorTests {
@@ -114,7 +114,7 @@ public class CommonAssignorTests {
         GroupSpec groupSpecWithAssignment = new GroupSpecImpl(
             membersWithAssignment,
             subscriptionType,
-            invertedTargetAssignment(membersWithAssignment)
+            assignedPartitions(membersWithAssignment)
         );
 
         GroupAssignment secondAssignment = assignor.assign(
@@ -211,7 +211,7 @@ public class CommonAssignorTests {
             GroupSpec groupSpecWithAssignment = new GroupSpecImpl(
                 membersWithAssignment,
                 subscriptionType,
-                invertedTargetAssignment(membersWithAssignment)
+                assignedPartitions(membersWithAssignment)
             );
 
             GroupAssignment secondAssignment = assignor.assign(

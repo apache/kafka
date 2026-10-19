@@ -99,7 +99,9 @@ public final class GroupSpecFixture {
         checkNotBuilt();
         built = true;
         var subscriptionType = sameSubscriptions ? SubscriptionType.HOMOGENEOUS : SubscriptionType.HETEROGENEOUS;
-        return new GroupSpecImpl(members, subscriptionType, invertedTargetAssignment);
+        Map<Uuid, Set<Integer>> assignedPartitions = new HashMap<>();
+        invertedTargetAssignment.forEach((topicId, owners) -> assignedPartitions.put(topicId, owners.keySet()));
+        return new GroupSpecImpl(members, subscriptionType, assignedPartitions);
     }
 
     private void checkNotBuilt() {

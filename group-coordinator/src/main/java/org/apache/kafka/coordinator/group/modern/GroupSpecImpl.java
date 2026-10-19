@@ -43,10 +43,10 @@ public class GroupSpecImpl implements GroupSpec {
     private final SubscriptionType subscriptionType;
 
     /**
-     * Reverse lookup map representing topic partitions with
-     * their current member assignments.
+     * The partitions which are currently assigned to a member,
+     * keyed by topic id.
      */
-    private final Map<Uuid, Map<Integer, String>> invertedMemberAssignment;
+    private final Map<Uuid, Set<Integer>> assignedPartitions;
 
     /**
      * In case of share groups, this map will be queried to decide
@@ -58,20 +58,20 @@ public class GroupSpecImpl implements GroupSpec {
     public GroupSpecImpl(
         Map<String, MemberSubscriptionAndAssignmentImpl> members,
         SubscriptionType subscriptionType,
-        Map<Uuid, Map<Integer, String>> invertedMemberAssignment
+        Map<Uuid, Set<Integer>> assignedPartitions
     ) {
-        this(members, subscriptionType, invertedMemberAssignment, Optional.empty());
+        this(members, subscriptionType, assignedPartitions, Optional.empty());
     }
 
     public GroupSpecImpl(
         Map<String, MemberSubscriptionAndAssignmentImpl> members,
         SubscriptionType subscriptionType,
-        Map<Uuid, Map<Integer, String>> invertedMemberAssignment,
+        Map<Uuid, Set<Integer>> assignedPartitions,
         Optional<Map<Uuid, Set<Integer>>> topicPartitionAllowedMap
     ) {
         this.members = Objects.requireNonNull(members);
         this.subscriptionType = Objects.requireNonNull(subscriptionType);
-        this.invertedMemberAssignment = Objects.requireNonNull(invertedMemberAssignment);
+        this.assignedPartitions = Objects.requireNonNull(assignedPartitions);
         this.topicPartitionAllowedMap = Objects.requireNonNull(topicPartitionAllowedMap);
     }
 
@@ -96,11 +96,11 @@ public class GroupSpecImpl implements GroupSpec {
      */
     @Override
     public boolean isPartitionAssigned(Uuid topicId, int partitionId) {
-        Map<Integer, String> partitionMap = invertedMemberAssignment.get(topicId);
-        if (partitionMap == null) {
+        Set<Integer> partitions = assignedPartitions.get(topicId);
+        if (partitions == null) {
             return false;
         }
-        return partitionMap.containsKey(partitionId);
+        return partitions.contains(partitionId);
     }
 
     /**
@@ -141,13 +141,13 @@ public class GroupSpecImpl implements GroupSpec {
         if (!(o instanceof GroupSpecImpl groupSpec)) return false;
         return Objects.equals(members, groupSpec.members) &&
             subscriptionType == groupSpec.subscriptionType &&
-            Objects.equals(invertedMemberAssignment, groupSpec.invertedMemberAssignment) &&
+            Objects.equals(assignedPartitions, groupSpec.assignedPartitions) &&
             Objects.equals(topicPartitionAllowedMap, groupSpec.topicPartitionAllowedMap);
     }
 
     @Override
     public int hashCode() {
-        return Objects.hash(members, subscriptionType, invertedMemberAssignment, topicPartitionAllowedMap);
+        return Objects.hash(members, subscriptionType, assignedPartitions, topicPartitionAllowedMap);
     }
 
     @Override
@@ -155,7 +155,7 @@ public class GroupSpecImpl implements GroupSpec {
         return "GroupSpecImpl(" +
             "members=" + members +
             ", subscriptionType=" + subscriptionType +
-            ", invertedMemberAssignment=" + invertedMemberAssignment +
+            ", assignedPartitions=" + assignedPartitions +
             ", topicPartitionAllowedMap=" + topicPartitionAllowedMap +
             ')';
     }

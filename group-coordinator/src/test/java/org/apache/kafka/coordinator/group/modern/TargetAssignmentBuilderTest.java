@@ -115,22 +115,8 @@ public class TargetAssignmentBuilderTest {
             ),
             HETEROGENEOUS,
             Map.of(
-                fooTopicId, Map.of(
-                    1, "member-1",
-                    2, "member-1",
-                    3, "member-2",
-                    4, "member-2",
-                    5, "member-3",
-                    6, "member-3"
-                ),
-                barTopicId, Map.of(
-                    1, "member-1",
-                    2, "member-1",
-                    3, "member-2",
-                    4, "member-2",
-                    5, "member-3",
-                    6, "member-3"
-                )
+                fooTopicId, Set.of(1, 2, 3, 4, 5, 6),
+                barTopicId, Set.of(1, 2, 3, 4, 5, 6)
             )
         );
 

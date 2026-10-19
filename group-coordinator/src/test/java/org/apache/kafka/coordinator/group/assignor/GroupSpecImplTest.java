@@ -40,7 +40,7 @@ public class GroupSpecImplTest {
     private static final String TEST_MEMBER = "test-member";
     private Map<String, MemberSubscriptionAndAssignmentImpl> members;
     private SubscriptionType subscriptionType;
-    private Map<Uuid, Map<Integer, String>> invertedTargetAssignment;
+    private Map<Uuid, Set<Integer>> assignedPartitions;
     private GroupSpecImpl groupSpec;
     private Uuid topicId;
 
@@ -48,7 +48,7 @@ public class GroupSpecImplTest {
     void setUp() {
         members = new HashMap<>();
         subscriptionType = SubscriptionType.HOMOGENEOUS;
-        invertedTargetAssignment = new HashMap<>();
+        assignedPartitions = new HashMap<>();
         topicId = Uuid.randomUuid();
 
         members.put(TEST_MEMBER,  new MemberSubscriptionAndAssignmentImpl(
@@ -61,7 +61,7 @@ public class GroupSpecImplTest {
         groupSpec = new GroupSpecImpl(
             members,
             subscriptionType,
-            invertedTargetAssignment
+            assignedPartitions
         );
     }
 
@@ -77,9 +77,7 @@ public class GroupSpecImplTest {
 
     @Test
     void testIsPartitionAssigned() {
-        Map<Integer, String> partitionMap = new HashMap<>();
-        partitionMap.put(1, "test-member");
-        invertedTargetAssignment.put(topicId, partitionMap);
+        assignedPartitions.put(topicId, Set.of(1));
 
         assertTrue(groupSpec.isPartitionAssigned(topicId, 1));
         assertFalse(groupSpec.isPartitionAssigned(topicId, 2));
@@ -119,7 +117,7 @@ public class GroupSpecImplTest {
         groupSpec = new GroupSpecImpl(
             members,
             subscriptionType,
-            invertedTargetAssignment,
+            assignedPartitions,
             Optional.of(Map.of(topicId, Set.of(0)))
         );
 

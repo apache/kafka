@@ -171,7 +171,7 @@ public class ShareGroupAssignorBenchmark {
         GroupAssignment initialAssignment = partitionAssignor.assign(groupSpec, subscribedTopicDescriber);
         Map<String, MemberAssignment> members = initialAssignment.members();
 
-        Map<Uuid, Map<Integer, String>> invertedTargetAssignment = AssignorBenchmarkUtils.computeInvertedTargetAssignment(initialAssignment);
+        Map<Uuid, Set<Integer>> assignedPartitions = AssignorBenchmarkUtils.computeAssignedPartitions(initialAssignment);
 
         Map<String, MemberSubscriptionAndAssignmentImpl> updatedMemberSpec = new HashMap<>();
 
@@ -206,7 +206,7 @@ public class ShareGroupAssignorBenchmark {
         groupSpec = new GroupSpecImpl(
             updatedMemberSpec,
             subscriptionType,
-            invertedTargetAssignment
+            assignedPartitions
         );
     }
 
