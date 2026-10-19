@@ -24476,6 +24476,8 @@ public class GroupMetadataManagerTest {
                 .withTopology(StreamsTopology.fromHeartbeatRequest(topology))
                 .withValidatedTopologyEpoch(0)
                 .withMetadataHash(metadataHash)
+                // Equal to the group config, so the epoch bumps only if the replay below resets them to the defaults.
+                .withLastAssignmentConfigs(new AssignmentConfigsImpl(2, List.of()))
             )
             .build();
 
@@ -24525,6 +24527,7 @@ public class GroupMetadataManagerTest {
             AssignmentConfigsImpl.DEFAULT.withNumStandbyReplicas(2),
             AssignmentConfigsImpl.fromRecord(metadataValue.lastAssignmentConfigs())
         );
+        assertEquals(11, result.response().data().memberEpoch());
         assertEquals(11, group.groupEpoch());
         assertEquals(AssignmentConfigsImpl.DEFAULT.withNumStandbyReplicas(2), group.lastAssignmentConfigs());
     }
