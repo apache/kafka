@@ -16,6 +16,7 @@
  */
 package org.apache.kafka.clients.consumer.internals;
 
+import org.apache.kafka.clients.Metadata;
 import org.apache.kafka.clients.consumer.ConsumerRecord;
 import org.apache.kafka.clients.consumer.OffsetAndMetadata;
 import org.apache.kafka.clients.consumer.OffsetOutOfRangeException;
@@ -176,10 +177,11 @@ public class FetchCollector<K, V> {
                 boolean positionAdvanced = false;
 
                 if (nextInLineFetch.nextFetchOffset() > position.offset) {
+                    Metadata.LeaderAndEpoch currentLeader = metadata.currentLeader(tp);
                     SubscriptionState.FetchPosition nextPosition = new SubscriptionState.FetchPosition(
                             nextInLineFetch.nextFetchOffset(),
                             nextInLineFetch.lastEpoch(),
-                            position.currentLeader);
+                            currentLeader);
                     log.trace("Updating fetch position from {} to {} for partition {} and returning {} records from `poll()`",
                             position, nextPosition, tp, partRecords.size());
                     subscriptions.position(tp, nextPosition);
