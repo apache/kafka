@@ -43,7 +43,6 @@ public class ProcessState {
     private final Map<String, Set<TaskId>> assignedActiveTasks;
     private final Map<String, Set<TaskId>> assignedStandbyTasks;
     private final Set<TaskId> assignedTasks;
-    // The members by task count, built on first use. An entry may lag behind memberToTaskCounts until it reaches the head.
     private PriorityQueue<Map.Entry<String, Integer>> membersByLoad;
 
     ProcessState(final String processId) {
@@ -110,8 +109,14 @@ public class ProcessState {
      * @return the number of tasks that `memberId` has assigned after adding the new task.
      */
     public int addTask(final String memberId, final TaskId taskId, final boolean isActive, final boolean isStateful) {
-        // The entry of the member in membersByLoad lags behind until it reaches the head, see leastLoadedEntry.
-        return addTaskInternal(memberId, taskId, isActive, isStateful);
+        int newTaskCount = addTaskInternal(memberId, taskId, isActive, isStateful);
+        // We cannot efficiently add a task to a specific member and keep the memberByLoad ordered correctly.
+        // So we just drop the heap here.
+        //
+        // The order in which addTask and addTaskToLeastLoadedMember is called ensures that the heaps are built at most
+        // twice (once for active, once for standby)
+        membersByLoad = null;
+        return newTaskCount;
     }
 
     private int addTaskInternal(final String memberId, final TaskId taskId, final boolean isActive, final boolean isStateful) {
@@ -134,38 +139,6 @@ public class ProcessState {
         return newTaskCount;
     }
 
-    String leastLoadedMember() {
-        return leastLoadedEntry().getKey();
-    }
-
-    /**
-     * The entry of the member with the fewest tasks, or null when the process has no members. Task counts only grow, so
-     * a stale entry under-counts: once the head is current, it is the least loaded.
-     */
-    private Map.Entry<String, Integer> leastLoadedEntry() {
-        if (membersByLoad == null) {
-            membersByLoad = new PriorityQueue<>(
-                memberToTaskCounts.size(),
-                Map.Entry.comparingByValue()
-            );
-            for (Map.Entry<String, Integer> entry : memberToTaskCounts.entrySet()) {
-                // Copy here, since map entry objects are allowed to be reused by the underlying map implementation.
-                membersByLoad.add(new AbstractMap.SimpleEntry<>(entry.getKey(), entry.getValue()));
-            }
-        }
-        while (!membersByLoad.isEmpty()) {
-            final Map.Entry<String, Integer> head = membersByLoad.peek();
-            final int taskCount = memberToTaskCounts.get(head.getKey());
-            if (head.getValue() == taskCount) {
-                return head;
-            }
-            membersByLoad.poll();
-            head.setValue(taskCount);
-            membersByLoad.add(head);
-        }
-        return null;
-    }
-
     /**
      * Assigns a task to the least loaded member of this process
      *
@@ -182,9 +155,22 @@ public class ProcessState {
         if (memberToTaskCounts.size() == 1) {
             return addTaskInternal(memberToTaskCounts.keySet().iterator().next(), taskId, isActive, isStateful);
         }
-        Map.Entry<String, Integer> member = leastLoadedEntry();
+        if (membersByLoad == null) {
+            membersByLoad = new PriorityQueue<>(
+                memberToTaskCounts.size(),
+                Map.Entry.comparingByValue()
+            );
+            for (Map.Entry<String, Integer> entry : memberToTaskCounts.entrySet()) {
+                // Copy here, since map entry objects are allowed to be reused by the underlying map implementation.
+                membersByLoad.add(new AbstractMap.SimpleEntry<>(entry.getKey(), entry.getValue()));
+            }
+        }
+        Map.Entry<String, Integer> member = membersByLoad.poll();
         if (member != null) {
-            return addTaskInternal(member.getKey(), taskId, isActive, isStateful);
+            int newTaskCount = addTaskInternal(member.getKey(), taskId, isActive, isStateful);
+            member.setValue(newTaskCount);
+            membersByLoad.add(member); // Reinsert the updated member back into the priority queue
+            return newTaskCount;
         } else {
             throw new TaskAssignorException("No members available to assign task " + taskId);
         }
