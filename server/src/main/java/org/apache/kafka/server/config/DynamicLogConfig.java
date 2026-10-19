@@ -99,10 +99,11 @@ public class DynamicLogConfig implements BrokerReconfigurable {
     }
 
     private void validateLogRemoteCopyLagMs(AbstractKafkaConfig newConfig) {
+        RemoteLogManagerConfig remoteLogManagerConfig = newConfig.remoteLogManagerConfig();
         long logRetentionMs = newConfig.logRetentionTimeMillis();
-        long logLocalRetentionMs = newConfig.remoteLogManagerConfig().logLocalRetentionMs();
+        long logLocalRetentionMs = remoteLogManagerConfig.logLocalRetentionMs();
         long effectiveLocalRetentionMs = logLocalRetentionMs == -2L ? logRetentionMs : logLocalRetentionMs;
-        long logRemoteCopyLagMs = newConfig.remoteLogManagerConfig().logRemoteCopyLagMs();
+        long logRemoteCopyLagMs = remoteLogManagerConfig.logRemoteCopyLagMs();
         if (logRemoteCopyLagMs > 0L && effectiveLocalRetentionMs >= 0L && logRemoteCopyLagMs > effectiveLocalRetentionMs) {
             throw new ConfigException(RemoteLogManagerConfig.LOG_REMOTE_COPY_LAG_MS_PROP, logRemoteCopyLagMs,
                 "Value must not exceed " + RemoteLogManagerConfig.LOG_LOCAL_RETENTION_MS_PROP + " (effective value: " + effectiveLocalRetentionMs + ")");
@@ -110,10 +111,11 @@ public class DynamicLogConfig implements BrokerReconfigurable {
     }
 
     private void validateLogRemoteCopyLagBytes(AbstractKafkaConfig newConfig) {
+        RemoteLogManagerConfig remoteLogManagerConfig = newConfig.remoteLogManagerConfig();
         long logRetentionBytes = newConfig.logRetentionBytes();
-        long logLocalRetentionBytes = newConfig.remoteLogManagerConfig().logLocalRetentionBytes();
+        long logLocalRetentionBytes = remoteLogManagerConfig.logLocalRetentionBytes();
         long effectiveLocalRetentionBytes = logLocalRetentionBytes == -2L ? logRetentionBytes : logLocalRetentionBytes;
-        long logRemoteCopyLagBytes = newConfig.remoteLogManagerConfig().logRemoteCopyLagBytes();
+        long logRemoteCopyLagBytes = remoteLogManagerConfig.logRemoteCopyLagBytes();
         if (logRemoteCopyLagBytes > 0L && effectiveLocalRetentionBytes >= 0L && logRemoteCopyLagBytes > effectiveLocalRetentionBytes) {
             throw new ConfigException(RemoteLogManagerConfig.LOG_REMOTE_COPY_LAG_BYTES_PROP, logRemoteCopyLagBytes,
                 "Value must not exceed " + RemoteLogManagerConfig.LOG_LOCAL_RETENTION_BYTES_PROP + " (effective value: " + effectiveLocalRetentionBytes + ")");
@@ -152,8 +154,9 @@ public class DynamicLogConfig implements BrokerReconfigurable {
         logManager.reconfigureDefaultLogConfig(new LogConfig(newBrokerDefaults));
         updateLogsConfig(newBrokerDefaults);
 
-        logManager.updateCordonedLogDirs(Set.copyOf(newConfig.cordonedLogDirs()));
-        directoryEventHandler.handleCordoned(newConfig.cordonedLogDirs().stream()
+        List<String> cordonedLogDirs = newConfig.cordonedLogDirs();
+        logManager.updateCordonedLogDirs(Set.copyOf(cordonedLogDirs));
+        directoryEventHandler.handleCordoned(cordonedLogDirs.stream()
             .flatMap(dir -> logManager.directoryId(dir).stream())
             .collect(Collectors.toSet()));
     }
