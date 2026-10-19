@@ -464,7 +464,7 @@ public class SubscriptionState {
         seekValidated(tp, new FetchPosition(offset));
     }
 
-    public void seekUnvalidated(TopicPartition tp, FetchPosition position) {
+    public synchronized void seekUnvalidated(TopicPartition tp, FetchPosition position) {
         assignedState(tp).seekUnvalidated(position);
     }
 

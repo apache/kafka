@@ -26,6 +26,7 @@ import org.apache.kafka.clients.consumer.CommitFailedException;
 import org.apache.kafka.clients.consumer.ConsumerConfig;
 import org.apache.kafka.clients.consumer.OffsetAndMetadata;
 import org.apache.kafka.clients.consumer.RetriableCommitFailedException;
+import org.apache.kafka.clients.consumer.internals.events.AsyncPollEventOffsetsToCommit;
 import org.apache.kafka.clients.consumer.internals.events.BackgroundEventHandler;
 import org.apache.kafka.clients.consumer.internals.metrics.AsyncConsumerMetrics;
 import org.apache.kafka.common.KafkaException;
@@ -244,6 +245,96 @@ public class CommitRequestManagerTest {
 
         assertEquals(0.03, (double) getMetric("commit-rate").metricValue(), 0.01);
         assertEquals(1.0, getMetric("commit-total").metricValue());
+    }
+
+    @Test
+    public void testAutoCommitDiscardsSnapshotAfterReassignment() {
+        TopicPartition tp = new TopicPartition("topic", 0);
+        subscriptionState.assignFromUser(singleton(tp));
+        subscriptionState.seek(tp, 100);
+        AsyncPollEventOffsetsToCommit snapshot = new AsyncPollEventOffsetsToCommit(
+            subscriptionState.assignmentId(), subscriptionState.allConsumed());
+        CommitRequestManager manager = create(true, 100);
+        when(coordinatorRequestManager.coordinator()).thenReturn(Optional.of(mockedNode));
+
+        // Even reassignment of the same partition must invalidate the previous snapshot.
+        subscriptionState.assignFromUser(Collections.emptySet());
+        subscriptionState.assignFromUser(singleton(tp));
+        subscriptionState.seek(tp, 200);
+        time.sleep(100);
+        manager.updateTimerAndMaybeCommit(time.milliseconds(), Optional.of(snapshot));
+        assertTrue(manager.poll(time.milliseconds()).unsentRequests.isEmpty());
+
+        // Discarding the stale snapshot must allow a fresh one to commit without another interval.
+        AsyncPollEventOffsetsToCommit currentSnapshot = new AsyncPollEventOffsetsToCommit(
+            subscriptionState.assignmentId(), subscriptionState.allConsumed());
+        manager.updateTimerAndMaybeCommit(time.milliseconds(), Optional.of(currentSnapshot));
+        List<NetworkClientDelegate.UnsentRequest> requests = manager.poll(time.milliseconds()).unsentRequests;
+        assertEquals(1, requests.size());
+        OffsetCommitRequestData request = (OffsetCommitRequestData) requests.get(0).requestBuilder().build().data();
+        assertEquals(200, request.topics().get(0).partitions().get(0).committedOffset());
+    }
+
+    @ParameterizedTest
+    @ValueSource(booleans = {true, false})
+    public void testAutoCommitDoesNotFallBackToCurrentOffsets(boolean snapshotPresent) {
+        TopicPartition tp = new TopicPartition("topic", 0);
+        subscriptionState.assignFromUser(singleton(tp));
+        subscriptionState.seek(tp, 100);
+        CommitRequestManager manager = create(true, 100);
+        when(coordinatorRequestManager.coordinator()).thenReturn(Optional.of(mockedNode));
+        Optional<AsyncPollEventOffsetsToCommit> snapshot = snapshotPresent
+            ? Optional.of(new AsyncPollEventOffsetsToCommit(subscriptionState.assignmentId(), Collections.emptyMap()))
+            : Optional.empty();
+
+        time.sleep(100);
+        manager.updateTimerAndMaybeCommit(time.milliseconds(), snapshot);
+        assertTrue(manager.poll(time.milliseconds()).unsentRequests.isEmpty(),
+            "An absent snapshot or empty offset map must not commit the current position");
+
+        time.sleep(100);
+        manager.updateTimerAndMaybeCommit(time.milliseconds(), Optional.of(new AsyncPollEventOffsetsToCommit(
+            subscriptionState.assignmentId(), subscriptionState.allConsumed())));
+        List<NetworkClientDelegate.UnsentRequest> requests = manager.poll(time.milliseconds()).unsentRequests;
+        assertEquals(1, requests.size());
+        OffsetCommitRequestData request = (OffsetCommitRequestData) requests.get(0).requestBuilder().build().data();
+        assertEquals(100, request.topics().get(0).partitions().get(0).committedOffset());
+    }
+
+    @Test
+    public void testAutoCommitSnapshotRespectsIntervalAndInflightCommit() {
+        TopicPartition tp = new TopicPartition("topic", 0);
+        subscriptionState.assignFromUser(singleton(tp));
+        subscriptionState.seek(tp, 100);
+        CommitRequestManager manager = create(true, 100);
+        when(coordinatorRequestManager.coordinator()).thenReturn(Optional.of(mockedNode));
+        Optional<AsyncPollEventOffsetsToCommit> snapshot = Optional.of(new AsyncPollEventOffsetsToCommit(
+            subscriptionState.assignmentId(), subscriptionState.allConsumed()));
+
+        manager.updateTimerAndMaybeCommit(time.milliseconds(), snapshot);
+        assertTrue(manager.poll(time.milliseconds()).unsentRequests.isEmpty());
+
+        time.sleep(100);
+        manager.updateTimerAndMaybeCommit(time.milliseconds(), snapshot);
+        List<NetworkClientDelegate.UnsentRequest> requests = manager.poll(time.milliseconds()).unsentRequests;
+        assertEquals(1, requests.size());
+        NetworkClientDelegate.UnsentRequest inflightCommit = requests.get(0);
+
+        subscriptionState.position(tp, new SubscriptionState.FetchPosition(200));
+        snapshot = Optional.of(new AsyncPollEventOffsetsToCommit(
+            subscriptionState.assignmentId(), subscriptionState.allConsumed()));
+        time.sleep(100);
+        manager.updateTimerAndMaybeCommit(time.milliseconds(), snapshot);
+        assertTrue(manager.poll(time.milliseconds()).unsentRequests.isEmpty(),
+            "A snapshot must not bypass the in-flight auto-commit guard");
+
+        inflightCommit.handler().onComplete(buildOffsetCommitClientResponse(
+            new OffsetCommitResponse(0, Collections.emptyMap())));
+        manager.updateTimerAndMaybeCommit(time.milliseconds(), snapshot);
+        requests = manager.poll(time.milliseconds()).unsentRequests;
+        assertEquals(1, requests.size());
+        OffsetCommitRequestData request = (OffsetCommitRequestData) requests.get(0).requestBuilder().build().data();
+        assertEquals(200, request.topics().get(0).partitions().get(0).committedOffset());
     }
 
     @Test
