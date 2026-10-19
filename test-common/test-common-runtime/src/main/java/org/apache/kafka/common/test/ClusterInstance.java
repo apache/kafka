@@ -335,15 +335,7 @@ public interface ClusterInstance {
     }
 
     default void createTopic(String topicName, int partitions, short replicas, Map<String, String> props) {
-        try (Admin admin = admin()) {
-            admin.createTopics(List.of(new NewTopic(topicName, partitions, replicas).configs(props))).all().get();
-            waitTopicCreation(topicName, partitions);
-        } catch (InterruptedException e) {
-            throw new InterruptException(e);
-        } catch (ExecutionException e) {
-            if (e.getCause() instanceof RuntimeException re) throw re;
-            throw new RuntimeException("Failed to create topic " + topicName, e.getCause());
-        }
+        createTopicAndWait(new NewTopic(topicName, partitions, replicas).configs(props), partitions);
     }
 
     default void createTopicWithAssignment(String topicName, Map<Integer, List<Integer>> replicaAssignment) {
@@ -351,15 +343,18 @@ public interface ClusterInstance {
     }
 
     default void createTopicWithAssignment(String topicName, Map<Integer, List<Integer>> replicaAssignment, Map<String, String> props) {
+        createTopicAndWait(new NewTopic(topicName, replicaAssignment).configs(props), replicaAssignment.size());
+    }
+
+    private void createTopicAndWait(NewTopic newTopic, int partitions) {
         try (Admin admin = admin()) {
-            admin.createTopics(List.of(new NewTopic(topicName, replicaAssignment).configs(props))).all().get();
-            int partitions = replicaAssignment.size();
-            waitTopicCreation(topicName, partitions);
+            admin.createTopics(List.of(newTopic)).all().get();
+            waitTopicCreation(newTopic.name(), partitions);
         } catch (InterruptedException e) {
             throw new InterruptException(e);
         } catch (ExecutionException e) {
             if (e.getCause() instanceof RuntimeException re) throw re;
-            throw new RuntimeException("Failed to create topic " + topicName, e.getCause());
+            throw new RuntimeException("Failed to create topic " + newTopic.name(), e.getCause());
         }
     }
 
