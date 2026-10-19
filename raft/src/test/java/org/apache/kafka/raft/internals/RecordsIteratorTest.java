@@ -189,14 +189,11 @@ public final class RecordsIteratorTest {
                 firstBatchSize,
                 true
             )) {
-                iterator.forEachRemaining(batch -> actualBatches.add(TestBatch.from(batch)));
+                assertThrows(
+                    IllegalStateException.class,
+                    () -> iterator.forEachRemaining(batch -> actualBatches.add(TestBatch.from(batch)))
+                );
             }
-
-            assertEquals(List.of(firstBatch), actualBatches);
-            // The slice ends before the second batch does, check the buffer is never grown for it
-            Mockito.verify(bufferSupplier, Mockito.never())
-                .get(Mockito.intThat(size -> size > firstBatchSize));
-            assertEquals(Set.of(), allocatedBuffers);
         }
     }
 

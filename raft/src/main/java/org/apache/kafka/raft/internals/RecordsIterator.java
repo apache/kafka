@@ -143,16 +143,8 @@ public final class RecordsIterator<T> implements Iterator<Batch<T>>, AutoCloseab
         } else if (firstBatchSize == null || bytesRead >= fileRecords.sizeInBytes()) {
             // No more bytes can be read, but the buffer doesn't contain a complete batch. firstBatchSize
             // is null when fewer than HEADER_SIZE_UP_TO_MAGIC bytes are left. Callers are expected to
-            // pass records that end on a batch boundary, so the records were cut in the middle of a
-            // batch or are corrupt. The partial batch can't be completed, so don't grow the buffer.
-            logger.error(
-                "Ignoring a partial batch of {} bytes at position {} of {}; the batch size is {}",
-                buffer.remaining(),
-                bytesRead - buffer.remaining(),
-                fileRecords,
-                firstBatchSize == null ? "unknown" : firstBatchSize
-            );
-            return memoryRecords;
+            // pass records that end on a batch boundary, so reaching this code is unexpected.
+            throw new IllegalStateException("Unexpected partial batch of records");
         } else {
             logger.info(
                 "Creating a new buffer; previous buffer {} cannot fit at least {} bytes",
