@@ -18,15 +18,15 @@ package org.apache.kafka.server.mirror;
 
 import org.junit.jupiter.api.Test;
 import org.junit.jupiter.params.ParameterizedTest;
+import org.junit.jupiter.params.provider.Arguments;
 import org.junit.jupiter.params.provider.EnumSource;
 import org.junit.jupiter.params.provider.MethodSource;
+import org.junit.jupiter.params.provider.ValueSource;
 
 import java.util.EnumSet;
 import java.util.Set;
 import java.util.stream.Collectors;
 import java.util.stream.Stream;
-
-import org.junit.jupiter.params.provider.Arguments;
 
 import static org.junit.jupiter.api.Assertions.assertEquals;
 import static org.junit.jupiter.api.Assertions.assertThrows;
@@ -44,42 +44,24 @@ class MirrorPartitionStateTest {
         assertEquals(expectedState, MirrorPartitionState.fromValue(value));
     }
 
-    @Test
-    void testFromValueInvalidPositive() {
+    @ParameterizedTest
+    @ValueSource(bytes = {9, -2, 100})
+    void testFromValueInvalid(byte value) {
         assertThrows(
             IllegalArgumentException.class,
-            () -> MirrorPartitionState.fromValue((byte) 9),
-            "Should throw IllegalArgumentException for invalid positive value"
-        );
-    }
-
-    @Test
-    void testFromValueInvalidNegative() {
-        assertThrows(
-            IllegalArgumentException.class,
-            () -> MirrorPartitionState.fromValue((byte) -2),
-            "Should throw IllegalArgumentException for invalid negative value"
-        );
-    }
-
-    @Test
-    void testFromValueInvalidRange() {
-        assertThrows(
-            IllegalArgumentException.class,
-            () -> MirrorPartitionState.fromValue((byte) 100),
-            "Should throw IllegalArgumentException for out-of-range value"
+            () -> MirrorPartitionState.fromValue(value),
+            "Should throw IllegalArgumentException for invalid value"
         );
     }
 
     @Test
     void testAllStatesAreCoveredByTable() {
         Set<MirrorPartitionState> tested = expectedStateValues()
-                .map(args -> (MirrorPartitionState) args.get()[0])
-                .collect(Collectors.toCollection(() ->
-                        EnumSet.noneOf(MirrorPartitionState.class)));
+            .map(args -> (MirrorPartitionState) args.get()[0])
+            .collect(Collectors.toCollection(() -> EnumSet.noneOf(MirrorPartitionState.class)));
 
         assertEquals(EnumSet.allOf(MirrorPartitionState.class), tested,
-                "Every MirrorPartitionState must have an entry in stateValues() with its expected byte value");
+            "Every MirrorPartitionState must have an entry in expectedStateValues() with its expected byte value");
     }
 
     @ParameterizedTest
@@ -89,20 +71,20 @@ class MirrorPartitionStateTest {
     }
 
     // Explicit mapping of each state to its expected byte value.
-    // Keep these values independent of MirrorPartitionState.value() to catch
-    // accidental changes to the state representation.
+    // Keep these values independent of MirrorPartitionState.value()
+    // to catch accidental changes to the state representation.
     private static Stream<Arguments> expectedStateValues() {
         return Stream.of(
-                Arguments.of(MirrorPartitionState.LOG_ALIGNMENT, (byte) 0),
-                Arguments.of(MirrorPartitionState.EPOCH_FENCING, (byte) 1),
-                Arguments.of(MirrorPartitionState.ULE_RECOVERY, (byte) 2),
-                Arguments.of(MirrorPartitionState.MIRRORING, (byte) 3),
-                Arguments.of(MirrorPartitionState.PAUSING, (byte) 4),
-                Arguments.of(MirrorPartitionState.PAUSED, (byte) 5),
-                Arguments.of(MirrorPartitionState.STOPPING, (byte) 6),
-                Arguments.of(MirrorPartitionState.STOPPED, (byte) 7),
-                Arguments.of(MirrorPartitionState.FAILED, (byte) 8),
-                Arguments.of(MirrorPartitionState.UNKNOWN, (byte) -1)
+            Arguments.of(MirrorPartitionState.LOG_ALIGNMENT, (byte) 0),
+            Arguments.of(MirrorPartitionState.EPOCH_FENCING, (byte) 1),
+            Arguments.of(MirrorPartitionState.ULE_RECOVERY, (byte) 2),
+            Arguments.of(MirrorPartitionState.MIRRORING, (byte) 3),
+            Arguments.of(MirrorPartitionState.PAUSING, (byte) 4),
+            Arguments.of(MirrorPartitionState.PAUSED, (byte) 5),
+            Arguments.of(MirrorPartitionState.STOPPING, (byte) 6),
+            Arguments.of(MirrorPartitionState.STOPPED, (byte) 7),
+            Arguments.of(MirrorPartitionState.FAILED, (byte) 8),
+            Arguments.of(MirrorPartitionState.UNKNOWN, (byte) -1)
         );
     }
 }
