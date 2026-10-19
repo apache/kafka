@@ -159,7 +159,6 @@ import static org.junit.jupiter.api.Assertions.assertNotNull;
 import static org.junit.jupiter.api.Assertions.assertNull;
 import static org.junit.jupiter.api.Assertions.assertThrows;
 import static org.junit.jupiter.api.Assertions.assertTrue;
-import static org.junit.jupiter.api.Assertions.fail;
 import static org.mockito.ArgumentMatchers.any;
 import static org.mockito.ArgumentMatchers.anyCollection;
 import static org.mockito.ArgumentMatchers.anyLong;
@@ -412,12 +411,8 @@ public class WorkerTest {
         assertStatistics(worker, 0, 0);
         FutureCallback<TargetState> onStart = new FutureCallback<>();
         worker.startConnector(CONNECTOR_ID, connectorProps, ctx, connectorStatusListener, TargetState.STARTED, onStart);
-        try {
-            onStart.get(0, TimeUnit.MILLISECONDS);
-            fail("Should have failed to start connector");
-        } catch (ExecutionException e) {
-            assertEquals(exception, e.getCause());
-        }
+        ExecutionException e = assertThrows(ExecutionException.class, () -> onStart.get(0, TimeUnit.MILLISECONDS), "Should have failed to start connector");
+        assertEquals(exception, e.getCause());
 
         assertStartupStatistics(worker, 1, 1, 0, 0);
         assertEquals(Set.of(), worker.connectorNames());
