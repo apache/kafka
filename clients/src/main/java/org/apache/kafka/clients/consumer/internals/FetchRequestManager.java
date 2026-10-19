@@ -81,7 +81,9 @@ public class FetchRequestManager extends AbstractFetch implements RequestManager
      */
     @Override
     public long maximumTimeToWait(long currentTimeMs) {
-        return nodesWithPendingFetchRequests.isEmpty() ? retryBackoffMs : Long.MAX_VALUE;
+        // retry.backoff.ms may be configured to 0, but returning 0 here would cause the application thread
+        // to poll continuously while there is no fetch request in flight.
+        return nodesWithPendingFetchRequests.isEmpty() ? Math.max(1L, retryBackoffMs) : Long.MAX_VALUE;
     }
 
     /**

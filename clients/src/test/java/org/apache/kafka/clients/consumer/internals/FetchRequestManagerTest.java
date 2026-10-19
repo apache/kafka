@@ -185,7 +185,7 @@ public class FetchRequestManagerTest {
     private final int maxBytes = Integer.MAX_VALUE;
     private final int maxWaitMs = 0;
     private final int fetchSize = 1000;
-    private final long retryBackoffMs = 100;
+    private long retryBackoffMs = 100;
     private final int requestTimeoutMs = 30000;
     private final ApiVersions apiVersions = new ApiVersions();
     private MockTime time = new MockTime(1);
@@ -404,6 +404,18 @@ public class FetchRequestManagerTest {
 
         assertEquals(0, sendFetches());
         assertEquals(retryBackoffMs, fetcher.maximumTimeToWait(time.milliseconds()));
+    }
+
+    @Test
+    public void testMaximumTimeToWaitDoesNotSpinWhenRetryBackoffIsZero() {
+        retryBackoffMs = 0;
+        buildFetcher();
+
+        long maximumTimeToWaitMs = fetcher.maximumTimeToWait(time.milliseconds());
+
+        assertTrue(maximumTimeToWaitMs > 0,
+                "maximumTimeToWait must be > 0 when there is no in-flight fetch request, even if " +
+                        "retry.backoff.ms is configured to 0; got " + maximumTimeToWaitMs);
     }
 
     @Test
