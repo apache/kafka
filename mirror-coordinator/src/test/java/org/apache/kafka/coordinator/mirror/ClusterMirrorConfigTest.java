@@ -74,6 +74,8 @@ public class ClusterMirrorConfigTest {
         assertNotNull(config.topicPropertiesExcludePattern());
         assertTrue(config.topicPropertiesExcludePattern()
                 .matcher("leader.replication.throttled.replicas").matches());
+        assertFalse(config.topicPropertiesExcludePattern()
+                .matcher("some.other.property").matches());
     }
 
     @Test
