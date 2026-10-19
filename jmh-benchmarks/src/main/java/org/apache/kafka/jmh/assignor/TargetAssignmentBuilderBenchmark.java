@@ -34,8 +34,10 @@ import org.apache.kafka.coordinator.group.modern.GroupSpecBuilder;
 import org.apache.kafka.coordinator.group.modern.SubscribedTopicDescriberImpl;
 import org.apache.kafka.coordinator.group.modern.TargetAssignmentBuilder;
 import org.apache.kafka.coordinator.group.modern.TopicIds;
+import org.apache.kafka.coordinator.group.modern.consumer.ConsumerGroup;
 import org.apache.kafka.coordinator.group.modern.consumer.ConsumerGroupMember;
 import org.apache.kafka.coordinator.group.util.UpdatedMembersAndTargetAssignmentView;
+import org.apache.kafka.timeline.SnapshotRegistry;
 
 import org.openjdk.jmh.annotations.Benchmark;
 import org.openjdk.jmh.annotations.BenchmarkMode;
@@ -52,7 +54,6 @@ import org.openjdk.jmh.annotations.Threads;
 import org.openjdk.jmh.annotations.Warmup;
 import org.slf4j.Logger;
 
-import java.util.HashMap;
 import java.util.List;
 import java.util.Map;
 import java.util.Optional;
@@ -116,14 +117,18 @@ public class TargetAssignmentBuilderBenchmark {
 
         setupTopics();
 
-        Map<String, ConsumerGroupMember> members = createMembers();
-        Map<String, Assignment> existingTargetAssignment = generateMockInitialTargetAssignmentAndUpdateInvertedTargetAssignment(members);
+        LogContext logContext = new LogContext();
+        SnapshotRegistry snapshotRegistry = new SnapshotRegistry(logContext);
+        ConsumerGroup group = new ConsumerGroup(logContext, snapshotRegistry, GROUP_ID);
+        createMembers().values().forEach(group::updateMember);
+        generateMockInitialTargetAssignment(group);
+        invertedTargetAssignment = group.invertedTargetAssignment();
 
         ConsumerGroupMember newMember = new ConsumerGroupMember.Builder("newMember")
             .setSubscribedTopicNames(allTopicNames)
             .build();
 
-        updatedMembersAndTargetAssignment = new UpdatedMembersAndTargetAssignmentView<>(members, Map.of(), existingTargetAssignment, ConsumerGroupMember::instanceId);
+        updatedMembersAndTargetAssignment = new UpdatedMembersAndTargetAssignmentView<>(group.members(), Map.of(), group.targetAssignment(), ConsumerGroupMember::instanceId);
         updatedMembersAndTargetAssignment.addOrUpdateMember(newMember.memberId(), newMember);
 
         groupSpec = buildGroupSpecWithoutOffload();
@@ -141,11 +146,9 @@ public class TargetAssignmentBuilderBenchmark {
         subscribedTopicDescriber = new SubscribedTopicDescriberImpl(metadataImage);
     }
 
-    private Map<String, Assignment> generateMockInitialTargetAssignmentAndUpdateInvertedTargetAssignment(
-        Map<String, ConsumerGroupMember> members
-    ) {
+    private void generateMockInitialTargetAssignment(ConsumerGroup group) {
         GroupSpec initialGroupSpec = AssignorBenchmarkUtils.createConsumerGroupSpec(
-            members,
+            group.members(),
             subscriptionType,
             topicResolver
         );
@@ -154,17 +157,12 @@ public class TargetAssignmentBuilderBenchmark {
             initialGroupSpec,
             subscribedTopicDescriber
         );
-        invertedTargetAssignment = AssignorBenchmarkUtils.computeInvertedTargetAssignment(groupAssignment);
-
-        Map<String, Assignment> initialTargetAssignment = new HashMap<>(memberCount);
 
         for (Map.Entry<String, MemberAssignment> entry : groupAssignment.members().entrySet()) {
             String memberId = entry.getKey();
             Map<Uuid, Set<Integer>> topicPartitions = entry.getValue().partitions();
-            initialTargetAssignment.put(memberId, new Assignment(topicPartitions));
+            group.updateTargetAssignment(memberId, new Assignment(topicPartitions));
         }
-
-        return initialTargetAssignment;
     }
 
     private Map<String, ConsumerGroupMember> createMembers() {
