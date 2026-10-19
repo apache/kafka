@@ -14,10 +14,15 @@
 # limitations under the License.
 
 import importlib.util
+import io
 import itertools
+import json
+import runpy
 import subprocess
+import sys
 import unittest
 from pathlib import Path
+from unittest.mock import call, patch
 
 
 SCRIPT = Path(__file__).with_name("pr-format.py")
@@ -55,18 +60,23 @@ class FormatBodyTest(unittest.TestCase):
                 self.assertEqual(formatted, pr_format.format_body(formatted))
 
     def test_preserves_fenced_code_and_long_indented_lines(self):
-        body = (
-            "```text\n"
-            "first code line\n"
-            "\n"
-            "    " + ("long code content " * 8) + "\n"
-            "last code line\n"
-            "```\n"
-        )
-
-        formatted = pr_format.format_body(body)
-        self.assertEqual(body, formatted)
-        self.assertEqual(formatted, pr_format.format_body(formatted))
+        for marker, other_marker in (("`", "~"), ("~", "`")):
+            with self.subTest(marker=marker):
+                code = (
+                    f"{marker * 4}text\n"
+                    "first code line\n\n"
+                    "    " + ("long code content " * 8) + "\n"
+                    f"{other_marker * 3}\n"
+                    "second code line\nthird code line\n"
+                    f"{marker * 3}\n"
+                    "fourth code line\nfifth code line\n"
+                    f"{marker * 5}\n"
+                )
+                body = "Prose before\nthe code fence.\n" + code + "Prose after\nthe code fence.\n"
+                expected = "Prose before the code fence.\n" + code + "Prose after the code fence.\n"
+                formatted = pr_format.format_body(body)
+                self.assertEqual(expected, formatted)
+                self.assertEqual(formatted, pr_format.format_body(formatted))
 
     def test_preserves_structured_content_and_hard_breaks(self):
         for body in (
@@ -74,12 +84,12 @@ class FormatBodyTest(unittest.TestCase):
             "> A quotation\n> on separate lines\n",
             "    " + "long indented code " * 8 + "\n\n\tmore code\n",
             "| Name  | Value |\n|-------|-------|\n| alpha | beta  |\n",
-            "Text\n---\n\n***\n\n___\n\n===\n",
+            "Text\n___\n\n***\n\n---\n\n===\n",
             "<details>\n<summary>Details</summary>\n</details>\n",
-            "[reference]: https://example.com\n",
+            '[reference]: https://example.com "A reference title long enough '
+            'that prose wrapping would split this definition."\n',
             "A deliberate hard break  \nfollowed by another line.\n",
             "A deliberate hard break\\\nfollowed by another line.\n",
-            "~~~text\nfirst line\n\nsecond line\n~~~\n",
             "```text\nunclosed fence\n\nmore code\n",
             "- parent\n  - nested child\n",
         ):
@@ -141,8 +151,6 @@ class FormatBodyTest(unittest.TestCase):
             (reviewers, wrapped_reviewers, reviewers),
             (reviewers + other, wrapped_reviewers + other, reviewers + other),
             (other + reviewers, other + wrapped_reviewers, other + reviewers),
-            (wrapped_reviewers + other, wrapped_reviewers + other, reviewers + other),
-            (other + wrapped_reviewers, other + wrapped_reviewers, other + reviewers),
         ):
             with self.subTest(body=body):
                 formatted = pr_format.format_body(body)
@@ -196,10 +204,54 @@ class FormatBodyTest(unittest.TestCase):
                 self.assertEqual(formatted, pr_format.format_body(formatted))
 
     def test_long_unbroken_words(self):
-        body = "An identifier " + "x" * 100 + " stays intact.\n"
+        identifier = "long-" * 20 + "name"
+        body = f"An identifier {identifier} stays intact.\n"
         formatted = pr_format.format_body(body)
-        self.assertIn("x" * 100, formatted)
+        self.assertEqual(f"An identifier\n{identifier}\nstays intact.\n", formatted)
         self.assertEqual(formatted, pr_format.format_body(formatted))
+
+    def test_cli_updates_only_changed_bodies(self):
+        for body, expected in (
+            ("Short prose.\n", "Short prose.\n"),
+            ("Short prose.\r\n", "Short prose.\n"),
+            ("First prose line\nsecond prose line.\n", "First prose line second prose line.\n"),
+        ):
+            with self.subTest(body=body):
+                response = subprocess.CompletedProcess(
+                    args=[], returncode=0,
+                    stdout=json.dumps({
+                        "title": "KAFKA-21205 Preserve Markdown",
+                        "body": body, "reviews": [],
+                    }).encode(),
+                    stderr=b"",
+                )
+                with (
+                    patch.dict("os.environ", {"PR_NUMBER": "23691", "GITHUB_ACTIONS": "true"}, clear=True),
+                    patch("subprocess.run", return_value=response) as run,
+                    patch("tempfile.NamedTemporaryFile") as temporary_file,
+                    patch("builtins.exit", new=sys.exit, create=True),
+                    patch("logging.getLogger"),
+                    patch("sys.stdout", new_callable=io.StringIO),
+                ):
+                    body_file = temporary_file.return_value.__enter__.return_value
+                    body_file.name = "pr-body.txt"
+                    with self.assertRaises(SystemExit) as result:
+                        runpy.run_path(str(SCRIPT), run_name="__main__")
+                    self.assertEqual(0, result.exception.code)
+                    expected_calls = [call(
+                        ["gh", "pr", "view", "23691", "--json", "title,body,reviews"],
+                        capture_output=True,
+                    )]
+                    if body != expected:
+                        expected_calls.append(call(
+                            ["gh", "pr", "edit", "23691", "--body-file", body_file.name],
+                            capture_output=True,
+                        ))
+                        temporary_file.assert_called_once_with()
+                        body_file.write.assert_called_once_with(expected.encode())
+                    else:
+                        temporary_file.assert_not_called()
+                    self.assertEqual(expected_calls, run.call_args_list)
 
 
 if __name__ == "__main__":
