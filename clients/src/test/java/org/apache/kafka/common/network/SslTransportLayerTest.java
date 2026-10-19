@@ -1305,6 +1305,7 @@ public class SslTransportLayerTest {
 
         // The readable part is sent, then the read of the next part fails
         assertThrows(IOException.class, () -> layer.transferFrom(fileChannel, 0, 3 * TRANSFER_SIZE));
+        assertArrayEquals(fileContents(TRANSFER_SIZE), sent.toByteArray());
         // A transfer from the unreadable position must fail as well instead of sending what was read before
         assertThrows(IOException.class, () -> layer.transferFrom(fileChannel, TRANSFER_SIZE, 2 * TRANSFER_SIZE));
         assertArrayEquals(fileContents(TRANSFER_SIZE), sent.toByteArray());
@@ -1322,6 +1323,7 @@ public class SslTransportLayerTest {
         FileChannel fileChannel = fileChannelReadableUpTo(TRANSFER_SIZE, () -> -1);
 
         assertEquals(TRANSFER_SIZE, layer.transferFrom(fileChannel, 0, 3 * TRANSFER_SIZE));
+        assertArrayEquals(fileContents(TRANSFER_SIZE), sent.toByteArray());
         assertEquals(0, layer.transferFrom(fileChannel, TRANSFER_SIZE, 2 * TRANSFER_SIZE));
         assertArrayEquals(fileContents(TRANSFER_SIZE), sent.toByteArray());
     }

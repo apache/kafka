@@ -999,6 +999,13 @@ public class SslTransportLayer implements TransportLayer {
             hasBytesBuffered = false;
     }
 
+    /**
+     * Transfers bytes from `fileChannel` by reading them into a buffer and writing them to this channel, since
+     * they have to be encrypted.
+     *
+     * @throws IOException If the file cannot be read or this channel cannot be written. The bytes the failed call
+     *         already wrote are not reported, so this channel must not be used after it.
+     */
     @Override
     public long transferFrom(FileChannel fileChannel, long position, long count) throws IOException {
         if (state == State.CLOSING)
