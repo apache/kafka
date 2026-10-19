@@ -24,26 +24,11 @@ import net.sourceforge.argparse4j.inf.ArgumentAction;
 import net.sourceforge.argparse4j.inf.ArgumentParser;
 
 import java.util.Map;
-import java.util.function.Consumer;
 
 class PrintVersionAndExitAction implements ArgumentAction {
 
-    @Override
-    public void run(
-        ArgumentParser parser,
-        Argument arg,
-        Map<String, Object> attrs,
-        String flag,
-        Object value,
-        Consumer<Object> valueSetter
-    ) {
-        String version = AppInfoParser.getVersion();
-        String commitId = AppInfoParser.getCommitId();
-        System.out.println(version + " (Commit:" + commitId + ")");
-        Exit.exit(0);
-    }
-
     // Deprecated in argparse4j 0.9.0 but still abstract, so it must be implemented.
+    // The interface's default run(..., valueSetter), which argparse4j invokes, delegates here.
     @Deprecated
     @Override
     public void run(
@@ -53,7 +38,10 @@ class PrintVersionAndExitAction implements ArgumentAction {
         String flag,
         Object value
     ) {
-        run(parser, arg, attrs, flag, value, null);
+        String version = AppInfoParser.getVersion();
+        String commitId = AppInfoParser.getCommitId();
+        System.out.println(version + " (Commit:" + commitId + ")");
+        Exit.exit(0);
     }
 
     @Override
