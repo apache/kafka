@@ -130,6 +130,7 @@ import java.util.stream.IntStream;
 
 import static org.apache.kafka.common.config.TopicConfig.SEGMENT_BYTES_CONFIG;
 import static org.apache.kafka.common.metadata.MetadataRecordType.CLEAR_ELR_RECORD;
+import static org.apache.kafka.common.metadata.MetadataRecordType.PARTITION_CHANGE_RECORD;
 import static org.apache.kafka.common.protocol.Errors.ELECTION_NOT_NEEDED;
 import static org.apache.kafka.common.protocol.Errors.ELIGIBLE_LEADERS_NOT_AVAILABLE;
 import static org.apache.kafka.common.protocol.Errors.INELIGIBLE_REPLICA;
@@ -1724,15 +1725,14 @@ public class ReplicationControlManagerTest {
             replicas[i] = new int[] {i % 3};
         }
         Uuid fooId = ctx.createTestTopic("foo", replicas).topicId();
-        // Increase the replication factor of partition 0 only. Use PartitionChangeRecord
-        // version 2, the latest one, because Directories is only valid in version 1 and above.
+        // Increase the replication factor of partition 0 only.
         ctx.replay(List.of(new ApiMessageAndVersion(new PartitionChangeRecord().
             setTopicId(fooId).
             setPartitionId(0).
             setReplicas(List.of(0, 1, 2)).
             setIsr(List.of(0, 1, 2)).
             setDirectories(List.of(DirectoryId.UNASSIGNED, DirectoryId.UNASSIGNED, DirectoryId.UNASSIGNED)),
-            (short) 2)));
+            PARTITION_CHANGE_RECORD.highestSupportedVersion())));
 
         ControllerRequestContext requestContext = anonymousContextFor(ApiKeys.CREATE_PARTITIONS);
         ControllerResult<List<CreatePartitionsTopicResult>> result = replicationControl.createPartitions(
