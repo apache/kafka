@@ -121,9 +121,9 @@ public final class ShareConsumeBenchSpec extends TaskSpec {
                             @JsonProperty("threadsPerWorker") Integer threadsPerWorker,
                             @JsonProperty("recordProcessor") Optional<RecordProcessor> recordProcessor,
                             @JsonProperty("activeTopics") List<String> activeTopics,
-                            @JsonProperty("acknowledgeType") Optional<AcknowledgeType> acknowledgeType,
+                            @JsonProperty("acknowledgeType") AcknowledgeType acknowledgeType,
                             @JsonProperty("recordAcknowledger") Optional<RecordAcknowledger> recordAcknowledger,
-                            @JsonProperty("shareGroupDLQConfig") Optional<ShareGroupDLQConfig> shareGroupDLQConfig) {
+                            @JsonProperty("shareGroupDLQConfig") ShareGroupDLQConfig shareGroupDLQConfig) {
         super(startMs, durationMs);
         this.consumerNode = (consumerNode == null) ? "" : consumerNode;
         this.bootstrapServers = (bootstrapServers == null) ? "" : bootstrapServers;
@@ -136,14 +136,10 @@ public final class ShareConsumeBenchSpec extends TaskSpec {
         this.shareGroup = shareGroup == null ? DEFAULT_SHARE_GROUP_NAME : shareGroup;
         this.threadsPerWorker = threadsPerWorker == null ? 1 : threadsPerWorker;
         this.recordProcessor = recordProcessor;
-        this.acknowledgeType = orEmpty(acknowledgeType);
-        this.recordAcknowledger = orEmpty(recordAcknowledger);
-        this.shareGroupDLQConfig = orEmpty(shareGroupDLQConfig);
+        this.acknowledgeType = Optional.ofNullable(acknowledgeType);
+        this.recordAcknowledger = recordAcknowledger == null ? Optional.empty() : recordAcknowledger;
+        this.shareGroupDLQConfig = Optional.ofNullable(shareGroupDLQConfig);
         validateAcknowledgement(this.acknowledgeType, this.recordAcknowledger);
-    }
-
-    private static <T> Optional<T> orEmpty(Optional<T> optional) {
-        return optional == null ? Optional.empty() : optional;
     }
 
     private static void validateAcknowledgement(Optional<AcknowledgeType> acknowledgeType,

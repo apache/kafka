@@ -61,7 +61,7 @@ class ShareConsumeBenchSpecTest {
     public void testDefaultShareGroupName() {
         ShareConsumeBenchSpec shareConsumeBenchSpec = new ShareConsumeBenchSpec(0, 0, "node", "localhost",
                 123, 1234, null, Map.of(), Map.of(), Map.of(), 1,
-                Optional.empty(), List.of("abc"), Optional.empty(), Optional.empty(), Optional.empty());
+                Optional.empty(), List.of("abc"), null, Optional.empty(), null);
         assertEquals("share", shareConsumeBenchSpec.shareGroup());
     }
 
@@ -85,7 +85,7 @@ class ShareConsumeBenchSpecTest {
         }
         assertThrows(IllegalArgumentException.class, () -> new ShareConsumeBenchSpec(0, 0, "node", "localhost",
                 123, 1234, "sg-1", Map.of(), Map.of(), Map.of(), 1,
-                Optional.empty(), List.of("abc"), Optional.of(AcknowledgeType.RENEW), Optional.empty(), Optional.empty()));
+                Optional.empty(), List.of("abc"), AcknowledgeType.RENEW, Optional.empty(), null));
     }
 
     @Test
@@ -175,7 +175,7 @@ class ShareConsumeBenchSpecTest {
         return new ShareConsumeBenchSpec(0, 0, "node", "localhost",
                 123, 1234, "sg-1",
                 Map.of(), Map.of(), Map.of(), 1,
-                Optional.empty(), activeTopics, Optional.empty(), Optional.empty(), Optional.empty());
+                Optional.empty(), activeTopics, null, Optional.empty(), null);
     }
 
 }
