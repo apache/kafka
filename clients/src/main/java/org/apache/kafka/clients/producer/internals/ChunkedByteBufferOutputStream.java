@@ -395,7 +395,7 @@ public class ChunkedByteBufferOutputStream extends ByteBufferOutputStream {
     }
 
     /**
-     * Throws if {@code requiredBytes} cannot be written to this stream.
+     * Test-only. Throws if {@code requiredBytes} cannot be written to this stream.
      * This only checks the attached chunks, it does not make room.
      *
      * @throws IllegalStateException if the attached chunks have less free space than required
@@ -405,8 +405,7 @@ public class ChunkedByteBufferOutputStream extends ByteBufferOutputStream {
         // A single write can be split across several chunks, so the required bytes needn't be
         // contiguous: only the total free space matters. Advancing here would waste the tail of the
         // current chunk, so writes advance lazily and this only validates. Automatic growth (growable
-        // streams only) lives in ensureCapacityFor; this method only checks the currently attached chunks
-        // (the accumulator uses it to decide when to attach extension chunks up front).
+        // streams only) lives in ensureCapacityFor; this method only checks the currently attached chunks.
         if (requiredBytes > remaining())
             throw new IllegalStateException("required " + requiredBytes
                 + " bytes but only " + remaining() + " remaining across the attached chunks");

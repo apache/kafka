@@ -20,7 +20,6 @@ import org.apache.kafka.clients.producer.Callback;
 import org.apache.kafka.common.TopicPartition;
 import org.apache.kafka.common.header.Header;
 import org.apache.kafka.common.record.internal.CompressionRatioEstimator;
-import org.apache.kafka.common.record.internal.CompressionType;
 import org.apache.kafka.common.record.internal.MemoryRecordsBuilder;
 
 import org.slf4j.Logger;
@@ -93,8 +92,7 @@ public class ChunkedProducerBatch extends ProducerBatch {
      */
     @Override
     public FutureRecordMetadata tryAppend(long timestamp, byte[] key, byte[] value, Header[] headers, Callback callback, long now) {
-        if (recordCount == 0 && recordsBuilder.compression().type() == CompressionType.NONE
-                && extensionBytesNeeded(timestamp, key, value, headers) != 0)
+        if (recordCount == 0 && !isCompressed() && extensionBytesNeeded(timestamp, key, value, headers) != 0)
             throw new IllegalStateException(
                     "Unexpected append to a chunked batch whose chunks lack capacity for the record; " +
                             "the stream should have been pre-sized for the batch's first record");
