@@ -1227,6 +1227,7 @@ org.apache.kafka.coordinator.group.assignor.uniform2.util.IntListTest:
 - testClear
 - testGet
 - testIndexOf
+- testListsWithoutCapacityHoldTheirOwnElements
 - testNegativeCapacityThrows
 - testOf
 - testRemove
