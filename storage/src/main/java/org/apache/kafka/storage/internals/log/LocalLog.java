@@ -550,6 +550,9 @@ public class LocalLog {
         String logDir = parentDir;
         if (!logDirFailureChannel.tryStartReadCheck(logDir))
             return;
+        // Once the scheduler has taken the check, the check finishes it; until then it is finished here, whatever is
+        // thrown, since a check that is never finished would stop this log dir from being checked for good
+        boolean scheduled = false;
         try {
             ScheduledFuture<?> check = scheduler.scheduleOnce("check-read-after-transfer-failure", () -> {
                 try {
@@ -561,12 +564,13 @@ public class LocalLog {
                     logDirFailureChannel.finishReadCheck(logDir);
                 }
             });
-            // A scheduler that is not running ignores the task, which would otherwise stop checking this log dir for good
-            if (check.isCancelled())
-                logDirFailureChannel.finishReadCheck(logDir);
+            // A scheduler that is not running ignores the task
+            scheduled = !check.isCancelled();
         } catch (RuntimeException e) {
-            logDirFailureChannel.finishReadCheck(logDir);
             logger.warn("Could not schedule a read check of {} after a failed transfer", records.file().getAbsolutePath(), e);
+        } finally {
+            if (!scheduled)
+                logDirFailureChannel.finishReadCheck(logDir);
         }
     }
 

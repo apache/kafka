@@ -56,6 +56,7 @@ import static org.junit.jupiter.api.Assertions.assertFalse;
 import static org.junit.jupiter.api.Assertions.assertInstanceOf;
 import static org.junit.jupiter.api.Assertions.assertNotEquals;
 import static org.junit.jupiter.api.Assertions.assertNotNull;
+import static org.junit.jupiter.api.Assertions.assertSame;
 import static org.junit.jupiter.api.Assertions.assertThrows;
 import static org.junit.jupiter.api.Assertions.assertTrue;
 import static org.mockito.ArgumentMatchers.any;
@@ -350,24 +351,29 @@ class LocalLogTest {
     }
 
     /**
-     * A check the scheduler did not take, because it is not running or it rejected it, must not stop the next
-     * failed write from being checked.
+     * A check the scheduler did not take, because it is not running, it rejected it or it failed with an error, must
+     * not stop the next failed write from being checked.
      */
     @Test
     public void testReadCheckNotTakenBySchedulerDoesNotBlockTheNextOne() throws IOException {
         ScheduledFuture<?> ignored = mock(ScheduledFuture.class);
         when(ignored.isCancelled()).thenReturn(true);
         Scheduler scheduler = mock(Scheduler.class);
-        doReturn(ignored).doThrow(new RejectedExecutionException()).doReturn(ignored)
+        OutOfMemoryError error = new OutOfMemoryError("unable to create native thread");
+        doReturn(ignored).doThrow(new RejectedExecutionException()).doThrow(error).doReturn(ignored)
             .when(scheduler).scheduleOnce(anyString(), any(Runnable.class));
         LocalLog otherLog = createLocalLogWithActiveSegment(TestUtils.randomPartitionLogDir(tmpDir),
             new LogConfig(new Properties()), scheduler);
         try {
             FileRecords records = fetchedRecords(otherLog);
+            FileRecords.TransferFailureHandler handler = records.transferFailureHandler();
 
-            for (int i = 0; i < 3; i++)
-                records.transferFailureHandler().onTransferFailure(records, 0, 10, new IOException("Broken pipe"));
-            verify(scheduler, times(3)).scheduleOnce(anyString(), any(Runnable.class));
+            handler.onTransferFailure(records, 0, 10, new IOException("Broken pipe"));
+            handler.onTransferFailure(records, 0, 10, new IOException("Broken pipe"));
+            assertSame(error, assertThrows(OutOfMemoryError.class,
+                () -> handler.onTransferFailure(records, 0, 10, new IOException("Broken pipe"))));
+            handler.onTransferFailure(records, 0, 10, new IOException("Broken pipe"));
+            verify(scheduler, times(4)).scheduleOnce(anyString(), any(Runnable.class));
         } finally {
             otherLog.closeQuietly();
         }

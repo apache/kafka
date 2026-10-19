@@ -51,6 +51,12 @@ public class FileRecords extends AbstractRecords implements Closeable {
      */
     @FunctionalInterface
     public interface TransferFailureHandler {
+        /**
+         * @param records The records that failed to be written
+         * @param position The absolute position in the file of the region that was being written
+         * @param count The size of the region
+         * @param transferFailure The exception the write failed with, rethrown by {@link #writeTo} once this returns
+         */
         void onTransferFailure(FileRecords records, long position, int count, IOException transferFailure);
     }
 
@@ -344,7 +350,7 @@ public class FileRecords extends AbstractRecords implements Closeable {
      * the replica becomes a follower), and the channel may have been closed concurrently, by a deletion or a
      * shutdown; neither says anything about the medium.
      *
-     * @param position The position of the region in the file
+     * @param position The absolute position of the region in the file
      * @param count The size of the region
      * @return The failure of the read, naming the file and the position, or empty if the region could be read or
      *         nothing can be concluded
