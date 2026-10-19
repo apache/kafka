@@ -20,6 +20,7 @@ import org.apache.kafka.common.Uuid;
 import org.apache.kafka.common.utils.Time;
 import org.apache.kafka.common.utils.internals.LogContext;
 import org.apache.kafka.coordinator.common.runtime.CoordinatorMetadataImage;
+import org.apache.kafka.coordinator.common.runtime.CoordinatorRecord;
 import org.apache.kafka.coordinator.group.TargetAssignmentRecordsBuilder;
 import org.apache.kafka.coordinator.group.api.assignor.GroupAssignment;
 import org.apache.kafka.coordinator.group.api.assignor.GroupSpec;
@@ -90,16 +91,12 @@ public class TargetAssignmentBuilderBenchmark {
 
     private UpdatedMembersAndTargetAssignmentView<ConsumerGroupMember, Assignment> updatedMembersAndTargetAssignment;
 
-    private GroupSpecBuilder.ConsumerGroupSpecBuilder groupSpecBuilder;
-
-    private TargetAssignmentBuilder targetAssignmentBuilder;
-
-    private TargetAssignmentRecordsBuilder<Assignment> targetAssignmentRecordsBuilder;
-
     /** The number of homogeneous subgroups to create for the heterogeneous subscription case. */
     private static final int MAX_BUCKET_COUNT = 5;
 
     private GroupSpec groupSpec;
+
+    private TargetAssignmentBuilder.TargetAssignmentResult targetAssignmentResult;
 
     private Map<Uuid, Map<Integer, String>> invertedTargetAssignment;
 
@@ -129,22 +126,8 @@ public class TargetAssignmentBuilderBenchmark {
         updatedMembersAndTargetAssignment = new UpdatedMembersAndTargetAssignmentView<>(members, Map.of(), existingTargetAssignment, ConsumerGroupMember::instanceId);
         updatedMembersAndTargetAssignment.addOrUpdateMember(newMember.memberId(), newMember);
 
-        groupSpecBuilder = new GroupSpecBuilder.ConsumerGroupSpecBuilder()
-            .withMembers(updatedMembersAndTargetAssignment.members())
-            .withSubscriptionType(subscriptionType)
-            .withTargetAssignment(updatedMembersAndTargetAssignment.targetAssignment())
-            .withInvertedTargetAssignment(invertedTargetAssignment)
-            .withMetadataImage(metadataImage);
-
-        targetAssignmentBuilder = new TargetAssignmentBuilder(GROUP_EPOCH, partitionAssignor)
-            .withTime(Time.SYSTEM)
-            .withMetadataImage(metadataImage);
-
-        targetAssignmentRecordsBuilder =
-            new TargetAssignmentRecordsBuilder.ConsumerTargetAssignmentRecordsBuilder(LOG, GROUP_ID)
-                .withCurrentMemberIds(updatedMembersAndTargetAssignment.members().keySet())
-                .withUnchangedStaticMembers()
-                .withCurrentTargetAssignment(updatedMembersAndTargetAssignment.targetAssignment());
+        groupSpec = buildGroupSpecWithoutOffload();
+        targetAssignmentResult = buildAssignment();
     }
 
     private void setupTopics() {
@@ -161,14 +144,14 @@ public class TargetAssignmentBuilderBenchmark {
     private Map<String, Assignment> generateMockInitialTargetAssignmentAndUpdateInvertedTargetAssignment(
         Map<String, ConsumerGroupMember> members
     ) {
-        this.groupSpec = AssignorBenchmarkUtils.createConsumerGroupSpec(
+        GroupSpec initialGroupSpec = AssignorBenchmarkUtils.createConsumerGroupSpec(
             members,
             subscriptionType,
             topicResolver
         );
 
         GroupAssignment groupAssignment = partitionAssignor.assign(
-            groupSpec,
+            initialGroupSpec,
             subscribedTopicDescriber
         );
         invertedTargetAssignment = AssignorBenchmarkUtils.computeInvertedTargetAssignment(groupAssignment);
@@ -214,16 +197,58 @@ public class TargetAssignmentBuilderBenchmark {
     @Benchmark
     @Threads(1)
     @OutputTimeUnit(TimeUnit.MILLISECONDS)
-    public void build() {
-        GroupSpec groupSpec = groupSpecBuilder.build();
+    public List<CoordinatorRecord> build() {
+        groupSpec = buildGroupSpecWithoutOffload();
+        targetAssignmentResult = buildAssignment();
+        return buildAssignmentRecords();
+    }
 
-        TargetAssignmentBuilder.TargetAssignmentResult assignmentResult = targetAssignmentBuilder
+    @Benchmark
+    @Threads(1)
+    @OutputTimeUnit(TimeUnit.MILLISECONDS)
+    public GroupSpec buildGroupSpecWithoutOffload() {
+        return buildGroupSpec(false);
+    }
+
+    @Benchmark
+    @Threads(1)
+    @OutputTimeUnit(TimeUnit.MILLISECONDS)
+    public GroupSpec buildGroupSpecWithOffload() {
+        return buildGroupSpec(true);
+    }
+
+    private GroupSpec buildGroupSpec(boolean assignorOffload) {
+        return new GroupSpecBuilder.ConsumerGroupSpecBuilder()
+            .withMembers(updatedMembersAndTargetAssignment.members())
+            .withSubscriptionType(subscriptionType)
+            .withTargetAssignment(updatedMembersAndTargetAssignment.targetAssignment())
+            .withInvertedTargetAssignment(invertedTargetAssignment)
+            .withMetadataImage(metadataImage)
+            .withAssignorOffload(assignorOffload)
+            .build();
+    }
+
+    @Benchmark
+    @Threads(1)
+    @OutputTimeUnit(TimeUnit.MILLISECONDS)
+    public TargetAssignmentBuilder.TargetAssignmentResult buildAssignment() {
+        return new TargetAssignmentBuilder(GROUP_EPOCH, partitionAssignor)
+            .withTime(Time.SYSTEM)
+            .withMetadataImage(metadataImage)
             .withGroupSpec(groupSpec)
             .build();
+    }
 
-        targetAssignmentRecordsBuilder
-            .withTargetAssignmentMetadata(assignmentResult.targetAssignmentMetadata())
-            .withNewTargetAssignment(assignmentResult.targetAssignment())
+    @Benchmark
+    @Threads(1)
+    @OutputTimeUnit(TimeUnit.MILLISECONDS)
+    public List<CoordinatorRecord> buildAssignmentRecords() {
+        return new TargetAssignmentRecordsBuilder.ConsumerTargetAssignmentRecordsBuilder(LOG, GROUP_ID)
+            .withTargetAssignmentMetadata(targetAssignmentResult.targetAssignmentMetadata())
+            .withCurrentMemberIds(updatedMembersAndTargetAssignment.members().keySet())
+            .withUnchangedStaticMembers()
+            .withCurrentTargetAssignment(updatedMembersAndTargetAssignment.targetAssignment())
+            .withNewTargetAssignment(targetAssignmentResult.targetAssignment())
             .build();
     }
 }
