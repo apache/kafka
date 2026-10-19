@@ -18,6 +18,7 @@ package org.apache.kafka.clients.admin;
 
 import org.apache.kafka.common.KafkaFuture;
 import org.apache.kafka.common.Node;
+import org.apache.kafka.common.TopicPartition;
 import org.apache.kafka.common.TopicPartitionInfo;
 import org.apache.kafka.common.errors.InvalidPartitionsException;
 import org.apache.kafka.common.errors.InvalidReplicaAssignmentException;
@@ -29,13 +30,16 @@ import org.apache.kafka.common.test.api.ClusterTestDefaults;
 import org.apache.kafka.common.test.api.ClusterTests;
 import org.apache.kafka.common.test.api.Type;
 import org.apache.kafka.server.common.MetadataVersion;
+import org.apache.kafka.test.TestUtils;
 
 import java.util.Comparator;
 import java.util.List;
 import java.util.Map;
+import java.util.Optional;
 import java.util.Set;
 import java.util.concurrent.ExecutionException;
 import java.util.stream.Collectors;
+import java.util.stream.IntStream;
 
 import static org.junit.jupiter.api.Assertions.assertEquals;
 import static org.junit.jupiter.api.Assertions.assertInstanceOf;
@@ -176,6 +180,32 @@ public class AddPartitionsTest {
                 .collect(Collectors.toSet());
             assertEquals(2, partition1Replicas.size());
             assertEquals(Set.of(0, 1), partition1Replicas);
+        }
+    }
+
+    @ClusterTest
+    public void testIncreasePartitionsUsesReplicationFactorOfPartitionZero(ClusterInstance cluster) throws Exception {
+        try (Admin admin = cluster.admin()) {
+            // Use enough partitions that iterating over them does not start at partition 0.
+            Map<Integer, List<Integer>> assignment = IntStream.range(0, 20).boxed()
+                .collect(Collectors.toMap(p -> p, p -> List.of(p % 4)));
+            cluster.createTopicWithAssignment("foo", assignment);
+
+            // Increase the replication factor of partition 0 only.
+            admin.alterPartitionReassignments(Map.of(new TopicPartition("foo", 0),
+                Optional.of(new NewPartitionReassignment(List.of(0, 1, 2))))).all().get();
+            TestUtils.waitForCondition(() -> admin.listPartitionReassignments().reassignments().get().isEmpty() &&
+                partition(admin, "foo", 0).replicas().size() == 3,
+                "Timed out waiting for the reassignment of partition 0");
+
+            admin.createPartitions(Map.of("foo", NewPartitions.increaseTo(21))).all().get();
+            cluster.waitTopicCreation("foo", 21);
+            assertEquals(3, partition(admin, "foo", 20).replicas().size());
+
+            // Manual assignments are also validated against partition 0.
+            ExecutionException e = assertThrows(ExecutionException.class, () -> admin.createPartitions(Map.of("foo",
+                NewPartitions.increaseTo(22, List.of(List.of(0))))).all().get());
+            assertInstanceOf(InvalidReplicaAssignmentException.class, e.getCause());
         }
     }
 
@@ -405,6 +435,10 @@ public class AddPartitionsTest {
 
     private static List<TopicPartitionInfo> partitions(Admin admin, String topic) throws Exception {
         return admin.describeTopics(List.of(topic)).allTopicNames().get().get(topic).partitions();
+    }
+
+    private static TopicPartitionInfo partition(Admin admin, String topic, int partition) throws Exception {
+        return partitions(admin, topic).stream().filter(p -> p.partition() == partition).findFirst().orElseThrow();
     }
 
     private static List<Integer> replicaIds(TopicPartitionInfo partition) {
