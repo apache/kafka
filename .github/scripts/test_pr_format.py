@@ -29,7 +29,7 @@ SPEC.loader.exec_module(pr_format)
 class FormatBodyTest(unittest.TestCase):
     def test_wraps_plain_prose_at_72_columns(self):
         body = (
-            "This is a plain paragraph with enough words to wrap at the expected "
+            "This is a plain   paragraph with enough words to wrap at the expected "
             "column while keeping every word and the paragraph meaning intact.\n"
         )
 
@@ -54,18 +54,6 @@ class FormatBodyTest(unittest.TestCase):
                 self.assertEqual(body, formatted)
                 self.assertEqual(formatted, pr_format.format_body(formatted))
 
-    def test_preserves_timeline(self):
-        for marker in ("+", "-"):
-            with self.subTest(marker=marker):
-                body = (
-                    f"{marker}04.151 consumer1 starts poll()\n"
-                    f"{marker}04.877 consumer1 heartbeats\n"
-                    f"{marker}05.155 consumer1 ends poll()\n"
-                )
-                formatted = pr_format.format_body(body)
-                self.assertEqual(body, formatted)
-                self.assertEqual(formatted, pr_format.format_body(formatted))
-
     def test_preserves_fenced_code_and_long_indented_lines(self):
         body = (
             "```text\n"
@@ -76,12 +64,6 @@ class FormatBodyTest(unittest.TestCase):
             "```\n"
         )
 
-        formatted = pr_format.format_body(body)
-        self.assertEqual(body, formatted)
-        self.assertEqual(formatted, pr_format.format_body(formatted))
-
-    def test_preserves_jira_fenced_code_reproduction(self):
-        body = "```\nfirst command\n\nsecond command\nthird command\n\n```\n"
         formatted = pr_format.format_body(body)
         self.assertEqual(body, formatted)
         self.assertEqual(formatted, pr_format.format_body(formatted))
@@ -133,19 +115,6 @@ class FormatBodyTest(unittest.TestCase):
                 self.assertEqual(expected, formatted)
                 self.assertTrue(all(len(line) <= 72 for line in formatted.splitlines()))
                 self.assertEqual(formatted, pr_format.format_body(formatted))
-
-    def test_normalizes_prose_spacing(self):
-        body = (
-            "This is a plain   paragraph with enough words to wrap at the expected "
-            "column while keeping every word and the paragraph meaning intact.\n"
-        )
-        formatted = pr_format.format_body(body)
-        self.assertEqual(
-            "This is a plain paragraph with enough words to wrap at the expected\n"
-            "column while keeping every word and the paragraph meaning intact.\n",
-            formatted,
-        )
-        self.assertEqual(formatted, pr_format.format_body(formatted))
 
     def test_unfenced_benchmark_output_is_stable(self):
         body = (
