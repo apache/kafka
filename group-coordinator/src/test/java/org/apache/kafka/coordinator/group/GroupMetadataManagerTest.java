@@ -19838,7 +19838,7 @@ public class GroupMetadataManagerTest {
                 .withTargetAssignmentTimestamp(12345L)
                 .withMetadataHash(groupMetadataHash)
                 .withValidatedTopologyEpoch(0)
-                .withLastAssignmentConfigs(new AssignmentConfigsImpl(0, List.of()))
+                .withLastAssignmentConfigs(AssignmentConfigsImpl.DEFAULT)
             )
             .build();
 
@@ -19908,7 +19908,7 @@ public class GroupMetadataManagerTest {
                 .withTargetAssignmentEpoch(10)
                 .withMetadataHash(groupMetadataHash)
                 .withValidatedTopologyEpoch(0)
-                .withLastAssignmentConfigs(new AssignmentConfigsImpl(0, List.of()))
+                .withLastAssignmentConfigs(AssignmentConfigsImpl.DEFAULT)
             )
             .build();
 
@@ -20429,7 +20429,7 @@ public class GroupMetadataManagerTest {
                 .withTargetAssignmentEpoch(10)
                 .withMetadataHash(groupMetadataHash)
                 .withValidatedTopologyEpoch(0)
-                .withLastAssignmentConfigs(new AssignmentConfigsImpl(0, List.of()))
+                .withLastAssignmentConfigs(AssignmentConfigsImpl.DEFAULT)
             )
             .build();
 
