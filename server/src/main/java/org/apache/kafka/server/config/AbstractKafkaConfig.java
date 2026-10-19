@@ -101,20 +101,12 @@ public abstract class AbstractKafkaConfig extends AbstractConfig {
         ClusterMirrorConfigs.brokerConfigDef()
     ));
 
-    // Built on first access rather than in the constructor. `definition` is a parameter, so a subclass may
-    // pass a ConfigDef narrower than CONFIG_DEF; building this eagerly would make every key it reads
-    // mandatory for all subclasses.
-    private volatile RemoteLogManagerConfig remoteLogManagerConfig;
-
     public AbstractKafkaConfig(ConfigDef definition, Map<?, ?> originals, Map<String, ?> configProviderProps, boolean doLog) {
         super(definition, originals, configProviderProps, doLog);
     }
 
     public RemoteLogManagerConfig remoteLogManagerConfig() {
-        if (remoteLogManagerConfig == null) {
-            remoteLogManagerConfig = new RemoteLogManagerConfig(this);
-        }
-        return remoteLogManagerConfig;
+        return new RemoteLogManagerConfig(this);
     }
 
     /**
@@ -150,11 +142,12 @@ public abstract class AbstractKafkaConfig extends AbstractConfig {
         logProps.put(TopicConfig.MESSAGE_TIMESTAMP_TYPE_CONFIG, logMessageTimestampType().name);
         logProps.put(TopicConfig.MESSAGE_TIMESTAMP_BEFORE_MAX_MS_CONFIG, logMessageTimestampBeforeMaxMs());
         logProps.put(TopicConfig.MESSAGE_TIMESTAMP_AFTER_MAX_MS_CONFIG, logMessageTimestampAfterMaxMs());
-        logProps.put(TopicConfig.LOCAL_LOG_RETENTION_MS_CONFIG, remoteLogManagerConfig().logLocalRetentionMs());
-        logProps.put(TopicConfig.LOCAL_LOG_RETENTION_BYTES_CONFIG, remoteLogManagerConfig().logLocalRetentionBytes());
-        logProps.put(TopicConfig.REMOTE_COPY_LAG_MS_CONFIG, remoteLogManagerConfig().logRemoteCopyLagMs());
-        logProps.put(TopicConfig.REMOTE_COPY_LAG_BYTES_CONFIG, remoteLogManagerConfig().logRemoteCopyLagBytes());
-        return logProps;
+        RemoteLogManagerConfig remoteLogManagerConfig = remoteLogManagerConfig();
+        logProps.put(TopicConfig.LOCAL_LOG_RETENTION_MS_CONFIG, remoteLogManagerConfig.logLocalRetentionMs());
+        logProps.put(TopicConfig.LOCAL_LOG_RETENTION_BYTES_CONFIG, remoteLogManagerConfig.logLocalRetentionBytes());
+        logProps.put(TopicConfig.REMOTE_COPY_LAG_MS_CONFIG, remoteLogManagerConfig.logRemoteCopyLagMs());
+        logProps.put(TopicConfig.REMOTE_COPY_LAG_BYTES_CONFIG, remoteLogManagerConfig.logRemoteCopyLagBytes());
+        return Collections.unmodifiableMap(logProps);
     }
 
     public List<String> logDirs() {

@@ -157,9 +157,4 @@ public class DynamicLogConfig implements BrokerReconfigurable {
             .flatMap(dir -> logManager.directoryId(dir).stream())
             .collect(Collectors.toSet()));
     }
-
-    @Override
-    public String toString() {
-        return "DynamicLogConfig";
-    }
 }
