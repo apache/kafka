@@ -54,6 +54,22 @@ public class IntListTest {
     }
 
     /**
+     * Lists created without capacity keep their own elements once they grow.
+     */
+    @Test
+    public void testListsWithoutCapacityHoldTheirOwnElements() {
+        var first = new IntList(0);
+        var second = new IntList(0);
+
+        first.add(1);
+        second.add(2);
+        second.add(3);
+
+        assertArrayEquals(new int[] {1}, first.toArray());
+        assertArrayEquals(new int[] {2, 3}, second.toArray());
+    }
+
+    /**
      * The list holds a copy of the elements.
      */
     @Test
