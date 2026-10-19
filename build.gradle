@@ -208,6 +208,7 @@ allprojects {
     options.charSet = 'UTF-8'
     options.docEncoding = 'UTF-8'
     options.encoding = 'UTF-8'
+    options.locale = 'en'
     options.memberLevel = JavadocMemberLevel.PUBLIC  // Document only public members/API
     // Turn off doclint for now, see https://blog.joda.org/2014/02/turning-off-doclint-in-jdk-8-javadoc.html for rationale
     options.addStringOption('Xdoclint:none', '-quiet')
@@ -1059,6 +1060,7 @@ project(':server') {
     implementation project(':transaction-coordinator')
     implementation project(':raft')
     implementation project(':share-coordinator')
+    implementation project(':mirror-coordinator')
     implementation project(':storage:storage-api')
     implementation libs.jacksonDatabind
     implementation libs.metrics
@@ -1189,6 +1191,7 @@ project(':core') {
     implementation project(':server')
     implementation project(':coordinator-common')
     implementation project(':share-coordinator')
+    implementation project(':mirror-coordinator')
 
     implementation libs.argparse4j
     implementation libs.jacksonDatabind
@@ -1227,7 +1230,6 @@ project(':core') {
       // It is safer to use from `apacheds` since that is the implementation.
       exclude module: 'mina-core'
     }
-    testImplementation libs.apachedsCoreApi
     testImplementation libs.apachedsInterceptorKerberos
     testImplementation libs.apachedsProtocolShared
     testImplementation libs.apachedsProtocolKerberos
@@ -1962,6 +1964,30 @@ project(':share-coordinator') {
 
   compileJava.dependsOn 'processMessages'
   srcJar.dependsOn 'processMessages'
+
+  javadoc {
+    enabled = false
+  }
+}
+
+project(':mirror-coordinator') {
+  base {
+    archivesName = "kafka-mirror-coordinator"
+  }
+
+  dependencies {
+    implementation project(':clients')
+
+    testImplementation libs.junitJupiter
+    testImplementation libs.mockitoCore
+    testImplementation testLog4j2Libs
+
+    testRuntimeOnly runtimeTestLibs
+  }
+
+  checkstyle {
+    configProperties = checkstyleConfigProperties("import-control-mirror-coordinator.xml")
+  }
 
   javadoc {
     enabled = false
@@ -2774,8 +2800,6 @@ project(':trogdor') {
     implementation libs.jacksonJakartarsJsonProvider
     implementation libs.jerseyContainerServlet
     implementation libs.jerseyHk2
-    implementation libs.jaxbApi // Jersey dependency that was available in the JDK before Java 9
-    implementation libs.activation // Jersey dependency that was available in the JDK before Java 9
     implementation (libs.jettyServer) {
       exclude group: 'org.slf4j', module: 'slf4j-api'
     }
@@ -3798,8 +3822,6 @@ project(':connect:runtime') {
     implementation libs.jacksonJakartarsJsonProvider
     implementation libs.jerseyContainerServlet
     implementation libs.jerseyHk2
-    implementation libs.jaxbApi // Jersey dependency that was available in the JDK before Java 9
-    implementation libs.activation // Jersey dependency that was available in the JDK before Java 9
     implementation (libs.jettyServer) {
       exclude group: 'org.slf4j', module: 'slf4j-api'
     }
@@ -3844,8 +3866,6 @@ project(':connect:runtime') {
     testImplementation project(':test-common:test-common-util')
     testImplementation project(':test-common:test-common-runtime')
     testImplementation project(':raft')
-    testImplementation project(':server-common')
-    testImplementation project(':server')
     testImplementation project(':group-coordinator')
     testImplementation project(':storage')
     testImplementation project(':connect:test-plugins')
@@ -4043,8 +4063,6 @@ project(':connect:mirror') {
     implementation libs.slf4jApi
     implementation libs.jerseyContainerServlet
     implementation libs.jerseyHk2
-    implementation libs.jaxbApi // Jersey dependency that was available in the JDK before Java 9
-    implementation libs.activation // Jersey dependency that was available in the JDK before Java 9
     implementation (libs.jettyServer) {
       exclude group: 'org.slf4j', module: 'slf4j-api'
     }

@@ -574,16 +574,15 @@ public class StickyTaskAssignor implements TaskAssignor {
      * the number placed per task.
      */
     private static Map<TaskId, Integer> assignRackAwareStandbys(final LocalState localState, final List<TaskId> standbyTasks) {
-        // A process has room while one of its members is below the per-member quota. Member task counts only grow and
-        // the quota only shrinks, so loads only grow and room only shrinks.
-        localState.identicalTagGroups = new IdenticalTagGroups<>(
+        // A process has room while one of its members is below the per-member quota. Only placeRackAwareStandby changes
+        // loads and room from here on, and it reports each change to the picker.
+        final RackAwareStandbyPicker<ProcessState> picker = new RackAwareStandbyPicker<>(
             localState.rackAwareAssignmentTags,
             localState.processIdToState.values(),
             process -> localState.processIdToClientTags.get(process.processId()),
             ProcessState::load,
             process -> leastLoadedMemberWithRoom(localState, process) != null
         );
-        final TagTree<ProcessState> tagTree = new TagTree<>(localState.rackAwareAssignmentTags, localState.identicalTagGroups.tagGroups());
         final Map<TaskId, Integer> rackAwareStandbys = new HashMap<>();
 
         // 1. re-assigning standby tasks in a new rack to clients that previously had the same task (as active or standby)
@@ -596,7 +595,7 @@ public class StickyTaskAssignor implements TaskAssignor {
                 rackNonSticky.add(task);
                 continue;
             }
-            final List<ProcessState> placed = pickRackAwareStandbys(localState, tagTree, task, List.of(), true, true, rackNonSticky);
+            final List<ProcessState> placed = pickRackAwareStandbys(localState, picker, task, List.of(), true, true, rackNonSticky);
             currentStandbys.put(task, placed);
             rackAwareStandbys.put(task, placed.size());
         }
@@ -606,7 +605,7 @@ public class StickyTaskAssignor implements TaskAssignor {
             final List<ProcessState> alreadyPlaced = currentStandbys.get(task);
             final boolean hasPrevMember = alreadyPlaced != null;
             final List<ProcessState> stickyPlaced = hasPrevMember ? alreadyPlaced : List.of();
-            rackAwareStandbys.put(task, stickyPlaced.size() + pickRackAwareStandbys(localState, tagTree, task, stickyPlaced, hasPrevMember, false, rackNonSticky).size());
+            rackAwareStandbys.put(task, stickyPlaced.size() + pickRackAwareStandbys(localState, picker, task, stickyPlaced, hasPrevMember, false, rackNonSticky).size());
         }
         return rackAwareStandbys;
     }
@@ -624,29 +623,27 @@ public class StickyTaskAssignor implements TaskAssignor {
      */
     private static List<ProcessState> pickRackAwareStandbys(
         final LocalState localState,
-        final TagTree<ProcessState> tagTree,
+        final RackAwareStandbyPicker<ProcessState> picker,
         final TaskId task,
         final List<ProcessState> alreadyPlaced,
         final boolean hasPrevMember,
         final boolean stickyOnly,
         final List<TaskId> rackNonSticky
     ) {
-        final List<IdenticalTagGroups.TagGroup<ProcessState>> holders = new ArrayList<>(1 + alreadyPlaced.size());
-        holders.add(localState.identicalTagGroups.tagGroupOf(localState.statefulActiveTaskToProcess.get(task)));
-        for (final ProcessState process : alreadyPlaced) {
-            holders.add(localState.identicalTagGroups.tagGroupOf(process));
-        }
-        final RackAwareStandbyPicker<ProcessState> picker = new RackAwareStandbyPicker<>(tagTree, holders);
+        final List<ProcessState> holders = new ArrayList<>(1 + alreadyPlaced.size());
+        holders.add(localState.statefulActiveTaskToProcess.get(task));
+        holders.addAll(alreadyPlaced);
+        picker.startTask(holders);
 
         final List<ProcessState> placed = new ArrayList<>();
         while (alreadyPlaced.size() + placed.size() < localState.numStandbyReplicas) {
-            final List<TagTree.TagKey> conditions = picker.pick();
-            if (conditions.isEmpty()) {
+            final RackAwareStandbyPicker.Pick<ProcessState> pick = picker.pick();
+            if (pick == null) {
                 break;
             }
 
-            // prev active or standby member in a candidate tag group
-            final Predicate<ProcessState> inCandidates = process -> picker.isCandidate(localState.identicalTagGroups.tagGroupOf(process), conditions);
+            // prev active or standby member on a candidate process
+            final Predicate<ProcessState> inCandidates = process -> picker.isCandidate(process, pick.conditions());
             final Member prevMember = hasPrevMember ? findPrevMemberForStandby(localState, task, inCandidates) : null;
             if (prevMember != null) {
                 placeRackAwareStandby(localState, picker, localState.processIdToState.get(prevMember.processId), prevMember.memberId, task, placed);
@@ -658,7 +655,7 @@ public class StickyTaskAssignor implements TaskAssignor {
                 break;
             }
 
-            final ProcessState processWithLeastLoad = picker.leastLoaded(conditions);
+            final ProcessState processWithLeastLoad = pick.leastLoaded();
             placeRackAwareStandby(localState, picker, processWithLeastLoad, leastLoadedMemberWithRoom(localState, processWithLeastLoad), task, placed);
         }
         return placed;
@@ -672,8 +669,15 @@ public class StickyTaskAssignor implements TaskAssignor {
         final TaskId task,
         final List<ProcessState> placed
     ) {
+        final int totalTasksPerMember = localState.totalTasksPerMember;
         maybeUpdateTotalTasksPerMember(localState, process.addTask(memberId, task, false, true));
-        picker.markUsed(localState.identicalTagGroups.tagGroupOf(process));
+        picker.markUsed(process);
+        if (localState.totalTasksPerMember < totalTasksPerMember) {
+            // A lower quota can take the room of any process.
+            picker.updatedAll();
+        } else {
+            picker.updated(process);
+        }
         placed.add(process);
     }
 
@@ -733,8 +737,6 @@ public class StickyTaskAssignor implements TaskAssignor {
         Map<TaskId, ProcessState> statefulActiveTaskToProcess;
         Map<String, ProcessState> processIdToState;
         Map<String, Map<String, String>> processIdToClientTags;
-        // The processes split into tag groups for the rack-aware picks, only set with rack.aware.assignment.tags.
-        IdenticalTagGroups<ProcessState> identicalTagGroups;
         LinkedList<TaskId> statefulActiveTaskIds;
         LinkedList<TaskId> statelessActiveTaskIds;
 

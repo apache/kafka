@@ -16,6 +16,11 @@
  */
 package org.apache.kafka.trogdor.workload;
 
+import org.apache.kafka.clients.consumer.AcknowledgeType;
+import org.apache.kafka.trogdor.common.JsonUtil;
+
+import com.fasterxml.jackson.databind.JsonMappingException;
+
 import org.junit.jupiter.api.Test;
 
 import java.util.HashSet;
@@ -53,15 +58,46 @@ class ShareConsumeBenchSpecTest {
     public void testDefaultShareGroupName() {
         ShareConsumeBenchSpec shareConsumeBenchSpec = new ShareConsumeBenchSpec(0, 0, "node", "localhost",
                 123, 1234, null, Map.of(), Map.of(), Map.of(), 1,
-                Optional.empty(), List.of("abc"));
+                Optional.empty(), List.of("abc"), null);
         assertEquals("share", shareConsumeBenchSpec.shareGroup());
+    }
+
+    @Test
+    public void testAcknowledgeTypeAbsentByDefault() throws Exception {
+        ShareConsumeBenchSpec spec = parseSpec(null);
+        assertEquals(Optional.empty(), spec.acknowledgeType());
+    }
+
+    @Test
+    public void testAcknowledgeTypeParsedFromJson() throws Exception {
+        assertEquals(Optional.of(AcknowledgeType.ACCEPT), parseSpec("ACCEPT").acknowledgeType());
+        assertEquals(Optional.of(AcknowledgeType.REJECT), parseSpec("REJECT").acknowledgeType());
+        assertEquals(Optional.of(AcknowledgeType.RELEASE), parseSpec("RELEASE").acknowledgeType());
+    }
+
+    @Test
+    public void testUnsupportedAcknowledgeTypeRaisesException() {
+        for (String unsupported : List.of("RENEW", "bogus")) {
+            assertThrows(JsonMappingException.class, () -> parseSpec(unsupported));
+        }
+        assertThrows(IllegalArgumentException.class, () -> new ShareConsumeBenchSpec(0, 0, "node", "localhost",
+                123, 1234, "sg-1", Map.of(), Map.of(), Map.of(), 1,
+                Optional.empty(), List.of("abc"), AcknowledgeType.RENEW));
+    }
+
+    private ShareConsumeBenchSpec parseSpec(String acknowledgeType) throws Exception {
+        String ackJson = acknowledgeType == null ? "" : String.format(", \"acknowledgeType\": \"%s\"", acknowledgeType);
+        String json = "{\"class\": \"org.apache.kafka.trogdor.workload.ShareConsumeBenchSpec\", " +
+                "\"startMs\": 0, \"durationMs\": 0, \"consumerNode\": \"node\", \"bootstrapServers\": \"localhost\", " +
+                "\"maxMessages\": 10, \"activeTopics\": [\"abc\"]" + ackJson + "}";
+        return JsonUtil.JSON_SERDE.readValue(json, ShareConsumeBenchSpec.class);
     }
 
     private ShareConsumeBenchSpec shareConsumeBenchSpec(List<String> activeTopics) {
         return new ShareConsumeBenchSpec(0, 0, "node", "localhost",
                 123, 1234, "sg-1",
                 Map.of(), Map.of(), Map.of(), 1,
-                Optional.empty(), activeTopics);
+                Optional.empty(), activeTopics, null);
     }
 
 }

@@ -31,6 +31,7 @@ import java.io.Closeable;
 import java.util.ArrayList;
 import java.util.List;
 import java.util.concurrent.CompletableFuture;
+import java.util.concurrent.ExecutionException;
 import java.util.concurrent.TimeUnit;
 import java.util.concurrent.atomic.AtomicInteger;
 
@@ -64,8 +65,6 @@ public class MetricsDuringTopicCreationDeletionTest {
         brokers = 3,
         serverProperties = {
             @ClusterConfigProperty(key = ServerConfigs.DELETE_TOPIC_ENABLE_CONFIG, value = "true"),
-            @ClusterConfigProperty(key = "log.initial.task.delay.ms", value = "100"),
-            @ClusterConfigProperty(key = "log.segment.delete.delay.ms", value = "1000"),
             @ClusterConfigProperty(key = ServerLogConfigs.AUTO_CREATE_TOPICS_ENABLE_CONFIG, value = "false"),
             // speed up the test for UnderReplicatedPartitions, which relies on the ISR expiry thread to execute concurrently with topic creation
             // But the replica.lag.time.max.ms value still need to consider the slow testing environment
@@ -126,20 +125,16 @@ public class MetricsDuringTopicCreationDeletionTest {
                 + ", but got: " + underReplicatedPartitionsCount.get());
     }
 
-    private void createAndDeleteTopics() {
+    private void createAndDeleteTopics() throws InterruptedException, ExecutionException {
         for (int i = 1; i <= CREATE_DELETE_ITERATIONS && running; i++) {
             for (String topic : topics) {
                 if (!running) return;
-                try {
-                    clusterInstance.createTopic(topic, PARTITION_NUM, REPLICATION_FACTOR);
-                } catch (Exception ignored) { }
+                clusterInstance.createTopic(topic, PARTITION_NUM, REPLICATION_FACTOR);
             }
 
             for (String topic : topics) {
                 if (!running) return;
-                try {
-                    clusterInstance.deleteTopic(topic);
-                } catch (Exception ignored) { }
+                clusterInstance.deleteTopic(topic);
             }
         }
     }

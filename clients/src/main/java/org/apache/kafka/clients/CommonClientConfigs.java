@@ -16,6 +16,7 @@
  */
 package org.apache.kafka.clients;
 
+import org.apache.kafka.common.Uuid;
 import org.apache.kafka.common.config.AbstractConfig;
 import org.apache.kafka.common.config.ConfigException;
 import org.apache.kafka.common.config.SaslConfigs;
@@ -341,12 +342,12 @@ public class CommonClientConfigs {
                 MetricsReporter.class, clientIdOverride);
     }
 
-    public static Optional<ClientTelemetryReporter> telemetryReporter(String clientId, AbstractConfig config) {
+    public static Optional<ClientTelemetryReporter> telemetryReporter(String clientId, Uuid clientInstanceId, AbstractConfig config) {
         if (!config.getBoolean(CommonClientConfigs.ENABLE_METRICS_PUSH_CONFIG)) {
             return Optional.empty();
         }
 
-        ClientTelemetryReporter telemetryReporter = new ClientTelemetryReporter(Time.SYSTEM);
+        ClientTelemetryReporter telemetryReporter = new ClientTelemetryReporter(Time.SYSTEM, clientInstanceId);
         telemetryReporter.configure(config.originals(Collections.singletonMap(CommonClientConfigs.CLIENT_ID_CONFIG, clientId)));
         return Optional.of(telemetryReporter);
     }
