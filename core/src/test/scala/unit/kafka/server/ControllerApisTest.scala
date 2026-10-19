@@ -611,7 +611,7 @@ class ControllerApisTest {
         setResourceName(invalidResource.name()).
         setResourceType(invalidResource.`type`().id()).
         setErrorCode(INVALID_REQUEST.code()).
-        setErrorMessage(s"Unknown operations type $invalidOperation"),
+        setErrorMessage(s"Unknown operation type $invalidOperation"),
       new AlterConfigsResourceResponse().
         setResourceName(validResource.name()).
         setResourceType(validResource.`type`().id()).
