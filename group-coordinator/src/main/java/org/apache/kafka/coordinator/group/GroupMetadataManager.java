@@ -4513,6 +4513,9 @@ public class GroupMetadataManager {
                 )
             );
 
+            log.info("[GroupId {}] Scheduled computing a new target assignment for epoch {} with '{}' assignor.",
+                group.groupId(), groupEpoch, preferredServerAssignor);
+
             // fromLastTargetAssignment looks up the assignment by instance id, so it's fine not to
             // use updatedMembersAndTargetAssignment.
             return UpdateTargetAssignmentResult.fromLastTargetAssignment(group, updatedMember);
@@ -4584,7 +4587,7 @@ public class GroupMetadataManager {
                 // The assignment epoch is greater than the group epoch. This means that the
                 // assignment was built off a group state that was not successfully written to the
                 // log and was reverted. Discard the assignment.
-                log.debug("[GroupId {}] Discarding stale offloaded target assignment for epoch {} (current group epoch is {}).",
+                log.info("[GroupId {}] Discarding stale offloaded target assignment for epoch {} (current group epoch is {}).",
                     groupId, targetAssignmentEpoch, consumerGroup.groupEpoch());
                 return new CoordinatorResult<>(List.of());
             }
@@ -4592,13 +4595,10 @@ public class GroupMetadataManager {
             if (consumerGroup.assignmentEpoch() >= targetAssignmentEpoch) {
                 // The assignment epoch is already caught up.
                 // Writing this record would backslide it.
-                log.debug("[GroupId {}] Discarding stale offloaded target assignment for epoch {} (current assignment epoch is {}).",
+                log.info("[GroupId {}] Discarding stale offloaded target assignment for epoch {} (current assignment epoch is {}).",
                     groupId, targetAssignmentEpoch, consumerGroup.assignmentEpoch());
                 return new CoordinatorResult<>(List.of());
             }
-
-            log.debug("[GroupId {}] Received updated target assignment for epoch {}: {}.",
-                groupId, targetAssignmentEpoch, result.targetAssignment());
 
             TargetAssignmentRecordsBuilder<Assignment> assignmentRecordsBuilder =
                 new TargetAssignmentRecordsBuilder.ConsumerTargetAssignmentRecordsBuilder(log, groupId)
@@ -4608,12 +4608,16 @@ public class GroupMetadataManager {
                     .withCurrentTargetAssignment(consumerGroup.targetAssignment())
                     .withNewTargetAssignment(result.targetAssignment());
 
+            log.info("[GroupId {}] Installing new target assignment for epoch {}.",
+                groupId, targetAssignmentEpoch);
+
             return new CoordinatorResult<>(assignmentRecordsBuilder.build());
         } catch (GroupIdNotFoundException ex) {
-            log.debug("[GroupId {}] Received updated target assignment but the consumer group no longer exists.", groupId);
+            log.info("[GroupId {}] Discarding stale offloaded target assignment for epoch {} (consumer group no longer exists).",
+                groupId, targetAssignmentEpoch);
             return new CoordinatorResult<>(List.of());
         } catch (Throwable t) {
-            log.error("[GroupId {}] Failed to compute a new target assignment for epoch {}: {}.",
+            log.error("[GroupId {}] Failed to install new target assignment for epoch {}: {}.",
                 groupId, targetAssignmentEpoch, t.getMessage(), t);
             return new CoordinatorResult<>(List.of());
         }
