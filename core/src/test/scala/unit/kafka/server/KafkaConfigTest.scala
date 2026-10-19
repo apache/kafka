@@ -2172,7 +2172,7 @@ class KafkaConfigTest {
 
         val props = createDefaultConfig()
         props.setProperty(config, "1000000")
-
+        
         val kafkaConfig = KafkaConfig.fromProps(props)
         kafkaConfig.dynamicConfig.initialize(None)
         
