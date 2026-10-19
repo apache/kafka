@@ -40,6 +40,7 @@ import org.apache.kafka.common.acl.AccessControlEntry;
 import org.apache.kafka.common.acl.AclBindingFilter;
 import org.apache.kafka.common.config.SaslConfigs;
 import org.apache.kafka.common.config.internals.BrokerSecurityConfigs;
+import org.apache.kafka.common.errors.InterruptException;
 import org.apache.kafka.common.network.ListenerName;
 import org.apache.kafka.common.security.auth.SecurityProtocol;
 import org.apache.kafka.common.serialization.ByteArrayDeserializer;
@@ -338,8 +339,7 @@ public interface ClusterInstance {
             admin.createTopics(List.of(new NewTopic(topicName, partitions, replicas).configs(props))).all().get();
             waitTopicCreation(topicName, partitions);
         } catch (InterruptedException e) {
-            Thread.currentThread().interrupt();
-            throw new RuntimeException("Failed to create topic " + topicName, e);
+            throw new InterruptException(e);
         } catch (ExecutionException e) {
             if (e.getCause() instanceof RuntimeException re) throw re;
             throw new RuntimeException("Failed to create topic " + topicName, e.getCause());
@@ -356,8 +356,7 @@ public interface ClusterInstance {
             int partitions = replicaAssignment.size();
             waitTopicCreation(topicName, partitions);
         } catch (InterruptedException e) {
-            Thread.currentThread().interrupt();
-            throw new RuntimeException("Failed to create topic " + topicName, e);
+            throw new InterruptException(e);
         } catch (ExecutionException e) {
             if (e.getCause() instanceof RuntimeException re) throw re;
             throw new RuntimeException("Failed to create topic " + topicName, e.getCause());
