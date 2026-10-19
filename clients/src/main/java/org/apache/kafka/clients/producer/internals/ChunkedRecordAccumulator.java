@@ -173,11 +173,11 @@ public class ChunkedRecordAccumulator extends RecordAccumulator {
                 if (appendResult.needsBufferExtension()) {
                     extensionChunks = allocateExtensionChunks(appendResult.extensionBytesNeeded, batchToExtend, dq,
                             topic, effectivePartition);
-                    if (extensionChunks == null) {
-                        // Pool exhausted or closed, or the extension exceeds the whole pool in whole chunks: no
-                        // chunks are held. allocateExtensionChunks has already decided whether to close the open
-                        // batch (then the record retries as a new batch's first record); retry either way, bounded
-                        // by throwIfNoMoreRetriesAllowed, which will report exhausted memory as the cause.
+                    if (extensionChunks.isEmpty()) {
+                        extensionChunks = null;
+                        // Pool exhausted or closed, or the extension can never fit: no chunks held. Whether to close the
+                        // open batch (the record then retries as a new batch) was already decided by allocateExtensionChunks;
+                        // retry either way, bounded by throwIfNoMoreRetriesAllowed, which reports exhausted memory as the cause.
                         nonBlockingMemoryAllocationDenied = true;
                         continue;
                     }
@@ -338,7 +338,7 @@ public class ChunkedRecordAccumulator extends RecordAccumulator {
      * re-evaluates against whatever is open then.
      *
      * @param batchToExtend the batch the gap was sized against; must not be null
-     * @return the chunks, or null if the pool was exhausted or closed, or the extension can never fit in it
+     * @return the chunks, or an empty list if the pool was exhausted or closed, or the extension can never fit in it
      */
     private List<ByteBuffer> allocateExtensionChunks(int extensionBytesNeeded, ProducerBatch batchToExtend,
                                                      Deque<ProducerBatch> dq, String topic, int partition) {
@@ -351,13 +351,13 @@ public class ChunkedRecordAccumulator extends RecordAccumulator {
             closeBatchToExtendIfStillOpen(batchToExtend, dq, topic, partition,
                     "Extension of " + extensionBytesNeeded + " bytes (" + chunkAlignedSize
                             + " bytes in whole chunks) exceeds the pool's " + chunkedFree.totalMemory() + " bytes");
-            return null;
+            return List.of();
         }
         List<ByteBuffer> chunks = chunkedFree.tryAllocateChunks(extensionBytesNeeded);
-        if (chunks != null)
+        if (!chunks.isEmpty())
             return chunks;
         closeBatchToExtendIfStillOpen(batchToExtend, dq, topic, partition, "Pool exhausted");
-        return null;
+        return List.of();
     }
 
     /**

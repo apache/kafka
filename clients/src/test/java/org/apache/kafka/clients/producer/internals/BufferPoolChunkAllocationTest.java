@@ -154,12 +154,12 @@ public class BufferPoolChunkAllocationTest {
     }
 
     /**
-     * When the memory is not available right away, {@link BufferPool#tryAllocateChunks} returns null without
-     * waiting: it takes nothing, never joins the wait queue or records a wait time, and so cannot be
+     * When the memory is not available right away, {@link BufferPool#tryAllocateChunks} returns an empty list
+     * without waiting: it takes nothing, never joins the wait queue or records a wait time, and so cannot be
      * interrupted either.
      */
     @Test
-    public void testTryAllocateChunksReturnsNullWithoutWaitingWhenUnavailable() throws Exception {
+    public void testTryAllocateChunksReturnsEmptyWithoutWaitingWhenUnavailable() throws Exception {
         int chunkSize = 64;
         AtomicInteger waitTimeRecordings = new AtomicInteger();
         BufferPool p = new BufferPool(2L * chunkSize, chunkSize, metrics, time, "producer-metrics",
@@ -175,7 +175,7 @@ public class BufferPoolChunkAllocationTest {
         // An interrupted thread would get InterruptedException from any wait.
         Thread.currentThread().interrupt();
         try {
-            assertNull(p.tryAllocateChunks(2 * chunkSize));
+            assertEquals(List.of(), p.tryAllocateChunks(2 * chunkSize));
         } finally {
             assertTrue(Thread.interrupted(), "the interrupt flag must be left untouched");
         }
@@ -188,25 +188,25 @@ public class BufferPoolChunkAllocationTest {
     }
 
     /**
-     * Once the pool is closed, {@link BufferPool#tryAllocateChunks} returns null even with memory free, where
-     * {@link BufferPool#allocateChunks} throws. A chunked stream growing while its batch is drained or
-     * aborted on producer close relies on this to fall back to the heap.
+     * Once the pool is closed, {@link BufferPool#tryAllocateChunks} returns an empty list even with memory
+     * free, where {@link BufferPool#allocateChunks} throws. A chunked stream growing while its batch is drained
+     * or aborted on producer close relies on this to fall back to the heap.
      */
     @Test
-    public void testTryAllocateChunksReturnsNullWhenClosed() throws Exception {
+    public void testTryAllocateChunksReturnsEmptyWhenClosed() throws Exception {
         int chunkSize = 64;
         long total = 4L * chunkSize;
         BufferPool p = pool(total, chunkSize);
         p.close();
 
-        assertNull(p.tryAllocateChunks(chunkSize));
+        assertEquals(List.of(), p.tryAllocateChunks(chunkSize));
         assertThrows(KafkaException.class, () -> p.allocateChunks(chunkSize, 0));
         assertEquals(total, p.availableMemory());
     }
 
     /**
      * {@link BufferPool#tryAllocateChunks} rejects the same invalid requests as {@link BufferPool#allocateChunks}:
-     * these are programming errors, not a lack of memory, so they throw rather than return null.
+     * these are programming errors, not a lack of memory, so they throw rather than return an empty list.
      */
     @Test
     public void testTryAllocateChunksRejectsInvalidRequests() {

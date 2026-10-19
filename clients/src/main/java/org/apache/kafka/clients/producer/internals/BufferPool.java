@@ -359,15 +359,15 @@ public class BufferPool {
     /**
      * Non-blocking variant of {@link #allocateChunks} for callers that can neither wait nor fail, such as a
      * chunked stream growing in the middle of a record. Returns the chunks if the memory is available right
-     * away, and {@code null} otherwise, without reserving anything, joining {@link #waiters} or recording a
+     * away, and an empty list otherwise, without reserving anything, joining {@link #waiters} or recording a
      * wait time. It never waits, so it ignores the thread's interrupt status and leaves it untouched. Also
-     * returns {@code null} once the pool is closed: the producer closes the pool before it drains or aborts the
+     * returns an empty list once the pool is closed: the producer closes the pool before it drains or aborts the
      * last batches, and closing those batches can still need to grow their streams. A stream growing
      * mid-write, which can take a partial grant, uses {@link #tryAllocateChunksUpTo} instead.
      *
      * @param totalSize minimum total bytes of capacity required across the returned chunks
      * @return list of {@code ceil(totalSize / poolableSize())} {@code ByteBuffer}s, each of capacity
-     *         {@code poolableSize()}, or {@code null} if the memory is not available right now or the pool is closed
+     *         {@code poolableSize()}, or an empty list if the memory is not available right now or the pool is closed
      * @throws IllegalArgumentException if {@code totalSize <= 0}, or if the request rounded up to
      *         whole chunks exceeds {@code totalMemory()}
      */
@@ -380,10 +380,10 @@ public class BufferPool {
         lock.lock();
         try {
             if (this.closed)
-                return null;
+                return List.of();
             pooled = reserveChunksIfAvailable(numChunks, chunkSize, memoryRequired);
             if (pooled == null)
-                return null;
+                return List.of();
         } finally {
             try {
                 signalNextWaiterIfMemoryAvailable();

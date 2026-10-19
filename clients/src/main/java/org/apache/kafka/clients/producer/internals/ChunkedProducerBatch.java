@@ -53,10 +53,11 @@ public class ChunkedProducerBatch extends ProducerBatch {
     /**
      * Bytes of chunk capacity this batch needs before {@code tryAppend} could accept the given
      * record. Returns 0 when no extension is needed: the batch is at its batch-size limit, or the
-     * attached chunk capacity already has room (always the case for an empty batch, whose stream
-     * is pre-sized for the first record). Positive when the record is within the batch-size limit
-     * but the attached chunks lack capacity — the accumulator then allocates exactly the missing
-     * bytes (rounded up to whole chunks) and attaches them via {@link #addBuffers} before retrying.
+     * attached chunk capacity already has room (always the case for an empty uncompressed batch,
+     * whose stream is pre-sized exactly for the first record). Positive when the record is within the
+     * batch-size limit but the attached chunks lack capacity — the accumulator then allocates exactly
+     * the missing bytes (rounded up to whole chunks) and attaches them via {@link #addBuffers} before
+     * retrying.
      * <p>
      * TODO (KAFKA-20859): improve by reusing size calculation.
      */
@@ -71,30 +72,21 @@ public class ChunkedProducerBatch extends ProducerBatch {
     }
 
     /**
-     * Appends the record. Capacity for it comes from two sources. The first is pre-sizing by the
-     * accumulator, before the append: the initial chunks, sized for the batch's first record, are
-     * acquired (blocking for pool memory) when the batch is created, and for each later record the
-     * accumulator attaches extension chunks for the shortfall reported by {@link #extensionBytesNeeded}
-     * (see {@link #addBuffers}). That extension acquire does not block: if the pool cannot supply the
-     * chunks, the accumulator closes this batch and retries the record on a new one. The second is
-     * automatic growth by the backing {@link ChunkedByteBufferOutputStream} during the write itself: a
-     * write that runs past the attached chunks takes another chunk from the pool without blocking,
-     * falling back to the heap if the pool has none. An uncompressed batch should never need that
-     * growth, because pre-sizing is an exact upper bound for it. For a compressed batch the pre-size
-     * scales with the topic's compression ratio estimate, which can exceed 1.0 for incompressible data
-     * and can change between pre-sizing and batch creation, so it is only a heuristic and the growth
-     * absorbs any overshoot.
+     * Appends the record. Its capacity is pre-sized by the accumulator before the append: the batch is
+     * created with chunks for its first record (a blocking acquire), and each later record gets extension
+     * chunks for the shortfall reported by {@link #extensionBytesNeeded} (see {@link #addBuffers}) through a
+     * non-blocking acquire; if the pool cannot supply them, the accumulator closes this batch and retries the
+     * record on a new one. Pre-sizing is an exact upper bound for an uncompressed batch. For a compressed batch
+     * it scales with the topic's compression ratio estimate, which is only a heuristic and can change between
+     * pre-sizing and batch creation, so the backing {@link ChunkedByteBufferOutputStream} also grows during the
+     * write, attaching all the chunks the write still needs: from the pool without blocking, the rest from the
+     * heap. The check here therefore covers only an uncompressed batch's first record, the one append no caller
+     * checks ({@code RecordAccumulator.appendNewBatch} appends straight into the new batch); every later append
+     * comes through {@code ChunkedRecordAccumulator.tryAppend}, which has already evaluated
+     * {@link #extensionBytesNeeded}.
      * <p>
-     * Pre-sizing is therefore verified here only for an uncompressed batch's first record, which is the
-     * one append no caller checks: {@code RecordAccumulator.appendNewBatch} creates the batch and appends
-     * straight into it. Every later append arrives through {@code ChunkedRecordAccumulator.tryAppend},
-     * which evaluates {@link #extensionBytesNeeded} itself and attaches chunks before retrying, so
-     * repeating the check for those would size the record a second time on every append for no added
-     * safety.
-     * <p>
-     * If the growth had to fall back to the heap because the pool was exhausted, the record is still
-     * appended but the batch is then closed for record appends, so it is sent early rather than taking
-     * further records that would keep growing on the heap past buffer.memory.
+     * If the growth fell back to the heap, the record is still appended but the batch is then closed for
+     * record appends, so it is sent early rather than growing further on the heap past buffer.memory.
      *
      * @return the record's future, or null if the batch is at its batch-size limit
      * @throws IllegalStateException if the uncompressed stream was not pre-sized to hold the batch's first record
@@ -112,9 +104,10 @@ public class ChunkedProducerBatch extends ProducerBatch {
             // trust a compression ratio estimate that has proven too low. Close for appends so later records
             // go to a new batch (which blocks for pool memory) instead of growing this one further on the heap.
             // The caller's append result reads isFull(), now true, so the sender is woken to send it early, and
-            // the drain's close() then feeds the observed ratio back to the estimator sooner. The compressor flush in
-            // closeForRecordAppends may fall back once more, which is bounded since nothing is appended after
-            // it. Closing is idempotent, and matches how the extension path closes a batch on pool exhaustion.
+            // the drain's ProducerBatch.close() then feeds the observed ratio back to the estimator sooner. The
+            // compressor flush in closeForRecordAppends may fall back to the heap once more, which is bounded since
+            // nothing is appended after it. Closing is idempotent, and matches how the extension path closes a
+            // batch on pool exhaustion.
             log.debug("Closing batch for {} to record appends so it is sent early: the buffer pool was "
                     + "exhausted and the batch's stream fell back to {} heap-allocated chunk(s) beyond buffer.memory. "
                     + "recordCount={}, attachedCapacity={}, estimatedSizeInBytes={}, compressionRatioEstimate={}",

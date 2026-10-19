@@ -1073,7 +1073,7 @@ public class ChunkedRecordAccumulatorTest {
                 List<ByteBuffer> chunks = super.tryAllocateChunks(totalSize);
                 // Uncompressed, the mid-batch extension is the only caller of tryAllocateChunks: the
                 // stream is pre-sized for every record, so it never grows itself mid-write.
-                if (chunks != null)
+                if (!chunks.isEmpty())
                     extensionAllocated.set(true);
                 return chunks;
             }
@@ -1199,7 +1199,7 @@ public class ChunkedRecordAccumulatorTest {
                 acquires.add("non-blocking");
                 closeCallsAtAlloc.add(closeForAppendsCalls.get());
                 // Simulate an exhausted pool for the non-blocking extension acquire only.
-                return null;
+                return List.of();
             }
         };
         ChunkedRecordAccumulator accum = new ChunkedRecordAccumulator(logContext, 8192, Compression.NONE,
@@ -1275,7 +1275,7 @@ public class ChunkedRecordAccumulatorTest {
                     // From here on dq.peekLast() is no longer the batch the gap was sized against.
                     drainedRef.set(simulateConcurrentDrainAndReplace(accumRef.get()));
                     // Simulate an exhausted pool.
-                    return null;
+                    return List.of();
                 }
                 return super.tryAllocateChunks(totalSize);
             }
@@ -1372,7 +1372,7 @@ public class ChunkedRecordAccumulatorTest {
                     if (sleepOnRefusalMs > 0)
                         time.sleep(sleepOnRefusalMs);
                     // Simulate an exhausted pool.
-                    return null;
+                    return List.of();
                 }
                 return super.tryAllocateChunks(totalSize);
             }
@@ -1543,7 +1543,7 @@ public class ChunkedRecordAccumulatorTest {
                     // through to the blocking new-batch acquire below.
                     time.sleep(spentInExtensionMs);
                     // Simulate an exhausted pool.
-                    return null;
+                    return List.of();
                 }
                 return super.tryAllocateChunks(totalSize);
             }
@@ -1810,7 +1810,7 @@ public class ChunkedRecordAccumulatorTest {
             public List<ByteBuffer> tryAllocateChunks(int totalSize) {
                 List<ByteBuffer> chunks = super.tryAllocateChunks(totalSize);
                 // The extension acquire is the only non-blocking one (see allocateExtensionChunks).
-                if (chunks != null)
+                if (!chunks.isEmpty())
                     extensionChunks.addAll(chunks);
                 Deque<ProducerBatch> dq = dqRef.get();
                 // Mock a concurrent appender that found the batch full: RecordAccumulator.tryAppend
