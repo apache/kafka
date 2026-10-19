@@ -219,6 +219,7 @@ public class DefaultSslEngineFactory implements SslEngineFactory {
         // SSLParameters#getCipherSuites may return null. If the provider does not report its supported
         // cipher suites we cannot filter, so use the configured list unchanged to fall back to the old behavior.
         if (supported == null) {
+            log.warn("Skipping validation of configured cipher suites {} because the JDK security provider does not report its supported cipher suites", configured);
             return configured.toArray(new String[0]);
         }
 
