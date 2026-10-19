@@ -18,127 +18,30 @@ package org.apache.kafka.server.mirror;
 
 import org.junit.jupiter.api.Test;
 import org.junit.jupiter.params.ParameterizedTest;
-import org.junit.jupiter.params.provider.ValueSource;
+import org.junit.jupiter.params.provider.EnumSource;
+import org.junit.jupiter.params.provider.MethodSource;
+
+import java.util.EnumSet;
+import java.util.Set;
+import java.util.stream.Collectors;
+import java.util.stream.Stream;
+
+import org.junit.jupiter.params.provider.Arguments;
 
 import static org.junit.jupiter.api.Assertions.assertEquals;
 import static org.junit.jupiter.api.Assertions.assertThrows;
 
 class MirrorPartitionStateTest {
-    @Test
-    void testLogAlignmentState() {
-        MirrorPartitionState state = MirrorPartitionState.LOG_ALIGNMENT;
-        assertEquals((byte) 0, state.value());
-    }
-
-    @Test
-    void testEpochFencingState() {
-        MirrorPartitionState state = MirrorPartitionState.EPOCH_FENCING;
-        assertEquals((byte) 1, state.value());
-    }
-
-    @Test
-    void testUleRecoveryState() {
-        MirrorPartitionState state = MirrorPartitionState.ULE_RECOVERY;
-        assertEquals((byte) 2, state.value());
-    }
-
-    @Test
-    void testMirroringState() {
-        MirrorPartitionState state = MirrorPartitionState.MIRRORING;
-        assertEquals((byte) 3, state.value());
-    }
-
-    @Test
-    void testPausingState() {
-        MirrorPartitionState state = MirrorPartitionState.PAUSING;
-        assertEquals((byte) 4, state.value());
-    }
-
-    @Test
-    void testPausedState() {
-        MirrorPartitionState state = MirrorPartitionState.PAUSED;
-        assertEquals((byte) 5, state.value());
-    }
-
-    @Test
-    void testStoppingState() {
-        MirrorPartitionState state = MirrorPartitionState.STOPPING;
-        assertEquals((byte) 6, state.value());
-    }
-
-    @Test
-    void testStoppedState() {
-        MirrorPartitionState state = MirrorPartitionState.STOPPED;
-        assertEquals((byte) 7, state.value());
-    }
-
-    @Test
-    void testFailedState() {
-        MirrorPartitionState state = MirrorPartitionState.FAILED;
-        assertEquals((byte) 8, state.value());
-    }
-
-    @Test
-    void testUnknownState() {
-        MirrorPartitionState state = MirrorPartitionState.UNKNOWN;
-        assertEquals((byte) -1, state.value());
+    @ParameterizedTest
+    @MethodSource("expectedStateValues")
+    void testValue(MirrorPartitionState state, byte expectedValue) {
+        assertEquals(expectedValue, state.value());
     }
 
     @ParameterizedTest
-    @ValueSource(bytes = {0, 1, 2, 3, 4, 5, 6, 7, 8, -1})
-    void testFromValueValidBytes(byte value) {
-        MirrorPartitionState state = MirrorPartitionState.fromValue(value);
-        assertEquals(value, state.value());
-    }
-
-    @Test
-    void testFromValueLogAlignment() {
-        assertEquals(MirrorPartitionState.LOG_ALIGNMENT, MirrorPartitionState.fromValue((byte) 0));
-    }
-
-    @Test
-    void testFromValueEpochFencing() {
-        assertEquals(MirrorPartitionState.EPOCH_FENCING, MirrorPartitionState.fromValue((byte) 1));
-    }
-
-    @Test
-    void testFromValueUleRecovery() {
-        assertEquals(MirrorPartitionState.ULE_RECOVERY, MirrorPartitionState.fromValue((byte) 2));
-    }
-
-    @Test
-    void testFromValueMirroring() {
-        assertEquals(MirrorPartitionState.MIRRORING, MirrorPartitionState.fromValue((byte) 3));
-    }
-
-    @Test
-    void testFromValuePausing() {
-        assertEquals(MirrorPartitionState.PAUSING, MirrorPartitionState.fromValue((byte) 4));
-    }
-
-    @Test
-    void testFromValuePaused() {
-        assertEquals(MirrorPartitionState.PAUSED, MirrorPartitionState.fromValue((byte) 5));
-    }
-
-    @Test
-    void testFromValueStopping() {
-        assertEquals(MirrorPartitionState.STOPPING, MirrorPartitionState.fromValue((byte) 6));
-    }
-
-    @Test
-    void testFromValueStopped() {
-        assertEquals(MirrorPartitionState.STOPPED, MirrorPartitionState.fromValue((byte) 7));
-    }
-
-    @Test
-    void testFromValueFailed() {
-        assertEquals(MirrorPartitionState.FAILED, MirrorPartitionState.fromValue((byte) 8));
-    }
-
-    @Test
-    void testFromValueUnknown() {
-        assertEquals(MirrorPartitionState.UNKNOWN, MirrorPartitionState.fromValue((byte) -1));
+    @MethodSource("expectedStateValues")
+    void testFromValue(MirrorPartitionState expectedState, byte value) {
+        assertEquals(expectedState, MirrorPartitionState.fromValue(value));
     }
 
     @Test
@@ -169,24 +72,37 @@ class MirrorPartitionStateTest {
     }
 
     @Test
-    void testAllStatesHaveUniqueValues() {
-        MirrorPartitionState[] states = MirrorPartitionState.values();
-        for (int i = 0; i < states.length; i++) {
-            for (int j = i + 1; j < states.length; j++) {
-                byte value1 = states[i].value();
-                byte value2 = states[j].value();
-                assertEquals(value1 != value2, true,
-                    String.format("States %s and %s have the same value: %d", states[i], states[j], value1));
-            }
-        }
+    void testAllStatesAreCoveredByTable() {
+        Set<MirrorPartitionState> tested = expectedStateValues()
+                .map(args -> (MirrorPartitionState) args.get()[0])
+                .collect(Collectors.toCollection(() ->
+                        EnumSet.noneOf(MirrorPartitionState.class)));
+
+        assertEquals(EnumSet.allOf(MirrorPartitionState.class), tested,
+                "Every MirrorPartitionState must have an entry in stateValues() with its expected byte value");
     }
 
-    @Test
-    void testRoundTripConversion() {
-        for (MirrorPartitionState state : MirrorPartitionState.values()) {
-            byte value = state.value();
-            MirrorPartitionState recovered = MirrorPartitionState.fromValue(value);
-            assertEquals(state, recovered, String.format("Round-trip conversion failed for %s", state));
-        }
+    @ParameterizedTest
+    @EnumSource(MirrorPartitionState.class)
+    void testRoundTrip(MirrorPartitionState state) {
+        assertEquals(state, MirrorPartitionState.fromValue(state.value()));
+    }
+
+    // Explicit mapping of each state to its expected byte value.
+    // Keep these values independent of MirrorPartitionState.value() to catch
+    // accidental changes to the state representation.
+    private static Stream<Arguments> expectedStateValues() {
+        return Stream.of(
+                Arguments.of(MirrorPartitionState.LOG_ALIGNMENT, (byte) 0),
+                Arguments.of(MirrorPartitionState.EPOCH_FENCING, (byte) 1),
+                Arguments.of(MirrorPartitionState.ULE_RECOVERY, (byte) 2),
+                Arguments.of(MirrorPartitionState.MIRRORING, (byte) 3),
+                Arguments.of(MirrorPartitionState.PAUSING, (byte) 4),
+                Arguments.of(MirrorPartitionState.PAUSED, (byte) 5),
+                Arguments.of(MirrorPartitionState.STOPPING, (byte) 6),
+                Arguments.of(MirrorPartitionState.STOPPED, (byte) 7),
+                Arguments.of(MirrorPartitionState.FAILED, (byte) 8),
+                Arguments.of(MirrorPartitionState.UNKNOWN, (byte) -1)
+        );
     }
 }
