@@ -157,7 +157,6 @@ public class RequestHeader implements AbstractRequestResponse {
         try {
             // We derive the header version from the request api version, so we read that first.
             // The request api version is part of `RequestHeaderData`, so we reset the buffer position after the read.
-            // If the api version is unsupported, the header is parsed with header version 1
             int bufferStartPositionForHeader = buffer.position();
             apiKeyId = buffer.getShort();
             short apiVersion = buffer.getShort();
@@ -168,6 +167,7 @@ public class RequestHeader implements AbstractRequestResponse {
             if (!apiKey.hasValidVersion())
                 throw new InvalidRequestException("Unsupported api with key " + apiKeyId + " (" + apiKey.name + ") and version " + apiVersion);
 
+            // If the api version is unsupported, the header is parsed with header version 1
             short headerVersion = apiKey.isVersionSupported(apiVersion) ? apiKey.requestHeaderVersion(apiVersion) : (short) 1;
             buffer.position(bufferStartPositionForHeader);
             final RequestHeaderData headerData = new RequestHeaderData(new ByteBufferAccessor(buffer), headerVersion);
