@@ -162,8 +162,8 @@ public class ShareConsumeBenchWorker implements TaskWorker {
     private Optional<AcknowledgeType> acknowledgeTypeFor(ConsumerRecord<byte[], byte[]> record) {
         if (spec.recordAcknowledger().isPresent()) {
             AcknowledgeType type = spec.recordAcknowledger().get().acknowledge(record);
-            if (type == null || type == AcknowledgeType.RENEW) {
-                throw new IllegalStateException("RecordAcknowledger must return ACCEPT, REJECT or RELEASE, but returned " + type);
+            if (type == null) {
+                throw new IllegalStateException("RecordAcknowledger must return an acknowledge type, but returned null");
             }
             return Optional.of(type);
         }

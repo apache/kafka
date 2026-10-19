@@ -33,7 +33,7 @@ import com.fasterxml.jackson.databind.JsonNode;
 })
 public interface RecordAcknowledger {
     /**
-     * Returns the acknowledge type to apply to the given record. It must be one of ACCEPT, REJECT or RELEASE.
+     * Returns the acknowledge type to apply to the given record. It must not be null.
      */
     AcknowledgeType acknowledge(ConsumerRecord<byte[], byte[]> record);
     JsonNode acknowledgerStatus();
