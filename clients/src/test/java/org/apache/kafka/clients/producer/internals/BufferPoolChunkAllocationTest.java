@@ -31,6 +31,7 @@ import java.util.concurrent.CountDownLatch;
 import java.util.concurrent.TimeUnit;
 import java.util.concurrent.atomic.AtomicInteger;
 import java.util.concurrent.atomic.AtomicReference;
+import java.util.concurrent.locks.ReentrantLock;
 
 import static org.junit.jupiter.api.Assertions.assertEquals;
 import static org.junit.jupiter.api.Assertions.assertInstanceOf;
@@ -306,6 +307,27 @@ public class BufferPoolChunkAllocationTest {
         BufferPool p = pool(4L * chunkSize, chunkSize);
         p.close();
         assertTrue(p.tryAllocateChunksUpTo(chunkSize).isEmpty());
+        assertEquals(4L * chunkSize, p.availableMemory());
+    }
+
+    /**
+     * While a thread is queued for memory, neither non-blocking variant takes memory ahead of it, even with memory
+     * free. A dummy waiter stands in for the queued thread; only its presence matters.
+     */
+    @Test
+    public void testNonBlockingAllocationsRefuseWhileWaitersQueued() {
+        int chunkSize = 64;
+        BufferPool p = pool(4L * chunkSize, chunkSize);
+        p.waiters().addLast(new ReentrantLock().newCondition());
+        assertTrue(p.tryAllocateChunks(chunkSize).isEmpty());
+        assertTrue(p.tryAllocateChunksUpTo(chunkSize).isEmpty());
+        assertEquals(4L * chunkSize, p.availableMemory());
+
+        // Cleared before any deallocate or close, which would signal the dummy without holding its lock.
+        p.waiters().clear();
+        List<ByteBuffer> chunks = p.tryAllocateChunks(chunkSize);
+        assertEquals(1, chunks.size());
+        p.deallocate(chunks.get(0));
         assertEquals(4L * chunkSize, p.availableMemory());
     }
 

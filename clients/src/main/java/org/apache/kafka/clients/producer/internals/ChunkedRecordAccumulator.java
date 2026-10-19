@@ -175,9 +175,9 @@ public class ChunkedRecordAccumulator extends RecordAccumulator {
                             topic, effectivePartition);
                     if (extensionChunks.isEmpty()) {
                         extensionChunks = null;
-                        // Pool exhausted or closed, or the extension can never fit: no chunks held. Whether to close the
-                        // open batch (the record then retries as a new batch) was already decided by allocateExtensionChunks;
-                        // retry either way, bounded by throwIfNoMoreRetriesAllowed, which reports exhausted memory as the cause.
+                        // Pool exhausted or closed, or the extension can never fit; allocateExtensionChunks decided whether to close the
+                        // open batch. Retry, bounded by the deadline, unless closed: the retry bound would report that as exhausted memory.
+                        if (closed) throw new KafkaException("Producer closed while send in progress");
                         nonBlockingMemoryAllocationDenied = true;
                         continue;
                     }
@@ -318,9 +318,9 @@ public class ChunkedRecordAccumulator extends RecordAccumulator {
      * exhausted, closing {@code batchToExtend} for appends so the record retries on the new-batch path
      * (blocks for memory).
      * <p>
-     * {@code tryAllocateChunks} also refuses once the pool is closed. That is handled the same way: when the
-     * retry then needs a new batch, its blocking acquire throws {@link KafkaException} for the closed pool
-     * (unless {@code max.block.ms} is already spent, in which case the retry bound gives up first).
+     * {@code tryAllocateChunks} also refuses once the pool is closed, which happens only after the accumulator is
+     * closed. The caller then throws {@link KafkaException} for the closed producer before the retry bound is
+     * consulted, so the refusal is never reported as exhausted memory.
      * <p>
      * An extension that, rounded up to whole chunks, exceeds the pool's entire capacity can never be
      * satisfied, and {@code tryAllocateChunks} would throw {@link IllegalArgumentException} for it. The

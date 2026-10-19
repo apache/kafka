@@ -363,7 +363,8 @@ public class BufferPool {
      * wait time. It never waits, so it ignores the thread's interrupt status and leaves it untouched. Also
      * returns an empty list once the pool is closed: the producer closes the pool before it drains or aborts the
      * last batches, and closing those batches still needs to grow their streams. A stream growing
-     * mid-write, which can take a partial grant, uses {@link #tryAllocateChunksUpTo} instead.
+     * mid-write, which can take a partial grant, uses {@link #tryAllocateChunksUpTo} instead. Also returns an
+     * empty list while any thread is queued for memory, so non-blocking callers never take memory ahead of a waiter.
      *
      * @param totalSize minimum total bytes of capacity required across the returned chunks
      * @return list of {@code ceil(totalSize / poolableSize())} {@code ByteBuffer}s, each of capacity
@@ -381,6 +382,10 @@ public class BufferPool {
         try {
             if (this.closed)
                 return List.of();
+            // Memory free while a thread is queued is the window between a deallocation signalling it and it re-taking
+            // the lock; taking it here would starve that FIFO waiter, so refuse and let the caller fall back.
+            if (!this.waiters.isEmpty())
+                return List.of();
             pooled = reserveChunksIfAvailable(numChunks, chunkSize, memoryRequired);
             if (pooled == null)
                 return List.of();
@@ -395,7 +400,8 @@ public class BufferPool {
      * of the {@code ceil(totalSize / poolableSize())} chunks as are available right now, possibly none, and the
      * caller covers the rest from the heap. A request larger than the pool is clamped to the pool's size rather
      * than rejected. Never waits; returns an empty list, never {@code null}, when nothing is free or the pool
-     * is closed.
+     * is closed. Also returns an empty list while any thread is queued for memory, so non-blocking callers never
+     * take memory ahead of a waiter.
      *
      * @throws IllegalArgumentException if {@code totalSize <= 0}
      */
@@ -413,6 +419,10 @@ public class BufferPool {
         lock.lock();
         try {
             if (this.closed)
+                return List.of();
+            // Memory free while a thread is queued is the window between a deallocation signalling it and it re-taking
+            // the lock; taking it here would starve that FIFO waiter, so refuse and let the caller fall back.
+            if (!this.waiters.isEmpty())
                 return List.of();
             granted = reserveChunksUpTo(numChunks, chunkSize, pooled);
         } finally {

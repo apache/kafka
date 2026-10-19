@@ -27,6 +27,7 @@ import java.util.Arrays;
 import java.util.Collections;
 import java.util.List;
 import java.util.concurrent.atomic.AtomicInteger;
+import java.util.concurrent.locks.ReentrantLock;
 
 import static org.junit.jupiter.api.Assertions.assertArrayEquals;
 import static org.junit.jupiter.api.Assertions.assertDoesNotThrow;
@@ -425,6 +426,28 @@ public class ChunkedByteBufferOutputStreamTest {
         // Returning the heap chunk here would push availableMemory to 3 chunks and break the bound.
         assertEquals(total, p.availableMemory(),
             "pool must be restored to exactly its capacity; the heap chunk must not be returned to the pool");
+    }
+
+    /**
+     * While a thread is queued for memory, growth falls back to the heap even with pool memory free, rather than
+     * take memory ahead of the waiter. A dummy waiter stands in for the queued thread.
+     */
+    @Test
+    public void testGrowthFallsBackToHeapWhileWaitersQueued() throws Exception {
+        int chunkSize = 8;
+        long total = 4L * chunkSize;
+        BufferPool p = pool(total, chunkSize);
+        try (ChunkedByteBufferOutputStream stream = new ChunkedByteBufferOutputStream(chunks(p, chunkSize, 1), chunkSize, p, true)) {
+            p.waiters().addLast(new ReentrantLock().newCondition());
+            stream.write(new byte[2 * chunkSize], 0, 2 * chunkSize);
+            assertEquals(1, stream.fallbackAllocations(), "the second chunk should come from the heap");
+            assertEquals(total - chunkSize, p.availableMemory(), "growth must not take pool memory");
+
+            // Cleared before close or deallocate, which would signal the dummy without holding its lock.
+            p.waiters().clear();
+            stream.deallocate();
+        }
+        assertEquals(total, p.availableMemory());
     }
 
     /**
