@@ -227,7 +227,7 @@ public class BufferPool {
      * @throws KafkaException           if the pool was closed during the wait
      * @throws BufferExhaustedException if the wait timed out; the buffer-exhausted metric is recorded
      *         only when {@code recordExhaustedOnTimeout} is true (the incremental strategy's new-batch
-     *         caller in {@link ChunkedRecordAccumulator} records the drop itself)
+     *         caller in {@link ChunkedRecordAccumulator} records that metric itself when it catches the exception)
      */
     private long awaitMemory(Condition moreMemory, long remainingTimeToBlockNs,
                              boolean recordExhaustedOnTimeout, Supplier<String> exhaustedMessage) throws InterruptedException {
@@ -362,7 +362,7 @@ public class BufferPool {
      * away, and an empty list otherwise, without reserving anything, joining {@link #waiters} or recording a
      * wait time. It never waits, so it ignores the thread's interrupt status and leaves it untouched. Also
      * returns an empty list once the pool is closed: the producer closes the pool before it drains or aborts the
-     * last batches, and closing those batches can still need to grow their streams. A stream growing
+     * last batches, and closing those batches still needs to grow their streams. A stream growing
      * mid-write, which can take a partial grant, uses {@link #tryAllocateChunksUpTo} instead.
      *
      * @param totalSize minimum total bytes of capacity required across the returned chunks
@@ -385,11 +385,7 @@ public class BufferPool {
             if (pooled == null)
                 return List.of();
         } finally {
-            try {
-                signalNextWaiterIfMemoryAvailable();
-            } finally {
-                lock.unlock();
-            }
+            lock.unlock();
         }
         return materializeChunks(pooled, numChunks, chunkSize, memoryRequired);
     }
@@ -420,11 +416,7 @@ public class BufferPool {
                 return List.of();
             granted = reserveChunksUpTo(numChunks, chunkSize, pooled);
         } finally {
-            try {
-                signalNextWaiterIfMemoryAvailable();
-            } finally {
-                lock.unlock();
-            }
+            lock.unlock();
         }
         if (granted == 0)
             return List.of();
