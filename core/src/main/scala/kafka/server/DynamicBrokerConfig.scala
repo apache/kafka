@@ -156,6 +156,7 @@ class DynamicBrokerConfig(private val kafkaConfig: KafkaConfig) extends Logging 
   private var currentConfig: KafkaConfig = _
 
   private[server] def initialize(clientTelemetryExporterPluginOpt: Option[ClientTelemetryExporterPlugin]): Unit = {
+    KafkaConfig.warnIfDynamicOnlyBrokerQuotaConfigsInStaticConfig(staticBrokerConfigs.asJava)
     currentConfig = new KafkaConfig(kafkaConfig.props, false)
     telemetryExporterPluginOpt = clientTelemetryExporterPluginOpt
   }

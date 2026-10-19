@@ -2173,7 +2173,8 @@ class KafkaConfigTest {
         val props = createDefaultConfig()
         props.setProperty(config, "1000000")
 
-        KafkaConfig.fromProps(props)
+        val kafkaConfig = KafkaConfig.fromProps(props)
+        kafkaConfig.dynamicConfig.initialize(None)
         
         val expectedMessage = s"$config is set in the static configuration file but is ignored at runtime; configure this property dynamically to take effect."
         

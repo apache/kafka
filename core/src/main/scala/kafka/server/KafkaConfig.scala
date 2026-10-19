@@ -101,6 +101,14 @@ object KafkaConfig extends Logging {
   }
 }
 
+private[server] def warnIfDynamicOnlyBrokerQuotaConfigsInStaticConfig(staticConfigs: util.Map[String, _]): Unit = {
+  QuotaConfig.DYNAMIC_ONLY_BROKER_QUOTA_CONFIGS.asScala.foreach { configName =>
+    if (staticConfigs.containsKey(configName)) {
+      warn(s"$configName is set in the static configuration file but is ignored at runtime; configure this property dynamically to take effect.")
+    }
+  }
+}
+
 /**
  * The class extend {@link AbstractKafkaConfig} which will be the future KafkaConfig.
  * When add any new methods if it doesn't depend on anything in Core, then move it to org.apache.kafka.server.config.KafkaConfig instead of here.
