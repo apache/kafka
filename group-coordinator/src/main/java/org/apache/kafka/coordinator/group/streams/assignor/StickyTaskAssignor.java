@@ -581,17 +581,14 @@ public class StickyTaskAssignor implements TaskAssignor {
         final Map<TaskId, List<ProcessState>> rackAwareStandbys = new HashMap<>();
 
         // 1. re-assigning standby tasks in a new rack to clients that previously had the same task (as active or standby)
-        final List<TaskId> toLeastLoaded = new ArrayList<>();
         for (final TaskId task : standbyTasks) {
             final List<ProcessState> standbys = new ArrayList<>();
             rackAwareStandbys.put(task, standbys);
-            if (!placeRackAwareStandbys(localState, picker, task, standbys, true)) {
-                toLeastLoaded.add(task);
-            }
+            placeRackAwareStandbys(localState, picker, task, standbys, true);
         }
 
         // 2. assigning remaining standby tasks in a new rack to the least loaded client
-        for (final TaskId task : toLeastLoaded) {
+        for (final TaskId task : standbyTasks) {
             placeRackAwareStandbys(localState, picker, task, rackAwareStandbys.get(task), false);
         }
         return rackAwareStandbys;
@@ -602,11 +599,8 @@ public class StickyTaskAssignor implements TaskAssignor {
      * which holds those placed by an earlier call. Among the candidates of a pick, a standby goes to the previous active
      * member, else the least-loaded previous standby member, each while below the quota, else to the least-loaded
      * candidate. With {@code stickyOnly}, stops at the first standby with no previous member to go to.
-     *
-     * @return whether the task has all its standbys; if not, the next step places the rest: step 2 after a
-     *         {@code stickyOnly} call, the tag-blind step 3 after the other.
      */
-    private static boolean placeRackAwareStandbys(
+    private static void placeRackAwareStandbys(
         final LocalState localState,
         final RackAwareStandbyPicker<ProcessState> picker,
         final TaskId task,
@@ -621,7 +615,7 @@ public class StickyTaskAssignor implements TaskAssignor {
         while (standbys.size() < localState.numStandbyReplicas) {
             final RackAwareStandbyPicker.Pick<ProcessState> pick = picker.pick();
             if (pick == null) {
-                return false;
+                return;
             }
 
             // prev active or standby member on a candidate process, else the least-loaded candidate
@@ -632,7 +626,7 @@ public class StickyTaskAssignor implements TaskAssignor {
                 process = localState.processIdToState.get(prevMember.processId);
                 newTaskCount = process.addTask(prevMember.memberId, task, false, true);
             } else if (stickyOnly) {
-                return false;
+                return;
             } else {
                 process = pick.leastLoaded();
                 newTaskCount = process.addTaskToLeastLoadedMember(task, false, true);
@@ -649,7 +643,6 @@ public class StickyTaskAssignor implements TaskAssignor {
             }
             standbys.add(process);
         }
-        return true;
     }
 
     /**
