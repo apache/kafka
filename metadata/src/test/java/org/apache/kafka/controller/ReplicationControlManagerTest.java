@@ -1724,14 +1724,15 @@ public class ReplicationControlManagerTest {
             replicas[i] = new int[] {i % 3};
         }
         Uuid fooId = ctx.createTestTopic("foo", replicas).topicId();
-        // Increase the replication factor of partition 0 only.
+        // Increase the replication factor of partition 0 only. Use PartitionChangeRecord
+        // version 2, the latest one, because Directories is only valid in version 1 and above.
         ctx.replay(List.of(new ApiMessageAndVersion(new PartitionChangeRecord().
             setTopicId(fooId).
             setPartitionId(0).
             setReplicas(List.of(0, 1, 2)).
             setIsr(List.of(0, 1, 2)).
             setDirectories(List.of(DirectoryId.UNASSIGNED, DirectoryId.UNASSIGNED, DirectoryId.UNASSIGNED)),
-            (short) 0)));
+            (short) 2)));
 
         ControllerRequestContext requestContext = anonymousContextFor(ApiKeys.CREATE_PARTITIONS);
         ControllerResult<List<CreatePartitionsTopicResult>> result = replicationControl.createPartitions(
