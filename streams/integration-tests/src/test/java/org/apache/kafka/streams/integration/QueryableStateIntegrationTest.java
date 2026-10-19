@@ -1983,16 +1983,26 @@ public class QueryableStateIntegrationTest {
                     Collections.singletonList(HeadersStores.window(lastRecord)),
                     toListAndCloseIterator(windowStore.fetch("duplicate", "single", timeTo, timeTo)));
                 assertEquals(HeadersStores.valueTimestampHeaders(firstRecord), windowStore.fetch("multi", timeFrom.toEpochMilli()));
+                // the two records of "multi" are in two windows
+                final List<KeyValue<Long, ValueTimestampHeaders<String>>> multiWindows = Arrays.asList(
+                    KeyValue.pair(timeFrom.toEpochMilli(), HeadersStores.valueTimestampHeaders(firstRecord)),
+                    KeyValue.pair(timeTo.toEpochMilli(), HeadersStores.valueTimestampHeaders(lastRecord)));
+                assertEquals(reversed(multiWindows), toListAndCloseIterator(windowStore.backwardFetch("multi", timeFrom, timeTo)));
                 assertThrows(NullPointerException.class, () -> windowStore.fetch(null, timeFrom, timeTo));
 
                 final ReadOnlySessionStore<String, AggregationWithHeaders<String>> sessionStore = HeadersStores.store(
                     streams, HEADERS_SESSION_STORE, QueryableStoreTypes.sessionStoreWithHeaders(), null, false);
+                final List<KeyValue<Windowed<String>, AggregationWithHeaders<String>>> sessions =
+                    records.stream().map(HeadersStores::session).collect(Collectors.toList());
                 final List<KeyValue<Windowed<String>, AggregationWithHeaders<String>>> fetchedSessions =
                     toListAndCloseIterator(sessionStore.fetch("duplicate", "single"));
-                assertSameEntries(
-                    records.stream().map(HeadersStores::session).collect(Collectors.toList()),
-                    fetchedSessions);
+                assertSameEntries(sessions, fetchedSessions);
                 assertEquals(reversed(fetchedSessions), toListAndCloseIterator(sessionStore.backwardFetch("duplicate", "single")));
+                // null bounds fetch the sessions of all keys
+                final List<KeyValue<Windowed<String>, AggregationWithHeaders<String>>> allSessions =
+                    toListAndCloseIterator(sessionStore.fetch(null, null));
+                assertSameEntries(sessions, allSessions);
+                assertEquals(reversed(allSessions), toListAndCloseIterator(sessionStore.backwardFetch(null, null)));
                 // only the session of the last record ends after the first record
                 assertEquals(
                     Collections.singletonList(HeadersStores.session(lastRecord)),
