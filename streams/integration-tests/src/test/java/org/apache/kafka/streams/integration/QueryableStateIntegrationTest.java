@@ -20,6 +20,9 @@ import org.apache.kafka.clients.consumer.ConsumerConfig;
 import org.apache.kafka.clients.producer.KafkaProducer;
 import org.apache.kafka.clients.producer.ProducerConfig;
 import org.apache.kafka.clients.producer.ProducerRecord;
+import org.apache.kafka.common.TopicPartition;
+import org.apache.kafka.common.header.Headers;
+import org.apache.kafka.common.header.internals.RecordHeaders;
 import org.apache.kafka.common.serialization.LongDeserializer;
 import org.apache.kafka.common.serialization.LongSerializer;
 import org.apache.kafka.common.serialization.Serde;
@@ -28,11 +31,14 @@ import org.apache.kafka.common.serialization.StringDeserializer;
 import org.apache.kafka.common.serialization.StringSerializer;
 import org.apache.kafka.common.utils.Bytes;
 import org.apache.kafka.server.util.MockTime;
+import org.apache.kafka.streams.CloseOptions;
+import org.apache.kafka.streams.CloseOptions.GroupMembershipOperation;
 import org.apache.kafka.streams.KafkaStreams;
 import org.apache.kafka.streams.KafkaStreams.State;
 import org.apache.kafka.streams.KeyQueryMetadata;
 import org.apache.kafka.streams.KeyValue;
 import org.apache.kafka.streams.LagInfo;
+import org.apache.kafka.streams.StoreQueryParameters;
 import org.apache.kafka.streams.StreamsBuilder;
 import org.apache.kafka.streams.StreamsConfig;
 import org.apache.kafka.streams.errors.InvalidStateStoreException;
@@ -50,14 +56,25 @@ import org.apache.kafka.streams.kstream.SessionWindows;
 import org.apache.kafka.streams.kstream.TimeWindows;
 import org.apache.kafka.streams.kstream.ValueMapper;
 import org.apache.kafka.streams.kstream.Windowed;
+import org.apache.kafka.streams.kstream.internals.SessionWindow;
+import org.apache.kafka.streams.kstream.internals.TimeWindow;
+import org.apache.kafka.streams.processor.StateRestoreListener;
+import org.apache.kafka.streams.processor.api.Processor;
+import org.apache.kafka.streams.processor.api.ProcessorContext;
+import org.apache.kafka.streams.processor.api.Record;
 import org.apache.kafka.streams.state.AggregationWithHeaders;
 import org.apache.kafka.streams.state.KeyValueIterator;
 import org.apache.kafka.streams.state.KeyValueStore;
+import org.apache.kafka.streams.state.QueryableStoreType;
 import org.apache.kafka.streams.state.QueryableStoreTypes;
 import org.apache.kafka.streams.state.ReadOnlyKeyValueStore;
 import org.apache.kafka.streams.state.ReadOnlySessionStore;
 import org.apache.kafka.streams.state.ReadOnlyWindowStore;
+import org.apache.kafka.streams.state.SessionStoreWithHeaders;
+import org.apache.kafka.streams.state.StoreBuilder;
 import org.apache.kafka.streams.state.Stores;
+import org.apache.kafka.streams.state.TimestampedKeyValueStoreWithHeaders;
+import org.apache.kafka.streams.state.TimestampedWindowStoreWithHeaders;
 import org.apache.kafka.streams.state.ValueAndTimestamp;
 import org.apache.kafka.streams.state.ValueTimestampHeaders;
 import org.apache.kafka.streams.state.WindowStoreIterator;
@@ -73,6 +90,8 @@ import org.junit.jupiter.api.Tag;
 import org.junit.jupiter.api.Test;
 import org.junit.jupiter.api.TestInfo;
 import org.junit.jupiter.api.Timeout;
+import org.junit.jupiter.params.ParameterizedTest;
+import org.junit.jupiter.params.provider.ValueSource;
 import org.slf4j.Logger;
 import org.slf4j.LoggerFactory;
 
@@ -83,10 +102,12 @@ import java.io.FileReader;
 import java.io.IOException;
 import java.io.PrintStream;
 import java.io.StringReader;
+import java.nio.charset.StandardCharsets;
 import java.time.Duration;
 import java.time.Instant;
 import java.util.ArrayList;
 import java.util.Arrays;
+import java.util.Collection;
 import java.util.Collections;
 import java.util.Comparator;
 import java.util.HashMap;
@@ -99,10 +120,15 @@ import java.util.Properties;
 import java.util.Set;
 import java.util.TreeMap;
 import java.util.TreeSet;
+import java.util.concurrent.CountDownLatch;
 import java.util.concurrent.TimeUnit;
 import java.util.concurrent.atomic.AtomicBoolean;
+import java.util.function.Function;
+import java.util.stream.Collectors;
 
+import static java.time.Duration.ofDays;
 import static java.time.Duration.ofMillis;
+import static java.time.Duration.ofMinutes;
 import static java.time.Duration.ofSeconds;
 import static java.time.Instant.ofEpochMilli;
 import static org.apache.kafka.common.utils.Utils.mkEntry;
@@ -116,6 +142,7 @@ import static org.apache.kafka.streams.state.QueryableStoreTypes.keyValueStore;
 import static org.apache.kafka.streams.state.QueryableStoreTypes.sessionStore;
 import static org.apache.kafka.streams.utils.TestUtils.safeUniqueTestName;
 import static org.apache.kafka.streams.utils.TestUtils.waitForApplicationState;
+import static org.apache.kafka.test.StreamsTestUtils.toListAndCloseIterator;
 import static org.apache.kafka.test.TestUtils.retryOnExceptionWithTimeout;
 import static org.junit.jupiter.api.Assertions.assertEquals;
 import static org.junit.jupiter.api.Assertions.assertFalse;
@@ -157,6 +184,11 @@ public class QueryableStateIntegrationTest {
     private String outputTopicThree = "output-three";
     // sufficiently large window size such that everything falls into 1 window
     private static final long WINDOW_SIZE = TimeUnit.MILLISECONDS.convert(2, TimeUnit.DAYS);
+    // stores of the Processor API topology built by headersStoresTopology()
+    private static final String HEADERS_KV_STORE = "headers-kv-store";
+    private static final String HEADERS_WINDOW_STORE = "headers-window-store";
+    private static final String HEADERS_SESSION_STORE = "headers-session-store";
+    private static final long HEADERS_WINDOW_SIZE_MS = 10_000L;
     private static final int STREAM_TWO_PARTITIONS = 2;
     private static final int NUM_REPLICAS = NUM_BROKERS;
     private Properties streamsConfiguration;
@@ -1253,6 +1285,29 @@ public class QueryableStateIntegrationTest {
     }
 
     /**
+     * Asserts that {@code actual} holds the entries of {@code expected}, in any order.
+     */
+    private static <T> void assertSameEntries(final Collection<T> expected, final List<T> actual) {
+        assertEquals(expected.size(), actual.size());
+        assertEquals(new HashSet<>(expected), new HashSet<>(actual));
+    }
+
+    private static <T> List<T> reversed(final List<T> list) {
+        final List<T> reversed = new ArrayList<>(list);
+        Collections.reverse(reversed);
+        return reversed;
+    }
+
+    private static void produceSynchronously(final List<ProducerRecord<String, String>> records) throws Exception {
+        try (final KafkaProducer<String, String> producer = new KafkaProducer<>(
+                TestUtils.producerConfig(CLUSTER.bootstrapServers(), StringSerializer.class, StringSerializer.class))) {
+            for (final ProducerRecord<String, String> record : records) {
+                producer.send(record).get();
+            }
+        }
+    }
+
+    /**
      * A class that periodically produces records in a separate thread
      */
     private static class ProducerRunnable implements Runnable {
@@ -1299,7 +1354,7 @@ public class QueryableStateIntegrationTest {
     }
 
     @Test
-    public void shouldQueryHeadersAwareKeyValueStoreBasicOperations(final TestInfo testInfo) throws Exception {
+    public void shouldQueryHeadersAwareKeyValueStoreViaMaterialized(final TestInfo testInfo) throws Exception {
         final String uniqueTestName = safeUniqueTestName(testInfo);
         final String inputTopic = uniqueTestName + "-input";
         final String storeName = uniqueTestName + "-store";
@@ -1318,41 +1373,54 @@ public class QueryableStateIntegrationTest {
 
         final Properties properties = mkProperties(mkMap(
             mkEntry(StreamsConfig.APPLICATION_ID_CONFIG, uniqueTestName + "-app"),
-            mkEntry(StreamsConfig.BOOTSTRAP_SERVERS_CONFIG, CLUSTER.bootstrapServers())
+            mkEntry(StreamsConfig.BOOTSTRAP_SERVERS_CONFIG, CLUSTER.bootstrapServers()),
+            // approximateNumEntries() only counts records that were flushed from the cache on commit
+            mkEntry(StreamsConfig.COMMIT_INTERVAL_MS_CONFIG, "100")
         ));
 
         try (final KafkaStreams streams = getRunningStreams(properties, builder, true)) {
-            IntegrationTestUtils.produceKeyValuesSynchronously(
+            final List<KeyValue<String, String>> records = Arrays.asList(
+                new KeyValue<>("alpha", "a1"),
+                new KeyValue<>("beta", "b1"),
+                new KeyValue<>("gamma", "g1"),
+                new KeyValue<>("delta", "d1"),
+                new KeyValue<>("epsilon", "e1")
+            );
+            final long timestamp = System.currentTimeMillis();
+            IntegrationTestUtils.produceKeyValuesSynchronouslyWithTimestamp(
                 inputTopic,
-                Arrays.asList(
-                    new KeyValue<>("alpha", "a1"),
-                    new KeyValue<>("beta", "b1"),
-                    new KeyValue<>("gamma", "g1"),
-                    new KeyValue<>("delta", "d1"),
-                    new KeyValue<>("epsilon", "e1")
-                ),
+                records,
                 TestUtils.producerConfig(
                     CLUSTER.bootstrapServers(),
                     StringSerializer.class,
                     StringSerializer.class,
                     new Properties()),
-                CLUSTER.time
+                HeadersStores.dslInputHeaders(),
+                timestamp,
+                false
             );
+
+            // sorted by key: "alpha", "beta", "delta", "epsilon", "gamma"
+            final List<KeyValue<String, ValueTimestampHeaders<String>>> entries = records.stream()
+                .sorted(Comparator.comparing(record -> record.key))
+                .map(record -> KeyValue.pair(record.key, ValueTimestampHeaders.make(record.value, timestamp, new RecordHeaders())))
+                .collect(Collectors.toList());
 
             retryOnExceptionWithTimeout(30_000, () -> {
                 final ReadOnlyKeyValueStore<String, ValueTimestampHeaders<String>> store =
                     streams.store(fromNameAndType(storeName, QueryableStoreTypes.timestampedKeyValueStoreWithHeaders()));
                 assertNotNull(store);
 
-                final ValueTimestampHeaders<String> result = store.get("alpha");
-                assertNotNull(result);
-                assertEquals("a1", result.value());
-                assertTrue(result.timestamp() > 0);
-                assertNotNull(result.headers());
-
+                assertEquals(entries.get(0).value, store.get("alpha"));
                 assertNull(store.get("nonexistent"));
-
+                assertThrows(NullPointerException.class, () -> store.get(null));
                 assertEquals(5L, store.approximateNumEntries());
+
+                assertEquals(entries, toListAndCloseIterator(store.all()));
+                assertEquals(reversed(entries), toListAndCloseIterator(store.reverseAll()));
+                assertEquals(entries.subList(1, 4), toListAndCloseIterator(store.range("beta", "epsilon")));
+                assertEquals(reversed(entries.subList(1, 4)), toListAndCloseIterator(store.reverseRange("beta", "epsilon")));
+                assertEquals(entries.subList(2, 3), toListAndCloseIterator(store.prefixScan("de", new StringSerializer())));
 
                 final ReadOnlyKeyValueStore<String, ValueAndTimestamp<String>> tsStore =
                     streams.store(fromNameAndType(storeName, QueryableStoreTypes.timestampedKeyValueStore()));
@@ -1360,91 +1428,6 @@ public class QueryableStateIntegrationTest {
                 final ValueAndTimestamp<String> tsResult = tsStore.get("beta");
                 assertNotNull(tsResult);
                 assertEquals("b1", tsResult.value());
-            });
-        }
-    }
-
-    @Test
-    public void shouldQueryHeadersAwareKeyValueStoreIterationOperations(final TestInfo testInfo) throws Exception {
-        final String uniqueTestName = safeUniqueTestName(testInfo);
-        final String inputTopic = uniqueTestName + "-input";
-        final String storeName = uniqueTestName + "-store";
-
-        CLUSTER.createTopic(inputTopic);
-
-        final StreamsBuilder builder = new StreamsBuilder();
-        builder.table(
-            inputTopic,
-            Consumed.with(Serdes.String(), Serdes.String()),
-            Materialized.<String, String>as(
-                Stores.persistentTimestampedKeyValueStoreWithHeaders(storeName))
-                .withKeySerde(Serdes.String())
-                .withValueSerde(Serdes.String())
-        );
-
-        final Properties properties = mkProperties(mkMap(
-            mkEntry(StreamsConfig.APPLICATION_ID_CONFIG, uniqueTestName + "-app"),
-            mkEntry(StreamsConfig.BOOTSTRAP_SERVERS_CONFIG, CLUSTER.bootstrapServers())
-        ));
-
-        try (final KafkaStreams streams = getRunningStreams(properties, builder, true)) {
-            IntegrationTestUtils.produceKeyValuesSynchronously(
-                inputTopic,
-                Arrays.asList(
-                    new KeyValue<>("apple", "fruit"),
-                    new KeyValue<>("banana", "fruit"),
-                    new KeyValue<>("carrot", "vegetable"),
-                    new KeyValue<>("date", "fruit"),
-                    new KeyValue<>("eggplant", "vegetable")
-                ),
-                TestUtils.producerConfig(
-                    CLUSTER.bootstrapServers(),
-                    StringSerializer.class,
-                    StringSerializer.class,
-                    new Properties()),
-                CLUSTER.time
-            );
-
-            retryOnExceptionWithTimeout(30_000, () -> {
-                final ReadOnlyKeyValueStore<String, ValueTimestampHeaders<String>> store =
-                    streams.store(fromNameAndType(storeName, QueryableStoreTypes.timestampedKeyValueStoreWithHeaders()));
-                assertNotNull(store);
-                assertNotNull(store.get("apple"));
-
-                int rangeCount = 0;
-                try (final KeyValueIterator<String, ValueTimestampHeaders<String>> range = store.range("banana", "date")) {
-                    while (range.hasNext()) {
-                        final KeyValue<String, ValueTimestampHeaders<String>> entry = range.next();
-                        assertNotNull(entry.value);
-                        assertNotNull(entry.value.headers());
-                        rangeCount++;
-                    }
-                }
-                assertEquals(3, rangeCount);
-
-                int allCount = 0;
-                try (final KeyValueIterator<String, ValueTimestampHeaders<String>> all = store.all()) {
-                    while (all.hasNext()) {
-                        final KeyValue<String, ValueTimestampHeaders<String>> entry = all.next();
-                        assertNotNull(entry.value);
-                        assertNotNull(entry.value.headers());
-                        allCount++;
-                    }
-                }
-                assertEquals(5, allCount);
-
-                int prefixCount = 0;
-                try (final KeyValueIterator<String, ValueTimestampHeaders<String>> prefix =
-                         store.prefixScan("ba", new StringSerializer())) {
-                    while (prefix.hasNext()) {
-                        final KeyValue<String, ValueTimestampHeaders<String>> entry = prefix.next();
-                        assertEquals("banana", entry.key);
-                        assertEquals("fruit", entry.value.value());
-                        assertNotNull(entry.value.headers());
-                        prefixCount++;
-                    }
-                }
-                assertEquals(1, prefixCount);
             });
         }
     }
@@ -1469,7 +1452,7 @@ public class QueryableStateIntegrationTest {
         final Properties properties = mkProperties(mkMap(
             mkEntry(StreamsConfig.APPLICATION_ID_CONFIG, uniqueTestName + "-app"),
             mkEntry(StreamsConfig.BOOTSTRAP_SERVERS_CONFIG, CLUSTER.bootstrapServers()),
-            mkEntry(StreamsConfig.DSL_STORE_FORMAT_CONFIG, "headers")
+            mkEntry(StreamsConfig.DSL_STORE_FORMAT_CONFIG, StreamsConfig.DSL_STORE_FORMAT_HEADERS)
         ));
 
         try (final KafkaStreams streams = getRunningStreams(properties, builder, true)) {
@@ -1481,6 +1464,7 @@ public class QueryableStateIntegrationTest {
                     StringSerializer.class,
                     StringSerializer.class,
                     new Properties()),
+                HeadersStores.dslInputHeaders(),
                 CLUSTER.time
             );
 
@@ -1491,7 +1475,7 @@ public class QueryableStateIntegrationTest {
                 final ValueTimestampHeaders<String> result = store.get("key1");
                 assertNotNull(result);
                 assertEquals("val1", result.value());
-                assertNotNull(result.headers());
+                assertEquals(new RecordHeaders(), result.headers());
 
                 final ReadOnlyKeyValueStore<String, ValueAndTimestamp<String>> tsStore =
                     streams.store(fromNameAndType(storeName, QueryableStoreTypes.timestampedKeyValueStore()));
@@ -1526,7 +1510,8 @@ public class QueryableStateIntegrationTest {
         ));
 
         try (final KafkaStreams streams = getRunningStreams(properties, builder, true)) {
-            IntegrationTestUtils.produceKeyValuesSynchronously(
+            // a single timestamp puts all records of a key into the same window
+            IntegrationTestUtils.produceKeyValuesSynchronouslyWithTimestamp(
                 inputTopic,
                 Arrays.asList(
                     new KeyValue<>("w-key1", "v1"),
@@ -1538,7 +1523,9 @@ public class QueryableStateIntegrationTest {
                     StringSerializer.class,
                     StringSerializer.class,
                     new Properties()),
-                CLUSTER.time
+                HeadersStores.dslInputHeaders(),
+                System.currentTimeMillis(),
+                false
             );
 
             retryOnExceptionWithTimeout(30_000, () -> {
@@ -1546,29 +1533,12 @@ public class QueryableStateIntegrationTest {
                     streams.store(fromNameAndType(storeName, QueryableStoreTypes.timestampedWindowStoreWithHeaders()));
                 assertNotNull(store);
 
-                int fetchCount = 0;
-                try (final WindowStoreIterator<ValueTimestampHeaders<Long>> iter =
-                         store.fetch("w-key1", ofEpochMilli(0), ofEpochMilli(System.currentTimeMillis() + WINDOW_SIZE))) {
-                    while (iter.hasNext()) {
-                        final KeyValue<Long, ValueTimestampHeaders<Long>> entry = iter.next();
-                        assertNotNull(entry.value);
-                        assertEquals(2L, entry.value.value());
-                        assertNotNull(entry.value.headers());
-                        fetchCount++;
-                    }
-                }
-                assertTrue(fetchCount > 0);
+                final List<KeyValue<Long, ValueTimestampHeaders<Long>>> fetched = HeadersStores.toListWithEmptyHeaders(
+                    store.fetch("w-key1", ofEpochMilli(0), ofEpochMilli(System.currentTimeMillis() + WINDOW_SIZE)), ValueTimestampHeaders::headers);
+                assertEquals(1, fetched.size());
+                assertEquals(2L, fetched.get(0).value.value());
 
-                int allCount = 0;
-                try (final KeyValueIterator<Windowed<String>, ValueTimestampHeaders<Long>> all = store.all()) {
-                    while (all.hasNext()) {
-                        final KeyValue<Windowed<String>, ValueTimestampHeaders<Long>> entry = all.next();
-                        assertNotNull(entry.value);
-                        assertNotNull(entry.value.headers());
-                        allCount++;
-                    }
-                }
-                assertEquals(2, allCount);
+                assertEquals(2, HeadersStores.toListWithEmptyHeaders(store.all(), ValueTimestampHeaders::headers).size());
 
                 final ReadOnlyWindowStore<String, ValueAndTimestamp<Long>> tsStore =
                     streams.store(fromNameAndType(storeName, QueryableStoreTypes.timestampedWindowStore()));
@@ -1617,6 +1587,7 @@ public class QueryableStateIntegrationTest {
                     StringSerializer.class,
                     StringSerializer.class,
                     new Properties()),
+                HeadersStores.dslInputHeaders(),
                 CLUSTER.time
             );
 
@@ -1625,17 +1596,10 @@ public class QueryableStateIntegrationTest {
                     streams.store(fromNameAndType(storeName, QueryableStoreTypes.sessionStoreWithHeaders()));
                 assertNotNull(store);
 
-                int sessionCount = 0;
-                try (final KeyValueIterator<Windowed<String>, AggregationWithHeaders<Long>> iter = store.fetch("s-key1")) {
-                    while (iter.hasNext()) {
-                        final KeyValue<Windowed<String>, AggregationWithHeaders<Long>> entry = iter.next();
-                        assertNotNull(entry.value);
-                        assertEquals(2L, entry.value.aggregation());
-                        assertNotNull(entry.value.headers());
-                        sessionCount++;
-                    }
-                }
-                assertEquals(1, sessionCount);
+                final List<KeyValue<Windowed<String>, AggregationWithHeaders<Long>>> sessions =
+                    HeadersStores.toListWithEmptyHeaders(store.fetch("s-key1"), AggregationWithHeaders::headers);
+                assertEquals(1, sessions.size());
+                assertEquals(2L, sessions.get(0).value.aggregation());
 
                 final ReadOnlySessionStore<String, Long> plainStore =
                     streams.store(fromNameAndType(storeName, sessionStore()));
@@ -1685,6 +1649,7 @@ public class QueryableStateIntegrationTest {
                     StringSerializer.class,
                     StringSerializer.class,
                     new Properties()),
+                HeadersStores.dslInputHeaders(),
                 CLUSTER.time
             );
 
@@ -1694,6 +1659,7 @@ public class QueryableStateIntegrationTest {
                 assertNotNull(store.get("r-key1"));
                 assertEquals("val1", store.get("r-key1").value());
             });
+            HeadersStores.closeAndLeaveGroup(streams);
         }
 
         final StreamsBuilder builder2 = new StreamsBuilder();
@@ -1706,7 +1672,8 @@ public class QueryableStateIntegrationTest {
                 .withValueSerde(Serdes.String())
         );
 
-        try (final KafkaStreams streams2 = getRunningStreams(properties, builder2, true)) {
+        // keep the state directory, so that the restarted instance reopens the local store
+        try (final KafkaStreams streams2 = getRunningStreams(properties, builder2, false)) {
             retryOnExceptionWithTimeout(30_000, () -> {
                 final ReadOnlyKeyValueStore<String, ValueTimestampHeaders<String>> store =
                     streams2.store(fromNameAndType(storeName, QueryableStoreTypes.timestampedKeyValueStoreWithHeaders()));
@@ -1714,7 +1681,7 @@ public class QueryableStateIntegrationTest {
                 final ValueTimestampHeaders<String> result = store.get("r-key1");
                 assertNotNull(result);
                 assertEquals("val1", result.value());
-                assertNotNull(result.headers());
+                assertEquals(new RecordHeaders(), result.headers());
 
                 final ValueTimestampHeaders<String> result2 = store.get("r-key2");
                 assertNotNull(result2);
@@ -1724,114 +1691,22 @@ public class QueryableStateIntegrationTest {
     }
 
     @Test
-    public void shouldQueryHeadersAwareKeyValueStoreReverseOperations(final TestInfo testInfo) throws Exception {
-        final String uniqueTestName = safeUniqueTestName(testInfo);
-        final String inputTopic = uniqueTestName + "-input";
-        final String storeName = uniqueTestName + "-store";
-
-        CLUSTER.createTopic(inputTopic);
-
-        final StreamsBuilder builder = new StreamsBuilder();
-        builder.table(
-            inputTopic,
-            Consumed.with(Serdes.String(), Serdes.String()),
-            Materialized.<String, String>as(
-                Stores.persistentTimestampedKeyValueStoreWithHeaders(storeName))
-                .withKeySerde(Serdes.String())
-                .withValueSerde(Serdes.String())
-        );
-
-        final Properties properties = mkProperties(mkMap(
-            mkEntry(StreamsConfig.APPLICATION_ID_CONFIG, uniqueTestName + "-app"),
-            mkEntry(StreamsConfig.BOOTSTRAP_SERVERS_CONFIG, CLUSTER.bootstrapServers())
-        ));
-
-        try (final KafkaStreams streams = getRunningStreams(properties, builder, true)) {
-            IntegrationTestUtils.produceKeyValuesSynchronously(
-                inputTopic,
-                Arrays.asList(
-                    new KeyValue<>("alpha", "a1"),
-                    new KeyValue<>("beta", "b1"),
-                    new KeyValue<>("gamma", "g1"),
-                    new KeyValue<>("delta", "d1"),
-                    new KeyValue<>("epsilon", "e1")
-                ),
-                TestUtils.producerConfig(
-                    CLUSTER.bootstrapServers(),
-                    StringSerializer.class,
-                    StringSerializer.class,
-                    new Properties()),
-                CLUSTER.time
-            );
-
-            retryOnExceptionWithTimeout(30_000, () -> {
-                final ReadOnlyKeyValueStore<String, ValueTimestampHeaders<String>> store =
-                    streams.store(fromNameAndType(storeName, QueryableStoreTypes.timestampedKeyValueStoreWithHeaders()));
-                assertNotNull(store.get("alpha"));
-
-                final List<String> reverseRangeKeys = new ArrayList<>();
-                try (final KeyValueIterator<String, ValueTimestampHeaders<String>> iter = store.reverseRange("beta", "epsilon")) {
-                    while (iter.hasNext()) {
-                        final KeyValue<String, ValueTimestampHeaders<String>> entry = iter.next();
-                        assertNotNull(entry.value.headers());
-                        reverseRangeKeys.add(entry.key);
-                    }
-                }
-                assertEquals(Arrays.asList("epsilon", "delta", "beta"), reverseRangeKeys);
-
-                final List<String> reverseAllKeys = new ArrayList<>();
-                try (final KeyValueIterator<String, ValueTimestampHeaders<String>> iter = store.reverseAll()) {
-                    while (iter.hasNext()) {
-                        final KeyValue<String, ValueTimestampHeaders<String>> entry = iter.next();
-                        assertNotNull(entry.value.headers());
-                        reverseAllKeys.add(entry.key);
-                    }
-                }
-                assertEquals(Arrays.asList("gamma", "epsilon", "delta", "beta", "alpha"), reverseAllKeys);
-            });
-        }
-    }
-
-    private <K, V> int countAndVerifyHeaders(final KeyValueIterator<K, V> iter,
-                                              final java.util.function.Function<V, Object> headersExtractor) {
-        int count = 0;
-        try (iter) {
-            while (iter.hasNext()) {
-                final KeyValue<K, V> entry = iter.next();
-                assertNotNull(headersExtractor.apply(entry.value));
-                count++;
-            }
-        }
-        return count;
-    }
-
-    private <V> int countAndVerifyWindowHeaders(final WindowStoreIterator<V> iter,
-                                                 final java.util.function.Function<V, Object> headersExtractor) {
-        int count = 0;
-        try (iter) {
-            while (iter.hasNext()) {
-                final KeyValue<Long, V> entry = iter.next();
-                assertNotNull(headersExtractor.apply(entry.value));
-                count++;
-            }
-        }
-        return count;
-    }
-
-    @Test
-    public void shouldQueryHeadersAwareWindowStoreBackwardAndFetchAllOperations(final TestInfo testInfo) throws Exception {
+    public void shouldQueryHeadersAwareWindowStoreAcrossMultipleAndOverlappingWindows(final TestInfo testInfo) throws Exception {
         final String uniqueTestName = safeUniqueTestName(testInfo);
         final String inputTopic = uniqueTestName + "-input";
         final String storeName = uniqueTestName + "-window-store";
+        final long windowSize = 10_000L;
+        final long advance = 5_000L;
 
         CLUSTER.createTopic(inputTopic);
 
         final StreamsBuilder builder = new StreamsBuilder();
         builder.stream(inputTopic, Consumed.with(Serdes.String(), Serdes.String()))
             .groupByKey()
-            .windowedBy(TimeWindows.ofSizeWithNoGrace(ofMillis(WINDOW_SIZE)))
+            // hopping windows, so that every record is counted in two overlapping windows
+            .windowedBy(TimeWindows.ofSizeWithNoGrace(ofMillis(windowSize)).advanceBy(ofMillis(advance)))
             .count(Materialized.<String, Long>as(
-                Stores.persistentTimestampedWindowStoreWithHeaders(storeName, ofMillis(WINDOW_SIZE), ofMillis(WINDOW_SIZE), false))
+                Stores.persistentTimestampedWindowStoreWithHeaders(storeName, ofDays(1), ofMillis(windowSize), false))
                 .withKeySerde(Serdes.String())
                 .withValueSerde(Serdes.Long()));
 
@@ -1841,109 +1716,70 @@ public class QueryableStateIntegrationTest {
         ));
 
         try (final KafkaStreams streams = getRunningStreams(properties, builder, true)) {
-            IntegrationTestUtils.produceKeyValuesSynchronously(
-                inputTopic,
-                Arrays.asList(
-                    new KeyValue<>("wa", "v1"),
-                    new KeyValue<>("wb", "v2"),
-                    new KeyValue<>("wc", "v3")
-                ),
-                TestUtils.producerConfig(
-                    CLUSTER.bootstrapServers(),
-                    StringSerializer.class,
-                    StringSerializer.class,
-                    new Properties()),
-                CLUSTER.time
+            // aligned to the advance, so that a window starts at t
+            final long t = System.currentTimeMillis() / advance * advance;
+            produceSynchronously(Arrays.asList(
+                new ProducerRecord<>(inputTopic, null, t, "wa", "v1", HeadersStores.dslInputHeaders()),
+                new ProducerRecord<>(inputTopic, null, t + advance, "wa", "v2", HeadersStores.dslInputHeaders()),
+                new ProducerRecord<>(inputTopic, null, t + 4 * advance, "wb", "v3", HeadersStores.dslInputHeaders())
+            ));
+
+            final List<KeyValue<Windowed<String>, ValueTimestampHeaders<Long>>> windows = Arrays.asList(
+                HeadersStores.windowedCount("wa", t - advance, t - advance + windowSize, 1L, t),
+                HeadersStores.windowedCount("wa", t, t + windowSize, 2L, t + advance),
+                HeadersStores.windowedCount("wa", t + advance, t + advance + windowSize, 1L, t + advance),
+                HeadersStores.windowedCount("wb", t + 3 * advance, t + 3 * advance + windowSize, 1L, t + 4 * advance),
+                HeadersStores.windowedCount("wb", t + 4 * advance, t + 4 * advance + windowSize, 1L, t + 4 * advance)
             );
+            final List<KeyValue<Long, ValueTimestampHeaders<Long>>> waWindows = windows.subList(0, 3).stream()
+                .map(window -> KeyValue.pair(window.key.window().start(), window.value))
+                .collect(Collectors.toList());
+            final Instant timeFrom = ofEpochMilli(t - advance);
+            final Instant timeTo = ofEpochMilli(t + 4 * advance);
 
             retryOnExceptionWithTimeout(30_000, () -> {
                 final ReadOnlyWindowStore<String, ValueTimestampHeaders<Long>> store =
                     streams.store(fromNameAndType(storeName, QueryableStoreTypes.timestampedWindowStoreWithHeaders()));
                 assertNotNull(store);
 
-                final Instant timeFrom = ofEpochMilli(0);
-                final Instant timeTo = ofEpochMilli(System.currentTimeMillis() + WINDOW_SIZE);
-                final java.util.function.Function<ValueTimestampHeaders<Long>, Object> h = ValueTimestampHeaders::headers;
+                assertEquals(waWindows, toListAndCloseIterator(store.fetch("wa", timeFrom, timeTo)));
+                assertEquals(reversed(waWindows), toListAndCloseIterator(store.backwardFetch("wa", timeFrom, timeTo)));
+                // the time range bounds the start time of the windows
+                assertEquals(waWindows.subList(1, 2), toListAndCloseIterator(store.fetch("wa", ofEpochMilli(t), ofEpochMilli(t))));
+                assertEquals(waWindows.get(1).value, store.fetch("wa", t));
 
-                assertTrue(countAndVerifyWindowHeaders(store.backwardFetch("wa", timeFrom, timeTo), h) > 0);
-                assertEquals(3, countAndVerifyHeaders(store.fetchAll(timeFrom, timeTo), h));
-                assertEquals(3, countAndVerifyHeaders(store.backwardFetchAll(timeFrom, timeTo), h));
-                assertEquals(3, countAndVerifyHeaders(store.backwardAll(), h));
-                assertEquals(3, countAndVerifyHeaders(store.fetch("wa", "wc", timeFrom, timeTo), h));
-                assertEquals(3, countAndVerifyHeaders(store.backwardFetch("wa", "wc", timeFrom, timeTo), h));
+                final List<KeyValue<Windowed<String>, ValueTimestampHeaders<Long>>> fetchedAll =
+                    toListAndCloseIterator(store.fetchAll(timeFrom, timeTo));
+                assertSameEntries(windows, fetchedAll);
+                assertEquals(reversed(fetchedAll), toListAndCloseIterator(store.backwardFetchAll(timeFrom, timeTo)));
+
+                final List<KeyValue<Windowed<String>, ValueTimestampHeaders<Long>>> all = toListAndCloseIterator(store.all());
+                assertSameEntries(windows, all);
+                assertEquals(reversed(all), toListAndCloseIterator(store.backwardAll()));
+
+                final List<KeyValue<Windowed<String>, ValueTimestampHeaders<Long>>> keyRange =
+                    toListAndCloseIterator(store.fetch("wa", "wb", timeFrom, timeTo));
+                assertSameEntries(windows, keyRange);
+                assertEquals(reversed(keyRange), toListAndCloseIterator(store.backwardFetch("wa", "wb", timeFrom, timeTo)));
             });
         }
     }
 
     @Test
-    public void shouldQueryHeadersAwareWindowStoreSinglePointLookup(final TestInfo testInfo) throws Exception {
-        final String uniqueTestName = safeUniqueTestName(testInfo);
-        final String inputTopic = uniqueTestName + "-input";
-        final String storeName = uniqueTestName + "-window-store";
-
-        CLUSTER.createTopic(inputTopic);
-
-        final StreamsBuilder builder = new StreamsBuilder();
-        builder.stream(inputTopic, Consumed.with(Serdes.String(), Serdes.String()))
-            .groupByKey()
-            .windowedBy(TimeWindows.ofSizeWithNoGrace(ofMillis(WINDOW_SIZE)))
-            .count(Materialized.<String, Long>as(
-                Stores.persistentTimestampedWindowStoreWithHeaders(storeName, ofMillis(WINDOW_SIZE), ofMillis(WINDOW_SIZE), false))
-                .withKeySerde(Serdes.String())
-                .withValueSerde(Serdes.Long()));
-
-        final Properties properties = mkProperties(mkMap(
-            mkEntry(StreamsConfig.APPLICATION_ID_CONFIG, uniqueTestName + "-app"),
-            mkEntry(StreamsConfig.BOOTSTRAP_SERVERS_CONFIG, CLUSTER.bootstrapServers())
-        ));
-
-        try (final KafkaStreams streams = getRunningStreams(properties, builder, true)) {
-            IntegrationTestUtils.produceKeyValuesSynchronously(
-                inputTopic,
-                Collections.singletonList(new KeyValue<>("wpt-key", "v1")),
-                TestUtils.producerConfig(
-                    CLUSTER.bootstrapServers(),
-                    StringSerializer.class,
-                    StringSerializer.class,
-                    new Properties()),
-                CLUSTER.time
-            );
-
-            retryOnExceptionWithTimeout(30_000, () -> {
-                final ReadOnlyWindowStore<String, ValueTimestampHeaders<Long>> store =
-                    streams.store(fromNameAndType(storeName, QueryableStoreTypes.timestampedWindowStoreWithHeaders()));
-                assertNotNull(store);
-
-                Long windowStart = null;
-                try (final WindowStoreIterator<ValueTimestampHeaders<Long>> iter =
-                         store.fetch("wpt-key", ofEpochMilli(0), ofEpochMilli(System.currentTimeMillis() + WINDOW_SIZE))) {
-                    assertTrue(iter.hasNext());
-                    windowStart = iter.next().key;
-                }
-                assertNotNull(windowStart);
-
-                final ValueTimestampHeaders<Long> pointResult = store.fetch("wpt-key", windowStart);
-                assertNotNull(pointResult);
-                assertEquals(1L, pointResult.value());
-                assertNotNull(pointResult.headers());
-            });
-        }
-    }
-
-    @Test
-    public void shouldQueryHeadersAwareSessionStoreBackwardAndFindSessionsOperations(final TestInfo testInfo) throws Exception {
+    public void shouldQueryHeadersAwareSessionStoreWithMultipleAndMergedSessions(final TestInfo testInfo) throws Exception {
         final String uniqueTestName = safeUniqueTestName(testInfo);
         final String inputTopic = uniqueTestName + "-input";
         final String storeName = uniqueTestName + "-session-store";
+        final long inactivityGap = 5_000L;
 
         CLUSTER.createTopic(inputTopic);
 
         final StreamsBuilder builder = new StreamsBuilder();
         builder.stream(inputTopic, Consumed.with(Serdes.String(), Serdes.String()))
             .groupByKey()
-            .windowedBy(SessionWindows.ofInactivityGapWithNoGrace(ofMillis(WINDOW_SIZE)))
+            .windowedBy(SessionWindows.ofInactivityGapAndGrace(ofMillis(inactivityGap), ofMinutes(1)))
             .count(Materialized.<String, Long>as(
-                Stores.persistentSessionStoreWithHeaders(storeName, ofMillis(WINDOW_SIZE)))
+                Stores.persistentSessionStoreWithHeaders(storeName, ofDays(1)))
                 .withKeySerde(Serdes.String())
                 .withValueSerde(Serdes.Long()));
 
@@ -1953,85 +1789,60 @@ public class QueryableStateIntegrationTest {
         ));
 
         try (final KafkaStreams streams = getRunningStreams(properties, builder, true)) {
-            IntegrationTestUtils.produceKeyValuesSynchronously(
-                inputTopic,
-                Arrays.asList(
-                    new KeyValue<>("sa", "v1"),
-                    new KeyValue<>("sa", "v2"),
-                    new KeyValue<>("sb", "v3"),
-                    new KeyValue<>("sc", "v4")
-                ),
-                TestUtils.producerConfig(
-                    CLUSTER.bootstrapServers(),
-                    StringSerializer.class,
-                    StringSerializer.class,
-                    new Properties()),
-                CLUSTER.time
-            );
+            final long t = System.currentTimeMillis();
+            // the records of "sa" are further apart than the inactivity gap, so they are in two sessions
+            produceSynchronously(Arrays.asList(
+                new ProducerRecord<>(inputTopic, null, t, "sa", "v1", HeadersStores.dslInputHeaders()),
+                new ProducerRecord<>(inputTopic, null, t, "sb", "v2", HeadersStores.dslInputHeaders()),
+                new ProducerRecord<>(inputTopic, null, t + 2 * inactivityGap, "sa", "v3", HeadersStores.dslInputHeaders())
+            ));
+
+            final KeyValue<Windowed<String>, AggregationWithHeaders<Long>> firstSession = HeadersStores.sessionCount("sa", t, t, 1L);
+            final KeyValue<Windowed<String>, AggregationWithHeaders<Long>> secondSession =
+                HeadersStores.sessionCount("sa", t + 2 * inactivityGap, t + 2 * inactivityGap, 1L);
+            final KeyValue<Windowed<String>, AggregationWithHeaders<Long>> otherKeySession = HeadersStores.sessionCount("sb", t, t, 1L);
 
             retryOnExceptionWithTimeout(30_000, () -> {
                 final ReadOnlySessionStore<String, AggregationWithHeaders<Long>> store =
                     streams.store(fromNameAndType(storeName, QueryableStoreTypes.sessionStoreWithHeaders()));
                 assertNotNull(store);
 
-                int backwardFetchCount = 0;
-                try (final KeyValueIterator<Windowed<String>, AggregationWithHeaders<Long>> iter = store.backwardFetch("sa")) {
-                    while (iter.hasNext()) {
-                        final KeyValue<Windowed<String>, AggregationWithHeaders<Long>> entry = iter.next();
-                        assertNotNull(entry.value.headers());
-                        assertEquals(2L, entry.value.aggregation());
-                        backwardFetchCount++;
-                    }
-                }
-                assertEquals(1, backwardFetchCount);
+                assertEquals(Arrays.asList(firstSession, secondSession), toListAndCloseIterator(store.fetch("sa")));
+                assertEquals(Arrays.asList(secondSession, firstSession), toListAndCloseIterator(store.backwardFetch("sa")));
+                // only the second session ends after t
+                assertEquals(
+                    Collections.singletonList(secondSession),
+                    toListAndCloseIterator(store.findSessions("sa", t + 1, t + 2 * inactivityGap)));
+                // only the first session starts at or before t
+                assertEquals(
+                    Collections.singletonList(firstSession),
+                    toListAndCloseIterator(store.backwardFindSessions("sa", t, t)));
 
-                int findSessionsCount = 0;
-                try (final KeyValueIterator<Windowed<String>, AggregationWithHeaders<Long>> iter =
-                         store.findSessions("sa", 0L, System.currentTimeMillis() + WINDOW_SIZE)) {
-                    while (iter.hasNext()) {
-                        final KeyValue<Windowed<String>, AggregationWithHeaders<Long>> entry = iter.next();
-                        assertNotNull(entry.value.headers());
-                        findSessionsCount++;
-                    }
-                }
-                assertEquals(1, findSessionsCount);
+                final List<KeyValue<Windowed<String>, AggregationWithHeaders<Long>>> keyRange =
+                    toListAndCloseIterator(store.fetch("sa", "sb"));
+                assertSameEntries(Arrays.asList(firstSession, secondSession, otherKeySession), keyRange);
+                assertEquals(reversed(keyRange), toListAndCloseIterator(store.backwardFetch("sa", "sb")));
+            });
 
-                int backwardFindSessionsCount = 0;
-                try (final KeyValueIterator<Windowed<String>, AggregationWithHeaders<Long>> iter =
-                         store.backwardFindSessions("sa", 0L, System.currentTimeMillis() + WINDOW_SIZE)) {
-                    while (iter.hasNext()) {
-                        final KeyValue<Windowed<String>, AggregationWithHeaders<Long>> entry = iter.next();
-                        assertNotNull(entry.value.headers());
-                        backwardFindSessionsCount++;
-                    }
-                }
-                assertEquals(1, backwardFindSessionsCount);
+            // a record within the inactivity gap of both sessions merges them into one
+            produceSynchronously(Collections.singletonList(
+                new ProducerRecord<>(inputTopic, null, t + inactivityGap, "sa", "v4", HeadersStores.dslInputHeaders())));
 
-                int multiKeyFetchCount = 0;
-                try (final KeyValueIterator<Windowed<String>, AggregationWithHeaders<Long>> iter = store.fetch("sa", "sc")) {
-                    while (iter.hasNext()) {
-                        final KeyValue<Windowed<String>, AggregationWithHeaders<Long>> entry = iter.next();
-                        assertNotNull(entry.value.headers());
-                        multiKeyFetchCount++;
-                    }
-                }
-                assertEquals(3, multiKeyFetchCount);
+            final KeyValue<Windowed<String>, AggregationWithHeaders<Long>> mergedSession =
+                HeadersStores.sessionCount("sa", t, t + 2 * inactivityGap, 3L);
 
-                int multiKeyBackwardCount = 0;
-                try (final KeyValueIterator<Windowed<String>, AggregationWithHeaders<Long>> iter = store.backwardFetch("sa", "sc")) {
-                    while (iter.hasNext()) {
-                        final KeyValue<Windowed<String>, AggregationWithHeaders<Long>> entry = iter.next();
-                        assertNotNull(entry.value.headers());
-                        multiKeyBackwardCount++;
-                    }
-                }
-                assertEquals(3, multiKeyBackwardCount);
+            retryOnExceptionWithTimeout(30_000, () -> {
+                final ReadOnlySessionStore<String, AggregationWithHeaders<Long>> store =
+                    streams.store(fromNameAndType(storeName, QueryableStoreTypes.sessionStoreWithHeaders()));
+
+                assertEquals(Collections.singletonList(mergedSession), toListAndCloseIterator(store.fetch("sa")));
+                assertEquals(Collections.singletonList(mergedSession), toListAndCloseIterator(store.findSessions("sa", t, t)));
             });
         }
     }
 
     @Test
-    public void shouldQueryHeadersAwareKeyValueStoreWithRecordUpdate(final TestInfo testInfo) throws Exception {
+    public void shouldQueryHeadersAwareKeyValueStoreAfterUpdateAndTombstone(final TestInfo testInfo) throws Exception {
         final String uniqueTestName = safeUniqueTestName(testInfo);
         final String inputTopic = uniqueTestName + "-input";
         final String storeName = uniqueTestName + "-store";
@@ -2056,104 +1867,253 @@ public class QueryableStateIntegrationTest {
         try (final KafkaStreams streams = getRunningStreams(properties, builder, true)) {
             IntegrationTestUtils.produceKeyValuesSynchronously(
                 inputTopic,
-                Collections.singletonList(new KeyValue<>("upd-key", "v1")),
+                Collections.singletonList(new KeyValue<>("key", "v1")),
                 TestUtils.producerConfig(
                     CLUSTER.bootstrapServers(),
                     StringSerializer.class,
                     StringSerializer.class,
                     new Properties()),
+                HeadersStores.dslInputHeaders(),
                 CLUSTER.time
             );
 
             retryOnExceptionWithTimeout(30_000, () -> {
                 final ReadOnlyKeyValueStore<String, ValueTimestampHeaders<String>> store =
                     streams.store(fromNameAndType(storeName, QueryableStoreTypes.timestampedKeyValueStoreWithHeaders()));
-                final ValueTimestampHeaders<String> result = store.get("upd-key");
+                final ValueTimestampHeaders<String> result = store.get("key");
                 assertNotNull(result);
                 assertEquals("v1", result.value());
             });
 
             IntegrationTestUtils.produceKeyValuesSynchronously(
                 inputTopic,
-                Collections.singletonList(new KeyValue<>("upd-key", "v2")),
+                Collections.singletonList(new KeyValue<>("key", "v2")),
                 TestUtils.producerConfig(
                     CLUSTER.bootstrapServers(),
                     StringSerializer.class,
                     StringSerializer.class,
                     new Properties()),
+                HeadersStores.dslInputHeaders(),
                 CLUSTER.time
             );
 
             retryOnExceptionWithTimeout(30_000, () -> {
                 final ReadOnlyKeyValueStore<String, ValueTimestampHeaders<String>> store =
                     streams.store(fromNameAndType(storeName, QueryableStoreTypes.timestampedKeyValueStoreWithHeaders()));
-                final ValueTimestampHeaders<String> result = store.get("upd-key");
+                final ValueTimestampHeaders<String> result = store.get("key");
                 assertNotNull(result);
                 assertEquals("v2", result.value());
-                assertNotNull(result.headers());
-                assertEquals(1L, store.approximateNumEntries());
+                assertEquals(new RecordHeaders(), result.headers());
+                assertEquals(1, toListAndCloseIterator(store.all()).size());
+            });
+
+            IntegrationTestUtils.produceKeyValuesSynchronously(
+                inputTopic,
+                Collections.singletonList(new KeyValue<>("key", (String) null)),
+                TestUtils.producerConfig(
+                    CLUSTER.bootstrapServers(),
+                    StringSerializer.class,
+                    StringSerializer.class,
+                    new Properties()),
+                HeadersStores.dslInputHeaders(),
+                CLUSTER.time
+            );
+
+            retryOnExceptionWithTimeout(30_000, () -> {
+                final ReadOnlyKeyValueStore<String, ValueTimestampHeaders<String>> store =
+                    streams.store(fromNameAndType(storeName, QueryableStoreTypes.timestampedKeyValueStoreWithHeaders()));
+                assertNull(store.get("key"));
+                assertEquals(Collections.emptyList(), toListAndCloseIterator(store.all()));
             });
         }
     }
 
-    @Test
-    public void shouldQueryHeadersAwareKeyValueStoreWithTombstone(final TestInfo testInfo) throws Exception {
+    @ParameterizedTest
+    @ValueSource(booleans = {true, false})
+    public void shouldReturnRecordHeadersFromHeadersAwareStores(final boolean cachingEnabled, final TestInfo testInfo) throws Exception {
         final String uniqueTestName = safeUniqueTestName(testInfo);
         final String inputTopic = uniqueTestName + "-input";
-        final String storeName = uniqueTestName + "-store";
 
         CLUSTER.createTopic(inputTopic);
-
-        final StreamsBuilder builder = new StreamsBuilder();
-        builder.table(
-            inputTopic,
-            Consumed.with(Serdes.String(), Serdes.String()),
-            Materialized.<String, String>as(
-                Stores.persistentTimestampedKeyValueStoreWithHeaders(storeName))
-                .withKeySerde(Serdes.String())
-                .withValueSerde(Serdes.String())
-        );
 
         final Properties properties = mkProperties(mkMap(
             mkEntry(StreamsConfig.APPLICATION_ID_CONFIG, uniqueTestName + "-app"),
             mkEntry(StreamsConfig.BOOTSTRAP_SERVERS_CONFIG, CLUSTER.bootstrapServers())
         ));
 
-        try (final KafkaStreams streams = getRunningStreams(properties, builder, true)) {
-            IntegrationTestUtils.produceKeyValuesSynchronously(
-                inputTopic,
-                Collections.singletonList(new KeyValue<>("tomb-key", "alive")),
-                TestUtils.producerConfig(
-                    CLUSTER.bootstrapServers(),
-                    StringSerializer.class,
-                    StringSerializer.class,
-                    new Properties()),
-                CLUSTER.time
-            );
+        try (final KafkaStreams streams = getRunningStreams(properties, HeadersStores.topology(inputTopic, cachingEnabled), true)) {
+            final List<ProducerRecord<String, String>> records = HeadersStores.recordsWithHeaders(inputTopic);
+            produceSynchronously(records);
+
+            // sorted by key: "duplicate", "multi", "none", "single"
+            final List<KeyValue<String, ValueTimestampHeaders<String>>> latestValues = HeadersStores.latestValuesByKey(records);
+            final ProducerRecord<String, String> firstRecord = records.get(0);
+            final ProducerRecord<String, String> lastRecord = records.get(records.size() - 1);
+            final Instant timeFrom = ofEpochMilli(HeadersStores.windowStart(firstRecord.timestamp()));
+            final Instant timeTo = ofEpochMilli(HeadersStores.windowStart(lastRecord.timestamp()));
 
             retryOnExceptionWithTimeout(30_000, () -> {
-                final ReadOnlyKeyValueStore<String, ValueTimestampHeaders<String>> store =
-                    streams.store(fromNameAndType(storeName, QueryableStoreTypes.timestampedKeyValueStoreWithHeaders()));
-                final ValueTimestampHeaders<String> result = store.get("tomb-key");
-                assertNotNull(result);
-                assertEquals("alive", result.value());
+                for (final KeyValue<String, ValueTimestampHeaders<String>> latestValue : latestValues) {
+                    HeadersStores.verifyForKey(streams, null, false, latestValue.key, records);
+                }
+
+                final ReadOnlyKeyValueStore<String, ValueTimestampHeaders<String>> kvStore = HeadersStores.store(
+                    streams, HEADERS_KV_STORE, QueryableStoreTypes.timestampedKeyValueStoreWithHeaders(), null, false);
+                assertEquals(latestValues, toListAndCloseIterator(kvStore.all()));
+                assertEquals(reversed(latestValues), toListAndCloseIterator(kvStore.reverseAll()));
+                assertEquals(latestValues.subList(1, 3), toListAndCloseIterator(kvStore.range("multi", "none")));
+                assertEquals(reversed(latestValues.subList(1, 3)), toListAndCloseIterator(kvStore.reverseRange("multi", "none")));
+                assertEquals(latestValues.subList(3, 4), toListAndCloseIterator(kvStore.prefixScan("si", new StringSerializer())));
+                assertThrows(NullPointerException.class, () -> kvStore.get(null));
+
+                final ReadOnlyWindowStore<String, ValueTimestampHeaders<String>> windowStore = HeadersStores.store(
+                    streams, HEADERS_WINDOW_STORE, QueryableStoreTypes.timestampedWindowStoreWithHeaders(), null, false);
+                final List<KeyValue<Windowed<String>, ValueTimestampHeaders<String>>> windows =
+                    records.stream().map(HeadersStores::window).collect(Collectors.toList());
+                final List<KeyValue<Windowed<String>, ValueTimestampHeaders<String>>> allWindows =
+                    toListAndCloseIterator(windowStore.all());
+                assertSameEntries(windows, allWindows);
+                assertEquals(reversed(allWindows), toListAndCloseIterator(windowStore.backwardAll()));
+                final List<KeyValue<Windowed<String>, ValueTimestampHeaders<String>>> fetchedWindows =
+                    toListAndCloseIterator(windowStore.fetchAll(timeFrom, timeTo));
+                assertSameEntries(windows, fetchedWindows);
+                assertEquals(reversed(fetchedWindows), toListAndCloseIterator(windowStore.backwardFetchAll(timeFrom, timeTo)));
+                // only the last record is in the later window
+                assertEquals(
+                    Collections.singletonList(HeadersStores.window(lastRecord)),
+                    toListAndCloseIterator(windowStore.fetch("duplicate", "single", timeTo, timeTo)));
+                assertEquals(HeadersStores.valueTimestampHeaders(firstRecord), windowStore.fetch("multi", timeFrom.toEpochMilli()));
+                assertThrows(NullPointerException.class, () -> windowStore.fetch(null, timeFrom, timeTo));
+
+                final ReadOnlySessionStore<String, AggregationWithHeaders<String>> sessionStore = HeadersStores.store(
+                    streams, HEADERS_SESSION_STORE, QueryableStoreTypes.sessionStoreWithHeaders(), null, false);
+                final List<KeyValue<Windowed<String>, AggregationWithHeaders<String>>> fetchedSessions =
+                    toListAndCloseIterator(sessionStore.fetch("duplicate", "single"));
+                assertSameEntries(
+                    records.stream().map(HeadersStores::session).collect(Collectors.toList()),
+                    fetchedSessions);
+                assertEquals(reversed(fetchedSessions), toListAndCloseIterator(sessionStore.backwardFetch("duplicate", "single")));
+                // only the session of the last record ends after the first record
+                assertEquals(
+                    Collections.singletonList(HeadersStores.session(lastRecord)),
+                    toListAndCloseIterator(sessionStore.findSessions("multi", firstRecord.timestamp() + 1, lastRecord.timestamp())));
+                assertEquals(
+                    Collections.singletonList(HeadersStores.session(firstRecord)),
+                    toListAndCloseIterator(sessionStore.backwardFindSessions("multi", firstRecord.timestamp(), firstRecord.timestamp())));
+                assertThrows(NullPointerException.class, () -> sessionStore.fetch(null));
+            });
+        }
+    }
+
+    @Test
+    public void shouldReturnRecordHeadersFromActiveAndStandbyHostsBeforeAndAfterRebalance(final TestInfo testInfo) throws Exception {
+        final String uniqueTestName = safeUniqueTestName(testInfo);
+        final String inputTopic = uniqueTestName + "-input";
+
+        CLUSTER.createTopic(inputTopic, STREAM_TWO_PARTITIONS, NUM_REPLICAS);
+
+        final List<ProducerRecord<String, String>> records = HeadersStores.recordsWithHeaders(inputTopic);
+        final Set<String> keys = records.stream().map(ProducerRecord::key).collect(Collectors.toSet());
+        produceSynchronously(records);
+
+        final List<KafkaStreams> streamsList = new ArrayList<>();
+        for (int i = 0; i < 2; i++) {
+            final Properties properties = mkProperties(mkMap(
+                mkEntry(StreamsConfig.APPLICATION_ID_CONFIG, uniqueTestName + "-app"),
+                mkEntry(StreamsConfig.BOOTSTRAP_SERVERS_CONFIG, CLUSTER.bootstrapServers()),
+                // the port is the index of the instance in streamsList
+                mkEntry(StreamsConfig.APPLICATION_SERVER_CONFIG, "localhost:" + i),
+                mkEntry(StreamsConfig.NUM_STANDBY_REPLICAS_CONFIG, "1"),
+                mkEntry(StreamsConfig.STATE_DIR_CONFIG, TestUtils.tempDirectory().getPath())
+            ));
+            streamsList.add(new KafkaStreams(HeadersStores.topology(inputTopic, false).build(), properties));
+        }
+
+        try {
+            startApplicationAndWaitUntilRunning(streamsList, ofSeconds(60));
+
+            final StringSerializer serializer = new StringSerializer();
+            retryOnExceptionWithTimeout(DEFAULT_TIMEOUT_MS, () -> {
+                for (final String key : keys) {
+                    final KeyQueryMetadata metadata = streamsList.get(0).queryMetadataForKey(HEADERS_KV_STORE, key, serializer);
+                    assertEquals(1, metadata.standbyHosts().size());
+                    final KafkaStreams activeHost = streamsList.get(metadata.activeHost().port());
+                    final KafkaStreams standbyHost = streamsList.get(metadata.standbyHosts().iterator().next().port());
+
+                    HeadersStores.verifyForKey(activeHost, metadata.partition(), false, key, records);
+                    // the stores of standby tasks are only queryable as stale stores
+                    HeadersStores.verifyForKey(standbyHost, metadata.partition(), true, key, records);
+                }
             });
 
-            IntegrationTestUtils.produceKeyValuesSynchronously(
-                inputTopic,
-                Collections.singletonList(new KeyValue<>("tomb-key", (String) null)),
-                TestUtils.producerConfig(
-                    CLUSTER.bootstrapServers(),
-                    StringSerializer.class,
-                    StringSerializer.class,
-                    new Properties()),
-                CLUSTER.time
-            );
+            // the remaining instance takes over the active tasks of the closed one
+            HeadersStores.closeAndLeaveGroup(streamsList.get(1));
+            waitForApplicationState(streamsList.subList(0, 1), State.RUNNING, ofSeconds(60));
 
+            retryOnExceptionWithTimeout(DEFAULT_TIMEOUT_MS, () -> {
+                for (final String key : keys) {
+                    HeadersStores.verifyForKey(streamsList.get(0), null, false, key, records);
+                }
+            });
+        } finally {
+            for (final KafkaStreams streams : streamsList) {
+                streams.close();
+            }
+        }
+    }
+
+    @Test
+    public void shouldReturnRecordHeadersFromHeadersAwareStoresDuringAndAfterRestoration(final TestInfo testInfo) throws Exception {
+        final String uniqueTestName = safeUniqueTestName(testInfo);
+        final String inputTopic = uniqueTestName + "-input";
+
+        CLUSTER.createTopic(inputTopic);
+
+        final List<ProducerRecord<String, String>> records = HeadersStores.recordsWithHeaders(inputTopic);
+        final List<KeyValue<String, ValueTimestampHeaders<String>>> latestValues = HeadersStores.latestValuesByKey(records);
+        final Properties properties = mkProperties(mkMap(
+            mkEntry(StreamsConfig.APPLICATION_ID_CONFIG, uniqueTestName + "-app"),
+            mkEntry(StreamsConfig.BOOTSTRAP_SERVERS_CONFIG, CLUSTER.bootstrapServers()),
+            mkEntry(StreamsConfig.STATE_DIR_CONFIG, TestUtils.tempDirectory().getPath())
+        ));
+
+        try (final KafkaStreams streams = getRunningStreams(properties, HeadersStores.topology(inputTopic, false), true)) {
+            produceSynchronously(records);
+            retryOnExceptionWithTimeout(30_000, () -> assertEquals(latestValues, toListAndCloseIterator(HeadersStores.store(
+                streams, HEADERS_KV_STORE, QueryableStoreTypes.timestampedKeyValueStoreWithHeaders(), null, false).all())));
+            HeadersStores.closeAndLeaveGroup(streams);
+        }
+
+        // with an empty state directory, the stores are restored from their changelogs
+        properties.put(StreamsConfig.STATE_DIR_CONFIG, TestUtils.tempDirectory().getPath());
+        // restore one changelog record per batch, so that restoration can be paused after the first record
+        properties.put(StreamsConfig.restoreConsumerPrefix(ConsumerConfig.MAX_POLL_RECORDS_CONFIG), 1);
+
+        final PausingRestoreListener restoreListener = new PausingRestoreListener(HEADERS_KV_STORE);
+        try (final KafkaStreams streams = new KafkaStreams(HeadersStores.topology(inputTopic, false).build(), properties)) {
+            streams.setGlobalStateRestoreListener(restoreListener);
+            streams.start();
+
+            try {
+                restoreListener.awaitPause();
+                // the restoring store is not queryable as an active store
+                assertThrows(InvalidStateStoreException.class, () -> HeadersStores.store(
+                    streams, HEADERS_KV_STORE, QueryableStoreTypes.timestampedKeyValueStoreWithHeaders(), null, false)
+                    .get(records.get(0).key()));
+                // only the first changelog record is restored, and it is queryable as a stale store
+                assertEquals(
+                    Collections.singletonList(KeyValue.pair(records.get(0).key(), HeadersStores.valueTimestampHeaders(records.get(0)))),
+                    toListAndCloseIterator(HeadersStores.store(
+                        streams, HEADERS_KV_STORE, QueryableStoreTypes.timestampedKeyValueStoreWithHeaders(), null, true).all()));
+            } finally {
+                restoreListener.resume();
+            }
+
+            waitForApplicationState(Collections.singletonList(streams), State.RUNNING, ofSeconds(60));
             retryOnExceptionWithTimeout(30_000, () -> {
-                final ReadOnlyKeyValueStore<String, ValueTimestampHeaders<String>> store =
-                    streams.store(fromNameAndType(storeName, QueryableStoreTypes.timestampedKeyValueStoreWithHeaders()));
-                assertNull(store.get("tomb-key"));
+                for (final KeyValue<String, ValueTimestampHeaders<String>> latestValue : latestValues) {
+                    HeadersStores.verifyForKey(streams, null, false, latestValue.key, records);
+                }
             });
         }
     }
@@ -2172,4 +2132,267 @@ public class QueryableStateIntegrationTest {
         }
     }
 
+    /**
+     * A restore listener that pauses the restoration of a store after its first restored batch, until
+     * {@link #resume()} is called.
+     */
+    private static class PausingRestoreListener implements StateRestoreListener {
+        private final String pausedStoreName;
+        private final CountDownLatch firstBatchRestored = new CountDownLatch(1);
+        private final CountDownLatch resumeRestoration = new CountDownLatch(1);
+
+        PausingRestoreListener(final String pausedStoreName) {
+            this.pausedStoreName = pausedStoreName;
+        }
+
+        @Override
+        public void onRestoreStart(final TopicPartition topicPartition,
+                                   final String storeName,
+                                   final long startingOffset,
+                                   final long endingOffset) {
+        }
+
+        @Override
+        public void onBatchRestored(final TopicPartition topicPartition,
+                                    final String storeName,
+                                    final long batchEndOffset,
+                                    final long numRestored) {
+            if (storeName.equals(pausedStoreName) && firstBatchRestored.getCount() > 0) {
+                firstBatchRestored.countDown();
+                try {
+                    resumeRestoration.await(60, TimeUnit.SECONDS);
+                } catch (final InterruptedException e) {
+                    Thread.currentThread().interrupt();
+                }
+            }
+        }
+
+        @Override
+        public void onRestoreEnd(final TopicPartition topicPartition,
+                                 final String storeName,
+                                 final long totalRestored) {
+        }
+
+        void awaitPause() throws InterruptedException {
+            assertTrue(firstBatchRestored.await(60, TimeUnit.SECONDS), "the restoration of " + pausedStoreName + " was not paused");
+        }
+
+        void resume() {
+            resumeRestoration.countDown();
+        }
+    }
+
+    /**
+     * Helpers for the tests of the headers-aware stores, including a Processor API topology that stores the
+     * headers of its input records.
+     */
+    private static final class HeadersStores {
+        /**
+         * Drains and closes {@code iterator}, asserting that every entry carries empty headers,
+         * since the DSL does not write record headers into headers-aware stores.
+         */
+        private static <K, V> List<KeyValue<K, V>> toListWithEmptyHeaders(final KeyValueIterator<K, V> iterator,
+                                                                          final Function<V, Headers> headersExtractor) {
+            final List<KeyValue<K, V>> entries = toListAndCloseIterator(iterator);
+            for (final KeyValue<K, V> entry : entries) {
+                assertEquals(new RecordHeaders(), headersExtractor.apply(entry.value));
+            }
+            return entries;
+        }
+
+        private static Headers headers(final String... keysAndValues) {
+            final Headers headers = new RecordHeaders();
+            for (int i = 0; i < keysAndValues.length; i += 2) {
+                headers.add(keysAndValues[i], keysAndValues[i + 1].getBytes(StandardCharsets.UTF_8));
+            }
+            return headers;
+        }
+
+        /**
+         * Headers of the input records of the DSL tests. DSL operators write empty headers to their stores
+         * (see the KIP-1285 current limitations), so these headers must not show up in query results.
+         */
+        private static Headers dslInputHeaders() {
+            return headers("source", "dsl-input");
+        }
+
+        /**
+         * Closes {@code streams} and leaves the group, so that the next instance of the application does not
+         * wait for the session timeout of this one to get its tasks.
+         */
+        private static void closeAndLeaveGroup(final KafkaStreams streams) {
+            assertTrue(streams.close(
+                CloseOptions.groupMembershipOperation(GroupMembershipOperation.LEAVE_GROUP).withTimeout(ofSeconds(60))));
+        }
+
+        private static KeyValue<Windowed<String>, ValueTimestampHeaders<Long>> windowedCount(final String key,
+                                                                                           final long windowStart,
+                                                                                           final long windowEnd,
+                                                                                           final long count,
+                                                                                           final long timestamp) {
+            return KeyValue.pair(
+                new Windowed<>(key, new TimeWindow(windowStart, windowEnd)),
+                ValueTimestampHeaders.make(count, timestamp, new RecordHeaders()));
+        }
+
+        private static KeyValue<Windowed<String>, AggregationWithHeaders<Long>> sessionCount(final String key,
+                                                                                          final long sessionStart,
+                                                                                          final long sessionEnd,
+                                                                                          final long count) {
+            return KeyValue.pair(
+                new Windowed<>(key, new SessionWindow(sessionStart, sessionEnd)),
+                AggregationWithHeaders.make(count, new RecordHeaders()));
+        }
+
+        /**
+         * Builds a Processor API topology that writes every input record, together with its headers, into a
+         * headers-aware key-value, window, and session store. Unlike the DSL, which writes empty headers to its
+         * stores, this lets tests verify that IQv1 returns the headers of the stored records.
+         */
+        private static StreamsBuilder topology(final String inputTopic, final boolean cachingEnabled) {
+            final List<StoreBuilder<?>> storeBuilders = Arrays.asList(
+                Stores.timestampedKeyValueStoreWithHeadersBuilder(
+                    Stores.persistentTimestampedKeyValueStoreWithHeaders(HEADERS_KV_STORE),
+                    Serdes.String(),
+                    Serdes.String()),
+                Stores.timestampedWindowStoreWithHeadersBuilder(
+                    Stores.persistentTimestampedWindowStoreWithHeaders(HEADERS_WINDOW_STORE, ofDays(1), ofMillis(HEADERS_WINDOW_SIZE_MS), false),
+                    Serdes.String(),
+                    Serdes.String()),
+                Stores.sessionStoreWithHeadersBuilder(
+                    Stores.persistentSessionStoreWithHeaders(HEADERS_SESSION_STORE, ofDays(1)),
+                    Serdes.String(),
+                    Serdes.String())
+            );
+
+            final StreamsBuilder builder = new StreamsBuilder();
+            for (final StoreBuilder<?> storeBuilder : storeBuilders) {
+                builder.addStateStore(cachingEnabled ? storeBuilder.withCachingEnabled() : storeBuilder.withCachingDisabled());
+            }
+            builder.stream(inputTopic, Consumed.with(Serdes.String(), Serdes.String()))
+                .process(Writer::new, HEADERS_KV_STORE, HEADERS_WINDOW_STORE, HEADERS_SESSION_STORE);
+            return builder;
+        }
+
+        /**
+         * Records with multiple headers whose keys are not sorted, a repeated header key, a single header, and no
+         * headers. Key "multi" is written twice, into two different windows and sessions.
+         */
+        private static List<ProducerRecord<String, String>> recordsWithHeaders(final String topic) {
+            final long timestamp = System.currentTimeMillis();
+            return Arrays.asList(
+                new ProducerRecord<>(topic, null, timestamp, "multi", "v1", headers("z", "1", "a", "2", "m", "3")),
+                new ProducerRecord<>(topic, null, timestamp, "duplicate", "v2", headers("dup", "1", "dup", "2")),
+                new ProducerRecord<>(topic, null, timestamp, "single", "v3", headers("key", "value")),
+                new ProducerRecord<>(topic, null, timestamp, "none", "v4", headers()),
+                new ProducerRecord<>(topic, null, timestamp + HEADERS_WINDOW_SIZE_MS, "multi", "v5", headers("z", "4"))
+            );
+        }
+
+        private static long windowStart(final long timestamp) {
+            return timestamp - timestamp % HEADERS_WINDOW_SIZE_MS;
+        }
+
+        private static ValueTimestampHeaders<String> valueTimestampHeaders(final ProducerRecord<String, String> record) {
+            return ValueTimestampHeaders.make(record.value(), record.timestamp(), record.headers());
+        }
+
+        private static KeyValue<Windowed<String>, ValueTimestampHeaders<String>> window(final ProducerRecord<String, String> record) {
+            final long windowStart = windowStart(record.timestamp());
+            return KeyValue.pair(
+                new Windowed<>(record.key(), new TimeWindow(windowStart, windowStart + HEADERS_WINDOW_SIZE_MS)),
+                valueTimestampHeaders(record));
+        }
+
+        private static KeyValue<Windowed<String>, AggregationWithHeaders<String>> session(final ProducerRecord<String, String> record) {
+            return KeyValue.pair(
+                new Windowed<>(record.key(), new SessionWindow(record.timestamp(), record.timestamp())),
+                AggregationWithHeaders.make(record.value(), record.headers()));
+        }
+
+        /**
+         * @return the value, timestamp, and headers of the latest record of each key, sorted by key
+         */
+        private static List<KeyValue<String, ValueTimestampHeaders<String>>> latestValuesByKey(final List<ProducerRecord<String, String>> records) {
+            final Map<String, ValueTimestampHeaders<String>> latestValues = new TreeMap<>();
+            for (final ProducerRecord<String, String> record : records) {
+                latestValues.put(record.key(), valueTimestampHeaders(record));
+            }
+            return latestValues.entrySet().stream()
+                .map(entry -> KeyValue.pair(entry.getKey(), entry.getValue()))
+                .collect(Collectors.toList());
+        }
+
+        private static <T> T store(final KafkaStreams streams,
+                                          final String storeName,
+                                          final QueryableStoreType<T> queryableStoreType,
+                                          final Integer partition,
+                                          final boolean enableStaleStores) {
+            final StoreQueryParameters<T> parameters = fromNameAndType(storeName, queryableStoreType).withPartition(partition);
+            return streams.store(enableStaleStores ? parameters.enableStaleStores() : parameters);
+        }
+
+        /**
+         * Verifies that single-key queries of the stores of {@link #topology} return the value,
+         * timestamp, and headers of the records produced for {@code key}.
+         */
+        private static void verifyForKey(final KafkaStreams streams,
+                                                      final Integer partition,
+                                                      final boolean enableStaleStores,
+                                                      final String key,
+                                                      final List<ProducerRecord<String, String>> records) {
+            final List<ProducerRecord<String, String>> keyRecords = records.stream()
+                .filter(record -> record.key().equals(key))
+                .collect(Collectors.toList());
+            final ProducerRecord<String, String> latestRecord = keyRecords.get(keyRecords.size() - 1);
+
+            final ReadOnlyKeyValueStore<String, ValueTimestampHeaders<String>> kvStore = store(
+                streams, HEADERS_KV_STORE, QueryableStoreTypes.timestampedKeyValueStoreWithHeaders(), partition, enableStaleStores);
+            assertEquals(valueTimestampHeaders(latestRecord), kvStore.get(key));
+
+            final ReadOnlyWindowStore<String, ValueTimestampHeaders<String>> windowStore = store(
+                streams, HEADERS_WINDOW_STORE, QueryableStoreTypes.timestampedWindowStoreWithHeaders(), partition, enableStaleStores);
+            assertEquals(
+                keyRecords.stream()
+                    .map(record -> KeyValue.pair(windowStart(record.timestamp()), valueTimestampHeaders(record)))
+                    .collect(Collectors.toList()),
+                toListAndCloseIterator(windowStore.fetch(key, ofEpochMilli(0L), ofEpochMilli(latestRecord.timestamp()))));
+
+            final ReadOnlySessionStore<String, AggregationWithHeaders<String>> sessionStore = store(
+                streams, HEADERS_SESSION_STORE, QueryableStoreTypes.sessionStoreWithHeaders(), partition, enableStaleStores);
+            assertEquals(
+                keyRecords.stream().map(HeadersStores::session).collect(Collectors.toList()),
+                toListAndCloseIterator(sessionStore.fetch(key)));
+        }
+
+        /**
+         * Writes every record, together with its headers, into the stores of {@link #topology}:
+         * the window store puts it into the window that contains its timestamp, and the session store into
+         * a session that starts and ends at its timestamp.
+         */
+        private static class Writer implements Processor<String, String, Void, Void> {
+            private TimestampedKeyValueStoreWithHeaders<String, String> kvStore;
+            private TimestampedWindowStoreWithHeaders<String, String> windowStore;
+            private SessionStoreWithHeaders<String, String> sessionStore;
+
+            @Override
+            public void init(final ProcessorContext<Void, Void> context) {
+                kvStore = context.getStateStore(HEADERS_KV_STORE);
+                windowStore = context.getStateStore(HEADERS_WINDOW_STORE);
+                sessionStore = context.getStateStore(HEADERS_SESSION_STORE);
+            }
+
+            @Override
+            public void process(final Record<String, String> record) {
+                final long timestamp = record.timestamp();
+                final ValueTimestampHeaders<String> valueTimestampHeaders =
+                    ValueTimestampHeaders.make(record.value(), timestamp, record.headers());
+                kvStore.put(record.key(), valueTimestampHeaders);
+                windowStore.put(record.key(), valueTimestampHeaders, windowStart(timestamp));
+                sessionStore.put(
+                    new Windowed<>(record.key(), new SessionWindow(timestamp, timestamp)),
+                    AggregationWithHeaders.make(record.value(), record.headers()));
+            }
+        }
+    }
 }
