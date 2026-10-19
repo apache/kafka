@@ -2225,6 +2225,19 @@ project(':clients') {
     include "**/org/apache/kafka/server/policy/*"
     include "**/org/apache/kafka/server/quota/*"
     include "**/org/apache/kafka/server/telemetry/*"
+    exclude "org/apache/kafka/errors/**Mirror**.java"
+    exclude "org/apache/kafka/errors/RadOnlyTopicException.java"
+    exclude(
+        'org/apache/kafka/common/errors/ReadOnlyTopicException.java',
+        'org/apache/kafka/common/errors/ClusterMirrorAuthorizationException.java',
+        'org/apache/kafka/common/errors/UnknownClusterMirrorException.java',
+        'org/apache/kafka/common/errors/TopicAlreadyInClusterMirrorException.java',
+        'org/apache/kafka/common/errors/MirrorConfigNotAvailableException.java',
+        'org/apache/kafka/common/errors/ClusterMirrorAlreadyExistsException.java',
+        'org/apache/kafka/common/errors/SourceMetadataNotAvailableException.java',
+        'org/apache/kafka/common/errors/TopicNotInClusterMirrorException.java',
+        'org/apache/kafka/common/errors/InvalidMirrorStateException.java'
+    )
   }
 }
 
