@@ -2922,6 +2922,7 @@ org.apache.kafka.clients.consumer.internals.SubscriptionStateTest:
 - testTryUpdatingLastStableOffset
 - testTryUpdatingLogStartOffset
 - testTryUpdatingPreferredReadReplica
+- testUnsubscribeDoesNotResetRebalanceListener
 - testViewIsClosedAfterAssignedCallback
 - testViewIsClosedAfterLostCallback
 - testViewIsClosedAfterRevokedCallback
