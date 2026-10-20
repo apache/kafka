@@ -129,6 +129,7 @@ import org.apache.kafka.coordinator.group.generated.StreamsGroupMemberMetadataVa
 import org.apache.kafka.coordinator.group.generated.StreamsGroupMetadataKey;
 import org.apache.kafka.coordinator.group.generated.StreamsGroupMetadataValue;
 import org.apache.kafka.coordinator.group.generated.StreamsGroupTargetAssignmentMemberKey;
+import org.apache.kafka.coordinator.group.generated.StreamsGroupTopologyKey;
 import org.apache.kafka.coordinator.group.generated.StreamsGroupTopologyValue;
 import org.apache.kafka.coordinator.group.metrics.GroupCoordinatorMetricsShard;
 import org.apache.kafka.coordinator.group.modern.Assignment;
@@ -21376,6 +21377,9 @@ public class GroupMetadataManagerTest {
 
         assertEquals(Errors.NONE.code(), result.response().data().errorCode());
         assertTrue(result.response().data().memberEpoch() > 0);
+        assertTrue(result.records().stream().noneMatch(
+            record -> record.key() instanceof StreamsGroupTopologyKey)
+        );
     }
 
     @Test
