@@ -246,7 +246,7 @@ public class TransactionMetadata {
             data.lastProducerEpoch = lastProducerEpoch;
         }
 
-        // With transaction V2, it is allowed to abort the transaction without adding any partitions. Then, the transaction
+        // With transaction V2, it is allowed to abort or commit the transaction without adding any partitions. Then, the transaction
         // start time is uncertain but it is still required. So we can use the update time as the transaction start time.
         data.txnStartTimestamp = noPartitionAdded ? updateTimestamp : txnStartTimestamp;
         data.nextProducerId = nextProducerId;
@@ -380,11 +380,11 @@ public class TransactionMetadata {
 
             case PREPARE_ABORT: // from endTxn
             case PREPARE_COMMIT:
-                // In V2, we allow state transits from Empty, CompleteCommit and CompleteAbort to PrepareAbort. It is possible
-                // their updated start time is not equal to the current start time.
-                boolean allowedEmptyAbort = toState == TransactionState.PREPARE_ABORT && transitMetadata.clientTransactionVersion().supportsEpochBump() &&
+                // In V2, we allow state transits from Empty, CompleteCommit and CompleteAbort to PrepareAbort or PrepareCommit.
+                // It is possible their updated start time is not equal to the current start time.
+                boolean allowedEmptyCompletion = transitMetadata.clientTransactionVersion().supportsEpochBump() &&
                     (state == TransactionState.EMPTY || state == TransactionState.COMPLETE_COMMIT || state == TransactionState.COMPLETE_ABORT);
-                boolean validTimestamp = txnStartTimestamp == transitMetadata.txnStartTimestamp() || allowedEmptyAbort;
+                boolean validTimestamp = txnStartTimestamp == transitMetadata.txnStartTimestamp() || allowedEmptyCompletion;
 
                 if (!validProducerEpoch(transitMetadata) ||
                     !topicPartitions.equals(transitMetadata.topicPartitions()) ||
