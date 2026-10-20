@@ -95,8 +95,6 @@ public class TargetAssignmentBuilderBenchmark {
     /** The number of homogeneous subgroups to create for the heterogeneous subscription case. */
     private static final int MAX_BUCKET_COUNT = 5;
 
-    private GroupSpec groupSpec;
-
     private TargetAssignmentBuilder.TargetAssignmentResult targetAssignmentResult;
 
     private List<String> allTopicNames = List.of();
@@ -128,8 +126,7 @@ public class TargetAssignmentBuilderBenchmark {
         updatedMembersAndTargetAssignment = new UpdatedMembersAndTargetAssignmentView<>(group.members(), Map.of(), group.targetAssignment(), ConsumerGroupMember::instanceId);
         updatedMembersAndTargetAssignment.addOrUpdateMember(newMember.memberId(), newMember);
 
-        groupSpec = buildGroupSpecWithoutOffload();
-        targetAssignmentResult = buildAssignment();
+        targetAssignmentResult = buildGroupSpecAndAssignment();
     }
 
     private void setupTopics() {
@@ -194,8 +191,7 @@ public class TargetAssignmentBuilderBenchmark {
     @Threads(1)
     @OutputTimeUnit(TimeUnit.MILLISECONDS)
     public List<CoordinatorRecord> build() {
-        groupSpec = buildGroupSpecWithoutOffload();
-        targetAssignmentResult = buildAssignment();
+        targetAssignmentResult = buildGroupSpecAndAssignment();
         return buildAssignmentRecords();
     }
 
@@ -226,7 +222,11 @@ public class TargetAssignmentBuilderBenchmark {
     @Benchmark
     @Threads(1)
     @OutputTimeUnit(TimeUnit.MILLISECONDS)
-    public TargetAssignmentBuilder.TargetAssignmentResult buildAssignment() {
+    public TargetAssignmentBuilder.TargetAssignmentResult buildGroupSpecAndAssignment() {
+        // We have to build a new group spec every time. The group spec caches its assigned
+        // partitions on the first call to isPartitionAssigned, so reusing one would leave that
+        // cost out of the benchmark.
+        GroupSpec groupSpec = buildGroupSpecWithoutOffload();
         return new TargetAssignmentBuilder(GROUP_EPOCH, partitionAssignor)
             .withTime(Time.SYSTEM)
             .withMetadataImage(metadataImage)
