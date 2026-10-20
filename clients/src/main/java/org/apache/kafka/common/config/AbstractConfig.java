@@ -396,6 +396,11 @@ public class AbstractConfig {
         }
     }
 
+    /**
+     * If this is used to instantiate the implementations of a new pluggable interface, add the interface to
+     * {@code kafka.docker.NativeImageConfigTest.PLUGGABLE_INTERFACES}, which checks that they are registered
+     * in the native image's reflect-config.json.
+     */
     private <T> T getConfiguredInstance(Object klass, Class<T> t, Map<String, Object> configPairs) {
         if (klass == null)
             return null;

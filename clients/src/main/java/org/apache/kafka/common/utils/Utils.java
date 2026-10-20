@@ -404,6 +404,10 @@ public final class Utils {
 
     /**
      * Instantiate the class
+     * <p>
+     * If this is used to instantiate the implementations of a new pluggable interface, add the interface to
+     * {@code kafka.docker.NativeImageConfigTest.PLUGGABLE_INTERFACES}, which checks that they are registered
+     * in the native image's reflect-config.json.
      */
     public static <T> T newInstance(Class<T> c) {
         if (c == null)
