@@ -108,6 +108,7 @@ import java.util.concurrent.ThreadPoolExecutor;
 import java.util.concurrent.TimeUnit;
 import java.util.concurrent.TimeoutException;
 import java.util.concurrent.atomic.AtomicBoolean;
+import java.util.concurrent.atomic.AtomicReference;
 import java.util.function.Function;
 import java.util.function.Supplier;
 import java.util.stream.Collectors;
@@ -143,6 +144,7 @@ import static org.mockito.ArgumentMatchers.anyString;
 import static org.mockito.ArgumentMatchers.eq;
 import static org.mockito.ArgumentMatchers.isNull;
 import static org.mockito.Mockito.CALLS_REAL_METHODS;
+import static org.mockito.Mockito.clearInvocations;
 import static org.mockito.Mockito.doAnswer;
 import static org.mockito.Mockito.doNothing;
 import static org.mockito.Mockito.doReturn;
@@ -232,6 +234,18 @@ public class DistributedHerderTest {
             Map.of(),
             Map.of(),
             Map.of(CONN1, new AppliedConnectorConfig(CONN1_CONFIG)),
+            Set.of(),
+            Set.of());
+    private static final ClusterConfigState SNAPSHOT_WITH_CONN2 = new ClusterConfigState(
+            2,
+            null,
+            Map.of(CONN1, 3, CONN2, 0),
+            Map.of(CONN1, CONN1_CONFIG, CONN2, CONN2_CONFIG),
+            Map.of(CONN1, TargetState.STARTED, CONN2, TargetState.STARTED),
+            TASK_CONFIGS_MAP,
+            Map.of(),
+            Map.of(),
+            Map.of(CONN1, new AppliedConnectorConfig(CONN1_CONFIG), CONN2, new AppliedConnectorConfig(CONN2_CONFIG)),
             Set.of(),
             Set.of());
     private static final ClusterConfigState SNAPSHOT_PAUSED_CONN1 = new ClusterConfigState(
@@ -874,6 +888,7 @@ public class DistributedHerderTest {
         assertEquals(
                 List.of(
                         "ensuring membership in the cluster",
+                        "reading to the end of the config topic",
                         "setting initial offsets for connector " + CONN2,
                         "writing a config for connector " + CONN2 + " to the config topic"
                 ),
@@ -1036,6 +1051,124 @@ public class DistributedHerderTest {
         ArgumentCaptor<Throwable> error = ArgumentCaptor.forClass(Throwable.class);
         verify(putConnectorCallback).onCompletion(error.capture(), isNull());
         assertInstanceOf(NotLeaderException.class, error.getValue());
+    }
+
+    @Test
+    public void testCreateConnectorWithInitialOffsetsReadsLatestConfigsBeforeWritingOffsets() throws Exception {
+        when(member.memberId()).thenReturn("leader");
+        when(member.currentProtocolVersion()).thenReturn(CONNECT_PROTOCOL_V0);
+        expectRebalance(1, List.of(), List.of(), true);
+        AtomicReference<ClusterConfigState> configTopic = new AtomicReference<>(SNAPSHOT);
+        doNothing().when(configBackingStore).refresh(anyLong(), any(TimeUnit.class));
+        when(configBackingStore.snapshot()).thenAnswer(invocation -> configTopic.get());
+
+        when(statusBackingStore.connectors()).thenReturn(Set.of());
+        expectMemberPoll();
+
+        herder.tick();
+
+        // Another request has created the connector, but this herder hasn't read that from the config topic yet
+        configTopic.set(SNAPSHOT_WITH_CONN2);
+
+        ArgumentCaptor<Callback<ConfigInfos>> validateCallback = ArgumentCaptor.forClass(Callback.class);
+        doAnswer(invocation -> {
+            validateCallback.getValue().onCompletion(null, CONN2_CONFIG_INFOS);
+            return null;
+        }).when(herder).validateConnectorConfig(eq(CONN2_CONFIG), validateCallback.capture());
+
+        expectMemberEnsureActive();
+        expectRecordStages(putConnectorCallback);
+
+        Map<Map<String, ?>, Map<String, ?>> initialOffsets =
+                Map.of(Map.of("partitionKey", "partitionValue"), Map.of("offsetKey", "offsetValue"));
+        herder.putConnectorConfig(CONN2, CONN2_CONFIG, null, initialOffsets, false, putConnectorCallback);
+        herder.tick();
+        herder.tick();
+
+        // The existing connector is found before its offsets can be overwritten
+        ArgumentCaptor<Throwable> error = ArgumentCaptor.forClass(Throwable.class);
+        verify(putConnectorCallback).onCompletion(error.capture(), isNull());
+        assertInstanceOf(AlreadyExistsException.class, error.getValue());
+        verify(worker, never()).modifyConnectorOffsets(anyString(), anyMap(), any(), anyBoolean(), any());
+    }
+
+    @Test
+    public void testCreateConnectorWithInitialOffsetsCreatedConcurrently() throws Exception {
+        when(member.memberId()).thenReturn("leader");
+        when(member.currentProtocolVersion()).thenReturn(CONNECT_PROTOCOL_V0);
+        expectRebalance(1, List.of(), List.of(), true);
+        AtomicReference<ClusterConfigState> configTopic = new AtomicReference<>(SNAPSHOT);
+        doNothing().when(configBackingStore).refresh(anyLong(), any(TimeUnit.class));
+        when(configBackingStore.snapshot()).thenAnswer(invocation -> configTopic.get());
+
+        when(statusBackingStore.connectors()).thenReturn(Set.of());
+        expectMemberPoll();
+
+        herder.tick();
+
+        ArgumentCaptor<Callback<ConfigInfos>> validateCallback = ArgumentCaptor.forClass(Callback.class);
+        doAnswer(invocation -> {
+            validateCallback.getValue().onCompletion(null, CONN2_CONFIG_INFOS);
+            return null;
+        }).when(herder).validateConnectorConfig(eq(CONN2_CONFIG), validateCallback.capture());
+
+        Map<Map<String, ?>, Map<String, ?>> initialOffsets =
+                Map.of(Map.of("partitionKey", "partitionValue"), Map.of("offsetKey", "offsetValue"));
+
+        // Another request creates the connector while its initial offsets are being written
+        ArgumentCaptor<Callback<Message>> offsetsCallback = ArgumentCaptor.forClass(Callback.class);
+        doAnswer(invocation -> {
+            configTopic.set(SNAPSHOT_WITH_CONN2);
+            offsetsCallback.getValue().onCompletion(null, new Message("The offsets for this connector have been set successfully"));
+            return null;
+        }).when(worker).modifyConnectorOffsets(eq(CONN2), eq(CONN2_CONFIG), eq(initialOffsets), eq(true), offsetsCallback.capture());
+
+        expectMemberEnsureActive();
+        expectRecordStages(putConnectorCallback);
+
+        herder.putConnectorConfig(CONN2, CONN2_CONFIG, null, initialOffsets, false, putConnectorCallback);
+        herder.tick();
+        herder.tick();
+        herder.tick();
+
+        // The offsets now belong to the connector created by the other request, so they must not be wiped
+        ArgumentCaptor<Throwable> error = ArgumentCaptor.forClass(Throwable.class);
+        verify(putConnectorCallback).onCompletion(error.capture(), isNull());
+        assertInstanceOf(AlreadyExistsException.class, error.getValue());
+        verify(worker, never()).modifyConnectorOffsets(anyString(), anyMap(), isNull(), any());
+        verify(configBackingStore, never()).putConnectorConfig(eq(CONN2), anyMap(), any());
+    }
+
+    @Test
+    public void testCreateConnectorWithInitialOffsetsNotLeader() throws Exception {
+        when(member.memberId()).thenReturn("member");
+        when(member.currentProtocolVersion()).thenReturn(CONNECT_PROTOCOL_V0);
+        expectRebalance(1, List.of(), List.of(), false);
+        expectConfigRefreshAndSnapshot(SNAPSHOT);
+
+        herder.tick();
+        clearInvocations(configBackingStore);
+
+        ArgumentCaptor<Callback<ConfigInfos>> validateCallback = ArgumentCaptor.forClass(Callback.class);
+        doAnswer(invocation -> {
+            validateCallback.getValue().onCompletion(null, CONN2_CONFIG_INFOS);
+            return null;
+        }).when(herder).validateConnectorConfig(eq(CONN2_CONFIG), validateCallback.capture());
+
+        expectRecordStages(putConnectorCallback);
+
+        Map<Map<String, ?>, Map<String, ?>> initialOffsets =
+                Map.of(Map.of("partitionKey", "partitionValue"), Map.of("offsetKey", "offsetValue"));
+        herder.putConnectorConfig(CONN2, CONN2_CONFIG, null, initialOffsets, false, putConnectorCallback);
+        herder.tick();
+        herder.tick();
+
+        ArgumentCaptor<Throwable> error = ArgumentCaptor.forClass(Throwable.class);
+        verify(putConnectorCallback).onCompletion(error.capture(), isNull());
+        assertInstanceOf(NotLeaderException.class, error.getValue());
+        // A worker that isn't the leader rejects the request before reading the config topic
+        verify(configBackingStore, never()).refresh(anyLong(), any(TimeUnit.class));
+        verify(worker, never()).modifyConnectorOffsets(anyString(), anyMap(), any(), anyBoolean(), any());
     }
 
     @Test

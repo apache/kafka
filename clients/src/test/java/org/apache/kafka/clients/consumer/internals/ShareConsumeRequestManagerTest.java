@@ -166,7 +166,7 @@ public class ShareConsumeRequestManagerTest {
     private final long requestTimeoutMs = 30000;
     private final long defaultApiTimeoutMs = 60000;
     private MockTime time = new MockTime(1);
-    private SubscriptionState subscriptions;
+    private ShareSubscriptionState subscriptions;
     private ShareConsumerMetadata metadata;
     private ShareFetchMetricsManager metricsManager;
     private MockClient client;
@@ -3737,7 +3737,7 @@ public class ShareConsumeRequestManagerTest {
                                             String memberId,
                                             ShareAcquireMode shareAcquireMode) {
         LogContext logContext = new LogContext();
-        SubscriptionState subscriptionState = new SubscriptionState(logContext, AutoOffsetResetStrategy.EARLIEST);
+        ShareSubscriptionState subscriptionState = new ShareSubscriptionState(logContext);
         buildRequestManager(metricConfig, keyDeserializer, valueDeserializer,
                 subscriptionState, logContext, memberId, shareAcquireMode);
     }
@@ -3745,7 +3745,7 @@ public class ShareConsumeRequestManagerTest {
     private <K, V> void buildRequestManager(MetricConfig metricConfig,
                                             Deserializer<K> keyDeserializer,
                                             Deserializer<V> valueDeserializer,
-                                            SubscriptionState subscriptionState,
+                                            ShareSubscriptionState subscriptionState,
                                             LogContext logContext,
                                             String memberId,
                                                                                    ShareAcquireMode shareAcquireMode) {
@@ -3767,7 +3767,6 @@ public class ShareConsumeRequestManagerTest {
                 shareAcquireMode);
         ShareFetchCollector<K, V> shareFetchCollector = new ShareFetchCollector<>(logContext,
                 metadata,
-                subscriptions,
                 shareFetchConfig,
                 deserializers);
         ShareAcknowledgementEventHandler acknowledgementEventHandler = new TestableShareAcknowledgementEventHandler(completedAcknowledgements, renewedRecords);
@@ -3785,7 +3784,7 @@ public class ShareConsumeRequestManagerTest {
     }
 
     private void buildDependencies(MetricConfig metricConfig,
-                                   SubscriptionState subscriptionState,
+                                   ShareSubscriptionState subscriptionState,
                                    LogContext logContext) {
         time = new MockTime(1, 0, 0);
         subscriptions = subscriptionState;
@@ -3815,7 +3814,7 @@ public class ShareConsumeRequestManagerTest {
         public TestableShareConsumeRequestManager(LogContext logContext,
                                                   String groupId,
                                                   ShareConsumerMetadata metadata,
-                                                  SubscriptionState subscriptions,
+                                                  ShareSubscriptionState subscriptions,
                                                   ShareFetchConfig shareFetchConfig,
                                                   ShareFetchBuffer shareFetchBuffer,
                                                   ShareAcknowledgementEventHandler acknowledgementEventHandler,

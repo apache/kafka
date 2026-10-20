@@ -19,6 +19,7 @@ package org.apache.kafka.connect.runtime.rest.entities;
 import org.apache.kafka.connect.runtime.TargetState;
 
 import com.fasterxml.jackson.annotation.JsonCreator;
+import com.fasterxml.jackson.annotation.JsonInclude;
 import com.fasterxml.jackson.annotation.JsonProperty;
 
 import java.util.List;
@@ -29,32 +30,8 @@ public record CreateConnectorRequest(
     @JsonProperty("name") String name,
     @JsonProperty("config") Map<String, String> config,
     @JsonProperty("initial_state") InitialState initialState,
-    @JsonProperty("initial_offsets") List<ConnectorOffset> initialOffsets
+    @JsonProperty("initial_offsets") @JsonInclude(JsonInclude.Include.NON_NULL) List<ConnectorOffset> initialOffsets
 ) {
-    /**
-     * Canonical constructor, declared explicitly and annotated so that Jackson unambiguously uses it as the creator
-     * rather than having to choose between this and the convenience constructor below.
-     */
-    @JsonCreator
-    public CreateConnectorRequest(
-        @JsonProperty("name") String name,
-        @JsonProperty("config") Map<String, String> config,
-        @JsonProperty("initial_state") InitialState initialState,
-        @JsonProperty("initial_offsets") List<ConnectorOffset> initialOffsets
-    ) {
-        this.name = name;
-        this.config = config;
-        this.initialState = initialState;
-        this.initialOffsets = initialOffsets;
-    }
-
-    /**
-     * Convenience constructor for requests that do not specify initial offsets.
-     */
-    public CreateConnectorRequest(String name, Map<String, String> config, InitialState initialState) {
-        this(name, config, initialState, null);
-    }
-
     public TargetState initialTargetState() {
         return initialState != null ? initialState.toTargetState() : null;
     }
