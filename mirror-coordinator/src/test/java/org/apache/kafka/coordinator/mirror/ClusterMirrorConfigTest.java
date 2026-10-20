@@ -20,6 +20,8 @@ import org.apache.kafka.common.acl.AccessControlEntry;
 import org.apache.kafka.common.acl.AclBinding;
 import org.apache.kafka.common.acl.AclOperation;
 import org.apache.kafka.common.acl.AclPermissionType;
+import org.apache.kafka.common.config.SaslConfigs;
+import org.apache.kafka.common.config.SslConfigs;
 import org.apache.kafka.common.resource.PatternType;
 import org.apache.kafka.common.resource.ResourcePattern;
 import org.apache.kafka.common.resource.ResourceType;
@@ -253,8 +255,8 @@ public class ClusterMirrorConfigTest {
     public void testSecurityConfiguration() {
         Properties props = new Properties();
         props.setProperty(ClusterMirrorConfig.SECURITY_PROTOCOL_CONFIG, "SSL");
-        props.setProperty(ClusterMirrorConfig.SSL_KEYSTORE_LOCATION_CONFIG, "/path/to/keystore");
-        props.setProperty(ClusterMirrorConfig.SSL_KEYSTORE_PASSWORD_CONFIG, "password");
+        props.setProperty(SslConfigs.SSL_KEYSTORE_LOCATION_CONFIG, "/path/to/keystore");
+        props.setProperty(SslConfigs.SSL_KEYSTORE_PASSWORD_CONFIG, "password");
 
         ClusterMirrorConfig config = ClusterMirrorConfig.fromProperties(props);
 
@@ -264,7 +266,7 @@ public class ClusterMirrorConfigTest {
     @Test
     public void testSaslMechanismConfiguration() {
         Properties props = new Properties();
-        props.setProperty(ClusterMirrorConfig.SASL_MECHANISM_CONFIG, "SCRAM-SHA-512");
+        props.setProperty(SaslConfigs.SASL_MECHANISM, "SCRAM-SHA-512");
 
         ClusterMirrorConfig config = ClusterMirrorConfig.fromProperties(props);
 
