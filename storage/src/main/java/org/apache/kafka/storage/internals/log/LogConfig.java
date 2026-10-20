@@ -254,6 +254,8 @@ public class LogConfig extends AbstractConfig {
                         ThrottledReplicaListValidator.INSTANCE, MEDIUM, QuotaConfig.FOLLOWER_REPLICATION_THROTTLED_REPLICAS_DOC)
                 .defineInternal(QuotaConfig.MIRROR_REPLICATION_THROTTLED_REPLICAS_CONFIG, LIST, QuotaConfig.MIRROR_REPLICATION_THROTTLED_REPLICAS_DEFAULT,
                         ThrottledReplicaListValidator.INSTANCE, MEDIUM, QuotaConfig.MIRROR_REPLICATION_THROTTLED_REPLICAS_DOC)
+                .defineInternal(TopicConfig.MIRROR_UNCLEAN_LEADER_ELECTION_ENABLE_CONFIG, BOOLEAN, TopicConfig.MIRROR_UNCLEAN_LEADER_ELECTION_ENABLE_DEFAULT,
+                        null, MEDIUM, TopicConfig.MIRROR_UNCLEAN_LEADER_ELECTION_ENABLE_DOC)
                 .define(TopicConfig.REMOTE_LOG_STORAGE_ENABLE_CONFIG, BOOLEAN, DEFAULT_REMOTE_STORAGE_ENABLE, null,
                         MEDIUM, TopicConfig.REMOTE_LOG_STORAGE_ENABLE_DOC)
                 .define(TopicConfig.LOCAL_LOG_RETENTION_MS_CONFIG, LONG, DEFAULT_LOCAL_RETENTION_MS, atLeast(-2), MEDIUM,
@@ -292,6 +294,7 @@ public class LogConfig extends AbstractConfig {
     public final boolean compact;
     public final boolean delete;
     public final boolean uncleanLeaderElectionEnable;
+    public final boolean mirrorUncleanLeaderElectionEnable;
     public final int minInSyncReplicas;
     public final BrokerCompressionType compressionType;
     public final Optional<Compression> compression;
@@ -346,6 +349,7 @@ public class LogConfig extends AbstractConfig {
                 .toList()
                 .contains(TopicConfig.CLEANUP_POLICY_DELETE);
         this.uncleanLeaderElectionEnable = getBoolean(TopicConfig.UNCLEAN_LEADER_ELECTION_ENABLE_CONFIG);
+        this.mirrorUncleanLeaderElectionEnable = getBoolean(TopicConfig.MIRROR_UNCLEAN_LEADER_ELECTION_ENABLE_CONFIG);
         this.minInSyncReplicas = getInt(TopicConfig.MIN_IN_SYNC_REPLICAS_CONFIG);
         this.compressionType = BrokerCompressionType.forName(getString(TopicConfig.COMPRESSION_TYPE_CONFIG));
         this.compression = getCompression();

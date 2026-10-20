@@ -1149,7 +1149,7 @@ public class DistributedHerder extends AbstractHerder implements Runnable {
                         }
 
                         log.trace("Handling connector config request {}", connName);
-                        if (!putConnectorConfigChecks(connName, allowReplace, callback)) {
+                        if (!putConnectorConfigChecks(connName, allowReplace, initialOffsets != null, callback)) {
                             return null;
                         }
 
@@ -1171,12 +1171,19 @@ public class DistributedHerder extends AbstractHerder implements Runnable {
      *
      * @param connName the name of the connector whose config is to be written
      * @param allowReplace whether an existing connector with this name may be overwritten
+     * @param refreshConfigs whether to read to the end of the config topic before checking whether the connector exists,
+     *                       so that a creation with initial offsets doesn't act on stale configs
      * @param callback callback to complete exceptionally if a check fails
      * @return true if all the checks passed, false otherwise
      */
-    private boolean putConnectorConfigChecks(String connName, boolean allowReplace, Callback<Created<ConnectorInfo>> callback) {
+    private boolean putConnectorConfigChecks(String connName, boolean allowReplace, boolean refreshConfigs,
+                                             Callback<Created<ConnectorInfo>> callback) {
         if (!isLeader()) {
             callback.onCompletion(new NotLeaderException("Only the leader can set connector configs.", leaderUrl()), null);
+            return false;
+        }
+        if (refreshConfigs && !refreshConfigSnapshot(workerSyncTimeoutMs)) {
+            callback.onCompletion(new ConnectException("Failed to read to end of config topic before setting initial offsets for connector " + connName), null);
             return false;
         }
         if (!allowReplace && configState.contains(connName)) {
@@ -1209,11 +1216,16 @@ public class DistributedHerder extends AbstractHerder implements Runnable {
                 }
                 addRequest(
                     () -> {
-                        // The offsets are already durable, so wipe them back out if the create can't be completed,
-                        // whether because the precondition re-check fails here or the config write below throws.
-                        Callback<Created<ConnectorInfo>> wipeOnFailure = (error, ignored) ->
-                            wipeInitialOffsetsAfterFailedCreate(connName, config, error, callback);
-                        if (!putConnectorConfigChecks(connName, allowReplace, wipeOnFailure)) {
+                        // The offsets are already durable, so wipe them back out if the create can't be completed, unless
+                        // another request created the connector in the meantime, since that would reset its offsets.
+                        Callback<Created<ConnectorInfo>> wipeOnFailure = (error, ignored) -> {
+                            if (error instanceof AlreadyExistsException) {
+                                callback.onCompletion(error, null);
+                            } else {
+                                wipeInitialOffsetsAfterFailedCreate(connName, config, error, callback);
+                            }
+                        };
+                        if (!putConnectorConfigChecks(connName, allowReplace, true, wipeOnFailure)) {
                             return null;
                         }
                         try {

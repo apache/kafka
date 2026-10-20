@@ -27,6 +27,7 @@ import java.util.List;
 import java.util.Map;
 
 import static org.junit.jupiter.api.Assertions.assertEquals;
+import static org.junit.jupiter.api.Assertions.assertFalse;
 import static org.junit.jupiter.api.Assertions.assertNotNull;
 import static org.junit.jupiter.api.Assertions.assertNull;
 import static org.junit.jupiter.api.Assertions.assertThrows;
@@ -44,7 +45,7 @@ public class CreateConnectorRequestTest {
         assertEquals(TargetState.PAUSED, CreateConnectorRequest.InitialState.PAUSED.toTargetState());
         assertEquals(TargetState.STOPPED, CreateConnectorRequest.InitialState.STOPPED.toTargetState());
 
-        CreateConnectorRequest createConnectorRequest = new CreateConnectorRequest("test-name", Map.of(), null);
+        CreateConnectorRequest createConnectorRequest = new CreateConnectorRequest("test-name", Map.of(), null, null);
         assertNull(createConnectorRequest.initialTargetState());
     }
 
@@ -61,13 +62,6 @@ public class CreateConnectorRequestTest {
         assertEquals(CreateConnectorRequest.InitialState.STOPPED, CreateConnectorRequest.InitialState.forValue("stopped"));
         assertEquals(CreateConnectorRequest.InitialState.STOPPED, CreateConnectorRequest.InitialState.forValue("Stopped"));
         assertEquals(CreateConnectorRequest.InitialState.STOPPED, CreateConnectorRequest.InitialState.forValue("STOPPED"));
-    }
-
-    @Test
-    public void testThreeArgConstructorLeavesInitialOffsetsNull() {
-        CreateConnectorRequest request = new CreateConnectorRequest("test-name", Map.of(), null);
-        assertNull(request.initialOffsets());
-        assertNull(request.initialOffsetsMap());
     }
 
     @Test
@@ -105,8 +99,7 @@ public class CreateConnectorRequestTest {
 
     @Test
     public void testInitialOffsetsRoundTrip() throws Exception {
-        // Serialize then deserialize. This pins Jackson's choice of creator: CreateConnectorRequest declares both a
-        // canonical (4-arg) and a convenience (3-arg) constructor, and only the canonical one is annotated.
+        // Serialize then deserialize, which relies on Jackson using the record's canonical constructor
         CreateConnectorRequest original = new CreateConnectorRequest(
             "source-1",
             Map.of("connector.class", "FileStreamSource"),
@@ -133,6 +126,17 @@ public class CreateConnectorRequestTest {
 
         assertNull(request.initialOffsets());
         assertNull(request.initialOffsetsMap());
+    }
+
+    @Test
+    public void testInitialOffsetsOmittedWhenNull() throws Exception {
+        // Follower workers forward create requests to the leader, so a request without initial offsets must serialize
+        // the same as before this field existed, or a leader that doesn't know the field rejects it.
+        String serialized = OBJECT_MAPPER.writeValueAsString(
+            new CreateConnectorRequest("source-1", Map.of("connector.class", "FileStreamSource"), null, null));
+
+        assertFalse(serialized.contains("initial_offsets"),
+            "initial_offsets must be omitted when null: " + serialized);
     }
 
     @Test

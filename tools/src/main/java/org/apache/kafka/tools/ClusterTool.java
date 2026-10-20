@@ -70,7 +70,8 @@ public class ClusterTool {
 
     static void execute(String... args) throws Exception {
         ArgumentParser parser = ArgumentParsers
-                .newArgumentParser("kafka-cluster")
+                .newFor("kafka-cluster")
+                .build()
                 .defaultHelp(true)
                 .description("The Kafka cluster tool.");
         Subparsers subparsers = parser.addSubparsers().dest("command");
