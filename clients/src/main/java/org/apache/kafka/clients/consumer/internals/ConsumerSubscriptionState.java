@@ -494,6 +494,7 @@ public class ConsumerSubscriptionState implements AbstractSubscriptionState {
      * Provides the number of assigned partitions in a thread safe manner.
      * @return the number of assigned partitions.
      */
+    @Override
     public synchronized int numAssignedPartitions() {
         return this.assignment.size();
     }

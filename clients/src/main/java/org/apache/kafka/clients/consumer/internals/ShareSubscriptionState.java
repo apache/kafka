@@ -138,6 +138,11 @@ public class ShareSubscriptionState implements AbstractSubscriptionState {
     }
 
     @Override
+    public synchronized int numAssignedPartitions() {
+        return assignment.size();
+    }
+
+    @Override
     public synchronized boolean hasAutoAssignedPartitions() {
         return subscribedToShareGroup;
     }
