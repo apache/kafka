@@ -73,7 +73,7 @@ Description
 </td>  
 <td>
 
-`4.3.0`
+`4.4.0`
 </td>  
 <td>
 
@@ -90,7 +90,7 @@ Description
 </td>  
 <td>
 
-`4.3.0`
+`4.4.0`
 </td>  
 <td>
 
@@ -107,7 +107,7 @@ Description
 </td>  
 <td>
 
-`4.3.0`
+`4.4.0`
 </td>  
 <td>
 
@@ -124,17 +124,17 @@ Example `pom.xml` snippet when using Maven:
     <dependency>
         <groupId>org.apache.kafka</groupId>
         <artifactId>kafka-streams</artifactId>
-        <version>4.3.0</version>
+        <version>4.4.0</version>
     </dependency>
     <dependency>
         <groupId>org.apache.kafka</groupId>
         <artifactId>kafka-clients</artifactId>
-        <version>4.3.0</version>
+        <version>4.4.0</version>
     </dependency>
         <dependency>
         <groupId>org.apache.kafka</groupId>
         <artifactId>kafka-streams-scala_2.13</artifactId>
-        <version>4.3.0</version>
+        <version>4.4.0</version>
     </dependency>
 
 # Using Kafka Streams within your application code

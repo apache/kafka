@@ -366,7 +366,6 @@ public class ConsumerSubscriptionState implements AbstractSubscriptionState {
         this.assignedTopicIds = Collections.emptySet();
         this.subscribedPattern = null;
         this.subscriptionType = SubscriptionType.NONE;
-        this.listenerContext.set(ListenerContext.NULL_LISTENER);
         this.assignmentId++;
     }
 

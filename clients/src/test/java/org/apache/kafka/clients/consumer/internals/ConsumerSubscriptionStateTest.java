@@ -592,6 +592,14 @@ public class ConsumerSubscriptionStateTest {
     }
 
     @Test
+    public void testUnsubscribeDoesNotResetRebalanceListener() {
+        state.setRebalanceListener(mock(RebalanceListener.class), consumer);
+        state.subscribe(Set.of(topic));
+        state.unsubscribe();
+        assertTrue(state.hasRebalanceListener());
+    }
+
+    @Test
     public void unsubscription() {
         state.subscribe(Pattern.compile(".*"));
         state.subscribeFromPattern(Set.of(topic, topic1));
