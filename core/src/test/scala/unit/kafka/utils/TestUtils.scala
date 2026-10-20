@@ -28,7 +28,6 @@ import org.apache.kafka.common.acl.{AccessControlEntry, AccessControlEntryFilter
 import org.apache.kafka.common.compress.Compression
 import org.apache.kafka.common.config.{ConfigException, ConfigResource}
 import org.apache.kafka.common.errors.{TopicExistsException, UnknownTopicOrPartitionException}
-import org.apache.kafka.common.header.Header
 import org.apache.kafka.common.internals.{Plugin, Topic}
 import org.apache.kafka.common.network.{ConnectionMode, ListenerName}
 import org.apache.kafka.common.record.TimestampType
@@ -58,14 +57,13 @@ import org.mockito.Mockito
 
 import java.io._
 import java.nio._
-import java.nio.charset.StandardCharsets
 import java.nio.file.{Files, StandardOpenOption}
 import java.time.Duration
 import java.util
 import java.util.concurrent._
 import java.util.{Optional, Properties}
 import scala.collection.mutable.ArrayBuffer
-import scala.collection.{Map, Seq, mutable}
+import scala.collection.{Map, Seq}
 import scala.concurrent.duration.FiniteDuration
 import scala.concurrent.{Await, ExecutionContext, Future}
 import scala.jdk.CollectionConverters._
@@ -88,9 +86,6 @@ object TestUtils extends Logging {
 
   // CN in SSL certificates - this is used for endpoint validation when enabled
   val SslCertificateCn = "localhost"
-
-  private val transactionStatusKey = "transactionStatus"
-  private val committedValue : Array[Byte] = "committed".getBytes(StandardCharsets.UTF_8)
 
   sealed trait LogDirFailureType
   case object Roll extends LogDirFailureType
@@ -1065,8 +1060,6 @@ object TestUtils extends Logging {
     props.put(ProducerConfig.MAX_IN_FLIGHT_REQUESTS_PER_CONNECTION, maxInFlight.toString)
     new KafkaProducer[Array[Byte], Array[Byte]](props, new ByteArraySerializer, new ByteArraySerializer)
   }
-
-  private def asBytes(string: String) = string.getBytes(StandardCharsets.UTF_8)
 
   def incrementalAlterConfigs[B <: KafkaBroker](
       servers: Seq[B],
