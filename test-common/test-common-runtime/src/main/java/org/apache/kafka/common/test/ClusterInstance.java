@@ -40,6 +40,7 @@ import org.apache.kafka.common.acl.AccessControlEntry;
 import org.apache.kafka.common.acl.AclBindingFilter;
 import org.apache.kafka.common.config.SaslConfigs;
 import org.apache.kafka.common.config.internals.BrokerSecurityConfigs;
+import org.apache.kafka.common.errors.InterruptException;
 import org.apache.kafka.common.network.ListenerName;
 import org.apache.kafka.common.security.auth.SecurityProtocol;
 import org.apache.kafka.common.serialization.ByteArrayDeserializer;
@@ -362,8 +363,7 @@ public interface ClusterInstance {
             admin.deleteTopics(List.of(topicName)).all().get();
             waitTopicDeletion(topicName);
         } catch (InterruptedException e) {
-            Thread.currentThread().interrupt();
-            throw new RuntimeException("Failed to delete topic " + topicName, e);
+            throw new InterruptException(e);
         } catch (ExecutionException e) {
             if (e.getCause() instanceof RuntimeException re) throw re;
             throw new RuntimeException("Failed to delete topic " + topicName, e.getCause());
