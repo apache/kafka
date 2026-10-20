@@ -68,7 +68,7 @@ public class LazyDownConversionRecords implements BaseRecords {
             // a RecordTooLargeException. Typically, the consumer would need to increase the fetch size in such cases.
             // If there are no messages before down-conversion, we return an empty record batch.
             firstConvertedBatch = null;
-            sizeInBytes = records.batches().iterator().hasNext() ? LazyDownConversionRecordsSend.MIN_OVERFLOW_MESSAGE_LENGTH : 0;
+            sizeInBytes = records.sizeInBytes() > 0 ? LazyDownConversionRecordsSend.MIN_OVERFLOW_MESSAGE_LENGTH : 0;
         }
     }
 
