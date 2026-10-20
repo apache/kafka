@@ -27,8 +27,9 @@
   // Version 3 introduces ClientInstanceId. (KIP-1313)
   //
   // Compatibility constraints:
-  // - New header fields must be tagged until every broker version that clients are required to
-  //   support (see KIP-896) includes the fix from KAFKA-21160 (first shipped in 4.5.0).
+  // - A new non-tagged header field must not be used by ApiVersionsRequest until every broker version
+  //   that clients are required to support (see KIP-896) includes the fix from KAFKA-21160 (first
+  //   shipped in 4.5.0).
   // - The first four fields (RequestApiKey, RequestApiVersion, CorrelationId, ClientId) must keep
   //   their order and encoding across all versions.
   // - Version 1 must not be removed. Brokers use it to parse headers with an unsupported API version.
