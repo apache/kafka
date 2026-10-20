@@ -19352,7 +19352,7 @@ public class GroupMetadataManagerTest {
         );
         List<CoordinatorRecord> records = new ArrayList<>();
         context.groupMetadataManager.createGroupTombstoneRecordsAndCancelTimers("share-group-id", records);
-        assertEquals(expectedRecords, records);
+        assertRecordsEquals(expectedRecords, records);
     }
 
     @Test
@@ -29129,6 +29129,7 @@ public class GroupMetadataManagerTest {
             context.groupMetadataManager.sharePartitionsEligibleForOffsetDeletion(groupId, requestData, errorTopicResponseList, records);
 
         assertTrue(errorTopicResponseList.isEmpty());
+        result.forEach(topic -> topic.partitions().sort(Comparator.comparingInt(DeleteShareGroupStateRequestData.PartitionData::partition)));
         assertEquals(expectedResult, result);
         assertRecordsEquals(expectedRecords, records);
     }
@@ -29244,6 +29245,7 @@ public class GroupMetadataManagerTest {
             context.groupMetadataManager.sharePartitionsEligibleForOffsetDeletion(groupId, requestData, errorTopicResponseList, records);
 
         assertTrue(errorTopicResponseList.isEmpty());
+        result.forEach(topic -> topic.partitions().sort(Comparator.comparingInt(DeleteShareGroupStateRequestData.PartitionData::partition)));
         assertEquals(expectedResult, result);
         assertRecordsEquals(expectedRecords, records);
     }
@@ -29326,6 +29328,7 @@ public class GroupMetadataManagerTest {
             ),
             errorTopicResponseList
         );
+        result.forEach(topic -> topic.partitions().sort(Comparator.comparingInt(DeleteShareGroupStateRequestData.PartitionData::partition)));
         assertEquals(expectedResult, result);
         assertRecordsEquals(expectedRecords, records);
     }
@@ -29410,6 +29413,7 @@ public class GroupMetadataManagerTest {
             ),
             errorTopicResponseList
         );
+        result.forEach(topic -> topic.partitions().sort(Comparator.comparingInt(DeleteShareGroupStateRequestData.PartitionData::partition)));
         assertEquals(expectedResult, result);
         assertRecordsEquals(expectedRecords, records);
     }
@@ -29501,6 +29505,7 @@ public class GroupMetadataManagerTest {
             ),
             errorTopicResponseList
         );
+        result.forEach(topic -> topic.partitions().sort(Comparator.comparingInt(DeleteShareGroupStateRequestData.PartitionData::partition)));
         assertEquals(expectedResult, result);
         assertRecordsEquals(expectedRecords, records);
     }
@@ -30221,7 +30226,7 @@ public class GroupMetadataManagerTest {
             )
         );
 
-        assertEquals(expectedRecords, records);
+        assertRecordsEquals(expectedRecords, records);
     }
 
     @Test
@@ -30594,8 +30599,8 @@ public class GroupMetadataManagerTest {
             )
         );
 
-        CoordinatorResult<Void, CoordinatorRecord> expectedResult = new CoordinatorResult<>(expectedRecords);
-        assertEquals(expectedResult, context.groupMetadataManager.maybeCleanupShareGroupState(Set.of(t1Id, t2Id, t6Id)));
+        CoordinatorResult<Void, CoordinatorRecord> result = context.groupMetadataManager.maybeCleanupShareGroupState(Set.of(t1Id, t2Id, t6Id));
+        assertRecordsEquals(expectedRecords, result.records());
     }
 
     @Test
