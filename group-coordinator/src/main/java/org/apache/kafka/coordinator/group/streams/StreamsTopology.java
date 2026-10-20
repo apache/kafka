@@ -23,6 +23,8 @@ import org.apache.kafka.coordinator.group.generated.StreamsGroupTopologyValue.Co
 import org.apache.kafka.coordinator.group.generated.StreamsGroupTopologyValue.Subtopology;
 import org.apache.kafka.coordinator.group.generated.StreamsGroupTopologyValue.TopicInfo;
 
+import java.util.ArrayList;
+import java.util.Arrays;
 import java.util.Collections;
 import java.util.Comparator;
 import java.util.HashMap;
@@ -136,28 +138,37 @@ public record StreamsTopology(int topologyEpoch,
         // The first step sorts indexes within each group; the second sorts the groups.
         // The referenced topic lists stay unchanged, so each index still identifies the same topic.
         // Copy before sorting to avoid mutating a replayed record or the heartbeat request.
-        Subtopology copy = subtopology.duplicate();
-        for (CopartitionGroup group : copy.copartitionGroups()) {
-            Collections.sort(group.sourceTopics());
-            Collections.sort(group.sourceTopicRegex());
-            Collections.sort(group.repartitionSourceTopics());
+        List<CopartitionGroup> groups = new ArrayList<>(subtopology.copartitionGroups().size());
+        for (CopartitionGroup group : subtopology.copartitionGroups()) {
+            CopartitionGroup copy = group.duplicate();
+            Collections.sort(copy.sourceTopics());
+            Collections.sort(copy.sourceTopicRegex());
+            Collections.sort(copy.repartitionSourceTopics());
+            groups.add(copy);
         }
-        copy.copartitionGroups().sort(
-            Comparator.comparing(CopartitionGroup::sourceTopics, StreamsTopology::compareTopicIndexes)
+
+        groups.sort(
+            Comparator
+                .comparing(CopartitionGroup::sourceTopics, StreamsTopology::compareTopicIndexes)
                 .thenComparing(CopartitionGroup::sourceTopicRegex, StreamsTopology::compareTopicIndexes)
                 .thenComparing(CopartitionGroup::repartitionSourceTopics, StreamsTopology::compareTopicIndexes)
         );
-        return copy;
+
+        return new Subtopology()
+            .setSubtopologyId(subtopology.subtopologyId())
+            .setSourceTopics(subtopology.sourceTopics())
+            .setSourceTopicRegex(subtopology.sourceTopicRegex())
+            .setRepartitionSinkTopics(subtopology.repartitionSinkTopics())
+            .setRepartitionSourceTopics(subtopology.repartitionSourceTopics())
+            .setStateChangelogTopics(subtopology.stateChangelogTopics())
+            .setCopartitionGroups(groups);
     }
 
     private static int compareTopicIndexes(List<Short> first, List<Short> second) {
-        for (int i = 0; i < Math.min(first.size(), second.size()); i++) {
-            int comparison = Short.compare(first.get(i), second.get(i));
-            if (comparison != 0) {
-                return comparison;
-            }
-        }
-        return Integer.compare(first.size(), second.size());
+        return Arrays.compare(
+            first.toArray(Short[]::new),
+            second.toArray(Short[]::new)
+        );
     }
 
     public StreamsGroupDescribeResponseData.Topology asStreamsGroupDescribeTopology() {

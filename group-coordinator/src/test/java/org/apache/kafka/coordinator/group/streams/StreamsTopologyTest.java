@@ -170,6 +170,41 @@ public class StreamsTopologyTest {
         assertEquals(originalReorderedRequest, reorderedRequest);
     }
 
+    @Test
+    public void mixedCopartitionGroupsShouldUseRepartitionIndexesToBreakSourceTies() {
+        StreamsGroupHeartbeatRequestData.Topology request = topologyWithCopartitionGroups("source");
+        request.subtopologies().get(0).setCopartitionGroups(List.of(
+            new StreamsGroupHeartbeatRequestData.CopartitionGroup()
+                .setSourceTopics(List.of((short) 1))
+                .setRepartitionSourceTopics(List.of((short) 3, (short) 2)),
+            new StreamsGroupHeartbeatRequestData.CopartitionGroup()
+                .setSourceTopics(List.of((short) 1))
+                .setRepartitionSourceTopics(List.of((short) 0))
+        ));
+        StreamsGroupHeartbeatRequestData.Topology originalRequest = request.duplicate();
+        StreamsGroupTopologyValue record = StreamsCoordinatorRecordHelpers.convertToStreamsGroupTopologyRecord(request).duplicate();
+        StreamsGroupTopologyValue originalRecord = record.duplicate();
+
+        // Source indexes tie, so repartition indexes must determine the group order.
+        List<StreamsGroupTopologyValue.CopartitionGroup> expectedGroups = List.of(
+            new StreamsGroupTopologyValue.CopartitionGroup()
+                .setSourceTopics(List.of((short) 1))
+                .setRepartitionSourceTopics(List.of((short) 0)),
+            new StreamsGroupTopologyValue.CopartitionGroup()
+                .setSourceTopics(List.of((short) 1))
+                .setRepartitionSourceTopics(List.of((short) 2, (short) 3))
+        );
+
+        StreamsTopology received = StreamsTopology.fromHeartbeatRequest(request);
+        StreamsTopology replayed = StreamsTopology.fromRecord(record);
+
+        assertEquals(expectedGroups, received.subtopologies().get(SUBTOPOLOGY_ID_1).copartitionGroups());
+        assertEquals(expectedGroups, replayed.subtopologies().get(SUBTOPOLOGY_ID_1).copartitionGroups());
+        assertEquals(received, replayed);
+        assertEquals(originalRequest, request);
+        assertEquals(originalRecord, record);
+    }
+
     @ParameterizedTest
     @ValueSource(strings = {"source", "regex", "repartition"})
     public void differentCopartitionConstraintsShouldNotBeEqual(String topicType) {
