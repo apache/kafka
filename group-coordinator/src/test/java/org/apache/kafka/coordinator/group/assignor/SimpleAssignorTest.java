@@ -47,6 +47,7 @@ import static org.apache.kafka.coordinator.group.api.assignor.SubscriptionType.H
 import static org.apache.kafka.coordinator.group.api.assignor.SubscriptionType.HOMOGENEOUS;
 import static org.junit.jupiter.api.Assertions.assertEquals;
 import static org.junit.jupiter.api.Assertions.assertThrows;
+import static org.junit.jupiter.api.Assertions.assertTrue;
 
 public class SimpleAssignorTest {
 
@@ -661,6 +662,54 @@ public class SimpleAssignorTest {
                 new Assignment(partitions.partitions())
             )));
         }
+    }
+
+    @Test
+    public void testIncrementalAssignmentWithUnsubscribedTopicHomogeneous() {
+        MetadataImage metadataImage = new MetadataImageBuilder()
+            .addTopic(TOPIC_1_UUID, TOPIC_1_NAME, 4)
+            .addTopic(TOPIC_2_UUID, TOPIC_2_NAME, 2)
+            .build();
+        SubscribedTopicDescriberImpl subscribedTopicMetadata = new SubscribedTopicDescriberImpl(
+            new KRaftCoordinatorMetadataImage(metadataImage)
+        );
+
+        // Both members used to consume topic 2, but the group now subscribes to topic 1 only
+        Set<Uuid> topicsSubscription = Set.of(TOPIC_1_UUID);
+        Map<String, MemberSubscriptionAndAssignmentImpl> members = new HashMap<>();
+        members.put(MEMBER_A, new MemberSubscriptionAndAssignmentImpl(
+            Optional.empty(),
+            Optional.empty(),
+            topicsSubscription,
+            new Assignment(mkAssignment(
+                mkTopicAssignment(TOPIC_1_UUID, 0),
+                mkTopicAssignment(TOPIC_2_UUID, 0)))
+        ));
+        members.put(MEMBER_B, new MemberSubscriptionAndAssignmentImpl(
+            Optional.empty(),
+            Optional.empty(),
+            topicsSubscription,
+            new Assignment(mkAssignment(
+                mkTopicAssignment(TOPIC_1_UUID, 1),
+                mkTopicAssignment(TOPIC_2_UUID, 1)))
+        ));
+
+        GroupSpec groupSpec = new GroupSpecImpl(members, HOMOGENEOUS, Map.of());
+        GroupAssignment computedAssignment = assignor.assign(groupSpec, subscribedTopicMetadata);
+
+        assertEquals(Set.of(MEMBER_A, MEMBER_B), computedAssignment.members().keySet());
+
+        // Topic 2 is revoked, and each member keeps its partition of topic 1 and gets one of the free ones
+        Map<Uuid, Set<Integer>> memberAAssignment = computedAssignment.members().get(MEMBER_A).partitions();
+        Map<Uuid, Set<Integer>> memberBAssignment = computedAssignment.members().get(MEMBER_B).partitions();
+        assertEquals(Set.of(TOPIC_1_UUID), memberAAssignment.keySet());
+        assertEquals(Set.of(TOPIC_1_UUID), memberBAssignment.keySet());
+        assertEquals(2, memberAAssignment.get(TOPIC_1_UUID).size());
+        assertEquals(2, memberBAssignment.get(TOPIC_1_UUID).size());
+        assertTrue(memberAAssignment.get(TOPIC_1_UUID).contains(0));
+        assertTrue(memberBAssignment.get(TOPIC_1_UUID).contains(1));
+
+        assertEveryPartitionGetsAssignment(4, computedAssignment);
     }
 
     @Test
