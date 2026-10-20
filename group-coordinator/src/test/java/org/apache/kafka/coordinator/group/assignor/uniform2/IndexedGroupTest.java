@@ -17,7 +17,6 @@
 package org.apache.kafka.coordinator.group.assignor.uniform2;
 
 import org.apache.kafka.common.Uuid;
-import org.apache.kafka.coordinator.group.api.assignor.SubscribedTopicDescriber;
 import org.apache.kafka.coordinator.group.api.assignor.SubscriptionType;
 
 import org.junit.jupiter.api.Test;
@@ -44,7 +43,7 @@ public class IndexedGroupTest {
     private static final Uuid T3 = new Uuid(3L, 1L);
     private static final Uuid MISSING = new Uuid(9L, 1L);
 
-    private static final SubscribedTopicDescriber DESCRIBER = new TopicsFixture()
+    private static final TopicsFixture TOPICS = new TopicsFixture()
         .withTopic(T1, 2)
         .withTopic(T2, 5)
         .withTopic(T3, 7)
@@ -58,12 +57,13 @@ public class IndexedGroupTest {
     @Test
     public void testMembersAreNumberedInMemberIdOrder() {
         var spec = new GroupSpecFixture()
+            .withMetadataImage(TOPICS.metadataImage())
             .withMember("m2", Set.of(T1))
             .withMember("m10", Set.of(T1))
             .withMember("m1", Set.of(T1))
             .build();
 
-        var group = new IndexedGroup.Builder(spec, DESCRIBER).build();
+        var group = new IndexedGroup.Builder(spec, TOPICS.subscribedTopicsDescriber()).build();
 
         assertEquals(List.of("m1", "m10", "m2"), memberIds(group));
     }
@@ -77,11 +77,12 @@ public class IndexedGroupTest {
     @Test
     public void testTopicsAreNumberedInTopicIdOrder() {
         var spec = new GroupSpecFixture()
+            .withMetadataImage(TOPICS.metadataImage())
             .withMember("B", Set.of(T2))
             .withMember("A", orderedSet(T3, T1))
             .build();
 
-        var group = new IndexedGroup.Builder(spec, DESCRIBER).build();
+        var group = new IndexedGroup.Builder(spec, TOPICS.subscribedTopicsDescriber()).build();
 
         assertEquals(List.of(T1, T2, T3), topicIds(group));
         assertEquals(List.of(0, 1, 2), topicIndices(group, T1, T2, T3));
@@ -96,10 +97,11 @@ public class IndexedGroupTest {
     @Test
     public void testTopicsThatAreNotSubscribedAreIgnored() {
         var spec = new GroupSpecFixture()
+            .withMetadataImage(TOPICS.metadataImage())
             .withMember("A", Set.of(T1))
             .build();
 
-        var group = new IndexedGroup.Builder(spec, DESCRIBER).build();
+        var group = new IndexedGroup.Builder(spec, TOPICS.subscribedTopicsDescriber()).build();
 
         assertEquals(List.of(T1), topicIds(group));
         assertEquals(List.of(0, -1), topicIndices(group, T1, T2));
@@ -116,12 +118,13 @@ public class IndexedGroupTest {
     @Test
     public void testTopicsThatDoNotExistAreIgnored() {
         var spec = new GroupSpecFixture()
+            .withMetadataImage(TOPICS.metadataImage())
             .withMember("C", Set.of(MISSING))
             .withMember("B", Set.of(T1))
             .withMember("A", orderedSet(MISSING, T1))
             .build();
 
-        var group = new IndexedGroup.Builder(spec, DESCRIBER).build();
+        var group = new IndexedGroup.Builder(spec, TOPICS.subscribedTopicsDescriber()).build();
 
         assertEquals(List.of(T1), topicIds(group));
         assertEquals(List.of(0, -1), topicIndices(group, T1, MISSING));
@@ -138,9 +141,9 @@ public class IndexedGroupTest {
      */
     @Test
     public void testEmptyGroup() {
-        var spec = new GroupSpecFixture().build();
+        var spec = new GroupSpecFixture().withMetadataImage(TOPICS.metadataImage()).build();
 
-        var group = new IndexedGroup.Builder(spec, DESCRIBER).build();
+        var group = new IndexedGroup.Builder(spec, TOPICS.subscribedTopicsDescriber()).build();
 
         assertEquals(List.of(), cohorts(group));
         assertEquals(List.of(List.of()), membersOfCohorts(group));
@@ -156,10 +159,11 @@ public class IndexedGroupTest {
     @Test
     public void testSingleMember() {
         var spec = new GroupSpecFixture()
+            .withMetadataImage(TOPICS.metadataImage())
             .withMember("A", orderedSet(T2, T1))
             .build();
 
-        var group = new IndexedGroup.Builder(spec, DESCRIBER).build();
+        var group = new IndexedGroup.Builder(spec, TOPICS.subscribedTopicsDescriber()).build();
 
         assertEquals(List.of(0), cohorts(group));
         assertEquals(List.of(List.of(0)), membersOfCohorts(group));
@@ -176,13 +180,14 @@ public class IndexedGroupTest {
     @Test
     public void testHomogeneousGroup() {
         var spec = new GroupSpecFixture()
+            .withMetadataImage(TOPICS.metadataImage())
             .withMember("C", orderedSet(T2, T1))
             .withMember("B", orderedSet(T1, T2))
             .withMember("A", orderedSet(T2, T1))
             .build();
         assertEquals(SubscriptionType.HOMOGENEOUS, spec.subscriptionType());
 
-        var group = new IndexedGroup.Builder(spec, DESCRIBER).build();
+        var group = new IndexedGroup.Builder(spec, TOPICS.subscribedTopicsDescriber()).build();
 
         assertEquals(List.of(0, 0, 0), cohorts(group));
         assertEquals(List.of(List.of(0, 1, 2)), membersOfCohorts(group));
@@ -201,6 +206,7 @@ public class IndexedGroupTest {
     @Test
     public void testHeterogeneousGroup() {
         var spec = new GroupSpecFixture()
+            .withMetadataImage(TOPICS.metadataImage())
             .withMember("D", Set.of(T3))
             .withMember("C", orderedSet(T2, T1))
             .withMember("B", orderedSet(T3, T2))
@@ -208,7 +214,7 @@ public class IndexedGroupTest {
             .build();
         assertEquals(SubscriptionType.HETEROGENEOUS, spec.subscriptionType());
 
-        var group = new IndexedGroup.Builder(spec, DESCRIBER).build();
+        var group = new IndexedGroup.Builder(spec, TOPICS.subscribedTopicsDescriber()).build();
 
         assertEquals(List.of(0, 1, 0, 2), cohorts(group));
         assertEquals(List.of(List.of(0, 2), List.of(1), List.of(3)), membersOfCohorts(group));
@@ -227,6 +233,7 @@ public class IndexedGroupTest {
     @Test
     public void testCohortsWithTheSameHashAreComparedExactly() {
         var spec = new GroupSpecFixture()
+            .withMetadataImage(TOPICS.metadataImage())
             .withMember("F", orderedSet(T2, T1))
             .withMember("E", Set.of())
             .withMember("D", Set.of(T1))
@@ -236,7 +243,7 @@ public class IndexedGroupTest {
             .build();
         assertEquals(SubscriptionType.HETEROGENEOUS, spec.subscriptionType());
 
-        var group = new IndexedGroup.Builder(spec, DESCRIBER, 0L).build();
+        var group = new IndexedGroup.Builder(spec, TOPICS.subscribedTopicsDescriber(), 0L).build();
 
         assertEquals(List.of(0, 1, 2, 0, 3, 1), cohorts(group));
         assertEquals(List.of(List.of(0), List.of(0, 1), List.of(1), List.of()), topicsOfCohorts(group));
@@ -248,9 +255,10 @@ public class IndexedGroupTest {
     @Test
     public void testSecondBuildThrows() {
         var spec = new GroupSpecFixture()
+            .withMetadataImage(TOPICS.metadataImage())
             .withMember("A", Set.of(T1))
             .build();
-        var builder = new IndexedGroup.Builder(spec, DESCRIBER);
+        var builder = new IndexedGroup.Builder(spec, TOPICS.subscribedTopicsDescriber());
         builder.build();
 
         assertThrows(IllegalStateException.class, builder::build);

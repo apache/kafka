@@ -55,7 +55,8 @@ public class BalanceExtraPartitionsTest {
      */
     @Test
     public void testNothingMayMoveInAnEmptyGroup() {
-        var fixture = new QuotasFixture(new GroupSpecFixture().build(), new TopicsFixture().withTopic(T1, 3).build());
+        var topicsFixture = new TopicsFixture().withTopic(T1, 3).build();
+        var fixture = new QuotasFixture(new GroupSpecFixture().withMetadataImage(topicsFixture.metadataImage()).build(), topicsFixture.subscribedTopicsDescriber());
         assertFalse(BalanceExtraPartitions.mayMove(fixture.group, fixture.quotas));
     }
 
@@ -94,23 +95,25 @@ public class BalanceExtraPartitionsTest {
      */
     @Test
     public void testCountsFitWhenTheyTakeNoMoreEntriesThanTheSubscriptions() {
-        var describer = new TopicsFixture()
+        var topicsFixture = new TopicsFixture()
             .withTopic(T1, 1)
             .withTopic(T2, 1)
             .withTopic(T3, 1)
             .withTopic(T4, 1)
             .build();
         var fitting = new GroupSpecFixture()
+            .withMetadataImage(topicsFixture.metadataImage())
             .withMember("A", Set.of(T1, T2))
             .withMember("B", Set.of(T3, T4))
             .build();
         var notFitting = new GroupSpecFixture()
+            .withMetadataImage(topicsFixture.metadataImage())
             .withMember("A", Set.of(T1, T2))
             .withMember("B", Set.of(T3))
             .build();
 
-        assertTrue(BalanceExtraPartitions.countsFit(new QuotasFixture(fitting, describer).group));
-        assertFalse(BalanceExtraPartitions.countsFit(new QuotasFixture(notFitting, describer).group));
+        assertTrue(BalanceExtraPartitions.countsFit(new QuotasFixture(fitting, topicsFixture.subscribedTopicsDescriber()).group));
+        assertFalse(BalanceExtraPartitions.countsFit(new QuotasFixture(notFitting, topicsFixture.subscribedTopicsDescriber()).group));
     }
 
     /**
@@ -124,18 +127,19 @@ public class BalanceExtraPartitionsTest {
      */
     @Test
     public void testBalanceMovesUntilNoExtraPartitionCanMove() {
+        var topicsFixture = new TopicsFixture()
+            .withTopic(T1, 5)
+            .withTopic(T2, 5)
+            .withTopic(T3, 5)
+            .build();
         var spec = new GroupSpecFixture()
+            .withMetadataImage(topicsFixture.metadataImage())
             .withMember("A", Set.of(T1, T2, T3))
             .withMember("B", Set.of(T1, T2))
             .withMember("C", Set.of(T2, T3))
             .withMember("D", Set.of(T1, T3))
             .build();
-        var describer = new TopicsFixture()
-            .withTopic(T1, 5)
-            .withTopic(T2, 5)
-            .withTopic(T3, 5)
-            .build();
-        var fixture = new QuotasFixture(spec, describer);
+        var fixture = new QuotasFixture(spec, topicsFixture.subscribedTopicsDescriber());
         fixture.addExtras("A", T1, T2, T3);
         fixture.addExtras("B", T1, T2);
         fixture.addExtras("C", T3);
@@ -155,17 +159,18 @@ public class BalanceExtraPartitionsTest {
      */
     @Test
     public void testNothingMovesWhenNoExtraPartitionCanMove() {
-        var spec = new GroupSpecFixture()
-            .withMember("A", Set.of(T1, T2))
-            .withMember("B", Set.of(T1))
-            .withMember("C", Set.of(T2, T3))
-            .build();
-        var describer = new TopicsFixture()
+        var topicsFixture = new TopicsFixture()
             .withTopic(T1, 2)
             .withTopic(T2, 3)
             .withTopic(T3, 1)
             .build();
-        var fixture = new QuotasFixture(spec, describer);
+        var spec = new GroupSpecFixture()
+            .withMetadataImage(topicsFixture.metadataImage())
+            .withMember("A", Set.of(T1, T2))
+            .withMember("B", Set.of(T1))
+            .withMember("C", Set.of(T2, T3))
+            .build();
+        var fixture = new QuotasFixture(spec, topicsFixture.subscribedTopicsDescriber());
         fixture.addExtras("A", T2);
         assertTrue(BalanceExtraPartitions.mayMove(fixture.group, fixture.quotas));
 
@@ -185,18 +190,19 @@ public class BalanceExtraPartitionsTest {
      */
     @Test
     public void testTheLargestMemberGivesToTheSmallestWhateverItsCohort() {
-        var spec = new GroupSpecFixture()
-            .withMember("A", Set.of(T1, T2, T3))
-            .withMember("B", Set.of(T1, T2, T3))
-            .withMember("C", Set.of(T1, T4))
-            .build();
-        var describer = new TopicsFixture()
+        var topicsFixture = new TopicsFixture()
             .withTopic(T1, 5)
             .withTopic(T2, 3)
             .withTopic(T3, 3)
             .withTopic(T4, 2)
             .build();
-        var fixture = new QuotasFixture(spec, describer);
+        var spec = new GroupSpecFixture()
+            .withMetadataImage(topicsFixture.metadataImage())
+            .withMember("A", Set.of(T1, T2, T3))
+            .withMember("B", Set.of(T1, T2, T3))
+            .withMember("C", Set.of(T1, T4))
+            .build();
+        var fixture = new QuotasFixture(spec, topicsFixture.subscribedTopicsDescriber());
         fixture.addExtras("A", T1, T2, T3);
         fixture.addExtras("B", T1);
         assertEquals(List.of(6, 4, 3), fixture.assignmentSizes());
@@ -219,16 +225,17 @@ public class BalanceExtraPartitionsTest {
     @Test
     public void testWithinACohortTheLargestGivesToTheSmallest() {
         var topics = Set.of(T1, T2);
+        var topicsFixture = new TopicsFixture()
+            .withTopic(T1, 5)
+            .withTopic(T2, 5)
+            .build();
         var spec = new GroupSpecFixture()
+            .withMetadataImage(topicsFixture.metadataImage())
             .withMember("A", topics, mkAssignment(mkTopicAssignment(T1, 0, 1, 2), mkTopicAssignment(T2, 0, 1)))
             .withMember("B", topics, mkAssignment(mkTopicAssignment(T1, 3, 4), mkTopicAssignment(T2, 2, 3, 4)))
             .withMember("C", topics)
             .build();
-        var describer = new TopicsFixture()
-            .withTopic(T1, 5)
-            .withTopic(T2, 5)
-            .build();
-        var fixture = new QuotasFixture(spec, describer);
+        var fixture = new QuotasFixture(spec, topicsFixture.subscribedTopicsDescriber());
         fixture.addExtras("A", T1, T2);
         fixture.addExtras("B", T1, T2);
 
@@ -249,17 +256,18 @@ public class BalanceExtraPartitionsTest {
     @Test
     public void testTheGiverGivesAnExtraPartitionTheReceiverOwnsFirst() {
         var topics = Set.of(T1, T2, T3);
-        var spec = new GroupSpecFixture()
-            .withMember("A", topics)
-            .withMember("B", topics, mkAssignment(mkTopicAssignment(T2, 0, 1)))
-            .withMember("C", topics, mkAssignment(mkTopicAssignment(T1, 0, 1)))
-            .build();
-        var describer = new TopicsFixture()
+        var topicsFixture = new TopicsFixture()
             .withTopic(T1, 4)
             .withTopic(T2, 4)
             .withTopic(T3, 4)
             .build();
-        var fixture = new QuotasFixture(spec, describer);
+        var spec = new GroupSpecFixture()
+            .withMetadataImage(topicsFixture.metadataImage())
+            .withMember("A", topics)
+            .withMember("B", topics, mkAssignment(mkTopicAssignment(T2, 0, 1)))
+            .withMember("C", topics, mkAssignment(mkTopicAssignment(T1, 0, 1)))
+            .build();
+        var fixture = new QuotasFixture(spec, topicsFixture.subscribedTopicsDescriber());
         fixture.addExtras("A", T1, T2, T3);
 
         balanceAndAssertBalanced(fixture);
@@ -277,16 +285,17 @@ public class BalanceExtraPartitionsTest {
      */
     @Test
     public void testTheGiverGivesAFreeExtraPartitionBeforeAnOwnedOne() {
-        var spec = new GroupSpecFixture()
-            .withMember("A", Set.of(T1, T2, T3), mkAssignment(mkTopicAssignment(T2, 0, 1)))
-            .withMember("B", Set.of(T1, T2))
-            .build();
-        var describer = new TopicsFixture()
+        var topicsFixture = new TopicsFixture()
             .withTopic(T1, 3)
             .withTopic(T2, 3)
             .withTopic(T3, 1)
             .build();
-        var fixture = new QuotasFixture(spec, describer);
+        var spec = new GroupSpecFixture()
+            .withMetadataImage(topicsFixture.metadataImage())
+            .withMember("A", Set.of(T1, T2, T3), mkAssignment(mkTopicAssignment(T2, 0, 1)))
+            .withMember("B", Set.of(T1, T2))
+            .build();
+        var fixture = new QuotasFixture(spec, topicsFixture.subscribedTopicsDescriber());
         fixture.addExtras("A", T1, T2);
 
         balanceAndAssertBalanced(fixture);
@@ -305,18 +314,19 @@ public class BalanceExtraPartitionsTest {
     @Test
     public void testOnEqualSizesAGiverWithAFreeExtraPartitionGivesFirst() {
         var topics = Set.of(T1, T2, T3, T4);
-        var spec = new GroupSpecFixture()
-            .withMember("A", topics, mkAssignment(mkTopicAssignment(T1, 0, 1), mkTopicAssignment(T2, 0, 1)))
-            .withMember("B", topics, mkAssignment(mkTopicAssignment(T3, 0, 1)))
-            .withMember("C", topics)
-            .build();
-        var describer = new TopicsFixture()
+        var topicsFixture = new TopicsFixture()
             .withTopic(T1, 4)
             .withTopic(T2, 4)
             .withTopic(T3, 4)
             .withTopic(T4, 4)
             .build();
-        var fixture = new QuotasFixture(spec, describer);
+        var spec = new GroupSpecFixture()
+            .withMetadataImage(topicsFixture.metadataImage())
+            .withMember("A", topics, mkAssignment(mkTopicAssignment(T1, 0, 1), mkTopicAssignment(T2, 0, 1)))
+            .withMember("B", topics, mkAssignment(mkTopicAssignment(T3, 0, 1)))
+            .withMember("C", topics)
+            .build();
+        var fixture = new QuotasFixture(spec, topicsFixture.subscribedTopicsDescriber());
         fixture.addExtras("A", T1, T2);
         fixture.addExtras("B", T3, T4);
 
@@ -334,18 +344,19 @@ public class BalanceExtraPartitionsTest {
      */
     @Test
     public void testReceiversOfEqualSizesGoInMemberOrder() {
-        var spec = new GroupSpecFixture()
-            .withMember("A", Set.of(T1, T2))
-            .withMember("B", Set.of(T1, T4))
-            .withMember("C", Set.of(T1, T3))
-            .build();
-        var describer = new TopicsFixture()
+        var topicsFixture = new TopicsFixture()
             .withTopic(T1, 4)
             .withTopic(T2, 2)
             .withTopic(T3, 1)
             .withTopic(T4, 1)
             .build();
-        var fixture = new QuotasFixture(spec, describer);
+        var spec = new GroupSpecFixture()
+            .withMetadataImage(topicsFixture.metadataImage())
+            .withMember("A", Set.of(T1, T2))
+            .withMember("B", Set.of(T1, T4))
+            .withMember("C", Set.of(T1, T3))
+            .build();
+        var fixture = new QuotasFixture(spec, topicsFixture.subscribedTopicsDescriber());
         fixture.addExtras("A", T1);
 
         balanceAndAssertBalanced(fixture);
@@ -362,16 +373,17 @@ public class BalanceExtraPartitionsTest {
      */
     @Test
     public void testOnEqualSizesAReceiverOwningMoreThanTheMinQuotaReceivesFirst() {
+        var topicsFixture = new TopicsFixture()
+            .withTopic(T1, 4)
+            .withTopic(T2, 1)
+            .build();
         var spec = new GroupSpecFixture()
+            .withMetadataImage(topicsFixture.metadataImage())
             .withMember("A", Set.of(T1, T2))
             .withMember("B", Set.of(T1))
             .withMember("C", Set.of(T1), mkAssignment(mkTopicAssignment(T1, 1, 2)))
             .build();
-        var describer = new TopicsFixture()
-            .withTopic(T1, 4)
-            .withTopic(T2, 1)
-            .build();
-        var fixture = new QuotasFixture(spec, describer);
+        var fixture = new QuotasFixture(spec, topicsFixture.subscribedTopicsDescriber());
         fixture.addExtras("A", T1);
 
         balanceAndAssertBalanced(fixture);
@@ -389,19 +401,20 @@ public class BalanceExtraPartitionsTest {
      */
     @Test
     public void testMembersWhoseSizeChangedAreLookedAtWithTheirNewSize() {
-        var spec = new GroupSpecFixture()
-            .withMember("A", Set.of(T1, T2, T3, T4))
-            .withMember("B", Set.of(T1, T2, T3, T4, T5))
-            .withMember("C", Set.of(T1, T2, T3, T4, T5))
-            .build();
-        var describer = new TopicsFixture()
+        var topicsFixture = new TopicsFixture()
             .withTopic(T1, 4)
             .withTopic(T2, 4)
             .withTopic(T3, 4)
             .withTopic(T4, 4)
             .withTopic(T5, 2)
             .build();
-        var fixture = new QuotasFixture(spec, describer);
+        var spec = new GroupSpecFixture()
+            .withMetadataImage(topicsFixture.metadataImage())
+            .withMember("A", Set.of(T1, T2, T3, T4))
+            .withMember("B", Set.of(T1, T2, T3, T4, T5))
+            .withMember("C", Set.of(T1, T2, T3, T4, T5))
+            .build();
+        var fixture = new QuotasFixture(spec, topicsFixture.subscribedTopicsDescriber());
         fixture.addExtras("A", T1, T2, T3, T4);
 
         balanceAndAssertBalanced(fixture);
@@ -420,18 +433,19 @@ public class BalanceExtraPartitionsTest {
      */
     @Test
     public void testTheSmallestMemberWhichCannotTakeIsPassedOver() {
-        var spec = new GroupSpecFixture()
-            .withMember("A", Set.of(T1, T4))
-            .withMember("B", Set.of(T1, T2, T3))
-            .withMember("C", Set.of(T1, T2, T3))
-            .build();
-        var describer = new TopicsFixture()
+        var topicsFixture = new TopicsFixture()
             .withTopic(T1, 5)
             .withTopic(T2, 3)
             .withTopic(T3, 3)
             .withTopic(T4, 5)
             .build();
-        var fixture = new QuotasFixture(spec, describer);
+        var spec = new GroupSpecFixture()
+            .withMetadataImage(topicsFixture.metadataImage())
+            .withMember("A", Set.of(T1, T4))
+            .withMember("B", Set.of(T1, T2, T3))
+            .withMember("C", Set.of(T1, T2, T3))
+            .build();
+        var fixture = new QuotasFixture(spec, topicsFixture.subscribedTopicsDescriber());
         fixture.addExtras("A", T1);
         fixture.addExtras("B", T1);
         fixture.addExtras("C", T2, T3);
@@ -454,17 +468,18 @@ public class BalanceExtraPartitionsTest {
      */
     @Test
     public void testAWaitingGiverWakesUpWhenASubscriberOfItsTopicsGetsSmaller() {
-        var spec = new GroupSpecFixture()
-            .withMember("A", Set.of(T1, T3))
-            .withMember("B", Set.of(T1, T2))
-            .withMember("C", Set.of(T2))
-            .build();
-        var describer = new TopicsFixture()
+        var topicsFixture = new TopicsFixture()
             .withTopic(T1, 3)
             .withTopic(T2, 3)
             .withTopic(T3, 2)
             .build();
-        var fixture = new QuotasFixture(spec, describer);
+        var spec = new GroupSpecFixture()
+            .withMetadataImage(topicsFixture.metadataImage())
+            .withMember("A", Set.of(T1, T3))
+            .withMember("B", Set.of(T1, T2))
+            .withMember("C", Set.of(T2))
+            .build();
+        var fixture = new QuotasFixture(spec, topicsFixture.subscribedTopicsDescriber());
         fixture.addExtras("A", T1);
         fixture.addExtras("B", T2);
         assertEquals(List.of(4, 3, 1), fixture.assignmentSizes());
@@ -485,13 +500,7 @@ public class BalanceExtraPartitionsTest {
      */
     @Test
     public void testCohortsSharingNoTopicAreBalancedOnTheirOwn() {
-        var spec = new GroupSpecFixture()
-            .withMember("A", Set.of(T1, T2, T3))
-            .withMember("B", Set.of(T1, T2, T3))
-            .withMember("C", Set.of(T4, T5, T6))
-            .withMember("D", Set.of(T4, T5, T6))
-            .build();
-        var describer = new TopicsFixture()
+        var topicsFixture = new TopicsFixture()
             .withTopic(T1, 5)
             .withTopic(T2, 5)
             .withTopic(T3, 5)
@@ -499,7 +508,14 @@ public class BalanceExtraPartitionsTest {
             .withTopic(T5, 3)
             .withTopic(T6, 3)
             .build();
-        var fixture = new QuotasFixture(spec, describer);
+        var spec = new GroupSpecFixture()
+            .withMetadataImage(topicsFixture.metadataImage())
+            .withMember("A", Set.of(T1, T2, T3))
+            .withMember("B", Set.of(T1, T2, T3))
+            .withMember("C", Set.of(T4, T5, T6))
+            .withMember("D", Set.of(T4, T5, T6))
+            .build();
+        var fixture = new QuotasFixture(spec, topicsFixture.subscribedTopicsDescriber());
         fixture.addExtras("A", T1, T2, T3);
         fixture.addExtras("C", T4, T5, T6);
         assertEquals(List.of(9, 6, 6, 3), fixture.assignmentSizes());
@@ -527,17 +543,18 @@ public class BalanceExtraPartitionsTest {
      */
     @Test
     public void testAGiverGivesSeveralExtraPartitionsInARowToTheSameReceiver() {
-        var spec = new GroupSpecFixture()
-            .withMember("A", Set.of(T1, T2, T3, T4))
-            .withMember("B", Set.of(T1, T2, T3, T4))
-            .build();
-        var describer = new TopicsFixture()
+        var topicsFixture = new TopicsFixture()
             .withTopic(T1, 3)
             .withTopic(T2, 3)
             .withTopic(T3, 3)
             .withTopic(T4, 3)
             .build();
-        var fixture = new QuotasFixture(spec, describer);
+        var spec = new GroupSpecFixture()
+            .withMetadataImage(topicsFixture.metadataImage())
+            .withMember("A", Set.of(T1, T2, T3, T4))
+            .withMember("B", Set.of(T1, T2, T3, T4))
+            .build();
+        var fixture = new QuotasFixture(spec, topicsFixture.subscribedTopicsDescriber());
         fixture.addExtras("A", T1, T2, T3, T4);
         assertEquals(List.of(8, 4), fixture.assignmentSizes());
 
@@ -610,11 +627,12 @@ public class BalanceExtraPartitionsTest {
                 }
             }
         }
-        var spec = new GroupSpecFixture();
+        var topicsFixture = new TopicsFixture();
+        partitionCounts.forEach(topicsFixture::withTopic);
+        topicsFixture.build();
+        var spec = new GroupSpecFixture().withMetadataImage(topicsFixture.metadataImage());
         memberSubscriptions.forEach((memberId, topics) -> spec.withMember(memberId, topics, owned.getOrDefault(memberId, Map.of())));
-        var describer = new TopicsFixture();
-        partitionCounts.forEach(describer::withTopic);
-        var fixture = new QuotasFixture(spec.build(), describer.build());
+        var fixture = new QuotasFixture(spec.build(), topicsFixture.subscribedTopicsDescriber());
         for (int topic = 0; topic < fixture.group.topicCount(); topic++) {
             var topicId = fixture.group.topicId(topic);
             var subscribers = new ArrayList<>(memberSubscriptions.keySet().stream().filter(m -> memberSubscriptions.get(m).contains(topicId)).toList());
@@ -664,26 +682,28 @@ public class BalanceExtraPartitionsTest {
     }
 
     private static QuotasFixture homogeneousGroup() {
-        var spec = new GroupSpecFixture()
-            .withMember("A", Set.of(T1, T2))
-            .withMember("B", Set.of(T1, T2))
-            .build();
-        var describer = new TopicsFixture()
+        var topicsFixture = new TopicsFixture()
             .withTopic(T1, 3)
             .withTopic(T2, 3)
             .build();
-        return new QuotasFixture(spec, describer);
+        var spec = new GroupSpecFixture()
+            .withMetadataImage(topicsFixture.metadataImage())
+            .withMember("A", Set.of(T1, T2))
+            .withMember("B", Set.of(T1, T2))
+            .build();
+        return new QuotasFixture(spec, topicsFixture.subscribedTopicsDescriber());
     }
 
     private static QuotasFixture twoCohortGroup() {
-        var spec = new GroupSpecFixture()
-            .withMember("A", Set.of(T1, T2))
-            .withMember("B", Set.of(T1))
-            .build();
-        var describer = new TopicsFixture()
+        var topicsFixture = new TopicsFixture()
             .withTopic(T1, 3)
             .withTopic(T2, 1)
             .build();
-        return new QuotasFixture(spec, describer);
+        var spec = new GroupSpecFixture()
+            .withMetadataImage(topicsFixture.metadataImage())
+            .withMember("A", Set.of(T1, T2))
+            .withMember("B", Set.of(T1))
+            .build();
+        return new QuotasFixture(spec, topicsFixture.subscribedTopicsDescriber());
     }
 }

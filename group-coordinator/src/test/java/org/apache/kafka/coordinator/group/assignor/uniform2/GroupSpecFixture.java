@@ -17,6 +17,7 @@
 package org.apache.kafka.coordinator.group.assignor.uniform2;
 
 import org.apache.kafka.common.Uuid;
+import org.apache.kafka.coordinator.common.runtime.CoordinatorMetadataImage;
 import org.apache.kafka.coordinator.group.api.assignor.GroupSpec;
 import org.apache.kafka.coordinator.group.api.assignor.SubscriptionType;
 import org.apache.kafka.coordinator.group.modern.Assignment;
@@ -37,10 +38,23 @@ import java.util.Set;
  */
 public final class GroupSpecFixture {
     private final Map<String, MemberSubscriptionAndAssignmentImpl> members = new LinkedHashMap<>();
+    private CoordinatorMetadataImage metadataImage;
     private final Map<Uuid, Map<Integer, String>> invertedTargetAssignment = new HashMap<>();
     private Set<Uuid> firstSubscription;
     private boolean sameSubscriptions = true;
     private boolean built;
+
+    /**
+     * Sets the metadata image of the topics.
+     *
+     * @param metadataImage The metadata image.
+     * @return This fixture.
+     */
+    public GroupSpecFixture withMetadataImage(CoordinatorMetadataImage metadataImage) {
+        checkNotBuilt();
+        this.metadataImage = metadataImage;
+        return this;
+    }
 
     /**
      * Adds a member holding no partitions.
@@ -99,7 +113,7 @@ public final class GroupSpecFixture {
         checkNotBuilt();
         built = true;
         var subscriptionType = sameSubscriptions ? SubscriptionType.HOMOGENEOUS : SubscriptionType.HETEROGENEOUS;
-        return new GroupSpecImpl(members, subscriptionType, invertedTargetAssignment);
+        return new GroupSpecImpl(metadataImage, members, subscriptionType);
     }
 
     private void checkNotBuilt() {

@@ -50,19 +50,20 @@ public class AssignRemainingExtraPartitionsTest {
      */
     @Test
     public void testTopicsWithTheFewestSubscribersGoFirst() {
-        var spec = new GroupSpecFixture()
-            .withMember("A", Set.of(T1, T2))
-            .withMember("B", Set.of(T1, T3))
-            .withMember("C", Set.of(T2, T4))
-            .withMember("D", Set.of(T1, T3))
-            .build();
-        var describer = new TopicsFixture()
+        var topicsFixture = new TopicsFixture()
             .withTopic(T1, 4)
             .withTopic(T2, 3)
             .withTopic(T3, 2)
             .withTopic(T4, 2)
             .build();
-        var fixture = new QuotasFixture(spec, describer);
+        var spec = new GroupSpecFixture()
+            .withMetadataImage(topicsFixture.metadataImage())
+            .withMember("A", Set.of(T1, T2))
+            .withMember("B", Set.of(T1, T3))
+            .withMember("C", Set.of(T2, T4))
+            .withMember("D", Set.of(T1, T3))
+            .build();
+        var fixture = new QuotasFixture(spec, topicsFixture.subscribedTopicsDescriber());
 
         new AssignRemainingExtraPartitions(fixture.group, fixture.quotas).run();
 
@@ -76,16 +77,17 @@ public class AssignRemainingExtraPartitionsTest {
      */
     @Test
     public void testExtraPartitionGoesToTheCohortWithTheSmallestAssignment() {
-        var spec = new GroupSpecFixture()
-            .withMember("A", Set.of(T1, T2))
-            .withMember("B", Set.of(T1, T3))
-            .build();
-        var describer = new TopicsFixture()
+        var topicsFixture = new TopicsFixture()
             .withTopic(T1, 3)
             .withTopic(T2, 2)
             .withTopic(T3, 1)
             .build();
-        var fixture = new QuotasFixture(spec, describer);
+        var spec = new GroupSpecFixture()
+            .withMetadataImage(topicsFixture.metadataImage())
+            .withMember("A", Set.of(T1, T2))
+            .withMember("B", Set.of(T1, T3))
+            .build();
+        var fixture = new QuotasFixture(spec, topicsFixture.subscribedTopicsDescriber());
 
         new AssignRemainingExtraPartitions(fixture.group, fixture.quotas).run();
 
@@ -100,16 +102,17 @@ public class AssignRemainingExtraPartitionsTest {
      */
     @Test
     public void testTiesGoToTheFirstCohort() {
-        var spec = new GroupSpecFixture()
-            .withMember("A", Set.of(T1, T2))
-            .withMember("B", Set.of(T1, T3))
-            .build();
-        var describer = new TopicsFixture()
+        var topicsFixture = new TopicsFixture()
             .withTopic(T1, 3)
             .withTopic(T2, 1)
             .withTopic(T3, 1)
             .build();
-        var fixture = new QuotasFixture(spec, describer);
+        var spec = new GroupSpecFixture()
+            .withMetadataImage(topicsFixture.metadataImage())
+            .withMember("A", Set.of(T1, T2))
+            .withMember("B", Set.of(T1, T3))
+            .build();
+        var fixture = new QuotasFixture(spec, topicsFixture.subscribedTopicsDescriber());
 
         new AssignRemainingExtraPartitions(fixture.group, fixture.quotas).run();
 
@@ -123,17 +126,18 @@ public class AssignRemainingExtraPartitionsTest {
      */
     @Test
     public void testMembersOfACohortAreServedInTurn() {
-        var spec = new GroupSpecFixture()
-            .withMember("A", Set.of(T1, T2, T3))
-            .withMember("B", Set.of(T1, T2, T3))
-            .withMember("C", Set.of(T1, T2, T3))
-            .build();
-        var describer = new TopicsFixture()
+        var topicsFixture = new TopicsFixture()
             .withTopic(T1, 4)
             .withTopic(T2, 4)
             .withTopic(T3, 4)
             .build();
-        var fixture = new QuotasFixture(spec, describer);
+        var spec = new GroupSpecFixture()
+            .withMetadataImage(topicsFixture.metadataImage())
+            .withMember("A", Set.of(T1, T2, T3))
+            .withMember("B", Set.of(T1, T2, T3))
+            .withMember("C", Set.of(T1, T2, T3))
+            .build();
+        var fixture = new QuotasFixture(spec, topicsFixture.subscribedTopicsDescriber());
 
         new AssignRemainingExtraPartitions(fixture.group, fixture.quotas).run();
 
@@ -149,16 +153,17 @@ public class AssignRemainingExtraPartitionsTest {
      */
     @Test
     public void testMembersWithTheFewestExtraPartitionsAreServedFirst() {
+        var topicsFixture = new TopicsFixture()
+            .withTopic(T1, 4)
+            .withTopic(T2, 5)
+            .build();
         var spec = new GroupSpecFixture()
+            .withMetadataImage(topicsFixture.metadataImage())
             .withMember("A", Set.of(T1, T2))
             .withMember("B", Set.of(T1, T2))
             .withMember("C", Set.of(T1, T2))
             .build();
-        var describer = new TopicsFixture()
-            .withTopic(T1, 4)
-            .withTopic(T2, 5)
-            .build();
-        var fixture = new QuotasFixture(spec, describer);
+        var fixture = new QuotasFixture(spec, topicsFixture.subscribedTopicsDescriber());
         fixture.addExtras("A", T2);
 
         new AssignRemainingExtraPartitions(fixture.group, fixture.quotas).run();
@@ -176,17 +181,18 @@ public class AssignRemainingExtraPartitionsTest {
      */
     @Test
     public void testAMemberWithMoreExtraPartitionsGetsOneWhenTheOthersHaveOneOfTheTopic() {
-        var spec = new GroupSpecFixture()
-            .withMember("A", Set.of(T1, T2, T3))
-            .withMember("B", Set.of(T1, T2, T3))
-            .withMember("C", Set.of(T1, T2, T3))
-            .build();
-        var describer = new TopicsFixture()
+        var topicsFixture = new TopicsFixture()
             .withTopic(T1, 5)
             .withTopic(T2, 5)
             .withTopic(T3, 5)
             .build();
-        var fixture = new QuotasFixture(spec, describer);
+        var spec = new GroupSpecFixture()
+            .withMetadataImage(topicsFixture.metadataImage())
+            .withMember("A", Set.of(T1, T2, T3))
+            .withMember("B", Set.of(T1, T2, T3))
+            .withMember("C", Set.of(T1, T2, T3))
+            .build();
+        var fixture = new QuotasFixture(spec, topicsFixture.subscribedTopicsDescriber());
         fixture.addExtras("A", T1);
         fixture.addExtras("B", T2, T3);
         fixture.addExtras("C", T2, T3);
@@ -204,16 +210,17 @@ public class AssignRemainingExtraPartitionsTest {
      */
     @Test
     public void testACohortWhoseMembersAllHaveAnExtraPartitionGetsNoMore() {
+        var topicsFixture = new TopicsFixture()
+            .withTopic(T1, 5)
+            .withTopic(T2, 2)
+            .build();
         var spec = new GroupSpecFixture()
+            .withMetadataImage(topicsFixture.metadataImage())
             .withMember("A", Set.of(T1))
             .withMember("B", Set.of(T1, T2))
             .withMember("C", Set.of(T1, T2))
             .build();
-        var describer = new TopicsFixture()
-            .withTopic(T1, 5)
-            .withTopic(T2, 2)
-            .build();
-        var fixture = new QuotasFixture(spec, describer);
+        var fixture = new QuotasFixture(spec, topicsFixture.subscribedTopicsDescriber());
         fixture.addExtras("A", T1);
 
         new AssignRemainingExtraPartitions(fixture.group, fixture.quotas).run();
@@ -230,17 +237,18 @@ public class AssignRemainingExtraPartitionsTest {
      */
     @Test
     public void testACohortThatFillsUpGetsNoMore() {
+        var topicsFixture = new TopicsFixture()
+            .withTopic(T1, 7)
+            .withTopic(T2, 4)
+            .build();
         var spec = new GroupSpecFixture()
+            .withMetadataImage(topicsFixture.metadataImage())
             .withMember("A", Set.of(T1))
             .withMember("B", Set.of(T1))
             .withMember("C", Set.of(T1, T2))
             .withMember("D", Set.of(T1, T2))
             .build();
-        var describer = new TopicsFixture()
-            .withTopic(T1, 7)
-            .withTopic(T2, 4)
-            .build();
-        var fixture = new QuotasFixture(spec, describer);
+        var fixture = new QuotasFixture(spec, topicsFixture.subscribedTopicsDescriber());
 
         new AssignRemainingExtraPartitions(fixture.group, fixture.quotas).run();
 
@@ -254,14 +262,15 @@ public class AssignRemainingExtraPartitionsTest {
      */
     @Test
     public void testNothingLeftToAssign() {
+        var topicsFixture = new TopicsFixture()
+            .withTopic(T1, 3)
+            .build();
         var spec = new GroupSpecFixture()
+            .withMetadataImage(topicsFixture.metadataImage())
             .withMember("A", Set.of(T1))
             .withMember("B", Set.of(T1))
             .build();
-        var describer = new TopicsFixture()
-            .withTopic(T1, 3)
-            .build();
-        var fixture = new QuotasFixture(spec, describer);
+        var fixture = new QuotasFixture(spec, topicsFixture.subscribedTopicsDescriber());
         fixture.addExtras("A", T1);
 
         new AssignRemainingExtraPartitions(fixture.group, fixture.quotas).run();
