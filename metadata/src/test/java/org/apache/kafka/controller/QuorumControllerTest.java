@@ -1677,8 +1677,8 @@ public class QuorumControllerTest {
         assertEquals(expectedSizes, appender.batchSizes,
             "batches should be exactly maxRecordsPerBatch-sized except the final one");
         assertTrue(appender.batchSizes.stream().allMatch(s -> s > 0 && s <= maxRecordsPerBatch),
-            "every batch should be non-empty and no larger than maxRecordsPerBatch");
-        assertEquals(numRecords, appender.batchSizes.stream().mapToLong(Integer::longValue).sum(),
+            "every batch should be non-empty and no larger than maxRecordsPerBatch: " + appender.batchSizes);
+        assertEquals(numRecords, appender.batchSizes.stream().mapToInt(Integer::intValue).sum(),
             "no record should be dropped or duplicated");
         assertEquals((long) numRecords, returned);
     }
