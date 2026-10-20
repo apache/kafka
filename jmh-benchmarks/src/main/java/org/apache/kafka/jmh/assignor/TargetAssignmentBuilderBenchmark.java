@@ -99,8 +99,6 @@ public class TargetAssignmentBuilderBenchmark {
 
     private TargetAssignmentBuilder.TargetAssignmentResult targetAssignmentResult;
 
-    private Map<Uuid, Map<Integer, String>> invertedTargetAssignment;
-
     private List<String> allTopicNames = List.of();
 
     private CoordinatorMetadataImage metadataImage;
@@ -122,7 +120,6 @@ public class TargetAssignmentBuilderBenchmark {
         ConsumerGroup group = new ConsumerGroup(logContext, snapshotRegistry, GROUP_ID);
         createMembers().values().forEach(group::updateMember);
         generateMockInitialTargetAssignment(group);
-        invertedTargetAssignment = group.invertedTargetAssignment();
 
         ConsumerGroupMember newMember = new ConsumerGroupMember.Builder("newMember")
             .setSubscribedTopicNames(allTopicNames)
@@ -148,6 +145,7 @@ public class TargetAssignmentBuilderBenchmark {
 
     private void generateMockInitialTargetAssignment(ConsumerGroup group) {
         GroupSpec initialGroupSpec = AssignorBenchmarkUtils.createConsumerGroupSpec(
+            metadataImage,
             group.members(),
             subscriptionType,
             topicResolver
@@ -220,7 +218,6 @@ public class TargetAssignmentBuilderBenchmark {
             .withMembers(updatedMembersAndTargetAssignment.members())
             .withSubscriptionType(subscriptionType)
             .withTargetAssignment(updatedMembersAndTargetAssignment.targetAssignment())
-            .withInvertedTargetAssignment(invertedTargetAssignment)
             .withMetadataImage(metadataImage)
             .withAssignorOffload(assignorOffload)
             .build();
