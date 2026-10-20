@@ -64,7 +64,7 @@ public class ConsumerGroupBuilder {
     }
 
     public ConsumerGroupBuilder withAssignment(String memberId, Map<Uuid, Set<Integer>> assignment) {
-        this.assignments.put(memberId, new Assignment(assignment));
+        this.assignments.put(memberId, Assignment.copyOf(assignment));
         return this;
     }
 

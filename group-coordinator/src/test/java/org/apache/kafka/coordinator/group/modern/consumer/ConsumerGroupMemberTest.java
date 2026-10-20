@@ -321,7 +321,7 @@ public class ConsumerGroupMemberTest {
         String subscribedTopicRegex = "topic.*";
         Map<Uuid, Set<Integer>> assignmentMap = new HashMap<>();
         assignmentMap.put(topicId4, new HashSet<>(assignedPartitions));
-        Assignment targetAssignment = new Assignment(assignmentMap);
+        Assignment targetAssignment = Assignment.copyOf(assignmentMap);
         ConsumerGroupMember member = new ConsumerGroupMember.Builder(memberId)
             .updateWith(LOG, GROUP_ID, record)
             .setClientId(clientId)

@@ -139,7 +139,7 @@ public class AssignorBenchmarkUtils {
                 Optional.ofNullable(member.rackId()),
                 Optional.ofNullable(member.instanceId()),
                 new TopicIds(member.subscribedTopicNames(), topicResolver),
-                new Assignment(Utils.toAssignmentWithoutEpochs(member.assignedPartitions()))
+                Assignment.of(Utils.toAssignmentWithoutEpochs(member.assignedPartitions()))
             ));
         }
 
@@ -173,7 +173,7 @@ public class AssignorBenchmarkUtils {
                 Optional.ofNullable(member.rackId()),
                 Optional.empty(),
                 new TopicIds(member.subscribedTopicNames(), topicResolver),
-                new Assignment(member.assignedPartitions())
+                Assignment.copyOf(member.assignedPartitions())
             ));
         }
 

@@ -121,7 +121,7 @@ public class CurrentAssignmentBuilderBenchmark {
                 .collect(Collectors.toSet());
             assignedPartitions.put(topicId, partitions);
         }
-        targetAssignment = new Assignment(assignedPartitions);
+        targetAssignment = Assignment.copyOf(assignedPartitions);
     }
 
     @Benchmark

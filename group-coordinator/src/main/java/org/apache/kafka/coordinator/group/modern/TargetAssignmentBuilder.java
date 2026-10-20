@@ -158,10 +158,13 @@ public class TargetAssignmentBuilder {
         String memberId
     ) {
         MemberAssignment newMemberAssignment = newGroupAssignment.members().get(memberId);
-        if (newMemberAssignment != null) {
-            return new Assignment(newMemberAssignment.partitions());
-        } else {
+        if (newMemberAssignment == null) {
             return Assignment.EMPTY;
         }
+
+        // The output is only read by the coordinator. Assignor inputs are
+        // reconstructed from target assignment records during replay.
+        // So, we don't need defensive copy here.
+        return Assignment.of(newMemberAssignment.partitions());
     }
 }

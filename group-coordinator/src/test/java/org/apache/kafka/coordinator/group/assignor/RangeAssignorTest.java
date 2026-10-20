@@ -469,7 +469,7 @@ public class RangeAssignorTest {
             Optional.empty(),
             Optional.empty(),
             Set.of(topic1Uuid, topic2Uuid),
-            new Assignment(mkAssignment(
+            Assignment.of(mkAssignment(
                 mkTopicAssignment(topic1Uuid, 0),
                 mkTopicAssignment(topic2Uuid, 0)
             ))
@@ -479,7 +479,7 @@ public class RangeAssignorTest {
             Optional.empty(),
             Optional.empty(),
             Set.of(topic1Uuid, topic2Uuid),
-            new Assignment(mkAssignment(
+            Assignment.of(mkAssignment(
                 mkTopicAssignment(topic1Uuid, 1),
                 mkTopicAssignment(topic2Uuid, 1)
             ))
@@ -536,7 +536,7 @@ public class RangeAssignorTest {
             Optional.empty(),
             Optional.empty(),
             Set.of(topic1Uuid, topic2Uuid),
-            new Assignment(mkAssignment(
+            Assignment.of(mkAssignment(
                 mkTopicAssignment(topic1Uuid, 0, 1),
                 mkTopicAssignment(topic2Uuid, 0, 1)
             ))
@@ -546,7 +546,7 @@ public class RangeAssignorTest {
             Optional.empty(),
             Optional.empty(),
             Set.of(topic1Uuid, topic2Uuid),
-            new Assignment(mkAssignment(
+            Assignment.of(mkAssignment(
                 mkTopicAssignment(topic1Uuid, 2),
                 mkTopicAssignment(topic2Uuid, 2)
             ))
@@ -592,7 +592,7 @@ public class RangeAssignorTest {
             Optional.empty(),
             Optional.empty(),
             Set.of(topic1Uuid, topic2Uuid),
-            new Assignment(mkAssignment(
+            Assignment.of(mkAssignment(
                 mkTopicAssignment(topic1Uuid, 0, 1),
                 mkTopicAssignment(topic2Uuid, 0, 1)
             ))
@@ -602,7 +602,7 @@ public class RangeAssignorTest {
             Optional.empty(),
             Optional.empty(),
             Set.of(topic1Uuid, topic2Uuid),
-            new Assignment(mkAssignment(
+            Assignment.of(mkAssignment(
                 mkTopicAssignment(topic1Uuid, 2),
                 mkTopicAssignment(topic2Uuid, 2)
             ))
@@ -661,7 +661,7 @@ public class RangeAssignorTest {
             Optional.empty(),
             Optional.empty(),
             Set.of(topic1Uuid, topic2Uuid),
-            new Assignment(mkAssignment(
+            Assignment.of(mkAssignment(
                 mkTopicAssignment(topic1Uuid, 0, 1),
                 mkTopicAssignment(topic2Uuid, 0, 1)
             ))
@@ -671,7 +671,7 @@ public class RangeAssignorTest {
             Optional.empty(),
             Optional.empty(),
             Set.of(topic1Uuid, topic2Uuid),
-            new Assignment(mkAssignment(
+            Assignment.of(mkAssignment(
                 mkTopicAssignment(topic1Uuid, 2),
                 mkTopicAssignment(topic2Uuid, 2)
             ))
@@ -730,7 +730,7 @@ public class RangeAssignorTest {
             Optional.empty(),
             Optional.empty(),
             Set.of(topic1Uuid, topic2Uuid),
-            new Assignment(mkAssignment(
+            Assignment.of(mkAssignment(
                 mkTopicAssignment(topic1Uuid, 2),
                 mkTopicAssignment(topic2Uuid, 2)
             ))
@@ -775,7 +775,7 @@ public class RangeAssignorTest {
             Optional.empty(),
             Optional.empty(),
             Set.of(topic1Uuid),
-            new Assignment(mkAssignment(
+            Assignment.of(mkAssignment(
                 mkTopicAssignment(topic1Uuid, 0, 1, 2),
                 mkTopicAssignment(topic2Uuid, 0)
             ))
@@ -785,7 +785,7 @@ public class RangeAssignorTest {
             Optional.empty(),
             Optional.empty(),
             Set.of(topic1Uuid, topic2Uuid, topic3Uuid),
-            new Assignment(mkAssignment(
+            Assignment.of(mkAssignment(
                 mkTopicAssignment(topic2Uuid, 1)
             ))
         ));
@@ -794,7 +794,7 @@ public class RangeAssignorTest {
             Optional.empty(),
             Optional.empty(),
             Set.of(topic2Uuid),
-            new Assignment(mkAssignment(
+            Assignment.of(mkAssignment(
                 mkTopicAssignment(topic2Uuid, 2),
                 mkTopicAssignment(topic3Uuid, 0, 1)
             ))

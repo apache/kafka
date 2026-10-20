@@ -426,7 +426,7 @@ public class ConsumerGroupTest {
         String memberId2 = Uuid.randomUuid().toString();
 
         ConsumerGroup consumerGroup = createConsumerGroup("foo");
-        consumerGroup.updateTargetAssignment(memberId1, new Assignment(mkAssignment(
+        consumerGroup.updateTargetAssignment(memberId1, Assignment.of(mkAssignment(
             mkTopicAssignment(fooTopicId, 1, 2, 3),
             mkTopicAssignment(zarTopicId, 7, 8, 9)
         )));
@@ -734,7 +734,7 @@ public class ConsumerGroupTest {
         String memberId2 = "member2";
 
         // Initial assignment for member1
-        Assignment initialAssignment = new Assignment(Map.of(
+        Assignment initialAssignment = Assignment.of(Map.of(
             topicId,
             Set.of(0)
         ));
@@ -749,7 +749,7 @@ public class ConsumerGroupTest {
         );
 
         // New assignment for member1
-        Assignment newAssignment = new Assignment(Map.of(
+        Assignment newAssignment = Assignment.of(Map.of(
             topicId,
             Set.of(1)
         ));
@@ -764,7 +764,7 @@ public class ConsumerGroupTest {
         );
 
         // New assignment for member2 to add partition 1
-        Assignment newAssignment2 = new Assignment(Map.of(
+        Assignment newAssignment2 = Assignment.of(Map.of(
             topicId,
             Set.of(1)
         ));
@@ -779,7 +779,7 @@ public class ConsumerGroupTest {
         );
 
         // New assignment for member1 to revoke partition 1 and assign partition 0
-        Assignment newAssignment1 = new Assignment(Map.of(
+        Assignment newAssignment1 = Assignment.of(Map.of(
             topicId,
             Set.of(0)
         ));
@@ -1509,7 +1509,7 @@ public class ConsumerGroupTest {
         );
         expectedConsumerGroup.setGroupEpoch(10);
         expectedConsumerGroup.setTargetAssignmentMetadata(10, 0L);
-        expectedConsumerGroup.updateTargetAssignment(memberId, new Assignment(mkAssignment(
+        expectedConsumerGroup.updateTargetAssignment(memberId, Assignment.of(mkAssignment(
             mkTopicAssignment(fooTopicId, 0)
         )));
         expectedConsumerGroup.setMetadataHash(computeGroupHash(Map.of(
@@ -1960,15 +1960,15 @@ public class ConsumerGroupTest {
             )
         );
 
-        consumerGroup.updateTargetAssignment("member1", new Assignment(mkAssignment(
+        consumerGroup.updateTargetAssignment("member1", Assignment.of(mkAssignment(
             mkTopicAssignment(Uuid.randomUuid(), 0, 1, 2))
         ));
 
-        consumerGroup.updateTargetAssignment("member2", new Assignment(mkAssignment(
+        consumerGroup.updateTargetAssignment("member2", Assignment.of(mkAssignment(
             mkTopicAssignment(Uuid.randomUuid(), 0, 1, 2))
         ));
 
-        consumerGroup.updateTargetAssignment("member3", new Assignment(mkAssignment(
+        consumerGroup.updateTargetAssignment("member3", Assignment.of(mkAssignment(
             mkTopicAssignment(Uuid.randomUuid(), 0, 1, 2))
         ));
 
@@ -2048,15 +2048,15 @@ public class ConsumerGroupTest {
             )
         );
 
-        consumerGroup.updateTargetAssignment("member1", new Assignment(mkAssignment(
+        consumerGroup.updateTargetAssignment("member1", Assignment.of(mkAssignment(
             mkTopicAssignment(Uuid.randomUuid(), 0, 1, 2))
         ));
 
-        consumerGroup.updateTargetAssignment("member2", new Assignment(mkAssignment(
+        consumerGroup.updateTargetAssignment("member2", Assignment.of(mkAssignment(
             mkTopicAssignment(Uuid.randomUuid(), 0, 1, 2))
         ));
 
-        consumerGroup.updateTargetAssignment("member3", new Assignment(mkAssignment(
+        consumerGroup.updateTargetAssignment("member3", Assignment.of(mkAssignment(
             mkTopicAssignment(Uuid.randomUuid(), 0, 1, 2))
         ));
 
