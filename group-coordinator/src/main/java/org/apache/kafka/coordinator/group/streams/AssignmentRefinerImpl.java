@@ -53,6 +53,7 @@ public class AssignmentRefinerImpl implements AssignmentRefiner {
         Map<String, StreamsGroupMember> members,
         Map<String, TasksTuple> targetAssignment,
         Map<String, MemberTaskOffsets> taskOffsets,
+        Map<String, Integer> heartbeatVersions,
         SortedMap<String, ConfiguredSubtopology> subtopologies,
         int numWarmupReplicas,
         long acceptableRecoveryLag
@@ -65,7 +66,7 @@ public class AssignmentRefinerImpl implements AssignmentRefiner {
             indexCurrentAssignment(members, taskOffsets, subtopologies, acceptableRecoveryLag);
         final Map<String, ProcessLoad> processLoad = indexProcessLoad(members, subtopologies);
         final TaskDecisions decisions =
-            analyzeTasks(currentAssignment, targetAssignment, members, subtopologies, processLoad);
+            analyzeTasks(currentAssignment, targetAssignment, members, heartbeatVersions, subtopologies, processLoad);
         final WarmupPlan warmupPlan =
             planWarmups(decisions, currentAssignment, members, processLoad, numWarmupReplicas);
         final SortedMap<String, SortedSet<TaskId>> withheldStandbys =
@@ -237,12 +238,17 @@ public class AssignmentRefinerImpl implements AssignmentRefiner {
      *
      * <p>Only an active-running or caught-up copy is ever promoted.
      *
+     * <p>A task whose target owner is {@link WarmupSupport#NOT_SUPPORTED} is never staged: its target owner never
+     * reports its restore progress, so no warm-up task could ever be seen to complete the migration.
+     *
      * @param currentAssignment
      *        The indexed current assignment, from {@link #indexCurrentAssignment}.
      * @param targetAssignment
      *        All members' target assignments, as computed by the task assignor.
      * @param members
      *        All members of the group, used to resolve which process a member runs in.
+     * @param heartbeatVersions
+     *        The version of the latest heartbeat of each member, which tells whether a member can be warmed up.
      * @param subtopologies
      *        The resolved subtopologies, which tell whether a subtopology is stateful.
      * @param processLoad
@@ -255,6 +261,7 @@ public class AssignmentRefinerImpl implements AssignmentRefiner {
         final CurrentAssignmentIndex currentAssignment,
         final Map<String, TasksTuple> targetAssignment,
         final Map<String, StreamsGroupMember> members,
+        final Map<String, Integer> heartbeatVersions,
         final SortedMap<String, ConfiguredSubtopology> subtopologies,
         final Map<String, ProcessLoad> processLoad
     ) {
@@ -297,6 +304,15 @@ public class AssignmentRefinerImpl implements AssignmentRefiner {
                 .map(activeHolder -> members.get(activeHolder.memberId()).processId());
 
             if (isReady(currentAssignment, task, currentProcessId, targetProcessId)) {
+                grantedTasks.add(new TaskGrant(task, targetOwner));
+                continue;
+            }
+
+            // A target owner that never reports its restore progress could not be seen to finish warming up, so the
+            // task is handed to it right away, cold unless its own process still holds the state. A caught-up copy on
+            // another process is not worth a detour either: promoting it would only postpone the same grant and add
+            // a second hand-over. This is the price of a group that is part-way through a client upgrade.
+            if (WarmupSupport.of(heartbeatVersions.get(targetOwner)) == WarmupSupport.NOT_SUPPORTED) {
                 grantedTasks.add(new TaskGrant(task, targetOwner));
                 continue;
             }
