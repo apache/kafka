@@ -168,32 +168,49 @@ public final class RecordsIteratorTest {
 
     @ParameterizedTest
     @ValueSource(ints = {1, Records.HEADER_SIZE_UP_TO_MAGIC - 1, Records.HEADER_SIZE_UP_TO_MAGIC})
-    public void testFileRecordsSliceEndingInPartialBatch(int partialBatchBytes) throws IOException {
+    public void testRecordsEndingInPartialBatch(int partialBatchBytes) throws IOException {
         TestBatch<String> firstBatch = new TestBatch<>(0, 1, 0, List.of("a", "b", "c", "d", "e"));
         TestBatch<String> secondBatch = new TestBatch<>(5, 1, 0, Collections.nCopies(10, "f"));
+        MemoryRecords records = buildRecords(
+            CompressionType.NONE,
+            List.of(firstBatch, secondBatch)
+        );
+        int firstBatchSize = records.firstBatchSize();
+        // The records end partialBatchBytes into the second batch
+        int partialRecordsSize = firstBatchSize + partialBatchBytes;
 
         try (FileRecords fileRecords = FileRecords.open(TestUtils.tempFile())) {
-            fileRecords.append(buildRecords(CompressionType.NONE, List.of(firstBatch)));
-            int firstBatchSize = fileRecords.sizeInBytes();
-            fileRecords.append(buildRecords(CompressionType.NONE, List.of(secondBatch)));
-            // The slice ends partialBatchBytes into the second batch
-            FileRecords slice = fileRecords.slice(0, firstBatchSize + partialBatchBytes);
+            fileRecords.append(records);
 
-            // A batch size equal to the first batch makes the second read return only the partial batch
+            testIterator(List.of(firstBatch), records.slice(0, partialRecordsSize), true);
+            testIterator(List.of(firstBatch), fileRecords.slice(0, partialRecordsSize), true);
+        }
+
+    }
+
+    @Test
+    public void testFileRecordsSliceEndingInPartialBatchAfterGrowingBuffer() throws IOException {
+        TestBatch<String> batch = new TestBatch<>(0, 1, 0, Collections.nCopies(10, "a"));
+
+        try (FileRecords fileRecords = FileRecords.open(TestUtils.tempFile())) {
+            fileRecords.append(buildRecords(CompressionType.NONE, List.of(batch)));
+            int batchSize = fileRecords.sizeInBytes();
+            // The slice ends one byte before the end of the batch
+            FileRecords slice = fileRecords.slice(0, batchSize - 1);
+
             Set<ByteBuffer> allocatedBuffers = Collections.newSetFromMap(new IdentityHashMap<>());
             BufferSupplier bufferSupplier = mockBufferSupplier(allocatedBuffers);
-            List<TestBatch<String>> actualBatches = new ArrayList<>();
             try (RecordsIterator<String> iterator = createIterator(
                 slice,
                 bufferSupplier,
-                firstBatchSize,
                 true
             )) {
-                assertThrows(
-                    IllegalStateException.class,
-                    () -> iterator.forEachRemaining(batch -> actualBatches.add(TestBatch.from(batch)))
-                );
+                assertFalse(iterator::hasNext);
+                assertThrows(NoSuchElementException.class, iterator::next);
             }
+
+            Mockito.verify(bufferSupplier).get(batchSize);
+            assertEquals(Set.of(), allocatedBuffers);
         }
     }
 

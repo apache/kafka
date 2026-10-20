@@ -137,8 +137,9 @@ public class FileRecords extends AbstractRecords implements Closeable {
      */
     public void readInto(ByteBuffer buffer, int position) throws IOException {
         int currentSize = sizeInBytes();
-        if (position < 0 || position > currentSize)
+        if (position < 0 || position > currentSize) {
             throw new IllegalArgumentException("Read position " + position + " is outside " + this);
+        }
         buffer.limit(buffer.position() + Math.min(buffer.remaining(), currentSize - position));
         Utils.readFully(channel, buffer, position + this.start);
         buffer.flip();
