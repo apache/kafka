@@ -42,7 +42,7 @@ import org.apache.kafka.common.security.token.delegation.TokenInformation
 import org.apache.kafka.common.utils.{SecurityUtils, Time}
 import org.apache.kafka.common.{TopicPartition, Uuid}
 import org.apache.kafka.metadata.LeaderRecoveryState
-import org.apache.kafka.metadata.migration.ZkMigrationLeadershipState
+import org.apache.kafka.metadata.migration.{MigrationConflictException, ZkMigrationLeadershipState}
 import org.apache.kafka.security.authorizer.AclEntry
 import org.apache.kafka.server.common.MetadataVersion
 import org.apache.kafka.server.config.{ConfigType, ReplicationConfigs, ZkConfigs}
@@ -1502,6 +1502,89 @@ class KafkaZkClientTest extends QuorumTestHarness {
         assertEquals(Code.OK, requests.last.resultCode)
       case _ => fail()
     }
+  }
+
+  @Test
+  def testUpdateMigrationStateRecoversFromLostAcknowledgment(): Unit = {
+    val (controllerEpoch, stat) = zkClient.getControllerEpoch.get
+    var migrationState = new ZkMigrationLeadershipState(3000, 42, 100, 42, Time.SYSTEM.milliseconds(), -1, controllerEpoch, stat.getVersion)
+    migrationState = zkClient.getOrCreateMigrationState(migrationState)
+    assertEquals(0, migrationState.migrationZkVersion())
+
+    // The write itself succeeds server-side...
+    val updatedOnce = zkClient.updateMigrationState(migrationState)
+    assertEquals(1, updatedOnce.migrationZkVersion())
+
+    // ...but the caller never finds out, and retries with the same, now-stale state. Rather than failing forever on a
+    // BadVersionException, the checker should recognize this is our own write and recover with the real version.
+    val updatedAgain = zkClient.updateMigrationState(migrationState)
+    assertEquals(1, updatedAgain.migrationZkVersion())
+    assertEquals(updatedOnce.kraftControllerId(), updatedAgain.kraftControllerId())
+    assertEquals(updatedOnce.kraftControllerEpoch(), updatedAgain.kraftControllerEpoch())
+    assertEquals(updatedOnce.kraftMetadataOffset(), updatedAgain.kraftMetadataOffset())
+    assertEquals(updatedOnce.kraftMetadataEpoch(), updatedAgain.kraftMetadataEpoch())
+  }
+
+  @Test
+  def testUpdateMigrationStateFailsOnGenuineConflict(): Unit = {
+    val (controllerEpoch, stat) = zkClient.getControllerEpoch.get
+    var migrationState = new ZkMigrationLeadershipState(3000, 42, 100, 42, Time.SYSTEM.milliseconds(), -1, controllerEpoch, stat.getVersion)
+    migrationState = zkClient.getOrCreateMigrationState(migrationState)
+    assertEquals(0, migrationState.migrationZkVersion())
+
+    // A different controller (a separate client, standing in for another KRaft controller) writes genuinely different
+    // content to the same znode.
+    val conflictingState = new ZkMigrationLeadershipState(3001, 43, 200, 43, Time.SYSTEM.milliseconds(), -1, controllerEpoch, migrationState.migrationZkVersion())
+    val writtenByOther = otherZkClient.updateMigrationState(conflictingState)
+    assertEquals(1, writtenByOther.migrationZkVersion())
+
+    // Our own cached state is stale, but this was not our own write.
+    // The checker should see the content mismatch and correctly continue to fail.
+    assertThrows(classOf[MigrationConflictException], () => zkClient.updateMigrationState(migrationState))
+  }
+
+  @Test
+  def testRetryMigrationRequestsSucceeds(): Unit = {
+    val (controllerEpoch, stat) = zkClient.getControllerEpoch.get
+    var migrationState = new ZkMigrationLeadershipState(3000, 42, 100, 42, Time.SYSTEM.milliseconds(), -1, controllerEpoch, stat.getVersion)
+    migrationState = zkClient.getOrCreateMigrationState(migrationState)
+    assertEquals(0, migrationState.migrationZkVersion())
+    migrationState = migrationState.withZkController(controllerEpoch, stat.getVersion)
+
+    val requests = Seq(
+      CreateRequest("/foo1", Array(), zkClient.defaultAcls("/foo1"), CreateMode.PERSISTENT),
+      CreateRequest("/foo2", Array(), zkClient.defaultAcls("/foo2"), CreateMode.PERSISTENT)
+    )
+
+    val (migrationZkVersion, responses) = zkClient.retryMigrationRequestsUntilConnected(requests, migrationState)
+    assertEquals(1, migrationZkVersion)
+    assertEquals(Code.OK, responses.head.resultCode)
+    assertEquals(Code.OK, responses.last.resultCode)
+    assertTrue(zkClient.pathExists("/foo1"))
+    assertTrue(zkClient.pathExists("/foo2"))
+  }
+
+  @Test
+  def testRetryMigrationRequestsThrowsMigrationConflictExceptionOnBadVersion(): Unit = {
+    val (controllerEpoch, stat) = zkClient.getControllerEpoch.get
+    var migrationState = new ZkMigrationLeadershipState(3000, 42, 100, 42, Time.SYSTEM.milliseconds(), -1, controllerEpoch, stat.getVersion)
+    migrationState = zkClient.getOrCreateMigrationState(migrationState)
+    assertEquals(0, migrationState.migrationZkVersion())
+    migrationState = migrationState.withZkController(controllerEpoch, stat.getVersion)
+
+    val requests = Seq(
+      CreateRequest("/foo1", Array(), zkClient.defaultAcls("/foo1"), CreateMode.PERSISTENT),
+      CreateRequest("/foo2", Array(), zkClient.defaultAcls("/foo2"), CreateMode.PERSISTENT)
+    )
+
+    // The batch write itself succeeds server-side...
+    val (versionOnce, _) = zkClient.retryMigrationRequestsUntilConnected(requests, migrationState)
+    assertEquals(1, versionOnce)
+    assertTrue(zkClient.pathExists("/foo1"))
+    assertTrue(zkClient.pathExists("/foo2"))
+
+    // ...but the caller never finds out, and retries the same batch with the same, now-stale migrationState.
+    assertThrows(classOf[MigrationConflictException], () => zkClient.retryMigrationRequestsUntilConnected(requests, migrationState))
   }
 
   @Test
