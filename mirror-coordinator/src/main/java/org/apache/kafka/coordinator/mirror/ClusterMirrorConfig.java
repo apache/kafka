@@ -42,7 +42,6 @@ import static org.apache.kafka.common.config.ConfigDef.Range.between;
 import static org.apache.kafka.common.config.ConfigDef.Type.INT;
 import static org.apache.kafka.common.config.ConfigDef.Type.LIST;
 import static org.apache.kafka.common.config.ConfigDef.Type.LONG;
-import static org.apache.kafka.common.config.ConfigDef.Type.PASSWORD;
 import static org.apache.kafka.common.config.ConfigDef.Type.SHORT;
 import static org.apache.kafka.common.config.ConfigDef.Type.STRING;
 import static org.apache.kafka.server.util.MirrorUtils.compilePattern;
@@ -53,9 +52,9 @@ import static org.apache.kafka.server.util.MirrorUtils.compilePatternList;
  * for all configurations supported by the Cluster Mirroring feature.
  */
 public final class ClusterMirrorConfig extends AbstractConfig {
-    // ---------------------------------------------------------------
-    // Broker level configs. Set when starting/rebooting the broker. Stored in server.properties or dynamic broker config.
-    // ---------------------------------------------------------------
+    /***********************************************************************************************************************
+       Broker level configs. Set when starting/rebooting the broker. Stored in server.properties or dynamic broker config.
+     ***********************************************************************************************************************/
 
     public static final String MIRROR_COORDINATOR_THREADS_CONFIG = "mirror.coordinator.threads";
     private static final String MIRROR_COORDINATOR_THREADS_DOC = "The number of threads used to process coordinator events for cluster mirroring.";
@@ -108,11 +107,10 @@ public final class ClusterMirrorConfig extends AbstractConfig {
             "Set to 0 to disable automatic retries.";
     private static final int MIRROR_FAILED_RETRY_MAX_ATTEMPTS_DEFAULT = 20;
 
-    // ---------------------------------------------------------------
-    // Mirror level configs. Set when creating/altering a specific mirror. Stored in cluster metadata.
-    // ---------------------------------------------------------------
+    /***************************************************************************************************
+       Mirror level configs. Set when creating/altering a specific mirror. Stored in cluster metadata.
+     ***************************************************************************************************/
 
-    // Connection configuration
     public static final String BOOTSTRAP_SERVERS_CONFIG = CommonClientConfigs.BOOTSTRAP_SERVERS_CONFIG;
     private static final String BOOTSTRAP_SERVERS_DOC = "A list of host/port pairs to use for establishing the initial connection to the source cluster. " +
             "This is a required configuration when creating a cluster mirror.";
@@ -132,13 +130,18 @@ public final class ClusterMirrorConfig extends AbstractConfig {
     private static final String CONNECTION_SETUP_TIMEOUT_MAX_MS_DOC = CommonClientConfigs.SOCKET_CONNECTION_SETUP_TIMEOUT_MAX_MS_DOC;
     private static final long CONNECTION_SETUP_TIMEOUT_MAX_MS_DEFAULT = CommonClientConfigs.DEFAULT_SOCKET_CONNECTION_SETUP_TIMEOUT_MAX_MS;
 
-    public static final String CONNECTIONS_MAX_IDLE_MS_CONFIG = "connections.max.idle.ms";
-    private static final String CONNECTIONS_MAX_IDLE_MS_DOC = "Idle connections timeout: the server socket processor threads close the connections that idle more than this";
+    public static final String CONNECTIONS_MAX_IDLE_MS_CONFIG = CommonClientConfigs.CONNECTIONS_MAX_IDLE_MS_CONFIG;
+    private static final String CONNECTIONS_MAX_IDLE_MS_DOC = CommonClientConfigs.CONNECTIONS_MAX_IDLE_MS_DOC;
     private static final long CONNECTIONS_MAX_IDLE_MS_DEFAULT = 10 * 60 * 1000L;
 
-    // Fetch and network configuration.
-    // The replica.* equivalents use a mirror.* prefix to avoid ambiguity with broker-level configs.
-    // The others reuse the existing key names since they have no replica.* prefix.
+    public static final String SOCKET_TIMEOUT_MS_CONFIG = "socket.timeout.ms";
+    private static final String SOCKET_TIMEOUT_MS_DOC = "The socket timeout for network requests.";
+    private static final int SOCKET_TIMEOUT_MS_DEFAULT = 30 * 1000;
+
+    public static final String SOCKET_RECEIVE_BUFFER_BYTES_CONFIG = "socket.receive.buffer.bytes";
+    private static final String SOCKET_RECEIVE_BUFFER_BYTES_DOC = "The socket receive buffer for network requests to the leader for replicating data.";
+    private static final int SOCKET_RECEIVE_BUFFER_BYTES_DEFAULT = 64 * 1024;
+
     public static final String FETCH_WAIT_MAX_MS_CONFIG = "fetch.wait.max.ms";
     private static final String FETCH_WAIT_MAX_MS_DOC = "The maximum wait time for each fetcher request issued by mirror replicas.";
     private static final int FETCH_WAIT_MAX_MS_DEFAULT = 1000;
@@ -161,16 +164,9 @@ public final class ClusterMirrorConfig extends AbstractConfig {
     private static final String FETCH_MAX_BYTES_DOC = "The number of bytes of messages to attempt to fetch for each partition.";
     private static final int FETCH_MAX_BYTES_DEFAULT = 1024 * 1024;
 
-    public static final String SOCKET_TIMEOUT_MS_CONFIG = "socket.timeout.ms";
-    private static final String SOCKET_TIMEOUT_MS_DOC = "The socket timeout for network requests.";
-    private static final int SOCKET_TIMEOUT_MS_DEFAULT = 30 * 1000;
-
-    public static final String SOCKET_RECEIVE_BUFFER_BYTES_CONFIG = "socket.receive.buffer.bytes";
-    private static final String SOCKET_RECEIVE_BUFFER_BYTES_DOC = "The socket receive buffer for network requests to the leader for replicating data.";
-    private static final int SOCKET_RECEIVE_BUFFER_BYTES_DEFAULT = 64 * 1024;
-
-    // Filter configuration
     public static final String TOPIC_PROPERTIES_EXCLUDE_CONFIG = "topic.properties.exclude";
+    private static final String TOPIC_PROPERTIES_EXCLUDE_DOC = "A comma-separated list of topic config property names and/or regexes to exclude from synchronization. "
+            + "Properties in this list will not be replicated from the source cluster.";
     private static final String TOPIC_PROPERTIES_EXCLUDE_DEFAULT =
             "follower.replication.throttled.replicas,"
                     + "leader.replication.throttled.replicas,"
@@ -182,183 +178,79 @@ public final class ClusterMirrorConfig extends AbstractConfig {
                     + "min.insync.replicas,"
                     + "mirror.replication.throttled.replicas,"
                     + "mirror.unclean.leader.election.enable";
-    private static final String TOPIC_PROPERTIES_EXCLUDE_DOC = "A comma-separated list of topic config property names to exclude from synchronization. "
-            + "Properties in this list will not be replicated from the source cluster. "
-            + "The mirror.name property is always excluded regardless of this setting.";
 
     public static final String TOPICS_INCLUDE_CONFIG = "topics.include";
-    private static final String TOPICS_INCLUDE_DEFAULT = ".*";
     private static final String TOPICS_INCLUDE_DOC = "A comma-separated list of regex patterns for topic names to include in mirroring. "
-            + "Topics on the source cluster whose names match at least one of the patterns will be automatically discovered and mirrored. ";
+            + "Topics on the source cluster whose names match at least one of the patterns will be automatically discovered and mirrored.";
+    private static final String TOPICS_INCLUDE_DEFAULT = ".*";
 
     public static final String TOPICS_EXCLUDE_CONFIG = "topics.exclude";
-    private static final String TOPICS_EXCLUDE_DEFAULT = "__.*";
-    private static final String TOPICS_EXCLUDE_DOC = "A comma-separated list of regex patterns for topic names to exclude from mirroring "
+    private static final String TOPICS_EXCLUDE_DOC = "A comma-separated list of regex patterns for topic names to exclude from mirroring. "
             + "Internal topics are excluded by default. Exclusions take precedence over inclusions.";
+    private static final String TOPICS_EXCLUDE_DEFAULT = "__.*";
 
     public static final String GROUPS_INCLUDE_CONFIG = "groups.include";
-    private static final String GROUPS_INCLUDE_DEFAULT = ".*";
     private static final String GROUPS_INCLUDE_DOC = "A comma-separated list of regex patterns for consumer group IDs to include in offset synchronization. "
             + "Only consumer groups whose IDs match at least one of the patterns will have their offsets replicated from the source cluster.";
+    private static final String GROUPS_INCLUDE_DEFAULT = ".*";
 
     public static final String GROUPS_EXCLUDE_CONFIG = "groups.exclude";
-    private static final String GROUPS_EXCLUDE_DEFAULT = "";
     private static final String GROUPS_EXCLUDE_DOC = "A comma-separated list of regex patterns for consumer group IDs to exclude from offset synchronization. " +
             "Exclusions take precedence over inclusions.";
+    private static final String GROUPS_EXCLUDE_DEFAULT = "";
 
     public static final String ACLS_INCLUDE_CONFIG = "acls.include";
-    private static final String ACLS_INCLUDE_DEFAULT = ".*";
     private static final String ACLS_INCLUDE_DOC = "A comma-separated list of ACL include rules. " + MirrorAclRule.DOC
             + "Examples: .* (match all ACLs), TOPIC;orders.* (all ACLs for topics matching orders.*), "
             + "TOPIC;.*;READ;ALLOW,TOPIC;.*;WRITE;ALLOW (all topic READ and WRITE ALLOW ACLs), "
             + "ANY;.*;ANY;ANY;User:alice (all ACLs for principal User:alice).";
+    private static final String ACLS_INCLUDE_DEFAULT = ".*";
 
     public static final String ACLS_EXCLUDE_CONFIG = "acls.exclude";
-    private static final String ACLS_EXCLUDE_DEFAULT = "";
     private static final String ACLS_EXCLUDE_DOC = "A comma-separated list of ACL exclude rules. " + MirrorAclRule.DOC
             + "Exclusions take precedence over inclusions. "
             + "Examples: .* (exclude all ACLs), ANY;.*;WRITE (exclude all WRITE ACLs), "
             + "ANY;.*;ANY;ANY;User:bob (exclude all ACLs for User:bob).";
+    private static final String ACLS_EXCLUDE_DEFAULT = "";
 
-    // Security configuration
     public static final String SECURITY_PROTOCOL_CONFIG = CommonClientConfigs.SECURITY_PROTOCOL_CONFIG;
-    private static final String SECURITY_PROTOCOL_DEFAULT = SecurityProtocol.PLAINTEXT.name;
     private static final String SECURITY_PROTOCOL_DOC = CommonClientConfigs.SECURITY_PROTOCOL_DOC;
+    private static final String SECURITY_PROTOCOL_DEFAULT = SecurityProtocol.PLAINTEXT.name;
 
     public static final String SECURITY_PROVIDERS_CONFIG = SecurityConfig.SECURITY_PROVIDERS_CONFIG;
     private static final String SECURITY_PROVIDERS_DOC = SecurityConfig.SECURITY_PROVIDERS_DOC;
 
-    public static final String SASL_MECHANISM_CONFIG = SaslConfigs.SASL_MECHANISM;
-    private static final String SASL_MECHANISM_DOC = SaslConfigs.SASL_MECHANISM_DOC;
-    private static final String SASL_MECHANISM_DEFAULT = "PLAIN";
+    private static final ConfigDef CONFIG_DEF = buildConfigDef();
 
-    public static final String SASL_JAAS_CONFIG = SaslConfigs.SASL_JAAS_CONFIG;
-    private static final String SASL_JAAS_CONFIG_DOC = SaslConfigs.SASL_JAAS_CONFIG_DOC;
-
-    public static final String SASL_CLIENT_CALLBACK_HANDLER_CLASS = SaslConfigs.SASL_CLIENT_CALLBACK_HANDLER_CLASS;
-    private static final String SASL_CLIENT_CALLBACK_HANDLER_CLASS_DOC = SaslConfigs.SASL_CLIENT_CALLBACK_HANDLER_CLASS_DOC;
-
-    public static final String SASL_LOGIN_CALLBACK_HANDLER_CLASS = SaslConfigs.SASL_LOGIN_CALLBACK_HANDLER_CLASS;
-    private static final String SASL_LOGIN_CALLBACK_HANDLER_CLASS_DOC = SaslConfigs.SASL_LOGIN_CALLBACK_HANDLER_CLASS_DOC;
-
-    public static final String SASL_LOGIN_CLASS = SaslConfigs.SASL_LOGIN_CLASS;
-    private static final String SASL_LOGIN_CLASS_DOC = SaslConfigs.SASL_LOGIN_CLASS_DOC;
-
-    public static final String SASL_KERBEROS_SERVICE_NAME = SaslConfigs.SASL_KERBEROS_SERVICE_NAME;
-    private static final String SASL_KERBEROS_SERVICE_NAME_DOC = SaslConfigs.SASL_KERBEROS_SERVICE_NAME_DOC;
-
-    public static final String SSL_PROTOCOL_CONFIG = SslConfigs.SSL_PROTOCOL_CONFIG;
-    private static final String SSL_PROTOCOL_DOC = SslConfigs.SSL_PROTOCOL_DOC;
-    private static final String SSL_PROTOCOL_DEFAULT = SslConfigs.DEFAULT_SSL_PROTOCOL;
-
-    public static final String SSL_PROVIDER_CONFIG = SslConfigs.SSL_PROVIDER_CONFIG;
-    private static final String SSL_PROVIDER_DOC = SslConfigs.SSL_PROVIDER_DOC;
-
-    public static final String SSL_CIPHER_SUITES_CONFIG = SslConfigs.SSL_CIPHER_SUITES_CONFIG;
-    private static final String SSL_CIPHER_SUITES_DOC = SslConfigs.SSL_CIPHER_SUITES_DOC;
-
-    public static final String SSL_ENABLED_PROTOCOLS_CONFIG = SslConfigs.SSL_ENABLED_PROTOCOLS_CONFIG;
-    private static final String SSL_ENABLED_PROTOCOLS_DOC = SslConfigs.SSL_ENABLED_PROTOCOLS_DOC;
-
-    public static final String SSL_KEYSTORE_TYPE_CONFIG = SslConfigs.SSL_KEYSTORE_TYPE_CONFIG;
-    private static final String SSL_KEYSTORE_TYPE_DOC = SslConfigs.SSL_KEYSTORE_TYPE_DOC;
-    private static final String SSL_KEYSTORE_TYPE_DEFAULT = SslConfigs.DEFAULT_SSL_KEYSTORE_TYPE;
-
-    public static final String SSL_KEYSTORE_LOCATION_CONFIG = SslConfigs.SSL_KEYSTORE_LOCATION_CONFIG;
-    private static final String SSL_KEYSTORE_LOCATION_DOC = SslConfigs.SSL_KEYSTORE_LOCATION_DOC;
-
-    public static final String SSL_KEYSTORE_PASSWORD_CONFIG = SslConfigs.SSL_KEYSTORE_PASSWORD_CONFIG;
-    private static final String SSL_KEYSTORE_PASSWORD_DOC = SslConfigs.SSL_KEYSTORE_PASSWORD_DOC;
-
-    public static final String SSL_KEY_PASSWORD_CONFIG = SslConfigs.SSL_KEY_PASSWORD_CONFIG;
-    private static final String SSL_KEY_PASSWORD_DOC = SslConfigs.SSL_KEY_PASSWORD_DOC;
-
-    public static final String SSL_KEYSTORE_KEY_CONFIG = SslConfigs.SSL_KEYSTORE_KEY_CONFIG;
-    private static final String SSL_KEYSTORE_KEY_DOC = SslConfigs.SSL_KEYSTORE_KEY_DOC;
-
-    public static final String SSL_KEYSTORE_CERTIFICATE_CHAIN_CONFIG = SslConfigs.SSL_KEYSTORE_CERTIFICATE_CHAIN_CONFIG;
-    private static final String SSL_KEYSTORE_CERTIFICATE_CHAIN_DOC = SslConfigs.SSL_KEYSTORE_CERTIFICATE_CHAIN_DOC;
-
-    public static final String SSL_TRUSTSTORE_TYPE_CONFIG = SslConfigs.SSL_TRUSTSTORE_TYPE_CONFIG;
-    private static final String SSL_TRUSTSTORE_TYPE_DOC = SslConfigs.SSL_TRUSTSTORE_TYPE_DOC;
-    private static final String SSL_TRUSTSTORE_TYPE_DEFAULT = SslConfigs.DEFAULT_SSL_TRUSTSTORE_TYPE;
-
-    public static final String SSL_TRUSTSTORE_LOCATION_CONFIG = SslConfigs.SSL_TRUSTSTORE_LOCATION_CONFIG;
-    private static final String SSL_TRUSTSTORE_LOCATION_DOC = SslConfigs.SSL_TRUSTSTORE_LOCATION_DOC;
-
-    public static final String SSL_TRUSTSTORE_PASSWORD_CONFIG = SslConfigs.SSL_TRUSTSTORE_PASSWORD_CONFIG;
-    private static final String SSL_TRUSTSTORE_PASSWORD_DOC = SslConfigs.SSL_TRUSTSTORE_PASSWORD_DOC;
-
-    public static final String SSL_TRUSTSTORE_CERTIFICATES_CONFIG = SslConfigs.SSL_TRUSTSTORE_CERTIFICATES_CONFIG;
-    private static final String SSL_TRUSTSTORE_CERTIFICATES_DOC = SslConfigs.SSL_TRUSTSTORE_CERTIFICATES_DOC;
-
-    public static final String SSL_KEYMANAGER_ALGORITHM_CONFIG = SslConfigs.SSL_KEYMANAGER_ALGORITHM_CONFIG;
-    private static final String SSL_KEYMANAGER_ALGORITHM_DOC = SslConfigs.SSL_KEYMANAGER_ALGORITHM_DOC;
-    private static final String SSL_KEYMANAGER_ALGORITHM_DEFAULT = SslConfigs.DEFAULT_SSL_KEYMANGER_ALGORITHM;
-
-    public static final String SSL_TRUSTMANAGER_ALGORITHM_CONFIG = SslConfigs.SSL_TRUSTMANAGER_ALGORITHM_CONFIG;
-    private static final String SSL_TRUSTMANAGER_ALGORITHM_DOC = SslConfigs.SSL_TRUSTMANAGER_ALGORITHM_DOC;
-    private static final String SSL_TRUSTMANAGER_ALGORITHM_DEFAULT = SslConfigs.DEFAULT_SSL_TRUSTMANAGER_ALGORITHM;
-
-    public static final String SSL_ENDPOINT_IDENTIFICATION_ALGORITHM_CONFIG = SslConfigs.SSL_ENDPOINT_IDENTIFICATION_ALGORITHM_CONFIG;
-    private static final String SSL_ENDPOINT_IDENTIFICATION_ALGORITHM_DOC = SslConfigs.SSL_ENDPOINT_IDENTIFICATION_ALGORITHM_DOC;
-    private static final String SSL_ENDPOINT_IDENTIFICATION_ALGORITHM_DEFAULT = SslConfigs.DEFAULT_SSL_ENDPOINT_IDENTIFICATION_ALGORITHM;
-
-    public static final String SSL_SECURE_RANDOM_IMPLEMENTATION_CONFIG = SslConfigs.SSL_SECURE_RANDOM_IMPLEMENTATION_CONFIG;
-    private static final String SSL_SECURE_RANDOM_IMPLEMENTATION_DOC = SslConfigs.SSL_SECURE_RANDOM_IMPLEMENTATION_DOC;
-
-    public static final String SSL_ENGINE_FACTORY_CLASS_CONFIG = SslConfigs.SSL_ENGINE_FACTORY_CLASS_CONFIG;
-    private static final String SSL_ENGINE_FACTORY_CLASS_DOC = SslConfigs.SSL_ENGINE_FACTORY_CLASS_DOC;
-
-    private static final ConfigDef CONFIG_DEF = new ConfigDef()
-            .define(BOOTSTRAP_SERVERS_CONFIG, LIST, null, HIGH, BOOTSTRAP_SERVERS_DOC)
-            .define(SOURCE_CLUSTER_ID_CONFIG, STRING, null, HIGH, SOURCE_CLUSTER_ID_DOC)
-            .define(REQUEST_TIMEOUT_MS_CONFIG, INT, REQUEST_TIMEOUT_MS_DEFAULT, atLeast(0), MEDIUM, REQUEST_TIMEOUT_MS_DOC)
-            .define(CONNECTION_SETUP_TIMEOUT_MS_CONFIG, LONG, CONNECTION_SETUP_TIMEOUT_MS_DEFAULT, atLeast(0L), MEDIUM, CONNECTION_SETUP_TIMEOUT_MS_DOC)
-            .define(CONNECTION_SETUP_TIMEOUT_MAX_MS_CONFIG, LONG, CONNECTION_SETUP_TIMEOUT_MAX_MS_DEFAULT, atLeast(0L), MEDIUM, CONNECTION_SETUP_TIMEOUT_MAX_MS_DOC)
-            .define(CONNECTIONS_MAX_IDLE_MS_CONFIG, LONG, CONNECTIONS_MAX_IDLE_MS_DEFAULT, MEDIUM, CONNECTIONS_MAX_IDLE_MS_DOC)
-            .define(FETCH_WAIT_MAX_MS_CONFIG, INT, FETCH_WAIT_MAX_MS_DEFAULT, atLeast(0), MEDIUM, FETCH_WAIT_MAX_MS_DOC)
-            .define(FETCH_BACKOFF_MS_CONFIG, LONG, FETCH_BACKOFF_MS_DEFAULT, atLeast(0L), MEDIUM, FETCH_BACKOFF_MS_DOC)
-            .define(FETCH_MIN_BYTES_CONFIG, INT, FETCH_MIN_BYTES_DEFAULT, atLeast(0), MEDIUM, FETCH_MIN_BYTES_DOC)
-            .define(FETCH_RESPONSE_MAX_BYTES_CONFIG, INT, FETCH_RESPONSE_MAX_BYTES_DEFAULT, atLeast(0), MEDIUM, FETCH_RESPONSE_MAX_BYTES_DOC)
-            .define(FETCH_MAX_BYTES_CONFIG, INT, FETCH_MAX_BYTES_DEFAULT, atLeast(0), MEDIUM, FETCH_MAX_BYTES_DOC)
-            .define(SOCKET_TIMEOUT_MS_CONFIG, INT, SOCKET_TIMEOUT_MS_DEFAULT, atLeast(0), MEDIUM, SOCKET_TIMEOUT_MS_DOC)
-            .define(SOCKET_RECEIVE_BUFFER_BYTES_CONFIG, INT, SOCKET_RECEIVE_BUFFER_BYTES_DEFAULT, atLeast(0), MEDIUM, SOCKET_RECEIVE_BUFFER_BYTES_DOC)
-            .define(TOPIC_PROPERTIES_EXCLUDE_CONFIG, LIST, TOPIC_PROPERTIES_EXCLUDE_DEFAULT, LOW, TOPIC_PROPERTIES_EXCLUDE_DOC)
-            .define(TOPICS_INCLUDE_CONFIG, LIST, TOPICS_INCLUDE_DEFAULT, LOW, TOPICS_INCLUDE_DOC)
-            .define(TOPICS_EXCLUDE_CONFIG, LIST, TOPICS_EXCLUDE_DEFAULT, LOW, TOPICS_EXCLUDE_DOC)
-            .define(GROUPS_INCLUDE_CONFIG, LIST, GROUPS_INCLUDE_DEFAULT, LOW, GROUPS_INCLUDE_DOC)
-            .define(GROUPS_EXCLUDE_CONFIG, LIST, GROUPS_EXCLUDE_DEFAULT, LOW, GROUPS_EXCLUDE_DOC)
-            .define(ACLS_INCLUDE_CONFIG, LIST, ACLS_INCLUDE_DEFAULT, LOW, ACLS_INCLUDE_DOC)
-            .define(ACLS_EXCLUDE_CONFIG, LIST, ACLS_EXCLUDE_DEFAULT, LOW, ACLS_EXCLUDE_DOC)
-            .define(SECURITY_PROTOCOL_CONFIG, STRING, SECURITY_PROTOCOL_DEFAULT, ConfigDef.ValidString.in(SecurityProtocol.PLAINTEXT.name, SecurityProtocol.SSL.name,
-                    SecurityProtocol.SASL_PLAINTEXT.name, SecurityProtocol.SASL_SSL.name), MEDIUM, SECURITY_PROTOCOL_DOC)
-            .define(SECURITY_PROVIDERS_CONFIG, STRING, null, LOW, SECURITY_PROVIDERS_DOC)
-            .define(SASL_MECHANISM_CONFIG, STRING, SASL_MECHANISM_DEFAULT, MEDIUM, SASL_MECHANISM_DOC)
-            .define(SASL_JAAS_CONFIG, PASSWORD, null, MEDIUM, SASL_JAAS_CONFIG_DOC)
-            .define(SASL_CLIENT_CALLBACK_HANDLER_CLASS, STRING, null, LOW, SASL_CLIENT_CALLBACK_HANDLER_CLASS_DOC)
-            .define(SASL_LOGIN_CALLBACK_HANDLER_CLASS, STRING, null, LOW, SASL_LOGIN_CALLBACK_HANDLER_CLASS_DOC)
-            .define(SASL_LOGIN_CLASS, STRING, null, LOW, SASL_LOGIN_CLASS_DOC)
-            .define(SASL_KERBEROS_SERVICE_NAME, STRING, null, MEDIUM, SASL_KERBEROS_SERVICE_NAME_DOC)
-            .define(SSL_PROTOCOL_CONFIG, STRING, SSL_PROTOCOL_DEFAULT, MEDIUM, SSL_PROTOCOL_DOC)
-            .define(SSL_PROVIDER_CONFIG, STRING, null, LOW, SSL_PROVIDER_DOC)
-            .define(SSL_CIPHER_SUITES_CONFIG, LIST, null, LOW, SSL_CIPHER_SUITES_DOC)
-            .define(SSL_ENABLED_PROTOCOLS_CONFIG, LIST, null, MEDIUM, SSL_ENABLED_PROTOCOLS_DOC)
-            .define(SSL_KEYSTORE_TYPE_CONFIG, STRING, SSL_KEYSTORE_TYPE_DEFAULT, MEDIUM, SSL_KEYSTORE_TYPE_DOC)
-            .define(SSL_KEYSTORE_LOCATION_CONFIG, STRING, null, MEDIUM, SSL_KEYSTORE_LOCATION_DOC)
-            .define(SSL_KEYSTORE_PASSWORD_CONFIG, PASSWORD, null, MEDIUM, SSL_KEYSTORE_PASSWORD_DOC)
-            .define(SSL_KEY_PASSWORD_CONFIG, PASSWORD, null, MEDIUM, SSL_KEY_PASSWORD_DOC)
-            .define(SSL_KEYSTORE_KEY_CONFIG, PASSWORD, null, MEDIUM, SSL_KEYSTORE_KEY_DOC)
-            .define(SSL_KEYSTORE_CERTIFICATE_CHAIN_CONFIG, PASSWORD, null, MEDIUM, SSL_KEYSTORE_CERTIFICATE_CHAIN_DOC)
-            .define(SSL_TRUSTSTORE_TYPE_CONFIG, STRING, SSL_TRUSTSTORE_TYPE_DEFAULT, MEDIUM, SSL_TRUSTSTORE_TYPE_DOC)
-            .define(SSL_TRUSTSTORE_LOCATION_CONFIG, STRING, null, MEDIUM, SSL_TRUSTSTORE_LOCATION_DOC)
-            .define(SSL_TRUSTSTORE_PASSWORD_CONFIG, PASSWORD, null, MEDIUM, SSL_TRUSTSTORE_PASSWORD_DOC)
-            .define(SSL_TRUSTSTORE_CERTIFICATES_CONFIG, PASSWORD, null, MEDIUM, SSL_TRUSTSTORE_CERTIFICATES_DOC)
-            .define(SSL_KEYMANAGER_ALGORITHM_CONFIG, STRING, SSL_KEYMANAGER_ALGORITHM_DEFAULT, LOW, SSL_KEYMANAGER_ALGORITHM_DOC)
-            .define(SSL_TRUSTMANAGER_ALGORITHM_CONFIG, STRING, SSL_TRUSTMANAGER_ALGORITHM_DEFAULT, LOW, SSL_TRUSTMANAGER_ALGORITHM_DOC)
-            .define(SSL_ENDPOINT_IDENTIFICATION_ALGORITHM_CONFIG, STRING, SSL_ENDPOINT_IDENTIFICATION_ALGORITHM_DEFAULT, LOW, SSL_ENDPOINT_IDENTIFICATION_ALGORITHM_DOC)
-            .define(SSL_SECURE_RANDOM_IMPLEMENTATION_CONFIG, STRING, null, LOW, SSL_SECURE_RANDOM_IMPLEMENTATION_DOC)
-            .define(SSL_ENGINE_FACTORY_CLASS_CONFIG, STRING, null, LOW, SSL_ENGINE_FACTORY_CLASS_DOC);
+    private static ConfigDef buildConfigDef() {
+        ConfigDef configDef = new ConfigDef()
+                .define(BOOTSTRAP_SERVERS_CONFIG, LIST, null, HIGH, BOOTSTRAP_SERVERS_DOC)
+                .define(SOURCE_CLUSTER_ID_CONFIG, STRING, null, HIGH, SOURCE_CLUSTER_ID_DOC)
+                .define(REQUEST_TIMEOUT_MS_CONFIG, INT, REQUEST_TIMEOUT_MS_DEFAULT, atLeast(0), MEDIUM, REQUEST_TIMEOUT_MS_DOC)
+                .define(CONNECTION_SETUP_TIMEOUT_MS_CONFIG, LONG, CONNECTION_SETUP_TIMEOUT_MS_DEFAULT, atLeast(0L), MEDIUM, CONNECTION_SETUP_TIMEOUT_MS_DOC)
+                .define(CONNECTION_SETUP_TIMEOUT_MAX_MS_CONFIG, LONG, CONNECTION_SETUP_TIMEOUT_MAX_MS_DEFAULT, atLeast(0L), MEDIUM, CONNECTION_SETUP_TIMEOUT_MAX_MS_DOC)
+                .define(CONNECTIONS_MAX_IDLE_MS_CONFIG, LONG, CONNECTIONS_MAX_IDLE_MS_DEFAULT, MEDIUM, CONNECTIONS_MAX_IDLE_MS_DOC)
+                .define(FETCH_WAIT_MAX_MS_CONFIG, INT, FETCH_WAIT_MAX_MS_DEFAULT, atLeast(0), MEDIUM, FETCH_WAIT_MAX_MS_DOC)
+                .define(FETCH_BACKOFF_MS_CONFIG, LONG, FETCH_BACKOFF_MS_DEFAULT, atLeast(0L), MEDIUM, FETCH_BACKOFF_MS_DOC)
+                .define(FETCH_MIN_BYTES_CONFIG, INT, FETCH_MIN_BYTES_DEFAULT, atLeast(0), MEDIUM, FETCH_MIN_BYTES_DOC)
+                .define(FETCH_RESPONSE_MAX_BYTES_CONFIG, INT, FETCH_RESPONSE_MAX_BYTES_DEFAULT, atLeast(0), MEDIUM, FETCH_RESPONSE_MAX_BYTES_DOC)
+                .define(FETCH_MAX_BYTES_CONFIG, INT, FETCH_MAX_BYTES_DEFAULT, atLeast(0), MEDIUM, FETCH_MAX_BYTES_DOC)
+                .define(SOCKET_TIMEOUT_MS_CONFIG, INT, SOCKET_TIMEOUT_MS_DEFAULT, atLeast(0), MEDIUM, SOCKET_TIMEOUT_MS_DOC)
+                .define(SOCKET_RECEIVE_BUFFER_BYTES_CONFIG, INT, SOCKET_RECEIVE_BUFFER_BYTES_DEFAULT, atLeast(0), MEDIUM, SOCKET_RECEIVE_BUFFER_BYTES_DOC)
+                .define(TOPIC_PROPERTIES_EXCLUDE_CONFIG, LIST, TOPIC_PROPERTIES_EXCLUDE_DEFAULT, LOW, TOPIC_PROPERTIES_EXCLUDE_DOC)
+                .define(TOPICS_INCLUDE_CONFIG, LIST, TOPICS_INCLUDE_DEFAULT, LOW, TOPICS_INCLUDE_DOC)
+                .define(TOPICS_EXCLUDE_CONFIG, LIST, TOPICS_EXCLUDE_DEFAULT, LOW, TOPICS_EXCLUDE_DOC)
+                .define(GROUPS_INCLUDE_CONFIG, LIST, GROUPS_INCLUDE_DEFAULT, LOW, GROUPS_INCLUDE_DOC)
+                .define(GROUPS_EXCLUDE_CONFIG, LIST, GROUPS_EXCLUDE_DEFAULT, LOW, GROUPS_EXCLUDE_DOC)
+                .define(ACLS_INCLUDE_CONFIG, LIST, ACLS_INCLUDE_DEFAULT, LOW, ACLS_INCLUDE_DOC)
+                .define(ACLS_EXCLUDE_CONFIG, LIST, ACLS_EXCLUDE_DEFAULT, LOW, ACLS_EXCLUDE_DOC)
+                .define(SECURITY_PROTOCOL_CONFIG, STRING, SECURITY_PROTOCOL_DEFAULT, ConfigDef.ValidString.in(SecurityProtocol.PLAINTEXT.name, SecurityProtocol.SSL.name,
+                        SecurityProtocol.SASL_PLAINTEXT.name, SecurityProtocol.SASL_SSL.name), MEDIUM, SECURITY_PROTOCOL_DOC)
+                .define(SECURITY_PROVIDERS_CONFIG, STRING, null, LOW, SECURITY_PROVIDERS_DOC);
+        SslConfigs.addClientSslSupport(configDef);
+        SaslConfigs.addClientSaslSupport(configDef);
+        return configDef;
+    }
 
     private static final ConfigDef BROKER_CONFIG_DEF = new ConfigDef()
             .define(MIRROR_COORDINATOR_THREADS_CONFIG, INT, MIRROR_COORDINATOR_THREADS_DEFAULT, atLeast(1), LOW, MIRROR_COORDINATOR_THREADS_DOC)
@@ -380,8 +272,6 @@ public final class ClusterMirrorConfig extends AbstractConfig {
     private final Pattern groupsExcludePattern;
     private final List<MirrorAclRule> aclIncludeRules;
     private final List<MirrorAclRule> aclExcludeRules;
-    private final String securityProtocol;
-    private final String saslMechanism;
 
     /**
      * Creates a ClusterMirrorConfig from mirror metadata properties stored in the cluster metadata.
@@ -415,8 +305,6 @@ public final class ClusterMirrorConfig extends AbstractConfig {
         this.groupsExcludePattern = compilePatternList(getList(GROUPS_EXCLUDE_CONFIG));
         this.aclIncludeRules = parseAclRules(getList(ACLS_INCLUDE_CONFIG));
         this.aclExcludeRules = parseAclRules(getList(ACLS_EXCLUDE_CONFIG));
-        this.securityProtocol = getString(SECURITY_PROTOCOL_CONFIG);
-        this.saslMechanism = getString(SASL_MECHANISM_CONFIG);
     }
 
     /**
@@ -434,8 +322,6 @@ public final class ClusterMirrorConfig extends AbstractConfig {
         this.groupsExcludePattern = null;
         this.aclIncludeRules = null;
         this.aclExcludeRules = null;
-        this.securityProtocol = null;
-        this.saslMechanism = null;
     }
 
     /**
@@ -482,6 +368,78 @@ public final class ClusterMirrorConfig extends AbstractConfig {
         return getInt(MIRROR_COORDINATOR_LOAD_BUFFER_SIZE_CONFIG);
     }
 
+    public int stateTopicNumPartitions() {
+        return getInt(MIRROR_STATE_TOPIC_NUM_PARTITIONS_CONFIG);
+    }
+
+    public short stateTopicReplicationFactor() {
+        return getShort(MIRROR_STATE_TOPIC_REPLICATION_FACTOR_CONFIG);
+    }
+
+    public int numReplicaFetchers() {
+        return getInt(MIRROR_NUM_REPLICA_FETCHERS_CONFIG);
+    }
+
+    public long metadataRefreshIntervalMs() {
+        return getLong(MIRROR_METADATA_REFRESH_INTERVAL_MS_CONFIG);
+    }
+
+    public long failedRetryInitialBackoffMs() {
+        return getLong(MIRROR_FAILED_RETRY_INITIAL_BACKOFF_MS_CONFIG);
+    }
+
+    public long failedRetryMaxBackoffMs() {
+        return getLong(MIRROR_FAILED_RETRY_MAX_BACKOFF_MS_CONFIG);
+    }
+
+    public int failedRetryMaxAttempts() {
+        return getInt(MIRROR_FAILED_RETRY_MAX_ATTEMPTS_CONFIG);
+    }
+
+    public int requestTimeoutMs() {
+        return getInt(REQUEST_TIMEOUT_MS_CONFIG);
+    }
+
+    public long connectionSetupTimeoutMs() {
+        return getLong(CONNECTION_SETUP_TIMEOUT_MS_CONFIG);
+    }
+
+    public long connectionSetupTimeoutMaxMs() {
+        return getLong(CONNECTION_SETUP_TIMEOUT_MAX_MS_CONFIG);
+    }
+
+    public long connectionsMaxIdleMs() {
+        return getLong(CONNECTIONS_MAX_IDLE_MS_CONFIG);
+    }
+
+    public int socketTimeoutMs() {
+        return getInt(SOCKET_TIMEOUT_MS_CONFIG);
+    }
+
+    public int socketReceiveBufferBytes() {
+        return getInt(SOCKET_RECEIVE_BUFFER_BYTES_CONFIG);
+    }
+
+    public int fetchWaitMaxMs() {
+        return getInt(FETCH_WAIT_MAX_MS_CONFIG);
+    }
+
+    public long fetchBackoffMs() {
+        return getLong(FETCH_BACKOFF_MS_CONFIG);
+    }
+
+    public int fetchMinBytes() {
+        return getInt(FETCH_MIN_BYTES_CONFIG);
+    }
+
+    public int fetchResponseMaxBytes() {
+        return getInt(FETCH_RESPONSE_MAX_BYTES_CONFIG);
+    }
+
+    public int fetchMaxBytes() {
+        return getInt(FETCH_MAX_BYTES_CONFIG);
+    }
+
     public Pattern topicPropertiesExcludePattern() {
         return topicPropertiesExcludePattern;
     }
@@ -510,84 +468,12 @@ public final class ClusterMirrorConfig extends AbstractConfig {
         return aclExcludeRules;
     }
 
-    public int stateTopicNumPartitions() {
-        return getInt(MIRROR_STATE_TOPIC_NUM_PARTITIONS_CONFIG);
-    }
-
-    public short stateTopicReplicationFactor() {
-        return getShort(MIRROR_STATE_TOPIC_REPLICATION_FACTOR_CONFIG);
-    }
-
     public String securityProtocol() {
-        return securityProtocol;
+        return getString(SECURITY_PROTOCOL_CONFIG);
     }
 
     public String saslMechanism() {
-        return saslMechanism;
-    }
-
-    public int numReplicaFetchers() {
-        return getInt(MIRROR_NUM_REPLICA_FETCHERS_CONFIG);
-    }
-
-    public long metadataRefreshIntervalMs() {
-        return getLong(MIRROR_METADATA_REFRESH_INTERVAL_MS_CONFIG);
-    }
-
-    public long fetchBackoffMs() {
-        return getLong(FETCH_BACKOFF_MS_CONFIG);
-    }
-
-    public long failedRetryInitialBackoffMs() {
-        return getLong(MIRROR_FAILED_RETRY_INITIAL_BACKOFF_MS_CONFIG);
-    }
-
-    public long failedRetryMaxBackoffMs() {
-        return getLong(MIRROR_FAILED_RETRY_MAX_BACKOFF_MS_CONFIG);
-    }
-
-    public int failedRetryMaxAttempts() {
-        return getInt(MIRROR_FAILED_RETRY_MAX_ATTEMPTS_CONFIG);
-    }
-
-    public int fetchWaitMaxMs() {
-        return getInt(FETCH_WAIT_MAX_MS_CONFIG);
-    }
-
-    public int fetchMinBytes() {
-        return getInt(FETCH_MIN_BYTES_CONFIG);
-    }
-
-    public int fetchResponseMaxBytes() {
-        return getInt(FETCH_RESPONSE_MAX_BYTES_CONFIG);
-    }
-
-    public int fetchMaxBytes() {
-        return getInt(FETCH_MAX_BYTES_CONFIG);
-    }
-
-    public int socketTimeoutMs() {
-        return getInt(SOCKET_TIMEOUT_MS_CONFIG);
-    }
-
-    public int socketReceiveBufferBytes() {
-        return getInt(SOCKET_RECEIVE_BUFFER_BYTES_CONFIG);
-    }
-
-    public int requestTimeoutMs() {
-        return getInt(REQUEST_TIMEOUT_MS_CONFIG);
-    }
-
-    public long connectionSetupTimeoutMs() {
-        return getLong(CONNECTION_SETUP_TIMEOUT_MS_CONFIG);
-    }
-
-    public long connectionSetupTimeoutMaxMs() {
-        return getLong(CONNECTION_SETUP_TIMEOUT_MAX_MS_CONFIG);
-    }
-
-    public long connectionsMaxIdleMs() {
-        return getLong(CONNECTIONS_MAX_IDLE_MS_CONFIG);
+        return getString(SaslConfigs.SASL_MECHANISM);
     }
 
     public List<MirrorAclRule> parseAclRules(List<String> rules) {
