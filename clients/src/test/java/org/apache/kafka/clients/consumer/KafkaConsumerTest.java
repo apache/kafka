@@ -3139,7 +3139,7 @@ public class KafkaConsumerTest {
 
         // Validate the state of the endOffsetRequested flag. It should still be set before the call to
         // currentLag(), because the previous LIST_OFFSETS call has not received a response. In this case,
-        // the SubscriptionState.requestPartitionEndOffset() method should *not* have been invoked.
+        // the ConsumerSubscriptionState.requestPartitionEndOffset() method should *not* have been invoked.
         assertTrue(subscription.partitionEndOffsetRequested(tp0));
         assertEquals(OptionalLong.empty(), consumer.currentLag(tp0));
         assertTrue(subscription.partitionEndOffsetRequested(tp0));
@@ -3194,7 +3194,7 @@ public class KafkaConsumerTest {
 
         // Validate the state of the endOffsetRequested flag. It should still be set before the call to
         // currentLag(), because the previous LIST_OFFSETS call has not received a response. In this case,
-        // the SubscriptionState.requestPartitionEndOffset() method should *not* have been invoked.
+        // the ConsumerSubscriptionState.requestPartitionEndOffset() method should *not* have been invoked.
         assertTrue(subscription.partitionEndOffsetRequested(tp0));
         assertEquals(OptionalLong.empty(), consumer.currentLag(tp0));
         assertTrue(subscription.partitionEndOffsetRequested(tp0));

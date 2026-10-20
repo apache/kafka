@@ -2232,7 +2232,7 @@ public abstract class ConsumerCoordinatorTest {
     }
 
     /**
-     * Verifies that subscription change updates SubscriptionState correctly even after JoinGroup failures
+     * Verifies that subscription change updates ConsumerSubscriptionState correctly even after JoinGroup failures
      * that don't re-invoke onJoinPrepare.
      */
     @Test
@@ -2253,7 +2253,7 @@ public abstract class ConsumerCoordinatorTest {
         assertThrows(GroupAuthorizationException.class, () -> coordinator.poll(time.timer(Long.MAX_VALUE)));
 
         // Change subscription to include only the authorized topic. Complete rebalance and check that
-        // references to topic2 have been removed from SubscriptionState.
+        // references to topic2 have been removed from ConsumerSubscriptionState.
         subscriptions.setRebalanceListener(rebalanceListener, rebalanceConsumer);
         subscriptions.subscribe(Set.of(topic1));
         assertEquals(Collections.singleton(topic1), subscriptions.metadataTopics());

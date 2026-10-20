@@ -2069,7 +2069,7 @@ public class AsyncKafkaConsumer<K, V> implements ConsumerDelegate<K, V> {
 
         // With the non-blocking async poll, it's critical that the application thread wait until the background
         // thread has completed the stage of validating positions. This prevents a race condition where both
-        // threads may attempt to update the SubscriptionState.position() for a given partition. So if the background
+        // threads may attempt to update the ConsumerSubscriptionState.position() for a given partition. So if the background
         // thread has not completed that stage for the inflight event, don't attempt to collect data from the fetch
         // buffer. If the inflight event was nulled out by checkInflightPoll(), that implies that it is safe to
         // attempt to collect data from the fetch buffer.

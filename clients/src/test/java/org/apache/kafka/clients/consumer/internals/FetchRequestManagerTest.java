@@ -3980,7 +3980,7 @@ public class FetchRequestManagerTest {
         // Overwrite node0Partition2's position with an empty leader to trigger the test case.
         subscriptions.position(node0Partition2, null);
 
-        // Confirm that calling SubscriptionState.position() succeeds for a leaderless partition. While it shouldn't
+        // Confirm that calling ConsumerSubscriptionState.position() succeeds for a leaderless partition. While it shouldn't
         // throw an exception, it should return a null position.
         ConsumerSubscriptionState.FetchPosition position = assertDoesNotThrow(() -> subscriptions.position(node0Partition2));
         assertNull(position);

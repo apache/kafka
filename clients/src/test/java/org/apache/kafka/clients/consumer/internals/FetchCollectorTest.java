@@ -218,8 +218,8 @@ public class FetchCollectorTest {
     public void testNoResultsIfInitializing() {
         buildDependencies();
 
-        // Intentionally call assign (vs. assignAndSeek) so that we don't set the position. The SubscriptionState
-        // will consider the partition as in the SubscriptionState.FetchStates.INITIALIZED state.
+        // Intentionally call assign (vs. assignAndSeek) so that we don't set the position. The ConsumerSubscriptionState
+        // will consider the partition as in the ConsumerSubscriptionState.FetchStates.INITIALIZED state.
         assign(topicAPartition0);
 
         // The position should thus be null and considered un-fetchable and invalid.
@@ -281,7 +281,7 @@ public class FetchCollectorTest {
         buildDependencies();
         assignAndSeek(topicAPartition0);
 
-        // The partition should not be 'paused' in the SubscriptionState until we explicitly tell it to.
+        // The partition should not be 'paused' in the ConsumerSubscriptionState until we explicitly tell it to.
         assertFalse(subscriptions.isPaused(topicAPartition0));
         subscriptions.pause(topicAPartition0);
         assertTrue(subscriptions.isPaused(topicAPartition0));

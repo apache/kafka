@@ -47,7 +47,7 @@ import java.util.Map;
  * <ul>
  *     <li>If a response handler accesses any shared state of the Fetcher (e.g. FetchSessionHandler),
  *     all access to that state must be synchronized on the Fetcher instance.</li>
- *     <li>If a response handler accesses any shared state of the coordinator (e.g. SubscriptionState),
+ *     <li>If a response handler accesses any shared state of the coordinator (e.g. ConsumerSubscriptionState),
  *     it is assumed that all access to that state is synchronized on the coordinator instance by
  *     the caller.</li>
  *     <li>At most one request is pending for each node at any time. Nodes with pending requests are
