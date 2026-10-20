@@ -4340,6 +4340,8 @@ org.apache.kafka.common.network.SslTransportLayerTest:
 - testServerRequestMetrics
 - testServerTruststoreDynamicUpdate
 - testTlsDefaults
+- testTransferFromDoesNotSendStaleBytesAfterFailedRead
+- testTransferFromDoesNotSendStaleBytesAtEndOfFile
 - testUngracefulRemoteCloseDuringHandshakeRead
 - testUngracefulRemoteCloseDuringHandshakeWrite
 - testUnsupportedCiphers
@@ -4625,6 +4627,12 @@ org.apache.kafka.common.record.internal.FileRecordsTest:
 - testPreallocateFalse
 - testPreallocateTrue
 - testRead
+- testReadFailureAtStartOfRegion
+- testReadFailureInsideRegion
+- testReadFailureIsEmptyWhenChannelClosedDuringRead
+- testReadFailureIsEmptyWhenReadMakesNoProgress
+- testReadFailureIsEmptyWhenRegionIsReadable
+- testReadFailureIsEmptyWhenTruncatedDuringRead
 - testSearch
 - testSearchForOffsetFromPosition1
 - testSearchForOffsetFromPosition2
@@ -4637,10 +4645,15 @@ org.apache.kafka.common.record.internal.FileRecordsTest:
 - testSearchForTimestampRejectsCompressedRecordExceedingMaxRecordBodySize
 - testSliceForAlreadySlicedFileRecords
 - testSliceSizeLimitWithConcurrentWrite
+- testTransferFailureHandlerCannotBeSetOnNonSlice
+- testTransferFailureHandlerIsKeptBySlices
 - testTruncate
 - testTruncateIfSizeIsDifferentToTargetSize
 - testTruncateNotCalledIfSizeIsBiggerThanTargetSize
 - testTruncateNotCalledIfSizeIsSameAsTargetSize
+- testWriteToDoesNotNotifyHandlerWhenChannelClosed
+- testWriteToNotifiesHandlerAndRethrows
+- testWriteToNotifiesHandlerWhenSizeFails
 org.apache.kafka.common.record.internal.LegacyRecordTest:
 - testChecksum
 - testEquality

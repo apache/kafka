@@ -355,8 +355,10 @@ org.apache.kafka.storage.internals.log.LocalLogTest:
 - testLogDirRenameToNewDir
 - testLogFlush
 - testNewSegmentsAfterRoll
+- testNoReadCheckOnceLogDirIsOffline
 - testNonActiveSegmentsFrom
 - testOffsetFromFile
+- testOneReadCheckAtATimePerLogDir
 - testParseTopicPartitionName
 - testParseTopicPartitionNameForEmptyName
 - testParseTopicPartitionNameForExistingInvalidDir
@@ -366,11 +368,14 @@ org.apache.kafka.storage.internals.log.LocalLogTest:
 - testParseTopicPartitionNameForMissingTopic
 - testParseTopicPartitionNameForNull
 - testParseTopicPartitionNameWithPeriodForDeletedTopic
+- testReadCheckNotTakenBySchedulerDoesNotBlockTheNextOne
+- testReadFailureAfterTransferFailureMarksLogDirOffline
 - testRemoveAndDeleteSegmentsAsync
 - testRemoveAndDeleteSegmentsSync
 - testRollEmptyActiveSegment
 - testRollSegmentErrorWhenNextOffsetIsIllegal
 - testRollSegmentThatAlreadyExists
+- testTransferFailureOnReadableRegionKeepsLogDirOnline
 - testTruncateFullyAndStartAt
 - testTruncateTo
 - testUpdateConfig
