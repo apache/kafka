@@ -2040,43 +2040,32 @@ public class FetchRequestManagerTest {
         client.prepareResponse(FetchResponse.of(Errors.NONE, 0, INVALID_SESSION_ID, new LinkedHashMap<>(partitions), List.of()));
         networkClientDelegate.poll(time.timer(0));
 
-        List<ConsumerRecord<byte[], byte[]>> fetchedRecords = new ArrayList<>();
-        fetchRecordsInto(fetchedRecords);
-
-        assertEquals(fetchedRecords.size(), subscriptions.position(tp1).offset - 1);
+        // Return the records before the error even though max.poll.records allows all partitions.
+        // Keep the empty error response buffered until the next call can report it to the application.
+        Map<TopicPartition, List<ConsumerRecord<byte[], byte[]>>> fetchedRecords = fetchRecords();
+        assertEquals(singleton(tp1), fetchedRecords.keySet());
+        assertEquals(3, fetchedRecords.get(tp1).size());
         assertEquals(4, subscriptions.position(tp1).offset);
-        assertEquals(3, fetchedRecords.size());
+        assertEquals(1, subscriptions.position(tp0).offset);
+        assertEquals(Set.of(tp0, tp2, tp3), fetcher.fetchBuffer.bufferedPartitions());
 
-        List<OffsetOutOfRangeException> oorExceptions = new ArrayList<>();
-        try {
-            fetchRecordsInto(fetchedRecords);
-        } catch (OffsetOutOfRangeException oor) {
-            oorExceptions.add(oor);
-        }
+        OffsetOutOfRangeException error = assertThrows(OffsetOutOfRangeException.class, this::fetchRecords);
+        assertEquals(singletonMap(tp0, 1L), error.offsetOutOfRangePartitions());
+        assertEquals(Set.of(tp2, tp3), fetcher.fetchBuffer.bufferedPartitions());
 
-        // Should have received one OffsetOutOfRangeException for partition tp1
-        assertEquals(1, oorExceptions.size());
-        OffsetOutOfRangeException oor = oorExceptions.get(0);
-        assertTrue(oor.offsetOutOfRangePartitions().containsKey(tp0));
-        assertEquals(1, oor.offsetOutOfRangePartitions().size());
-
-        fetchRecordsInto(fetchedRecords);
-
-        // Should not have received an Exception for tp2.
+        // Once the empty error response is removed, return the next partition's valid records.
+        fetchedRecords = fetchRecords();
+        assertEquals(singleton(tp2), fetchedRecords.keySet());
+        assertEquals(2, fetchedRecords.get(tp2).size());
         assertEquals(6, subscriptions.position(tp2).offset);
-        assertEquals(5, fetchedRecords.size());
+        assertEquals(singleton(tp3), fetcher.fetchBuffer.bufferedPartitions());
 
-        int numExceptionsExpected = 3;
-        List<KafkaException> kafkaExceptions = new ArrayList<>();
-        for (int i = 1; i <= numExceptionsExpected; i++) {
-            try {
-                fetchRecordsInto(fetchedRecords);
-            } catch (KafkaException e) {
-                kafkaExceptions.add(e);
-            }
+        // The non-empty, incomplete response must remain buffered and keep reporting the error.
+        for (int i = 0; i < 3; i++) {
+            assertThrows(KafkaException.class, this::fetchRecords);
+            assertEquals(1, subscriptions.position(tp3).offset);
+            assertEquals(singleton(tp3), fetcher.fetchBuffer.bufferedPartitions());
         }
-        // Should have received as much as numExceptionsExpected Kafka exceptions for tp3.
-        assertEquals(numExceptionsExpected, kafkaExceptions.size());
     }
 
     @Test
@@ -2089,31 +2078,34 @@ public class FetchRequestManagerTest {
         assignFromUser(Set.of(tp0), 2);
         subscriptions.seek(tp0, 1);
         assertEquals(1, sendFetches());
-        Map<TopicIdPartition, FetchResponseData.PartitionData> partitions = new HashMap<>();
-        partitions.put(tidp0, new FetchResponseData.PartitionData()
-                .setPartitionIndex(tp0.partition())
-                .setHighWatermark(100)
-                .setRecords(records));
         client.prepareResponse(fullFetchResponse(tidp0, records, Errors.NONE, 100L, 0));
         networkClientDelegate.poll(time.timer(0));
 
         assertEquals(2, fetchRecords().get(tp0).size());
+        assertEquals(3, subscriptions.position(tp0).offset);
 
         subscriptions.assignFromUser(Set.of(tp0, tp1));
         subscriptions.seekUnvalidated(tp1, new SubscriptionState.FetchPosition(1, Optional.empty(), metadata.currentLeader(tp1)));
 
         assertEquals(1, sendFetches());
-        partitions = new HashMap<>();
+        Map<TopicIdPartition, FetchResponseData.PartitionData> partitions = new HashMap<>();
         partitions.put(tidp1, new FetchResponseData.PartitionData()
                 .setPartitionIndex(tp1.partition())
                 .setErrorCode(Errors.OFFSET_OUT_OF_RANGE.code())
                 .setHighWatermark(100));
         client.prepareResponse(FetchResponse.of(Errors.NONE, 0, INVALID_SESSION_ID, new LinkedHashMap<>(partitions), List.of()));
         networkClientDelegate.poll(time.timer(0));
-        assertEquals(1, fetchRecords().get(tp0).size());
+
+        // Return the one remaining tp0 record before reporting tp1's error, despite the limit of two.
+        Map<TopicPartition, List<ConsumerRecord<byte[], byte[]>>> fetchedRecords = fetchRecords();
+        assertEquals(singleton(tp0), fetchedRecords.keySet());
+        assertEquals(1, fetchedRecords.get(tp0).size());
+        assertEquals(4, subscriptions.position(tp0).offset);
+        assertEquals(1, subscriptions.position(tp1).offset);
+        assertEquals(singleton(tp1), fetcher.fetchBuffer.bufferedPartitions());
 
         subscriptions.seek(tp1, 10);
-        // Should not throw OffsetOutOfRangeException after the seek
+        // Seeking makes the buffered error stale, so it must not be reported on the next fetch.
         assertEmptyFetch("Should not return records or advance position after seeking to end of topic partitions");
     }
 
