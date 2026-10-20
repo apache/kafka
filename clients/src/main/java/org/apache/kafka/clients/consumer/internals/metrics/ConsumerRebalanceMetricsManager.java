@@ -17,7 +17,7 @@
 package org.apache.kafka.clients.consumer.internals.metrics;
 
 import org.apache.kafka.clients.consumer.KafkaConsumer;
-import org.apache.kafka.clients.consumer.internals.SubscriptionState;
+import org.apache.kafka.clients.consumer.internals.ConsumerSubscriptionState;
 import org.apache.kafka.common.MetricName;
 import org.apache.kafka.common.metrics.Measurable;
 import org.apache.kafka.common.metrics.Metrics;
@@ -52,11 +52,11 @@ public final class ConsumerRebalanceMetricsManager extends RebalanceMetricsManag
     private long lastRebalanceEndMs = -1L;
     private long lastRebalanceStartMs = -1L;
 
-    public ConsumerRebalanceMetricsManager(Metrics metrics, SubscriptionState subscriptions) {
+    public ConsumerRebalanceMetricsManager(Metrics metrics, ConsumerSubscriptionState subscriptions) {
         this(new MetricsLedger(metrics), subscriptions);
     }
 
-    private ConsumerRebalanceMetricsManager(MetricsLedger metrics, SubscriptionState subscriptions) {
+    private ConsumerRebalanceMetricsManager(MetricsLedger metrics, ConsumerSubscriptionState subscriptions) {
         super(metrics, CONSUMER_METRIC_GROUP_PREFIX + COORDINATOR_METRICS_SUFFIX);
 
         rebalanceLatencyAvg = createMetric("rebalance-latency-avg",
@@ -125,7 +125,7 @@ public final class ConsumerRebalanceMetricsManager extends RebalanceMetricsManag
      * regardless of whether they were assigned via {@link KafkaConsumer#subscribe(Pattern)} or
      * {@link KafkaConsumer#assign(Collection)}
      */
-    private void registerAssignedPartitionCount(SubscriptionState subscriptions) {
+    private void registerAssignedPartitionCount(ConsumerSubscriptionState subscriptions) {
         Measurable numParts = (config, now) -> subscriptions.numAssignedPartitions();
         metrics.addMetric(assignedPartitionsCount, numParts);
     }
