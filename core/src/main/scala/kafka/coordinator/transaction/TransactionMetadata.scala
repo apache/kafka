@@ -75,6 +75,7 @@ private[transaction] sealed trait TransactionState {
  *
  * transition: received AddPartitionsToTxnRequest => Ongoing
  *             received AddOffsetsToTxnRequest => Ongoing
+ *             received EndTxnRequest with commit and TransactionV2 enabled => PrepareCommit
  *             received EndTxnRequest with abort and TransactionV2 enabled => PrepareAbort
  */
 private[transaction] case object Empty extends TransactionState {
@@ -102,11 +103,16 @@ private[transaction] case object Ongoing extends TransactionState {
  * Group is preparing to commit
  *
  * transition: received acks from all partitions => CompleteCommit
+ *
+ * Note, In transaction v2, we allow Empty, CompleteCommit, CompleteAbort to transition to PrepareCommit. A
+ * coordinator that has lost leadership but not yet applied the metadata change sees the transaction as having no
+ * partitions, so it commits an empty transaction, which fails with a retriable error since the write cannot be
+ * replicated, rather than returning a fatal error to the client.
  */
 private[transaction] case object PrepareCommit extends TransactionState {
   val id: Byte = 2
   val name: String = "PrepareCommit"
-  val validPreviousStates: Set[TransactionState] = Set(Ongoing)
+  val validPreviousStates: Set[TransactionState] = Set(Ongoing, Empty, CompleteCommit, CompleteAbort)
 }
 
 /**
@@ -341,7 +347,7 @@ private[transaction] class TransactionMetadata(val transactionalId: String,
       (producerEpoch, lastProducerEpoch)
     }
 
-    // With transaction V2, it is allowed to abort the transaction without adding any partitions. Then, the transaction
+    // With transaction V2, it is allowed to abort or commit the transaction without adding any partitions. Then, the transaction
     // start time is uncertain but it is still required. So we can use the update time as the transaction start time.
     val newTxnStartTimestamp = if (noPartitionAdded) updateTimestamp else txnStartTimestamp
     prepareTransitionTo(newState, producerId, nextProducerId, updatedProducerEpoch, updatedLastProducerEpoch, txnTimeoutMs, topicPartitions.toSet,
@@ -485,11 +491,11 @@ private[transaction] class TransactionMetadata(val transactionalId: String,
           }
 
         case PrepareAbort | PrepareCommit => // from endTxn
-          // In V2, we allow state transits from Empty, CompleteCommit and CompleteAbort to PrepareAbort. It is possible
-          // their updated start time is not equal to the current start time.
-          val allowedEmptyAbort = toState == PrepareAbort && transitMetadata.clientTransactionVersion.supportsEpochBump() &&
+          // In V2, we allow state transits from Empty, CompleteCommit and CompleteAbort to PrepareAbort or PrepareCommit.
+          // It is possible their updated start time is not equal to the current start time.
+          val allowedEmptyCompletion = transitMetadata.clientTransactionVersion.supportsEpochBump() &&
             (state == Empty || state == CompleteCommit || state == CompleteAbort)
-          val validTimestamp = txnStartTimestamp == transitMetadata.txnStartTimestamp || allowedEmptyAbort
+          val validTimestamp = txnStartTimestamp == transitMetadata.txnStartTimestamp || allowedEmptyCompletion
           if (!validProducerEpoch(transitMetadata) ||
             !topicPartitions.toSet.equals(transitMetadata.topicPartitions) ||
             txnTimeoutMs != transitMetadata.txnTimeoutMs || !validTimestamp) {

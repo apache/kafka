@@ -34,7 +34,7 @@ import org.apache.kafka.server.util.RequestAndCompletionHandler
 import org.junit.jupiter.api.Assertions._
 import org.junit.jupiter.api.Test
 import org.junit.jupiter.params.ParameterizedTest
-import org.junit.jupiter.params.provider.ValueSource
+import org.junit.jupiter.params.provider.{EnumSource, ValueSource}
 import org.mockito.ArgumentMatchers.any
 import org.mockito.{ArgumentCaptor, ArgumentMatchers}
 import org.mockito.Mockito.{clearInvocations, mock, mockConstruction, times, verify, verifyNoMoreInteractions, when}
@@ -479,6 +479,48 @@ class TransactionMarkerChannelManagerTest {
     assertEquals(0, channelManager.queueForBroker(broker1.id).get.totalNumMarkers)
     assertEquals(None, txnMetadata2.pendingState)
     assertEquals(CompleteCommit, txnMetadata2.state)
+  }
+
+  @ParameterizedTest
+  @EnumSource(value = classOf[TransactionResult], names = Array("COMMIT", "ABORT"))
+  def shouldCompleteTxnWithoutSendingMarkersWhenNoPartitions(result: TransactionResult): Unit = {
+    // With transaction V2, ending a transaction with no partitions writes PrepareCommit or PrepareAbort with no partitions.
+    val (prepareState, completeState) =
+      if (result == TransactionResult.COMMIT) (PrepareCommit, CompleteCommit)
+      else (PrepareAbort, CompleteAbort)
+    val txnMetadata = new TransactionMetadata(transactionalId1, producerId1, producerId1, RecordBatch.NO_PRODUCER_ID,
+      producerEpoch, lastProducerEpoch, txnTimeoutMs, prepareState, mutable.Set.empty[TopicPartition], 0L, 0L, TransactionVersion.TV_2)
+    when(txnStateManager.getTransactionState(ArgumentMatchers.eq(transactionalId1)))
+      .thenReturn(Right(Some(CoordinatorEpochAndTxnMetadata(coordinatorEpoch, txnMetadata))))
+
+    val txnTransitionMetadata = txnMetadata.prepareComplete(time.milliseconds())
+
+    when(txnStateManager.appendTransactionToLog(
+      ArgumentMatchers.eq(transactionalId1),
+      ArgumentMatchers.eq(coordinatorEpoch),
+      ArgumentMatchers.eq(txnTransitionMetadata),
+      capturedErrorsCallback.capture(),
+      any(),
+      any()))
+      .thenAnswer(_ => {
+        txnMetadata.completeTransitionTo(txnTransitionMetadata)
+        capturedErrorsCallback.getValue.apply(Errors.NONE)
+      })
+
+    channelManager.addTxnMarkersToSend(coordinatorEpoch, result, txnMetadata, txnTransitionMetadata)
+
+    // The completion is written right away since there are no markers to wait for.
+    verify(txnStateManager).appendTransactionToLog(
+      ArgumentMatchers.eq(transactionalId1),
+      ArgumentMatchers.eq(coordinatorEpoch),
+      ArgumentMatchers.eq(txnTransitionMetadata),
+      any(),
+      any(),
+      any())
+    assertTrue(channelManager.generateRequests().isEmpty)
+    assertEquals(0, channelManager.numTxnsWithPendingMarkers)
+    assertEquals(None, txnMetadata.pendingState)
+    assertEquals(completeState, txnMetadata.state)
   }
 
   @Test

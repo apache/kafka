@@ -29,7 +29,7 @@ import org.apache.kafka.server.util.MockScheduler
 import org.junit.jupiter.api.Assertions._
 import org.junit.jupiter.api.Test
 import org.junit.jupiter.params.ParameterizedTest
-import org.junit.jupiter.params.provider.ValueSource
+import org.junit.jupiter.params.provider.{EnumSource, ValueSource}
 import org.mockito.ArgumentMatchers.{any, anyInt}
 import org.mockito.Mockito._
 import org.mockito.{ArgumentCaptor, ArgumentMatchers}
@@ -289,7 +289,7 @@ class TransactionCoordinatorTest {
     val wrongPidTxnMetadata = new TransactionMetadata(transactionalId, 1, 0, RecordBatch.NO_PRODUCER_ID,
       0, RecordBatch.NO_PRODUCER_EPOCH, 0, PrepareCommit, partitions, 0, 0, TV_0)
     when(transactionManager.getTransactionState(ArgumentMatchers.eq(transactionalId)))
-      .thenReturn(Right(Some(new CoordinatorEpochAndTxnMetadata(coordinatorEpoch, wrongPidTxnMetadata))))
+      .thenReturn(Right(Some(CoordinatorEpochAndTxnMetadata(coordinatorEpoch, wrongPidTxnMetadata))))
 
     coordinator.handleVerifyPartitionsInTransaction(transactionalId, 0L, 0, partitions, verifyPartitionsInTxnCallback)
     errors.foreach { case (_, error) =>
@@ -300,7 +300,7 @@ class TransactionCoordinatorTest {
     val oldEpochTxnMetadata = new TransactionMetadata(transactionalId, 0, 0, RecordBatch.NO_PRODUCER_ID,
       0, RecordBatch.NO_PRODUCER_EPOCH, 0, PrepareCommit, partitions, 0, 0, TV_0)
     when(transactionManager.getTransactionState(ArgumentMatchers.eq(transactionalId)))
-      .thenReturn(Right(Some(new CoordinatorEpochAndTxnMetadata(coordinatorEpoch, oldEpochTxnMetadata))))
+      .thenReturn(Right(Some(CoordinatorEpochAndTxnMetadata(coordinatorEpoch, oldEpochTxnMetadata))))
 
     coordinator.handleVerifyPartitionsInTransaction(transactionalId, 0L, 1, partitions, verifyPartitionsInTxnCallback)
     errors.foreach { case (_, error) =>
@@ -311,7 +311,7 @@ class TransactionCoordinatorTest {
     val emptyTxnMetadata = new TransactionMetadata(transactionalId, 0, 0, RecordBatch.NO_PRODUCER_ID,
       0, RecordBatch.NO_PRODUCER_EPOCH, 0, PrepareCommit, partitions, 0, 0, TV_0)
     when(transactionManager.getTransactionState(ArgumentMatchers.eq(transactionalId)))
-      .thenReturn(Right(Some(new CoordinatorEpochAndTxnMetadata(coordinatorEpoch, emptyTxnMetadata))))
+      .thenReturn(Right(Some(CoordinatorEpochAndTxnMetadata(coordinatorEpoch, emptyTxnMetadata))))
     
     coordinator.handleVerifyPartitionsInTransaction(transactionalId, 0L, 0, partitions, verifyPartitionsInTxnCallback)
     errors.foreach { case (_, error) => 
@@ -323,7 +323,7 @@ class TransactionCoordinatorTest {
       0, RecordBatch.NO_PRODUCER_EPOCH, 0, Ongoing, mutable.Set.empty, 0, 0, TV_0)
     ongoingTxnMetadata.pendingState = Some(CompleteCommit)
     when(transactionManager.getTransactionState(ArgumentMatchers.eq(transactionalId)))
-      .thenReturn(Right(Some(new CoordinatorEpochAndTxnMetadata(coordinatorEpoch, ongoingTxnMetadata))))
+      .thenReturn(Right(Some(CoordinatorEpochAndTxnMetadata(coordinatorEpoch, ongoingTxnMetadata))))
 
     coordinator.handleVerifyPartitionsInTransaction(transactionalId, 0L, 0, partitions, verifyPartitionsInTxnCallback)
     errors.foreach { case (_, error) =>
@@ -538,8 +538,9 @@ class TransactionCoordinatorTest {
     coordinator.handleEndTransaction(transactionalId, producerId, epoch.toShort, TransactionResult.COMMIT, clientTransactionVersion, endTxnCallback)
     if (isRetry) {
       assertEquals(Errors.NONE, error)
+      verifyNoAppend()
     } else {
-      assertEquals(Errors.INVALID_TXN_STATE, error)
+      verifyEmptyCommitAppended()
     }
     verify(transactionManager).getTransactionState(ArgumentMatchers.eq(transactionalId))
   }
@@ -611,6 +612,20 @@ class TransactionCoordinatorTest {
 
     coordinator.handleEndTransaction(transactionalId, producerId, requestEpoch(clientTransactionVersion), TransactionResult.COMMIT, clientTransactionVersion, endTxnCallback)
     assertEquals(Errors.INVALID_TXN_STATE, error)
+    verify(transactionManager).getTransactionState(ArgumentMatchers.eq(transactionalId))
+  }
+
+  @Test
+  def shouldCommitEmptyTransactionOnEndTxnRequestWhenStatusIsCompleteAbortAndResultIsCommitInV2(): Unit = {
+    val clientTransactionVersion = TransactionVersion.fromFeatureLevel(2)
+    val txnMetadata = new TransactionMetadata(transactionalId, producerId, producerId, RecordBatch.NO_PRODUCER_ID,
+      producerEpoch, (producerEpoch - 1).toShort, 1, CompleteAbort, collection.mutable.Set.empty[TopicPartition], 0, time.milliseconds(), clientTransactionVersion)
+    when(transactionManager.getTransactionState(ArgumentMatchers.eq(transactionalId)))
+      .thenReturn(Right(Some(CoordinatorEpochAndTxnMetadata(coordinatorEpoch, txnMetadata))))
+
+    // A commit at the current epoch is the next EndTxnRequest, not a retry, so an empty transaction is committed.
+    coordinator.handleEndTransaction(transactionalId, producerId, producerEpoch, TransactionResult.COMMIT, clientTransactionVersion, endTxnCallback)
+    verifyEmptyCommitAppended()
     verify(transactionManager).getTransactionState(ArgumentMatchers.eq(transactionalId))
   }
 
@@ -755,14 +770,128 @@ class TransactionCoordinatorTest {
     coordinator.handleEndTransaction(transactionalId, producerId, epoch.toShort, TransactionResult.COMMIT, clientTransactionVersion, endTxnCallback)
     if (isRetry) {
       assertEquals(Errors.PRODUCER_FENCED, error)
+      verifyNoAppend()
     } else {
-      assertEquals(Errors.INVALID_TXN_STATE, error)
+      verifyEmptyCommitAppended()
     }
     verify(transactionManager).getTransactionState(ArgumentMatchers.eq(transactionalId))
   }
 
+  @ParameterizedTest
+  @ValueSource(strings = Array("Empty", "CompleteCommit", "CompleteAbort"))
+  def shouldPrepareEmptyCommitInV2(stateName: String): Unit = {
+    val state = TransactionState.fromName(stateName).get
+    val txnMetadata = new TransactionMetadata(transactionalId, producerId, producerId, RecordBatch.NO_PRODUCER_ID,
+      producerEpoch, (producerEpoch - 1).toShort, 1, state, mutable.Set.empty[TopicPartition], 0, time.milliseconds(), TV_2)
+    when(transactionManager.getTransactionState(ArgumentMatchers.eq(transactionalId)))
+      .thenReturn(Right(Some(CoordinatorEpochAndTxnMetadata(coordinatorEpoch, txnMetadata))))
+    when(transactionManager.appendTransactionToLog(
+      ArgumentMatchers.eq(transactionalId),
+      ArgumentMatchers.eq(coordinatorEpoch),
+      capturedTxnTransitMetadata.capture(),
+      capturedErrorsCallback.capture(),
+      any(),
+      any())
+    ).thenAnswer(_ => {
+      txnMetadata.completeTransitionTo(capturedTxnTransitMetadata.getValue)
+      capturedErrorsCallback.getValue.apply(Errors.NONE)
+    })
+
+    coordinator.handleEndTransaction(transactionalId, producerId, producerEpoch, TransactionResult.COMMIT, TV_2, endTxnCallback)
+
+    assertEquals(Errors.NONE, error)
+    assertEquals(producerId, newProducerId)
+    assertEquals(producerEpoch + 1, newEpoch)
+    assertEquals(PrepareCommit, txnMetadata.state)
+    assertTrue(txnMetadata.topicPartitions.isEmpty)
+    verify(transactionMarkerChannelManager).addTxnMarkersToSend(
+      ArgumentMatchers.eq(coordinatorEpoch),
+      ArgumentMatchers.eq(TransactionResult.COMMIT),
+      ArgumentMatchers.eq(txnMetadata),
+      any[TxnTransitMetadata]())
+  }
+
+  @ParameterizedTest
+  @ValueSource(strings = Array("Empty", "CompleteCommit", "CompleteAbort"))
+  def shouldGenerateNewProducerIdOnEmptyCommitIfEpochsExhaustedV2(stateName: String): Unit = {
+    val state = TransactionState.fromName(stateName).get
+    mockPidGenerator()
+    nextPid = producerId2
+    val txnMetadata = new TransactionMetadata(transactionalId, producerId, producerId, RecordBatch.NO_PRODUCER_ID,
+      (Short.MaxValue - 1).toShort, (Short.MaxValue - 2).toShort, txnTimeoutMs, state, mutable.Set.empty[TopicPartition], 0, time.milliseconds(), TV_2)
+    when(transactionManager.getTransactionState(ArgumentMatchers.eq(transactionalId)))
+      .thenReturn(Right(Some(CoordinatorEpochAndTxnMetadata(coordinatorEpoch, txnMetadata))))
+    when(transactionManager.appendTransactionToLog(
+      ArgumentMatchers.eq(transactionalId),
+      ArgumentMatchers.eq(coordinatorEpoch),
+      capturedTxnTransitMetadata.capture(),
+      capturedErrorsCallback.capture(),
+      any(),
+      any())
+    ).thenAnswer(_ => {
+      txnMetadata.completeTransitionTo(capturedTxnTransitMetadata.getValue)
+      capturedErrorsCallback.getValue.apply(Errors.NONE)
+    })
+
+    coordinator.handleEndTransaction(transactionalId, producerId, (Short.MaxValue - 1).toShort, TransactionResult.COMMIT, TV_2, endTxnCallback)
+
+    // The empty commit bumps the epoch to Short.MaxValue, so the producer ID is rotated on completion.
+    assertEquals(Errors.NONE, error)
+    assertEquals(producerId2, newProducerId)
+    assertEquals(0, newEpoch)
+    assertEquals(PrepareCommit, txnMetadata.state)
+    assertEquals(Short.MaxValue, txnMetadata.producerEpoch)
+    assertEquals(producerId2, capturedTxnTransitMetadata.getValue.nextProducerId)
+    assertTrue(txnMetadata.topicPartitions.isEmpty)
+  }
+
+  @ParameterizedTest
+  @EnumSource(value = classOf[Errors], names = Array("NOT_COORDINATOR", "COORDINATOR_NOT_AVAILABLE"))
+  def shouldReturnRetriableErrorWhenEmptyCommitCannotBeWrittenInV2(appendError: Errors): Unit = {
+    // A stale coordinator sees the transaction as empty since its partitions were added on the new coordinator,
+    // but it cannot replicate the write, so the client gets a retriable error rather than INVALID_TXN_STATE.
+    val txnMetadata = new TransactionMetadata(transactionalId, producerId, producerId, RecordBatch.NO_PRODUCER_ID,
+      producerEpoch, (producerEpoch - 1).toShort, 1, CompleteCommit, mutable.Set.empty[TopicPartition], 0, time.milliseconds(), TV_2)
+    when(transactionManager.getTransactionState(ArgumentMatchers.eq(transactionalId)))
+      .thenReturn(Right(Some(CoordinatorEpochAndTxnMetadata(coordinatorEpoch, txnMetadata))))
+    when(transactionManager.appendTransactionToLog(
+      ArgumentMatchers.eq(transactionalId),
+      ArgumentMatchers.eq(coordinatorEpoch),
+      any[TxnTransitMetadata],
+      capturedErrorsCallback.capture(),
+      any(),
+      any())
+    ).thenAnswer(_ => capturedErrorsCallback.getValue.apply(appendError))
+
+    coordinator.handleEndTransaction(transactionalId, producerId, producerEpoch, TransactionResult.COMMIT, TV_2, endTxnCallback)
+
+    assertEquals(appendError, error)
+    assertEquals(CompleteCommit, txnMetadata.state)
+    assertEquals(producerEpoch, txnMetadata.producerEpoch)
+    verify(transactionMarkerChannelManager, never()).addTxnMarkersToSend(anyInt(), any(), any(), any())
+  }
+
+  private def verifyNoAppend(): Unit =
+    verify(transactionManager, never()).appendTransactionToLog(
+      ArgumentMatchers.eq(transactionalId), any(), any(), any(), any(), any())
+
+  private def verifyEmptyCommitAppended(): Unit = {
+    val newMetadata = ArgumentCaptor.forClass(classOf[TxnTransitMetadata])
+    verify(transactionManager).appendTransactionToLog(
+      ArgumentMatchers.eq(transactionalId),
+      ArgumentMatchers.eq(coordinatorEpoch),
+      newMetadata.capture(),
+      any(),
+      any(),
+      any())
+    assertEquals(PrepareCommit, newMetadata.getValue.txnState)
+    assertEquals(producerEpoch + 1, newMetadata.getValue.producerEpoch)
+    assertEquals(time.milliseconds(), newMetadata.getValue.txnStartTimestamp)
+    assertTrue(newMetadata.getValue.topicPartitions.isEmpty)
+  }
+
   @Test
-  def shouldReturnInvalidTxnRequestOnEndTxnV2IfNotEndTxnV2Retry(): Unit = {
+  def shouldTreatEndTxnV2AtCurrentEpochAsNextRequestNotRetry(): Unit = {
     when(transactionManager.getTransactionState(ArgumentMatchers.eq(transactionalId)))
       .thenReturn(Right(Some(CoordinatorEpochAndTxnMetadata(coordinatorEpoch, new TransactionMetadata(transactionalId, producerId, producerId,
         RecordBatch.NO_PRODUCER_ID, producerEpoch, RecordBatch.NO_PRODUCER_EPOCH, 1, PrepareCommit, collection.mutable.Set.empty[TopicPartition], 0, time.milliseconds(), TV_2)))))
@@ -776,9 +905,9 @@ class TransactionCoordinatorTest {
       .thenReturn(Right(Some(CoordinatorEpochAndTxnMetadata(coordinatorEpoch, new TransactionMetadata(transactionalId, producerId, producerId,
         RecordBatch.NO_PRODUCER_ID, producerEpoch, RecordBatch.NO_PRODUCER_EPOCH, 1, CompleteCommit, collection.mutable.Set.empty[TopicPartition], 0, time.milliseconds(), TV_2)))))
 
-    // If producerEpoch is the same, this is not a retry of the EndTxnRequest, but the next EndTxnRequest. Return INVALID_TXN_STATE.
+    // If producerEpoch is the same, this is not a retry of the EndTxnRequest, but the next EndTxnRequest. Commit an empty transaction.
     coordinator.handleEndTransaction(transactionalId, producerId, producerEpoch, TransactionResult.COMMIT, TV_2, endTxnCallback)
-    assertEquals(Errors.INVALID_TXN_STATE, error)
+    verifyEmptyCommitAppended()
     verify(transactionManager, times(2)).getTransactionState(ArgumentMatchers.eq(transactionalId))
   }
 

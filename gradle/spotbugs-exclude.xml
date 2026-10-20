@@ -158,6 +158,15 @@ For a detailed description of spotbugs bug categories, see https://spotbugs.read
     </Match>
 
     <Match>
+        <!-- After the scalac optimizer inlines generateTxnTransitMetadataForTxnCompletion into commitEmptyTransaction,
+             its `nextState == PrepareAbort` check compares the PrepareCommit and PrepareAbort case objects, which
+             spotBugs reports as an equals() call between unrelated types. The comparison is intended to be false. -->
+        <Class name="kafka.coordinator.transaction.TransactionCoordinator"/>
+        <Method name="commitEmptyTransaction$1"/>
+        <Bug pattern="EC_UNRELATED_TYPES"/>
+    </Match>
+
+    <Match>
         <!-- Scala doesn't have checked exceptions so one cannot catch RuntimeException and rely
              on the compiler to fail if the code is changed to call a method that throws Exception.
              Given that, this bug pattern doesn't make sense for Scala code. -->

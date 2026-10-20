@@ -180,6 +180,40 @@ class TransactionMetadataTest {
     assertEquals(time.milliseconds() + 1, txnMetadata.txnStartTimestamp)
   }
 
+  @ParameterizedTest
+  @ValueSource(strings = Array("Empty", "CompleteCommit", "CompleteAbort"))
+  def testTransitFromNoOngoingTransactionToPrepareCommitAndCompleteCommitInV2(stateName: String): Unit = {
+    val state = TransactionState.fromName(stateName).get
+    val producerEpoch = 735.toShort
+
+    val txnMetadata = new TransactionMetadata(
+      transactionalId = transactionalId,
+      producerId = producerId,
+      previousProducerId = RecordBatch.NO_PRODUCER_ID,
+      nextProducerId = RecordBatch.NO_PRODUCER_ID,
+      producerEpoch = producerEpoch,
+      lastProducerEpoch = RecordBatch.NO_PRODUCER_EPOCH,
+      txnTimeoutMs = 30000,
+      state = state,
+      topicPartitions = mutable.Set.empty,
+      txnStartTimestamp = if (state == Empty) -1 else time.milliseconds() - 1,
+      txnLastUpdateTimestamp = time.milliseconds(),
+      clientTransactionVersion = TV_2)
+
+    var transitMetadata = txnMetadata.prepareAbortOrCommit(PrepareCommit, TV_2, RecordBatch.NO_PRODUCER_ID, time.milliseconds() + 1, true)
+    txnMetadata.completeTransitionTo(transitMetadata)
+    assertEquals(PrepareCommit, txnMetadata.state)
+    assertEquals(producerId, txnMetadata.producerId)
+    assertEquals(producerEpoch + 1, txnMetadata.producerEpoch)
+    assertEquals(time.milliseconds() + 1, txnMetadata.txnStartTimestamp)
+
+    transitMetadata = txnMetadata.prepareComplete(time.milliseconds() + 2)
+    txnMetadata.completeTransitionTo(transitMetadata)
+    assertEquals(CompleteCommit, txnMetadata.state)
+    assertEquals(producerEpoch + 1, txnMetadata.producerEpoch)
+    assertTrue(txnMetadata.topicPartitions.isEmpty)
+  }
+
   @Test
   def testTolerateUpdateTimeShiftDuringEpochBump(): Unit = {
     val producerEpoch: Short = 1
