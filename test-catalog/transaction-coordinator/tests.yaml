@@ -69,6 +69,7 @@ org.apache.kafka.coordinator.transaction.TransactionMetadataTest:
 - testTransitFromCompleteAbortToPrepareAbortInV2
 - testTransitFromCompleteCommitToPrepareAbortInV2
 - testTransitFromEmptyToPrepareAbortInV2
+- testTransitFromNoOngoingTransactionToPrepareCommitAndCompleteCommitInV2
 org.apache.kafka.coordinator.transaction.TransactionStateManagerConfigTest:
 - ShouldDefineAllConfigInConfigDef
 - ShouldGetStaticValueFromClassAttribute

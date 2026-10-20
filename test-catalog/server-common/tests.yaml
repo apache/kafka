@@ -274,6 +274,12 @@ org.apache.kafka.server.metrics.KafkaYammerMetricsTest:
 org.apache.kafka.server.metrics.TimeRatioTest:
 - testRatio
 - testRatioMisalignedWindow
+org.apache.kafka.server.mirror.MirrorPartitionStateTest:
+- testAllStatesAreCoveredByTable
+- testFromValue
+- testFromValueInvalid
+- testRoundTrip
+- testValue
 org.apache.kafka.server.mutable.BoundedListTest:
 - testAddAll
 - testAddingToBoundedList
