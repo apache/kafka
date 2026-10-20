@@ -142,7 +142,7 @@ class TransactionStateManager(brokerId: Int,
             }
           }
         }.map { case (txnId, txnMetadata) =>
-          new TransactionalIdAndProducerIdEpoch(txnId, txnMetadata.producerId, txnMetadata.producerEpoch)
+          new TransactionalIdAndProducerIdEpoch(txnId, txnMetadata.clientProducerId, txnMetadata.clientProducerEpoch)
         }
       }
     })

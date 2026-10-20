@@ -24,6 +24,7 @@ import org.apache.kafka.server.common.TransactionVersion;
 
 import org.junit.jupiter.api.Test;
 import org.junit.jupiter.params.ParameterizedTest;
+import org.junit.jupiter.params.provider.EnumSource;
 import org.junit.jupiter.params.provider.ValueSource;
 
 import java.util.HashSet;
@@ -55,6 +56,7 @@ public class TransactionMetadataTest {
             RecordBatch.NO_PRODUCER_ID,
             producerEpoch,
             RecordBatch.NO_PRODUCER_EPOCH,
+            RecordBatch.NO_PRODUCER_EPOCH,
             30000,
             TransactionState.EMPTY,
             Set.of(),
@@ -80,6 +82,7 @@ public class TransactionMetadataTest {
             RecordBatch.NO_PRODUCER_ID,
             RecordBatch.NO_PRODUCER_ID,
             producerEpoch,
+            RecordBatch.NO_PRODUCER_EPOCH,
             RecordBatch.NO_PRODUCER_EPOCH,
             30000,
             TransactionState.EMPTY,
@@ -107,6 +110,7 @@ public class TransactionMetadataTest {
             RecordBatch.NO_PRODUCER_ID,
             producerEpoch,
             RecordBatch.NO_PRODUCER_EPOCH,
+            RecordBatch.NO_PRODUCER_EPOCH,
             30000,
             TransactionState.EMPTY,
             Set.of(),
@@ -115,7 +119,7 @@ public class TransactionMetadataTest {
             TV_0
         );
 
-        assertTrue(txnMetadata.isProducerEpochExhausted());
+        assertTrue(txnMetadata.isClientFacingEpochExhausted());
         assertThrows(IllegalStateException.class, () -> txnMetadata.prepareIncrementProducerEpoch(30000,
             Optional.empty(), time.milliseconds()));
     }
@@ -131,6 +135,7 @@ public class TransactionMetadataTest {
             RecordBatch.NO_PRODUCER_ID,
             producerEpoch,
             RecordBatch.NO_PRODUCER_EPOCH,
+            RecordBatch.NO_PRODUCER_EPOCH,
             30000,
             TransactionState.EMPTY,
             Set.of(),
@@ -139,7 +144,7 @@ public class TransactionMetadataTest {
             TV_2
         );
 
-        TxnTransitMetadata transitMetadata = txnMetadata.prepareAbortOrCommit(TransactionState.PREPARE_ABORT, TV_2, RecordBatch.NO_PRODUCER_ID, time.milliseconds() + 1, true);
+        TxnTransitMetadata transitMetadata = txnMetadata.prepareAbortOrCommit(TransactionState.PREPARE_ABORT, TV_2, RecordBatch.NO_PRODUCER_ID, RecordBatch.NO_PRODUCER_EPOCH, time.milliseconds() + 1, true);
         txnMetadata.completeTransitionTo(transitMetadata);
         assertEquals(producerId, txnMetadata.producerId());
         assertEquals(producerEpoch + 1, txnMetadata.producerEpoch());
@@ -157,6 +162,7 @@ public class TransactionMetadataTest {
             RecordBatch.NO_PRODUCER_ID,
             producerEpoch,
             RecordBatch.NO_PRODUCER_EPOCH,
+            RecordBatch.NO_PRODUCER_EPOCH,
             30000,
             TransactionState.COMPLETE_ABORT,
             Set.of(),
@@ -165,7 +171,7 @@ public class TransactionMetadataTest {
             TV_2
         );
 
-        TxnTransitMetadata transitMetadata = txnMetadata.prepareAbortOrCommit(TransactionState.PREPARE_ABORT, TV_2, RecordBatch.NO_PRODUCER_ID, time.milliseconds() + 1, true);
+        TxnTransitMetadata transitMetadata = txnMetadata.prepareAbortOrCommit(TransactionState.PREPARE_ABORT, TV_2, RecordBatch.NO_PRODUCER_ID, RecordBatch.NO_PRODUCER_EPOCH, time.milliseconds() + 1, true);
         txnMetadata.completeTransitionTo(transitMetadata);
         assertEquals(producerId, txnMetadata.producerId());
         assertEquals(producerEpoch + 1, txnMetadata.producerEpoch());
@@ -183,6 +189,7 @@ public class TransactionMetadataTest {
             RecordBatch.NO_PRODUCER_ID,
             producerEpoch,
             RecordBatch.NO_PRODUCER_EPOCH,
+            RecordBatch.NO_PRODUCER_EPOCH,
             30000,
             TransactionState.COMPLETE_COMMIT,
             Set.of(),
@@ -191,7 +198,7 @@ public class TransactionMetadataTest {
             TV_2
         );
 
-        TxnTransitMetadata transitMetadata = txnMetadata.prepareAbortOrCommit(TransactionState.PREPARE_ABORT, TV_2, RecordBatch.NO_PRODUCER_ID, time.milliseconds() + 1, true);
+        TxnTransitMetadata transitMetadata = txnMetadata.prepareAbortOrCommit(TransactionState.PREPARE_ABORT, TV_2, RecordBatch.NO_PRODUCER_ID, RecordBatch.NO_PRODUCER_EPOCH, time.milliseconds() + 1, true);
         txnMetadata.completeTransitionTo(transitMetadata);
         assertEquals(producerId, txnMetadata.producerId());
         assertEquals(producerEpoch + 1, txnMetadata.producerEpoch());
@@ -207,6 +214,7 @@ public class TransactionMetadataTest {
             RecordBatch.NO_PRODUCER_ID,
             RecordBatch.NO_PRODUCER_ID,
             producerEpoch,
+            RecordBatch.NO_PRODUCER_EPOCH,
             RecordBatch.NO_PRODUCER_EPOCH,
             30000,
             TransactionState.EMPTY,
@@ -237,6 +245,7 @@ public class TransactionMetadataTest {
             RecordBatch.NO_PRODUCER_ID,
             producerEpoch,
             RecordBatch.NO_PRODUCER_EPOCH,
+            RecordBatch.NO_PRODUCER_EPOCH,
             30000,
             TransactionState.EMPTY,
             Set.of(),
@@ -264,6 +273,7 @@ public class TransactionMetadataTest {
             RecordBatch.NO_PRODUCER_ID,
             RecordBatch.NO_PRODUCER_ID,
             producerEpoch,
+            RecordBatch.NO_PRODUCER_EPOCH,
             RecordBatch.NO_PRODUCER_EPOCH,
             30000,
             TransactionState.EMPTY,
@@ -304,6 +314,7 @@ public class TransactionMetadataTest {
             RecordBatch.NO_PRODUCER_ID,
             producerEpoch,
             RecordBatch.NO_PRODUCER_EPOCH,
+            RecordBatch.NO_PRODUCER_EPOCH,
             30000,
             TransactionState.ONGOING,
             Set.of(),
@@ -313,7 +324,7 @@ public class TransactionMetadataTest {
         );
 
         // let new time be smaller
-        TxnTransitMetadata transitMetadata = txnMetadata.prepareAbortOrCommit(TransactionState.PREPARE_COMMIT, TV_0, RecordBatch.NO_PRODUCER_ID, time.milliseconds() - 1, false);
+        TxnTransitMetadata transitMetadata = txnMetadata.prepareAbortOrCommit(TransactionState.PREPARE_COMMIT, TV_0, RecordBatch.NO_PRODUCER_ID, RecordBatch.NO_PRODUCER_EPOCH, time.milliseconds() - 1, false);
         txnMetadata.completeTransitionTo(transitMetadata);
         assertEquals(TransactionState.PREPARE_COMMIT, txnMetadata.state());
         assertEquals(producerId, txnMetadata.producerId());
@@ -333,6 +344,7 @@ public class TransactionMetadataTest {
             RecordBatch.NO_PRODUCER_ID,
             producerEpoch,
             RecordBatch.NO_PRODUCER_EPOCH,
+            RecordBatch.NO_PRODUCER_EPOCH,
             30000,
             TransactionState.ONGOING,
             Set.of(),
@@ -342,7 +354,7 @@ public class TransactionMetadataTest {
         );
 
         // let new time be smaller
-        TxnTransitMetadata transitMetadata = txnMetadata.prepareAbortOrCommit(TransactionState.PREPARE_ABORT, TV_0, RecordBatch.NO_PRODUCER_ID, time.milliseconds() - 1, false);
+        TxnTransitMetadata transitMetadata = txnMetadata.prepareAbortOrCommit(TransactionState.PREPARE_ABORT, TV_0, RecordBatch.NO_PRODUCER_ID, RecordBatch.NO_PRODUCER_EPOCH, time.milliseconds() - 1, false);
         txnMetadata.completeTransitionTo(transitMetadata);
         assertEquals(TransactionState.PREPARE_ABORT, txnMetadata.state());
         assertEquals(producerId, txnMetadata.producerId());
@@ -365,6 +377,7 @@ public class TransactionMetadataTest {
             RecordBatch.NO_PRODUCER_ID,
             producerEpoch,
             lastProducerEpoch,
+            RecordBatch.NO_PRODUCER_EPOCH,
             30000,
             TransactionState.PREPARE_COMMIT,
             Set.of(),
@@ -398,6 +411,7 @@ public class TransactionMetadataTest {
             RecordBatch.NO_PRODUCER_ID,
             producerEpoch,
             lastProducerEpoch,
+            RecordBatch.NO_PRODUCER_EPOCH,
             30000,
             TransactionState.PREPARE_ABORT,
             Set.of(),
@@ -429,13 +443,14 @@ public class TransactionMetadataTest {
             RecordBatch.NO_PRODUCER_ID,
             producerEpoch,
             RecordBatch.NO_PRODUCER_EPOCH,
+            RecordBatch.NO_PRODUCER_EPOCH,
             30000,
             TransactionState.ONGOING,
             Set.of(),
             -1,
             time.milliseconds(),
             TV_0);
-        assertTrue(txnMetadata.isProducerEpochExhausted());
+        assertTrue(txnMetadata.isClientFacingEpochExhausted());
 
         TxnTransitMetadata fencingTransitMetadata = txnMetadata.prepareFenceProducerEpoch();
         assertEquals(Short.MAX_VALUE, fencingTransitMetadata.producerEpoch());
@@ -445,7 +460,7 @@ public class TransactionMetadataTest {
         // We should reset the pending state to make way for the abort transition.
         txnMetadata.pendingState(Optional.empty());
 
-        TxnTransitMetadata transitMetadata = txnMetadata.prepareAbortOrCommit(TransactionState.PREPARE_ABORT, TV_0, RecordBatch.NO_PRODUCER_ID, time.milliseconds(), false);
+        TxnTransitMetadata transitMetadata = txnMetadata.prepareAbortOrCommit(TransactionState.PREPARE_ABORT, TV_0, RecordBatch.NO_PRODUCER_ID, RecordBatch.NO_PRODUCER_EPOCH, time.milliseconds(), false);
         txnMetadata.completeTransitionTo(transitMetadata);
         assertEquals(producerId, transitMetadata.producerId());
     }
@@ -461,13 +476,14 @@ public class TransactionMetadataTest {
             RecordBatch.NO_PRODUCER_ID,
             producerEpoch,
             RecordBatch.NO_PRODUCER_EPOCH,
+            RecordBatch.NO_PRODUCER_EPOCH,
             30000,
             TransactionState.COMPLETE_COMMIT,
             Set.of(),
             -1,
             time.milliseconds(),
             TV_0);
-        assertTrue(txnMetadata.isProducerEpochExhausted());
+        assertTrue(txnMetadata.isClientFacingEpochExhausted());
 
         assertThrows(IllegalStateException.class, txnMetadata::prepareFenceProducerEpoch);
     }
@@ -483,15 +499,71 @@ public class TransactionMetadataTest {
             RecordBatch.NO_PRODUCER_ID,
             producerEpoch,
             RecordBatch.NO_PRODUCER_EPOCH,
+            RecordBatch.NO_PRODUCER_EPOCH,
             30000,
             TransactionState.COMPLETE_ABORT,
             Set.of(),
             -1,
             time.milliseconds(),
             TV_0);
-        assertTrue(txnMetadata.isProducerEpochExhausted());
+        assertTrue(txnMetadata.isClientFacingEpochExhausted());
 
         assertThrows(IllegalStateException.class, txnMetadata::prepareFenceProducerEpoch);
+    }
+
+    @ParameterizedTest
+    @EnumSource(value = TransactionState.class, names = {"EMPTY", "COMPLETE_COMMIT", "COMPLETE_ABORT", "PREPARE_COMMIT", "PREPARE_ABORT"})
+    public void testKeepPreparedTxnTransitionsRequireOngoingState(TransactionState state) {
+        // InitProducerId(keepPreparedTxn=true) transitions are only valid for an ONGOING transaction.
+        TransactionMetadata txnMetadata = new TransactionMetadata(
+            transactionalId,
+            producerId,
+            RecordBatch.NO_PRODUCER_ID,
+            RecordBatch.NO_PRODUCER_ID,
+            (short) 735,
+            RecordBatch.NO_PRODUCER_EPOCH,
+            RecordBatch.NO_PRODUCER_EPOCH,
+            30000,
+            state,
+            Set.of(),
+            time.milliseconds(),
+            time.milliseconds(),
+            TV_2);
+
+        assertThrows(IllegalStateException.class, () -> txnMetadata.prepareIncrementProducerEpochForOngoing(time.milliseconds()));
+        assertThrows(IllegalStateException.class, () -> txnMetadata.prepareProducerIdRotationForOngoing(producerId + 1, time.milliseconds()));
+        assertEquals(Optional.empty(), txnMetadata.pendingState());
+    }
+
+    @Test
+    public void testFenceProducerWithKeptPreparedTxnBumpsClientFacingEpoch() {
+        // After InitProducerId(keepPreparedTxn=true) producerId / producerEpoch are frozen for the markers
+        // and the client-facing identity is in nextProducerId / nextProducerEpoch, so the fence bumps the latter.
+        short producerEpoch = 735;
+        short clientEpoch = 740;
+        long clientProducerId = producerId + 1;
+
+        TransactionMetadata txnMetadata = new TransactionMetadata(
+            transactionalId,
+            producerId,
+            RecordBatch.NO_PRODUCER_ID,
+            clientProducerId,
+            producerEpoch,
+            RecordBatch.NO_PRODUCER_EPOCH,
+            clientEpoch,
+            30000,
+            TransactionState.ONGOING,
+            Set.of(),
+            -1,
+            time.milliseconds(),
+            TV_2);
+
+        TxnTransitMetadata fencingTransitMetadata = txnMetadata.prepareFenceProducerEpoch();
+        assertEquals(producerId, fencingTransitMetadata.producerId());
+        assertEquals(producerEpoch, fencingTransitMetadata.producerEpoch());
+        assertEquals(clientProducerId, fencingTransitMetadata.clientProducerId());
+        assertEquals((short) (clientEpoch + 1), fencingTransitMetadata.clientProducerEpoch());
+        assertEquals(Optional.of(TransactionState.PREPARE_EPOCH_FENCE), txnMetadata.pendingState());
     }
 
     @Test
@@ -505,13 +577,14 @@ public class TransactionMetadataTest {
             RecordBatch.NO_PRODUCER_ID,
             producerEpoch,
             RecordBatch.NO_PRODUCER_EPOCH,
+            RecordBatch.NO_PRODUCER_EPOCH,
             30000,
             TransactionState.ONGOING,
             Set.of(),
             -1,
             time.milliseconds(),
             TV_0);
-        assertTrue(txnMetadata.isProducerEpochExhausted());
+        assertTrue(txnMetadata.isClientFacingEpochExhausted());
 
         // When epoch is at max, prepareFenceProducerEpoch logs an error but doesn't throw
         // This allows graceful recovery through producer ID rotation
@@ -532,6 +605,7 @@ public class TransactionMetadataTest {
             RecordBatch.NO_PRODUCER_ID,
             RecordBatch.NO_PRODUCER_ID,
             producerEpoch,
+            RecordBatch.NO_PRODUCER_EPOCH,
             RecordBatch.NO_PRODUCER_EPOCH,
             30000,
             TransactionState.EMPTY,
@@ -561,6 +635,7 @@ public class TransactionMetadataTest {
             RecordBatch.NO_PRODUCER_ID,
             producerEpoch,
             RecordBatch.NO_PRODUCER_EPOCH,
+            RecordBatch.NO_PRODUCER_EPOCH,
             30000,
             TransactionState.ONGOING,
             Set.of(),
@@ -568,7 +643,7 @@ public class TransactionMetadataTest {
             time.milliseconds(),
             TV_2);
 
-        TxnTransitMetadata transitMetadata = txnMetadata.prepareAbortOrCommit(TransactionState.PREPARE_COMMIT, TV_2, RecordBatch.NO_PRODUCER_ID, time.milliseconds() - 1, false);
+        TxnTransitMetadata transitMetadata = txnMetadata.prepareAbortOrCommit(TransactionState.PREPARE_COMMIT, TV_2, RecordBatch.NO_PRODUCER_ID, RecordBatch.NO_PRODUCER_EPOCH, time.milliseconds() - 1, false);
         txnMetadata.completeTransitionTo(transitMetadata);
         assertEquals(producerId, txnMetadata.producerId());
         assertEquals((short) (producerEpoch + 1), txnMetadata.producerEpoch());
@@ -593,16 +668,17 @@ public class TransactionMetadataTest {
             RecordBatch.NO_PRODUCER_ID,
             producerEpoch,
             RecordBatch.NO_PRODUCER_EPOCH,
+            RecordBatch.NO_PRODUCER_EPOCH,
             30000,
             TransactionState.ONGOING,
             Set.of(),
             time.milliseconds(),
             time.milliseconds(),
             TV_2);
-        assertTrue(txnMetadata.isProducerEpochExhausted());
+        assertTrue(txnMetadata.isClientFacingEpochExhausted());
 
         long newProducerId = 9893L;
-        TxnTransitMetadata transitMetadata = txnMetadata.prepareAbortOrCommit(TransactionState.PREPARE_COMMIT, TV_2, newProducerId, time.milliseconds() - 1, false);
+        TxnTransitMetadata transitMetadata = txnMetadata.prepareAbortOrCommit(TransactionState.PREPARE_COMMIT, TV_2, newProducerId, RecordBatch.NO_PRODUCER_EPOCH, time.milliseconds() - 1, false);
         txnMetadata.completeTransitionTo(transitMetadata);
         assertEquals(producerId, txnMetadata.producerId());
         assertEquals(Short.MAX_VALUE, txnMetadata.producerEpoch());
@@ -647,6 +723,7 @@ public class TransactionMetadataTest {
             RecordBatch.NO_PRODUCER_ID,
             RecordBatch.NO_PRODUCER_EPOCH,
             RecordBatch.NO_PRODUCER_EPOCH,
+            RecordBatch.NO_PRODUCER_EPOCH,
             30000,
             TransactionState.EMPTY,
             Set.of(),
@@ -671,6 +748,7 @@ public class TransactionMetadataTest {
             RecordBatch.NO_PRODUCER_ID,
             RecordBatch.NO_PRODUCER_ID,
             producerEpoch,
+            RecordBatch.NO_PRODUCER_EPOCH,
             RecordBatch.NO_PRODUCER_EPOCH,
             30000,
             TransactionState.EMPTY,
@@ -698,6 +776,7 @@ public class TransactionMetadataTest {
             RecordBatch.NO_PRODUCER_ID,
             producerEpoch,
             lastProducerEpoch,
+            RecordBatch.NO_PRODUCER_EPOCH,
             30000,
             TransactionState.EMPTY,
             Set.of(),
@@ -724,6 +803,7 @@ public class TransactionMetadataTest {
             RecordBatch.NO_PRODUCER_ID,
             producerEpoch,
             lastProducerEpoch,
+            RecordBatch.NO_PRODUCER_EPOCH,
             30000,
             TransactionState.EMPTY,
             Set.of(),
@@ -793,6 +873,7 @@ public class TransactionMetadataTest {
             producerId,
             RecordBatch.NO_PRODUCER_ID,
             producerEpoch,
+            RecordBatch.NO_PRODUCER_EPOCH,
             RecordBatch.NO_PRODUCER_EPOCH,
             30000,
             state,

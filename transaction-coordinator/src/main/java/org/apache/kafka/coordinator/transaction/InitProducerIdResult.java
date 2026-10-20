@@ -17,6 +17,20 @@
 package org.apache.kafka.coordinator.transaction;
 
 import org.apache.kafka.common.protocol.Errors;
+import org.apache.kafka.common.record.internal.RecordBatch;
 
-public record InitProducerIdResult(long producerId, short producerEpoch, Errors error) {
+/**
+ * The result of InitProducerId. The ongoingTxnProducerId and ongoingTxnProducerEpoch are set when
+ * InitProducerId(keepPreparedTxn=true) kept an ongoing (prepared) transaction, otherwise they are
+ * {@link RecordBatch#NO_PRODUCER_ID} and {@link RecordBatch#NO_PRODUCER_EPOCH}.
+ */
+public record InitProducerIdResult(long producerId,
+                                   short producerEpoch,
+                                   Errors error,
+                                   long ongoingTxnProducerId,
+                                   short ongoingTxnProducerEpoch) {
+
+    public InitProducerIdResult(long producerId, short producerEpoch, Errors error) {
+        this(producerId, producerEpoch, error, RecordBatch.NO_PRODUCER_ID, RecordBatch.NO_PRODUCER_EPOCH);
+    }
 }

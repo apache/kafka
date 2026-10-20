@@ -42,6 +42,7 @@ public class TransactionMetadata {
     private long nextProducerId;
     private short producerEpoch;
     private short lastProducerEpoch;
+    private short nextProducerEpoch;
     private int txnTimeoutMs;
     private TransactionState state;
     // The topicPartitions is mutable, so using HashSet, instead of Set.
@@ -72,6 +73,7 @@ public class TransactionMetadata {
      * @param nextProducerId           Latest producer ID sent to the producer for the given transactional ID
      * @param producerEpoch            current epoch of the producer
      * @param lastProducerEpoch        last epoch of the producer
+     * @param nextProducerEpoch        next epoch for the producer (for 2PC support)
      * @param txnTimeoutMs             timeout to be used to abort long running transactions
      * @param state                    current state of the transaction
      * @param topicPartitions          current set of partitions that are part of this transaction
@@ -85,6 +87,7 @@ public class TransactionMetadata {
                                long nextProducerId,
                                short producerEpoch,
                                short lastProducerEpoch,
+                               short nextProducerEpoch,
                                int txnTimeoutMs,
                                TransactionState state,
                                Set<TopicPartition> topicPartitions,
@@ -97,6 +100,7 @@ public class TransactionMetadata {
         this.nextProducerId = nextProducerId;
         this.producerEpoch = producerEpoch;
         this.lastProducerEpoch = lastProducerEpoch;
+        this.nextProducerEpoch = nextProducerEpoch;
         this.txnTimeoutMs = txnTimeoutMs;
         this.state = state;
         this.topicPartitions = new HashSet<>(topicPartitions);
@@ -106,6 +110,27 @@ public class TransactionMetadata {
         this.pendingState = Optional.empty();
         this.hasFailedEpochFence = false;
         this.lock = new ReentrantLock();
+    }
+
+    public boolean hasNextProducerEpoch() {
+        return nextProducerEpoch != RecordBatch.NO_PRODUCER_EPOCH;
+    }
+
+    // When InitProducerId keeps an Ongoing transaction (which is "prepared" from
+    // the 2PC protocol perspective) it needs to preserve the producerId / epoch of
+    // the transaction (that will be used for sending markers), but update the
+    // producerId / epoch that's going to be used by client (so that we could fence
+    // stale client requests). For backward compatibility (in case of server
+    // downgrade) we keep the producerId / epoch of the transaction in the
+    // producer* fields and the other pair in the nextProducer* fields.
+    // Note that we check hasNextProducerEpoch because nextProducerId could
+    // be set in other conditions, not related to "prepared" 2PC transactions
+    public long clientProducerId() {
+        return hasNextProducerEpoch() ? nextProducerId : producerId;
+    }
+
+    public short clientProducerEpoch() {
+        return hasNextProducerEpoch() ? nextProducerEpoch : producerEpoch;
     }
 
     public <T> T inLock(Supplier<T> function) {
@@ -133,21 +158,34 @@ public class TransactionMetadata {
     // this is visible for test only
     public TxnTransitMetadata prepareNoTransit() {
         // do not call transitTo as it will set the pending state, a follow-up call to abort the transaction will set its pending state
-        return new TxnTransitMetadata(producerId, prevProducerId, nextProducerId, producerEpoch, lastProducerEpoch, txnTimeoutMs,
-            state, new HashSet<>(topicPartitions), txnStartTimestamp, txnLastUpdateTimestamp, clientTransactionVersion);
+        return new TxnTransitMetadata(producerId, prevProducerId, nextProducerId, producerEpoch, lastProducerEpoch,
+            nextProducerEpoch, txnTimeoutMs, state, new HashSet<>(topicPartitions), txnStartTimestamp, txnLastUpdateTimestamp,
+            clientTransactionVersion);
     }
 
+    /**
+     * Prepare the transition to fence the current producer.  The fence is applied to the client-facing
+     * identity (see {@link #clientProducerEpoch()}): if InitProducerId(keepPreparedTxn=true) was used,
+     * producerId / producerEpoch are frozen to be used for the transaction markers, so the
+     * nextProducerEpoch is bumped instead.
+     */
     public TxnTransitMetadata prepareFenceProducerEpoch() {
-        if (producerEpoch == Short.MAX_VALUE)
-            LOGGER.error("Fencing producer {} {} with epoch equal to Short.MaxValue, this must not happen unless there is a bug", transactionalId, producerId);
+        short clientEpoch = clientProducerEpoch();
+        if (clientEpoch == Short.MAX_VALUE)
+            LOGGER.error("Fencing producer {} {} with epoch equal to Short.MaxValue, this must not happen unless there is a bug",
+                transactionalId, clientProducerId());
 
         // If we've already failed to fence an epoch (because the write to the log failed), we don't increase it again.
         // This is safe because we never return the epoch to client if we fail to fence the epoch
-        // Also don't increase if producerEpoch is already at max, to avoid overflow.
-        short bumpedEpoch = hasFailedEpochFence || producerEpoch == Short.MAX_VALUE ? producerEpoch : (short) (producerEpoch + 1);
+        // Also don't increase if the epoch is already at max, to avoid overflow.
+        short bumpedEpoch = hasFailedEpochFence || clientEpoch == Short.MAX_VALUE ? clientEpoch : (short) (clientEpoch + 1);
 
         TransitionData data = new TransitionData(TransactionState.PREPARE_EPOCH_FENCE);
-        data.producerEpoch = bumpedEpoch;
+        if (hasNextProducerEpoch()) {
+            data.nextProducerEpoch = bumpedEpoch;
+        } else {
+            data.producerEpoch = bumpedEpoch;
+        }
         return prepareTransitionTo(data);
     }
 
@@ -155,7 +193,7 @@ public class TransactionMetadata {
         int newTxnTimeoutMs,
         Optional<Short> expectedProducerEpoch,
         long updateTimestamp) {
-        if (isProducerEpochExhausted())
+        if (isEpochExhausted(producerEpoch))
             throw new IllegalStateException("Cannot allocate any more producer epochs for producerId " + producerId);
 
         TransitionData data = new TransitionData(TransactionState.EMPTY);
@@ -211,6 +249,34 @@ public class TransactionMetadata {
         return prepareTransitionTo(data);
     }
 
+    public TxnTransitMetadata prepareIncrementProducerEpochForOngoing(long updateTimestamp) {
+        if (state != TransactionState.ONGOING)
+            throw new IllegalStateException("Cannot increment producer epoch for ongoing transaction when state is " + state +
+                "; producer epoch increment for ongoing transactions is only allowed in ONGOING state");
+        if (isClientFacingEpochExhausted())
+            throw new IllegalStateException("Cannot allocate any more producer epochs for producerId " + clientProducerId());
+
+        // Note that we need to set nextProducerId because it's not set when we first call InitProducerId(keepPreparedTxn=true)
+        TransitionData data = new TransitionData(state);
+        data.nextProducerId = clientProducerId();
+        data.nextProducerEpoch = (short) (clientProducerEpoch() + 1);
+        data.txnLastUpdateTimestamp = updateTimestamp;
+
+        return prepareTransitionTo(data);
+    }
+
+    public TxnTransitMetadata prepareProducerIdRotationForOngoing(long newNextProducerId, long updateTimestamp) {
+        if (state != TransactionState.ONGOING)
+            throw new IllegalStateException("Cannot rotate producer ids for ongoing transaction when state is " + state +
+                "; producer ID rotation for ongoing transactions is only allowed in ONGOING state");
+
+        TransitionData data = new TransitionData(state);
+        data.nextProducerId = newNextProducerId;
+        data.nextProducerEpoch = 0;
+        data.txnLastUpdateTimestamp = updateTimestamp;
+        return prepareTransitionTo(data);
+    }
+
     public TxnTransitMetadata prepareAddPartitions(Set<TopicPartition> addedTopicPartitions,
                                                    long updateTimestamp,
                                                    TransactionVersion clientTransactionVersion) {
@@ -235,6 +301,7 @@ public class TransactionMetadata {
     public TxnTransitMetadata prepareAbortOrCommit(TransactionState newState,
                                                    TransactionVersion clientTransactionVersion,
                                                    long nextProducerId,
+                                                   short nextProducerEpoch,
                                                    long updateTimestamp,
                                                    boolean noPartitionAdded) {
         TransitionData data = new TransitionData(newState);
@@ -247,7 +314,7 @@ public class TransactionMetadata {
                 // We already ensured that we do not overflow here. MAX_SHORT is the highest possible value.
                 data.producerEpoch = (short) (producerEpoch + 1);
             }
-            data.lastProducerEpoch = producerEpoch;
+            data.lastProducerEpoch = clientProducerEpoch();
         } else {
             data.producerEpoch = producerEpoch;
             data.lastProducerEpoch = lastProducerEpoch;
@@ -257,8 +324,15 @@ public class TransactionMetadata {
         // start time is uncertain but it is still required. So we can use the update time as the transaction start time.
         data.txnStartTimestamp = noPartitionAdded ? updateTimestamp : txnStartTimestamp;
         data.nextProducerId = nextProducerId;
+        data.nextProducerEpoch = nextProducerEpoch;
         data.txnLastUpdateTimestamp = updateTimestamp;
         data.clientTransactionVersion = clientTransactionVersion;
+        // If the transaction was kept with InitProducerId(keepPreparedTxn=true), the client used the client-facing
+        // producer id, which may be different from the frozen producerId.  Keep track of it as the previous
+        // producer id, so that the client's retry can be recognized if the producer id is rotated on completion.
+        if (hasNextProducerEpoch())
+            data.prevProducerId = clientProducerId();
+
         return prepareTransitionTo(data);
     }
 
@@ -276,15 +350,26 @@ public class TransactionMetadata {
         // but lastProducerEpoch remains MAX-1 to maintain consistency with what the client last saw.
         if (clientTransactionVersion.supportsEpochBump() && nextProducerId != RecordBatch.NO_PRODUCER_ID) {
             data.producerId = nextProducerId;
-            data.producerEpoch = 0;
+            data.producerEpoch = hasNextProducerEpoch() ? nextProducerEpoch : 0;
         } else {
             data.producerId = producerId;
-            data.producerEpoch = producerEpoch;
+            data.producerEpoch = clientProducerEpoch();
         }
+        // For a transaction kept with InitProducerId(keepPreparedTxn=true), the previous (client-facing)
+        // producer id was recorded by prepareAbortOrCommit, the frozen producerId must not overwrite it.
+        data.prevProducerId = expectedPrevProducerIdOnComplete();
         data.nextProducerId = RecordBatch.NO_PRODUCER_ID;
+        data.nextProducerEpoch = RecordBatch.NO_PRODUCER_EPOCH;
         data.topicPartitions = new HashSet<>();
         data.txnLastUpdateTimestamp = updateTimestamp;
+
         return prepareTransitionTo(data);
+    }
+
+    // The previous producer id of the COMPLETE_COMMIT / COMPLETE_ABORT transition from the current
+    // PREPARE_COMMIT / PREPARE_ABORT state.
+    private long expectedPrevProducerIdOnComplete() {
+        return hasNextProducerEpoch() ? prevProducerId : producerId;
     }
 
     public TxnTransitMetadata prepareDead() {
@@ -294,11 +379,13 @@ public class TransactionMetadata {
     }
 
     /**
-     * Check if the epochs have been exhausted for the current producerId. We do not allow the client to use an
-     * epoch equal to Short.MaxValue to ensure that the coordinator will always be able to fence an existing producer.
+     * Check if the epochs have been exhausted for the client-facing producer id, see {@link #clientProducerEpoch()}:
+     * nextProducerId / nextProducerEpoch if InitProducerId(keepPreparedTxn=true) kept the ongoing transaction,
+     * otherwise producerId / producerEpoch.  We do not allow the client to use an epoch equal to Short.MaxValue
+     * to ensure that the coordinator will always be able to fence an existing producer.
      */
-    public boolean isProducerEpochExhausted() {
-        return isEpochExhausted(producerEpoch);
+    public boolean isClientFacingEpochExhausted() {
+        return isEpochExhausted(clientProducerEpoch());
     }
 
     /**
@@ -332,8 +419,8 @@ public class TransactionMetadata {
         // check that the new state transition is valid and update the pending state if necessary
         if (data.state.validPreviousStates().contains(this.state)) {
             TxnTransitMetadata transitMetadata = new TxnTransitMetadata(
-                data.producerId, this.producerId, data.nextProducerId, data.producerEpoch, data.lastProducerEpoch,
-                data.txnTimeoutMs, data.state, data.topicPartitions,
+                data.producerId, data.prevProducerId, data.nextProducerId, data.producerEpoch, data.lastProducerEpoch,
+                data.nextProducerEpoch, data.txnTimeoutMs, data.state, data.topicPartitions,
                 data.txnStartTimestamp, data.txnLastUpdateTimestamp, data.clientTransactionVersion
             );
 
@@ -435,6 +522,7 @@ public class TransactionMetadata {
         nextProducerId = transitMetadata.nextProducerId();
         producerEpoch = transitMetadata.producerEpoch();
         lastProducerEpoch = transitMetadata.lastProducerEpoch();
+        nextProducerEpoch = transitMetadata.nextProducerEpoch();
         txnTimeoutMs = transitMetadata.txnTimeoutMs();
         topicPartitions = transitMetadata.topicPartitions();
         txnStartTimestamp = transitMetadata.txnStartTimestamp();
@@ -449,15 +537,17 @@ public class TransactionMetadata {
      * Validates the producer epoch and ID based on transaction state and version.
      * <p>
      * Logic:
-     * * 1. **Overflow Case in Transactions V2:**
-     * *    - During overflow (epoch reset to 0), we compare both `lastProducerEpoch` values since it
-     * *      does not change during completion.
-     * *    - For PrepareComplete, the producer ID has been updated. We ensure that the `prevProducerID`
-     * *      in the transit metadata matches the current producer ID, confirming the change.
+     * * 1. **CompleteCommit or CompleteAbort in Transactions V2:**
+     * *    - If the producer ID changes (the producer ID was rotated on epoch overflow, or the client-facing
+     * *      producer ID set by InitProducerId(keepPreparedTxn=true) is different from the producer ID), the
+     * *      producer epoch must be the nextProducerEpoch (or 0 if it's not set), the `lastProducerEpoch` must not
+     * *      change during completion and the `prevProducerId` in the transit metadata must be the previous
+     * *      (client-facing) producer ID.
+     * *    - Otherwise, the producer epoch must be the client-facing producer epoch, see {@link #clientProducerEpoch()}.
      * *
-     * * 2. **Epoch Bump Case in Transactions V2:**
-     * *    - For PrepareCommit or PrepareAbort, the producer epoch has been bumped. We ensure the `lastProducerEpoch`
-     * *      in transit metadata matches the current producer epoch, confirming the bump.
+     * * 2. **PrepareCommit or PrepareAbort in Transactions V2:**
+     * *    - The producer epoch has been bumped (to be used for the markers). We ensure the `lastProducerEpoch`
+     * *      in transit metadata matches the client-facing producer epoch, confirming the bump.
      * *    - We also verify that the producer ID remains the same.
      * *
      * * 3. **Other Cases:**
@@ -468,20 +558,30 @@ public class TransactionMetadata {
      */
     private boolean validProducerEpoch(TxnTransitMetadata transitMetadata) {
         boolean isAtLeastTransactionsV2 = transitMetadata.clientTransactionVersion().supportsEpochBump();
-        TransactionState txnState = transitMetadata.txnState();
+        TransactionState transitTxnState = transitMetadata.txnState();
         short transitProducerEpoch = transitMetadata.producerEpoch();
         long transitProducerId = transitMetadata.producerId();
         short transitLastProducerEpoch = transitMetadata.lastProducerEpoch();
 
         if (isAtLeastTransactionsV2 &&
-            (txnState == TransactionState.COMPLETE_COMMIT || txnState == TransactionState.COMPLETE_ABORT) &&
-            transitProducerEpoch == 0) {
-            return transitLastProducerEpoch == lastProducerEpoch && transitMetadata.prevProducerId() == producerId;
+            (transitTxnState == TransactionState.COMPLETE_COMMIT || transitTxnState == TransactionState.COMPLETE_ABORT)) {
+            if (transitProducerId != producerId) {
+                // Producer ID rotation case: validate that the transition metadata has the correct prevProducerId
+                // and that the transitProducerEpoch matches the nextProducerEpoch (which may have been bumped during EndTransaction).
+                // If nextProducerEpoch is not set (NO_PRODUCER_EPOCH), then transitProducerEpoch should be 0 (standard rotation).
+                boolean epochMatches = hasNextProducerEpoch() ?
+                        transitProducerEpoch == nextProducerEpoch : transitProducerEpoch == 0;
+                return transitLastProducerEpoch == lastProducerEpoch &&
+                        transitMetadata.prevProducerId() == expectedPrevProducerIdOnComplete() &&
+                        epochMatches;
+            } else {
+                return transitProducerEpoch == clientProducerEpoch();
+            }
         }
 
         if (isAtLeastTransactionsV2 &&
-            (txnState == TransactionState.PREPARE_COMMIT || txnState == TransactionState.PREPARE_ABORT)) {
-            return transitLastProducerEpoch == producerEpoch && transitProducerId == producerId;
+            (transitTxnState == TransactionState.PREPARE_COMMIT || transitTxnState == TransactionState.PREPARE_ABORT)) {
+            return transitLastProducerEpoch == clientProducerEpoch() && transitProducerId == producerId;
         }
         return transitProducerEpoch == producerEpoch && transitProducerId == producerId;
     }
@@ -528,6 +628,10 @@ public class TransactionMetadata {
         this.producerEpoch = producerEpoch;
     }
 
+    public void setNextProducerEpoch(short nextProducerEpoch) {
+        this.nextProducerEpoch = nextProducerEpoch;
+    }
+
     public short producerEpoch() {
         return producerEpoch;
     }
@@ -538,6 +642,14 @@ public class TransactionMetadata {
 
     public short lastProducerEpoch() {
         return lastProducerEpoch;
+    }
+
+    public long nextProducerId() {
+        return nextProducerId;
+    }
+
+    public short nextProducerEpoch() {
+        return nextProducerEpoch;
     }
 
     public int txnTimeoutMs() {
@@ -603,6 +715,7 @@ public class TransactionMetadata {
             ", nextProducerId=" + nextProducerId +
             ", producerEpoch=" + producerEpoch +
             ", lastProducerEpoch=" + lastProducerEpoch +
+            ", nextProducerEpoch=" + nextProducerEpoch +
             ", txnTimeoutMs=" + txnTimeoutMs +
             ", state=" + state +
             ", pendingState=" + pendingState +
@@ -625,6 +738,7 @@ public class TransactionMetadata {
             nextProducerId == other.nextProducerId &&
             producerEpoch == other.producerEpoch &&
             lastProducerEpoch == other.lastProducerEpoch &&
+            nextProducerEpoch == other.nextProducerEpoch &&
             txnTimeoutMs == other.txnTimeoutMs &&
             state.equals(other.state) &&
             topicPartitions.equals(other.topicPartitions) &&
@@ -642,6 +756,7 @@ public class TransactionMetadata {
             nextProducerId,
             producerEpoch,
             lastProducerEpoch,
+            nextProducerEpoch,
             txnTimeoutMs,
             state,
             topicPartitions,
@@ -658,9 +773,11 @@ public class TransactionMetadata {
     private class TransitionData {
         final TransactionState state;
         long producerId = TransactionMetadata.this.producerId;
+        long prevProducerId = TransactionMetadata.this.producerId;
         long nextProducerId = TransactionMetadata.this.nextProducerId;
         short producerEpoch = TransactionMetadata.this.producerEpoch;
         short lastProducerEpoch = TransactionMetadata.this.lastProducerEpoch;
+        short nextProducerEpoch = TransactionMetadata.this.nextProducerEpoch;
         int txnTimeoutMs = TransactionMetadata.this.txnTimeoutMs;
         HashSet<TopicPartition> topicPartitions = TransactionMetadata.this.topicPartitions;
         long txnStartTimestamp = TransactionMetadata.this.txnStartTimestamp;
