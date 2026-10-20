@@ -26,6 +26,14 @@ type: docs
 -->
 
 
+## Upgrading to 4.5.0
+
+### Upgrading Servers to 4.5.0 from any version 3.3.x through 4.4.0
+
+### Notable changes in 4.5.0
+
+  * A custom assignor configured in `group.streams.assignors` may now reuse the name of a built-in assignor, and then replaces that built-in; such a configuration used to fail broker startup with a `ConfigException`. This matters because `balanced` is now a built-in streams task assignor that is registered by default (the default of `group.streams.assignors` is now `sticky,balanced`), so a broker that registers a custom assignor named `balanced` keeps starting after the upgrade and keeps using that custom assignor. Configuring a custom assignor together with the built-in whose name it reuses still fails broker startup, because assignor names must be unique. For further details, please refer to [KAFKA-21194](https://issues.apache.org/jira/browse/KAFKA-21194).
+
 ## Upgrading to 4.4.0
 
 ### Upgrading Servers to 4.4.0 from any version 3.3.x through 4.3.0
