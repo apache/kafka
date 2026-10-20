@@ -367,8 +367,7 @@ public interface ClusterInstance {
             admin.deleteTopics(List.of(topicName)).all().get();
             waitTopicDeletion(topicName);
         } catch (InterruptedException e) {
-            Thread.currentThread().interrupt();
-            throw new RuntimeException("Failed to delete topic " + topicName, e);
+            throw new InterruptException(e);
         } catch (ExecutionException e) {
             if (e.getCause() instanceof RuntimeException re) throw re;
             throw new RuntimeException("Failed to delete topic " + topicName, e.getCause());
