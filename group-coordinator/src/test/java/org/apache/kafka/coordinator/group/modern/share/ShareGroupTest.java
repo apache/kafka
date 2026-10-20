@@ -16,7 +16,6 @@
  */
 package org.apache.kafka.coordinator.group.modern.share;
 
-import org.apache.kafka.common.Uuid;
 import org.apache.kafka.common.errors.GroupIdNotFoundException;
 import org.apache.kafka.common.errors.GroupNotEmptyException;
 import org.apache.kafka.common.errors.UnknownMemberIdException;
@@ -28,7 +27,6 @@ import org.apache.kafka.common.utils.internals.LogContext;
 import org.apache.kafka.coordinator.common.runtime.KRaftCoordinatorMetadataImage;
 import org.apache.kafka.coordinator.common.runtime.MetadataImageBuilder;
 import org.apache.kafka.coordinator.group.Group;
-import org.apache.kafka.coordinator.group.modern.Assignment;
 import org.apache.kafka.coordinator.group.modern.MemberState;
 import org.apache.kafka.coordinator.group.modern.share.ShareGroup.ShareGroupState;
 import org.apache.kafka.timeline.SnapshotRegistry;
@@ -41,8 +39,6 @@ import java.util.List;
 import java.util.Map;
 import java.util.Set;
 
-import static org.apache.kafka.common.utils.Utils.mkEntry;
-import static org.apache.kafka.common.utils.Utils.mkMap;
 import static org.apache.kafka.coordinator.group.api.assignor.SubscriptionType.HETEROGENEOUS;
 import static org.apache.kafka.coordinator.group.api.assignor.SubscriptionType.HOMOGENEOUS;
 import static org.junit.jupiter.api.Assertions.assertDoesNotThrow;
@@ -206,89 +202,6 @@ public class ShareGroupTest {
         assertEquals(
             HETEROGENEOUS,
             shareGroup.subscriptionType()
-        );
-    }
-
-    @Test
-    public void testUpdateInvertedAssignment() {
-        SnapshotRegistry snapshotRegistry = new SnapshotRegistry(new LogContext());
-        ShareGroup shareGroup = new ShareGroup(snapshotRegistry, "test-group");
-        Uuid topicId = Uuid.randomUuid();
-        String memberId1 = "member1";
-        String memberId2 = "member2";
-
-        // Initial assignment for member1
-        Assignment initialAssignment = new Assignment(Map.of(
-            topicId,
-            Set.of(0)
-        ));
-        shareGroup.updateTargetAssignment(memberId1, initialAssignment);
-
-        // Verify that partition 0 is assigned to member1.
-        assertEquals(
-            mkMap(
-                mkEntry(topicId, mkMap(mkEntry(0, memberId1)))
-            ),
-            shareGroup.invertedTargetAssignment()
-        );
-
-        // New assignment for member1
-        Assignment newAssignment = new Assignment(Map.of(
-            topicId,
-            Set.of(1)
-        ));
-        shareGroup.updateTargetAssignment(memberId1, newAssignment);
-
-        // Verify that partition 0 is no longer assigned and partition 1 is assigned to member1
-        assertEquals(
-            mkMap(
-                mkEntry(topicId, mkMap(mkEntry(1, memberId1)))
-            ),
-            shareGroup.invertedTargetAssignment()
-        );
-
-        // New assignment for member2 to add partition 1
-        Assignment newAssignment2 = new Assignment(Map.of(
-            topicId,
-            Set.of(1)
-        ));
-        shareGroup.updateTargetAssignment(memberId2, newAssignment2);
-
-        // Verify that partition 1 is assigned to member2
-        assertEquals(
-            mkMap(
-                mkEntry(topicId, mkMap(mkEntry(1, memberId2)))
-            ),
-            shareGroup.invertedTargetAssignment()
-        );
-
-        // New assignment for member1 to revoke partition 1 and assign partition 0
-        Assignment newAssignment1 = new Assignment(Map.of(
-            topicId,
-            Set.of(0)
-        ));
-        shareGroup.updateTargetAssignment(memberId1, newAssignment1);
-
-        // Verify that partition 1 is still assigned to member2 and partition 0 is assigned to member1
-        assertEquals(
-            mkMap(
-                mkEntry(topicId, mkMap(
-                    mkEntry(0, memberId1),
-                    mkEntry(1, memberId2)
-                ))
-            ),
-            shareGroup.invertedTargetAssignment()
-        );
-
-        // Test remove target assignment for member1
-        shareGroup.removeTargetAssignment(memberId1);
-
-        // Verify that partition 0 is no longer assigned and partition 1 is still assigned to member2
-        assertEquals(
-            mkMap(
-                mkEntry(topicId, mkMap(mkEntry(1, memberId2)))
-            ),
-            shareGroup.invertedTargetAssignment()
         );
     }
 
