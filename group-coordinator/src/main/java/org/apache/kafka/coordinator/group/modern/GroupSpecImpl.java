@@ -101,6 +101,8 @@ public class GroupSpecImpl implements GroupSpec {
 
     /**
      * {@inheritDoc}
+     * <p>
+     * Partitions which do not exist in the metadata image are reported as unassigned.
      */
     @Override
     public boolean isPartitionAssigned(Uuid topicId, int partitionId) {
