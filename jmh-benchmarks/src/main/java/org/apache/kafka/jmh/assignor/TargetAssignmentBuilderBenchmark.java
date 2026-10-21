@@ -82,6 +82,9 @@ public class TargetAssignmentBuilderBenchmark {
     @Param({"HOMOGENEOUS", "HETEROGENEOUS"})
     private SubscriptionType subscriptionType;
 
+    @Param({"false", "true"})
+    private boolean assignorOffload;
+
     private static final Logger LOG = new LogContext().logger(TargetAssignmentBuilderBenchmark.class);
 
     private static final String GROUP_ID = "benchmark-group";
@@ -198,18 +201,7 @@ public class TargetAssignmentBuilderBenchmark {
     @Benchmark
     @Threads(1)
     @OutputTimeUnit(TimeUnit.MILLISECONDS)
-    public GroupSpec buildGroupSpecWithoutOffload() {
-        return buildGroupSpec(false);
-    }
-
-    @Benchmark
-    @Threads(1)
-    @OutputTimeUnit(TimeUnit.MILLISECONDS)
-    public GroupSpec buildGroupSpecWithOffload() {
-        return buildGroupSpec(true);
-    }
-
-    private GroupSpec buildGroupSpec(boolean assignorOffload) {
+    public GroupSpec buildGroupSpec() {
         return new GroupSpecBuilder.ConsumerGroupSpecBuilder()
             .withMembers(updatedMembersAndTargetAssignment.members())
             .withSubscriptionType(subscriptionType)
@@ -226,7 +218,7 @@ public class TargetAssignmentBuilderBenchmark {
         // We have to build a new group spec every time. The group spec caches its assigned
         // partitions on the first call to isPartitionAssigned, so reusing one would leave that
         // cost out of the benchmark.
-        GroupSpec groupSpec = buildGroupSpecWithoutOffload();
+        GroupSpec groupSpec = buildGroupSpec();
         return new TargetAssignmentBuilder(GROUP_EPOCH, partitionAssignor)
             .withTime(Time.SYSTEM)
             .withMetadataImage(metadataImage)
@@ -238,6 +230,8 @@ public class TargetAssignmentBuilderBenchmark {
     @Threads(1)
     @OutputTimeUnit(TimeUnit.MILLISECONDS)
     public List<CoordinatorRecord> buildAssignmentRecords() {
+        // Assignor offload does not affect this benchmark, since it only affects building the group
+        // spec.
         return new TargetAssignmentRecordsBuilder.ConsumerTargetAssignmentRecordsBuilder(LOG, GROUP_ID)
             .withTargetAssignmentMetadata(targetAssignmentResult.targetAssignmentMetadata())
             .withCurrentMemberIds(updatedMembersAndTargetAssignment.members().keySet())
