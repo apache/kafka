@@ -204,7 +204,7 @@ class ControllerApis(
       controllerMutationQuotaRecorderFor(controllerMutationQuota))
     val future = deleteTopics(context,
       deleteTopicsRequest.data,
-      request.context.apiVersion,
+      request.context.effectiveApiVersion,
       authHelper.authorize(request.context, DELETE, CLUSTER, CLUSTER_NAME, true, false, 1),
       names => authHelper.filterByAuthorized(request.context, DESCRIBE, TOPIC, names, (n: String) => n),
       names => authHelper.filterByAuthorized(request.context, DELETE, TOPIC, names, (n: String) => n))

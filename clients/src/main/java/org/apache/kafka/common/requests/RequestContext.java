@@ -156,7 +156,8 @@ public class RequestContext implements AuthorizableRequestContext {
      * over the network.
      */
     public Send buildResponseSend(AbstractResponse body) {
-        return body.toSend(header.toResponseHeader(), apiVersion());
+        short version = effectiveApiVersion();
+        return body.toSend(responseHeader(version), version);
     }
 
     /**
@@ -170,15 +171,32 @@ public class RequestContext implements AuthorizableRequestContext {
      * so we do not lose the benefit of "zero copy" transfers from disk.
      */
     public ByteBuffer buildResponseEnvelopePayload(AbstractResponse body) {
-        return body.serializeWithHeader(header.toResponseHeader(), apiVersion());
+        short version = effectiveApiVersion();
+        return body.serializeWithHeader(responseHeader(version), version);
+    }
+
+    /**
+     * The response header follows the version used to serialize the response body. For an unsupported
+     * ApiVersionsRequest, this is v0 rather than the original request version.
+     */
+    private ResponseHeader responseHeader(short responseVersion) {
+        return new ResponseHeader(header.correlationId(), header.apiKey().responseHeaderVersion(responseVersion));
     }
 
     private boolean isUnsupportedApiVersionsRequest() {
         return header.apiKey() == API_VERSIONS && !header.isApiVersionSupported();
     }
 
-    public short apiVersion() {
-        // Use v0 when serializing an unhandled ApiVersion response
+    /**
+     * Returns the API version used to parse the request body and serialize the response.
+     * An unsupported {@link ApiVersionsRequest} is treated as v0 without parsing its body, and its response
+     * is serialized as v0. For all other requests, this is the original version sent by the client.
+     * Request handlers should use this version or {@link AbstractRequest#version()} for version-dependent behavior.
+     *
+     * @see #requestVersion()
+     * @see AbstractRequest#version()
+     */
+    public short effectiveApiVersion() {
         if (isUnsupportedApiVersionsRequest())
             return 0;
         return header.apiVersion();
@@ -213,6 +231,13 @@ public class RequestContext implements AuthorizableRequestContext {
         return header.apiKey().id;
     }
 
+    /**
+     * Returns the original API version sent by the client in the request header. This can differ from
+     * {@link #effectiveApiVersion()} for an unsupported {@link ApiVersionsRequest}. Use this when the original
+     * version is needed, such as checking whether the requested API version is enabled.
+     *
+     * @see RequestHeader#apiVersion()
+     */
     @Override
     public int requestVersion() {
         return header.apiVersion();

@@ -54,7 +54,8 @@ public class RequestContextTest {
         RequestHeader header = new RequestHeader(ApiKeys.API_VERSIONS, Short.MAX_VALUE, "", correlationId);
         RequestContext context = new RequestContext(header, "0", InetAddress.getLocalHost(), KafkaPrincipal.ANONYMOUS,
                 new ListenerName("ssl"), SecurityProtocol.SASL_SSL, ClientInformation.EMPTY, false);
-        assertEquals(0, context.apiVersion());
+        assertEquals(header.apiVersion(), context.requestVersion());
+        assertEquals(0, context.effectiveApiVersion());
 
         // Write some garbage to the request buffer. This should be ignored since we will treat
         // the unknown version type as v0 which has an empty request body.
@@ -84,7 +85,8 @@ public class RequestContextTest {
 
         RequestContext context = new RequestContext(header, "0", InetAddress.getLocalHost(), KafkaPrincipal.ANONYMOUS,
                 new ListenerName("ssl"), SecurityProtocol.SASL_SSL, ClientInformation.EMPTY, false);
-        assertEquals(0, context.apiVersion());
+        assertEquals(header.apiVersion(), context.requestVersion());
+        assertEquals(0, context.effectiveApiVersion());
 
         verifyUnsupportedApiVersionsRequestSerde(context, requestBuffer, correlationId);
     }
@@ -95,6 +97,7 @@ public class RequestContextTest {
         assertInstanceOf(ApiVersionsRequest.class, requestAndSize.request);
         ApiVersionsRequest request = (ApiVersionsRequest) requestAndSize.request;
         assertTrue(request.hasUnsupportedRequestVersion());
+        assertEquals(0, request.version());
 
         Send send = context.buildResponseSend(request.getErrorResponse(0, Errors.UNSUPPORTED_VERSION.exception()));
         ByteBufferChannel channel = new ByteBufferChannel(256);
@@ -104,8 +107,14 @@ public class RequestContextTest {
         responseBuffer.flip();
         responseBuffer.getInt(); // strip off the size
 
-        ResponseHeader responseHeader = ResponseHeader.parse(responseBuffer,
-            ApiKeys.API_VERSIONS.responseHeaderVersion(context.header.apiVersion()));
+        verifyUnsupportedApiVersionsResponse(responseBuffer, correlationId);
+        verifyUnsupportedApiVersionsResponse(
+            context.buildResponseEnvelopePayload(request.getErrorResponse(0, Errors.UNSUPPORTED_VERSION.exception())),
+            correlationId);
+    }
+
+    private void verifyUnsupportedApiVersionsResponse(ByteBuffer responseBuffer, int correlationId) {
+        ResponseHeader responseHeader = ResponseHeader.parse(responseBuffer, (short) 0);
         assertEquals(correlationId, responseHeader.correlationId());
 
         ApiVersionsResponse response = (ApiVersionsResponse) AbstractResponse.parseResponse(ApiKeys.API_VERSIONS,
@@ -113,6 +122,7 @@ public class RequestContextTest {
         assertEquals(Errors.UNSUPPORTED_VERSION.code(), response.data().errorCode());
         assertEquals(ApiKeys.API_VERSIONS.latestVersion(),
             response.data().apiKeys().find(ApiKeys.API_VERSIONS.id).maxVersion());
+        assertEquals(0, responseBuffer.remaining());
     }
 
     @Test
@@ -151,6 +161,9 @@ public class RequestContextTest {
         RequestContext context = new RequestContext(header, "0", InetAddress.getLocalHost(),
             KafkaPrincipal.ANONYMOUS, new ListenerName("ssl"), SecurityProtocol.SASL_SSL,
             ClientInformation.EMPTY, true);
+
+        assertEquals(header.apiVersion(), context.requestVersion());
+        assertEquals(header.apiVersion(), context.effectiveApiVersion());
 
         ByteBuffer buffer = context.buildResponseEnvelopePayload(new CreateTopicsResponse(expectedResponse));
         assertEquals(buffer.capacity(), buffer.limit(), "Buffer limit and capacity should be the same");

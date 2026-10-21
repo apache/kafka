@@ -845,7 +845,7 @@ public class GroupCoordinatorService implements GroupCoordinator {
 
             });
     }
-    
+
     private AlterShareGroupOffsetsResponseData buildErrorResponse(AlterShareGroupOffsetsResponseData response, InitializeShareGroupStateResult result) {
         AlterShareGroupOffsetsResponseData data = new AlterShareGroupOffsetsResponseData();
         Map<Uuid, Map<Integer, PartitionErrorData>> topicPartitionErrorsMap = result.getErrors();
@@ -1430,7 +1430,7 @@ public class GroupCoordinatorService implements GroupCoordinator {
 
         return FutureUtils.combineFutures(futures, ArrayList::new, List::addAll);
     }
-    
+
     /**
      * See {@link GroupCoordinator#shareGroupDescribe(AuthorizableRequestContext, List)}.
      */
@@ -1495,7 +1495,7 @@ public class GroupCoordinatorService implements GroupCoordinator {
         if (!isActive.get() || metadataImage == null) {
             return CompletableFuture.completedFuture(AlterShareGroupOffsetsRequest.getErrorResponseData(Errors.COORDINATOR_NOT_AVAILABLE));
         }
-        
+
         if (groupId == null || groupId.isEmpty()) {
             return CompletableFuture.completedFuture(AlterShareGroupOffsetsRequest.getErrorResponseData(Errors.INVALID_GROUP_ID));
         }
@@ -1747,7 +1747,7 @@ public class GroupCoordinatorService implements GroupCoordinator {
      * that should still proceed to tombstoning. Version-agnostic: the raw {@link ApiError}
      * is added as-is; any per-version translation of new error codes (e.g. downgrading
      * {@code GROUP_DELETION_FAILED} for {@code DeleteGroups} v&lt;3) happens at the
-     * {@code KafkaApis} layer where {@code request.context.apiVersion()} is in scope and
+     * {@code KafkaApis} layer where {@code request.context.effectiveApiVersion()} is in scope and
      * matches how other new error codes are version-gated.
      */
     private static List<String> filterStreamsTopologyErrors(
