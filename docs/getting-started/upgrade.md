@@ -26,6 +26,14 @@ type: docs
 -->
 
 
+## Upgrading to 4.5.0
+
+### Upgrading Servers to 4.5.0 from any version 3.3.x through 4.4.0
+
+### Notable changes in 4.5.0
+
+  * Client metrics subscription (KIP-714) `match` config patterns are now required to be valid RE2/J syntax when creating a subscription or changing its `match` value. A pre-existing `match` pattern that only compiles under java.util.regex (e.g. one relying on backreferences or lookaround) is still matched via a deprecated fallback, which logs a warning on every broker that loads it. This fallback will be removed in Kafka 5.0, so such patterns should be migrated to valid RE2/J syntax before then. For further details, please refer to [KAFKA-15677](https://issues.apache.org/jira/browse/KAFKA-15677).
+
 ## Upgrading to 4.4.0
 
 ### Upgrading Servers to 4.4.0 from any version 3.3.x through 4.3.0
@@ -62,7 +70,6 @@ type: docs
   * The `org.apache.kafka.automatic.config.providers` allowlist is now applied when dynamic broker configurations are validated and applied.
   * `group.consumer.assignors` now fails broker startup with a `ConfigException` when two configured assignors resolve to the same name, for example a built-in listed both by its name and by its class name, or a custom assignor reusing the name of another configured assignor. Such a configuration used to pass startup validation and fail later during group coordinator loading. For further details, please refer to [KAFKA-20843](https://issues.apache.org/jira/browse/KAFKA-20843).
   * `telemetry.max.bytes` now also bounds the size of a client's *decompressed* telemetry payload, not just its compressed wire size (this decompressed-size check was introduced in 4.3.1). A push whose decompressed size exceeds this limit is rejected with the retryable `TELEMETRY_TOO_LARGE` error, so the client retries at its normal push interval; previously this was misreported as `INVALID_RECORD`, which permanently disabled telemetry for that client instance. If clients hit this limit, for example after upgrading from 4.3.0, consider raising `telemetry.max.bytes`, since typical metric formats can decompress to many times their compressed size. For further details, please refer to [KAFKA-21076](https://issues.apache.org/jira/browse/KAFKA-21076).
-  * Client metrics subscription (KIP-714) `match` config patterns are now required to be valid RE2/J syntax when creating a subscription or changing its `match` value. A pre-existing `match` pattern that only compiles under java.util.regex (e.g. one relying on backreferences or lookaround) is still matched via a deprecated fallback, which logs a warning on every broker that loads it. This fallback will be removed in Kafka 5.0, so such patterns should be migrated to valid RE2/J syntax before then. For further details, please refer to [KAFKA-15677](https://issues.apache.org/jira/browse/KAFKA-15677).
 
 ## Upgrading to 4.3.2
 

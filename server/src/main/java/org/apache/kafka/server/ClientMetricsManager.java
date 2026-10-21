@@ -132,9 +132,6 @@ public class ClientMetricsManager implements AutoCloseable {
     }
 
     public void updateSubscription(String subscriptionName, Properties properties) {
-        // Reapplying an already-committed config, not admitting a new one, so pass properties
-        // twice to skip RE2/J-only strictness. Patterns are still validated permissively below.
-        ClientMetricsConfigs.validate(subscriptionName, properties, properties);
         // IncrementalAlterConfigs API will send empty configs when all the configs are deleted
         // for respective subscription. In that case, we need to remove the subscription from the map.
         if (properties.isEmpty()) {

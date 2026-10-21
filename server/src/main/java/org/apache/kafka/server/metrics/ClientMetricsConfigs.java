@@ -272,7 +272,8 @@ public class ClientMetricsConfigs extends AbstractConfig {
                     subscriptionName, param, patternValue, re2Exception.getDescription());
                 return ClientMatchPattern.ofLegacy(legacyPattern);
             } catch (java.util.regex.PatternSyntaxException legacyException) {
-                throw new InvalidConfigurationException("Illegal client matching pattern: " + param + "=" + patternValue);
+                throw new InvalidConfigurationException(
+                    "Illegal client matching pattern: " + param + "=" + patternValue, legacyException);
             }
         }
     }

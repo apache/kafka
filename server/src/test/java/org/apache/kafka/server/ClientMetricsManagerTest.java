@@ -18,7 +18,6 @@ package org.apache.kafka.server;
 
 import org.apache.kafka.common.MetricName;
 import org.apache.kafka.common.Uuid;
-import org.apache.kafka.common.errors.InvalidRequestException;
 import org.apache.kafka.common.errors.TelemetryTooLargeException;
 import org.apache.kafka.common.message.GetTelemetrySubscriptionsRequestData;
 import org.apache.kafka.common.message.PushTelemetryRequestData;
@@ -165,12 +164,18 @@ public class ClientMetricsManagerTest {
     }
 
     @Test
-    public void testUpdateSubscriptionWithInvalidMetricsProperties() {
+    public void testUpdateSubscriptionIgnoresUnknownProperties() {
+        // Unknown keys are only rejected by the controller at admission time; updateSubscription
+        // (live update or broker reload) silently ignores them instead of rejecting the subscription.
         assertTrue(clientMetricsManager.subscriptions().isEmpty());
 
         Properties properties = new Properties();
         properties.put("random", "random");
-        assertThrows(InvalidRequestException.class, () -> clientMetricsManager.updateSubscription("sub-1", properties));
+        clientMetricsManager.updateSubscription("sub-1", properties);
+
+        ClientMetricsManager.SubscriptionInfo subscriptionInfo = clientMetricsManager.subscriptionInfo("sub-1");
+        assertNotNull(subscriptionInfo);
+        assertEquals(ClientMetricsConfigs.INTERVAL_MS_DEFAULT, subscriptionInfo.intervalMs());
     }
 
     @Test
