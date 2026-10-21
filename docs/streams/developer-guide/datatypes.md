@@ -92,7 +92,7 @@ Apache Kafka includes several built-in serde implementations for Java primitives
     <dependency>
         <groupId>org.apache.kafka</groupId>
         <artifactId>kafka-clients</artifactId>
-        <version>4.3.0</version>
+        <version>4.3.2</version>
     </dependency>
 
 This artifact provides the following serde implementations under the package [org.apache.kafka.common.serialization](https://github.com/apache/kafka/blob/4.3/clients/src/main/java/org/apache/kafka/common/serialization), which you can leverage when e.g., defining default serializers in your Streams configuration.  
@@ -220,7 +220,7 @@ Apache Kafka Streams includes serde implementations for windowed types in its `k
     <dependency>
         <groupId>org.apache.kafka</groupId>
         <artifactId>kafka-streams</artifactId>
-        <version>4.3.0</version>
+        <version>4.3.2</version>
     </dependency>
 
 This artifact provides the following windowed serde implementations under the package [org.apache.kafka.streams.kstream](https://github.com/apache/kafka/blob/4.3/streams/src/main/java/org/apache/kafka/streams/kstream):
