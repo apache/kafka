@@ -40,79 +40,19 @@ import static org.apache.kafka.common.config.ConfigDef.Importance.HIGH;
 import static org.apache.kafka.common.config.ConfigDef.Importance.LOW;
 import static org.apache.kafka.common.config.ConfigDef.Importance.MEDIUM;
 import static org.apache.kafka.common.config.ConfigDef.Range.atLeast;
-import static org.apache.kafka.common.config.ConfigDef.Range.between;
 import static org.apache.kafka.common.config.ConfigDef.Type.INT;
 import static org.apache.kafka.common.config.ConfigDef.Type.LIST;
 import static org.apache.kafka.common.config.ConfigDef.Type.LONG;
-import static org.apache.kafka.common.config.ConfigDef.Type.SHORT;
 import static org.apache.kafka.common.config.ConfigDef.Type.STRING;
 import static org.apache.kafka.server.util.MirrorUtils.compilePattern;
 import static org.apache.kafka.server.util.MirrorUtils.compilePatternList;
 
 /**
- * This class provides proper validation, defaults, and documentation
- * for all configurations supported by the Cluster Mirroring feature.
+ * Cluster Mirror configurations.
+ * Set when creating/altering a specific mirror.
+ * Stored in cluster metadata.
  */
 public final class ClusterMirrorConfig extends AbstractConfig {
-    /***********************************************************************************************************************
-       Broker level configs. Set when starting/rebooting the broker. Stored in server.properties or dynamic broker config.
-     ***********************************************************************************************************************/
-
-    public static final String MIRROR_COORDINATOR_THREADS_CONFIG = "mirror.coordinator.threads";
-    private static final String MIRROR_COORDINATOR_THREADS_DOC = "The number of threads used to process coordinator events for cluster mirroring.";
-    private static final int MIRROR_COORDINATOR_THREADS_DEFAULT = 1;
-
-    public static final String MIRROR_COORDINATOR_WRITE_TIMEOUT_MS_CONFIG = "mirror.coordinator.write.timeout.ms";
-    private static final String MIRROR_COORDINATOR_WRITE_TIMEOUT_MS_DOC = "The timeout in milliseconds for write operations on the mirror state coordinator.";
-    private static final long MIRROR_COORDINATOR_WRITE_TIMEOUT_MS_DEFAULT = 5000L;
-
-    public static final String MIRROR_COORDINATOR_APPEND_LINGER_MS_CONFIG = "mirror.coordinator.append.linger.ms";
-    private static final String MIRROR_COORDINATOR_APPEND_LINGER_MS_DOC = "The linger time in milliseconds for batching records before flushing to the mirror state topic.";
-    private static final int MIRROR_COORDINATOR_APPEND_LINGER_MS_DEFAULT = 10;
-
-    public static final String MIRROR_COORDINATOR_LOAD_BUFFER_SIZE_CONFIG = "mirror.coordinator.load.buffer.size";
-    private static final String MIRROR_COORDINATOR_LOAD_BUFFER_SIZE_DOC = "The buffer size in bytes for loading mirror state records during coordinator startup.";
-    private static final int MIRROR_COORDINATOR_LOAD_BUFFER_SIZE_DEFAULT = 5 * 1024 * 1024;
-
-    public static final String MIRROR_STATE_TOPIC_NUM_PARTITIONS_CONFIG = "mirror.state.topic.num.partitions";
-    private static final String MIRROR_STATE_TOPIC_NUM_PARTITIONS_DOC = "The number of partitions for the internal topic (should not change after deployment).";
-    private static final int MIRROR_STATE_TOPIC_NUM_PARTITIONS_DEFAULT = 50;
-
-    public static final String MIRROR_STATE_TOPIC_REPLICATION_FACTOR_CONFIG = "mirror.state.topic.replication.factor";
-    private static final String MIRROR_STATE_TOPIC_REPLICATION_FACTOR_DOC = "The replication factor for the internal topic. " +
-            "Topic creation will fail until the cluster size meets this replication factor requirement.";
-    private static final short MIRROR_STATE_TOPIC_REPLICATION_FACTOR_DEFAULT = 3;
-
-    public static final String MIRROR_NUM_REPLICA_FETCHERS_CONFIG = "mirror.num.replica.fetchers";
-    private static final String MIRROR_NUM_REPLICA_FETCHERS_DOC = "Number of fetcher threads used to replicate records from each source broker in a cluster mirror. " +
-            "The total number of mirror fetcher threads on a broker equals this value multiplied by the number of distinct source brokers and the number of cluster mirrors. " +
-            "A higher value increases I/O parallelism for cross cluster replication at the cost of higher CPU and memory utilization.";
-    private static final int MIRROR_NUM_REPLICA_FETCHERS_DEFAULT = 1;
-
-    public static final String MIRROR_METADATA_REFRESH_INTERVAL_MS_CONFIG = "mirror.metadata.refresh.interval.ms";
-    private static final String MIRROR_METADATA_REFRESH_INTERVAL_MS_DOC = "The interval in milliseconds at which the coordinator refreshes metadata from source clusters. " +
-            "This controls how frequently the coordinator polls source clusters to detect new topics and metadata changes.";
-    private static final long MIRROR_METADATA_REFRESH_INTERVAL_MS_DEFAULT = 60000L;
-
-    public static final String MIRROR_FAILED_RETRY_INITIAL_BACKOFF_MS_CONFIG = "mirror.failed.retry.initial.backoff.ms";
-    private static final String MIRROR_FAILED_RETRY_INITIAL_BACKOFF_MS_DOC = "The initial backoff time in milliseconds before retrying a mirror partition " +
-            "in FAILED state. The actual delay uses full jitter: a uniform random value in [0, backoff].";
-    private static final long MIRROR_FAILED_RETRY_INITIAL_BACKOFF_MS_DEFAULT = 100L;
-
-    public static final String MIRROR_FAILED_RETRY_MAX_BACKOFF_MS_CONFIG = "mirror.failed.retry.max.backoff.ms";
-    private static final String MIRROR_FAILED_RETRY_MAX_BACKOFF_MS_DOC = "The maximum backoff time in milliseconds for retrying a mirror partition in FAILED state.";
-    private static final long MIRROR_FAILED_RETRY_MAX_BACKOFF_MS_DEFAULT = 300000L;
-
-    public static final String MIRROR_FAILED_RETRY_MAX_ATTEMPTS_CONFIG = "mirror.failed.retry.max.attempts";
-    private static final String MIRROR_FAILED_RETRY_MAX_ATTEMPTS_DOC = "The maximum number of automatic retry attempts for a mirror partition in FAILED state. " +
-            "After this limit is reached, manual intervention is required via the start-mirror-topics command. " +
-            "Set to 0 to disable automatic retries.";
-    private static final int MIRROR_FAILED_RETRY_MAX_ATTEMPTS_DEFAULT = 20;
-
-    /***************************************************************************************************
-       Mirror level configs. Set when creating/altering a specific mirror. Stored in cluster metadata.
-     ***************************************************************************************************/
-
     public static final String BOOTSTRAP_SERVERS_CONFIG = CommonClientConfigs.BOOTSTRAP_SERVERS_CONFIG;
     private static final String BOOTSTRAP_SERVERS_DOC = "A list of host/port pairs to use for establishing the initial connection to the source cluster. " +
             "This is a required configuration when creating a cluster mirror.";
@@ -286,19 +226,6 @@ public final class ClusterMirrorConfig extends AbstractConfig {
         return configDef;
     }
 
-    private static final ConfigDef BROKER_CONFIG_DEF = new ConfigDef()
-            .define(MIRROR_COORDINATOR_THREADS_CONFIG, INT, MIRROR_COORDINATOR_THREADS_DEFAULT, atLeast(1), LOW, MIRROR_COORDINATOR_THREADS_DOC)
-            .define(MIRROR_COORDINATOR_WRITE_TIMEOUT_MS_CONFIG, LONG, MIRROR_COORDINATOR_WRITE_TIMEOUT_MS_DEFAULT, atLeast(1L), LOW, MIRROR_COORDINATOR_WRITE_TIMEOUT_MS_DOC)
-            .define(MIRROR_COORDINATOR_APPEND_LINGER_MS_CONFIG, INT, MIRROR_COORDINATOR_APPEND_LINGER_MS_DEFAULT, atLeast(0), LOW, MIRROR_COORDINATOR_APPEND_LINGER_MS_DOC)
-            .define(MIRROR_COORDINATOR_LOAD_BUFFER_SIZE_CONFIG, INT, MIRROR_COORDINATOR_LOAD_BUFFER_SIZE_DEFAULT, atLeast(1), LOW, MIRROR_COORDINATOR_LOAD_BUFFER_SIZE_DOC)
-            .define(MIRROR_STATE_TOPIC_NUM_PARTITIONS_CONFIG, INT, MIRROR_STATE_TOPIC_NUM_PARTITIONS_DEFAULT, atLeast(1), HIGH, MIRROR_STATE_TOPIC_NUM_PARTITIONS_DOC)
-            .define(MIRROR_STATE_TOPIC_REPLICATION_FACTOR_CONFIG, SHORT, MIRROR_STATE_TOPIC_REPLICATION_FACTOR_DEFAULT, atLeast(1), HIGH, MIRROR_STATE_TOPIC_REPLICATION_FACTOR_DOC)
-            .define(MIRROR_NUM_REPLICA_FETCHERS_CONFIG, INT, MIRROR_NUM_REPLICA_FETCHERS_DEFAULT, atLeast(1), HIGH, MIRROR_NUM_REPLICA_FETCHERS_DOC)
-            .define(MIRROR_METADATA_REFRESH_INTERVAL_MS_CONFIG, LONG, MIRROR_METADATA_REFRESH_INTERVAL_MS_DEFAULT, atLeast(0L), MEDIUM, MIRROR_METADATA_REFRESH_INTERVAL_MS_DOC)
-            .define(MIRROR_FAILED_RETRY_INITIAL_BACKOFF_MS_CONFIG, LONG, MIRROR_FAILED_RETRY_INITIAL_BACKOFF_MS_DEFAULT, atLeast(1L), MEDIUM, MIRROR_FAILED_RETRY_INITIAL_BACKOFF_MS_DOC)
-            .define(MIRROR_FAILED_RETRY_MAX_BACKOFF_MS_CONFIG, LONG, MIRROR_FAILED_RETRY_MAX_BACKOFF_MS_DEFAULT, atLeast(1L), MEDIUM, MIRROR_FAILED_RETRY_MAX_BACKOFF_MS_DOC)
-            .define(MIRROR_FAILED_RETRY_MAX_ATTEMPTS_CONFIG, INT, MIRROR_FAILED_RETRY_MAX_ATTEMPTS_DEFAULT, between(0, Short.MAX_VALUE), MEDIUM, MIRROR_FAILED_RETRY_MAX_ATTEMPTS_DOC);
-
     private final Pattern topicPropertiesExcludePattern;
     private final Pattern topicsIncludePattern;
     private final Pattern topicsExcludePattern;
@@ -342,35 +269,10 @@ public final class ClusterMirrorConfig extends AbstractConfig {
     }
 
     /**
-     * Creates a ClusterMirrorConfig from broker-level configuration.
-     * Only broker-level mirror configurations are available.
-     *
-     * @param config the broker configuration
-     */
-    public ClusterMirrorConfig(AbstractConfig config) {
-        super(BROKER_CONFIG_DEF, config.originals(), false);
-        this.topicPropertiesExcludePattern = null;
-        this.topicsIncludePattern = null;
-        this.topicsExcludePattern = null;
-        this.groupsIncludePattern = null;
-        this.groupsExcludePattern = null;
-        this.aclIncludeRules = null;
-        this.aclExcludeRules = null;
-    }
-
-    /**
      * Supported mirror configurations.
      */
     public static ConfigDef configDef() {
         return new ConfigDef(CONFIG_DEF);
-    }
-
-    /**
-     * Broker-level mirror configurations.
-     * This is merged into AbstractKafkaConfig for validation.
-     */
-    public static ConfigDef brokerConfigDef() {
-        return new ConfigDef(BROKER_CONFIG_DEF);
     }
 
     /**
@@ -384,50 +286,6 @@ public final class ClusterMirrorConfig extends AbstractConfig {
 
     public static void main(String[] args) {
         System.out.println(CONFIG_DEF.toHtml(4, config -> "clustermirrorconfigs_" + config));
-    }
-
-    public int coordinatorNumThreads() {
-        return getInt(MIRROR_COORDINATOR_THREADS_CONFIG);
-    }
-
-    public long coordinatorWriteTimeoutMs() {
-        return getLong(MIRROR_COORDINATOR_WRITE_TIMEOUT_MS_CONFIG);
-    }
-
-    public int coordinatorAppendLingerMs() {
-        return getInt(MIRROR_COORDINATOR_APPEND_LINGER_MS_CONFIG);
-    }
-
-    public int coordinatorLoadBufferSize() {
-        return getInt(MIRROR_COORDINATOR_LOAD_BUFFER_SIZE_CONFIG);
-    }
-
-    public int stateTopicNumPartitions() {
-        return getInt(MIRROR_STATE_TOPIC_NUM_PARTITIONS_CONFIG);
-    }
-
-    public short stateTopicReplicationFactor() {
-        return getShort(MIRROR_STATE_TOPIC_REPLICATION_FACTOR_CONFIG);
-    }
-
-    public int numReplicaFetchers() {
-        return getInt(MIRROR_NUM_REPLICA_FETCHERS_CONFIG);
-    }
-
-    public long metadataRefreshIntervalMs() {
-        return getLong(MIRROR_METADATA_REFRESH_INTERVAL_MS_CONFIG);
-    }
-
-    public long failedRetryInitialBackoffMs() {
-        return getLong(MIRROR_FAILED_RETRY_INITIAL_BACKOFF_MS_CONFIG);
-    }
-
-    public long failedRetryMaxBackoffMs() {
-        return getLong(MIRROR_FAILED_RETRY_MAX_BACKOFF_MS_CONFIG);
-    }
-
-    public int failedRetryMaxAttempts() {
-        return getInt(MIRROR_FAILED_RETRY_MAX_ATTEMPTS_CONFIG);
     }
 
     public int requestTimeoutMs() {

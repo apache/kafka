@@ -237,11 +237,6 @@ public class ClusterMirrorConfigTest {
     }
 
     @Test
-    public void testBrokerConfigDefIsNotNull() {
-        assertNotNull(ClusterMirrorConfig.brokerConfigDef());
-    }
-
-    @Test
     public void testFetchConfiguration() {
         Properties props = new Properties();
         props.setProperty(ClusterMirrorConfig.FETCH_MAX_BYTES_CONFIG, "5242880");
