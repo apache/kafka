@@ -348,4 +348,18 @@ public class ClusterMirrorConfigTest {
 
         assertEquals(2, config.aclIncludeRules().size());
     }
+
+    @Test
+    public void testTopicPropertiesExcludePatternMatching() {
+        Properties props = new Properties();
+        props.setProperty(ClusterMirrorConfig.TOPIC_PROPERTIES_EXCLUDE_CONFIG,
+                "leader.replication.throttled.replicas,follower.replication.throttled.replicas,min.insync.replicas");
+
+        ClusterMirrorConfig config = ClusterMirrorConfig.fromProperties(props);
+
+        assertTrue(config.topicPropertiesExcludePattern().matcher("leader.replication.throttled.replicas").matches());
+        assertTrue(config.topicPropertiesExcludePattern().matcher("follower.replication.throttled.replicas").matches());
+        assertTrue(config.topicPropertiesExcludePattern().matcher("min.insync.replicas").matches());
+        assertFalse(config.topicPropertiesExcludePattern().matcher("cleanup.policy").matches());
+    }
 }
