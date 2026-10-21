@@ -22,6 +22,7 @@ import org.apache.kafka.common.acl.AclOperation;
 import org.apache.kafka.common.acl.AclPermissionType;
 import org.apache.kafka.common.config.AbstractConfig;
 import org.apache.kafka.common.config.ConfigDef;
+import org.apache.kafka.common.config.ConfigException;
 import org.apache.kafka.common.config.SaslConfigs;
 import org.apache.kafka.common.config.SecurityConfig;
 import org.apache.kafka.common.config.SslConfigs;
@@ -29,6 +30,7 @@ import org.apache.kafka.common.resource.ResourceType;
 import org.apache.kafka.common.security.auth.SecurityProtocol;
 
 import com.google.re2j.Pattern;
+import com.google.re2j.PatternSyntaxException;
 
 import java.util.List;
 import java.util.Locale;
@@ -220,6 +222,38 @@ public final class ClusterMirrorConfig extends AbstractConfig {
     public static final String SECURITY_PROVIDERS_CONFIG = SecurityConfig.SECURITY_PROVIDERS_CONFIG;
     private static final String SECURITY_PROVIDERS_DOC = SecurityConfig.SECURITY_PROVIDERS_DOC;
 
+    @SuppressWarnings("unchecked")
+    private static final ConfigDef.Validator REGEX_LIST_VALIDATOR = (name, value) -> {
+        if (value == null) return;
+        List<String> patterns = (List<String>) value;
+        for (String pattern : patterns) {
+            String trimmed = pattern.trim();
+            if (!trimmed.isEmpty()) {
+                try {
+                    Pattern.compile(trimmed);
+                } catch (PatternSyntaxException e) {
+                    throw new ConfigException(name, value, "Invalid regex pattern: " + e.getMessage());
+                }
+            }
+        }
+    };
+
+    @SuppressWarnings("unchecked")
+    private static final ConfigDef.Validator ACL_RULES_VALIDATOR = (name, value) -> {
+        if (value == null) return;
+        List<String> rules = (List<String>) value;
+        for (String rule : rules) {
+            String trimmed = rule.trim();
+            if (!trimmed.isEmpty() && !trimmed.equals(".*")) {
+                try {
+                    MirrorAclRule.parse(trimmed);
+                } catch (Exception e) {
+                    throw new ConfigException(name, value, "Invalid ACL rule: " + e.getMessage());
+                }
+            }
+        }
+    };
+
     private static final ConfigDef CONFIG_DEF = buildConfigDef();
 
     private static ConfigDef buildConfigDef() {
@@ -238,12 +272,12 @@ public final class ClusterMirrorConfig extends AbstractConfig {
                 .define(SOCKET_TIMEOUT_MS_CONFIG, INT, SOCKET_TIMEOUT_MS_DEFAULT, atLeast(0), MEDIUM, SOCKET_TIMEOUT_MS_DOC)
                 .define(SOCKET_RECEIVE_BUFFER_BYTES_CONFIG, INT, SOCKET_RECEIVE_BUFFER_BYTES_DEFAULT, atLeast(0), MEDIUM, SOCKET_RECEIVE_BUFFER_BYTES_DOC)
                 .define(TOPIC_PROPERTIES_EXCLUDE_CONFIG, LIST, TOPIC_PROPERTIES_EXCLUDE_DEFAULT, LOW, TOPIC_PROPERTIES_EXCLUDE_DOC)
-                .define(TOPICS_INCLUDE_CONFIG, LIST, TOPICS_INCLUDE_DEFAULT, LOW, TOPICS_INCLUDE_DOC)
-                .define(TOPICS_EXCLUDE_CONFIG, LIST, TOPICS_EXCLUDE_DEFAULT, LOW, TOPICS_EXCLUDE_DOC)
-                .define(GROUPS_INCLUDE_CONFIG, LIST, GROUPS_INCLUDE_DEFAULT, LOW, GROUPS_INCLUDE_DOC)
-                .define(GROUPS_EXCLUDE_CONFIG, LIST, GROUPS_EXCLUDE_DEFAULT, LOW, GROUPS_EXCLUDE_DOC)
-                .define(ACLS_INCLUDE_CONFIG, LIST, ACLS_INCLUDE_DEFAULT, LOW, ACLS_INCLUDE_DOC)
-                .define(ACLS_EXCLUDE_CONFIG, LIST, ACLS_EXCLUDE_DEFAULT, LOW, ACLS_EXCLUDE_DOC)
+                .define(TOPICS_INCLUDE_CONFIG, LIST, TOPICS_INCLUDE_DEFAULT, REGEX_LIST_VALIDATOR, LOW, TOPICS_INCLUDE_DOC)
+                .define(TOPICS_EXCLUDE_CONFIG, LIST, TOPICS_EXCLUDE_DEFAULT, REGEX_LIST_VALIDATOR, LOW, TOPICS_EXCLUDE_DOC)
+                .define(GROUPS_INCLUDE_CONFIG, LIST, GROUPS_INCLUDE_DEFAULT, REGEX_LIST_VALIDATOR, LOW, GROUPS_INCLUDE_DOC)
+                .define(GROUPS_EXCLUDE_CONFIG, LIST, GROUPS_EXCLUDE_DEFAULT, REGEX_LIST_VALIDATOR, LOW, GROUPS_EXCLUDE_DOC)
+                .define(ACLS_INCLUDE_CONFIG, LIST, ACLS_INCLUDE_DEFAULT, ACL_RULES_VALIDATOR, LOW, ACLS_INCLUDE_DOC)
+                .define(ACLS_EXCLUDE_CONFIG, LIST, ACLS_EXCLUDE_DEFAULT, ACL_RULES_VALIDATOR, LOW, ACLS_EXCLUDE_DOC)
                 .define(SECURITY_PROTOCOL_CONFIG, STRING, SECURITY_PROTOCOL_DEFAULT, ConfigDef.ValidString.in(SecurityProtocol.PLAINTEXT.name, SecurityProtocol.SSL.name,
                         SecurityProtocol.SASL_PLAINTEXT.name, SecurityProtocol.SASL_SSL.name), MEDIUM, SECURITY_PROTOCOL_DOC)
                 .define(SECURITY_PROVIDERS_CONFIG, STRING, null, LOW, SECURITY_PROVIDERS_DOC);
@@ -303,8 +337,8 @@ public final class ClusterMirrorConfig extends AbstractConfig {
         this.topicsExcludePattern = compilePatternList(getList(TOPICS_EXCLUDE_CONFIG));
         this.groupsIncludePattern = compilePatternList(getList(GROUPS_INCLUDE_CONFIG));
         this.groupsExcludePattern = compilePatternList(getList(GROUPS_EXCLUDE_CONFIG));
-        this.aclIncludeRules = parseAclRules(getList(ACLS_INCLUDE_CONFIG));
-        this.aclExcludeRules = parseAclRules(getList(ACLS_EXCLUDE_CONFIG));
+        this.aclIncludeRules = MirrorAclRule.parseList(getList(ACLS_INCLUDE_CONFIG));
+        this.aclExcludeRules = MirrorAclRule.parseList(getList(ACLS_EXCLUDE_CONFIG));
     }
 
     /**
@@ -476,14 +510,6 @@ public final class ClusterMirrorConfig extends AbstractConfig {
         return getString(SaslConfigs.SASL_MECHANISM);
     }
 
-    public List<MirrorAclRule> parseAclRules(List<String> rules) {
-        return rules.stream()
-                .map(String::trim)
-                .filter(s -> !s.isEmpty())
-                .map(MirrorAclRule::parse)
-                .toList();
-    }
-
     /**
      * Represents an ACL rule parsed from the semicolon-separated format:
      * resourceType;resourceName;operation;permissionType;principal
@@ -516,6 +542,14 @@ public final class ClusterMirrorConfig extends AbstractConfig {
                 + "Use * to match all principals. "
                 + "Trailing fields can be omitted and will match anything. "
                 + "Use .* as the entire value to match all ACLs. ";
+
+        public static List<MirrorAclRule> parseList(List<String> rules) {
+            return rules.stream()
+                    .map(String::trim)
+                    .filter(s -> !s.isEmpty())
+                    .map(MirrorAclRule::parse)
+                    .toList();
+        }
 
         public static MirrorAclRule parse(String rule) {
             String trimmed = rule.trim();
