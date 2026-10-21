@@ -137,7 +137,7 @@ public class DynamicLogConfig implements BrokerReconfigurable {
     private void updateLogsConfig(Map<String, Object> newBrokerDefaults) {
         logManager.brokerConfigUpdated();
         logManager.allLogs().forEach(log -> {
-            Map<Object, Object> props = new HashMap<>(newBrokerDefaults);
+            Map<String, Object> props = new HashMap<>(newBrokerDefaults);
             LogConfig logConfig = log.config();
             logConfig.originals().forEach((k, v) -> {
                 if (logConfig.overriddenConfigs.contains(k)) {
@@ -150,7 +150,7 @@ public class DynamicLogConfig implements BrokerReconfigurable {
 
     @Override
     public void reconfigure(AbstractKafkaConfig oldConfig, AbstractKafkaConfig newConfig) {
-        Map<String, Object> newBrokerDefaults = new HashMap<>(newConfig.extractLogConfigMap());
+        Map<String, Object> newBrokerDefaults = newConfig.extractLogConfigMap();
         logManager.reconfigureDefaultLogConfig(new LogConfig(newBrokerDefaults));
         updateLogsConfig(newBrokerDefaults);
 
@@ -158,6 +158,6 @@ public class DynamicLogConfig implements BrokerReconfigurable {
         logManager.updateCordonedLogDirs(Set.copyOf(cordonedLogDirs));
         directoryEventHandler.handleCordoned(cordonedLogDirs.stream()
             .flatMap(dir -> logManager.directoryId(dir).stream())
-            .collect(Collectors.toSet()));
+            .collect(Collectors.toUnmodifiableSet()));
     }
 }
