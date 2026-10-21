@@ -20,6 +20,7 @@ import org.apache.kafka.common.acl.AccessControlEntry;
 import org.apache.kafka.common.acl.AclBinding;
 import org.apache.kafka.common.acl.AclOperation;
 import org.apache.kafka.common.acl.AclPermissionType;
+import org.apache.kafka.common.config.ConfigException;
 import org.apache.kafka.common.config.SaslConfigs;
 import org.apache.kafka.common.config.SslConfigs;
 import org.apache.kafka.common.resource.PatternType;
@@ -34,6 +35,7 @@ import static org.junit.jupiter.api.Assertions.assertEquals;
 import static org.junit.jupiter.api.Assertions.assertFalse;
 import static org.junit.jupiter.api.Assertions.assertNotNull;
 import static org.junit.jupiter.api.Assertions.assertNull;
+import static org.junit.jupiter.api.Assertions.assertThrows;
 import static org.junit.jupiter.api.Assertions.assertTrue;
 
 public class ClusterMirrorConfigTest {
@@ -271,5 +273,84 @@ public class ClusterMirrorConfigTest {
         ClusterMirrorConfig config = ClusterMirrorConfig.fromProperties(props);
 
         assertEquals("SCRAM-SHA-512", config.saslMechanism());
+    }
+
+    @Test
+    public void testValidRegexPatterns() {
+        Properties props = new Properties();
+        props.setProperty(ClusterMirrorConfig.TOPICS_INCLUDE_CONFIG, "test.*,prod.*");
+        props.setProperty(ClusterMirrorConfig.GROUPS_EXCLUDE_CONFIG, "console-.*");
+
+        ClusterMirrorConfig config = ClusterMirrorConfig.fromProperties(props);
+
+        assertNotNull(config.topicsIncludePattern());
+        assertNotNull(config.groupsExcludePattern());
+    }
+
+    @Test
+    public void testInvalidRegexPattern() {
+        Properties props = new Properties();
+        props.setProperty(ClusterMirrorConfig.TOPICS_INCLUDE_CONFIG, "test[invalid");
+
+        assertThrows(ConfigException.class, () -> ClusterMirrorConfig.fromProperties(props));
+    }
+
+    @Test
+    public void testValidAclRules() {
+        Properties props = new Properties();
+        props.setProperty(ClusterMirrorConfig.ACLS_INCLUDE_CONFIG, "TOPIC;.*;READ;ALLOW");
+
+        ClusterMirrorConfig config = ClusterMirrorConfig.fromProperties(props);
+
+        assertEquals(1, config.aclIncludeRules().size());
+    }
+
+    @Test
+    public void testInvalidAclRuleOperation() {
+        Properties props = new Properties();
+        props.setProperty(ClusterMirrorConfig.ACLS_INCLUDE_CONFIG, "TOPIC;.*;INVALID_OP;ALLOW");
+
+        assertThrows(ConfigException.class, () -> ClusterMirrorConfig.fromProperties(props));
+    }
+
+    @Test
+    public void testInvalidAclRuleResourceType() {
+        Properties props = new Properties();
+        props.setProperty(ClusterMirrorConfig.ACLS_EXCLUDE_CONFIG, "INVALID_TYPE;.*;READ");
+
+        assertThrows(ConfigException.class, () -> ClusterMirrorConfig.fromProperties(props));
+    }
+
+    @Test
+    public void testMultipleValidRegexPatterns() {
+        Properties props = new Properties();
+        props.setProperty(ClusterMirrorConfig.TOPICS_INCLUDE_CONFIG, "test.*,prod.*,staging.*");
+
+        ClusterMirrorConfig config = ClusterMirrorConfig.fromProperties(props);
+
+        assertTrue(config.topicsIncludePattern().matcher("test-topic").matches());
+        assertTrue(config.topicsIncludePattern().matcher("prod-topic").matches());
+        assertTrue(config.topicsIncludePattern().matcher("staging-topic").matches());
+        assertFalse(config.topicsIncludePattern().matcher("other-topic").matches());
+    }
+
+    @Test
+    public void testMultipleValidAclRules() {
+        Properties props = new Properties();
+        props.setProperty(ClusterMirrorConfig.ACLS_INCLUDE_CONFIG, "TOPIC;.*;READ;ALLOW,CLUSTER;.*;ALL;DENY");
+
+        ClusterMirrorConfig config = ClusterMirrorConfig.fromProperties(props);
+
+        assertEquals(2, config.aclIncludeRules().size());
+    }
+
+    @Test
+    public void testMixedValidAndEmptyAclRules() {
+        Properties props = new Properties();
+        props.setProperty(ClusterMirrorConfig.ACLS_INCLUDE_CONFIG, "TOPIC;.*;READ;ALLOW, , CLUSTER;.*;ALL;ALLOW");
+
+        ClusterMirrorConfig config = ClusterMirrorConfig.fromProperties(props);
+
+        assertEquals(2, config.aclIncludeRules().size());
     }
 }
