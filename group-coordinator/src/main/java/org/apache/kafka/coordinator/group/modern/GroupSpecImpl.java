@@ -115,20 +115,37 @@ public class GroupSpecImpl implements GroupSpec {
         Map<Uuid, BitSet> assignedTopicPartitions = new HashMap<>();
         for (MemberSubscriptionAndAssignmentImpl member : members.values()) {
             for (Map.Entry<Uuid, Set<Integer>> entry : member.partitions().entrySet()) {
-                BitSet partitions = assignedTopicPartitions.computeIfAbsent(entry.getKey(), topicId -> new BitSet(
-                    metadataImage.topicMetadata(topicId).map(CoordinatorMetadataImage.TopicMetadata::partitionCount).orElse(0)
-                ));
+                BitSet assignedPartitions = assignedTopicPartitions.computeIfAbsent(
+                    entry.getKey(),
+                    topicId -> new BitSet(
+                        metadataImage.topicMetadata(topicId)
+                            .map(CoordinatorMetadataImage.TopicMetadata::partitionCount)
+                            .orElse(0)
+                    )
+                );
                 for (int partition : entry.getValue()) {
-                    if (partition >= partitions.size()) {
-                        // Drop partitions that do not exist, to avoid bloating the BitSet.
-                        // Note that BitSet.size() rounds up to the nearest multiple of 64.
+                    if (partition >= assignedPartitions.size()) {
+                        // Drop partitions beyond BitSet.size(), to avoid over-allocating memory in
+                        // the BitSet. Note that BitSet.size() rounds up to the nearest multiple of
+                        // 64, so non-existent partitions can still fall through.
                         continue;
                     }
 
-                    partitions.set(partition);
+                    assignedPartitions.set(partition);
                 }
             }
         }
+
+        // The filter for non-existent partitions checks against BitSet.size(), which is rounded up
+        // to the nearest multiple of 64, so drop the remaining partitions that do not exist.
+        for (Map.Entry<Uuid, BitSet> entry : assignedTopicPartitions.entrySet()) {
+            int partitionCount = metadataImage.topicMetadata(entry.getKey())
+                .map(CoordinatorMetadataImage.TopicMetadata::partitionCount)
+                .orElse(0);
+            BitSet assignedPartitions = entry.getValue();
+            assignedPartitions.clear(partitionCount, assignedPartitions.size());
+        }
+
         return assignedTopicPartitions;
     }
 
