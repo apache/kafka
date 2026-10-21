@@ -62,17 +62,18 @@ public final class ShareGroupDLQRecordHelper {
     protected static final String HEADER_DLQ_ERRORS_DELIVERY_COUNT = "__dlq.errors.delivery.count";
     protected static final String HEADER_DLQ_ERRORS_MESSAGE = "__dlq.errors.message";
 
-    // DLQ context header keys added unconditionally by headers() below. An original record header
-    // reusing one of these keys is dropped (not merely shadowed) so the DLQ-computed value is the
-    // only one present - not just the one a last-header-wins lookup happens to find. The delivery
-    // count and cause/message headers are deliberately excluded here: they are only added when
-    // deliveryCount/cause are actually present (see headers() below), and dropping an original
-    // header under one of those keys when no replacement is being added would lose it outright.
+    // DLQ context header keys. An original record header reusing one of these keys is always
+    // dropped, even when no DLQ header is added under that key for this call (e.g. no delivery count
+    // or cause). The most likely way for an original record to carry one is a record forwarded from
+    // a DLQ topic back onto a normal topic and DLQ'ed again, in which case preserving the stale
+    // headers from the earlier DLQ round would be misleading.
     private static final Set<String> RESERVED_DLQ_HEADER_KEYS = Set.of(
             HEADER_DLQ_ERRORS_TOPIC,
             HEADER_DLQ_ERRORS_PARTITION,
             HEADER_DLQ_ERRORS_OFFSET,
-            HEADER_DLQ_ERRORS_GROUP
+            HEADER_DLQ_ERRORS_GROUP,
+            HEADER_DLQ_ERRORS_DELIVERY_COUNT,
+            HEADER_DLQ_ERRORS_MESSAGE
     );
 
     /**
@@ -89,9 +90,8 @@ public final class ShareGroupDLQRecordHelper {
      * Builds DLQ headers for a single offset.
      *
      * @param originalRecordHeaders The original source record's headers, or null if unresolved/unavailable.
-     *                              Any header reusing the key of a DLQ context header actually added
-     *                              by this call (see {@link #RESERVED_DLQ_HEADER_KEYS}, plus delivery
-     *                              count/cause when present) is dropped.
+     *                              Any header reusing a reserved DLQ header key (see
+     *                              {@link #RESERVED_DLQ_HEADER_KEYS}) is dropped.
      * @param sourceTopic   The resolved source topic name
      * @param partition     The source partition number
      * @param offset        The source offset
@@ -113,11 +113,7 @@ public final class ShareGroupDLQRecordHelper {
         RecordHeaders headers = new RecordHeaders();
         if (originalRecordHeaders != null) {
             for (Header header : originalRecordHeaders) {
-                String key = header.key();
-                boolean collidesWithHeaderAddedThisCall = RESERVED_DLQ_HEADER_KEYS.contains(key)
-                        || (deliveryCount.isPresent() && key.equals(HEADER_DLQ_ERRORS_DELIVERY_COUNT))
-                        || (causeMessage != null && key.equals(HEADER_DLQ_ERRORS_MESSAGE));
-                if (!collidesWithHeaderAddedThisCall) {
+                if (!RESERVED_DLQ_HEADER_KEYS.contains(header.key())) {
                     headers.add(header);
                 }
             }

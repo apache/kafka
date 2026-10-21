@@ -1958,15 +1958,16 @@ class ShareGroupDLQStateManagerTest {
     /**
      * As {@link #testDLQRecordCopyEnabled()}, but each source record also carries an original header
      * with the given key/value, uniformly. When that key does not collide with a standard DLQ context
-     * header, it is preserved as-is; when it does - covering both an unconditionally-added key
-     * ({@link #HEADER_DLQ_ERRORS_GROUP}) and the conditionally-added delivery-count/message keys, which
-     * are present in this scenario since {@link #param()} always sets both - the original header is
-     * dropped entirely (per ShareGroupDLQRecordHelper.headers()) so only the DLQ-computed value remains:
-     * not merely shadowed, but the sole header under that key.
+     * header, it is preserved as-is; when it does - covering every reserved DLQ header key - the
+     * original header is dropped entirely (per ShareGroupDLQRecordHelper.headers()) so only the
+     * DLQ-computed value remains: not merely shadowed, but the sole header under that key.
      */
     @ParameterizedTest
     @CsvSource({
         "x-original-header, original-value, false",
+        HEADER_DLQ_ERRORS_TOPIC + ", bogus-topic, true",
+        HEADER_DLQ_ERRORS_PARTITION + ", bogus-partition, true",
+        HEADER_DLQ_ERRORS_OFFSET + ", bogus-offset, true",
         HEADER_DLQ_ERRORS_GROUP + ", bogus-group, true",
         HEADER_DLQ_ERRORS_DELIVERY_COUNT + ", bogus-count, true",
         HEADER_DLQ_ERRORS_MESSAGE + ", bogus-message, true"
@@ -2038,12 +2039,11 @@ class ShareGroupDLQStateManagerTest {
     /**
      * As {@link #testDLQRecordCopyEnabled()}, but delivery count and cause are both absent (so the
      * corresponding DLQ headers are never added this call) and each source record carries an original
-     * header reusing each of those two keys. Verifies the original headers are preserved rather than
-     * dropped: unlike the always-added TOPIC/PARTITION/OFFSET/GROUP headers, dropping these would lose
-     * them outright, since no DLQ-computed replacement is added when delivery count/cause are absent.
+     * header reusing each of those two keys. Verifies the original headers are still dropped, since
+     * they are reserved, rather than being preserved with stale values from an earlier DLQ round.
      */
     @Test
-    public void testDLQRecordCopyEnabledPreservesOriginalHeaderWhenCorrespondingDlqHeaderOmitted() throws Exception {
+    public void testDLQRecordCopyEnabledDropsReservedOriginalHeaderWhenCorrespondingDLQHeaderOmitted() throws Exception {
         MockClient client = new MockClient(MOCK_TIME);
         List<ProduceRequest> capturedProduces = prepareProduceCapturingClient(client);
 
@@ -2077,9 +2077,7 @@ class ShareGroupDLQStateManagerTest {
             0, new ExpectedDlqPartition(0L, 2L, Map.of(
                 HEADER_DLQ_ERRORS_TOPIC, "source-topic",
                 HEADER_DLQ_ERRORS_PARTITION, "0",
-                HEADER_DLQ_ERRORS_GROUP, GROUP_ID,
-                HEADER_DLQ_ERRORS_DELIVERY_COUNT, "legit-delivery-count",
-                HEADER_DLQ_ERRORS_MESSAGE, "legit-message"
+                HEADER_DLQ_ERRORS_GROUP, GROUP_ID
             ), List.of(keyData1, keyData2, keyData3), List.of(valueData1, valueData2, valueData3))
         ));
         verify(mockMetrics).recordDLQProduce(GROUP_ID);
@@ -2482,6 +2480,72 @@ class ShareGroupDLQStateManagerTest {
         // Copy disabled => the source log is never read; the DLQ record carries headers only.
         verifyNoInteractions(logReader);
         verify(mockMetrics).recordDLQRecordWrite(GROUP_ID, 3);
+        verify(mockMetrics, never()).recordDLQProduceFailed(any());
+    }
+
+    /**
+     * Record copy is disabled while the source records carry headers reusing reserved DLQ header keys.
+     * The source log is never read, so none of those headers may leak into the DLQ record: each one
+     * carries only the DLQ-computed headers, exactly once per key, and no key or value.
+     */
+    @Test
+    public void testDLQRecordCopyDisabledIgnoresReservedHeadersOnSourceRecords() throws Exception {
+        MockClient client = new MockClient(MOCK_TIME);
+        List<ProduceRequest> capturedProduces = prepareProduceCapturingClient(client);
+
+        ShareGroupDLQRecordParameter param = param();
+        Header[] reservedHeaders = new Header[] {
+            new RecordHeader(HEADER_DLQ_ERRORS_TOPIC, "bogus-topic".getBytes(StandardCharsets.UTF_8)),
+            new RecordHeader(HEADER_DLQ_ERRORS_PARTITION, "bogus-partition".getBytes(StandardCharsets.UTF_8)),
+            new RecordHeader(HEADER_DLQ_ERRORS_OFFSET, "bogus-offset".getBytes(StandardCharsets.UTF_8)),
+            new RecordHeader(HEADER_DLQ_ERRORS_GROUP, "bogus-group".getBytes(StandardCharsets.UTF_8)),
+            new RecordHeader(HEADER_DLQ_ERRORS_DELIVERY_COUNT, "bogus-count".getBytes(StandardCharsets.UTF_8)),
+            new RecordHeader(HEADER_DLQ_ERRORS_MESSAGE, "bogus-message".getBytes(StandardCharsets.UTF_8))
+        };
+        LogReader logReader = mock(LogReader.class);
+        whenReadAsync(logReader, param.topicIdPartition(), logReadResult(recordsInfo(
+            new SimpleRecord(MOCK_TIME.milliseconds(), "key1".getBytes(StandardCharsets.UTF_8),
+                "value1".getBytes(StandardCharsets.UTF_8), reservedHeaders),
+            new SimpleRecord(MOCK_TIME.milliseconds(), "key2".getBytes(StandardCharsets.UTF_8),
+                "value2".getBytes(StandardCharsets.UTF_8), reservedHeaders),
+            new SimpleRecord(MOCK_TIME.milliseconds(), "key3".getBytes(StandardCharsets.UTF_8),
+                "value3".getBytes(StandardCharsets.UTF_8), reservedHeaders)), Errors.NONE));
+
+        // Default cacheHelper has record copy disabled.
+        stateManager = builder().withClient(client).withLogReader(logReader).build();
+        stateManager.start();
+        assertNull(stateManager.dlq(param).get(10, TimeUnit.SECONDS));
+
+        verifyNoInteractions(logReader);
+        assertEquals(1, capturedProduces.size());
+        ProduceRequestData.TopicProduceData topic = capturedProduces.get(0).data().topicData().iterator().next();
+        MemoryRecords dlqRecords = (MemoryRecords) topic.partitionData().iterator().next().records();
+        int recordCount = 0;
+        for (Record record : dlqRecords.records()) {
+            recordCount++;
+            assertFalse(record.hasKey());
+            assertFalse(record.hasValue());
+            Map<String, Integer> headerCounts = new HashMap<>();
+            Map<String, String> headerValues = new HashMap<>();
+            for (Header h : record.headers()) {
+                headerCounts.merge(h.key(), 1, Integer::sum);
+                headerValues.put(h.key(), new String(h.value(), StandardCharsets.UTF_8));
+            }
+            assertEquals(Map.of(
+                HEADER_DLQ_ERRORS_TOPIC, 1,
+                HEADER_DLQ_ERRORS_PARTITION, 1,
+                HEADER_DLQ_ERRORS_OFFSET, 1,
+                HEADER_DLQ_ERRORS_GROUP, 1,
+                HEADER_DLQ_ERRORS_DELIVERY_COUNT, 1,
+                HEADER_DLQ_ERRORS_MESSAGE, 1
+            ), headerCounts);
+            assertEquals("source-topic", headerValues.get(HEADER_DLQ_ERRORS_TOPIC));
+            assertEquals("0", headerValues.get(HEADER_DLQ_ERRORS_PARTITION));
+            assertEquals(GROUP_ID, headerValues.get(HEADER_DLQ_ERRORS_GROUP));
+            assertEquals("1", headerValues.get(HEADER_DLQ_ERRORS_DELIVERY_COUNT));
+            assertEquals("simulated cause", headerValues.get(HEADER_DLQ_ERRORS_MESSAGE));
+        }
+        assertEquals(3, recordCount);
         verify(mockMetrics, never()).recordDLQProduceFailed(any());
     }
 
