@@ -29,6 +29,7 @@ import org.apache.kafka.common.errors.KafkaStorageException;
 import org.apache.kafka.common.errors.OffsetOutOfRangeException;
 import org.apache.kafka.common.errors.RecordBatchTooLargeException;
 import org.apache.kafka.common.errors.RecordTooLargeException;
+import org.apache.kafka.common.errors.UnsupportedCompressionTypeException;
 import org.apache.kafka.common.internals.Topic;
 import org.apache.kafka.common.message.AbortedTxn;
 import org.apache.kafka.common.message.DescribeProducersResponseData;
@@ -1158,6 +1159,10 @@ public class UnifiedLog implements AutoCloseable {
                                 PrimitiveRef.LongRef offset = PrimitiveRef.ofLong(localLog.logEndOffset());
                                 appendInfo.setFirstOffset(offset.value);
                                 Compression targetCompression = BrokerCompressionType.targetCompression(config().compression, appendInfo.sourceCompression());
+                                if (origin == AppendOrigin.CLIENT) {
+                                    validateCompressionType(appendInfo.sourceCompression(), "producer");
+                                    validateCompressionType(targetCompression.type(), "broker");
+                                }
                                 LogValidator validator = new LogValidator(validRecords,
                                         topicPartition(),
                                         time(),
@@ -1479,6 +1484,13 @@ public class UnifiedLog implements AutoCloseable {
         return producerStateManager.producerStateManagerConfig().transactionVerificationEnabled()
                 && !batch.isControlBatch()
                 && !verificationGuard(batch.producerId()).verify(requestVerificationGuard);
+    }
+
+    private void validateCompressionType(CompressionType compressionType, String source) {
+        if (config().disabledCompressionTypes.contains(compressionType)) {
+            throw new UnsupportedCompressionTypeException("Compression type " + compressionType + " used by the " + source +
+                    " is disabled for new client writes to " + topicPartition());
+        }
     }
 
     /**
