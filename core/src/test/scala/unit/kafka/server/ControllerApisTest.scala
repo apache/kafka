@@ -574,14 +574,14 @@ class ControllerApisTest {
             new AlterableConfig().
               setName(TopicConfig.FLUSH_MS_CONFIG).
               setValue("4000").
-              setConfigOperation(126.toByte)))),
+              setConfigOperation(126.toByte)).iterator())),
         new AlterConfigsResource().
           setResourceName(validResource.name()).
           setResourceType(validResource.`type`().id()).
           setConfigs(new AlterableConfigCollection(util.Arrays.asList(new AlterableConfig().
             setName(TopicConfig.FLUSH_MS_CONFIG).
             setValue("1000").
-            setConfigOperation(AlterConfigOp.OpType.SET.id())))))))
+            setConfigOperation(AlterConfigOp.OpType.SET.id())).iterator()))).iterator()))
     requestData.resources().add(requestData.resources().asScala.last.duplicate().setResourceName(invalidResource.name()))
     val request = buildRequest(new IncrementalAlterConfigsRequest.Builder(requestData).build(0))
     val controller = spy(new MockController.Builder().build())
@@ -591,14 +591,14 @@ class ControllerApisTest {
     val capturedChanges = ArgumentCaptor.forClass(
       classOf[util.Map[ConfigResource, util.Map[String, util.Map.Entry[AlterConfigOp.OpType, String]]]])
     verify(controller).incrementalAlterConfigs(any(classOf[ControllerRequestContext]),
-      capturedChanges.capture(), ArgumentMatchers.eq(false), ArgumentMatchers.eq(false))
+      capturedChanges.capture(), ArgumentMatchers.eq(false))
     assertEquals(Set(validResource), capturedChanges.getValue.keySet().asScala.toSet)
     assertEquals(Map(TopicConfig.FLUSH_MS_CONFIG ->
       new util.AbstractMap.SimpleEntry[AlterConfigOp.OpType, String](AlterConfigOp.OpType.SET, "1000")),
       capturedChanges.getValue.get(validResource).asScala.toMap)
 
     val capturedResponse = ArgumentCaptor.forClass(classOf[AbstractResponse])
-    verify(requestChannel).sendResponse(ArgumentMatchers.eq(request), capturedResponse.capture())
+    verify(requestChannel).sendResponse(ArgumentMatchers.eq(request), capturedResponse.capture(), ArgumentMatchers.eq(None))
     val response = capturedResponse.getValue.asInstanceOf[IncrementalAlterConfigsResponse]
     assertEquals(2, response.data().responses().size())
     assertEquals(Set(
