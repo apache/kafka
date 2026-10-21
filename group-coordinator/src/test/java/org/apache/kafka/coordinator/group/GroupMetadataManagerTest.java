@@ -21333,6 +21333,8 @@ public class GroupMetadataManagerTest {
 
     @Test
     public void testStreamsGroupMemberJoiningWithReorderedCopartitionGroups() {
+        // First - [[3, 2], [1, 0]]
+        // Second - [[1, 0], [2, 3]]
         String groupId = "fooup";
         String memberId = Uuid.randomUuid().toString();
         Topology topology = new Topology().setSubtopologies(List.of(
@@ -21380,6 +21382,56 @@ public class GroupMetadataManagerTest {
         assertTrue(result.records().stream().noneMatch(
             record -> record.key() instanceof StreamsGroupTopologyKey)
         );
+    }
+
+    @Test
+    public void testStreamsGroupMemberJoiningWithDifferentCopartitionGroups() {
+        // First -> [[0, 1], [2, 3]]
+        // Second -> [[0, 2], [1, 3]]
+        String groupId = "fooup";
+        String memberId = Uuid.randomUuid().toString();
+        Topology topology = new Topology().setEpoch(1).setSubtopologies(List.of(
+            new Subtopology()
+                .setSubtopologyId("subtopology1")
+                .setSourceTopics(List.of("foo", "bar", "baz", "qux"))
+                .setCopartitionGroups(List.of(
+                    new CopartitionGroup().setSourceTopics(List.of((short) 0, (short) 1)),
+                    new CopartitionGroup().setSourceTopics(List.of((short) 2, (short) 3))
+                ))
+        ));
+        MockTaskAssignor assignor = new MockTaskAssignor("sticky");
+        GroupMetadataManagerTestContext context = new GroupMetadataManagerTestContext.Builder()
+            .withStreamsGroupTaskAssignors(List.of(assignor))
+            .withMetadataImage(new MetadataImageBuilder()
+                .addTopic(Uuid.randomUuid(), "foo", 3)
+                .addTopic(Uuid.randomUuid(), "bar", 3)
+                .addTopic(Uuid.randomUuid(), "baz", 3)
+                .addTopic(Uuid.randomUuid(), "qux", 3)
+                .buildCoordinatorMetadataImage())
+            .withConfig(GroupCoordinatorConfig.STREAMS_GROUP_INITIAL_REBALANCE_DELAY_MS_CONFIG, 0)
+            .build();
+        assignor.prepareGroupAssignment(Map.of(memberId, TasksTuple.EMPTY));
+        context.replay(StreamsCoordinatorRecordHelpers.newStreamsGroupTopologyRecord(groupId, topology));
+
+        // Keep the epoch and topics unchanged, but change which topics must be copartitioned.
+        Topology changedTopology = topology.duplicate();
+        changedTopology.subtopologies().get(0).setCopartitionGroups(List.of(
+            new CopartitionGroup().setSourceTopics(List.of((short) 0, (short) 2)),
+            new CopartitionGroup().setSourceTopics(List.of((short) 1, (short) 3))
+        ));
+        InvalidRequestException exception = assertThrows(InvalidRequestException.class, () -> context.streamsGroupHeartbeat(
+            new StreamsGroupHeartbeatRequestData()
+                .setGroupId(groupId)
+                .setMemberId(memberId)
+                .setMemberEpoch(0)
+                .setRebalanceTimeoutMs(1500)
+                .setTopology(changedTopology)
+                .setProcessId(DEFAULT_PROCESS_ID)
+                .setActiveTasks(List.of())
+                .setStandbyTasks(List.of())
+                .setWarmupTasks(List.of())));
+
+        assertEquals("Topology updates are not supported yet.", exception.getMessage());
     }
 
     @Test
