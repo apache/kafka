@@ -14,16 +14,20 @@
  * See the License for the specific language governing permissions and
  * limitations under the License.
  */
-package kafka.server;
+package org.apache.kafka.server;
 
 import org.apache.kafka.clients.CommonClientConfigs;
 import org.apache.kafka.clients.admin.Admin;
 import org.apache.kafka.clients.admin.NewTopic;
+import org.apache.kafka.clients.consumer.ConsumerConfig;
+import org.apache.kafka.clients.consumer.ConsumerRecord;
+import org.apache.kafka.clients.consumer.KafkaConsumer;
 import org.apache.kafka.clients.producer.KafkaProducer;
 import org.apache.kafka.clients.producer.ProducerConfig;
 import org.apache.kafka.clients.producer.ProducerRecord;
 import org.apache.kafka.common.TopicPartition;
 import org.apache.kafka.common.config.SaslConfigs;
+import org.apache.kafka.common.config.TopicConfig;
 import org.apache.kafka.common.config.internals.BrokerSecurityConfigs;
 import org.apache.kafka.common.network.ListenerName;
 import org.apache.kafka.common.security.JaasUtils;
@@ -32,7 +36,8 @@ import org.apache.kafka.common.security.authenticator.LoginManager;
 import org.apache.kafka.common.security.oauthbearer.OAuthBearerLoginCallbackHandler;
 import org.apache.kafka.common.security.oauthbearer.OAuthBearerLoginModule;
 import org.apache.kafka.common.security.oauthbearer.OAuthBearerValidatorCallbackHandler;
-import org.apache.kafka.common.serialization.ByteArraySerializer;
+import org.apache.kafka.common.serialization.StringDeserializer;
+import org.apache.kafka.common.serialization.StringSerializer;
 import org.apache.kafka.common.test.KafkaClusterTestKit;
 import org.apache.kafka.common.test.TestKitNodes;
 import org.apache.kafka.common.test.api.TestKitDefaults;
@@ -45,7 +50,8 @@ import org.junit.jupiter.api.Test;
 import org.junit.jupiter.api.Timeout;
 
 import java.io.File;
-import java.nio.charset.StandardCharsets;
+import java.time.Duration;
+import java.util.ArrayList;
 import java.util.HashMap;
 import java.util.List;
 import java.util.Map;
@@ -53,6 +59,8 @@ import java.util.Map;
 import javax.security.auth.login.Configuration;
 
 import no.nav.security.mock.oauth2.MockOAuth2Server;
+
+import static org.junit.jupiter.api.Assertions.assertEquals;
 
 /**
  * Integration test for brokers that use OAUTHBEARER as the inter-broker SASL mechanism, configured as described in
@@ -121,39 +129,53 @@ public class InterBrokerOAuthIntegrationTest {
             cluster.startup();
             cluster.waitForReadyBrokers();
 
+            // With acks=all and min.insync.replicas equal to the replication factor, a send succeeds only after every
+            // replica has the record, so the followers must authenticate to the leader over the inter-broker listener
             String topic = "inter-broker-replication-test";
-            Map<String, Object> clientConfigs = clientConfigs();
-            try (Admin admin = cluster.admin(clientConfigs)) {
-                admin.createTopics(List.of(new NewTopic(topic, 1, (short) NUM_BROKERS))).all().get();
+            NewTopic newTopic = new NewTopic(topic, 1, (short) NUM_BROKERS)
+                .configs(Map.of(TopicConfig.MIN_IN_SYNC_REPLICAS_CONFIG, String.valueOf(NUM_BROKERS)));
+            try (Admin admin = cluster.admin(clientConfigs(cluster))) {
+                admin.createTopics(List.of(newTopic)).all().get();
             }
 
-            Map<String, Object> producerConfigs = new HashMap<>(clientConfigs);
-            producerConfigs.put(ProducerConfig.BOOTSTRAP_SERVERS_CONFIG, cluster.bootstrapServers());
+            Map<String, Object> producerConfigs = clientConfigs(cluster);
+            producerConfigs.put(ProducerConfig.ACKS_CONFIG, "all");
             int numRecords = 10;
-            try (KafkaProducer<byte[], byte[]> producer = new KafkaProducer<>(producerConfigs, new ByteArraySerializer(), new ByteArraySerializer())) {
+            try (KafkaProducer<String, String> producer = new KafkaProducer<>(producerConfigs, new StringSerializer(), new StringSerializer())) {
                 for (int i = 0; i < numRecords; i++) {
-                    producer.send(new ProducerRecord<>(topic,
-                        ("key-" + i).getBytes(StandardCharsets.UTF_8),
-                        ("value-" + i).getBytes(StandardCharsets.UTF_8))).get();
+                    producer.send(new ProducerRecord<>(topic, "key-" + i, "value-" + i)).get();
                 }
             }
 
-            // The followers can only replicate the records if they authenticate to the leader over the inter-broker listener
+            Map<String, Object> consumerConfigs = clientConfigs(cluster);
+            consumerConfigs.put(ConsumerConfig.AUTO_OFFSET_RESET_CONFIG, "earliest");
             TopicPartition tp = new TopicPartition(topic, 0);
-            TestUtils.waitForCondition(() -> cluster.brokers().values().stream()
-                    .allMatch(broker -> broker.replicaManager().localLog(tp).exists(log -> log.logEndOffset() == numRecords)),
-                "All replicas should have " + numRecords + " records");
+            List<ConsumerRecord<String, String>> records = new ArrayList<>();
+            try (KafkaConsumer<String, String> consumer = new KafkaConsumer<>(consumerConfigs, new StringDeserializer(), new StringDeserializer())) {
+                consumer.assign(List.of(tp));
+                TestUtils.waitForCondition(() -> {
+                    consumer.poll(Duration.ofMillis(100)).forEach(records::add);
+                    return records.size() >= numRecords;
+                }, "Should consume " + numRecords + " records");
+            }
+            assertEquals(numRecords, records.size());
+            for (int i = 0; i < numRecords; i++) {
+                assertEquals("key-" + i, records.get(i).key());
+                assertEquals("value-" + i, records.get(i).value());
+            }
         }
     }
 
-    private Map<String, Object> clientConfigs() {
-        return Map.of(
-            CommonClientConfigs.SECURITY_PROTOCOL_CONFIG, SecurityProtocol.SASL_PLAINTEXT.name,
-            SaslConfigs.SASL_MECHANISM, MECHANISM,
-            SaslConfigs.SASL_JAAS_CONFIG, OAuthBearerLoginModule.class.getName() + " required ;",
-            SaslConfigs.SASL_LOGIN_CALLBACK_HANDLER_CLASS, OAuthBearerLoginCallbackHandler.class.getName(),
-            SaslConfigs.SASL_OAUTHBEARER_TOKEN_ENDPOINT_URL, tokenEndpointUrl,
-            SaslConfigs.SASL_OAUTHBEARER_CLIENT_CREDENTIALS_CLIENT_ID, "test-client",
-            SaslConfigs.SASL_OAUTHBEARER_CLIENT_CREDENTIALS_CLIENT_SECRET, "test-secret");
+    private Map<String, Object> clientConfigs(KafkaClusterTestKit cluster) {
+        Map<String, Object> configs = new HashMap<>();
+        configs.put(CommonClientConfigs.BOOTSTRAP_SERVERS_CONFIG, cluster.bootstrapServers());
+        configs.put(CommonClientConfigs.SECURITY_PROTOCOL_CONFIG, SecurityProtocol.SASL_PLAINTEXT.name);
+        configs.put(SaslConfigs.SASL_MECHANISM, MECHANISM);
+        configs.put(SaslConfigs.SASL_JAAS_CONFIG, OAuthBearerLoginModule.class.getName() + " required ;");
+        configs.put(SaslConfigs.SASL_LOGIN_CALLBACK_HANDLER_CLASS, OAuthBearerLoginCallbackHandler.class.getName());
+        configs.put(SaslConfigs.SASL_OAUTHBEARER_TOKEN_ENDPOINT_URL, tokenEndpointUrl);
+        configs.put(SaslConfigs.SASL_OAUTHBEARER_CLIENT_CREDENTIALS_CLIENT_ID, "test-client");
+        configs.put(SaslConfigs.SASL_OAUTHBEARER_CLIENT_CREDENTIALS_CLIENT_SECRET, "test-secret");
+        return configs;
     }
 }

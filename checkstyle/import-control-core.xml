@@ -64,7 +64,6 @@
   <subpackage name="server">
     <allow pkg="kafka" />
     <allow pkg="org.apache.kafka" />
-    <allow pkg="no.nav.security.mock.oauth2" />
   </subpackage>
 
   <subpackage name="security">

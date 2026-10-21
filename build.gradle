@@ -1046,6 +1046,9 @@ project(':server') {
     testFixturesImplementation.exclude group: 'org.bouncycastle', module: 'bcprov-jdk15on'
     testCompileClasspath.exclude group: 'org.bouncycastle', module: 'bcprov-jdk15on'
     testRuntimeClasspath.exclude group: 'org.bouncycastle', module: 'bcprov-jdk15on'
+    // JUnit 4 is a transitive runtime dependency of mock-oauth2-server (via okhttp3 mockwebserver),
+    // keep it off the compile classpath so tests can't accidentally use JUnit 4 APIs.
+    testCompileClasspath.exclude group: 'junit', module: 'junit'
   }
 
   dependencies {
@@ -1076,6 +1079,7 @@ project(':server') {
     testImplementation testFixtures(project(':storage:storage-api'))
     testImplementation testFixtures(project(':server-common'))
     testImplementation testFixtures(project(':metadata'))
+    testImplementation libs.mockOAuth2Server
 
     testFixturesImplementation project(':clients')
     testFixturesImplementation testFixtures(project(':clients'))
