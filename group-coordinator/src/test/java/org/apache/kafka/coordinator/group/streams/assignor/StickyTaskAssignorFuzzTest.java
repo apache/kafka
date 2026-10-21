@@ -37,12 +37,12 @@ public class StickyTaskAssignorFuzzTest {
     }
 
     @Test
-    public void shouldProduceValidAssignmentsForSmallGroupsUnderRandomChanges() {
+    public void shouldProduceValidAssignmentsForSmallGroupsUnderRandomTriggers() {
         testbed.run(Profile.SMALL);
     }
 
     @Test
-    public void shouldProduceValidAssignmentsForLargeGroupsUnderRandomChanges() {
+    public void shouldProduceValidAssignmentsForLargeGroupsUnderRandomTriggers() {
         testbed.run(Profile.LARGE);
     }
 }

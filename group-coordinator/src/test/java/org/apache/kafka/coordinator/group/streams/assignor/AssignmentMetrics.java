@@ -22,6 +22,7 @@ import org.apache.kafka.coordinator.group.streams.assignor.TaskAssignorTestbed.P
 import org.apache.kafka.coordinator.group.streams.assignor.TaskAssignorTestbed.Scenario;
 
 import java.util.ArrayList;
+import java.util.Collections;
 import java.util.HashMap;
 import java.util.HashSet;
 import java.util.LinkedHashMap;
@@ -34,9 +35,9 @@ import static org.apache.kafka.coordinator.group.streams.assignor.TaskAssignorTe
 
 /**
  * Grades the assignment of a rebalance on what every assignor is compared on: balance across members and processes,
- * the distribution of each stateful task's replicas over the client tags, stickiness and restores since the
- * assignment before the change, and convergence. Nothing here is asserted; the {@link Summary} over a run is printed
- * so two assignors, or two versions of one, can be compared on the same scenarios.
+ * the distribution of each stateful task's replicas over the client tags, stickiness since the assignment before the
+ * trigger, and convergence. Each row is named after its metric. Nothing here is asserted; the {@link Summary} over a
+ * run is printed so two assignors, or two versions of one, can be compared on the same scenarios.
  */
 final class AssignmentMetrics {
 
@@ -51,6 +52,7 @@ final class AssignmentMetrics {
         final Map<String, Integer> totalPerMember = new HashMap<>();
         final Map<TaskId, String> activeMemberOf = new HashMap<>();
         final Map<TaskId, Set<String>> ownerProcessesOf = new HashMap<>();
+        final Map<TaskId, Set<String>> standbyProcessesOf = new HashMap<>();
         for (final Map.Entry<String, MemberAssignment> entry : result.members().entrySet()) {
             final String memberId = entry.getKey();
             final String processId = scenario.processOf(memberId);
@@ -67,29 +69,30 @@ final class AssignmentMetrics {
             }
             for (final TaskId task : standby) {
                 ownerProcessesOf.computeIfAbsent(task, t -> new HashSet<>()).add(processId);
+                standbyProcessesOf.computeIfAbsent(task, t -> new HashSet<>()).add(processId);
             }
             statefulActivePerMember.put(memberId, stateful);
             activePerMember.put(memberId, active.size());
             totalPerMember.put(memberId, active.size() + standby.size());
         }
 
-        double maxActiveLoad = 0;
-        double minActiveLoad = Double.MAX_VALUE;
-        double maxLoad = 0;
-        double minLoad = Double.MAX_VALUE;
+        // The load of a process is its tasks divided by its members.
+        final List<Double> statefulActiveLoads = new ArrayList<>();
+        final List<Double> activeLoads = new ArrayList<>();
+        final List<Double> loads = new ArrayList<>();
         for (final ProcessSpec process : scenario.processes.values()) {
+            int statefulActive = 0;
             int active = 0;
             int tasks = 0;
             for (final String memberId : process.members) {
+                statefulActive += statefulActivePerMember.get(memberId);
                 active += activePerMember.get(memberId);
                 tasks += totalPerMember.get(memberId);
             }
-            final double activeLoad = (double) active / process.members.size();
-            maxActiveLoad = Math.max(maxActiveLoad, activeLoad);
-            minActiveLoad = Math.min(minActiveLoad, activeLoad);
-            final double load = (double) tasks / process.members.size();
-            maxLoad = Math.max(maxLoad, load);
-            minLoad = Math.min(minLoad, load);
+            final double capacity = process.members.size();
+            statefulActiveLoads.add(statefulActive / capacity);
+            activeLoads.add(active / capacity);
+            loads.add(tasks / capacity);
         }
 
         // Members without a task of the subtopology count as 0. A skew of 1 is unavoidable when the partitions
@@ -105,15 +108,15 @@ final class AssignmentMetrics {
         }
 
         final Map<String, OptionalDouble> rows = new LinkedHashMap<>();
-        rows.put("stateful active tasks per member (max-min)", OptionalDouble.of(range(statefulActivePerMember.values())));
-        rows.put("active tasks per member (max-min)", OptionalDouble.of(range(activePerMember.values())));
-        rows.put("total tasks per member (max-min)", OptionalDouble.of(range(totalPerMember.values())));
-        // The load of a process is its tasks divided by its members.
-        rows.put("active load per process (max-min)", OptionalDouble.of(maxActiveLoad - minActiveLoad));
-        rows.put("process load (max-min)", OptionalDouble.of(maxLoad - minLoad));
-        rows.put("subtopology skew above unavoidable (max-min)", OptionalDouble.of(subtopologyExcessSkew));
+        rows.put("Stateful active balance per member", OptionalDouble.of(range(statefulActivePerMember.values())));
+        rows.put("Active balance per member", OptionalDouble.of(range(activePerMember.values())));
+        rows.put("Task balance per member", OptionalDouble.of(range(totalPerMember.values())));
+        rows.put("Stateful active load balance per process", OptionalDouble.of(loadRange(statefulActiveLoads)));
+        rows.put("Active load balance per process", OptionalDouble.of(loadRange(activeLoads)));
+        rows.put("Load balance per process", OptionalDouble.of(loadRange(loads)));
+        rows.put("Subtopology balance", OptionalDouble.of(subtopologyExcessSkew));
         rows.putAll(rackRows(scenario, ownerProcessesOf));
-        rows.putAll(stickinessRows(scenario, before, activeMemberOf, ownerProcessesOf));
+        rows.putAll(stickinessRows(scenario, before, activeMemberOf, standbyProcessesOf));
         return rows;
     }
 
@@ -124,109 +127,61 @@ final class AssignmentMetrics {
      */
     static Map<String, OptionalDouble> convergenceRows(final int rounds, final boolean converged, final long firstAssignmentNanos) {
         final Map<String, OptionalDouble> rows = new LinkedHashMap<>();
-        rows.put("rounds to converge", converged ? OptionalDouble.of(rounds) : OptionalDouble.empty());
-        rows.put("not converged", OptionalDouble.of(converged ? 0 : 1));
-        rows.put("assignment time (ms)", OptionalDouble.of(firstAssignmentNanos / 1_000_000.0));
+        rows.put("Rounds to converge", converged ? OptionalDouble.of(rounds) : OptionalDouble.empty());
+        rows.put("Not converged", OptionalDouble.of(converged ? 0 : 1));
+        rows.put("Assignment time (ms)", OptionalDouble.of(firstAssignmentNanos / 1_000_000.0));
         return rows;
     }
 
     /**
-     * One row per configured tag key in priority order, empty when the key is not graded, so every rebalance
-     * returns the same rows. Only stateful tasks are graded: a stateless task has a single replica.
+     * Two rows per key position in priority order, key 1 being the first key of {@code rack.aware.assignment.tags}.
+     * A row is empty when the position has no key, the key has a single value or one value per process, so the
+     * assignor has no choice, or there are no standby or no stateful tasks; every rebalance returns the same rows.
+     * Only stateful tasks are graded, since a stateless task has a single replica.
+     * <ul>
+     * <li>tasks lost when one value of key i fails: the fraction of stateful tasks whose replicas are all on one value
+     * of the key, or on processes without it; when that value fails, the task loses its state.</li>
+     * <li>distinct tag values of key i: the average over stateful tasks of the values their replicas are on, out of
+     * {@code min(replicas, values of the key in the group)}, the most they could be on.</li>
+     * </ul>
      */
     private static Map<String, OptionalDouble> rackRows(final Scenario scenario, final Map<TaskId, Set<String>> ownerProcessesOf) {
-        final TagDistribution distribution = tagDistribution(scenario, ownerProcessesOf);
+        final int positions = TaskAssignorTestbed.TAG_KEYS.size();
+        final List<OptionalDouble> tasksLost = new ArrayList<>(Collections.nCopies(positions, OptionalDouble.empty()));
+        final List<OptionalDouble> distinctTagValues = new ArrayList<>(Collections.nCopies(positions, OptionalDouble.empty()));
+        final Set<TaskId> statefulTasks = scenario.topology.statefulTasks();
+        if (scenario.numStandbyReplicas > 0 && !statefulTasks.isEmpty()) {
+            final Map<String, Set<String>> valuesInGroup = tagValuesInGroup(scenario);
+            for (int i = 0; i < Math.min(positions, scenario.tagKeys.size()); i++) {
+                final String key = scenario.tagKeys.get(i);
+                final int values = valuesInGroup.getOrDefault(key, Set.of()).size();
+                if (values <= 1 || values >= scenario.processes.size()) {
+                    continue;
+                }
+                int lost = 0;
+                double distinctShares = 0;
+                for (final TaskId task : statefulTasks) {
+                    final Set<String> holders = ownerProcessesOf.get(task);
+                    final int distinct = distinctValues(scenario, holders, key).size();
+                    lost += distinct <= 1 ? 1 : 0;
+                    distinctShares += (double) distinct / Math.min(holders.size(), values);
+                }
+                tasksLost.set(i, OptionalDouble.of((double) lost / statefulTasks.size()));
+                distinctTagValues.set(i, OptionalDouble.of(distinctShares / statefulTasks.size()));
+            }
+        }
         final Map<String, OptionalDouble> rows = new LinkedHashMap<>();
-        for (final String key : TaskAssignorTestbed.TAG_KEYS) {
-            rows.put("distinct tag values [" + key + "] (achieved / achievable)", graded(distribution.distinctValues(), key));
+        for (int i = 0; i < positions; i++) {
+            rows.put("Tasks lost when one value of key " + (i + 1) + " fails", tasksLost.get(i));
         }
-        for (final String key : TaskAssignorTestbed.TAG_KEYS) {
-            rows.put("ideal distribution through [" + key + "]", graded(distribution.idealThroughKey(), key));
-        }
-        for (final String key : TaskAssignorTestbed.TAG_KEYS) {
-            rows.put("all replicas on one tag value [" + key + "]", graded(distribution.allReplicasOnOneValue(), key));
+        for (int i = 0; i < positions; i++) {
+            rows.put("Distinct tag values of key " + (i + 1), distinctTagValues.get(i));
         }
         return rows;
-    }
-
-    private static OptionalDouble graded(final Map<String, Double> perKey, final String key) {
-        final Double value = perKey.get(key);
-        return value == null ? OptionalDouble.empty() : OptionalDouble.of(value);
     }
 
     private static OptionalDouble fraction(final int part, final int whole) {
         return whole == 0 ? OptionalDouble.empty() : OptionalDouble.of((double) part / whole);
-    }
-
-    /** Per graded tag key: the three distribution rows. Keys are the graded keys in priority order. */
-    private record TagDistribution(
-        Map<String, Double> distinctValues,
-        Map<String, Double> idealThroughKey,
-        Map<String, Double> allReplicasOnOneValue
-    ) {
-        static final TagDistribution NONE = new TagDistribution(Map.of(), Map.of(), Map.of());
-    }
-
-    /**
-     * Distribution of each stateful task's replicas over the graded tag keys: the configured keys in priority order,
-     * without keys that have a single value in the group and without keys that have a value per process, as a host
-     * name does, since replicas of one task never share a process and so always reach distinct values on them. A key
-     * that some processes do not carry is graded. For a task {@code t} and key
-     * {@code k}, {@code d} is the number of distinct values among the processes holding a replica of {@code t}
-     * (a missing value adds nothing), and {@code d*} = min(replicas of {@code t}, values of {@code k} in the group)
-     * is the largest {@code d} any placement can reach. Nothing is graded without standby tasks or without stateful
-     * tasks, since every task then has a single replica.
-     * <ul>
-     * <li>distinct tag values: sum of {@code max(d - 1, 0)} over sum of {@code d* - 1}, over the tasks with
-     * {@code d* > 1}; the active task's own value is not a score, so replicas sharing one value, or carrying none,
-     * score 0.</li>
-     * <li>ideal distribution through key: the fraction of tasks that reach the KIP-708 ideal distribution on this
-     * key and on every higher-priority graded key, see {@link #idealDistribution}.</li>
-     * <li>all replicas on one tag value: of the tasks with {@code d* > 1}, the fraction with {@code d <= 1}; they
-     * lose every replica when that one value fails although the group allowed otherwise.</li>
-     * </ul>
-     */
-    private static TagDistribution tagDistribution(final Scenario scenario, final Map<TaskId, Set<String>> ownerProcessesOf) {
-        if (scenario.numStandbyReplicas == 0 || scenario.topology.statefulTasks().isEmpty()) {
-            return TagDistribution.NONE;
-        }
-        final Map<String, Set<String>> valuesInGroup = tagValuesInGroup(scenario);
-        final List<String> keys = new ArrayList<>();
-        for (final String key : scenario.tagKeys) {
-            final int values = valuesInGroup.getOrDefault(key, Set.of()).size();
-            if (values > 1 && values < scenario.processes.size()) {
-                keys.add(key);
-            }
-        }
-        if (keys.isEmpty()) {
-            return TagDistribution.NONE;
-        }
-        final Map<String, Double> distinctValues = new LinkedHashMap<>();
-        final Map<String, Double> allReplicasOnOneValue = new LinkedHashMap<>();
-        for (final String key : keys) {
-            final int available = valuesInGroup.get(key).size();
-            int achieved = 0;
-            int achievable = 0;
-            int gradedTasks = 0;
-            int exposedTasks = 0;
-            for (final TaskId task : scenario.topology.statefulTasks()) {
-                final Set<String> holders = ownerProcessesOf.getOrDefault(task, Set.of());
-                final int best = Math.min(holders.size(), available);
-                if (best <= 1) {
-                    continue;
-                }
-                final int distinct = distinctValues(scenario, holders, key).size();
-                achieved += Math.max(distinct - 1, 0);
-                achievable += best - 1;
-                gradedTasks++;
-                if (distinct <= 1) {
-                    exposedTasks++;
-                }
-            }
-            fraction(achieved, achievable).ifPresent(value -> distinctValues.put(key, value));
-            fraction(exposedTasks, gradedTasks).ifPresent(value -> allReplicasOnOneValue.put(key, value));
-        }
-        return new TagDistribution(distinctValues, idealDistributionThroughKey(scenario, keys, valuesInGroup, ownerProcessesOf), allReplicasOnOneValue);
     }
 
     /** The distinct values of {@code key} among the holders that carry it. */
@@ -250,108 +205,72 @@ final class AssignmentMetrics {
     }
 
     /**
-     * A task's replicas reach the KIP-708 ideal distribution on a key when every holder carries the key, the
-     * replicas cover as many distinct values as the replicas or the values in the group allow, and no value holds
-     * two replicas more than another. A holder without the key is of unknown location, so it never counts.
-     */
-    private static boolean idealDistribution(final Scenario scenario, final Set<String> holders, final String key, final int available) {
-        final Map<String, Integer> replicasPerValue = new HashMap<>();
-        for (final String processId : holders) {
-            final String value = scenario.processes.get(processId).tags.get(key);
-            if (value == null) {
-                return false;
-            }
-            replicasPerValue.merge(value, 1, Integer::sum);
-        }
-        return replicasPerValue.size() == Math.min(holders.size(), available) && range(replicasPerValue.values()) <= 1;
-    }
-
-    /**
-     * For each graded key in priority order, the fraction of the stateful tasks that reach the ideal distribution
-     * on it and on every higher-priority graded key. The cascade shows which key the assignor gives up first; the
-     * tag key priority says the lowest-priority key should go first.
-     */
-    private static Map<String, Double> idealDistributionThroughKey(
-        final Scenario scenario,
-        final List<String> keys,
-        final Map<String, Set<String>> valuesInGroup,
-        final Map<TaskId, Set<String>> ownerProcessesOf
-    ) {
-        final int[] idealThrough = new int[keys.size()];
-        for (final TaskId task : scenario.topology.statefulTasks()) {
-            final Set<String> holders = ownerProcessesOf.getOrDefault(task, Set.of());
-            for (int i = 0; i < keys.size(); i++) {
-                if (!idealDistribution(scenario, holders, keys.get(i), valuesInGroup.get(keys.get(i)).size())) {
-                    break;
-                }
-                idealThrough[i]++;
-            }
-        }
-        final Map<String, Double> result = new LinkedHashMap<>();
-        for (int i = 0; i < keys.size(); i++) {
-            result.put(keys.get(i), (double) idealThrough[i] / scenario.topology.statefulTasks().size());
-        }
-        return result;
-    }
-
-    /**
-     * Stickiness and restores since the assignment before the change; nothing is graded on the initial assignment.
+     * Stickiness since the assignment before the trigger, over the tasks some member held then; tasks of a
+     * subtopology just added have no state anywhere and are left out. Every row is empty for the initial assignment.
+     * A process had state of a task when it held a replica or a warm-up task of it before the trigger.
      * <ul>
-     * <li>stateful active tasks kept on member: of the stateful active tasks whose previous member is still in the
-     * group, the fraction that member still holds as active. A restarted process comes back with new member ids, so
-     * its tasks are not counted.</li>
-     * <li>replicas placed without state: replicas, active or standby, of a stateful task on a process that held no
-     * replica or warm-up task of it before, whatever the reason; each one is a full restore. Tasks nobody held before
-     * the change (a subtopology just added) have no state anywhere and nothing to restore, so they are left out;
-     * without this, a rebalance that adds a subtopology would dominate the average.</li>
+     * <li>the three stateful active rows put every stateful task in one level, so they add up to 1: its active task
+     * stays on its member; moves to another member of a process with state, so it is revoked and granted again but
+     * not restored; or moves to a process without state, a full restore.</li>
+     * <li>active tasks kept on member: the same as the first level, over stateful and stateless tasks.</li>
+     * <li>standby tasks placed without state: the standby tasks of stateful tasks on a process without state, each a
+     * full restore. A standby task moved within its process keeps its persistent state, so it is not counted.</li>
      * </ul>
      */
     private static Map<String, OptionalDouble> stickinessRows(
         final Scenario scenario,
         final Scenario.Baseline before,
         final Map<TaskId, String> activeMemberOf,
-        final Map<TaskId, Set<String>> ownerProcessesOf
+        final Map<TaskId, Set<String>> standbyProcessesOf
     ) {
-        final Map<String, OptionalDouble> rows = new LinkedHashMap<>();
-        if (before.assignment().isEmpty()) {
-            rows.put("stateful active tasks kept on member (1.0 = all)", OptionalDouble.empty());
-            rows.put("replicas placed without state", OptionalDouble.empty());
-            return rows;
-        }
-        int held = 0;
-        int kept = 0;
-        final Map<TaskId, Set<String>> previousOwnerProcessesOf = new HashMap<>();
+        final Map<TaskId, String> previousActiveMemberOf = new HashMap<>();
+        final Map<TaskId, Set<String>> processesWithStateOf = new HashMap<>();
         for (final Map.Entry<String, MemberAssignment> entry : before.assignment().entrySet()) {
             final String previousMember = entry.getKey();
-            final boolean memberInGroup = scenario.memberIds().contains(previousMember);
             final Set<TaskId> previousActive = toTaskIds(entry.getValue().activeTasks());
-            for (final TaskId task : previousActive) {
-                if (memberInGroup && scenario.topology.statefulTasks().contains(task)) {
-                    held++;
-                    kept += previousMember.equals(activeMemberOf.get(task)) ? 1 : 0;
-                }
-            }
+            previousActive.forEach(task -> previousActiveMemberOf.put(task, previousMember));
             final Set<TaskId> previousTasks = new HashSet<>(previousActive);
             previousTasks.addAll(toTaskIds(entry.getValue().standbyTasks()));
             previousTasks.addAll(toTaskIds(before.warmupTasks().getOrDefault(previousMember, Map.of())));
             for (final TaskId task : previousTasks) {
-                previousOwnerProcessesOf.computeIfAbsent(task, t -> new HashSet<>()).add(before.processOfMember().get(previousMember));
+                processesWithStateOf.computeIfAbsent(task, t -> new HashSet<>()).add(before.processOfMember().get(previousMember));
             }
         }
-        int placedWithoutState = 0;
-        for (final TaskId task : scenario.topology.statefulTasks()) {
-            final Set<String> previousOwners = previousOwnerProcessesOf.get(task);
-            if (previousOwners == null) {
+        int activeKept = 0;
+        int statefulHeld = 0;
+        int statefulKept = 0;
+        int statefulMovedWithState = 0;
+        int statefulMovedWithoutState = 0;
+        int standbysWithoutState = 0;
+        for (final Map.Entry<TaskId, String> entry : previousActiveMemberOf.entrySet()) {
+            final TaskId task = entry.getKey();
+            final String activeMember = activeMemberOf.get(task);
+            final boolean kept = entry.getValue().equals(activeMember);
+            activeKept += kept ? 1 : 0;
+            if (!scenario.topology.statefulTasks().contains(task)) {
                 continue;
             }
-            for (final String processId : ownerProcessesOf.getOrDefault(task, Set.of())) {
-                if (!previousOwners.contains(processId)) {
-                    placedWithoutState++;
+            final Set<String> processesWithState = processesWithStateOf.get(task);
+            statefulHeld++;
+            if (kept) {
+                statefulKept++;
+            } else if (processesWithState.contains(scenario.processOf(activeMember))) {
+                statefulMovedWithState++;
+            } else {
+                statefulMovedWithoutState++;
+            }
+            for (final String processId : standbyProcessesOf.getOrDefault(task, Set.of())) {
+                if (!processesWithState.contains(processId)) {
+                    standbysWithoutState++;
                 }
             }
         }
-        rows.put("stateful active tasks kept on member (1.0 = all)", fraction(kept, held));
-        rows.put("replicas placed without state", OptionalDouble.of(placedWithoutState));
+        final Map<String, OptionalDouble> rows = new LinkedHashMap<>();
+        rows.put("Stateful active tasks kept on member", fraction(statefulKept, statefulHeld));
+        rows.put("Stateful active tasks moved to a process with state", fraction(statefulMovedWithState, statefulHeld));
+        rows.put("Stateful active tasks moved to a process without state", fraction(statefulMovedWithoutState, statefulHeld));
+        rows.put("Active tasks kept on member", fraction(activeKept, previousActiveMemberOf.size()));
+        rows.put("Standby tasks placed without state", before.assignment().isEmpty() ? OptionalDouble.empty() : OptionalDouble.of(standbysWithoutState));
         return rows;
     }
 
@@ -364,6 +283,11 @@ final class AssignmentMetrics {
             min = Math.min(min, value);
         }
         return max == Integer.MIN_VALUE ? 0 : max - min;
+    }
+
+    /** {@code max - min} of the process loads, 0 when there are none. */
+    private static double loadRange(final List<Double> loads) {
+        return loads.isEmpty() ? 0 : Collections.max(loads) - Collections.min(loads);
     }
 
     /** The graded rows of one rebalance, for the scenario history. */

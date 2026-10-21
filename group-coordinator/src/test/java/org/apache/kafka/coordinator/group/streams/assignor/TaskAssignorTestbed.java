@@ -38,8 +38,8 @@ import java.util.TreeSet;
 
 /**
  * Randomized testbed for {@link TaskAssignor} implementations. Each scenario generates a random topology and group
- * from a seed, runs the assignor, then applies random changes (a process joining, leaving or restarting, a member
- * leaving, a subtopology being added) and runs it again after each one. A change may hit while warm-up tasks are in
+ * from a seed, runs the assignor, then applies random triggers (a process joining, leaving or restarting, a member
+ * leaving, a subtopology being added) and runs it again after each one. A trigger may hit while warm-up tasks are in
  * flight, so the assignor also sees them in its input. Every assignment is checked against
  * {@link AssignmentInvariants}; the assignment of each rebalance is graded by {@link AssignmentMetrics} on what every
  * assignor is compared on, and the summary is printed so two assignors, or two versions of one, can be compared on
@@ -66,7 +66,7 @@ final class TaskAssignorTestbed {
     private static final String SEED_ENVIRONMENT_VARIABLE = "STREAMS_ASSIGNOR_FUZZ_SEED";
     private static final String BASE_SEED_PROPERTY = "streams.assignor.fuzz.base.seed";
     private static final String BASE_SEED_ENVIRONMENT_VARIABLE = "STREAMS_ASSIGNOR_FUZZ_BASE_SEED";
-    private static final int MAX_CHANGES = 8;
+    private static final int MAX_TRIGGERS = 8;
     private static final int MAX_CONVERGENCE_ITERATIONS = 10;
     private static final long REPORTED_OFFSET = 100L;
     /** Mean of {@link Profile#LARGE}'s membersPerProcess draw, used to size the group from the task count. */
@@ -215,7 +215,7 @@ final class TaskAssignorTestbed {
 
     /**
      * Runs all scenarios of the profile from {@link #DEFAULT_BASE_SEED} and prints two summaries: the initial
-     * assignment of each group, computed from an empty assignment, and the rebalances after the random changes,
+     * assignment of each group, computed from an empty assignment, and the rebalances after the random triggers,
      * computed from the previous assignment.
      */
     void run(final Profile profile) {
@@ -266,13 +266,16 @@ final class TaskAssignorTestbed {
     ) {
         final Random random = new Random(seed);
         final Scenario scenario = Scenario.generate(random, profile);
+        // Where warm-up tasks go depends on the assignment, so they draw from their own random: the triggers are then
+        // the same for every assignor on the same seed.
+        final Random warmupRandom = new Random(random.nextLong());
         try {
             rebalance(scenario, fromEmpty, scenario.baseline());
-            final int changes = random.nextInt(MAX_CHANGES) + 1;
-            for (int i = 0; i < changes; i++) {
-                scenario.startWarmups(random);
+            final int triggers = random.nextInt(MAX_TRIGGERS) + 1;
+            for (int i = 0; i < triggers; i++) {
+                scenario.startWarmups(warmupRandom);
                 final Scenario.Baseline before = scenario.baseline();
-                scenario.applyRandomChange(random);
+                scenario.applyRandomTrigger(random);
                 rebalance(scenario, fromPrevious, before);
             }
         } catch (final AssertionError | RuntimeException e) {
@@ -286,7 +289,7 @@ final class TaskAssignorTestbed {
 
     /**
      * One rebalance: the assignor runs on the scenario's input, and its result, the one the coordinator installs, is
-     * graded against {@code before}, the state before the change that triggered the rebalance. The assignor then runs
+     * graded against {@code before}, the state before the trigger of the rebalance. The assignor then runs
      * again on its own output, each result fed back as the previous assignment, until the output reproduces itself
      * or {@link #MAX_CONVERGENCE_ITERATIONS} is reached, which only adds the convergence rows. Not converging is
      * graded, not failed: the coordinator runs the assignor once per rebalance, so it only means a later rebalance
@@ -346,7 +349,7 @@ final class TaskAssignorTestbed {
         return builder.toString();
     }
 
-    // ---- Random scenario: topology, group and events ----
+    // ---- Random scenario: topology, group and triggers ----
 
     record Subtopology(String id, int partitions, boolean stateful) {
     }
@@ -440,8 +443,8 @@ final class TaskAssignorTestbed {
         private int nextSubtopology;
 
         /**
-         * What the members held before the change that triggered a rebalance, warm-up tasks included, and on which
-         * process, so that task movement can be told apart from the tasks of a process that left.
+         * What the members held before the trigger of a rebalance, warm-up tasks included, and on which process, so
+         * that stickiness can tell which processes had the state of a task, including processes that left.
          */
         record Baseline(
             Map<String, MemberAssignment> assignment,
@@ -482,34 +485,34 @@ final class TaskAssignorTestbed {
             return scenario;
         }
 
-        /** A change that triggers a rebalance; returns false when it is not applicable to the group as it is, so another is drawn. */
+        /** A trigger of a rebalance; returns false when it is not applicable to the group as it is, so another is drawn. */
         @FunctionalInterface
-        private interface Change {
+        private interface Trigger {
             boolean apply(Random random);
         }
 
         /**
-         * The changes a group sees in production: scale out, scale in or a crash, a rolling restart, a stream thread
+         * The triggers a group sees in production: scale out, scale in or a crash, a rolling restart, a stream thread
          * dying, and a deployment that adds a subtopology.
          */
-        private final List<Change> changes = List.of(
-            this::addProcessChange,
-            this::dropProcessChange,
-            this::restartProcessChange,
-            this::dropMemberChange,
-            this::addSubtopology
+        private final List<Trigger> triggers = List.of(
+            this::addProcessTrigger,
+            this::removeProcessTrigger,
+            this::restartProcessTrigger,
+            this::removeMemberTrigger,
+            this::addSubtopologyTrigger
         );
 
-        /** Applies one random change to the group; a drawn change that would alter nothing is redrawn. */
-        void applyRandomChange(final Random random) {
+        /** Applies one random trigger to the group; a drawn trigger that would alter nothing is redrawn. */
+        void applyRandomTrigger(final Random random) {
             boolean applied = false;
             while (!applied) {
-                applied = changes.get(random.nextInt(changes.size())).apply(random);
+                applied = triggers.get(random.nextInt(triggers.size())).apply(random);
             }
         }
 
         /**
-         * The refiner may be migrating stateful tasks when the next change hits, up to the default
+         * The refiner may be migrating stateful tasks when the next trigger hits, up to the default
          * {@code group.streams.num.warmup.replicas} at a time: the active task stays with its owner while a member of
          * a process holding no replica of the task restores its state as a warm-up task. Placing warm-up tasks does
          * not trigger a rebalance, so only the next one sees them.
@@ -553,30 +556,30 @@ final class TaskAssignorTestbed {
             return tasks.getOrDefault(task.subtopologyId(), Set.of()).contains(task.partition());
         }
 
-        private boolean addProcessChange(final Random random) {
+        private boolean addProcessTrigger(final Random random) {
             final String processId = addProcess(random);
-            history.append("change: add process ").append(processId).append(' ').append(processes.get(processId)).append('\n');
+            history.append("trigger: add process ").append(processId).append(' ').append(processes.get(processId)).append('\n');
             return true;
         }
 
-        private boolean dropProcessChange(final Random random) {
+        private boolean removeProcessTrigger(final Random random) {
             if (processes.size() == 1) {
                 return false;
             }
             final String processId = randomProcess(random);
             removeProcess(processId);
-            history.append("change: drop process ").append(processId).append('\n');
+            history.append("trigger: remove process ").append(processId).append('\n');
             return true;
         }
 
-        private boolean restartProcessChange(final Random random) {
+        private boolean restartProcessTrigger(final Random random) {
             final String processId = randomProcess(random);
             restartProcess(processId);
-            history.append("change: restart process ").append(processId).append(" -> ").append(processes.get(processId)).append('\n');
+            history.append("trigger: restart process ").append(processId).append(" -> ").append(processes.get(processId)).append('\n');
             return true;
         }
 
-        private boolean dropMemberChange(final Random random) {
+        private boolean removeMemberTrigger(final Random random) {
             final String processId = randomProcess(random);
             final ProcessSpec process = processes.get(processId);
             if (process.members.size() == 1) {
@@ -584,7 +587,7 @@ final class TaskAssignorTestbed {
             }
             final String memberId = process.members.get(random.nextInt(process.members.size()));
             removeMember(processId, memberId);
-            history.append("change: drop member ").append(memberId).append('\n');
+            history.append("trigger: remove member ").append(memberId).append('\n');
             return true;
         }
 
@@ -685,12 +688,12 @@ final class TaskAssignorTestbed {
         }
 
         /** A deployment adds a subtopology; its tasks have no previous owner. */
-        private boolean addSubtopology(final Random random) {
+        private boolean addSubtopologyTrigger(final Random random) {
             final List<Subtopology> specs = new ArrayList<>(topology.specs());
             final Subtopology added = new Subtopology("s" + nextSubtopology++, profile.partitions(random), profile.stateful(random));
             specs.add(added);
             topology = Topology.of(specs);
-            history.append("change: add subtopology ").append(added).append('\n');
+            history.append("trigger: add subtopology ").append(added).append('\n');
             return true;
         }
 
