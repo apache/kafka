@@ -32,7 +32,6 @@ import org.apache.kafka.coordinator.group.modern.ModernGroup;
 import org.apache.kafka.timeline.SnapshotRegistry;
 import org.apache.kafka.timeline.TimelineObject;
 
-import java.util.Collection;
 import java.util.Collections;
 import java.util.HashSet;
 import java.util.List;
@@ -113,7 +112,7 @@ public class ShareGroup extends ModernGroup<ShareGroupMember> {
          * @param added The partitions to add.
          * @return A copy of this value with the partitions added.
          */
-        public InitMapValue withAddedPartitions(Collection<Integer> added) {
+        public InitMapValue withAddedPartitions(Set<Integer> added) {
             Set<Integer> newPartitions = new HashSet<>(partitions);
             newPartitions.addAll(added);
             return new InitMapValue(name, newPartitions, timestamp);
@@ -123,7 +122,7 @@ public class ShareGroup extends ModernGroup<ShareGroupMember> {
          * @param removed The partitions to remove.
          * @return A copy of this value with the partitions removed.
          */
-        public InitMapValue withRemovedPartitions(Collection<Integer> removed) {
+        public InitMapValue withRemovedPartitions(Set<Integer> removed) {
             Set<Integer> newPartitions = new HashSet<>(partitions);
             newPartitions.removeAll(removed);
             return new InitMapValue(name, newPartitions, timestamp);
