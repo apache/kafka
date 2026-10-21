@@ -23,7 +23,7 @@ import org.apache.kafka.common.config.SaslConfigs;
 import org.apache.kafka.common.config.SslConfigs;
 import org.apache.kafka.common.config.internals.BrokerSecurityConfigs;
 import org.apache.kafka.coordinator.group.GroupCoordinatorConfig;
-import org.apache.kafka.coordinator.mirror.ClusterMirrorConfig;
+import org.apache.kafka.coordinator.mirror.ClusterMirrorBrokerConfig;
 import org.apache.kafka.coordinator.share.ShareCoordinatorConfig;
 import org.apache.kafka.coordinator.transaction.TransactionLogConfig;
 import org.apache.kafka.network.SocketServer;
@@ -286,8 +286,8 @@ public class DynamicBrokerConfig {
 
     public static class DynamicClusterMirrorConfig implements BrokerReconfigurable {
         public static final Set<String> RECONFIGURABLE_CONFIGS = Set.of(
-                ClusterMirrorConfig.MIRROR_NUM_REPLICA_FETCHERS_CONFIG,
-                ClusterMirrorConfig.MIRROR_METADATA_REFRESH_INTERVAL_MS_CONFIG);
+                ClusterMirrorBrokerConfig.MIRROR_NUM_REPLICA_FETCHERS_CONFIG,
+                ClusterMirrorBrokerConfig.MIRROR_METADATA_REFRESH_INTERVAL_MS_CONFIG);
 
         private final Supplier<AbstractKafkaConfig> currentConfig;
 
@@ -302,11 +302,11 @@ public class DynamicBrokerConfig {
 
         @Override
         public void validateReconfiguration(AbstractKafkaConfig newConfig) {
-            int newFetchers = newConfig.getInt(ClusterMirrorConfig.MIRROR_NUM_REPLICA_FETCHERS_CONFIG);
-            int oldFetchers = currentConfig.get().getInt(ClusterMirrorConfig.MIRROR_NUM_REPLICA_FETCHERS_CONFIG);
+            int newFetchers = newConfig.getInt(ClusterMirrorBrokerConfig.MIRROR_NUM_REPLICA_FETCHERS_CONFIG);
+            int oldFetchers = currentConfig.get().getInt(ClusterMirrorBrokerConfig.MIRROR_NUM_REPLICA_FETCHERS_CONFIG);
             if (newFetchers != oldFetchers) {
                 String errorMsg = "Dynamic thread count update validation failed for "
-                        + ClusterMirrorConfig.MIRROR_NUM_REPLICA_FETCHERS_CONFIG + "=" + newFetchers;
+                        + ClusterMirrorBrokerConfig.MIRROR_NUM_REPLICA_FETCHERS_CONFIG + "=" + newFetchers;
                 if (newFetchers < oldFetchers / 2)
                     throw new ConfigException(errorMsg + ", Value should be at least half the current value " + oldFetchers);
                 if (newFetchers > oldFetchers * 2)
