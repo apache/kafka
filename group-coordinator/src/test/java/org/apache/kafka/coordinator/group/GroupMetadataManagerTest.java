@@ -30221,7 +30221,7 @@ public class GroupMetadataManagerTest {
             )
         );
 
-        assertEquals(expectedRecords, records);
+        assertRecordsEquals(expectedRecords, records);
     }
 
     @Test
