@@ -1241,9 +1241,13 @@ class KafkaConfigTest {
 
     def assertDynamic(property: String, value: Any, accessor: () => Any): Unit = {
       val initial = accessor()
+      val logConfigName = ServerTopicConfigSynonyms.TOPIC_CONFIG_SYNONYMS.asScala
+        .find { case (_, brokerConfigName) => brokerConfigName == property }.get._1
+      assertEquals(initial, config.extractLogConfigMap.get(logConfigName))
       props.setProperty(property, value.toString)
       config.updateCurrentConfig(new KafkaConfig(props))
       assertNotEquals(initial, accessor())
+      assertEquals(accessor(), config.extractLogConfigMap.get(logConfigName))
     }
 
     // Test dynamic log config values can be correctly passed through via KafkaConfig to LogConfig

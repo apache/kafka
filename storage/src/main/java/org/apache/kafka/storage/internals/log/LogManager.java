@@ -20,6 +20,7 @@ import org.apache.kafka.common.DirectoryId;
 import org.apache.kafka.common.KafkaException;
 import org.apache.kafka.common.TopicPartition;
 import org.apache.kafka.common.Uuid;
+import org.apache.kafka.common.config.AbstractConfig;
 import org.apache.kafka.common.errors.InconsistentTopicIdException;
 import org.apache.kafka.common.errors.KafkaStorageException;
 import org.apache.kafka.common.errors.LogDirNotFoundException;
@@ -32,6 +33,8 @@ import org.apache.kafka.metadata.ConfigRepository;
 import org.apache.kafka.metadata.properties.MetaProperties;
 import org.apache.kafka.metadata.properties.MetaPropertiesEnsemble;
 import org.apache.kafka.metadata.properties.PropertiesUtils;
+import org.apache.kafka.server.config.ServerLogConfigs;
+import org.apache.kafka.server.log.remote.storage.RemoteLogManagerConfig;
 import org.apache.kafka.server.metrics.KafkaMetricsGroup;
 import org.apache.kafka.server.util.FileLock;
 import org.apache.kafka.server.util.Scheduler;
@@ -172,6 +175,52 @@ public class LogManager {
          * @return The log dir Uuid
          */
         Uuid get(Uuid topicId, int partition, int brokerId);
+    }
+
+    /**
+     * Create the log manager from broker configuration without starting log recovery or background
+     * tasks. Transaction settings are supplied by the caller to keep storage independent of the
+     * transaction coordinator module.
+     */
+    public static LogManager create(AbstractConfig config,
+                                    Set<String> initialOfflineDirs,
+                                    ConfigRepository configRepository,
+                                    Scheduler scheduler,
+                                    Time time,
+                                    BrokerTopicStats brokerTopicStats,
+                                    LogDirFailureChannel logDirFailureChannel,
+                                    int maxTransactionTimeoutMs,
+                                    ProducerStateManagerConfig producerStateManagerConfig,
+                                    int producerIdExpirationCheckIntervalMs) throws IOException {
+        Map<String, Object> defaultProps = LogConfig.extractLogConfigMap(config);
+        boolean remoteStorageEnabled = config.getBoolean(RemoteLogManagerConfig.REMOTE_LOG_STORAGE_SYSTEM_ENABLE_PROP);
+        LogConfig.validateBrokerLogConfigValues(defaultProps, remoteStorageEnabled);
+        LogConfig defaultLogConfig = new LogConfig(defaultProps);
+        List<String> logDirs = Optional.ofNullable(config.getList(ServerLogConfigs.LOG_DIRS_CONFIG))
+            .orElseGet(() -> config.getList(ServerLogConfigs.LOG_DIR_CONFIG));
+        long initialTaskDelayMs = Optional.ofNullable(config.getLong(ServerLogConfigs.LOG_INITIAL_TASK_DELAY_MS_CONFIG))
+            .orElse(ServerLogConfigs.LOG_INITIAL_TASK_DELAY_MS_DEFAULT);
+
+        return new LogManager(logDirs.stream().map(dir -> new File(dir).getAbsoluteFile()).toList(),
+            initialOfflineDirs.stream().map(dir -> new File(dir).getAbsoluteFile()).toList(),
+            configRepository,
+            defaultLogConfig,
+            new CleanerConfig(config),
+            config.getInt(ServerLogConfigs.NUM_RECOVERY_THREADS_PER_DATA_DIR_CONFIG),
+            config.getLong(ServerLogConfigs.LOG_FLUSH_SCHEDULER_INTERVAL_MS_CONFIG),
+            config.getInt(ServerLogConfigs.LOG_FLUSH_OFFSET_CHECKPOINT_INTERVAL_MS_CONFIG),
+            config.getInt(ServerLogConfigs.LOG_FLUSH_START_OFFSET_CHECKPOINT_INTERVAL_MS_CONFIG),
+            config.getLong(ServerLogConfigs.LOG_CLEANUP_INTERVAL_MS_CONFIG),
+            maxTransactionTimeoutMs,
+            producerStateManagerConfig,
+            producerIdExpirationCheckIntervalMs,
+            scheduler,
+            brokerTopicStats,
+            logDirFailureChannel,
+            time,
+            remoteStorageEnabled,
+            initialTaskDelayMs,
+            LogCleaner::new);
     }
 
     /**

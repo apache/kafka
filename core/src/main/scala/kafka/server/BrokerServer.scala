@@ -19,7 +19,6 @@ package kafka.server
 
 import kafka.coordinator.group.CoordinatorPartitionWriter
 import kafka.coordinator.transaction.TransactionCoordinator
-import kafka.log.LogManager
 import kafka.network.SocketServer
 import kafka.raft.KafkaRaftManager
 import kafka.server.metadata._
@@ -40,7 +39,7 @@ import org.apache.kafka.coordinator.group.{GroupConfigManager, GroupCoordinator,
 import org.apache.kafka.coordinator.group.modern.share.ShareGroupConfigProvider
 import org.apache.kafka.coordinator.share.metrics.{ShareCoordinatorMetrics, ShareCoordinatorRuntimeMetrics}
 import org.apache.kafka.coordinator.share.{ShareCoordinator, ShareCoordinatorRecordSerde, ShareCoordinatorService}
-import org.apache.kafka.coordinator.transaction.ProducerIdManager
+import org.apache.kafka.coordinator.transaction.{ProducerIdManager, TransactionLogConfig, TransactionStateManagerConfig}
 import org.apache.kafka.image.publisher.{BrokerRegistrationTracker, MetadataPublisher}
 import org.apache.kafka.metadata.{BrokerState, KRaftMetadataCache, ListenerInfo, MetadataCache, MetadataVersionConfigValidator}
 import org.apache.kafka.metadata.publisher.{AclPublisher, DelegationTokenPublisher, DynamicClientQuotaPublisher, DynamicTopicClusterQuotaPublisher, ScramPublisher}
@@ -61,7 +60,7 @@ import org.apache.kafka.server.util.timer.{SystemTimer, SystemTimerReaper, Timer
 import org.apache.kafka.server.util.{Deadline, FutureUtils, KafkaScheduler, NetworkPartitionMetadataClient, PartitionMetadataClient}
 import org.apache.kafka.server.{AssignmentsManager, AutoTopicCreationManager, BrokerFeatures, BrokerLifecycleManager, ClientMetricsManager, DefaultApiVersionManager, DefaultAutoTopicCreationManager, DelayedActionQueue, FetchManager, FetchSessionCacheShard, ForwardingManager, ForwardingManagerImpl, KRaftTopicCreator, NodeToControllerChannelManagerImpl, ProcessRole, RaftControllerNodeProvider}
 import org.apache.kafka.server.transaction.AddPartitionsToTxnManager
-import org.apache.kafka.storage.internals.log.{LogDirFailureChannel, LogManager => JLogManager}
+import org.apache.kafka.storage.internals.log.{LogDirFailureChannel, LogManager, ProducerStateManagerConfig}
 import org.apache.kafka.storage.log.metrics.BrokerTopicStats
 import org.apache.kafka.server.partition.{AlterPartitionManager, DefaultAlterPartitionManager}
 import org.apache.kafka.server.share.dlq.{DefaultShareGroupDLQManager, NoOpShareGroupDLQManager, ShareGroupDLQManager}
@@ -116,7 +115,7 @@ class BrokerServer(
   var dataPlaneRequestHandlerPool: KafkaRequestHandlerPool = _
 
   var logDirFailureChannel: LogDirFailureChannel = _
-  var logManager: JLogManager = _
+  var logManager: LogManager = _
   var remoteLogManagerOpt: Option[RemoteLogManager] = None
 
   var tokenManager: DelegationTokenManager = _
@@ -225,13 +224,17 @@ class BrokerServer(
 
       // Create log manager, but don't start it because we need to delay any potential unclean shutdown log recovery
       // until we catch up on the metadata log and have up-to-date topic and broker configs.
-      logManager = LogManager(config,
+      val transactionLogConfig = new TransactionLogConfig(config)
+      logManager = LogManager.create(config,
         sharedServer.metaPropsEnsemble.errorLogDirs(),
         metadataCache,
         kafkaScheduler,
         time,
         brokerTopicStats,
-        logDirFailureChannel)
+        logDirFailureChannel,
+        new TransactionStateManagerConfig(config).transactionMaxTimeoutMs,
+        new ProducerStateManagerConfig(transactionLogConfig.producerIdExpirationMs, transactionLogConfig.transactionPartitionVerificationEnable),
+        transactionLogConfig.producerIdExpirationCheckIntervalMs)
 
       lifecycleManager = new BrokerLifecycleManager(
         config,
