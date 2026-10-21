@@ -1490,6 +1490,8 @@ org.apache.kafka.coordinator.group.modern.share.ShareGroupTest:
 - testGetOrCreateMember
 - testGroupState
 - testGroupTypeFromString
+- testInitMapValueWithAddedPartitions
+- testInitMapValueWithRemovedPartitions
 - testIsInStatesCaseInsensitive
 - testIsSubscribedToTopic
 - testMetadataRefreshDeadline
