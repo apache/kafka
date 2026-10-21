@@ -20,7 +20,6 @@ import org.apache.kafka.clients.consumer.OffsetAndMetadata;
 import org.apache.kafka.common.TopicPartition;
 
 import java.util.Collections;
-import java.util.HashMap;
 import java.util.Map;
 import java.util.Optional;
 import java.util.concurrent.CompletableFuture;
@@ -30,12 +29,7 @@ public abstract class CommitEvent extends CompletableApplicationEvent<Map<TopicP
     /**
      * Offsets to commit per partition.
      */
-    private final Optional<Map<TopicPartition, OffsetAndMetadata>> offsets;
-
-    /**
-     * Offsets that is calculated.
-     */
-    private volatile Optional<Map<TopicPartition, OffsetAndMetadata>> calculatedOffsets;
+    private volatile Optional<Map<TopicPartition, OffsetAndMetadata>> offsets;
 
     /**
      * Future that completes when allConsumed offsets have been calculated.
@@ -47,7 +41,6 @@ public abstract class CommitEvent extends CompletableApplicationEvent<Map<TopicP
     protected CommitEvent(final Type type, final Optional<Map<TopicPartition, OffsetAndMetadata>> offsets, final long deadlineMs) {
         super(type, deadlineMs);
         this.offsets = validate(offsets);
-        this.calculatedOffsets = Optional.of(new HashMap<>());
     }
 
     /**
@@ -80,12 +73,11 @@ public abstract class CommitEvent extends CompletableApplicationEvent<Map<TopicP
         offsetsReady.complete(null);
     }
 
-    public void updateCalculatedOffsets(final Map<TopicPartition, OffsetAndMetadata> calculatedOffsets) {
-        this.calculatedOffsets = Optional.of(calculatedOffsets);
-    }
-
-    public Optional<Map<TopicPartition, OffsetAndMetadata>> calculatedOffsets() {
-        return calculatedOffsets;
+    public void setOffsetsIfOffsetsIsEmpty(Map<TopicPartition, OffsetAndMetadata> newOffsets) {
+        if (offsets.isPresent()) {
+            return;
+        }
+        offsets = validate(Optional.ofNullable(newOffsets));
     }
 
     @Override

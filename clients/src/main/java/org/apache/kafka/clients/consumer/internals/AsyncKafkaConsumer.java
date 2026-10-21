@@ -1128,7 +1128,7 @@ public class AsyncKafkaConsumer<K, V> implements ConsumerDelegate<K, V> {
                 final Map<TopicPartition, OffsetAndMetadata> callbackOffsets =
                     throwable == null
                         ? committedOffsets
-                        : asyncCommitEvent.calculatedOffsets().orElse(new HashMap<>());
+                        : asyncCommitEvent.offsets().orElse(new HashMap<>());
 
                 if (callback == null) {
                     if (throwable != null) {

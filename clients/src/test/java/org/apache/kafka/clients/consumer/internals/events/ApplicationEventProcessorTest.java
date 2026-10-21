@@ -578,7 +578,7 @@ public class ApplicationEventProcessorTest {
         processor.process(event);
         verify(commitRequestManager).commitAsync(allConsumed);
         assertTrue(event.offsetsReady.isDone());
-        assertEquals(Optional.of(allConsumed), event.calculatedOffsets());
+        assertEquals(Optional.of(allConsumed), event.offsets());
         Map<TopicPartition, OffsetAndMetadata> committedOffsets = assertDoesNotThrow(() -> event.future().get());
         assertEquals(allConsumed, committedOffsets);
     }
@@ -594,7 +594,7 @@ public class ApplicationEventProcessorTest {
         processor.process(event);
         verify(commitRequestManager).commitAsync(offsets);
         assertTrue(event.offsetsReady.isDone());
-        assertEquals(Optional.of(offsets), event.calculatedOffsets());
+        assertEquals(Optional.of(offsets), event.offsets());
         Map<TopicPartition, OffsetAndMetadata> committedOffsets = assertDoesNotThrow(() -> event.future().get());
         assertEquals(offsets, committedOffsets);
     }
@@ -624,8 +624,28 @@ public class ApplicationEventProcessorTest {
         verify(commitRequestManager).commitAsync(allConsumed);
         assertTrue(event.offsetsReady.isDone());
         assertFutureThrows(IllegalStateException.class, event.future());
-        assertEquals(Optional.of(allConsumed), event.calculatedOffsets());
+        assertEquals(Optional.of(allConsumed), event.offsets());
     }
+
+    @Test
+    public void testAsyncCommitEventWithInvalidAllConsumedOffsets() {
+        AsyncCommitEvent event = new AsyncCommitEvent(Optional.empty());
+
+        TopicPartition tp = new TopicPartition("topic", 0);
+        subscriptionState = new SubscriptionState(new LogContext(), AutoOffsetResetStrategy.EARLIEST);
+        subscriptionState.assignFromUser(Collections.singleton(tp));
+        subscriptionState.seek(tp, -1L);
+
+        setupProcessor(true);
+        processor.process(event);
+
+        verify(commitRequestManager, never()).commitAsync(any());
+        assertTrue(event.offsets().isEmpty());
+        assertFalse(event.offsetsReady.isDone());
+        // For the client side, it will get TimeoutException instead of KafkaException(IllegalArgumentException).
+        assertFutureThrows(IllegalArgumentException.class, event.future());
+    }
+
 
     @Test
     public void testStreamsOnTasksRevokedCallbackCompletedEvent() {
