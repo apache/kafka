@@ -734,6 +734,42 @@ class TransactionStateManagerTest {
     verifyWritesTxnMarkersInPrepareState(TransactionState.PREPARE_ABORT)
   }
 
+  @ParameterizedTest
+  @EnumSource(value = classOf[TransactionState], names = Array("PREPARE_COMMIT", "PREPARE_ABORT"))
+  def shouldCompleteEmptyPreparedTransactionOnLoad(state: TransactionState): Unit = {
+    // With transaction V2, ending a transaction with no partitions writes PrepareCommit or PrepareAbort with no
+    // partitions. On load, it must still be completed.
+    val (expectedResult, expectedCompleteState) =
+      if (state == TransactionState.PREPARE_COMMIT) (TransactionResult.COMMIT, TransactionState.COMPLETE_COMMIT)
+      else (TransactionResult.ABORT, TransactionState.COMPLETE_ABORT)
+    val txnMetadata = new TransactionMetadata(transactionalId1, producerIds(transactionalId1), RecordBatch.NO_PRODUCER_ID,
+      RecordBatch.NO_PRODUCER_ID, 1.toShort, RecordBatch.NO_PRODUCER_EPOCH, transactionTimeoutMs, state,
+      mutable.Set.empty[TopicPartition], time.milliseconds(), time.milliseconds(), TV_2)
+
+    txnRecords += new SimpleRecord(txnMessageKeyBytes1, TransactionLog.valueToBytes(txnMetadata.prepareNoTransit(), TV_2))
+    prepareTxnLog(topicPartition, 0, MemoryRecords.withRecords(0L, Compression.NONE, txnRecords.toArray: _*))
+
+    var txnResult: TransactionResult = null
+    var loadedMetadata: TransactionMetadata = null
+    var completeMetadata: TxnTransitMetadata = null
+    transactionManager.loadTransactionsForTxnTopicPartition(partitionId, 0, (_, result, metadata, newMetadata) => {
+      txnResult = result
+      loadedMetadata = metadata
+      completeMetadata = newMetadata
+    })
+    scheduler.tick()
+
+    assertEquals(expectedResult, txnResult)
+    assertEquals(state, loadedMetadata.state)
+    assertEquals(1.toShort, loadedMetadata.producerEpoch)
+    assertTrue(loadedMetadata.topicPartitions.isEmpty)
+    assertEquals(expectedCompleteState, completeMetadata.txnState)
+
+    loadedMetadata.completeTransitionTo(completeMetadata)
+    assertEquals(expectedCompleteState, loadedMetadata.state)
+    assertEquals(1.toShort, loadedMetadata.producerEpoch)
+  }
+
   @Test
   def shouldRemoveCompleteCommitExpiredTransactionalIds(): Unit = {
     setupAndRunTransactionalIdExpiration(Errors.NONE, TransactionState.COMPLETE_COMMIT)

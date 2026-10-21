@@ -26,7 +26,7 @@ import org.apache.kafka.server.util.MockTime
 import org.junit.jupiter.api.Assertions._
 import org.junit.jupiter.api.Test
 import org.junit.jupiter.params.ParameterizedTest
-import org.junit.jupiter.params.provider.ValueSource
+import org.junit.jupiter.params.provider.{EnumSource, ValueSource}
 
 import java.util.Optional
 
@@ -182,6 +182,39 @@ class TransactionMetadataTest {
     assertEquals(producerId, txnMetadata.producerId)
     assertEquals(producerEpoch + 1, txnMetadata.producerEpoch)
     assertEquals(time.milliseconds() + 1, txnMetadata.txnStartTimestamp)
+  }
+
+  @ParameterizedTest
+  @EnumSource(value = classOf[TransactionState], names = Array("EMPTY", "COMPLETE_COMMIT", "COMPLETE_ABORT"))
+  def testTransitFromNoOngoingTransactionToPrepareCommitAndCompleteCommitInV2(state: TransactionState): Unit = {
+    val producerEpoch = 735.toShort
+
+    val txnMetadata = new TransactionMetadata(
+      transactionalId = transactionalId,
+      producerId = producerId,
+      prevProducerId = RecordBatch.NO_PRODUCER_ID,
+      nextProducerId = RecordBatch.NO_PRODUCER_ID,
+      producerEpoch = producerEpoch,
+      lastProducerEpoch = RecordBatch.NO_PRODUCER_EPOCH,
+      txnTimeoutMs = 30000,
+      state = state,
+      topicPartitions = mutable.Set.empty,
+      txnStartTimestamp = if (state == TransactionState.EMPTY) -1 else time.milliseconds() - 1,
+      txnLastUpdateTimestamp = time.milliseconds(),
+      clientTransactionVersion = TV_2)
+
+    var transitMetadata = txnMetadata.prepareAbortOrCommit(TransactionState.PREPARE_COMMIT, TV_2, RecordBatch.NO_PRODUCER_ID, time.milliseconds() + 1, true)
+    txnMetadata.completeTransitionTo(transitMetadata)
+    assertEquals(TransactionState.PREPARE_COMMIT, txnMetadata.state)
+    assertEquals(producerId, txnMetadata.producerId)
+    assertEquals(producerEpoch + 1, txnMetadata.producerEpoch)
+    assertEquals(time.milliseconds() + 1, txnMetadata.txnStartTimestamp)
+
+    transitMetadata = txnMetadata.prepareComplete(time.milliseconds() + 2)
+    txnMetadata.completeTransitionTo(transitMetadata)
+    assertEquals(TransactionState.COMPLETE_COMMIT, txnMetadata.state)
+    assertEquals(producerEpoch + 1, txnMetadata.producerEpoch)
+    assertTrue(txnMetadata.topicPartitions.isEmpty)
   }
 
   @Test

@@ -197,7 +197,7 @@ private[transaction] class TransactionMetadata(val transactionalId: String,
       (producerEpoch, lastProducerEpoch)
     }
 
-    // With transaction V2, it is allowed to abort the transaction without adding any partitions. Then, the transaction
+    // With transaction V2, it is allowed to abort or commit the transaction without adding any partitions. Then, the transaction
     // start time is uncertain but it is still required. So we can use the update time as the transaction start time.
     val newTxnStartTimestamp = if (noPartitionAdded) updateTimestamp else txnStartTimestamp
     prepareTransitionTo(
@@ -342,11 +342,11 @@ private[transaction] class TransactionMetadata(val transactionalId: String,
           }
 
         case TransactionState.PREPARE_ABORT | TransactionState.PREPARE_COMMIT => // from endTxn
-          // In V2, we allow state transits from Empty, CompleteCommit and CompleteAbort to PrepareAbort. It is possible
-          // their updated start time is not equal to the current start time.
-          val allowedEmptyAbort = toState == TransactionState.PREPARE_ABORT && transitMetadata.clientTransactionVersion.supportsEpochBump() &&
+          // In V2, we allow state transits from Empty, CompleteCommit and CompleteAbort to PrepareAbort or PrepareCommit.
+          // It is possible their updated start time is not equal to the current start time.
+          val allowedEmptyCompletion = transitMetadata.clientTransactionVersion.supportsEpochBump() &&
             (state == TransactionState.EMPTY || state == TransactionState.COMPLETE_COMMIT || state == TransactionState.COMPLETE_ABORT)
-          val validTimestamp = txnStartTimestamp == transitMetadata.txnStartTimestamp || allowedEmptyAbort
+          val validTimestamp = txnStartTimestamp == transitMetadata.txnStartTimestamp || allowedEmptyCompletion
           if (!validProducerEpoch(transitMetadata) ||
             !topicPartitions.equals(transitMetadata.topicPartitions.asScala) ||
             txnTimeoutMs != transitMetadata.txnTimeoutMs || !validTimestamp) {
