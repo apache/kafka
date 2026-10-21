@@ -13,7 +13,6 @@
 // See the License for the specific language governing permissions and
 // limitations under the License.
 
-import org.eclipse.jgit.api.Git
 import org.gradle.api.artifacts.FileCollectionDependency
 import java.nio.charset.StandardCharsets
 
@@ -109,7 +108,8 @@ ext {
     throw new GradleException("Unexpected value for scalaOptimizerMode property. Expected one of $scalaOptimizerValues, but received: $userScalaOptimizerMode")
 
   generatedDocsDir = new File("${project.rootDir}/docs/generated")
-  repo = file("$rootDir/.git").isDirectory() ? Git.open(project.getRootDir()) : null
+  // exists() rather than isDirectory(): .git is a file in git worktrees
+  isGitCheckout = file("$rootDir/.git").exists()
 
   commitId = determineCommitId()
 
@@ -232,8 +232,13 @@ def determineCommitId() {
   def takeFromHash = 16
   if (project.hasProperty('commitId')) {
     commitId.take(takeFromHash)
-  } else if (repo != null) {
-    repo.repository.resolve("HEAD").abbreviate(takeFromHash).name()
+  } else if (isGitCheckout) {
+    // Use providers.exec so that the git call is tracked as a configuration cache input.
+    // Truncate the full hash rather than using --short, which can return more characters.
+    providers.exec {
+      commandLine 'git', 'rev-parse', 'HEAD'
+      workingDir rootDir
+    }.standardOutput.asText.get().trim().take(takeFromHash)
   } else {
     "unknown"
   }
@@ -259,7 +264,7 @@ static def projectToJUnitXmlPath(project) {
 
 apply from: file('wrapper.gradle')
 
-if (repo != null) {
+if (isGitCheckout) {
   rat {
     dependsOn subprojects.collect {
       it.tasks.matching {
@@ -273,7 +278,11 @@ if (repo != null) {
 
     // Exclude everything under the directory that git should be ignoring via .gitignore or that isn't checked in. These
     // restrict us only to files that are checked in or are staged.
-    excludes = new ArrayList<String>(repo.clean().setIgnore(false).setCleanDirectories(true).setDryRun(true).call())
+    // Equivalent of `git clean -ndx`: untracked and ignored files, with untracked directories collapsed.
+    excludes = new ArrayList<String>(providers.exec {
+      commandLine 'git', 'ls-files', '--others', '--directory'
+      workingDir rootDir
+    }.standardOutput.asText.get().readLines())
     // And some of the files that we have checked in should also be excluded from this check
     excludes.addAll([
         '**/.git/**',
