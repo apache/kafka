@@ -6805,13 +6805,13 @@ public class GroupMetadataManager {
                 value.initializingTopics().stream()
                     .map(topicPartitionInfo -> Map.entry(
                         topicPartitionInfo.topicId(),
-                        new InitMapValue(topicPartitionInfo.topicName(), topicPartitionInfo.partitions(), timestamp)))
+                        new InitMapValue(topicPartitionInfo.topicName(), new HashSet<>(topicPartitionInfo.partitions()), timestamp)))
                     .collect(Collectors.toMap(Map.Entry::getKey, Map.Entry::getValue)),
 
                 value.initializedTopics().stream()
                     .map(topicPartitionInfo -> Map.entry(
                         topicPartitionInfo.topicId(),
-                        new InitMapValue(topicPartitionInfo.topicName(), topicPartitionInfo.partitions(), timestamp)))
+                        new InitMapValue(topicPartitionInfo.topicName(), new HashSet<>(topicPartitionInfo.partitions()), timestamp)))
                     .collect(Collectors.toMap(Map.Entry::getKey, Map.Entry::getValue)),
 
                 value.deletingTopics().stream()

@@ -33,6 +33,7 @@ import org.apache.kafka.timeline.SnapshotRegistry;
 import org.apache.kafka.timeline.TimelineObject;
 
 import java.util.Collection;
+import java.util.Collections;
 import java.util.HashSet;
 import java.util.List;
 import java.util.Locale;
@@ -100,11 +101,7 @@ public class ShareGroup extends ModernGroup<ShareGroupMember> {
         long timestamp
     ) {
         public InitMapValue {
-            partitions = Set.copyOf(partitions);
-        }
-
-        public InitMapValue(String name, Collection<Integer> partitions, long timestamp) {
-            this(name, Set.copyOf(partitions), timestamp);
+            partitions = Collections.unmodifiableSet(partitions);
         }
 
         /**

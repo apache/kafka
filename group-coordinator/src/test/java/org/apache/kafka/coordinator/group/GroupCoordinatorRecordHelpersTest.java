@@ -60,6 +60,7 @@ import org.junit.jupiter.params.provider.MethodSource;
 import java.util.ArrayList;
 import java.util.Arrays;
 import java.util.HashMap;
+import java.util.LinkedHashSet;
 import java.util.List;
 import java.util.Map;
 import java.util.Optional;
@@ -214,7 +215,9 @@ public class GroupCoordinatorRecordHelpersTest {
         Uuid topicId1 = Uuid.randomUuid();
         String topicName2 = "t2";
         Uuid topicId2 = Uuid.randomUuid();
-        Set<Integer> partitions = Set.of(0, 1);
+        Set<Integer> partitions = new LinkedHashSet<>();
+        partitions.add(0);
+        partitions.add(1);
 
         CoordinatorRecord expectedRecord = CoordinatorRecord.record(
             new ShareGroupStatePartitionMetadataKey()
@@ -226,7 +229,7 @@ public class GroupCoordinatorRecordHelpersTest {
                             new ShareGroupStatePartitionMetadataValue.TopicPartitionsInfo()
                                 .setTopicId(topicId1)
                                 .setTopicName(topicName1)
-                                .setPartitions(List.copyOf(partitions))
+                                .setPartitions(List.of(0, 1))
                         )
                     )
                     .setDeletingTopics(
