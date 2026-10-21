@@ -27,6 +27,7 @@ import org.apache.kafka.coordinator.group.modern.Assignment;
 import org.apache.kafka.coordinator.group.modern.GroupSpecImpl;
 import org.apache.kafka.coordinator.group.modern.MemberSubscriptionAndAssignmentImpl;
 import org.apache.kafka.coordinator.group.modern.SubscribedTopicDescriberImpl;
+import org.apache.kafka.coordinator.group.modern.share.ShareGroup.InitMapValue;
 import org.apache.kafka.server.common.TopicIdPartition;
 
 import org.junit.jupiter.api.Test;
@@ -232,15 +233,13 @@ public class SimpleAssignorTest {
             Assignment.EMPTY
         ));
 
-        GroupSpec groupSpec = new GroupSpecImpl(
+        GroupSpec groupSpec = new GroupSpecImpl.ShareGroupSpecImpl(
             metadataImage,
             members,
             HOMOGENEOUS,
-            Optional.of(
-                Map.of(
-                    TOPIC_1_UUID, Set.of(0, 1, 2),
-                    TOPIC_3_UUID, Set.of(0, 1)    // but not 2
-                )
+            Map.of(
+                TOPIC_1_UUID, new InitMapValue(TOPIC_1_NAME, Set.of(0, 1, 2), 0L),
+                TOPIC_3_UUID, new InitMapValue(TOPIC_3_NAME, Set.of(0, 1), 0L)    // but not 2
             )
         );
         SubscribedTopicDescriberImpl subscribedTopicMetadata = new SubscribedTopicDescriberImpl(
@@ -282,13 +281,11 @@ public class SimpleAssignorTest {
             Assignment.EMPTY
         ));
 
-        GroupSpec groupSpec = new GroupSpecImpl(
+        GroupSpec groupSpec = new GroupSpecImpl.ShareGroupSpecImpl(
             metadataImage,
             members,
             HOMOGENEOUS,
-            Optional.of(
-                Map.of(TOPIC_1_UUID, Set.of(0, 1, 2))
-            )
+            Map.of(TOPIC_1_UUID, new InitMapValue(TOPIC_1_NAME, Set.of(0, 1, 2), 0L))
         );
 
         SubscribedTopicDescriberImpl subscribedTopicMetadata = new SubscribedTopicDescriberImpl(
@@ -395,16 +392,14 @@ public class SimpleAssignorTest {
             Assignment.EMPTY
         ));
 
-        GroupSpec groupSpec = new GroupSpecImpl(
+        GroupSpec groupSpec = new GroupSpecImpl.ShareGroupSpecImpl(
             metadataImage,
             members,
             HETEROGENEOUS,
-            Optional.of(
-                Map.of(
-                    TOPIC_1_UUID, Set.of(0, 1), // but not 2
-                    TOPIC_2_UUID, Set.of(0, 2), // but not 1
-                    TOPIC_3_UUID, Set.of(1)     // but not 0
-                )
+            Map.of(
+                TOPIC_1_UUID, new InitMapValue(TOPIC_1_NAME, Set.of(0, 1), 0L), // but not 2
+                TOPIC_2_UUID, new InitMapValue(TOPIC_2_NAME, Set.of(0, 2), 0L), // but not 1
+                TOPIC_3_UUID, new InitMapValue(TOPIC_3_NAME, Set.of(1), 0L)     // but not 0
             )
         );
 
@@ -458,15 +453,13 @@ public class SimpleAssignorTest {
             Assignment.EMPTY
         ));
 
-        GroupSpec groupSpec = new GroupSpecImpl(
+        GroupSpec groupSpec = new GroupSpecImpl.ShareGroupSpecImpl(
             metadataImage,
             members,
             HETEROGENEOUS,
-            Optional.of(
-                Map.of(
-                    TOPIC_1_UUID, Set.of(0, 1, 2),
-                    TOPIC_2_UUID, Set.of(0, 1, 2)
-                )
+            Map.of(
+                TOPIC_1_UUID, new InitMapValue(TOPIC_1_NAME, Set.of(0, 1, 2), 0L),
+                TOPIC_2_UUID, new InitMapValue(TOPIC_2_NAME, Set.of(0, 1, 2), 0L)
             )
         );
 

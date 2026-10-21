@@ -22,13 +22,13 @@ import org.apache.kafka.coordinator.common.runtime.MetadataImageBuilder;
 import org.apache.kafka.coordinator.group.api.assignor.GroupSpec;
 import org.apache.kafka.coordinator.group.modern.consumer.ConsumerGroupMember;
 import org.apache.kafka.coordinator.group.modern.consumer.ResolvedRegularExpression;
+import org.apache.kafka.coordinator.group.modern.share.ShareGroup.InitMapValue;
+import org.apache.kafka.coordinator.group.modern.share.ShareGroup.ShareGroupStatePartitionMetadataInfo;
 
 import org.junit.jupiter.api.Test;
 
 import java.util.Arrays;
 import java.util.HashMap;
-import java.util.HashSet;
-import java.util.List;
 import java.util.Map;
 import java.util.Optional;
 import java.util.Set;
@@ -212,7 +212,38 @@ public class GroupSpecBuilderTest {
     }
 
     @Test
-    public void testAssignorOffload() {
+    public void testShareGroupStatePartitionMetadata() {
+        Uuid fooTopicId = Uuid.randomUuid();
+
+        CoordinatorMetadataImage metadataImage = new MetadataImageBuilder()
+            .addTopic(fooTopicId, "foo", 6)
+            .buildCoordinatorMetadataImage();
+
+        Map<Uuid, InitMapValue> initializedTopics = Map.of(
+            fooTopicId, new InitMapValue("foo", Set.of(1, 2, 3), 1L)
+        );
+
+        GroupSpec groupSpec = new GroupSpecBuilder.ShareGroupSpecBuilder()
+            .withMembers(Map.of())
+            .withSubscriptionType(HOMOGENEOUS)
+            .withTargetAssignment(Map.of())
+            .withMetadataImage(metadataImage)
+            .withShareGroupStatePartitionMetadata(new ShareGroupStatePartitionMetadataInfo(Map.of(), initializedTopics, Set.of()))
+            .build();
+
+        assertEquals(
+            new GroupSpecImpl.ShareGroupSpecImpl(
+                metadataImage,
+                Map.of(),
+                HOMOGENEOUS,
+                initializedTopics
+            ),
+            groupSpec
+        );
+    }
+
+    @Test
+    public void testConsumerAssignorOffload() {
         Uuid fooTopicId = Uuid.randomUuid();
 
         CoordinatorMetadataImage metadataImage = new MetadataImageBuilder()
@@ -239,18 +270,12 @@ public class GroupSpecBuilderTest {
             )
         ));
 
-        Set<Integer> fooAssignablePartitions = new HashSet<>(List.of(1, 2, 3));
-        Map<Uuid, Set<Integer>> topicAssignablePartitions = new HashMap<>(Map.of(
-            fooTopicId, fooAssignablePartitions
-        ));
-
         GroupSpec groupSpec = new GroupSpecBuilder.ConsumerGroupSpecBuilder()
             .withMembers(members)
             .withSubscriptionType(HOMOGENEOUS)
             .withTargetAssignment(targetAssignment)
             .withMetadataImage(metadataImage)
             .withResolvedRegularExpressions(resolvedRegularExpressions)
-            .withTopicAssignablePartitionsMap(topicAssignablePartitions)
             .withAssignorOffload(true)
             .build();
 
@@ -258,8 +283,6 @@ public class GroupSpecBuilderTest {
         members.clear();
         targetAssignment.clear();
         resolvedRegularExpressions.clear();
-        fooAssignablePartitions.clear();
-        topicAssignablePartitions.clear();
 
         assertEquals(
             new GroupSpecImpl(
@@ -276,9 +299,46 @@ public class GroupSpecBuilderTest {
                     // targetAssignment
                     new Assignment(mkAssignment(mkTopicAssignment(fooTopicId, 1, 2)))
                 )),
+                HOMOGENEOUS
+            ),
+            groupSpec
+        );
+    }
+
+    @Test
+    public void testShareAssignorOffload() {
+        // We only test the fields specific to share groups, since testConsumerAssignorOffload
+        // covers the common fields.
+        Uuid fooTopicId = Uuid.randomUuid();
+
+        CoordinatorMetadataImage metadataImage = new MetadataImageBuilder()
+            .addTopic(fooTopicId, "foo", 6)
+            .buildCoordinatorMetadataImage();
+
+        Map<Uuid, InitMapValue> initializedTopics = Map.of(
+            fooTopicId, new InitMapValue("foo", Set.of(1, 2, 3), 1L)
+        );
+
+        GroupSpec groupSpec = new GroupSpecBuilder.ShareGroupSpecBuilder()
+            .withMembers(Map.of())
+            .withSubscriptionType(HOMOGENEOUS)
+            .withTargetAssignment(Map.of())
+            .withMetadataImage(metadataImage)
+            .withShareGroupStatePartitionMetadata(new ShareGroupStatePartitionMetadataInfo(Map.of(), initializedTopics, Set.of()))
+            .withAssignorOffload(true)
+            .build();
+
+        // Modifications after the GroupSpec has been built should not be visible in the GroupSpec.
+        // This is currently a no-op, since ShareGroupStatePartitionMetadataInfo is immutable by
+        // convention. New share group specific fields should be modified here.
+
+        assertEquals(
+            new GroupSpecImpl.ShareGroupSpecImpl(
+                metadataImage,
+                Map.of(),
                 HOMOGENEOUS,
-                // topicAssignablePartitionsMap
-                Optional.of(Map.of(fooTopicId, Set.of(1, 2, 3)))
+                // shareGroupStatePartitionMetadata
+                initializedTopics
             ),
             groupSpec
         );
