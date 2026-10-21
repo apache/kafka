@@ -47,17 +47,16 @@ public class KeepStickyExtraPartitionsTest {
      */
     @Test
     public void testOwnersAboveTheMinQuotaKeepAnExtraPartition() {
-        var topicsFixture = new TopicsFixture()
-            .withTopic(T1, 3)
-            .withTopic(T2, 8)
-            .build();
         var spec = new GroupSpecFixture()
-            .withMetadataImage(topicsFixture.metadataImage())
             .withMember("A", Set.of(T1, T2), mkAssignment(mkTopicAssignment(T1, 0), mkTopicAssignment(T2, 0, 1, 2)))
             .withMember("B", Set.of(T1, T2), mkAssignment(mkTopicAssignment(T1, 1), mkTopicAssignment(T2, 3)))
             .withMember("C", Set.of(T1, T2), mkAssignment(mkTopicAssignment(T1, 2), mkTopicAssignment(T2, 4, 5, 6, 7)))
             .build();
-        var fixture = new QuotasFixture(spec, topicsFixture.subscribedTopicsDescriber());
+        var describer = new TopicsFixture()
+            .withTopic(T1, 3)
+            .withTopic(T2, 8)
+            .build();
+        var fixture = new QuotasFixture(spec, describer);
 
         new KeepStickyExtraPartitions(fixture.group, fixture.currentAssignment, fixture.quotas).run();
 
@@ -74,17 +73,16 @@ public class KeepStickyExtraPartitionsTest {
      */
     @Test
     public void testOwnersOfTheSameSizeKeepInMemberOrder() {
-        var topicsFixture = new TopicsFixture()
-            .withTopic(T1, 4)
-            .withTopic(T2, 4)
-            .build();
         var spec = new GroupSpecFixture()
-            .withMetadataImage(topicsFixture.metadataImage())
             .withMember("A", Set.of(T1, T2), mkAssignment(mkTopicAssignment(T1, 0, 1), mkTopicAssignment(T2, 0, 1)))
             .withMember("B", Set.of(T1, T2), mkAssignment(mkTopicAssignment(T1, 2, 3), mkTopicAssignment(T2, 2)))
             .withMember("C", Set.of(T1, T2))
             .build();
-        var fixture = new QuotasFixture(spec, topicsFixture.subscribedTopicsDescriber());
+        var describer = new TopicsFixture()
+            .withTopic(T1, 4)
+            .withTopic(T2, 4)
+            .build();
+        var fixture = new QuotasFixture(spec, describer);
 
         new KeepStickyExtraPartitions(fixture.group, fixture.currentAssignment, fixture.quotas).run();
 
@@ -101,13 +99,7 @@ public class KeepStickyExtraPartitionsTest {
      */
     @Test
     public void testOwnersWithTheSmallestAssignmentKeepTheExtraPartitions() {
-        var topicsFixture = new TopicsFixture()
-            .withTopic(T1, 9)
-            .withTopic(T2, 9)
-            .withTopic(T3, 9)
-            .build();
         var spec = new GroupSpecFixture()
-            .withMetadataImage(topicsFixture.metadataImage())
             .withMember("A", Set.of(T1, T2, T3), mkAssignment(
                 mkTopicAssignment(T1, 0, 1, 2), mkTopicAssignment(T2, 0, 1, 2), mkTopicAssignment(T3, 0, 1, 2)))
             .withMember("B", Set.of(T1, T2, T3), mkAssignment(
@@ -116,7 +108,12 @@ public class KeepStickyExtraPartitionsTest {
                 mkTopicAssignment(T1, 6, 7, 8), mkTopicAssignment(T2, 6, 7, 8), mkTopicAssignment(T3, 6, 7, 8)))
             .withMember("D", Set.of(T1, T2, T3))
             .build();
-        var fixture = new QuotasFixture(spec, topicsFixture.subscribedTopicsDescriber());
+        var describer = new TopicsFixture()
+            .withTopic(T1, 9)
+            .withTopic(T2, 9)
+            .withTopic(T3, 9)
+            .build();
+        var fixture = new QuotasFixture(spec, describer);
 
         new KeepStickyExtraPartitions(fixture.group, fixture.currentAssignment, fixture.quotas).run();
 

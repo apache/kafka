@@ -17,6 +17,7 @@
 package org.apache.kafka.coordinator.group.assignor.uniform2;
 
 import org.apache.kafka.common.Uuid;
+import org.apache.kafka.coordinator.group.api.assignor.SubscribedTopicDescriber;
 import org.apache.kafka.coordinator.group.assignor.uniform2.util.IntList;
 
 import org.junit.jupiter.api.Test;
@@ -46,7 +47,7 @@ public class CurrentAssignmentTest {
     private static final int B = 1;
     private static final int C = 2;
 
-    private static final TopicsFixture TOPICS = new TopicsFixture()
+    private static final SubscribedTopicDescriber DESCRIBER = new TopicsFixture()
         .withTopic(T1, 4)
         .withTopic(T2, 3)
         .build();
@@ -59,12 +60,11 @@ public class CurrentAssignmentTest {
     @Test
     public void testOwnersAndAssignments() {
         var spec = new GroupSpecFixture()
-            .withMetadataImage(TOPICS.metadataImage())
             .withMember("A", Set.of(T1, T2), mkAssignment(mkTopicAssignment(T1, 0, 3), mkTopicAssignment(T2, 1)))
             .withMember("B", Set.of(T1, T2), mkAssignment(mkTopicAssignment(T1, 1)))
             .withMember("C", Set.of(T1, T2), mkAssignment(mkTopicAssignment(T2, 0, 2)))
             .build();
-        var group = new IndexedGroup.Builder(spec, TOPICS.subscribedTopicsDescriber()).build();
+        var group = new IndexedGroup.Builder(spec, DESCRIBER).build();
 
         var currentAssignment = new CurrentAssignment(spec, group);
 
@@ -82,11 +82,10 @@ public class CurrentAssignmentTest {
     @Test
     public void testTopicNobodyOwnsHasNoOwners() {
         var spec = new GroupSpecFixture()
-            .withMetadataImage(TOPICS.metadataImage())
             .withMember("A", Set.of(T1, T2), mkAssignment(mkTopicAssignment(T1, 0, 1)))
             .withMember("B", Set.of(T1, T2))
             .build();
-        var group = new IndexedGroup.Builder(spec, TOPICS.subscribedTopicsDescriber()).build();
+        var group = new IndexedGroup.Builder(spec, DESCRIBER).build();
 
         var currentAssignment = new CurrentAssignment(spec, group);
 
@@ -104,11 +103,10 @@ public class CurrentAssignmentTest {
     @Test
     public void testPartitionsOfATopicTheMemberDoesNotSubscribeToAreStale() {
         var spec = new GroupSpecFixture()
-            .withMetadataImage(TOPICS.metadataImage())
             .withMember("A", Set.of(T1, T2), mkAssignment(mkTopicAssignment(T1, 0)))
             .withMember("B", Set.of(T1), mkAssignment(mkTopicAssignment(T1, 1), mkTopicAssignment(T2, 0)))
             .build();
-        var group = new IndexedGroup.Builder(spec, TOPICS.subscribedTopicsDescriber()).build();
+        var group = new IndexedGroup.Builder(spec, DESCRIBER).build();
 
         var currentAssignment = new CurrentAssignment(spec, group);
 
@@ -125,11 +123,10 @@ public class CurrentAssignmentTest {
     @Test
     public void testPartitionsOfATopicThatNoLongerExistsAreStale() {
         var spec = new GroupSpecFixture()
-            .withMetadataImage(TOPICS.metadataImage())
             .withMember("A", Set.of(T1), mkAssignment(mkTopicAssignment(T1, 0), mkTopicAssignment(MISSING, 0)))
             .withMember("B", Set.of(T1), mkAssignment(mkTopicAssignment(T1, 1)))
             .build();
-        var group = new IndexedGroup.Builder(spec, TOPICS.subscribedTopicsDescriber()).build();
+        var group = new IndexedGroup.Builder(spec, DESCRIBER).build();
 
         var currentAssignment = new CurrentAssignment(spec, group);
 

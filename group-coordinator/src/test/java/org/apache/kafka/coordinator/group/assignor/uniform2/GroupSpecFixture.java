@@ -38,23 +38,10 @@ import java.util.Set;
  */
 public final class GroupSpecFixture {
     private final Map<String, MemberSubscriptionAndAssignmentImpl> members = new LinkedHashMap<>();
-    private CoordinatorMetadataImage metadataImage;
     private final Map<Uuid, Map<Integer, String>> invertedTargetAssignment = new HashMap<>();
     private Set<Uuid> firstSubscription;
     private boolean sameSubscriptions = true;
     private boolean built;
-
-    /**
-     * Sets the metadata image of the topics.
-     *
-     * @param metadataImage The metadata image.
-     * @return This fixture.
-     */
-    public GroupSpecFixture withMetadataImage(CoordinatorMetadataImage metadataImage) {
-        checkNotBuilt();
-        this.metadataImage = metadataImage;
-        return this;
-    }
 
     /**
      * Adds a member holding no partitions.
@@ -113,7 +100,8 @@ public final class GroupSpecFixture {
         checkNotBuilt();
         built = true;
         var subscriptionType = sameSubscriptions ? SubscriptionType.HOMOGENEOUS : SubscriptionType.HETEROGENEOUS;
-        return new GroupSpecImpl(metadataImage, members, subscriptionType);
+        // The metadata image is only used by isPartitionAssigned, which the uniform2 assignor never calls.
+        return new GroupSpecImpl(CoordinatorMetadataImage.EMPTY, members, subscriptionType);
     }
 
     private void checkNotBuilt() {

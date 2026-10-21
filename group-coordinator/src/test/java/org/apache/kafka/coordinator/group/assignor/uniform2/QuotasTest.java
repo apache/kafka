@@ -50,18 +50,17 @@ public class QuotasTest {
      */
     @Test
     public void testMinQuotaAndExtraPartitions() {
-        var topicsFixture = new TopicsFixture()
-            .withTopic(T1, 3)
-            .withTopic(T2, 7)
-            .withTopic(T3, 2)
-            .build();
         var spec = new GroupSpecFixture()
-            .withMetadataImage(topicsFixture.metadataImage())
             .withMember("A", Set.of(T1, T2, T3))
             .withMember("B", Set.of(T1, T2, T3))
             .withMember("C", Set.of(T2, T3))
             .build();
-        var group = new IndexedGroup.Builder(spec, topicsFixture.subscribedTopicsDescriber()).build();
+        var describer = new TopicsFixture()
+            .withTopic(T1, 3)
+            .withTopic(T2, 7)
+            .withTopic(T3, 2)
+            .build();
+        var group = new IndexedGroup.Builder(spec, describer).build();
 
         var quotas = new Quotas(group);
 
@@ -79,16 +78,15 @@ public class QuotasTest {
      */
     @Test
     public void testGiveExtraPartition() {
-        var topicsFixture = new TopicsFixture()
-            .withTopic(T1, 3)
-            .withTopic(T2, 2)
-            .build();
         var spec = new GroupSpecFixture()
-            .withMetadataImage(topicsFixture.metadataImage())
             .withMember("A", Set.of(T1, T2))
             .withMember("B", Set.of(T1, T2))
             .build();
-        var group = new IndexedGroup.Builder(spec, topicsFixture.subscribedTopicsDescriber()).build();
+        var describer = new TopicsFixture()
+            .withTopic(T1, 3)
+            .withTopic(T2, 2)
+            .build();
+        var group = new IndexedGroup.Builder(spec, describer).build();
         var quotas = new Quotas(group);
         int t1 = group.topicIndex(T1);
         int t2 = group.topicIndex(T2);
@@ -108,15 +106,14 @@ public class QuotasTest {
      */
     @Test
     public void testMoveExtraPartition() {
-        var topicsFixture = new TopicsFixture()
-            .withTopic(T1, 3)
-            .build();
         var spec = new GroupSpecFixture()
-            .withMetadataImage(topicsFixture.metadataImage())
             .withMember("A", Set.of(T1))
             .withMember("B", Set.of(T1))
             .build();
-        var group = new IndexedGroup.Builder(spec, topicsFixture.subscribedTopicsDescriber()).build();
+        var describer = new TopicsFixture()
+            .withTopic(T1, 3)
+            .build();
+        var group = new IndexedGroup.Builder(spec, describer).build();
         var quotas = new Quotas(group);
         int t1 = group.topicIndex(T1);
         quotas.giveExtraPartition(A, t1);
