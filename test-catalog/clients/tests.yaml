@@ -4463,6 +4463,8 @@ org.apache.kafka.common.protocol.MessageUtilTest:
 - testDeepToString
 - testDuplicate
 - testInvalidBinaryNode
+- testJsonNodeToInt
+- testJsonNodeToLong
 org.apache.kafka.common.protocol.ProtoUtilsTest:
 - testDelayedAllocationSchemaDetection
 org.apache.kafka.common.protocol.ProtocolTest:

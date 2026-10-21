@@ -1256,6 +1256,7 @@ kafka.server.ControllerApisTest:
 - testFetchSnapshotSentToKRaft
 - testHandleLegacyAlterConfigsErrors
 - testInvalidDeleteTopicsRequest
+- testInvalidIncrementalAlterConfigsOperation
 - testInvalidIncrementalAlterConfigsResources
 - testNotAuthorizedToDeleteWithTopicExisting
 - testNotAuthorizedToDeleteWithTopicNotExisting
