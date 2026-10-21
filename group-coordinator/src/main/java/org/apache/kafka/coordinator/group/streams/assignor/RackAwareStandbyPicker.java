@@ -32,8 +32,8 @@ import java.util.function.ToDoubleFunction;
 import java.util.stream.IntStream;
 
 /**
- * Picks the conditions for the next standby of one task: the most tag keys that a process with room can meet,
- * preferring the keys earlier in {@code rack.aware.assignment.tags}. A process meets a tag key when it has a value
+ * Picks the conditions for the next standby of one task: the tag keys in {@code rack.aware.assignment.tags} order, each
+ * kept if a process with room meets it together with those kept so far. A process meets a tag key when it has a value
  * for it that no holder of the task has yet. A pick also returns the least-loaded process with room that meets the
  * conditions, and the picker can tell whether a process meets them. The caller reports every change to a load or room
  * with {@link #updated(Object)} or {@link #updatedAll()}.
