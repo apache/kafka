@@ -150,6 +150,14 @@ def command_stage_docs():
     # inside it into the docs version subdirectory in the kafka-site repo
     cmd("Extracting site-docs", f"tar xf {docs_tar} --strip-components 1", cwd=versioned_docs_path)
 
+    # LICENSE and NOTICE sit at the root of the site-docs tar and get dumped into
+    # content/en/<version> by the extract above, but they are not docs content and
+    # do not belong in the kafka-site content tree. Drop them after extraction.
+    for stray_file in ("LICENSE", "NOTICE"):
+        stray_path = os.path.join(content_docs_path, stray_file)
+        if os.path.exists(stray_path):
+            cmd(f"Removing stray {stray_file}", f"rm -f {stray_path}")
+
     javadocs_src_dir = os.path.join(repo_dir, "build", "docs", "javadoc")
 
     cmd("Copying javadocs", f"cp -R {javadocs_src_dir} {versioned_docs_path}")
