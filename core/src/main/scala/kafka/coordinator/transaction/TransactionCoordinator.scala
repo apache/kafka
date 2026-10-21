@@ -708,12 +708,18 @@ class TransactionCoordinator(txnConfig: TransactionConfig,
     +----------------+-------+---------+-------+---------+
     |                | Retry | Current | Retry | Current |
     +----------------+-------+---------+-------+---------+
-    | Empty          | PF    | EB      | PF    | ITS     |
+    | Empty          | PF    | EB      | PF    | EB      |
     +----------------+-------+---------+-------+---------+
-    | CompleteAbort  | NONE  | EB      | ITS   | ITS     |
+    | CompleteAbort  | NONE  | EB      | ITS   | EB      |
     +----------------+-------+---------+-------+---------+
-    | CompleteCommit | ITS   | EB      | NONE  | ITS     |
+    | CompleteCommit | ITS   | EB      | NONE  | EB      |
     +----------------+-------+---------+-------+---------+
+
+    Empty, CompleteAbort and CompleteCommit + Commit + Current commits an empty transaction, the same way an abort
+    there aborts one: the epoch is bumped and the transition is written to the log. A coordinator that has lost
+    leadership but has not applied the metadata change yet can only see the transaction as empty, since the
+    partitions were added on the new coordinator. Returning ITS from its cache would be fatal to the client; going
+    through the log instead fails with a retriable error because the write cannot be replicated (KAFKA-21181).
    */
 
   /**
@@ -813,6 +819,12 @@ class TransactionCoordinator(txnConfig: TransactionConfig,
               }
             }
 
+            def commitEmptyTransaction(): ApiResult[(Int, TxnTransitMetadata)] = {
+              info(s"TransactionalId: $transactionalId's state is ${txnMetadata.state} with no partitions, committing an " +
+                s"empty transaction for producer $producerId at epoch $producerEpoch.")
+              generateTxnTransitMetadataForTxnCompletion(PrepareCommit, true)
+            }
+
             if (txnMetadata.pendingTransitionInProgress && txnMetadata.pendingState.get != PrepareEpochFence) {
               // This check is performed first so that the pending transition can complete before the next checks.
               // With TV2, we may be transitioning over a producer epoch overflow, and the producer may be using the
@@ -835,7 +847,7 @@ class TransactionCoordinator(txnConfig: TransactionConfig,
                   if (isRetry)
                     Left(Errors.NONE)
                   else
-                    logInvalidStateTransitionAndReturnError(transactionalId, txnMetadata.state, txnMarkerResult)
+                    commitEmptyTransaction()
                 } else {
                   // Abort.
                   if (isRetry)
@@ -851,7 +863,10 @@ class TransactionCoordinator(txnConfig: TransactionConfig,
                     generateTxnTransitMetadataForTxnCompletion(PrepareAbort, true)
                 } else {
                   // Commit.
-                  logInvalidStateTransitionAndReturnError(transactionalId, txnMetadata.state, txnMarkerResult)
+                  if (isRetry)
+                    logInvalidStateTransitionAndReturnError(transactionalId, txnMetadata.state, txnMarkerResult)
+                  else
+                    commitEmptyTransaction()
                 }
               case PrepareCommit =>
                 if (txnMarkerResult == TransactionResult.COMMIT)
@@ -867,7 +882,7 @@ class TransactionCoordinator(txnConfig: TransactionConfig,
                 if (txnMarkerResult == TransactionResult.ABORT) {
                   generateTxnTransitMetadataForTxnCompletion(PrepareAbort, true)
                 } else {
-                  logInvalidStateTransitionAndReturnError(transactionalId, txnMetadata.state, txnMarkerResult)
+                  commitEmptyTransaction()
                 }
               case Dead | PrepareEpochFence =>
                 val errorMsg = s"Found transactionalId $transactionalId with state ${txnMetadata.state}. " +

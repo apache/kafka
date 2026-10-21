@@ -43,7 +43,7 @@ import org.apache.kafka.storage.internals.log.{AppendOrigin, FetchDataInfo, LogC
 import org.junit.jupiter.api.Assertions._
 import org.junit.jupiter.api.{AfterEach, BeforeEach, Test}
 import org.junit.jupiter.params.ParameterizedTest
-import org.junit.jupiter.params.provider.EnumSource
+import org.junit.jupiter.params.provider.{EnumSource, ValueSource}
 import org.mockito.{ArgumentCaptor, ArgumentMatchers}
 import org.mockito.ArgumentMatchers.{any, anyInt, anyLong, anyShort}
 import org.mockito.Mockito.{RETURNS_DEFAULTS, atLeastOnce, mock, reset, times, verify, when, withSettings}
@@ -710,6 +710,43 @@ class TransactionStateManagerTest {
   @Test
   def shouldWriteTxnMarkersForTransactionInPreparedAbortState(): Unit = {
     verifyWritesTxnMarkersInPrepareState(PrepareAbort)
+  }
+
+  @ParameterizedTest
+  @ValueSource(strings = Array("PrepareCommit", "PrepareAbort"))
+  def shouldCompleteEmptyPreparedTransactionOnLoad(stateName: String): Unit = {
+    val state = TransactionState.fromName(stateName).get
+    // With transaction V2, ending a transaction with no partitions writes PrepareCommit or PrepareAbort with no
+    // partitions. On load, it must still be completed.
+    val (expectedResult, expectedCompleteState) =
+      if (state == PrepareCommit) (TransactionResult.COMMIT, CompleteCommit)
+      else (TransactionResult.ABORT, CompleteAbort)
+    val txnMetadata = new TransactionMetadata(transactionalId1, producerIds(transactionalId1), RecordBatch.NO_PRODUCER_ID,
+      RecordBatch.NO_PRODUCER_ID, 1.toShort, RecordBatch.NO_PRODUCER_EPOCH, transactionTimeoutMs, state,
+      mutable.Set.empty[TopicPartition], time.milliseconds(), time.milliseconds(), TV_2)
+
+    txnRecords += new SimpleRecord(txnMessageKeyBytes1, TransactionLog.valueToBytes(txnMetadata.prepareNoTransit(), TV_2))
+    prepareTxnLog(topicPartition, 0, MemoryRecords.withRecords(0L, Compression.NONE, txnRecords.toArray: _*))
+
+    var txnResult: TransactionResult = null
+    var loadedMetadata: TransactionMetadata = null
+    var completeMetadata: TxnTransitMetadata = null
+    transactionManager.loadTransactionsForTxnTopicPartition(partitionId, 0, (_, result, metadata, newMetadata) => {
+      txnResult = result
+      loadedMetadata = metadata
+      completeMetadata = newMetadata
+    })
+    scheduler.tick()
+
+    assertEquals(expectedResult, txnResult)
+    assertEquals(state, loadedMetadata.state)
+    assertEquals(1.toShort, loadedMetadata.producerEpoch)
+    assertTrue(loadedMetadata.topicPartitions.isEmpty)
+    assertEquals(expectedCompleteState, completeMetadata.txnState)
+
+    loadedMetadata.completeTransitionTo(completeMetadata)
+    assertEquals(expectedCompleteState, loadedMetadata.state)
+    assertEquals(1.toShort, loadedMetadata.producerEpoch)
   }
 
   @Test
