@@ -113,8 +113,8 @@ public final class ClusterMirrorConfig extends AbstractConfig {
             "follower.replication.throttled.replicas,"
                     + "leader.replication.throttled.replicas,"
                     + "message.timestamp.difference.max.ms,"
-                    + "log.message.timestamp.before.max.ms,"
-                    + "log.message.timestamp.after.max.ms,"
+                    + "message.timestamp.before.max.ms,"
+                    + "message.timestamp.after.max.ms,"
                     + "message.timestamp.type,"
                     + "unclean.leader.election.enable,"
                     + "min.insync.replicas,"
@@ -210,8 +210,8 @@ public final class ClusterMirrorConfig extends AbstractConfig {
                 .define(FETCH_RESPONSE_MAX_BYTES_CONFIG, INT, FETCH_RESPONSE_MAX_BYTES_DEFAULT, atLeast(0), MEDIUM, FETCH_RESPONSE_MAX_BYTES_DOC)
                 .define(FETCH_MAX_BYTES_CONFIG, INT, FETCH_MAX_BYTES_DEFAULT, atLeast(0), MEDIUM, FETCH_MAX_BYTES_DOC)
                 .define(SOCKET_TIMEOUT_MS_CONFIG, INT, SOCKET_TIMEOUT_MS_DEFAULT, atLeast(0), MEDIUM, SOCKET_TIMEOUT_MS_DOC)
-                .define(SOCKET_RECEIVE_BUFFER_BYTES_CONFIG, INT, SOCKET_RECEIVE_BUFFER_BYTES_DEFAULT, atLeast(0), MEDIUM, SOCKET_RECEIVE_BUFFER_BYTES_DOC)
-                .define(TOPIC_PROPERTIES_EXCLUDE_CONFIG, LIST, TOPIC_PROPERTIES_EXCLUDE_DEFAULT, LOW, TOPIC_PROPERTIES_EXCLUDE_DOC)
+                .define(SOCKET_RECEIVE_BUFFER_BYTES_CONFIG, INT, SOCKET_RECEIVE_BUFFER_BYTES_DEFAULT, atLeast(1), MEDIUM, SOCKET_RECEIVE_BUFFER_BYTES_DOC)
+                .define(TOPIC_PROPERTIES_EXCLUDE_CONFIG, LIST, TOPIC_PROPERTIES_EXCLUDE_DEFAULT, REGEX_LIST_VALIDATOR, LOW, TOPIC_PROPERTIES_EXCLUDE_DOC)
                 .define(TOPICS_INCLUDE_CONFIG, LIST, TOPICS_INCLUDE_DEFAULT, REGEX_LIST_VALIDATOR, LOW, TOPICS_INCLUDE_DOC)
                 .define(TOPICS_EXCLUDE_CONFIG, LIST, TOPICS_EXCLUDE_DEFAULT, REGEX_LIST_VALIDATOR, LOW, TOPICS_EXCLUDE_DOC)
                 .define(GROUPS_INCLUDE_CONFIG, LIST, GROUPS_INCLUDE_DEFAULT, REGEX_LIST_VALIDATOR, LOW, GROUPS_INCLUDE_DOC)
