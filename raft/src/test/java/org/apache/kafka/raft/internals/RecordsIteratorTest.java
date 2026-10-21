@@ -185,7 +185,6 @@ public final class RecordsIteratorTest {
             testIterator(List.of(firstBatch), records.slice(0, partialRecordsSize), true);
             testIterator(List.of(firstBatch), fileRecords.slice(0, partialRecordsSize), true);
         }
-
     }
 
     @Test
