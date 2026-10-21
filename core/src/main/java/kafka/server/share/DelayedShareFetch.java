@@ -842,10 +842,7 @@ public class DelayedShareFetch extends DelayedOperation {
             return CompletableFuture.completedFuture(existingFetchedData);
         }
 
-        // The already fetched records are handed out first, so only the remainder of the record budget
-        // is available to the missing partitions. If nothing remains then nothing from them could be
-        // acquired, so skip the read altogether; the partitions are simply absent from the response and
-        // their locks are released along with the rest of the acquired partitions.
+        // Check if further read is required based on the remaining record budget after accounting for already fetched data.
         if (remainingRecordBudget(shareFetch.maxFetchRecords(), topicPartitionData, existingFetchedData) <= 0) {
             return CompletableFuture.completedFuture(existingFetchedData);
         }
@@ -861,7 +858,7 @@ public class DelayedShareFetch extends DelayedOperation {
     }
 
     /**
-     * Returns the record budget left for further reads once the already fetched data has been handed out,
+     * Returns the record budget left for further reads after accounting for the already fetched data,
      * or 0 if the budget is exhausted. Records are counted by offset span, from the fetch offset to the last
      * offset of the last batch, which is the same approximation {@link SharePartition#acquire} makes when it
      * bounds the acquired records by max fetch records. The span starts at the fetch offset rather than at
