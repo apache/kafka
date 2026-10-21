@@ -94,20 +94,18 @@ public class DescribeConfigsTest {
             admin.incrementalAlterConfigs(Map.of(clusterResource, List.of(new AlterConfigOp(
                 new ConfigEntry(ServerLogConfigs.LOG_CLEANUP_POLICY_CONFIG, "compact,delete"),
                 AlterConfigOp.OpType.SET)))).all().get();
-            TestUtils.waitForCondition(
-                () -> describeConfig(admin, clusterResource, ServerLogConfigs.LOG_CLEANUP_POLICY_CONFIG).source()
-                    == ConfigEntry.ConfigSource.DYNAMIC_DEFAULT_BROKER_CONFIG,
-                ServerLogConfigs.LOG_CLEANUP_POLICY_CONFIG + " was not applied as a cluster-wide config"
-            );
-            assertEquals("compact,delete",
-                describeConfig(admin, clusterResource, ServerLogConfigs.LOG_CLEANUP_POLICY_CONFIG).value());
+            TestUtils.waitForCondition(() -> {
+                ConfigEntry entry = describeConfig(admin, clusterResource, ServerLogConfigs.LOG_CLEANUP_POLICY_CONFIG);
+                return entry.source() == ConfigEntry.ConfigSource.DYNAMIC_DEFAULT_BROKER_CONFIG
+                    && "compact,delete".equals(entry.value());
+            }, ServerLogConfigs.LOG_CLEANUP_POLICY_CONFIG + " was not applied as a cluster-wide config");
         }
     }
 
     // Listener-prefixed configs are not defined in the ConfigDef, so they are described from the raw strings in
     // originals(). The type still resolves to LIST through the base config, so the raw string must not be cast to a List.
     @ClusterTest(serverProperties = {
-        @ClusterConfigProperty(key = PREFIXED_SSL_ENABLED_PROTOCOLS_CONFIG, value = "TLSv1.2,TLSv1.3")
+        @ClusterConfigProperty(key = PREFIXED_SSL_ENABLED_PROTOCOLS_CONFIG, value = "TLSv1.3,TLSv1.2")
     })
     public void testDescribeConfigsPrefixedListenerListConfig(ClusterInstance cluster) throws Exception {
         ConfigResource brokerResource = new ConfigResource(ConfigResource.Type.BROKER,
@@ -116,7 +114,7 @@ public class DescribeConfigsTest {
             ConfigEntry entry = describeConfig(admin, brokerResource, PREFIXED_SSL_ENABLED_PROTOCOLS_CONFIG);
             assertNotNull(entry);
             assertEquals(ConfigEntry.ConfigSource.STATIC_BROKER_CONFIG, entry.source());
-            assertEquals("TLSv1.2,TLSv1.3", entry.value());
+            assertEquals("TLSv1.3,TLSv1.2", entry.value());
         }
     }
 
