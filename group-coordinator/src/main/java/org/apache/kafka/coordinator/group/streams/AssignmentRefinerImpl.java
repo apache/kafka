@@ -240,9 +240,7 @@ public class AssignmentRefinerImpl implements AssignmentRefiner {
         final Map<String, Integer> heartbeatVersions,
         final SortedMap<String, ConfiguredSubtopology> subtopologies
     ) {
-        // The map is sorted, which gives the canonical task order that makes a derivation reproducible and leaves the
-        // warmup budget pass that follows a deterministic tie-break to fall back on.
-        final SortedMap<TaskId, String> targetOwners = statefulActiveOwners(targetAssignment, subtopologies);
+        final Map<TaskId, String> targetOwners = statefulActiveOwners(targetAssignment, subtopologies);
 
         final List<StagedMigration> stagedMigrations = new ArrayList<>();
         final List<TaskGrant> grantedTasks = new ArrayList<>();
@@ -315,6 +313,9 @@ public class AssignmentRefinerImpl implements AssignmentRefiner {
             }
         }
 
+        // Sorting gives the canonical task order that makes a derivation reproducible.
+        stagedMigrations.sort(Comparator.comparing(StagedMigration::task));
+        grantedTasks.sort(Comparator.comparing(TaskGrant::task));
         return new TaskDecisions(List.copyOf(stagedMigrations), List.copyOf(grantedTasks));
     }
 
@@ -1007,11 +1008,11 @@ public class AssignmentRefinerImpl implements AssignmentRefiner {
     /**
      * Inverts the target assignment into a lookup from stateful task to the member that is to run it as an active task.
      */
-    private static SortedMap<TaskId, String> statefulActiveOwners(
+    private static Map<TaskId, String> statefulActiveOwners(
         final Map<String, TasksTuple> targetAssignment,
         final SortedMap<String, ConfiguredSubtopology> subtopologies
     ) {
-        final SortedMap<TaskId, String> owners = new TreeMap<>();
+        final Map<TaskId, String> owners = new HashMap<>();
         targetAssignment.forEach((memberId, tasks) ->
             forEachStatefulTask(tasks.activeTasks(), subtopologies, task -> owners.put(task, memberId)));
         return owners;
