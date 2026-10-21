@@ -85,6 +85,11 @@ public class ShareGroup extends ModernGroup<ShareGroupMember> {
         Map<Uuid, InitMapValue> initializedTopics,
         Set<Uuid> deletingTopics
     ) {
+        public ShareGroupStatePartitionMetadataInfo {
+            initializingTopics = Collections.unmodifiableMap(initializingTopics);
+            initializedTopics = Collections.unmodifiableMap(initializedTopics);
+            deletingTopics = Collections.unmodifiableSet(deletingTopics);
+        }
     }
 
     /**
