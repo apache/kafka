@@ -101,7 +101,7 @@ public final class ClusterMirrorBrokerConfig extends AbstractConfig {
             .defineInternal(MIRROR_FAILED_RETRY_MAX_ATTEMPTS_CONFIG, INT, MIRROR_FAILED_RETRY_MAX_ATTEMPTS_DEFAULT, between(0, Short.MAX_VALUE), MEDIUM, MIRROR_FAILED_RETRY_MAX_ATTEMPTS_DOC);
 
     public ClusterMirrorBrokerConfig(Properties properties) {
-        super(CONFIG_DEF, properties);
+        super(CONFIG_DEF, properties, false);
     }
 
     public int coordinatorNumThreads() {
