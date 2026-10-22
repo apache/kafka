@@ -6931,7 +6931,11 @@ public class GroupMetadataManager {
                     log.info("Loaded consumer group {} with {} members.", groupId, consumerGroup.members().size());
                     consumerGroup.members().forEach((memberId, member) -> {
                         log.debug("Loaded member {} in consumer group {}.", memberId, groupId);
-                        scheduleConsumerGroupSessionTimeout(groupId, memberId);
+                        scheduleConsumerGroupSessionTimeout(
+                            groupId,
+                            memberId,
+                            member.classicProtocolSessionTimeout().orElse(consumerGroupSessionTimeoutMs(groupId))
+                        );
                         if (member.state() == MemberState.UNREVOKED_PARTITIONS) {
                             scheduleConsumerGroupRebalanceTimeout(
                                 groupId,
