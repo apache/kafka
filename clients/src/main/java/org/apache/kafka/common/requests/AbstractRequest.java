@@ -95,13 +95,6 @@ public abstract class AbstractRequest implements AbstractRequestResponse {
         this.apiKey = apiKey;
     }
 
-    /**
-     * Returns the API version of this request object, which determines its body format.
-     * Server-side request handlers can use this version for version-dependent behavior.
-     * An unsupported {@link ApiVersionsRequest} is represented as a v0 request without parsing its body,
-     * so this version can differ from the original version sent by the client. Use
-     * {@link RequestContext#requestVersion()} when the original client version is needed.
-     */
     public short version() {
         return version;
     }

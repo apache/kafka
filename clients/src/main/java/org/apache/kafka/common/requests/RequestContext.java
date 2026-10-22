@@ -36,6 +36,10 @@ import java.util.Optional;
 import static org.apache.kafka.common.protocol.ApiKeys.API_VERSIONS;
 
 public class RequestContext implements AuthorizableRequestContext {
+    /**
+     * The original header from the client request. For an unsupported {@link ApiVersionsRequest},
+     * use {@link #effectiveApiVersion()} to get the actual parsed API version.
+     */
     public final RequestHeader header;
     public final String connectionId;
     public final InetAddress clientAddress;
@@ -175,10 +179,6 @@ public class RequestContext implements AuthorizableRequestContext {
         return body.serializeWithHeader(responseHeader(version), version);
     }
 
-    /**
-     * The response header follows the version used to serialize the response body. For an unsupported
-     * ApiVersionsRequest, this is v0 rather than the original request version.
-     */
     private ResponseHeader responseHeader(short responseVersion) {
         return new ResponseHeader(header.correlationId(), header.apiKey().responseHeaderVersion(responseVersion));
     }
@@ -188,13 +188,11 @@ public class RequestContext implements AuthorizableRequestContext {
     }
 
     /**
-     * Returns the API version used to parse the request body and serialize the response.
-     * An unsupported {@link ApiVersionsRequest} is treated as v0 without parsing its body, and its response
-     * is serialized as v0. For all other requests, this is the original version sent by the client.
-     * Request handlers should use this version or {@link AbstractRequest#version()} for version-dependent behavior.
-     *
-     * @see #requestVersion()
-     * @see AbstractRequest#version()
+     * Returns the API version parsed by the server. This is usually the API version in the original client request.
+     * The only exception is an unsupported {@link ApiVersionsRequest}, whose API version is set to 0 after parsing.
+     * The response should be sent and serialized using this version.
+     * <p>
+     * To retrieve the API version in the original client request, use {@link #requestVersion()} instead.
      */
     public short effectiveApiVersion() {
         if (isUnsupportedApiVersionsRequest())
@@ -235,8 +233,6 @@ public class RequestContext implements AuthorizableRequestContext {
      * Returns the original API version sent by the client in the request header. This can differ from
      * {@link #effectiveApiVersion()} for an unsupported {@link ApiVersionsRequest}. Use this when the original
      * version is needed, such as checking whether the requested API version is enabled.
-     *
-     * @see RequestHeader#apiVersion()
      */
     @Override
     public int requestVersion() {

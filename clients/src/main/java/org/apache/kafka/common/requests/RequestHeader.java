@@ -63,13 +63,6 @@ public class RequestHeader implements AbstractRequestResponse {
         return ApiKeys.forId(data.requestApiKey());
     }
 
-    /**
-     * Returns the API version stored in the request header, even if the server does not support it.
-     * This is the original version sent by the client, not necessarily the version used to process the request.
-     * Server-side request handlers should use {@link RequestContext#effectiveApiVersion()} or
-     * {@link AbstractRequest#version()} for version-dependent behavior, and {@link RequestContext#requestVersion()}
-     * when the original client version is needed.
-     */
     public short apiVersion() {
         return data.requestApiVersion();
     }
