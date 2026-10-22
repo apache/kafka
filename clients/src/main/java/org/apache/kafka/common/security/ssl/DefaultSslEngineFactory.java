@@ -43,6 +43,7 @@ import java.security.KeyStoreException;
 import java.security.NoSuchAlgorithmException;
 import java.security.PrivateKey;
 import java.security.SecureRandom;
+import java.security.Security;
 import java.security.cert.Certificate;
 import java.security.cert.CertificateFactory;
 import java.security.spec.InvalidKeySpecException;
@@ -425,7 +426,7 @@ public class DefaultSslEngineFactory implements SslEngineFactory {
     static class PemStore implements SecurityStore {
         private static final PemParser CERTIFICATE_PARSER = new PemParser("CERTIFICATE");
         private static final PemParser PRIVATE_KEY_PARSER = new PemParser("PRIVATE KEY");
-        private static final List<KeyFactory> KEY_FACTORIES = keyFactories(List.of("RSA", "DSA", "EC"));
+        private static final List<KeyFactory> KEY_FACTORIES = keyFactories(Security.getAlgorithms("KeyFactory"));
 
         private final char[] keyPassword;
         private final KeyStore keyStore;
@@ -455,7 +456,7 @@ public class DefaultSslEngineFactory implements SslEngineFactory {
             return false;
         }
 
-        static List<KeyFactory> keyFactories(List<String> algorithms) {
+        static List<KeyFactory> keyFactories(Set<String> algorithms) {
             List<KeyFactory> keyFactories = new ArrayList<>();
             for (String algorithm : algorithms) {
                 try {
