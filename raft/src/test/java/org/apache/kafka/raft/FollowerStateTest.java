@@ -127,7 +127,7 @@ public class FollowerStateTest {
     public void testPreVoteAfterLeaderResigned(boolean isLogUpToDate) {
         FollowerState state = newFollowerState(Set.of(1, 2, 3));
         state.resetFetchTimeoutForSuccessfulFetch(time.milliseconds());
-        state.setLeaderHasResigned();
+        state.setHasLeaderResigned();
 
         assertEquals(isLogUpToDate, state.canGrantVote(ReplicaKey.of(1, ReplicaKey.NO_DIRECTORY_ID), isLogUpToDate, true));
         assertEquals(isLogUpToDate, state.canGrantVote(ReplicaKey.of(2, ReplicaKey.NO_DIRECTORY_ID), isLogUpToDate, true));

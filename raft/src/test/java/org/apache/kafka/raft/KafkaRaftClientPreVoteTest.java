@@ -672,6 +672,54 @@ public class KafkaRaftClientPreVoteTest {
 
     @ParameterizedTest
     @EnumSource(value = KRaftVersion.class)
+    public void testFollowerGrantsPreVoteAfterLeaderResigns(KRaftVersion kraftVersion) throws Exception {
+        int localId = randomReplicaId();
+        ReplicaKey local = replicaKey(localId, true);
+        ReplicaKey leader = replicaKey(localId + 1, true);
+        ReplicaKey otherNodeKey = replicaKey(localId + 2, true);
+        int epoch = 2;
+
+        RaftClientTestContext context = new RaftClientTestContext.Builder(
+            local.id(),
+            local.directoryId().get()
+        )
+            .withStartingVoters(VoterSetTest.voterSet(Stream.of(local, leader, otherNodeKey)), kraftVersion)
+            .withElectedLeader(epoch, leader.id())
+            .withRaftProtocol(KIP_996_PROTOCOL)
+            .build();
+
+        context.assertElectedLeader(epoch, leader.id());
+
+        context.pollUntilRequest();
+        RaftRequest.Outbound fetchRequest = context.assertSentFetchRequest();
+        context.assertFetchRequestData(fetchRequest, epoch, 0L, 0, context.client.highWatermark());
+        context.deliverResponse(
+            fetchRequest.correlationId(),
+            fetchRequest.destination(),
+            context.fetchResponse(epoch, leader.id(), MemoryRecords.EMPTY, 0L, Errors.NONE)
+        );
+
+        // After fetching successfully from the leader, follower rejects PreVotes even if the remote log is up to date
+        context.deliverRequest(context.preVoteRequest(epoch, otherNodeKey, epoch, 1));
+        context.pollUntilResponse();
+        context.assertSentVoteResponse(Errors.NONE, epoch, OptionalInt.of(leader.id()), false);
+        assertTrue(context.client.quorum().isFollower());
+
+        // Leader resigns by sending EndQuorumEpoch
+        context.deliverRequest(context.endEpochRequest(epoch, leader.id(), List.of(otherNodeKey, local)));
+        context.pollUntilResponse();
+        context.assertSentEndQuorumEpochResponse(Errors.NONE, epoch, OptionalInt.of(leader.id()));
+        assertTrue(context.client.quorum().isFollower());
+
+        // Once the leader has resigned, follower grants PreVotes again
+        context.deliverRequest(context.preVoteRequest(epoch, otherNodeKey, epoch, 1));
+        context.pollUntilResponse();
+        context.assertSentVoteResponse(Errors.NONE, epoch, OptionalInt.of(leader.id()), true);
+        assertTrue(context.client.quorum().isFollower());
+    }
+
+    @ParameterizedTest
+    @EnumSource(value = KRaftVersion.class)
     public void testRejectPreVoteIfRemoteLogIsNotUpToDate(KRaftVersion kraftVersion) throws Exception {
         int localId = randomReplicaId();
         int epoch = 2;

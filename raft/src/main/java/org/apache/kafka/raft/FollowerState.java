@@ -162,7 +162,7 @@ public final class FollowerState implements EpochState {
      * Record that the leader of this epoch has resigned, after receiving an `EndQuorumEpoch`
      * request from it.
      */
-    public void setLeaderHasResigned() {
+    public void setHasLeaderResigned() {
         hasLeaderResigned = true;
     }
 
