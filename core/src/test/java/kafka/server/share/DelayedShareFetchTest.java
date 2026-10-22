@@ -102,7 +102,6 @@ import static org.junit.jupiter.api.Assertions.assertTrue;
 import static org.mockito.ArgumentMatchers.any;
 import static org.mockito.ArgumentMatchers.anyBoolean;
 import static org.mockito.ArgumentMatchers.anyInt;
-import static org.mockito.ArgumentMatchers.anyLong;
 import static org.mockito.Mockito.doAnswer;
 import static org.mockito.Mockito.doReturn;
 import static org.mockito.Mockito.doThrow;
@@ -222,12 +221,9 @@ public class DelayedShareFetchTest {
         // We are testing the case when the share partition is getting fetched for the first time, so for the first time
         // the fetchOffsetMetadata will return empty. Post the first readFromLog call, the fetchOffsetMetadata will be
         // populated for the share partition, which has 1 as the positional difference, so it doesn't satisfy the minBytes(2).
-        when(sp0.fetchOffsetMetadata(anyLong()))
-            .thenReturn(Optional.empty())
-            .thenReturn(Optional.of(new LogOffsetMetadata(0, 1, 0)));
         LogOffsetMetadata hwmOffsetMetadata = new LogOffsetMetadata(1, 1, 1);
 
-        doAnswer(invocation -> buildLogReadResult(List.of(tp0))).when(replicaManager).readFromLog(any(), any(), any(ReplicaQuota.class), anyBoolean());
+        doAnswer(invocation -> buildLogReadResult(List.of(tp0), Map.of(tp0, new LogOffsetMetadata(0, 1, 0)))).when(replicaManager).readFromLog(any(), any(), any(ReplicaQuota.class), anyBoolean());
         BiConsumer<SharePartitionKey, Throwable> exceptionHandler = mockExceptionHandler();
 
         PartitionMaxBytesStrategy partitionMaxBytesStrategy = mockPartitionMaxBytes(Set.of(tp0));
@@ -305,7 +301,6 @@ public class DelayedShareFetchTest {
         // functionality to give the file position difference as 1 byte, so it doesn't satisfy the minBytes(2).
         LogOffsetMetadata hwmOffsetMetadata = mock(LogOffsetMetadata.class);
         when(hwmOffsetMetadata.positionDiff(any())).thenReturn(1);
-        when(sp0.fetchOffsetMetadata(anyLong())).thenReturn(Optional.of(mock(LogOffsetMetadata.class)));
         BiConsumer<SharePartitionKey, Throwable> exceptionHandler = mockExceptionHandler();
 
         Partition p0 = mock(Partition.class);
@@ -327,6 +322,8 @@ public class DelayedShareFetchTest {
             .withFetchId(fetchId)
             .build());
 
+        // The share partition has been fetched before, hence the fetch offset metadata is already cached.
+        delayedShareFetch.updateFetchOffsetMetadataCache(tp0, 0L, mock(LogOffsetMetadata.class));
         when(sp0.maybeAcquireFetchLock(fetchId)).thenReturn(true);
         when(sp1.maybeAcquireFetchLock(fetchId)).thenReturn(true);
 
@@ -364,7 +361,6 @@ public class DelayedShareFetchTest {
         when(sp1.canAcquireRecords()).thenReturn(false);
         doAnswer(invocation -> buildLogReadResult(List.of(tp0))).when(replicaManager).readFromLog(any(), any(), any(ReplicaQuota.class), anyBoolean());
 
-        when(sp0.fetchOffsetMetadata(anyLong())).thenReturn(Optional.of(new LogOffsetMetadata(0, 1, 0)));
         mockTopicIdPartitionToReturnDataEqualToMinBytes(replicaManager, tp0, 1);
 
         PartitionMaxBytesStrategy partitionMaxBytesStrategy = mockPartitionMaxBytes(Set.of(tp0));
@@ -965,7 +961,6 @@ public class DelayedShareFetchTest {
         SharePartition sp0 = mock(SharePartition.class);
         when(sp0.canAcquireRecords()).thenReturn(true);
         // Empty fetch offset metadata forces maybeReadFromLog to actually read from the log.
-        when(sp0.fetchOffsetMetadata(anyLong())).thenReturn(Optional.empty());
 
         LinkedHashMap<TopicIdPartition, SharePartition> sharePartitions = new LinkedHashMap<>();
         sharePartitions.put(tp0, sp0);
@@ -1019,7 +1014,6 @@ public class DelayedShareFetchTest {
 
         SharePartition sp0 = mock(SharePartition.class);
         when(sp0.canAcquireRecords()).thenReturn(true);
-        when(sp0.fetchOffsetMetadata(anyLong())).thenReturn(Optional.of(new LogOffsetMetadata(0, 1, 0)));
 
         LinkedHashMap<TopicIdPartition, SharePartition> sharePartitions = new LinkedHashMap<>();
         sharePartitions.put(tp0, sp0);
@@ -1065,7 +1059,7 @@ public class DelayedShareFetchTest {
         sharePartitions1.put(tp0, sp0);
 
         ReplicaManager replicaManager = mock(ReplicaManager.class);
-        doAnswer(invocation -> buildLogReadResult(List.of(tp0))).when(replicaManager).readFromLog(any(), any(), any(ReplicaQuota.class), anyBoolean());
+        doAnswer(invocation -> buildLogReadResult(List.of(tp0), Map.of(tp0, new LogOffsetMetadata(0, 1, 1)))).when(replicaManager).readFromLog(any(), any(), any(ReplicaQuota.class), anyBoolean());
         mockTopicIdPartitionToReturnDataEqualToMinBytes(replicaManager, tp0, 1);
 
         ShareFetch shareFetch = new ShareFetch(FETCH_PARAMS, groupId, Uuid.randomUuid().toString(),
@@ -1216,11 +1210,6 @@ public class DelayedShareFetchTest {
         // All 5 partitions are acquirable.
         doAnswer(invocation -> buildLogReadResult(sharePartitions.keySet().stream().toList())).when(replicaManager).readFromLog(any(), any(), any(ReplicaQuota.class), anyBoolean());
 
-        when(sp0.fetchOffsetMetadata(anyLong())).thenReturn(Optional.of(new LogOffsetMetadata(0, 1, 0)));
-        when(sp1.fetchOffsetMetadata(anyLong())).thenReturn(Optional.of(new LogOffsetMetadata(0, 1, 0)));
-        when(sp2.fetchOffsetMetadata(anyLong())).thenReturn(Optional.of(new LogOffsetMetadata(0, 1, 0)));
-        when(sp3.fetchOffsetMetadata(anyLong())).thenReturn(Optional.of(new LogOffsetMetadata(0, 1, 0)));
-        when(sp4.fetchOffsetMetadata(anyLong())).thenReturn(Optional.of(new LogOffsetMetadata(0, 1, 0)));
 
         mockTopicIdPartitionToReturnDataEqualToMinBytes(replicaManager, tp0, 1);
         mockTopicIdPartitionToReturnDataEqualToMinBytes(replicaManager, tp1, 1);
@@ -1320,8 +1309,6 @@ public class DelayedShareFetchTest {
         acquirableTopicPartitions.add(tp1);
         doAnswer(invocation -> buildLogReadResult(acquirableTopicPartitions.stream().toList())).when(replicaManager).readFromLog(any(), any(), any(ReplicaQuota.class), anyBoolean());
 
-        when(sp0.fetchOffsetMetadata(anyLong())).thenReturn(Optional.of(new LogOffsetMetadata(0, 1, 0)));
-        when(sp1.fetchOffsetMetadata(anyLong())).thenReturn(Optional.of(new LogOffsetMetadata(0, 1, 0)));
 
         mockTopicIdPartitionToReturnDataEqualToMinBytes(replicaManager, tp0, 1);
         mockTopicIdPartitionToReturnDataEqualToMinBytes(replicaManager, tp1, 1);
@@ -1497,9 +1484,6 @@ public class DelayedShareFetchTest {
         when(sp2.nextFetchOffset()).thenReturn(30L);
 
         // Fetch offset matches with the cached entry for sp0 but not for sp1 and sp2. Hence, a replica manager fetch will happen for sp1 and sp2.
-        when(sp0.fetchOffsetMetadata(anyLong())).thenReturn(Optional.of(new LogOffsetMetadata(10, 1, 0)));
-        when(sp1.fetchOffsetMetadata(anyLong())).thenReturn(Optional.empty());
-        when(sp2.fetchOffsetMetadata(anyLong())).thenReturn(Optional.empty());
 
         // Mocking local log read result for tp1 and remote storage read result for tp2.
         doAnswer(invocation -> buildLocalAndRemoteFetchResult(Set.of(tp1), Set.of(tp2))).when(replicaManager).readFromLog(any(), any(), any(ReplicaQuota.class), anyBoolean());
@@ -1531,6 +1515,8 @@ public class DelayedShareFetchTest {
             .withFetchId(fetchId)
             .build());
 
+        // Fetch offset matches with the cached entry for sp0.
+        delayedShareFetch.updateFetchOffsetMetadataCache(tp0, 10L, new LogOffsetMetadata(10, 1, 0));
         // All the topic partitions are acquirable.
         when(sp0.maybeAcquireFetchLock(fetchId)).thenReturn(true);
         when(sp1.maybeAcquireFetchLock(fetchId)).thenReturn(true);
@@ -1561,7 +1547,6 @@ public class DelayedShareFetchTest {
         SharePartition sp0 = mock(SharePartition.class);
         when(sp0.canAcquireRecords()).thenReturn(true);
         when(sp0.nextFetchOffset()).thenReturn(10L);
-        when(sp0.fetchOffsetMetadata(anyLong())).thenReturn(Optional.empty());
 
         LinkedHashMap<TopicIdPartition, SharePartition> sharePartitions = new LinkedHashMap<>();
         sharePartitions.put(tp0, sp0);
@@ -1648,7 +1633,6 @@ public class DelayedShareFetchTest {
         when(sp0.nextFetchOffset()).thenReturn(10L);
 
         // Fetch offset does not match with the cached entry for sp0, hence, a replica manager fetch will happen for sp0.
-        when(sp0.fetchOffsetMetadata(anyLong())).thenReturn(Optional.empty());
 
         // Mocking remote storage read result for tp0.
         doAnswer(invocation -> buildLocalAndRemoteFetchResult(Set.of(), Set.of(tp0))).when(replicaManager).readFromLog(any(), any(), any(ReplicaQuota.class), anyBoolean());
@@ -1724,9 +1708,6 @@ public class DelayedShareFetchTest {
         when(sp2.nextFetchOffset()).thenReturn(25L);
 
         // Fetch offset does not match with the cached entry for sp0, sp1 and sp2. Hence, a replica manager fetch will happen for all.
-        when(sp0.fetchOffsetMetadata(anyLong())).thenReturn(Optional.empty());
-        when(sp1.fetchOffsetMetadata(anyLong())).thenReturn(Optional.empty());
-        when(sp2.fetchOffsetMetadata(anyLong())).thenReturn(Optional.empty());
 
         // Mocking local log read result for tp0 and remote storage read result for tp1 and tp2.
         doAnswer(invocation -> buildLocalAndRemoteFetchResult(Set.of(tp0), Set.of(tp1, tp2))).when(replicaManager).readFromLog(any(), any(), any(ReplicaQuota.class), anyBoolean());
@@ -1811,9 +1792,6 @@ public class DelayedShareFetchTest {
         when(sp2.nextFetchOffset()).thenReturn(30L);
 
         // Fetch offset matches with the cached entry for sp0 but not for sp1 and sp2. Hence, a replica manager fetch will happen for sp1 and sp2 during tryComplete.
-        when(sp0.fetchOffsetMetadata(anyLong())).thenReturn(Optional.of(new LogOffsetMetadata(10, 1, 0)));
-        when(sp1.fetchOffsetMetadata(anyLong())).thenReturn(Optional.empty());
-        when(sp2.fetchOffsetMetadata(anyLong())).thenReturn(Optional.empty());
 
         try (MockedStatic<ShareFetchUtils> mockedShareFetchUtils = Mockito.mockStatic(ShareFetchUtils.class)) {
             Map<TopicIdPartition, ShareFetchResponseData.PartitionData> partitionDataMap = new LinkedHashMap<>();
@@ -1856,6 +1834,8 @@ public class DelayedShareFetchTest {
                 .withFetchId(fetchId)
                 .build());
 
+            // Fetch offset matches with the cached entry for sp0.
+            delayedShareFetch.updateFetchOffsetMetadataCache(tp0, 10L, new LogOffsetMetadata(10, 1, 0));
             // All the topic partitions are acquirable.
             when(sp0.maybeAcquireFetchLock(fetchId)).thenReturn(true);
             when(sp1.maybeAcquireFetchLock(fetchId)).thenReturn(true);
@@ -1907,7 +1887,6 @@ public class DelayedShareFetchTest {
 
         when(sp0.nextFetchOffset()).thenReturn(10L);
         // Fetch offset does not match with the cached entry for sp0. Hence, a replica manager fetch will happen for sp0.
-        when(sp0.fetchOffsetMetadata(anyLong())).thenReturn(Optional.empty());
 
         // Mocking remote storage read result for tp0.
         doAnswer(invocation -> buildLocalAndRemoteFetchResult(Set.of(), Set.of(tp0))).when(replicaManager).readFromLog(any(), any(), any(ReplicaQuota.class), anyBoolean());
@@ -1991,7 +1970,6 @@ public class DelayedShareFetchTest {
 
         when(sp0.nextFetchOffset()).thenReturn(10L);
         // Fetch offset does not match with the cached entry for sp0. Hence, a replica manager fetch will happen for sp0.
-        when(sp0.fetchOffsetMetadata(anyLong())).thenReturn(Optional.empty());
 
         // Mocking remote storage read result for tp0.
         doAnswer(invocation -> buildLocalAndRemoteFetchResult(Set.of(), Set.of(tp0))).when(replicaManager).readFromLog(any(), any(), any(ReplicaQuota.class), anyBoolean());
@@ -2079,9 +2057,6 @@ public class DelayedShareFetchTest {
         when(sp2.nextFetchOffset()).thenReturn(30L);
 
         // Fetch offset does not match with the cached entry for sp0, sp1 and sp2. Hence, a replica manager fetch will happen for all of them in tryComplete.
-        when(sp0.fetchOffsetMetadata(anyLong())).thenReturn(Optional.empty());
-        when(sp1.fetchOffsetMetadata(anyLong())).thenReturn(Optional.empty());
-        when(sp2.fetchOffsetMetadata(anyLong())).thenReturn(Optional.empty());
 
         try (MockedStatic<ShareFetchUtils> mockedShareFetchUtils = Mockito.mockStatic(ShareFetchUtils.class)) {
             Map<TopicIdPartition, ShareFetchResponseData.PartitionData> partitionDataMap = new LinkedHashMap<>();
@@ -2193,9 +2168,6 @@ public class DelayedShareFetchTest {
         when(sp0.nextFetchOffset()).thenReturn(10L);
         when(sp1.nextFetchOffset()).thenReturn(20L);
         when(sp2.nextFetchOffset()).thenReturn(30L);
-        when(sp0.fetchOffsetMetadata(anyLong())).thenReturn(Optional.empty());
-        when(sp1.fetchOffsetMetadata(anyLong())).thenReturn(Optional.empty());
-        when(sp2.fetchOffsetMetadata(anyLong())).thenReturn(Optional.empty());
 
         try (MockedStatic<ShareFetchUtils> mockedShareFetchUtils = Mockito.mockStatic(ShareFetchUtils.class)) {
             Map<TopicIdPartition, ShareFetchResponseData.PartitionData> partitionDataMap = new LinkedHashMap<>();
@@ -2298,8 +2270,6 @@ public class DelayedShareFetchTest {
         when(sp1.canAcquireRecords()).thenReturn(true);
         when(sp0.nextFetchOffset()).thenReturn(10L);
         when(sp1.nextFetchOffset()).thenReturn(20L);
-        when(sp0.fetchOffsetMetadata(anyLong())).thenReturn(Optional.empty());
-        when(sp1.fetchOffsetMetadata(anyLong())).thenReturn(Optional.empty());
 
         LinkedHashMap<TopicIdPartition, SharePartition> sharePartitions = new LinkedHashMap<>();
         sharePartitions.put(tp0, sp0);
@@ -2402,8 +2372,6 @@ public class DelayedShareFetchTest {
         when(sp0.nextFetchOffset()).thenReturn(10L);
         when(sp1.nextFetchOffset()).thenReturn(10L);
         // Fetch offset does not match with the cached entry for sp0 and sp1. Hence, a replica manager fetch will happen for both.
-        when(sp0.fetchOffsetMetadata(anyLong())).thenReturn(Optional.empty());
-        when(sp1.fetchOffsetMetadata(anyLong())).thenReturn(Optional.empty());
 
         LinkedHashSet<TopicIdPartition> remoteStorageFetchPartitions = new LinkedHashSet<>();
         remoteStorageFetchPartitions.add(tp0);
@@ -2746,9 +2714,6 @@ public class DelayedShareFetchTest {
         when(sp0.maybeAcquireFetchLock(any())).thenReturn(true);
         when(sp0.canAcquireRecords()).thenReturn(true);
         when(sp0.nextFetchOffset()).thenReturn(0L);
-        when(sp0.fetchOffsetMetadata(anyLong()))
-            .thenReturn(Optional.empty())
-            .thenReturn(Optional.of(new LogOffsetMetadata(0, 1, 0)));
         when(metadataProvider.endOffsetMetadata(any(), any())).thenReturn(new LogOffsetMetadata(1, 1, 1));
 
         PartitionMaxBytesStrategy partitionMaxBytesStrategy = mockPartitionMaxBytes(Set.of(tp0));
@@ -2823,9 +2788,6 @@ public class DelayedShareFetchTest {
         when(sp0.maybeAcquireFetchLock(any())).thenReturn(true);
         when(sp0.canAcquireRecords()).thenReturn(true);
         when(sp0.nextFetchOffset()).thenReturn(0L);
-        when(sp0.fetchOffsetMetadata(anyLong()))
-            .thenReturn(Optional.empty())
-            .thenReturn(Optional.of(new LogOffsetMetadata(0, 1, 0)));
         when(metadataProvider.endOffsetMetadata(any(), any())).thenReturn(new LogOffsetMetadata(1, 1, 1));
 
         PartitionMaxBytesStrategy partitionMaxBytesStrategy = mockPartitionMaxBytes(Set.of(tp0));
@@ -2892,9 +2854,6 @@ public class DelayedShareFetchTest {
         when(sp0.maybeAcquireFetchLock(any())).thenReturn(true);
         when(sp0.canAcquireRecords()).thenReturn(true);
         when(sp0.nextFetchOffset()).thenReturn(0L);
-        when(sp0.fetchOffsetMetadata(anyLong()))
-            .thenReturn(Optional.empty())
-            .thenReturn(Optional.of(new LogOffsetMetadata(0, 1, 0)));
         when(metadataProvider.endOffsetMetadata(any(), any())).thenReturn(new LogOffsetMetadata(1, 1, 1));
 
         PartitionMaxBytesStrategy partitionMaxBytesStrategy = mockPartitionMaxBytes(Set.of(tp0));
@@ -2955,9 +2914,6 @@ public class DelayedShareFetchTest {
         when(sp0.maybeAcquireFetchLock(any())).thenReturn(true);
         when(sp0.canAcquireRecords()).thenReturn(true);
         when(sp0.nextFetchOffset()).thenReturn(0L);
-        when(sp0.fetchOffsetMetadata(anyLong()))
-            .thenReturn(Optional.empty())
-            .thenReturn(Optional.of(new LogOffsetMetadata(0, 1, 0)));
         when(metadataProvider.endOffsetMetadata(any(), any())).thenReturn(new LogOffsetMetadata(1, 1, 1));
 
         PartitionMaxBytesStrategy partitionMaxBytesStrategy = mockPartitionMaxBytes(Set.of(tp0));
@@ -3023,9 +2979,6 @@ public class DelayedShareFetchTest {
         when(sp0.maybeAcquireFetchLock(any())).thenReturn(true);
         when(sp0.canAcquireRecords()).thenReturn(true);
         when(sp0.nextFetchOffset()).thenReturn(0L);
-        when(sp0.fetchOffsetMetadata(anyLong()))
-            .thenReturn(Optional.empty())
-            .thenReturn(Optional.of(new LogOffsetMetadata(0, 1, 0)));
         when(metadataProvider.endOffsetMetadata(any(), any())).thenReturn(new LogOffsetMetadata(1, 1, 1));
 
         PartitionMaxBytesStrategy partitionMaxBytesStrategy = mockPartitionMaxBytes(Set.of(tp0));
@@ -3114,14 +3067,11 @@ public class DelayedShareFetchTest {
         // isDone returns false for the first tryComplete (store pending fetch) and true for the second
         // tryComplete (process the completed result).
         when(asyncReadFuture.isDone()).thenReturn(false).thenReturn(true);
-        when(asyncReadFuture.get()).thenReturn(buildLogReadResultMap(List.of(tp0)));
+        when(asyncReadFuture.get()).thenReturn(buildLogReadResultMap(List.of(tp0), Map.of(tp0, new LogOffsetMetadata(0, 1, 0))));
 
         when(sp0.maybeAcquireFetchLock(any())).thenReturn(true);
         when(sp0.canAcquireRecords()).thenReturn(true);
         when(sp0.nextFetchOffset()).thenReturn(0L);
-        when(sp0.fetchOffsetMetadata(anyLong()))
-            .thenReturn(Optional.empty())
-            .thenReturn(Optional.of(new LogOffsetMetadata(0, 1, 0)));
         when(metadataProvider.endOffsetMetadata(any(), any())).thenReturn(new LogOffsetMetadata(1, 1, 1));
 
         PartitionMaxBytesStrategy partitionMaxBytesStrategy = mockPartitionMaxBytes(Set.of(tp0));
@@ -3198,9 +3148,6 @@ public class DelayedShareFetchTest {
         when(sp0.nextFetchOffset()).thenReturn(10L);
         when(sp1.nextFetchOffset()).thenReturn(20L);
         when(sp2.nextFetchOffset()).thenReturn(30L);
-        when(sp0.fetchOffsetMetadata(anyLong())).thenReturn(Optional.empty());
-        when(sp1.fetchOffsetMetadata(anyLong())).thenReturn(Optional.empty());
-        when(sp2.fetchOffsetMetadata(anyLong())).thenReturn(Optional.empty());
 
         // First read (tryComplete): tp0, tp1 local and tp2 remote fetch. The second read (additional local
         // read in onComplete) fails, exercising an error path in readAndProcessFetchResultCompletion:
@@ -3338,6 +3285,16 @@ public class DelayedShareFetchTest {
 
     private static LinkedHashMap<TopicIdPartition, LogReadResult> buildLogReadResultMap(List<TopicIdPartition> topicIdPartitions) {
         return CollectionConverters.asJava(buildLogReadResult(topicIdPartitions)).stream()
+            .collect(Collectors.toMap(
+                Tuple2::_1,
+                Tuple2::_2,
+                (oldValue, newValue) -> oldValue,
+                LinkedHashMap::new
+            ));
+    }
+
+    private static LinkedHashMap<TopicIdPartition, LogReadResult> buildLogReadResultMap(List<TopicIdPartition> topicIdPartitions, Map<TopicIdPartition, LogOffsetMetadata> fetchOffsetMetadata) {
+        return CollectionConverters.asJava(buildLogReadResult(topicIdPartitions, fetchOffsetMetadata)).stream()
             .collect(Collectors.toMap(
                 Tuple2::_1,
                 Tuple2::_2,

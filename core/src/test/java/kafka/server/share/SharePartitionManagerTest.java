@@ -1808,7 +1808,6 @@ public class SharePartitionManagerTest {
                 "TestShareFetch", mockTimer, mockReplicaManager.localBrokerId(),
                 DELAYED_SHARE_FETCH_PURGATORY_PURGE_INTERVAL, false, true);
         mockReplicaManagerDelayedShareFetch(mockReplicaManager, delayedShareFetchPurgatory);
-        when(sp1.fetchOffsetMetadata(anyLong())).thenReturn(Optional.of(new LogOffsetMetadata(0, 1, 0)));
         mockTopicIdPartitionToReturnDataEqualToMinBytes(mockReplicaManager, tp1, 2);
 
         // Initially you cannot acquire records for both sp1 and sp2.
@@ -2028,7 +2027,6 @@ public class SharePartitionManagerTest {
                 "TestShareFetch", mockTimer, mockReplicaManager.localBrokerId(),
                 DELAYED_SHARE_FETCH_PURGATORY_PURGE_INTERVAL, false, true);
         mockReplicaManagerDelayedShareFetch(mockReplicaManager, delayedShareFetchPurgatory);
-        when(sp1.fetchOffsetMetadata(anyLong())).thenReturn(Optional.of(new LogOffsetMetadata(0, 1, 0)));
         mockTopicIdPartitionToReturnDataEqualToMinBytes(mockReplicaManager, tp1, 1);
 
         // Initially you cannot acquire records for both sp1 and sp2.
@@ -2649,7 +2647,6 @@ public class SharePartitionManagerTest {
             "TestShareFetch", mockTimer, replicaManager.localBrokerId(),
             DELAYED_SHARE_FETCH_PURGATORY_PURGE_INTERVAL, false, true);
         mockReplicaManagerDelayedShareFetch(replicaManager, delayedShareFetchPurgatory);
-        when(sp1.fetchOffsetMetadata(anyLong())).thenReturn(Optional.of(new LogOffsetMetadata(0, 1, 0)));
         mockTopicIdPartitionToReturnDataEqualToMinBytes(replicaManager, tp1, 1);
 
         doAnswer(invocation -> buildLogReadResult(List.of(tp1))).when(replicaManager).readFromLog(any(), any(), any(ReplicaQuota.class), anyBoolean());
@@ -3268,14 +3265,30 @@ public class SharePartitionManagerTest {
             Compression.NONE, new SimpleRecord("test-key".getBytes(), "test-value".getBytes())));
     }
 
+    static Seq<Tuple2<TopicIdPartition, LogReadResult>> buildLogReadResult(
+        List<TopicIdPartition> topicIdPartitions,
+        Map<TopicIdPartition, LogOffsetMetadata> fetchOffsetMetadata
+    ) {
+        return buildLogReadResult(topicIdPartitions, MemoryRecords.withRecords(
+            Compression.NONE, new SimpleRecord("test-key".getBytes(), "test-value".getBytes())), fetchOffsetMetadata);
+    }
+
     static Seq<Tuple2<TopicIdPartition, LogReadResult>> buildEmptyLogReadResult(List<TopicIdPartition> topicIdPartitions) {
         return buildLogReadResult(topicIdPartitions, MemoryRecords.EMPTY);
     }
 
     static Seq<Tuple2<TopicIdPartition, LogReadResult>> buildLogReadResult(List<TopicIdPartition> topicIdPartitions, Records records) {
+        return buildLogReadResult(topicIdPartitions, records, Map.of());
+    }
+
+    static Seq<Tuple2<TopicIdPartition, LogReadResult>> buildLogReadResult(
+        List<TopicIdPartition> topicIdPartitions,
+        Records records,
+        Map<TopicIdPartition, LogOffsetMetadata> fetchOffsetMetadata
+    ) {
         List<Tuple2<TopicIdPartition, LogReadResult>> logReadResults = new ArrayList<>();
         topicIdPartitions.forEach(topicIdPartition -> logReadResults.add(new Tuple2<>(topicIdPartition, new LogReadResult(
-            new FetchDataInfo(new LogOffsetMetadata(0, 0, 0), records),
+            new FetchDataInfo(fetchOffsetMetadata.getOrDefault(topicIdPartition, new LogOffsetMetadata(0, 0, 0)), records),
             Optional.empty(),
             -1L,
             -1L,
