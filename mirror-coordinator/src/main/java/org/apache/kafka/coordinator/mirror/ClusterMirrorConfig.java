@@ -164,48 +164,57 @@ public final class ClusterMirrorConfig extends AbstractConfig {
     public static final String SECURITY_PROVIDERS_CONFIG = SecurityConfig.SECURITY_PROVIDERS_CONFIG;
     private static final String SECURITY_PROVIDERS_DOC = SecurityConfig.SECURITY_PROVIDERS_DOC;
 
-    private static final ConfigDef.Validator SOCKET_RECEIVE_BUFFER_BYTES_VALIDATOR = (name, value) -> {
-        int size = (int) value;
-        if (size != -1 && size < 1) {
-            throw new ConfigException(
-                    name,
-                    value,
-                    "Must be -1 or a positive integer."
-            );
-        }
-    };
-    
-    @SuppressWarnings("unchecked")
-    private static final ConfigDef.Validator REGEX_LIST_VALIDATOR = (name, value) -> {
-        if (value == null) return;
-        List<String> patterns = (List<String>) value;
-        for (String pattern : patterns) {
-            String trimmed = pattern.trim();
-            if (!trimmed.isEmpty()) {
-                try {
-                    Pattern.compile(trimmed);
-                } catch (PatternSyntaxException e) {
-                    throw new ConfigException(name, value, "Invalid regex pattern: " + e.getMessage());
+    private static final ConfigDef.Validator SOCKET_RECEIVE_BUFFER_BYTES_VALIDATOR = ConfigDef.LambdaValidator.with(
+            (name, value) -> {
+                int size = (int) value;
+                if (size != -1 && size < 1) {
+                    throw new ConfigException(
+                            name,
+                            value,
+                            "Must be -1 or a positive integer."
+                    );
                 }
-            }
-        }
-    };
+            },
+            () -> "Must be -1 or a positive integer"
+    );
 
     @SuppressWarnings("unchecked")
-    private static final ConfigDef.Validator ACL_RULES_VALIDATOR = (name, value) -> {
-        if (value == null) return;
-        List<String> rules = (List<String>) value;
-        for (String rule : rules) {
-            String trimmed = rule.trim();
-            if (!trimmed.isEmpty()) {
-                try {
-                    MirrorAclRule.parse(trimmed);
-                } catch (Exception e) {
-                    throw new ConfigException(name, value, "Invalid ACL rule: " + e.getMessage());
+    private static final ConfigDef.Validator REGEX_LIST_VALIDATOR = ConfigDef.LambdaValidator.with(
+            (name, value) -> {
+                if (value == null) return;
+                List<String> patterns = (List<String>) value;
+                for (String pattern : patterns) {
+                    String trimmed = pattern.trim();
+                    if (!trimmed.isEmpty()) {
+                        try {
+                            Pattern.compile(trimmed);
+                        } catch (PatternSyntaxException e) {
+                            throw new ConfigException(name, value, "Invalid regex pattern: " + e.getMessage());
+                        }
+                    }
                 }
-            }
-        }
-    };
+            },
+            () -> "Valid comma-separated list of regex patterns"
+    );
+
+    @SuppressWarnings("unchecked")
+    private static final ConfigDef.Validator ACL_RULES_VALIDATOR = ConfigDef.LambdaValidator.with(
+            (name, value) -> {
+                if (value == null) return;
+                List<String> rules = (List<String>) value;
+                for (String rule : rules) {
+                    String trimmed = rule.trim();
+                    if (!trimmed.isEmpty()) {
+                        try {
+                            MirrorAclRule.parse(trimmed);
+                        } catch (Exception e) {
+                            throw new ConfigException(name, value, "Invalid ACL rule: " + e.getMessage());
+                        }
+                    }
+                }
+            },
+            () -> "Valid comma-separated list of ACL rules"
+    );
 
     private static final ConfigDef CONFIG_DEF = buildConfigDef();
 
