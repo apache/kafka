@@ -305,6 +305,8 @@ org.apache.kafka.server.ForwardingManagerTest:
 - testResponseCorrelationIdMismatch
 - testUnsupportedVersionFromNetworkClient
 - testUnsupportedVersions
+org.apache.kafka.server.InterBrokerOAuthIntegrationTest:
+- testReplicationWithBrokerLoginCallbackHandler
 org.apache.kafka.server.KRaftClusterTest:
 - testAbandonedFutureReplicaRecovered_mainReplicaInOfflineLogDir
 - testAbandonedFutureReplicaRecovered_mainReplicaInOnlineLogDir
@@ -640,12 +642,16 @@ org.apache.kafka.server.share.dlq.ShareGroupDLQStateManagerTest:
 - testConstructorRejectsNullTime
 - testConstructorRejectsNullTimer
 - testCreateTopicBuilderPinsCreateTimeAlongsideDlqEnableConfig
+- testDLQRecordCopyDisabledIgnoresReservedHeadersOnSourceRecords
 - testDLQRecordCopyDisabledSkipsFetch
 - testDLQRecordCopyEnabled
 - testDLQRecordCopyEnabledButInvalidConfigSkipsFetch
+- testDLQRecordCopyEnabledDropsReservedOriginalHeaderWhenCorrespondingDLQHeaderOmitted
 - testDLQRecordCopyEnabledFetchesOnceAcrossProduceRetries
+- testDLQRecordCopyEnabledOriginalHeader
 - testDLQRecordCopyEnabledWithErrorOnLogRead
 - testDLQRecordCopyEnabledWithMixedLocalAndRemoteFetch
+- testDLQRecordCopyEnabledWithMixedOriginalHeadersPerRecord
 - testDLQRecordCopyEnabledWithMultipleLogReaderIterations
 - testDLQRecordCopyEnabledWithPartialLogReaderRecords
 - testDLQRecordCopyEnabledWithRemoteFetch

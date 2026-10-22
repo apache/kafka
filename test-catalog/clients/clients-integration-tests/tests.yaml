@@ -434,10 +434,12 @@ org.apache.kafka.clients.consumer.ShareConsumerCallbackTest:
 - testAcknowledgementCommitCallbackThrowsException
 - testAcknowledgementSentOnSubscriptionChange
 org.apache.kafka.clients.consumer.ShareConsumerDLQTest:
+- testDlqCopiesOriginalRecordHeaders
 - testDlqCopiesRecordsReadFromRemoteAndLocalStorage
 - testDlqCopiesRecordsReadFromRemoteStorage
 - testDlqCopyRecordSkippedWhenDecompressedSizeExceedsDlqMaxMessageBytes
 - testDlqNotTriggeredWhenGatedOff
+- testDlqOriginalHeaderCollidingWithDlqHeaderIsOverwritten
 - testDlqRecordsRoutedToCorrectDlqPartition
 - testDlqRespectsDlqTopicMaxMessageBytesNotEqToSourceTopic
 - testDlqStopsAfterDisablingForGroup
