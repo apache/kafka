@@ -485,9 +485,15 @@ Set to a positive integer value if you wish to allow up to some number of positi
    sasl.enabled.mechanisms=OAUTHBEARER
    listener.name.<listener name>.oauthbearer.sasl.server.callback.handler.class=org.apache.kafka.common.security.oauthbearer.OAuthBearerValidatorCallbackHandler
    listener.name.<listener name>.oauthbearer.sasl.oauthbearer.jwks.endpoint.url=https://example.com/oauth2/v1/keys
+   listener.name.<listener name>.oauthbearer.sasl.oauthbearer.expected.audience=my-kafka-cluster
+   listener.name.<listener name>.oauthbearer.sasl.oauthbearer.expected.issuer=https://example.com
    ```
 
+   When `sasl.oauthbearer.jwks.endpoint.url` is set, the broker fails at startup unless `sasl.oauthbearer.expected.audience` and `sasl.oauthbearer.expected.issuer` are also set. To accept tokens without verifying the `aud` or `iss` claim, set `sasl.oauthbearer.allow.unverified.audience` or `sasl.oauthbearer.allow.unverified.issuer` to `true` instead. This is insecure and strongly discouraged.
+
 The OAUTHBEARER broker configuration includes: 
+   * sasl.oauthbearer.allow.unverified.audience
+   * sasl.oauthbearer.allow.unverified.issuer
    * sasl.oauthbearer.clock.skew.seconds
    * sasl.oauthbearer.expected.audience
    * sasl.oauthbearer.expected.issuer
@@ -497,6 +503,31 @@ The OAUTHBEARER broker configuration includes:
    * sasl.oauthbearer.jwks.endpoint.url
    * sasl.oauthbearer.scope.claim.name
    * sasl.oauthbearer.sub.claim.name
+
+##### Tokenless login for validate-only brokers
+
+A broker may only validate OAUTHBEARER tokens presented by clients and use a different SASL mechanism (or a different listener) for inter-broker communication. Such a broker never needs to obtain a token of its own, but it still performs a JAAS login with `OAuthBearerLoginModule` for the OAUTHBEARER listener at startup.
+
+If `sasl.login.callback.handler.class` is not set for the listener, the login uses the default `OAuthBearerUnsecuredLoginCallbackHandler`. When none of the JAAS module options start with `unsecuredLogin`, this handler does not create a token; the login succeeds without a token (a tokenless login), and the broker logs that this login cannot be used to establish client connections. JAAS module options that are not related to unsecured token creation, such as the `ssl.*` options used to configure TLS trust for an `https` JWKS endpoint, do not change this. For example: 
+
+```java-properties
+listeners=SASL_SSL://host.name:port1,SSL://host.name:port2
+security.inter.broker.protocol=SSL
+sasl.enabled.mechanisms=OAUTHBEARER
+listener.name.<listener name>.oauthbearer.sasl.jaas.config=org.apache.kafka.common.security.oauthbearer.OAuthBearerLoginModule required \
+    ssl.truststore.location="/etc/kafka/jwks-truststore.p12" \
+    ssl.truststore.type="PKCS12" \
+    ssl.truststore.password="changeit" ;
+listener.name.<listener name>.oauthbearer.sasl.server.callback.handler.class=org.apache.kafka.common.security.oauthbearer.OAuthBearerValidatorCallbackHandler
+listener.name.<listener name>.oauthbearer.sasl.oauthbearer.jwks.endpoint.url=https://example.com/oauth2/v1/keys
+listener.name.<listener name>.oauthbearer.sasl.oauthbearer.expected.audience=my-kafka-cluster
+listener.name.<listener name>.oauthbearer.sasl.oauthbearer.expected.issuer=https://example.com
+```
+
+Note the following when relying on tokenless login: 
+   * Any JAAS module option starting with `unsecuredLogin` (including a mistyped one) makes the handler create an unsecured token instead. When the module options are not empty, the broker logs the option names at `INFO` level so that such a mistake is visible.
+   * A tokenless login cannot be used to connect to other brokers, so OAUTHBEARER must not be used as `sasl.mechanism.inter.broker.protocol` for such a broker unless `sasl.login.callback.handler.class` is set to a handler that obtains a real token, such as `org.apache.kafka.common.security.oauthbearer.OAuthBearerLoginCallbackHandler`.
+   * `OAuthBearerUnsecuredLoginCallbackHandler` is an internal class intended for testing. Tokenless login is its current default behavior rather than a dedicated, supported handler, and a dedicated handler may be introduced in a future release.
 #### Configuring Non-production Kafka Clients
 
 To configure SASL authentication on the clients: 

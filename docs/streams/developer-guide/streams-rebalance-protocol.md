@@ -53,7 +53,7 @@ The following features are available in the current release:
 
 * **Offline Migration**: After shutting down all members and waiting for their `session.timeout.ms` to expire (or forcing an explicit group leave), a classic group can be converted to a streams group and a streams group can be converted to a classic group. The only broker-side group data that will be preserved are the committed offsets. Internal topics (changelog and repartition topics) will continue to exist as regular Kafka topics.
 
-* **Static Membership**: Streams applications can configure `group.instance.id` when using `group.protocol=streams`. Kafka Streams derives unique group instance IDs for its stream threads internally.
+* **Static Membership**: Streams applications can configure [`group.instance.id`](../config-streams#group-instance-id) when using `group.protocol=streams`. This requires clients and brokers running Kafka 4.4 or newer: brokers on older versions reject `group.instance.id` on the streams group heartbeat with `INVALID_REQUEST`, which is a fatal error that shuts down the Kafka Streams client. Before downgrading brokers below 4.4, or if brokers have already been downgraded, remove `group.instance.id` from all Streams applications using `group.protocol=streams` and restart them. Also note that for topologies without persistent state stores, Kafka Streams generates a new process ID on each restart, causing the broker to recompute the group assignment and effectively negating the benefits of static membership across restarts.
 
 # What's Not Supported in This Version
 
@@ -125,6 +125,7 @@ The following broker configurations control the behavior of streams groups. For 
 * [`group.streams.initial.rebalance.delay.ms`](/{version}/configuration/broker-configs#brokerconfigs_group.streams.initial.rebalance.delay.ms): The first rebalance of a new (ie, previously empty) group is delayed by this amount to allow more members to join the group.
 * [`group.streams.topology.description.plugin.class`](/{version}/configuration/broker-configs#brokerconfigs_group.streams.topology.description.plugin.class): The fully qualified class name of a `StreamsGroupTopologyDescriptionPlugin` implementation. When not set, the [topology description feature](/{version}/streams/developer-guide/topology-description-plugin/) is disabled.
 * [`group.streams.assignors`](/{version}/configuration/broker-configs#brokerconfigs_group.streams.assignors): The task assignors available to streams groups, as a list of built-in assignor names and fully qualified class names of custom `TaskAssignor` implementations. The first entry is the default assignor for groups that do not select one with `streams.assignor.name`.
+* [`group.streams.rack.aware.assignment.tags`](/{version}/configuration/broker-configs#brokerconfigs_group.streams.rack.aware.assignment.tags): The default list of client tag keys used to distribute standby replicas across Kafka Streams instances, when the broker-side assignor supports it.
 
 ## Group Configuration
 
@@ -139,6 +140,7 @@ The following group-level configurations are available for streams groups:
 * [`streams.num.standby.replicas`](/{version}/configuration/group-configs#groupconfigs_streams.num.standby.replicas): The number of standby replicas for each task.
 * [`streams.initial.rebalance.delay.ms`](/{version}/configuration/group-configs#groupconfigs_streams.initial.rebalance.delay.ms): The first rebalance of a group is delayed by this amount to allow more members to join the group.
 * [`streams.assignor.name`](/{version}/configuration/group-configs#groupconfigs_streams.assignor.name): The name of the task assignor to use for this group, which must be one of the assignors registered on the broker via `group.streams.assignors`. When unset, the group uses the first entry of `group.streams.assignors`.
+* [`streams.rack.aware.assignment.tags`](/{version}/configuration/group-configs#groupconfigs_streams.rack.aware.assignment.tags): The list of client tag keys used to distribute standby replicas across Kafka Streams instances, when the broker-side assignor supports it.
 
 ### Example: Setting Group-Level Configuration
 ```

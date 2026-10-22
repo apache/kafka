@@ -42,7 +42,6 @@ import org.apache.kafka.test.TestUtils;
 import java.nio.charset.StandardCharsets;
 import java.time.Duration;
 import java.util.ArrayList;
-import java.util.Collections;
 import java.util.HashMap;
 import java.util.HashSet;
 import java.util.List;
@@ -1011,7 +1010,7 @@ public class TransactionsTestHelper {
         return new ProducerRecord<>(topic, partition,
                 key.getBytes(StandardCharsets.UTF_8),
                 value.getBytes(StandardCharsets.UTF_8),
-                Collections.singleton(header));
+                Set.of(header));
     }
 
     public static String assertCommittedAndGetValue(ConsumerRecord<byte[], byte[]> record) {

@@ -23,6 +23,7 @@ import org.apache.kafka.common.header.internals.RecordHeaders;
 import org.apache.kafka.common.serialization.Serdes;
 import org.apache.kafka.common.serialization.Serializer;
 import org.apache.kafka.common.utils.internals.LogContext;
+import org.apache.kafka.streams.FixedPartitionPartitioner;
 import org.apache.kafka.streams.KeyQueryMetadata;
 import org.apache.kafka.streams.StreamsBuilder;
 import org.apache.kafka.streams.StreamsMetadata;
@@ -136,7 +137,7 @@ public class StreamsMetadataStateTest {
         topologyMetadata.buildAndRewriteTopology();
         metadataState = new StreamsMetadataState(topologyMetadata, hostOne, logContext);
         metadataState.onChange(hostToActivePartitions, hostToStandbyPartitions, partitionInfos);
-        partitioner = new FixedPartitionPartitioner(1);
+        partitioner = new FixedPartitionPartitioner<>(1);
         storeNames = Set.of("table-one", "table-two", "merged-table", globalTable);
     }
 
@@ -307,7 +308,7 @@ public class StreamsMetadataStateTest {
                 "merged-table",
                 "the-key",
                 new RecordHeaders(),
-                new FixedPartitionPartitioner(2)
+                new FixedPartitionPartitioner<>(2)
         );
 
         assertEquals(expected, actual);
@@ -518,25 +519,6 @@ public class StreamsMetadataStateTest {
             partitions.add(0);
             partitions.add(1);
             return Optional.of(partitions);
-        }
-    }
-
-    private static class FixedPartitionPartitioner implements StreamPartitioner<String, Object> {
-        private final int partition;
-
-        FixedPartitionPartitioner(final int partition) {
-            this.partition = partition;
-        }
-
-        @SuppressWarnings("removal")
-        @Override
-        public Optional<Set<Integer>> partitions(final String topic, final String key, final Object value, final int numPartitions) {
-            throw new AssertionError("Deprecated 4-argument partitions method was called instead of 5-argument method containing headers.");
-        }
-
-        @Override
-        public Optional<Set<Integer>> partitions(final String topic, final String key, final Object value, final Headers headers, final int numPartitions) {
-            return Optional.of(Collections.singleton(partition));
         }
     }
 }

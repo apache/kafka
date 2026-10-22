@@ -22,8 +22,8 @@ import org.apache.kafka.common.config.ConfigException;
 import org.apache.kafka.common.config.SaslConfigs;
 import org.apache.kafka.common.config.SslConfigs;
 import org.apache.kafka.common.config.internals.BrokerSecurityConfigs;
-import org.apache.kafka.common.utils.Utils;
 import org.apache.kafka.coordinator.group.GroupCoordinatorConfig;
+import org.apache.kafka.coordinator.mirror.ClusterMirrorConfigs;
 import org.apache.kafka.coordinator.share.ShareCoordinatorConfig;
 import org.apache.kafka.coordinator.transaction.TransactionLogConfig;
 import org.apache.kafka.network.SocketServer;
@@ -41,6 +41,7 @@ import java.util.Optional;
 import java.util.Properties;
 import java.util.Set;
 import java.util.function.Function;
+import java.util.function.Supplier;
 import java.util.regex.Matcher;
 import java.util.regex.Pattern;
 import java.util.stream.Collectors;
@@ -53,6 +54,9 @@ public class DynamicBrokerConfig {
     private static final Set<String> DYNAMIC_PRODUCER_STATE_MANAGER_CONFIGS = Set.of(
             TransactionLogConfig.PRODUCER_ID_EXPIRATION_MS_CONFIG,
             TransactionLogConfig.TRANSACTION_PARTITION_VERIFICATION_ENABLE_CONFIG);
+
+    private static final Set<String> DYNAMIC_REPLICATION_CONFIGS = Set.of(
+            ReplicationConfigs.FOLLOWER_FETCH_LAST_TIERED_OFFSET_ENABLE_CONFIG);
 
     private static final Set<String> CLUSTER_LEVEL_LISTENER_CONFIGS = Set.of(
             SocketServerConfigs.MAX_CONNECTIONS_CONFIG,
@@ -77,9 +81,10 @@ public class DynamicBrokerConfig {
             SocketServer.RECONFIGURABLE_CONFIGS,
             DYNAMIC_PRODUCER_STATE_MANAGER_CONFIGS,
             DynamicRemoteLogConfig.RECONFIGURABLE_CONFIGS,
-            DynamicReplicationConfig.RECONFIGURABLE_CONFIGS,
+            DYNAMIC_REPLICATION_CONFIGS,
             List.of(AbstractConfig.CONFIG_PROVIDERS_CONFIG),
             GroupCoordinatorConfig.RECONFIGURABLE_CONFIGS,
+            DynamicClusterMirrorConfig.RECONFIGURABLE_CONFIGS,
             DynamicQuotaConfig.RECONFIGURABLE_CONFIGS,
             ShareCoordinatorConfig.RECONFIGURABLE_CONFIGS)
         .flatMap(Collection::stream)
@@ -127,13 +132,13 @@ public class DynamicBrokerConfig {
         }
     }
 
-    public static void validateConfigs(Properties props, boolean perBrokerConfig) {
-        checkInvalidProps(nonDynamicConfigs(props), "Cannot update these configs dynamically");
-        checkInvalidProps(securityConfigsWithoutListenerPrefix(props),
+    public static void validateConfigs(Properties propsOriginal, Properties propsResolved, boolean perBrokerConfig) {
+        checkInvalidProps(nonDynamicConfigs(propsResolved), "Cannot update these configs dynamically");
+        checkInvalidProps(securityConfigsWithoutListenerPrefix(propsResolved),
                 "These security configs can be dynamically updated only per-listener using the listener prefix");
-        validateConfigTypes(props);
+        validateConfigTypes(propsOriginal, propsResolved);
         if (!perBrokerConfig) {
-            checkInvalidProps(perBrokerConfigs(props),
+            checkInvalidProps(perBrokerConfigs(propsResolved),
                     "Cannot update these configs at default cluster level, broker id must be specified");
         }
     }
@@ -143,17 +148,26 @@ public class DynamicBrokerConfig {
     }
 
     public static void validateConfigTypes(Properties props) {
+        validateConfigTypes(props, resolveVariableConfigs(props));
+    }
+
+    static void validateConfigTypes(Properties propsOriginal, Properties propsResolved) {
+        Properties basePropsOriginal = stripListenerPrefix(propsOriginal);
+        Properties basePropsResolved = stripListenerPrefix(propsResolved);
+        DynamicConfig.Broker.validate(basePropsOriginal, basePropsResolved);
+    }
+
+    private static Properties stripListenerPrefix(Properties props) {
         Properties baseProps = new Properties();
         props.forEach((name, value) -> {
             Matcher matcher = LISTENER_CONFIG_REGEX.matcher((String) name);
             if (matcher.matches()) {
-                String baseName = matcher.group(1);
-                baseProps.put(baseName, value);
+                baseProps.put(matcher.group(1), value);
             } else {
                 baseProps.put(name, value);
             }
         });
-        DynamicConfig.Broker.validate(baseProps);
+        return baseProps;
     }
 
     public static Set<String> perBrokerConfigs(Properties props) {
@@ -183,7 +197,7 @@ public class DynamicBrokerConfig {
 
     public static Properties resolveVariableConfigs(Properties propsOriginal) {
         Properties props = new Properties();
-        AbstractConfig config = new AbstractConfig(new ConfigDef(), propsOriginal, Utils.castToStringObjectMap(propsOriginal), false);
+        AbstractConfig config = new AbstractConfig(new ConfigDef(), propsOriginal, false);
         config.originals().forEach((key, value) -> {
             if (!key.startsWith(AbstractConfig.CONFIG_PROVIDERS_CONFIG)) {
                 props.put(key, value);
@@ -198,19 +212,6 @@ public class DynamicBrokerConfig {
                 name -> PER_BROKER_CONFIGS.contains(name) ? "per-broker" : "cluster-wide"
             )
         );
-    }
-
-    public static class DynamicLogConfig {
-        /**
-         * The broker configurations pertaining to logs that are reconfigurable. This set contains
-         * the names you would use when setting a static or dynamic broker configuration (not topic
-         * configuration).
-         */
-        public static final Set<String> RECONFIGURABLE_CONFIGS = Stream.of(
-                ServerTopicConfigSynonyms.TOPIC_CONFIG_SYNONYMS.values(),
-                Set.of(ServerLogConfigs.CORDONED_LOG_DIRS_CONFIG))
-            .flatMap(Collection::stream)
-            .collect(Collectors.toUnmodifiableSet());
     }
 
     public static class DynamicListenerConfig {
@@ -279,12 +280,43 @@ public class DynamicBrokerConfig {
                 RemoteLogManagerConfig.REMOTE_LOG_READER_THREADS_PROP);
     }
 
-    public static class DynamicReplicationConfig {
-        public static final Set<String> RECONFIGURABLE_CONFIGS = Set.of(
-                ReplicationConfigs.FOLLOWER_FETCH_LAST_TIERED_OFFSET_ENABLE_CONFIG);
-    }
-
     public static class DynamicQuotaConfig {
         public static final Set<String> RECONFIGURABLE_CONFIGS = QuotaConfig.BROKER_QUOTA_CONFIGS;
+    }
+
+    public static class DynamicClusterMirrorConfig implements BrokerReconfigurable {
+        public static final Set<String> RECONFIGURABLE_CONFIGS = Set.of(
+                ClusterMirrorConfigs.MIRROR_NUM_REPLICA_FETCHERS_CONFIG,
+                ClusterMirrorConfigs.MIRROR_METADATA_REFRESH_INTERVAL_MS_CONFIG);
+
+        private final Supplier<AbstractKafkaConfig> currentConfig;
+
+        public DynamicClusterMirrorConfig(Supplier<AbstractKafkaConfig> currentConfig) {
+            this.currentConfig = currentConfig;
+        }
+
+        @Override
+        public Set<String> reconfigurableConfigs() {
+            return RECONFIGURABLE_CONFIGS;
+        }
+
+        @Override
+        public void validateReconfiguration(AbstractKafkaConfig newConfig) {
+            int newFetchers = newConfig.getInt(ClusterMirrorConfigs.MIRROR_NUM_REPLICA_FETCHERS_CONFIG);
+            int oldFetchers = currentConfig.get().getInt(ClusterMirrorConfigs.MIRROR_NUM_REPLICA_FETCHERS_CONFIG);
+            if (newFetchers != oldFetchers) {
+                String errorMsg = "Dynamic thread count update validation failed for "
+                        + ClusterMirrorConfigs.MIRROR_NUM_REPLICA_FETCHERS_CONFIG + "=" + newFetchers;
+                if (newFetchers < oldFetchers / 2)
+                    throw new ConfigException(errorMsg + ", Value should be at least half the current value " + oldFetchers);
+                if (newFetchers > oldFetchers * 2)
+                    throw new ConfigException(errorMsg + ", Value should not be greater than double the current value " + oldFetchers);
+            }
+        }
+
+        @Override
+        public void reconfigure(AbstractKafkaConfig oldConfig, AbstractKafkaConfig newConfig) {
+            // TODO: Implement reconfiguration when MirrorMetadataManager is available (KAFKA-21233)
+        }
     }
 }

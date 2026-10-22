@@ -45,6 +45,7 @@ import java.util.List;
 import java.util.Optional;
 import java.util.Set;
 import java.util.UUID;
+import java.util.concurrent.ScheduledFuture;
 import java.util.concurrent.atomic.AtomicLong;
 import java.util.function.Consumer;
 import java.util.function.Supplier;
@@ -83,12 +84,13 @@ public class LocalLog {
     private final Time time;
     private final TopicPartition topicPartition;
     private final LogDirFailureChannel logDirFailureChannel;
+    private final FileRecords.TransferFailureHandler transferFailureHandler = this::checkReadAfterTransferFailure;
     private final Logger logger;
 
     private volatile LogOffsetMetadata nextOffsetMetadata;
-    // The memory mapped buffer for index files of this log will be closed with either delete() or closeHandlers()
-    // After memory mapped buffer is closed, no disk IO operation should be performed for this log.
-    private volatile boolean isMemoryMappedBufferClosed = false;
+    // Set to true when the log is closed with either delete(), close() or closeQuietly().
+    // After the log is closed, no disk IO operation should be performed for this log.
+    private volatile boolean isClosed = false;
     // Cache value of parent directory to avoid allocations in hot paths like ReplicaManager.checkpointHighWatermarks
     private volatile String parentDir;
     private volatile LogConfig config;
@@ -222,9 +224,9 @@ public class LocalLog {
         config = newConfig;
     }
 
-    public void checkIfMemoryMappedBufferClosed() {
-        if (isMemoryMappedBufferClosed) {
-            throw new KafkaStorageException("The memory mapped buffer for log of " + topicPartition + " is already closed");
+    public void checkIfClosed() {
+        if (isClosed) {
+            throw new KafkaStorageException("The log for " + topicPartition + " is already closed");
         }
     }
 
@@ -239,7 +241,7 @@ public class LocalLog {
      * @param offset the offset to be updated
      */
     public void markFlushed(long offset) {
-        checkIfMemoryMappedBufferClosed();
+        checkIfClosed();
         if (offset > recoveryPoint) {
             updateRecoveryPoint(offset);
             lastFlushedTime.set(time.milliseconds());
@@ -270,7 +272,7 @@ public class LocalLog {
             if (segmentsToFlush.stream().anyMatch(s -> s.baseOffset() >= currentRecoveryPoint)) {
                 // The directory might be renamed concurrently for topic deletion, which may cause NoSuchFileException here.
                 // Since the directory is to be deleted anyways, we just swallow NoSuchFileException and let it go.
-                Utils.flushDirIfExists(dir.toPath());
+                Utils.flushPathIfExists(dir.toPath());
             }
         }
     }
@@ -309,23 +311,25 @@ public class LocalLog {
     }
 
     /**
-     * Close file handlers used by log but don't write to disk.
+     * Close the segments of the log, swallowing any exceptions.
      * This is called if the log directory is offline.
      */
-    public void closeHandlers() {
-        segments.closeHandlers();
-        isMemoryMappedBufferClosed = true;
+    public void closeQuietly() {
+        if (isClosed) return;
+        segments.closeQuietly();
+        isClosed = true;
     }
 
     /**
-     * Closes the segments of the log.
+     * Close the segments of the log.
      */
     public void close() {
+        if (isClosed) return;
         maybeHandleIOException(
             () -> "Error while closing log segments for " + topicPartition + " in dir " + dir.getParent(),
             () -> {
-                checkIfMemoryMappedBufferClosed();
                 segments.close();
+                isClosed = true;
                 return null;
             }
         );
@@ -341,8 +345,8 @@ public class LocalLog {
                 if (!segments.isEmpty()) {
                     throw new IllegalStateException("Can not delete directory when " + segments.numberOfSegments() + " segments are still present");
                 }
-                if (!isMemoryMappedBufferClosed) {
-                    throw new IllegalStateException("Can not delete directory when memory mapped buffer for log of " + topicPartition + " is still open.");
+                if (!isClosed) {
+                    throw new IllegalStateException("Can not delete directory when log of " + topicPartition + " is still open.");
                 }
                 Utils.delete(dir);
                 return null;
@@ -365,7 +369,7 @@ public class LocalLog {
                         toDelete -> logger.info("Deleting segments as the log has been deleted: {}", toDelete.stream()
                             .map(LogSegment::toString)
                             .collect(Collectors.joining(", "))));
-                isMemoryMappedBufferClosed = true;
+                isClosed = true;
                 return deletableSegments;
             }
         );
@@ -513,7 +517,7 @@ public class LocalLog {
                         }
                     }
                     if (fetchDataInfo != null) {
-                        return fetchDataInfo;
+                        return withTransferFailureHandler(fetchDataInfo);
                     } else {
                         // okay we are beyond the end of the last segment with no data fetched although the start offset is in range,
                         // this can happen when all messages with offset larger than start offsets have been deleted.
@@ -522,6 +526,52 @@ public class LocalLog {
                     }
                 }
         );
+    }
+
+    /**
+     * The records of a fetch are read from the segment only when they are written to the network, after this log
+     * has returned them, so an IOException from that read cannot be caught here. Have the records report a failed
+     * write instead, so that the log directory is marked offline if the segment cannot be read, as for any other
+     * IOException in this log.
+     */
+    private FetchDataInfo withTransferFailureHandler(FetchDataInfo fetchDataInfo) {
+        if (!(fetchDataInfo.records instanceof FileRecords fileRecords))
+            return fetchDataInfo;
+        return fetchDataInfo.withRecords(fileRecords.withTransferFailureHandler(transferFailureHandler));
+    }
+
+    /**
+     * Called on the network thread when writing fetched records failed, which may be a socket or a storage failure.
+     * Re-reading the region tells them apart, so it is done on the scheduler rather than on the network thread, at
+     * most once at a time per log dir, so that a burst of failed sends or a slow failing disk does not take up the
+     * threads of the scheduler, which other tasks of the broker share.
+     */
+    private void checkReadAfterTransferFailure(FileRecords records, long position, int count, IOException transferFailure) {
+        String logDir = parentDir;
+        if (!logDirFailureChannel.tryStartReadCheck(logDir))
+            return;
+        // Once the scheduler has taken the check, the check finishes it; until then it is finished here, whatever is
+        // thrown, since a check that is never finished would stop this log dir from being checked for good
+        boolean scheduled = false;
+        try {
+            ScheduledFuture<?> check = scheduler.scheduleOnce("check-read-after-transfer-failure", () -> {
+                try {
+                    records.readFailure(position, count).ifPresent(readFailure -> {
+                        readFailure.addSuppressed(transferFailure);
+                        logDirFailureChannel.maybeAddOfflineLogDir(logDir, readFailure.getMessage(), readFailure);
+                    });
+                } finally {
+                    logDirFailureChannel.finishReadCheck(logDir);
+                }
+            });
+            // A scheduler that is not running ignores the task
+            scheduled = !check.isCancelled();
+        } catch (RuntimeException e) {
+            logger.warn("Could not schedule a read check of {} after a failed transfer", records.file().getAbsolutePath(), e);
+        } finally {
+            if (!scheduled)
+                logDirFailureChannel.finishReadCheck(logDir);
+        }
     }
 
     public void append(long lastOffset, MemoryRecords records) throws IOException {
@@ -586,7 +636,7 @@ public class LocalLog {
             () -> "Error while rolling log segment for " + topicPartition + " in dir " + dir.getParent(),
             () -> {
                 long start = time.hiResClockMs();
-                checkIfMemoryMappedBufferClosed();
+                checkIfClosed();
                 long newOffset = Math.max(expectedNextOffset, logEndOffset());
                 File logFile = LogFileUtils.logFile(dir, newOffset, "");
                 LogSegment activeSegment = segments.activeSegment();
@@ -659,7 +709,7 @@ public class LocalLog {
             () -> "Error while truncating the entire log for " + topicPartition + " in dir " + dir.getParent(),
             () -> {
                 logger.debug("Truncate and start at offset {}", newOffset);
-                checkIfMemoryMappedBufferClosed();
+                checkIfClosed();
                 List<LogSegment> segmentsToDelete = new ArrayList<>(segments.values());
 
                 if (!segmentsToDelete.isEmpty()) {
@@ -1057,7 +1107,7 @@ public class LocalLog {
         for (LogSegment logSegment : sortedNewSegments) {
             logSegment.changeFileSuffixes(SWAP_FILE_SUFFIX, "");
         }
-        Utils.flushDir(dir.toPath());
+        Utils.flushPath(dir.toPath());
         return deletedNotReplaced;
     }
 

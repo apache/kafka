@@ -70,11 +70,9 @@ public class ClientTelemetryTest {
         Map<String, Object> configs = new HashMap<>();
         configs.put(AdminClientConfig.BOOTSTRAP_SERVERS_CONFIG, clusterInstance.bootstrapServers());
         configs.put(AdminClientConfig.ENABLE_METRICS_PUSH_CONFIG, true);
+        String testTopicName = "test_topic";
+        clusterInstance.createTopic(testTopicName, 1, (short) 1);
         try (Admin admin = Admin.create(configs)) {
-            String testTopicName = "test_topic";
-            admin.createTopics(Collections.singletonList(new NewTopic(testTopicName, 1, (short) 1)));
-            clusterInstance.waitTopicCreation(testTopicName, 1);
-
             Map<String, Object> producerConfigs = new HashMap<>();
             producerConfigs.put(ProducerConfig.BOOTSTRAP_SERVERS_CONFIG, clusterInstance.bootstrapServers());
             producerConfigs.put(ProducerConfig.KEY_SERIALIZER_CLASS_CONFIG, StringSerializer.class.getName());

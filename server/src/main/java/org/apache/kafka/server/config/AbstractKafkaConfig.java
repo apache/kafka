@@ -23,15 +23,18 @@ import org.apache.kafka.common.config.AbstractConfig;
 import org.apache.kafka.common.config.ConfigDef;
 import org.apache.kafka.common.config.ConfigException;
 import org.apache.kafka.common.config.ConfigResource;
+import org.apache.kafka.common.config.TopicConfig;
 import org.apache.kafka.common.config.internals.BrokerSecurityConfigs;
 import org.apache.kafka.common.config.types.Password;
 import org.apache.kafka.common.network.ListenerName;
 import org.apache.kafka.common.record.TimestampType;
 import org.apache.kafka.common.security.auth.SecurityProtocol;
 import org.apache.kafka.common.utils.Utils;
+import org.apache.kafka.coordinator.group.Group.GroupType;
 import org.apache.kafka.coordinator.group.GroupConfig;
 import org.apache.kafka.coordinator.group.GroupCoordinatorConfig;
 import org.apache.kafka.coordinator.group.modern.share.ShareGroupConfig;
+import org.apache.kafka.coordinator.mirror.ClusterMirrorConfigs;
 import org.apache.kafka.coordinator.share.ShareCoordinatorConfig;
 import org.apache.kafka.coordinator.transaction.AddPartitionsToTxnConfig;
 import org.apache.kafka.coordinator.transaction.TransactionLogConfig;
@@ -40,6 +43,7 @@ import org.apache.kafka.network.SocketServerConfigs;
 import org.apache.kafka.raft.KRaftConfigs;
 import org.apache.kafka.raft.MetadataLogConfig;
 import org.apache.kafka.raft.QuorumConfig;
+import org.apache.kafka.server.ProcessRole;
 import org.apache.kafka.server.log.remote.storage.RemoteLogManagerConfig;
 import org.apache.kafka.server.metrics.MetricConfigs;
 import org.apache.kafka.server.util.Csv;
@@ -47,12 +51,17 @@ import org.apache.kafka.storage.internals.log.CleanerConfig;
 import org.apache.kafka.storage.internals.log.LogConfig;
 
 import org.apache.commons.validator.routines.InetAddressValidator;
+import org.slf4j.Logger;
+import org.slf4j.LoggerFactory;
 
+import java.util.Collections;
 import java.util.HashMap;
+import java.util.HashSet;
 import java.util.List;
 import java.util.Locale;
 import java.util.Map;
 import java.util.Optional;
+import java.util.OptionalLong;
 import java.util.Set;
 import java.util.concurrent.TimeUnit;
 import java.util.stream.Collectors;
@@ -64,6 +73,8 @@ import java.util.stream.Collectors;
  * For more details check KAFKA-15853
  */
 public abstract class AbstractKafkaConfig extends AbstractConfig {
+
+    private static final Logger log = LoggerFactory.getLogger(AbstractKafkaConfig.class);
 
     private static final InetAddressValidator INET_ADDRESS_VALIDATOR = InetAddressValidator.getInstance();
 
@@ -86,20 +97,57 @@ public abstract class AbstractKafkaConfig extends AbstractConfig {
         QuotaConfig.CONFIG_DEF,
         BrokerSecurityConfigs.CONFIG_DEF,
         DelegationTokenManagerConfigs.CONFIG_DEF,
-        AddPartitionsToTxnConfig.CONFIG_DEF
+        AddPartitionsToTxnConfig.CONFIG_DEF,
+        ClusterMirrorConfigs.brokerConfigDef()
     ));
-
-    private volatile QuotaConfig quotaConfig;
 
     public AbstractKafkaConfig(ConfigDef definition, Map<?, ?> originals, Map<String, ?> configProviderProps, boolean doLog) {
         super(definition, originals, configProviderProps, doLog);
     }
 
-    public QuotaConfig quotaConfig() {
-        if (quotaConfig == null) {
-            quotaConfig = new QuotaConfig(this);
-        }
-        return quotaConfig;
+    public RemoteLogManagerConfig remoteLogManagerConfig() {
+        return new RemoteLogManagerConfig(this);
+    }
+
+    /**
+     * Copy the subset of properties that are relevant to Logs. The individual properties
+     * are listed here since the names are slightly different in each Config class...
+     */
+    public Map<String, Object> extractLogConfigMap() {
+        Map<String, Object> logProps = new HashMap<>();
+        logProps.put(TopicConfig.SEGMENT_BYTES_CONFIG, logSegmentBytes());
+        logProps.put(TopicConfig.SEGMENT_MS_CONFIG, logRollTimeMillis());
+        logProps.put(TopicConfig.SEGMENT_JITTER_MS_CONFIG, logRollTimeJitterMillis());
+        logProps.put(TopicConfig.SEGMENT_INDEX_BYTES_CONFIG, logIndexSizeMaxBytes());
+        logProps.put(TopicConfig.FLUSH_MESSAGES_INTERVAL_CONFIG, logFlushIntervalMessages());
+        logProps.put(TopicConfig.FLUSH_MS_CONFIG, logFlushIntervalMs());
+        logProps.put(TopicConfig.RETENTION_BYTES_CONFIG, logRetentionBytes());
+        logProps.put(TopicConfig.RETENTION_MS_CONFIG, logRetentionTimeMillis());
+        logProps.put(TopicConfig.MAX_MESSAGE_BYTES_CONFIG, messageMaxBytes());
+        logProps.put(TopicConfig.MAX_DECOMPRESSED_MESSAGE_BYTES_CONFIG, maxDecompressedMessageBytes());
+        logProps.put(TopicConfig.INDEX_INTERVAL_BYTES_CONFIG, logIndexIntervalBytes());
+        logProps.put(TopicConfig.DELETE_RETENTION_MS_CONFIG, logCleanerDeleteRetentionMs());
+        logProps.put(TopicConfig.MIN_COMPACTION_LAG_MS_CONFIG, logCleanerMinCompactionLagMs());
+        logProps.put(TopicConfig.MAX_COMPACTION_LAG_MS_CONFIG, logCleanerMaxCompactionLagMs());
+        logProps.put(TopicConfig.FILE_DELETE_DELAY_MS_CONFIG, logDeleteDelayMs());
+        logProps.put(TopicConfig.MIN_CLEANABLE_DIRTY_RATIO_CONFIG, logCleanerMinCleanRatio());
+        logProps.put(TopicConfig.CLEANUP_POLICY_CONFIG, logCleanupPolicy());
+        logProps.put(TopicConfig.MIN_IN_SYNC_REPLICAS_CONFIG, minInSyncReplicas());
+        logProps.put(TopicConfig.COMPRESSION_TYPE_CONFIG, compressionType());
+        logProps.put(TopicConfig.COMPRESSION_GZIP_LEVEL_CONFIG, gzipCompressionLevel());
+        logProps.put(TopicConfig.COMPRESSION_LZ4_LEVEL_CONFIG, lz4CompressionLevel());
+        logProps.put(TopicConfig.COMPRESSION_ZSTD_LEVEL_CONFIG, zstdCompressionLevel());
+        logProps.put(TopicConfig.UNCLEAN_LEADER_ELECTION_ENABLE_CONFIG, uncleanLeaderElectionEnable());
+        logProps.put(TopicConfig.PREALLOCATE_CONFIG, logPreAllocateEnable());
+        logProps.put(TopicConfig.MESSAGE_TIMESTAMP_TYPE_CONFIG, logMessageTimestampType().name);
+        logProps.put(TopicConfig.MESSAGE_TIMESTAMP_BEFORE_MAX_MS_CONFIG, logMessageTimestampBeforeMaxMs());
+        logProps.put(TopicConfig.MESSAGE_TIMESTAMP_AFTER_MAX_MS_CONFIG, logMessageTimestampAfterMaxMs());
+        RemoteLogManagerConfig remoteLogManagerConfig = remoteLogManagerConfig();
+        logProps.put(TopicConfig.LOCAL_LOG_RETENTION_MS_CONFIG, remoteLogManagerConfig.logLocalRetentionMs());
+        logProps.put(TopicConfig.LOCAL_LOG_RETENTION_BYTES_CONFIG, remoteLogManagerConfig.logLocalRetentionBytes());
+        logProps.put(TopicConfig.REMOTE_COPY_LAG_MS_CONFIG, remoteLogManagerConfig.logRemoteCopyLagMs());
+        logProps.put(TopicConfig.REMOTE_COPY_LAG_BYTES_CONFIG, remoteLogManagerConfig.logRemoteCopyLagBytes());
+        return Collections.unmodifiableMap(logProps);
     }
 
     public List<String> logDirs() {
@@ -157,6 +205,22 @@ public abstract class AbstractKafkaConfig extends AbstractConfig {
 
     public SecurityProtocol interBrokerSecurityProtocol() {
         return interBrokerListenerNameAndSecurityProtocol().getValue();
+    }
+
+    public ListenerName mirrorAdminListenerName() {
+        String mirrorAdminListenerName = getString(ReplicationConfigs.MIRROR_ADMIN_LISTENER_NAME_CONFIG);
+        if (mirrorAdminListenerName == null) {
+            return interBrokerListenerName();
+        }
+
+        ListenerName listenerName = ListenerName.normalised(mirrorAdminListenerName);
+        SecurityProtocol securityProtocol = effectiveListenerSecurityProtocolMap().get(listenerName);
+        if (securityProtocol == null) {
+            throw new ConfigException("Listener with name " + listenerName.value() + " defined in " +
+                    ReplicationConfigs.MIRROR_ADMIN_LISTENER_NAME_CONFIG + " not found in " +
+                    SocketServerConfigs.LISTENER_SECURITY_PROTOCOL_MAP_CONFIG + ".");
+        }
+        return listenerName;
     }
 
     public int initialRegistrationTimeoutMs() {
@@ -679,4 +743,294 @@ public abstract class AbstractKafkaConfig extends AbstractConfig {
         );
         return defaults;
     }
+
+    // ********* General Configuration **********
+
+    public int brokerSessionTimeoutMs() {
+        return getInt(KRaftConfigs.BROKER_SESSION_TIMEOUT_MS_CONFIG);
+    }
+
+    public long controllerPerformanceSamplePeriodMs() {
+        return getLong(KRaftConfigs.CONTROLLER_PERFORMANCE_SAMPLE_PERIOD_MS);
+    }
+
+    public long controllerPerformanceAlwaysLogThresholdMs() {
+        return getLong(KRaftConfigs.CONTROLLER_PERFORMANCE_ALWAYS_LOG_THRESHOLD_MS);
+    }
+
+    public Set<ProcessRole> processRoles() {
+        Set<ProcessRole> result = new HashSet<>();
+        for (String role : getList(KRaftConfigs.PROCESS_ROLES_CONFIG)) {
+            switch (role) {
+                case "broker" -> result.add(ProcessRole.BrokerRole);
+                case "controller" -> result.add(ProcessRole.ControllerRole);
+                default -> throw new ConfigException("Unknown process role '" + role +
+                            "' (only 'broker' and 'controller' are allowed roles)");
+            }
+        }
+        return Collections.unmodifiableSet(result);
+    }
+
+    public String metadataLogDir() {
+        String dir = getString(MetadataLogConfig.METADATA_LOG_DIR_CONFIG);
+        return dir != null ? dir : logDirs().get(0);
+    }
+
+    public long serverMaxStartupTimeMs() {
+        return getLong(KRaftConfigs.SERVER_MAX_STARTUP_TIME_MS_CONFIG);
+    }
+
+    public Integer messageMaxBytes() {
+        return getInt(ServerConfigs.MESSAGE_MAX_BYTES_CONFIG);
+    }
+
+    public Integer maxDecompressedMessageBytes() {
+        return getInt(ServerConfigs.MAX_DECOMPRESSED_MESSAGE_BYTES_CONFIG);
+    }
+
+    public int getNumReplicaAlterLogDirsThreads() {
+        Integer numThreads = getInt(ServerConfigs.NUM_REPLICA_ALTER_LOG_DIRS_THREADS_CONFIG);
+        return numThreads != null ? numThreads : logDirs().size();
+    }
+
+    // ********* Metadata Configuration **********
+
+    public long metadataSnapshotMaxNewRecordBytes() {
+        return getLong(MetadataLogConfig.METADATA_SNAPSHOT_MAX_NEW_RECORD_BYTES_CONFIG);
+    }
+
+    public long metadataSnapshotMaxIntervalMs() {
+        return getLong(MetadataLogConfig.METADATA_SNAPSHOT_MAX_INTERVAL_MS_CONFIG);
+    }
+
+    public OptionalLong metadataMaxIdleIntervalNs() {
+        long value = TimeUnit.NANOSECONDS.convert(
+                getInt(MetadataLogConfig.METADATA_MAX_IDLE_INTERVAL_MS_CONFIG).longValue(),
+                TimeUnit.MILLISECONDS);
+        return value > 0 ? OptionalLong.of(value) : OptionalLong.empty();
+    }
+
+    // ********* Rack Configuration **********
+
+    public Optional<String> replicaSelectorClassName() {
+        return Optional.ofNullable(getString(ReplicationConfigs.REPLICA_SELECTOR_CLASS_CONFIG));
+    }
+
+    // ********* Replication Configuration **********
+
+    public long replicaLagTimeMaxMs() {
+        return getLong(ReplicationConfigs.REPLICA_LAG_TIME_MAX_MS_CONFIG);
+    }
+
+    public int replicaSocketTimeoutMs() {
+        return getInt(ReplicationConfigs.REPLICA_SOCKET_TIMEOUT_MS_CONFIG);
+    }
+
+    public int replicaSocketReceiveBufferBytes() {
+        return getInt(ReplicationConfigs.REPLICA_SOCKET_RECEIVE_BUFFER_BYTES_CONFIG);
+    }
+
+    public int replicaFetchMaxBytes() {
+        return getInt(ReplicationConfigs.REPLICA_FETCH_MAX_BYTES_CONFIG);
+    }
+
+    public int replicaFetchWaitMaxMs() {
+        return getInt(ReplicationConfigs.REPLICA_FETCH_WAIT_MAX_MS_CONFIG);
+    }
+
+    public int replicaFetchMinBytes() {
+        return getInt(ReplicationConfigs.REPLICA_FETCH_MIN_BYTES_CONFIG);
+    }
+
+    public int replicaFetchResponseMaxBytes() {
+        return getInt(ReplicationConfigs.REPLICA_FETCH_RESPONSE_MAX_BYTES_CONFIG);
+    }
+
+    public int replicaFetchBackoffMs() {
+        return getInt(ReplicationConfigs.REPLICA_FETCH_BACKOFF_MS_CONFIG);
+    }
+
+    public long replicaHighWatermarkCheckpointIntervalMs() {
+        return getLong(ReplicationConfigs.REPLICA_HIGH_WATERMARK_CHECKPOINT_INTERVAL_MS_CONFIG);
+    }
+
+    public int fetchPurgatoryPurgeIntervalRequests() {
+        return getInt(ReplicationConfigs.FETCH_PURGATORY_PURGE_INTERVAL_REQUESTS_CONFIG);
+    }
+
+    public int producerPurgatoryPurgeIntervalRequests() {
+        return getInt(ReplicationConfigs.PRODUCER_PURGATORY_PURGE_INTERVAL_REQUESTS_CONFIG);
+    }
+
+    public int deleteRecordsPurgatoryPurgeIntervalRequests() {
+        return getInt(ReplicationConfigs.DELETE_RECORDS_PURGATORY_PURGE_INTERVAL_REQUESTS_CONFIG);
+    }
+
+    public boolean autoLeaderRebalanceEnable() {
+        return getBoolean(ReplicationConfigs.AUTO_LEADER_REBALANCE_ENABLE_CONFIG);
+    }
+
+    public long leaderImbalanceCheckIntervalSeconds() {
+        return getLong(ReplicationConfigs.LEADER_IMBALANCE_CHECK_INTERVAL_SECONDS_CONFIG);
+    }
+
+    public long uncleanLeaderElectionCheckIntervalMs() {
+        return getLong(ReplicationConfigs.UNCLEAN_LEADER_ELECTION_INTERVAL_MS_CONFIG);
+    }
+
+    public Boolean uncleanLeaderElectionEnable() {
+        return getBoolean(ReplicationConfigs.UNCLEAN_LEADER_ELECTION_ENABLE_CONFIG);
+    }
+
+    public Boolean followerFetchLastTieredOffsetEnable() {
+        return getBoolean(ReplicationConfigs.FOLLOWER_FETCH_LAST_TIERED_OFFSET_ENABLE_CONFIG);
+    }
+
+    // ********* Controlled Shutdown Configuration **********
+
+    public boolean controlledShutdownEnable() {
+        return getBoolean(ServerConfigs.CONTROLLED_SHUTDOWN_ENABLE_CONFIG);
+    }
+
+    // ********* Group Coordinator Configuration **********
+
+    @SuppressWarnings("removal")
+    public Set<GroupType> groupCoordinatorRebalanceProtocols() {
+        return getList(GroupCoordinatorConfig.GROUP_COORDINATOR_REBALANCE_PROTOCOLS_CONFIG)
+                .stream()
+                .map(s -> GroupType.valueOf(s.toUpperCase(Locale.ROOT)))
+                .collect(Collectors.toUnmodifiableSet());
+    }
+
+    @SuppressWarnings("removal")
+    protected void validateGroupCoordinatorRebalanceProtocols(boolean doLog) {
+        Set<GroupType> protocols = groupCoordinatorRebalanceProtocols();
+
+        if (!protocols.contains(GroupType.CLASSIC)) {
+            throw new ConfigException("Disabling the '" + GroupType.CLASSIC + "' protocol is not supported.");
+        }
+
+        if (doLog && protocols.contains(GroupType.SHARE)) {
+            log.warn("'{}' in `{}` is deprecated. " +
+                            "Share groups are controlled by the 'share.version' feature. " +
+                            "This config will be removed in Kafka 5.0.",
+                    GroupType.SHARE,
+                    GroupCoordinatorConfig.GROUP_COORDINATOR_REBALANCE_PROTOCOLS_CONFIG);
+        }
+
+        if (doLog && originals().containsKey(GroupCoordinatorConfig.GROUP_COORDINATOR_REBALANCE_PROTOCOLS_CONFIG)) {
+            Set<GroupType> defaultProtocols = GroupCoordinatorConfig.GROUP_COORDINATOR_REBALANCE_PROTOCOLS_DEFAULT
+                    .stream()
+                    .map(s -> GroupType.valueOf(s.toUpperCase(Locale.ROOT)))
+                    .collect(Collectors.toUnmodifiableSet());
+
+            Set<GroupType> missingProtocols = new HashSet<>(defaultProtocols);
+            missingProtocols.removeAll(protocols);
+
+            if (!missingProtocols.isEmpty()) {
+                log.warn("The config `{}` is deprecated and will be removed in Kafka 5.0. " +
+                                "The following protocol(s) are currently disabled: {}. " +
+                                "In Kafka 5.0, all protocols will always be enabled and controlled solely by feature versions " +
+                                "(group.version, streams.version, share.version) via kafka-features.sh. " +
+                                "Please remove the configuration, which will restore all protocols to the default enabled state, to prepare for the upgrade.",
+                        GroupCoordinatorConfig.GROUP_COORDINATOR_REBALANCE_PROTOCOLS_CONFIG,
+                        missingProtocols.stream().map(GroupType::toString).collect(Collectors.joining(", ")));
+            } else {
+                log.warn("The config `{}` is deprecated and will be removed in Kafka 5.0. " +
+                                "Please remove the configuration to prepare for the upgrade.",
+                        GroupCoordinatorConfig.GROUP_COORDINATOR_REBALANCE_PROTOCOLS_CONFIG);
+            }
+        }
+    }
+
+    // ********* Metric Configuration **********
+
+    public int metricNumSamples() {
+        return getInt(MetricConfigs.METRIC_NUM_SAMPLES_CONFIG);
+    }
+
+    public long metricSampleWindowMs() {
+        return getLong(MetricConfigs.METRIC_SAMPLE_WINDOW_MS_CONFIG);
+    }
+
+    public String metricRecordingLevel() {
+        return getString(MetricConfigs.METRIC_RECORDING_LEVEL_CONFIG);
+    }
+
+    // ********* Kafka Client Telemetry Metrics Configuration **********
+
+    public int clientTelemetryMaxBytes() {
+        return getInt(MetricConfigs.CLIENT_TELEMETRY_MAX_BYTES_CONFIG);
+    }
+
+    // ********* SSL/SASL Configuration **********
+    // Security configs may be overridden for listeners, so it is not safe to use the base values.
+    // Hence the base SSL/SASL configs are not fields of KafkaConfig, listener configs should be
+    // retrieved using KafkaConfig#valuesWithPrefixOverride
+
+    @SuppressWarnings("unchecked")
+    protected Set<String> saslEnabledMechanisms(ListenerName listenerName) {
+        Object value = valuesWithPrefixOverride(listenerName.configPrefix())
+                .get(BrokerSecurityConfigs.SASL_ENABLED_MECHANISMS_CONFIG);
+        if (value != null) {
+            return Set.copyOf((List<String>) value);
+        }
+        return Set.of();
+    }
+
+    public String saslMechanismInterBrokerProtocol() {
+        return getString(BrokerSecurityConfigs.SASL_MECHANISM_INTER_BROKER_PROTOCOL_CONFIG);
+    }
+
+    public String saslMechanismMirrorAdminProtocol() {
+        String configured = getString(BrokerSecurityConfigs.SASL_MECHANISM_MIRROR_ADMIN_PROTOCOL_CONFIG);
+        return configured != null ? configured : saslMechanismInterBrokerProtocol();
+    }
+
+    // ********* Fetch Configuration **********
+
+    public int maxIncrementalFetchSessionCacheSlots() {
+        return getInt(ServerConfigs.MAX_INCREMENTAL_FETCH_SESSION_CACHE_SLOTS_CONFIG);
+    }
+
+    public int fetchMaxBytes() {
+        return getInt(ServerConfigs.FETCH_MAX_BYTES_CONFIG);
+    }
+
+    // ********* Request Limit Configuration **********
+
+    public int maxRequestPartitionSizeLimit() {
+        return getInt(ServerConfigs.MAX_REQUEST_PARTITION_SIZE_LIMIT_CONFIG);
+    }
+
+    public boolean deleteTopicEnable() {
+        return getBoolean(ServerConfigs.DELETE_TOPIC_ENABLE_CONFIG);
+    }
+
+    public String compressionType() {
+        return getString(ServerConfigs.COMPRESSION_TYPE_CONFIG);
+    }
+
+    public Integer gzipCompressionLevel() {
+        return getInt(ServerConfigs.COMPRESSION_GZIP_LEVEL_CONFIG);
+    }
+
+    public Integer lz4CompressionLevel() {
+        return getInt(ServerConfigs.COMPRESSION_LZ4_LEVEL_CONFIG);
+    }
+
+    public Integer zstdCompressionLevel() {
+        return getInt(ServerConfigs.COMPRESSION_ZSTD_LEVEL_CONFIG);
+    }
+
+    // ********* Internal Configurations **********
+
+    public boolean unstableApiVersionsEnabled() {
+        return getBoolean(ServerConfigs.UNSTABLE_API_VERSIONS_ENABLE_CONFIG);
+    }
+
+    public boolean unstableFeatureVersionsEnabled() {
+        return getBoolean(ServerConfigs.UNSTABLE_FEATURE_VERSIONS_ENABLE_CONFIG);
+    }
+
 }

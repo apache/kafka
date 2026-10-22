@@ -47,11 +47,10 @@ import java.time.Instant;
 import java.util.Properties;
 
 import static java.util.Arrays.asList;
-import static org.hamcrest.MatcherAssert.assertThat;
-import static org.hamcrest.Matchers.is;
 import static org.junit.jupiter.api.Assertions.assertEquals;
 import static org.junit.jupiter.api.Assertions.assertFalse;
 import static org.junit.jupiter.api.Assertions.assertNull;
+import static org.junit.jupiter.api.Assertions.assertTrue;
 
 @SuppressWarnings("unchecked")
 public class KTableMapValuesTest {
@@ -268,8 +267,8 @@ public class KTableMapValuesTest {
 
         table2.enableSendingOldValues(true);
 
-        assertThat(table1.sendingOldValueEnabled(), is(true));
-        assertThat(table2.sendingOldValueEnabled(), is(true));
+        assertTrue(table1.sendingOldValueEnabled());
+        assertTrue(table2.sendingOldValueEnabled());
 
         testSendingOldValues(builder, topic1, table2);
     }
@@ -291,8 +290,8 @@ public class KTableMapValuesTest {
 
         table2.enableSendingOldValues(true);
 
-        assertThat(table1.sendingOldValueEnabled(), is(false));
-        assertThat(table2.sendingOldValueEnabled(), is(true));
+        assertFalse(table1.sendingOldValueEnabled());
+        assertTrue(table2.sendingOldValueEnabled());
 
         testSendingOldValues(builder, topic1, table2);
     }

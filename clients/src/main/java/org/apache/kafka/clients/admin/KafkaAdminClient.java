@@ -273,6 +273,7 @@ import org.apache.kafka.common.utils.internals.ProducerIdAndEpoch;
 
 import org.slf4j.Logger;
 
+import java.net.InetSocketAddress;
 import java.security.InvalidKeyException;
 import java.security.NoSuchAlgorithmException;
 import java.time.Duration;
@@ -589,10 +590,21 @@ public class KafkaAdminClient extends AdminClient {
                 ? config.getList(AdminClientConfig.BOOTSTRAP_CONTROLLERS_CONFIG)
                 : config.getList(CommonClientConfigs.BOOTSTRAP_SERVERS_CONFIG);
 
-            // Don't create bootstrap cluster here - let NetworkClient.ensureBootstrapped() handle it
-            // during the first poll after DNS resolution succeeds
+            // bootstrap.resolve.timeout.ms=0 resolves DNS synchronously here and primes the
+            // metadata manager, so any DNS failure surfaces as a ConfigException and no admin
+            // client instance is created. A positive value opts in to asynchronous bootstrap
+            // resolution, where resolution is deferred to the first poll.
+            if (config.getLong(CommonClientConfigs.BOOTSTRAP_RESOLVE_TIMEOUT_MS_CONFIG) == 0L) {
+                List<InetSocketAddress> addresses = ClientUtils.parseAndValidateAddresses(
+                    bootstrapAddressesToUse,
+                    config.getString(CommonClientConfigs.CLIENT_DNS_LOOKUP_CONFIG));
+                metadataManager.update(Cluster.bootstrap(addresses), time.milliseconds());
+            }
+            // Otherwise, let NetworkClient.ensureBootstrapped() handle it during the first poll
+            // after DNS resolution succeeds.
             List<MetricsReporter> reporters = CommonClientConfigs.metricsReporters(clientId, config);
-            clientTelemetryReporter = CommonClientConfigs.telemetryReporter(clientId, config);
+            Uuid clientInstanceId = Uuid.randomUuid();
+            clientTelemetryReporter = CommonClientConfigs.telemetryReporter(clientId, clientInstanceId, config);
             clientTelemetryReporter.ifPresent(reporters::add);
             Map<String, String> metricTags = Collections.singletonMap("client-id", clientId);
             MetricConfig metricConfig = new MetricConfig().samples(config.getInt(AdminClientConfig.METRICS_NUM_SAMPLES_CONFIG))
@@ -606,6 +618,7 @@ public class KafkaAdminClient extends AdminClient {
             networkClient = ClientUtils.createNetworkClient(config,
                 bootstrapAddressesToUse,
                 clientId,
+                clientInstanceId,
                 metrics,
                 "admin-client",
                 logContext,
@@ -631,11 +644,12 @@ public class KafkaAdminClient extends AdminClient {
     static KafkaAdminClient createInternal(AdminClientConfig config,
                                            AdminMetadataManager metadataManager,
                                            KafkaClient client,
+                                           Uuid clientInstanceId,
                                            Time time) {
         Metrics metrics = null;
         String clientId = generateClientId(config);
         List<MetricsReporter> reporters = CommonClientConfigs.metricsReporters(clientId, config);
-        Optional<ClientTelemetryReporter> clientTelemetryReporter = CommonClientConfigs.telemetryReporter(clientId, config);
+        Optional<ClientTelemetryReporter> clientTelemetryReporter = CommonClientConfigs.telemetryReporter(clientId, clientInstanceId, config);
         clientTelemetryReporter.ifPresent(reporters::add);
 
         try {
