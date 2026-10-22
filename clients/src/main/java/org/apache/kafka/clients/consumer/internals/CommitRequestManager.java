@@ -75,7 +75,7 @@ import static org.apache.kafka.common.protocol.Errors.COORDINATOR_LOAD_IN_PROGRE
 
 public class CommitRequestManager implements RequestManager, MemberStateListener {
     private final Time time;
-    private final SubscriptionState subscriptions;
+    private final ConsumerSubscriptionState subscriptions;
     private final ConsumerMetadata metadata;
     private final LogContext logContext;
     private final Logger log;
@@ -109,7 +109,7 @@ public class CommitRequestManager implements RequestManager, MemberStateListener
     public CommitRequestManager(
         final Time time,
         final LogContext logContext,
-        final SubscriptionState subscriptions,
+        final ConsumerSubscriptionState subscriptions,
         final ConsumerConfig config,
         final CoordinatorRequestManager coordinatorRequestManager,
         final OffsetCommitCallbackInvoker offsetCommitCallbackInvoker,
@@ -136,7 +136,7 @@ public class CommitRequestManager implements RequestManager, MemberStateListener
     CommitRequestManager(
         final Time time,
         final LogContext logContext,
-        final SubscriptionState subscriptions,
+        final ConsumerSubscriptionState subscriptions,
         final ConsumerConfig config,
         final CoordinatorRequestManager coordinatorRequestManager,
         final OffsetCommitCallbackInvoker offsetCommitCallbackInvoker,
@@ -221,7 +221,20 @@ public class CommitRequestManager implements RequestManager, MemberStateListener
      */
     @Override
     public long maximumTimeToWait(long currentTimeMs) {
-        return autoCommitState.map(ac -> ac.remainingMs(currentTimeMs)).orElse(Long.MAX_VALUE);
+        if (autoCommitState.isEmpty()) {
+            return Long.MAX_VALUE;
+        }
+        AutoCommitState autoCommit = autoCommitState.get();
+        // An auto-commit is only sent when the coordinator is known; poll() returns EMPTY otherwise.
+        // If the coordinator is unavailable (e.g. bootstrap DNS resolution is still in progress),
+        // falling through to the timer-based remainingMs() would return 0 once the auto-commit interval
+        // elapses, since the auto-commit timer remains permanently expired. This would cause both the
+        // application and network threads to busy-spin. Wait a retry backoff instead of the auto-commit
+        // interval, which may be configured to zero and is consistent with the other request managers.
+        if (coordinatorRequestManager.coordinator().isEmpty()) {
+            return retryBackoffMs;
+        }
+        return autoCommit.remainingMs(currentTimeMs);
     }
 
     private static long findMinTime(final Collection<? extends RequestState> requests, final long currentTimeMs) {

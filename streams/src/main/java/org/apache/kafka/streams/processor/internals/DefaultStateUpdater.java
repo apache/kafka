@@ -479,7 +479,7 @@ public class DefaultStateUpdater implements StateUpdater {
             if (!updatingTasks.isEmpty()) {
                 changelogEndOffsets = changelogReader.logicalChangelogEndOffsets();
             } else {
-                changelogEndOffsets = Collections.emptyMap();
+                changelogEndOffsets = Map.of();
             }
 
             final Map<StreamsRebalanceData.TaskId, Long> endOffsetSnapshot = new HashMap<>(updatingTasks.size());
@@ -1118,14 +1118,14 @@ public class DefaultStateUpdater implements StateUpdater {
     public Set<StandbyTask> updatingStandbyTasks() {
         return stateUpdaterThread != null
             ? Set.copyOf(stateUpdaterThread.updatingStandbyTasks())
-            : Collections.emptySet();
+            : Set.of();
     }
 
     @Override
     public Set<Task> updatingTasks() {
         return stateUpdaterThread != null
             ? Set.copyOf(stateUpdaterThread.updatingTasks())
-            : Collections.emptySet();
+            : Set.of();
     }
 
     public Set<StreamTask> restoredActiveTasks() {
@@ -1149,7 +1149,7 @@ public class DefaultStateUpdater implements StateUpdater {
     public Set<Task> pausedTasks() {
         return stateUpdaterThread != null
             ? Set.copyOf(stateUpdaterThread.pausedTasks())
-            : Collections.emptySet();
+            : Set.of();
     }
 
     @Override

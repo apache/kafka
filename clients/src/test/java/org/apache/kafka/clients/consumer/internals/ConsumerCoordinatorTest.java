@@ -171,7 +171,7 @@ public abstract class ConsumerCoordinatorTest {
         }
     });
     private final Node node = metadataResponse.brokers().iterator().next();
-    private SubscriptionState subscriptions;
+    private ConsumerSubscriptionState subscriptions;
     private ConsumerMetadata metadata;
     private Consumer<?, ?> rebalanceConsumer;
     private Metrics metrics;
@@ -199,7 +199,7 @@ public abstract class ConsumerCoordinatorTest {
     @BeforeEach
     public void setup() {
         LogContext logContext = new LogContext();
-        this.subscriptions = new SubscriptionState(logContext, AutoOffsetResetStrategy.EARLIEST);
+        this.subscriptions = new ConsumerSubscriptionState(logContext, AutoOffsetResetStrategy.EARLIEST);
         this.metadata = new ConsumerMetadata(0, 0, Long.MAX_VALUE, false,
                 false, subscriptions, logContext, new ClusterResourceListeners());
         this.client = new MockClient(time, metadata);
@@ -287,7 +287,7 @@ public abstract class ConsumerCoordinatorTest {
     @SuppressWarnings("unchecked")
     @Test
     public void testPerformAssignmentShouldUpdateGroupSubscriptionAfterAssignmentIfNeeded() {
-        SubscriptionState mockSubscriptionState = Mockito.mock(SubscriptionState.class);
+        ConsumerSubscriptionState mockSubscriptionState = Mockito.mock(ConsumerSubscriptionState.class);
 
         // the consumer only subscribed to "topic1"
         Map<String, List<String>> memberSubscriptions = singletonMap(consumerId, singletonList(topic1));
@@ -387,7 +387,7 @@ public abstract class ConsumerCoordinatorTest {
 
     @Test
     public void testPerformAssignmentShouldValidateCooperativeAssignment() {
-        SubscriptionState mockSubscriptionState = Mockito.mock(SubscriptionState.class);
+        ConsumerSubscriptionState mockSubscriptionState = Mockito.mock(ConsumerSubscriptionState.class);
         List<JoinGroupResponseData.JoinGroupResponseMember> metadata = validateCooperativeAssignmentTestSetup();
 
         // simulate the custom cooperative assignor didn't revoke the partition first before assign to other consumer
@@ -411,7 +411,7 @@ public abstract class ConsumerCoordinatorTest {
 
     @Test
     public void testOnLeaderElectedShouldSkipAssignment() {
-        SubscriptionState mockSubscriptionState = Mockito.mock(SubscriptionState.class);
+        ConsumerSubscriptionState mockSubscriptionState = Mockito.mock(ConsumerSubscriptionState.class);
         ConsumerPartitionAssignor assignor = Mockito.mock(ConsumerPartitionAssignor.class);
         String assignorName = "mock-assignor";
         Mockito.when(assignor.name()).thenReturn(assignorName);
@@ -438,7 +438,7 @@ public abstract class ConsumerCoordinatorTest {
 
     @Test
     public void testPerformAssignmentShouldSkipValidateCooperativeAssignmentForBuiltInCooperativeStickyAssignor() {
-        SubscriptionState mockSubscriptionState = Mockito.mock(SubscriptionState.class);
+        ConsumerSubscriptionState mockSubscriptionState = Mockito.mock(ConsumerSubscriptionState.class);
         List<JoinGroupResponseData.JoinGroupResponseMember> metadata = validateCooperativeAssignmentTestSetup();
 
         List<ConsumerPartitionAssignor> assignorsWithCooperativeStickyAssignor = new ArrayList<>(assignors);
@@ -546,7 +546,7 @@ public abstract class ConsumerCoordinatorTest {
 
             // elapse auto commit interval and set committable position
             time.sleep(autoCommitIntervalMs);
-            subscriptions.seekUnvalidated(t1p, new SubscriptionState.FetchPosition(100L));
+            subscriptions.seekUnvalidated(t1p, new ConsumerSubscriptionState.FetchPosition(100L));
 
             // should try to find coordinator since we are auto committing
             coordinator.poll(time.timer(0));
@@ -2232,7 +2232,7 @@ public abstract class ConsumerCoordinatorTest {
     }
 
     /**
-     * Verifies that subscription change updates SubscriptionState correctly even after JoinGroup failures
+     * Verifies that subscription change updates ConsumerSubscriptionState correctly even after JoinGroup failures
      * that don't re-invoke onJoinPrepare.
      */
     @Test
@@ -2253,7 +2253,7 @@ public abstract class ConsumerCoordinatorTest {
         assertThrows(GroupAuthorizationException.class, () -> coordinator.poll(time.timer(Long.MAX_VALUE)));
 
         // Change subscription to include only the authorized topic. Complete rebalance and check that
-        // references to topic2 have been removed from SubscriptionState.
+        // references to topic2 have been removed from ConsumerSubscriptionState.
         subscriptions.setRebalanceListener(rebalanceListener, rebalanceConsumer);
         subscriptions.subscribe(Set.of(topic1));
         assertEquals(Collections.singleton(topic1), subscriptions.metadataTopics());
@@ -2303,11 +2303,7 @@ public abstract class ConsumerCoordinatorTest {
         client.prepareResponse(syncGroupResponse(Collections.singletonList(partition), Errors.NONE));
 
         // The first call to poll should raise the exception from the rebalance listener
-        try {
-            coordinator.poll(time.timer(Long.MAX_VALUE));
-            fail("Expected exception thrown from assignment callback");
-        } catch (WakeupException e) {
-        }
+        assertThrows(WakeupException.class, () -> coordinator.poll(time.timer(Long.MAX_VALUE)), "Expected exception thrown from assignment callback");
 
         // The second call should retry the assignment callback and succeed
         coordinator.poll(time.timer(Long.MAX_VALUE));
@@ -3981,12 +3977,7 @@ public abstract class ConsumerCoordinatorTest {
                 Thread.sleep(200);
             if (expectedMinTimeMs > 0) {
                 time.sleep(expectedMinTimeMs - 1);
-                try {
-                    future.get(500, TimeUnit.MILLISECONDS);
-                    fail("Close completed ungracefully without waiting for timeout");
-                } catch (TimeoutException e) {
-                    // Expected timeout
-                }
+                assertThrows(TimeoutException.class, () -> future.get(500, TimeUnit.MILLISECONDS), "Close completed ungracefully without waiting for timeout");
             }
             if (expectedMaxTimeMs >= 0)
                 time.sleep(expectedMaxTimeMs - expectedMinTimeMs + 2);
@@ -4031,7 +4022,7 @@ public abstract class ConsumerCoordinatorTest {
                                                  final Metrics metrics,
                                                  final List<ConsumerPartitionAssignor> assignors,
                                                  final boolean autoCommitEnabled,
-                                                 final SubscriptionState subscriptionState) {
+                                                 final ConsumerSubscriptionState subscriptionState) {
         return new ConsumerCoordinator(
                 rebalanceConfig,
                 new LogContext(),

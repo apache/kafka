@@ -30,7 +30,7 @@ import org.apache.kafka.clients.consumer.AcknowledgeType
 import org.apache.kafka.common._
 import org.apache.kafka.common.acl.AclOperation
 import org.apache.kafka.common.compress.Compression
-import org.apache.kafka.common.config.ConfigResource
+import org.apache.kafka.common.config.{ConfigResource, TopicConfig}
 import org.apache.kafka.common.config.ConfigResource.Type.{BROKER, BROKER_LOGGER}
 import org.apache.kafka.common.errors.{ClusterAuthorizationException, UnsupportedVersionException}
 import org.apache.kafka.common.internals.{Plugin, Topic}
@@ -96,7 +96,7 @@ import org.apache.kafka.server.FetchContext.FullFetchContext
 import org.apache.kafka.server.{AutoTopicCreationManager, ClientMetricsManager, FetchManager, FetchSessionCacheShard, ForwardingManager, SimpleApiVersionManager}
 import org.apache.kafka.server.authorizer.{Action, AuthorizationResult, Authorizer}
 import org.apache.kafka.server.common.{FeatureVersion, FinalizedFeatures, GroupVersion, KRaftVersion, MetadataVersion, RequestLocal, ShareVersion, StreamsVersion, TransactionVersion}
-import org.apache.kafka.server.config.{ReplicationConfigs, ServerConfigs, ServerLogConfigs}
+import org.apache.kafka.server.config.{QuotaConfig, ReplicationConfigs, ServerConfigs, ServerLogConfigs}
 import org.apache.kafka.server.logger.LoggingController
 import org.apache.kafka.server.metrics.{ClientMetricsTestUtils, KafkaYammerMetrics}
 import org.apache.kafka.server.share.{CachedSharePartition, ErroneousAndValidPartitionData, SharePartitionKey}
@@ -150,7 +150,7 @@ class KafkaApisTest extends Logging {
   private val clientControllerQuotaManager: ControllerMutationQuotaManager = mock(classOf[ControllerMutationQuotaManager])
   private val replicaQuotaManager: ReplicationQuotaManager = mock(classOf[ReplicationQuotaManager])
   private val quotas = new QuotaManagers(clientQuotaManager, clientQuotaManager, clientRequestQuotaManager,
-    clientControllerQuotaManager, replicaQuotaManager, replicaQuotaManager, replicaQuotaManager, util.Optional.empty())
+    clientControllerQuotaManager, replicaQuotaManager, replicaQuotaManager, replicaQuotaManager, replicaQuotaManager, util.Optional.empty())
   private val fetchManager: FetchManager = mock(classOf[FetchManager])
   private val sharePartitionManager: SharePartitionManager = mock(classOf[SharePartitionManager])
   private val clientMetricsManager: ClientMetricsManager = mock(classOf[ClientMetricsManager])
@@ -309,6 +309,68 @@ class KafkaApisTest extends Logging {
     val describeConfigsResponseData = configs.head
     assertEquals(propName, describeConfigsResponseData.name)
     assertEquals(propValue, describeConfigsResponseData.value)
+  }
+
+  @Test
+  def testDescribeConfigsTopicIncludesInternalConfigSetOnTopic(): Unit = {
+    val resourceName = "topic-1"
+    val configRepository: ConfigRepository = mock(classOf[ConfigRepository])
+    val topicConfigs = new Properties()
+    topicConfigs.put(LogConfig.INTERNAL_SEGMENT_BYTES_CONFIG, "1048576")
+    when(configRepository.topicConfig(resourceName)).thenReturn(topicConfigs)
+
+    metadataCache = mock(classOf[KRaftMetadataCache])
+    when(metadataCache.contains(resourceName)).thenReturn(true)
+
+    val requestHeader = new RequestHeader(ApiKeys.DESCRIBE_CONFIGS, ApiKeys.DESCRIBE_CONFIGS.latestVersion, clientId, 0)
+    val describeConfigsRequest = new DescribeConfigsRequest.Builder(new DescribeConfigsRequestData()
+      .setResources(util.List.of(new DescribeConfigsRequestData.DescribeConfigsResource()
+        .setResourceName(resourceName)
+        .setResourceType(ConfigResource.Type.TOPIC.id))))
+      .build(requestHeader.apiVersion)
+    val request = buildRequest(describeConfigsRequest, requestHeader = Option(requestHeader))
+
+    kafkaApis = createKafkaApis(configRepository = configRepository)
+    kafkaApis.handleDescribeConfigsRequest(request)
+
+    val response = verifyNoThrottling[DescribeConfigsResponse](request)
+    val configNames = response.data.results.get(0).configs.asScala.map(_.name).toSet
+    // Non-internal configs are always reported.
+    assertTrue(configNames.contains(TopicConfig.SEGMENT_BYTES_CONFIG))
+    // An internal config set on the topic itself is reported.
+    assertTrue(configNames.contains(LogConfig.INTERNAL_SEGMENT_BYTES_CONFIG))
+    // A public config inherited from the broker-level default is reported as well.
+    assertTrue(configNames.contains(TopicConfig.MAX_DECOMPRESSED_MESSAGE_BYTES_CONFIG))
+  }
+
+  @Test
+  def testDescribeConfigsTopicIncludesInternalListConfigSetOnTopic(): Unit = {
+    val resourceName = "topic-1"
+    val configRepository: ConfigRepository = mock(classOf[ConfigRepository])
+    val topicConfigs = new Properties()
+    topicConfigs.put(QuotaConfig.MIRROR_REPLICATION_THROTTLED_REPLICAS_CONFIG, "0:101")
+    when(configRepository.topicConfig(resourceName)).thenReturn(topicConfigs)
+
+    metadataCache = mock(classOf[KRaftMetadataCache])
+    when(metadataCache.contains(resourceName)).thenReturn(true)
+
+    val requestHeader = new RequestHeader(ApiKeys.DESCRIBE_CONFIGS, ApiKeys.DESCRIBE_CONFIGS.latestVersion, clientId, 0)
+    val describeConfigsRequest = new DescribeConfigsRequest.Builder(new DescribeConfigsRequestData()
+      .setResources(util.List.of(new DescribeConfigsRequestData.DescribeConfigsResource()
+        .setResourceName(resourceName)
+        .setResourceType(ConfigResource.Type.TOPIC.id))))
+      .build(requestHeader.apiVersion)
+    val request = buildRequest(describeConfigsRequest, requestHeader = Option(requestHeader))
+
+    kafkaApis = createKafkaApis(configRepository = configRepository)
+    kafkaApis.handleDescribeConfigsRequest(request)
+
+    val response = verifyNoThrottling[DescribeConfigsResponse](request)
+    val result = response.data.results.get(0)
+    assertEquals(Errors.NONE.code, result.errorCode, result.errorMessage)
+    val configs = result.configs.asScala.filter(_.name == QuotaConfig.MIRROR_REPLICATION_THROTTLED_REPLICAS_CONFIG)
+    assertEquals(1, configs.length)
+    assertEquals("0:101", configs.head.value)
   }
 
   @Test

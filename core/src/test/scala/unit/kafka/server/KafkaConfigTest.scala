@@ -19,12 +19,14 @@ package kafka.server
 
 import java.io.File
 import java.net.InetSocketAddress
+import java.nio.file.Files
 import java.util
 import java.util.{Arrays, Collections, Properties}
 import kafka.utils.TestUtils.assertBadConfigContainingMessage
 import kafka.utils.TestUtils
 import org.apache.kafka.common.{Endpoint, Node}
 import org.apache.kafka.common.config.{AbstractConfig, ConfigException, SaslConfigs, SecurityConfig, SslConfigs, TopicConfig}
+import org.apache.kafka.common.config.provider.FileConfigProvider
 import org.apache.kafka.common.metrics.Sensor
 import org.apache.kafka.common.network.ListenerName
 import org.apache.kafka.common.record.internal.{CompressionType, Records}
@@ -38,6 +40,7 @@ import org.apache.kafka.coordinator.share.ShareCoordinatorConfig
 import org.apache.kafka.coordinator.transaction.{TransactionLogConfig, TransactionStateManagerConfig}
 import org.apache.kafka.network.SocketServerConfigs
 import org.apache.kafka.raft.{KRaftConfigs, MetadataLogConfig, QuorumConfig}
+import org.apache.kafka.coordinator.mirror.ClusterMirrorConfigs
 import org.apache.kafka.server.config.{AbstractKafkaConfig, DelegationTokenManagerConfigs, QuotaConfig, ReplicationConfigs, ServerConfigs, ServerLogConfigs, ServerTopicConfigSynonyms}
 import org.apache.kafka.server.log.remote.storage.RemoteLogManagerConfig
 import org.apache.kafka.server.metrics.MetricConfigs
@@ -53,6 +56,51 @@ import scala.jdk.CollectionConverters._
 import scala.util.Using
 
 class KafkaConfigTest {
+
+  @Test
+  def testConfigProviderAllowlistSkippedForServerProperties(): Unit = {
+    val providerFile = Files.createTempFile("provider", ".properties")
+    val previous = System.getProperty(AbstractConfig.AUTOMATIC_CONFIG_PROVIDERS_PROPERTY)
+    try {
+      Files.writeString(providerFile, "token=1234")
+      System.setProperty(AbstractConfig.AUTOMATIC_CONFIG_PROVIDERS_PROPERTY, "none")
+
+      val props = TestUtils.createBrokerConfig(0)
+      props.setProperty(AbstractConfig.CONFIG_PROVIDERS_CONFIG, "file")
+      props.setProperty(AbstractConfig.CONFIG_PROVIDERS_CONFIG + ".file.class", classOf[FileConfigProvider].getName)
+      props.setProperty(ServerConfigs.NUM_IO_THREADS_CONFIG, "${file:" + providerFile.toAbsolutePath + ":token}")
+
+      val config = KafkaConfig.fromProps(props)
+      assertEquals(1234, config.numIoThreads)
+    } finally {
+      if (previous == null) System.clearProperty(AbstractConfig.AUTOMATIC_CONFIG_PROVIDERS_PROPERTY)
+      else System.setProperty(AbstractConfig.AUTOMATIC_CONFIG_PROVIDERS_PROPERTY, previous)
+      Files.deleteIfExists(providerFile)
+    }
+  }
+
+  @Test
+  def testConfigProviderAllowlistEnforcedForReconfiguration(): Unit = {
+    val providerFile = Files.createTempFile("provider", ".properties")
+    val previous = System.getProperty(AbstractConfig.AUTOMATIC_CONFIG_PROVIDERS_PROPERTY)
+    try {
+      Files.writeString(providerFile, "token=1234")
+      System.setProperty(AbstractConfig.AUTOMATIC_CONFIG_PROVIDERS_PROPERTY, "none")
+
+      val props = TestUtils.createBrokerConfig(0)
+      props.setProperty(AbstractConfig.CONFIG_PROVIDERS_CONFIG, "file")
+      props.setProperty(AbstractConfig.CONFIG_PROVIDERS_CONFIG + ".file.class", classOf[FileConfigProvider].getName)
+      props.setProperty(ServerConfigs.NUM_IO_THREADS_CONFIG, "${file:" + providerFile.toAbsolutePath + ":token}")
+
+      val e = assertThrows(classOf[ConfigException], () => KafkaConfig(props, doLog = false, enforceProviderAllowlist = true))
+      assertTrue(e.getMessage.contains("is not allowed"))
+      assertFalse(e.getMessage.contains("1234"))
+    } finally {
+      if (previous == null) System.clearProperty(AbstractConfig.AUTOMATIC_CONFIG_PROVIDERS_PROPERTY)
+      else System.setProperty(AbstractConfig.AUTOMATIC_CONFIG_PROVIDERS_PROPERTY, previous)
+      Files.deleteIfExists(providerFile)
+    }
+  }
 
   def createDefaultConfig(): Properties = {
     val props = new Properties()
@@ -602,6 +650,42 @@ class KafkaConfigTest {
   }
 
   @Test
+  def testMirrorAdminListenerNameDefaultsToInterBrokerListenerName(): Unit = {
+    val props = createDefaultConfig()
+    val config = KafkaConfig.fromProps(props)
+    assertEquals(config.interBrokerListenerName, config.mirrorAdminListenerName)
+  }
+
+  @Test
+  def testMirrorAdminListenerNameExplicitlySet(): Unit = {
+    val props = createDefaultConfig()
+    props.setProperty(SocketServerConfigs.LISTENERS_CONFIG, "PLAINTEXT://localhost:0,CONTROLLER://localhost:5000,MIRROR://localhost:5001")
+    props.setProperty(SocketServerConfigs.LISTENER_SECURITY_PROTOCOL_MAP_CONFIG, "MIRROR:PLAINTEXT,CONTROLLER:SASL_SSL,PLAINTEXT:PLAINTEXT")
+    props.setProperty(ReplicationConfigs.MIRROR_ADMIN_LISTENER_NAME_CONFIG, "MIRROR")
+    val config = KafkaConfig.fromProps(props)
+    assertNotEquals(ListenerName.normalised("MIRROR"), config.interBrokerListenerName())
+    assertEquals(ListenerName.normalised("MIRROR"), config.mirrorAdminListenerName)
+  }
+
+  @Test
+  def testSaslMechanismMirrorAdminProtocolDefaultsToInterBrokerProtocol(): Unit = {
+    val props = createDefaultConfig()
+    props.setProperty(BrokerSecurityConfigs.SASL_MECHANISM_INTER_BROKER_PROTOCOL_CONFIG, "PLAIN")
+    val config = KafkaConfig.fromProps(props)
+    assertEquals(config.saslMechanismInterBrokerProtocol, config.saslMechanismMirrorAdminProtocol)
+  }
+
+  @Test
+  def testSaslMechanismMirrorAdminProtocolExplicitlySet(): Unit = {
+    val props = createDefaultConfig()
+    props.setProperty(BrokerSecurityConfigs.SASL_MECHANISM_INTER_BROKER_PROTOCOL_CONFIG, "PLAIN")
+    props.setProperty(BrokerSecurityConfigs.SASL_MECHANISM_MIRROR_ADMIN_PROTOCOL_CONFIG, "SCRAM-SHA-256")
+    val config = KafkaConfig.fromProps(props)
+    assertEquals("SCRAM-SHA-256", config.saslMechanismMirrorAdminProtocol)
+    assertEquals("PLAIN", config.saslMechanismInterBrokerProtocol)
+  }
+
+  @Test
   def testCaseInsensitiveListenerProtocol(): Unit = {
     val props = new Properties()
     props.setProperty(KRaftConfigs.PROCESS_ROLES_CONFIG, "broker")
@@ -885,6 +969,7 @@ class KafkaConfigTest {
         case ReplicationConfigs.REPLICA_FETCH_MIN_BYTES_CONFIG => assertPropertyInvalid(baseProperties, name, "not_a_number")
         case ReplicationConfigs.REPLICA_FETCH_RESPONSE_MAX_BYTES_CONFIG => assertPropertyInvalid(baseProperties, name, "not_a_number")
         case ReplicationConfigs.REPLICA_SELECTOR_CLASS_CONFIG => // Ignore string
+        case ReplicationConfigs.MIRROR_ADMIN_LISTENER_NAME_CONFIG => // ignore string
         case ReplicationConfigs.NUM_REPLICA_FETCHERS_CONFIG => assertPropertyInvalid(baseProperties, name, "not_a_number", "0", "-1")
         case ReplicationConfigs.REPLICA_HIGH_WATERMARK_CHECKPOINT_INTERVAL_MS_CONFIG => assertPropertyInvalid(baseProperties, name, "not_a_number")
         case ReplicationConfigs.FETCH_PURGATORY_PURGE_INTERVAL_REQUESTS_CONFIG => assertPropertyInvalid(baseProperties, name, "not_a_number")
@@ -893,6 +978,20 @@ class KafkaConfigTest {
         case ReplicationConfigs.AUTO_LEADER_REBALANCE_ENABLE_CONFIG => assertPropertyInvalid(baseProperties, name, "not_a_boolean", "0")
         case ReplicationConfigs.LEADER_IMBALANCE_CHECK_INTERVAL_SECONDS_CONFIG => assertPropertyInvalid(baseProperties, name, "not_a_number")
         case ReplicationConfigs.UNCLEAN_LEADER_ELECTION_ENABLE_CONFIG => assertPropertyInvalid(baseProperties, name, "not_a_boolean", "0")
+
+        /** Cluster mirror configs */
+        case ClusterMirrorConfigs.MIRROR_COORDINATOR_THREADS_CONFIG => assertPropertyInvalid(baseProperties, name, "not_a_number", "0")
+        case ClusterMirrorConfigs.MIRROR_COORDINATOR_WRITE_TIMEOUT_MS_CONFIG => assertPropertyInvalid(baseProperties, name, "not_a_number", "0")
+        case ClusterMirrorConfigs.MIRROR_COORDINATOR_APPEND_LINGER_MS_CONFIG => assertPropertyInvalid(baseProperties, name, "not_a_number", "-1")
+        case ClusterMirrorConfigs.MIRROR_COORDINATOR_LOAD_BUFFER_SIZE_CONFIG => assertPropertyInvalid(baseProperties, name, "not_a_number", "0")
+        case ClusterMirrorConfigs.MIRROR_STATE_TOPIC_NUM_PARTITIONS_CONFIG => assertPropertyInvalid(baseProperties, name, "not_a_number", "0")
+        case ClusterMirrorConfigs.MIRROR_STATE_TOPIC_REPLICATION_FACTOR_CONFIG => assertPropertyInvalid(baseProperties, name, "not_a_number", "0")
+        case ClusterMirrorConfigs.MIRROR_NUM_REPLICA_FETCHERS_CONFIG => assertPropertyInvalid(baseProperties, name, "not_a_number", "0")
+        case ClusterMirrorConfigs.MIRROR_METADATA_REFRESH_INTERVAL_MS_CONFIG => assertPropertyInvalid(baseProperties, name, "not_a_number", "-1")
+        case ClusterMirrorConfigs.MIRROR_FAILED_RETRY_INITIAL_BACKOFF_MS_CONFIG => assertPropertyInvalid(baseProperties, name, "not_a_number", "0")
+        case ClusterMirrorConfigs.MIRROR_FAILED_RETRY_MAX_BACKOFF_MS_CONFIG => assertPropertyInvalid(baseProperties, name, "not_a_number", "0")
+        case ClusterMirrorConfigs.MIRROR_FAILED_RETRY_MAX_ATTEMPTS_CONFIG => assertPropertyInvalid(baseProperties, name, "not_a_number", "-1")
+
         case ServerConfigs.CONTROLLED_SHUTDOWN_ENABLE_CONFIG => assertPropertyInvalid(baseProperties, name, "not_a_boolean", "0")
         case GroupCoordinatorConfig.GROUP_MIN_SESSION_TIMEOUT_MS_CONFIG => assertPropertyInvalid(baseProperties, name, "not_a_number")
         case GroupCoordinatorConfig.GROUP_MAX_SESSION_TIMEOUT_MS_CONFIG => assertPropertyInvalid(baseProperties, name, "not_a_number")
@@ -954,6 +1053,7 @@ class KafkaConfigTest {
         //Sasl Configs
         case KRaftConfigs.SASL_MECHANISM_CONTROLLER_PROTOCOL_CONFIG => // ignore
         case BrokerSecurityConfigs.SASL_MECHANISM_INTER_BROKER_PROTOCOL_CONFIG => // ignore
+        case BrokerSecurityConfigs.SASL_MECHANISM_MIRROR_ADMIN_PROTOCOL_CONFIG => // ignore string
         case BrokerSecurityConfigs.SASL_ENABLED_MECHANISMS_CONFIG =>
         case SaslConfigs.SASL_CLIENT_CALLBACK_HANDLER_CLASS =>
         case BrokerSecurityConfigs.SASL_SERVER_CALLBACK_HANDLER_CLASS_CONFIG =>
@@ -1181,6 +1281,8 @@ class KafkaConfigTest {
           assertDynamic(kafkaConfigProp, 10007, () => config.logIndexIntervalBytes)
         case TopicConfig.MAX_MESSAGE_BYTES_CONFIG =>
           assertDynamic(kafkaConfigProp, 10008, () => config.messageMaxBytes)
+        case TopicConfig.MAX_DECOMPRESSED_MESSAGE_BYTES_CONFIG =>
+          assertDynamic(kafkaConfigProp, 20000, () => config.maxDecompressedMessageBytes)
         case TopicConfig.MESSAGE_TIMESTAMP_BEFORE_MAX_MS_CONFIG =>
           assertDynamic(kafkaConfigProp, 10015L, () => config.logMessageTimestampBeforeMaxMs)
         case TopicConfig.MESSAGE_TIMESTAMP_AFTER_MAX_MS_CONFIG =>
@@ -1217,6 +1319,10 @@ class KafkaConfigTest {
         case QuotaConfig.FOLLOWER_REPLICATION_THROTTLED_REPLICAS_CONFIG =>
         // topic only config
         case QuotaConfig.LEADER_REPLICATION_THROTTLED_REPLICAS_CONFIG =>
+        // topic only config
+        case QuotaConfig.MIRROR_REPLICATION_THROTTLED_REPLICAS_CONFIG =>
+        // topic only config
+        case TopicConfig.MIRROR_UNCLEAN_LEADER_ELECTION_ENABLE_CONFIG =>
         // topic only config
         case "internal.segment.bytes" =>
         // topic internal config
@@ -1917,16 +2023,16 @@ class KafkaConfigTest {
     // This is OK.
     props.put(GroupCoordinatorConfig.GROUP_COORDINATOR_REBALANCE_PROTOCOLS_CONFIG, "classic,consumer")
     val config = KafkaConfig.fromProps(props)
-    assertEquals(Set(GroupType.CLASSIC, GroupType.CONSUMER), config.groupCoordinatorRebalanceProtocols)
+    assertEquals(Set(GroupType.CLASSIC, GroupType.CONSUMER), config.groupCoordinatorRebalanceProtocols.asScala.toSet)
 
     props.put(GroupCoordinatorConfig.GROUP_COORDINATOR_REBALANCE_PROTOCOLS_CONFIG, "classic,streams")
     val config2 = KafkaConfig.fromProps(props)
-    assertEquals(Set(GroupType.CLASSIC, GroupType.STREAMS), config2.groupCoordinatorRebalanceProtocols)
+    assertEquals(Set(GroupType.CLASSIC, GroupType.STREAMS), config2.groupCoordinatorRebalanceProtocols.asScala.toSet)
 
     // Including "share" is also OK
     props.put(GroupCoordinatorConfig.GROUP_COORDINATOR_REBALANCE_PROTOCOLS_CONFIG, "classic,consumer,share")
     val config3 = KafkaConfig.fromProps(props)
-    assertEquals(Set(GroupType.CLASSIC, GroupType.CONSUMER, GroupType.SHARE), config3.groupCoordinatorRebalanceProtocols)
+    assertEquals(Set(GroupType.CLASSIC, GroupType.CONSUMER, GroupType.SHARE), config3.groupCoordinatorRebalanceProtocols.asScala.toSet)
   }
 
   @Test

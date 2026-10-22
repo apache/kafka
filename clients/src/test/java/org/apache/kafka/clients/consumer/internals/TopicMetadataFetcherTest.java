@@ -52,7 +52,6 @@ import static org.junit.jupiter.api.Assertions.assertFalse;
 import static org.junit.jupiter.api.Assertions.assertNotNull;
 import static org.junit.jupiter.api.Assertions.assertNull;
 import static org.junit.jupiter.api.Assertions.assertThrows;
-import static org.junit.jupiter.api.Assertions.fail;
 
 public class TopicMetadataFetcherTest {
 
@@ -69,7 +68,7 @@ public class TopicMetadataFetcherTest {
         RequestTestUtils.metadataUpdateWithIds(1, singletonMap(topicName, 4), topicIds);
 
     private MockTime time = new MockTime(1);
-    private SubscriptionState subscriptions;
+    private ConsumerSubscriptionState subscriptions;
     private ConsumerMetadata metadata;
     private MockClient client;
     private Metrics metrics;
@@ -132,12 +131,8 @@ public class TopicMetadataFetcherTest {
         buildFetcher();
         assignFromUser(singleton(tp0));
         client.prepareResponse(newMetadataResponse(Errors.TOPIC_AUTHORIZATION_FAILED));
-        try {
-            topicMetadataFetcher.getAllTopicMetadata(time.timer(10L));
-            fail();
-        } catch (TopicAuthorizationException e) {
-            assertEquals(singleton(topicName), e.unauthorizedTopics());
-        }
+        TopicAuthorizationException e = assertThrows(TopicAuthorizationException.class, () -> topicMetadataFetcher.getAllTopicMetadata(time.timer(10L)));
+        assertEquals(singleton(topicName), e.unauthorizedTopics());
     }
 
     @Test
@@ -239,14 +234,14 @@ public class TopicMetadataFetcherTest {
         long retryBackoffMs = 100;
         long retryBackoffMaxMs = 1000;
         LogContext logContext = new LogContext();
-        SubscriptionState subscriptionState = new SubscriptionState(logContext, AutoOffsetResetStrategy.EARLIEST);
+        ConsumerSubscriptionState subscriptionState = new ConsumerSubscriptionState(logContext, AutoOffsetResetStrategy.EARLIEST);
         buildDependencies(metricConfig, metadataExpireMs, subscriptionState, logContext);
         topicMetadataFetcher = new TopicMetadataFetcher(logContext, consumerClient, retryBackoffMs, retryBackoffMaxMs);
     }
 
     private void buildDependencies(MetricConfig metricConfig,
                                    long metadataExpireMs,
-                                   SubscriptionState subscriptionState,
+                                   ConsumerSubscriptionState subscriptionState,
                                    LogContext logContext) {
         time = new MockTime(1);
         subscriptions = subscriptionState;

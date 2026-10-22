@@ -37,6 +37,7 @@ import org.apache.kafka.coordinator.group.OffsetExpirationConditionImpl;
 import org.apache.kafka.coordinator.group.TargetAssignmentMetadata;
 import org.apache.kafka.coordinator.group.Utils;
 import org.apache.kafka.coordinator.group.generated.StreamsGroupTopologyValue;
+import org.apache.kafka.coordinator.group.streams.assignor.AssignmentConfigsImpl;
 import org.apache.kafka.coordinator.group.streams.topics.ConfiguredTopology;
 import org.apache.kafka.coordinator.group.streams.topics.EndpointToPartitionsManager;
 import org.apache.kafka.timeline.SnapshotRegistry;
@@ -57,7 +58,6 @@ import java.util.Map;
 import java.util.Objects;
 import java.util.Optional;
 import java.util.Set;
-import java.util.TreeMap;
 
 import static org.apache.kafka.coordinator.group.streams.StreamsGroup.StreamsGroupState.ASSIGNING;
 import static org.apache.kafka.coordinator.group.streams.StreamsGroup.StreamsGroupState.DEAD;
@@ -226,6 +226,15 @@ public class StreamsGroup implements Group {
     private final Map<String, MemberTaskOffsets> taskOffsets = new HashMap<>();
 
     /**
+     * The version of the latest streams group heartbeat of each member, keyed by member ID, which tells the
+     * {@link AssignmentRefiner} which members report their task offsets. A member that is missing has not heartbeated
+     * since the coordinator loaded the group. Like {@link #taskOffsets}, it is transient: written in the heartbeat
+     * path, dropped when the member is removed and lost on coordinator failover. It is not persisted, so that it can
+     * never outlive the client that sent it.
+     */
+    private final Map<String, Integer> heartbeatVersions = new HashMap<>();
+
+    /**
      * The intermediate assignment the members are reconciled toward, as derived by the {@link AssignmentRefiner} from
      * the target assignment, together with the assignment epoch it was derived for. Like {@link #taskOffsets}, this is
      * held in memory only and never persisted; it is derived again from the persisted assignments after a coordinator
@@ -265,10 +274,11 @@ public class StreamsGroup implements Group {
     private final TimelineObject<Optional<ConfiguredTopology>> configuredTopology;
 
     /**
-     * The last used assignment configurations for this streams group.
+     * The last used assignment configurations for this streams group, or {@link AssignmentConfigsImpl#DEFAULT} if the
+     * group metadata record has none.
      * This is used to determine when assignment configuration changes should trigger a rebalance.
      */
-    private final TimelineHashMap<String, String> lastAssignmentConfigs;
+    private final TimelineObject<AssignmentConfigsImpl> lastAssignmentConfigs;
 
     /**
      * The metadata refresh deadline. It consists of a timestamp in milliseconds together with the group epoch at the time of setting it.
@@ -331,7 +341,7 @@ public class StreamsGroup implements Group {
         this.refinedAssignment = new TimelineObject<>(snapshotRegistry, RefinedAssignment.NONE);
         this.topology = new TimelineObject<>(snapshotRegistry, Optional.empty());
         this.configuredTopology = new TimelineObject<>(snapshotRegistry, Optional.empty());
-        this.lastAssignmentConfigs = new TimelineHashMap<>(snapshotRegistry, 0);
+        this.lastAssignmentConfigs = new TimelineObject<>(snapshotRegistry, AssignmentConfigsImpl.DEFAULT);
     }
 
     /**
@@ -589,6 +599,7 @@ public class StreamsGroup implements Group {
         maybeUpdateGroupState();
         endpointToPartitionsCache.remove(memberId);
         taskOffsets.remove(memberId);
+        heartbeatVersions.remove(memberId);
     }
 
     /**
@@ -599,6 +610,20 @@ public class StreamsGroup implements Group {
      */
     public void updateTaskOffsets(String memberId, MemberTaskOffsets memberOffsets) {
         taskOffsets.put(memberId, memberOffsets);
+    }
+
+    /**
+     * Records the version of the latest streams group heartbeat of a member.
+     */
+    public void updateHeartbeatVersion(String memberId, int heartbeatVersion) {
+        heartbeatVersions.put(memberId, heartbeatVersion);
+    }
+
+    /**
+     * @return An immutable view of the latest heartbeat version of each member, keyed by member ID.
+     */
+    public Map<String, Integer> heartbeatVersions() {
+        return Collections.unmodifiableMap(heartbeatVersions);
     }
 
     /**
@@ -955,7 +980,7 @@ public class StreamsGroup implements Group {
     ) {
         Set<String> requiredTopicNames = topology.requiredTopics();
 
-        Map<String, Long> topicHash = new HashMap<>(requiredTopicNames.size());
+        Map<String, Long> topicHash = Utils.newHashMap(requiredTopicNames.size());
         requiredTopicNames.forEach(topicName -> {
             metadataImage.topicMetadata(topicName).ifPresent(__ ->
                 topicHash.put(
@@ -1138,8 +1163,10 @@ public class StreamsGroup implements Group {
             records.add(StreamsCoordinatorRecordHelpers.newStreamsGroupMemberTombstoneRecord(groupId(), memberId))
         );
 
-        records.add(StreamsCoordinatorRecordHelpers.newStreamsGroupEpochTombstoneRecord(groupId()));
+        // The topology tombstone must precede the group epoch tombstone: replaying it unsubscribes
+        // the group from its topics, which is only possible while the group still exists.
         records.add(StreamsCoordinatorRecordHelpers.newStreamsGroupTopologyRecordTombstone(groupId()));
+        records.add(StreamsCoordinatorRecordHelpers.newStreamsGroupEpochTombstoneRecord(groupId()));
     }
 
     /**
@@ -1548,10 +1575,11 @@ public class StreamsGroup implements Group {
     }
 
     /**
-     * @return The assignment configurations for this streams group.
+     * @return The last used assignment configurations for this streams group, or {@link AssignmentConfigsImpl#DEFAULT}
+     *         if the group metadata record has none.
      */
-    public Map<String, String> lastAssignmentConfigs() {
-        return Collections.unmodifiableMap(new TreeMap<>(lastAssignmentConfigs));
+    public AssignmentConfigsImpl lastAssignmentConfigs() {
+        return lastAssignmentConfigs.get();
     }
 
     /**
@@ -1559,11 +1587,8 @@ public class StreamsGroup implements Group {
      *
      * @param lastAssignmentConfigs The last assignment configurations to set.
      */
-    public void setLastAssignmentConfigs(Map<String, String> lastAssignmentConfigs) {
-        this.lastAssignmentConfigs.clear();
-        if (lastAssignmentConfigs != null) {
-            this.lastAssignmentConfigs.putAll(lastAssignmentConfigs);
-        }
+    public void setLastAssignmentConfigs(AssignmentConfigsImpl lastAssignmentConfigs) {
+        this.lastAssignmentConfigs.set(Objects.requireNonNull(lastAssignmentConfigs));
     }
 
     /**

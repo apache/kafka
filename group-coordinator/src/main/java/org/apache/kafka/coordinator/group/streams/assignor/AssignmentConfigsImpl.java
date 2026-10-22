@@ -18,10 +18,12 @@ package org.apache.kafka.coordinator.group.streams.assignor;
 
 import org.apache.kafka.coordinator.group.GroupCoordinatorConfig;
 import org.apache.kafka.coordinator.group.api.streams.assignor.AssignmentConfigs;
+import org.apache.kafka.coordinator.group.generated.StreamsGroupMetadataValue;
 
 import java.util.List;
 import java.util.Map;
 import java.util.Objects;
+import java.util.TreeMap;
 
 /**
  * The assignment configurations for a streams group.
@@ -52,22 +54,28 @@ public record AssignmentConfigsImpl(
     }
 
     /**
-     * Converts the raw assignment configs computed for the group into the typed configs passed to the assignor.
+     * Converts the assignment configs recorded for the group into the typed configs passed to the assignor.
+     *
+     * @param configs The configs from the group metadata record, or null if the record has none.
      */
-    public static AssignmentConfigsImpl fromMap(Map<String, String> configs) {
-        // The map is empty when it was replayed from a group metadata record written before the last assignment
-        // configs were persisted.
-        if (configs.isEmpty()) {
+    public static AssignmentConfigsImpl fromRecord(List<StreamsGroupMetadataValue.LastAssignmentConfig> configs) {
+        // If a config is not present, we use its default value. A record written before the configs were persisted has
+        // none, and a config added later is only written when it is not at its default.
+        if (configs == null) {
             return DEFAULT;
         }
-        // The rack-aware assignment tags are only recorded when any are configured, so an absent value means the
-        // configuration is at its default.
-        String rackAwareAssignmentTags = configs.getOrDefault(
-            RACK_AWARE_ASSIGNMENT_TAGS_CONFIG, GroupCoordinatorConfig.STREAMS_GROUP_RACK_AWARE_ASSIGNMENT_TAGS_DEFAULT);
-        return new AssignmentConfigsImpl(
-            Integer.parseInt(configs.get(NUM_STANDBY_REPLICAS_CONFIG)),
-            parseRackAwareAssignmentTags(rackAwareAssignmentTags)
-        );
+        int numStandbyReplicas = DEFAULT.numStandbyReplicas();
+        List<String> rackAwareAssignmentTags = DEFAULT.rackAwareAssignmentTags();
+        for (StreamsGroupMetadataValue.LastAssignmentConfig config : configs) {
+            switch (config.key()) {
+                case NUM_STANDBY_REPLICAS_CONFIG -> numStandbyReplicas = Integer.parseInt(config.value());
+                case RACK_AWARE_ASSIGNMENT_TAGS_CONFIG -> rackAwareAssignmentTags = parseRackAwareAssignmentTags(config.value());
+                default -> {
+                    // Unknown configs are ignored.
+                }
+            }
+        }
+        return new AssignmentConfigsImpl(numStandbyReplicas, rackAwareAssignmentTags);
     }
 
     /**
@@ -76,6 +84,20 @@ public record AssignmentConfigsImpl(
      */
     private static List<String> parseRackAwareAssignmentTags(String rackAwareAssignmentTags) {
         return rackAwareAssignmentTags.isEmpty() ? List.of() : List.of(rackAwareAssignmentTags.split(","));
+    }
+
+    /**
+     * Converts the typed configs into the raw configs recorded for the group; the inverse of {@link #fromRecord(List)}.
+     */
+    public static Map<String, String> toMap(AssignmentConfigs assignmentConfigs) {
+        // Configs recorded in all broker versions that write LastAssignmentConfigs in streams group metadata are always included.
+        // Configs added in later versions are only written when not at the default, matching what older versions write.
+        Map<String, String> configs = new TreeMap<>();
+        configs.put(NUM_STANDBY_REPLICAS_CONFIG, Integer.toString(assignmentConfigs.numStandbyReplicas()));
+        if (!assignmentConfigs.rackAwareAssignmentTags().isEmpty()) {
+            configs.put(RACK_AWARE_ASSIGNMENT_TAGS_CONFIG, String.join(",", assignmentConfigs.rackAwareAssignmentTags()));
+        }
+        return configs;
     }
 
     /**

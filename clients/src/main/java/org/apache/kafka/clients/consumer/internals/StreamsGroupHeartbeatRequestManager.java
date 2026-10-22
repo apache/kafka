@@ -413,10 +413,11 @@ public class StreamsGroupHeartbeatRequestManager implements RequestManager {
         long retryBackoffMs = config.getLong(ConsumerConfig.RETRY_BACKOFF_MS_CONFIG);
         long retryBackoffMaxMs = config.getLong(ConsumerConfig.RETRY_BACKOFF_MAX_MS_CONFIG);
         this.heartbeatState = new HeartbeatState(streamsRebalanceData, membershipManager, maxPollIntervalMs, time);
+        int requestTimeout = config.getInt(ConsumerConfig.REQUEST_TIMEOUT_MS_CONFIG);
         this.heartbeatRequestState = new HeartbeatRequestState(
             logContext,
             time,
-            0,
+            requestTimeout,
             retryBackoffMs,
             retryBackoffMaxMs,
             RETRY_BACKOFF_JITTER
@@ -530,9 +531,20 @@ public class StreamsGroupHeartbeatRequestManager implements RequestManager {
     @Override
     public long maximumTimeToWait(long currentTimeMs) {
         pollTimer.update(currentTimeMs);
-        if (pollTimer.isExpired() ||
-            membershipManager.shouldNotWaitForHeartbeatInterval() && !heartbeatRequestState.requestInFlight()) {
-
+        if (pollTimer.isExpired()) {
+            return 0L;
+        }
+        // A heartbeat is only sent when the coordinator is known; poll() returns EMPTY otherwise
+        // (see the guard at the top of poll()). If the coordinator is unavailable (for example,
+        // while bootstrap DNS resolution is still in progress), the
+        // shouldNotWaitForHeartbeatInterval() check would return 0 whenever the member wants to
+        // (re)join. Because no heartbeat can be sent until the coordinator is discovered, the
+        // condition remains true and both the application and network threads end up busy-spinning.
+        // Wait a retry backoff to keep the application thread responsive without busy-spinning.
+        if (coordinatorRequestManager.coordinator().isEmpty() || membershipManager.shouldSkipHeartbeat()) {
+            return heartbeatRequestState.retryBackoffMs();
+        }
+        if (membershipManager.shouldNotWaitForHeartbeatInterval() && !heartbeatRequestState.requestInFlight()) {
             return 0L;
         }
         return Math.min(pollTimer.remainingMs() / 2, heartbeatRequestState.timeToNextHeartbeatMs(currentTimeMs));

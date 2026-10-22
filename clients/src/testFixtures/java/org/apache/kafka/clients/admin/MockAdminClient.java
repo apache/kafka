@@ -739,6 +739,7 @@ public class MockAdminClient extends AdminClient {
     }
 
     @Override
+    @Deprecated(since = "4.1", forRemoval = true)
     @SuppressWarnings("removal")
     public synchronized ListConsumerGroupsResult listConsumerGroups(ListConsumerGroupsOptions options) {
         KafkaFutureImpl<Collection<Object>> future = new KafkaFutureImpl<>();
@@ -1441,7 +1442,8 @@ public class MockAdminClient extends AdminClient {
     }
 
     @Override
-    @SuppressWarnings({"deprecation", "removal"})
+    @Deprecated(since = "4.1", forRemoval = true)
+    @SuppressWarnings({"removal"})
     public ListClientMetricsResourcesResult listClientMetricsResources(ListClientMetricsResourcesOptions options) {
         KafkaFutureImpl<Collection<ClientMetricsResourceListing>> future = new KafkaFutureImpl<>();
         future.complete(clientMetricsConfigs.keySet().stream().map(ClientMetricsResourceListing::new).collect(Collectors.toList()));

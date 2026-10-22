@@ -54,7 +54,6 @@ import org.apache.kafka.test.MockProcessorSupplier;
 import org.apache.kafka.test.MockValueJoiner;
 import org.apache.kafka.test.StreamsTestUtils;
 
-import org.hamcrest.Matchers;
 import org.junit.jupiter.api.BeforeEach;
 import org.junit.jupiter.api.Test;
 import org.junit.jupiter.api.Timeout;
@@ -81,12 +80,11 @@ import static java.time.Duration.ofMillis;
 import static org.apache.kafka.streams.StreamsConfig.PROCESSOR_WRAPPER_CLASS_CONFIG;
 import static org.apache.kafka.streams.utils.TestUtils.PROCESSOR_WRAPPER_COUNTER_CONFIG;
 import static org.apache.kafka.streams.utils.TestUtils.dummyStreamsConfigMap;
-import static org.hamcrest.CoreMatchers.equalTo;
-import static org.hamcrest.CoreMatchers.is;
-import static org.hamcrest.MatcherAssert.assertThat;
 import static org.junit.jupiter.api.Assertions.assertEquals;
+import static org.junit.jupiter.api.Assertions.assertFalse;
+import static org.junit.jupiter.api.Assertions.assertNull;
 import static org.junit.jupiter.api.Assertions.assertThrows;
-import static org.junit.jupiter.api.Assertions.fail;
+import static org.junit.jupiter.api.Assertions.assertTrue;
 import static org.mockito.Mockito.mock;
 import static org.mockito.Mockito.when;
 
@@ -189,65 +187,72 @@ public class TopologyTest {
     @Test
     public void shouldNotAllowToAddSourcesWithSameName() {
         topology.addSource("source", "topic-1");
-        try {
-            topology.addSource("source", "topic-2");
-            fail("Should throw TopologyException for duplicate source name");
-        } catch (final TopologyException expected) { }
+        assertThrows(
+            TopologyException.class,
+            () -> topology.addSource("source", "topic-2"),
+            "should not allow a duplicate source name"
+        );
     }
 
     @Test
     public void shouldNotAllowToAddTopicTwice() {
         topology.addSource("source", "topic-1");
-        try {
-            topology.addSource("source-2", "topic-1");
-            fail("Should throw TopologyException for already used topic");
-        } catch (final TopologyException expected) { }
+        assertThrows(
+            TopologyException.class,
+            () -> topology.addSource("source-2", "topic-1"),
+            "should not allow a topic that is already used"
+        );
     }
 
     @Test
     public void testPatternMatchesAlreadyProvidedTopicSource() {
         topology.addSource("source-1", "foo");
-        try {
-            topology.addSource("source-2", Pattern.compile("f.*"));
-            fail("Should have thrown TopologyException for overlapping pattern with already registered topic");
-        } catch (final TopologyException expected) { }
+        assertThrows(
+            TopologyException.class,
+            () -> topology.addSource("source-2", Pattern.compile("f.*")),
+            "should not allow a pattern overlapping an already registered topic"
+        );
     }
 
     @Test
     public void testNamedTopicMatchesAlreadyProvidedPattern() {
         topology.addSource("source-1", Pattern.compile("f.*"));
-        try {
-            topology.addSource("source-2", "foo");
-            fail("Should have thrown TopologyException for overlapping topic with already registered pattern");
-        } catch (final TopologyException expected) { }
+        assertThrows(
+            TopologyException.class,
+            () -> topology.addSource("source-2", "foo"),
+            "should not allow a topic overlapping an already registered pattern"
+        );
     }
 
     @Test
     public void shouldNotAllowToAddProcessorWithSameName() {
         topology.addSource("source", "topic-1");
         topology.addProcessor("processor", new MockApiProcessorSupplier<>(), "source");
-        try {
-            topology.addProcessor("processor", new MockApiProcessorSupplier<>(), "source");
-            fail("Should throw TopologyException for duplicate processor name");
-        } catch (final TopologyException expected) { }
+        assertThrows(
+            TopologyException.class,
+            () -> topology.addProcessor("processor", new MockApiProcessorSupplier<>(), "source"),
+            "should not allow a duplicate processor name"
+        );
     }
 
     @Test
     public void shouldNotAllowToAddProcessorWithEmptyParents() {
         topology.addSource("source", "topic-1");
-        try {
-            topology.addProcessor("processor", new MockApiProcessorSupplier<>());
-            fail("Should throw TopologyException for processor without at least one parent node");
-        } catch (final TopologyException expected) { }
+        assertThrows(
+            TopologyException.class,
+            () -> topology.addProcessor("processor", new MockApiProcessorSupplier<>()),
+            "should not allow a processor without at least one parent node"
+        );
     }
 
     @Test
     public void shouldNotAllowToAddProcessorWithNullParents() {
         topology.addSource("source", "topic-1");
-        try {
-            topology.addProcessor("processor", new MockApiProcessorSupplier<>(), (String) null);
-            fail("Should throw NullPointerException for processor when null parent names are provided");
-        } catch (final NullPointerException expected) { }
+        assertThrows(
+            NullPointerException.class,
+            () -> topology.addProcessor("processor", new MockApiProcessorSupplier<>(), (String) null),
+            "should not allow null parent names for a processor"
+        );
     }
 
     @Test
@@ -264,30 +269,33 @@ public class TopologyTest {
     public void shouldNotAllowToAddSinkWithSameName() {
         topology.addSource("source", "topic-1");
         topology.addSink("sink", "topic-2", "source");
-        try {
-            topology.addSink("sink", "topic-3", "source");
-            fail("Should throw TopologyException for duplicate sink name");
-        } catch (final TopologyException expected) { }
+        assertThrows(
+            TopologyException.class,
+            () -> topology.addSink("sink", "topic-3", "source"),
+            "should not allow a duplicate sink name"
+        );
     }
 
     @Test
     public void shouldNotAllowToAddSinkWithEmptyParents() {
         topology.addSource("source", "topic-1");
         topology.addProcessor("processor", new MockApiProcessorSupplier<>(), "source");
-        try {
-            topology.addSink("sink", "topic-2");
-            fail("Should throw TopologyException for sink without at least one parent node");
-        } catch (final TopologyException expected) { }
+        assertThrows(
+            TopologyException.class,
+            () -> topology.addSink("sink", "topic-2"),
+            "should not allow a sink without at least one parent node"
+        );
     }
 
     @Test
     public void shouldNotAllowToAddSinkWithNullParents() {
         topology.addSource("source", "topic-1");
         topology.addProcessor("processor", new MockApiProcessorSupplier<>(), "source");
-        try {
-            topology.addSink("sink", "topic-2", (String) null);
-            fail("Should throw NullPointerException for sink when null parent names are provided");
-        } catch (final NullPointerException expected) { }
+        assertThrows(
+            NullPointerException.class,
+            () -> topology.addSink("sink", "topic-2", (String) null),
+            "should not allow null parent names for a sink"
+        );
     }
 
     @Test
@@ -304,10 +312,11 @@ public class TopologyTest {
     public void shouldFailIfSinkIsParent() {
         topology.addSource("source", "topic-1");
         topology.addSink("sink-1", "topic-2", "source");
-        try {
-            topology.addSink("sink-2", "topic-3", "sink-1");
-            fail("Should throw TopologyException for using sink as parent");
-        } catch (final TopologyException expected) { }
+        assertThrows(
+            TopologyException.class,
+            () -> topology.addSink("sink-2", "topic-3", "sink-1"),
+            "should not allow a sink as a parent node"
+        );
     }
 
     @Test
@@ -320,10 +329,11 @@ public class TopologyTest {
     public void shouldNotAllowToAddStateStoreToSource() {
         mockStoreBuilder();
         topology.addSource("source-1", "topic-1");
-        try {
-            topology.addStateStore(storeBuilder, "source-1");
-            fail("Should have thrown TopologyException for adding store to source node");
-        } catch (final TopologyException expected) { }
+        assertThrows(
+            TopologyException.class,
+            () -> topology.addStateStore(storeBuilder, "source-1"),
+            "should not allow adding a state store to a source node"
+        );
     }
 
     @Test
@@ -331,10 +341,11 @@ public class TopologyTest {
         mockStoreBuilder();
         topology.addSource("source-1", "topic-1");
         topology.addSink("sink-1", "topic-1", "source-1");
-        try {
-            topology.addStateStore(storeBuilder, "sink-1");
-            fail("Should have thrown TopologyException for adding store to sink node");
-        } catch (final TopologyException expected) { }
+        assertThrows(
+            TopologyException.class,
+            () -> topology.addStateStore(storeBuilder, "sink-1"),
+            "should not allow adding a state store to a sink node"
+        );
     }
 
     private void mockStoreBuilder() {
@@ -348,10 +359,11 @@ public class TopologyTest {
 
         final StoreBuilder<?> otherStoreBuilder = mock(StoreBuilder.class);
         when(otherStoreBuilder.name()).thenReturn("store");
-        try {
-            topology.addStateStore(otherStoreBuilder);
-            fail("Should have thrown TopologyException for same store name with different StoreBuilder");
-        } catch (final TopologyException expected) { }
+        assertThrows(
+            TopologyException.class,
+            () -> topology.addStateStore(otherStoreBuilder),
+            "should not allow the same store name with a different StoreBuilder"
+        );
     }
 
     @Test
@@ -397,15 +409,12 @@ public class TopologyTest {
         final Properties config = new Properties();
         config.put(StreamsConfig.DEFAULT_KEY_SERDE_CLASS_CONFIG, Serdes.ByteArraySerde.class);
         config.put(StreamsConfig.DEFAULT_VALUE_SERDE_CLASS_CONFIG, Serdes.ByteArraySerde.class);
-        try {
-            new TopologyTestDriverBuilder(topology).withConfig(config).build();
-            fail("Should have thrown StreamsException");
-        } catch (final StreamsException e) {
-            final String error = e.toString();
-            final String expectedMessage = "org.apache.kafka.streams.errors.StreamsException: failed to initialize processor " + badNodeName;
-
-            assertThat(error, equalTo(expectedMessage));
-        }
+        final StreamsException exception = assertThrows(
+            StreamsException.class,
+            () -> new TopologyTestDriverBuilder(topology).withConfig(config).build()
+        );
+        final String expectedMessage = "org.apache.kafka.streams.errors.StreamsException: failed to initialize processor " + badNodeName;
+        assertEquals(expectedMessage, exception.toString());
     }
 
     private static class LocalMockProcessorSupplier implements ProcessorSupplier<Object, Object, Object, Object> {
@@ -439,7 +448,7 @@ public class TopologyTest {
 
     @Test
     public void shouldDescribeEmptyTopology() {
-        assertThat(topology.describe(), equalTo(expectedDescription));
+        assertEquals(expectedDescription, topology.describe());
     }
 
     @Test
@@ -447,7 +456,7 @@ public class TopologyTest {
         final TopologyDescription.Sink expectedSinkNode =
             new InternalTopologyBuilder.Sink<>("sink", (key, value, record) -> record.topic() + "-" + key);
 
-        assertThat(expectedSinkNode.topic(), equalTo(null));
+        assertNull(expectedSinkNode.topic());
     }
 
     @Test
@@ -456,7 +465,7 @@ public class TopologyTest {
         final TopologyDescription.Sink expectedSinkNode =
             new InternalTopologyBuilder.Sink<>("sink", topicNameExtractor);
 
-        assertThat(expectedSinkNode.topicNameExtractor(), equalTo(topicNameExtractor));
+        assertEquals(topicNameExtractor, expectedSinkNode.topicNameExtractor());
     }
 
     @Test
@@ -467,8 +476,8 @@ public class TopologyTest {
             new SubtopologyDescription(0,
                                        Collections.singleton(expectedSourceNode)));
 
-        assertThat(topology.describe(), equalTo(expectedDescription));
-        assertThat(topology.describe().hashCode(), equalTo(expectedDescription.hashCode()));
+        assertEquals(expectedDescription, topology.describe());
+        assertEquals(expectedDescription.hashCode(), topology.describe().hashCode());
     }
 
     @Test
@@ -479,8 +488,8 @@ public class TopologyTest {
             new SubtopologyDescription(0,
                                        Collections.singleton(expectedSourceNode)));
 
-        assertThat(topology.describe(), equalTo(expectedDescription));
-        assertThat(topology.describe().hashCode(), equalTo(expectedDescription.hashCode()));
+        assertEquals(expectedDescription, topology.describe());
+        assertEquals(expectedDescription.hashCode(), topology.describe().hashCode());
     }
 
     @Test
@@ -491,8 +500,8 @@ public class TopologyTest {
             new SubtopologyDescription(0,
                                        Collections.singleton(expectedSourceNode)));
 
-        assertThat(topology.describe(), equalTo(expectedDescription));
-        assertThat(topology.describe().hashCode(), equalTo(expectedDescription.hashCode()));
+        assertEquals(expectedDescription, topology.describe());
+        assertEquals(expectedDescription.hashCode(), topology.describe().hashCode());
     }
 
     @Test
@@ -512,8 +521,8 @@ public class TopologyTest {
             new SubtopologyDescription(2,
                                        Collections.singleton(expectedSourceNode3)));
 
-        assertThat(topology.describe(), equalTo(expectedDescription));
-        assertThat(topology.describe().hashCode(), equalTo(expectedDescription.hashCode()));
+        assertEquals(expectedDescription, topology.describe());
+        assertEquals(expectedDescription.hashCode(), topology.describe().hashCode());
     }
 
     @Test
@@ -526,8 +535,8 @@ public class TopologyTest {
         allNodes.add(expectedProcessorNode);
         expectedDescription.addSubtopology(new SubtopologyDescription(0, allNodes));
 
-        assertThat(topology.describe(), equalTo(expectedDescription));
-        assertThat(topology.describe().hashCode(), equalTo(expectedDescription.hashCode()));
+        assertEquals(expectedDescription, topology.describe());
+        assertEquals(expectedDescription.hashCode(), topology.describe().hashCode());
     }
 
     @Test
@@ -542,8 +551,8 @@ public class TopologyTest {
         allNodes.add(expectedProcessorNode);
         expectedDescription.addSubtopology(new SubtopologyDescription(0, allNodes));
 
-        assertThat(topology.describe(), equalTo(expectedDescription));
-        assertThat(topology.describe().hashCode(), equalTo(expectedDescription.hashCode()));
+        assertEquals(expectedDescription, topology.describe());
+        assertEquals(expectedDescription.hashCode(), topology.describe().hashCode());
     }
 
 
@@ -559,8 +568,8 @@ public class TopologyTest {
         allNodes.add(expectedProcessorNode);
         expectedDescription.addSubtopology(new SubtopologyDescription(0, allNodes));
 
-        assertThat(topology.describe(), equalTo(expectedDescription));
-        assertThat(topology.describe().hashCode(), equalTo(expectedDescription.hashCode()));
+        assertEquals(expectedDescription, topology.describe());
+        assertEquals(expectedDescription.hashCode(), topology.describe().hashCode());
     }
 
     @Test
@@ -575,8 +584,8 @@ public class TopologyTest {
         allNodes.add(expectedProcessorNode2);
         expectedDescription.addSubtopology(new SubtopologyDescription(0, allNodes));
 
-        assertThat(topology.describe(), equalTo(expectedDescription));
-        assertThat(topology.describe().hashCode(), equalTo(expectedDescription.hashCode()));
+        assertEquals(expectedDescription, topology.describe());
+        assertEquals(expectedDescription.hashCode(), topology.describe().hashCode());
     }
 
     @Test
@@ -591,8 +600,8 @@ public class TopologyTest {
         allNodes.add(expectedProcessorNode);
         expectedDescription.addSubtopology(new SubtopologyDescription(0, allNodes));
 
-        assertThat(topology.describe(), equalTo(expectedDescription));
-        assertThat(topology.describe().hashCode(), equalTo(expectedDescription.hashCode()));
+        assertEquals(expectedDescription, topology.describe());
+        assertEquals(expectedDescription.hashCode(), topology.describe().hashCode());
     }
 
     @Test
@@ -621,8 +630,8 @@ public class TopologyTest {
         allNodes3.add(expectedProcessorNode3);
         expectedDescription.addSubtopology(new SubtopologyDescription(2, allNodes3));
 
-        assertThat(topology.describe(), equalTo(expectedDescription));
-        assertThat(topology.describe().hashCode(), equalTo(expectedDescription.hashCode()));
+        assertEquals(expectedDescription, topology.describe());
+        assertEquals(expectedDescription.hashCode(), topology.describe().hashCode());
     }
 
     @Test
@@ -651,8 +660,8 @@ public class TopologyTest {
         allNodes3.add(expectedSinkNode3);
         expectedDescription.addSubtopology(new SubtopologyDescription(2, allNodes3));
 
-        assertThat(topology.describe(), equalTo(expectedDescription));
-        assertThat(topology.describe().hashCode(), equalTo(expectedDescription.hashCode()));
+        assertEquals(expectedDescription, topology.describe());
+        assertEquals(expectedDescription.hashCode(), topology.describe().hashCode());
     }
 
     @Test
@@ -683,8 +692,8 @@ public class TopologyTest {
         allNodes.add(expectedSinkNode);
         expectedDescription.addSubtopology(new SubtopologyDescription(0, allNodes));
 
-        assertThat(topology.describe(), equalTo(expectedDescription));
-        assertThat(topology.describe().hashCode(), equalTo(expectedDescription.hashCode()));
+        assertEquals(expectedDescription, topology.describe());
+        assertEquals(expectedDescription.hashCode(), topology.describe().hashCode());
     }
 
     @Test
@@ -714,23 +723,23 @@ public class TopologyTest {
         allNodes.add(expectedProcessorNode3);
         expectedDescription.addSubtopology(new SubtopologyDescription(0, allNodes));
 
-        assertThat(topology.describe(), equalTo(expectedDescription));
-        assertThat(topology.describe().hashCode(), equalTo(expectedDescription.hashCode()));
+        assertEquals(expectedDescription, topology.describe());
+        assertEquals(expectedDescription.hashCode(), topology.describe().hashCode());
     }
 
     @Test
     public void shouldDescribeGlobalStoreTopology() {
         addGlobalStoreToTopologyAndExpectedDescription("globalStore", "source", "globalTopic", "processor", 0);
-        assertThat(topology.describe(), equalTo(expectedDescription));
-        assertThat(topology.describe().hashCode(), equalTo(expectedDescription.hashCode()));
+        assertEquals(expectedDescription, topology.describe());
+        assertEquals(expectedDescription.hashCode(), topology.describe().hashCode());
     }
 
     @Test
     public void shouldDescribeMultipleGlobalStoreTopology() {
         addGlobalStoreToTopologyAndExpectedDescription("globalStore1", "source1", "globalTopic1", "processor1", 0);
         addGlobalStoreToTopologyAndExpectedDescription("globalStore2", "source2", "globalTopic2", "processor2", 1);
-        assertThat(topology.describe(), equalTo(expectedDescription));
-        assertThat(topology.describe().hashCode(), equalTo(expectedDescription.hashCode()));
+        assertEquals(expectedDescription, topology.describe());
+        assertEquals(expectedDescription.hashCode(), topology.describe().hashCode());
     }
 
     @SuppressWarnings("deprecation")
@@ -1202,7 +1211,7 @@ public class TopologyTest {
         );
 
         topology.internalTopologyBuilder.setStreamsConfig(streamsConfig);
-        assertThat(topology.internalTopologyBuilder.setApplicationId("test").buildTopology().hasPersistentLocalStore(), is(true));
+        assertTrue(topology.internalTopologyBuilder.setApplicationId("test").buildTopology().hasPersistentLocalStore());
     }
 
     @ParameterizedTest
@@ -1227,7 +1236,7 @@ public class TopologyTest {
         );
 
         topology.internalTopologyBuilder.setStreamsConfig(streamsConfig);
-        assertThat(topology.internalTopologyBuilder.setApplicationId("test").buildTopology().hasPersistentLocalStore(), is(storeType == StoreType.ROCKS_DB));
+        assertEquals(storeType == StoreType.ROCKS_DB, topology.internalTopologyBuilder.setApplicationId("test").buildTopology().hasPersistentLocalStore());
     }
 
     @ParameterizedTest
@@ -1252,7 +1261,7 @@ public class TopologyTest {
         );
 
         topology.internalTopologyBuilder.setStreamsConfig(streamsConfig);
-        assertThat(topology.internalTopologyBuilder.setApplicationId("test").buildTopology().hasPersistentLocalStore(), is(storeType == StoreType.ROCKS_DB));
+        assertEquals(storeType == StoreType.ROCKS_DB, topology.internalTopologyBuilder.setApplicationId("test").buildTopology().hasPersistentLocalStore());
     }
 
     @ParameterizedTest
@@ -1276,7 +1285,7 @@ public class TopologyTest {
         );
 
         topology.internalTopologyBuilder.setStreamsConfig(streamsConfig);
-        assertThat(topology.internalTopologyBuilder.setApplicationId("test").buildTopology().hasPersistentLocalStore(), is(storeType == StoreType.ROCKS_DB));
+        assertEquals(storeType == StoreType.ROCKS_DB, topology.internalTopologyBuilder.setApplicationId("test").buildTopology().hasPersistentLocalStore());
     }
 
     @SuppressWarnings("deprecation")
@@ -1302,7 +1311,7 @@ public class TopologyTest {
         );
 
         topology.internalTopologyBuilder.setStreamsConfig(streamsConfig);
-        assertThat(topology.internalTopologyBuilder.setApplicationId("test").buildTopology().hasPersistentLocalStore(), is(false));
+        assertFalse(topology.internalTopologyBuilder.setApplicationId("test").buildTopology().hasPersistentLocalStore());
     }
 
     @Test
@@ -1326,7 +1335,7 @@ public class TopologyTest {
         );
 
         topology.internalTopologyBuilder.setStreamsConfig(streamsConfig);
-        assertThat(topology.internalTopologyBuilder.setApplicationId("test").buildTopology().hasPersistentLocalStore(), is(true));
+        assertTrue(topology.internalTopologyBuilder.setApplicationId("test").buildTopology().hasPersistentLocalStore());
     }
 
     @ParameterizedTest
@@ -1351,7 +1360,7 @@ public class TopologyTest {
         );
 
         topology.internalTopologyBuilder.setStreamsConfig(streamsConfig);
-        assertThat(topology.internalTopologyBuilder.setApplicationId("test").buildTopology().hasPersistentLocalStore(), is(storeType == StoreType.ROCKS_DB));
+        assertEquals(storeType == StoreType.ROCKS_DB, topology.internalTopologyBuilder.setApplicationId("test").buildTopology().hasPersistentLocalStore());
     }
 
     @ParameterizedTest
@@ -1377,7 +1386,7 @@ public class TopologyTest {
         );
 
         topology.internalTopologyBuilder.setStreamsConfig(streamsConfig);
-        assertThat(topology.internalTopologyBuilder.setApplicationId("test").buildTopology().hasPersistentLocalStore(), is(storeType == StoreType.ROCKS_DB));
+        assertEquals(storeType == StoreType.ROCKS_DB, topology.internalTopologyBuilder.setApplicationId("test").buildTopology().hasPersistentLocalStore());
     }
 
     @ParameterizedTest
@@ -1402,7 +1411,7 @@ public class TopologyTest {
         );
 
         topology.internalTopologyBuilder.setStreamsConfig(streamsConfig);
-        assertThat(topology.internalTopologyBuilder.setApplicationId("test").buildTopology().hasPersistentLocalStore(), is(storeType == StoreType.ROCKS_DB));
+        assertEquals(storeType == StoreType.ROCKS_DB, topology.internalTopologyBuilder.setApplicationId("test").buildTopology().hasPersistentLocalStore());
     }
 
     @SuppressWarnings("deprecation")
@@ -1428,7 +1437,7 @@ public class TopologyTest {
         );
 
         topology.internalTopologyBuilder.setStreamsConfig(streamsConfig);
-        assertThat(topology.internalTopologyBuilder.setApplicationId("test").buildTopology().hasPersistentLocalStore(), is(false));
+        assertFalse(topology.internalTopologyBuilder.setApplicationId("test").buildTopology().hasPersistentLocalStore());
     }
 
     @Test
@@ -1452,7 +1461,7 @@ public class TopologyTest {
         );
 
         topology.internalTopologyBuilder.setStreamsConfig(streamsConfig);
-        assertThat(topology.internalTopologyBuilder.setApplicationId("test").buildTopology().hasPersistentLocalStore(), is(true));
+        assertTrue(topology.internalTopologyBuilder.setApplicationId("test").buildTopology().hasPersistentLocalStore());
     }
 
     @ParameterizedTest
@@ -1477,7 +1486,7 @@ public class TopologyTest {
         );
 
         topology.internalTopologyBuilder.setStreamsConfig(streamsConfig);
-        assertThat(topology.internalTopologyBuilder.setApplicationId("test").buildTopology().hasPersistentLocalStore(), is(storeType == StoreType.ROCKS_DB));
+        assertEquals(storeType == StoreType.ROCKS_DB, topology.internalTopologyBuilder.setApplicationId("test").buildTopology().hasPersistentLocalStore());
     }
 
     @SuppressWarnings("deprecation")
@@ -1503,7 +1512,7 @@ public class TopologyTest {
         );
 
         topology.internalTopologyBuilder.setStreamsConfig(streamsConfig);
-        assertThat(topology.internalTopologyBuilder.setApplicationId("test").buildTopology().hasPersistentLocalStore(), is(false));
+        assertFalse(topology.internalTopologyBuilder.setApplicationId("test").buildTopology().hasPersistentLocalStore());
     }
 
     @Test
@@ -1532,7 +1541,7 @@ public class TopologyTest {
         );
 
         topology.internalTopologyBuilder.setStreamsConfig(streamsConfig);
-        assertThat(topology.internalTopologyBuilder.setApplicationId("test").buildTopology().hasPersistentLocalStore(), is(true));
+        assertTrue(topology.internalTopologyBuilder.setApplicationId("test").buildTopology().hasPersistentLocalStore());
     }
 
     @ParameterizedTest
@@ -1563,7 +1572,7 @@ public class TopologyTest {
         );
 
         topology.internalTopologyBuilder.setStreamsConfig(streamsConfig);
-        assertThat(topology.internalTopologyBuilder.setApplicationId("test").buildTopology().hasPersistentLocalStore(), is(storeType == StoreType.ROCKS_DB));
+        assertEquals(storeType == StoreType.ROCKS_DB, topology.internalTopologyBuilder.setApplicationId("test").buildTopology().hasPersistentLocalStore());
     }
 
     @SuppressWarnings("deprecation")
@@ -1594,7 +1603,7 @@ public class TopologyTest {
         );
 
         topology.internalTopologyBuilder.setStreamsConfig(streamsConfig);
-        assertThat(topology.internalTopologyBuilder.setApplicationId("test").buildTopology().hasPersistentLocalStore(), is(false));
+        assertFalse(topology.internalTopologyBuilder.setApplicationId("test").buildTopology().hasPersistentLocalStore());
     }
 
     @Test
@@ -1623,7 +1632,7 @@ public class TopologyTest {
         );
 
         topology.internalTopologyBuilder.setStreamsConfig(streamsConfig);
-        assertThat(topology.internalTopologyBuilder.setApplicationId("test").buildTopology().hasPersistentLocalStore(), is(true));
+        assertTrue(topology.internalTopologyBuilder.setApplicationId("test").buildTopology().hasPersistentLocalStore());
     }
 
     @ParameterizedTest
@@ -1654,7 +1663,7 @@ public class TopologyTest {
         );
 
         topology.internalTopologyBuilder.setStreamsConfig(streamsConfig);
-        assertThat(topology.internalTopologyBuilder.setApplicationId("test").buildTopology().hasPersistentLocalStore(), is(storeType == StoreType.ROCKS_DB));
+        assertEquals(storeType == StoreType.ROCKS_DB, topology.internalTopologyBuilder.setApplicationId("test").buildTopology().hasPersistentLocalStore());
     }
 
     @SuppressWarnings("deprecation")
@@ -1684,7 +1693,7 @@ public class TopologyTest {
         );
 
         topology.internalTopologyBuilder.setStreamsConfig(streamsConfig);
-        assertThat(topology.internalTopologyBuilder.setApplicationId("test").buildTopology().hasPersistentLocalStore(), is(false));
+        assertFalse(topology.internalTopologyBuilder.setApplicationId("test").buildTopology().hasPersistentLocalStore());
     }
 
     @Test
@@ -1713,7 +1722,7 @@ public class TopologyTest {
         );
 
         topology.internalTopologyBuilder.setStreamsConfig(streamsConfig);
-        assertThat(topology.internalTopologyBuilder.setApplicationId("test").buildTopology().hasPersistentLocalStore(), is(true));
+        assertTrue(topology.internalTopologyBuilder.setApplicationId("test").buildTopology().hasPersistentLocalStore());
     }
 
     @ParameterizedTest
@@ -1744,7 +1753,7 @@ public class TopologyTest {
         );
 
         topology.internalTopologyBuilder.setStreamsConfig(streamsConfig);
-        assertThat(topology.internalTopologyBuilder.setApplicationId("test").buildTopology().hasPersistentLocalStore(), is(storeType == StoreType.ROCKS_DB));
+        assertEquals(storeType == StoreType.ROCKS_DB, topology.internalTopologyBuilder.setApplicationId("test").buildTopology().hasPersistentLocalStore());
     }
 
     @SuppressWarnings("deprecation")
@@ -1774,7 +1783,7 @@ public class TopologyTest {
         );
 
         topology.internalTopologyBuilder.setStreamsConfig(streamsConfig);
-        assertThat(topology.internalTopologyBuilder.setApplicationId("test").buildTopology().hasPersistentLocalStore(), is(false));
+        assertFalse(topology.internalTopologyBuilder.setApplicationId("test").buildTopology().hasPersistentLocalStore());
     }
 
     @Test
@@ -1798,7 +1807,7 @@ public class TopologyTest {
         );
 
         topology.internalTopologyBuilder.setStreamsConfig(streamsConfig);
-        assertThat(topology.internalTopologyBuilder.setApplicationId("test").buildTopology().hasPersistentLocalStore(), is(true));
+        assertTrue(topology.internalTopologyBuilder.setApplicationId("test").buildTopology().hasPersistentLocalStore());
     }
 
     @ParameterizedTest
@@ -1824,7 +1833,7 @@ public class TopologyTest {
         );
 
         topology.internalTopologyBuilder.setStreamsConfig(streamsConfig);
-        assertThat(topology.internalTopologyBuilder.setApplicationId("test").buildTopology().hasPersistentLocalStore(), is(storeType == StoreType.ROCKS_DB));
+        assertEquals(storeType == StoreType.ROCKS_DB, topology.internalTopologyBuilder.setApplicationId("test").buildTopology().hasPersistentLocalStore());
     }
 
     @ParameterizedTest
@@ -1850,7 +1859,7 @@ public class TopologyTest {
         );
 
         topology.internalTopologyBuilder.setStreamsConfig(streamsConfig);
-        assertThat(topology.internalTopologyBuilder.setApplicationId("test").buildTopology().hasPersistentLocalStore(), is(storeType == StoreType.ROCKS_DB));
+        assertEquals(storeType == StoreType.ROCKS_DB, topology.internalTopologyBuilder.setApplicationId("test").buildTopology().hasPersistentLocalStore());
     }
 
     @ParameterizedTest
@@ -1875,7 +1884,7 @@ public class TopologyTest {
         );
 
         topology.internalTopologyBuilder.setStreamsConfig(streamsConfig);
-        assertThat(topology.internalTopologyBuilder.setApplicationId("test").buildTopology().hasPersistentLocalStore(), is(storeType == StoreType.ROCKS_DB));
+        assertEquals(storeType == StoreType.ROCKS_DB, topology.internalTopologyBuilder.setApplicationId("test").buildTopology().hasPersistentLocalStore());
     }
 
     @SuppressWarnings("deprecation")
@@ -1901,7 +1910,7 @@ public class TopologyTest {
         );
 
         topology.internalTopologyBuilder.setStreamsConfig(streamsConfig);
-        assertThat(topology.internalTopologyBuilder.setApplicationId("test").buildTopology().hasPersistentLocalStore(), is(false));
+        assertFalse(topology.internalTopologyBuilder.setApplicationId("test").buildTopology().hasPersistentLocalStore());
     }
 
     @Test
@@ -1939,11 +1948,11 @@ public class TopologyTest {
         topology.internalTopologyBuilder.setStreamsConfig(streamsConfig);
         final ProcessorTopology processorTopology = topology.internalTopologyBuilder.setApplicationId("test").buildTopology();
         // one for ktable, and one for count operation
-        assertThat(processorTopology.stateStores().size(), is(2));
+        assertEquals(2, processorTopology.stateStores().size());
         // ktable store is rocksDB (default)
-        assertThat(processorTopology.stateStores().get(0).persistent(), is(true));
+        assertTrue(processorTopology.stateStores().get(0).persistent());
         // count store is rocksDB (default)
-        assertThat(processorTopology.stateStores().get(1).persistent(), is(true));
+        assertTrue(processorTopology.stateStores().get(1).persistent());
     }
 
     @ParameterizedTest
@@ -1983,11 +1992,11 @@ public class TopologyTest {
         topology.internalTopologyBuilder.setStreamsConfig(streamsConfig);
         final ProcessorTopology processorTopology = topology.internalTopologyBuilder.setApplicationId("test").buildTopology();
         // one for ktable, and one for count operation
-        assertThat(processorTopology.stateStores().size(), is(2));
+        assertEquals(2, processorTopology.stateStores().size());
         // ktable store is rocksDB (default)
-        assertThat(processorTopology.stateStores().get(0).persistent(), is(true));
+        assertTrue(processorTopology.stateStores().get(0).persistent());
         // count store is storeType
-        assertThat(processorTopology.stateStores().get(1).persistent(), is(storeType == StoreType.ROCKS_DB));
+        assertEquals(storeType == StoreType.ROCKS_DB, processorTopology.stateStores().get(1).persistent());
     }
 
     @SuppressWarnings("deprecation")
@@ -2029,11 +2038,11 @@ public class TopologyTest {
         topology.internalTopologyBuilder.setStreamsConfig(streamsConfig);
         final ProcessorTopology processorTopology = topology.internalTopologyBuilder.setApplicationId("test").buildTopology();
         // one for ktable, and one for count operation
-        assertThat(processorTopology.stateStores().size(), is(2));
+        assertEquals(2, processorTopology.stateStores().size());
         // ktable store is in-memory (default is in-memory)
-        assertThat(processorTopology.stateStores().get(0).persistent(), is(false));
+        assertFalse(processorTopology.stateStores().get(0).persistent());
         // count store is storeType
-        assertThat(processorTopology.stateStores().get(1).persistent(), is(storeType == StoreType.ROCKS_DB));
+        assertEquals(storeType == StoreType.ROCKS_DB, processorTopology.stateStores().get(1).persistent());
     }
 
     @ParameterizedTest
@@ -2073,11 +2082,11 @@ public class TopologyTest {
         topology.internalTopologyBuilder.setStreamsConfig(streamsConfig);
         final ProcessorTopology processorTopology = topology.internalTopologyBuilder.setApplicationId("test").buildTopology();
         // one for ktable, and one for count operation
-        assertThat(processorTopology.stateStores().size(), is(2));
+        assertEquals(2, processorTopology.stateStores().size());
         // ktable store is rocksDB (default)
-        assertThat(processorTopology.stateStores().get(0).persistent(), is(true));
+        assertTrue(processorTopology.stateStores().get(0).persistent());
         // count store is storeType
-        assertThat(processorTopology.stateStores().get(1).persistent(), is(storeType == StoreType.ROCKS_DB));
+        assertEquals(storeType == StoreType.ROCKS_DB, processorTopology.stateStores().get(1).persistent());
     }
 
     @ParameterizedTest
@@ -2116,11 +2125,11 @@ public class TopologyTest {
         topology.internalTopologyBuilder.setStreamsConfig(streamsConfig);
         final ProcessorTopology processorTopology = topology.internalTopologyBuilder.setApplicationId("test").buildTopology();
         // one for ktable, and one for count operation
-        assertThat(processorTopology.stateStores().size(), is(2));
+        assertEquals(2, processorTopology.stateStores().size());
         // ktable store is rocksDB (default)
-        assertThat(processorTopology.stateStores().get(0).persistent(), is(true));
+        assertTrue(processorTopology.stateStores().get(0).persistent());
         // count store is storeType
-        assertThat(processorTopology.stateStores().get(1).persistent(), is(storeType == StoreType.ROCKS_DB));
+        assertEquals(storeType == StoreType.ROCKS_DB, processorTopology.stateStores().get(1).persistent());
     }
 
     @Test
@@ -2261,8 +2270,8 @@ public class TopologyTest {
     public void topologyWithStaticTopicNameExtractorShouldRespectEqualHashcodeContract() {
         final Topology topologyA = topologyWithStaticTopicName();
         final Topology topologyB = topologyWithStaticTopicName();
-        assertThat(topologyA.describe(), equalTo(topologyB.describe()));
-        assertThat(topologyA.describe().hashCode(), equalTo(topologyB.describe().hashCode()));
+        assertEquals(topologyB.describe(), topologyA.describe());
+        assertEquals(topologyB.describe().hashCode(), topologyA.describe().hashCode());
     }
 
     private Topology topologyWithStaticTopicName() {
@@ -2411,8 +2420,8 @@ public class TopologyTest {
         allNodes.add(expectedProcessor);
         expectedDescription.addSubtopology(new SubtopologyDescription(0, allNodes));
 
-        assertThat(topology.describe(), equalTo(expectedDescription));
-        assertThat(topology.describe().hashCode(), equalTo(expectedDescription.hashCode()));
+        assertEquals(expectedDescription, topology.describe());
+        assertEquals(expectedDescription.hashCode(), topology.describe().hashCode());
     }
 
     @Test
@@ -2435,7 +2444,7 @@ public class TopologyTest {
                 new MockProcessorSupplier<>());
 
         final StoreFactory stateStoreFactory = topology.internalTopologyBuilder.stateStores().get(storeName);
-        assertThat(stateStoreFactory.loggingEnabled(), equalTo(false));
+        assertFalse(stateStoreFactory.loggingEnabled());
     }
 
     @Test
@@ -2469,8 +2478,8 @@ public class TopologyTest {
             () -> record -> System.out.println("Processing: " + random.nextInt()),
             "p2"
         );
-        assertThat(counter.numWrappedProcessors(), is(3));
-        assertThat(counter.wrappedProcessorNames(), Matchers.containsInAnyOrder("p1", "p2", "p3"));
+        assertEquals(3, counter.numWrappedProcessors());
+        assertEquals(Set.of("p1", "p2", "p3"), counter.wrappedProcessorNames());
     }
 
     @SuppressWarnings("deprecation")

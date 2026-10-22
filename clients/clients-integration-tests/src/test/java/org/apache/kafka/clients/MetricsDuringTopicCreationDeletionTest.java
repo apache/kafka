@@ -31,7 +31,9 @@ import java.io.Closeable;
 import java.util.ArrayList;
 import java.util.List;
 import java.util.concurrent.CompletableFuture;
+import java.util.concurrent.ExecutionException;
 import java.util.concurrent.TimeUnit;
+import java.util.concurrent.atomic.AtomicInteger;
 
 import static org.junit.jupiter.api.Assertions.assertEquals;
 
@@ -40,7 +42,7 @@ public class MetricsDuringTopicCreationDeletionTest {
     private static final String TOPIC_NAME_PREFIX = "topic";
     private static final int TOPIC_NUM = 2;
     private static final int CREATE_DELETE_ITERATIONS = 3;
-    private static final short REPLICATION_FACTOR = 1;
+    private static final short REPLICATION_FACTOR = 3;
     private static final int PARTITION_NUM = 3;
 
     private final ClusterInstance clusterInstance;
@@ -60,11 +62,9 @@ public class MetricsDuringTopicCreationDeletionTest {
      */
     @ClusterTest(
         types = {Type.KRAFT},
-        brokers = 1,
+        brokers = 3,
         serverProperties = {
             @ClusterConfigProperty(key = ServerConfigs.DELETE_TOPIC_ENABLE_CONFIG, value = "true"),
-            @ClusterConfigProperty(key = "log.initial.task.delay.ms", value = "100"),
-            @ClusterConfigProperty(key = "log.segment.delete.delay.ms", value = "1000"),
             @ClusterConfigProperty(key = ServerLogConfigs.AUTO_CREATE_TOPICS_ENABLE_CONFIG, value = "false"),
             // speed up the test for UnderReplicatedPartitions, which relies on the ISR expiry thread to execute concurrently with topic creation
             // But the replica.lag.time.max.ms value still need to consider the slow testing environment
@@ -75,25 +75,32 @@ public class MetricsDuringTopicCreationDeletionTest {
 
         final int initialOfflinePartitionsCount = getGauge("OfflinePartitionsCount").value();
         final int initialPreferredReplicaImbalanceCount = getGauge("PreferredReplicaImbalanceCount").value();
-        final int initialUnderReplicatedPartitionsCount = getGauge("UnderReplicatedPartitions").value();
+        final int initialUnderReplicatedPartitionsCount = underReplicatedPartitionCount();
+
+        AtomicInteger offlinePartitionsCount = new AtomicInteger(initialOfflinePartitionsCount);
+        AtomicInteger preferredReplicaImbalanceCount = new AtomicInteger(initialPreferredReplicaImbalanceCount);
+        AtomicInteger underReplicatedPartitionsCount = new AtomicInteger(initialUnderReplicatedPartitionsCount);
 
         CompletableFuture<Void> future = CompletableFuture.runAsync(() -> {
             while (running) {
-                int offlinePartitionsCount = getGauge("OfflinePartitionsCount").value();
-                int preferredReplicaImbalanceCount = getGauge("PreferredReplicaImbalanceCount").value();
-                int underReplicatedPartitionsCount = getGauge("UnderReplicatedPartitions").value();
+                offlinePartitionsCount.set(getGauge("OfflinePartitionsCount").value());
+                preferredReplicaImbalanceCount.set(
+                    getGauge("PreferredReplicaImbalanceCount").value());
+                underReplicatedPartitionsCount.set(
+                    underReplicatedPartitionCount());
 
-                if (offlinePartitionsCount != initialOfflinePartitionsCount ||
-                    preferredReplicaImbalanceCount != initialPreferredReplicaImbalanceCount ||
-                    underReplicatedPartitionsCount != initialUnderReplicatedPartitionsCount) {
+                if (offlinePartitionsCount.get() != initialOfflinePartitionsCount ||
+                    preferredReplicaImbalanceCount.get() != initialPreferredReplicaImbalanceCount ||
+                    underReplicatedPartitionsCount.get() != initialUnderReplicatedPartitionsCount) {
                     running = false;
                 }
 
                 try {
                     // Avoid busy loop
                     TimeUnit.MILLISECONDS.sleep(100);
-                } catch (InterruptedException ignored) {
-
+                } catch (InterruptedException e) {
+                    Thread.currentThread().interrupt();
+                    running = false;
                 }
             }
         });
@@ -107,32 +114,27 @@ public class MetricsDuringTopicCreationDeletionTest {
             createAndDeleteTopics();
         }
 
-        final int finalOfflinePartitionsCount = getGauge("OfflinePartitionsCount").value();
-        final int finalPreferredReplicaImbalanceCount = getGauge("PreferredReplicaImbalanceCount").value();
-        final int finalUnderReplicatedPartitionsCount = getGauge("UnderReplicatedPartitions").value();
-
-        assertEquals(initialOfflinePartitionsCount, finalOfflinePartitionsCount,
-            "Expect offlinePartitionsCount to be " + initialOfflinePartitionsCount + ", but got: " + finalOfflinePartitionsCount);
-        assertEquals(initialPreferredReplicaImbalanceCount, finalPreferredReplicaImbalanceCount,
-            "Expect PreferredReplicaImbalanceCount to be " + initialPreferredReplicaImbalanceCount + ", but got: " + finalPreferredReplicaImbalanceCount);
-        assertEquals(initialUnderReplicatedPartitionsCount, finalUnderReplicatedPartitionsCount,
-            "Expect UnderReplicatedPartitionCount to be " + initialUnderReplicatedPartitionsCount + ", but got: " + finalUnderReplicatedPartitionsCount);
+        assertEquals(initialOfflinePartitionsCount, offlinePartitionsCount.get(),
+            "Expect offlinePartitionsCount to be " + initialOfflinePartitionsCount
+                + ", but got: " + offlinePartitionsCount.get());
+        assertEquals(initialPreferredReplicaImbalanceCount, preferredReplicaImbalanceCount.get(),
+            "Expect PreferredReplicaImbalanceCount to be " + initialPreferredReplicaImbalanceCount
+                + ", but got: " + preferredReplicaImbalanceCount.get());
+        assertEquals(initialUnderReplicatedPartitionsCount, underReplicatedPartitionsCount.get(),
+            "Expect UnderReplicatedPartitionCount to be " + initialUnderReplicatedPartitionsCount
+                + ", but got: " + underReplicatedPartitionsCount.get());
     }
 
-    private void createAndDeleteTopics() {
+    private void createAndDeleteTopics() throws InterruptedException, ExecutionException {
         for (int i = 1; i <= CREATE_DELETE_ITERATIONS && running; i++) {
             for (String topic : topics) {
                 if (!running) return;
-                try {
-                    clusterInstance.createTopic(topic, PARTITION_NUM, REPLICATION_FACTOR);
-                } catch (Exception ignored) { }
+                clusterInstance.createTopic(topic, PARTITION_NUM, REPLICATION_FACTOR);
             }
 
             for (String topic : topics) {
                 if (!running) return;
-                try {
-                    clusterInstance.deleteTopic(topic);
-                } catch (Exception ignored) { }
+                clusterInstance.deleteTopic(topic);
             }
         }
     }
@@ -144,5 +146,11 @@ public class MetricsDuringTopicCreationDeletionTest {
             .findFirst()
             .map(entry -> (Gauge<Integer>) entry.getValue())
             .orElseThrow(() -> new AssertionError("Unable to find metric " + metricName));
+    }
+
+    private int underReplicatedPartitionCount() {
+        return clusterInstance.brokers().values().stream()
+            .mapToInt(broker -> broker.replicaManager().underReplicatedPartitionCount())
+            .sum();
     }
 }

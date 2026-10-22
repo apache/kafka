@@ -29,7 +29,7 @@ import java.util.Map;
  * Convenience class for making asynchronous requests to the OffsetsForLeaderEpoch API
  */
 public class OffsetsForLeaderEpochClient extends AsyncClient<
-        Map<TopicPartition, SubscriptionState.FetchPosition>,
+        Map<TopicPartition, ConsumerSubscriptionState.FetchPosition>,
         OffsetsForLeaderEpochRequest,
         OffsetsForLeaderEpochResponse,
         OffsetsForLeaderEpochUtils.OffsetForEpochResult> {
@@ -40,14 +40,14 @@ public class OffsetsForLeaderEpochClient extends AsyncClient<
 
     @Override
     protected AbstractRequest.Builder<OffsetsForLeaderEpochRequest> prepareRequest(
-            Node node, Map<TopicPartition, SubscriptionState.FetchPosition> requestData) {
+            Node node, Map<TopicPartition, ConsumerSubscriptionState.FetchPosition> requestData) {
         return OffsetsForLeaderEpochUtils.prepareRequest(requestData);
     }
 
     @Override
     protected OffsetsForLeaderEpochUtils.OffsetForEpochResult handleResponse(
             Node node,
-            Map<TopicPartition, SubscriptionState.FetchPosition> requestData,
+            Map<TopicPartition, ConsumerSubscriptionState.FetchPosition> requestData,
             OffsetsForLeaderEpochResponse response) {
 
         return OffsetsForLeaderEpochUtils.handleResponse(requestData, response);

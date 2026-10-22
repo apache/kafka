@@ -16,12 +16,14 @@
 # limitations under the License.
 ###############################################################################
 
-FROM docker.io/library/eclipse-temurin:21-jre-alpine AS build-jsa
+ARG base_image=docker.io/library/eclipse-temurin:25-jre-alpine
+
+FROM ${base_image} AS build-jsa
 
 USER root
 
 # Get kafka from https://archive.apache.org/dist/kafka and pass the url through build arguments
-ARG kafka_url
+ARG kafka_url=""
 
 COPY jsa_launch /etc/kafka/docker/jsa_launch
 COPY server.properties /etc/kafka/docker/server.properties
@@ -29,6 +31,7 @@ COPY server.properties /etc/kafka/docker/server.properties
 COPY *kafka.tgz kafka.tgz
 
 RUN set -eux ; \
+    command -v java >/dev/null || { echo "base_image must carry a JRE (java not found on PATH)" >&2; exit 1; } ; \
     apk update ; \
     apk upgrade ; \
     apk add --no-cache bash procps-ng; \
@@ -49,7 +52,7 @@ RUN set -eux ; \
 RUN /etc/kafka/docker/jsa_launch
 
 
-FROM docker.io/library/eclipse-temurin:21-jre-alpine
+FROM ${base_image}
 
 # exposed ports
 EXPOSE 9092
@@ -57,7 +60,7 @@ EXPOSE 9092
 USER root
 
 # Get kafka from https://archive.apache.org/dist/kafka and pass the url through build arguments
-ARG kafka_url
+ARG kafka_url=""
 ARG build_date
 
 COPY *kafka.tgz kafka.tgz

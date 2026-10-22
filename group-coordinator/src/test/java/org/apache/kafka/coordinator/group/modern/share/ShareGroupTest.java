@@ -30,6 +30,7 @@ import org.apache.kafka.coordinator.common.runtime.MetadataImageBuilder;
 import org.apache.kafka.coordinator.group.Group;
 import org.apache.kafka.coordinator.group.modern.Assignment;
 import org.apache.kafka.coordinator.group.modern.MemberState;
+import org.apache.kafka.coordinator.group.modern.share.ShareGroup.InitMapValue;
 import org.apache.kafka.coordinator.group.modern.share.ShareGroup.ShareGroupState;
 import org.apache.kafka.timeline.SnapshotRegistry;
 
@@ -52,6 +53,18 @@ import static org.junit.jupiter.api.Assertions.assertThrows;
 import static org.junit.jupiter.api.Assertions.assertTrue;
 
 public class ShareGroupTest {
+
+    @Test
+    public void testInitMapValueWithAddedPartitions() {
+        InitMapValue initMapValue = new InitMapValue("foo", Set.of(0, 1), 1L);
+        assertEquals(new InitMapValue("foo", Set.of(0, 1, 2), 1L), initMapValue.withAddedPartitions(Set.of(1, 2)));
+    }
+
+    @Test
+    public void testInitMapValueWithRemovedPartitions() {
+        InitMapValue initMapValue = new InitMapValue("foo", Set.of(0, 1), 1L);
+        assertEquals(new InitMapValue("foo", Set.of(0), 1L), initMapValue.withRemovedPartitions(Set.of(1, 2)));
+    }
 
     @Test
     public void testType() {

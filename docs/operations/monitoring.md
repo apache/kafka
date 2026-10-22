@@ -509,7 +509,7 @@ kafka.server:type=ReplicaManager,name=UnderReplicatedPartitions
 <tr>  
 <td>
 
-\# of under minIsr partitions (|ISR| < min.insync.replicas)
+\# of under minIsr partitions (|ISR| < min(min.insync.replicas, replica count))
 </td>  
 <td>
 
@@ -522,7 +522,7 @@ kafka.server:type=ReplicaManager,name=UnderMinIsrPartitionCount
 <tr>  
 <td>
 
-\# of at minIsr partitions (|ISR| = min.insync.replicas)
+\# of at minIsr partitions (|ISR| = min(min.insync.replicas, replica count))
 </td>  
 <td>
 
@@ -1188,6 +1188,45 @@ kafka.server:type=group-coordinator-metrics,name=event-purgatory-time-ms-[max|p5
 <td>
 
 The time that an event waited in the purgatory before being completed
+</td> </tr>  
+<tr>  
+<td>
+
+Average Background Thread Idle Ratio
+</td>  
+<td>
+
+kafka.server:type=group-coordinator-metrics,name=background-thread-idle-ratio-avg
+</td>  
+<td>
+
+The average idle ratio of the coordinator background threads
+</td> </tr>  
+<tr>  
+<td>
+
+Background Queue Time (Ms)
+</td>  
+<td>
+
+kafka.server:type=group-coordinator-metrics,name=background-queue-time-ms-[max|p50|p95|p99|p999]
+</td>  
+<td>
+
+The time that a background task spent waiting in the queue to be processed
+</td> </tr>  
+<tr>  
+<td>
+
+Background Processing Time (Ms)
+</td>  
+<td>
+
+kafka.server:type=group-coordinator-metrics,name=background-processing-time-ms-[max|p50|p95|p99|p999]
+</td>  
+<td>
+
+The time that a background task took to be processed
 </td> </tr>  
 <tr>  
 <td>

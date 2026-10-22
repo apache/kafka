@@ -535,7 +535,6 @@ For a detailed description of spotbugs bug categories, see https://spotbugs.read
             <Class name="org.apache.kafka.storage.internals.log.AbstractIndex"/>
             <Class name="org.apache.kafka.server.AssignmentsManager"/>
             <Class name="org.apache.kafka.connect.file.FileStreamSourceTask"/>
-            <Class name="org.apache.kafka.streams.processor.internals.DefaultStateUpdater$StateUpdaterThread"/>
             <Class name="org.apache.kafka.streams.processor.internals.StreamThread"/>
             <Class name="org.apache.kafka.streams.processor.internals.StreamsProducer"/>
             <Class name="org.apache.kafka.streams.state.internals.AbstractDualSchemaRocksDBSegmentedBytesStore"/>
@@ -550,11 +549,17 @@ For a detailed description of spotbugs bug categories, see https://spotbugs.read
             <Class name="org.apache.kafka.tools.VerifiableShareConsumer"/>
             <Class name="org.apache.kafka.server.quota.ClientQuotaManager"/>
             <Class name="kafka.log.LogManager"/>
-            <Class name="kafka.server.DelayedFetch"/>
             <Class name="kafka.server.KafkaApis"/>
             <Class name="kafka.server.metadata.KRaftMetadataCache"/>
             <Class name="org.apache.kafka.streams.processor.internals.InternalTopologyBuilder"/>
         </Or>
+        <Bug pattern="AT_NONATOMIC_OPERATIONS_ON_SHARED_VARIABLE"/>
+    </Match>
+
+    <Match>
+        <!-- KAFKA-20404: totalCheckpointLatency is accumulated in measureCheckpointLatency and reset in recordMetrics; both methods only run inside StateUpdaterThread.runOnce, so the read-modify-write is thread-confined. -->
+        <Class name="org.apache.kafka.streams.processor.internals.DefaultStateUpdater$StateUpdaterThread"/>
+        <Field name="totalCheckpointLatency"/>
         <Bug pattern="AT_NONATOMIC_OPERATIONS_ON_SHARED_VARIABLE"/>
     </Match>
 
@@ -574,7 +579,6 @@ For a detailed description of spotbugs bug categories, see https://spotbugs.read
             <Class name="org.apache.kafka.image.publisher.SnapshotGenerator"/>
             <Class name="org.apache.kafka.image.publisher.SnapshotGenerator$Builder"/>
             <Class name="org.apache.kafka.connect.file.FileStreamSourceTask"/>
-            <Class name="org.apache.kafka.streams.processor.internals.DefaultStateUpdater$StateUpdaterThread"/>
             <Class name="org.apache.kafka.streams.processor.internals.StreamThread"/>
             <Class name="org.apache.kafka.streams.processor.internals.StreamsProducer"/>
             <Class name="org.apache.kafka.streams.state.internals.InMemoryTimeOrderedKeyValueChangeBuffer"/>
@@ -596,6 +600,13 @@ For a detailed description of spotbugs bug categories, see https://spotbugs.read
             <Class name="org.apache.kafka.streams.state.internals.InMemorySessionStore"/>
             <Class name="org.apache.kafka.streams.state.internals.InMemoryWindowStore"/>
         </Or>
+        <Bug pattern="AT_NONATOMIC_64BIT_PRIMITIVE"/>
+    </Match>
+
+    <Match>
+        <!-- KAFKA-20404: totalCheckpointLatency is a 64-bit counter mutated and read only on the StateUpdaterThread (see measureCheckpointLatency and recordMetrics), so a torn read across threads cannot occur. -->
+        <Class name="org.apache.kafka.streams.processor.internals.DefaultStateUpdater$StateUpdaterThread"/>
+        <Field name="totalCheckpointLatency"/>
         <Bug pattern="AT_NONATOMIC_64BIT_PRIMITIVE"/>
     </Match>
 
