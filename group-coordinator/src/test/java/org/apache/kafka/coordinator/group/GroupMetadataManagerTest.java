@@ -6203,6 +6203,35 @@ public class GroupMetadataManagerTest {
     }
 
     @Test
+    public void testOnLoadedUsesClassicMemberSessionTimeout() {
+        String groupId = "group";
+        String classicMemberId = "classic-member";
+        String consumerMemberId = "consumer-member";
+        int classicSessionTimeoutMs = 10000;
+        int consumerSessionTimeoutMs = 45000;
+
+        GroupMetadataManagerTestContext context = new GroupMetadataManagerTestContext.Builder()
+            .withConfig(GroupCoordinatorConfig.CONSUMER_GROUP_SESSION_TIMEOUT_MS_CONFIG, consumerSessionTimeoutMs)
+            .withConsumerGroup(new ConsumerGroupBuilder(groupId, 10)
+                .withMember(new ConsumerGroupMember.Builder(classicMemberId)
+                    .setMemberEpoch(10)
+                    .setClassicMemberMetadata(
+                        new ConsumerGroupMemberMetadataValue.ClassicMemberMetadata()
+                            .setSessionTimeoutMs(classicSessionTimeoutMs))
+                    .build())
+                .withMember(new ConsumerGroupMember.Builder(consumerMemberId)
+                    .setMemberEpoch(10)
+                    .build())
+                .withAssignmentEpoch(10))
+            .build();
+
+        context.groupMetadataManager.onLoaded();
+
+        context.assertSessionTimeout(groupId, classicMemberId, classicSessionTimeoutMs);
+        context.assertSessionTimeout(groupId, consumerMemberId, consumerSessionTimeoutMs);
+    }
+
+    @Test
     public void testOnLoadedWithStreamsGroup() {
         Uuid fooTopicId = Uuid.randomUuid();
         String fooTopicName = "foo";
@@ -30221,7 +30250,7 @@ public class GroupMetadataManagerTest {
             )
         );
 
-        assertEquals(expectedRecords, records);
+        assertRecordsEquals(expectedRecords, records);
     }
 
     @Test
