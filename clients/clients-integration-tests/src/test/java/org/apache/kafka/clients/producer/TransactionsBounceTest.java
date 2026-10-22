@@ -18,6 +18,7 @@
 package org.apache.kafka.clients.producer;
 
 import org.apache.kafka.clients.ClientsTestUtils;
+import org.apache.kafka.clients.admin.Admin;
 import org.apache.kafka.clients.consumer.Consumer;
 import org.apache.kafka.clients.consumer.ConsumerConfig;
 import org.apache.kafka.clients.consumer.ConsumerRecord;
@@ -25,6 +26,7 @@ import org.apache.kafka.clients.consumer.GroupProtocol;
 import org.apache.kafka.clients.consumer.OffsetAndMetadata;
 import org.apache.kafka.clients.producer.internals.ErrorLoggingCallback;
 import org.apache.kafka.common.TopicPartition;
+import org.apache.kafka.common.TopicPartitionInfo;
 import org.apache.kafka.common.config.TopicConfig;
 import org.apache.kafka.common.test.ClusterInstance;
 import org.apache.kafka.common.test.api.ClusterConfigProperty;
@@ -51,7 +53,6 @@ import java.util.stream.Collectors;
 import java.util.stream.IntStream;
 
 import static org.junit.jupiter.api.Assertions.assertEquals;
-import static org.junit.jupiter.api.Assertions.assertNotNull;
 import static org.junit.jupiter.api.Assertions.assertNull;
 
 @ClusterTestDefaults(
@@ -76,7 +77,6 @@ public class TransactionsBounceTest {
     private static final int NUM_PARTITIONS = 3;
     private static final String OUTPUT_TOPIC = "output-topic";
     private static final String INPUT_TOPIC = "input-topic";
-    private static final String TRANSACTION_STATUS_HEADER = "transactionStatus";
 
     private final ClusterInstance cluster;
 
@@ -130,8 +130,7 @@ public class TransactionsBounceTest {
                     for (ConsumerRecord<byte[], byte[]> record : records) {
                         ProducerRecord<byte[], byte[]> outputRecord = new ProducerRecord<>(OUTPUT_TOPIC, record.key(), record.value());
                         // Mark the intended outcome so the verifying consumer can detect any aborted records it receives.
-                        outputRecord.headers().add(TRANSACTION_STATUS_HEADER,
-                            (shouldAbort ? "aborted" : "committed").getBytes(StandardCharsets.UTF_8));
+                        outputRecord.headers().add(ClientsTestUtils.transactionStatusHeader(!shouldAbort));
                         producer.send(outputRecord, new ErrorLoggingCallback(OUTPUT_TOPIC, record.key(), record.value(), true));
                     }
 
@@ -152,8 +151,8 @@ public class TransactionsBounceTest {
                 }
             } finally {
                 scheduler.shutdown();
+                assertNull(scheduler.failure, "Broker bouncer failed");
             }
-            assertNull(scheduler.failure, "Broker bouncer failed");
         }
 
         try (Consumer<byte[], byte[]> consumer = createConsumerAndSubscribe("randomGroup", OUTPUT_TOPIC, groupProtocol, true)) {
@@ -161,9 +160,7 @@ public class TransactionsBounceTest {
             List<ConsumerRecord<byte[], byte[]>> records = ClientsTestUtils.consumeRecords(
                 consumer, numInputRecords, Integer.MAX_VALUE, CONSUME_RECORD_TIMEOUT_MS);
             for (ConsumerRecord<byte[], byte[]> record : records) {
-                var header = record.headers().lastHeader(TRANSACTION_STATUS_HEADER);
-                assertNotNull(header, "Expected a transaction status header");
-                assertEquals("committed", new String(header.value(), StandardCharsets.UTF_8));
+                ClientsTestUtils.assertTransactionCommitted(record);
                 TopicPartition partition = new TopicPartition(record.topic(), record.partition());
                 recordsByPartition.computeIfAbsent(partition, __ -> new ArrayList<>())
                     .add(Integer.parseInt(new String(record.value(), StandardCharsets.UTF_8)));
@@ -228,15 +225,24 @@ public class TransactionsBounceTest {
                     log.trace("Restarted broker {}", brokerId);
                     TimeUnit.MILLISECONDS.sleep(500);
                 }
-                for (int partition = 0; partition < NUM_PARTITIONS; partition++) {
-                    TopicPartition topicPartition = new TopicPartition(OUTPUT_TOPIC, partition);
-                    TestUtils.waitForCondition(() -> cluster.getLeaderBrokerId(topicPartition) >= 0,
-                        "No leader elected for " + topicPartition);
+                try (Admin admin = cluster.admin()) {
+                    for (int partition = 0; partition < NUM_PARTITIONS; partition++) {
+                        TopicPartition topicPartition = new TopicPartition(OUTPUT_TOPIC, partition);
+                        TestUtils.waitForCondition(() -> hasLeader(admin, topicPartition), "No leader elected for " + topicPartition);
+                    }
                 }
             } catch (Exception | AssertionError e) {
+                log.error("Broker bouncer failed", e);
                 failure = e;
                 initiateShutdown();
             }
+        }
+
+        private boolean hasLeader(Admin admin, TopicPartition topicPartition) throws Exception {
+            TopicPartitionInfo info = admin.describeTopics(List.of(topicPartition.topic()))
+                .allTopicNames().get().get(topicPartition.topic())
+                .partitions().get(topicPartition.partition());
+            return info.leader() != null && info.leader().id() >= 0;
         }
     }
 }

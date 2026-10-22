@@ -30,7 +30,6 @@ import org.apache.kafka.common.TopicPartition;
 import org.apache.kafka.common.config.ConfigResource;
 import org.apache.kafka.common.errors.InvalidPidMappingException;
 import org.apache.kafka.common.errors.TransactionalIdNotFoundException;
-import org.apache.kafka.common.header.internals.RecordHeader;
 import org.apache.kafka.common.test.ClusterInstance;
 import org.apache.kafka.common.test.api.ClusterConfigProperty;
 import org.apache.kafka.common.test.api.ClusterTest;
@@ -49,7 +48,9 @@ import java.util.concurrent.ExecutionException;
 import java.util.concurrent.Future;
 import java.util.concurrent.TimeUnit;
 
+import static org.apache.kafka.clients.ClientsTestUtils.assertTransactionCommitted;
 import static org.apache.kafka.clients.ClientsTestUtils.consumeRecords;
+import static org.apache.kafka.clients.ClientsTestUtils.transactionStatusHeader;
 import static org.apache.kafka.clients.consumer.ConsumerConfig.ISOLATION_LEVEL_CONFIG;
 import static org.apache.kafka.clients.producer.ProducerConfig.ENABLE_IDEMPOTENCE_CONFIG;
 import static org.apache.kafka.coordinator.group.GroupCoordinatorConfig.GROUP_INITIAL_REBALANCE_DELAY_MS_CONFIG;
@@ -68,11 +69,9 @@ import static org.apache.kafka.server.config.ServerLogConfigs.AUTO_CREATE_TOPICS
 import static org.apache.kafka.test.TestUtils.DEFAULT_MAX_WAIT_MS;
 import static org.apache.kafka.test.TestUtils.assertFutureThrows;
 import static org.apache.kafka.test.TestUtils.waitForCondition;
-import static org.junit.jupiter.api.Assertions.assertArrayEquals;
 import static org.junit.jupiter.api.Assertions.assertEquals;
 import static org.junit.jupiter.api.Assertions.assertFalse;
 import static org.junit.jupiter.api.Assertions.assertThrows;
-import static org.junit.jupiter.api.Assertions.assertTrue;
 
 @ClusterTestDefaults(
     brokers = 3,
@@ -100,10 +99,6 @@ import static org.junit.jupiter.api.Assertions.assertTrue;
     }
 )
 public class ProducerIdExpirationTest {
-    private static final String HEADER_KEY = "transactionStatus";
-    private static final byte[] COMMITTED_VALUE = "committed".getBytes(StandardCharsets.UTF_8);
-    private static final byte[] ABORTED_VALUE = "aborted".getBytes(StandardCharsets.UTF_8);
-
     private final String topic1 = "topic1";
     private final int numPartitions = 1;
     private final short replicationFactor = 3;
@@ -310,18 +305,14 @@ public class ProducerIdExpirationTest {
         String value,
         boolean willBeCommitted
     ) {
-        var header = new RecordHeader(HEADER_KEY, willBeCommitted ? COMMITTED_VALUE : ABORTED_VALUE);
         return new ProducerRecord<>(topic, partition,
             key.getBytes(StandardCharsets.UTF_8),
             value.getBytes(StandardCharsets.UTF_8),
-            Collections.singleton(header));
+            Collections.singleton(transactionStatusHeader(willBeCommitted)));
     }
 
     private static String assertCommittedAndGetValue(ConsumerRecord<byte[], byte[]> record) {
-        var headers = record.headers().headers(HEADER_KEY).iterator();
-        assertTrue(headers.hasNext(), "Expected transaction status header");
-        var header = headers.next();
-        assertArrayEquals(COMMITTED_VALUE, header.value(), "Expected committed status");
+        assertTransactionCommitted(record);
         return new String(record.value(), StandardCharsets.UTF_8);
     }
 
