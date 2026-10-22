@@ -42,6 +42,8 @@ public class LogDirFailureChannel {
     private final BlockingQueue<String> offlineLogDirQueue;
     // Log dirs with a read check running, see tryStartReadCheck
     private final Set<String> logDirsWithReadCheck = ConcurrentHashMap.newKeySet();
+    // Log dirs with a read failure being reported, see tryStartReadFailureReport
+    private final Set<String> logDirsWithReadFailureReport = ConcurrentHashMap.newKeySet();
 
     public LogDirFailureChannel(int logDirNum) {
         this.offlineLogDirs = new ConcurrentHashMap<>();
@@ -86,6 +88,28 @@ public class LogDirFailureChannel {
      */
     public void finishReadCheck(String logDir) {
         logDirsWithReadCheck.remove(logDir);
+    }
+
+    /**
+     * Start reporting a known read failure in the given log dir, unless the log dir is already offline or a report is
+     * already running. A running report takes the log dir offline, so one at a time per log dir loses nothing. Reports
+     * are tracked apart from checks, see {@link #tryStartReadCheck}, so that a running check, which may find nothing,
+     * does not drop a known failure. A started report must be finished with {@link #finishReadFailureReport}.
+     *
+     * @param logDir The log dir with the read failure.
+     * @return true if the report was started, false if the log dir is offline or a report is already running.
+     */
+    public boolean tryStartReadFailureReport(String logDir) {
+        return !hasOfflineLogDir(logDir) && logDirsWithReadFailureReport.add(logDir);
+    }
+
+    /**
+     * Finish a report started with {@link #tryStartReadFailureReport}.
+     *
+     * @param logDir The log dir with the read failure.
+     */
+    public void finishReadFailureReport(String logDir) {
+        logDirsWithReadFailureReport.remove(logDir);
     }
 
     /**

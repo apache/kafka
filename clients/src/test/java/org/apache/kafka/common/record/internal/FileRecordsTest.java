@@ -21,6 +21,9 @@ import org.apache.kafka.common.KafkaException;
 import org.apache.kafka.common.compress.Compression;
 import org.apache.kafka.common.header.Header;
 import org.apache.kafka.common.header.internals.RecordHeader;
+import org.apache.kafka.common.network.FileReadException;
+import org.apache.kafka.common.network.PlaintextTransportLayer;
+import org.apache.kafka.common.network.SslTransportLayer;
 import org.apache.kafka.common.network.TransferableChannel;
 import org.apache.kafka.common.record.TimestampType;
 import org.apache.kafka.test.TestUtils;
@@ -525,8 +528,9 @@ public class FileRecordsTest {
     }
 
     /**
-     * A failed write is reported to the handler with the region being written, and the exception is rethrown as it
-     * arrived: the handler finds out later whether the file could be read.
+     * A failed write to a network channel that cannot tell a failed read of the file from a failed write is reported
+     * to the handler with the region being written, and the exception is rethrown as it arrived: the handler finds out
+     * later whether the file could be read.
      */
     @Test
     public void testWriteToNotifiesHandlerAndRethrows() throws IOException {
@@ -542,7 +546,50 @@ public class FileRecordsTest {
     }
 
     /**
-     * A closed channel means the file was not read, so there is nothing for the handler to find out.
+     * A network channel that reports its own failed reads of the file fails with a FileReadException for them, which
+     * is reported to the handler, and with any other exception only when it could not be written to.
+     */
+    @Test
+    public void testWriteToNotifiesHandlerOnlyOfFailedReadsWhenChannelReportsThem() throws IOException {
+        List<List<Object>> notifications = new ArrayList<>();
+        FileRecords records = fileRecords.slice(1, fileRecords.sizeInBytes() - 1)
+            .withTransferFailureHandler(recordingHandler(notifications));
+        IOException socketFailure = new IOException("Broken pipe");
+        FileReadException readFailure = new FileReadException(5, new IOException("Input/output error"));
+        int length = records.sizeInBytes() - 2;
+
+        assertSame(socketFailure, assertThrows(IOException.class,
+            () -> records.writeTo(failingChannelReportingFileReadFailures(socketFailure), 2, length)));
+        assertTrue(notifications.isEmpty());
+        assertSame(readFailure, assertThrows(IOException.class,
+            () -> records.writeTo(failingChannelReportingFileReadFailures(readFailure), 2, length)));
+        assertEquals(List.of(List.of(records, 3L, length, readFailure)), notifications);
+    }
+
+    /**
+     * A socket failure reaches the handler, to be told apart from a failed read by re-reading the region, only on the
+     * transport layer that cannot tell them apart itself: PLAINTEXT, where one system call reads the file and writes
+     * the socket, and not TLS.
+     */
+    @Test
+    public void testWriteToNotifiesHandlerOfSocketFailureOnlyOverPlaintext() throws IOException {
+        List<List<Object>> notifications = new ArrayList<>();
+        FileRecords records = fileRecords.slice(0, fileRecords.sizeInBytes())
+            .withTransferFailureHandler(recordingHandler(notifications));
+        IOException socketFailure = new IOException("Broken pipe");
+        TransferableChannel tls = transportFailingWith(SslTransportLayer.class, socketFailure);
+        TransferableChannel plaintext = transportFailingWith(PlaintextTransportLayer.class, socketFailure);
+
+        assertSame(socketFailure, assertThrows(IOException.class, () -> records.writeTo(tls, 0, records.sizeInBytes())));
+        assertTrue(notifications.isEmpty());
+        assertSame(socketFailure, assertThrows(IOException.class,
+            () -> records.writeTo(plaintext, 0, records.sizeInBytes())));
+        assertEquals(List.of(List.of(records, 0L, records.sizeInBytes(), socketFailure)), notifications);
+    }
+
+    /**
+     * A closed channel, closed concurrently, says nothing about the medium, so there is nothing for the handler to find
+     * out.
      */
     @Test
     public void testWriteToDoesNotNotifyHandlerWhenChannelClosed() throws IOException {
@@ -558,23 +605,42 @@ public class FileRecordsTest {
     }
 
     /**
-     * Getting the size of the file before the transfer is part of writing to the channel, so its failure is
-     * reported too.
+     * Getting the size of the file before the transfer is part of reading it, so its failure is a failed read at the
+     * position of the region, reported even when the network channel reports its own failed reads.
      */
     @Test
-    public void testWriteToNotifiesHandlerWhenSizeFails() throws IOException {
+    public void testWriteToReportsFailedSizeAsFailedRead() throws IOException {
         FileChannel fileChannel = fileChannelOfSize(1024);
         List<List<Object>> notifications = new ArrayList<>();
-        FileRecords records = new FileRecords(mock(File.class), fileChannel, 1024).slice(0, 1024)
+        FileRecords records = new FileRecords(mock(File.class), fileChannel, 1024).slice(100, 900)
             .withTransferFailureHandler(recordingHandler(notifications));
         IOException sizeFailure = new IOException("Input/output error");
         when(fileChannel.size()).thenThrow(sizeFailure);
         TransferableChannel channel = mock(TransferableChannel.class);
+        when(channel.reportsFileReadFailures()).thenReturn(true);
 
-        IOException thrown = assertThrows(IOException.class, () -> records.writeTo(channel, 0, 1024));
-        assertSame(sizeFailure, thrown);
-        assertEquals(List.of(List.of(records, 0L, 1024, sizeFailure)), notifications);
+        FileReadException thrown = assertThrows(FileReadException.class, () -> records.writeTo(channel, 10, 800));
+        assertEquals(110, thrown.position());
+        assertSame(sizeFailure, thrown.getCause());
+        assertEquals(List.of(List.of(records, 110L, 800, thrown)), notifications);
         verify(channel, never()).transferFrom(any(), anyLong(), anyLong());
+    }
+
+    /**
+     * A file closed before its size could be read, for instance by a deletion, was not read either.
+     */
+    @Test
+    public void testWriteToDoesNotNotifyHandlerWhenFileClosed() throws IOException {
+        FileChannel fileChannel = fileChannelOfSize(1024);
+        List<List<Object>> notifications = new ArrayList<>();
+        FileRecords records = new FileRecords(mock(File.class), fileChannel, 1024).slice(0, 1024)
+            .withTransferFailureHandler(recordingHandler(notifications));
+        ClosedChannelException closed = new ClosedChannelException();
+        when(fileChannel.size()).thenThrow(closed);
+
+        assertSame(closed, assertThrows(IOException.class,
+            () -> records.writeTo(mock(TransferableChannel.class), 0, 1024)));
+        assertTrue(notifications.isEmpty());
     }
 
     @Test
@@ -693,6 +759,23 @@ public class FileRecordsTest {
         TransferableChannel channel = mock(TransferableChannel.class);
         when(channel.transferFrom(any(), anyLong(), anyLong())).thenThrow(failure);
         return channel;
+    }
+
+    // A network channel that fails with the given exception and reports its own failed reads of the file
+    private static TransferableChannel failingChannelReportingFileReadFailures(IOException failure) throws IOException {
+        TransferableChannel channel = failingChannel(failure);
+        when(channel.reportsFileReadFailures()).thenReturn(true);
+        return channel;
+    }
+
+    // A transport layer of the given type whose transfers fail with the given exception, and which says whether it
+    // reports its own failed reads of the file as its type does
+    private static <T extends TransferableChannel> T transportFailingWith(Class<T> type, IOException failure)
+            throws IOException {
+        T transportLayer = mock(type);
+        when(transportLayer.transferFrom(any(), anyLong(), anyLong())).thenThrow(failure);
+        when(transportLayer.reportsFileReadFailures()).thenCallRealMethod();
+        return transportLayer;
     }
 
     // An answer to FileChannel.read(ByteBuffer, long) that fills the buffer

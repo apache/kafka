@@ -17,6 +17,7 @@
 package org.apache.kafka.common.record.internal;
 
 import org.apache.kafka.common.KafkaException;
+import org.apache.kafka.common.network.FileReadException;
 import org.apache.kafka.common.network.TransferableChannel;
 import org.apache.kafka.common.record.internal.FileLogInputStream.FileChannelRecordBatch;
 import org.apache.kafka.common.utils.Utils;
@@ -46,8 +47,10 @@ public class FileRecords extends AbstractRecords implements Closeable {
     static final int REREAD_BUFFER_SIZE = 32 * 1024;
 
     /**
-     * Notified when {@link #writeTo} fails, typically to find out with {@link #readFailure} whether the backing file
-     * could not be read. It is called on the thread that failed to write, a network thread, so it must not block.
+     * Notified when {@link #writeTo} fails in a way that may come from a failed read of the backing file: with a
+     * {@link FileReadException} when the file could not be read, otherwise with an exception that may come from the
+     * file and the network channel alike, which {@link #readFailure} tells apart.
+     * It is called on the thread that failed to write, a network thread, so it must not block.
      */
     @FunctionalInterface
     public interface TransferFailureHandler {
@@ -63,7 +66,7 @@ public class FileRecords extends AbstractRecords implements Closeable {
     private final boolean isSlice;
     private final int start;
     private final int end;
-    // Notified when writing to a network channel fails, or null
+    // Notified when writing to a network channel fails as described in TransferFailureHandler, or null
     private final TransferFailureHandler transferFailureHandler;
 
     private final Iterable<FileLogInputStream.FileChannelRecordBatch> batches;
@@ -175,7 +178,8 @@ public class FileRecords extends AbstractRecords implements Closeable {
 
     /**
      * Return a copy of this slice whose {@link #writeTo} notifies the given handler when writing to a network channel
-     * fails. Slices taken from it with {@link #slice} notify the same handler. This instance is not modified.
+     * fails in a way that may come from a failed read of the file, see {@link TransferFailureHandler}. Slices taken
+     * from it with {@link #slice} notify the same handler. This instance is not modified.
      *
      * @param handler The handler to notify
      * @return A copy of this slice that notifies the handler
@@ -325,7 +329,7 @@ public class FileRecords extends AbstractRecords implements Closeable {
         long position = start + offset;
         int count = Math.min(length, oldSize - offset);
         try {
-            long newSize = Math.min(channel.size(), end) - start;
+            long newSize = Math.min(fileSize(position), end) - start;
             if (newSize < oldSize)
                 throw new KafkaException(String.format(
                         "Size of FileRecords %s has been truncated during write: old size %d, new size %d",
@@ -333,22 +337,48 @@ public class FileRecords extends AbstractRecords implements Closeable {
             // safe to cast to int since `count` is an int
             return (int) destChannel.transferFrom(channel, position, count);
         } catch (IOException e) {
-            // The transfer reads the file and writes the socket in one call, so a storage failure and a socket
-            // failure both arrive here as a bare IOException. Let the handler find out which one it was. A closed
-            // channel means the file was not read, so there is nothing to find out.
-            if (transferFailureHandler != null && !(e instanceof ClosedChannelException))
+            if (transferFailureHandler != null && mayBeReadFailure(destChannel, e))
                 transferFailureHandler.onTransferFailure(this, position, count, e);
             throw e;
         }
     }
 
     /**
-     * Read the given region of the backing file, after {@link #writeTo} failed on it, to tell a storage failure from
-     * a socket failure. The whole region is read rather than its first byte because, depending on the platform, the
-     * transfer may fail anywhere within it without reporting progress. Only a failed read of an open channel counts
-     * as a storage failure: the end of the file may be reached because the log was truncated concurrently (e.g. when
-     * the replica becomes a follower), and the channel may have been closed concurrently, by a deletion or a
-     * shutdown; neither says anything about the medium.
+     * The size of the backing file. Failing to get it counts as failing to read the file at the given position, where
+     * the transfer was to start.
+     */
+    private long fileSize(long position) throws IOException {
+        try {
+            return channel.size();
+        } catch (ClosedChannelException e) {
+            throw e;
+        } catch (IOException e) {
+            throw new FileReadException(position, e);
+        }
+    }
+
+    /**
+     * Whether the given failure of {@link #writeTo} may come from a failed read of the backing file. A closed channel,
+     * of the file or the network, was closed concurrently, by a deletion or a shutdown, or because the connection is
+     * closing, which says nothing about the medium. Otherwise, a network channel that reports file read failures
+     * throws a {@link FileReadException} for them, so any other failure comes from the network channel; one that does
+     * not, because a single system call reads the file and writes the socket, throws the same bare IOException for
+     * both.
+     */
+    private static boolean mayBeReadFailure(TransferableChannel destChannel, IOException transferFailure) {
+        if (transferFailure instanceof FileReadException)
+            return true;
+        return !(transferFailure instanceof ClosedChannelException) && !destChannel.reportsFileReadFailures();
+    }
+
+    /**
+     * Read the given region of the backing file, after {@link #writeTo} failed on it with an exception that may come
+     * from the file and the network channel alike, to tell a storage failure from a socket failure. The whole region
+     * is read rather than its first byte because, depending on the platform, the transfer may fail anywhere within it
+     * without reporting progress. Only a failed read of an open channel counts as a storage failure: the end of the
+     * file may be reached because the log was truncated concurrently (e.g. when the replica becomes a follower), and
+     * the channel may have been closed concurrently, by a deletion or a shutdown; neither says anything about the
+     * medium.
      *
      * @param position The absolute position of the region in the file
      * @param count The size of the region
