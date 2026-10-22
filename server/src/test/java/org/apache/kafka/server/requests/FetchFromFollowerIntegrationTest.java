@@ -23,6 +23,7 @@ import org.apache.kafka.clients.admin.NewPartitionReassignment;
 import org.apache.kafka.clients.admin.TopicDescription;
 import org.apache.kafka.clients.consumer.Consumer;
 import org.apache.kafka.clients.consumer.ConsumerConfig;
+import org.apache.kafka.clients.consumer.GroupProtocol;
 import org.apache.kafka.clients.consumer.RangeAssignor;
 import org.apache.kafka.clients.producer.Producer;
 import org.apache.kafka.clients.producer.ProducerRecord;
@@ -42,6 +43,7 @@ import org.apache.kafka.common.test.api.Type;
 import org.apache.kafka.common.utils.Utils;
 import org.apache.kafka.server.IntegrationTestUtils;
 import org.apache.kafka.server.TestUtils;
+import org.junit.jupiter.api.Timeout;
 
 import java.net.Socket;
 import java.time.Duration;
@@ -49,9 +51,9 @@ import java.util.ArrayList;
 import java.util.Collection;
 import java.util.Collections;
 import java.util.HashMap;
-import java.util.HashSet;
 import java.util.LinkedHashMap;
 import java.util.List;
+import java.util.Locale;
 import java.util.Map;
 import java.util.Optional;
 import java.util.Set;
@@ -59,6 +61,7 @@ import java.util.concurrent.ExecutorService;
 import java.util.concurrent.Executors;
 import java.util.concurrent.Future;
 import java.util.concurrent.TimeUnit;
+import java.util.stream.Collectors;
 
 import static org.apache.kafka.coordinator.group.GroupCoordinatorConfig.OFFSETS_TOPIC_REPLICATION_FACTOR_CONFIG;
 import static org.apache.kafka.server.TestUtils.consumeRecords;
@@ -91,6 +94,7 @@ public class FetchFromFollowerIntegrationTest {
     public static final int FOLLOWER_BROKER_ID = 1;
 
     @ClusterTest
+    @Timeout(15)
     public void testFollowerCompleteDelayedFetchesOnReplication(ClusterInstance cluster) throws Exception {
         cluster.createTopicWithAssignment(TOPIC, Map.of(0, List.of(LEADER_BROKER_ID, FOLLOWER_BROKER_ID)));
         int leaderId = waitUntilLeaderIsKnown(cluster.brokers().values(), new TopicPartition(TOPIC, 0));
@@ -98,6 +102,9 @@ public class FetchFromFollowerIntegrationTest {
         var topicPartition = new TopicPartition(TOPIC, 0);
         assertEquals(LEADER_BROKER_ID, leaderId);
 
+        // Set fetch.max.wait.ms to a value (20 seconds) greater than the timeout (15 seconds).
+        // Send a fetch request before the record is replicated to ensure that the replication
+        // triggers purgatory completion.
         LinkedHashMap<TopicPartition, FetchRequest.PartitionData> fetchData = createPartitionMap(cluster, 1000, List.of(topicPartition), Map.of(topicPartition, 0L));
         FetchRequest fetchRequest = FetchRequest.Builder.forConsumer(ApiKeys.FETCH.latestVersion(), 20000, 1, fetchData)
                 .setMaxBytes(1000)
@@ -132,8 +139,8 @@ public class FetchFromFollowerIntegrationTest {
         cluster.createTopicWithAssignment(TOPIC, Map.of(0, List.of(LEADER_BROKER_ID, FOLLOWER_BROKER_ID)));
         waitUntilLeaderIsKnown(cluster.brokers().values(), new TopicPartition(TOPIC, 0));
 
-        produceMessages(cluster, 10);
-        assertEquals(1, getPreferredReplica(cluster));
+        produceMessages(cluster, TOPIC, 10);
+        assertEquals(1, getPreferredReplica(cluster, TOPIC));
 
         cluster.brokers().get(FOLLOWER_BROKER_ID).shutdown();
         TopicPartition topicPartition = new TopicPartition(TOPIC, 0);
@@ -148,56 +155,68 @@ public class FetchFromFollowerIntegrationTest {
                 "follower is still reachable."
         );
 
-        assertEquals(-1, getPreferredReplica(cluster));
+        assertEquals(-1, getPreferredReplica(cluster, TOPIC));
     }
 
     @ClusterTest
     public void testFetchFromFollowerWithRoll(ClusterInstance cluster) throws Exception {
-        cluster.createTopicWithAssignment(TOPIC, Map.of(0, List.of(LEADER_BROKER_ID, FOLLOWER_BROKER_ID)));
-        waitUntilLeaderIsKnown(cluster.brokers().values(), new TopicPartition(TOPIC, 0));
+        for (GroupProtocol groupProtocol : cluster.supportedGroupProtocols()) {
+            verifyFetchFromFollowerWithRoll(cluster, groupProtocol);
+        }
+    }
+
+    private void verifyFetchFromFollowerWithRoll(ClusterInstance cluster, GroupProtocol groupProtocol) throws Exception {
+        // Each protocol gets its own topic and group ids so that the iterations of
+        // testFetchFromFollowerWithRoll, which share a single cluster, stay independent.
+        String protocolName = groupProtocol.name().toLowerCase(Locale.ROOT);
+        String topic = TOPIC + "-" + protocolName;
+        cluster.createTopicWithAssignment(topic, Map.of(0, List.of(LEADER_BROKER_ID, FOLLOWER_BROKER_ID)));
+        waitUntilLeaderIsKnown(cluster.brokers().values(), new TopicPartition(topic, 0));
 
         var followerConsumerProps = new HashMap<String, Object>();
         followerConsumerProps.put(ConsumerConfig.BOOTSTRAP_SERVERS_CONFIG, cluster.bootstrapServers());
-        followerConsumerProps.put(ConsumerConfig.GROUP_ID_CONFIG, "test-group-follower");
+        followerConsumerProps.put(ConsumerConfig.GROUP_ID_CONFIG, "test-group-follower-" + protocolName);
         followerConsumerProps.put(ConsumerConfig.AUTO_OFFSET_RESET_CONFIG, "earliest");
         followerConsumerProps.put(ConsumerConfig.CLIENT_RACK_CONFIG, String.valueOf(FOLLOWER_BROKER_ID));
+        followerConsumerProps.put(ConsumerConfig.GROUP_PROTOCOL_CONFIG, groupProtocol.name());
 
         var leaderConsumerProps = new HashMap<String, Object>();
         leaderConsumerProps.put(ConsumerConfig.BOOTSTRAP_SERVERS_CONFIG, cluster.bootstrapServers());
-        leaderConsumerProps.put(ConsumerConfig.GROUP_ID_CONFIG, "test-group-leader");
+        leaderConsumerProps.put(ConsumerConfig.GROUP_ID_CONFIG, "test-group-leader-" + protocolName);
         leaderConsumerProps.put(ConsumerConfig.AUTO_OFFSET_RESET_CONFIG, "earliest");
+        leaderConsumerProps.put(ConsumerConfig.GROUP_PROTOCOL_CONFIG, groupProtocol.name());
 
         try (Consumer<byte[], byte[]> followerConsumer = cluster.consumer(followerConsumerProps);
              Consumer<byte[], byte[]> leaderConsumer = cluster.consumer(leaderConsumerProps)) {
-            followerConsumer.subscribe(List.of(TOPIC));
-            leaderConsumer.subscribe(List.of(TOPIC));
+            followerConsumer.subscribe(List.of(topic));
+            leaderConsumer.subscribe(List.of(topic));
 
             // Wait until preferred replica is set to follower.
             waitForCondition(
-                    () -> getPreferredReplica(cluster) == FOLLOWER_BROKER_ID,
-                    "Preferred replica is not set to follower"
+                    () -> getPreferredReplica(cluster, topic) == FOLLOWER_BROKER_ID,
+                    "Preferred replica is not set to follower for " + protocolName
             );
 
             // Produce and consume from both consumers.
-            produceMessages(cluster, 1);
+            produceMessages(cluster, topic, 1);
             consumeRecords(followerConsumer, 1);
             consumeRecords(leaderConsumer, 1);
 
             // Shutdown follower, produce and consume should work for both consumers.
             cluster.shutdownBroker(FOLLOWER_BROKER_ID);
-            produceMessages(cluster, 1);
+            produceMessages(cluster, topic, 1);
             consumeRecords(followerConsumer, 1);
             consumeRecords(leaderConsumer, 1);
 
             // Start the follower and wait until preferred replica is set to follower.
             cluster.startBroker(FOLLOWER_BROKER_ID);
             waitForCondition(
-                    () -> getPreferredReplica(cluster) == FOLLOWER_BROKER_ID,
-                    "Preferred replica is not set to follower after restart"
+                    () -> getPreferredReplica(cluster, topic) == FOLLOWER_BROKER_ID,
+                    "Preferred replica is not set to follower after restart for " + protocolName
             );
 
             // Produce and consume should still work for both consumers.
-            produceMessages(cluster, 1);
+            produceMessages(cluster, topic, 1);
             consumeRecords(followerConsumer, 1);
             consumeRecords(leaderConsumer, 1);
         }
@@ -272,10 +291,10 @@ public class FetchFromFollowerIntegrationTest {
         }
     }
 
-    private Map<String, Uuid> getTopicIds(ClusterInstance cluster) throws Exception {
+    private Map<String, Uuid> getTopicIds(ClusterInstance cluster, Collection<String> topics) throws Exception {
         Map<String, Uuid> topicIds = new HashMap<>();
         try (Admin admin = cluster.admin()) {
-            Map<String, TopicDescription> descriptions = admin.describeTopics(List.of(TOPIC))
+            Map<String, TopicDescription> descriptions = admin.describeTopics(topics)
                     .allTopicNames()
                     .get();
             descriptions.forEach((name, desc) -> topicIds.put(name, desc.topicId()));
@@ -289,7 +308,9 @@ public class FetchFromFollowerIntegrationTest {
             List<TopicPartition> topicPartitions,
             Map<TopicPartition, Long> offsetMap) throws Exception {
 
-        Map<String, Uuid> topicIds = getTopicIds(cluster);
+        Map<String, Uuid> topicIds = getTopicIds(cluster, topicPartitions.stream()
+                .map(TopicPartition::topic)
+                .collect(Collectors.toSet()));
         var partitionMap = new LinkedHashMap<TopicPartition, FetchRequest.PartitionData>();
         for (TopicPartition tp : topicPartitions) {
             Uuid topicId = topicIds.getOrDefault(tp.topic(), Uuid.ZERO_UUID);
@@ -305,8 +326,8 @@ public class FetchFromFollowerIntegrationTest {
         return partitionMap;
     }
 
-    private int getPreferredReplica(ClusterInstance cluster) throws Exception {
-        var topicPartition = new TopicPartition(TOPIC, 0);
+    private int getPreferredReplica(ClusterInstance cluster, String topic) throws Exception {
+        var topicPartition = new TopicPartition(topic, 0);
         Map<TopicPartition, Long> offsetMap = Map.of(topicPartition, 0L);
         LinkedHashMap<TopicPartition, FetchRequest.PartitionData> fetchData = createPartitionMap(cluster, 1000, List.of(topicPartition), offsetMap);
         FetchRequest fetchRequest = FetchRequest.Builder.forConsumer(ApiKeys.FETCH.latestVersion(), 500, 1, fetchData)
@@ -324,10 +345,10 @@ public class FetchFromFollowerIntegrationTest {
         return topicResponse.partitions().get(0).preferredReadReplica();
     }
 
-    private void produceMessages(ClusterInstance cluster, int numMessages) throws Exception {
+    private void produceMessages(ClusterInstance cluster, String topic, int numMessages) throws Exception {
         try (Producer<byte[], byte[]> producer = cluster.producer(Map.of())) {
             for (int i = 0; i < numMessages; i++) {
-                producer.send(new ProducerRecord<>(TOPIC, ("key-" + i).getBytes(), ("value-" + i).getBytes())).get();
+                producer.send(new ProducerRecord<>(topic, ("key-" + i).getBytes(), ("value-" + i).getBytes())).get();
             }
         }
     }
@@ -356,10 +377,20 @@ public class FetchFromFollowerIntegrationTest {
         }
 
         List<Future<Void>> recordFutures = new ArrayList<>();
-        for (Consumer<byte[], byte[]> consumer : consumers) {
+        for (int i = 0; i < consumers.size(); i++) {
+            Consumer<byte[], byte[]> consumer = consumers.get(i);
+            int consumerIndex = i;
+            Set<TopicPartition> expectedAssignment = expectedAssignment(topics, expectedPartitionOrder.get(i));
             recordFutures.add(executor.submit(() -> {
                 try {
-                    consumeRecords(consumer, topics.size());
+                    // Verify that the records came from the rack-aware assigned partitions, and not
+                    // merely that the expected number of records arrived. The assignment can change
+                    // between awaitConsumerAssignments and this consume, so re-check it here.
+                    Set<TopicPartition> consumedPartitions = consumeRecords(consumer, topics.size()).stream()
+                            .map(record -> new TopicPartition(record.topic(), record.partition()))
+                            .collect(Collectors.toSet());
+                    assertEquals(expectedAssignment, consumedPartitions,
+                            "Consumer " + consumerIndex + " consumed records from unexpected partitions");
                 } catch (Exception e) {
                     throw new RuntimeException(e);
                 }
@@ -385,11 +416,7 @@ public class FetchFromFollowerIntegrationTest {
         List<Future<Void>> assignmentFutures = new ArrayList<>();
         for (int i = 0; i < consumers.size(); i++) {
             final int consumerIndex = i;
-            int partition = expectedPartitionOrder.get(i);
-            Set<TopicPartition> expectedAssignment = new HashSet<>();
-            for (String t : topics) {
-                expectedAssignment.add(new TopicPartition(t, partition));
-            }
+            Set<TopicPartition> expectedAssignment = expectedAssignment(topics, expectedPartitionOrder.get(i));
 
             Consumer<byte[], byte[]> consumer = consumers.get(i);
             assignmentFutures.add(executor.submit(() -> {
@@ -411,6 +438,12 @@ public class FetchFromFollowerIntegrationTest {
         for (Future<Void> future : assignmentFutures) {
             future.get(30, TimeUnit.SECONDS);
         }
+    }
+
+    private static Set<TopicPartition> expectedAssignment(List<String> topics, int partition) {
+        return topics.stream()
+                .map(topic -> new TopicPartition(topic, partition))
+                .collect(Collectors.toSet());
     }
 
     private static <T> List<T> reverseList(List<T> list) {
