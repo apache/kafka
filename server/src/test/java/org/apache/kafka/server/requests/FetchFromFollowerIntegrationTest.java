@@ -43,6 +43,7 @@ import org.apache.kafka.common.test.api.Type;
 import org.apache.kafka.common.utils.Utils;
 import org.apache.kafka.server.IntegrationTestUtils;
 import org.apache.kafka.server.TestUtils;
+
 import org.junit.jupiter.api.Timeout;
 
 import java.net.Socket;
