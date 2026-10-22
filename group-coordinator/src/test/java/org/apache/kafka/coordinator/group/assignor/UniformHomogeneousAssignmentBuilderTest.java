@@ -71,8 +71,20 @@ public class UniformHomogeneousAssignmentBuilderTest {
 
     @ParameterizedTest
     @ValueSource(booleans = {false, true})
-    public void testReassignmentStickiness(boolean rackAware) {
-        CommonAssignorTests.testReassignmentStickiness(assignor, HOMOGENEOUS, rackAware);
+    public void testIterationOrderStickiness(boolean rackAware) {
+        CommonAssignorTests.testIterationOrderStickiness(assignor, HOMOGENEOUS, rackAware);
+    }
+
+    @ParameterizedTest
+    @ValueSource(booleans = {false, true})
+    public void testStaticMemberReplacementStickiness(boolean rackAware) {
+        CommonAssignorTests.testStaticMemberReplacementStickiness(assignor, HOMOGENEOUS, rackAware);
+    }
+
+    @ParameterizedTest
+    @ValueSource(booleans = {false, true})
+    public void testMemberReplacementStickiness(boolean rackAware) {
+        CommonAssignorTests.testMemberReplacementStickiness(assignor, HOMOGENEOUS, rackAware);
     }
 
     @Test
