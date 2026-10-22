@@ -960,7 +960,6 @@ public class DelayedShareFetchTest {
 
         SharePartition sp0 = mock(SharePartition.class);
         when(sp0.canAcquireRecords()).thenReturn(true);
-        // Empty fetch offset metadata forces maybeReadFromLog to actually read from the log.
 
         LinkedHashMap<TopicIdPartition, SharePartition> sharePartitions = new LinkedHashMap<>();
         sharePartitions.put(tp0, sp0);
@@ -1210,7 +1209,6 @@ public class DelayedShareFetchTest {
         // All 5 partitions are acquirable.
         doAnswer(invocation -> buildLogReadResult(sharePartitions.keySet().stream().toList())).when(replicaManager).readFromLog(any(), any(), any(ReplicaQuota.class), anyBoolean());
 
-
         mockTopicIdPartitionToReturnDataEqualToMinBytes(replicaManager, tp0, 1);
         mockTopicIdPartitionToReturnDataEqualToMinBytes(replicaManager, tp1, 1);
         mockTopicIdPartitionToReturnDataEqualToMinBytes(replicaManager, tp2, 1);
@@ -1308,7 +1306,6 @@ public class DelayedShareFetchTest {
         acquirableTopicPartitions.add(tp0);
         acquirableTopicPartitions.add(tp1);
         doAnswer(invocation -> buildLogReadResult(acquirableTopicPartitions.stream().toList())).when(replicaManager).readFromLog(any(), any(), any(ReplicaQuota.class), anyBoolean());
-
 
         mockTopicIdPartitionToReturnDataEqualToMinBytes(replicaManager, tp0, 1);
         mockTopicIdPartitionToReturnDataEqualToMinBytes(replicaManager, tp1, 1);
@@ -1483,8 +1480,6 @@ public class DelayedShareFetchTest {
         when(sp1.nextFetchOffset()).thenReturn(20L);
         when(sp2.nextFetchOffset()).thenReturn(30L);
 
-        // Fetch offset matches with the cached entry for sp0 but not for sp1 and sp2. Hence, a replica manager fetch will happen for sp1 and sp2.
-
         // Mocking local log read result for tp1 and remote storage read result for tp2.
         doAnswer(invocation -> buildLocalAndRemoteFetchResult(Set.of(tp1), Set.of(tp2))).when(replicaManager).readFromLog(any(), any(), any(ReplicaQuota.class), anyBoolean());
 
@@ -1515,7 +1510,7 @@ public class DelayedShareFetchTest {
             .withFetchId(fetchId)
             .build());
 
-        // Fetch offset matches with the cached entry for sp0.
+        // Fetch offset matches with the cached entry for sp0 but not for sp1 and sp2. Hence, a replica manager fetch will happen for sp1 and sp2.
         delayedShareFetch.updateFetchOffsetMetadataCache(tp0, 10L, new LogOffsetMetadata(10, 1, 0));
         // All the topic partitions are acquirable.
         when(sp0.maybeAcquireFetchLock(fetchId)).thenReturn(true);
@@ -1632,8 +1627,6 @@ public class DelayedShareFetchTest {
 
         when(sp0.nextFetchOffset()).thenReturn(10L);
 
-        // Fetch offset does not match with the cached entry for sp0, hence, a replica manager fetch will happen for sp0.
-
         // Mocking remote storage read result for tp0.
         doAnswer(invocation -> buildLocalAndRemoteFetchResult(Set.of(), Set.of(tp0))).when(replicaManager).readFromLog(any(), any(), any(ReplicaQuota.class), anyBoolean());
 
@@ -1706,8 +1699,6 @@ public class DelayedShareFetchTest {
         when(sp0.nextFetchOffset()).thenReturn(10L);
         when(sp1.nextFetchOffset()).thenReturn(20L);
         when(sp2.nextFetchOffset()).thenReturn(25L);
-
-        // Fetch offset does not match with the cached entry for sp0, sp1 and sp2. Hence, a replica manager fetch will happen for all.
 
         // Mocking local log read result for tp0 and remote storage read result for tp1 and tp2.
         doAnswer(invocation -> buildLocalAndRemoteFetchResult(Set.of(tp0), Set.of(tp1, tp2))).when(replicaManager).readFromLog(any(), any(), any(ReplicaQuota.class), anyBoolean());
@@ -1791,8 +1782,6 @@ public class DelayedShareFetchTest {
         when(sp1.nextFetchOffset()).thenReturn(20L);
         when(sp2.nextFetchOffset()).thenReturn(30L);
 
-        // Fetch offset matches with the cached entry for sp0 but not for sp1 and sp2. Hence, a replica manager fetch will happen for sp1 and sp2 during tryComplete.
-
         try (MockedStatic<ShareFetchUtils> mockedShareFetchUtils = Mockito.mockStatic(ShareFetchUtils.class)) {
             Map<TopicIdPartition, ShareFetchResponseData.PartitionData> partitionDataMap = new LinkedHashMap<>();
             partitionDataMap.put(tp0, mock(ShareFetchResponseData.PartitionData.class));
@@ -1834,7 +1823,7 @@ public class DelayedShareFetchTest {
                 .withFetchId(fetchId)
                 .build());
 
-            // Fetch offset matches with the cached entry for sp0.
+            // Fetch offset matches with the cached entry for sp0 but not for sp1 and sp2. Hence, a replica manager fetch will happen for sp1 and sp2.
             delayedShareFetch.updateFetchOffsetMetadataCache(tp0, 10L, new LogOffsetMetadata(10, 1, 0));
             // All the topic partitions are acquirable.
             when(sp0.maybeAcquireFetchLock(fetchId)).thenReturn(true);
@@ -1886,7 +1875,6 @@ public class DelayedShareFetchTest {
             BROKER_TOPIC_STATS);
 
         when(sp0.nextFetchOffset()).thenReturn(10L);
-        // Fetch offset does not match with the cached entry for sp0. Hence, a replica manager fetch will happen for sp0.
 
         // Mocking remote storage read result for tp0.
         doAnswer(invocation -> buildLocalAndRemoteFetchResult(Set.of(), Set.of(tp0))).when(replicaManager).readFromLog(any(), any(), any(ReplicaQuota.class), anyBoolean());
@@ -1969,7 +1957,6 @@ public class DelayedShareFetchTest {
             BROKER_TOPIC_STATS);
 
         when(sp0.nextFetchOffset()).thenReturn(10L);
-        // Fetch offset does not match with the cached entry for sp0. Hence, a replica manager fetch will happen for sp0.
 
         // Mocking remote storage read result for tp0.
         doAnswer(invocation -> buildLocalAndRemoteFetchResult(Set.of(), Set.of(tp0))).when(replicaManager).readFromLog(any(), any(), any(ReplicaQuota.class), anyBoolean());
@@ -2055,8 +2042,6 @@ public class DelayedShareFetchTest {
         when(sp0.nextFetchOffset()).thenReturn(10L);
         when(sp1.nextFetchOffset()).thenReturn(20L);
         when(sp2.nextFetchOffset()).thenReturn(30L);
-
-        // Fetch offset does not match with the cached entry for sp0, sp1 and sp2. Hence, a replica manager fetch will happen for all of them in tryComplete.
 
         try (MockedStatic<ShareFetchUtils> mockedShareFetchUtils = Mockito.mockStatic(ShareFetchUtils.class)) {
             Map<TopicIdPartition, ShareFetchResponseData.PartitionData> partitionDataMap = new LinkedHashMap<>();
@@ -2371,7 +2356,6 @@ public class DelayedShareFetchTest {
 
         when(sp0.nextFetchOffset()).thenReturn(10L);
         when(sp1.nextFetchOffset()).thenReturn(10L);
-        // Fetch offset does not match with the cached entry for sp0 and sp1. Hence, a replica manager fetch will happen for both.
 
         LinkedHashSet<TopicIdPartition> remoteStorageFetchPartitions = new LinkedHashSet<>();
         remoteStorageFetchPartitions.add(tp0);

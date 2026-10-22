@@ -109,8 +109,8 @@ public class DelayedShareFetch extends DelayedOperation {
     private LinkedHashMap<TopicIdPartition, Long> partitionsAcquired;
     private LinkedHashMap<TopicIdPartition, LogReadResult> localPartitionsAlreadyFetched;
     /**
-    * The cache of fetch offset metadata for the share fetch request. This is used to avoid redundant reads.
-    */
+     * The cache of fetch offset metadata for the share fetch request. This is used to avoid redundant reads.
+     */
     private final Map<TopicIdPartition, CachedFetchOffsetMetadata> fetchOffsetMetadataCache;
     private Optional<PendingRemoteFetches> pendingRemoteFetchesOpt;
     /** Holds the CompletableFuture for a pending async fetch operation.
