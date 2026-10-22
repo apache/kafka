@@ -31,6 +31,7 @@ public interface AuthorizerServerInfo {
 
     /**
      * Returns cluster metadata for the broker running this authorizer including cluster id.
+     * The cluster id is null when it is not yet known.
      */
     ClusterResource clusterResource();
 

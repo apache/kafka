@@ -87,6 +87,7 @@ import org.apache.kafka.raft.internals.UpdateVoterHandler;
 import org.apache.kafka.server.common.KRaftVersion;
 import org.apache.kafka.server.common.OffsetAndEpoch;
 import org.apache.kafka.server.common.serialization.RecordSerde;
+import org.apache.kafka.server.util.DeferredValue;
 import org.apache.kafka.snapshot.NotifyingRawSnapshotWriter;
 import org.apache.kafka.snapshot.RawSnapshotReader;
 import org.apache.kafka.snapshot.RawSnapshotWriter;
@@ -181,7 +182,7 @@ public final class KafkaRaftClient<T> implements RaftClient<T> {
     private final Time time;
     private final int fetchMaxWaitMs;
     private final boolean canBecomeVoter;
-    private final String clusterId;
+    private final DeferredValue<String> clusterId;
     private final Endpoints localListeners;
     private final SupportedVersionRange localSupportedKRaftVersion;
     private final NetworkChannel channel;
@@ -241,7 +242,7 @@ public final class KafkaRaftClient<T> implements RaftClient<T> {
         ExpirationService expirationService,
         LogContext logContext,
         boolean canBecomeVoter,
-        String clusterId,
+        DeferredValue<String> clusterId,
         Collection<InetSocketAddress> bootstrapServers,
         Endpoints localListeners,
         SupportedVersionRange localSupportedKRaftVersion,
@@ -281,7 +282,7 @@ public final class KafkaRaftClient<T> implements RaftClient<T> {
         ExpirationService expirationService,
         int fetchMaxWaitMs,
         boolean canBecomeVoter,
-        String clusterId,
+        DeferredValue<String> clusterId,
         Collection<InetSocketAddress> bootstrapServers,
         Endpoints localListeners,
         SupportedVersionRange localSupportedKRaftVersion,
@@ -827,7 +828,7 @@ public final class KafkaRaftClient<T> implements RaftClient<T> {
      * Handle a Vote request. This API may return the following errors:
      *
      * - {@link Errors#INCONSISTENT_CLUSTER_ID} if the cluster id is presented in request
-     *      but different from this node
+     *      but different from this node and this node knows its cluster id
      * - {@link Errors#BROKER_NOT_AVAILABLE} if this node is currently shutting down
      * - {@link Errors#FENCED_LEADER_EPOCH} if the epoch is smaller than this node's epoch
      * - {@link Errors#INVALID_REQUEST} if the last epoch or offset are invalid
@@ -1093,7 +1094,7 @@ public final class KafkaRaftClient<T> implements RaftClient<T> {
      * Handle a BeginEpoch request. This API may return the following errors:
      *
      * - {@link Errors#INCONSISTENT_CLUSTER_ID} if the cluster id is presented in request
-     *      but different from this node
+     *      but different from this node and this node knows its cluster id
      * - {@link Errors#BROKER_NOT_AVAILABLE} if this node is currently shutting down
      * - {@link Errors#FENCED_LEADER_EPOCH} if the epoch is smaller than this node's epoch
      */
@@ -1249,7 +1250,7 @@ public final class KafkaRaftClient<T> implements RaftClient<T> {
      * Handle an EndEpoch request. This API may return the following errors:
      *
      * - {@link Errors#INCONSISTENT_CLUSTER_ID} if the cluster id is presented in request
-     *      but different from this node
+     *      but different from this node and this node knows its cluster id
      * - {@link Errors#BROKER_NOT_AVAILABLE} if this node is currently shutting down
      * - {@link Errors#FENCED_LEADER_EPOCH} if the epoch is smaller than this node's epoch
      */
@@ -1462,11 +1463,12 @@ public final class KafkaRaftClient<T> implements RaftClient<T> {
     }
 
     private boolean hasValidClusterId(String requestClusterId) {
-        // We don't enforce the cluster id if it is not provided.
-        if (requestClusterId == null) {
+        // We don't enforce the cluster id if it is not provided, or if the current
+        // node's cluster id is not known.
+        if (requestClusterId == null || !clusterId.isDone()) {
             return true;
         }
-        return clusterId.equals(requestClusterId);
+        return requestClusterId.equals(clusterId.getNow());
     }
 
     /**
@@ -1478,7 +1480,7 @@ public final class KafkaRaftClient<T> implements RaftClient<T> {
      * This API may return the following errors:
      *
      * - {@link Errors#INCONSISTENT_CLUSTER_ID} if the cluster id is presented in request
-     *     but different from this node
+     *     but different from this node and this node knows its cluster id
      * - {@link Errors#BROKER_NOT_AVAILABLE} if this node is currently shutting down
      * - {@link Errors#FENCED_LEADER_EPOCH} if the epoch is smaller than this node's epoch
      * - {@link Errors#INVALID_REQUEST} if the request epoch is larger than the leader's current epoch
@@ -1915,7 +1917,7 @@ public final class KafkaRaftClient<T> implements RaftClient<T> {
      * This API may return the following errors:
      *
      * - {@link Errors#INCONSISTENT_CLUSTER_ID} if the cluster id is presented in request
-     *     but different from this node
+     *     but different from this node and this node knows its cluster id
      * - {@link Errors#BROKER_NOT_AVAILABLE} if this node is currently shutting down
      * - {@link Errors#FENCED_LEADER_EPOCH} if the epoch is smaller than this node's epoch
      * - {@link Errors#INVALID_REQUEST} if the request epoch is larger than the leader's current epoch
@@ -2265,7 +2267,7 @@ public final class KafkaRaftClient<T> implements RaftClient<T> {
                         String.format(
                             "The given id \"%s\" doesn't match the cluster id \"%s\"",
                             data.clusterId(),
-                            clusterId
+                            clusterId.getNow()
                         )
                     )
             );
@@ -2422,7 +2424,7 @@ public final class KafkaRaftClient<T> implements RaftClient<T> {
                         String.format(
                             "The given id \"%s\" doesn't match the cluster id \"%s\"",
                             data.clusterId(),
-                            clusterId
+                            clusterId.getNow()
                         )
                     )
             );
@@ -2925,7 +2927,7 @@ public final class KafkaRaftClient<T> implements RaftClient<T> {
     ) {
         return RaftUtil.singletonEndQuorumEpochRequest(
             log.topicPartition(),
-            clusterId,
+            clusterId.getNow(),
             quorum.epoch(),
             quorum.localIdOrThrow(),
             state.preferredSuccessors()
@@ -2969,7 +2971,7 @@ public final class KafkaRaftClient<T> implements RaftClient<T> {
     private BeginQuorumEpochRequestData buildBeginQuorumEpochRequest(ReplicaKey remoteVoter) {
         return RaftUtil.singletonBeginQuorumEpochRequest(
             log.topicPartition(),
-            clusterId,
+            clusterId.getNow(),
             quorum.epoch(),
             quorum.localIdOrThrow(),
             quorum.leaderEndpoints(),
@@ -2981,7 +2983,7 @@ public final class KafkaRaftClient<T> implements RaftClient<T> {
         OffsetAndEpoch endOffset = endOffset();
         return RaftUtil.singletonVoteRequest(
             log.topicPartition(),
-            clusterId,
+            clusterId.getNow(),
             quorum.epoch(),
             quorum.localReplicaKeyOrThrow(),
             remoteVoter,
@@ -3006,7 +3008,7 @@ public final class KafkaRaftClient<T> implements RaftClient<T> {
         return request
             .setMaxBytes(quorumConfig.fetchMaxBytes())
             .setMaxWaitMs(fetchMaxWaitMs)
-            .setClusterId(clusterId)
+            .setClusterId(clusterId.getNow())
             .setReplicaState(new FetchRequestData.ReplicaState().setReplicaId(quorum.localIdOrSentinel()));
     }
 
@@ -3023,7 +3025,7 @@ public final class KafkaRaftClient<T> implements RaftClient<T> {
 
     private FetchSnapshotRequestData buildFetchSnapshotRequest(OffsetAndEpoch snapshotId, long snapshotSize) {
         return RaftUtil.singletonFetchSnapshotRequest(
-            clusterId,
+            clusterId.getNow(),
             ReplicaKey.of(quorum().localIdOrSentinel(), quorum.localDirectoryId()),
             log.topicPartition(),
             quorum.epoch(),
@@ -3453,7 +3455,7 @@ public final class KafkaRaftClient<T> implements RaftClient<T> {
 
     private UpdateRaftVoterRequestData buildUpdateVoterRequest() {
         return RaftUtil.updateVoterRequest(
-            clusterId,
+            clusterId.getNow(),
             quorum.localReplicaKeyOrThrow(),
             quorum.epoch(),
             localSupportedKRaftVersion,
@@ -3461,7 +3463,7 @@ public final class KafkaRaftClient<T> implements RaftClient<T> {
         );
     }
 
-    private AddRaftVoterRequestData buildAddVoterRequest() {
+    private AddRaftVoterRequestData buildAddVoterRequest(String clusterId) {
         return RaftUtil.addVoterRequest(
             clusterId,
             quorumConfig.requestTimeoutMs(),
@@ -3471,7 +3473,10 @@ public final class KafkaRaftClient<T> implements RaftClient<T> {
         );
     }
 
-    private RemoveRaftVoterRequestData buildRemoveVoterRequest(ReplicaKey replicaKey) {
+    private RemoveRaftVoterRequestData buildRemoveVoterRequest(
+        ReplicaKey replicaKey,
+        String clusterId
+    ) {
         return RaftUtil.removeVoterRequest(
             clusterId,
             replicaKey
@@ -3493,7 +3498,7 @@ public final class KafkaRaftClient<T> implements RaftClient<T> {
         return maybeSendRequest(
             currentTimeMs,
             state.leaderNode(channel.listenerName()),
-            this::buildAddVoterRequest
+            () -> buildAddVoterRequest(clusterId.getNow())
         );
     }
 
@@ -3505,7 +3510,7 @@ public final class KafkaRaftClient<T> implements RaftClient<T> {
         return maybeSendRequest(
             currentTimeMs,
             state.leaderNode(channel.listenerName()),
-            () -> buildRemoveVoterRequest(replicaKey)
+            () -> buildRemoveVoterRequest(replicaKey, clusterId.getNow())
         );
     }
 

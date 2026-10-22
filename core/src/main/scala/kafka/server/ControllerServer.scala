@@ -33,7 +33,7 @@ import org.apache.kafka.common.security.scram.internals.ScramMechanism
 import org.apache.kafka.common.security.token.delegation.internals.DelegationTokenCache
 import org.apache.kafka.common.utils.Utils
 import org.apache.kafka.common.utils.internals.LogContext
-import org.apache.kafka.common.{ClusterResource, Endpoint, Uuid}
+import org.apache.kafka.common.{Endpoint, Uuid}
 import org.apache.kafka.controller.metrics.{ControllerMetadataMetricsPublisher, QuorumControllerMetrics}
 import org.apache.kafka.controller.{Controller, QuorumController, QuorumFeatures, RaftClientVotersSupplier}
 import org.apache.kafka.image.publisher.{ControllerRegistrationsPublisher, KRaftMetadataCachePublisher, MetadataPublisher}
@@ -52,7 +52,7 @@ import org.apache.kafka.server.controller.ControllerRegistrationManager
 import org.apache.kafka.server.metrics.{KafkaMetricsGroup, KafkaYammerMetrics, LinuxIoMetricsCollector}
 import org.apache.kafka.server.network.{EndpointReadyFutures, KafkaAuthorizerServerInfo}
 import org.apache.kafka.server.policy.{AlterConfigPolicy, CreateTopicPolicy}
-import org.apache.kafka.server.util.{Deadline, FutureUtils}
+import org.apache.kafka.server.util.{Deadline, DeferredValue, FutureUtils}
 import org.apache.kafka.server.NodeToControllerChannelManagerImpl
 import org.apache.kafka.server.RaftControllerNodeProvider
 
@@ -126,7 +126,7 @@ class ControllerServer(
     true
   }
 
-  def clusterId: String = sharedServer.clusterId
+  def clusterId: DeferredValue[String] = sharedServer.clusterId
 
   def startup(): Unit = {
     if (!maybeChangeStatus(SHUTDOWN, STARTING)) return
@@ -138,7 +138,6 @@ class ControllerServer(
 
       maybeChangeStatus(STARTING, STARTED)
 
-      metricsGroup.newGauge("ClusterId", () => clusterId)
       metricsGroup.newGauge("yammer-metrics-count", () =>  KafkaYammerMetrics.defaultRegistry.allMetrics.size)
 
       linuxIoMetricsCollector = new LinuxIoMetricsCollector("/proc", time)
@@ -196,7 +195,7 @@ class ControllerServer(
         val builder = new EndpointReadyFutures.Builder()
         builder.build(authorizerPlugin.toJava,
           new KafkaAuthorizerServerInfo(
-            new ClusterResource(clusterId),
+            clusterId,
             config.nodeId,
             listenerInfo.listeners().values(),
             listenerInfo.firstListener(),
@@ -237,7 +236,7 @@ class ControllerServer(
 
         quorumControllerMetrics = new QuorumControllerMetrics(Optional.of(KafkaYammerMetrics.defaultRegistry), time, config.brokerSessionTimeoutMs)
 
-        new QuorumController.Builder(config.nodeId, sharedServer.clusterId).
+        new QuorumController.Builder(config.nodeId, clusterId).
           setTime(time).
           setThreadNamePrefix(s"quorum-controller-${config.nodeId}-").
           setConfigSchema(configSchema).
@@ -304,6 +303,23 @@ class ControllerServer(
         "controller"
       )
 
+      val authorizerFutures: Map[Endpoint, CompletableFuture[Void]] = endpointReadyFutures.futures().asScala.toMap
+
+      /**
+       * Enable the controller endpoint(s). If we are using an authorizer which stores
+       * ACLs in the metadata log, such as StandardAuthorizer, we will be able to start
+       * accepting requests from principals included super.users right after this point,
+       * but we will not be able to process requests from non-superusers until AclPublisher
+       * publishes metadata from the QuorumController. MetadataPublishers do not publish
+       * metadata until the controller has caught up to the high watermark.
+       */
+      val socketServerFuture = socketServer.enableRequestProcessing(authorizerFutures)
+
+      // Wait for the cluster ID to be known before proceeding
+      val knownClusterId = clusterId.waitWithLogging(logger.underlying, logIdent,
+        "the clusterId to be known", startupDeadline, time)
+      metricsGroup.newGauge("ClusterId", () => knownClusterId)
+
       // Set up the metadata cache publisher.
       metadataPublishers.add(metadataCachePublisher)
 
@@ -354,7 +370,7 @@ class ControllerServer(
 
       // Set up the DynamicTopicClusterQuotaPublisher. This will enable quotas for the cluster and topics.
       metadataPublishers.add(new DynamicTopicClusterQuotaPublisher(
-        clusterId,
+        knownClusterId,
         config.nodeId,
         sharedServer.metadataPublishingFaultHandler,
         "controller",
@@ -398,18 +414,6 @@ class ControllerServer(
       FutureUtils.waitWithLogging(logger.underlying, logIdent,
         "the controller metadata publishers to be installed",
         sharedServer.loader.installPublishers(metadataPublishers), startupDeadline, time)
-
-      val authorizerFutures: Map[Endpoint, CompletableFuture[Void]] = endpointReadyFutures.futures().asScala.toMap
-
-      /**
-       * Enable the controller endpoint(s). If we are using an authorizer which stores
-       * ACLs in the metadata log, such as StandardAuthorizer, we will be able to start
-       * accepting requests from principals included super.users right after this point,
-       * but we will not be able to process requests from non-superusers until AclPublisher
-       * publishes metadata from the QuorumController. MetadataPublishers do not publish
-       * metadata until the controller has caught up to the high watermark.
-       */
-      val socketServerFuture = socketServer.enableRequestProcessing(authorizerFutures)
 
       /**
        * Start the KIP-919 controller registration manager.

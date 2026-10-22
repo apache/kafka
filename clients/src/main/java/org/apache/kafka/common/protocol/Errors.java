@@ -21,6 +21,7 @@ import org.apache.kafka.common.errors.ApiException;
 import org.apache.kafka.common.errors.BrokerIdNotRegisteredException;
 import org.apache.kafka.common.errors.BrokerNotAvailableException;
 import org.apache.kafka.common.errors.ClusterAuthorizationException;
+import org.apache.kafka.common.errors.ClusterIdNotKnownException;
 import org.apache.kafka.common.errors.ConcurrentTransactionsException;
 import org.apache.kafka.common.errors.ControllerIdNotRegisteredException;
 import org.apache.kafka.common.errors.ControllerMovedException;
@@ -424,7 +425,8 @@ public enum Errors {
     SHARE_SESSION_LIMIT_REACHED(133, "The limit of share sessions has been reached.", ShareSessionLimitReachedException::new),
     GROUP_DELETION_FAILED(134, "DeleteGroups could not complete; see the error message on the per-group result for details.", GroupDeletionFailedException::new),
     STREAMS_TOPOLOGY_DESCRIPTION_UPDATE_FAILED(135, "The broker could not process the topology description update; see the error message for details.", StreamsTopologyDescriptionUpdateFailedException::new),
-    CONTROLLER_ID_NOT_REGISTERED(136, "The given controller ID was not registered.", ControllerIdNotRegisteredException::new);
+    CONTROLLER_ID_NOT_REGISTERED(136, "The given controller ID was not registered.", ControllerIdNotRegisteredException::new),
+    CLUSTER_ID_NOT_KNOWN(137, "The cluster ID is not known yet.", ClusterIdNotKnownException::new);
 
     private static final Logger log = LoggerFactory.getLogger(Errors.class);
 

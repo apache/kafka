@@ -17,10 +17,10 @@
 
 package org.apache.kafka.server.network;
 
-import org.apache.kafka.common.ClusterResource;
 import org.apache.kafka.common.Endpoint;
 import org.apache.kafka.common.security.auth.SecurityProtocol;
 
+import org.apache.kafka.server.util.DeferredValue;
 import org.junit.jupiter.api.Test;
 
 import java.util.HashMap;
@@ -45,7 +45,7 @@ public final class EndpointReadyFuturesTest {
             new Endpoint("INTERNAL", SecurityProtocol.PLAINTEXT, "127.0.0.1", 9093);
 
     private static final KafkaAuthorizerServerInfo INFO = new KafkaAuthorizerServerInfo(
-        new ClusterResource("S6-01LPiQOCBhhFIunQUcQ"),
+        DeferredValue.completed("S6-01LPiQOCBhhFIunQUcQ"),
         1,
         List.of(EXTERNAL, INTERNAL),
         INTERNAL,
