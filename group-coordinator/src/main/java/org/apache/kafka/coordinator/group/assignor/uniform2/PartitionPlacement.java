@@ -62,8 +62,8 @@ final class PartitionPlacement {
 
     /**
      * The partitions of the topic being placed that do not stay with their owner, in increasing
-     * id. A partition stays with its owner when it has one and the owner keeps fewer partitions
-     * than its quota so far.
+     * id order. A partition stays with its owner when it has one and the owner keeps fewer
+     * partitions than its quota so far.
      */
     private final IntList movingPartitions = new IntList(16);
 
@@ -111,8 +111,8 @@ final class PartitionPlacement {
                 movingPartitions.add(partition);
             }
         }
-        // Since the quotas add up to the partition count, every member has its quota when every
-        // partition stays with its owner, and nothing moves.
+        // No member is below its quota when no partition moves, since the owners keep every
+        // partition and the quotas add up to the partition count.
         boolean moves = !movingPartitions.isEmpty();
         if (moves) {
             handOutMovingPartitions(topic, minQuota, assignment);
