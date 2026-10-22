@@ -530,6 +530,7 @@ public class CoordinatorRuntime<S extends CoordinatorShard<U>, U> implements Aut
                 case LOADING:
                     state = CoordinatorState.LOADING;
                     SnapshotRegistry snapshotRegistry = new SnapshotRegistry(logContext);
+                    executor.createSnapshot();
                     coordinator = new SnapshottableCoordinator<>(
                         logContext,
                         snapshotRegistry,
@@ -717,6 +718,7 @@ public class CoordinatorRuntime<S extends CoordinatorShard<U>, U> implements Aut
                     );
                     runtimeMetrics.recordFlushTime(time.milliseconds() - flushStartMs);
                     coordinator.updateLastWrittenOffset(offset);
+                    executor.createSnapshot();
 
                     if (offset != currentBatch.nextOffset) {
                         log.error("The state machine of the coordinator {} is out of sync with the underlying log. " +
@@ -786,6 +788,7 @@ public class CoordinatorRuntime<S extends CoordinatorShard<U>, U> implements Aut
         private void failCurrentBatch(Throwable t) {
             if (currentBatch != null) {
                 coordinator.revertLastWrittenOffset(currentBatch.baseOffset);
+                executor.revertToSnapshot();
                 currentBatch.deferredEvents.complete(t);
                 freeCurrentBatch();
             }
@@ -1096,6 +1099,7 @@ public class CoordinatorRuntime<S extends CoordinatorShard<U>, U> implements Aut
                 );
                 runtimeMetrics.recordFlushTime(time.milliseconds() - flushStartMs);
                 coordinator.updateLastWrittenOffset(offset);
+                executor.createSnapshot();
 
                 deferredEventQueue.add(offset, DeferredEventCollection.of(log, event));
             } catch (Throwable t) {
@@ -1113,6 +1117,7 @@ public class CoordinatorRuntime<S extends CoordinatorShard<U>, U> implements Aut
                         "error: {}.", tp, t.getMessage(), t);
                 }
                 coordinator.revertLastWrittenOffset(prevLastWrittenOffset);
+                executor.revertToSnapshot();
                 event.complete(t);
             }
         }

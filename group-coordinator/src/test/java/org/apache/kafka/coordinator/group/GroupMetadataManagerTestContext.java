@@ -622,17 +622,20 @@ public class GroupMetadataManagerTestContext {
         this.classicGroupInitialRebalanceDelayMs = config.classicGroupInitialRebalanceDelayMs();
         this.classicGroupNewMemberJoinTimeoutMs = config.classicGroupNewMemberJoinTimeoutMs();
         snapshotRegistry.idempotentCreateSnapshot(lastWrittenOffset);
+        executor.createSnapshot();
     }
 
     public void commit() {
         long lastCommittedOffset = this.lastCommittedOffset;
         this.lastCommittedOffset = lastWrittenOffset;
         snapshotRegistry.deleteSnapshotsUpTo(lastCommittedOffset);
+        executor.createSnapshot();
     }
 
     public void rollback() {
         lastWrittenOffset = lastCommittedOffset;
         snapshotRegistry.revertToSnapshot(lastCommittedOffset);
+        executor.revertToSnapshot();
     }
 
     public ConsumerGroup.ConsumerGroupState consumerGroupState(

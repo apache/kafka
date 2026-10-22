@@ -433,4 +433,33 @@ public class CoordinatorExecutorImplTest {
         assertEquals(2, taskCallCount.get());
         assertEquals(0, operationCallCount.get());
     }
+
+    @Test
+    public void testRevertToSnapshot() {
+        CoordinatorShardScheduler<String> scheduler = mock(CoordinatorShardScheduler.class);
+        ExecutorService executorService = mock(ExecutorService.class);
+        CoordinatorExecutorImpl<String> executor = new CoordinatorExecutorImpl<>(
+            LOG_CONTEXT,
+            executorService,
+            scheduler
+        );
+
+        // The tasks are submitted but never run, so they stay scheduled.
+        when(executorService.submit(any(Runnable.class))).thenReturn(CompletableFuture.completedFuture(null));
+
+        executor.schedule(TASK_KEY + 0, () -> "Hello!", (result, exception) -> null);
+        executor.createSnapshot();
+        executor.schedule(TASK_KEY + 1, () -> "Hello!", (result, exception) -> null);
+
+        // The task scheduled since the snapshot is cancelled. The task scheduled before the
+        // snapshot is kept.
+        executor.revertToSnapshot();
+        assertTrue(executor.isScheduled(TASK_KEY + 0));
+        assertFalse(executor.isScheduled(TASK_KEY + 1));
+
+        // The task cancelled since the snapshot is not restored.
+        executor.cancel(TASK_KEY + 0);
+        executor.revertToSnapshot();
+        assertFalse(executor.isScheduled(TASK_KEY + 0));
+    }
 }

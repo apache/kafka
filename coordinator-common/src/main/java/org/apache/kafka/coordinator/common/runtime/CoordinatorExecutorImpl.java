@@ -23,7 +23,9 @@ import org.apache.kafka.common.utils.internals.LogContext;
 
 import org.slf4j.Logger;
 
+import java.util.HashSet;
 import java.util.Map;
+import java.util.Set;
 import java.util.concurrent.ConcurrentHashMap;
 import java.util.concurrent.ExecutorService;
 import java.util.concurrent.RejectedExecutionException;
@@ -176,6 +178,12 @@ public class CoordinatorExecutorImpl<U> implements CoordinatorExecutor<U> {
     private final CoordinatorShardScheduler<U> scheduler;
     private final Map<String, Task<?>> tasks = new ConcurrentHashMap<>();
 
+    /**
+     * The keys of the tasks scheduled since the last snapshot taken by {@link #createSnapshot()}.
+     * These tasks are cancelled when reverting to the snapshot with {@link #revertToSnapshot()}.
+     */
+    private final Set<String> tasksToCancelOnRevert = new HashSet<>();
+
     public CoordinatorExecutorImpl(
         LogContext logContext,
         ExecutorService executor,
@@ -208,6 +216,8 @@ public class CoordinatorExecutorImpl<U> implements CoordinatorExecutor<U> {
         // Put the task if the key is free. Otherwise, reject it.
         if (tasks.putIfAbsent(key, task) != null) return false;
 
+        tasksToCancelOnRevert.add(key);
+
         // Submit the task.
         executor.submit(task::run);
 
@@ -230,6 +240,24 @@ public class CoordinatorExecutorImpl<U> implements CoordinatorExecutor<U> {
      */
     public void cancelAll() {
         tasks.keySet().forEach(this::cancel);
+    }
+
+    /**
+     * Takes a snapshot of the scheduled tasks. Tasks scheduled since the snapshot are cancelled
+     * when reverting to the snapshot with {@link #revertToSnapshot()}.
+     */
+    public void createSnapshot() {
+        tasksToCancelOnRevert.clear();
+    }
+
+    /**
+     * Reverts the scheduled tasks to the last snapshot taken by {@link #createSnapshot()}.
+     * Tasks scheduled since the snapshot are cancelled. Tasks cancelled or completed since
+     * the snapshot are not restored.
+     */
+    public void revertToSnapshot() {
+        tasksToCancelOnRevert.forEach(this::cancel);
+        tasksToCancelOnRevert.clear();
     }
 
     /**

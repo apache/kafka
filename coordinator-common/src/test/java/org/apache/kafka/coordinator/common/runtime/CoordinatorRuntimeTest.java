@@ -5904,6 +5904,54 @@ public class CoordinatorRuntimeTest {
     }
 
     @Test
+    public void testCoordinatorExecutorWhenWriteFails() {
+        MockTimer timer = new MockTimer();
+        // The partition writer only accepts one write.
+        MockPartitionWriter writer = new MockPartitionWriter(1);
+        ExecutorService executorService = mock(ExecutorService.class);
+
+        // The tasks are submitted but never run, so they stay scheduled.
+        when(executorService.submit(any(Runnable.class))).thenReturn(CompletableFuture.completedFuture(null));
+
+        CoordinatorRuntime<MockCoordinatorShard, String> runtime =
+            new CoordinatorRuntime.Builder<MockCoordinatorShard, String>()
+                .withTime(timer.time())
+                .withTimer(timer)
+                .withWriteTimeout(DEFAULT_WRITE_TIMEOUT)
+                .withLoader(new MockCoordinatorLoader())
+                .withEventProcessor(new DirectEventProcessor())
+                .withPartitionWriter(writer)
+                .withCoordinatorShardBuilderSupplier(new MockCoordinatorShardBuilderSupplier())
+                .withCoordinatorRuntimeMetrics(mock(CoordinatorRuntimeMetrics.class))
+                .withCoordinatorMetrics(mock(CoordinatorMetrics.class))
+                .withSerializer(new StringSerializer())
+                .withExecutorService(executorService)
+                .withCachedBufferMaxBytesSupplier(() -> CACHED_BUFFER_MAX_BYTES)
+                .build();
+
+        // Loads the coordinator.
+        runtime.scheduleLoadOperation(TP, 10);
+        CoordinatorRuntime<MockCoordinatorShard, String>.CoordinatorContext ctx = runtime.contextOrThrow(TP);
+
+        // Write #1. It should succeed and keep its task.
+        runtime.scheduleWriteOperation("write#1", TP, state -> {
+            state.executor().schedule("write#1#task", () -> "task result", (result, exception) -> null);
+            return new CoordinatorResult<>(List.of("record1"), "response1");
+        });
+        assertTrue(ctx.executor.isScheduled("write#1#task"));
+
+        // Write #2. It should fail because the writer is configured to only
+        // accept 1 write, and its task should be cancelled.
+        CompletableFuture<String> write2 = runtime.scheduleWriteOperation("write#2", TP, state -> {
+            state.executor().schedule("write#2#task", () -> "task result", (result, exception) -> null);
+            return new CoordinatorResult<>(List.of("record2"), "response2");
+        });
+        assertFutureThrows(KafkaException.class, write2);
+        assertTrue(ctx.executor.isScheduled("write#1#task"));
+        assertFalse(ctx.executor.isScheduled("write#2#task"));
+    }
+
+    @Test
     public void testLingerTimeComparisonInMaybeFlushCurrentBatch() throws Exception {
         // Provides the runtime clock; we will advance it.
         MockTimer clockTimer = new MockTimer();

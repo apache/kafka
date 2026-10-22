@@ -19,10 +19,12 @@ package org.apache.kafka.coordinator.common.runtime;
 import java.util.ArrayDeque;
 import java.util.ArrayList;
 import java.util.HashMap;
+import java.util.HashSet;
 import java.util.List;
 import java.util.Map;
 import java.util.Objects;
 import java.util.Queue;
+import java.util.Set;
 
 public class MockCoordinatorExecutor<T> implements CoordinatorExecutor<T> {
     private class ExecutorTask<R> {
@@ -70,6 +72,12 @@ public class MockCoordinatorExecutor<T> implements CoordinatorExecutor<T> {
     private final Map<String, TaskRunnable<?>> tasks = new HashMap<>();
     private final Queue<ExecutorTask<?>> queue = new ArrayDeque<>();
 
+    /**
+     * The keys of the tasks scheduled since the last snapshot taken by {@link #createSnapshot()}.
+     * These tasks are cancelled when reverting to the snapshot with {@link #revertToSnapshot()}.
+     */
+    private final Set<String> tasksToCancelOnRevert = new HashSet<>();
+
     @Override
     public <R> boolean schedule(
         String key,
@@ -77,6 +85,7 @@ public class MockCoordinatorExecutor<T> implements CoordinatorExecutor<T> {
         TaskOperation<T, R> operation
     ) {
         if (tasks.putIfAbsent(key, task) != null) return false;
+        tasksToCancelOnRevert.add(key);
         return queue.add(new ExecutorTask<>(key, task, operation));
     }
 
@@ -102,5 +111,23 @@ public class MockCoordinatorExecutor<T> implements CoordinatorExecutor<T> {
         }
         queue.clear();
         return results;
+    }
+
+    /**
+     * Takes a snapshot of the scheduled tasks. Tasks scheduled since the snapshot are cancelled
+     * when reverting to the snapshot with {@link #revertToSnapshot()}.
+     */
+    public void createSnapshot() {
+        tasksToCancelOnRevert.clear();
+    }
+
+    /**
+     * Reverts the scheduled tasks to the last snapshot taken by {@link #createSnapshot()}.
+     * Tasks scheduled since the snapshot are cancelled. Tasks cancelled or completed since
+     * the snapshot are not restored.
+     */
+    public void revertToSnapshot() {
+        tasksToCancelOnRevert.forEach(this::cancel);
+        tasksToCancelOnRevert.clear();
     }
 }
