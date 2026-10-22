@@ -36,6 +36,14 @@ import java.util.Set;
  */
 public class GroupSpecImpl implements GroupSpec {
     /**
+     * The partitions of a topic which are currently assigned to a member.
+     *
+     * @param partitions     The assigned partitions.
+     * @param partitionCount The number of partitions in the topic.
+     */
+    private record AssignedPartitions(BitSet partitions, int partitionCount) { }
+
+    /**
      * The metadata image, used to size the assigned partitions of each topic.
      */
     private final CoordinatorMetadataImage metadataImage;
@@ -54,7 +62,7 @@ public class GroupSpecImpl implements GroupSpec {
      * The partitions which are currently assigned to a member,
      * keyed by topic id.
      */
-    private Map<Uuid, BitSet> assignedTopicPartitions;
+    private Map<Uuid, AssignedPartitions> assignedTopicPartitions;
 
     /**
      * In case of share groups, this map will be queried to decide
@@ -109,32 +117,30 @@ public class GroupSpecImpl implements GroupSpec {
         if (assignedTopicPartitions == null) {
             assignedTopicPartitions = computeAssignedTopicPartitions();
         }
-        BitSet assignedPartitions = assignedTopicPartitions.get(topicId);
-        return assignedPartitions != null && assignedPartitions.get(partitionId);
+        AssignedPartitions assignedPartitions = assignedTopicPartitions.get(topicId);
+        return assignedPartitions != null && assignedPartitions.partitions().get(partitionId);
     }
 
-    private Map<Uuid, BitSet> computeAssignedTopicPartitions() {
-        Map<Uuid, Integer> partitionCounts = new HashMap<>();
-        Map<Uuid, BitSet> assignedTopicPartitions = new HashMap<>();
+    private Map<Uuid, AssignedPartitions> computeAssignedTopicPartitions() {
+        Map<Uuid, AssignedPartitions> assignedTopicPartitions = new HashMap<>();
         for (MemberSubscriptionAndAssignmentImpl member : members.values()) {
             for (Map.Entry<Uuid, Set<Integer>> entry : member.partitions().entrySet()) {
-                int partitionCount = partitionCounts.computeIfAbsent(
+                AssignedPartitions assignedPartitions = assignedTopicPartitions.computeIfAbsent(
                     entry.getKey(),
-                    topicId -> metadataImage.topicMetadata(topicId)
-                        .map(CoordinatorMetadataImage.TopicMetadata::partitionCount)
-                        .orElse(0)
-                );
-                BitSet assignedPartitions = assignedTopicPartitions.computeIfAbsent(
-                    entry.getKey(),
-                    topicId -> new BitSet(partitionCount)
+                    topicId -> {
+                        int partitionCount = metadataImage.topicMetadata(topicId)
+                            .map(CoordinatorMetadataImage.TopicMetadata::partitionCount)
+                            .orElse(0);
+                        return new AssignedPartitions(new BitSet(partitionCount), partitionCount);
+                    }
                 );
                 for (int partition : entry.getValue()) {
-                    if (partition >= partitionCount) {
+                    if (partition >= assignedPartitions.partitionCount()) {
                         // Drop partitions that do not exist.
                         continue;
                     }
 
-                    assignedPartitions.set(partition);
+                    assignedPartitions.partitions().set(partition);
                 }
             }
         }
