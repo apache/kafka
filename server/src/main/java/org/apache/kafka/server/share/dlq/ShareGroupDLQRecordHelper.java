@@ -21,7 +21,7 @@ import org.apache.kafka.common.TopicIdPartition;
 import org.apache.kafka.common.Uuid;
 import org.apache.kafka.common.compress.Compression;
 import org.apache.kafka.common.header.Header;
-import org.apache.kafka.common.header.internals.RecordHeader;
+import org.apache.kafka.common.header.internals.RecordHeaders;
 import org.apache.kafka.common.record.internal.DefaultRecord;
 import org.apache.kafka.common.record.internal.DefaultRecordBatch;
 import org.apache.kafka.common.record.internal.MemoryRecords;
@@ -36,6 +36,7 @@ import java.util.ArrayList;
 import java.util.List;
 import java.util.Map;
 import java.util.Optional;
+import java.util.Set;
 import java.util.concurrent.CompletableFuture;
 import java.util.function.Function;
 
@@ -61,6 +62,20 @@ public final class ShareGroupDLQRecordHelper {
     protected static final String HEADER_DLQ_ERRORS_DELIVERY_COUNT = "__dlq.errors.delivery.count";
     protected static final String HEADER_DLQ_ERRORS_MESSAGE = "__dlq.errors.message";
 
+    // DLQ context header keys. An original record header reusing one of these keys is always
+    // dropped, even when no DLQ header is added under that key for this call (e.g. no delivery count
+    // or cause). The most likely way for an original record to carry one is a record forwarded from
+    // a DLQ topic back onto a normal topic and DLQ'ed again, in which case preserving the stale
+    // headers from the earlier DLQ round would be misleading.
+    private static final Set<String> RESERVED_DLQ_HEADER_KEYS = Set.of(
+            HEADER_DLQ_ERRORS_TOPIC,
+            HEADER_DLQ_ERRORS_PARTITION,
+            HEADER_DLQ_ERRORS_OFFSET,
+            HEADER_DLQ_ERRORS_GROUP,
+            HEADER_DLQ_ERRORS_DELIVERY_COUNT,
+            HEADER_DLQ_ERRORS_MESSAGE
+    );
+
     /**
      * Result of building DLQ records for a range of offsets, respecting maxMessageBytes.
      *
@@ -74,6 +89,9 @@ public final class ShareGroupDLQRecordHelper {
     /**
      * Builds DLQ headers for a single offset.
      *
+     * @param originalRecordHeaders The original source record's headers, or null if unresolved/unavailable.
+     *                              Any header reusing a reserved DLQ header key (see
+     *                              {@link #RESERVED_DLQ_HEADER_KEYS}) is dropped.
      * @param sourceTopic   The resolved source topic name
      * @param partition     The source partition number
      * @param offset        The source offset
@@ -83,6 +101,7 @@ public final class ShareGroupDLQRecordHelper {
      * @return Array of DLQ headers
      */
     private static Header[] headers(
+            Header[] originalRecordHeaders,
             String sourceTopic,
             int partition,
             long offset,
@@ -91,22 +110,25 @@ public final class ShareGroupDLQRecordHelper {
             Optional<Throwable> cause
     ) {
         String causeMessage = cause.map(Throwable::getMessage).orElse(null);
-        int size = 4 + (deliveryCount.isPresent() ? 1 : 0) + (causeMessage != null ? 1 : 0);
-
-        Header[] headers = new Header[size];
-        int counter = 0;
-        headers[counter++] = new RecordHeader(HEADER_DLQ_ERRORS_TOPIC, sourceTopic.getBytes(StandardCharsets.UTF_8));
-        headers[counter++] = new RecordHeader(HEADER_DLQ_ERRORS_PARTITION, Integer.toString(partition).getBytes(StandardCharsets.UTF_8));
-        headers[counter++] = new RecordHeader(HEADER_DLQ_ERRORS_OFFSET, Long.toString(offset).getBytes(StandardCharsets.UTF_8));
-        headers[counter++] = new RecordHeader(HEADER_DLQ_ERRORS_GROUP, groupId.getBytes(StandardCharsets.UTF_8));
-        if (deliveryCount.isPresent()) {
-            headers[counter++] = new RecordHeader(HEADER_DLQ_ERRORS_DELIVERY_COUNT,
-                    Short.toString(deliveryCount.get()).getBytes(StandardCharsets.UTF_8));
+        RecordHeaders headers = new RecordHeaders();
+        if (originalRecordHeaders != null) {
+            for (Header header : originalRecordHeaders) {
+                if (!RESERVED_DLQ_HEADER_KEYS.contains(header.key())) {
+                    headers.add(header);
+                }
+            }
         }
+        headers.add(HEADER_DLQ_ERRORS_TOPIC, sourceTopic.getBytes(StandardCharsets.UTF_8));
+        headers.add(HEADER_DLQ_ERRORS_PARTITION, Integer.toString(partition).getBytes(StandardCharsets.UTF_8));
+        headers.add(HEADER_DLQ_ERRORS_OFFSET, Long.toString(offset).getBytes(StandardCharsets.UTF_8));
+        headers.add(HEADER_DLQ_ERRORS_GROUP, groupId.getBytes(StandardCharsets.UTF_8));
+        deliveryCount.ifPresent(count ->
+            headers.add(HEADER_DLQ_ERRORS_DELIVERY_COUNT, Short.toString(count).getBytes(StandardCharsets.UTF_8))
+        );
         if (causeMessage != null) {
-            headers[counter] = new RecordHeader(HEADER_DLQ_ERRORS_MESSAGE, causeMessage.getBytes(StandardCharsets.UTF_8));
+            headers.add(HEADER_DLQ_ERRORS_MESSAGE, causeMessage.getBytes(StandardCharsets.UTF_8));
         }
-        return headers;
+        return headers.toArray();
     }
 
     /**
@@ -181,11 +203,13 @@ public final class ShareGroupDLQRecordHelper {
             ByteBuffer key = null;
             ByteBuffer value = null;
             Record record = resolvedRecordData.get(offset);
+            Header[] originalRecordHeaders = null;
             if (record != null) {
                 key = record.hasKey() ? record.key() : null;
                 value = record.hasValue() ? record.value() : null;
+                originalRecordHeaders = record.headers();
             }
-            Header[] recordHeaders = headers(sourceTopic, param.topicIdPartition().partition(),
+            Header[] recordHeaders = headers(originalRecordHeaders, sourceTopic, param.topicIdPartition().partition(),
                     offset, param.groupId(), param.deliveryCount(), param.cause());
             if (baseTimestamp == null) {
                 baseTimestamp = timestamp;
