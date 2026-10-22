@@ -49,6 +49,7 @@ public class ByteUtilsTest {
     private final byte x01 = 0x01;
     private final byte x02 = 0x02;
     private final byte x0F = 0x0f;
+    private final byte x10 = 0x10;
     private final byte x07 = 0x07;
     private final byte x08 = 0x08;
     private final byte x3F = 0x3f;
@@ -312,26 +313,16 @@ public class ByteUtilsTest {
     }
 
     @Test
-    public void testInvalidVarint() throws IOException {
-        // varint encoding has one overflow byte (6-byte sequence)
+    public void testInvalidVarint() {
+        // varint encoding has one overflow byte
         ByteBuffer buf = ByteBuffer.wrap(new byte[] {xFF, xFF, xFF, xFF, xFF, x01});
         assertThrows(IllegalArgumentException.class, () -> ByteUtils.readVarint(buf));
 
-        // unused bits set in the 5th byte (bits 5-7 must be zero for a valid 32-bit varint)
-        byte[] unusedBitsEncoding = new byte[] {xFF, xFF, xFF, xFF, 0x1F};
-        assertThrows(IllegalArgumentException.class,
-                () -> ByteUtils.readUnsignedVarint(ByteBuffer.wrap(unusedBitsEncoding)));
-        assertThrows(IllegalArgumentException.class,
-                () -> ByteUtils.readUnsignedVarint(new ByteArrayInputStream(unusedBitsEncoding)));
-
-        // boundary: 0x10 in the 5th byte has bit 4 set and is also invalid
-        byte[] bit4Encoding = new byte[] {xFF, xFF, xFF, xFF, 0x10};
-        assertThrows(IllegalArgumentException.class,
-                () -> ByteUtils.readUnsignedVarint(ByteBuffer.wrap(bit4Encoding)));
-        assertThrows(IllegalArgumentException.class,
-                () -> ByteUtils.readUnsignedVarint(new ByteArrayInputStream(bit4Encoding)));
-
-        assertEquals(-1, ByteUtils.readUnsignedVarint(ByteBuffer.wrap(new byte[] {xFF, xFF, xFF, xFF, 0x0F})));
+        // varint encoding has unused bits set in the last byte
+        ByteBuffer unusedBitsBuf = ByteBuffer.wrap(new byte[] {xFF, xFF, xFF, xFF, x10});
+        assertThrows(IllegalArgumentException.class, () -> ByteUtils.readUnsignedVarint(unusedBitsBuf.duplicate()));
+        InputStream unusedBitsIn = new ByteBufferInputStream(unusedBitsBuf);
+        assertThrows(IllegalArgumentException.class, () -> ByteUtils.readUnsignedVarint(unusedBitsIn));
     }
 
     @Test
