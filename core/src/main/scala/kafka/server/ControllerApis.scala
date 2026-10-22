@@ -955,14 +955,14 @@ class ControllerApis(
 
     if (!allowTokenRequests(request)) {
       requestHelper.sendResponseMaybeThrottle(request, requestThrottleMs =>
-        CreateDelegationTokenResponse.prepareResponse(request.context.requestVersion, requestThrottleMs,
+        CreateDelegationTokenResponse.prepareResponse(request.context.effectiveApiVersion, requestThrottleMs,
           Errors.DELEGATION_TOKEN_REQUEST_NOT_ALLOWED, owner, requester))
       CompletableFuture.completedFuture[Unit](())
     } else if (!owner.equals(requester) &&
       !authHelper.authorize(request.context, CREATE_TOKENS, USER, owner.toString)) {
       // Requester is always allowed to create token for self
       requestHelper.sendResponseMaybeThrottle(request, requestThrottleMs =>
-        CreateDelegationTokenResponse.prepareResponse(request.context.requestVersion, requestThrottleMs,
+        CreateDelegationTokenResponse.prepareResponse(request.context.effectiveApiVersion, requestThrottleMs,
           Errors.DELEGATION_TOKEN_AUTHORIZATION_FAILED, owner, requester))
         CompletableFuture.completedFuture[Unit](())
     } else {
@@ -975,7 +975,7 @@ class ControllerApis(
         .thenApply[Unit] { response =>
            requestHelper.sendResponseMaybeThrottle(request, requestThrottleMs =>
              CreateDelegationTokenResponse.prepareResponse(
-               request.context.requestVersion,
+               request.context.effectiveApiVersion,
                requestThrottleMs,
                Errors.forCode(response.errorCode()),
                new KafkaPrincipal(response.principalType(), response.principalName()),
