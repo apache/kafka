@@ -41,6 +41,7 @@ import java.util.Optional;
 import java.util.Properties;
 import java.util.Set;
 import java.util.function.Function;
+import java.util.function.Supplier;
 import java.util.regex.Matcher;
 import java.util.regex.Pattern;
 import java.util.stream.Collectors;
@@ -213,19 +214,6 @@ public class DynamicBrokerConfig {
         );
     }
 
-    public static class DynamicLogConfig {
-        /**
-         * The broker configurations pertaining to logs that are reconfigurable. This set contains
-         * the names you would use when setting a static or dynamic broker configuration (not topic
-         * configuration).
-         */
-        public static final Set<String> RECONFIGURABLE_CONFIGS = Stream.of(
-                ServerTopicConfigSynonyms.TOPIC_CONFIG_SYNONYMS.values(),
-                Set.of(ServerLogConfigs.CORDONED_LOG_DIRS_CONFIG))
-            .flatMap(Collection::stream)
-            .collect(Collectors.toUnmodifiableSet());
-    }
-
     public static class DynamicListenerConfig {
         /**
          * The set of configurations which the DynamicListenerConfig object listens for. Many of
@@ -292,13 +280,43 @@ public class DynamicBrokerConfig {
                 RemoteLogManagerConfig.REMOTE_LOG_READER_THREADS_PROP);
     }
 
-    public static class DynamicClusterMirrorConfig {
+    public static class DynamicQuotaConfig {
+        public static final Set<String> RECONFIGURABLE_CONFIGS = QuotaConfig.BROKER_QUOTA_CONFIGS;
+    }
+
+    public static class DynamicClusterMirrorConfig implements BrokerReconfigurable {
         public static final Set<String> RECONFIGURABLE_CONFIGS = Set.of(
                 ClusterMirrorConfigs.MIRROR_NUM_REPLICA_FETCHERS_CONFIG,
                 ClusterMirrorConfigs.MIRROR_METADATA_REFRESH_INTERVAL_MS_CONFIG);
-    }
 
-    public static class DynamicQuotaConfig {
-        public static final Set<String> RECONFIGURABLE_CONFIGS = QuotaConfig.BROKER_QUOTA_CONFIGS;
+        private final Supplier<AbstractKafkaConfig> currentConfig;
+
+        public DynamicClusterMirrorConfig(Supplier<AbstractKafkaConfig> currentConfig) {
+            this.currentConfig = currentConfig;
+        }
+
+        @Override
+        public Set<String> reconfigurableConfigs() {
+            return RECONFIGURABLE_CONFIGS;
+        }
+
+        @Override
+        public void validateReconfiguration(AbstractKafkaConfig newConfig) {
+            int newFetchers = newConfig.getInt(ClusterMirrorConfigs.MIRROR_NUM_REPLICA_FETCHERS_CONFIG);
+            int oldFetchers = currentConfig.get().getInt(ClusterMirrorConfigs.MIRROR_NUM_REPLICA_FETCHERS_CONFIG);
+            if (newFetchers != oldFetchers) {
+                String errorMsg = "Dynamic thread count update validation failed for "
+                        + ClusterMirrorConfigs.MIRROR_NUM_REPLICA_FETCHERS_CONFIG + "=" + newFetchers;
+                if (newFetchers < oldFetchers / 2)
+                    throw new ConfigException(errorMsg + ", Value should be at least half the current value " + oldFetchers);
+                if (newFetchers > oldFetchers * 2)
+                    throw new ConfigException(errorMsg + ", Value should not be greater than double the current value " + oldFetchers);
+            }
+        }
+
+        @Override
+        public void reconfigure(AbstractKafkaConfig oldConfig, AbstractKafkaConfig newConfig) {
+            // TODO: Implement reconfiguration when MirrorMetadataManager is available (KAFKA-21233)
+        }
     }
 }

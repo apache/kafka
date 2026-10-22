@@ -388,7 +388,7 @@ public class AsyncKafkaConsumer<K, V> implements ConsumerDelegate<K, V> {
     private final ConsumerInterceptors<K, V> interceptors;
     private final IsolationLevel isolationLevel;
 
-    private final SubscriptionState subscriptions;
+    private final ConsumerSubscriptionState subscriptions;
 
     /**
      * This is a snapshot of the partitions assigned to this consumer. HOWEVER, this is only populated and used in
@@ -622,7 +622,7 @@ public class AsyncKafkaConsumer<K, V> implements ConsumerDelegate<K, V> {
                        CompletableEventReaper backgroundEventReaper,
                        ConsumerRebalanceListenerInvoker rebalanceListenerInvoker,
                        Metrics metrics,
-                       SubscriptionState subscriptions,
+                       ConsumerSubscriptionState subscriptions,
                        ConsumerMetadata metadata,
                        long retryBackoffMs,
                        int requestTimeoutMs,
@@ -672,7 +672,7 @@ public class AsyncKafkaConsumer<K, V> implements ConsumerDelegate<K, V> {
                        Deserializer<K> keyDeserializer,
                        Deserializer<V> valueDeserializer,
                        KafkaClient client,
-                       SubscriptionState subscriptions,
+                       ConsumerSubscriptionState subscriptions,
                        ConsumerMetadata metadata) {
         this.log = logContext.logger(getClass());
         this.subscriptions = subscriptions;
@@ -805,7 +805,7 @@ public class AsyncKafkaConsumer<K, V> implements ConsumerDelegate<K, V> {
         FetchCollector<K, V> build(
             final LogContext logContext,
             final ConsumerMetadata metadata,
-            final SubscriptionState subscriptions,
+            final ConsumerSubscriptionState subscriptions,
             final FetchConfig fetchConfig,
             final Deserializers<K, V> deserializers,
             final FetchMetricsManager metricsManager,
@@ -819,7 +819,7 @@ public class AsyncKafkaConsumer<K, V> implements ConsumerDelegate<K, V> {
 
         ConsumerMetadata build(
             final ConsumerConfig config,
-            final SubscriptionState subscriptions,
+            final ConsumerSubscriptionState subscriptions,
             final LogContext logContext,
             final ClusterResourceListeners clusterResourceListeners
         );
@@ -1242,7 +1242,7 @@ public class AsyncKafkaConsumer<K, V> implements ConsumerDelegate<K, V> {
 
             Timer timer = time.timer(timeout);
             do {
-                SubscriptionState.FetchPosition position = subscriptions.validPosition(partition);
+                ConsumerSubscriptionState.FetchPosition position = subscriptions.validPosition(partition);
                 if (position != null)
                     return position.offset;
 
@@ -2038,7 +2038,7 @@ public class AsyncKafkaConsumer<K, V> implements ConsumerDelegate<K, V> {
     /**
      * Perform the "{@link FetchCollector#collectFetch(FetchBuffer) fetch collection}" step by reading raw data out
      * of the {@link #fetchBuffer}, converting it to a well-formed {@link CompletedFetch}, validating that it and
-     * the internal {@link SubscriptionState state} are correct, and then converting it all into a {@link Fetch}
+     * the internal {@link ConsumerSubscriptionState state} are correct, and then converting it all into a {@link Fetch}
      * for returning.
      */
     private Fetch<K, V> collectFetch() {
@@ -2069,7 +2069,7 @@ public class AsyncKafkaConsumer<K, V> implements ConsumerDelegate<K, V> {
 
         // With the non-blocking async poll, it's critical that the application thread wait until the background
         // thread has completed the stage of validating positions. This prevents a race condition where both
-        // threads may attempt to update the SubscriptionState.position() for a given partition. So if the background
+        // threads may attempt to update the ConsumerSubscriptionState.position() for a given partition. So if the background
         // thread has not completed that stage for the inflight event, don't attempt to collect data from the fetch
         // buffer. If the inflight event was nulled out by checkInflightPoll(), that implies that it is safe to
         // attempt to collect data from the fetch buffer.
@@ -2547,7 +2547,7 @@ public class AsyncKafkaConsumer<K, V> implements ConsumerDelegate<K, V> {
     }
 
     // Visible for testing
-    SubscriptionState subscriptions() {
+    ConsumerSubscriptionState subscriptions() {
         return subscriptions;
     }
 

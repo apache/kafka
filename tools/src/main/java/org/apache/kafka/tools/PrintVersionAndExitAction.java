@@ -27,6 +27,9 @@ import java.util.Map;
 
 class PrintVersionAndExitAction implements ArgumentAction {
 
+    // Deprecated in argparse4j 0.9.0 but still abstract, so it must be implemented.
+    // The interface's default run(..., valueSetter), which argparse4j invokes, delegates here.
+    @Deprecated
     @Override
     public void run(
         ArgumentParser parser,
