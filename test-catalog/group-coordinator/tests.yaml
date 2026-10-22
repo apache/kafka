@@ -626,6 +626,7 @@ org.apache.kafka.coordinator.group.GroupMetadataManagerTest:
 - testOnLoadedSchedulesClassicGroupMemberHeartbeats
 - testOnLoadedSessionTimeoutExpiration
 - testOnLoadedSessionTimeoutExpirationForShareMember
+- testOnLoadedUsesClassicMemberSessionTimeout
 - testOnLoadedWithShareGroup
 - testOnLoadedWithStreamsGroup
 - testOnMetadataUpdate
