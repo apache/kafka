@@ -245,6 +245,49 @@ public class AssignmentRefinerTest {
     }
 
     // ---------------------------------------------------------------------------------------------------------------
+    // misplacedTasks
+    // ---------------------------------------------------------------------------------------------------------------
+
+    @Test
+    public void shouldFindTheStatefulTargetActivesTheirTargetOwnerDoesNotHold() {
+        // memberA holds 0_0 and is given 0_1 too, which memberB holds; nobody holds 0_2; the target assignment hands
+        // 0_3 to a member the group no longer has. The stateless task memberA does not hold needs no decision either.
+        final Map<String, StreamsGroupMember> members = Map.of(
+            "memberA", member("memberA", "processA", mkTasksTuple(TaskRole.ACTIVE, mkTasks(STATEFUL, 0))),
+            "memberB", member("memberB", "processB", mkTasksTuple(TaskRole.ACTIVE, mkTasks(STATEFUL, 1)))
+        );
+        final Map<String, TasksTuple> targetAssignment = Map.of(
+            "memberA", mkTasksTuple(TaskRole.ACTIVE, mkTasks(STATEFUL, 0, 1), mkTasks(STATELESS, 0)),
+            "memberB", mkTasksTuple(TaskRole.ACTIVE, mkTasks(STATEFUL, 2)),
+            "departed", mkTasksTuple(TaskRole.ACTIVE, mkTasks(STATEFUL, 3))
+        );
+
+        assertEquals(
+            Map.of(STATEFUL, Map.of(1, "memberA", 2, "memberB", 3, "departed")),
+            AssignmentRefinerImpl.misplacedTasks(
+                members, targetAssignment, AssignmentRefinerImpl.statefulSubtopologies(subtopologies()))
+        );
+    }
+
+    @Test
+    public void shouldFindNothingMisplacedWhenEveryStatefulActiveIsOnItsTargetOwner() {
+        final Map<String, StreamsGroupMember> members = Map.of(
+            "memberA", member("memberA", "processA", mkTasksTuple(TaskRole.ACTIVE, mkTasks(STATEFUL, 0))),
+            "memberB", member("memberB", "processB", mkTasksTuple(TaskRole.ACTIVE, mkTasks(STATEFUL, 1)))
+        );
+        final Map<String, TasksTuple> targetAssignment = Map.of(
+            "memberA", mkTasksTuple(TaskRole.ACTIVE, mkTasks(STATEFUL, 0)),
+            "memberB", mkTasksTuple(TaskRole.ACTIVE, mkTasks(STATEFUL, 1))
+        );
+
+        assertEquals(
+            Map.of(),
+            AssignmentRefinerImpl.misplacedTasks(
+                members, targetAssignment, AssignmentRefinerImpl.statefulSubtopologies(subtopologies()))
+        );
+    }
+
+    // ---------------------------------------------------------------------------------------------------------------
     // indexCurrentAssignment
     // ---------------------------------------------------------------------------------------------------------------
 
@@ -2322,6 +2365,28 @@ public class AssignmentRefinerTest {
     }
 
     @Test
+    public void shouldReturnTheTargetAssignmentItselfWhenEveryActiveIsInPlaceWhateverTheCopiesReport() {
+        // Standbys, a warm-up task the target assignment no longer has and lagging reports do not matter once every
+        // stateful task runs on its target owner: nothing is held back, and the reconciler revokes the warm-up.
+        final Map<String, StreamsGroupMember> members = Map.of(
+            "memberA", member("memberA", "processA", new TasksTuple(
+                Map.of(STATEFUL, Set.of(0)), Map.of(STATEFUL, Set.of(1)), Map.of(STATEFUL, Set.of(2)))),
+            "memberB", member("memberB", "processB", new TasksTuple(
+                Map.of(STATEFUL, Set.of(1)), Map.of(STATEFUL, Set.of(0)), Map.of()))
+        );
+        final Map<String, TasksTuple> targetAssignment = Map.of(
+            "memberA", new TasksTuple(Map.of(STATEFUL, Set.of(0)), Map.of(STATEFUL, Set.of(1)), Map.of()),
+            "memberB", new TasksTuple(Map.of(STATEFUL, Set.of(1)), Map.of(STATEFUL, Set.of(0)), Map.of())
+        );
+        final Map<String, MemberTaskOffsets> taskOffsets = Map.of(
+            "memberA", offsets(Map.of(1, 0L, 2, 0L), Map.of(1, 10_000L, 2, 10_000L)),
+            "memberB", offsets(0, 0L, 10_000L)
+        );
+
+        assertSame(targetAssignment, assemble(members, targetAssignment, taskOffsets, 1));
+    }
+
+    @Test
     public void shouldKeepTheActiveWithItsCurrentOwnerAndWithholdItFromTheTargetOwner() {
         final Map<String, StreamsGroupMember> members = Map.of(
             "memberA", member("memberA", "processA", mkTasksTuple(TaskRole.ACTIVE, mkTasks(STATEFUL, 0))),
@@ -2693,12 +2758,12 @@ public class AssignmentRefinerTest {
     ) {
         return AssignmentRefinerImpl.analyzeTasks(
             index(members, taskOffsets),
-            targetAssignment,
+            AssignmentRefinerImpl.misplacedTasks(
+                members, targetAssignment, AssignmentRefinerImpl.statefulSubtopologies(subtopologies())),
             new AssignmentRefinerImpl.TargetStandbyHolders(
                 targetAssignment, AssignmentRefinerImpl.statefulSubtopologies(subtopologies())),
             members,
-            heartbeatVersions,
-            AssignmentRefinerImpl.statefulSubtopologies(subtopologies())
+            heartbeatVersions
         );
     }
 
