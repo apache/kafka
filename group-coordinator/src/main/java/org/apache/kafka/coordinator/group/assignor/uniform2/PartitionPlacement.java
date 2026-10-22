@@ -20,12 +20,17 @@ import org.apache.kafka.coordinator.group.assignor.uniform2.util.IntList;
 
 /**
  * Places the partitions of a topic on its subscribers, given their quotas, moving as few
- * partitions as possible.
+ * partitions as possible. It only decides which member gets every partition; it does not build
+ * the assignments of the members.
  *
- * <p>Every owner keeps its partitions up to its quota, the lowest partition ids first. The other
- * partitions, those without owner and those beyond the quota of their owner, go to the subscribers
- * below their quota, in member order, the lowest partition ids first. A partition thus moves only
- * when its owner's quota is below what it owns.
+ * <p>Every owner keeps its partitions with the lowest ids, up to its quota. The other partitions,
+ * those without an owner and those beyond the quota of their owner, go to the subscribers below
+ * their quota, each taking the lowest ids left until it reaches its quota. The subscribers take
+ * them cohort by cohort, in member order within a cohort. With a minimum quota of 0, only the
+ * members with an extra partition can be below their quota, and they take them in the order of
+ * {@link Quotas#membersWithExtraPartition}. A partition thus moves only when its owner owns more
+ * partitions than its quota. Owners keep their lowest ids so that partitions that were
+ * consecutive stay consecutive, which lets their sets be {@code RangeSet}s.
  */
 final class PartitionPlacement {
     /**
@@ -44,10 +49,10 @@ final class PartitionPlacement {
     private final Quotas quotas;
 
     /**
-     * Per member, the number of partitions of the topic being placed that it got so far. Reset
-     * after every topic.
+     * Per member, the number of partitions of the topic being placed that it keeps. Reset after
+     * every topic.
      */
-    private final int[] placed;
+    private final int[] kept;
 
     /**
      * Per member, whether it gets an extra partition of the topic being placed. Reset after every
@@ -56,69 +61,61 @@ final class PartitionPlacement {
     private final boolean[] hasExtraPartitionOfTopic;
 
     /**
-     * The partitions of the topic being placed that can go to the members below their quota, which
-     * are those without an owner and those beyond the quota of their owner.
+     * The partitions of the topic being placed that do not stay with their owner, in increasing
+     * id. A partition stays with its owner when it has one and the owner keeps fewer partitions
+     * than its quota so far.
      */
-    private final IntList free = new IntList(16);
+    private final IntList movingPartitions = new IntList(16);
 
     /**
-     * The subscribers of the topic being placed below their quota, in member order.
+     * The owners keeping partitions of the topic being placed, whose entries of {@link #kept} are
+     * reset after the topic.
      */
-    private final IntList receivers = new IntList(16);
-
-    /**
-     * The members that got partitions of the topic being placed, to reset {@link #placed}.
-     */
-    private final IntList placedMembers = new IntList(16);
+    private final IntList keepingOwners = new IntList(16);
 
     /**
      * @param group             The members and topics of the group.
      * @param currentAssignment The current assignment.
-     * @param quotas            The quotas of the members.
+     * @param quotas            The quotas, as the steps left them. Every extra partition of every
+     *                          topic must be given, so that the quotas of a topic add up to its
+     *                          partition count.
      */
     PartitionPlacement(IndexedGroup group, CurrentAssignment currentAssignment, Quotas quotas) {
         this.group = group;
         this.currentAssignment = currentAssignment;
         this.quotas = quotas;
-        this.placed = new int[group.memberCount()];
+        this.kept = new int[group.memberCount()];
         this.hasExtraPartitionOfTopic = new boolean[group.memberCount()];
     }
 
     /**
-     * Places the partitions of the topic.
+     * Places the partitions of the topic, see the class documentation.
      *
      * @param topic      The topic.
      * @param assignment Receives, for every partition of the topic, the member getting it. Its
-     *                   length is at least the partition count of the topic.
-     * @return {@code true} if a partition may move. {@code false} guarantees that every partition
-     *         stays with its owner, and the caller need not read the assignment.
+     *                   length must be at least the partition count of the topic.
+     * @return {@code true} if a partition goes to a member that does not own it. Otherwise every
+     *         partition stays with its owner, and the caller need not read the assignment.
      */
     boolean place(int topic, int[] assignment) {
-        markExtras(topic, true);
+        markMembersWithExtraPartition(topic, true);
         int minQuota = quotas.minQuota(topic);
         var owners = currentAssignment.owners(topic);
-        free.clear();
+        movingPartitions.clear();
         for (int partition = 0; partition < group.partitionCount(topic); partition++) {
             int owner = owners == null ? -1 : owners[partition];
-            if (owner >= 0 && placed[owner] < quota(owner, minQuota)) {
+            if (owner >= 0 && kept[owner] < quota(owner, minQuota)) {
                 assignment[partition] = owner;
-                addPlaced(owner);
+                keep(owner);
             } else {
-                free.add(partition);
+                movingPartitions.add(partition);
             }
         }
-        // The quotas add up to the partition count, so when every partition stays with its owner,
-        // every member has its quota and nothing moves.
-        boolean moves = !free.isEmpty();
+        // Since the quotas add up to the partition count, every member has its quota when every
+        // partition stays with its owner, and nothing moves.
+        boolean moves = !movingPartitions.isEmpty();
         if (moves) {
-            collectReceivers(topic, minQuota);
-            int next = 0;
-            for (int i = 0; i < receivers.size(); i++) {
-                int member = receivers.get(i);
-                for (int missing = quota(member, minQuota) - placed[member]; missing > 0; missing--) {
-                    assignment[free.get(next++)] = member;
-                }
-            }
+            handOutMovingPartitions(topic, minQuota, assignment);
         }
         reset(topic);
         return moves;
@@ -127,7 +124,7 @@ final class PartitionPlacement {
     /**
      * Sets or clears the marks of the members getting an extra partition of the topic.
      */
-    private void markExtras(int topic, boolean mark) {
+    private void markMembersWithExtraPartition(int topic, boolean mark) {
         var members = quotas.membersWithExtraPartition(topic);
         for (int i = 0; i < members.size(); i++) {
             hasExtraPartitionOfTopic[members.get(i)] = mark;
@@ -142,60 +139,57 @@ final class PartitionPlacement {
     }
 
     /**
-     * Counts one more partition placed on the member.
+     * Counts one more partition of the topic that the owner keeps.
      */
-    private void addPlaced(int member) {
-        if (placed[member]++ == 0) {
-            placedMembers.add(member);
+    private void keep(int owner) {
+        if (kept[owner]++ == 0) {
+            keepingOwners.add(owner);
         }
     }
 
     /**
-     * Collects in {@link #receivers} the subscribers of the topic below their quota, in member
-     * order. With a minimum quota of 0, only the members with an extra partition can be below their
-     * quota.
+     * Gives the moving partitions of the topic to its subscribers below their quota, in the order
+     * of the class documentation.
      */
-    private void collectReceivers(int topic, int minQuota) {
-        receivers.clear();
+    private void handOutMovingPartitions(int topic, int minQuota, int[] assignment) {
+        int moved = 0;
+        // With a minimum quota of 0, only the members with an extra partition can be below their
+        // quota, so the subscribers of the topic need not be walked.
         if (minQuota == 0) {
             var members = quotas.membersWithExtraPartition(topic);
             for (int i = 0; i < members.size(); i++) {
-                if (placed[members.get(i)] == 0) {
-                    receivers.add(members.get(i));
-                }
+                moved = giveMissingPartitions(members.get(i), minQuota, moved, assignment);
             }
         } else {
             for (int cohort : group.cohortsOf(topic)) {
                 for (int member : group.membersOf(cohort)) {
-                    if (placed[member] < quota(member, minQuota)) {
-                        receivers.add(member);
-                    }
+                    moved = giveMissingPartitions(member, minQuota, moved, assignment);
                 }
             }
         }
-        // The members of a single cohort are in member order already, unlike the members with an
-        // extra partition or the members of several cohorts.
-        if (minQuota == 0 || group.cohortsOf(topic).length > 1) {
-            receivers.sort();
-        }
     }
 
     /**
-     * Resets the numbers of partitions placed on the members, after a topic or before placing it
-     * again.
+     * Gives the member the next moving partitions until it reaches its quota.
+     *
+     * @param moved The number of moving partitions given so far.
+     * @return The number of moving partitions given so far, including those given to the member.
      */
-    private void clearPlaced() {
-        for (int i = 0; i < placedMembers.size(); i++) {
-            placed[placedMembers.get(i)] = 0;
+    private int giveMissingPartitions(int member, int minQuota, int moved, int[] assignment) {
+        for (int count = kept[member]; count < quota(member, minQuota); count++) {
+            assignment[movingPartitions.get(moved++)] = member;
         }
-        placedMembers.clear();
+        return moved;
     }
 
     /**
-     * Resets {@link #hasExtraPartitionOfTopic} and {@link #placed} after placing the topic.
+     * Resets {@link #hasExtraPartitionOfTopic} and {@link #kept} after placing the topic.
      */
     private void reset(int topic) {
-        markExtras(topic, false);
-        clearPlaced();
+        markMembersWithExtraPartition(topic, false);
+        for (int i = 0; i < keepingOwners.size(); i++) {
+            kept[keepingOwners.get(i)] = 0;
+        }
+        keepingOwners.clear();
     }
 }

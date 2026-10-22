@@ -33,9 +33,6 @@ import static org.junit.jupiter.api.Assertions.assertTrue;
  * Tests of {@link PartitionPlacement}, on quotas set by hand. A topic with {@code P} partitions and
  * {@code N} subscribers has a minimum quota of {@code P / N}, and each test gives its {@code P % N}
  * extra partitions to chosen subscribers.
- *
- * <p>The member ids sort as A &lt; B &lt; C, so that A is member 0, B is member 1 and C is member
- * 2, and the topic ids as T1 &lt; T2, so that T1 is topic 0 and T2 is topic 1.
  */
 public class PartitionPlacementTest {
     private static final Uuid T1 = new Uuid(1L, 1L);
@@ -46,9 +43,10 @@ public class PartitionPlacementTest {
     private static final int C = 2;
 
     /**
-     * Fills the assignment before placing, to tell whether {@code place} wrote it.
+     * The value of every entry of the assignment before placing, so that an entry
+     * {@link PartitionPlacement#place} did not write stands out.
      */
-    private static final int UNTOUCHED = -7;
+    private static final int UNTOUCHED = -1;
 
     /**
      * T1 has 7 partitions and 3 subscribers, so a minimum quota of 2 and 1 extra partition, A's.
@@ -76,7 +74,7 @@ public class PartitionPlacementTest {
      * and 4 beyond the quota of C, go to A and then B, the lowest ids first.
      */
     @Test
-    public void testFreePartitionsGoToTheMembersBelowTheirQuotaInMemberOrder() {
+    public void testMovingPartitionsGoToTheMembersBelowTheirQuotaInMemberOrder() {
         var spec = new GroupSpecFixture()
             .withMember("C", Set.of(T1), mkAssignment(mkTopicAssignment(T1, 1, 2, 3, 4)))
             .withMember("B", Set.of(T1))
@@ -91,11 +89,11 @@ public class PartitionPlacementTest {
     /**
      * A and C subscribe to T1, and B to T1 and T2, so that A and C form cohort 0 and B cohort 1. T1
      * has 6 partitions over its 3 subscribers, so a minimum quota of 2. Nobody owns them, and they
-     * go to A, B and C in member order, not cohort by cohort. T2 has a single partition and
-     * subscriber, B, which gets it with the same placement.
+     * go cohort by cohort: to A and C, then to B. T2 has a single partition and a single
+     * subscriber, B, which gets it when the same {@code PartitionPlacement} places T2 after T1.
      */
     @Test
-    public void testFreePartitionsGoInMemberOrderAcrossCohorts() {
+    public void testMovingPartitionsGoCohortByCohort() {
         var spec = new GroupSpecFixture()
             .withMember("C", Set.of(T1))
             .withMember("B", Set.of(T1, T2))
@@ -110,7 +108,7 @@ public class PartitionPlacementTest {
 
         var placement = new PartitionPlacement(fixture.group, fixture.currentAssignment, fixture.quotas);
 
-        assertArrayEquals(new int[] {A, A, B, B, C, C}, place(fixture, placement, T1));
+        assertArrayEquals(new int[] {A, A, C, C, B, B}, place(fixture, placement, T1));
         assertArrayEquals(new int[] {B}, place(fixture, placement, T2));
     }
 
@@ -120,7 +118,7 @@ public class PartitionPlacementTest {
      * quota is 0, gets nothing.
      */
     @Test
-    public void testWithAMinQuotaOfZeroOnlyTheMembersWithAnExtraPartitionGetOne() {
+    public void testWithAMinQuotaOfZeroMovingPartitionsGoOnlyToTheMembersWithAnExtraPartition() {
         var spec = new GroupSpecFixture()
             .withMember("A", Set.of(T1))
             .withMember("B", Set.of(T1))
@@ -152,14 +150,68 @@ public class PartitionPlacementTest {
     }
 
     /**
-     * Same quotas as in the previous test, 3 for A and 2 for B, but partition 4 has no owner, and B
-     * gets it.
+     * A, B and C subscribe to T1 and T2, both placed with the same placement. T1 has 4 partitions,
+     * so a minimum quota of 1 and 1 extra partition, A's: A keeps its partitions 0 and 1, and B and
+     * C get 2 and 3. T2 has 3 partitions, a minimum quota of 1 and no extra partition, and nobody
+     * owns them: A, B and C get one each, as nothing of T1 carries over, neither the extra
+     * partition of A nor the partitions it kept.
      */
     @Test
-    public void testPartitionsMoveWhenOneHasNoOwner() {
+    public void testNothingCarriesOverFromOneTopicToTheNext() {
         var spec = new GroupSpecFixture()
-            .withMember("A", Set.of(T1), mkAssignment(mkTopicAssignment(T1, 0, 1, 2)))
-            .withMember("B", Set.of(T1), mkAssignment(mkTopicAssignment(T1, 3)))
+            .withMember("A", Set.of(T1, T2), mkAssignment(mkTopicAssignment(T1, 0, 1)))
+            .withMember("B", Set.of(T1, T2))
+            .withMember("C", Set.of(T1, T2))
+            .build();
+        var describer = new TopicsFixture()
+            .withTopic(T1, 4)
+            .withTopic(T2, 3)
+            .build();
+        var fixture = new QuotasFixture(spec, describer);
+        fixture.addExtras("A", T1);
+        var placement = new PartitionPlacement(fixture.group, fixture.currentAssignment, fixture.quotas);
+
+        assertArrayEquals(new int[] {A, A, B, C}, place(fixture, placement, T1));
+        assertArrayEquals(new int[] {A, B, C}, place(fixture, placement, T2));
+    }
+
+    /**
+     * T1 and T2 have 2 partitions over 3 subscribers each, so a minimum quota of 0 and 2 extra
+     * partitions each, and nobody owns them. The extra partitions of T2 are C's and A's, in that
+     * order, as the round robin of the second step gives them after T1 took A's and B's. The
+     * partitions of T2 go in the order of its extra partitions: 0 to C and 1 to A.
+     */
+    @Test
+    public void testWithAMinQuotaOfZeroMovingPartitionsGoInTheOrderOfTheExtraPartitions() {
+        var spec = new GroupSpecFixture()
+            .withMember("A", Set.of(T1, T2))
+            .withMember("B", Set.of(T1, T2))
+            .withMember("C", Set.of(T1, T2))
+            .build();
+        var describer = new TopicsFixture()
+            .withTopic(T1, 2)
+            .withTopic(T2, 2)
+            .build();
+        var fixture = new QuotasFixture(spec, describer);
+        fixture.addExtras("A", T1);
+        fixture.addExtras("B", T1);
+        fixture.addExtras("C", T2);
+        fixture.addExtras("A", T2);
+        var placement = new PartitionPlacement(fixture.group, fixture.currentAssignment, fixture.quotas);
+
+        assertArrayEquals(new int[] {C, A}, place(fixture, placement, T2));
+    }
+
+    /**
+     * T1 has 5 partitions and 2 subscribers, so a minimum quota of 2 and 1 extra partition, A's.
+     * A owns partitions 0 and 1, its minimum quota, and keeps them, and gets partition 2 to reach
+     * its quota of 3. B gets 3 and 4.
+     */
+    @Test
+    public void testAMemberOwningItsMinQuotaGetsItsExtraPartition() {
+        var spec = new GroupSpecFixture()
+            .withMember("A", Set.of(T1), mkAssignment(mkTopicAssignment(T1, 0, 1)))
+            .withMember("B", Set.of(T1))
             .build();
         var fixture = new QuotasFixture(spec, new TopicsFixture().withTopic(T1, 5).build());
         fixture.addExtras("A", T1);
@@ -169,26 +221,29 @@ public class PartitionPlacementTest {
     }
 
     /**
-     * Same quotas as in the previous test, 3 for A and 2 for B, and every partition has an owner,
-     * but A owns 4 partitions, and partition 3, beyond its quota, goes to B.
+     * T1 has 2 partitions over A and B, so a minimum quota of 1, and A owns partition 0. The
+     * assignment given has 4 entries, as the caller sizes it to its largest topic: the placement
+     * fills the first 2, A keeping 0 and B getting 1, and leaves the others alone.
      */
     @Test
-    public void testPartitionsMoveWhenAnOwnerOwnsMoreThanItsQuota() {
+    public void testOnlyTheEntriesOfThePartitionsOfTheTopicAreWritten() {
         var spec = new GroupSpecFixture()
-            .withMember("A", Set.of(T1), mkAssignment(mkTopicAssignment(T1, 0, 1, 2, 3)))
-            .withMember("B", Set.of(T1), mkAssignment(mkTopicAssignment(T1, 4)))
+            .withMember("A", Set.of(T1), mkAssignment(mkTopicAssignment(T1, 0)))
+            .withMember("B", Set.of(T1))
             .build();
-        var fixture = new QuotasFixture(spec, new TopicsFixture().withTopic(T1, 5).build());
-        fixture.addExtras("A", T1);
+        var fixture = new QuotasFixture(spec, new TopicsFixture().withTopic(T1, 2).build());
         var placement = new PartitionPlacement(fixture.group, fixture.currentAssignment, fixture.quotas);
+        var assignment = new int[4];
+        Arrays.fill(assignment, UNTOUCHED);
 
-        assertArrayEquals(new int[] {A, A, A, B, B}, place(fixture, placement, T1));
+        assertTrue(placement.place(fixture.topic(T1), assignment));
+        assertArrayEquals(new int[] {A, B, UNTOUCHED, UNTOUCHED}, assignment);
     }
 
     /**
      * Places the topic, expecting partitions to move.
      *
-     * @return The member getting every partition.
+     * @return Per partition of the topic, the member getting it.
      */
     private static int[] place(QuotasFixture fixture, PartitionPlacement placement, Uuid topicId) {
         int topic = fixture.topic(topicId);
