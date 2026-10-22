@@ -36,13 +36,12 @@ import java.util.stream.Collectors;
  * <br>
  * Since the API protocol may change multiple times during the development of a single release, we use internal versions to
  * represent each protocol change.
- * For example, when the first protocol change is introduced during the development of 1.0, we add the config value `1.0-IV0`
- * and the corresponding enum constant `IBP_1_0_IV0`.
- * The config value `1.0` also maps to `IBP_1_0_IV0`, which is the latest internal version at that point.
- * If the protocol changes again during the development of 1.0, we add `1.0-IV1` and `IBP_1_0_IV1`.
- * This way, users deploying builds from trunk can use `1.0-IV0`, `1.0-IV1`, and later internal versions to upgrade incrementally.
- * Once 1.0 becomes production-ready, the release version `1.0` maps to the latest production internal version for that release.
- * For most people who just want to use released versions, they can simply specify `1.0` when upgrading to the 1.0 release.
+ * For example, when the first protocol change is introduced during the development of 3.5, we add the config value `3.5-IV0`
+ * and the corresponding enum constant `IBP_3_5_IV0`.
+ * If the protocol changes again during the development of 3.5, we add `3.5-IV1` and `IBP_3_5_IV1`.
+ * This way, users deploying builds from trunk can use `3.5-IV0`, `3.5-IV1`, and later internal versions to upgrade incrementally.
+ * Once 3.5 becomes production-ready, the release version `3.5` maps to the latest production internal version for that release.
+ * For most people who just want to use released versions, they can simply specify `3.5` when upgrading to the 3.5 release.
  */
 public enum MetadataVersion {
 
