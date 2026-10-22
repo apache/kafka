@@ -28,6 +28,7 @@ import org.apache.kafka.common.config.SecurityConfig;
 import org.apache.kafka.common.config.SslConfigs;
 import org.apache.kafka.common.resource.ResourceType;
 import org.apache.kafka.common.security.auth.SecurityProtocol;
+import org.apache.kafka.common.utils.Utils;
 
 import com.google.re2j.Pattern;
 import com.google.re2j.PatternSyntaxException;
@@ -81,7 +82,7 @@ public final class ClusterMirrorConfig extends AbstractConfig {
     private static final int SOCKET_TIMEOUT_MS_DEFAULT = 30 * 1000;
 
     public static final String SOCKET_RECEIVE_BUFFER_BYTES_CONFIG = "socket.receive.buffer.bytes";
-    private static final String SOCKET_RECEIVE_BUFFER_BYTES_DOC = "The socket receive buffer for network requests to the leader for replicating data.";
+    private static final String SOCKET_RECEIVE_BUFFER_BYTES_DOC = "The socket receive buffer for network requests to the source cluster.";
     private static final int SOCKET_RECEIVE_BUFFER_BYTES_DEFAULT = 64 * 1024;
 
     public static final String FETCH_WAIT_MAX_MS_CONFIG = "fetch.wait.max.ms";
@@ -109,6 +110,7 @@ public final class ClusterMirrorConfig extends AbstractConfig {
     public static final String TOPIC_PROPERTIES_EXCLUDE_CONFIG = "topic.properties.exclude";
     private static final String TOPIC_PROPERTIES_EXCLUDE_DOC = "A comma-separated list of topic config property names and/or regexes to exclude from synchronization. "
             + "Properties in this list will not be replicated from the source cluster.";
+    // The message.timestamp.difference.max.ms property was removed in 4.0 but may still be used by older clusters
     private static final String TOPIC_PROPERTIES_EXCLUDE_DEFAULT =
             "follower.replication.throttled.replicas,"
                     + "leader.replication.throttled.replicas,"
@@ -162,6 +164,17 @@ public final class ClusterMirrorConfig extends AbstractConfig {
     public static final String SECURITY_PROVIDERS_CONFIG = SecurityConfig.SECURITY_PROVIDERS_CONFIG;
     private static final String SECURITY_PROVIDERS_DOC = SecurityConfig.SECURITY_PROVIDERS_DOC;
 
+    private static final ConfigDef.Validator SOCKET_RECEIVE_BUFFER_BYTES_VALIDATOR = (name, value) -> {
+        int size = (int) value;
+        if (size != -1 && size < 1) {
+            throw new ConfigException(
+                    name,
+                    value,
+                    "Must be -1 or a positive integer."
+            );
+        }
+    };
+    
     @SuppressWarnings("unchecked")
     private static final ConfigDef.Validator REGEX_LIST_VALIDATOR = (name, value) -> {
         if (value == null) return;
@@ -184,7 +197,7 @@ public final class ClusterMirrorConfig extends AbstractConfig {
         List<String> rules = (List<String>) value;
         for (String rule : rules) {
             String trimmed = rule.trim();
-            if (!trimmed.isEmpty() && !trimmed.equals(".*")) {
+            if (!trimmed.isEmpty()) {
                 try {
                     MirrorAclRule.parse(trimmed);
                 } catch (Exception e) {
@@ -200,26 +213,33 @@ public final class ClusterMirrorConfig extends AbstractConfig {
         ConfigDef configDef = new ConfigDef()
                 .define(BOOTSTRAP_SERVERS_CONFIG, LIST, null, HIGH, BOOTSTRAP_SERVERS_DOC)
                 .define(SOURCE_CLUSTER_ID_CONFIG, STRING, null, HIGH, SOURCE_CLUSTER_ID_DOC)
-                .define(REQUEST_TIMEOUT_MS_CONFIG, INT, REQUEST_TIMEOUT_MS_DEFAULT, atLeast(0), MEDIUM, REQUEST_TIMEOUT_MS_DOC)
-                .define(CONNECTION_SETUP_TIMEOUT_MS_CONFIG, LONG, CONNECTION_SETUP_TIMEOUT_MS_DEFAULT, atLeast(0L), MEDIUM, CONNECTION_SETUP_TIMEOUT_MS_DOC)
-                .define(CONNECTION_SETUP_TIMEOUT_MAX_MS_CONFIG, LONG, CONNECTION_SETUP_TIMEOUT_MAX_MS_DEFAULT, atLeast(0L), MEDIUM, CONNECTION_SETUP_TIMEOUT_MAX_MS_DOC)
+                .define(REQUEST_TIMEOUT_MS_CONFIG, INT, REQUEST_TIMEOUT_MS_DEFAULT,
+                        atLeast(0), MEDIUM, REQUEST_TIMEOUT_MS_DOC)
+                .define(CONNECTION_SETUP_TIMEOUT_MS_CONFIG, LONG, CONNECTION_SETUP_TIMEOUT_MS_DEFAULT,
+                        atLeast(0L), MEDIUM, CONNECTION_SETUP_TIMEOUT_MS_DOC)
+                .define(CONNECTION_SETUP_TIMEOUT_MAX_MS_CONFIG, LONG, CONNECTION_SETUP_TIMEOUT_MAX_MS_DEFAULT,
+                        atLeast(0L), MEDIUM, CONNECTION_SETUP_TIMEOUT_MAX_MS_DOC)
                 .define(CONNECTIONS_MAX_IDLE_MS_CONFIG, LONG, CONNECTIONS_MAX_IDLE_MS_DEFAULT, MEDIUM, CONNECTIONS_MAX_IDLE_MS_DOC)
                 .define(FETCH_WAIT_MAX_MS_CONFIG, INT, FETCH_WAIT_MAX_MS_DEFAULT, atLeast(0), MEDIUM, FETCH_WAIT_MAX_MS_DOC)
                 .define(FETCH_BACKOFF_MS_CONFIG, LONG, FETCH_BACKOFF_MS_DEFAULT, atLeast(0L), MEDIUM, FETCH_BACKOFF_MS_DOC)
                 .define(FETCH_MIN_BYTES_CONFIG, INT, FETCH_MIN_BYTES_DEFAULT, atLeast(0), MEDIUM, FETCH_MIN_BYTES_DOC)
-                .define(FETCH_RESPONSE_MAX_BYTES_CONFIG, INT, FETCH_RESPONSE_MAX_BYTES_DEFAULT, atLeast(0), MEDIUM, FETCH_RESPONSE_MAX_BYTES_DOC)
+                .define(FETCH_RESPONSE_MAX_BYTES_CONFIG, INT, FETCH_RESPONSE_MAX_BYTES_DEFAULT,
+                        atLeast(0), MEDIUM, FETCH_RESPONSE_MAX_BYTES_DOC)
                 .define(FETCH_MAX_BYTES_CONFIG, INT, FETCH_MAX_BYTES_DEFAULT, atLeast(0), MEDIUM, FETCH_MAX_BYTES_DOC)
                 .define(SOCKET_TIMEOUT_MS_CONFIG, INT, SOCKET_TIMEOUT_MS_DEFAULT, atLeast(0), MEDIUM, SOCKET_TIMEOUT_MS_DOC)
-                .define(SOCKET_RECEIVE_BUFFER_BYTES_CONFIG, INT, SOCKET_RECEIVE_BUFFER_BYTES_DEFAULT, atLeast(1), MEDIUM, SOCKET_RECEIVE_BUFFER_BYTES_DOC)
-                .define(TOPIC_PROPERTIES_EXCLUDE_CONFIG, LIST, TOPIC_PROPERTIES_EXCLUDE_DEFAULT, REGEX_LIST_VALIDATOR, LOW, TOPIC_PROPERTIES_EXCLUDE_DOC)
+                .define(SOCKET_RECEIVE_BUFFER_BYTES_CONFIG, INT, SOCKET_RECEIVE_BUFFER_BYTES_DEFAULT,
+                        SOCKET_RECEIVE_BUFFER_BYTES_VALIDATOR, MEDIUM, SOCKET_RECEIVE_BUFFER_BYTES_DOC)
+                .define(TOPIC_PROPERTIES_EXCLUDE_CONFIG, LIST, TOPIC_PROPERTIES_EXCLUDE_DEFAULT,
+                        REGEX_LIST_VALIDATOR, LOW, TOPIC_PROPERTIES_EXCLUDE_DOC)
                 .define(TOPICS_INCLUDE_CONFIG, LIST, TOPICS_INCLUDE_DEFAULT, REGEX_LIST_VALIDATOR, LOW, TOPICS_INCLUDE_DOC)
                 .define(TOPICS_EXCLUDE_CONFIG, LIST, TOPICS_EXCLUDE_DEFAULT, REGEX_LIST_VALIDATOR, LOW, TOPICS_EXCLUDE_DOC)
                 .define(GROUPS_INCLUDE_CONFIG, LIST, GROUPS_INCLUDE_DEFAULT, REGEX_LIST_VALIDATOR, LOW, GROUPS_INCLUDE_DOC)
                 .define(GROUPS_EXCLUDE_CONFIG, LIST, GROUPS_EXCLUDE_DEFAULT, REGEX_LIST_VALIDATOR, LOW, GROUPS_EXCLUDE_DOC)
                 .define(ACLS_INCLUDE_CONFIG, LIST, ACLS_INCLUDE_DEFAULT, ACL_RULES_VALIDATOR, LOW, ACLS_INCLUDE_DOC)
                 .define(ACLS_EXCLUDE_CONFIG, LIST, ACLS_EXCLUDE_DEFAULT, ACL_RULES_VALIDATOR, LOW, ACLS_EXCLUDE_DOC)
-                .define(SECURITY_PROTOCOL_CONFIG, STRING, SECURITY_PROTOCOL_DEFAULT, ConfigDef.ValidString.in(SecurityProtocol.PLAINTEXT.name, SecurityProtocol.SSL.name,
-                        SecurityProtocol.SASL_PLAINTEXT.name, SecurityProtocol.SASL_SSL.name), MEDIUM, SECURITY_PROTOCOL_DOC)
+                .define(SECURITY_PROTOCOL_CONFIG, STRING, SECURITY_PROTOCOL_DEFAULT,
+                        ConfigDef.CaseInsensitiveValidString.in(Utils.enumOptions(SecurityProtocol.class)),
+                        MEDIUM, SECURITY_PROTOCOL_DOC)
                 .define(SECURITY_PROVIDERS_CONFIG, STRING, null, LOW, SECURITY_PROVIDERS_DOC);
         SslConfigs.addClientSslSupport(configDef);
         SaslConfigs.addClientSaslSupport(configDef);

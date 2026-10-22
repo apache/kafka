@@ -362,4 +362,40 @@ public class ClusterMirrorConfigTest {
         assertTrue(config.topicPropertiesExcludePattern().matcher("min.insync.replicas").matches());
         assertFalse(config.topicPropertiesExcludePattern().matcher("cleanup.policy").matches());
     }
+
+    @Test
+    public void testSocketReceiveBufferBytesValidPositive() {
+        Properties props = new Properties();
+        props.setProperty(ClusterMirrorConfig.SOCKET_RECEIVE_BUFFER_BYTES_CONFIG, "131072");
+
+        ClusterMirrorConfig config = ClusterMirrorConfig.fromProperties(props);
+
+        assertEquals(131072, config.socketReceiveBufferBytes());
+    }
+
+    @Test
+    public void testSocketReceiveBufferBytesValidNegativeOne() {
+        Properties props = new Properties();
+        props.setProperty(ClusterMirrorConfig.SOCKET_RECEIVE_BUFFER_BYTES_CONFIG, "-1");
+
+        ClusterMirrorConfig config = ClusterMirrorConfig.fromProperties(props);
+
+        assertEquals(-1, config.socketReceiveBufferBytes());
+    }
+
+    @Test
+    public void testSocketReceiveBufferBytesInvalidZero() {
+        Properties props = new Properties();
+        props.setProperty(ClusterMirrorConfig.SOCKET_RECEIVE_BUFFER_BYTES_CONFIG, "0");
+
+        assertThrows(ConfigException.class, () -> ClusterMirrorConfig.fromProperties(props));
+    }
+
+    @Test
+    public void testSocketReceiveBufferBytesInvalidNegative() {
+        Properties props = new Properties();
+        props.setProperty(ClusterMirrorConfig.SOCKET_RECEIVE_BUFFER_BYTES_CONFIG, "-100");
+
+        assertThrows(ConfigException.class, () -> ClusterMirrorConfig.fromProperties(props));
+    }
 }
