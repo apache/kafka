@@ -566,6 +566,10 @@ public class SslTransportLayer implements TransportLayer {
         if (appReadBuffer.position() > 0) {
             read = readFromAppBuffer(dst);
         }
+        // An earlier read() unwrapped the peer's close_notify and all data before it has now been returned.
+        // Report end-of-stream rather than reading from the socket, which may never deliver a TCP FIN.
+        if (read == 0 && appReadBuffer.position() == 0 && sslEngine.isInboundDone())
+            throw new EOFException("Peer sent close_notify");
 
         boolean readFromNetwork = false;
         boolean isClosed = false;
@@ -650,7 +654,11 @@ public class SslTransportLayer implements TransportLayer {
         }
         updateBytesBuffered(readFromNetwork || read > 0);
         // If data has been read and unwrapped, return the data even if end-of-stream, channel will be closed
-        // on a subsequent poll.
+        // on a subsequent poll. A peer may send close_notify without a TCP FIN, so the socket may never become
+        // readable again. Mark bytes as buffered (updateBytesBuffered() may have just cleared the flag) so the
+        // selector calls read() again without waiting for OP_READ, and that read() reports the EOF.
+        if (sslEngine.isInboundDone())
+            hasBytesBuffered = true;
         return read;
     }
 
@@ -685,7 +693,15 @@ public class SslTransportLayer implements TransportLayer {
         int i = offset;
         while (i < offset + length) {
             if (dsts[i].hasRemaining()) {
-                int read = read(dsts[i]);
+                int read;
+                try {
+                    read = read(dsts[i]);
+                } catch (EOFException e) {
+                    // Return the bytes already read; the next read reports the end-of-stream again.
+                    if (totalRead > 0)
+                        return totalRead;
+                    throw e;
+                }
                 if (read > 0)
                     totalRead += read;
                 else

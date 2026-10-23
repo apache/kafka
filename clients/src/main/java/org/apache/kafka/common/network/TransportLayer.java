@@ -87,7 +87,9 @@ public interface TransportLayer extends ScatteringByteChannel, TransferableChann
 
     /**
      * @return true if channel has bytes to be read in any intermediate buffers
-     * which may be processed without reading additional data from the network.
+     * which may be processed without reading additional data from the network,
+     * or if the end of stream has been received (e.g. a TLS close_notify) but not
+     * yet reported by a read, which may not be followed by the socket becoming readable.
      */
     boolean hasBytesBuffered();
 }
