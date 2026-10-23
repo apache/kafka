@@ -1046,6 +1046,9 @@ project(':server') {
     testFixturesImplementation.exclude group: 'org.bouncycastle', module: 'bcprov-jdk15on'
     testCompileClasspath.exclude group: 'org.bouncycastle', module: 'bcprov-jdk15on'
     testRuntimeClasspath.exclude group: 'org.bouncycastle', module: 'bcprov-jdk15on'
+    // JUnit 4 is a transitive runtime dependency of mock-oauth2-server (via okhttp3 mockwebserver),
+    // keep it off the compile classpath so tests can't accidentally use JUnit 4 APIs.
+    testCompileClasspath.exclude group: 'junit', module: 'junit'
   }
 
   dependencies {
@@ -1076,6 +1079,7 @@ project(':server') {
     testImplementation testFixtures(project(':storage:storage-api'))
     testImplementation testFixtures(project(':server-common'))
     testImplementation testFixtures(project(':metadata'))
+    testImplementation libs.mockOAuth2Server
 
     testFixturesImplementation project(':clients')
     testFixturesImplementation testFixtures(project(':clients'))
@@ -2225,6 +2229,17 @@ project(':clients') {
     include "**/org/apache/kafka/server/policy/*"
     include "**/org/apache/kafka/server/quota/*"
     include "**/org/apache/kafka/server/telemetry/*"
+    exclude(
+        'org/apache/kafka/common/errors/ReadOnlyTopicException.java',
+        'org/apache/kafka/common/errors/ClusterMirrorAuthorizationException.java',
+        'org/apache/kafka/common/errors/UnknownClusterMirrorException.java',
+        'org/apache/kafka/common/errors/TopicAlreadyInClusterMirrorException.java',
+        'org/apache/kafka/common/errors/MirrorConfigNotAvailableException.java',
+        'org/apache/kafka/common/errors/ClusterMirrorAlreadyExistsException.java',
+        'org/apache/kafka/common/errors/SourceMetadataNotAvailableException.java',
+        'org/apache/kafka/common/errors/TopicNotInClusterMirrorException.java',
+        'org/apache/kafka/common/errors/InvalidMirrorStateException.java'
+    )
   }
 }
 

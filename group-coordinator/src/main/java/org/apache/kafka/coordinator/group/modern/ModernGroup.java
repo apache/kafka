@@ -16,7 +16,6 @@
  */
 package org.apache.kafka.coordinator.group.modern;
 
-import org.apache.kafka.common.Uuid;
 import org.apache.kafka.common.errors.UnknownMemberIdException;
 import org.apache.kafka.common.message.ListGroupsResponseData;
 import org.apache.kafka.coordinator.common.runtime.CoordinatorMetadataImage;
@@ -32,7 +31,6 @@ import org.apache.kafka.timeline.TimelineObject;
 
 import java.util.Collections;
 import java.util.HashMap;
-import java.util.HashSet;
 import java.util.Map;
 import java.util.Objects;
 import java.util.Set;
@@ -107,12 +105,6 @@ public abstract class ModernGroup<T extends ModernGroupMember> implements Group 
     protected final TimelineHashMap<String, Assignment> targetAssignment;
 
     /**
-     * Reverse lookup map representing topic partitions with
-     * their current member assignments.
-     */
-    private final TimelineHashMap<Uuid, TimelineHashMap<Integer, String>> invertedTargetAssignment;
-
-    /**
      * The metadata refresh deadline. It consists of a timestamp in milliseconds together with
      * the group epoch at the time of setting it. The metadata refresh time is considered as a
      * soft state (read that it is not stored in a timeline data structure). It is like this
@@ -138,7 +130,6 @@ public abstract class ModernGroup<T extends ModernGroupMember> implements Group 
         this.subscriptionType = new TimelineObject<>(snapshotRegistry, HOMOGENEOUS);
         this.targetAssignmentMetadata = new TimelineObject<>(snapshotRegistry, TargetAssignmentMetadata.INITIAL);
         this.targetAssignment = new TimelineHashMap<>(snapshotRegistry, 0);
-        this.invertedTargetAssignment = new TimelineHashMap<>(snapshotRegistry, 0);
     }
 
     /**
@@ -263,76 +254,13 @@ public abstract class ModernGroup<T extends ModernGroupMember> implements Group 
     }
 
     /**
-     * @return An immutable map containing all the topic partitions
-     *         with their current member assignments.
-     */
-    public Map<Uuid, Map<Integer, String>> invertedTargetAssignment() {
-        return Collections.unmodifiableMap(invertedTargetAssignment);
-    }
-
-    /**
      * Updates target assignment of a member.
      *
      * @param memberId              The member id.
      * @param newTargetAssignment   The new target assignment.
      */
     public void updateTargetAssignment(String memberId, Assignment newTargetAssignment) {
-        updateInvertedTargetAssignment(
-            memberId,
-            targetAssignment.getOrDefault(memberId, new Assignment(Map.of())),
-            newTargetAssignment
-        );
         targetAssignment.put(memberId, newTargetAssignment);
-    }
-
-    /**
-     * Updates the reverse lookup map of the target assignment.
-     *
-     * @param memberId              The member Id.
-     * @param oldTargetAssignment   The old target assignment.
-     * @param newTargetAssignment   The new target assignment.
-     */
-    private void updateInvertedTargetAssignment(
-        String memberId,
-        Assignment oldTargetAssignment,
-        Assignment newTargetAssignment
-    ) {
-        // Combine keys from both old and new assignments.
-        Set<Uuid> allTopicIds = new HashSet<>();
-        allTopicIds.addAll(oldTargetAssignment.partitions().keySet());
-        allTopicIds.addAll(newTargetAssignment.partitions().keySet());
-
-        for (Uuid topicId : allTopicIds) {
-            Set<Integer> oldPartitions = oldTargetAssignment.partitions().getOrDefault(topicId, Set.of());
-            Set<Integer> newPartitions = newTargetAssignment.partitions().getOrDefault(topicId, Set.of());
-
-            TimelineHashMap<Integer, String> topicPartitionAssignment = invertedTargetAssignment.computeIfAbsent(
-                topicId, k -> new TimelineHashMap<>(snapshotRegistry, Math.max(oldPartitions.size(), newPartitions.size()))
-            );
-
-            // Remove partitions that aren't present in the new assignment only if the partition is currently
-            // still assigned to the member in question.
-            // If p0 was moved from A to B, and the target assignment map was updated for B first, we don't want to
-            // remove the key p0 from the inverted map and undo the action when A eventually tries to update its assignment.
-            for (Integer partition : oldPartitions) {
-                if (!newPartitions.contains(partition) && memberId.equals(topicPartitionAssignment.get(partition))) {
-                    topicPartitionAssignment.remove(partition);
-                }
-            }
-
-            // Add partitions that are in the new assignment but not in the old assignment.
-            for (Integer partition : newPartitions) {
-                if (!oldPartitions.contains(partition)) {
-                    topicPartitionAssignment.put(partition, memberId);
-                }
-            }
-
-            if (topicPartitionAssignment.isEmpty()) {
-                invertedTargetAssignment.remove(topicId);
-            } else {
-                invertedTargetAssignment.put(topicId, topicPartitionAssignment);
-            }
-        }
     }
 
     /**
@@ -341,11 +269,6 @@ public abstract class ModernGroup<T extends ModernGroupMember> implements Group 
      * @param memberId The member id.
      */
     public void removeTargetAssignment(String memberId) {
-        updateInvertedTargetAssignment(
-            memberId,
-            targetAssignment.getOrDefault(memberId, Assignment.EMPTY),
-            Assignment.EMPTY
-        );
         targetAssignment.remove(memberId);
     }
 
