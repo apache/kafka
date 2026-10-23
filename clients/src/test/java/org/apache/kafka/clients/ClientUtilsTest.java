@@ -211,6 +211,21 @@ public class ClientUtilsTest {
         assertEquals("198.51.100.9", addresses.get(0).getAddress().getHostAddress());
     }
 
+    @Test
+    public void testParseAndValidateAddressesFailsOnInvalidPortEvenWhenHostIsUnresolvable() {
+        // A malformed port must fail validation regardless of whether its paired host resolves,
+        // instead of being silently skipped just because resolution happened to fail for that entry.
+        HostResolver hostResolver = host -> {
+            if (host.equals("bad.invalid")) {
+                throw new UnknownHostException("simulated unresolvable host");
+            }
+            return InetAddress.getAllByName(host);
+        };
+
+        assertThrows(ConfigException.class, () -> ClientUtils.parseAndValidateAddresses(
+            asList("bad.invalid:70000", "127.0.0.1:9092"), ClientDnsLookup.USE_ALL_DNS_IPS, hostResolver));
+    }
+
     private List<InetSocketAddress> checkWithoutLookup(String... url) {
         return ClientUtils.parseAndValidateAddresses(asList(url), ClientDnsLookup.USE_ALL_DNS_IPS);
     }

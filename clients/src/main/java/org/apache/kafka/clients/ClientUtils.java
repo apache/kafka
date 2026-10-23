@@ -88,6 +88,12 @@ public final class ClientUtils {
                 }
             }
         } else {
+            // Validate the port before attempting resolution (matching InetSocketAddress(host, port)'s
+            // own behavior, which checks the port range unconditionally): otherwise a malformed port on
+            // an unresolvable host would be silently skipped below instead of failing validation.
+            if (port < 0 || port > 0xFFFF) {
+                throw new IllegalArgumentException("port out of range:" + port);
+            }
             // Preserve the pre-existing single-address-per-host contract of this lookup mode
             // (equivalent to InetSocketAddress(host, port)'s implicit resolution): take only the
             // first address the resolver returns, rather than all of them like the branch above.
