@@ -105,7 +105,7 @@ class DynamicBrokerConfigTest {
   }
 
   @Test
-  def testDynamicOnlyBrokerQuotaConfigWarnsOnlyForStaticConfig(): Unit = {
+  def testBrokerQuotaConfigWarnsOnlyForStaticConfig(): Unit = {
     val quotaConfig = QuotaConfig.LEADER_REPLICATION_THROTTLED_RATE_CONFIG
     val expectedMessage =
       s"$quotaConfig is set in the static configuration file but is ignored at runtime; configure this property dynamically to take effect."
