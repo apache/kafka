@@ -118,7 +118,7 @@ public class GroupSpecImpl implements GroupSpec {
             assignedTopicPartitions = computeAssignedTopicPartitions();
         }
         AssignedPartitions assignedPartitions = assignedTopicPartitions.get(topicId);
-        return assignedPartitions != null && assignedPartitions.partitions().get(partitionId);
+        return assignedPartitions != null && partitionId >= 0 && assignedPartitions.partitions().get(partitionId);
     }
 
     private Map<Uuid, AssignedPartitions> computeAssignedTopicPartitions() {
@@ -135,7 +135,7 @@ public class GroupSpecImpl implements GroupSpec {
                     }
                 );
                 for (int partition : entry.getValue()) {
-                    if (partition >= assignedPartitions.partitionCount()) {
+                    if (partition < 0 || partition >= assignedPartitions.partitionCount()) {
                         // Drop partitions that do not exist.
                         continue;
                     }

@@ -81,16 +81,25 @@ public class GroupSpecImplTest {
 
     @Test
     void testIsPartitionAssigned() {
+        Uuid deletedTopicId = Uuid.randomUuid();
         members.put(TEST_MEMBER, new MemberSubscriptionAndAssignmentImpl(
             Optional.empty(),
             Optional.empty(),
-            Set.of(topicId),
-            new Assignment(Map.of(topicId, Set.of(1)))
+            Set.of(topicId, deletedTopicId),
+            new Assignment(Map.of(
+                // Partitions -1 and 3 do not exist.
+                topicId, Set.of(-1, 0, 2, 3),
+                // The deleted topic is not in the metadata image, so none of its partitions exist.
+                deletedTopicId, Set.of(0)
+            ))
         ));
 
-        assertTrue(groupSpec.isPartitionAssigned(topicId, 1));
-        assertFalse(groupSpec.isPartitionAssigned(topicId, 2));
-        assertFalse(groupSpec.isPartitionAssigned(Uuid.randomUuid(), 2));
+        assertFalse(groupSpec.isPartitionAssigned(topicId, -1));
+        assertTrue(groupSpec.isPartitionAssigned(topicId, 0));
+        assertFalse(groupSpec.isPartitionAssigned(topicId, 1));
+        assertTrue(groupSpec.isPartitionAssigned(topicId, 2));
+        assertFalse(groupSpec.isPartitionAssigned(topicId, 3));
+        assertFalse(groupSpec.isPartitionAssigned(deletedTopicId, 0));
     }
 
     @Test
