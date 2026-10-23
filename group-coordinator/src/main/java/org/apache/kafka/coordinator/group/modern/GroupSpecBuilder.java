@@ -151,7 +151,7 @@ public abstract class GroupSpecBuilder<T extends ModernGroupMember, U extends Gr
             Map<String, MemberSubscriptionAndAssignmentImpl> members,
             SubscriptionType subscriptionType
         ) {
-            return new GroupSpecImpl.ShareGroupSpecImpl(metadataImage, members, subscriptionType, initializedTopics);
+            return new ShareGroupSpecImpl(metadataImage, members, subscriptionType, initializedTopics);
         }
     }
 

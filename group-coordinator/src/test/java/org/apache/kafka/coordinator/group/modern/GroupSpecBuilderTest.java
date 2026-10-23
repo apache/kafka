@@ -232,7 +232,7 @@ public class GroupSpecBuilderTest {
             .build();
 
         assertEquals(
-            new GroupSpecImpl.ShareGroupSpecImpl(
+            new ShareGroupSpecImpl(
                 metadataImage,
                 Map.of(),
                 HOMOGENEOUS,
@@ -335,7 +335,7 @@ public class GroupSpecBuilderTest {
         // convention. New share group specific fields should be modified here.
 
         assertEquals(
-            new GroupSpecImpl.ShareGroupSpecImpl(
+            new ShareGroupSpecImpl(
                 metadataImage,
                 Map.of(),
                 HOMOGENEOUS,

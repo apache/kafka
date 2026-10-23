@@ -23,7 +23,6 @@ import org.apache.kafka.coordinator.group.api.assignor.SubscriptionType;
 import org.apache.kafka.coordinator.group.modern.Assignment;
 import org.apache.kafka.coordinator.group.modern.GroupSpecImpl;
 import org.apache.kafka.coordinator.group.modern.MemberSubscriptionAndAssignmentImpl;
-import org.apache.kafka.coordinator.group.modern.share.ShareGroup.InitMapValue;
 
 import org.junit.jupiter.api.BeforeEach;
 import org.junit.jupiter.api.Test;
@@ -122,16 +121,5 @@ public class GroupSpecImplTest {
     void testIsPartitionAssignable() {
         // All partitions are assignable in consumer groups.
         assertTrue(groupSpec.isPartitionAssignable(topicId, 1));
-
-        // Only initialized partitions are assignable in share groups.
-        groupSpec = new GroupSpecImpl.ShareGroupSpecImpl(
-            metadataImage,
-            members,
-            subscriptionType,
-            Map.of(topicId, new InitMapValue("topic", Set.of(0), 0L))
-        );
-
-        assertTrue(groupSpec.isPartitionAssignable(topicId, 0));
-        assertFalse(groupSpec.isPartitionAssignable(topicId, 1));
     }
 }

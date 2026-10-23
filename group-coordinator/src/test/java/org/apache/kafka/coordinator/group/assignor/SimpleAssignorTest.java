@@ -26,6 +26,7 @@ import org.apache.kafka.coordinator.group.api.assignor.PartitionAssignorExceptio
 import org.apache.kafka.coordinator.group.modern.Assignment;
 import org.apache.kafka.coordinator.group.modern.GroupSpecImpl;
 import org.apache.kafka.coordinator.group.modern.MemberSubscriptionAndAssignmentImpl;
+import org.apache.kafka.coordinator.group.modern.ShareGroupSpecImpl;
 import org.apache.kafka.coordinator.group.modern.SubscribedTopicDescriberImpl;
 import org.apache.kafka.coordinator.group.modern.share.ShareGroup.InitMapValue;
 import org.apache.kafka.server.common.TopicIdPartition;
@@ -233,7 +234,7 @@ public class SimpleAssignorTest {
             Assignment.EMPTY
         ));
 
-        GroupSpec groupSpec = new GroupSpecImpl.ShareGroupSpecImpl(
+        GroupSpec groupSpec = new ShareGroupSpecImpl(
             metadataImage,
             members,
             HOMOGENEOUS,
@@ -281,7 +282,7 @@ public class SimpleAssignorTest {
             Assignment.EMPTY
         ));
 
-        GroupSpec groupSpec = new GroupSpecImpl.ShareGroupSpecImpl(
+        GroupSpec groupSpec = new ShareGroupSpecImpl(
             metadataImage,
             members,
             HOMOGENEOUS,
@@ -392,7 +393,7 @@ public class SimpleAssignorTest {
             Assignment.EMPTY
         ));
 
-        GroupSpec groupSpec = new GroupSpecImpl.ShareGroupSpecImpl(
+        GroupSpec groupSpec = new ShareGroupSpecImpl(
             metadataImage,
             members,
             HETEROGENEOUS,
@@ -453,7 +454,7 @@ public class SimpleAssignorTest {
             Assignment.EMPTY
         ));
 
-        GroupSpec groupSpec = new GroupSpecImpl.ShareGroupSpecImpl(
+        GroupSpec groupSpec = new ShareGroupSpecImpl(
             metadataImage,
             members,
             HETEROGENEOUS,
