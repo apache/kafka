@@ -1039,20 +1039,11 @@ public class NetworkClientTest {
         RequestHeader header = parseHeader(requestBuffer);
         assertEquals(ApiKeys.METADATA, header.apiKey());
 
-        MetadataResponseData.MetadataResponseBrokerCollection brokers = new MetadataResponseData.MetadataResponseBrokerCollection();
-        brokers.add(new MetadataResponseData.MetadataResponseBroker()
-            .setNodeId(broker.id())
-            .setHost(broker.host())
-            .setPort(broker.port()));
-        MetadataResponseData.MetadataResponseTopicCollection topics = new MetadataResponseData.MetadataResponseTopicCollection();
-        topics.add(new MetadataResponseData.MetadataResponseTopic()
+        MetadataResponse response = RequestTestUtils.metadataUpdateWith(1, Collections.emptyMap());
+        response.data().topics().add(new MetadataResponseData.MetadataResponseTopic()
             .setTopicId(deletedTopicId)
             .setName(null)
             .setErrorCode(Errors.UNKNOWN_TOPIC_ID.code()));
-        MetadataResponse response = new MetadataResponse(new MetadataResponseData()
-            .setBrokers(brokers)
-            .setControllerId(broker.id())
-            .setTopics(topics), header.apiVersion());
         ByteBuffer responseBuffer = RequestTestUtils.serializeResponseWithHeader(response, header.apiVersion(), header.correlationId());
         selector.delayedReceive(new DelayedReceive(broker.idString(), new NetworkReceive(broker.idString(), responseBuffer)));
 
