@@ -57,7 +57,6 @@ import org.slf4j.Logger;
 
 import java.util.ArrayList;
 import java.util.List;
-import java.util.Map;
 import java.util.Optional;
 import java.util.OptionalLong;
 import java.util.concurrent.atomic.AtomicBoolean;
@@ -280,21 +279,6 @@ public class OffsetMetadataManager {
         private boolean contains(String groupId, String topic, int partition) {
             TimelineHashSet<Long> openTransactions = get(groupId, topic, partition);
             return openTransactions != null;
-        }
-
-        /**
-         * Snapshot-aware overload of {@link #contains(String, String, int)}: returns
-         * {@code true} if the given group had any pending transactional offsets for the
-         * given topic and partition at {@code committedOffset}.
-         */
-        private boolean contains(String groupId, String topic, int partition, long committedOffset) {
-            TimelineHashMap<String, TimelineHashMap<Integer, TimelineHashSet<Long>>> openTransactionsByTopic =
-                openTransactionsByGroup.get(groupId, committedOffset);
-            if (openTransactionsByTopic == null) return false;
-            TimelineHashMap<Integer, TimelineHashSet<Long>> openTransactionsByPartition =
-                openTransactionsByTopic.get(topic, committedOffset);
-            if (openTransactionsByPartition == null) return false;
-            return openTransactionsByPartition.containsKey(partition, committedOffset);
         }
 
         /**
@@ -1061,55 +1045,21 @@ public class OffsetMetadataManager {
     }
 
     /**
-     * Read-only counterpart to {@link #cleanupExpiredOffsets(String, List)}: returns whether
-     * every committed offset for the group is currently eligible for expiration and no pending
-     * transactional offsets remain. Used by the topology-description plugin cleanup cycle on
-     * the eligibility read side, where the sweep must not mutate any record but still needs to
-     * decide whether the group is fully expirable before driving a {@code plugin.deleteTopology}.
+     * Whether {@code groupId} currently has no committed offsets and no pending transactional
+     * offsets at the snapshot {@code committedOffset}. Used by the topology-description plugin
+     * cleanup cycle on the eligibility read side — the regular offset-expiration cycle is
+     * already running periodically and tombstoning expired offsets, so by the time this is
+     * called the group's {@code offsetsByGroup} entry is gone iff every committed offset has
+     * been expired and no transactional commits are in flight.
      *
      * <p>{@code committedOffset} is the snapshot point the runtime hands to the read operation
-     * that calls this method. Every timeline-backed lookup in here uses that snapshot — the
-     * runtime contract is that read operations only observe committed state, so a concurrent
-     * uncommitted offset commit or pending-transaction record must not flip the eligibility
-     * outcome on us.
+     * that calls this method. Both lookups go through that snapshot — the runtime contract is
+     * that read operations only observe committed state, so a concurrent uncommitted offset
+     * commit or pending-transaction record must not flip the eligibility outcome on us.
      */
-    public boolean allOffsetsExpired(String groupId, long currentTimestampMs, long committedOffset) {
-        TimelineHashMap<String, TimelineHashMap<Integer, OffsetAndMetadata>> offsetsByTopic =
-            offsets.offsetsByGroup.get(groupId, committedOffset);
-        if (offsetsByTopic == null) {
-            return !openTransactions.contains(groupId, committedOffset);
-        }
-        Group group;
-        try {
-            group = groupMetadataManager.group(groupId, committedOffset);
-        } catch (GroupIdNotFoundException e) {
-            // The group disappeared between the caller's existence check and this lookup at
-            // the same snapshot — it is not eligible for plugin cleanup, the next sweep will
-            // pick this up naturally.
-            return false;
-        }
-        Optional<OffsetExpirationCondition> offsetExpirationCondition = group.offsetExpirationCondition();
-        if (offsetExpirationCondition.isEmpty()) {
-            return false;
-        }
-        OffsetExpirationCondition condition = offsetExpirationCondition.get();
-        for (Map.Entry<String, TimelineHashMap<Integer, OffsetAndMetadata>> topicEntry
-                : offsetsByTopic.entrySet(committedOffset)) {
-            String topic = topicEntry.getKey();
-            if (group.isSubscribedToTopic(topic)) {
-                return false;
-            }
-            for (Map.Entry<Integer, OffsetAndMetadata> partitionEntry
-                    : topicEntry.getValue().entrySet(committedOffset)) {
-                int partition = partitionEntry.getKey();
-                OffsetAndMetadata offsetAndMetadata = partitionEntry.getValue();
-                if (!condition.isOffsetExpired(offsetAndMetadata, currentTimestampMs, config.offsetsRetentionMs())
-                    || openTransactions.contains(groupId, topic, partition, committedOffset)) {
-                    return false;
-                }
-            }
-        }
-        return !openTransactions.contains(groupId, committedOffset);
+    public boolean groupHasNoOffsets(String groupId, long committedOffset) {
+        return offsets.offsetsByGroup.get(groupId, committedOffset) == null
+            && !openTransactions.contains(groupId, committedOffset);
     }
 
     /**
@@ -1143,6 +1093,7 @@ public class OffsetMetadataManager {
         offsetsByTopic.forEach((topic, partitions) -> {
             if (!group.isSubscribedToTopic(topic)) {
                 partitions.forEach((partition, offsetAndMetadata) -> {
+                    // We don't expire the offset yet if there is a pending transactional offset for the partition.
                     if (condition.isOffsetExpired(offsetAndMetadata, currentTimestampMs, config.offsetsRetentionMs())
                         && !hasPendingTransactionalOffsets(groupId, topic, partition)) {
                         appendOffsetCommitTombstone(groupId, topic, partition, records);

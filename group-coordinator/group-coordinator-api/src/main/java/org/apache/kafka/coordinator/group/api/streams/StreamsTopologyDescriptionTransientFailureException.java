@@ -16,6 +16,7 @@
  */
 package org.apache.kafka.coordinator.group.api.streams;
 
+import org.apache.kafka.common.annotation.InterfaceAudience;
 import org.apache.kafka.common.annotation.InterfaceStability;
 import org.apache.kafka.common.errors.ApiException;
 
@@ -23,6 +24,7 @@ import org.apache.kafka.common.errors.ApiException;
  * Signals a transient backend failure; the broker re-solicits on a later heartbeat.
  * Any other exception completed on the future is treated identically.
  */
+@InterfaceAudience.Public
 @InterfaceStability.Evolving
 public class StreamsTopologyDescriptionTransientFailureException extends ApiException {
 

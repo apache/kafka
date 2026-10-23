@@ -16,14 +16,14 @@
  */
 package org.apache.kafka.clients.consumer;
 
-import org.apache.kafka.clients.consumer.internals.AutoOffsetResetStrategy;
-import org.apache.kafka.clients.consumer.internals.SubscriptionState;
+import org.apache.kafka.clients.consumer.internals.ShareSubscriptionState;
 import org.apache.kafka.common.KafkaException;
 import org.apache.kafka.common.Metric;
 import org.apache.kafka.common.MetricName;
 import org.apache.kafka.common.TopicIdPartition;
 import org.apache.kafka.common.TopicPartition;
 import org.apache.kafka.common.Uuid;
+import org.apache.kafka.common.annotation.InterfaceAudience;
 import org.apache.kafka.common.metrics.KafkaMetric;
 import org.apache.kafka.common.utils.internals.LogContext;
 
@@ -44,9 +44,10 @@ import static org.apache.kafka.clients.consumer.internals.ConsumerUtils.DEFAULT_
  * A mock of the {@link ShareConsumer} interface you can use for testing code that uses Kafka. This class is <i> not
  * thread-safe </i>.
  */
+@InterfaceAudience.Public
 public class MockShareConsumer<K, V> implements ShareConsumer<K, V> {
 
-    private final SubscriptionState subscriptions;
+    private final ShareSubscriptionState subscriptions;
     private final AtomicBoolean wakeup;
 
     private final Map<TopicPartition, List<ConsumerRecord<K, V>>> records;
@@ -58,7 +59,7 @@ public class MockShareConsumer<K, V> implements ShareConsumer<K, V> {
      * Constructs a new MockShareConsumer for testing.
      */
     public MockShareConsumer() {
-        this.subscriptions = new SubscriptionState(new LogContext(), AutoOffsetResetStrategy.NONE);
+        this.subscriptions = new ShareSubscriptionState(new LogContext());
         this.records = new HashMap<>();
         this.closed = false;
         this.wakeup = new AtomicBoolean(false);
@@ -73,7 +74,7 @@ public class MockShareConsumer<K, V> implements ShareConsumer<K, V> {
     @Override
     public synchronized void subscribe(Collection<String> topics) {
         ensureNotClosed();
-        subscriptions.subscribe(new HashSet<>(topics), Optional.empty());
+        subscriptions.subscribeToShareGroup(new HashSet<>(topics));
     }
 
     @Override

@@ -99,7 +99,7 @@ public class RemoteLogMetadataSerdeTest {
     }
 
     @Test
-    public void testInvalidRemoteStorageMetadata() {
+    public void testInvalidRemoteLogMetadata() {
         // Serializing receives an exception as it does not have the expected RemoteLogMetadata registered in serdes.
         assertThrows(IllegalArgumentException.class,
             () -> new RemoteLogMetadataSerde().serialize(new InvalidRemoteLogMetadata(1, time.milliseconds())));

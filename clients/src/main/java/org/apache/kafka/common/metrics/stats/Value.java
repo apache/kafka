@@ -16,12 +16,14 @@
  */
 package org.apache.kafka.common.metrics.stats;
 
+import org.apache.kafka.common.annotation.InterfaceAudience;
 import org.apache.kafka.common.metrics.MeasurableStat;
 import org.apache.kafka.common.metrics.MetricConfig;
 
 /**
  * An instantaneous value.
  */
+@InterfaceAudience.Public
 public class Value implements MeasurableStat {
     private double value = 0;
 

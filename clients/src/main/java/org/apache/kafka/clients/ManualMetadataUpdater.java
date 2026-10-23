@@ -22,6 +22,7 @@ import org.apache.kafka.common.errors.AuthenticationException;
 import org.apache.kafka.common.requests.MetadataResponse;
 import org.apache.kafka.common.requests.RequestHeader;
 
+import java.net.InetSocketAddress;
 import java.util.ArrayList;
 import java.util.List;
 import java.util.Optional;
@@ -79,6 +80,19 @@ public class ManualMetadataUpdater implements MetadataUpdater {
     @Override
     public void handleSuccessfulResponse(RequestHeader requestHeader, long now, MetadataResponse response) {
         // Do nothing
+    }
+
+    @Override
+    public boolean isBootstrapped() {
+        // ManualMetadataUpdater is designed for cases where nodes are manually set,
+        // so we consider it bootstrapped if nodes have been provided
+        return !nodes.isEmpty();
+    }
+
+    @Override
+    public void bootstrap(List<InetSocketAddress> addresses) {
+        // ManualMetadataUpdater doesn't use NetworkClient's bootstrap mechanism
+        // Nodes should be set manually via constructor or setNodes()
     }
 
     @Override

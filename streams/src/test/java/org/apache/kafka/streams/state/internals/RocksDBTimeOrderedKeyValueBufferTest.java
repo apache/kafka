@@ -16,11 +16,18 @@
  */
 package org.apache.kafka.streams.state.internals;
 
+import org.apache.kafka.common.header.Header;
+import org.apache.kafka.common.header.Headers;
+import org.apache.kafka.common.header.internals.RecordHeader;
 import org.apache.kafka.common.header.internals.RecordHeaders;
 import org.apache.kafka.common.metrics.Metrics;
 import org.apache.kafka.common.metrics.Sensor;
+import org.apache.kafka.common.serialization.Deserializer;
 import org.apache.kafka.common.serialization.Serde;
 import org.apache.kafka.common.serialization.Serdes;
+import org.apache.kafka.common.serialization.Serializer;
+import org.apache.kafka.common.serialization.StringDeserializer;
+import org.apache.kafka.common.serialization.StringSerializer;
 import org.apache.kafka.common.utils.MockTime;
 import org.apache.kafka.streams.processor.TaskId;
 import org.apache.kafka.streams.processor.api.Record;
@@ -40,11 +47,15 @@ import org.mockito.junit.jupiter.MockitoExtension;
 import org.mockito.junit.jupiter.MockitoSettings;
 import org.mockito.quality.Strictness;
 
+import java.nio.charset.StandardCharsets;
 import java.time.Duration;
+import java.util.ArrayList;
+import java.util.List;
 import java.util.concurrent.atomic.AtomicInteger;
 
-import static org.hamcrest.MatcherAssert.assertThat;
-import static org.hamcrest.Matchers.equalTo;
+import static org.junit.jupiter.api.Assertions.assertEquals;
+import static org.junit.jupiter.api.Assertions.assertFalse;
+import static org.junit.jupiter.api.Assertions.assertTrue;
 import static org.mockito.Mockito.when;
 
 @ExtendWith(MockitoExtension.class)
@@ -87,8 +98,8 @@ public class RocksDBTimeOrderedKeyValueBufferTest {
         when(serdeGetter.keySerde()).thenReturn((Serde) new Serdes.StringSerde());
         when(serdeGetter.valueSerde()).thenReturn((Serde) new Serdes.StringSerde());
         createBuffer(Duration.ofMillis(1), null);
-        assertThat(pipeRecord("K", "V", 2L), equalTo(true));
-        assertThat(pipeRecord("K", "V", 0L), equalTo(false));
+        assertTrue(pipeRecord("K", "V", 2L));
+        assertFalse(pipeRecord("K", "V", 0L));
     }
 
     @Test
@@ -109,7 +120,7 @@ public class RocksDBTimeOrderedKeyValueBufferTest {
         assertNumSizeAndTimestamp(buffer, 1, 0, 42);
         buffer.evictWhile(() -> buffer.numRecords() > 0, r -> count.getAndIncrement());
         assertNumSizeAndTimestamp(buffer, 0, Long.MAX_VALUE, 0);
-        assertThat(count.get(), equalTo(1));
+        assertEquals(1, count.get());
     }
 
     @SuppressWarnings({"rawtypes", "unchecked"})
@@ -123,12 +134,12 @@ public class RocksDBTimeOrderedKeyValueBufferTest {
         assertNumSizeAndTimestamp(buffer, 1, 0, 42);
         buffer.evictWhile(() -> buffer.numRecords() > 0, r -> count.getAndIncrement());
         assertNumSizeAndTimestamp(buffer, 0, Long.MAX_VALUE, 0);
-        assertThat(count.get(), equalTo(1));
+        assertEquals(1, count.get());
         pipeRecord("2", "0", 1L);
         assertNumSizeAndTimestamp(buffer, 1, 1, 42);
         buffer.evictWhile(() -> buffer.numRecords() > 0, r -> count.getAndIncrement());
         assertNumSizeAndTimestamp(buffer, 0, Long.MAX_VALUE, 0);
-        assertThat(count.get(), equalTo(2));
+        assertEquals(2, count.get());
     }
 
     @Test
@@ -138,11 +149,11 @@ public class RocksDBTimeOrderedKeyValueBufferTest {
         pipeRecord("1", "0", 0L);
         buffer.evictWhile(() -> buffer.numRecords() > 0, r -> count.getAndIncrement());
         assertNumSizeAndTimestamp(buffer, 1, 0, 42);
-        assertThat(count.get(), equalTo(0));
+        assertEquals(0, count.get());
         pipeRecord("2", "0", 1L);
         buffer.evictWhile(() -> buffer.numRecords() > 0, r -> count.getAndIncrement());
         assertNumSizeAndTimestamp(buffer, 1, 1, 42);
-        assertThat(count.get(), equalTo(1));
+        assertEquals(1, count.get());
     }
 
     @SuppressWarnings({"rawtypes", "unchecked"})
@@ -154,10 +165,10 @@ public class RocksDBTimeOrderedKeyValueBufferTest {
         final AtomicInteger count = new AtomicInteger(0);
         pipeRecord("1", "0", 0L);
         buffer.evictWhile(() -> buffer.numRecords() > 1, r -> count.getAndIncrement());
-        assertThat(count.get(), equalTo(0));
+        assertEquals(0, count.get());
         pipeRecord("2", "0", 1L);
         buffer.evictWhile(() -> buffer.numRecords() > 0, r -> count.getAndIncrement());
-        assertThat(count.get(), equalTo(2));
+        assertEquals(2, count.get());
     }
 
     @SuppressWarnings({"rawtypes", "unchecked"})
@@ -192,25 +203,119 @@ public class RocksDBTimeOrderedKeyValueBufferTest {
         final AtomicInteger count = new AtomicInteger(0);
         pipeRecord("2", "0", 0L);
         buffer.evictWhile(() -> buffer.numRecords() > 0, r -> count.getAndIncrement());
-        assertThat(count.get(), equalTo(0));
+        assertEquals(0, count.get());
         assertNumSizeAndTimestamp(buffer, 1, 0, 42);
         pipeRecord("2", "2", 0L);
         buffer.evictWhile(() -> buffer.numRecords() > 0, r -> count.getAndIncrement());
-        assertThat(count.get(), equalTo(0));
+        assertEquals(0, count.get());
         assertNumSizeAndTimestamp(buffer, 2, 0, 84);
         pipeRecord("1", "0", 7L);
         assertNumSizeAndTimestamp(buffer, 3, 0, 126);
         buffer.evictWhile(() -> buffer.numRecords() > 0, r -> count.getAndIncrement());
-        assertThat(count.get(), equalTo(2));
+        assertEquals(2, count.get());
         assertNumSizeAndTimestamp(buffer, 1, 7, 42);
+    }
+
+    @Test
+    public void shouldDeserializeWithPutTimeHeadersEvenAfterContextMutation() {
+        final HeaderCapturingSerde serde = new HeaderCapturingSerde();
+        createBuffer(Duration.ZERO, serde);
+        final RecordHeaders putHeaders = new RecordHeaders(new Header[]{
+            new RecordHeader("at-put", "first".getBytes(StandardCharsets.UTF_8))
+        });
+        // Give the record its own headers, distinct from the context headers, so the assertions below prove that
+        // eviction deserialization reads from the stored recordContext snapshot rather than from record.headers().
+        final RecordHeaders recordHeaders = new RecordHeaders(new Header[]{
+            new RecordHeader("on-record", "rec".getBytes(StandardCharsets.UTF_8))
+        });
+        context.setRecordContext(new ProcessorRecordContext(0L, offset++, 0, "testing", putHeaders));
+        buffer.put(0L, new Record<>("k", "v", 0L, recordHeaders), context.recordContext());
+
+        // Simulate the processor moving on to another record with different headers before eviction runs.
+        final RecordHeaders laterHeaders = new RecordHeaders(new Header[]{
+            new RecordHeader("at-evict", "second".getBytes(StandardCharsets.UTF_8))
+        });
+        context.setRecordContext(new ProcessorRecordContext(0L, offset++, 0, "testing", laterHeaders));
+
+        final List<TimeOrderedKeyValueBuffer.Eviction<String, String>> evicted = new ArrayList<>();
+        buffer.evictWhile(() -> buffer.numRecords() > 0, evicted::add);
+
+        assertEquals(1, evicted.size());
+        // The key/value deserializers must see the headers captured at put time, not the mutated context headers.
+        assertTrue(serde.capturedHeaders.contains(putHeaders));
+        assertTrue(serde.capturedHeaders.stream().allMatch(putHeaders::equals));
+        assertEquals(putHeaders, evicted.get(0).recordContext().headers());
+    }
+
+    @Test
+    public void shouldNotBeAffectedByProcessorContextHeaderMutationBetweenPutAndEvict() {
+        final HeaderCapturingSerde serde = new HeaderCapturingSerde();
+        createBuffer(Duration.ofMillis(1), serde);
+        final RecordHeaders putHeaders = new RecordHeaders(new Header[]{
+            new RecordHeader("at-put", "first".getBytes(StandardCharsets.UTF_8))
+        });
+        // Give the record its own headers, distinct from the context headers, so the assertions below prove that
+        // eviction deserialization reads from the stored recordContext snapshot rather than from record.headers().
+        final RecordHeaders recordHeaders = new RecordHeaders(new Header[]{
+            new RecordHeader("on-record", "rec".getBytes(StandardCharsets.UTF_8))
+        });
+        context.setRecordContext(new ProcessorRecordContext(0L, offset++, 0, "testing", putHeaders));
+        buffer.put(0L, new Record<>("k", "v", 0L, recordHeaders), context.recordContext());
+
+        // Simulate the processor moving on to handle a different record with different headers
+        // before the grace period expires and eviction runs.
+        final RecordHeaders laterHeaders = new RecordHeaders(new Header[]{
+            new RecordHeader("at-evict", "second".getBytes(StandardCharsets.UTF_8))
+        });
+        final RecordHeaders triggerRecordHeaders = new RecordHeaders(new Header[]{
+            new RecordHeader("on-trigger-record", "trig".getBytes(StandardCharsets.UTF_8))
+        });
+        context.setRecordContext(new ProcessorRecordContext(10L, offset++, 0, "testing", laterHeaders));
+        // Advance stream time past the grace period for the original record.
+        buffer.put(10L, new Record<>("trigger", "v", 10L, triggerRecordHeaders), context.recordContext());
+
+        final List<TimeOrderedKeyValueBuffer.Eviction<String, String>> evicted = new ArrayList<>();
+        buffer.evictWhile(() -> true, evicted::add);
+
+        // Only the original "k" record at t=0 falls outside the grace window of t=10.
+        assertEquals(1, evicted.size());
+        assertEquals("k", evicted.get(0).key());
+        // The deserializers for the evicted record must see its put-time headers, not the later context headers.
+        assertTrue(serde.capturedHeaders.contains(putHeaders));
+        assertTrue(serde.capturedHeaders.stream().allMatch(putHeaders::equals));
+        assertEquals(putHeaders, evicted.get(0).recordContext().headers());
+    }
+
+    /**
+     * A {@link Serde} whose deserializer records the {@link Headers} it is handed on each call, so tests can assert
+     * which headers reached the key/value deserializers during eviction. Serialization behaves like a plain String serde.
+     */
+    private static final class HeaderCapturingSerde implements Serde<String> {
+        private final List<Headers> capturedHeaders = new ArrayList<>();
+
+        @Override
+        public Serializer<String> serializer() {
+            return new StringSerializer();
+        }
+
+        @Override
+        public Deserializer<String> deserializer() {
+            return new StringDeserializer() {
+                @Override
+                public String deserialize(final String topic, final Headers headers, final byte[] data) {
+                    capturedHeaders.add(headers);
+                    return super.deserialize(topic, data);
+                }
+            };
+        }
     }
 
     private void assertNumSizeAndTimestamp(final TimeOrderedKeyValueBuffer<String, String, String> buffer,
                                            final int num,
                                            final long time,
                                            final long size) {
-        assertThat(buffer.numRecords(), equalTo(num));
-        assertThat(buffer.minTimestamp(), equalTo(time));
-        assertThat(buffer.bufferSize(), equalTo(size));
+        assertEquals(num, buffer.numRecords());
+        assertEquals(time, buffer.minTimestamp());
+        assertEquals(size, buffer.bufferSize());
     }
 }

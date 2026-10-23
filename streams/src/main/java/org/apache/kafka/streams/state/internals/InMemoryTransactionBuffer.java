@@ -18,6 +18,8 @@ package org.apache.kafka.streams.state.internals;
 
 import org.apache.kafka.common.utils.Bytes;
 import org.apache.kafka.streams.KeyValue;
+import org.apache.kafka.streams.processor.StateStoreContext;
+import org.apache.kafka.streams.query.Position;
 
 import java.util.Map;
 import java.util.NavigableMap;
@@ -42,6 +44,7 @@ import java.util.TreeMap;
 class InMemoryTransactionBuffer extends AbstractTransactionBuffer<Bytes> {
 
     private final NavigableMap<Bytes, byte[]> baseMap;
+    private Position pendingPosition = Position.emptyPosition();
 
     InMemoryTransactionBuffer(final NavigableMap<Bytes, byte[]> baseMap) {
         this.baseMap = baseMap;
@@ -81,6 +84,27 @@ class InMemoryTransactionBuffer extends AbstractTransactionBuffer<Bytes> {
         return new BaseMapIterator(forward ? copy : copy.descendingMap());
     }
 
+    /**
+     * Committed-only point read. Bypasses the staging layer and reads the base map directly.
+     * <p>
+     * The owner reads lock-free (it is the sole mutator and single-threaded). Non-owner (IQ) reads
+     * take the snapshot read-lock: {@code commit}/{@code rollback} mutate the non-thread-safe base
+     * {@link java.util.TreeMap} under the write-lock, so an unlocked read could traverse a
+     * mid-rebalance tree (wrong value/NPE) or observe a partially-applied commit. The read-lock also
+     * supplies the happens-before edge that makes committed writes visible.
+     */
+    byte[] getCommitted(final Bytes key) {
+        if (Thread.currentThread() == ownerThread) {
+            return baseMap.get(key);
+        }
+        snapshotLock.readLock().lock();
+        try {
+            return baseMap.get(key);
+        } finally {
+            snapshotLock.readLock().unlock();
+        }
+    }
+
     private NavigableMap<Bytes, byte[]> boundView(final Bytes from, final Bytes to, final boolean toInclusive) {
         if (from != null && to != null) {
             return baseMap.subMap(from, true, to, toInclusive);
@@ -106,7 +130,35 @@ class InMemoryTransactionBuffer extends AbstractTransactionBuffer<Bytes> {
 
     @Override
     void discardPendingBatch() {
-        // no-op — no backend batch to discard
+        pendingPosition = Position.emptyPosition();
+    }
+
+    void updatePosition(final StateStoreContext stateStoreContext) {
+        snapshotLock.writeLock().lock();
+        try {
+            StoreQueryUtils.updatePosition(pendingPosition, stateStoreContext);
+        } finally {
+            snapshotLock.writeLock().unlock();
+        }
+    }
+
+    Position pendingPosition() {
+        snapshotLock.readLock().lock();
+        try {
+            return pendingPosition.copy();
+        } finally {
+            snapshotLock.readLock().unlock();
+        }
+    }
+
+    void mergePendingPositionInto(final Position committed) {
+        snapshotLock.writeLock().lock();
+        try {
+            committed.merge(pendingPosition);
+            pendingPosition = Position.emptyPosition();
+        } finally {
+            snapshotLock.writeLock().unlock();
+        }
     }
 
     /**

@@ -72,6 +72,8 @@ public class StreamsGroupTopologyDescriptionRequestManager implements RequestMan
             .setTopologyEpoch(streamsRebalanceData.topologyEpoch())
             .setTopologyDescription(streamsRebalanceData.wireTopologyDescription());
 
+        logger.info("Sending topology description for group {}", data.groupId());
+
         final NetworkClientDelegate.UnsentRequest unsent = new NetworkClientDelegate.UnsentRequest(
             new StreamsGroupTopologyDescriptionUpdateRequest.Builder(data),
             coordinatorRequestManager.coordinator()
@@ -140,6 +142,7 @@ public class StreamsGroupTopologyDescriptionRequestManager implements RequestMan
             case NONE:
                 pushRequestState.onSuccessfulAttempt(responseTimeMs);
                 streamsRebalanceData.setTopologyPushRequired(false);
+                logger.info("Topology description pushed successfully");
                 break;
 
             case NOT_COORDINATOR:

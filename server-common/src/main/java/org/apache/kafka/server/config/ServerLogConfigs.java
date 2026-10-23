@@ -141,7 +141,11 @@ public class ServerLogConfigs {
             "message timestamp and the broker's timestamp. The message timestamp can be later than or equal to the broker's " +
             "timestamp, with the maximum allowable difference determined by the value set in this configuration. " +
             "If log.message.timestamp.type=CreateTime, the message will be rejected if the difference in timestamps exceeds " +
-            "this specified threshold. This configuration is ignored if log.message.timestamp.type=LogAppendTime.";
+            "this specified threshold. This configuration is ignored if log.message.timestamp.type=LogAppendTime. " +
+            "Note that time-based retention (log.retention.ms) is based on the largest message timestamp in a segment, " +
+            "so a segment containing a message with a future timestamp is not eligible for time-based deletion until that " +
+            "timestamp plus the retention time has passed. Increasing this value above the default allows more " +
+            "future-timestamped messages and can delay segment deletion, increasing disk usage.";
 
     public static final String NUM_RECOVERY_THREADS_PER_DATA_DIR_CONFIG = "num.recovery.threads.per.data.dir";
     public static final int NUM_RECOVERY_THREADS_PER_DATA_DIR_DEFAULT = 2;
@@ -175,5 +179,6 @@ public class ServerLogConfigs {
         "directory has failed for longer than this time, the broker will fail and shut down.";
 
     public static final int MAX_MESSAGE_BYTES_DEFAULT = 1024 * 1024 + Records.LOG_OVERHEAD;
+    public static final int MAX_DECOMPRESSED_MESSAGE_BYTES_DEFAULT = Records.SOFT_MAX_ARRAY_LENGTH;
     public static final String COMPRESSION_TYPE_DEFAULT = BrokerCompressionType.PRODUCER.name;
 }

@@ -18,6 +18,7 @@ package org.apache.kafka.server.quota;
 
 import org.apache.kafka.common.Cluster;
 import org.apache.kafka.common.Configurable;
+import org.apache.kafka.common.annotation.InterfaceAudience;
 import org.apache.kafka.common.security.auth.KafkaPrincipal;
 
 import java.util.Map;
@@ -32,6 +33,7 @@ import java.util.Map;
  *     <li><code>role</code> set to broker/controller, which indicates the role of the server</li>
  * </ul>
  */
+@InterfaceAudience.Public
 public interface ClientQuotaCallback extends Configurable {
 
     /**

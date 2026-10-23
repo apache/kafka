@@ -27,8 +27,9 @@ import org.apache.kafka.common.metrics.Metrics
 import org.apache.kafka.common.protocol.Errors
 import org.apache.kafka.common.record.internal.RecordBatch
 import org.apache.kafka.common.requests.{AddPartitionsToTxnResponse, TransactionResult}
-import org.apache.kafka.common.utils.{ProducerIdAndEpoch, Time}
+import org.apache.kafka.common.utils.Time
 import org.apache.kafka.common.utils.internals.LogContext
+import org.apache.kafka.common.utils.internals.ProducerIdAndEpoch
 import org.apache.kafka.coordinator.transaction.{InitProducerIdResult, ProducerIdManager, TransactionConfig, TransactionLogConfig, TransactionMetadata, TransactionState, TransactionStateManagerConfig, TransactionalIdAndProducerIdEpoch, TxnTransitMetadata}
 import org.apache.kafka.metadata.MetadataCache
 import org.apache.kafka.server.common.{RequestLocal, TransactionVersion}
@@ -735,12 +736,26 @@ class TransactionCoordinator(txnConfig: TransactionConfig,
     +----------------+-------+---------+-------+---------+
     |                | Retry | Current | Retry | Current |
     +----------------+-------+---------+-------+---------+
-    | Empty          | PF    | EB      | PF    | ITS     |
+    | Empty          | PF    | EB      | PF    | EB      |
     +----------------+-------+---------+-------+---------+
-    | CompleteAbort  | NONE  | EB      | ITS   | ITS     |
+    | CompleteAbort  | NONE  | EB      | PF    | EB      |
     +----------------+-------+---------+-------+---------+
-    | CompleteCommit | ITS   | EB      | NONE  | ITS     |
+    | CompleteCommit | ITS   | EB      | NONE  | EB      |
     +----------------+-------+---------+-------+---------+
+
+    Empty, CompleteAbort and CompleteCommit + Commit + Current commits an empty transaction, the same way an abort
+    there aborts one: the epoch is bumped and the transition is written to the log. A coordinator that has lost
+    leadership but has not applied the metadata change yet can only see the transaction as empty, since the
+    partitions were added on the new coordinator. Returning ITS from its cache would be fatal to the client; going
+    through the log instead fails with a retriable error because the write cannot be replicated (KAFKA-21181).
+
+    CompleteAbort + Commit + Retry returns PF rather than ITS because the coordinator may abort an open
+    transaction on its own (e.g. when it exceeds transaction.timeout.ms), bumping the epoch without the
+    producer's knowledge. A commit that was already in flight when such an abort completed arrives with the
+    pre-abort epoch and is indistinguishable from a retry. The commit is guaranteed not to have taken effect.
+    Under transaction V1 this race fails the strict epoch check above and returns the recoverable
+    PRODUCER_FENCED; V2's retry-tolerant epoch check accepts the request instead, so the recoverable outcome
+    is restored here at the state check (KAFKA-20785).
    */
 
   /**
@@ -841,6 +856,12 @@ class TransactionCoordinator(txnConfig: TransactionConfig,
               }
             }
 
+            def commitEmptyTransaction(): ApiResult[(Int, TxnTransitMetadata)] = {
+              info(s"TransactionalId: $transactionalId's state is ${txnMetadata.state} with no partitions, committing an " +
+                s"empty transaction for producer $producerId at epoch $producerEpoch.")
+              generateTxnTransitMetadataForTxnCompletion(TransactionState.PREPARE_COMMIT, true)
+            }
+
             if (txnMetadata.pendingTransitionInProgress && txnMetadata.pendingState.get != TransactionState.PREPARE_EPOCH_FENCE) {
               // This check is performed first so that the pending transition can complete before the next checks.
               // With TV2, we may be transitioning over a producer epoch overflow, and the producer may be using the
@@ -863,7 +884,7 @@ class TransactionCoordinator(txnConfig: TransactionConfig,
                   if (isRetry)
                     Left(Errors.NONE)
                   else
-                    logInvalidStateTransitionAndReturnError(transactionalId, txnMetadata.state, txnMarkerResult)
+                    commitEmptyTransaction()
                 } else {
                   // Abort.
                   if (isRetry)
@@ -879,7 +900,16 @@ class TransactionCoordinator(txnConfig: TransactionConfig,
                     generateTxnTransitMetadataForTxnCompletion(TransactionState.PREPARE_ABORT, true)
                 } else {
                   // Commit.
-                  logInvalidStateTransitionAndReturnError(transactionalId, txnMetadata.state, txnMarkerResult)
+                  if (isRetry) {
+                    // The commit raced with a coordinator-side abort (e.g. on transaction.timeout.ms) and is guaranteed
+                    // not to have taken effect; see the CompleteAbort + Commit + Retry note under the state table above (KAFKA-20785).
+                    info(s"TransactionalId: $transactionalId's state is ${txnMetadata.state}, but received a COMMIT at " +
+                      s"the pre-abort epoch $producerEpoch. The transaction was likely aborted by the coordinator on " +
+                      s"timeout while the commit was in flight. Returning ${Errors.PRODUCER_FENCED}.")
+                    Left(Errors.PRODUCER_FENCED)
+                  } else {
+                    commitEmptyTransaction()
+                  }
                 }
               case TransactionState.PREPARE_COMMIT =>
                 if (txnMarkerResult == TransactionResult.COMMIT)
@@ -895,7 +925,7 @@ class TransactionCoordinator(txnConfig: TransactionConfig,
                 if (txnMarkerResult == TransactionResult.ABORT) {
                   generateTxnTransitMetadataForTxnCompletion(TransactionState.PREPARE_ABORT, true)
                 } else {
-                  logInvalidStateTransitionAndReturnError(transactionalId, txnMetadata.state, txnMarkerResult)
+                  commitEmptyTransaction()
                 }
               case TransactionState.DEAD | TransactionState.PREPARE_EPOCH_FENCE =>
                 val errorMsg = s"Found transactionalId $transactionalId with state ${txnMetadata.state}. " +

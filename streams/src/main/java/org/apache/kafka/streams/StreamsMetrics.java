@@ -18,6 +18,7 @@ package org.apache.kafka.streams;
 
 import org.apache.kafka.common.Metric;
 import org.apache.kafka.common.MetricName;
+import org.apache.kafka.common.annotation.InterfaceAudience;
 import org.apache.kafka.common.metrics.Sensor;
 
 import java.util.Map;
@@ -25,6 +26,7 @@ import java.util.Map;
 /**
  * The Kafka Streams metrics interface for adding metric sensors and collecting metric values.
  */
+@InterfaceAudience.Public
 public interface StreamsMetrics {
 
     /**

@@ -60,7 +60,7 @@ public class TransactionLogMessageFormatterTest extends CoordinatorRecordMessage
                               "data":{"producerId":100,
                                       "producerEpoch":50,
                                       "transactionTimeoutMs":500,
-                                      "transactionStatus":4,
+                                      "transactionStatus":"CompleteCommit",
                                       "transactionPartitions":[],
                                       "transactionLastUpdateTimestampMs":1000,
                                       "transactionStartTimestampMs":750}}}
@@ -75,7 +75,7 @@ public class TransactionLogMessageFormatterTest extends CoordinatorRecordMessage
                               "data":{"producerId":100,
                                       "producerEpoch":50,
                                       "transactionTimeoutMs":500,
-                                      "transactionStatus":4,
+                                      "transactionStatus":"CompleteCommit",
                                       "transactionPartitions":[],
                                       "transactionLastUpdateTimestampMs":1000,
                                       "transactionStartTimestampMs":750}}}

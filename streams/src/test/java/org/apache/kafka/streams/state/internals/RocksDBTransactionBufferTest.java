@@ -314,6 +314,53 @@ public class RocksDBTransactionBufferTest {
     }
 
     @Test
+    public void stageAllShouldNotExposeAPartiallyStagedBatchToNonOwnerReads() throws Exception {
+        final int batchSize = 50;
+        final AtomicBoolean stop = new AtomicBoolean(false);
+        final AtomicReference<Throwable> failure = new AtomicReference<>();
+        // A non-owner read takes the read lock, which stageAll holds off for the whole batch, so the
+        // batch is either wholly absent or wholly present -- the all-or-nothing view a caller would
+        // otherwise get from a single WriteBatch write. Keys are scanned in the "k" range so the
+        // base-store keys (a, b, c) are excluded from the count.
+        final Thread reader = new Thread(() -> {
+            try {
+                while (!stop.get()) {
+                    int staged = 0;
+                    try (KeyValueIterator<Bytes, byte[]> iter = buffer.range(key("k000"), key("k999"), true, true)) {
+                        while (iter.hasNext()) {
+                            iter.next();
+                            staged++;
+                        }
+                    }
+                    if (staged != 0 && staged != batchSize) {
+                        throw new AssertionError("non-owner read observed a partially staged batch of " + staged
+                            + " of " + batchSize + " writes");
+                    }
+                }
+            } catch (final Throwable t) {
+                failure.compareAndSet(null, t);
+            }
+        });
+        reader.start();
+        try {
+            for (int i = 0; i < 1_000 && failure.get() == null; i++) {
+                buffer.stageAll(() -> {
+                    for (int k = 0; k < batchSize; k++) {
+                        buffer.stage(key(String.format("k%03d", k)), val("v" + k));
+                    }
+                });
+                buffer.rollback();
+            }
+        } finally {
+            stop.set(true);
+            reader.join();
+        }
+        if (failure.get() != null) {
+            throw new AssertionError("concurrent non-owner reader failed", failure.get());
+        }
+    }
+
+    @Test
     public void shouldNotShowStagedWritesInBaseAfterRollback() throws RocksDBException {
         buffer.stage(key("x"), val("staged-x"));
         buffer.rollback();
@@ -414,15 +461,26 @@ public class RocksDBTransactionBufferTest {
         assertEquals("v3", str(db.get(cfHandle, key("x").get())));
     }
 
+    @Test
+    public void shouldNotLeakRolledBackWriteIntoLaterCommitOfDifferentKey() throws RocksDBException {
+        buffer.stage(key("x"), val("vx"));
+        buffer.rollback();
+
+        buffer.stage(key("y"), val("vy"));
+        buffer.commit();
+
+        assertNull(db.get(cfHandle, key("x").get()));
+        assertEquals("vy", str(db.get(cfHandle, key("y").get())));
+    }
+
     // --- CF-aware overload tests ---
 
     @Test
     public void shouldStageWriteToOtherCF() throws RocksDBException {
         buffer.stage(otherCfHandle, key("x"), val("other-x"));
 
-        // Shared read buffer sees the staged value
-        assertTrue(buffer.get(key("x")).isPresent());
-        assertArrayEquals(val("other-x"), buffer.get(key("x")).get());
+        // Non-primary CF writes are not visible in the staging read buffer
+        assertNull(buffer.get(key("x")));
         // Not yet flushed to RocksDB
         assertNull(db.get(otherCfHandle, key("x").get()));
 
@@ -437,8 +495,8 @@ public class RocksDBTransactionBufferTest {
 
         buffer.stage(otherCfHandle, key("x"), null);
 
-        // Shared read buffer shows tombstone
-        assertEquals(Optional.empty(), buffer.get(key("x")));
+        // Non-primary CF deletes are not visible in the staging read buffer
+        assertNull(buffer.get(key("x")));
         // Not yet flushed
         assertArrayEquals(val("other-x"), db.get(otherCfHandle, key("x").get()));
 

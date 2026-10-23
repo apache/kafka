@@ -17,6 +17,7 @@
 package org.apache.kafka.streams.processor;
 
 import org.apache.kafka.common.TopicPartition;
+import org.apache.kafka.common.annotation.InterfaceAudience;
 import org.apache.kafka.common.annotation.InterfaceStability.Evolving;
 import org.apache.kafka.streams.errors.StreamsException;
 import org.apache.kafka.streams.processor.api.ProcessorContext;
@@ -48,6 +49,7 @@ import java.util.Map;
  * functionality required to reload a storage engine from its changelog as well
  * as basic lifecycle management.
  */
+@InterfaceAudience.Public
 public interface StateStore {
 
     /**

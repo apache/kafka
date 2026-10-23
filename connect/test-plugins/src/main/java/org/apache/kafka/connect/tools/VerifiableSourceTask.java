@@ -17,6 +17,7 @@
 package org.apache.kafka.connect.tools;
 
 import org.apache.kafka.clients.producer.RecordMetadata;
+import org.apache.kafka.common.annotation.InterfaceAudience;
 import org.apache.kafka.connect.data.Schema;
 import org.apache.kafka.connect.data.SchemaBuilder;
 import org.apache.kafka.connect.data.Struct;
@@ -45,6 +46,7 @@ import java.util.stream.Stream;
  * <p>
  * If logging is left enabled, log output on stdout can be easily ignored by checking whether a given line is valid JSON.
  */
+@InterfaceAudience.Public
 public class VerifiableSourceTask extends SourceTask {
     private static final Logger log = LoggerFactory.getLogger(VerifiableSourceTask.class);
 

@@ -23,7 +23,6 @@ import java.util
 import java.util.Properties
 import java.util.concurrent.TimeUnit
 import kafka.integration.KafkaServerTestHarness
-import kafka.security.JaasTestUtils
 import kafka.server.KafkaConfig
 import kafka.utils.{TestInfoUtils, TestUtils}
 import org.apache.kafka.clients.admin.{Admin, NewPartitions}
@@ -36,6 +35,7 @@ import org.apache.kafka.common.record.TimestampType
 import org.apache.kafka.common.security.auth.SecurityProtocol
 import org.apache.kafka.common.{KafkaException, TopicPartition}
 import org.apache.kafka.coordinator.group.GroupCoordinatorConfig
+import org.apache.kafka.security.JaasTestUtils
 import org.apache.kafka.server.config.ServerLogConfigs
 import org.junit.jupiter.api.Assertions._
 import org.junit.jupiter.api.{AfterEach, BeforeEach, TestInfo}
@@ -101,6 +101,13 @@ abstract class BaseProducerSendTest extends KafkaServerTestHarness {
     super.tearDown()
   }
 
+  /**
+   * Additional producer properties applied to every producer created via [[createProducer]].
+   * Subclasses override this to run the whole suite under a different producer configuration
+   * (e.g. a different buffer.memory.allocation.strategy).
+   */
+  protected def producerOverrides: Properties = new Properties()
+
   protected def createProducer(lingerMs: Int = 0,
                                deliveryTimeoutMs: Int = 2 * 60 * 1000,
                                batchSize: Int = 16384,
@@ -117,7 +124,8 @@ abstract class BaseProducerSendTest extends KafkaServerTestHarness {
       deliveryTimeoutMs = deliveryTimeoutMs,
       maxBlockMs = maxBlockMs,
       batchSize = batchSize,
-      bufferSize = bufferSize)
+      bufferSize = bufferSize,
+      additionalProperties = Some(producerOverrides))
     registerProducer(producer)
   }
 

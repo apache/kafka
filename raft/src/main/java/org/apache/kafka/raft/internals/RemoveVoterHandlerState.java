@@ -20,7 +20,15 @@ import org.apache.kafka.common.message.RemoveRaftVoterResponseData;
 import org.apache.kafka.common.utils.Timer;
 
 import java.util.concurrent.CompletableFuture;
+import java.util.concurrent.CompletionStage;
 
+/**
+ * Tracks the state of a single pending remove voter operation.
+ * <p>
+ * An instance is created by {@link RemoveVoterHandler#handleRemoveVoterRequest} once the
+ * updated VotersRecord has been appended to the log, and is held by
+ * {@link ChangeVoterHandlerState} until the record commits or the operation expires.
+ */
 public final class RemoveVoterHandlerState {
     private final long lastOffset;
     private final Timer timeout;
@@ -31,16 +39,37 @@ public final class RemoveVoterHandlerState {
         this.timeout = timeout;
     }
 
+    /**
+     * Returns the time in milliseconds until this operation expires.
+     *
+     * @param currentTimeMs the current time in milliseconds
+     * @return the remaining time in milliseconds until expiration
+     */
     public long timeUntilOperationExpiration(long currentTimeMs) {
         timeout.update(currentTimeMs);
         return timeout.remainingMs();
     }
 
-    public CompletableFuture<RemoveRaftVoterResponseData> future() {
-        return future;
+    /**
+     * Completes the future with the provided response.
+     *
+     * @param response the response to complete the future with
+     */
+    public void completeFuture(RemoveRaftVoterResponseData response) {
+        future.complete(response);
     }
 
+    /**
+     * Returns the offset of the VotersRecord that was appended to the log for this remove voter
+     * operation.
+     *
+     * @return the offset of the appended VotersRecord
+     */
     public long lastOffset() {
         return lastOffset;
+    }
+
+    CompletionStage<RemoveRaftVoterResponseData> future() {
+        return future;
     }
 }

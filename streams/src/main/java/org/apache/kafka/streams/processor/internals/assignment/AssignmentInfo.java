@@ -17,7 +17,7 @@
 package org.apache.kafka.streams.processor.internals.assignment;
 
 import org.apache.kafka.common.TopicPartition;
-import org.apache.kafka.common.utils.ByteBufferInputStream;
+import org.apache.kafka.common.utils.internals.ByteBufferInputStream;
 import org.apache.kafka.streams.errors.TaskAssignmentException;
 import org.apache.kafka.streams.processor.TaskId;
 import org.apache.kafka.streams.state.HostInfo;
@@ -32,7 +32,6 @@ import java.io.IOException;
 import java.nio.ByteBuffer;
 import java.util.ArrayList;
 import java.util.Collection;
-import java.util.Collections;
 import java.util.HashMap;
 import java.util.HashSet;
 import java.util.List;
@@ -63,10 +62,10 @@ public class AssignmentInfo {
                           final int commonlySupportedVersion) {
         this(version,
              commonlySupportedVersion,
-             Collections.emptyList(),
-             Collections.emptyMap(),
-             Collections.emptyMap(),
-             Collections.emptyMap(),
+             List.of(),
+             Map.of(),
+             Map.of(),
+             Map.of(),
              0);
     }
 

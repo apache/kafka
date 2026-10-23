@@ -16,6 +16,7 @@
  */
 package org.apache.kafka.streams.kstream.internals;
 
+import org.apache.kafka.common.errors.SerializationException;
 import org.apache.kafka.common.header.Headers;
 import org.apache.kafka.common.serialization.Deserializer;
 import org.apache.kafka.common.utils.internals.ByteUtils;
@@ -81,6 +82,9 @@ public class ChangedDeserializer<T> implements Deserializer<Change<T>>, Wrapping
             }
             case (byte) 2: {
                 final int newDataLength = ByteUtils.readVarint(buffer);
+                if (newDataLength > buffer.remaining()) {
+                    throw new SerializationException();
+                }
                 newData = new byte[newDataLength];
                 buffer.get(newData);
 
@@ -108,6 +112,9 @@ public class ChangedDeserializer<T> implements Deserializer<Change<T>>, Wrapping
             }
             case (byte) 5: {
                 final int newDataLength = ByteUtils.readVarint(buffer);
+                if (newDataLength > buffer.remaining()) {
+                    throw new SerializationException();
+                }
                 newData = new byte[newDataLength];
                 buffer.get(newData);
 

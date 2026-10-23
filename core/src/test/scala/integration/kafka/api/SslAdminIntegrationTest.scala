@@ -16,7 +16,6 @@ import java.util
 import java.util.concurrent._
 import java.util.Properties
 import com.yammer.metrics.core.Gauge
-import kafka.security.JaasTestUtils
 import kafka.utils.TestUtils
 import org.apache.kafka.clients.admin.{AdminClientConfig, CreateAclsResult, DescribeClusterOptions}
 import org.apache.kafka.common.acl._
@@ -31,6 +30,7 @@ import org.apache.kafka.server.authorizer._
 import org.apache.kafka.common.network.ConnectionMode
 import org.apache.kafka.common.utils.Utils
 import org.apache.kafka.metadata.authorizer.{ClusterMetadataAuthorizer, StandardAuthorizer}
+import org.apache.kafka.security.JaasTestUtils
 import org.apache.kafka.server.metrics.KafkaYammerMetrics
 import org.junit.jupiter.api.Assertions.{assertEquals, assertFalse, assertNotNull, assertThrows, assertTrue}
 import org.junit.jupiter.api.{AfterEach, Test, TestInfo}

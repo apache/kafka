@@ -18,6 +18,7 @@
 package org.apache.kafka.connect.rest;
 
 import org.apache.kafka.common.Configurable;
+import org.apache.kafka.common.annotation.InterfaceAudience;
 import org.apache.kafka.common.config.ConfigDef;
 import org.apache.kafka.connect.components.ConnectPlugin;
 import org.apache.kafka.connect.health.ConnectClusterState;
@@ -49,6 +50,7 @@ import java.util.Map;
  * The following tags are automatically added to all metrics registered: <code>config</code> set to
  * <code>rest.extension.classes</code>, and <code>class</code> set to the ConnectRestExtension class name.
  */
+@InterfaceAudience.Public
 public interface ConnectRestExtension extends Configurable, ConnectPlugin, Closeable {
 
     /**

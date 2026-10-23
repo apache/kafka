@@ -16,6 +16,7 @@
  */
 package org.apache.kafka.connect.header;
 
+import org.apache.kafka.common.annotation.InterfaceAudience;
 import org.apache.kafka.connect.data.Schema;
 
 /**
@@ -24,6 +25,7 @@ import org.apache.kafka.connect.data.Schema;
  * <p>
  * This is an immutable interface.
  */
+@InterfaceAudience.Public
 public interface Header {
 
     /**

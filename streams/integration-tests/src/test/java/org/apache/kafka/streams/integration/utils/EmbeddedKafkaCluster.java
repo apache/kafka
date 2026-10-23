@@ -48,6 +48,7 @@ import org.apache.kafka.coordinator.transaction.TransactionLogConfig;
 import org.apache.kafka.network.SocketServerConfigs;
 import org.apache.kafka.server.config.ServerConfigs;
 import org.apache.kafka.server.config.ServerLogConfigs;
+import org.apache.kafka.server.streams.InMemoryTopologyDescriptionPlugin;
 import org.apache.kafka.server.util.MockTime;
 import org.apache.kafka.storage.internals.log.CleanerConfig;
 import org.apache.kafka.test.TestCondition;
@@ -89,6 +90,17 @@ import static org.apache.kafka.common.utils.Utils.mkProperties;
 public class EmbeddedKafkaCluster {
 
     private static final Logger log = LoggerFactory.getLogger(EmbeddedKafkaCluster.class);
+
+    /**
+     * Value for {@link GroupCoordinatorConfig#STREAMS_GROUP_TOPOLOGY_DESCRIPTION_PLUGIN_CLASS_CONFIG}
+     * that opts a test cluster out of the {@link InMemoryTopologyDescriptionPlugin} configured by
+     * default, running the broker with the plugin-less production default. Needed because the
+     * config's default is null, but a {@link Properties} cannot carry null and an empty class name
+     * would fail config parsing, so {@link #addDefaultBrokerPropsIfAbsent} removes the property
+     * when it is set to this value.
+     */
+    public static final String NO_TOPOLOGY_DESCRIPTION_PLUGIN = "";
+
     private final KafkaClusterTestKit cluster;
     private final Properties brokerConfig;
     public final MockTime time;
@@ -209,6 +221,27 @@ public class EmbeddedKafkaCluster {
         Utils.closeQuietly(cluster, "embedded Kafka cluster", shutdownFailure);
         if (shutdownFailure.get() != null) {
             throw new KafkaException("Failed to shut down producer / embedded Kafka cluster", shutdownFailure.get());
+        }
+    }
+
+    /**
+     * The IDs of the nodes that run a controller. These nodes are also brokers, and the cluster runs a single
+     * controller, so a test that restarts a broker to fail over a partition leader should pick a broker that is not
+     * one of these.
+     */
+    public Set<Integer> controllerNodeIds() {
+        return cluster.controllers().keySet();
+    }
+
+    /**
+     * Shuts the broker down and starts it back up with the same identity, and waits for it to be ready again.
+     */
+    public void restartBroker(final int nodeId) {
+        cluster.restartBroker(nodeId, Map.of());
+        try {
+            cluster.waitForReadyBrokers();
+        } catch (final InterruptedException | ExecutionException e) {
+            throw new RuntimeException(e);
         }
     }
 
@@ -401,6 +434,10 @@ public class EmbeddedKafkaCluster {
 
     private void addDefaultBrokerPropsIfAbsent(final Properties brokerConfig) {
         brokerConfig.putIfAbsent(CleanerConfig.LOG_CLEANER_DEDUPE_BUFFER_SIZE_PROP, 2 * 1024 * 1024L);
+        brokerConfig.putIfAbsent(GroupCoordinatorConfig.STREAMS_GROUP_TOPOLOGY_DESCRIPTION_PLUGIN_CLASS_CONFIG, InMemoryTopologyDescriptionPlugin.class.getName());
+        if (NO_TOPOLOGY_DESCRIPTION_PLUGIN.equals(brokerConfig.get(GroupCoordinatorConfig.STREAMS_GROUP_TOPOLOGY_DESCRIPTION_PLUGIN_CLASS_CONFIG))) {
+            brokerConfig.remove(GroupCoordinatorConfig.STREAMS_GROUP_TOPOLOGY_DESCRIPTION_PLUGIN_CLASS_CONFIG);
+        }
         brokerConfig.putIfAbsent(GroupCoordinatorConfig.STREAMS_GROUP_MIN_SESSION_TIMEOUT_MS_CONFIG, "100");
         brokerConfig.putIfAbsent(GroupCoordinatorConfig.STREAMS_GROUP_MIN_HEARTBEAT_INTERVAL_MS_CONFIG, "100");
         brokerConfig.putIfAbsent(GroupCoordinatorConfig.GROUP_MIN_SESSION_TIMEOUT_MS_CONFIG, "0");
@@ -454,12 +491,12 @@ public class EmbeddedKafkaCluster {
         }
     }
 
-    public void setGroupHeartbeatTimeout(final String groupId, final int heartbeatTimeoutMs) {
+    public void setGroupHeartbeatInterval(final String groupId, final int heartbeatIntervalMs) {
         try (final Admin adminClient = createAdminClient()) {
             adminClient.incrementalAlterConfigs(
                 Map.of(
                     new ConfigResource(ConfigResource.Type.GROUP, groupId),
-                    List.of(new AlterConfigOp(new ConfigEntry(GroupConfig.STREAMS_HEARTBEAT_INTERVAL_MS_CONFIG, String.valueOf(heartbeatTimeoutMs)), AlterConfigOp.OpType.SET))
+                    List.of(new AlterConfigOp(new ConfigEntry(GroupConfig.STREAMS_HEARTBEAT_INTERVAL_MS_CONFIG, String.valueOf(heartbeatIntervalMs)), AlterConfigOp.OpType.SET))
                 )
             ).all().get();
         } catch (final InterruptedException | ExecutionException e) {
@@ -486,6 +523,31 @@ public class EmbeddedKafkaCluster {
                 Map.of(
                     new ConfigResource(ConfigResource.Type.GROUP, groupId),
                     List.of(new AlterConfigOp(new ConfigEntry(GroupConfig.STREAMS_INITIAL_REBALANCE_DELAY_MS_CONFIG, String.valueOf(initialRebalanceDelayMs)), AlterConfigOp.OpType.SET))
+                )
+            ).all().get();
+        } catch (final InterruptedException | ExecutionException e) {
+            throw new RuntimeException(e);
+        }
+    }
+
+    public void setGroupNumWarmupReplicas(final String groupId, final int numWarmupReplicas) {
+        setGroupConfig(groupId, GroupConfig.STREAMS_NUM_WARMUP_REPLICAS_CONFIG, String.valueOf(numWarmupReplicas));
+    }
+
+    public void setGroupAcceptableRecoveryLag(final String groupId, final long acceptableRecoveryLag) {
+        setGroupConfig(groupId, GroupConfig.STREAMS_ACCEPTABLE_RECOVERY_LAG_CONFIG, String.valueOf(acceptableRecoveryLag));
+    }
+
+    public void setGroupTaskOffsetInterval(final String groupId, final int taskOffsetIntervalMs) {
+        setGroupConfig(groupId, GroupConfig.STREAMS_TASK_OFFSET_INTERVAL_MS_CONFIG, String.valueOf(taskOffsetIntervalMs));
+    }
+
+    private void setGroupConfig(final String groupId, final String name, final String value) {
+        try (final Admin adminClient = createAdminClient()) {
+            adminClient.incrementalAlterConfigs(
+                Map.of(
+                    new ConfigResource(ConfigResource.Type.GROUP, groupId),
+                    List.of(new AlterConfigOp(new ConfigEntry(name, value), AlterConfigOp.OpType.SET))
                 )
             ).all().get();
         } catch (final InterruptedException | ExecutionException e) {

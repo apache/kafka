@@ -21,6 +21,9 @@
   // Version 1 adds replica directory id (KIP-853)
   "validVersions": "0-1",
   "flexibleVersions": "0+",
+  "headerVersions": {
+    "0+": "2"
+  },
   "fields": [
     { "name": "ClusterId", "type": "string", "versions": "0+", "nullableVersions": "0+", "default": "null", "taggedVersions": "0+", "tag": 0,
       "about": "The clusterId if known, this is used to validate metadata fetches prior to broker registration." },

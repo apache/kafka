@@ -14,9 +14,11 @@
  * See the License for the specific language governing permissions and
  * limitations under the License.
  */
+
 package org.apache.kafka.common.metrics.stats;
 
 import org.apache.kafka.common.MetricName;
+import org.apache.kafka.common.annotation.InterfaceAudience;
 import org.apache.kafka.common.metrics.CompoundStat;
 import org.apache.kafka.common.metrics.MetricConfig;
 
@@ -24,10 +26,10 @@ import java.util.Arrays;
 import java.util.List;
 import java.util.concurrent.TimeUnit;
 
-
 /**
  * A compound stat that includes a rate metric and a cumulative total metric.
  */
+@InterfaceAudience.Public
 public class Meter implements CompoundStat {
     private final MetricName rateMetricName;
     private final MetricName totalMetricName;

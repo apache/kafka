@@ -28,8 +28,7 @@ import org.junit.jupiter.api.Test;
 import java.util.Arrays;
 import java.util.List;
 
-import static org.hamcrest.CoreMatchers.is;
-import static org.hamcrest.MatcherAssert.assertThat;
+import static org.junit.jupiter.api.Assertions.assertEquals;
 import static org.junit.jupiter.api.Assertions.assertTrue;
 
 /**
@@ -67,6 +66,6 @@ public class WordCountProcessorTest {
             new MockProcessorContext.CapturedForward<>(new Record<>("beta", "1", 0L)),
             new MockProcessorContext.CapturedForward<>(new Record<>("gamma", "1", 0L))
         );
-        assertThat(context.forwarded(), is(expected));
+        assertEquals(expected, context.forwarded());
     }
 }

@@ -18,6 +18,7 @@
 package org.apache.kafka.streams.processor.api;
 
 import org.apache.kafka.common.Configurable;
+import org.apache.kafka.common.annotation.InterfaceAudience;
 import org.apache.kafka.streams.StreamsBuilder;
 import org.apache.kafka.streams.StreamsConfig;
 import org.apache.kafka.streams.Topology;
@@ -42,6 +43,7 @@ import java.util.Map;
  * the {@code ProcessorWrapper} is instantiated, and will provide it with the TopologyConfigs that were passed in
  * to the {@link StreamsBuilder} or {@link Topology} constructor.
  */
+@InterfaceAudience.Public
 public interface ProcessorWrapper extends Configurable {
 
     @Override

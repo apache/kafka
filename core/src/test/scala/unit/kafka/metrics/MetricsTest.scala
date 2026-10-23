@@ -108,12 +108,20 @@ class MetricsTest extends KafkaServerTestHarness with Logging {
 
   @Test
   def testLinuxIoMetrics(): Unit = {
-    // Check if linux-disk-{read,write}-bytes metrics either do or do not exist depending on whether we are or are not
+    // Check if the linux-disk-* I/O metrics either do or do not exist depending on whether we are or are not
     // able to collect those metrics on the platform where this test is running.
     val usable = new LinuxIoMetricsCollector("/proc", Time.SYSTEM).usable()
     val expectedCount = if (usable) 1 else 0
     val metrics = KafkaYammerMetrics.defaultRegistry.allMetrics
-    Set("linux-disk-read-bytes", "linux-disk-write-bytes").foreach(name =>
+    Set(
+      "linux-disk-read-bytes",
+      "linux-disk-write-bytes",
+      "linux-disk-rchar",
+      "linux-disk-wchar",
+      "linux-disk-syscr",
+      "linux-disk-syscw",
+      "linux-disk-cancelled-write-bytes"
+    ).foreach(name =>
       assertEquals(metrics.keySet.asScala.count(_.getMBeanName == s"$requiredKafkaServerPrefix=$name"), expectedCount))
   }
 

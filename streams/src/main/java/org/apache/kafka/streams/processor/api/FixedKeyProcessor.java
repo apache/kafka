@@ -16,6 +16,7 @@
  */
 package org.apache.kafka.streams.processor.api;
 
+import org.apache.kafka.common.annotation.InterfaceAudience;
 import org.apache.kafka.streams.processor.PunctuationType;
 import org.apache.kafka.streams.processor.Punctuator;
 import org.apache.kafka.streams.processor.StateStore;
@@ -30,6 +31,7 @@ import java.time.Duration;
  * @param <VOut> the type of output values
  */
 @FunctionalInterface
+@InterfaceAudience.Public
 public interface FixedKeyProcessor<KIn, VIn, VOut> {
 
     /**

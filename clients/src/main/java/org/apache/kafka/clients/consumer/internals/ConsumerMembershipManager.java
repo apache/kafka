@@ -104,7 +104,7 @@ import static org.apache.kafka.clients.consumer.internals.ConsumerRebalanceListe
  * the user if the callbacks fail. This manager is only concerned about the callbacks completion to
  * know that it can proceed with the reconciliation.
  */
-public class ConsumerMembershipManager extends AbstractMembershipManager<ConsumerGroupHeartbeatResponse> {
+public class ConsumerMembershipManager extends AbstractMembershipManager<ConsumerGroupHeartbeatResponse, ConsumerSubscriptionState> {
 
     /**
      * Group instance ID to be used by the member, provided when creating the current membership manager.
@@ -144,7 +144,7 @@ public class ConsumerMembershipManager extends AbstractMembershipManager<Consume
                                      Optional<String> rackId,
                                      int rebalanceTimeoutMs,
                                      Optional<String> serverAssignor,
-                                     SubscriptionState subscriptions,
+                                     ConsumerSubscriptionState subscriptions,
                                      CommitRequestManager commitRequestManager,
                                      ConsumerMetadata metadata,
                                      LogContext logContext,
@@ -173,7 +173,7 @@ public class ConsumerMembershipManager extends AbstractMembershipManager<Consume
                               Optional<String> rackId,
                               int rebalanceTimeoutMs,
                               Optional<String> serverAssignor,
-                              SubscriptionState subscriptions,
+                              ConsumerSubscriptionState subscriptions,
                               CommitRequestManager commitRequestManager,
                               ConsumerMetadata metadata,
                               LogContext logContext,
@@ -320,8 +320,7 @@ public class ConsumerMembershipManager extends AbstractMembershipManager<Consume
     private CompletableFuture<Void> invokeOnPartitionsRevokedCallback(Set<TopicPartition> partitionsRevoked) {
         // This should not trigger the callback if partitionsRevoked is empty, to keep the
         // current behaviour.
-        Optional<ConsumerRebalanceListener> listener = subscriptions.rebalanceListener();
-        if (!partitionsRevoked.isEmpty() && listener.isPresent()) {
+        if (!partitionsRevoked.isEmpty() && subscriptions.hasRebalanceListener()) {
             return enqueueConsumerRebalanceListenerCallback(ON_PARTITIONS_REVOKED, partitionsRevoked);
         } else {
             return CompletableFuture.completedFuture(null);
@@ -331,8 +330,7 @@ public class ConsumerMembershipManager extends AbstractMembershipManager<Consume
     private CompletableFuture<Void> invokeOnPartitionsLostCallback(Set<TopicPartition> partitionsLost) {
         // This should not trigger the callback if partitionsLost is empty, to keep the current
         // behaviour.
-        Optional<ConsumerRebalanceListener> listener = subscriptions.rebalanceListener();
-        if (!partitionsLost.isEmpty() && listener.isPresent()) {
+        if (!partitionsLost.isEmpty() && subscriptions.hasRebalanceListener()) {
             return enqueueConsumerRebalanceListenerCallback(ON_PARTITIONS_LOST, partitionsLost);
         } else {
             return CompletableFuture.completedFuture(null);

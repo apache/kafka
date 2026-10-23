@@ -39,6 +39,7 @@ import org.apache.kafka.common.TopicPartition;
 import org.apache.kafka.common.acl.AccessControlEntry;
 import org.apache.kafka.common.acl.AclBindingFilter;
 import org.apache.kafka.common.config.SaslConfigs;
+import org.apache.kafka.common.config.internals.BrokerSecurityConfigs;
 import org.apache.kafka.common.network.ListenerName;
 import org.apache.kafka.common.security.auth.SecurityProtocol;
 import org.apache.kafka.common.serialization.ByteArrayDeserializer;
@@ -50,18 +51,15 @@ import org.apache.kafka.common.test.api.Type;
 import org.apache.kafka.server.authorizer.Authorizer;
 import org.apache.kafka.server.fault.FaultHandlerException;
 import org.apache.kafka.storage.internals.checkpoint.OffsetCheckpointFile;
-import org.apache.kafka.storage.internals.log.UnifiedLog;
 
 import java.io.File;
 import java.io.IOException;
 import java.util.ArrayList;
-import java.util.Arrays;
 import java.util.Collection;
 import java.util.HashMap;
 import java.util.HashSet;
 import java.util.List;
 import java.util.Map;
-import java.util.Objects;
 import java.util.Optional;
 import java.util.Set;
 import java.util.concurrent.ExecutionException;
@@ -203,17 +201,29 @@ public interface ClusterInstance {
     default Map<String, Object> setClientSaslConfig(Map<String, Object> configs) {
         Map<String, Object> props = new HashMap<>(configs);
         if (config().brokerSecurityProtocol() == SecurityProtocol.SASL_PLAINTEXT) {
+            String mechanism = clientSaslMechanism();
             props.putIfAbsent(CommonClientConfigs.SECURITY_PROTOCOL_CONFIG, SecurityProtocol.SASL_PLAINTEXT.name);
-            props.putIfAbsent(SaslConfigs.SASL_MECHANISM, "PLAIN");
-            props.putIfAbsent(
-                SaslConfigs.SASL_JAAS_CONFIG,
-                String.format(
-                    "org.apache.kafka.common.security.plain.PlainLoginModule required username=\"%s\" password=\"%s\";",
-                    JaasUtils.KAFKA_PLAIN_ADMIN, JaasUtils.KAFKA_PLAIN_ADMIN_PASSWORD
-                )
-            );
+            props.putIfAbsent(SaslConfigs.SASL_MECHANISM, mechanism);
+            if (mechanism.equalsIgnoreCase("PLAIN")) {
+                props.putIfAbsent(
+                    SaslConfigs.SASL_JAAS_CONFIG,
+                    String.format(
+                        "org.apache.kafka.common.security.plain.PlainLoginModule required username=\"%s\" password=\"%s\";",
+                        JaasUtils.KAFKA_PLAIN_ADMIN, JaasUtils.KAFKA_PLAIN_ADMIN_PASSWORD
+                    )
+                );
+            }
         }
         return props;
+    }
+
+    default String clientSaslMechanism() {
+        String mechanisms = config().serverProperties().get(BrokerSecurityConfigs.SASL_ENABLED_MECHANISMS_CONFIG);
+        if (mechanisms == null) return "PLAIN";
+        for (String m : mechanisms.split(",")) {
+            if (m.trim().equalsIgnoreCase("PLAIN")) return "PLAIN";
+        }
+        return mechanisms.split(",")[0].trim();
     }
 
     Map<String, Object> setClientSslConfig(Map<String, Object> configs);
@@ -259,10 +269,23 @@ public interface ClusterInstance {
 
     void startBroker(int brokerId);
 
+    void restartBroker(int brokerId, Map<String, Object> propOverrides);
+
     void restartBrokersWithSwappedClientListenerPorts(int brokerId1, int brokerId2);
 
     //---------------------------[wait]---------------------------//
 
+    /**
+     * Waits for topic deletion to propagate to all live brokers.
+     *
+     * <p>Also verifies that partition 0 has no online replica, is absent from log managers
+     * and cleaner checkpoints, and has no active log directories. These directories are
+     * soft-deleted by renaming them with a unique ID and a {@link org.apache.kafka.storage.internals.log.LogFileUtils#DELETE_DIR_SUFFIX DELETE_DIR_SUFFIX} suffix.
+     * Physical file cleanup happens asynchronously and is not awaited.
+     *
+     * @param topic The name of the deleted topic
+     * @throws InterruptedException If the wait is interrupted
+     */
     default void waitTopicDeletion(String topic) throws InterruptedException {
         Collection<KafkaBroker> brokers = aliveBrokers().values();
         // wait for metadata
@@ -304,14 +327,6 @@ public interface ClusterInstance {
                 broker.config().logDirs().stream().allMatch(logDir ->
                     !new File(logDir, topicPartition.topic() + "-" + topicPartition.partition()).exists())
         ), "Failed to soft-delete the data to a delete directory");
-
-        // Ensure that the topic directories are hard-deleted
-        TestUtils.waitForCondition(() -> brokers.stream().allMatch(broker ->
-                broker.config().logDirs().stream().allMatch(logDir ->
-                    Arrays.stream(Objects.requireNonNull(new File(logDir).list())).noneMatch(partitionDirectoryName ->
-                        partitionDirectoryName.startsWith(topicPartition.topic() + "-" + topicPartition.partition()) &&
-                            partitionDirectoryName.endsWith(UnifiedLog.DELETE_DIR_SUFFIX)))
-        ), "Failed to hard-delete the delete directory");
     }
 
     default void createTopic(String topicName, int partitions, short replicas) throws InterruptedException {
@@ -326,8 +341,12 @@ public interface ClusterInstance {
     }
 
     default void createTopicWithAssignment(String topicName, Map<Integer, List<Integer>> replicaAssignment) throws InterruptedException {
+        createTopicWithAssignment(topicName, replicaAssignment, Map.of());
+    }
+
+    default void createTopicWithAssignment(String topicName, Map<Integer, List<Integer>> replicaAssignment, Map<String, String> props) throws InterruptedException {
         try (Admin admin = admin()) {
-            admin.createTopics(List.of(new NewTopic(topicName, replicaAssignment)));
+            admin.createTopics(List.of(new NewTopic(topicName, replicaAssignment).configs(props)));
             int partitions = replicaAssignment.size();
             waitTopicCreation(topicName, partitions);
         }

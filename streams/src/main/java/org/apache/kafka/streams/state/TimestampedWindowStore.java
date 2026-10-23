@@ -16,6 +16,7 @@
  */
 package org.apache.kafka.streams.state;
 
+import org.apache.kafka.common.annotation.InterfaceAudience;
 import org.apache.kafka.streams.kstream.Windowed;
 
 /**
@@ -31,4 +32,5 @@ import org.apache.kafka.streams.kstream.Windowed;
  * @param <K> Type of keys
  * @param <V> Type of values
  */
+@InterfaceAudience.Public
 public interface TimestampedWindowStore<K, V> extends WindowStore<K, ValueAndTimestamp<V>> { }

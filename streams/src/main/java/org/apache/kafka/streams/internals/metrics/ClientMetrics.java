@@ -25,7 +25,6 @@ import org.slf4j.Logger;
 import org.slf4j.LoggerFactory;
 
 import java.io.InputStream;
-import java.util.Collections;
 import java.util.LinkedHashMap;
 import java.util.Map;
 import java.util.Properties;
@@ -154,7 +153,7 @@ public class ClientMetrics {
         streamsMetrics.addClientLevelImmutableMetric(
                 RECORDING_LEVEL,
                 RECORDING_LEVEL_DESCRIPTION,
-                Collections.singletonMap(PROCESS_ID_TAG, processId),
+                Map.of(PROCESS_ID_TAG, processId),
                 RecordingLevel.INFO,
                 recordingLevel
         );

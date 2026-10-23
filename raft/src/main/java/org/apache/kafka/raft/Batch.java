@@ -221,4 +221,42 @@ public final class Batch<T> implements Iterable<T> {
             List.of()
         );
     }
+
+    /**
+     * Create a batch whose records were skipped, carrying only the offset information without the
+     * record bytes.
+     *
+     * @param baseOffset offset of the first record in the batch
+     * @param epoch epoch of the leader that created this batch
+     * @param appendTimestamp timestamp in milliseconds of when the batch was appended
+     * @param sizeInBytes number of bytes used by this batch
+     * @param numRecords the number of records in this batch
+     */
+    public static <T> Batch<T> skipped(
+        long baseOffset,
+        int epoch,
+        long appendTimestamp,
+        int sizeInBytes,
+        int numRecords
+    ) {
+        if (numRecords < 1) {
+            throw new IllegalArgumentException(
+                String.format(
+                    "Batch must contain at least one record; baseOffset = %d; epoch = %d",
+                    baseOffset,
+                    epoch
+                )
+            );
+        }
+
+        return new Batch<>(
+            baseOffset,
+            epoch,
+            appendTimestamp,
+            sizeInBytes,
+            baseOffset + numRecords - 1,
+            List.of(),
+            List.of()
+        );
+    }
 }

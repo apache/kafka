@@ -17,6 +17,7 @@
 
 package org.apache.kafka.clients.admin;
 
+import org.apache.kafka.common.annotation.InterfaceAudience;
 import org.apache.kafka.common.annotation.InterfaceStability;
 
 /**
@@ -26,6 +27,7 @@ import org.apache.kafka.common.annotation.InterfaceStability;
  * be retrieved. It is paired with {@link StreamsGroupDescription#topologyDescription()}: the
  * description is present if and only if the status is {@link #AVAILABLE}.
  */
+@InterfaceAudience.Public
 @InterfaceStability.Evolving
 public enum StreamsGroupTopologyDescriptionStatus {
 

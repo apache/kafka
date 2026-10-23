@@ -17,6 +17,8 @@
 
 package org.apache.kafka.common.config;
 
+import org.apache.kafka.common.annotation.InterfaceAudience;
+
 /**
  * <p>Keys that can be used to configure a topic. These keys are useful when creating or reconfiguring a
  * topic using the AdminClient.
@@ -27,6 +29,7 @@ package org.apache.kafka.common.config;
  */
 // This is a public API, so we should not remove or alter keys without a discussion and a deprecation period.
 // Eventually this should replace LogConfig.scala.
+@InterfaceAudience.Public
 public class TopicConfig {
     public static final String SEGMENT_BYTES_CONFIG = "segment.bytes";
     public static final String SEGMENT_BYTES_DOC = "This configuration controls the segment file size for " +
@@ -107,20 +110,22 @@ public class TopicConfig {
             "(i.e. retention.ms/bytes).";
 
     public static final String REMOTE_COPY_LAG_MS_CONFIG = "remote.copy.lag.ms";
-    public static final String REMOTE_COPY_LAG_MS_DOC = "Controls how long to delay uploading segments to remote storage. " +
-            "When set to 0, immediate upload without any delay check. " +
-            "When set to a positive value (ms), a segment can't become eligible for upload until the time since the latest record in the segment reaches the value. " +
-            "The value should not exceed the real local retention ms except the latter is retained indefinitely (-1). " +
-            "When set to -1, resolves to the real local retention ms as maximum delay. " +
-            "For how the real local retention time is computed, see <code>local.retention.ms</code>.";
+    public static final String REMOTE_COPY_LAG_MS_DOC = "Controls one of the two upload eligibility checks (time and size) for copying segments to remote storage. " +
+            "A non-active segment is upload-eligible when either this time-based check or <code>remote.copy.lag.bytes</code> is satisfied. " +
+            "When set to 0, uploads are immediately eligible regardless of lag checks. " +
+            "When set to a positive value (ms), the segment is time-eligible once elapsed time since its latest record reaches this value. " +
+            "When set to -1, this value is derived from effective local retention time (<code>local.retention.ms</code>). " +
+            "If that effective local retention time is unlimited (-1), this time-based check is not applied. " +
+            "A positive value should not exceed effective local retention time unless local retention is unlimited (-1).";
 
     public static final String REMOTE_COPY_LAG_BYTES_CONFIG = "remote.copy.lag.bytes";
-    public static final String REMOTE_COPY_LAG_BYTES_DOC = "Controls size-based delay for uploading segments to remote storage. " +
-            "When set to 0, immediate upload without any delay check. " +
-            "When set to a positive value (bytes), a segment can't become eligible for upload until the total bytes of log data after the segment reach the value. " +
-            "The value should not exceed the real local retention bytes except the latter is retained indefinitely (-1). " +
-            "When set to -1, resolves to the real local retention bytes as maximum delay. " +
-            "For how the real local retention size is computed, see <code>local.retention.bytes</code>.";
+    public static final String REMOTE_COPY_LAG_BYTES_DOC = "Controls one of the two upload eligibility checks (time and size) for copying segments to remote storage. " +
+            "A non-active segment is upload-eligible when either this size-based check or <code>remote.copy.lag.ms</code> is satisfied. " +
+            "When set to 0, uploads are immediately eligible regardless of lag checks. " +
+            "When set to a positive value (bytes), the segment is size-eligible once bytes of newer local log data after that segment reaches this value. " +
+            "When set to -1, this value is derived from effective local retention size (<code>local.retention.bytes</code>). " +
+            "If that effective local retention size is unlimited (-1), this size-based check is not applied. " +
+            "A positive value should not exceed effective local retention size unless local retention is unlimited (-1).";
 
     public static final String REMOTE_LOG_DELETE_ON_DISABLE_CONFIG = "remote.log.delete.on.disable";
     public static final String REMOTE_LOG_DELETE_ON_DISABLE_DOC = "Determines whether tiered data for a topic should be " +
@@ -130,6 +135,18 @@ public class TopicConfig {
     public static final String MAX_MESSAGE_BYTES_CONFIG = "max.message.bytes";
     public static final String MAX_MESSAGE_BYTES_DOC =
         "The largest record batch size allowed by Kafka (after compression if compression is enabled).";
+
+    public static final String MAX_DECOMPRESSED_MESSAGE_BYTES_CONFIG = "max.decompressed.message.bytes";
+    public static final String MAX_DECOMPRESSED_MESSAGE_BYTES_DOC = "The maximum decompressed size, in bytes, of a " +
+        "single record the broker will accept; larger records are rejected with an " +
+        "<code>InvalidRecordException</code>. It is enforced where the broker decompresses records: produce " +
+        "validation of compressed batches, log compaction, and offset lookups by timestamp or max timestamp against " +
+        "the local log or remote storage. " +
+        "Unlike <code>max.message.bytes</code>, which bounds the compressed batch on the wire, this bounds the " +
+        "decompressed size of an individual record. Lowering it below the size of already-stored records makes " +
+        "compaction and timestamp offset lookups of affected partitions fail until it is raised again. The " +
+        "default imposes no limit beyond the largest record the broker could allocate anyway; set a smaller value " +
+        "to enforce a per-record cap.";
 
     public static final String INDEX_INTERVAL_BYTES_CONFIG = "index.interval.bytes";
     public static final String INDEX_INTERVAL_BYTES_DOC = "This setting controls how frequently Kafka " +
@@ -198,21 +215,34 @@ public class TopicConfig {
         "thread to trigger election periodically (default is 5 minutes). Please run <code>kafka-leader-election.sh</code> with <code>unclean</code> option " +
          "to trigger the unclean leader election immediately if needed.</p>";
 
+    public static final String MIRROR_UNCLEAN_LEADER_ELECTION_ENABLE_CONFIG = "mirror.unclean.leader.election.enable";
+    public static final String MIRROR_UNCLEAN_LEADER_ELECTION_ENABLE_DOC = "When enabled, this property allows the mirror to support " +
+        "unclean leader elections on the source cluster. During log truncation, it forces the mirror to wait for all assigned replicas, " +
+        "not just active ISR members, to complete truncation. While this guarantees absolute cross-cluster consistency, a single stuck " +
+        "replica will block the partition indefinitely. Conversely, when disabled, the mirror will bypass recovery entirely during a ULE, " +
+        "immediately dropping the partition into a FAILED state and halting replication.";
+    public static final Boolean MIRROR_UNCLEAN_LEADER_ELECTION_ENABLE_DEFAULT = false;
+
     public static final String MIN_IN_SYNC_REPLICAS_CONFIG = "min.insync.replicas";
     public static final String MIN_IN_SYNC_REPLICAS_DOC = "Specifies the <i>minimum</i> number of in-sync replicas (including the leader) " +
         "required for a write to succeed when a producer sets <code>acks</code> to \"all\" (or \"-1\"). In the <code>acks=all</code> " +
         "case, every in-sync replica must acknowledge a write for it to be considered successful. E.g., if a topic has " +
         "<code>replication.factor</code> of 3 and the ISR set includes all three replicas, then all three replicas must acknowledge an " +
         "<code>acks=all</code> write for it to succeed, even if <code>min.insync.replicas</code> happens to be less than 3. " +
-        "If <code>acks=all</code> and the current ISR set contains fewer than <code>min.insync.replicas</code> members, then the producer " +
+        "The effective minimum ISR size Kafka actually enforces is <code>min(min.insync.replicas, replica count)</code>, not the raw configured value: if " +
+        "<code>min.insync.replicas</code> is set higher than the partition's current replica count, the broker uses the " +
+        "replica count instead, since the ISR can never exceed it. " +
+        "If <code>acks=all</code> and the current ISR set is smaller than this effective minimum, then the producer " +
         "will raise an exception (either <code>NotEnoughReplicas</code> or <code>NotEnoughReplicasAfterAppend</code>).<br> " +
         "Regardless of the <code>acks</code> setting, the messages will not be visible to the consumers until " +
-        "they are replicated to all in-sync replicas and the <code>min.insync.replicas</code> condition is met.<br> " +
+        "they are replicated to all in-sync replicas and the ISR size meets this same effective minimum.<br> " +
         "When used together, <code>min.insync.replicas</code> and <code>acks</code> allow you to enforce greater durability guarantees. " +
         "A typical scenario would be to create a topic with a replication factor of 3, " +
         "set <code>min.insync.replicas</code> to 2, and produce with <code>acks</code> of \"all\". " +
         "This ensures that a majority of replicas must persist a write before it's considered successful by the producer and it's visible to consumers." +
-        "<p>Note that when the Eligible Leader Replicas feature is enabled, the semantics of this config changes. Please refer to <a href=\"https://kafka.apache.org/documentation/#eligible_leader_replicas\">the ELR section</a> for more info.</p>";
+        "<p>Note that the effective minimum ISR bound above applies regardless of whether the Eligible Leader Replicas feature is enabled; " +
+        "however, when the Eligible Leader Replicas feature is enabled, additional configuration rules apply to this setting " +
+        "(for example, it cannot be set for individual brokers). Please refer to <a href=\"https://kafka.apache.org/documentation/#eligible_leader_replicas\">the ELR section</a> for more info.</p>";
 
     public static final String COMPRESSION_TYPE_CONFIG = "compression.type";
     public static final String COMPRESSION_TYPE_DOC = "Specify the final compression type for a given topic. " +
@@ -247,7 +277,11 @@ public class TopicConfig {
         "difference between the message timestamp and the broker's timestamp. The message timestamp can be later than " +
         "or equal to the broker's timestamp, with the maximum allowable difference determined by the value set in this " +
         "configuration. If message.timestamp.type=CreateTime, the message will be rejected if the difference in " +
-        "timestamps exceeds this specified threshold. This configuration is ignored if message.timestamp.type=LogAppendTime.";
+        "timestamps exceeds this specified threshold. This configuration is ignored if message.timestamp.type=LogAppendTime. " +
+        "Note that time-based retention (" + RETENTION_MS_CONFIG + ") is based on the largest message timestamp in a segment, " +
+        "so a segment containing a message with a future timestamp is not eligible for time-based deletion until that " +
+        "timestamp plus the retention time has passed. Increasing this value above the default allows more " +
+        "future-timestamped messages and can delay segment deletion, increasing disk usage.";
 
     /**
      * @deprecated down-conversion is not possible in Apache Kafka 4.0 and newer, hence this configuration is a no-op,

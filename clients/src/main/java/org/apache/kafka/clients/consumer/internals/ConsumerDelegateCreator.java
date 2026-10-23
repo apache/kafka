@@ -77,7 +77,7 @@ public class ConsumerDelegateCreator {
                                                 Deserializer<K> keyDeserializer,
                                                 Deserializer<V> valueDeserializer,
                                                 KafkaClient client,
-                                                SubscriptionState subscriptions,
+                                                ConsumerSubscriptionState subscriptions,
                                                 ConsumerMetadata metadata,
                                                 List<ConsumerPartitionAssignor> assignors) {
         try {

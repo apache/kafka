@@ -14,13 +14,17 @@
  * See the License for the specific language governing permissions and
  * limitations under the License.
  */
+
 package org.apache.kafka.tools.api;
+
+import org.apache.kafka.common.annotation.InterfaceAudience;
 
 import java.nio.ByteBuffer;
 
 /**
  * The integer decoder translates bytes into integers.
  */
+@InterfaceAudience.Public
 public class IntegerDecoder implements Decoder<Integer> {
     @Override
     public Integer fromBytes(byte[] bytes) {
