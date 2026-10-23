@@ -24,8 +24,10 @@ import org.apache.kafka.clients.admin.StreamsGroupTopologyDescription.Sink;
 import org.apache.kafka.clients.admin.StreamsGroupTopologyDescription.Source;
 import org.apache.kafka.clients.admin.StreamsGroupTopologyDescription.Subtopology;
 
+import java.util.ArrayList;
 import java.util.Collection;
 import java.util.HashSet;
+import java.util.List;
 import java.util.Set;
 import java.util.TreeSet;
 
@@ -42,34 +44,58 @@ public final class TopologyDescriptionFormatter {
     public static String format(final StreamsGroupTopologyDescription topology) {
         final StringBuilder sb = new StringBuilder();
         sb.append("Topologies:\n");
+        // Kafka Streams numbers subtopologies and global stores from a single counter, but the wire format carries no
+        // global store id. We assume both lists arrive sorted by id, which holds because
+        // org.apache.kafka.streams.processor.internals.TopologyDescriptionConverter#toWire sorts them before sending;
+        // neither the protocol nor the topology description plugin guarantees it. Under that assumption the global
+        // store ids are exactly the ids not taken by a subtopology, in ascending order.
+        final List<GlobalStore> globalStores = new ArrayList<>(topology.globalStores());
+        final List<Integer> globalStoreIds = globalStoreIds(topology.subtopologies(), globalStores.size());
+        int next = 0;
+        // Interleave subtopologies and global stores by id, like Topology#describe().
         for (final Subtopology subtopology : topology.subtopologies()) {
+            final Integer subtopologyId = numericId(subtopology);
+            while (subtopologyId != null && next < globalStores.size() && globalStoreIds.get(next) < subtopologyId) {
+                sb.append("   ");
+                appendGlobalStore(sb, globalStores.get(next), globalStoreIds.get(next));
+                next++;
+            }
             sb.append("   ");
             appendSubtopology(sb, subtopology);
         }
-        // Kafka Streams numbers subtopologies and global stores from a single counter, and both lists are sent
-        // sorted by id, so the global store ids are exactly the ids not taken by a subtopology, in ascending order.
-        final Set<Integer> subtopologyIds = numericIds(topology.subtopologies());
-        int globalStoreId = 0;
-        for (final GlobalStore globalStore : topology.globalStores()) {
-            while (subtopologyIds.contains(globalStoreId)) {
-                globalStoreId++;
-            }
+        for (; next < globalStores.size(); next++) {
             sb.append("   ");
-            appendGlobalStore(sb, globalStore, globalStoreId++);
+            appendGlobalStore(sb, globalStores.get(next), globalStoreIds.get(next));
         }
         return sb.toString();
     }
 
-    private static Set<Integer> numericIds(final Collection<Subtopology> subtopologies) {
-        final Set<Integer> ids = new HashSet<>();
+    private static List<Integer> globalStoreIds(final Collection<Subtopology> subtopologies, final int count) {
+        final Set<Integer> subtopologyIds = new HashSet<>();
         for (final Subtopology subtopology : subtopologies) {
-            try {
-                ids.add(Integer.parseInt(subtopology.id()));
-            } catch (final NumberFormatException e) {
-                // a non-numeric id cannot collide with a numeric global store label
+            final Integer id = numericId(subtopology);
+            if (id != null) {
+                subtopologyIds.add(id);
             }
         }
+        final List<Integer> ids = new ArrayList<>(count);
+        int id = 0;
+        while (ids.size() < count) {
+            if (!subtopologyIds.contains(id)) {
+                ids.add(id);
+            }
+            id++;
+        }
         return ids;
+    }
+
+    private static Integer numericId(final Subtopology subtopology) {
+        try {
+            return Integer.parseInt(subtopology.id());
+        } catch (final NumberFormatException e) {
+            // a non-numeric id cannot collide with a numeric global store label
+            return null;
+        }
     }
 
     private static void appendSubtopology(final StringBuilder sb, final Subtopology subtopology) {

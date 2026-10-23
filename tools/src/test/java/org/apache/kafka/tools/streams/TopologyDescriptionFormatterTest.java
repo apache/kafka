@@ -113,9 +113,9 @@ public class TopologyDescriptionFormatterTest {
             List.of(globalStore("g")));
 
         assertEquals(List.of(
+            "Sub-topology: 0 for global store (will not generate tasks)",
             "Sub-topology: 1",
-            "Sub-topology: 2",
-            "Sub-topology: 0 for global store (will not generate tasks)"),
+            "Sub-topology: 2"),
             subtopologyHeaders(TopologyDescriptionFormatter.format(topology)));
     }
 
@@ -126,10 +126,10 @@ public class TopologyDescriptionFormatterTest {
             List.of(globalStore("g0"), globalStore("g1"), globalStore("g2")));
 
         assertEquals(List.of(
-            "Sub-topology: 1",
-            "Sub-topology: 3",
             "Sub-topology: 0 for global store (will not generate tasks)",
+            "Sub-topology: 1",
             "Sub-topology: 2 for global store (will not generate tasks)",
+            "Sub-topology: 3",
             "Sub-topology: 4 for global store (will not generate tasks)"),
             subtopologyHeaders(TopologyDescriptionFormatter.format(topology)));
     }
