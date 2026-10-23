@@ -565,8 +565,8 @@ public class ClassicKafkaConsumer<K, V> implements ConsumerDelegate<K, V> {
      * This can be controlled through the {@code metadata.max.age.ms} configuration: by lowering
      * the max metadata age, the consumer will refresh metadata more often and check for matching topics.
      * <p>
-     * See {@link #subscribe(Collection, ConsumerRebalanceListener)} for details on the
-     * use of the {@link RebalanceListener}. Generally rebalances are triggered when there
+     * See {@link RebalanceListener} for details on the
+     * use of rebalance callbacks. Generally rebalances are triggered when there
      * is a change to the topics matching the provided pattern and when consumer group membership changes.
      * Group rebalances only take place during an active call to {@link #poll(Duration)}.
      *
