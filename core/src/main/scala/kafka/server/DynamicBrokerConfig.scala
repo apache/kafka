@@ -40,7 +40,7 @@ import org.apache.kafka.raft.{KRaftConfigs, KafkaRaftClient}
 import org.apache.kafka.server.{DynamicThreadPool, ProcessRole}
 import org.apache.kafka.server.common.ApiMessageAndVersion
 import org.apache.kafka.server.config.DynamicBrokerConfig.DynamicClusterMirrorConfig
-import org.apache.kafka.server.config.{BrokerReconfigurable => JBrokerReconfigurable, DynamicConfig, DynamicLogConfig, DynamicProducerStateManagerConfig, ServerConfigs, DynamicBrokerConfig => JDynamicBrokerConfig}
+import org.apache.kafka.server.config.{DynamicConfig, DynamicProducerStateManagerConfig, QuotaConfig, ServerConfigs, ServerLogConfigs, BrokerReconfigurable => JBrokerReconfigurable, DynamicBrokerConfig => JDynamicBrokerConfig}
 import org.apache.kafka.server.log.remote.storage.RemoteLogManagerConfig
 import org.apache.kafka.server.metrics.{ClientTelemetryExporterPlugin, MetricConfigs}
 import org.apache.kafka.server.quota.QuotaFactory
@@ -155,8 +155,18 @@ class DynamicBrokerConfig(private val kafkaConfig: KafkaConfig) extends Logging 
   private var telemetryExporterPluginOpt: Option[ClientTelemetryExporterPlugin] = _
   private var currentConfig: KafkaConfig = _
 
+  private def warnIfBrokerQuotaConfigsInStaticConfig(): Unit = {
+    QuotaConfig.BROKER_QUOTA_CONFIGS.asScala.foreach { configName =>
+      if (staticBrokerConfigs.contains(configName)) {
+        warn(s"$configName is set in the static configuration file but is ignored at runtime; configure this property dynamically to take effect.")
+      }
+    }
+  }
+
   private[server] def initialize(clientTelemetryExporterPluginOpt: Option[ClientTelemetryExporterPlugin]): Unit = {
-    KafkaConfig.warnIfDynamicOnlyBrokerQuotaConfigsInStaticConfig(staticBrokerConfigs.asJava)
+    if (kafkaConfig.processRoles.contains(ProcessRole.BrokerRole)) {
+      warnIfBrokerQuotaConfigsInStaticConfig()
+    }
     currentConfig = new KafkaConfig(kafkaConfig.props, false)
     telemetryExporterPluginOpt = clientTelemetryExporterPluginOpt
   }

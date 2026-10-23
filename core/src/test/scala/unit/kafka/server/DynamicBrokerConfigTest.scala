@@ -115,7 +115,7 @@ class DynamicBrokerConfigTest {
     val configWithStaticQuota = KafkaConfig(propsWithStaticQuota)
 
     Using.resource(LogCaptureAppender.createAndRegister) { appender =>
-      appender.setClassLogger(KafkaConfig.getClass, Level.WARN)
+      appender.setClassLogger(classOf[DynamicBrokerConfig], Level.WARN)
       configWithStaticQuota.dynamicConfig.initialize(None)
       assertEquals(1, appender.getMessages.asScala.count(_.contains(expectedMessage)))
 
@@ -129,12 +129,28 @@ class DynamicBrokerConfigTest {
     val configWithoutStaticQuota = KafkaConfig(propsWithoutStaticQuota)
 
     Using.resource(LogCaptureAppender.createAndRegister) { appender =>
-      appender.setClassLogger(KafkaConfig.getClass, Level.WARN)
+      appender.setClassLogger(classOf[DynamicBrokerConfig], Level.WARN)
       configWithoutStaticQuota.dynamicConfig.initialize(None)
 
       val dynamicQuotaUpdate = new Properties()
       dynamicQuotaUpdate.put(quotaConfig, "1000000")
       configWithoutStaticQuota.dynamicConfig.updateBrokerConfig(0, dynamicQuotaUpdate)
+      assertFalse(appender.getMessages.asScala.exists(_.contains(expectedMessage)))
+    }
+
+    val controllerProps = new Properties()
+    controllerProps.setProperty(KRaftConfigs.PROCESS_ROLES_CONFIG, "controller")
+    controllerProps.setProperty(SocketServerConfigs.LISTENERS_CONFIG, "PLAINTEXT://A:9092,SSL://B:9093")
+    controllerProps.setProperty(SocketServerConfigs.ADVERTISED_LISTENERS_CONFIG, "PLAINTEXT://A:9092,SSL://B:9093")
+    controllerProps.setProperty(KRaftConfigs.CONTROLLER_LISTENER_NAMES_CONFIG, "PLAINTEXT,SSL")
+    controllerProps.setProperty(KRaftConfigs.NODE_ID_CONFIG, "2")
+    controllerProps.setProperty(QuorumConfig.QUORUM_VOTERS_CONFIG, "2@localhost:9092")
+    controllerProps.put(quotaConfig, "1000000")
+    val controllerConfig = KafkaConfig(controllerProps)
+    
+    Using.resource(LogCaptureAppender.createAndRegister) { appender =>
+      appender.setClassLogger(classOf[DynamicBrokerConfig], Level.WARN)
+      controllerConfig.dynamicConfig.initialize(None)
       assertFalse(appender.getMessages.asScala.exists(_.contains(expectedMessage)))
     }
   }

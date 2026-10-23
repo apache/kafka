@@ -2160,15 +2160,9 @@ class KafkaConfigTest {
 
   @Test
   def testWarnIfDynamicQuotasInStaticConfig(): Unit = {
-    val quotaConfigs = Seq(
-      QuotaConfig.LEADER_REPLICATION_THROTTLED_RATE_CONFIG,
-      QuotaConfig.FOLLOWER_REPLICATION_THROTTLED_RATE_CONFIG,
-      QuotaConfig.REPLICA_ALTER_LOG_DIRS_IO_MAX_BYTES_PER_SECOND_CONFIG
-    )
-
-    quotaConfigs.foreach { config =>
+    QuotaConfig.BROKER_QUOTA_CONFIGS.asScala.foreach { config =>
       Using.resource(LogCaptureAppender.createAndRegister) { appender =>
-        appender.setClassLogger(KafkaConfig.getClass, Level.WARN)
+        appender.setClassLogger(classOf[DynamicBrokerConfig], Level.WARN)
 
         val props = createDefaultConfig()
         props.setProperty(config, "1000000")

@@ -99,14 +99,6 @@ object KafkaConfig extends Logging {
   def maybeSensitive(configType: Option[ConfigDef.Type]): Boolean = {
     AbstractKafkaConfig.maybeSensitive(configType.toJava)
   }
-
-  private[server] def warnIfDynamicOnlyBrokerQuotaConfigsInStaticConfig(staticConfigs: util.Map[String, _]): Unit = {
-    QuotaConfig.DYNAMIC_ONLY_BROKER_QUOTA_CONFIGS.asScala.foreach { configName =>
-      if (staticConfigs.containsKey(configName)) {
-        warn(s"$configName is set in the static configuration file but is ignored at runtime; configure this property dynamically to take effect.")
-      }
-    }
-  }
 }
 
 /**
