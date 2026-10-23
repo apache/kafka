@@ -31,7 +31,6 @@ import org.apache.kafka.connect.storage.StatusBackingStore;
 import org.apache.kafka.connect.util.ConnectorTaskId;
 
 import org.junit.jupiter.api.AfterEach;
-import org.junit.jupiter.api.BeforeEach;
 import org.junit.jupiter.api.Test;
 import org.junit.jupiter.api.extension.ExtendWith;
 import org.mockito.Mock;
@@ -67,20 +66,15 @@ public class WorkerTaskTest {
     @Mock private TaskStatus.Listener statusListener;
     @Mock private ClassLoader loader;
     @Mock private StatusBackingStore statusBackingStore;
-    private MockConnectMetrics metrics;
+    private final MockConnectMetrics metrics = new MockConnectMetrics();
     @Mock private ErrorHandlingMetrics errorHandlingMetrics;
     @Mock private RetryWithToleranceOperator<Object> retryWithToleranceOperator;
     @Mock private TransformationChain<Object, SourceRecord> transformationChain;
     @Mock private Supplier<List<ErrorReporter<Object>>> errorReportersSupplier;
 
-    @BeforeEach
-    public void setup() {
-        metrics = new MockConnectMetrics();
-    }
-
     @AfterEach
     public void tearDown() {
-        if (metrics != null) metrics.stop();
+        metrics.stop();
     }
 
     @Test
