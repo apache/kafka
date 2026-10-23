@@ -23,7 +23,7 @@ import org.apache.kafka.common.protocol.Errors;
 import org.apache.kafka.common.protocol.Readable;
 
 public class ControllerRegistrationRequest extends AbstractRequest {
-    private static final short LAST_VERSION_BEFORE_REQUEST_HEADER_V3 = 0;
+    private static final short LATEST_VERSION_BEFORE_REQUEST_HEADER_V3 = 0;
 
     public static class Builder extends AbstractRequest.Builder<ControllerRegistrationRequest> {
         private final ControllerRegistrationRequestData data;
@@ -35,7 +35,7 @@ public class ControllerRegistrationRequest extends AbstractRequest {
         public Builder(ControllerRegistrationRequestData data, boolean useRequestHeaderV3) {
             super(ApiKeys.CONTROLLER_REGISTRATION,
                 ApiKeys.CONTROLLER_REGISTRATION.oldestVersion(),
-                useRequestHeaderV3 ? ApiKeys.CONTROLLER_REGISTRATION.latestVersion() : LAST_VERSION_BEFORE_REQUEST_HEADER_V3);
+                useRequestHeaderV3 ? ApiKeys.CONTROLLER_REGISTRATION.latestVersion() : LATEST_VERSION_BEFORE_REQUEST_HEADER_V3);
             this.data = data;
         }
 
