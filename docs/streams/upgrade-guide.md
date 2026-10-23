@@ -65,9 +65,11 @@ Starting in Kafka Streams 2.6.x, a new processing mode is available, named EOS v
 
 Since 2.6.0 release, Kafka Streams depends on a RocksDB version that requires MacOS 10.14 or higher.
 
-## Streams API changes in 4.3.0
+## Streams API changes in 4.3.2
 
 Processors returning the same `StoreBuilder` instance from `ConnectedStoreProvider#stores()` are now grouped into one subtopology ([KAFKA-20464](https://issues.apache.org/jira/browse/KAFKA-20464)). For affected applications, task IDs change and state is restored from the changelog on first startup after upgrading. Linking processors to a store by name is unaffected.
+
+## Streams API changes in 4.3.0
 
 **Note:** Kafka Streams 4.3.0 contains a critical native memory leak in the RocksDB state store layer ([KAFKA-20616](https://issues.apache.org/jira/browse/KAFKA-20616)). The `ColumnFamilyOptions` for the offsets column family is not closed, and column family handles can leak on close-path exceptions, which under cascading task closes (e.g., rebalances or error-triggered recoveries) leads to unbounded off-heap memory growth and eventual OOM. Users running Kafka Streams should consider upgrading directly to 4.3.1, which includes the fix for it.
 
