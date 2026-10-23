@@ -2330,6 +2330,7 @@ kafka.server.share.DelayedShareFetchTest:
 - testDelayedShareFetchTryCompleteReturnsTrue
 - testEmptyFutureReturnedByDelayedShareFetchOnComplete
 - testExceptionInMinBytesCalculation
+- testFetchOffsetMetadataCachedPerDelayedShareFetch
 - testForceCompleteNotTriggersDelayedActionsQueueWhenFetchDataIsEmpty
 - testForceCompleteTriggersDelayedActionsQueue
 - testLocksReleasedAcquireException

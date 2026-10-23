@@ -476,6 +476,8 @@ org.apache.kafka.clients.consumer.ShareConsumerDeliveryTest:
 - testShareAutoOffsetResetEarliest
 - testShareAutoOffsetResetEarliestAfterLsoMovement
 - testShareAutoOffsetResetMultipleGroupsWithDifferentValue
+org.apache.kafka.clients.consumer.ShareConsumerFairnessTest:
+- testPartitionsWithDeepBacklogAreServedFairly
 org.apache.kafka.clients.consumer.ShareConsumerLagTest:
 - testSharePartitionLagAfterAlterShareGroupOffsets
 - testSharePartitionLagAfterDeleteShareGroupOffsets
