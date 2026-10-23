@@ -437,6 +437,9 @@ class StreamsGroupStaticMemberGroupMetadataManagerTest {
                 .setHeartbeatIntervalMs(5000)
                 .setTaskOffsetIntervalMs(60000)
                 .setAcceptableRecoveryLag(10000)
+                .setActiveTasks(topic.responseTasks(0, 1))
+                .setWarmupTasks(List.of())
+                .setStandbyTasks(List.of())
                 .setStatus(List.of()),
             revokeAckResult.response().data()
         );
@@ -563,8 +566,9 @@ class StreamsGroupStaticMemberGroupMetadataManagerTest {
         ));
     }
 
-    @Test
-    public void testStaticMemberRejoinWithSameProcessIdDoesNotBumpStreamsGroupEpoch() throws UnknownHostException {
+    @ParameterizedTest
+    @MethodSource("rackIdCases")
+    public void testStaticMemberRejoinWithSameProcessIdDoesNotBumpStreamsGroupEpoch(String rackId) throws UnknownHostException {
         String groupId = "fooup";
         int groupEpoch = DEFAULT_GROUP_EPOCH;
 
@@ -592,6 +596,7 @@ class StreamsGroupStaticMemberGroupMetadataManagerTest {
                     .setMemberEpoch(LEAVE_GROUP_STATIC_MEMBER_EPOCH)
                     .setPreviousMemberEpoch(groupEpoch)
                     .setProcessId(processId)
+                    .setRackId(rackId)
                     .setAssignedTasks(assignedTasks)
                     .build())
                 .withTargetAssignment(oldMemberId, targetAssignment)
@@ -604,11 +609,14 @@ class StreamsGroupStaticMemberGroupMetadataManagerTest {
             .build();
 
         CoordinatorResult<StreamsGroupHeartbeatResult, CoordinatorRecord> result = context.streamsGroupHeartbeat(
-            staticJoinHeartbeat(groupId, rejoinMemberId, instanceId, processId),
+            staticJoinHeartbeat(groupId, rejoinMemberId, instanceId, processId)
+                .setRackId(rackId),
             newClientId,
             newClientAddress
         );
         
+        assertEquals(groupEpoch, context.groupMetadataManager.streamsGroup(groupId).groupEpoch());
+        assertEquals(Optional.ofNullable(rackId), context.groupMetadataManager.streamsGroup(groupId).getMemberOrThrow(rejoinMemberId).rackId());
         assertEquals(rejoinMemberId, result.response().data().memberId());
         assertEquals(groupEpoch, result.response().data().memberEpoch());
 
@@ -1315,8 +1323,9 @@ class StreamsGroupStaticMemberGroupMetadataManagerTest {
     }
 
 
-    @Test
-    public void testStaticMemberLeaveWithLeaveGroupStaticMemberEpochAndRejoinAndOtherRackIdThenGroupBumpOccur() {
+    @ParameterizedTest
+    @MethodSource("rackIdCases")
+    public void testStaticMemberLeaveWithLeaveGroupStaticMemberEpochAndRejoinAndOtherRackIdThenGroupBumpOccur(String newRackId) {
         int leaveEpoch = LEAVE_GROUP_STATIC_MEMBER_EPOCH;
         int memberEpoch = DEFAULT_MEMBER_EPOCH;
         int groupEpoch = DEFAULT_GROUP_EPOCH;
@@ -1353,7 +1362,6 @@ class StreamsGroupStaticMemberGroupMetadataManagerTest {
 
         CoordinatorResult<StreamsGroupHeartbeatResult, CoordinatorRecord> normalHeartbeatResult = context.streamsGroupHeartbeat(
             staticHeartbeat(groupId, memberId, instanceId, memberEpoch)
-                .setRackId(rackId)
         );
 
         assertResponseEquals(
@@ -1368,6 +1376,7 @@ class StreamsGroupStaticMemberGroupMetadataManagerTest {
                 .setStandbyTasks(null), 
             normalHeartbeatResult.response().data());
         assertEquals(groupEpoch, context.groupMetadataManager.streamsGroup(groupId).groupEpoch());
+        assertEquals(Optional.of(rackId), context.groupMetadataManager.streamsGroup(groupId).getMemberOrThrow(memberId).rackId());
 
         CoordinatorResult<StreamsGroupHeartbeatResult, CoordinatorRecord> leaveResult = context.streamsGroupHeartbeat(
             staticHeartbeat(groupId, memberId, instanceId, leaveEpoch)
@@ -1387,7 +1396,6 @@ class StreamsGroupStaticMemberGroupMetadataManagerTest {
         assertEquals(groupEpoch, context.groupMetadataManager.streamsGroup(groupId).groupEpoch());
 
         String newMemberId = Uuid.randomUuid().toString();
-        String newRackId = Uuid.randomUuid().toString();
         assignor.prepareGroupAssignment(Map.of(newMemberId, givenTargetAssignment));
 
         int bumpedGroupEpoch = groupEpoch + 1;
@@ -1415,6 +1423,7 @@ class StreamsGroupStaticMemberGroupMetadataManagerTest {
             rejoinResult.response().data()
         );
         assertEquals(bumpedGroupEpoch, context.groupMetadataManager.streamsGroup(groupId).groupEpoch());
+        assertEquals(Optional.ofNullable(newRackId), context.groupMetadataManager.streamsGroup(groupId).getMemberOrThrow(newMemberId).rackId());
 
         StreamsGroupMember transationStaticInitMember = streamsGroupMemberBuilderWithDefaults(newMemberId, instanceId)
             .setMemberEpoch(JOIN_GROUP_MEMBER_EPOCH)
@@ -1458,6 +1467,13 @@ class StreamsGroupStaticMemberGroupMetadataManagerTest {
         );
     }
 
+
+    private static Stream<Arguments> rackIdCases() {
+        return Stream.of(
+            Arguments.of("rack-b"), // Give other rack id.
+            Arguments.of((String) null) // Give no rack id.
+        );
+    }
 
     @Test
     public void testStaticMemberRejoinWritesReplacementRecordsInStreamsGroup() {

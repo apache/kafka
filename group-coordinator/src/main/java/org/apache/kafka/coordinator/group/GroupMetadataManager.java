@@ -2141,7 +2141,6 @@ public class GroupMetadataManager {
         // 1. Create or update the member.
         StreamsGroupMember.Builder updatedMemberBuilder = new StreamsGroupMember.Builder(member)
             .maybeUpdateInstanceId(Optional.ofNullable(instanceId))
-            .maybeUpdateRackId(Optional.ofNullable(rackId))
             .maybeUpdateRebalanceTimeoutMs(ofSentinel(rebalanceTimeoutMs))
             .maybeUpdateTopologyEpoch(topology != null ? OptionalInt.of(topology.epoch()) : OptionalInt.empty())
             .setClientId(clientId)
@@ -2152,10 +2151,13 @@ public class GroupMetadataManager {
         if (isJoining) {
             StreamsGroupMemberMetadataValue.Endpoint userEndpointMetadata = userEndpoint == null ? null :
                 new StreamsGroupMemberMetadataValue.Endpoint().setHost(userEndpoint.host()).setPort(userEndpoint.port());
-            updatedMemberBuilder.setUserEndpoint(userEndpointMetadata);
+            updatedMemberBuilder
+                .setUserEndpoint(userEndpointMetadata)
+                .setRackId(rackId);
         } else {
             updatedMemberBuilder
-                .maybeUpdateUserEndpoint(Optional.ofNullable(userEndpoint).map(x -> new StreamsGroupMemberMetadataValue.Endpoint().setHost(x.host()).setPort(x.port())));
+                .maybeUpdateUserEndpoint(Optional.ofNullable(userEndpoint).map(x -> new StreamsGroupMemberMetadataValue.Endpoint().setHost(x.host()).setPort(x.port())))
+                .maybeUpdateRackId(Optional.ofNullable(rackId));
         }
         StreamsGroupMember updatedMember = updatedMemberBuilder.build();
         
@@ -2347,11 +2349,13 @@ public class GroupMetadataManager {
         // The assignment is only provided in the following cases:
         // 1. The member is joining.
         // 2. The member's assignment has been updated.
+        // 3. The member reports all owned task sets, including when acknowledging an assignment or retrying after a heartbeat failure.
         boolean assignedTaskChanged = hasAssignedTasksChanged(member, updatedMember);
         boolean endpointChanged = hasUserEndpointChanged(member, updatedMember);
+        boolean hasOwnedTasksReported = ownedActiveTasks != null && ownedStandbyTasks != null && ownedWarmupTasks != null;
 
-        // Echo the assignment back when joining or the assignment changed.
-        if (isJoining || assignedTaskChanged) {
+        // Echo the assignment when joining, when it changes, or when all owned task sets are reported.
+        if (isJoining || assignedTaskChanged || hasOwnedTasksReported) {
             response.setActiveTasks(createStreamsGroupHeartbeatResponseTaskIdsFromEpochs(updatedMember.assignedTasks().activeTasksWithEpochs()));
             response.setStandbyTasks(createStreamsGroupHeartbeatResponseTaskIds(updatedMember.assignedTasks().standbyTasks()));
             response.setWarmupTasks(createStreamsGroupHeartbeatResponseTaskIds(updatedMember.assignedTasks().warmupTasks()));
