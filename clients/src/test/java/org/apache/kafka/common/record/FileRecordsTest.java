@@ -30,6 +30,8 @@ import org.apache.kafka.test.TestUtils;
 import org.junit.jupiter.api.AfterEach;
 import org.junit.jupiter.api.BeforeEach;
 import org.junit.jupiter.api.Test;
+import org.junit.jupiter.params.ParameterizedTest;
+import org.junit.jupiter.params.provider.ValueSource;
 import org.mockito.Mockito;
 
 import java.io.File;
@@ -45,6 +47,7 @@ import java.util.Random;
 import java.util.concurrent.ExecutorService;
 import java.util.concurrent.Executors;
 import java.util.concurrent.Future;
+import java.util.stream.Collectors;
 
 import static java.util.Arrays.asList;
 import static org.apache.kafka.common.utils.Utils.utf8;
@@ -241,6 +244,64 @@ public class FileRecordsTest {
         read = fileRecords.slice(first.sizeInBytes(), second.sizeInBytes());
         assertEquals(second.sizeInBytes(), read.sizeInBytes());
         assertEquals(Collections.singletonList(second), batches(read), "Read a single message starting from the second message");
+    }
+
+    @Test
+    public void testReadIntoStopsAtEndOfSlice() throws IOException {
+        List<RecordBatch> items = batches(fileRecords);
+        RecordBatch second = items.get(1);
+        // The slice holds only the second batch. The third batch should not be read into the buffer.
+        FileRecords slice = fileRecords.slice(items.get(0).sizeInBytes(), second.sizeInBytes());
+        ByteBuffer buffer = ByteBuffer.allocate(fileRecords.sizeInBytes());
+
+        slice.readInto(buffer, 0);
+
+        assertEquals(second.sizeInBytes(), buffer.remaining());
+        assertEquals(
+            Collections.singletonList(second.baseOffset()),
+            batches(MemoryRecords.readableRecords(buffer)).stream()
+                .map(RecordBatch::baseOffset).collect(Collectors.toList())
+        );
+    }
+
+    @ParameterizedTest
+    @ValueSource(booleans = {true, false})
+    public void testReadIntoStopsAtEndOfRecords(boolean preallocate) throws IOException {
+        try (FileRecords fileRecords = createFileRecords(values, preallocate)) {
+            // The buffer has room past the records, where a preallocated file has zeros instead of ending
+            ByteBuffer buffer = ByteBuffer.allocate(2 * fileRecords.sizeInBytes());
+
+            fileRecords.readInto(buffer, 0);
+
+            assertEquals(fileRecords.sizeInBytes(), buffer.remaining());
+            assertEquals(
+                asList(0L, 1L, 2L),
+                batches(MemoryRecords.readableRecords(buffer)).stream()
+                    .map(RecordBatch::baseOffset).collect(Collectors.toList())
+            );
+        }
+    }
+
+    @Test
+    public void testReadIntoAtEndOfRecordsReadsNothing() throws IOException {
+        List<RecordBatch> items = batches(fileRecords);
+        FileRecords slice = fileRecords.slice(items.get(0).sizeInBytes(), items.get(1).sizeInBytes());
+        ByteBuffer buffer = ByteBuffer.allocate(fileRecords.sizeInBytes());
+
+        slice.readInto(buffer, slice.sizeInBytes());
+
+        assertEquals(0, buffer.remaining());
+    }
+
+    @Test
+    public void testReadIntoWithPositionOutsideRecords() throws IOException {
+        List<RecordBatch> items = batches(fileRecords);
+        FileRecords slice = fileRecords.slice(items.get(0).sizeInBytes(), items.get(1).sizeInBytes());
+        ByteBuffer buffer = ByteBuffer.allocate(fileRecords.sizeInBytes());
+
+        // Both positions are inside the file but outside the slice
+        assertThrows(IllegalArgumentException.class, () -> slice.readInto(buffer, -1));
+        assertThrows(IllegalArgumentException.class, () -> slice.readInto(buffer, slice.sizeInBytes() + 1));
     }
 
     /**
@@ -703,7 +764,11 @@ public class FileRecordsTest {
     }
 
     private FileRecords createFileRecords(byte[][] values) throws IOException {
-        FileRecords fileRecords = FileRecords.open(tempFile());
+        return createFileRecords(values, false);
+    }
+
+    private FileRecords createFileRecords(byte[][] values, boolean preallocate) throws IOException {
+        FileRecords fileRecords = FileRecords.open(tempFile(), false, 1024 * 1024, preallocate);
         append(fileRecords, values);
         return fileRecords;
     }
