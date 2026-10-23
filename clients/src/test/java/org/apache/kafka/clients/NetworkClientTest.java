@@ -80,7 +80,6 @@ import java.util.stream.Collectors;
 import java.util.stream.IntStream;
 
 import static org.apache.kafka.common.protocol.ApiKeys.PRODUCE;
-import static org.junit.jupiter.api.Assertions.assertDoesNotThrow;
 import static org.junit.jupiter.api.Assertions.assertEquals;
 import static org.junit.jupiter.api.Assertions.assertFalse;
 import static org.junit.jupiter.api.Assertions.assertNotEquals;
@@ -1015,7 +1014,7 @@ public class NetworkClientTest {
     }
 
     @Test
-    public void testMetadataResponseByTopicIdWithUnknownTopicIdAndNoName() {
+    public void testUnknownTopicIdWithoutNameCompletesMetadataUpdate() {
         // A consumer subscribed with SubscriptionPattern requests metadata by the IDs of its assigned topics.
         // When one of those topics is deleted, the broker answers its ID with UNKNOWN_TOPIC_ID and no name.
         Uuid deletedTopicId = Uuid.randomUuid();
@@ -1057,7 +1056,10 @@ public class NetworkClientTest {
         ByteBuffer responseBuffer = RequestTestUtils.serializeResponseWithHeader(response, header.apiVersion(), header.correlationId());
         selector.delayedReceive(new DelayedReceive(broker.idString(), new NetworkReceive(broker.idString(), responseBuffer)));
 
-        assertDoesNotThrow(() -> client.poll(0, time.milliseconds()));
+        int initialUpdateVersion = metadata.updateVersion();
+        client.poll(0, time.milliseconds());
+        assertEquals(initialUpdateVersion + 1, metadata.updateVersion());
+        assertTrue(metadata.updateRequested());
     }
 
     @Test
