@@ -1619,6 +1619,7 @@ public class PersisterStateManager {
             // 9. when W1 completes, it will clear inFlight and raise wakeup event.
             // 10. at this point W2, W3, etc. could be sent as a combined request thus achieving batching.
             final Map<RPCType, Set<Node>> sending = new HashMap<>();
+            final boolean useRequestHeaderV3 = cacheHelper.isRequestHeaderV3Supported();
             synchronized (nodeMapLock) {
                 nodeRPCMap.forEach((coordNode, rpcTypesPerNode) ->
                     rpcTypesPerNode.forEach((rpcType, groupsPerRpcType) ->
@@ -1627,7 +1628,7 @@ public class PersisterStateManager {
                             // to not be sent immediately but get batched
                             if (!inFlight.containsKey(rpcType) || !inFlight.get(rpcType).contains(coordNode)) {
                                 AbstractRequest.Builder<? extends AbstractRequest> combinedRequestPerTypePerGroup =
-                                    RequestCoalescerHelper.coalesceRequests(groupId, rpcType, handlersPerGroup, cacheHelper.isRequestHeaderV3Supported());
+                                    RequestCoalescerHelper.coalesceRequests(groupId, rpcType, handlersPerGroup, useRequestHeaderV3);
                                 requests.add(new RequestAndCompletionHandler(
                                     time.milliseconds(),
                                     coordNode,
