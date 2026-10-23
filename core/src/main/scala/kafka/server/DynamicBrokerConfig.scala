@@ -40,7 +40,7 @@ import org.apache.kafka.raft.{KRaftConfigs, KafkaRaftClient}
 import org.apache.kafka.server.{DynamicThreadPool, ProcessRole}
 import org.apache.kafka.server.common.ApiMessageAndVersion
 import org.apache.kafka.server.config.DynamicBrokerConfig.DynamicClusterMirrorConfig
-import org.apache.kafka.server.config.{DynamicConfig, DynamicProducerStateManagerConfig, QuotaConfig, ServerConfigs, ServerLogConfigs, BrokerReconfigurable => JBrokerReconfigurable, DynamicBrokerConfig => JDynamicBrokerConfig}
+import org.apache.kafka.server.config.{BrokerReconfigurable => JBrokerReconfigurable, DynamicConfig, DynamicLogConfig, DynamicProducerStateManagerConfig, QuotaConfig, ServerConfigs, DynamicBrokerConfig => JDynamicBrokerConfig}
 import org.apache.kafka.server.log.remote.storage.RemoteLogManagerConfig
 import org.apache.kafka.server.metrics.{ClientTelemetryExporterPlugin, MetricConfigs}
 import org.apache.kafka.server.quota.QuotaFactory
