@@ -1321,7 +1321,7 @@ public class KafkaConsumerTest {
         Node node = metadata.fetch().nodes().get(0);
 
         client.prepareResponseFrom(FindCoordinatorResponse.prepareResponse(Errors.NONE, groupId, node), node);
-        KafkaConsumer<String, String> consumer = newConsumer(groupProtocol, time, client, subscription, metadata, assignor,
+        consumer = newConsumer(groupProtocol, time, client, subscription, metadata, assignor,
                 true, groupId, groupInstanceId, false);
         consumer.assign(List.of(tp0));
 
@@ -2576,7 +2576,7 @@ public class KafkaConsumerTest {
             Collections.emptyList());
         client.prepareResponse(updateResponse);
 
-        KafkaConsumer<String, String> consumer = newConsumer(groupProtocol, time, client, subscription, metadata, assignor, true, groupInstanceId);
+        consumer = newConsumer(groupProtocol, time, client, subscription, metadata, assignor, true, groupInstanceId);
         assertEquals(Collections.emptyList(), consumer.partitionsFor("non-exist-topic"));
     }
 
@@ -2613,7 +2613,7 @@ public class KafkaConsumerTest {
     @ParameterizedTest
     @EnumSource(GroupProtocol.class)
     public void testPollAuthenticationFailure(GroupProtocol groupProtocol) throws InterruptedException {
-        final KafkaConsumer<String, String> consumer = consumerWithPendingAuthenticationError(groupProtocol);
+        consumer = consumerWithPendingAuthenticationError(groupProtocol);
         consumer.subscribe(Set.of(topic));
 
         if (groupProtocol == GroupProtocol.CONSUMER) {
@@ -2686,7 +2686,7 @@ public class KafkaConsumerTest {
         MockClient client = new MockClient(time, metadata);
         initMetadata(client, Map.of(topic, 2));
         Node node = metadata.fetch().nodes().get(0);
-        KafkaConsumer<String, String> consumer = newConsumer(groupProtocol, time, client, subscription, metadata,
+        consumer = newConsumer(groupProtocol, time, client, subscription, metadata,
             assignor, true, groupInstanceId);
         consumer.assign(List.of(tp0));
 
@@ -2734,7 +2734,7 @@ public class KafkaConsumerTest {
         MockClient client = new MockClient(time, metadata);
         initMetadata(client, Map.of(topic, 2));
         Node node = metadata.fetch().nodes().get(0);
-        KafkaConsumer<String, String> consumer = newConsumer(groupProtocol, time, client, subscription, metadata,
+        consumer = newConsumer(groupProtocol, time, client, subscription, metadata,
             assignor, true, groupInstanceId);
         consumer.assign(List.of(tp0));
 
@@ -2965,7 +2965,7 @@ public class KafkaConsumerTest {
         initMetadata(client, Map.of(topic, 1));
         final Node node = metadata.fetch().nodes().get(0);
 
-        final KafkaConsumer<String, String> consumer = newConsumer(groupProtocol, time, client, subscription, metadata, assignor, true, groupInstanceId);
+        consumer = newConsumer(groupProtocol, time, client, subscription, metadata, assignor, true, groupInstanceId);
 
         final ConsumerGroupMetadata groupMetadataOnStart = consumer.groupMetadata();
         assertEquals(groupId, groupMetadataOnStart.groupId());
@@ -3709,7 +3709,7 @@ public class KafkaConsumerTest {
                 topicMetadata);
         client.prepareMetadataUpdate(updateResponse);
 
-        KafkaConsumer<String, String> consumer = newConsumer(groupProtocol, time, client, subscription, metadata, assignor, true, groupInstanceId);
+        consumer = newConsumer(groupProtocol, time, client, subscription, metadata, assignor, true, groupInstanceId);
         consumer.setRebalanceListener(getRebalanceListener());
         consumer.subscribe(Set.of(invalidTopicName));
 
@@ -3743,7 +3743,7 @@ public class KafkaConsumerTest {
         MockClient client = new MockClient(time, metadata);
         initMetadata(client, Map.of(topic, 1));
 
-        KafkaConsumer<String, String> consumer = newConsumer(groupProtocol, time, client, subscription, metadata, assignor, true, groupInstanceId);
+        consumer = newConsumer(groupProtocol, time, client, subscription, metadata, assignor, true, groupInstanceId);
         consumer.subscribe(List.of(topic));
         // MetricName objects to check
         Metrics metrics = consumer.metricsRegistry();
@@ -3789,7 +3789,7 @@ public void testPollIdleRatio(GroupProtocol groupProtocol) {
         MockClient client = new MockClient(time, metadata);
         initMetadata(client, Map.of(topic, 1));
 
-        KafkaConsumer<String, String> consumer = newConsumer(groupProtocol, time, client, subscription, metadata, assignor, true, groupInstanceId);
+        consumer = newConsumer(groupProtocol, time, client, subscription, metadata, assignor, true, groupInstanceId);
         // MetricName object to check
         Metrics metrics = consumer.metricsRegistry();
         MetricName pollIdleRatio = metrics.metricName("poll-idle-ratio-avg", "consumer-metrics");
@@ -3831,7 +3831,7 @@ public void testPollIdleRatio(GroupProtocol groupProtocol) {
         MockClient client = new MockClient(time, metadata);
         initMetadata(client, Map.of(topic, 1));
 
-        KafkaConsumer<String, String> consumer = newConsumer(groupProtocol, time, client, subscription, metadata, assignor, true, groupInstanceId);
+        consumer = newConsumer(groupProtocol, time, client, subscription, metadata, assignor, true, groupInstanceId);
         // MetricName object to check
         Metrics metrics = consumer.metricsRegistry();
         MetricName pollIdleRatio = metrics.metricName("poll-idle-ratio-avg", "consumer-metrics");
@@ -3884,7 +3884,7 @@ public void testPollIdleRatio(GroupProtocol groupProtocol) {
         Time time = new MockTime(1L);
         ConsumerMetadata metadata = createMetadata(subscription);
         MockClient client = new MockClient(time, metadata);
-        KafkaConsumer<String, String> consumer = newConsumer(groupProtocol, time, client, subscription, metadata, assignor, true, groupInstanceId);
+        consumer = newConsumer(groupProtocol, time, client, subscription, metadata, assignor, true, groupInstanceId);
         MockRebalanceListener countingRebalanceListener = new MockRebalanceListener();
         initMetadata(client, Map.of(topic, 1, topic2, 1, topic3, 1));
 
@@ -4184,7 +4184,7 @@ public void testPollIdleRatio(GroupProtocol groupProtocol) {
         ConsumerMetadata metadata = createMetadata(subscription);
         MockClient client = new MockClient(time, metadata);
         initMetadata(client, Map.of(topic, 1));
-        KafkaConsumer<String, String> consumer = newConsumer(groupProtocol, time, client, subscription, metadata,
+        consumer = newConsumer(groupProtocol, time, client, subscription, metadata,
                 new RoundRobinAssignor(), true, groupInstanceId);
         consumer.subscribe(List.of(topic));
 
@@ -4212,7 +4212,7 @@ public void testPollIdleRatio(GroupProtocol groupProtocol) {
         Node node = metadata.fetch().nodes().get(0);
 
         client.prepareResponseFrom(FindCoordinatorResponse.prepareResponse(Errors.NONE, groupId, node), node);
-        KafkaConsumer<String, String> consumer = newConsumer(groupProtocol, time, client, subscription, metadata,
+        consumer = newConsumer(groupProtocol, time, client, subscription, metadata,
                 assignor, true, groupInstanceId);
         consumer.subscribe(List.of(topic));
         assertFalse(groupProtocol == GroupProtocol.CLASSIC ?
@@ -4230,7 +4230,7 @@ public void testPollIdleRatio(GroupProtocol groupProtocol) {
     @ParameterizedTest
     @EnumSource(value = GroupProtocol.class, names = "CLASSIC")
     public void testSubscribeToRe2jPatternNotSupportedForClassicConsumer(GroupProtocol groupProtocol) {
-        KafkaConsumer<String, String> consumer = newConsumerNoAutoCommit(groupProtocol, time, mock(NetworkClient.class), subscription,
+        consumer = newConsumerNoAutoCommit(groupProtocol, time, mock(NetworkClient.class), subscription,
             mock(ConsumerMetadata.class));
         assertThrows(UnsupportedOperationException.class, () ->
             consumer.subscribe(new SubscriptionPattern("t*")));
