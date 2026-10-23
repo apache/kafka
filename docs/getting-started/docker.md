@@ -158,6 +158,7 @@ When using environment variables, you need to set all properties required to sta
   - Alternatively, start with a single voter and grow the quorum later: `--standalone` on the first controller, `--no-initial-controllers` on the others. They join as observers and are added with `kafka-metadata-quorum.sh add-controller`.
 - `STORAGE_FORMAT_ARGS` is appended to the image's `kafka-storage format` command, so any of its options can be passed.
 - Each controller must advertise its controller listener, e.g. `KAFKA_ADVERTISED_LISTENERS=CONTROLLER://controller-1:9093`. On a controller, `KAFKA_ADVERTISED_LISTENERS` may only list listeners from `KAFKA_CONTROLLER_LISTENER_NAMES`.
+- See the `dynamic_quorum` Docker Compose examples for combined and isolated mode in the [Kafka repository](https://github.com/apache/kafka/blob/trunk/docker/examples/README.md).
 
 ### Running in SSL mode
 
