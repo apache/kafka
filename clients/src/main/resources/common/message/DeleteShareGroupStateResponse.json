@@ -17,6 +17,7 @@
   "apiKey": 86,
   "type": "response",
   "name": "DeleteShareGroupStateResponse",
+  // Version 1 is the same as version 0 (KIP-1313).
   "validVersions": "0-1",
   "flexibleVersions": "0+",
   "headerVersions": {

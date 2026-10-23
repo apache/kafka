@@ -28,6 +28,7 @@ import org.apache.kafka.common.requests.MetadataResponse;
 import org.apache.kafka.coordinator.group.GroupConfig;
 import org.apache.kafka.coordinator.group.GroupConfigManager;
 import org.apache.kafka.metadata.MetadataCache;
+import org.apache.kafka.server.common.MetadataVersion;
 import org.apache.kafka.server.share.SharePartitionKey;
 import org.apache.kafka.server.share.dlq.ShareGroupDLQMetadataCacheHelper;
 import org.apache.kafka.server.share.persister.ShareCoordinatorMetadataCacheHelper;
@@ -178,7 +179,8 @@ public class ShareCoordinatorMetadataCacheHelperImpl implements ShareCoordinator
 
     @Override
     public boolean isRequestHeaderV3Supported() {
-        return metadataCache.metadataVersion().isRequestHeaderV3Supported();
+        MetadataVersion metadataVersion = metadataCache.metadataVersion();
+        return metadataVersion != null && metadataVersion.isRequestHeaderV3Supported();
     }
 
     @Override

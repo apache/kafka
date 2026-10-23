@@ -29,7 +29,7 @@ import java.util.stream.Collectors;
 
 public class ReadShareGroupStateRequest extends AbstractRequest {
 
-    private static final short LAST_VERSION_BEFORE_REQUEST_HEADER_V3 = 0;
+    private static final short LATEST_VERSION_BEFORE_REQUEST_HEADER_V3 = 0;
 
     public static class Builder extends AbstractRequest.Builder<ReadShareGroupStateRequest> {
 
@@ -42,7 +42,7 @@ public class ReadShareGroupStateRequest extends AbstractRequest {
         public Builder(ReadShareGroupStateRequestData data, boolean useRequestHeaderV3) {
             super(ApiKeys.READ_SHARE_GROUP_STATE,
                 ApiKeys.READ_SHARE_GROUP_STATE.oldestVersion(),
-                useRequestHeaderV3 ? ApiKeys.READ_SHARE_GROUP_STATE.latestVersion() : LAST_VERSION_BEFORE_REQUEST_HEADER_V3);
+                useRequestHeaderV3 ? ApiKeys.READ_SHARE_GROUP_STATE.latestVersion() : LATEST_VERSION_BEFORE_REQUEST_HEADER_V3);
             this.data = data;
         }
 

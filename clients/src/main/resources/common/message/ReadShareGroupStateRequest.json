@@ -19,7 +19,6 @@
   "listeners": ["broker"],
   "name": "ReadShareGroupStateRequest",
   // Version 1 uses the v3 request header (KIP-1313).
-  "latestVersionUnstable": true,
   "validVersions": "0-1",
   "flexibleVersions": "0+",
   "headerVersions": {

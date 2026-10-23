@@ -765,7 +765,7 @@ class AuthorizerIntegrationTest extends AbstractAuthorizerIntegrationTest {
         .setPartitions(List(new InitializeShareGroupStateRequestData.PartitionData()
           .setPartition(part)
         ).asJava)
-      ).asJava), false).build()
+      ).asJava), true).build()
 
   private def readShareGroupStateRequest = new ReadShareGroupStateRequest.Builder(
     new ReadShareGroupStateRequestData()
@@ -776,7 +776,7 @@ class AuthorizerIntegrationTest extends AbstractAuthorizerIntegrationTest {
           .setPartition(part)
           .setLeaderEpoch(0)
         ).asJava)
-      ).asJava), false).build()
+      ).asJava), true).build()
 
   private def writeShareGroupStateRequest = new WriteShareGroupStateRequest.Builder(
     new WriteShareGroupStateRequestData()
@@ -786,7 +786,7 @@ class AuthorizerIntegrationTest extends AbstractAuthorizerIntegrationTest {
         .setPartitions(List(new WriteShareGroupStateRequestData.PartitionData()
           .setPartition(part)
         ).asJava)
-      ).asJava), false).build()
+      ).asJava), true).build()
 
   private def deleteShareGroupStateRequest = new DeleteShareGroupStateRequest.Builder(
     new DeleteShareGroupStateRequestData()
@@ -796,7 +796,7 @@ class AuthorizerIntegrationTest extends AbstractAuthorizerIntegrationTest {
         .setPartitions(List(new DeleteShareGroupStateRequestData.PartitionData()
           .setPartition(part)
         ).asJava)
-      ).asJava), false).build()
+      ).asJava), true).build()
 
   private def readShareGroupStateSummaryRequest = new ReadShareGroupStateSummaryRequest.Builder(
     new ReadShareGroupStateSummaryRequestData()
