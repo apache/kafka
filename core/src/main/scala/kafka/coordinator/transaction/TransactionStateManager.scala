@@ -37,6 +37,7 @@ import org.apache.kafka.common.{KafkaException, TopicIdPartition, TopicPartition
 import org.apache.kafka.coordinator.transaction.{CoordinatorEpochAndTxnMetadata, TransactionConfig, TransactionLog, TransactionMetadata, TransactionState, TransactionStateManagerConfig, TransactionPartitionAndLeaderEpoch, TransactionalIdAndProducerIdEpoch, TransactionalIdCoordinatorEpochAndMetadata, TransactionalIdCoordinatorEpochAndTransitMetadata, TxnMetadataCacheEntry, TxnTransitMetadata}
 import org.apache.kafka.metadata.MetadataCache
 import org.apache.kafka.server.common.{RequestLocal, TransactionVersion}
+import org.apache.kafka.server.partition.PartitionListener
 import org.apache.kafka.server.storage.log.FetchIsolation
 import org.apache.kafka.server.util.Scheduler
 import org.apache.kafka.server.util.LockUtils.{inReadLock, inWriteLock}
@@ -245,8 +246,12 @@ class TransactionStateManager(brokerId: Int,
   private[transaction] def removeExpiredTransactionalIds(): Unit = {
     inReadLock[Exception](stateLock, () => {
       transactionMetadataCache.foreachEntry { (partitionId, partitionCacheEntry) =>
-        val transactionPartition = new TopicPartition(Topic.TRANSACTION_STATE_TOPIC_NAME, partitionId)
-        removeExpiredTransactionalIds(transactionPartition, partitionCacheEntry)
+        // the cache entry of a partition that is being reloaded (e.g. after a leader epoch bump) is about to be
+        // replaced, and the load relies on the log end offset not changing while it waits for the high watermark
+        if (!loadingPartitions.exists(_.txnPartitionId == partitionId)) {
+          val transactionPartition = new TopicPartition(Topic.TRANSACTION_STATE_TOPIC_NAME, partitionId)
+          removeExpiredTransactionalIds(transactionPartition, partitionCacheEntry)
+        }
       }
     })
   }
@@ -555,8 +560,8 @@ class TransactionStateManager(brokerId: Int,
       loadingPartitions.add(partitionAndLeaderEpoch)
     })
 
-    def loadTransactions(startTimeMs: java.lang.Long): Unit = {
-      val schedulerTimeMs = time.milliseconds() - startTimeMs
+    def loadTransactions(startTimeMs: java.lang.Long, hwmWaitTimeMs: Long): Unit = {
+      val schedulerTimeMs = time.milliseconds() - startTimeMs - hwmWaitTimeMs
       info(s"Loading transaction metadata from $topicPartition at epoch $coordinatorEpoch")
       validateTransactionTopicPartitionCountIsStable()
 
@@ -565,7 +570,8 @@ class TransactionStateManager(brokerId: Int,
       val totalLoadingTimeMs = endTimeMs - startTimeMs
       partitionLoadSensor.record(totalLoadingTimeMs.toDouble, endTimeMs, false)
       info(s"Finished loading ${loadedTransactions.size} transaction metadata from $topicPartition in " +
-        s"$totalLoadingTimeMs milliseconds, of which $schedulerTimeMs milliseconds was spent in the scheduler.")
+        s"$totalLoadingTimeMs milliseconds, of which $hwmWaitTimeMs milliseconds was spent waiting for the high watermark " +
+        s"to reach the log end offset and $schedulerTimeMs milliseconds was spent in the scheduler.")
 
       inWriteLock[Exception](stateLock, () => {
         if (loadingPartitions.contains(partitionAndLeaderEpoch)) {
@@ -605,7 +611,85 @@ class TransactionStateManager(brokerId: Int,
     }
 
     val scheduleStartMs = time.milliseconds()
-    scheduler.scheduleOnce(s"load-txns-for-partition-$topicPartition", () => loadTransactions(scheduleStartMs))
+
+    def scheduleLoad(hwmWaitTimeMs: Long): Unit =
+      scheduler.scheduleOnce(s"load-txns-for-partition-$topicPartition", () => loadTransactions(scheduleStartMs, hwmWaitTimeMs))
+
+    // The listener is invoked with partition locks held, so instead of blocking on stateLock there, this runs on
+    // the scheduler, which also serializes it with the load tasks for the partition.
+    def scheduleAbandonLoad(reason: String): Unit =
+      scheduler.scheduleOnce(s"abandon-load-txns-for-partition-$topicPartition", () => {
+        inWriteLock[Exception](stateLock, () => {
+          loadingPartitions.remove(partitionAndLeaderEpoch)
+        })
+        info(s"Abandoned loading transaction metadata from $topicPartition at epoch $coordinatorEpoch because $reason")
+      })
+
+    // The load reads up to the log end offset, but a newly elected leader may have records above the high watermark
+    // that are not committed yet and may still get truncated. The coordinator does not write to the partition while
+    // it is loading, so the log end offset doesn't change; wait until the high watermark catches up to it so that
+    // all the records the load reads are committed.
+    replicaManager.getLog(topicPartition) match {
+      case Some(log) if log.highWatermark < log.logEndOffset =>
+        val logEndOffset = log.logEndOffset
+        info(s"Waiting for the high watermark of $topicPartition (currently ${log.highWatermark}) to reach the log end " +
+          s"offset $logEndOffset before loading transaction metadata at epoch $coordinatorEpoch")
+        val listener = new HighWatermarkWaitListener(topicPartition, logEndOffset, coordinatorEpoch, scheduleLoad, scheduleAbandonLoad)
+        if (!replicaManager.maybeAddListener(topicPartition, listener)) {
+          listener.abandon(s"$topicPartition is not online")
+        } else {
+          // the high watermark may have been updated after it was read above but before the listener was added,
+          // in which case the listener isn't notified of the update: check it again now that the listener is added
+          listener.onHighWatermarkUpdated(topicPartition, log.highWatermark)
+          // the wait may have finished before the listener was added; in that case remove it again
+          if (listener.isFinished)
+            replicaManager.removeListener(topicPartition, listener)
+        }
+      case _ =>
+        scheduleLoad(0L)
+    }
+  }
+
+  /**
+   * Waits for the high watermark of a transaction log partition to reach the given log end offset and then
+   * schedules the load. If this broker stops being the leader first, the load is abandoned instead.
+   */
+  private class HighWatermarkWaitListener(topicPartition: TopicPartition,
+                                          logEndOffset: Long,
+                                          coordinatorEpoch: Int,
+                                          scheduleLoad: Long => Unit,
+                                          scheduleAbandonLoad: String => Unit) extends PartitionListener {
+    private val waitStartMs = time.milliseconds()
+    private val finished = new AtomicBoolean(false)
+
+    def isFinished: Boolean = finished.get
+
+    def abandon(reason: String): Unit = {
+      if (finished.compareAndSet(false, true))
+        finish(scheduleAbandonLoad(reason))
+    }
+
+    private def finish(schedule: => Unit): Unit = {
+      try {
+        schedule
+      } finally {
+        replicaManager.removeListener(topicPartition, this)
+      }
+    }
+
+    override def onHighWatermarkUpdated(partition: TopicPartition, offset: Long): Unit = {
+      if (offset >= logEndOffset && finished.compareAndSet(false, true)) {
+        val hwmWaitTimeMs = time.milliseconds() - waitStartMs
+        info(s"The high watermark of $topicPartition reached $offset after waiting $hwmWaitTimeMs milliseconds")
+        finish(scheduleLoad(hwmWaitTimeMs))
+      }
+    }
+
+    override def onBecomingFollower(partition: TopicPartition): Unit = abandon("it became a follower")
+
+    override def onFailed(partition: TopicPartition): Unit = abandon("it failed")
+
+    override def onDeleted(partition: TopicPartition): Unit = abandon("it was deleted")
   }
 
   def removeTransactionsForTxnTopicPartition(partitionId: Int): Unit = {
