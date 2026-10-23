@@ -1425,7 +1425,6 @@ org.apache.kafka.coordinator.group.modern.consumer.ConsumerGroupTest:
 - testSubscribedRegularExpressionCount
 - testSubscriptionType
 - testUpdateAndRemoveRegularExpression
-- testUpdateInvertedAssignment
 - testUpdateMember
 - testUpdateSubscribedTopicNamesAndSubscriptionType
 - testUpdatingMemberUpdatesPartitionEpoch
@@ -1509,7 +1508,6 @@ org.apache.kafka.coordinator.group.modern.share.ShareGroupTest:
 - testProtocolType
 - testRemoveMember
 - testType
-- testUpdateInvertedAssignment
 - testUpdateMember
 - testUpdateSubscribedTopicNamesAndSubscriptionType
 - testValidateDeleteGroup
