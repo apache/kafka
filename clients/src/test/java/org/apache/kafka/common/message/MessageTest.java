@@ -64,6 +64,7 @@ import com.fasterxml.jackson.databind.JsonNode;
 import org.junit.jupiter.api.Test;
 import org.junit.jupiter.api.Timeout;
 import org.junit.jupiter.params.ParameterizedTest;
+import org.junit.jupiter.params.provider.ValueSource;
 
 import java.lang.reflect.Method;
 import java.nio.ByteBuffer;
@@ -71,9 +72,6 @@ import java.util.ArrayList;
 import java.util.Arrays;
 import java.util.Collections;
 import java.util.List;
-import java.util.Random;
-import java.util.Set;
-import java.util.function.Consumer;
 import java.util.function.Supplier;
 
 import static java.util.Collections.singletonList;
@@ -861,55 +859,35 @@ public final class MessageTest {
         verifyWriteSucceeds((short) 6, createTopics);
     }
 
-    @Test
-    public void testTaggedFieldsWrittenInAscendingTagOrder() {
-        // KIP-482 requires tagged fields in strictly ascending tag order.
-        // Setters for SimpleExampleMessage's known tagged fields, indexed by tag.
-        List<Consumer<SimpleExampleMessageData>> knownTagSetters = List.of(
-            m -> m.setMyTaggedIntArray(List.of(1)),
-            m -> m.setMyNullableString("a"),
-            m -> m.setMyInt16((short) 1),
-            m -> m.setMyFloat64(1.0),
-            m -> m.setMyString("b"),
-            m -> m.setMyBytes(new byte[] {0x1}),
-            m -> m.setTaggedUuid(new Uuid(1L, 2L)),
-            m -> m.setTaggedLong(1L),
-            m -> m.setMyTaggedStruct(new SimpleExampleMessageData.TaggedStruct().setStructId("c")),
-            m -> m.setTaggedLongFlexibleVersionSubset(1L));
-        for (int run = 0; run < 100; run++) {
-            long seed = System.nanoTime() + run;
-            Random random = new Random(seed);
-            short version = (short) (1 + random.nextInt(2));
-            // Tags 8 and 9 are only valid from version 2.
-            int numKnownTags = version == 1 ? 8 : knownTagSetters.size();
-            SimpleExampleMessageData message = new SimpleExampleMessageData();
-            List<Integer> expectedTags = new ArrayList<>();
-            for (int tag = 0; tag < numKnownTags; tag++) {
-                if (random.nextBoolean()) {
-                    expectedTags.add(tag);
-                }
-            }
-            // Set the known tagged fields in random order, so the written order cannot come from it.
-            Collections.shuffle(expectedTags, random);
-            for (int tag : expectedTags) {
-                knownTagSetters.get(tag).accept(message);
-            }
-            // Unknown tags are the ones the schema does not define, so they are above all known tags.
-            // They must be added in ascending order, since RawTaggedFieldWriter rejects an unsorted list.
-            int unknownTag = knownTagSetters.size() - 1;
-            int numUnknownTags = random.nextInt(5);
-            for (int i = 0; i < numUnknownTags; i++) {
-                unknownTag += 1 + random.nextInt(1000);
-                message.unknownTaggedFields().add(new RawTaggedField(unknownTag, new byte[random.nextInt(3)]));
-                expectedTags.add(unknownTag);
-            }
-            List<Integer> writtenTags = writtenTaggedFieldTags(message, version);
-            for (int i = 1; i < writtenTags.size(); i++) {
-                assertTrue(
-                    writtenTags.get(i - 1) < writtenTags.get(i),
-                    "Tags " + writtenTags + " are not strictly ascending, seed=" + seed);
-            }
-            assertEquals(Set.copyOf(expectedTags), Set.copyOf(writtenTags), "Failed with seed=" + seed);
+    @ParameterizedTest
+    @ValueSource(shorts = {1, 2})
+    public void testTaggedFieldsWrittenInAscendingTagOrder(short version) {
+        SimpleExampleMessageData message = new SimpleExampleMessageData()
+            .setMyTaggedIntArray(List.of(1))
+            .setMyNullableString("a")
+            .setMyInt16((short) 1)
+            .setMyFloat64(1.0)
+            .setMyString("b")
+            .setMyBytes(new byte[] {0x1})
+            .setTaggedUuid(new Uuid(1L, 2L))
+            .setTaggedLong(1L);
+        List<Integer> expectedTags;
+        if (version == 1) {
+            // Tags 8 and 9 are only defined from version 2, so here they are unknown tags.
+            addUnknownTaggedFields(message, 8, 9);
+            expectedTags = List.of(0, 1, 2, 3, 4, 5, 6, 7, 8, 9);
+        } else {
+            message.setMyTaggedStruct(new SimpleExampleMessageData.TaggedStruct().setStructId("c"))
+                .setTaggedLongFlexibleVersionSubset(1L);
+            addUnknownTaggedFields(message, 10, 11);
+            expectedTags = List.of(0, 1, 2, 3, 4, 5, 6, 7, 8, 9, 10, 11);
+        }
+        assertEquals(expectedTags, writtenTaggedFieldTags(message, version));
+    }
+
+    private void addUnknownTaggedFields(SimpleExampleMessageData message, int... tags) {
+        for (int tag : tags) {
+            message.unknownTaggedFields().add(new RawTaggedField(tag, new byte[] {0x1}));
         }
     }
 
