@@ -4635,6 +4635,10 @@ org.apache.kafka.common.record.internal.FileRecordsTest:
 - testReadFailureIsEmptyWhenReadMakesNoProgress
 - testReadFailureIsEmptyWhenRegionIsReadable
 - testReadFailureIsEmptyWhenTruncatedDuringRead
+- testReadIntoAtEndOfRecordsReadsNothing
+- testReadIntoStopsAtEndOfRecords
+- testReadIntoStopsAtEndOfSlice
+- testReadIntoWithPositionOutsideRecords
 - testSearch
 - testSearchForOffsetFromPosition1
 - testSearchForOffsetFromPosition2

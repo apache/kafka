@@ -819,7 +819,10 @@ org.apache.kafka.raft.internals.RecordsIteratorTest:
 - testCrcValidation
 - testEmptyRecords
 - testFileRecords
+- testFileRecordsSliceEndingInPartialBatchAfterGrowingBuffer
+- testFileRecordsSliceLargerThanBatchSize
 - testMemoryRecords
+- testRecordsEndingInPartialBatch
 - testWithAllSupportedControlRecords
 org.apache.kafka.raft.internals.RemoveVoterHandlerStateTest:
 - testCompleteFuture
