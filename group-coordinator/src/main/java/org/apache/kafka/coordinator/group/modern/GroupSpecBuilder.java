@@ -176,13 +176,6 @@ public abstract class GroupSpecBuilder<T extends ModernGroupMember, U extends Gr
     private CoordinatorMetadataImage metadataImage = CoordinatorMetadataImage.EMPTY;
 
     /**
-     * Whether the {@link GroupSpec} produced by {@link GroupSpecBuilder#build()} will be used on a
-     * background thread. When {@code true}, {@link GroupSpecBuilder#build()} takes copies of any
-     * mutable collections, so that subsequent changes are not visible to the assignor.
-     */
-    private boolean assignorOffload;
-
-    /**
      * Adds all the existing members.
      *
      * @param members   The existing members in the consumer group.
@@ -235,20 +228,6 @@ public abstract class GroupSpecBuilder<T extends ModernGroupMember, U extends Gr
     }
 
     /**
-     * Sets whether the {@link GroupSpec} produced by {@link GroupSpecBuilder#build()} will be used
-     * on a background thread. When {@code true}, {@link GroupSpecBuilder#build()} takes copies of
-     * any mutable collections, so that subsequent changes are not visible to the assignor.
-     *
-     * @param assignorOffload Whether the produced {@link GroupSpec} will be consumed on a
-     *                        background thread.
-     * @return This object.
-     */
-    public U withAssignorOffload(boolean assignorOffload) {
-        this.assignorOffload = assignorOffload;
-        return self();
-    }
-
-    /**
      * Builds the {@link GroupSpec} to be passed to the assignor.
      *
      * @return The {@link GroupSpec} describing the members and their existing assignments.
@@ -268,10 +247,6 @@ public abstract class GroupSpecBuilder<T extends ModernGroupMember, U extends Gr
                 topicResolver
             ))
         );
-
-        if (assignorOffload) {
-            // There are currently no inputs to the assignor that require a deep copy here.
-        }
 
         return newGroupSpec(
             metadataImage,

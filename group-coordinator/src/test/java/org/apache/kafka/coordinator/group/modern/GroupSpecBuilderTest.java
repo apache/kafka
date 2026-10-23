@@ -243,7 +243,9 @@ public class GroupSpecBuilderTest {
     }
 
     @Test
-    public void testConsumerAssignorOffload() {
+    public void testConsumerGroupSpecImmutable() {
+        // The assignor may run on a background thread while the group continues to change, so
+        // the GroupSpec must not be affected by modifications made after it has been built.
         Uuid fooTopicId = Uuid.randomUuid();
 
         CoordinatorMetadataImage metadataImage = new MetadataImageBuilder()
@@ -276,7 +278,6 @@ public class GroupSpecBuilderTest {
             .withTargetAssignment(targetAssignment)
             .withMetadataImage(metadataImage)
             .withResolvedRegularExpressions(resolvedRegularExpressions)
-            .withAssignorOffload(true)
             .build();
 
         // Modifications after the GroupSpec has been built should not be visible in the GroupSpec.
@@ -306,8 +307,10 @@ public class GroupSpecBuilderTest {
     }
 
     @Test
-    public void testShareAssignorOffload() {
-        // We only test the fields specific to share groups, since testConsumerAssignorOffload
+    public void testShareGroupSpecImmutable() {
+        // The assignor may run on a background thread while the group continues to change, so
+        // the GroupSpec must not be affected by modifications made after it has been built.
+        // We only test the fields specific to share groups, since testConsumerGroupSpecImmutable
         // covers the common fields.
         Uuid fooTopicId = Uuid.randomUuid();
 
@@ -325,7 +328,6 @@ public class GroupSpecBuilderTest {
             .withTargetAssignment(Map.of())
             .withMetadataImage(metadataImage)
             .withShareGroupStatePartitionMetadata(new ShareGroupStatePartitionMetadataInfo(Map.of(), initializedTopics, Set.of()))
-            .withAssignorOffload(true)
             .build();
 
         // Modifications after the GroupSpec has been built should not be visible in the GroupSpec.
