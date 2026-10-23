@@ -61,6 +61,14 @@ public final class ClusterMirrorBrokerConfig extends AbstractConfig {
     private static final String MIRROR_STATE_TOPIC_REPLICATION_FACTOR_DOC = "The replication factor for the internal topic. " +
             "Topic creation will fail until the cluster size meets this replication factor requirement.";
 
+    public static final String MIRROR_STATE_TOPIC_MIN_ISR_CONFIG = "mirror.state.topic.min.isr";
+    private static final String MIRROR_STATE_TOPIC_MIN_ISR_DOC = "The minimum number of replicas that must acknowledge a write to mirror state topic in order to be considered successful.";
+    private static final int MIRROR_STATE_TOPIC_MIN_ISR_DEFAULT = 2;
+
+    public static final String MIRROR_STATE_TOPIC_SEGMENT_BYTES_CONFIG = "mirror.state.topic.segment.bytes";
+    private static final String MIRROR_STATE_TOPIC_SEGMENT_BYTES_DOC = "The mirror state topic segment bytes should be kept relatively small in order to facilitate faster log compaction and cache loads.";
+    private static final int MIRROR_STATE_TOPIC_SEGMENT_BYTES_DEFAULT = 100 * 1024 * 1024;
+
     public static final String MIRROR_NUM_REPLICA_FETCHERS_CONFIG = "mirror.num.replica.fetchers";
     private static final int MIRROR_NUM_REPLICA_FETCHERS_DEFAULT = 1;
     private static final String MIRROR_NUM_REPLICA_FETCHERS_DOC = "Number of fetcher threads used to replicate records from each source broker in a cluster mirror. " +
@@ -94,6 +102,8 @@ public final class ClusterMirrorBrokerConfig extends AbstractConfig {
             .defineInternal(MIRROR_COORDINATOR_LOAD_BUFFER_SIZE_CONFIG, INT, MIRROR_COORDINATOR_LOAD_BUFFER_SIZE_DEFAULT, atLeast(1), LOW, MIRROR_COORDINATOR_LOAD_BUFFER_SIZE_DOC)
             .defineInternal(MIRROR_STATE_TOPIC_NUM_PARTITIONS_CONFIG, INT, MIRROR_STATE_TOPIC_NUM_PARTITIONS_DEFAULT, atLeast(1), HIGH, MIRROR_STATE_TOPIC_NUM_PARTITIONS_DOC)
             .defineInternal(MIRROR_STATE_TOPIC_REPLICATION_FACTOR_CONFIG, SHORT, MIRROR_STATE_TOPIC_REPLICATION_FACTOR_DEFAULT, atLeast(1), HIGH, MIRROR_STATE_TOPIC_REPLICATION_FACTOR_DOC)
+            .defineInternal(MIRROR_STATE_TOPIC_MIN_ISR_CONFIG, INT, MIRROR_STATE_TOPIC_MIN_ISR_DEFAULT, atLeast(1), HIGH, MIRROR_STATE_TOPIC_MIN_ISR_DOC)
+            .defineInternal(MIRROR_STATE_TOPIC_SEGMENT_BYTES_CONFIG, INT, MIRROR_STATE_TOPIC_SEGMENT_BYTES_DEFAULT, atLeast(1), HIGH, MIRROR_STATE_TOPIC_SEGMENT_BYTES_DOC)
             .defineInternal(MIRROR_NUM_REPLICA_FETCHERS_CONFIG, INT, MIRROR_NUM_REPLICA_FETCHERS_DEFAULT, atLeast(1), HIGH, MIRROR_NUM_REPLICA_FETCHERS_DOC)
             .defineInternal(MIRROR_METADATA_REFRESH_INTERVAL_MS_CONFIG, LONG, MIRROR_METADATA_REFRESH_INTERVAL_MS_DEFAULT, atLeast(0L), MEDIUM, MIRROR_METADATA_REFRESH_INTERVAL_MS_DOC)
             .defineInternal(MIRROR_FAILED_RETRY_INITIAL_BACKOFF_MS_CONFIG, LONG, MIRROR_FAILED_RETRY_INITIAL_BACKOFF_MS_DEFAULT, atLeast(1L), MEDIUM, MIRROR_FAILED_RETRY_INITIAL_BACKOFF_MS_DOC)
@@ -126,6 +136,14 @@ public final class ClusterMirrorBrokerConfig extends AbstractConfig {
 
     public short stateTopicReplicationFactor() {
         return getShort(MIRROR_STATE_TOPIC_REPLICATION_FACTOR_CONFIG);
+    }
+
+    public int stateTopicMinISR() {
+        return getInt(MIRROR_STATE_TOPIC_MIN_ISR_CONFIG);
+    }
+
+    public int stateTopicSegmentBytes() {
+        return getInt(MIRROR_STATE_TOPIC_SEGMENT_BYTES_CONFIG);
     }
 
     public int numReplicaFetchers() {

@@ -44,6 +44,8 @@ public class ClusterMirrorBrokerConfigTest {
         ConfigDef configDef = ClusterMirrorBrokerConfig.CONFIG_DEF;
         assertTrue(configDef.names().contains(ClusterMirrorBrokerConfig.MIRROR_STATE_TOPIC_NUM_PARTITIONS_CONFIG));
         assertTrue(configDef.names().contains(ClusterMirrorBrokerConfig.MIRROR_STATE_TOPIC_REPLICATION_FACTOR_CONFIG));
+        assertTrue(configDef.names().contains(ClusterMirrorBrokerConfig.MIRROR_STATE_TOPIC_MIN_ISR_CONFIG));
+        assertTrue(configDef.names().contains(ClusterMirrorBrokerConfig.MIRROR_STATE_TOPIC_SEGMENT_BYTES_CONFIG));
     }
 
     @Test
