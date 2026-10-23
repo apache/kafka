@@ -390,7 +390,6 @@ public class ConsumerAssignorBenchmark {
             }
 
             var members = new HashMap<String, MemberSubscriptionAndAssignmentImpl>();
-            var invertedTargetAssignment = new HashMap<Uuid, Map<Integer, String>>();
             for (int i = 0; i < memberCount; i++) {
                 var memberId = "member" + i;
                 var memberAssignment = currentAssignment.members().get(memberId);
@@ -402,8 +401,6 @@ public class ConsumerAssignorBenchmark {
                     var partitions = new HashMap<Uuid, Set<Integer>>();
                     memberAssignment.partitions().forEach((topicId, topicPartitions) -> {
                         partitions.put(topicId, new HashSet<>(topicPartitions));
-                        var owners = invertedTargetAssignment.computeIfAbsent(topicId, id -> new HashMap<>());
-                        topicPartitions.forEach(partition -> owners.put(partition, memberId));
                     });
                     assignment = new Assignment(partitions);
                 }
@@ -416,9 +413,9 @@ public class ConsumerAssignorBenchmark {
             }
 
             var spec = new GroupSpecImpl(
+                image,
                 members,
-                subscription == Subscription.HOMOGENEOUS ? SubscriptionType.HOMOGENEOUS : SubscriptionType.HETEROGENEOUS,
-                invertedTargetAssignment
+                subscription == Subscription.HOMOGENEOUS ? SubscriptionType.HOMOGENEOUS : SubscriptionType.HETEROGENEOUS
             );
 
             return new Group(spec, topicResolver, describer);
