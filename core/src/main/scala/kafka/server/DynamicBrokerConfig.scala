@@ -155,7 +155,11 @@ class DynamicBrokerConfig(private val kafkaConfig: KafkaConfig) extends Logging 
   private var telemetryExporterPluginOpt: Option[ClientTelemetryExporterPlugin] = _
   private var currentConfig: KafkaConfig = _
 
-  private def warnIfBrokerQuotaConfigsInStaticConfig(): Unit = {
+  /** Called from [[BrokerServer.startup]] so the reminder is logged once per broker process. */
+  private[server] def warnIfBrokerQuotaConfigsInStaticConfig(): Unit = {
+    if (!kafkaConfig.processRoles.contains(ProcessRole.BrokerRole)) {
+      return
+    }
     QuotaConfig.BROKER_QUOTA_CONFIGS.asScala.foreach { configName =>
       if (staticBrokerConfigs.contains(configName)) {
         warn(s"$configName is set in the static configuration file but is ignored at runtime; configure this property dynamically to take effect.")
@@ -164,9 +168,6 @@ class DynamicBrokerConfig(private val kafkaConfig: KafkaConfig) extends Logging 
   }
 
   private[server] def initialize(clientTelemetryExporterPluginOpt: Option[ClientTelemetryExporterPlugin]): Unit = {
-    if (kafkaConfig.processRoles.contains(ProcessRole.BrokerRole)) {
-      warnIfBrokerQuotaConfigsInStaticConfig()
-    }
     currentConfig = new KafkaConfig(kafkaConfig.props, false)
     telemetryExporterPluginOpt = clientTelemetryExporterPluginOpt
   }

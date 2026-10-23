@@ -116,6 +116,7 @@ class DynamicBrokerConfigTest {
 
     Using.resource(LogCaptureAppender.createAndRegister) { appender =>
       appender.setClassLogger(classOf[DynamicBrokerConfig], Level.WARN)
+      configWithStaticQuota.dynamicConfig.warnIfBrokerQuotaConfigsInStaticConfig()
       configWithStaticQuota.dynamicConfig.initialize(None)
       assertEquals(1, appender.getMessages.asScala.count(_.contains(expectedMessage)))
 
@@ -150,7 +151,7 @@ class DynamicBrokerConfigTest {
     
     Using.resource(LogCaptureAppender.createAndRegister) { appender =>
       appender.setClassLogger(classOf[DynamicBrokerConfig], Level.WARN)
-      controllerConfig.dynamicConfig.initialize(None)
+      controllerConfig.dynamicConfig.warnIfBrokerQuotaConfigsInStaticConfig()
       assertFalse(appender.getMessages.asScala.exists(_.contains(expectedMessage)))
     }
   }
