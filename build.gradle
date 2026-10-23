@@ -2254,6 +2254,11 @@ project(':clients:clients-integration-tests') {
     testImplementation testFixtures(project(':storage'))
     testImplementation testFixtures(project(':clients'))
     testImplementation project(path: ':clients', configuration: 'shadow')
+    // The clients shadow jar excludes the compression libraries which are runtime dependencies in
+    // its pom, so they must be added explicitly for the tests which use compression.
+    testRuntimeOnly libs.snappy
+    testRuntimeOnly libs.zstd
+    testRuntimeOnly libs.lz4
     implementation project(':server-common')
     testImplementation testFixtures(project(':server-common'))
     implementation project(':group-coordinator')
