@@ -39,6 +39,7 @@ import org.apache.kafka.streams.Topology;
 import org.apache.kafka.streams.integration.utils.EmbeddedKafkaCluster;
 import org.apache.kafka.streams.integration.utils.IntegrationTestUtils;
 import org.apache.kafka.streams.kstream.Materialized;
+import org.apache.kafka.streams.processor.StandbyUpdateListener;
 import org.apache.kafka.streams.processor.StateRestoreListener;
 import org.apache.kafka.streams.processor.TaskId;
 import org.apache.kafka.streams.state.KeyValueStore;
@@ -61,9 +62,9 @@ import java.util.Map;
 import java.util.Optional;
 import java.util.Properties;
 import java.util.Set;
+import java.util.concurrent.ConcurrentHashMap;
 import java.util.concurrent.CountDownLatch;
 import java.util.concurrent.atomic.AtomicLong;
-import java.util.concurrent.atomic.AtomicReference;
 import java.util.function.Function;
 
 import static org.apache.kafka.common.utils.Utils.mkEntry;
@@ -72,7 +73,6 @@ import static org.apache.kafka.common.utils.Utils.mkObjectProperties;
 import static org.apache.kafka.common.utils.Utils.mkProperties;
 import static org.apache.kafka.streams.utils.TestUtils.safeUniqueTestName;
 import static org.junit.jupiter.api.Assertions.assertEquals;
-import static org.junit.jupiter.api.Assertions.assertTrue;
 
 /**
  * Streams group protocol (KIP-1071) analog of {@link HighAvailabilityTaskAssignorIntegrationTest}: proves that
@@ -172,7 +172,7 @@ public class StreamsGroupWarmupTaskIntegrationTest {
                                             final long batchEndOffset,
                                             final long numRestored) {
                     // this test's topology/scale-out shape guarantees exactly one task ever warms up on
-                    // kafkaStreams1, so a plain set is sufficient (see findStandbyTaskId's own "at most one" check).
+                    // kafkaStreams1, so a plain set is sufficient (asserted below on warmupChangelogs).
                     instance1NumRestored.set(numRestored);
                 }
 
@@ -185,33 +185,63 @@ public class StreamsGroupWarmupTaskIntegrationTest {
                 }
             });
 
+            // a warm-up task is a standby task on the client, so the restore listener above does not see it; its start
+            // and its promotion are reported here.
+            final Set<TopicPartition> warmupChangelogs = ConcurrentHashMap.newKeySet();
+            final Set<TopicPartition> promotedChangelogs = ConcurrentHashMap.newKeySet();
+            kafkaStreams1.setStandbyUpdateListener(new StandbyUpdateListener() {
+                @Override
+                public void onUpdateStart(final TopicPartition topicPartition,
+                                          final String storeName,
+                                          final long startingOffset) {
+                    warmupChangelogs.add(topicPartition);
+                }
+
+                @Override
+                public void onBatchLoaded(final TopicPartition topicPartition,
+                                          final String storeName,
+                                          final TaskId taskId,
+                                          final long batchEndOffset,
+                                          final long batchSize,
+                                          final long currentEndOffset) {
+                }
+
+                @Override
+                public void onUpdateSuspended(final TopicPartition topicPartition,
+                                              final String storeName,
+                                              final long storeOffset,
+                                              final long currentEndOffset,
+                                              final SuspendReason reason) {
+                    if (reason == SuspendReason.PROMOTED) {
+                        promotedChangelogs.add(topicPartition);
+                    }
+                }
+            });
+
             kafkaStreams1.start();
 
             // the new instance has no caught-up copy of any stateful task, so the target assignment's mismatch
-            // should be staged behind a warm-up task rather than promoted to active right away.
-            final AtomicReference<TaskId> warmupTaskId = new AtomicReference<>();
+            // should be staged behind a warm-up task rather than promoted to active right away; once the warm-up
+            // catches up (acceptable.recovery.lag=0, i.e. fully caught up), it should be promoted to active.
             TestUtils.waitForCondition(
-                () -> {
-                    final TaskId standbyTaskId = findStandbyTaskId(kafkaStreams1);
-                    if (standbyTaskId == null) {
-                        return false;
-                    }
-                    warmupTaskId.set(standbyTaskId);
-                    return true;
-                },
+                () -> !promotedChangelogs.isEmpty(),
                 120_000L,
-                () -> "Never saw a warm-up task assigned to the new instance after scale out."
+                () -> warmupChangelogs.isEmpty()
+                    ? "Never saw a warm-up task assigned to the new instance after scale out."
+                    : "The warm-up task for " + warmupChangelogs + " was never promoted to active on the new instance."
             );
 
-            // once the warm-up catches up (acceptable.recovery.lag=0, i.e. fully caught up), it should be promoted
-            // to active.
+            // this test's topology/scale-out shape (2 tasks, 1 process gaining a member) means only the one task
+            // whose target owner actually changed should ever be staged behind a warm-up.
+            assertEquals(1, warmupChangelogs.size(), "Expected exactly one warm-up task on the new instance, got: " + warmupChangelogs);
+            assertEquals(warmupChangelogs, promotedChangelogs);
+            // the topology has a single subtopology, and a task's changelog partition is its input partition
+            final TaskId warmupTaskId = new TaskId(0, warmupChangelogs.iterator().next().partition());
+
             TestUtils.waitForCondition(
-                () -> isActiveTask(kafkaStreams1, warmupTaskId.get()),
+                () -> isActiveTask(kafkaStreams1, warmupTaskId),
                 120_000L,
-                () -> "The warm-up task " + warmupTaskId.get() + " was never promoted to active on the new instance. " +
-                    "Note, if this does fail, check and see if the new instance just failed to catch up within" +
-                    " the refinement interval. A full minute should be long enough to read ~500 records" +
-                    " in any test environment, but you never know..."
+                () -> "The promoted task " + warmupTaskId + " never showed up as an active task on the new instance."
             );
 
             // the promoted task should be exclusively owned by kafkaStreams1 now; with no standbys configured
@@ -219,9 +249,9 @@ public class StreamsGroupWarmupTaskIntegrationTest {
             // in any role at all. Poll instead of checking once: a thread's exposed metadata snapshot is only
             // refreshed on transition back into RUNNING, so it can briefly still show the pre-revocation state.
             TestUtils.waitForCondition(
-                () -> !hasTask(kafkaStreams0, warmupTaskId.get()),
+                () -> !hasTask(kafkaStreams0, warmupTaskId),
                 120_000L,
-                () -> "kafkaStreams0 should have released " + warmupTaskId.get() + " once it was promoted to active on kafkaStreams1"
+                () -> "kafkaStreams0 should have released " + warmupTaskId + " once it was promoted to active on kafkaStreams1"
             );
 
             restoreCompleteLatch.await();
@@ -231,19 +261,6 @@ public class StreamsGroupWarmupTaskIntegrationTest {
             // Belt-and-suspenders check that we never even attempt to restore any records.
             assertEquals(-1L, instance1NumRestored.get());
         }
-    }
-
-    private static TaskId findStandbyTaskId(final KafkaStreams streams) {
-        final List<TaskId> standbyTaskIds = new ArrayList<>();
-        for (final ThreadMetadata threadMetadata : streams.metadataForLocalThreads()) {
-            for (final TaskMetadata taskMetadata : threadMetadata.standbyTasks()) {
-                standbyTaskIds.add(taskMetadata.taskId());
-            }
-        }
-        // this test's topology/scale-out shape (2 tasks, 1 process gaining a member) means only the one task
-        // whose target owner actually changed should ever be staged behind a warm-up.
-        assertTrue(standbyTaskIds.size() <= 1, "Expected at most one warm-up task on the new instance, got: " + standbyTaskIds);
-        return standbyTaskIds.isEmpty() ? null : standbyTaskIds.get(0);
     }
 
     private static boolean isActiveTask(final KafkaStreams streams, final TaskId taskId) {
