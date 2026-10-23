@@ -30,7 +30,7 @@ import java.util.stream.Collectors;
 
 public class AlterPartitionRequest extends AbstractRequest {
 
-    private static final short LAST_VERSION_BEFORE_REQUEST_HEADER_V3 = 3;
+    private static final short LATEST_VERSION_BEFORE_REQUEST_HEADER_V3 = 3;
 
     private final AlterPartitionRequestData data;
 
@@ -74,7 +74,7 @@ public class AlterPartitionRequest extends AbstractRequest {
             super(
                 ApiKeys.ALTER_PARTITION,
                 ApiKeys.ALTER_PARTITION.oldestVersion(),
-                useRequestHeaderV3 ? ApiKeys.ALTER_PARTITION.latestVersion() : LAST_VERSION_BEFORE_REQUEST_HEADER_V3
+                useRequestHeaderV3 ? ApiKeys.ALTER_PARTITION.latestVersion() : LATEST_VERSION_BEFORE_REQUEST_HEADER_V3
             );
             this.data = data;
         }
