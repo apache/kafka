@@ -73,10 +73,10 @@ public class MockCoordinatorExecutor<T> implements CoordinatorExecutor<T> {
     private final Queue<ExecutorTask<?>> queue = new ArrayDeque<>();
 
     /**
-     * The keys of the tasks scheduled since the last snapshot taken by {@link #createSnapshot()}.
-     * These tasks are cancelled when reverting to the snapshot with {@link #revertToSnapshot()}.
+     * The keys of the tasks scheduled by the operations in the current batch. These tasks are
+     * cancelled by {@link #onBatchReverted()}.
      */
-    private final Set<String> tasksToCancelOnRevert = new HashSet<>();
+    private final Set<String> currentBatchTasks = new HashSet<>();
 
     @Override
     public <R> boolean schedule(
@@ -85,7 +85,7 @@ public class MockCoordinatorExecutor<T> implements CoordinatorExecutor<T> {
         TaskOperation<T, R> operation
     ) {
         if (tasks.putIfAbsent(key, task) != null) return false;
-        tasksToCancelOnRevert.add(key);
+        currentBatchTasks.add(key);
         return queue.add(new ExecutorTask<>(key, task, operation));
     }
 
@@ -114,20 +114,19 @@ public class MockCoordinatorExecutor<T> implements CoordinatorExecutor<T> {
     }
 
     /**
-     * Takes a snapshot of the scheduled tasks. Tasks scheduled since the snapshot are cancelled
-     * when reverting to the snapshot with {@link #revertToSnapshot()}.
+     * Forgets the tasks scheduled by the operations in the current batch, now that the batch
+     * has been written. Unlike the real executor, the tasks were already queued.
      */
-    public void createSnapshot() {
-        tasksToCancelOnRevert.clear();
+    public void onBatchWritten() {
+        currentBatchTasks.clear();
     }
 
     /**
-     * Reverts the scheduled tasks to the last snapshot taken by {@link #createSnapshot()}.
-     * Tasks scheduled since the snapshot are cancelled. Tasks cancelled or completed since
-     * the snapshot are not restored.
+     * Cancels the tasks scheduled by the operations in the current batch, now that the batch
+     * has been reverted.
      */
-    public void revertToSnapshot() {
-        tasksToCancelOnRevert.forEach(this::cancel);
-        tasksToCancelOnRevert.clear();
+    public void onBatchReverted() {
+        currentBatchTasks.forEach(this::cancel);
+        currentBatchTasks.clear();
     }
 }

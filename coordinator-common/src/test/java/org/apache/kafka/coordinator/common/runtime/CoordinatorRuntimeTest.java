@@ -5841,7 +5841,6 @@ public class CoordinatorRuntimeTest {
                 .withCoordinatorRuntimeMetrics(runtimeMetrics)
                 .withCoordinatorMetrics(mock(CoordinatorMetrics.class))
                 .withSerializer(new StringSerializer())
-                .withAppendLingerMs(OptionalInt.of(0))
                 .withExecutorService(executorService)
                 .withCachedBufferMaxBytesSupplier(() -> CACHED_BUFFER_MAX_BYTES)
                 .build();
@@ -5871,6 +5870,18 @@ public class CoordinatorRuntimeTest {
         // Execute the write.
         processor.poll();
 
+        // The batch is not written yet. The event to flush it is in the queue.
+        assertEquals(1, processor.size());
+
+        // The task must not be submitted until the batch is written.
+        verify(executorService, times(0)).submit(any(Runnable.class));
+
+        // Flush the batch.
+        processor.poll();
+
+        // The task is submitted once the batch is written.
+        verify(executorService, times(1)).submit(any(Runnable.class));
+
         // We should have a new write event in the queue as a result of the
         // task being executed immediately.
         assertEquals(1, processor.size());
@@ -5884,6 +5895,9 @@ public class CoordinatorRuntimeTest {
         ), ctx.coordinator.coordinator().fullRecords());
 
         // Execute the pending write.
+        processor.poll();
+
+        // Flush its batch.
         processor.poll();
 
         // The processor must be empty now.
@@ -5935,20 +5949,73 @@ public class CoordinatorRuntimeTest {
 
         // Write #1. It should succeed and keep its task.
         runtime.scheduleWriteOperation("write#1", TP, state -> {
-            state.executor().schedule("write#1#task", () -> "task result", (result, exception) -> null);
+            state.executor().schedule(
+                "write#1#task",
+                () -> "task result",
+                (result, exception) -> null
+            );
             return new CoordinatorResult<>(List.of("record1"), "response1");
         });
         assertTrue(ctx.executor.isScheduled("write#1#task"));
+        verify(executorService, times(1)).submit(any(Runnable.class));
 
         // Write #2. It should fail because the writer is configured to only
         // accept 1 write, and its task should be cancelled.
         CompletableFuture<String> write2 = runtime.scheduleWriteOperation("write#2", TP, state -> {
-            state.executor().schedule("write#2#task", () -> "task result", (result, exception) -> null);
+            state.executor().schedule(
+                "write#2#task",
+                () -> "task result",
+                (result, exception) -> null
+            );
             return new CoordinatorResult<>(List.of("record2"), "response2");
         });
         assertFutureThrows(KafkaException.class, write2);
         assertTrue(ctx.executor.isScheduled("write#1#task"));
         assertFalse(ctx.executor.isScheduled("write#2#task"));
+        verify(executorService, times(1)).submit(any(Runnable.class));
+    }
+
+    @Test
+    public void testCoordinatorExecutorWhenWriteHasNoRecords() {
+        MockTimer timer = new MockTimer();
+        MockPartitionWriter writer = new MockPartitionWriter();
+        ExecutorService executorService = mock(ExecutorService.class);
+
+        // The tasks are submitted but never run, so they stay scheduled.
+        when(executorService.submit(any(Runnable.class))).thenReturn(CompletableFuture.completedFuture(null));
+
+        CoordinatorRuntime<MockCoordinatorShard, String> runtime =
+            new CoordinatorRuntime.Builder<MockCoordinatorShard, String>()
+                .withTime(timer.time())
+                .withTimer(timer)
+                .withWriteTimeout(DEFAULT_WRITE_TIMEOUT)
+                .withLoader(new MockCoordinatorLoader())
+                .withEventProcessor(new DirectEventProcessor())
+                .withPartitionWriter(writer)
+                .withCoordinatorShardBuilderSupplier(new MockCoordinatorShardBuilderSupplier())
+                .withCoordinatorRuntimeMetrics(mock(CoordinatorRuntimeMetrics.class))
+                .withCoordinatorMetrics(mock(CoordinatorMetrics.class))
+                .withSerializer(new StringSerializer())
+                .withExecutorService(executorService)
+                .withCachedBufferMaxBytesSupplier(() -> CACHED_BUFFER_MAX_BYTES)
+                .build();
+
+        // Loads the coordinator.
+        runtime.scheduleLoadOperation(TP, 10);
+        CoordinatorRuntime<MockCoordinatorShard, String>.CoordinatorContext ctx = runtime.contextOrThrow(TP);
+
+        // Write #1. It has no records and there is no open batch, so its task
+        // should be submitted immediately.
+        runtime.scheduleWriteOperation("write#1", TP, state -> {
+            state.executor().schedule(
+                "write#1#task",
+                () -> "task result",
+                (result, exception) -> null
+            );
+            return new CoordinatorResult<>(List.of(), "response1");
+        });
+        assertTrue(ctx.executor.isScheduled("write#1#task"));
+        verify(executorService, times(1)).submit(any(Runnable.class));
     }
 
     @Test
