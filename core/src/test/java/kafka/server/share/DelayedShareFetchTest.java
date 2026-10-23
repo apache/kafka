@@ -65,6 +65,7 @@ import org.junit.jupiter.api.Test;
 import org.mockito.MockedStatic;
 import org.mockito.Mockito;
 
+import java.io.IOException;
 import java.util.ArrayList;
 import java.util.LinkedHashMap;
 import java.util.LinkedHashSet;
@@ -74,6 +75,7 @@ import java.util.Optional;
 import java.util.OptionalInt;
 import java.util.OptionalLong;
 import java.util.Set;
+import java.util.TreeMap;
 import java.util.concurrent.CompletableFuture;
 import java.util.concurrent.Future;
 import java.util.concurrent.RejectedExecutionException;
@@ -94,6 +96,7 @@ import static kafka.server.share.SharePartitionManagerTest.REMOTE_FETCH_MAX_WAIT
 import static kafka.server.share.SharePartitionManagerTest.buildEmptyLogReadResult;
 import static kafka.server.share.SharePartitionManagerTest.buildLogReadResult;
 import static kafka.server.share.SharePartitionManagerTest.mockReplicaManagerDelayedShareFetch;
+import static org.apache.kafka.server.share.fetch.ShareFetchTestUtils.createFileRecords;
 import static org.junit.jupiter.api.Assertions.assertEquals;
 import static org.junit.jupiter.api.Assertions.assertFalse;
 import static org.junit.jupiter.api.Assertions.assertNotNull;
@@ -922,6 +925,116 @@ public class DelayedShareFetchTest {
         assertEquals(topicPartitionData.keySet(), combinedLogReadResponse.keySet());
         assertEquals(combinedLogReadResponse.get(tp0), logReadResponse.get(tp0));
         assertEquals(combinedLogReadResponse.get(tp1), logReadResponse.get(tp1));
+    }
+
+    @Test
+    public void testCombineLogReadResponseSkipsReadWhenRecordBudgetExhausted() throws IOException {
+        String groupId = "grp";
+        ReplicaManager replicaManager = mock(ReplicaManager.class);
+        TopicIdPartition tp0 = new TopicIdPartition(Uuid.randomUuid(), new TopicPartition("foo", 0));
+        TopicIdPartition tp1 = new TopicIdPartition(Uuid.randomUuid(), new TopicPartition("foo", 1));
+        TopicIdPartition tp2 = new TopicIdPartition(Uuid.randomUuid(), new TopicPartition("foo", 2));
+
+        LinkedHashMap<TopicIdPartition, SharePartition> sharePartitions = new LinkedHashMap<>();
+        sharePartitions.put(tp0, mock(SharePartition.class));
+        sharePartitions.put(tp1, mock(SharePartition.class));
+        sharePartitions.put(tp2, mock(SharePartition.class));
+
+        ShareFetch shareFetch = new ShareFetch(FETCH_PARAMS, groupId, Uuid.randomUuid().toString(),
+            new CompletableFuture<>(), List.of(tp0, tp1, tp2), BATCH_OPTIMIZED, BATCH_SIZE, MAX_FETCH_RECORDS,
+            BROKER_TOPIC_STATS);
+
+        DelayedShareFetch delayedShareFetch = DelayedShareFetchBuilder.builder()
+            .withShareFetchData(shareFetch)
+            .withReplicaManagerLogReader(replicaManager)
+            .withSharePartitions(sharePartitions)
+            .withPartitionMaxBytesStrategy(mockPartitionMaxBytes(Set.of(tp2)))
+            .build();
+        doAnswer(invocation -> buildLogReadResult(List.of(tp2))).when(replicaManager).readFromLog(any(), any(), any(ReplicaQuota.class), anyBoolean());
+
+        LinkedHashMap<TopicIdPartition, Long> topicPartitionData = new LinkedHashMap<>();
+        topicPartitionData.put(tp0, 0L);
+        topicPartitionData.put(tp1, 0L);
+        topicPartitionData.put(tp2, 0L);
+
+        // Case 1 - the already fetched data holds 99 records in 2 batches, fewer than max fetch records,
+        // hence the missing partition is read.
+        LinkedHashMap<TopicIdPartition, LogReadResult> logReadResponse = buildLogReadResultMap(List.of(tp0),
+            createFileRecords(new TreeMap<>(Map.of(5L, 50, 55L, 49))));
+        logReadResponse.putAll(buildLogReadResultMap(List.of(tp1), MemoryRecords.EMPTY));
+        LinkedHashMap<TopicIdPartition, LogReadResult> combinedLogReadResponse = delayedShareFetch.combineLogReadResponse(topicPartitionData, logReadResponse).join();
+        assertEquals(topicPartitionData.keySet(), combinedLogReadResponse.keySet());
+        Mockito.verify(replicaManager, times(1)).readFromLog(any(), any(), any(ReplicaQuota.class), anyBoolean());
+
+        // Case 2 - a single already fetched partition holds exactly max fetch records in 2 batches, hence
+        // nothing could be acquired from the missing partition and the read is skipped.
+        Mockito.clearInvocations(replicaManager);
+        logReadResponse = buildLogReadResultMap(List.of(tp0), createFileRecords(new TreeMap<>(Map.of(0L, 50, 50L, 50))));
+        logReadResponse.putAll(buildLogReadResultMap(List.of(tp1), MemoryRecords.EMPTY));
+        combinedLogReadResponse = delayedShareFetch.combineLogReadResponse(topicPartitionData, logReadResponse).join();
+        assertEquals(Set.of(tp0, tp1), combinedLogReadResponse.keySet());
+        Mockito.verify(replicaManager, never()).readFromLog(any(), any(), any(ReplicaQuota.class), anyBoolean());
+
+        // Case 3 - the already fetched partitions together hold max fetch records, hence the read is skipped.
+        logReadResponse = buildLogReadResultMap(List.of(tp0), createFileRecords(new TreeMap<>(Map.of(10L, 30, 40L, 30))));
+        logReadResponse.putAll(buildLogReadResultMap(List.of(tp1), createFileRecords(new TreeMap<>(Map.of(0L, 40)))));
+        combinedLogReadResponse = delayedShareFetch.combineLogReadResponse(topicPartitionData, logReadResponse).join();
+        assertEquals(Set.of(tp0, tp1), combinedLogReadResponse.keySet());
+        Mockito.verify(replicaManager, never()).readFromLog(any(), any(), any(ReplicaQuota.class), anyBoolean());
+
+        // Case 4 - the already fetched data spans well past max fetch records in 4 batches. The base offsets
+        // alone prove the budget is spent, so the iteration stops before the last batch and the read is skipped.
+        logReadResponse = buildLogReadResultMap(List.of(tp0), createFileRecords(new TreeMap<>(Map.of(5L, 50, 55L, 50, 105L, 50, 155L, 50))));
+        combinedLogReadResponse = delayedShareFetch.combineLogReadResponse(topicPartitionData, logReadResponse).join();
+        assertEquals(Set.of(tp0), combinedLogReadResponse.keySet());
+        Mockito.verify(replicaManager, never()).readFromLog(any(), any(), any(ReplicaQuota.class), anyBoolean());
+    }
+
+    @Test
+    public void testCombineLogReadResponseRecordBudgetCountsFromFetchOffset() throws IOException {
+        String groupId = "grp";
+        ReplicaManager replicaManager = mock(ReplicaManager.class);
+        TopicIdPartition tp0 = new TopicIdPartition(Uuid.randomUuid(), new TopicPartition("foo", 0));
+        TopicIdPartition tp1 = new TopicIdPartition(Uuid.randomUuid(), new TopicPartition("foo", 1));
+
+        LinkedHashMap<TopicIdPartition, SharePartition> sharePartitions = new LinkedHashMap<>();
+        sharePartitions.put(tp0, mock(SharePartition.class));
+        sharePartitions.put(tp1, mock(SharePartition.class));
+
+        ShareFetch shareFetch = new ShareFetch(FETCH_PARAMS, groupId, Uuid.randomUuid().toString(),
+            new CompletableFuture<>(), List.of(tp0, tp1), BATCH_OPTIMIZED, BATCH_SIZE, MAX_FETCH_RECORDS,
+            BROKER_TOPIC_STATS);
+
+        DelayedShareFetch delayedShareFetch = DelayedShareFetchBuilder.builder()
+            .withShareFetchData(shareFetch)
+            .withReplicaManagerLogReader(replicaManager)
+            .withSharePartitions(sharePartitions)
+            .withPartitionMaxBytesStrategy(mockPartitionMaxBytes(Set.of(tp1)))
+            .build();
+        doAnswer(invocation -> buildLogReadResult(List.of(tp1))).when(replicaManager).readFromLog(any(), any(), any(ReplicaQuota.class), anyBoolean());
+
+        // The fetched data starts at a batch boundary, hence the first batch can hold records prior to the
+        // fetch offset which are already in-flight or acknowledged. Those are not handed out again, so they
+        // must not consume the record budget. The data holds offsets 5 to 154 in 3 batches.
+        LinkedHashMap<TopicIdPartition, LogReadResult> logReadResponse = buildLogReadResultMap(List.of(tp0),
+            createFileRecords(new TreeMap<>(Map.of(5L, 50, 55L, 50, 105L, 50))));
+
+        // Case 1 - fetch offset inside the first batch: only offsets 60 to 154 count, so budget remains.
+        LinkedHashMap<TopicIdPartition, Long> topicPartitionData = new LinkedHashMap<>();
+        topicPartitionData.put(tp0, 60L);
+        topicPartitionData.put(tp1, 0L);
+
+        LinkedHashMap<TopicIdPartition, LogReadResult> combinedLogReadResponse = delayedShareFetch.combineLogReadResponse(topicPartitionData, logReadResponse).join();
+        assertEquals(topicPartitionData.keySet(), combinedLogReadResponse.keySet());
+        Mockito.verify(replicaManager, times(1)).readFromLog(any(), any(), any(ReplicaQuota.class), anyBoolean());
+
+        // Case 2 - fetch offset at the base of the first batch: all 150 count, so the budget is exhausted.
+        Mockito.clearInvocations(replicaManager);
+        topicPartitionData.put(tp0, 0L);
+
+        combinedLogReadResponse = delayedShareFetch.combineLogReadResponse(topicPartitionData, logReadResponse).join();
+        assertEquals(Set.of(tp0), combinedLogReadResponse.keySet());
+        Mockito.verify(replicaManager, never()).readFromLog(any(), any(), any(ReplicaQuota.class), anyBoolean());
     }
 
     @Test
@@ -3336,6 +3449,16 @@ public class DelayedShareFetchTest {
 
     private static LinkedHashMap<TopicIdPartition, LogReadResult> toLogReadResultMap(Seq<Tuple2<TopicIdPartition, LogReadResult>> logReadResults) {
         return CollectionConverters.asJava(logReadResults).stream()
+            .collect(Collectors.toMap(
+                Tuple2::_1,
+                Tuple2::_2,
+                (oldValue, newValue) -> oldValue,
+                LinkedHashMap::new
+            ));
+    }
+
+    private static LinkedHashMap<TopicIdPartition, LogReadResult> buildLogReadResultMap(List<TopicIdPartition> topicIdPartitions, Records records) {
+        return CollectionConverters.asJava(buildLogReadResult(topicIdPartitions, records)).stream()
             .collect(Collectors.toMap(
                 Tuple2::_1,
                 Tuple2::_2,

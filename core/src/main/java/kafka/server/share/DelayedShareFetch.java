@@ -26,6 +26,8 @@ import org.apache.kafka.common.errors.NotLeaderOrFollowerException;
 import org.apache.kafka.common.errors.UnknownTopicOrPartitionException;
 import org.apache.kafka.common.message.ShareFetchResponseData;
 import org.apache.kafka.common.protocol.Errors;
+import org.apache.kafka.common.record.internal.RecordBatch;
+import org.apache.kafka.common.record.internal.Records;
 import org.apache.kafka.common.utils.Time;
 import org.apache.kafka.raft.errors.NotLeaderException;
 import org.apache.kafka.server.metrics.KafkaMetricsGroup;
@@ -824,6 +826,11 @@ public class DelayedShareFetch extends DelayedOperation {
             return CompletableFuture.completedFuture(existingFetchedData);
         }
 
+        // Check if further read is required based on the remaining record budget after accounting for already fetched data.
+        if (remainingRecordBudget(shareFetch.maxFetchRecords(), topicPartitionData, existingFetchedData) <= 0) {
+            return CompletableFuture.completedFuture(existingFetchedData);
+        }
+
         return readFromLog(
             missingLogReadTopicPartitions,
             partitionMaxBytesStrategy.maxBytes(shareFetch.fetchParams().maxBytes,
@@ -832,6 +839,61 @@ public class DelayedShareFetch extends DelayedOperation {
             missingTopicPartitionsLogReadResponse.putAll(existingFetchedData);
             return missingTopicPartitionsLogReadResponse;
         });
+    }
+
+    /**
+     * Returns the record budget left for further reads after accounting for the already fetched data,
+     * or 0 if the budget is exhausted. Records are counted by offset span, from the fetch offset to the last
+     * offset of the last batch, which is the same approximation {@link SharePartition#acquire} makes when it
+     * bounds the acquired records by max fetch records. The span starts at the fetch offset rather than at
+     * the base offset of the first batch because the fetched data starts at a batch boundary, and the records
+     * of that batch prior to the fetch offset are already in-flight or acknowledged, hence are not handed out
+     * again and must not consume the budget.
+     * <ul>
+     *     <li>{@link RecordBatch#lastOffset()} is called at most once per partition, on the last batch, rather
+     *     than on every batch. For file backed records the base offset comes from the bytes already read while
+     *     iterating, whereas the last offset may require loading the batch header from the file channel.</li>
+     *     <li>Iteration stops as soon as the base offsets alone prove the budget is spent. Base offsets are
+     *     strictly increasing, so the offsets between the start of the span and a batch's base offset are
+     *     already accounted for and the batch itself holds at least one more record.</li>
+     * </ul>
+     *
+     * @param maxFetchRecords The record budget of the share fetch request.
+     * @param fetchOffsets The fetch offsets of the acquired topic partitions.
+     * @param fetchedData The already fetched data, keyed by topic partition.
+     * @return The remaining record budget, or 0 if none remains.
+     */
+    private static int remainingRecordBudget(int maxFetchRecords,
+                                             Map<TopicIdPartition, Long> fetchOffsets,
+                                             Map<TopicIdPartition, LogReadResult> fetchedData) {
+        long remaining = maxFetchRecords;
+        for (Map.Entry<TopicIdPartition, LogReadResult> entry : fetchedData.entrySet()) {
+            FetchDataInfo fetchDataInfo = entry.getValue().info();
+            if (fetchDataInfo == null || fetchDataInfo.records == null) {
+                continue;
+            }
+
+            Records records = fetchDataInfo.records;
+            // The span starts at the fetch offset, or at the base offset of the first batch if that is
+            // higher or the fetch offset is unknown.
+            long startOffset = fetchOffsets.getOrDefault(entry.getKey(), -1L);
+            RecordBatch lastBatch = null;
+            for (RecordBatch batch : records.batches()) {
+                if (lastBatch == null) {
+                    startOffset = Math.max(startOffset, batch.baseOffset());
+                } else if (batch.baseOffset() - startOffset >= remaining) {
+                    return 0;
+                }
+                lastBatch = batch;
+            }
+            if (lastBatch != null) {
+                remaining -= Math.max(0, lastBatch.lastOffset() - startOffset + 1);
+                if (remaining <= 0) {
+                    return 0;
+                }
+            }
+        }
+        return (int) remaining;
     }
 
     // Visible for testing.
