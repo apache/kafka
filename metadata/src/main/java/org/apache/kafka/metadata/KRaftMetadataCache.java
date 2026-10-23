@@ -427,8 +427,8 @@ public class KRaftMetadataCache implements MetadataCache {
         return Optional.ofNullable(image.topics().getTopic(topicName))
             .flatMap(topic -> Optional.ofNullable(topic.partitions().get(partitionId)))
             .map(partition -> Optional.ofNullable(image.cluster().broker(partition.leader))
-                .flatMap(broker -> broker.node(listenerName.value()))
-                .orElse(Node.noNode()));
+            .flatMap(broker -> broker.node(listenerName.value()))
+            .orElse(Node.noNode()));
     }
 
     @Override

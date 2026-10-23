@@ -519,6 +519,7 @@ public class MetadataCacheTest {
             new RegisterBrokerRecord()
                 .setBrokerId(0)
                 .setBrokerEpoch(BROKER_EPOCH)
+                .setRack(null)
                 .setFenced(false)
                 .setEndPoints(new BrokerEndpointCollection(List.of(
                     new BrokerEndpoint()
