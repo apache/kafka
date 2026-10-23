@@ -56,8 +56,15 @@ public class AsyncBootstrapResolutionTest {
         clusterInstance.waitForReadyBrokers();
 
         String bootstrapServers = clusterInstance.bootstrapServers();
-        String host = Utils.getHost(bootstrapServers);
-        InetAddress realAddress = new DefaultHostResolver().resolve(host)[0];
+        String realHost = Utils.getHost(bootstrapServers);
+        Integer realPort = Utils.getPort(bootstrapServers);
+        InetAddress realAddress = new DefaultHostResolver().resolve(realHost)[0];
+
+        // Use a hostname that real JVM DNS cannot resolve (RFC 6761 reserved .invalid TLD) as the
+        // configured bootstrap host, paired with the real broker's port. This way, if bootstrap
+        // resolution ever bypasses the injected resolver again, this test fails for real instead
+        // of passing incidentally because the real cluster hostname happens to resolve on its own.
+        String unresolvableBootstrapHost = "async-bootstrap-resolution-test.invalid";
 
         AtomicInteger attempts = new AtomicInteger();
         HostResolver flakyThenWorking = resolveHost -> {
@@ -68,7 +75,7 @@ public class AsyncBootstrapResolutionTest {
         };
 
         Map<String, Object> props = Map.of(
-                CommonClientConfigs.BOOTSTRAP_SERVERS_CONFIG, bootstrapServers,
+                CommonClientConfigs.BOOTSTRAP_SERVERS_CONFIG, unresolvableBootstrapHost + ":" + realPort,
                 CommonClientConfigs.BOOTSTRAP_RESOLVE_TIMEOUT_MS_CONFIG, "30000");
 
         try (Admin admin = KafkaAdminClient.createInternal(

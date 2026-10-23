@@ -36,6 +36,7 @@ import org.apache.kafka.common.utils.internals.LogContext;
 import org.slf4j.Logger;
 import org.slf4j.LoggerFactory;
 
+import java.net.Inet6Address;
 import java.net.InetAddress;
 import java.net.InetSocketAddress;
 import java.net.UnknownHostException;
@@ -92,7 +93,12 @@ public final class ClientUtils {
             // first address the resolver returns, rather than all of them like the branch above.
             try {
                 InetAddress[] resolved = hostResolver.resolve(host);
-                addresses.add(new InetSocketAddress(resolved[0], port));
+                // Re-attach the originally configured hostname to the resolved address (no extra
+                // DNS lookup) instead of using the resolver's InetAddress as-is: Cluster.bootstrap()
+                // reads getHostString() into Node.host(), and later reconnection logic re-resolves
+                // that value through this same HostResolver, so losing the configured hostname here
+                // (e.g. an unnamed/IP-literal InetAddress) would key that later lookup differently.
+                addresses.add(new InetSocketAddress(withConfiguredHostname(host, resolved[0]), port));
             } catch (UnknownHostException e) {
                 log.warn("Couldn't resolve server {} from {} as DNS resolution failed for {}",
                         url, CommonClientConfigs.BOOTSTRAP_SERVERS_CONFIG, host);
@@ -100,6 +106,20 @@ public final class ClientUtils {
         }
 
         return addresses;
+    }
+
+    /**
+     * Returns an InetAddress with the same IP as {@code resolved} but with {@code host} as its
+     * hostname, without performing any additional DNS lookup. Preserves the IPv6 scope ID, if any.
+     */
+    private static InetAddress withConfiguredHostname(String host, InetAddress resolved) throws UnknownHostException {
+        if (resolved instanceof Inet6Address) {
+            Inet6Address v6 = (Inet6Address) resolved;
+            if (v6.getScopeId() != 0) {
+                return Inet6Address.getByAddress(host, v6.getAddress(), v6.getScopeId());
+            }
+        }
+        return InetAddress.getByAddress(host, resolved.getAddress());
     }
 
     public static List<InetSocketAddress> parseAddresses(List<String> urls, ClientDnsLookup clientDnsLookup) {
