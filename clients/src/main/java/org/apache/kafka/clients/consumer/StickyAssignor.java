@@ -121,8 +121,8 @@ import java.util.Set;
  * class TheOldRebalanceListener implements RebalanceListener {
  *
  *   void onPartitionsRevoked(Collection<TopicPartition> partitions, RebalanceConsumer consumer) {
+ *     consumer.commitSync();
  *     for (TopicPartition partition: partitions) {
- *       commitOffsets(partition);
  *       cleanupState(partition);
  *     }
  *   }
@@ -149,8 +149,7 @@ import java.util.Set;
  *   Collection<TopicPartition> lastAssignment = Collections.emptyList();
  *
  *   void onPartitionsRevoked(Collection<TopicPartition> partitions, RebalanceConsumer consumer) {
- *     for (TopicPartition partition: partitions)
- *       commitOffsets(partition);
+ *     consumer.commitSync();
  *   }
  *
  *   void onPartitionsAssigned(Collection<TopicPartition> assignment, RebalanceConsumer consumer) {

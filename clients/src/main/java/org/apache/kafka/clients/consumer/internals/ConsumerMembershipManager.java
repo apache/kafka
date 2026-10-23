@@ -443,7 +443,7 @@ public class ConsumerMembershipManager extends AbstractMembershipManager<Consume
     /**
      * Signals that a {@link RebalanceListener} callback has completed. This is invoked when the
      * application thread has completed the callback and has submitted a
-     * {@link RebalanceListenerCallbackCompletedEvent} to the network I/O thread. At this point, we
+     * {@link ConsumerRebalanceListenerCallbackCompletedEvent} to the network I/O thread. At this point, we
      * notify the state machine that it's complete so that it can move to the next appropriate step of the
      * rebalance process.
      *
