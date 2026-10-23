@@ -44,7 +44,7 @@ public class GroupSpecImpl implements GroupSpec {
     private record AssignedPartitions(BitSet partitions, int partitionCount) { }
 
     /**
-     * The metadata image, used to size the assigned partitions of each topic.
+     * The metadata image, used to look up the partition count of each topic.
      */
     private final CoordinatorMetadataImage metadataImage;
 
@@ -85,10 +85,10 @@ public class GroupSpecImpl implements GroupSpec {
         SubscriptionType subscriptionType,
         Optional<Map<Uuid, Set<Integer>>> topicPartitionAllowedMap
     ) {
+        this.metadataImage = Objects.requireNonNull(metadataImage);
         this.members = Objects.requireNonNull(members);
         this.subscriptionType = Objects.requireNonNull(subscriptionType);
         this.topicPartitionAllowedMap = Objects.requireNonNull(topicPartitionAllowedMap);
-        this.metadataImage = Objects.requireNonNull(metadataImage);
     }
 
     /**
