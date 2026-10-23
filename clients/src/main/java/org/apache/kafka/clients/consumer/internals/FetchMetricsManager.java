@@ -169,10 +169,10 @@ public class FetchMetricsManager extends AbstractConsumerMetricsManager {
      * This method is called by the {@link Fetch fetch} logic before it requests fetches in order to update the
      * internal set of metrics that are tracked.
      *
-     * @param subscription {@link SubscriptionState} that contains the set of assigned partitions
-     * @see SubscriptionState#assignmentId()
+     * @param subscription {@link ConsumerSubscriptionState} that contains the set of assigned partitions
+     * @see ConsumerSubscriptionState#assignmentId()
      */
-    void maybeUpdateAssignment(SubscriptionState subscription) {
+    void maybeUpdateAssignment(ConsumerSubscriptionState subscription) {
         int newAssignmentId = subscription.assignmentId();
 
         if (this.assignmentId != newAssignmentId) {
@@ -258,7 +258,7 @@ public class FetchMetricsManager extends AbstractConsumerMetricsManager {
     }
 
     @Deprecated // To be removed in Kafka 5.0 release.
-    private void maybeRecordDeprecatedPreferredReadReplica(TopicPartition tp, SubscriptionState subscription) {
+    private void maybeRecordDeprecatedPreferredReadReplica(TopicPartition tp, ConsumerSubscriptionState subscription) {
         if (shouldReportDeprecatedMetric(tp.topic())) {
             MetricName metricName = deprecatedPartitionPreferredReadReplicaMetricName(tp);
             metrics.addMetricIfAbsent(

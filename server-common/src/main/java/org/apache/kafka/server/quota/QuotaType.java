@@ -23,6 +23,7 @@ public enum QuotaType {
     CONTROLLER_MUTATION("ControllerMutation"),
     LEADER_REPLICATION("LeaderReplication"),
     FOLLOWER_REPLICATION("FollowerReplication"),
+    MIRROR_REPLICATION("MirrorReplication"),
     ALTER_LOG_DIRS_REPLICATION("AlterLogDirsReplication"),
     RLM_COPY("RLMCopy"),
     RLM_FETCH("RLMFetch");

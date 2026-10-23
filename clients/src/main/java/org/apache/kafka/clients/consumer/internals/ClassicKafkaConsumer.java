@@ -135,7 +135,7 @@ public class ClassicKafkaConsumer<K, V> implements ConsumerDelegate<K, V> {
 
     private final Time time;
     private final ConsumerNetworkClient client;
-    private final SubscriptionState subscriptions;
+    private final ConsumerSubscriptionState subscriptions;
     private final ConsumerMetadata metadata;
     private final long retryBackoffMs;
     private final long retryBackoffMaxMs;
@@ -175,7 +175,8 @@ public class ClassicKafkaConsumer<K, V> implements ConsumerDelegate<K, V> {
             this.defaultApiTimeoutMs = config.getInt(ConsumerConfig.DEFAULT_API_TIMEOUT_MS_CONFIG);
             this.time = Time.SYSTEM;
             List<MetricsReporter> reporters = CommonClientConfigs.metricsReporters(clientId, config);
-            this.clientTelemetryReporter = CommonClientConfigs.telemetryReporter(clientId, config);
+            Uuid clientInstanceId = Uuid.randomUuid();
+            this.clientTelemetryReporter = CommonClientConfigs.telemetryReporter(clientId, clientInstanceId, config);
             this.clientTelemetryReporter.ifPresent(reporters::add);
             this.metrics = createMetrics(config, time, reporters);
             this.retryBackoffMs = config.getLong(ConsumerConfig.RETRY_BACKOFF_MS_CONFIG);
@@ -198,7 +199,6 @@ public class ClassicKafkaConsumer<K, V> implements ConsumerDelegate<K, V> {
             this.isolationLevel = fetchConfig.isolationLevel;
 
             ApiVersions apiVersions = new ApiVersions();
-            Uuid clientInstanceId = Uuid.randomUuid();
             this.client = createConsumerNetworkClient(config,
                     clientInstanceId,
                     metrics,
@@ -302,7 +302,7 @@ public class ClassicKafkaConsumer<K, V> implements ConsumerDelegate<K, V> {
                          Deserializer<K> keyDeserializer,
                          Deserializer<V> valueDeserializer,
                          KafkaClient client,
-                         SubscriptionState subscriptions,
+                         ConsumerSubscriptionState subscriptions,
                          ConsumerMetadata metadata,
                          List<ConsumerPartitionAssignor> assignors) {
         this.log = logContext.logger(getClass());
@@ -818,7 +818,7 @@ public class ClassicKafkaConsumer<K, V> implements ConsumerDelegate<K, V> {
         acquireAndEnsureOpen();
         try {
             log.info("Seeking to offset {} for partition {}", offset, partition);
-            SubscriptionState.FetchPosition newPosition = new SubscriptionState.FetchPosition(
+            ConsumerSubscriptionState.FetchPosition newPosition = new ConsumerSubscriptionState.FetchPosition(
                     offset,
                     Optional.empty(), // This will ensure we skip validation
                     this.metadata.currentLeader(partition));
@@ -844,7 +844,7 @@ public class ClassicKafkaConsumer<K, V> implements ConsumerDelegate<K, V> {
                 log.info("Seeking to offset {} for partition {}", offset, partition);
             }
             Metadata.LeaderAndEpoch currentLeaderAndEpoch = this.metadata.currentLeader(partition);
-            SubscriptionState.FetchPosition newPosition = new SubscriptionState.FetchPosition(
+            ConsumerSubscriptionState.FetchPosition newPosition = new ConsumerSubscriptionState.FetchPosition(
                     offsetAndMetadata.offset(),
                     offsetAndMetadata.leaderEpoch(),
                     currentLeaderAndEpoch);
@@ -897,7 +897,7 @@ public class ClassicKafkaConsumer<K, V> implements ConsumerDelegate<K, V> {
 
             Timer timer = time.timer(timeout);
             do {
-                SubscriptionState.FetchPosition position = this.subscriptions.validPosition(partition);
+                ConsumerSubscriptionState.FetchPosition position = this.subscriptions.validPosition(partition);
                 if (position != null)
                     return position.offset;
 

@@ -21,7 +21,6 @@ import org.apache.kafka.clients.admin.AlterConfigOp;
 import org.apache.kafka.clients.admin.AlterConfigsOptions;
 import org.apache.kafka.clients.admin.Config;
 import org.apache.kafka.clients.admin.ConfigEntry;
-import org.apache.kafka.clients.admin.NewTopic;
 import org.apache.kafka.clients.admin.OffsetSpec;
 import org.apache.kafka.clients.producer.Producer;
 import org.apache.kafka.clients.producer.ProducerConfig;
@@ -30,6 +29,7 @@ import org.apache.kafka.common.TopicPartition;
 import org.apache.kafka.common.config.ConfigResource;
 import org.apache.kafka.common.config.TopicConfig;
 import org.apache.kafka.common.header.Header;
+import org.apache.kafka.common.header.internals.RecordHeader;
 import org.apache.kafka.common.test.ClusterInstance;
 import org.apache.kafka.common.test.api.ClusterConfigProperty;
 import org.apache.kafka.common.test.api.ClusterTest;
@@ -274,6 +274,94 @@ public class ShareConsumerDLQTest extends ShareConsumerTestBase {
     }
 
     /**
+     * As {@link #testRejectedRecordsWrittenToDlqWithCopyRecordEnabled()}, but the source records also carry
+     * a custom header. Verifies that with record copy enabled, the original record's headers are preserved
+     * on the DLQ record alongside the standard DLQ context headers.
+     */
+    @ClusterTest
+    public void testDlqCopiesOriginalRecordHeaders() throws Exception {
+        String groupId = "dlq-copy-headers-group";
+        String dlqTopic = "dlq.copy.headers";
+        int recordCount = 3;
+        String originalHeaderKey = "original-header";
+        String originalHeaderValue = "original-value";
+
+        alterShareAutoOffsetReset(groupId, "earliest");
+        createDlqTopic(dlqTopic);
+        alterShareGroupConfig(groupId, GroupConfig.ERRORS_DEADLETTERQUEUE_TOPIC_NAME_CONFIG, dlqTopic);
+        // Enable record copy so the original key/value/headers are written onto the DLQ record.
+        alterShareGroupConfig(groupId, GroupConfig.ERRORS_DEADLETTERQUEUE_COPY_RECORD_ENABLE_CONFIG, "true");
+
+        Header originalHeader = new RecordHeader(originalHeaderKey, originalHeaderValue.getBytes(StandardCharsets.UTF_8));
+        try (Producer<byte[], byte[]> producer = createProducer()) {
+            for (int i = 0; i < recordCount; i++) {
+                producer.send(new ProducerRecord<>(tp.topic(), tp.partition(), "key".getBytes(StandardCharsets.UTF_8),
+                    "value".getBytes(StandardCharsets.UTF_8), List.of(originalHeader)));
+            }
+            producer.flush();
+        }
+        rejectRecords(groupId, recordCount);
+
+        List<ConsumerRecord<byte[], byte[]>> dlqRecords = readDlqPartition(dlqTopic, 0, recordCount);
+        assertEquals(recordCount, dlqRecords.size(), "Unexpected number of records on the DLQ topic");
+        for (ConsumerRecord<byte[], byte[]> record : dlqRecords) {
+            assertEquals(originalHeaderValue, headerValue(record, originalHeaderKey),
+                "DLQ record should carry the original record's header");
+            // The original header must coexist with (not replace) the standard DLQ context headers.
+            assertEquals(groupId, headerValue(record, HEADER_DLQ_ERRORS_GROUP));
+            assertEquals(tp.topic(), headerValue(record, HEADER_DLQ_ERRORS_TOPIC));
+        }
+        verifyDlqMetrics(groupId, recordCount);
+    }
+
+    /**
+     * As {@link #testDlqCopiesOriginalRecordHeaders()}, but the source record's custom header reuses one
+     * of the standard DLQ context header keys. Verifies the original header is dropped entirely by
+     * ShareGroupDLQRecordHelper.headers() - not merely shadowed - so only the DLQ-computed value for
+     * that key reaches the DLQ record.
+     */
+    @ClusterTest
+    public void testDlqOriginalHeaderCollidingWithDlqHeaderIsOverwritten() throws Exception {
+        String groupId = "dlq-copy-collide-group";
+        String dlqTopic = "dlq.copy.collide";
+        int recordCount = 3;
+
+        alterShareAutoOffsetReset(groupId, "earliest");
+        createDlqTopic(dlqTopic);
+        alterShareGroupConfig(groupId, GroupConfig.ERRORS_DEADLETTERQUEUE_TOPIC_NAME_CONFIG, dlqTopic);
+        alterShareGroupConfig(groupId, GroupConfig.ERRORS_DEADLETTERQUEUE_COPY_RECORD_ENABLE_CONFIG, "true");
+
+        // Reuses the "group" DLQ header's key, with a bogus value that must not survive.
+        Header collidingHeader = new RecordHeader(HEADER_DLQ_ERRORS_GROUP, "bogus-group".getBytes(StandardCharsets.UTF_8));
+        try (Producer<byte[], byte[]> producer = createProducer()) {
+            for (int i = 0; i < recordCount; i++) {
+                producer.send(new ProducerRecord<>(tp.topic(), tp.partition(), "key".getBytes(StandardCharsets.UTF_8),
+                    "value".getBytes(StandardCharsets.UTF_8), List.of(collidingHeader)));
+            }
+            producer.flush();
+        }
+        rejectRecords(groupId, recordCount);
+
+        List<ConsumerRecord<byte[], byte[]>> dlqRecords = readDlqPartition(dlqTopic, 0, recordCount);
+        assertEquals(recordCount, dlqRecords.size(), "Unexpected number of records on the DLQ topic");
+        for (ConsumerRecord<byte[], byte[]> record : dlqRecords) {
+            assertEquals(groupId, headerValue(record, HEADER_DLQ_ERRORS_GROUP),
+                "The DLQ-computed header must win over the original record's colliding, bogus header");
+            // Confirm the original header was dropped, not merely shadowed: exactly one header under
+            // this key, not two.
+            long matchingHeaderCount = 0;
+            for (Header h : record.headers()) {
+                if (h.key().equals(HEADER_DLQ_ERRORS_GROUP)) {
+                    matchingHeaderCount++;
+                }
+            }
+            assertEquals(1, matchingHeaderCount,
+                "Expected exactly one '" + HEADER_DLQ_ERRORS_GROUP + "' header, found " + matchingHeaderCount);
+        }
+        verifyDlqMetrics(groupId, recordCount);
+    }
+
+    /**
      * End-to-end DLQ copy when the source records have been tiered to remote storage. The source topic enables
      * tiered storage and rolls a segment per record, with a 45s total retention and a 5s local retention so the
      * early offsets are offloaded to remote storage and then deleted locally (well before the remote segments
@@ -501,16 +589,11 @@ public class ShareConsumerDLQTest extends ShareConsumerTestBase {
         // so a single record's DLQ copy cleanly fits under the limit but two together clearly don't.
         int payloadSize = dlqMaxMessageBytes - 2_000;
 
-        try (Admin admin = createAdminClient()) {
-            admin.createTopics(Set.of(
-                new NewTopic(sourceTopic, 1, (short) 1)
-                    .configs(Map.of(TopicConfig.MAX_MESSAGE_BYTES_CONFIG, Integer.toString(sourceMaxMessageBytes))),
-                new NewTopic(dlqTopic, 1, (short) 1)
-                    .configs(Map.of(
-                        TopicConfig.ERRORS_DEADLETTERQUEUE_GROUP_ENABLE_CONFIG, "true",
-                        TopicConfig.MAX_MESSAGE_BYTES_CONFIG, Integer.toString(dlqMaxMessageBytes)))
-            )).all().get();
-        }
+        cluster.createTopic(sourceTopic, 1, (short) 1,
+            Map.of(TopicConfig.MAX_MESSAGE_BYTES_CONFIG, Integer.toString(sourceMaxMessageBytes)));
+        cluster.createTopic(dlqTopic, 1, (short) 1, Map.of(
+            TopicConfig.ERRORS_DEADLETTERQUEUE_GROUP_ENABLE_CONFIG, "true",
+            TopicConfig.MAX_MESSAGE_BYTES_CONFIG, Integer.toString(dlqMaxMessageBytes)));
 
         alterShareAutoOffsetReset(groupId, "earliest");
         alterShareGroupConfig(groupId, GroupConfig.ERRORS_DEADLETTERQUEUE_TOPIC_NAME_CONFIG, dlqTopic);
@@ -634,15 +717,10 @@ public class ShareConsumerDLQTest extends ShareConsumerTestBase {
         // plus batch/record framing overhead.
         int highDlqMaxMessageBytes = 500_000;
 
-        try (Admin admin = createAdminClient()) {
-            admin.createTopics(Set.of(
-                new NewTopic(sourceTopic, 1, (short) 1),
-                new NewTopic(dlqTopic, 1, (short) 1)
-                    .configs(Map.of(
-                        TopicConfig.ERRORS_DEADLETTERQUEUE_GROUP_ENABLE_CONFIG, "true",
-                        TopicConfig.MAX_MESSAGE_BYTES_CONFIG, Integer.toString(lowDlqMaxMessageBytes)))
-            )).all().get();
-        }
+        cluster.createTopic(sourceTopic, 1, (short) 1);
+        cluster.createTopic(dlqTopic, 1, (short) 1, Map.of(
+            TopicConfig.ERRORS_DEADLETTERQUEUE_GROUP_ENABLE_CONFIG, "true",
+            TopicConfig.MAX_MESSAGE_BYTES_CONFIG, Integer.toString(lowDlqMaxMessageBytes)));
 
         alterShareAutoOffsetReset(groupId, "earliest");
         alterShareGroupConfig(groupId, GroupConfig.ERRORS_DEADLETTERQUEUE_TOPIC_NAME_CONFIG, dlqTopic);
@@ -678,14 +756,9 @@ public class ShareConsumerDLQTest extends ShareConsumerTestBase {
         // comfortably above the decompressed payload size up front - simpler than altering the first
         // topic's config and waiting for it to propagate.
         String dlqTopic2 = "dlq.decompress-cap-2";
-        try (Admin admin = createAdminClient()) {
-            admin.createTopics(Set.of(
-                new NewTopic(dlqTopic2, 1, (short) 1)
-                    .configs(Map.of(
-                        TopicConfig.ERRORS_DEADLETTERQUEUE_GROUP_ENABLE_CONFIG, "true",
-                        TopicConfig.MAX_MESSAGE_BYTES_CONFIG, Integer.toString(highDlqMaxMessageBytes)))
-            )).all().get();
-        }
+        cluster.createTopic(dlqTopic2, 1, (short) 1, Map.of(
+            TopicConfig.ERRORS_DEADLETTERQUEUE_GROUP_ENABLE_CONFIG, "true",
+            TopicConfig.MAX_MESSAGE_BYTES_CONFIG, Integer.toString(highDlqMaxMessageBytes)));
         alterShareGroupConfig(groupId, GroupConfig.ERRORS_DEADLETTERQUEUE_TOPIC_NAME_CONFIG, dlqTopic2);
 
         try (Producer<byte[], byte[]> producer = createProducer(Map.of(ProducerConfig.COMPRESSION_TYPE_CONFIG, "gzip"))) {
@@ -972,13 +1045,8 @@ public class ShareConsumerDLQTest extends ShareConsumerTestBase {
     }
 
     private void createDlqTopic(String topicName, int numPartitions) {
-        assertDoesNotThrow(() -> {
-            try (Admin admin = createAdminClient()) {
-                NewTopic newTopic = new NewTopic(topicName, numPartitions, (short) 1)
-                    .configs(Map.of(TopicConfig.ERRORS_DEADLETTERQUEUE_GROUP_ENABLE_CONFIG, "true"));
-                admin.createTopics(Set.of(newTopic)).all().get();
-            }
-        }, "Failed to create DLQ topic");
+        assertDoesNotThrow(() -> cluster.createTopic(topicName, numPartitions, (short) 1,
+            Map.of(TopicConfig.ERRORS_DEADLETTERQUEUE_GROUP_ENABLE_CONFIG, "true")), "Failed to create DLQ topic");
     }
 
     // Creates a single-partition source topic with tiered storage enabled and one log segment per record (via
@@ -987,18 +1055,15 @@ public class ShareConsumerDLQTest extends ShareConsumerTestBase {
     // storage; the total retention (`retentionMs`) is kept generous so the remote segments are not deleted while
     // the test is still running.
     private void createRemoteStorageSourceTopic(String topic, long retentionMs, long localRetentionMs) {
-        assertDoesNotThrow(() -> {
-            try (Admin admin = createAdminClient()) {
-                Map<String, String> configs = Map.of(
-                    TopicConfig.REMOTE_LOG_STORAGE_ENABLE_CONFIG, "true",
-                    TopicConfig.RETENTION_MS_CONFIG, Long.toString(retentionMs),
-                    TopicConfig.LOCAL_LOG_RETENTION_MS_CONFIG, Long.toString(localRetentionMs),
-                    // Roll a segment for every record so each inactive segment can be offloaded then deleted locally.
-                    TopicConfig.INDEX_INTERVAL_BYTES_CONFIG, "1",
-                    TopicConfig.SEGMENT_INDEX_BYTES_CONFIG, "12");
-                admin.createTopics(Set.of(new NewTopic(topic, 1, (short) 1).configs(configs))).all().get();
-            }
-        }, "Failed to create remote-storage source topic");
+        Map<String, String> configs = Map.of(
+            TopicConfig.REMOTE_LOG_STORAGE_ENABLE_CONFIG, "true",
+            TopicConfig.RETENTION_MS_CONFIG, Long.toString(retentionMs),
+            TopicConfig.LOCAL_LOG_RETENTION_MS_CONFIG, Long.toString(localRetentionMs),
+            // Roll a segment for every record so each inactive segment can be offloaded then deleted locally.
+            TopicConfig.INDEX_INTERVAL_BYTES_CONFIG, "1",
+            TopicConfig.SEGMENT_INDEX_BYTES_CONFIG, "12");
+        assertDoesNotThrow(() -> cluster.createTopic(topic, 1, (short) 1, configs),
+            "Failed to create remote-storage source topic");
     }
 
     // The earliest offset still held in local storage. Offsets below this have been removed locally (e.g. after

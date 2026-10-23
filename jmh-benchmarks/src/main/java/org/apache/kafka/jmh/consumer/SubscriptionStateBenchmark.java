@@ -19,7 +19,7 @@ package org.apache.kafka.jmh.consumer;
 
 import org.apache.kafka.clients.Metadata;
 import org.apache.kafka.clients.consumer.internals.AutoOffsetResetStrategy;
-import org.apache.kafka.clients.consumer.internals.SubscriptionState;
+import org.apache.kafka.clients.consumer.internals.ConsumerSubscriptionState;
 import org.apache.kafka.common.Node;
 import org.apache.kafka.common.TopicPartition;
 import org.apache.kafka.common.utils.internals.LogContext;
@@ -56,7 +56,7 @@ public class SubscriptionStateBenchmark {
     @Param({"50"})
     int partitionCount;
 
-    SubscriptionState subscriptionState;
+    ConsumerSubscriptionState subscriptionState;
 
     @Setup(Level.Trial)
     public void setup() {
@@ -66,9 +66,9 @@ public class SubscriptionStateBenchmark {
                 assignment.add(new TopicPartition(String.format("topic-%04d", topicId), partitionId))
             )
         );
-        subscriptionState = new SubscriptionState(new LogContext(), AutoOffsetResetStrategy.EARLIEST);
+        subscriptionState = new ConsumerSubscriptionState(new LogContext(), AutoOffsetResetStrategy.EARLIEST);
         subscriptionState.assignFromUser(assignment);
-        SubscriptionState.FetchPosition position = new SubscriptionState.FetchPosition(
+        ConsumerSubscriptionState.FetchPosition position = new ConsumerSubscriptionState.FetchPosition(
             0L,
             Optional.of(0),
             new Metadata.LeaderAndEpoch(Optional.of(new Node(0, "host", 9092)), Optional.of(10))

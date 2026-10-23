@@ -14,22 +14,16 @@
  * See the License for the specific language governing permissions and
  * limitations under the License.
  */
-package org.apache.kafka.streams.state.internals;
-
-import org.apache.kafka.streams.state.WindowStoreIterator;
+package org.apache.kafka.common.errors;
 
 /**
- * Iterator adapter for {@link WindowStoreIterator} that converts plain values
- * to timestamp-with-headers format by adding empty headers and timestamp=-1.
- * <p>
- * This extends {@link PlainToHeadersIteratorAdapter} to also implement the
- * {@link WindowStoreIterator} interface marker.
+ * The cluster mirror is in an invalid state for the requested operation.
+ * This error occurs when attempting an operation on a cluster mirror that is not in the appropriate state.
  */
-class PlainToHeadersWindowStoreIteratorAdapter
-    extends PlainToHeadersIteratorAdapter<Long>
-    implements WindowStoreIterator<byte[]> {
+public class InvalidMirrorStateException extends ApiException {
+    private static final long serialVersionUID = 1L;
 
-    PlainToHeadersWindowStoreIteratorAdapter(final WindowStoreIterator<byte[]> innerIterator) {
-        super(innerIterator);
+    public InvalidMirrorStateException(String message) {
+        super(message);
     }
 }

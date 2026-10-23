@@ -29,6 +29,7 @@ import java.io.File;
 import java.io.IOException;
 import java.io.RandomAccessFile;
 import java.nio.ByteBuffer;
+import java.nio.channels.ClosedChannelException;
 import java.nio.channels.FileChannel;
 import java.nio.file.Files;
 import java.nio.file.StandardOpenOption;
@@ -41,9 +42,29 @@ import java.util.concurrent.atomic.AtomicInteger;
  * instance to enable slicing a range of the log records.
  */
 public class FileRecords extends AbstractRecords implements Closeable {
+    // Size of the buffer used to re-read a region that failed to transfer, see readFailure
+    static final int REREAD_BUFFER_SIZE = 32 * 1024;
+
+    /**
+     * Notified when {@link #writeTo} fails, typically to find out with {@link #readFailure} whether the backing file
+     * could not be read. It is called on the thread that failed to write, a network thread, so it must not block.
+     */
+    @FunctionalInterface
+    public interface TransferFailureHandler {
+        /**
+         * @param records The records that failed to be written
+         * @param position The absolute position in the file of the region that was being written
+         * @param count The size of the region
+         * @param transferFailure The exception the write failed with, rethrown by {@link #writeTo} once this returns
+         */
+        void onTransferFailure(FileRecords records, long position, int count, IOException transferFailure);
+    }
+
     private final boolean isSlice;
     private final int start;
     private final int end;
+    // Notified when writing to a network channel fails, or null
+    private final TransferFailureHandler transferFailureHandler;
 
     private final Iterable<FileLogInputStream.FileChannelRecordBatch> batches;
 
@@ -66,6 +87,7 @@ public class FileRecords extends AbstractRecords implements Closeable {
         this.start = 0;
         this.end = end;
         this.isSlice = false;
+        this.transferFailureHandler = null;
 
         if (channel.size() > Integer.MAX_VALUE) {
             throw new KafkaException(
@@ -92,13 +114,15 @@ public class FileRecords extends AbstractRecords implements Closeable {
         File file,
         FileChannel channel,
         int start,
-        int end
+        int end,
+        TransferFailureHandler transferFailureHandler
     ) {
         this.file = file;
         this.channel = channel;
         this.start = start;
         this.end = end;
         this.isSlice = true;
+        this.transferFailureHandler = transferFailureHandler;
 
         // don't check the file size since this is just a slice view
         this.size = new AtomicInteger(end - start);
@@ -146,7 +170,26 @@ public class FileRecords extends AbstractRecords implements Closeable {
         int availableBytes = availableBytes(position, size);
         int startPosition = this.start + position;
 
-        return new FileRecords(file, channel, startPosition, startPosition + availableBytes);
+        return new FileRecords(file, channel, startPosition, startPosition + availableBytes, transferFailureHandler);
+    }
+
+    /**
+     * Return a copy of this slice whose {@link #writeTo} notifies the given handler when writing to a network channel
+     * fails. Slices taken from it with {@link #slice} notify the same handler. This instance is not modified.
+     *
+     * @param handler The handler to notify
+     * @return A copy of this slice that notifies the handler
+     * @throws IllegalStateException If this instance is not a slice
+     */
+    public FileRecords withTransferFailureHandler(TransferFailureHandler handler) {
+        if (!isSlice)
+            throw new IllegalStateException("A transfer failure handler can only be set on a slice of " + file);
+        return new FileRecords(file, channel, start, end, Objects.requireNonNull(handler));
+    }
+
+    // Visible for testing
+    public TransferFailureHandler transferFailureHandler() {
+        return transferFailureHandler;
     }
 
     /**
@@ -278,17 +321,61 @@ public class FileRecords extends AbstractRecords implements Closeable {
 
     @Override
     public int writeTo(TransferableChannel destChannel, int offset, int length) throws IOException {
-        long newSize = Math.min(channel.size(), end) - start;
         int oldSize = sizeInBytes();
-        if (newSize < oldSize)
-            throw new KafkaException(String.format(
-                    "Size of FileRecords %s has been truncated during write: old size %d, new size %d",
-                    file.getAbsolutePath(), oldSize, newSize));
-
         long position = start + offset;
         int count = Math.min(length, oldSize - offset);
-        // safe to cast to int since `count` is an int
-        return (int) destChannel.transferFrom(channel, position, count);
+        try {
+            long newSize = Math.min(channel.size(), end) - start;
+            if (newSize < oldSize)
+                throw new KafkaException(String.format(
+                        "Size of FileRecords %s has been truncated during write: old size %d, new size %d",
+                        file.getAbsolutePath(), oldSize, newSize));
+            // safe to cast to int since `count` is an int
+            return (int) destChannel.transferFrom(channel, position, count);
+        } catch (IOException e) {
+            // The transfer reads the file and writes the socket in one call, so a storage failure and a socket
+            // failure both arrive here as a bare IOException. Let the handler find out which one it was. A closed
+            // channel means the file was not read, so there is nothing to find out.
+            if (transferFailureHandler != null && !(e instanceof ClosedChannelException))
+                transferFailureHandler.onTransferFailure(this, position, count, e);
+            throw e;
+        }
+    }
+
+    /**
+     * Read the given region of the backing file, after {@link #writeTo} failed on it, to tell a storage failure from
+     * a socket failure. The whole region is read rather than its first byte because, depending on the platform, the
+     * transfer may fail anywhere within it without reporting progress. Only a failed read of an open channel counts
+     * as a storage failure: the end of the file may be reached because the log was truncated concurrently (e.g. when
+     * the replica becomes a follower), and the channel may have been closed concurrently, by a deletion or a
+     * shutdown; neither says anything about the medium.
+     *
+     * @param position The absolute position of the region in the file
+     * @param count The size of the region
+     * @return The failure of the read, naming the file and the position, or empty if the region could be read or
+     *         nothing can be concluded
+     */
+    public Optional<IOException> readFailure(long position, int count) {
+        ByteBuffer buffer = ByteBuffer.allocate(Math.min(count, REREAD_BUFFER_SIZE));
+        long regionEnd = position + count;
+        long readPosition = position;
+        try {
+            while (readPosition < regionEnd) {
+                buffer.clear();
+                buffer.limit((int) Math.min(buffer.capacity(), regionEnd - readPosition));
+                int bytesRead = channel.read(buffer, readPosition);
+                if (bytesRead <= 0)
+                    return Optional.empty();
+                readPosition += bytesRead;
+            }
+            return Optional.empty();
+        } catch (ClosedChannelException e) {
+            return Optional.empty();
+        } catch (IOException e) {
+            return Optional.of(new IOException("Failed to read " + file.getAbsolutePath() + " at position "
+                    + readPosition + " after failing to write " + count + " bytes from position " + position
+                    + " to a network channel", e));
+        }
     }
 
     /**

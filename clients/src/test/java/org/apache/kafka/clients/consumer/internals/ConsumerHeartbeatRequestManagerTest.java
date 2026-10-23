@@ -101,6 +101,7 @@ public class ConsumerHeartbeatRequestManagerTest
     // methods (groupInstanceId, rackId, serverAssignor). The subclass setUp() assigns the same
     // mock to super.membershipManager so inherited tests see the same instance.
     private ConsumerMembershipManager membershipManager;
+    private ConsumerSubscriptionState subscriptions;
     private HeartbeatState heartbeatState;
 
     public ConsumerHeartbeatRequestManagerTest() {
@@ -115,7 +116,8 @@ public class ConsumerHeartbeatRequestManagerTest
         this.coordinatorRequestManager = mock(CoordinatorRequestManager.class);
         this.heartbeatState = mock(HeartbeatState.class);
         this.backgroundEventHandler = mock(BackgroundEventHandler.class);
-        this.subscriptions = mock(SubscriptionState.class);
+        this.subscriptions = mock(ConsumerSubscriptionState.class);
+        super.subscriptions = subscriptions;
         this.membershipManager = mock(ConsumerMembershipManager.class);
         super.membershipManager = this.membershipManager;
         this.metrics = new Metrics(time);
@@ -141,6 +143,46 @@ public class ConsumerHeartbeatRequestManagerTest
                 metrics);
 
         when(coordinatorRequestManager.coordinator()).thenReturn(Optional.of(mock(Node.class)));
+    }
+
+    @Test
+    public void testInitialHeartbeatIntervalUsesRequestTimeout() {
+        int requestTimeoutMs = 1000;
+        ConsumerConfig config = new ConsumerConfig(config().originals(
+            Map.of(ConsumerConfig.REQUEST_TIMEOUT_MS_CONFIG, requestTimeoutMs)));
+        mockJoiningMemberData(DEFAULT_GROUP_INSTANCE_ID);
+        when(membershipManager.shouldHeartbeatNow()).thenReturn(true);
+        try (Metrics metrics = new Metrics(time)) {
+            ConsumerHeartbeatRequestManager manager = new ConsumerHeartbeatRequestManager(
+                logContext,
+                time,
+                config,
+                coordinatorRequestManager,
+                subscriptions,
+                membershipManager,
+                backgroundEventHandler,
+                metrics);
+
+            assertEquals(0, manager.maximumTimeToWait(time.milliseconds()));
+            NetworkClientDelegate.PollResult result = manager.poll(time.milliseconds());
+            assertEquals(1, result.unsentRequests.size());
+            assertEquals(requestTimeoutMs, result.timeUntilNextPollMs);
+
+            // Keep the first heartbeat in flight; neither polling path should busy-spin or generate another request.
+            result = manager.poll(time.milliseconds());
+            assertTrue(result.unsentRequests.isEmpty());
+            assertEquals(requestTimeoutMs, result.timeUntilNextPollMs);
+            assertTrue(manager.maximumTimeToWait(time.milliseconds()) > 0,
+                "Should wait while the first heartbeat is in flight");
+
+            long elapsedMs = requestTimeoutMs / 2;
+            time.sleep(elapsedMs);
+            result = manager.poll(time.milliseconds());
+            assertTrue(result.unsentRequests.isEmpty());
+            assertEquals(requestTimeoutMs - elapsedMs, result.timeUntilNextPollMs);
+            assertTrue(manager.maximumTimeToWait(time.milliseconds()) > 0,
+                "Should wait while the first heartbeat is in flight");
+        }
     }
 
     @Override
@@ -207,8 +249,6 @@ public class ConsumerHeartbeatRequestManagerTest
     @ApiKeyVersionsSource(apiKey = ApiKeys.CONSUMER_GROUP_HEARTBEAT)
     public void testFirstHeartbeatIncludesRequiredInfoToJoinGroupAndGetAssignments(short version) {
         createHeartbeatStateAndRequestManager();
-        createHeartbeatRequestStateWithZeroHeartbeatInterval();
-        time.sleep(DEFAULT_HEARTBEAT_INTERVAL_MS);
         String topic = "topic1";
         Set<String> set = Collections.singleton(topic);
         when(subscriptions.subscription()).thenReturn(set);
@@ -216,6 +256,7 @@ public class ConsumerHeartbeatRequestManagerTest
 
         // Create a ConsumerHeartbeatRequest and verify the payload
         mockJoiningMemberData(DEFAULT_GROUP_INSTANCE_ID);
+        when(membershipManager.shouldHeartbeatNow()).thenReturn(true);
         assertEquals(0, heartbeatRequestManager.maximumTimeToWait(time.milliseconds()));
         NetworkClientDelegate.PollResult pollResult = heartbeatRequestManager.poll(time.milliseconds());
         assertEquals(1, pollResult.unsentRequests.size());
@@ -270,9 +311,8 @@ public class ConsumerHeartbeatRequestManagerTest
         CoordinatorRequestManager realCoordinatorRequestManager = new CoordinatorRequestManager(
             logContext, DEFAULT_RETRY_BACKOFF_MS, DEFAULT_RETRY_BACKOFF_MAX_MS, DEFAULT_GROUP_ID);
 
-        // The member wants to join, but its heartbeat interval is still zero (unknown until the
-        // first heartbeat response).
-        createHeartbeatRequestStateWithZeroHeartbeatInterval();
+        // The member wants to join immediately, but no heartbeat can be sent until the coordinator is known.
+        createHeartbeatStateAndRequestManager();
         when(membershipManager.state()).thenReturn(MemberState.JOINING);
         when(membershipManager.shouldHeartbeatNow()).thenReturn(true);
         ConsumerHeartbeatRequestManager realHeartbeatRequestManager = createHeartbeatRequestManager(
@@ -312,7 +352,7 @@ public class ConsumerHeartbeatRequestManagerTest
     public void testValidateConsumerGroupHeartbeatRequest(final short version) {
         createHeartbeatStateAndRequestManager();
 
-        // The initial heartbeatInterval is set to 0, but we're testing
+        // Expire the heartbeat timer so poll() generates a request for payload validation.
         time.sleep(DEFAULT_HEARTBEAT_INTERVAL_MS);
 
         String subscribedTopic = "topic";
@@ -448,8 +488,6 @@ public class ConsumerHeartbeatRequestManagerTest
                 membershipManager,
                 DEFAULT_MAX_POLL_INTERVAL_MS
         );
-
-        createHeartbeatRequestStateWithZeroHeartbeatInterval();
 
         // The initial ConsumerGroupHeartbeatRequest sets most fields to their initial empty values
         ConsumerGroupHeartbeatRequestData data = heartbeatState.buildRequestData();
@@ -618,7 +656,6 @@ public class ConsumerHeartbeatRequestManagerTest
     @Test
     public void testRegexInHeartbeatLifecycle() {
         heartbeatState = new HeartbeatState(subscriptions, membershipManager, DEFAULT_MAX_POLL_INTERVAL_MS);
-        createHeartbeatRequestStateWithZeroHeartbeatInterval();
 
         // Initial heartbeat with regex
         mockJoiningMemberData(null);
@@ -650,7 +687,6 @@ public class ConsumerHeartbeatRequestManagerTest
     @Test
     public void testRegexInJoiningHeartbeat() {
         heartbeatState = new HeartbeatState(subscriptions, membershipManager, DEFAULT_MAX_POLL_INTERVAL_MS);
-        createHeartbeatRequestStateWithZeroHeartbeatInterval();
 
         // Initial heartbeat with regex
         mockJoiningMemberData(null);
@@ -673,7 +709,6 @@ public class ConsumerHeartbeatRequestManagerTest
     @Test
     public void testRackIdInHeartbeatLifecycle() {
         heartbeatState = new HeartbeatState(subscriptions, membershipManager, DEFAULT_MAX_POLL_INTERVAL_MS);
-        createHeartbeatRequestStateWithZeroHeartbeatInterval();
 
         // Initial heartbeat with rackId
         mockJoiningMemberData(null);

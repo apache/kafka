@@ -17,9 +17,6 @@
 package org.apache.kafka.server.log.remote.metadata.storage;
 
 
-import org.apache.kafka.clients.CommonClientConfigs;
-import org.apache.kafka.clients.admin.Admin;
-import org.apache.kafka.clients.admin.NewTopic;
 import org.apache.kafka.common.TopicIdPartition;
 import org.apache.kafka.common.TopicPartition;
 import org.apache.kafka.common.Uuid;
@@ -171,9 +168,6 @@ public class TopicBasedRemoteLogMetadataManagerMultipleSubscriptionsTest {
     }
 
     private void createTopic(String topic, Map<Integer, List<Integer>> replicasAssignments) {
-        try (Admin admin = Admin.create(Map.of(CommonClientConfigs.BOOTSTRAP_SERVERS_CONFIG, clusterInstance.bootstrapServers()))) {
-            admin.createTopics(List.of(new NewTopic(topic, replicasAssignments)));
-            assertDoesNotThrow(() -> clusterInstance.waitTopicCreation(topic, replicasAssignments.size()));
-        }
+        assertDoesNotThrow(() -> clusterInstance.createTopicWithAssignment(topic, replicasAssignments));
     }
 }
