@@ -27,8 +27,10 @@ import org.apache.kafka.coordinator.group.api.assignor.SubscriptionType;
 import org.apache.kafka.coordinator.group.modern.Assignment;
 import org.apache.kafka.coordinator.group.modern.GroupSpecImpl;
 import org.apache.kafka.coordinator.group.modern.MemberSubscriptionAndAssignmentImpl;
+import org.apache.kafka.coordinator.group.modern.ShareGroupSpecImpl;
 import org.apache.kafka.coordinator.group.modern.TopicIds;
 import org.apache.kafka.coordinator.group.modern.consumer.ConsumerGroupMember;
+import org.apache.kafka.coordinator.group.modern.share.ShareGroup.InitMapValue;
 import org.apache.kafka.coordinator.group.modern.share.ShareGroupMember;
 import org.apache.kafka.image.MetadataDelta;
 import org.apache.kafka.image.MetadataImage;
@@ -128,13 +130,15 @@ public class AssignorBenchmarkUtils {
      * @param members               The ShareGroupMembers.
      * @param subscriptionType      The group's subscription type.
      * @param topicResolver         The TopicResolver to use.
+     * @param initializedTopics     The initialized topics.
      * @return The new GroupSpec.
      */
     public static GroupSpec createShareGroupSpec(
         CoordinatorMetadataImage metadataImage,
         Map<String, ShareGroupMember> members,
         SubscriptionType subscriptionType,
-        TopicIds.TopicResolver topicResolver
+        TopicIds.TopicResolver topicResolver,
+        Map<Uuid, InitMapValue> initializedTopics
     ) {
         Map<String, MemberSubscriptionAndAssignmentImpl> memberSpecs = new HashMap<>();
 
@@ -150,10 +154,11 @@ public class AssignorBenchmarkUtils {
             ));
         }
 
-        return new GroupSpecImpl(
+        return new ShareGroupSpecImpl(
             metadataImage,
             memberSpecs,
-            subscriptionType
+            subscriptionType,
+            initializedTopics
         );
     }
 
