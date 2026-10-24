@@ -26,9 +26,18 @@ import java.util.Optional;
 public class MockQuorumStateStore implements QuorumStateStore {
     private Optional<QuorumStateData> current = Optional.empty();
 
+    // Cumulative counts of quorum-state-file writes and reads, used by the JMH raft benchmarks.
+    private long writeCount = 0;
+    private long readCount = 0;
+
     @Override
     public Optional<ElectionState> readElectionState() {
+        readCount++;
         return current.map(ElectionState::fromQuorumStateData);
+    }
+
+    public long readCount() {
+        return readCount;
     }
 
     @Override
@@ -36,6 +45,11 @@ public class MockQuorumStateStore implements QuorumStateStore {
         current = Optional.of(
             update.toQuorumStateData(kraftVersion.quorumStateVersion())
         );
+        writeCount++;
+    }
+
+    public long writeCount() {
+        return writeCount;
     }
 
     @Override
