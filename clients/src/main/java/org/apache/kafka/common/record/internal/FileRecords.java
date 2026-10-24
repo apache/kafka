@@ -360,7 +360,7 @@ public class FileRecords extends AbstractRecords implements Closeable {
     /**
      * Whether the given failure of {@link #writeTo} may come from a failed read of the backing file. A closed channel,
      * of the file or the network, was closed concurrently, by a deletion or a shutdown, or because the connection is
-     * closing, which says nothing about the medium. Otherwise, a network channel that reports file read failures
+     * closing, which says nothing about the medium. Otherwise, a network channel that distinguishes file read failures
      * throws a {@link FileReadException} for them, so any other failure comes from the network channel; one that does
      * not, because a single system call reads the file and writes the socket, throws the same bare IOException for
      * both.
@@ -368,7 +368,7 @@ public class FileRecords extends AbstractRecords implements Closeable {
     private static boolean mayBeReadFailure(TransferableChannel destChannel, IOException transferFailure) {
         if (transferFailure instanceof FileReadException)
             return true;
-        return !(transferFailure instanceof ClosedChannelException) && !destChannel.reportsFileReadFailures();
+        return !(transferFailure instanceof ClosedChannelException) && !destChannel.distinguishesFileReadFailures();
     }
 
     /**

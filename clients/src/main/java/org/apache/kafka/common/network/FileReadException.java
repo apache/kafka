@@ -21,8 +21,8 @@ import java.io.IOException;
 /**
  * Thrown when the file being transferred to a network channel could not be read, its size included, as opposed to
  * the network channel not being written to: by {@link TransferableChannel#transferFrom} if the channel
- * {@link TransferableChannel#reportsFileReadFailures()}, and by the records being transferred. A file channel closed
- * concurrently, for instance by a deletion or a shutdown, does not count as a failed read: its
+ * {@link TransferableChannel#distinguishesFileReadFailures()}, and by the records being transferred. A file channel
+ * closed concurrently, for instance by a deletion or a shutdown, does not count as a failed read: its
  * {@link java.nio.channels.ClosedChannelException} is thrown as it is.
  */
 public class FileReadException extends IOException {

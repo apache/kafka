@@ -546,11 +546,11 @@ public class FileRecordsTest {
     }
 
     /**
-     * A network channel that reports its own failed reads of the file fails with a FileReadException for them, which
-     * is reported to the handler, and with any other exception only when it could not be written to.
+     * A network channel that tells its own failed reads of the file apart fails with a FileReadException for them,
+     * which is reported to the handler, and with any other exception only when it could not be written to.
      */
     @Test
-    public void testWriteToNotifiesHandlerOnlyOfFailedReadsWhenChannelReportsThem() throws IOException {
+    public void testWriteToNotifiesHandlerOnlyOfFailedReadsWhenChannelDistinguishesThem() throws IOException {
         List<List<Object>> notifications = new ArrayList<>();
         FileRecords records = fileRecords.slice(1, fileRecords.sizeInBytes() - 1)
             .withTransferFailureHandler(recordingHandler(notifications));
@@ -559,10 +559,10 @@ public class FileRecordsTest {
         int length = records.sizeInBytes() - 2;
 
         assertSame(socketFailure, assertThrows(IOException.class,
-            () -> records.writeTo(failingChannelReportingFileReadFailures(socketFailure), 2, length)));
+            () -> records.writeTo(failingChannelDistinguishingFileReadFailures(socketFailure), 2, length)));
         assertTrue(notifications.isEmpty());
         assertSame(readFailure, assertThrows(IOException.class,
-            () -> records.writeTo(failingChannelReportingFileReadFailures(readFailure), 2, length)));
+            () -> records.writeTo(failingChannelDistinguishingFileReadFailures(readFailure), 2, length)));
         assertEquals(List.of(List.of(records, 3L, length, readFailure)), notifications);
     }
 
@@ -606,7 +606,7 @@ public class FileRecordsTest {
 
     /**
      * Getting the size of the file before the transfer is part of reading it, so its failure is a failed read at the
-     * position of the region, reported even when the network channel reports its own failed reads.
+     * position of the region, reported even when the network channel tells its own failed reads apart.
      */
     @Test
     public void testWriteToReportsFailedSizeAsFailedRead() throws IOException {
@@ -617,7 +617,7 @@ public class FileRecordsTest {
         IOException sizeFailure = new IOException("Input/output error");
         when(fileChannel.size()).thenThrow(sizeFailure);
         TransferableChannel channel = mock(TransferableChannel.class);
-        when(channel.reportsFileReadFailures()).thenReturn(true);
+        when(channel.distinguishesFileReadFailures()).thenReturn(true);
 
         FileReadException thrown = assertThrows(FileReadException.class, () -> records.writeTo(channel, 10, 800));
         assertEquals(110, thrown.position());
@@ -761,20 +761,21 @@ public class FileRecordsTest {
         return channel;
     }
 
-    // A network channel that fails with the given exception and reports its own failed reads of the file
-    private static TransferableChannel failingChannelReportingFileReadFailures(IOException failure) throws IOException {
+    // A network channel that fails with the given exception and tells its own failed reads of the file apart
+    private static TransferableChannel failingChannelDistinguishingFileReadFailures(IOException failure)
+            throws IOException {
         TransferableChannel channel = failingChannel(failure);
-        when(channel.reportsFileReadFailures()).thenReturn(true);
+        when(channel.distinguishesFileReadFailures()).thenReturn(true);
         return channel;
     }
 
     // A transport layer of the given type whose transfers fail with the given exception, and which says whether it
-    // reports its own failed reads of the file as its type does
+    // tells its own failed reads of the file apart as its type does
     private static <T extends TransferableChannel> T transportFailingWith(Class<T> type, IOException failure)
             throws IOException {
         T transportLayer = mock(type);
         when(transportLayer.transferFrom(any(), anyLong(), anyLong())).thenThrow(failure);
-        when(transportLayer.reportsFileReadFailures()).thenCallRealMethod();
+        when(transportLayer.distinguishesFileReadFailures()).thenCallRealMethod();
         return transportLayer;
     }
 

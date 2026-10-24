@@ -1086,7 +1086,7 @@ public class SslTransportLayer implements TransportLayer {
      * @return true: {@link #transferFrom} reads the file and writes this channel separately, so it knows which failed
      */
     @Override
-    public boolean reportsFileReadFailures() {
+    public boolean distinguishesFileReadFailures() {
         return true;
     }
 }

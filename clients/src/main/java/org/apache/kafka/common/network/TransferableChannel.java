@@ -46,7 +46,7 @@ public interface TransferableChannel extends GatheringByteChannel {
      * @param count The maximum number of bytes to be transferred; must be non-negative
      * @return The number of bytes, possibly zero, that were actually transferred
      * @throws FileReadException If `fileChannel` cannot be read, other than because it was closed, and this channel
-     *         {@link #reportsFileReadFailures()}
+     *         {@link #distinguishesFileReadFailures()}
      * @throws IOException If `fileChannel` cannot be read or this channel cannot be written to
      * @see FileChannel#transferTo(long, long, java.nio.channels.WritableByteChannel)
      */
@@ -58,7 +58,7 @@ public interface TransferableChannel extends GatheringByteChannel {
      *         {@link java.nio.channels.ClosedChannelException}, which may come from either channel. false if it cannot
      *         tell a failed read of the file from a failed write to this channel, as when one system call does both.
      */
-    default boolean reportsFileReadFailures() {
+    default boolean distinguishesFileReadFailures() {
         return false;
     }
 }
