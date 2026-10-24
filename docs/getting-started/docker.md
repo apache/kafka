@@ -109,7 +109,7 @@ If no user provided configuration (file input or environment variables) is passe
 ### Using an input file for providing configs
 
 - This method requires users to provide the path to a local folder which contains the Kafka property files and mount it to the Docker container using a Docker volume.
-- It replaces the default KRaft configuration file present in the Docker container.
+- The folder can contain any of `server.properties`, `log4j2.yaml` and `tools-log4j2.yaml`. Each file that is present replaces the corresponding default file present in the Docker container.
 - The following command can be used to mount the folder containing the property files:
 
 ```bash
@@ -133,11 +133,22 @@ When using environment variables, you need to set all properties required to sta
     - For `abc.def`, use `KAFKA_ABC_DEF`
     - For `abc-def`, use `KAFKA_ABC___DEF`
     - For `abc_def`, use `KAFKA_ABC__DEF`
-- To provide configs to log4j property files, the following points should be considered:
-  - log4j properties provided via environment variables will be appended to the default properties file (log4j properties files bundled with Kafka).
-  - `KAFKA_LOG4J_ROOT_LOGLEVEL` can be provided to set the value of `log4j.rootLogger` in `log4j2.yaml` and `tools-log4j2.yaml`.
-  - log4j loggers can be added to `log4j2.yaml` by setting them in the `KAFKA_LOG4J_LOGGERS` environment variable as a single comma separated string.
-    - Example: assuming that `KAFKA_LOG4J_LOGGERS='property1=value1,property2=value2'` is provided to the Docker container, `log4j.logger.property1=value1` and `log4j.logger.property2=value2` will be added to the `log4j2.yaml` file inside the Docker container.
+- To provide configs to the log4j2 configuration files, the following points should be considered:
+  - log4j2 configs provided via environment variables are merged into the `log4j2.yaml` and `tools-log4j2.yaml` files. The user provided file is used if one is mounted, otherwise the default file bundled with Kafka is used.
+  - `KAFKA_LOG4J_ROOT_LOGLEVEL` can be provided to set the root logger level (`Configuration.Loggers.Root.level`) in `log4j2.yaml`.
+  - `KAFKA_TOOLS_LOG4J_LOGLEVEL` can be provided to set the root logger level (`Configuration.Loggers.Root.level`) in `tools-log4j2.yaml`.
+  - log4j2 loggers can be added to `log4j2.yaml` by setting them in the `KAFKA_LOG4J_LOGGERS` environment variable as a single comma separated string of `logger_name=level` pairs. A logger with the same name that is already present in the file will be replaced; all other loggers in the file are kept.
+    - Example: assuming that `KAFKA_LOG4J_LOGGERS='org.apache.kafka.clients=DEBUG,kafka.controller=TRACE'` is provided to the Docker container, the following loggers will be added to the `Logger` list in the `log4j2.yaml` file inside the Docker container:
+
+```yaml
+Configuration:
+  Loggers:
+    Logger:
+      - name: org.apache.kafka.clients
+        level: DEBUG
+      - name: kafka.controller
+        level: TRACE
+```
 
 ### Running in SASL mode
 
