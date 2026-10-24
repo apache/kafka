@@ -159,6 +159,13 @@ public enum ApiKeys {
     // we adjust `toApiVersion` to return `0` for the min version of `produce` in the broker listener.
     public static final short PRODUCE_API_VERSIONS_RESPONSE_MIN_VERSION = 0;
 
+    /**
+     * ApiVersions is used for version discovery, so the server accepts any version of it.
+     * An unsupported version is handled as this version, and the client falls back to parsing
+     * the response with it (KIP-511). This version must never be removed.
+     */
+    public static final short API_VERSIONS_FALLBACK_VERSION = 0;
+
     /** the permanent and immutable id of an API - this can't change ever */
     public final short id;
 
@@ -243,11 +250,17 @@ public enum ApiKeys {
         return apiVersion >= oldestVersion() && apiVersion <= latestVersion();
     }
 
+    /**
+     * Returns true if a request with the given version must be handled as
+     * {@link #API_VERSIONS_FALLBACK_VERSION} instead of being parsed.
+     */
+    public boolean isFallbackVersion(short apiVersion) {
+        return this == API_VERSIONS && !isVersionSupported(apiVersion);
+    }
+
     public boolean isVersionEnabled(short apiVersion, boolean enableUnstableLastVersion) {
-        // ApiVersions API is a particular case. The client always send the highest version
-        // that it supports and the server fails back to version 0 if it does not know it.
-        // Hence, we have to accept any versions here, even unsupported ones.
-        if (this == ApiKeys.API_VERSIONS) return true;
+        // ApiVersions accepts any version, see isFallbackVersion
+        if (this == API_VERSIONS) return true;
 
         return apiVersion >= oldestVersion() && apiVersion <= latestVersion(enableUnstableLastVersion);
     }
