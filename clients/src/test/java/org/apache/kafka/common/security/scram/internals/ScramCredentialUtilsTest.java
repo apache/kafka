@@ -24,6 +24,7 @@ import org.junit.jupiter.api.Test;
 
 import java.security.NoSuchAlgorithmException;
 import java.util.Arrays;
+import java.util.Locale;
 
 import static org.junit.jupiter.api.Assertions.assertArrayEquals;
 import static org.junit.jupiter.api.Assertions.assertEquals;
@@ -54,6 +55,22 @@ public class ScramCredentialUtilsTest {
         assertArrayEquals(credential.storedKey(), credential2.storedKey());
         assertArrayEquals(credential.serverKey(), credential2.serverKey());
         assertEquals(credential.iterations(), credential2.iterations());
+    }
+
+    @Test
+    public void stringConversionUsesAsciiDigitsRegardlessOfDefaultLocale() {
+        ScramCredential credential = formatter.generateCredential("password", 4096);
+        // Under a default locale with native digits (e.g. ar-EG formats %d as Arabic-Indic digits) the
+        // persisted iteration count must still use ASCII digits
+        Locale defaultLocale = Locale.getDefault();
+        Locale.setDefault(Locale.forLanguageTag("ar-EG"));
+        try {
+            String str = ScramCredentialUtils.credentialToString(credential);
+            assertTrue(str.endsWith(",iterations=4096"), str);
+            assertEquals(4096, ScramCredentialUtils.credentialFromString(str).iterations());
+        } finally {
+            Locale.setDefault(defaultLocale);
+        }
     }
 
     @Test

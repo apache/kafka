@@ -28,6 +28,7 @@ import org.junit.jupiter.api.Test;
 import java.nio.charset.StandardCharsets;
 import java.util.Base64;
 import java.util.Collections;
+import java.util.Locale;
 
 import javax.security.sasl.SaslException;
 
@@ -163,6 +164,26 @@ public class ScramMessagesTest {
         for (String extension : VALID_EXTENSIONS) {
             str = String.format("r=%s,s=%s,i=4096,%s", nonce, salt, extension);
             checkServerFirstMessage(createScramMessage(ServerFirstMessage.class, str), nonce, salt, 4096);
+        }
+    }
+
+    @Test
+    public void serverFirstMessageUsesAsciiDigitsRegardlessOfDefaultLocale() throws SaslException {
+        String clientNonce = formatter.secureRandomString();
+        String serverNonce = formatter.secureRandomString();
+        String nonce = clientNonce + serverNonce;
+        String salt = randomBytesAsString();
+
+        // Under a default locale with native digits (e.g. ar-EG formats %d as Arabic-Indic digits) the
+        // iteration count must still be sent as ASCII digits, otherwise clients cannot parse the message
+        Locale defaultLocale = Locale.getDefault();
+        Locale.setDefault(Locale.forLanguageTag("ar-EG"));
+        try {
+            ServerFirstMessage m = new ServerFirstMessage(clientNonce, serverNonce, toBytes(salt), 4096);
+            assertEquals(String.format(Locale.ROOT, "r=%s,s=%s,i=4096", nonce, salt), new String(m.toBytes(), StandardCharsets.UTF_8));
+            checkServerFirstMessage(new ServerFirstMessage(m.toBytes()), nonce, salt, 4096);
+        } finally {
+            Locale.setDefault(defaultLocale);
         }
     }
 

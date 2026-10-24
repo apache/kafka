@@ -21,6 +21,7 @@ import org.apache.kafka.common.security.scram.ScramCredential;
 
 import java.util.Base64;
 import java.util.Collection;
+import java.util.Locale;
 import java.util.Properties;
 
 /**
@@ -41,7 +42,8 @@ public final class ScramCredentialUtils {
     private ScramCredentialUtils() {}
 
     public static String credentialToString(ScramCredential credential) {
-        return String.format("%s=%s,%s=%s,%s=%s,%s=%d",
+        // Locale.ROOT: the iteration count must be persisted with ASCII digits regardless of the JVM's default locale
+        return String.format(Locale.ROOT, "%s=%s,%s=%s,%s=%s,%s=%d",
                SALT,
                Base64.getEncoder().encodeToString(credential.salt()),
                STORED_KEY,
