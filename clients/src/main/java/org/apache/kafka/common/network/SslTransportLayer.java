@@ -1003,8 +1003,9 @@ public class SslTransportLayer implements TransportLayer {
      * Transfers bytes from `fileChannel` by reading them into a buffer and writing them to this channel, since
      * they have to be encrypted.
      *
-     * @throws IOException If the file cannot be read or this channel cannot be written. The bytes the failed call
-     *         already wrote are not reported, so this channel must not be used after it.
+     * @throws FileReadException If the file cannot be read, other than because it was closed
+     * @throws IOException If this channel cannot be written to, or the file was closed. Whatever the failed call
+     *         throws, the bytes it already wrote are not reported, so this channel must not be used after it.
      */
     @Override
     public long transferFrom(FileChannel fileChannel, long position, long count) throws IOException {
@@ -1016,7 +1017,12 @@ public class SslTransportLayer implements TransportLayer {
         if (!flush(netWriteBuffer))
             return 0;
 
-        long channelSize = fileChannel.size();
+        long channelSize;
+        try {
+            channelSize = fileChannel.size();
+        } catch (IOException e) {
+            throw FileReadException.ofReadFailure(position, e);
+        }
         if (position > channelSize)
             return 0;
         int totalBytesToWrite = (int) Math.min(Math.min(count, channelSize - position), Integer.MAX_VALUE);
@@ -1047,6 +1053,8 @@ public class SslTransportLayer implements TransportLayer {
                 int bytesRead;
                 try {
                     bytesRead = fileChannel.read(fileChannelBuffer, pos);
+                } catch (IOException e) {
+                    throw FileReadException.ofReadFailure(pos, e);
                 } finally {
                     // Holds exactly what was read, nothing if the read failed or reached the end of the file:
                     // otherwise the next call would send the previous read as the contents of this position.
@@ -1066,5 +1074,13 @@ public class SslTransportLayer implements TransportLayer {
             pos += networkBytesWritten;
         }
         return totalBytesWritten;
+    }
+
+    /**
+     * @return true: {@link #transferFrom} reads the file and writes this channel separately, so it knows which failed
+     */
+    @Override
+    public boolean distinguishesFileReadFailures() {
+        return true;
     }
 }

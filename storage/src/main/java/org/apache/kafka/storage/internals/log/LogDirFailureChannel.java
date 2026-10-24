@@ -53,16 +53,18 @@ public class LogDirFailureChannel {
     }
 
     /**
-     * If the given logDir is not already offline, add it to the
+     * If the given logDir is not already offline, log the error, add it to the
      * set of offline log dirs and enqueue it to the logDirFailureEvent queue.
+     * Errors in a log dir that is already offline are not logged, so that the
+     * failures that follow the first one in a failing log dir do not flood the log.
      * 
      * @param logDir The offline logDir.
      * @param msg Error message.
      * @param e Exception instance.
      */
     public void maybeAddOfflineLogDir(String logDir, String msg, IOException e) {
-        log.error(msg, e);
         if (offlineLogDirs.putIfAbsent(logDir, logDir) == null) {
+            log.error(msg, e);
             offlineLogDirQueue.add(logDir);
         }
     }
