@@ -19,7 +19,6 @@ package org.apache.kafka.image.loader;
 
 import org.apache.kafka.common.Uuid;
 import org.apache.kafka.common.config.ConfigResource;
-import org.apache.kafka.common.message.KRaftVersionRecord;
 import org.apache.kafka.common.message.SnapshotHeaderRecord;
 import org.apache.kafka.common.metadata.AbortTransactionRecord;
 import org.apache.kafka.common.metadata.BeginTransactionRecord;
@@ -524,35 +523,18 @@ public class MetadataLoaderTest {
     public void testKRaftVersionFinalizedLevelMetric() throws Exception {
         MockFaultHandler faultHandler = new MockFaultHandler("testKRaftVersionFinalizedLevelMetric");
         MockTime time = new MockTime();
+        AtomicReference<KRaftVersion> currentKRaftVersion = new AtomicReference<>(KRaftVersion.KRAFT_VERSION_0);
         List<MockPublisher> publishers = List.of(new MockPublisher());
         try (MetadataLoader loader = new MetadataLoader.Builder().
             setFaultHandler(faultHandler).
             setTime(time).
             setHighWaterMarkAccessor(() -> OptionalLong.of(1L)).
+            setKraftVersionSupplier(currentKRaftVersion::get).
             build()) {
             loader.installPublishers(publishers).get();
             loadTestSnapshot(loader, 200);
-            assertThrows(
-                NullPointerException.class,
-                () -> loader.metrics().finalizedFeatureLevel(KRaftVersion.FEATURE_NAME)
-            );
             publishers.get(0).firstPublish.get(10, TimeUnit.SECONDS);
-            MockBatchReader batchReader = new MockBatchReader(
-                300,
-                List.of(
-                    Batch.control(
-                        300,
-                        100,
-                        4000,
-                        10,
-                        List.of(ControlRecord.of(new KRaftVersionRecord()))
-                    )
-                )
-            ).setTime(time);
-            loader.handleCommit(batchReader);
-            loader.waitForAllEventsToBeHandled();
-            assertTrue(batchReader.closed);
-            assertEquals(300L, loader.lastAppliedOffset());
+            // After the first publish, the metric reflects the supplier's current value.
             assertEquals((short) 0, loader.metrics().finalizedFeatureLevel(KRaftVersion.FEATURE_NAME));
             loader.handleCommit(new MockBatchReader(301, List.of(
                 MockBatchReader.newBatch(301, 100, List.of(
@@ -561,13 +543,12 @@ public class MetadataLoaderTest {
             loader.waitForAllEventsToBeHandled();
             assertEquals(301L, loader.lastAppliedOffset());
             assertEquals((short) 0, loader.metrics().finalizedFeatureLevel(KRaftVersion.FEATURE_NAME));
+            // Bump the supplier; the next publish should pick up the new value.
+            currentKRaftVersion.set(KRaftVersion.KRAFT_VERSION_1);
             loader.handleCommit(new MockBatchReader(302, List.of(
-                Batch.control(
-                    302,
-                    100,
-                    4000,
-                    10,
-                    List.of(ControlRecord.of(new KRaftVersionRecord().setKRaftVersion((short) 1)))))));
+                MockBatchReader.newBatch(302, 100, List.of(
+                    new ApiMessageAndVersion(new RemoveTopicRecord().
+                        setTopicId(Uuid.fromString("96CSXcq3R8mYtsHEmIcMUg")), (short) 0))))));
             loader.waitForAllEventsToBeHandled();
             assertEquals(302L, loader.lastAppliedOffset());
             assertEquals((short) 1, loader.metrics().finalizedFeatureLevel(KRaftVersion.FEATURE_NAME));
