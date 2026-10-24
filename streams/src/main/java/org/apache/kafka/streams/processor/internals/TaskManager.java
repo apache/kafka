@@ -1931,6 +1931,7 @@ public class TaskManager {
                     schedulingTaskManager.lockTasks(ids).get();
                     locked = true;
                 } catch (final InterruptedException e) {
+                    Thread.currentThread().interrupt();
                     log.warn("Interrupted while waiting for tasks {} to be locked",
                         ids.stream().map(TaskId::toString).collect(Collectors.joining(",")));
                 } catch (final ExecutionException e) {
