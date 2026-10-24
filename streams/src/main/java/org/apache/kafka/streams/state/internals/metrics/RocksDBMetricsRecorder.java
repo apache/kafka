@@ -112,6 +112,11 @@ public class RocksDBMetricsRecorder {
     private TaskId taskId;
     private StreamsMetricsImpl streamsMetrics;
     private boolean singleCache = true;
+    // The statistics-based sensors are registered lazily (see maybeInitStatisticsBasedSensors)
+    // the first time value providers with a non-null Statistics are added. This guards against
+    // registering them more than once when segments are added and removed over the lifetime of
+    // the recorder. See KAFKA-10397.
+    private boolean statisticsBasedSensorsInitialized = false;
 
     public RocksDBMetricsRecorder(final String metricsScope,
                                   final String storeName) {
@@ -147,7 +152,11 @@ public class RocksDBMetricsRecorder {
                 "Please open a bug report under https://issues.apache.org/jira/projects/KAFKA/issues");
         }
         final RocksDBMetricContext metricContext = new RocksDBMetricContext(taskId.toString(), metricsScope, storeName);
-        initSensors(streamsMetrics, metricContext);
+        // The property / block-cache gauges read the RocksDB instance directly (getAggregatedLongProperty /
+        // getLongProperty) and are meaningful regardless of whether a Statistics object exists, so they are
+        // always registered here. The statistics-based sensors, in contrast, are only registered later in
+        // addValueProviders() once we know the store actually has a (non-user-provided) Statistics to read
+        // from -- see maybeInitStatisticsBasedSensors() and KAFKA-10397.
         initGauges(streamsMetrics, metricContext);
         this.taskId = taskId;
         this.streamsMetrics = streamsMetrics;
@@ -168,6 +177,24 @@ public class RocksDBMetricsRecorder {
         verifyDbAndCacheAndStatistics(segmentName, db, cache, statistics);
         logger.debug("Adding value providers for store {} of task {}", segmentName, taskId);
         storeToValueProviders.put(segmentName, new DbAndCacheAndStatistics(db, cache, statistics));
+        maybeInitStatisticsBasedSensors(statistics);
+    }
+
+    /**
+     * Registers the statistics-based sensors the first time value providers with a non-null
+     * {@link Statistics} are added.
+     *
+     * <p>If the user supplies their own {@code Statistics} object through the {@code RocksDBConfigSetter},
+     * {@link org.apache.kafka.streams.state.internals.RocksDBStore} passes {@code null} here, because
+     * Streams must not read (and thereby reset) the user's statistics. In that case the statistics-based
+     * metrics can never be recorded, so we do not register them at all rather than exposing metrics that
+     * are perpetually empty. See KAFKA-10397.
+     */
+    private void maybeInitStatisticsBasedSensors(final Statistics statistics) {
+        if (statistics != null && !statisticsBasedSensorsInitialized) {
+            initSensors(streamsMetrics, new RocksDBMetricContext(taskId.toString(), metricsScope, storeName));
+            statisticsBasedSensorsInitialized = true;
+        }
     }
 
     private void verifyDbAndCacheAndStatistics(final String segmentName,
@@ -475,7 +502,11 @@ public class RocksDBMetricsRecorder {
             compactionTimeMin = Double.min(compactionTimeMin, compactionTimeData.getMin());
             compactionTimeMax = Double.max(compactionTimeMax, compactionTimeData.getMax());
         }
-        if (shouldRecord) {
+        // statisticsBasedSensorsInitialized is false when no Statistics is available (e.g. the user
+        // provided their own via RocksDBConfigSetter, see KAFKA-10397), in which case the sensors were
+        // never registered and there is nothing to record to. shouldRecord already covers the
+        // per-provider null-Statistics case; this also guards the corner case of an empty value-provider map.
+        if (shouldRecord && statisticsBasedSensorsInitialized) {
             bytesWrittenToDatabaseSensor.record(bytesWrittenToDatabase, now);
             bytesReadFromDatabaseSensor.record(bytesReadFromDatabase, now);
             memtableBytesFlushedSensor.record(memtableBytesFlushed, now);
