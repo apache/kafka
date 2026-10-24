@@ -20,31 +20,50 @@ import org.apache.kafka.common.utils.internals.ByteBufferOutputStream;
 
 import java.nio.ByteBuffer;
 import java.util.ArrayList;
+import java.util.Collections;
+import java.util.IdentityHashMap;
 import java.util.List;
+import java.util.Objects;
+import java.util.Set;
 
 /**
  * A {@link ByteBufferOutputStream} backed by a linked list of fixed-size chunks instead of a single
- * re-allocated buffer. Chunks are supplied by the caller (initial chunks via the constructor,
- * additional chunks via {@link #addBuffers(List)}).
+ * re-allocated buffer. Chunks are pre-supplied by the caller (initial chunks via the constructor,
+ * additional chunks via {@link #addBuffers(List)}), sized ahead of each write.
  * <p>
- * Current/temporary behavior:
- * <ul>
- * <li>The stream does not grow on its own: a write whose size exceeds the remaining free bytes
- *     across all attached chunks throws {@link IllegalStateException}, so the caller must attach
- *     enough chunks before any such write.
- *     TODO: KAFKA-20579 (automatic mid-write growth for compression support).</li>
- * <li>{@link #buffer()} returns the written bytes as a single contiguous {@link ByteBuffer},
- *     flattening all chunks into a new buffer with an extra copy.
- *     TODO: KAFKA-20580 (remove the extra copy on send, scatter-gather send).</li>
- * </ul>
+ * Only a stream constructed {@code growable} also grows on its own mid-write. That is the compressed case,
+ * where the caller's sizing is only a ratio-based estimate of the compressor's output: before a write that would
+ * run past the attached chunks, the stream attaches all the chunks the write still needs, as many as the pool
+ * can hand out without blocking ({@link BufferPool#tryAllocateChunksUpTo}) and the rest from the heap, since the
+ * pool may be exhausted, or closed, in the middle of a write (a partially written record can neither be rolled
+ * back nor blocked on). Heap growth is not left unbounded,
+ * though: once a record's append falls back to the heap, the owning batch is closed for appends after that record
+ * (see {@link ChunkedProducerBatch#tryAppend}), so only the current record and the compressor's final flush can
+ * grow on the heap. The closed case arises when a compressed batch is closed or aborted after the producer closed
+ * the pool (e.g. drained or aborted on producer close) and the compressor flush grows the stream.
+ * Only pool-owned chunks are tracked in {@code poolAllocatedChunks}, so heap-allocated fallback chunks are
+ * never returned to the pool on {@link #deallocate()}; see {@link #fallbackAllocations()}.
+ * <p>
+ * A non-growable stream (the uncompressed case, where the caller's sizing is an exact upper bound) never
+ * grows on its own: a write that would run past the attached chunks throws {@link IllegalStateException}
+ * instead, before writing anything, as a guard against pre-sizing bugs.
+ * <p>
+ * {@link #buffer()} returns the written bytes as a single contiguous {@link ByteBuffer}, flattening
+ * all chunks into a new buffer with an extra copy.
+ * TODO: KAFKA-20580 (remove the extra copy on send, scatter-gather send).
  */
 public class ChunkedByteBufferOutputStream extends ByteBufferOutputStream {
 
     private final List<ByteBuffer> chunks;
+    // Identity-based: ByteBuffer#equals compares contents, so e.g. two empty chunks would compare equal.
+    private final Set<ByteBuffer> poolAllocatedChunks;
     private final int chunkSize;
     private final BufferPool pool;
+    // Whether a write past the attached chunks may grow the stream (pool, then heap) instead of throwing.
+    private final boolean growable;
     private ByteBuffer currentChunk;
     private int currentChunkIndex;
+    private int fallbackAllocations;
     // Set once the stream is closed for appends via close(); no further writes or addBuffers are allowed.
     private boolean closed;
     // Single-buffer view produced by flatten() and cached here so repeat buffer() calls
@@ -59,13 +78,20 @@ public class ChunkedByteBufferOutputStream extends ByteBufferOutputStream {
      * @param initialChunks pre-allocated chunks. Must be non-empty and each chunk's capacity must
      *                      equal {@code chunkSize}
      * @param chunkSize     the size of each chunk in bytes
-     * @param pool          the buffer pool used for deallocation
+     * @param pool          the buffer pool that growth allocates from and chunks are returned to; must not be null
+     * @param growable      whether a write past the attached chunks grows the stream (non-blocking pool
+     *                      allocation, then heap fallback), for a compressed batch whose sizing is an estimate;
+     *                      if false (an uncompressed batch, sized to an exact upper bound) such a write throws
+     *                      {@link IllegalStateException}
      */
-    public ChunkedByteBufferOutputStream(List<ByteBuffer> initialChunks, int chunkSize, BufferPool pool) {
+    public ChunkedByteBufferOutputStream(List<ByteBuffer> initialChunks, int chunkSize, BufferPool pool, boolean growable) {
         validateInitialChunks(initialChunks, chunkSize);
         this.chunkSize = chunkSize;
-        this.pool = pool;
+        this.pool = Objects.requireNonNull(pool, "pool must not be null");
+        this.growable = growable;
         this.chunks = new ArrayList<>(initialChunks);
+        this.poolAllocatedChunks = Collections.newSetFromMap(new IdentityHashMap<>());
+        this.poolAllocatedChunks.addAll(initialChunks);
         this.currentChunk = this.chunks.get(0);
         this.currentChunkIndex = 0;
     }
@@ -96,6 +122,7 @@ public class ChunkedByteBufferOutputStream extends ByteBufferOutputStream {
     public void write(int b) {
         ensureNotDeallocated();
         ensureWritable();
+        ensureCapacityFor(1);
         advanceWhileCurrentChunkFull();
         currentChunk.put((byte) b);
     }
@@ -104,6 +131,8 @@ public class ChunkedByteBufferOutputStream extends ByteBufferOutputStream {
     public void write(byte[] bytes, int off, int len) {
         ensureNotDeallocated();
         ensureWritable();
+        if (len > 0)
+            ensureCapacityFor(len);
         while (len > 0) {
             advanceWhileCurrentChunkFull();
             int toWrite = Math.min(len, currentChunk.remaining());
@@ -117,6 +146,7 @@ public class ChunkedByteBufferOutputStream extends ByteBufferOutputStream {
     public void write(ByteBuffer sourceBuffer) {
         ensureNotDeallocated();
         ensureWritable();
+        ensureCapacityFor(sourceBuffer.remaining());
         while (sourceBuffer.hasRemaining()) {
             advanceWhileCurrentChunkFull();
             int toWrite = Math.min(sourceBuffer.remaining(), currentChunk.remaining());
@@ -145,6 +175,40 @@ public class ChunkedByteBufferOutputStream extends ByteBufferOutputStream {
     }
 
     /**
+     * Makes sure the attached chunks have room for a write of {@code len} bytes before any of it is written.
+     * A growable stream that is short attaches all the chunks the write still needs in one step: as many as
+     * the pool can hand out without blocking, the rest from the heap (counted in {@link #fallbackAllocations()}).
+     *
+     * @throws IllegalStateException if the stream is not growable and the attached chunks are too small
+     */
+    private void ensureCapacityFor(int len) {
+        if (len <= currentChunk.remaining())
+            return;
+        int shortfall = len - remaining();
+        if (shortfall <= 0)
+            return;
+        if (!growable)
+            throw new IllegalStateException("write of " + len + " bytes exceeded the attached chunk capacity ("
+                + attachedCapacity() + " bytes) of a non-growable (uncompressed) stream by " + shortfall
+                + " bytes; this indicates a pre-sizing bug");
+        // Non-blocking, and empty rather than an exception when the pool has no memory right now or has been
+        // closed (the producer closes it before draining or aborting the last batches)
+        List<ByteBuffer> pooled = pool.tryAllocateChunksUpTo(shortfall);
+        for (ByteBuffer chunk : pooled) {
+            chunks.add(chunk);
+            poolAllocatedChunks.add(chunk);
+        }
+        // Heap fallback: the pool could not hand out enough chunks without blocking, but the in-flight
+        // record can neither be rolled back nor blocked on, so allocate the rest on the heap to guarantee
+        // forward progress
+        int chunksNeeded = (int) (((long) shortfall + chunkSize - 1L) / chunkSize);
+        int heapChunks = chunksNeeded - pooled.size();
+        for (int i = 0; i < heapChunks; i++)
+            chunks.add(ByteBuffer.allocate(chunkSize));
+        fallbackAllocations += heapChunks;
+    }
+
+    /**
      * Makes room for the next write by advancing past the chunks that are already full.
      */
     private void advanceWhileCurrentChunkFull() {
@@ -154,13 +218,15 @@ public class ChunkedByteBufferOutputStream extends ByteBufferOutputStream {
     }
 
     /**
-     * Advances {@code currentChunk} to the next pre-supplied chunk.
+     * Advances {@code currentChunk} to the next attached chunk. It never allocates: every write first
+     * attaches the chunks it needs ({@link #ensureCapacityFor}).
+     *
+     * @throws IllegalStateException if no attached chunk is left
      */
     private void advanceToNextChunk() {
-        if (currentChunkIndex + 1 >= chunks.size()) {
-            // TODO: KAFKA-20579. With compression support, grow here instead of throwing.
-            throw new IllegalStateException("write exceeded the stream's remaining chunk capacity");
-        }
+        if (currentChunkIndex + 1 >= chunks.size())
+            throw new IllegalStateException("write exceeded the attached chunk capacity (" + attachedCapacity()
+                + " bytes); growth must attach the chunks a write needs before it starts");
         currentChunkIndex++;
         currentChunk = chunks.get(currentChunkIndex);
     }
@@ -174,6 +240,7 @@ public class ChunkedByteBufferOutputStream extends ByteBufferOutputStream {
         ensureWritable();
         validateChunkCapacities(newChunks, chunkSize);
         chunks.addAll(newChunks);
+        poolAllocatedChunks.addAll(newChunks);
     }
 
     /**
@@ -237,8 +304,8 @@ public class ChunkedByteBufferOutputStream extends ByteBufferOutputStream {
         if (currentChunk == null)  // already deallocated; nothing attached
             return;
         List<ByteBuffer> unused = chunks.subList(currentChunkIndex + 1, chunks.size());
-        if (pool != null) {
-            for (ByteBuffer chunk : unused)
+        for (ByteBuffer chunk : unused) {
+            if (poolAllocatedChunks.remove(chunk))
                 pool.deallocate(chunk);
         }
         // Remove the released chunks from `chunks`, so they are
@@ -298,6 +365,18 @@ public class ChunkedByteBufferOutputStream extends ByteBufferOutputStream {
     }
 
     /**
+     * Number of chunks that had to be allocated from the heap because the pool was exhausted, or
+     * closed, mid-record (one write can add several). Always zero for a non-growable stream, and zero
+     * on the normal path; a non-zero value means the producer transiently exceeded buffer.memory to
+     * guarantee forward progress.
+     * {@link ChunkedProducerBatch#tryAppend} reads it to close the batch for appends (sending it early) once
+     * growth has fallen back to the heap; also used by tests.
+     */
+    int fallbackAllocations() {
+        return fallbackAllocations;
+    }
+
+    /**
      * Total bytes available across the current chunk and every queued (not-yet-active) chunk.
      */
     @Override
@@ -316,7 +395,7 @@ public class ChunkedByteBufferOutputStream extends ByteBufferOutputStream {
     }
 
     /**
-     * Throws if {@code requiredBytes} cannot be written to this stream.
+     * Test-only. Throws if {@code requiredBytes} cannot be written to this stream.
      * This only checks the attached chunks, it does not make room.
      *
      * @throws IllegalStateException if the attached chunks have less free space than required
@@ -325,8 +404,8 @@ public class ChunkedByteBufferOutputStream extends ByteBufferOutputStream {
         ensureNotDeallocated();
         // A single write can be split across several chunks, so the required bytes needn't be
         // contiguous: only the total free space matters. Advancing here would waste the tail of the
-        // current chunk, so writes advance lazily and this only validates.
-        // TODO: review with KAFKA-20579, but growth support should belong in advanceToNextChunk, not here.
+        // current chunk, so writes advance lazily and this only validates. Automatic growth (growable
+        // streams only) lives in ensureCapacityFor; this method only checks the currently attached chunks.
         if (requiredBytes > remaining())
             throw new IllegalStateException("required " + requiredBytes
                 + " bytes but only " + remaining() + " remaining across the attached chunks");
@@ -336,12 +415,11 @@ public class ChunkedByteBufferOutputStream extends ByteBufferOutputStream {
      * Returns all pool-allocated chunks to the buffer pool. Called at batch completion.
      */
     void deallocate(BufferPool pool) {
-        if (pool != null) {
-            for (ByteBuffer chunk : chunks) {
-                pool.deallocate(chunk);
-            }
+        for (ByteBuffer chunk : poolAllocatedChunks) {
+            pool.deallocate(chunk);
         }
         chunks.clear();
+        poolAllocatedChunks.clear();
         currentChunk = null;
         currentChunkIndex = -1;
         flattenedBuffer = null;
