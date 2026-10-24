@@ -100,6 +100,7 @@ import static org.mockito.Mockito.when;
 
 public class LogManagerTest {
 
+    private final BrokerTopicStats brokerTopicStats = new BrokerTopicStats();
     private final MockTime time = new MockTime();
     private static final int MAX_LOG_AGE_MS = 10 * 60 * 1000;
     private static final Map<?, ?> LOG_PROPS = Map.of(
@@ -126,16 +127,20 @@ public class LogManagerTest {
 
     @AfterEach
     public void tearDown() throws IOException {
-        if (logManager != null) {
-            logManager.shutdown();
-        }
-        Utils.delete(logDir);
-        Utils.delete(logDir2);
-        // Some tests assign a new LogManager
-        if (logManager != null) {
-            for (File dir : logManager.liveLogDirs()) {
-                Utils.delete(dir);
+        try {
+            if (logManager != null) {
+                logManager.shutdown();
             }
+            Utils.delete(logDir);
+            Utils.delete(logDir2);
+            // Some tests assign a new LogManager
+            if (logManager != null) {
+                for (File dir : logManager.liveLogDirs()) {
+                    Utils.delete(dir);
+                }
+            }
+        } finally {
+            brokerTopicStats.close();
         }
     }
 
@@ -697,6 +702,7 @@ public class LogManagerTest {
     private LogManager createLogManager(List<File> logDirs, ConfigRepository configRepository, int recoveryThreadsPerDataDir) throws IOException {
         return LogTestUtils.createLogManager(
                 logDirs,
+                brokerTopicStats,
                 LOG_CONFIG,
                 configRepository,
                 this.time,
@@ -1348,6 +1354,7 @@ public class LogManagerTest {
         LogConfig logConfig = new LogConfig(props);
         logManager = LogTestUtils.createLogManager(
                 List.of(this.logDir),
+                brokerTopicStats,
                 logConfig,
                 new MockConfigRepository(),
                 time,
@@ -1476,7 +1483,7 @@ public class LogManagerTest {
                 new ProducerStateManagerConfig(TransactionLogConfig.PRODUCER_ID_EXPIRATION_MS_DEFAULT, false),
                 TransactionLogConfig.PRODUCER_ID_EXPIRATION_CHECK_INTERVAL_MS_DEFAULT,
                 scheduler,
-                new BrokerTopicStats(),
+                brokerTopicStats,
                 new LogDirFailureChannel(1),
                 Time.SYSTEM,
                 false,

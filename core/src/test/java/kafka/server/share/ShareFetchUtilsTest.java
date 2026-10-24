@@ -46,6 +46,7 @@ import org.apache.kafka.storage.internals.log.OffsetResultHolder;
 import org.apache.kafka.storage.log.metrics.BrokerTopicStats;
 import org.apache.kafka.test.TestUtils;
 
+import org.junit.jupiter.api.AfterAll;
 import org.junit.jupiter.api.Test;
 import org.junit.jupiter.api.extension.ExtensionContext;
 import org.junit.jupiter.params.ParameterizedTest;
@@ -95,6 +96,11 @@ public class ShareFetchUtilsTest {
         // No-op
     };
     private static final BrokerTopicStats BROKER_TOPIC_STATS = new BrokerTopicStats();
+
+    @AfterAll
+    public static void tearDown() {
+        BROKER_TOPIC_STATS.close();
+    }
 
     @Test
     public void testProcessFetchResponse() {
