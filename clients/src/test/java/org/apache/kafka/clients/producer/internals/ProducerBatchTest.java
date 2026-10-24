@@ -151,7 +151,7 @@ public class ProducerBatchTest {
             assertTrue(batches.size() >= 2, "This batch should be split to multiple small batches.");
 
             for (ProducerBatch splitProducerBatch : batches) {
-                for (RecordBatch splitBatch : splitProducerBatch.records().batches()) {
+                for (RecordBatch splitBatch : ((MemoryRecords) splitProducerBatch.records()).batches()) {
                     for (Record record : splitBatch) {
                         assertEquals(1, record.headers().length, "Header size should be 1.");
                         assertEquals("header-key", record.headers()[0].key(), "Header key should be 'header-key'.");
@@ -160,6 +160,41 @@ public class ProducerBatchTest {
                 }
             }
         }
+    }
+
+    @Test
+    public void testSplitChunkedBatch() {
+        // Small chunks so the batch spans several of them; enough chunks to fill the write limit.
+        int chunkSize = 128;
+        List<ByteBuffer> chunks = new ArrayList<>();
+        for (int i = 0; i < 16; i++) {
+            chunks.add(ByteBuffer.allocate(chunkSize));
+        }
+        ChunkedByteBufferOutputStream stream = new ChunkedByteBufferOutputStream(chunks, chunkSize, null);
+        CompositeMemoryRecordsBuilder builder = new CompositeMemoryRecordsBuilder(stream, MAGIC_VALUE_V2,
+                Compression.NONE, TimestampType.CREATE_TIME, 0L, RecordBatch.NO_TIMESTAMP, RecordBatch.NO_PRODUCER_ID,
+                RecordBatch.NO_PRODUCER_EPOCH, RecordBatch.NO_SEQUENCE, false, false,
+                RecordBatch.NO_PARTITION_LEADER_EPOCH, /* writeLimit */ 1024);
+        ProducerBatch batch = new ChunkedProducerBatch(new TopicPartition("topic", 1), builder, now);
+
+        int appended = 0;
+        while (batch.tryAppend(now, ("key" + appended).getBytes(), ("value" + appended).getBytes(),
+                Record.EMPTY_HEADERS, null, now) != null) {
+            appended++;
+        }
+
+        Deque<ProducerBatch> batches = batch.split(200);
+        assertTrue(batches.size() >= 2, "This batch should be split to multiple small batches.");
+
+        int i = 0;
+        for (ProducerBatch splitProducerBatch : batches) {
+            for (Record record : ((MemoryRecords) splitProducerBatch.records()).records()) {
+                assertEquals(ByteBuffer.wrap(("key" + i).getBytes()), record.key());
+                assertEquals(ByteBuffer.wrap(("value" + i).getBytes()), record.value());
+                i++;
+            }
+        }
+        assertEquals(appended, i);
     }
 
     @Test
@@ -190,7 +225,7 @@ public class ProducerBatchTest {
                     assertEquals(magic, splitProducerBatch.magic());
                     assertTrue(splitProducerBatch.isSplitBatch());
 
-                    for (RecordBatch splitBatch : splitProducerBatch.records().batches()) {
+                    for (RecordBatch splitBatch : ((MemoryRecords) splitProducerBatch.records()).batches()) {
                         assertEquals(magic, splitBatch.magic());
                         assertEquals(0L, splitBatch.baseOffset());
                         assertEquals(compressionType, splitBatch.compressionType());
