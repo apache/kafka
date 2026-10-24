@@ -538,6 +538,61 @@ public class MetadataCacheTest {
     }
 
     @Test
+    public void testGetPartitionLeaderEndpoint() {
+        MetadataCache cache = createCache();
+        String topic = "topic";
+        Uuid topicId = Uuid.randomUuid();
+        ListenerName listenerName = ListenerName.forSecurityProtocol(SecurityProtocol.PLAINTEXT);
+
+        List<ApiMessage> records = List.of(
+            new RegisterBrokerRecord()
+                .setBrokerId(0)
+                .setRack("rack0")
+                .setFenced(false)
+                .setEndPoints(new BrokerEndpointCollection(List.of(
+                    new BrokerEndpoint()
+                        .setHost("foo0")
+                        .setPort(9092)
+                        .setSecurityProtocol(SecurityProtocol.PLAINTEXT.id)
+                        .setName(listenerName.value())
+                ))),
+            new TopicRecord().setName(topic).setTopicId(topicId),
+            new PartitionRecord()
+                .setTopicId(topicId)
+                .setPartitionId(0)
+                .setLeader(0)
+                .setIsr(List.of(0))
+                .setReplicas(List.of(0)),
+            // Offline partition
+            new PartitionRecord()
+                .setTopicId(topicId)
+                .setPartitionId(1)
+                .setLeader(LeaderConstants.NO_LEADER)
+                .setIsr(List.of())
+                .setReplicas(List.of(0)),
+            // Leader is not a registered broker
+            new PartitionRecord()
+                .setTopicId(topicId)
+                .setPartitionId(2)
+                .setLeader(1)
+                .setIsr(List.of(1))
+                .setReplicas(List.of(1))
+        );
+        updateCache(cache, records);
+
+        assertEquals(Optional.of(new Node(0, "foo0", 9092, "rack0")),
+            cache.getPartitionLeaderEndpoint(topic, 0, listenerName));
+        // The partition exists, so the result is Node.noNode() rather than empty if there is no leader endpoint
+        assertEquals(Optional.of(Node.noNode()),
+            cache.getPartitionLeaderEndpoint(topic, 0, ListenerName.forSecurityProtocol(SecurityProtocol.SSL)));
+        assertEquals(Optional.of(Node.noNode()), cache.getPartitionLeaderEndpoint(topic, 1, listenerName));
+        assertEquals(Optional.of(Node.noNode()), cache.getPartitionLeaderEndpoint(topic, 2, listenerName));
+        // The result is empty only if the partition or topic does not exist
+        assertEquals(Optional.empty(), cache.getPartitionLeaderEndpoint(topic, 3, listenerName));
+        assertEquals(Optional.empty(), cache.getPartitionLeaderEndpoint("unknown-topic", 0, listenerName));
+    }
+
+    @Test
     public void testGetPartitionReplicaEndpoints() {
         MetadataCache cache = createCache();
         SecurityProtocol securityProtocol = SecurityProtocol.PLAINTEXT;

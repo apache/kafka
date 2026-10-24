@@ -101,9 +101,10 @@ public interface MetadataCache extends ConfigRepository {
     /**
      * Get a partition leader's endpoint
      *
-     * @return  If the leader is known, and the listener name is available, return Some(node). If the leader is known,
-     *          but the listener is unavailable, return Some(Node.NO_NODE). Otherwise, if the leader is not known,
-     *          return None
+     * @return  If the leader is known, and the listener name is available, return Some(node). If the partition exists
+     *          but the leader or its listener is unavailable (e.g. the partition is offline), return Some(Node.NO_NODE).
+     *          Otherwise, if the topic or partition is not known, return None. Callers may treat None as a deleted
+     *          partition, so it must not be returned just because the leader is unavailable.
      */
     Optional<Node> getPartitionLeaderEndpoint(String topic, int partitionId, ListenerName listenerName);
 

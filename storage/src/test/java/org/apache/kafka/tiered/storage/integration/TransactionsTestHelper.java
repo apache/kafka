@@ -37,6 +37,7 @@ import org.apache.kafka.common.errors.ProducerFencedException;
 import org.apache.kafka.common.errors.TimeoutException;
 import org.apache.kafka.common.header.internals.RecordHeader;
 import org.apache.kafka.common.test.ClusterInstance;
+import org.apache.kafka.metadata.LeaderAndIsr;
 import org.apache.kafka.test.TestUtils;
 
 import java.nio.charset.StandardCharsets;
@@ -992,6 +993,48 @@ public class TransactionsTestHelper {
 
             producer.beginTransaction();
             producer.abortTransaction();
+        }
+    }
+
+    public static void testCommitMarkerIsWrittenAfterPartitionComesBackOnline(
+            ClusterInstance clusterInstance,
+            GroupProtocol groupProtocol
+    ) throws Exception {
+        var transactionalId = "transactional-producer";
+        var topic = "offline-topic";
+        var tp = new TopicPartition(topic, 0);
+
+        try (var producer = createTransactionalProducer(clusterInstance, transactionalId);
+             var admin = clusterInstance.admin()) {
+            producer.initTransactions();
+
+            // Host the partition on a broker other than the transaction coordinator, so that it can go offline
+            // while the coordinator commits the transaction.
+            var coordinatorId = admin.describeTransactions(List.of(transactionalId))
+                    .description(transactionalId).get().coordinatorId();
+            var offlineBroker = clusterInstance.brokerIds().stream()
+                .filter(id -> id != coordinatorId)
+                .findFirst().orElseThrow();
+            clusterInstance.createTopicWithAssignment(topic, Map.of(0, List.of(offlineBroker)));
+
+            producer.beginTransaction();
+            producer.send(producerRecordWithExpectedTransactionStatus(topic, 0, "1", "1", true)).get();
+
+            clusterInstance.shutdownBroker(offlineBroker);
+            TestUtils.waitForCondition(() -> clusterInstance.aliveBrokers().values().stream().allMatch(broker ->
+                    broker.metadataCache().getLeaderAndIsr(topic, 0)
+                        .map(leaderAndIsr -> leaderAndIsr.leader() == LeaderAndIsr.NO_LEADER).orElse(false)),
+                "Partition " + tp + " did not go offline");
+
+            // The commit marker for the offline partition must not be dropped
+            producer.commitTransaction();
+        }
+
+        restartDeadBrokers(clusterInstance);
+        try (var consumer = createReadCommittedConsumer(clusterInstance, groupProtocol, "offline-partition-group")) {
+            consumer.assign(List.of(tp));
+            var records = consumeRecords(consumer, 1);
+            records.forEach(TransactionsTestHelper::assertCommittedAndGetValue);
         }
     }
 
