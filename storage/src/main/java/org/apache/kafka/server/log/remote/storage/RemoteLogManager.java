@@ -1918,6 +1918,7 @@ public class RemoteLogManager implements Closeable, AsyncOffsetReader {
                 enrichedRecordBatch = findFirstBatch(remoteLogInputStream, offset);
                 if (enrichedRecordBatch.batch == null) {
                     Utils.closeQuietly(remoteSegInputStream, "RemoteLogSegmentInputStream");
+                    remoteSegInputStream = null;
                     rlsMetadataOptional = findNextSegmentMetadata(rlsMetadataOptional.get(), logOptional.get().leaderEpochCache());
                 }
             }
@@ -1961,9 +1962,9 @@ public class RemoteLogManager implements Closeable, AsyncOffsetReader {
 
             return fetchDataInfo;
         } finally {
-            if (enrichedRecordBatch.batch != null) {
-                Utils.closeQuietly(remoteSegInputStream, "RemoteLogSegmentInputStream");
-            }
+            // The stream is set to null after it is closed within the loop above, so this closes the
+            // currently-open segment stream exactly once, including when findFirstBatch throws.
+            Utils.closeQuietly(remoteSegInputStream, "RemoteLogSegmentInputStream");
         }
     }
     // for testing
