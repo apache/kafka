@@ -42,7 +42,7 @@ public class MirrorSourceConfigTest {
         MirrorSourceConfig config = new MirrorSourceConfig(makeProps());
         Map<String, String> props = config.taskConfigForTopicPartitions(topicPartitions, 1);
         MirrorSourceTaskConfig taskConfig = new MirrorSourceTaskConfig(props);
-        assertEquals(taskConfig.taskTopicPartitions(), new HashSet<>(topicPartitions),
+        assertEquals(new HashSet<>(topicPartitions), taskConfig.taskTopicPartitions(),
                 "Setting topic property configuration failed");
     }
 
