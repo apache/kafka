@@ -137,10 +137,10 @@ public class KRaftMetadataCache implements MetadataCache {
             List<Integer> filteredReplicas = maybeFilterAliveReplicas(image, partition.replicas, listenerName, errorUnavailableEndpoints);
             List<Integer> filteredIsr = maybeFilterAliveReplicas(image, partition.isr, listenerName, errorUnavailableEndpoints);
             List<Integer> offlineReplicas = getOfflineReplicas(image, partition, listenerName);
-            Optional<Node> maybeLeader = getAliveEndpoint(image, partition.leader, listenerName);
+            BrokerRegistration leader = image.cluster().broker(partition.leader);
             Errors error;
-            if (maybeLeader.isEmpty()) {
-                if (!image.cluster().brokers().containsKey(partition.leader)) {
+            if (!hasEndpoint(leader, listenerName)) {
+                if (leader == null) {
                     log.debug("Error while fetching metadata for {}-{}: leader not available", topicName, partitionId);
                     error = Errors.LEADER_NOT_AVAILABLE;
                 } else {
@@ -168,7 +168,7 @@ public class KRaftMetadataCache implements MetadataCache {
                 return new MetadataResponsePartition()
                     .setErrorCode(error.code())
                     .setPartitionIndex(partitionId)
-                    .setLeaderId(maybeLeader.get().id())
+                    .setLeaderId(partition.leader)
                     .setLeaderEpoch(partition.leaderEpoch)
                     .setReplicaNodes(filteredReplicas)
                     .setIsrNodes(filteredIsr)
@@ -210,10 +210,10 @@ public class KRaftMetadataCache implements MetadataCache {
             List<Integer> filteredReplicas = maybeFilterAliveReplicas(image, partition.replicas, listenerName, false);
             List<Integer> filteredIsr = maybeFilterAliveReplicas(image, partition.isr, listenerName, false);
             List<Integer> offlineReplicas = getOfflineReplicas(image, partition, listenerName);
-            Optional<Node> maybeLeader = getAliveEndpoint(image, partition.leader, listenerName);
+            BrokerRegistration leader = image.cluster().broker(partition.leader);
             result.add(new DescribeTopicPartitionsResponsePartition()
                 .setPartitionIndex(partitionId)
-                .setLeaderId(maybeLeader.map(Node::id).orElse(MetadataResponse.NO_LEADER_ID))
+                .setLeaderId(hasEndpoint(leader, listenerName) ? partition.leader : MetadataResponse.NO_LEADER_ID)
                 .setLeaderEpoch(partition.leaderEpoch)
                 .setReplicaNodes(filteredReplicas)
                 .setIsrNodes(filteredIsr)
@@ -244,14 +244,11 @@ public class KRaftMetadataCache implements MetadataCache {
     }
 
     /**
-     * Get the endpoint matching the provided listener if the broker is alive. Note that listeners can
+     * Check whether the broker is registered and has a listener named `listenerName`. Note that listeners can
      * be added dynamically, so a broker with a missing listener could be a transient error.
-     *
-     * @return None if broker is not alive or if the broker does not have a listener named `listenerName`.
      */
-    private Optional<Node> getAliveEndpoint(MetadataImage image, int id, ListenerName listenerName) {
-        return image.cluster().broker(id) == null ? Optional.empty() :
-            image.cluster().broker(id).node(listenerName.value());
+    private static boolean hasEndpoint(BrokerRegistration broker, ListenerName listenerName) {
+        return broker != null && broker.listeners().containsKey(listenerName.value());
     }
 
     @Override
