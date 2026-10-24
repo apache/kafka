@@ -353,7 +353,6 @@ public interface ClusterInstance {
         } catch (InterruptedException e) {
             throw new InterruptException(e);
         } catch (ExecutionException e) {
-            if (e.getCause() instanceof RuntimeException re) throw re;
             throw new RuntimeException("Failed to create topic " + newTopic.name(), e.getCause());
         }
     }
