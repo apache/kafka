@@ -199,6 +199,11 @@ class KafkaConfig private(doLog: Boolean, val props: util.Map[_, _], enforceProv
     dynamicConfig.addReconfigurable(reconfigurable)
   }
 
+  /**
+   * Whether the dynamic configs loaded on startup are being applied, see [[DynamicBrokerConfig.loadInitialConfigs]].
+   */
+  def isLoadingInitialDynamicConfigs: Boolean = dynamicConfig.isLoadingInitialConfigs
+
   override def removeReconfigurable(reconfigurable: Reconfigurable): Unit = {
     dynamicConfig.removeReconfigurable(reconfigurable)
   }
