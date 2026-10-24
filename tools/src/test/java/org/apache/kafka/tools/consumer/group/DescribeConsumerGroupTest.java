@@ -439,7 +439,7 @@ public class DescribeConsumerGroupTest {
                 }
                 // remove previous consumer groups, so we can have a clean cluster for next consumer group protocol test.
                 deleteConsumerGroups(groups);
-                deleteTopic(topic);
+                clusterInstance.deleteTopic(topic);
             }
         }
     }
@@ -1179,12 +1179,6 @@ public class DescribeConsumerGroupTest {
     private void deleteConsumerGroups(Collection<String> groupIds) {
         try (Admin admin = Admin.create(Map.of(CommonClientConfigs.BOOTSTRAP_SERVERS_CONFIG, clusterInstance.bootstrapServers()))) {
             Assertions.assertDoesNotThrow(() -> admin.deleteConsumerGroups(groupIds).all().get());
-        }
-    }
-
-    private void deleteTopic(String topic) {
-        try (Admin admin = Admin.create(Map.of(CommonClientConfigs.BOOTSTRAP_SERVERS_CONFIG, clusterInstance.bootstrapServers()))) {
-            Assertions.assertDoesNotThrow(() -> admin.deleteTopics(List.of(topic)).topicNameValues().get(topic).get());
         }
     }
 
