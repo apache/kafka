@@ -16,7 +16,7 @@
  */
 package org.apache.kafka.clients.consumer.internals.events;
 
-import org.apache.kafka.clients.consumer.ConsumerRebalanceListener;
+import org.apache.kafka.clients.consumer.RebalanceListener;
 import org.apache.kafka.clients.consumer.internals.ConsumerRebalanceListenerMethodName;
 import org.apache.kafka.common.KafkaException;
 
@@ -25,7 +25,7 @@ import java.util.Optional;
 import java.util.concurrent.CompletableFuture;
 
 /**
- * Event that signifies that the application thread has executed the {@link ConsumerRebalanceListener} callback. If
+ * Event that signifies that the application thread has executed the {@link RebalanceListener} callback. If
  * the callback execution threw an error, it is included in the event should any event listener want to know.
  */
 public class ConsumerRebalanceListenerCallbackCompletedEvent extends ApplicationEvent {
