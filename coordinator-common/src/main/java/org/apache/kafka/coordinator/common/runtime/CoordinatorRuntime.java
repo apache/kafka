@@ -717,6 +717,7 @@ public class CoordinatorRuntime<S extends CoordinatorShard<U>, U> implements Aut
                     );
                     runtimeMetrics.recordFlushTime(time.milliseconds() - flushStartMs);
                     coordinator.updateLastWrittenOffset(offset);
+                    executor.onBatchWritten();
 
                     if (offset != currentBatch.nextOffset) {
                         log.error("The state machine of the coordinator {} is out of sync with the underlying log. " +
@@ -786,6 +787,7 @@ public class CoordinatorRuntime<S extends CoordinatorShard<U>, U> implements Aut
         private void failCurrentBatch(Throwable t) {
             if (currentBatch != null) {
                 coordinator.revertLastWrittenOffset(currentBatch.baseOffset);
+                executor.onBatchReverted();
                 currentBatch.deferredEvents.complete(t);
                 freeCurrentBatch();
             }
@@ -920,6 +922,10 @@ public class CoordinatorRuntime<S extends CoordinatorShard<U>, U> implements Aut
                 // If the records are empty, it was a read operation after all. In this case,
                 // the response can be returned once any pending write operations complete.
                 waitForPendingWrites(event);
+                // Without an open batch, the tasks scheduled by the operation would not be
+                // submitted until the next batch is written, which may never happen. Nothing
+                // can revert the operation, so submit its tasks now.
+                if (currentBatch == null) executor.onBatchWritten();
             } else {
                 // If the records are not empty, first, they are applied to the state machine,
                 // second, they are appended to the opened batch.
@@ -1096,6 +1102,7 @@ public class CoordinatorRuntime<S extends CoordinatorShard<U>, U> implements Aut
                 );
                 runtimeMetrics.recordFlushTime(time.milliseconds() - flushStartMs);
                 coordinator.updateLastWrittenOffset(offset);
+                executor.onBatchWritten();
 
                 deferredEventQueue.add(offset, DeferredEventCollection.of(log, event));
             } catch (Throwable t) {
@@ -1113,6 +1120,7 @@ public class CoordinatorRuntime<S extends CoordinatorShard<U>, U> implements Aut
                         "error: {}.", tp, t.getMessage(), t);
                 }
                 coordinator.revertLastWrittenOffset(prevLastWrittenOffset);
+                executor.onBatchReverted();
                 event.complete(t);
             }
         }

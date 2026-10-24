@@ -628,11 +628,13 @@ public class GroupMetadataManagerTestContext {
         long lastCommittedOffset = this.lastCommittedOffset;
         this.lastCommittedOffset = lastWrittenOffset;
         snapshotRegistry.deleteSnapshotsUpTo(lastCommittedOffset);
+        executor.onBatchWritten();
     }
 
     public void rollback() {
         lastWrittenOffset = lastCommittedOffset;
         snapshotRegistry.revertToSnapshot(lastCommittedOffset);
+        executor.onBatchReverted();
     }
 
     public ConsumerGroup.ConsumerGroupState consumerGroupState(
