@@ -38,6 +38,7 @@ import java.util.stream.Stream;
 import static org.apache.kafka.test.TestUtils.assertFutureThrows;
 import static org.junit.jupiter.api.Assertions.assertEquals;
 import static org.junit.jupiter.api.Assertions.assertInstanceOf;
+import static org.junit.jupiter.api.Assertions.assertTimeout;
 import static org.junit.jupiter.api.Assertions.assertThrows;
 import static org.junit.jupiter.api.Assertions.assertTrue;
 
@@ -92,8 +93,9 @@ public class AdminClientTimeoutIntegrationTest {
                 new ConfigResource(ConfigResource.Type.BROKER, "1"),
                 new ConfigResource(ConfigResource.Type.BROKER, "2"));
 
-            ExecutionException exception = assertThrows(ExecutionException.class,
-                () -> admin.describeConfigs(configResources, new DescribeConfigsOptions().timeoutMs(0)).all().get());
+            ExecutionException exception = assertTimeout(Duration.ofSeconds(30),
+                () -> assertThrows(ExecutionException.class,
+                    () -> admin.describeConfigs(configResources, new DescribeConfigsOptions().timeoutMs(0)).all().get()));
             assertInstanceOf(TimeoutException.class, exception.getCause());
         }
     }
@@ -101,9 +103,10 @@ public class AdminClientTimeoutIntegrationTest {
     @ClusterTest
     public void testDescribeUserScramCredentialsTimeout() {
         try (Admin admin = createInvalidAdminClient()) {
-            ExecutionException exception = assertThrows(ExecutionException.class,
-                () -> admin.describeUserScramCredentials(List.of("tom4"),
-                    new DescribeUserScramCredentialsOptions().timeoutMs(0)).all().get());
+            ExecutionException exception = assertTimeout(Duration.ofSeconds(10),
+                () -> assertThrows(ExecutionException.class,
+                    () -> admin.describeUserScramCredentials(List.of("tom4"),
+                        new DescribeUserScramCredentialsOptions().timeoutMs(0)).all().get()));
             assertInstanceOf(TimeoutException.class, exception.getCause());
         }
     }
@@ -112,9 +115,10 @@ public class AdminClientTimeoutIntegrationTest {
     public void testDescribeTransactionsTimeout() {
         try (Admin admin = createInvalidAdminClient()) {
             String transactionId = "foo";
-            ExecutionException exception = assertThrows(ExecutionException.class,
-                () -> admin.describeTransactions(Set.of(transactionId),
-                    new DescribeTransactionsOptions().timeoutMs(0)).description(transactionId).get());
+            ExecutionException exception = assertTimeout(Duration.ofSeconds(10),
+                () -> assertThrows(ExecutionException.class,
+                    () -> admin.describeTransactions(Set.of(transactionId),
+                        new DescribeTransactionsOptions().timeoutMs(0)).description(transactionId).get()));
             assertInstanceOf(TimeoutException.class, exception.getCause());
         }
     }
@@ -122,10 +126,11 @@ public class AdminClientTimeoutIntegrationTest {
     @ClusterTest
     public void testAbortTransactionTimeout() {
         try (Admin admin = createInvalidAdminClient()) {
-            ExecutionException exception = assertThrows(ExecutionException.class,
-                () -> admin.abortTransaction(
-                    new AbortTransactionSpec(new TopicPartition("topic", 0), 1, (short) 1, 1),
-                    new AbortTransactionOptions().timeoutMs(0)).all().get());
+            ExecutionException exception = assertTimeout(Duration.ofSeconds(10),
+                () -> assertThrows(ExecutionException.class,
+                    () -> admin.abortTransaction(
+                        new AbortTransactionSpec(new TopicPartition("topic", 0), 1, (short) 1, 1),
+                        new AbortTransactionOptions().timeoutMs(0)).all().get()));
             assertInstanceOf(TimeoutException.class, exception.getCause());
         }
     }
@@ -177,8 +182,9 @@ public class AdminClientTimeoutIntegrationTest {
     public void testListClientMetricsResourcesTimeoutMs() {
         try (Admin admin = createInvalidAdminClient()) {
             ListClientMetricsResourcesOptions timeoutOption = new ListClientMetricsResourcesOptions().timeoutMs(0);
-            ExecutionException exception = assertThrows(ExecutionException.class,
-                () -> admin.listClientMetricsResources(timeoutOption).all().get());
+            ExecutionException exception = assertTimeout(Duration.ofSeconds(30),
+                () -> assertThrows(ExecutionException.class,
+                    () -> admin.listClientMetricsResources(timeoutOption).all().get()));
             assertInstanceOf(TimeoutException.class, exception.getCause());
         }
     }
@@ -187,8 +193,9 @@ public class AdminClientTimeoutIntegrationTest {
     public void testListConfigResourcesTimeoutMs() {
         try (Admin admin = createInvalidAdminClient()) {
             ListConfigResourcesOptions timeoutOption = new ListConfigResourcesOptions().timeoutMs(0);
-            ExecutionException exception = assertThrows(ExecutionException.class,
-                () -> admin.listConfigResources(Set.of(), timeoutOption).all().get());
+            ExecutionException exception = assertTimeout(Duration.ofSeconds(30),
+                () -> assertThrows(ExecutionException.class,
+                    () -> admin.listConfigResources(Set.of(), timeoutOption).all().get()));
             assertInstanceOf(TimeoutException.class, exception.getCause());
         }
     }
