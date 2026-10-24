@@ -828,6 +828,7 @@ public class RemoteLogManager implements Closeable, AsyncOffsetReader {
 
         protected final TopicIdPartition topicIdPartition;
         private final Logger logger;
+        private final ReentrantLock executionLock = new ReentrantLock();
 
         public RLMTask(TopicIdPartition topicIdPartition) {
             this.topicIdPartition = topicIdPartition;
@@ -839,33 +840,48 @@ public class RemoteLogManager implements Closeable, AsyncOffsetReader {
         }
 
         public void run() {
-            if (isCancelled()) {
-                logger.debug("Skipping the current run for partition {} as it is cancelled", topicIdPartition);
-                return;
-            }
-            if (!remoteLogMetadataManagerPlugin.get().isReady(topicIdPartition)) {
-                logger.debug("Skipping the current run for partition {} as the remote-log metadata is not ready", topicIdPartition);
-                return;
-            }
-
+            executionLock.lock();
             try {
-                Optional<UnifiedLog> unifiedLogOptional = fetchLog.apply(topicIdPartition.topicPartition());
-
-                if (unifiedLogOptional.isEmpty()) {
+                if (isCancelled()) {
+                    logger.debug("Skipping the current run for partition {} as it is cancelled", topicIdPartition);
+                    return;
+                }
+                if (!remoteLogMetadataManagerPlugin.get().isReady(topicIdPartition)) {
+                    logger.debug("Skipping the current run for partition {} as the remote-log metadata is not ready", topicIdPartition);
                     return;
                 }
 
-                execute(unifiedLogOptional.get());
-            } catch (InterruptedException ex) {
-                if (!isCancelled()) {
-                    logger.warn("Current thread for partition {} is interrupted", topicIdPartition, ex);
+                try {
+                    Optional<UnifiedLog> unifiedLogOptional = fetchLog.apply(topicIdPartition.topicPartition());
+
+                    if (unifiedLogOptional.isEmpty()) {
+                        return;
+                    }
+
+                    execute(unifiedLogOptional.get());
+                } catch (InterruptedException ex) {
+                    if (!isCancelled()) {
+                        logger.warn("Current thread for partition {} is interrupted", topicIdPartition, ex);
+                    }
+                } catch (RetriableException | RetriableRemoteStorageException ex) {
+                    logger.debug("Encountered a retryable error while executing current task for partition {}", topicIdPartition, ex);
+                } catch (Exception ex) {
+                    if (!isCancelled()) {
+                        logger.warn("Current task for partition {} received error but it will be scheduled", topicIdPartition, ex);
+                    }
                 }
-            } catch (RetriableException | RetriableRemoteStorageException ex) {
-                logger.debug("Encountered a retryable error while executing current task for partition {}", topicIdPartition, ex);
-            } catch (Exception ex) {
-                if (!isCancelled()) {
-                    logger.warn("Current task for partition {} received error but it will be scheduled", topicIdPartition, ex);
-                }
+            } finally {
+                executionLock.unlock();
+            }
+        }
+
+        void awaitExecutionCompletion() {
+            executionLock.lock();
+            try {
+                // Wait for an in-flight execution to finish before its owner proceeds with cleanup.
+                logger.debug("Remote log task for partition {} completed", topicIdPartition);
+            } finally {
+                executionLock.unlock();
             }
         }
 
@@ -1547,8 +1563,8 @@ public class RemoteLogManager implements Closeable, AsyncOffsetReader {
                 }
             }
 
-            // Update log start offset with the computed value after retention cleanup is done
-            remoteLogRetentionHandler.logStartOffset.ifPresent(offset -> handleLogStartOffsetUpdate(topicIdPartition.topicPartition(), offset));
+            // Cancellation must win over log-start-offset updates.
+            if (!isCancelled()) remoteLogRetentionHandler.logStartOffset.ifPresent(offset -> handleLogStartOffsetUpdate(topicIdPartition.topicPartition(), offset));
 
             // At this point in time we have updated the log start offsets, but not initiated a deletion.
             // Either a follower has picked up the changes to the log start offset, or they have not.
@@ -2252,6 +2268,8 @@ public class RemoteLogManager implements Closeable, AsyncOffsetReader {
                 future.cancel(true);
             } catch (Exception ex) {
                 LOGGER.error("Error occurred while canceling the task: {}", rlmTask, ex);
+            } finally {
+                rlmTask.awaitExecutionCompletion();
             }
         }
 
