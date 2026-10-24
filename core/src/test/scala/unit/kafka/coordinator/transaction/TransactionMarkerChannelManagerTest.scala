@@ -28,9 +28,11 @@ import org.apache.kafka.common.requests.{RequestHeader, TransactionResult, Write
 import org.apache.kafka.common.utils.MockTime
 import org.apache.kafka.common.utils.internals.LogContext
 import org.apache.kafka.common.metrics.Metrics
-import org.apache.kafka.common.{Node, TopicPartition}
+import org.apache.kafka.common.{Node, TopicPartition, Uuid}
+import org.apache.kafka.common.metadata.{PartitionRecord, TopicRecord}
+import org.apache.kafka.common.protocol.ApiMessage
 import org.apache.kafka.coordinator.transaction.{CoordinatorEpochAndTxnMetadata, TransactionMetadata, TransactionState}
-import org.apache.kafka.metadata.MetadataCache
+import org.apache.kafka.metadata.{LeaderConstants, MetadataCache, MetadataCacheFixtures}
 import org.apache.kafka.server.common.{MetadataVersion, TransactionVersion}
 import org.apache.kafka.server.metrics.{KafkaMetricsGroup, KafkaYammerMetrics}
 import org.apache.kafka.server.util.{InterBrokerSendThread, RequestAndCompletionHandler}
@@ -399,6 +401,48 @@ class TransactionMarkerChannelManagerTest {
     }.toMap
 
     assertEquals(Map(broker1 -> expectedBroker1Request), secondDrainedRequests)
+  }
+
+  @Test
+  def shouldSaveForLaterWhenPartitionIsOffline(): Unit = {
+    mockCache()
+
+    val cache = MetadataCacheFixtures.createCache()
+    val topicId = Uuid.randomUuid()
+    MetadataCacheFixtures.updateCache(cache, util.List.of[ApiMessage](
+      new TopicRecord().setName(partition1.topic).setTopicId(topicId),
+      new PartitionRecord()
+        .setTopicId(topicId)
+        .setPartitionId(partition1.partition)
+        .setLeader(LeaderConstants.NO_LEADER)
+        .setIsr(util.List.of[Integer]())
+        .setReplicas(util.List.of[Integer](broker1.id))
+    ))
+
+    val manager = new TransactionMarkerChannelManager(
+      KafkaConfig.fromProps(TestUtils.createBrokerConfig(1)),
+      cache,
+      networkClient,
+      txnStateManager,
+      time)
+    try {
+      manager.addTxnMarkersToSend(coordinatorEpoch, txnResult, txnMetadata2, txnMetadata2.prepareComplete(time.milliseconds()))
+
+      // The marker for the offline partition must be kept rather than dropped as if the partition were deleted
+      assertEquals(1, manager.numTxnsWithPendingMarkers)
+      assertEquals(1, manager.queueForUnknownBroker.totalNumMarkers(txnTopicPartition2))
+      assertTrue(txnMetadata2.topicPartitions.contains(partition1))
+      verify(txnStateManager, times(0)).appendTransactionToLog(any(), any(), any(), any(), any(), any())
+
+      // The marker must also survive a retry while the partition is still offline
+      assertTrue(manager.generateRequests().isEmpty)
+      assertEquals(1, manager.numTxnsWithPendingMarkers)
+      assertEquals(1, manager.queueForUnknownBroker.totalNumMarkers(txnTopicPartition2))
+      assertTrue(txnMetadata2.topicPartitions.contains(partition1))
+      verify(txnStateManager, times(0)).appendTransactionToLog(any(), any(), any(), any(), any(), any())
+    } finally {
+      manager.shutdown()
+    }
   }
 
   @Test

@@ -188,4 +188,12 @@ public class TransactionsTest {
     public void testEmptyAbortAfterCommit() throws Exception {
         TransactionsTestHelper.testEmptyAbortAfterCommit(clusterInstance, TOPIC_CONFIG);
     }
+
+    // Replicate the transaction log on all brokers so that it remains writable (min ISR 2) while one broker is down
+    @ClusterTest(serverProperties = {
+        @ClusterConfigProperty(key = TransactionLogConfig.TRANSACTIONS_TOPIC_REPLICATION_FACTOR_CONFIG, value = "3")
+    })
+    public void testCommitMarkerIsWrittenAfterPartitionComesBackOnline() throws Exception {
+        TransactionsTestHelper.testCommitMarkerIsWrittenAfterPartitionComesBackOnline(clusterInstance, GroupProtocol.CONSUMER);
+    }
 }
