@@ -1038,6 +1038,50 @@ public class RecordAccumulatorTest {
         assertEquals(1, batches.size());
     }
 
+    @ParameterizedTest
+    @MethodSource("allocationStrategies")
+    public void testPartitionAtBrokerDeduplicationWindowDoesNotStarveOtherPartitions(String allocationStrategy) throws Exception {
+        int batchSize = 1025;
+        int deliveryTimeoutMs = 3200;
+        int lingerMs = 10;
+        long totalSize = 10 * batchSize;
+
+        TransactionManager transactionManager = Mockito.mock(TransactionManager.class);
+        RecordAccumulator accumulator = createTestRecordAccumulator(allocationStrategy, transactionManager,
+            deliveryTimeoutMs, batchSize, totalSize, Compression.NONE, lingerMs);
+
+        ProducerIdAndEpoch producerIdAndEpoch = new ProducerIdAndEpoch(12345L, (short) 5);
+        Mockito.when(transactionManager.producerIdAndEpoch()).thenReturn(producerIdAndEpoch);
+        Mockito.when(transactionManager.isSendToPartitionAllowed(Mockito.any())).thenReturn(true);
+        Mockito.when(transactionManager.firstInFlightSequence(Mockito.any())).thenReturn(RecordBatch.NO_SEQUENCE);
+        // tp1 has already filled up the window the broker retains for duplicate detection, tp2 has not. Both are
+        // led by node1.
+        Mockito.when(transactionManager.wouldExceedBrokerDeduplicationWindow(tp1)).thenReturn(true);
+        Mockito.when(transactionManager.wouldExceedBrokerDeduplicationWindow(tp2)).thenReturn(false);
+
+        accumulator.append(topic, partition1, 0L, key, value, Record.EMPTY_HEADERS, null, maxBlockTimeMs,
+            time.milliseconds(), cluster);
+        accumulator.append(topic, partition2, 0L, key, value, Record.EMPTY_HEADERS, null, maxBlockTimeMs,
+            time.milliseconds(), cluster);
+        time.sleep(lingerMs + 1);
+
+        Map<Integer, List<ProducerBatch>> drained = accumulator.drain(metadataCache, Set.of(node1),
+            Integer.MAX_VALUE, time.milliseconds());
+        // Only tp2 is drained; tp1 being capped must not stop the drain for the rest of the node.
+        List<ProducerBatch> batches = drained.get(node1.id());
+        assertEquals(1, batches.size());
+        assertEquals(tp2, batches.get(0).topicPartition);
+        assertTrue(accumulator.hasUndrained());
+
+        // Once tp1 has room again it is drained as well.
+        Mockito.when(transactionManager.wouldExceedBrokerDeduplicationWindow(tp1)).thenReturn(false);
+        drained = accumulator.drain(metadataCache, Set.of(node1), Integer.MAX_VALUE, time.milliseconds());
+        batches = drained.get(node1.id());
+        assertEquals(1, batches.size());
+        assertEquals(tp1, batches.get(0).topicPartition);
+        assertFalse(accumulator.hasUndrained());
+    }
+
     @Test
     public void testSplitAndReenqueue() throws ExecutionException, InterruptedException {
         long now = time.milliseconds();

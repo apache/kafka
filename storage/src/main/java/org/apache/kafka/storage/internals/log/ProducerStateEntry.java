@@ -32,6 +32,9 @@ import java.util.OptionalLong;
  * elements in the queue. When the queue is at capacity, we remove the first element to make space for the incoming batch.
  */
 public class ProducerStateEntry {
+    // The idempotent producer relies on this value to avoid sending more batches after an in-flight batch than the
+    // broker retains, see TransactionManager.NUM_BATCHES_RETAINED_BY_BROKER in the clients module. The producer cannot
+    // depend on this class, so the two constants must be kept in sync.
     public static final int NUM_BATCHES_TO_RETAIN = 5;
     private final long producerId;
     private final Deque<BatchMetadata> batchMetadata = new ArrayDeque<>();
