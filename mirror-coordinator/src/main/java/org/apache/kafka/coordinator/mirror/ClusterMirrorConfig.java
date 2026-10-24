@@ -444,6 +444,11 @@ public final class ClusterMirrorConfig extends AbstractConfig {
                 return MATCH_ALL_RULE;
             }
             String[] parts = trimmed.split(SEPARATOR, -1);
+            if (parts.length > 5) {
+                throw new IllegalArgumentException(
+                        "Invalid ACL rule: expected at most 5 fields, but found " +
+                                parts.length + ": " + trimmed);
+            }
             return new MirrorAclRule(
                     parseResourceType(parts, 0),
                     parsePattern(parts, 1),
