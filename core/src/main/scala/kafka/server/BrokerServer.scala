@@ -208,6 +208,7 @@ class BrokerServer(
 
       val clientTelemetryExporterPlugin = new ClientTelemetryExporterPlugin()
 
+      config.dynamicConfig.warnIfBrokerQuotaConfigsInStaticConfig()
       config.dynamicConfig.initialize(Some(clientTelemetryExporterPlugin))
       quotaManagers = QuotaFactory.instantiate(config, metrics, time, s"broker-${config.nodeId}-", ProcessRole.BrokerRole.toString)
       DynamicBrokerConfig.readDynamicBrokerConfigsFromSnapshot(raftManager, config, quotaManagers, logContext)

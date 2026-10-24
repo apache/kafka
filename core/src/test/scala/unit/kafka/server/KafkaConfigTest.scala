@@ -2159,6 +2159,28 @@ class KafkaConfigTest {
   }
 
   @Test
+  def testWarnIfDynamicQuotasInStaticConfig(): Unit = {
+    QuotaConfig.BROKER_QUOTA_CONFIGS.asScala.foreach { config =>
+      Using.resource(LogCaptureAppender.createAndRegister) { appender =>
+        appender.setClassLogger(classOf[DynamicBrokerConfig], Level.WARN)
+
+        val props = createDefaultConfig()
+        props.setProperty(config, "1000000")
+        
+        val kafkaConfig = KafkaConfig.fromProps(props)
+        kafkaConfig.dynamicConfig.warnIfBrokerQuotaConfigsInStaticConfig()
+        
+        val expectedMessage = s"$config is set in the static configuration file but is ignored at runtime; configure this property dynamically to take effect."
+        
+        assertTrue(
+          appender.getMessages.asScala.exists(_.contains(expectedMessage)),
+          s"Expected warning message not found for config: $config"
+        )
+      }
+    }    
+  }
+
+  @Test
   def testLogBrokerHeartbeatIntervalMsShouldBeLowerThanHalfOfBrokerSessionTimeoutMs(): Unit = {
     val props = createDefaultConfig()
     Using.resource(LogCaptureAppender.createAndRegister) { appender =>
