@@ -26,6 +26,8 @@ import org.apache.kafka.common.errors.NotLeaderOrFollowerException;
 import org.apache.kafka.common.errors.UnknownTopicOrPartitionException;
 import org.apache.kafka.common.message.ShareFetchResponseData;
 import org.apache.kafka.common.protocol.Errors;
+import org.apache.kafka.common.record.internal.RecordBatch;
+import org.apache.kafka.common.record.internal.Records;
 import org.apache.kafka.common.utils.Time;
 import org.apache.kafka.raft.errors.NotLeaderException;
 import org.apache.kafka.server.metrics.KafkaMetricsGroup;
@@ -54,6 +56,7 @@ import org.slf4j.Logger;
 import org.slf4j.LoggerFactory;
 
 import java.util.ArrayList;
+import java.util.HashMap;
 import java.util.HashSet;
 import java.util.LinkedHashMap;
 import java.util.LinkedHashSet;
@@ -107,6 +110,10 @@ public class DelayedShareFetch extends DelayedOperation {
     private long acquireStartTimeMs;
     private LinkedHashMap<TopicIdPartition, Long> partitionsAcquired;
     private LinkedHashMap<TopicIdPartition, LogReadResult> localPartitionsAlreadyFetched;
+    /**
+     * The cache of fetch offset metadata for the share fetch request. This is used to avoid redundant reads.
+     */
+    private final Map<TopicIdPartition, CachedFetchOffsetMetadata> fetchOffsetMetadataCache;
     private Optional<PendingRemoteFetches> pendingRemoteFetchesOpt;
     /** Holds the CompletableFuture for a pending async fetch operation.
      * Unlike remote fetches (which have one future per partition), async fetch has a single future
@@ -191,6 +198,7 @@ public class DelayedShareFetch extends DelayedOperation {
         this.metadataProvider = metadataProvider;
         this.partitionsAcquired = new LinkedHashMap<>();
         this.localPartitionsAlreadyFetched = new LinkedHashMap<>();
+        this.fetchOffsetMetadataCache = new HashMap<>();
         this.exceptionHandler = exceptionHandler;
         this.sharePartitions = sharePartitions;
         this.partitionMaxBytesStrategy = partitionMaxBytesStrategy;
@@ -370,9 +378,6 @@ public class DelayedShareFetch extends DelayedOperation {
     ) {
         List<ShareFetchPartitionData> shareFetchPartitionDataList = new ArrayList<>();
         try {
-            // Reset fetch offset metadata for partitions requiring remote fetch
-            resetFetchOffsetMetadataForRemoteFetchPartitions(topicPartitionData, responseData);
-
             // Build response data excluding partitions needing remote fetch
             responseData.forEach((topicIdPartition, logReadResult) -> {
                 if (logReadResult.info().delayedRemoteStorageFetch.isEmpty()) {
@@ -395,32 +400,6 @@ public class DelayedShareFetch extends DelayedOperation {
                 partitionsWithData(shareFetchPartitionDataList)
             );
         }
-    }
-
-    /**
-     * This function updates the cached fetch offset metadata to null corresponding to the share partition's fetch offset.
-     * This is required in the case when a topic partition that has local log fetch during tryComplete, but changes to remote
-     * storage fetch in onComplete. In this situation, if the cached fetchOffsetMetadata got updated in tryComplete, then
-     * we will enter a state where each share fetch request for this topic partition from client will use the cached
-     * fetchOffsetMetadata in tryComplete and return an empty response to the client from onComplete.
-     * Hence, we require to set offsetMetadata to null for this fetch offset, which would cause tryComplete to update
-     * fetchOffsetMetadata and thereby we will identify this partition for remote storage fetch.
-     * @param topicPartitionData - Map containing the fetch offset for the topic partitions.
-     * @param readResponse - Map containing the readFromLog response for the topic partitions.
-     */
-    private void resetFetchOffsetMetadataForRemoteFetchPartitions(
-        LinkedHashMap<TopicIdPartition, Long> topicPartitionData,
-        LinkedHashMap<TopicIdPartition, LogReadResult> readResponse
-    ) {
-        readResponse.forEach((topicIdPartition, logReadResult) -> {
-            if (logReadResult.info().delayedRemoteStorageFetch.isPresent()) {
-                SharePartition sharePartition = sharePartitions.get(topicIdPartition);
-                sharePartition.updateFetchOffsetMetadata(
-                    topicPartitionData.get(topicIdPartition),
-                    null
-                );
-            }
-        });
     }
 
     @Override
@@ -567,8 +546,7 @@ public class DelayedShareFetch extends DelayedOperation {
     ) {
         LinkedHashMap<TopicIdPartition, Long> partitionsNotMatchingFetchOffsetMetadata = new LinkedHashMap<>();
         topicPartitionData.forEach((topicIdPartition, fetchOffset) -> {
-            SharePartition sharePartition = sharePartitions.get(topicIdPartition);
-            if (sharePartition.fetchOffsetMetadata(fetchOffset).isEmpty()) {
+            if (fetchOffsetMetadata(topicIdPartition, fetchOffset).isEmpty()) {
                 partitionsNotMatchingFetchOffsetMetadata.put(topicIdPartition, fetchOffset);
             }
         });
@@ -591,17 +569,27 @@ public class DelayedShareFetch extends DelayedOperation {
                                                 LinkedHashMap<TopicIdPartition, LogReadResult> readResponseData) {
         for (Map.Entry<TopicIdPartition, LogReadResult> entry : readResponseData.entrySet()) {
             TopicIdPartition topicIdPartition = entry.getKey();
-            SharePartition sharePartition = sharePartitions.get(topicIdPartition);
             LogReadResult logReadResult = entry.getValue();
             if (logReadResult.error().code() != Errors.NONE.code()) {
                 log.debug("Log read result {} errored out for topic partition {}",
                     logReadResult, topicIdPartition);
                 continue;
             }
-            sharePartition.updateFetchOffsetMetadata(
-                topicPartitionData.get(topicIdPartition),
+            updateFetchOffsetMetadataCache(topicIdPartition, topicPartitionData.get(topicIdPartition),
                 logReadResult.info().fetchOffsetMetadata);
         }
+    }
+
+    private Optional<LogOffsetMetadata> fetchOffsetMetadata(TopicIdPartition topicIdPartition, long fetchOffset) {
+        CachedFetchOffsetMetadata cached = fetchOffsetMetadataCache.get(topicIdPartition);
+        if (cached == null || cached.offset() != fetchOffset || cached.offsetMetadata() == null)
+            return Optional.empty();
+        return Optional.of(cached.offsetMetadata());
+    }
+
+    // Visible for testing.
+    void updateFetchOffsetMetadataCache(TopicIdPartition topicIdPartition, long fetchOffset, LogOffsetMetadata offsetMetadata) {
+        fetchOffsetMetadataCache.put(topicIdPartition, new CachedFetchOffsetMetadata(fetchOffset, offsetMetadata));
     }
 
     // minByes estimation currently assumes the common case where all fetched data is acquirable.
@@ -625,9 +613,7 @@ public class DelayedShareFetch extends DelayedOperation {
             if (endOffsetMetadata == LogOffsetMetadata.UNKNOWN_OFFSET_METADATA)
                 continue;
 
-            SharePartition sharePartition = sharePartitions.get(topicIdPartition);
-
-            Optional<LogOffsetMetadata> optionalFetchOffsetMetadata = sharePartition.fetchOffsetMetadata(fetchOffset);
+            Optional<LogOffsetMetadata> optionalFetchOffsetMetadata = fetchOffsetMetadata(topicIdPartition, fetchOffset);
             if (optionalFetchOffsetMetadata.isEmpty() || optionalFetchOffsetMetadata.get() == LogOffsetMetadata.UNKNOWN_OFFSET_METADATA)
                 continue;
             LogOffsetMetadata fetchOffsetMetadata = optionalFetchOffsetMetadata.get();
@@ -840,6 +826,11 @@ public class DelayedShareFetch extends DelayedOperation {
             return CompletableFuture.completedFuture(existingFetchedData);
         }
 
+        // Check if further read is required based on the remaining record budget after accounting for already fetched data.
+        if (remainingRecordBudget(shareFetch.maxFetchRecords(), topicPartitionData, existingFetchedData) <= 0) {
+            return CompletableFuture.completedFuture(existingFetchedData);
+        }
+
         return readFromLog(
             missingLogReadTopicPartitions,
             partitionMaxBytesStrategy.maxBytes(shareFetch.fetchParams().maxBytes,
@@ -848,6 +839,61 @@ public class DelayedShareFetch extends DelayedOperation {
             missingTopicPartitionsLogReadResponse.putAll(existingFetchedData);
             return missingTopicPartitionsLogReadResponse;
         });
+    }
+
+    /**
+     * Returns the record budget left for further reads after accounting for the already fetched data,
+     * or 0 if the budget is exhausted. Records are counted by offset span, from the fetch offset to the last
+     * offset of the last batch, which is the same approximation {@link SharePartition#acquire} makes when it
+     * bounds the acquired records by max fetch records. The span starts at the fetch offset rather than at
+     * the base offset of the first batch because the fetched data starts at a batch boundary, and the records
+     * of that batch prior to the fetch offset are already in-flight or acknowledged, hence are not handed out
+     * again and must not consume the budget.
+     * <ul>
+     *     <li>{@link RecordBatch#lastOffset()} is called at most once per partition, on the last batch, rather
+     *     than on every batch. For file backed records the base offset comes from the bytes already read while
+     *     iterating, whereas the last offset may require loading the batch header from the file channel.</li>
+     *     <li>Iteration stops as soon as the base offsets alone prove the budget is spent. Base offsets are
+     *     strictly increasing, so the offsets between the start of the span and a batch's base offset are
+     *     already accounted for and the batch itself holds at least one more record.</li>
+     * </ul>
+     *
+     * @param maxFetchRecords The record budget of the share fetch request.
+     * @param fetchOffsets The fetch offsets of the acquired topic partitions.
+     * @param fetchedData The already fetched data, keyed by topic partition.
+     * @return The remaining record budget, or 0 if none remains.
+     */
+    private static int remainingRecordBudget(int maxFetchRecords,
+                                             Map<TopicIdPartition, Long> fetchOffsets,
+                                             Map<TopicIdPartition, LogReadResult> fetchedData) {
+        long remaining = maxFetchRecords;
+        for (Map.Entry<TopicIdPartition, LogReadResult> entry : fetchedData.entrySet()) {
+            FetchDataInfo fetchDataInfo = entry.getValue().info();
+            if (fetchDataInfo == null || fetchDataInfo.records == null) {
+                continue;
+            }
+
+            Records records = fetchDataInfo.records;
+            // The span starts at the fetch offset, or at the base offset of the first batch if that is
+            // higher or the fetch offset is unknown.
+            long startOffset = fetchOffsets.getOrDefault(entry.getKey(), -1L);
+            RecordBatch lastBatch = null;
+            for (RecordBatch batch : records.batches()) {
+                if (lastBatch == null) {
+                    startOffset = Math.max(startOffset, batch.baseOffset());
+                } else if (batch.baseOffset() - startOffset >= remaining) {
+                    return 0;
+                }
+                lastBatch = batch;
+            }
+            if (lastBatch != null) {
+                remaining -= Math.max(0, lastBatch.lastOffset() - startOffset + 1);
+                if (remaining <= 0) {
+                    return 0;
+                }
+            }
+        }
+        return (int) remaining;
     }
 
     // Visible for testing.
@@ -1306,4 +1352,13 @@ public class DelayedShareFetch extends DelayedOperation {
             completeRemoteShareFetchRequestOutsidePurgatory();
         }
     }
+
+    /**
+     * The fetch offset metadata cached for a topic partition.
+     *
+     * @param offset         The fetch offset of the share partition at which the log was read.
+     * @param offsetMetadata The log offset metadata, containing the segment and file position, returned by the log
+     *                       read for the fetch offset.
+     */
+    private record CachedFetchOffsetMetadata(long offset, LogOffsetMetadata offsetMetadata) { }
 }
