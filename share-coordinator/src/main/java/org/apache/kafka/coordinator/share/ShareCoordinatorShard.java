@@ -260,11 +260,9 @@ public class ShareCoordinatorShard implements CoordinatorShard<CoordinatorRecord
             ShareGroupOffset offsetRecord = ShareGroupOffset.fromRecord(value);
             // This record is the complete snapshot.
             shareStateMap.put(mapKey, offsetRecord);
-            // If number of share updates is exceeded, then reset it.
+            // A snapshot subsumes all prior share updates, so reset the count.
             if (snapshotUpdateCount.containsKey(mapKey)) {
-                if (snapshotUpdateCount.get(mapKey) >= config.shareCoordinatorSnapshotUpdateRecordsPerSnapshot()) {
-                    snapshotUpdateCount.put(mapKey, 0);
-                }
+                snapshotUpdateCount.put(mapKey, 0);
             }
         }
 
@@ -586,24 +584,28 @@ public class ShareCoordinatorShard implements CoordinatorShard<CoordinatorRecord
     /**
      * Iterates over the soft state to determine the share partitions whose last snapshot is
      * older than the allowed time interval. The candidate share partitions are force snapshotted.
+     * <p>
+     * Skipped if all share partitions are cold snapshotted with no pending share updates.
      *
      * @return A result containing snapshot records, if any, and a void response.
      */
     public CoordinatorResult<Void, CoordinatorRecord> snapshotColdPartitions() {
-        long coldSnapshottedPartitionsCount = shareStateMap.values().stream()
-            .filter(shareGroupOffset -> shareGroupOffset.createTimestamp() - shareGroupOffset.writeTimestamp() != 0)
-            .count();
+        boolean allPartitionsQuiet = shareStateMap.entrySet().stream()
+            .allMatch(entry -> entry.getValue().createTimestamp() != entry.getValue().writeTimestamp() &&
+                snapshotUpdateCount.getOrDefault(entry.getKey(), 0) == 0);
 
-        // If all share partitions are snapshotted, it means that
-        // system is quiet and cold snapshotting will not help much.
-        if (coldSnapshottedPartitionsCount == shareStateMap.size()) {
-            log.debug("All share snapshot records already cold snapshotted, skipping.");
+        // If all share partitions are cold snapshotted with no pending updates,
+        // it means that system is quiet and cold snapshotting will not help much.
+        if (allPartitionsQuiet) {
+            log.debug("All share snapshot records already cold snapshotted with no pending updates, skipping.");
             return new CoordinatorResult<>(List.of(), null);
         }
 
         // Some active partitions are there.
         List<CoordinatorRecord> records = new ArrayList<>();
 
+        // Idle partitions are snapshotted as well, since their old snapshot
+        // offsets hold back the prune floor.
         shareStateMap.forEach((sharePartitionKey, shareGroupOffset) -> {
             long timeSinceLastSnapshot = time.milliseconds() - shareGroupOffset.writeTimestamp();
             if (timeSinceLastSnapshot >= config.shareCoordinatorColdPartitionSnapshotIntervalMs()) {
