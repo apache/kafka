@@ -302,7 +302,8 @@ public class ClusterTestExtensionsTest {
                     topic -> topic.name().equals(testTopic)
             ));
 
-            assertThrows(UnknownTopicOrPartitionException.class, () -> clusterInstance.deleteTopic("non-existent-topic"));
+            assertInstanceOf(UnknownTopicOrPartitionException.class,
+                assertThrows(RuntimeException.class, () -> clusterInstance.deleteTopic("non-existent-topic")).getCause());
         }
     }
 

@@ -365,7 +365,6 @@ public interface ClusterInstance {
         } catch (InterruptedException e) {
             throw new InterruptException(e);
         } catch (ExecutionException e) {
-            if (e.getCause() instanceof RuntimeException re) throw re;
             throw new RuntimeException("Failed to delete topic " + topicName, e.getCause());
         }
     }
