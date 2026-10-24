@@ -1,0 +1,14 @@
+{
+  "schema": "KIP_1320_SELECTED_RESULT_V1",
+  "kafka_sha": "ac0d7e245b213c20ab66bcea211d1cbd5ed2c95a",
+  "query_set_version": "JVM_SOURCE_IMPORT_TEXT_V1",
+  "query_manifest_sha256": "a652498f83c52187ee6659099186431cc7aab230635a9e4154c0aa79beaee43d",
+  "source_snapshot_manifest_sha256": "826677daafc6555caf162f96a1b5f621cf692bce8f5b1c7ab82d2136c21e6e67",
+  "source_results_sha256": "cdaa2ee198ab6bef44f328bb56fdfe33a2cc55db3ee1c6d4b0051dbaa5c43a16",
+  "first_started_at": "2026-07-19T01:11:20Z",
+  "last_completed_at": "2026-07-21T01:03:13Z",
+  "usage_threshold": 1000,
+  "total_queries": 4454,
+  "selected_candidates": 75,
+  "selected_query_results": 150
+}
