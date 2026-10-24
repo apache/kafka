@@ -19,12 +19,14 @@ package org.apache.kafka.coordinator.group.streams;
 import org.apache.kafka.common.message.StreamsGroupDescribeResponseData;
 import org.apache.kafka.common.message.StreamsGroupHeartbeatRequestData;
 import org.apache.kafka.coordinator.group.generated.StreamsGroupTopologyValue;
+import org.apache.kafka.coordinator.group.generated.StreamsGroupTopologyValue.CopartitionGroup;
 import org.apache.kafka.coordinator.group.generated.StreamsGroupTopologyValue.Subtopology;
 import org.apache.kafka.coordinator.group.generated.StreamsGroupTopologyValue.TopicInfo;
 
 import java.util.Collections;
 import java.util.Comparator;
 import java.util.HashMap;
+import java.util.List;
 import java.util.Map;
 import java.util.Objects;
 import java.util.Set;
@@ -111,7 +113,8 @@ public record StreamsTopology(int topologyEpoch,
     public static StreamsTopology fromRecord(StreamsGroupTopologyValue record) {
         return new StreamsTopology(
             record.epoch(),
-            record.subtopologies().stream().collect(Collectors.toMap(Subtopology::subtopologyId, x -> x))
+            record.subtopologies().stream()
+                .collect(Collectors.toMap(Subtopology::subtopologyId, x -> x))
         );
     }
 
@@ -126,6 +129,178 @@ public record StreamsTopology(int topologyEpoch,
         final Map<String, StreamsGroupTopologyValue.Subtopology> subtopologyMap = recordValue.subtopologies().stream()
             .collect(Collectors.toMap(StreamsGroupTopologyValue.Subtopology::subtopologyId, x -> x));
         return new StreamsTopology(topology.epoch(), subtopologyMap);
+    }
+
+    /**
+     * Checks whether the request describes this topology without converting or modifying it.
+     * Subtopologies are matched by ID. Copartition groups and their topic indexes are compared
+     * without regard to order, but duplicate occurrences must still match. All other lists
+     * retain their order-sensitive comparison, including the topic lists referenced by indexes.
+     *
+     * @param topology The topology supplied in the heartbeat request.
+     * @return Whether the request matches this topology.
+     */
+    public boolean matches(StreamsGroupHeartbeatRequestData.Topology topology) {
+        if (topologyEpoch != topology.epoch() || subtopologies.size() != topology.subtopologies().size()) {
+            return false;
+        }
+        for (int i = 0; i < topology.subtopologies().size(); i++) {
+            StreamsGroupHeartbeatRequestData.Subtopology requested = topology.subtopologies().get(i);
+            Subtopology current = subtopologies.get(requested.subtopologyId());
+            if (current == null || !matchesSubtopology(current, requested)) {
+                return false;
+            }
+
+            // Do not let repeated IDs match one stored subtopology while omitting another.
+            for (int j = 0; j < i; j++) {
+                if (requested.subtopologyId().equals(topology.subtopologies().get(j).subtopologyId())) {
+                    return false;
+                }
+            }
+        }
+        return true;
+    }
+
+    // Keep these comparisons in sync with the generated fields guarded by StreamsTopologyTest.
+    private static boolean matchesSubtopology(Subtopology current, StreamsGroupHeartbeatRequestData.Subtopology requested) {
+        if (!current.subtopologyId().equals(requested.subtopologyId())) {
+            return false;
+        }
+
+        return current.sourceTopics().equals(requested.sourceTopics())
+            && current.sourceTopicRegex().equals(requested.sourceTopicRegex())
+            && current.repartitionSinkTopics().equals(requested.repartitionSinkTopics())
+            && matchesTopicInfos(current.repartitionSourceTopics(), requested.repartitionSourceTopics())
+            && matchesTopicInfos(current.stateChangelogTopics(), requested.stateChangelogTopics())
+            && matchesCopartitionGroups(current.copartitionGroups(), requested.copartitionGroups());
+    }
+
+    private static boolean matchesTopicInfos(List<TopicInfo> current, List<StreamsGroupHeartbeatRequestData.TopicInfo> requested) {
+        if (current.size() != requested.size()) {
+            return false;
+        }
+        for (int i = 0; i < current.size(); i++) {
+            TopicInfo fromCurrent = current.get(i);
+            StreamsGroupHeartbeatRequestData.TopicInfo fromRequested = requested.get(i);
+            if (!fromCurrent.name().equals(fromRequested.name())
+                || fromCurrent.partitions() != fromRequested.partitions()
+                || fromCurrent.replicationFactor() != fromRequested.replicationFactor()
+                || !matchesTopicConfigs(fromCurrent.topicConfigs(), fromRequested.topicConfigs())) {
+                return false;
+            }
+        }
+        return true;
+    }
+
+    private static boolean matchesTopicConfigs(
+        List<StreamsGroupTopologyValue.TopicConfig> current,
+        List<StreamsGroupHeartbeatRequestData.KeyValue> requested
+    ) {
+        // Preserve the null handling of convertToTopicInfo for directly constructed requests.
+        if (current == null || requested == null) {
+            return current == null && requested == null;
+        }
+        if (current.size() != requested.size()) {
+            return false;
+        }
+        for (int i = 0; i < current.size(); i++) {
+            if (!Objects.equals(current.get(i).key(), requested.get(i).key())
+                || !Objects.equals(current.get(i).value(), requested.get(i).value())) {
+                return false;
+            }
+        }
+        return true;
+    }
+
+    private static boolean matchesCopartitionGroups(
+        List<CopartitionGroup> current,
+        List<StreamsGroupHeartbeatRequestData.CopartitionGroup> requested
+    ) {
+        if (current.size() != requested.size()) {
+            return false;
+        }
+
+        boolean sameOrder = true;
+        for (int i = 0; i < current.size(); i++) {
+            if (!matchesCopartitionGroup(current.get(i), requested.get(i))) {
+                sameOrder = false;
+                break;
+            }
+        }
+        if (sameOrder) {
+            return true;
+        }
+
+        // Count equivalent occurrences rather than allocating sorted copies
+        // or sets, which would lose duplicate groups.
+        for (int i = 0; i < current.size(); i++) {
+            CopartitionGroup group = current.get(i);
+            StreamsGroupHeartbeatRequestData.CopartitionGroup representative = null;
+            int requestedCount = 0;
+            for (int j = 0; j < requested.size(); j++) {
+                if (matchesCopartitionGroup(group, requested.get(j))) {
+                    representative = requested.get(j);
+                    requestedCount++;
+                }
+            }
+            if (representative == null) {
+                return false;
+            }
+            int currentCount = 0;
+            for (int j = 0; j < current.size(); j++) {
+                if (matchesCopartitionGroup(current.get(j), representative)) {
+                    currentCount++;
+                }
+            }
+            if (currentCount != requestedCount) {
+                return false;
+            }
+        }
+        return true;
+    }
+
+    private static boolean matchesCopartitionGroup(
+        CopartitionGroup current,
+        StreamsGroupHeartbeatRequestData.CopartitionGroup requested
+    ) {
+        return sameTopicIndexes(current.sourceTopics(), requested.sourceTopics())
+            && sameTopicIndexes(current.sourceTopicRegex(), requested.sourceTopicRegex())
+            && sameTopicIndexes(current.repartitionSourceTopics(), requested.repartitionSourceTopics());
+    }
+
+    private static boolean sameTopicIndexes(List<Short> current, List<Short> requested) {
+        // [0] != [0, 1, 2]
+        if (current.size() != requested.size()) {
+            return false;
+        }
+
+        // [0, 1, 2] == [0, 1, 2]
+        if (current.equals(requested)) {
+            return true;
+        }
+
+        int size = current.size();
+
+        // Ignore ordering while preserving duplicate counts.
+        // For example, [0, 0, 1] matches [1, 0, 0], but not [0, 1, 1].
+        for (int i = 0; i < size; i++) {
+            short index = current.get(i);
+            int currentCount = 0;
+            int requestedCount = 0;
+
+            for (int j = 0; j < size; j++) {
+                if (current.get(j) == index) {
+                    currentCount++;
+                }
+                if (requested.get(j) == index) {
+                    requestedCount++;
+                }
+            }
+            if (currentCount != requestedCount) {
+                return false;
+            }
+        }
+        return true;
     }
 
     public StreamsGroupDescribeResponseData.Topology asStreamsGroupDescribeTopology() {
