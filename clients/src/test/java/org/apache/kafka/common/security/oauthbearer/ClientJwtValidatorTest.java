@@ -17,15 +17,19 @@
 
 package org.apache.kafka.common.security.oauthbearer;
 
+import org.apache.kafka.common.config.SaslConfigs;
 import org.apache.kafka.common.security.oauthbearer.internals.secured.AccessTokenBuilder;
 import org.apache.kafka.common.utils.Utils;
 
 import org.junit.jupiter.api.Test;
 
 import java.util.Base64;
+import java.util.List;
+import java.util.Set;
 
 import static org.apache.kafka.common.security.oauthbearer.OAuthBearerLoginModule.OAUTHBEARER_MECHANISM;
 import static org.junit.jupiter.api.Assertions.assertDoesNotThrow;
+import static org.junit.jupiter.api.Assertions.assertEquals;
 import static org.junit.jupiter.api.Assertions.assertThrows;
 
 public class ClientJwtValidatorTest extends JwtValidatorTest {
@@ -54,5 +58,101 @@ public class ClientJwtValidatorTest extends JwtValidatorTest {
                 "Valid, URL-safe base 64-encoded JWT should be decodable"
             );
         }
+    }
+
+    @Test
+    void testSpaceDelimitedStringScopesProcessedAccordingToRfc6749() throws Exception {
+        OAuthBearerToken token = validateTokenWithScope("email profile phone address");
+
+        assertEquals(Set.of("email", "profile", "phone", "address"), token.scope());
+    }
+
+    @Test
+    void testSpaceDelimitedStringScopesTrimmedAndCollapsed() throws Exception {
+        OAuthBearerToken token = validateTokenWithScope("   email   profile   phone   ");
+
+        assertEquals(Set.of("email", "profile", "phone"), token.scope());
+    }
+
+    @Test
+    void testSpaceDelimitedStringScopesProcessedWithConfiguredScopeClaimName() throws Exception {
+        OAuthBearerToken token = validateTokenWithCustomScopeClaimName("scp", "email profile phone");
+
+        assertEquals(Set.of("email", "profile", "phone"), token.scope());
+    }
+
+    @Test
+    void testDuplicateSpaceDelimitedStringScopesRejected() {
+        JwtValidatorException exception = assertThrows(JwtValidatorException.class,
+            () -> validateTokenWithScope("email profile email"));
+
+        assertErrorMessageContains(exception.getMessage(), "scope value must not contain duplicates");
+    }
+
+    @Test
+    void testBlankSpaceDelimitedStringScopesProduceEmptySet() throws Exception {
+        OAuthBearerToken token = validateTokenWithScope("   ");
+
+        assertEquals(Set.of(), token.scope());
+    }
+
+    @Test
+    void testCollectionScopesStillProcessed() throws Exception {
+        OAuthBearerToken token = validateTokenWithScope(List.of("email", "profile", "phone"));
+
+        assertEquals(Set.of("email", "profile", "phone"), token.scope());
+    }
+
+    private OAuthBearerToken validateTokenWithScope(Object scope) throws Exception {
+        JwtValidator validator = createJwtValidator();
+        validator.configure(getSaslConfigs(), OAUTHBEARER_MECHANISM, getJaasConfigEntries());
+
+        return validator.validate(createJwtWithScope(scope));
+    }
+
+    private OAuthBearerToken validateTokenWithCustomScopeClaimName(String scopeClaimName, Object scope) throws Exception {
+        JwtValidator validator = createJwtValidator();
+        validator.configure(
+            getSaslConfigs(SaslConfigs.SASL_OAUTHBEARER_SCOPE_CLAIM_NAME, scopeClaimName),
+            OAUTHBEARER_MECHANISM,
+            getJaasConfigEntries()
+        );
+
+        return validator.validate(createJwtWithScopeClaimName(scopeClaimName, scope));
+    }
+
+    private String createJwtWithScope(Object scope) {
+        return createJwtWithScopeClaimName("scope", scope);
+    }
+
+    private String createJwtWithScopeClaimName(String scopeClaimName, Object scope) {
+        String defaultScopeJson = "scope".equals(scopeClaimName) ? "" : "\"scope\":\"engineering\",";
+        return createJwt(
+            "{\"alg\":\"HS256\",\"typ\":\"JWT\"}",
+            String.format(
+                "{\"sub\":\"jdoe\",\"exp\":60,\"iat\":0,%s\"%s\":%s}",
+                defaultScopeJson,
+                scopeClaimName,
+                scopeJson(scope)
+            ),
+            "dummysignature"
+        );
+    }
+
+    private String scopeJson(Object scope) {
+        if (scope instanceof String)
+            return "\"" + escapeJson((String) scope) + "\"";
+
+        @SuppressWarnings("unchecked")
+        List<String> scopes = (List<String>) scope;
+        return scopes.stream()
+            .map(scopeValue -> "\"" + escapeJson(scopeValue) + "\"")
+            .reduce((left, right) -> left + "," + right)
+            .map(scopeValues -> "[" + scopeValues + "]")
+            .orElse("[]");
+    }
+
+    private String escapeJson(String value) {
+        return value.replace("\\", "\\\\").replace("\"", "\\\"");
     }
 }
