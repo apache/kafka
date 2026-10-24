@@ -26,6 +26,7 @@ import org.apache.kafka.common.utils.internals.BufferSupplier.GrowableBufferSupp
 import org.apache.kafka.common.utils.internals.LogContext;
 import org.apache.kafka.raft.Batch;
 import org.apache.kafka.raft.ControlRecord;
+import org.apache.kafka.raft.RaftClientContextBuilder;
 import org.apache.kafka.raft.RaftClientTestContext;
 import org.apache.kafka.raft.internals.StringSerde;
 import org.apache.kafka.server.common.OffsetAndEpoch;
@@ -62,7 +63,7 @@ public final class SnapshotWriterReaderTest {
         long magicTimestamp = 0xDEADBEEF;
         OffsetAndEpoch id = new OffsetAndEpoch(recordsPerBatch * batches, 3);
 
-        RaftClientTestContext.Builder contextBuilder = new RaftClientTestContext.Builder(localId, voters);
+        RaftClientContextBuilder<RaftClientTestContext> contextBuilder = new RaftClientContextBuilder<RaftClientTestContext>(localId, voters, RaftClientTestContext::new);
         RaftClientTestContext context = contextBuilder.build();
 
         context.pollUntil(() -> context.currentLeader().equals(OptionalInt.of(localId)));
@@ -94,7 +95,7 @@ public final class SnapshotWriterReaderTest {
         OffsetAndEpoch id = new OffsetAndEpoch(recordsPerBatch * batches, 3);
         List<List<String>> expected = buildRecords(recordsPerBatch, batches);
 
-        RaftClientTestContext.Builder contextBuilder = new RaftClientTestContext.Builder(localId, voters);
+        RaftClientContextBuilder<RaftClientTestContext> contextBuilder = new RaftClientContextBuilder<RaftClientTestContext>(localId, voters, RaftClientTestContext::new);
         for (List<String> batch : expected) {
             contextBuilder.appendToLog(id.epoch(), batch);
         }
@@ -131,7 +132,7 @@ public final class SnapshotWriterReaderTest {
         OffsetAndEpoch id = new OffsetAndEpoch(recordsPerBatch * batches, 3);
         List<List<String>> expected = buildRecords(recordsPerBatch, batches);
 
-        RaftClientTestContext.Builder contextBuilder = new RaftClientTestContext.Builder(localId, voters);
+        RaftClientContextBuilder<RaftClientTestContext> contextBuilder = new RaftClientContextBuilder<RaftClientTestContext>(localId, voters, RaftClientTestContext::new);
         for (List<String> batch : expected) {
             contextBuilder.appendToLog(id.epoch(), batch);
         }
@@ -158,7 +159,7 @@ public final class SnapshotWriterReaderTest {
         OffsetAndEpoch id = new OffsetAndEpoch(recordsPerBatch * batches, 3);
         List<List<String>> expected = buildRecords(recordsPerBatch, batches);
 
-        RaftClientTestContext.Builder contextBuilder = new RaftClientTestContext.Builder(localId, voters);
+        RaftClientContextBuilder<RaftClientTestContext> contextBuilder = new RaftClientContextBuilder<RaftClientTestContext>(localId, voters, RaftClientTestContext::new);
         for (List<String> batch : expected) {
             contextBuilder.appendToLog(id.epoch(), batch);
         }

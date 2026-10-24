@@ -65,15 +65,14 @@ public final class KafkaRaftClientFetchTest {
         ReplicaKey local = KafkaRaftClientTest.replicaKey(localId, true);
         ReplicaKey electedLeader = KafkaRaftClientTest.replicaKey(localId + 1, true);
 
-        RaftClientTestContext context = new RaftClientTestContext.Builder(
+        RaftClientTestContext context = new RaftClientContextBuilder<>(
             local.id(),
-            local.directoryId().get()
-        )
+            local.directoryId().get(), RaftClientTestContext::new)
             .withStartingVoters(
                 VoterSetTest.voterSet(Stream.of(local, electedLeader)), KRaftVersion.KRAFT_VERSION_1
             )
             .withElectedLeader(epoch, electedLeader.id())
-            .withRaftProtocol(RaftClientTestContext.RaftProtocol.KIP_996_PROTOCOL)
+            .withRaftProtocol(SharedRaftClientContext.RaftProtocol.KIP_996_PROTOCOL)
             .build();
 
         context.pollUntilRequest();
@@ -101,10 +100,9 @@ public final class KafkaRaftClientFetchTest {
         ReplicaKey electedLeader = KafkaRaftClientTest.replicaKey(localId + 1, true);
         int expectedFetchMaxBytes = 1024;
 
-        RaftClientTestContext context = new RaftClientTestContext.Builder(
+        RaftClientTestContext context = new RaftClientContextBuilder<>(
             local.id(),
-            local.directoryId().get()
-        )
+            local.directoryId().get(), RaftClientTestContext::new)
             .withStartingVoters(
                 VoterSetTest.voterSet(Stream.of(local, electedLeader)),
                 KRaftVersion.KRAFT_VERSION_1
@@ -131,10 +129,9 @@ public final class KafkaRaftClientFetchTest {
         var remoteMaxSizeBytes = Integer.MAX_VALUE;
         var localMaxSizeBytes = 1;
 
-        RaftClientTestContext context = new RaftClientTestContext.Builder(
+        RaftClientTestContext context = new RaftClientContextBuilder<>(
             localKey.id(),
-            localKey.directoryId().get()
-        )
+            localKey.directoryId().get(), RaftClientTestContext::new)
             .appendToLog(epoch, List.of("a", "a", "a"))
             .appendToLog(epoch, List.of("b", "b", "b"))
             .withStartingVoters(
@@ -186,10 +183,9 @@ public final class KafkaRaftClientFetchTest {
         var remoteMaxSizeBytes = 1;
         var localMaxSizeBytes = 1024;
 
-        RaftClientTestContext context = new RaftClientTestContext.Builder(
+        RaftClientTestContext context = new RaftClientContextBuilder<>(
             localKey.id(),
-            localKey.directoryId().get()
-        )
+            localKey.directoryId().get(), RaftClientTestContext::new)
             .appendToLog(epoch, List.of("a", "a", "a"))
             .appendToLog(epoch, List.of("b", "b", "b"))
             .withStartingVoters(
@@ -239,10 +235,9 @@ public final class KafkaRaftClientFetchTest {
         var remoteMaxSizeBytes = batchSizeBytes * 2;
         var localMaxSizeBytes = 1024;
 
-        RaftClientTestContext context = new RaftClientTestContext.Builder(
+        RaftClientTestContext context = new RaftClientContextBuilder<>(
             localKey.id(),
-            localKey.directoryId().get()
-        )
+            localKey.directoryId().get(), RaftClientTestContext::new)
             .appendToLog(epoch, List.of("a", "a", "a"))
             .appendToLog(epoch, List.of("b", "b", "b"))
             .appendToLog(epoch, List.of("c", "c", "c"))
@@ -308,10 +303,9 @@ public final class KafkaRaftClientFetchTest {
         var remoteKey = KafkaRaftClientTest.replicaKey(id + 1, true);
         var localMaxSizeBytes = 1024;
 
-        RaftClientTestContext context = new RaftClientTestContext.Builder(
+        RaftClientTestContext context = new RaftClientContextBuilder<>(
             localKey.id(),
-            localKey.directoryId().get()
-        )
+            localKey.directoryId().get(), RaftClientTestContext::new)
             .appendToLog(epoch, List.of("a", "a", "a"))
             .appendToLog(epoch, List.of("b", "b", "b"))
             .withStartingVoters(
@@ -383,16 +377,15 @@ public final class KafkaRaftClientFetchTest {
         ReplicaKey local = KafkaRaftClientTest.replicaKey(localId, true);
         ReplicaKey electedLeader = KafkaRaftClientTest.replicaKey(localId + 1, true);
 
-        RaftClientTestContext context = new RaftClientTestContext.Builder(
+        RaftClientTestContext context = new RaftClientContextBuilder<>(
             local.id(),
-            local.directoryId().get()
-        )
+            local.directoryId().get(), RaftClientTestContext::new)
             .withStartingVoters(
                 VoterSetTest.voterSet(Stream.of(local, electedLeader)),
                 KRaftVersion.KRAFT_VERSION_1
             )
             .withElectedLeader(epoch, electedLeader.id())
-            .withRaftProtocol(RaftClientTestContext.RaftProtocol.KIP_996_PROTOCOL)
+            .withRaftProtocol(SharedRaftClientContext.RaftProtocol.KIP_996_PROTOCOL)
             .build();
 
         context.pollUntilRequest();
@@ -447,17 +440,16 @@ public final class KafkaRaftClientFetchTest {
         ReplicaKey local = KafkaRaftClientTest.replicaKey(localId, true);
         ReplicaKey electedLeader = KafkaRaftClientTest.replicaKey(localId + 1, true);
 
-        RaftClientTestContext context = new RaftClientTestContext.Builder(
+        RaftClientTestContext context = new RaftClientContextBuilder<>(
             local.id(),
-            local.directoryId().get()
-        )
+            local.directoryId().get(), RaftClientTestContext::new)
             .appendToLog(epoch, List.of("a", "b", "c"))
             .appendToLog(epoch, List.of("d", "e", "f"))
             .withStartingVoters(
                 VoterSetTest.voterSet(Stream.of(local, electedLeader)), KRaftVersion.KRAFT_VERSION_1
             )
             .withElectedLeader(epoch, electedLeader.id())
-            .withRaftProtocol(RaftClientTestContext.RaftProtocol.KIP_1166_PROTOCOL)
+            .withRaftProtocol(SharedRaftClientContext.RaftProtocol.KIP_1166_PROTOCOL)
             .build();
 
         var localLogEndOffset = context.log.endOffset().offset();
@@ -506,17 +498,16 @@ public final class KafkaRaftClientFetchTest {
         var voter = KafkaRaftClientTest.replicaKey(local.id() + 1, true);
         var remote = KafkaRaftClientTest.replicaKey(local.id() + 2, true);
 
-        RaftClientTestContext context = new RaftClientTestContext.Builder(
+        RaftClientTestContext context = new RaftClientContextBuilder<>(
             local.id(),
-            local.directoryId().get()
-        )
+            local.directoryId().get(), RaftClientTestContext::new)
             .appendToLog(epoch, List.of("a", "b", "c"))
             .appendToLog(epoch, List.of("d", "e", "f"))
             .withStartingVoters(
                 VoterSetTest.voterSet(Stream.of(local, voter)), KRaftVersion.KRAFT_VERSION_1
             )
             .withUnknownLeader(epoch)
-            .withRaftProtocol(RaftClientTestContext.RaftProtocol.KIP_1166_PROTOCOL)
+            .withRaftProtocol(SharedRaftClientContext.RaftProtocol.KIP_1166_PROTOCOL)
             .build();
 
         context.unattachedToLeader();
@@ -553,17 +544,16 @@ public final class KafkaRaftClientFetchTest {
         var voter = KafkaRaftClientTest.replicaKey(local.id() + 1, true);
         var remote = KafkaRaftClientTest.replicaKey(local.id() + 2, true);
 
-        RaftClientTestContext context = new RaftClientTestContext.Builder(
+        RaftClientTestContext context = new RaftClientContextBuilder<>(
             local.id(),
-            local.directoryId().get()
-        )
+            local.directoryId().get(), RaftClientTestContext::new)
             .appendToLog(epoch, List.of("a", "b", "c"))
             .appendToLog(epoch, List.of("d", "e", "f"))
             .withStartingVoters(
                 VoterSetTest.voterSet(Stream.of(local, voter)), KRaftVersion.KRAFT_VERSION_1
             )
             .withUnknownLeader(epoch)
-            .withRaftProtocol(RaftClientTestContext.RaftProtocol.KIP_1166_PROTOCOL)
+            .withRaftProtocol(SharedRaftClientContext.RaftProtocol.KIP_1166_PROTOCOL)
             .build();
 
         context.unattachedToLeader();
@@ -599,17 +589,16 @@ public final class KafkaRaftClientFetchTest {
         var voter = KafkaRaftClientTest.replicaKey(local.id() + 1, true);
         var remote = KafkaRaftClientTest.replicaKey(local.id() + 2, true);
 
-        RaftClientTestContext context = new RaftClientTestContext.Builder(
+        RaftClientTestContext context = new RaftClientContextBuilder<>(
             local.id(),
-            local.directoryId().get()
-        )
+            local.directoryId().get(), RaftClientTestContext::new)
             .appendToLog(epoch, List.of("a", "b", "c"))
             .appendToLog(epoch, List.of("d", "e", "f"))
             .withStartingVoters(
                 VoterSetTest.voterSet(Stream.of(local, voter)), KRaftVersion.KRAFT_VERSION_1
             )
             .withUnknownLeader(epoch)
-            .withRaftProtocol(RaftClientTestContext.RaftProtocol.KIP_1166_PROTOCOL)
+            .withRaftProtocol(SharedRaftClientContext.RaftProtocol.KIP_1166_PROTOCOL)
             .build();
 
         context.unattachedToLeader();
@@ -659,17 +648,16 @@ public final class KafkaRaftClientFetchTest {
         var voter = KafkaRaftClientTest.replicaKey(local.id() + 1, true);
         var remote = KafkaRaftClientTest.replicaKey(local.id() + 2, true);
 
-        RaftClientTestContext context = new RaftClientTestContext.Builder(
+        RaftClientTestContext context = new RaftClientContextBuilder<>(
             local.id(),
-            local.directoryId().get()
-        )
+            local.directoryId().get(), RaftClientTestContext::new)
             .appendToLog(epoch, List.of("a", "b", "c"))
             .appendToLog(epoch, List.of("d", "e", "f"))
             .withStartingVoters(
                 VoterSetTest.voterSet(Stream.of(local, voter)), KRaftVersion.KRAFT_VERSION_1
             )
             .withUnknownLeader(epoch)
-            .withRaftProtocol(RaftClientTestContext.RaftProtocol.KIP_1166_PROTOCOL)
+            .withRaftProtocol(SharedRaftClientContext.RaftProtocol.KIP_1166_PROTOCOL)
             .build();
 
         context.unattachedToLeader();
@@ -707,17 +695,16 @@ public final class KafkaRaftClientFetchTest {
         var voter = KafkaRaftClientTest.replicaKey(local.id() + 1, true);
         var remote = KafkaRaftClientTest.replicaKey(local.id() + 2, true);
 
-        RaftClientTestContext context = new RaftClientTestContext.Builder(
+        RaftClientTestContext context = new RaftClientContextBuilder<>(
             local.id(),
-            local.directoryId().get()
-        )
+            local.directoryId().get(), RaftClientTestContext::new)
             .appendToLog(epoch, List.of("a", "b", "c"))
             .appendToLog(epoch, List.of("d", "e", "f"))
             .withStartingVoters(
                 VoterSetTest.voterSet(Stream.of(local, voter)), KRaftVersion.KRAFT_VERSION_1
             )
             .withUnknownLeader(epoch)
-            .withRaftProtocol(RaftClientTestContext.RaftProtocol.KIP_1166_PROTOCOL)
+            .withRaftProtocol(SharedRaftClientContext.RaftProtocol.KIP_1166_PROTOCOL)
             .build();
 
         context.unattachedToLeader();
