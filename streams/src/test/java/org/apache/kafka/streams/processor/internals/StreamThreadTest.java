@@ -678,6 +678,72 @@ public class StreamThreadTest {
     }
 
     @Test
+    public void shouldNotProcessOrPunctuateWhileUncommittedBytesExceedLimit() {
+        final long maxUncommittedBytesPerThread = 1024L;
+        final StreamsConfig config = new StreamsConfig(configProps(false, false));
+        when(mainConsumer.poll(Mockito.any())).thenReturn(ConsumerRecords.empty());
+        final ConsumerGroupMetadata consumerGroupMetadata = mock(ConsumerGroupMetadata.class);
+        when(mainConsumer.groupMetadata()).thenReturn(consumerGroupMetadata);
+        when(consumerGroupMetadata.groupInstanceId()).thenReturn(Optional.empty());
+        final TaskManager taskManager = mockTaskManager();
+        when(taskManager.totalUncommittedBytes()).thenReturn(maxUncommittedBytesPerThread + 1);
+        // a rebalance is in progress, so the commit is skipped
+        when(taskManager.commit(Mockito.any())).thenReturn(-1);
+
+        final TopologyMetadata topologyMetadata = new TopologyMetadata(internalTopologyBuilder, config);
+        topologyMetadata.buildAndRewriteTopology();
+        thread = buildStreamThread(mainConsumer, taskManager, config, topologyMetadata, maxUncommittedBytesPerThread);
+        thread.setState(State.STARTING);
+        thread.setState(State.PARTITIONS_ASSIGNED);
+        thread.runOnceWithoutProcessingThreads();
+
+        verify(mainConsumer).poll(Mockito.any());
+        verify(taskManager).commit(Mockito.any());
+        verify(taskManager, never()).process(Mockito.anyInt(), Mockito.any());
+        verify(taskManager, never()).punctuate();
+    }
+
+    @Test
+    public void shouldResumeProcessingOnceUncommittedBytesAreCommitted() {
+        final long maxUncommittedBytesPerThread = 1024L;
+        final StreamsConfig config = new StreamsConfig(configProps(false, false));
+        when(mainConsumer.poll(Mockito.any())).thenReturn(ConsumerRecords.empty());
+        final ConsumerGroupMetadata consumerGroupMetadata = mock(ConsumerGroupMetadata.class);
+        when(mainConsumer.groupMetadata()).thenReturn(consumerGroupMetadata);
+        when(consumerGroupMetadata.groupInstanceId()).thenReturn(Optional.empty());
+        final AtomicLong uncommittedBytes = new AtomicLong(maxUncommittedBytesPerThread + 1);
+        final AtomicBoolean rebalanceInProgress = new AtomicBoolean(true);
+        final TaskManager taskManager = mockTaskManager();
+        when(taskManager.totalUncommittedBytes()).thenAnswer(invocation -> uncommittedBytes.get());
+        when(taskManager.commit(Mockito.any())).thenAnswer(invocation -> {
+            if (rebalanceInProgress.get()) {
+                return -1;
+            }
+            uncommittedBytes.set(0L);
+            return 1;
+        });
+
+        final TopologyMetadata topologyMetadata = new TopologyMetadata(internalTopologyBuilder, config);
+        topologyMetadata.buildAndRewriteTopology();
+        thread = buildStreamThread(mainConsumer, taskManager, config, topologyMetadata, maxUncommittedBytesPerThread);
+        thread.setState(State.STARTING);
+        thread.setState(State.PARTITIONS_ASSIGNED);
+
+        thread.runOnceWithoutProcessingThreads();
+        verify(taskManager, never()).process(Mockito.anyInt(), Mockito.any());
+
+        // the rebalance completes: processing stays paused until the commit at the end of this iteration succeeds
+        rebalanceInProgress.set(false);
+        thread.runOnceWithoutProcessingThreads();
+        verify(taskManager, never()).process(Mockito.anyInt(), Mockito.any());
+        verify(taskManager, never()).punctuate();
+
+        thread.runOnceWithoutProcessingThreads();
+        verify(taskManager).process(Mockito.anyInt(), Mockito.any());
+        verify(taskManager).punctuate();
+    }
+
+    @Test
     public void shouldNotProcessWhenPartitionRevoked() {
         final Properties props = configProps(false, false);
 
