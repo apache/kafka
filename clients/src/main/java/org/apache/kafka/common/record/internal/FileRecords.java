@@ -350,10 +350,8 @@ public class FileRecords extends AbstractRecords implements Closeable {
     private long fileSize(long position) throws IOException {
         try {
             return channel.size();
-        } catch (ClosedChannelException e) {
-            throw e;
         } catch (IOException e) {
-            throw new FileReadException(position, e);
+            throw FileReadException.ofReadFailure(position, e);
         }
     }
 

@@ -29,7 +29,6 @@ import java.io.EOFException;
 import java.io.IOException;
 import java.nio.ByteBuffer;
 import java.nio.channels.CancelledKeyException;
-import java.nio.channels.ClosedChannelException;
 import java.nio.channels.FileChannel;
 import java.nio.channels.SelectionKey;
 import java.nio.channels.SocketChannel;
@@ -1021,11 +1020,8 @@ public class SslTransportLayer implements TransportLayer {
         long channelSize;
         try {
             channelSize = fileChannel.size();
-        } catch (ClosedChannelException e) {
-            // A file closed concurrently, by a deletion or a shutdown, says nothing about the medium
-            throw e;
         } catch (IOException e) {
-            throw new FileReadException(position, e);
+            throw FileReadException.ofReadFailure(position, e);
         }
         if (position > channelSize)
             return 0;
@@ -1057,10 +1053,8 @@ public class SslTransportLayer implements TransportLayer {
                 int bytesRead;
                 try {
                     bytesRead = fileChannel.read(fileChannelBuffer, pos);
-                } catch (ClosedChannelException e) {
-                    throw e;
                 } catch (IOException e) {
-                    throw new FileReadException(pos, e);
+                    throw FileReadException.ofReadFailure(pos, e);
                 } finally {
                     // Holds exactly what was read, nothing if the read failed or reached the end of the file:
                     // otherwise the next call would send the previous read as the contents of this position.

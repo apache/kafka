@@ -17,13 +17,14 @@
 package org.apache.kafka.common.network;
 
 import java.io.IOException;
+import java.nio.channels.ClosedChannelException;
 
 /**
  * Thrown when the file being transferred to a network channel could not be read, its size included, as opposed to
  * the network channel not being written to: by {@link TransferableChannel#transferFrom} if the channel
  * {@link TransferableChannel#distinguishesFileReadFailures()}, and by the records being transferred. A file channel
  * closed concurrently, for instance by a deletion or a shutdown, does not count as a failed read: its
- * {@link java.nio.channels.ClosedChannelException} is thrown as it is.
+ * {@link ClosedChannelException} is thrown as it is, see {@link #ofReadFailure}.
  */
 public class FileReadException extends IOException {
     private static final long serialVersionUID = 1L;
@@ -46,5 +47,18 @@ public class FileReadException extends IOException {
      */
     public long position() {
         return position;
+    }
+
+    /**
+     * The exception to throw for a failed read of a file being transferred to a network channel: the failure itself if
+     * it is a {@link ClosedChannelException}, since a file closed concurrently, by a deletion or a shutdown, says
+     * nothing about the medium, otherwise a FileReadException with the failure as its cause.
+     *
+     * @param position The absolute position in the file at which the failed read started, or, if the size of the file
+     *                 could not be read, at which the transfer was to start
+     * @param failure The failure of the read
+     */
+    public static IOException ofReadFailure(long position, IOException failure) {
+        return failure instanceof ClosedChannelException ? failure : new FileReadException(position, failure);
     }
 }
