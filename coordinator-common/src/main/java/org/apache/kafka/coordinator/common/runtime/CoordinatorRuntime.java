@@ -490,10 +490,6 @@ public class CoordinatorRuntime<S extends CoordinatorShard<U>, U> implements Aut
             this.state = CoordinatorState.INITIAL;
             this.epoch = -1;
             this.deferredEventQueue = new DeferredEventQueue(logContext);
-
-            // After PoC (Draft PR), I think it would be better to move
-            // timer creation to where the snapshot registry is created.
-            // (See, L537 - timer.initializeSnapshotRegistry(snapshotRegistry);)
             this.timer = new CoordinatorTimerImpl<>(
                 logContext,
                 CoordinatorRuntime.this.timer,
@@ -501,8 +497,7 @@ public class CoordinatorRuntime<S extends CoordinatorShard<U>, U> implements Aut
                     operationName,
                     tp,
                     coordinator -> operation.generate()
-                ),
-                time
+                )
             );
             this.executor = new CoordinatorExecutorImpl<>(
                 logContext,
@@ -535,7 +530,6 @@ public class CoordinatorRuntime<S extends CoordinatorShard<U>, U> implements Aut
                 case LOADING:
                     state = CoordinatorState.LOADING;
                     SnapshotRegistry snapshotRegistry = new SnapshotRegistry(logContext);
-                    timer.initializeSnapshotRegistry(snapshotRegistry);
                     coordinator = new SnapshottableCoordinator<>(
                         logContext,
                         snapshotRegistry,
@@ -792,9 +786,6 @@ public class CoordinatorRuntime<S extends CoordinatorShard<U>, U> implements Aut
         private void failCurrentBatch(Throwable t) {
             if (currentBatch != null) {
                 coordinator.revertLastWrittenOffset(currentBatch.baseOffset);
-                if (state == CoordinatorState.ACTIVE) {
-                    timer.onRollback();
-                }
                 currentBatch.deferredEvents.complete(t);
                 freeCurrentBatch();
             }
@@ -1122,9 +1113,6 @@ public class CoordinatorRuntime<S extends CoordinatorShard<U>, U> implements Aut
                         "error: {}.", tp, t.getMessage(), t);
                 }
                 coordinator.revertLastWrittenOffset(prevLastWrittenOffset);
-                if (state == CoordinatorState.ACTIVE) {
-                    timer.onRollback();
-                }
                 event.complete(t);
             }
         }
