@@ -39,6 +39,7 @@ import org.apache.kafka.coordinator.group.streams.MemberTaskOffsets;
 import org.apache.kafka.coordinator.group.streams.NoOpAssignmentRefiner;
 import org.apache.kafka.coordinator.group.streams.StreamsGroupMember;
 import org.apache.kafka.coordinator.group.streams.TasksTuple;
+import org.apache.kafka.coordinator.group.streams.assignor.BalancedTaskAssignor;
 import org.apache.kafka.coordinator.group.streams.assignor.StickyTaskAssignor;
 import org.apache.kafka.coordinator.group.streams.topics.ConfiguredSubtopology;
 
@@ -358,7 +359,7 @@ public class GroupCoordinatorConfigTest {
     public static class StickyNamedTaskAssignor implements TaskAssignor {
         @Override
         public String name() {
-            // Collides with the built-in "sticky" assignor.
+            // Overrides the built-in "sticky" assignor.
             return "sticky";
         }
 
@@ -387,13 +388,15 @@ public class GroupCoordinatorConfigTest {
         GroupCoordinatorConfig config;
         List<TaskAssignor> assignors;
 
-        // Test default config. The default is every built-in assignor, in declaration order.
-        assertEquals(List.of("sticky"), GroupCoordinatorConfig.STREAMS_GROUP_ASSIGNORS_DEFAULT);
+        // Test default config. The default is every built-in assignor, in declaration order, so that the
+        // first entry -- the default assignor of groups that do not select one -- stays the sticky assignor.
+        assertEquals(List.of("sticky", "balanced"), GroupCoordinatorConfig.STREAMS_GROUP_ASSIGNORS_DEFAULT);
         config = createConfig(configs);
         assignors = config.streamsGroupAssignors();
-        assertEquals(1, assignors.size());
+        assertEquals(2, assignors.size());
         assertInstanceOf(StickyTaskAssignor.class, assignors.get(0));
-        assertEquals(List.of("sticky"), config.streamsGroupAssignorNames());
+        assertInstanceOf(BalancedTaskAssignor.class, assignors.get(1));
+        assertEquals(List.of("sticky", "balanced"), config.streamsGroupAssignorNames());
 
         // Test custom assignor.
         configs.put(GroupCoordinatorConfig.STREAMS_GROUP_ASSIGNORS_CONFIG, CustomTaskAssignor.class.getName());
@@ -445,21 +448,21 @@ public class GroupCoordinatorConfigTest {
     }
 
     @Test
-    public void testStreamsGroupAssignorsWithReservedBuiltinNameFails() {
-        // A custom assignor must not take the name of a built-in, whether or not the built-in is
-        // itself configured: a group selecting that name would otherwise silently get the custom one.
+    public void testStreamsGroupAssignorsOverridingBuiltinName() {
+        // A custom assignor may reuse the name of a built-in; groups selecting that name get the custom one.
         Map<String, Object> configs = new HashMap<>();
         configs.put(GroupCoordinatorConfig.STREAMS_GROUP_ASSIGNORS_CONFIG, StickyNamedTaskAssignor.class.getName());
-        assertEquals("Invalid value " + StickyNamedTaskAssignor.class.getName() +
-                " for configuration group.streams.assignors: Assignor name 'sticky' is reserved by a " +
-                "built-in assignor. A custom assignor must not reuse the name of a built-in assignor",
-            assertThrows(ConfigException.class, () -> createConfig(configs)).getMessage());
+        GroupCoordinatorConfig config = createConfig(configs);
+        List<TaskAssignor> assignors = config.streamsGroupAssignors();
+        assertEquals(1, assignors.size());
+        assertInstanceOf(StickyNamedTaskAssignor.class, assignors.get(0));
+        assertEquals(List.of("sticky"), config.streamsGroupAssignorNames());
     }
 
     @Test
     public void testStreamsGroupAssignorsBuiltinByClassName() {
-        // A built-in configured by its class name is recognised as the built-in, not as a custom assignor
-        // reusing the reserved name. The name it is registered under is the built-in short name.
+        // A built-in may also be configured by its class name and resolves to the built-in itself.
+        // The name it is registered under is the built-in short name.
         Map<String, Object> configs = new HashMap<>();
         configs.put(GroupCoordinatorConfig.STREAMS_GROUP_ASSIGNORS_CONFIG, StickyTaskAssignor.class.getName());
         GroupCoordinatorConfig config = createConfig(configs);
