@@ -722,7 +722,7 @@ public class AsyncKafkaConsumerTest {
         doReturn(-1).when(metadata).updateVersion();
 
         completeTopicSubscriptionChangeEventSuccessfully();
-        consumer.subscribe(singleton(topicName), mock(ConsumerRebalanceListener.class));
+        consumer.subscribe(singleton(topicName));
         // Simulate partition assignment from group coordinator
         subscriptions.assignFromSubscribed(singleton(tp));
 
@@ -780,7 +780,7 @@ public class AsyncKafkaConsumerTest {
         doReturn(-1).when(metadata).updateVersion();
 
         completeTopicSubscriptionChangeEventSuccessfully();
-        consumer.subscribe(singleton(topicName), mock(ConsumerRebalanceListener.class));
+        consumer.subscribe(singleton(topicName));
         // Simulate partition assignment from group coordinator
         subscriptions.assignFromSubscribed(singleton(tp));
 
@@ -1107,7 +1107,7 @@ public class AsyncKafkaConsumerTest {
             mock(ConsumerRebalanceListenerInvoker.class),
             subscriptions);
         completeTopicSubscriptionChangeEventSuccessfully();
-        consumer.subscribe(singleton("topic"), mock(ConsumerRebalanceListener.class));
+        consumer.subscribe(singleton("topic"));
         subscriptions.assignFromSubscribed(singleton(new TopicPartition("topic", 0)));
         completeSeekUnvalidatedEventSuccessfully();
         subscriptions.seek(new TopicPartition("topic", 0), 100);
@@ -1142,7 +1142,7 @@ public class AsyncKafkaConsumerTest {
         final TopicPartition tp1 = new TopicPartition(topicName, 1);
         final TopicPartition tp2 = new TopicPartition(topicName, 2);
 
-        consumer.subscribe(singleton(topicName), mock(ConsumerRebalanceListener.class));
+        consumer.subscribe(singleton(topicName));
 
         // Simulate rebalance that reconciled a new assignment of tp0 and tp1
         subscriptions.assignFromSubscribedAwaitingCallback(Set.of(tp0, tp1), Set.of(tp0, tp1));
@@ -1170,7 +1170,7 @@ public class AsyncKafkaConsumerTest {
             mock(ConsumerRebalanceListenerInvoker.class),
             subscriptions);
         completeTopicSubscriptionChangeEventSuccessfully();
-        consumer.subscribe(singleton("topic"), mock(ConsumerRebalanceListener.class));
+        consumer.subscribe(singleton("topic"));
         subscriptions.assignFromSubscribed(singleton(new TopicPartition("topic", 0)));
         completeSeekUnvalidatedEventSuccessfully();
         subscriptions.seek(new TopicPartition("topic", 0), 100);
@@ -2418,6 +2418,7 @@ public class AsyncKafkaConsumerTest {
     }
 
     @Test
+    @SuppressWarnings("removal")
     public void testSubscribeToRe2JPatternValidation() {
         consumer = newConsumer();
 
@@ -2434,6 +2435,7 @@ public class AsyncKafkaConsumerTest {
     }
 
     @Test
+    @SuppressWarnings("removal")
     public void testSubscribeToRe2JPatternThrowsIfNoGroupId() {
         consumer = newConsumer(requiredConsumerConfig());
         assertThrows(InvalidGroupIdException.class, () -> consumer.subscribe(new SubscriptionPattern("t*")));
@@ -2442,6 +2444,7 @@ public class AsyncKafkaConsumerTest {
     }
 
     @Test
+    @SuppressWarnings("removal")
     public void testSubscribeToRe2JPatternGeneratesEvent() {
         consumer = newConsumer();
         completeTopicRe2JPatternSubscriptionChangeEventSuccessfully();

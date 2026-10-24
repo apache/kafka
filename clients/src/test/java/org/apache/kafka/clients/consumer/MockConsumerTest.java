@@ -142,6 +142,7 @@ public class MockConsumerTest {
     }
 
     @Test
+    @SuppressWarnings("removal")
     public void testRebalanceListener() {
         final List<TopicPartition> revoked = new ArrayList<>();
         final List<TopicPartition> assigned = new ArrayList<>();
@@ -239,18 +240,19 @@ public class MockConsumerTest {
 
         List<TopicPartition> lost = new ArrayList<>();
         List<TopicPartition> revoked = new ArrayList<>();
-        consumer.subscribe(List.of("test"), new ConsumerRebalanceListener() {
+        consumer.setRebalanceListener(new RebalanceListener() {
             @Override
-            public void onPartitionsRevoked(Collection<TopicPartition> partitions) {
+            public void onPartitionsRevoked(Collection<TopicPartition> partitions, RebalanceConsumer rebalanceConsumer) {
                 revoked.addAll(partitions);
             }
             @Override
-            public void onPartitionsAssigned(Collection<TopicPartition> partitions) {}
+            public void onPartitionsAssigned(Collection<TopicPartition> partitions, RebalanceConsumer rebalanceConsumer) {}
             @Override
-            public void onPartitionsLost(Collection<TopicPartition> partitions) {
+            public void onPartitionsLost(Collection<TopicPartition> partitions, RebalanceConsumer rebalanceConsumer) {
                 lost.addAll(partitions);
             }
         });
+        consumer.subscribe(List.of("test"));
 
         consumer.rebalance(assigned);
         consumer.losePartitions(List.of(tp0));
