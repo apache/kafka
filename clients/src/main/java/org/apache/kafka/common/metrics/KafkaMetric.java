@@ -23,6 +23,7 @@ import org.apache.kafka.common.annotation.SuppressKafkaInternalApiUsage;
 import org.apache.kafka.common.utils.Time;
 
 import java.util.Objects;
+import java.util.Optional;
 
 @InterfaceAudience.Public
 public final class KafkaMetric implements Metric {
@@ -32,7 +33,7 @@ public final class KafkaMetric implements Metric {
     private final Time time;
     private final MetricValueProvider<?> metricValueProvider;
     private volatile MetricConfig config;
-
+    private final Optional<Sensor.RecordingLevel> recordingLevel;
     // public for testing
     /**
      * Create a metric to monitor an object that implements MetricValueProvider.
@@ -44,12 +45,33 @@ public final class KafkaMetric implements Metric {
      */
     @SuppressKafkaInternalApiUsage("KIP-1265: ctor leaks internal Time for test injection — pending KIP review to promote Time or refactor")
     public KafkaMetric(Object lock, MetricName metricName, MetricValueProvider<?> valueProvider,
-            MetricConfig config, Time time) {
+                       MetricConfig config, Time time) {
         this.metricName = metricName;
         this.lock = lock;
         this.metricValueProvider = Objects.requireNonNull(valueProvider, "valueProvider must not be null");
         this.config = config;
         this.time = time;
+        this.recordingLevel = Optional.empty();
+    }
+
+    /**
+     * Constructor for KafkaMetric having recording level.
+     * @param lock The lock used to prevent race condition
+     * @param metricName The name of the metric
+     * @param valueProvider The metric value provider associated with this metric
+     * @param config The configuration of the metric
+     * @param time The time instance to use with the metrics
+     * @param recordingLevel The recording level of the metric
+     */
+
+    public KafkaMetric(Object lock, MetricName metricName, MetricValueProvider<?> valueProvider,
+                       MetricConfig config, Time time, Sensor.RecordingLevel recordingLevel) {
+        this.metricName = metricName;
+        this.lock = lock;
+        this.metricValueProvider = Objects.requireNonNull(valueProvider, "valueProvider must not be null");
+        this.config = config;
+        this.time = time;
+        this.recordingLevel = Optional.ofNullable(recordingLevel);
     }
 
     /**
@@ -81,6 +103,16 @@ public final class KafkaMetric implements Metric {
         synchronized (this.lock) {
             return metricValueProvider.value(config, now);
         }
+    }
+
+    /**
+     * The method determines if the metric is active based on the recording level and the metric's configuration.
+     * @return true if the metric is active, false otherwise
+     */
+    public boolean isActive() {
+        return recordingLevel
+                .map(level -> level.shouldRecord(config.recordLevel().id))
+                .orElse(true);
     }
 
     /**
