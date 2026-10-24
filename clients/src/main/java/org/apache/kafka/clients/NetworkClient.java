@@ -167,6 +167,8 @@ public class NetworkClient implements KafkaClient {
 
     private final ExecutorService bootstrapExecutor;
 
+    private final HostResolver hostResolver;
+
     private final TelemetrySender telemetrySender;
 
     public NetworkClient(Selectable selector,
@@ -399,6 +401,7 @@ public class NetworkClient implements KafkaClient {
         this.rebootstrapTriggerMs = rebootstrapTriggerMs;
         this.metadataRecoveryStrategy = metadataRecoveryStrategy;
         this.metadataClusterCheckEnable = metadataClusterCheckEnable;
+        this.hostResolver = hostResolver;
         this.bootstrapConfiguration = bootstrapConfiguration;
         // Bootstrap timer is lazily initialized on the first poll so its budget represents
         // "time we spend on bootstrap once polling begins" — an idle gap between construction
@@ -414,7 +417,8 @@ public class NetworkClient implements KafkaClient {
             this.pendingBootstrapResolution = CompletableFuture.supplyAsync(
                 () -> ClientUtils.parseAddresses(
                     bootstrapConfiguration.bootstrapServers,
-                    bootstrapConfiguration.clientDnsLookup
+                    bootstrapConfiguration.clientDnsLookup,
+                    hostResolver
                 ),
                 bootstrapExecutor
             );
@@ -1375,7 +1379,8 @@ public class NetworkClient implements KafkaClient {
         pendingBootstrapResolution = CompletableFuture.supplyAsync(
             () -> ClientUtils.parseAddresses(
                 bootstrapConfiguration.bootstrapServers,
-                bootstrapConfiguration.clientDnsLookup
+                bootstrapConfiguration.clientDnsLookup,
+                hostResolver
             ),
             bootstrapExecutor
         );
