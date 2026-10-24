@@ -49,7 +49,6 @@ import java.util.UUID;
 import java.util.concurrent.ScheduledFuture;
 import java.util.concurrent.atomic.AtomicLong;
 import java.util.function.Consumer;
-import java.util.function.Predicate;
 import java.util.function.Supplier;
 import java.util.regex.Pattern;
 import java.util.stream.Collectors;
@@ -544,58 +543,43 @@ public class LocalLog {
 
     /**
      * Called on the network thread when writing fetched records failed in a way that may come from a failed read of
-     * the segment. A {@link FileReadException} means that the segment could not be read, which is reported as a
-     * failure of the log dir. Any other exception may be a socket or a storage failure, which re-reading the region
-     * tells apart. Both are done on the scheduler rather than on the network thread, since reporting logs
-     * synchronously and re-reading reads the disk, and each at most once at a time per log dir, so that a burst of
-     * failed sends or a slow failing disk does not take up the threads of the scheduler, which other tasks of the
-     * broker share.
+     * the segment. A {@link FileReadException} means that the segment could not be read, so the log dir is marked
+     * offline right away. Any other exception may be a socket or a storage failure, which re-reading the region tells
+     * apart. The re-read is done on the scheduler rather than on the network thread, at most once at a time per log
+     * dir, so that a burst of failed sends or a slow failing disk does not take up the threads of the scheduler, which
+     * other tasks of the broker share.
      */
     private void onTransferFailure(FileRecords records, long position, int count, IOException transferFailure) {
         String logDir = parentDir;
         if (transferFailure instanceof FileReadException readFailure) {
-            scheduleOneAtATimePerLogDir(records, "report-read-failure-after-transfer-failure",
-                logDirFailureChannel::tryStartReadFailureReport, logDirFailureChannel::finishReadFailureReport,
-                () -> logDirFailureChannel.maybeAddOfflineLogDir(logDir, "Failed to read "
-                    + records.file().getAbsolutePath() + " at position " + readFailure.position() + " while writing "
-                    + count + " bytes from position " + position + " to a network channel", readFailure));
-        } else {
-            scheduleOneAtATimePerLogDir(records, "check-read-after-transfer-failure",
-                logDirFailureChannel::tryStartReadCheck, logDirFailureChannel::finishReadCheck,
-                () -> records.readFailure(position, count).ifPresent(readFailure -> {
-                    readFailure.addSuppressed(transferFailure);
-                    logDirFailureChannel.maybeAddOfflineLogDir(logDir, readFailure.getMessage(), readFailure);
-                }));
-        }
-    }
-
-    /**
-     * Run the given task on the scheduler after a failed transfer of the given records, if tryStart accepts it for
-     * this log dir, and pass the log dir to finish once the task is done or could not be scheduled.
-     */
-    private void scheduleOneAtATimePerLogDir(FileRecords records, String name, Predicate<String> tryStart,
-                                             Consumer<String> finish, Runnable task) {
-        String logDir = parentDir;
-        if (!tryStart.test(logDir))
+            logDirFailureChannel.maybeAddOfflineLogDir(logDir, "Failed to read " + records.file().getAbsolutePath()
+                + " at position " + readFailure.position() + " while writing " + count + " bytes from position "
+                + position + " to a network channel", readFailure);
             return;
-        // Once the scheduler has taken the task, the task finishes it; until then it is finished here, whatever is
-        // thrown, since a task that is never finished would stop this log dir from being handled for good
+        }
+        if (!logDirFailureChannel.tryStartReadCheck(logDir))
+            return;
+        // Once the scheduler has taken the check, the check finishes it; until then it is finished here, whatever is
+        // thrown, since a check that is never finished would stop this log dir from being checked for good
         boolean scheduled = false;
         try {
-            ScheduledFuture<?> future = scheduler.scheduleOnce(name, () -> {
+            ScheduledFuture<?> check = scheduler.scheduleOnce("check-read-after-transfer-failure", () -> {
                 try {
-                    task.run();
+                    records.readFailure(position, count).ifPresent(readFailure -> {
+                        readFailure.addSuppressed(transferFailure);
+                        logDirFailureChannel.maybeAddOfflineLogDir(logDir, readFailure.getMessage(), readFailure);
+                    });
                 } finally {
-                    finish.accept(logDir);
+                    logDirFailureChannel.finishReadCheck(logDir);
                 }
             });
             // A scheduler that is not running ignores the task
-            scheduled = !future.isCancelled();
+            scheduled = !check.isCancelled();
         } catch (RuntimeException e) {
-            logger.warn("Could not schedule {} for {}", name, records.file().getAbsolutePath(), e);
+            logger.warn("Could not schedule a read check of {} after a failed transfer", records.file().getAbsolutePath(), e);
         } finally {
             if (!scheduled)
-                finish.accept(logDir);
+                logDirFailureChannel.finishReadCheck(logDir);
         }
     }
 
