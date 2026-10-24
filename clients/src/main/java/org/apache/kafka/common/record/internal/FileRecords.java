@@ -50,7 +50,8 @@ public class FileRecords extends AbstractRecords implements Closeable {
      * Notified when {@link #writeTo} fails in a way that may come from a failed read of the backing file: with a
      * {@link FileReadException} when the file could not be read, otherwise with an exception that may come from the
      * file and the network channel alike, which {@link #readFailure} tells apart.
-     * It is called on the thread that failed to write, a network thread, so it must not block.
+     * It is called on the thread that failed to write, a network thread, so it must not do slow work such as reading
+     * the file again.
      */
     @FunctionalInterface
     public interface TransferFailureHandler {

@@ -65,6 +65,7 @@ import static org.mockito.ArgumentMatchers.anyInt;
 import static org.mockito.ArgumentMatchers.anyLong;
 import static org.mockito.ArgumentMatchers.anyString;
 import static org.mockito.Mockito.doReturn;
+import static org.mockito.Mockito.doThrow;
 import static org.mockito.Mockito.mock;
 import static org.mockito.Mockito.never;
 import static org.mockito.Mockito.spy;
@@ -397,6 +398,31 @@ class LocalLogTest {
             firstLog.closeQuietly();
             secondLog.closeQuietly();
             otherDirLog.closeQuietly();
+        }
+    }
+
+    /**
+     * A check that fails, for instance because the re-read throws unexpectedly, must not stop the next failed write
+     * from being checked either.
+     */
+    @Test
+    public void testFailedReadCheckDoesNotBlockTheNextOne() throws IOException {
+        List<Runnable> scheduled = new ArrayList<>();
+        LocalLog otherLog = createLocalLogWithActiveSegment(TestUtils.randomPartitionLogDir(tmpDir),
+            new LogConfig(new Properties()), capturingScheduler(scheduled));
+        try {
+            FileRecords records = fetchedRecords(otherLog);
+            FileRecords failingRecords = spy(records);
+            IllegalStateException failure = new IllegalStateException("Unexpected");
+            doThrow(failure).when(failingRecords).readFailure(anyLong(), anyInt());
+            FileRecords.TransferFailureHandler handler = records.transferFailureHandler();
+
+            handler.onTransferFailure(failingRecords, 0, 10, new IOException("Broken pipe"));
+            assertSame(failure, assertThrows(IllegalStateException.class, () -> scheduled.get(0).run()));
+            handler.onTransferFailure(records, 0, 10, new IOException("Broken pipe"));
+            assertEquals(2, scheduled.size());
+        } finally {
+            otherLog.closeQuietly();
         }
     }
 
