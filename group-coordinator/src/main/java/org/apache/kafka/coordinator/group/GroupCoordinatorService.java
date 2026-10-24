@@ -1038,12 +1038,11 @@ public class GroupCoordinatorService implements GroupCoordinator {
         CompletableFuture<JoinGroupResponseData> responseFuture = new CompletableFuture<>();
         TopicPartition tp = topicPartitionFor(request.groupId());
 
-        // The classic-join write op resolves the group and, when a plugin is configured, detects an
-        // empty streams group with a stored topology before mutating anything. A plugin-less broker
-        // has no topology to clean up, so it converts directly on the first call (topologyCleanupHandled
-        // true). The op returns whether streams-topology cleanup is needed before conversion; for
-        // already-classic, non-existent, and non-streams groups (the common case) it returns false and
-        // has already completed the response, so no extra op runs.
+        // Usually the join completes in this first call and returns false. It returns true only
+        // for an empty streams group whose topology is still in the plugin. That group is about
+        // to become a classic group, so its topology must be deleted from the plugin first.
+        // Then the join runs again. With no plugin configured there is nothing to delete, so we
+        // pass topologyCleanupHandled = true and the group is converted right away.
         runClassicGroupJoin(context, request, responseFuture, tp,
             !streamsGroupTopologyDescriptionManager.isPluginConfigured()
         ).thenCompose(needsCleanup -> {
@@ -1068,9 +1067,13 @@ public class GroupCoordinatorService implements GroupCoordinator {
     }
 
     /**
-     * Converting an empty streams group to classic would orphan the plugin's topology, so the
-     * join detected cleanup is needed: delete the topology (behind a durable UNCERTAIN(-2)
-     * barrier) and re-run the join, which then converts because cleanup has been handled.
+     * Deletes the group's topology from the plugin, then runs the classic join again so the
+     * empty streams group can be converted to a classic group. Without this, the conversion
+     * would leave the topology in the plugin with nothing pointing to it.
+     *
+     * <p>If the delete does not happen (see
+     * {@link StreamsGroupTopologyDescriptionManager#cleanupTopologyBeforeConversion}), the join
+     * fails with {@code REBALANCE_IN_PROGRESS} and the client retries.
      */
     private CompletableFuture<Void> cleanupTopologyBeforeConversion(
         AuthorizableRequestContext context,
@@ -1084,21 +1087,21 @@ public class GroupCoordinatorService implements GroupCoordinator {
                     failJoinRetriably(request, responseFuture);
                     return CompletableFuture.completedFuture(null);
                 }
-                // Smart-finalize after the re-join: a no-op once the group has been
-                // converted (it is no longer a streams group). It only writes for a group
-                // revived between the barrier and the re-join — the re-join then rejects
-                // with INCONSISTENT_GROUP_PROTOCOL and, without the finalize, a raced
-                // push's epoch write would land on stored == UNCERTAIN and record a real
-                // epoch over the plugin this delete just emptied.
+                // Run the join again, then finalize the epoch. Usually the join converts the
+                // group and the finalize does nothing, because the group is no longer a
+                // streams group. But a streams member may have joined during the delete.
+                // Then the join fails with INCONSISTENT_GROUP_PROTOCOL and the group stays
+                // a streams group. The finalize then fixes its epoch (NONE, or UNCERTAIN if
+                // a push finished), so the broker does not record a topology the delete removed.
                 return runClassicGroupJoin(context, request, responseFuture, tp, true)
                     .thenCompose(__ -> streamsGroupTopologyDescriptionManager.finalizeAfterDelete(request.groupId()));
             });
     }
 
     /**
-     * Complete the join with {@code REBALANCE_IN_PROGRESS} (if not already completed): a
-     * retriable error classic clients respond to by re-joining, used when the pre-conversion
-     * topology cleanup could not run to completion.
+     * Fails the join with {@code REBALANCE_IN_PROGRESS}, unless the response is already
+     * complete. Classic clients react to this error by joining again. Used when the topology
+     * could not be deleted from the plugin before converting the group.
      */
     private static void failJoinRetriably(
         JoinGroupRequestData request,
@@ -1112,13 +1115,15 @@ public class GroupCoordinatorService implements GroupCoordinator {
     }
 
     /**
-     * Run the classic-group-join write op. On the common path {@code classicGroupJoin} completes
-     * {@code responseFuture} internally and the returned future yields {@code false}. When it detects
-     * an empty streams group with a stored topology and {@code topologyCleanupHandled} is false, it
-     * makes no mutation, leaves {@code responseFuture} uncompleted, and the returned future yields
-     * {@code true} so the caller can run plugin cleanup and re-invoke with {@code topologyCleanupHandled}
-     * set. A scheduling failure completes {@code responseFuture} with the translated error and yields
-     * {@code false}.
+     * Runs the classic-group-join write operation. The returned future yields:
+     * <ul>
+     *   <li>{@code false}: the join is done and {@code responseFuture} is completed, either
+     *       with a result or with an error.</li>
+     *   <li>{@code true}: the group is an empty streams group whose topology is still in the
+     *       plugin, and {@code topologyCleanupHandled} is {@code false}. Nothing is changed and
+     *       {@code responseFuture} stays open. The caller must delete the topology and call
+     *       this method again with {@code topologyCleanupHandled = true}.</li>
+     * </ul>
      */
     private CompletableFuture<Boolean> runClassicGroupJoin(
         AuthorizableRequestContext context,
