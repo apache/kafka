@@ -17,6 +17,8 @@
 
 package org.apache.kafka.server;
 
+import org.apache.kafka.common.config.ConfigException;
+
 public enum ProcessRole {
     BrokerRole("broker"),
     ControllerRole("controller");
@@ -25,6 +27,15 @@ public enum ProcessRole {
 
     ProcessRole(String roleName) {
         this.roleName = roleName;
+    }
+
+    public static ProcessRole fromString(String role) {
+        return switch (role) {
+            case "broker" -> BrokerRole;
+            case "controller" -> ControllerRole;
+            default -> throw new ConfigException("Unknown process role '" + role +
+                "' (only 'broker' and 'controller' are allowed roles)");
+        };
     }
 
     @Override
