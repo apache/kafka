@@ -150,6 +150,10 @@ public class SmokeTestClient extends SmokeTestUtil {
         fullProps.put(StreamsConfig.CLIENT_ID_CONFIG, "SmokeTest-" + name);
         fullProps.put(StreamsConfig.STATE_DIR_CONFIG, TestUtils.tempDirectory().getAbsolutePath());
         fullProps.put(StreamsConfig.PROCESSING_GUARANTEE_CONFIG, StreamsConfig.EXACTLY_ONCE_V2);
+        // SmokeTestDriver writes records two days in the past, so window changelogs need more than the
+        // default one-day additional retention. StreamsSmokeTestBaseService.prop_file() in
+        // tests/kafkatest/services/streams.py passes the same value to the old clients in system tests;
+        // change both together.
         fullProps.put(StreamsConfig.WINDOW_STORE_CHANGE_LOG_ADDITIONAL_RETENTION_MS_CONFIG, Duration.ofDays(3).toMillis());
         fullProps.putAll(props);
         return fullProps;
