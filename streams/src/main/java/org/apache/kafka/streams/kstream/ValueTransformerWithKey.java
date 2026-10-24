@@ -53,6 +53,7 @@ import java.time.Duration;
  */
 
 @InterfaceAudience.Public
+@Deprecated
 public interface ValueTransformerWithKey<K, V, VR> {
 
     /**
