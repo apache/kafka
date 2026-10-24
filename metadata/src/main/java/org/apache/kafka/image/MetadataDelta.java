@@ -21,6 +21,7 @@ import org.apache.kafka.common.metadata.AccessControlEntryRecord;
 import org.apache.kafka.common.metadata.BrokerRegistrationChangeRecord;
 import org.apache.kafka.common.metadata.ClearElrRecord;
 import org.apache.kafka.common.metadata.ClientQuotaRecord;
+import org.apache.kafka.common.metadata.ClusterIdRecord;
 import org.apache.kafka.common.metadata.ConfigRecord;
 import org.apache.kafka.common.metadata.DelegationTokenRecord;
 import org.apache.kafka.common.metadata.FeatureLevelRecord;
@@ -271,6 +272,9 @@ public final class MetadataDelta {
             case UNREGISTER_CONTROLLER_RECORD:
                 replay((UnregisterControllerRecord) record);
                 break;
+            case CLUSTER_ID_RECORD:
+                replay((ClusterIdRecord) record);
+                break;
             default:
                 throw new RuntimeException("Unknown metadata record type " + type);
         }
@@ -373,6 +377,10 @@ public final class MetadataDelta {
     }
 
     public void replay(UnregisterControllerRecord record) {
+        getOrCreateClusterDelta().replay(record);
+    }
+
+    public void replay(ClusterIdRecord record) {
         getOrCreateClusterDelta().replay(record);
     }
 

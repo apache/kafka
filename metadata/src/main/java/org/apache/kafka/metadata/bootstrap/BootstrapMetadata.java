@@ -17,6 +17,7 @@
 
 package org.apache.kafka.metadata.bootstrap;
 
+import org.apache.kafka.common.metadata.ClusterIdRecord;
 import org.apache.kafka.common.metadata.FeatureLevelRecord;
 import org.apache.kafka.common.protocol.ApiMessage;
 import org.apache.kafka.metadata.util.BatchFileReader;
@@ -66,7 +67,7 @@ public class BootstrapMetadata {
         if (Files.exists(binaryBootstrapPath)) {
             return fromCheckpointFile(binaryBootstrapPath);
         }
-        return fromVersion(MetadataVersion.latestProduction(), "the default bootstrap");
+        return defaultBootstrap();
     }
 
     /**
@@ -101,6 +102,7 @@ public class BootstrapMetadata {
     public static BootstrapMetadata fromVersions(
         MetadataVersion metadataVersion,
         Map<String, Short> featureVersions,
+        String clusterId,
         String source
     ) {
         List<ApiMessageAndVersion> records = new ArrayList<>();
@@ -125,15 +127,44 @@ public class BootstrapMetadata {
                     setFeatureLevel(level), (short) 0));
             }
         }
+        // Add ClusterIdRecord if the metadata version supports it
+        if (metadataVersion.isClusterIdSupported()) {
+            records.add(new ApiMessageAndVersion(new ClusterIdRecord().
+                setClusterId(clusterId), (short) 0));
+        }
         return new BootstrapMetadata(records, metadataVersion.featureLevel(), source);
     }
 
-    public static BootstrapMetadata fromVersion(MetadataVersion metadataVersion, String source) {
-        List<ApiMessageAndVersion> records = List.of(
-            new ApiMessageAndVersion(new FeatureLevelRecord().
-                setName(MetadataVersion.FEATURE_NAME).
-                setFeatureLevel(metadataVersion.featureLevel()), (short) 0));
+    public static BootstrapMetadata fromVersion(
+        MetadataVersion metadataVersion,
+        String clusterId,
+        String source
+    ) {
+        List<ApiMessageAndVersion> records = new ArrayList<>();
+        records.add(new ApiMessageAndVersion(new FeatureLevelRecord().
+            setName(MetadataVersion.FEATURE_NAME).
+            setFeatureLevel(metadataVersion.featureLevel()), (short) 0));
+        // Add ClusterIdRecord if the metadata version supports it
+        if (metadataVersion.isClusterIdSupported()) {
+            records.add(new ApiMessageAndVersion(new ClusterIdRecord().
+                setClusterId(clusterId), (short) 0));
+        }
         return new BootstrapMetadata(records, metadataVersion.featureLevel(), source);
+    }
+
+    /**
+     * Create a default BootstrapMetadata without a ClusterIdRecord.
+     * This is used as a fallback when no bootstrap.checkpoint file exists,
+     * such as for clusters created after KIP-1170, which moved bootstrap
+     * metadata records to the 0-0.checkpoint.
+     */
+    public static BootstrapMetadata defaultBootstrap() {
+        return new BootstrapMetadata(
+            List.of(new ApiMessageAndVersion(new FeatureLevelRecord().
+                setName(MetadataVersion.FEATURE_NAME).
+                setFeatureLevel(MetadataVersion.latestProduction().featureLevel()), (short) 0)),
+            MetadataVersion.latestProduction().featureLevel(),
+            "the default bootstrap");
     }
 
     public static BootstrapMetadata fromRecords(List<ApiMessageAndVersion> records, String source) {
@@ -193,6 +224,18 @@ public class BootstrapMetadata {
             }
         }
         return result;
+    }
+
+    /**
+     * Returns true if this bootstrap metadata contains a ClusterIdRecord.
+     */
+    public boolean containsClusterIdRecord() {
+        for (ApiMessageAndVersion record : records) {
+            if (record.message() instanceof ClusterIdRecord) {
+                return true;
+            }
+        }
+        return false;
     }
 
     public BootstrapMetadata copyWithFeatureRecord(String featureName, short level) {

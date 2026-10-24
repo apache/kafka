@@ -84,7 +84,7 @@ public class BootstrapMetadataTest {
                 setName(FEATURE_NAME).
                 setFeatureLevel((short) 7), (short) 0)),
                     IBP_3_3_IV3.featureLevel(), "foo"),
-            BootstrapMetadata.fromVersion(IBP_3_3_IV3, "foo"));
+            BootstrapMetadata.fromVersion(IBP_3_3_IV3, "test-cluster-id", "foo"));
     }
 
     @Test
@@ -169,8 +169,7 @@ public class BootstrapMetadataTest {
     @Test
     public void testReadFromEmptyDirectory() throws Exception {
         try (BootstrapTestDirectory testDirectory = BootstrapTestDirectory.createDirectory()) {
-            assertEquals(BootstrapMetadata.fromVersion(MetadataVersion.latestProduction(),
-                    "the default bootstrap"),
+            assertEquals(BootstrapMetadata.defaultBootstrap(),
                 BootstrapMetadata.fromDirectory(testDirectory.path()));
         }
     }
@@ -186,7 +185,7 @@ public class BootstrapMetadataTest {
     public void testFromDirectoryWithLegacyBootstrapCheckpoint() throws Exception {
         try (BootstrapTestDirectory testDirectory = BootstrapTestDirectory.createDirectory()) {
             Path checkpointPath = testDirectory.binaryBootstrapPath();
-            BootstrapMetadata expected = BootstrapMetadata.fromVersion(IBP_3_3_IV3, "test");
+            BootstrapMetadata expected = BootstrapMetadata.fromVersion(IBP_3_3_IV3, "test-cluster-id", "test");
             try (BatchFileWriter writer = BatchFileWriter.open(checkpointPath)) {
                 writer.append(expected.records());
             }
@@ -207,7 +206,7 @@ public class BootstrapMetadataTest {
         Map<String, Short> features = new TreeMap<>();
         features.put("foo", (short) 2);
         features.put("bar", (short) 1);
-        BootstrapMetadata bm = BootstrapMetadata.fromVersions(MetadataVersion.latestProduction(), features, "test");
+        BootstrapMetadata bm = BootstrapMetadata.fromVersions(MetadataVersion.latestProduction(), features, "test-cluster-id", "test");
         assertEquals(List.of(
             new ApiMessageAndVersion(new FeatureLevelRecord()
                 .setName(FEATURE_NAME)
@@ -225,7 +224,7 @@ public class BootstrapMetadataTest {
     @Test
     public void testFromVersionsExcludesZeroLevelFeatures() {
         Map<String, Short> features = Map.of("foo", (short) 0);
-        BootstrapMetadata bm = BootstrapMetadata.fromVersions(MetadataVersion.latestProduction(), features, "test");
+        BootstrapMetadata bm = BootstrapMetadata.fromVersions(MetadataVersion.latestProduction(), features, "test-cluster-id", "test");
         assertEquals(List.of(
             new ApiMessageAndVersion(new FeatureLevelRecord()
                 .setName(FEATURE_NAME)
