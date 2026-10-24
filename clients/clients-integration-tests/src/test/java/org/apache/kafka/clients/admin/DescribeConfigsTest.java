@@ -17,12 +17,16 @@
 package org.apache.kafka.clients.admin;
 
 import org.apache.kafka.common.config.ConfigResource;
+import org.apache.kafka.common.config.SslConfigs;
 import org.apache.kafka.common.errors.TimeoutException;
 import org.apache.kafka.common.errors.UnknownTopicOrPartitionException;
 import org.apache.kafka.common.test.ClusterInstance;
+import org.apache.kafka.common.test.api.ClusterConfigProperty;
 import org.apache.kafka.common.test.api.ClusterTest;
 import org.apache.kafka.common.test.api.Type;
 import org.apache.kafka.server.config.QuotaConfig;
+import org.apache.kafka.server.config.ServerLogConfigs;
+import org.apache.kafka.test.TestUtils;
 
 import java.util.List;
 import java.util.Map;
@@ -31,9 +35,13 @@ import java.util.concurrent.ExecutionException;
 import static org.junit.jupiter.api.Assertions.assertEquals;
 import static org.junit.jupiter.api.Assertions.assertInstanceOf;
 import static org.junit.jupiter.api.Assertions.assertNotEquals;
+import static org.junit.jupiter.api.Assertions.assertNotNull;
 import static org.junit.jupiter.api.Assertions.assertThrows;
 
 public class DescribeConfigsTest {
+
+    private static final String PREFIXED_SSL_ENABLED_PROTOCOLS_CONFIG =
+        "listener.name.external." + SslConfigs.SSL_ENABLED_PROTOCOLS_CONFIG;
 
     @ClusterTest
     public void testDescribeConfigsNonexistent(ClusterInstance cluster) throws Exception {
@@ -75,5 +83,42 @@ public class DescribeConfigsTest {
             ConfigEntry entry = topicConfig.get(QuotaConfig.MIRROR_REPLICATION_THROTTLED_REPLICAS_CONFIG);
             assertEquals("0:101", entry.value());
         }
+    }
+
+    // Cluster-wide configs are described from DynamicBrokerConfig#currentDynamicDefaultConfigs, which holds raw
+    // strings. A LIST config must be returned as the raw string instead of being cast to a List.
+    @ClusterTest
+    public void testDescribeConfigsClusterWideListConfig(ClusterInstance cluster) throws Exception {
+        ConfigResource clusterResource = new ConfigResource(ConfigResource.Type.BROKER, "");
+        try (Admin admin = cluster.admin()) {
+            admin.incrementalAlterConfigs(Map.of(clusterResource, List.of(new AlterConfigOp(
+                new ConfigEntry(ServerLogConfigs.LOG_CLEANUP_POLICY_CONFIG, "compact,delete"),
+                AlterConfigOp.OpType.SET)))).all().get();
+            TestUtils.waitForCondition(() -> {
+                ConfigEntry entry = describeConfig(admin, clusterResource, ServerLogConfigs.LOG_CLEANUP_POLICY_CONFIG);
+                return entry.source() == ConfigEntry.ConfigSource.DYNAMIC_DEFAULT_BROKER_CONFIG
+                    && "compact,delete".equals(entry.value());
+            }, ServerLogConfigs.LOG_CLEANUP_POLICY_CONFIG + " was not applied as a cluster-wide config");
+        }
+    }
+
+    // Listener-prefixed configs are not defined in the ConfigDef, so they are described from the raw strings in
+    // originals(). The type still resolves to LIST through the base config, so the raw string must not be cast to a List.
+    @ClusterTest(serverProperties = {
+        @ClusterConfigProperty(key = PREFIXED_SSL_ENABLED_PROTOCOLS_CONFIG, value = "TLSv1.3,TLSv1.2")
+    })
+    public void testDescribeConfigsPrefixedListenerListConfig(ClusterInstance cluster) throws Exception {
+        ConfigResource brokerResource = new ConfigResource(ConfigResource.Type.BROKER,
+            String.valueOf(cluster.brokerIds().iterator().next()));
+        try (Admin admin = cluster.admin()) {
+            ConfigEntry entry = describeConfig(admin, brokerResource, PREFIXED_SSL_ENABLED_PROTOCOLS_CONFIG);
+            assertNotNull(entry);
+            assertEquals(ConfigEntry.ConfigSource.STATIC_BROKER_CONFIG, entry.source());
+            assertEquals("TLSv1.3,TLSv1.2", entry.value());
+        }
+    }
+
+    private static ConfigEntry describeConfig(Admin admin, ConfigResource resource, String name) throws Exception {
+        return admin.describeConfigs(List.of(resource)).all().get().get(resource).get(name);
     }
 }
