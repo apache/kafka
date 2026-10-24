@@ -71,6 +71,9 @@ public class MirrorCheckpointTask extends SourceTask {
     private MirrorCheckpointMetrics metrics;
     private Scheduler scheduler;
     private Map<String, Map<TopicPartition, OffsetAndMetadata>> idleConsumerGroupsOffset;
+    // tracks the last observed state of each consumer group on the target cluster, so that
+    // syncGroupOffset only syncs offsets for groups that are safe to update (i.e. not actively consumed)
+    private Map<String, GroupState> targetConsumerGroupStates;
     private CheckpointStore checkpointStore;
 
     public MirrorCheckpointTask() {}
@@ -80,12 +83,23 @@ public class MirrorCheckpointTask extends SourceTask {
             ReplicationPolicy replicationPolicy, OffsetSyncStore offsetSyncStore, Set<String> consumerGroups,
             Map<String, Map<TopicPartition, OffsetAndMetadata>> idleConsumerGroupsOffset,
             CheckpointStore checkpointStore) {
+        this(sourceClusterAlias, targetClusterAlias, replicationPolicy, offsetSyncStore, consumerGroups,
+                idleConsumerGroupsOffset, new HashMap<>(), checkpointStore);
+    }
+
+    // for testing
+    MirrorCheckpointTask(String sourceClusterAlias, String targetClusterAlias,
+            ReplicationPolicy replicationPolicy, OffsetSyncStore offsetSyncStore, Set<String> consumerGroups,
+            Map<String, Map<TopicPartition, OffsetAndMetadata>> idleConsumerGroupsOffset,
+            Map<String, GroupState> targetConsumerGroupStates,
+            CheckpointStore checkpointStore) {
         this.sourceClusterAlias = sourceClusterAlias;
         this.targetClusterAlias = targetClusterAlias;
         this.replicationPolicy = replicationPolicy;
         this.offsetSyncStore = offsetSyncStore;
         this.consumerGroups = consumerGroups;
         this.idleConsumerGroupsOffset = idleConsumerGroupsOffset;
+        this.targetConsumerGroupStates = targetConsumerGroupStates;
         this.checkpointStore = checkpointStore;
         this.topicFilter = topic -> true;
         this.interval = Duration.ofNanos(1);
@@ -111,6 +125,7 @@ public class MirrorCheckpointTask extends SourceTask {
         legacyMetrics = metricNamesFormats.contains(METRIC_NAMES_LEGACY) ? config.legacyMetrics() : null;
         metrics = metricNamesFormats.contains(METRIC_NAMES_NEW) ? config.metrics(context.pluginMetrics()) : null;
         idleConsumerGroupsOffset = new HashMap<>();
+        targetConsumerGroupStates = new HashMap<>();
         checkpointStore = new CheckpointStore(config, consumerGroups);
         scheduler = new Scheduler(getClass(), config.entityLabel(), config.adminTimeout());
         scheduler.executeAsync(() -> {
@@ -300,6 +315,12 @@ public class MirrorCheckpointTask extends SourceTask {
     }
 
     private void refreshIdleConsumerGroupOffset() throws ExecutionException, InterruptedException {
+        // Start each refresh from a clean slate so that stale offsets/states from a previous cycle
+        // (for example if a previous syncGroupOffset failed before clearing them, or if a group has
+        // since transitioned from EMPTY to an active state) cannot be used to rewind active consumers.
+        idleConsumerGroupsOffset.clear();
+        targetConsumerGroupStates.clear();
+
         Map<String, KafkaFuture<ConsumerGroupDescription>> consumerGroupsDesc = adminCall(
                 () -> targetAdminClient.describeConsumerGroups(consumerGroups).describedGroups(),
                 () -> String.format("describe consumer groups %s on %s cluster", consumerGroups, targetClusterAlias)
@@ -322,12 +343,21 @@ public class MirrorCheckpointTask extends SourceTask {
                             )
                     );
                 }
-                // new consumer upstream has state "DEAD" and will be identified during the offset sync-up
+                // Only record the state once the offsets (for EMPTY groups) have been fetched successfully.
+                // If listConsumerGroupOffsets above throws, we skip this put so the group is left out of
+                // targetConsumerGroupStates and syncGroupOffset will not attempt to sync its offsets.
+                targetConsumerGroupStates.put(group, consumerGroupState);
             } catch (InterruptedException ie) {
                 log.error("Error querying for consumer group {} on cluster {}.", group, targetClusterAlias, ie);
             } catch (ExecutionException ee) {
                 // check for non-existent new consumer upstream which will be identified during the offset sync-up
-                if (!(ee.getCause() instanceof GroupIdNotFoundException)) {
+                if (ee.getCause() instanceof GroupIdNotFoundException) {
+                    // new consumer upstream that never existed at target; treat it as DEAD so that the
+                    // offset sync-up will create it on the target cluster
+                    targetConsumerGroupStates.put(group, GroupState.DEAD);
+                } else {
+                    // transient failure (e.g. timeout): leave the group out of targetConsumerGroupStates so
+                    // that syncGroupOffset skips it rather than syncing offsets based on stale information
                     log.error("Error querying for consumer group {} on cluster {}.", group, targetClusterAlias, ee);
                 }
             }
@@ -337,61 +367,84 @@ public class MirrorCheckpointTask extends SourceTask {
     Map<String, Map<TopicPartition, OffsetAndMetadata>> syncGroupOffset() throws ExecutionException, InterruptedException {
         Map<String, Map<TopicPartition, OffsetAndMetadata>> offsetToSyncAll = new HashMap<>();
 
-        // first, sync offsets for the idle consumers at target
-        for (Entry<String, Map<TopicPartition, OffsetAndMetadata>> group : checkpointStore.computeConvertedUpstreamOffset().entrySet()) {
-            String consumerGroupId = group.getKey();
-            // for each idle consumer at target, read the checkpoints (converted upstream offset)
-            // from the pre-populated map
-            Map<TopicPartition, OffsetAndMetadata> convertedUpstreamOffset = group.getValue();
+        try {
+            // first, sync offsets for the idle consumers at target
+            for (Entry<String, Map<TopicPartition, OffsetAndMetadata>> group : checkpointStore.computeConvertedUpstreamOffset().entrySet()) {
+                String consumerGroupId = group.getKey();
+                // for each idle consumer at target, read the checkpoints (converted upstream offset)
+                // from the pre-populated map
+                Map<TopicPartition, OffsetAndMetadata> convertedUpstreamOffset = group.getValue();
 
-            Map<TopicPartition, OffsetAndMetadata> offsetToSync = new HashMap<>();
-            Map<TopicPartition, OffsetAndMetadata> targetConsumerOffset = idleConsumerGroupsOffset.get(consumerGroupId);
-            if (targetConsumerOffset == null) {
-                // this is a new consumer, just sync the offset to target
-                syncGroupOffset(consumerGroupId, convertedUpstreamOffset);
-                offsetToSyncAll.put(consumerGroupId, convertedUpstreamOffset);
-                continue;
-            }
-
-            for (Entry<TopicPartition, OffsetAndMetadata> convertedEntry : convertedUpstreamOffset.entrySet()) {
-
-                TopicPartition topicPartition = convertedEntry.getKey();
-                OffsetAndMetadata convertedOffset = convertedUpstreamOffset.get(topicPartition);
-                if (!targetConsumerOffset.containsKey(topicPartition)) {
-                    // if is a new topicPartition from upstream, just sync the offset to target
-                    offsetToSync.put(topicPartition, convertedOffset);
+                // Decide whether it is safe to sync based on the state of the group on the target cluster
+                // as observed during the most recent refresh. Only groups that are not actively consuming
+                // the mirrored topics may have their offsets altered, otherwise active consumers could be
+                // rewound (or made to skip messages).
+                GroupState targetConsumerGroupState = targetConsumerGroupStates.get(consumerGroupId);
+                if (targetConsumerGroupState == GroupState.DEAD) {
+                    // the group does not exist on the target cluster (a new consumer that only exists at
+                    // source); it is safe to (re)create it by syncing the converted upstream offsets
+                    syncGroupOffset(consumerGroupId, convertedUpstreamOffset);
+                    offsetToSyncAll.put(consumerGroupId, convertedUpstreamOffset);
                     continue;
                 }
 
-                // if translated offset from upstream is smaller than the current consumer offset
-                // in the target, skip updating the offset for that partition
-                OffsetAndMetadata targetOffsetAndMetadata = targetConsumerOffset.get(topicPartition);
-                if (targetOffsetAndMetadata != null) {
-                    long latestDownstreamOffset = targetOffsetAndMetadata.offset();
-                    if (latestDownstreamOffset >= convertedOffset.offset()) {
-                        log.trace("latestDownstreamOffset {} is larger than or equal to convertedUpstreamOffset {} for "
-                                + "TopicPartition {}", latestDownstreamOffset, convertedOffset.offset(), topicPartition);
+                Map<TopicPartition, OffsetAndMetadata> targetConsumerOffset = idleConsumerGroupsOffset.get(consumerGroupId);
+                if (targetConsumerGroupState != GroupState.EMPTY || targetConsumerOffset == null) {
+                    // The group is either being actively consumed on the target cluster (e.g. STABLE,
+                    // PREPARING_REBALANCE, COMPLETING_REBALANCE, ASSIGNING), or its state/offsets could not be
+                    // refreshed in this cycle (absent from the maps). In both cases skip syncing to avoid
+                    // rewinding the offsets of consumers actively using this group on the target cluster.
+                    log.info("Consumer group: {} with state: {} on the target cluster is not idle, skipping offset sync.",
+                            consumerGroupId, targetConsumerGroupState);
+                    continue;
+                }
+
+                Map<TopicPartition, OffsetAndMetadata> offsetToSync = new HashMap<>();
+                for (Entry<TopicPartition, OffsetAndMetadata> convertedEntry : convertedUpstreamOffset.entrySet()) {
+
+                    TopicPartition topicPartition = convertedEntry.getKey();
+                    OffsetAndMetadata convertedOffset = convertedUpstreamOffset.get(topicPartition);
+                    if (!targetConsumerOffset.containsKey(topicPartition)) {
+                        // if is a new topicPartition from upstream, just sync the offset to target
+                        offsetToSync.put(topicPartition, convertedOffset);
                         continue;
                     }
-                } else {
-                    // It is possible that when resetting offsets are performed in the java kafka client, the reset to -1 will be intercepted.
-                    // However, there are some other types of clients such as sarama, which can magically reset the group offset to -1, which will cause
-                    // `targetOffsetAndMetadata` here is null. For this case, just sync the offset to target.
-                    log.warn("Group {} offset for partition {} may has been reset to a negative offset, just sync the offset to target.",
-                            consumerGroupId, topicPartition);
+
+                    // if translated offset from upstream is smaller than the current consumer offset
+                    // in the target, skip updating the offset for that partition
+                    OffsetAndMetadata targetOffsetAndMetadata = targetConsumerOffset.get(topicPartition);
+                    if (targetOffsetAndMetadata != null) {
+                        long latestDownstreamOffset = targetOffsetAndMetadata.offset();
+                        if (latestDownstreamOffset >= convertedOffset.offset()) {
+                            log.trace("latestDownstreamOffset {} is larger than or equal to convertedUpstreamOffset {} for "
+                                    + "TopicPartition {}", latestDownstreamOffset, convertedOffset.offset(), topicPartition);
+                            continue;
+                        }
+                    } else {
+                        // It is possible that when resetting offsets are performed in the java kafka client, the reset to -1 will be intercepted.
+                        // However, there are some other types of clients such as sarama, which can magically reset the group offset to -1, which will cause
+                        // `targetOffsetAndMetadata` here is null. For this case, just sync the offset to target.
+                        log.warn("Group {} offset for partition {} may has been reset to a negative offset, just sync the offset to target.",
+                                consumerGroupId, topicPartition);
+                    }
+                    offsetToSync.put(topicPartition, convertedOffset);
                 }
-                offsetToSync.put(topicPartition, convertedOffset);
-            }
 
-            if (offsetToSync.isEmpty()) {
-                log.trace("skip syncing the offset for consumer group: {}", consumerGroupId);
-                continue;
-            }
-            syncGroupOffset(consumerGroupId, offsetToSync);
+                if (offsetToSync.isEmpty()) {
+                    log.trace("skip syncing the offset for consumer group: {}", consumerGroupId);
+                    continue;
+                }
+                syncGroupOffset(consumerGroupId, offsetToSync);
 
-            offsetToSyncAll.put(consumerGroupId, offsetToSync);
+                offsetToSyncAll.put(consumerGroupId, offsetToSync);
+            }
+        } finally {
+            // Always discard the snapshot so the next cycle starts from freshly refreshed state, even if
+            // syncing failed partway through. Otherwise a stale EMPTY snapshot could later be applied to a
+            // group that has since become active, rewinding its offsets.
+            idleConsumerGroupsOffset.clear();
+            targetConsumerGroupStates.clear();
         }
-        idleConsumerGroupsOffset.clear();
         return offsetToSyncAll;
     }
 
