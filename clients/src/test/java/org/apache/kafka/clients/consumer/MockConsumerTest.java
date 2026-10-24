@@ -17,6 +17,7 @@
 package org.apache.kafka.clients.consumer;
 
 import org.apache.kafka.clients.consumer.internals.AutoOffsetResetStrategy;
+import org.apache.kafka.common.KafkaException;
 import org.apache.kafka.common.TopicPartition;
 import org.apache.kafka.common.header.internals.RecordHeaders;
 import org.apache.kafka.common.record.TimestampType;
@@ -31,12 +32,14 @@ import java.util.Collections;
 import java.util.HashMap;
 import java.util.Iterator;
 import java.util.List;
+import java.util.Map;
 import java.util.Optional;
 import java.util.Set;
 import java.util.stream.IntStream;
 
 import static org.junit.jupiter.api.Assertions.assertEquals;
 import static org.junit.jupiter.api.Assertions.assertFalse;
+import static org.junit.jupiter.api.Assertions.assertNull;
 import static org.junit.jupiter.api.Assertions.assertThrows;
 import static org.junit.jupiter.api.Assertions.assertTrue;
 
@@ -139,6 +142,49 @@ public class MockConsumerTest {
         assertEquals(rec1, iter.next());
         assertEquals(rec2, iter.next());
         assertFalse(iter.hasNext());
+    }
+
+    @Test
+    public void testOffsetsForTimes() {
+        TopicPartition partition0 = new TopicPartition("test", 0);
+        TopicPartition partition1 = new TopicPartition("test", 1);
+        consumer.assign(Collections.singleton(partition0));
+        consumer.addRecord(new ConsumerRecord<>("test", 0, 0L, 0L, TimestampType.CREATE_TIME,
+                0, 0, "key0", "value0", new RecordHeaders(), Optional.of(1)));
+        consumer.addRecord(new ConsumerRecord<>("test", 0, 1L, 100L, TimestampType.CREATE_TIME,
+                0, 0, "key1", "value1", new RecordHeaders(), Optional.of(2)));
+
+        Map<TopicPartition, Long> timestampsToSearch = new HashMap<>();
+        timestampsToSearch.put(partition0, 50L);
+        timestampsToSearch.put(partition1, 50L);
+
+        Map<TopicPartition, OffsetAndTimestamp> result = consumer.offsetsForTimes(timestampsToSearch);
+
+        assertEquals(new OffsetAndTimestamp(1L, 100L, Optional.of(2)), result.get(partition0));
+        assertNull(result.get(partition1));
+        assertEquals(2, result.size());
+
+        assertEquals(new OffsetAndTimestamp(0L, 0L, Optional.of(1)),
+                consumer.offsetsForTimes(Collections.singletonMap(partition0, 0L)).get(partition0));
+        assertNull(consumer.offsetsForTimes(Collections.singletonMap(partition0, 101L)).get(partition0));
+    }
+
+    @Test
+    public void testOffsetsForTimesRejectsNegativeTimestamp() {
+        TopicPartition partition = new TopicPartition("test", 0);
+        Map<TopicPartition, Long> timestampsToSearch = Collections.singletonMap(partition, -1L);
+
+        assertThrows(IllegalArgumentException.class, () -> consumer.offsetsForTimes(timestampsToSearch));
+    }
+
+    @Test
+    public void testOffsetsForTimesPropagatesOffsetExceptionOnce() {
+        TopicPartition partition = new TopicPartition("test", 0);
+        Map<TopicPartition, Long> timestampsToSearch = Collections.singletonMap(partition, 0L);
+        consumer.setOffsetsException(new KafkaException("injected failure"));
+
+        assertThrows(KafkaException.class, () -> consumer.offsetsForTimes(timestampsToSearch));
+        assertEquals(Collections.singletonMap(partition, null), consumer.offsetsForTimes(timestampsToSearch));
     }
 
     @Test
