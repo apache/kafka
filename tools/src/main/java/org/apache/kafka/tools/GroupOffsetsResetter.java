@@ -311,7 +311,7 @@ public class GroupOffsetsResetter {
             LogOffsetResult logOffsetResult = logStartOffsets.get(topicPartition);
 
             if (!(logOffsetResult instanceof LogOffset)) {
-                CommandLineUtils.printUsageAndExit(parser, "Error getting starting offset of topic partition: " + topicPartition);
+                CommandLineUtils.printUsageAndThrow(parser, "Error getting starting offset of topic partition: " + topicPartition);
             }
 
             return new OffsetAndMetadata(((LogOffset) logOffsetResult).value);
@@ -324,7 +324,7 @@ public class GroupOffsetsResetter {
             LogOffsetResult logOffsetResult = logEndOffsets.get(topicPartition);
 
             if (!(logOffsetResult instanceof LogOffset)) {
-                CommandLineUtils.printUsageAndExit(parser, "Error getting ending offset of topic partition: " + topicPartition);
+                CommandLineUtils.printUsageAndThrow(parser, "Error getting ending offset of topic partition: " + topicPartition);
             }
 
             return new OffsetAndMetadata(((LogOffset) logOffsetResult).value);
@@ -357,7 +357,7 @@ public class GroupOffsetsResetter {
             return partitionsToReset.stream().collect(Collectors.toMap(Function.identity(), topicPartition -> {
                 LogOffsetResult logTimestampOffset = logTimestampOffsets.get(topicPartition);
                 if (!(logTimestampOffset instanceof LogOffset)) {
-                    CommandLineUtils.printUsageAndExit(parser, "Error getting offset by timestamp of topic partition: " + topicPartition);
+                    CommandLineUtils.printUsageAndThrow(parser, "Error getting offset by timestamp of topic partition: " + topicPartition);
                 }
                 return new OffsetAndMetadata(((LogOffset) logTimestampOffset).value);
             }));
@@ -378,7 +378,7 @@ public class GroupOffsetsResetter {
             GroupOffsetsResetter.LogOffsetResult logTimestampOffset = logTimestampOffsets.get(topicPartition);
 
             if (!(logTimestampOffset instanceof GroupOffsetsResetter.LogOffset)) {
-                CommandLineUtils.printUsageAndExit(parser, "Error getting offset by timestamp of topic partition: " + topicPartition);
+                CommandLineUtils.printUsageAndThrow(parser, "Error getting offset by timestamp of topic partition: " + topicPartition);
             }
 
             return new OffsetAndMetadata(((GroupOffsetsResetter.LogOffset) logTimestampOffset).value);

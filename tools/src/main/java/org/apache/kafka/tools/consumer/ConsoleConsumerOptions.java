@@ -200,17 +200,17 @@ public final class ConsoleConsumerOptions extends CommandDefaultOptions {
         try {
             options = parser.parse(args);
         } catch (OptionException oe) {
-            CommandLineUtils.printUsageAndExit(parser, oe.getMessage());
+            CommandLineUtils.printUsageAndThrow(parser, oe.getMessage());
         }
 
         CommandLineUtils.maybePrintHelpOrVersion(this, "This tool helps to read data from Kafka topics and outputs it to standard output.");
 
         checkRequiredArgs();
         if (options.has(consumerPropertyOpt) && options.has(commandPropertyOpt)) {
-            CommandLineUtils.printUsageAndExit(parser, "Options --consumer-property and --command-property cannot be specified together.");
+            CommandLineUtils.printUsageAndThrow(parser, "Options --consumer-property and --command-property cannot be specified together.");
         }
         if (options.has(consumerConfigOpt) && options.has(commandConfigOpt)) {
-            CommandLineUtils.printUsageAndExit(parser, "Options --consumer.config and --command-config cannot be specified together.");
+            CommandLineUtils.printUsageAndThrow(parser, "Options --consumer.config and --command-config cannot be specified together.");
         }
 
         if (options.has(consumerPropertyOpt)) {
@@ -238,13 +238,13 @@ public final class ConsoleConsumerOptions extends CommandDefaultOptions {
 
         if (partitionArg().isPresent()) {
             if (!options.has(topicOpt)) {
-                CommandLineUtils.printUsageAndExit(parser, "The topic is required when partition is specified.");
+                CommandLineUtils.printUsageAndThrow(parser, "The topic is required when partition is specified.");
             }
             if (fromBeginning() && options.has(offsetOpt)) {
-                CommandLineUtils.printUsageAndExit(parser, "Options from-beginning and offset cannot be specified together.");
+                CommandLineUtils.printUsageAndThrow(parser, "Options from-beginning and offset cannot be specified together.");
             }
         } else if (options.has(offsetOpt)) {
-            CommandLineUtils.printUsageAndExit(parser, "The partition is required when offset is specified.");
+            CommandLineUtils.printUsageAndThrow(parser, "The partition is required when offset is specified.");
         }
 
         CommandLineUtils.checkRequiredArgs(parser, options, bootstrapServerOpt);
@@ -265,13 +265,13 @@ public final class ConsoleConsumerOptions extends CommandDefaultOptions {
             groupIdsProvided.add(extraConsumerProps.getProperty(ConsumerConfig.GROUP_ID_CONFIG));
         }
         if (groupIdsProvided.size() > 1) {
-            CommandLineUtils.printUsageAndExit(parser, "The group ids provided in different places (directly using '--group', "
+            CommandLineUtils.printUsageAndThrow(parser, "The group ids provided in different places (directly using '--group', "
                     + "via '--consumer-property', or via '--consumer.config') do not match. "
                     + "Detected group ids: "
                     + groupIdsProvided.stream().map(group -> "'" + group + "'").collect(Collectors.joining(", ")));
         }
         if (!groupIdsProvided.isEmpty() && partitionArg().isPresent()) {
-            CommandLineUtils.printUsageAndExit(parser, "Options group and partition cannot be specified together.");
+            CommandLineUtils.printUsageAndThrow(parser, "Options group and partition cannot be specified together.");
         }
         return groupIdsProvided;
     }
@@ -358,7 +358,7 @@ public final class ConsoleConsumerOptions extends CommandDefaultOptions {
     }
 
     private void invalidOffset(String offset) {
-        CommandLineUtils.printUsageAndExit(parser, "The provided offset value '" + offset + "' is incorrect. Valid values are " +
+        CommandLineUtils.printUsageAndThrow(parser, "The provided offset value '" + offset + "' is incorrect. Valid values are " +
                 "'earliest', 'latest', or a non-negative long.");
     }
 
@@ -374,7 +374,7 @@ public final class ConsoleConsumerOptions extends CommandDefaultOptions {
             formatter = (MessageFormatter) messageFormatterClass.getDeclaredConstructor().newInstance();
 
             if (options.has(messageFormatterArgOpt) && options.has(messageFormatterArgOptDeprecated)) {
-                CommandLineUtils.printUsageAndExit(parser, "Options --property and --formatter-property cannot be specified together.");
+                CommandLineUtils.printUsageAndThrow(parser, "Options --property and --formatter-property cannot be specified together.");
             }
             if (options.has(messageFormatterArgOptDeprecated)) {
                 System.out.println("Option --property is deprecated and will be removed in a future version. Use --formatter-property instead.");
@@ -389,7 +389,7 @@ public final class ConsoleConsumerOptions extends CommandDefaultOptions {
             formatter.configure(formatterConfigs);
 
         } catch (Exception e) {
-            CommandLineUtils.printUsageAndExit(parser, e.getMessage());
+            CommandLineUtils.printUsageAndThrow(parser, e.getMessage());
         }
         return formatter;
     }
