@@ -151,9 +151,9 @@ public class MockConsumer<K, V> implements Consumer<K, V> {
     }
 
     /**
-     * Simulates a partition loss event. Calls {@link ConsumerRebalanceListener#onPartitionsLost}
+     * Simulates a partition loss event. Calls {@link RebalanceListener#onPartitionsLost}
      * for the specified partitions and removes them from the current assignment. Unlike
-     * {@link #rebalance(Collection)}, which calls {@link ConsumerRebalanceListener#onPartitionsRevoked},
+     * {@link #rebalance(Collection)}, which calls {@link RebalanceListener#onPartitionsRevoked},
      * this method models the case where the consumer loses partitions without a graceful revoke..
      *
      * <p>Only records belonging to the lost partitions are cleared; records for retained
