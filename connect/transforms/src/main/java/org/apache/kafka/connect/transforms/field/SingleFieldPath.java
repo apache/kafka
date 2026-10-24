@@ -143,6 +143,15 @@ public class SingleFieldPath {
     }
 
     /**
+     * Return the path steps of this field path.
+     *
+     * @return unmodifiable list of path steps
+     */
+    public List<String> steps() {
+        return steps;
+    }
+
+    /**
      * Access a {@code Field} at the current path within a schema {@code Schema}
      * If field is not found, then {@code null} is returned.
      */
