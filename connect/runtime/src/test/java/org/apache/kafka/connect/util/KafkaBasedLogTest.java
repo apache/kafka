@@ -29,6 +29,7 @@ import org.apache.kafka.common.KafkaException;
 import org.apache.kafka.common.Node;
 import org.apache.kafka.common.PartitionInfo;
 import org.apache.kafka.common.TopicPartition;
+import org.apache.kafka.common.errors.BootstrapResolutionException;
 import org.apache.kafka.common.errors.LeaderNotAvailableException;
 import org.apache.kafka.common.errors.TimeoutException;
 import org.apache.kafka.common.errors.UnsupportedVersionException;
@@ -169,6 +170,27 @@ public class KafkaBasedLogTest {
 
         store.stop();
         verifyStartAndStop();
+    }
+
+    @Test
+    public void testStartPropagatesBootstrapResolutionExceptionFromCreateConsumer() {
+        // A terminal, non-retriable bootstrap resolution failure while constructing the consumer for an
+        // internal topic must not be swallowed or retried; it should propagate out of start() so that the
+        // worker/herder startup path fails fast instead of hanging.
+        KafkaBasedLog<String, String> failingStore = new KafkaBasedLog<>(TOPIC, PRODUCER_PROPS, CONSUMER_PROPS,
+                topicAdminSupplier, consumedCallback, time, initializer) {
+            @Override
+            protected KafkaProducer<String, String> createProducer() {
+                return producer;
+            }
+
+            @Override
+            protected MockConsumer<String, String> createConsumer() {
+                throw new BootstrapResolutionException("bootstrap servers could not be resolved");
+            }
+        };
+
+        assertThrows(BootstrapResolutionException.class, failingStore::start);
     }
 
     @Test
