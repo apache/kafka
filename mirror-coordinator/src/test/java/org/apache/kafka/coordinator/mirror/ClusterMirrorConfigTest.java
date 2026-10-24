@@ -168,6 +168,16 @@ public class ClusterMirrorConfigTest {
     }
 
     @Test
+    public void testParseAclRulesWithExtraFields() {
+        Properties props = new Properties();
+        props.setProperty(ClusterMirrorConfig.ACLS_INCLUDE_CONFIG,
+                "TOPIC;.*;READ;ALLOW;User:alice;extrafield;moredata");
+
+        ConfigException ex = assertThrows(ConfigException.class, () -> ClusterMirrorConfig.fromProperties(props));
+        assertTrue(ex.getMessage().contains("expected at most 5 fields"));
+    }
+
+    @Test
     public void testParseAclRulesWithPrincipal() {
         Properties props = new Properties();
         props.setProperty(ClusterMirrorConfig.ACLS_INCLUDE_CONFIG, "TOPIC;.*;READ;ALLOW;User:alice");
@@ -177,6 +187,22 @@ public class ClusterMirrorConfigTest {
         assertEquals(1, config.aclIncludeRules().size());
         ClusterMirrorConfig.MirrorAclRule rule = config.aclIncludeRules().get(0);
         assertEquals("User:alice", rule.principal());
+    }
+
+    @Test
+    public void testParseAclRulesWithComplexPrincipalDN() {
+        Properties props = new Properties();
+        props.setProperty(ClusterMirrorConfig.ACLS_INCLUDE_CONFIG,
+                "TOPIC;.*;READ;ALLOW;User:CN=billing-service,OU=Finance,O=Enterprise,L=London,C=GB");
+
+        ClusterMirrorConfig config = ClusterMirrorConfig.fromProperties(props);
+
+        assertEquals(1, config.aclIncludeRules().size());
+        ClusterMirrorConfig.MirrorAclRule rule = config.aclIncludeRules().get(0);
+        assertEquals(ResourceType.TOPIC, rule.resourceType());
+        assertEquals(AclOperation.READ, rule.operation());
+        assertEquals(AclPermissionType.ALLOW, rule.permissionType());
+        assertEquals("User:CN=billing-service,OU=Finance,O=Enterprise,L=London,C=GB", rule.principal());
     }
 
     @Test
