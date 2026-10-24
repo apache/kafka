@@ -370,9 +370,11 @@ public abstract class AbstractCoordinator implements Closeable {
     protected synchronized void pollHeartbeat(long now) {
         if (heartbeatThread != null) {
             if (heartbeatThread.isFailed()) {
-                // set the heartbeat thread to null and raise an exception. If the user catches it,
-                // the next call to ensureActiveGroup() will spawn a new heartbeat thread.
+                // close the heartbeat thread, set it to null and raise an exception. If the user catches it,
+                // the next call to ensureActiveGroup() will spawn a new heartbeat thread. Closing it here
+                // matters because close() cannot stop the thread once this reference is gone.
                 RuntimeException cause = heartbeatThread.failureCause();
+                heartbeatThread.close();
                 heartbeatThread = null;
                 throw cause;
             }
