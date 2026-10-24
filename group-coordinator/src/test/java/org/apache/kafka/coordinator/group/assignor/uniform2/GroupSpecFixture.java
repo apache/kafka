@@ -18,6 +18,7 @@ package org.apache.kafka.coordinator.group.assignor.uniform2;
 
 import org.apache.kafka.common.Uuid;
 import org.apache.kafka.coordinator.common.runtime.CoordinatorMetadataImage;
+import org.apache.kafka.coordinator.group.api.assignor.GroupAssignment;
 import org.apache.kafka.coordinator.group.api.assignor.GroupSpec;
 import org.apache.kafka.coordinator.group.api.assignor.SubscriptionType;
 import org.apache.kafka.coordinator.group.modern.Assignment;
@@ -42,6 +43,24 @@ public final class GroupSpecFixture {
     private Set<Uuid> firstSubscription;
     private boolean sameSubscriptions = true;
     private boolean built;
+
+    /**
+     * @param spec       The group spec.
+     * @param assignment An assignment of the group.
+     * @return A fixture with the members of the spec, in its order, each holding its partitions of
+     *         the assignment. More members can be added to it.
+     */
+    public static GroupSpecFixture after(GroupSpec spec, GroupAssignment assignment) {
+        var fixture = new GroupSpecFixture();
+        for (String memberId : spec.memberIds()) {
+            fixture.withMember(
+                memberId,
+                spec.memberSubscription(memberId).subscribedTopicIds(),
+                assignment.members().get(memberId).partitions()
+            );
+        }
+        return fixture;
+    }
 
     /**
      * Adds a member holding no partitions.
