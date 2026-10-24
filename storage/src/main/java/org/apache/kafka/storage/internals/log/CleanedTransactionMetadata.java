@@ -22,6 +22,7 @@ import org.apache.kafka.common.record.internal.Record;
 import org.apache.kafka.common.record.internal.RecordBatch;
 
 import java.io.IOException;
+import java.util.ArrayList;
 import java.util.Comparator;
 import java.util.HashMap;
 import java.util.HashSet;
@@ -36,7 +37,7 @@ import java.util.Set;
  * This is a helper class to facilitate tracking transaction state while cleaning the log. It maintains a set
  * of the ongoing aborted and committed transactions as the cleaner is working its way through the log. This
  * class is responsible for deciding when transaction markers can be removed and is therefore also responsible
- * for updating the cleaned transaction index accordingly.
+ * for staging the retained aborted transactions destined for the cleaned transaction index.
  */
 public class CleanedTransactionMetadata {
     private final Set<Long> ongoingCommittedTxns = new HashSet<>();
@@ -50,17 +51,22 @@ public class CleanedTransactionMetadata {
     );
 
     /**
-     * Output cleaned index to write retained aborted transactions
+     * Retained aborted transactions that have not yet been written to a cleaned transaction index.
+     * They are staged here so that the cleaner can flush them to the index of whichever cleaned
+     * segment the corresponding data ends up in.
      */
-    private Optional<TransactionIndex> cleanedIndex = Optional.empty();
+    private final List<AbortedTxn> pendingAbortedTxns = new ArrayList<>();
 
     /**
-     * Update the cleaned index.
+     * Append the staged aborted transactions to the given transaction index and clear the staging list.
      *
-     * @param cleanedIndex The new cleaned index
+     * @param index The transaction index of the cleaned segment holding the corresponding data
      */
-    public void setCleanedIndex(Optional<TransactionIndex> cleanedIndex) {
-        this.cleanedIndex = cleanedIndex;
+    public void flushPendingAbortedTxnsTo(TransactionIndex index) throws IOException {
+        for (AbortedTxn abortedTxn : pendingAbortedTxns) {
+            index.append(abortedTxn);
+        }
+        pendingAbortedTxns.clear();
     }
 
     /**
@@ -95,13 +101,7 @@ public class CleanedTransactionMetadata {
 
                     // Retain the marker until all batches from the transaction have been removed.
                     if (abortedTxnMetadata != null && abortedTxnMetadata.lastObservedBatchOffset.isPresent()) {
-                        cleanedIndex.ifPresent(index -> {
-                            try {
-                                index.append(abortedTxnMetadata.abortedTxn);
-                            } catch (IOException e) {
-                                throw new RuntimeException(e);
-                            }
-                        });
+                        pendingAbortedTxns.add(abortedTxnMetadata.abortedTxn);
                         return false;
                     }
 
