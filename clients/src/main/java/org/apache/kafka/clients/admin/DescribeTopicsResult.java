@@ -17,6 +17,7 @@
 
 package org.apache.kafka.clients.admin;
 
+import org.apache.kafka.common.KafkaException;
 import org.apache.kafka.common.KafkaFuture;
 import org.apache.kafka.common.TopicCollection;
 import org.apache.kafka.common.Uuid;
@@ -108,7 +109,7 @@ public class DescribeTopicsResult {
                     } catch (InterruptedException | ExecutionException e) {
                         // This should be unreachable, because allOf ensured that all the futures
                         // completed successfully.
-                        throw new RuntimeException(e);
+                        throw new KafkaException(e);
                     }
                 }
                 return descriptions;
