@@ -18,6 +18,9 @@ package org.apache.kafka.streams.integration;
 
 import org.apache.kafka.clients.producer.ProducerRecord;
 import org.apache.kafka.common.MetricName;
+import org.apache.kafka.common.header.Headers;
+import org.apache.kafka.common.header.internals.RecordHeaders;
+import org.apache.kafka.common.serialization.Deserializer;
 import org.apache.kafka.common.serialization.Serdes;
 import org.apache.kafka.common.serialization.StringSerializer;
 import org.apache.kafka.common.utils.Bytes;
@@ -43,6 +46,7 @@ import org.apache.kafka.streams.processor.api.ContextualProcessor;
 import org.apache.kafka.streams.processor.api.ProcessorSupplier;
 import org.apache.kafka.streams.processor.api.Record;
 import org.apache.kafka.streams.state.KeyValueStore;
+import org.apache.kafka.streams.test.TestRecord;
 import org.apache.kafka.test.MockProcessorSupplier;
 
 import org.junit.jupiter.api.Tag;
@@ -62,18 +66,24 @@ import java.util.Properties;
 import java.util.concurrent.atomic.AtomicBoolean;
 import java.util.stream.Stream;
 
+import static java.nio.charset.StandardCharsets.UTF_8;
 import static org.apache.kafka.common.utils.Utils.mkEntry;
 import static org.apache.kafka.common.utils.Utils.mkMap;
+import static org.junit.jupiter.api.Assertions.assertArrayEquals;
 import static org.junit.jupiter.api.Assertions.assertEquals;
 import static org.junit.jupiter.api.Assertions.assertFalse;
 import static org.junit.jupiter.api.Assertions.assertInstanceOf;
 import static org.junit.jupiter.api.Assertions.assertIterableEquals;
+import static org.junit.jupiter.api.Assertions.assertNotNull;
+import static org.junit.jupiter.api.Assertions.assertNull;
 import static org.junit.jupiter.api.Assertions.assertThrows;
 import static org.junit.jupiter.api.Assertions.assertTrue;
 
 @Timeout(600)
 @Tag("integration")
 public class ProcessingExceptionHandlerIntegrationTest {
+    private static final String SOURCE_HEADER = "source-only";
+    private static final byte[] SOURCE_HEADER_VALUE = "kept".getBytes(UTF_8);
     private final String threadId = Thread.currentThread().getName();
 
     private static final Instant TIMESTAMP = Instant.now();
@@ -398,6 +408,74 @@ public class ProcessingExceptionHandlerIntegrationTest {
         }
     }
 
+    @Test
+    public void shouldExposeOriginalHeadersAfterCachedProcessingError() {
+        final StreamsBuilder builder = new StreamsBuilder();
+        builder
+            .stream("TOPIC_NAME", consumedWithHeaderRemovingKeySerde())
+            .groupByKey(Grouped.with(Serdes.String(), Serdes.String()))
+            .count(Materialized.<String, Long, KeyValueStore<Bytes, byte[]>>as("count")
+                .withKeySerde(Serdes.String())
+                .withValueSerde(Serdes.Long())
+                .withCachingEnabled())
+            .toStream()
+            .mapValues(value -> {
+                throw new RuntimeException("Error");
+            });
+
+        final Properties properties = new Properties();
+        properties.put(
+            StreamsConfig.PROCESSING_EXCEPTION_HANDLER_CLASS_CONFIG,
+            AssertSourceRawHeadersProcessingExceptionHandler.class
+        );
+
+        try (final TopologyTestDriver driver = new TopologyTestDriverBuilder(builder.build()).withConfig(properties).build()) {
+            final TestInputTopic<String, String> inputTopic =
+                driver.createInputTopic("TOPIC_NAME", new StringSerializer(), new StringSerializer());
+            final ProducerRecord<String, String> event = sourceRecord("TOPIC_NAME", "ID123-1", "ID123-A1");
+
+            assertThrows(
+                StreamsException.class,
+                () -> inputTopic.pipeInput(new TestRecord<>(event.key(), event.value(), event.headers(), TIMESTAMP))
+            );
+        }
+    }
+
+    @Test
+    public void shouldExposeOriginalHeadersWhenForwardingWithChangedHeadersFailsDownstream() {
+        final StreamsBuilder builder = new StreamsBuilder();
+        builder
+            .stream("TOPIC_NAME", consumedWithHeaderRemovingKeySerde())
+            .process(() -> new ContextualProcessor<String, String, String, String>() {
+                @Override
+                public void process(final Record<String, String> record) {
+                    final RecordHeaders newHeaders = new RecordHeaders(record.headers());
+                    newHeaders.add("downstream-header", "downstream-value".getBytes(UTF_8));
+                    context().forward(record.withHeaders(newHeaders));
+                }
+            })
+            .mapValues(value -> {
+                throw new RuntimeException("Downstream failure");
+            });
+
+        final Properties properties = new Properties();
+        properties.put(
+            StreamsConfig.PROCESSING_EXCEPTION_HANDLER_CLASS_CONFIG,
+            AssertForwardedHeadersProcessingExceptionHandler.class
+        );
+
+        try (final TopologyTestDriver driver = new TopologyTestDriverBuilder(builder.build()).withConfig(properties).build()) {
+            final TestInputTopic<String, String> inputTopic =
+                driver.createInputTopic("TOPIC_NAME", new StringSerializer(), new StringSerializer());
+            final ProducerRecord<String, String> event = sourceRecord("TOPIC_NAME", "ID123-1", "ID123-A1");
+
+            assertThrows(
+                StreamsException.class,
+                () -> inputTopic.pipeInput(new TestRecord<>(event.key(), event.value(), event.headers(), TIMESTAMP))
+            );
+        }
+    }
+
     static Stream<Arguments> sourceRawRecordTopologyTestCases() {
         // Validate source raw key and source raw value for fully stateless topology
         final List<ProducerRecord<String, String>> statelessTopologyEvent = List.of(new ProducerRecord<>("TOPIC_NAME", "ID123-1", "ID123-A1"));
@@ -492,8 +570,8 @@ public class ProcessingExceptionHandlerIntegrationTest {
         return Stream.of(
             Arguments.of(statelessTopologyEvent, statelessTopologyBuilder.build()),
             Arguments.of(cacheAggregateExceptionInAggregatorEvent, cacheAggregateExceptionInAggregatorTopologyBuilder.build()),
-            Arguments.of(cacheAggregateExceptionAfterAggregationEvent, noCacheAggregateExceptionAfterAggregationTopologyBuilder.build()),
-            Arguments.of(noCacheAggregateExceptionAfterAggregationEvents, cacheAggregateExceptionInAggregatorTopologyBuilder.build()),
+            Arguments.of(cacheAggregateExceptionAfterAggregationEvent, cacheAggregateExceptionAfterAggregationTopologyBuilder.build()),
+            Arguments.of(noCacheAggregateExceptionAfterAggregationEvents, noCacheAggregateExceptionAfterAggregationTopologyBuilder.build()),
             Arguments.of(cacheTableEvents, cacheTableTopologyBuilder.build()),
             Arguments.of(joinEvents, joinTopologyBuilder.build())
         );
@@ -579,6 +657,71 @@ public class ProcessingExceptionHandlerIntegrationTest {
         @Override
         public void configure(final Map<String, ?> configs) {
             // No-op
+        }
+    }
+
+    public static class AssertSourceRawHeadersProcessingExceptionHandler implements ProcessingExceptionHandler {
+        @Override
+        public Response handleError(final ErrorHandlerContext context,
+                                    final Record<?, ?> record,
+                                    final Exception exception) {
+            assertNull(record.headers().lastHeader(SOURCE_HEADER));
+            assertNotNull(context.headers().lastHeader(SOURCE_HEADER));
+            assertArrayEquals(SOURCE_HEADER_VALUE, context.headers().lastHeader(SOURCE_HEADER).value());
+            return Response.fail();
+        }
+
+        @Override
+        public void configure(final Map<String, ?> configs) {
+            // No-op
+        }
+    }
+
+    public static class AssertForwardedHeadersProcessingExceptionHandler implements ProcessingExceptionHandler {
+        @Override
+        public Response handleError(final ErrorHandlerContext context,
+                                    final Record<?, ?> record,
+                                    final Exception exception) {
+            assertNotNull(record.headers().lastHeader("downstream-header"));
+            assertNull(record.headers().lastHeader(SOURCE_HEADER));
+            assertNotNull(context.headers().lastHeader(SOURCE_HEADER));
+            assertArrayEquals(SOURCE_HEADER_VALUE, context.headers().lastHeader(SOURCE_HEADER).value());
+            assertEquals("ID123-1", Serdes.String().deserializer().deserialize("topic", context.sourceRawKey()));
+            assertEquals("ID123-A1", Serdes.String().deserializer().deserialize("topic", context.sourceRawValue()));
+            return Response.fail();
+        }
+
+        @Override
+        public void configure(final Map<String, ?> configs) {
+            // No-op
+        }
+    }
+
+    private static ProducerRecord<String, String> sourceRecord(final String topic,
+                                                                final String key,
+                                                                final String value) {
+        final ProducerRecord<String, String> record = new ProducerRecord<>(topic, key, value);
+        record.headers().add(SOURCE_HEADER, SOURCE_HEADER_VALUE);
+        return record;
+    }
+
+    private static Consumed<String, String> consumedWithHeaderRemovingKeySerde() {
+        return Consumed.with(
+            Serdes.serdeFrom(new StringSerializer(), new HeaderRemovingStringDeserializer()),
+            Serdes.String()
+        );
+    }
+
+    private static final class HeaderRemovingStringDeserializer implements Deserializer<String> {
+        @Override
+        public String deserialize(final String topic, final byte[] data) {
+            return data == null ? null : new String(data, UTF_8);
+        }
+
+        @Override
+        public String deserialize(final String topic, final Headers headers, final byte[] data) {
+            headers.remove(SOURCE_HEADER);
+            return deserialize(topic, data);
         }
     }
 
