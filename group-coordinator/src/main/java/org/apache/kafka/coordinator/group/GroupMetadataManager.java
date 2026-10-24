@@ -4609,11 +4609,18 @@ public class GroupMetadataManager {
             time.milliseconds()
         );
         if (!canComputeNextTargetAssignment) {
-            returnedStatus.ifPresent(statusList -> statusList.add(
-                new Status()
-                    .setStatusCode(StreamsGroupHeartbeatResponse.Status.ASSIGNMENT_DELAYED.code())
-                    .setStatusDetail("Assignment delayed due to the configured assignment interval.")
-            ));
+            Map<String, TasksTuple> existingAssignment = updatedMembersAndTargetAssignment.targetAssignment();
+            boolean hasTargetAssignment = updatedMember
+                .map(member -> existingAssignment.containsKey(member.memberId()))
+                .orElse(false);
+
+            if (!hasTargetAssignment) {
+                returnedStatus.ifPresent(statusList -> statusList.add(
+                    new Status()
+                        .setStatusCode(StreamsGroupHeartbeatResponse.Status.ASSIGNMENT_DELAYED.code())
+                        .setStatusDetail("Assignment delayed due to the configured assignment interval.")
+                ));    
+            }
 
             return new UpdateTargetAssignmentResult<>(group.assignmentEpoch(), updatedMembersAndTargetAssignment.targetAssignment());
         }
