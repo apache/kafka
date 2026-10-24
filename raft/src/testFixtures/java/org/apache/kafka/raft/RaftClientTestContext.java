@@ -644,7 +644,7 @@ public final class RaftClientTestContext {
         }
 
         client.poll();
-        assertElectedLeader(epoch, localIdOrThrow());
+        assertElectedLeaderAndVotedKey(epoch, localIdOrThrow(), localVotedKey());
     }
 
     void expectAndGrantPreVotes(int epoch) throws Exception {
@@ -681,6 +681,10 @@ public final class RaftClientTestContext {
         return raftProtocol.isReconfigSupported() ?
             ReplicaKey.of(localIdOrThrow(), localDirectoryId) :
             ReplicaKey.of(localIdOrThrow(), ReplicaKey.NO_DIRECTORY_ID);
+    }
+
+    private ReplicaKey localVotedKey() {
+        return ReplicaKey.of(localIdOrThrow(), localDirectoryId);
     }
 
     private void expectBeginEpoch(int epoch) throws Exception {
@@ -760,6 +764,23 @@ public final class RaftClientTestContext {
                 epoch,
                 leaderId,
                 Optional.of(persistedVotedKey(candidateKey, kraftVersion)),
+                expectedVoters()
+            ),
+            quorumStateStore.readElectionState().get()
+        );
+    }
+
+    public void assertElectedLeaderWithLocalVotedKey(int epoch) {
+        assertElectedLeaderAndVotedKey(epoch, localIdOrThrow(), localVotedKey());
+    }
+
+    public void assertResignedLeaderWithLocalVotedKey(int epoch) {
+        assertTrue(client.quorum().isResigned());
+        assertEquals(
+            ElectionState.withElectedLeader(
+                epoch,
+                localIdOrThrow(),
+                Optional.of(persistedVotedKey(localVotedKey(), kraftVersion)),
                 expectedVoters()
             ),
             quorumStateStore.readElectionState().get()
