@@ -1149,7 +1149,7 @@ public class ReplicationControlManager {
                     partitionId,
                     new LeaderAcceptor(clusterControl, partition),
                     featureControl.metadataVersionOrThrow(),
-                    getTopicEffectiveMinIsr(topic.name),
+                    getEffectiveMinIsr(topic.name, partition),
                     featureControl.isElrFeatureEnabled()
                 );
                 if (configurationControl.uncleanLeaderElectionEnabledForTopic(topic.name())) {
@@ -1699,7 +1699,7 @@ public class ReplicationControlManager {
             partitionId,
             new LeaderAcceptor(clusterControl, partition),
             featureControl.metadataVersionOrThrow(),
-            getTopicEffectiveMinIsr(topic),
+            getEffectiveMinIsr(topic, partition),
             featureControl.isElrFeatureEnabled()
         )
             .setElection(election)
@@ -1866,7 +1866,7 @@ public class ReplicationControlManager {
                 topicPartition.partitionId(),
                 new LeaderAcceptor(clusterControl, partition),
                 featureControl.metadataVersionOrThrow(),
-                getTopicEffectiveMinIsr(topic.name),
+                getEffectiveMinIsr(topic.name, partition),
                 featureControl.isElrFeatureEnabled()
             )
                 .setElection(PartitionChangeBuilder.Election.PREFERRED)
@@ -2149,7 +2149,7 @@ public class ReplicationControlManager {
                 topicIdPart.partitionId(),
                 new LeaderAcceptor(clusterControl, partition, isAcceptableLeader),
                 featureControl.metadataVersionOrThrow(),
-                getTopicEffectiveMinIsr(topic.name),
+                getEffectiveMinIsr(topic.name, partition),
                 featureControl.isElrFeatureEnabled()
             );
             if (configurationControl.uncleanLeaderElectionEnabledForTopic(topic.name)) {
@@ -2269,7 +2269,7 @@ public class ReplicationControlManager {
             tp.partitionId(),
             new LeaderAcceptor(clusterControl, part),
             featureControl.metadataVersionOrThrow(),
-            getTopicEffectiveMinIsr(topicName),
+            getEffectiveMinIsr(topicName, part),
             featureControl.isElrFeatureEnabled()
         );
         if (configurationControl.uncleanLeaderElectionEnabledForTopic(topicName)) {
@@ -2335,7 +2335,7 @@ public class ReplicationControlManager {
             tp.partitionId(),
             new LeaderAcceptor(clusterControl, part),
             featureControl.metadataVersionOrThrow(),
-            getTopicEffectiveMinIsr(topics.get(tp.topicId()).name),
+            getEffectiveMinIsr(topics.get(tp.topicId()).name, part),
             featureControl.isElrFeatureEnabled()
         );
         if (!reassignment.replicas().equals(currentReplicas)) {
@@ -2418,7 +2418,7 @@ public class ReplicationControlManager {
                                     partitionIndex,
                                     new LeaderAcceptor(clusterControl, partitionRegistration),
                                     featureControl.metadataVersionOrThrow(),
-                                    getTopicEffectiveMinIsr(topicName),
+                                    getEffectiveMinIsr(topicName, partitionRegistration),
                                     featureControl.isElrFeatureEnabled()
                             )
                                     .setDirectory(brokerId, dirId)
@@ -2480,12 +2480,11 @@ public class ReplicationControlManager {
     }
 
     // Visible to test.
-    int getTopicEffectiveMinIsr(String topicName) {
+    int getEffectiveMinIsr(String topicName, PartitionRegistration partition) {
         String minIsrConfig = configurationControl.getTopicConfig(topicName, MIN_IN_SYNC_REPLICAS_CONFIG).value();
         int currentMinIsr = Integer.parseInt(minIsrConfig);
-        Uuid topicId = topicsByName.get(topicName);
-        int replicationFactor = topics.get(topicId).parts.get(0).replicas.length;
-        return Math.min(currentMinIsr, replicationFactor);
+        // Partitions of the same topic can have different replication factors.
+        return Math.min(currentMinIsr, partition.replicas.length);
     }
 
     /**
