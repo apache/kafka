@@ -46,9 +46,7 @@ import java.util.SortedSet;
 import java.util.TreeSet;
 import java.util.concurrent.CompletableFuture;
 
-import static org.apache.kafka.clients.consumer.CloseOptions.GroupMembershipOperation.DEFAULT;
 import static org.apache.kafka.clients.consumer.CloseOptions.GroupMembershipOperation.LEAVE_GROUP;
-import static org.apache.kafka.clients.consumer.CloseOptions.GroupMembershipOperation.REMAIN_IN_GROUP;
 import static org.apache.kafka.clients.consumer.internals.ConsumerRebalanceListenerMethodName.ON_PARTITIONS_LOST;
 import static org.apache.kafka.clients.consumer.internals.ConsumerRebalanceListenerMethodName.ON_PARTITIONS_REVOKED;
 
@@ -366,6 +364,26 @@ public class ConsumerMembershipManager extends AbstractMembershipManager<Consume
     }
 
     /**
+     * Transition out of the {@link MemberState#LEAVING} state even if the heartbeat was not sent.
+     * This will ensure that the member is not blocked on {@link MemberState#LEAVING} (best
+     * effort to send the request, without any response handling or retry logic)
+     */
+    @Override
+    public void onHeartbeatRequestSkipped() {
+        if (state == MemberState.LEAVING) {
+            boolean intentionallySkipped =
+                leaveGroupOperation() == CloseOptions.GroupMembershipOperation.REMAIN_IN_GROUP && groupInstanceId().isEmpty();
+            if (!intentionallySkipped) {
+                log.warn("Heartbeat to leave group cannot be sent (most probably due to coordinator " +
+                        "not known/available). Member {} with epoch {} will transition to {}.",
+                    memberId, memberEpoch, MemberState.UNSUBSCRIBED);
+            }
+            transitionTo(MemberState.UNSUBSCRIBED);
+            maybeCompleteLeaveInProgress();
+        }
+    }
+
+    /**
      * Log partitions being revoked that were already paused, since the pause flag will be
      * effectively lost.
      */
@@ -375,27 +393,6 @@ public class ConsumerMembershipManager extends AbstractMembershipManager<Consume
         if (!revokePausedPartitions.isEmpty()) {
             log.info("The pause flag in partitions {} will be removed due to revocation.", revokePausedPartitions);
         }
-    }
-
-    @Override
-    public boolean isLeavingGroup() {
-        CloseOptions.GroupMembershipOperation leaveGroupOperation = leaveGroupOperation();
-        if (REMAIN_IN_GROUP == leaveGroupOperation && groupInstanceId.isEmpty()) {
-            return false;
-        }
-
-        MemberState state = state();
-        boolean isLeavingState = state == MemberState.PREPARE_LEAVING || state == MemberState.LEAVING;
-
-        // Default operation: both static and dynamic consumers will send a leave heartbeat
-        boolean hasLeaveOperation = DEFAULT == leaveGroupOperation ||
-            // Leave operation: both static and dynamic consumers will send a leave heartbeat
-            LEAVE_GROUP == leaveGroupOperation ||
-            // Remain in group: static consumers will send a leave heartbeat with -2 epoch to reflect that a member using the given
-            // instance id decided to leave the group and would be back within the session timeout.
-            groupInstanceId().isPresent();
-
-        return isLeavingState && hasLeaveOperation;
     }
 
     /**
