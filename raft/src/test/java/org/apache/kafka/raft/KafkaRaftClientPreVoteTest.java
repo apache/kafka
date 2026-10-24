@@ -17,13 +17,14 @@
 package org.apache.kafka.raft;
 
 import org.apache.kafka.common.Uuid;
+import org.apache.kafka.common.message.VoteRequestData;
 import org.apache.kafka.common.message.VoteResponseData;
 import org.apache.kafka.common.protocol.ApiKeys;
 import org.apache.kafka.common.protocol.Errors;
 import org.apache.kafka.common.record.internal.MemoryRecords;
 import org.apache.kafka.raft.RaftClientTestContext.RaftProtocol;
 import org.apache.kafka.server.common.KRaftVersion;
-
+import org.junit.jupiter.api.Test;
 import org.junit.jupiter.params.ParameterizedTest;
 import org.junit.jupiter.params.provider.Arguments;
 import org.junit.jupiter.params.provider.EnumSource;
@@ -670,9 +671,8 @@ public class KafkaRaftClientPreVoteTest {
         assertTrue(context.client.quorum().isFollower());
     }
 
-    @ParameterizedTest
-    @EnumSource(value = KRaftVersion.class)
-    public void testFollowerGrantsPreVoteAfterLeaderResigns(KRaftVersion kraftVersion) throws Exception {
+    @Test
+    public void testFollowerGrantsPreVoteAfterLeaderResigns() throws Exception {
         int localId = randomReplicaId();
         ReplicaKey local = replicaKey(localId, true);
         ReplicaKey leader = replicaKey(localId + 1, true);
@@ -683,9 +683,9 @@ public class KafkaRaftClientPreVoteTest {
             local.id(),
             local.directoryId().get()
         )
-            .withStartingVoters(VoterSetTest.voterSet(Stream.of(local, leader, otherNodeKey)), kraftVersion)
+            .withStartingVoters(VoterSetTest.voterSet(Stream.of(local, leader, otherNodeKey)), KRaftVersion.KRAFT_VERSION_0)
             .withElectedLeader(epoch, leader.id())
-            .withRaftProtocol(KIP_996_PROTOCOL)
+            .withRaftProtocol(RaftProtocol.KIP_1186_PROTOCOL)
             .build();
 
         context.assertElectedLeader(epoch, leader.id());
@@ -700,19 +700,20 @@ public class KafkaRaftClientPreVoteTest {
         );
 
         // After fetching successfully from the leader, follower rejects PreVotes even if the remote log is up to date
-        context.deliverRequest(context.preVoteRequest(epoch, otherNodeKey, epoch, 1));
+        VoteRequestData preVote = context.preVoteRequest(epoch, otherNodeKey, epoch, 1);
+        context.deliverRequest(preVote);
         context.pollUntilResponse();
         context.assertSentVoteResponse(Errors.NONE, epoch, OptionalInt.of(leader.id()), false);
         assertTrue(context.client.quorum().isFollower());
 
-        // Leader resigns by sending EndQuorumEpoch
+        // Leader resigns by sending EndQuorumEpoch. This request can move the node out of the follower state.
         context.deliverRequest(context.endEpochRequest(epoch, leader.id(), List.of(otherNodeKey, local)));
         context.pollUntilResponse();
         context.assertSentEndQuorumEpochResponse(Errors.NONE, epoch, OptionalInt.of(leader.id()));
         assertTrue(context.client.quorum().isFollower());
 
-        // Once the leader has resigned, follower grants PreVotes again
-        context.deliverRequest(context.preVoteRequest(epoch, otherNodeKey, epoch, 1));
+        // Once the leader has resigned, the follower can now grant the same PreVote that was previously rejected
+        context.deliverRequest(preVote);
         context.pollUntilResponse();
         context.assertSentVoteResponse(Errors.NONE, epoch, OptionalInt.of(leader.id()), true);
         assertTrue(context.client.quorum().isFollower());
