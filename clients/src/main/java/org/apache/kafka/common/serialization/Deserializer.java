@@ -97,6 +97,12 @@ public interface Deserializer<T> extends Closeable {
      * <p>Similarly, if this method is overridden, the implementation cannot make any assumptions about the
      * passed in {@link ByteBuffer} either.
      *
+     * <p>The serialized bytes are the buffer's {@link ByteBuffer#remaining() remaining} bytes, i.e. those
+     * between its current {@code position} and {@code limit}. An implementation should read the data without
+     * changing the buffer's {@code position}, {@code limit}, or {@code mark}: the caller retains ownership of
+     * the buffer and may read it again after this method returns (for example, to determine the serialized
+     * size of the value), so mutating the buffer's state can corrupt unrelated processing.
+     *
      * <p>It is recommended to deserialize a {@code null} {@link ByteBuffer} to a {@code null} object.
      *
      * <p>Note that the passed in {@link Headers} may be empty, but never {@code null}.
