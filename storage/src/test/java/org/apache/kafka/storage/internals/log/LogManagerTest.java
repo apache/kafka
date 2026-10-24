@@ -1270,6 +1270,34 @@ public class LogManagerTest {
         verifyMetrics(1,  logMetrics.get(), metricTag);
     }
 
+    /**
+     * The future log only learns about leader epochs from the record batches copied into it, so epochs
+     * with no records behind them exist only in the current log's cache. They have to survive the swap,
+     * otherwise a leader that moved a partition between log directories can no longer answer the end
+     * offset of the epoch a follower last fetched.
+     */
+    @Test
+    public void testLeaderEpochCacheIsCarriedOverWhenMovingCurrentToFutureLog() throws Exception {
+        File dir1 = TestUtils.tempDirectory();
+        File dir2 = TestUtils.tempDirectory();
+        logManager = createLogManager(List.of(dir1, dir2));
+        logManager.startup(Set.of());
+
+        TopicPartition tp = new TopicPartition("future-log", 0);
+        logManager.maybeUpdatePreferredLogDir(tp, dir1.getAbsolutePath());
+        UnifiedLog currentLog = logManager.getOrCreateLog(tp, Optional.empty());
+        List<EpochEntry> epochEntries = List.of(new EpochEntry(1, 0L), new EpochEntry(2, 5L), new EpochEntry(4, 9L));
+        currentLog.leaderEpochCache().assign(epochEntries);
+
+        logManager.maybeUpdatePreferredLogDir(tp, dir2.getAbsolutePath());
+        UnifiedLog futureLog = logManager.getOrCreateLog(tp, false, true, Optional.empty());
+        assertEquals(List.of(), futureLog.leaderEpochCache().epochEntries());
+
+        logManager.replaceCurrentWithFutureLog(tp);
+
+        assertEquals(epochEntries, futureLog.leaderEpochCache().epochEntries());
+    }
+
     private void verifyMetrics(int logCount, Set<MetricName> logMetrics, String metricTag) {
         assertEquals(LogMetricNames.ALL_METRIC_NAMES.size() * logCount, logMetrics.size());
         logMetrics.forEach(metric -> assertTrue(metric.getMBeanName().contains(metricTag)));
