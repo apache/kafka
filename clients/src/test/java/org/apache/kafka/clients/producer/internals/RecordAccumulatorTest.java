@@ -24,6 +24,7 @@ import org.apache.kafka.clients.producer.BufferExhaustedException;
 import org.apache.kafka.clients.producer.Callback;
 import org.apache.kafka.clients.producer.ProducerConfig;
 import org.apache.kafka.clients.producer.RecordMetadata;
+import org.apache.kafka.clients.producer.internals.RecordAccumulator.RecordAppendResult;
 import org.apache.kafka.common.Cluster;
 import org.apache.kafka.common.KafkaException;
 import org.apache.kafka.common.Node;
@@ -1571,6 +1572,20 @@ public class RecordAccumulatorTest {
         Map<Integer, List<ProducerBatch>> batches = accum.drain(metadataCache,
             Set.of(node2), 999999 /* maxSize */, time.milliseconds());
         assertTrue(batches.get(node2.id()).isEmpty());
+    }
+
+    @Test
+    public void testBatchSizeZero() throws InterruptedException {
+        RecordAccumulator accum = createTestRecordAccumulator(0, 10 * 1024, Compression.NONE, Integer.MAX_VALUE);
+        RecordAppendResult result = accum.append(tp1.topic(), tp1.partition(), 0L, null, value, Record.EMPTY_HEADERS, null, 0, time.milliseconds(), cluster);
+        assertTrue(result.batchIsFull);
+        assertTrue(result.newBatchCreated);
+        result = accum.append(tp1.topic(), tp1.partition(), 0L, null, value, Record.EMPTY_HEADERS, null, 0, time.milliseconds(), cluster);
+        assertTrue(result.batchIsFull);
+        assertTrue(result.newBatchCreated);
+        result = accum.append(tp1.topic(), tp1.partition(), 0L, null, value, Record.EMPTY_HEADERS, null, 0, time.milliseconds(), cluster);
+        assertTrue(result.batchIsFull);
+        assertTrue(result.newBatchCreated);
     }
 
     @Test
