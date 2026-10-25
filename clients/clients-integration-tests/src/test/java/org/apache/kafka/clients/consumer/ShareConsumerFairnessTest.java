@@ -217,7 +217,8 @@ public class ShareConsumerFairnessTest extends ShareConsumerTestBase {
         // Records per partition a single fetch can return, capped by the fetch bytes of the partition.
         int recordsPerPartitionPerFetch = 100;
         createTopic(topic, partitions, 1);
-        produceRecords(topic, partitions, RECORD_VALUE_SIZE);
+        // Enough records per partition to outlast the polls even if a partition were read first on every poll.
+        produceRecords(topic, partitions, POLLS_PER_PHASE * recordsPerPartitionPerFetch, RECORD_VALUE_SIZE);
         alterShareAutoOffsetReset(groupId, "earliest");
 
         Map<Integer, Integer> recordsByPartition;
@@ -241,16 +242,16 @@ public class ShareConsumerFairnessTest extends ShareConsumerTestBase {
     }
 
     private void produceRecords(String topic, int partitions) {
-        produceRecords(topic, partitions, "value".getBytes().length);
+        produceRecords(topic, partitions, RECORDS_PER_PARTITION, "value".getBytes().length);
     }
 
     /**
-     * Produces {@link #RECORDS_PER_PARTITION} records of the given value size to every partition, each record in
-     * its own batch so the size of the records on the log is known.
+     * Produces the given number of records of the given value size to every partition, each record in its own
+     * batch so the size of the records on the log is known.
      */
-    private void produceRecords(String topic, int partitions, int valueSize) {
+    private void produceRecords(String topic, int partitions, int recordsPerPartition, int valueSize) {
         try (Producer<byte[], byte[]> producer = createProducer(Map.of(ProducerConfig.BATCH_SIZE_CONFIG, 0))) {
-            for (int i = 0; i < RECORDS_PER_PARTITION; i++) {
+            for (int i = 0; i < recordsPerPartition; i++) {
                 for (int p = 0; p < partitions; p++) {
                     producer.send(new ProducerRecord<>(topic, p, null, null, new byte[valueSize]));
                 }
