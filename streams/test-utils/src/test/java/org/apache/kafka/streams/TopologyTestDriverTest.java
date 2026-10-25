@@ -17,6 +17,7 @@
 package org.apache.kafka.streams;
 
 import org.apache.kafka.clients.producer.ProducerRecord;
+import org.apache.kafka.common.IsolationLevel;
 import org.apache.kafka.common.header.Header;
 import org.apache.kafka.common.header.Headers;
 import org.apache.kafka.common.header.internals.RecordHeader;
@@ -49,6 +50,12 @@ import org.apache.kafka.streams.processor.api.ProcessorContext;
 import org.apache.kafka.streams.processor.api.ProcessorSupplier;
 import org.apache.kafka.streams.processor.api.Record;
 import org.apache.kafka.streams.processor.api.RecordMetadata;
+import org.apache.kafka.streams.query.FailureReason;
+import org.apache.kafka.streams.query.KeyQuery;
+import org.apache.kafka.streams.query.Position;
+import org.apache.kafka.streams.query.PositionBound;
+import org.apache.kafka.streams.query.QueryConfig;
+import org.apache.kafka.streams.query.QueryResult;
 import org.apache.kafka.streams.state.KeyValueBytesStoreSupplier;
 import org.apache.kafka.streams.state.KeyValueIterator;
 import org.apache.kafka.streams.state.KeyValueStore;
@@ -1771,6 +1778,55 @@ public abstract class TopologyTestDriverTest {
         assertArrayEquals(key1, outputRecord.key());
         assertArrayEquals(value1, outputRecord.value());
         assertEquals(SINK_TOPIC_1, outputRecord.topic());
+    }
+
+    @Test
+    public void shouldAssignOffsetsPerTopicMatchingPattern() {
+        testDriver = new TopologyTestDriverBuilder(
+            setupMultipleSourcesPatternTopology(Pattern.compile("source-topic-\\d")))
+            .withConfig(config).build();
+
+        pipeRecord(SOURCE_TOPIC_1, testRecord1);
+        pipeRecord(SOURCE_TOPIC_2, testRecord1);
+        pipeRecord(SOURCE_TOPIC_1, testRecord1);
+        pipeRecord(SOURCE_TOPIC_2, testRecord1);
+
+        assertEquals(List.of(
+            new TTDTestRecord(SOURCE_TOPIC_1, testRecord1, 0L),
+            new TTDTestRecord(SOURCE_TOPIC_2, testRecord1, 0L),
+            new TTDTestRecord(SOURCE_TOPIC_1, testRecord1, 1L),
+            new TTDTestRecord(SOURCE_TOPIC_2, testRecord1, 1L)
+        ), mockProcessors.get(0).processedRecords);
+    }
+
+    @Test
+    public void shouldWaitForPatternTopicPositionBound() {
+        final String storeName = "positions";
+        final Topology topology = new Topology();
+        topology.addSource("source", stringDeserializer, longDeserializer, Pattern.compile("source-topic-\\d"));
+        topology.addProcessor("writer", () -> new StoreWriter(storeName), "source");
+        topology.addStateStore(Stores.keyValueStoreBuilder(
+            Stores.inMemoryKeyValueStore(storeName), Serdes.String(), Serdes.Long()).withLoggingDisabled(), "writer");
+        testDriver = new TopologyTestDriverBuilder(topology).withConfig(config).build();
+        final TestInputTopic<String, Long> topicA = testDriver.createInputTopic(
+            SOURCE_TOPIC_1, new StringSerializer(), new LongSerializer());
+        final TestInputTopic<String, Long> topicB = testDriver.createInputTopic(
+            SOURCE_TOPIC_2, new StringSerializer(), new LongSerializer());
+        topicA.pipeInput("a", 1L);
+        topicA.pipeInput("a", 2L);
+        topicB.pipeInput("b", 1L);
+
+        final KeyValueStore<String, Long> store = testDriver.getKeyValueStore(storeName);
+        final PositionBound bound = PositionBound.at(Position.emptyPosition().withComponent(SOURCE_TOPIC_2, 0, 1));
+        final QueryConfig queryConfig = new QueryConfig(false, IsolationLevel.READ_UNCOMMITTED);
+        final QueryResult<Long> before = store.query(KeyQuery.withKey("b"), bound, queryConfig);
+        assertTrue(before.isFailure());
+        assertEquals(FailureReason.NOT_UP_TO_BOUND, before.getFailureReason());
+
+        topicB.pipeInput("b", 2L);
+        final QueryResult<Long> after = store.query(KeyQuery.withKey("b"), bound, queryConfig);
+        assertTrue(after.isSuccess());
+        assertEquals(2L, after.getResult());
     }
 
     @Test
