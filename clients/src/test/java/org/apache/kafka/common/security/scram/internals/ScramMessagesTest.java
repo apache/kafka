@@ -24,6 +24,8 @@ import org.apache.kafka.common.security.scram.internals.ScramMessages.ServerFirs
 
 import org.junit.jupiter.api.BeforeEach;
 import org.junit.jupiter.api.Test;
+import org.junit.jupiter.api.parallel.ResourceLock;
+import org.junit.jupiter.api.parallel.Resources;
 
 import java.nio.charset.StandardCharsets;
 import java.util.Base64;
@@ -168,6 +170,7 @@ public class ScramMessagesTest {
     }
 
     @Test
+    @ResourceLock(Resources.LOCALE)
     public void serverFirstMessageUsesAsciiDigitsRegardlessOfDefaultLocale() throws SaslException {
         String clientNonce = formatter.secureRandomString();
         String serverNonce = formatter.secureRandomString();
