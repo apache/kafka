@@ -3577,19 +3577,20 @@ class KafkaApis(val requestChannel: RequestChannel,
         shareFetchRequest.data.memberId,
         params,
         shareFetchRequest.data.shareAcquireMode,
-        shareSessionEpoch,
         shareFetchRequest.data.maxRecords,
         shareFetchRequest.data.batchSize,
         interestedTopicPartitions
       ).thenApply{ result =>
-        val combinedResult = mutable.Map.empty[TopicIdPartition, ShareFetchResponseData.PartitionData]
+        // Preserve the fetch order of the partitions, the share session uses it to re-order the partitions
+        // for the subsequent fetch.
+        val combinedResult = mutable.LinkedHashMap.empty[TopicIdPartition, ShareFetchResponseData.PartitionData]
         result.asScala.foreach { case (tp, data) =>
           combinedResult += (tp -> data)
         }
         erroneous.foreach { case (tp, data) =>
           combinedResult += (tp -> data)
         }
-        combinedResult.toMap
+        combinedResult
       }
     }
   }

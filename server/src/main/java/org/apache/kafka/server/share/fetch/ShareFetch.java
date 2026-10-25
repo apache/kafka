@@ -28,6 +28,7 @@ import org.apache.kafka.storage.log.metrics.BrokerTopicStats;
 import java.util.Collection;
 import java.util.HashMap;
 import java.util.HashSet;
+import java.util.LinkedHashMap;
 import java.util.LinkedHashSet;
 import java.util.List;
 import java.util.Map;
@@ -177,7 +178,7 @@ public class ShareFetch {
             return;
         }
 
-        Map<TopicIdPartition, PartitionData> response = new HashMap<>(partitionData);
+        Map<TopicIdPartition, PartitionData> response = new LinkedHashMap<>(partitionData);
         // Add any erroneous partitions to the response.
         addErroneousToResponse(response);
         future.complete(response);
