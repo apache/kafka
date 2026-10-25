@@ -68,7 +68,6 @@ import org.junit.jupiter.api.AfterEach;
 import org.junit.jupiter.api.Test;
 import org.junit.jupiter.params.ParameterizedTest;
 import org.junit.jupiter.params.provider.CsvSource;
-import org.junit.jupiter.params.provider.ValueSource;
 
 import java.io.File;
 import java.time.Duration;
@@ -1738,10 +1737,14 @@ public abstract class TopologyTestDriverTest {
     }
 
     @ParameterizedTest
-    @ValueSource(booleans = {false, true})
-    public void shouldContinueAfterGlobalTableDeserializationError(final boolean invalidKey) {
-        config.put(StreamsConfig.DESERIALIZATION_EXCEPTION_HANDLER_CLASS_CONFIG, LogAndContinueExceptionHandler.class);
-        try (final TopologyTestDriver driver = new TopologyTestDriverBuilder(globalTableTopology()).withConfig(config).build()) {
+    @CsvSource({"false, false", "false, true", "true, false", "true, true"})
+    public void shouldContinueAfterGlobalTableDeserializationError(final boolean invalidKey,
+                                                                 final boolean inheritHandler) {
+        final Properties handlerConfig = new Properties();
+        handlerConfig.setProperty(StreamsConfig.DESERIALIZATION_EXCEPTION_HANDLER_CLASS_CONFIG, LogAndContinueExceptionHandler.class.getName());
+        final Properties driverConfig = inheritHandler ? new Properties(handlerConfig) : handlerConfig;
+        driverConfig.putAll(config);
+        try (final TopologyTestDriver driver = new TopologyTestDriverBuilder(globalTableTopology()).withConfig(driverConfig).build()) {
             final TestInputTopic<byte[], byte[]> input = driver.createInputTopic("global-topic", new ByteArraySerializer(), new ByteArraySerializer());
             final byte[] valid = new LongSerializer().serialize("global-topic", 1L);
             input.pipeInput(valid, valid);
@@ -1754,12 +1757,21 @@ public abstract class TopologyTestDriverTest {
     }
 
     @ParameterizedTest
-    @ValueSource(strings = {"deserialization.exception.handler", "default.deserialization.exception.handler"})
-    public void shouldInvokeConfiguredGlobalTableDeserializationHandler(final String handlerConfig) {
+    @CsvSource({
+        "deserialization.exception.handler, false",
+        "deserialization.exception.handler, true",
+        "default.deserialization.exception.handler, false",
+        "default.deserialization.exception.handler, true"
+    })
+    public void shouldInvokeConfiguredGlobalTableDeserializationHandler(final String handlerConfig,
+                                                                      final boolean inheritHandler) {
         final List<ConsumerRecord<byte[], byte[]>> failedRecords = new ArrayList<>();
-        config.put(handlerConfig, TrackingDeserializationExceptionHandler.class);
-        config.put("test.failed.records", failedRecords);
-        try (final TopologyTestDriver driver = new TopologyTestDriverBuilder(globalTableTopology()).withConfig(config).build()) {
+        final Properties handlerDefaults = new Properties();
+        handlerDefaults.setProperty(handlerConfig, TrackingDeserializationExceptionHandler.class.getName());
+        final Properties driverConfig = inheritHandler ? new Properties(handlerDefaults) : handlerDefaults;
+        driverConfig.putAll(config);
+        driverConfig.put("test.failed.records", failedRecords);
+        try (final TopologyTestDriver driver = new TopologyTestDriverBuilder(globalTableTopology()).withConfig(driverConfig).build()) {
             final TestInputTopic<Long, byte[]> input = driver.createInputTopic("global-topic", new LongSerializer(), new ByteArraySerializer());
             final byte[] valid = new LongSerializer().serialize("global-topic", 1L);
             input.pipeInput(1L, valid);
