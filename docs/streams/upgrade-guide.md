@@ -67,7 +67,7 @@ Since 2.6.0 release, Kafka Streams depends on a RocksDB version that requires Ma
 
 ## Streams API changes in 4.5.0
 
-`TopologyTestDriver` now uses the configured `DeserializationExceptionHandler` for global stores, including `GlobalKTable` input records, matching the global stream thread. Previously, the test driver always skipped global records that failed deserialization. With the default handler, these records now cause a `StreamsException`. Tests that intentionally skip malformed global records should set `deserialization.exception.handler` to `org.apache.kafka.streams.errors.LogAndContinueExceptionHandler`.
+`TopologyTestDriver` now honors the configured deserialization exception handler for `GlobalKTable` records. With the default handler, malformed records now throw `StreamsException`; tests that require skipping these records should configure `LogAndContinueExceptionHandler`.
 
 Processors returning the same `StoreBuilder` instance from `ConnectedStoreProvider#stores()` are now grouped into one subtopology ([KAFKA-20464](https://issues.apache.org/jira/browse/KAFKA-20464)). For affected applications, task IDs change and state is restored from the changelog on first startup after upgrading. Linking processors to a store by name is unaffected.
 
