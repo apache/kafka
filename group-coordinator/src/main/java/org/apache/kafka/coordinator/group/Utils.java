@@ -203,7 +203,7 @@ public class Utils {
         Map<Uuid, Set<Integer>> topicPartitionMap = new HashMap<>();
         consumerProtocolAssignment.assignedPartitions().forEach(topicPartition -> {
             metadataImage.topicMetadata(topicPartition.topic()).ifPresent(topicMetadata -> {
-                topicPartitionMap.put(topicMetadata.id(), new HashSet<>(topicPartition.partitions()));
+                topicPartitionMap.put(topicMetadata.id(), Set.copyOf(topicPartition.partitions()));
             });
         });
         return topicPartitionMap;

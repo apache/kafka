@@ -101,5 +101,4 @@ public class MemberSubscriptionAndAssignmentImpl implements MemberSubscription, 
             ", memberAssignment=" + memberAssignment +
             ')';
     }
-
 }

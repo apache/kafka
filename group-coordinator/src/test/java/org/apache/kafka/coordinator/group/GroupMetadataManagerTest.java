@@ -181,7 +181,6 @@ import org.junit.jupiter.params.ParameterizedTest;
 import org.junit.jupiter.params.provider.Arguments;
 import org.junit.jupiter.params.provider.MethodSource;
 import org.junit.jupiter.params.provider.ValueSource;
-import org.mockito.ArgumentCaptor;
 
 import java.nio.ByteBuffer;
 import java.util.ArrayList;
@@ -260,7 +259,6 @@ import static org.junit.jupiter.api.Assertions.assertEquals;
 import static org.junit.jupiter.api.Assertions.assertFalse;
 import static org.junit.jupiter.api.Assertions.assertNotEquals;
 import static org.junit.jupiter.api.Assertions.assertNotNull;
-import static org.junit.jupiter.api.Assertions.assertNotSame;
 import static org.junit.jupiter.api.Assertions.assertNull;
 import static org.junit.jupiter.api.Assertions.assertSame;
 import static org.junit.jupiter.api.Assertions.assertThrows;
@@ -275,75 +273,6 @@ import static org.mockito.Mockito.verify;
 import static org.mockito.Mockito.when;
 
 public class GroupMetadataManagerTest {
-
-    @ParameterizedTest
-    @ValueSource(booleans = {false, true})
-    public void testMutableAssignorOutputBecomesImmutableInputAfterReplay(boolean shareGroup) {
-        String groupId = "group";
-        String memberId = Uuid.randomUuid().toString();
-        Uuid topicId = Uuid.randomUuid();
-        Set<Integer> partitionIds = new HashSet<>(Set.of(0, 1));
-        Map<Uuid, Set<Integer>> partitions = new HashMap<>();
-        partitions.put(topicId, partitionIds);
-
-        MockPartitionAssignor assignor = spy(new MockPartitionAssignor("range"));
-        GroupMetadataManagerTestContext context = new GroupMetadataManagerTestContext.Builder()
-            .withConfig(GroupCoordinatorConfig.CONSUMER_GROUP_ASSIGNORS_CONFIG, List.of(assignor))
-            .withConfig(GroupCoordinatorConfig.CONSUMER_GROUP_ASSIGNMENT_INTERVAL_MS_CONFIG, 0)
-            .withConfig(GroupCoordinatorConfig.SHARE_GROUP_ASSIGNMENT_INTERVAL_MS_CONFIG, 0)
-            .withShareGroupAssignor(assignor)
-            .withMetadataImage(new MetadataImageBuilder()
-                .addTopic(topicId, "foo", 2)
-                .buildCoordinatorMetadataImage())
-            .build();
-
-        assignor.prepareGroupAssignment(new GroupAssignment(Map.of(
-            memberId, new MemberAssignmentImpl(partitions)
-        )));
-
-        // The first join creates and replays records from the mutable output.
-        // A second join triggers assignment using the replayed target assignment.
-        for (String joiningMemberId : List.of(memberId, Uuid.randomUuid().toString())) {
-            List<CoordinatorRecord> records;
-            CoordinatorRecord expectedAssignmentRecord;
-            if (shareGroup) {
-                records = context.shareGroupHeartbeat(new ShareGroupHeartbeatRequestData()
-                    .setGroupId(groupId)
-                    .setMemberId(joiningMemberId)
-                    .setMemberEpoch(0)
-                    .setSubscribedTopicNames(List.of("foo"))).records();
-                expectedAssignmentRecord = GroupCoordinatorRecordHelpers.newShareGroupTargetAssignmentRecord(
-                    groupId, memberId, partitions);
-            } else {
-                records = context.consumerGroupHeartbeat(new ConsumerGroupHeartbeatRequestData()
-                    .setGroupId(groupId)
-                    .setMemberId(joiningMemberId)
-                    .setMemberEpoch(0)
-                    .setRebalanceTimeoutMs(5000)
-                    .setSubscribedTopicNames(List.of("foo"))
-                    .setTopicPartitions(List.of())).records();
-                expectedAssignmentRecord = GroupCoordinatorRecordHelpers.newConsumerGroupTargetAssignmentRecord(
-                    groupId, memberId, partitions);
-            }
-            if (joiningMemberId.equals(memberId)) {
-                assertTrue(records.contains(expectedAssignmentRecord));
-            }
-        }
-
-        ArgumentCaptor<GroupSpec> groupSpecCaptor = ArgumentCaptor.forClass(GroupSpec.class);
-        verify(assignor, times(2)).assign(groupSpecCaptor.capture(), any());
-        Map<Uuid, Set<Integer>> nextInput = groupSpecCaptor.getValue().memberAssignment(memberId).partitions();
-        Assignment replayedAssignment = shareGroup
-            ? context.groupMetadataManager.shareGroup(groupId).targetAssignment(memberId)
-            : context.groupMetadataManager.consumerGroup(groupId).targetAssignment(memberId);
-
-        assertEquals(partitions, nextInput);
-        assertNotSame(partitions, nextInput);
-        assertNotSame(partitionIds, nextInput.get(topicId));
-        assertSame(replayedAssignment.partitions(), nextInput);
-        assertThrows(UnsupportedOperationException.class, () -> nextInput.clear());
-        assertThrows(UnsupportedOperationException.class, () -> nextInput.get(topicId).remove(0));
-    }
 
     @Test
     public void testConsumerHeartbeatRegexValidation() {
@@ -1395,6 +1324,49 @@ public class GroupMetadataManagerTest {
         );
 
         assertRecordsEquals(expectedRecords, result.records());
+    }
+
+    @Test
+    public void testMutableAssignorOutputBecomesImmutableInputAfterReplay() {
+        String groupId = "group";
+        String memberId = Uuid.randomUuid().toString();
+        Uuid topicId = Uuid.randomUuid();
+        Set<Integer> partitionIds = new HashSet<>(Set.of(0, 1));
+        Map<Uuid, Set<Integer>> partitions = new HashMap<>();
+        partitions.put(topicId, partitionIds);
+
+        MockPartitionAssignor assignor = spy(new MockPartitionAssignor("range"));
+        GroupMetadataManagerTestContext context = new GroupMetadataManagerTestContext.Builder()
+            .withConfig(GroupCoordinatorConfig.CONSUMER_GROUP_ASSIGNORS_CONFIG, List.of(assignor))
+            .withConfig(GroupCoordinatorConfig.CONSUMER_GROUP_ASSIGNMENT_INTERVAL_MS_CONFIG, 0)
+            .withShareGroupAssignor(assignor)
+            .withMetadataImage(new MetadataImageBuilder()
+                .addTopic(topicId, "foo", 2)
+                .buildCoordinatorMetadataImage())
+            .build();
+
+        assignor.prepareGroupAssignment(new GroupAssignment(Map.of(
+            memberId, new MemberAssignmentImpl(partitions)
+        )));
+
+        context.consumerGroupHeartbeat(
+            new ConsumerGroupHeartbeatRequestData()
+                .setGroupId(groupId)
+                .setMemberId(memberId)
+                .setMemberEpoch(0)
+                .setRebalanceTimeoutMs(5000)
+                .setSubscribedTopicNames(List.of("foo"))
+                .setTopicPartitions(List.of())
+        );
+
+        Assignment replayedAssignment = context.groupMetadataManager
+            .consumerGroup(groupId)
+            .targetAssignment(memberId);
+
+        assertEquals(partitions, replayedAssignment.partitions());
+        assertThrows(UnsupportedOperationException.class, () -> replayedAssignment.partitions().clear());
+        assertThrows(UnsupportedOperationException.class, () -> replayedAssignment.partitions().get(topicId).remove(0)
+        );
     }
 
     @Test

@@ -72,7 +72,7 @@ public final class GroupSpecFixture {
             Optional.empty(),
             Optional.empty(),
             topics,
-            new Assignment(partitions)
+            Assignment.of(partitions)
         ));
 
         if (firstSubscription == null) {

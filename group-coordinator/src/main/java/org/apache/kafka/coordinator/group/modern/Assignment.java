@@ -23,6 +23,7 @@ import org.apache.kafka.coordinator.group.generated.ShareGroupTargetAssignmentMe
 
 import java.util.Collections;
 import java.util.HashMap;
+import java.util.HashSet;
 import java.util.Map;
 import java.util.Objects;
 import java.util.Set;
@@ -136,7 +137,8 @@ public class Assignment implements MemberAssignment {
         return Assignment.of(
             record.topicPartitions().stream().collect(Collectors.toMap(
                 ShareGroupTargetAssignmentMemberValue.TopicPartition::topicId,
-                topicPartitions -> Set.copyOf(topicPartitions.partitions())))
+                topicPartitions -> Collections.unmodifiableSet(new HashSet<>(topicPartitions.partitions()))
+            ))
         );
     }
 }

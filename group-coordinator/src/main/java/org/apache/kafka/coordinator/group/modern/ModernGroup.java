@@ -279,7 +279,7 @@ public abstract class ModernGroup<T extends ModernGroupMember> implements Group 
     public void updateTargetAssignment(String memberId, Assignment newTargetAssignment) {
         updateInvertedTargetAssignment(
             memberId,
-            targetAssignment.getOrDefault(memberId, Assignment.copyOf(Map.of())),
+            targetAssignment.getOrDefault(memberId, Assignment.EMPTY),
             newTargetAssignment
         );
         targetAssignment.put(memberId, newTargetAssignment);

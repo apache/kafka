@@ -1271,7 +1271,7 @@ public class ConsumerGroup extends ModernGroup<ConsumerGroupMember> {
                         ))
                 )
                 .build();
-            consumerGroup.updateTargetAssignment(newMember.memberId(), Assignment.copyOf(assignedPartitions));
+            consumerGroup.updateTargetAssignment(newMember.memberId(), Assignment.of(assignedPartitions));
             consumerGroup.updateMember(newMember);
         });
 
