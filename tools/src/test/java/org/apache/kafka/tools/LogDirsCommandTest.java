@@ -49,7 +49,7 @@ public class LogDirsCommandTest {
 
     @ClusterTest(brokers = 3)
     public void testLogDirsWithoutBrokers(ClusterInstance clusterInstance) {
-        createTopic(clusterInstance, TOPIC);
+        clusterInstance.createTopicWithAssignment(TOPIC, Map.of(0, List.of(0)));
         try (Admin admin = Admin.create(Map.of(CommonClientConfigs.BOOTSTRAP_SERVERS_CONFIG, clusterInstance.bootstrapServers()))) {
             String output = assertDoesNotThrow(() -> execute(fromArgsToOptions("--bootstrap-server", clusterInstance.bootstrapServers(), "--describe"), admin));
 
@@ -69,7 +69,7 @@ public class LogDirsCommandTest {
 
     @ClusterTest(brokers = 3)
     public void testLogDirsWithBrokers(ClusterInstance clusterInstance) {
-        createTopic(clusterInstance, TOPIC);
+        clusterInstance.createTopicWithAssignment(TOPIC, Map.of(0, List.of(0)));
         try (Admin admin = Admin.create(Map.of(CommonClientConfigs.BOOTSTRAP_SERVERS_CONFIG, clusterInstance.bootstrapServers()))) {
             int brokerId = 0;
             String output = assertDoesNotThrow(() -> execute(fromArgsToOptions("--bootstrap-server", clusterInstance.bootstrapServers(), "--broker-list", String.valueOf(brokerId), "--describe"), admin));
@@ -115,8 +115,8 @@ public class LogDirsCommandTest {
 
     @ClusterTest
     public void testLogDirsWithSpecificTopic(ClusterInstance clusterInstance) {
-        createTopic(clusterInstance, TOPIC);
-        createTopic(clusterInstance, "other-topic");
+        clusterInstance.createTopicWithAssignment(TOPIC, Map.of(0, List.of(0)));
+        clusterInstance.createTopicWithAssignment("other-topic", Map.of(0, List.of(0)));
         try (Admin admin = Admin.create(Map.of(CommonClientConfigs.BOOTSTRAP_SERVERS_CONFIG, clusterInstance.bootstrapServers()))) {
             String output = assertDoesNotThrow(() -> execute(fromArgsToOptions("--bootstrap-server", clusterInstance.bootstrapServers(), "--topic-list", TOPIC, "--describe"), admin));
             // check all brokers are present
@@ -214,9 +214,5 @@ public class LogDirsCommandTest {
             }
         };
         return ToolsTestUtils.captureStandardOut(runnable);
-    }
-
-    private void createTopic(ClusterInstance clusterInstance, String topic) {
-        assertDoesNotThrow(() -> clusterInstance.createTopicWithAssignment(topic, Map.of(0, List.of(0))));
     }
 }

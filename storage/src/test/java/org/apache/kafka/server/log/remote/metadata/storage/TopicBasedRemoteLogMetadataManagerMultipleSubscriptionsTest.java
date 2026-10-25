@@ -35,7 +35,6 @@ import java.util.concurrent.ExecutionException;
 import java.util.concurrent.Phaser;
 import java.util.concurrent.TimeUnit;
 
-import static org.junit.jupiter.api.Assertions.assertDoesNotThrow;
 import static org.junit.jupiter.api.Assertions.assertEquals;
 import static org.junit.jupiter.api.Assertions.assertThrows;
 import static org.junit.jupiter.api.Assertions.assertTrue;
@@ -59,15 +58,15 @@ public class TopicBasedRemoteLogMetadataManagerMultipleSubscriptionsTest {
         // Create topics.
         String leaderTopic = "leader";
         // Set broker id 0 as the first entry which is taken as the leader.
-        createTopic(leaderTopic, Map.of(0, List.of(0, 1, 2)));
+        clusterInstance.createTopicWithAssignment(leaderTopic, Map.of(0, List.of(0, 1, 2)));
 
         String followerTopic = "follower";
         // Set broker id 1 as the first entry which is taken as the leader.
-        createTopic(followerTopic, Map.of(0, List.of(1, 2, 0)));
+        clusterInstance.createTopicWithAssignment(followerTopic, Map.of(0, List.of(1, 2, 0)));
 
         String topicWithNoMessages = "no-messages-topic";
         // Set broker id 1 as the first entry which is taken as the leader.
-        createTopic(topicWithNoMessages, Map.of(0, List.of(1, 2, 0)));
+        clusterInstance.createTopicWithAssignment(topicWithNoMessages, Map.of(0, List.of(1, 2, 0)));
 
         final TopicIdPartition leaderTopicIdPartition = new TopicIdPartition(Uuid.randomUuid(), new TopicPartition(leaderTopic, 0));
         final TopicIdPartition followerTopicIdPartition = new TopicIdPartition(Uuid.randomUuid(), new TopicPartition(followerTopic, 0));
@@ -165,9 +164,5 @@ public class TopicBasedRemoteLogMetadataManagerMultipleSubscriptionsTest {
             assertTrue(remoteLogMetadataManager.listRemoteLogSegments(leaderTopicIdPartition).hasNext(), "No segments found");
             assertTrue(remoteLogMetadataManager.listRemoteLogSegments(followerTopicIdPartition).hasNext(), "No segments found");
         }
-    }
-
-    private void createTopic(String topic, Map<Integer, List<Integer>> replicasAssignments) {
-        assertDoesNotThrow(() -> clusterInstance.createTopicWithAssignment(topic, replicasAssignments));
     }
 }
