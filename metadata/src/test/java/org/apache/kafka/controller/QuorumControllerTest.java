@@ -172,7 +172,7 @@ public class QuorumControllerTest {
     private static final Logger log = LoggerFactory.getLogger(QuorumControllerTest.class);
 
     static final BootstrapMetadata SIMPLE_BOOTSTRAP = BootstrapMetadata.
-            fromVersion(MetadataVersion.IBP_3_7_IV0, "test-provided bootstrap");
+            fromVersion(MetadataVersion.IBP_3_7_IV0, "test-cluster-id", "test-provided bootstrap");
 
     /**
      * Test setting some configuration values and reading them back.
@@ -388,7 +388,7 @@ public class QuorumControllerTest {
                 build();
             QuorumControllerTestEnv controlEnv = new QuorumControllerTestEnv.Builder(clientEnv).
                 setSessionTimeoutMillis(OptionalLong.of(sessionTimeoutMillis)).
-                setBootstrapMetadata(BootstrapMetadata.fromVersion(MetadataVersion.IBP_4_0_IV1, "test-provided bootstrap ELR enabled")).
+                setBootstrapMetadata(BootstrapMetadata.fromVersion(MetadataVersion.IBP_4_0_IV1, "test-cluster-id", "test-provided bootstrap ELR enabled")).
                 build()
         ) {
             ListenerCollection listeners = new ListenerCollection();
@@ -527,7 +527,7 @@ public class QuorumControllerTest {
                 .setControllerBuilderInitializer(controllerBuilder ->
                     controllerBuilder.setFenceStaleBrokerIntervalNs(TimeUnit.SECONDS.toNanos(15)))
                 .setSessionTimeoutMillis(OptionalLong.of(sessionTimeoutMillis))
-                .setBootstrapMetadata(BootstrapMetadata.fromVersion(MetadataVersion.IBP_4_0_IV0, "test-provided bootstrap ELR not supported"))
+                .setBootstrapMetadata(BootstrapMetadata.fromVersion(MetadataVersion.IBP_4_0_IV0, "test-cluster-id", "test-provided bootstrap ELR not supported"))
                 .build()
         ) {
             ListenerCollection listeners = new ListenerCollection();
@@ -621,7 +621,7 @@ public class QuorumControllerTest {
                 MockRaftClientTestEnv clientEnv = new MockRaftClientTestEnv.Builder(1).build();
                 QuorumControllerTestEnv controlEnv = new QuorumControllerTestEnv.Builder(clientEnv).
                 setSessionTimeoutMillis(OptionalLong.of(sessionTimeoutMillis)).
-                setBootstrapMetadata(BootstrapMetadata.fromVersion(MetadataVersion.IBP_4_0_IV1, "test-provided bootstrap ELR enabled")).
+                setBootstrapMetadata(BootstrapMetadata.fromVersion(MetadataVersion.IBP_4_0_IV1, "test-cluster-id", "test-provided bootstrap ELR enabled")).
                 build()
         ) {
             ListenerCollection listeners = new ListenerCollection();
@@ -1650,7 +1650,7 @@ public class QuorumControllerTest {
         ControllerResult<Void> result = ActivationRecordsGenerator.generate(
             msg -> { },
             -1L,
-            BootstrapMetadata.fromVersion(metadataVersion, "test"),
+            BootstrapMetadata.fromVersion(metadataVersion, "test-cluster-id", "test"),
             Optional.empty(),
             3);
         RecordTestUtils.replayAll(featureControlManager, result.records());
@@ -1685,7 +1685,7 @@ public class QuorumControllerTest {
         ControllerResult<Void> result = ActivationRecordsGenerator.generate(
             logMsg -> { },
             0L,
-            BootstrapMetadata.fromVersion(MetadataVersion.IBP_3_6_IV1, "test"),
+            BootstrapMetadata.fromVersion(MetadataVersion.IBP_3_6_IV1, "test-cluster-id", "test"),
             Optional.empty(),
             3);
         assertFalse(result.isAtomic());
@@ -1733,7 +1733,7 @@ public class QuorumControllerTest {
         ControllerResult<Void> result = ActivationRecordsGenerator.generate(
             logMsg -> { },
             offsetControlManager.transactionStartOffset(),
-            BootstrapMetadata.fromVersion(MetadataVersion.IBP_3_6_IV1, "test"),
+            BootstrapMetadata.fromVersion(MetadataVersion.IBP_3_6_IV1, "test-cluster-id", "test"),
             Optional.of(MetadataVersion.IBP_3_6_IV1),
             3);
 
@@ -1756,7 +1756,7 @@ public class QuorumControllerTest {
             ActivationRecordsGenerator.generate(
                 msg -> { },
                 offsetControlManager.transactionStartOffset(),
-                BootstrapMetadata.fromVersion(MetadataVersion.IBP_3_6_IV0, "test"),
+                BootstrapMetadata.fromVersion(MetadataVersion.IBP_3_6_IV0, "test-cluster-id", "test"),
                 Optional.of(MetadataVersion.IBP_3_6_IV0),
                 3));
     }

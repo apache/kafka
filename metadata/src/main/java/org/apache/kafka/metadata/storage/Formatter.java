@@ -383,7 +383,7 @@ public class Formatter {
 
     BootstrapMetadata calculateBootstrapMetadata() throws  Exception {
         BootstrapMetadata bootstrapMetadata = BootstrapMetadata.
-            fromVersions(releaseVersion, featureLevels, "format command");
+            fromVersions(releaseVersion, featureLevels, clusterId, "format command");
         List<ApiMessageAndVersion> bootstrapRecords = new ArrayList<>(bootstrapMetadata.records());
         if (!scramArguments.isEmpty()) {
             if (!releaseVersion.isScramSupported()) {

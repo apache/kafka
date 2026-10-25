@@ -140,8 +140,8 @@ public enum MetadataVersion {
     // Please move this comment when updating the LATEST_PRODUCTION constant.
     //
 
-    // New version for the Kafka 4.5.0 release.
-    IBP_4_5_IV0(34, "4.5", "IV0", false);
+    // Enables auto-formatting directories; adds ClusterIdRecord (KIP-1262).
+    IBP_4_5_IV0(34, "4.5", "IV0", true);
 
     // NOTES when adding a new version:
     //   Update the default version in @ClusterTest annotation to point to the latest version
@@ -230,6 +230,10 @@ public enum MetadataVersion {
 
     public boolean isCordonedLogDirsSupported() {
         return this.isAtLeast(MetadataVersion.IBP_4_3_IV0);
+    }
+
+    public boolean isClusterIdSupported() {
+        return this.isAtLeast(MetadataVersion.IBP_4_5_IV0);
     }
 
     public short registerBrokerRecordVersion() {
