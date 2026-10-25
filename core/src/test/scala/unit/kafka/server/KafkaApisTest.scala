@@ -6357,7 +6357,6 @@ class KafkaApisTest extends Logging {
     val fetchResult: Map[TopicIdPartition, ShareFetchResponseData.PartitionData] =
       kafkaApis.handleFetchFromShareFetchRequest(
         request,
-        0,
         erroneousAndValidPartitionData,
         sharePartitionManager,
         authorizedTopics
@@ -6490,7 +6489,6 @@ class KafkaApisTest extends Logging {
     val fetchResult: Map[TopicIdPartition, ShareFetchResponseData.PartitionData] =
       kafkaApis.handleFetchFromShareFetchRequest(
         request,
-        0,
         erroneousAndValidPartitionData,
         sharePartitionManager,
         authorizedTopics
@@ -6615,7 +6613,6 @@ class KafkaApisTest extends Logging {
     val fetchResult: Map[TopicIdPartition, ShareFetchResponseData.PartitionData] =
       kafkaApis.handleFetchFromShareFetchRequest(
         request,
-        0,
         erroneousAndValidPartitionData,
         sharePartitionManager,
         authorizedTopics
@@ -6689,31 +6686,32 @@ class KafkaApisTest extends Logging {
     val tp3 = new TopicIdPartition(topicId2, new TopicPartition(topicName2, 1))
     val tp4 = new TopicIdPartition(topicId3, new TopicPartition(topicName3, 0))
 
+    // The partitions are fetched in the order tp3, tp2 which differs from the request order.
+    val fetchedPartitions = new util.LinkedHashMap[TopicIdPartition, ShareFetchResponseData.PartitionData]
+    fetchedPartitions.put(tp3,
+      new ShareFetchResponseData.PartitionData()
+        .setPartitionIndex(1)
+        .setErrorCode(Errors.NONE.code)
+        .setRecords(records2)
+        .setAcquiredRecords(new util.ArrayList(util.List.of(
+          new ShareFetchResponseData.AcquiredRecords()
+            .setFirstOffset(0)
+            .setLastOffset(19)
+            .setDeliveryCount(1)
+        ))))
+    fetchedPartitions.put(tp2,
+      new ShareFetchResponseData.PartitionData()
+        .setPartitionIndex(0)
+        .setErrorCode(Errors.NONE.code)
+        .setRecords(records1)
+        .setAcquiredRecords(new util.ArrayList(util.List.of(
+          new ShareFetchResponseData.AcquiredRecords()
+            .setFirstOffset(0)
+            .setLastOffset(9)
+            .setDeliveryCount(1)
+        ))))
     when(sharePartitionManager.fetchMessages(any(), any(), any(), any(), anyInt(), anyInt(), any())).thenReturn(
-      CompletableFuture.completedFuture(util.Map.of[TopicIdPartition, ShareFetchResponseData.PartitionData](
-        tp2,
-          new ShareFetchResponseData.PartitionData()
-            .setPartitionIndex(0)
-            .setErrorCode(Errors.NONE.code)
-            .setRecords(records1)
-            .setAcquiredRecords(new util.ArrayList(util.List.of(
-              new ShareFetchResponseData.AcquiredRecords()
-                .setFirstOffset(0)
-                .setLastOffset(9)
-                .setDeliveryCount(1)
-            ))),
-        tp3,
-          new ShareFetchResponseData.PartitionData()
-            .setPartitionIndex(1)
-            .setErrorCode(Errors.NONE.code)
-            .setRecords(records2)
-            .setAcquiredRecords(new util.ArrayList(util.List.of(
-              new ShareFetchResponseData.AcquiredRecords()
-                .setFirstOffset(0)
-                .setLastOffset(19)
-                .setDeliveryCount(1)
-            )))
-      ))
+      CompletableFuture.completedFuture(fetchedPartitions)
     )
 
     val erroneousPartitions: util.Map[TopicIdPartition, ShareFetchResponseData.PartitionData] = new util.HashMap()
@@ -6761,13 +6759,16 @@ class KafkaApisTest extends Logging {
     val fetchResult: Map[TopicIdPartition, ShareFetchResponseData.PartitionData] =
       kafkaApis.handleFetchFromShareFetchRequest(
         request,
-        0,
         erroneousAndValidPartitionData,
         sharePartitionManager,
         authorizedTopics
       ).get()
 
     assertEquals(4, fetchResult.size)
+    // The share session re-orders its partitions from the result, hence the result must keep the order in
+    // which the partitions were fetched, with the erroneous partitions appended.
+    assertEquals(List(tp3, tp2), fetchResult.keys.toList.take(2))
+    assertEquals(Set(tp1, tp4), fetchResult.keys.toList.drop(2).toSet)
 
     assertTrue(fetchResult.contains(tp1))
     val partitionData1: PartitionData = fetchResult.getOrElse(tp1, null)

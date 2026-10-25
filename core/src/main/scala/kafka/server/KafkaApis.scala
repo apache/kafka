@@ -3420,7 +3420,7 @@ class KafkaApis(val requestChannel: RequestChannel,
       if (shareFetchRequest.version() >= 2 && shareFetchRequest.data.isRenewAck)
         CompletableFuture.completedFuture(mutable.Map.empty[TopicIdPartition, ShareFetchResponseData.PartitionData])
       else
-        handleFetchFromShareFetchRequest(request, shareSessionEpoch, erroneousAndValidPartitionData, sharePartitionManager, authorizedTopics)
+        handleFetchFromShareFetchRequest(request, erroneousAndValidPartitionData, sharePartitionManager, authorizedTopics)
 
     def combineShareFetchAndShareAcknowledgeResponses(fetchResult: CompletableFuture[Map[TopicIdPartition, ShareFetchResponseData.PartitionData]],
                                                       acknowledgeResult: CompletableFuture[Map[TopicIdPartition, ShareAcknowledgeResponseData.PartitionData]],
@@ -3516,7 +3516,6 @@ class KafkaApis(val requestChannel: RequestChannel,
 
   // Visible for Testing
   def handleFetchFromShareFetchRequest(request: Request,
-                                       shareSessionEpoch: Int,
                                        erroneousAndValidPartitionData: ErroneousAndValidPartitionData,
                                        sharePartitionManagerInstance: SharePartitionManager,
                                        authorizedTopics: Set[String]
