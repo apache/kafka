@@ -335,8 +335,7 @@ public class TopologyTestDriver implements Closeable {
     TopologyTestDriver(final InternalTopologyBuilder builder,
                        final Properties config,
                        final long initialWallClockTimeMs) {
-        final Properties configCopy = new Properties();
-        configCopy.putAll(Utils.propsToMap(config));
+        final Map<String, Object> configCopy = Utils.propsToMap(config);
         configCopy.putIfAbsent(StreamsConfig.BOOTSTRAP_SERVERS_CONFIG, "dummy-bootstrap-host:0");
         // provide randomized dummy app-id if it's not specified
         configCopy.putIfAbsent(StreamsConfig.APPLICATION_ID_CONFIG, "dummy-topology-test-driver-app-id-" + ThreadLocalRandom.current().nextInt());

@@ -444,6 +444,39 @@ public abstract class TopologyTestDriverTest {
     }
 
     @Test
+    public void shouldAllowUnusedNonStringDefaultConfig() {
+        final Properties defaults = new Properties();
+        defaults.put("unused.property", new Object());
+        final Properties driverConfig = new Properties(defaults);
+        driverConfig.putAll(config);
+
+        try (final TopologyTestDriver driver = new TopologyTestDriverBuilder(setupSourceSinkTopology()).withConfig(driverConfig).build()) {
+            driver.createInputTopic(SOURCE_TOPIC_1, new ByteArraySerializer(), new ByteArraySerializer())
+                .pipeInput(new byte[]{1}, new byte[]{2});
+            assertArrayEquals(new byte[]{2}, driver.createOutputTopic(SINK_TOPIC_1, new ByteArrayDeserializer(), new ByteArrayDeserializer()).readValue());
+        }
+    }
+
+    @Test
+    public void shouldPreserveInheritedAndExplicitSerdeConfig() {
+        final Properties defaults = new Properties();
+        defaults.setProperty(StreamsConfig.DEFAULT_KEY_SERDE_CLASS_CONFIG, Serdes.StringSerde.class.getName());
+        defaults.setProperty(StreamsConfig.DEFAULT_VALUE_SERDE_CLASS_CONFIG, Serdes.StringSerde.class.getName());
+        final Properties driverConfig = new Properties(defaults);
+        driverConfig.putAll(config);
+        driverConfig.remove(StreamsConfig.DEFAULT_KEY_SERDE_CLASS_CONFIG);
+        driverConfig.put(StreamsConfig.DEFAULT_VALUE_SERDE_CLASS_CONFIG, Serdes.LongSerde.class);
+
+        try (final TopologyTestDriver driver = new TopologyTestDriverBuilder(setupSourceSinkTopology()).withConfig(driverConfig).build()) {
+            driver.createInputTopic(SOURCE_TOPIC_1, new StringSerializer(), new LongSerializer()).pipeInput("key", -1L);
+            assertEquals(KeyValue.pair("key", -1L), driver.createOutputTopic(SINK_TOPIC_1, new StringDeserializer(), new LongDeserializer()).readKeyValue());
+        }
+
+        assertFalse(driverConfig.containsKey(StreamsConfig.DEFAULT_KEY_SERDE_CLASS_CONFIG));
+        assertEquals(Serdes.LongSerde.class, driverConfig.get(StreamsConfig.DEFAULT_VALUE_SERDE_CLASS_CONFIG));
+    }
+
+    @Test
     public void shouldInitProcessor() {
         testDriver = new TopologyTestDriverBuilder(setupSingleProcessorTopology())
             .withConfig(config)
