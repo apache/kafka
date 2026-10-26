@@ -92,7 +92,12 @@ public class DefaultApiVersionManagerTest {
         );
 
         for (ApiKeys apiKey : ApiKeys.apisForListener(apiScope)) {
-            if (apiKey.messageType.latestVersionUnstable()) {
+            if (apiKey == ApiKeys.API_VERSIONS) {
+                // Because API_VERSIONS has an unstable version while KIP-1313 is under development,
+                // we need a special case in this test. This assertion will start failing when the
+                // API is no longer unstable and the special case can be removed.
+                assertTrue(apiKey.messageType.latestVersionUnstable());
+            } else if (apiKey.messageType.latestVersionUnstable()) {
                 assertFalse(
                     versionManager.isApiEnabled(apiKey, apiKey.latestVersion()),
                     apiKey + " version " + apiKey.latestVersion() + " should be disabled."

@@ -113,8 +113,10 @@ public class ApiMessageTypeTest {
         assertEquals((short) 1, ApiMessageType.API_VERSIONS.requestHeaderVersion((short) 0));
         assertEquals((short) 1, ApiMessageType.API_VERSIONS.requestHeaderVersion((short) 2));
         assertEquals((short) 2, ApiMessageType.API_VERSIONS.requestHeaderVersion((short) 3));
+        assertEquals((short) 3, ApiMessageType.API_VERSIONS.requestHeaderVersion((short) 6));
         assertEquals((short) 0, ApiMessageType.API_VERSIONS.responseHeaderVersion((short) 0));
         assertEquals((short) 0, ApiMessageType.API_VERSIONS.responseHeaderVersion((short) 3));
+        assertEquals((short) 0, ApiMessageType.API_VERSIONS.responseHeaderVersion((short) 6));
 
         // Envelope is flexible from v0: header v2 request / v1 response everywhere.
         assertEquals((short) 2, ApiMessageType.ENVELOPE.requestHeaderVersion((short) 0));
