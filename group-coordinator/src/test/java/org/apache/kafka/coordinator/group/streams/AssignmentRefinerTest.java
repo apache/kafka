@@ -498,7 +498,7 @@ public class AssignmentRefinerTest {
 
         final AssignmentRefinerImpl.CurrentAssignmentIndex index = index(members, taskOffsets);
 
-        assertEquals(Map.of("processA", Set.of(new TaskId(STATEFUL, 1))), index.onDiskByProcess());
+        assertEquals(Map.of("processA", Set.of(new TaskId(STATEFUL, 1))), index.stateOnDisk().byProcess());
     }
 
     @Test
@@ -513,7 +513,7 @@ public class AssignmentRefinerTest {
         final AssignmentRefinerImpl.CurrentAssignmentIndex index =
             index(members, Map.of("memberA", offsets(1000L, 1050L)));
 
-        assertEquals(Map.of(), index.onDiskByProcess());
+        assertEquals(Map.of(), index.stateOnDisk().byProcess());
     }
 
     @Test
@@ -547,7 +547,7 @@ public class AssignmentRefinerTest {
                 new AssignmentRefinerImpl.TaskCopy("memberB", "processB", TaskRole.STANDBY, true, true))),
             index.taskCopies()
         );
-        assertEquals(Map.of(), index.onDiskByProcess());
+        assertEquals(Map.of(), index.stateOnDisk().byProcess());
         assertEquals(index(members, taskOffsets).processLoad(), index.processLoad());
         assertEquals(
             Map.of(

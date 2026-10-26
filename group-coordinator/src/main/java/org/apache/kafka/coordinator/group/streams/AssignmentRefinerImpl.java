@@ -165,7 +165,7 @@ public class AssignmentRefinerImpl implements AssignmentRefiner {
      * reconciler refuses to grant a role for a task the process still holds.
      *
      * <p>A member also reports offsets for tasks it holds no role for, from the state directories an earlier
-     * incarnation left on disk. Those reports are indexed per process as {@link CurrentAssignmentIndex#onDiskByProcess}
+     * incarnation left on disk. Those reports are indexed per process as {@link CurrentAssignmentIndex#stateOnDisk}
      * and are what lets the case analysis hand such a task straight back to the process that can reopen it.
      *
      * <p>Only the tasks in {@code misplacedTasks} are indexed. Each process's load
@@ -195,7 +195,6 @@ public class AssignmentRefinerImpl implements AssignmentRefiner {
     ) {
         final Map<TaskId, ActiveHolder> activeHolder = new HashMap<>();
         final Map<TaskId, List<TaskCopy>> taskCopies = new HashMap<>();
-        final Map<String, Set<TaskId>> reportedByProcess = new HashMap<>();
         final Set<String> membersRestoringAnActive = new HashSet<>();
         final Map<String, Integer> memberCounts = new HashMap<>();
         final Map<String, Integer> statefulTaskCounts = new HashMap<>();
@@ -231,13 +230,6 @@ public class AssignmentRefinerImpl implements AssignmentRefiner {
                 task -> addTaskCopy(taskCopies, task, member, TaskRole.WARMUP, offsets, acceptableRecoveryLag)
             );
 
-            forEachStatefulReportedTask(
-                offsets.taskOffsets(),
-                statefulSubtopologies,
-                misplacedTasks,
-                task -> reportedByProcess.computeIfAbsent(member.processId(), __ -> new HashSet<>()).add(task)
-            );
-
             if (isRestoringAnActive(activeTasks, offsets, statefulSubtopologies)) {
                 membersRestoringAnActive.add(member.memberId());
             }
@@ -246,20 +238,13 @@ public class AssignmentRefinerImpl implements AssignmentRefiner {
             statefulTaskCounts.merge(member.processId(), statefulTaskCount, Integer::sum);
         }
 
-        final Map<String, Set<TaskId>> onDiskByProcess = Utils.newHashMap(reportedByProcess.size());
-        reportedByProcess.forEach((processId, reported) -> {
-            reported.removeIf(task -> isHeldOnProcess(activeHolder, taskCopies, members, processId, task));
-            if (!reported.isEmpty()) {
-                onDiskByProcess.put(processId, reported);
-            }
-        });
-
         final Map<String, ProcessLoad> processLoad = Utils.newHashMap(memberCounts.size());
         memberCounts.forEach((processId, memberCount) ->
             processLoad.put(processId, new ProcessLoad(statefulTaskCounts.get(processId), memberCount)));
 
-        return new CurrentAssignmentIndex(
-            activeHolder, taskCopies, onDiskByProcess, processLoad, membersRestoringAnActive);
+        final StateOnDisk stateOnDisk =
+            new StateOnDisk(members, taskOffsets, statefulSubtopologies, misplacedTasks, activeHolder, taskCopies);
+        return new CurrentAssignmentIndex(activeHolder, taskCopies, stateOnDisk, processLoad, membersRestoringAnActive);
     }
 
     /**
@@ -538,7 +523,7 @@ public class AssignmentRefinerImpl implements AssignmentRefiner {
         final String processId,
         final TaskId task
     ) {
-        return currentAssignment.onDiskByProcess().getOrDefault(processId, Set.of()).contains(task);
+        return currentAssignment.stateOnDisk().byProcess().getOrDefault(processId, Set.of()).contains(task);
     }
 
     /**
@@ -1316,11 +1301,10 @@ public class AssignmentRefinerImpl implements AssignmentRefiner {
      *        placement to preserve.
      * @param taskCopies
      *        The standby and warm-up holders of each task.
-     * @param onDiskByProcess
+     * @param stateOnDisk
      *        Per process, the tasks it reports state for while holding no copy of them: state in its state directory
      *        that no role it has been granted accounts for. How far behind that state is cannot be measured, because
-     *        a member reports an end offset only for a task it is restoring. A process with no such task has no
-     *        entry.
+     *        a member reports an end offset only for a task it is restoring.
      * @param processLoad
      *        How loaded each process is. The load of a process is its stateful task count over the number of members
      *        it runs -- the same shape as the task assignor's own {@code ProcessState.load()}, so that both layers
@@ -1338,7 +1322,7 @@ public class AssignmentRefinerImpl implements AssignmentRefiner {
     record CurrentAssignmentIndex(
         Map<TaskId, ActiveHolder> activeHolder,
         Map<TaskId, List<TaskCopy>> taskCopies,
-        Map<String, Set<TaskId>> onDiskByProcess,
+        StateOnDisk stateOnDisk,
         Map<String, ProcessLoad> processLoad,
         Set<String> membersRestoringAnActive
     ) {
@@ -1596,6 +1580,72 @@ public class AssignmentRefinerImpl implements AssignmentRefiner {
         Map<TaskId, String> activeStagedOnProcess,
         Map<TaskId, String> standbyKeptOnMember
     ) {
+    }
+
+    /**
+     * Per process, the tasks among those the index covers that it reports state for while holding no copy of them.
+     *
+     * <p>The lookup is built lazily, because building it reads every member's offset reports and a refinement may not
+     * need it at all.
+     */
+    static final class StateOnDisk {
+
+        private final Map<String, StreamsGroupMember> members;
+        private final Map<String, MemberTaskOffsets> taskOffsets;
+        private final Set<String> statefulSubtopologies;
+        private final Map<String, ? extends Map<Integer, ?>> misplacedTasks;
+        private final Map<TaskId, ActiveHolder> activeHolder;
+        private final Map<TaskId, List<TaskCopy>> taskCopies;
+        private Map<String, Set<TaskId>> byProcess;
+
+        StateOnDisk(
+            final Map<String, StreamsGroupMember> members,
+            final Map<String, MemberTaskOffsets> taskOffsets,
+            final Set<String> statefulSubtopologies,
+            final Map<String, ? extends Map<Integer, ?>> misplacedTasks,
+            final Map<TaskId, ActiveHolder> activeHolder,
+            final Map<TaskId, List<TaskCopy>> taskCopies
+        ) {
+            this.members = members;
+            this.taskOffsets = taskOffsets;
+            this.statefulSubtopologies = statefulSubtopologies;
+            this.misplacedTasks = misplacedTasks;
+            this.activeHolder = activeHolder;
+            this.taskCopies = taskCopies;
+        }
+
+        /**
+         * Per process, the tasks it reports state for while holding no copy of them. A process with no such task has
+         * no entry.
+         */
+        Map<String, Set<TaskId>> byProcess() {
+            if (byProcess == null) {
+                byProcess = reportedWithoutACopy();
+            }
+            return byProcess;
+        }
+
+        private Map<String, Set<TaskId>> reportedWithoutACopy() {
+            final Map<String, Set<TaskId>> reportedByProcess = new HashMap<>();
+            for (final StreamsGroupMember member : members.values()) {
+                final MemberTaskOffsets offsets = taskOffsets.getOrDefault(member.memberId(), MemberTaskOffsets.EMPTY);
+                forEachStatefulReportedTask(
+                    offsets.taskOffsets(),
+                    statefulSubtopologies,
+                    misplacedTasks,
+                    task -> reportedByProcess.computeIfAbsent(member.processId(), __ -> new HashSet<>()).add(task)
+                );
+            }
+
+            final Map<String, Set<TaskId>> withoutACopy = Utils.newHashMap(reportedByProcess.size());
+            reportedByProcess.forEach((processId, reported) -> {
+                reported.removeIf(task -> isHeldOnProcess(activeHolder, taskCopies, members, processId, task));
+                if (!reported.isEmpty()) {
+                    withoutACopy.put(processId, reported);
+                }
+            });
+            return withoutACopy;
+        }
     }
 
     /**
