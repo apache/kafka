@@ -58,7 +58,10 @@ public class HeartbeatRequestStateTest {
         time.sleep(100);
         assertTrue(heartbeatRequestState.canSendRequest(time.milliseconds()));
         assertEquals(0, heartbeatRequestState.timeToNextHeartbeatMs(time.milliseconds()));
+        heartbeatRequestState.onSuccessfulAttempt(time.milliseconds());
         heartbeatRequestState.onSendAttempt(time.milliseconds());
+        heartbeatRequestState.resetTimer();
+        time.sleep(HEARTBEAT_INTERVAL_MS);
         assertFalse(heartbeatRequestState.canSendRequest(time.milliseconds()));
         assertEquals(RETRY_BACKOFF_MS, heartbeatRequestState.timeToNextHeartbeatMs(time.milliseconds()));
     }
