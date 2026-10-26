@@ -24,6 +24,7 @@ import org.apache.kafka.common.protocol.Errors;
 import org.apache.kafka.common.record.internal.MemoryRecords;
 import org.apache.kafka.raft.RaftClientTestContext.RaftProtocol;
 import org.apache.kafka.server.common.KRaftVersion;
+
 import org.junit.jupiter.api.Test;
 import org.junit.jupiter.params.ParameterizedTest;
 import org.junit.jupiter.params.provider.Arguments;
