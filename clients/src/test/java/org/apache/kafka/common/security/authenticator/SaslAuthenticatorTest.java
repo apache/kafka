@@ -18,6 +18,7 @@ package org.apache.kafka.common.security.authenticator;
 
 import org.apache.kafka.clients.NetworkClient;
 import org.apache.kafka.common.KafkaException;
+import org.apache.kafka.common.Uuid;
 import org.apache.kafka.common.config.SaslConfigs;
 import org.apache.kafka.common.config.SslClientAuth;
 import org.apache.kafka.common.config.SslConfigs;
@@ -796,8 +797,9 @@ public class SaslAuthenticatorTest {
                 setRequestApiKey(ApiKeys.API_VERSIONS.id).
                 setRequestApiVersion(Short.MAX_VALUE).
                 setClientId("someclient").
-                setCorrelationId(1),
-                (short) 2);
+                setCorrelationId(1).
+                setClientInstanceId(Uuid.randomUuid()),
+                (short) 3);
         ApiVersionsRequest request = new ApiVersionsRequest.Builder().build();
         selector.send(new NetworkSend(node, request.toSend(header)));
         ByteBuffer responseBuffer = waitForResponse();
