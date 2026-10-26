@@ -3261,13 +3261,15 @@ public class SharePartitionManagerTest {
     }
 
     static Seq<Tuple2<TopicIdPartition, LogReadResult>> buildLogReadResult(List<TopicIdPartition> topicIdPartitions) {
-        return buildLogReadResult(topicIdPartitions, MemoryRecords.withRecords(
-            Compression.NONE, new SimpleRecord("test-key".getBytes(), "test-value".getBytes())));
+        return buildLogReadResult(topicIdPartitions, defaultTestRecords());
     }
 
     static Seq<Tuple2<TopicIdPartition, LogReadResult>> buildLogReadResult(Map<TopicIdPartition, LogOffsetMetadata> fetchOffsetMetadata) {
-        return buildLogReadResult(fetchOffsetMetadata, MemoryRecords.withRecords(
-            Compression.NONE, new SimpleRecord("test-key".getBytes(), "test-value".getBytes())));
+        return buildLogReadResult(fetchOffsetMetadata, defaultTestRecords());
+    }
+
+    private static MemoryRecords defaultTestRecords() {
+        return MemoryRecords.withRecords(Compression.NONE, new SimpleRecord("test-key".getBytes(), "test-value".getBytes()));
     }
 
     static Seq<Tuple2<TopicIdPartition, LogReadResult>> buildEmptyLogReadResult(List<TopicIdPartition> topicIdPartitions) {
