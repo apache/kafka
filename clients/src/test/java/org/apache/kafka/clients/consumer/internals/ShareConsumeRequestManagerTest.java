@@ -166,7 +166,7 @@ public class ShareConsumeRequestManagerTest {
     private final long requestTimeoutMs = 30000;
     private final long defaultApiTimeoutMs = 60000;
     private MockTime time = new MockTime(1);
-    private SubscriptionState subscriptions;
+    private ShareSubscriptionState subscriptions;
     private ShareConsumerMetadata metadata;
     private ShareFetchMetricsManager metricsManager;
     private MockClient client;
@@ -1333,7 +1333,7 @@ public class ShareConsumeRequestManagerTest {
         client.prepareResponse(fullFetchResponse(tip0, secondRecords, secondAcquiredRecords, Errors.NONE));
         networkClientDelegate.poll(time.timer(0));
 
-        // Draining both completed fetches for tip0 in one collect() call forces the merge in ShareFetch.add().
+        // Drain both completed fetches for tip0 in one collect() call.
         ShareFetch<byte[], byte[]> fetch = collectFetch();
         List<ConsumerRecord<byte[], byte[]>> fetchedRecords = fetch.records().get(tp0);
         assertEquals(5, fetchedRecords.size(), "records from both fetches should be visible after the merge");
@@ -3537,6 +3537,67 @@ public class ShareConsumeRequestManagerTest {
             metrics.metrics().get(metrics.metricInstance(shareFetchMetricsRegistry.acknowledgementSendTotal)).metricValue());
     }
 
+    /**
+     * A commitSync() which carries RENEW acknowledgements for a partition on one node and ordinary acknowledgements
+     * for a partition on another node. Whatever order the two nodes respond in, the application thread must be told
+     * about the completed renewals so that the renewed records can be moved back to in-flight. No acknowledgement
+     * commit callback is registered, so the only reason to raise the event is the renewals.
+     */
+    @ParameterizedTest
+    @ValueSource(booleans = {false, true})
+    public void testCommitSyncRenewOnOneNodeAcceptOnAnother(boolean renewNodeRespondsLast) {
+        buildRequestManager();
+
+        subscriptions.subscribeToShareGroup(Set.of(topicName));
+        subscriptions.assignFromSubscribed(Set.of(tp0, tp1));
+        client.updateMetadata(
+            RequestTestUtils.metadataUpdateWithIds(2, Map.of(topicName, 2),
+                tp -> validLeaderEpoch, topicIds, false));
+        Node nodeId0 = metadata.fetch().nodeById(0);
+        Node nodeId1 = metadata.fetch().nodeById(1);
+        assertEquals(nodeId0, metadata.fetch().leaderFor(tp0));
+        assertEquals(nodeId1, metadata.fetch().leaderFor(tp1));
+
+        // Fetch records from both partitions so that both nodes have established share sessions.
+        assertEquals(2, sendFetches());
+        client.prepareResponseFrom(fullFetchResponse(tip0, records, acquiredRecords, Errors.NONE), nodeId0);
+        client.prepareResponseFrom(fullFetchResponse(tip1, records, acquiredRecords, Errors.NONE), nodeId1);
+        networkClientDelegate.poll(time.timer(0));
+        assertEquals(2, fetchRecords().size());
+
+        // Renew the records from tp0 and accept the records from tp1 in a single commitSync().
+        Acknowledgements renewAcks = getAcknowledgements(1, AcknowledgeType.RENEW, AcknowledgeType.RENEW, AcknowledgeType.RENEW);
+        Acknowledgements acceptAcks = getAcknowledgements(1, AcknowledgeType.ACCEPT, AcknowledgeType.ACCEPT, AcknowledgeType.ACCEPT);
+        CompletableFuture<Map<TopicIdPartition, Acknowledgements>> future = shareConsumeRequestManager.commitSync(
+            Map.of(tip0, new NodeAcknowledgements(0, renewAcks), tip1, new NodeAcknowledgements(1, acceptAcks)),
+            calculateDeadlineMs(time.timer(defaultApiTimeoutMs)));
+        assertEquals(2, shareConsumeRequestManager.sendAcknowledgements());
+
+        // Send both ShareAcknowledge requests, then answer them one at a time in the chosen order.
+        networkClientDelegate.poll(time.timer(0));
+        assertEquals(2, client.inFlightRequestCount());
+
+        Node first = renewNodeRespondsLast ? nodeId1 : nodeId0;
+        TopicIdPartition firstTip = renewNodeRespondsLast ? tip1 : tip0;
+        Node last = renewNodeRespondsLast ? nodeId0 : nodeId1;
+        TopicIdPartition lastTip = renewNodeRespondsLast ? tip0 : tip1;
+
+        client.respondFrom(fullAcknowledgeResponse(firstTip, Errors.NONE), first);
+        networkClientDelegate.poll(time.timer(0));
+        assertFalse(future.isDone());
+
+        client.respondFrom(fullAcknowledgeResponse(lastTip, Errors.NONE), last);
+        networkClientDelegate.poll(time.timer(0));
+        assertTrue(future.isDone());
+        assertTrue(future.join().get(tip0).isCompleted());
+        assertTrue(future.join().get(tip1).isCompleted());
+
+        // The renewals for tp0 completed successfully, so the application thread must receive an event telling it
+        // to move the renewed records back to in-flight, regardless of which node happened to respond last.
+        assertEquals(Set.of(1L, 2L, 3L), renewedRecords,
+            "renewed records were not reported to the application thread");
+    }
+
     private ShareFetchResponse fetchResponseWithTopLevelError(TopicIdPartition tp, Errors error) {
         Map<TopicIdPartition, ShareFetchResponseData.PartitionData> partitions = Map.of(tp,
                 new ShareFetchResponseData.PartitionData()
@@ -3676,7 +3737,7 @@ public class ShareConsumeRequestManagerTest {
                                             String memberId,
                                             ShareAcquireMode shareAcquireMode) {
         LogContext logContext = new LogContext();
-        SubscriptionState subscriptionState = new SubscriptionState(logContext, AutoOffsetResetStrategy.EARLIEST);
+        ShareSubscriptionState subscriptionState = new ShareSubscriptionState(logContext);
         buildRequestManager(metricConfig, keyDeserializer, valueDeserializer,
                 subscriptionState, logContext, memberId, shareAcquireMode);
     }
@@ -3684,7 +3745,7 @@ public class ShareConsumeRequestManagerTest {
     private <K, V> void buildRequestManager(MetricConfig metricConfig,
                                             Deserializer<K> keyDeserializer,
                                             Deserializer<V> valueDeserializer,
-                                            SubscriptionState subscriptionState,
+                                            ShareSubscriptionState subscriptionState,
                                             LogContext logContext,
                                             String memberId,
                                                                                    ShareAcquireMode shareAcquireMode) {
@@ -3706,7 +3767,6 @@ public class ShareConsumeRequestManagerTest {
                 shareAcquireMode);
         ShareFetchCollector<K, V> shareFetchCollector = new ShareFetchCollector<>(logContext,
                 metadata,
-                subscriptions,
                 shareFetchConfig,
                 deserializers);
         ShareAcknowledgementEventHandler acknowledgementEventHandler = new TestableShareAcknowledgementEventHandler(completedAcknowledgements, renewedRecords);
@@ -3724,7 +3784,7 @@ public class ShareConsumeRequestManagerTest {
     }
 
     private void buildDependencies(MetricConfig metricConfig,
-                                   SubscriptionState subscriptionState,
+                                   ShareSubscriptionState subscriptionState,
                                    LogContext logContext) {
         time = new MockTime(1, 0, 0);
         subscriptions = subscriptionState;
@@ -3754,7 +3814,7 @@ public class ShareConsumeRequestManagerTest {
         public TestableShareConsumeRequestManager(LogContext logContext,
                                                   String groupId,
                                                   ShareConsumerMetadata metadata,
-                                                  SubscriptionState subscriptions,
+                                                  ShareSubscriptionState subscriptions,
                                                   ShareFetchConfig shareFetchConfig,
                                                   ShareFetchBuffer shareFetchBuffer,
                                                   ShareAcknowledgementEventHandler acknowledgementEventHandler,

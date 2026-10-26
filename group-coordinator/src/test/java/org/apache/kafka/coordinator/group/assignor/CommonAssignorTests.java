@@ -17,7 +17,7 @@
 package org.apache.kafka.coordinator.group.assignor;
 
 import org.apache.kafka.common.Uuid;
-import org.apache.kafka.coordinator.common.runtime.KRaftCoordinatorMetadataImage;
+import org.apache.kafka.coordinator.common.runtime.CoordinatorMetadataImage;
 import org.apache.kafka.coordinator.common.runtime.MetadataImageBuilder;
 import org.apache.kafka.coordinator.group.api.assignor.GroupAssignment;
 import org.apache.kafka.coordinator.group.api.assignor.GroupSpec;
@@ -27,7 +27,6 @@ import org.apache.kafka.coordinator.group.modern.Assignment;
 import org.apache.kafka.coordinator.group.modern.GroupSpecImpl;
 import org.apache.kafka.coordinator.group.modern.MemberSubscriptionAndAssignmentImpl;
 import org.apache.kafka.coordinator.group.modern.SubscribedTopicDescriberImpl;
-import org.apache.kafka.image.MetadataImage;
 
 import java.util.HashMap;
 import java.util.LinkedHashMap;
@@ -37,7 +36,6 @@ import java.util.Optional;
 import java.util.Set;
 
 import static org.apache.kafka.coordinator.group.AssignmentTestUtil.assertAssignment;
-import static org.apache.kafka.coordinator.group.AssignmentTestUtil.invertedTargetAssignment;
 import static org.junit.jupiter.api.Assertions.assertSame;
 
 public class CommonAssignorTests {
@@ -58,15 +56,15 @@ public class CommonAssignorTests {
      * @param rackAware        Whether to test with rack awareness.
      */
     public static void testAssignmentReuse(PartitionAssignor assignor, SubscriptionType subscriptionType, boolean rackAware) {
-        MetadataImage metadataImage = new MetadataImageBuilder()
+        CoordinatorMetadataImage metadataImage = new MetadataImageBuilder()
             .addTopic(TOPIC_1_UUID, TOPIC_1_NAME, 2)
             .addTopic(TOPIC_2_UUID, TOPIC_2_NAME, 5)
             .addTopic(TOPIC_3_UUID, TOPIC_3_NAME, 7)
             .addRacks()
-            .build();
+            .buildCoordinatorMetadataImage();
 
         SubscribedTopicDescriberImpl subscribedTopicMetadata = new SubscribedTopicDescriberImpl(
-            new KRaftCoordinatorMetadataImage(metadataImage)
+            metadataImage
         );
 
         Map<String, MemberSubscriptionAndAssignmentImpl> members = new HashMap<>();
@@ -90,9 +88,9 @@ public class CommonAssignorTests {
         ));
 
         GroupSpec groupSpec = new GroupSpecImpl(
+            metadataImage,
             members,
-            subscriptionType,
-            Map.of()
+            subscriptionType
         );
 
         GroupAssignment firstAssignment = assignor.assign(
@@ -112,9 +110,9 @@ public class CommonAssignorTests {
             ));
         }
         GroupSpec groupSpecWithAssignment = new GroupSpecImpl(
+            metadataImage,
             membersWithAssignment,
-            subscriptionType,
-            invertedTargetAssignment(membersWithAssignment)
+            subscriptionType
         );
 
         GroupAssignment secondAssignment = assignor.assign(
@@ -137,15 +135,15 @@ public class CommonAssignorTests {
      * @param rackAware        Whether to test with rack awareness.
      */
     public static void testReassignmentStickiness(PartitionAssignor assignor, SubscriptionType subscriptionType, boolean rackAware) {
-        MetadataImage metadataImage = new MetadataImageBuilder()
+        CoordinatorMetadataImage metadataImage = new MetadataImageBuilder()
             .addTopic(TOPIC_1_UUID, TOPIC_1_NAME, 2)
             .addTopic(TOPIC_2_UUID, TOPIC_2_NAME, 5)
             .addTopic(TOPIC_3_UUID, TOPIC_3_NAME, 7)
             .addRacks()
-            .build();
+            .buildCoordinatorMetadataImage();
 
         SubscribedTopicDescriberImpl subscribedTopicMetadata = new SubscribedTopicDescriberImpl(
-            new KRaftCoordinatorMetadataImage(metadataImage)
+            metadataImage
         );
 
         Map<String, MemberSubscriptionAndAssignmentImpl> members = new HashMap<>();
@@ -172,9 +170,9 @@ public class CommonAssignorTests {
         ));
 
         GroupSpec groupSpec = new GroupSpecImpl(
+            metadataImage,
             members,
-            subscriptionType,
-            Map.of()
+            subscriptionType
         );
 
         GroupAssignment firstAssignment = assignor.assign(
@@ -209,9 +207,9 @@ public class CommonAssignorTests {
                 ));
             }
             GroupSpec groupSpecWithAssignment = new GroupSpecImpl(
+                metadataImage,
                 membersWithAssignment,
-                subscriptionType,
-                invertedTargetAssignment(membersWithAssignment)
+                subscriptionType
             );
 
             GroupAssignment secondAssignment = assignor.assign(

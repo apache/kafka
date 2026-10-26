@@ -57,9 +57,10 @@ import static java.util.Collections.unmodifiableList;
  *   <li>Keeping assignment for the member</li>
  *   <li>Computing assignment for the group if the member is required to do so</li>
  * </ul>
- * The class variable R is the response for the specific group's heartbeat RPC.
+ * The class variable R is the response for the specific group's heartbeat RPC and the class variable
+ * S is the specific group's subscription state class.
  */
-public abstract class AbstractMembershipManager<R extends AbstractResponse> implements RequestManager {
+public abstract class AbstractMembershipManager<R extends AbstractResponse, S extends AbstractSubscriptionState> implements RequestManager {
 
     /**
      * TopicPartition comparator based on topic name and partition.
@@ -105,7 +106,7 @@ public abstract class AbstractMembershipManager<R extends AbstractResponse> impl
      * Subscription state object holding the current assignment the member has for the topics it
      * subscribed to.
      */
-    protected final SubscriptionState subscriptions;
+    protected final S subscriptions;
 
     /**
      * Metadata that allows us to create the partitions needed for {@link ConsumerRebalanceListener}.
@@ -205,7 +206,7 @@ public abstract class AbstractMembershipManager<R extends AbstractResponse> impl
     protected CloseOptions.GroupMembershipOperation leaveGroupOperation = CloseOptions.GroupMembershipOperation.DEFAULT;
 
     AbstractMembershipManager(String groupId,
-                              SubscriptionState subscriptions,
+                              S subscriptions,
                               Metadata metadata,
                               Logger log,
                               Time time,

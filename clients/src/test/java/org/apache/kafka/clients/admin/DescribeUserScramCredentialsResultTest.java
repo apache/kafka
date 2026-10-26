@@ -20,6 +20,7 @@ package org.apache.kafka.clients.admin;
 import org.apache.kafka.common.internals.KafkaFutureImpl;
 import org.apache.kafka.common.message.DescribeUserScramCredentialsResponseData;
 import org.apache.kafka.common.protocol.Errors;
+import org.apache.kafka.test.TestUtils;
 
 import org.junit.jupiter.api.Test;
 
@@ -36,9 +37,9 @@ public class DescribeUserScramCredentialsResultTest {
         KafkaFutureImpl<DescribeUserScramCredentialsResponseData> dataFuture = new KafkaFutureImpl<>();
         dataFuture.completeExceptionally(new RuntimeException());
         DescribeUserScramCredentialsResult results = new DescribeUserScramCredentialsResult(dataFuture);
-        assertThrows(Exception.class, () -> results.all().get(), "expected all() to fail when there is a top-level error");
-        assertThrows(Exception.class, () -> results.users().get(), "expected users() to fail when there is a top-level error");
-        assertThrows(Exception.class, () -> results.description("whatever").get(), "expected description() to fail when there is a top-level error");
+        TestUtils.assertFutureThrows(RuntimeException.class, results.all());
+        TestUtils.assertFutureThrows(RuntimeException.class, results.users());
+        TestUtils.assertFutureThrows(RuntimeException.class, results.description("whatever"));
     }
 
     @Test

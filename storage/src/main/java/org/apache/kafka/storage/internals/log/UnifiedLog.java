@@ -2342,7 +2342,7 @@ public class UnifiedLog implements AutoCloseable {
         maybeHandleIOException(
                 () -> "Error while flushing producer state snapshot " + snapshot + " for " + topicPartition() + " in dir " + dir().getParent(),
                 () -> {
-                    Utils.flushFileIfExists(snapshot);
+                    Utils.flushPathIfExists(snapshot);
                     return null;
                 });
     }

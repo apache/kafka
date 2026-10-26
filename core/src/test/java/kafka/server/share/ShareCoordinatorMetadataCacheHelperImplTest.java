@@ -28,6 +28,7 @@ import org.apache.kafka.common.protocol.Errors;
 import org.apache.kafka.coordinator.group.GroupConfig;
 import org.apache.kafka.coordinator.group.GroupConfigManager;
 import org.apache.kafka.metadata.MetadataCache;
+import org.apache.kafka.server.common.MetadataVersion;
 import org.apache.kafka.server.config.ServerLogConfigs;
 import org.apache.kafka.server.share.SharePartitionKey;
 import org.apache.kafka.server.share.dlq.ShareGroupDLQMetadataCacheHelper;
@@ -498,6 +499,40 @@ public class ShareCoordinatorMetadataCacheHelperImplTest {
         );
 
         verify(mockMetadataCache, times(1)).getAliveBrokerNodes(eq(mockListenerName));
+    }
+
+    @Test
+    public void testIsRequestHeaderV3SupportedReturnsTrue() {
+        MetadataCache mockMetadataCache = mock(MetadataCache.class);
+        when(mockMetadataCache.metadataVersion()).thenReturn(MetadataVersion.IBP_4_5_IV0);
+
+        ShareCoordinatorMetadataCacheHelperImpl cache = new ShareCoordinatorMetadataCacheHelperImpl(
+            mockMetadataCache,
+            sharePartitionKey -> 0,
+            mock(ListenerName.class),
+            mock(GroupConfigManager.class),
+            () -> ServerLogConfigs.MAX_MESSAGE_BYTES_DEFAULT
+        );
+
+        assertTrue(cache.isRequestHeaderV3Supported());
+        verify(mockMetadataCache, times(1)).metadataVersion();
+    }
+
+    @Test
+    public void testIsRequestHeaderV3SupportedReturnsFalseOnException() {
+        MetadataCache mockMetadataCache = mock(MetadataCache.class);
+        when(mockMetadataCache.metadataVersion()).thenThrow(new IllegalStateException("Unknown metadata version"));
+
+        ShareCoordinatorMetadataCacheHelperImpl cache = new ShareCoordinatorMetadataCacheHelperImpl(
+            mockMetadataCache,
+            sharePartitionKey -> 0,
+            mock(ListenerName.class),
+            mock(GroupConfigManager.class),
+            () -> ServerLogConfigs.MAX_MESSAGE_BYTES_DEFAULT
+        );
+
+        assertFalse(cache.isRequestHeaderV3Supported());
+        verify(mockMetadataCache, times(1)).metadataVersion();
     }
 
     // Tests for shareGroupDlqTopic

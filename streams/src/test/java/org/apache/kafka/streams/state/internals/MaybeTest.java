@@ -23,8 +23,8 @@ import java.util.NoSuchElementException;
 import static org.junit.jupiter.api.Assertions.assertEquals;
 import static org.junit.jupiter.api.Assertions.assertFalse;
 import static org.junit.jupiter.api.Assertions.assertNull;
+import static org.junit.jupiter.api.Assertions.assertThrows;
 import static org.junit.jupiter.api.Assertions.assertTrue;
-import static org.junit.jupiter.api.Assertions.fail;
 
 public class MaybeTest {
     @Test
@@ -43,12 +43,11 @@ public class MaybeTest {
     @Test
     public void shouldThrowOnGetUndefinedValue() {
         final Maybe<Object> undefined = Maybe.undefined();
-        try {
-            undefined.getNullableValue();
-            fail();
-        } catch (final NoSuchElementException e) {
-            // no assertion necessary
-        }
+        assertThrows(
+            NoSuchElementException.class,
+            undefined::getNullableValue,
+            "should not return a value from an undefined Maybe"
+        );
     }
 
     @Test

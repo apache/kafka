@@ -17,6 +17,7 @@
 package org.apache.kafka.common.utils;
 
 import org.apache.kafka.common.config.ConfigException;
+import org.apache.kafka.common.utils.internals.OperatingSystem;
 import org.apache.kafka.common.utils.internals.SingleByteBufferOutputStream;
 import org.apache.kafka.test.TestUtils;
 
@@ -39,6 +40,7 @@ import java.nio.charset.StandardCharsets;
 import java.nio.file.DirectoryStream;
 import java.nio.file.FileSystem;
 import java.nio.file.Files;
+import java.nio.file.NoSuchFileException;
 import java.nio.file.Path;
 import java.nio.file.StandardOpenOption;
 import java.nio.file.attribute.BasicFileAttributes;
@@ -93,6 +95,7 @@ import static org.junit.jupiter.api.Assertions.assertNull;
 import static org.junit.jupiter.api.Assertions.assertThrows;
 import static org.junit.jupiter.api.Assertions.assertTrue;
 import static org.junit.jupiter.api.Assertions.fail;
+import static org.junit.jupiter.api.Assumptions.assumeFalse;
 import static org.mockito.ArgumentMatchers.any;
 import static org.mockito.ArgumentMatchers.anyLong;
 import static org.mockito.Mockito.atLeastOnce;
@@ -606,6 +609,39 @@ public class UtilsTest {
             // Scenario 4: test end of stream is reached before buffer is filled up
             assertThrows(EOFException.class, () -> Utils.readFullyOrFail(channel, largeBuffer, 0, "large"));
         }
+    }
+
+    @Test
+    public void testFlushPathWithExistingFile() throws IOException {
+        Path file = TestUtils.tempFile().toPath();
+        // On non-Windows/z/OS platforms this fsyncs the file; on Windows/z/OS it is skipped. Either way it must not throw.
+        assertDoesNotThrow(() -> Utils.flushPath(file));
+    }
+
+    @Test
+    public void testFlushPathWithExistingDirectory() {
+        Path dir = TestUtils.tempDirectory().toPath();
+        assertDoesNotThrow(() -> Utils.flushPath(dir));
+    }
+
+    @Test
+    public void testFlushPathWithNullIsNoOp() {
+        assertDoesNotThrow(() -> Utils.flushPath(null));
+    }
+
+    @Test
+    public void testFlushPathThrowsForMissingPath() {
+        // The platform guard short-circuits before the path is opened on Windows/z/OS, so nothing is thrown there.
+        assumeFalse(OperatingSystem.IS_WINDOWS || OperatingSystem.IS_ZOS);
+        Path missing = TestUtils.tempDirectory().toPath().resolve("does-not-exist");
+        assertThrows(NoSuchFileException.class, () -> Utils.flushPath(missing));
+    }
+
+    @Test
+    public void testFlushPathIfExistsSwallowsNoSuchFileException() {
+        Path missing = TestUtils.tempDirectory().toPath().resolve("does-not-exist");
+        // A missing path must be swallowed (NoSuchFileException), not propagated.
+        assertDoesNotThrow(() -> Utils.flushPathIfExists(missing));
     }
 
     /**

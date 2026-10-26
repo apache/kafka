@@ -267,6 +267,9 @@ public class ClientQuotaControlManager {
         if (configKey == null) {
             return new ApiError(Errors.INVALID_REQUEST, "Invalid configuration key " + key);
         }
+        if (!Double.isFinite(value)) {
+            return new ApiError(Errors.INVALID_REQUEST, "Quota " + key + " must be a finite number");
+        }
         if (value <= 0.0) {
             return new ApiError(Errors.INVALID_REQUEST, "Quota " + key + " must be greater than 0");
         }

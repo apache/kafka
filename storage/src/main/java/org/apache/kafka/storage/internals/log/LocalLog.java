@@ -45,6 +45,7 @@ import java.util.List;
 import java.util.Optional;
 import java.util.Set;
 import java.util.UUID;
+import java.util.concurrent.ScheduledFuture;
 import java.util.concurrent.atomic.AtomicLong;
 import java.util.function.Consumer;
 import java.util.function.Supplier;
@@ -83,6 +84,7 @@ public class LocalLog {
     private final Time time;
     private final TopicPartition topicPartition;
     private final LogDirFailureChannel logDirFailureChannel;
+    private final FileRecords.TransferFailureHandler transferFailureHandler = this::checkReadAfterTransferFailure;
     private final Logger logger;
 
     private volatile LogOffsetMetadata nextOffsetMetadata;
@@ -270,7 +272,7 @@ public class LocalLog {
             if (segmentsToFlush.stream().anyMatch(s -> s.baseOffset() >= currentRecoveryPoint)) {
                 // The directory might be renamed concurrently for topic deletion, which may cause NoSuchFileException here.
                 // Since the directory is to be deleted anyways, we just swallow NoSuchFileException and let it go.
-                Utils.flushDirIfExists(dir.toPath());
+                Utils.flushPathIfExists(dir.toPath());
             }
         }
     }
@@ -515,7 +517,7 @@ public class LocalLog {
                         }
                     }
                     if (fetchDataInfo != null) {
-                        return fetchDataInfo;
+                        return withTransferFailureHandler(fetchDataInfo);
                     } else {
                         // okay we are beyond the end of the last segment with no data fetched although the start offset is in range,
                         // this can happen when all messages with offset larger than start offsets have been deleted.
@@ -524,6 +526,52 @@ public class LocalLog {
                     }
                 }
         );
+    }
+
+    /**
+     * The records of a fetch are read from the segment only when they are written to the network, after this log
+     * has returned them, so an IOException from that read cannot be caught here. Have the records report a failed
+     * write instead, so that the log directory is marked offline if the segment cannot be read, as for any other
+     * IOException in this log.
+     */
+    private FetchDataInfo withTransferFailureHandler(FetchDataInfo fetchDataInfo) {
+        if (!(fetchDataInfo.records instanceof FileRecords fileRecords))
+            return fetchDataInfo;
+        return fetchDataInfo.withRecords(fileRecords.withTransferFailureHandler(transferFailureHandler));
+    }
+
+    /**
+     * Called on the network thread when writing fetched records failed, which may be a socket or a storage failure.
+     * Re-reading the region tells them apart, so it is done on the scheduler rather than on the network thread, at
+     * most once at a time per log dir, so that a burst of failed sends or a slow failing disk does not take up the
+     * threads of the scheduler, which other tasks of the broker share.
+     */
+    private void checkReadAfterTransferFailure(FileRecords records, long position, int count, IOException transferFailure) {
+        String logDir = parentDir;
+        if (!logDirFailureChannel.tryStartReadCheck(logDir))
+            return;
+        // Once the scheduler has taken the check, the check finishes it; until then it is finished here, whatever is
+        // thrown, since a check that is never finished would stop this log dir from being checked for good
+        boolean scheduled = false;
+        try {
+            ScheduledFuture<?> check = scheduler.scheduleOnce("check-read-after-transfer-failure", () -> {
+                try {
+                    records.readFailure(position, count).ifPresent(readFailure -> {
+                        readFailure.addSuppressed(transferFailure);
+                        logDirFailureChannel.maybeAddOfflineLogDir(logDir, readFailure.getMessage(), readFailure);
+                    });
+                } finally {
+                    logDirFailureChannel.finishReadCheck(logDir);
+                }
+            });
+            // A scheduler that is not running ignores the task
+            scheduled = !check.isCancelled();
+        } catch (RuntimeException e) {
+            logger.warn("Could not schedule a read check of {} after a failed transfer", records.file().getAbsolutePath(), e);
+        } finally {
+            if (!scheduled)
+                logDirFailureChannel.finishReadCheck(logDir);
+        }
     }
 
     public void append(long lastOffset, MemoryRecords records) throws IOException {
@@ -1059,7 +1107,7 @@ public class LocalLog {
         for (LogSegment logSegment : sortedNewSegments) {
             logSegment.changeFileSuffixes(SWAP_FILE_SUFFIX, "");
         }
-        Utils.flushDir(dir.toPath());
+        Utils.flushPath(dir.toPath());
         return deletedNotReplaced;
     }
 

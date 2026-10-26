@@ -96,7 +96,7 @@ import org.apache.kafka.server.FetchContext.FullFetchContext
 import org.apache.kafka.server.{AutoTopicCreationManager, ClientMetricsManager, FetchManager, FetchSessionCacheShard, ForwardingManager, SimpleApiVersionManager}
 import org.apache.kafka.server.authorizer.{Action, AuthorizationResult, Authorizer}
 import org.apache.kafka.server.common.{FeatureVersion, FinalizedFeatures, GroupVersion, KRaftVersion, MetadataVersion, RequestLocal, ShareVersion, StreamsVersion, TransactionVersion}
-import org.apache.kafka.server.config.{ReplicationConfigs, ServerConfigs, ServerLogConfigs}
+import org.apache.kafka.server.config.{QuotaConfig, ReplicationConfigs, ServerConfigs, ServerLogConfigs}
 import org.apache.kafka.server.logger.LoggingController
 import org.apache.kafka.server.metrics.{ClientMetricsTestUtils, KafkaYammerMetrics}
 import org.apache.kafka.server.share.{CachedSharePartition, ErroneousAndValidPartitionData, SharePartitionKey}
@@ -150,7 +150,7 @@ class KafkaApisTest extends Logging {
   private val clientControllerQuotaManager: ControllerMutationQuotaManager = mock(classOf[ControllerMutationQuotaManager])
   private val replicaQuotaManager: ReplicationQuotaManager = mock(classOf[ReplicationQuotaManager])
   private val quotas = new QuotaManagers(clientQuotaManager, clientQuotaManager, clientRequestQuotaManager,
-    clientControllerQuotaManager, replicaQuotaManager, replicaQuotaManager, replicaQuotaManager, util.Optional.empty())
+    clientControllerQuotaManager, replicaQuotaManager, replicaQuotaManager, replicaQuotaManager, replicaQuotaManager, util.Optional.empty())
   private val fetchManager: FetchManager = mock(classOf[FetchManager])
   private val sharePartitionManager: SharePartitionManager = mock(classOf[SharePartitionManager])
   private val clientMetricsManager: ClientMetricsManager = mock(classOf[ClientMetricsManager])
@@ -341,6 +341,36 @@ class KafkaApisTest extends Logging {
     assertTrue(configNames.contains(LogConfig.INTERNAL_SEGMENT_BYTES_CONFIG))
     // A public config inherited from the broker-level default is reported as well.
     assertTrue(configNames.contains(TopicConfig.MAX_DECOMPRESSED_MESSAGE_BYTES_CONFIG))
+  }
+
+  @Test
+  def testDescribeConfigsTopicIncludesInternalListConfigSetOnTopic(): Unit = {
+    val resourceName = "topic-1"
+    val configRepository: ConfigRepository = mock(classOf[ConfigRepository])
+    val topicConfigs = new Properties()
+    topicConfigs.put(QuotaConfig.MIRROR_REPLICATION_THROTTLED_REPLICAS_CONFIG, "0:101")
+    when(configRepository.topicConfig(resourceName)).thenReturn(topicConfigs)
+
+    metadataCache = mock(classOf[KRaftMetadataCache])
+    when(metadataCache.contains(resourceName)).thenReturn(true)
+
+    val requestHeader = new RequestHeader(ApiKeys.DESCRIBE_CONFIGS, ApiKeys.DESCRIBE_CONFIGS.latestVersion, clientId, 0)
+    val describeConfigsRequest = new DescribeConfigsRequest.Builder(new DescribeConfigsRequestData()
+      .setResources(util.List.of(new DescribeConfigsRequestData.DescribeConfigsResource()
+        .setResourceName(resourceName)
+        .setResourceType(ConfigResource.Type.TOPIC.id))))
+      .build(requestHeader.apiVersion)
+    val request = buildRequest(describeConfigsRequest, requestHeader = Option(requestHeader))
+
+    kafkaApis = createKafkaApis(configRepository = configRepository)
+    kafkaApis.handleDescribeConfigsRequest(request)
+
+    val response = verifyNoThrottling[DescribeConfigsResponse](request)
+    val result = response.data.results.get(0)
+    assertEquals(Errors.NONE.code, result.errorCode, result.errorMessage)
+    val configs = result.configs.asScala.filter(_.name == QuotaConfig.MIRROR_REPLICATION_THROTTLED_REPLICAS_CONFIG)
+    assertEquals(1, configs.length)
+    assertEquals("0:101", configs.head.value)
   }
 
   @Test
@@ -14920,7 +14950,7 @@ class KafkaApisTest extends Logging {
   def getReadShareGroupStateResponse(requestData: ReadShareGroupStateRequestData, configOverrides: Map[String, String] = Map.empty,
                                      verifyNoErr: Boolean = true, authorizer: Authorizer = null,
                                      readStateResult: util.List[ReadShareGroupStateResponseData.ReadStateResult]): ReadShareGroupStateResponse = {
-    val requestChannelRequest = buildRequest(new ReadShareGroupStateRequest.Builder(requestData).build())
+    val requestChannelRequest = buildRequest(new ReadShareGroupStateRequest.Builder(requestData, true).build())
 
     val future = new CompletableFuture[ReadShareGroupStateResponseData]()
     when(shareCoordinator.readState(
@@ -14949,7 +14979,7 @@ class KafkaApisTest extends Logging {
   def getReadShareGroupStateSummaryResponse(requestData: ReadShareGroupStateSummaryRequestData, configOverrides: Map[String, String] = Map.empty,
                                             verifyNoErr: Boolean = true, authorizer: Authorizer = null,
                                             readStateSummaryResult: util.List[ReadShareGroupStateSummaryResponseData.ReadStateSummaryResult]): ReadShareGroupStateSummaryResponse = {
-    val requestChannelRequest = buildRequest(new ReadShareGroupStateSummaryRequest.Builder(requestData).build())
+    val requestChannelRequest = buildRequest(new ReadShareGroupStateSummaryRequest.Builder(requestData, true).build())
 
     val future = new CompletableFuture[ReadShareGroupStateSummaryResponseData]()
     when(shareCoordinator.readStateSummary(
@@ -14978,7 +15008,7 @@ class KafkaApisTest extends Logging {
   def getWriteShareGroupStateResponse(requestData: WriteShareGroupStateRequestData, configOverrides: Map[String, String] = Map.empty,
                                       verifyNoErr: Boolean = true, authorizer: Authorizer = null,
                                       writeStateResult: util.List[WriteShareGroupStateResponseData.WriteStateResult]): WriteShareGroupStateResponse = {
-    val requestChannelRequest = buildRequest(new WriteShareGroupStateRequest.Builder(requestData).build())
+    val requestChannelRequest = buildRequest(new WriteShareGroupStateRequest.Builder(requestData, true).build())
 
     val future = new CompletableFuture[WriteShareGroupStateResponseData]()
     when(shareCoordinator.writeState(
@@ -15007,7 +15037,7 @@ class KafkaApisTest extends Logging {
   def getDeleteShareGroupStateResponse(requestData: DeleteShareGroupStateRequestData, configOverrides: Map[String, String] = Map.empty,
                                        verifyNoErr: Boolean = true, authorizer: Authorizer = null,
                                        deleteStateResult: util.List[DeleteShareGroupStateResponseData.DeleteStateResult]): DeleteShareGroupStateResponse = {
-    val requestChannelRequest = buildRequest(new DeleteShareGroupStateRequest.Builder(requestData).build())
+    val requestChannelRequest = buildRequest(new DeleteShareGroupStateRequest.Builder(requestData, true).build())
 
     val future = new CompletableFuture[DeleteShareGroupStateResponseData]()
     when(shareCoordinator.deleteState(
@@ -15036,7 +15066,7 @@ class KafkaApisTest extends Logging {
   def getInitializeShareGroupStateResponse(requestData: InitializeShareGroupStateRequestData, configOverrides: Map[String, String] = Map.empty,
                                            verifyNoErr: Boolean = true, authorizer: Authorizer = null,
                                            initStateResult: util.List[InitializeShareGroupStateResponseData.InitializeStateResult]): InitializeShareGroupStateResponse = {
-    val requestChannelRequest = buildRequest(new InitializeShareGroupStateRequest.Builder(requestData).build())
+    val requestChannelRequest = buildRequest(new InitializeShareGroupStateRequest.Builder(requestData, true).build())
 
     val future = new CompletableFuture[InitializeShareGroupStateResponseData]()
     when(shareCoordinator.initializeState(

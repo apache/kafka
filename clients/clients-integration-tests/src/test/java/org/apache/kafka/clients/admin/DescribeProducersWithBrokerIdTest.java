@@ -57,7 +57,7 @@ public class DescribeProducersWithBrokerIdTest {
     }
     
     @BeforeEach
-    void setUp() throws InterruptedException {
+    void setUp() {
         clusterInstance.createTopic(TOPIC_NAME, NUM_PARTITIONS, REPLICATION_FACTOR);
     }
 

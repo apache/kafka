@@ -20,7 +20,6 @@ import org.apache.kafka.clients.CommonClientConfigs;
 import org.apache.kafka.clients.admin.Admin;
 import org.apache.kafka.clients.admin.NewPartitionReassignment;
 import org.apache.kafka.clients.admin.NewPartitions;
-import org.apache.kafka.clients.admin.NewTopic;
 import org.apache.kafka.clients.admin.ShareGroupDescription;
 import org.apache.kafka.clients.producer.Producer;
 import org.apache.kafka.clients.producer.ProducerRecord;
@@ -66,6 +65,8 @@ public class ShareConsumerRackAwareTest {
     public void testShareConsumerWithRackAwareAssignor(ClusterInstance clusterInstance) throws ExecutionException, InterruptedException {
         String groupId = "group0";
         String topic = "test-topic";
+        // Create a new topic with 1 partition on broker 0.
+        clusterInstance.createTopicWithAssignment(topic, Map.of(0, List.of(0)));
         try (Admin admin = clusterInstance.admin();
              Producer<byte[], byte[]> producer = clusterInstance.producer();
              ShareConsumer<byte[], byte[]> consumer0 = clusterInstance.shareConsumer(Map.of(
@@ -84,10 +85,6 @@ public class ShareConsumerRackAwareTest {
                  CommonClientConfigs.CLIENT_RACK_CONFIG, "rack2"
              ))
         ) {
-            // Create a new topic with 1 partition on broker 0.
-            admin.createTopics(List.of(new NewTopic(topic, Map.of(0, List.of(0)))));
-            clusterInstance.waitTopicCreation(topic, 1);
-
             producer.send(new ProducerRecord<>(topic, "key".getBytes(), "value".getBytes()));
             producer.flush();
 
