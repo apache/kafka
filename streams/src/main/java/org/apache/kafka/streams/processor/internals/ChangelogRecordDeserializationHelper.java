@@ -54,10 +54,15 @@ public class ChangelogRecordDeserializationHelper {
         if (versionHeader == null) {
             return;
         } else {
-            switch (versionHeader.value()[0]) {
+            final byte[] version = versionHeader.value();
+            if (version == null || version.length == 0) {
+                log.warn("Changelog record has an empty version header. Skipping consistency information.");
+                return;
+            }
+            switch (version[0]) {
                 case 0:
                     final Header vectorHeader = record.headers().lastHeader(CHANGELOG_POSITION_HEADER_KEY);
-                    if (vectorHeader == null) {
+                    if (vectorHeader == null || vectorHeader.value() == null || vectorHeader.value().length == 0) {
                         throw new StreamsException("This should not happen. Consistency is enabled but the changelog "
                                 + "contains records without consistency information.");
                     }
