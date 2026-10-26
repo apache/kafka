@@ -2582,6 +2582,49 @@ public class AssignmentRefinerTest {
     }
 
     @Test
+    public void shouldPatchMembersWithoutChangingTheTargetAssignment() {
+        // A patched member shares the partition sets it does not change with the target assignment, so a patch must
+        // copy a set before changing it. memberB's active set is emptied by 0_1's patch and started again by 0_2's.
+        final Map<String, StreamsGroupMember> members = Map.of(
+            "memberA", member("memberA", "processA", mkTasksTuple(TaskRole.ACTIVE, mkTasks(STATEFUL, 0, 1))),
+            "memberB", member("memberB", "processB", new TasksTuple(
+                Map.of(STATEFUL, Set.of(2)), Map.of(STATEFUL, Set.of(0)), Map.of()))
+        );
+
+        // memberA keeps 0_0 and is given 0_2, which memberB runs, and memberB is given 0_1 and a standby of 0_0. Built
+        // from mutable maps and sets, so that a patch changing a shared set would change the target assignment instead
+        // of throwing.
+        final Map<String, TasksTuple> targetAssignment = Map.of(
+            "memberA", new TasksTuple(
+                new HashMap<>(Map.of(STATEFUL, new HashSet<>(Set.of(0, 2)))), new HashMap<>(), new HashMap<>()),
+            "memberB", new TasksTuple(
+                new HashMap<>(Map.of(STATEFUL, new HashSet<>(Set.of(1)))),
+                new HashMap<>(Map.of(STATEFUL, new HashSet<>(Set.of(0)))),
+                new HashMap<>())
+        );
+
+        final Map<String, TasksTuple> refined = assemble(members, targetAssignment, Map.of(), 2);
+
+        // Both migrations are staged and warmed, so memberA and memberB are patched ...
+        assertEquals(
+            Map.of(
+                "memberA", new TasksTuple(Map.of(STATEFUL, Set.of(0, 1)), Map.of(), Map.of(STATEFUL, Set.of(2))),
+                "memberB", new TasksTuple(
+                    Map.of(STATEFUL, Set.of(2)), Map.of(STATEFUL, Set.of(0)), Map.of(STATEFUL, Set.of(1)))
+            ),
+            refined
+        );
+        // ... and the target assignment they were patched from is as it was.
+        assertEquals(
+            Map.of(
+                "memberA", new TasksTuple(Map.of(STATEFUL, Set.of(0, 2)), Map.of(), Map.of()),
+                "memberB", new TasksTuple(Map.of(STATEFUL, Set.of(1)), Map.of(STATEFUL, Set.of(0)), Map.of())
+            ),
+            targetAssignment
+        );
+    }
+
+    @Test
     public void shouldPreserveTheActiveTaskCountThroughEveryDerivation() {
         // The wrapper ignores a refined assignment that drops or duplicates an active task, so a derivation that
         // trips this check would ship a refiner the coordinator silently discards.

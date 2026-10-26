@@ -1566,55 +1566,90 @@ public class AssignmentRefinerImpl implements AssignmentRefiner {
      */
     private static final class PatchedTasks {
 
-        private final Map<String, Set<Integer>> activeTasks;
-        private final Map<String, Set<Integer>> standbyTasks;
-        private final Map<String, Set<Integer>> warmupTasks;
+        private final PatchedRole activeTasks;
+        private final PatchedRole standbyTasks;
+        private final PatchedRole warmupTasks;
 
         private PatchedTasks(final TasksTuple tasks) {
-            this.activeTasks = mutableCopy(tasks.activeTasks());
-            this.standbyTasks = mutableCopy(tasks.standbyTasks());
-            this.warmupTasks = mutableCopy(tasks.warmupTasks());
+            this.activeTasks = new PatchedRole(tasks.activeTasks());
+            this.standbyTasks = new PatchedRole(tasks.standbyTasks());
+            this.warmupTasks = new PatchedRole(tasks.warmupTasks());
         }
 
         private void addActive(final TaskId task) {
-            add(activeTasks, task);
+            activeTasks.add(task);
         }
 
         private void removeActive(final TaskId task) {
-            remove(activeTasks, task);
+            activeTasks.remove(task);
         }
 
         private void addStandby(final TaskId task) {
-            add(standbyTasks, task);
+            standbyTasks.add(task);
         }
 
         private void removeStandby(final TaskId task) {
-            remove(standbyTasks, task);
+            standbyTasks.remove(task);
         }
 
         private void addWarmup(final TaskId task) {
-            add(warmupTasks, task);
+            warmupTasks.add(task);
         }
 
         private TasksTuple toTasksTuple() {
-            return new TasksTuple(activeTasks, standbyTasks, warmupTasks);
+            return new TasksTuple(activeTasks.tasks(), standbyTasks.tasks(), warmupTasks.tasks());
+        }
+    }
+
+    /**
+     * The tasks of one role of one member, patched copy-on-write: the role's map, and a subtopology's partition set,
+     * are only copied once a patch changes them, so a patch that touches one task does not copy the member's whole
+     * assignment. The partition sets a patch leaves alone are shared with the target assignment, which nothing
+     * mutates.
+     */
+    private static final class PatchedRole {
+
+        private final Map<String, Set<Integer>> original;
+        private Map<String, Set<Integer>> patched;
+
+        private PatchedRole(final Map<String, Set<Integer>> original) {
+            this.original = original;
         }
 
-        private static Map<String, Set<Integer>> mutableCopy(final Map<String, Set<Integer>> tasks) {
-            final Map<String, Set<Integer>> copy = new HashMap<>();
-            tasks.forEach((subtopologyId, partitionIds) -> copy.put(subtopologyId, new HashSet<>(partitionIds)));
-            return copy;
+        private Map<String, Set<Integer>> tasks() {
+            return patched == null ? original : patched;
         }
 
-        private static void add(final Map<String, Set<Integer>> tasks, final TaskId task) {
-            tasks.computeIfAbsent(task.subtopologyId(), __ -> new HashSet<>()).add(task.partition());
+        private void add(final TaskId task) {
+            mutablePartitions(task.subtopologyId()).add(task.partition());
         }
 
-        private static void remove(final Map<String, Set<Integer>> tasks, final TaskId task) {
-            final Set<Integer> partitionIds = tasks.get(task.subtopologyId());
-            if (partitionIds != null && partitionIds.remove(task.partition()) && partitionIds.isEmpty()) {
-                tasks.remove(task.subtopologyId());
+        private void remove(final TaskId task) {
+            final Set<Integer> partitionIds = tasks().get(task.subtopologyId());
+            if (partitionIds == null || !partitionIds.contains(task.partition())) {
+                return;
             }
+            final Set<Integer> mutablePartitionIds = mutablePartitions(task.subtopologyId());
+            mutablePartitionIds.remove(task.partition());
+            if (mutablePartitionIds.isEmpty()) {
+                patched.remove(task.subtopologyId());
+            }
+        }
+
+        private Set<Integer> mutablePartitions(final String subtopologyId) {
+            if (patched == null) {
+                patched = new HashMap<>(original);
+            }
+            final Set<Integer> partitionIds = patched.get(subtopologyId);
+            // A set that is still the target assignment's own object is copied before it changes; any other set was
+            // created by this patch.
+            if (partitionIds == null || partitionIds == original.get(subtopologyId)) {
+                final Set<Integer> mutablePartitionIds =
+                    partitionIds == null ? new HashSet<>() : new HashSet<>(partitionIds);
+                patched.put(subtopologyId, mutablePartitionIds);
+                return mutablePartitionIds;
+            }
+            return partitionIds;
         }
     }
 
