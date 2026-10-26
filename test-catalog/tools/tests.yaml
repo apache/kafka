@@ -1086,6 +1086,9 @@ org.apache.kafka.tools.streams.StreamsGroupCommandTest:
 org.apache.kafka.tools.streams.TopologyDescriptionFormatterTest:
 - testFormatEmptyTopologyHasNoTrailingSpace
 - testFormatGlobalStore
+- testFormatGlobalStoreDefinedBeforeSubtopologiesDoesNotCollide
+- testFormatGlobalStoreIgnoresNonNumericSubtopologyIds
+- testFormatGlobalStoresInterleavedWithSubtopologiesFillUnusedIds
 - testFormatMultipleGlobalStoresAreSeparatedByBlankLine
 - testFormatMultipleSubtopologiesAreIndentedConsistently
 - testFormatRendersEmptySuccessorsAndPredecessorsAsNone
