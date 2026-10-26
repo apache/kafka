@@ -482,6 +482,49 @@ public class AssignmentRefinerTest {
         assertEquals(Map.of(), index.onDiskByProcess());
     }
 
+    @Test
+    public void shouldIndexOnlyMisplacedTasks() {
+        // memberA holds 0_0 and 0_1, is restoring 0_1 and has state for 0_3 on disk; memberB holds standbys of 0_0 and
+        // 0_1. Only 0_0 is misplaced, so only what concerns 0_0 is indexed. The process load and the members restoring
+        // an active task still cover every task: memberA counts as restoring because of 0_1, which is not indexed.
+        final Map<String, StreamsGroupMember> members = Map.of(
+            "memberA", member("memberA", "processA", mkTasksTuple(TaskRole.ACTIVE, mkTasks(STATEFUL, 0, 1))),
+            "memberB", member("memberB", "processB", mkTasksTuple(TaskRole.STANDBY, mkTasks(STATEFUL, 0, 1)))
+        );
+        final Map<String, MemberTaskOffsets> taskOffsets = Map.of(
+            "memberA", offsets(Map.of(1, 500L, 3, 1000L), Map.of(1, 10_000L, 3, 1000L)),
+            "memberB", offsets(Map.of(0, 9_990L, 1, 9_000L), Map.of(0, 10_000L, 1, 10_000L))
+        );
+
+        final AssignmentRefinerImpl.CurrentAssignmentIndex index = AssignmentRefinerImpl.indexCurrentAssignment(
+            members,
+            taskOffsets,
+            AssignmentRefinerImpl.statefulSubtopologies(subtopologies()),
+            ACCEPTABLE_RECOVERY_LAG,
+            Map.of(STATEFUL, Map.of(0, "memberC"))
+        );
+
+        assertEquals(
+            Map.of(STATEFUL_0, new AssignmentRefinerImpl.ActiveHolder("memberA", false, false)),
+            index.activeHolder()
+        );
+        assertEquals(
+            Map.of(STATEFUL_0, List.of(
+                new AssignmentRefinerImpl.TaskCopy("memberB", "processB", TaskRole.STANDBY, true, true))),
+            index.taskCopies()
+        );
+        assertEquals(Map.of(), index.onDiskByProcess());
+        assertEquals(index(members, taskOffsets).processLoad(), index.processLoad());
+        assertEquals(
+            Map.of(
+                "processA", new AssignmentRefinerImpl.ProcessLoad(2, 1),
+                "processB", new AssignmentRefinerImpl.ProcessLoad(2, 1)
+            ),
+            index.processLoad()
+        );
+        assertEquals(Set.of("memberA"), index.membersRestoringAnActive());
+    }
+
     // ---------------------------------------------------------------------------------------------------------------
     // analyzeTasks
     // ---------------------------------------------------------------------------------------------------------------
@@ -2738,7 +2781,8 @@ public class AssignmentRefinerTest {
             members,
             taskOffsets,
             AssignmentRefinerImpl.statefulSubtopologies(subtopologies()),
-            ACCEPTABLE_RECOVERY_LAG
+            ACCEPTABLE_RECOVERY_LAG,
+            null
         );
     }
 
