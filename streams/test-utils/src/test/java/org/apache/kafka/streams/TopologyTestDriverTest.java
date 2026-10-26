@@ -1800,6 +1800,23 @@ public abstract class TopologyTestDriverTest {
     }
 
     @Test
+    public void shouldKeepGlobalInputOffsetsIndependentOfPatternInput() {
+        // Register the global source first to exercise the overlap currently accepted by the builder.
+        final Topology topology = setupGlobalStoreTopology(SOURCE_TOPIC_1);
+        topology.addSource("pattern-source", Pattern.compile("source-topic-\\d"));
+        topology.addProcessor("pattern-processor", new MockProcessorSupplier(), "pattern-source");
+        testDriver = new TopologyTestDriverBuilder(topology).withConfig(config).build();
+        final KeyValueStore<byte[], byte[]> globalStore = testDriver.getKeyValueStore(SOURCE_TOPIC_1 + "-globalStore");
+
+        pipeRecord(SOURCE_TOPIC_2, testRecord1);
+        pipeRecord(SOURCE_TOPIC_1, testRecord1);
+        assertEquals(Position.emptyPosition().withComponent(SOURCE_TOPIC_1, 0, 0), globalStore.getPosition());
+
+        pipeRecord(SOURCE_TOPIC_1, testRecord1);
+        assertEquals(Position.emptyPosition().withComponent(SOURCE_TOPIC_1, 0, 1), globalStore.getPosition());
+    }
+
+    @Test
     public void shouldWaitForPatternTopicPositionBound() {
         final String storeName = "positions";
         final Topology topology = new Topology();
