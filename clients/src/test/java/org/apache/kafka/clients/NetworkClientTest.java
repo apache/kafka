@@ -63,6 +63,7 @@ import org.junit.jupiter.api.BeforeEach;
 import org.junit.jupiter.api.Test;
 
 import java.io.IOException;
+import java.net.ConnectException;
 import java.net.InetAddress;
 import java.net.InetSocketAddress;
 import java.net.UnknownHostException;
@@ -75,10 +76,12 @@ import java.util.List;
 import java.util.Optional;
 import java.util.Set;
 import java.util.concurrent.atomic.AtomicInteger;
+import java.util.function.Consumer;
 import java.util.stream.Collectors;
 import java.util.stream.IntStream;
 
 import static org.apache.kafka.common.protocol.ApiKeys.PRODUCE;
+import static org.junit.jupiter.api.Assertions.assertDoesNotThrow;
 import static org.junit.jupiter.api.Assertions.assertEquals;
 import static org.junit.jupiter.api.Assertions.assertFalse;
 import static org.junit.jupiter.api.Assertions.assertNotEquals;
@@ -1817,4 +1820,87 @@ public class NetworkClientTest {
         assertTrue(metadataUpdater.isBootstrapped());
     }
 
+    @Test
+    public void testConnectionRefusedAfterBootstrapResolutionIsNotBootstrapResolutionException() throws InterruptedException {
+        // The remote end refuses the connection, reported as a NOT_CONNECTED disconnect on a later poll.
+        List<String> connectAttempts = new ArrayList<>();
+        MockSelector refusingSelector = new MockSelector(time, address -> false) {
+            @Override
+            public void connect(String id, InetSocketAddress address, int sendBufferSize, int receiveBufferSize) throws IOException {
+                connectAttempts.add(id);
+                super.connect(id, address, sendBufferSize, receiveBufferSize);
+            }
+        };
+        verifyConnectionRefusedAfterBootstrapResolution(refusingSelector, connectAttempts, refusingSelector::serverConnectionRefused);
+    }
+
+    @Test
+    public void testImmediateConnectionRefusedAfterBootstrapResolutionIsNotBootstrapResolutionException() throws InterruptedException {
+        // connect() itself fails with a ConnectException.
+        List<String> connectAttempts = new ArrayList<>();
+        MockSelector refusingSelector = new MockSelector(time) {
+            @Override
+            public void connect(String id, InetSocketAddress address, int sendBufferSize, int receiveBufferSize) throws IOException {
+                connectAttempts.add(id);
+                throw new ConnectException("Connection refused");
+            }
+        };
+        verifyConnectionRefusedAfterBootstrapResolution(refusingSelector, connectAttempts, id -> { });
+    }
+
+    // Bootstrap resolution succeeds but all connections are refused past bootstrap.resolve.timeout.ms;
+    // this must be a regular connection failure, not a BootstrapResolutionException.
+    private void verifyConnectionRefusedAfterBootstrapResolution(MockSelector refusingSelector,
+                                                                 List<String> connectAttempts,
+                                                                 Consumer<String> refuseConnection) throws InterruptedException {
+        long bootstrapResolveTimeoutMs = 1000;
+        Metadata metadata = new Metadata(50, 50, 5000, new LogContext(), new ClusterResourceListeners());
+        BootstrapConfiguration config = BootstrapConfiguration.enabled(
+                BOOTSTRAP_ADDRESSES,
+                ClientDnsLookup.USE_ALL_DNS_IPS,
+                bootstrapResolveTimeoutMs,
+                CommonClientConfigs.DEFAULT_RETRY_BACKOFF_MS);
+        NetworkClient client = new NetworkClient(refusingSelector, metadata, "mock", Integer.MAX_VALUE,
+                reconnectBackoffMsTest, reconnectBackoffMaxMsTest, 64 * 1024, 64 * 1024,
+                defaultRequestTimeoutMs, connectionSetupTimeoutMsTest, connectionSetupTimeoutMaxMsTest,
+                time, false, new ApiVersions(), new LogContext(),
+                MetadataRecoveryStrategy.NONE, config, false);
+
+        try {
+            // Zero-timeout polls keep mock time fixed until async DNS resolution completes.
+            TestUtils.waitForCondition(() -> {
+                client.poll(0, time.milliseconds());
+                return !metadata.fetch().nodes().isEmpty();
+            }, "Bootstrap DNS resolution should complete");
+            List<Node> bootstrapNodes = metadata.fetch().nodes();
+
+            // Refuse every attempt, advancing time past the resolve timeout and reconnect backoff each round.
+            int handledAttempts = 0;
+            for (int round = 0; round < 3; round++) {
+                client.poll(0, time.milliseconds());
+                List<String> newAttempts = new ArrayList<>(connectAttempts.subList(handledAttempts, connectAttempts.size()));
+                handledAttempts = connectAttempts.size();
+                assertFalse(newAttempts.isEmpty(), "Expected a connection attempt to a resolved bootstrap address");
+
+                newAttempts.forEach(refuseConnection);
+                client.poll(0, time.milliseconds());
+                refusingSelector.clear();
+
+                for (String nodeId : newAttempts) {
+                    Node node = bootstrapNodes.stream().filter(n -> n.idString().equals(nodeId)).findFirst().orElseThrow();
+                    assertTrue(client.connectionFailed(node), "Refused connection should be reported as a connection failure");
+                    assertFalse(client.isReady(node, time.milliseconds()));
+                }
+
+                time.sleep(bootstrapResolveTimeoutMs + 2 * reconnectBackoffMaxMsTest);
+            }
+
+            // No bootstrap failure is reported and the resolved bootstrap nodes are retained.
+            assertDoesNotThrow(metadata::maybeThrowBootstrapFatalException);
+            assertDoesNotThrow(metadata::maybeThrowAnyException);
+            assertEquals(new HashSet<>(bootstrapNodes), new HashSet<>(metadata.fetch().nodes()));
+        } finally {
+            client.close();
+        }
+    }
 }
