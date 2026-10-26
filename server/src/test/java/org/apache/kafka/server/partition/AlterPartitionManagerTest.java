@@ -148,7 +148,7 @@ public class AlterPartitionManagerTest {
     }
 
     @Test
-    public void testRequestVersionGatedByRequestHeaderV3Supported() {
+    public void testRequestVersionFollowsRequestHeaderV3SupportedChange() {
         ArgumentCaptor<AbstractRequest.Builder<AlterPartitionRequest>> requestCapture = ArgumentCaptor.captor();
         ArgumentCaptor<ControllerRequestCompletionHandler> callbackCapture = ArgumentCaptor.captor();
         var requestHeaderV3Supported = new AtomicBoolean(false);

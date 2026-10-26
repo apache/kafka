@@ -28,7 +28,6 @@ import org.apache.kafka.common.requests.AllocateProducerIdsRequest;
 import org.apache.kafka.common.requests.AllocateProducerIdsResponse;
 import org.apache.kafka.common.utils.MockTime;
 import org.apache.kafka.common.utils.Time;
-import org.apache.kafka.server.common.ControllerRequestCompletionHandler;
 import org.apache.kafka.server.common.NodeToControllerChannelManager;
 import org.apache.kafka.server.common.ProducerIdsBlock;
 import org.apache.kafka.test.TestUtils;
@@ -287,24 +286,20 @@ public class ProducerIdManagerTest {
     }
 
     @Test
-    public void testRequestVersionGatedByRequestHeaderV3Supported() {
+    public void testRequestVersionFollowsRequestHeaderV3SupportedChange() {
         ArgumentCaptor<AbstractRequest.Builder<AllocateProducerIdsRequest>> requestCapture = ArgumentCaptor.captor();
-        ArgumentCaptor<ControllerRequestCompletionHandler> callbackCapture = ArgumentCaptor.captor();
         var requestHeaderV3Supported = new AtomicBoolean(false);
         var manager = new RPCProducerIdManager(0, new MockTime(), () -> 1L, brokerToController, requestHeaderV3Supported::get);
 
-        assertThrows(CoordinatorLoadInProgressException.class, manager::generateProducerId);
-        Mockito.verify(brokerToController).sendRequest(requestCapture.capture(), callbackCapture.capture());
+        manager.sendRequest();
+        Mockito.verify(brokerToController).sendRequest(requestCapture.capture(), Mockito.any());
         short requestVersion = requestCapture.getValue().latestAllowedVersion();
         assertEquals((short) 0, requestVersion);
         assertEquals((short) 2, ApiKeys.ALLOCATE_PRODUCER_IDS.requestHeaderVersion(requestVersion));
 
-        // The timeout clears the in-flight request, so the next call sends again
         requestHeaderV3Supported.set(true);
-        callbackCapture.getValue().onTimeout();
-
-        assertThrows(CoordinatorLoadInProgressException.class, manager::generateProducerId);
-        Mockito.verify(brokerToController, Mockito.times(2)).sendRequest(requestCapture.capture(), callbackCapture.capture());
+        manager.sendRequest();
+        Mockito.verify(brokerToController, Mockito.times(2)).sendRequest(requestCapture.capture(), Mockito.any());
         requestVersion = requestCapture.getValue().latestAllowedVersion();
         assertEquals(ApiKeys.ALLOCATE_PRODUCER_IDS.latestVersion(), requestVersion);
         assertEquals((short) 3, ApiKeys.ALLOCATE_PRODUCER_IDS.requestHeaderVersion(requestVersion));
