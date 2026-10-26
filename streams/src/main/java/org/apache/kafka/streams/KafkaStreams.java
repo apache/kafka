@@ -1434,7 +1434,7 @@ public class KafkaStreams implements AutoCloseable {
                     return i;
                 }
             }
-            // It's safe to use threads.size() rather than getNumLiveStreamThreads() to infer the number of threads
+            // It's safe to use threads.size() rather than numLiveStreamThreads() to infer the number of threads
             // here since we trimmed any DEAD threads earlier in this method while holding the lock
             return threads.size() + 1;
         }

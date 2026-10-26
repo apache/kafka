@@ -298,7 +298,6 @@ public abstract class AbstractStickyAssignor extends AbstractPartitionAssignor {
                 assert existingPair.dstMemberId.equals(oldConsumer);
                 if (!existingPair.srcMemberId.equals(newConsumer)) {
                     // the partition is not moving back to its previous consumer
-                    // return new ConsumerPair2(existingPair.src, newConsumer);
                     addPartitionMovementRecord(partition, new ConsumerPair(existingPair.srcMemberId, newConsumer));
                 }
             } else

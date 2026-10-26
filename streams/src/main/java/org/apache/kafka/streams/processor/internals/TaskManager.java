@@ -1108,7 +1108,7 @@ public class TaskManager {
             try {
                 if (revokedTasksNeedCommit && prepareCommitSucceeded) {
                     // in handleRevocation we must call commitOffsetsOrTransaction() directly rather than
-                    // commitAndFillInConsumedOffsetsAndMetadataPerTaskMap() to make sure we don't skip the
+                    // commitTasksAndMaybeUpdateCommittableOffsets() to make sure we don't skip the
                     // offset commit because we are in a rebalance
                     taskExecutor.commitOffsetsOrTransaction(consumedOffsetsPerTask);
                 }

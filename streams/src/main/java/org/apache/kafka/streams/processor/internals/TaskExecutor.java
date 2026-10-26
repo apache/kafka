@@ -136,7 +136,7 @@ public class TaskExecutor {
      * @throws TimeoutException if committing offsets failed due to TimeoutException (non-EOS)
      * @throws TaskCorruptedException if committing offsets failed due to TimeoutException (EOS)
      * @param consumedOffsetsAndMetadata an empty map that will be filled in with the prepared offsets
-     * @return number of committed offsets, or -1 if we are in the middle of a rebalance and cannot commit
+     * @return number of committed offsets
      */
     int commitTasksAndMaybeUpdateCommittableOffsets(final Collection<? extends Task> tasksToCommit,
                                                     final Map<Task, Map<TopicPartition, OffsetAndMetadata>> consumedOffsetsAndMetadata) {
