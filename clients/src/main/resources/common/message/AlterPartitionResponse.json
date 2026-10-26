@@ -25,7 +25,7 @@
   //
   // Version 3 is the same as version 2 (KIP-903).
   //
-  // Version 4 is the same as version 3.
+  // Version 4 is the same as version 3 (KIP-1313).
   "validVersions": "2-4",
   "flexibleVersions": "0+",
   "headerVersions": {
