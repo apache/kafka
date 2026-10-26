@@ -17,7 +17,7 @@
   "apiKey": 70,
   "type": "response",
   "name": "ControllerRegistrationResponse",
-  // Version 1 is the same as version 0.
+  // Version 1 is the same as version 0 (KIP-1313).
   "validVersions": "0-1",
   "flexibleVersions": "0+",
   "headerVersions": {

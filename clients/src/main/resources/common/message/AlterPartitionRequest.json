@@ -26,7 +26,6 @@
   // Version 3 adds the NewIsrEpochs field and deprecates the NewIsr field (KIP-903).
   //
   // Version 4 uses the v3 request header (KIP-1313).
-  "latestVersionUnstable": true,
   "validVersions": "2-4",
   "flexibleVersions": "0+",
   "headerVersions": {
