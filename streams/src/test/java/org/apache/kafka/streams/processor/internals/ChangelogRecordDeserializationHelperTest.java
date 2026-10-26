@@ -83,27 +83,27 @@ public class ChangelogRecordDeserializationHelperTest {
     }
 
     @Test
-    public void shouldThrowWhenPositionHeaderIsNull() {
+    public void shouldSkipRecordWithNullPositionHeader() {
         final ConsumerRecord<byte[], byte[]> record = record();
         record.headers().add(CHANGELOG_VERSION_HEADER_RECORD_CONSISTENCY);
         record.headers().add(new RecordHeader(CHANGELOG_POSITION_HEADER_KEY, null));
 
-        assertThrows(
-            StreamsException.class,
-            () -> ChangelogRecordDeserializationHelper.applyChecksAndUpdatePosition(record, true, Position.emptyPosition())
-        );
+        final Position position = Position.emptyPosition();
+        ChangelogRecordDeserializationHelper.applyChecksAndUpdatePosition(record, true, position);
+
+        assertEquals(Position.emptyPosition(), position);
     }
 
     @Test
-    public void shouldThrowWhenPositionHeaderIsEmpty() {
+    public void shouldSkipRecordWithEmptyPositionHeader() {
         final ConsumerRecord<byte[], byte[]> record = record();
         record.headers().add(CHANGELOG_VERSION_HEADER_RECORD_CONSISTENCY);
         record.headers().add(new RecordHeader(CHANGELOG_POSITION_HEADER_KEY, new byte[0]));
 
-        assertThrows(
-            StreamsException.class,
-            () -> ChangelogRecordDeserializationHelper.applyChecksAndUpdatePosition(record, true, Position.emptyPosition())
-        );
+        final Position position = Position.emptyPosition();
+        ChangelogRecordDeserializationHelper.applyChecksAndUpdatePosition(record, true, position);
+
+        assertEquals(Position.emptyPosition(), position);
     }
 
     @Test
