@@ -347,35 +347,6 @@ public class ConsumerHeartbeatRequestManagerTest
         }
     }
 
-    @Test
-    public void testMaximumTimeToWaitWhileHeartbeatInFlightDoesNotSpin() {
-        // The member keeps joining, so the heartbeat below is sent without waiting for the interval.
-        when(membershipManager.state()).thenReturn(MemberState.JOINING);
-        when(membershipManager.shouldHeartbeatNow()).thenReturn(true);
-        // A known interval means a successful heartbeat response was already received.
-        heartbeatRequestState.onSuccessfulAttempt(time.milliseconds());
-
-        NetworkClientDelegate.PollResult firstResult = heartbeatRequestManager.poll(time.milliseconds());
-        assertEquals(1, firstResult.unsentRequests.size(),
-            "A heartbeat should be sent as soon as the coordinator is known");
-
-        // Deliberately do not complete the request, so it stays in flight while the heartbeat timer expires.
-        time.sleep(DEFAULT_HEARTBEAT_INTERVAL_MS + 1);
-
-        NetworkClientDelegate.PollResult secondResult = heartbeatRequestManager.poll(time.milliseconds());
-        assertEquals(0, secondResult.unsentRequests.size(),
-            "No heartbeat should be sent while another one is in flight");
-        assertTrue(secondResult.timeUntilNextPollMs > 0,
-            "timeUntilNextPollMs must be > 0 while a heartbeat is in flight to avoid a busy loop; got "
-                + secondResult.timeUntilNextPollMs);
-        assertEquals(DEFAULT_RETRY_BACKOFF_MS, secondResult.timeUntilNextPollMs);
-
-        long result = heartbeatRequestManager.maximumTimeToWait(time.milliseconds());
-        assertTrue(result > 0,
-            "maximumTimeToWait must be > 0 while a heartbeat is in flight to avoid a busy loop; got " + result);
-        assertEquals(DEFAULT_RETRY_BACKOFF_MS, result);
-    }
-
     @ParameterizedTest
     @ApiKeyVersionsSource(apiKey = ApiKeys.CONSUMER_GROUP_HEARTBEAT)
     public void testValidateConsumerGroupHeartbeatRequest(final short version) {

@@ -97,7 +97,6 @@ class StreamsGroupHeartbeatRequestManagerTest {
     private static final int RECEIVED_TASK_OFFSET_INTERVAL_MS = 7000;
     private static final long RECEIVED_ACCEPTABLE_RECOVERY_LAG = 4242;
     private static final int DEFAULT_MAX_POLL_INTERVAL_MS = 10000;
-    private static final long DEFAULT_RETRY_BACKOFF_MS = 100;
     private static final String GROUP_ID = "group-id";
     private static final String MEMBER_ID = "member-id";
     private static final int MEMBER_EPOCH = 1;
@@ -2516,39 +2515,6 @@ class StreamsGroupHeartbeatRequestManagerTest {
     }
 
     @Test
-    public void testMaximumTimeToWaitWhileHeartbeatInFlightDoesNotSpin() {
-        final int heartbeatIntervalMs = 5000;
-        final StreamsGroupHeartbeatRequestManager heartbeatRequestManager = createStreamsGroupHeartbeatRequestManager();
-        when(coordinatorRequestManager.coordinator()).thenReturn(Optional.of(coordinatorNode));
-        // The member keeps joining, so the heartbeat below is sent without waiting for the interval.
-        when(membershipManager.state()).thenReturn(MemberState.JOINING);
-
-        // Complete a first heartbeat so the manager learns the interval from its response.
-        completeSuccessfulHeartbeat(heartbeatRequestManager, buildClientResponseWithConfig(
-            heartbeatIntervalMs, RECEIVED_TASK_OFFSET_INTERVAL_MS, RECEIVED_ACCEPTABLE_RECOVERY_LAG));
-
-        final NetworkClientDelegate.PollResult firstResult = heartbeatRequestManager.poll(time.milliseconds());
-        assertEquals(1, firstResult.unsentRequests.size(),
-            "A heartbeat should be sent as soon as the coordinator is known");
-
-        // Deliberately do not complete the request, so it stays in flight while the heartbeat timer expires.
-        time.sleep(heartbeatIntervalMs + 1);
-
-        final NetworkClientDelegate.PollResult secondResult = heartbeatRequestManager.poll(time.milliseconds());
-        assertEquals(0, secondResult.unsentRequests.size(),
-            "No heartbeat should be sent while another one is in flight");
-        assertTrue(secondResult.timeUntilNextPollMs > 0,
-            "timeUntilNextPollMs must be > 0 while a heartbeat is in flight to avoid a busy loop; got "
-                + secondResult.timeUntilNextPollMs);
-        assertEquals(DEFAULT_RETRY_BACKOFF_MS, secondResult.timeUntilNextPollMs);
-
-        final long result = heartbeatRequestManager.maximumTimeToWait(time.milliseconds());
-        assertTrue(result > 0,
-            "maximumTimeToWait must be > 0 while a heartbeat is in flight to avoid a busy loop; got " + result);
-        assertEquals(DEFAULT_RETRY_BACKOFF_MS, result);
-    }
-
-    @Test
     public void testMaximumTimeToWaitPollTimerExpired() {
         try (
             final MockedConstruction<Timer> timerMockedConstruction =
@@ -2790,7 +2756,6 @@ class StreamsGroupHeartbeatRequestManagerTest {
         prop.put(ConsumerConfig.KEY_DESERIALIZER_CLASS_CONFIG, StringDeserializer.class);
         prop.put(ConsumerConfig.VALUE_DESERIALIZER_CLASS_CONFIG, StringDeserializer.class);
         prop.setProperty(ConsumerConfig.MAX_POLL_INTERVAL_MS_CONFIG, String.valueOf(DEFAULT_MAX_POLL_INTERVAL_MS));
-        prop.setProperty(ConsumerConfig.RETRY_BACKOFF_MS_CONFIG, String.valueOf(DEFAULT_RETRY_BACKOFF_MS));
         prop.setProperty(ConsumerConfig.BOOTSTRAP_SERVERS_CONFIG, "localhost:9092");
         return new ConsumerConfig(prop);
     }

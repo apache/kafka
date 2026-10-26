@@ -58,6 +58,9 @@ public class HeartbeatRequestStateTest {
         time.sleep(100);
         assertTrue(heartbeatRequestState.canSendRequest(time.milliseconds()));
         assertEquals(0, heartbeatRequestState.timeToNextHeartbeatMs(time.milliseconds()));
+        heartbeatRequestState.onSendAttempt(time.milliseconds());
+        assertFalse(heartbeatRequestState.canSendRequest(time.milliseconds()));
+        assertEquals(RETRY_BACKOFF_MS, heartbeatRequestState.timeToNextHeartbeatMs(time.milliseconds()));
     }
 
     @Test
@@ -133,32 +136,5 @@ public class HeartbeatRequestStateTest {
 
         assertFalse(heartbeatRequestState.canSendRequest(time.milliseconds()));
         assertTrue(heartbeatRequestState.timeToNextHeartbeatMs(time.milliseconds()) > 0);
-    }
-
-    @Test
-    public void testTimeToNextHeartbeatMsWhileRequestInFlightDoesNotSpin() {
-        final long heartbeatIntervalMs = 5000;
-        final HeartbeatRequestState heartbeatRequestState = new HeartbeatRequestState(
-            LOG_CONTEXT,
-            time,
-            heartbeatIntervalMs,
-            RETRY_BACKOFF_MS,
-            RETRY_BACKOFF_MAX_MS,
-            JITTER
-        );
-        // A known interval means a successful heartbeat response was already received.
-        heartbeatRequestState.onSuccessfulAttempt(time.milliseconds());
-
-        heartbeatRequestState.onSendAttempt(time.milliseconds());
-        heartbeatRequestState.resetTimer();
-        time.sleep(heartbeatIntervalMs + 1);
-
-        assertFalse(heartbeatRequestState.canSendRequest(time.milliseconds()),
-            "No request should be sendable while one is in flight");
-        final long timeToNextHeartbeatMs = heartbeatRequestState.timeToNextHeartbeatMs(time.milliseconds());
-        assertTrue(timeToNextHeartbeatMs > 0,
-            "timeToNextHeartbeatMs must be > 0 while a heartbeat request is in flight to avoid a busy loop; got "
-                + timeToNextHeartbeatMs);
-        assertEquals(RETRY_BACKOFF_MS, heartbeatRequestState.timeToNextHeartbeatMs(time.milliseconds()));
     }
 }

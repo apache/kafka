@@ -432,6 +432,8 @@ abstract class AbstractHeartbeatRequestManagerTest<R extends AbstractResponse> {
         result = heartbeatRequestManager.poll(time.milliseconds());
         assertEquals(0, result.unsentRequests.size(), "No heartbeat should be sent while a " +
                 "previous one is in-flight");
+        assertEquals(DEFAULT_RETRY_BACKOFF_MS, result.timeUntilNextPollMs);
+        assertEquals(DEFAULT_RETRY_BACKOFF_MS, heartbeatRequestManager.maximumTimeToWait(time.milliseconds()));
 
         time.sleep(DEFAULT_HEARTBEAT_INTERVAL_MS);
         result = heartbeatRequestManager.poll(time.milliseconds());
