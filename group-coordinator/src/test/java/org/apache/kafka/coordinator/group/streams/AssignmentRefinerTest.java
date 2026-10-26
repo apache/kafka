@@ -2376,6 +2376,27 @@ public class AssignmentRefinerTest {
     }
 
     @Test
+    public void shouldLookUpTheTargetStandbyHoldersOfMisplacedTasksOnly() {
+        // Only 0_0 is misplaced, so the lookup has no entry for 0_1 although the target assignment names memberA as its
+        // standby holder. The stateless task has none either, even though it is asked for.
+        final Map<String, TasksTuple> targetAssignment = Map.of(
+            "memberA", mkTasksTuple(TaskRole.STANDBY, mkTasks(STATEFUL, 0, 1)),
+            "memberB", mkTasksTuple(TaskRole.STANDBY, mkTasks(STATEFUL, 0)),
+            "memberC", mkTasksTuple(TaskRole.STANDBY, mkTasks(STATELESS, 0))
+        );
+
+        final AssignmentRefinerImpl.TargetStandbyHolders holders = new AssignmentRefinerImpl.TargetStandbyHolders(
+            targetAssignment,
+            AssignmentRefinerImpl.statefulSubtopologies(subtopologies()),
+            Map.of(STATEFUL, Map.of(0, "memberD"), STATELESS, Map.of(0, "memberD"))
+        );
+
+        assertEquals(Set.of("memberA", "memberB"), holders.holdersOf(STATEFUL_0));
+        assertEquals(Set.of(), holders.holdersOf(STATEFUL_1));
+        assertEquals(Set.of(), holders.holdersOf(new TaskId(STATELESS, 0)));
+    }
+
+    @Test
     public void shouldNotWithholdStandbysOfStatelessTasks() {
         // A stateless task has no state to restore, so it is never staged and never collides with anything the
         // refiner decides. Its placements flow through from the target assignment untouched.
@@ -2805,7 +2826,7 @@ public class AssignmentRefinerTest {
             AssignmentRefinerImpl.misplacedTasks(
                 members, targetAssignment, AssignmentRefinerImpl.statefulSubtopologies(subtopologies())),
             new AssignmentRefinerImpl.TargetStandbyHolders(
-                targetAssignment, AssignmentRefinerImpl.statefulSubtopologies(subtopologies())),
+                targetAssignment, AssignmentRefinerImpl.statefulSubtopologies(subtopologies()), null),
             members,
             heartbeatVersions
         );
@@ -2873,7 +2894,7 @@ public class AssignmentRefinerTest {
         return AssignmentRefinerImpl.filterStandbys(
             targetAssignment,
             new AssignmentRefinerImpl.TargetStandbyHolders(
-                targetAssignment, AssignmentRefinerImpl.statefulSubtopologies(subtopologies())),
+                targetAssignment, AssignmentRefinerImpl.statefulSubtopologies(subtopologies()), null),
             currentAssignment,
             decisions,
             AssignmentRefinerImpl.planWarmups(decisions, currentAssignment, members, numWarmupReplicas),

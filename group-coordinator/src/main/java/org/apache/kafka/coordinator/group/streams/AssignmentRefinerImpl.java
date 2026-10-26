@@ -75,7 +75,7 @@ public class AssignmentRefinerImpl implements AssignmentRefiner {
         final CurrentAssignmentIndex currentAssignment = indexCurrentAssignment(
             members, taskOffsets, statefulSubtopologies, acceptableRecoveryLag, targetOwnerByMisplacedTask);
         final TargetStandbyHolders targetStandbyHolders =
-            new TargetStandbyHolders(targetAssignment, statefulSubtopologies);
+            new TargetStandbyHolders(targetAssignment, statefulSubtopologies, targetOwnerByMisplacedTask);
         final TaskDecisions decisions = analyzeTasks(
             currentAssignment, targetOwnerByMisplacedTask, targetStandbyHolders, members, heartbeatVersions);
         if (decisions.stagedMigrations().isEmpty()) {
@@ -1107,15 +1107,17 @@ public class AssignmentRefinerImpl implements AssignmentRefiner {
     }
 
     /**
-     * Inverts the target assignment into a lookup from stateful task to the members that are to hold it as a standby.
+     * Inverts the target assignment into a lookup from stateful task to the members that are to hold it as a standby,
+     * for the misplaced tasks, or for every task if {@code misplacedTasks} is {@code null}.
      */
     private static Map<TaskId, Set<String>> statefulStandbyHolders(
         final Map<String, TasksTuple> targetAssignment,
-        final Set<String> statefulSubtopologies
+        final Set<String> statefulSubtopologies,
+        final Map<String, ? extends Map<Integer, ?>> misplacedTasks
     ) {
         final Map<TaskId, Set<String>> holders = new HashMap<>();
         targetAssignment.forEach((memberId, tasks) ->
-            forEachStatefulTask(tasks.standbyTasks(), statefulSubtopologies, null,
+            forEachStatefulTask(tasks.standbyTasks(), statefulSubtopologies, misplacedTasks,
                 task -> holders.computeIfAbsent(task, __ -> new HashSet<>()).add(memberId)));
         return holders;
     }
@@ -1511,26 +1513,33 @@ public class AssignmentRefinerImpl implements AssignmentRefiner {
     }
 
     /**
-     * The members the target assignment names as standby holders of each stateful task.
+     * The members the target assignment names as standby holders of each stateful task the derivation decides on.
      *
      * <p>The lookup is built from the target assignment on the first {@link #holdersOf} call, which walks every target
-     * standby. Only a task that diverges from its target owner reads it -- to rank the copies to promote, and to find
-     * the placement a borrowed migration holds back -- so a derivation of a group that has converged never pays for
-     * the walk. The lookup is reachable only through {@link #holdersOf}, so every caller sees it built. It lives for
-     * one derivation, on one thread.
+     * standby and allocates only for the tasks it is built for. Only a task that diverges from its target owner reads
+     * it -- to rank the copies to promote, and to find the placement a borrowed migration holds back -- so a derivation
+     * of a group that has converged never pays for the walk. The lookup is reachable only through {@link #holdersOf},
+     * so every caller sees it built. It lives for one derivation, on one thread.
      */
     static final class TargetStandbyHolders {
 
         private final Map<String, TasksTuple> targetAssignment;
         private final Set<String> statefulSubtopologies;
+        private final Map<String, ? extends Map<Integer, ?>> misplacedTasks;
         private Map<TaskId, Set<String>> holders;
 
+        /**
+         * The standby holders of the misplaced tasks, from {@link #misplacedTasks}, or of every task if
+         * {@code misplacedTasks} is {@code null}.
+         */
         TargetStandbyHolders(
             final Map<String, TasksTuple> targetAssignment,
-            final Set<String> statefulSubtopologies
+            final Set<String> statefulSubtopologies,
+            final Map<String, ? extends Map<Integer, ?>> misplacedTasks
         ) {
             this.targetAssignment = targetAssignment;
             this.statefulSubtopologies = statefulSubtopologies;
+            this.misplacedTasks = misplacedTasks;
         }
 
         /**
@@ -1538,7 +1547,7 @@ public class AssignmentRefinerImpl implements AssignmentRefiner {
          */
         Set<String> holdersOf(final TaskId task) {
             if (holders == null) {
-                holders = statefulStandbyHolders(targetAssignment, statefulSubtopologies);
+                holders = statefulStandbyHolders(targetAssignment, statefulSubtopologies, misplacedTasks);
             }
             return holders.getOrDefault(task, Set.of());
         }
