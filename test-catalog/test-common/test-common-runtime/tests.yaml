@@ -36,6 +36,7 @@ org.apache.kafka.common.test.junit.ClusterTestExtensionsTest:
 - testCreateProducerAndConsumer
 - testCreateTopic
 - testDefaults
+- testDeleteTopic
 - testNoAutoStart
 - testNotSupportedNewGroupProtocols
 - testSaslPlaintext
@@ -44,6 +45,5 @@ org.apache.kafka.common.test.junit.ClusterTestExtensionsTest:
 - testShutdownAndSyncMetadata
 - testSsl
 - testSupportedNewGroupProtocols
-- testVerifyTopicDeletion
 org.apache.kafka.common.test.junit.ClusterTestExtensionsUnitTest:
 - testProcessClusterTemplate

@@ -4075,6 +4075,7 @@ org.apache.kafka.common.message.MessageTest:
 - testSyncGroupDefaultGroupInstanceId
 - testTaggedFieldCountRejectedWhenExceedingHardCap
 - testTaggedFieldCountRejectedWhenLargerThanRemainingBytes
+- testTaggedFieldsWrittenInAscendingTagOrder
 - testThrottleTimeIgnorableInDescribeGroupsResponse
 - testTxnOffsetCommitRequestVersions
 - testTxnOffsetCommitResponseVersions
