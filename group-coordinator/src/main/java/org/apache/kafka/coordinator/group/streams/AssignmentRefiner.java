@@ -16,6 +16,7 @@
  */
 package org.apache.kafka.coordinator.group.streams;
 
+import org.apache.kafka.common.utils.internals.PrimitiveRef;
 import org.apache.kafka.coordinator.group.streams.topics.ConfiguredSubtopology;
 
 import java.util.Map;
@@ -108,16 +109,40 @@ public interface AssignmentRefiner {
         Map<String, TasksTuple> targetAssignment,
         Map<String, TasksTuple> refinedAssignment
     ) {
-        return targetAssignment == refinedAssignment
-            || countActiveTasks(targetAssignment) == countActiveTasks(refinedAssignment);
+        if (refinedAssignment == targetAssignment) {
+            return true;
+        }
+        // A member whose tasks the refined assignment hands back as the target assignment's own object holds the same
+        // active tasks in both, so only the other members are counted: the difference of the two totals is the sum of
+        // theirs.
+        PrimitiveRef.IntRef difference = PrimitiveRef.ofInt(0);
+        PrimitiveRef.IntRef membersInBoth = PrimitiveRef.ofInt(0);
+        refinedAssignment.forEach((memberId, refinedTasks) -> {
+            TasksTuple targetTasks = targetAssignment.get(memberId);
+            if (targetTasks != null) {
+                membersInBoth.value++;
+            }
+            if (refinedTasks != targetTasks) {
+                difference.value += countActiveTasks(refinedTasks);
+                if (targetTasks != null) {
+                    difference.value -= countActiveTasks(targetTasks);
+                }
+            }
+        });
+        if (membersInBoth.value < targetAssignment.size()) {
+            targetAssignment.forEach((memberId, targetTasks) -> {
+                if (!refinedAssignment.containsKey(memberId)) {
+                    difference.value -= countActiveTasks(targetTasks);
+                }
+            });
+        }
+        return difference.value == 0;
     }
 
-    private static int countActiveTasks(Map<String, TasksTuple> assignment) {
+    private static int countActiveTasks(TasksTuple tasks) {
         int count = 0;
-        for (TasksTuple tasks : assignment.values()) {
-            for (Set<Integer> partitionIds : tasks.activeTasks().values()) {
-                count += partitionIds.size();
-            }
+        for (Set<Integer> partitionIds : tasks.activeTasks().values()) {
+            count += partitionIds.size();
         }
         return count;
     }

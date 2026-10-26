@@ -176,6 +176,30 @@ public class AssignmentRefinerTest {
         assertTrue(AssignmentRefiner.preservesActiveTaskCount(targetAssignment, targetAssignment));
     }
 
+    @Test
+    public void shouldCountTheMembersMissingFromEitherAssignment() {
+        // memberA's tasks are the target assignment's own object in both maps. memberB gives up 0_2 to memberC, which
+        // only the refined assignment has, and memberD, which only the target assignment has, holds no active task.
+        final TasksTuple memberATasks = active(Map.of("0", Set.of(0, 1)));
+        final Map<String, TasksTuple> targetAssignment = Map.of(
+            "memberA", memberATasks,
+            "memberB", active(Map.of("0", Set.of(2))),
+            "memberD", TasksTuple.EMPTY
+        );
+        final Map<String, TasksTuple> refinedAssignment = Map.of(
+            "memberA", memberATasks,
+            "memberB", active(Map.of()),
+            "memberC", active(Map.of("0", Set.of(2)))
+        );
+
+        assertTrue(AssignmentRefiner.preservesActiveTaskCount(targetAssignment, refinedAssignment));
+        // A member missing from the refined assignment takes its active tasks with it.
+        assertFalse(AssignmentRefiner.preservesActiveTaskCount(
+            Map.of("memberA", memberATasks, "memberB", active(Map.of("0", Set.of(2)))),
+            Map.of("memberA", memberATasks)
+        ));
+    }
+
     // ---------------------------------------------------------------------------------------------------------------
     // isCaughtUp
     // ---------------------------------------------------------------------------------------------------------------
