@@ -764,7 +764,7 @@ class ControllerApisTest {
     assertThrows(classOf[ClusterAuthorizationException], () => {
       controllerApis = createControllerApis(Some(createDenyAllAuthorizer()), new MockController.Builder().build())
       controllerApis.handleAllocateProducerIdsRequest(buildRequest(new AllocateProducerIdsRequest.Builder(
-        new AllocateProducerIdsRequestData(), false).build()))
+        new AllocateProducerIdsRequestData(), true).build()))
     })
   }
 
@@ -1277,7 +1277,7 @@ class ControllerApisTest {
       new AllocateProducerIdsRequestData()
         .setBrokerId(4)
         .setBrokerEpoch(93234),
-      false
+      true
     ).build()
 
     when(controller.allocateProducerIds(
@@ -1295,7 +1295,7 @@ class ControllerApisTest {
     val authorizer = mock(classOf[Authorizer])
     val authorizerPlugin = Plugin.wrapInstance(authorizer, null, "authorizer.class.name")
     controllerApis = createControllerApis(Some(authorizerPlugin), controller)
-    val request = new AssignReplicasToDirsRequest.Builder(new AssignReplicasToDirsRequestData(), false).build()
+    val request = new AssignReplicasToDirsRequest.Builder(new AssignReplicasToDirsRequestData(), true).build()
 
     when(authorizer.authorize(any[RequestContext], ArgumentMatchers.eq(Collections.singletonList(new Action(
       AclOperation.CLUSTER_ACTION,

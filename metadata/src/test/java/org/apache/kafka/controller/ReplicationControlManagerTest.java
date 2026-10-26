@@ -3330,7 +3330,7 @@ public class ReplicationControlManagerTest {
                     setNewIsrWithEpochs(isrWithDefaultEpoch(0, 1, 2))))));
         ControllerResult<AlterPartitionResponseData> alterPartitionResult = replication.alterPartition(
             anonymousContextFor(ApiKeys.ALTER_PARTITION),
-            new AlterPartitionRequest.Builder(alterPartitionRequestData, false).build().data());
+            new AlterPartitionRequest.Builder(alterPartitionRequestData, true).build().data());
         assertEquals(new AlterPartitionResponseData().setTopics(List.of(
             new AlterPartitionResponseData.TopicData().
                 setTopicId(topicId).
@@ -3405,7 +3405,7 @@ public class ReplicationControlManagerTest {
                     setNewIsrWithEpochs(isrWithDefaultEpoch(0, 1, 2, 3, 4, 5))))));
         ControllerResult<AlterPartitionResponseData> alterPartitionResultTwo = replication.alterPartition(
             anonymousContextFor(ApiKeys.ALTER_PARTITION),
-            new AlterPartitionRequest.Builder(alterPartitionRequestDataTwo, false).build().data());
+            new AlterPartitionRequest.Builder(alterPartitionRequestDataTwo, true).build().data());
         assertEquals(new AlterPartitionResponseData().setTopics(List.of(
                 new AlterPartitionResponseData.TopicData().
                     setTopicId(topicId).

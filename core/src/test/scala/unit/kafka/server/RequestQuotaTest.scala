@@ -631,7 +631,7 @@ class RequestQuotaTest extends BaseRequestTest {
             Topic.CLUSTER_METADATA_TOPIC_PARTITION))
 
         case ApiKeys.ALTER_PARTITION =>
-          new AlterPartitionRequest.Builder(new AlterPartitionRequestData(), false)
+          new AlterPartitionRequest.Builder(new AlterPartitionRequestData(), true)
 
         case ApiKeys.UPDATE_FEATURES =>
           new UpdateFeaturesRequest.Builder(new UpdateFeaturesRequestData())
@@ -677,7 +677,7 @@ class RequestQuotaTest extends BaseRequestTest {
           new ListTransactionsRequest.Builder(new ListTransactionsRequestData())
 
         case ApiKeys.ALLOCATE_PRODUCER_IDS =>
-          new AllocateProducerIdsRequest.Builder(new AllocateProducerIdsRequestData(), false)
+          new AllocateProducerIdsRequest.Builder(new AllocateProducerIdsRequestData(), true)
 
         case ApiKeys.CONSUMER_GROUP_HEARTBEAT =>
           new ConsumerGroupHeartbeatRequest.Builder(new ConsumerGroupHeartbeatRequestData())
@@ -692,7 +692,7 @@ class RequestQuotaTest extends BaseRequestTest {
           new PushTelemetryRequest.Builder(new PushTelemetryRequestData())
 
         case ApiKeys.ASSIGN_REPLICAS_TO_DIRS =>
-          new AssignReplicasToDirsRequest.Builder(new AssignReplicasToDirsRequestData(), false)
+          new AssignReplicasToDirsRequest.Builder(new AssignReplicasToDirsRequestData(), true)
 
         case ApiKeys.LIST_CONFIG_RESOURCES =>
           new ListConfigResourcesRequest.Builder(new ListConfigResourcesRequestData())
