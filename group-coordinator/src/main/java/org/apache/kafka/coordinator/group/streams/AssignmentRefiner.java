@@ -104,6 +104,11 @@ public interface AssignmentRefiner {
         Map<String, TasksTuple> targetAssignment,
         Map<String, TasksTuple> refinedAssignment
     ) {
+        // Skip the count when the refined assignment is the target assignment itself, which the built-in refiners
+        // return whenever nothing is held back, for example on every call in a settled group.
+        if (refinedAssignment == targetAssignment) {
+            return true;
+        }
         return countActiveTasks(targetAssignment) == countActiveTasks(refinedAssignment);
     }
 
