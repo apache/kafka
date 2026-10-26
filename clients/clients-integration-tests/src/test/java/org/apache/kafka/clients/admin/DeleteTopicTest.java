@@ -118,7 +118,7 @@ public class DeleteTopicTest {
     }
 
     @ClusterTest
-    public void testDeleteTopicWithAllAliveReplicas(ClusterInstance cluster) throws Exception {
+    public void testDeleteTopicWithAllAliveReplicas(ClusterInstance cluster) {
         cluster.createTopicWithAssignment(DEFAULT_TOPIC, expectedReplicaAssignment);
         cluster.deleteTopic(DEFAULT_TOPIC);
     }
