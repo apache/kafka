@@ -1431,15 +1431,17 @@ public class RecordAccumulator {
          * Return the chunk capacity required by a needsBufferExtension result.
          *
          * @return the number of bytes to allocate
-         * @throws IllegalStateException if this is not a buffer-extension result
+         * @throws IllegalStateException if this is not a needsBufferExtension result
          */
         int extensionBytesNeeded() {
-            throw new IllegalStateException("Only a buffer-extension result has extension bytes");
+            throw new IllegalStateException("Only a needsBufferExtension result has extension bytes");
         }
 
         /**
-         * The only result that carries incremental-strategy-specific state. Keeping this state
-         * out of the regular result avoids allocating space for it on every full-strategy append.
+         * The needsBufferExtension result: the open batch needs more chunk capacity before the
+         * record can be appended. It is only produced by the incremental strategy and is the only
+         * result that carries incremental-strategy-specific state. Keeping this state out of the
+         * regular result avoids allocating space for it on every full-strategy append.
          */
         private static final class BufferExtensionResult extends RecordAppendResult {
             private final int extensionBytesNeeded;

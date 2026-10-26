@@ -152,6 +152,16 @@ public class RecordAccumulatorTest {
         assertEquals(128, result.extensionBytesNeeded());
     }
 
+    @Test
+    public void testNeedsNewBatchResultHasNoExtensionBytes() {
+        RecordAccumulator.RecordAppendResult result = RecordAccumulator.RecordAppendResult.NEEDS_NEW_BATCH;
+
+        assertFalse(result.appended());
+        assertFalse(result.needsBufferExtension());
+        assertTrue(result.needsNewBatch());
+        assertThrows(IllegalStateException.class, result::extensionBytesNeeded);
+    }
+
     @ParameterizedTest
     @MethodSource("allocationStrategies")
     public void testDrainBatches(String allocationStrategy) throws Exception {
