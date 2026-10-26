@@ -447,10 +447,11 @@ abstract class AbstractHeartbeatRequestManagerTest<R extends AbstractResponse> {
             "the first poll after receiving a response that took longer than the interval, " +
             "waiting only for the minimal backoff.");
 
-        // The next response is also slower than the interval.
+        // The next heartbeat is still in flight when the interval expires.
         time.sleep(DEFAULT_HEARTBEAT_INTERVAL_MS);
         result = heartbeatRequestManager.poll(time.milliseconds());
-        assertEquals(0, result.unsentRequests.size());
+        assertEquals(0, result.unsentRequests.size(), "No heartbeat should be sent while the " +
+                "next one is in-flight");
         assertEquals(DEFAULT_RETRY_BACKOFF_MS, result.timeUntilNextPollMs);
         assertEquals(DEFAULT_RETRY_BACKOFF_MS, heartbeatRequestManager.maximumTimeToWait(time.milliseconds()));
     }
