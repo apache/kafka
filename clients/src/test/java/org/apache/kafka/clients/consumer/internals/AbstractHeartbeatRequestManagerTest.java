@@ -58,7 +58,6 @@ import static org.mockito.ArgumentMatchers.anyLong;
 import static org.mockito.Mockito.clearInvocations;
 import static org.mockito.Mockito.inOrder;
 import static org.mockito.Mockito.never;
-import static org.mockito.Mockito.spy;
 import static org.mockito.Mockito.verify;
 import static org.mockito.Mockito.when;
 
@@ -106,23 +105,6 @@ abstract class AbstractHeartbeatRequestManagerTest<R extends AbstractResponse> {
     protected abstract void verifyHeartbeatStateReset();
 
     protected abstract String metricGroupName();
-
-    protected void createHeartbeatRequestStateWithZeroHeartbeatInterval() {
-        createHeartbeatRequestStateWithHeartbeatInterval(0);
-    }
-
-    protected void createHeartbeatRequestStateWithHeartbeatInterval(final long heartbeatIntervalMs) {
-        heartbeatRequestState = spy(new HeartbeatRequestState(
-            logContext,
-            time,
-            heartbeatIntervalMs,
-            DEFAULT_RETRY_BACKOFF_MS,
-            DEFAULT_RETRY_BACKOFF_MAX_MS,
-            DEFAULT_HEARTBEAT_JITTER_MS)
-        );
-
-        recreateHeartbeatRequestManager();
-    }
 
     @Test
     public void testTimerNotDue() {

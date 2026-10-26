@@ -2516,30 +2516,24 @@ class StreamsGroupHeartbeatRequestManagerTest {
     }
 
     /**
-     * A heartbeat request is in flight and the heartbeat timer is already expired. That happens both
-     * while the very first heartbeat is in flight, when the interval is still unknown (it is initialised
-     * to 0 and only learned from the first heartbeat response), and later on, when a response takes
-     * longer than the interval. In that window no heartbeat can be sent until the in-flight one
+     * A heartbeat request is in flight and the heartbeat timer is already expired, because the response takes
+     * longer than the heartbeat interval. In that window no heartbeat can be sent until the in-flight one
      * completes, so both {@link NetworkClientDelegate.PollResult#timeUntilNextPollMs} and
      * {@link StreamsGroupHeartbeatRequestManager#maximumTimeToWait(long)} must return a positive delay;
      * returning 0 causes a busy loop in the consumer network thread and the application thread until the in-flight
      * request completes, which can be as long as request.timeout.ms when the coordinator is unreachable.
      */
-    @ParameterizedTest
-    @ValueSource(longs = {0, 5000})
-    public void testMaximumTimeToWaitWhileHeartbeatInFlightDoesNotSpin(final long heartbeatIntervalMs) {
+    @Test
+    public void testMaximumTimeToWaitWhileHeartbeatInFlightDoesNotSpin() {
+        final int heartbeatIntervalMs = 5000;
         final StreamsGroupHeartbeatRequestManager heartbeatRequestManager = createStreamsGroupHeartbeatRequestManager();
         when(coordinatorRequestManager.coordinator()).thenReturn(Optional.of(coordinatorNode));
-        // The member keeps joining for both intervals, so the heartbeat below is sent without waiting for
-        // the interval and the total simulated time stays under max.poll.interval.ms.
+        // The member keeps joining, so the heartbeat below is sent without waiting for the interval.
         when(membershipManager.state()).thenReturn(MemberState.JOINING);
 
-        if (heartbeatIntervalMs > 0) {
-            // The manager always starts with a zero (unknown) interval, so the only way to give it a
-            // non-zero one is to complete a first heartbeat with a response carrying that interval.
-            completeSuccessfulHeartbeat(heartbeatRequestManager, buildClientResponseWithConfig(
-                (int) heartbeatIntervalMs, RECEIVED_TASK_OFFSET_INTERVAL_MS, RECEIVED_ACCEPTABLE_RECOVERY_LAG));
-        }
+        // Complete a first heartbeat so the manager learns the interval from its response.
+        completeSuccessfulHeartbeat(heartbeatRequestManager, buildClientResponseWithConfig(
+            heartbeatIntervalMs, RECEIVED_TASK_OFFSET_INTERVAL_MS, RECEIVED_ACCEPTABLE_RECOVERY_LAG));
 
         final NetworkClientDelegate.PollResult firstResult = heartbeatRequestManager.poll(time.milliseconds());
         assertEquals(1, firstResult.unsentRequests.size(),

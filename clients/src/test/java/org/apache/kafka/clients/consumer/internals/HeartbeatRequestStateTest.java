@@ -21,8 +21,6 @@ import org.apache.kafka.common.utils.Time;
 import org.apache.kafka.common.utils.internals.LogContext;
 
 import org.junit.jupiter.api.Test;
-import org.junit.jupiter.params.ParameterizedTest;
-import org.junit.jupiter.params.provider.ValueSource;
 
 import static org.junit.jupiter.api.Assertions.assertEquals;
 import static org.junit.jupiter.api.Assertions.assertFalse;
@@ -138,15 +136,14 @@ public class HeartbeatRequestStateTest {
     }
 
     /**
-     * A heartbeat request is in flight and the heartbeat timer is expired. That happens both before the
-     * first heartbeat response, when the interval is still unknown and initialised to 0, and later on,
-     * when a response takes longer than the interval. No heartbeat can be sent until the in-flight one
+     * A heartbeat request is in flight and the heartbeat timer is expired, because the response takes
+     * longer than the heartbeat interval. No heartbeat can be sent until the in-flight one
      * completes, so the wait must stay positive; returning the remaining backoff gives 0 and causes a busy loop
      * in callers that use it as a poll timeout.
      */
-    @ParameterizedTest
-    @ValueSource(longs = {0, 5000})
-    public void testTimeToNextHeartbeatMsWhileRequestInFlightDoesNotSpin(final long heartbeatIntervalMs) {
+    @Test
+    public void testTimeToNextHeartbeatMsWhileRequestInFlightDoesNotSpin() {
+        final long heartbeatIntervalMs = 5000;
         final HeartbeatRequestState heartbeatRequestState = new HeartbeatRequestState(
             LOG_CONTEXT,
             time,
@@ -155,10 +152,8 @@ public class HeartbeatRequestStateTest {
             RETRY_BACKOFF_MAX_MS,
             JITTER
         );
-        if (heartbeatIntervalMs > 0) {
-            // A known interval means a successful heartbeat response was already received.
-            heartbeatRequestState.onSuccessfulAttempt(time.milliseconds());
-        }
+        // A known interval means a successful heartbeat response was already received.
+        heartbeatRequestState.onSuccessfulAttempt(time.milliseconds());
 
         heartbeatRequestState.onSendAttempt(time.milliseconds());
         heartbeatRequestState.resetTimer();

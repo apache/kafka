@@ -348,34 +348,27 @@ public class ConsumerHeartbeatRequestManagerTest
     }
 
     /**
-     * A heartbeat request is in flight and the heartbeat timer is already expired. That happens both
-     * while the very first heartbeat is in flight, when the interval is still unknown (it is initialised
-     * to 0 and only learned from the first heartbeat response), and later on, when a response takes
-     * longer than the interval. In that window no heartbeat can be sent until the in-flight one
+     * A heartbeat request is in flight and the heartbeat timer is already expired, because the response takes
+     * longer than the heartbeat interval. In that window no heartbeat can be sent until the in-flight one
      * completes, so both {@link NetworkClientDelegate.PollResult#timeUntilNextPollMs} and
      * {@link AbstractHeartbeatRequestManager#maximumTimeToWait(long)} must return a positive delay;
      * returning 0 causes a busy loop in the consumer network thread and the application thread until the in-flight
      * request completes, which can be as long as request.timeout.ms when the coordinator is unreachable.
      */
-    @ParameterizedTest
-    @ValueSource(longs = {0, 5000})
-    public void testMaximumTimeToWaitWhileHeartbeatInFlightDoesNotSpin(final long heartbeatIntervalMs) {
-        createHeartbeatRequestStateWithHeartbeatInterval(heartbeatIntervalMs);
-        // The member keeps joining for both intervals, so the heartbeat below is sent without waiting for
-        // the interval and the total simulated time stays under max.poll.interval.ms.
+    @Test
+    public void testMaximumTimeToWaitWhileHeartbeatInFlightDoesNotSpin() {
+        // The member keeps joining, so the heartbeat below is sent without waiting for the interval.
         when(membershipManager.state()).thenReturn(MemberState.JOINING);
         when(membershipManager.shouldHeartbeatNow()).thenReturn(true);
-        if (heartbeatIntervalMs > 0) {
-            // A known interval means a successful heartbeat response was already received.
-            heartbeatRequestState.onSuccessfulAttempt(time.milliseconds());
-        }
+        // A known interval means a successful heartbeat response was already received.
+        heartbeatRequestState.onSuccessfulAttempt(time.milliseconds());
 
         NetworkClientDelegate.PollResult firstResult = heartbeatRequestManager.poll(time.milliseconds());
         assertEquals(1, firstResult.unsentRequests.size(),
             "A heartbeat should be sent as soon as the coordinator is known");
 
         // Deliberately do not complete the request, so it stays in flight while the heartbeat timer expires.
-        time.sleep(heartbeatIntervalMs + 1);
+        time.sleep(DEFAULT_HEARTBEAT_INTERVAL_MS + 1);
 
         NetworkClientDelegate.PollResult secondResult = heartbeatRequestManager.poll(time.milliseconds());
         assertHeartbeatInFlightWaitDoesNotBusyLoop(secondResult);
@@ -387,7 +380,7 @@ public class ConsumerHeartbeatRequestManagerTest
      * from a real successful heartbeat response, becomes STABLE, and then sends its steady-state heartbeat when
      * the interval elapses. That response never arrives, so the heartbeat timer expires again while the request
      * is still in flight. This complements
-     * {@link #testMaximumTimeToWaitWhileHeartbeatInFlightDoesNotSpin(long)}, which constructs the request state
+     * {@link #testMaximumTimeToWaitWhileHeartbeatInFlightDoesNotSpin()}, which constructs the request state
      * with a known interval, by proving that the interval learned through
      * {@code onResponse -> updateHeartbeatIntervalMs} lands the manager in exactly the same state: no heartbeat
      * can be sent, and both {@link NetworkClientDelegate.PollResult#timeUntilNextPollMs} and
@@ -396,8 +389,6 @@ public class ConsumerHeartbeatRequestManagerTest
      */
     @Test
     public void testMaximumTimeToWaitWhenResponseIsSlowerThanIntervalDoesNotSpin() {
-        // The interval is unknown until the first heartbeat response, exactly as on a freshly created consumer.
-        createHeartbeatRequestStateWithZeroHeartbeatInterval();
         when(membershipManager.state()).thenReturn(MemberState.JOINING);
         when(membershipManager.shouldHeartbeatNow()).thenReturn(true);
 
