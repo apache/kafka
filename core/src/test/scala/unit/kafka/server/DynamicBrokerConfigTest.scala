@@ -105,6 +105,27 @@ class DynamicBrokerConfigTest {
   }
 
   @Test
+  def testWarnIfBrokerQuotaConfigsInStaticConfig(): Unit = {
+    QuotaConfig.BROKER_QUOTA_CONFIGS.asScala.foreach { config =>
+      Using.resource(LogCaptureAppender.createAndRegister) { appender =>
+        appender.setClassLogger(classOf[DynamicBrokerConfig], Level.WARN)
+
+        val props = TestUtils.createBrokerConfig(0, port = 8181)
+        props.put(config, "1000000")
+        val kafkaConfig = KafkaConfig(props)
+        kafkaConfig.dynamicConfig.warnIfBrokerQuotaConfigsInStaticConfig()
+
+        val expectedMessage =
+          s"$config is set in the static configuration file but is ignored at runtime; configure this property dynamically to take effect."
+        assertTrue(
+          appender.getMessages.asScala.exists(_.contains(expectedMessage)),
+          s"Expected warning message not found for config: $config"
+        )
+      }
+    }
+  }
+
+  @Test
   def testBrokerQuotaConfigWarnsOnlyForStaticConfig(): Unit = {
     val quotaConfig = QuotaConfig.LEADER_REPLICATION_THROTTLED_RATE_CONFIG
     val expectedMessage =
@@ -139,21 +160,6 @@ class DynamicBrokerConfigTest {
       assertFalse(appender.getMessages.asScala.exists(_.contains(expectedMessage)))
     }
 
-    val controllerProps = new Properties()
-    controllerProps.setProperty(KRaftConfigs.PROCESS_ROLES_CONFIG, "controller")
-    controllerProps.setProperty(SocketServerConfigs.LISTENERS_CONFIG, "PLAINTEXT://A:9092,SSL://B:9093")
-    controllerProps.setProperty(SocketServerConfigs.ADVERTISED_LISTENERS_CONFIG, "PLAINTEXT://A:9092,SSL://B:9093")
-    controllerProps.setProperty(KRaftConfigs.CONTROLLER_LISTENER_NAMES_CONFIG, "PLAINTEXT,SSL")
-    controllerProps.setProperty(KRaftConfigs.NODE_ID_CONFIG, "2")
-    controllerProps.setProperty(QuorumConfig.QUORUM_VOTERS_CONFIG, "2@localhost:9092")
-    controllerProps.put(quotaConfig, "1000000")
-    val controllerConfig = KafkaConfig(controllerProps)
-    
-    Using.resource(LogCaptureAppender.createAndRegister) { appender =>
-      appender.setClassLogger(classOf[DynamicBrokerConfig], Level.WARN)
-      controllerConfig.dynamicConfig.warnIfBrokerQuotaConfigsInStaticConfig()
-      assertFalse(appender.getMessages.asScala.exists(_.contains(expectedMessage)))
-    }
   }
 
   @Test

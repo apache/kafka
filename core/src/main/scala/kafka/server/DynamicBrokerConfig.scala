@@ -157,9 +157,6 @@ class DynamicBrokerConfig(private val kafkaConfig: KafkaConfig) extends Logging 
 
   /** Called from [[BrokerServer.startup]] so the reminder is logged once per broker process. */
   private[server] def warnIfBrokerQuotaConfigsInStaticConfig(): Unit = {
-    if (!kafkaConfig.processRoles.contains(ProcessRole.BrokerRole)) {
-      return
-    }
     QuotaConfig.BROKER_QUOTA_CONFIGS.asScala.foreach { configName =>
       if (staticBrokerConfigs.contains(configName)) {
         warn(s"$configName is set in the static configuration file but is ignored at runtime; configure this property dynamically to take effect.")
