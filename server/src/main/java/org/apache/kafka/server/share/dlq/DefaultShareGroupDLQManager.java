@@ -19,15 +19,23 @@ package org.apache.kafka.server.share.dlq;
 
 import org.apache.kafka.clients.KafkaClient;
 import org.apache.kafka.common.utils.Time;
+import org.apache.kafka.common.utils.Utils;
+import org.apache.kafka.common.utils.internals.KafkaThread;
+import org.apache.kafka.common.utils.internals.ThreadUtils;
 import org.apache.kafka.server.share.LogReader;
 import org.apache.kafka.server.share.metrics.ShareGroupMetrics;
 import org.apache.kafka.server.util.timer.Timer;
 
 import org.slf4j.Logger;
 import org.slf4j.LoggerFactory;
+import org.slf4j.event.Level;
 
 import java.util.concurrent.CompletableFuture;
-import java.util.concurrent.Executor;
+import java.util.concurrent.ExecutorService;
+import java.util.concurrent.Executors;
+import java.util.concurrent.TimeUnit;
+import java.util.concurrent.atomic.AtomicInteger;
+import java.util.function.IntSupplier;
 
 /**
  * The default share group DLQ manager responsible for processing
@@ -40,6 +48,14 @@ public class DefaultShareGroupDLQManager implements ShareGroupDLQManager {
      */
     private final ShareGroupDLQStateManager stateManager;
 
+    /**
+     * Executor on which the state manager reads the source records of DLQ requests from the log, so
+     * that the read never blocks the thread which submitted the request. Owned by this manager.
+     */
+    private final ExecutorService fetchExecutor;
+
+    private static final long FETCH_EXECUTOR_SHUTDOWN_TIMEOUT_MS = 5_000L;
+
     private static final Logger log = LoggerFactory.getLogger(DefaultShareGroupDLQManager.class);
 
     public static ShareGroupDLQManager instance(
@@ -48,10 +64,10 @@ public class DefaultShareGroupDLQManager implements ShareGroupDLQManager {
         Time time,
         Timer timer,
         ShareGroupMetrics shareGroupMetrics,
-        LogReader logReader,
-        Executor fetchExecutor
+        IntSupplier shareGroupDLQManagerFetcherNumThreads,
+        LogReader logReader
     ) {
-        DefaultShareGroupDLQManager instance = new DefaultShareGroupDLQManager(client, cacheHelper, time, timer, shareGroupMetrics, logReader, fetchExecutor);
+        DefaultShareGroupDLQManager instance = new DefaultShareGroupDLQManager(client, cacheHelper, time, timer, shareGroupMetrics, shareGroupDLQManagerFetcherNumThreads, logReader);
         instance.start();
         return instance;
     }
@@ -62,14 +78,23 @@ public class DefaultShareGroupDLQManager implements ShareGroupDLQManager {
         Time time,
         Timer timer,
         ShareGroupMetrics shareGroupMetrics,
-        LogReader logReader,
-        Executor fetchExecutor
+        IntSupplier shareGroupDLQManagerFetcherNumThreads,
+        LogReader logReader
     ) {
+        AtomicInteger threadId = new AtomicInteger();
+        fetchExecutor = Executors.newFixedThreadPool(
+            shareGroupDLQManagerFetcherNumThreads.getAsInt(),
+            runnable -> KafkaThread.daemon("share-group-dlq-record-fetcher-" + threadId.getAndIncrement(), runnable));
         stateManager = new ShareGroupDLQStateManager(client, cacheHelper, time, timer, shareGroupMetrics, logReader, fetchExecutor);
     }
 
     private void start() {
         stateManager.start();
+    }
+
+    // Visibility for tests
+    ExecutorService fetchExecutor() {
+        return fetchExecutor;
     }
 
     @Override
@@ -85,10 +110,9 @@ public class DefaultShareGroupDLQManager implements ShareGroupDLQManager {
 
     @Override
     public void stop() {
-        try {
-            stateManager.stop();
-        } catch (Exception e) {
-            log.error("Unable to stop DLQ state manager", e);
-        }
+        // Drain the reads first - they enqueue onto the state manager when they finish - and interrupt
+        // any which do not finish in time.
+        ThreadUtils.shutdownExecutorServiceQuietly(fetchExecutor, FETCH_EXECUTOR_SHUTDOWN_TIMEOUT_MS, TimeUnit.MILLISECONDS);
+        Utils.swallow(log, Level.ERROR, "Unable to stop DLQ state manager", stateManager::stop);
     }
 }

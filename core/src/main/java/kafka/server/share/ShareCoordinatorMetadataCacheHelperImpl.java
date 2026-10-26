@@ -102,8 +102,7 @@ public class ShareCoordinatorMetadataCacheHelperImpl implements ShareCoordinator
         if (props == null) {
             return false;
         }
-        // This is called for every DLQ request, so read the one flag directly. Constructing a LogConfig
-        // parses every topic config on each call, which made it the dominant cost of the DLQ path.
+        // Only this one flag is needed, so read it directly rather than building a LogConfig.
         Object value = props.get(TopicConfig.ERRORS_DEADLETTERQUEUE_GROUP_ENABLE_CONFIG);
         if (value == null) {
             return LogConfig.DEFAULT_ERRORS_DEADLETTERQUEUE_GROUP_ENABLE;
@@ -119,17 +118,15 @@ public class ShareCoordinatorMetadataCacheHelperImpl implements ShareCoordinator
     @Override
     public int dlqTopicMaxMessageBytes(String topic) {
         Properties props = metadataCache.topicConfig(topic);
-        // LogConfig defines its own static default for this key, so only a topic-level override is read
-        // here and without one the broker's configured message.max.bytes is used. Reading the one key
-        // directly avoids parsing every topic config, as constructing a LogConfig would.
+        // Only a topic-level override is read here; without one the broker's configured
+        // message.max.bytes is used.
         Object value = props == null ? null : props.get(TopicConfig.MAX_MESSAGE_BYTES_CONFIG);
         if (value == null) {
             return messageMaxBytesSupplier.getAsInt();
         }
         try {
             Integer maxMessageBytes = (Integer) ConfigDef.parseType(TopicConfig.MAX_MESSAGE_BYTES_CONFIG, value, ConfigDef.Type.INT);
-            // LogConfig requires message.max.bytes to be at least 0.
-            if (maxMessageBytes != null && maxMessageBytes >= 0) {
+            if (maxMessageBytes != null) {
                 return maxMessageBytes;
             }
         } catch (ConfigException exe) {

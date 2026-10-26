@@ -194,9 +194,9 @@ public class ShareGroupDLQStateManager {
             return future;
         }
 
-        // Resolve round 1's source records here - on the calling thread for local offsets and, for
-        // tiered offsets, asynchronously on the remote-storage reader pool - and enqueue only once
-        // resolution finishes. Later rounds (if the range needs more than one produce request) are
+        // Resolve round 1's source records asynchronously - local offsets are read on the fetch executor
+        // and tiered offsets on the remote-storage reader pool - and enqueue only once resolution
+        // finishes. Later rounds (if the range needs more than one produce request) are
         // resolved the same way from handleProduceResponse(), each with its own fresh decompression
         // budget. Records are only read when copy is enabled for the group and the DLQ is correctly
         // configured (validated above); otherwise we enqueue immediately.
