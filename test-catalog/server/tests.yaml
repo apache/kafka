@@ -700,7 +700,7 @@ org.apache.kafka.server.share.fetch.PartitionMaxBytesStrategyTest:
 org.apache.kafka.server.share.fetch.PartitionRotateStrategyTest:
 - testRoundRobinStrategy
 - testRoundRobinStrategyWithEmptyPartitions
-- testRoundRobinStrategyWithSpecialSessionEpochs
+- testRoundRobinStrategyWithSinglePartition
 org.apache.kafka.server.share.fetch.RecordStateTest:
 - testRecordStateForId
 - testRecordStateValidateTransition
@@ -709,6 +709,7 @@ org.apache.kafka.server.share.fetch.ShareFetchTest:
 - testErrorInAllPartitions
 - testErrorInAllPartitionsWithMultipleTopicIdPartitions
 - testFilterErroneousTopicPartitions
+- testMaybeCompletePreservesPartitionOrder
 - testMaybeCompleteWithErroneousTopicPartitions
 - testMaybeCompleteWithException
 - testMaybeCompleteWithExceptionPartialFailure

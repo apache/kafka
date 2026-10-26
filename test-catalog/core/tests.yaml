@@ -2430,6 +2430,7 @@ kafka.server.share.ShareFetchUtilsTest:
 - testAccumulateAcquiredRecordsSingleRecord
 - testAccumulateAcquiredRecordsWithRanges
 - testProcessFetchResponse
+- testProcessFetchResponsePreservesFetchOrder
 - testProcessFetchResponseWhenNoRecordsAreAcquired
 - testProcessFetchResponseWithEmptyRecords
 - testProcessFetchResponseWithLsoMovementForTopicPartition
@@ -2458,7 +2459,7 @@ kafka.server.share.SharePartitionManagerTest:
 - testConcurrentInitialEpochRequestsClearsState
 - testCreateIdleShareFetchTask
 - testDelayedInitializationShouldCompleteFetchRequest
-- testFetchMessagesRotatePartitions
+- testFetchMessagesPreservesPartitionOrder
 - testGetErroneousAndValidTopicIdPartitions
 - testListenerRegistration
 - testMultipleSequentialShareFetches
@@ -2497,6 +2498,7 @@ kafka.server.share.SharePartitionManagerTest:
 - testSharePartitionPartialInitializationFailure
 - testShareSessionUpdateTopicIdsBrokerSide
 - testSubsequentShareSession
+- testSubsequentShareSessionPartitionOrder
 - testToForgetPartitions
 - testZeroSizeShareSession
 kafka.server.share.SharePartitionTest:
