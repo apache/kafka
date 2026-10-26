@@ -16,6 +16,7 @@
  */
 package org.apache.kafka.coordinator.group.streams;
 
+import org.apache.kafka.common.utils.internals.PrimitiveRef;
 import org.apache.kafka.coordinator.group.Utils;
 import org.apache.kafka.coordinator.group.streams.assignor.TaskId;
 import org.apache.kafka.coordinator.group.streams.topics.ConfiguredSubtopology;
@@ -65,15 +66,15 @@ public class AssignmentRefinerImpl implements AssignmentRefiner {
 
         final CurrentAssignmentIndex currentAssignment =
             indexCurrentAssignment(members, taskOffsets, subtopologies, acceptableRecoveryLag);
-        final Map<String, ProcessLoad> processLoad = indexProcessLoad(members, subtopologies);
+        final TargetStandbyHolders targetStandbyHolders = new TargetStandbyHolders(targetAssignment, subtopologies);
         final TaskDecisions decisions = analyzeTasks(
             currentAssignment,
             targetAssignment,
+            targetStandbyHolders,
             members,
             heartbeatVersions,
             keepActiveTasks,
-            subtopologies,
-            processLoad
+            subtopologies
         );
         if (decisions.stagedMigrations().isEmpty()) {
             // Nothing is held back, so the remaining passes would patch nothing: warm-up tasks and withheld standbys
@@ -85,11 +86,10 @@ public class AssignmentRefinerImpl implements AssignmentRefiner {
             currentAssignment,
             members,
             heartbeatVersions.keySet().containsAll(members.keySet()),
-            processLoad,
             numWarmupReplicas
         );
-        final SortedMap<String, SortedSet<TaskId>> withheldStandbys =
-            filterStandbys(targetAssignment, currentAssignment, decisions, warmupPlan, members, subtopologies);
+        final SortedMap<String, SortedSet<TaskId>> withheldStandbys = filterStandbys(
+            targetAssignment, targetStandbyHolders, currentAssignment, decisions, warmupPlan, members, subtopologies);
 
         return assemble(targetAssignment, currentAssignment, decisions, warmupPlan, withheldStandbys);
     }
@@ -109,6 +109,8 @@ public class AssignmentRefinerImpl implements AssignmentRefiner {
      * <p>A member also reports offsets for tasks it holds no role for, from the state directories an earlier
      * incarnation left on disk. Those reports are indexed per process as {@link CurrentAssignmentIndex#onDiskByProcess}
      * and are what lets the case analysis hand such a task straight back to the process that can reopen it.
+     *
+     * <p>The same pass counts each process's load ({@link CurrentAssignmentIndex#processLoad}), from the same tasks.
      *
      * @param members
      *        All members of the group.
@@ -131,10 +133,15 @@ public class AssignmentRefinerImpl implements AssignmentRefiner {
         final Map<TaskId, List<TaskCopy>> taskCopies = new HashMap<>();
         final Map<String, Set<TaskId>> reportedByProcess = new HashMap<>();
         final Map<String, Set<TaskId>> heldByProcess = new HashMap<>();
+        final Map<String, Integer> memberCounts = new HashMap<>();
+        final Map<String, Integer> statefulTaskCounts = new HashMap<>();
 
         for (final StreamsGroupMember member : members.values()) {
             final MemberTaskOffsets offsets = taskOffsets.getOrDefault(member.memberId(), MemberTaskOffsets.EMPTY);
             final Set<TaskId> heldOnProcess = heldByProcess.computeIfAbsent(member.processId(), __ -> new HashSet<>());
+            // Counted rather than read off heldOnProcess, so that the load does not depend on the invariant that
+            // a process never holds two copies of one task.
+            final PrimitiveRef.IntRef statefulTaskCount = PrimitiveRef.ofInt(0);
 
             forEachStatefulActiveTask(
                 member.assignedTasks().activeTasksWithEpochs(),
@@ -146,6 +153,7 @@ public class AssignmentRefinerImpl implements AssignmentRefiner {
                         isCaughtUp(offsets, task, acceptableRecoveryLag)
                     ));
                     heldOnProcess.add(task);
+                    statefulTaskCount.value++;
                 }
             );
 
@@ -155,6 +163,7 @@ public class AssignmentRefinerImpl implements AssignmentRefiner {
                 task -> {
                     addTaskCopy(taskCopies, task, member, TaskRole.STANDBY, offsets, acceptableRecoveryLag);
                     heldOnProcess.add(task);
+                    statefulTaskCount.value++;
                 }
             );
 
@@ -164,6 +173,7 @@ public class AssignmentRefinerImpl implements AssignmentRefiner {
                 task -> {
                     addTaskCopy(taskCopies, task, member, TaskRole.WARMUP, offsets, acceptableRecoveryLag);
                     heldOnProcess.add(task);
+                    statefulTaskCount.value++;
                 }
             );
 
@@ -172,6 +182,9 @@ public class AssignmentRefinerImpl implements AssignmentRefiner {
                 subtopologies,
                 task -> reportedByProcess.computeIfAbsent(member.processId(), __ -> new HashSet<>()).add(task)
             );
+
+            memberCounts.merge(member.processId(), 1, Integer::sum);
+            statefulTaskCounts.merge(member.processId(), statefulTaskCount.value, Integer::sum);
         }
 
         final Map<String, Set<TaskId>> onDiskByProcess = Utils.newHashMap(reportedByProcess.size());
@@ -182,7 +195,11 @@ public class AssignmentRefinerImpl implements AssignmentRefiner {
             }
         });
 
-        return new CurrentAssignmentIndex(activeHolder, taskCopies, onDiskByProcess);
+        final Map<String, ProcessLoad> processLoad = Utils.newHashMap(memberCounts.size());
+        memberCounts.forEach((processId, memberCount) ->
+            processLoad.put(processId, new ProcessLoad(statefulTaskCounts.get(processId), memberCount)));
+
+        return new CurrentAssignmentIndex(activeHolder, taskCopies, onDiskByProcess, processLoad);
     }
 
     /**
@@ -199,52 +216,6 @@ public class AssignmentRefinerImpl implements AssignmentRefiner {
      */
     private static boolean isRestoring(final MemberTaskOffsets memberTaskOffsets, final TaskId task) {
         return offsetOf(memberTaskOffsets.taskOffsets(), task) != null;
-    }
-
-    /**
-     * Indexes how loaded each process is, so that the derivation can send work to the process with the most room:
-     * the case analysis picks between equally good copies to promote, and the warmup budget pass orders which
-     * warm-up tasks it funds.
-     * The load of a process is its stateful task count over the number of members it runs -- the same shape as the task
-     * assignor's own {@code ProcessState.load()}, so that both layers rank processes comparably.
-     *
-     * <p><b>Only stateful tasks are counted.</b>
-     *
-     * <p>A process running nothing but stateless tasks therefore has a load of zero, which is the right answer:
-     * the target assignment has already chosen every target owner, and this order only decides which of those
-     * migrations is funded first, never where a task goes.
-     *
-     * <p>The count covers the tasks a member has been granted ({@link StreamsGroupMember#assignedTasks()}).
-     * A task on its way out ({@link StreamsGroupMember#tasksPendingRevocation()}) is no part of the load.
-     *
-     * @param members
-     *        All members of the group.
-     * @param subtopologies
-     *        The resolved subtopologies, which tell whether a subtopology is stateful.
-     *
-     * @return The load of every process running at least one member, indexed by process ID.
-     */
-    static Map<String, ProcessLoad> indexProcessLoad(
-        final Map<String, StreamsGroupMember> members,
-        final SortedMap<String, ConfiguredSubtopology> subtopologies
-    ) {
-        final Map<String, Integer> memberCounts = new HashMap<>();
-        final Map<String, Integer> statefulTaskCounts = new HashMap<>();
-
-        for (final StreamsGroupMember member : members.values()) {
-            final String processId = member.processId();
-            memberCounts.merge(processId, 1, Integer::sum);
-
-            final Consumer<TaskId> count = task -> statefulTaskCounts.merge(processId, 1, Integer::sum);
-            forEachStatefulActiveTask(member.assignedTasks().activeTasksWithEpochs(), subtopologies, count);
-            forEachStatefulTask(member.assignedTasks().standbyTasks(), subtopologies, count);
-            forEachStatefulTask(member.assignedTasks().warmupTasks(), subtopologies, count);
-        }
-
-        final Map<String, ProcessLoad> processLoad = Utils.newHashMap(memberCounts.size());
-        memberCounts.forEach((processId, memberCount) ->
-            processLoad.put(processId, new ProcessLoad(statefulTaskCounts.getOrDefault(processId, 0), memberCount)));
-        return processLoad;
     }
 
     /**
@@ -269,6 +240,8 @@ public class AssignmentRefinerImpl implements AssignmentRefiner {
      *        The indexed current assignment, from {@link #indexCurrentAssignment}.
      * @param targetAssignment
      *        All members' target assignments, as computed by the task assignor.
+     * @param targetStandbyHolders
+     *        The members the target assignment names as standby holders of each task.
      * @param members
      *        All members of the group, used to resolve which process a member runs in.
      * @param heartbeatVersions
@@ -277,25 +250,21 @@ public class AssignmentRefinerImpl implements AssignmentRefiner {
      *        Whether every active task has to stay with the member that holds it, see {@link AssignmentRefiner#refine}.
      * @param subtopologies
      *        The resolved subtopologies, which tell whether a subtopology is stateful.
-     * @param processLoad
-     *        The load of each process, from {@link #indexProcessLoad}, used to pick between equally good copies to
-     *        promote.
      *
      * @return What was decided for the tasks that are not already in place.
      */
     static TaskDecisions analyzeTasks(
         final CurrentAssignmentIndex currentAssignment,
         final Map<String, TasksTuple> targetAssignment,
+        final TargetStandbyHolders targetStandbyHolders,
         final Map<String, StreamsGroupMember> members,
         final Map<String, Integer> heartbeatVersions,
         final boolean keepActiveTasks,
-        final SortedMap<String, ConfiguredSubtopology> subtopologies,
-        final Map<String, ProcessLoad> processLoad
+        final SortedMap<String, ConfiguredSubtopology> subtopologies
     ) {
         // The map is sorted, which gives the canonical task order that makes a derivation reproducible and leaves the
         // warmup budget pass that follows a deterministic tie-break to fall back on.
         final SortedMap<TaskId, String> targetOwners = statefulActiveOwners(targetAssignment, subtopologies);
-        final Map<TaskId, Set<String>> targetStandbyHolders = statefulStandbyHolders(targetAssignment, subtopologies);
 
         final List<StagedMigration> stagedMigrations = new ArrayList<>();
         final List<TaskGrant> grantedTasks = new ArrayList<>();
@@ -321,9 +290,9 @@ public class AssignmentRefinerImpl implements AssignmentRefiner {
             if (targetMember == null) {
                 final Optional<String> currentOwner = holder != null
                     ? Optional.of(holder.memberId())
-                    : bestCopyToPromote(currentAssignment, task, targetStandbyHolders, processLoad)
+                    : bestCopyToPromote(currentAssignment, task, targetStandbyHolders)
                         .or(() -> unobservableStandbyToPromote(
-                            currentAssignment, task, null, targetStandbyHolders, heartbeatVersions, processLoad));
+                            currentAssignment, task, null, targetStandbyHolders, heartbeatVersions));
                 currentOwner.ifPresent(owner -> stagedMigrations.add(
                     stagedMigration(currentAssignment, task, owner, targetOwner, Optional.empty())));
                 continue;
@@ -360,7 +329,7 @@ public class AssignmentRefinerImpl implements AssignmentRefiner {
             }
 
             final Optional<String> currentOwner = keepRunningOn(
-                currentAssignment, task, holder, targetProcessId, targetStandbyHolders, heartbeatVersions, processLoad);
+                currentAssignment, task, holder, targetProcessId, targetStandbyHolders, heartbeatVersions);
 
             if (currentOwner.isEmpty()) {
                 grantedTasks.add(new TaskGrant(task, targetOwner));
@@ -382,9 +351,8 @@ public class AssignmentRefinerImpl implements AssignmentRefiner {
         final TaskId task,
         final ActiveHolder holder,
         final String targetProcessId,
-        final Map<TaskId, Set<String>> targetStandbyHolders,
-        final Map<String, Integer> heartbeatVersions,
-        final Map<String, ProcessLoad> processLoad
+        final TargetStandbyHolders targetStandbyHolders,
+        final Map<String, Integer> heartbeatVersions
     ) {
         if (holder != null && holder.hot()) {
             return Optional.of(holder.memberId());
@@ -397,9 +365,9 @@ public class AssignmentRefinerImpl implements AssignmentRefiner {
             // is restoring -- and the copy-holder detour would cost a second restore, a slot and a hand-over.
             return Optional.empty();
         }
-        return bestCopyToPromote(currentAssignment, task, targetStandbyHolders, processLoad)
+        return bestCopyToPromote(currentAssignment, task, targetStandbyHolders)
             .or(() -> unobservableStandbyToPromote(
-                currentAssignment, task, targetProcessId, targetStandbyHolders, heartbeatVersions, processLoad));
+                currentAssignment, task, targetProcessId, targetStandbyHolders, heartbeatVersions));
     }
 
     /**
@@ -416,15 +384,14 @@ public class AssignmentRefinerImpl implements AssignmentRefiner {
     private static Optional<String> bestCopyToPromote(
         final CurrentAssignmentIndex currentAssignment,
         final TaskId task,
-        final Map<TaskId, Set<String>> targetStandbyHolders,
-        final Map<String, ProcessLoad> processLoad
+        final TargetStandbyHolders targetStandbyHolders
     ) {
-        final Set<String> designatedStandbyHolders = targetStandbyHolders.getOrDefault(task, Set.of());
+        final Set<String> designatedStandbyHolders = targetStandbyHolders.holdersOf(task);
         return currentAssignment.taskCopies().getOrDefault(task, List.of()).stream()
             .filter(TaskCopy::caughtUp)
             .min(Comparator
                 .comparingInt((TaskCopy copy) -> designatedStandbyHolders.contains(copy.memberId()) ? 1 : 0)
-                .thenComparingDouble(copy -> processLoad.get(copy.processId()).load())
+                .thenComparingDouble(copy -> currentAssignment.processLoad().get(copy.processId()).load())
                 .thenComparing(TaskCopy::memberId))
             .map(TaskCopy::memberId);
     }
@@ -442,21 +409,20 @@ public class AssignmentRefinerImpl implements AssignmentRefiner {
         final CurrentAssignmentIndex currentAssignment,
         final TaskId task,
         final String targetProcessId,
-        final Map<TaskId, Set<String>> targetStandbyHolders,
-        final Map<String, Integer> heartbeatVersions,
-        final Map<String, ProcessLoad> processLoad
+        final TargetStandbyHolders targetStandbyHolders,
+        final Map<String, Integer> heartbeatVersions
     ) {
         if (currentAssignment.activeHolder().containsKey(task)
             || targetProcessId != null && findCopyOnProcess(currentAssignment, task, targetProcessId).isPresent()) {
             return Optional.empty();
         }
-        final Set<String> designatedStandbyHolders = targetStandbyHolders.getOrDefault(task, Set.of());
+        final Set<String> designatedStandbyHolders = targetStandbyHolders.holdersOf(task);
         return currentAssignment.taskCopies().getOrDefault(task, List.of()).stream()
             .filter(copy -> copy.role() == TaskRole.STANDBY
                 && designatedStandbyHolders.contains(copy.memberId())
                 && WarmupSupport.of(heartbeatVersions.get(copy.memberId())) != WarmupSupport.SUPPORTED)
             .min(Comparator
-                .comparingDouble((TaskCopy copy) -> processLoad.get(copy.processId()).load())
+                .comparingDouble((TaskCopy copy) -> currentAssignment.processLoad().get(copy.processId()).load())
                 .thenComparing(TaskCopy::memberId))
             .map(TaskCopy::memberId);
     }
@@ -553,8 +519,6 @@ public class AssignmentRefinerImpl implements AssignmentRefiner {
      * @param everyMemberHeardFrom
      *        Whether every member has heartbeated since the coordinator loaded the group. If not, no new warm-up task
      *        is funded.
-     * @param processLoad
-     *        The load of each process, from {@link #indexProcessLoad}.
      * @param numWarmupReplicas
      *        How many copies beyond the target assignment may exist at once, group-wide.
      *
@@ -565,7 +529,6 @@ public class AssignmentRefinerImpl implements AssignmentRefiner {
         final CurrentAssignmentIndex currentAssignment,
         final Map<String, StreamsGroupMember> members,
         final boolean everyMemberHeardFrom,
-        final Map<String, ProcessLoad> processLoad,
         final int numWarmupReplicas
     ) {
         if (numWarmupReplicas == 0) {
@@ -578,7 +541,7 @@ public class AssignmentRefinerImpl implements AssignmentRefiner {
 
         final Set<String> restoringAnActive = membersRestoringAnActive(currentAssignment, decisions, members);
         final Map<String, ProcessLoad> loadAfterGrants =
-            loadAfterGrants(processLoad, currentAssignment, decisions, members);
+            loadAfterGrants(currentAssignment, decisions, members);
         final List<FundingCandidate> candidates = new ArrayList<>();
 
         // Fund no new warm-up task until every member has heartbeated after a coordinator failover. Before that, the
@@ -654,16 +617,16 @@ public class AssignmentRefinerImpl implements AssignmentRefiner {
     }
 
     /**
-     * {@link #indexProcessLoad}'s counts with this step's grants applied: minus one for the process running the
-     * task today, plus one for the target owner's process unless that process already holds a copy of the task,
-     * since the grant then promotes that copy and starts no restore.
+     * {@link CurrentAssignmentIndex#processLoad}'s counts with this step's grants applied: minus one for the process
+     * running the task today, plus one for the target owner's process unless that process already holds a copy of the
+     * task, since the grant then promotes that copy and starts no restore.
      */
     private static Map<String, ProcessLoad> loadAfterGrants(
-        final Map<String, ProcessLoad> processLoad,
         final CurrentAssignmentIndex currentAssignment,
         final TaskDecisions decisions,
         final Map<String, StreamsGroupMember> members
     ) {
+        final Map<String, ProcessLoad> processLoad = currentAssignment.processLoad();
         if (decisions.grantedTasks().isEmpty()) {
             return processLoad;
         }
@@ -890,6 +853,8 @@ public class AssignmentRefinerImpl implements AssignmentRefiner {
      *
      * @param targetAssignment
      *        All members' target assignments, as computed by the task assignor.
+     * @param targetStandbyHolders
+     *        The members the target assignment names as standby holders of each task.
      * @param currentAssignment
      *        The indexed current assignment, from {@link #indexCurrentAssignment}.
      * @param decisions
@@ -906,6 +871,7 @@ public class AssignmentRefinerImpl implements AssignmentRefiner {
      */
     static SortedMap<String, SortedSet<TaskId>> filterStandbys(
         final Map<String, TasksTuple> targetAssignment,
+        final TargetStandbyHolders targetStandbyHolders,
         final CurrentAssignmentIndex currentAssignment,
         final TaskDecisions decisions,
         final WarmupPlan warmupPlan,
@@ -913,12 +879,11 @@ public class AssignmentRefinerImpl implements AssignmentRefiner {
         final SortedMap<String, ConfiguredSubtopology> subtopologies
     ) {
         final StandbyConflicts conflicts = indexStandbyConflicts(
-            targetAssignment,
+            targetStandbyHolders,
             currentAssignment,
             decisions,
             warmupPlan,
-            members,
-            subtopologies
+            members
         );
         final SortedMap<String, SortedSet<TaskId>> withheld = new TreeMap<>();
 
@@ -946,12 +911,11 @@ public class AssignmentRefinerImpl implements AssignmentRefiner {
      * on its current owner to fulfill its role of being borrowed.
      */
     private static StandbyConflicts indexStandbyConflicts(
-        final Map<String, TasksTuple> targetAssignment,
+        final TargetStandbyHolders targetStandbyHolders,
         final CurrentAssignmentIndex currentAssignment,
         final TaskDecisions decisions,
         final WarmupPlan warmupPlan,
-        final Map<String, StreamsGroupMember> members,
-        final SortedMap<String, ConfiguredSubtopology> subtopologies
+        final Map<String, StreamsGroupMember> members
     ) {
         // Conflicts from staged migrations
         final Map<TaskId, String> activeStagedOnProcess = new HashMap<>();
@@ -969,19 +933,18 @@ public class AssignmentRefinerImpl implements AssignmentRefiner {
         final BinaryOperator<String> firstInMemberOrder = (left, right) -> left.compareTo(right) <= 0 ? left : right;
         final Map<TaskId, String> standbyKeptOnMember = new HashMap<>();
         final Set<TaskId> alreadyUndelivered = new HashSet<>();
-        targetAssignment.forEach((targetMemberId, tasks) ->
-            forEachStatefulTask(tasks.standbyTasks(), subtopologies, task -> {
-                if (warmupPlan.borrowedMigrations().contains(task)) {
-                    final StreamsGroupMember targetMember = members.get(targetMemberId);
-                    final String currentOwnerProcessId = activeStagedOnProcess.get(task);
-                    if (targetMember == null // dropped out of the group
-                        || targetMember.processId().equals(currentOwnerProcessId)) { // stage migration; tracked above
-                        alreadyUndelivered.add(task);
-                    } else if (findCopyOnProcess(currentAssignment, task, targetMember.processId()).isEmpty()) { // only withhold if not a sibling move
-                        standbyKeptOnMember.merge(task, targetMemberId, firstInMemberOrder);
-                    }
+        for (final TaskId task : warmupPlan.borrowedMigrations()) {
+            for (final String targetMemberId : targetStandbyHolders.holdersOf(task)) {
+                final StreamsGroupMember targetMember = members.get(targetMemberId);
+                final String currentOwnerProcessId = activeStagedOnProcess.get(task);
+                if (targetMember == null // dropped out of the group
+                    || targetMember.processId().equals(currentOwnerProcessId)) { // stage migration; tracked above
+                    alreadyUndelivered.add(task);
+                } else if (findCopyOnProcess(currentAssignment, task, targetMember.processId()).isEmpty()) { // only withhold if not a sibling move
+                    standbyKeptOnMember.merge(task, targetMemberId, firstInMemberOrder);
                 }
-            }));
+            }
+        }
         alreadyUndelivered.forEach(standbyKeptOnMember::remove);
 
         return new StandbyConflicts(activeStagedOnProcess, standbyKeptOnMember);
@@ -1158,20 +1121,6 @@ public class AssignmentRefinerImpl implements AssignmentRefiner {
         return owners;
     }
 
-    /**
-     * Inverts the target assignment into a lookup from stateful task to the members that are to hold it as a standby.
-     */
-    private static Map<TaskId, Set<String>> statefulStandbyHolders(
-        final Map<String, TasksTuple> targetAssignment,
-        final SortedMap<String, ConfiguredSubtopology> subtopologies
-    ) {
-        final Map<TaskId, Set<String>> holders = new HashMap<>();
-        targetAssignment.forEach((memberId, tasks) ->
-            forEachStatefulTask(tasks.standbyTasks(), subtopologies,
-                task -> holders.computeIfAbsent(task, __ -> new HashSet<>()).add(memberId)));
-        return holders;
-    }
-
     private static void addTaskCopy(
         final Map<TaskId, List<TaskCopy>> taskCopies,
         final TaskId task,
@@ -1259,11 +1208,21 @@ public class AssignmentRefinerImpl implements AssignmentRefiner {
      *        that no role it has been granted accounts for. How far behind that state is cannot be measured, because
      *        a member reports an end offset only for a task it is restoring. A process with no such task has no
      *        entry.
+     * @param processLoad
+     *        How loaded each process is. The load of a process is its stateful task count over the number of members
+     *        it runs -- the same shape as the task assignor's own {@code ProcessState.load()}, so that both layers
+     *        rank processes comparably.
+     *        <b>Only stateful tasks are counted.</b> A process running nothing but stateless tasks therefore has a
+     *        load of zero, which is the right answer: the load never decides where a task goes, because the target
+     *        assignment has already chosen every target owner.
+     *        The count covers the tasks a member has been granted ({@link StreamsGroupMember#assignedTasks()}); a task
+     *        on its way out ({@link StreamsGroupMember#tasksPendingRevocation()}) is no part of the load.
      */
     record CurrentAssignmentIndex(
         Map<TaskId, ActiveHolder> activeHolder,
         Map<TaskId, List<TaskCopy>> taskCopies,
-        Map<String, Set<TaskId>> onDiskByProcess
+        Map<String, Set<TaskId>> onDiskByProcess,
+        Map<String, ProcessLoad> processLoad
     ) {
     }
 
@@ -1276,7 +1235,7 @@ public class AssignmentRefinerImpl implements AssignmentRefiner {
      *
      * @param statefulTaskCount
      *        How many stateful tasks the process has been granted, counting every role. See
-     *        {@link #indexProcessLoad} for why stateless tasks are left out.
+     *        {@link CurrentAssignmentIndex#processLoad} for why stateless tasks are left out.
      * @param memberCount
      *        How many members the process runs. Each member is one stream thread, so this is the process's
      *        capacity for running tasks.
@@ -1520,6 +1479,45 @@ public class AssignmentRefinerImpl implements AssignmentRefiner {
         Map<TaskId, String> activeStagedOnProcess,
         Map<TaskId, String> standbyKeptOnMember
     ) {
+    }
+
+    /**
+     * The members the target assignment names as standby holders of each stateful task.
+     *
+     * <p>The lookup is built lazily, because building it walks every member's target standbys and a refinement may
+     * not need it at all.
+     */
+    static final class TargetStandbyHolders {
+
+        private final Map<String, TasksTuple> targetAssignment;
+        private final SortedMap<String, ConfiguredSubtopology> subtopologies;
+        private Map<TaskId, Set<String>> holders;
+
+        TargetStandbyHolders(
+            final Map<String, TasksTuple> targetAssignment,
+            final SortedMap<String, ConfiguredSubtopology> subtopologies
+        ) {
+            this.targetAssignment = targetAssignment;
+            this.subtopologies = subtopologies;
+        }
+
+        /**
+         * The members the target assignment names as standby holders of the task; empty if it names none.
+         */
+        Set<String> holdersOf(final TaskId task) {
+            if (holders == null) {
+                holders = statefulStandbyHolders();
+            }
+            return holders.getOrDefault(task, Set.of());
+        }
+
+        private Map<TaskId, Set<String>> statefulStandbyHolders() {
+            final Map<TaskId, Set<String>> lookup = new HashMap<>();
+            targetAssignment.forEach((memberId, tasks) ->
+                forEachStatefulTask(tasks.standbyTasks(), subtopologies,
+                    task -> lookup.computeIfAbsent(task, __ -> new HashSet<>()).add(memberId)));
+            return lookup;
+        }
     }
 
     /**
