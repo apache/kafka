@@ -1428,7 +1428,7 @@ public class RecordAccumulator {
         }
 
         /**
-         * Return the chunk capacity required by a buffer-extension result.
+         * Return the chunk capacity required by a needsBufferExtension result.
          *
          * @return the number of bytes to allocate
          * @throws IllegalStateException if this is not a buffer-extension result
