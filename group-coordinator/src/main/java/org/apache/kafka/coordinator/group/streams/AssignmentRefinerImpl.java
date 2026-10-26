@@ -556,8 +556,8 @@ public class AssignmentRefinerImpl implements AssignmentRefiner {
         }
 
         final SortedMap<TaskId, String> warmupTasks = new TreeMap<>();
-        final SortedSet<TaskId> borrowedMigrations = new TreeSet<>();
-        final SortedSet<TaskId> parkedMigrations = new TreeSet<>();
+        final Set<TaskId> borrowedMigrations = new HashSet<>();
+        final Set<TaskId> parkedMigrations = new HashSet<>();
 
         final Set<String> restoringAnActive = membersRestoringAnActive(currentAssignment, decisions, members);
         final Map<String, ProcessLoad> loadAfterGrants =
@@ -617,8 +617,8 @@ public class AssignmentRefinerImpl implements AssignmentRefiner {
 
         return new WarmupPlan(
             Collections.unmodifiableSortedMap(warmupTasks),
-            Collections.unmodifiableSortedSet(borrowedMigrations),
-            Collections.unmodifiableSortedSet(parkedMigrations)
+            Collections.unmodifiableSet(borrowedMigrations),
+            Collections.unmodifiableSet(parkedMigrations)
         );
     }
 
@@ -1678,14 +1678,14 @@ public class AssignmentRefinerImpl implements AssignmentRefiner {
      */
     record WarmupPlan(
         SortedMap<TaskId, String> warmupTasks,
-        SortedSet<TaskId> borrowedMigrations,
-        SortedSet<TaskId> parkedMigrations
+        Set<TaskId> borrowedMigrations,
+        Set<TaskId> parkedMigrations
     ) {
 
         static final WarmupPlan EMPTY = new WarmupPlan(
             Collections.emptySortedMap(),
-            Collections.emptySortedSet(),
-            Collections.emptySortedSet()
+            Set.of(),
+            Set.of()
         );
     }
 }
