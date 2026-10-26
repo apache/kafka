@@ -684,7 +684,10 @@ public class KafkaRaftClientPreVoteTest {
             local.id(),
             local.directoryId().get()
         )
-            .withStartingVoters(VoterSetTest.voterSet(Stream.of(local, leader, otherNodeKey)), KRaftVersion.KRAFT_VERSION_0)
+            .withStartingVoters(
+                VoterSetTest.voterSet(Stream.of(local, leader, otherNodeKey)),
+                KRaftVersion.KRAFT_VERSION_0
+            )
             .withElectedLeader(epoch, leader.id())
             .withRaftProtocol(RaftProtocol.KIP_1186_PROTOCOL)
             .build();
@@ -693,27 +696,34 @@ public class KafkaRaftClientPreVoteTest {
 
         context.pollUntilRequest();
         RaftRequest.Outbound fetchRequest = context.assertSentFetchRequest();
-        context.assertFetchRequestData(fetchRequest, epoch, 0L, 0, context.client.highWatermark());
+        context.assertFetchRequestData(
+            fetchRequest, epoch, 0L, 0, context.client.highWatermark()
+        );
         context.deliverResponse(
             fetchRequest.correlationId(),
             fetchRequest.destination(),
             context.fetchResponse(epoch, leader.id(), MemoryRecords.EMPTY, 0L, Errors.NONE)
         );
 
-        // After fetching successfully from the leader, follower rejects PreVotes even if the remote log is up to date
+        // After fetching successfully from the leader, the follower rejects a PreVote
+        // even if the remote log is up to date
         VoteRequestData preVote = context.preVoteRequest(epoch, otherNodeKey, epoch, 1);
         context.deliverRequest(preVote);
         context.pollUntilResponse();
         context.assertSentVoteResponse(Errors.NONE, epoch, OptionalInt.of(leader.id()), false);
         assertTrue(context.client.quorum().isFollower());
 
-        // Leader resigns by sending EndQuorumEpoch. This request can move the node out of the follower state.
-        context.deliverRequest(context.endEpochRequest(epoch, leader.id(), List.of(otherNodeKey, local)));
+        // Leader resigns by sending EndQuorumEpoch. The local node is not the top preferred
+        // successor and the clock doesn't advance, so it stays a follower
+        context.deliverRequest(
+            context.endEpochRequest(epoch, leader.id(), List.of(otherNodeKey, local))
+        );
         context.pollUntilResponse();
         context.assertSentEndQuorumEpochResponse(Errors.NONE, epoch, OptionalInt.of(leader.id()));
         assertTrue(context.client.quorum().isFollower());
 
-        // Once the leader has resigned, the follower can now grant the same PreVote that was previously rejected
+        // Once the leader has resigned, the follower can now grant the same
+        // PreVote that was previously rejected
         context.deliverRequest(preVote);
         context.pollUntilResponse();
         context.assertSentVoteResponse(Errors.NONE, epoch, OptionalInt.of(leader.id()), true);
