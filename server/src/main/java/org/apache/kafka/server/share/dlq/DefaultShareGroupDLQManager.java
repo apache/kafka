@@ -27,6 +27,7 @@ import org.slf4j.Logger;
 import org.slf4j.LoggerFactory;
 
 import java.util.concurrent.CompletableFuture;
+import java.util.concurrent.Executor;
 
 /**
  * The default share group DLQ manager responsible for processing
@@ -47,9 +48,10 @@ public class DefaultShareGroupDLQManager implements ShareGroupDLQManager {
         Time time,
         Timer timer,
         ShareGroupMetrics shareGroupMetrics,
-        LogReader logReader
+        LogReader logReader,
+        Executor fetchExecutor
     ) {
-        DefaultShareGroupDLQManager instance = new DefaultShareGroupDLQManager(client, cacheHelper, time, timer, shareGroupMetrics, logReader);
+        DefaultShareGroupDLQManager instance = new DefaultShareGroupDLQManager(client, cacheHelper, time, timer, shareGroupMetrics, logReader, fetchExecutor);
         instance.start();
         return instance;
     }
@@ -60,9 +62,10 @@ public class DefaultShareGroupDLQManager implements ShareGroupDLQManager {
         Time time,
         Timer timer,
         ShareGroupMetrics shareGroupMetrics,
-        LogReader logReader
+        LogReader logReader,
+        Executor fetchExecutor
     ) {
-        stateManager = new ShareGroupDLQStateManager(client, cacheHelper, time, timer, shareGroupMetrics, logReader);
+        stateManager = new ShareGroupDLQStateManager(client, cacheHelper, time, timer, shareGroupMetrics, logReader, fetchExecutor);
     }
 
     private void start() {

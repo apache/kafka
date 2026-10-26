@@ -184,7 +184,8 @@ class ShareGroupDLQStateManagerTest {
                 time,
                 timer != null ? timer : mockTimer,
                 shareGroupMetrics != null ? shareGroupMetrics : mockMetrics,
-                logReader == null ? MOCK_LOG_READER : logReader
+                logReader == null ? MOCK_LOG_READER : logReader,
+                Runnable::run
             );
         }
     }
@@ -337,14 +338,14 @@ class ShareGroupDLQStateManagerTest {
     public void testConstructorRejectsNullClient() {
         ShareGroupDLQMetadataCacheHelper cacheHelper = mock(ShareGroupDLQMetadataCacheHelper.class);
         assertThrows(IllegalArgumentException.class,
-            () -> new ShareGroupDLQStateManager(null, cacheHelper, MOCK_TIME, mockTimer, mockMetrics, MOCK_LOG_READER));
+            () -> new ShareGroupDLQStateManager(null, cacheHelper, MOCK_TIME, mockTimer, mockMetrics, MOCK_LOG_READER, Runnable::run));
     }
 
     @Test
     public void testConstructorRejectsNullCacheHelper() {
         KafkaClient client = mock(KafkaClient.class);
         assertThrows(IllegalArgumentException.class,
-            () -> new ShareGroupDLQStateManager(client, null, MOCK_TIME, mockTimer, mockMetrics, MOCK_LOG_READER));
+            () -> new ShareGroupDLQStateManager(client, null, MOCK_TIME, mockTimer, mockMetrics, MOCK_LOG_READER, Runnable::run));
     }
 
     @Test
@@ -352,7 +353,7 @@ class ShareGroupDLQStateManagerTest {
         KafkaClient client = mock(KafkaClient.class);
         ShareGroupDLQMetadataCacheHelper cacheHelper = mock(ShareGroupDLQMetadataCacheHelper.class);
         assertThrows(IllegalArgumentException.class,
-            () -> new ShareGroupDLQStateManager(client, cacheHelper, null, mockTimer, mockMetrics, MOCK_LOG_READER));
+            () -> new ShareGroupDLQStateManager(client, cacheHelper, null, mockTimer, mockMetrics, MOCK_LOG_READER, Runnable::run));
     }
 
     @Test
@@ -360,7 +361,7 @@ class ShareGroupDLQStateManagerTest {
         KafkaClient client = mock(KafkaClient.class);
         ShareGroupDLQMetadataCacheHelper cacheHelper = mock(ShareGroupDLQMetadataCacheHelper.class);
         assertThrows(IllegalArgumentException.class,
-            () -> new ShareGroupDLQStateManager(client, cacheHelper, MOCK_TIME, null, mockMetrics, MOCK_LOG_READER));
+            () -> new ShareGroupDLQStateManager(client, cacheHelper, MOCK_TIME, null, mockMetrics, MOCK_LOG_READER, Runnable::run));
     }
 
     @Test
@@ -368,7 +369,7 @@ class ShareGroupDLQStateManagerTest {
         KafkaClient client = mock(KafkaClient.class);
         ShareGroupDLQMetadataCacheHelper cacheHelper = mock(ShareGroupDLQMetadataCacheHelper.class);
         assertThrows(IllegalArgumentException.class,
-            () -> new ShareGroupDLQStateManager(client, cacheHelper, MOCK_TIME, mockTimer, null, MOCK_LOG_READER));
+            () -> new ShareGroupDLQStateManager(client, cacheHelper, MOCK_TIME, mockTimer, null, MOCK_LOG_READER, Runnable::run));
     }
 
     @Test
@@ -376,7 +377,15 @@ class ShareGroupDLQStateManagerTest {
         KafkaClient client = mock(KafkaClient.class);
         ShareGroupDLQMetadataCacheHelper cacheHelper = mock(ShareGroupDLQMetadataCacheHelper.class);
         assertThrows(IllegalArgumentException.class,
-            () -> new ShareGroupDLQStateManager(client, cacheHelper, MOCK_TIME, mockTimer, mockMetrics, null));
+            () -> new ShareGroupDLQStateManager(client, cacheHelper, MOCK_TIME, mockTimer, mockMetrics, null, Runnable::run));
+    }
+
+    @Test
+    public void testConstructorRejectsNullFetchExecutor() {
+        KafkaClient client = mock(KafkaClient.class);
+        ShareGroupDLQMetadataCacheHelper cacheHelper = mock(ShareGroupDLQMetadataCacheHelper.class);
+        assertThrows(IllegalArgumentException.class,
+            () -> new ShareGroupDLQStateManager(client, cacheHelper, MOCK_TIME, mockTimer, mockMetrics, MOCK_LOG_READER, null));
     }
 
     // ---- Lifecycle tests ----

@@ -304,6 +304,17 @@ public class ShareGroupDLQRecordFetcher {
         long nextOffset = readFrom;
         for (RecordBatch batch : records.batches()) {
             if (shouldStop()) return nextOffset;
+            // A read returns up to maxFetchBytes of batches, usually far more than the requested range needs.
+            // Once a batch starts beyond endOffset nothing after it can be wanted, and visiting it would load its
+            // whole body from the log just to discard it. A batch that ends before the read position holds
+            // nothing wanted either. For a v2 batch, baseOffset() and lastOffset() come from the batch header
+            // already in hand, so neither check loads anything. A legacy (v0/v1) batch's baseOffset() loads the
+            // batch and, if compressed, decompresses it outside the bounded path below, so legacy batches
+            // are always visited.
+            if (batch.magic() >= RecordBatch.MAGIC_VALUE_V2) {
+                if (batch.baseOffset() > endOffset) return nextOffset;
+                if (batch.lastOffset() < nextOffset) continue;
+            }
             nextOffset = collectFromBatch(batch, nextOffset);
         }
         return nextOffset;

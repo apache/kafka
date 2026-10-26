@@ -71,7 +71,7 @@ import java.time.Duration
 import java.util
 import java.util.Optional
 import java.util.concurrent.locks.{Condition, ReentrantLock}
-import java.util.concurrent.{CompletableFuture, ExecutionException, TimeUnit, TimeoutException}
+import java.util.concurrent.{CompletableFuture, ExecutionException, ExecutorService, Executors, ThreadFactory, TimeUnit, TimeoutException}
 import scala.collection.Map
 import scala.jdk.CollectionConverters._
 import scala.jdk.OptionConverters.RichOption
@@ -177,6 +177,9 @@ class BrokerServer(
   private var shareGroupTimer: Timer = _
 
   private var shareGroupDLQManager: ShareGroupDLQManager = _
+
+  // Runs the source record reads of the share group DLQ manager, off the persister thread.
+  private var shareGroupDLQFetchExecutor: ExecutorService = _
 
   private var shareGroupLogReader: ReplicaManagerLogReader = _
 
@@ -774,17 +777,28 @@ class BrokerServer(
     }
   }
 
+  /** Daemon thread factory naming each thread with the given name. */
+  private def daemonThreadFactory(threadName: String): ThreadFactory = {
+    (runnable: Runnable) => {
+      val thread = new Thread(runnable, threadName)
+      thread.setDaemon(true)
+      thread
+    }
+  }
+
   private def createShareGroupDLQManager(): ShareGroupDLQManager = {
     val className = config.shareGroupConfig.shareGroupDLQManagerClassName
     if (className.nonEmpty) {
       if (className.equals(classOf[DefaultShareGroupDLQManager].getName)) {
+        shareGroupDLQFetchExecutor = Executors.newSingleThreadExecutor(daemonThreadFactory("share-group-dlq-record-fetcher"))
         DefaultShareGroupDLQManager.instance(
           NetworkUtils.buildNetworkClient("ShareGroupDLQManager", config, metrics, Time.SYSTEM, new LogContext(s"[ShareGroupDLQManager broker=${config.brokerId}]")),
           new ShareCoordinatorMetadataCacheHelperImpl(metadataCache, key => shareCoordinator.partitionFor(key), config.interBrokerListenerName, groupConfigManager, () => config.messageMaxBytes),
           Time.SYSTEM,
           shareGroupTimer,
           shareGroupMetrics,
-          shareGroupLogReader
+          shareGroupLogReader,
+          shareGroupDLQFetchExecutor
         )
       } else if (className.equals(classOf[NoOpShareGroupDLQManager].getName)) {
         info("Using no-op share group DLQ manager")
@@ -942,6 +956,15 @@ class BrokerServer(
       // requests from sharePartitionManager do not encounter a stopped shareGroupDLQManager.
       if (shareGroupDLQManager != null)
         Utils.swallow(this.logger.underlying, () => shareGroupDLQManager.stop())
+
+      // Stopped after the DLQ manager so that nothing submits to it any more. Reads still running or
+      // queued are given a moment to finish and are interrupted otherwise.
+      if (shareGroupDLQFetchExecutor != null)
+        Utils.swallow(this.logger.underlying, () => {
+          shareGroupDLQFetchExecutor.shutdown()
+          if (!shareGroupDLQFetchExecutor.awaitTermination(5, TimeUnit.SECONDS))
+            shareGroupDLQFetchExecutor.shutdownNow()
+        })
 
       if (shareGroupMetrics != null)
         Utils.swallow(this.logger.underlying, () => shareGroupMetrics.close())

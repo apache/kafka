@@ -19,6 +19,7 @@ package kafka.server.share;
 
 import org.apache.kafka.common.Node;
 import org.apache.kafka.common.Uuid;
+import org.apache.kafka.common.config.ConfigDef;
 import org.apache.kafka.common.config.ConfigException;
 import org.apache.kafka.common.config.TopicConfig;
 import org.apache.kafka.common.message.MetadataResponseData;
@@ -101,8 +102,15 @@ public class ShareCoordinatorMetadataCacheHelperImpl implements ShareCoordinator
         if (props == null) {
             return false;
         }
+        // This is called for every DLQ request, so read the one flag directly. Constructing a LogConfig
+        // parses every topic config on each call, which made it the dominant cost of the DLQ path.
+        Object value = props.get(TopicConfig.ERRORS_DEADLETTERQUEUE_GROUP_ENABLE_CONFIG);
+        if (value == null) {
+            return LogConfig.DEFAULT_ERRORS_DEADLETTERQUEUE_GROUP_ENABLE;
+        }
         try {
-            return new LogConfig(props).getBoolean(TopicConfig.ERRORS_DEADLETTERQUEUE_GROUP_ENABLE_CONFIG);
+            return Boolean.TRUE.equals(
+                ConfigDef.parseType(TopicConfig.ERRORS_DEADLETTERQUEUE_GROUP_ENABLE_CONFIG, value, ConfigDef.Type.BOOLEAN));
         } catch (ConfigException exe) {
             return false;
         }
@@ -111,17 +119,23 @@ public class ShareCoordinatorMetadataCacheHelperImpl implements ShareCoordinator
     @Override
     public int dlqTopicMaxMessageBytes(String topic) {
         Properties props = metadataCache.topicConfig(topic);
-        // LogConfig defines its own static default for this key, so an explicit containsKey
-        // check is needed to distinguish "no topic-level override" from "override present"
-        // and fall back to the broker's configured message.max.bytes in the former case.
-        if (props == null || !props.containsKey(TopicConfig.MAX_MESSAGE_BYTES_CONFIG)) {
+        // LogConfig defines its own static default for this key, so only a topic-level override is read
+        // here and without one the broker's configured message.max.bytes is used. Reading the one key
+        // directly avoids parsing every topic config, as constructing a LogConfig would.
+        Object value = props == null ? null : props.get(TopicConfig.MAX_MESSAGE_BYTES_CONFIG);
+        if (value == null) {
             return messageMaxBytesSupplier.getAsInt();
         }
         try {
-            return new LogConfig(props).getInt(TopicConfig.MAX_MESSAGE_BYTES_CONFIG);
+            Integer maxMessageBytes = (Integer) ConfigDef.parseType(TopicConfig.MAX_MESSAGE_BYTES_CONFIG, value, ConfigDef.Type.INT);
+            // LogConfig requires message.max.bytes to be at least 0.
+            if (maxMessageBytes != null && maxMessageBytes >= 0) {
+                return maxMessageBytes;
+            }
         } catch (ConfigException exe) {
-            return messageMaxBytesSupplier.getAsInt();
+            // Fall back to the broker's configured value.
         }
+        return messageMaxBytesSupplier.getAsInt();
     }
 
     @Override

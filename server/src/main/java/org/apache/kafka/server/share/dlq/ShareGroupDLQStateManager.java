@@ -68,6 +68,8 @@ import java.util.Random;
 import java.util.Set;
 import java.util.concurrent.CompletableFuture;
 import java.util.concurrent.ConcurrentLinkedQueue;
+import java.util.concurrent.Executor;
+import java.util.concurrent.RejectedExecutionException;
 import java.util.concurrent.atomic.AtomicBoolean;
 import java.util.function.Function;
 
@@ -84,6 +86,7 @@ public class ShareGroupDLQStateManager {
     private final Timer timer;
     private final ShareGroupDLQMetadataCacheHelper cacheHelper;
     private final LogReader logReader;
+    private final Executor fetchExecutor;
     private final ShareGroupMetrics shareGroupMetrics;
     public static final long REQUEST_BACKOFF_MS = 1_000L;
     public static final long REQUEST_BACKOFF_MAX_MS = 30_000L;
@@ -103,7 +106,8 @@ public class ShareGroupDLQStateManager {
         Time time,
         Timer timer,
         ShareGroupMetrics shareGroupMetrics,
-        LogReader logReader
+        LogReader logReader,
+        Executor fetchExecutor
     ) {
         if (client == null) {
             throw new IllegalArgumentException("Kafkaclient must not be null.");
@@ -129,11 +133,16 @@ public class ShareGroupDLQStateManager {
             throw new IllegalArgumentException("LogReader must not be null.");
         }
 
+        if (fetchExecutor == null) {
+            throw new IllegalArgumentException("Fetch executor must not be null.");
+        }
+
         this.time = time;
         this.timer = timer;
         this.cacheHelper = cacheHelper;
         this.shareGroupMetrics = shareGroupMetrics;
         this.logReader = logReader;
+        this.fetchExecutor = fetchExecutor;
         this.sender = new SendThread(
             "ShareGroupDLQSendThread",
             client,
@@ -192,7 +201,7 @@ public class ShareGroupDLQStateManager {
         // budget. Records are only read when copy is enabled for the group and the DLQ is correctly
         // configured (validated above); otherwise we enqueue immediately.
         if (cacheHelper.isShareGroupDlqCopyRecordEnabled(param.groupId())) {
-            requestHandler.resolveRound().whenComplete((ignored, ignoredError) -> enqueue(requestHandler));
+            requestHandler.resolveRoundAsync().whenComplete((ignored, ignoredError) -> enqueue(requestHandler));
         } else {
             enqueue(requestHandler);
         }
@@ -656,7 +665,7 @@ public class ShareGroupDLQStateManager {
                                 // to what's left to send) before rejoining the node map, mirroring the
                                 // "resolved before eligible for coalescing" invariant dlq() establishes for round 1.
                                 nextOffsetToSend = lastOffsetIncludedThisRound + 1;
-                                resolveRound().whenComplete((ignored, err) -> addRequestToNodeMap(dlqPartitionLeaderNode(), this));
+                                resolveRoundAsync().whenComplete((ignored, err) -> addRequestToNodeMap(dlqPartitionLeaderNode(), this));
                             } else {
                                 this.result.complete(null);
                             }
@@ -702,6 +711,27 @@ public class ShareGroupDLQStateManager {
                     shareGroupMetrics.recordDLQProduceFailed(param.groupId());
                     requestErrorResponse(clientResponseError.exception());
             }
+        }
+
+        /**
+         * Runs {@link #resolveRound()} on the fetch executor, so the log read it starts never blocks the
+         * calling thread: round 1 is called from the thread completing a share partition's persister
+         * write, and later rounds from the sender thread. Like {@link #resolveRound()}, the returned
+         * future always completes normally, including when the executor rejects the task, in which case
+         * this round is produced with headers only.
+         */
+        CompletableFuture<Void> resolveRoundAsync() {
+            CompletableFuture<Void> resolved = new CompletableFuture<>();
+            try {
+                fetchExecutor.execute(() -> resolveRound().whenComplete((ignored, err) -> resolved.complete(null)));
+            } catch (RejectedExecutionException e) {
+                LOG.warn("Unable to schedule the fetch of original record data for {}. " +
+                    "DLQ records will be produced with headers only for this round.", this, e);
+                this.resolvedRecordData = Map.of();
+                this.lastResolvedOffsetThisRound = param.lastOffset();
+                resolved.complete(null);
+            }
+            return resolved;
         }
 
         /**

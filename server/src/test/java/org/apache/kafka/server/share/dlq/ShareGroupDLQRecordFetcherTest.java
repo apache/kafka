@@ -65,7 +65,9 @@ import static org.mockito.ArgumentMatchers.any;
 import static org.mockito.ArgumentMatchers.anyBoolean;
 import static org.mockito.ArgumentMatchers.anySet;
 import static org.mockito.ArgumentMatchers.eq;
+import static org.mockito.Mockito.doReturn;
 import static org.mockito.Mockito.mock;
+import static org.mockito.Mockito.never;
 import static org.mockito.Mockito.times;
 import static org.mockito.Mockito.verify;
 import static org.mockito.Mockito.when;
@@ -259,6 +261,79 @@ class ShareGroupDLQRecordFetcherTest {
         assertRecord(result, 0L, "k0", "v0");
         assertRecord(result, 1L, "k1", "v1");
         assertNull(result.get(2L));
+    }
+
+    // A read result whose batches are the given ones, in order, so a test can control what each batch reports
+    // about itself and verify whether the fetcher looked inside it.
+    private static LogReadResult successWithBatches(RecordBatch... batches) {
+        Records records = mock(Records.class);
+        doReturn(List.of(batches)).when(records).batches();
+        return logReadResult(new FetchDataInfo(null, records), Errors.NONE);
+    }
+
+    private static RecordBatch mockBatch(long baseOffset, long lastOffset) {
+        RecordBatch batch = mock(RecordBatch.class);
+        when(batch.magic()).thenReturn(RecordBatch.MAGIC_VALUE_V2);
+        when(batch.baseOffset()).thenReturn(baseOffset);
+        when(batch.lastOffset()).thenReturn(lastOffset);
+        return batch;
+    }
+
+    @Test
+    public void testBatchesStartingBeyondEndOffsetAreNeverVisited() throws Exception {
+        // A read returns up to maxFetchBytes of batches, far more than the one record wanted. Once a batch starts
+        // beyond endOffset, neither it nor any later batch may be touched - visiting a file-backed batch loads it.
+        RecordBatch wanted = MemoryRecords.withRecords(0L, Compression.NONE, record("k0", "v0"), record("k1", "v1"))
+            .batches().iterator().next();
+        RecordBatch beyond1 = mockBatch(2L, 3L);
+        RecordBatch beyond2 = mockBatch(4L, 5L);
+        whenReadAsync(done(successWithBatches(wanted, beyond1, beyond2)));
+
+        Map<Long, Record> result = fetch(param(0L, 1L));
+
+        assertEquals(2, result.size());
+        assertRecord(result, 0L, "k0", "v0");
+        assertRecord(result, 1L, "k1", "v1");
+        verify(beyond1, never()).iterator();
+        verify(beyond1, never()).isCompressed();
+        verify(beyond2, never()).baseOffset();
+        verify(beyond2, never()).iterator();
+        verify(logReader, times(1)).readAsync(any(), anySet(), any(), any(), anyBoolean());
+    }
+
+    @Test
+    public void testBatchEndingBeforeReadPositionIsSkippedWithoutBeingVisited() throws Exception {
+        // Only [4, 5] is wanted, but the read starts at an earlier batch. That batch holds nothing wanted
+        // and must not be loaded.
+        RecordBatch before = mockBatch(0L, 3L);
+        RecordBatch wanted = MemoryRecords.withRecords(4L, Compression.NONE, record("k4", "v4"), record("k5", "v5"))
+            .batches().iterator().next();
+        whenReadAsync(done(successWithBatches(before, wanted)));
+
+        Map<Long, Record> result = fetch(param(4L, 5L));
+
+        assertEquals(2, result.size());
+        assertRecord(result, 4L, "k4", "v4");
+        assertRecord(result, 5L, "k5", "v5");
+        verify(before, never()).iterator();
+        verify(before, never()).isCompressed();
+    }
+
+    @Test
+    public void testLegacyBatchBaseOffsetIsNeverRead() throws Exception {
+        // For a legacy (v0/v1) batch, baseOffset() loads the batch and, if compressed, decompresses it outside the
+        // bounded path, so the fetcher must not call it. Such a batch is visited as before.
+        RecordBatch legacy = mock(RecordBatch.class);
+        when(legacy.magic()).thenReturn(RecordBatch.MAGIC_VALUE_V1);
+        when(legacy.lastOffset()).thenReturn(5L);
+        when(legacy.isCompressed()).thenReturn(false);
+        when(legacy.iterator()).thenAnswer(invocation -> List.<Record>of().iterator());
+        whenReadAsync(done(successWithBatches(legacy)));
+
+        fetch(param(0L, 1L));
+
+        verify(legacy, never()).baseOffset();
+        verify(legacy, times(1)).iterator();
     }
 
     @Test

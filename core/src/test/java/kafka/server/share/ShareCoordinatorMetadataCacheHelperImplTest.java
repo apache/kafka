@@ -773,6 +773,43 @@ public class ShareCoordinatorMetadataCacheHelperImplTest {
         assertFalse(cache.isDlqEnabledOnTopic("test-topic"));
     }
 
+    private ShareCoordinatorMetadataCacheHelperImpl helperWithTopicProps(Properties props) {
+        MetadataCache mockMetadataCache = mock(MetadataCache.class);
+        when(mockMetadataCache.topicConfig("test-topic")).thenReturn(props);
+        return new ShareCoordinatorMetadataCacheHelperImpl(
+            mockMetadataCache,
+            sharePartitionKey -> 0,
+            mock(ListenerName.class),
+            mock(GroupConfigManager.class),
+            () -> ServerLogConfigs.MAX_MESSAGE_BYTES_DEFAULT
+        );
+    }
+
+    @Test
+    public void testIsDlqEnabledOnTopicParsesPaddedStringAndBoolean() {
+        Properties padded = new Properties();
+        padded.put(TopicConfig.ERRORS_DEADLETTERQUEUE_GROUP_ENABLE_CONFIG, " TRUE ");
+        assertTrue(helperWithTopicProps(padded).isDlqEnabledOnTopic("test-topic"));
+
+        Properties bool = new Properties();
+        bool.put(TopicConfig.ERRORS_DEADLETTERQUEUE_GROUP_ENABLE_CONFIG, true);
+        assertTrue(helperWithTopicProps(bool).isDlqEnabledOnTopic("test-topic"));
+    }
+
+    @Test
+    public void testIsDlqEnabledOnTopicReturnsFalseForInvalidValue() {
+        Properties props = new Properties();
+        props.put(TopicConfig.ERRORS_DEADLETTERQUEUE_GROUP_ENABLE_CONFIG, "not-a-boolean");
+        assertFalse(helperWithTopicProps(props).isDlqEnabledOnTopic("test-topic"));
+    }
+
+    @Test
+    public void testIsDlqEnabledOnTopicReturnsFalseWhenFlagMissing() {
+        Properties props = new Properties();
+        props.put(TopicConfig.MAX_MESSAGE_BYTES_CONFIG, "1000");
+        assertFalse(helperWithTopicProps(props).isDlqEnabledOnTopic("test-topic"));
+    }
+
     // Tests for dlqTopicMaxMessageBytes
 
     @Test
