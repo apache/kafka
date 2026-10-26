@@ -280,9 +280,9 @@ class ShareGroupDLQRecordFetcherTest {
     }
 
     @Test
-    public void testBatchesStartingBeyondEndOffsetAreNeverVisited() throws Exception {
-        // A read returns up to maxFetchBytes of batches, far more than the one record wanted. Once a batch starts
-        // beyond endOffset, neither it nor any later batch may be touched - visiting a file-backed batch loads it.
+    public void testBatchesStartingBeyondEndOffsetAreNotLoaded() throws Exception {
+        // A read returns up to maxFetchBytes of batches, far more than the one record wanted. A batch that starts
+        // beyond endOffset must not be loaded - visiting a file-backed batch reads its body from the log.
         RecordBatch wanted = MemoryRecords.withRecords(0L, Compression.NONE, record("k0", "v0"), record("k1", "v1"))
             .batches().iterator().next();
         RecordBatch beyond1 = mockBatch(2L, 3L);
@@ -296,27 +296,26 @@ class ShareGroupDLQRecordFetcherTest {
         assertRecord(result, 1L, "k1", "v1");
         verify(beyond1, never()).iterator();
         verify(beyond1, never()).isCompressed();
-        verify(beyond2, never()).baseOffset();
         verify(beyond2, never()).iterator();
+        verify(beyond2, never()).isCompressed();
         verify(logReader, times(1)).readAsync(any(), anySet(), any(), any(), anyBoolean());
     }
 
     @Test
-    public void testBatchEndingBeforeReadPositionIsSkippedWithoutBeingVisited() throws Exception {
-        // Only [4, 5] is wanted, but the read starts at an earlier batch. That batch holds nothing wanted
-        // and must not be loaded.
-        RecordBatch before = mockBatch(0L, 3L);
-        RecordBatch wanted = MemoryRecords.withRecords(4L, Compression.NONE, record("k4", "v4"), record("k5", "v5"))
+    public void testWantedBatchAfterOutOfOrderBatchIsStillCollected() throws Exception {
+        // Skipping a batch beyond endOffset must not end the scan: a wanted batch that follows it is still found,
+        // so the result does not depend on the order the batches were returned in.
+        RecordBatch beyond = mockBatch(10L, 11L);
+        RecordBatch wanted = MemoryRecords.withRecords(0L, Compression.NONE, record("k0", "v0"), record("k1", "v1"))
             .batches().iterator().next();
-        whenReadAsync(done(successWithBatches(before, wanted)));
+        whenReadAsync(done(successWithBatches(beyond, wanted)));
 
-        Map<Long, Record> result = fetch(param(4L, 5L));
+        Map<Long, Record> result = fetch(param(0L, 1L));
 
         assertEquals(2, result.size());
-        assertRecord(result, 4L, "k4", "v4");
-        assertRecord(result, 5L, "k5", "v5");
-        verify(before, never()).iterator();
-        verify(before, never()).isCompressed();
+        assertRecord(result, 0L, "k0", "v0");
+        assertRecord(result, 1L, "k1", "v1");
+        verify(beyond, never()).iterator();
     }
 
     @Test
