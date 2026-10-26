@@ -16,6 +16,7 @@
  */
 package org.apache.kafka.streams.state.internals;
 
+import org.apache.kafka.common.errors.SerializationException;
 import org.apache.kafka.streams.query.Position;
 
 import java.nio.ByteBuffer;
@@ -39,6 +40,9 @@ public final class PositionSerde {
         switch (version) {
             case (byte) 0: // actual position, v0
                 final int nTopics = buffer.getInt();
+                if (nTopics < 0 || nTopics > buffer.remaining() / (2 * Integer.BYTES)) {
+                    throw new SerializationException("Invalid format: invalid number of topics " + nTopics);
+                }
                 final Map<String, Map<Integer, Long>> position = new HashMap<>(nTopics);
                 for (int i = 0; i < nTopics; i++) {
                     final int topicNameLength = buffer.getInt();
@@ -46,6 +50,9 @@ public final class PositionSerde {
                     final String topic = new String(topicNameBytes, StandardCharsets.UTF_8);
 
                     final int numPairs = buffer.getInt();
+                    if (numPairs < 0 || numPairs > buffer.remaining() / (Integer.BYTES + Long.BYTES)) {
+                        throw new SerializationException("Invalid format: invalid number of partitions " + numPairs);
+                    }
                     final Map<Integer, Long> partitionOffsets = new HashMap<>(numPairs);
                     for (int j = 0; j < numPairs; j++) {
                         partitionOffsets.put(buffer.getInt(), buffer.getLong());
