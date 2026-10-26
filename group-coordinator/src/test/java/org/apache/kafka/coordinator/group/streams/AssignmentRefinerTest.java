@@ -3157,11 +3157,11 @@ public class AssignmentRefinerTest {
         return AssignmentRefinerImpl.analyzeTasks(
             index(members, taskOffsets),
             targetAssignment,
+            new AssignmentRefinerImpl.TargetStandbyHolders(targetAssignment, subtopologies()),
             members,
             heartbeatVersions,
             keepActiveTasks,
-            subtopologies(),
-            load(members)
+            subtopologies()
         );
     }
 
@@ -3180,7 +3180,7 @@ public class AssignmentRefinerTest {
     private static Map<String, AssignmentRefinerImpl.ProcessLoad> load(
         final Map<String, StreamsGroupMember> members
     ) {
-        return AssignmentRefinerImpl.indexProcessLoad(members, subtopologies());
+        return index(members, Map.of()).processLoad();
     }
 
     private static AssignmentRefinerImpl.WarmupPlan plan(
@@ -3204,7 +3204,6 @@ public class AssignmentRefinerTest {
             index(members, taskOffsets),
             members,
             heartbeatVersions.keySet().containsAll(members.keySet()),
-            load(members),
             numWarmupReplicas
         );
     }
@@ -3238,10 +3237,10 @@ public class AssignmentRefinerTest {
         final AssignmentRefinerImpl.CurrentAssignmentIndex currentAssignment = index(members, taskOffsets);
         return AssignmentRefinerImpl.filterStandbys(
             targetAssignment,
+            new AssignmentRefinerImpl.TargetStandbyHolders(targetAssignment, subtopologies()),
             currentAssignment,
             decisions,
-            AssignmentRefinerImpl.planWarmups(
-                decisions, currentAssignment, members, true, load(members), numWarmupReplicas),
+            AssignmentRefinerImpl.planWarmups(decisions, currentAssignment, members, true, numWarmupReplicas),
             members,
             subtopologies()
         );
