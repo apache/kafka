@@ -347,14 +347,6 @@ public class ConsumerHeartbeatRequestManagerTest
         }
     }
 
-    /**
-     * A heartbeat request is in flight and the heartbeat timer is already expired, because the response takes
-     * longer than the heartbeat interval. In that window no heartbeat can be sent until the in-flight one
-     * completes, so both {@link NetworkClientDelegate.PollResult#timeUntilNextPollMs} and
-     * {@link AbstractHeartbeatRequestManager#maximumTimeToWait(long)} must return a positive delay;
-     * returning 0 causes a busy loop in the consumer network thread and the application thread until the in-flight
-     * request completes, which can be as long as request.timeout.ms when the coordinator is unreachable.
-     */
     @Test
     public void testMaximumTimeToWaitWhileHeartbeatInFlightDoesNotSpin() {
         // The member keeps joining, so the heartbeat below is sent without waiting for the interval.
@@ -374,19 +366,6 @@ public class ConsumerHeartbeatRequestManagerTest
         assertHeartbeatInFlightWaitDoesNotBusyLoop(secondResult);
     }
 
-    /**
-     * The "response slower than the interval" way of reaching the same window, driven end to end through the
-     * manager instead of by priming the request state directly. The member joins, learns its heartbeat interval
-     * from a real successful heartbeat response, becomes STABLE, and then sends its steady-state heartbeat when
-     * the interval elapses. That response never arrives, so the heartbeat timer expires again while the request
-     * is still in flight. This complements
-     * {@link #testMaximumTimeToWaitWhileHeartbeatInFlightDoesNotSpin()}, which constructs the request state
-     * with a known interval, by proving that the interval learned through
-     * {@code onResponse -> updateHeartbeatIntervalMs} lands the manager in exactly the same state: no heartbeat
-     * can be sent, and both {@link NetworkClientDelegate.PollResult#timeUntilNextPollMs} and
-     * {@link AbstractHeartbeatRequestManager#maximumTimeToWait(long)} must return a positive delay rather than
-     * causing a busy loop in the application and network threads.
-     */
     @Test
     public void testMaximumTimeToWaitWhenResponseIsSlowerThanIntervalDoesNotSpin() {
         when(membershipManager.state()).thenReturn(MemberState.JOINING);

@@ -2515,14 +2515,6 @@ class StreamsGroupHeartbeatRequestManagerTest {
         assertEquals(INSTANCE_ID, streamsRequest.data().instanceId());
     }
 
-    /**
-     * A heartbeat request is in flight and the heartbeat timer is already expired, because the response takes
-     * longer than the heartbeat interval. In that window no heartbeat can be sent until the in-flight one
-     * completes, so both {@link NetworkClientDelegate.PollResult#timeUntilNextPollMs} and
-     * {@link StreamsGroupHeartbeatRequestManager#maximumTimeToWait(long)} must return a positive delay;
-     * returning 0 causes a busy loop in the consumer network thread and the application thread until the in-flight
-     * request completes, which can be as long as request.timeout.ms when the coordinator is unreachable.
-     */
     @Test
     public void testMaximumTimeToWaitWhileHeartbeatInFlightDoesNotSpin() {
         final int heartbeatIntervalMs = 5000;

@@ -135,12 +135,6 @@ public class HeartbeatRequestStateTest {
         assertTrue(heartbeatRequestState.timeToNextHeartbeatMs(time.milliseconds()) > 0);
     }
 
-    /**
-     * A heartbeat request is in flight and the heartbeat timer is expired, because the response takes
-     * longer than the heartbeat interval. No heartbeat can be sent until the in-flight one
-     * completes, so the wait must stay positive; returning the remaining backoff gives 0 and causes a busy loop
-     * in callers that use it as a poll timeout.
-     */
     @Test
     public void testTimeToNextHeartbeatMsWhileRequestInFlightDoesNotSpin() {
         final long heartbeatIntervalMs = 5000;
