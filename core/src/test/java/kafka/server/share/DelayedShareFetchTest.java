@@ -3458,13 +3458,7 @@ public class DelayedShareFetchTest {
     }
 
     private static LinkedHashMap<TopicIdPartition, LogReadResult> buildLogReadResultMap(List<TopicIdPartition> topicIdPartitions, Records records) {
-        return CollectionConverters.asJava(buildLogReadResult(topicIdPartitions, records)).stream()
-            .collect(Collectors.toMap(
-                Tuple2::_1,
-                Tuple2::_2,
-                (oldValue, newValue) -> oldValue,
-                LinkedHashMap::new
-            ));
+        return toLogReadResultMap(buildLogReadResult(topicIdPartitions, records));
     }
 
     @SuppressWarnings("unchecked")

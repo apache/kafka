@@ -384,6 +384,7 @@ if __name__ == "__main__":
         print(f"| Module | Test | Message | Time |")
         print(f"| ------ | ---- | ------- | ---- |")
         logger.info(f"Found {len(failed_table)} test failures:")
+        failed_table.sort()
         for row in failed_table:
             logger.info(f"{FAILED} {row[0]} > {row[1]}")
             row_joined = " | ".join(row)
@@ -398,6 +399,7 @@ if __name__ == "__main__":
         print(f"| Module | Test | Message | Time |")
         print(f"| ------ | ---- | ------- | ---- |")
         logger.info(f"Found {len(flaky_table)} flaky test failures:")
+        flaky_table.sort()
         for row in flaky_table:
             logger.info(f"{FLAKY} {row[0]} > {row[1]}")
             row_joined = " | ".join(row)
@@ -412,6 +414,7 @@ if __name__ == "__main__":
         print(f"| Module | Test |")
         print(f"| ------ | ---- |")
         logger.debug(f"::group::Found {len(skipped_table)} skipped tests")
+        skipped_table.sort()
         for row in skipped_table:
             row_joined = " | ".join(row)
             print(f"| {row_joined} |")
@@ -427,6 +430,7 @@ if __name__ == "__main__":
         print(f"| Module | Test |")
         print(f"| ------ | ---- |")
         logger.debug(f"::group::Found {len(quarantined_table)} quarantined tests")
+        quarantined_table.sort()
         for row in quarantined_table:
             row_joined = " | ".join(row)
             print(f"| {row_joined} |")
@@ -434,12 +438,14 @@ if __name__ == "__main__":
         print("\n</details>")
         logger.debug("::endgroup::")
 
+    # New
     if len(new_table) > 0:
         print("<details>")
         print(f"<summary>New Tests ({len(new_table)})</summary>\n")
         print(f"| Module | Test |")
         print(f"| ------ | ---- |")
         logger.debug(f"::group::Found {len(new_table)} new tests")
+        new_table.sort()
         for row in new_table:
             row_joined = " | ".join(row)
             print(f"| {row_joined} |")

@@ -28,4 +28,6 @@ public interface ShareCoordinatorMetadataCacheHelper {
     Node getShareCoordinator(SharePartitionKey key, String internalTopicName);
 
     List<Node> getClusterNodes();
+
+    boolean isRequestHeaderV3Supported();
 }
