@@ -143,7 +143,7 @@ public class AssignmentsManagerTest {
         TEST_IMAGE = delta.apply(MetadataProvenance.EMPTY);
     }
 
-    private static MetadataImage withMetadataVersion(MetadataVersion metadataVersion) {
+    private static MetadataImage imageWithMetadataVersion(MetadataVersion metadataVersion) {
         MetadataDelta delta = new MetadataDelta.Builder().setImage(TEST_IMAGE).build();
         delta.replay(new FeatureLevelRecord().
             setName(MetadataVersion.FEATURE_NAME).
@@ -323,7 +323,7 @@ public class AssignmentsManagerTest {
     @ValueSource(booleans = {true, false})
     public void testRequestVersionGatedByRequestHeaderV3Supported(boolean requestHeaderV3Supported) throws Exception {
         MetadataVersion metadataVersion = requestHeaderV3Supported ? MetadataVersion.IBP_4_5_IV0 : MetadataVersion.IBP_4_4_IV2;
-        try (TestEnv testEnv = new TestEnv(withMetadataVersion(metadataVersion))) {
+        try (TestEnv testEnv = new TestEnv(imageWithMetadataVersion(metadataVersion))) {
             testEnv.onAssignment(new TopicIdPartition(TOPIC_1, 0), DIR_1);
             TestUtils.retryOnExceptionWithTimeout(60_000, () -> assertEquals(1, testEnv.assignmentsManager.numInFlight()));
 

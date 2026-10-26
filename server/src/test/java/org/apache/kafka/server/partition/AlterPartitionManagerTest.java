@@ -163,7 +163,7 @@ public class AlterPartitionManagerTest {
         assertEquals((short) 3, requestVersion);
         assertEquals((short) 2, ApiKeys.ALTER_PARTITION.requestHeaderVersion(requestVersion));
 
-        // The response omits tp0, so the callback sends it again
+        // The response omits tp0, so it is retried
         requestHeaderV3Supported.set(true);
         callbackCapture.getValue().onComplete(new ClientResponse(null, null, "", 0L, 0L,
                 false, null, null, new AlterPartitionResponse(new AlterPartitionResponseData())));
