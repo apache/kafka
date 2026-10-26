@@ -724,7 +724,15 @@ public class SimpleAssignorTest {
                 mkTopicAssignment(TOPIC_2_UUID, 1)))
         ));
 
-        GroupSpec groupSpec = new GroupSpecImpl(metadataImage, members, HOMOGENEOUS);
+        GroupSpec groupSpec = new ShareGroupSpecImpl(
+            metadataImage,
+            members,
+            HOMOGENEOUS,
+            Map.of(
+                TOPIC_1_UUID, new InitMapValue(TOPIC_1_NAME, Set.of(0, 1, 2, 3), 0L),
+                TOPIC_2_UUID, new InitMapValue(TOPIC_2_NAME, Set.of(0, 1), 0L)
+            )
+        );
         GroupAssignment computedAssignment = assignor.assign(groupSpec, subscribedTopicMetadata);
 
         assertEquals(Set.of(MEMBER_A, MEMBER_B), computedAssignment.members().keySet());
@@ -771,7 +779,15 @@ public class SimpleAssignorTest {
                 mkTopicAssignment(TOPIC_2_UUID, 1)))
         ));
 
-        GroupSpec groupSpec = new GroupSpecImpl(metadataImage, members, HETEROGENEOUS);
+        GroupSpec groupSpec = new ShareGroupSpecImpl(
+            metadataImage,
+            members,
+            HETEROGENEOUS,
+            Map.of(
+                TOPIC_1_UUID, new InitMapValue(TOPIC_1_NAME, Set.of(0, 1, 2, 3), 0L),
+                TOPIC_2_UUID, new InitMapValue(TOPIC_2_NAME, Set.of(0, 1), 0L)
+            )
+        );
         GroupAssignment computedAssignment = assignor.assign(groupSpec, subscribedTopicMetadata);
 
         assertEquals(Set.of(MEMBER_A, MEMBER_B), computedAssignment.members().keySet());
