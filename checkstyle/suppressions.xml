@@ -46,6 +46,7 @@
     <!-- server tests -->
     <suppress checks="MethodLength|JavaNCSS|NPathComplexity" files="DescribeTopicPartitionsRequestHandlerTest.java"/>
     <suppress checks="CyclomaticComplexity" files="ListConsumerGroupTest.java"/>
+    <suppress checks="ClassFanOutComplexity" files="ShareGroupDLQStateManagerTest.java"/>
     <suppress checks="ClassFanOutComplexity|CyclomaticComplexity|MethodLength|ParameterNumber|JavaNCSS|ImportControl" files="RequestConvertToJson.java"/>
     <suppress checks="ImportControl" files="BrokerRegistrationRequestTest.java"/>
     <suppress checks="ImportControl" files="MetadataRequestTest.java"/>

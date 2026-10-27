@@ -28,6 +28,7 @@ import org.apache.kafka.common.requests.MetadataResponse;
 import org.apache.kafka.coordinator.group.GroupConfig;
 import org.apache.kafka.coordinator.group.GroupConfigManager;
 import org.apache.kafka.metadata.MetadataCache;
+import org.apache.kafka.server.common.MetadataVersion;
 import org.apache.kafka.server.share.SharePartitionKey;
 import org.apache.kafka.server.share.dlq.ShareGroupDLQMetadataCacheHelper;
 import org.apache.kafka.server.share.persister.ShareCoordinatorMetadataCacheHelper;
@@ -174,6 +175,17 @@ public class ShareCoordinatorMetadataCacheHelperImpl implements ShareCoordinator
             log.warn("Exception while getting cluster nodes.", e);
         }
         return List.of();
+    }
+
+    @Override
+    public boolean isRequestHeaderV3Supported() {
+        try {
+            MetadataVersion metadataVersion = metadataCache.metadataVersion();
+            return metadataVersion != null && metadataVersion.isRequestHeaderV3Supported();
+        } catch (IllegalStateException e) {
+            // The metadata version is unknown until the first metadata image is loaded.
+            return false;
+        }
     }
 
     @Override

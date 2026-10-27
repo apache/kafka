@@ -68,6 +68,7 @@ public class QuotaFactory {
                                 ControllerMutationQuotaManager controllerMutation,
                                 ReplicationQuotaManager leader,
                                 ReplicationQuotaManager follower,
+                                ReplicationQuotaManager mirror,
                                 ReplicationQuotaManager alterLogDirs,
                                 Optional<Plugin<ClientQuotaCallback>> clientQuotaCallbackPlugin) {
 
@@ -136,6 +137,7 @@ public class QuotaFactory {
             new ControllerMutationQuotaManager(clientControllerMutationConfig(quotaConfig), metrics, time, threadNamePrefix, clientQuotaCallbackPlugin),
             new ReplicationQuotaManager(replicationConfig(quotaConfig), metrics, QuotaType.LEADER_REPLICATION, time),
             new ReplicationQuotaManager(replicationConfig(quotaConfig), metrics, QuotaType.FOLLOWER_REPLICATION, time),
+            new ReplicationQuotaManager(replicationConfig(quotaConfig), metrics, QuotaType.MIRROR_REPLICATION, time),
             new ReplicationQuotaManager(alterLogDirsReplicationConfig(quotaConfig), metrics, QuotaType.ALTER_LOG_DIRS_REPLICATION, time),
             clientQuotaCallbackPlugin
         );

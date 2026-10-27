@@ -114,7 +114,7 @@ public class QuotaFactoryTest {
     private static QuotaManagers createQuotaManagers(ClientQuotaManager produce) {
         return new QuotaManagers(
             mock(ClientQuotaManager.class), produce, mock(ClientRequestQuotaManager.class),
-            mock(ControllerMutationQuotaManager.class), null, null, null, Optional.empty()
+            mock(ControllerMutationQuotaManager.class), null, null, null, null, Optional.empty()
         );
     }
 

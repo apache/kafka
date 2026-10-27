@@ -20,7 +20,6 @@ import kafka.server.KafkaBroker;
 
 import org.apache.kafka.clients.admin.Admin;
 import org.apache.kafka.clients.admin.ListTopicsOptions;
-import org.apache.kafka.clients.admin.NewTopic;
 import org.apache.kafka.common.config.TopicConfig;
 import org.apache.kafka.common.errors.InvalidTopicException;
 import org.apache.kafka.common.errors.NotEnoughReplicasAfterAppendException;
@@ -36,7 +35,6 @@ import org.apache.kafka.common.test.api.ClusterTestDefaults;
 import org.apache.kafka.common.test.api.Type;
 
 import java.util.HashMap;
-import java.util.List;
 import java.util.Map;
 import java.util.concurrent.ExecutionException;
 
@@ -109,7 +107,7 @@ public class ProducerFailureHandlingTest {
      * With ack == 1 the future metadata will throw ExecutionException caused by RecordTooLargeException
      */
     @ClusterTest
-    public void testTooLargeRecordWithAckOne(ClusterInstance clusterInstance) throws InterruptedException {
+    public void testTooLargeRecordWithAckOne(ClusterInstance clusterInstance) {
         clusterInstance.createTopic(topic1, 1, (short) clusterInstance.brokers().size());
 
         try (Producer<byte[], byte[]> producer = clusterInstance.producer(producerConfig(1))) {
@@ -158,7 +156,7 @@ public class ProducerFailureHandlingTest {
      * With incorrect broker-list the future metadata should return ExecutionException caused by TimeoutException
      */
     @ClusterTest
-    public void testWrongBrokerList(ClusterInstance clusterInstance) throws InterruptedException {
+    public void testWrongBrokerList(ClusterInstance clusterInstance) {
         clusterInstance.createTopic(topic1, 1, (short) 1);
         // producer with incorrect broker list
         Map<String, Object> producerConfig = new HashMap<>(producerConfig(1));
@@ -176,7 +174,7 @@ public class ProducerFailureHandlingTest {
      * when partition is higher than the upper bound of partitions.
      */
     @ClusterTest
-    public void testInvalidPartition(ClusterInstance clusterInstance) throws InterruptedException {
+    public void testInvalidPartition(ClusterInstance clusterInstance) {
         // create topic with a single partition
         clusterInstance.createTopic(topic1, 1, (short) clusterInstance.brokers().size());
 
@@ -224,7 +222,7 @@ public class ProducerFailureHandlingTest {
     @ClusterTest(serverProperties = {
         @ClusterConfigProperty(key = AUTO_CREATE_TOPICS_ENABLE_CONFIG, value = "true")
     })
-    public void testCannotSendToInternalTopicWhenAutoCreateTrueAndTopicExists(ClusterInstance clusterInstance) throws Exception {
+    public void testCannotSendToInternalTopicWhenAutoCreateTrueAndTopicExists(ClusterInstance clusterInstance) {
         createInternalTopic(clusterInstance);
         assertSendToInternalTopicFails(clusterInstance, InvalidTopicException.class);
     }
@@ -234,7 +232,7 @@ public class ProducerFailureHandlingTest {
      * when auto.create.topics.enable=false and the internal topic already exists.
      */
     @ClusterTest
-    public void testCannotSendToInternalTopicWhenAutoCreateFalseAndTopicExists(ClusterInstance clusterInstance) throws Exception {
+    public void testCannotSendToInternalTopicWhenAutoCreateFalseAndTopicExists(ClusterInstance clusterInstance) {
         createInternalTopic(clusterInstance);
         assertSendToInternalTopicFails(clusterInstance, InvalidTopicException.class);
     }
@@ -278,9 +276,7 @@ public class ProducerFailureHandlingTest {
         String topicName = "minisrtest2";
         int brokerNum = clusterInstance.brokers().size();
         Map<String, String> topicConfig = Map.of(MIN_IN_SYNC_REPLICAS_CONFIG, String.valueOf(brokerNum));
-        try (Admin admin = clusterInstance.admin()) {
-            admin.createTopics(List.of(new NewTopic(topicName, 1, (short) brokerNum).configs(topicConfig)));
-        }
+        clusterInstance.createTopic(topicName, 1, (short) brokerNum, topicConfig);
 
         ProducerRecord<byte[], byte[]> record =
                 new ProducerRecord<>(topicName, null, "key".getBytes(), "value".getBytes());
@@ -333,7 +329,7 @@ public class ProducerFailureHandlingTest {
                 BUFFER_MEMORY_CONFIG, producerBufferSize);
     }
 
-    private void createInternalTopic(ClusterInstance clusterInstance) throws Exception {
+    private void createInternalTopic(ClusterInstance clusterInstance) {
         clusterInstance.createTopic(Topic.GROUP_METADATA_TOPIC_NAME, 1, (short) 1, clusterInstance.brokers().get(0)
                 .groupCoordinator()
                 .groupMetadataTopicConfigs());

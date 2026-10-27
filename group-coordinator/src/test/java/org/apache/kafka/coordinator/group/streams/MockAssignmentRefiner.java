@@ -33,6 +33,7 @@ public class MockAssignmentRefiner implements AssignmentRefiner {
     private Map<String, StreamsGroupMember> lastPassedMembers = Map.of();
     private Map<String, TasksTuple> lastPassedTargetAssignment = Map.of();
     private Map<String, MemberTaskOffsets> lastPassedTaskOffsets = Map.of();
+    private Map<String, Integer> lastPassedHeartbeatVersions = Map.of();
     private SortedMap<String, ConfiguredSubtopology> lastPassedSubtopologies = null;
     private int lastPassedNumWarmupReplicas = -1;
     private long lastPassedAcceptableRecoveryLag = -1L;
@@ -57,6 +58,10 @@ public class MockAssignmentRefiner implements AssignmentRefiner {
         return lastPassedTaskOffsets;
     }
 
+    public Map<String, Integer> lastPassedHeartbeatVersions() {
+        return lastPassedHeartbeatVersions;
+    }
+
     public SortedMap<String, ConfiguredSubtopology> lastPassedSubtopologies() {
         return lastPassedSubtopologies;
     }
@@ -74,6 +79,7 @@ public class MockAssignmentRefiner implements AssignmentRefiner {
         Map<String, StreamsGroupMember> members,
         Map<String, TasksTuple> targetAssignment,
         Map<String, MemberTaskOffsets> taskOffsets,
+        Map<String, Integer> heartbeatVersions,
         SortedMap<String, ConfiguredSubtopology> subtopologies,
         int numWarmupReplicas,
         long acceptableRecoveryLag
@@ -82,6 +88,7 @@ public class MockAssignmentRefiner implements AssignmentRefiner {
         lastPassedMembers = members;
         lastPassedTargetAssignment = targetAssignment;
         lastPassedTaskOffsets = taskOffsets;
+        lastPassedHeartbeatVersions = Map.copyOf(heartbeatVersions);
         lastPassedSubtopologies = subtopologies;
         lastPassedNumWarmupReplicas = numWarmupReplicas;
         lastPassedAcceptableRecoveryLag = acceptableRecoveryLag;

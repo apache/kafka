@@ -998,7 +998,8 @@ class Partition(val topicPartition: TopicPartition,
    * advancing the HW, the follower's log end offset may keep falling behind the HW (determined by the leader's log end
    * offset) and therefore will never be added to ISR.
    *
-   * The HW can only advance if the ISR size is equal or large than the min ISR(min.insync.replicas).
+   * The HW can only advance if the ISR size is equal to or larger than the effective min ISR
+   * (min(min.insync.replicas, replica count) - see effectiveMinIsr).
    *
    * With the addition of AlterPartition, we also consider newly added replicas as part of the ISR when advancing
    * the HW. These replicas have not yet been committed to the ISR by the controller, so we could revert to the previously

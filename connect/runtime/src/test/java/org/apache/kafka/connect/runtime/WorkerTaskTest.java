@@ -31,7 +31,6 @@ import org.apache.kafka.connect.storage.StatusBackingStore;
 import org.apache.kafka.connect.util.ConnectorTaskId;
 
 import org.junit.jupiter.api.AfterEach;
-import org.junit.jupiter.api.BeforeEach;
 import org.junit.jupiter.api.Test;
 import org.junit.jupiter.api.extension.ExtendWith;
 import org.mockito.Mock;
@@ -67,20 +66,15 @@ public class WorkerTaskTest {
     @Mock private TaskStatus.Listener statusListener;
     @Mock private ClassLoader loader;
     @Mock private StatusBackingStore statusBackingStore;
-    private ConnectMetrics metrics;
+    private final MockConnectMetrics metrics = new MockConnectMetrics();
     @Mock private ErrorHandlingMetrics errorHandlingMetrics;
     @Mock private RetryWithToleranceOperator<Object> retryWithToleranceOperator;
     @Mock private TransformationChain<Object, SourceRecord> transformationChain;
     @Mock private Supplier<List<ErrorReporter<Object>>> errorReportersSupplier;
 
-    @BeforeEach
-    public void setup() {
-        metrics = new MockConnectMetrics();
-    }
-
     @AfterEach
     public void tearDown() {
-        if (metrics != null) metrics.stop();
+        metrics.stop();
     }
 
     @Test
@@ -221,7 +215,6 @@ public class WorkerTaskTest {
     @Test
     public void updateMetricsOnListenerEventsForStartupPauseResumeAndShutdown() {
         ConnectorTaskId taskId = new ConnectorTaskId("foo", 0);
-        ConnectMetrics metrics = new MockConnectMetrics();
         TaskMetricsGroup group = new TaskMetricsGroup(taskId, metrics, statusListener);
 
         group.onStartup(taskId);
@@ -242,7 +235,6 @@ public class WorkerTaskTest {
     @Test
     public void updateMetricsOnListenerEventsForStartupPauseResumeAndFailure() {
         ConnectorTaskId taskId = new ConnectorTaskId("foo", 0);
-        MockConnectMetrics metrics = new MockConnectMetrics();
         MockTime time = metrics.time();
         ConnectException error = new ConnectException("error");
         TaskMetricsGroup group = new TaskMetricsGroup(taskId, metrics, statusListener);
