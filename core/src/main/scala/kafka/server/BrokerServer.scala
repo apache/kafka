@@ -43,7 +43,7 @@ import org.apache.kafka.coordinator.share.{ShareCoordinator, ShareCoordinatorRec
 import org.apache.kafka.coordinator.transaction.ProducerIdManager
 import org.apache.kafka.image.publisher.{BrokerRegistrationTracker, MetadataPublisher}
 import org.apache.kafka.metadata.{BrokerState, KRaftMetadataCache, ListenerInfo, MetadataCache, MetadataVersionConfigValidator}
-import org.apache.kafka.metadata.publisher.{AclPublisher, ClientQuotaMetadataManager, DelegationTokenPublisher, DynamicClientQuotaPublisher, DynamicTopicClusterQuotaPublisher, ScramPublisher}
+import org.apache.kafka.metadata.publisher.{AclPublisher, DelegationTokenPublisher, DynamicClientQuotaPublisher, DynamicTopicClusterQuotaPublisher, ScramPublisher}
 import org.apache.kafka.security.{CredentialProvider, DelegationTokenManager}
 import org.apache.kafka.server.FetchSession.FetchSessionCache
 import org.apache.kafka.server.authorizer.Authorizer
@@ -149,8 +149,6 @@ class BrokerServer(
   @volatile var metadataCache: KRaftMetadataCache = _
 
   var quotaManagers: QuotaFactory.QuotaManagers = _
-
-  var clientQuotaMetadataManager: ClientQuotaMetadataManager = _
 
   @volatile var brokerTopicStats: BrokerTopicStats = _
 
@@ -293,11 +291,6 @@ class BrokerServer(
         apiVersionManager,
         sharedServer.socketFactory,
         connectionDisconnectListeners)
-
-      clientQuotaMetadataManager = new ClientQuotaMetadataManager(
-        quotaManagers.userClientQuotaUpdaters(),
-        (ip, quota) => socketServer.connectionQuotas.updateIpConnectionRateQuota(ip.toScala, quota.toScala)
-      )
 
       val listenerInfo = ListenerInfo.create(Optional.of(config.interBrokerListenerName.value()),
           config.effectiveAdvertisedBrokerListeners.asJava).
@@ -548,7 +541,8 @@ class BrokerServer(
           config.nodeId,
           sharedServer.metadataPublishingFaultHandler,
           "broker",
-          clientQuotaMetadataManager,
+          quotaManagers.userClientQuotaUpdaters(),
+          (ip, quota) => socketServer.connectionQuotas.updateIpConnectionRateQuota(ip.toScala, quota.toScala),
         ),
         new DynamicTopicClusterQuotaPublisher(
           clusterId,

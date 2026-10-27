@@ -20,23 +20,26 @@ import org.apache.kafka.common.TopicPartition;
 import org.apache.kafka.common.internals.Plugin;
 import org.apache.kafka.common.metrics.Metrics;
 import org.apache.kafka.common.metrics.Quota;
+import org.apache.kafka.common.quota.ClientQuotaEntity;
 import org.apache.kafka.common.utils.Time;
 import org.apache.kafka.common.utils.Utils;
 import org.apache.kafka.common.utils.internals.Sanitizer;
 import org.apache.kafka.metadata.publisher.QuotaConfigChangeListener;
-import org.apache.kafka.metadata.publisher.QuotaEntity;
-import org.apache.kafka.metadata.publisher.QuotaEntity.UserClientQuotaEntity;
 import org.apache.kafka.server.config.AbstractKafkaConfig;
 import org.apache.kafka.server.config.ClientQuotaManagerConfig;
 import org.apache.kafka.server.config.QuotaConfig;
 import org.apache.kafka.server.config.ReplicationQuotaManagerConfig;
 import org.apache.kafka.server.quota.ClientQuotaEntity.ConfigEntity;
+import org.apache.kafka.server.quota.ClientQuotaManager.ClientIdEntity;
+import org.apache.kafka.server.quota.ClientQuotaManager.UserEntity;
 
 import java.util.Map;
 import java.util.Optional;
 import java.util.OptionalDouble;
 import java.util.function.BiConsumer;
 
+import static org.apache.kafka.common.quota.ClientQuotaEntity.CLIENT_ID;
+import static org.apache.kafka.common.quota.ClientQuotaEntity.USER;
 import static org.apache.kafka.server.quota.ClientQuotaManager.DEFAULT_USER_CLIENT_ID;
 import static org.apache.kafka.server.quota.ClientQuotaManager.DEFAULT_USER_ENTITY;
 
@@ -85,7 +88,7 @@ public class QuotaFactory {
             };
         }
 
-        public Map<String, BiConsumer<UserClientQuotaEntity, OptionalDouble>> userClientQuotaUpdaters() {
+        public Map<String, BiConsumer<ClientQuotaEntity, OptionalDouble>> userClientQuotaUpdaters() {
             return Map.of(
                 QuotaConfig.CONSUMER_BYTE_RATE_OVERRIDE_CONFIG, userClientQuotaUpdater(fetch),
                 QuotaConfig.PRODUCER_BYTE_RATE_OVERRIDE_CONFIG, userClientQuotaUpdater(produce),
@@ -94,18 +97,22 @@ public class QuotaFactory {
             );
         }
 
-        private static BiConsumer<UserClientQuotaEntity, OptionalDouble> userClientQuotaUpdater(ClientQuotaManager manager) {
+        private static BiConsumer<ClientQuotaEntity, OptionalDouble> userClientQuotaUpdater(ClientQuotaManager manager) {
             return (entity, newValue) -> {
+                Map<String, String> entries = entity.entries();
+                // Metadata uses null for default entities, so use containsKey to distinguish them from absent dimensions.
                 // In User+Client quota managers, "<default>" is used for default entity; absent entities use empty Optionals.
                 // Only explicit user names are sanitized; client IDs are passed through unchanged.
-                Optional<ConfigEntity> userEntity = entity.userEntity()
-                    .map(user -> user instanceof QuotaEntity.UserEntity explicitUser
-                        ? new ClientQuotaManager.UserEntity(Sanitizer.sanitize(explicitUser.user()))
-                        : DEFAULT_USER_ENTITY);
-                Optional<ConfigEntity> clientIdEntity = entity.clientIdEntity()
-                    .map(clientId -> clientId instanceof QuotaEntity.ClientIdEntity explicitClientId
-                        ? new ClientQuotaManager.ClientIdEntity(explicitClientId.clientId())
-                        : DEFAULT_USER_CLIENT_ID);
+                Optional<ConfigEntity> userEntity = Optional.empty();
+                if (entries.containsKey(USER)) {
+                    String user = entries.get(USER);
+                    userEntity = Optional.of(user == null ? DEFAULT_USER_ENTITY : new UserEntity(Sanitizer.sanitize(user)));
+                }
+                Optional<ConfigEntity> clientIdEntity = Optional.empty();
+                if (entries.containsKey(CLIENT_ID)) {
+                    String clientId = entries.get(CLIENT_ID);
+                    clientIdEntity = Optional.of(clientId == null ? DEFAULT_USER_CLIENT_ID : new ClientIdEntity(clientId));
+                }
                 Optional<Quota> quota = newValue.isPresent() ? Optional.of(Quota.upperBound(newValue.getAsDouble())) : Optional.empty();
                 manager.updateQuota(userEntity, clientIdEntity, quota);
             };

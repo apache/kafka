@@ -17,16 +17,20 @@
 package org.apache.kafka.server.quota;
 
 import org.apache.kafka.common.metrics.Quota;
-import org.apache.kafka.metadata.publisher.QuotaEntity;
-import org.apache.kafka.metadata.publisher.QuotaEntity.UserClientQuotaEntity;
+import org.apache.kafka.common.quota.ClientQuotaEntity;
+import org.apache.kafka.server.quota.ClientQuotaEntity.ConfigEntity;
 import org.apache.kafka.server.quota.QuotaFactory.QuotaManagers;
 
 import org.junit.jupiter.api.Test;
 
+import java.util.Collections;
+import java.util.HashMap;
 import java.util.Map;
 import java.util.Optional;
 import java.util.OptionalDouble;
 
+import static org.apache.kafka.common.quota.ClientQuotaEntity.CLIENT_ID;
+import static org.apache.kafka.common.quota.ClientQuotaEntity.USER;
 import static org.apache.kafka.server.config.QuotaConfig.CONSUMER_BYTE_RATE_OVERRIDE_CONFIG;
 import static org.apache.kafka.server.config.QuotaConfig.CONTROLLER_MUTATION_RATE_OVERRIDE_CONFIG;
 import static org.apache.kafka.server.config.QuotaConfig.PRODUCER_BYTE_RATE_OVERRIDE_CONFIG;
@@ -39,35 +43,47 @@ public class QuotaFactoryTest {
     @Test
     public void testUserClientQuotaUpdaterConvertsEntityAndQuota() {
         assertQuotaConversion(
-            new QuotaEntity.UserEntity("user"),
+            Map.of(USER, "user"),
             Optional.of(new ClientQuotaManager.UserEntity("user")), Optional.empty()
         );
         assertQuotaConversion(
-            new QuotaEntity.DefaultUserEntity(),
+            Collections.singletonMap(USER, null),
             Optional.of(ClientQuotaManager.DEFAULT_USER_ENTITY), Optional.empty()
         );
         assertQuotaConversion(
-            new QuotaEntity.ClientIdEntity("client"),
+            Map.of(CLIENT_ID, "client"),
             Optional.empty(), Optional.of(new ClientQuotaManager.ClientIdEntity("client"))
         );
         assertQuotaConversion(
-            new QuotaEntity.DefaultClientIdEntity(),
+            Collections.singletonMap(CLIENT_ID, null),
             Optional.empty(), Optional.of(ClientQuotaManager.DEFAULT_USER_CLIENT_ID)
         );
         assertQuotaConversion(
-            new QuotaEntity.ExplicitUserExplicitClientIdEntity("user", "client"),
+            Map.of(USER, "user", CLIENT_ID, "client"),
             Optional.of(new ClientQuotaManager.UserEntity("user")), Optional.of(new ClientQuotaManager.ClientIdEntity("client"))
         );
+
+        Map<String, String> explicitUserDefaultClient = new HashMap<>();
+        explicitUserDefaultClient.put(USER, "user");
+        explicitUserDefaultClient.put(CLIENT_ID, null);
         assertQuotaConversion(
-            new QuotaEntity.ExplicitUserDefaultClientIdEntity("user"),
+            explicitUserDefaultClient,
             Optional.of(new ClientQuotaManager.UserEntity("user")), Optional.of(ClientQuotaManager.DEFAULT_USER_CLIENT_ID)
         );
+
+        Map<String, String> defaultUserExplicitClient = new HashMap<>();
+        defaultUserExplicitClient.put(USER, null);
+        defaultUserExplicitClient.put(CLIENT_ID, "client");
         assertQuotaConversion(
-            new QuotaEntity.DefaultUserExplicitClientIdEntity("client"),
+            defaultUserExplicitClient,
             Optional.of(ClientQuotaManager.DEFAULT_USER_ENTITY), Optional.of(new ClientQuotaManager.ClientIdEntity("client"))
         );
+
+        Map<String, String> defaultUserDefaultClient = new HashMap<>();
+        defaultUserDefaultClient.put(USER, null);
+        defaultUserDefaultClient.put(CLIENT_ID, null);
         assertQuotaConversion(
-            new QuotaEntity.DefaultUserDefaultClientIdEntity(),
+            defaultUserDefaultClient,
             Optional.of(ClientQuotaManager.DEFAULT_USER_ENTITY), Optional.of(ClientQuotaManager.DEFAULT_USER_CLIENT_ID)
         );
     }
@@ -85,10 +101,10 @@ public class QuotaFactoryTest {
         var userClientQuotaUpdaters = managers.userClientQuotaUpdaters();
         assertEquals(expectedManagers.keySet(), userClientQuotaUpdaters.keySet());
 
-        var entity = new QuotaEntity.ExplicitUserExplicitClientIdEntity("user", "client");
+        var entity = new ClientQuotaEntity(Map.of(USER, "user", CLIENT_ID, "client"));
         var quota = OptionalDouble.of(123.5);
-        Optional<ClientQuotaEntity.ConfigEntity> expectedUser = Optional.of(new ClientQuotaManager.UserEntity("user"));
-        Optional<ClientQuotaEntity.ConfigEntity> expectedClient = Optional.of(new ClientQuotaManager.ClientIdEntity("client"));
+        Optional<ConfigEntity> expectedUser = Optional.of(new ClientQuotaManager.UserEntity("user"));
+        Optional<ConfigEntity> expectedClient = Optional.of(new ClientQuotaManager.ClientIdEntity("client"));
         expectedManagers.forEach((key, manager) -> {
             userClientQuotaUpdaters.get(key).accept(entity, quota);
             verify(manager).updateQuota(expectedUser, expectedClient, Optional.of(Quota.upperBound(123.5)));
@@ -103,12 +119,13 @@ public class QuotaFactoryTest {
     }
 
     private static void assertQuotaConversion(
-        UserClientQuotaEntity entity,
-        Optional<ClientQuotaEntity.ConfigEntity> expectedUser,
-        Optional<ClientQuotaEntity.ConfigEntity> expectedClient
+        Map<String, String> entries,
+        Optional<ConfigEntity> expectedUser,
+        Optional<ConfigEntity> expectedClient
     ) {
         ClientQuotaManager manager = mock(ClientQuotaManager.class);
         var userClientQuotaUpdater = createQuotaManagers(manager).userClientQuotaUpdaters().get(PRODUCER_BYTE_RATE_OVERRIDE_CONFIG);
+        var entity = new ClientQuotaEntity(entries);
 
         // Verify quota updates.
         userClientQuotaUpdater.accept(entity, OptionalDouble.of(123.5));
