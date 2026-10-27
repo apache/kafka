@@ -813,6 +813,7 @@ org.apache.kafka.coordinator.group.GroupMetadataManagerTest:
 - testStreamsGroupEndpointInformationOnlyWhenEpochGreater
 - testStreamsGroupEpochDoesNotIncreaseWhenEveryAssignmentConfigIsAtItsDefault
 - testStreamsGroupEpochIncreaseWithNumStandbyReplicasConfigChanges
+- testStreamsGroupEpochIncreasesWhenAnAssignmentConfigIsNotAtItsDefault
 - testStreamsGroupEpochShouldNotIncreaseWithAcceptableRecoveryLagConfigChange
 - testStreamsGroupEvaluatedConfigs
 - testStreamsGroupFallsBackToTargetAssignmentWhenRefinementLosesAnActiveTask
@@ -1898,6 +1899,8 @@ org.apache.kafka.coordinator.group.streams.TopologyMetadataTest:
 org.apache.kafka.coordinator.group.streams.assignor.AssignmentConfigsImplTest:
 - testDefault
 - testFromRecord
+- testFromRecordIgnoresUnknownConfigs
+- testFromRecordWithEmptyConfigs
 - testFromRecordWithoutConfigs
 - testFromRecordWithoutRackAwareAssignmentTags
 - testRackAwareAssignmentTagsAreUnmodifiable
