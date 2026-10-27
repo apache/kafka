@@ -25,6 +25,7 @@ import org.apache.kafka.common.test.api.ClusterTestDefaults;
 import org.apache.kafka.common.test.api.Type;
 import org.apache.kafka.common.utils.Time;
 
+import org.junit.jupiter.api.Test;
 import org.slf4j.Logger;
 import org.slf4j.LoggerFactory;
 
@@ -49,17 +50,11 @@ public class AdminClientTimeoutIntegrationTest {
 
     private static final Logger log = LoggerFactory.getLogger(AdminClientTimeoutIntegrationTest.class);
 
-    private final ClusterInstance clusterInstance;
-
-    public AdminClientTimeoutIntegrationTest(ClusterInstance clusterInstance) {
-        this.clusterInstance = clusterInstance;
-    }
-
     /**
      * Test injecting timeouts for calls that are in flight.
      */
     @ClusterTest
-    public void testCallInFlightTimeouts() throws Exception {
+    public void testCallInFlightTimeouts(ClusterInstance clusterInstance) throws Exception {
         var config = Map.of(
                 AdminClientConfig.BOOTSTRAP_SERVERS_CONFIG, clusterInstance.bootstrapServers(),
                 AdminClientConfig.RETRIES_CONFIG, "0",
@@ -86,7 +81,7 @@ public class AdminClientTimeoutIntegrationTest {
         }
     }
 
-    @ClusterTest
+    @Test
     public void testDescribeConfigWithOptionTimeoutMs() {
         try (Admin admin = createInvalidAdminClient()) {
             List<ConfigResource> configResources = List.of(
@@ -100,7 +95,7 @@ public class AdminClientTimeoutIntegrationTest {
         }
     }
 
-    @ClusterTest
+    @Test
     public void testDescribeUserScramCredentialsTimeout() {
         try (Admin admin = createInvalidAdminClient()) {
             ExecutionException exception = assertTimeout(Duration.ofSeconds(10),
@@ -111,7 +106,7 @@ public class AdminClientTimeoutIntegrationTest {
         }
     }
 
-    @ClusterTest
+    @Test
     public void testDescribeTransactionsTimeout() {
         try (Admin admin = createInvalidAdminClient()) {
             String transactionId = "foo";
@@ -123,7 +118,7 @@ public class AdminClientTimeoutIntegrationTest {
         }
     }
 
-    @ClusterTest
+    @Test
     public void testAbortTransactionTimeout() {
         try (Admin admin = createInvalidAdminClient()) {
             ExecutionException exception = assertTimeout(Duration.ofSeconds(10),
@@ -136,7 +131,7 @@ public class AdminClientTimeoutIntegrationTest {
     }
 
     @ClusterTest
-    public void testClose() {
+    public void testClose(ClusterInstance clusterInstance) {
         Admin admin = clusterInstance.admin();
         admin.close();
         admin.close(); // double close has no effect
@@ -146,7 +141,7 @@ public class AdminClientTimeoutIntegrationTest {
      * Test closing the AdminClient with a timeout of 0, when there are calls with extremely long
      * timeouts in progress. The calls should be aborted after the hard shutdown timeout elapses.
      */
-    @ClusterTest
+    @Test
     public void testForceClose() {
         try (Admin admin = createInvalidAdminClient()) {
             var future = admin.createTopics(Stream.of("mytopic", "mytopic2")
@@ -161,7 +156,7 @@ public class AdminClientTimeoutIntegrationTest {
      * Check that a call with a timeout does not complete before the minimum timeout has elapsed,
      * even when the default request timeout is shorter.
      */
-    @ClusterTest
+    @Test
     public void testMinimumRequestTimeouts() {
         Map<String, Object> config = Map.of(
             AdminClientConfig.BOOTSTRAP_SERVERS_CONFIG, "localhost:" + INCORRECT_BROKER_PORT,
@@ -178,7 +173,7 @@ public class AdminClientTimeoutIntegrationTest {
         }
     }
 
-    @ClusterTest
+    @Test
     public void testListClientMetricsResourcesTimeoutMs() {
         try (Admin admin = createInvalidAdminClient()) {
             ListClientMetricsResourcesOptions timeoutOption = new ListClientMetricsResourcesOptions().timeoutMs(0);
@@ -189,7 +184,7 @@ public class AdminClientTimeoutIntegrationTest {
         }
     }
 
-    @ClusterTest
+    @Test
     public void testListConfigResourcesTimeoutMs() {
         try (Admin admin = createInvalidAdminClient()) {
             ListConfigResourcesOptions timeoutOption = new ListConfigResourcesOptions().timeoutMs(0);
