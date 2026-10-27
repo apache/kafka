@@ -1461,6 +1461,10 @@ public class StreamThread extends Thread implements ProcessingThread {
                         taskManager.activeTaskIds(), taskManager.standbyTaskIds(), commitLatency);
                 }
             }
+
+            // maybeCommit() commits when the uncommitted bytes exceed the limit, so they only exceed it here when that
+            // commit was skipped (during a rebalance) or failed, or when the task executors wrote more since the commit
+            maybePauseProcessingForUncommittedBytes();
         }
 
         now = time.milliseconds();
@@ -1920,6 +1924,7 @@ public class StreamThread extends Thread implements ProcessingThread {
         final boolean paused = shouldCommitDueToUncommittedBytes();
         if (paused != processingPausedForUncommittedBytes) {
             processingPausedForUncommittedBytes = paused;
+            taskManager.setProcessingThreadsPaused(paused);
             if (paused) {
                 log.info("Pausing processing until a commit succeeds, because state stores contain more than {} " +
                              "uncommitted bytes and the last commit was skipped or failed.", maxUncommittedBytesPerThread);

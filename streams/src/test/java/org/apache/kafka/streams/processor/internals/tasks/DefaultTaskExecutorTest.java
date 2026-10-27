@@ -135,6 +135,20 @@ public class DefaultTaskExecutorTest {
     }
 
     @Test
+    public void shouldUnassignTaskWhileProcessingPaused() {
+        when(taskManager.processingPaused()).thenReturn(true);
+
+        taskExecutor.start();
+
+        verify(taskManager, timeout(VERIFICATION_TIMEOUT)).unassignTask(task, taskExecutor);
+        verify(task).flush();
+        verify(task, never()).process(anyLong());
+        verify(task, never()).maybePunctuateStreamTime();
+        verify(task, never()).maybePunctuateSystemTime();
+        assertNull(taskExecutor.currentTask());
+    }
+
+    @Test
     public void shouldProcessTasks() {
         when(taskExecutionMetadata.canProcessTask(any(), anyLong())).thenReturn(true);
         when(task.isProcessable(anyLong())).thenReturn(true);
