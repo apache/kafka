@@ -1,0 +1,36 @@
+// Licensed to the Apache Software Foundation (ASF) under one or more
+// contributor license agreements.  See the NOTICE file distributed with
+// this work for additional information regarding copyright ownership.
+// The ASF licenses this file to You under the Apache License, Version 2.0
+// (the "License"); you may not use this file except in compliance with
+// the License.  You may obtain a copy of the License at
+//
+//    http://www.apache.org/licenses/LICENSE-2.0
+//
+// Unless required by applicable law or agreed to in writing, software
+// distributed under the License is distributed on an "AS IS" BASIS,
+// WITHOUT WARRANTIES OR CONDITIONS OF ANY KIND, either express or implied.
+// See the License for the specific language governing permissions and
+// limitations under the License.
+
+{
+  "apiKey": 1,
+  "type": "coordinator-value",
+  "name": "MirrorPartitionStateValue",
+  "validVersions": "0",
+  "flexibleVersions": "0+",
+  "fields": [
+    { "name": "State", "type": "int8", "versions": "0+",
+      "about": "The mirror partition state." },
+    { "name": "LeaderEpoch", "type": "int32", "versions": "0+", "default": "-1",
+      "about": "The highest leader epoch seen for the partition, or -1 if not available." },
+    { "name": "StateEpoch", "type": "int32", "versions": "0+", "default": "0",
+      "about": "Monotonically increasing epoch incremented on every state transition." },
+    { "name": "ErrorMessage", "type": "string", "versions": "0+", "nullableVersions": "0+", "default": "null",
+      "about": "The error message when in FAILED state, or null if not applicable." },
+    { "name": "RetryAttempt", "type": "int16", "versions": "0+", "default": "0",
+      "about": "The number of automatic retry attempts while in FAILED state, or -1 for non-retryable failure." },
+    { "name": "PreviousState", "type": "int8", "versions": "0+", "default": "-1",
+      "about": "The mirror partition state before this transition; UNKNOWN if not recorded." }
+  ]
+}
