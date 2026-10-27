@@ -193,38 +193,33 @@ public class LogManager {
                       LogConfig initialDefaultConfig,
                       CleanerConfig cleanerConfig,
                       int numRecoveryThreadsPerDataDir,
-                      long flushCheckMs,
-                      long flushRecoveryOffsetCheckpointMs,
-                      long flushStartOffsetCheckpointMs,
-                      long retentionCheckMs,
+                      LogMaintenanceConfig maintenanceConfig,
                       int maxTransactionTimeoutMs,
                       ProducerStateManagerConfig producerStateManagerConfig,
-                      int producerIdExpirationCheckIntervalMs,
                       Scheduler scheduler,
                       BrokerTopicStats brokerTopicStats,
                       LogDirFailureChannel logDirFailureChannel,
                       Time time,
                       boolean remoteStorageSystemEnable,
-                      long initialTaskDelayMs,
                       LogCleanerBuilder cleanerBuilder) throws IOException {
         this.logDirs = logDirs;
         this.configRepository = configRepository;
         this.initialDefaultConfig = initialDefaultConfig;
         this.cleanerConfig = cleanerConfig;
         this.numRecoveryThreadsPerDataDir = numRecoveryThreadsPerDataDir;
-        this.flushCheckMs = flushCheckMs;
-        this.flushRecoveryOffsetCheckpointMs = flushRecoveryOffsetCheckpointMs;
-        this.flushStartOffsetCheckpointMs = flushStartOffsetCheckpointMs;
-        this.retentionCheckMs = retentionCheckMs;
+        this.flushCheckMs = maintenanceConfig.flushCheckMs();
+        this.flushRecoveryOffsetCheckpointMs = maintenanceConfig.flushRecoveryOffsetCheckpointMs();
+        this.flushStartOffsetCheckpointMs = maintenanceConfig.flushStartOffsetCheckpointMs();
+        this.retentionCheckMs = maintenanceConfig.retentionCheckMs();
         this.maxTransactionTimeoutMs = maxTransactionTimeoutMs;
         this.producerStateManagerConfig = producerStateManagerConfig;
-        this.producerIdExpirationCheckIntervalMs = producerIdExpirationCheckIntervalMs;
+        this.producerIdExpirationCheckIntervalMs = maintenanceConfig.producerIdExpirationCheckIntervalMs();
         this.scheduler = scheduler;
         this.brokerTopicStats = brokerTopicStats;
         this.logDirFailureChannel = logDirFailureChannel;
         this.time = time;
         this.remoteStorageSystemEnable = remoteStorageSystemEnable;
-        this.initialTaskDelayMs = initialTaskDelayMs;
+        this.initialTaskDelayMs = maintenanceConfig.initialTaskDelayMs();
         this.cleanerFactory = cleanerBuilder;
         liveLogDirs = createAndValidateLogDirs(logDirs, initialOfflineDirs);
         currentDefaultConfig = initialDefaultConfig;
