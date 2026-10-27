@@ -394,6 +394,18 @@ public class ConsumerConfig extends AbstractConfig {
     public static final String SECURITY_PROVIDERS_CONFIG = SecurityConfig.SECURITY_PROVIDERS_CONFIG;
     private static final String SECURITY_PROVIDERS_DOC = SecurityConfig.SECURITY_PROVIDERS_DOC;
 
+    /** <code>security.protocol</code> */
+    public static final String SECURITY_PROTOCOL_CONFIG = CommonClientConfigs.SECURITY_PROTOCOL_CONFIG;
+
+    /** <code>metadata.recovery.strategy</code> */
+    public static final String METADATA_RECOVERY_STRATEGY_CONFIG = CommonClientConfigs.METADATA_RECOVERY_STRATEGY_CONFIG;
+
+    /** <code>metadata.recovery.rebootstrap.trigger.ms</code> */
+    public static final String METADATA_RECOVERY_REBOOTSTRAP_TRIGGER_MS_CONFIG =CommonClientConfigs.METADATA_RECOVERY_REBOOTSTRAP_TRIGGER_MS_CONFIG;
+
+    /** <code>metadata.cluster.check.enable</code> */
+    public static final String METADATA_CLUSTER_CHECK_ENABLE_CONFIG = CommonClientConfigs.METADATA_CLUSTER_CHECK_ENABLE_CONFIG;
+
     /**
      * <code>share.acknowledgement.mode</code>
      */
@@ -698,7 +710,7 @@ public class ConsumerConfig extends AbstractConfig {
                                         null,
                                         Importance.LOW,
                                         SECURITY_PROVIDERS_DOC)
-                                .define(CommonClientConfigs.SECURITY_PROTOCOL_CONFIG,
+                                .define(SECURITY_PROTOCOL_CONFIG,
                                         Type.STRING,
                                         CommonClientConfigs.DEFAULT_SECURITY_PROTOCOL,
                                         ConfigDef.CaseInsensitiveValidString
@@ -707,36 +719,36 @@ public class ConsumerConfig extends AbstractConfig {
                                         CommonClientConfigs.SECURITY_PROTOCOL_DOC)
                                 .withClientSslSupport()
                                 .withClientSaslSupport()
-                                .define(CommonClientConfigs.METADATA_RECOVERY_STRATEGY_CONFIG,
+                                .define(METADATA_RECOVERY_STRATEGY_CONFIG,
                                         Type.STRING,
                                         CommonClientConfigs.DEFAULT_METADATA_RECOVERY_STRATEGY,
                                         ConfigDef.CaseInsensitiveValidString
                                                 .in(Utils.enumOptions(MetadataRecoveryStrategy.class)),
                                         Importance.LOW,
                                         CommonClientConfigs.METADATA_RECOVERY_STRATEGY_DOC)
-                                .define(CommonClientConfigs.METADATA_RECOVERY_REBOOTSTRAP_TRIGGER_MS_CONFIG,
+                                .define(METADATA_RECOVERY_REBOOTSTRAP_TRIGGER_MS_CONFIG,
                                         Type.LONG,
                                         CommonClientConfigs.DEFAULT_METADATA_RECOVERY_REBOOTSTRAP_TRIGGER_MS,
                                         atLeast(0),
                                         Importance.LOW,
                                         CommonClientConfigs.METADATA_RECOVERY_REBOOTSTRAP_TRIGGER_MS_DOC)
-                                .define(CommonClientConfigs.METADATA_CLUSTER_CHECK_ENABLE_CONFIG,
+                                .define(METADATA_CLUSTER_CHECK_ENABLE_CONFIG,
                                         Type.BOOLEAN,
                                         true,
                                         Importance.LOW,
                                         CommonClientConfigs.METADATA_CLUSTER_CHECK_ENABLE_DOC)
-                                .define(ConsumerConfig.SHARE_ACKNOWLEDGEMENT_MODE_CONFIG,
+                                .define(SHARE_ACKNOWLEDGEMENT_MODE_CONFIG,
                                         Type.STRING,
                                         ShareAcknowledgementMode.IMPLICIT.name(),
                                         new ShareAcknowledgementMode.Validator(),
                                         Importance.MEDIUM,
-                                        ConsumerConfig.SHARE_ACKNOWLEDGEMENT_MODE_DOC)
-                                .define(ConsumerConfig.SHARE_ACQUIRE_MODE_CONFIG,
+                                        SHARE_ACKNOWLEDGEMENT_MODE_DOC)
+                                .define(SHARE_ACQUIRE_MODE_CONFIG,
                                         Type.STRING,
                                         DEFAULT_SHARE_ACQUIRE_MODE,
                                         new ShareAcquireMode.Validator(),
                                         Importance.MEDIUM,
-                                        ConsumerConfig.SHARE_ACQUIRE_MODE_DOC)
+                                        SHARE_ACQUIRE_MODE_DOC)
                                 .define(CONFIG_PROVIDERS_CONFIG,
                                         Type.LIST,
                                         List.of(),

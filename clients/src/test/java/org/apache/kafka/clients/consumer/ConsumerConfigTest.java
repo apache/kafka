@@ -16,7 +16,6 @@
  */
 package org.apache.kafka.clients.consumer;
 
-import org.apache.kafka.clients.CommonClientConfigs;
 import org.apache.kafka.clients.MetadataRecoveryStrategy;
 import org.apache.kafka.common.config.ConfigException;
 import org.apache.kafka.common.errors.InvalidConfigurationException;
@@ -158,10 +157,10 @@ public class ConsumerConfigTest {
         Map<String, Object> configs = new HashMap<>();
         configs.put(ConsumerConfig.KEY_DESERIALIZER_CLASS_CONFIG, keyDeserializerClass);
         configs.put(ConsumerConfig.VALUE_DESERIALIZER_CLASS_CONFIG, valueDeserializerClass);
-        configs.put(CommonClientConfigs.SECURITY_PROTOCOL_CONFIG, "abc");
+        configs.put(ConsumerConfig.SECURITY_PROTOCOL_CONFIG, "abc");
         configs.put(ConsumerConfig.BOOTSTRAP_SERVERS_CONFIG, "localhost:9092");
         ConfigException ce = assertThrows(ConfigException.class, () -> new ConsumerConfig(configs));
-        assertTrue(ce.getMessage().contains(CommonClientConfigs.SECURITY_PROTOCOL_CONFIG));
+        assertTrue(ce.getMessage().contains(ConsumerConfig.SECURITY_PROTOCOL_CONFIG));
     }
 
     @Test
@@ -171,9 +170,9 @@ public class ConsumerConfigTest {
         configs.put(ConsumerConfig.KEY_DESERIALIZER_CLASS_CONFIG, keyDeserializerClass);
         configs.put(ConsumerConfig.VALUE_DESERIALIZER_CLASS_CONFIG, valueDeserializerClass);
         configs.put(ConsumerConfig.BOOTSTRAP_SERVERS_CONFIG, "localhost:9092");
-        configs.put(CommonClientConfigs.SECURITY_PROTOCOL_CONFIG, saslSslLowerCase);
+        configs.put(ConsumerConfig.SECURITY_PROTOCOL_CONFIG, saslSslLowerCase);
         final ConsumerConfig consumerConfig = new ConsumerConfig(configs);
-        assertEquals(saslSslLowerCase, consumerConfig.originals().get(CommonClientConfigs.SECURITY_PROTOCOL_CONFIG));
+        assertEquals(saslSslLowerCase, consumerConfig.originals().get(ConsumerConfig.SECURITY_PROTOCOL_CONFIG));
     }
 
     @Test
@@ -221,7 +220,7 @@ public class ConsumerConfigTest {
         configs.put(ConsumerConfig.VALUE_DESERIALIZER_CLASS_CONFIG, valueDeserializerClass);
         configs.put(ConsumerConfig.BOOTSTRAP_SERVERS_CONFIG, "localhost:9092");
         final ConsumerConfig consumerConfig = new ConsumerConfig(configs);
-        assertEquals(MetadataRecoveryStrategy.REBOOTSTRAP.name, consumerConfig.getString(CommonClientConfigs.METADATA_RECOVERY_STRATEGY_CONFIG));
+        assertEquals(MetadataRecoveryStrategy.REBOOTSTRAP.name, consumerConfig.getString(ConsumerConfig.METADATA_RECOVERY_STRATEGY_CONFIG));
     }
 
     @Test
@@ -229,10 +228,10 @@ public class ConsumerConfigTest {
         Map<String, Object> configs = new HashMap<>();
         configs.put(ConsumerConfig.KEY_DESERIALIZER_CLASS_CONFIG, keyDeserializerClass);
         configs.put(ConsumerConfig.VALUE_DESERIALIZER_CLASS_CONFIG, valueDeserializerClass);
-        configs.put(CommonClientConfigs.METADATA_RECOVERY_STRATEGY_CONFIG, "abc");
+        configs.put(ConsumerConfig.METADATA_RECOVERY_STRATEGY_CONFIG, "abc");
         configs.put(ConsumerConfig.BOOTSTRAP_SERVERS_CONFIG, "localhost:9092");
         ConfigException ce = assertThrows(ConfigException.class, () -> new ConsumerConfig(configs));
-        assertTrue(ce.getMessage().contains(CommonClientConfigs.METADATA_RECOVERY_STRATEGY_CONFIG));
+        assertTrue(ce.getMessage().contains(ConsumerConfig.METADATA_RECOVERY_STRATEGY_CONFIG));
     }
 
     @ParameterizedTest
