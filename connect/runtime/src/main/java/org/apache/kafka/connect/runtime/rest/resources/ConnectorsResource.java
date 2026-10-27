@@ -179,7 +179,7 @@ public class ConnectorsResource {
         ),
         @ApiResponse(
             responseCode = "409",
-            description = "Connector already exists or request cannot be completed while a rebalance is in progress",
+            description = "Connector already exists or request cannot be completed due to a conflicting operation, such as a rebalance or concurrent configuration change",
             content = @Content(mediaType = MediaType.APPLICATION_JSON, schema = @Schema(implementation = ErrorMessage.class))
         ),
         @ApiResponse(
@@ -362,7 +362,7 @@ public class ConnectorsResource {
         ),
         @ApiResponse(
             responseCode = "409",
-            description = "Request cannot be completed while a rebalance is in progress",
+            description = "Request cannot be completed due to a conflicting operation, such as a rebalance or concurrent configuration change",
             content = @Content(mediaType = MediaType.APPLICATION_JSON, schema = @Schema(implementation = ErrorMessage.class))
         ),
         @ApiResponse(
@@ -423,7 +423,7 @@ public class ConnectorsResource {
         ),
         @ApiResponse(
             responseCode = "409",
-            description = "Request cannot be completed while a rebalance is in progress",
+            description = "Request cannot be completed due to a conflicting operation, such as a rebalance or concurrent configuration change",
             content = @Content(mediaType = MediaType.APPLICATION_JSON, schema = @Schema(implementation = ErrorMessage.class))
         ),
         @ApiResponse(
@@ -463,7 +463,7 @@ public class ConnectorsResource {
         ),
         @ApiResponse(
             responseCode = "409",
-            description = "Request cannot be completed while a rebalance is in progress",
+            description = "Request cannot be completed due to a conflicting operation, such as a rebalance or concurrent configuration change",
             content = @Content(mediaType = MediaType.APPLICATION_JSON, schema = @Schema(implementation = ErrorMessage.class))
         ),
         @ApiResponse(
@@ -514,7 +514,7 @@ public class ConnectorsResource {
         ),
         @ApiResponse(
             responseCode = "409",
-            description = "Request cannot be completed while a rebalance is in progress",
+            description = "Request cannot be completed due to a conflicting operation, such as a rebalance or concurrent configuration change",
             content = @Content(mediaType = MediaType.APPLICATION_JSON, schema = @Schema(implementation = ErrorMessage.class))
         ),
         @ApiResponse(
@@ -645,7 +645,7 @@ public class ConnectorsResource {
         ),
         @ApiResponse(
             responseCode = "409",
-            description = "Request cannot be completed while a rebalance is in progress",
+            description = "Request cannot be completed due to a conflicting operation, such as a rebalance or concurrent configuration change",
             content = @Content(mediaType = MediaType.APPLICATION_JSON, schema = @Schema(implementation = ErrorMessage.class))
         ),
         @ApiResponse(
@@ -679,7 +679,7 @@ public class ConnectorsResource {
         ),
         @ApiResponse(
             responseCode = "409",
-            description = "Request cannot be completed while a rebalance is in progress",
+            description = "Request cannot be completed due to a conflicting operation, such as a rebalance or concurrent configuration change",
             content = @Content(mediaType = MediaType.APPLICATION_JSON, schema = @Schema(implementation = ErrorMessage.class))
         ),
         @ApiResponse(
@@ -750,7 +750,7 @@ public class ConnectorsResource {
         ),
         @ApiResponse(
             responseCode = "409",
-            description = "Request cannot be completed while a rebalance is in progress",
+            description = "Request cannot be completed due to a conflicting operation, such as a rebalance or concurrent configuration change",
             content = @Content(mediaType = MediaType.APPLICATION_JSON, schema = @Schema(implementation = ErrorMessage.class))
         ),
         @ApiResponse(
@@ -794,7 +794,7 @@ public class ConnectorsResource {
         ),
         @ApiResponse(
             responseCode = "409",
-            description = "Request cannot be completed while a rebalance is in progress",
+            description = "Request cannot be completed due to a conflicting operation, such as a rebalance or concurrent configuration change",
             content = @Content(mediaType = MediaType.APPLICATION_JSON, schema = @Schema(implementation = ErrorMessage.class))
         ),
         @ApiResponse(

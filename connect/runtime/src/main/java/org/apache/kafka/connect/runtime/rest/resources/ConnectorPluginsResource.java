@@ -127,7 +127,7 @@ public class ConnectorPluginsResource {
         ),
         @ApiResponse(
             responseCode = "500",
-            description = "Configuration validation timed out or was interrupted",
+            description = "Configuration validation timed out, was interrupted, or failed unexpectedly",
             content = @Content(
                 mediaType = MediaType.APPLICATION_JSON,
                 schema = @Schema(implementation = ErrorMessage.class)
