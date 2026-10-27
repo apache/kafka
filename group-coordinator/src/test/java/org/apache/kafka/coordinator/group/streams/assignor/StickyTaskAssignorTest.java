@@ -1798,6 +1798,29 @@ public class StickyTaskAssignorTest {
         assertEquals(Set.of("memberB1"), standbyHolders(result, "test-subtopology", 0));
     }
 
+    @Test
+    public void shouldPlaceRackAwareStandbyOnPreviousStandbyMemberWithRoomWhenAnotherOneIsFull() {
+        // Each process is in a rack of its own and every member has room for two tasks. Task 4's standby goes back to
+        // m1, which fills it, while m1b on the same process still has room. Task 0's previous standby members are m1,
+        // the most caught-up, and m2, so the full m1 is skipped and the standby goes back to m2, not to m1b, which has
+        // no state of task 0.
+        final Map<String, MemberMetadataAndStateImpl> members = mkMap(
+            mkEntry("a0", createTaggedMemberMetadata("P0", Map.of("rack", "A"), Map.of("s", Set.of(0)), Map.of())),
+            mkEntry("m1", createTaggedMemberMetadataWithOffsets("P1", Map.of("rack", "B"), Map.of("s", Set.of(1)), Map.of("s", Set.of(4, 0)), Map.of("s", Map.of(0, 9000L)))),
+            mkEntry("m1b", createTaggedMemberMetadata("P1", Map.of("rack", "B"), Map.of("s", Set.of(2)), Map.of())),
+            mkEntry("m2", createTaggedMemberMetadataWithOffsets("P2", Map.of("rack", "C"), Map.of("s", Set.of(3)), Map.of("s", Set.of(0)), Map.of("s", Map.of(0, 100L)))),
+            mkEntry("m2b", createTaggedMemberMetadata("P2", Map.of("rack", "C"), Map.of("s", Set.of(4)), Map.of("s", Set.of(1))))
+        );
+
+        final GroupAssignment result = assignor.assign(
+            new GroupSpecImpl(members, AssignmentConfigsImpl.DEFAULT.withNumStandbyReplicas(1).withRackAwareAssignmentTags(List.of("rack"))),
+            new TopologyDescriberImpl(5, true, List.of("s"))
+        );
+
+        assertEquals(Set.of(4), getStandbyTasks(result, "s", "m1"));
+        assertEquals(Set.of("m2"), standbyHolders(result, "s", 0));
+    }
+
     private int activeTaskCount(GroupAssignment result, String memberId, String subtopologyId) {
         return getAllActiveTasks(result, memberId).getOrDefault(subtopologyId, Set.of()).size();
     }
