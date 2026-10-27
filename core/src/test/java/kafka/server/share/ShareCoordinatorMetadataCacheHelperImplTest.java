@@ -35,6 +35,8 @@ import org.apache.kafka.server.share.dlq.ShareGroupDLQMetadataCacheHelper;
 import org.apache.kafka.server.share.persister.ShareCoordinatorMetadataCacheHelper;
 
 import org.junit.jupiter.api.Test;
+import org.junit.jupiter.params.ParameterizedTest;
+import org.junit.jupiter.params.provider.CsvSource;
 
 import java.util.Arrays;
 import java.util.List;
@@ -879,6 +881,25 @@ public class ShareCoordinatorMetadataCacheHelperImplTest {
         );
 
         assertEquals(5_000_000, cache.dlqTopicMaxMessageBytes("test-topic"));
+    }
+
+    @ParameterizedTest
+    @CsvSource({"0, 0", "1, 1", "2147483647, 2147483647", "-1, 5000000", "-2147483648, 5000000"})
+    public void testDlqTopicMaxMessageBytesAppliesTopicConfigBounds(String override, int expected) {
+        MetadataCache mockMetadataCache = mock(MetadataCache.class);
+        Properties props = new Properties();
+        props.put(TopicConfig.MAX_MESSAGE_BYTES_CONFIG, override);
+        when(mockMetadataCache.topicConfig("test-topic")).thenReturn(props);
+
+        ShareCoordinatorMetadataCacheHelperImpl cache = new ShareCoordinatorMetadataCacheHelperImpl(
+            mockMetadataCache,
+            sharePartitionKey -> 0,
+            mock(ListenerName.class),
+            mock(GroupConfigManager.class),
+            () -> 5_000_000
+        );
+
+        assertEquals(expected, cache.dlqTopicMaxMessageBytes("test-topic"));
     }
 
     // Tests for topicName

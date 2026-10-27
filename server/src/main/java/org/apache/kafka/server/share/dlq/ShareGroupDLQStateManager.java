@@ -278,8 +278,8 @@ public class ShareGroupDLQStateManager {
         // The original source records for the CURRENT round only, resolved before this round is added
         // to the node map (see resolveRound()): once for round 1 (before this handler is first
         // enqueued), then again for each subsequent round after a successful produce response advances
-        // nextOffsetToSend. Volatile because resolution runs off the sender thread - on the calling
-        // thread for local offsets and, for tiered offsets, on the remote-storage reader pool - while
+        // nextOffsetToSend. Volatile because resolution runs off the sender thread - on the fetch
+        // executor for local offsets and, for tiered offsets, on the remote-storage reader pool - while
         // this value is read on the sender thread when the produce request is built. Memoized per round:
         // set once per round and reused for every retry of that round, so retries never re-fetch.
         private volatile Map<Long, Record> resolvedRecordData = Map.of();
@@ -736,8 +736,9 @@ public class ShareGroupDLQStateManager {
 
         /**
          * Resolves the source records for the CURRENT round only - the window starting at
-         * {@link #nextOffsetToSend} - reading from the local log on the calling thread and, for any
-         * offsets tiered to remote storage, asynchronously on the remote-storage reader pool. The result
+         * {@link #nextOffsetToSend} - reading from the local log on the thread running this method (the
+         * fetch executor, when called through {@link #resolveRoundAsync()}) and, for any offsets tiered
+         * to remote storage, asynchronously on the remote-storage reader pool. The result
          * is memoized in {@link #resolvedRecordData} and reused for every retry of this same round (this
          * method is only ever called once per round - see {@link #dlq} for round 1 and
          * {@link #handleProduceResponse} for subsequent rounds - so a round's data is never re-fetched by

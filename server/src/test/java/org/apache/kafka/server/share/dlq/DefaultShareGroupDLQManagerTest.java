@@ -135,4 +135,39 @@ class DefaultShareGroupDLQManagerTest {
         assertTrue(read.get(10, TimeUnit.SECONDS));
         assertTrue(manager.fetchExecutor().isTerminated());
     }
+
+    @Test
+    public void testStopRunsQueuedReadsAndDoesNotInterruptRunningOnes() throws Exception {
+        // Occupy every fetch thread so the next task has to wait in the queue.
+        CountDownLatch allStarted = new CountDownLatch(FETCH_THREADS);
+        CountDownLatch release = new CountDownLatch(1);
+        List<Future<Boolean>> running = new ArrayList<>();
+        for (int i = 0; i < FETCH_THREADS; i++) {
+            running.add(manager.fetchExecutor().submit(() -> {
+                allStarted.countDown();
+                // True only if released normally, false if interrupted.
+                try {
+                    return release.await(10, TimeUnit.SECONDS);
+                } catch (InterruptedException e) {
+                    return false;
+                }
+            }));
+        }
+        assertTrue(allStarted.await(10, TimeUnit.SECONDS));
+        Future<String> queued = manager.fetchExecutor().submit(() -> "ran");
+
+        Thread stopper = new Thread(manager::stop);
+        stopper.start();
+        stopper.join(200);
+        assertTrue(stopper.isAlive());
+        assertFalse(queued.isDone());
+        release.countDown();
+        stopper.join(10_000);
+
+        assertFalse(stopper.isAlive());
+        assertEquals("ran", queued.get(10, TimeUnit.SECONDS));
+        for (Future<Boolean> read : running) {
+            assertTrue(read.get(10, TimeUnit.SECONDS));
+        }
+    }
 }

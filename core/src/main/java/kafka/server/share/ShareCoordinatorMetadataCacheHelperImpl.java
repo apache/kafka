@@ -125,14 +125,16 @@ public class ShareCoordinatorMetadataCacheHelperImpl implements ShareCoordinator
             return messageMaxBytesSupplier.getAsInt();
         }
         try {
+            // Returns null only on null input which has already been checked above.
             Integer maxMessageBytes = (Integer) ConfigDef.parseType(TopicConfig.MAX_MESSAGE_BYTES_CONFIG, value, ConfigDef.Type.INT);
-            if (maxMessageBytes != null) {
-                return maxMessageBytes;
-            }
+            // parseType only checks the type, so apply the same bounds as the topic config.
+            LogConfig.configKeys().get(TopicConfig.MAX_MESSAGE_BYTES_CONFIG).validator
+                .ensureValid(TopicConfig.MAX_MESSAGE_BYTES_CONFIG, maxMessageBytes);
+            return maxMessageBytes;
         } catch (ConfigException exe) {
             // Fall back to the broker's configured value.
+            return messageMaxBytesSupplier.getAsInt();
         }
-        return messageMaxBytesSupplier.getAsInt();
     }
 
     @Override

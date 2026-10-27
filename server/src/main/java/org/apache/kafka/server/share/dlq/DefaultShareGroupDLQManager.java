@@ -21,7 +21,6 @@ import org.apache.kafka.clients.KafkaClient;
 import org.apache.kafka.common.utils.Time;
 import org.apache.kafka.common.utils.Utils;
 import org.apache.kafka.common.utils.internals.KafkaThread;
-import org.apache.kafka.common.utils.internals.ThreadUtils;
 import org.apache.kafka.server.share.LogReader;
 import org.apache.kafka.server.share.metrics.ShareGroupMetrics;
 import org.apache.kafka.server.util.timer.Timer;
@@ -110,9 +109,20 @@ public class DefaultShareGroupDLQManager implements ShareGroupDLQManager {
 
     @Override
     public void stop() {
-        // Drain the reads first - they enqueue onto the state manager when they finish - and interrupt
-        // any which do not finish in time.
-        ThreadUtils.shutdownExecutorServiceQuietly(fetchExecutor, FETCH_EXECUTOR_SHUTDOWN_TIMEOUT_MS, TimeUnit.MILLISECONDS);
+        // Drain the reads first - they enqueue onto the state manager when they finish. Queued reads
+        // still run after shutdown(). shutdownNow() is deliberately not used: it would interrupt a
+        // thread which may be reading a log segment, and an interrupt during a FileChannel operation
+        // closes the channel for every other user of that segment. A read which does not finish in
+        // time is abandoned and left to complete on its daemon thread. The futures of requests that
+        // never complete are not awaited by anything on the shutdown path.
+        fetchExecutor.shutdown();
+        try {
+            if (!fetchExecutor.awaitTermination(FETCH_EXECUTOR_SHUTDOWN_TIMEOUT_MS, TimeUnit.MILLISECONDS)) {
+                log.warn("DLQ fetch executor did not finish its pending reads in {} ms.", FETCH_EXECUTOR_SHUTDOWN_TIMEOUT_MS);
+            }
+        } catch (InterruptedException e) {
+            Thread.currentThread().interrupt();
+        }
         Utils.swallow(log, Level.ERROR, "Unable to stop DLQ state manager", stateManager::stop);
     }
 }
