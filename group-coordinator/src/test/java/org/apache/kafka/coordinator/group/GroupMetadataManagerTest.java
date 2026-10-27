@@ -34,6 +34,7 @@ import org.apache.kafka.common.errors.InvalidRegularExpression;
 import org.apache.kafka.common.errors.InvalidRequestException;
 import org.apache.kafka.common.errors.NotLeaderOrFollowerException;
 import org.apache.kafka.common.errors.RebalanceInProgressException;
+import org.apache.kafka.common.errors.StreamsInvalidTopologyEpochException;
 import org.apache.kafka.common.errors.UnknownMemberIdException;
 import org.apache.kafka.common.errors.UnknownServerException;
 import org.apache.kafka.common.errors.UnknownTopicOrPartitionException;
@@ -12415,7 +12416,7 @@ public class GroupMetadataManagerTest {
     @Test
     public void testValidateStreamsGroupTopologyDescriptionUpdateRejectsStaleEpoch() {
         // KIP-1331: validateStreamsGroupTopologyDescriptionUpdate must reject a pushedEpoch that
-        // does not match the group's current topology epoch with INVALID_REQUEST. Without this
+        // does not match the group's current topology epoch with STREAMS_INVALID_TOPOLOGY_EPOCH. Without this
         // check, a stale push could regress storedDescriptionTopologyEpoch and the heartbeat
         // gate would never converge.
         String groupId = "streams-group";
@@ -12431,7 +12432,7 @@ public class GroupMetadataManagerTest {
 
         // No topology has been pushed via heartbeat, so currentTopologyEpoch() returns -1.
         // A push claiming epoch 4 must be rejected.
-        assertThrows(InvalidRequestException.class,
+        assertThrows(StreamsInvalidTopologyEpochException.class,
             () -> context.groupMetadataManager.validateStreamsGroupTopologyDescriptionUpdate(
                 groupId, memberId, 4, context.lastCommittedOffset));
     }
@@ -21463,6 +21464,89 @@ public class GroupMetadataManagerTest {
         );
 
         assertRecordsEquals(expectedRecords, result.records());
+    }
+
+    @Test
+    public void testStreamsGroupMemberJoiningWithDifferentTopologyAndSameEpoch() {
+        String groupId = "fooup";
+        String subtopology1 = "subtopology1";
+        String fooTopicName = "foo";
+        String barTopicName = "bar";
+        Topology groupTopology = new Topology().setEpoch(1).setSubtopologies(List.of(
+                new Subtopology()
+                    .setSubtopologyId(subtopology1)
+                    .setSourceTopics(List.of(fooTopicName))
+            )
+        );
+        Topology memberTopology = new Topology().setEpoch(1).setSubtopologies(List.of(
+                new Subtopology()
+                    .setSubtopologyId(subtopology1)
+                    .setSourceTopics(List.of(fooTopicName, barTopicName))
+            )
+        );
+
+        GroupMetadataManagerTestContext context = new GroupMetadataManagerTestContext.Builder()
+            .withStreamsGroup(
+                new StreamsGroupBuilder(groupId, 10)
+                    .withTopology(StreamsTopology.fromHeartbeatRequest(groupTopology))
+            )
+            .build();
+
+        StreamsInvalidTopologyEpochException exception = assertThrows(StreamsInvalidTopologyEpochException.class,
+            () -> context.streamsGroupHeartbeat(
+                new StreamsGroupHeartbeatRequestData()
+                    .setGroupId(groupId)
+                    .setMemberId(Uuid.randomUuid().toString())
+                    .setMemberEpoch(0)
+                    .setRebalanceTimeoutMs(1500)
+                    .setTopology(memberTopology)
+                    .setProcessId(DEFAULT_PROCESS_ID)
+                    .setActiveTasks(List.of())
+                    .setStandbyTasks(List.of())
+                    .setWarmupTasks(List.of())));
+        assertEquals("The topology sent by the member differs from the group's topology with the same epoch 1. " +
+            "Make sure all members of the group run the same topology.", exception.getMessage());
+    }
+
+    @Test
+    public void testStreamsGroupMemberJoiningWithDifferentTopologyAndHigherEpoch() {
+        String groupId = "fooup";
+        String subtopology1 = "subtopology1";
+        String fooTopicName = "foo";
+        String barTopicName = "bar";
+        Topology groupTopology = new Topology().setEpoch(0).setSubtopologies(List.of(
+                new Subtopology()
+                    .setSubtopologyId(subtopology1)
+                    .setSourceTopics(List.of(fooTopicName))
+            )
+        );
+        Topology memberTopology = new Topology().setEpoch(1).setSubtopologies(List.of(
+                new Subtopology()
+                    .setSubtopologyId(subtopology1)
+                    .setSourceTopics(List.of(fooTopicName, barTopicName))
+            )
+        );
+
+        GroupMetadataManagerTestContext context = new GroupMetadataManagerTestContext.Builder()
+            .withStreamsGroup(
+                new StreamsGroupBuilder(groupId, 10)
+                    .withTopology(StreamsTopology.fromHeartbeatRequest(groupTopology))
+            )
+            .build();
+
+        InvalidRequestException exception = assertThrows(InvalidRequestException.class,
+            () -> context.streamsGroupHeartbeat(
+                new StreamsGroupHeartbeatRequestData()
+                    .setGroupId(groupId)
+                    .setMemberId(Uuid.randomUuid().toString())
+                    .setMemberEpoch(0)
+                    .setRebalanceTimeoutMs(1500)
+                    .setTopology(memberTopology)
+                    .setProcessId(DEFAULT_PROCESS_ID)
+                    .setActiveTasks(List.of())
+                    .setStandbyTasks(List.of())
+                    .setWarmupTasks(List.of())));
+        assertEquals("Topology updates are not supported yet.", exception.getMessage());
     }
 
     @Test

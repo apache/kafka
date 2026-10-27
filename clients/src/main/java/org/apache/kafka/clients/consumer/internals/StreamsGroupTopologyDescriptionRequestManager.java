@@ -165,6 +165,14 @@ public class StreamsGroupTopologyDescriptionRequestManager implements RequestMan
                 streamsRebalanceData.setTopologyPushRequired(false);
                 break;
 
+            case STREAMS_INVALID_TOPOLOGY_EPOCH:
+                // The group's topology epoch changed after the heartbeat that requested this push.
+                // No retry follows; a heartbeat at the new epoch requests a new push if needed.
+                pushRequestState.onSuccessfulAttempt(responseTimeMs);
+                logger.info("Topology description push rejected with STREAMS_INVALID_TOPOLOGY_EPOCH: {}", errorMessage);
+                streamsRebalanceData.setTopologyPushRequired(false);
+                break;
+
             case STREAMS_TOPOLOGY_DESCRIPTION_UPDATE_FAILED:
             case INVALID_REQUEST:
             case UNSUPPORTED_VERSION:
