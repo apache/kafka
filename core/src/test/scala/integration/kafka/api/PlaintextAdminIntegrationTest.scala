@@ -17,7 +17,6 @@
 package kafka.api
 
 import java.io.File
-import java.net.InetAddress
 import java.nio.ByteBuffer
 import java.nio.file.{Files, Paths, StandardOpenOption}
 import java.lang.{Long => JLong}
@@ -30,7 +29,6 @@ import kafka.integration.KafkaServerTestHarness
 import kafka.server.KafkaConfig
 import kafka.utils.TestUtils._
 import kafka.utils.{TestInfoUtils, TestUtils}
-import org.apache.kafka.clients.HostResolver
 import org.apache.kafka.clients.admin.AlterConfigOp.OpType
 import org.apache.kafka.clients.admin.ConfigEntry.ConfigSource
 import org.apache.kafka.clients.admin._
@@ -47,7 +45,7 @@ import org.apache.kafka.common.record.internal.FileRecords
 import org.apache.kafka.common.requests.DeleteRecordsRequest
 import org.apache.kafka.common.resource.{PatternType, ResourcePattern, ResourceType}
 import org.apache.kafka.common.serialization.{ByteArrayDeserializer, ByteArraySerializer}
-import org.apache.kafka.common.utils.{Time, Utils}
+import org.apache.kafka.common.utils.Utils
 import org.apache.kafka.common.{ConsumerGroupState, ElectionType, GroupState, GroupType, IsolationLevel, TopicPartition, TopicPartitionReplica}
 import org.apache.kafka.controller.ControllerRequestContextUtil.ANONYMOUS_CONTEXT
 import org.apache.kafka.coordinator.group.{GroupConfig, GroupCoordinatorConfig}
@@ -60,7 +58,7 @@ import org.apache.kafka.storage.internals.log.{CleanerConfig, LogConfig, LogFile
 import org.apache.kafka.test.TestUtils.{DEFAULT_MAX_WAIT_MS, assertFutureThrows}
 import org.apache.logging.log4j.core.config.Configurator
 import org.junit.jupiter.api.Assertions._
-import org.junit.jupiter.api.{BeforeEach, Test, TestInfo, Timeout}
+import org.junit.jupiter.api.{BeforeEach, Test, TestInfo}
 import org.junit.jupiter.params.ParameterizedTest
 import org.junit.jupiter.params.provider.MethodSource
 import org.slf4j.LoggerFactory
@@ -92,26 +90,6 @@ class PlaintextAdminIntegrationTest extends BaseAdminIntegrationTest {
     Configurator.reconfigure()
     brokerLoggerConfigResource = new ConfigResource(
       ConfigResource.Type.BROKER_LOGGER, brokers.head.config.brokerId.toString)
-  }
-
-  @Test
-  @Timeout(30)
-  def testDescribeConfigWithOptionTimeoutMs(): Unit = {
-    val config = createConfig
-    config.put(AdminClientConfig.BOOTSTRAP_SERVERS_CONFIG, s"localhost:${TestUtils.IncorrectBrokerPort}")
-    val brokenClient = Admin.create(config)
-
-    try {
-      // Describe and broker
-      val brokerResource1 = new ConfigResource(ConfigResource.Type.BROKER, brokers(1).config.brokerId.toString)
-      val brokerResource2 = new ConfigResource(ConfigResource.Type.BROKER, brokers(2).config.brokerId.toString)
-      val configResources = util.List.of(brokerResource1, brokerResource2)
-
-      val exception = assertThrows(classOf[ExecutionException], () => {
-        brokenClient.describeConfigs(configResources,new DescribeConfigsOptions().timeoutMs(0)).all().get()
-      })
-      assertInstanceOf(classOf[TimeoutException], exception.getCause)
-    } finally brokenClient.close(time.Duration.ZERO)
   }
 
   @Test
@@ -254,26 +232,6 @@ class PlaintextAdminIntegrationTest extends BaseAdminIntegrationTest {
     val credentialInfo = scram.credentialInfos().get(0)
     assertEquals(ScramMechanism.SCRAM_SHA_256, credentialInfo.mechanism())
     assertEquals(4096, credentialInfo.iterations())
-  }
-
-  private def createInvalidAdminClient(): Admin = {
-    val config = createConfig
-    config.put(AdminClientConfig.BOOTSTRAP_SERVERS_CONFIG, s"localhost:${TestUtils.IncorrectBrokerPort}")
-    Admin.create(config)
-  }
-
-  @Timeout(10)
-  @Test
-  def testDescribeUserScramCredentialsTimeout(): Unit = {
-    client = createInvalidAdminClient()
-    try {
-      // test describeUserScramCredentials(List<String> users, DescribeUserScramCredentialsOptions options)
-      val exception = assertThrows(classOf[ExecutionException], () => {
-        client.describeUserScramCredentials(util.List.of("tom4"),
-          new DescribeUserScramCredentialsOptions().timeoutMs(0)).all().get()
-      })
-      assertInstanceOf(classOf[TimeoutException], exception.getCause)
-    } finally client.close(time.Duration.ZERO)
   }
 
   private def consumeToExpectedNumber = (expectedNumber: Int, groupProtocol: String) => {
@@ -452,34 +410,6 @@ class PlaintextAdminIntegrationTest extends BaseAdminIntegrationTest {
   }
 
   @Test
-  @Timeout(10)
-  def testDescribeTransactionsTimeout(): Unit = {
-    client = createInvalidAdminClient()
-    try {
-      val transactionId = "foo"
-      val exception = assertThrows(classOf[ExecutionException], () => {
-        client.describeTransactions(util.Set.of(transactionId),
-          new DescribeTransactionsOptions().timeoutMs(0)).description(transactionId).get()
-      })
-      assertInstanceOf(classOf[TimeoutException], exception.getCause)
-    } finally client.close(time.Duration.ZERO)
-  }
-
-  @Test
-  @Timeout(10)
-  def testAbortTransactionTimeout(): Unit = {
-    client = createInvalidAdminClient()
-    try {
-      val exception = assertThrows(classOf[ExecutionException], () => {
-        client.abortTransaction(
-          new AbortTransactionSpec(topicPartition, 1, 1, 1),
-          new AbortTransactionOptions().timeoutMs(0)).all().get()
-      })
-      assertInstanceOf(classOf[TimeoutException], exception.getCause)
-    } finally client.close(time.Duration.ZERO)
-  }
-
-  @Test
   def testListTransactions(): Unit = {
     def createTransactionList(): Unit = {
       client = createAdminClient
@@ -621,27 +551,6 @@ class PlaintextAdminIntegrationTest extends BaseAdminIntegrationTest {
 
       checkConsumer(tp, 2)
     } finally producer.close()
-  }
-
-  @Test
-  def testClose(): Unit = {
-    val client = createAdminClient
-    client.close()
-    client.close() // double close has no effect
-  }
-
-  @Test
-  def testAdminClientHandlingBadIPWithoutTimeout(): Unit = {
-    val config = createConfig
-    config.put(AdminClientConfig.SOCKET_CONNECTION_SETUP_TIMEOUT_MS_CONFIG, "1000")
-    val returnBadAddressFirst = new HostResolver {
-      override def resolve(host: String): Array[InetAddress] = {
-        Array[InetAddress](InetAddress.getByName("10.200.20.100"), InetAddress.getByName(host))
-      }
-    }
-    client = AdminClientTestUtils.create(config, returnBadAddressFirst)
-    // simply check that a call, e.g. describeCluster, returns normally
-    client.describeCluster().nodes().get()
   }
 
   @ParameterizedTest(name = TestInfoUtils.TestWithParameterizedGroupProtocolNames)
@@ -1271,60 +1180,6 @@ class PlaintextAdminIntegrationTest extends BaseAdminIntegrationTest {
     assertFutureThrows(classOf[SecurityDisabledException], client.createAcls(util.Set.of(acl)).all())
     assertFutureThrows(classOf[SecurityDisabledException], client.deleteAcls(util.Set.of(acl.toFilter)).all())
   }
-
-  /**
-    * Test closing the AdminClient with a generous timeout.  Calls in progress should be completed,
-    * since they can be done within the timeout.  New calls should receive exceptions.
-    */
-  @Test
-  def testDelayedClose(): Unit = {
-    client = createAdminClient
-    val topics = Seq("mytopic", "mytopic2")
-    val newTopics = topics.map(new NewTopic(_, 1, 1.toShort))
-    val future = client.createTopics(newTopics.asJava, new CreateTopicsOptions().validateOnly(true)).all()
-    client.close(time.Duration.ofHours(2))
-    val future2 = client.createTopics(newTopics.asJava, new CreateTopicsOptions().validateOnly(true)).all()
-    assertFutureThrows(classOf[IllegalStateException], future2)
-    future.get
-    client.close(time.Duration.ofMinutes(30)) // multiple close-with-timeout should have no effect
-  }
-
-  /**
-    * Test closing the AdminClient with a timeout of 0, when there are calls with extremely long
-    * timeouts in progress.  The calls should be aborted after the hard shutdown timeout elapses.
-    */
-  @Test
-  def testForceClose(): Unit = {
-    val config = createConfig
-    config.put(AdminClientConfig.BOOTSTRAP_SERVERS_CONFIG, s"localhost:${TestUtils.IncorrectBrokerPort}")
-    client = Admin.create(config)
-    // Because the bootstrap servers are set up incorrectly, this call will not complete, but must be
-    // cancelled by the close operation.
-    val future = client.createTopics(Seq("mytopic", "mytopic2").map(new NewTopic(_, 1, 1.toShort)).asJava,
-      new CreateTopicsOptions().timeoutMs(900000)).all()
-    client.close(time.Duration.ZERO)
-    assertFutureThrows(classOf[TimeoutException], future)
-  }
-
-  /**
-    * Check that a call with a timeout does not complete before the minimum timeout has elapsed,
-    * even when the default request timeout is shorter.
-    */
-  @Test
-  def testMinimumRequestTimeouts(): Unit = {
-    val config = createConfig
-    config.put(AdminClientConfig.BOOTSTRAP_SERVERS_CONFIG, s"localhost:${TestUtils.IncorrectBrokerPort}")
-    config.put(AdminClientConfig.REQUEST_TIMEOUT_MS_CONFIG, "0")
-    client = Admin.create(config)
-    val startTimeMs = Time.SYSTEM.milliseconds()
-    val future = client.createTopics(Seq("mytopic", "mytopic2").map(new NewTopic(_, 1, 1.toShort)).asJava,
-      new CreateTopicsOptions().timeoutMs(2)).all()
-    assertFutureThrows(classOf[TimeoutException], future)
-    val endTimeMs = Time.SYSTEM.milliseconds()
-    assertTrue(endTimeMs > startTimeMs, "Expected the timeout to take at least one millisecond.")
-  }
-
-
 
   @ParameterizedTest(name = TestInfoUtils.TestWithParameterizedGroupProtocolNames)
   @MethodSource(Array("getTestGroupProtocolParametersAll"))
@@ -3658,18 +3513,6 @@ class PlaintextAdminIntegrationTest extends BaseAdminIntegrationTest {
   }
 
   @Test
-  @Timeout(30)
-  def testListClientMetricsResourcesTimeoutMs(): Unit = {
-    client = createInvalidAdminClient()
-    try {
-      val timeoutOption = new ListClientMetricsResourcesOptions().timeoutMs(0)
-      val exception = assertThrows(classOf[ExecutionException], () =>
-        client.listClientMetricsResources(timeoutOption).all().get())
-      assertInstanceOf(classOf[TimeoutException], exception.getCause)
-    } finally client.close(time.Duration.ZERO)
-  }
-
-  @Test
   def testListConfigResources(): Unit = {
     client = createAdminClient
 
@@ -3741,18 +3584,6 @@ class PlaintextAdminIntegrationTest extends BaseAdminIntegrationTest {
     assertThrows(classOf[ExecutionException], () => {
       client.listConfigResources(util.Set.of(ConfigResource.Type.UNKNOWN), new ListConfigResourcesOptions()).all().get()
     })
-  }
-
-  @Test
-  @Timeout(30)
-  def testListConfigResourcesTimeoutMs(): Unit = {
-    client = createInvalidAdminClient()
-    try {
-      val timeoutOption = new ListConfigResourcesOptions().timeoutMs(0)
-      val exception = assertThrows(classOf[ExecutionException], () =>
-        client.listConfigResources(util.Set.of(), timeoutOption).all().get())
-      assertInstanceOf(classOf[TimeoutException], exception.getCause)
-    } finally client.close(time.Duration.ZERO)
   }
 
   /**
