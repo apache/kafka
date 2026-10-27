@@ -211,8 +211,9 @@ public class PlaintextTransportLayer implements TransportLayer {
 
     /**
      * Transfers bytes from `fileChannel` without copying them, where possible with a single system call that reads
-     * the file and writes the socket. It then fails with the same IOException whichever of the two failed, so this
-     * channel cannot tell them apart: {@link #distinguishesFileReadFailures()} is false.
+     * the file and writes the socket. That call fails with the same IOException whether the file could not be read or
+     * the socket could not be written to, so this channel cannot tell the two apart:
+     * {@link #distinguishesFileReadFailures()} is false.
      */
     @Override
     public long transferFrom(FileChannel fileChannel, long position, long count) throws IOException {

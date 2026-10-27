@@ -53,9 +53,9 @@ public class LogDirFailureChannel {
     }
 
     /**
-     * If the given logDir is not already offline, log the error, add it to the
-     * set of offline log dirs and enqueue it to the logDirFailureEvent queue.
-     * Errors in a log dir that is already offline are not logged, so that the
+     * If the given logDir is not already offline, add it to the set of offline
+     * log dirs, log the error and enqueue logDir to the logDirFailureEvent queue.
+     * An error in a log dir that is already offline is not logged, so that the
      * failures that follow the first one in a failing log dir do not flood the log.
      * 
      * @param logDir The offline logDir.

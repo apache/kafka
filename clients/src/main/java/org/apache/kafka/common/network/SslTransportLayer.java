@@ -1001,11 +1001,12 @@ public class SslTransportLayer implements TransportLayer {
 
     /**
      * Transfers bytes from `fileChannel` by reading them into a buffer and writing them to this channel, since
-     * they have to be encrypted.
+     * they have to be encrypted. If it throws any exception, the bytes it already wrote to this channel are not
+     * reported, so this channel must not be used after a failed transfer.
      *
      * @throws FileReadException If the file cannot be read, other than because it was closed
-     * @throws IOException If this channel cannot be written to, or the file was closed. Whatever the failed call
-     *         throws, the bytes it already wrote are not reported, so this channel must not be used after it.
+     * @throws java.nio.channels.ClosedChannelException If the file or this channel was closed
+     * @throws IOException If this channel cannot be written to
      */
     @Override
     public long transferFrom(FileChannel fileChannel, long position, long count) throws IOException {

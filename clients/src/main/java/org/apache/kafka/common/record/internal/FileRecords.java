@@ -48,8 +48,8 @@ public class FileRecords extends AbstractRecords implements Closeable {
 
     /**
      * Notified when {@link #writeTo} fails in a way that may come from a failed read of the backing file: with a
-     * {@link FileReadException} when the file could not be read, otherwise with an exception that may come from the
-     * file and the network channel alike, which {@link #readFailure} tells apart.
+     * {@link FileReadException} when the file could not be read, otherwise with an exception that may come from either
+     * the file or the network channel, which re-reading the region with {@link #readFailure} tells apart.
      * It is called on the thread that failed to write, a network thread, so it must not do slow work such as reading
      * the file again.
      */
@@ -67,7 +67,7 @@ public class FileRecords extends AbstractRecords implements Closeable {
     private final boolean isSlice;
     private final int start;
     private final int end;
-    // Notified when writing to a network channel fails as described in TransferFailureHandler, or null
+    // If not null, notified when writing to a network channel fails as described in TransferFailureHandler
     private final TransferFailureHandler transferFailureHandler;
 
     private final Iterable<FileLogInputStream.FileChannelRecordBatch> batches;
@@ -338,7 +338,7 @@ public class FileRecords extends AbstractRecords implements Closeable {
             // safe to cast to int since `count` is an int
             return (int) destChannel.transferFrom(channel, position, count);
         } catch (IOException e) {
-            if (transferFailureHandler != null && mayBeReadFailure(destChannel, e))
+            if (transferFailureHandler != null && mayBeFileReadFailure(destChannel, e))
                 transferFailureHandler.onTransferFailure(this, position, count, e);
             throw e;
         }
@@ -357,14 +357,13 @@ public class FileRecords extends AbstractRecords implements Closeable {
     }
 
     /**
-     * Whether the given failure of {@link #writeTo} may come from a failed read of the backing file. A closed channel,
-     * of the file or the network, was closed concurrently, by a deletion or a shutdown, or because the connection is
-     * closing, which says nothing about the medium. Otherwise, a network channel that distinguishes file read failures
-     * throws a {@link FileReadException} for them, so any other failure comes from the network channel; one that does
-     * not, because a single system call reads the file and writes the socket, throws the same bare IOException for
-     * both.
+     * Whether the given failure of {@link #writeTo} may come from a failed read of the backing file. A
+     * {@link FileReadException} always does. A {@link ClosedChannelException} never does: the file or the network
+     * channel was closed concurrently, by a deletion, a shutdown or a closing connection, which says nothing about the
+     * medium. Any other exception does only if the network channel cannot tell a failed read of the file from a failed
+     * write, as when a single system call does both.
      */
-    private static boolean mayBeReadFailure(TransferableChannel destChannel, IOException transferFailure) {
+    private static boolean mayBeFileReadFailure(TransferableChannel destChannel, IOException transferFailure) {
         if (transferFailure instanceof FileReadException)
             return true;
         return !(transferFailure instanceof ClosedChannelException) && !destChannel.distinguishesFileReadFailures();
@@ -372,7 +371,7 @@ public class FileRecords extends AbstractRecords implements Closeable {
 
     /**
      * Read the given region of the backing file, after {@link #writeTo} failed on it with an exception that may come
-     * from the file and the network channel alike, to tell a storage failure from a socket failure. The whole region
+     * from either the file or the network channel, to tell a storage failure from a socket failure. The whole region
      * is read rather than its first byte because, depending on the platform, the transfer may fail anywhere within it
      * without reporting progress. Only a failed read of an open channel counts as a storage failure: the end of the
      * file may be reached because the log was truncated concurrently (e.g. when the replica becomes a follower), and

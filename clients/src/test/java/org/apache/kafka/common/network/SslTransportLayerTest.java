@@ -1323,7 +1323,7 @@ public class SslTransportLayerTest {
     }
 
     /**
-     * Getting the size of the file is part of reading it.
+     * Failing to get the size of the file counts as failing to read it.
      */
     @ParameterizedTest
     @ArgumentsSource(SslTransportLayerArgumentsProvider.class)

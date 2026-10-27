@@ -588,8 +588,8 @@ public class FileRecordsTest {
     }
 
     /**
-     * A closed channel, closed concurrently, says nothing about the medium, so there is nothing for the handler to find
-     * out.
+     * A channel closed concurrently, for instance by a deletion or a shutdown, says nothing about the medium, so the
+     * handler is not notified.
      */
     @Test
     public void testWriteToDoesNotNotifyHandlerWhenChannelClosed() throws IOException {
@@ -627,7 +627,8 @@ public class FileRecordsTest {
     }
 
     /**
-     * A file closed before its size could be read, for instance by a deletion, was not read either.
+     * A file closed before its size could be read, for instance by a deletion, is not a failed read either, so the
+     * handler is not notified.
      */
     @Test
     public void testWriteToDoesNotNotifyHandlerWhenFileClosed() throws IOException {

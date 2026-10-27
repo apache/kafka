@@ -20,10 +20,11 @@ import java.io.IOException;
 import java.nio.channels.ClosedChannelException;
 
 /**
- * Thrown when the file being transferred to a network channel could not be read, its size included, as opposed to
- * the network channel not being written to: by {@link TransferableChannel#transferFrom} if the channel
- * {@link TransferableChannel#distinguishesFileReadFailures()}, and by the records being transferred. A file channel
- * closed concurrently, for instance by a deletion or a shutdown, does not count as a failed read: its
+ * Thrown when a file being transferred to a network channel cannot be read, as opposed to the network channel
+ * failing to be written to. Failing to get the size of the file counts as failing to read it. It is thrown by
+ * {@link TransferableChannel#transferFrom} if the channel {@link TransferableChannel#distinguishesFileReadFailures()},
+ * and by {@link org.apache.kafka.common.record.internal.FileRecords#writeTo} if it cannot get the size of the file
+ * before the transfer. A file closed concurrently, for instance by a deletion or a shutdown, is not a failed read: its
  * {@link ClosedChannelException} is thrown as it is, see {@link #ofReadFailure}.
  */
 public class FileReadException extends IOException {
@@ -50,9 +51,9 @@ public class FileReadException extends IOException {
     }
 
     /**
-     * The exception to throw for a failed read of a file being transferred to a network channel: the failure itself if
-     * it is a {@link ClosedChannelException}, since a file closed concurrently, by a deletion or a shutdown, says
-     * nothing about the medium, otherwise a FileReadException with the failure as its cause.
+     * Returns the exception to throw when a read of a file being transferred to a network channel fails: the failure
+     * itself if it is a {@link ClosedChannelException}, since a file closed concurrently, for instance by a deletion or
+     * a shutdown, says nothing about the medium; otherwise a FileReadException with the failure as its cause.
      *
      * @param position The absolute position in the file at which the failed read started, or, if the size of the file
      *                 could not be read, at which the transfer was to start
