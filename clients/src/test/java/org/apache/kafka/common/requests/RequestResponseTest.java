@@ -3718,6 +3718,7 @@ public class RequestResponseTest {
                 .setProducerId(12345L)
                 .setProducerEpoch((short) 15)
                 .setTransactionStartTimeMs(13490218304L)
+                .setTransactionLastUpdateTimeMs(13490228304L)
                 .setTransactionState("Empty"),
             new DescribeTransactionsResponseData.TransactionState()
                 .setErrorCode(Errors.NONE.code())
@@ -3725,6 +3726,7 @@ public class RequestResponseTest {
                 .setProducerId(98765L)
                 .setProducerEpoch((short) 30)
                 .setTransactionStartTimeMs(13490218304L)
+                .setTransactionLastUpdateTimeMs(13490238304L)
                 .setTransactionState("Ongoing")
                 .setTopics(new DescribeTransactionsResponseData.TopicDataCollection(
                     asList(

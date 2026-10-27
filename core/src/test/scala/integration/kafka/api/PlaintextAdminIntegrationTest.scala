@@ -371,9 +371,22 @@ class PlaintextAdminIntegrationTest extends BaseAdminIntegrationTest {
       assertEquals(0, transactionResult.producerId())
       assertEquals(0, transactionResult.producerEpoch())
       assertEquals(util.Set.of(topicPartition), transactionResult.topicPartitions())
+      assertTrue(transactionResult.transactionStartTimeMs().isPresent)
+      assertTrue(transactionResult.transactionLastUpdateTimeMs().isPresent)
+      val ongoingStartTimeMs = transactionResult.transactionStartTimeMs().getAsLong
+      val ongoingLastUpdateTimeMs = transactionResult.transactionLastUpdateTimeMs().getAsLong
+      assertTrue(ongoingLastUpdateTimeMs >= ongoingStartTimeMs)
 
       producer.commitTransaction()
       TestUtils.waitUntilTrue(() => transactionState() == TransactionState.COMPLETE_COMMIT, stateAbnormalMsg)
+      val committed = describeTransactions()
+      assertEquals(TransactionState.COMPLETE_COMMIT, committed.state())
+      assertEquals(ongoingStartTimeMs, committed.transactionStartTimeMs().getAsLong)
+      val committedLastUpdateTimeMs = committed.transactionLastUpdateTimeMs().getAsLong
+      assertTrue(committedLastUpdateTimeMs >= ongoingLastUpdateTimeMs)
+      val committedAgain = describeTransactions()
+      assertEquals(committedLastUpdateTimeMs, committedAgain.transactionLastUpdateTimeMs().getAsLong)
+      assertEquals(ongoingStartTimeMs, committedAgain.transactionStartTimeMs().getAsLong)
     } finally producer.close()
 
     // abort case
@@ -406,6 +419,11 @@ class PlaintextAdminIntegrationTest extends BaseAdminIntegrationTest {
 
       abortProducer.abortTransaction()
       TestUtils.waitUntilTrue(() => transactionState() == TransactionState.COMPLETE_ABORT, stateAbnormalMsg)
+      val aborted = describeTransactions()
+      assertEquals(TransactionState.COMPLETE_ABORT, aborted.state())
+      assertTrue(aborted.transactionStartTimeMs().isPresent)
+      assertTrue(aborted.transactionLastUpdateTimeMs().isPresent)
+      assertTrue(aborted.transactionLastUpdateTimeMs().getAsLong >= aborted.transactionStartTimeMs().getAsLong)
     } finally abortProducer.close()
   }
 
