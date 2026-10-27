@@ -519,6 +519,23 @@ public class ShareCoordinatorMetadataCacheHelperImplTest {
     }
 
     @Test
+    public void testIsRequestHeaderV3SupportedReturnsFalseOnOlderMetadataVersion() {
+        MetadataCache mockMetadataCache = mock(MetadataCache.class);
+        when(mockMetadataCache.metadataVersion()).thenReturn(MetadataVersion.IBP_4_4_IV2);
+
+        ShareCoordinatorMetadataCacheHelperImpl cache = new ShareCoordinatorMetadataCacheHelperImpl(
+            mockMetadataCache,
+            sharePartitionKey -> 0,
+            mock(ListenerName.class),
+            mock(GroupConfigManager.class),
+            () -> ServerLogConfigs.MAX_MESSAGE_BYTES_DEFAULT
+        );
+
+        assertFalse(cache.isRequestHeaderV3Supported());
+        verify(mockMetadataCache, times(1)).metadataVersion();
+    }
+
+    @Test
     public void testIsRequestHeaderV3SupportedReturnsFalseOnException() {
         MetadataCache mockMetadataCache = mock(MetadataCache.class);
         when(mockMetadataCache.metadataVersion()).thenThrow(new IllegalStateException("Unknown metadata version"));
