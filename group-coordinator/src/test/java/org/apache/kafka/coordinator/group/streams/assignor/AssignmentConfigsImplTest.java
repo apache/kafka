@@ -46,6 +46,23 @@ public class AssignmentConfigsImplTest {
     }
 
     @Test
+    void testFromRecordWithEmptyConfigs() {
+        assertEquals(AssignmentConfigsImpl.DEFAULT, AssignmentConfigsImpl.fromRecord(List.of()));
+    }
+
+    @Test
+    void testFromRecordIgnoresUnknownConfigs() {
+        // A newer broker may record configs that this broker does not know.
+        assertEquals(
+            AssignmentConfigsImpl.DEFAULT.withNumStandbyReplicas(1),
+            AssignmentConfigsImpl.fromRecord(List.of(
+                lastAssignmentConfig("unknown.config", "value"),
+                lastAssignmentConfig("num.standby.replicas", "1")
+            ))
+        );
+    }
+
+    @Test
     void testFromRecordWithoutRackAwareAssignmentTags() {
         // The tags are only recorded when any are configured.
         assertEquals(

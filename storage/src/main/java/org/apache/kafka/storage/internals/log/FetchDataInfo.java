@@ -54,6 +54,13 @@ public class FetchDataInfo {
         this.delayedRemoteStorageFetch = delayedRemoteStorageFetch;
     }
 
+    /**
+     * @return A copy of this instance with the given records
+     */
+    public FetchDataInfo withRecords(Records records) {
+        return new FetchDataInfo(fetchOffsetMetadata, records, firstEntryIncomplete, abortedTransactions, delayedRemoteStorageFetch);
+    }
+
     public static FetchDataInfo empty(long fetchOffset) {
         return new FetchDataInfo(new LogOffsetMetadata(fetchOffset), MemoryRecords.EMPTY);
     }

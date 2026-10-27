@@ -32,6 +32,8 @@ import org.apache.kafka.coordinator.group.modern.ModernGroup;
 import org.apache.kafka.timeline.SnapshotRegistry;
 import org.apache.kafka.timeline.TimelineObject;
 
+import java.util.Collections;
+import java.util.HashSet;
 import java.util.List;
 import java.util.Locale;
 import java.util.Map;
@@ -82,6 +84,11 @@ public class ShareGroup extends ModernGroup<ShareGroupMember> {
         Map<Uuid, InitMapValue> initializedTopics,
         Set<Uuid> deletingTopics
     ) {
+        public ShareGroupStatePartitionMetadataInfo {
+            initializingTopics = Collections.unmodifiableMap(initializingTopics);
+            initializedTopics = Collections.unmodifiableMap(initializedTopics);
+            deletingTopics = Collections.unmodifiableSet(deletingTopics);
+        }
     }
 
     /**
@@ -97,6 +104,29 @@ public class ShareGroup extends ModernGroup<ShareGroupMember> {
         Set<Integer> partitions,
         long timestamp
     ) {
+        public InitMapValue {
+            partitions = Collections.unmodifiableSet(partitions);
+        }
+
+        /**
+         * @param added The partitions to add.
+         * @return A copy of this value with the partitions added.
+         */
+        public InitMapValue withAddedPartitions(Set<Integer> added) {
+            Set<Integer> newPartitions = new HashSet<>(partitions);
+            newPartitions.addAll(added);
+            return new InitMapValue(name, newPartitions, timestamp);
+        }
+
+        /**
+         * @param removed The partitions to remove.
+         * @return A copy of this value with the partitions removed.
+         */
+        public InitMapValue withRemovedPartitions(Set<Integer> removed) {
+            Set<Integer> newPartitions = new HashSet<>(partitions);
+            newPartitions.removeAll(removed);
+            return new InitMapValue(name, newPartitions, timestamp);
+        }
     }
 
     /**

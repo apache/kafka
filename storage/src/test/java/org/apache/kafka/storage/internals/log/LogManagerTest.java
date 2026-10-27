@@ -168,6 +168,7 @@ public class LogManagerTest {
         writeMetaProperties(dirs.get(3), Optional.of(DirectoryId.random()));
         writeMetaProperties(dirs.get(4));
 
+        logManager.shutdown();
         logManager = createLogManager(dirs);
 
         UnifiedLog log = logManager.getOrCreateLog(new TopicPartition(NAME, 0), false, false, Optional.empty(), Optional.of(targetedLogDirectoryId));
@@ -592,6 +593,7 @@ public class LogManagerTest {
         File logDir = TestUtils.tempDirectory();
         File remoteIndexCache = new File(logDir, RemoteIndexCache.DIR_NAME);
         remoteIndexCache.mkdir();
+        logManager.shutdown();
         logManager = createLogManager(List.of(logDir));
         logManager.loadLogs(LOG_CONFIG, Map.of(), unifiedLog ->  false);
     }
@@ -600,6 +602,7 @@ public class LogManagerTest {
     public void testLoadLogRenameLogThatShouldBeStray() throws IOException {
         AtomicInteger invokedCount = new AtomicInteger(0);
         File logDir = TestUtils.tempDirectory();
+        logManager.shutdown();
         logManager = createLogManager(List.of(logDir));
 
         String testTopic = "test-stray-topic";
@@ -1241,6 +1244,7 @@ public class LogManagerTest {
     public void testMetricsAreRemovedWhenMovingCurrentToFutureLog() throws Exception {
         File dir1 = TestUtils.tempDirectory();
         File dir2 = TestUtils.tempDirectory();
+        logManager.shutdown();
         logManager = createLogManager(List.of(dir1, dir2));
         logManager.startup(Set.of());
 
@@ -1287,6 +1291,7 @@ public class LogManagerTest {
         writeMetaProperties(dirs.get(3), Optional.of(Uuid.fromString("kQfNPJ2FTHq_6Qlyyv6Jqg")));
         writeMetaProperties(dirs.get(4));
 
+        logManager.shutdown();
         logManager = createLogManager(dirs);
 
         assertFalse(logManager.directoryId(dirs.get(0).getAbsolutePath()).isPresent());
@@ -1306,6 +1311,7 @@ public class LogManagerTest {
     public void testReplaceCurrentWithFutureLogDoesNotCloseSourceLog() throws Exception {
         File logDir1 = TestUtils.tempDirectory();
         File logDir2 = TestUtils.tempDirectory();
+        logManager.shutdown();
         logManager = createLogManager(List.of(logDir1, logDir2));
         logManager.startup(Set.of());
 

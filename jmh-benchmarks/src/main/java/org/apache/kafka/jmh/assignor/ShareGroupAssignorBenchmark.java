@@ -115,6 +115,8 @@ public class ShareGroupAssignorBenchmark {
 
     private List<String> allTopicNames = List.of();
 
+    private CoordinatorMetadataImage metadataImage;
+
     private TopicIds.TopicResolver topicResolver;
 
     private SubscribedTopicDescriber subscribedTopicDescriber;
@@ -126,7 +128,7 @@ public class ShareGroupAssignorBenchmark {
         setupTopics();
 
         Map<String, ShareGroupMember> members = createMembers();
-        this.groupSpec = AssignorBenchmarkUtils.createShareGroupSpec(members, subscriptionType, topicResolver);
+        this.groupSpec = AssignorBenchmarkUtils.createShareGroupSpec(metadataImage, members, subscriptionType, topicResolver);
 
         if (assignmentType == AssignmentType.INCREMENTAL) {
             simulateIncrementalRebalance();
@@ -136,7 +138,7 @@ public class ShareGroupAssignorBenchmark {
     private void setupTopics() {
         allTopicNames = AssignorBenchmarkUtils.createTopicNames(topicCount);
 
-        CoordinatorMetadataImage metadataImage = AssignorBenchmarkUtils.createMetadataImage(allTopicNames, partitionCount);
+        metadataImage = AssignorBenchmarkUtils.createMetadataImage(allTopicNames, partitionCount);
         topicResolver = new TopicIds.CachedTopicResolver(metadataImage);
 
         subscribedTopicDescriber = new SubscribedTopicDescriberImpl(metadataImage);
@@ -171,8 +173,6 @@ public class ShareGroupAssignorBenchmark {
         GroupAssignment initialAssignment = partitionAssignor.assign(groupSpec, subscribedTopicDescriber);
         Map<String, MemberAssignment> members = initialAssignment.members();
 
-        Map<Uuid, Map<Integer, String>> invertedTargetAssignment = AssignorBenchmarkUtils.computeInvertedTargetAssignment(initialAssignment);
-
         Map<String, MemberSubscriptionAndAssignmentImpl> updatedMemberSpec = new HashMap<>();
 
         for (String memberId : groupSpec.memberIds()) {
@@ -204,9 +204,9 @@ public class ShareGroupAssignorBenchmark {
         ));
 
         groupSpec = new GroupSpecImpl(
+            metadataImage,
             updatedMemberSpec,
-            subscriptionType,
-            invertedTargetAssignment
+            subscriptionType
         );
     }
 

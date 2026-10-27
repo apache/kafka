@@ -17,6 +17,7 @@
 package org.apache.kafka.coordinator.group.assignor.uniform2;
 
 import org.apache.kafka.common.Uuid;
+import org.apache.kafka.coordinator.common.runtime.CoordinatorMetadataImage;
 import org.apache.kafka.coordinator.group.api.assignor.GroupSpec;
 import org.apache.kafka.coordinator.group.api.assignor.SubscriptionType;
 import org.apache.kafka.coordinator.group.modern.Assignment;
@@ -99,7 +100,8 @@ public final class GroupSpecFixture {
         checkNotBuilt();
         built = true;
         var subscriptionType = sameSubscriptions ? SubscriptionType.HOMOGENEOUS : SubscriptionType.HETEROGENEOUS;
-        return new GroupSpecImpl(members, subscriptionType, invertedTargetAssignment);
+        // The metadata image is only used by isPartitionAssigned, which the uniform2 assignor never calls.
+        return new GroupSpecImpl(CoordinatorMetadataImage.EMPTY, members, subscriptionType);
     }
 
     private void checkNotBuilt() {

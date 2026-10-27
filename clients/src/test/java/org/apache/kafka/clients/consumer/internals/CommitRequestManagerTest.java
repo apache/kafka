@@ -121,7 +121,7 @@ public class CommitRequestManagerTest {
     private static final String DEFAULT_GROUP_ID = "group-id";
     private static final String DEFAULT_GROUP_INSTANCE_ID = "group-instance-id";
     private final Node mockedNode = new Node(1, "host1", 9092);
-    private SubscriptionState subscriptionState;
+    private ConsumerSubscriptionState subscriptionState;
     private ConsumerMetadata metadata;
     private LogContext logContext;
     private MockTime time;
@@ -137,7 +137,7 @@ public class CommitRequestManagerTest {
     public void setup() {
         this.logContext = new LogContext();
         this.time = new MockTime(0);
-        this.subscriptionState = new SubscriptionState(new LogContext(), AutoOffsetResetStrategy.EARLIEST);
+        this.subscriptionState = new ConsumerSubscriptionState(new LogContext(), AutoOffsetResetStrategy.EARLIEST);
         this.metadata = mock(ConsumerMetadata.class);
         this.coordinatorRequestManager = mock(CoordinatorRequestManager.class);
         this.offsetCommitCallbackInvoker = mock(OffsetCommitCallbackInvoker.class);
@@ -305,7 +305,7 @@ public class CommitRequestManagerTest {
 
     @Test
     public void testCommitSync() {
-        subscriptionState = mock(SubscriptionState.class);
+        subscriptionState = mock(ConsumerSubscriptionState.class);
         when(coordinatorRequestManager.coordinator()).thenReturn(Optional.of(mockedNode));
         TopicPartition tp = new TopicPartition("topic", 1);
         OffsetAndMetadata offsetAndMetadata = new OffsetAndMetadata(0, Optional.of(1), "");
@@ -331,7 +331,7 @@ public class CommitRequestManagerTest {
 
     @Test
     public void testCommitSyncWithEmptyOffsets() {
-        subscriptionState = mock(SubscriptionState.class);
+        subscriptionState = mock(ConsumerSubscriptionState.class);
 
         CommitRequestManager commitRequestManager = create(false, 100);
         CompletableFuture<Map<TopicPartition, OffsetAndMetadata>> future = commitRequestManager.commitSync(
@@ -347,7 +347,7 @@ public class CommitRequestManagerTest {
 
     @Test
     public void testCommitAsync() {
-        subscriptionState = mock(SubscriptionState.class);
+        subscriptionState = mock(ConsumerSubscriptionState.class);
         when(coordinatorRequestManager.coordinator()).thenReturn(Optional.of(mockedNode));
         TopicPartition tp = new TopicPartition("topic", 1);
         OffsetAndMetadata offsetAndMetadata = new OffsetAndMetadata(0, Optional.of(1), "");
@@ -372,7 +372,7 @@ public class CommitRequestManagerTest {
 
     @Test
     public void testCommitAsyncWithEmptyOffsets() {
-        subscriptionState = mock(SubscriptionState.class);
+        subscriptionState = mock(ConsumerSubscriptionState.class);
 
         CommitRequestManager commitRequestManager = create(true, 100);
         CompletableFuture<Map<TopicPartition, OffsetAndMetadata>> future = commitRequestManager.commitAsync(Collections.emptyMap());
@@ -483,7 +483,7 @@ public class CommitRequestManagerTest {
 
     @Test
     public void testCommitSyncShouldSucceedWithTopicId() {
-        subscriptionState = mock(SubscriptionState.class);
+        subscriptionState = mock(ConsumerSubscriptionState.class);
         TopicPartition tp = new TopicPartition("topic", 1);
         Uuid topicId = Uuid.randomUuid();
         when(coordinatorRequestManager.coordinator()).thenReturn(Optional.of(mockedNode));
@@ -511,7 +511,7 @@ public class CommitRequestManagerTest {
 
     @Test
     public void testCommitSyncShouldSucceedWithUnknownOffsetAndMetadata() {
-        subscriptionState = mock(SubscriptionState.class);
+        subscriptionState = mock(ConsumerSubscriptionState.class);
         Uuid topicId = Uuid.randomUuid();
         when(coordinatorRequestManager.coordinator()).thenReturn(Optional.of(mockedNode));
         when(metadata.topicIds()).thenReturn(Map.of("topic", topicId));
