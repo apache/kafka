@@ -126,7 +126,10 @@ public class ProducerConfig extends AbstractConfig {
 
     /** <code>partitioner.rack.aware</code> */
     public static final String PARTITIONER_RACK_AWARE_CONFIG = "partitioner.rack.aware";
-    private static final String PARTITIONER_RACK_AWARE_DOC = "Controls whether the default partitioner is rack-aware. This has no effect when a custom partitioner is used.";
+    private static final String PARTITIONER_RACK_AWARE_DOC = "Controls whether the default partitioner is rack-aware. "
+            + "When enabled, the sticky partition is chosen from partitions whose leader is in the same rack as <code>" + CommonClientConfigs.CLIENT_RACK_CONFIG
+            + "</code>, which must be set. It only applies to records without a key, or to all records when <code>" + PARTITIONER_IGNORE_KEYS_CONFIG + "=true</code>. "
+            + "This has no effect when a custom partitioner is used.";
 
     /** <code>acks</code> */
     public static final String ACKS_CONFIG = "acks";
@@ -189,6 +192,9 @@ public class ProducerConfig extends AbstractConfig {
      */
     public static final String CLIENT_RACK_CONFIG = CommonClientConfigs.CLIENT_RACK_CONFIG;
     public static final String DEFAULT_CLIENT_RACK = CommonClientConfigs.DEFAULT_CLIENT_RACK;
+    private static final String CLIENT_RACK_DOC = CommonClientConfigs.CLIENT_RACK_DOC + ". "
+            + "The default partitioner uses it when <code>" + PARTITIONER_RACK_AWARE_CONFIG + "=true</code> to prefer partitions whose leader is in the same rack, "
+            + "which only applies to records without a key, or to all records when <code>" + PARTITIONER_IGNORE_KEYS_CONFIG + "=true</code>.";
 
     /** <code>send.buffer.bytes</code> */
     public static final String SEND_BUFFER_CONFIG = CommonClientConfigs.SEND_BUFFER_CONFIG;
@@ -345,10 +351,12 @@ public class ProducerConfig extends AbstractConfig {
             "<li>If not set, the default partitioning logic is used. " +
             "This strategy send records to a partition until at least " + BATCH_SIZE_CONFIG + " bytes is produced to the partition. It works with the strategy:" +
             "<ol>" +
-            "<li>If no partition is specified but a key is present, choose a partition based on a hash of the key.</li>" +
-            "<li>If no partition or key is present, choose the sticky partition that changes when at least <code>" + BATCH_SIZE_CONFIG + "</code> bytes are produced to the partition.</li>" +
-            "<li>If <code>" + CLIENT_RACK_CONFIG + "</code> is specified and <code>" + PARTITIONER_RACK_AWARE_CONFIG + "=true</code>, the sticky partition is chosen from partitions " +
-            "with the leader broker in the same rack, if at least one is available. If none are available, it falls back on selecting from all available partitions.</li>" +
+            "<li>If no partition is specified but a key is present and <code>" + PARTITIONER_IGNORE_KEYS_CONFIG + "=false</code>, choose a partition based on a hash of the key.</li>" +
+            "<li>If no partition is specified and either no key is present or <code>" + PARTITIONER_IGNORE_KEYS_CONFIG + "=true</code>, " +
+            "choose the sticky partition that changes when at least <code>" + BATCH_SIZE_CONFIG + "</code> bytes are produced to the partition.</li>" +
+            "<li>If <code>" + PARTITIONER_RACK_AWARE_CONFIG + "=true</code>, the sticky partition is chosen from partitions " +
+            "with the leader broker in the same rack as <code>" + CLIENT_RACK_CONFIG + "</code>, if at least one is available. " +
+            "If none are available, it falls back on selecting from all available partitions.</li>" +
             "</ol>" +
             "</li>" +
             "<li><code>org.apache.kafka.clients.producer.RoundRobinPartitioner</code>: A partitioning strategy where " +
@@ -445,7 +453,7 @@ public class ProducerConfig extends AbstractConfig {
                                 .define(LINGER_MS_CONFIG, Type.LONG, 5, atLeast(0), Importance.MEDIUM, LINGER_MS_DOC)
                                 .define(DELIVERY_TIMEOUT_MS_CONFIG, Type.INT, 120 * 1000, atLeast(0), Importance.MEDIUM, DELIVERY_TIMEOUT_MS_DOC)
                                 .define(CLIENT_ID_CONFIG, Type.STRING, "", Importance.MEDIUM, CommonClientConfigs.CLIENT_ID_DOC)
-                                .define(CLIENT_RACK_CONFIG, Type.STRING, DEFAULT_CLIENT_RACK, Importance.LOW, CommonClientConfigs.CLIENT_RACK_DOC)
+                                .define(CLIENT_RACK_CONFIG, Type.STRING, DEFAULT_CLIENT_RACK, Importance.LOW, CLIENT_RACK_DOC)
                                 .define(SEND_BUFFER_CONFIG, Type.INT, 128 * 1024, atLeast(CommonClientConfigs.SEND_BUFFER_LOWER_BOUND), Importance.MEDIUM, CommonClientConfigs.SEND_BUFFER_DOC)
                                 .define(RECEIVE_BUFFER_CONFIG, Type.INT, 32 * 1024, atLeast(CommonClientConfigs.RECEIVE_BUFFER_LOWER_BOUND), Importance.MEDIUM, CommonClientConfigs.RECEIVE_BUFFER_DOC)
                                 .define(MAX_REQUEST_SIZE_CONFIG,
