@@ -401,7 +401,7 @@ public class ConsumerConfig extends AbstractConfig {
     public static final String METADATA_RECOVERY_STRATEGY_CONFIG = CommonClientConfigs.METADATA_RECOVERY_STRATEGY_CONFIG;
 
     /** <code>metadata.recovery.rebootstrap.trigger.ms</code> */
-    public static final String METADATA_RECOVERY_REBOOTSTRAP_TRIGGER_MS_CONFIG =CommonClientConfigs.METADATA_RECOVERY_REBOOTSTRAP_TRIGGER_MS_CONFIG;
+    public static final String METADATA_RECOVERY_REBOOTSTRAP_TRIGGER_MS_CONFIG = CommonClientConfigs.METADATA_RECOVERY_REBOOTSTRAP_TRIGGER_MS_CONFIG;
 
     /** <code>metadata.cluster.check.enable</code> */
     public static final String METADATA_CLUSTER_CHECK_ENABLE_CONFIG = CommonClientConfigs.METADATA_CLUSTER_CHECK_ENABLE_CONFIG;
