@@ -2263,6 +2263,39 @@ public class StreamTaskTest {
         verify(recordCollector).offsets();
     }
 
+    @Test
+    public void shouldNeedCommitWhenInitializationWritesUncommittedBytes() {
+        when(stateManager.taskId()).thenReturn(taskId);
+        when(stateManager.taskType()).thenReturn(TaskType.ACTIVE);
+        when(stateManager.approximateNumUncommittedBytes()).thenReturn(2048L);
+        stateDirectory.close();
+        stateDirectory = mock(StateDirectory.class);
+        when(stateDirectory.lock(taskId)).thenReturn(true);
+
+        task = createStatefulTask(createConfig(StreamsConfig.EXACTLY_ONCE_V2, "0"), true, stateManager);
+        task.initializeIfNeeded();
+        task.completeRestoration(noOpResetter -> { });
+
+        assertEquals(RUNNING, task.state());
+        assertTrue(task.commitNeeded());
+    }
+
+    @Test
+    public void shouldNotNeedCommitAfterRestorationWithoutUncommittedBytes() {
+        when(stateManager.taskId()).thenReturn(taskId);
+        when(stateManager.taskType()).thenReturn(TaskType.ACTIVE);
+        stateDirectory.close();
+        stateDirectory = mock(StateDirectory.class);
+        when(stateDirectory.lock(taskId)).thenReturn(true);
+
+        task = createStatefulTask(createConfig(StreamsConfig.EXACTLY_ONCE_V2, "0"), true, stateManager);
+        task.initializeIfNeeded();
+        task.completeRestoration(noOpResetter -> { });
+
+        assertEquals(RUNNING, task.state());
+        assertFalse(task.commitNeeded());
+    }
+
     @SuppressWarnings("unchecked")
     @Test
     public void shouldThrowIllegalStateExceptionIfCurrentNodeIsNotNullWhenPunctuateCalled() {
