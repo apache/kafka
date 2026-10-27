@@ -74,14 +74,6 @@ def reset_hard_head(**kwargs):
     cmd("Resetting branch", "git reset --hard HEAD", **kwargs)
 
 
-def contributors(from_rev, to_rev, **kwargs):
-    __defaults(kwargs)
-    kwargs["shell"] = True
-    line = "git shortlog -sn --group=author --group=trailer:co-authored-by"
-    line += f" --group=trailer:Reviewers --no-merges {from_rev}..{to_rev}"
-    line += " | cut -f2 | sort --ignore-case | uniq"
-    return [str(x) for x in filter(None, execute(line, **kwargs).split('\n'))]
-
 def branches(**kwargs):
     output = execute('git branch')
     return [line.replace('*', ' ').strip() for line in output.splitlines()]
