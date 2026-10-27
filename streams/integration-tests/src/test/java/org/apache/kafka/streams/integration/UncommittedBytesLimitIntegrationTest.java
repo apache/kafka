@@ -44,6 +44,7 @@ import org.junit.jupiter.api.Test;
 import org.junit.jupiter.api.TestInfo;
 import org.junit.jupiter.api.Timeout;
 
+import java.nio.charset.StandardCharsets;
 import java.time.Duration;
 import java.util.List;
 import java.util.Locale;
@@ -56,19 +57,18 @@ import static org.junit.jupiter.api.Assertions.assertEquals;
 
 /**
  * Processing pauses while a thread's uncommitted state store bytes exceed
- * {@code statestore.uncommitted.max.bytes}, and resumes once a commit drains them. Writes made in
- * {@code Processor.init()} must therefore make the task commit-eligible, otherwise nothing ever
- * commits them and the thread stays paused.
+ * {@code statestore.uncommitted.max.bytes}, and resumes once a commit drains them. These tests check that the
+ * pause cannot become permanent: every byte it counts must be one that a commit releases.
  */
 @Timeout(600)
 @Tag("integration")
-public class UncommittedBytesInitWriteIntegrationTest {
+public class UncommittedBytesLimitIntegrationTest {
 
     private static final int NUM_BROKERS = 1;
     public static final EmbeddedKafkaCluster CLUSTER = new EmbeddedKafkaCluster(NUM_BROKERS);
 
     private static final String STORE_NAME = "init-store";
-    private static final long MAX_UNCOMMITTED_BYTES = 1024L;
+    private static final int INIT_WRITE_BYTES = 4096;
 
     private String applicationId;
     private String inputTopic;
@@ -88,7 +88,7 @@ public class UncommittedBytesInitWriteIntegrationTest {
 
     @BeforeEach
     public void before(final TestInfo testInfo) throws Exception {
-        applicationId = "uncommitted-bytes-init-" + safeUniqueTestName(testInfo);
+        applicationId = "uncommitted-bytes-limit-" + safeUniqueTestName(testInfo);
         inputTopic = applicationId + "-input";
         outputTopic = applicationId + "-output";
         CLUSTER.createTopic(inputTopic, 1, 1);
@@ -103,7 +103,6 @@ public class UncommittedBytesInitWriteIntegrationTest {
         streamsConfig.put(StreamsConfig.PROCESSING_GUARANTEE_CONFIG, StreamsConfig.EXACTLY_ONCE_V2);
         streamsConfig.put(StreamsConfig.TRANSACTIONAL_STATE_STORES_CONFIG, true);
         streamsConfig.put(StreamsConfig.STATESTORE_CACHE_MAX_BYTES_CONFIG, 0);
-        streamsConfig.put(StreamsConfig.STATESTORE_UNCOMMITTED_MAX_BYTES_CONFIG, MAX_UNCOMMITTED_BYTES);
         streamsConfig.put(ConsumerConfig.AUTO_OFFSET_RESET_CONFIG, "earliest");
     }
 
@@ -118,17 +117,8 @@ public class UncommittedBytesInitWriteIntegrationTest {
 
     @Test
     public void shouldProcessRecordsWhenProcessorInitWritesExceedUncommittedBytesLimit() throws Exception {
-        final Topology topology = new Topology();
-        topology.addSource("source", new StringDeserializer(), new StringDeserializer(), inputTopic);
-        topology.addProcessor("init-writer", InitWritingProcessor::new, "source");
-        topology.addStateStore(
-            Stores.keyValueStoreBuilder(Stores.persistentKeyValueStore(STORE_NAME), Serdes.String(), Serdes.ByteArray())
-                .withCachingDisabled(),
-            "init-writer");
-        topology.addSink("sink", outputTopic, new StringSerializer(), new StringSerializer(), "init-writer");
-
-        streams = new KafkaStreams(topology, streamsConfig);
-        startApplicationAndWaitUntilRunning(streams);
+        streamsConfig.put(StreamsConfig.STATESTORE_UNCOMMITTED_MAX_BYTES_CONFIG, INIT_WRITE_BYTES / 4L);
+        startApplication(true);
 
         produceRecord("k", "v");
 
@@ -137,18 +127,58 @@ public class UncommittedBytesInitWriteIntegrationTest {
         assertEquals(List.of(KeyValue.pair("k", "v")), results);
     }
 
-    private static class InitWritingProcessor implements Processor<String, String, String, String> {
+    @Test
+    public void shouldProcessRecordsWhenUncommittedBytesLimitIsBelowEmptyStoreOverhead() throws Exception {
+        streamsConfig.put(StreamsConfig.STATESTORE_UNCOMMITTED_MAX_BYTES_CONFIG, 1L);
+        startApplication(false);
+
+        produceRecord("k1", "v1");
+        produceRecord("k2", "v2");
+        produceRecord("k3", "v3");
+
+        final List<KeyValue<String, String>> results =
+            waitUntilMinKeyValueRecordsReceived(getConsumerConfig(), outputTopic, 3, 60000);
+        assertEquals(List.of(KeyValue.pair("k1", "v1"), KeyValue.pair("k2", "v2"), KeyValue.pair("k3", "v3")), results);
+    }
+
+    private void startApplication(final boolean writeOnInit) throws Exception {
+        final Topology topology = new Topology();
+        topology.addSource("source", new StringDeserializer(), new StringDeserializer(), inputTopic);
+        topology.addProcessor("writer", () -> new StoreWritingProcessor(writeOnInit), "source");
+        topology.addStateStore(
+            Stores.keyValueStoreBuilder(Stores.persistentKeyValueStore(STORE_NAME), Serdes.String(), Serdes.ByteArray())
+                .withCachingDisabled(),
+            "writer");
+        topology.addSink("sink", outputTopic, new StringSerializer(), new StringSerializer(), "writer");
+
+        streams = new KafkaStreams(topology, streamsConfig);
+        startApplicationAndWaitUntilRunning(streams);
+    }
+
+    /**
+     * Writes every record to the store before forwarding it, and optionally writes a large value in {@code init()}.
+     */
+    private static class StoreWritingProcessor implements Processor<String, String, String, String> {
+        private final boolean writeOnInit;
         private ProcessorContext<String, String> context;
+        private KeyValueStore<String, byte[]> store;
+
+        StoreWritingProcessor(final boolean writeOnInit) {
+            this.writeOnInit = writeOnInit;
+        }
 
         @Override
         public void init(final ProcessorContext<String, String> context) {
             this.context = context;
-            final KeyValueStore<String, byte[]> store = context.getStateStore(STORE_NAME);
-            store.put("init", new byte[(int) MAX_UNCOMMITTED_BYTES * 4]);
+            store = context.getStateStore(STORE_NAME);
+            if (writeOnInit) {
+                store.put("init", new byte[INIT_WRITE_BYTES]);
+            }
         }
 
         @Override
         public void process(final Record<String, String> record) {
+            store.put(record.key(), record.value().getBytes(StandardCharsets.UTF_8));
             context.forward(record);
         }
     }
