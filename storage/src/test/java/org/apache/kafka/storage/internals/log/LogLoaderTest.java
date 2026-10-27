@@ -245,19 +245,20 @@ public class LogLoaderTest {
                 logConfig,
                 new CleanerConfig(false),
                 4,
-                1000L,
-                10000L,
-                10000L,
-                1000L,
+                new LogMaintenanceConfig(
+                        1000L,
+                        10000L,
+                        10000L,
+                        1000L,
+                        TransactionLogConfig.PRODUCER_ID_EXPIRATION_CHECK_INTERVAL_MS_DEFAULT,
+                        100L),
                 5 * 60 * 1000,
                 producerStateManagerConfig,
-                TransactionLogConfig.PRODUCER_ID_EXPIRATION_CHECK_INTERVAL_MS_DEFAULT,
                 time.scheduler,
                 new BrokerTopicStats(),
                 logDirFailureChannel,
                 time,
                 false,
-                100L,
                 LogCleaner::new) {
 
             @Override

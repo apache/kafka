@@ -1468,19 +1468,20 @@ public class LogManagerTest {
                 new LogConfig(tmpProperties),
                 new CleanerConfig(false),
                 1,
-                1000L,
-                10000L,
-                10000L,
-                1000L,
+                new LogMaintenanceConfig(
+                        1000L,
+                        10000L,
+                        10000L,
+                        1000L,
+                        TransactionLogConfig.PRODUCER_ID_EXPIRATION_CHECK_INTERVAL_MS_DEFAULT,
+                        0),
                 5 * 60 * 1000,
                 new ProducerStateManagerConfig(TransactionLogConfig.PRODUCER_ID_EXPIRATION_MS_DEFAULT, false),
-                TransactionLogConfig.PRODUCER_ID_EXPIRATION_CHECK_INTERVAL_MS_DEFAULT,
                 scheduler,
                 new BrokerTopicStats(),
                 new LogDirFailureChannel(1),
                 Time.SYSTEM,
                 false,
-                0,
                 LogCleaner::new);
 
         scheduler.startup();
