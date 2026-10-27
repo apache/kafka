@@ -41,6 +41,7 @@ import org.apache.kafka.storage.internals.log.CleanerConfig;
 import org.apache.kafka.storage.internals.log.LogCleaner;
 import org.apache.kafka.storage.internals.log.LogConfig;
 import org.apache.kafka.storage.internals.log.LogDirFailureChannel;
+import org.apache.kafka.storage.internals.log.LogMaintenanceConfig;
 import org.apache.kafka.storage.internals.log.LogManager;
 import org.apache.kafka.storage.internals.log.ProducerStateManagerConfig;
 import org.apache.kafka.storage.log.metrics.BrokerTopicStats;
@@ -106,19 +107,20 @@ public class PartitionMakeFollowerBenchmark {
             logConfig,
             new CleanerConfig(0, 0, 0, 0, 0, 0.0, 0, false),
             1,
-            1000L,
-            10000L,
-            10000L,
-            1000L,
+            new LogMaintenanceConfig(
+                1000L,
+                10000L,
+                10000L,
+                1000L,
+                600000,
+                ServerLogConfigs.LOG_INITIAL_TASK_DELAY_MS_DEFAULT),
             15 * 60 * 1000,
             new ProducerStateManagerConfig(60000, false),
-            600000,
             scheduler,
             brokerTopicStats,
             logDirFailureChannel,
             Time.SYSTEM,
             false,
-            ServerLogConfigs.LOG_INITIAL_TASK_DELAY_MS_DEFAULT,
             LogCleaner::new);
 
         TopicPartition tp = new TopicPartition("topic", 0);
