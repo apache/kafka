@@ -985,9 +985,9 @@ public class AssignmentRefinerImpl implements AssignmentRefiner {
      * <p>The lag is the distance between the reported end offset and the reported offset, and a lag that is not known
      * is never within the threshold: an offset missing on either side, or reported as {@link Long#MAX_VALUE}, counts as
      * not caught up. The client reports an end offset of {@link Long#MAX_VALUE} while it does not know a changelog's end
-     * offset yet, and either offset as {@link Long#MAX_VALUE} when its sum over the changelogs overflows. A slightly
-     * negative lag does count, because the offset is a position while the end offset is the last offset, so a fully
-     * restored task reports a lag of -1.
+     * offset yet, and either offset as {@link Long#MAX_VALUE} when its sum over the changelogs overflows. A negative
+     * lag counts too: the client reports a changelog's end offset either as the next offset, like the offset, or as the
+     * last offset, one less, so a fully restored task reports a lag of 0 or below.
      *
      * @param memberTaskOffsets
      *        The offsets the member reported, {@link MemberTaskOffsets#EMPTY} if it reported none.
@@ -1010,8 +1010,9 @@ public class AssignmentRefinerImpl implements AssignmentRefiner {
     }
 
     /**
-     * Whether the member has restored any of the task: it reports a position above 0 for it. The client reports a
-     * position of 0 for a changelog it has restored nothing from, and {@link Long#MAX_VALUE} when the sum overflows.
+     * Whether the member has restored any of the task: the position it reports for the task, the sum over the task's
+     * changelogs, is above 0. The client counts a changelog it has restored nothing from as 0, and reports
+     * {@link Long#MAX_VALUE} when the sum overflows.
      */
     private static boolean hasRestoredSomething(final MemberTaskOffsets memberTaskOffsets, final TaskId task) {
         final Long offset = offsetOf(memberTaskOffsets.taskOffsets(), task);
