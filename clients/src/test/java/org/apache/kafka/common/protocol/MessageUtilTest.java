@@ -169,4 +169,20 @@ public final class MessageUtilTest {
             () -> MessageUtil.jsonNodeToBinary(new TextNode("This is not base64!"), "Test non-base64 to binary")
         );
     }
+
+    @Test
+    public void testMaxArrayLength() {
+        assertEquals(MessageUtil.MAX_ARRAY_LENGTH, MessageUtil.maxArrayLength());
+        try {
+            MessageUtil.setMaxArrayLength(1);
+            assertEquals(1, MessageUtil.maxArrayLength());
+            MessageUtil.setMaxArrayLength(Integer.MAX_VALUE);
+            assertEquals(Integer.MAX_VALUE, MessageUtil.maxArrayLength());
+            assertThrows(IllegalArgumentException.class, () -> MessageUtil.setMaxArrayLength(0));
+            assertThrows(IllegalArgumentException.class, () -> MessageUtil.setMaxArrayLength(-1));
+            assertEquals(Integer.MAX_VALUE, MessageUtil.maxArrayLength());
+        } finally {
+            MessageUtil.setMaxArrayLength(MessageUtil.MAX_ARRAY_LENGTH);
+        }
+    }
 }
