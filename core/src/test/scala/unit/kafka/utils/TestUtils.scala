@@ -915,19 +915,20 @@ object TestUtils extends Logging {
                    defaultConfig,
                    cleanerConfig,
                    recoveryThreadsPerDataDir,
-                   1000L,
-                   10000L,
-                   10000L,
-                   1000L,
+                   new LogMaintenanceConfig(
+                     1000L,
+                     10000L,
+                     10000L,
+                     1000L,
+                     TransactionLogConfig.PRODUCER_ID_EXPIRATION_CHECK_INTERVAL_MS_DEFAULT,
+                     initialTaskDelayMs),
                    5 * 60 * 1000,
                    new ProducerStateManagerConfig(TransactionLogConfig.PRODUCER_ID_EXPIRATION_MS_DEFAULT, transactionVerificationEnabled),
-                   TransactionLogConfig.PRODUCER_ID_EXPIRATION_CHECK_INTERVAL_MS_DEFAULT,
                    time.scheduler,
                    new BrokerTopicStats,
                    new LogDirFailureChannel(logDirs.size),
                    time,
                    remoteStorageSystemEnable,
-                   initialTaskDelayMs,
                    (cleanerConfig, files, map, logDirFailureChannel, time) => Mockito.spy(new LogCleaner(cleanerConfig, files, map, logDirFailureChannel, time))
     )
 
