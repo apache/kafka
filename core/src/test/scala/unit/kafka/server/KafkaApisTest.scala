@@ -7277,6 +7277,69 @@ class KafkaApisTest extends Logging {
   }
 
   @Test
+  def testHandleShareFetchRequestNegativeMaxRecords(): Unit = {
+    val topicId = Uuid.randomUuid()
+    metadataCache = initializeMetadataCacheWithShareGroupsEnabled()
+
+    val shareFetchRequestData = new ShareFetchRequestData()
+      .setGroupId("group")
+      .setMemberId(Uuid.randomUuid().toString)
+      .setShareSessionEpoch(0)
+      .setMaxRecords(-1)
+      .setTopics(new ShareFetchRequestData.FetchTopicCollection(util.List.of(new ShareFetchRequestData.FetchTopic()
+        .setTopicId(topicId)
+        .setPartitions(new ShareFetchRequestData.FetchPartitionCollection(util.List.of(
+          new ShareFetchRequestData.FetchPartition().setPartitionIndex(0)
+        ).iterator))
+      ).iterator))
+
+    val shareFetchRequest = new ShareFetchRequest.Builder(shareFetchRequestData).build(ApiKeys.SHARE_FETCH.latestVersion)
+    val request = buildRequest(shareFetchRequest)
+
+    kafkaApis = createKafkaApis()
+    kafkaApis.handleShareFetchRequest(request)
+
+    val response = verifyNoThrottling[ShareFetchResponse](request)
+    assertEquals(Errors.INVALID_REQUEST.code, response.data.errorCode)
+    verify(sharePartitionManager, never()).newContext(any(), any(), any(), any(), any(), any(), any())
+    verify(sharePartitionManager, never()).fetchMessages(any(), any(), any(), any(), anyInt(), anyInt(), any())
+  }
+
+  @Test
+  def testHandleShareFetchRequestZeroMaxRecordsIsAccepted(): Unit = {
+    val topicId = Uuid.randomUuid()
+    metadataCache = initializeMetadataCacheWithShareGroupsEnabled()
+
+    when(sharePartitionManager.newContext(any(), any(), any(), any(), any(), any(), any())).thenReturn(
+      new FinalContext()
+    )
+
+    // A zero maxRecords is sent by the clients when the request carries only acknowledgements
+    // or share session changes, hence it must not be rejected.
+    val shareFetchRequestData = new ShareFetchRequestData()
+      .setGroupId("group")
+      .setMemberId(Uuid.randomUuid().toString)
+      .setShareSessionEpoch(0)
+      .setMaxRecords(0)
+      .setTopics(new ShareFetchRequestData.FetchTopicCollection(util.List.of(new ShareFetchRequestData.FetchTopic()
+        .setTopicId(topicId)
+        .setPartitions(new ShareFetchRequestData.FetchPartitionCollection(util.List.of(
+          new ShareFetchRequestData.FetchPartition().setPartitionIndex(0)
+        ).iterator))
+      ).iterator))
+
+    val shareFetchRequest = new ShareFetchRequest.Builder(shareFetchRequestData).build(ApiKeys.SHARE_FETCH.latestVersion)
+    val request = buildRequest(shareFetchRequest)
+
+    kafkaApis = createKafkaApis()
+    kafkaApis.handleShareFetchRequest(request)
+
+    val response = verifyNoThrottling[ShareFetchResponse](request)
+    assertEquals(Errors.NONE.code, response.data.errorCode)
+    verify(sharePartitionManager).newContext(any(), any(), any(), any(), any(), any(), any())
+  }
+
+  @Test
   def testHandleShareFetchRequestReleaseAcquiredRecordsThrowError(): Unit = {
     val topicName = "foo"
     val topicId = Uuid.randomUuid()

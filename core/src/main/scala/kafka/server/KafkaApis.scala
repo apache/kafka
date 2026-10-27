@@ -3321,6 +3321,16 @@ class KafkaApis(val requestChannel: RequestChannel,
     val forgottenTopics = shareFetchRequest.forgottenTopics(topicIdNames)
     var shareFetchContext: ShareFetchContext = null
 
+    // The maxRecords is available from version 1 and cannot be negative. A value of 0 is valid, for example
+    // clients send it in record-limit mode to the nodes not being fetched from, when the request carries only
+    // acknowledgements or share session changes.
+    if (shareFetchRequest.version >= 1 && shareFetchRequest.data.maxRecords < 0) {
+      val errorMsg = s"maxRecords must not be negative, but found ${shareFetchRequest.data.maxRecords}."
+      error(errorMsg)
+      requestHelper.sendMaybeThrottle(request, shareFetchRequest.getErrorResponse(AbstractResponse.DEFAULT_THROTTLE_TIME, Errors.INVALID_REQUEST.exception(errorMsg)))
+      return CompletableFuture.completedFuture[Unit](())
+    }
+
     // KIP-1222 enforces setting the maxBytes, minBytes, maxRecords, maxWaitMs
     // values to 0, in case isRenewAck is true.
     if (shareFetchRequest.version >= 2 && shareFetchRequest.data.isRenewAck) {
