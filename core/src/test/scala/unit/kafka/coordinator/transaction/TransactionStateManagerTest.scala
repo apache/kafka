@@ -281,14 +281,16 @@ class TransactionStateManagerTest {
     val listener = prepareTxnLogAboveHighWatermark()
     val highWatermark = new AtomicLong(0L)
     when(logMockOf(topicPartition).highWatermark).thenAnswer(_ => highWatermark.get)
-    // the high watermark advances after the listener is notified of the current state but before it's added,
-    // so the listener isn't notified of the update
+    // the high watermark advances after it's read but before the listener is added, so the listener isn't
+    // notified of the update
     when(replicaManager.maybeAddListener(ArgumentMatchers.eq(topicPartition), listener.capture())).thenAnswer { _ =>
       highWatermark.set(2L)
       true
     }
 
     transactionManager.loadTransactionsForTxnTopicPartition(partitionId, coordinatorEpoch, (_, _, _, _) => ())
+    // the check after registration finishes the wait and removes the listener, and since the wait is then finished
+    // the registration removes it again
     verify(replicaManager, times(2)).removeListener(topicPartition, listener.getValue)
     assertTrue(transactionManager.getTransactionState(transactionalId1).exists(_.isDefined))
     assertTrue(transactionManager.loadingPartitions.isEmpty)
@@ -304,12 +306,15 @@ class TransactionStateManagerTest {
     }
 
     transactionManager.loadTransactionsForTxnTopicPartition(partitionId, coordinatorEpoch, (_, _, _, _) => ())
-    // removed after registration since the callback ran before the listener was added
+    // the callback finishes the wait and removes the listener before it's added, so the registration removes it
+    // again once it's added
     verify(replicaManager, times(2)).removeListener(topicPartition, listener.getValue)
     assertTrue(transactionManager.getTransactionState(transactionalId1).exists(_.isDefined))
   }
 
-  // Prepares a log with two records for transactionalId1 where the high watermark is below the log end offset
+  // Prepares a log with two records for transactionalId1 where the high watermark is below the log end offset.
+  // The tests advance the high watermark by invoking the captured listener directly; on a real leader the
+  // updates come from the followers fetching (or from the ISR shrinking).
   private def prepareTxnLogAboveHighWatermark(online: Boolean = true): ArgumentCaptor[PartitionListener] = {
     txnMetadata1.state(TransactionState.ONGOING)
     txnMetadata1.addPartitions(util.Set.of(new TopicPartition("topic1", 0)))

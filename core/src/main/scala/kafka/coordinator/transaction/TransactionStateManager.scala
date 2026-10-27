@@ -628,7 +628,8 @@ class TransactionStateManager(brokerId: Int,
     // The load reads up to the log end offset, but a newly elected leader may have records above the high watermark
     // that are not committed yet and may still get truncated. The coordinator does not write to the partition while
     // it is loading, so the log end offset doesn't change; wait until the high watermark catches up to it so that
-    // all the records the load reads are committed.
+    // all the records the load reads are committed. The high watermark of the leader advances as the followers in the
+    // ISR fetch from it, or when a lagging follower is removed from the ISR.
     replicaManager.getLog(topicPartition) match {
       case Some(log) if log.highWatermark < log.logEndOffset =>
         val logEndOffset = log.logEndOffset
@@ -646,6 +647,8 @@ class TransactionStateManager(brokerId: Int,
             replicaManager.removeListener(topicPartition, listener)
         }
       case _ =>
+        // either all the records are already committed, or there is no local log, in which case the load finds
+        // no records
         scheduleLoad(0L)
     }
   }
