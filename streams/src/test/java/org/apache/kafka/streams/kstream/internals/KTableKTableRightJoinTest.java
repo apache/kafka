@@ -18,7 +18,6 @@ package org.apache.kafka.streams.kstream.internals;
 
 import org.apache.kafka.common.serialization.Serdes;
 import org.apache.kafka.common.utils.LogCaptureAppender;
-import org.apache.kafka.common.utils.LogCaptureAppender.Event;
 import org.apache.kafka.streams.StreamsBuilder;
 import org.apache.kafka.streams.StreamsConfig;
 import org.apache.kafka.streams.kstream.Consumed;
@@ -27,14 +26,13 @@ import org.apache.kafka.streams.processor.api.Processor;
 import org.apache.kafka.streams.processor.api.Record;
 import org.apache.kafka.test.StreamsTestUtils;
 
+import org.apache.logging.log4j.Level;
 import org.junit.jupiter.params.ParameterizedTest;
 import org.junit.jupiter.params.provider.ValueSource;
 
 import java.util.Properties;
-import java.util.stream.Collectors;
 
-import static org.hamcrest.CoreMatchers.hasItem;
-import static org.hamcrest.MatcherAssert.assertThat;
+import static org.junit.jupiter.api.Assertions.assertTrue;
 
 public class KTableKTableRightJoinTest {
 
@@ -61,13 +59,8 @@ public class KTableKTableRightJoinTest {
         try (final LogCaptureAppender appender = LogCaptureAppender.createAndRegister(KTableKTableRightJoin.class)) {
             join.process(new Record<>(null, new Change<>("new", "old"), 0));
 
-            assertThat(
-                appender.getEvents().stream()
-                    .filter(e -> e.getLevel().equals("WARN"))
-                    .map(Event::getMessage)
-                    .collect(Collectors.toList()),
-                hasItem("Skipping record due to null key. topic=[left] partition=[-1] offset=[-2]")
-            );
+            assertTrue(appender.getMessages(Level.WARN).contains(
+                "Skipping record due to null key. topic=[left] partition=[-1] offset=[-2]"));
         }
     }
 

@@ -19,7 +19,7 @@ package org.apache.kafka.clients.consumer;
 
 import org.apache.kafka.clients.Metadata;
 import org.apache.kafka.clients.consumer.internals.AutoOffsetResetStrategy;
-import org.apache.kafka.clients.consumer.internals.SubscriptionState;
+import org.apache.kafka.clients.consumer.internals.ConsumerSubscriptionState;
 import org.apache.kafka.common.KafkaException;
 import org.apache.kafka.common.Metric;
 import org.apache.kafka.common.MetricName;
@@ -62,7 +62,7 @@ import static org.apache.kafka.clients.consumer.internals.ConsumerUtils.DEFAULT_
 public class MockConsumer<K, V> implements Consumer<K, V> {
 
     private final Map<String, List<PartitionInfo>> partitions;
-    private final SubscriptionState subscriptions;
+    private final ConsumerSubscriptionState subscriptions;
     private final Map<TopicPartition, Long> beginningOffsets;
     private final Map<TopicPartition, Long> endOffsets;
     private final Map<TopicPartition, Long> durationResetOffsets;
@@ -103,7 +103,7 @@ public class MockConsumer<K, V> implements Consumer<K, V> {
     }
 
     private MockConsumer(AutoOffsetResetStrategy offsetResetStrategy) {
-        this.subscriptions = new SubscriptionState(new LogContext(), offsetResetStrategy);
+        this.subscriptions = new ConsumerSubscriptionState(new LogContext(), offsetResetStrategy);
         this.partitions = new HashMap<>();
         this.records = new HashMap<>();
         this.paused = new HashSet<>();
@@ -128,27 +128,33 @@ public class MockConsumer<K, V> implements Consumer<K, V> {
      */
     public synchronized void rebalance(Collection<TopicPartition> newAssignment) {
         // compute added and removed partitions for rebalance callback
-        Set<TopicPartition> oldAssignmentSet = this.subscriptions.assignedPartitions();
+        Set<TopicPartition> oldAssignmentSet = subscriptions.assignedPartitions();
         Set<TopicPartition> newAssignmentSet = new HashSet<>(newAssignment);
-        List<TopicPartition> added = newAssignment.stream().filter(x -> !oldAssignmentSet.contains(x)).collect(Collectors.toList());
-        List<TopicPartition> removed = oldAssignmentSet.stream().filter(x -> !newAssignmentSet.contains(x)).collect(Collectors.toList());
+        List<TopicPartition> added = newAssignment
+                .stream()
+                .filter(x -> !oldAssignmentSet.contains(x))
+                .collect(Collectors.toList());
+        List<TopicPartition> removed = oldAssignmentSet
+                .stream()
+                .filter(x -> !newAssignmentSet.contains(x))
+                .collect(Collectors.toList());
 
         // rebalance
-        this.records.clear();
+        records.clear();
 
         // rebalance callbacks
         if (!removed.isEmpty()) {
-            this.subscriptions.rebalanceListener().ifPresent(crl -> crl.onPartitionsRevoked(removed));
+            subscriptions.onPartitionsRevoked(removed);
         }
-        this.subscriptions.assignFromSubscribed(newAssignment);
-        this.subscriptions.rebalanceListener().ifPresent(crl -> crl.onPartitionsAssigned(added));
+        subscriptions.assignFromSubscribed(newAssignment);
+        subscriptions.onPartitionsAssigned(added);
     }
 
     /**
-     * Simulates a partition loss event. Calls {@link ConsumerRebalanceListener#onPartitionsLost}
+     * Simulates a partition loss event. Calls {@link RebalanceListener#onPartitionsLost}
      * for the specified partitions and removes them from the current assignment. Unlike
-     * {@link #rebalance(Collection)}, which calls {@link ConsumerRebalanceListener#onPartitionsRevoked},
-     * this method models the case where the consumer loses partitions without a graceful revoke..
+     * {@link #rebalance(Collection)}, which calls {@link RebalanceListener#onPartitionsRevoked},
+     * this method models the case where the consumer loses partitions without a graceful revoke.
      *
      * <p>Only records belonging to the lost partitions are cleared; records for retained
      * partitions are unaffected.
@@ -165,7 +171,7 @@ public class MockConsumer<K, V> implements Consumer<K, V> {
         if (!notAssigned.isEmpty())
             throw new IllegalStateException("Cannot lose partitions that are not currently assigned: " + notAssigned);
         lost.forEach(records::remove);
-        this.subscriptions.rebalanceListener().ifPresent(crl -> crl.onPartitionsLost(lost));
+        this.subscriptions.onPartitionsLost(lost);
         Set<TopicPartition> remaining = currentAssignment.stream()
             .filter(tp -> !lost.contains(tp))
             .collect(Collectors.toSet());
@@ -174,12 +180,12 @@ public class MockConsumer<K, V> implements Consumer<K, V> {
 
     @Override
     public synchronized Set<String> subscription() {
-        return this.subscriptions.subscription();
+        return subscriptions.subscription();
     }
 
     @Override
     public synchronized void subscribe(Collection<String> topics) {
-        subscribe(topics, Optional.empty());
+        subscribeInternal(topics, null);
     }
 
     @Override
@@ -187,32 +193,25 @@ public class MockConsumer<K, V> implements Consumer<K, V> {
         if (listener == null)
             throw new IllegalArgumentException("RebalanceListener cannot be null");
 
-        subscribe(pattern, Optional.of(listener));
+        subscribeInternal(pattern, listener);
     }
 
     @Override
     public synchronized void subscribe(Pattern pattern) {
-        subscribe(pattern, Optional.empty());
+        subscribeInternal(pattern, null);
     }
 
     @Override
-    public void subscribe(SubscriptionPattern pattern, ConsumerRebalanceListener listener) {
+    public synchronized void subscribe(SubscriptionPattern pattern, ConsumerRebalanceListener listener) {
         if (listener == null)
             throw new IllegalArgumentException("RebalanceListener cannot be null");
-        subscribe(pattern, Optional.of(listener));
+
+        subscribeInternal(pattern, listener);
     }
 
     @Override
-    public void subscribe(SubscriptionPattern pattern) {
-        subscribe(pattern, Optional.empty());
-    }
-
-    private void subscribe(SubscriptionPattern pattern, Optional<ConsumerRebalanceListener> listener) {
-        if (pattern == null || pattern.toString().isEmpty())
-            throw new IllegalArgumentException("Topic pattern cannot be " + (pattern == null ? "null" : "empty"));
-        ensureNotClosed();
-        committed.clear();
-        this.subscriptions.subscribe(pattern, listener);
+    public synchronized void subscribe(SubscriptionPattern pattern) {
+        subscribeInternal(pattern, null);
     }
 
     @Override
@@ -220,19 +219,34 @@ public class MockConsumer<K, V> implements Consumer<K, V> {
         if (listener == null)
             throw new IllegalArgumentException("RebalanceListener cannot be null");
 
-        subscribe(topics, Optional.of(listener));
+        subscribeInternal(topics, listener);
     }
 
-    private synchronized void subscribe(Collection<String> topics, Optional<ConsumerRebalanceListener> listener) {
+    private synchronized void subscribeInternal(SubscriptionPattern pattern, ConsumerRebalanceListener listener) {
+        if (pattern == null || pattern.toString().isEmpty())
+            throw new IllegalArgumentException("Topic pattern cannot be " + (pattern == null ? "null" : "empty"));
+
         ensureNotClosed();
         committed.clear();
-        this.subscriptions.subscribe(new HashSet<>(topics), listener);
+        if (listener != null)
+            subscriptions.setRebalanceListener(listener, this);
+        subscriptions.subscribe(pattern);
     }
 
-    private synchronized void subscribe(Pattern pattern, Optional<ConsumerRebalanceListener> listener) {
+    private synchronized void subscribeInternal(Collection<String> topics, ConsumerRebalanceListener listener) {
         ensureNotClosed();
         committed.clear();
-        this.subscriptions.subscribe(pattern, listener);
+        if (listener != null)
+            subscriptions.setRebalanceListener(listener, this);
+        subscriptions.subscribe(new HashSet<>(topics));
+    }
+
+    private synchronized void subscribeInternal(Pattern pattern, ConsumerRebalanceListener listener) {
+        ensureNotClosed();
+        committed.clear();
+        if (listener != null)
+            subscriptions.setRebalanceListener(listener, this);
+        subscriptions.subscribe(pattern);
         Set<String> topicsToSubscribe = new HashSet<>();
         for (String topic: partitions.keySet()) {
             if (pattern.matcher(topic).matches() &&
@@ -240,10 +254,10 @@ public class MockConsumer<K, V> implements Consumer<K, V> {
                 topicsToSubscribe.add(topic);
         }
         ensureNotClosed();
-        this.subscriptions.subscribeFromPattern(topicsToSubscribe);
+        subscriptions.subscribeFromPattern(topicsToSubscribe);
         final Set<TopicPartition> assignedPartitions = new HashSet<>();
         for (final String topic : topicsToSubscribe) {
-            for (final PartitionInfo info : this.partitions.get(topic)) {
+            for (final PartitionInfo info : partitions.get(topic)) {
                 assignedPartitions.add(new TopicPartition(topic, info.partition()));
             }
 
@@ -273,6 +287,12 @@ public class MockConsumer<K, V> implements Consumer<K, V> {
         ensureNotClosed();
         committed.clear();
         subscriptions.unsubscribe();
+    }
+
+    @Override
+    public synchronized void setRebalanceListener(RebalanceListener callback) {
+        ensureNotClosed();
+        subscriptions.setRebalanceListener(callback, this);
     }
 
     @Override
@@ -331,7 +351,7 @@ public class MockConsumer<K, V> implements Consumer<K, V> {
                     if (rec.offset() >= position) {
                         results.computeIfAbsent(entry.getKey(), partition -> new ArrayList<>()).add(rec);
                         Metadata.LeaderAndEpoch leaderAndEpoch = new Metadata.LeaderAndEpoch(Optional.empty(), rec.leaderEpoch());
-                        SubscriptionState.FetchPosition newPosition = new SubscriptionState.FetchPosition(
+                        ConsumerSubscriptionState.FetchPosition newPosition = new ConsumerSubscriptionState.FetchPosition(
                                 rec.offset() + 1, rec.leaderEpoch(), leaderAndEpoch);
                         subscriptions.position(entry.getKey(), newPosition);
                         nextOffsetAndMetadata.put(entry.getKey(), new OffsetAndMetadata(rec.offset() + 1, rec.leaderEpoch(), ""));
@@ -467,7 +487,7 @@ public class MockConsumer<K, V> implements Consumer<K, V> {
         ensureNotClosed();
         if (!this.subscriptions.isAssigned(partition))
             throw new IllegalArgumentException("You can only check the position for partitions assigned to this consumer.");
-        SubscriptionState.FetchPosition position = this.subscriptions.position(partition);
+        ConsumerSubscriptionState.FetchPosition position = this.subscriptions.position(partition);
         if (position == null) {
             updateFetchPosition(partition);
             position = this.subscriptions.position(partition);

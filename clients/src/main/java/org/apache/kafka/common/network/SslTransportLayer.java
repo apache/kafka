@@ -917,7 +917,7 @@ public class SslTransportLayer implements TransportLayer {
     //      unable to process the server message and an SSLException is thrown:
     //      javax.net.ssl.SSLException: Unrecognized SSL message, plaintext connection?
     //   b) If server closes the connection gracefully during handshake, client may receive close_notify
-    //      and and an SSLException is thrown:
+    //      and an SSLException is thrown:
     //      javax.net.ssl.SSLException: Received close_notify during handshake
     // We want to handle a) as a non-retriable SslAuthenticationException and b) as a retriable IOException.
     // To do this we need to rely on the exception string. Since it is safer to throw a retriable exception
@@ -999,6 +999,13 @@ public class SslTransportLayer implements TransportLayer {
             hasBytesBuffered = false;
     }
 
+    /**
+     * Transfers bytes from `fileChannel` by reading them into a buffer and writing them to this channel, since
+     * they have to be encrypted.
+     *
+     * @throws IOException If the file cannot be read or this channel cannot be written. The bytes the failed call
+     *         already wrote are not reported, so this channel must not be used after it.
+     */
     @Override
     public long transferFrom(FileChannel fileChannel, long position, long count) throws IOException {
         if (state == State.CLOSING)
@@ -1031,33 +1038,33 @@ public class SslTransportLayer implements TransportLayer {
 
         int totalBytesWritten = 0;
         long pos = position;
-        try {
-            while (totalBytesWritten < totalBytesToWrite) {
-                if (!fileChannelBuffer.hasRemaining()) {
-                    fileChannelBuffer.clear();
-                    int bytesRemaining = totalBytesToWrite - totalBytesWritten;
-                    if (bytesRemaining < fileChannelBuffer.limit())
-                        fileChannelBuffer.limit(bytesRemaining);
-                    int bytesRead = fileChannel.read(fileChannelBuffer, pos);
-                    if (bytesRead <= 0)
-                        break;
+        while (totalBytesWritten < totalBytesToWrite) {
+            if (!fileChannelBuffer.hasRemaining()) {
+                fileChannelBuffer.clear();
+                int bytesRemaining = totalBytesToWrite - totalBytesWritten;
+                if (bytesRemaining < fileChannelBuffer.limit())
+                    fileChannelBuffer.limit(bytesRemaining);
+                int bytesRead;
+                try {
+                    bytesRead = fileChannel.read(fileChannelBuffer, pos);
+                } finally {
+                    // Holds exactly what was read, nothing if the read failed or reached the end of the file:
+                    // otherwise the next call would send the previous read as the contents of this position.
                     fileChannelBuffer.flip();
                 }
-                int networkBytesWritten = write(fileChannelBuffer);
-                totalBytesWritten += networkBytesWritten;
-                // In the case of a partial write we only return the written bytes to the caller. As a result, the
-                // `position` passed in the next `transferFrom` call won't include the bytes remaining in
-                // `fileChannelBuffer`. By draining `fileChannelBuffer` first, we ensure we update `pos` before
-                // we invoke `fileChannel.read`.
-                if (fileChannelBuffer.hasRemaining())
+                if (bytesRead <= 0)
                     break;
-                pos += networkBytesWritten;
             }
-            return totalBytesWritten;
-        } catch (IOException e) {
-            if (totalBytesWritten > 0)
-                return totalBytesWritten;
-            throw e;
+            int networkBytesWritten = write(fileChannelBuffer);
+            totalBytesWritten += networkBytesWritten;
+            // In the case of a partial write we only return the written bytes to the caller. As a result, the
+            // `position` passed in the next `transferFrom` call won't include the bytes remaining in
+            // `fileChannelBuffer`. By draining `fileChannelBuffer` first, we ensure we update `pos` before
+            // we invoke `fileChannel.read`.
+            if (fileChannelBuffer.hasRemaining())
+                break;
+            pos += networkBytesWritten;
         }
+        return totalBytesWritten;
     }
 }

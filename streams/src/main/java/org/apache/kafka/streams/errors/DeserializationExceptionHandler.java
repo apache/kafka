@@ -92,7 +92,7 @@ public interface DeserializationExceptionHandler extends Configurable {
      * @return a {@link Response} object
      */
     default Response handleError(final ErrorHandlerContext context, final ConsumerRecord<byte[], byte[]> record, final Exception exception) {
-        return new Response(Result.from(handle(context, record, exception)), Collections.emptyList());
+        return new Response(Result.from(handle(context, record, exception)), List.of());
     }
     /**
      * Enumeration that describes the response from the exception handler.
@@ -206,7 +206,7 @@ public interface DeserializationExceptionHandler extends Configurable {
          * @return a {@code Response} with a {@link DeserializationExceptionHandler.Result#FAIL} status.
          */
         public static Response fail() {
-            return fail(Collections.emptyList());
+            return fail(List.of());
         }
 
         /**
@@ -225,7 +225,7 @@ public interface DeserializationExceptionHandler extends Configurable {
          * @return a {@code Response} with a {@link DeserializationExceptionHandler.Result#RESUME} status.
          */
         public static Response resume() {
-            return resume(Collections.emptyList());
+            return resume(List.of());
         }
 
         /**
@@ -248,7 +248,7 @@ public interface DeserializationExceptionHandler extends Configurable {
          */
         public List<ProducerRecord<byte[], byte[]>> deadLetterQueueRecords() {
             if (deadLetterQueueRecords == null) {
-                return Collections.emptyList();
+                return List.of();
             }
             return Collections.unmodifiableList(deadLetterQueueRecords);
         }

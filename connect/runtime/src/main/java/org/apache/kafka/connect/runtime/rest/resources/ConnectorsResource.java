@@ -200,7 +200,7 @@ public class ConnectorsResource {
         checkAndPutConnectorConfigName(name, configs);
 
         FutureCallback<Herder.Created<ConnectorInfo>> cb = new FutureCallback<>();
-        herder.putConnectorConfig(name, configs, createRequest.initialTargetState(), false, cb);
+        herder.putConnectorConfig(name, configs, createRequest.initialTargetState(), createRequest.initialOffsetsMap(), false, cb);
         Herder.Created<ConnectorInfo> info = requestHandler.completeOrForwardRequest(cb, "/connectors", "POST", headers, createRequest,
                 new TypeReference<>() { }, new CreatedConnectorInfoTranslator(), forward);
 
@@ -297,13 +297,13 @@ public class ConnectorsResource {
             content = @Content(mediaType = MediaType.APPLICATION_JSON, schema = @Schema(implementation = ErrorMessage.class))
         )
     })
-    public Response getConnectorActiveTopics(final @PathParam("connector") @Parameter(description = "The name of the connector") String connector) {
+    public Map<String, ActiveTopicsInfo> getConnectorActiveTopics(final @PathParam("connector") @Parameter(description = "The name of the connector") String connector) {
         if (isTopicTrackingDisabled) {
             throw new ConnectRestException(Response.Status.FORBIDDEN.getStatusCode(),
                     "Topic tracking is disabled.");
         }
         ActiveTopicsInfo info = herder.connectorActiveTopics(connector);
-        return Response.ok(Map.of(info.connector(), info)).build();
+        return Map.of(info.connector(), info);
     }
 
     @PUT
@@ -432,7 +432,7 @@ public class ConnectorsResource {
             content = @Content(mediaType = MediaType.APPLICATION_JSON, schema = @Schema(implementation = ErrorMessage.class))
         )
     })
-    public Response patchConnectorConfig(final @PathParam("connector") @Parameter(description = "The name of the connector") String connector,
+    public ConnectorInfo patchConnectorConfig(final @PathParam("connector") @Parameter(description = "The name of the connector") String connector,
                                          final @Context HttpHeaders headers,
                                          final @Parameter(hidden = true) @QueryParam("forward") Boolean forward,
                                          final Map<String, String> connectorConfigPatch) throws Throwable {
@@ -440,7 +440,7 @@ public class ConnectorsResource {
         herder.patchConnectorConfig(connector, connectorConfigPatch, cb);
         Herder.Created<ConnectorInfo> createdInfo = requestHandler.completeOrForwardRequest(cb, "/connectors/" + connector + "/config",
                 "PATCH", headers, connectorConfigPatch, new TypeReference<>() { }, new CreatedConnectorInfoTranslator(), forward);
-        return Response.ok().entity(createdInfo.result()).build();
+        return createdInfo.result();
     }
 
     @POST
@@ -759,19 +759,18 @@ public class ConnectorsResource {
             content = @Content(mediaType = MediaType.APPLICATION_JSON, schema = @Schema(implementation = ErrorMessage.class))
         )
     })
-    public Response alterConnectorOffsets(final @Parameter(hidden = true) @QueryParam("forward") Boolean forward,
-                                          final @Context HttpHeaders headers,
-                                          final @PathParam("connector") @Parameter(description = "The name of the connector") String connector,
-                                          final ConnectorOffsets offsets) throws Throwable {
+    public Message alterConnectorOffsets(final @Parameter(hidden = true) @QueryParam("forward") Boolean forward,
+                                         final @Context HttpHeaders headers,
+                                         final @PathParam("connector") @Parameter(description = "The name of the connector") String connector,
+                                         final ConnectorOffsets offsets) throws Throwable {
         if (offsets.offsets() == null || offsets.offsets().isEmpty()) {
             throw new BadRequestException("Partitions / offsets need to be provided for an alter offsets request");
         }
 
         FutureCallback<Message> cb = new FutureCallback<>();
         herder.alterConnectorOffsets(connector, offsets.toMap(), cb);
-        Message msg = requestHandler.completeOrForwardRequest(cb, "/connectors/" + connector + "/offsets", "PATCH", headers, offsets,
+        return requestHandler.completeOrForwardRequest(cb, "/connectors/" + connector + "/offsets", "PATCH", headers, offsets,
                 new TypeReference<>() { }, new IdentityTranslator<>(), forward);
-        return Response.ok().entity(msg).build();
     }
 
     @DELETE
@@ -804,14 +803,13 @@ public class ConnectorsResource {
             content = @Content(mediaType = MediaType.APPLICATION_JSON, schema = @Schema(implementation = ErrorMessage.class))
         )
     })
-    public Response resetConnectorOffsets(final @Parameter(hidden = true) @QueryParam("forward") Boolean forward,
-                                          final @Context HttpHeaders headers,
-                                          final @PathParam("connector") @Parameter(description = "The name of the connector") String connector) throws Throwable {
+    public Message resetConnectorOffsets(final @Parameter(hidden = true) @QueryParam("forward") Boolean forward,
+                                         final @Context HttpHeaders headers,
+                                         final @PathParam("connector") @Parameter(description = "The name of the connector") String connector) throws Throwable {
         FutureCallback<Message> cb = new FutureCallback<>();
         herder.resetConnectorOffsets(connector, cb);
-        Message msg = requestHandler.completeOrForwardRequest(cb, "/connectors/" + connector + "/offsets", "DELETE", headers, null,
+        return requestHandler.completeOrForwardRequest(cb, "/connectors/" + connector + "/offsets", "DELETE", headers, null,
                 new TypeReference<>() { }, new IdentityTranslator<>(), forward);
-        return Response.ok().entity(msg).build();
     }
 
     // Check whether the connector name from the url matches the one (if there is one) provided in the connectorConfig

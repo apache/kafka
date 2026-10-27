@@ -54,7 +54,7 @@ import static org.apache.kafka.streams.state.internals.Utils.rawTimestampedValue
  * a {@code TimestampedKeyValueStoreWithHeaders}, this adapter is used to translate between
  * the timestamped {@code byte[]} format and the timestamped-with-headers {@code byte[]} format.
  *
- * @see TimestampedToHeadersIteratorAdapter
+ * @see MappingKeyValueIteratorAdapter#timestampedToHeaders(KeyValueIterator)
  */
 @SuppressWarnings("unchecked")
 public class TimestampedToHeadersStoreAdapter implements KeyValueStore<Bytes, byte[]> {
@@ -169,7 +169,7 @@ public class TimestampedToHeadersStoreAdapter implements KeyValueStore<Bytes, by
 
             if (rawResult.isSuccess()) {
                 final KeyValueIterator<Bytes, byte[]> convertedIterator =
-                        new TimestampedToHeadersIteratorAdapter<>(rawResult.getResult());
+                        MappingKeyValueIteratorAdapter.timestampedToHeaders(rawResult.getResult());
                 result = (QueryResult<R>) InternalQueryResultUtil.copyAndSubstituteDeserializedResult(rawResult, convertedIterator);
             } else {
                 result = (QueryResult<R>) rawResult;
@@ -201,29 +201,29 @@ public class TimestampedToHeadersStoreAdapter implements KeyValueStore<Bytes, by
     @Override
     public KeyValueIterator<Bytes, byte[]> range(final Bytes from,
                                                  final Bytes to) {
-        return new TimestampedToHeadersIteratorAdapter<>(store.range(from, to));
+        return MappingKeyValueIteratorAdapter.timestampedToHeaders(store.range(from, to));
     }
 
     @Override
     public KeyValueIterator<Bytes, byte[]> reverseRange(final Bytes from,
                                                         final Bytes to) {
-        return new TimestampedToHeadersIteratorAdapter<>(store.reverseRange(from, to));
+        return MappingKeyValueIteratorAdapter.timestampedToHeaders(store.reverseRange(from, to));
     }
 
     @Override
     public KeyValueIterator<Bytes, byte[]> all() {
-        return new TimestampedToHeadersIteratorAdapter<>(store.all());
+        return MappingKeyValueIteratorAdapter.timestampedToHeaders(store.all());
     }
 
     @Override
     public KeyValueIterator<Bytes, byte[]> reverseAll() {
-        return new TimestampedToHeadersIteratorAdapter<>(store.reverseAll());
+        return MappingKeyValueIteratorAdapter.timestampedToHeaders(store.reverseAll());
     }
 
     @Override
     public <PS extends Serializer<P>, P> KeyValueIterator<Bytes, byte[]> prefixScan(final P prefix,
                                                                                     final PS prefixKeySerializer) {
-        return new TimestampedToHeadersIteratorAdapter<>(store.prefixScan(prefix, prefixKeySerializer));
+        return MappingKeyValueIteratorAdapter.timestampedToHeaders(store.prefixScan(prefix, prefixKeySerializer));
     }
 
     @Override

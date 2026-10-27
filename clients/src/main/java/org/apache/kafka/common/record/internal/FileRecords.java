@@ -21,12 +21,15 @@ import org.apache.kafka.common.network.TransferableChannel;
 import org.apache.kafka.common.record.internal.FileLogInputStream.FileChannelRecordBatch;
 import org.apache.kafka.common.utils.Utils;
 import org.apache.kafka.common.utils.internals.AbstractIterator;
+import org.apache.kafka.common.utils.internals.BufferSupplier;
+import org.apache.kafka.common.utils.internals.CloseableIterator;
 
 import java.io.Closeable;
 import java.io.File;
 import java.io.IOException;
 import java.io.RandomAccessFile;
 import java.nio.ByteBuffer;
+import java.nio.channels.ClosedChannelException;
 import java.nio.channels.FileChannel;
 import java.nio.file.Files;
 import java.nio.file.StandardOpenOption;
@@ -39,9 +42,29 @@ import java.util.concurrent.atomic.AtomicInteger;
  * instance to enable slicing a range of the log records.
  */
 public class FileRecords extends AbstractRecords implements Closeable {
+    // Size of the buffer used to re-read a region that failed to transfer, see readFailure
+    static final int REREAD_BUFFER_SIZE = 32 * 1024;
+
+    /**
+     * Notified when {@link #writeTo} fails, typically to find out with {@link #readFailure} whether the backing file
+     * could not be read. It is called on the thread that failed to write, a network thread, so it must not block.
+     */
+    @FunctionalInterface
+    public interface TransferFailureHandler {
+        /**
+         * @param records The records that failed to be written
+         * @param position The absolute position in the file of the region that was being written
+         * @param count The size of the region
+         * @param transferFailure The exception the write failed with, rethrown by {@link #writeTo} once this returns
+         */
+        void onTransferFailure(FileRecords records, long position, int count, IOException transferFailure);
+    }
+
     private final boolean isSlice;
     private final int start;
     private final int end;
+    // Notified when writing to a network channel fails, or null
+    private final TransferFailureHandler transferFailureHandler;
 
     private final Iterable<FileLogInputStream.FileChannelRecordBatch> batches;
 
@@ -64,6 +87,7 @@ public class FileRecords extends AbstractRecords implements Closeable {
         this.start = 0;
         this.end = end;
         this.isSlice = false;
+        this.transferFailureHandler = null;
 
         if (channel.size() > Integer.MAX_VALUE) {
             throw new KafkaException(
@@ -90,13 +114,15 @@ public class FileRecords extends AbstractRecords implements Closeable {
         File file,
         FileChannel channel,
         int start,
-        int end
+        int end,
+        TransferFailureHandler transferFailureHandler
     ) {
         this.file = file;
         this.channel = channel;
         this.start = start;
         this.end = end;
         this.isSlice = true;
+        this.transferFailureHandler = transferFailureHandler;
 
         // don't check the file size since this is just a slice view
         this.size = new AtomicInteger(end - start);
@@ -126,15 +152,21 @@ public class FileRecords extends AbstractRecords implements Closeable {
     }
 
     /**
-     * Read log batches into the given buffer until there are no bytes remaining in the buffer or the end of the file
-     * is reached.
+     * Read log batches into the given buffer until there are no bytes remaining in the buffer or the end of
+     * this FileRecords object is reached.
      *
      * @param buffer The buffer to write the batches to
-     * @param position Position in the buffer to read from
+     * @param position Position to start reading from, relative to the start of this FileRecords object
      * @throws IOException If an I/O error occurs, see {@link FileChannel#read(ByteBuffer, long)} for details on the
-     * possible exceptions
+     * possible exceptions.
+     * @throws IllegalArgumentException If position is negative or greater than {@link #sizeInBytes()}
      */
     public void readInto(ByteBuffer buffer, int position) throws IOException {
+        int currentSize = sizeInBytes();
+        if (position < 0 || position > currentSize) {
+            throw new IllegalArgumentException("Read position " + position + " is outside " + this);
+        }
+        buffer.limit(buffer.position() + Math.min(buffer.remaining(), currentSize - position));
         Utils.readFully(channel, buffer, position + this.start);
         buffer.flip();
     }
@@ -144,7 +176,26 @@ public class FileRecords extends AbstractRecords implements Closeable {
         int availableBytes = availableBytes(position, size);
         int startPosition = this.start + position;
 
-        return new FileRecords(file, channel, startPosition, startPosition + availableBytes);
+        return new FileRecords(file, channel, startPosition, startPosition + availableBytes, transferFailureHandler);
+    }
+
+    /**
+     * Return a copy of this slice whose {@link #writeTo} notifies the given handler when writing to a network channel
+     * fails. Slices taken from it with {@link #slice} notify the same handler. This instance is not modified.
+     *
+     * @param handler The handler to notify
+     * @return A copy of this slice that notifies the handler
+     * @throws IllegalStateException If this instance is not a slice
+     */
+    public FileRecords withTransferFailureHandler(TransferFailureHandler handler) {
+        if (!isSlice)
+            throw new IllegalStateException("A transfer failure handler can only be set on a slice of " + file);
+        return new FileRecords(file, channel, start, end, Objects.requireNonNull(handler));
+    }
+
+    // Visible for testing
+    public TransferFailureHandler transferFailureHandler() {
+        return transferFailureHandler;
     }
 
     /**
@@ -208,22 +259,9 @@ public class FileRecords extends AbstractRecords implements Closeable {
     }
 
     /**
-     * Close this record set
+     * Close this record set. Callers are responsible for flushing and trimming before closing.
      */
     public void close() throws IOException {
-        if (!channel.isOpen()) {
-            return;
-        }
-
-        flush();
-        trim();
-        channel.close();
-    }
-
-    /**
-     * Close file handlers used by the FileChannel but don't write to disk. This is used when the disk may have failed
-     */
-    public void closeHandlers() throws IOException {
         channel.close();
     }
 
@@ -239,7 +277,7 @@ public class FileRecords extends AbstractRecords implements Closeable {
     }
 
     /**
-     * Trim file when close or roll to next file
+     * Trim file when rolling to the next segment or preparing for shutdown
      */
     public void trim() throws IOException {
         truncateTo(sizeInBytes());
@@ -289,17 +327,61 @@ public class FileRecords extends AbstractRecords implements Closeable {
 
     @Override
     public int writeTo(TransferableChannel destChannel, int offset, int length) throws IOException {
-        long newSize = Math.min(channel.size(), end) - start;
         int oldSize = sizeInBytes();
-        if (newSize < oldSize)
-            throw new KafkaException(String.format(
-                    "Size of FileRecords %s has been truncated during write: old size %d, new size %d",
-                    file.getAbsolutePath(), oldSize, newSize));
-
         long position = start + offset;
         int count = Math.min(length, oldSize - offset);
-        // safe to cast to int since `count` is an int
-        return (int) destChannel.transferFrom(channel, position, count);
+        try {
+            long newSize = Math.min(channel.size(), end) - start;
+            if (newSize < oldSize)
+                throw new KafkaException(String.format(
+                        "Size of FileRecords %s has been truncated during write: old size %d, new size %d",
+                        file.getAbsolutePath(), oldSize, newSize));
+            // safe to cast to int since `count` is an int
+            return (int) destChannel.transferFrom(channel, position, count);
+        } catch (IOException e) {
+            // The transfer reads the file and writes the socket in one call, so a storage failure and a socket
+            // failure both arrive here as a bare IOException. Let the handler find out which one it was. A closed
+            // channel means the file was not read, so there is nothing to find out.
+            if (transferFailureHandler != null && !(e instanceof ClosedChannelException))
+                transferFailureHandler.onTransferFailure(this, position, count, e);
+            throw e;
+        }
+    }
+
+    /**
+     * Read the given region of the backing file, after {@link #writeTo} failed on it, to tell a storage failure from
+     * a socket failure. The whole region is read rather than its first byte because, depending on the platform, the
+     * transfer may fail anywhere within it without reporting progress. Only a failed read of an open channel counts
+     * as a storage failure: the end of the file may be reached because the log was truncated concurrently (e.g. when
+     * the replica becomes a follower), and the channel may have been closed concurrently, by a deletion or a
+     * shutdown; neither says anything about the medium.
+     *
+     * @param position The absolute position of the region in the file
+     * @param count The size of the region
+     * @return The failure of the read, naming the file and the position, or empty if the region could be read or
+     *         nothing can be concluded
+     */
+    public Optional<IOException> readFailure(long position, int count) {
+        ByteBuffer buffer = ByteBuffer.allocate(Math.min(count, REREAD_BUFFER_SIZE));
+        long regionEnd = position + count;
+        long readPosition = position;
+        try {
+            while (readPosition < regionEnd) {
+                buffer.clear();
+                buffer.limit((int) Math.min(buffer.capacity(), regionEnd - readPosition));
+                int bytesRead = channel.read(buffer, readPosition);
+                if (bytesRead <= 0)
+                    return Optional.empty();
+                readPosition += bytesRead;
+            }
+            return Optional.empty();
+        } catch (ClosedChannelException e) {
+            return Optional.empty();
+        } catch (IOException e) {
+            return Optional.of(new IOException("Failed to read " + file.getAbsolutePath() + " at position "
+                    + readPosition + " after failing to write " + count + " bytes from position " + position
+                    + " to a network channel", e));
+        }
     }
 
     /**
@@ -351,17 +433,25 @@ public class FileRecords extends AbstractRecords implements Closeable {
      * @param targetTimestamp The timestamp to search for.
      * @param startingPosition The starting position to search.
      * @param startingOffset The starting offset to search.
+     * @param maxRecordBodySize The maximum declared (decompressed) body size of a single record; a compressed
+     *                          record exceeding it is rejected with an InvalidRecordException before its body is
+     *                          allocated. Pass {@link Records#SOFT_MAX_ARRAY_LENGTH} for no limit beyond the
+     *                          array-length ceiling.
      * @return The timestamp and offset of the message found. Null if no message is found.
      */
-    public TimestampAndOffset searchForTimestamp(long targetTimestamp, int startingPosition, long startingOffset) {
+    public TimestampAndOffset searchForTimestamp(long targetTimestamp, int startingPosition, long startingOffset,
+                                                 int maxRecordBodySize) {
         for (RecordBatch batch : batchesFrom(startingPosition)) {
             if (batch.maxTimestamp() >= targetTimestamp) {
                 // We found a message
-                for (Record record : batch) {
-                    long timestamp = record.timestamp();
-                    if (timestamp >= targetTimestamp && record.offset() >= startingOffset)
-                        return new TimestampAndOffset(timestamp, record.offset(),
-                                maybeLeaderEpoch(batch.partitionLeaderEpoch()));
+                try (CloseableIterator<Record> iterator = batch.streamingIterator(BufferSupplier.NO_CACHING, maxRecordBodySize)) {
+                    while (iterator.hasNext()) {
+                        Record record = iterator.next();
+                        long timestamp = record.timestamp();
+                        if (timestamp >= targetTimestamp && record.offset() >= startingOffset)
+                            return new TimestampAndOffset(timestamp, record.offset(),
+                                    maybeLeaderEpoch(batch.partitionLeaderEpoch()));
+                    }
                 }
             }
         }
@@ -487,8 +577,13 @@ public class FileRecords extends AbstractRecords implements Closeable {
                         StandardOpenOption.WRITE);
             } else {
                 RandomAccessFile randomAccessFile = new RandomAccessFile(file, "rw");
-                randomAccessFile.setLength(initFileSize);
-                return randomAccessFile.getChannel();
+                try {
+                    randomAccessFile.setLength(initFileSize);
+                    return randomAccessFile.getChannel();
+                } catch (IOException e) {
+                    randomAccessFile.close();
+                    throw e;
+                }
             }
         } else {
             return FileChannel.open(file.toPath());

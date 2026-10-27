@@ -16,11 +16,15 @@
  */
 package org.apache.kafka.streams.state.internals;
 
+import org.apache.kafka.common.utils.Bytes;
+import org.apache.kafka.streams.KeyValue;
+
 import org.rocksdb.ColumnFamilyHandle;
 import org.rocksdb.ReadOptions;
 import org.rocksdb.RocksDBException;
 import org.rocksdb.RocksIterator;
 
+import java.util.List;
 import java.util.concurrent.atomic.AtomicInteger;
 
 /**
@@ -64,6 +68,16 @@ final class ThrowingOnOffsetsPutDBAccessor implements RocksDBStore.DBAccessor {
             throw new RocksDBException("simulated put failure on offsets CF");
         }
         delegate.put(columnFamily, key, value);
+    }
+
+    @Override
+    public void putAll(final RocksDBStore.ColumnFamilyAccessor cfAccessor,
+                       final List<KeyValue<Bytes, byte[]>> entries) throws RocksDBException {
+        // Routed through this wrapper's put() rather than delegated, so the simulated offsets-CF
+        // failure still applies to batch writes.
+        for (final KeyValue<Bytes, byte[]> entry : entries) {
+            cfAccessor.put(this, entry.key.get(), entry.value);
+        }
     }
 
     @Override

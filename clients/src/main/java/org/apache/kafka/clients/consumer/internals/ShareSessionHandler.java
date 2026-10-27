@@ -41,7 +41,6 @@ import java.util.LinkedHashMap;
 import java.util.List;
 import java.util.Map;
 import java.util.Map.Entry;
-import java.util.Set;
 import java.util.stream.Collectors;
 
 /**
@@ -94,10 +93,6 @@ public class ShareSessionHandler {
         return sessionPartitions;
     }
 
-    public Collection<TopicIdPartition> sessionPartitions() {
-        return Set.copyOf(sessionPartitions.values());
-    }
-
     public void addPartitionToFetch(TopicIdPartition topicIdPartition, Acknowledgements partitionAcknowledgements) {
         nextPartitions.put(topicIdPartition.topicPartition(), topicIdPartition);
         if (partitionAcknowledgements != null) {
@@ -111,6 +106,10 @@ public class ShareSessionHandler {
 
     public boolean isNewSession() {
         return nextMetadata.isNewSession();
+    }
+
+    public boolean isSessionEmpty() {
+        return sessionPartitions.isEmpty();
     }
 
     public ShareFetchRequest.Builder newShareFetchBuilder(String groupId, ShareFetchConfig shareFetchConfig, boolean canSkipIfRequestEmpty) {
@@ -166,12 +165,22 @@ public class ShareSessionHandler {
         Map<TopicIdPartition, List<ShareFetchRequestData.AcknowledgementBatch>> acknowledgementBatches = new HashMap<>();
         if (!nextAcknowledgements.isEmpty()) {
             for (Map.Entry<TopicIdPartition, Acknowledgements> partitionsAcks : nextAcknowledgements.entrySet()) {
+                TopicIdPartition tip = partitionsAcks.getKey();
                 List<AcknowledgementBatch> partitionAckBatches = partitionsAcks.getValue().getAcknowledgementBatches();
                 for (AcknowledgementBatch ackBatch : partitionAckBatches) {
                     if (ackBatch.acknowledgeTypes().contains(AcknowledgeType.RENEW.id)) {
                         hasRenewAcknowledgements = true;
                     }
-                    acknowledgementBatches.computeIfAbsent(partitionsAcks.getKey(), k -> new ArrayList<>()).add(ackBatch.toShareFetchRequest());
+                    acknowledgementBatches.computeIfAbsent(tip, k -> new ArrayList<>()).add(ackBatch.toShareFetchRequest());
+                }
+
+                // If the partition is only being included in the request to send acknowledgements, we need to
+                // remove it so that it doesn't get added into the share session for fetching
+                TopicIdPartition sessionTip = sessionPartitions.get(tip.topicPartition());
+                if ((sessionTip == null) || !sessionTip.equals(tip)) {
+                    if (!removed.contains(tip)) {
+                        removed.add(tip);
+                    }
                 }
             }
         }
@@ -179,16 +188,26 @@ public class ShareSessionHandler {
         nextPartitions = new LinkedHashMap<>();
         nextAcknowledgements = new LinkedHashMap<>();
 
-        if (canSkipIfRequestEmpty && added.isEmpty() && removed.isEmpty() && acknowledgementBatches.isEmpty()) {
-            return null;
+        // If there are no changes to the share session and no acknowledgements, we can sometimes skip sending an empty request
+        if (added.isEmpty() && removed.isEmpty() && acknowledgementBatches.isEmpty() && !nextMetadata.isFinalEpoch()) {
+            // If the share session is empty, there are no partitions to fetch from and we can always skip
+            if (sessionPartitions.isEmpty()) {
+                log.debug("Skipping sending empty ShareFetch because share partitions empty");
+                return null;
+            }
+
+            // If the share session is not empty, but we do not want to fetch records for this node, we can skip
+            if (canSkipIfRequestEmpty) {
+                log.debug("Skipping sending empty ShareFetch because no share session changes or acknowledgements");
+                return null;
+            }
         }
 
         if (log.isDebugEnabled()) {
-            log.debug("Build ShareFetch {} for node {}. Added {}, removed {}, replaced {} out of {}",
+            log.debug("Build ShareFetch {} for node {}. Added {}, removed {} out of {}",
                 nextMetadata, node,
                 topicIdPartitionsToLogString(added),
                 topicIdPartitionsToLogString(removed),
-                topicIdPartitionsToLogString(replaced),
                 topicIdPartitionsToLogString(sessionPartitions.values()));
         }
 

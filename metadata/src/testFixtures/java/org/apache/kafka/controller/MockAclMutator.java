@@ -24,8 +24,10 @@ import org.apache.kafka.metadata.RecordTestUtils;
 import org.apache.kafka.metadata.authorizer.AclMutator;
 import org.apache.kafka.metadata.authorizer.StandardAcl;
 import org.apache.kafka.metadata.authorizer.StandardAuthorizer;
+import org.apache.kafka.raft.KRaftConfigs;
 import org.apache.kafka.server.authorizer.AclCreateResult;
 import org.apache.kafka.server.authorizer.AclDeleteResult;
+import org.apache.kafka.server.common.MetadataVersion;
 
 import java.util.HashMap;
 import java.util.List;
@@ -47,7 +49,9 @@ public class MockAclMutator implements AclMutator {
         StandardAuthorizer authorizer
     ) {
         this.authorizer = authorizer;
-        this.aclControl = new AclControlManager.Builder().build();
+        this.aclControl = new AclControlManager.Builder().
+            setMaxRecordsPerBatch(KRaftConfigs.CONTROLLER_MAX_RECORDS_PER_BATCH_DEFAULT).
+            build();
     }
 
     private void syncIdToAcl(
@@ -72,7 +76,7 @@ public class MockAclMutator implements AclMutator {
         List<AclBinding> aclBindings
     ) {
         Map<Uuid, StandardAcl> prevIdToAcl = new HashMap<>(aclControl.idToAcl());
-        ControllerResult<List<AclCreateResult>> result = aclControl.createAcls(aclBindings);
+        ControllerResult<List<AclCreateResult>> result = aclControl.createAcls(aclBindings, MetadataVersion.latestTesting());
         RecordTestUtils.replayAll(aclControl, result.records());
         syncIdToAcl(prevIdToAcl, aclControl.idToAcl());
         return CompletableFuture.completedFuture(result.response());

@@ -48,7 +48,6 @@ import jakarta.ws.rs.PathParam;
 import jakarta.ws.rs.Produces;
 import jakarta.ws.rs.QueryParam;
 import jakarta.ws.rs.core.MediaType;
-import jakarta.ws.rs.core.Response;
 
 /**
  * A set of endpoints to adjust the log levels of runtime loggers.
@@ -82,8 +81,8 @@ public class LoggingResource {
         description = "Logger levels retrieved successfully",
         content = @Content(mediaType = MediaType.APPLICATION_JSON, schema = @Schema(type = "object", additionalPropertiesSchema = LoggerLevel.class))
     )
-    public Response listLoggers() {
-        return Response.ok(herder.allLoggerLevels()).build();
+    public Map<String, LoggerLevel> listLoggers() {
+        return herder.allLoggerLevels();
     }
 
     /**
@@ -107,14 +106,14 @@ public class LoggingResource {
             content = @Content(mediaType = MediaType.APPLICATION_JSON, schema = @Schema(implementation = ErrorMessage.class))
         )
     })
-    public Response getLogger(final @PathParam("logger") @Parameter(description = "The name of the logger") String namedLogger) {
+    public LoggerLevel getLogger(final @PathParam("logger") @Parameter(description = "The name of the logger") String namedLogger) {
         Objects.requireNonNull(namedLogger, "require non-null name");
 
         LoggerLevel loggerLevel = herder.loggerLevel(namedLogger);
         if (loggerLevel == null)
             throw new NotFoundException("Logger " + namedLogger + " not found.");
 
-        return Response.ok(loggerLevel).build();
+        return loggerLevel;
     }
 
     /**
@@ -168,7 +167,7 @@ public class LoggingResource {
         )
     })
     @SuppressWarnings("fallthrough")
-    public Response setLevel(final @PathParam("logger") @Parameter(description = "The name of the logger") String namespace,
+    public List<String> setLevel(final @PathParam("logger") @Parameter(description = "The name of the logger") String namespace,
                              final Map<String, String> levelMap,
                              @DefaultValue("worker") @QueryParam("scope") @Parameter(description = "The scope for the logging modification (single-worker, cluster-wide, etc.)") String scope) {
         if (scope == null) {
@@ -190,11 +189,11 @@ public class LoggingResource {
             default:
                 log.warn("Received invalid scope '{}' in request to adjust logging level; will default to {}", scope, WORKER_SCOPE);
             case WORKER_SCOPE:
-                List<String> affectedLoggers = herder.setWorkerLoggerLevel(namespace, levelString);
-                return Response.ok(affectedLoggers).build();
+                return herder.setWorkerLoggerLevel(namespace, levelString);
             case CLUSTER_SCOPE:
                 herder.setClusterLoggerLevel(namespace, levelString);
-                return Response.noContent().build();
+                // JAX-RS translates a null return value into a 204 No Content response
+                return null;
         }
     }
 

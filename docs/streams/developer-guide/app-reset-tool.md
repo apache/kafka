@@ -28,7 +28,7 @@ type: docs
 
 You can reset an application and force it to reprocess its data from scratch by using the application reset tool. This can be useful for development and testing, or when fixing bugs.
 
-The application reset tool handles the Kafka Streams [user topics](manage-topics.html#streams-developer-guide-topics-user) (input, and output) and [internal topics](manage-topics.html#streams-developer-guide-topics-internal) differently when resetting the application.
+The application reset tool handles the Kafka Streams [user topics](../manage-topics#streams-developer-guide-topics-user) (input, and output) and [internal topics](../manage-topics#streams-developer-guide-topics-internal) differently when resetting the application.
 
 Here's what the application reset tool does for each topic type:
 

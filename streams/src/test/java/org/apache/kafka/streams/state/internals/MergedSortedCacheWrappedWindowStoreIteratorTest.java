@@ -38,8 +38,6 @@ import java.util.Collections;
 import java.util.List;
 import java.util.function.Function;
 
-import static org.hamcrest.CoreMatchers.equalTo;
-import static org.hamcrest.MatcherAssert.assertThat;
 import static org.junit.jupiter.api.Assertions.assertArrayEquals;
 import static org.junit.jupiter.api.Assertions.assertEquals;
 
@@ -183,9 +181,9 @@ public class MergedSortedCacheWrappedWindowStoreIteratorTest {
         final MergedSortedCacheWindowStoreIterator iterator = new MergedSortedCacheWindowStoreIterator(
             cacheIterator, storeIterator, true, tsExtractor
         );
-        assertThat(iterator.peekNextKey(), equalTo(0L));
+        assertEquals(0L, iterator.peekNextKey());
         iterator.next();
-        assertThat(iterator.peekNextKey(), equalTo(10L));
+        assertEquals(10L, iterator.peekNextKey());
         iterator.close();
     }
 
@@ -206,9 +204,9 @@ public class MergedSortedCacheWrappedWindowStoreIteratorTest {
         final MergedSortedCacheWindowStoreIterator iterator = new MergedSortedCacheWindowStoreIterator(
             cacheIterator, storeIterator, false, tsExtractor
         );
-        assertThat(iterator.peekNextKey(), equalTo(10L));
+        assertEquals(10L, iterator.peekNextKey());
         iterator.next();
-        assertThat(iterator.peekNextKey(), equalTo(0L));
+        assertEquals(0L, iterator.peekNextKey());
         iterator.close();
     }
 
@@ -233,9 +231,9 @@ public class MergedSortedCacheWrappedWindowStoreIteratorTest {
             true,
             tsExtractor
         );
-        assertThat(iterator.peekNextKey(), equalTo(0L));
+        assertEquals(0L, iterator.peekNextKey());
         iterator.next();
-        assertThat(iterator.peekNextKey(), equalTo(10L));
+        assertEquals(10L, iterator.peekNextKey());
         iterator.close();
     }
 
@@ -260,9 +258,9 @@ public class MergedSortedCacheWrappedWindowStoreIteratorTest {
             false,
             tsExtractor
         );
-        assertThat(iterator.peekNextKey(), equalTo(10L));
+        assertEquals(10L, iterator.peekNextKey());
         iterator.next();
-        assertThat(iterator.peekNextKey(), equalTo(0L));
+        assertEquals(0L, iterator.peekNextKey());
         iterator.close();
     }
 }

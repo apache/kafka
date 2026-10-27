@@ -27,6 +27,7 @@ import org.apache.kafka.common.security.token.delegation.internals.DelegationTok
 import org.apache.kafka.common.utils.Time
 import org.apache.kafka.coordinator.group.GroupCoordinator
 import org.apache.kafka.metadata.{BrokerState, MetadataCache}
+import org.apache.kafka.server.quota.QuotaFactory
 import org.apache.kafka.security.CredentialProvider
 import org.apache.kafka.server.BrokerLifecycleManager
 import org.apache.kafka.server.authorizer.Authorizer

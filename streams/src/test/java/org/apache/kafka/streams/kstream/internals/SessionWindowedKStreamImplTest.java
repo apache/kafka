@@ -26,6 +26,7 @@ import org.apache.kafka.streams.StreamsBuilder;
 import org.apache.kafka.streams.StreamsConfig;
 import org.apache.kafka.streams.TestInputTopic;
 import org.apache.kafka.streams.TopologyTestDriver;
+import org.apache.kafka.streams.TopologyTestDriverBuilder;
 import org.apache.kafka.streams.kstream.Consumed;
 import org.apache.kafka.streams.kstream.EmitStrategy;
 import org.apache.kafka.streams.kstream.Grouped;
@@ -55,7 +56,6 @@ import org.junit.jupiter.params.provider.Arguments;
 import org.junit.jupiter.params.provider.MethodSource;
 
 import java.util.ArrayList;
-import java.util.Arrays;
 import java.util.Collections;
 import java.util.List;
 import java.util.Properties;
@@ -63,10 +63,8 @@ import java.util.stream.Stream;
 
 import static java.time.Duration.ofMillis;
 import static java.util.Arrays.asList;
-import static org.hamcrest.CoreMatchers.equalTo;
-import static org.hamcrest.MatcherAssert.assertThat;
-import static org.hamcrest.core.IsInstanceOf.instanceOf;
 import static org.junit.jupiter.api.Assertions.assertEquals;
+import static org.junit.jupiter.api.Assertions.assertInstanceOf;
 import static org.junit.jupiter.api.Assertions.assertThrows;
 
 public class SessionWindowedKStreamImplTest {
@@ -123,7 +121,7 @@ public class SessionWindowedKStreamImplTest {
             .toStream()
             .process(supplier);
 
-        try (final TopologyTestDriver driver = new TopologyTestDriver(builder.build(), props)) {
+        try (final TopologyTestDriver driver = new TopologyTestDriverBuilder(builder.build()).withConfig(props).build()) {
             processData(driver);
         }
 
@@ -162,7 +160,7 @@ public class SessionWindowedKStreamImplTest {
             .toStream()
             .process(supplier);
 
-        try (final TopologyTestDriver driver = new TopologyTestDriver(builder.build(), props)) {
+        try (final TopologyTestDriver driver = new TopologyTestDriverBuilder(builder.build()).withConfig(props).build()) {
             processData(driver);
         }
 
@@ -203,7 +201,7 @@ public class SessionWindowedKStreamImplTest {
                          Materialized.with(Serdes.String(), Serdes.String()))
             .toStream()
             .process(supplier);
-        try (final TopologyTestDriver driver = new TopologyTestDriver(builder.build(), props)) {
+        try (final TopologyTestDriver driver = new TopologyTestDriverBuilder(builder.build()).withConfig(props).build()) {
             processData(driver);
         }
 
@@ -239,23 +237,23 @@ public class SessionWindowedKStreamImplTest {
         setup(inputType, withHeaders);
         stream.count(Materialized.as("count-store"));
 
-        try (final TopologyTestDriver driver = new TopologyTestDriver(builder.build(), props)) {
+        try (final TopologyTestDriver driver = new TopologyTestDriverBuilder(builder.build()).withConfig(props).build()) {
             processData(driver);
             final SessionStore<String, Long> store = driver.getSessionStore("count-store");
             final List<KeyValue<Windowed<String>, Long>> data = unwrapAggregations(store.fetch("1", "2"));
             if (!emitFinal) {
-                assertThat(
-                        data,
-                        equalTo(Arrays.asList(
+                assertEquals(
+                        List.of(
                                 KeyValue.pair(new Windowed<>("1", new SessionWindow(10, 15)), 2L),
                                 KeyValue.pair(new Windowed<>("1", new SessionWindow(600, 600)), 1L),
-                                KeyValue.pair(new Windowed<>("2", new SessionWindow(599, 600)), 2L))));
+                                KeyValue.pair(new Windowed<>("2", new SessionWindow(599, 600)), 2L)),
+                        data);
             } else {
-                assertThat(
-                        data,
-                        equalTo(Arrays.asList(
+                assertEquals(
+                        List.of(
                                 KeyValue.pair(new Windowed<>("1", new SessionWindow(600, 600)), 1L),
-                                KeyValue.pair(new Windowed<>("2", new SessionWindow(599, 600)), 2L))));
+                                KeyValue.pair(new Windowed<>("2", new SessionWindow(599, 600)), 2L)),
+                        data);
 
             }
         }
@@ -267,24 +265,24 @@ public class SessionWindowedKStreamImplTest {
         setup(inputType, withHeaders);
         stream.reduce(MockReducer.STRING_ADDER, Materialized.as("reduced"));
 
-        try (final TopologyTestDriver driver = new TopologyTestDriver(builder.build(), props)) {
+        try (final TopologyTestDriver driver = new TopologyTestDriverBuilder(builder.build()).withConfig(props).build()) {
             processData(driver);
             final SessionStore<String, String> sessionStore = driver.getSessionStore("reduced");
             final List<KeyValue<Windowed<String>, String>> data = unwrapAggregations(sessionStore.fetch("1", "2"));
 
             if (!emitFinal) {
-                assertThat(
-                        data,
-                        equalTo(Arrays.asList(
+                assertEquals(
+                        List.of(
                                 KeyValue.pair(new Windowed<>("1", new SessionWindow(10, 15)), "1+2"),
                                 KeyValue.pair(new Windowed<>("1", new SessionWindow(600, 600)), "3"),
-                                KeyValue.pair(new Windowed<>("2", new SessionWindow(599, 600)), "1+2"))));
+                                KeyValue.pair(new Windowed<>("2", new SessionWindow(599, 600)), "1+2")),
+                        data);
             } else {
-                assertThat(
-                        data,
-                        equalTo(Arrays.asList(
+                assertEquals(
+                        List.of(
                                 KeyValue.pair(new Windowed<>("1", new SessionWindow(600, 600)), "3"),
-                                KeyValue.pair(new Windowed<>("2", new SessionWindow(599, 600)), "1+2"))));
+                                KeyValue.pair(new Windowed<>("2", new SessionWindow(599, 600)), "1+2")),
+                        data);
 
             }
         }
@@ -300,23 +298,23 @@ public class SessionWindowedKStreamImplTest {
             sessionMerger,
             Materialized.<String, String, SessionStore<Bytes, byte[]>>as("aggregated").withValueSerde(Serdes.String()));
 
-        try (final TopologyTestDriver driver = new TopologyTestDriver(builder.build(), props)) {
+        try (final TopologyTestDriver driver = new TopologyTestDriverBuilder(builder.build()).withConfig(props).build()) {
             processData(driver);
             final SessionStore<String, String> sessionStore = driver.getSessionStore("aggregated");
             final List<KeyValue<Windowed<String>, String>> data = unwrapAggregations(sessionStore.fetch("1", "2"));
             if (!emitFinal) {
-                assertThat(
-                        data,
-                        equalTo(Arrays.asList(
+                assertEquals(
+                        List.of(
                                 KeyValue.pair(new Windowed<>("1", new SessionWindow(10, 15)), "0+0+1+2"),
                                 KeyValue.pair(new Windowed<>("1", new SessionWindow(600, 600)), "0+3"),
-                                KeyValue.pair(new Windowed<>("2", new SessionWindow(599, 600)), "0+0+1+2"))));
+                                KeyValue.pair(new Windowed<>("2", new SessionWindow(599, 600)), "0+0+1+2")),
+                        data);
             } else {
-                assertThat(
-                        data,
-                        equalTo(Arrays.asList(
+                assertEquals(
+                        List.of(
                                 KeyValue.pair(new Windowed<>("1", new SessionWindow(600, 600)), "0+3"),
-                                KeyValue.pair(new Windowed<>("2", new SessionWindow(599, 600)), "0+0+1+2"))));
+                                KeyValue.pair(new Windowed<>("2", new SessionWindow(599, 600)), "0+0+1+2")),
+                        data);
 
             }
         }
@@ -425,14 +423,14 @@ public class SessionWindowedKStreamImplTest {
                 sessionMerger,
                 Materialized.<String, String, SessionStore<Bytes, byte[]>>as("aggregated").withValueSerde(Serdes.String()));
 
-        try (final TopologyTestDriver driver = new TopologyTestDriver(builder.build(), props)) {
+        try (final TopologyTestDriver driver = new TopologyTestDriverBuilder(builder.build()).withConfig(props).build()) {
             final StateStore store = driver.getAllStateStores().get("aggregated");
             final WrappedStateStore<?, ?, ?> changeLogging = (WrappedStateStore<?, ?, ?>) ((WrappedStateStore<?, ?, ?>) store).wrapped();
-            assertThat(store, instanceOf(MeteredSessionStore.class));
+            assertInstanceOf(MeteredSessionStore.class, store);
             if (withHeaders) {
-                assertThat(changeLogging, instanceOf(ChangeLoggingSessionBytesStoreWithHeaders.class));
+                assertInstanceOf(ChangeLoggingSessionBytesStoreWithHeaders.class, changeLogging);
             } else {
-                assertThat(changeLogging, instanceOf(ChangeLoggingSessionBytesStore.class));
+                assertInstanceOf(ChangeLoggingSessionBytesStore.class, changeLogging);
             }
         }
     }

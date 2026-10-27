@@ -22,6 +22,9 @@
   // For ConsumerGroupDescribeRequest, version 1 is same as version 0.
   "validVersions": "0-1",
   "flexibleVersions": "0+",
+  "headerVersions": {
+    "0+": "2"
+  },
   "fields": [
     { "name": "GroupIds", "type": "[]string", "versions": "0+", "entityType": "groupId",
       "about": "The ids of the groups to describe." },

@@ -17,10 +17,11 @@
 package org.apache.kafka.clients;
 
 import org.apache.kafka.clients.consumer.Consumer;
-import org.apache.kafka.clients.consumer.ConsumerRebalanceListener;
 import org.apache.kafka.clients.consumer.ConsumerRecord;
 import org.apache.kafka.clients.consumer.OffsetAndMetadata;
 import org.apache.kafka.clients.consumer.OffsetCommitCallback;
+import org.apache.kafka.clients.consumer.RebalanceConsumer;
+import org.apache.kafka.clients.consumer.RebalanceListener;
 import org.apache.kafka.clients.consumer.RetriableCommitFailedException;
 import org.apache.kafka.clients.producer.Producer;
 import org.apache.kafka.clients.producer.ProducerRecord;
@@ -76,13 +77,22 @@ public class ClientsTestUtils {
         int numRecords,
         int maxPollRecords
     ) throws InterruptedException {
+        return consumeRecords(consumer, numRecords, maxPollRecords, 60000);
+    }
+
+    public static <K, V> List<ConsumerRecord<K, V>> consumeRecords(
+        Consumer<K, V> consumer,
+        int numRecords,
+        int maxPollRecords,
+        long maxWaitMs
+    ) throws InterruptedException {
         List<ConsumerRecord<K, V>> consumedRecords = new ArrayList<>();
         TestUtils.waitForCondition(() -> {
             var records = consumer.poll(Duration.ofMillis(100));
             records.forEach(consumedRecords::add);
             assertTrue(records.count() <= maxPollRecords);
             return consumedRecords.size() >= numRecords;
-        }, 60000, "Timed out before consuming expected " + numRecords + " records.");
+        }, maxWaitMs, "Timed out before consuming expected " + numRecords + " records.");
 
         return consumedRecords;
     }
@@ -425,7 +435,8 @@ public class ClientsTestUtils {
         ) throws InterruptedException {
             var listener = new TestConsumerReassignmentListener();
             try (Consumer<byte[], byte[]> consumer = cluster.consumer(consumerConfig)) {
-                consumer.subscribe(List.of(TOPIC), listener);
+                consumer.setRebalanceListener(listener);
+                consumer.subscribe(List.of(TOPIC));
                 // the initial subscription should cause a callback execution
                 awaitRebalance(consumer, listener);
                 assertEquals(1, listener.callsToAssigned);
@@ -522,17 +533,17 @@ public class ClientsTestUtils {
         }
     }
 
-    public static class TestConsumerReassignmentListener implements ConsumerRebalanceListener {
+    public static class TestConsumerReassignmentListener implements RebalanceListener {
         public int callsToAssigned = 0;
         public int callsToRevoked = 0;
 
         @Override
-        public void onPartitionsAssigned(Collection<TopicPartition> partitions) {
+        public void onPartitionsAssigned(Collection<TopicPartition> partitions, RebalanceConsumer consumer) {
             callsToAssigned += 1;
         }
 
         @Override
-        public void onPartitionsRevoked(Collection<TopicPartition> partitions) {
+        public void onPartitionsRevoked(Collection<TopicPartition> partitions, RebalanceConsumer consumer) {
             callsToRevoked += 1;
         }
     }

@@ -34,6 +34,7 @@ import java.util.List;
 import java.util.Locale;
 import java.util.Map;
 import java.util.Set;
+import java.util.concurrent.atomic.AtomicInteger;
 
 import static org.junit.jupiter.api.Assertions.assertEquals;
 import static org.junit.jupiter.api.Assertions.assertFalse;
@@ -369,6 +370,26 @@ public class MirrorMakerConfigTest {
             "connector properties should not be transformed");
     }
 
+    @Test
+    public void testTransformClosesConfigProvidersWhenGetFails() {
+        try {
+            MirrorMakerConfig mirrorConfig = new MirrorMakerConfig(makeProps(
+                "clusters", "a, b",
+                "config.providers", "fake",
+                "config.providers.fake.class", FailingGetConfigProvider.class.getName()));
+
+            // the constructor instantiates its own FailingGetConfigProvider and must close it too
+            assertEquals(1, FailingGetConfigProvider.CLOSED_COUNT.get());
+
+            assertThrows(RuntimeException.class,
+                () -> mirrorConfig.transform(Map.of("ssl.key.password", "${fake:secret:password}")));
+
+            assertEquals(2, FailingGetConfigProvider.CLOSED_COUNT.get());
+        } finally {
+            FailingGetConfigProvider.CLOSED_COUNT.set(0);
+        }
+    }
+
     public static class FakeConfigProvider implements ConfigProvider {
 
         Map<String, String> secrets = Map.of("password", "secret2");
@@ -384,6 +405,29 @@ public class MirrorMakerConfigTest {
         @Override
         public ConfigData get(String path) {
             return new ConfigData(secrets);
+        }
+
+        @Override
+        public ConfigData get(String path, Set<String> keys) {
+            return get(path);
+        }
+    }
+
+    public static class FailingGetConfigProvider implements ConfigProvider {
+        static final AtomicInteger CLOSED_COUNT = new AtomicInteger();
+
+        @Override
+        public void configure(Map<String, ?> props) {
+        }
+
+        @Override
+        public void close() {
+            CLOSED_COUNT.incrementAndGet();
+        }
+
+        @Override
+        public ConfigData get(String path) {
+            throw new RuntimeException("get failed");
         }
 
         @Override

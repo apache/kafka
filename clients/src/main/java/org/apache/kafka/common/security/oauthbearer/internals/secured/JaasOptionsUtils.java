@@ -85,10 +85,14 @@ public class JaasOptionsUtils {
     public SSLSocketFactory createSSLSocketFactory() {
         Map<String, ?> sslClientConfig = getSslClientConfig();
         SslFactory sslFactory = new SslFactory(ConnectionMode.CLIENT);
-        sslFactory.configure(sslClientConfig);
-        SSLSocketFactory socketFactory = ((DefaultSslEngineFactory) sslFactory.sslEngineFactory()).sslContext().getSocketFactory();
-        log.debug("Created SSLSocketFactory: {}", sslClientConfig);
-        return socketFactory;
+        try {
+            sslFactory.configure(sslClientConfig);
+            SSLSocketFactory socketFactory = ((DefaultSslEngineFactory) sslFactory.sslEngineFactory()).sslContext().getSocketFactory();
+            log.debug("Created SSLSocketFactory: {}", sslClientConfig);
+            return socketFactory;
+        } finally {
+            sslFactory.close();
+        }
     }
 
     public String validatePassword(String name) {

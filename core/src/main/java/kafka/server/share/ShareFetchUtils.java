@@ -33,7 +33,6 @@ import org.apache.kafka.server.storage.log.FetchPartitionData;
 import org.slf4j.Logger;
 import org.slf4j.LoggerFactory;
 
-import java.util.HashMap;
 import java.util.Iterator;
 import java.util.LinkedHashMap;
 import java.util.List;
@@ -57,7 +56,9 @@ public class ShareFetchUtils {
             PartitionMetadataProvider metadataProvider,
             BiConsumer<SharePartitionKey, Throwable> exceptionHandler
     ) {
-        Map<TopicIdPartition, ShareFetchResponseData.PartitionData> response = new HashMap<>();
+        // Preserve the fetch order of the partitions in the response, the share session uses it to re-order
+        // the partitions for the subsequent fetch.
+        Map<TopicIdPartition, ShareFetchResponseData.PartitionData> response = new LinkedHashMap<>();
 
         // Acquired records count for the share fetch request.
         int acquiredRecordsCount = 0;

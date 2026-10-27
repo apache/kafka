@@ -38,6 +38,7 @@ import org.apache.kafka.common.record.internal.ControlRecordType;
 import org.apache.kafka.common.record.internal.Record;
 import org.apache.kafka.common.record.internal.RecordBatch;
 import org.apache.kafka.common.utils.Time;
+import org.apache.kafka.common.utils.Utils;
 import org.apache.kafka.coordinator.group.ShareGroupAutoOffsetResetStrategy;
 import org.apache.kafka.coordinator.group.modern.share.ShareGroupConfigProvider;
 import org.apache.kafka.server.share.PartitionMetadataProvider;
@@ -68,7 +69,6 @@ import org.apache.kafka.server.share.persister.WriteShareGroupStateParameters;
 import org.apache.kafka.server.storage.log.FetchIsolation;
 import org.apache.kafka.server.storage.log.FetchPartitionData;
 import org.apache.kafka.server.util.timer.Timer;
-import org.apache.kafka.storage.internals.log.LogOffsetMetadata;
 
 import org.slf4j.Logger;
 import org.slf4j.LoggerFactory;
@@ -100,7 +100,7 @@ import java.util.function.Supplier;
  * and are in-flight.
  */
 @SuppressWarnings({"ClassDataAbstractionCoupling", "ClassFanOutComplexity"})
-public class SharePartition {
+public class SharePartition implements AutoCloseable {
 
     private static final Logger log = LoggerFactory.getLogger(SharePartition.class);
 
@@ -288,11 +288,6 @@ public class SharePartition {
     private GapWindow persisterReadResultGapWindow;
 
     /**
-     * We maintain the latest fetch offset and its metadata to estimate the minBytes requirement more efficiently.
-     */
-    private final OffsetMetadata fetchOffsetMetadata;
-
-    /**
      * The delayed share fetch key is used to track the delayed share fetch requests that are waiting
      * for the respective share partition.
      */
@@ -402,7 +397,6 @@ public class SharePartition {
         this.metadataProvider = metadataProvider;
         this.delayedRequestNotifier = delayedRequestNotifier;
         this.configProvider = configProvider;
-        this.fetchOffsetMetadata = new OffsetMetadata();
         this.delayedShareFetchKey = new DelayedShareFetchGroupKey(groupId, topicIdPartition);
         this.listener = listener;
         this.sharePartitionMetrics = sharePartitionMetrics;
@@ -472,7 +466,7 @@ public class SharePartition {
                 }
 
                 TopicData<PartitionAllData> state = result.topicsData().get(0);
-                if (state.topicId() != topicIdPartition.topicId() || state.partitions().size() != 1) {
+                if (!Objects.equals(state.topicId(), topicIdPartition.topicId()) || state.partitions().size() != 1) {
                     log.error("Failed to initialize the share partition: {}-{}. Invalid topic partition response: {}.",
                         groupId, topicIdPartition, result);
                     throwable = new IllegalStateException(String.format("Failed to initialize the share partition %s-%s", groupId, topicIdPartition));
@@ -1129,6 +1123,16 @@ public class SharePartition {
         // and update the cached state for start offset. Else rollback the state transition.
         rollbackOrProcessStateUpdates(future, throwable, persisterBatches);
         return future;
+    }
+
+    @Override
+    public void close() {
+        if (partitionState() == SharePartitionState.ACTIVE) {
+            log.warn("Closing share partition: {}-{} while in active state. Consider marking it fenced "
+                + "before close.", groupId, topicIdPartition);
+        }
+        // Deregister the share partition metrics on teardown.
+        Utils.closeQuietly(sharePartitionMetrics, "sharePartitionMetrics");
     }
 
     long loadStartTimeMs() {
@@ -2494,26 +2498,6 @@ public class SharePartition {
         return Optional.empty();
     }
 
-    protected void updateFetchOffsetMetadata(long nextFetchOffset, LogOffsetMetadata logOffsetMetadata) {
-        lock.writeLock().lock();
-        try {
-            fetchOffsetMetadata.updateOffsetMetadata(nextFetchOffset, logOffsetMetadata);
-        } finally {
-            lock.writeLock().unlock();
-        }
-    }
-
-    protected Optional<LogOffsetMetadata> fetchOffsetMetadata(long nextFetchOffset) {
-        lock.readLock().lock();
-        try {
-            if (fetchOffsetMetadata.offsetMetadata() == null || fetchOffsetMetadata.offset() != nextFetchOffset)
-                return Optional.empty();
-            return Optional.of(fetchOffsetMetadata.offsetMetadata());
-        } finally {
-            lock.readLock().unlock();
-        }
-    }
-
     // Visible for testing
     SharePartitionState partitionState() {
         lock.readLock().lock();
@@ -2881,7 +2865,7 @@ public class SharePartition {
                 }
 
                 TopicData<PartitionErrorData> state = result.topicsData().get(0);
-                if (state.topicId() != topicIdPartition.topicId() || state.partitions().size() != 1
+                if (!Objects.equals(state.topicId(), topicIdPartition.topicId()) || state.partitions().size() != 1
                     || state.partitions().get(0).partition() != topicIdPartition.partition()) {
                     log.error("Failed to write the share group state for share partition: {}-{}. Invalid topic partition response: {}",
                         groupId, topicIdPartition, result);
@@ -3569,32 +3553,6 @@ public class SharePartition {
 
         void gapStartOffset(long gapStartOffset) {
             this.gapStartOffset = gapStartOffset;
-        }
-    }
-
-    /**
-     * FetchOffsetMetadata class is used to cache offset and its log metadata.
-     */
-    static final class OffsetMetadata {
-        // This offset could be different from offsetMetadata.messageOffset if it's in the middle of a batch.
-        private long offset;
-        private LogOffsetMetadata offsetMetadata;
-
-        OffsetMetadata() {
-            offset = -1;
-        }
-
-        long offset() {
-            return offset;
-        }
-
-        LogOffsetMetadata offsetMetadata() {
-            return offsetMetadata;
-        }
-
-        void updateOffsetMetadata(long offset, LogOffsetMetadata offsetMetadata) {
-            this.offset = offset;
-            this.offsetMetadata = offsetMetadata;
         }
     }
 
