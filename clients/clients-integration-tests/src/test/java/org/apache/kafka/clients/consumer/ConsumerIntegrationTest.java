@@ -17,6 +17,7 @@
 package org.apache.kafka.clients.consumer;
 
 import org.apache.kafka.clients.admin.Admin;
+import org.apache.kafka.clients.admin.AdminClientTestUtils;
 import org.apache.kafka.clients.admin.NewPartitionReassignment;
 import org.apache.kafka.clients.admin.NewPartitions;
 import org.apache.kafka.clients.consumer.internals.AbstractHeartbeatRequestManager;
@@ -217,7 +218,9 @@ public class ConsumerIntegrationTest {
             }
 
             // make the leader epoch increment by shutdown the leader broker
-            clusterInstance.shutdownBroker(clusterInstance.getLeaderBrokerId(targetTopicPartition));
+            try (Admin admin = clusterInstance.admin()) {
+                clusterInstance.shutdownBroker(AdminClientTestUtils.fetchOrWaitForLeader(admin, targetTopicPartition));
+            }
 
             sendMsg(clusterInstance, topic, msgNum);
 

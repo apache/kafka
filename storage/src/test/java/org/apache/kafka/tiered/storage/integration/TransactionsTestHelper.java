@@ -18,6 +18,7 @@ package org.apache.kafka.tiered.storage.integration;
 
 import kafka.server.BrokerServer;
 
+import org.apache.kafka.clients.admin.AdminClientTestUtils;
 import org.apache.kafka.clients.admin.ProducerState;
 import org.apache.kafka.clients.admin.TransactionState;
 import org.apache.kafka.clients.consumer.Consumer;
@@ -779,7 +780,7 @@ public class TransactionsTestHelper {
             var testTopic = "test-topic";
             clusterInstance.createTopic(testTopic, NUM_PARTITIONS, (short) 1);
             var testTp = new TopicPartition(testTopic, 0);
-            var partitionLeader = clusterInstance.getLeaderBrokerId(testTp);
+            var partitionLeader = fetchOrWaitForLeader(clusterInstance, testTp);
 
             producer.initTransactions();
 
@@ -856,7 +857,7 @@ public class TransactionsTestHelper {
             var testTopic = "test-topic";
             clusterInstance.createTopic(testTopic, NUM_PARTITIONS, (short) 1);
             var testTp = new TopicPartition(testTopic, 0);
-            var partitionLeader = clusterInstance.getLeaderBrokerId(testTp);
+            var partitionLeader = fetchOrWaitForLeader(clusterInstance, testTp);
 
             producer.initTransactions();
 
@@ -1187,6 +1188,12 @@ public class TransactionsTestHelper {
     ) {
         clusterInstance.createTopic(TOPIC1, NUM_PARTITIONS, BROKER_COUNT, topicConfig);
         clusterInstance.createTopic(TOPIC2, NUM_PARTITIONS, BROKER_COUNT, topicConfig);
+    }
+
+    private static int fetchOrWaitForLeader(ClusterInstance clusterInstance, TopicPartition topicPartition) throws InterruptedException {
+        try (var admin = clusterInstance.admin()) {
+            return AdminClientTestUtils.fetchOrWaitForLeader(admin, topicPartition);
+        }
     }
 
     public static void restartDeadBrokers(ClusterInstance clusterInstance) {

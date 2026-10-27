@@ -18,11 +18,11 @@ package org.apache.kafka.tools;
 
 import org.apache.kafka.clients.admin.Admin;
 import org.apache.kafka.clients.admin.AdminClientConfig;
+import org.apache.kafka.clients.admin.AdminClientTestUtils;
 import org.apache.kafka.clients.admin.TopicDescription;
 import org.apache.kafka.common.Node;
 import org.apache.kafka.common.TopicPartition;
 import org.apache.kafka.common.errors.UnknownTopicOrPartitionException;
-import org.apache.kafka.common.test.AdminUtils;
 import org.apache.kafka.common.test.ClusterInstance;
 import org.apache.kafka.common.test.api.ClusterConfigProperty;
 import org.apache.kafka.common.test.api.ClusterTest;
@@ -388,8 +388,12 @@ public class LeaderElectionCommandTest {
     }
 
     private void assertLeader(Admin client, TopicPartition topicPartition, int expectedLeader) throws Exception {
-        int leader = AdminUtils.fetchOrWaitForLeader(client, topicPartition.topic(), topicPartition.partition(), 30000);
-        assertEquals(expectedLeader, leader);
+        // fetchOrWaitForLeader returns the current leader, which may be stale right after an election or shutdown
+        TestUtils.waitForCondition(
+                () -> AdminClientTestUtils.fetchOrWaitForLeader(client, topicPartition.topic(), topicPartition.partition(), 30000) == expectedLeader,
+                30000,
+                () -> "Timed out waiting for leader " + expectedLeader + " of " + topicPartition
+        );
     }
 
     private void assertNoLeader(Admin client, TopicPartition topicPartition) throws InterruptedException {
