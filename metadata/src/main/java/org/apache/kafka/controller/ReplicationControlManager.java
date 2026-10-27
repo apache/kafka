@@ -2483,7 +2483,8 @@ public class ReplicationControlManager {
     int getEffectiveMinIsr(String topicName, PartitionRegistration partition) {
         String minIsrConfig = configurationControl.getTopicConfig(topicName, MIN_IN_SYNC_REPLICAS_CONFIG).value();
         int currentMinIsr = Integer.parseInt(minIsrConfig);
-        // Partitions of the same topic can have different replication factors.
+        // Must match Partition#effectiveMinIsr on the broker. Partitions of the same topic can
+        // have different replication factors, so use this partition's replica count.
         return Math.min(currentMinIsr, partition.replicas.length);
     }
 
