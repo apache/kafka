@@ -23,6 +23,7 @@ import kafka.server.metadata.BrokerServerMetrics
 import kafka.utils.{CoreUtils, Logging}
 import org.apache.kafka.common.metrics.Metrics
 import org.apache.kafka.common.network.ListenerName
+import org.apache.kafka.common.protocol.MessageUtil
 import org.apache.kafka.common.utils.{AppInfoParser, LogContext, Time}
 import org.apache.kafka.controller.metrics.ControllerMetadataMetrics
 import org.apache.kafka.image.MetadataProvenance
@@ -265,6 +266,7 @@ class SharedServer(
           metrics = new Metrics()
         }
         sharedServerConfig.dynamicConfig.initialize(zkClientOpt = None, clientMetricsReceiverPluginOpt = None)
+        MessageUtil.setMaxArrayLength(sharedServerConfig.messageMaxArrayLength)
 
         if (sharedServerConfig.processRoles.contains(ProcessRole.BrokerRole)) {
           brokerMetrics = BrokerServerMetrics(metrics)

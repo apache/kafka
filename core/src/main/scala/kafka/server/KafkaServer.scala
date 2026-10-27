@@ -38,7 +38,7 @@ import org.apache.kafka.common.message.BrokerRegistrationRequestData.{Listener, 
 import org.apache.kafka.common.message.ControlledShutdownRequestData
 import org.apache.kafka.common.metrics.Metrics
 import org.apache.kafka.common.network._
-import org.apache.kafka.common.protocol.Errors
+import org.apache.kafka.common.protocol.{Errors, MessageUtil}
 import org.apache.kafka.common.requests.{ControlledShutdownRequest, ControlledShutdownResponse}
 import org.apache.kafka.common.security.scram.internals.ScramMechanism
 import org.apache.kafka.common.security.token.delegation.internals.DelegationTokenCache
@@ -266,6 +266,7 @@ class KafkaServer(
         // initialize dynamic broker configs from ZooKeeper. Any updates made after this will be
         // applied after ZkConfigManager starts.
         config.dynamicConfig.initialize(Some(zkClient), clientMetricsReceiverPluginOpt = None)
+        MessageUtil.setMaxArrayLength(config.messageMaxArrayLength)
 
         /* start scheduler */
         kafkaScheduler = new KafkaScheduler(config.backgroundThreads)
