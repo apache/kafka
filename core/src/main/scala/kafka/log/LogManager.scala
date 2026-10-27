@@ -23,7 +23,7 @@ import org.apache.kafka.common.utils.Time
 import org.apache.kafka.coordinator.transaction.{TransactionLogConfig, TransactionStateManagerConfig}
 import org.apache.kafka.metadata.ConfigRepository
 import org.apache.kafka.server.util.Scheduler
-import org.apache.kafka.storage.internals.log.{CleanerConfig, LogCleaner, LogConfig, LogDirFailureChannel, LogManager => JLogManager, ProducerStateManagerConfig}
+import org.apache.kafka.storage.internals.log.{CleanerConfig, LogCleaner, LogConfig, LogDirFailureChannel, LogMaintenanceConfig, LogManager => JLogManager, ProducerStateManagerConfig}
 import org.apache.kafka.storage.log.metrics.BrokerTopicStats
 
 import java.io.File
@@ -54,19 +54,20 @@ object LogManager {
       defaultLogConfig,
       cleanerConfig,
       config.numRecoveryThreadsPerDataDir,
-      config.logFlushSchedulerIntervalMs,
-      config.logFlushOffsetCheckpointIntervalMs,
-      config.logFlushStartOffsetCheckpointIntervalMs,
-      config.logCleanupIntervalMs,
+      new LogMaintenanceConfig(
+        config.logFlushSchedulerIntervalMs,
+        config.logFlushOffsetCheckpointIntervalMs,
+        config.logFlushStartOffsetCheckpointIntervalMs,
+        config.logCleanupIntervalMs,
+        transactionLogConfig.producerIdExpirationCheckIntervalMs,
+        config.logInitialTaskDelayMs),
       new TransactionStateManagerConfig(config).transactionMaxTimeoutMs,
       new ProducerStateManagerConfig(transactionLogConfig.producerIdExpirationMs, transactionLogConfig.transactionPartitionVerificationEnable),
-      transactionLogConfig.producerIdExpirationCheckIntervalMs,
       kafkaScheduler,
       brokerTopicStats,
       logDirFailureChannel,
       time,
       config.remoteLogManagerConfig.isRemoteStorageSystemEnabled,
-      config.logInitialTaskDelayMs,
       (cleanerConfig, files, map, logDirFailureChannel, time) => new LogCleaner(cleanerConfig, files, map, logDirFailureChannel, time))
   }
 }
