@@ -22,7 +22,7 @@ from kafkatest.services.kafka import KafkaService, quorum
 from kafkatest.services.streams import StreamsSmokeTestDriverService, StreamsSmokeTestJobRunnerService
 from kafkatest.version import LATEST_2_2, LATEST_2_3, LATEST_2_4, LATEST_2_5, LATEST_2_6, LATEST_2_7, LATEST_2_8, \
   LATEST_3_0, LATEST_3_1, LATEST_3_2, LATEST_3_3, LATEST_3_4, LATEST_3_5, LATEST_3_6, LATEST_3_7, LATEST_3_8, \
-  LATEST_3_9, LATEST_4_0, LATEST_4_1, LATEST_4_2, LATEST_4_3, DEV_VERSION, KafkaVersion
+  LATEST_3_9, LATEST_4_0, LATEST_4_1, LATEST_4_2, LATEST_4_3, LATEST_4_4, DEV_VERSION, KafkaVersion
 
 
 smoke_test_versions = [str(LATEST_2_4), str(LATEST_2_5), str(LATEST_2_6),
@@ -31,7 +31,7 @@ smoke_test_versions = [str(LATEST_2_4), str(LATEST_2_5), str(LATEST_2_6),
                        str(LATEST_3_4), str(LATEST_3_5), str(LATEST_3_6),
                        str(LATEST_3_7), str(LATEST_3_8), str(LATEST_3_9),
                        str(LATEST_4_0), str(LATEST_4_1), str(LATEST_4_2),
-                       str(LATEST_4_3)]
+                       str(LATEST_4_3), str(LATEST_4_4)]
 
 # The headers-aware suppress buffer (KAFKA-20413) is only on trunk, so 4.3 is the newest
 # release that still writes plain V3 suppress-changelog records even with this config set.
