@@ -785,6 +785,7 @@ org.apache.kafka.metadata.MetadataCacheTest:
 - testGetLeaderAndIsr
 - testGetLiveBrokerEpoch
 - testGetOfflineReplicasConsidersDirAssignment
+- testGetPartitionLeaderEndpointForKnownPartitionWithoutEndpoint
 - testGetPartitionReplicaEndpoints
 - testIsBrokerFenced
 - testIsBrokerInControlledShutdown

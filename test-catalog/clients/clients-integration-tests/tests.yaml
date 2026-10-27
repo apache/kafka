@@ -34,7 +34,18 @@ org.apache.kafka.clients.admin.AddPartitionsTest:
 - testReplicaPlacementPartialServers
 - testWrongReplicaCount
 org.apache.kafka.clients.admin.AdminClientTimeoutIntegrationTest:
+- testAbortTransactionTimeout
+- testAdminClientHandlingBadIPWithoutTimeout
 - testCallInFlightTimeouts
+- testClose
+- testDelayedClose
+- testDescribeConfigWithOptionTimeoutMs
+- testDescribeTransactionsTimeout
+- testDescribeUserScramCredentialsTimeout
+- testForceClose
+- testListClientMetricsResourcesTimeoutMs
+- testListConfigResourcesTimeoutMs
+- testMinimumRequestTimeouts
 org.apache.kafka.clients.admin.AdminClientWithPoliciesIntegrationTest:
 - testInvalidAlterConfigsDueToPolicy
 org.apache.kafka.clients.admin.AdminFenceProducersTest:

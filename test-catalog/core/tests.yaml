@@ -298,9 +298,7 @@ kafka.api.MetricsTest:
 - testMetrics
 kafka.api.PlaintextAdminIntegrationTest:
 - testAbortTransaction
-- testAbortTransactionTimeout
 - testAclOperations
-- testAdminClientHandlingBadIPWithoutTimeout
 - testAlterLogDirsAfterDeleteRecords
 - testAlterReplicaLogDirs
 - testAlterShareGroupOffsets
@@ -309,7 +307,6 @@ kafka.api.PlaintextAdminIntegrationTest:
 - testAppendConfigToEmptyDefaultValue
 - testAppendConfigToExistentValue
 - testAuthorizedOperations
-- testClose
 - testConsumeAfterDeleteRecords
 - testConsumerGroupWithMemberMigration
 - testConsumerGroupWithMemberRemoval
@@ -318,7 +315,6 @@ kafka.api.PlaintextAdminIntegrationTest:
 - testCreatePartitionWithOptionRetryOnQuotaViolation
 - testCreateTopicsReturnsConfigs
 - testDefaultNameQuotaIsNotEqualToDefaultQuota
-- testDelayedClose
 - testDeleteConsumerGroupOffsets
 - testDeleteRecordsAfterCorruptRecords
 - testDeleteRecordsWithException
@@ -327,7 +323,6 @@ kafka.api.PlaintextAdminIntegrationTest:
 - testDeleteStreamsGroups
 - testDescribeAndAlterConfigs
 - testDescribeClassicGroups
-- testDescribeConfigWithOptionTimeoutMs
 - testDescribeConfigsForLog4jLogLevels
 - testDescribeGroups
 - testDescribeProducers
@@ -336,9 +331,7 @@ kafka.api.PlaintextAdminIntegrationTest:
 - testDescribeStreamsGroupsNotReady
 - testDescribeStreamsGroupsWithTopologyDescription
 - testDescribeTransactions
-- testDescribeTransactionsTimeout
 - testDescribeUserScramCredentials
-- testDescribeUserScramCredentialsTimeout
 - testElectPreferredLeaders
 - testElectUncleanLeadersAndNoop
 - testElectUncleanLeadersForAllPartitions
@@ -347,7 +340,6 @@ kafka.api.PlaintextAdminIntegrationTest:
 - testElectUncleanLeadersForUnknownPartitions
 - testElectUncleanLeadersNoop
 - testElectUncleanLeadersWhenNoLiveBrokers
-- testForceClose
 - testGroupConfigEvaluatedAfterBrokerRestart
 - testIncrementalAlterAndDescribeGroupConfigs
 - testIncrementalAlterConfigsDeleteAndSetBrokerConfigs
@@ -361,9 +353,7 @@ kafka.api.PlaintextAdminIntegrationTest:
 - testInvalidAlterPartitionReassignments
 - testInvalidIncrementalAlterConfigs
 - testListClientMetricsResources
-- testListClientMetricsResourcesTimeoutMs
 - testListConfigResources
-- testListConfigResourcesTimeoutMs
 - testListConsumerGroupOffsets
 - testListConsumerGroups
 - testListGroups
@@ -375,7 +365,6 @@ kafka.api.PlaintextAdminIntegrationTest:
 - testLogStartOffsetAfterDeleteRecords
 - testLogStartOffsetCheckpoint
 - testLongTopicNames
-- testMinimumRequestTimeouts
 - testNullConfigs
 - testOffsetsForTimesAfterDeleteRecords
 - testReplicaCanFetchFromLogStartOffsetAfterDeleteRecords
@@ -800,6 +789,7 @@ kafka.coordinator.transaction.TransactionMarkerChannelManagerTest:
 - shouldOnlyWriteTxnCompletionOnce
 - shouldRemoveMarkersForTxnPartitionWhenPartitionEmigrated
 - shouldRetryAppendToLogOnEndTxnWhenCoordinatorNotAvailableError
+- shouldRetryMarkersUntilLeaderEndpointIsAvailable
 - shouldSaveForLaterWhenLeaderUnknownButNotAvailable
 - shouldSkipSendMarkersWhenLeaderNotFound
 - testRemoveMetricsOnClose
@@ -2400,6 +2390,7 @@ kafka.server.share.ShareCoordinatorMetadataCacheHelperImplTest:
 - testIsDlqEnabledOnTopicReturnsFalseWhenTopicConfigNull
 - testIsDlqEnabledOnTopicReturnsTrue
 - testIsRequestHeaderV3SupportedReturnsFalseOnException
+- testIsRequestHeaderV3SupportedReturnsFalseOnOlderMetadataVersion
 - testIsRequestHeaderV3SupportedReturnsTrue
 - testIsShareGroupDlqCopyRecordEnabledReturnsFalse
 - testIsShareGroupDlqCopyRecordEnabledReturnsFalseWhenGroupConfigEmpty

@@ -5535,12 +5535,7 @@ org.apache.kafka.common.security.plain.internals.PlainSaslServerTest:
 - emptyTokens
 - noAuthorizationIdSpecified
 org.apache.kafka.common.security.scram.internals.ScramCredentialUtilsTest:
-- extraneousFields
-- generateCredential
-- invalidCredential
-- missingFields
 - scramCredentialCache
-- stringConversion
 org.apache.kafka.common.security.scram.internals.ScramFormatterTest:
 - rfc7677Example
 - saslName
@@ -5549,6 +5544,7 @@ org.apache.kafka.common.security.scram.internals.ScramMessagesTest:
 - invalidClientFirstMessage
 - invalidServerFinalMessage
 - invalidServerFirstMessage
+- serverFirstMessageUsesAsciiDigitsRegardlessOfDefaultLocale
 - validClientFinalMessage
 - validClientFirstMessage
 - validServerFinalMessage
