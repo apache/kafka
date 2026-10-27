@@ -17,7 +17,6 @@
 package kafka.api
 
 import java.io.File
-import java.net.InetAddress
 import java.nio.ByteBuffer
 import java.nio.file.{Files, Paths, StandardOpenOption}
 import java.lang.{Long => JLong}
@@ -30,7 +29,6 @@ import kafka.integration.KafkaServerTestHarness
 import kafka.server.KafkaConfig
 import kafka.utils.TestUtils._
 import kafka.utils.{TestInfoUtils, TestUtils}
-import org.apache.kafka.clients.HostResolver
 import org.apache.kafka.clients.admin.AlterConfigOp.OpType
 import org.apache.kafka.clients.admin.ConfigEntry.ConfigSource
 import org.apache.kafka.clients.admin._
@@ -553,20 +551,6 @@ class PlaintextAdminIntegrationTest extends BaseAdminIntegrationTest {
 
       checkConsumer(tp, 2)
     } finally producer.close()
-  }
-
-  @Test
-  def testAdminClientHandlingBadIPWithoutTimeout(): Unit = {
-    val config = createConfig
-    config.put(AdminClientConfig.SOCKET_CONNECTION_SETUP_TIMEOUT_MS_CONFIG, "1000")
-    val returnBadAddressFirst = new HostResolver {
-      override def resolve(host: String): Array[InetAddress] = {
-        Array[InetAddress](InetAddress.getByName("10.200.20.100"), InetAddress.getByName(host))
-      }
-    }
-    client = AdminClientTestUtils.create(config, returnBadAddressFirst)
-    // simply check that a call, e.g. describeCluster, returns normally
-    client.describeCluster().nodes().get()
   }
 
   @ParameterizedTest(name = TestInfoUtils.TestWithParameterizedGroupProtocolNames)
@@ -1195,23 +1179,6 @@ class PlaintextAdminIntegrationTest extends BaseAdminIntegrationTest {
     assertFutureThrows(classOf[SecurityDisabledException], client.describeAcls(AclBindingFilter.ANY).values())
     assertFutureThrows(classOf[SecurityDisabledException], client.createAcls(util.Set.of(acl)).all())
     assertFutureThrows(classOf[SecurityDisabledException], client.deleteAcls(util.Set.of(acl.toFilter)).all())
-  }
-
-  /**
-    * Test closing the AdminClient with a generous timeout.  Calls in progress should be completed,
-    * since they can be done within the timeout.  New calls should receive exceptions.
-    */
-  @Test
-  def testDelayedClose(): Unit = {
-    client = createAdminClient
-    val topics = Seq("mytopic", "mytopic2")
-    val newTopics = topics.map(new NewTopic(_, 1, 1.toShort))
-    val future = client.createTopics(newTopics.asJava, new CreateTopicsOptions().validateOnly(true)).all()
-    client.close(time.Duration.ofHours(2))
-    val future2 = client.createTopics(newTopics.asJava, new CreateTopicsOptions().validateOnly(true)).all()
-    assertFutureThrows(classOf[IllegalStateException], future2)
-    future.get
-    client.close(time.Duration.ofMinutes(30)) // multiple close-with-timeout should have no effect
   }
 
   @ParameterizedTest(name = TestInfoUtils.TestWithParameterizedGroupProtocolNames)

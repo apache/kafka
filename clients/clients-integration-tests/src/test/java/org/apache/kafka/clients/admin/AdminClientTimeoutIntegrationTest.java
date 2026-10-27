@@ -16,6 +16,7 @@
  */
 package org.apache.kafka.clients.admin;
 
+import org.apache.kafka.clients.HostResolver;
 import org.apache.kafka.common.TopicPartition;
 import org.apache.kafka.common.config.ConfigResource;
 import org.apache.kafka.common.errors.TimeoutException;
@@ -29,6 +30,7 @@ import org.junit.jupiter.api.Test;
 import org.slf4j.Logger;
 import org.slf4j.LoggerFactory;
 
+import java.net.InetAddress;
 import java.time.Duration;
 import java.util.List;
 import java.util.Map;
@@ -78,6 +80,22 @@ public class AdminClientTimeoutIntegrationTest {
                     new CreateTopicsOptions().validateOnly(true)).all();
             future2.get();
             assertEquals(1, factory.failuresInjected());
+        }
+    }
+
+    @ClusterTest
+    public void testAdminClientHandlingBadIPWithoutTimeout(ClusterInstance clusterInstance) throws Exception {
+        Map<String, Object> config = Map.of(
+            AdminClientConfig.BOOTSTRAP_SERVERS_CONFIG, clusterInstance.bootstrapServers(),
+            AdminClientConfig.REQUEST_TIMEOUT_MS_CONFIG, "20000",
+            AdminClientConfig.DEFAULT_API_TIMEOUT_MS_CONFIG, "40000",
+            AdminClientConfig.SOCKET_CONNECTION_SETUP_TIMEOUT_MS_CONFIG, "1000");
+        HostResolver returnBadAddressFirst = host -> new InetAddress[] {
+            InetAddress.getByName("10.200.20.100"),
+            InetAddress.getByName(host)
+        };
+        try (Admin admin = AdminClientTestUtils.create(config, returnBadAddressFirst)) {
+            admin.describeCluster().nodes().get();
         }
     }
 
@@ -135,6 +153,24 @@ public class AdminClientTimeoutIntegrationTest {
         Admin admin = clusterInstance.admin();
         admin.close();
         admin.close(); // double close has no effect
+    }
+
+    /**
+     * Test closing the AdminClient with a generous timeout. Calls in progress should be completed,
+     * since they can be done within the timeout. New calls should receive exceptions.
+     */
+    @ClusterTest
+    public void testDelayedClose(ClusterInstance clusterInstance) throws Exception {
+        List<NewTopic> newTopics = Stream.of("mytopic", "mytopic2")
+            .map(topic -> new NewTopic(topic, 1, (short) 1)).toList();
+        try (Admin admin = clusterInstance.admin()) {
+            var future = admin.createTopics(newTopics, new CreateTopicsOptions().validateOnly(true)).all();
+            admin.close(Duration.ofHours(2));
+            var future2 = admin.createTopics(newTopics, new CreateTopicsOptions().validateOnly(true)).all();
+            assertFutureThrows(IllegalStateException.class, future2);
+            future.get();
+            admin.close(Duration.ofMinutes(30)); // multiple close-with-timeout should have no effect
+        }
     }
 
     /**
