@@ -19,6 +19,7 @@ package org.apache.kafka.server.config;
 import org.apache.kafka.clients.CommonClientConfigs;
 import org.apache.kafka.common.config.ConfigDef;
 import org.apache.kafka.common.config.TopicConfig;
+import org.apache.kafka.common.protocol.MessageUtil;
 import org.apache.kafka.common.record.internal.CompressionType;
 import org.apache.kafka.common.record.internal.Records;
 import org.apache.kafka.server.authorizer.Authorizer;
@@ -111,6 +112,13 @@ public class ServerConfigs {
     public static final int FETCH_MAX_BYTES_DEFAULT = 55 * 1024 * 1024;
     public static final String FETCH_MAX_BYTES_DOC = "The maximum number of bytes we will return for a fetch request. Must be at least 1024.";
 
+    public static final String MESSAGE_MAX_ARRAY_LENGTH_CONFIG = "message.max.array.length";
+    public static final int MESSAGE_MAX_ARRAY_LENGTH_DEFAULT = MessageUtil.MAX_ARRAY_LENGTH;
+    public static final String MESSAGE_MAX_ARRAY_LENGTH_DOC = "The maximum number of elements the protocol message readers accept for any single array, rejecting " +
+        "larger declarations before reading them. Applies to every message this process parses, including " +
+        "requests, responses and on-disk state such as producer snapshots. Raise it if a legitimate message " +
+        "(for example a producer snapshot with more producer IDs) exceeds the limit.";
+
     /** ********* Request Limit Configuration **************/
     public static final String MAX_REQUEST_PARTITION_SIZE_LIMIT_CONFIG = "max.request.partition.size.limit";
     public static final int MAX_REQUEST_PARTITION_SIZE_LIMIT_DEFAULT = 2000;
@@ -159,6 +167,7 @@ public class ServerConfigs {
 
             /** ********* Request Limit Configuration ***********/
             .define(MAX_REQUEST_PARTITION_SIZE_LIMIT_CONFIG, INT, MAX_REQUEST_PARTITION_SIZE_LIMIT_DEFAULT, atLeast(1), MEDIUM, MAX_REQUEST_PARTITION_SIZE_LIMIT_DOC)
+            .define(MESSAGE_MAX_ARRAY_LENGTH_CONFIG, INT, MESSAGE_MAX_ARRAY_LENGTH_DEFAULT, atLeast(1), LOW, MESSAGE_MAX_ARRAY_LENGTH_DOC)
             /** Internal Configurations **/
             // This indicates whether unreleased APIs should be advertised by this node.
             .defineInternal(UNSTABLE_API_VERSIONS_ENABLE_CONFIG, BOOLEAN, false, HIGH)
