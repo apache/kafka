@@ -149,7 +149,7 @@ import static org.apache.kafka.common.config.ConfigDef.parseType;
  *   <li>{@link ConsumerConfig#ALLOW_AUTO_CREATE_TOPICS_CONFIG "allow.auto.create.topics"} (false) - Consumers will never trigger automatic topic creation</li>
  *   <li>{@link ConsumerConfig#GROUP_PROTOCOL_CONFIG "group.protocol"} as a consumer config, e.g. {@code consumer.group.protocol} (classic) -
  *       Streams ignores it; to select the rebalance protocol, set the Streams config {@link #GROUP_PROTOCOL_CONFIG "group.protocol"} instead</li>
- *   <li>{@link CommonClientConfigs#BOOTSTRAP_RESOLVE_TIMEOUT_MS_CONFIG "bootstrap.resolve.timeout.ms"} (0) - All clients created by Streams
+ *   <li>{@link ConsumerConfig#BOOTSTRAP_RESOLVE_TIMEOUT_MS_CONFIG "bootstrap.resolve.timeout.ms"} (0) - All clients created by Streams
  *       will always resolve bootstrap servers synchronously</li>
  * </ul>
  *
@@ -585,19 +585,19 @@ public class StreamsConfig extends AbstractConfig {
 
     /** {@code default.list.key.serde.inner} */
     @SuppressWarnings("WeakerAccess")
-    public static final String DEFAULT_LIST_KEY_SERDE_INNER_CLASS = CommonClientConfigs.DEFAULT_LIST_KEY_SERDE_INNER_CLASS;
+    public static final String DEFAULT_LIST_KEY_SERDE_INNER_CLASS_CONFIG = CommonClientConfigs.DEFAULT_LIST_KEY_SERDE_INNER_CLASS;
 
     /** {@code default.list.value.serde.inner} */
     @SuppressWarnings("WeakerAccess")
-    public static final String DEFAULT_LIST_VALUE_SERDE_INNER_CLASS = CommonClientConfigs.DEFAULT_LIST_VALUE_SERDE_INNER_CLASS;
+    public static final String DEFAULT_LIST_VALUE_SERDE_INNER_CLASS_CONFIG = CommonClientConfigs.DEFAULT_LIST_VALUE_SERDE_INNER_CLASS;
 
     /** {@code default.list.key.serde.type} */
     @SuppressWarnings("WeakerAccess")
-    public static final String DEFAULT_LIST_KEY_SERDE_TYPE_CLASS = CommonClientConfigs.DEFAULT_LIST_KEY_SERDE_TYPE_CLASS;
+    public static final String DEFAULT_LIST_KEY_SERDE_TYPE_CLASS_CONFIG = CommonClientConfigs.DEFAULT_LIST_KEY_SERDE_TYPE_CLASS;
 
     /** {@code default.list.value.serde.type} */
     @SuppressWarnings("WeakerAccess")
-    public static final String DEFAULT_LIST_VALUE_SERDE_TYPE_CLASS = CommonClientConfigs.DEFAULT_LIST_VALUE_SERDE_TYPE_CLASS;
+    public static final String DEFAULT_LIST_VALUE_SERDE_TYPE_CLASS_CONFIG = CommonClientConfigs.DEFAULT_LIST_VALUE_SERDE_TYPE_CLASS;
 
     /** {@code default.timestamp.extractor} */
     @SuppressWarnings("WeakerAccess")
@@ -1024,22 +1024,22 @@ public class StreamsConfig extends AbstractConfig {
                     null,
                     Importance.MEDIUM,
                     DEFAULT_KEY_SERDE_CLASS_DOC)
-            .define(DEFAULT_LIST_KEY_SERDE_INNER_CLASS,
+            .define(DEFAULT_LIST_KEY_SERDE_INNER_CLASS_CONFIG,
                     Type.CLASS,
                     null,
                     Importance.MEDIUM,
                     CommonClientConfigs.DEFAULT_LIST_KEY_SERDE_INNER_CLASS_DOC)
-            .define(DEFAULT_LIST_VALUE_SERDE_INNER_CLASS,
+            .define(DEFAULT_LIST_VALUE_SERDE_INNER_CLASS_CONFIG,
                     Type.CLASS,
                     null,
                     Importance.MEDIUM,
                     CommonClientConfigs.DEFAULT_LIST_VALUE_SERDE_INNER_CLASS_DOC)
-            .define(DEFAULT_LIST_KEY_SERDE_TYPE_CLASS,
+            .define(DEFAULT_LIST_KEY_SERDE_TYPE_CLASS_CONFIG,
                     Type.CLASS,
                     null,
                     Importance.MEDIUM,
                     CommonClientConfigs.DEFAULT_LIST_KEY_SERDE_TYPE_CLASS_DOC)
-            .define(DEFAULT_LIST_VALUE_SERDE_TYPE_CLASS,
+            .define(DEFAULT_LIST_VALUE_SERDE_TYPE_CLASS_CONFIG,
                     Type.CLASS,
                     null,
                     Importance.MEDIUM,
