@@ -38,4 +38,6 @@ interface GlobalStateMaintainer {
     void maybeCheckpoint();
 
     long approximateNumUncommittedBytes();
+
+    long maxStoreUncommittedBytes();
 }

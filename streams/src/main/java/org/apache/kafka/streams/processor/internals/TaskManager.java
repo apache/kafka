@@ -1787,6 +1787,14 @@ public class TaskManager {
         return total;
     }
 
+    long maxStoreUncommittedBytes() {
+        long max = 0;
+        for (final Task task : allRunningTasks().values()) {
+            max = Math.max(max, task.maxStoreUncommittedBytes());
+        }
+        return max;
+    }
+
     Set<Task> readOnlyAllTasks() {
         // not bothering with an unmodifiable map, since the tasks themselves are mutable, but
         // if any outside code modifies the map or the tasks, it would be a severe transgression.
