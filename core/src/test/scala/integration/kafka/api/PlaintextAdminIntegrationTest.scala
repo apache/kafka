@@ -35,7 +35,7 @@ import org.apache.kafka.clients.admin.AlterConfigOp.OpType
 import org.apache.kafka.clients.admin.ConfigEntry.ConfigSource
 import org.apache.kafka.clients.admin._
 import org.apache.kafka.clients.consumer.internals.AsyncKafkaConsumer
-import org.apache.kafka.clients.consumer.{CommitFailedException, Consumer, ConsumerConfig, ConsumerRebalanceListener, ConsumerRecords, GroupProtocol, KafkaConsumer, OffsetAndMetadata, ShareConsumer}
+import org.apache.kafka.clients.consumer.{CommitFailedException, Consumer, ConsumerConfig, ConsumerRecords, GroupProtocol, KafkaConsumer, OffsetAndMetadata, RebalanceConsumer, RebalanceListener, ShareConsumer}
 import org.apache.kafka.clients.producer.{KafkaProducer, ProducerConfig, ProducerRecord}
 import org.apache.kafka.common.acl.{AccessControlEntry, AclBinding, AclBindingFilter, AclOperation, AclPermissionType}
 import org.apache.kafka.common.config.{ConfigResource, LogLevelConfig, SslConfigs, TopicConfig}
@@ -3887,15 +3887,16 @@ class PlaintextAdminIntegrationTest extends BaseAdminIntegrationTest {
       new Thread {
         override def run : Unit = {
           var started = false
-          consumer.subscribe(util.Set.of(topic), new ConsumerRebalanceListener {
-            override def onPartitionsRevoked(partitions: util.Collection[TopicPartition]): Unit = {}
-            override def onPartitionsAssigned(partitions: util.Collection[TopicPartition]): Unit = {
+          consumer.setRebalanceListener(new RebalanceListener {
+            override def onPartitionsRevoked(partitions: util.Collection[TopicPartition], rebalanceConsumer: RebalanceConsumer): Unit = {}
+            override def onPartitionsAssigned(partitions: util.Collection[TopicPartition], rebalanceConsumer: RebalanceConsumer): Unit = {
               if (!started) {
                 startLatch.countDown()
                 started = true
               }
             }
           })
+          consumer.subscribe(util.Set.of(topic))
           try {
             while (consumerThreadRunning.get()) {
               consumer.poll(JDuration.ofSeconds(5))
