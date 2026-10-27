@@ -38,7 +38,6 @@ import org.apache.kafka.coordinator.transaction.TransactionLogConfig;
 import org.apache.kafka.server.config.ReplicationConfigs;
 import org.apache.kafka.server.config.ServerConfigs;
 import org.apache.kafka.server.config.ServerLogConfigs;
-import org.apache.kafka.server.util.ShutdownableThread;
 import org.apache.kafka.test.TestUtils;
 
 import java.nio.charset.StandardCharsets;
@@ -48,12 +47,13 @@ import java.util.HashSet;
 import java.util.List;
 import java.util.Map;
 import java.util.Set;
+import java.util.concurrent.CompletableFuture;
 import java.util.concurrent.TimeUnit;
+import java.util.concurrent.atomic.AtomicBoolean;
 import java.util.stream.Collectors;
 import java.util.stream.IntStream;
 
 import static org.junit.jupiter.api.Assertions.assertEquals;
-import static org.junit.jupiter.api.Assertions.assertNull;
 
 @ClusterTestDefaults(
     types = {Type.KRAFT},
@@ -115,8 +115,8 @@ public class TransactionsBounceTest {
                  ProducerConfig.TRANSACTIONAL_ID_CONFIG, "test-txn"
              ))) {
             producer.initTransactions();
-            BounceScheduler scheduler = new BounceScheduler();
-            scheduler.start();
+            AtomicBoolean bouncing = new AtomicBoolean(true);
+            CompletableFuture<Void> bouncer = CompletableFuture.runAsync(() -> bounceBrokers(bouncing));
             try {
                 int numMessagesProcessed = 0;
                 int iteration = 0;
@@ -150,8 +150,8 @@ public class TransactionsBounceTest {
                     iteration++;
                 }
             } finally {
-                scheduler.shutdown();
-                assertNull(scheduler.failure, "Broker bouncer failed");
+                bouncing.set(false);
+                bouncer.get();
             }
         }
 
@@ -206,43 +206,30 @@ public class TransactionsBounceTest {
         }
     }
 
-    private class BounceScheduler extends ShutdownableThread {
-        private volatile Throwable failure;
-
-        BounceScheduler() {
-            super("daemon-broker-bouncer", false);
-        }
-
-        @Override
-        public void doWork() {
-            try {
+    private void bounceBrokers(AtomicBoolean bouncing) {
+        try (Admin admin = cluster.admin()) {
+            while (bouncing.get()) {
                 for (int brokerId : cluster.brokerIds()) {
-                    log.trace("Shutting down broker {}", brokerId);
                     cluster.shutdownBroker(brokerId);
                     cluster.brokers().get(brokerId).awaitShutdown();
                     TimeUnit.MILLISECONDS.sleep(500);
                     cluster.startBroker(brokerId);
-                    log.trace("Restarted broker {}", brokerId);
                     TimeUnit.MILLISECONDS.sleep(500);
                 }
-                try (Admin admin = cluster.admin()) {
-                    for (int partition = 0; partition < NUM_PARTITIONS; partition++) {
-                        TopicPartition topicPartition = new TopicPartition(OUTPUT_TOPIC, partition);
-                        TestUtils.waitForCondition(() -> hasLeader(admin, topicPartition), "No leader elected for " + topicPartition);
-                    }
+                for (int partition = 0; partition < NUM_PARTITIONS; partition++) {
+                    TopicPartition topicPartition = new TopicPartition(OUTPUT_TOPIC, partition);
+                    TestUtils.waitForCondition(() -> hasLeader(admin, topicPartition), "No leader elected for " + topicPartition);
                 }
-            } catch (Exception | AssertionError e) {
-                log.error("Broker bouncer failed", e);
-                failure = e;
-                initiateShutdown();
             }
+        } catch (Exception e) {
+            throw new RuntimeException("Broker bouncer failed", e);
         }
+    }
 
-        private boolean hasLeader(Admin admin, TopicPartition topicPartition) throws Exception {
-            TopicPartitionInfo info = admin.describeTopics(List.of(topicPartition.topic()))
-                .allTopicNames().get().get(topicPartition.topic())
-                .partitions().get(topicPartition.partition());
-            return info.leader() != null && info.leader().id() >= 0;
-        }
+    private boolean hasLeader(Admin admin, TopicPartition topicPartition) throws Exception {
+        TopicPartitionInfo info = admin.describeTopics(List.of(topicPartition.topic()))
+            .allTopicNames().get().get(topicPartition.topic())
+            .partitions().get(topicPartition.partition());
+        return info.leader() != null && info.leader().id() >= 0;
     }
 }
