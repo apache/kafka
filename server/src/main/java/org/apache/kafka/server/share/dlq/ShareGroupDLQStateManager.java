@@ -865,12 +865,13 @@ public class ShareGroupDLQStateManager {
             // destination partition - re-added to the node map below (after nodeRPCMap.remove(node),
             // which would otherwise wipe them out) so they're retried on a subsequent tick.
             final List<ProduceRequestHandler> deferredForNextRound = new ArrayList<>();
+            final short requestHeaderVersion = cacheHelper.produceRequestHeaderVersion();
             synchronized (nodeMapLock) {
                 nodeRPCMap.forEach((destNode, handlers) -> {
                     // this condition causes requests of same type and same destination node
                     // to not be sent immediately but get batched
                     if (!inFlight.contains(destNode)) {
-                        CoalesceResults results = coalesceProduceRequests(handlers);
+                        CoalesceResults results = coalesceProduceRequests(handlers, requestHeaderVersion);
                         deferredForNextRound.addAll(results.deferredHandlers());
                         if (results.liveHandlers().isEmpty()) {
                             emptyNodes.add(destNode);
@@ -951,7 +952,7 @@ public class ShareGroupDLQStateManager {
     }
 
     // Visibility for tests
-    static CoalesceResults coalesceProduceRequests(List<ProduceRequestHandler> handlers) {
+    static CoalesceResults coalesceProduceRequests(List<ProduceRequestHandler> handlers, short requestHeaderVersion) {
         // Above handlers are destined for the same broker node - it could be for different DLQ topics and partitions
         // but the same broker node. The produce request requires each topic data request to be scoped to a
         // specific topic/topicId, and within a topic each partition must appear at most once (the broker keys
@@ -1025,7 +1026,7 @@ public class ShareGroupDLQStateManager {
             .setTimeoutMs(ServerConfigs.REQUEST_TIMEOUT_MS_DEFAULT);
 
         return new CoalesceResults(
-            new ProduceRequest.Builder(ApiKeys.PRODUCE.latestVersion(), ApiKeys.PRODUCE.latestVersion(), data),
+            new ProduceRequest.Builder(ApiKeys.PRODUCE.oldestVersion(), ApiKeys.PRODUCE.latestVersionForRequestHeader(requestHeaderVersion), data),
             liveHandlers,
             deferredHandlers
         );

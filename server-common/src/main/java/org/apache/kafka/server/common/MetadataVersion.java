@@ -288,6 +288,10 @@ public enum MetadataVersion {
         return this.isAtLeast(MetadataVersion.IBP_4_5_IV0) ? (short) 3 : (short) 2;
     }
 
+    public short produceRequestHeaderVersion() {
+        return this.isAtLeast(MetadataVersion.IBP_4_5_IV0) ? (short) 3 : (short) 2;
+    }
+
     public short partitionChangeRecordVersion() {
         if (isElrSupported()) {
             return (short) 2;

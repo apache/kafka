@@ -116,4 +116,11 @@ public interface ShareGroupDLQMetadataCacheHelper {
      * @return TopicPartitionData java record specifying the information.
      */
     TopicPartitionData topicPartitionData(String topicName);
+
+    /**
+     * Get the latest request header version which may be used for produce requests, based on the metadata version.
+     *
+     * @return The latest request header version which may be used for produce requests
+     */
+    short produceRequestHeaderVersion();
 }
