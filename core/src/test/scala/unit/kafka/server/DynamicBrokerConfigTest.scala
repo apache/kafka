@@ -33,9 +33,7 @@ import org.apache.kafka.raft.{KRaftConfigs, QuorumConfig}
 import org.apache.kafka.server.DynamicThreadPool
 import org.apache.kafka.server.authorizer._
 import org.apache.kafka.server.common.DirectoryEventHandler
-import org.apache.kafka.common.utils.LogCaptureAppender
-import org.apache.kafka.server.config.{DynamicLogConfig, QuotaConfig, ReplicationConfigs, ServerConfigs, ServerLogConfigs}
-import org.apache.logging.log4j.Level
+import org.apache.kafka.server.config.{DynamicLogConfig, ReplicationConfigs, ServerConfigs, ServerLogConfigs}
 import org.apache.kafka.server.log.remote.storage.{RemoteLogManager, RemoteLogManagerConfig}
 import org.apache.kafka.server.metrics.{ClientTelemetryExporterPlugin, KafkaYammerMetrics, MetricConfigs}
 import org.apache.kafka.server.quota.QuotaFactory
@@ -55,7 +53,6 @@ import java.util.{Optional, Properties, Map => JMap}
 import java.{lang, util}
 import scala.collection.Set
 import scala.jdk.CollectionConverters._
-import scala.util.Using
 
 class DynamicBrokerConfigTest {
 
@@ -102,64 +99,6 @@ class DynamicBrokerConfigTest {
       assertEquals(oldKeystore, config.originalsFromThisConfig.get(SslConfigs.SSL_KEYSTORE_LOCATION_CONFIG))
       assertEquals(oldKeystore, config.valuesFromThisConfig.get(SslConfigs.SSL_KEYSTORE_LOCATION_CONFIG))
     }
-  }
-
-  @Test
-  def testWarnIfBrokerQuotaConfigsInStaticConfig(): Unit = {
-    QuotaConfig.BROKER_QUOTA_CONFIGS.asScala.foreach { config =>
-      Using.resource(LogCaptureAppender.createAndRegister) { appender =>
-        appender.setClassLogger(classOf[DynamicBrokerConfig], Level.WARN)
-
-        val props = TestUtils.createBrokerConfig(0, port = 8181)
-        props.put(config, "1000000")
-        val kafkaConfig = KafkaConfig(props)
-        kafkaConfig.dynamicConfig.warnIfBrokerQuotaConfigsInStaticConfig()
-
-        val expectedMessage =
-          s"$config is set in the static configuration file but is ignored at runtime; configure this property dynamically to take effect."
-        assertTrue(
-          appender.getMessages.asScala.exists(_.contains(expectedMessage)),
-          s"Expected warning message not found for config: $config"
-        )
-      }
-    }
-  }
-
-  @Test
-  def testBrokerQuotaConfigWarnsOnlyForStaticConfig(): Unit = {
-    val quotaConfig = QuotaConfig.LEADER_REPLICATION_THROTTLED_RATE_CONFIG
-    val expectedMessage =
-      s"$quotaConfig is set in the static configuration file but is ignored at runtime; configure this property dynamically to take effect."
-
-    val propsWithStaticQuota = TestUtils.createBrokerConfig(0, port = 8181)
-    propsWithStaticQuota.put(quotaConfig, "1000000")
-    val configWithStaticQuota = KafkaConfig(propsWithStaticQuota)
-
-    Using.resource(LogCaptureAppender.createAndRegister) { appender =>
-      appender.setClassLogger(classOf[DynamicBrokerConfig], Level.WARN)
-      configWithStaticQuota.dynamicConfig.warnIfBrokerQuotaConfigsInStaticConfig()
-      configWithStaticQuota.dynamicConfig.initialize(None)
-      assertEquals(1, appender.getMessages.asScala.count(_.contains(expectedMessage)))
-
-      val unrelatedUpdate = new Properties()
-      unrelatedUpdate.put(ServerLogConfigs.LOG_RETENTION_TIME_MILLIS_CONFIG, "99999999")
-      configWithStaticQuota.dynamicConfig.updateBrokerConfig(0, unrelatedUpdate)
-      assertEquals(1, appender.getMessages.asScala.count(_.contains(expectedMessage)))
-    }
-
-    val propsWithoutStaticQuota = TestUtils.createBrokerConfig(0, port = 8181)
-    val configWithoutStaticQuota = KafkaConfig(propsWithoutStaticQuota)
-
-    Using.resource(LogCaptureAppender.createAndRegister) { appender =>
-      appender.setClassLogger(classOf[DynamicBrokerConfig], Level.WARN)
-      configWithoutStaticQuota.dynamicConfig.initialize(None)
-
-      val dynamicQuotaUpdate = new Properties()
-      dynamicQuotaUpdate.put(quotaConfig, "1000000")
-      configWithoutStaticQuota.dynamicConfig.updateBrokerConfig(0, dynamicQuotaUpdate)
-      assertFalse(appender.getMessages.asScala.exists(_.contains(expectedMessage)))
-    }
-
   }
 
   @Test
