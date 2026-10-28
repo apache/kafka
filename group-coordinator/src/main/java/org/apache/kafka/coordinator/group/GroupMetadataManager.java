@@ -2510,7 +2510,7 @@ public class GroupMetadataManager {
      *  - If the request defines a different topology with the same epoch as the group, a
      *    StreamsInvalidTopologyEpochException is thrown.
      *  - If the request defines a different topology with a higher epoch than the group, an InvalidRequestException
-     *    is thrown, since topology updates are not supported.
+     *    is thrown, since topology updates are not supported yet.
      *
      * @param groupId  The group ID.
      * @param memberId The member ID.
