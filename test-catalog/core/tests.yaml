@@ -554,8 +554,6 @@ kafka.api.SslProducerSendTest:
 - testSendOffset
 - testSendToPartition
 - testSendToPartitionWithFollowerShutdownShouldNotTimeout
-kafka.api.TransactionsBounceTest:
-- testWithGroupMetadata
 kafka.api.UserClientIdQuotaTest:
 - testProducerConsumerOverrideLowerQuota
 - testProducerConsumerOverrideUnthrottled
@@ -815,6 +813,7 @@ kafka.coordinator.transaction.TransactionMarkerRequestCompletionHandlerTest:
 - shouldThrowIllegalStateExceptionWhenUnknownError
 kafka.coordinator.transaction.TransactionStateManagerTest:
 - shouldCompleteEmptyPreparedTransactionOnLoad
+- shouldNotExpireTransactionalIdsOfPartitionWaitingToBeReloaded
 - shouldNotRemoveExpiredTransactionalIdsIfLogAppendFails
 - shouldNotRemoveOngoingTransactionalIds
 - shouldNotRemovePrepareAbortTransactionalIds
@@ -840,9 +839,15 @@ kafka.coordinator.transaction.TransactionStateManagerTest:
 - testListTransactionsFiltering
 - testListTransactionsFilteringWithInvalidPattern
 - testListTransactionsWithCoordinatorLoadingInProgress
+- testLoadAbandonedWhenPartitionIsNotOnline
+- testLoadAbandonedWhenPartitionTransitionsBeforeHighWatermarkReachesLogEndOffset
 - testLoadAndRemoveTransactionsForPartition
+- testLoadAtNewLeaderEpochWhileWaitingForHighWatermark
 - testLoadTransactionMetadataContainingSegmentEndingWithEmptyBatch
 - testLoadTransactionMetadataWithCorruptedLog
+- testLoadWaitsForHighWatermarkToReachLogEndOffset
+- testLoadWhenHighWatermarkReachesLogEndOffsetDuringListenerRegistration
+- testLoadWithoutWaitingWhenHighWatermarkAlreadyReachedOnRegistration
 - testMakeFollowerLoadingPartition
 - testNotCoordinatorAfterLosingLeadershipBeforeResignation
 - testNotCoordinatorIfLeadershipLostBeforeAppendCompletes
@@ -1623,6 +1628,7 @@ kafka.server.KafkaApisTest:
 - testHandleShareFetchRequestInvalidRequestOnFinalEpoch
 - testHandleShareFetchRequestInvalidRequestOnInitialEpoch
 - testHandleShareFetchRequestInvalidShareSessionError
+- testHandleShareFetchRequestNegativeMaxRecords
 - testHandleShareFetchRequestPropagatesAcknowledgementErrorMessage
 - testHandleShareFetchRequestQuotaTagsVerification
 - testHandleShareFetchRequestReleaseAcquiredRecordsThrowError
@@ -1635,6 +1641,7 @@ kafka.server.KafkaApisTest:
 - testHandleShareFetchRequestSuccessfulShareSessionLifecycle
 - testHandleShareFetchRequestTopicDeletedDuringFetch
 - testHandleShareFetchRequestWhenShareSessionCacheIsFull
+- testHandleShareFetchRequestZeroMaxRecordsIsAccepted
 - testHandleShareFetchShareGroupDisabled
 - testHandleShareFetchWithAcknowledgementQuotaTagsVerification
 - testHandleSyncGroupRequest
