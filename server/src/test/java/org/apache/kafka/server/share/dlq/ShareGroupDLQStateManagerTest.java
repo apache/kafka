@@ -43,6 +43,7 @@ import org.apache.kafka.common.requests.ProduceRequest;
 import org.apache.kafka.common.requests.ProduceResponse;
 import org.apache.kafka.common.utils.Time;
 import org.apache.kafka.common.utils.Utils;
+import org.apache.kafka.server.common.MetadataVersion;
 import org.apache.kafka.server.share.LogReader;
 import org.apache.kafka.server.share.dlq.ShareGroupDLQMetadataCacheHelper.TopicPartitionData;
 import org.apache.kafka.server.share.metrics.ShareGroupMetrics;
@@ -131,6 +132,7 @@ class ShareGroupDLQStateManagerTest {
     private static final Node DEFAULT_LEADER = new Node(0, HOST, PORT);
     private static final LogReader MOCK_LOG_READER = mock(LogReader.class);
     private static final int DEFAULT_MAX_MESSAGE_BYTES = 1024 * 1024;
+    private static final short OLDEST_REQUEST_HEADER_VERSION = MetadataVersion.MINIMUM_VERSION.produceRequestHeaderVersion();
     private static final short LATEST_REQUEST_HEADER_VERSION =
         ApiKeys.PRODUCE.requestHeaderVersion(ApiKeys.PRODUCE.latestVersion());
 
@@ -242,7 +244,7 @@ class ShareGroupDLQStateManagerTest {
         ));
         when(helper.isShareGroupDlqCopyRecordEnabled(GROUP_ID)).thenReturn(false);
         when(helper.dlqTopicMaxMessageBytes(anyString())).thenReturn(DEFAULT_MAX_MESSAGE_BYTES);
-        when(helper.requestHeaderVersion()).thenReturn(LATEST_REQUEST_HEADER_VERSION);
+        when(helper.produceRequestHeaderVersion()).thenReturn(LATEST_REQUEST_HEADER_VERSION);
         return helper;
     }
 
@@ -629,7 +631,7 @@ class ShareGroupDLQStateManagerTest {
     @ValueSource(shorts = {2, 3})
     public void testDlqProduceRequestVersionFollowsRequestHeaderVersion(short requestHeaderVersion) throws Exception {
         ShareGroupDLQMetadataCacheHelper cacheHelper = cacheHelper(DEFAULT_LEADER);
-        when(cacheHelper.requestHeaderVersion()).thenReturn(requestHeaderVersion);
+        when(cacheHelper.produceRequestHeaderVersion()).thenReturn(requestHeaderVersion);
         MockClient client = new MockClient(MOCK_TIME);
         List<ProduceRequest> capturedProduces = new ArrayList<>();
         client.prepareResponseFrom(captureProduce(capturedProduces), successfulProduceResponse(0), DEFAULT_LEADER);
@@ -644,9 +646,9 @@ class ShareGroupDLQStateManagerTest {
 
     @Test
     public void testDlqProduceRequestVersionFollowsRequestHeaderVersionChange() throws Exception {
-        AtomicInteger requestHeaderVersion = new AtomicInteger(2);
+        AtomicInteger requestHeaderVersion = new AtomicInteger(OLDEST_REQUEST_HEADER_VERSION);
         ShareGroupDLQMetadataCacheHelper cacheHelper = cacheHelper(DEFAULT_LEADER);
-        when(cacheHelper.requestHeaderVersion()).thenAnswer(invocation -> (short) requestHeaderVersion.get());
+        when(cacheHelper.produceRequestHeaderVersion()).thenAnswer(invocation -> (short) requestHeaderVersion.get());
         MockClient client = new MockClient(MOCK_TIME);
         List<ProduceRequest> capturedProduces = new ArrayList<>();
         client.prepareResponseFrom(captureProduce(capturedProduces), successfulProduceResponse(0), DEFAULT_LEADER);
@@ -655,17 +657,17 @@ class ShareGroupDLQStateManagerTest {
         stateManager = builder().withClient(client).withCacheHelper(cacheHelper).build();
         stateManager.start();
         assertNull(stateManager.dlq(param()).get(10, TimeUnit.SECONDS));
-        requestHeaderVersion.set(3);
+        requestHeaderVersion.set(LATEST_REQUEST_HEADER_VERSION);
         assertNull(stateManager.dlq(param()).get(10, TimeUnit.SECONDS));
 
         assertEquals(2, capturedProduces.size());
-        assertProduceRequestVersion(capturedProduces.get(0), (short) 2);
-        assertProduceRequestVersion(capturedProduces.get(1), (short) 3);
+        assertProduceRequestVersion(capturedProduces.get(0), OLDEST_REQUEST_HEADER_VERSION);
+        assertProduceRequestVersion(capturedProduces.get(1), LATEST_REQUEST_HEADER_VERSION);
     }
 
     @Test
     public void testDlqProduceUsesLatestVersionSupportedByLeader() throws Exception {
-        short leaderLatestVersion = ApiKeys.PRODUCE.latestVersionForRequestHeader((short) 2);
+        short leaderLatestVersion = ApiKeys.PRODUCE.latestVersionForRequestHeader(OLDEST_REQUEST_HEADER_VERSION);
         MockClient client = new MockClient(MOCK_TIME);
         client.setNodeApiVersions(NodeApiVersions.create(ApiKeys.PRODUCE.id, ApiKeys.PRODUCE.oldestVersion(), leaderLatestVersion));
         List<ProduceRequest> capturedProduces = new ArrayList<>();
@@ -706,7 +708,7 @@ class ShareGroupDLQStateManagerTest {
     @Test
     public void testDlqTopicPrefixEmptyStringSkipsPrefixCheck() throws Exception {
         ShareGroupDLQMetadataCacheHelper cacheHelper = mock(ShareGroupDLQMetadataCacheHelper.class);
-        when(cacheHelper.requestHeaderVersion()).thenReturn(LATEST_REQUEST_HEADER_VERSION);
+        when(cacheHelper.produceRequestHeaderVersion()).thenReturn(LATEST_REQUEST_HEADER_VERSION);
         when(cacheHelper.shareGroupDlqTopic(GROUP_ID)).thenReturn(Optional.of(DLQ_TOPIC));
         when(cacheHelper.shareGroupDlqTopicPrefix()).thenReturn(Optional.of(""));
         when(cacheHelper.containsTopic(DLQ_TOPIC)).thenReturn(true);
@@ -761,7 +763,7 @@ class ShareGroupDLQStateManagerTest {
     @Test
     public void testDlqCreateTopicThenProduceSucceeds() throws Exception {
         ShareGroupDLQMetadataCacheHelper cacheHelper = mock(ShareGroupDLQMetadataCacheHelper.class);
-        when(cacheHelper.requestHeaderVersion()).thenReturn(LATEST_REQUEST_HEADER_VERSION);
+        when(cacheHelper.produceRequestHeaderVersion()).thenReturn(LATEST_REQUEST_HEADER_VERSION);
         when(cacheHelper.shareGroupDlqTopic(GROUP_ID)).thenReturn(Optional.of(DLQ_TOPIC));
         when(cacheHelper.shareGroupDlqTopicPrefix()).thenReturn(Optional.empty());
         when(cacheHelper.isDlqEnabledOnTopic(DLQ_TOPIC)).thenReturn(true);
@@ -930,7 +932,7 @@ class ShareGroupDLQStateManagerTest {
     public void testDlqCreateTopicPartialFailuresThenSucceeds() throws Exception {
         int maxAttempts = 3;
         ShareGroupDLQMetadataCacheHelper cacheHelper = mock(ShareGroupDLQMetadataCacheHelper.class);
-        when(cacheHelper.requestHeaderVersion()).thenReturn(LATEST_REQUEST_HEADER_VERSION);
+        when(cacheHelper.produceRequestHeaderVersion()).thenReturn(LATEST_REQUEST_HEADER_VERSION);
         when(cacheHelper.shareGroupDlqTopic(GROUP_ID)).thenReturn(Optional.of(DLQ_TOPIC));
         when(cacheHelper.shareGroupDlqTopicPrefix()).thenReturn(Optional.empty());
         when(cacheHelper.isDlqEnabledOnTopic(DLQ_TOPIC)).thenReturn(true);
@@ -1253,7 +1255,7 @@ class ShareGroupDLQStateManagerTest {
     @Test
     public void testDlqTwoEnqueuedRecordsBothComplete() throws Exception {
         ShareGroupDLQMetadataCacheHelper cacheHelper = mock(ShareGroupDLQMetadataCacheHelper.class);
-        when(cacheHelper.requestHeaderVersion()).thenReturn(LATEST_REQUEST_HEADER_VERSION);
+        when(cacheHelper.produceRequestHeaderVersion()).thenReturn(LATEST_REQUEST_HEADER_VERSION);
         when(cacheHelper.shareGroupDlqTopic(GROUP_ID)).thenReturn(Optional.of(DLQ_TOPIC));
         when(cacheHelper.shareGroupDlqTopicPrefix()).thenReturn(Optional.empty());
         when(cacheHelper.containsTopic(DLQ_TOPIC)).thenReturn(true);
@@ -1412,7 +1414,7 @@ class ShareGroupDLQStateManagerTest {
         // partition 0 -> group-a, partition 1 -> group-b, partition 2 -> group-c (via the
         // sourcePartition % numPartitions mapping in populateDLQTopicData).
         ShareGroupDLQMetadataCacheHelper cacheHelper = mock(ShareGroupDLQMetadataCacheHelper.class);
-        when(cacheHelper.requestHeaderVersion()).thenReturn(LATEST_REQUEST_HEADER_VERSION);
+        when(cacheHelper.produceRequestHeaderVersion()).thenReturn(LATEST_REQUEST_HEADER_VERSION);
         when(cacheHelper.shareGroupDlqTopic(anyString())).thenReturn(Optional.of(DLQ_TOPIC));
         when(cacheHelper.shareGroupDlqTopicPrefix()).thenReturn(Optional.empty());
         when(cacheHelper.containsTopic(DLQ_TOPIC)).thenReturn(true);
