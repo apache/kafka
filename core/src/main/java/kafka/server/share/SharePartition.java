@@ -2542,15 +2542,18 @@ public class SharePartition implements AutoCloseable {
         List<PersisterBatch> persisterBatches
     ) {
         if (throwable != null) {
+            List<PersisterBatch> dlqBatches = new ArrayList<>();
             lock.writeLock().lock();
             try {
                 // Log in DEBUG to avoid flooding of logs for a faulty client.
                 log.debug("Request failed for updating state, rollback any changed state"
                     + " for the share partition: {}-{}", groupId, topicIdPartition);
                 persisterBatches.forEach(persisterBatch -> {
-                    persisterBatch.updatedState.completeStateTransition(false);
+                    persisterBatch.updatedState.completeStateTransition(false, isDLQEnabledForGroup());
                     if (persisterBatch.updatedState.state() == RecordState.AVAILABLE) {
                         updateFindNextFetchOffset(true);
+                    } else if (persisterBatch.updatedState.state() == RecordState.ARCHIVING) {
+                        dlqBatches.add(persisterBatch);
                     }
                     // If there is a failure, then update the deliveryCompleteCount only in case there are some records
                     // which were in a Terminal state, but after rolling back they are in a non-Terminal state. We also
@@ -2563,6 +2566,17 @@ public class SharePartition implements AutoCloseable {
             } finally {
                 lock.writeLock().unlock();
             }
+            // The rollback may have moved records at the delivery count limit to ARCHIVING when the
+            // DLQ flow is enabled. Start the DLQ flow outside the lock, as in the successful path.
+            dlqBatches.forEach(persisterBatch -> initiateDLQAndArchive(
+                persisterBatch.updatedState::archive,
+                persisterBatch.stateBatch.firstOffset(),
+                persisterBatch.stateBatch.lastOffset(),
+                persisterBatch.stateBatch.deliveryCount(),
+                persisterBatch.stateBatch.deliveryCount() >= maxDeliveryCount()
+                    ? ShareGroupDLQManager.DELIVERY_COUNT_EXCEEDED
+                    : ShareGroupDLQManager.CLIENT_REJECT
+            ));
             future.completeExceptionally(throwable);
             return;
         }
@@ -2585,11 +2599,16 @@ public class SharePartition implements AutoCloseable {
                         log.debug("Failed to write state to persister for the share partition: {}-{}",
                             groupId, topicIdPartition, exception);
                         // In case of failure when transition state is rolled back then it should be rolled
-                        // back to ACQUIRED state, unless acquisition lock for the state has expired.
+                        // back to ACQUIRED state, unless acquisition lock for the state has expired. If the
+                        // acquisition lock has expired and the delivery count is at the limit, the rollback
+                        // moves records to ARCHIVING when the DLQ flow is enabled so that they are not
+                        // silently archived and lost from the DLQ.
                         persisterBatches.forEach(persisterBatch -> {
-                            persisterBatch.updatedState().completeStateTransition(false);
+                            persisterBatch.updatedState().completeStateTransition(false, isDLQEnabledForGroup());
                             if (persisterBatch.updatedState().state() == RecordState.AVAILABLE) {
                                 updateFindNextFetchOffset(true);
+                            } else if (persisterBatch.updatedState().state() == RecordState.ARCHIVING) {
+                                dlqBatches.add(persisterBatch);
                             }
                             // If there is a failure, then update the deliveryCompleteCount only in case there are some records
                             // which were in a Terminal state, but after rolling back they are in a non-Terminal state. We also
@@ -2599,24 +2618,23 @@ public class SharePartition implements AutoCloseable {
                                 deliveryCompleteCount.addAndGet(-numInFlightRecordsInBatch(persisterBatch.stateBatch.firstOffset(), persisterBatch.stateBatch.lastOffset()));
                             }
                         });
-                        return;
-                    }
+                    } else {
+                        log.trace("State change request successful for share partition: {}-{}",
+                            groupId, topicIdPartition);
 
-                    log.trace("State change request successful for share partition: {}-{}",
-                        groupId, topicIdPartition);
-
-                    for (PersisterBatch persisterBatch : persisterBatches) {
-                        persisterBatch.updatedState().completeStateTransition(true);
-                        if (persisterBatch.updatedState.state() == RecordState.AVAILABLE) {
-                            updateFindNextFetchOffset(true);
+                        for (PersisterBatch persisterBatch : persisterBatches) {
+                            persisterBatch.updatedState().completeStateTransition(true, isDLQEnabledForGroup());
+                            if (persisterBatch.updatedState.state() == RecordState.AVAILABLE) {
+                                updateFindNextFetchOffset(true);
+                            }
+                            if (persisterBatch.updatedState.state() == RecordState.ARCHIVING) {
+                                dlqBatches.add(persisterBatch);
+                            }
                         }
-                        if (persisterBatch.updatedState.state() == RecordState.ARCHIVING) {
-                            dlqBatches.add(persisterBatch);
-                        }
-                    }
 
-                    // Update the cached state and start and end offsets after acknowledging/releasing the acquired records.
-                    cacheStateUpdated = maybeUpdateCachedStateAndOffsets();
+                        // Update the cached state and start and end offsets after acknowledging/releasing the acquired records.
+                        cacheStateUpdated = maybeUpdateCachedStateAndOffsets();
+                    }
                 } finally {
                     lock.writeLock().unlock();
                     if (exception != null) {
@@ -2637,7 +2655,11 @@ public class SharePartition implements AutoCloseable {
                         persisterBatch.stateBatch.firstOffset(),
                         persisterBatch.stateBatch.lastOffset(),
                         persisterBatch.stateBatch.deliveryCount(),
-                        persisterBatch.dlqCause
+                        persisterBatch.dlqCause != null
+                            ? persisterBatch.dlqCause
+                            : persisterBatch.stateBatch.deliveryCount() >= maxDeliveryCount()
+                                ? ShareGroupDLQManager.DELIVERY_COUNT_EXCEEDED
+                                : ShareGroupDLQManager.CLIENT_REJECT
                     );
                 });
             });

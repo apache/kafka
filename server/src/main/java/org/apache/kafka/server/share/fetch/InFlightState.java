@@ -213,10 +213,15 @@ public class InFlightState {
      * Complete the state transition for the records. If the commit is true or the state is terminal,
      * it cancels the acquisition lock timeout task and clears the rollback state.
      * If the commit is false and the state is not terminal, it rolls back the state transition.
+     * When the rollback finds the acquisition lock expired and the delivery count at the limit,
+     * the records move to ARCHIVING if DLQ support is enabled, consistent with the normal
+     * transition path in {@link #tryUpdateState}, so that they are written to the DLQ instead of
+     * being archived directly.
      *
-     * @param commit If true, commits the state transition, otherwise rolls back.
+     * @param commit           If true, commits the state transition, otherwise rolls back.
+     * @param dlqSupportEnabled Whether the DLQ flow is enabled for the share group.
      */
-    public void completeStateTransition(boolean commit) {
+    public void completeStateTransition(boolean commit, boolean dlqSupportEnabled) {
         if (commit || isTerminalState) {
             // Cancel the acquisition lock timeout task for the state since it is acknowledged/released successfully.
             cancelAndClearAcquisitionLockTimeoutTask();
@@ -227,9 +232,14 @@ public class InFlightState {
         // Check is acquisition lock timeout task is expired then mark the message as Available.
         if (acquisitionLockTimeoutTask != null && acquisitionLockTimeoutTask.hasExpired()) {
             // If the acquisition lock timeout task has expired, we should mark the record as available.
-            // However, if the delivery count has reached the maximum delivery count, we should archive the record.
-            state = previousState.deliveryCount() >= rollbackState.maxDeliveryCount ?
-                RecordState.ARCHIVED : RecordState.AVAILABLE;
+            // However, if the delivery count has reached the maximum delivery count, we should archive
+            // the record, or move it to ARCHIVING when the DLQ flow is enabled, mirroring the normal
+            // transition path so that the record is not silently archived and lost from the DLQ.
+            if (previousState.deliveryCount() >= rollbackState.maxDeliveryCount) {
+                state = dlqSupportEnabled ? RecordState.ARCHIVING : RecordState.ARCHIVED;
+            } else {
+                state = RecordState.AVAILABLE;
+            }
             memberId = EMPTY_MEMBER_ID;
             cancelAndClearAcquisitionLockTimeoutTask();
         } else {
