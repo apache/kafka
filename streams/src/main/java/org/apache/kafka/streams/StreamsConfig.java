@@ -807,7 +807,7 @@ public class StreamsConfig extends AbstractConfig {
 
     /** {@code metadata.recovery.rebootstrap.trigger.ms} */
     @SuppressWarnings("WeakerAccess")
-    public static final String METADATA_RECOVERY_REBOOTSTRAP_TRIGGER_MS_CONFIG =CommonClientConfigs.METADATA_RECOVERY_REBOOTSTRAP_TRIGGER_MS_CONFIG;
+    public static final String METADATA_RECOVERY_REBOOTSTRAP_TRIGGER_MS_CONFIG = CommonClientConfigs.METADATA_RECOVERY_REBOOTSTRAP_TRIGGER_MS_CONFIG;
 
     /** {@code metadata.cluster.check.enable} */
     @SuppressWarnings("WeakerAccess")
