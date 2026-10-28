@@ -81,6 +81,7 @@ import java.util.Map;
 import java.util.Optional;
 import java.util.Set;
 import java.util.concurrent.CompletableFuture;
+import java.util.concurrent.atomic.AtomicReference;
 import java.util.stream.Collectors;
 
 import static java.util.Arrays.asList;
@@ -110,6 +111,7 @@ import static org.mockito.ArgumentMatchers.argThat;
 import static org.mockito.ArgumentMatchers.eq;
 import static org.mockito.ArgumentMatchers.same;
 import static org.mockito.Mockito.atLeastOnce;
+import static org.mockito.Mockito.doAnswer;
 import static org.mockito.Mockito.doNothing;
 import static org.mockito.Mockito.doThrow;
 import static org.mockito.Mockito.inOrder;
@@ -2427,6 +2429,42 @@ public class TaskManagerTest {
         verify(tasks).removeTask(task00);
         verify(tasks).addPendingTasksToInit(Set.of(task00));
         verify(consumer, never()).commitSync(emptyMap());
+    }
+
+    @Test
+    public void shouldResetOffsetsInNewTaskIfRevivedTaskIsClosedOnAssignmentBeforeInitialization() {
+        final StreamTask revivedTask = statefulTask(taskId00, taskId00ChangelogPartitions)
+            .withInputPartitions(taskId00Partitions)
+            .build();
+        final AtomicReference<State> revivedTaskState = new AtomicReference<>(State.RUNNING);
+        when(revivedTask.state()).thenAnswer(invocation -> revivedTaskState.get());
+        doAnswer(invocation -> {
+            revivedTaskState.set(State.SUSPENDED);
+            return null;
+        }).when(revivedTask).suspend();
+        final StreamTask newTask = statefulTask(taskId00, taskId00ChangelogPartitions)
+            .withInputPartitions(taskId00Partitions)
+            .inState(State.CREATED)
+            .build();
+        final Tasks taskRegistry = new Tasks(new LogContext());
+        taskRegistry.addTask(revivedTask);
+        when(activeTaskCreator.streamsProducer()).thenReturn(mock(StreamsProducer.class));
+        when(activeTaskCreator.createTasks(consumer, taskId00Assignment)).thenReturn(singletonList(newTask));
+        when(consumer.assignment()).thenReturn(taskId00Partitions);
+        final TaskManager taskManager = setUpTaskManager(ProcessingMode.EXACTLY_ONCE_V2, taskRegistry);
+
+        // the corrupted task is closed dirty, which drops its buffered records, and revived with its input
+        // partitions marked to be reset to the committed offsets once it is initialized again
+        taskManager.handleCorruption(Set.of(taskId00));
+        verify(revivedTask).addPartitionsForOffsetReset(taskId00Partitions);
+        when(revivedTask.partitionsForOffsetReset()).thenReturn(taskId00Partitions);
+
+        // the rebalance triggered by the corruption completes before the revived task is initialized
+        taskManager.handleAssignment(taskId00Assignment, emptyMap());
+
+        verify(revivedTask).closeClean();
+        verify(newTask).addPartitionsForOffsetReset(taskId00Partitions);
+        assertEquals(Set.of(newTask), taskRegistry.drainPendingTasksToInit());
     }
 
     @Test
