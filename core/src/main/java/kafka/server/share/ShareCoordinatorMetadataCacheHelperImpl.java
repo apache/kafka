@@ -19,6 +19,7 @@ package kafka.server.share;
 
 import org.apache.kafka.common.Node;
 import org.apache.kafka.common.Uuid;
+import org.apache.kafka.common.config.ConfigDef;
 import org.apache.kafka.common.config.ConfigException;
 import org.apache.kafka.common.config.TopicConfig;
 import org.apache.kafka.common.message.MetadataResponseData;
@@ -101,8 +102,14 @@ public class ShareCoordinatorMetadataCacheHelperImpl implements ShareCoordinator
         if (props == null) {
             return false;
         }
+        // Only this one flag is needed, so read it directly rather than building a LogConfig.
+        Object value = props.get(TopicConfig.ERRORS_DEADLETTERQUEUE_GROUP_ENABLE_CONFIG);
+        if (value == null) {
+            return LogConfig.DEFAULT_ERRORS_DEADLETTERQUEUE_GROUP_ENABLE;
+        }
         try {
-            return new LogConfig(props).getBoolean(TopicConfig.ERRORS_DEADLETTERQUEUE_GROUP_ENABLE_CONFIG);
+            return Boolean.TRUE.equals(
+                ConfigDef.parseType(TopicConfig.ERRORS_DEADLETTERQUEUE_GROUP_ENABLE_CONFIG, value, ConfigDef.Type.BOOLEAN));
         } catch (ConfigException exe) {
             return false;
         }
@@ -111,15 +118,21 @@ public class ShareCoordinatorMetadataCacheHelperImpl implements ShareCoordinator
     @Override
     public int dlqTopicMaxMessageBytes(String topic) {
         Properties props = metadataCache.topicConfig(topic);
-        // LogConfig defines its own static default for this key, so an explicit containsKey
-        // check is needed to distinguish "no topic-level override" from "override present"
-        // and fall back to the broker's configured message.max.bytes in the former case.
-        if (props == null || !props.containsKey(TopicConfig.MAX_MESSAGE_BYTES_CONFIG)) {
+        // Only a topic-level override is read here; without one the broker's configured
+        // message.max.bytes is used.
+        Object value = props == null ? null : props.get(TopicConfig.MAX_MESSAGE_BYTES_CONFIG);
+        if (value == null) {
             return messageMaxBytesSupplier.getAsInt();
         }
         try {
-            return new LogConfig(props).getInt(TopicConfig.MAX_MESSAGE_BYTES_CONFIG);
+            // Returns null only on null input which has already been checked above.
+            Integer maxMessageBytes = (Integer) ConfigDef.parseType(TopicConfig.MAX_MESSAGE_BYTES_CONFIG, value, ConfigDef.Type.INT);
+            // parseType only checks the type, so apply the same bounds as the topic config.
+            LogConfig.configKeys().get(TopicConfig.MAX_MESSAGE_BYTES_CONFIG).validator
+                .ensureValid(TopicConfig.MAX_MESSAGE_BYTES_CONFIG, maxMessageBytes);
+            return maxMessageBytes;
         } catch (ConfigException exe) {
+            // Fall back to the broker's configured value.
             return messageMaxBytesSupplier.getAsInt();
         }
     }
