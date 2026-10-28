@@ -165,8 +165,8 @@ class ZkMigrationClientTest extends ZkMigrationTestHarness {
    */
   @Test
   def testPartitionStateUsesZkControllerEpoch(): Unit = {
-    // Claiming the controller bumps the ZK controller epoch from the pre-created 1 to 2, which keeps
-    // it distinct from both the KRaft epoch (42) and the initial ZK epoch.
+    // The harness starts with ZK controller epoch 1. Claiming leadership makes it 2,
+    // so it differs from the KRaft epoch (42) and from the starting value.
     migrationState = migrationClient.claimControllerLeadership(migrationState)
     assertEquals(2, migrationState.zkControllerEpoch())
     assertEquals(InitialControllerEpoch, migrationState.kraftControllerEpoch())
