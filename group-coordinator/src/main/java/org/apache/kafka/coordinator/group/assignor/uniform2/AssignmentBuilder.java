@@ -296,7 +296,8 @@ public final class AssignmentBuilder {
      */
     private Map<Uuid, Set<Integer>> ownedPartitions(int member) {
         var assignment = currentAssignment.assignment(member);
-        Map<Uuid, Set<Integer>> partitions = Utils.newHashMap(assignment.size());
+        // At least 12 entries, which a default HashMap holds without growing.
+        Map<Uuid, Set<Integer>> partitions = Utils.newHashMap(Math.max(assignment.size(), 12));
         assignment.forEach((topicId, topicPartitions) -> {
             int topic = group.topicIndex(topicId);
             if (topic >= 0 && group.subscribes(member, topic)) {
