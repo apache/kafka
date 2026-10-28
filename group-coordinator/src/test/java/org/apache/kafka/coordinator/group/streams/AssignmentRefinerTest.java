@@ -228,9 +228,14 @@ public class AssignmentRefinerTest {
     }
 
     @Test
-    public void shouldNotBeCaughtUpWhenTheRestoreHasNotStarted() {
-        // Long.MAX_VALUE is the client's way of saying that it has not started restoring the task, so no lag can be
-        // computed from it.
+    public void shouldNotBeCaughtUpWhileTheEndOffsetIsNotKnown() {
+        // The client reports an end offset of Long.MAX_VALUE until it has fetched the changelog's end offset.
+        assertFalse(AssignmentRefinerImpl.isCaughtUp(offsets(0L, Long.MAX_VALUE), STATEFUL_0, ACCEPTABLE_RECOVERY_LAG));
+    }
+
+    @Test
+    public void shouldNotBeCaughtUpWhenAnOffsetSumOverflowed() {
+        // The client pins an offset sum that overflows to Long.MAX_VALUE, so no lag can be computed from it.
         assertFalse(AssignmentRefinerImpl.isCaughtUp(offsets(Long.MAX_VALUE, 1000L), STATEFUL_0, ACCEPTABLE_RECOVERY_LAG));
         assertFalse(AssignmentRefinerImpl.isCaughtUp(offsets(1000L, Long.MAX_VALUE), STATEFUL_0, ACCEPTABLE_RECOVERY_LAG));
     }
@@ -284,13 +289,14 @@ public class AssignmentRefinerTest {
 
     @Test
     public void shouldIndexAnActiveHolderWhoseRestoreHasNotStartedAsNotProcessing() {
-        // Long.MAX_VALUE is the "restore not started" cap; it is still a report, so the task is still restoring.
+        // Before its restore starts, the client reports a position of 0 and an end offset of Long.MAX_VALUE; it is
+        // still a report, so the task is still restoring.
         final Map<String, StreamsGroupMember> members = Map.of(
             "memberA", member("memberA", "processA", mkTasksTuple(TaskRole.ACTIVE, mkTasks(STATEFUL, 0)))
         );
 
         final AssignmentRefinerImpl.CurrentAssignmentIndex index =
-            index(members, Map.of("memberA", offsets(Long.MAX_VALUE, Long.MAX_VALUE)));
+            index(members, Map.of("memberA", offsets(0L, Long.MAX_VALUE)));
 
         assertEquals(
             Map.of(STATEFUL_0, new AssignmentRefinerImpl.ActiveHolder("memberA", true, false)),
@@ -335,7 +341,7 @@ public class AssignmentRefinerTest {
         assertEquals(
             Set.of(
                 new AssignmentRefinerImpl.TaskCopy("memberA", "processA", TaskRole.STANDBY, true, true),
-                new AssignmentRefinerImpl.TaskCopy("memberB", "processB", TaskRole.WARMUP, false, true)
+                new AssignmentRefinerImpl.TaskCopy("memberB", "processB", TaskRole.WARMUP, false, false)
             ),
             Set.copyOf(index.taskCopies().get(STATEFUL_0))
         );
@@ -343,17 +349,20 @@ public class AssignmentRefinerTest {
 
     @Test
     public void shouldIndexWhetherACopyHasStartedItsRestore() {
-        // A reported position means the member has restored some of the task, which is what makes an in-flight
-        // warm-up task worth keeping once it stops making progress. The cap the client reports before a restore
-        // begins does not count, and neither does reporting nothing at all.
+        // A position above 0 means the member has restored some of the task, which is what makes an in-flight
+        // warm-up task worth keeping once it stops making progress. A position of 0 is what the client reports
+        // before it restores anything, so it does not count, and neither does reporting nothing at all. A position
+        // sum that overflowed to Long.MAX_VALUE counts.
         final Map<String, StreamsGroupMember> members = Map.of(
             "memberA", member("memberA", "processA", mkTasksTuple(TaskRole.STANDBY, mkTasks(STATEFUL, 0))),
             "memberB", member("memberB", "processB", mkTasksTuple(TaskRole.WARMUP, mkTasks(STATEFUL, 0))),
-            "memberC", member("memberC", "processC", mkTasksTuple(TaskRole.STANDBY, mkTasks(STATEFUL, 0)))
+            "memberC", member("memberC", "processC", mkTasksTuple(TaskRole.STANDBY, mkTasks(STATEFUL, 0))),
+            "memberD", member("memberD", "processD", mkTasksTuple(TaskRole.STANDBY, mkTasks(STATEFUL, 0)))
         );
         final Map<String, MemberTaskOffsets> taskOffsets = Map.of(
             "memberA", offsets(1000L, 2000L),
-            "memberB", offsets(Long.MAX_VALUE, Long.MAX_VALUE)
+            "memberB", offsets(0L, Long.MAX_VALUE),
+            "memberD", offsets(Long.MAX_VALUE, Long.MAX_VALUE)
         );
 
         final AssignmentRefinerImpl.CurrentAssignmentIndex index = index(members, taskOffsets);
@@ -362,7 +371,8 @@ public class AssignmentRefinerTest {
             Set.of(
                 new AssignmentRefinerImpl.TaskCopy("memberA", "processA", TaskRole.STANDBY, false, true),
                 new AssignmentRefinerImpl.TaskCopy("memberB", "processB", TaskRole.WARMUP, false, false),
-                new AssignmentRefinerImpl.TaskCopy("memberC", "processC", TaskRole.STANDBY, false, false)
+                new AssignmentRefinerImpl.TaskCopy("memberC", "processC", TaskRole.STANDBY, false, false),
+                new AssignmentRefinerImpl.TaskCopy("memberD", "processD", TaskRole.STANDBY, false, true)
             ),
             Set.copyOf(index.taskCopies().get(STATEFUL_0))
         );
@@ -645,7 +655,7 @@ public class AssignmentRefinerTest {
                 "memberA",
                 "memberB",
                 Optional.of("processB"),
-                Optional.of(new AssignmentRefinerImpl.TaskCopy("memberB", "processB", TaskRole.STANDBY, false, true))
+                Optional.of(new AssignmentRefinerImpl.TaskCopy("memberB", "processB", TaskRole.STANDBY, false, false))
             )),
             decisions.stagedMigrations()
         );
@@ -1836,8 +1846,11 @@ public class AssignmentRefinerTest {
             "memberB", mkTasksTuple(TaskRole.ACTIVE, mkTasks(STATEFUL, 0, 1)),
             "memberC", mkTasksTuple(TaskRole.ACTIVE, mkTasks(STATEFUL, 2, 3))
         );
-        // memberB reports its restoring active task and nothing for the warm-up task, which has not started.
-        final Map<String, MemberTaskOffsets> taskOffsets = Map.of("memberB", offsets(1, 500L, 10_000L));
+        // memberB reports its restoring active task, and a position of 0 for the warm-up task, which has restored
+        // nothing yet.
+        final Map<String, MemberTaskOffsets> taskOffsets = Map.of(
+            "memberB", offsets(Map.of(0, 0L, 1, 500L), Map.of(0, 10_000L, 1, 10_000L))
+        );
 
         final AssignmentRefinerImpl.WarmupPlan plan = plan(members, targetAssignment, taskOffsets, 1);
 
