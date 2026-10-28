@@ -50,7 +50,9 @@
   // Version 17 no changes to the response (KIP-853).
   //
   // Version 18 no changes to the response (KIP-1166)
-  "validVersions": "4-18",
+  //
+  // Version 19 is the same as version 18 (KIP-1313).
+  "validVersions": "4-19",
   "flexibleVersions": "12+",
   "headerVersions": {
     "0-11": "0",
