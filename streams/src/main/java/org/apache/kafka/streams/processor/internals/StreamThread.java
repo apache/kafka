@@ -1425,6 +1425,9 @@ public class StreamThread extends Thread implements ProcessingThread {
             taskManager.maybeUpdateTaskOffsetSumSnapshot();
 
             if (!streamsGroupReady) {
+                // the group can become not ready while this thread keeps its tasks, and the task executors keep
+                // processing them, so the byte limit must still apply even though nothing commits
+                maybePauseProcessingForUncommittedBytes();
                 return;
             }
         }
