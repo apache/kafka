@@ -3410,6 +3410,8 @@ org.apache.kafka.clients.producer.internals.RecordAccumulatorTest:
 - testHasRoomForAllowsOversizedFirstRecordButRejectsSubsequentRecords
 - testLinger
 - testMutedPartitions
+- testNeedsBufferExtensionResultExposesRequiredCapacity
+- testNeedsNewBatchResultHasNoExtensionBytes
 - testNextReadyCheckDelay
 - testPartialDrain
 - testProduceRequestResultAwaitAllDependents
