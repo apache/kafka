@@ -2174,10 +2174,16 @@ public class GroupMetadataManager {
         // The assignment is only provided in the following cases:
         // 1. The member is joining.
         // 2. The member's assignment has been updated.
-        if (memberEpoch == 0 || hasAssignedTasksChanged(member, updatedMember)) {
+        // 3. The member reports all owned task sets, including when acknowleding an assignment or retrying after a heartbeat failure.
+        boolean assignedTaskChanged = hasAssignedTasksChanged(member, updatedMember);
+        boolean hasOwnedTaskReported = ownedActiveTasks != null && ownedStandbyTasks != null && ownedWarmupTasks != null;
+        if (memberEpoch == 0 || assignedTaskChanged || hasOwnedTaskReported) {
             response.setActiveTasks(createStreamsGroupHeartbeatResponseTaskIdsFromEpochs(updatedMember.assignedTasks().activeTasksWithEpochs()));
             response.setStandbyTasks(createStreamsGroupHeartbeatResponseTaskIds(updatedMember.assignedTasks().standbyTasks()));
             response.setWarmupTasks(createStreamsGroupHeartbeatResponseTaskIds(updatedMember.assignedTasks().warmupTasks()));
+        }
+
+        if (memberEpoch == 0 || assignedTaskChanged) {
             group.invalidateCachedEndpointToPartitions(updatedMember.memberId());
             if (updatedMember.userEndpoint().isPresent()) {
                 // If no user endpoint is defined, there is no change in the endpoint information.
