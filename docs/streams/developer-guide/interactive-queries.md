@@ -210,12 +210,12 @@ You can also materialize the results of stateless operators by using the overloa
     
     // materialize the result of filtering corresponding to odd numbers
     // the "queryableStoreName" can be subsequently queried.
-    KTable<String, Integer> oddCounts = numberLines.filter((region, count) -> (count % 2 != 0),
-      Materialized.<String, Integer, KeyValueStore<Bytes, byte[]>as("queryableStoreName"));
+    KTable<String, Integer> oddCounts = regionCounts.filter((region, count) -> (count % 2 != 0),
+      Materialized.<String, Integer, KeyValueStore<Bytes, byte[]>>as("queryableStoreName"));
     
     // do not materialize the result of filtering corresponding to even numbers
     // this means that these results will not be materialized and cannot be queried.
-    KTable<String, Integer> oddCounts = numberLines.filter((region, count) -> (count % 2 == 0));
+    KTable<String, Integer> evenCounts = regionCounts.filter((region, count) -> (count % 2 == 0));
 
 ## Querying local window stores
 
@@ -549,7 +549,7 @@ Here is how to implement `QueryableStoreType`:
 
 A wrapper class is required because each instance of a Kafka Streams application may run multiple stream tasks and manage multiple local instances of a particular state store. The wrapper class hides this complexity and lets you query a "logical" state store by name without having to know about all of the underlying local instances of that state store.
 
-When implementing your wrapper class you must use the [StateStoreProvider](https://github.com/apache/kafka/blob/trunk/streams/src/main/java/org/apache/kafka/streams/state/internals/StateStoreProvider.java) interface to get access to the underlying instances of your store. `StateStoreProvider#stores(String storeName, QueryableStoreType<T> queryableStoreType)` returns a `List` of state stores with the given storeName and of the type as defined by `queryableStoreType`.
+When implementing your wrapper class you must use the [StateStoreProvider](https://github.com/apache/kafka/blob/4.4/streams/src/main/java/org/apache/kafka/streams/state/internals/StateStoreProvider.java) interface to get access to the underlying instances of your store. `StateStoreProvider#stores(String storeName, QueryableStoreType<T> queryableStoreType)` returns a `List` of state stores with the given storeName and of the type as defined by `queryableStoreType`.
 
 Here is an example implementation of the wrapper:
     
@@ -892,18 +892,20 @@ This example shows how to configure and run a Kafka Streams application that sup
 The following methods return [StreamsMetadata](/{version}/javadoc/org/apache/kafka/streams/StreamsMetadata.html) objects, which provide meta-information about application instances such as their RPC endpoint and locally available state stores.
 
   * `KafkaStreams#metadataForAllStreamsClients()`: find all instances of this application
-  * `KafkaStreams#streamsMetadataForStore(String storeName)`: find those applications instances that manage local instances of the state store "storeName"
+  * `KafkaStreams#streamsMetadataForStore(String storeName)`: find those application instances that manage local instances of the state store "storeName"
 
 The following methods return [KeyQueryMetadata](/{version}/javadoc/org/apache/kafka/streams/KeyQueryMetadata.html), which provides the active and standby application instances for a key.
 
-  * `KafkaStreams#queryMetadataForKey(String storeName, K key, Serializer<K> keySerializer)`: using the default stream partitioning strategy, find the one application instance that holds the data for the given key in the given state store
-  * `KafkaStreams#queryMetadataForKey(String storeName, K key, StreamPartitioner<K, ?> partitioner)`: using `partitioner`, find the one application instance that holds the data for the given key in the given state store
+  * `KafkaStreams#queryMetadataForKey(String storeName, K key, Serializer<K> keySerializer)`: using the default stream partitioning strategy, find the active and standby application instances for the given key in the given state store
+  * `KafkaStreams#queryMetadataForKey(String storeName, K key, StreamPartitioner<K, ?> partitioner)`: using `partitioner`, find the active and standby application instances for the given key in the given state store
+
+If the partitioner or key serializer uses record headers, use the `Headers` overload of `queryMetadataForKey`; otherwise, the returned metadata may not match where the key resides.
 
 
 
 Attention
 
-If `application.server` is not configured for an application instance, then `metadataForAllStreamsClients()` and `streamsMetadataForStore()` will not find any [StreamsMetadata](/{version}/javadoc/org/apache/kafka/streams/StreamsMetadata.html) for it. `queryMetadataForKey()` cannot provide a usable host for a key assigned to that instance.
+If `application.server` is not configured for an application instance, then `metadataForAllStreamsClients()` and `streamsMetadataForStore()` will not find any [StreamsMetadata](/{version}/javadoc/org/apache/kafka/streams/StreamsMetadata.html) for it. For a key assigned to that instance, `queryMetadataForKey()` returns `HostInfo.unavailable()` (`unavailable`, port `-1`) from `activeHost()`, and the instance is absent from `standbyHosts()`.
 
 For example, we can now find the `StreamsMetadata` for the state store named "word-count" that we defined in the code example shown in the previous section:
     
@@ -933,7 +935,7 @@ For example, we can now find the `StreamsMetadata` for the state store named "wo
     Optional<Long> result = streams.streamsMetadataForStore("word-count")
         .stream()
         .map(streamsMetadata -> {
-            // Construct the (fictituous) full endpoint URL to query the current remote application instance
+            // Construct the (fictitious) full endpoint URL to query the current remote application instance
             String url = "http://" + streamsMetadata.host() + ":" + streamsMetadata.port() + "/word-count/alice";
             // Read and return the count for 'alice', if any.
             return http.getLong(url);
