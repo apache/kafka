@@ -784,6 +784,7 @@ class BrokerServer(
           Time.SYSTEM,
           shareGroupTimer,
           shareGroupMetrics,
+          () => config.shareGroupConfig.shareGroupDLQManagerFetcherNumThreads(),
           shareGroupLogReader
         )
       } else if (className.equals(classOf[NoOpShareGroupDLQManager].getName)) {
@@ -891,6 +892,23 @@ class BrokerServer(
       if (partitionMetadataClient != null)
         Utils.swallow(this.logger.underlying, () => partitionMetadataClient.close())
 
+      Utils.closeQuietly(sharePartitionManager, "share partition manager")
+
+      // The order of closing sharePartitionManager, groupCoordinator and persister matters.
+      // groupCoordinator, sharePartitionManager must be closed before the persister so that
+      // new requests from sharePartitionManager, groupCoordinator do not encounter a stopped
+      // persister.
+      if (persister != null)
+        Utils.swallow(this.logger.underlying, () => persister.stop())
+
+      // The order of closing sharePartitionManager and shareGroupDLQManager matters.
+      // sharePartitionManager must be closed before the shareGroupDLQManager so any new
+      // requests from sharePartitionManager do not encounter a stopped shareGroupDLQManager.
+      // They are also closed before the shareCoordinator and the replicaManager, which the persister
+      // and the DLQ manager's reads of source records depend on.
+      if (shareGroupDLQManager != null)
+        Utils.swallow(this.logger.underlying, () => shareGroupDLQManager.stop())
+
       if (shareCoordinator != null)
         Utils.swallow(this.logger.underlying, () => shareCoordinator.shutdown())
 
@@ -928,21 +946,6 @@ class BrokerServer(
         Utils.swallow(this.logger.underlying, () => socketServer.shutdown())
 
       Utils.closeQuietly(brokerTopicStats, "broker topic stats")
-      Utils.closeQuietly(sharePartitionManager, "share partition manager")
-
-      // The order of closing sharePartitionManager, groupCoordinator and persister matters.
-      // groupCoordinator, sharePartitionManager must be closed before the persister so that
-      // new requests from sharePartitionManager, groupCoordinator do not encounter a stopped
-      // persister.
-      if (persister != null)
-        Utils.swallow(this.logger.underlying, () => persister.stop())
-
-      // The order of closing sharePartitionManager and shareGroupDLQManager matters.
-      // sharePartitionManager must be closed before the shareGroupDLQManager so any new
-      // requests from sharePartitionManager do not encounter a stopped shareGroupDLQManager.
-      if (shareGroupDLQManager != null)
-        Utils.swallow(this.logger.underlying, () => shareGroupDLQManager.stop())
-
       if (shareGroupMetrics != null)
         Utils.swallow(this.logger.underlying, () => shareGroupMetrics.close())
 

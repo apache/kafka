@@ -182,12 +182,14 @@ public final class IndexedGroup {
             var topicIds = seenTopicIds.toArray(new Uuid[0]);
             Arrays.sort(topicIds);
             var partitionCounts = new int[topicIds.length];
+            int maxPartitionCount = 0;
             // Per index in the order seen, the index in topic id order.
             var renumbered = new int[topicIds.length];
             for (int topic = 0; topic < topicIds.length; topic++) {
                 int seenIndex = topicIndices.put(topicIds[topic], topic);
                 renumbered[seenIndex] = topic;
                 partitionCounts[topic] = seenPartitionCounts.get(seenIndex);
+                maxPartitionCount = Math.max(maxPartitionCount, partitionCounts[topic]);
             }
 
             // The topics of the cohorts are renumbered in place too, which is cheaper than reading
@@ -211,6 +213,7 @@ public final class IndexedGroup {
                 topicIds,
                 topicIndices,
                 partitionCounts,
+                maxPartitionCount,
                 subscriberCounts,
                 cohortsByTopic(topicIds.length, cohortTopics),
                 cohortMembers,
@@ -440,6 +443,11 @@ public final class IndexedGroup {
     private final int[] partitionCounts;
 
     /**
+     * The largest number of partitions of a topic, or 0 if there are no subscribed topics.
+     */
+    private final int maxPartitionCount;
+
+    /**
      * Per topic, its number of subscribers.
      */
     private final int[] subscriberCounts;
@@ -462,16 +470,18 @@ public final class IndexedGroup {
     /**
      * Holds the arrays and the map without copying them: they must not be changed afterwards.
      *
-     * @param memberIds        The member ids, in ascending order.
-     * @param cohortOfMember   Per member, its cohort.
-     * @param topicIds         The topic ids, in ascending order.
-     * @param topicIndices     Per topic id seen in a subscription, its index, or -1 if the topic
-     *                         does not exist.
-     * @param partitionCounts  Per topic, its number of partitions.
-     * @param subscriberCounts Per topic, its number of subscribers.
-     * @param cohortsOfTopic   Per topic, the cohorts subscribing to it, in cohort order.
-     * @param cohortMembers    Per cohort, its members, in member order.
-     * @param cohortTopics     Per cohort, its subscribed topics, in topic order.
+     * @param memberIds         The member ids, in ascending order.
+     * @param cohortOfMember    Per member, its cohort.
+     * @param topicIds          The topic ids, in ascending order.
+     * @param topicIndices      Per topic id seen in a subscription, its index, or -1 if the topic
+     *                          does not exist.
+     * @param partitionCounts   Per topic, its number of partitions.
+     * @param maxPartitionCount The largest number of partitions of a topic, or 0 if there are no
+     *                          subscribed topics.
+     * @param subscriberCounts  Per topic, its number of subscribers.
+     * @param cohortsOfTopic    Per topic, the cohorts subscribing to it, in cohort order.
+     * @param cohortMembers     Per cohort, its members, in member order.
+     * @param cohortTopics      Per cohort, its subscribed topics, in topic order.
      */
     private IndexedGroup(
         String[] memberIds,
@@ -479,6 +489,7 @@ public final class IndexedGroup {
         Uuid[] topicIds,
         Map<Uuid, Integer> topicIndices,
         int[] partitionCounts,
+        int maxPartitionCount,
         int[] subscriberCounts,
         int[][] cohortsOfTopic,
         int[][] cohortMembers,
@@ -489,6 +500,7 @@ public final class IndexedGroup {
         this.topicIds = topicIds;
         this.topicIndices = topicIndices;
         this.partitionCounts = partitionCounts;
+        this.maxPartitionCount = maxPartitionCount;
         this.subscriberCounts = subscriberCounts;
         this.cohortsOfTopic = cohortsOfTopic;
         this.cohortMembers = cohortMembers;
@@ -543,6 +555,13 @@ public final class IndexedGroup {
      */
     public int partitionCount(int topic) {
         return partitionCounts[topic];
+    }
+
+    /**
+     * @return The largest number of partitions of a topic, or 0 if there are no subscribed topics.
+     */
+    public int maxPartitionCount() {
+        return maxPartitionCount;
     }
 
     /**

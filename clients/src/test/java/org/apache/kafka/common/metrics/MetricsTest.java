@@ -207,8 +207,6 @@ public class MetricsTest {
 
     @Test
     public void testRemoveChildSensor() {
-        final Metrics metrics = new Metrics();
-
         final Sensor parent = metrics.sensor("parent");
         final Sensor child = metrics.sensor("child", parent);
 
@@ -709,6 +707,7 @@ public class MetricsTest {
     public void testConcurrentReadUpdate() {
         final Random random = new Random();
         final Deque<Sensor> sensors = new ConcurrentLinkedDeque<>();
+        metrics.close();
         metrics = new Metrics(new MockTime(10));
         SensorCreator sensorCreator = new SensorCreator(metrics);
 
