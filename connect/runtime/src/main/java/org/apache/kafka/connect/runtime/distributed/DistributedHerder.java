@@ -27,6 +27,7 @@ import org.apache.kafka.common.metrics.stats.CumulativeSum;
 import org.apache.kafka.common.metrics.stats.Max;
 import org.apache.kafka.common.utils.Time;
 import org.apache.kafka.common.utils.Utils;
+import org.apache.kafka.common.utils.Utils.UncheckedCloseable;
 import org.apache.kafka.common.utils.internals.Exit;
 import org.apache.kafka.common.utils.internals.ExponentialBackoff;
 import org.apache.kafka.common.utils.internals.LogContext;
@@ -109,7 +110,6 @@ import java.util.concurrent.atomic.AtomicReference;
 import java.util.stream.Collectors;
 
 import javax.crypto.KeyGenerator;
-import javax.crypto.SecretKey;
 
 import jakarta.ws.rs.core.Response;
 import jakarta.ws.rs.core.UriBuilder;
@@ -171,7 +171,6 @@ public class DistributedHerder extends AbstractHerder implements Runnable {
     private final String workerGroupId;
     private final int workerSyncTimeoutMs;
     private final int workerUnsyncBackoffMs;
-    private final int keyRotationIntervalMs;
     private final String requestSignatureAlgorithm;
     private final List<String> keySignatureVerificationAlgorithms;
     private final KeyGenerator keyGenerator;
@@ -215,8 +214,7 @@ public class DistributedHerder extends AbstractHerder implements Runnable {
     private volatile boolean fencedFromConfigTopic;
     private volatile int generation;
     private volatile long scheduledRebalance;
-    private volatile SecretKey sessionKey;
-    private volatile long keyExpiration;
+    private final SessionKeyManager sessionKeyManager;
     private short currentProtocolVersion;
     private short backoffRetries;
     private volatile DistributedHerderRequest currentRequest;
@@ -297,7 +295,7 @@ public class DistributedHerder extends AbstractHerder implements Runnable {
         this.workerSyncTimeoutMs = config.getInt(DistributedConfig.WORKER_SYNC_TIMEOUT_MS_CONFIG);
         this.workerUnsyncBackoffMs = config.getInt(DistributedConfig.WORKER_UNSYNC_BACKOFF_MS_CONFIG);
         this.requestSignatureAlgorithm = config.getString(DistributedConfig.INTER_WORKER_SIGNATURE_ALGORITHM_CONFIG);
-        this.keyRotationIntervalMs = config.getInt(DistributedConfig.INTER_WORKER_KEY_TTL_MS_CONFIG);
+        this.sessionKeyManager = new SessionKeyManager(config.getInt(DistributedConfig.INTER_WORKER_KEY_TTL_MS_CONFIG));
         this.keySignatureVerificationAlgorithms = config.getList(DistributedConfig.INTER_WORKER_VERIFICATION_ALGORITHMS_CONFIG);
         this.keyGenerator = config.getInternalRequestKeyGenerator();
         this.restClient = restClient;
@@ -342,8 +340,7 @@ public class DistributedHerder extends AbstractHerder implements Runnable {
         fencedFromConfigTopic = false;
         canReadConfigs = true; // We didn't try yet, but Configs are readable until proven otherwise
         scheduledRebalance = Long.MAX_VALUE;
-        keyExpiration = Long.MAX_VALUE;
-        sessionKey = null;
+        sessionKeyManager.reset();
         backoffRetries = BACKOFF_RETRIES;
         currentRequest = null;
         tickThreadStage = new Stage("awaiting startup", time.milliseconds());
@@ -463,7 +460,7 @@ public class DistributedHerder extends AbstractHerder implements Runnable {
 
         if (checkForKeyRotation(now)) {
             log.debug("Distributing new session key");
-            keyExpiration = Long.MAX_VALUE;
+            sessionKeyManager.markRotationInProgress();
             try {
                 SessionKey newSessionKey = new SessionKey(keyGenerator.generateKey(), now);
                 writeToConfigTopicAsLeader(
@@ -508,10 +505,10 @@ public class DistributedHerder extends AbstractHerder implements Runnable {
             log.debug("Scheduled rebalance at: {} (now: {} scheduledTick: {}) ",
                     scheduledRebalance, now, scheduledTick);
         }
-        if (isLeader() && internalRequestValidationEnabled() && keyExpiration < Long.MAX_VALUE) {
-            scheduledTick = scheduledTick != null ? Math.min(scheduledTick, keyExpiration) : keyExpiration;
+        if (isLeader() && internalRequestValidationEnabled() && sessionKeyManager.expiration() < Long.MAX_VALUE) {
+            scheduledTick = scheduledTick != null ? Math.min(scheduledTick, sessionKeyManager.expiration()) : sessionKeyManager.expiration();
             log.debug("Scheduled next key rotation at: {} (now: {} scheduledTick: {}) ",
-                    keyExpiration, now, scheduledTick);
+                    sessionKeyManager.expiration(), now, scheduledTick);
         }
 
         // Process any configuration updates
@@ -576,37 +573,13 @@ public class DistributedHerder extends AbstractHerder implements Runnable {
     }
 
     private boolean checkForKeyRotation(long now) {
-        SecretKey key;
-        long expiration;
-        synchronized (this) {
-            // This happens on startup; the snapshot contains the session key,
-            // but no callback in the config update listener has been fired for it yet.
-            if (sessionKey == null && configState.sessionKey() != null) {
-                sessionKey = configState.sessionKey().key();
-                keyExpiration = configState.sessionKey().creationTimestamp() + keyRotationIntervalMs;
-            }
-            key = sessionKey;
-            expiration = keyExpiration;
-        }
-
-        if (internalRequestValidationEnabled()) {
-            if (isLeader()) {
-                if (key == null) {
-                    log.debug("Internal request signing is enabled but no session key has been distributed yet. "
-                        + "Distributing new key now.");
-                    return true;
-                } else if (expiration <= now) {
-                    log.debug("Existing key has expired. Distributing new key now.");
-                    return true;
-                } else if (!key.getAlgorithm().equals(keyGenerator.getAlgorithm())
-                        || key.getEncoded().length != keyGenerator.generateKey().getEncoded().length) {
-                    log.debug("Previously-distributed key uses different algorithm/key size "
-                        + "than required by current worker configuration. Distributing new key now.");
-                    return true;
-                }
-            }
-        }
-        return false;
+        return sessionKeyManager.needsRotation(
+                now,
+                configState.sessionKey(),
+                isLeader(),
+                internalRequestValidationEnabled(),
+                keyGenerator
+        );
     }
 
     private synchronized boolean updateConfigsWithEager(AtomicReference<Set<String>> connectorConfigUpdatesCopy,
@@ -1401,7 +1374,7 @@ public class DistributedHerder extends AbstractHerder implements Runnable {
                         try {
                             String stageDescription = "Forwarding zombie fencing request to the leader at " + workerUrl;
                             try (TemporaryStage stage = new TemporaryStage(stageDescription, callback, time)) {
-                                restClient.httpRequest(fenceUrl, "PUT", null, null, sessionKey, requestSignatureAlgorithm);
+                                restClient.httpRequest(fenceUrl, "PUT", null, null, sessionKeyManager.key(), requestSignatureAlgorithm);
                             }
                             callback.onCompletion(null, null);
                         } catch (Throwable t) {
@@ -2359,7 +2332,7 @@ public class DistributedHerder extends AbstractHerder implements Runnable {
                     log.trace("Forwarding task configurations for connector {} to leader", connName);
                     String stageDescription = "Forwarding task configurations to the leader at " + leaderUrl;
                     try (TemporaryStage stage = new TemporaryStage(stageDescription, cb, time)) {
-                        restClient.httpRequest(reconfigUrl, "POST", null, rawTaskProps, sessionKey, requestSignatureAlgorithm);
+                        restClient.httpRequest(reconfigUrl, "POST", null, rawTaskProps, sessionKeyManager.key(), requestSignatureAlgorithm);
                     }
                     cb.onCompletion(null, null);
                 } catch (ConnectException e) {
@@ -2583,16 +2556,7 @@ public class DistributedHerder extends AbstractHerder implements Runnable {
         public void onSessionKeyUpdate(SessionKey sessionKey) {
             log.info("Session key updated");
 
-            synchronized (DistributedHerder.this) {
-                DistributedHerder.this.sessionKey = sessionKey.key();
-                // Track the expiration of the key.
-                // Followers will receive rotated keys from the leader and won't be responsible for
-                // tracking expiration and distributing new keys themselves, but may become leaders
-                // later on and will need to know when to update the key.
-                if (keyRotationIntervalMs > 0) {
-                    DistributedHerder.this.keyExpiration = sessionKey.creationTimestamp() + keyRotationIntervalMs;
-                }
-            }
+            sessionKeyManager.onKeyUpdate(sessionKey);
         }
 
         @Override
@@ -2881,12 +2845,12 @@ public class DistributedHerder extends AbstractHerder implements Runnable {
                         requestSignature.keyAlgorithm(),
                         keySignatureVerificationAlgorithms
                 ));
-            } else if (sessionKey == null) {
+            } else if (sessionKeyManager.key() == null) {
                 requestValidationError = new ConnectRestException(
                         Response.Status.SERVICE_UNAVAILABLE,
                         "This worker is still starting up and has not been able to read a session key from the config topic yet"
                 );
-            } else if (!requestSignature.isValid(sessionKey)) {
+            } else if (!requestSignature.isValid(sessionKeyManager.key())) {
                 requestValidationError = new ConnectRestException(
                         Response.Status.FORBIDDEN,
                         "Internal request contained invalid signature."
