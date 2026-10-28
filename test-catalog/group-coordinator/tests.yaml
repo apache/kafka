@@ -1145,6 +1145,35 @@ org.apache.kafka.coordinator.group.assignor.SimpleAssignorTest:
 - testIncrementalAssignmentIncreasingMembersHeterogeneous
 - testIncrementalAssignmentIncreasingMembersHomogeneous
 - testName
+org.apache.kafka.coordinator.group.assignor.Uniform2AssignorTest:
+- testAGiverGivesSeveralExtraPartitionsInARow
+- testAWaitingGiverWakesUpWhenASubscriberOfItsTopicsGetsSmaller
+- testAddedPartitionsGoToTheMembersBelowTheirQuota
+- testAnExtraPartitionGoesToAnotherMemberWhenTheSmallestHaveOneOfTheTopic
+- testAssignmentReuse
+- testAssignmentWithThePropertiesDoesNotChange
+- testBalanceMovesExtraPartitionsKeptByTheirOwner
+- testBalanceMovesUntilNoExtraPartitionCanMove
+- testCohortWhoseMembersAllHaveAnExtraPartitionGetsNoMore
+- testCohortsWaitingForAnExtraPartitionOfOneTopicDoNotCarryOverToTheNext
+- testEmptyGroup
+- testFromARangeLikeAssignment
+- testFromATopicHeldByASingleMember
+- testFromAnArbitraryAssignment
+- testHeterogeneousBalancesAcrossTopics
+- testHomogeneousSpreadsEveryTopic
+- testJoinOnlyMovesThePartitionsOfTheJoiner
+- testLeaveOnlyMovesThePartitionsOfTheLeaver
+- testMemberChangingItsSubscriptionGivesUpTheTopicItLeaves
+- testMembersWithTheSameSubscriptionShareACohort
+- testMissingAndUnsubscribedTopicsAreIgnored
+- testName
+- testOrderIndependence
+- testReassignmentStickiness
+- testStalePartitionsAreDropped
+- testSubscriptionsAsTopicIdsWithAnUnknownTopic
+- testTheGiverGivesTheExtraPartitionOfATopicTheReceiverOwnsMoreThanTheMinimumQuotaOf
+- testTheSmallestMemberThatCannotTakeIsPassedOver
 org.apache.kafka.coordinator.group.assignor.UniformHeterogeneousAssignmentBuilderTest:
 - testAssignmentReuse
 - testFirstAssignmentNumMembersGreaterThanTotalNumPartitions
@@ -1172,6 +1201,15 @@ org.apache.kafka.coordinator.group.assignor.UniformHomogeneousAssignmentBuilderT
 - testReassignmentWhenOneSubscriptionRemovedAfterInitialAssignmentWithTwoMembersTwoTopics
 - testReassignmentWhenPartitionsAreAddedForTwoMembersTwoTopics
 - testValidityAndBalanceForLargeSampleSet
+org.apache.kafka.coordinator.group.assignor.uniform2.AssignmentBuilderTest:
+- testChangedMemberSharesTheSetsOfItsUnchangedTopics
+- testMemberLosingAllThePartitionsOfATopicHasNoEntryForIt
+- testNewSetsAreHashSetsWhenNotConsecutive
+- testNewSetsAreRangeSetsWhenConsecutive
+- testNothingCarriesOverFromOneTopicToTheNext
+- testStalePartitionsAreDroppedFromAMemberHoldingOnlyThem
+- testStalePartitionsAreDroppedFromAMemberWhoseTopicsDoNotChange
+- testUnchangedMemberKeepsItsMap
 org.apache.kafka.coordinator.group.assignor.uniform2.CurrentAssignmentTest:
 - testOwnersAndAssignments
 - testPartitionsOfATopicThatNoLongerExistsAreStale
@@ -1182,6 +1220,7 @@ org.apache.kafka.coordinator.group.assignor.uniform2.IndexedGroupTest:
 - testEmptyGroup
 - testHeterogeneousGroup
 - testHomogeneousGroup
+- testMaxPartitionCount
 - testMembersAreNumberedInMemberIdOrder
 - testSecondBuildThrows
 - testSingleMember
