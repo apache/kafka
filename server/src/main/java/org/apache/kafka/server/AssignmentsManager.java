@@ -354,14 +354,14 @@ public final class AssignmentsManager {
             "prior to sending.", newInFlight.size(), numInvalid);
         if (!newInFlight.isEmpty()) {
             sendAssignments(image.cluster().brokerEpoch(nodeId), newInFlight,
-                image.features().metadataVersionOrThrow().isRequestHeaderV3Supported());
+                image.features().metadataVersionOrThrow().requestHeaderVersion());
         }
     }
 
-    void sendAssignments(long brokerEpoch, Map<TopicIdPartition, Assignment> newInflight, boolean useRequestHeaderV3) {
+    void sendAssignments(long brokerEpoch, Map<TopicIdPartition, Assignment> newInflight, short requestHeaderVersion) {
         CompletionHandler completionHandler = new CompletionHandler(newInflight);
         channelManager.sendRequest(new AssignReplicasToDirsRequest.Builder(
-            buildRequestData(nodeId, brokerEpoch, newInflight), useRequestHeaderV3),
+            buildRequestData(nodeId, brokerEpoch, newInflight), requestHeaderVersion),
             completionHandler);
         inflight = newInflight;
     }

@@ -24,8 +24,6 @@ import org.apache.kafka.common.protocol.Errors;
 import org.apache.kafka.common.protocol.Readable;
 
 public class AllocateProducerIdsRequest extends AbstractRequest {
-    private static final short LATEST_VERSION_BEFORE_REQUEST_HEADER_V3 = 0;
-
     private final AllocateProducerIdsRequestData data;
 
     public AllocateProducerIdsRequest(AllocateProducerIdsRequestData data, short version) {
@@ -50,13 +48,13 @@ public class AllocateProducerIdsRequest extends AbstractRequest {
         private final AllocateProducerIdsRequestData data;
 
         /**
-         * @param data               the request data
-         * @param useRequestHeaderV3 whether the versions which use request header v3 may be used
+         * @param data                 the request data
+         * @param requestHeaderVersion the latest request header version which may be used
          */
-        public Builder(AllocateProducerIdsRequestData data, boolean useRequestHeaderV3) {
+        public Builder(AllocateProducerIdsRequestData data, short requestHeaderVersion) {
             super(ApiKeys.ALLOCATE_PRODUCER_IDS,
                 ApiKeys.ALLOCATE_PRODUCER_IDS.oldestVersion(),
-                useRequestHeaderV3 ? ApiKeys.ALLOCATE_PRODUCER_IDS.latestVersion() : LATEST_VERSION_BEFORE_REQUEST_HEADER_V3);
+                ApiKeys.ALLOCATE_PRODUCER_IDS.latestVersionForRequestHeader(requestHeaderVersion));
             this.data = data;
         }
 

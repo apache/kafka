@@ -312,7 +312,7 @@ class BrokerServer(
         metrics,
         s"broker-${config.nodeId}-",
         () => lifecycleManager.brokerEpoch,
-        () => metadataCache.metadataVersion().isRequestHeaderV3Supported
+        () => metadataCache.metadataVersion().requestHeaderVersion
       )
       alterPartitionManager.start()
 
@@ -416,7 +416,7 @@ class BrokerServer(
         time,
         () => lifecycleManager.brokerEpoch,
         clientToControllerChannelManager,
-        () => metadataCache.metadataVersion().isRequestHeaderV3Supported
+        () => metadataCache.metadataVersion().requestHeaderVersion
       )
 
       // Create transaction coordinator, but don't start it until we've started replica manager.

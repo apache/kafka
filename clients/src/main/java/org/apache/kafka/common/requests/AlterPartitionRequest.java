@@ -30,8 +30,6 @@ import java.util.stream.Collectors;
 
 public class AlterPartitionRequest extends AbstractRequest {
 
-    private static final short LATEST_VERSION_BEFORE_REQUEST_HEADER_V3 = 3;
-
     private final AlterPartitionRequestData data;
 
     public AlterPartitionRequest(AlterPartitionRequestData data, short apiVersion) {
@@ -68,13 +66,13 @@ public class AlterPartitionRequest extends AbstractRequest {
          * @param data The data to be sent. Note that because the version of the
          *             request is not known at this time, it is expected that all
          *             topics have a topic id and a topic name set.
-         * @param useRequestHeaderV3 whether the versions which use request header v3 may be used
+         * @param requestHeaderVersion the latest request header version which may be used
          */
-        public Builder(AlterPartitionRequestData data, boolean useRequestHeaderV3) {
+        public Builder(AlterPartitionRequestData data, short requestHeaderVersion) {
             super(
                 ApiKeys.ALTER_PARTITION,
                 ApiKeys.ALTER_PARTITION.oldestVersion(),
-                useRequestHeaderV3 ? ApiKeys.ALTER_PARTITION.latestVersion() : LATEST_VERSION_BEFORE_REQUEST_HEADER_V3
+                ApiKeys.ALTER_PARTITION.latestVersionForRequestHeader(requestHeaderVersion)
             );
             this.data = data;
         }
