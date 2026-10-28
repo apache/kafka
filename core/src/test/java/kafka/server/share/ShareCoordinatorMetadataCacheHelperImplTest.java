@@ -504,7 +504,7 @@ public class ShareCoordinatorMetadataCacheHelperImplTest {
     }
 
     @Test
-    public void testRequestHeaderVersionReturnsV3() {
+    public void testRequestHeaderVersionReturnsHeaderV3() {
         MetadataCache mockMetadataCache = mock(MetadataCache.class);
         when(mockMetadataCache.metadataVersion()).thenReturn(MetadataVersion.IBP_4_5_IV0);
 
@@ -521,7 +521,7 @@ public class ShareCoordinatorMetadataCacheHelperImplTest {
     }
 
     @Test
-    public void testRequestHeaderVersionOnOlderMetadataVersion() {
+    public void testRequestHeaderVersionReturnsHeaderV2OnOlderMetadataVersion() {
         MetadataCache mockMetadataCache = mock(MetadataCache.class);
         when(mockMetadataCache.metadataVersion()).thenReturn(MetadataVersion.IBP_4_4_IV2);
 
