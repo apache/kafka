@@ -137,6 +137,8 @@ public class DefaultTaskExecutorTest {
     @Test
     public void shouldUnassignTaskWhileProcessingPaused() {
         when(taskManager.processingPaused()).thenReturn(true);
+        when(task.isProcessable(anyLong())).thenReturn(true);
+        when(taskExecutionMetadata.canPunctuateTask(task)).thenReturn(true);
 
         taskExecutor.start();
 
