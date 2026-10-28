@@ -1098,13 +1098,4 @@ object TestUtils extends Logging {
       .foldLeft(0.0)((total, metric) => total + metric.metricValue.asInstanceOf[Double])
     total.toLong
   }
-
-  def meterCount(metricName: String): Long = {
-    KafkaYammerMetrics.defaultRegistry.allMetrics.asScala
-      .filter { case (k, _) => k.getMBeanName.endsWith(metricName) }
-      .values
-      .headOption
-      .map(_.asInstanceOf[Meter].count)
-      .getOrElse(fail(s"Unable to find metric $metricName"))
-  }
 }
