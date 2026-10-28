@@ -48,6 +48,7 @@ import org.junit.jupiter.api.Test;
 import java.nio.ByteBuffer;
 import java.util.Collections;
 import java.util.List;
+import java.util.Optional;
 import java.util.UUID;
 
 import static org.junit.jupiter.api.Assertions.assertArrayEquals;
@@ -209,6 +210,45 @@ public class CompletedFetchTest {
                 assertEquals(headers, valueThrown.headers());
             }
         }
+    }
+
+    @Test
+    public void testLeaderEpochIsSetPerBatch() {
+        // 3 batches of 3 records each, the second one without a partition leader epoch
+        int[] leaderEpochs = {5, RecordBatch.NO_PARTITION_LEADER_EPOCH, 1000};
+        int recordsPerBatch = 3;
+        ByteBuffer buffer = ByteBuffer.allocate(1024);
+        for (int i = 0; i < leaderEpochs.length; i++) {
+            try (MemoryRecordsBuilder builder = MemoryRecords.builder(buffer, RecordBatch.CURRENT_MAGIC_VALUE, Compression.NONE,
+                    TimestampType.CREATE_TIME, (long) i * recordsPerBatch, RecordBatch.NO_TIMESTAMP, leaderEpochs[i])) {
+                for (int j = 0; j < recordsPerBatch; j++)
+                    builder.append(0L, "key".getBytes(), "value".getBytes());
+            }
+        }
+        buffer.flip();
+        FetchResponseData.PartitionData partitionData = new FetchResponseData.PartitionData()
+                .setRecords(MemoryRecords.readableRecords(buffer));
+
+        Deserializers<String, String> deserializers = newStringDeserializers();
+        FetchConfig fetchConfig = newFetchConfig(IsolationLevel.READ_UNCOMMITTED, true);
+        CompletedFetch completedFetch = newCompletedFetch(0, partitionData);
+
+        // read 2 records at a time so that fetches resume in the middle of a batch
+        long expectedOffset = 0;
+        List<ConsumerRecord<String, String>> records;
+        while (!(records = completedFetch.fetchRecords(fetchConfig, deserializers, 2)).isEmpty()) {
+            for (ConsumerRecord<String, String> record : records) {
+                assertEquals(expectedOffset, record.offset());
+                int leaderEpoch = leaderEpochs[(int) (expectedOffset / recordsPerBatch)];
+                Optional<Integer> expectedLeaderEpoch = leaderEpoch == RecordBatch.NO_PARTITION_LEADER_EPOCH
+                        ? Optional.empty() : Optional.of(leaderEpoch);
+                assertEquals(expectedLeaderEpoch, record.leaderEpoch());
+                expectedOffset++;
+            }
+            // the epoch used to update the position is the one of the last returned record
+            assertEquals(records.get(records.size() - 1).leaderEpoch(), completedFetch.lastEpoch());
+        }
+        assertEquals((long) leaderEpochs.length * recordsPerBatch, expectedOffset);
     }
 
     private CompletedFetch newCompletedFetch(long fetchOffset,
