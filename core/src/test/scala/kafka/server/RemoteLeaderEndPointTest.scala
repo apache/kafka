@@ -56,6 +56,7 @@ class RemoteLeaderEndPointTest {
     var blockingSend: MockBlockingSender = _
     var endPoint: LeaderEndPoint = _
     var currentBrokerEpoch = 1L
+    var currentMetadataVersion: MetadataVersion = MetadataVersion.MINIMUM_VERSION
 
     @BeforeEach
     def setUp(): Unit = {
@@ -68,7 +69,7 @@ class RemoteLeaderEndPointTest {
         blockingSend = new MockBlockingSender(offsets = new util.HashMap[TopicPartition, EpochEndOffset](),
             sourceBroker = sourceBroker, time = time)
         endPoint = new RemoteLeaderEndPoint(logPrefix, blockingSend, fetchSessionHandler,
-            config, replicaManager, QuotaFactory.UNBOUNDED_QUOTA, () => MetadataVersion.MINIMUM_VERSION, () => currentBrokerEpoch)
+            config, replicaManager, QuotaFactory.UNBOUNDED_QUOTA, () => currentMetadataVersion, () => currentBrokerEpoch)
     }
 
     @Test
@@ -146,5 +147,25 @@ class RemoteLeaderEndPointTest {
         val result2 = endPoint.buildFetch(partitionMap)
         assertTrue(result2.partitionsWithError.isEmpty)
         assertEquals(if (version < 15) -1L else 2L, result2.result.get.fetchRequest.build(version).replicaEpoch)
+    }
+
+    @Test
+    def testFetchRequestVersionFollowsMetadataVersion(): Unit = {
+        val tp = new TopicPartition("topic1", 0)
+        val log = mock(classOf[UnifiedLog])
+        val partitionMap = java.util.Map.of(
+            tp, new PartitionFetchState(Optional.of(Uuid.randomUuid()), 150, Optional.empty(), 0, Optional.empty(), ReplicaState.FETCHING, Optional.empty))
+        when(replicaManager.localLogOrException(tp)).thenReturn(log)
+        when(log.logStartOffset).thenReturn(1)
+
+        currentMetadataVersion = MetadataVersion.IBP_4_4_IV2
+        val fetchRequest1 = endPoint.buildFetch(partitionMap).result.get.fetchRequest
+        assertEquals(18, fetchRequest1.latestAllowedVersion)
+        assertEquals(2, ApiKeys.FETCH.requestHeaderVersion(fetchRequest1.latestAllowedVersion))
+
+        currentMetadataVersion = MetadataVersion.IBP_4_5_IV0
+        val fetchRequest2 = endPoint.buildFetch(partitionMap).result.get.fetchRequest
+        assertEquals(19, fetchRequest2.latestAllowedVersion)
+        assertEquals(3, ApiKeys.FETCH.requestHeaderVersion(fetchRequest2.latestAllowedVersion))
     }
 }
