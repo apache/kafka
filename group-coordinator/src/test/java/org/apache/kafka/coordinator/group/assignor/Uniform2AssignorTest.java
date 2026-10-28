@@ -628,16 +628,16 @@ public class Uniform2AssignorTest {
     }
 
     /**
-     * A, B and C subscribe to T1, of 4 partitions, and T2, of 2 partitions, and hold ranges of the
-     * partitions of both topics taken together, as the uniform assignor can assign them: A holds 0
-     * and 1 of T1, B holds 2 and 3 of T1, and C holds both partitions of T2. T1 has a minimum quota
-     * of 1 and 1 extra partition, which A keeps, as the first of the two owners above the minimum
-     * quota. T2 has a minimum quota of 0 and 2 extra partitions: C keeps one, and the other goes to
-     * B, the smallest member without one. B gives up partition 3 of T1 to C, and C gives up
-     * partition 1 of T2 to B. A keeps its map.
+     * C holds all the partitions of a topic. A, B and C subscribe to T1, of 4 partitions, and T2,
+     * of 2 partitions, and hold ranges of the partitions of both topics taken together, as the
+     * uniform assignor can assign them: A holds 0 and 1 of T1, B holds 2 and 3 of T1, and C holds
+     * both partitions of T2. T1 has a minimum quota of 1 and 1 extra partition, which A keeps, as
+     * the first of the two owners above the minimum quota. T2 has a minimum quota of 0 and 2 extra
+     * partitions: C keeps one, and the other goes to B, the smallest member without one. B gives
+     * up partition 3 of T1 to C, and C gives up partition 1 of T2 to B. A keeps its map.
      */
     @Test
-    public void testFromWholeTopics() {
+    public void testFromATopicHeldByASingleMember() {
         var spec = new GroupSpecFixture()
             .withMember("A", Set.of(T1, T2), Map.of(T1, Set.of(0, 1)))
             .withMember("B", Set.of(T1, T2), Map.of(T1, Set.of(2, 3)))
@@ -692,7 +692,7 @@ public class Uniform2AssignorTest {
      * the group is homogeneous, and the assignment is the same as with the topics given by id.
      */
     @Test
-    public void testSubscriptionsAsTopicIds() {
+    public void testSubscriptionsAsTopicIdsWithAnUnknownTopic() {
         CoordinatorMetadataImage image = new MetadataImageBuilder()
             .addTopic(T1, "t1", 2)
             .addTopic(T2, "t2", 5)
@@ -729,7 +729,9 @@ public class Uniform2AssignorTest {
 
     /**
      * The assignment does not depend on the order of the members, of the topics of their
-     * subscriptions, nor of the entries of their current assignment.
+     * subscriptions, nor of the entries of their current assignment. The order of the members is
+     * also checked by {@link #testReassignmentStickiness}; this test also shuffles the topics of
+     * the subscriptions and the entries of the current assignments.
      */
     @Test
     public void testOrderIndependence() {

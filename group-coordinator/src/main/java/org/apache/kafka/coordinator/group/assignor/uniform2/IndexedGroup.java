@@ -443,7 +443,7 @@ public final class IndexedGroup {
     private final int[] partitionCounts;
 
     /**
-     * The largest number of partitions of a topic, or 0 without topics.
+     * The largest number of partitions of a topic, or 0 if there are no subscribed topics.
      */
     private final int maxPartitionCount;
 
@@ -476,7 +476,8 @@ public final class IndexedGroup {
      * @param topicIndices      Per topic id seen in a subscription, its index, or -1 if the topic
      *                          does not exist.
      * @param partitionCounts   Per topic, its number of partitions.
-     * @param maxPartitionCount The largest number of partitions of a topic, or 0 without topics.
+     * @param maxPartitionCount The largest number of partitions of a topic, or 0 if there are no
+     *                          subscribed topics.
      * @param subscriberCounts  Per topic, its number of subscribers.
      * @param cohortsOfTopic    Per topic, the cohorts subscribing to it, in cohort order.
      * @param cohortMembers     Per cohort, its members, in member order.
@@ -557,7 +558,7 @@ public final class IndexedGroup {
     }
 
     /**
-     * @return The largest number of partitions of a topic, or 0 if there is no topic.
+     * @return The largest number of partitions of a topic, or 0 if there are no subscribed topics.
      */
     public int maxPartitionCount() {
         return maxPartitionCount;

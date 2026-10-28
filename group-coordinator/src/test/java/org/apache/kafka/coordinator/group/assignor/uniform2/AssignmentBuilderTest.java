@@ -40,6 +40,7 @@ import static org.junit.jupiter.api.Assertions.assertSame;
 public class AssignmentBuilderTest {
     private static final Uuid T1 = new Uuid(1L, 1L);
     private static final Uuid T2 = new Uuid(2L, 1L);
+    private static final Uuid T3 = new Uuid(3L, 1L);
     private static final Uuid MISSING = new Uuid(9L, 1L);
 
     /**
@@ -75,90 +76,37 @@ public class AssignmentBuilderTest {
     }
 
     /**
-     * A and C subscribe to T1, and B to T1 and T2. T1 has 6 partitions over its 3 subscribers, so a
-     * minimum quota of 2. T2 has 2 partitions and the single subscriber B, which owns both. B gives
-     * up partitions 4 and 5 of T1 to C, so it gets a new map. T2 does not change, so the new map
-     * has the same set of T2 that B holds.
+     * A member that changes on one topic gets a new map, which keeps its sets of the topics it does
+     * not change on, whether partitions of these topics move or not. A subscribes to T1, T2 and T3,
+     * and B and C to T1 and T2. T1, of 6 partitions, has a minimum quota of 2: A keeps partitions 0
+     * and 1 of the 4 it owns, and C gets 2 and 3. T2, of 3 partitions, has a minimum quota of 1: A
+     * keeps partition 0, B keeps 1, and C gets 2, which B gives up. Nothing moves on T3, which only
+     * A subscribes to. A changes on T1 only, so its new map has the same sets of T2 and T3 that A
+     * holds, and B changes on T2 only, so its new map has the same set of T1 that B holds.
      */
     @Test
     public void testChangedMemberSharesTheSetsOfItsUnchangedTopics() {
         var spec = new GroupSpecFixture()
-            .withMember("A", Set.of(T1), Map.of(T1, Set.of(0, 1)))
-            .withMember("B", Set.of(T1, T2), Map.of(T1, Set.of(2, 3, 4, 5), T2, Set.of(0, 1)))
-            .withMember("C", Set.of(T1))
-            .build();
-        var describer = new TopicsFixture()
-            .withTopic(T1, 6)
-            .withTopic(T2, 2)
-            .build();
-
-        var result = new AssignmentBuilder(spec, describer).build();
-
-        assertAssignment(Map.of(
-            "A", Map.of(T1, Set.of(0, 1)),
-            "B", Map.of(T1, Set.of(2, 3), T2, Set.of(0, 1)),
-            "C", Map.of(T1, Set.of(4, 5))
-        ), result);
-        assertSame(spec.memberAssignment("A").partitions(), result.members().get("A").partitions());
-        assertNotSame(spec.memberAssignment("B").partitions(), result.members().get("B").partitions());
-        assertSame(spec.memberAssignment("B").partitions().get(T2), result.members().get("B").partitions().get(T2));
-    }
-
-    /**
-     * A member that changes on one topic keeps its set of a later topic that it does not change
-     * on, even though partitions of that topic move. T1 has 6 partitions and T2 has 3, both over A,
-     * B and C, so minimum quotas of 2 and 1 and no extra partition. On T1, A keeps partitions 0 and
-     * 1 of the 4 it owns, and C gets 2 and 3. On T2, A keeps partition 0, B keeps 1, and C gets 2,
-     * which B gives up. A changes on T1 only, so its new map has the same set of T2 that A holds,
-     * and B changes on T2 only, so its new map has the same set of T1 that B holds.
-     */
-    @Test
-    public void testChangedMemberSharesItsSetOfAMovingTopicItDoesNotChangeOn() {
-        var spec = new GroupSpecFixture()
-            .withMember("A", Set.of(T1, T2), Map.of(T1, Set.of(0, 1, 2, 3), T2, Set.of(0)))
+            .withMember("A", Set.of(T1, T2, T3), Map.of(T1, Set.of(0, 1, 2, 3), T2, Set.of(0), T3, Set.of(0, 1)))
             .withMember("B", Set.of(T1, T2), Map.of(T1, Set.of(4, 5), T2, Set.of(1, 2)))
             .withMember("C", Set.of(T1, T2))
             .build();
         var describer = new TopicsFixture()
             .withTopic(T1, 6)
             .withTopic(T2, 3)
+            .withTopic(T3, 2)
             .build();
 
         var result = new AssignmentBuilder(spec, describer).build();
 
         assertAssignment(Map.of(
-            "A", Map.of(T1, Set.of(0, 1), T2, Set.of(0)),
+            "A", Map.of(T1, Set.of(0, 1), T2, Set.of(0), T3, Set.of(0, 1)),
             "B", Map.of(T1, Set.of(4, 5), T2, Set.of(1)),
             "C", Map.of(T1, Set.of(2, 3), T2, Set.of(2))
         ), result);
         assertSame(spec.memberAssignment("A").partitions().get(T2), result.members().get("A").partitions().get(T2));
+        assertSame(spec.memberAssignment("A").partitions().get(T3), result.members().get("A").partitions().get(T3));
         assertSame(spec.memberAssignment("B").partitions().get(T1), result.members().get("B").partitions().get(T1));
-    }
-
-    /**
-     * Nobody owns the 4 partitions of T1, so its 2 subscribers both change: A gets partitions 0 and
-     * 1, and B gets 2 and 3, each in a new map with a {@link RangeSet}.
-     */
-    @Test
-    public void testNewSetsOfATopicWithoutOwnersAreRangeSets() {
-        var spec = new GroupSpecFixture()
-            .withMember("A", Set.of(T1))
-            .withMember("B", Set.of(T1))
-            .build();
-        var describer = new TopicsFixture()
-            .withTopic(T1, 4)
-            .build();
-
-        var result = new AssignmentBuilder(spec, describer).build();
-
-        assertAssignment(Map.of(
-            "A", Map.of(T1, Set.of(0, 1)),
-            "B", Map.of(T1, Set.of(2, 3))
-        ), result);
-        assertEquals(Map.of(
-            "A", Map.of(T1, RangeSet.class),
-            "B", Map.of(T1, RangeSet.class)
-        ), setClasses(result));
     }
 
     /**
@@ -219,57 +167,6 @@ public class AssignmentBuilderTest {
             "B", Map.of(T1, HashSet.class),
             "C", Map.of(T1, RangeSet.class)
         ), setClasses(result));
-    }
-
-    /**
-     * T1 has 5 partitions and 2 subscribers, so a minimum quota of 2 and 1 extra partition, A's. A
-     * owns partitions 0 and 1, keeps them and gets 2, and B gets 3 and 4. Both new sets are
-     * consecutive.
-     */
-    @Test
-    public void testNewSetOfAMemberKeepingAndGettingPartitionsIsARangeSetWhenConsecutive() {
-        var spec = new GroupSpecFixture()
-            .withMember("A", Set.of(T1), Map.of(T1, Set.of(0, 1)))
-            .withMember("B", Set.of(T1))
-            .build();
-        var describer = new TopicsFixture()
-            .withTopic(T1, 5)
-            .build();
-
-        var result = new AssignmentBuilder(spec, describer).build();
-
-        assertAssignment(Map.of(
-            "A", Map.of(T1, Set.of(0, 1, 2)),
-            "B", Map.of(T1, Set.of(3, 4))
-        ), result);
-        assertEquals(Map.of(
-            "A", Map.of(T1, RangeSet.class),
-            "B", Map.of(T1, RangeSet.class)
-        ), setClasses(result));
-    }
-
-    /**
-     * T1 has 6 partitions and 2 subscribers, so a minimum quota of 3. B owns partitions 1, 3 and 5,
-     * its quota, and keeps its map. A owns 0 and 4, keeps them and gets 2, which nobody owns, so
-     * its new set is 0, 2 and 4.
-     */
-    @Test
-    public void testNewSetOfAMemberKeepingAndGettingPartitionsHasThemAll() {
-        var spec = new GroupSpecFixture()
-            .withMember("A", Set.of(T1), Map.of(T1, Set.of(0, 4)))
-            .withMember("B", Set.of(T1), Map.of(T1, Set.of(1, 3, 5)))
-            .build();
-        var describer = new TopicsFixture()
-            .withTopic(T1, 6)
-            .build();
-
-        var result = new AssignmentBuilder(spec, describer).build();
-
-        assertAssignment(Map.of(
-            "A", Map.of(T1, Set.of(0, 2, 4)),
-            "B", Map.of(T1, Set.of(1, 3, 5))
-        ), result);
-        assertSame(spec.memberAssignment("B").partitions(), result.members().get("B").partitions());
     }
 
     /**
@@ -340,7 +237,7 @@ public class AssignmentBuilderTest {
      * gets a new, empty map.
      */
     @Test
-    public void testMemberHoldingOnlyStalePartitionsGetsANewMapWithoutThem() {
+    public void testStalePartitionsAreDroppedFromAMemberHoldingOnlyThem() {
         var spec = new GroupSpecFixture()
             .withMember("A", Set.of(T1), Map.of(T2, Set.of(0), MISSING, Set.of(0)))
             .withMember("B", Set.of(T1), Map.of(T1, Set.of(0)))

@@ -60,11 +60,6 @@ public final class Quotas {
     private final int[] minAssignmentSizes;
 
     /**
-     * Per cohort, the number of its topics with a minimum quota above 0.
-     */
-    private final int[] topicsWithMinQuotaAboveZero;
-
-    /**
      * Per topic, the members getting one of its extra partitions.
      */
     private final IntList[] membersWithExtraPartition;
@@ -91,11 +86,9 @@ public final class Quotas {
             membersWithExtraPartition[topic] = extraPartitions[topic] == 0 ? NONE : new IntList(extraPartitions[topic]);
         }
         minAssignmentSizes = new int[group.cohortCount()];
-        topicsWithMinQuotaAboveZero = new int[group.cohortCount()];
         for (int cohort = 0; cohort < group.cohortCount(); cohort++) {
             for (int topic : group.topicsOf(cohort)) {
                 minAssignmentSizes[cohort] += minQuotas[topic];
-                topicsWithMinQuotaAboveZero[cohort] += minQuotas[topic] > 0 ? 1 : 0;
             }
         }
         extraPartitionCounts = new int[group.memberCount()];
@@ -136,15 +129,6 @@ public final class Quotas {
      */
     public int assignmentSize(int member) {
         return minAssignmentSizes[group.cohortOf(member)] + extraPartitionCounts[member];
-    }
-
-    /**
-     * @return An upper bound of the number of topics of which the member gets partitions. A topic
-     *         with a minimum quota above 0 counts twice when the member gets one of its extra
-     *         partitions.
-     */
-    public int maxTopicsWithPartitions(int member) {
-        return topicsWithMinQuotaAboveZero[group.cohortOf(member)] + extraPartitionCounts[member];
     }
 
     /**

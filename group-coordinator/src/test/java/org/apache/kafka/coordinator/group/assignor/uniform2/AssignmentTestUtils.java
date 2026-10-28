@@ -43,11 +43,16 @@ public final class AssignmentTestUtils {
     private AssignmentTestUtils() { }
 
     /**
-     * Checks the properties of an assignment. Every member of the group is in it, and every
-     * partition of every subscribed topic is assigned exactly once, to a subscriber. Every
-     * subscriber of a topic gets its minimum quota or one more. No extra partition could move
-     * between two subscribers so that their assignment sizes get closer by two, and with a single
-     * subscription all assignment sizes are within one of each other.
+     * Asserts that the assignment has the properties of the assignor:
+     * <ul>
+     *     <li>every member of the group is in it;</li>
+     *     <li>every partition of every subscribed topic is assigned exactly once, to a
+     *     subscriber;</li>
+     *     <li>every subscriber of a topic gets its minimum quota or one more;</li>
+     *     <li>no extra partition could move between two subscribers so that their assignment sizes
+     *     get closer by two;</li>
+     *     <li>with a single subscription, all assignment sizes are within one of each other.</li>
+     * </ul>
      */
     public static void assertValidAssignment(GroupSpec spec, SubscribedTopicDescriber describer, GroupAssignment result) {
         assertValidAssignment(spec, describer, result, "");

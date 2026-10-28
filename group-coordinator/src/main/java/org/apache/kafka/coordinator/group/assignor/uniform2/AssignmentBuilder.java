@@ -86,12 +86,14 @@ public final class AssignmentBuilder {
     private int[] placed;
 
     /**
-     * Per member, the lowest partition of the topic being placed that it gets.
+     * Per member, the lowest partition of the topic being placed that it gets. Only defined for
+     * the members getting partitions of the topic.
      */
     private int[] lowest;
 
     /**
-     * Per member, the highest partition of the topic being placed that it gets.
+     * Per member, the highest partition of the topic being placed that it gets. Only defined for
+     * the members getting partitions of the topic.
      */
     private int[] highest;
 
@@ -109,7 +111,8 @@ public final class AssignmentBuilder {
 
     /**
      * Per partition of the topic being placed, the next partition that its member gets. It links
-     * the partitions of every member from its lowest to its highest.
+     * the partitions of every member from its lowest to its highest. The entry of the highest
+     * partition of a member is not defined.
      */
     private int[] nextPartition;
 
@@ -150,8 +153,8 @@ public final class AssignmentBuilder {
         highest = new int[memberCount];
         changed = new boolean[memberCount];
         changedMembers = new IntList(16);
-        membersGettingPartitions = new IntList(16);
         nextPartition = new int[group.maxPartitionCount()];
+        membersGettingPartitions = new IntList(16);
 
         // Places the partitions of every topic, and updates the assignments of the members whose
         // partitions of the topic change. The assignment of the topic gives the member getting
@@ -169,6 +172,8 @@ public final class AssignmentBuilder {
         Map<String, MemberAssignment> members = Utils.newHashMap(memberCount);
         for (int member = 0; member < memberCount; member++) {
             var partitions = newAssignments.get(member);
+            // A member without a new map gets exactly the partitions it owns of every topic, so it
+            // keeps its map, unless the map has stale partitions, which a copy without them drops.
             if (partitions == null) {
                 partitions = currentAssignment.holdsStalePartitions(member)
                     ? ownedPartitions(member)
@@ -291,9 +296,7 @@ public final class AssignmentBuilder {
      */
     private Map<Uuid, Set<Integer>> ownedPartitions(int member) {
         var assignment = currentAssignment.assignment(member);
-        // Sized for the entries it owns and for those it may get, so that it does not grow.
-        int capacity = Math.max(assignment.size(), quotas.maxTopicsWithPartitions(member));
-        Map<Uuid, Set<Integer>> partitions = Utils.newHashMap(capacity);
+        Map<Uuid, Set<Integer>> partitions = Utils.newHashMap(assignment.size());
         assignment.forEach((topicId, topicPartitions) -> {
             int topic = group.topicIndex(topicId);
             if (topic >= 0 && group.subscribes(member, topic)) {
