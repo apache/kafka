@@ -98,6 +98,9 @@ public class StickyTaskAssignor implements TaskAssignor {
         assignActive(localState, localState.statelessActiveTaskIds, false);
 
         if (localState.numStandbyReplicas > 0) {
+            if (!localState.rackAwareAssignmentTags.isEmpty()) {
+                initializeRackAwareState(localState, groupSpec);
+            }
             assignStandby(localState, localState.statefulActiveTaskIds);
         }
 
@@ -139,7 +142,7 @@ public class StickyTaskAssignor implements TaskAssignor {
         localState.processIdToState = Utils.newHashMap(localState.totalMembersWithActiveTaskCapacity);
         localState.processIdToClientTags = Utils.newHashMap(localState.totalMembersWithActiveTaskCapacity);
         localState.activeTaskToPrevMember = Utils.newHashMap(localState.totalActiveTasks);
-        localState.statefulActiveTaskToProcess = Utils.newHashMap(localState.totalStatefulActiveTasks);
+        localState.activeTaskToProcess = Utils.newHashMap(localState.totalActiveTasks);
 
         // Standby-strength candidates per task, gathered in a single pass over the members and ranked below.
         final Map<TaskId, ArrayList<StandbyCandidate>> standbyCandidates = new HashMap<>();
@@ -151,8 +154,6 @@ public class StickyTaskAssignor implements TaskAssignor {
 
             localState.processIdToState.computeIfAbsent(processId, ProcessState::new)
                 .addMember(memberId);
-            // Client tags belong to the process, so every member of it reports the same ones.
-            localState.processIdToClientTags.putIfAbsent(processId, memberMetadata.clientTags());
 
             // prev active tasks
             for (final Map.Entry<String, Set<Integer>> entry : memberAssignmentState.activeTasks().entrySet()) {
@@ -167,6 +168,24 @@ public class StickyTaskAssignor implements TaskAssignor {
 
         localState.standbyTaskToPrevMember = rankStandbyCandidates(standbyCandidates);
         return localState;
+    }
+
+    /** Fills the client tags and active task processes, which only the rack-aware standby assignment reads. */
+    private static void initializeRackAwareState(final LocalState localState, final GroupSpec groupSpec) {
+        // Assumes every member of a process reports the same client tags; if not (e.g. old members still
+        // in the group with their old tags after an unclean restart), the first member seen wins.
+        for (final String memberId : groupSpec.memberIds()) {
+            final MemberAssignmentMetadata memberMetadata = groupSpec.memberMetadata(memberId);
+            localState.processIdToClientTags.putIfAbsent(memberMetadata.processId(), memberMetadata.clientTags());
+        }
+
+        for (final ProcessState process : localState.processIdToState.values()) {
+            for (final Set<TaskId> activeTasks : process.assignedActiveTasksByMember().values()) {
+                for (final TaskId task : activeTasks) {
+                    localState.activeTaskToProcess.put(task, process);
+                }
+            }
+        }
     }
 
     private static void collectStandbyCandidates(final Map<TaskId, ArrayList<StandbyCandidate>> standbyCandidates,
@@ -345,9 +364,6 @@ public class StickyTaskAssignor implements TaskAssignor {
                 // The stateful active task quota is only checked in steps 1 and 2, so it needs no update here.
                 maybeUpdateActiveTasksPerMember(localState, newTaskCount);
                 maybeUpdateTotalTasksPerMember(localState, newTaskCount);
-                if (stateful) {
-                    localState.statefulActiveTaskToProcess.put(task, processWithLeastLoad);
-                }
             } else {
                 throw new TaskAssignorException(String.format("No member available to assign active task %s.", task));
             }
@@ -367,7 +383,6 @@ public class StickyTaskAssignor implements TaskAssignor {
         if (stateful) {
             // Nothing else is assigned yet, so the member's task count is its stateful active task count.
             maybeUpdateStatefulActiveTasksPerMember(localState, newTaskCount);
-            localState.statefulActiveTaskToProcess.put(task, processState);
         }
         maybeUpdateActiveTasksPerMember(localState, newTaskCount);
         maybeUpdateTotalTasksPerMember(localState, newTaskCount);
@@ -613,7 +628,7 @@ public class StickyTaskAssignor implements TaskAssignor {
         final boolean stickyOnly
     ) {
         final List<ProcessState> holders = new ArrayList<>(1 + standbys.size());
-        holders.add(localState.statefulActiveTaskToProcess.get(task));
+        holders.add(localState.activeTaskToProcess.get(task));
         holders.addAll(standbys);
         picker.startTask(holders);
 
@@ -706,8 +721,8 @@ public class StickyTaskAssignor implements TaskAssignor {
         // helper data structures:
         Map<TaskId, Member> activeTaskToPrevMember;
         Map<TaskId, ArrayList<Member>> standbyTaskToPrevMember;
-        // The process that owns each stateful active task in this assignment, the sole holder when its standbys are placed.
-        Map<TaskId, ProcessState> statefulActiveTaskToProcess;
+        // The process that owns each active task in this assignment, the sole holder when its standbys are placed.
+        Map<TaskId, ProcessState> activeTaskToProcess;
         Map<String, ProcessState> processIdToState;
         Map<String, Map<String, String>> processIdToClientTags;
         LinkedList<TaskId> statefulActiveTaskIds;
