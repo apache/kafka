@@ -171,8 +171,7 @@ public class StreamsGroupWarmupTaskIntegrationTest {
                                             final String storeName,
                                             final long batchEndOffset,
                                             final long numRestored) {
-                    // this test's topology/scale-out shape guarantees exactly one task ever warms up on
-                    // kafkaStreams1, so a plain set is sufficient (asserted below on warmupChangelogs).
+                    // expected never to fire: the task taken over from the warm-up has nothing left to restore
                     instance1NumRestored.set(numRestored);
                 }
 
