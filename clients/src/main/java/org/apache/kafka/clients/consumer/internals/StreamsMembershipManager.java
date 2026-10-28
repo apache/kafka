@@ -804,21 +804,31 @@ public class StreamsMembershipManager implements RequestManager {
         }
     }
 
+    /**
+     * Determines whether the group is ready from the statuses of a heartbeat response.
+     * <p>
+     * {@code ASSIGNMENT_DELAYED} only means that the coordinator deferred computing a new target assignment, so it
+     * keeps the previous readiness: a member that has not yet been ready (e.g., during the initial rebalance delay)
+     * stays not ready, while a ready member keeps processing the tasks it owns.
+     */
     private boolean isGroupReady(List<StreamsGroupHeartbeatResponseData.Status> statuses) {
+        boolean assignmentDelayed = false;
         if (statuses != null) {
             for (final StreamsGroupHeartbeatResponseData.Status status : statuses) {
                 switch (StreamsGroupHeartbeatResponse.Status.fromCode(status.statusCode())) {
                     case MISSING_SOURCE_TOPICS:
                     case MISSING_INTERNAL_TOPICS:
                     case INCORRECTLY_PARTITIONED_TOPICS:
-                    case ASSIGNMENT_DELAYED:
                         return false;
+                    case ASSIGNMENT_DELAYED:
+                        assignmentDelayed = true;
+                        break;
                     default:
                         // continue checking other statuses
                 }
             }
         }
-        return true;
+        return !assignmentDelayed || targetAssignment.isGroupReady;
     }
 
     /**
