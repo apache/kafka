@@ -27,7 +27,7 @@ import java.util.Set;
  * to {@code to} (exclusive).
  * This implementation provides a view over a continuous range of integers without actually storing them.
  */
-class RangeSet implements Set<Integer> {
+public class RangeSet implements Set<Integer> {
     private final int from;
     private final int to;
 
