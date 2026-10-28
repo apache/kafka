@@ -208,12 +208,12 @@ class BrokerServer(
 
       val clientTelemetryExporterPlugin = new ClientTelemetryExporterPlugin()
 
+      config.dynamicConfig.initialize(Some(clientTelemetryExporterPlugin))
       QuotaConfig.BROKER_QUOTA_CONFIGS.asScala.foreach { configName =>
         if (config.dynamicConfig.staticBrokerConfigs.contains(configName)) {
           warn(s"$configName is set in the static configuration file but is ignored at runtime; configure this property dynamically to take effect.")
         }
       }
-      config.dynamicConfig.initialize(Some(clientTelemetryExporterPlugin))
       quotaManagers = QuotaFactory.instantiate(config, metrics, time, s"broker-${config.nodeId}-", ProcessRole.BrokerRole.toString)
       DynamicBrokerConfig.readDynamicBrokerConfigsFromSnapshot(raftManager, config, quotaManagers, logContext)
 
