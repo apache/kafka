@@ -415,7 +415,7 @@ class ControllerApisTest {
     assertThrows(classOf[ClusterAuthorizationException], () => {
       controllerApis = createControllerApis(Some(createDenyAllAuthorizer()), new MockController.Builder().build())
       controllerApis.handleAlterPartitionRequest(buildRequest(new AlterPartitionRequest.Builder(
-        new AlterPartitionRequestData(), true).build(ApiKeys.ALTER_PARTITION.latestVersion)))
+        new AlterPartitionRequestData(), 3.toShort).build(ApiKeys.ALTER_PARTITION.latestVersion)))
     })
   }
 
@@ -764,7 +764,7 @@ class ControllerApisTest {
     assertThrows(classOf[ClusterAuthorizationException], () => {
       controllerApis = createControllerApis(Some(createDenyAllAuthorizer()), new MockController.Builder().build())
       controllerApis.handleAllocateProducerIdsRequest(buildRequest(new AllocateProducerIdsRequest.Builder(
-        new AllocateProducerIdsRequestData(), true).build()))
+        new AllocateProducerIdsRequestData(), 3.toShort).build()))
     })
   }
 
@@ -1277,7 +1277,7 @@ class ControllerApisTest {
       new AllocateProducerIdsRequestData()
         .setBrokerId(4)
         .setBrokerEpoch(93234),
-      true
+      3.toShort
     ).build()
 
     when(controller.allocateProducerIds(
@@ -1295,7 +1295,7 @@ class ControllerApisTest {
     val authorizer = mock(classOf[Authorizer])
     val authorizerPlugin = Plugin.wrapInstance(authorizer, null, "authorizer.class.name")
     controllerApis = createControllerApis(Some(authorizerPlugin), controller)
-    val request = new AssignReplicasToDirsRequest.Builder(new AssignReplicasToDirsRequestData(), true).build()
+    val request = new AssignReplicasToDirsRequest.Builder(new AssignReplicasToDirsRequestData(), 3.toShort).build()
 
     when(authorizer.authorize(any[RequestContext], ArgumentMatchers.eq(Collections.singletonList(new Action(
       AclOperation.CLUSTER_ACTION,

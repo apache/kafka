@@ -68,7 +68,7 @@ class AllocateProducerIdsRequestTest(cluster: ClusterInstance) {
       new AllocateProducerIdsRequestData()
         .setBrokerId(sourceBroker.config.brokerId)
         .setBrokerEpoch(sourceBroker.lifecycleManager.brokerEpoch),
-      true
+      3.toShort
     ).build()
 
     connectAndReceive(

@@ -35,7 +35,7 @@ import org.apache.kafka.test.TestUtils
 import org.junit.jupiter.api.Assertions.{assertEquals, assertFalse, assertTrue}
 import org.junit.jupiter.api.{Test, Timeout}
 import org.junit.jupiter.params.ParameterizedTest
-import org.junit.jupiter.params.provider.ValueSource
+import org.junit.jupiter.params.provider.{EnumSource, ValueSource}
 
 import java.util
 import java.util.{Optional, OptionalInt, Properties}
@@ -224,14 +224,9 @@ class ControllerRegistrationManagerTest {
   }
 
   @ParameterizedTest
-  @ValueSource(booleans = Array(false, true))
-  def testRequestVersionGatedByRequestHeaderV3Supported(requestHeaderV3Supported: Boolean): Unit = {
+  @EnumSource(value = classOf[MetadataVersion], names = Array("IBP_4_4_IV2", "IBP_4_5_IV0"))
+  def testRequestVersionFollowsRequestHeaderVersion(metadataVersion: MetadataVersion): Unit = {
     val context = new RegistrationTestContext(configProperties)
-    val metadataVersion = if (requestHeaderV3Supported) {
-      MetadataVersion.IBP_4_5_IV0
-    } else {
-      MetadataVersion.IBP_4_4_IV2
-    }
     val manager = newControllerRegistrationManager(context)
     try {
       context.controllerNodeProvider.node.set(controller1)
@@ -253,10 +248,8 @@ class ControllerRegistrationManagerTest {
       })
 
       val requestVersion = request.get.version
-      val expectedVersion = if (requestHeaderV3Supported) ApiKeys.CONTROLLER_REGISTRATION.latestVersion else 0.toShort
-      assertEquals(expectedVersion, requestVersion)
-      val expectedHeaderVersion = if (requestHeaderV3Supported) 3.toShort else 2.toShort
-      assertEquals(expectedHeaderVersion, ApiKeys.CONTROLLER_REGISTRATION.requestHeaderVersion(requestVersion))
+      assertEquals(ApiKeys.CONTROLLER_REGISTRATION.latestVersionForRequestHeader(metadataVersion.requestHeaderVersion), requestVersion)
+      assertEquals(metadataVersion.requestHeaderVersion, ApiKeys.CONTROLLER_REGISTRATION.requestHeaderVersion(requestVersion))
     } finally {
       manager.close()
     }

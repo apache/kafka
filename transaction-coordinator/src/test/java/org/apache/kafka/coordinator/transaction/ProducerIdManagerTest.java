@@ -49,6 +49,7 @@ import java.util.concurrent.ExecutorService;
 import java.util.concurrent.Executors;
 import java.util.concurrent.TimeUnit;
 import java.util.concurrent.atomic.AtomicBoolean;
+import java.util.concurrent.atomic.AtomicReference;
 
 import static org.apache.kafka.coordinator.transaction.RPCProducerIdManager.RETRY_BACKOFF_MS;
 import static org.junit.jupiter.api.Assertions.assertDoesNotThrow;
@@ -58,6 +59,10 @@ import static org.junit.jupiter.api.Assertions.assertThrows;
 import static org.junit.jupiter.api.Assertions.assertTrue;
 
 public class ProducerIdManagerTest {
+    private static final short OLDEST_REQUEST_HEADER_VERSION =
+        ApiKeys.ALLOCATE_PRODUCER_IDS.requestHeaderVersion(ApiKeys.ALLOCATE_PRODUCER_IDS.oldestVersion());
+    private static final short LATEST_REQUEST_HEADER_VERSION =
+        ApiKeys.ALLOCATE_PRODUCER_IDS.requestHeaderVersion(ApiKeys.ALLOCATE_PRODUCER_IDS.latestVersion());
 
     private final NodeToControllerChannelManager brokerToController = Mockito.mock(NodeToControllerChannelManager.class);
 
@@ -82,7 +87,7 @@ public class ProducerIdManagerTest {
                               boolean hasAuthenticationException,
                               boolean hasVersionMismatch,
                               boolean hasNoResponse) {
-            super(brokerId, time, () -> 1L, brokerToController, () -> true);
+            super(brokerId, time, () -> 1L, brokerToController, () -> LATEST_REQUEST_HEADER_VERSION);
             this.idStart = idStart;
             this.idLen = idLen;
             this.errorQueue = errorQueue;
@@ -286,23 +291,23 @@ public class ProducerIdManagerTest {
     }
 
     @Test
-    public void testRequestVersionFollowsRequestHeaderV3SupportedChange() {
+    public void testRequestVersionFollowsRequestHeaderVersionChange() {
         ArgumentCaptor<AbstractRequest.Builder<AllocateProducerIdsRequest>> requestCapture = ArgumentCaptor.captor();
-        var requestHeaderV3Supported = new AtomicBoolean(false);
-        var manager = new RPCProducerIdManager(0, new MockTime(), () -> 1L, brokerToController, requestHeaderV3Supported::get);
+        var requestHeaderVersion = new AtomicReference<>(OLDEST_REQUEST_HEADER_VERSION);
+        var manager = new RPCProducerIdManager(0, new MockTime(), () -> 1L, brokerToController, requestHeaderVersion::get);
 
         manager.sendRequest();
         Mockito.verify(brokerToController).sendRequest(requestCapture.capture(), Mockito.any());
         short requestVersion = requestCapture.getValue().latestAllowedVersion();
-        assertEquals((short) 0, requestVersion);
-        assertEquals((short) 2, ApiKeys.ALLOCATE_PRODUCER_IDS.requestHeaderVersion(requestVersion));
+        assertEquals(ApiKeys.ALLOCATE_PRODUCER_IDS.latestVersionForRequestHeader(OLDEST_REQUEST_HEADER_VERSION), requestVersion);
+        assertEquals(OLDEST_REQUEST_HEADER_VERSION, ApiKeys.ALLOCATE_PRODUCER_IDS.requestHeaderVersion(requestVersion));
 
-        requestHeaderV3Supported.set(true);
+        requestHeaderVersion.set(LATEST_REQUEST_HEADER_VERSION);
         manager.sendRequest();
         Mockito.verify(brokerToController, Mockito.times(2)).sendRequest(requestCapture.capture(), Mockito.any());
         requestVersion = requestCapture.getValue().latestAllowedVersion();
-        assertEquals(ApiKeys.ALLOCATE_PRODUCER_IDS.latestVersion(), requestVersion);
-        assertEquals((short) 3, ApiKeys.ALLOCATE_PRODUCER_IDS.requestHeaderVersion(requestVersion));
+        assertEquals(ApiKeys.ALLOCATE_PRODUCER_IDS.latestVersionForRequestHeader(LATEST_REQUEST_HEADER_VERSION), requestVersion);
+        assertEquals(LATEST_REQUEST_HEADER_VERSION, ApiKeys.ALLOCATE_PRODUCER_IDS.requestHeaderVersion(requestVersion));
     }
 
     private Queue<Errors> queue(Errors... errors) {

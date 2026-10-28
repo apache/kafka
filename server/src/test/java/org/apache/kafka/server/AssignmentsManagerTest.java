@@ -52,6 +52,7 @@ import com.yammer.metrics.core.MetricsRegistry;
 
 import org.junit.jupiter.api.Test;
 import org.junit.jupiter.params.ParameterizedTest;
+import org.junit.jupiter.params.provider.EnumSource;
 import org.junit.jupiter.params.provider.ValueSource;
 import org.slf4j.Logger;
 import org.slf4j.LoggerFactory;
@@ -320,21 +321,15 @@ public class AssignmentsManagerTest {
     }
 
     @ParameterizedTest
-    @ValueSource(booleans = {true, false})
-    public void testRequestVersionGatedByRequestHeaderV3Supported(boolean requestHeaderV3Supported) throws Exception {
-        MetadataVersion metadataVersion = requestHeaderV3Supported ? MetadataVersion.IBP_4_5_IV0 : MetadataVersion.IBP_4_4_IV2;
+    @EnumSource(value = MetadataVersion.class, names = {"IBP_4_4_IV2", "IBP_4_5_IV0"})
+    public void testRequestVersionFollowsRequestHeaderVersion(MetadataVersion metadataVersion) throws Exception {
         try (TestEnv testEnv = new TestEnv(imageWithMetadataVersion(metadataVersion))) {
             testEnv.onAssignment(new TopicIdPartition(TOPIC_1, 0), DIR_1);
             TestUtils.retryOnExceptionWithTimeout(60_000, () -> assertEquals(1, testEnv.assignmentsManager.numInFlight()));
 
             short requestVersion = testEnv.channelManager.callbacks.peek().getKey().version();
-            short expectedVersion = requestHeaderV3Supported
-                ? ApiKeys.ASSIGN_REPLICAS_TO_DIRS.latestVersion()
-                : (short) 0;
-            assertEquals(expectedVersion, requestVersion);
-
-            short expectedHeaderVersion = requestHeaderV3Supported ? (short) 3 : (short) 2;
-            assertEquals(expectedHeaderVersion, ApiKeys.ASSIGN_REPLICAS_TO_DIRS.requestHeaderVersion(requestVersion));
+            assertEquals(ApiKeys.ASSIGN_REPLICAS_TO_DIRS.latestVersionForRequestHeader(metadataVersion.requestHeaderVersion()), requestVersion);
+            assertEquals(metadataVersion.requestHeaderVersion(), ApiKeys.ASSIGN_REPLICAS_TO_DIRS.requestHeaderVersion(requestVersion));
         }
     }
 
