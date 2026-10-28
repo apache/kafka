@@ -31,6 +31,7 @@ import org.apache.kafka.test.TestUtils;
 import java.util.List;
 import java.util.Map;
 import java.util.concurrent.ExecutionException;
+import java.util.concurrent.atomic.AtomicReference;
 
 import static org.junit.jupiter.api.Assertions.assertEquals;
 import static org.junit.jupiter.api.Assertions.assertInstanceOf;
@@ -94,11 +95,12 @@ public class DescribeConfigsTest {
             admin.incrementalAlterConfigs(Map.of(clusterResource, List.of(new AlterConfigOp(
                 new ConfigEntry(ServerLogConfigs.LOG_CLEANUP_POLICY_CONFIG, "compact,delete"),
                 AlterConfigOp.OpType.SET)))).all().get();
+            AtomicReference<ConfigEntry> entry = new AtomicReference<>();
             TestUtils.waitForCondition(() -> {
-                ConfigEntry entry = describeConfig(admin, clusterResource, ServerLogConfigs.LOG_CLEANUP_POLICY_CONFIG);
-                return entry.source() == ConfigEntry.ConfigSource.DYNAMIC_DEFAULT_BROKER_CONFIG
-                    && "compact,delete".equals(entry.value());
+                entry.set(describeConfig(admin, clusterResource, ServerLogConfigs.LOG_CLEANUP_POLICY_CONFIG));
+                return entry.get().source() == ConfigEntry.ConfigSource.DYNAMIC_DEFAULT_BROKER_CONFIG;
             }, ServerLogConfigs.LOG_CLEANUP_POLICY_CONFIG + " was not applied as a cluster-wide config");
+            assertEquals("compact,delete", entry.get().value());
         }
     }
 
