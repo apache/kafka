@@ -32,6 +32,7 @@ import java.nio.file.Paths;
 import java.util.ArrayList;
 import java.util.Collection;
 import java.util.List;
+import java.util.Locale;
 import java.util.Optional;
 
 /**
@@ -186,7 +187,7 @@ public class CheckpointFile<T> {
         }
 
         private IOException buildMalformedLineException(String line) {
-            return new IOException(String.format("Malformed line in checkpoint file [%s]: %s", location, line));
+            return new IOException(String.format(Locale.ROOT, "Malformed line in checkpoint file [%s]: %s", location, line));
         }
     }
 

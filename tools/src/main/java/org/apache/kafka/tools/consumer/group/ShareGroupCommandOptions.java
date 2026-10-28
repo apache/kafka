@@ -20,6 +20,7 @@ import org.apache.kafka.server.util.CommandDefaultOptions;
 import org.apache.kafka.server.util.CommandLineUtils;
 
 import java.util.List;
+import java.util.Locale;
 import java.util.Set;
 import java.util.stream.Collectors;
 
@@ -194,13 +195,13 @@ public class ShareGroupCommandOptions extends CommandDefaultOptions {
         if (options.has(deleteOpt)) {
             if (!options.has(groupOpt) && !options.has(allGroupsOpt))
                 CommandLineUtils.printUsageAndExit(parser,
-                    String.format("Option %s takes the options %s or %s.", deleteOpt, groupOpt, allGroupsOpt));
+                    String.format(Locale.ROOT, "Option %s takes the options %s or %s.", deleteOpt, groupOpt, allGroupsOpt));
             if (options.has(allGroupsOpt) && options.has(groupOpt))
                 CommandLineUtils.printUsageAndExit(parser,
-                    String.format("Option %s takes either %s or %s, not both.", deleteOpt, groupOpt, allGroupsOpt));
+                    String.format(Locale.ROOT, "Option %s takes either %s or %s, not both.", deleteOpt, groupOpt, allGroupsOpt));
             if (options.has(allTopicsOpt) || options.has(topicOpt))
                 CommandLineUtils.printUsageAndExit(parser,
-                    String.format("Option %s does not take the options %s or %s.", deleteOpt, topicOpt, allTopicsOpt));
+                    String.format(Locale.ROOT, "Option %s does not take the options %s or %s.", deleteOpt, topicOpt, allTopicsOpt));
         }
 
         if (options.has(deleteOffsetsOpt)) {

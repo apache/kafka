@@ -38,6 +38,7 @@ import net.sourceforge.argparse4j.inf.Namespace;
 
 import java.util.HashMap;
 import java.util.List;
+import java.util.Locale;
 import java.util.Map;
 
 import javax.security.auth.login.AppConfigurationEntry;
@@ -206,7 +207,7 @@ public class OAuthCompatibilityTool {
 
     private static class ArgsHandler {
 
-        private static final String DESCRIPTION = String.format(
+        private static final String DESCRIPTION = String.format(Locale.ROOT,
             "This tool is used to verify OAuth/OIDC provider compatibility.%n%n" +
             "Run the following script to determine the configuration options:%n%n" +
                 "    ./bin/kafka-run-class.sh %s --help",
