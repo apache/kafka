@@ -52,31 +52,31 @@ class MirrorCoordinatorRecordSerdeTest {
         CoordinatorRecord record = stateRecord("error");
         // Version 0, fixed-width fields, compact nullable error string, and no tagged fields.
         byte[] value = ByteBuffer.allocate(21)
-            .putShort((short) 0)
-            .put((byte) 8)
-            .putInt(42)
-            .putInt(7)
-            .put((byte) 6)
-            .put("error".getBytes(UTF_8))
-            .putShort((short) 3)
-            .put((byte) 3)
-            .put((byte) 0)
+            .putShort((short) 0) // Value schema version.
+            .put((byte) 8) // State: FAILED.
+            .putInt(42) // LeaderEpoch.
+            .putInt(7) // StateEpoch.
+            .put((byte) 6) // Compact ErrorMessage length: five UTF-8 bytes plus one.
+            .put("error".getBytes(UTF_8)) // ErrorMessage contents.
+            .putShort((short) 3) // RetryAttempt.
+            .put((byte) 3) // PreviousState: MIRRORING.
+            .put((byte) 0) // Number of tagged fields.
             .array();
 
-        assertWireFormat(record, keyBytes((short) 1), value);
+        assertWireFormat(record, keyBytes((short) 0), value);
     }
 
     @Test
     void testLastMirrorEpochsWireFormat() {
         CoordinatorRecord record = epochRecord();
         byte[] value = ByteBuffer.allocate(15)
-            .putShort((short) 0)
-            .putInt(42)
-            .putLong(4_294_967_313L)
-            .put((byte) 0)
+            .putShort((short) 0) // Value schema version.
+            .putInt(42) // LastMirrorEpoch.
+            .putLong(4_294_967_313L) // LastMirrorOffset: exceeds the 32-bit integer range.
+            .put((byte) 0) // Number of tagged fields.
             .array();
 
-        assertWireFormat(record, keyBytes((short) 2), value);
+        assertWireFormat(record, keyBytes((short) 1), value);
     }
 
     @ParameterizedTest
@@ -112,7 +112,7 @@ class MirrorCoordinatorRecordSerdeTest {
     }
 
     @ParameterizedTest
-    @ValueSource(shorts = {-1, 0, 3, 255, Short.MAX_VALUE})
+    @ValueSource(shorts = {-1, 2, 3, 255, Short.MAX_VALUE})
     void testUnknownRecordType(short recordType) {
         byte[] key = ByteBuffer.allocate(Short.BYTES).putShort(recordType).array();
         Deserializer.UnknownRecordTypeException exception = assertThrows(
@@ -183,12 +183,12 @@ class MirrorCoordinatorRecordSerdeTest {
 
     private static byte[] keyBytes(short recordType) {
         return ByteBuffer.allocate(30)
-            .putShort(recordType)
-            .putShort((short) 6)
-            .put("mirror".getBytes(UTF_8))
-            .putLong(1L)
-            .putLong(2L)
-            .putInt(4)
+            .putShort(recordType) // Coordinator record type: state (0) or last mirror epochs (1).
+            .putShort((short) 6) // MirrorName length in UTF-8 bytes.
+            .put("mirror".getBytes(UTF_8)) // MirrorName contents.
+            .putLong(1L) // TopicId: most significant bits.
+            .putLong(2L) // TopicId: least significant bits.
+            .putInt(4) // Partition index.
             .array();
     }
 

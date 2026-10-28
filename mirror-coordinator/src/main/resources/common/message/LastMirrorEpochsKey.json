@@ -14,7 +14,7 @@
 // limitations under the License.
 
 {
-  "apiKey": 2,
+  "apiKey": 1,
   "type": "coordinator-key",
   "name": "LastMirrorEpochsKey",
   "validVersions": "0",

@@ -14,7 +14,7 @@
 // limitations under the License.
 
 {
-  "apiKey": 1,
+  "apiKey": 0,
   "type": "coordinator-value",
   "name": "MirrorPartitionStateValue",
   "validVersions": "0",
