@@ -113,6 +113,10 @@ public interface Task {
         throw new UnsupportedOperationException();
     }
 
+    default Set<TopicPartition> partitionsForOffsetReset() {
+        return Set.of();
+    }
+
     /**
      * @throws StreamsException fatal error, should close the thread
      */
