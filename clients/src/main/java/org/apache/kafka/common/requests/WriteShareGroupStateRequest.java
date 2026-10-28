@@ -28,6 +28,7 @@ import java.util.List;
 import java.util.stream.Collectors;
 
 public class WriteShareGroupStateRequest extends AbstractRequest {
+
     public static class Builder extends AbstractRequest.Builder<WriteShareGroupStateRequest> {
 
         private final WriteShareGroupStateRequestData data;

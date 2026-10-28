@@ -28,6 +28,7 @@ import java.util.List;
 import java.util.stream.Collectors;
 
 public class DeleteShareGroupStateRequest extends AbstractRequest {
+
     public static class Builder extends AbstractRequest.Builder<DeleteShareGroupStateRequest> {
 
         private final DeleteShareGroupStateRequestData data;

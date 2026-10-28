@@ -28,6 +28,7 @@ import java.util.List;
 import java.util.stream.Collectors;
 
 public class InitializeShareGroupStateRequest extends AbstractRequest {
+
     public static class Builder extends AbstractRequest.Builder<InitializeShareGroupStateRequest> {
 
         private final InitializeShareGroupStateRequestData data;
