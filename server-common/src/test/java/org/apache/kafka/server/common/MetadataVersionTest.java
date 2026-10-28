@@ -279,4 +279,11 @@ class MetadataVersionTest {
         short expectedVersion = metadataVersion.isAtLeast(IBP_4_5_IV0) ? (short) 3 : (short) 2;
         assertEquals(expectedVersion, metadataVersion.envelopeRequestHeaderVersion());
     }
+
+    @ParameterizedTest
+    @EnumSource(value = MetadataVersion.class)
+    public void testProduceRequestHeaderVersion(MetadataVersion metadataVersion) {
+        short expectedVersion = metadataVersion.isAtLeast(IBP_4_5_IV0) ? (short) 3 : (short) 2;
+        assertEquals(expectedVersion, metadataVersion.produceRequestHeaderVersion());
+    }
 }

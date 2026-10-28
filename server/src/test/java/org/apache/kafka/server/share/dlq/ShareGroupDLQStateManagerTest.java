@@ -19,6 +19,7 @@ package org.apache.kafka.server.share.dlq;
 
 import org.apache.kafka.clients.KafkaClient;
 import org.apache.kafka.clients.MockClient;
+import org.apache.kafka.clients.NodeApiVersions;
 import org.apache.kafka.common.Node;
 import org.apache.kafka.common.TopicIdPartition;
 import org.apache.kafka.common.Uuid;
@@ -31,6 +32,7 @@ import org.apache.kafka.common.message.CreateTopicsRequestData;
 import org.apache.kafka.common.message.CreateTopicsResponseData;
 import org.apache.kafka.common.message.ProduceRequestData;
 import org.apache.kafka.common.message.ProduceResponseData;
+import org.apache.kafka.common.protocol.ApiKeys;
 import org.apache.kafka.common.protocol.Errors;
 import org.apache.kafka.common.record.internal.MemoryRecords;
 import org.apache.kafka.common.record.internal.Record;
@@ -57,6 +59,7 @@ import org.junit.jupiter.api.AfterEach;
 import org.junit.jupiter.api.Test;
 import org.junit.jupiter.params.ParameterizedTest;
 import org.junit.jupiter.params.provider.CsvSource;
+import org.junit.jupiter.params.provider.ValueSource;
 import org.mockito.ArgumentMatcher;
 import org.mockito.Mockito;
 
@@ -83,6 +86,7 @@ import java.util.concurrent.Future;
 import java.util.concurrent.RejectedExecutionException;
 import java.util.concurrent.TimeUnit;
 import java.util.concurrent.TimeoutException;
+import java.util.concurrent.atomic.AtomicInteger;
 import java.util.stream.Collectors;
 
 import static org.apache.kafka.server.share.dlq.ShareGroupDLQRecordHelper.HEADER_DLQ_ERRORS_DELIVERY_COUNT;
@@ -127,6 +131,8 @@ class ShareGroupDLQStateManagerTest {
     private static final Node DEFAULT_LEADER = new Node(0, HOST, PORT);
     private static final LogReader MOCK_LOG_READER = mock(LogReader.class);
     private static final int DEFAULT_MAX_MESSAGE_BYTES = 1024 * 1024;
+    private static final short LATEST_REQUEST_HEADER_VERSION =
+        ApiKeys.PRODUCE.requestHeaderVersion(ApiKeys.PRODUCE.latestVersion());
 
     private final MockTimer mockTimer = new MockTimer(MOCK_TIME);
     private final ShareGroupMetrics mockMetrics = mock(ShareGroupMetrics.class);
@@ -236,6 +242,7 @@ class ShareGroupDLQStateManagerTest {
         ));
         when(helper.isShareGroupDlqCopyRecordEnabled(GROUP_ID)).thenReturn(false);
         when(helper.dlqTopicMaxMessageBytes(anyString())).thenReturn(DEFAULT_MAX_MESSAGE_BYTES);
+        when(helper.requestHeaderVersion()).thenReturn(LATEST_REQUEST_HEADER_VERSION);
         return helper;
     }
 
@@ -618,6 +625,66 @@ class ShareGroupDLQStateManagerTest {
         verify(mockMetrics, never()).recordDLQProduceFailed(any());
     }
 
+    @ParameterizedTest
+    @ValueSource(shorts = {2, 3})
+    public void testDlqProduceRequestVersionFollowsRequestHeaderVersion(short requestHeaderVersion) throws Exception {
+        ShareGroupDLQMetadataCacheHelper cacheHelper = cacheHelper(DEFAULT_LEADER);
+        when(cacheHelper.requestHeaderVersion()).thenReturn(requestHeaderVersion);
+        MockClient client = new MockClient(MOCK_TIME);
+        List<ProduceRequest> capturedProduces = new ArrayList<>();
+        client.prepareResponseFrom(captureProduce(capturedProduces), successfulProduceResponse(0), DEFAULT_LEADER);
+
+        stateManager = builder().withClient(client).withCacheHelper(cacheHelper).build();
+        stateManager.start();
+        assertNull(stateManager.dlq(param()).get(10, TimeUnit.SECONDS));
+
+        assertEquals(1, capturedProduces.size());
+        assertProduceRequestVersion(capturedProduces.get(0), requestHeaderVersion);
+    }
+
+    @Test
+    public void testDlqProduceRequestVersionFollowsRequestHeaderVersionChange() throws Exception {
+        AtomicInteger requestHeaderVersion = new AtomicInteger(2);
+        ShareGroupDLQMetadataCacheHelper cacheHelper = cacheHelper(DEFAULT_LEADER);
+        when(cacheHelper.requestHeaderVersion()).thenAnswer(invocation -> (short) requestHeaderVersion.get());
+        MockClient client = new MockClient(MOCK_TIME);
+        List<ProduceRequest> capturedProduces = new ArrayList<>();
+        client.prepareResponseFrom(captureProduce(capturedProduces), successfulProduceResponse(0), DEFAULT_LEADER);
+        client.prepareResponseFrom(captureProduce(capturedProduces), successfulProduceResponse(0), DEFAULT_LEADER);
+
+        stateManager = builder().withClient(client).withCacheHelper(cacheHelper).build();
+        stateManager.start();
+        assertNull(stateManager.dlq(param()).get(10, TimeUnit.SECONDS));
+        requestHeaderVersion.set(3);
+        assertNull(stateManager.dlq(param()).get(10, TimeUnit.SECONDS));
+
+        assertEquals(2, capturedProduces.size());
+        assertProduceRequestVersion(capturedProduces.get(0), (short) 2);
+        assertProduceRequestVersion(capturedProduces.get(1), (short) 3);
+    }
+
+    @Test
+    public void testDlqProduceUsesLatestVersionSupportedByLeader() throws Exception {
+        short leaderLatestVersion = ApiKeys.PRODUCE.latestVersionForRequestHeader((short) 2);
+        MockClient client = new MockClient(MOCK_TIME);
+        client.setNodeApiVersions(NodeApiVersions.create(ApiKeys.PRODUCE.id, ApiKeys.PRODUCE.oldestVersion(), leaderLatestVersion));
+        List<ProduceRequest> capturedProduces = new ArrayList<>();
+        client.prepareResponseFrom(captureProduce(capturedProduces), successfulProduceResponse(0), DEFAULT_LEADER);
+
+        stateManager = builder().withClient(client).build();
+        stateManager.start();
+        assertNull(stateManager.dlq(param()).get(10, TimeUnit.SECONDS));
+
+        assertEquals(1, capturedProduces.size());
+        assertEquals(leaderLatestVersion, capturedProduces.get(0).version());
+        verify(mockMetrics).recordDLQRecordWrite(GROUP_ID, 3);
+    }
+
+    private static void assertProduceRequestVersion(ProduceRequest request, short requestHeaderVersion) {
+        assertEquals(ApiKeys.PRODUCE.latestVersionForRequestHeader(requestHeaderVersion), request.version());
+        assertEquals(requestHeaderVersion, ApiKeys.PRODUCE.requestHeaderVersion(request.version()));
+    }
+
     /**
      * Asserts every record in the captured produce request carries wall-clock (epoch) time as its
      * timestamp, matching {@link #MOCK_TIME}'s {@link org.apache.kafka.common.utils.Time#milliseconds()}.
@@ -639,6 +706,7 @@ class ShareGroupDLQStateManagerTest {
     @Test
     public void testDlqTopicPrefixEmptyStringSkipsPrefixCheck() throws Exception {
         ShareGroupDLQMetadataCacheHelper cacheHelper = mock(ShareGroupDLQMetadataCacheHelper.class);
+        when(cacheHelper.requestHeaderVersion()).thenReturn(LATEST_REQUEST_HEADER_VERSION);
         when(cacheHelper.shareGroupDlqTopic(GROUP_ID)).thenReturn(Optional.of(DLQ_TOPIC));
         when(cacheHelper.shareGroupDlqTopicPrefix()).thenReturn(Optional.of(""));
         when(cacheHelper.containsTopic(DLQ_TOPIC)).thenReturn(true);
@@ -693,6 +761,7 @@ class ShareGroupDLQStateManagerTest {
     @Test
     public void testDlqCreateTopicThenProduceSucceeds() throws Exception {
         ShareGroupDLQMetadataCacheHelper cacheHelper = mock(ShareGroupDLQMetadataCacheHelper.class);
+        when(cacheHelper.requestHeaderVersion()).thenReturn(LATEST_REQUEST_HEADER_VERSION);
         when(cacheHelper.shareGroupDlqTopic(GROUP_ID)).thenReturn(Optional.of(DLQ_TOPIC));
         when(cacheHelper.shareGroupDlqTopicPrefix()).thenReturn(Optional.empty());
         when(cacheHelper.isDlqEnabledOnTopic(DLQ_TOPIC)).thenReturn(true);
@@ -861,6 +930,7 @@ class ShareGroupDLQStateManagerTest {
     public void testDlqCreateTopicPartialFailuresThenSucceeds() throws Exception {
         int maxAttempts = 3;
         ShareGroupDLQMetadataCacheHelper cacheHelper = mock(ShareGroupDLQMetadataCacheHelper.class);
+        when(cacheHelper.requestHeaderVersion()).thenReturn(LATEST_REQUEST_HEADER_VERSION);
         when(cacheHelper.shareGroupDlqTopic(GROUP_ID)).thenReturn(Optional.of(DLQ_TOPIC));
         when(cacheHelper.shareGroupDlqTopicPrefix()).thenReturn(Optional.empty());
         when(cacheHelper.isDlqEnabledOnTopic(DLQ_TOPIC)).thenReturn(true);
@@ -1183,6 +1253,7 @@ class ShareGroupDLQStateManagerTest {
     @Test
     public void testDlqTwoEnqueuedRecordsBothComplete() throws Exception {
         ShareGroupDLQMetadataCacheHelper cacheHelper = mock(ShareGroupDLQMetadataCacheHelper.class);
+        when(cacheHelper.requestHeaderVersion()).thenReturn(LATEST_REQUEST_HEADER_VERSION);
         when(cacheHelper.shareGroupDlqTopic(GROUP_ID)).thenReturn(Optional.of(DLQ_TOPIC));
         when(cacheHelper.shareGroupDlqTopicPrefix()).thenReturn(Optional.empty());
         when(cacheHelper.containsTopic(DLQ_TOPIC)).thenReturn(true);
@@ -1341,6 +1412,7 @@ class ShareGroupDLQStateManagerTest {
         // partition 0 -> group-a, partition 1 -> group-b, partition 2 -> group-c (via the
         // sourcePartition % numPartitions mapping in populateDLQTopicData).
         ShareGroupDLQMetadataCacheHelper cacheHelper = mock(ShareGroupDLQMetadataCacheHelper.class);
+        when(cacheHelper.requestHeaderVersion()).thenReturn(LATEST_REQUEST_HEADER_VERSION);
         when(cacheHelper.shareGroupDlqTopic(anyString())).thenReturn(Optional.of(DLQ_TOPIC));
         when(cacheHelper.shareGroupDlqTopicPrefix()).thenReturn(Optional.empty());
         when(cacheHelper.containsTopic(DLQ_TOPIC)).thenReturn(true);
@@ -1491,7 +1563,7 @@ class ShareGroupDLQStateManagerTest {
     @Test
     public void testCoalesceProduceRequestsWithEmptyHandlerListProducesEmptyRequest() {
         ShareGroupDLQStateManager.CoalesceResults result =
-            ShareGroupDLQStateManager.coalesceProduceRequests(List.of());
+            ShareGroupDLQStateManager.coalesceProduceRequests(List.of(), LATEST_REQUEST_HEADER_VERSION);
 
         assertTrue(result.liveHandlers().isEmpty());
         ProduceRequest request = ((ProduceRequest.Builder) result.request()).build();
@@ -1506,7 +1578,7 @@ class ShareGroupDLQStateManagerTest {
         handler.populateDLQTopicData();
 
         ShareGroupDLQStateManager.CoalesceResults result =
-            ShareGroupDLQStateManager.coalesceProduceRequests(List.of(handler));
+            ShareGroupDLQStateManager.coalesceProduceRequests(List.of(handler), LATEST_REQUEST_HEADER_VERSION);
 
         assertEquals(List.of(handler), result.liveHandlers());
 
@@ -1547,7 +1619,7 @@ class ShareGroupDLQStateManagerTest {
         h1.populateDLQTopicData();
 
         ShareGroupDLQStateManager.CoalesceResults result =
-            ShareGroupDLQStateManager.coalesceProduceRequests(List.of(h0, h1));
+            ShareGroupDLQStateManager.coalesceProduceRequests(List.of(h0, h1), LATEST_REQUEST_HEADER_VERSION);
 
         assertEquals(List.of(h0, h1), result.liveHandlers());
 
@@ -1590,7 +1662,7 @@ class ShareGroupDLQStateManagerTest {
         }
 
         ShareGroupDLQStateManager.CoalesceResults result =
-            ShareGroupDLQStateManager.coalesceProduceRequests(handlers);
+            ShareGroupDLQStateManager.coalesceProduceRequests(handlers, LATEST_REQUEST_HEADER_VERSION);
 
         assertEquals(handlers, result.liveHandlers());
 
@@ -1669,7 +1741,7 @@ class ShareGroupDLQStateManagerTest {
         hB.populateDLQTopicData();
 
         ShareGroupDLQStateManager.CoalesceResults result =
-            ShareGroupDLQStateManager.coalesceProduceRequests(List.of(hA, hB));
+            ShareGroupDLQStateManager.coalesceProduceRequests(List.of(hA, hB), LATEST_REQUEST_HEADER_VERSION);
 
         assertEquals(List.of(hA, hB), result.liveHandlers());
 
@@ -1716,7 +1788,7 @@ class ShareGroupDLQStateManagerTest {
             3);
 
         ShareGroupDLQStateManager.CoalesceResults result =
-            ShareGroupDLQStateManager.coalesceProduceRequests(List.of(good, broken));
+            ShareGroupDLQStateManager.coalesceProduceRequests(List.of(good, broken), LATEST_REQUEST_HEADER_VERSION);
 
         assertEquals(List.of(good), result.liveHandlers(),
             "Only the handler whose topicProduceData() succeeded should appear in liveHandlers");
@@ -1750,7 +1822,7 @@ class ShareGroupDLQStateManagerTest {
         h2.populateDLQTopicData();
 
         ShareGroupDLQStateManager.CoalesceResults round1 =
-            ShareGroupDLQStateManager.coalesceProduceRequests(List.of(h0, h1, h2));
+            ShareGroupDLQStateManager.coalesceProduceRequests(List.of(h0, h1, h2), LATEST_REQUEST_HEADER_VERSION);
 
         assertEquals(List.of(h0), round1.liveHandlers(),
             "Only the first handler for the partition should be admitted within the byte budget");
@@ -1769,7 +1841,7 @@ class ShareGroupDLQStateManagerTest {
         // re-enqueues deferredHandlers via addRequestToNodeMap) and get coalesced again on their own.
         // h1 now gets the free first-handler pass; h2 is deferred a second time.
         ShareGroupDLQStateManager.CoalesceResults round2 =
-            ShareGroupDLQStateManager.coalesceProduceRequests(List.of(h1, h2));
+            ShareGroupDLQStateManager.coalesceProduceRequests(List.of(h1, h2), LATEST_REQUEST_HEADER_VERSION);
         assertEquals(List.of(h1), round2.liveHandlers());
         assertEquals(List.of(h2), round2.deferredHandlers());
         // h2 has now been deferred twice (round1 and round2) without ever being admitted - its
@@ -1778,7 +1850,7 @@ class ShareGroupDLQStateManagerTest {
 
         // Round 3: h2 is alone and finally gets admitted.
         ShareGroupDLQStateManager.CoalesceResults round3 =
-            ShareGroupDLQStateManager.coalesceProduceRequests(List.of(h2));
+            ShareGroupDLQStateManager.coalesceProduceRequests(List.of(h2), LATEST_REQUEST_HEADER_VERSION);
         assertEquals(List.of(h2), round3.liveHandlers());
         assertEquals(List.of(), round3.deferredHandlers());
         // Exactly one recordDLQProduce per handler, total - not once per deferral re-evaluation.
