@@ -361,7 +361,7 @@ public class FileRecords extends AbstractRecords implements Closeable {
      * {@link FileReadException} always does. A {@link ClosedChannelException} never does: the file or the network
      * channel was closed concurrently, by a deletion, a shutdown or a closing connection, which says nothing about the
      * medium. Any other exception does only if the network channel cannot tell a failed read of the file from a failed
-     * write, as when a single system call does both.
+     * write to the network channel, as when a single system call does both.
      */
     private static boolean mayBeFileReadFailure(TransferableChannel destChannel, IOException transferFailure) {
         if (transferFailure instanceof FileReadException)
