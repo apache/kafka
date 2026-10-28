@@ -126,6 +126,74 @@ public class TopicCommandTest {
     }
 
     @Test
+    public void testMinIsrLargerThanReplicationFactorIsAtMinIsr() {
+        // RF=2, ISR=2, min.insync.replicas=3: the broker caps min ISR at 2, so acks=all succeeds.
+        TopicCommand.PartitionDescription partitionDescription =
+            minIsrPartitionDescription(List.of(1, 2), List.of(1, 2), 1, 3, null);
+
+        assertEquals(2, partitionDescription.minIsrCount());
+        assertFalse(partitionDescription.isUnderMinIsr());
+        assertTrue(partitionDescription.isAtMinIsrPartitions());
+    }
+
+    @Test
+    public void testMinIsrLargerThanReplicationFactorWithSingleReplica() {
+        TopicCommand.PartitionDescription partitionDescription =
+            minIsrPartitionDescription(List.of(1), List.of(1), 1, 2, null);
+
+        assertEquals(1, partitionDescription.minIsrCount());
+        assertFalse(partitionDescription.isUnderMinIsr());
+        assertTrue(partitionDescription.isAtMinIsrPartitions());
+    }
+
+    @Test
+    public void testIsUnderMinIsrWhenMinIsrNotLargerThanReplicationFactor() {
+        TopicCommand.PartitionDescription partitionDescription =
+            minIsrPartitionDescription(List.of(1, 2, 3), List.of(1), 1, 2, null);
+
+        assertEquals(2, partitionDescription.minIsrCount());
+        assertTrue(partitionDescription.isUnderMinIsr());
+        assertFalse(partitionDescription.isAtMinIsrPartitions());
+    }
+
+    @Test
+    public void testMinIsrCountsAddingReplicasDuringReassignment() {
+        // Like the broker, the replica count includes adding replicas, so the effective min ISR stays 3.
+        TopicCommand.PartitionDescription partitionDescription =
+            minIsrPartitionDescription(List.of(1, 2, 3), List.of(1, 2), 1, 3,
+                new PartitionReassignment(List.of(1, 2, 3), List.of(3), List.of()));
+
+        assertEquals(3, partitionDescription.minIsrCount());
+        assertTrue(partitionDescription.isUnderMinIsr());
+        assertFalse(partitionDescription.isAtMinIsrPartitions());
+    }
+
+    @Test
+    public void testIsUnderMinIsrWithoutLeader() {
+        TopicCommand.PartitionDescription partitionDescription =
+            minIsrPartitionDescription(List.of(1, 2), List.of(1, 2), null, 3, null);
+
+        assertTrue(partitionDescription.isUnderMinIsr());
+    }
+
+    /**
+     * Builds a {@link TopicCommand.PartitionDescription} with only the min.insync.replicas config set, so the
+     * min-ISR checks can be exercised without a cluster.
+     */
+    private static TopicCommand.PartitionDescription minIsrPartitionDescription(List<Integer> replicaIds,
+                                                                                List<Integer> isrIds,
+                                                                                Integer leaderId,
+                                                                                int minIsr,
+                                                                                PartitionReassignment reassignment) {
+        List<Node> replicas = replicaIds.stream().map(id -> new Node(id, "localhost", 9090 + id)).toList();
+        List<Node> isr = isrIds.stream().map(id -> new Node(id, "localhost", 9090 + id)).toList();
+        Node leader = leaderId == null ? null : new Node(leaderId, "localhost", 9090 + leaderId);
+        Config config = new Config(List.of(new ConfigEntry(TopicConfig.MIN_IN_SYNC_REPLICAS_CONFIG, String.valueOf(minIsr))));
+        return new TopicCommand.PartitionDescription("test-topic",
+            new TopicPartitionInfo(0, leader, replicas, isr), config, reassignment);
+    }
+
+    @Test
     public void testAlterWithUnspecifiedPartitionCount() {
         String[] options = new String[] {" --bootstrap-server", bootstrapServer, "--alter", "--topic", topicName};
         assertInitializeInvalidOptionsExitCode(1, options);
@@ -1095,6 +1163,29 @@ public class TopicCommandTest {
 
         String output = captureDescribeTopicStandardOut(clusterInstance, buildTopicCommandOptionsWithBootstrap(clusterInstance, "--describe", "--at-min-isr-partitions", "--exclude-internal"));
         String[] rows = output.split(System.lineSeparator());
+        assertTrue(rows[0].startsWith(String.format("Topic: %s", testTopicName)),
+                "Unexpected output: " + rows[0]);
+        assertEquals(1, rows.length);
+    }
+
+    @ClusterTest(brokers = 3)
+    public void testDescribeMinIsrPartitionsWhenMinIsrLargerThanReplicationFactor(ClusterInstance clusterInstance) throws InterruptedException {
+        String testTopicName = TestUtils.randomString(10);
+        Map<String, String> topicConfig = new HashMap<>();
+        topicConfig.put(TopicConfig.MIN_IN_SYNC_REPLICAS_CONFIG, "3");
+        clusterInstance.createTopic(testTopicName, 1, (short) 2, topicConfig);
+
+        TestUtils.waitForCondition(
+                () -> clusterInstance.aliveBrokers().values().stream().allMatch(broker -> broker.metadataCache().getLeaderAndIsr(testTopicName, 0).get().isr().size() == 2),
+                CLUSTER_WAIT_MS, String.format("Timeout waiting for partition metadata propagating to brokers for %s topic", testTopicName)
+        );
+
+        // The broker caps min ISR at the replica count, so a fully replicated partition is at min ISR, not under it.
+        String underMinIsrOutput = captureDescribeTopicStandardOut(clusterInstance, buildTopicCommandOptionsWithBootstrap(clusterInstance, "--describe", "--under-min-isr-partitions", "--exclude-internal"));
+        assertFalse(underMinIsrOutput.contains(testTopicName), "Unexpected output: " + underMinIsrOutput);
+
+        String atMinIsrOutput = captureDescribeTopicStandardOut(clusterInstance, buildTopicCommandOptionsWithBootstrap(clusterInstance, "--describe", "--at-min-isr-partitions", "--exclude-internal"));
+        String[] rows = atMinIsrOutput.split(System.lineSeparator());
         assertTrue(rows[0].startsWith(String.format("Topic: %s", testTopicName)),
                 "Unexpected output: " + rows[0]);
         assertEquals(1, rows.length);
