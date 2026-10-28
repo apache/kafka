@@ -1619,7 +1619,7 @@ public class PersisterStateManager {
             // 9. when W1 completes, it will clear inFlight and raise wakeup event.
             // 10. at this point W2, W3, etc. could be sent as a combined request thus achieving batching.
             final Map<RPCType, Set<Node>> sending = new HashMap<>();
-            final boolean useRequestHeaderV3 = cacheHelper.isRequestHeaderV3Supported();
+            final short requestHeaderVersion = cacheHelper.requestHeaderVersion();
             synchronized (nodeMapLock) {
                 nodeRPCMap.forEach((coordNode, rpcTypesPerNode) ->
                     rpcTypesPerNode.forEach((rpcType, groupsPerRpcType) ->
@@ -1628,7 +1628,7 @@ public class PersisterStateManager {
                             // to not be sent immediately but get batched
                             if (!inFlight.containsKey(rpcType) || !inFlight.get(rpcType).contains(coordNode)) {
                                 AbstractRequest.Builder<? extends AbstractRequest> combinedRequestPerTypePerGroup =
-                                    RequestCoalescerHelper.coalesceRequests(groupId, rpcType, handlersPerGroup, useRequestHeaderV3);
+                                    RequestCoalescerHelper.coalesceRequests(groupId, rpcType, handlersPerGroup, requestHeaderVersion);
                                 requests.add(new RequestAndCompletionHandler(
                                     time.milliseconds(),
                                     coordNode,
@@ -1697,19 +1697,19 @@ public class PersisterStateManager {
     private static class RequestCoalescerHelper {
         private static final Logger LOG = LoggerFactory.getLogger(RequestCoalescerHelper.class);
 
-        public static AbstractRequest.Builder<? extends AbstractRequest> coalesceRequests(String groupId, RPCType rpcType, List<? extends PersisterStateManagerHandler> handlers, boolean useRequestHeaderV3) {
+        public static AbstractRequest.Builder<? extends AbstractRequest> coalesceRequests(String groupId, RPCType rpcType, List<? extends PersisterStateManagerHandler> handlers, short requestHeaderVersion) {
             LOG.trace("Received coalesce request for {} handlers of RPC type {}", handlers.size(), rpcType);
             return switch (rpcType) {
-                case WRITE -> coalesceWrites(groupId, handlers, useRequestHeaderV3);
-                case READ -> coalesceReads(groupId, handlers, useRequestHeaderV3);
-                case SUMMARY -> coalesceReadSummaries(groupId, handlers, useRequestHeaderV3);
-                case DELETE -> coalesceDeletes(groupId, handlers, useRequestHeaderV3);
-                case INITIALIZE -> coalesceInitializations(groupId, handlers, useRequestHeaderV3);
+                case WRITE -> coalesceWrites(groupId, handlers, requestHeaderVersion);
+                case READ -> coalesceReads(groupId, handlers, requestHeaderVersion);
+                case SUMMARY -> coalesceReadSummaries(groupId, handlers, requestHeaderVersion);
+                case DELETE -> coalesceDeletes(groupId, handlers, requestHeaderVersion);
+                case INITIALIZE -> coalesceInitializations(groupId, handlers, requestHeaderVersion);
                 default -> throw new RuntimeException("Unknown rpc type: " + rpcType);
             };
         }
 
-        private static AbstractRequest.Builder<? extends AbstractRequest> coalesceWrites(String groupId, List<? extends PersisterStateManagerHandler> handlers, boolean useRequestHeaderV3) {
+        private static AbstractRequest.Builder<? extends AbstractRequest> coalesceWrites(String groupId, List<? extends PersisterStateManagerHandler> handlers, short requestHeaderVersion) {
             Map<Uuid, List<WriteShareGroupStateRequestData.PartitionData>> partitionData = new HashMap<>();
             handlers.forEach(persHandler -> {
                 assert persHandler instanceof WriteStateHandler;
@@ -1739,11 +1739,11 @@ public class PersisterStateManager {
                         .setTopicId(entry.getKey())
                         .setPartitions(entry.getValue()))
                     .collect(Collectors.toList())),
-                useRequestHeaderV3
+                requestHeaderVersion
             );
         }
 
-        private static AbstractRequest.Builder<? extends AbstractRequest> coalesceReads(String groupId, List<? extends PersisterStateManagerHandler> handlers, boolean useRequestHeaderV3) {
+        private static AbstractRequest.Builder<? extends AbstractRequest> coalesceReads(String groupId, List<? extends PersisterStateManagerHandler> handlers, short requestHeaderVersion) {
             Map<Uuid, List<ReadShareGroupStateRequestData.PartitionData>> partitionData = new HashMap<>();
             handlers.forEach(persHandler -> {
                 assert persHandler instanceof ReadStateHandler;
@@ -1763,11 +1763,11 @@ public class PersisterStateManager {
                         .setTopicId(entry.getKey())
                         .setPartitions(entry.getValue()))
                     .collect(Collectors.toList())),
-                useRequestHeaderV3
+                requestHeaderVersion
             );
         }
 
-        private static AbstractRequest.Builder<? extends AbstractRequest> coalesceReadSummaries(String groupId, List<? extends PersisterStateManagerHandler> handlers, boolean useRequestHeaderV3) {
+        private static AbstractRequest.Builder<? extends AbstractRequest> coalesceReadSummaries(String groupId, List<? extends PersisterStateManagerHandler> handlers, short requestHeaderVersion) {
             Map<Uuid, List<ReadShareGroupStateSummaryRequestData.PartitionData>> partitionData = new HashMap<>();
             handlers.forEach(persisterStateManagerHandler -> {
                 assert persisterStateManagerHandler instanceof ReadStateSummaryHandler;
@@ -1787,11 +1787,11 @@ public class PersisterStateManager {
                         .setTopicId(entry.getKey())
                         .setPartitions(entry.getValue()))
                     .collect(Collectors.toList())),
-                useRequestHeaderV3
+                requestHeaderVersion
             );
         }
 
-        private static AbstractRequest.Builder<? extends AbstractRequest> coalesceDeletes(String groupId, List<? extends PersisterStateManagerHandler> handlers, boolean useRequestHeaderV3) {
+        private static AbstractRequest.Builder<? extends AbstractRequest> coalesceDeletes(String groupId, List<? extends PersisterStateManagerHandler> handlers, short requestHeaderVersion) {
             Map<Uuid, List<DeleteShareGroupStateRequestData.PartitionData>> partitionData = new HashMap<>();
             handlers.forEach(persHandler -> {
                 assert persHandler instanceof DeleteStateHandler;
@@ -1810,11 +1810,11 @@ public class PersisterStateManager {
                         .setTopicId(entry.getKey())
                         .setPartitions(entry.getValue()))
                     .toList()),
-                useRequestHeaderV3
+                requestHeaderVersion
             );
         }
 
-        private static AbstractRequest.Builder<? extends AbstractRequest> coalesceInitializations(String groupId, List<? extends PersisterStateManagerHandler> handlers, boolean useRequestHeaderV3) {
+        private static AbstractRequest.Builder<? extends AbstractRequest> coalesceInitializations(String groupId, List<? extends PersisterStateManagerHandler> handlers, short requestHeaderVersion) {
             Map<Uuid, List<InitializeShareGroupStateRequestData.PartitionData>> partitionData = new HashMap<>();
             handlers.forEach(persHandler -> {
                 assert persHandler instanceof InitializeStateHandler;
@@ -1835,7 +1835,7 @@ public class PersisterStateManager {
                         .setTopicId(entry.getKey())
                         .setPartitions(entry.getValue()))
                     .toList()),
-                useRequestHeaderV3
+                requestHeaderVersion
             );
         }
     }
