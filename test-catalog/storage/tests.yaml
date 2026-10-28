@@ -346,6 +346,7 @@ org.apache.kafka.storage.internals.log.LocalLogTest:
 - testCreateAndDeleteSegment
 - testDeleteSegmentFilesAsync
 - testDeleteSegmentFilesSync
+- testFailedReadCheckDoesNotBlockTheNextOne
 - testFlushingNonExistentDir
 - testLogAppend
 - testLogDeleteDirName
@@ -372,6 +373,8 @@ org.apache.kafka.storage.internals.log.LocalLogTest:
 - testReadFailureAfterTransferFailureMarksLogDirOffline
 - testRemoveAndDeleteSegmentsAsync
 - testRemoveAndDeleteSegmentsSync
+- testReportedReadFailureIsNotDroppedByRunningReadCheck
+- testReportedReadFailureMarksLogDirOfflineWithoutReread
 - testRollEmptyActiveSegment
 - testRollSegmentErrorWhenNextOffsetIsIllegal
 - testRollSegmentThatAlreadyExists
@@ -483,6 +486,8 @@ org.apache.kafka.storage.internals.log.LogCleanerTest:
 org.apache.kafka.storage.internals.log.LogConcurrencyTest:
 - testUncommittedDataNotConsumed
 - testUncommittedDataNotConsumedFrequentSegmentRolls
+org.apache.kafka.storage.internals.log.LogDirFailureChannelTest:
+- testOnlyTheFailureThatTakesLogDirOfflineIsLoggedAndEnqueued
 org.apache.kafka.storage.internals.log.LogLoaderTest:
 - testBogusIndexSegmentsAreRemoved
 - testCleanShutdownFile

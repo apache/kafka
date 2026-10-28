@@ -4341,8 +4341,11 @@ org.apache.kafka.common.network.SslTransportLayerTest:
 - testServerRequestMetrics
 - testServerTruststoreDynamicUpdate
 - testTlsDefaults
+- testTransferFromDoesNotReportFailedWriteAsFailedRead
 - testTransferFromDoesNotSendStaleBytesAfterFailedRead
 - testTransferFromDoesNotSendStaleBytesAtEndOfFile
+- testTransferFromThrowsClosedFileChannelAsIs
+- testTransferFromThrowsFileReadExceptionWhenSizeFails
 - testUngracefulRemoteCloseDuringHandshakeRead
 - testUngracefulRemoteCloseDuringHandshakeWrite
 - testUnsupportedCiphers
@@ -4659,8 +4662,11 @@ org.apache.kafka.common.record.internal.FileRecordsTest:
 - testTruncateNotCalledIfSizeIsBiggerThanTargetSize
 - testTruncateNotCalledIfSizeIsSameAsTargetSize
 - testWriteToDoesNotNotifyHandlerWhenChannelClosed
+- testWriteToDoesNotNotifyHandlerWhenFileClosed
 - testWriteToNotifiesHandlerAndRethrows
-- testWriteToNotifiesHandlerWhenSizeFails
+- testWriteToNotifiesHandlerOfSocketFailureOnlyOverPlaintext
+- testWriteToNotifiesHandlerOnlyOfFailedReadsWhenChannelDistinguishesThem
+- testWriteToReportsFailedSizeAsFailedRead
 org.apache.kafka.common.record.internal.LegacyRecordTest:
 - testChecksum
 - testEquality
