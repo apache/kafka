@@ -2463,8 +2463,8 @@ public class StreamsMembershipManagerTest {
 
         final List<StreamsGroupHeartbeatResponseData.Status> statuses = List.of(
             new StreamsGroupHeartbeatResponseData.Status()
-                .setStatusCode(StreamsGroupHeartbeatResponse.Status.ASSIGNMENT_DELAYED.code())
-                .setStatusDetail("Assignment delayed due to the configured initial rebalance delay.")
+                .setStatusCode(StreamsGroupHeartbeatResponse.Status.MISSING_SOURCE_TOPICS.code())
+                .setStatusDetail("Source topics are missing.")
         );
 
         final StreamsGroupHeartbeatResponse responseWithoutTasks = makeHeartbeatResponse(
@@ -2485,6 +2485,68 @@ public class StreamsMembershipManagerTest {
             false
         );
         completeAssignment(tasksAssignedEvent2);
+    }
+
+    @Test
+    public void testAssignmentDelayedKeepsReadyGroupReady() {
+        setupStreamsRebalanceDataWithOneSubtopologyOneSourceTopic(SUBTOPOLOGY_ID_0, TOPIC_0);
+        final Set<StreamsRebalanceData.TaskId> activeTasks =
+            Set.of(new StreamsRebalanceData.TaskId(SUBTOPOLOGY_ID_0, PARTITION_0));
+        when(subscriptionState.assignedPartitions())
+            .thenReturn(Set.of())
+            .thenReturn(Set.of(new TopicPartition(TOPIC_0, PARTITION_0)));
+        joining();
+        reconcile(makeHeartbeatResponseWithActiveTasks(SUBTOPOLOGY_ID_0, List.of(PARTITION_0)));
+        acknowledging(verifyOnTasksAssignedCallbackNeededEventAddedToBackgroundEventHandler(activeTasks, Set.of(), Set.of(), true));
+
+        final StreamsGroupHeartbeatResponse delayedResponse = makeHeartbeatResponse(
+            null,
+            null,
+            null,
+            MEMBER_EPOCH,
+            List.of(
+                new StreamsGroupHeartbeatResponseData.Status()
+                    .setStatusCode(StreamsGroupHeartbeatResponse.Status.ASSIGNMENT_DELAYED.code())
+                    .setStatusDetail("Assignment delayed due to the configured assignment interval.")
+            )
+        );
+        membershipManager.onHeartbeatSuccess(delayedResponse);
+        membershipManager.poll(time.milliseconds());
+
+        verify(backgroundEventHandler, times(tasksAssignedAddCount)).add(any(StreamsTasksAssignedEvent.class));
+        verifyInStateAcknowledging(membershipManager);
+    }
+
+    @Test
+    public void testAssignmentDelayedWithMissingTopicsMakesReadyGroupNotReady() {
+        setupStreamsRebalanceDataWithOneSubtopologyOneSourceTopic(SUBTOPOLOGY_ID_0, TOPIC_0);
+        final Set<StreamsRebalanceData.TaskId> activeTasks =
+            Set.of(new StreamsRebalanceData.TaskId(SUBTOPOLOGY_ID_0, PARTITION_0));
+        when(subscriptionState.assignedPartitions())
+            .thenReturn(Set.of())
+            .thenReturn(Set.of(new TopicPartition(TOPIC_0, PARTITION_0)));
+        joining();
+        reconcile(makeHeartbeatResponseWithActiveTasks(SUBTOPOLOGY_ID_0, List.of(PARTITION_0)));
+        acknowledging(verifyOnTasksAssignedCallbackNeededEventAddedToBackgroundEventHandler(activeTasks, Set.of(), Set.of(), true));
+
+        final StreamsGroupHeartbeatResponse delayedResponse = makeHeartbeatResponse(
+            null,
+            null,
+            null,
+            MEMBER_EPOCH,
+            List.of(
+                new StreamsGroupHeartbeatResponseData.Status()
+                    .setStatusCode(StreamsGroupHeartbeatResponse.Status.ASSIGNMENT_DELAYED.code())
+                    .setStatusDetail("Assignment delayed due to the configured assignment interval."),
+                new StreamsGroupHeartbeatResponseData.Status()
+                    .setStatusCode(StreamsGroupHeartbeatResponse.Status.MISSING_INTERNAL_TOPICS.code())
+                    .setStatusDetail("One or more internal topics are missing.")
+            )
+        );
+        membershipManager.onHeartbeatSuccess(delayedResponse);
+        membershipManager.poll(time.milliseconds());
+
+        verifyOnTasksAssignedCallbackNeededEventAddedToBackgroundEventHandler(activeTasks, Set.of(), Set.of(), false);
     }
 
     private void verifyThatNoTasksHaveBeenRevoked() {
