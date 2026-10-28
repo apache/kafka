@@ -300,7 +300,7 @@ public class ClusterMirrorConfigTest {
     @Test
     public void testAclsIncludeWithMultipleFields() {
         Properties props = new Properties();
-        props.setProperty(ClusterMirrorConfig.ACLS_INCLUDE_CONFIG, "TOPIC;.*;READ;ALLOW");
+        props.setProperty(ClusterMirrorConfig.ACLS_INCLUDE_CONFIG, "TOPIC;.*;.*;READ;ALLOW");
 
         ClusterMirrorConfig config = ClusterMirrorConfig.fromProperties(props);
 
@@ -315,22 +315,21 @@ public class ClusterMirrorConfigTest {
     public void testAclsIncludeWithExtraFields() {
         Properties props = new Properties();
         props.setProperty(ClusterMirrorConfig.ACLS_INCLUDE_CONFIG,
-                "TOPIC;.*;READ;ALLOW;User:alice;extrafield;moredata");
+                "TOPIC;.*;.*;READ;ALLOW;User:alice;extrafield;moredata");
 
         ClusterMirrorConfig config = ClusterMirrorConfig.fromProperties(props);
 
         assertEquals(1, config.aclIncludeRules().size());
         ClusterMirrorConfig.MirrorAclRule rule = config.aclIncludeRules().get(0);
-        assertEquals("User:alice", rule.principal());
-        // Extra fields beyond the 6th are captured in the host pattern (split limit=6)
-        assertNotNull(rule.hostPattern());
-        assertTrue(rule.hostPattern().matcher("extrafield;moredata").matches());
+        assertEquals("User:alice;extrafield;moredata", rule.principal());
+        // Extra semicolons after the principal are preserved as part of the principal (split limit=6)
+        assertTrue(rule.principal().contains(";extrafield;moredata"));
     }
 
     @Test
     public void testAclsIncludeWithPrincipal() {
         Properties props = new Properties();
-        props.setProperty(ClusterMirrorConfig.ACLS_INCLUDE_CONFIG, "TOPIC;.*;READ;ALLOW;User:alice");
+        props.setProperty(ClusterMirrorConfig.ACLS_INCLUDE_CONFIG, "TOPIC;.*;.*;READ;ALLOW;User:alice");
 
         ClusterMirrorConfig config = ClusterMirrorConfig.fromProperties(props);
 
@@ -340,9 +339,9 @@ public class ClusterMirrorConfigTest {
     }
 
     @Test
-    public void testAclsIncludeWihWildcardPrincipal() {
+    public void testAclsIncludeWithWildcardPrincipal() {
         Properties props = new Properties();
-        props.setProperty(ClusterMirrorConfig.ACLS_INCLUDE_CONFIG, "TOPIC;.*;READ;ALLOW;User:*");
+        props.setProperty(ClusterMirrorConfig.ACLS_INCLUDE_CONFIG, "TOPIC;.*;.*;READ;ALLOW;User:*");
 
         ClusterMirrorConfig config = ClusterMirrorConfig.fromProperties(props);
 
@@ -356,7 +355,7 @@ public class ClusterMirrorConfigTest {
     public void testAclsIncludeWithPrincipalDN() {
         Properties props = new Properties();
         props.setProperty(ClusterMirrorConfig.ACLS_INCLUDE_CONFIG,
-                "TOPIC;.*;READ;ALLOW;User:CN=billing-service,OU=Finance,O=Enterprise,L=London,C=GB");
+                "TOPIC;.*;.*;READ;ALLOW;User:CN=billing-service,OU=Finance,O=Enterprise,L=London,C=GB");
 
         ClusterMirrorConfig config = ClusterMirrorConfig.fromProperties(props);
 
@@ -372,7 +371,7 @@ public class ClusterMirrorConfigTest {
     public void testAclsIncludeWithCommaContainingPrincipal() {
         Properties props = new Properties();
         props.setProperty(ClusterMirrorConfig.ACLS_INCLUDE_CONFIG,
-                "TOPIC;.*;READ;ALLOW;User:CN=billing-service,OU=Finance,O=Enterprise,L=London,C=GB||TOPIC;.*;WRITE;ALLOW;User:alice");
+                "TOPIC;.*;.*;READ;ALLOW;User:CN=billing-service,OU=Finance,O=Enterprise,L=London,C=GB||TOPIC;.*;.*;WRITE;ALLOW;User:alice");
 
         ClusterMirrorConfig config = ClusterMirrorConfig.fromProperties(props);
 
@@ -388,7 +387,7 @@ public class ClusterMirrorConfigTest {
     @Test
     public void testAclsIncludeWithPipeContainingPrincipal() {
         Properties props = new Properties();
-        props.setProperty(ClusterMirrorConfig.ACLS_INCLUDE_CONFIG, "TOPIC;.*;READ;ALLOW;User:alice|bob");
+        props.setProperty(ClusterMirrorConfig.ACLS_INCLUDE_CONFIG, "TOPIC;.*;.*;READ;ALLOW;User:alice|bob");
 
         ClusterMirrorConfig config = ClusterMirrorConfig.fromProperties(props);
 
@@ -400,7 +399,7 @@ public class ClusterMirrorConfigTest {
     @Test
     public void testAclsIncludeIncludingEmpty() {
         Properties props = new Properties();
-        props.setProperty(ClusterMirrorConfig.ACLS_EXCLUDE_CONFIG, "TOPIC;.*;WRITE||||CLUSTER;.*;ALL;DENY");
+        props.setProperty(ClusterMirrorConfig.ACLS_EXCLUDE_CONFIG, "TOPIC;.*;.*;WRITE||||CLUSTER;.*;.*;ALL;DENY");
 
         ClusterMirrorConfig config = ClusterMirrorConfig.fromProperties(props);
 
@@ -430,7 +429,7 @@ public class ClusterMirrorConfigTest {
     @Test
     public void testAclsIncludeWithInvalidOperation() {
         Properties props = new Properties();
-        props.setProperty(ClusterMirrorConfig.ACLS_INCLUDE_CONFIG, "TOPIC;.*;INVALID_OP;ALLOW");
+        props.setProperty(ClusterMirrorConfig.ACLS_INCLUDE_CONFIG, "TOPIC;.*;.*;INVALID_OP;ALLOW");
 
         ConfigException ex = assertThrows(ConfigException.class, () -> ClusterMirrorConfig.fromProperties(props));
         assertTrue(ex.getMessage().contains("Invalid ACL rule"));
@@ -439,7 +438,7 @@ public class ClusterMirrorConfigTest {
     @Test
     public void testAclsIncludeWithInvalidResource() {
         Properties props = new Properties();
-        props.setProperty(ClusterMirrorConfig.ACLS_INCLUDE_CONFIG, "INVALID_TYPE;.*;READ");
+        props.setProperty(ClusterMirrorConfig.ACLS_INCLUDE_CONFIG, "INVALID_TYPE;.*;.*;READ");
 
         ConfigException ex = assertThrows(ConfigException.class, () -> ClusterMirrorConfig.fromProperties(props));
         assertTrue(ex.getMessage().contains("Invalid ACL rule"));
@@ -448,7 +447,7 @@ public class ClusterMirrorConfigTest {
     @Test
     public void testAclsIncludeWithInvalidPermission() {
         Properties props = new Properties();
-        props.setProperty(ClusterMirrorConfig.ACLS_INCLUDE_CONFIG, "TOPIC;.*;READ;INVALID_PERMISSION");
+        props.setProperty(ClusterMirrorConfig.ACLS_INCLUDE_CONFIG, "TOPIC;.*;.*;READ;INVALID_PERMISSION");
 
         ConfigException ex = assertThrows(ConfigException.class, () -> ClusterMirrorConfig.fromProperties(props));
         assertTrue(ex.getMessage().contains("Invalid ACL rule"));
@@ -457,7 +456,7 @@ public class ClusterMirrorConfigTest {
     @Test
     public void testAclsIncludeWithWhitespaceInFields() {
         Properties props = new Properties();
-        props.setProperty(ClusterMirrorConfig.ACLS_INCLUDE_CONFIG, "  TOPIC  ;  .*  ;  READ  ;  ALLOW  ;  User:alice  ");
+        props.setProperty(ClusterMirrorConfig.ACLS_INCLUDE_CONFIG, "  TOPIC  ;  .*  ;  .*  ;  READ  ;  ALLOW  ;  User:alice  ");
 
         ClusterMirrorConfig config = ClusterMirrorConfig.fromProperties(props);
 
@@ -472,7 +471,7 @@ public class ClusterMirrorConfigTest {
     @Test
     public void testAclsIncludeWithAnyResource() {
         Properties props = new Properties();
-        props.setProperty(ClusterMirrorConfig.ACLS_INCLUDE_CONFIG, "ANY;.*;READ;ALLOW;User:alice");
+        props.setProperty(ClusterMirrorConfig.ACLS_INCLUDE_CONFIG, "ANY;.*;.*;READ;ALLOW;User:alice");
 
         ClusterMirrorConfig config = ClusterMirrorConfig.fromProperties(props);
 
@@ -484,7 +483,7 @@ public class ClusterMirrorConfigTest {
     @Test
     public void testAclsIncludeWithAnyOperation() {
         Properties props = new Properties();
-        props.setProperty(ClusterMirrorConfig.ACLS_INCLUDE_CONFIG, "TOPIC;.*;ANY;ALLOW;User:alice");
+        props.setProperty(ClusterMirrorConfig.ACLS_INCLUDE_CONFIG, "TOPIC;.*;.*;ANY;ALLOW;User:alice");
 
         ClusterMirrorConfig config = ClusterMirrorConfig.fromProperties(props);
 
@@ -496,7 +495,7 @@ public class ClusterMirrorConfigTest {
     @Test
     public void testAclsIncludeWithAnyPermission() {
         Properties props = new Properties();
-        props.setProperty(ClusterMirrorConfig.ACLS_INCLUDE_CONFIG, "TOPIC;.*;READ;ANY;User:alice");
+        props.setProperty(ClusterMirrorConfig.ACLS_INCLUDE_CONFIG, "TOPIC;.*;.*;READ;ANY;User:alice");
 
         ClusterMirrorConfig config = ClusterMirrorConfig.fromProperties(props);
 
@@ -508,7 +507,7 @@ public class ClusterMirrorConfigTest {
     @Test
     public void testAclsIncludeWithUnknownResource() {
         Properties props = new Properties();
-        props.setProperty(ClusterMirrorConfig.ACLS_INCLUDE_CONFIG, "UNKNOWN;.*;READ;ALLOW");
+        props.setProperty(ClusterMirrorConfig.ACLS_INCLUDE_CONFIG, "UNKNOWN;.*;.*;READ;ALLOW");
 
         ConfigException ex = assertThrows(ConfigException.class, () -> ClusterMirrorConfig.fromProperties(props));
         assertTrue(ex.getMessage().contains("Invalid ACL rule"));
@@ -517,7 +516,7 @@ public class ClusterMirrorConfigTest {
     @Test
     public void testAclsIncludeWithUnknownOperation() {
         Properties props = new Properties();
-        props.setProperty(ClusterMirrorConfig.ACLS_INCLUDE_CONFIG, "TOPIC;.*;UNKNOWN;ALLOW");
+        props.setProperty(ClusterMirrorConfig.ACLS_INCLUDE_CONFIG, "TOPIC;.*;.*;UNKNOWN;ALLOW");
 
         ConfigException ex = assertThrows(ConfigException.class, () -> ClusterMirrorConfig.fromProperties(props));
         assertTrue(ex.getMessage().contains("Invalid ACL rule"));
@@ -526,7 +525,64 @@ public class ClusterMirrorConfigTest {
     @Test
     public void testAclsIncludeWithUnknownPermission() {
         Properties props = new Properties();
-        props.setProperty(ClusterMirrorConfig.ACLS_INCLUDE_CONFIG, "TOPIC;.*;READ;UNKNOWN");
+        props.setProperty(ClusterMirrorConfig.ACLS_INCLUDE_CONFIG, "TOPIC;.*;.*;READ;UNKNOWN");
+
+        ConfigException ex = assertThrows(ConfigException.class, () -> ClusterMirrorConfig.fromProperties(props));
+        assertTrue(ex.getMessage().contains("Invalid ACL rule"));
+    }
+
+    @Test
+    public void testAclsIncludeWithLowercaseResourceType() {
+        Properties props = new Properties();
+        props.setProperty(ClusterMirrorConfig.ACLS_INCLUDE_CONFIG, "topic;.*;.*;read;allow");
+
+        ClusterMirrorConfig config = ClusterMirrorConfig.fromProperties(props);
+
+        assertEquals(1, config.aclIncludeRules().size());
+        ClusterMirrorConfig.MirrorAclRule rule = config.aclIncludeRules().get(0);
+        assertEquals(ResourceType.TOPIC, rule.resourceType());
+    }
+
+    @Test
+    public void testAclsIncludeWithLowercaseOperation() {
+        Properties props = new Properties();
+        props.setProperty(ClusterMirrorConfig.ACLS_INCLUDE_CONFIG, "TOPIC;.*;.*;read;allow");
+
+        ClusterMirrorConfig config = ClusterMirrorConfig.fromProperties(props);
+
+        assertEquals(1, config.aclIncludeRules().size());
+        ClusterMirrorConfig.MirrorAclRule rule = config.aclIncludeRules().get(0);
+        assertEquals(AclOperation.READ, rule.operation());
+    }
+
+    @Test
+    public void testAclsIncludeWithLowercasePermissionType() {
+        Properties props = new Properties();
+        props.setProperty(ClusterMirrorConfig.ACLS_INCLUDE_CONFIG, "TOPIC;.*;.*;READ;allow");
+
+        ClusterMirrorConfig config = ClusterMirrorConfig.fromProperties(props);
+
+        assertEquals(1, config.aclIncludeRules().size());
+        ClusterMirrorConfig.MirrorAclRule rule = config.aclIncludeRules().get(0);
+        assertEquals(AclPermissionType.ALLOW, rule.permissionType());
+    }
+
+    @Test
+    public void testAclsIncludeWithLowercaseAny() {
+        Properties props = new Properties();
+        props.setProperty(ClusterMirrorConfig.ACLS_INCLUDE_CONFIG, "TOPIC;.*;.*;any;allow");
+
+        ClusterMirrorConfig config = ClusterMirrorConfig.fromProperties(props);
+
+        assertEquals(1, config.aclIncludeRules().size());
+        ClusterMirrorConfig.MirrorAclRule rule = config.aclIncludeRules().get(0);
+        assertNull(rule.operation());
+    }
+
+    @Test
+    public void testAclsIncludeWithLowercaseUnknown() {
+        Properties props = new Properties();
+        props.setProperty(ClusterMirrorConfig.ACLS_INCLUDE_CONFIG, "TOPIC;.*;.*;unknown;allow");
 
         ConfigException ex = assertThrows(ConfigException.class, () -> ClusterMirrorConfig.fromProperties(props));
         assertTrue(ex.getMessage().contains("Invalid ACL rule"));
@@ -535,7 +591,7 @@ public class ClusterMirrorConfigTest {
     @Test
     public void testAclsExclude() {
         Properties props = new Properties();
-        props.setProperty(ClusterMirrorConfig.ACLS_EXCLUDE_CONFIG, "TOPIC;.*;WRITE");
+        props.setProperty(ClusterMirrorConfig.ACLS_EXCLUDE_CONFIG, "TOPIC;.*;.*;WRITE");
 
         ClusterMirrorConfig config = ClusterMirrorConfig.fromProperties(props);
 
@@ -560,7 +616,7 @@ public class ClusterMirrorConfigTest {
     @Test
     public void testAclRuleWithHost() {
         Properties props = new Properties();
-        props.setProperty(ClusterMirrorConfig.ACLS_INCLUDE_CONFIG, "TOPIC;test-.*;READ;ALLOW;User:alice;192\\.168\\..*");
+        props.setProperty(ClusterMirrorConfig.ACLS_INCLUDE_CONFIG, "TOPIC;test-.*;192\\.168\\..*;READ;ALLOW;User:alice");
 
         ClusterMirrorConfig config = ClusterMirrorConfig.fromProperties(props);
 
@@ -575,7 +631,7 @@ public class ClusterMirrorConfigTest {
     @Test
     public void testAclRuleWithEmptyHost() {
         Properties props = new Properties();
-        props.setProperty(ClusterMirrorConfig.ACLS_INCLUDE_CONFIG, "TOPIC;.*;READ;ALLOW;User:alice;");
+        props.setProperty(ClusterMirrorConfig.ACLS_INCLUDE_CONFIG, "TOPIC;.*;;;;;READ;ALLOW;User:alice");
 
         ClusterMirrorConfig config = ClusterMirrorConfig.fromProperties(props);
 
@@ -628,10 +684,10 @@ public class ClusterMirrorConfigTest {
                 )
         );
 
-        ClusterMirrorConfig.MirrorAclRule ruleMatch = ClusterMirrorConfig.MirrorAclRule.parse("TOPIC;.*;READ;ALLOW;User:alice;192\\.168\\..*");
+        ClusterMirrorConfig.MirrorAclRule ruleMatch = ClusterMirrorConfig.MirrorAclRule.parse("TOPIC;.*;192\\.168\\..*;READ;ALLOW;User:alice");
         assertTrue(ruleMatch.matches(binding));
 
-        ClusterMirrorConfig.MirrorAclRule ruleNoMatch = ClusterMirrorConfig.MirrorAclRule.parse("TOPIC;.*;READ;ALLOW;User:alice;10\\..*");
+        ClusterMirrorConfig.MirrorAclRule ruleNoMatch = ClusterMirrorConfig.MirrorAclRule.parse("TOPIC;.*;10\\..*;READ;ALLOW;User:alice");
         assertFalse(ruleNoMatch.matches(binding));
     }
 

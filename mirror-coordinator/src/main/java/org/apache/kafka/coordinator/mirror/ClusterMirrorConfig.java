@@ -35,6 +35,7 @@ import com.google.re2j.PatternSyntaxException;
 
 import java.util.Arrays;
 import java.util.List;
+import java.util.Locale;
 import java.util.Properties;
 
 import static org.apache.kafka.common.config.ConfigDef.Importance.HIGH;
@@ -394,10 +395,10 @@ public final class ClusterMirrorConfig extends AbstractConfig {
     public record MirrorAclRule(
             ResourceType resourceType,
             Pattern resourceNamePattern,
+            Pattern hostPattern,
             AclOperation operation,
             AclPermissionType permissionType,
-            String principal,
-            Pattern hostPattern
+            String principal
     ) {
         private static final String SEPARATOR = ";";
         private static final String WILDCARD = ".*";
@@ -407,7 +408,7 @@ public final class ClusterMirrorConfig extends AbstractConfig {
         // Using a small domain-specific language to make ACLs filtering easier
         private static final String DOC = "Rules are separated by || (double pipe). "
                 + "Each rule uses semicolon-separated fields: "
-                + "resourceType;resourceName;operation;permissionType;principal;host. "
+                + "resourceType;resourceName;host;operation;permissionType;principal. "
                 + "The resourceType, operation, and permissionType fields use enum values (e.g. TOPIC, READ, ALLOW). "
                 + "Use ANY or empty to match all values for these fields. "
                 + "The resourceName and host fields support regex patterns (e.g. test-.*, 192\\.168\\..*). "
@@ -431,27 +432,29 @@ public final class ClusterMirrorConfig extends AbstractConfig {
             if (trimmed.equals(WILDCARD)) {
                 return MATCH_ALL_RULE;
             }
-            // Split with limit 6 to preserve any extra semicolons in the principal (5th field).
+            // Split with limit 6 to preserve any extra semicolons in the principal (6th field).
             // This ensures that principals containing semicolons are preserved as-is.
             String[] parts = trimmed.split(SEPARATOR, 6);
             return new MirrorAclRule(
                     parseResourceType(parts, 0),
                     parseResourceName(parts, 1),
-                    parseOperation(parts, 2),
-                    parsePermissionType(parts, 3),
-                    parsePrincipal(parts, 4),
-                    parseHost(parts, 5)
+                    parseHost(parts, 2),
+                    parseOperation(parts, 3),
+                    parsePermissionType(parts, 4),
+                    parsePrincipal(parts, 5)
             );
         }
 
         private static ResourceType parseResourceType(String[] parts, int index) {
             if (index >= parts.length) return null;
             String value = parts[index].trim();
-            if (value.isEmpty() || value.equalsIgnoreCase(ResourceType.ANY.name())) return null;
-            if (value.equals(ResourceType.UNKNOWN.name())) {
+            if (value.isEmpty()) return null;
+            String upper = value.toUpperCase(Locale.ROOT);
+            if (upper.equals(ResourceType.ANY.name())) return null;
+            if (upper.equals(ResourceType.UNKNOWN.name())) {
                 throw new IllegalArgumentException("UNKNOWN resource type is not allowed");
             }
-            return ResourceType.valueOf(value);
+            return ResourceType.valueOf(upper);
         }
 
         private static Pattern parseResourceName(String[] parts, int index) {
@@ -461,24 +464,35 @@ public final class ClusterMirrorConfig extends AbstractConfig {
             return compilePattern(value);
         }
 
+        private static Pattern parseHost(String[] parts, int index) {
+            if (index >= parts.length) return null;
+            String value = parts[index].trim();
+            if (value.isEmpty()) return null;
+            return compilePattern(value);
+        }
+
         private static AclOperation parseOperation(String[] parts, int index) {
             if (index >= parts.length) return null;
             String value = parts[index].trim();
-            if (value.isEmpty() || value.equalsIgnoreCase(AclOperation.ANY.name())) return null;
-            if (value.equals(AclOperation.UNKNOWN.name())) {
+            if (value.isEmpty()) return null;
+            String upper = value.toUpperCase(Locale.ROOT);
+            if (upper.equals(AclOperation.ANY.name())) return null;
+            if (upper.equals(AclOperation.UNKNOWN.name())) {
                 throw new IllegalArgumentException("UNKNOWN operation is not allowed");
             }
-            return AclOperation.valueOf(value);
+            return AclOperation.valueOf(upper);
         }
 
         private static AclPermissionType parsePermissionType(String[] parts, int index) {
             if (index >= parts.length) return null;
             String value = parts[index].trim();
-            if (value.isEmpty() || value.equalsIgnoreCase(AclPermissionType.ANY.name())) return null;
-            if (value.equals(AclPermissionType.UNKNOWN.name())) {
+            if (value.isEmpty()) return null;
+            String upper = value.toUpperCase(Locale.ROOT);
+            if (upper.equals(AclPermissionType.ANY.name())) return null;
+            if (upper.equals(AclPermissionType.UNKNOWN.name())) {
                 throw new IllegalArgumentException("UNKNOWN permission type is not allowed");
             }
-            return AclPermissionType.valueOf(value);
+            return AclPermissionType.valueOf(upper);
         }
 
         private static String parsePrincipal(String[] parts, int index) {
@@ -486,13 +500,6 @@ public final class ClusterMirrorConfig extends AbstractConfig {
             String value = parts[index].trim();
             if (value.isEmpty()) return null;
             return value;
-        }
-
-        private static Pattern parseHost(String[] parts, int index) {
-            if (index >= parts.length) return null;
-            String value = parts[index].trim();
-            if (value.isEmpty()) return null;
-            return compilePattern(value);
         }
 
         /**
