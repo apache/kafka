@@ -19,7 +19,9 @@ package org.apache.kafka.coordinator.group;
 import org.apache.kafka.common.Configurable;
 import org.apache.kafka.common.KafkaException;
 import org.apache.kafka.common.config.AbstractConfig;
+import org.apache.kafka.common.config.ConfigData;
 import org.apache.kafka.common.config.ConfigException;
+import org.apache.kafka.common.config.provider.ConfigProvider;
 import org.apache.kafka.common.record.internal.CompressionType;
 import org.apache.kafka.coordinator.group.api.assignor.ConsumerGroupPartitionAssignor;
 import org.apache.kafka.coordinator.group.api.assignor.GroupAssignment;
@@ -49,8 +51,10 @@ import java.util.HashMap;
 import java.util.List;
 import java.util.Map;
 import java.util.OptionalInt;
+import java.util.Set;
 import java.util.SortedMap;
 import java.util.concurrent.CompletableFuture;
+import java.util.concurrent.atomic.AtomicInteger;
 
 import static org.junit.jupiter.api.Assertions.assertEquals;
 import static org.junit.jupiter.api.Assertions.assertInstanceOf;
@@ -1000,6 +1004,93 @@ public class GroupCoordinatorConfigTest {
         props.put(configName, value);
         GroupCoordinatorConfig.clampDynamicConfigs(props);
         assertEquals(expectedValue, props.get(configName));
+    }
+
+    @Test
+    public void testClampDynamicConfigsRejectsDisallowedProviderWithoutInvokingAnyProvider() {
+        Map<String, String> props = new HashMap<>();
+        props.put(GroupCoordinatorConfig.CONSUMER_GROUP_MIN_ASSIGNMENT_INTERVAL_MS_CONFIG, "30000");
+        props.put(GroupCoordinatorConfig.CONSUMER_GROUP_MAX_ASSIGNMENT_INTERVAL_MS_CONFIG, "60000");
+        props.put(GroupCoordinatorConfig.CONSUMER_GROUP_ASSIGNMENT_INTERVAL_MS_CONFIG, "${allowed:path:key}");
+        // One allowlisted provider alongside two that are not on the allowlist.
+        props.put("config.providers", "allowed,disallowed1,disallowed2");
+        props.put("config.providers.allowed.class", AllowedConfigProvider.class.getName());
+        props.put("config.providers.disallowed1.class", DisallowedConfigProvider.class.getName());
+        props.put("config.providers.disallowed2.class", DisallowedConfigProvider.class.getName());
+
+        AllowedConfigProvider.reset();
+        DisallowedConfigProvider.reset();
+        String previousAllowlist = System.getProperty(AbstractConfig.AUTOMATIC_CONFIG_PROVIDERS_PROPERTY);
+        System.setProperty(AbstractConfig.AUTOMATIC_CONFIG_PROVIDERS_PROPERTY, AllowedConfigProvider.class.getName());
+        try {
+            assertThrows(ConfigException.class, () -> GroupCoordinatorConfig.clampDynamicConfigs(props));
+            assertEquals(0, AllowedConfigProvider.invocations(),
+                "an allowlisted provider must not be instantiated either, once a disallowed provider is declared alongside it");
+            assertEquals(0, DisallowedConfigProvider.invocations(),
+                "a disallowed config provider must never be instantiated");
+        } finally {
+            if (previousAllowlist == null) {
+                System.clearProperty(AbstractConfig.AUTOMATIC_CONFIG_PROVIDERS_PROPERTY);
+            } else {
+                System.setProperty(AbstractConfig.AUTOMATIC_CONFIG_PROVIDERS_PROPERTY, previousAllowlist);
+            }
+        }
+    }
+
+    private abstract static class CountingConfigProvider implements ConfigProvider {
+        CountingConfigProvider(AtomicInteger invocations) {
+            invocations.incrementAndGet();
+        }
+
+        @Override
+        public void configure(Map<String, ?> configs) {
+        }
+
+        @Override
+        public ConfigData get(String path) {
+            return new ConfigData(Map.of("key", "45000"));
+        }
+
+        @Override
+        public ConfigData get(String path, Set<String> keys) {
+            return get(path);
+        }
+
+        @Override
+        public void close() {
+        }
+    }
+
+    public static class AllowedConfigProvider extends CountingConfigProvider {
+        private static final AtomicInteger INVOCATIONS = new AtomicInteger();
+
+        public AllowedConfigProvider() {
+            super(INVOCATIONS);
+        }
+
+        static void reset() {
+            INVOCATIONS.set(0);
+        }
+
+        static int invocations() {
+            return INVOCATIONS.get();
+        }
+    }
+
+    public static class DisallowedConfigProvider extends CountingConfigProvider {
+        private static final AtomicInteger INVOCATIONS = new AtomicInteger();
+
+        public DisallowedConfigProvider() {
+            super(INVOCATIONS);
+        }
+
+        static void reset() {
+            INVOCATIONS.set(0);
+        }
+
+        static int invocations() {
+            return INVOCATIONS.get();
+        }
     }
 
     @Test

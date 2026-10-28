@@ -17,10 +17,16 @@
 
 package kafka.server
 
+import java.{lang, util}
+import java.nio.file.Files
+import java.util.{Optional, Properties, Map => JMap}
+import java.util.concurrent.{CompletionStage, TimeUnit}
+import java.util.concurrent.atomic.AtomicReference
 import kafka.network.{DataPlaneAcceptor, SocketServer}
 import kafka.utils.TestUtils
 import org.apache.kafka.common.acl.{AclBinding, AclBindingFilter}
-import org.apache.kafka.common.config.{ConfigException, SslConfigs}
+import org.apache.kafka.common.config.provider.FileConfigProvider
+import org.apache.kafka.common.config.{AbstractConfig, ConfigException, SslConfigs}
 import org.apache.kafka.common.internals.Plugin
 import org.apache.kafka.common.metrics.{JmxReporter, KafkaMetric, Metrics, MetricsReporter}
 import org.apache.kafka.common.network.ListenerName
@@ -47,10 +53,6 @@ import org.mockito.ArgumentMatchers.{anySet, anyString}
 import org.mockito.Mockito._
 import org.mockito.{ArgumentCaptor, ArgumentMatchers, Mockito}
 
-import java.util.concurrent.atomic.AtomicReference
-import java.util.concurrent.{CompletionStage, TimeUnit}
-import java.util.{Optional, Properties, Map => JMap}
-import java.{lang, util}
 import scala.collection.Set
 import scala.jdk.CollectionConverters._
 
@@ -114,6 +116,30 @@ class DynamicBrokerConfigTest {
 
     assertEquals(GroupCoordinatorConfig.CONSUMER_GROUP_MAX_ASSIGNMENT_INTERVAL_MS_DEFAULT,
       config.getInt(GroupCoordinatorConfig.CONSUMER_GROUP_ASSIGNMENT_INTERVAL_MS_CONFIG))
+  }
+
+  @Test
+  def testAssignmentIntervalResolvedThroughConfigProviderIsApplied(): Unit = {
+    val providerFile = Files.createTempFile("provider", ".properties")
+    try {
+      Files.writeString(providerFile, "interval=2000")
+
+      val props = TestUtils.createBrokerConfig(0, port = 8181)
+      val config = KafkaConfig(props)
+      val dynamicConfig = config.dynamicConfig
+      dynamicConfig.initialize(None)
+
+      val props1 = new Properties
+      props1.put(AbstractConfig.CONFIG_PROVIDERS_CONFIG, "file")
+      props1.put(AbstractConfig.CONFIG_PROVIDERS_CONFIG + ".file.class", classOf[FileConfigProvider].getName)
+      props1.put(GroupCoordinatorConfig.CONSUMER_GROUP_ASSIGNMENT_INTERVAL_MS_CONFIG,
+        "${file:" + providerFile.toAbsolutePath + ":interval}")
+      dynamicConfig.updateBrokerConfig(0, props1)
+
+      assertEquals(2000, config.getInt(GroupCoordinatorConfig.CONSUMER_GROUP_ASSIGNMENT_INTERVAL_MS_CONFIG))
+    } finally {
+      Files.deleteIfExists(providerFile)
+    }
   }
 
   @Test
