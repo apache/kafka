@@ -1489,6 +1489,7 @@ org.apache.kafka.coordinator.group.modern.share.ShareGroupConfigProviderTest:
 - testShareGroupDLQTopicWithoutGroupConfig
 org.apache.kafka.coordinator.group.modern.share.ShareGroupConfigTest:
 - testConfigs
+- testDlqManagerFetcherThreadCountDefaultsToTwo
 - testInvalidConfigs
 org.apache.kafka.coordinator.group.modern.share.ShareGroupMemberTest:
 - testAsShareGroupDescribeMember

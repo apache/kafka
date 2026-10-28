@@ -597,6 +597,12 @@ org.apache.kafka.server.requests.ProduceRequestTest:
 - testZSTDProduceRequest
 org.apache.kafka.server.share.CachedSharePartitionTest:
 - testCachedSharePartitionEqualsAndHashCode
+org.apache.kafka.server.share.dlq.DefaultShareGroupDLQManagerTest:
+- testFetchThreadsAreNamedDaemonThreads
+- testStopIsIdempotent
+- testStopRunsQueuedReadsAndDoesNotInterruptRunningOnes
+- testStopTerminatesFetchExecutor
+- testStopWaitsForReadsAlreadyRunning
 org.apache.kafka.server.share.dlq.ShareGroupDLQRecordFetcherTest:
 - combination
 - many
@@ -605,6 +611,7 @@ org.apache.kafka.server.share.dlq.ShareGroupDLQRecordFetcherTest:
 - testAsyncReadResumeCompletesEmptyWhenProcessingThrows
 - testAsyncReadResumeWithNoProgressCompletesEmpty
 - testAsyncReadResumesLoopWhenPending
+- testBatchesStartingBeyondEndOffsetAreNotLoaded
 - testCompressedBatchAfterUncompressedRespectsCombinedBudget
 - testCompressedBatchExceedingDecompressedBudgetSkippedButLaterBatchStillCollected
 - testCompressedBatchExceedingDecompressedBudgetSkipsBatch
@@ -614,6 +621,7 @@ org.apache.kafka.server.share.dlq.ShareGroupDLQRecordFetcherTest:
 - testFetchRecordsAcrossMultipleReads
 - testFetchStopsOnceEnoughContentCollectedWithoutScanningWholeRange
 - testHardStopPreventsFurtherReads
+- testLegacyBatchBaseOffsetIsNeverRead
 - testLegacyCompressedBatchExceedingCumulativeCapSkipsBatchButLaterBatchStillCollected
 - testMissingPartitionResultYieldsNoRecords
 - testMultipleBatchesInSingleReadStopAtBudgetBetweenBatches
@@ -626,6 +634,7 @@ org.apache.kafka.server.share.dlq.ShareGroupDLQRecordFetcherTest:
 - testSingleReadWithUncompressedMagicV2AndLegacyCompressedBatchesAllCollected
 - testSingleRecordWithFabricatedLengthRejectedWithoutLargeAllocation
 - testUncompressedBatchStopsMidBatchOnceBudgetReached
+- testWantedBatchAfterOutOfOrderBatchIsStillCollected
 org.apache.kafka.server.share.dlq.ShareGroupDLQStateManagerTest:
 - testCoalesceProduceRequestsDefersHandlersThatExceedPartitionBudget
 - testCoalesceProduceRequestsKeepsDifferentDlqTopicsSeparate
@@ -637,6 +646,7 @@ org.apache.kafka.server.share.dlq.ShareGroupDLQStateManagerTest:
 - testCompleteHandlerSafelyIsolatesOneHandlersUncaughtExceptionFromOthers
 - testConstructorRejectsNullCacheHelper
 - testConstructorRejectsNullClient
+- testConstructorRejectsNullFetchExecutor
 - testConstructorRejectsNullLogReader
 - testConstructorRejectsNullShareGroupMetrics
 - testConstructorRejectsNullTime
@@ -688,7 +698,10 @@ org.apache.kafka.server.share.dlq.ShareGroupDLQStateManagerTest:
 - testDlqValidationFailureCompletesFutureSynchronously
 - testFetcherBudgetSplitsRoundEvenWhenSizeFloorWouldHaveRoomForMore
 - testMultipleAccumulatedHandlersInNodeRPCMap
+- testRecordIsProducedWithHeadersOnlyWhenFetchExecutorRejects
 - testResolveRoundSurvivesSynchronousExceptionFromMaybeFetchRecordData
+- testSourceRecordsAreNotReadWhenCopyIsDisabled
+- testSourceRecordsAreReadOnTheFetchExecutorNotTheCaller
 - testStartIsIdempotent
 - testStopWithoutStartIsNoOp
 org.apache.kafka.server.share.fetch.DelayedShareFetchKeyTest:
