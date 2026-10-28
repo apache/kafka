@@ -504,7 +504,7 @@ public class ShareCoordinatorMetadataCacheHelperImplTest {
     }
 
     @Test
-    public void testIsRequestHeaderV3SupportedReturnsTrue() {
+    public void testRequestHeaderVersionReturnsV3() {
         MetadataCache mockMetadataCache = mock(MetadataCache.class);
         when(mockMetadataCache.metadataVersion()).thenReturn(MetadataVersion.IBP_4_5_IV0);
 
@@ -516,12 +516,12 @@ public class ShareCoordinatorMetadataCacheHelperImplTest {
             () -> ServerLogConfigs.MAX_MESSAGE_BYTES_DEFAULT
         );
 
-        assertTrue(cache.isRequestHeaderV3Supported());
+        assertEquals((short) 3, cache.requestHeaderVersion());
         verify(mockMetadataCache, times(1)).metadataVersion();
     }
 
     @Test
-    public void testIsRequestHeaderV3SupportedReturnsFalseOnOlderMetadataVersion() {
+    public void testRequestHeaderVersionOnOlderMetadataVersion() {
         MetadataCache mockMetadataCache = mock(MetadataCache.class);
         when(mockMetadataCache.metadataVersion()).thenReturn(MetadataVersion.IBP_4_4_IV2);
 
@@ -533,12 +533,12 @@ public class ShareCoordinatorMetadataCacheHelperImplTest {
             () -> ServerLogConfigs.MAX_MESSAGE_BYTES_DEFAULT
         );
 
-        assertFalse(cache.isRequestHeaderV3Supported());
+        assertEquals((short) 2, cache.requestHeaderVersion());
         verify(mockMetadataCache, times(1)).metadataVersion();
     }
 
     @Test
-    public void testIsRequestHeaderV3SupportedReturnsFalseOnException() {
+    public void testRequestHeaderVersionReturnsMinimumVersionHeaderOnException() {
         MetadataCache mockMetadataCache = mock(MetadataCache.class);
         when(mockMetadataCache.metadataVersion()).thenThrow(new IllegalStateException("Unknown metadata version"));
 
@@ -550,7 +550,7 @@ public class ShareCoordinatorMetadataCacheHelperImplTest {
             () -> ServerLogConfigs.MAX_MESSAGE_BYTES_DEFAULT
         );
 
-        assertFalse(cache.isRequestHeaderV3Supported());
+        assertEquals(MetadataVersion.MINIMUM_VERSION.requestHeaderVersion(), cache.requestHeaderVersion());
         verify(mockMetadataCache, times(1)).metadataVersion();
     }
 
