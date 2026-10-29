@@ -421,6 +421,38 @@ public class SharePartitionManager implements AutoCloseable {
             log.debug("Removed share session with key {}", key);
         }
 
+        return releaseAcquiredRecordsForSession(groupId, memberId, topicIdPartitions);
+    }
+
+    /**
+     * Called on a member-leave notification from the share session cache, triggered when a client
+     * connection is detected as disconnected. Unlike {@link #releaseSession(String, String)}, the
+     * session (and its acquired records) is only released if the session currently cached for
+     * {@code groupId}/{@code memberId} still belongs to {@code connectionId}. If the member has
+     * already reconnected and established a new session on a different connection, that new session
+     * is left untouched, and nothing is released: the member has not actually left the group.
+     *
+     * @param groupId      The group id, this is used to identify the share group.
+     * @param memberId     The member id is used to identify the client.
+     * @param connectionId The connection id of the disconnected connection that triggered this call.
+     */
+    private void releaseSessionOnMemberLeave(String groupId, String memberId, String connectionId) {
+        ShareSessionKey key = shareSessionKey(groupId, memberId);
+        ShareSession removedSession = cache.removeIfConnectionMatches(key, connectionId);
+        if (removedSession == null) {
+            log.debug("Skipping release for {} on disconnect of connection {} as the session was " +
+                "already replaced or removed, likely due to a reconnect", key, connectionId);
+            return;
+        }
+        log.debug("Removed share session with key {} on disconnect of connection {}", key, connectionId);
+        releaseAcquiredRecordsForSession(groupId, memberId, topicIdPartitions(removedSession));
+    }
+
+    private CompletableFuture<Map<TopicIdPartition, ShareAcknowledgeResponseData.PartitionData>> releaseAcquiredRecordsForSession(
+        String groupId,
+        String memberId,
+        List<TopicIdPartition> topicIdPartitions
+    ) {
         // Additionally release the acquired records for the respective member.
         if (topicIdPartitions.isEmpty()) {
             return CompletableFuture.completedFuture(Map.of());
@@ -532,16 +564,16 @@ public class SharePartitionManager implements AutoCloseable {
                     log.error("Acknowledge data present in Initial Fetch Request for group {} member {}", groupId, memberId);
                     throw Errors.INVALID_REQUEST.exception();
                 }
+                ImplicitLinkedHashCollection<CachedSharePartition> cachedSharePartitions = new
+                        ImplicitLinkedHashCollection<>(shareFetchData.size());
+                shareFetchData.forEach(topicIdPartition ->
+                    cachedSharePartitions.mustAdd(new CachedSharePartition(topicIdPartition, false)));
                 // The remove and the subsequent create must happen atomically under the cache's lock.
                 ShareSessionKey responseShareSessionKey;
                 synchronized (cache) {
                     if (cache.remove(key) != null) {
                         log.debug("Removed share session with key {}", key);
                     }
-                    ImplicitLinkedHashCollection<CachedSharePartition> cachedSharePartitions = new
-                            ImplicitLinkedHashCollection<>(shareFetchData.size());
-                    shareFetchData.forEach(topicIdPartition ->
-                        cachedSharePartitions.mustAdd(new CachedSharePartition(topicIdPartition, false)));
                     responseShareSessionKey = cache.maybeCreateSession(groupId, memberId,
                         cachedSharePartitions, clientConnectionId);
                 }
@@ -636,6 +668,11 @@ public class SharePartitionManager implements AutoCloseable {
         }
     }
 
+    // Visible for testing.
+    public ShareSessionCache shareSessionCache() {
+        return cache;
+    }
+
     /**
      * The cachedTopicIdPartitionsInShareSession method is used to get the cached topic-partitions in the share session.
      *
@@ -651,10 +688,18 @@ public class SharePartitionManager implements AutoCloseable {
         if (shareSession == null) {
             return List.of();
         }
+        return topicIdPartitions(shareSession);
+    }
+
+    private static List<TopicIdPartition> topicIdPartitions(ShareSession shareSession) {
         List<TopicIdPartition> cachedTopicIdPartitions = new ArrayList<>();
-        shareSession.partitionMap().forEach(cachedSharePartition -> cachedTopicIdPartitions.add(
-            new TopicIdPartition(cachedSharePartition.topicId(), new TopicPartition(cachedSharePartition.topic(), cachedSharePartition.partition()
-            ))));
+        // The partition map may be concurrently modified by a share fetch request for the same session,
+        // hence hold the session lock while iterating, as done by every other reader of the partition map.
+        synchronized (shareSession) {
+            shareSession.partitionMap().forEach(cachedSharePartition -> cachedTopicIdPartitions.add(
+                new TopicIdPartition(cachedSharePartition.topicId(), new TopicPartition(cachedSharePartition.topic(), cachedSharePartition.partition()
+                ))));
+        }
         return cachedTopicIdPartitions;
     }
 
@@ -930,8 +975,8 @@ public class SharePartitionManager implements AutoCloseable {
     private class ShareGroupListenerImpl implements ShareGroupListener {
 
         @Override
-        public void onMemberLeave(String groupId, String memberId) {
-            releaseSession(groupId, memberId);
+        public void onMemberLeave(String groupId, String memberId, String connectionId) {
+            releaseSessionOnMemberLeave(groupId, memberId, connectionId);
         }
 
         @Override

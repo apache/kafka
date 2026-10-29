@@ -24,10 +24,15 @@ public interface ShareGroupListener {
     /**
      * Called when member leaves the group.
      *
-     * @param groupId  The id of the group.
-     * @param memberId The id of the member.
+     * @param groupId      The id of the group.
+     * @param memberId     The id of the member.
+     * @param connectionId The id of the connection whose disconnect triggered this member leave. A
+     *                     new session for the same group/member may have already been established on
+     *                     a different connection by the time this is called, in which case that new
+     *                     session belongs to a member that has not actually left the group and must
+     *                     not be affected by this call.
      */
-    void onMemberLeave(String groupId, String memberId);
+    void onMemberLeave(String groupId, String memberId, String connectionId);
 
     /**
      * Called when the group is empty.

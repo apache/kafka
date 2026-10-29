@@ -131,31 +131,61 @@ public class ShareSessionCache {
      * Maybe remove the session and notify member leave listener. This is called when the connection
      * is disconnected for the client. The session may have already been removed by the client as part
      * of final epoch, hence check if the session is still present in the cache.
+     * <p>
+     * The member may have already reconnected on a new connection and replaced the session at
+     * {@code key} by the time this runs (or while it runs); {@code connectionId} identifies the
+     * connection whose disconnect triggered this call, and every check below is against the session
+     * currently cached at {@code key} still belonging to that same connection, so a session belonging
+     * to a reconnected member is never affected by this call.
      *
-     * @param key The share session key.
+     * @param key          The share session key.
+     * @param connectionId The connection id whose disconnect triggered this call.
      */
-    private void maybeRemoveAndNotifyListenersOnMemberLeave(ShareSessionKey key) {
-        ShareSession session;
+    private void maybeRemoveAndNotifyListenersOnMemberLeave(ShareSessionKey key, String connectionId) {
+        boolean sessionOwnedByConnection;
         synchronized (this) {
-            session = get(key);
-            if (session != null) {
-                // As session is not null hence it's removed as part of connection disconnect. Hence,
-                // update the evictions metric.
+            ShareSession session = sessions.get(key);
+            sessionOwnedByConnection = session != null && session.connectionId().equals(connectionId);
+            if (sessionOwnedByConnection) {
+                // The session is still owned by the disconnected connection hence it's removed as
+                // part of connection disconnect. Hence, update the evictions metric.
                 evictionsMeter.mark();
             }
         }
 
-        if (session != null) {
+        if (sessionOwnedByConnection) {
             // Notify the share group listener that member has left the group. Notify listener prior
             // removing the session from the cache to ensure that the listener has access to the session
             // while it is still in the cache.
             if (shareGroupListener != null) {
-                shareGroupListener.onMemberLeave(key.groupId(), key.memberId());
+                shareGroupListener.onMemberLeave(key.groupId(), key.memberId(), connectionId);
             }
-            // Try removing session if not already removed. The listener might have removed the session
-            // already.
-            remove(session);
+            // Try removing session if not already removed by the listener above, but only if it still
+            // belongs to the disconnected connection.
+            removeIfConnectionMatches(key, connectionId);
         }
+    }
+
+    /**
+     * Remove the session at {@code key}, but only if it currently belongs to {@code connectionId}.
+     * <p>
+     * This guards against the member having reconnected and established a new session at the same
+     * key (over a new connection) in the window before this is called: without this check, a
+     * late-arriving removal tied to the old, disconnected connection could otherwise evict the new,
+     * live session.
+     *
+     * @param key          The share session key.
+     * @param connectionId The connection id that the currently cached session at {@code key} must
+     *                     match for it to be removed.
+     * @return The removed session, or null if nothing was removed (either no session was present, or
+     *         the cached session belongs to a different connection).
+     */
+    public synchronized ShareSession removeIfConnectionMatches(ShareSessionKey key, String connectionId) {
+        ShareSession session = sessions.get(key);
+        if (session != null && session.connectionId().equals(connectionId)) {
+            return remove(session);
+        }
+        return null;
     }
 
     /**
@@ -287,7 +317,7 @@ public class ShareSessionCache {
                     // Try removing session and notify listeners. The session might already be removed
                     // as part of final epoch from client, so we need to check if the session is still
                     // present in the cache.
-                    maybeRemoveAndNotifyListenersOnMemberLeave(sessionKeyAndState.shareSessionKey());
+                    maybeRemoveAndNotifyListenersOnMemberLeave(sessionKeyAndState.shareSessionKey(), connectionId);
                 }
                 // Notify the share group listener if the group is empty. This should be checked regardless
                 // session is evicted by connection disconnect or client's final epoch.
