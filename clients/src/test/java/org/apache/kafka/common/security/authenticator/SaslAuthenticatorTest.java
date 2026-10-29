@@ -148,7 +148,6 @@ import static org.junit.jupiter.api.Assertions.assertInstanceOf;
 import static org.junit.jupiter.api.Assertions.assertNotNull;
 import static org.junit.jupiter.api.Assertions.assertThrows;
 import static org.junit.jupiter.api.Assertions.assertTrue;
-import static org.junit.jupiter.api.Assertions.fail;
 
 /**
  * Tests for the Sasl authenticator. These use a test harness that runs a simple socket server that echos back responses.
@@ -1287,9 +1286,7 @@ public class SaslAuthenticatorTest {
 
         server = createEchoServer(securityProtocol);
         try {
-            createAndCheckClientConnectionFailure(securityProtocol, node);
-            fail("Did not generate exception prior to creating channel");
-        } catch (IOException expected) {
+            IOException expected = assertThrows(IOException.class, () -> createAndCheckClientConnectionFailure(securityProtocol, node));
             server.verifyAuthenticationMetrics(0, 0);
             server.verifyReauthenticationMetrics(0, 0);
             Throwable underlyingCause = expected.getCause().getCause().getCause();
