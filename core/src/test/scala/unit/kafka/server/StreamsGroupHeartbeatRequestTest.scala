@@ -29,6 +29,7 @@ import org.apache.kafka.common.errors.{InvalidConfigurationException, Unsupporte
 import org.apache.kafka.server.common.Feature
 import org.junit.jupiter.api.Assertions.{assertEquals, assertNotNull, assertThrows, assertTrue}
 
+import java.util.Optional
 import java.util.concurrent.ExecutionException
 import scala.jdk.CollectionConverters._
 
@@ -978,6 +979,66 @@ class StreamsGroupHeartbeatRequestTest(cluster: ClusterInstance) extends GroupCo
         s"Expected InvalidConfigurationException but got ${executionException.getCause}")
       assertTrue(executionException.getCause.getMessage.contains("'does-not-exist' is not a registered task assignor"),
         s"Unexpected error message: ${executionException.getCause.getMessage}")
+    } finally {
+      admin.close()
+    }
+  }
+
+  @ClusterTest
+  def testStreamsGroupSelectsBalancedAssignorWithoutBrokerConfig(): Unit = {
+    val admin = cluster.admin()
+    val groupId = "test-group"
+    val topicName = "test-topic"
+
+    try {
+      TestUtils.createOffsetsTopicWithAdmin(
+        admin = admin,
+        brokers = cluster.brokers.values().asScala.toSeq,
+        controllers = cluster.controllers().values().asScala.toSeq
+      )
+
+      TestUtils.createTopicWithAdmin(
+        admin = admin,
+        brokers = cluster.brokers.values().asScala.toSeq,
+        controllers = cluster.controllers().values().asScala.toSeq,
+        topic = topicName,
+        numPartitions = 3
+      )
+      TestUtils.waitUntilTrue(() => {
+        admin.listTopics().names().get().contains(topicName)
+      }, msg = s"Topic $topicName is not available to the group coordinator")
+
+      // Every built-in assignor is registered by default, so a group can select the balanced assignor without
+      // any broker configuration.
+      val groupConfigResource = new ConfigResource(ConfigResource.Type.GROUP, groupId)
+      val balancedAlterOp = new AlterConfigOp(
+        new ConfigEntry(GroupConfig.STREAMS_ASSIGNOR_NAME_CONFIG, "balanced"),
+        AlterConfigOp.OpType.SET
+      )
+      admin.incrementalAlterConfigs(
+        Map(groupConfigResource -> List(balancedAlterOp).asJavaCollection).asJava
+      ).all().get()
+
+      TestUtils.waitUntilTrue(() => {
+        streamsGroupHeartbeat(
+          groupId = groupId,
+          memberId = "test-member",
+          rebalanceTimeoutMs = 1000,
+          activeTasks = List.empty,
+          standbyTasks = List.empty,
+          warmupTasks = List.empty,
+          topology = createMockTopology(topicName)
+        ).errorCode == Errors.NONE.code()
+      }, "StreamsGroupHeartbeatRequest did not succeed within the timeout period.")
+
+      // The described assignor is the one the coordinator resolves the group config to, which would be the
+      // default sticky assignor if "balanced" were not registered. Group config propagation is asynchronous,
+      // so wait for it.
+      var assignorName: Optional[String] = Optional.empty()
+      TestUtils.waitUntilTrue(() => {
+        assignorName = admin.describeStreamsGroups(List(groupId).asJava).all().get().get(groupId).assignorName()
+        assignorName == Optional.of("balanced")
+      }, s"Expected the group to report the balanced assignor, but it reported $assignorName.")
     } finally {
       admin.close()
     }
