@@ -203,7 +203,8 @@ public class EnvelopeUtilsTest {
         ByteBuffer envelopeRequestBuffer = new EnvelopeRequest.Builder(
             forwardedRequestBuffer,
             PRINCIPAL_SERDE.serialize(FORWARDED_PRINCIPAL),
-            clientAddress
+            clientAddress,
+            ApiKeys.ENVELOPE.requestHeaderVersion(ApiKeys.ENVELOPE.latestVersion())
         ).build().serializeWithHeader(envelopeRequestHeader);
 
         // Advance the buffer past the envelope header before constructing the Request.
