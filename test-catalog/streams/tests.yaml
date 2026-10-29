@@ -3020,6 +3020,8 @@ org.apache.kafka.streams.processor.internals.StreamThreadTest:
 - shouldNotThrowWhenStandbyTasksAssignedAndNoStateStoresForTopology
 - shouldOnlyCompleteShutdownAfterRebalanceNotInProgress
 - shouldOnlyShutdownOnce
+- shouldPauseProcessingThreadsWhileUncommittedBytesExceedLimit
+- shouldPauseProcessingThreadsWhileUncommittedBytesExceedLimitAndStreamsGroupNotReady
 - shouldPopulateWireTopologyDescriptionWhenPushEnabled
 - shouldProcessWhenPartitionAssigned
 - shouldProcessWhenRunning
@@ -3333,6 +3335,7 @@ org.apache.kafka.streams.processor.internals.TaskManagerTest:
 - shouldFailOnCommitFatal
 - shouldFailStreamThreadIfStateUpdaterDied
 - shouldFirstHandleTasksInStateUpdaterThenSuspendedActiveTasksInTaskRegistry
+- shouldForwardProcessingThreadsPausedToSchedulingTaskManager
 - shouldHandleExceptionThrownDuringRecyclingActiveTask
 - shouldHandleExceptionThrownDuringRecyclingStandbyTask
 - shouldHandleRebalanceEvents
@@ -3365,6 +3368,7 @@ org.apache.kafka.streams.processor.internals.TaskManagerTest:
 - shouldNotComputeOffsetSumForRunningStatelessTask
 - shouldNotFailForTimeoutExceptionOnConsumerCommit
 - shouldNotFailOnTimeoutException
+- shouldNotForwardProcessingThreadsPausedWithoutProcessingThreads
 - shouldNotLockAnythingIfStateDirIsEmpty
 - shouldNotPauseReadyTasksOnRebalanceComplete
 - shouldNotPublishTaskOffsetSumSnapshotUnderClassicProtocol
@@ -3950,6 +3954,7 @@ org.apache.kafka.streams.processor.internals.tasks.DefaultTaskExecutorTest:
 - shouldShutdownTaskExecutor
 - shouldUnassignTaskWhenNotProgressing
 - shouldUnassignTaskWhenRequired
+- shouldUnassignTaskWhileProcessingPaused
 org.apache.kafka.streams.processor.internals.tasks.DefaultTaskManagerTest:
 - shouldAddTask
 - shouldAssignTaskThatCanBeProcessed
@@ -3960,6 +3965,7 @@ org.apache.kafka.streams.processor.internals.tasks.DefaultTaskManagerTest:
 - shouldLockAnEmptySetOfTasks
 - shouldNotAssignAnyLockedTask
 - shouldNotAssignLockedTask
+- shouldNotAssignTaskWhileProcessingPaused
 - shouldNotAssignTasksForProcessingIfProcessingDisabled
 - shouldNotAssignTasksForPunctuationIfPunctuationDisabled
 - shouldNotAssignTasksIfUncaughtExceptionPresent
@@ -3975,6 +3981,7 @@ org.apache.kafka.streams.processor.internals.tasks.DefaultTaskManagerTest:
 - shouldReturnFromAwaitOnSignalProcessableTasks
 - shouldReturnFromAwaitOnUnassignment
 - shouldReturnFromAwaitOnUnlocking
+- shouldReturnFromAwaitWhenProcessingResumed
 - shouldShutdownTaskExecutors
 - shouldStartTaskExecutors
 - shouldUnassignLockingTask
