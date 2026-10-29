@@ -209,6 +209,7 @@ org.apache.kafka.server.ClientMetricsManagerTest:
 org.apache.kafka.server.CordonedLogDirsIntegrationTest:
 - testAlterPartitionWithCordonedLogDirs
 - testAlterReplicaWithCordonedLogDirs
+- testCordonRelativeLogDir
 - testCordonUncordonLogDirs
 - testCordonUnknownLogDirs
 - testDecommissionBroker

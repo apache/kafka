@@ -1120,6 +1120,7 @@ kafka.server.BrokerLifecycleManagerTest:
 - testKraftJBODMetadataVersionUpdateEvent
 - testRegistrationIncludesDirs
 - testRegistrationTimeout
+- testRelativeCordonedLogDirsIncludedInHeartbeatAfterInitialCatchUp
 - testSuccessfulRegistration
 kafka.server.BrokerMetricNamesTest:
 - testMetrics
@@ -1371,6 +1372,7 @@ kafka.server.DynamicBrokerConfigTest:
 - testDynamicListenerConfig
 - testDynamicLogConfigCordonedLogDirs
 - testDynamicLogConfigHandlesSynonymsCorrectly
+- testDynamicLogConfigRelativeCordonedLogDir
 - testDynamicLogLocalRetentionMsConfig
 - testDynamicLogLocalRetentionSizeConfig
 - testDynamicLogLocalRetentionSkipsOnInvalidConfig
@@ -1854,6 +1856,7 @@ kafka.server.KafkaConfigTest:
 - testPortInQuorumVotersNotRequiredToMatchFirstControllerListenerPortForThisKRaftController
 - testRejectsNegativeBrokerId
 - testRejectsNegativeNodeId
+- testRelativeLogDirWithRelativeOrAbsoluteCordon
 - testSaslJwksEndpointRetryDefaults
 - testSaslMechanismMirrorAdminProtocolDefaultsToInterBrokerProtocol
 - testSaslMechanismMirrorAdminProtocolExplicitlySet
