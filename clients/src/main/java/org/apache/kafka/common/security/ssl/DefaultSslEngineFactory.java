@@ -48,9 +48,11 @@ import java.security.cert.CertificateFactory;
 import java.security.spec.InvalidKeySpecException;
 import java.security.spec.PKCS8EncodedKeySpec;
 import java.util.ArrayList;
+import java.util.Arrays;
 import java.util.Base64;
 import java.util.Collections;
 import java.util.Date;
+import java.util.HashSet;
 import java.util.List;
 import java.util.Map;
 import java.util.Objects;
@@ -223,7 +225,7 @@ public class DefaultSslEngineFactory implements SslEngineFactory {
             return configured.toArray(new String[0]);
         }
 
-        Set<String> supportedCiphers = Set.of(supported);
+        Set<String> supportedCiphers = new HashSet<>(Arrays.asList(supported));
         List<String> accepted = configured.stream()
             .filter(supportedCiphers::contains)
             .collect(Collectors.toList());

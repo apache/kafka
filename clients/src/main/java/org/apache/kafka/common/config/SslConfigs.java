@@ -46,7 +46,9 @@ public class SslConfigs {
 
     public static final String SSL_CIPHER_SUITES_CONFIG = "ssl.cipher.suites";
     public static final String SSL_CIPHER_SUITES_DOC = "A list of cipher suites. This is a named combination of authentication, encryption, MAC and key exchange algorithm used to negotiate the security settings for a network connection using TLS or SSL network protocol. "
-            + "By default all the available cipher suites are supported.";
+            + "By default all the available cipher suites are supported. "
+            + "Configured cipher suites that are not supported by the JDK security provider are ignored and a warning is logged. "
+            + "If none of the configured cipher suites are supported, configuration fails with an error.";
 
     public static final String SSL_ENABLED_PROTOCOLS_CONFIG = "ssl.enabled.protocols";
     public static final String SSL_ENABLED_PROTOCOLS_DOC = "The list of protocols enabled for SSL connections. "
