@@ -5604,7 +5604,12 @@ org.apache.kafka.common.security.ssl.DefaultSslEngineFactoryTest:
 - testUnavailableKeyFactoryAlgorithmDoesNotThrow
 org.apache.kafka.common.security.ssl.SslPrincipalMapperTest:
 - testCommaWithWhitespace
+- testEmptyNameFallsThroughToNextRule
+- testEmptyNameWithNoOtherRuleIsRejected
 - testInvalidRules
+- testNameDerivedFromFullMatchWithAlternation
+- testNameDerivedFromFullMatchWithUnanchoredPattern
+- testReplacementAppliedOnce
 - testRulesSplitting
 - testSslPrincipalMapper
 - testValidRules
