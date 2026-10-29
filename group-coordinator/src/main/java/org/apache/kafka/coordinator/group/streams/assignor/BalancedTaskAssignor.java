@@ -47,7 +47,6 @@ import java.util.Set;
 import java.util.SortedSet;
 import java.util.TreeMap;
 import java.util.TreeSet;
-import java.util.function.BiPredicate;
 import java.util.function.Function;
 import java.util.stream.Collectors;
 
@@ -67,9 +66,11 @@ import java.util.stream.Collectors;
  *     <li>Standby tasks are placed on the least loaded process that does not hold the task yet, and then moved
  *     between processes as long as a move reduces the skew of the per-member task load. With
  *     {@code rack.aware.assignment.tags}, a standby first goes to the least loaded process that makes its task more
- *     rack-diverse, if there is one, and standbys only move between processes with the same tag values.</li>
+ *     rack-diverse and has a member below the per-member task quota of the {@link StickyTaskAssignor}, if there is
+ *     one, and a move must not lower the rack diversity of its task.</li>
  *     <li>Stateless active tasks continue the deal of step 1 where the stateful tasks stopped, so that all active
- *     tasks together are dealt in proportion to the member counts.</li>
+ *     tasks together are dealt in proportion to the member counts. With {@code rack.aware.assignment.tags}, they are
+ *     dealt before the standbys, so that the quota and the load of the standbys count them.</li>
  *     <li>Within a process, the tasks are spread over its members in three rounds, as the classic client spreads a
  *     process's tasks over its stream threads: stateful active tasks, then standby tasks, then stateless active
  *     tasks. Each round levels the members' total task counts. A stateful task stays on the member that currently
@@ -131,18 +132,27 @@ public class BalancedTaskAssignor implements TaskAssignor {
         dealTasks(processesById, period, 0, statefulTasks, process -> process.statefulActiveTasks);
 
         final int numStandbyReplicas = groupSpec.configs().numStandbyReplicas();
+        final List<String> rackAwareAssignmentTags = groupSpec.configs().rackAwareAssignmentTags();
+        // Without tags, the stateless tasks come after the standbys, so that the load by which the standbys are placed
+        // counts stateful tasks only. With tags, they come before, so that the quota of the rack-aware standbys counts
+        // every task, as in the sticky assignor. Where they go does not depend on the standbys.
+        final boolean statelessBeforeStandbys = numStandbyReplicas > 0 && !rackAwareAssignmentTags.isEmpty();
+        if (statelessBeforeStandbys) {
+            dealTasks(processesById, period, statefulTasks.size(), statelessTasks, process -> process.statelessActiveTasks);
+        }
+
         if (numStandbyReplicas > 0) {
             assignStandbyReplicaTasks(
                 processes.values(),
                 statefulTasks,
                 numStandbyReplicas,
-                groupSpec.configs().rackAwareAssignmentTags()
+                rackAwareAssignmentTags
             );
         }
 
-        // The stateless tasks come after the standbys, so that the load by which the standbys are placed counts
-        // stateful tasks only. Where they go does not depend on the standbys.
-        dealTasks(processesById, period, statefulTasks.size(), statelessTasks, process -> process.statelessActiveTasks);
+        if (!statelessBeforeStandbys) {
+            dealTasks(processesById, period, statefulTasks.size(), statelessTasks, process -> process.statelessActiveTasks);
+        }
 
         return buildGroupAssignment(processes.values());
     }
@@ -289,18 +299,17 @@ public class BalancedTaskAssignor implements TaskAssignor {
                 tasksShortOfReplicas, statefulTasks.size(), numStandbyReplicas, missingReplicas, processes.size());
         }
 
-        // A move between processes with the same tag values keeps the rack diversity of the task.
         balanceTasksOverProcesses(
             processes,
             process -> process.standbyTasks,
-            (source, destination) -> !rackAware || source.hasSameTagValues(destination, rackAwareAssignmentTags)
+            rackAware ? new RackDiversity(processes, rackAwareAssignmentTags) : null
         );
     }
 
     /**
      * Places the standby tasks that make their task more rack-diverse, each on the least loaded process among the
-     * most diverse ones, and returns the number placed per task. As in the classic assignor, a process takes any
-     * number of them.
+     * most diverse ones, and returns the number placed per task. As in the sticky assignor, a process takes them
+     * while one of its members is below the per-member task quota.
      */
     private static Map<TaskId, Integer> assignRackAwareStandbyReplicaTasks(final Collection<ProcessTasks> processes,
                                                                           final SortedSet<TaskId> statefulTasks,
@@ -313,13 +322,14 @@ public class BalancedTaskAssignor implements TaskAssignor {
             }
         }
 
+        final TaskQuota quota = new TaskQuota(processes, (long) statefulTasks.size() * numStandbyReplicas);
         // The processes are in sorted order of their ID, so a load tie goes to the smaller ID, as in BY_ASSIGNED_LOAD.
         final RackAwareStandbyPicker<ProcessTasks> picker = new RackAwareStandbyPicker<>(
             rackAwareAssignmentTags,
             processes,
             ProcessTasks::clientTags,
             ProcessTasks::assignedTaskLoad,
-            process -> true
+            quota::hasRoom
         );
         final Map<TaskId, Integer> placedReplicas = Utils.newHashMap(statefulTasks.size());
         for (final TaskId task : statefulTasks) {
@@ -333,7 +343,12 @@ public class BalancedTaskAssignor implements TaskAssignor {
                 final ProcessTasks process = pick.leastLoaded();
                 process.standbyTasks.add(task);
                 picker.markUsed(process);
-                picker.updated(process);
+                if (quota.taskAdded(process)) {
+                    // A lower quota can take the room of any process.
+                    picker.updatedAll();
+                } else {
+                    picker.updated(process);
+                }
                 placed++;
             }
             placedReplicas.put(task, placed);
@@ -365,18 +380,20 @@ public class BalancedTaskAssignor implements TaskAssignor {
 
     /**
      * Moves tasks from more loaded to less loaded processes until no single move reduces the skew of the per-member
-     * task load any further. A task is never moved to a process that already holds it as active or standby task, nor
-     * between two processes that {@code canMoveBetween} rejects.
+     * task load any further. A task is never moved to a process that already holds it as active or standby task, nor,
+     * with {@code rackDiversity}, so that its rack diversity drops.
+     *
+     * @param rackDiversity The rack diversity of the tasks, or {@code null} without {@code rack.aware.assignment.tags}.
      */
     private static void balanceTasksOverProcesses(final Collection<ProcessTasks> processes,
                                                   final Function<ProcessTasks, SortedSet<TaskId>> tasksToBalance,
-                                                  final BiPredicate<ProcessTasks, ProcessTasks> canMoveBetween) {
+                                                  final RackDiversity rackDiversity) {
         boolean keepBalancing = true;
         while (keepBalancing) {
             keepBalancing = false;
             for (final ProcessTasks source : processes) {
                 for (final ProcessTasks destination : processes) {
-                    if (source == destination || !shouldMoveATask(source, destination) || !canMoveBetween.test(source, destination)) {
+                    if (source == destination || !shouldMoveATask(source, destination)) {
                         continue;
                     }
 
@@ -385,9 +402,13 @@ public class BalancedTaskAssignor implements TaskAssignor {
                     final Iterator<TaskId> sourceIterator = tasksToBalance.apply(source).iterator();
                     while (shouldMoveATask(source, destination) && sourceIterator.hasNext()) {
                         final TaskId taskToMove = sourceIterator.next();
-                        if (!destination.hasTask(taskToMove)) {
+                        if (!destination.hasTask(taskToMove)
+                            && (rackDiversity == null || rackDiversity.keptByMove(taskToMove, source, destination))) {
                             sourceIterator.remove();
                             destinationTasks.add(taskToMove);
+                            if (rackDiversity != null) {
+                                rackDiversity.moved(taskToMove, source, destination);
+                            }
                             keepBalancing = true;
                         }
                     }
@@ -438,6 +459,116 @@ public class BalancedTaskAssignor implements TaskAssignor {
                 .add(taskId.partition());
         }
         return ret;
+    }
+
+    /**
+     * The per-member quota on active plus standby tasks of the {@link StickyTaskAssignor}: the tasks left over the
+     * members left, rounded up, where a member that reaches it leaves with its tasks. The members of a process are
+     * levelled once the placement is final, so the member that takes the n-th task of a process with c members reaches
+     * ceil(n / c).
+     */
+    private static final class TaskQuota {
+        private int members;
+        private long tasks;
+        private int tasksPerMember;
+
+        /**
+         * @param standbysToPlace The standbys still to place; the tasks the processes hold count as placed one by one.
+         */
+        private TaskQuota(final Collection<ProcessTasks> processes, final long standbysToPlace) {
+            tasks = standbysToPlace;
+            for (final ProcessTasks process : processes) {
+                members += process.capacity();
+                tasks += process.assignedTaskCount();
+            }
+            tasksPerMember = tasksPerMember();
+            for (final ProcessTasks process : processes) {
+                for (int taskCount = 1; taskCount <= process.assignedTaskCount(); taskCount++) {
+                    memberReached(memberTaskCount(taskCount, process.capacity()));
+                }
+            }
+        }
+
+        /** Whether one of the members of the process is below the quota. */
+        private boolean hasRoom(final ProcessTasks process) {
+            return process.assignedTaskCount() < (long) process.capacity() * tasksPerMember;
+        }
+
+        /** Counts the task just added to the process; returns whether the quota dropped. */
+        private boolean taskAdded(final ProcessTasks process) {
+            return memberReached(memberTaskCount(process.assignedTaskCount(), process.capacity()));
+        }
+
+        private boolean memberReached(final int memberTaskCount) {
+            if (memberTaskCount != tasksPerMember) {
+                return false;
+            }
+            members--;
+            tasks -= memberTaskCount;
+            final int previousTasksPerMember = tasksPerMember;
+            tasksPerMember = tasksPerMember();
+            return tasksPerMember < previousTasksPerMember;
+        }
+
+        private int tasksPerMember() {
+            return members == 0 ? 0 : (int) ((tasks + members - 1) / members);
+        }
+
+        /** The task count of the member that takes the {@code processTaskCount}-th task of a levelled process. */
+        private static int memberTaskCount(final int processTaskCount, final int capacity) {
+            return (processTaskCount + capacity - 1) / capacity;
+        }
+    }
+
+    /**
+     * The processes holding each stateful task, to tell whether moving a standby keeps the rack diversity of its task:
+     * the distinct values of no tag key among the holders may drop. A missing value counts as no value.
+     */
+    private static final class RackDiversity {
+        private final List<String> tagKeys;
+        private final Map<TaskId, List<ProcessTasks>> holders = new HashMap<>();
+
+        private RackDiversity(final Collection<ProcessTasks> processes, final List<String> tagKeys) {
+            this.tagKeys = tagKeys;
+            for (final ProcessTasks process : processes) {
+                for (final TaskId task : process.statefulActiveTasks) {
+                    holders.computeIfAbsent(task, taskId -> new ArrayList<>()).add(process);
+                }
+                for (final TaskId task : process.standbyTasks) {
+                    holders.computeIfAbsent(task, taskId -> new ArrayList<>()).add(process);
+                }
+            }
+        }
+
+        /** Whether moving the standby of the task from the source to the destination keeps its distinct values. */
+        private boolean keptByMove(final TaskId task, final ProcessTasks source, final ProcessTasks destination) {
+            for (final String key : tagKeys) {
+                final String sourceValue = source.clientTags.get(key);
+                final String destinationValue = destination.clientTags.get(key);
+                if (Objects.equals(sourceValue, destinationValue)) {
+                    continue;
+                }
+                // The source's value stays if another holder has it; the destination's value is new if none has it.
+                boolean sourceValueStays = sourceValue == null;
+                boolean destinationValueNew = destinationValue != null;
+                for (final ProcessTasks holder : holders.get(task)) {
+                    if (holder != source) {
+                        final String value = holder.clientTags.get(key);
+                        sourceValueStays |= Objects.equals(value, sourceValue);
+                        destinationValueNew &= !Objects.equals(value, destinationValue);
+                    }
+                }
+                if (!sourceValueStays && !destinationValueNew) {
+                    return false;
+                }
+            }
+            return true;
+        }
+
+        private void moved(final TaskId task, final ProcessTasks source, final ProcessTasks destination) {
+            final List<ProcessTasks> taskHolders = holders.get(task);
+            taskHolders.set(taskHolders.indexOf(source), destination);
+        }
     }
 
     /**
@@ -508,16 +639,6 @@ public class BalancedTaskAssignor implements TaskAssignor {
 
         private boolean hasTask(final TaskId task) {
             return statefulActiveTasks.contains(task) || statelessActiveTasks.contains(task) || standbyTasks.contains(task);
-        }
-
-        /** Whether both processes have the same value for every key, or both lack it. */
-        private boolean hasSameTagValues(final ProcessTasks other, final List<String> tagKeys) {
-            for (final String key : tagKeys) {
-                if (!Objects.equals(clientTags.get(key), other.clientTags.get(key))) {
-                    return false;
-                }
-            }
-            return true;
         }
 
         /**
