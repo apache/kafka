@@ -19,8 +19,8 @@ package org.apache.kafka.common.message;
 import org.apache.kafka.common.compress.Compression;
 import org.apache.kafka.common.protocol.ByteBufferAccessor;
 import org.apache.kafka.common.protocol.MessageUtil;
-import org.apache.kafka.common.record.MemoryRecords;
-import org.apache.kafka.common.record.SimpleRecord;
+import org.apache.kafka.common.record.internal.MemoryRecords;
+import org.apache.kafka.common.record.internal.SimpleRecord;
 
 import org.junit.jupiter.api.Test;
 
@@ -70,7 +70,7 @@ public class RecordsSerdeTest {
     }
 
     private void testRoundTrip(SimpleRecordsMessageData message, short version) {
-        ByteBuffer buf = MessageUtil.toByteBuffer(message, version);
+        ByteBuffer buf = MessageUtil.toByteBufferAccessor(message, version).buffer();
         SimpleRecordsMessageData message2 = deserialize(buf.duplicate(), version);
         assertEquals(message, message2);
         assertEquals(message.hashCode(), message2.hashCode());

@@ -30,27 +30,16 @@ import java.util.Collections
 import scala.concurrent.ExecutionContext.Implicits.global
 import scala.concurrent.Future
 
-@ClusterTestDefaults(types = Array(Type.KRAFT))
+@ClusterTestDefaults(
+  types = Array(Type.KRAFT),
+  serverProperties = Array(
+    new ClusterConfigProperty(key = GroupCoordinatorConfig.OFFSETS_TOPIC_PARTITIONS_CONFIG, value = "1"),
+    new ClusterConfigProperty(key = GroupCoordinatorConfig.OFFSETS_TOPIC_REPLICATION_FACTOR_CONFIG, value = "1")
+  )
+)
 class HeartbeatRequestTest(cluster: ClusterInstance) extends GroupCoordinatorBaseRequestTest(cluster) {
-  @ClusterTest(serverProperties = Array(
-    new ClusterConfigProperty(key = GroupCoordinatorConfig.OFFSETS_TOPIC_PARTITIONS_CONFIG, value = "1"),
-    new ClusterConfigProperty(key = GroupCoordinatorConfig.OFFSETS_TOPIC_REPLICATION_FACTOR_CONFIG, value = "1")
-  ))
-  def testHeartbeatWithOldConsumerGroupProtocolAndNewGroupCoordinator(): Unit = {
-    testHeartbeat()
-  }
-
-  @ClusterTest(types = Array(Type.KRAFT, Type.CO_KRAFT), serverProperties = Array(
-    new ClusterConfigProperty(key = GroupCoordinatorConfig.NEW_GROUP_COORDINATOR_ENABLE_CONFIG, value = "false"),
-    new ClusterConfigProperty(key = GroupCoordinatorConfig.GROUP_COORDINATOR_REBALANCE_PROTOCOLS_CONFIG, value = "classic"),
-    new ClusterConfigProperty(key = GroupCoordinatorConfig.OFFSETS_TOPIC_PARTITIONS_CONFIG, value = "1"),
-    new ClusterConfigProperty(key = GroupCoordinatorConfig.OFFSETS_TOPIC_REPLICATION_FACTOR_CONFIG, value = "1")
-  ))
-  def testHeartbeatWithOldConsumerGroupProtocolAndOldGroupCoordinator(): Unit = {
-    testHeartbeat()
-  }
-
-  private def testHeartbeat(): Unit = {
+  @ClusterTest
+  def testHeartbeatWithOldConsumerGroupProtocol(): Unit = {
     // Creates the __consumer_offsets topics because it won't be created automatically
     // in this test because it does not use FindCoordinator API.
     createOffsetsTopic()
@@ -188,6 +177,15 @@ class HeartbeatRequestTest(cluster: ClusterInstance) extends GroupCoordinatorBas
         memberId = leaderMemberId,
         generationId = -1,
         expectedError = Errors.UNKNOWN_MEMBER_ID,
+        version = version.toShort
+      )
+
+      // Heartbeat with empty group id.
+      heartbeat(
+        groupId = "",
+        memberId = leaderMemberId,
+        generationId = -1,
+        expectedError = Errors.INVALID_GROUP_ID,
         version = version.toShort
       )
     }

@@ -18,20 +18,17 @@
 package org.apache.kafka.clients.admin;
 
 import org.apache.kafka.common.KafkaFuture;
-import org.apache.kafka.common.annotation.InterfaceStability;
+import org.apache.kafka.common.annotation.InterfaceAudience;
 
 import java.util.Collection;
 import java.util.HashMap;
 import java.util.Map;
 import java.util.concurrent.ExecutionException;
 
-
 /**
- * The result of the {@link Admin#describeClassicGroups(Collection, DescribeClassicGroupsOptions)}} call.
- * <p>
- * The API of this class is evolving, see {@link Admin} for details.
+ * The result of the {@link Admin#describeClassicGroups(Collection, DescribeClassicGroupsOptions)} call.
  */
-@InterfaceStability.Evolving
+@InterfaceAudience.Public
 public class DescribeClassicGroupsResult {
 
     private final Map<String, KafkaFuture<ClassicGroupDescription>> futures;
@@ -51,7 +48,7 @@ public class DescribeClassicGroupsResult {
      * Return a future which yields all ClassicGroupDescription objects, if all the describes succeed.
      */
     public KafkaFuture<Map<String, ClassicGroupDescription>> all() {
-        return KafkaFuture.allOf(futures.values().toArray(new KafkaFuture[0])).thenApply(
+        return KafkaFuture.allOf(futures.values().toArray(new KafkaFuture<?>[0])).thenApply(
             nil -> {
                 Map<String, ClassicGroupDescription> descriptions = new HashMap<>(futures.size());
                 futures.forEach((key, future) -> {

@@ -19,12 +19,12 @@ package org.apache.kafka.storage.internals.log;
 import org.apache.kafka.common.TopicPartition;
 import org.apache.kafka.common.protocol.ByteBufferAccessor;
 import org.apache.kafka.common.protocol.MessageUtil;
-import org.apache.kafka.common.record.RecordBatch;
-import org.apache.kafka.common.utils.ByteUtils;
-import org.apache.kafka.common.utils.Crc32C;
-import org.apache.kafka.common.utils.LogContext;
+import org.apache.kafka.common.record.internal.RecordBatch;
 import org.apache.kafka.common.utils.Time;
 import org.apache.kafka.common.utils.Utils;
+import org.apache.kafka.common.utils.internals.ByteUtils;
+import org.apache.kafka.common.utils.internals.Crc32C;
+import org.apache.kafka.common.utils.internals.LogContext;
 import org.apache.kafka.server.log.remote.metadata.storage.generated.ProducerSnapshot;
 
 import org.slf4j.Logger;
@@ -49,7 +49,6 @@ import java.util.Optional;
 import java.util.OptionalLong;
 import java.util.TreeMap;
 import java.util.concurrent.ConcurrentSkipListMap;
-import java.util.stream.Collectors;
 import java.util.stream.Stream;
 
 /**
@@ -376,7 +375,12 @@ public class ProducerStateManager {
 
     public ProducerAppendInfo prepareUpdate(long producerId, AppendOrigin origin) {
         ProducerStateEntry currentEntry = lastEntry(producerId).orElse(ProducerStateEntry.empty(producerId));
-        return new ProducerAppendInfo(topicPartition, producerId, currentEntry, origin, verificationStateEntry(producerId));
+        // mapEndOffset() == 0 means no records have ever been appended to the log. It is advanced on every append
+        // (including from producers without idempotence enabled) and by producer state rebuilds, so it tracks the
+        // log end offset, and is advanced to the log start offset when producer state is loaded without a snapshot
+        // or when the log start offset is incremented, so any deletion of records leaves it non-zero.
+        return new ProducerAppendInfo(topicPartition, producerId, currentEntry, origin,
+            verificationStateEntry(producerId), mapEndOffset() == 0);
     }
 
     /**
@@ -525,9 +529,9 @@ public class ProducerStateManager {
      * transaction index, but the completion must be done only after successfully appending to the index.
      */
     public long lastStableOffset(CompletedTxn completedTxn) {
-        return findNextIncompleteTxn(completedTxn.producerId)
+        return findNextIncompleteTxn(completedTxn.producerId())
                 .map(x -> x.firstOffset.messageOffset)
-                .orElse(completedTxn.lastOffset + 1);
+                .orElse(completedTxn.lastOffset() + 1);
     }
 
     private Optional<TxnMetadata> findNextIncompleteTxn(long producerId) {
@@ -544,13 +548,13 @@ public class ProducerStateManager {
      * advancing the first unstable offset.
      */
     public void completeTxn(CompletedTxn completedTxn) {
-        TxnMetadata txnMetadata = ongoingTxns.remove(completedTxn.firstOffset);
+        TxnMetadata txnMetadata = ongoingTxns.remove(completedTxn.firstOffset());
         if (txnMetadata == null)
             throw new IllegalArgumentException("Attempted to complete transaction " + completedTxn + " on partition "
                     + topicPartition + " which was not started");
 
-        txnMetadata.lastOffset = OptionalLong.of(completedTxn.lastOffset);
-        unreplicatedTxns.put(completedTxn.firstOffset, txnMetadata);
+        txnMetadata.lastOffset = OptionalLong.of(completedTxn.lastOffset());
+        unreplicatedTxns.put(completedTxn.firstOffset(), txnMetadata);
         updateOldestTxnTimestamp();
     }
 
@@ -650,9 +654,12 @@ public class ProducerStateManager {
             long currentTxnFirstOffset = producerEntry.currentTxnFirstOffset();
 
             OptionalLong currentTxnFirstOffsetVal = currentTxnFirstOffset >= 0 ? OptionalLong.of(currentTxnFirstOffset) : OptionalLong.empty();
-            Optional<BatchMetadata> batchMetadata =
-                    (lastOffset >= 0) ? Optional.of(new BatchMetadata(lastSequence, lastOffset, offsetDelta, timestamp)) : Optional.empty();
-            entries.add(new ProducerStateEntry(producerId, producerEpoch, coordinatorEpoch, timestamp, currentTxnFirstOffsetVal, batchMetadata));
+            ProducerStateEntry stateEntry = new ProducerStateEntry(producerId, producerEpoch, coordinatorEpoch, timestamp, currentTxnFirstOffsetVal);
+
+            if (lastOffset >= 0)
+                stateEntry.addBatch(producerEpoch, lastSequence, lastOffset, offsetDelta, timestamp);
+
+            entries.add(stateEntry);
         }
 
         return entries;
@@ -701,10 +708,10 @@ public class ProducerStateManager {
         if (dir.exists() && dir.isDirectory()) {
             try (Stream<Path> paths = Files.list(dir.toPath())) {
                 return paths.filter(ProducerStateManager::isSnapshotFile)
-                        .map(path -> new SnapshotFile(path.toFile())).collect(Collectors.toList());
+                        .map(path -> new SnapshotFile(path.toFile())).toList();
             }
         } else {
-            return Collections.emptyList();
+            return List.of();
         }
     }
 

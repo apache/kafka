@@ -16,11 +16,9 @@
  */
 package org.apache.kafka.clients.admin;
 
-import org.apache.kafka.common.annotation.InterfaceStability;
-
 import java.util.Objects;
 
-@InterfaceStability.Evolving
+@Deprecated(since = "4.1")
 public class ClientMetricsResourceListing {
     private final String name;
 

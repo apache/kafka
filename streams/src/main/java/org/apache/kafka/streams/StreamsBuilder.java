@@ -16,6 +16,8 @@
  */
 package org.apache.kafka.streams;
 
+import org.apache.kafka.common.annotation.InterfaceAudience;
+import org.apache.kafka.common.annotation.SuppressKafkaInternalApiUsage;
 import org.apache.kafka.common.utils.Bytes;
 import org.apache.kafka.streams.errors.TopologyException;
 import org.apache.kafka.streams.kstream.Consumed;
@@ -41,9 +43,9 @@ import org.apache.kafka.streams.state.ReadOnlyKeyValueStore;
 import org.apache.kafka.streams.state.StoreBuilder;
 
 import java.util.Collection;
-import java.util.Collections;
 import java.util.Objects;
 import java.util.Properties;
+import java.util.Set;
 import java.util.regex.Pattern;
 
 /**
@@ -62,20 +64,23 @@ import java.util.regex.Pattern;
  * @see KTable
  * @see GlobalKTable
  */
+@InterfaceAudience.Public
 public class StreamsBuilder {
 
     /** The actual topology that is constructed by this StreamsBuilder. */
     protected final Topology topology;
 
     /** The topology's internal builder. */
+    @SuppressKafkaInternalApiUsage("KIP-1265: protected field exposes internal InternalTopologyBuilder for subclass access — pending KIP review to promote the type or refactor")
     protected final InternalTopologyBuilder internalTopologyBuilder;
 
+    @SuppressKafkaInternalApiUsage("KIP-1265: protected field exposes internal InternalStreamsBuilder for subclass access — pending KIP review to promote the type or refactor")
     protected final InternalStreamsBuilder internalStreamsBuilder;
 
     public StreamsBuilder() {
         topology = new Topology();
         internalTopologyBuilder = topology.internalTopologyBuilder;
-        internalStreamsBuilder = new InternalStreamsBuilder(internalTopologyBuilder);
+        internalStreamsBuilder = new InternalStreamsBuilder(internalTopologyBuilder, false);
     }
 
     /**
@@ -87,7 +92,14 @@ public class StreamsBuilder {
     public StreamsBuilder(final TopologyConfig topologyConfigs) {
         topology = newTopology(topologyConfigs);
         internalTopologyBuilder = topology.internalTopologyBuilder;
-        internalStreamsBuilder = new InternalStreamsBuilder(internalTopologyBuilder);
+        internalStreamsBuilder = new InternalStreamsBuilder(
+            internalTopologyBuilder,
+            TopologyConfig.InternalConfig.getBoolean(
+                topologyConfigs.originals(),
+                TopologyConfig.InternalConfig.ENABLE_PROCESS_PROCESSVALUE_FIX,
+                false
+            )
+        );
     }
 
     protected Topology newTopology(final TopologyConfig topologyConfigs) {
@@ -109,7 +121,7 @@ public class StreamsBuilder {
      * @return a {@link KStream} for the specified topic
      */
     public synchronized <K, V> KStream<K, V> stream(final String topic) {
-        return stream(Collections.singleton(topic));
+        return stream(Set.of(topic));
     }
 
     /**
@@ -127,7 +139,7 @@ public class StreamsBuilder {
      */
     public synchronized <K, V> KStream<K, V> stream(final String topic,
                                                     final Consumed<K, V> consumed) {
-        return stream(Collections.singleton(topic), consumed);
+        return stream(Set.of(topic), consumed);
     }
 
     /**
@@ -384,7 +396,7 @@ public class StreamsBuilder {
 
         final MaterializedInternal<K, V, KeyValueStore<Bytes, byte[]>> materializedInternal =
             new MaterializedInternal<>(
-                Materialized.with(consumedInternal.keySerde(), consumedInternal.valueSerde()),
+                Materialized.<K, V, KeyValueStore<Bytes, byte[]>>with(consumedInternal.keySerde(), consumedInternal.valueSerde()).withLoggingDisabled(),
                 internalStreamsBuilder,
                 topic + "-",
                 true /* force materializing global tables */);
@@ -457,7 +469,7 @@ public class StreamsBuilder {
         Objects.requireNonNull(materialized, "materialized can't be null");
         final ConsumedInternal<K, V> consumedInternal = new ConsumedInternal<>(consumed);
         // always use the serdes from consumed
-        materialized.withKeySerde(consumedInternal.keySerde()).withValueSerde(consumedInternal.valueSerde());
+        materialized.withKeySerde(consumedInternal.keySerde()).withValueSerde(consumedInternal.valueSerde()).withLoggingDisabled();
 
         final MaterializedInternal<K, V, KeyValueStore<Bytes, byte[]>> materializedInternal =
             new MaterializedInternal<>(materialized, internalStreamsBuilder, topic + "-");
@@ -570,16 +582,28 @@ public class StreamsBuilder {
     /**
      * Returns the {@link Topology} that represents the specified processing logic.
      * Note that using this method means no optimizations are performed.
+     * To enable topology optimizations, use {@link #build(Properties)} instead and pass
+     * a {@link Properties} object with {@code topology.optimization} set to
+     * {@link StreamsConfig#OPTIMIZE}.
      *
      * @return the {@link Topology} that represents the specified processing logic
      */
     public synchronized Topology build() {
         return build(null);
     }
-    
+
     /**
      * Returns the {@link Topology} that represents the specified processing logic and accepts
      * a {@link Properties} instance used to indicate whether to optimize topology or not.
+     * <p>
+     * To enable topology optimizations, two steps are required:
+     * <ol>
+     *   <li>Set {@code topology.optimization} to {@link StreamsConfig#OPTIMIZE} in the
+     *       provided {@link Properties}.</li>
+     *   <li>Pass that same {@link Properties} object to this method.</li>
+     * </ol>
+     * If {@code topology.optimization} is not set to {@link StreamsConfig#OPTIMIZE} in
+     * {@code props}, no optimizations will be applied even if this method is called.
      *
      * @param props the {@link Properties} used for building possibly optimized topology
      * @return the {@link Topology} that represents the specified processing logic

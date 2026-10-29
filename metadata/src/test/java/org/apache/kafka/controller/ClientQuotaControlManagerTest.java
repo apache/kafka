@@ -25,6 +25,7 @@ import org.apache.kafka.common.quota.ClientQuotaAlteration;
 import org.apache.kafka.common.quota.ClientQuotaEntity;
 import org.apache.kafka.common.requests.ApiError;
 import org.apache.kafka.metadata.RecordTestUtils;
+import org.apache.kafka.raft.KRaftConfigs;
 import org.apache.kafka.server.common.ApiMessageAndVersion;
 import org.apache.kafka.server.config.QuotaConfig;
 
@@ -44,14 +45,26 @@ import java.util.stream.Collectors;
 
 import static org.junit.jupiter.api.Assertions.assertEquals;
 import static org.junit.jupiter.api.Assertions.assertFalse;
+import static org.junit.jupiter.api.Assertions.assertThrows;
 import static org.junit.jupiter.api.Assertions.assertTrue;
 
 @Timeout(value = 40)
 public class ClientQuotaControlManagerTest {
 
     @Test
+    public void testBuilderRequiresPositiveMaxRecordsPerBatch() {
+        for (int invalidMaxRecordsPerBatch : new int[] {0, -1, -100}) {
+            IllegalStateException exception = assertThrows(IllegalStateException.class, () ->
+                new ClientQuotaControlManager.Builder().
+                    setMaxRecordsPerBatch(invalidMaxRecordsPerBatch).
+                    build());
+            assertEquals("Max records per batch must be greater than zero", exception.getMessage());
+        }
+    }
+
+    @Test
     public void testInvalidEntityTypes() {
-        ClientQuotaControlManager manager = new ClientQuotaControlManager.Builder().build();
+        ClientQuotaControlManager manager = new ClientQuotaControlManager.Builder().setMaxRecordsPerBatch(KRaftConfigs.CONTROLLER_MAX_RECORDS_PER_BATCH_DEFAULT).build();
 
         // Unknown type "foo"
         assertInvalidEntity(manager, entity("foo", "bar"));
@@ -68,7 +81,7 @@ public class ClientQuotaControlManagerTest {
         assertInvalidEntity(manager, entity(ClientQuotaEntity.CLIENT_ID, "user-1", ClientQuotaEntity.IP, "1.2.3.4"));
 
         // Empty
-        assertInvalidEntity(manager, new ClientQuotaEntity(Collections.emptyMap()));
+        assertInvalidEntity(manager, new ClientQuotaEntity(Map.of()));
     }
 
     private void assertInvalidEntity(ClientQuotaControlManager manager, ClientQuotaEntity entity) {
@@ -77,7 +90,7 @@ public class ClientQuotaControlManagerTest {
 
     @Test
     public void testInvalidQuotaKeys() {
-        ClientQuotaControlManager manager = new ClientQuotaControlManager.Builder().build();
+        ClientQuotaControlManager manager = new ClientQuotaControlManager.Builder().setMaxRecordsPerBatch(KRaftConfigs.CONTROLLER_MAX_RECORDS_PER_BATCH_DEFAULT).build();
         ClientQuotaEntity entity = entity(ClientQuotaEntity.USER, "user-1");
 
         // Invalid + valid keys
@@ -100,7 +113,7 @@ public class ClientQuotaControlManagerTest {
 
     @Test
     public void testAlterAndRemove() {
-        ClientQuotaControlManager manager = new ClientQuotaControlManager.Builder().build();
+        ClientQuotaControlManager manager = new ClientQuotaControlManager.Builder().setMaxRecordsPerBatch(KRaftConfigs.CONTROLLER_MAX_RECORDS_PER_BATCH_DEFAULT).build();
 
         ClientQuotaEntity userEntity = userEntity("user-1");
         List<ClientQuotaAlteration> alters = new ArrayList<>();
@@ -174,7 +187,7 @@ public class ClientQuotaControlManagerTest {
 
     @Test
     public void testEntityTypes() throws Exception {
-        ClientQuotaControlManager manager = new ClientQuotaControlManager.Builder().build();
+        ClientQuotaControlManager manager = new ClientQuotaControlManager.Builder().setMaxRecordsPerBatch(KRaftConfigs.CONTROLLER_MAX_RECORDS_PER_BATCH_DEFAULT).build();
 
         Map<ClientQuotaEntity, Map<String, Double>> quotasToTest = new HashMap<>();
         quotasToTest.put(userClientEntity("user-1", "client-id-1"),
@@ -323,8 +336,8 @@ public class ClientQuotaControlManagerTest {
 
     @Test
     public void testConfigKeysForEntityTypeWithUser() {
-        testConfigKeysForEntityType(Collections.singletonList(ClientQuotaEntity.USER),
-            Arrays.asList(
+        testConfigKeysForEntityType(List.of(ClientQuotaEntity.USER),
+            List.of(
                 "producer_byte_rate",
                 "consumer_byte_rate",
                 "controller_mutation_rate",
@@ -334,8 +347,8 @@ public class ClientQuotaControlManagerTest {
 
     @Test
     public void testConfigKeysForEntityTypeWithClientId() {
-        testConfigKeysForEntityType(Collections.singletonList(ClientQuotaEntity.CLIENT_ID),
-            Arrays.asList(
+        testConfigKeysForEntityType(List.of(ClientQuotaEntity.CLIENT_ID),
+            List.of(
                 "producer_byte_rate",
                 "consumer_byte_rate",
                 "controller_mutation_rate",
@@ -345,8 +358,8 @@ public class ClientQuotaControlManagerTest {
 
     @Test
     public void testConfigKeysForEntityTypeWithUserAndClientId() {
-        testConfigKeysForEntityType(Arrays.asList(ClientQuotaEntity.CLIENT_ID, ClientQuotaEntity.USER),
-            Arrays.asList(
+        testConfigKeysForEntityType(List.of(ClientQuotaEntity.CLIENT_ID, ClientQuotaEntity.USER),
+            List.of(
                 "producer_byte_rate",
                 "consumer_byte_rate",
                 "controller_mutation_rate",
@@ -356,8 +369,8 @@ public class ClientQuotaControlManagerTest {
 
     @Test
     public void testConfigKeysForEntityTypeWithIp() {
-        testConfigKeysForEntityType(Collections.singletonList(ClientQuotaEntity.IP),
-            Collections.singletonList(
+        testConfigKeysForEntityType(List.of(ClientQuotaEntity.IP),
+            List.of(
                 "connection_creation_rate"
             ));
     }
@@ -386,20 +399,20 @@ public class ClientQuotaControlManagerTest {
 
     @Test
     public void testConfigKeysForEmptyEntity() {
-        testConfigKeysError(Collections.emptyList(),
+        testConfigKeysError(List.of(),
             new ApiError(Errors.INVALID_REQUEST, "Invalid empty client quota entity"));
     }
 
     @Test
     public void testConfigKeysForEntityTypeWithIpAndUser() {
-        testConfigKeysError(Arrays.asList(ClientQuotaEntity.IP, ClientQuotaEntity.USER),
+        testConfigKeysError(List.of(ClientQuotaEntity.IP, ClientQuotaEntity.USER),
             new ApiError(Errors.INVALID_REQUEST, "Invalid quota entity combination, IP entity should" +
                 "not be combined with User or ClientId"));
     }
 
     @Test
     public void testConfigKeysForEntityTypeWithIpAndClientId() {
-        testConfigKeysError(Arrays.asList(ClientQuotaEntity.IP, ClientQuotaEntity.CLIENT_ID),
+        testConfigKeysError(List.of(ClientQuotaEntity.IP, ClientQuotaEntity.CLIENT_ID),
             new ApiError(Errors.INVALID_REQUEST, "Invalid quota entity combination, IP entity should" +
                 "not be combined with User or ClientId"));
     }
@@ -410,7 +423,7 @@ public class ClientQuotaControlManagerTest {
 
     @Test
     public void testConfigKeysForUnresolvableIpEntity() {
-        testConfigKeysError(Collections.singletonMap(ClientQuotaEntity.IP, "example.invalid"),
+        testConfigKeysError(Map.of(ClientQuotaEntity.IP, "example.invalid"),
             new ApiError(Errors.INVALID_REQUEST, "example.invalid is not a valid IP or resolvable host."));
     }
 
@@ -427,7 +440,7 @@ public class ClientQuotaControlManagerTest {
     static {
         VALID_CLIENT_ID_QUOTA_KEYS = new HashMap<>();
         assertEquals(ApiError.NONE, ClientQuotaControlManager.configKeysForEntityType(
-                keysToEntity(Collections.singletonList(ClientQuotaEntity.CLIENT_ID)), VALID_CLIENT_ID_QUOTA_KEYS));
+                keysToEntity(List.of(ClientQuotaEntity.CLIENT_ID)), VALID_CLIENT_ID_QUOTA_KEYS));
     }
 
     @Test
@@ -449,6 +462,34 @@ public class ClientQuotaControlManagerTest {
         assertEquals(new ApiError(Errors.INVALID_REQUEST, "Quota consumer_byte_rate must be greater than 0"),
             ClientQuotaControlManager.validateQuotaKeyValue(
                 VALID_CLIENT_ID_QUOTA_KEYS, "consumer_byte_rate", -2.0));
+    }
+
+    @Test
+    public void testValidateQuotaKeyValueForNaNConsumerByteRate() {
+        assertEquals(new ApiError(Errors.INVALID_REQUEST, "Quota consumer_byte_rate must be a finite number"),
+            ClientQuotaControlManager.validateQuotaKeyValue(
+                VALID_CLIENT_ID_QUOTA_KEYS, "consumer_byte_rate", Double.NaN));
+    }
+
+    @Test
+    public void testValidateQuotaKeyValueForInfiniteConsumerByteRate() {
+        assertEquals(new ApiError(Errors.INVALID_REQUEST, "Quota consumer_byte_rate must be a finite number"),
+            ClientQuotaControlManager.validateQuotaKeyValue(
+                VALID_CLIENT_ID_QUOTA_KEYS, "consumer_byte_rate", Double.POSITIVE_INFINITY));
+    }
+
+    @Test
+    public void testValidateQuotaKeyValueForNaNRequestPercentage() {
+        assertEquals(new ApiError(Errors.INVALID_REQUEST, "Quota request_percentage must be a finite number"),
+            ClientQuotaControlManager.validateQuotaKeyValue(
+                VALID_CLIENT_ID_QUOTA_KEYS, "request_percentage", Double.NaN));
+    }
+
+    @Test
+    public void testValidateQuotaKeyValueForInfiniteRequestPercentage() {
+        assertEquals(new ApiError(Errors.INVALID_REQUEST, "Quota request_percentage must be a finite number"),
+            ClientQuotaControlManager.validateQuotaKeyValue(
+                VALID_CLIENT_ID_QUOTA_KEYS, "request_percentage", Double.POSITIVE_INFINITY));
     }
 
     @Test

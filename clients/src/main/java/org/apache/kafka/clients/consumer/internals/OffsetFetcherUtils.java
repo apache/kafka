@@ -34,8 +34,8 @@ import org.apache.kafka.common.protocol.ApiKeys;
 import org.apache.kafka.common.protocol.Errors;
 import org.apache.kafka.common.requests.ListOffsetsResponse;
 import org.apache.kafka.common.requests.OffsetsForLeaderEpochRequest;
-import org.apache.kafka.common.utils.LogContext;
 import org.apache.kafka.common.utils.Time;
+import org.apache.kafka.common.utils.internals.LogContext;
 
 import org.slf4j.Logger;
 
@@ -47,10 +47,8 @@ import java.util.List;
 import java.util.Map;
 import java.util.Optional;
 import java.util.Set;
-import java.util.concurrent.atomic.AtomicInteger;
 import java.util.concurrent.atomic.AtomicReference;
 import java.util.function.BiFunction;
-import java.util.function.Function;
 import java.util.stream.Collectors;
 
 /**
@@ -58,39 +56,45 @@ import java.util.stream.Collectors;
  */
 class OffsetFetcherUtils {
     private final ConsumerMetadata metadata;
-    private final SubscriptionState subscriptionState;
+    private final ConsumerSubscriptionState subscriptionState;
     private final Time time;
     private final long retryBackoffMs;
     private final ApiVersions apiVersions;
+    private final PositionsValidator positionsValidator;
     private final Logger log;
 
-    /**
-     * Exception that occurred while validating positions, that will be propagated on the next
-     * call to validate positions. This could be an error received in the
-     * OffsetsForLeaderEpoch response, or a LogTruncationException detected when using a
-     * successful response to validate the positions. It will be cleared when thrown.
-     */
-    private final AtomicReference<RuntimeException> cachedValidatePositionsException = new AtomicReference<>();
     /**
      * Exception that occurred while resetting positions, that will be propagated on the next
      * call to reset positions. This will have the error received in the response to the
      * ListOffsets request. It will be cleared when thrown on the next call to reset.
      */
     private final AtomicReference<RuntimeException> cachedResetPositionsException = new AtomicReference<>();
-    private final AtomicInteger metadataUpdateVersion = new AtomicInteger(-1);
 
     OffsetFetcherUtils(LogContext logContext,
                        ConsumerMetadata metadata,
-                       SubscriptionState subscriptionState,
+                       ConsumerSubscriptionState subscriptionState,
                        Time time,
                        long retryBackoffMs,
                        ApiVersions apiVersions) {
+        this(logContext, metadata, subscriptionState,
+            time, retryBackoffMs, apiVersions,
+            new PositionsValidator(logContext, time, subscriptionState, metadata));
+    }
+
+    OffsetFetcherUtils(LogContext logContext,
+                       ConsumerMetadata metadata,
+                       ConsumerSubscriptionState subscriptionState,
+                       Time time,
+                       long retryBackoffMs,
+                       ApiVersions apiVersions,
+                       PositionsValidator positionsValidator) {
         this.log = logContext.logger(getClass());
         this.metadata = metadata;
         this.subscriptionState = subscriptionState;
         this.time = time;
         this.retryBackoffMs = retryBackoffMs;
         this.apiVersions = apiVersions;
+        this.positionsValidator = positionsValidator;
     }
 
     /**
@@ -161,34 +165,29 @@ class OffsetFetcherUtils {
             return new OffsetFetcherUtils.ListOffsetResult(fetchedOffsets, partitionsToRetry);
     }
 
-    <T> Map<Node, Map<TopicPartition, T>> regroupPartitionMapByNode(Map<TopicPartition, T> partitionMap) {
-        return partitionMap.entrySet()
-                .stream()
-                .collect(Collectors.groupingBy(entry -> metadata.fetch().leaderFor(entry.getKey()),
-                        Collectors.toMap(Map.Entry::getKey, Map.Entry::getValue)));
+    <T> Map<Node, Map<TopicPartition, T>> regroupPartitionMapByNode(
+            Map<TopicPartition, T> partitionMap,
+            Set<TopicPartition> partitionsToRetry) {
+        Map<Node, Map<TopicPartition, T>> partitionsByNode = new HashMap<>();
+
+        final var cluster = metadata.fetch();
+
+        partitionMap.forEach((tp, value) -> {
+            Node leader = cluster.leaderFor(tp);
+            if (leader == null) {
+                log.debug("Leader for partition {} is unknown while regrouping partition map by node", tp);
+                partitionsToRetry.add(tp);
+                return;
+            }
+            partitionsByNode.computeIfAbsent(leader, __ -> new HashMap<>())
+                .put(tp, value);
+        });
+
+        return partitionsByNode;
     }
 
-    Map<TopicPartition, SubscriptionState.FetchPosition> getPartitionsToValidate() {
-        RuntimeException exception = cachedValidatePositionsException.getAndSet(null);
-        if (exception != null)
-            throw exception;
-
-        // Validate each partition against the current leader and epoch
-        // If we see a new metadata version, check all partitions
-        validatePositionsOnMetadataChange();
-
-        // Collect positions needing validation, with backoff
-        return subscriptionState
-                .partitionsNeedingValidation(time.milliseconds())
-                .stream()
-                .filter(tp -> subscriptionState.position(tp) != null)
-                .collect(Collectors.toMap(Function.identity(), subscriptionState::position));
-    }
-
-    void maybeSetValidatePositionsException(RuntimeException e) {
-        if (!cachedValidatePositionsException.compareAndSet(null, e)) {
-            log.error("Discarding error validating positions because another error is pending", e);
-        }
+    Map<TopicPartition, ConsumerSubscriptionState.FetchPosition> refreshAndGetPartitionsToValidate() {
+        return positionsValidator.refreshAndGetPartitionsToValidate(apiVersions);
     }
 
     /**
@@ -196,13 +195,7 @@ class OffsetFetcherUtils {
      * we should check that all the assignments have a valid position.
      */
     void validatePositionsOnMetadataChange() {
-        int newMetadataUpdateVersion = metadata.updateVersion();
-        if (metadataUpdateVersion.getAndSet(newMetadataUpdateVersion) != newMetadataUpdateVersion) {
-            subscriptionState.assignedPartitions().forEach(topicPartition -> {
-                ConsumerMetadata.LeaderAndEpoch leaderAndEpoch = metadata.currentLeader(topicPartition);
-                subscriptionState.maybeValidatePositionForCurrentLeader(apiVersions, topicPartition, leaderAndEpoch);
-            });
-        }
+        positionsValidator.validatePositionsOnMetadataChange(apiVersions);
     }
 
     /**
@@ -298,6 +291,47 @@ class OffsetFetcherUtils {
                     log.trace("Updating high watermark for partition {} to {}", partition, offset);
                     subscriptionState.updateHighWatermark(partition, offset);
                 }
+            } else {
+                if (isolationLevel == IsolationLevel.READ_COMMITTED) {
+                    log.debug("Not updating last stable offset for partition {} as it is no longer assigned", partition);
+                } else {
+                    log.debug("Not updating high watermark for partition {} as it is no longer assigned", partition);
+                }
+            }
+        }
+    }
+
+    /**
+     * The {@code LIST_OFFSETS} lag lookup is serialized, so if there's an inflight request it must finish before
+     * another request can be issued. This serialization mechanism is controlled by the 'end offset requested'
+     * flag in {@link ConsumerSubscriptionState}.
+     *
+     * @return {@code true} if the partition's end offset can be requested, {@code false} if there's already an
+     *         in-flight request
+     */
+    boolean maybeSetPartitionEndOffsetRequest(TopicPartition partition) {
+        if (subscriptionState.partitionEndOffsetRequested(partition)) {
+            log.info("Not requesting the log end offset for {} to compute lag as an outstanding request already exists", partition);
+            return false;
+        } else {
+            log.info("Requesting the log end offset for {} in order to compute lag", partition);
+            subscriptionState.requestPartitionEndOffset(partition);
+            return true;
+        }
+    }
+
+    /**
+     * If any of the given partitions are assigned, this will clear the partition's 'end offset requested' flag so
+     * that the next attempt to look up the lag will properly issue another <code>LIST_OFFSETS</code> request. This
+     * is only intended to be called when <code>LIST_OFFSETS</code> fails. Successful <code>LIST_OFFSETS</code> calls
+     * should use {@link #updateSubscriptionState(Map, IsolationLevel)}.
+     *
+     * @param partitions Partitions for which the 'end offset requested' flag should be cleared (if still assigned)
+     */
+    void clearPartitionEndOffsetRequests(Collection<TopicPartition> partitions) {
+        for (final TopicPartition partition : partitions) {
+            if (subscriptionState.maybeClearPartitionEndOffsetRequested(partition)) {
+                log.trace("Clearing end offset requested for partition {}", partition);
             }
         }
     }
@@ -334,9 +368,9 @@ class OffsetFetcherUtils {
 
 
     void onSuccessfulResponseForValidatingPositions(
-            final Map<TopicPartition, SubscriptionState.FetchPosition> fetchPositions,
+            final Map<TopicPartition, ConsumerSubscriptionState.FetchPosition> fetchPositions,
             final OffsetsForLeaderEpochUtils.OffsetForEpochResult offsetsResult) {
-        List<SubscriptionState.LogTruncation> truncations = new ArrayList<>();
+        List<ConsumerSubscriptionState.LogTruncation> truncations = new ArrayList<>();
         if (!offsetsResult.partitionsToRetry().isEmpty()) {
             subscriptionState.setNextAllowedRetry(offsetsResult.partitionsToRetry(),
                     time.milliseconds() + retryBackoffMs);
@@ -349,32 +383,32 @@ class OffsetFetcherUtils {
         // In addition, check whether the returned offset and epoch are valid. If not, then we should reset
         // its offset if reset policy is configured, or throw out of range exception.
         offsetsResult.endOffsets().forEach((topicPartition, respEndOffset) -> {
-            SubscriptionState.FetchPosition requestPosition = fetchPositions.get(topicPartition);
-            Optional<SubscriptionState.LogTruncation> truncationOpt =
+            ConsumerSubscriptionState.FetchPosition requestPosition = fetchPositions.get(topicPartition);
+            Optional<ConsumerSubscriptionState.LogTruncation> truncationOpt =
                     subscriptionState.maybeCompleteValidation(topicPartition, requestPosition,
                             respEndOffset);
             truncationOpt.ifPresent(truncations::add);
         });
 
         if (!truncations.isEmpty()) {
-            maybeSetValidatePositionsException(buildLogTruncationException(truncations));
+            positionsValidator.maybeSetError(buildLogTruncationException(truncations));
         }
     }
 
-    void onFailedResponseForValidatingPositions(final Map<TopicPartition, SubscriptionState.FetchPosition> fetchPositions,
+    void onFailedResponseForValidatingPositions(final Map<TopicPartition, ConsumerSubscriptionState.FetchPosition> fetchPositions,
                                                 final RuntimeException error) {
         subscriptionState.requestFailed(fetchPositions.keySet(), time.milliseconds() + retryBackoffMs);
         metadata.requestUpdate(false);
 
         if (!(error instanceof RetriableException)) {
-            maybeSetValidatePositionsException(error);
+            positionsValidator.maybeSetError(error);
         }
     }
 
-    private LogTruncationException buildLogTruncationException(List<SubscriptionState.LogTruncation> truncations) {
+    private LogTruncationException buildLogTruncationException(List<ConsumerSubscriptionState.LogTruncation> truncations) {
         Map<TopicPartition, OffsetAndMetadata> divergentOffsets = new HashMap<>();
         Map<TopicPartition, Long> truncatedFetchOffsets = new HashMap<>();
-        for (SubscriptionState.LogTruncation truncation : truncations) {
+        for (ConsumerSubscriptionState.LogTruncation truncation : truncations) {
             truncation.divergentOffsetOpt.ifPresent(divergentOffset ->
                     divergentOffsets.put(truncation.topicPartition, divergentOffset));
             truncatedFetchOffsets.put(truncation.topicPartition, truncation.fetchPosition.offset);
@@ -385,7 +419,7 @@ class OffsetFetcherUtils {
     // Visible for testing
     void resetPositionIfNeeded(TopicPartition partition, AutoOffsetResetStrategy requestedResetStrategy,
                                ListOffsetData offsetData) {
-        SubscriptionState.FetchPosition position = new SubscriptionState.FetchPosition(
+        ConsumerSubscriptionState.FetchPosition position = new ConsumerSubscriptionState.FetchPosition(
                 offsetData.offset,
                 Optional.empty(), // This will ensure we skip validation
                 metadata.currentLeader(partition));
@@ -393,8 +427,8 @@ class OffsetFetcherUtils {
         subscriptionState.maybeSeekUnvalidated(partition, position, requestedResetStrategy);
     }
 
-    static Map<Node, Map<TopicPartition, SubscriptionState.FetchPosition>> regroupFetchPositionsByLeader(
-            Map<TopicPartition, SubscriptionState.FetchPosition> partitionMap) {
+    static Map<Node, Map<TopicPartition, ConsumerSubscriptionState.FetchPosition>> regroupFetchPositionsByLeader(
+            Map<TopicPartition, ConsumerSubscriptionState.FetchPosition> partitionMap) {
         return partitionMap.entrySet()
                 .stream()
                 .filter(entry -> entry.getValue().currentLeader.leader.isPresent())

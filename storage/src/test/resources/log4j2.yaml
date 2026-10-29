@@ -28,8 +28,8 @@ Configuration:
         pattern: "${logPattern}"
     RollingFile:
       - name: FileAppender
-        fileName: storage.log
-        filePattern: "storage-%d{yyyy-MM-dd}.log"
+        fileName: build/kafka-storage-test/storage.log
+        filePattern: "build/kafka-storage-test/storage-%d{yyyy-MM-dd}.log"
         PatternLayout:
           pattern: "${fileLogPattern}"
         TimeBasedTriggeringPolicy:
@@ -37,7 +37,7 @@ Configuration:
 
   Loggers:
     Root:
-      level: OFF
+      level: "OFF"
       AppenderRef:
         - ref: STDOUT
     Logger:

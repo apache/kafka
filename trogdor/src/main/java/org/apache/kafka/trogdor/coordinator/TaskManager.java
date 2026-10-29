@@ -19,13 +19,13 @@ package org.apache.kafka.trogdor.coordinator;
 
 import org.apache.kafka.common.KafkaException;
 import org.apache.kafka.common.errors.InvalidRequestException;
-import org.apache.kafka.common.utils.Scheduler;
-import org.apache.kafka.common.utils.ThreadUtils;
 import org.apache.kafka.common.utils.Time;
 import org.apache.kafka.common.utils.Utils;
+import org.apache.kafka.common.utils.internals.ThreadUtils;
 import org.apache.kafka.trogdor.common.JsonUtil;
 import org.apache.kafka.trogdor.common.Node;
 import org.apache.kafka.trogdor.common.Platform;
+import org.apache.kafka.trogdor.common.Scheduler;
 import org.apache.kafka.trogdor.rest.RequestConflictException;
 import org.apache.kafka.trogdor.rest.TaskDone;
 import org.apache.kafka.trogdor.rest.TaskPending;
@@ -256,17 +256,12 @@ public final class TaskManager {
         }
 
         TaskState taskState() {
-            switch (state) {
-                case PENDING:
-                    return new TaskPending(spec);
-                case RUNNING:
-                    return new TaskRunning(spec, startedMs, getCombinedStatus());
-                case STOPPING:
-                    return new TaskStopping(spec, startedMs, getCombinedStatus());
-                case DONE:
-                    return new TaskDone(spec, startedMs, doneMs, error, cancelled, getCombinedStatus());
-            }
-            throw new RuntimeException("unreachable");
+            return switch (state) {
+                case PENDING -> new TaskPending(spec);
+                case RUNNING -> new TaskRunning(spec, startedMs, getCombinedStatus());
+                case STOPPING -> new TaskStopping(spec, startedMs, getCombinedStatus());
+                case DONE -> new TaskDone(spec, startedMs, doneMs, error, cancelled, getCombinedStatus());
+            };
         }
 
         private JsonNode getCombinedStatus() {

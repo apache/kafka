@@ -23,8 +23,6 @@ import org.apache.kafka.streams.processor.internals.Task;
 import org.junit.jupiter.api.Test;
 
 import java.nio.ByteBuffer;
-import java.util.Arrays;
-import java.util.HashSet;
 import java.util.Map;
 import java.util.Set;
 
@@ -49,22 +47,20 @@ import static org.apache.kafka.streams.processor.internals.assignment.StreamsAss
 import static org.apache.kafka.streams.processor.internals.assignment.StreamsAssignmentProtocolVersions.MIN_NAMED_TOPOLOGY_VERSION;
 import static org.apache.kafka.streams.processor.internals.assignment.SubscriptionInfo.MIN_VERSION_OFFSET_SUM_SUBSCRIPTION;
 import static org.apache.kafka.streams.processor.internals.assignment.SubscriptionInfo.UNKNOWN_OFFSET_SUM;
-import static org.hamcrest.CoreMatchers.is;
-import static org.hamcrest.MatcherAssert.assertThat;
-import static org.hamcrest.Matchers.anEmptyMap;
 import static org.junit.jupiter.api.Assertions.assertEquals;
 import static org.junit.jupiter.api.Assertions.assertNull;
 import static org.junit.jupiter.api.Assertions.assertThrows;
+import static org.junit.jupiter.api.Assertions.assertTrue;
 import static org.junit.jupiter.api.Assertions.fail;
 
 public class SubscriptionInfoTest {
-    private static final Set<TaskId> ACTIVE_TASKS = new HashSet<>(Arrays.asList(
+    private static final Set<TaskId> ACTIVE_TASKS = Set.of(
         TASK_0_0,
         TASK_0_1,
-        TASK_1_0));
-    private static final Set<TaskId> STANDBY_TASKS = new HashSet<>(Arrays.asList(
+        TASK_1_0);
+    private static final Set<TaskId> STANDBY_TASKS = Set.of(
         TASK_1_1,
-        TASK_2_0));
+        TASK_2_0);
     private static final Map<TaskId, Long> TASK_OFFSET_SUMS = mkMap(
         mkEntry(TASK_0_0, Task.LATEST_OFFSET),
         mkEntry(TASK_0_1, Task.LATEST_OFFSET),
@@ -353,7 +349,7 @@ public class SubscriptionInfoTest {
         final SubscriptionInfo info =
             new SubscriptionInfo(7, LATEST_SUPPORTED_VERSION,
                 PID_1, "localhost:80", TASK_OFFSET_SUMS, IGNORED_UNIQUE_FIELD, IGNORED_ERROR_CODE, EMPTY_CLIENT_TAGS);
-        assertThat(info, is(SubscriptionInfo.decode(info.encode())));
+        assertEquals(SubscriptionInfo.decode(info.encode()), info);
     }
 
     @Test
@@ -361,8 +357,8 @@ public class SubscriptionInfoTest {
         final SubscriptionInfo info =
             new SubscriptionInfo(7, LATEST_SUPPORTED_VERSION,
                 PID_1, "localhost:80", TASK_OFFSET_SUMS, IGNORED_UNIQUE_FIELD, IGNORED_ERROR_CODE, EMPTY_CLIENT_TAGS);
-        assertThat(info.prevTasks(), is(ACTIVE_TASKS));
-        assertThat(info.standbyTasks(), is(STANDBY_TASKS));
+        assertEquals(ACTIVE_TASKS, info.prevTasks());
+        assertEquals(STANDBY_TASKS, info.standbyTasks());
     }
 
     @Test
@@ -375,7 +371,7 @@ public class SubscriptionInfoTest {
                                  IGNORED_UNIQUE_FIELD,
                                  IGNORED_ERROR_CODE,
                                  EMPTY_CLIENT_TAGS).encode());
-        assertThat(info.taskOffsetSums(), is(TASK_OFFSET_SUMS));
+        assertEquals(TASK_OFFSET_SUMS, info.taskOffsetSums());
     }
 
     @Test
@@ -398,7 +394,7 @@ public class SubscriptionInfoTest {
                 "localhost:80")
             .encode());
 
-        assertThat(info.taskOffsetSums(), is(expectedOffsetSumsMap));
+        assertEquals(expectedOffsetSumsMap, info.taskOffsetSums());
     }
 
     @Test
@@ -406,7 +402,7 @@ public class SubscriptionInfoTest {
         final SubscriptionInfo info =
             new SubscriptionInfo(8, LATEST_SUPPORTED_VERSION,
                 PID_1, "localhost:80", TASK_OFFSET_SUMS, IGNORED_UNIQUE_FIELD, IGNORED_ERROR_CODE, EMPTY_CLIENT_TAGS);
-        assertThat(info, is(SubscriptionInfo.decode(info.encode())));
+        assertEquals(SubscriptionInfo.decode(info.encode()), info);
     }
 
     @Test
@@ -426,7 +422,7 @@ public class SubscriptionInfoTest {
         final SubscriptionInfo info =
                 new SubscriptionInfo(9, LATEST_SUPPORTED_VERSION,
                     PID_1, "localhost:80", TASK_OFFSET_SUMS, IGNORED_UNIQUE_FIELD, IGNORED_ERROR_CODE, EMPTY_CLIENT_TAGS);
-        assertThat(info, is(SubscriptionInfo.decode(info.encode())));
+        assertEquals(SubscriptionInfo.decode(info.encode()), info);
     }
 
     @Test
@@ -434,7 +430,7 @@ public class SubscriptionInfoTest {
         final SubscriptionInfo info =
             new SubscriptionInfo(10, LATEST_SUPPORTED_VERSION,
                 PID_1, "localhost:80", TASK_OFFSET_SUMS, IGNORED_UNIQUE_FIELD, IGNORED_ERROR_CODE, EMPTY_CLIENT_TAGS);
-        assertThat(info, is(SubscriptionInfo.decode(info.encode())));
+        assertEquals(SubscriptionInfo.decode(info.encode()), info);
     }
 
     @Test
@@ -442,7 +438,7 @@ public class SubscriptionInfoTest {
         final SubscriptionInfo info =
             new SubscriptionInfo(10, LATEST_SUPPORTED_VERSION,
                 PID_1, "localhost:80", NAMED_TASK_OFFSET_SUMS, IGNORED_UNIQUE_FIELD, IGNORED_ERROR_CODE, EMPTY_CLIENT_TAGS);
-        assertThat(info, is(SubscriptionInfo.decode(info.encode())));
+        assertEquals(SubscriptionInfo.decode(info.encode()), info);
     }
 
     @Test
@@ -459,7 +455,7 @@ public class SubscriptionInfoTest {
         final SubscriptionInfo info =
             new SubscriptionInfo(11, LATEST_SUPPORTED_VERSION,
                 PID_1, "localhost:80", TASK_OFFSET_SUMS, IGNORED_UNIQUE_FIELD, IGNORED_ERROR_CODE, CLIENT_TAGS);
-        assertThat(info, is(SubscriptionInfo.decode(info.encode())));
+        assertEquals(SubscriptionInfo.decode(info.encode()), info);
     }
 
     @Test
@@ -467,8 +463,8 @@ public class SubscriptionInfoTest {
         final SubscriptionInfo info =
             new SubscriptionInfo(11, LATEST_SUPPORTED_VERSION,
                 PID_1, "localhost:80", TASK_OFFSET_SUMS, IGNORED_UNIQUE_FIELD, IGNORED_ERROR_CODE, EMPTY_CLIENT_TAGS);
-        assertThat(info.clientTags(), is(anEmptyMap()));
-        assertThat(info, is(SubscriptionInfo.decode(info.encode())));
+        assertTrue(info.clientTags().isEmpty());
+        assertEquals(SubscriptionInfo.decode(info.encode()), info);
     }
 
     @Test
@@ -477,7 +473,7 @@ public class SubscriptionInfoTest {
             new SubscriptionInfo(10, LATEST_SUPPORTED_VERSION,
                 PID_1, "localhost:80", TASK_OFFSET_SUMS, IGNORED_UNIQUE_FIELD, IGNORED_ERROR_CODE, CLIENT_TAGS);
 
-        assertThat(info.clientTags(), is(anEmptyMap()));
+        assertTrue(info.clientTags().isEmpty());
     }
 
     @Test
@@ -486,7 +482,7 @@ public class SubscriptionInfoTest {
             new SubscriptionInfo(11, LATEST_SUPPORTED_VERSION,
                 PID_1, "localhost:80", TASK_OFFSET_SUMS, IGNORED_UNIQUE_FIELD, IGNORED_ERROR_CODE, CLIENT_TAGS);
 
-        assertThat(info.clientTags(), is(CLIENT_TAGS));
+        assertEquals(CLIENT_TAGS, info.clientTags());
     }
 
     private static ByteBuffer encodeFutureVersion() {

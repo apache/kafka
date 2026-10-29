@@ -27,7 +27,7 @@ import org.apache.kafka.common.message.ListTransactionsResponseData;
 import org.apache.kafka.common.protocol.Errors;
 import org.apache.kafka.common.requests.ListTransactionsRequest;
 import org.apache.kafka.common.requests.ListTransactionsResponse;
-import org.apache.kafka.common.utils.LogContext;
+import org.apache.kafka.common.utils.internals.LogContext;
 
 import org.junit.jupiter.api.Test;
 
@@ -36,6 +36,7 @@ import java.util.Collections;
 import java.util.List;
 import java.util.Map;
 import java.util.OptionalInt;
+import java.util.Set;
 import java.util.function.Function;
 import java.util.stream.Collectors;
 
@@ -43,6 +44,7 @@ import static java.util.Arrays.asList;
 import static java.util.Collections.singleton;
 import static org.junit.jupiter.api.Assertions.assertEquals;
 import static org.junit.jupiter.api.Assertions.assertNotNull;
+import static org.junit.jupiter.api.Assertions.assertNull;
 import static org.junit.jupiter.api.Assertions.assertThrows;
 
 public class ListTransactionsHandlerTest {
@@ -84,6 +86,42 @@ public class ListTransactionsHandlerTest {
         ListTransactionsRequest request = handler.buildBatchedRequest(brokerId, singleton(brokerKey)).build();
         assertEquals(Collections.singletonList(filteredState.toString()), request.data().stateFilters());
         assertEquals(Collections.emptyList(), request.data().producerIdFilters());
+    }
+
+
+    @Test
+    public void testBuildRequestWithFilteredTransactionalIdPattern() {
+        int brokerId = 1;
+        BrokerKey brokerKey = new BrokerKey(OptionalInt.of(brokerId));
+        String filteredTransactionalIdPattern = "^special-.*";
+        ListTransactionsOptions options = new ListTransactionsOptions()
+            .filterOnTransactionalIdPattern(filteredTransactionalIdPattern);
+        ListTransactionsHandler handler = new ListTransactionsHandler(options, logContext);
+        ListTransactionsRequest request = handler.buildBatchedRequest(brokerId, Set.of(brokerKey)).build();
+        assertEquals(filteredTransactionalIdPattern, request.data().transactionalIdPattern());
+        assertEquals(List.of(), request.data().stateFilters());
+    }
+
+    @Test
+    public void testBuildRequestWithNullFilteredTransactionalIdPattern() {
+        int brokerId = 1;
+        BrokerKey brokerKey = new BrokerKey(OptionalInt.of(brokerId));
+        ListTransactionsOptions options = new ListTransactionsOptions()
+            .filterOnTransactionalIdPattern(null);
+        ListTransactionsHandler handler = new ListTransactionsHandler(options, logContext);
+        ListTransactionsRequest request = handler.buildBatchedRequest(brokerId, Set.of(brokerKey)).build();
+        assertNull(request.data().transactionalIdPattern());
+    }
+
+    @Test
+    public void testBuildRequestWithEmptyFilteredTransactionalIdPattern() {
+        int brokerId = 1;
+        BrokerKey brokerKey = new BrokerKey(OptionalInt.of(brokerId));
+        ListTransactionsOptions options = new ListTransactionsOptions()
+            .filterOnTransactionalIdPattern("");
+        ListTransactionsHandler handler = new ListTransactionsHandler(options, logContext);
+        ListTransactionsRequest request = handler.buildBatchedRequest(brokerId, Set.of(brokerKey)).build();
+        assertNull(request.data().transactionalIdPattern());
     }
 
     @Test

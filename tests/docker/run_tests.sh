@@ -18,7 +18,16 @@
 SCRIPT_DIR="$( cd "$( dirname "${BASH_SOURCE[0]}" )" && pwd )"
 KAFKA_NUM_CONTAINERS=${KAFKA_NUM_CONTAINERS:-14}
 TC_PATHS=${TC_PATHS:-./kafkatest/}
-REBUILD=${REBUILD:f}
+REBUILD=${REBUILD:-f}
+
+# Auto-detect container runtime if not set
+if [[ -z "${CONTAINER_RUNTIME}" ]]; then
+    if command -v docker &> /dev/null; then
+        export CONTAINER_RUNTIME="docker"
+    elif command -v podman &> /dev/null; then
+        export CONTAINER_RUNTIME="podman"
+    fi
+fi
 
 die() {
     echo $@
@@ -32,10 +41,7 @@ else
 fi
 
 if [ "$REBUILD" == "t" ]; then
-    ./gradlew clean systemTestLibs
-    if [ "$KAFKA_MODE" == "native" ]; then
-        ./gradlew clean releaseTarGz
-    fi
+    export CLEAN_BUILD=true
 fi
 
 if ${SCRIPT_DIR}/ducker-ak ssh | grep -q '(none)'; then

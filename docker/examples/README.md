@@ -1,69 +1,15 @@
-Kafka Docker Image Usage Guide
-==============================
+Kafka Docker Image Examples
+===========================
 
 Introduction
 ------------
 
-This document contains usage guide as well as examples for Docker image.
+This document contains examples for the Docker image.
 Docker Compose files are provided in this directory for the example use cases.
 
-Kafka server can be started using following ways:
-
-- Default configs
-- File input
-- Environment variables
-
-Running on default configs
---------------------------
-
-If no user provided configuration (file input or environment variables) is passed to the Docker container, the default KRaft configuration for single combined-mode node will be used.
-This default configuration is packaged in the Kafka tarball.
-
-Use input file for providing configs 
-------------------------------------
-
-- This method requires users to provide path to a local folder which contains the Kafka property files and mount it to Docker container using Docker volume.
-- It replaces the default KRaft configuration file present in Docker container.
-- The Command `docker run --volume /path/to/property/folder:/mnt/shared/config -p 9092:9092 apache/kafka:latest` can be used to mount the folder containing the property files.
-- Property files will be only read by the Docker container.
-
-Using Environment Variables
----------------------------
-
-When using the environment variables, you need to set all properties required to start the KRaft node.
-Therefore, the recommended way to use environment variables is via Docker Compose, which allows users to set all the properties that are needed.
-It is also possible to use the input file to have a common set of configurations, and then override specific node properties using the environment variables.
-
-- Kafka property defined via environment variables will override the value of that property defined in the user provided property file.
-- If properties are provided via environment variables only, all required properties must be specified.
-- The following rules must be used to construct the environment variable key name:
-    - Replace `.` with `_`
-    - Replace `_` with `__` (double underscore)
-    - Replace `-` with `___` (triple underscore)
-    - Prefix the result with `KAFKA_`
-    - Examples:
-        - For `abc.def`, use `KAFKA_ABC_DEF`
-        - For `abc-def`, use `KAFKA_ABC___DEF`
-        - For `abc_def`, use `KAFKA_ABC__DEF`
-        
-- To provide configs to log4j property files, following points should be considered:
-  - log4j properties provided via environment variables will be appended to the default properties file (log4j properties files bundled with Kafka).
-  - `KAFKA_LOG4J_ROOT_LOGLEVEL` can be provided to set the value of `log4j.rootLogger` in log4j.properties and `tools-log4j.properties`.
-  - log4j loggers can be added to log4j.properties by setting them in `KAFKA_LOG4J_LOGGERS` environment variable in a single comma separated string.
-      - Example:
-          - Assuming that `KAFKA_LOG4J_LOGGERS='property1=value1,property2=value2'` environment variable is provided to Docker container.
-          - `log4j.logger.property1=value1` and `log4j.logger.property2=value2` will be added to the `log4j.properties` file inside Docker container.
-
-Running in SSL mode
--------------------
-        
-- Recommended way to run in ssl mode is by mounting secrets on `/etc/kafka/secrets` in Docker container and providing configs following through environment variables (`KAFKA_SSL_KEYSTORE_FILENAME`, `KAFKA_SSL_KEYSTORE_CREDENTIALS`, `KAFKA_SSL_KEY_CREDENTIALS`, `KAFKA_SSL_TRUSTSTORE_FILENAME` and `KAFKA_SSL_TRUSTSTORE_CREDENTIALS`) to let the Docker image scripts extract passwords and populate correct paths in `server.properties`.      
-- Please ensure appropriate `KAFKA_ADVERTISED_LISTENERS` are provided through environment variables to enable SSL mode in Kafka server, i.e. it should contain an `SSL` listener.
-- Alternatively property file input can be used to provide ssl properties.
-- Make sure you set location of truststore and keystore correctly when using file input. See example for file input in `docker-compose-files/single-node/file-input` for better clarity.
-- Note that advertised.listeners property needs to be provided along with SSL properties in file input and cannot be provided through environment variable separately.
-- In conclusion, ssl properties with advertised.listeners should be treated as a group and provided in file input or environment variables in it's entirety.
-- In case ssl properties are provided both through file input and environment variables, environment variable properties will override the file input properties, just as mentioned in the beginning of this section.
+For the usage guide of the Docker image (default configs, file input, environment variables, SASL and SSL modes),
+see the **Getting Started > Docker** page of the Kafka documentation on the website
+(source: [docs/getting-started/docker.md](../../docs/getting-started/docker.md)).
 
 Examples
 --------
@@ -128,7 +74,7 @@ Single Node
     - To produce messages using client scripts (Ensure that java version >= 17):
     ```
     # Run from root of the repo
-    $ bin/kafka-console-producer.sh --topic test --bootstrap-server localhost:9093 --producer.config ./docker/examples/fixtures/client-secrets/client-ssl.properties
+    $ bin/kafka-console-producer.sh --topic test --bootstrap-server localhost:9093 --command-config ./docker/examples/fixtures/client-secrets/client-ssl.properties
     ```
 - File Input:
     - Here ssl configs are provided via file input.
@@ -148,7 +94,28 @@ Single Node
     - To produce messages using client scripts (Ensure that java version >= 17):
     ```
     # Run from root of the repo
-    $ bin/kafka-console-producer.sh --topic test --bootstrap-server localhost:9093 --producer.config ./docker/examples/fixtures/client-secrets/client-ssl.properties
+    $ bin/kafka-console-producer.sh --topic test --bootstrap-server localhost:9093 --command-config ./docker/examples/fixtures/client-secrets/client-ssl.properties
+    ```
+- SASL_PLAINTEXT:
+    - Here we use SASL/PLAIN mechanism for authentication.
+    - A JAAS configuration file is mounted into the container via a volume mount.
+    - `KAFKA_OPTS` is set to point to the JAAS config file.
+    - Similar to the plaintext example, two listeners are configured: one for inter-broker communication and one for client-to-broker communication. Both use the `SASL_PLAINTEXT` security protocol.
+    - Two users are configured in the JAAS file: `admin` (for inter-broker) and `alice` (for clients).
+    - To run the example:
+    ```
+    # Run from root of the repo
+
+    # JVM based Apache Kafka Docker Image
+    $ IMAGE=apache/kafka:latest docker compose -f docker/examples/docker-compose-files/single-node/sasl_plaintext/docker-compose.yml up
+
+    # GraalVM based Native Apache Kafka Docker Image
+    $ IMAGE=apache/kafka-native:latest docker compose -f docker/examples/docker-compose-files/single-node/sasl_plaintext/docker-compose.yml up
+    ```
+    - To produce messages using client scripts (Ensure that java version >= 17):
+    ```
+    # Run from root of the repo
+    $ bin/kafka-console-producer.sh --topic test --bootstrap-server localhost:9094 --command-config ./docker/examples/fixtures/client-secrets/client-sasl.properties
     ```
 
 Multi Node Cluster
@@ -200,7 +167,26 @@ Multi Node Cluster
         - To produce messages using client scripts (Ensure that java version >= 17):
         ```
         # Run from root of the repo
-        $ bin/kafka-console-producer.sh --topic test --bootstrap-server localhost:29093 --producer.config ./docker/examples/fixtures/client-secrets/client-ssl.properties
+        $ bin/kafka-console-producer.sh --topic test --bootstrap-server localhost:29093 --command-config ./docker/examples/fixtures/client-secrets/client-ssl.properties
+        ```
+    - SASL_PLAINTEXT:
+        - Similar to Plaintext example, with SASL/PLAIN authentication added.
+        - Similar to Plaintext example, two listeners are configured for inter-broker and client-to-broker communication, both using the `SASL_PLAINTEXT` security protocol. Controllers use `PLAINTEXT`.
+        - Each broker mounts the same JAAS config file. In production, each broker should have its own credentials.
+        - To run the example:
+        ```
+        # Run from root of the repo
+
+        # JVM based Apache Kafka Docker Image
+        $ IMAGE=apache/kafka:latest docker compose -f docker/examples/docker-compose-files/cluster/combined/sasl_plaintext/docker-compose.yml up
+
+        # GraalVM based Native Apache Kafka Docker Image
+        $ IMAGE=apache/kafka-native:latest docker compose -f docker/examples/docker-compose-files/cluster/combined/sasl_plaintext/docker-compose.yml up
+        ```
+        - To produce messages using client scripts (Ensure that java version >= 17):
+        ```
+        # Run from root of the repo
+        $ bin/kafka-console-producer.sh --topic test --bootstrap-server localhost:29094 --command-config ./docker/examples/fixtures/client-secrets/client-sasl.properties
         ```
 - Isolated:
     - Examples are present in `docker-compose-files/cluster/isolated` directory.
@@ -239,7 +225,25 @@ Multi Node Cluster
         - To produce messages using client scripts (Ensure that java version >= 17):
         ```
         # Run from root of the repo
-        $ bin/kafka-console-producer.sh --topic test --bootstrap-server localhost:29093 --producer.config ./docker/examples/fixtures/client-secrets/client-ssl.properties
+        $ bin/kafka-console-producer.sh --topic test --bootstrap-server localhost:29093 --command-config ./docker/examples/fixtures/client-secrets/client-ssl.properties
+        ```
+    - SASL_PLAINTEXT:
+        - Same as combined SASL_PLAINTEXT example, with controllers and brokers separated.
+        - `SASL_PLAINTEXT` is only for inter-broker and client communication. Controllers use `PLAINTEXT`.
+        - To run the example:
+        ```
+        # Run from root of the repo
+
+        # JVM based Apache Kafka Docker Image
+        $ IMAGE=apache/kafka:latest docker compose -f docker/examples/docker-compose-files/cluster/isolated/sasl_plaintext/docker-compose.yml up
+
+        # GraalVM based Native Apache Kafka Docker Image
+        $ IMAGE=apache/kafka-native:latest docker compose -f docker/examples/docker-compose-files/cluster/isolated/sasl_plaintext/docker-compose.yml up
+        ```
+        - To produce messages using client scripts (Ensure that java version >= 17):
+        ```
+        # Run from root of the repo
+        $ bin/kafka-console-producer.sh --topic test --bootstrap-server localhost:29094 --command-config ./docker/examples/fixtures/client-secrets/client-sasl.properties
         ```
 
 - Note that the examples are meant to be tried one at a time, make sure you close an example server before trying out the other to avoid conflicts.

@@ -34,9 +34,7 @@ specifies the versions of the protocol that our code understands.  For example,
 specifying "0-2" indicates that we understand versions 0, 1, and 2.  You must
 always specify the highest message version which is supported.
 
-The only old message versions that are no longer supported are version 0 of
-MetadataRequest and MetadataResponse.  In general, since we adopted KIP-97,
-dropping support for old message versions is no longer allowed without a KIP.
+Dropping support for old message versions is no longer allowed without a KIP.
 Therefore, please be careful not to increase the lower end of the version
 support interval for any message.
 
@@ -93,6 +91,8 @@ There are several primitive field types available.
 
 * "records": recordset such as memory recordset.
 
+* "struct": a composite object consisting of one or more fields.
+
 In addition to these primitive field types, there is also an array type.  Array
 types start with a "[]" and end with the name of the element type.  For
 example, []Foo declares an array of "Foo" objects.  Array fields have their own
@@ -103,10 +103,11 @@ Guide](https://kafka.apache.org/protocol.html).
 
 Nullable Fields
 ---------------
-Booleans, ints, and floats can never be null.  However, fields that are strings,
-bytes, uuid, records, or arrays may optionally be "nullable".  When a field is 
-"nullable", that simply means that we are prepared to serialize and deserialize
-null entries for that field.
+Booleans, ints, floats and uuid can never be null. Uuid fields use a special zero uuid
+value (all bits set to 0) as a sentinel to represent "no UUID" instead of null. However,
+fields that are strings, bytes, records, struct, or arrays may optionally be "nullable".
+When a field is "nullable", that simply means that we are prepared to serialize and
+deserialize null entries for that field.
 
 If you want to declare a field as nullable, you set "nullableVersions" for that
 field.  Nullability is implemented as a version range in order to accommodate a
@@ -155,6 +156,22 @@ In flexible versions, variable-length fields such as strings, arrays, and bytes
 fields are serialized in a more efficient way that saves space.  The new
 serialization types start with compact.  For example COMPACT_STRING is a more
 efficient form of STRING.
+
+Header Versions
+---------------
+Every request and response is preceded by a versioned header (carrying fields
+like the API key, version, and correlation ID).  Every request and response
+schema with valid versions must have a top-level "headerVersions" property that
+maps its versions to header versions -- for example, {"0-1": "1", "2+": "2"}
+means versions 0-1 use header version 1, and version 2 and up use header
+version 2.
+
+The ranges must start at 0, stay contiguous and non-overlapping, and end with
+an open-ended range; header versions must never decrease as the message version
+rises.
+A flexible message version must map to header version 2 or later (requests)
+or 1 or later (responses).  ApiVersionsResponse is the exception -- it always
+maps to header version 0, so that older brokers can parse it.
 
 Serializing Messages
 --------------------
@@ -247,6 +264,11 @@ in this set will be accessible in O(1) time with an automatically generated
 "find" function.  The order of elements in the set will still be preserved,
 however.  New entries that are added to the set always show up as last in the
 ordering.
+
+Note that "mapKey" does not affect how the data is sent over the network.  It
+only affects the in-memory data structure used by the generated code.  Adding or
+removing "mapKey" on an existing field is not an incompatible change and does
+not require a new version in "validVersions".
 
 Incompatible Changes
 --------------------

@@ -16,10 +16,12 @@
  */
 package org.apache.kafka.streams.kstream;
 
+import org.apache.kafka.common.annotation.InterfaceAudience;
 import org.apache.kafka.streams.errors.TopologyException;
 
 import java.util.Objects;
 
+@InterfaceAudience.Public
 public class Named implements NamedOperation<Named> {
 
     private static final int MAX_NAME_LENGTH = 249;
@@ -27,7 +29,7 @@ public class Named implements NamedOperation<Named> {
     protected String name;
 
     protected Named(final Named named) {
-        this(Objects.requireNonNull(named, "named can't be null").name);
+        this(Objects.requireNonNull(named, "named cannot be null").name);
     }
 
     protected Named(final String name) {
@@ -46,12 +48,13 @@ public class Named implements NamedOperation<Named> {
      * @throws TopologyException if an invalid name is specified; valid characters are ASCII alphanumerics, '.', '_' and '-'.
      */
     public static Named as(final String name) {
-        Objects.requireNonNull(name, "name can't be null");
+        Objects.requireNonNull(name, "name cannot be null");
         return new Named(name);
     }
 
     @Override
     public Named withName(final String name) {
+        Objects.requireNonNull(name, "name cannot be null");
         return new Named(name);
     }
 

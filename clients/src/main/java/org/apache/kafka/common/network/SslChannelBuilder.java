@@ -26,7 +26,6 @@ import org.apache.kafka.common.security.auth.KafkaPrincipalSerde;
 import org.apache.kafka.common.security.auth.SslAuthenticationContext;
 import org.apache.kafka.common.security.ssl.SslFactory;
 import org.apache.kafka.common.security.ssl.SslPrincipalMapper;
-import org.apache.kafka.common.utils.LogContext;
 import org.apache.kafka.common.utils.Utils;
 
 import java.io.Closeable;
@@ -53,8 +52,7 @@ public class SslChannelBuilder implements ChannelBuilder, ListenerReconfigurable
      */
     public SslChannelBuilder(ConnectionMode connectionMode,
                              ListenerName listenerName,
-                             boolean isInterBrokerListener,
-                             LogContext logContext) {
+                             boolean isInterBrokerListener) {
         this.connectionMode = connectionMode;
         this.listenerName = listenerName;
         this.isInterBrokerListener = isInterBrokerListener;
@@ -164,7 +162,7 @@ public class SslChannelBuilder implements ChannelBuilder, ListenerReconfigurable
 
         @Override
         public Optional<KafkaPrincipalSerde> principalSerde() {
-            return principalBuilder instanceof KafkaPrincipalSerde ? Optional.of((KafkaPrincipalSerde) principalBuilder) : Optional.empty();
+            return Optional.of(principalBuilder);
         }
 
         @Override

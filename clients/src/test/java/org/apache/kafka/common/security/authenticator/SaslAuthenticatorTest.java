@@ -44,6 +44,7 @@ import org.apache.kafka.common.network.ChannelMetadataRegistry;
 import org.apache.kafka.common.network.ChannelState;
 import org.apache.kafka.common.network.ConnectionMode;
 import org.apache.kafka.common.network.ListenerName;
+import org.apache.kafka.common.network.NetworkReceive;
 import org.apache.kafka.common.network.NetworkSend;
 import org.apache.kafka.common.network.NetworkTestUtils;
 import org.apache.kafka.common.network.NioEchoServer;
@@ -51,6 +52,7 @@ import org.apache.kafka.common.network.SaslChannelBuilder;
 import org.apache.kafka.common.network.Selector;
 import org.apache.kafka.common.network.TransportLayer;
 import org.apache.kafka.common.protocol.ApiKeys;
+import org.apache.kafka.common.protocol.ByteBufferAccessor;
 import org.apache.kafka.common.protocol.Errors;
 import org.apache.kafka.common.protocol.types.SchemaException;
 import org.apache.kafka.common.requests.AbstractRequest;
@@ -91,11 +93,11 @@ import org.apache.kafka.common.security.scram.internals.ScramFormatter;
 import org.apache.kafka.common.security.scram.internals.ScramMechanism;
 import org.apache.kafka.common.security.token.delegation.TokenInformation;
 import org.apache.kafka.common.security.token.delegation.internals.DelegationTokenCache;
-import org.apache.kafka.common.utils.LogContext;
 import org.apache.kafka.common.utils.MockTime;
-import org.apache.kafka.common.utils.SecurityUtils;
 import org.apache.kafka.common.utils.Time;
 import org.apache.kafka.common.utils.Utils;
+import org.apache.kafka.common.utils.internals.LogContext;
+import org.apache.kafka.common.utils.internals.SecurityUtils;
 import org.apache.kafka.test.TestUtils;
 
 import org.junit.jupiter.api.AfterEach;
@@ -119,6 +121,7 @@ import java.util.List;
 import java.util.Map;
 import java.util.Random;
 import java.util.Set;
+import java.util.concurrent.Semaphore;
 import java.util.concurrent.atomic.AtomicInteger;
 import java.util.function.Function;
 import java.util.stream.Collectors;
@@ -155,6 +158,7 @@ public class SaslAuthenticatorTest {
     private static final long CONNECTIONS_MAX_REAUTH_MS_VALUE = 100L;
     private static final int BUFFER_SIZE = 4 * 1024;
     private static Time time = Time.SYSTEM;
+    private static boolean needLargeExpiration = false;
 
     private NioEchoServer server;
     private Selector selector;
@@ -174,10 +178,12 @@ public class SaslAuthenticatorTest {
         saslClientConfigs = clientCertStores.getTrustingConfig(serverCertStores);
         credentialCache = new CredentialCache();
         TestLogin.loginCount.set(0);
+        CountingKafkaPrincipalBuilder.buildCount = 0;
     }
 
     @AfterEach
     public void teardown() throws Exception {
+        needLargeExpiration = false;
         if (server != null)
             this.server.close();
         if (selector != null)
@@ -210,6 +216,31 @@ public class SaslAuthenticatorTest {
 
         server = createEchoServer(securityProtocol);
         checkAuthenticationAndReauthentication(securityProtocol, node);
+    }
+
+    @Test
+    public void testPrincipalBuiltOncePerAuthentication() throws Exception {
+        String node = "0";
+        time = new MockTime();
+        SecurityProtocol securityProtocol = SecurityProtocol.SASL_PLAINTEXT;
+        configureMechanisms("PLAIN", Collections.singletonList("PLAIN"));
+        saslServerConfigs.put(BrokerSecurityConfigs.PRINCIPAL_BUILDER_CLASS_CONFIG,
+                CountingKafkaPrincipalBuilder.class);
+
+        server = createEchoServer(securityProtocol);
+        createClientConnection(securityProtocol, node);
+        checkClientConnection(node);
+        server.selector().channels().get(0).principal();
+        server.selector().channels().get(0).principal();
+        assertEquals(1, CountingKafkaPrincipalBuilder.buildCount,
+                "Principal should be built only once for repeated access on a connection");
+
+        time.sleep((long) (CONNECTIONS_MAX_REAUTH_MS_VALUE * 1.1));
+        checkClientConnection(node);
+        server.verifyReauthenticationMetrics(1, 0);
+        server.selector().channels().get(0).principal();
+        assertEquals(2, CountingKafkaPrincipalBuilder.buildCount,
+                "A successful re-authentication should build and cache a new principal");
     }
 
     /**
@@ -305,15 +336,11 @@ public class SaslAuthenticatorTest {
         server = createEchoServer(securityProtocol);
         createSelector(securityProtocol, saslClientConfigs);
         InetSocketAddress addr = new InetSocketAddress("localhost", server.port());
-        try {
-            selector.connect(node, addr, BUFFER_SIZE, BUFFER_SIZE);
-            fail("SASL/PLAIN channel created without username");
-        } catch (IOException e) {
-            // Expected exception
-            assertTrue(selector.channels().isEmpty(), "Channels not closed");
-            for (SelectionKey key : selector.keys())
-                assertFalse(key.isValid(), "Key not cancelled");
-        }
+        assertThrows(IOException.class, () -> selector.connect(node, addr, BUFFER_SIZE, BUFFER_SIZE),
+                "SASL/PLAIN channel created without username");
+        assertTrue(selector.channels().isEmpty(), "Channels not closed");
+        for (SelectionKey key : selector.keys())
+            assertFalse(key.isValid(), "Key not cancelled");
     }
 
     /**
@@ -329,12 +356,7 @@ public class SaslAuthenticatorTest {
         server = createEchoServer(securityProtocol);
         createSelector(securityProtocol, saslClientConfigs);
         InetSocketAddress addr = new InetSocketAddress("localhost", server.port());
-        try {
-            selector.connect(node, addr, BUFFER_SIZE, BUFFER_SIZE);
-            fail("SASL/PLAIN channel created without password");
-        } catch (IOException e) {
-            // Expected exception
-        }
+        assertThrows(IOException.class, () -> selector.connect(node, addr, BUFFER_SIZE, BUFFER_SIZE), "SASL/PLAIN channel created without password");
     }
 
     /**
@@ -763,7 +785,7 @@ public class SaslAuthenticatorTest {
         selector.send(new NetworkSend(node, request.toSend(header)));
         ByteBuffer responseBuffer = waitForResponse();
         ResponseHeader.parse(responseBuffer, ApiKeys.API_VERSIONS.responseHeaderVersion((short) 0));
-        ApiVersionsResponse response = ApiVersionsResponse.parse(responseBuffer, (short) 0);
+        ApiVersionsResponse response = ApiVersionsResponse.parse(new ByteBufferAccessor(responseBuffer), (short) 0);
         assertEquals(Errors.UNSUPPORTED_VERSION.code(), response.data().errorCode());
 
         ApiVersion apiVersion = response.data().apiKeys().find(ApiKeys.API_VERSIONS.id);
@@ -822,7 +844,7 @@ public class SaslAuthenticatorTest {
         ByteBuffer responseBuffer = waitForResponse();
         ResponseHeader.parse(responseBuffer, ApiKeys.API_VERSIONS.responseHeaderVersion(version));
         ApiVersionsResponse response =
-            ApiVersionsResponse.parse(responseBuffer, version);
+            ApiVersionsResponse.parse(new ByteBufferAccessor(responseBuffer), version);
         assertEquals(Errors.INVALID_REQUEST.code(), response.data().errorCode());
 
         // Send ApiVersionsRequest with a supported version. This should succeed.
@@ -861,7 +883,7 @@ public class SaslAuthenticatorTest {
         selector.send(new NetworkSend(node, request.toSend(header)));
         ByteBuffer responseBuffer = waitForResponse();
         ResponseHeader.parse(responseBuffer, ApiKeys.API_VERSIONS.responseHeaderVersion(version));
-        ApiVersionsResponse response = ApiVersionsResponse.parse(responseBuffer, version);
+        ApiVersionsResponse response = ApiVersionsResponse.parse(new ByteBufferAccessor(responseBuffer), version);
         assertEquals(Errors.NONE.code(), response.data().errorCode());
 
         // Test that client can authenticate successfully
@@ -1053,12 +1075,7 @@ public class SaslAuthenticatorTest {
 
         SecurityProtocol securityProtocol = SecurityProtocol.SASL_SSL;
         server = createEchoServer(securityProtocol);
-        try {
-            createSelector(securityProtocol, saslClientConfigs);
-            fail("SASL/PLAIN channel created without valid login module");
-        } catch (KafkaException e) {
-            // Expected exception
-        }
+        assertThrows(KafkaException.class, () -> createSelector(securityProtocol, saslClientConfigs), "SASL/PLAIN channel created without valid login module");
     }
 
     /**
@@ -1222,40 +1239,19 @@ public class SaslAuthenticatorTest {
         saslServerConfigs.put(prefix + BrokerSecurityConfigs.SASL_SERVER_CALLBACK_HANDLER_CLASS_CONFIG,
                 TestServerCallbackHandler.class);
         Class<?> loginCallback = TestLoginCallbackHandler.class;
+        assertThrows(KafkaException.class, () -> createEchoServer(securityProtocol), "Should have failed to create server with default login handler");
 
-        try {
-            createEchoServer(securityProtocol);
-            fail("Should have failed to create server with default login handler");
-        } catch (KafkaException e) {
-            // Expected exception
-        }
+        saslServerConfigs.put(SaslConfigs.SASL_LOGIN_CALLBACK_HANDLER_CLASS, loginCallback);
+        assertThrows(KafkaException.class, () -> createEchoServer(securityProtocol), "Should have failed to create server with login handler config without listener+mechanism prefix");
+        saslServerConfigs.remove(SaslConfigs.SASL_LOGIN_CALLBACK_HANDLER_CLASS);
 
-        try {
-            saslServerConfigs.put(SaslConfigs.SASL_LOGIN_CALLBACK_HANDLER_CLASS, loginCallback);
-            createEchoServer(securityProtocol);
-            fail("Should have failed to create server with login handler config without listener+mechanism prefix");
-        } catch (KafkaException e) {
-            // Expected exception
-            saslServerConfigs.remove(SaslConfigs.SASL_LOGIN_CALLBACK_HANDLER_CLASS);
-        }
+        saslServerConfigs.put("plain." + SaslConfigs.SASL_LOGIN_CALLBACK_HANDLER_CLASS, loginCallback);
+        assertThrows(KafkaException.class, () -> createEchoServer(securityProtocol), "Should have failed to create server with login handler config without listener prefix");
+        saslServerConfigs.remove("plain." + SaslConfigs.SASL_LOGIN_CALLBACK_HANDLER_CLASS);
 
-        try {
-            saslServerConfigs.put("plain." + SaslConfigs.SASL_LOGIN_CALLBACK_HANDLER_CLASS, loginCallback);
-            createEchoServer(securityProtocol);
-            fail("Should have failed to create server with login handler config without listener prefix");
-        } catch (KafkaException e) {
-            // Expected exception
-            saslServerConfigs.remove("plain." + SaslConfigs.SASL_LOGIN_CALLBACK_HANDLER_CLASS);
-        }
-
-        try {
-            saslServerConfigs.put(listenerName.configPrefix() + SaslConfigs.SASL_LOGIN_CALLBACK_HANDLER_CLASS, loginCallback);
-            createEchoServer(securityProtocol);
-            fail("Should have failed to create server with login handler config without mechanism prefix");
-        } catch (KafkaException e) {
-            // Expected exception
-            saslServerConfigs.remove("plain." + SaslConfigs.SASL_LOGIN_CALLBACK_HANDLER_CLASS);
-        }
+        saslServerConfigs.put(listenerName.configPrefix() + SaslConfigs.SASL_LOGIN_CALLBACK_HANDLER_CLASS, loginCallback);
+        assertThrows(KafkaException.class, () -> createEchoServer(securityProtocol), "Should have failed to create server with login handler config without mechanism prefix");
+        saslServerConfigs.remove(listenerName.configPrefix() + SaslConfigs.SASL_LOGIN_CALLBACK_HANDLER_CLASS);
 
         // Connection should succeed using login callback override for mechanism
         saslServerConfigs.put(prefix + SaslConfigs.SASL_LOGIN_CALLBACK_HANDLER_CLASS, loginCallback);
@@ -1343,12 +1339,7 @@ public class SaslAuthenticatorTest {
         String module1 = TestJaasConfig.jaasConfigProperty("PLAIN", "user1", "user1-secret").value();
         String module2 = TestJaasConfig.jaasConfigProperty("PLAIN", "user2", "user2-secret").value();
         saslClientConfigs.put(SaslConfigs.SASL_JAAS_CONFIG, new Password(module1 + " " + module2));
-        try {
-            createClientConnection(securityProtocol, "1");
-            fail("Connection created with multiple login modules in sasl.jaas.config");
-        } catch (IllegalArgumentException e) {
-            // Expected
-        }
+        assertThrows(IllegalArgumentException.class, () -> createClientConnection(securityProtocol, "1"), "Connection created with multiple login modules in sasl.jaas.config");
     }
 
     /**
@@ -1603,8 +1594,44 @@ public class SaslAuthenticatorTest {
          * original token with a new one.
          */
         delay(1000L);
-        assertThrows(AssertionFailedError.class, () -> checkClientConnection(node));
+        assertClientConnectionDisconnects(node);
         server.verifyReauthenticationMetrics(0, 1);
+    }
+
+    @Test
+    public void testReauthenticateWithLargeReauthValue() throws Exception {
+        // enable it, we'll get a large expiration timestamp token
+        needLargeExpiration = true;
+        String node = "0";
+        SecurityProtocol securityProtocol = SecurityProtocol.SASL_SSL;
+
+        configureMechanisms(OAuthBearerLoginModule.OAUTHBEARER_MECHANISM,
+            List.of(OAuthBearerLoginModule.OAUTHBEARER_MECHANISM));
+        // set a large re-auth timeout in server side
+        saslServerConfigs.put(BrokerSecurityConfigs.CONNECTIONS_MAX_REAUTH_MS_CONFIG, Long.MAX_VALUE);
+        server = createEchoServer(securityProtocol);
+
+        // set to default value for sasl login configs for initialization in ExpiringCredentialRefreshConfig
+        saslClientConfigs.put(SaslConfigs.SASL_LOGIN_REFRESH_WINDOW_FACTOR, SaslConfigs.DEFAULT_LOGIN_REFRESH_WINDOW_FACTOR);
+        saslClientConfigs.put(SaslConfigs.SASL_LOGIN_REFRESH_WINDOW_JITTER, SaslConfigs.DEFAULT_LOGIN_REFRESH_WINDOW_JITTER);
+        saslClientConfigs.put(SaslConfigs.SASL_LOGIN_REFRESH_MIN_PERIOD_SECONDS, SaslConfigs.DEFAULT_LOGIN_REFRESH_MIN_PERIOD_SECONDS);
+        saslClientConfigs.put(SaslConfigs.SASL_LOGIN_REFRESH_BUFFER_SECONDS, SaslConfigs.DEFAULT_LOGIN_REFRESH_BUFFER_SECONDS);
+        saslClientConfigs.put(SaslConfigs.SASL_LOGIN_CALLBACK_HANDLER_CLASS, AlternateLoginCallbackHandler.class);
+
+        createCustomClientConnection(securityProtocol, OAuthBearerLoginModule.OAUTHBEARER_MECHANISM, node, true);
+
+        // channel should be not null before sasl handshake
+        assertNotNull(selector.channel(node));
+
+        TestUtils.waitForCondition(() -> {
+            selector.poll(1000);
+            // this channel should be closed due to session timeout calculation overflow
+            return selector.channel(node) == null;
+        }, "channel didn't close with large re-authentication value");
+
+        // ensure metrics are as expected
+        server.verifyAuthenticationMetrics(0, 0);
+        server.verifyReauthenticationMetrics(0, 0);
     }
 
     @Test
@@ -1687,7 +1714,7 @@ public class SaslAuthenticatorTest {
          * to sleep long enough so that the next write will trigger a re-authentication.
          */
         delay((long) (CONNECTIONS_MAX_REAUTH_MS_VALUE * 1.1));
-        assertThrows(AssertionFailedError.class, () -> checkClientConnection(node));
+        assertClientConnectionDisconnects(node);
         server.verifyAuthenticationMetrics(1, 0);
         server.verifyReauthenticationMetrics(0, 1);
     }
@@ -1855,6 +1882,69 @@ public class SaslAuthenticatorTest {
         verifySslClientAuthForSaslSslListener(false, SslClientAuth.REQUIRED);
     }
 
+    @Test
+    public void testServerSidePendingSendDuringReauthentication() throws Exception {
+        SecurityProtocol securityProtocol = SecurityProtocol.SASL_PLAINTEXT;
+        TestJaasConfig jaasConfig = configureMechanisms("PLAIN", Collections.singletonList("PLAIN"));
+        jaasConfig.createOrUpdateEntry(TestJaasConfig.LOGIN_CONTEXT_SERVER, PlainLoginModule.class.getName(), new HashMap<>());
+        jaasConfig.setClientOptions("PLAIN", TestServerCallbackHandler.USERNAME, TestServerCallbackHandler.PASSWORD);
+        String callbackPrefix = ListenerName.forSecurityProtocol(securityProtocol).saslMechanismConfigPrefix("PLAIN");
+        saslServerConfigs.put(callbackPrefix + BrokerSecurityConfigs.SASL_SERVER_CALLBACK_HANDLER_CLASS_CONFIG,
+                TestServerCallbackHandler.class.getName());
+        server = createEchoServer(securityProtocol);
+
+        String node = "node1";
+        try {
+            createClientConnection(securityProtocol, node);
+            NetworkTestUtils.waitForChannelReady(selector, node);
+            server.verifyAuthenticationMetrics(1, 0);
+
+            /*
+             * Now start the reauthentication on the connection. First, we have to sleep long enough so
+             * that the next write will cause re-authentication
+             */
+            delay((long) (CONNECTIONS_MAX_REAUTH_MS_VALUE * 1.1));
+            server.verifyReauthenticationMetrics(0, 0);
+
+            // block reauthentication to complete
+            TestServerCallbackHandler.sem.acquire();
+
+            String prefix = TestUtils.randomString(100);
+            // send a client request to start a reauthentication.
+            selector.send(new NetworkSend(node, ByteBufferSend.sizePrefixed(ByteBuffer.wrap((prefix + "-0").getBytes(StandardCharsets.UTF_8)))));
+            // wait till reauthentication is blocked
+            TestUtils.waitForCondition(() -> {
+                selector.poll(10L);
+                return TestServerCallbackHandler.sem.hasQueuedThreads();
+            }, 5000, "Reauthentication is not blocked");
+
+            // Set the client's channel `send` to null to allow setting a new send on the server's selector.
+            // Without this, NioEchoServer will throw an error while processing the client request,
+            // since we're manually setting a server side send to simulate the issue.
+            TestUtils.setFieldValue(selector.channel(node), "send", null);
+
+            // extract the channel id from the server's selector and directly set a send on it.
+            String channelId = server.selector().channels().get(0).id();
+            String payload = prefix + "-1";
+            server.selector().send(new NetworkSend(channelId, ByteBufferSend.sizePrefixed(ByteBuffer.wrap(payload.getBytes(StandardCharsets.UTF_8)))));
+            // allow reauthentication to complete
+            TestServerCallbackHandler.sem.release();
+
+            TestUtils.waitForCondition(() -> {
+                selector.poll(10L);
+                for (NetworkReceive receive : selector.completedReceives()) {
+                    assertEquals(payload, new String(Utils.toArray(receive.payload()), StandardCharsets.UTF_8));
+                    return true;
+                }
+                return false;
+            }, 5000, "Failed Receive the server send after reauthentication");
+
+            server.verifyReauthenticationMetrics(1, 0);
+        } finally {
+            closeClientConnectionIfNecessary();
+        }
+    }
+
     private void verifySslClientAuthForSaslSslListener(boolean useListenerPrefix,
                                                        SslClientAuth configuredClientAuth) throws Exception {
 
@@ -1936,7 +2026,7 @@ public class SaslAuthenticatorTest {
         if (enableSaslAuthenticateHeader)
             createClientConnection(securityProtocol, node);
         else
-            createClientConnectionWithoutSaslAuthenticateHeader(securityProtocol, saslMechanism, node);
+            createCustomClientConnection(securityProtocol, saslMechanism, node, false);
     }
 
     private NioEchoServer startServerApiVersionsUnsupportedByClient(final SecurityProtocol securityProtocol, String saslMechanism) throws Exception {
@@ -2024,15 +2114,13 @@ public class SaslAuthenticatorTest {
         return server;
     }
 
-    private void createClientConnectionWithoutSaslAuthenticateHeader(final SecurityProtocol securityProtocol,
-            final String saslMechanism, String node) throws Exception {
-
-        final ListenerName listenerName = ListenerName.forSecurityProtocol(securityProtocol);
-        final Map<String, ?> configs = Collections.emptyMap();
-        final JaasContext jaasContext = JaasContext.loadClientContext(configs);
-        final Map<String, JaasContext> jaasContexts = Collections.singletonMap(saslMechanism, jaasContext);
-
-        SaslChannelBuilder clientChannelBuilder = new SaslChannelBuilder(ConnectionMode.CLIENT, jaasContexts,
+    private SaslChannelBuilder saslChannelBuilderWithoutHeader(
+        final SecurityProtocol securityProtocol,
+        final String saslMechanism,
+        final Map<String, JaasContext> jaasContexts,
+        final ListenerName listenerName
+    ) {
+        return new SaslChannelBuilder(ConnectionMode.CLIENT, jaasContexts,
                 securityProtocol, listenerName, false, saslMechanism,
                 null, null, null, time, new LogContext(), null) {
 
@@ -2059,6 +2147,42 @@ public class SaslAuthenticatorTest {
                 };
             }
         };
+    }
+
+    private void createCustomClientConnection(
+        final SecurityProtocol securityProtocol,
+        final String saslMechanism,
+        String node,
+        boolean withSaslAuthenticateHeader
+    ) throws Exception {
+
+        final ListenerName listenerName = ListenerName.forSecurityProtocol(securityProtocol);
+        final Map<String, ?> configs = Collections.emptyMap();
+        final JaasContext jaasContext = JaasContext.loadClientContext(configs);
+        final Map<String, JaasContext> jaasContexts = Collections.singletonMap(saslMechanism, jaasContext);
+
+        SaslChannelBuilder clientChannelBuilder;
+        if (!withSaslAuthenticateHeader) {
+            clientChannelBuilder = saslChannelBuilderWithoutHeader(securityProtocol, saslMechanism, jaasContexts, listenerName);
+        } else {
+            clientChannelBuilder = new SaslChannelBuilder(ConnectionMode.CLIENT, jaasContexts,
+                securityProtocol, listenerName, false, saslMechanism,
+                null, null, null, time, new LogContext(), null) {
+
+                @Override
+                protected SaslClientAuthenticator buildClientAuthenticator(Map<String, ?> configs,
+                                                                           AuthenticateCallbackHandler callbackHandler,
+                                                                           String id,
+                                                                           String serverHost,
+                                                                           String servicePrincipal,
+                                                                           TransportLayer transportLayer,
+                                                                           Subject subject) {
+
+                    return new SaslClientAuthenticator(configs, callbackHandler, id, subject,
+                        servicePrincipal, serverHost, saslMechanism, transportLayer, time, new LogContext());
+                }
+            };
+        }
         clientChannelBuilder.configure(saslClientConfigs);
         this.selector = NetworkTestUtils.createSelector(clientChannelBuilder, time);
         InetSocketAddress addr = new InetSocketAddress("localhost", server.port());
@@ -2195,6 +2319,12 @@ public class SaslAuthenticatorTest {
         NetworkTestUtils.checkClientConnection(selector, node, 100, 10);
     }
 
+    private void assertClientConnectionDisconnects(String node) {
+        AssertionFailedError e = assertThrows(AssertionFailedError.class, () -> checkClientConnection(node));
+        assertTrue(e.getMessage().contains("No disconnects should have occurred"),
+            "Expected disconnection failure, but got: " + e.getMessage());
+    }
+
     private void closeClientConnectionIfNecessary() {
         if (selector != null) {
             selector.close();
@@ -2310,6 +2440,7 @@ public class SaslAuthenticatorTest {
         static final String USERNAME = "TestServerCallbackHandler-user";
         static final String PASSWORD = "TestServerCallbackHandler-password";
         private volatile boolean configured;
+        public static Semaphore sem = new Semaphore(1);
 
         @Override
         public void configure(Map<String, ?> configs, String mechanism, List<AppConfigurationEntry> jaasConfigEntries) {
@@ -2323,7 +2454,14 @@ public class SaslAuthenticatorTest {
         protected boolean authenticate(String username, char[] password) {
             if (!configured)
                 throw new IllegalStateException("Server callback handler not configured");
-            return USERNAME.equals(username) && new String(password).equals(PASSWORD);
+            try {
+                sem.acquire();
+                return USERNAME.equals(username) && new String(password).equals(PASSWORD);
+            } catch (InterruptedException e) {
+                throw new RuntimeException(e);
+            } finally {
+                sem.release();
+            }
         }
     }
 
@@ -2507,10 +2645,11 @@ public class SaslAuthenticatorTest {
                                 + ++numInvocations;
                         String headerJson = "{" + claimOrHeaderJsonText("alg", "none") + "}";
                         /*
-                         * Use a short lifetime so the background refresh thread replaces it before we
+                         * If we're testing large expiration scenario, use a large lifetime.
+                         * Otherwise, use a short lifetime so the background refresh thread replaces it before we
                          * re-authenticate
                          */
-                        String lifetimeSecondsValueToUse = "1";
+                        String lifetimeSecondsValueToUse = needLargeExpiration ? String.valueOf(Long.MAX_VALUE) : "1";
                         String claimsJson;
                         try {
                             claimsJson = String.format("{%s,%s,%s}",
@@ -2614,6 +2753,37 @@ public class SaslAuthenticatorTest {
 
         static KafkaPrincipal saslSslPrincipal(String saslPrincipal, String sslPrincipal) {
             return new KafkaPrincipal(KafkaPrincipal.USER_TYPE, saslPrincipal + ":" + sslPrincipal);
+        }
+
+        @Override
+        public byte[] serialize(KafkaPrincipal principal) {
+            return new byte[0];
+        }
+
+        @Override
+        public KafkaPrincipal deserialize(byte[] bytes) {
+            return null;
+        }
+    }
+
+    public static class CountingKafkaPrincipalBuilder implements KafkaPrincipalBuilder {
+        private static int buildCount;
+
+        @Override
+        public KafkaPrincipal build(AuthenticationContext context) {
+            SaslAuthenticationContext saslContext = (SaslAuthenticationContext) context;
+            buildCount++;
+            return new KafkaPrincipal(KafkaPrincipal.USER_TYPE, saslContext.server().getAuthorizationID());
+        }
+
+        @Override
+        public byte[] serialize(KafkaPrincipal principal) {
+            return new byte[0];
+        }
+
+        @Override
+        public KafkaPrincipal deserialize(byte[] bytes) {
+            return null;
         }
     }
 }

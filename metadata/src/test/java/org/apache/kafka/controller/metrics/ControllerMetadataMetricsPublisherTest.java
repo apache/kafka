@@ -36,6 +36,7 @@ import org.apache.kafka.image.loader.SnapshotManifest;
 import org.apache.kafka.image.writer.ImageReWriter;
 import org.apache.kafka.image.writer.ImageWriterOptions;
 import org.apache.kafka.raft.LeaderAndEpoch;
+import org.apache.kafka.server.common.MetadataVersion;
 import org.apache.kafka.server.fault.MockFaultHandler;
 
 import org.junit.jupiter.api.Test;
@@ -143,11 +144,11 @@ public class ControllerMetadataMetricsPublisherTest {
     @Test
     public void testLoadSnapshot() {
         try (TestEnv env = new TestEnv()) {
-            MetadataDelta delta = new MetadataDelta(MetadataImage.EMPTY);
+            MetadataDelta delta = new MetadataDelta.Builder()
+                .setImage(MetadataImage.EMPTY)
+                .build();
             ImageReWriter writer = new ImageReWriter(delta);
-            IMAGE1.write(writer, new ImageWriterOptions.Builder().
-                    setMetadataVersion(delta.image().features().metadataVersion()).
-                    build());
+            IMAGE1.write(writer, new ImageWriterOptions.Builder(MetadataVersion.MINIMUM_VERSION).build());
             env.publisher.onMetadataUpdate(delta, IMAGE1, fakeManifest(true));
             assertEquals(0, env.metrics.activeBrokerCount());
             assertEquals(3, env.metrics.globalTopicCount());

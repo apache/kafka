@@ -14,9 +14,20 @@
  * See the License for the specific language governing permissions and
  * limitations under the License.
  */
+
 package org.apache.kafka.common.errors;
 
+import org.apache.kafka.common.annotation.InterfaceAudience;
+
+@InterfaceAudience.Public
 public class TransactionAbortableException extends ApiException {
+
+    private static final long serialVersionUID = 1L;
+
+    public TransactionAbortableException(String message, Throwable cause) {
+        super(message, cause);
+    }
+
     public TransactionAbortableException(String message) {
         super(message);
     }

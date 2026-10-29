@@ -32,15 +32,14 @@ import org.apache.kafka.common.requests.AbstractResponse;
 import org.apache.kafka.common.requests.FindCoordinatorRequest.NoBatchedFindCoordinatorsException;
 import org.apache.kafka.common.requests.MetadataRequest;
 import org.apache.kafka.common.requests.MetadataResponse;
-import org.apache.kafka.common.utils.LogContext;
 import org.apache.kafka.common.utils.MockTime;
+import org.apache.kafka.common.utils.internals.LogContext;
 
 import org.junit.jupiter.api.Test;
 
 import java.util.Arrays;
 import java.util.Collections;
 import java.util.HashMap;
-import java.util.HashSet;
 import java.util.List;
 import java.util.Map;
 import java.util.Objects;
@@ -188,6 +187,25 @@ class AdminApiDriverTest {
         ctx.poll(emptyMap(), fulfillmentResults);
 
         ctx.poll(emptyMap(), emptyMap());
+    }
+
+    @Test
+    public void testRetryLookupIsNoOpForFixedBrokerStrategy() {
+        // For a lookup strategy that targets a fixed broker, a fulfillment request whose broker has
+        // left the cluster cannot be re-resolved by another lookup. maybeRetryLookup must report it
+        // made no progress (return false) and leave the key mapped, so the caller does not spin
+        // retrying it and exhaust the retry budget.
+        TestContext ctx = TestContext.staticMapped(map("foo", 1));
+        ctx.handler.expectRequest(Set.of("foo"), completed("foo", 1L));
+
+        List<RequestSpec<String>> requestSpecs = ctx.driver.poll();
+        assertEquals(1, requestSpecs.size());
+        RequestSpec<String> spec = requestSpecs.get(0);
+        assertEquals(OptionalInt.of(1), spec.scope.destinationBrokerId());
+
+        assertFalse(ctx.driver.maybeRetryLookup(ctx.time.milliseconds(), spec));
+        // The key remains mapped to its fixed broker.
+        assertEquals(OptionalInt.of(1), ctx.driver.keyToBrokerId("foo"));
     }
 
     @Test
@@ -397,7 +415,7 @@ class AdminApiDriverTest {
     public void testRetryLookupAndDisableBatchAfterNoBatchedFindCoordinatorsException() {
         MockTime time = new MockTime();
         LogContext lc = new LogContext();
-        Set<String> groupIds = new HashSet<>(Arrays.asList("g1", "g2"));
+        Set<String> groupIds = Set.of("g1", "g2");
         DeleteConsumerGroupsHandler handler = new DeleteConsumerGroupsHandler(lc);
         AdminApiFuture<CoordinatorKey, Void> future = AdminApiFuture.forKeys(
                 groupIds.stream().map(CoordinatorKey::byGroupId).collect(Collectors.toSet()));

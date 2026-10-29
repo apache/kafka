@@ -16,6 +16,7 @@
  */
 package org.apache.kafka.streams.processor.api;
 
+import org.apache.kafka.common.annotation.InterfaceAudience;
 import org.apache.kafka.common.header.Headers;
 import org.apache.kafka.common.header.internals.RecordHeaders;
 import org.apache.kafka.streams.errors.StreamsException;
@@ -35,7 +36,8 @@ import java.util.Objects;
  * @param <K> The type of the key
  * @param <V> The type of the value
  */
-public class Record<K, V> {
+@InterfaceAudience.Public
+public class Record<K, V> implements ReadOnlyRecord<K, V> {
     private final K key;
     private final V value;
     private final long timestamp;
@@ -86,6 +88,7 @@ public class Record<K, V> {
     /**
      * The key of the record. May be null.
      */
+    @Override
     public K key() {
         return key;
     }
@@ -93,6 +96,7 @@ public class Record<K, V> {
     /**
      * The value of the record. May be null.
      */
+    @Override
     public V value() {
         return value;
     }
@@ -100,6 +104,7 @@ public class Record<K, V> {
     /**
      * The timestamp of the record. Will never be negative.
      */
+    @Override
     public long timestamp() {
         return timestamp;
     }
@@ -107,6 +112,7 @@ public class Record<K, V> {
     /**
      * The headers of the record. Never null.
      */
+    @Override
     public Headers headers() {
         return headers;
     }

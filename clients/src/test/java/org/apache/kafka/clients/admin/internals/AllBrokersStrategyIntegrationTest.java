@@ -27,8 +27,8 @@ import org.apache.kafka.common.requests.AbstractRequest;
 import org.apache.kafka.common.requests.AbstractResponse;
 import org.apache.kafka.common.requests.MetadataRequest;
 import org.apache.kafka.common.requests.MetadataResponse;
-import org.apache.kafka.common.utils.LogContext;
 import org.apache.kafka.common.utils.MockTime;
+import org.apache.kafka.common.utils.internals.LogContext;
 import org.apache.kafka.test.TestUtils;
 
 import org.junit.jupiter.api.Test;
@@ -77,7 +77,7 @@ public class AllBrokersStrategyIntegrationTest {
 
         driver.onFailure(time.milliseconds(), spec, new UnknownServerException());
         assertTrue(result.all().isDone());
-        TestUtils.assertFutureThrows(result.all(), UnknownServerException.class);
+        TestUtils.assertFutureThrows(UnknownServerException.class, result.all());
         assertEquals(Collections.emptyList(), driver.poll());
     }
 
@@ -200,7 +200,7 @@ public class AllBrokersStrategyIntegrationTest {
 
         driver.onFailure(time.milliseconds(), requestSpec, new UnknownServerException());
         assertTrue(future.isDone());
-        TestUtils.assertFutureThrows(future, UnknownServerException.class);
+        TestUtils.assertFutureThrows(UnknownServerException.class, future);
         assertEquals(Collections.emptyList(), driver.poll());
     }
 

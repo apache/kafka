@@ -29,12 +29,12 @@ class MeteredMultiVersionedKeyQueryIterator<V> implements VersionedRecordIterato
 
     private final VersionedRecordIterator<byte[]> iterator;
     private final Function<VersionedRecord<byte[]>, VersionedRecord<V>> deserializeValue;
-    private final LongAdder numOpenIterators;
     private final Sensor sensor;
     private final Time time;
     private final long startNs;
     private final long startTimestampMs;
     private final Set<MeteredIterator> openIterators;
+    private final LongAdder numOpenIterators;
 
     public MeteredMultiVersionedKeyQueryIterator(final VersionedRecordIterator<byte[]> iterator,
                                                  final Sensor sensor,

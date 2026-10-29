@@ -26,7 +26,6 @@ import org.apache.kafka.tiered.storage.utils.BrokerLocalStorage;
 
 import java.io.File;
 import java.io.PrintStream;
-import java.util.Collections;
 import java.util.Map;
 import java.util.Optional;
 import java.util.concurrent.ExecutionException;
@@ -62,7 +61,7 @@ public final class AlterLogDirAction implements TieredStorageTestAction {
 
         // build alterReplicaLogDirs request content to move from sourceDir to targetDir
         TopicPartitionReplica topicPartitionReplica = new TopicPartitionReplica(topicPartition.topic(), topicPartition.partition(), brokerId);
-        Map<TopicPartitionReplica, String> logDirs = Collections.singletonMap(topicPartitionReplica, targetDir.get().getAbsolutePath());
+        Map<TopicPartitionReplica, String> logDirs = Map.of(topicPartitionReplica, targetDir.get().getAbsolutePath());
 
         AlterReplicaLogDirsResult results = context.admin().alterReplicaLogDirs(logDirs);
         results.values().get(topicPartitionReplica).get(30, TimeUnit.SECONDS);

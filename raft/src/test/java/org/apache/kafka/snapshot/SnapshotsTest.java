@@ -17,7 +17,7 @@
 package org.apache.kafka.snapshot;
 
 import org.apache.kafka.common.utils.Utils;
-import org.apache.kafka.raft.OffsetAndEpoch;
+import org.apache.kafka.server.common.OffsetAndEpoch;
 import org.apache.kafka.test.TestUtils;
 
 import org.junit.jupiter.api.Test;
@@ -45,10 +45,10 @@ public final class SnapshotsTest {
         Path path = Snapshots.snapshotPath(TestUtils.tempDirectory().toPath(), snapshotId);
         SnapshotPath snapshotPath = Snapshots.parse(path).get();
 
-        assertEquals(path, snapshotPath.path);
-        assertEquals(snapshotId, snapshotPath.snapshotId);
-        assertFalse(snapshotPath.partial);
-        assertFalse(snapshotPath.deleted);
+        assertEquals(path, snapshotPath.path());
+        assertEquals(snapshotId, snapshotPath.snapshotId());
+        assertFalse(snapshotPath.partial());
+        assertFalse(snapshotPath.deleted());
     }
 
     @Test
@@ -64,9 +64,9 @@ public final class SnapshotsTest {
 
         SnapshotPath snapshotPath = Snapshots.parse(path).get();
 
-        assertEquals(path, snapshotPath.path);
-        assertEquals(snapshotId, snapshotPath.snapshotId);
-        assertTrue(snapshotPath.partial);
+        assertEquals(path, snapshotPath.path());
+        assertEquals(snapshotId, snapshotPath.snapshotId());
+        assertTrue(snapshotPath.partial());
     }
 
     @Test
@@ -79,8 +79,8 @@ public final class SnapshotsTest {
         Path deletedPath = Snapshots.deleteRenamePath(path, snapshotId);
         SnapshotPath snapshotPath = Snapshots.parse(deletedPath).get();
 
-        assertEquals(snapshotId, snapshotPath.snapshotId);
-        assertTrue(snapshotPath.deleted);
+        assertEquals(snapshotId, snapshotPath.snapshotId());
+        assertTrue(snapshotPath.deleted());
     }
 
     @Test

@@ -19,8 +19,10 @@ package org.apache.kafka.server.log.remote.metadata.storage.serialization;
 import org.apache.kafka.clients.consumer.ConsumerRecord;
 import org.apache.kafka.common.MessageFormatter;
 import org.apache.kafka.common.protocol.ApiMessage;
+import org.apache.kafka.common.protocol.ByteBufferAccessor;
+import org.apache.kafka.common.protocol.ObjectSerializationCache;
 import org.apache.kafka.server.common.ApiMessageAndVersion;
-import org.apache.kafka.server.common.serialization.BytesApiMessageSerde;
+import org.apache.kafka.server.common.serialization.AbstractApiMessageSerde;
 import org.apache.kafka.server.log.remote.metadata.storage.RemoteLogSegmentMetadataSnapshot;
 import org.apache.kafka.server.log.remote.metadata.storage.generated.MetadataRecordType;
 import org.apache.kafka.server.log.remote.metadata.storage.generated.RemoteLogSegmentMetadataRecord;
@@ -33,76 +35,65 @@ import org.apache.kafka.server.log.remote.storage.RemoteLogSegmentMetadataUpdate
 import org.apache.kafka.server.log.remote.storage.RemotePartitionDeleteMetadata;
 
 import java.io.PrintStream;
+import java.nio.ByteBuffer;
 
 /**
  * This class provides serialization and deserialization for {@link RemoteLogMetadata}. This is the root serde
  * for the messages that are stored in internal remote log metadata topic.
  */
 public class RemoteLogMetadataSerde {
-    private static final short REMOTE_LOG_SEGMENT_METADATA_API_KEY = new RemoteLogSegmentMetadataRecord().apiKey();
-    private static final short REMOTE_LOG_SEGMENT_METADATA_UPDATE_API_KEY = new RemoteLogSegmentMetadataUpdateRecord().apiKey();
-    private static final short REMOTE_PARTITION_DELETE_API_KEY = new RemotePartitionDeleteMetadataRecord().apiKey();
-    private static final short REMOTE_LOG_SEGMENT_METADATA_SNAPSHOT_API_KEY = new RemoteLogSegmentMetadataSnapshotRecord().apiKey();
+    private static final AbstractApiMessageSerde API_MESSAGE_SERDE = new AbstractApiMessageSerde() {
+        @Override
+        public ApiMessage apiMessageFor(short apiKey) {
+            return MetadataRecordType.fromId(apiKey).newMetadataRecord();
+        }
+    };
 
-    private final BytesApiMessageSerde bytesApiMessageSerde;
-
-    private final RemoteLogSegmentMetadataTransform segmentTransform;
-    private final RemoteLogSegmentMetadataUpdateTransform segmentUpdateTransform;
-    private final RemotePartitionDeleteMetadataTransform partitionDeleteTransform;
-    private final RemoteLogSegmentMetadataSnapshotTransform segmentSnapshotTransform;
-
-    public RemoteLogMetadataSerde() {
-        bytesApiMessageSerde = new BytesApiMessageSerde() {
-            @Override
-            public ApiMessage apiMessageFor(short apiKey) {
-                return newApiMessage(apiKey);
-            }
-        };
-        segmentTransform = new RemoteLogSegmentMetadataTransform();
-        segmentUpdateTransform = new RemoteLogSegmentMetadataUpdateTransform();
-        partitionDeleteTransform = new RemotePartitionDeleteMetadataTransform();
-        segmentSnapshotTransform = new RemoteLogSegmentMetadataSnapshotTransform();
-    }
-
-    protected ApiMessage newApiMessage(short apiKey) {
-        return MetadataRecordType.fromId(apiKey).newMetadataRecord();
-    }
+    private final RemoteLogSegmentMetadataTransform segmentTransform = new RemoteLogSegmentMetadataTransform();
+    private final RemoteLogSegmentMetadataUpdateTransform segmentUpdateTransform = new RemoteLogSegmentMetadataUpdateTransform();
+    private final RemotePartitionDeleteMetadataTransform partitionDeleteTransform = new RemotePartitionDeleteMetadataTransform();
+    private final RemoteLogSegmentMetadataSnapshotTransform segmentSnapshotTransform = new RemoteLogSegmentMetadataSnapshotTransform();
 
     public byte[] serialize(RemoteLogMetadata remoteLogMetadata) {
+        ApiMessageAndVersion apiMessageAndVersion = toApiMessageAndVersion(remoteLogMetadata);
 
-        ApiMessageAndVersion apiMessageAndVersion;
-        if (remoteLogMetadata instanceof RemoteLogSegmentMetadata) {
-            apiMessageAndVersion = segmentTransform.toApiMessageAndVersion((RemoteLogSegmentMetadata) remoteLogMetadata);
-        } else if (remoteLogMetadata instanceof RemoteLogSegmentMetadataUpdate) {
-            apiMessageAndVersion = segmentUpdateTransform.toApiMessageAndVersion((RemoteLogSegmentMetadataUpdate) remoteLogMetadata);
-        } else if (remoteLogMetadata instanceof RemotePartitionDeleteMetadata) {
-            apiMessageAndVersion = partitionDeleteTransform.toApiMessageAndVersion((RemotePartitionDeleteMetadata) remoteLogMetadata);
-        } else if (remoteLogMetadata instanceof RemoteLogSegmentMetadataSnapshot) {
-            apiMessageAndVersion = segmentSnapshotTransform.toApiMessageAndVersion((RemoteLogSegmentMetadataSnapshot) remoteLogMetadata);
-        } else {
-            throw new IllegalArgumentException("RemoteLogMetadataTransform for given RemoteStorageMetadata class: " + remoteLogMetadata.getClass()
-                    + " does not exist.");
-        }
-
-        return bytesApiMessageSerde.serialize(apiMessageAndVersion);
+        ObjectSerializationCache cache = new ObjectSerializationCache();
+        int size = API_MESSAGE_SERDE.recordSize(apiMessageAndVersion, cache);
+        ByteBufferAccessor writable = new ByteBufferAccessor(ByteBuffer.allocate(size));
+        API_MESSAGE_SERDE.write(apiMessageAndVersion, cache, writable);
+        return writable.buffer().array();
     }
 
     public RemoteLogMetadata deserialize(byte[] data) {
-        ApiMessageAndVersion apiMessageAndVersion = bytesApiMessageSerde.deserialize(data);
+        ApiMessageAndVersion apiMessageAndVersion = API_MESSAGE_SERDE.read(new ByteBufferAccessor(ByteBuffer.wrap(data)), data.length);
 
-        short apiKey = apiMessageAndVersion.message().apiKey();
-        if (apiKey == REMOTE_LOG_SEGMENT_METADATA_API_KEY) {
+        ApiMessage message = apiMessageAndVersion.message();
+        if (message instanceof RemoteLogSegmentMetadataRecord) {
             return segmentTransform.fromApiMessageAndVersion(apiMessageAndVersion);
-        } else if (apiKey == REMOTE_LOG_SEGMENT_METADATA_UPDATE_API_KEY) {
+        } else if (message instanceof RemoteLogSegmentMetadataUpdateRecord) {
             return segmentUpdateTransform.fromApiMessageAndVersion(apiMessageAndVersion);
-        } else if (apiKey == REMOTE_PARTITION_DELETE_API_KEY) {
+        } else if (message instanceof RemotePartitionDeleteMetadataRecord) {
             return partitionDeleteTransform.fromApiMessageAndVersion(apiMessageAndVersion);
-        } else if (apiKey == REMOTE_LOG_SEGMENT_METADATA_SNAPSHOT_API_KEY) {
+        } else if (message instanceof RemoteLogSegmentMetadataSnapshotRecord) {
             return segmentSnapshotTransform.fromApiMessageAndVersion(apiMessageAndVersion);
         } else {
-            throw new IllegalArgumentException("RemoteLogMetadataTransform for apikey: " + apiKey + " does not exist.");
+            throw new IllegalArgumentException("RemoteLogMetadataTransform for apikey: " + message.apiKey() + " does not exist.");
         }
+    }
 
+    private ApiMessageAndVersion toApiMessageAndVersion(RemoteLogMetadata remoteLogMetadata) {
+        if (remoteLogMetadata instanceof RemoteLogSegmentMetadata metadata) {
+            return segmentTransform.toApiMessageAndVersion(metadata);
+        } else if (remoteLogMetadata instanceof RemoteLogSegmentMetadataUpdate metadataUpdate) {
+            return segmentUpdateTransform.toApiMessageAndVersion(metadataUpdate);
+        } else if (remoteLogMetadata instanceof RemotePartitionDeleteMetadata deleteMetadata) {
+            return partitionDeleteTransform.toApiMessageAndVersion(deleteMetadata);
+        } else if (remoteLogMetadata instanceof RemoteLogSegmentMetadataSnapshot snapshot) {
+            return segmentSnapshotTransform.toApiMessageAndVersion(snapshot);
+        } else {
+            throw new IllegalArgumentException("RemoteLogMetadataTransform for given RemoteLogMetadata class: " + remoteLogMetadata.getClass()
+                    + " does not exist.");
+        }
     }
 
     public static class RemoteLogMetadataFormatter implements MessageFormatter {

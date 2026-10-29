@@ -16,6 +16,7 @@
  */
 package org.apache.kafka.streams.errors;
 
+import org.apache.kafka.common.annotation.InterfaceAudience;
 import org.apache.kafka.common.header.Headers;
 import org.apache.kafka.streams.kstream.ValueTransformerWithKeySupplier;
 import org.apache.kafka.streams.processor.PunctuationType;
@@ -32,6 +33,7 @@ import org.apache.kafka.streams.processor.api.Record;
  * <p> {@code ErrorHandlerContext} instances are passed into {@link DeserializationExceptionHandler},
  * {@link ProcessingExceptionHandler}, or {@link ProductionExceptionHandler} dependent on what error occurred.
  */
+@InterfaceAudience.Public
 public interface ErrorHandlerContext {
     /**
      * Return the topic name of the current input record; could be {@code null} if it is not
@@ -147,4 +149,38 @@ public interface ErrorHandlerContext {
      * @return The timestamp.
      */
     long timestamp();
+
+    /**
+     * Return the non-deserialized byte[] of the input message key if the context has been triggered by a message.
+     *
+     * <p> If this method is invoked within a {@link Punctuator#punctuate(long)
+     * punctuation callback}, or while processing a record that was forwarded by a punctuation
+     * callback, it will return null.
+     *
+     * <p> If this method is invoked in a sub-topology due to a repartition, the returned key would be one sent
+     * to the repartition topic.
+     *
+     * <p> Always returns null if this method is invoked within a
+     * ProductionExceptionHandler.handle(ErrorHandlerContext, ProducerRecord, Exception)
+     *
+     * @return the raw byte of the key of the source message
+     */
+    byte[] sourceRawKey();
+
+    /**
+     * Return the non-deserialized byte[] of the input message value if the context has been triggered by a message.
+     *
+     * <p> If this method is invoked within a {@link Punctuator#punctuate(long)
+     * punctuation callback}, or while processing a record that was forwarded by a punctuation
+     * callback, it will return {@code null}.
+     *
+     * <p> If this method is invoked in a sub-topology due to a repartition, the returned key would be one sent
+     * to the repartition topic.
+     *
+     * <p> Always returns null if this method is invoked within a
+     * ProductionExceptionHandler.handle(ErrorHandlerContext, ProducerRecord, Exception)
+     *
+     * @return the raw byte of the value of the source message
+     */
+    byte[] sourceRawValue();
 }

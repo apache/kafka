@@ -29,7 +29,7 @@ import java.util.List;
 import java.util.ListIterator;
 import java.util.NoSuchElementException;
 
-public class LogicalSegmentIterator implements VersionedRecordIterator {
+public class LogicalSegmentIterator implements VersionedRecordIterator<byte[]> {
     private final ListIterator<LogicalKeyValueSegment> segmentIterator;
     private final Bytes key;
     private final Long fromTime;
@@ -76,7 +76,7 @@ public class LogicalSegmentIterator implements VersionedRecordIterator {
     }
 
     @Override
-    public Object next() {
+    public VersionedRecord<byte[]> next() {
         if (hasNext()) {
             // since data is stored in descending order in the segments, retrieve previous record, if the order is Ascending.
             return order.equals(ResultOrder.ASCENDING) ? iterator.previous() : iterator.next();

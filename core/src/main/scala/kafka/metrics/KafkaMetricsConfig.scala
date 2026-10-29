@@ -33,8 +33,8 @@ class KafkaMetricsConfig(props: VerifiableProperties) {
    * Comma-separated list of reporter types. These classes should be on the
    * classpath and will be instantiated at run-time.
    */
-  val reporters: Seq[String] = Csv.parseCsvList(props.getString(MetricConfigs.KAFKA_METRICS_REPORTER_CLASSES_CONFIG,
-    MetricConfigs.KAFKA_METRIC_REPORTER_CLASSES_DEFAULT)).asScala
+  val reporters: Seq[String] = (if (props.containsKey(MetricConfigs.KAFKA_METRICS_REPORTER_CLASSES_CONFIG)) 
+    Csv.parseCsvList(props.getString(MetricConfigs.KAFKA_METRICS_REPORTER_CLASSES_CONFIG)) else MetricConfigs.KAFKA_METRIC_REPORTER_CLASSES_DEFAULT).asScala
 
   /**
    * The metrics polling interval (in seconds).

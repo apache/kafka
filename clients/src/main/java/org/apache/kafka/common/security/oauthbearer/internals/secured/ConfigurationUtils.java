@@ -18,19 +18,28 @@
 package org.apache.kafka.common.security.oauthbearer.internals.secured;
 
 import org.apache.kafka.common.config.ConfigException;
+import org.apache.kafka.common.config.types.Password;
 import org.apache.kafka.common.network.ListenerName;
+import org.apache.kafka.common.utils.Utils;
+
+import org.slf4j.Logger;
+import org.slf4j.LoggerFactory;
 
 import java.io.File;
 import java.net.MalformedURLException;
 import java.net.URISyntaxException;
 import java.net.URL;
-import java.nio.file.Path;
 import java.util.Arrays;
+import java.util.List;
 import java.util.Locale;
 import java.util.Map;
 import java.util.Set;
 import java.util.stream.Collectors;
 
+import javax.security.auth.login.AppConfigurationEntry;
+
+import static org.apache.kafka.common.config.internals.BrokerSecurityConfigs.ALLOWED_SASL_OAUTHBEARER_FILES_CONFIG;
+import static org.apache.kafka.common.config.internals.BrokerSecurityConfigs.ALLOWED_SASL_OAUTHBEARER_FILES_DEFAULT;
 import static org.apache.kafka.common.config.internals.BrokerSecurityConfigs.ALLOWED_SASL_OAUTHBEARER_URLS_CONFIG;
 import static org.apache.kafka.common.config.internals.BrokerSecurityConfigs.ALLOWED_SASL_OAUTHBEARER_URLS_DEFAULT;
 
@@ -40,6 +49,8 @@ import static org.apache.kafka.common.config.internals.BrokerSecurityConfigs.ALL
  */
 
 public class ConfigurationUtils {
+
+    private static final Logger LOG = LoggerFactory.getLogger(ConfigurationUtils.class);
 
     private final Map<String, ?> configs;
 
@@ -58,6 +69,10 @@ public class ConfigurationUtils {
             this.prefix = null;
     }
 
+    public boolean containsKey(String name) {
+        return get(name) != null;
+    }
+
     /**
      * Validates that, if a value is supplied, is a file that:
      *
@@ -71,7 +86,7 @@ public class ConfigurationUtils {
      * ignored. Any whitespace is trimmed off of the beginning and end.
      */
 
-    public Path validateFile(String name) {
+    public File validateFileUrl(String name) {
         URL url = validateUrl(name);
         File file;
 
@@ -81,6 +96,35 @@ public class ConfigurationUtils {
             throw new ConfigException(String.format("The OAuth configuration option %s contains a URL (%s) that is malformed: %s", name, url, e.getMessage()));
         }
 
+        return validateFile(name, file);
+    }
+
+    /**
+     * Validates that the file:
+     *
+     * <li>
+     *     <ul>exists</ul>
+     *     <ul>has read permission</ul>
+     *     <ul>points to a file</ul>
+     * </li>
+     */
+    public File validateFile(String name) {
+        String s = validateString(name);
+        File file = validateFile(name, new File(s).getAbsoluteFile());
+        throwIfFileIsNotAllowed(name, file.getAbsolutePath());
+        return file;
+    }
+
+    /**
+     * Validates that the file:
+     *
+     * <li>
+     *     <ul>exists</ul>
+     *     <ul>has read permission</ul>
+     *     <ul>points to a file</ul>
+     * </li>
+     */
+    private File validateFile(String name, File file) {
         if (!file.exists())
             throw new ConfigException(String.format("The OAuth configuration option %s contains a file (%s) that doesn't exist", name, file));
 
@@ -90,7 +134,7 @@ public class ConfigurationUtils {
         if (file.isDirectory())
             throw new ConfigException(String.format("The OAuth configuration option %s references a directory (%s), not a file", name, file));
 
-        return file.toPath();
+        return file;
     }
 
     /**
@@ -110,7 +154,7 @@ public class ConfigurationUtils {
 
         if (value == null) {
             if (isRequired)
-                throw new ConfigException(String.format("The OAuth configuration option %s must be non-null", name));
+                throw new ConfigException(String.format("The OAuth configuration option %s is required", name));
             else
                 return null;
         }
@@ -143,7 +187,7 @@ public class ConfigurationUtils {
 
         if (value == null) {
             if (isRequired)
-                throw new ConfigException(String.format("The OAuth configuration option %s must be non-null", name));
+                throw new ConfigException(String.format("The OAuth configuration option %s is required", name));
             else
                 return null;
         }
@@ -187,42 +231,42 @@ public class ConfigurationUtils {
         if (!(protocol.equals("http") || protocol.equals("https") || protocol.equals("file")))
             throw new ConfigException(String.format("The OAuth configuration option %s contains a URL (%s) that contains an invalid protocol (%s); only \"http\", \"https\", and \"file\" protocol are supported", name, value, protocol));
 
-        throwIfURLIsNotAllowed(value);
+        throwIfURLIsNotAllowed(name, value);
 
         return url;
     }
 
-    public String validateString(String name) throws ValidateException {
+    public String validatePassword(String name) {
+        Password value = get(name);
+
+        if (value == null || Utils.isBlank(value.value()))
+            throw new ConfigException(String.format("The OAuth configuration option %s value is required", name));
+
+        return value.value().trim();
+    }
+
+    public String validateString(String name) {
         return validateString(name, true);
     }
 
-    public String validateString(String name, boolean isRequired) throws ValidateException {
+    public String validateString(String name, boolean isRequired) {
         String value = get(name);
 
-        if (value == null) {
+        if (Utils.isBlank(value)) {
             if (isRequired)
-                throw new ConfigException(String.format("The OAuth configuration option %s value must be non-null", name));
+                throw new ConfigException(String.format("The OAuth configuration option %s value is required", name));
             else
                 return null;
         }
 
-        value = value.trim();
-
-        if (value.isEmpty()) {
-            if (isRequired)
-                throw new ConfigException(String.format("The OAuth configuration option %s value must not contain only whitespace", name));
-            else
-                return null;
-        }
-
-        return value;
+        return value.trim();
     }
 
     public Boolean validateBoolean(String name, boolean isRequired) {
         Boolean value = get(name);
 
         if (value == null && isRequired)
-            throw new ConfigException(String.format("The OAuth configuration option %s must be non-null", name));
+            throw new ConfigException(String.format("The OAuth configuration option %s is required", name));
 
         return value;
     }
@@ -237,16 +281,137 @@ public class ConfigurationUtils {
         return (T) configs.get(name);
     }
 
+    public static <T> T getConfiguredInstance(Map<String, ?> configs,
+                                              String saslMechanism,
+                                              List<AppConfigurationEntry> jaasConfigEntries,
+                                              String configName,
+                                              Class<T> expectedClass) {
+        Object configValue = configs.get(configName);
+        Object o;
+
+        if (configValue instanceof String) {
+            String implementationClassName = (String) configValue;
+
+            try {
+                o = Utils.newInstance(implementationClassName, expectedClass);
+            } catch (Exception e) {
+                throw new ConfigException(
+                    String.format(
+                        "The class %s defined in the %s configuration could not be instantiated: %s",
+                        implementationClassName,
+                        configName,
+                        e.getMessage()
+                    )
+                );
+            }
+        } else if (configValue instanceof Class<?>) {
+            Class<?> implementationClass = (Class<?>) configValue;
+
+            try {
+                o = Utils.newInstance(implementationClass);
+            } catch (Exception e) {
+                throw new ConfigException(
+                    String.format(
+                        "The class %s defined in the %s configuration could not be instantiated: %s",
+                        implementationClass.getName(),
+                        configName,
+                        e.getMessage()
+                    )
+                );
+            }
+        } else if (configValue != null) {
+            throw new ConfigException(
+                String.format(
+                    "The type for the %s configuration must be either %s or %s, but was %s",
+                    configName,
+                    String.class.getName(),
+                    Class.class.getName(),
+                    configValue.getClass().getName()
+                )
+            );
+        } else {
+            throw new ConfigException(String.format("The required configuration %s was null", configName));
+        }
+
+        if (!expectedClass.isInstance(o)) {
+            throw new ConfigException(
+                String.format(
+                    "The configured class (%s) for the %s configuration is not an instance of %s, as is required",
+                    o.getClass().getName(),
+                    configName,
+                    expectedClass.getName()
+                )
+            );
+        }
+
+        if (o instanceof OAuthBearerConfigurable) {
+            try {
+                ((OAuthBearerConfigurable) o).configure(configs, saslMechanism, jaasConfigEntries);
+            } catch (Exception e) {
+                Utils.maybeCloseQuietly(o, "Instance of class " + o.getClass().getName() + " failed call to configure()");
+                LOG.warn(
+                    "The class {} defined in the {} configuration encountered an error on configure(): {}",
+                    o.getClass().getName(),
+                    configName,
+                    e.getMessage(),
+                    e
+                );
+                throw new ConfigException(
+                    String.format(
+                        "The class %s defined in the %s configuration encountered an error on configure(): %s",
+                        o.getClass().getName(),
+                        configName,
+                        e.getMessage()
+                    )
+                );
+            }
+        }
+
+        return expectedClass.cast(o);
+    }
+
     // visible for testing
     // make sure the url is in the "org.apache.kafka.sasl.oauthbearer.allowed.urls" system property
-    void throwIfURLIsNotAllowed(String value) {
-        Set<String> allowedUrls = Arrays.stream(
-                        System.getProperty(ALLOWED_SASL_OAUTHBEARER_URLS_CONFIG, ALLOWED_SASL_OAUTHBEARER_URLS_DEFAULT).split(","))
-                .map(String::trim)
-                .collect(Collectors.toSet());
-        if (!allowedUrls.contains(value)) {
-            throw new ConfigException(value + " is not allowed. Update system property '"
-                    + ALLOWED_SASL_OAUTHBEARER_URLS_CONFIG + "' to allow " + value);
+    void throwIfURLIsNotAllowed(String configName, String configValue) {
+        throwIfResourceIsNotAllowed(
+            "URL",
+            configName,
+            configValue,
+            ALLOWED_SASL_OAUTHBEARER_URLS_CONFIG,
+            ALLOWED_SASL_OAUTHBEARER_URLS_DEFAULT
+        );
+    }
+
+    // visible for testing
+    // make sure the file is in the "org.apache.kafka.sasl.oauthbearer.allowed.files" system property
+    void throwIfFileIsNotAllowed(String configName, String configValue) {
+        throwIfResourceIsNotAllowed(
+            "file",
+            configName,
+            configValue,
+            ALLOWED_SASL_OAUTHBEARER_FILES_CONFIG,
+            ALLOWED_SASL_OAUTHBEARER_FILES_DEFAULT
+        );
+    }
+
+    private void throwIfResourceIsNotAllowed(String resourceType,
+                                             String configName,
+                                             String configValue,
+                                             String propertyName,
+                                             String propertyDefault) {
+        String[] allowedArray = System.getProperty(propertyName, propertyDefault).split(",");
+        Set<String> allowed = Arrays.stream(allowedArray)
+            .map(String::trim)
+            .collect(Collectors.toSet());
+
+        if (!allowed.contains(configValue)) {
+            String message = String.format(
+                "The %s cannot be accessed due to restrictions. Update the system property '%s' to allow the %s to be accessed.",
+                resourceType,
+                propertyName,
+                resourceType
+            );
+            throw new ConfigException(configName, configValue, message);
         }
     }
 }

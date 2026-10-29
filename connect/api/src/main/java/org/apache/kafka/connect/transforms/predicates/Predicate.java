@@ -17,7 +17,8 @@
 package org.apache.kafka.connect.transforms.predicates;
 
 import org.apache.kafka.common.Configurable;
-import org.apache.kafka.common.config.ConfigDef;
+import org.apache.kafka.common.annotation.InterfaceAudience;
+import org.apache.kafka.connect.components.ConnectPlugin;
 import org.apache.kafka.connect.connector.ConnectRecord;
 
 /**
@@ -31,16 +32,25 @@ import org.apache.kafka.connect.connector.ConnectRecord;
  * To support this, implementations of this interface should also contain a service provider configuration file in
  * {@code META-INF/services/org.apache.kafka.connect.transforms.predicates.Predicate}.
  *
+ * <p>Implement {@link org.apache.kafka.common.metrics.Monitorable} to enable the predicate to register metrics.
+ * The following tags are automatically added to all metrics registered: <code>connector</code> set to connector name,
+ * <code>task</code> set to the task id and <code>predicate</code> set to the predicate alias.
+ *
  * @param <R> The type of record.
  */
-public interface Predicate<R extends ConnectRecord<R>> extends Configurable, AutoCloseable {
+@InterfaceAudience.Public
+public interface Predicate<R extends ConnectRecord<R>> extends Configurable, AutoCloseable, ConnectPlugin {
+
 
     /**
-     * Configuration specification for this predicate.
+     * Get the version of this component.
      *
-     * @return the configuration definition for this predicate; never null
+     * @return the version, formatted as a String. The version may not be {@code null} or empty.
      */
-    ConfigDef config();
+    @Override
+    default String version() {
+        return "undefined";
+    }
 
     /**
      * Returns whether the given record satisfies this predicate.

@@ -23,7 +23,6 @@ import org.apache.kafka.server.ServerSocketFactory;
 import java.io.IOException;
 import java.net.InetSocketAddress;
 import java.nio.channels.ServerSocketChannel;
-import java.util.Collections;
 import java.util.HashMap;
 import java.util.HashSet;
 import java.util.Map;
@@ -163,6 +162,47 @@ public class PreboundSocketFactoryManager implements AutoCloseable {
         return socketAddress.getPort();
     }
 
+    /**
+     * Swap the port numbers assigned to two nodes. This is used to simulate a network routing anomaly,
+     * such as a misconfigured proxy.
+     *
+     * @param nodeId1       The ID of the first node.
+     * @param nodeId2       The ID of the second node.
+     * @param listener      The listener for the socket.
+     * @param brokerPort1   The port number used by the first node, to be assigned to the second node.
+     * @param brokerPort2   The port number used by the second node, to be assigned to the first node.
+     */
+    public synchronized void swapPortsForListener(
+        int nodeId1,
+        int nodeId2,
+        String listener,
+        int brokerPort1,
+        int brokerPort2
+    ) throws IOException {
+        if (closed) {
+            throw new RuntimeException("Cannot open new socket: manager is closed.");
+        }
+        Map<String, ServerSocketChannel> socketsForNode1 = sockets.get(nodeId1);
+        Map<String, ServerSocketChannel> socketsForNode2 = sockets.get(nodeId2);
+        if (socketsForNode1 != null && socketsForNode2 != null) {
+            ServerSocketChannel socketChannel1 = ServerSocketFactory.INSTANCE.openServerSocket(
+                listener,
+                new InetSocketAddress(brokerPort2),
+                -1,
+                -1);
+            socketsForNode1.put(listener, socketChannel1);
+
+            ServerSocketChannel socketChannel2 = ServerSocketFactory.INSTANCE.openServerSocket(
+                listener,
+                new InetSocketAddress(brokerPort1),
+                -1,
+                -1);
+            socketsForNode2.put(listener, socketChannel2);
+        } else {
+            throw new RuntimeException("Cannot find sockets for both nodes to swap");
+        }
+    }
+
     @Override
     public synchronized void close() throws Exception {
         if (closed) {
@@ -174,7 +214,7 @@ public class PreboundSocketFactoryManager implements AutoCloseable {
         // SocketServer.)
         for (Entry<Integer, Map<String, ServerSocketChannel>> socketsEntry : sockets.entrySet()) {
             Set<String> usedListeners = usedSockets.getOrDefault(
-                socketsEntry.getKey(), Collections.emptySet());
+                socketsEntry.getKey(), Set.of());
             for (Entry<String, ServerSocketChannel> entry : socketsEntry.getValue().entrySet()) {
                 if (!usedListeners.contains(entry.getKey())) {
                     Utils.closeQuietly(entry.getValue(), "serverSocketChannel");

@@ -67,6 +67,7 @@ from runtime import (
     repo_dir,
 )
 import git
+import gh_actions
 import gpg
 import notes
 import preferences
@@ -89,7 +90,7 @@ def get_jdk(version):
     else: jdk_java_home = jdk_env["JAVA_HOME"]
     java_version = execute(f"{jdk_java_home}/bin/java -version", env=jdk_env)
     if (version == 8 and "1.8.0" not in java_version) or \
-       (f"{version}.0" not in java_version and '"{version}"' not in java_version):
+       (f"{version}.0" not in java_version and f'"{version}"' not in java_version):
         preferences.unset(key)
         fail(f"JDK {version} is required")
     return jdk_env
@@ -124,31 +125,54 @@ def detect_docs_release_version(version):
 
 def command_stage_docs():
     kafka_site_repo_path = sys.argv[2] if len(sys.argv) > 2 else os.path.join(repo_dir, "..", "kafka-site")
-    if not os.path.exists(kafka_site_repo_path) or not os.path.exists(os.path.join(kafka_site_repo_path, "powered-by.html")):
-        fail("{kafka_site_repo_path} doesn't exist or does not appear to be the kafka-site repository")
+    if not os.path.exists(kafka_site_repo_path) or not os.path.exists(os.path.join(kafka_site_repo_path, "hugo.yaml")):
+        fail(f"{kafka_site_repo_path} doesn't exist or does not appear to be the kafka-site repository")
 
-    jdk17_env = get_jdk(17)
+    jdk25_env = get_jdk(25)
 
     # We explicitly override the version of the project that we normally get from gradle.properties since we want to be
     # able to run this from a release branch where we made some updates, but the build would show an incorrect SNAPSHOT
     # version due to already having bumped the bugfix version number.
     gradle_version_override = detect_docs_release_version(project_version)
 
-    cmd("Building docs", f"./gradlew -Pversion={gradle_version_override} clean siteDocsTar aggregatedJavadoc", cwd=repo_dir, env=jdk17_env)
+    cmd("Building docs",f"./gradlew -Pversion={gradle_version_override} clean siteDocsTar", cwd=repo_dir, env=jdk25_env,)
+    # Disable parallel execution for aggregatedJavadoc due to Gradle 9 issues
+    cmd("Building docs", f"./gradlew -Pversion={gradle_version_override} aggregatedJavadoc --no-parallel", cwd=repo_dir, env=jdk25_env,)
 
     docs_tar = os.path.join(repo_dir, "core", "build", "distributions", f"kafka_2.13-{gradle_version_override}-site-docs.tgz")
 
-    versioned_docs_path = os.path.join(kafka_site_repo_path, docs_version(project_version))
-    if not os.path.exists(versioned_docs_path):
-        os.mkdir(versioned_docs_path, 0o755)
+    # Hugo layout: markdown/content pages live under content/en/<version>,
+    # javadoc and other static assets live under static/<version>
+    docs_slot = docs_version(project_version)
+    content_docs_path = os.path.join(kafka_site_repo_path, "content", "en", docs_slot)
+    static_docs_path = os.path.join(kafka_site_repo_path, "static", docs_slot)
+    if not os.path.exists(content_docs_path):
+        os.makedirs(content_docs_path, 0o755)
+    if not os.path.exists(static_docs_path):
+        os.makedirs(static_docs_path, 0o755)
 
     # The contents of the docs jar are site-docs/<docs dir>. We need to get rid of the site-docs prefix and dump everything
     # inside it into the docs version subdirectory in the kafka-site repo
-    cmd("Extracting site-docs", f"tar xf {docs_tar} --strip-components 1", cwd=versioned_docs_path)
+    cmd("Extracting site-docs", f"tar xf {docs_tar} --strip-components 1", cwd=content_docs_path)
+
+    # Images come bundled in the tar, but belong under static/<version>, not
+    # content/en/<version>. Move them out after extraction.
+    content_images_path = os.path.join(content_docs_path, "images")
+    if os.path.exists(content_images_path):
+        static_images_path = os.path.join(static_docs_path, "images")
+        cmd("Moving images to static assets", f"mkdir -p {static_images_path} && cp -R {content_images_path}/. {static_images_path} && rm -rf {content_images_path}", shell=True)
+
+    # LICENSE and NOTICE sit at the root of the site-docs tar and get dumped into
+    # content/en/<version> by the extract above, but they are not docs content and
+    # do not belong in the kafka-site content tree. Drop them after extraction.
+    for stray_file in ("LICENSE", "NOTICE"):
+        stray_path = os.path.join(content_docs_path, stray_file)
+        if os.path.exists(stray_path):
+            cmd(f"Removing stray {stray_file}", f"rm -f {stray_path}")
 
     javadocs_src_dir = os.path.join(repo_dir, "build", "docs", "javadoc")
 
-    cmd("Copying javadocs", f"cp -R {javadocs_src_dir} {versioned_docs_path}")
+    cmd("Copying javadocs", f"cp -R {javadocs_src_dir} {static_docs_path}")
 
     sys.exit(0)
 
@@ -214,11 +238,53 @@ elif not (subcommand is None or subcommand == 'stage'):
 ## Default 'stage' subcommand implementation isn't isolated to its own function yet for historical reasons
 
 
+def trigger_docker_workflows(rc_tag, release_version, dev_branch):
+    """
+    Trigger Docker image build/test and RC release workflows via GitHub Actions API.
+    Prompts the user for confirmation before each step.
+    """
+    print("\n=== Docker Image Workflows ===")
+    if gh_actions.DRY_RUN:
+        print("NOTE: GITHUB_DRY_RUN is enabled. No actual API calls will be made.")
+    if gh_actions.GITHUB_REPO != "apache/kafka":
+        print(f"NOTE: Using custom repository: {gh_actions.GITHUB_REPO}")
+    if not confirm("Trigger Docker image build workflows via GitHub Actions?"):
+        print("Skipping Docker image workflows.")
+        return
+
+    def get_github_token():
+        print(templates.github_token_instructions())
+        return prompt("Enter your GitHub personal access token: ")
+    github_token = preferences.get('github_token', get_github_token)
+    kafka_url = f"https://dist.apache.org/repos/dist/dev/kafka/{rc_tag}/kafka_2.13-{release_version}.tgz"
+
+    # Step 1: Trigger build/test workflows and loop until CVE-free
+    while True:
+        print("\nStep 1/2: Triggering Docker Build Test workflows for JVM and native images...")
+        for image_type in ["jvm", "native"]:
+            gh_actions.trigger_docker_build_test(github_token, dev_branch, image_type, kafka_url)
+        print(f"\nReview build results and CVE scan reports at:")
+        print(f"  https://github.com/{gh_actions.GITHUB_REPO}/actions/workflows/docker_build_and_test.yml")
+        print("Both JVM and native builds should succeed with no CRITICAL or HIGH CVEs.")
+        print("If CVEs are found, update docker/jvm/Dockerfile or docker/native/Dockerfile and answer 'n' below to retry.")
+        if confirm("Have the builds passed with no CVEs?"):
+            break
+
+    # Step 2: Push RC images to DockerHub
+    print("\nStep 2/2: Triggering Docker RC Release workflows for JVM and native images...")
+    for image_type in ["jvm", "native"]:
+        docker_image_name = "apache/kafka-native" if image_type == "native" else "apache/kafka"
+        rc_docker_image = f"{docker_image_name}:{rc_tag}"
+        gh_actions.trigger_docker_rc_release(github_token, dev_branch, image_type, rc_docker_image, kafka_url)
+
+    print(f"\nMonitor all Docker workflow runs at: https://github.com/{gh_actions.GITHUB_REPO}/actions")
+
+
 def verify_gpg_key():
     if not gpg.key_exists(gpg_key_id):
         fail(f"GPG key {gpg_key_id} not found")
     if not gpg.valid_passphrase(gpg_key_id, gpg_passphrase):
-        fail(f"GPG passprase not valid for key {gpg_key_id}")
+        fail(f"GPG passphrase not valid for key {gpg_key_id}")
 
 
 preferences.once("verify_requirements", lambda: confirm_or_fail(templates.requirements_instructions(preferences.FILE, preferences.as_json())))
@@ -229,16 +295,15 @@ gpg_key_pass_id = gpg.key_pass_id(gpg_key_id, gpg_passphrase)
 preferences.once(f"verify_gpg_key_{gpg_key_pass_id}", verify_gpg_key)
 
 apache_id = preferences.get('apache_id', lambda: prompt("Please enter your apache-id: "))
-jdk8_env = get_jdk(8)
-jdk17_env = get_jdk(17)
+jdk25_env = get_jdk(25)
 
 
-def verify_prerequeisites():
+def verify_prerequisites():
     print("Begin to check if you have met all the pre-requisites for the release process")
     def prereq(name, soft_check):
         try:
             result = soft_check()
-            if result == False:
+            if not result:
                 fail(f"Pre-requisite not met: {name}")
             else:
                 print(f"Pre-requisite met: {name}")
@@ -246,12 +311,12 @@ def verify_prerequeisites():
             fail(f"Pre-requisite not met: {name}. Error: {e}")
     prereq('Apache Maven CLI (mvn) in PATH', lambda: "Apache Maven" in execute("mvn -v"))
     prereq("svn CLI in PATH", lambda: "svn" in execute("svn --version"))
-    prereq("Verifying that you have no unstaged git changes", lambda: git.has_unstaged_changes())
-    prereq("Verifying that you have no staged git changes", lambda: git.has_staged_changes())
+    prereq("Verifying that you have no unstaged git changes", lambda: git.ensure_no_unstaged_changes())
+    prereq("Verifying that you have no staged git changes", lambda: git.ensure_no_staged_changes())
     return True
 
 
-preferences.once(f"verify_prerequeisites", verify_prerequeisites)
+preferences.once(f"verify_prerequisites", verify_prerequisites)
 
 # Validate that the release doesn't already exist
 git.fetch_tags()
@@ -281,23 +346,11 @@ def delete_gitrefs():
 
 git.create_branch(release_version, f"{git.push_remote_name}/{dev_branch}")
 append_fail_hook("Delete gitrefs", delete_gitrefs)
-print("Updating version numbers")
-textfiles.replace(f"{repo_dir}/gradle.properties", "version", f"version={release_version}")
-textfiles.replace(f"{repo_dir}/tests/kafkatest/__init__.py", "__version__", f"__version__ = '{release_version}'")
-print("Updating streams quickstart pom")
-textfiles.replace(f"{repo_dir}/streams/quickstart/pom.xml", "-SNAPSHOT", "", regex=True)
-print("Updating streams quickstart java pom")
-textfiles.replace(f"{repo_dir}/streams/quickstart/java/pom.xml", "-SNAPSHOT", "", regex=True)
-print("Updating streams quickstart archetype pom")
-textfiles.replace(f"{repo_dir}/streams/quickstart/java/src/main/resources/archetype-resources/pom.xml", "-SNAPSHOT", "", regex=True)
-print("Updating ducktape version.py")
-textfiles.replace(f"{repo_dir}/tests/kafkatest/version.py", "^DEV_VERSION =.*",
-    f"DEV_VERSION = KafkaVersion(\"{release_version}-SNAPSHOT\")", regex=True)
-print("Updating docs templateData.js")
-textfiles.replace(f"{repo_dir}/docs/js/templateData.js", "-SNAPSHOT", "", regex=True)
+cmd("Updating version numbers", f"./gradlew updateVersion -PnewVersion={release_version}", cwd=repo_dir)
 git.commit(f"Bump version to {release_version}")
 git.create_tag(rc_tag)
 git.switch_branch(starting_branch)
+git.merge_ref(rc_tag)
 
 # Note that we don't use tempfile here because mkdtemp causes problems with being able to determine the absolute path to a file.
 # Instead we rely on a fixed path
@@ -328,9 +381,9 @@ except Exception as e:
 
 
 git.targz(rc_tag, f"kafka-{release_version}-src/", f"{artifacts_dir}/kafka-{release_version}-src.tgz")
-cmd("Building artifacts", "./gradlew clean && ./gradlew releaseTarGz -PscalaVersion=2.13", cwd=kafka_dir, env=jdk8_env, shell=True)
+cmd("Building artifacts", "./gradlew clean && ./gradlew releaseTarGz -PscalaVersion=2.13", cwd=kafka_dir, env=jdk25_env, shell=True)
 cmd("Copying artifacts", f"cp {kafka_dir}/core/build/distributions/* {artifacts_dir}", shell=True)
-cmd("Building docs", "./gradlew clean aggregatedJavadoc", cwd=kafka_dir, env=jdk17_env)
+cmd("Building docs", "./gradlew clean aggregatedJavadoc --no-parallel", cwd=kafka_dir, env=jdk25_env)
 cmd("Copying docs", f"cp -R {kafka_dir}/build/docs/javadoc {artifacts_dir}")
 
 for filename in os.listdir(artifacts_dir):
@@ -344,8 +397,6 @@ for filename in os.listdir(artifacts_dir):
     # argument for the file is included in the output and verification uses a simple diff that will break if an absolute path
     # is used.
     dir, fname = os.path.split(full_path)
-    cmd(f"Generating MD5    for {full_path}", f"gpg --print-md md5    {fname} > {fname}.md5   ", shell=True, cwd=dir)
-    cmd(f"Generating SHA1   for {full_path}", f"gpg --print-md sha1   {fname} > {fname}.sha1  ", shell=True, cwd=dir)
     cmd(f"Generating SHA512 for {full_path}", f"gpg --print-md sha512 {fname} > {fname}.sha512", shell=True, cwd=dir)
 
 cmd("Listing artifacts to be uploaded:", f"ls -R {artifacts_dir}")
@@ -355,12 +406,31 @@ confirm_or_fail(f"Going to check in artifacts to svn under {SVN_DEV_URL}/{rc_tag
 svn.commit_artifacts(rc_tag, artifacts_dir, work_dir)
 
 confirm_or_fail("Going to build and upload mvn artifacts based on these settings:\n" + textfiles.read(global_gradle_props) + '\nOK?')
-cmd("Building and uploading archives", "./gradlew publish -PscalaVersion=2.13", cwd=kafka_dir, env=jdk8_env, shell=True)
-cmd("Building and uploading archives", "mvn deploy -Pgpg-signing", cwd=os.path.join(kafka_dir, "streams/quickstart"), env=jdk8_env, shell=True)
+cmd("Building and uploading archives", "./gradlew publish -PscalaVersion=2.13 --no-parallel", cwd=kafka_dir, env=jdk25_env, shell=True)
+# Publishes the KIP-1265 plugin artifacts to the same Nexus staging repo. The api-checker
+# tree is a separate Gradle build (composite/included) so the root :publish task does not
+# descend into it. The four coordinates uploaded here are:
+#   org.apache.kafka:kafka-api-checker-core                        (shared scanner/reporter jar)
+#   org.apache.kafka:kafka-internal-api-checker-gradle-plugin      (Gradle plugin impl jar)
+#   org.apache.kafka.internal-api-checker:org.apache.kafka.internal-api-checker.gradle.plugin
+#                                                                  (Gradle plugin marker)
+#   org.apache.kafka:kafka-internal-api-checker-maven-plugin       (Maven plugin)
+# The companion `public-api-checker` plugin stays registered in the included build so it can
+# be applied to Kafka's own subprojects, but its marker publication is disabled in
+# api-checker/gradle-plugins/build.gradle — only the internal-api-checker is shipped.
+# The version is read from the root gradle.properties — release.py has already bumped it
+# via `updateVersion` above — and the included build's allprojects block picks it up
+# automatically. The api-checker tree is pure Java with no Scala dependencies, so the
+# scalaVersion flag isn't passed. Publish credentials come from ~/.gradle/gradle.properties
+# (mavenUrl / mavenUsername / mavenPassword).
+cmd("Building and uploading archives",
+    "./gradlew :api-checker:core:publish :api-checker:gradle-plugins:publish :api-checker:maven-plugin:publish --no-parallel",
+    cwd=kafka_dir, env=jdk25_env, shell=True)
+cmd("Building and uploading archives", "mvn deploy -Pgpg-signing", cwd=os.path.join(kafka_dir, "streams/quickstart"), env=jdk25_env, shell=True)
 
 # TODO: Many of these suggested validation steps could be automated
 # and would help pre-validate a lot of the stuff voters test
-print(templates.sanity_check_instructions(release_version, rc_tag, apache_id))
+print(templates.sanity_check_instructions(release_version, rc_tag))
 confirm_or_fail("Have you sufficiently verified the release artifacts?")
 
 # TODO: Can we close the staging repository via a REST API since we
@@ -368,13 +438,15 @@ confirm_or_fail("Have you sufficiently verified the release artifacts?")
 print(templates.deploy_instructions())
 confirm_or_fail("Have you successfully deployed the artifacts?")
 confirm_or_fail(f"Ok to push RC tag {rc_tag}?")
-git.push_tag(rc_tag)
+git.push_ref(rc_tag)
+git.push_ref(starting_branch)
+
+trigger_docker_workflows(rc_tag, release_version, dev_branch)
 
 # Move back to starting branch and clean out the temporary release branch (e.g. 1.0.0) we used to generate everything
 git.reset_hard_head()
 git.switch_branch(starting_branch)
 git.delete_branch(release_version)
 
-rc_vote_email_text = templates.rc_vote_email_text(release_version, rc, rc_tag, dev_branch, docs_release_version, apache_id)
+rc_vote_email_text = templates.rc_vote_email_text(release_version, rc, rc_tag, dev_branch, docs_release_version)
 print(templates.rc_email_instructions(rc_vote_email_text))
-

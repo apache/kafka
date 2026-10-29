@@ -22,7 +22,6 @@ import org.apache.kafka.server.share.persister.PersisterStateBatch;
 import org.junit.jupiter.params.ParameterizedTest;
 import org.junit.jupiter.params.provider.MethodSource;
 
-import java.util.Collections;
 import java.util.LinkedList;
 import java.util.List;
 import java.util.stream.Stream;
@@ -36,7 +35,6 @@ public class PersisterStateBatchCombinerTest {
         final List<PersisterStateBatch> newBatches;
         final List<PersisterStateBatch> expectedResult;
         final long startOffset;
-        final boolean shouldRun;
 
         BatchTestHolder(
             String testName,
@@ -45,23 +43,11 @@ public class PersisterStateBatchCombinerTest {
             List<PersisterStateBatch> expectedResult,
             long startOffset
         ) {
-            this(testName, batchesSoFar, newBatches, expectedResult, startOffset, false);
-        }
-
-        BatchTestHolder(
-            String testName,
-            List<PersisterStateBatch> batchesSoFar,
-            List<PersisterStateBatch> newBatches,
-            List<PersisterStateBatch> expectedResult,
-            long startOffset,
-            boolean shouldRun
-        ) {
             this.testName = testName;
             this.batchesSoFar = batchesSoFar;
             this.newBatches = newBatches;
             this.expectedResult = expectedResult;
             this.startOffset = startOffset;
-            this.shouldRun = shouldRun;
         }
 
         static List<PersisterStateBatch> singleBatch(
@@ -70,7 +56,7 @@ public class PersisterStateBatchCombinerTest {
             int deliveryState,
             int deliveryCount
         ) {
-            return Collections.singletonList(
+            return List.of(
                 new PersisterStateBatch(firstOffset, lastOffset, (byte) deliveryState, (short) deliveryCount)
             );
         }
@@ -108,14 +94,14 @@ public class PersisterStateBatchCombinerTest {
             new BatchTestHolder(
                 "Current batches with start offset midway are pruned.",
                 BatchTestHolder.singleBatch(100, 130, 0, 1),
-                Collections.emptyList(),
+                List.of(),
                 BatchTestHolder.singleBatch(120, 130, 0, 1),
                 120
             ),
 
             new BatchTestHolder(
                 "New batches with start offset midway are pruned.",
-                Collections.emptyList(),
+                List.of(),
                 BatchTestHolder.singleBatch(100, 130, 0, 1),
                 BatchTestHolder.singleBatch(120, 130, 0, 1),
                 120
@@ -123,10 +109,60 @@ public class PersisterStateBatchCombinerTest {
 
             new BatchTestHolder(
                 "Both current and new batches empty.",
-                Collections.emptyList(),
-                Collections.emptyList(),
-                Collections.emptyList(),
+                List.of(),
+                List.of(),
+                List.of(),
                 120
+            ),
+
+            new BatchTestHolder(
+                "Null current and new batches are treated as empty.",
+                null,
+                null,
+                List.of(),
+                -1
+            ),
+
+            new BatchTestHolder(
+                "Duplicate equal batches ending before a later batch do not fill the gap.",
+                BatchTestHolder.singleBatch(100, 110, 0, 1),
+                BatchTestHolder.multiBatch()
+                    .addBatch(100, 110, 0, 1)
+                    .addBatch(120, 130, 2, 1)
+                    .build(),
+                BatchTestHolder.multiBatch()
+                    .addBatch(100, 110, 0, 1)
+                    .addBatch(120, 130, 2, 1)
+                    .build(),
+                -1
+            ),
+
+            new BatchTestHolder(
+                "Duplicate state-2 batches ending before a later state-0 batch do not fill the gap.",
+                BatchTestHolder.singleBatch(0, 5, 2, 1),
+                BatchTestHolder.multiBatch()
+                    .addBatch(0, 5, 2, 1)
+                    .addBatch(11, 15, 0, 1)
+                    .build(),
+                BatchTestHolder.multiBatch()
+                    .addBatch(0, 5, 2, 1)
+                    .addBatch(11, 15, 0, 1)
+                    .build(),
+                -1
+            ),
+
+            new BatchTestHolder(
+                "Duplicate state-0 batches ending before a later state-0 batch do not fill the gap.",
+                BatchTestHolder.singleBatch(0, 5, 0, 1),
+                BatchTestHolder.multiBatch()
+                    .addBatch(0, 5, 0, 1)
+                    .addBatch(11, 15, 0, 1)
+                    .build(),
+                BatchTestHolder.multiBatch()
+                    .addBatch(0, 5, 0, 1)
+                    .addBatch(11, 15, 0, 1)
+                    .build(),
+                -1
             )
         );
     }
@@ -163,8 +199,7 @@ public class PersisterStateBatchCombinerTest {
                 BatchTestHolder.singleBatch(100, 110, 0, 1),
                 BatchTestHolder.singleBatch(105, 108, 0, 1),
                 BatchTestHolder.singleBatch(100, 110, 0, 1),
-                -1,
-                true
+                -1
             ),
 
             new BatchTestHolder(
@@ -204,10 +239,11 @@ public class PersisterStateBatchCombinerTest {
                 BatchTestHolder.multiBatch()
                     .addBatch(111, 119, 2, 2)
                     .addBatch(116, 123, 2, 2)  // overlap with first batch
-                    .build(),       // ,  //[(111-123, 2, 2)]
+                    .build(),
                 BatchTestHolder.multiBatch()
                     .addBatch(100, 110, 0, 1)
                     .addBatch(111, 123, 2, 2)
+                    .addBatch(124, 130, 0, 1)
                     .build(),
                 -1
             ),
@@ -386,60 +422,52 @@ public class PersisterStateBatchCombinerTest {
     @ParameterizedTest
     @MethodSource("generatorDifferentStates")
     public void testStateBatchCombineDifferentStates(BatchTestHolder test) {
-        if (test.shouldRun) {
-            assertEquals(test.expectedResult,
-                new PersisterStateBatchCombiner(
-                    test.batchesSoFar,
-                    test.newBatches,
-                    test.startOffset)
-                    .combineStateBatches(),
-                test.testName
-            );
-        }
+        assertEquals(test.expectedResult,
+            new PersisterStateBatchCombiner(
+                test.batchesSoFar,
+                test.newBatches,
+                test.startOffset)
+                .combineStateBatches(),
+            test.testName
+        );
     }
 
     @ParameterizedTest
     @MethodSource("generatorSameState")
     public void testStateBatchCombineSameState(BatchTestHolder test) {
-        if (test.shouldRun) {
-            assertEquals(test.expectedResult,
-                new PersisterStateBatchCombiner(
-                    test.batchesSoFar,
-                    test.newBatches,
-                    test.startOffset)
-                    .combineStateBatches(),
-                test.testName
-            );
-        }
+        assertEquals(test.expectedResult,
+            new PersisterStateBatchCombiner(
+                test.batchesSoFar,
+                test.newBatches,
+                test.startOffset)
+                .combineStateBatches(),
+            test.testName
+        );
     }
 
     @ParameterizedTest
     @MethodSource("generatorComplex")
     public void testStateBatchCombineComplexCases(BatchTestHolder test) {
-        if (test.shouldRun) {
-            assertEquals(test.expectedResult,
-                new PersisterStateBatchCombiner(
-                    test.batchesSoFar,
-                    test.newBatches,
-                    test.startOffset)
-                    .combineStateBatches(),
-                test.testName
-            );
-        }
+        assertEquals(test.expectedResult,
+            new PersisterStateBatchCombiner(
+                test.batchesSoFar,
+                test.newBatches,
+                test.startOffset)
+                .combineStateBatches(),
+            test.testName
+        );
     }
 
     @ParameterizedTest
     @MethodSource("generatorCornerCases")
     public void testStateBatchCombineCornerCases(BatchTestHolder test) {
-        if (test.shouldRun) {
-            assertEquals(test.expectedResult,
-                new PersisterStateBatchCombiner(
-                    test.batchesSoFar,
-                    test.newBatches,
-                    test.startOffset)
-                    .combineStateBatches(),
-                test.testName
-            );
-        }
+        assertEquals(test.expectedResult,
+            new PersisterStateBatchCombiner(
+                test.batchesSoFar,
+                test.newBatches,
+                test.startOffset)
+                .combineStateBatches(),
+            test.testName
+        );
     }
 }

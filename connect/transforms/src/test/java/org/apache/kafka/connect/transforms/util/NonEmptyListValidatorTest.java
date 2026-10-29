@@ -20,7 +20,7 @@ import org.apache.kafka.common.config.ConfigException;
 
 import org.junit.jupiter.api.Test;
 
-import java.util.Collections;
+import java.util.List;
 
 import static org.junit.jupiter.api.Assertions.assertThrows;
 
@@ -34,11 +34,11 @@ public class NonEmptyListValidatorTest {
     @Test
     public void testEmptyList() {
         assertThrows(ConfigException.class,
-            () -> new NonEmptyListValidator().ensureValid("foo", Collections.emptyList()));
+            () -> new NonEmptyListValidator().ensureValid("foo", List.of()));
     }
 
     @Test
     public void testValidList() {
-        new NonEmptyListValidator().ensureValid("foo", Collections.singletonList("foo"));
+        new NonEmptyListValidator().ensureValid("foo", List.of("foo"));
     }
 }

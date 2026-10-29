@@ -25,10 +25,9 @@ import org.apache.kafka.common.requests.FetchRequest.PartitionData
 import org.apache.kafka.common.requests.{FetchRequest, FetchResponse}
 import org.apache.kafka.server.config.ServerConfigs
 import org.junit.jupiter.api.Assertions._
-import org.junit.jupiter.api.{AfterEach, BeforeEach, TestInfo}
-import org.junit.jupiter.params.ParameterizedTest
-import org.junit.jupiter.params.provider.ValueSource
+import org.junit.jupiter.api.{AfterEach, BeforeEach, Test, TestInfo}
 
+import java.util
 import java.util.{Optional, Properties}
 import scala.jdk.CollectionConverters._
 
@@ -79,12 +78,11 @@ class FetchRequestMaxBytesTest extends BaseRequestTest {
   }
 
   private def createTopics(): Unit = {
-    val topicConfig = new Properties
-    topicConfig.setProperty(TopicConfig.MIN_IN_SYNC_REPLICAS_CONFIG, 1.toString)
+    val topicConfigs = util.Map.of(TopicConfig.MIN_IN_SYNC_REPLICAS_CONFIG, 1.toString)
     createTopic(testTopic,
                 numPartitions = 1, 
                 replicationFactor = 1,
-                topicConfig = topicConfig)
+                topicConfig = topicConfigs)
     // Produce several messages as single batches.
     messages.indices.foreach(i => {
       val record = new ProducerRecord(testTopic, 0, oneByteArray(i.toByte), messages(i))
@@ -104,9 +102,8 @@ class FetchRequestMaxBytesTest extends BaseRequestTest {
    * Note that when a single batch is larger than FetchMaxBytes, it will be
    * returned in full even if this is larger than FetchMaxBytes.  See KIP-74.
    */
-  @ParameterizedTest
-  @ValueSource(strings = Array("kraft"))
-  def testConsumeMultipleRecords(quorum: String): Unit = {
+  @Test
+  def testConsumeMultipleRecords(): Unit = {
     createTopics()
 
     expectNextRecords(IndexedSeq(messages(0), messages(1)), 0)

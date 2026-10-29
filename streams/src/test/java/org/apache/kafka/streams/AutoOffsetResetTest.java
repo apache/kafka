@@ -41,7 +41,7 @@ class AutoOffsetResetTest {
     }
 
     @Test
-    void shouldThrowExceptionOnDurationForLastetReset() {
+    void shouldThrowExceptionOnDurationForLatestReset() {
         final AutoOffsetResetInternal latest = new AutoOffsetResetInternal(AutoOffsetReset.latest());
         assertThrows(IllegalStateException.class, latest::duration, "Latest should not have a duration.");
     }

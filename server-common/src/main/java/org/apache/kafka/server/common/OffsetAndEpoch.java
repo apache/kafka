@@ -16,40 +16,11 @@
  */
 package org.apache.kafka.server.common;
 
-public class OffsetAndEpoch {
-    private final long offset;
-    private final int leaderEpoch;
-
-    public OffsetAndEpoch(long offset, int leaderEpoch) {
-        this.offset = offset;
-        this.leaderEpoch = leaderEpoch;
-    }
-
-    public long offset() {
-        return offset;
-    }
-
-    public int leaderEpoch() {
-        return leaderEpoch;
-    }
-
+public record OffsetAndEpoch(long offset, int epoch) implements Comparable<OffsetAndEpoch> {
     @Override
-    public boolean equals(Object o) {
-        if (this == o) return true;
-        if (o == null || getClass() != o.getClass()) return false;
-        OffsetAndEpoch that = (OffsetAndEpoch) o;
-        return offset == that.offset && leaderEpoch == that.leaderEpoch;
-    }
-
-    @Override
-    public int hashCode() {
-        int result = leaderEpoch;
-        result = 31 * result + Long.hashCode(offset);
-        return result;
-    }
-
-    @Override
-    public String toString() {
-        return "(offset=" + offset + ", leaderEpoch=" + leaderEpoch + ")";
+    public int compareTo(OffsetAndEpoch o) {
+        if (epoch == o.epoch)
+            return Long.compare(offset, o.offset);
+        return Integer.compare(epoch, o.epoch);
     }
 }

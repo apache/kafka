@@ -66,7 +66,7 @@ public class DefaultTaskExecutorTest {
         when(task.isProcessable(anyLong())).thenReturn(true);
         when(task.id()).thenReturn(new TaskId(0, 0, "A"));
         when(task.process(anyLong())).thenReturn(true);
-        when(task.prepareCommit()).thenReturn(Collections.emptyMap());
+        when(task.prepareCommit(true)).thenReturn(Collections.emptyMap());
     }
 
     @AfterEach
@@ -143,6 +143,7 @@ public class DefaultTaskExecutorTest {
 
         verify(task, timeout(VERIFICATION_TIMEOUT).atLeast(2)).process(anyLong());
         verify(task, timeout(VERIFICATION_TIMEOUT).atLeastOnce()).recordProcessBatchTime(anyLong());
+        verify(task, timeout(VERIFICATION_TIMEOUT).atLeastOnce()).maybeFlushTerminalE2ELatency(anyLong());
     }
 
 

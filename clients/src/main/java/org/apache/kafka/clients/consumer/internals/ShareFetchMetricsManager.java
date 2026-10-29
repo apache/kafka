@@ -16,12 +16,14 @@
  */
 package org.apache.kafka.clients.consumer.internals;
 
+import org.apache.kafka.clients.consumer.internals.metrics.AbstractConsumerMetricsManager;
+import org.apache.kafka.clients.consumer.internals.metrics.MetricsLedger;
+import org.apache.kafka.clients.consumer.internals.metrics.SensorBuilder;
 import org.apache.kafka.common.metrics.Metrics;
 import org.apache.kafka.common.metrics.Sensor;
 import org.apache.kafka.common.metrics.stats.WindowedCount;
 
-public class ShareFetchMetricsManager {
-    private final Metrics metrics;
+public class ShareFetchMetricsManager extends AbstractConsumerMetricsManager {
     private final Sensor throttleTime;
     private final Sensor bytesFetched;
     private final Sensor recordsFetched;
@@ -29,9 +31,14 @@ public class ShareFetchMetricsManager {
     private final Sensor sentAcknowledgements;
     private final Sensor failedAcknowledgements;
 
+    @SuppressWarnings({"this-escape"})
     public ShareFetchMetricsManager(Metrics metrics, ShareFetchMetricsRegistry metricsRegistry) {
-        this.metrics = metrics;
+        this(new MetricsLedger(metrics), metricsRegistry);
+    }
 
+    @SuppressWarnings({"this-escape"})
+    private ShareFetchMetricsManager(MetricsLedger metrics, ShareFetchMetricsRegistry metricsRegistry) {
+        super(metrics);
         this.bytesFetched = new SensorBuilder(metrics, "bytes-fetched")
                 .withAvg(metricsRegistry.fetchSizeAvg)
                 .withMax(metricsRegistry.fetchSizeMax)

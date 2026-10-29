@@ -24,9 +24,9 @@ import org.apache.kafka.image.writer.ImageWriter;
 import org.apache.kafka.image.writer.ImageWriterOptions;
 import org.apache.kafka.metadata.PartitionRegistration;
 
+import java.util.Collections;
 import java.util.Map;
 import java.util.Map.Entry;
-import java.util.Objects;
 
 
 /**
@@ -34,31 +34,9 @@ import java.util.Objects;
  *
  * This class is thread-safe.
  */
-public final class TopicImage {
-    private final String name;
-
-    private final Uuid id;
-
-    private final Map<Integer, PartitionRegistration> partitions;
-
-    public TopicImage(String name,
-                      Uuid id,
-                      Map<Integer, PartitionRegistration> partitions) {
-        this.name = name;
-        this.id = id;
-        this.partitions = partitions;
-    }
-
-    public String name() {
-        return name;
-    }
-
-    public Uuid id() {
-        return id;
-    }
-
-    public Map<Integer, PartitionRegistration> partitions() {
-        return partitions;
+public record TopicImage(String name, Uuid id, Map<Integer, PartitionRegistration> partitions) {
+    public TopicImage {
+        partitions = Collections.unmodifiableMap(partitions);
     }
 
     public void write(ImageWriter writer, ImageWriterOptions options) {
@@ -70,19 +48,6 @@ public final class TopicImage {
             PartitionRegistration partition = entry.getValue();
             writer.write(partition.toRecord(id, partitionId, options));
         }
-    }
-
-    @Override
-    public boolean equals(Object o) {
-        if (!(o instanceof TopicImage other)) return false;
-        return name.equals(other.name) &&
-            id.equals(other.id) &&
-            partitions.equals(other.partitions);
-    }
-
-    @Override
-    public int hashCode() {
-        return Objects.hash(name, id, partitions);
     }
 
     @Override

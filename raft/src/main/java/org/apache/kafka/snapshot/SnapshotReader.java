@@ -17,15 +17,15 @@
 package org.apache.kafka.snapshot;
 
 import org.apache.kafka.raft.Batch;
-import org.apache.kafka.raft.OffsetAndEpoch;
+import org.apache.kafka.server.common.OffsetAndEpoch;
 
 import java.util.Iterator;
 
 /**
  * A type for reading an immutable snapshot.
  *
- * A snapshot reader can be used to scan through all of the objects T in a snapshot. It
- * is assumed that the content of the snapshot represents all of the objects T for the topic
+ * A snapshot reader can be used to scan through all the objects T in a snapshot. It
+ * is assumed that the content of the snapshot represents all the objects T for the topic
  * partition from offset 0 up to but not including the end offset in the snapshot id.
  *
  * The offsets ({@code baseOffset()} and {@code lastOffset()} stored in {@code Batch<T>}

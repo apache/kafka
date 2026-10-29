@@ -17,7 +17,6 @@
 package org.apache.kafka.network;
 
 import java.net.InetAddress;
-import java.util.Collections;
 import java.util.Map;
 import java.util.concurrent.TimeUnit;
 
@@ -37,21 +36,21 @@ public class ConnectionQuotaEntity {
         return new ConnectionQuotaEntity(CONNECTION_RATE_SENSOR_NAME + "-" + listenerName,
                 CONNECTION_RATE_METRIC_NAME,
                 Long.MAX_VALUE,
-                Collections.singletonMap("listener", listenerName));
+                Map.of("listener", listenerName));
     }
 
     public static ConnectionQuotaEntity brokerQuotaEntity() {
         return new ConnectionQuotaEntity(CONNECTION_RATE_SENSOR_NAME,
                 "broker-" + ConnectionQuotaEntity.CONNECTION_RATE_METRIC_NAME,
                 Long.MAX_VALUE,
-                Collections.emptyMap());
+                Map.of());
     }
 
     public static ConnectionQuotaEntity ipQuotaEntity(InetAddress ip) {
         return new ConnectionQuotaEntity(CONNECTION_RATE_SENSOR_NAME + "-" + ip.getHostAddress(),
                 CONNECTION_RATE_METRIC_NAME,
                 TimeUnit.HOURS.toSeconds(1),
-                Collections.singletonMap(IP_METRIC_TAG, ip.getHostAddress()));
+                Map.of(IP_METRIC_TAG, ip.getHostAddress()));
     }
 
     private final String sensorName;

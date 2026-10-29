@@ -128,15 +128,19 @@ public class TimingWheel {
         }
     }
 
-    private synchronized void addOverflowWheel() {
+    private void addOverflowWheel() {
         if (overflowWheel == null) {
-            overflowWheel = new TimingWheel(
-                interval,
-                wheelSize,
-                currentTimeMs,
-                taskCounter,
-                queue
-            );
+            synchronized (this) {
+                if (overflowWheel == null) {
+                    overflowWheel = new TimingWheel(
+                        interval,
+                        wheelSize,
+                        currentTimeMs,
+                        taskCounter,
+                        queue
+                    );
+                }
+            }
         }
     }
 
@@ -181,5 +185,15 @@ public class TimingWheel {
             // Try to advance the clock of the overflow wheel if present
             if (overflowWheel != null) overflowWheel.advanceClock(currentTimeMs);
         }
+    }
+
+    // only for testing
+    TimingWheel overflowWheel() {
+        return this.overflowWheel;
+    }
+
+    // only for testing
+    long currentTimeMs() {
+        return this.currentTimeMs;
     }
 }

@@ -22,6 +22,7 @@ import org.apache.kafka.common.GroupState;
 import org.apache.kafka.common.GroupType;
 import org.apache.kafka.common.Node;
 import org.apache.kafka.common.acl.AclOperation;
+import org.apache.kafka.common.annotation.InterfaceAudience;
 
 import java.util.Collection;
 import java.util.Collections;
@@ -34,6 +35,7 @@ import java.util.stream.Collectors;
 /**
  * A detailed description of a single consumer group in the cluster.
  */
+@InterfaceAudience.Public
 public class ConsumerGroupDescription {
     private final String groupId;
     private final boolean isSimpleConsumerGroup;
@@ -49,7 +51,8 @@ public class ConsumerGroupDescription {
     /**
      * @deprecated Since 4.0. Use {@link #ConsumerGroupDescription(String, boolean, Collection, String, GroupType, GroupState, Node, Set, Optional, Optional)} instead.
      */
-    @Deprecated
+    @SuppressWarnings("removal")
+    @Deprecated(since = "4.0", forRemoval = true)
     public ConsumerGroupDescription(String groupId,
                                     boolean isSimpleConsumerGroup,
                                     Collection<MemberDescription> members,
@@ -62,7 +65,8 @@ public class ConsumerGroupDescription {
     /**
      * @deprecated Since 4.0. Use {@link #ConsumerGroupDescription(String, boolean, Collection, String, GroupType, GroupState, Node, Set, Optional, Optional)} instead.
      */
-    @Deprecated
+    @SuppressWarnings("removal")
+    @Deprecated(since = "4.0", forRemoval = true)
     public ConsumerGroupDescription(String groupId,
                                     boolean isSimpleConsumerGroup,
                                     Collection<MemberDescription> members,
@@ -76,7 +80,8 @@ public class ConsumerGroupDescription {
     /**
      * @deprecated Since 4.0. Use {@link #ConsumerGroupDescription(String, boolean, Collection, String, GroupType, GroupState, Node, Set, Optional, Optional)} instead.
      */
-    @Deprecated
+    @SuppressWarnings("removal")
+    @Deprecated(since = "4.0", forRemoval = true)
     public ConsumerGroupDescription(String groupId,
                                     boolean isSimpleConsumerGroup,
                                     Collection<MemberDescription> members,
@@ -182,7 +187,8 @@ public class ConsumerGroupDescription {
      * The consumer group state, or UNKNOWN if the state is too new for us to parse.
      * @deprecated Since 4.0. Use {@link #groupState()} instead.
      */
-    @Deprecated
+    @SuppressWarnings("removal")
+    @Deprecated(since = "4.0", forRemoval = true)
     public ConsumerGroupState state() {
         return ConsumerGroupState.parse(groupState.toString());
     }
@@ -204,7 +210,7 @@ public class ConsumerGroupDescription {
     /**
      * authorizedOperations for this group, or null if that information is not known.
      */
-    public  Set<AclOperation> authorizedOperations() {
+    public Set<AclOperation> authorizedOperations() {
         return authorizedOperations;
     }
 

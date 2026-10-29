@@ -23,6 +23,10 @@
   // Version 2 is the first flexible version.
   "validVersions": "0-2",
   "flexibleVersions": "2+",
+  "headerVersions": {
+    "0-1": "1",
+    "2+": "2"
+  },
   "fields": [
     { "name": "Topics", "type": "[]DeleteRecordsTopic", "versions": "0+",
       "about": "Each topic that we want to delete records from.", "fields": [
@@ -33,7 +37,7 @@
         { "name": "PartitionIndex", "type": "int32", "versions": "0+",
           "about": "The partition index." },
         { "name": "Offset", "type": "int64", "versions": "0+",
-          "about": "The deletion offset." }
+          "about": "The deletion offset. -1 means that records should be truncated to the high watermark." }
       ]}
     ]},
     { "name": "TimeoutMs", "type": "int32", "versions": "0+",

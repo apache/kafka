@@ -19,6 +19,7 @@ package org.apache.kafka.clients.producer;
 import org.apache.kafka.clients.ClientDnsLookup;
 import org.apache.kafka.clients.CommonClientConfigs;
 import org.apache.kafka.clients.MetadataRecoveryStrategy;
+import org.apache.kafka.common.annotation.InterfaceAudience;
 import org.apache.kafka.common.config.AbstractConfig;
 import org.apache.kafka.common.config.ConfigDef;
 import org.apache.kafka.common.config.ConfigDef.Importance;
@@ -27,7 +28,7 @@ import org.apache.kafka.common.config.ConfigException;
 import org.apache.kafka.common.config.SecurityConfig;
 import org.apache.kafka.common.metrics.JmxReporter;
 import org.apache.kafka.common.metrics.Sensor;
-import org.apache.kafka.common.record.CompressionType;
+import org.apache.kafka.common.record.internal.CompressionType;
 import org.apache.kafka.common.security.auth.SecurityProtocol;
 import org.apache.kafka.common.serialization.Serializer;
 import org.apache.kafka.common.utils.Utils;
@@ -35,13 +36,14 @@ import org.apache.kafka.common.utils.Utils;
 import org.slf4j.Logger;
 import org.slf4j.LoggerFactory;
 
-import java.util.Collections;
 import java.util.HashMap;
+import java.util.List;
 import java.util.Map;
 import java.util.Properties;
 import java.util.Set;
 import java.util.concurrent.atomic.AtomicInteger;
 
+import static org.apache.kafka.common.config.ConfigDef.NO_DEFAULT_VALUE;
 import static org.apache.kafka.common.config.ConfigDef.Range.atLeast;
 import static org.apache.kafka.common.config.ConfigDef.Range.between;
 import static org.apache.kafka.common.config.ConfigDef.ValidString.in;
@@ -50,6 +52,7 @@ import static org.apache.kafka.common.config.ConfigDef.ValidString.in;
  * Configuration for the Kafka Producer. Documentation for these configurations can be found in the <a
  * href="http://kafka.apache.org/documentation.html#producerconfigs">Kafka documentation</a>
  */
+@InterfaceAudience.Public
 public class ProducerConfig extends AbstractConfig {
     private static final Logger log = LoggerFactory.getLogger(ProducerConfig.class);
 
@@ -94,30 +97,36 @@ public class ProducerConfig extends AbstractConfig {
                                                  + "Note: This setting gives the upper bound of the batch size to be sent. If we have fewer than this many bytes accumulated "
                                                  + "for this partition, we will 'linger' for the <code>linger.ms</code> time waiting for more records to show up. "
                                                  + "This <code>linger.ms</code> setting defaults to 5, which means the producer will wait for 5ms or until the record batch is "
-                                                 + "of <code>batch.size</code>(whichever happens first) before sending the record batch. Note that broker backpressure can "
-                                                 + " result in a higher effective linger time than this setting."
+                                                 + "of <code>batch.size</code> (whichever happens first) before sending the record batch. Note that broker backpressure can "
+                                                 + " result in a higher effective linger time than this setting. "
                                                  + "The default changed from 0 to 5 in Apache Kafka 4.0 as the efficiency gains from larger batches typically result in "
                                                  + "similar or lower producer latency despite the increased linger.";
 
     /** <code>partitioner.adaptive.partitioning.enable</code> */
-    public static final String PARTITIONER_ADPATIVE_PARTITIONING_ENABLE_CONFIG = "partitioner.adaptive.partitioning.enable";
-    private static final String PARTITIONER_ADPATIVE_PARTITIONING_ENABLE_DOC =
+    public static final String PARTITIONER_ADAPTIVE_PARTITIONING_ENABLE_CONFIG = "partitioner.adaptive.partitioning.enable";
+    @Deprecated
+    public static final String PARTITIONER_ADPATIVE_PARTITIONING_ENABLE_CONFIG = PARTITIONER_ADAPTIVE_PARTITIONING_ENABLE_CONFIG;
+    private static final String PARTITIONER_ADAPTIVE_PARTITIONING_ENABLE_DOC =
             "When set to 'true', the producer will try to adapt to broker performance and produce more messages to partitions hosted on faster brokers. "
-            + "If 'false', producer will try to distribute messages uniformly. Note: this setting has no effect if a custom partitioner is used";
+            + "If 'false', the producer will try to distribute messages uniformly. Note: this setting has no effect if a custom partitioner is used.";
 
     /** <code>partitioner.availability.timeout.ms</code> */
     public static final String PARTITIONER_AVAILABILITY_TIMEOUT_MS_CONFIG = "partitioner.availability.timeout.ms";
     private static final String PARTITIONER_AVAILABILITY_TIMEOUT_MS_DOC =
             "If a broker cannot process produce requests from a partition for <code>" + PARTITIONER_AVAILABILITY_TIMEOUT_MS_CONFIG + "</code> time, "
             + "the partitioner treats that partition as not available.  If the value is 0, this logic is disabled. "
-            + "Note: this setting has no effect if a custom partitioner is used or <code>" + PARTITIONER_ADPATIVE_PARTITIONING_ENABLE_CONFIG
-            + "</code> is set to 'false'";
+            + "Note: this setting has no effect if a custom partitioner is used or <code>" + PARTITIONER_ADAPTIVE_PARTITIONING_ENABLE_CONFIG
+            + "</code> is set to 'false'.";
 
     /** <code>partitioner.ignore.keys</code> */
     public static final String PARTITIONER_IGNORE_KEYS_CONFIG = "partitioner.ignore.keys";
     private static final String PARTITIONER_IGNORE_KEYS_DOC = "When set to 'true' the producer won't use record keys to choose a partition. "
             + "If 'false', producer would choose a partition based on a hash of the key when a key is present. "
             + "Note: this setting has no effect if a custom partitioner is used.";
+
+    /** <code>partitioner.rack.aware</code> */
+    public static final String PARTITIONER_RACK_AWARE_CONFIG = "partitioner.rack.aware";
+    private static final String PARTITIONER_RACK_AWARE_DOC = "Controls whether the default partitioner is rack-aware. This has no effect when a custom partitioner is used.";
 
     /** <code>acks</code> */
     public static final String ACKS_CONFIG = "acks";
@@ -175,6 +184,12 @@ public class ProducerConfig extends AbstractConfig {
     /** <code>client.id</code> */
     public static final String CLIENT_ID_CONFIG = CommonClientConfigs.CLIENT_ID_CONFIG;
 
+    /**
+     * <code>client.rack</code>
+     */
+    public static final String CLIENT_RACK_CONFIG = CommonClientConfigs.CLIENT_RACK_CONFIG;
+    public static final String DEFAULT_CLIENT_RACK = CommonClientConfigs.DEFAULT_CLIENT_RACK;
+
     /** <code>send.buffer.bytes</code> */
     public static final String SEND_BUFFER_CONFIG = CommonClientConfigs.SEND_BUFFER_CONFIG;
 
@@ -215,11 +230,28 @@ public class ProducerConfig extends AbstractConfig {
                                                     + "not all memory the producer uses is used for buffering. Some additional memory will be used for compression (if "
                                                     + "compression is enabled) as well as for maintaining in-flight requests.";
 
+    /** <code>buffer.memory.allocation.strategy</code> */
+    public static final String BUFFER_MEMORY_ALLOCATION_STRATEGY_CONFIG = "buffer.memory.allocation.strategy";
+    public static final String BUFFER_MEMORY_ALLOCATION_STRATEGY_FULL = "full";
+    public static final String BUFFER_MEMORY_ALLOCATION_STRATEGY_INCREMENTAL = "incremental";
+    private static final String BUFFER_MEMORY_ALLOCATION_STRATEGY_DOC = "Controls how the producer allocates memory from <code>" + BUFFER_MEMORY_CONFIG + "</code> for record batches. The following values are supported: "
+                                                    + "<ul>"
+                                                    + "<li><code>" + BUFFER_MEMORY_ALLOCATION_STRATEGY_FULL + "</code>: reserves a full <code>" + BATCH_SIZE_CONFIG + "</code> up front when a batch is created, "
+                                                    + "regardless of how much data it ends up holding. Pool memory therefore scales with the number of active partitions.</li>"
+                                                    + "<li><code>" + BUFFER_MEMORY_ALLOCATION_STRATEGY_INCREMENTAL + "</code>: allocates memory on demand as records are appended, growing a batch "
+                                                    + "up to <code>" + BATCH_SIZE_CONFIG + "</code>. Pool memory therefore scales with the data actually buffered rather than the number of active "
+                                                    + "partitions, allowing larger <code>" + BATCH_SIZE_CONFIG + "</code> values (e.g. for high-latency clusters) without reserving "
+                                                    + "<code>" + BATCH_SIZE_CONFIG + "</code> for every active partition.</li>"
+                                                    + "</ul>";
+
     /** <code>retry.backoff.ms</code> */
     public static final String RETRY_BACKOFF_MS_CONFIG = CommonClientConfigs.RETRY_BACKOFF_MS_CONFIG;
 
     /** <code>retry.backoff.max.ms</code> */
     public static final String RETRY_BACKOFF_MAX_MS_CONFIG = CommonClientConfigs.RETRY_BACKOFF_MAX_MS_CONFIG;
+
+    /** <code>bootstrap.resolve.timeout.ms</code> */
+    public static final String BOOTSTRAP_RESOLVE_TIMEOUT_MS_CONFIG = CommonClientConfigs.BOOTSTRAP_RESOLVE_TIMEOUT_MS_CONFIG;
 
     /**
      * <code>enable.metrics.push</code>
@@ -274,11 +306,12 @@ public class ProducerConfig extends AbstractConfig {
 
     /** <code>retries</code> */
     public static final String RETRIES_CONFIG = CommonClientConfigs.RETRIES_CONFIG;
-    private static final String RETRIES_DOC = "Setting a value greater than zero will cause the client to resend any record whose send fails with a potentially transient error."
-            + " Note that this retry is no different than if the client resent the record upon receiving the error."
-            + " Produce requests will be failed before the number of retries has been exhausted if the timeout configured by"
-            + " <code>" + DELIVERY_TIMEOUT_MS_CONFIG + "</code> expires first before successful acknowledgement. Users should generally"
-            + " prefer to leave this config unset and instead use <code>" + DELIVERY_TIMEOUT_MS_CONFIG + "</code> to control"
+    private static final String RETRIES_DOC = "Number of times to retry a request that fails with a transient error."
+            + " Setting a value greater than zero will cause the client to resend any record whose send fails with a potentially transient error. "
+            + " Requests will be retried this many times until they succeed, fail with a non-transient error, or the <code>" + DELIVERY_TIMEOUT_MS_CONFIG + "</code> expires."
+            + " Note that this automatic retry will simply resend the same record upon receiving the error."
+            + " Setting a value of zero will disable this automatic retry behaviour, so that the transient errors will be propagated to the application to be handled."
+            + " Users should generally prefer to leave this config unset and instead use <code>" + DELIVERY_TIMEOUT_MS_CONFIG + "</code> to control"
             + " retry behavior."
             + "<p>"
             + "Enabling idempotence requires this config value to be greater than 0."
@@ -313,7 +346,9 @@ public class ProducerConfig extends AbstractConfig {
             "This strategy send records to a partition until at least " + BATCH_SIZE_CONFIG + " bytes is produced to the partition. It works with the strategy:" +
             "<ol>" +
             "<li>If no partition is specified but a key is present, choose a partition based on a hash of the key.</li>" +
-            "<li>If no partition or key is present, choose the sticky partition that changes when at least " + BATCH_SIZE_CONFIG + " bytes are produced to the partition.</li>" +
+            "<li>If no partition or key is present, choose the sticky partition that changes when at least <code>" + BATCH_SIZE_CONFIG + "</code> bytes are produced to the partition.</li>" +
+            "<li>If <code>" + CLIENT_RACK_CONFIG + "</code> is specified and <code>" + PARTITIONER_RACK_AWARE_CONFIG + "=true</code>, the sticky partition is chosen from partitions " +
+            "with the leader broker in the same rack, if at least one is available. If none are available, it falls back on selecting from all available partitions.</li>" +
             "</ol>" +
             "</li>" +
             "<li><code>org.apache.kafka.clients.producer.RoundRobinPartitioner</code>: A partitioning strategy where " +
@@ -355,6 +390,11 @@ public class ProducerConfig extends AbstractConfig {
             "By default the TransactionId is not configured, which means transactions cannot be used. " +
             "Note that, by default, transactions require a cluster of at least three brokers which is the recommended setting for production; for development you can change this, by adjusting broker setting <code>transaction.state.log.replication.factor</code>.";
 
+    /** <code> transaction.two.phase.commit.enable </code> */
+    public static final String TRANSACTION_TWO_PHASE_COMMIT_ENABLE_CONFIG = "transaction.two.phase.commit.enable";
+    private static final String TRANSACTION_TWO_PHASE_COMMIT_ENABLE_DOC = "If set to true, then the broker is informed that the client is participating in " +
+            "two phase commit protocol and transactions that this client starts never expire.";
+
     /**
      * <code>security.providers</code>
      */
@@ -364,7 +404,12 @@ public class ProducerConfig extends AbstractConfig {
     private static final AtomicInteger PRODUCER_CLIENT_ID_SEQUENCE = new AtomicInteger(1);
 
     static {
-        CONFIG = new ConfigDef().define(BOOTSTRAP_SERVERS_CONFIG, Type.LIST, Collections.emptyList(), new ConfigDef.NonNullValidator(), Importance.HIGH, CommonClientConfigs.BOOTSTRAP_SERVERS_DOC)
+        CONFIG = new ConfigDef().define(BOOTSTRAP_SERVERS_CONFIG,
+                                        Type.LIST,
+                                        NO_DEFAULT_VALUE,
+                                        ConfigDef.ValidList.anyNonDuplicateValues(false, false),
+                                        Importance.HIGH,
+                                        CommonClientConfigs.BOOTSTRAP_SERVERS_DOC)
                                 .define(CLIENT_DNS_LOOKUP_CONFIG,
                                         Type.STRING,
                                         ClientDnsLookup.USE_ALL_DNS_IPS.toString(),
@@ -373,6 +418,14 @@ public class ProducerConfig extends AbstractConfig {
                                         Importance.MEDIUM,
                                         CommonClientConfigs.CLIENT_DNS_LOOKUP_DOC)
                                 .define(BUFFER_MEMORY_CONFIG, Type.LONG, 32 * 1024 * 1024L, atLeast(0L), Importance.HIGH, BUFFER_MEMORY_DOC)
+                                // Internal until the incremental strategy is fully implemented
+                                .defineInternal(BUFFER_MEMORY_ALLOCATION_STRATEGY_CONFIG,
+                                        Type.STRING,
+                                        BUFFER_MEMORY_ALLOCATION_STRATEGY_FULL,
+                                        ConfigDef.CaseInsensitiveValidString
+                                                .in(BUFFER_MEMORY_ALLOCATION_STRATEGY_FULL, BUFFER_MEMORY_ALLOCATION_STRATEGY_INCREMENTAL),
+                                        Importance.MEDIUM,
+                                        BUFFER_MEMORY_ALLOCATION_STRATEGY_DOC)
                                 .define(RETRIES_CONFIG, Type.INT, Integer.MAX_VALUE, between(0, Integer.MAX_VALUE), Importance.HIGH, RETRIES_DOC)
                                 .define(ACKS_CONFIG,
                                         Type.STRING,
@@ -385,12 +438,14 @@ public class ProducerConfig extends AbstractConfig {
                                 .define(COMPRESSION_LZ4_LEVEL_CONFIG, Type.INT, CompressionType.LZ4.defaultLevel(), CompressionType.LZ4.levelValidator(), Importance.MEDIUM, COMPRESSION_LZ4_LEVEL_DOC)
                                 .define(COMPRESSION_ZSTD_LEVEL_CONFIG, Type.INT, CompressionType.ZSTD.defaultLevel(), CompressionType.ZSTD.levelValidator(), Importance.MEDIUM, COMPRESSION_ZSTD_LEVEL_DOC)
                                 .define(BATCH_SIZE_CONFIG, Type.INT, 16384, atLeast(0), Importance.MEDIUM, BATCH_SIZE_DOC)
-                                .define(PARTITIONER_ADPATIVE_PARTITIONING_ENABLE_CONFIG, Type.BOOLEAN, true, Importance.LOW, PARTITIONER_ADPATIVE_PARTITIONING_ENABLE_DOC)
+                                .define(PARTITIONER_ADAPTIVE_PARTITIONING_ENABLE_CONFIG, Type.BOOLEAN, true, Importance.LOW, PARTITIONER_ADAPTIVE_PARTITIONING_ENABLE_DOC)
                                 .define(PARTITIONER_AVAILABILITY_TIMEOUT_MS_CONFIG, Type.LONG, 0, atLeast(0), Importance.LOW, PARTITIONER_AVAILABILITY_TIMEOUT_MS_DOC)
                                 .define(PARTITIONER_IGNORE_KEYS_CONFIG, Type.BOOLEAN, false, Importance.MEDIUM, PARTITIONER_IGNORE_KEYS_DOC)
+                                .define(PARTITIONER_RACK_AWARE_CONFIG, Type.BOOLEAN, false, Importance.LOW, PARTITIONER_RACK_AWARE_DOC)
                                 .define(LINGER_MS_CONFIG, Type.LONG, 5, atLeast(0), Importance.MEDIUM, LINGER_MS_DOC)
                                 .define(DELIVERY_TIMEOUT_MS_CONFIG, Type.INT, 120 * 1000, atLeast(0), Importance.MEDIUM, DELIVERY_TIMEOUT_MS_DOC)
                                 .define(CLIENT_ID_CONFIG, Type.STRING, "", Importance.MEDIUM, CommonClientConfigs.CLIENT_ID_DOC)
+                                .define(CLIENT_RACK_CONFIG, Type.STRING, DEFAULT_CLIENT_RACK, Importance.LOW, CommonClientConfigs.CLIENT_RACK_DOC)
                                 .define(SEND_BUFFER_CONFIG, Type.INT, 128 * 1024, atLeast(CommonClientConfigs.SEND_BUFFER_LOWER_BOUND), Importance.MEDIUM, CommonClientConfigs.SEND_BUFFER_DOC)
                                 .define(RECEIVE_BUFFER_CONFIG, Type.INT, 32 * 1024, atLeast(CommonClientConfigs.RECEIVE_BUFFER_LOWER_BOUND), Importance.MEDIUM, CommonClientConfigs.RECEIVE_BUFFER_DOC)
                                 .define(MAX_REQUEST_SIZE_CONFIG,
@@ -413,6 +468,12 @@ public class ProducerConfig extends AbstractConfig {
                                         atLeast(0L),
                                         Importance.LOW,
                                         CommonClientConfigs.RETRY_BACKOFF_MAX_MS_DOC)
+                                .define(BOOTSTRAP_RESOLVE_TIMEOUT_MS_CONFIG,
+                                        Type.LONG,
+                                        CommonClientConfigs.DEFAULT_BOOTSTRAP_RESOLVE_TIMEOUT_MS,
+                                        atLeast(0L),
+                                        Importance.HIGH,
+                                        CommonClientConfigs.BOOTSTRAP_RESOLVE_TIMEOUT_MS_DOC)
                                 .define(ENABLE_METRICS_PUSH_CONFIG,
                                         Type.BOOLEAN,
                                         true,
@@ -453,7 +514,7 @@ public class ProducerConfig extends AbstractConfig {
                                 .define(METRIC_REPORTER_CLASSES_CONFIG,
                                         Type.LIST,
                                         JmxReporter.class.getName(),
-                                        new ConfigDef.NonNullValidator(),
+                                        ConfigDef.ValidList.anyNonDuplicateValues(true, false),
                                         Importance.LOW,
                                         CommonClientConfigs.METRIC_REPORTER_CLASSES_DOC)
                                 .define(MAX_IN_FLIGHT_REQUESTS_PER_CONNECTION,
@@ -492,8 +553,8 @@ public class ProducerConfig extends AbstractConfig {
                                         Importance.MEDIUM, PARTITIONER_CLASS_DOC)
                                 .define(INTERCEPTOR_CLASSES_CONFIG,
                                         Type.LIST,
-                                        Collections.emptyList(),
-                                        new ConfigDef.NonNullValidator(),
+                                        List.of(),
+                                        ConfigDef.ValidList.anyNonDuplicateValues(true, false),
                                         Importance.LOW,
                                         INTERCEPTOR_CLASSES_DOC)
                                 .define(CommonClientConfigs.SECURITY_PROTOCOL_CONFIG,
@@ -526,6 +587,11 @@ public class ProducerConfig extends AbstractConfig {
                                         new ConfigDef.NonEmptyString(),
                                         Importance.LOW,
                                         TRANSACTIONAL_ID_DOC)
+                                .define(TRANSACTION_TWO_PHASE_COMMIT_ENABLE_CONFIG,
+                                        Type.BOOLEAN,
+                                        false,
+                                        Importance.LOW,
+                                        TRANSACTION_TWO_PHASE_COMMIT_ENABLE_DOC)
                                 .define(CommonClientConfigs.METADATA_RECOVERY_STRATEGY_CONFIG,
                                         Type.STRING,
                                         CommonClientConfigs.DEFAULT_METADATA_RECOVERY_STRATEGY,
@@ -538,7 +604,18 @@ public class ProducerConfig extends AbstractConfig {
                                         CommonClientConfigs.DEFAULT_METADATA_RECOVERY_REBOOTSTRAP_TRIGGER_MS,
                                         atLeast(0),
                                         Importance.LOW,
-                                        CommonClientConfigs.METADATA_RECOVERY_REBOOTSTRAP_TRIGGER_MS_DOC);
+                                        CommonClientConfigs.METADATA_RECOVERY_REBOOTSTRAP_TRIGGER_MS_DOC)
+                                .define(CommonClientConfigs.METADATA_CLUSTER_CHECK_ENABLE_CONFIG,
+                                        Type.BOOLEAN,
+                                        true,
+                                        Importance.LOW,
+                                        CommonClientConfigs.METADATA_CLUSTER_CHECK_ENABLE_DOC)
+                                .define(CONFIG_PROVIDERS_CONFIG,
+                                        Type.LIST,
+                                        List.of(),
+                                        ConfigDef.ValidList.anyNonDuplicateValues(true, false),
+                                        Importance.LOW,
+                                        CONFIG_PROVIDERS_DOC);
     }
 
     @Override
@@ -609,6 +686,20 @@ public class ProducerConfig extends AbstractConfig {
         if (!idempotenceEnabled && userConfiguredTransactions) {
             throw new ConfigException("Cannot set a " + ProducerConfig.TRANSACTIONAL_ID_CONFIG + " without also enabling idempotence.");
         }
+
+        // Validate that transaction.timeout.ms is not set when transaction.two.phase.commit.enable is true
+        // In standard Kafka transactions, the broker enforces transaction.timeout.ms and aborts any
+        // transaction that isn't completed in time. With two-phase commit (2PC), an external coordinator
+        // decides when to finalize, so broker-side timeouts don't apply. Disallow using both.
+        boolean enable2PC = this.getBoolean(TRANSACTION_TWO_PHASE_COMMIT_ENABLE_CONFIG);
+        boolean userConfiguredTransactionTimeout = originalConfigs.containsKey(TRANSACTION_TIMEOUT_CONFIG);
+        if (enable2PC && userConfiguredTransactionTimeout) {
+            throw new ConfigException(
+                "Cannot set " + ProducerConfig.TRANSACTION_TIMEOUT_CONFIG +
+                " when " + ProducerConfig.TRANSACTION_TWO_PHASE_COMMIT_ENABLE_CONFIG +
+                " is set to true. Transactions will not expire with two-phase commit enabled."
+            );
+        }
     }
 
     private static String parseAcks(String acksString) {
@@ -635,26 +726,47 @@ public class ProducerConfig extends AbstractConfig {
         return newConfigs;
     }
 
+    /**
+     * Constructs a new ProducerConfig with the given properties.
+     *
+     * @param props The producer configuration properties
+     */
     public ProducerConfig(Properties props) {
         super(CONFIG, props);
     }
 
+    /**
+     * Constructs a new ProducerConfig with the given configuration map.
+     *
+     * @param props The producer configuration map
+     */
     public ProducerConfig(Map<String, Object> props) {
         super(CONFIG, props);
     }
 
-    ProducerConfig(Map<?, ?> props, boolean doLog) {
-        super(CONFIG, props, doLog);
-    }
-
+    /**
+     * Gets the set of all producer configuration names.
+     *
+     * @return The set of configuration names
+     */
     public static Set<String> configNames() {
         return CONFIG.names();
     }
 
+    /**
+     * Gets a copy of the producer configuration definition.
+     *
+     * @return A new ConfigDef instance containing the producer configuration definition
+     */
     public static ConfigDef configDef() {
         return new ConfigDef(CONFIG);
     }
 
+    /**
+     * Generates HTML documentation for producer configurations.
+     *
+     * @param args Command line arguments (unused)
+     */
     public static void main(String[] args) {
         System.out.println(CONFIG.toHtml(4, config -> "producerconfigs_" + config));
     }

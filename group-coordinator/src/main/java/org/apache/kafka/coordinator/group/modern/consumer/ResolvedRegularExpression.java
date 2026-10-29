@@ -22,53 +22,16 @@ import java.util.Set;
 
 /**
  * The metadata associated with a regular expression in a Consumer Group.
+ *
+ * @param topics    The set of resolved topics.
+ * @param version   The version of the metadata image used to resolve the topics.
+ * @param timestamp The timestamp at the time of the resolution.
  */
-public class ResolvedRegularExpression {
-    public static final ResolvedRegularExpression EMPTY = new ResolvedRegularExpression(Collections.emptySet(), -1L, -1L);
+public record ResolvedRegularExpression(Set<String> topics, long version, long timestamp) {
+    public static final ResolvedRegularExpression EMPTY = new ResolvedRegularExpression(Set.of(), -1L, -1L);
 
-    /**
-     * The set of resolved topics.
-     */
-    public final Set<String> topics;
-
-    /**
-     * The version of the metadata image used to resolve the topics.
-     */
-    public final long version;
-
-    /**
-     * The timestamp at the time of the resolution.
-     */
-    public final long timestamp;
-
-    public ResolvedRegularExpression(
-        Set<String> topics,
-        long version,
-        long timestamp
-    ) {
-        this.topics = Collections.unmodifiableSet(Objects.requireNonNull(topics));
-        this.version = version;
-        this.timestamp = timestamp;
-    }
-
-    @Override
-    public boolean equals(Object o) {
-        if (this == o) return true;
-        if (o == null || getClass() != o.getClass()) return false;
-
-        ResolvedRegularExpression that = (ResolvedRegularExpression) o;
-
-        if (version != that.version) return false;
-        if (timestamp != that.timestamp) return false;
-        return topics.equals(that.topics);
-    }
-
-    @Override
-    public int hashCode() {
-        int result = topics.hashCode();
-        result = 31 * result + (int) (version ^ (version >>> 32));
-        result = 31 * result + (int) (timestamp ^ (timestamp >>> 32));
-        return result;
+    public ResolvedRegularExpression {
+        topics = Collections.unmodifiableSet(Objects.requireNonNull(topics));
     }
 
     @Override

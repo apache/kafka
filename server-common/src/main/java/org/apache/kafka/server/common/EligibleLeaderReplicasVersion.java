@@ -16,16 +16,15 @@
  */
 package org.apache.kafka.server.common;
 
-import java.util.Collections;
 import java.util.Map;
 
 public enum EligibleLeaderReplicasVersion implements FeatureVersion {
 
     // Version 0 is the version disable ELR.
-    ELRV_0(0, MetadataVersion.MINIMUM_KRAFT_VERSION, Collections.emptyMap()),
+    ELRV_0(0, MetadataVersion.MINIMUM_VERSION, Map.of()),
 
     // Version 1 enables the ELR (KIP-966).
-    ELRV_1(1, MetadataVersion.IBP_4_0_IV1, Collections.emptyMap());
+    ELRV_1(1, MetadataVersion.IBP_4_1_IV0, Map.of(MetadataVersion.FEATURE_NAME, MetadataVersion.IBP_4_0_IV1.featureLevel()));
 
     public static final String FEATURE_NAME = "eligible.leader.replicas.version";
 
@@ -63,10 +62,6 @@ public enum EligibleLeaderReplicasVersion implements FeatureVersion {
     @Override
     public Map<String, Short> dependencies() {
         return dependencies;
-    }
-
-    public boolean isEligibleLeaderReplicasFeatureEnabeld() {
-        return featureLevel >= ELRV_1.featureLevel;
     }
 
     public static EligibleLeaderReplicasVersion fromFeatureLevel(short version) {

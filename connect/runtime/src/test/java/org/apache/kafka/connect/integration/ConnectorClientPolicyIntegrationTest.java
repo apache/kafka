@@ -19,12 +19,14 @@ package org.apache.kafka.connect.integration;
 import org.apache.kafka.clients.CommonClientConfigs;
 import org.apache.kafka.clients.consumer.ConsumerConfig;
 import org.apache.kafka.common.config.SaslConfigs;
+import org.apache.kafka.connect.connector.policy.AllowlistConnectorClientConfigOverridePolicy;
 import org.apache.kafka.connect.runtime.ConnectorConfig;
 import org.apache.kafka.connect.runtime.WorkerConfig;
 import org.apache.kafka.connect.runtime.rest.errors.ConnectRestException;
 import org.apache.kafka.connect.storage.StringConverter;
 import org.apache.kafka.connect.util.clusters.EmbeddedConnectCluster;
 
+import org.junit.jupiter.api.BeforeEach;
 import org.junit.jupiter.api.Tag;
 import org.junit.jupiter.api.Test;
 
@@ -39,6 +41,7 @@ import static org.apache.kafka.connect.runtime.ConnectorConfig.VALUE_CONVERTER_C
 import static org.apache.kafka.connect.runtime.SinkConnectorConfig.TOPICS_CONFIG;
 import static org.apache.kafka.connect.runtime.WorkerConfig.OFFSET_COMMIT_INTERVAL_MS_CONFIG;
 import static org.junit.jupiter.api.Assertions.assertEquals;
+import static org.junit.jupiter.api.Assertions.assertThrows;
 import static org.junit.jupiter.api.Assertions.fail;
 
 @Tag("integration")
@@ -47,6 +50,13 @@ public class ConnectorClientPolicyIntegrationTest {
     private static final int NUM_TASKS = 1;
     private static final int NUM_WORKERS = 1;
     private static final String CONNECTOR_NAME = "simple-conn";
+
+    private Map<String, String> workerConfigs;
+
+    @BeforeEach
+    public void setup() {
+        workerConfigs = Map.of();
+    }
 
     @Test
     public void testCreateWithOverridesForNonePolicy() {
@@ -93,9 +103,38 @@ public class ConnectorClientPolicyIntegrationTest {
         assertPassCreateConnector(null, props);
     }
 
+    @Test
+    public void testCreateWithoutOverridesForAllowlistPolicy() throws Exception {
+        // setup up props for the sink connector
+        Map<String, String> props = basicConnectorConfig();
+        assertPassCreateConnector("Allowlist", props);
+    }
+
+    @Test
+    public void testCreateWithNotAllowedOverridesForAllowlistPolicy() {
+        workerConfigs = Map.of(
+                AllowlistConnectorClientConfigOverridePolicy.ALLOWLIST_CONFIG, CommonClientConfigs.CLIENT_RACK_CONFIG
+        );
+        // setup up props for the sink connector
+        Map<String, String> props = basicConnectorConfig();
+        props.put(ConnectorConfig.CONNECTOR_CLIENT_CONSUMER_OVERRIDES_PREFIX + CommonClientConfigs.CLIENT_ID_CONFIG, "test");
+        assertFailCreateConnector("Allowlist", props);
+    }
+
+    @Test
+    public void testCreateWithAllowedOverridesForAllowlistPolicy() throws Exception {
+        workerConfigs = Map.of(
+                AllowlistConnectorClientConfigOverridePolicy.ALLOWLIST_CONFIG, CommonClientConfigs.CLIENT_ID_CONFIG
+        );
+        // setup up props for the sink connector
+        Map<String, String> props = basicConnectorConfig();
+        props.put(ConnectorConfig.CONNECTOR_CLIENT_CONSUMER_OVERRIDES_PREFIX + CommonClientConfigs.CLIENT_ID_CONFIG, "test");
+        assertPassCreateConnector("Allowlist", props);
+    }
+
     private EmbeddedConnectCluster connectClusterWithPolicy(String policy) {
         // setup Connect worker properties
-        Map<String, String> workerProps = new HashMap<>();
+        Map<String, String> workerProps = new HashMap<>(workerConfigs);
         workerProps.put(OFFSET_COMMIT_INTERVAL_MS_CONFIG, String.valueOf(5_000));
         if (policy != null) {
             workerProps.put(WorkerConfig.CONNECTOR_CLIENT_POLICY_CLASS_CONFIG, policy);
@@ -123,9 +162,8 @@ public class ConnectorClientPolicyIntegrationTest {
     private void assertFailCreateConnector(String policy, Map<String, String> props) {
         EmbeddedConnectCluster connect = connectClusterWithPolicy(policy);
         try {
-            connect.configureConnector(CONNECTOR_NAME, props);
-            fail("Shouldn't be able to create connector");
-        } catch (ConnectRestException e) {
+            ConnectRestException e = assertThrows(ConnectRestException.class,
+                () -> connect.configureConnector(CONNECTOR_NAME, props), "Shouldn't be able to create connector");
             assertEquals(400, e.statusCode());
         } finally {
             connect.stop();
@@ -148,7 +186,7 @@ public class ConnectorClientPolicyIntegrationTest {
 
     public Map<String, String> basicConnectorConfig() {
         Map<String, String> props = new HashMap<>();
-        props.put(CONNECTOR_CLASS_CONFIG, MonitorableSinkConnector.class.getSimpleName());
+        props.put(CONNECTOR_CLASS_CONFIG, TestableSinkConnector.class.getSimpleName());
         props.put(TASKS_MAX_CONFIG, String.valueOf(NUM_TASKS));
         props.put(TOPICS_CONFIG, "test-topic");
         props.put(KEY_CONVERTER_CLASS_CONFIG, StringConverter.class.getName());

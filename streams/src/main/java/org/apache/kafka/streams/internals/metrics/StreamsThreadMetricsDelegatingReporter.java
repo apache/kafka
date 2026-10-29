@@ -27,6 +27,7 @@ import org.slf4j.LoggerFactory;
 import java.util.List;
 import java.util.Map;
 import java.util.Objects;
+import java.util.Optional;
 
 public class StreamsThreadMetricsDelegatingReporter implements MetricsReporter {
     
@@ -34,13 +35,13 @@ public class StreamsThreadMetricsDelegatingReporter implements MetricsReporter {
     private static final String THREAD_ID_TAG = "thread-id";
     private final Consumer<byte[], byte[]> consumer;
     private final String threadId;
-    private final String stateUpdaterThreadId;
+    private final Optional<String> stateUpdaterThreadId;
 
 
-    public StreamsThreadMetricsDelegatingReporter(final Consumer<byte[], byte[]> consumer, final String threadId, final String stateUpdaterThreadId) {
+    public StreamsThreadMetricsDelegatingReporter(final Consumer<byte[], byte[]> consumer, final String threadId, final Optional<String> stateUpdaterThreadId) {
         this.consumer = Objects.requireNonNull(consumer);
         this.threadId = Objects.requireNonNull(threadId);
-        this.stateUpdaterThreadId = Objects.requireNonNull(stateUpdaterThreadId);
+        this.stateUpdaterThreadId = stateUpdaterThreadId;
         log.debug("Creating MetricsReporter for threadId {} and stateUpdaterId {}", threadId, stateUpdaterThreadId);
     }
 
@@ -57,9 +58,17 @@ public class StreamsThreadMetricsDelegatingReporter implements MetricsReporter {
         }
     }
 
+    /*
+       The StreamMetrics object is a singleton shared by all StreamThread instances.
+       So we need to make sure we only pass metrics for the current StreamThread that contains this
+       MetricsReporter instance, which will register metrics with the embedded KafkaConsumer to pass
+       through the telemetry pipeline.
+       Otherwise, Kafka Streams would register multiple metrics for all StreamThreads.
+     */
     private boolean tagMatchStreamOrStateUpdaterThreadId(final KafkaMetric metric) {
         final Map<String, String> tags = metric.metricName().tags();
-        final boolean shouldInclude = tags.containsKey(THREAD_ID_TAG) && (tags.get(THREAD_ID_TAG).equals(threadId) || tags.get(THREAD_ID_TAG).equals(stateUpdaterThreadId));
+        final boolean shouldInclude = tags.containsKey(THREAD_ID_TAG) && (tags.get(THREAD_ID_TAG).equals(threadId) ||
+                Optional.ofNullable(tags.get(THREAD_ID_TAG)).equals(stateUpdaterThreadId));
         if (!shouldInclude) {
             log.trace("Rejecting metric {}", metric.metricName());
         }

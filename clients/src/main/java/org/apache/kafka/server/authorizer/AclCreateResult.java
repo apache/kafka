@@ -17,12 +17,12 @@
 
 package org.apache.kafka.server.authorizer;
 
-import org.apache.kafka.common.annotation.InterfaceStability;
+import org.apache.kafka.common.annotation.InterfaceAudience;
 import org.apache.kafka.common.errors.ApiException;
 
 import java.util.Optional;
 
-@InterfaceStability.Evolving
+@InterfaceAudience.Public
 public class AclCreateResult {
     public static final AclCreateResult SUCCESS = new AclCreateResult();
 

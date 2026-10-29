@@ -18,12 +18,10 @@
 package org.apache.kafka.connect.mirror;
 
 import org.apache.kafka.common.Configurable;
-import org.apache.kafka.common.annotation.InterfaceStability;
 
 import java.util.Map;
 
 /** Defines which consumer groups should be replicated. */
-@InterfaceStability.Evolving
 public interface GroupFilter extends Configurable, AutoCloseable {
 
     boolean shouldReplicateGroup(String group);

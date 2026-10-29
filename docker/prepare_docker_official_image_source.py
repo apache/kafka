@@ -33,18 +33,29 @@ Usage:
 
 from datetime import date
 import argparse
-from distutils.dir_util import copy_tree
 import os
 import shutil
 import re
 
 
+def replace_arg_with_env(filedata, arg_name, value):
+    # Replace the whole line so a default like `ARG kafka_url=""` does not leak into the ENV value.
+    filedata, count = re.subn(rf"^ARG {re.escape(arg_name)}\b.*$", f"ENV {arg_name} {value}", filedata, flags=re.MULTILINE)
+    if count == 0:
+        raise ValueError(f"'ARG {arg_name}' not found in the Dockerfile, cannot hardcode its value")
+    return filedata
+
+
 def remove_args_and_hardcode_values(file_path, kafka_version, kafka_url):
     with open(file_path, 'r') as file:
         filedata = file.read()
-    filedata = filedata.replace("ARG kafka_url", f"ENV kafka_url {kafka_url}")
-    filedata = filedata.replace(
-        "ARG build_date", f"ENV build_date {str(date.today())}")
+    # Docker Official Images require literal FROM lines, so drop the ARG and inline its default.
+    base_image = re.search(r"^ARG base_image=(\S+)\n\n?", filedata, re.MULTILINE)
+    if base_image is None:
+        raise ValueError("'ARG base_image' not found in the Dockerfile, cannot hardcode the base image")
+    filedata = filedata.replace(base_image.group(0), "").replace("${base_image}", base_image.group(1))
+    filedata = replace_arg_with_env(filedata, "kafka_url", kafka_url)
+    filedata = replace_arg_with_env(filedata, "build_date", str(date.today()))
     original_comment = re.compile(r"# Get kafka from https://archive.apache.org/dist/kafka and pass the url through build arguments")
     updated_comment = f"# Get Kafka from https://archive.apache.org/dist/kafka, url passed as env var, for version {kafka_version}"
     filedata = original_comment.sub(updated_comment, filedata)
@@ -61,12 +72,10 @@ if __name__ == '__main__':
     args = parser.parse_args()
     kafka_url = f"https://archive.apache.org/dist/kafka/{args.kafka_version}/kafka_2.13-{args.kafka_version}.tgz"
     current_dir = os.path.dirname(os.path.realpath(__file__))
-    new_dir = os.path.join(
-        current_dir, f'docker_official_images', args.kafka_version)
+    new_dir = os.path.join(current_dir, 'docker_official_images', args.kafka_version)
     if os.path.exists(new_dir):
         shutil.rmtree(new_dir)
     os.makedirs(new_dir)
-    copy_tree(os.path.join(current_dir, args.image_type), os.path.join(new_dir, args.kafka_version, args.image_type))
-    copy_tree(os.path.join(current_dir, 'resources'), os.path.join(new_dir, args.kafka_version, args.image_type, 'resources'))
-    remove_args_and_hardcode_values(
-        os.path.join(new_dir, args.kafka_version, args.image_type, 'Dockerfile'), args.kafka_version, kafka_url)
+    shutil.copytree(os.path.join(current_dir, args.image_type), os.path.join(new_dir, args.image_type), dirs_exist_ok=True)
+    shutil.copytree(os.path.join(current_dir, 'resources'), os.path.join(new_dir, args.image_type, 'resources'), dirs_exist_ok=True)
+    remove_args_and_hardcode_values(os.path.join(new_dir, args.image_type, 'Dockerfile'), args.kafka_version, kafka_url)

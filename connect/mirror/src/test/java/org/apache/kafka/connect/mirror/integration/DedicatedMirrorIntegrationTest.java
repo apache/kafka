@@ -45,8 +45,6 @@ import org.slf4j.Logger;
 import org.slf4j.LoggerFactory;
 
 import java.time.Duration;
-import java.util.Arrays;
-import java.util.Collections;
 import java.util.HashMap;
 import java.util.List;
 import java.util.Map;
@@ -58,7 +56,6 @@ import java.util.concurrent.TimeUnit;
 import java.util.concurrent.atomic.AtomicInteger;
 import java.util.concurrent.atomic.AtomicReference;
 import java.util.function.Predicate;
-import java.util.stream.Collectors;
 
 import static org.apache.kafka.clients.consumer.ConsumerConfig.AUTO_OFFSET_RESET_CONFIG;
 import static org.apache.kafka.connect.mirror.MirrorMaker.CONNECTOR_CLASSES;
@@ -145,7 +142,7 @@ public class DedicatedMirrorIntegrationTest {
             final String ba = b + "->" + a;
             final String testTopicPrefix = "test-topic-";
 
-            Map<String, String> mmProps = new HashMap<String, String>() {{
+            Map<String, String> mmProps = new HashMap<>() {{
                     put("dedicated.mode.enable.internal.rest", "false");
                     put("listeners", "http://localhost:0");
                     // Refresh topics very frequently to quickly pick up on topics that are created
@@ -207,7 +204,7 @@ public class DedicatedMirrorIntegrationTest {
             final String ab = a + "->" + b;
             final String testTopicPrefix = "test-topic-";
 
-            Map<String, String> mmProps = new HashMap<String, String>() {{
+            Map<String, String> mmProps = new HashMap<>() {{
                     put("dedicated.mode.enable.internal.rest", "false");
                     put("listeners", "http://localhost:0");
                     // Refresh topics very frequently to quickly pick up on topics that are created
@@ -230,7 +227,7 @@ public class DedicatedMirrorIntegrationTest {
             // Bring up a single-node cluster
             final MirrorMaker mm = startMirrorMaker("no-offset-syncing", mmProps);
             final SourceAndTarget sourceAndTarget = new SourceAndTarget(a, b);
-            awaitMirrorMakerStart(mm, sourceAndTarget, Arrays.asList(MirrorSourceConnector.class, MirrorHeartbeatConnector.class));
+            awaitMirrorMakerStart(mm, sourceAndTarget, List.of(MirrorSourceConnector.class, MirrorHeartbeatConnector.class));
 
             // wait for mirror source and heartbeat connectors to start a task
             awaitConnectorTasksStart(mm, MirrorHeartbeatConnector.class, sourceAndTarget);
@@ -256,7 +253,7 @@ public class DedicatedMirrorIntegrationTest {
                     .stream()
                     .filter(Optional::isPresent)
                     .map(Optional::get)
-                    .collect(Collectors.toList());
+                    .toList();
 
             assertTrue(offsetSyncTopic.isEmpty());
         }
@@ -291,7 +288,7 @@ public class DedicatedMirrorIntegrationTest {
             final String ba = b + "->" + a;
             final String testTopicPrefix = "test-topic-";
 
-            Map<String, String> mmProps = new HashMap<String, String>() {{
+            Map<String, String> mmProps = new HashMap<>() {{
                     put("dedicated.mode.enable.internal.rest", "true");
                     put("listeners", "http://localhost:0");
                     // Refresh topics very frequently to quickly pick up on topics that are created
@@ -451,8 +448,8 @@ public class DedicatedMirrorIntegrationTest {
     }
 
     private void awaitTopicContent(EmbeddedKafkaCluster cluster, String clusterName, String topic, int numMessages) throws Exception {
-        try (Consumer<?, ?> consumer = cluster.createConsumer(Collections.singletonMap(AUTO_OFFSET_RESET_CONFIG, "earliest"))) {
-            consumer.subscribe(Collections.singleton(topic));
+        try (Consumer<?, ?> consumer = cluster.createConsumer(Map.of(AUTO_OFFSET_RESET_CONFIG, "earliest"))) {
+            consumer.subscribe(Set.of(topic));
             AtomicInteger messagesRead = new AtomicInteger(0);
             waitForCondition(
                     () -> {

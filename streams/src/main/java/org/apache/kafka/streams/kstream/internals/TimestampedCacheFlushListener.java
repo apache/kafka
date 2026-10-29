@@ -16,6 +16,8 @@
  */
 package org.apache.kafka.streams.kstream.internals;
 
+import org.apache.kafka.common.header.Headers;
+import org.apache.kafka.common.header.internals.RecordHeaders;
 import org.apache.kafka.streams.processor.api.ProcessorContext;
 import org.apache.kafka.streams.processor.api.Record;
 import org.apache.kafka.streams.processor.internals.InternalProcessorContext;
@@ -26,11 +28,8 @@ import org.apache.kafka.streams.state.internals.CacheFlushListener;
 import static org.apache.kafka.streams.state.ValueAndTimestamp.getValueOrNull;
 
 class TimestampedCacheFlushListener<KOut, VOut> implements CacheFlushListener<KOut, ValueAndTimestamp<VOut>> {
-
     private final InternalProcessorContext<KOut, Change<VOut>> context;
-
-    @SuppressWarnings("rawtypes")
-    private final ProcessorNode myNode;
+    private final ProcessorNode<?, ?, ?, ?> myNode;
 
     TimestampedCacheFlushListener(final ProcessorContext<KOut, Change<VOut>> context) {
         this.context = (InternalProcessorContext<KOut, Change<VOut>>) context;
@@ -39,19 +38,19 @@ class TimestampedCacheFlushListener<KOut, VOut> implements CacheFlushListener<KO
 
     @Override
     public void apply(final Record<KOut, Change<ValueAndTimestamp<VOut>>> record) {
-        @SuppressWarnings("rawtypes") final ProcessorNode prev = context.currentNode();
+        final ProcessorNode<?, ?, ?, ?> prev = context.currentNode();
         context.setCurrentNode(myNode);
         try {
+            final VOut newValue = getValueOrNull(record.value().newValue);
+            final VOut oldValue = getValueOrNull(record.value().oldValue);
+            final long timestamp = record.value().newValue != null ? record.value().newValue.timestamp() : record.timestamp();
+            final Headers headers = record.headers() != null ? record.headers() : new RecordHeaders();
+
             context.forward(
                 record
-                    .withValue(
-                        new Change<>(
-                            getValueOrNull(record.value().newValue),
-                            getValueOrNull(record.value().oldValue),
-                            record.value().isLatest))
-                    .withTimestamp(
-                        record.value().newValue != null ? record.value().newValue.timestamp()
-                            : record.timestamp())
+                    .withValue(new Change<>(newValue, oldValue, record.value().isLatest))
+                    .withTimestamp(timestamp)
+                    .withHeaders(headers)
             );
         } finally {
             context.setCurrentNode(prev);

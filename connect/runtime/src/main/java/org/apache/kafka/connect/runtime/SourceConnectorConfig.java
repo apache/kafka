@@ -26,12 +26,12 @@ import org.slf4j.Logger;
 import org.slf4j.LoggerFactory;
 
 import java.util.ArrayList;
-import java.util.Collections;
 import java.util.HashMap;
 import java.util.HashSet;
 import java.util.List;
 import java.util.Locale;
 import java.util.Map;
+import java.util.Set;
 import java.util.stream.Collectors;
 
 import static org.apache.kafka.common.utils.Utils.enumOptions;
@@ -113,16 +113,9 @@ public final class SourceConnectorConfig extends ConnectorConfig {
             + "has been overridden from the worker's). Only applicable in distributed mode; in standalone mode, setting this property will have no effect.";
     private static final String OFFSETS_TOPIC_DISPLAY = "Offsets topic";
 
-    private static class EnrichedSourceConnectorConfig extends ConnectorConfig {
-        EnrichedSourceConnectorConfig(Plugins plugins, ConfigDef configDef, Map<String, String> props) {
-            super(plugins, configDef, props);
-        }
-
-    }
-
     private final TransactionBoundary transactionBoundary;
     private final Long transactionBoundaryInterval;
-    private final EnrichedSourceConnectorConfig enrichedSourceConfig;
+    private final ConnectorConfig enrichedSourceConfig;
     private final String offsetsTopic;
 
     private static ConfigDef configDef(ConfigDef baseConfigDef) {
@@ -132,7 +125,7 @@ public final class SourceConnectorConfig extends ConnectorConfig {
                 .define(
                         TOPIC_CREATION_GROUPS_CONFIG,
                         ConfigDef.Type.LIST,
-                        Collections.emptyList(),
+                        List.of(),
                         ConfigDef.CompositeValidator.of(
                                 new ConfigDef.NonNullValidator(),
                                 ConfigDef.LambdaValidator.with(
@@ -240,7 +233,7 @@ public final class SourceConnectorConfig extends ConnectorConfig {
         if (topicCreationGroups.contains(DEFAULT_TOPIC_CREATION_GROUP)) {
             log.warn("'{}' topic creation group always exists and does not need to be listed explicitly",
                 DEFAULT_TOPIC_CREATION_GROUP);
-            topicCreationGroups.removeAll(Collections.singleton(DEFAULT_TOPIC_CREATION_GROUP));
+            topicCreationGroups.removeAll(Set.of(DEFAULT_TOPIC_CREATION_GROUP));
         }
 
         ConfigDef newDef = new ConfigDef(baseConfigDef);
@@ -273,7 +266,7 @@ public final class SourceConnectorConfig extends ConnectorConfig {
             propsWithoutRegexForDefaultGroup.entrySet()
                     .removeIf(e -> e.getKey().equals(DEFAULT_TOPIC_CREATION_PREFIX + INCLUDE_REGEX_CONFIG)
                             || e.getKey().equals(DEFAULT_TOPIC_CREATION_PREFIX + EXCLUDE_REGEX_CONFIG));
-            enrichedSourceConfig = new EnrichedSourceConnectorConfig(plugins,
+            enrichedSourceConfig = new ConnectorConfig(plugins,
                     enrich(defaultConfigDef, props, defaultGroup),
                     propsWithoutRegexForDefaultGroup);
         } else {
@@ -332,7 +325,7 @@ public final class SourceConnectorConfig extends ConnectorConfig {
 
     public Map<String, Object> topicCreationOtherConfigs(String group) {
         if (enrichedSourceConfig == null) {
-            return Collections.emptyMap();
+            return Map.of();
         }
         return enrichedSourceConfig.originalsWithPrefix(TOPIC_CREATION_PREFIX + group + '.').entrySet().stream()
                 .filter(e -> {

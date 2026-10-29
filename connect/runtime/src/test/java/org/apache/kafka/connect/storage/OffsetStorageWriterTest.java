@@ -54,8 +54,8 @@ import static org.mockito.Mockito.when;
 public class OffsetStorageWriterTest {
     private static final String NAMESPACE = "namespace";
     // Connect format - any types should be accepted here
-    private static final Map<String, Object> OFFSET_KEY = Collections.singletonMap("key", "key");
-    private static final Map<String, Object> OFFSET_VALUE = Collections.singletonMap("key", 12);
+    private static final Map<String, Object> OFFSET_KEY = Map.of("key", "key");
+    private static final Map<String, Object> OFFSET_VALUE = Map.of("key", 12);
 
     // Serialized
     private static final byte[] OFFSET_KEY_SERIALIZED = "key-serialized".getBytes();

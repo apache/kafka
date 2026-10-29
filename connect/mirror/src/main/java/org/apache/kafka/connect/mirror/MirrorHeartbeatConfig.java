@@ -57,6 +57,7 @@ public class MirrorHeartbeatConfig extends MirrorConnectorConfig {
         return getShort(HEARTBEATS_TOPIC_REPLICATION_FACTOR);
     }
 
+
     private static ConfigDef defineHeartbeatConfig(ConfigDef baseConfig) {
         return baseConfig
                 .define(

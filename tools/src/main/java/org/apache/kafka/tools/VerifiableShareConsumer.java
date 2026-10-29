@@ -21,6 +21,7 @@ import org.apache.kafka.clients.admin.Admin;
 import org.apache.kafka.clients.admin.AlterConfigOp;
 import org.apache.kafka.clients.admin.AlterConfigsOptions;
 import org.apache.kafka.clients.admin.ConfigEntry;
+import org.apache.kafka.clients.consumer.AcknowledgeType;
 import org.apache.kafka.clients.consumer.AcknowledgementCommitCallback;
 import org.apache.kafka.clients.consumer.ConsumerConfig;
 import org.apache.kafka.clients.consumer.ConsumerRecord;
@@ -61,7 +62,6 @@ import java.io.PrintStream;
 import java.time.Duration;
 import java.util.ArrayList;
 import java.util.Collection;
-import java.util.Collections;
 import java.util.HashMap;
 import java.util.List;
 import java.util.Locale;
@@ -77,6 +77,29 @@ import java.util.concurrent.TimeUnit;
 import static net.sourceforge.argparse4j.impl.Arguments.store;
 import static net.sourceforge.argparse4j.impl.Arguments.storeTrue;
 
+/**
+ * Command line share consumer designed for system testing. It outputs consumer events to STDOUT as JSON
+ * formatted objects. The "name" field in each JSON event identifies the event type. The following
+ * events are currently supported:
+ *
+ * <ul>
+ * <li>startup_complete: emitted when the share consumer has started up.
+ *     See {@link VerifiableShareConsumer.StartupComplete}.</li>
+ * <li>offset_reset_strategy_set: emitted when the offset reset strategy for the share group has been set.
+ *     See {@link VerifiableShareConsumer.OffsetResetStrategySet}.</li>
+ * <li>records_consumed: contains a summary of records consumed in a single call to {@link KafkaShareConsumer#poll(Duration)}.
+ *     See {@link VerifiableShareConsumer.RecordsConsumed}.</li>
+ * <li>offsets_acknowledged: contains the result of acknowledging offsets. When {@code --ack-pattern} is
+ *     used, also includes a per-{@link AcknowledgeType} count breakdown.
+ *     See {@link VerifiableShareConsumer.OffsetsAcknowledged}.</li>
+ * <li>record_data: contains the key, value, and offset of an individual consumed record (only included if verbose
+ *  *     output is enabled). See {@link VerifiableShareConsumer.RecordData}.</li>
+ * <li>shutdown_requested: emitted as share consumer shutdown is requested.
+ *     See {@link VerifiableShareConsumer.ShutdownRequested}.</li>
+ * <li>shutdown_complete: emitted after the share consumer returns from {@link KafkaShareConsumer#close()}.
+ *     See {@link VerifiableShareConsumer.ShutdownComplete}.</li>
+ * </ul>
+ */
 public class VerifiableShareConsumer implements Closeable, AcknowledgementCommitCallback {
 
     private static final Logger log = LoggerFactory.getLogger(VerifiableShareConsumer.class);
@@ -84,15 +107,21 @@ public class VerifiableShareConsumer implements Closeable, AcknowledgementCommit
     private final ObjectMapper mapper = new ObjectMapper();
     private final PrintStream out;
     private final KafkaShareConsumer<String, String> consumer;
+    private final Admin adminClient;
     private final String topic;
     private final AcknowledgementMode acknowledgementMode;
     private final String offsetResetStrategy;
     private final Boolean verbose;
     private final int maxMessages;
     private Integer totalAcknowledged = 0;
-    private final String brokerHostandPort;
     private final String groupId;
     private final CountDownLatch shutdownLatch = new CountDownLatch(1);
+    private final List<AcknowledgeType> ackPattern;
+    private final Map<TopicPartition, Map<Long, AcknowledgeType>> pendingAckTypes = new HashMap<>();
+    // Tracks, per offset, which ackPattern index to apply next. Only advances past a RENEW (RENEW
+    // re-delivers the same record), so non-renewed offsets keep resolving to their original
+    // (offset % ackPattern.size()) entry, e.g. a RELEASE keeps being re-applied on every redelivery.
+    private final Map<TopicPartition, Map<Long, Integer>> ackPatternIndex = new HashMap<>();
 
     public static class PartitionData {
         private final String topic;
@@ -198,6 +227,14 @@ public class VerifiableShareConsumer implements Closeable, AcknowledgementCommit
         }
     }
 
+    private static class ShutdownRequested extends ShareConsumerEvent {
+
+        @Override
+        public String name() {
+            return "shutdown_requested";
+        }
+    }
+
     protected static class ShutdownComplete extends ShareConsumerEvent {
 
         @Override
@@ -232,19 +269,22 @@ public class VerifiableShareConsumer implements Closeable, AcknowledgementCommit
         }
     }
 
-    @JsonPropertyOrder({ "timestamp", "name", "count", "partitions", "success", "error" })
+    @JsonPropertyOrder({ "timestamp", "name", "count", "partitions", "success", "error", "ackTypeCounts" })
     protected static class OffsetsAcknowledged extends ShareConsumerEvent {
 
         private final long count;
         private final List<AcknowledgedData> partitions;
         private final String error;
         private final boolean success;
+        private final Map<String, Long> ackTypeCounts;
 
-        public OffsetsAcknowledged(long count, List<AcknowledgedData> partitions, String error, boolean success) {
+        public OffsetsAcknowledged(long count, List<AcknowledgedData> partitions, String error, boolean success,
+                                    Map<String, Long> ackTypeCounts) {
             this.count = count;
             this.partitions = partitions;
             this.error = error;
             this.success = success;
+            this.ackTypeCounts = ackTypeCounts;
         }
 
         @Override
@@ -271,6 +311,12 @@ public class VerifiableShareConsumer implements Closeable, AcknowledgementCommit
         @JsonProperty
         public boolean success() {
             return success;
+        }
+
+        @JsonProperty
+        @JsonInclude(JsonInclude.Include.NON_NULL)
+        public Map<String, Long> ackTypeCounts() {
+            return ackTypeCounts;
         }
 
     }
@@ -317,23 +363,25 @@ public class VerifiableShareConsumer implements Closeable, AcknowledgementCommit
     }
 
     public VerifiableShareConsumer(KafkaShareConsumer<String, String> consumer,
+                                   Admin adminClient,
                                    PrintStream out,
                                    Integer maxMessages,
                                    String topic,
                                    AcknowledgementMode acknowledgementMode,
                                    String offsetResetStrategy,
-                                   String brokerHostandPort,
                                    String groupId,
-                                   Boolean verbose) {
+                                   Boolean verbose,
+                                   List<AcknowledgeType> ackPattern) {
         this.out = out;
         this.consumer = consumer;
+        this.adminClient = adminClient;
         this.topic = topic;
         this.acknowledgementMode = acknowledgementMode;
         this.offsetResetStrategy = offsetResetStrategy;
         this.verbose = verbose;
         this.maxMessages = maxMessages;
-        this.brokerHostandPort = brokerHostandPort;
         this.groupId = groupId;
+        this.ackPattern = ackPattern;
         addKafkaSerializerModule();
     }
 
@@ -351,7 +399,8 @@ public class VerifiableShareConsumer implements Closeable, AcknowledgementCommit
         mapper.registerModule(kafka);
     }
 
-    private void onRecordsReceived(ConsumerRecords<String, String> records) {
+    // package-private for testing
+    void onRecordsReceived(ConsumerRecords<String, String> records) {
         List<RecordSetSummary> summaries = new ArrayList<>();
         for (TopicPartition tp : records.partitions()) {
             List<ConsumerRecord<String, String>> partitionRecords = records.records(tp);
@@ -363,6 +412,21 @@ public class VerifiableShareConsumer implements Closeable, AcknowledgementCommit
 
             for (ConsumerRecord<String, String> record : partitionRecords) {
                 partitionOffsets.add(record.offset());
+
+                if (!ackPattern.isEmpty()) {
+                    Map<Long, Integer> partitionIndex = ackPatternIndex.computeIfAbsent(tp, k -> new HashMap<>());
+                    int index = partitionIndex.computeIfAbsent(record.offset(),
+                        offset -> (int) (offset % ackPattern.size()));
+                    AcknowledgeType type = ackPattern.get(index);
+                    consumer.acknowledge(record, type);
+                    pendingAckTypes.computeIfAbsent(tp, k -> new HashMap<>()).put(record.offset(), type);
+                    if (type == AcknowledgeType.RENEW) {
+                        // RENEW re-delivers the same record; advance to the next pattern entry so a
+                        // subsequent delivery resolves to a different (eventually terminal) type
+                        // instead of renewing the same offset indefinitely.
+                        partitionIndex.put(record.offset(), (index + 1) % ackPattern.size());
+                    }
+                }
             }
 
             summaries.add(new RecordSetSummary(tp.topic(), tp.partition(), partitionOffsets));
@@ -381,10 +445,38 @@ public class VerifiableShareConsumer implements Closeable, AcknowledgementCommit
     public void onComplete(Map<TopicIdPartition, Set<Long>> offsetsMap, Exception exception) {
         List<AcknowledgedData> acknowledgedOffsets = new ArrayList<>();
         int totalAcknowledged = 0;
+        Map<String, Long> ackTypeCounts = (ackPattern.isEmpty() || exception != null) ? null : new HashMap<>();
         for (Map.Entry<TopicIdPartition, Set<Long>> offsetEntry : offsetsMap.entrySet()) {
             TopicIdPartition tp = offsetEntry.getKey();
             acknowledgedOffsets.add(new AcknowledgedData(tp.topic(), tp.partition(), offsetEntry.getValue()));
             totalAcknowledged += offsetEntry.getValue().size();
+
+            if (ackTypeCounts != null) {
+                TopicPartition topicPartition = new TopicPartition(tp.topic(), tp.partition());
+                Map<Long, AcknowledgeType> offsetTypes = pendingAckTypes.get(topicPartition);
+                if (offsetTypes != null) {
+                    for (long offset : offsetEntry.getValue()) {
+                        AcknowledgeType type = offsetTypes.remove(offset);
+                        if (type != null) {
+                            ackTypeCounts.merge(type.name(), 1L, Long::sum);
+                            if (type != AcknowledgeType.RENEW) {
+                                // Terminal (or about-to-be-redelivered-unchanged, e.g. RELEASE) outcome:
+                                // no future delivery of this offset needs an advanced pattern index.
+                                Map<Long, Integer> partitionIndex = ackPatternIndex.get(topicPartition);
+                                if (partitionIndex != null) {
+                                    partitionIndex.remove(offset);
+                                    if (partitionIndex.isEmpty()) {
+                                        ackPatternIndex.remove(topicPartition);
+                                    }
+                                }
+                            }
+                        }
+                    }
+                    if (offsetTypes.isEmpty()) {
+                        pendingAckTypes.remove(topicPartition);
+                    }
+                }
+            }
         }
 
         boolean success = true;
@@ -393,7 +485,7 @@ public class VerifiableShareConsumer implements Closeable, AcknowledgementCommit
             success = false;
             error = exception.getMessage();
         }
-        printJson(new OffsetsAcknowledged(totalAcknowledged, acknowledgedOffsets, error, success));
+        printJson(new OffsetsAcknowledged(totalAcknowledged, acknowledgedOffsets, error, success, ackTypeCounts));
         if (success) {
             this.totalAcknowledged += totalAcknowledged;
         }
@@ -406,11 +498,6 @@ public class VerifiableShareConsumer implements Closeable, AcknowledgementCommit
             if (!Objects.equals(offsetResetStrategy, "")) {
                 ShareGroupAutoOffsetResetStrategy offsetResetStrategy =
                     ShareGroupAutoOffsetResetStrategy.fromString(this.offsetResetStrategy);
-
-                Properties adminClientProps = new Properties();
-                adminClientProps.put(CommonClientConfigs.BOOTSTRAP_SERVERS_CONFIG, brokerHostandPort);
-
-                Admin adminClient = Admin.create(adminClientProps);
 
                 ConfigResource configResource = new ConfigResource(ConfigResource.Type.GROUP, groupId);
                 Map<ConfigResource, Collection<AlterConfigOp>> alterEntries = new HashMap<>();
@@ -426,7 +513,7 @@ public class VerifiableShareConsumer implements Closeable, AcknowledgementCommit
                 printJson(new OffsetResetStrategySet(offsetResetStrategy.type().toString()));
             }
 
-            consumer.subscribe(Collections.singleton(this.topic));
+            consumer.subscribe(Set.of(this.topic));
             consumer.setAcknowledgementCommitCallback(this);
             while (!(maxMessages >= 0 && totalAcknowledged >= maxMessages)) {
                 ConsumerRecords<String, String> records = consumer.poll(Duration.ofMillis(5000));
@@ -461,6 +548,7 @@ public class VerifiableShareConsumer implements Closeable, AcknowledgementCommit
     public void close() {
         boolean interrupted = false;
         try {
+            printJson(new ShutdownRequested());
             consumer.wakeup();
             while (true) {
                 try {
@@ -495,7 +583,8 @@ public class VerifiableShareConsumer implements Closeable, AcknowledgementCommit
 
     private static ArgumentParser argParser() {
         ArgumentParser parser = ArgumentParsers
-            .newArgumentParser("verifiable-share-consumer")
+            .newFor("verifiable-share-consumer")
+            .build()
             .defaultHelp(true)
             .description("This tool creates a share group and consumes messages from a specific topic and emits share consumer events (e.g. share consumer startup, received messages, and offsets acknowledged) as JSON objects to STDOUT.");
         MutuallyExclusiveGroup connectionGroup = parser.addMutuallyExclusiveGroup("Connection Group")
@@ -505,8 +594,8 @@ public class VerifiableShareConsumer implements Closeable, AcknowledgementCommit
             .action(store())
             .required(true)
             .type(String.class)
-            .metavar("HOST1:PORT1[,HOST2:PORT2[...]]")
             .dest("bootstrapServer")
+            .metavar("HOST1:PORT1[,HOST2:PORT2[...]]")
             .help("The server(s) to connect to. Comma-separated list of Kafka brokers in the form HOST1:PORT1,HOST2:PORT2,...");
 
         parser.addArgument("--topic")
@@ -520,17 +609,17 @@ public class VerifiableShareConsumer implements Closeable, AcknowledgementCommit
             .action(store())
             .required(true)
             .type(String.class)
-            .metavar("GROUP_ID")
             .dest("groupId")
-            .help("The groupId shared among members of the share group");
+            .metavar("GROUP-ID")
+            .help("The group id of the share group");
 
         parser.addArgument("--max-messages")
             .action(store())
             .required(false)
             .type(Integer.class)
             .setDefault(-1)
-            .metavar("MAX-MESSAGES")
             .dest("maxMessages")
+            .metavar("MAX-MESSAGES")
             .help("Consume this many messages. If -1 (the default), the share consumers will consume until the process is killed externally");
 
         parser.addArgument("--verbose")
@@ -545,7 +634,22 @@ public class VerifiableShareConsumer implements Closeable, AcknowledgementCommit
             .setDefault("auto")
             .type(String.class)
             .dest("acknowledgementMode")
+            .metavar("ACKNOWLEDGEMENT-MODE")
             .help("Acknowledgement mode for the share consumers (must be either 'auto', 'sync' or 'async')");
+
+        parser.addArgument("--ack-pattern")
+            .action(store())
+            .required(false)
+            .setDefault("")
+            .type(String.class)
+            .dest("ackPattern")
+            .metavar("ACK-PATTERN")
+            .help("Comma-separated cycle of accept|release|reject|renew applied to each consumed record " +
+                "via AcknowledgeType, selected by (record offset % pattern length). RENEW re-delivers the " +
+                "same record, so its next delivery advances to the following pattern entry instead of " +
+                "renewing again (a pattern of only 'renew' is rejected, since it could never resolve). " +
+                "When set, the share consumer uses explicit acknowledgement and requires " +
+                "--acknowledgement-mode to be 'sync' or 'async'.");
 
         parser.addArgument("--offset-reset-strategy")
             .action(store())
@@ -553,16 +657,29 @@ public class VerifiableShareConsumer implements Closeable, AcknowledgementCommit
             .setDefault("")
             .type(String.class)
             .dest("offsetResetStrategy")
-            .help("Set share group reset strategy (must be either 'earliest' or 'latest')");
+            .metavar("OFFSET-RESET-STRATEGY")
+            .help("Share group offset reset strategy (must be either 'earliest' or 'latest')");
 
-        parser.addArgument("--consumer.config")
+        parser.addArgument("--command-config")
             .action(store())
             .required(false)
             .type(String.class)
-            .metavar("CONFIG_FILE")
-            .help("Consumer config properties file (config options shared with command line parameters will be overridden).");
+            .dest("commandConfig")
+            .metavar("CONFIG-FILE")
+            .help("Config properties file (config options shared with command line parameters will be overridden).");
 
         return parser;
+    }
+
+    // package-private for testing
+    static List<AcknowledgeType> parseAckPattern(String ackPatternArg) {
+        List<AcknowledgeType> ackPattern = new ArrayList<>();
+        if (ackPatternArg != null && !ackPatternArg.isEmpty()) {
+            for (String type : ackPatternArg.split(",")) {
+                ackPattern.add(AcknowledgeType.valueOf(type.trim().toUpperCase(Locale.ROOT)));
+            }
+        }
+        return ackPattern;
     }
 
     public static VerifiableShareConsumer createFromArgs(ArgumentParser parser, String[] args) throws ArgumentParserException {
@@ -571,8 +688,21 @@ public class VerifiableShareConsumer implements Closeable, AcknowledgementCommit
         AcknowledgementMode acknowledgementMode =
             AcknowledgementMode.valueOf(res.getString("acknowledgementMode").toUpperCase(Locale.ROOT));
         String offsetResetStrategy = res.getString("offsetResetStrategy").toLowerCase(Locale.ROOT);
-        String configFile = res.getString("consumer.config");
-        String brokerHostandPort = res.getString("bootstrapServer");
+        String configFile = res.getString("commandConfig");
+        String brokerHostAndPort = res.getString("bootstrapServer");
+
+        List<AcknowledgeType> ackPattern = parseAckPattern(res.getString("ackPattern"));
+        if (!ackPattern.isEmpty()) {
+            if (acknowledgementMode == AcknowledgementMode.AUTO) {
+                throw new ArgumentParserException(
+                    "--ack-pattern requires --acknowledgement-mode to be 'sync' or 'async', not 'auto'", parser);
+            }
+            if (ackPattern.stream().allMatch(type -> type == AcknowledgeType.RENEW)) {
+                throw new ArgumentParserException(
+                    "--ack-pattern must contain at least one non-RENEW type; a pattern of only 'renew' " +
+                        "would re-deliver every record indefinitely without ever resolving it", parser);
+            }
+        }
 
         Properties consumerProps = new Properties();
         if (configFile != null) {
@@ -587,7 +717,11 @@ public class VerifiableShareConsumer implements Closeable, AcknowledgementCommit
 
         consumerProps.put(ConsumerConfig.GROUP_ID_CONFIG, groupId);
 
-        consumerProps.put(ConsumerConfig.BOOTSTRAP_SERVERS_CONFIG, brokerHostandPort);
+        consumerProps.put(ConsumerConfig.BOOTSTRAP_SERVERS_CONFIG, brokerHostAndPort);
+
+        if (!ackPattern.isEmpty()) {
+            consumerProps.put(ConsumerConfig.SHARE_ACKNOWLEDGEMENT_MODE_CONFIG, "explicit");
+        }
 
         String topic = res.getString("topic");
         int maxMessages = res.getInt("maxMessages");
@@ -596,16 +730,29 @@ public class VerifiableShareConsumer implements Closeable, AcknowledgementCommit
         StringDeserializer deserializer = new StringDeserializer();
         KafkaShareConsumer<String, String> consumer = new KafkaShareConsumer<>(consumerProps, deserializer, deserializer);
 
+        Properties adminClientProps = new Properties();
+        if (configFile != null) {
+            try {
+                adminClientProps.putAll(Utils.loadProps(configFile));
+            } catch (IOException e) {
+                throw new ArgumentParserException(e.getMessage(), parser);
+            }
+        }
+
+        adminClientProps.put(CommonClientConfigs.BOOTSTRAP_SERVERS_CONFIG, brokerHostAndPort);
+        Admin adminClient = Admin.create(adminClientProps);
+
         return new VerifiableShareConsumer(
             consumer,
+            adminClient,
             System.out,
             maxMessages,
             topic,
             acknowledgementMode,
             offsetResetStrategy,
-            brokerHostandPort,
             groupId,
-            verbose);
+            verbose,
+            ackPattern);
     }
 
     public static void main(String[] args) {

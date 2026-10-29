@@ -27,8 +27,8 @@ import org.junit.jupiter.params.provider.ValueSource;
 import org.pcollections.HashTreePSet;
 import org.pcollections.MapPSet;
 
-import java.util.Collections;
 import java.util.Iterator;
+import java.util.List;
 import java.util.Spliterator;
 import java.util.function.Consumer;
 import java.util.function.Predicate;
@@ -170,32 +170,32 @@ public class PCollectionsImmutableSetTest {
     @ValueSource(booleans = {true, false})
     public void testDelegationOfContainsAll(boolean mockFunctionReturnValue) {
         new PCollectionsHashSetWrapperDelegationChecker<>()
-            .defineMockConfigurationForFunctionInvocation(mock -> mock.containsAll(eq(Collections.emptyList())), mockFunctionReturnValue)
-            .defineWrapperFunctionInvocationAndMockReturnValueTransformation(wrapper -> wrapper.containsAll(Collections.emptyList()), identity())
+            .defineMockConfigurationForFunctionInvocation(mock -> mock.containsAll(eq(List.of())), mockFunctionReturnValue)
+            .defineWrapperFunctionInvocationAndMockReturnValueTransformation(wrapper -> wrapper.containsAll(List.of()), identity())
             .doFunctionDelegationCheck();
     }
 
     @Test
     public void testDelegationOfUnsupportedFunctionAddAll() {
         new PCollectionsHashSetWrapperDelegationChecker<>()
-            .defineMockConfigurationForUnsupportedFunction(mock -> mock.addAll(eq(Collections.emptyList())))
-            .defineWrapperUnsupportedFunctionInvocation(wrapper -> wrapper.addAll(Collections.emptyList()))
+            .defineMockConfigurationForUnsupportedFunction(mock -> mock.addAll(eq(List.of())))
+            .defineWrapperUnsupportedFunctionInvocation(wrapper -> wrapper.addAll(List.of()))
             .doUnsupportedFunctionDelegationCheck();
     }
 
     @Test
     public void testDelegationOfUnsupportedFunctionRetainAll() {
         new PCollectionsHashSetWrapperDelegationChecker<>()
-            .defineMockConfigurationForUnsupportedFunction(mock -> mock.retainAll(eq(Collections.emptyList())))
-            .defineWrapperUnsupportedFunctionInvocation(wrapper -> wrapper.retainAll(Collections.emptyList()))
+            .defineMockConfigurationForUnsupportedFunction(mock -> mock.retainAll(eq(List.of())))
+            .defineWrapperUnsupportedFunctionInvocation(wrapper -> wrapper.retainAll(List.of()))
             .doUnsupportedFunctionDelegationCheck();
     }
 
     @Test
     public void testDelegationOfUnsupportedFunctionRemoveAll() {
         new PCollectionsHashSetWrapperDelegationChecker<>()
-            .defineMockConfigurationForUnsupportedFunction(mock -> mock.removeAll(eq(Collections.emptyList())))
-            .defineWrapperUnsupportedFunctionInvocation(wrapper -> wrapper.removeAll(Collections.emptyList()))
+            .defineMockConfigurationForUnsupportedFunction(mock -> mock.removeAll(eq(List.of())))
+            .defineWrapperUnsupportedFunctionInvocation(wrapper -> wrapper.removeAll(List.of()))
             .doUnsupportedFunctionDelegationCheck();
     }
 

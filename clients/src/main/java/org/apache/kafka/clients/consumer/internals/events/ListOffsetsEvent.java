@@ -32,7 +32,7 @@ import java.util.Map;
  * {@link OffsetAndTimestamp} found (offset of the first message whose timestamp is greater than
  * or equals to the target timestamp)
  */
-public class ListOffsetsEvent extends CompletableApplicationEvent<Map<TopicPartition, OffsetAndTimestampInternal>> {
+public class ListOffsetsEvent extends CompletableApplicationEvent<Map<TopicPartition, OffsetAndTimestampInternal>> implements MetadataErrorNotifiableEvent {
     private final Map<TopicPartition, Long> timestampsToSearch;
     private final boolean requireTimestamps;
 
@@ -65,8 +65,8 @@ public class ListOffsetsEvent extends CompletableApplicationEvent<Map<TopicParti
     }
 
     @Override
-    public boolean requireSubscriptionMetadata() {
-        return true;
+    public void onMetadataError(Exception metadataError) {
+        future().completeExceptionally(metadataError);
     }
 
     @Override

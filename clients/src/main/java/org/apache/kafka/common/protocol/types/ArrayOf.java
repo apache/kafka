@@ -16,9 +16,12 @@
  */
 package org.apache.kafka.common.protocol.types;
 
+import org.apache.kafka.common.protocol.MessageUtil;
 import org.apache.kafka.common.protocol.types.Type.DocumentedType;
 
 import java.nio.ByteBuffer;
+import java.util.ArrayList;
+import java.util.List;
 import java.util.Optional;
 
 /**
@@ -27,6 +30,8 @@ import java.util.Optional;
 public class ArrayOf extends DocumentedType {
 
     private static final String ARRAY_TYPE_NAME = "ARRAY";
+
+    private static final String NULLABLE_ARRAY_TYPE_NAME = "NULLABLE_ARRAY";
 
     private final Type type;
     private final boolean nullable;
@@ -74,10 +79,13 @@ public class ArrayOf extends DocumentedType {
 
         if (size > buffer.remaining())
             throw new SchemaException("Error reading array of size " + size + ", only " + buffer.remaining() + " bytes available");
-        Object[] objs = new Object[size];
+        if (size > MessageUtil.MAX_ARRAY_LENGTH)
+            throw new SchemaException("Error reading array of size " + size + ", which exceeds the maximum allowed size of " + MessageUtil.MAX_ARRAY_LENGTH);
+
+        List<Object> values = new ArrayList<>(Math.min(size, MessageUtil.MAX_PREALLOCATED_ARRAY_CAPACITY));
         for (int i = 0; i < size; i++)
-            objs[i] = type.read(buffer);
-        return objs;
+            values.add(type.read(buffer));
+        return values.toArray();
     }
 
     @Override
@@ -98,8 +106,19 @@ public class ArrayOf extends DocumentedType {
     }
 
     @Override
+    public String leftBracket() {
+        return nullable ? "?[" : "[";
+    }
+
+    @Override
+    public String rightBracket() {
+        return "]";
+    }
+
+    @Override
     public String toString() {
-        return ARRAY_TYPE_NAME + "(" + type + ")";
+        String name = nullable ? NULLABLE_ARRAY_TYPE_NAME : ARRAY_TYPE_NAME;
+        return name + "(" + type + ")";
     }
 
     @Override
@@ -119,15 +138,27 @@ public class ArrayOf extends DocumentedType {
 
     @Override
     public String typeName() {
-        return ARRAY_TYPE_NAME;
+        return nullable ? NULLABLE_ARRAY_TYPE_NAME : ARRAY_TYPE_NAME;
     }
 
     @Override
     public String documentation() {
-        return "Represents a sequence of objects of a given type T. " +
+        String doc;
+        if (nullable) {
+            doc = "Represents a sequence of objects of a given type T. " +
                 "Type T can be either a primitive type (e.g. " + STRING + ") or a structure. " +
                 "First, the length N is given as an " + INT32 + ". Then N instances of type T follow. " +
                 "A null array is represented with a length of -1. " +
-                "In protocol documentation an array of T instances is referred to as [T].";
+                "In protocol documentation a nullable array of T instances is referred to as " +
+                leftBracket() + "T" + rightBracket() + ".";
+        } else {
+            doc = "Represents a sequence of objects of a given type T. " +
+                "Type T can be either a primitive type (e.g. " + STRING + ") or a structure. " +
+                "First, the length N is given as an " + INT32 + ". Then N instances of type T follow. " +
+                "In protocol documentation an array of T instances is referred to as " +
+                leftBracket() + "T" + rightBracket() + ".";
+        }
+
+        return doc;
     }
 }

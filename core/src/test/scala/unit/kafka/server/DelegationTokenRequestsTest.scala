@@ -17,17 +17,15 @@
 package kafka.server
 
 import kafka.api.{IntegrationTestHarness, SaslSetup}
-import kafka.security.JaasTestUtils
 import kafka.utils.TestUtils
 import org.apache.kafka.clients.admin.{Admin, AdminClientConfig, CreateDelegationTokenOptions, DescribeDelegationTokenOptions}
 import org.apache.kafka.common.errors.{DelegationTokenNotFoundException, InvalidPrincipalTypeException}
 import org.apache.kafka.common.security.auth.SecurityProtocol
-import org.apache.kafka.common.utils.SecurityUtils
+import org.apache.kafka.common.utils.internals.SecurityUtils
+import org.apache.kafka.security.JaasTestUtils
 import org.apache.kafka.server.config.DelegationTokenManagerConfigs
 import org.junit.jupiter.api.Assertions._
-import org.junit.jupiter.api.{AfterEach, BeforeEach, TestInfo}
-import org.junit.jupiter.params.ParameterizedTest
-import org.junit.jupiter.params.provider.ValueSource
+import org.junit.jupiter.api.{AfterEach, BeforeEach, Test, TestInfo}
 
 import java.util
 import scala.concurrent.ExecutionException
@@ -65,9 +63,8 @@ class DelegationTokenRequestsTest extends IntegrationTestHarness with SaslSetup 
     config
   }
 
-  @ParameterizedTest
-  @ValueSource(strings = Array("kraft"))
-  def testDelegationTokenRequests(quorum: String): Unit = {
+  @Test
+  def testDelegationTokenRequests(): Unit = {
     adminClient = Admin.create(createAdminConfig)
 
     // create token1 with renewer1

@@ -18,15 +18,15 @@
 package org.apache.kafka.server.telemetry;
 
 import org.apache.kafka.common.Uuid;
-import org.apache.kafka.common.annotation.InterfaceStability;
+import org.apache.kafka.common.annotation.InterfaceAudience;
 
 import java.nio.ByteBuffer;
 
 /**
- * A client telemetry payload as sent by the client to the telemetry receiver. The payload is
- * received by the broker's {@link ClientTelemetryReceiver} implementation.
+ * A client telemetry payload as sent by the client to the telemetry exporter. The payload is
+ * exported using a {@link ClientTelemetryExporter}.
  */
-@InterfaceStability.Evolving
+@InterfaceAudience.Public
 public interface ClientTelemetryPayload {
 
     /**

@@ -16,50 +16,10 @@
  */
 package org.apache.kafka.connect.runtime.rest.entities;
 
-import com.fasterxml.jackson.annotation.JsonCreator;
 import com.fasterxml.jackson.annotation.JsonProperty;
 
-import java.util.Objects;
-
-public class ConfigInfo {
-
-    private final ConfigKeyInfo configKey;
-    private final ConfigValueInfo configValue;
-
-    @JsonCreator
-    public ConfigInfo(
-        @JsonProperty("definition") ConfigKeyInfo configKey,
-        @JsonProperty("value") ConfigValueInfo configValue) {
-        this.configKey = configKey;
-        this.configValue = configValue;
-    }
-
-    @JsonProperty("definition")
-    public ConfigKeyInfo configKey() {
-        return configKey;
-    }
-
-    @JsonProperty("value")
-    public ConfigValueInfo configValue() {
-        return configValue;
-    }
-
-    @Override
-    public boolean equals(Object o) {
-        if (this == o) return true;
-        if (o == null || getClass() != o.getClass()) return false;
-        ConfigInfo that = (ConfigInfo) o;
-        return Objects.equals(configKey, that.configKey) &&
-               Objects.equals(configValue, that.configValue);
-    }
-
-    @Override
-    public int hashCode() {
-        return Objects.hash(configKey, configValue);
-    }
-
-    @Override
-    public String toString() {
-        return "[" + configKey + "," + configValue + "]";
-    }
+public record ConfigInfo(
+    @JsonProperty("definition") ConfigKeyInfo configKey,
+    @JsonProperty("value") ConfigValueInfo configValue
+) {
 }

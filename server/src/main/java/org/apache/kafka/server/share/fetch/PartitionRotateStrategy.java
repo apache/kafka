@@ -18,9 +18,10 @@ package org.apache.kafka.server.share.fetch;
 
 import org.apache.kafka.common.TopicIdPartition;
 
-import java.util.LinkedHashMap;
+import java.util.ArrayList;
+import java.util.Collections;
+import java.util.List;
 import java.util.Locale;
-import java.util.Map;
 
 /**
  * The PartitionRotateStrategy is used to rotate the partitions based on the respective strategy.
@@ -44,11 +45,10 @@ public interface PartitionRotateStrategy {
      * Rotate the partitions based on the strategy.
      *
      * @param topicIdPartitions the topicIdPartitions to rotate
-     * @param metadata the metadata to rotate
      *
      * @return the rotated topicIdPartitions
      */
-    LinkedHashMap<TopicIdPartition, Integer> rotate(LinkedHashMap<TopicIdPartition, Integer> topicIdPartitions, PartitionRotateMetadata metadata);
+    List<TopicIdPartition> rotate(List<TopicIdPartition> topicIdPartitions);
 
     static PartitionRotateStrategy type(StrategyType type) {
         return switch (type) {
@@ -57,50 +57,23 @@ public interface PartitionRotateStrategy {
     }
 
     /**
-     * Rotate the partitions based on the round-robin strategy.
+     * Rotate the partitions based on the round-robin strategy: the partitions move left by one, hence the first
+     * partition becomes the last and every other partition moves one position towards the front.
      *
      * @param topicIdPartitions the topicIdPartitions to rotate
-     * @param metadata the metadata to rotate
      *
      * @return the rotated topicIdPartitions
      */
-    static LinkedHashMap<TopicIdPartition, Integer> rotateRoundRobin(
-        LinkedHashMap<TopicIdPartition, Integer> topicIdPartitions,
-        PartitionRotateMetadata metadata
-    ) {
-        if (topicIdPartitions.isEmpty() || topicIdPartitions.size() == 1 || metadata.sessionEpoch < 1) {
-            // No need to rotate the partitions if there are no partitions, only one partition or the
-            // session epoch is initial or final.
+    static List<TopicIdPartition> rotateRoundRobin(List<TopicIdPartition> topicIdPartitions) {
+        if (topicIdPartitions.size() <= 1) {
+            // No need to rotate the partitions if there are no partitions or only one partition.
             return topicIdPartitions;
         }
-
-        int rotateAt = metadata.sessionEpoch % topicIdPartitions.size();
-        if (rotateAt == 0) {
-            // No need to rotate the partitions if the rotateAt is 0.
-            return topicIdPartitions;
-        }
-
-        // TODO: Once the partition max bytes is removed then the partition will be a linked list and rotation
-        //  will be a simple operation. Else consider using ImplicitLinkedHashCollection.
-        LinkedHashMap<TopicIdPartition, Integer> suffixPartitions = new LinkedHashMap<>(rotateAt);
-        LinkedHashMap<TopicIdPartition, Integer> rotatedPartitions = new LinkedHashMap<>(topicIdPartitions.size());
-        int i = 0;
-        for (Map.Entry<TopicIdPartition, Integer> entry : topicIdPartitions.entrySet()) {
-            if (i < rotateAt) {
-                suffixPartitions.put(entry.getKey(), entry.getValue());
-            } else {
-                rotatedPartitions.put(entry.getKey(), entry.getValue());
-            }
-            i++;
-        }
-        rotatedPartitions.putAll(suffixPartitions);
+        // Avoid modifying the original list, create copy.
+        List<TopicIdPartition> rotatedPartitions = new ArrayList<>(topicIdPartitions);
+        // Elements from the list should move left by one i.e. if the original list is [1,2,3], then the
+        // output should be [2,3,1] and not [3,1,2]. Hence, negate the distance here.
+        Collections.rotate(rotatedPartitions, -1);
         return rotatedPartitions;
     }
-
-    /**
-     * The partition rotate metadata which can be used to store the metadata for the partition rotation.
-     *
-     * @param sessionEpoch the share session epoch.
-     */
-    record PartitionRotateMetadata(int sessionEpoch) { }
 }

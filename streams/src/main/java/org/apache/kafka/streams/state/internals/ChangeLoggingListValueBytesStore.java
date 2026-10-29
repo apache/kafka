@@ -16,6 +16,7 @@
  */
 package org.apache.kafka.streams.state.internals;
 
+import org.apache.kafka.common.header.internals.RecordHeaders;
 import org.apache.kafka.common.utils.Bytes;
 import org.apache.kafka.streams.state.KeyValueStore;
 
@@ -32,9 +33,9 @@ public class ChangeLoggingListValueBytesStore extends ChangeLoggingKeyValueBytes
         // we need to log the full new list and thus call get() on the inner store below
         // if the value is a tombstone, we delete the whole list and thus can save the get call
         if (value == null) {
-            log(key, null, internalContext.recordContext().timestamp());
+            log(key, null, internalContext.recordContext().timestamp(), new RecordHeaders());
         } else {
-            log(key, wrapped().get(key), internalContext.recordContext().timestamp());
+            log(key, wrapped().get(key), internalContext.recordContext().timestamp(), new RecordHeaders());
         }
     }
 

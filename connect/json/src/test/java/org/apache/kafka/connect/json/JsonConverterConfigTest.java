@@ -35,7 +35,7 @@ public class JsonConverterConfigTest {
         configValues.put(JsonConverterConfig.DECIMAL_FORMAT_CONFIG, "NuMeRiC");
 
         final JsonConverterConfig config = new JsonConverterConfig(configValues);
-        assertEquals(config.decimalFormat(), DecimalFormat.NUMERIC);
+        assertEquals(DecimalFormat.NUMERIC, config.decimalFormat());
     }
 
 }

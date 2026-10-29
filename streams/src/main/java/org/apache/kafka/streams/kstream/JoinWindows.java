@@ -16,6 +16,7 @@
  */
 package org.apache.kafka.streams.kstream;
 
+import org.apache.kafka.common.annotation.InterfaceAudience;
 import org.apache.kafka.streams.processor.TimestampExtractor;
 
 import java.time.Duration;
@@ -67,6 +68,7 @@ import static org.apache.kafka.streams.internals.ApiUtils.validateMillisecondDur
  * @see KStream#outerJoin(KStream, ValueJoiner, JoinWindows, StreamJoined)
  * @see TimestampExtractor
  */
+@InterfaceAudience.Public
 public class JoinWindows extends Windows<Window> {
 
     /** Maximum time difference for tuples that are before the join tuple. */
@@ -154,7 +156,7 @@ public class JoinWindows extends Windows<Window> {
      * @param timeDifference join window interval
      * @return a new JoinWindows object with the window definition with and grace period (default to 24 hours minus {@code timeDifference})
      * @throws IllegalArgumentException if {@code timeDifference} is negative or can't be represented as {@code long milliseconds}
-     * @deprecated Since 3.0. Use {@link #ofTimeDifferenceWithNoGrace(Duration)}} instead.
+     * @deprecated Since 3.0. Use {@link #ofTimeDifferenceWithNoGrace(Duration)} instead.
      */
     @Deprecated
     public static JoinWindows of(final Duration timeDifference) throws IllegalArgumentException {

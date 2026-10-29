@@ -36,6 +36,12 @@ public final class MessageUtil {
 
     public static final int UNSIGNED_SHORT_MAX = 65535;
 
+    public static final int MAX_PREALLOCATED_ARRAY_CAPACITY = 1000;
+
+    public static final int MAX_ARRAY_LENGTH = 1_000_000;
+
+    public static final int MAX_TAGGED_FIELD_COUNT = 10_000;
+
     /**
      * Copy a byte buffer into an array.  This will not affect the buffer's
      * position or mark.
@@ -111,55 +117,27 @@ public final class MessageUtil {
     }
 
     public static int jsonNodeToInt(JsonNode node, String about) {
-        if (node.isInt()) {
-            return node.asInt();
+        if (!node.isIntegralNumber()) {
+            throw new NumberFormatException(about + ": expected an integer type, but got " +
+                node.getNodeType());
         }
-        if (node.isTextual()) {
-            throw new NumberFormatException(about + ": expected an integer or " +
-                "string type, but got " + node.getNodeType());
+        if (!node.canConvertToInt()) {
+            throw new NumberFormatException(about + ": value " + node.bigIntegerValue() +
+                " does not fit in a 32-bit signed integer.");
         }
-        String text = node.asText();
-        if (text.startsWith("0x")) {
-            try {
-                return Integer.parseInt(text.substring(2), 16);
-            } catch (NumberFormatException e) {
-                throw new NumberFormatException(about + ": failed to " +
-                    "parse hexadecimal number: " + e.getMessage());
-            }
-        } else {
-            try {
-                return Integer.parseInt(text);
-            } catch (NumberFormatException e) {
-                throw new NumberFormatException(about + ": failed to " +
-                    "parse number: " + e.getMessage());
-            }
-        }
+        return node.intValue();
     }
 
     public static long jsonNodeToLong(JsonNode node, String about) {
-        if (node.isLong()) {
-            return node.asLong();
+        if (!node.isIntegralNumber()) {
+            throw new NumberFormatException(about + ": expected an integer type, but got " +
+                node.getNodeType());
         }
-        if (node.isTextual()) {
-            throw new NumberFormatException(about + ": expected an integer or " +
-                "string type, but got " + node.getNodeType());
+        if (!node.canConvertToLong()) {
+            throw new NumberFormatException(about + ": value " + node.bigIntegerValue() +
+                " does not fit in a 64-bit signed integer.");
         }
-        String text = node.asText();
-        if (text.startsWith("0x")) {
-            try {
-                return Long.parseLong(text.substring(2), 16);
-            } catch (NumberFormatException e) {
-                throw new NumberFormatException(about + ": failed to " +
-                    "parse hexadecimal number: " + e.getMessage());
-            }
-        } else {
-            try {
-                return Long.parseLong(text);
-            } catch (NumberFormatException e) {
-                throw new NumberFormatException(about + ": failed to " +
-                    "parse number: " + e.getMessage());
-            }
-        }
+        return node.longValue();
     }
 
     public static byte[] jsonNodeToBinary(JsonNode node, String about) {
@@ -204,13 +182,13 @@ public final class MessageUtil {
         }
     }
 
-    public static ByteBuffer toByteBuffer(final Message message, final short version) {
+    public static ByteBufferAccessor toByteBufferAccessor(final Message message, final short version) {
         ObjectSerializationCache cache = new ObjectSerializationCache();
         int messageSize = message.size(cache, version);
         ByteBufferAccessor bytes = new ByteBufferAccessor(ByteBuffer.allocate(messageSize));
         message.write(bytes, cache, version);
         bytes.flip();
-        return bytes.buffer();
+        return bytes;
     }
 
     public static ByteBuffer toVersionPrefixedByteBuffer(final short version, final Message message) {

@@ -14,9 +14,10 @@
  * See the License for the specific language governing permissions and
  * limitations under the License.
  */
+
 package org.apache.kafka.streams.state.internals;
 
-
+import org.apache.kafka.common.IsolationLevel;
 import org.apache.kafka.common.serialization.Serdes;
 import org.apache.kafka.streams.StoreQueryParameters;
 import org.apache.kafka.streams.errors.InvalidStateStoreException;
@@ -65,7 +66,7 @@ public class WrappingStoreProviderTest {
     @Test
     public void shouldFindKeyValueStores() {
         final List<ReadOnlyKeyValueStore<String, String>> results =
-                wrappingStoreProvider.stores("kv", QueryableStoreTypes.<String, String>keyValueStore());
+                wrappingStoreProvider.stores("kv", QueryableStoreTypes.keyValueStore());
         assertEquals(2, results.size());
     }
 
@@ -95,15 +96,31 @@ public class WrappingStoreProviderTest {
     public void shouldReturnAllStoreWhenQueryWithoutPartition() {
         wrappingStoreProvider.setStoreQueryParameters(StoreQueryParameters.fromNameAndType("kv", QueryableStoreTypes.<String, String>keyValueStore()));
         final List<ReadOnlyKeyValueStore<String, String>> results =
-                wrappingStoreProvider.stores("kv", QueryableStoreTypes.<String, String>keyValueStore());
+                wrappingStoreProvider.stores("kv", QueryableStoreTypes.keyValueStore());
         assertEquals(numStateStorePartitions, results.size());
+    }
+
+    @Test
+    public void shouldDefaultToReadUncommittedWhenIsolationLevelNotSpecified() {
+        assertEquals(IsolationLevel.READ_UNCOMMITTED, wrappingStoreProvider.defaultIsolationLevel());
+    }
+
+    @Test
+    public void shouldPropagateConfiguredDefaultIsolationLevel() {
+        final StateStoreProviderStub stub = new StateStoreProviderStub(false);
+        final WrappingStoreProvider provider = new WrappingStoreProvider(
+            Arrays.asList(stub),
+            StoreQueryParameters.fromNameAndType("kv", QueryableStoreTypes.keyValueStore()),
+            IsolationLevel.READ_COMMITTED
+        );
+        assertEquals(IsolationLevel.READ_COMMITTED, provider.defaultIsolationLevel());
     }
 
     @Test
     public void shouldReturnSingleStoreWhenQueryWithPartition() {
         wrappingStoreProvider.setStoreQueryParameters(StoreQueryParameters.fromNameAndType("kv", QueryableStoreTypes.<String, String>keyValueStore()).withPartition(numStateStorePartitions - 1));
         final List<ReadOnlyKeyValueStore<String, String>> results =
-                wrappingStoreProvider.stores("kv", QueryableStoreTypes.<String, String>keyValueStore());
+                wrappingStoreProvider.stores("kv", QueryableStoreTypes.keyValueStore());
         assertEquals(1, results.size());
     }
 }

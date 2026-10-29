@@ -16,11 +16,15 @@
  */
 package org.apache.kafka.clients.consumer.internals;
 
-import org.apache.kafka.clients.consumer.ConsumerRebalanceListener;
+import org.apache.kafka.clients.consumer.CloseOptions;
+import org.apache.kafka.clients.consumer.Consumer;
+import org.apache.kafka.clients.consumer.RebalanceConsumer;
+import org.apache.kafka.clients.consumer.RebalanceListener;
 import org.apache.kafka.clients.consumer.internals.events.BackgroundEvent;
 import org.apache.kafka.clients.consumer.internals.events.BackgroundEventHandler;
 import org.apache.kafka.clients.consumer.internals.events.ConsumerRebalanceListenerCallbackCompletedEvent;
-import org.apache.kafka.clients.consumer.internals.events.ConsumerRebalanceListenerCallbackNeededEvent;
+import org.apache.kafka.clients.consumer.internals.events.PartitionsAssignedEvent;
+import org.apache.kafka.clients.consumer.internals.events.PartitionsRemovedEvent;
 import org.apache.kafka.clients.consumer.internals.metrics.AsyncConsumerMetrics;
 import org.apache.kafka.clients.consumer.internals.metrics.ConsumerRebalanceMetricsManager;
 import org.apache.kafka.clients.consumer.internals.metrics.RebalanceCallbackMetricsManager;
@@ -38,9 +42,9 @@ import org.apache.kafka.common.metrics.Metrics;
 import org.apache.kafka.common.protocol.Errors;
 import org.apache.kafka.common.requests.ConsumerGroupHeartbeatRequest;
 import org.apache.kafka.common.requests.ConsumerGroupHeartbeatResponse;
-import org.apache.kafka.common.utils.LogContext;
 import org.apache.kafka.common.utils.MockTime;
 import org.apache.kafka.common.utils.Time;
+import org.apache.kafka.common.utils.internals.LogContext;
 
 import org.junit.jupiter.api.BeforeEach;
 import org.junit.jupiter.api.Test;
@@ -70,9 +74,9 @@ import java.util.stream.Stream;
 
 import static org.apache.kafka.clients.consumer.internals.AbstractMembershipManager.TOPIC_PARTITION_COMPARATOR;
 import static org.apache.kafka.clients.consumer.internals.AsyncKafkaConsumer.invokeRebalanceCallbacks;
+import static org.apache.kafka.clients.consumer.internals.ConsumerUtils.CONSUMER_METRIC_GROUP_PREFIX;
+import static org.apache.kafka.clients.consumer.internals.ConsumerUtils.COORDINATOR_METRICS_SUFFIX;
 import static org.apache.kafka.common.requests.ConsumerGroupHeartbeatRequest.LEAVE_GROUP_MEMBER_EPOCH;
-import static org.apache.kafka.common.utils.Utils.mkEntry;
-import static org.apache.kafka.common.utils.Utils.mkMap;
 import static org.apache.kafka.common.utils.Utils.mkSortedSet;
 import static org.junit.jupiter.api.Assertions.assertDoesNotThrow;
 import static org.junit.jupiter.api.Assertions.assertEquals;
@@ -89,6 +93,7 @@ import static org.mockito.ArgumentMatchers.anyLong;
 import static org.mockito.ArgumentMatchers.anySet;
 import static org.mockito.ArgumentMatchers.eq;
 import static org.mockito.Mockito.clearInvocations;
+import static org.mockito.Mockito.doAnswer;
 import static org.mockito.Mockito.doNothing;
 import static org.mockito.Mockito.inOrder;
 import static org.mockito.Mockito.mock;
@@ -106,11 +111,12 @@ public class ConsumerMembershipManagerTest {
     private static final int MEMBER_EPOCH = 1;
     private static final LogContext LOG_CONTEXT = new LogContext();
 
-    private SubscriptionState subscriptionState;
+    private ConsumerSubscriptionState subscriptionState;
     private ConsumerMetadata metadata;
     private CommitRequestManager commitRequestManager;
     private BlockingQueue<BackgroundEvent> backgroundEventQueue;
     private BackgroundEventHandler backgroundEventHandler;
+    private Consumer<?, ?> mockConsumer;
     private Time time;
     private Metrics metrics;
     private ConsumerRebalanceMetricsManager rebalanceMetricsManager;
@@ -118,15 +124,16 @@ public class ConsumerMembershipManagerTest {
     @BeforeEach
     public void setup() {
         metadata = mock(ConsumerMetadata.class);
-        subscriptionState = mock(SubscriptionState.class);
+        subscriptionState = mock(ConsumerSubscriptionState.class);
         commitRequestManager = mock(CommitRequestManager.class);
+        mockConsumer = mock(Consumer.class);
         backgroundEventQueue = new LinkedBlockingQueue<>();
         time = new MockTime(0);
-        backgroundEventHandler = new BackgroundEventHandler(backgroundEventQueue, time, mock(AsyncConsumerMetrics.class));
+        backgroundEventHandler = spy(new BackgroundEventHandler(backgroundEventQueue, time, mock(AsyncConsumerMetrics.class)));
         metrics = new Metrics(time);
-        rebalanceMetricsManager = new ConsumerRebalanceMetricsManager(metrics);
+        rebalanceMetricsManager = new ConsumerRebalanceMetricsManager(metrics, subscriptionState);
 
-        when(commitRequestManager.maybeAutoCommitSyncBeforeRevocation(anyLong())).thenReturn(CompletableFuture.completedFuture(null));
+        when(commitRequestManager.maybeAutoCommitSyncBeforeRebalance(anyLong())).thenReturn(CompletableFuture.completedFuture(null));
     }
 
     private ConsumerMembershipManager createMembershipManagerJoiningGroup() {
@@ -141,19 +148,22 @@ public class ConsumerMembershipManagerTest {
 
     private ConsumerMembershipManager createMembershipManager(String groupInstanceId) {
         ConsumerMembershipManager manager = spy(new ConsumerMembershipManager(
-            GROUP_ID, Optional.ofNullable(groupInstanceId), REBALANCE_TIMEOUT, Optional.empty(),
+            GROUP_ID, Optional.ofNullable(groupInstanceId), Optional.empty(), REBALANCE_TIMEOUT, Optional.empty(),
             subscriptionState, commitRequestManager, metadata, LOG_CONTEXT,
-            backgroundEventHandler, time, rebalanceMetricsManager));
+            backgroundEventHandler, time, rebalanceMetricsManager, true));
         assertMemberIdIsGenerated(manager.memberId());
         return manager;
     }
 
-    private ConsumerMembershipManager createMembershipManagerJoiningGroup(String groupInstanceId,
-                                                                      String serverAssignor) {
+    private ConsumerMembershipManager createMembershipManagerJoiningGroup(
+        String groupInstanceId,
+        String serverAssignor,
+        String rackId
+    ) {
         ConsumerMembershipManager manager = spy(new ConsumerMembershipManager(
-                GROUP_ID, Optional.ofNullable(groupInstanceId), REBALANCE_TIMEOUT,
+                GROUP_ID, Optional.ofNullable(groupInstanceId), Optional.ofNullable(rackId), REBALANCE_TIMEOUT,
                 Optional.ofNullable(serverAssignor), subscriptionState, commitRequestManager,
-                metadata, LOG_CONTEXT, backgroundEventHandler, time, rebalanceMetricsManager));
+                metadata, LOG_CONTEXT, backgroundEventHandler, time, rebalanceMetricsManager, true));
         assertMemberIdIsGenerated(manager.memberId());
         manager.transitionToJoining();
         return manager;
@@ -164,8 +174,26 @@ public class ConsumerMembershipManagerTest {
         ConsumerMembershipManager membershipManager = createMembershipManagerJoiningGroup();
         assertEquals(Optional.empty(), membershipManager.serverAssignor());
 
-        membershipManager = createMembershipManagerJoiningGroup("instance1", "Uniform");
+        membershipManager = createMembershipManagerJoiningGroup("instance1", "Uniform", null);
         assertEquals(Optional.of("Uniform"), membershipManager.serverAssignor());
+    }
+
+    @Test
+    public void testMembershipManagerRackId() {
+        ConsumerMembershipManager membershipManager = createMembershipManagerJoiningGroup();
+        assertEquals(Optional.empty(), membershipManager.rackId());
+
+        membershipManager = createMembershipManagerJoiningGroup(null, null, "rack1");
+        assertEquals(Optional.of("rack1"), membershipManager.rackId());
+    }
+
+    @Test
+    public void testAssignedPartitionCountMetricRegistered() {
+        MetricName metricName = metrics.metricName(
+                "assigned-partitions",
+                CONSUMER_METRIC_GROUP_PREFIX + COORDINATOR_METRICS_SUFFIX
+        );
+        assertNotNull(metrics.metric(metricName), "Metric assigned-partitions should have been registered");
     }
 
     @Test
@@ -230,9 +258,9 @@ public class ConsumerMembershipManagerTest {
     @Test
     public void testTransitionToFailedWhenTryingToJoin() {
         ConsumerMembershipManager membershipManager = new ConsumerMembershipManager(
-                GROUP_ID, Optional.empty(), REBALANCE_TIMEOUT, Optional.empty(),
+                GROUP_ID, Optional.empty(), Optional.empty(), REBALANCE_TIMEOUT, Optional.empty(),
                 subscriptionState, commitRequestManager, metadata, LOG_CONTEXT,
-            backgroundEventHandler, time, rebalanceMetricsManager);
+            backgroundEventHandler, time, rebalanceMetricsManager, true);
         assertEquals(MemberState.UNSUBSCRIBED, membershipManager.state());
         membershipManager.transitionToJoining();
 
@@ -249,8 +277,73 @@ public class ConsumerMembershipManagerTest {
     }
 
     @Test
+    public void testTransitionToFencedMarksPendingRevocationBeforeSignalingPartitionsLost() {
+        ConsumerMembershipManager membershipManager = createMemberInStableState();
+        String topicName = "topic1";
+        TopicPartition ownedPartition = new TopicPartition(topicName, 0);
+        Set<TopicPartition> ownedPartitions = Collections.singleton(ownedPartition);
+
+        CounterConsumerRebalanceListener listener = new CounterConsumerRebalanceListener();
+        mockListener(listener);
+        when(subscriptionState.assignedPartitions()).thenReturn(ownedPartitions);
+        when(subscriptionState.hasAutoAssignedPartitions()).thenReturn(true);
+
+        membershipManager.transitionToFenced();
+
+        // Verify markPendingRevocation is called before enqueueing the callback event
+        InOrder inOrder = inOrder(subscriptionState, backgroundEventHandler);
+        inOrder.verify(subscriptionState).markPendingRevocation(ownedPartitions);
+        inOrder.verify(backgroundEventHandler).add(any(PartitionsRemovedEvent.class));
+    }
+
+    @Test
+    public void testTransitionToFatalMarksPendingRevocationBeforeSignalingPartitionsLost() {
+        ConsumerMembershipManager membershipManager = createMemberInStableState();
+        String topicName = "topic1";
+        TopicPartition ownedPartition = new TopicPartition(topicName, 0);
+        Set<TopicPartition> ownedPartitions = Collections.singleton(ownedPartition);
+
+        CounterConsumerRebalanceListener listener = new CounterConsumerRebalanceListener();
+        mockListener(listener);
+        when(subscriptionState.assignedPartitions()).thenReturn(ownedPartitions);
+        when(subscriptionState.hasAutoAssignedPartitions()).thenReturn(true);
+
+        membershipManager.transitionToFatal();
+
+        // Verify markPendingRevocation is called before enqueueing the callback event
+        InOrder inOrder = inOrder(subscriptionState, backgroundEventHandler);
+        inOrder.verify(subscriptionState).markPendingRevocation(ownedPartitions);
+        inOrder.verify(backgroundEventHandler).add(any(PartitionsRemovedEvent.class));
+    }
+
+    @Test
+    public void testTransitionToStaleMarksPendingRevocationBeforeSignalingPartitionsLost() {
+        ConsumerMembershipManager membershipManager = createMemberInStableState();
+        String topicName = "topic1";
+        TopicPartition ownedPartition = new TopicPartition(topicName, 0);
+        Set<TopicPartition> ownedPartitions = Collections.singleton(ownedPartition);
+
+        CounterConsumerRebalanceListener listener = new CounterConsumerRebalanceListener();
+        mockListener(listener);
+        when(subscriptionState.assignedPartitions()).thenReturn(ownedPartitions);
+        when(subscriptionState.hasAutoAssignedPartitions()).thenReturn(true);
+
+        // First transition to LEAVING (required before transitioning to STALE)
+        membershipManager.transitionToSendingLeaveGroup(true);
+        clearInvocations(subscriptionState, backgroundEventHandler);
+        when(subscriptionState.assignedPartitions()).thenReturn(ownedPartitions);
+
+        membershipManager.transitionToStale();
+
+        // Verify markPendingRevocation is called before enqueueing the callback event
+        InOrder inOrder = inOrder(subscriptionState, backgroundEventHandler);
+        inOrder.verify(subscriptionState).markPendingRevocation(ownedPartitions);
+        inOrder.verify(backgroundEventHandler).add(any(PartitionsRemovedEvent.class));
+    }
+
+    @Test
     public void testListenersGetNotifiedOnTransitionsToFatal() {
-        when(subscriptionState.rebalanceListener()).thenReturn(Optional.empty());
+        when(subscriptionState.hasRebalanceListener()).thenReturn(false);
         ConsumerMembershipManager membershipManager = createMembershipManagerJoiningGroup();
         MemberStateListener listener = mock(MemberStateListener.class);
         membershipManager.registerStateListener(listener);
@@ -266,7 +359,7 @@ public class ConsumerMembershipManagerTest {
 
     @Test
     public void testListenersGetNotifiedOnTransitionsToLeavingGroup() {
-        when(subscriptionState.rebalanceListener()).thenReturn(Optional.empty());
+        when(subscriptionState.hasRebalanceListener()).thenReturn(false);
         ConsumerMembershipManager membershipManager = createMembershipManagerJoiningGroup();
         MemberStateListener listener = mock(MemberStateListener.class);
         membershipManager.registerStateListener(listener);
@@ -309,7 +402,8 @@ public class ConsumerMembershipManagerTest {
             membershipManager.memberId());
         when(subscriptionState.hasAutoAssignedPartitions()).thenReturn(true);
         membershipManager.onHeartbeatSuccess(heartbeatResponse);
-        membershipManager.poll(time.milliseconds());
+        membershipManager.maybeReconcile(true);
+        processAssignmentEventNoCallback(membershipManager);
         membershipManager.onHeartbeatRequestGenerated();
         assertEquals(MemberState.STABLE, membershipManager.state());
         assertEquals(MEMBER_EPOCH, membershipManager.memberEpoch());
@@ -424,6 +518,10 @@ public class ConsumerMembershipManagerTest {
 
         membershipManager.onHeartbeatSuccess(createConsumerGroupHeartbeatResponse(new Assignment(), membershipManager.memberId()));
 
+        assertFalse(sendLeave.isDone(), "Send leave operation should not complete until a leave response is received");
+
+        membershipManager.onHeartbeatSuccess(createConsumerGroupLeaveResponse(membershipManager.memberId()));
+
         assertSendLeaveCompleted(membershipManager, sendLeave);
     }
 
@@ -446,6 +544,54 @@ public class ConsumerMembershipManagerTest {
         assertEquals(MemberState.LEAVING, membershipManager.state());
         assertEquals(ConsumerGroupHeartbeatRequest.LEAVE_GROUP_MEMBER_EPOCH,
                 membershipManager.memberEpoch());
+    }
+
+    @Test
+    public void testLeaveGroupEpochOnClose() {
+        // Static member should leave the group with epoch -2 with GroupMembershipOperation.DEFAULT
+        ConsumerMembershipManager membershipManager = createMemberInStableState("instance1");
+        mockLeaveGroup();
+        membershipManager.leaveGroupOnClose(CloseOptions.GroupMembershipOperation.DEFAULT);
+        verify(subscriptionState).unsubscribe();
+        assertEquals(MemberState.LEAVING, membershipManager.state());
+        assertEquals(ConsumerGroupHeartbeatRequest.LEAVE_GROUP_STATIC_MEMBER_EPOCH,
+            membershipManager.memberEpoch());
+
+        // Static member should leave the group with epoch -1 with GroupMembershipOperation.LEAVE_GROUP
+        membershipManager = createMemberInStableState("instance1");
+        mockLeaveGroup();
+        membershipManager.leaveGroupOnClose(CloseOptions.GroupMembershipOperation.LEAVE_GROUP);
+        verify(subscriptionState).unsubscribe();
+        assertEquals(MemberState.LEAVING, membershipManager.state());
+        assertEquals(ConsumerGroupHeartbeatRequest.LEAVE_GROUP_MEMBER_EPOCH,
+            membershipManager.memberEpoch());
+
+        // Static member should leave the group with epoch -2 with GroupMembershipOperation.REMAIN_IN_GROUP
+        membershipManager = createMemberInStableState("instance1");
+        mockLeaveGroup();
+        membershipManager.leaveGroupOnClose(CloseOptions.GroupMembershipOperation.REMAIN_IN_GROUP);
+        verify(subscriptionState).unsubscribe();
+        assertEquals(MemberState.LEAVING, membershipManager.state());
+        assertEquals(ConsumerGroupHeartbeatRequest.LEAVE_GROUP_STATIC_MEMBER_EPOCH,
+            membershipManager.memberEpoch());
+
+        // Dynamic member should leave the group with epoch -1 with GroupMembershipOperation.DEFAULT
+        membershipManager = createMemberInStableState(null);
+        mockLeaveGroup();
+        membershipManager.leaveGroupOnClose(CloseOptions.GroupMembershipOperation.DEFAULT);
+        verify(subscriptionState).unsubscribe();
+        assertEquals(MemberState.LEAVING, membershipManager.state());
+        assertEquals(ConsumerGroupHeartbeatRequest.LEAVE_GROUP_MEMBER_EPOCH,
+            membershipManager.memberEpoch());
+
+        // Dynamic member should leave the group with epoch -1 with GroupMembershipOperation.LEAVE_GROUP
+        membershipManager = createMemberInStableState(null);
+        mockLeaveGroup();
+        membershipManager.leaveGroupOnClose(CloseOptions.GroupMembershipOperation.LEAVE_GROUP);
+        verify(subscriptionState).unsubscribe();
+        assertEquals(MemberState.LEAVING, membershipManager.state());
+        assertEquals(ConsumerGroupHeartbeatRequest.LEAVE_GROUP_MEMBER_EPOCH,
+            membershipManager.memberEpoch());
     }
 
     /**
@@ -608,8 +754,8 @@ public class ConsumerMembershipManagerTest {
         membershipManager.onHeartbeatSuccess(createConsumerGroupHeartbeatResponse(assignment2, membershipManager.memberId()));
         assertEquals(MemberState.RECONCILING, membershipManager.state());
         CompletableFuture<Void> commitResult = new CompletableFuture<>();
-        when(commitRequestManager.maybeAutoCommitSyncBeforeRevocation(anyLong())).thenReturn(commitResult);
-        membershipManager.poll(time.milliseconds());
+        when(commitRequestManager.maybeAutoCommitSyncBeforeRebalance(anyLong())).thenReturn(commitResult);
+        membershipManager.maybeReconcile(false);
 
         // Get fenced, commit completes
         membershipManager.transitionToFenced();
@@ -627,7 +773,8 @@ public class ConsumerMembershipManagerTest {
         // We have to reconcile & ack the assignment again
         membershipManager.onHeartbeatSuccess(createConsumerGroupHeartbeatResponse(assignment1, membershipManager.memberId()));
         assertEquals(MemberState.RECONCILING, membershipManager.state());
-        membershipManager.poll(time.milliseconds());
+        membershipManager.maybeReconcile(true);
+        processAssignmentEventNoCallback(membershipManager);
         assertEquals(MemberState.ACKNOWLEDGING, membershipManager.state());
         membershipManager.onHeartbeatRequestGenerated();
         assertEquals(MemberState.STABLE, membershipManager.state());
@@ -663,7 +810,8 @@ public class ConsumerMembershipManagerTest {
         // stay in RECONCILING state, since an unresolved topic is assigned
         membershipManager.onHeartbeatSuccess(createConsumerGroupHeartbeatResponse(assignment1, membershipManager.memberId()));
         assertEquals(MemberState.RECONCILING, membershipManager.state());
-        membershipManager.poll(time.milliseconds());
+        membershipManager.maybeReconcile(true);
+        processAssignmentEventNoCallback(membershipManager);
         verifyReconciliationTriggeredAndCompleted(membershipManager,
             Collections.singletonList(new TopicIdPartition(topic1, new TopicPartition("topic1", 0)))
         );
@@ -679,7 +827,7 @@ public class ConsumerMembershipManagerTest {
         // Receive original assignment again - full reconciliation not triggered but assignment is acked again
         membershipManager.onHeartbeatSuccess(createConsumerGroupHeartbeatResponse(assignment1, membershipManager.memberId()));
         assertEquals(MemberState.RECONCILING, membershipManager.state());
-        membershipManager.poll(time.milliseconds());
+        membershipManager.maybeReconcile(false);
         assertEquals(MemberState.ACKNOWLEDGING, membershipManager.state());
         verifyReconciliationNotTriggered(membershipManager);
         assertEquals(Collections.singletonMap(topic1, mkSortedSet(0)), membershipManager.currentAssignment().partitions);
@@ -733,6 +881,7 @@ public class ConsumerMembershipManagerTest {
         // Reconciliation in progress completes. Should be applied revoking topic 1 only. Newly
         // discovered topic2 will be reconciled in the next reconciliation loop.
         commitResult.complete(null);
+        processAssignmentEventNoCallback(membershipManager);
 
         // Member should update the subscription and send ack when the delayed reconciliation
         // completes.
@@ -751,8 +900,8 @@ public class ConsumerMembershipManagerTest {
         assertEquals(MemberState.RECONCILING, membershipManager.state());
         assertEquals(topic2Assignment, membershipManager.topicPartitionsAwaitingReconciliation());
 
-        // Next reconciliation triggered in poll
-        membershipManager.poll(time.milliseconds());
+        membershipManager.maybeReconcile(true);
+        processAssignmentEventNoCallback(membershipManager);
 
         assertEquals(Collections.emptySet(), membershipManager.topicsAwaitingReconciliation());
         verify(subscriptionState).assignFromSubscribedAwaitingCallback(topicPartitions(topic2Assignment, topic2Metadata), topicPartitions(topic2Assignment, topic2Metadata));
@@ -777,12 +926,7 @@ public class ConsumerMembershipManagerTest {
 
         ConsumerMembershipManager membershipManager = createMembershipManagerJoiningGroup();
         when(subscriptionState.hasAutoAssignedPartitions()).thenReturn(true);
-        when(metadata.topicNames()).thenReturn(
-            mkMap(
-                mkEntry(topicId1, topic1),
-                mkEntry(topicId2, topic2)
-            )
-        );
+        when(metadata.topicNames()).thenReturn(Map.of(topicId1, topic1, topicId2, topic2));
 
         // Receive assignment with only topic1-0, getting stuck during commit.
         final CompletableFuture<Void> commitFuture = mockNewAssignmentAndRevocationStuckOnCommit(membershipManager, topicId1,
@@ -790,14 +934,10 @@ public class ConsumerMembershipManagerTest {
 
         // New assignment adding a new topic2-0 (not in metadata).
         // No reconciliation triggered, because another reconciliation is in progress.
-        Map<Uuid, SortedSet<Integer>> newAssignment =
-            mkMap(
-                mkEntry(topicId1, mkSortedSet(0)),
-                mkEntry(topicId2, mkSortedSet(0))
-            );
+        Map<Uuid, SortedSet<Integer>> newAssignment = Map.of(topicId1, mkSortedSet(0), topicId2, mkSortedSet(0));
 
         receiveAssignment(newAssignment, membershipManager);
-        membershipManager.poll(time.milliseconds());
+        membershipManager.maybeReconcile(false);
 
         verifyReconciliationNotTriggered(membershipManager);
         assertEquals(MemberState.RECONCILING, membershipManager.state());
@@ -808,6 +948,7 @@ public class ConsumerMembershipManagerTest {
         // with membership manager entering ACKNOWLEDGING state.
 
         commitFuture.complete(null);
+        processAssignmentEventNoCallback(membershipManager);
 
         assertEquals(MemberState.ACKNOWLEDGING, membershipManager.state());
         assertEquals(Set.of(topicId2), membershipManager.topicsAwaitingReconciliation());
@@ -819,10 +960,54 @@ public class ConsumerMembershipManagerTest {
         assertEquals(MemberState.RECONCILING, membershipManager.state());
         clearInvocations(membershipManager, commitRequestManager);
 
-        // Next poll should trigger final reconciliation
-        membershipManager.poll(time.milliseconds());
+        membershipManager.maybeReconcile(true);
+        processAssignmentEventNoCallback(membershipManager);
 
         verifyReconciliationTriggeredAndCompleted(membershipManager, Arrays.asList(topicId1Partition0, topicId2Partition0));
+    }
+
+    /**
+     * When the resolvable subset of the target equals the current assignment but some topic ids
+     * remain unresolved, the partial acknowledgement must fire exactly once per target epoch -
+     * regardless of which thread invokes maybeReconcile. The first attempt (background or
+     * foreground) acks the resolvable fragment; subsequent attempts must stay in RECONCILING
+     * to avoid emitting redundant heartbeats.
+     */
+    @Test
+    public void testPartialAckNotRepeatedOnBackgroundReconcileWhenMetadataMissing() {
+        Uuid topicId1 = Uuid.randomUuid();
+        String topic1 = "topic1";
+        final TopicIdPartition topicId1Partition0 = new TopicIdPartition(topicId1, new TopicPartition(topic1, 0));
+
+        Uuid topicId2 = Uuid.randomUuid();
+
+        ConsumerMembershipManager membershipManager =
+            mockMemberSuccessfullyReceivesAndAcksAssignment(topicId1, topic1, Collections.singletonList(0));
+
+        membershipManager.onHeartbeatRequestGenerated();
+        assertEquals(MemberState.STABLE, membershipManager.state());
+        when(subscriptionState.assignedPartitions()).thenReturn(getTopicPartitions(Collections.singleton(topicId1Partition0)));
+        clearInvocations(membershipManager, subscriptionState);
+
+        Map<Uuid, SortedSet<Integer>> newAssignment = Map.of(topicId1, mkSortedSet(0), topicId2, mkSortedSet(0));
+        receiveAssignment(newAssignment, membershipManager);
+
+        // First reconcile from the background thread acks the resolvable fragment, no need to wait for consumer.poll.
+        membershipManager.maybeReconcile(false);
+        assertEquals(MemberState.ACKNOWLEDGING, membershipManager.state());
+
+        membershipManager.onHeartbeatRequestGenerated();
+        assertEquals(MemberState.RECONCILING, membershipManager.state());
+        assertEquals(Collections.singleton(topicId2), membershipManager.topicsAwaitingReconciliation());
+
+        // Until a new target arrives or new metadata resolves topicId2, further reconciles from either
+        // thread must stay in RECONCILING - no redundant acks.
+        for (int i = 0; i < 5; i++) {
+            membershipManager.maybeReconcile(false);
+            assertEquals(MemberState.RECONCILING, membershipManager.state());
+            membershipManager.maybeReconcile(true);
+            assertEquals(MemberState.RECONCILING, membershipManager.state());
+        }
     }
 
     // Tests the case where topic metadata is not available at the time of the assignment,
@@ -851,15 +1036,10 @@ public class ConsumerMembershipManagerTest {
         // New assignment adding a new topic2-0 (not in metadata).
         // No reconciliation triggered, because new topic in assignment is waiting for metadata.
 
-        Map<Uuid, SortedSet<Integer>> newAssignment =
-            mkMap(
-                mkEntry(topicId1, mkSortedSet(0)),
-                mkEntry(topicId2, mkSortedSet(0))
-            );
+        Map<Uuid, SortedSet<Integer>> newAssignment = Map.of(topicId1, mkSortedSet(0), topicId2, mkSortedSet(0));
 
         receiveAssignment(newAssignment, membershipManager);
-        membershipManager.poll(time.milliseconds());
-
+        membershipManager.maybeReconcile(false);
         // No full reconciliation triggered, but assignment needs to be acknowledged.
         assertEquals(MemberState.ACKNOWLEDGING, membershipManager.state());
         assertTrue(membershipManager.shouldHeartbeatNow());
@@ -875,13 +1055,11 @@ public class ConsumerMembershipManagerTest {
         // Metadata discovered for topic2. Should trigger reconciliation to complete the assignment,
         // with membership manager entering ACKNOWLEDGING state.
 
-        Map<Uuid, String> fullTopicMetadata = mkMap(
-            mkEntry(topicId1, topic1),
-            mkEntry(topicId2, topic2)
-        );
+        Map<Uuid, String> fullTopicMetadata = Map.of(topicId1, topic1, topicId2, topic2);
         when(metadata.topicNames()).thenReturn(fullTopicMetadata);
 
-        membershipManager.poll(time.milliseconds());
+        membershipManager.maybeReconcile(true);
+        processAssignmentEventNoCallback(membershipManager);
 
         verifyReconciliationTriggeredAndCompleted(membershipManager, Arrays.asList(topicId1Partition0, topicId2Partition0));
     }
@@ -908,6 +1086,9 @@ public class ConsumerMembershipManagerTest {
         assertFalse(leaveResult.isDone());
 
         membershipManager.onHeartbeatSuccess(createConsumerGroupHeartbeatResponse(createAssignment(true), membershipManager.memberId()));
+        assertFalse(leaveResult.isDone());
+
+        membershipManager.onHeartbeatSuccess(createConsumerGroupLeaveResponse(membershipManager.memberId()));
         assertSendLeaveCompleted(membershipManager, leaveResult);
     }
 
@@ -951,16 +1132,43 @@ public class ConsumerMembershipManagerTest {
 
         assertEquals(state, membershipManager.state());
         verify(responseData, never()).memberId();
-        verify(responseData, never()).memberEpoch();
+        // In unsubscribed, we check if we received a leave group response, so we do verify member epoch.
+        if (state != MemberState.UNSUBSCRIBED) {
+            verify(responseData, never()).memberEpoch();
+        }
         verify(responseData, never()).assignment();
     }
 
     @Test
-    public void testLeaveGroupWhenStateIsReconciling() {
-        ConsumerMembershipManager membershipManager = mockJoinAndReceiveAssignment(false);
-        assertEquals(MemberState.RECONCILING, membershipManager.state());
+    public void testIgnoreLeaveResponseWhenNotLeavingGroup() {
+        ConsumerMembershipManager membershipManager = createMemberInStableState();
 
-        testLeaveGroupReleasesAssignmentAndResetsEpochToSendLeaveGroup(membershipManager);
+        CompletableFuture<Void> leaveResult = membershipManager.leaveGroup();
+
+        // Send leave request, transitioning to UNSUBSCRIBED state
+        membershipManager.onHeartbeatRequestGenerated();
+        assertEquals(MemberState.UNSUBSCRIBED, membershipManager.state());
+
+        // Receive a previous heartbeat response, which should be ignored
+        membershipManager.onHeartbeatSuccess(new ConsumerGroupHeartbeatResponse(
+            new ConsumerGroupHeartbeatResponseData()
+                .setErrorCode(Errors.NONE.code())
+                .setMemberId(membershipManager.memberId())
+                .setMemberEpoch(MEMBER_EPOCH)
+        ));
+        assertFalse(leaveResult.isDone());
+
+        // Receive a leave heartbeat response, which should unblock the consumer
+        membershipManager.onHeartbeatSuccess(createConsumerGroupLeaveResponse(membershipManager.memberId()));
+
+        // Consumer unblocks and updates subscription
+        membershipManager.onSubscriptionUpdated();
+        membershipManager.onConsumerPoll();
+
+        membershipManager.onHeartbeatSuccess(createConsumerGroupLeaveResponse(membershipManager.memberId()));
+
+        assertEquals(MemberState.JOINING, membershipManager.state());
+        assertEquals(0, membershipManager.memberEpoch());
     }
 
     @Test
@@ -973,7 +1181,8 @@ public class ConsumerMembershipManagerTest {
         receiveAssignment(topicId, Arrays.asList(0, 1), membershipManager);
 
         verifyReconciliationNotTriggered(membershipManager);
-        membershipManager.poll(time.milliseconds());
+        membershipManager.maybeReconcile(true);
+        processAssignmentEventNoCallback(membershipManager);
 
         List<TopicIdPartition> assignedPartitions = Arrays.asList(
             new TopicIdPartition(topicId, new TopicPartition(topicName, 0)),
@@ -1019,7 +1228,7 @@ public class ConsumerMembershipManagerTest {
         mockLeaveGroup();
         CompletableFuture<Void> leaveResult2 = membershipManager.leaveGroup();
         verify(subscriptionState, never()).unsubscribe();
-        verify(subscriptionState, never()).rebalanceListener();
+        verify(subscriptionState, never()).hasRebalanceListener();
         assertFalse(leaveResult2.isDone());
 
         // Complete first leave group operation. Should also complete the second leave group.
@@ -1052,7 +1261,7 @@ public class ConsumerMembershipManagerTest {
         assertTrue(leaveResult2.isDone());
         assertFalse(leaveResult2.isCompletedExceptionally());
         assertEquals(MemberState.UNSUBSCRIBED, membershipManager.state());
-        verify(subscriptionState, never()).rebalanceListener();
+        verify(subscriptionState, never()).hasRebalanceListener();
         verify(subscriptionState, never()).assignFromSubscribed(Collections.emptySet());
     }
 
@@ -1084,6 +1293,45 @@ public class ConsumerMembershipManagerTest {
         verify(subscriptionState).unsubscribe();
         assertTrue(leaveResult1.isDone());
         assertEquals(MemberState.STALE, membershipManager.state());
+    }
+
+    /**
+     * Test that when unsubscribe/leaveGroup is called during an ongoing reconciliation and the pending
+     * assignment event is completed exceptionally, the member can still rejoin and start
+     * a new reconciliation.
+     */
+    @Test
+    public void testLeaveGroupDuringReconciliationThenRejoin() {
+        Uuid topicId = Uuid.randomUuid();
+        String topicName = "topic1";
+        ConsumerMembershipManager membershipManager = createMembershipManagerJoiningGroup();
+        mockOwnedPartitionAndAssignmentReceived(membershipManager, topicId, topicName, Collections.emptyList());
+
+        // Start reconciliation - assignment event is pending
+        receiveAssignment(topicId, Collections.singletonList(0), membershipManager);
+        membershipManager.maybeReconcile(true);
+        PartitionsAssignedEvent pendingAssignmentEvent = (PartitionsAssignedEvent) backgroundEventQueue.poll();
+        assertNotNull(pendingAssignmentEvent);
+
+        // Call leaveGroup while reconciliation is in progress
+        mockLeaveGroup();
+        membershipManager.leaveGroup();
+        assertEquals(MemberState.LEAVING, membershipManager.state());
+
+        // Complete the pending assignment event exceptionally (simulating unsubscribe skipping it)
+        pendingAssignmentEvent.future().completeExceptionally(
+            new KafkaException("Assignment event skipped because consumer is unsubscribing"));
+
+        // Complete leave and rejoin
+        membershipManager.onHeartbeatRequestGenerated();
+        clearInvocations(membershipManager);
+        mockOwnedPartitionAndAssignmentReceived(membershipManager, topicId, topicName, Collections.emptyList());
+        membershipManager.transitionToJoining();
+
+        // Receive assignment - verify new reconciliation starts
+        receiveAssignment(topicId, Collections.singletonList(0), membershipManager);
+        membershipManager.maybeReconcile(true);
+        verifyReconciliationTriggered(membershipManager);
     }
 
     @Test
@@ -1155,7 +1403,7 @@ public class ConsumerMembershipManagerTest {
         // Fatal error received in response for the last heartbeat. Member should remain in FATAL
         // state but no callbacks should be triggered because the member already left the group.
         MockRebalanceListener rebalanceListener = new MockRebalanceListener();
-        when(subscriptionState.rebalanceListener()).thenReturn(Optional.of(rebalanceListener));
+        subscriptionState.setRebalanceListener(rebalanceListener);
         membershipManager.onHeartbeatFailure(false);
         membershipManager.transitionToFatal();
         assertEquals(0, rebalanceListener.lostCount);
@@ -1207,7 +1455,8 @@ public class ConsumerMembershipManagerTest {
         receiveAssignment(topicId, Collections.singletonList(0), membershipManager);
 
         verifyReconciliationNotTriggered(membershipManager);
-        membershipManager.poll(time.milliseconds());
+        membershipManager.maybeReconcile(true);
+        processAssignmentEventNoCallback(membershipManager);
 
         Set<TopicPartition> expectedAssignment = Collections.singleton(new TopicPartition(topicName, 0));
         assertEquals(MemberState.ACKNOWLEDGING, membershipManager.state());
@@ -1249,7 +1498,8 @@ public class ConsumerMembershipManagerTest {
 
         verifyReconciliationNotTriggered(membershipManager);
 
-        membershipManager.poll(time.milliseconds());
+        membershipManager.maybeReconcile(true);
+        processAssignmentEventNoCallback(membershipManager);
 
         verifyReconciliationTriggeredAndCompleted(membershipManager, Collections.emptyList());
 
@@ -1273,7 +1523,7 @@ public class ConsumerMembershipManagerTest {
         receiveAssignment(topicId, Collections.singletonList(0), membershipManager);
 
         verifyReconciliationNotTriggered(membershipManager);
-        membershipManager.poll(time.milliseconds());
+        membershipManager.maybeReconcile(false);
         membershipManager.onHeartbeatRequestGenerated();
 
         assertEquals(MemberState.RECONCILING, membershipManager.state());
@@ -1299,9 +1549,10 @@ public class ConsumerMembershipManagerTest {
         String topicName = "topic1";
         when(metadata.topicNames()).thenReturn(Collections.singletonMap(topicId, topicName));
         when(subscriptionState.hasAutoAssignedPartitions()).thenReturn(true);
-        when(subscriptionState.rebalanceListener()).thenReturn(Optional.empty());
+        when(subscriptionState.hasRebalanceListener()).thenReturn(false);
 
-        membershipManager.poll(time.milliseconds());
+        membershipManager.maybeReconcile(true);
+        processAssignmentEventNoCallback(membershipManager);
 
         // Assignment should have been reconciled.
         Set<TopicPartition> expectedAssignment = Collections.singleton(new TopicPartition(topicName, 1));
@@ -1363,7 +1614,8 @@ public class ConsumerMembershipManagerTest {
         receiveAssignment(topicId, Arrays.asList(0, 1), membershipManager);
 
         verifyReconciliationNotTriggered(membershipManager);
-        membershipManager.poll(time.milliseconds());
+        membershipManager.maybeReconcile(true);
+        processAssignmentEventNoCallback(membershipManager);
 
         List<TopicIdPartition> assignedPartitions = topicIdPartitions(topicId, topicName, 0, 1);
         verifyReconciliationTriggeredAndCompleted(membershipManager, assignedPartitions);
@@ -1382,7 +1634,8 @@ public class ConsumerMembershipManagerTest {
         receiveAssignment(topicId, Arrays.asList(0, 1, 2), membershipManager);
 
         verifyReconciliationNotTriggered(membershipManager);
-        membershipManager.poll(time.milliseconds());
+        membershipManager.maybeReconcile(true);
+        processAssignmentEventNoCallback(membershipManager);
 
         List<TopicIdPartition> assignedPartitions = new ArrayList<>();
         assignedPartitions.add(ownedPartition);
@@ -1403,7 +1656,8 @@ public class ConsumerMembershipManagerTest {
         receiveAssignment(topicId, Arrays.asList(0, 1), membershipManager);
 
         verifyReconciliationNotTriggered(membershipManager);
-        membershipManager.poll(time.milliseconds());
+        membershipManager.maybeReconcile(true);
+        processAssignmentEventNoCallback(membershipManager);
 
         verifyReconciliationTriggeredAndCompleted(membershipManager, expectedAssignmentReconciled);
         assertEquals(MemberState.ACKNOWLEDGING, membershipManager.state());
@@ -1436,7 +1690,8 @@ public class ConsumerMembershipManagerTest {
         receiveEmptyAssignment(membershipManager);
 
         verifyReconciliationNotTriggered(membershipManager);
-        membershipManager.poll(time.milliseconds());
+        membershipManager.maybeReconcile(true);
+        processAssignmentEventNoCallback(membershipManager);
 
         testRevocationOfAllPartitionsCompleted(membershipManager);
         verify(subscriptionState, times(2)).markPendingRevocation(Set.of(new TopicPartition("topic1", 0)));
@@ -1452,8 +1707,8 @@ public class ConsumerMembershipManagerTest {
         receiveEmptyAssignment(membershipManager);
 
         verifyReconciliationNotTriggered(membershipManager);
-        when(commitRequestManager.maybeAutoCommitSyncBeforeRevocation(anyLong())).thenReturn(commitResult);
-        membershipManager.poll(time.milliseconds());
+        when(commitRequestManager.maybeAutoCommitSyncBeforeRebalance(anyLong())).thenReturn(commitResult);
+        membershipManager.maybeReconcile(true);
 
         // Member stays in RECONCILING while the commit request hasn't completed.
         assertEquals(MemberState.RECONCILING, membershipManager.state());
@@ -1463,9 +1718,10 @@ public class ConsumerMembershipManagerTest {
 
         // Complete commit request
         commitResult.complete(null);
+        processAssignmentEventNoCallback(membershipManager);
         InOrder inOrder = inOrder(subscriptionState, commitRequestManager);
         inOrder.verify(subscriptionState).markPendingRevocation(Set.of(new TopicPartition("topic1", 0)));
-        inOrder.verify(commitRequestManager).maybeAutoCommitSyncBeforeRevocation(anyLong());
+        inOrder.verify(commitRequestManager).maybeAutoCommitSyncBeforeRebalance(anyLong());
         inOrder.verify(subscriptionState).markPendingRevocation(Set.of(new TopicPartition("topic1", 0)));
 
         testRevocationOfAllPartitionsCompleted(membershipManager);
@@ -1481,7 +1737,7 @@ public class ConsumerMembershipManagerTest {
         receiveEmptyAssignment(membershipManager);
 
         verifyReconciliationNotTriggered(membershipManager);
-        membershipManager.poll(time.milliseconds());
+        membershipManager.maybeReconcile(true);
 
         // Member stays in RECONCILING while the commit request hasn't completed.
         assertEquals(MemberState.RECONCILING, membershipManager.state());
@@ -1491,6 +1747,7 @@ public class ConsumerMembershipManagerTest {
         // Complete commit request
         commitResult.completeExceptionally(new KafkaException("Commit request failed with " +
                 "non-retriable error"));
+        processAssignmentEventNoCallback(membershipManager);
         verify(subscriptionState, times(2)).markPendingRevocation(Set.of(new TopicPartition("topic1", 0)));
 
         testRevocationOfAllPartitionsCompleted(membershipManager);
@@ -1512,7 +1769,8 @@ public class ConsumerMembershipManagerTest {
         receiveAssignment(topicId, Arrays.asList(1, 2), membershipManager);
 
         verifyReconciliationNotTriggered(membershipManager);
-        membershipManager.poll(time.milliseconds());
+        membershipManager.maybeReconcile(true);
+        processAssignmentEventNoCallback(membershipManager);
 
         TreeSet<TopicPartition> expectedSet = new TreeSet<>(TOPIC_PARTITION_COMPARATOR);
         expectedSet.add(new TopicPartition(topicName, 1));
@@ -1546,8 +1804,8 @@ public class ConsumerMembershipManagerTest {
         String topicName = "topic1";
         mockTopicNameInMetadataCache(Collections.singletonMap(topicId, topicName), true);
 
-        // When the next poll is run, the member should re-trigger reconciliation
-        membershipManager.poll(time.milliseconds());
+        membershipManager.maybeReconcile(true);
+        processAssignmentEventNoCallback(membershipManager);
         List<TopicIdPartition> expectedAssignmentReconciled = topicIdPartitions(topicId, topicName, 0, 1);
         verifyReconciliationTriggeredAndCompleted(membershipManager, expectedAssignmentReconciled);
         assertEquals(MemberState.ACKNOWLEDGING, membershipManager.state());
@@ -1576,7 +1834,7 @@ public class ConsumerMembershipManagerTest {
         // Next poll is run, but metadata still without the unresolved topic in it. Should keep
         // the unresolved and request update again.
         when(metadata.topicNames()).thenReturn(Collections.emptyMap());
-        membershipManager.poll(time.milliseconds());
+        membershipManager.maybeReconcile(false);
         verifyReconciliationNotTriggered(membershipManager);
         assertEquals(Collections.singleton(topicId), membershipManager.topicsAwaitingReconciliation());
         verify(metadata, times(2)).requestUpdate(anyBoolean());
@@ -1594,7 +1852,8 @@ public class ConsumerMembershipManagerTest {
         receiveAssignment(topicId, Arrays.asList(0, 1), membershipManager);
 
         verifyReconciliationNotTriggered(membershipManager);
-        membershipManager.poll(time.milliseconds());
+        membershipManager.maybeReconcile(true);
+        processAssignmentEventNoCallback(membershipManager);
         verify(subscriptionState).markPendingRevocation(Set.of());
 
         // Member should complete reconciliation
@@ -1618,7 +1877,8 @@ public class ConsumerMembershipManagerTest {
         // Revoke one of the 2 partitions
         receiveAssignment(topicId, Collections.singletonList(1), membershipManager);
 
-        membershipManager.poll(time.milliseconds());
+        membershipManager.maybeReconcile(true);
+        processAssignmentEventNoCallback(membershipManager);
         verify(subscriptionState, times(2)).markPendingRevocation(Set.of(new TopicPartition(topicName, 0)));
 
         // Revocation should complete without requesting any metadata update given that the topic
@@ -1662,7 +1922,7 @@ public class ConsumerMembershipManagerTest {
 
         when(subscriptionState.assignedPartitions()).thenReturn(Collections.emptySet());
         when(subscriptionState.hasAutoAssignedPartitions()).thenReturn(true);
-        when(subscriptionState.rebalanceListener()).thenReturn(Optional.of(listener));
+        mockListener(listener);
         doNothing().when(subscriptionState).markPendingRevocation(anySet());
         when(metadata.topicNames()).thenReturn(Collections.singletonMap(topicId, topicName));
 
@@ -1671,7 +1931,7 @@ public class ConsumerMembershipManagerTest {
         receiveAssignment(topicId, Arrays.asList(0, 1), membershipManager);
 
         verifyReconciliationNotTriggered(membershipManager);
-        membershipManager.poll(time.milliseconds());
+        membershipManager.maybeReconcile(true);
 
         assertEquals(MemberState.RECONCILING, membershipManager.state());
         assertTrue(membershipManager.reconciliationInProgress());
@@ -1704,7 +1964,7 @@ public class ConsumerMembershipManagerTest {
         // Step 5: receive an empty assignment, which means we should call revoke
         when(subscriptionState.assignedPartitions()).thenReturn(topicPartitions(topicName, 0, 1));
         receiveEmptyAssignment(membershipManager);
-        membershipManager.poll(time.milliseconds());
+        membershipManager.maybeReconcile(true);
 
         assertEquals(MemberState.RECONCILING, membershipManager.state());
         assertTrue(membershipManager.reconciliationInProgress());
@@ -1760,14 +2020,14 @@ public class ConsumerMembershipManagerTest {
         );
         ConsumerRebalanceListenerInvoker invoker = consumerRebalanceListenerInvoker();
 
-        when(subscriptionState.rebalanceListener()).thenReturn(Optional.of(listener));
+        mockListener(listener);
         doNothing().when(subscriptionState).markPendingRevocation(anySet());
 
         // Step 2: put the state machine into the appropriate... state
         receiveEmptyAssignment(membershipManager);
 
         verifyReconciliationNotTriggered(membershipManager);
-        membershipManager.poll(time.milliseconds());
+        membershipManager.maybeReconcile(true);
 
         assertEquals(MemberState.RECONCILING, membershipManager.state());
         assertEquals(topicIdPartitionsMap(topicId, 0), membershipManager.currentAssignment().partitions);
@@ -1819,14 +2079,14 @@ public class ConsumerMembershipManagerTest {
         );
         ConsumerRebalanceListenerInvoker invoker = consumerRebalanceListenerInvoker();
 
-        when(subscriptionState.rebalanceListener()).thenReturn(Optional.of(listener));
+        mockListener(listener);
         doNothing().when(subscriptionState).markPendingRevocation(anySet());
 
         // Step 2: put the state machine into the appropriate... state
         receiveEmptyAssignment(membershipManager);
 
         verifyReconciliationNotTriggered(membershipManager);
-        membershipManager.poll(time.milliseconds());
+        membershipManager.maybeReconcile(true);
 
         assertEquals(MemberState.RECONCILING, membershipManager.state());
         assertEquals(topicIdPartitionsMap(topicId, 0), membershipManager.currentAssignment().partitions);
@@ -1882,9 +2142,7 @@ public class ConsumerMembershipManagerTest {
         mockPartitionOwnedAndNewPartitionAdded(topicName, partitionOwned, partitionAdded,
             new CounterConsumerRebalanceListener(), membershipManager);
 
-        membershipManager.poll(time.milliseconds());
-
-        verify(subscriptionState).assignFromSubscribedAwaitingCallback(assignedPartitions, addedPartitions);
+        membershipManager.maybeReconcile(true);
 
         performCallback(
             membershipManager,
@@ -1894,6 +2152,8 @@ public class ConsumerMembershipManagerTest {
             true
         );
 
+        // Assignment is applied when the callback event is processed
+        verify(subscriptionState).assignFromSubscribedAwaitingCallback(assignedPartitions, addedPartitions);
         verify(subscriptionState).enablePartitionsAwaitingCallback(assignedPartitions);
     }
 
@@ -1914,9 +2174,7 @@ public class ConsumerMembershipManagerTest {
         mockPartitionOwnedAndNewPartitionAdded(topicName, partitionOwned, partitionAdded,
             listener, membershipManager);
 
-        membershipManager.poll(time.milliseconds());
-
-        verify(subscriptionState).assignFromSubscribedAwaitingCallback(assignedPartitions, addedPartitions);
+        membershipManager.maybeReconcile(true);
 
         performCallback(
             membershipManager,
@@ -1925,6 +2183,9 @@ public class ConsumerMembershipManagerTest {
             addedPartitions,
             true
         );
+
+        // Assignment is applied when the callback event is processed
+        verify(subscriptionState).assignFromSubscribedAwaitingCallback(assignedPartitions, addedPartitions);
         verify(subscriptionState, never()).enablePartitionsAwaitingCallback(any());
     }
 
@@ -2014,14 +2275,14 @@ public class ConsumerMembershipManagerTest {
             Collections.singletonList(new TopicIdPartition(topicId, tp)));
         CounterConsumerRebalanceListener listener = new CounterConsumerRebalanceListener();
         ConsumerRebalanceListenerInvoker invoker = consumerRebalanceListenerInvoker();
-        when(subscriptionState.rebalanceListener()).thenReturn(Optional.of(listener));
+        mockListener(listener);
 
         membershipManager.transitionToSendingLeaveGroup(true);
         membershipManager.onHeartbeatRequestGenerated();
 
         assertEquals(MemberState.STALE, membershipManager.state());
         assertFalse(backgroundEventQueue.isEmpty());
-        assertInstanceOf(ConsumerRebalanceListenerCallbackNeededEvent.class, backgroundEventQueue.peek());
+        assertInstanceOf(PartitionsRemovedEvent.class, backgroundEventQueue.peek());
 
         // Stale member triggers onPartitionLost callback that will not complete just yet
         ConsumerRebalanceListenerCallbackCompletedEvent callbackEvent = performCallback(
@@ -2065,7 +2326,7 @@ public class ConsumerMembershipManagerTest {
         membershipManager.updateAssignment(Collections.singletonMap(topicId, mkSortedSet(partitionOwned)));
         when(metadata.topicNames()).thenReturn(Collections.singletonMap(topicId, topicName));
         when(subscriptionState.hasAutoAssignedPartitions()).thenReturn(true);
-        when(subscriptionState.rebalanceListener()).thenReturn(Optional.ofNullable(listener));
+        mockListener(listener);
 
         // Receive assignment adding a new partition
         receiveAssignment(topicId, Arrays.asList(partitionOwned, partitionAdded), membershipManager);
@@ -2084,7 +2345,7 @@ public class ConsumerMembershipManagerTest {
         );
         ConsumerRebalanceListenerInvoker invoker = consumerRebalanceListenerInvoker();
 
-        when(subscriptionState.rebalanceListener()).thenReturn(Optional.of(listener));
+        mockListener(listener);
         doNothing().when(subscriptionState).markPendingRevocation(anySet());
 
         // Step 2: put the state machine into the appropriate... state
@@ -2176,18 +2437,40 @@ public class ConsumerMembershipManagerTest {
         // We expect only our enqueued event in the background queue.
         assertEquals(1, backgroundEventQueue.size());
         assertNotNull(backgroundEventQueue.peek());
-        assertInstanceOf(ConsumerRebalanceListenerCallbackNeededEvent.class, backgroundEventQueue.peek());
-        ConsumerRebalanceListenerCallbackNeededEvent neededEvent = (ConsumerRebalanceListenerCallbackNeededEvent) backgroundEventQueue.poll();
-        assertNotNull(neededEvent);
-        assertEquals(expectedMethodName, neededEvent.methodName());
-        assertEquals(expectedPartitions, neededEvent.partitions());
 
-        ConsumerRebalanceListenerCallbackCompletedEvent invokedEvent = invokeRebalanceCallbacks(
-                invoker,
-                neededEvent.methodName(),
-                neededEvent.partitions(),
-                neededEvent.future()
-        );
+        ConsumerRebalanceListenerCallbackCompletedEvent invokedEvent;
+
+        if (expectedMethodName == ConsumerRebalanceListenerMethodName.ON_PARTITIONS_ASSIGNED) {
+            // ON_PARTITIONS_ASSIGNED uses the new PartitionsAssignedEvent
+            assertInstanceOf(PartitionsAssignedEvent.class, backgroundEventQueue.peek());
+            PartitionsAssignedEvent neededEvent = (PartitionsAssignedEvent) backgroundEventQueue.poll();
+            assertNotNull(neededEvent);
+            assertEquals(expectedPartitions, neededEvent.addedPartitions());
+
+            // Apply assignment (simulates ApplyAssignmentEvent processing)
+            membershipManager.applyAssignment(neededEvent.assignedPartitions(), neededEvent.addedPartitions());
+
+            invokedEvent = invokeRebalanceCallbacks(
+                    invoker,
+                    ConsumerRebalanceListenerMethodName.ON_PARTITIONS_ASSIGNED,
+                    neededEvent.addedPartitions(),
+                    neededEvent.future()
+            );
+        } else {
+            // ON_PARTITIONS_REVOKED and ON_PARTITIONS_LOST use PartitionsRemovedEvent
+            assertInstanceOf(PartitionsRemovedEvent.class, backgroundEventQueue.peek());
+            PartitionsRemovedEvent neededEvent = (PartitionsRemovedEvent) backgroundEventQueue.poll();
+            assertNotNull(neededEvent);
+            assertEquals(expectedMethodName, neededEvent.methodName());
+            assertEquals(expectedPartitions, neededEvent.partitions());
+
+            invokedEvent = invokeRebalanceCallbacks(
+                    invoker,
+                    neededEvent.methodName(),
+                    neededEvent.partitions(),
+                    neededEvent.future()
+            );
+        }
 
         if (complete) {
             completeCallback(invokedEvent, membershipManager);
@@ -2200,9 +2483,28 @@ public class ConsumerMembershipManagerTest {
         membershipManager.consumerRebalanceListenerCallbackCompleted(callbackCompletedEvent);
     }
 
+    /**
+     * Process a callback event when no listener is registered. This simulates what the
+     * application thread does when processing a PartitionsAssignedEvent
+     * with invokeCallback=false.
+     */
+    private void processAssignmentEventNoCallback(ConsumerMembershipManager membershipManager) {
+        assertEquals(1, backgroundEventQueue.size());
+        PartitionsAssignedEvent neededEvent =
+            (PartitionsAssignedEvent) backgroundEventQueue.poll();
+        assertNotNull(neededEvent);
+        // Apply assignment (simulates ApplyAssignmentEvent processing)
+        membershipManager.applyAssignment(neededEvent.assignedPartitions(), neededEvent.addedPartitions());
+
+        // Complete the callback (simulates ConsumerRebalanceListenerCallbackCompletedEvent processing)
+        ConsumerRebalanceListenerCallbackCompletedEvent completedEvent =
+            new ConsumerRebalanceListenerCallbackCompletedEvent(ConsumerRebalanceListenerMethodName.ON_PARTITIONS_ASSIGNED, neededEvent.future(), Optional.empty());
+        membershipManager.consumerRebalanceListenerCallbackCompleted(completedEvent);
+    }
+
     private void testFenceIsNoOp(ConsumerMembershipManager membershipManager) {
         assertNotEquals(0, membershipManager.memberEpoch());
-        verify(subscriptionState, never()).rebalanceListener();
+        verify(subscriptionState, never()).hasRebalanceListener();
     }
 
     private void assertStaleMemberLeavesGroupAndClearsAssignment(ConsumerMembershipManager membershipManager) {
@@ -2221,12 +2523,13 @@ public class ConsumerMembershipManagerTest {
     public void testMemberJoiningTransitionsToStableWhenReceivingEmptyAssignment() {
         ConsumerMembershipManager membershipManager = createMembershipManagerJoiningGroup();
         when(subscriptionState.hasAutoAssignedPartitions()).thenReturn(true);
-        when(subscriptionState.rebalanceListener()).thenReturn(Optional.empty());
+        when(subscriptionState.hasRebalanceListener()).thenReturn(false);
         assertEquals(MemberState.JOINING, membershipManager.state());
         receiveEmptyAssignment(membershipManager);
 
         verifyReconciliationNotTriggered(membershipManager);
-        membershipManager.poll(time.milliseconds());
+        membershipManager.maybeReconcile(true);
+        processAssignmentEventNoCallback(membershipManager);
         membershipManager.onHeartbeatRequestGenerated();
 
         assertEquals(MemberState.STABLE, membershipManager.state());
@@ -2237,7 +2540,7 @@ public class ConsumerMembershipManagerTest {
         CounterConsumerRebalanceListener listener = new CounterConsumerRebalanceListener();
         ConsumerRebalanceListenerInvoker invoker = consumerRebalanceListenerInvoker();
 
-        when(subscriptionState.rebalanceListener()).thenReturn(Optional.of(listener));
+        mockListener(listener);
         ConsumerMembershipManager membershipManager = createMembershipManagerJoiningGroup();
         when(subscriptionState.hasAutoAssignedPartitions()).thenReturn(true);
         receiveEmptyAssignment(membershipManager);
@@ -2248,7 +2551,7 @@ public class ConsumerMembershipManagerTest {
         assertEquals(0, listener.lostCount());
 
         verifyReconciliationNotTriggered(membershipManager);
-        membershipManager.poll(time.milliseconds());
+        membershipManager.maybeReconcile(true);
         performCallback(
             membershipManager,
             invoker,
@@ -2285,18 +2588,29 @@ public class ConsumerMembershipManagerTest {
         long reconciliationDurationMs = 1234;
         time.sleep(reconciliationDurationMs);
 
-        membershipManager.poll(time.milliseconds());
+        membershipManager.maybeReconcile(true);
         // Complete commit request to complete the callback invocation
         commitResult.complete(null);
+        processAssignmentEventNoCallback(membershipManager);
 
         assertEquals((double) reconciliationDurationMs, getMetricValue(metrics, rebalanceMetricsManager.rebalanceLatencyTotal));
         assertEquals((double) reconciliationDurationMs, getMetricValue(metrics, rebalanceMetricsManager.rebalanceLatencyAvg));
         assertEquals((double) reconciliationDurationMs, getMetricValue(metrics, rebalanceMetricsManager.rebalanceLatencyMax));
         assertEquals(1d, getMetricValue(metrics, rebalanceMetricsManager.rebalanceTotal));
-        assertEquals(120d, 1d, (double) getMetricValue(metrics, rebalanceMetricsManager.rebalanceRatePerHour));
+        assertEquals(1d, getMetricValue(metrics, rebalanceMetricsManager.rebalanceRatePerHour));
         assertEquals(0d, getMetricValue(metrics, rebalanceMetricsManager.failedRebalanceRate));
         assertEquals(0d, getMetricValue(metrics, rebalanceMetricsManager.failedRebalanceTotal));
         assertEquals(0d, getMetricValue(metrics, rebalanceMetricsManager.lastRebalanceSecondsAgo));
+
+        long windowLength = metrics.config().samples() * 3600_000L;
+        time.sleep(windowLength - reconciliationDurationMs - 1);
+        assertEquals(1d / metrics.config().samples(), (double) getMetricValue(metrics, rebalanceMetricsManager.rebalanceRatePerHour), 0.1d);
+        assertEquals(0d, getMetricValue(metrics, rebalanceMetricsManager.failedRebalanceRate));
+
+        // WindowLength have passed, triggering metric reset
+        time.sleep(windowLength);
+        assertEquals(0d, getMetricValue(metrics, rebalanceMetricsManager.rebalanceRatePerHour));
+        assertEquals(0d, getMetricValue(metrics, rebalanceMetricsManager.failedRebalanceRate));
     }
 
     @Test
@@ -2310,14 +2624,14 @@ public class ConsumerMembershipManagerTest {
         SleepyRebalanceListener listener = new SleepyRebalanceListener(1453, time);
         when(subscriptionState.assignedPartitions()).thenReturn(Collections.emptySet());
         when(subscriptionState.hasAutoAssignedPartitions()).thenReturn(true);
-        when(subscriptionState.rebalanceListener()).thenReturn(Optional.of(listener));
+        mockListener(listener);
         doNothing().when(subscriptionState).markPendingRevocation(anySet());
         when(metadata.topicNames()).thenReturn(Collections.singletonMap(topicId, topicName));
 
         when(metadata.topicNames()).thenReturn(Collections.singletonMap(topicId, topicName));
         receiveAssignment(topicId, Arrays.asList(0, 1), membershipManager);
 
-        membershipManager.poll(time.milliseconds());
+        membershipManager.maybeReconcile(true);
 
         // assign partitions
         performCallback(
@@ -2338,7 +2652,7 @@ public class ConsumerMembershipManagerTest {
         when(subscriptionState.assignedPartitions()).thenReturn(topicPartitions(topicName, 0, 1));
         receiveAssignment(topicId, Collections.singletonList(2), membershipManager);
 
-        membershipManager.poll(time.milliseconds());
+        membershipManager.maybeReconcile(true);
 
         performCallback(
             membershipManager,
@@ -2391,9 +2705,25 @@ public class ConsumerMembershipManagerTest {
 
         assertEquals((double) 0, getMetricValue(metrics, rebalanceMetricsManager.rebalanceLatencyTotal));
         assertEquals(0d, getMetricValue(metrics, rebalanceMetricsManager.rebalanceTotal));
-        assertEquals(120d, getMetricValue(metrics, rebalanceMetricsManager.failedRebalanceRate));
+        assertEquals(1d, getMetricValue(metrics, rebalanceMetricsManager.failedRebalanceRate));
         assertEquals(1d, getMetricValue(metrics, rebalanceMetricsManager.failedRebalanceTotal));
         assertEquals(-1d, getMetricValue(metrics, rebalanceMetricsManager.lastRebalanceSecondsAgo));
+
+        long windowLength = metrics.config().samples() * 3600_000L;
+        time.sleep(windowLength - 2300 - 1);
+        assertEquals(1d / metrics.config().samples(), (double) getMetricValue(metrics, rebalanceMetricsManager.failedRebalanceRate), 0.1d);
+
+        // WindowLength have passed, triggering metric reset
+        time.sleep(windowLength);
+        assertEquals(0d, getMetricValue(metrics, rebalanceMetricsManager.failedRebalanceRate));
+    }
+
+    @Test
+    public void testPollMustCallsMaybeReconcileWithFalse() {
+        ConsumerMembershipManager membershipManager = createMemberInStableState();
+        membershipManager.poll(time.milliseconds());
+        verify(membershipManager).maybeReconcile(false);
+        verifyReconciliationNotTriggered(membershipManager);
     }
 
     private Object getMetricValue(Metrics metrics, MetricName name) {
@@ -2409,7 +2739,8 @@ public class ConsumerMembershipManagerTest {
         receiveAssignment(topicId, partitions, membershipManager);
 
         verifyReconciliationNotTriggered(membershipManager);
-        membershipManager.poll(time.milliseconds());
+        membershipManager.maybeReconcile(true);
+        processAssignmentEventNoCallback(membershipManager);
 
         List<TopicIdPartition> assignedPartitions =
             partitions.stream().map(tp -> new TopicIdPartition(topicId,
@@ -2424,7 +2755,7 @@ public class ConsumerMembershipManagerTest {
         receiveEmptyAssignment(membershipManager);
 
         verifyReconciliationNotTriggered(membershipManager);
-        membershipManager.poll(time.milliseconds());
+        membershipManager.maybeReconcile(true);
 
         verifyReconciliationTriggered(membershipManager);
         clearInvocations(membershipManager);
@@ -2443,13 +2774,33 @@ public class ConsumerMembershipManagerTest {
         receiveAssignment(topicId, partitions, membershipManager);
 
         verifyReconciliationNotTriggered(membershipManager);
-        membershipManager.poll(time.milliseconds());
+        membershipManager.maybeReconcile(true);
 
         verifyReconciliationTriggered(membershipManager);
         clearInvocations(membershipManager);
         assertEquals(MemberState.RECONCILING, membershipManager.state());
 
         return commitResult;
+    }
+
+    private void mockListener(RebalanceListener listener) {
+        doAnswer(invocation -> {
+            Collection<TopicPartition> partitions = invocation.getArgument(0);
+            listener.onPartitionsAssigned(partitions, null);
+            return null;
+        }).when(subscriptionState).onPartitionsAssigned(any());
+        doAnswer(invocation -> {
+            Collection<TopicPartition> partitions = invocation.getArgument(0);
+            listener.onPartitionsLost(partitions, null);
+            return null;
+        }).when(subscriptionState).onPartitionsLost(any());
+        doAnswer(invocation -> {
+            Collection<TopicPartition> partitions = invocation.getArgument(0);
+            listener.onPartitionsRevoked(partitions, null);
+            return null;
+        }).when(subscriptionState).onPartitionsRevoked(any());
+        when(subscriptionState.hasRebalanceListener()).thenReturn(true);
+
     }
 
     private ConsumerRebalanceListenerCallbackCompletedEvent mockNewAssignmentStuckOnPartitionsRevokedCallback(
@@ -2459,12 +2810,12 @@ public class ConsumerMembershipManagerTest {
         CounterConsumerRebalanceListener listener = new CounterConsumerRebalanceListener();
         when(subscriptionState.assignedPartitions()).thenReturn(Collections.singleton(ownedPartition));
         when(subscriptionState.hasAutoAssignedPartitions()).thenReturn(true);
-        when(subscriptionState.rebalanceListener()).thenReturn(Optional.of(listener));
+        mockListener(listener);
         when(commitRequestManager.autoCommitEnabled()).thenReturn(false);
 
         when(metadata.topicNames()).thenReturn(Collections.singletonMap(topicId, topicName));
         receiveAssignment(topicId, partitions, membershipManager);
-        membershipManager.poll(time.milliseconds());
+        membershipManager.maybeReconcile(true);
         verifyReconciliationTriggered(membershipManager);
         clearInvocations(membershipManager);
         assertEquals(MemberState.RECONCILING, membershipManager.state());
@@ -2484,12 +2835,12 @@ public class ConsumerMembershipManagerTest {
         CounterConsumerRebalanceListener listener = new CounterConsumerRebalanceListener();
         when(subscriptionState.assignedPartitions()).thenReturn(Collections.emptySet());
         when(subscriptionState.hasAutoAssignedPartitions()).thenReturn(true);
-        when(subscriptionState.rebalanceListener()).thenReturn(Optional.of(listener));
+        mockListener(listener);
         when(commitRequestManager.autoCommitEnabled()).thenReturn(false);
 
         when(metadata.topicNames()).thenReturn(Collections.singletonMap(topicId, topicName));
         receiveAssignment(topicId, Collections.singletonList(newPartition), membershipManager);
-        membershipManager.poll(time.milliseconds());
+        membershipManager.maybeReconcile(true);
         verifyReconciliationTriggered(membershipManager);
         clearInvocations(membershipManager);
         assertEquals(MemberState.RECONCILING, membershipManager.state());
@@ -2548,11 +2899,11 @@ public class ConsumerMembershipManagerTest {
 
     private CompletableFuture<Void> mockRevocationNoCallbacks(boolean withAutoCommit) {
         doNothing().when(subscriptionState).markPendingRevocation(anySet());
-        when(subscriptionState.rebalanceListener()).thenReturn(Optional.empty()).thenReturn(Optional.empty());
+        when(subscriptionState.hasRebalanceListener()).thenReturn(false);
         if (withAutoCommit) {
             when(commitRequestManager.autoCommitEnabled()).thenReturn(true);
             CompletableFuture<Void> commitResult = new CompletableFuture<>();
-            when(commitRequestManager.maybeAutoCommitSyncBeforeRevocation(anyLong())).thenReturn(commitResult);
+            when(commitRequestManager.maybeAutoCommitSyncBeforeRebalance(anyLong())).thenReturn(commitResult);
             return commitResult;
         } else {
             return CompletableFuture.completedFuture(null);
@@ -2564,7 +2915,7 @@ public class ConsumerMembershipManagerTest {
         TopicPartition ownedPartition = new TopicPartition(topicName, 0);
         when(subscriptionState.assignedPartitions()).thenReturn(Collections.singleton(ownedPartition));
         when(subscriptionState.hasAutoAssignedPartitions()).thenReturn(true);
-        when(subscriptionState.rebalanceListener()).thenReturn(Optional.empty()).thenReturn(Optional.empty());
+        when(subscriptionState.hasRebalanceListener()).thenReturn(false);
     }
 
     private void testRevocationOfAllPartitionsCompleted(ConsumerMembershipManager membershipManager) {
@@ -2603,7 +2954,7 @@ public class ConsumerMembershipManagerTest {
         membershipManager.updateAssignment(partitionsByTopicId);
         when(metadata.topicNames()).thenReturn(Collections.singletonMap(topicId, topicName));
         when(subscriptionState.hasAutoAssignedPartitions()).thenReturn(true);
-        when(subscriptionState.rebalanceListener()).thenReturn(Optional.empty()).thenReturn(Optional.empty());
+        when(subscriptionState.hasRebalanceListener()).thenReturn(false);
     }
 
     private Set<TopicPartition> getTopicPartitions(Collection<TopicIdPartition> topicIdPartitions) {
@@ -2615,7 +2966,7 @@ public class ConsumerMembershipManagerTest {
     private void mockOwnedPartition(ConsumerMembershipManager membershipManager, Uuid topicId, String topic) {
         int partition = 0;
         TopicPartition previouslyOwned = new TopicPartition(topic, partition);
-        membershipManager.updateAssignment(mkMap(mkEntry(topicId, new TreeSet<>(Collections.singletonList(partition)))));
+        membershipManager.updateAssignment(Map.of(topicId, new TreeSet<>(Collections.singletonList(partition))));
         when(subscriptionState.assignedPartitions()).thenReturn(Collections.singleton(previouslyOwned));
         when(subscriptionState.hasAutoAssignedPartitions()).thenReturn(true);
     }
@@ -2629,12 +2980,13 @@ public class ConsumerMembershipManagerTest {
         ConsumerMembershipManager membershipManager = createMembershipManagerJoiningGroup();
         ConsumerGroupHeartbeatResponse heartbeatResponse = createConsumerGroupHeartbeatResponse(assignment, membershipManager.memberId());
         when(subscriptionState.hasAutoAssignedPartitions()).thenReturn(true);
-        when(subscriptionState.rebalanceListener()).thenReturn(Optional.empty()).thenReturn(Optional.empty());
+        when(subscriptionState.hasRebalanceListener()).thenReturn(false);
 
         membershipManager.onHeartbeatSuccess(heartbeatResponse);
 
         if (triggerReconciliation) {
-            membershipManager.poll(time.milliseconds());
+            membershipManager.maybeReconcile(true);
+            processAssignmentEventNoCallback(membershipManager);
             verify(subscriptionState).assignFromSubscribedAwaitingCallback(anyCollection(), anyCollection());
         } else {
             verify(subscriptionState, never()).assignFromSubscribed(anyCollection());
@@ -2649,18 +3001,19 @@ public class ConsumerMembershipManagerTest {
     }
 
     private ConsumerMembershipManager createMemberInStableState(String groupInstanceId) {
-        ConsumerMembershipManager membershipManager = createMembershipManagerJoiningGroup(groupInstanceId, null);
+        ConsumerMembershipManager membershipManager = createMembershipManagerJoiningGroup(groupInstanceId, null, null);
         ConsumerGroupHeartbeatResponse heartbeatResponse = createConsumerGroupHeartbeatResponse(new Assignment(), membershipManager.memberId());
         when(subscriptionState.hasAutoAssignedPartitions()).thenReturn(true);
-        when(subscriptionState.rebalanceListener()).thenReturn(Optional.empty());
+        when(subscriptionState.hasRebalanceListener()).thenReturn(false);
         membershipManager.onHeartbeatSuccess(heartbeatResponse);
         assertEquals(MemberState.RECONCILING, membershipManager.state());
-        membershipManager.poll(time.milliseconds());
+        membershipManager.maybeReconcile(true);
+        processAssignmentEventNoCallback(membershipManager);
         assertEquals(MemberState.ACKNOWLEDGING, membershipManager.state());
         membershipManager.onHeartbeatRequestGenerated();
         assertEquals(MemberState.STABLE, membershipManager.state());
 
-        clearInvocations(subscriptionState, membershipManager, commitRequestManager);
+        clearInvocations(subscriptionState, membershipManager, commitRequestManager, backgroundEventHandler);
         return membershipManager;
     }
 
@@ -2722,7 +3075,7 @@ public class ConsumerMembershipManagerTest {
         // Stale reconciliation should have been aborted and a new one should be triggered on the next poll.
         assertFalse(membershipManager.reconciliationInProgress());
         clearInvocations(membershipManager);
-        membershipManager.poll(time.milliseconds());
+        membershipManager.maybeReconcile(true);
         verify(membershipManager).markReconciliationInProgress();
     }
 
@@ -2794,7 +3147,7 @@ public class ConsumerMembershipManagerTest {
         CounterConsumerRebalanceListener listener = new CounterConsumerRebalanceListener();
         when(subscriptionState.assignedPartitions()).thenReturn(Collections.singleton(ownedPartition));
         when(subscriptionState.hasAutoAssignedPartitions()).thenReturn(true);
-        when(subscriptionState.rebalanceListener()).thenReturn(Optional.of(listener));
+        mockListener(listener);
         doNothing().when(subscriptionState).markPendingRevocation(anySet());
         when(commitRequestManager.autoCommitEnabled()).thenReturn(false);
     }
@@ -2809,7 +3162,7 @@ public class ConsumerMembershipManagerTest {
         CounterConsumerRebalanceListener listener = new CounterConsumerRebalanceListener();
         when(subscriptionState.assignedPartitions()).thenReturn(Collections.singleton(ownedPartition));
         when(subscriptionState.hasAutoAssignedPartitions()).thenReturn(true);
-        when(subscriptionState.rebalanceListener()).thenReturn(Optional.of(listener));
+        mockListener(listener);
         when(commitRequestManager.autoCommitEnabled()).thenReturn(false);
         membershipManager.transitionToFenced();
         return performCallback(
@@ -2845,6 +3198,13 @@ public class ConsumerMembershipManagerTest {
                 .setMemberId(memberId)
                 .setMemberEpoch(MEMBER_EPOCH)
                 .setAssignment(assignment));
+    }
+
+    private ConsumerGroupHeartbeatResponse createConsumerGroupLeaveResponse(String memberId) {
+        return new ConsumerGroupHeartbeatResponse(new ConsumerGroupHeartbeatResponseData()
+            .setErrorCode(Errors.NONE.code())
+            .setMemberId(memberId)
+            .setMemberEpoch(LEAVE_GROUP_MEMBER_EPOCH));
     }
 
     /**
@@ -2915,7 +3275,7 @@ public class ConsumerMembershipManagerTest {
             Arguments.of(MemberState.STALE));
     }
 
-    private static class SleepyRebalanceListener implements ConsumerRebalanceListener {
+    private static class SleepyRebalanceListener implements RebalanceListener {
         private long sleepMs;
         private final long sleepDurationMs;
         private final Time time;
@@ -2925,13 +3285,13 @@ public class ConsumerMembershipManagerTest {
         }
 
         @Override
-        public void onPartitionsRevoked(Collection<TopicPartition> partitions) {
+        public void onPartitionsRevoked(Collection<TopicPartition> partitions, RebalanceConsumer rebalanceConsumer) {
             sleepMs += sleepDurationMs;
             time.sleep(sleepDurationMs);
         }
 
         @Override
-        public void onPartitionsAssigned(Collection<TopicPartition> partitions) {
+        public void onPartitionsAssigned(Collection<TopicPartition> partitions, RebalanceConsumer rebalanceConsumer) {
             sleepMs += sleepDurationMs;
             time.sleep(sleepDurationMs);
         }

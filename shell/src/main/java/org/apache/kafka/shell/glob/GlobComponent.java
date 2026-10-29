@@ -32,39 +32,20 @@ public final class GlobComponent {
      * Returns true if the character is a special character for regular expressions.
      */
     private static boolean isRegularExpressionSpecialCharacter(char ch) {
-        switch (ch) {
-            case '$':
-            case '(':
-            case ')':
-            case '+':
-            case '.':
-            case '[':
-            case ']':
-            case '^':
-            case '{':
-            case '|':
-                return true;
-            default:
-                break;
-        }
-        return false;
+        return switch (ch) {
+            case '$', '(', ')', '+', '.', '[', ']', '^', '{', '|' -> true;
+            default -> false;
+        };
     }
 
     /**
      * Returns true if the character is a special character for globs.
      */
     private static boolean isGlobSpecialCharacter(char ch) {
-        switch (ch) {
-            case '*':
-            case '?':
-            case '\\':
-            case '{':
-            case '}':
-                return true;
-            default:
-                break;
-        }
-        return false;
+        return switch (ch) {
+            case '*', '?', '\\', '{', '}' -> true;
+            default -> false;
+        };
     }
 
     /**

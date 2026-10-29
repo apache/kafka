@@ -17,7 +17,7 @@
 
 package org.apache.kafka.image.publisher;
 
-import org.apache.kafka.common.utils.LogContext;
+import org.apache.kafka.common.utils.internals.LogContext;
 import org.apache.kafka.image.MetadataDelta;
 import org.apache.kafka.image.MetadataImage;
 import org.apache.kafka.image.loader.LoaderManifest;
@@ -90,8 +90,7 @@ public class BrokerRegistrationTracker implements MetadataPublisher {
             }
         }
         if (checkBrokerRegistration) {
-            if (brokerRegistrationNeedsRefresh(newImage.features().metadataVersion(),
-                    delta.clusterDelta().broker(id))) {
+            if (brokerRegistrationNeedsRefresh(newImage.features().metadataVersionOrThrow(), delta.clusterDelta().broker(id))) {
                 refreshRegistrationCallback.run();
             }
         }

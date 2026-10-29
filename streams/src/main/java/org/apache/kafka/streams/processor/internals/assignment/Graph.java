@@ -214,7 +214,7 @@ public class Graph<V extends Comparable<V>> {
         }
 
         // Add a dummy null node connected to every existing node with residual flow 1 and cost 0
-        // Then try to find negative cylce starting using dummy node as source node. Since there's no
+        // Then try to find negative cycle starting using dummy node as source node. Since there's no
         // path from original nodes to null node, negative cycles must be within original nodes.
         final TreeMap<V, Edge> destMap = new TreeMap<>();
         for (final V node : residualGraph.nodes) {
@@ -437,7 +437,7 @@ public class Graph<V extends Comparable<V>> {
     }
 
     private void cancelNegativeCycle(final V nodeInCycle, final Map<V, V> parentNodes, final Map<V, Edge> parentEdges) {
-        // Start from parentNode since nodeInCyle is used as exit condition in below loops
+        // Start from parentNode since nodeInCycle is used as exit condition in below loops
         final V parentNode = parentNodes.get(nodeInCycle);
         Edge parentEdge = parentEdges.get(nodeInCycle);
 

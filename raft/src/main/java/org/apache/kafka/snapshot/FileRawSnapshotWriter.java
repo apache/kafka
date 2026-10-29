@@ -16,10 +16,10 @@
  */
 package org.apache.kafka.snapshot;
 
-import org.apache.kafka.common.record.MemoryRecords;
-import org.apache.kafka.common.record.UnalignedMemoryRecords;
+import org.apache.kafka.common.record.internal.MemoryRecords;
+import org.apache.kafka.common.record.internal.UnalignedMemoryRecords;
 import org.apache.kafka.common.utils.Utils;
-import org.apache.kafka.raft.OffsetAndEpoch;
+import org.apache.kafka.server.common.OffsetAndEpoch;
 
 import java.io.IOException;
 import java.io.UncheckedIOException;

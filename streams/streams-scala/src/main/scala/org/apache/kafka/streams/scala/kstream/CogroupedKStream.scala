@@ -34,6 +34,7 @@ import org.apache.kafka.streams.scala.FunctionsCompatConversions.{AggregatorFrom
  * @param inner The underlying Java abstraction for CogroupedKStream
  * @see `org.apache.kafka.streams.kstream.CogroupedKStream`
  */
+@deprecated("Use `org.apache.kafka.streams.kstream.CogroupedKStream` instead", "4.3.0")
 class CogroupedKStream[KIn, VOut](val inner: CogroupedKStreamJ[KIn, VOut]) {
 
   /**

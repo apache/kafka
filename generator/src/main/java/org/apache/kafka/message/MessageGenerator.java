@@ -36,7 +36,6 @@ import java.nio.file.Files;
 import java.nio.file.Path;
 import java.nio.file.Paths;
 import java.util.ArrayList;
-import java.util.Collections;
 import java.util.HashSet;
 import java.util.List;
 import java.util.Locale;
@@ -85,10 +84,10 @@ public final class MessageGenerator {
     static final String ARRAYLIST_CLASS = "java.util.ArrayList";
 
     static final String IMPLICIT_LINKED_HASH_COLLECTION_CLASS =
-        "org.apache.kafka.common.utils.ImplicitLinkedHashCollection";
+        "org.apache.kafka.common.utils.internals.ImplicitLinkedHashCollection";
 
     static final String IMPLICIT_LINKED_HASH_MULTI_COLLECTION_CLASS =
-        "org.apache.kafka.common.utils.ImplicitLinkedHashMultiCollection";
+        "org.apache.kafka.common.utils.internals.ImplicitLinkedHashMultiCollection";
 
     static final String UNSUPPORTED_VERSION_EXCEPTION_CLASS =
         "org.apache.kafka.common.errors.UnsupportedVersionException";
@@ -103,6 +102,8 @@ public final class MessageGenerator {
 
     static final String SCHEMA_CLASS = "org.apache.kafka.common.protocol.types.Schema";
 
+    static final String NULLABLE_SCHEMA_CLASS = "org.apache.kafka.common.protocol.types.NullableSchema";
+
     static final String ARRAYOF_CLASS = "org.apache.kafka.common.protocol.types.ArrayOf";
 
     static final String COMPACT_ARRAYOF_CLASS = "org.apache.kafka.common.protocol.types.CompactArrayOf";
@@ -111,15 +112,19 @@ public final class MessageGenerator {
 
     static final String UUID_CLASS = "org.apache.kafka.common.Uuid";
 
-    static final String BASE_RECORDS_CLASS = "org.apache.kafka.common.record.BaseRecords";
+    static final String BASE_RECORDS_CLASS = "org.apache.kafka.common.record.internal.BaseRecords";
 
-    static final String MEMORY_RECORDS_CLASS = "org.apache.kafka.common.record.MemoryRecords";
+    static final String MEMORY_RECORDS_CLASS = "org.apache.kafka.common.record.internal.MemoryRecords";
 
     static final String REQUEST_SUFFIX = "Request";
 
     static final String RESPONSE_SUFFIX = "Response";
 
-    static final String BYTE_UTILS_CLASS = "org.apache.kafka.common.utils.ByteUtils";
+    static final String REQUEST_HEADER_NAME = "RequestHeader";
+
+    static final String RESPONSE_HEADER_NAME = "ResponseHeader";
+
+    static final String BYTE_UTILS_CLASS = "org.apache.kafka.common.utils.internals.ByteUtils";
 
     static final String STANDARD_CHARSETS = "java.nio.charset.StandardCharsets";
 
@@ -180,13 +185,13 @@ public final class MessageGenerator {
         JSON_SERDE.configure(DeserializationFeature.ACCEPT_SINGLE_VALUE_AS_ARRAY, true);
         JSON_SERDE.configure(DeserializationFeature.FAIL_ON_TRAILING_TOKENS, true);
         JSON_SERDE.configure(JsonParser.Feature.ALLOW_COMMENTS, true);
-        JSON_SERDE.setSerializationInclusion(JsonInclude.Include.NON_EMPTY);
+        JSON_SERDE.setDefaultPropertyInclusion(JsonInclude.Include.NON_EMPTY);
         JSON_SERDE.registerModule(new Jdk8Module());
     }
 
     private static List<TypeClassGenerator> createTypeClassGenerators(String packageName,
                                                                       List<String> types) {
-        if (types == null) return Collections.emptyList();
+        if (types == null) return List.of();
         List<TypeClassGenerator> generators = new ArrayList<>();
         for (String type : types) {
             switch (type) {
@@ -214,7 +219,7 @@ public final class MessageGenerator {
 
     private static List<MessageClassGenerator> createMessageClassGenerators(String packageName,
                                                                             List<String> types) {
-        if (types == null) return Collections.emptyList();
+        if (types == null) return List.of();
         List<MessageClassGenerator> generators = new ArrayList<>();
         for (String type : types) {
             switch (type) {
@@ -241,17 +246,53 @@ public final class MessageGenerator {
 
         List<TypeClassGenerator> typeClassGenerators = createTypeClassGenerators(packageName, typeClassGeneratorTypes);
         Set<String> outputFileNames = new HashSet<>();
+
+        // Parse pass: read every schema and pick out the header schemas, which carry the header
+        // version bounds that headerVersions maps are validated against below. Validation cannot run
+        // in the MessageSpec constructor because each file is parsed in isolation and cannot reach
+        // the header schemas.
+        List<ParsedSpec> parsedSpecs = new ArrayList<>();
+        MessageSpec requestHeader = null;
+        MessageSpec responseHeader = null;
         try (DirectoryStream<Path> directoryStream = Files.newDirectoryStream(Paths.get(inputDir), JSON_GLOB)) {
             for (Path inputPath : directoryStream) {
                 try {
                     MessageSpec spec = JSON_SERDE.readValue(inputPath.toFile(), MessageSpec.class);
-                    outputFileNames.addAll(
-                        generateAndWriteMessageClasses(spec, packageName, outputDir, messageClassGeneratorTypes));
-                    numProcessed++;
-                    typeClassGenerators.forEach(generator -> generator.registerMessageType(spec));
+                    if (spec.type() == MessageSpecType.HEADER) {
+                        if (REQUEST_HEADER_NAME.equals(spec.name())) {
+                            if (requestHeader != null) {
+                                throw new RuntimeException("Found more than one " + REQUEST_HEADER_NAME + " schema.");
+                            }
+                            requestHeader = spec;
+                        } else if (RESPONSE_HEADER_NAME.equals(spec.name())) {
+                            if (responseHeader != null) {
+                                throw new RuntimeException("Found more than one " + RESPONSE_HEADER_NAME + " schema.");
+                            }
+                            responseHeader = spec;
+                        }
+                    }
+                    parsedSpecs.add(new ParsedSpec(inputPath, spec));
                 } catch (Exception e) {
                     throw new RuntimeException("Exception while processing " + inputPath.toString(), e);
                 }
+            }
+        }
+
+        // Validation pass: every schema (including the header schemas) is parsed now, so validate the
+        // header-version mappings before generating anything, so a bad schema fails the build without
+        // leaving partially generated output behind.
+        checkHeaderVersions(parsedSpecs, requestHeader, responseHeader);
+
+        // Generate pass.
+        for (ParsedSpec parsedSpec : parsedSpecs) {
+            MessageSpec spec = parsedSpec.spec;
+            try {
+                outputFileNames.addAll(
+                    generateAndWriteMessageClasses(spec, packageName, outputDir, messageClassGeneratorTypes));
+                numProcessed++;
+                typeClassGenerators.forEach(generator -> generator.registerMessageType(spec));
+            } catch (Exception e) {
+                throw new RuntimeException("Exception while processing " + parsedSpec.path.toString(), e);
             }
         }
         for (TypeClassGenerator typeClassGenerator : typeClassGenerators) {
@@ -269,7 +310,29 @@ public final class MessageGenerator {
                 }
             }
         }
-        System.out.printf("MessageGenerator: processed %d Kafka message JSON files(s).%n", numProcessed);
+        System.out.printf("MessageGenerator: processed %d Kafka message JSON file(s).%n", numProcessed);
+    }
+
+    private static void checkHeaderVersions(List<ParsedSpec> parsedSpecs,
+                                            MessageSpec requestHeader,
+                                            MessageSpec responseHeader) {
+        for (ParsedSpec parsedSpec : parsedSpecs) {
+            try {
+                parsedSpec.spec.checkHeaderVersions(requestHeader, responseHeader);
+            } catch (Exception e) {
+                throw new RuntimeException("Exception while processing " + parsedSpec.path.toString(), e);
+            }
+        }
+    }
+
+    private static final class ParsedSpec {
+        final Path path;
+        final MessageSpec spec;
+
+        ParsedSpec(Path path, MessageSpec spec) {
+            this.path = path;
+            this.spec = spec;
+        }
     }
 
     /**
@@ -368,7 +431,8 @@ public final class MessageGenerator {
 
     public static void main(String[] args) throws Exception {
         ArgumentParser parser = ArgumentParsers
-            .newArgumentParser("message-generator")
+            .newFor("message-generator")
+            .build()
             .defaultHelp(true)
             .description("The Kafka message generator");
         parser.addArgument("--package", "-p")

@@ -17,10 +17,15 @@
 package org.apache.kafka.connect.runtime;
 
 
+import org.apache.kafka.common.internals.Plugin;
 import org.apache.kafka.common.utils.Utils;
 import org.apache.kafka.connect.connector.ConnectRecord;
+import org.apache.kafka.connect.runtime.isolation.LoaderSwap;
 import org.apache.kafka.connect.transforms.Transformation;
 import org.apache.kafka.connect.transforms.predicates.Predicate;
+
+import java.util.Objects;
+import java.util.function.Function;
 
 /**
  * Wrapper for a {@link Transformation} and corresponding optional {@link Predicate}
@@ -32,45 +37,107 @@ public class TransformationStage<R extends ConnectRecord<R>> implements AutoClos
 
     static final String PREDICATE_CONFIG = "predicate";
     static final String NEGATE_CONFIG = "negate";
-    private final Predicate<R> predicate;
-    private final Transformation<R> transformation;
+    private final Plugin<Predicate<R>> predicatePlugin;
+    private final Plugin<Transformation<R>> transformationPlugin;
     private final boolean negate;
+    private final String transformAlias;
+    private final String predicateAlias;
+    private final String transformVersion;
+    private final String predicateVersion;
+    private final Function<ClassLoader, LoaderSwap> pluginLoaderSwapper;
 
-    TransformationStage(Transformation<R> transformation) {
-        this(null, false, transformation);
+
+    TransformationStage(
+        Plugin<Transformation<R>> transformationPlugin,
+        String transformAlias,
+        String transformVersion,
+        Function<ClassLoader, LoaderSwap> pluginLoaderSwapper
+    ) {
+        this(null, null, null, false, transformationPlugin, transformAlias, transformVersion, pluginLoaderSwapper);
     }
 
-    TransformationStage(Predicate<R> predicate, boolean negate, Transformation<R> transformation) {
-        this.predicate = predicate;
+    TransformationStage(
+        Plugin<Predicate<R>> predicatePlugin,
+        String predicateAlias,
+        String predicateVersion,
+        boolean negate,
+        Plugin<Transformation<R>> transformationPlugin,
+        String transformAlias,
+        String transformVersion,
+        Function<ClassLoader, LoaderSwap> pluginLoaderSwapper
+    ) {
+        this.predicatePlugin = predicatePlugin;
         this.negate = negate;
-        this.transformation = transformation;
+        this.transformationPlugin = transformationPlugin;
+        this.pluginLoaderSwapper = pluginLoaderSwapper;
+        this.transformAlias = transformAlias;
+        this.predicateAlias = predicateAlias;
+        this.transformVersion = transformVersion;
+        this.predicateVersion = predicateVersion;
     }
 
     public Class<? extends Transformation<R>> transformClass() {
         @SuppressWarnings("unchecked")
-        Class<? extends Transformation<R>> transformClass = (Class<? extends Transformation<R>>) transformation.getClass();
+        Class<? extends Transformation<R>> transformClass = (Class<? extends Transformation<R>>) transformationPlugin.get().getClass();
         return transformClass;
     }
 
     public R apply(R record) {
-        if (predicate == null || negate ^ predicate.test(record)) {
-            return transformation.apply(record);
+        Predicate<R> predicate = predicatePlugin != null ? predicatePlugin.get() : null;
+        boolean shouldTransform = predicate == null;
+        if (predicate != null) {
+            try (LoaderSwap swap = pluginLoaderSwapper.apply(predicate.getClass().getClassLoader())) {
+                shouldTransform = negate ^ predicate.test(record);
+            }
+        }
+        if (shouldTransform) {
+            try (LoaderSwap swap = pluginLoaderSwapper.apply(transformationPlugin.get().getClass().getClassLoader())) {
+                record = transformationPlugin.get().apply(record);
+            }
         }
         return record;
     }
 
     @Override
     public void close() {
-        Utils.closeQuietly(transformation, "transformation");
-        Utils.closeQuietly(predicate, "predicate");
+        Utils.closeQuietly(transformationPlugin, "transformation");
+        Utils.closeQuietly(predicatePlugin, "predicate");
     }
 
     @Override
     public String toString() {
         return "TransformationStage{" +
-                "predicate=" + predicate +
-                ", transformation=" + transformation +
+                "predicate=" + predicatePlugin.get() +
+                ", transformation=" + transformationPlugin.get() +
                 ", negate=" + negate +
                 '}';
+    }
+
+    public record AliasedPluginInfo(String alias, String className, String version) {
+        public AliasedPluginInfo {
+            Objects.requireNonNull(alias, "alias cannot be null");
+            Objects.requireNonNull(className, "className cannot be null");
+        }
+    }
+
+
+    public record StageInfo(AliasedPluginInfo transform, AliasedPluginInfo predicate) {
+        public StageInfo {
+            Objects.requireNonNull(transform, "transform cannot be null");
+        }
+    }
+
+
+    public StageInfo transformationStageInfo() {
+        AliasedPluginInfo transformInfo = new AliasedPluginInfo(
+            transformAlias,
+            transformationPlugin.get().getClass().getName(),
+            transformVersion
+        );
+        AliasedPluginInfo predicateInfo = predicatePlugin != null ? new AliasedPluginInfo(
+            predicateAlias,
+            predicatePlugin.get().getClass().getName(), predicateVersion
+        ) : null;
+        return new StageInfo(transformInfo, predicateInfo);
     }
 }

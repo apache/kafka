@@ -16,6 +16,7 @@
  */
 package org.apache.kafka.common.metrics.stats;
 
+import org.apache.kafka.common.annotation.InterfaceAudience;
 import org.apache.kafka.common.metrics.MetricConfig;
 
 import java.util.List;
@@ -26,6 +27,7 @@ import java.util.List;
  *
  * See also {@link WindowedCount} if you want to increment the value by 1 on each recording.
  */
+@InterfaceAudience.Public
 public class WindowedSum extends SampledStat {
 
     public WindowedSum() {

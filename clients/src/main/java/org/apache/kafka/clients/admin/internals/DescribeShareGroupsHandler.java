@@ -31,7 +31,7 @@ import org.apache.kafka.common.requests.FindCoordinatorRequest;
 import org.apache.kafka.common.requests.FindCoordinatorRequest.CoordinatorType;
 import org.apache.kafka.common.requests.ShareGroupDescribeRequest;
 import org.apache.kafka.common.requests.ShareGroupDescribeResponse;
-import org.apache.kafka.common.utils.LogContext;
+import org.apache.kafka.common.utils.internals.LogContext;
 
 import org.slf4j.Logger;
 
@@ -41,6 +41,7 @@ import java.util.HashMap;
 import java.util.HashSet;
 import java.util.List;
 import java.util.Map;
+import java.util.Optional;
 import java.util.Set;
 import java.util.stream.Collectors;
 
@@ -92,7 +93,7 @@ public class DescribeShareGroupsHandler extends AdminApiHandler.Batched<Coordina
         ShareGroupDescribeRequestData data = new ShareGroupDescribeRequestData()
             .setGroupIds(groupIds)
             .setIncludeAuthorizedOperations(includeAuthorizedOperations);
-        return new ShareGroupDescribeRequest.Builder(data, true);
+        return new ShareGroupDescribeRequest.Builder(data);
     }
 
     @Override
@@ -119,6 +120,7 @@ public class DescribeShareGroupsHandler extends AdminApiHandler.Batched<Coordina
             describedGroup.members().forEach(groupMember ->
                 memberDescriptions.add(new ShareMemberDescription(
                     groupMember.memberId(),
+                    Optional.ofNullable(groupMember.rackId()),
                     groupMember.clientId(),
                     groupMember.clientHost(),
                     new ShareMemberAssignment(convertAssignment(groupMember.assignment())),
@@ -159,7 +161,9 @@ public class DescribeShareGroupsHandler extends AdminApiHandler.Batched<Coordina
             Set<CoordinatorKey> groupsToUnmap) {
         switch (error) {
             case GROUP_AUTHORIZATION_FAILED:
+            case TOPIC_AUTHORIZATION_FAILED:
                 log.debug("`DescribeShareGroups` request for group id {} failed due to error {}", groupId.idValue, error);
+                // The topic auth response received on DescribeShareGroup is a generic one not including topic names, so we just pass it on unchanged here.
                 failed.put(groupId, error.exception(errorMsg));
                 break;
 

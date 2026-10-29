@@ -16,25 +16,49 @@
  */
 package org.apache.kafka.tiered.storage.integration;
 
+import org.apache.kafka.clients.consumer.GroupProtocol;
+import org.apache.kafka.common.test.ClusterInstance;
+import org.apache.kafka.common.test.api.ClusterConfig;
+import org.apache.kafka.common.test.api.ClusterTemplate;
+import org.apache.kafka.common.test.api.Type;
 import org.apache.kafka.tiered.storage.TieredStorageTestBuilder;
-import org.apache.kafka.tiered.storage.TieredStorageTestHarness;
 import org.apache.kafka.tiered.storage.specs.KeyValueSpec;
 
-import java.util.Arrays;
-import java.util.Collections;
+import java.util.List;
+import java.util.Locale;
+import java.util.Set;
 
 import static org.apache.kafka.common.utils.Utils.mkEntry;
 import static org.apache.kafka.common.utils.Utils.mkMap;
+import static org.apache.kafka.tiered.storage.utils.TieredStorageTestUtils.createServerPropsForRemoteStorage;
 
-public final class AlterLogDirTest extends TieredStorageTestHarness {
+public final class AlterLogDirTest {
 
-    @Override
-    public int brokerCount() {
-        return 2;
+    private static final int BROKER_COUNT = 3;
+
+    private static List<ClusterConfig> clusterConfig() {
+        return List.of(ClusterConfig.defaultBuilder()
+                .setTypes(Set.of(Type.KRAFT))
+                .setBrokers(BROKER_COUNT)
+                .setDisksPerBroker(2)
+                .setServerProperties(createServerPropsForRemoteStorage(
+                        AlterLogDirTest.class.getSimpleName().toLowerCase(Locale.ROOT), 
+                        BROKER_COUNT, 
+                        5))
+                .build());
     }
 
-    @Override
-    protected void writeTestSpecifications(TieredStorageTestBuilder builder) {
+    @ClusterTemplate("clusterConfig")
+    public void testAlterLogDirWithClassicGroupProtocol(ClusterInstance clusterInstance) throws Exception {
+        executeAlterLogDirTest(clusterInstance, GroupProtocol.CLASSIC);
+    }
+
+    @ClusterTemplate("clusterConfig")
+    public void testAlterLogDirWithConsumerGroupProtocol(ClusterInstance clusterInstance) throws Exception {
+        executeAlterLogDirTest(clusterInstance, GroupProtocol.CONSUMER);
+    }
+
+    private void executeAlterLogDirTest(ClusterInstance clusterInstance, GroupProtocol groupProtocol) throws Exception {
         final String topicB = "topicB";
         final int p0 = 0;
         final int partitionCount = 1;
@@ -44,10 +68,11 @@ public final class AlterLogDirTest extends TieredStorageTestHarness {
         final int broker0 = 0;
         final int broker1 = 1;
 
+        TieredStorageTestBuilder builder = new TieredStorageTestBuilder();
         builder
-                // create topicB with 1 partition and 1 RF
+                // create topicB with 1 partition and 2 RF
                 .createTopic(topicB, partitionCount, replicationFactor, maxBatchCountPerSegment,
-                        mkMap(mkEntry(p0, Arrays.asList(broker1, broker0))), enableRemoteLogStorage)
+                        mkMap(mkEntry(p0, List.of(broker1, broker0))), enableRemoteLogStorage)
                 // send records to partition 0
                 .expectSegmentToBeOffloaded(broker1, topicB, p0, 0, new KeyValueSpec("k0", "v0"))
                 .expectSegmentToBeOffloaded(broker1, topicB, p0, 1, new KeyValueSpec("k1", "v1"))
@@ -55,7 +80,7 @@ public final class AlterLogDirTest extends TieredStorageTestHarness {
                 .produce(topicB, p0, new KeyValueSpec("k0", "v0"), new KeyValueSpec("k1", "v1"),
                         new KeyValueSpec("k2", "v2"))
                 // alter dir within the replica, we only expect one replicaId
-                .alterLogDir(topicB, p0, Collections.singletonList(broker0).get(0))
+                .alterLogDir(topicB, p0, broker0)
                 // make sure the altered replica can still be elected as the leader
                 .expectLeader(topicB, p0, broker0, true)
                 // produce some more events and verify the earliest local offset
@@ -64,5 +89,7 @@ public final class AlterLogDirTest extends TieredStorageTestHarness {
                 // consume from the beginning of the topic to read data from local and remote storage
                 .expectFetchFromTieredStorage(broker0, topicB, p0, 3)
                 .consume(topicB, p0, 0L, 4, 3);
+
+        builder.build().execute(clusterInstance, groupProtocol);
     }
 }

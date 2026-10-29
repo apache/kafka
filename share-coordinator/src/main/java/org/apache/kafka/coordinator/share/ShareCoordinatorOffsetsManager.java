@@ -60,13 +60,20 @@ public class ShareCoordinatorOffsetsManager {
      *
      * @param key    - represents {@link SharePartitionKey} whose offset needs updating
      * @param offset - represents the latest partition offset for provided key
+     * @param isDelete - true if the offset is for a tombstone record
      */
-    public void updateState(SharePartitionKey key, long offset) {
+    public void updateState(SharePartitionKey key, long offset, boolean isDelete) {
         lastRedundantOffset.set(Math.min(lastRedundantOffset.get(), offset));
         offsets.put(key, offset);
 
         Optional<Long> redundantOffset = findRedundantOffset();
         redundantOffset.ifPresent(lastRedundantOffset::set);
+
+        // If the share partition is deleted, we should not hold onto its offset in our calculations
+        // as there is nothing beyond deletion which is going to update its state.
+        if (isDelete) {
+            offsets.remove(key);
+        }
     }
 
     private Optional<Long> findRedundantOffset() {

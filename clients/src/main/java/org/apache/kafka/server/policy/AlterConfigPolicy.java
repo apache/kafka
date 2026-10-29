@@ -17,6 +17,7 @@
 package org.apache.kafka.server.policy;
 
 import org.apache.kafka.common.Configurable;
+import org.apache.kafka.common.annotation.InterfaceAudience;
 import org.apache.kafka.common.config.ConfigResource;
 import org.apache.kafka.common.errors.PolicyViolationException;
 
@@ -33,10 +34,11 @@ import java.util.Objects;
  * using the default constructor and will then pass the broker configs to its <code>configure()</code> method. During
  * broker shutdown, the <code>close()</code> method will be invoked so that resources can be released (if necessary).
  */
+@InterfaceAudience.Public
 public interface AlterConfigPolicy extends Configurable, AutoCloseable {
 
     /**
-     * Class containing the create request parameters.
+     * Class containing the alter configs request parameters.
      */
     class RequestMetadata {
 
@@ -91,8 +93,7 @@ public interface AlterConfigPolicy extends Configurable, AutoCloseable {
      * Clients will receive the POLICY_VIOLATION error code along with the exception's message. Note that validation
      * failure only affects the relevant resource, other resources in the request will still be processed.
      *
-     * @param requestMetadata the alter configs request parameters for the provided resource (topic is the only resource
-     *                        type whose configs can be updated currently).
+     * @param requestMetadata the alter configs request parameters for the provided resource.
      * @throws PolicyViolationException if the request parameters do not satisfy this policy.
      */
     void validate(RequestMetadata requestMetadata) throws PolicyViolationException;

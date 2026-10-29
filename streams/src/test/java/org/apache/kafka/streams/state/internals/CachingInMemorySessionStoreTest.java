@@ -23,7 +23,7 @@ import org.apache.kafka.common.serialization.IntegerSerializer;
 import org.apache.kafka.common.serialization.StringDeserializer;
 import org.apache.kafka.common.utils.Bytes;
 import org.apache.kafka.common.utils.LogCaptureAppender;
-import org.apache.kafka.common.utils.LogContext;
+import org.apache.kafka.common.utils.internals.LogContext;
 import org.apache.kafka.streams.KeyValue;
 import org.apache.kafka.streams.KeyValueTimestamp;
 import org.apache.kafka.streams.errors.InvalidStateStoreException;
@@ -54,6 +54,7 @@ import java.util.ArrayList;
 import java.util.Collections;
 import java.util.LinkedList;
 import java.util.List;
+import java.util.Map;
 import java.util.Random;
 
 import static java.util.Arrays.asList;
@@ -62,9 +63,6 @@ import static org.apache.kafka.common.utils.Utils.mkMap;
 import static org.apache.kafka.test.StreamsTestUtils.toListAndCloseIterator;
 import static org.apache.kafka.test.StreamsTestUtils.verifyKeyValueList;
 import static org.apache.kafka.test.StreamsTestUtils.verifyWindowedKeyValue;
-import static org.hamcrest.CoreMatchers.hasItem;
-import static org.hamcrest.MatcherAssert.assertThat;
-import static org.hamcrest.Matchers.equalTo;
 import static org.junit.jupiter.api.Assertions.assertArrayEquals;
 import static org.junit.jupiter.api.Assertions.assertEquals;
 import static org.junit.jupiter.api.Assertions.assertFalse;
@@ -166,7 +164,7 @@ public class CachingInMemorySessionStoreTest {
         assertEquals(Position.emptyPosition(), cachingStore.getPosition());
         assertEquals(Position.emptyPosition(), underlyingStore.getPosition());
 
-        cachingStore.flush();
+        cachingStore.commit(Map.of());
 
         assertEquals(
             Position.fromMap(mkMap(mkEntry("", mkMap(mkEntry(0, 2L))))),
@@ -457,7 +455,7 @@ public class CachingInMemorySessionStoreTest {
             assertFalse(rangeIter.hasNext());
 
             assertNull(cachingStore.fetchSession(keyA, 0, 0));
-            assertThat(cachingStore.fetchSession(keyB, 0, 0), equalTo("2".getBytes()));
+            assertArrayEquals("2".getBytes(), cachingStore.fetchSession(keyB, 0, 0));
         }
     }
 
@@ -472,7 +470,7 @@ public class CachingInMemorySessionStoreTest {
         cachingStore.put(a1, "1".getBytes());
         cachingStore.put(a2, "2".getBytes());
         cachingStore.put(a3, "3".getBytes());
-        cachingStore.flush();
+        cachingStore.commit(Map.of());
         cachingStore.put(a4, "4".getBytes());
         cachingStore.put(a5, "5".getBytes());
         cachingStore.put(a6, "6".getBytes());
@@ -499,7 +497,7 @@ public class CachingInMemorySessionStoreTest {
         cachingStore.put(a1, "1".getBytes());
         cachingStore.put(a2, "2".getBytes());
         cachingStore.put(a3, "3".getBytes());
-        cachingStore.flush();
+        cachingStore.commit(Map.of());
         cachingStore.put(a4, "4".getBytes());
         cachingStore.put(a5, "5".getBytes());
         cachingStore.put(a6, "6".getBytes());
@@ -580,7 +578,7 @@ public class CachingInMemorySessionStoreTest {
         cachingStore.setFlushListener(flushListener, true);
 
         cachingStore.put(b, "1".getBytes());
-        cachingStore.flush();
+        cachingStore.commit(Map.of());
 
         assertEquals(
             Collections.singletonList(
@@ -593,7 +591,7 @@ public class CachingInMemorySessionStoreTest {
         flushListener.forwarded.clear();
 
         cachingStore.put(a, "1".getBytes());
-        cachingStore.flush();
+        cachingStore.commit(Map.of());
 
         assertEquals(
             Collections.singletonList(
@@ -606,7 +604,7 @@ public class CachingInMemorySessionStoreTest {
         flushListener.forwarded.clear();
 
         cachingStore.put(a, "2".getBytes());
-        cachingStore.flush();
+        cachingStore.commit(Map.of());
 
         assertEquals(
             Collections.singletonList(
@@ -619,7 +617,7 @@ public class CachingInMemorySessionStoreTest {
         flushListener.forwarded.clear();
 
         cachingStore.remove(a);
-        cachingStore.flush();
+        cachingStore.commit(Map.of());
 
         assertEquals(
             Collections.singletonList(
@@ -634,7 +632,7 @@ public class CachingInMemorySessionStoreTest {
         cachingStore.put(a, "1".getBytes());
         cachingStore.put(a, "2".getBytes());
         cachingStore.remove(a);
-        cachingStore.flush();
+        cachingStore.commit(Map.of());
 
         assertEquals(
             Collections.emptyList(),
@@ -654,13 +652,13 @@ public class CachingInMemorySessionStoreTest {
         cachingStore.setFlushListener(flushListener, false);
 
         cachingStore.put(a, "1".getBytes());
-        cachingStore.flush();
+        cachingStore.commit(Map.of());
 
         cachingStore.put(a, "2".getBytes());
-        cachingStore.flush();
+        cachingStore.commit(Map.of());
 
         cachingStore.remove(a);
-        cachingStore.flush();
+        cachingStore.commit(Map.of());
 
         assertEquals(
             asList(new KeyValueTimestamp<>(
@@ -682,7 +680,7 @@ public class CachingInMemorySessionStoreTest {
         cachingStore.put(a, "1".getBytes());
         cachingStore.put(a, "2".getBytes());
         cachingStore.remove(a);
-        cachingStore.flush();
+        cachingStore.commit(Map.of());
 
         assertEquals(
             Collections.emptyList(),
@@ -795,15 +793,11 @@ public class CachingInMemorySessionStoreTest {
             assertFalse(iterator.hasNext());
 
             final List<String> messages = appender.getMessages();
-            assertThat(
-                messages,
-                hasItem(
-                    "Returning empty iterator for fetch with invalid key range: from > to." +
-                        " This may be due to range arguments set in the wrong order, " +
-                        "or serdes that don't preserve ordering when lexicographically comparing the serialized bytes." +
-                        " Note that the built-in numerical serdes do not follow this for negative numbers"
-                )
-            );
+            assertTrue(messages.contains(
+                "Returning empty iterator for fetch with invalid key range: from > to." +
+                    " This may be due to range arguments set in the wrong order, " +
+                    "or serdes that don't preserve ordering when lexicographically comparing the serialized bytes." +
+                    " Note that the built-in numerical serdes do not follow this for negative numbers"));
         }
     }
 
@@ -818,13 +812,11 @@ public class CachingInMemorySessionStoreTest {
             assertFalse(iterator.hasNext());
 
             final List<String> messages = appender.getMessages();
-            assertThat(
-                messages,
-                hasItem("Returning empty iterator for fetch with invalid key range: from > to." +
+            assertTrue(messages.contains(
+                "Returning empty iterator for fetch with invalid key range: from > to." +
                     " This may be due to range arguments set in the wrong order, " +
                     "or serdes that don't preserve ordering when lexicographically comparing the serialized bytes." +
-                    " Note that the built-in numerical serdes do not follow this for negative numbers")
-            );
+                    " Note that the built-in numerical serdes do not follow this for negative numbers"));
         }
     }
 

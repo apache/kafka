@@ -18,6 +18,7 @@
 package kafka.metrics
 
 import java.lang.management.ManagementFactory
+import java.util
 import java.util.Properties
 import javax.management.ObjectName
 import com.yammer.metrics.core.MetricPredicate
@@ -35,10 +36,15 @@ import org.apache.kafka.common.metrics.JmxReporter
 import org.apache.kafka.common.utils.Time
 import org.apache.kafka.server.config.ServerLogConfigs
 import org.apache.kafka.server.metrics.{KafkaMetricsGroup, KafkaYammerMetrics, LinuxIoMetricsCollector}
+import org.apache.kafka.storage.internals.checkpoint.OffsetCheckpointFile
+import org.apache.kafka.storage.internals.log.UnifiedLog
 import org.apache.kafka.storage.log.metrics.BrokerTopicMetrics
-import org.junit.jupiter.api.Timeout
+import org.junit.jupiter.api.{Test, Timeout}
 import org.junit.jupiter.params.ParameterizedTest
-import org.junit.jupiter.params.provider.{MethodSource, ValueSource}
+import org.junit.jupiter.params.provider.MethodSource
+
+import java.io.File
+import scala.jdk.OptionConverters.RichOptional
 
 @Timeout(120)
 class MetricsTest extends KafkaServerTestHarness with Logging {
@@ -56,19 +62,17 @@ class MetricsTest extends KafkaServerTestHarness with Logging {
 
   val nMessages = 2
 
-  @ParameterizedTest
-  @ValueSource(strings = Array("kraft"))
-  def testMetricsReporterAfterDeletingTopic(quorum: String): Unit = {
+  @Test
+  def testMetricsReporterAfterDeletingTopic(): Unit = {
     val topic = "test-topic-metric"
     createTopic(topic)
     deleteTopic(topic)
-    TestUtils.verifyTopicDeletion(topic, 1, brokers)
+    verifyTopicDeletion(topic, brokers)
     assertEquals(Set.empty, topicMetricGroups(topic), "Topic metrics exists after deleteTopic")
   }
 
-  @ParameterizedTest
-  @ValueSource(strings = Array("kraft"))
-  def testBrokerTopicMetricsUnregisteredAfterDeletingTopic(quorum: String): Unit = {
+  @Test
+  def testBrokerTopicMetricsUnregisteredAfterDeletingTopic(): Unit = {
     val topic = "test-broker-topic-metric"
     createTopic(topic, 2)
     // Produce a few messages to create the metrics
@@ -77,49 +81,52 @@ class MetricsTest extends KafkaServerTestHarness with Logging {
     assertTrue(topicMetricGroups(topic).nonEmpty, "Topic metrics don't exist")
     brokers.foreach(b => assertNotNull(b.brokerTopicStats.topicStats(topic)))
     deleteTopic(topic)
-    TestUtils.verifyTopicDeletion(topic, 1, brokers)
+    verifyTopicDeletion(topic, brokers)
     assertEquals(Set.empty, topicMetricGroups(topic), "Topic metrics exists after deleteTopic")
   }
 
-  @ParameterizedTest
-  @ValueSource(strings = Array("kraft"))
-  def testClusterIdMetric(quorum: String): Unit = {
+  @Test
+  def testClusterIdMetric(): Unit = {
     // Check if clusterId metric exists.
     val metrics = KafkaYammerMetrics.defaultRegistry.allMetrics
     assertEquals(metrics.keySet.asScala.count(_.getMBeanName == s"$requiredKafkaServerPrefix=ClusterId"), 1)
   }
 
-  @ParameterizedTest
-  @ValueSource(strings = Array("kraft"))
-  def testBrokerStateMetric(quorum: String): Unit = {
+  @Test
+  def testBrokerStateMetric(): Unit = {
     // Check if BrokerState metric exists.
     val metrics = KafkaYammerMetrics.defaultRegistry.allMetrics
     assertEquals(metrics.keySet.asScala.count(_.getMBeanName == s"$requiredKafkaServerPrefix=BrokerState"), 1)
   }
 
-  @ParameterizedTest
-  @ValueSource(strings = Array("kraft"))
-  def testYammerMetricsCountMetric(quorum: String): Unit = {
+  @Test
+  def testYammerMetricsCountMetric(): Unit = {
     // Check if yammer-metrics-count metric exists.
     val metrics = KafkaYammerMetrics.defaultRegistry.allMetrics
     assertEquals(metrics.keySet.asScala.count(_.getMBeanName == s"$requiredKafkaServerPrefix=yammer-metrics-count"), 1)
   }
 
-  @ParameterizedTest
-  @ValueSource(strings = Array("kraft"))
-  def testLinuxIoMetrics(quorum: String): Unit = {
-    // Check if linux-disk-{read,write}-bytes metrics either do or do not exist depending on whether we are or are not
+  @Test
+  def testLinuxIoMetrics(): Unit = {
+    // Check if the linux-disk-* I/O metrics either do or do not exist depending on whether we are or are not
     // able to collect those metrics on the platform where this test is running.
     val usable = new LinuxIoMetricsCollector("/proc", Time.SYSTEM).usable()
     val expectedCount = if (usable) 1 else 0
     val metrics = KafkaYammerMetrics.defaultRegistry.allMetrics
-    Set("linux-disk-read-bytes", "linux-disk-write-bytes").foreach(name =>
+    Set(
+      "linux-disk-read-bytes",
+      "linux-disk-write-bytes",
+      "linux-disk-rchar",
+      "linux-disk-wchar",
+      "linux-disk-syscr",
+      "linux-disk-syscw",
+      "linux-disk-cancelled-write-bytes"
+    ).foreach(name =>
       assertEquals(metrics.keySet.asScala.count(_.getMBeanName == s"$requiredKafkaServerPrefix=$name"), expectedCount))
   }
 
-  @ParameterizedTest
-  @ValueSource(strings = Array("kraft"))
-  def testJMXFilter(quorum: String): Unit = {
+  @Test
+  def testJMXFilter(): Unit = {
     // Check if cluster id metrics is not exposed in JMX
     assertTrue(ManagementFactory.getPlatformMBeanServer
                  .isRegistered(new ObjectName("kafka.controller:type=KafkaController,name=ActiveControllerCount")))
@@ -127,12 +134,11 @@ class MetricsTest extends KafkaServerTestHarness with Logging {
                   .isRegistered(new ObjectName(s"$requiredKafkaServerPrefix=ClusterId")))
   }
 
-  @ParameterizedTest
-  @ValueSource(strings = Array("kraft"))
-  def testUpdateJMXFilter(quorum: String): Unit = {
+  @Test
+  def testUpdateJMXFilter(): Unit = {
     // verify previously exposed metrics are removed and existing matching metrics are added
     brokers.foreach(broker => broker.kafkaYammerMetrics.reconfigure(
-      Map(JmxReporter.EXCLUDE_CONFIG -> "kafka.controller:type=KafkaController,name=ActiveControllerCount").asJava
+      util.Map.of(JmxReporter.EXCLUDE_CONFIG, "kafka.controller:type=KafkaController,name=ActiveControllerCount")
     ))
     assertFalse(ManagementFactory.getPlatformMBeanServer
                  .isRegistered(new ObjectName("kafka.controller:type=KafkaController,name=ActiveControllerCount")))
@@ -140,9 +146,8 @@ class MetricsTest extends KafkaServerTestHarness with Logging {
                   .isRegistered(new ObjectName(s"$requiredKafkaServerPrefix=ClusterId")))
   }
 
-  @ParameterizedTest
-  @ValueSource(strings = Array("kraft"))
-  def testGeneralBrokerTopicMetricsAreGreedilyRegistered(quorum: String): Unit = {
+  @Test
+  def testGeneralBrokerTopicMetricsAreGreedilyRegistered(): Unit = {
     val topic = "test-broker-topic-metric"
     createTopic(topic, 2)
 
@@ -156,28 +161,30 @@ class MetricsTest extends KafkaServerTestHarness with Logging {
     assertTrue(topicMetricGroups(topic).nonEmpty, "Topic metrics aren't registered")
   }
 
-  @ParameterizedTest
-  @ValueSource(strings = Array("kraft"))
-  def testWindowsStyleTagNames(quorum: String): Unit = {
+  @Test
+  def testWindowsStyleTagNames(): Unit = {
     val path = "C:\\windows-path\\kafka-logs"
-    val tags = Map("dir" -> path)
-    val expectedMBeanName = Set(tags.keySet.head, ObjectName.quote(path)).mkString("=")
-    val metric = new KafkaMetricsGroup(this.getClass).metricName("test-metric", tags.asJava)
+    val tags = util.Map.of("dir", path)
+    val expectedMBeanName = Set(tags.keySet().iterator().next(), ObjectName.quote(path)).mkString("=")
+
+    // Changing the package or class name may cause incompatibility with existing code and metrics configuration
+    val metricsPackage = "kafka.metrics"
+    val metricsClassName = "MetricsTest"
+    val metric = new KafkaMetricsGroup(metricsPackage, metricsClassName).metricName("test-metric", tags)
     assert(metric.getMBeanName.endsWith(expectedMBeanName))
   }
 
-  @ParameterizedTest(name = TestInfoUtils.TestWithParameterizedQuorumAndGroupProtocolNames)
-  @MethodSource(Array("getTestQuorumAndGroupProtocolParametersAll"))
-  def testBrokerTopicMetricsBytesInOut(quorum: String, groupProtocol: String): Unit = {
+  @ParameterizedTest(name = TestInfoUtils.TestWithParameterizedGroupProtocolNames)
+  @MethodSource(Array("getTestGroupProtocolParametersAll"))
+  def testBrokerTopicMetricsBytesInOut(groupProtocol: String): Unit = {
     val topic = "test-bytes-in-out"
     val replicationBytesIn = BrokerTopicMetrics.REPLICATION_BYTES_IN_PER_SEC
     val replicationBytesOut = BrokerTopicMetrics.REPLICATION_BYTES_OUT_PER_SEC
     val bytesIn = s"${BrokerTopicMetrics.BYTES_IN_PER_SEC},topic=$topic"
     val bytesOut = s"${BrokerTopicMetrics.BYTES_OUT_PER_SEC},topic=$topic"
 
-    val topicConfig = new Properties
-    topicConfig.setProperty(TopicConfig.MIN_IN_SYNC_REPLICAS_CONFIG, "2")
-    createTopic(topic, 1, numNodes, topicConfig)
+    val topicConfigs = util.Map.of(TopicConfig.MIN_IN_SYNC_REPLICAS_CONFIG, "2")
+    createTopic(topic, 1, numNodes, topicConfigs)
     // Produce a few messages to create the metrics
     TestUtils.generateAndProduceMessages(brokers, topic, nMessages)
 
@@ -185,7 +192,7 @@ class MetricsTest extends KafkaServerTestHarness with Logging {
     // versus failures caused by the metrics
     val topicPartition = new TopicPartition(topic, 0)
     brokers.foreach { broker =>
-      val log = broker.logManager.getLog(new TopicPartition(topic, 0))
+      val log = broker.logManager.getLog(new TopicPartition(topic, 0)).toScala
       val brokerId = broker.config.brokerId
       val logSize = log.map(_.size)
       assertTrue(logSize.exists(_ > 0), s"Expected broker $brokerId to have a Log for $topicPartition with positive size, actual: $logSize")
@@ -213,9 +220,8 @@ class MetricsTest extends KafkaServerTestHarness with Logging {
     assertTrue(TestUtils.meterCount(bytesOut) > initialBytesOut)
   }
 
-  @ParameterizedTest
-  @ValueSource(strings = Array("kraft"))
-  def testKRaftControllerMetrics(quorum: String): Unit = {
+  @Test
+  def testKRaftControllerMetrics(): Unit = {
     val metrics = KafkaYammerMetrics.defaultRegistry.allMetrics
     Set(
       "kafka.controller:type=KafkaController,name=ActiveControllerCount",
@@ -247,5 +253,42 @@ class MetricsTest extends KafkaServerTestHarness with Logging {
   private def filterByTopicMetricRegex(metrics: Set[String], topic: Option[String]): Set[String] = {
     val pattern = (".*BrokerTopicMetrics.*" + topic.map(t => s"($t)$$").getOrElse("")).r.pattern
     metrics.filter(pattern.matcher(_).matches())
+  }
+
+  private def verifyTopicDeletion[B <: KafkaBroker](topic: String, brokers: Seq[B]): Unit = {
+    val topicPartitions = (0 until 1).map(new TopicPartition(topic, _))
+    // ensure that the topic-partition has been deleted from all brokers' replica managers
+    TestUtils.waitUntilTrue(() =>
+      brokers.forall(broker => topicPartitions.forall(tp => broker.replicaManager.onlinePartition(tp).isEmpty)),
+      "Replica manager's should have deleted all of this topic's partitions")
+    // ensure that logs from all replicas are deleted
+    TestUtils.waitUntilTrue(() => brokers.forall(broker => topicPartitions.forall(tp => broker.logManager.getLog(tp).isEmpty)),
+      "Replica logs not deleted after delete topic is complete")
+    // ensure that topic is removed from all cleaner offsets
+    TestUtils.waitUntilTrue(() => brokers.forall(broker => topicPartitions.forall { tp =>
+      val checkpoints = broker.logManager.liveLogDirs.asScala.map { logDir =>
+        new OffsetCheckpointFile(new File(logDir, "cleaner-offset-checkpoint"), null).read()
+      }
+      checkpoints.forall(checkpointsPerLogDir => !checkpointsPerLogDir.containsKey(tp))
+    }), "Cleaner offset for deleted partition should have been removed")
+    TestUtils.waitUntilTrue(() => brokers.forall(broker =>
+      broker.config.logDirs.stream().allMatch { logDir =>
+        topicPartitions.forall { tp =>
+          !new File(logDir, tp.topic + "-" + tp.partition).exists()
+        }
+      }
+    ), "Failed to soft-delete the data to a delete directory")
+    TestUtils.waitUntilTrue(() => brokers.forall(broker =>
+      broker.config.logDirs.stream().allMatch { logDir =>
+        topicPartitions.forall { tp =>
+          !util.List.of(new File(logDir).list()).asScala.exists { partitionDirectoryNames =>
+            partitionDirectoryNames.exists { directoryName =>
+              directoryName.startsWith(tp.topic + "-" + tp.partition) &&
+                directoryName.endsWith(UnifiedLog.DELETE_DIR_SUFFIX)
+            }
+          }
+        }
+      }
+    ), "Failed to hard-delete the delete directory")
   }
 }

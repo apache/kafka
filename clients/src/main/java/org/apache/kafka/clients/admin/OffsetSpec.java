@@ -14,13 +14,17 @@
  * See the License for the specific language governing permissions and
  * limitations under the License.
  */
+
 package org.apache.kafka.clients.admin;
+
+import org.apache.kafka.common.annotation.InterfaceAudience;
 
 import java.util.Map;
 
 /** 
  * This class allows to specify the desired offsets when using {@link KafkaAdminClient#listOffsets(Map, ListOffsetsOptions)}
  */
+@InterfaceAudience.Public
 public class OffsetSpec {
 
     public static class EarliestSpec extends OffsetSpec { }
@@ -28,6 +32,7 @@ public class OffsetSpec {
     public static class MaxTimestampSpec extends OffsetSpec { }
     public static class EarliestLocalSpec extends OffsetSpec { }
     public static class LatestTieredSpec extends OffsetSpec { }
+    public static class EarliestPendingUploadSpec extends OffsetSpec { }
     public static class TimestampSpec extends OffsetSpec {
         private final long timestamp;
 
@@ -90,5 +95,14 @@ public class OffsetSpec {
      */
     public static OffsetSpec latestTiered() {
         return new LatestTieredSpec();
+    }
+
+    /**
+     * Used to retrieve the earliest offset of records that are pending upload to remote storage.
+     * <br/>
+     * Note: When tiered storage is not enabled, we will return unknown offset.
+     */
+    public static OffsetSpec earliestPendingUpload() {
+        return new EarliestPendingUploadSpec();
     }
 }

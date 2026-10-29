@@ -33,7 +33,6 @@ import org.apache.kafka.streams.processor.api.ProcessorSupplier;
 import org.apache.kafka.streams.state.KeyValueStore;
 import org.apache.kafka.streams.state.VersionedBytesStoreSupplier;
 
-import java.util.Collections;
 import java.util.Objects;
 import java.util.Set;
 
@@ -89,7 +88,7 @@ public class KGroupedTableImpl<K, V> extends AbstractStream<K, V> implements KGr
         // the passed in StreamsGraphNode must be the parent of the repartition node
         builder.addGraphNode(this.graphNode, repartitionGraphNode);
 
-        final ProcessorGraphNode statefulProcessorNode = new ProcessorGraphNode<>(
+        final ProcessorGraphNode<K, Change<V>> statefulProcessorNode = new ProcessorGraphNode<>(
             funcName,
             new ProcessorParameters<>(aggregateSupplier, funcName)
         );
@@ -102,7 +101,7 @@ public class KGroupedTableImpl<K, V> extends AbstractStream<K, V> implements KGr
         return new KTableImpl<>(funcName,
                                 materialized.keySerde(),
                                 materialized.valueSerde(),
-                                Collections.singleton(sourceName),
+                                Set.of(sourceName),
                                 materialized.queryableStoreName(),
                                 aggregateSupplier,
                                 statefulProcessorNode,

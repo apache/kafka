@@ -191,7 +191,13 @@ class TestAnalyzer:
                 provider.save_cache(self.build_cache)
                 logger.info(f"Saved cache to {provider.__class__.__name__}")
 
-    def build_query(self, project: str, chunk_start: datetime, chunk_end: datetime, test_type: str) -> str:
+    def build_query(
+            self,
+            project: str,
+            chunk_start: datetime,
+            chunk_end: datetime,
+            test_tags: List[str]
+        ) -> str:
         """
         Constructs the query string to be used in both build info and test containers API calls.
         
@@ -199,19 +205,30 @@ class TestAnalyzer:
             project: The project name.
             chunk_start: The start datetime for the chunk.
             chunk_end: The end datetime for the chunk.
-            test_type: The type of tests to query.
+            test_tags: A list of tags to include.
         
         Returns:
             A formatted query string.
         """
-        return f'project:{project} buildStartTime:[{chunk_start.isoformat()} TO {chunk_end.isoformat()}] gradle.requestedTasks:{test_type} tag:github tag:trunk'
+        test_tags.append("+github")
+        tags = []
+        for tag in test_tags:
+            if tag.startswith("+"):
+                tags.append(f"tag:{tag[1:]}")
+            elif tag.startswith("-"):
+                tags.append(f"-tag:{tag[1:]}")
+            else:
+                raise ValueError("Tag should include + or - to indicate inclusion or exclusion.")
+
+        tags = " ".join(tags)
+        return f"project:{project} buildStartTime:[{chunk_start.isoformat()} TO {chunk_end.isoformat()}] gradle.requestedTasks:test {tags}"
     
     def process_chunk(
         self,
         chunk_start: datetime,
         chunk_end: datetime,
         project: str,
-        test_type: str,
+        test_tags: List[str],
         remaining_build_ids: set | None,
         max_builds_per_request: int
     ) -> Dict[str, BuildInfo]:
@@ -219,7 +236,7 @@ class TestAnalyzer:
         chunk_builds = {}
         
         # Use the helper method to build the query
-        query = self.build_query(project, chunk_start, chunk_end, test_type)
+        query = self.build_query(project, chunk_start, chunk_end, test_tags)
         
         # Initialize pagination for this chunk
         from_build = None
@@ -292,14 +309,23 @@ class TestAnalyzer:
             time.sleep(0.5)  # Rate limiting between pagination requests
             
         return chunk_builds
-    def get_build_info(self, build_ids: List[str] = None, project: str = None, test_type: str = None, query_days: int = None, bypass_cache: bool = False, fetch_all: bool = False) -> Dict[str, BuildInfo]:
+
+    def get_build_info(
+            self,
+            build_ids: List[str] = None,
+            project: str = None,
+            test_tags: List[str] = None,
+            query_days: int = None,
+            bypass_cache: bool = False,
+            fetch_all: bool = False
+    ) -> Dict[str, BuildInfo]:
         builds = {}
         max_builds_per_request = 100
         cutoff_date = datetime.now(pytz.UTC) - timedelta(days=query_days)
         current_time = datetime.now(pytz.UTC)
         
         if not fetch_all and not build_ids:
-            raise ValueError("Either build_ids must be provided or fetch_all must be True")
+            raise ValueError(f"Either build_ids must be provided or fetch_all must be True: {build_ids} {fetch_all}")
         
         # Get builds from cache if available and bypass_cache is False
         if not bypass_cache and self.build_cache:
@@ -353,7 +379,7 @@ class TestAnalyzer:
                     chunk[0], 
                     chunk[1], 
                     project, 
-                    test_type, 
+                    test_tags,
                     remaining_build_ids.copy() if remaining_build_ids else None,
                     max_builds_per_request
                 ): chunk for chunk in chunks
@@ -385,8 +411,15 @@ class TestAnalyzer:
             self._save_cache()
         
         return builds
-    def get_test_results(self, project: str, threshold_days: int, test_type: str = "quarantinedTest",
-                        outcomes: List[str] = None) -> List[TestResult]:
+
+    def get_test_results(
+        self,
+        project: str,
+        threshold_days: int,
+        test_tags: List[str],
+        outcomes: List[str] = None
+    ) -> List[TestResult]:
+
         """Fetch test results with timeline information"""
         if outcomes is None:
             outcomes = ["failed", "flaky"]
@@ -408,7 +441,7 @@ class TestAnalyzer:
             logger.debug(f"Processing chunk: {chunk_start} to {chunk_end}")
             
             # Use the helper method to build the query
-            query = self.build_query(project, chunk_start, chunk_end, test_type)
+            query = self.build_query(project, chunk_start, chunk_end, test_tags)
             
             query_params = {
                 'query': query,
@@ -452,7 +485,10 @@ class TestAnalyzer:
         logger.debug(f"Total unique build IDs collected: {len(build_ids)}")
         
         # Fetch build information using the updated get_build_info method
-        builds = self.get_build_info(list(build_ids), project, test_type, threshold_days)
+        print(build_ids)
+        print(list(build_ids))
+
+        builds = self.get_build_info(list(build_ids), project, test_tags, threshold_days)
         logger.debug(f"Retrieved {len(builds)} builds from API")
         logger.debug(f"Retrieved build IDs: {sorted(builds.keys())}")
 
@@ -549,7 +585,7 @@ class TestAnalyzer:
                                 "kafka", 
                                 chunk_start,
                                 current_time,
-                                test_type="quarantinedTest"
+                                test_tags=["+trunk", "+flaky"]
                             )
                             
                             problematic_tests[result.name] = {
@@ -570,7 +606,7 @@ class TestAnalyzer:
         project: str,
         chunk_start: datetime,
         chunk_end: datetime,
-        test_type: str = "quarantinedTest"
+        test_tags: List[str]
     ) -> List[TestCaseResult]:
         """
         Fetch detailed test case results for a specific container.
@@ -580,10 +616,10 @@ class TestAnalyzer:
             project: The project name
             chunk_start: Start time for the query
             chunk_end: End time for the query
-            test_type: Type of tests to query (default: "quarantinedTest")
+            test_tags: List of tags to query
         """
         # Use the helper method to build the query, similar to get_test_results
-        query = self.build_query(project, chunk_start, chunk_end, test_type)
+        query = self.build_query(project, chunk_start, chunk_end, test_tags)
         
         query_params = {
             'query': query,
@@ -612,7 +648,7 @@ class TestAnalyzer:
                         build_ids.update(ids)
             
             # Get build info for all build IDs
-            builds = self.get_build_info(list(build_ids), project, test_type, 7)  # 7 days for test cases
+            builds = self.get_build_info(list(build_ids), project, test_tags, 7)  # 7 days for test cases
             
             for test in content:
                 outcome_data = test['outcomeDistribution']
@@ -741,7 +777,7 @@ class TestAnalyzer:
                             project,
                             chunk_start,
                             current_time,
-                            test_type="quarantinedTest"
+                            test_tags=["+trunk", "+flaky"]
                         )
                         
                         # Only include if all test cases are also passing consistently
@@ -845,7 +881,7 @@ class TestAnalyzer:
                         "kafka",
                         chunk_start,
                         current_time,
-                        test_type="test"
+                        test_tags=["+trunk", "-flaky"]
                     )
                     
                     failing_test_cases = {}
@@ -880,14 +916,13 @@ class TestAnalyzer:
         
         return persistent_failures
 
-def get_develocity_class_link(class_name: str, threshold_days: int, test_type: str = None) -> str:
+def get_develocity_class_link(class_name: str, threshold_days: int) -> str:
     """
     Generate Develocity link for a test class
     
     Args:
         class_name: Name of the test class
         threshold_days: Number of days to look back in search
-        test_type: Type of test (e.g., "quarantinedTest", "test")
     """
     base_url = "https://develocity.apache.org/scans/tests"
     params = {
@@ -895,15 +930,13 @@ def get_develocity_class_link(class_name: str, threshold_days: int, test_type: s
         "search.tags": "github,trunk",
         "search.timeZoneId": "UTC",
         "search.relativeStartTime": f"P{threshold_days}D",
-        "tests.container": class_name
+        "tests.container": class_name,
+        "search.tasks": "test"
     }
-    
-    if test_type:
-        params["search.tasks"] = test_type
         
     return f"{base_url}?{'&'.join(f'{k}={requests.utils.quote(str(v))}' for k, v in params.items())}"
 
-def get_develocity_method_link(class_name: str, method_name: str, threshold_days: int, test_type: str = None) -> str:
+def get_develocity_method_link(class_name: str, method_name: str, threshold_days: int) -> str:
     """
     Generate Develocity link for a test method
     
@@ -911,7 +944,6 @@ def get_develocity_method_link(class_name: str, method_name: str, threshold_days
         class_name: Name of the test class
         method_name: Name of the test method
         threshold_days: Number of days to look back in search
-        test_type: Type of test (e.g., "quarantinedTest", "test")
     """
     base_url = "https://develocity.apache.org/scans/tests"
     
@@ -925,15 +957,13 @@ def get_develocity_method_link(class_name: str, method_name: str, threshold_days
         "search.timeZoneId": "UTC",
         "search.relativeStartTime": f"P{threshold_days}D",
         "tests.container": class_name,
-        "tests.test": method_name
+        "tests.test": method_name,
+        "search.tasks": "test"
     }
-    
-    if test_type:
-        params["search.tasks"] = test_type
         
     return f"{base_url}?{'&'.join(f'{k}={requests.utils.quote(str(v))}' for k, v in params.items())}"
 
-def print_most_problematic_tests(problematic_tests: Dict[str, Dict], threshold_days: int, test_type: str = None):
+def print_most_problematic_tests(problematic_tests: Dict[str, Dict], threshold_days: int):
     """Print a summary of the most problematic tests"""
     print("\n## Most Problematic Tests")
     if not problematic_tests:
@@ -949,7 +979,7 @@ def print_most_problematic_tests(problematic_tests: Dict[str, Dict], threshold_d
     for test_name, details in sorted(problematic_tests.items(), 
                                    key=lambda x: x[1]['failure_rate'],
                                    reverse=True):
-        class_link = get_develocity_class_link(test_name, threshold_days, test_type=test_type)
+        class_link = get_develocity_class_link(test_name, threshold_days)
         print(f"<tr><td colspan=\"4\">{test_name}</td><td><a href=\"{class_link}\">↗️</a></td></tr>")
         
         for test_case in sorted(details['test_cases'],
@@ -958,7 +988,7 @@ def print_most_problematic_tests(problematic_tests: Dict[str, Dict], threshold_d
                               reverse=True):
             method_name = test_case.name.split('.')[-1]
             if method_name != 'N/A':
-                method_link = get_develocity_method_link(test_name, test_case.name, threshold_days, test_type="quarantinedTest")
+                method_link = get_develocity_method_link(test_name, test_case.name, threshold_days)
                 total_runs = test_case.outcome_distribution.total
                 failure_rate = (test_case.outcome_distribution.failed + test_case.outcome_distribution.flaky) / total_runs if total_runs > 0 else 0
                 print(f"<tr><td></td><td>{method_name}</td>"
@@ -1107,7 +1137,7 @@ def print_persistent_failing_tests(persistent_failures: Dict[str, Dict], thresho
     
     print("</details>")
 
-def print_cleared_tests(cleared_tests: Dict[str, Dict], threshold_days: int, test_type: str = None):
+def print_cleared_tests(cleared_tests: Dict[str, Dict], threshold_days: int):
     """Print tests that are ready to be unquarantined"""
     print("\n## Cleared Tests (Ready for Unquarantine)")
     if not cleared_tests:
@@ -1127,7 +1157,7 @@ def print_cleared_tests(cleared_tests: Dict[str, Dict], threshold_days: int, tes
     for test_name, details in sorted(cleared_tests.items(),
                                    key=lambda x: x[1]['success_rate'],
                                    reverse=True):
-        class_link = get_develocity_class_link(test_name, threshold_days, test_type=test_type)
+        class_link = get_develocity_class_link(test_name, threshold_days)
         print(f"<tr><td colspan=\"5\">{test_name}</td><td><a href=\"{class_link}\">↗️</a></td></tr>")
         print(f"<tr><td></td><td>Class Overall</td>"
               f"<td>{details['success_rate']:.2%}</td>"
@@ -1207,13 +1237,13 @@ def main():
         quarantined_results = analyzer.get_test_results(
             PROJECT, 
             threshold_days=QUARANTINE_THRESHOLD_DAYS,
-            test_type="quarantinedTest"
+            test_tags=["+trunk", "+flaky", "-new"]
         )
         
         regular_results = analyzer.get_test_results(
             PROJECT,
             threshold_days=7,  # Last 7 days for regular tests
-            test_type="test"
+            test_tags=["+trunk", "-flaky", "-new"]
         )
         
         # Generate reports
@@ -1249,10 +1279,10 @@ def main():
         print(f"This report was run on {datetime.now(pytz.UTC).strftime('%Y-%m-%d %H:%M:%S')} UTC")
         
         # Print each section
-        print_most_problematic_tests(problematic_tests, QUARANTINE_THRESHOLD_DAYS, test_type="quarantinedTest")
+        print_most_problematic_tests(problematic_tests, QUARANTINE_THRESHOLD_DAYS)
         print_flaky_regressions(flaky_regressions, QUARANTINE_THRESHOLD_DAYS)
         print_persistent_failing_tests(persistent_failures, QUARANTINE_THRESHOLD_DAYS)
-        print_cleared_tests(cleared_tests, QUARANTINE_THRESHOLD_DAYS, test_type="quarantinedTest")
+        print_cleared_tests(cleared_tests, QUARANTINE_THRESHOLD_DAYS)
 
     except Exception as e:
         logger.exception("Error occurred during report generation")

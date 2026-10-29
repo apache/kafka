@@ -18,8 +18,6 @@ package org.apache.kafka.server.util;
 
 import org.junit.jupiter.api.Test;
 
-import java.util.Arrays;
-import java.util.Collections;
 import java.util.List;
 import java.util.Map;
 
@@ -30,7 +28,7 @@ public class CsvTest {
     @Test
     public void testCsvMap() {
         Map<String, String> emptyMap = Csv.parseCsvMap("");
-        assertEquals(Collections.emptyMap(), emptyMap);
+        assertEquals(Map.of(), emptyMap);
 
         String kvPairsIpV6 = "a:b:c:v,a:b:c:v";
         Map<String, String> ipv6Map = Csv.parseCsvMap(kvPairsIpV6);
@@ -62,12 +60,12 @@ public class CsvTest {
     @Test
     public void testCsvList() {
         List<String> emptyList = Csv.parseCsvList("");
-        assertEquals(Collections.emptyList(), emptyList);
+        assertEquals(List.of(), emptyList);
 
         List<String> emptyListFromNullString = Csv.parseCsvList(null);
-        assertEquals(Collections.emptyList(), emptyListFromNullString);
+        assertEquals(List.of(), emptyListFromNullString);
 
         List<String> csvList = Csv.parseCsvList("a,b ,c, d,,e,");
-        assertEquals(Arrays.asList("a", "b", "c", "d", "e"), csvList);
+        assertEquals(List.of("a", "b", "c", "d", "e"), csvList);
     }
 }

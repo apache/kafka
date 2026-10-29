@@ -17,12 +17,14 @@
 
 package org.apache.kafka.streams.query;
 
+import org.apache.kafka.common.annotation.InterfaceAudience;
 import org.apache.kafka.streams.kstream.Windowed;
 import org.apache.kafka.streams.state.KeyValueIterator;
 
 import java.time.Instant;
 import java.util.Optional;
 
+@InterfaceAudience.Public
 public class WindowRangeQuery<K, V> implements Query<KeyValueIterator<Windowed<K>, V>> {
 
     private final Optional<K> key;

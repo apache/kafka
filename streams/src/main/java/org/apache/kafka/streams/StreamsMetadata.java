@@ -17,6 +17,7 @@
 package org.apache.kafka.streams;
 
 import org.apache.kafka.common.TopicPartition;
+import org.apache.kafka.common.annotation.InterfaceAudience;
 import org.apache.kafka.streams.state.HostInfo;
 
 import java.util.Set;
@@ -24,6 +25,7 @@ import java.util.Set;
 /**
  * Metadata of a Kafka Streams client.
  */
+@InterfaceAudience.Public
 public interface StreamsMetadata {
 
     /**
@@ -49,9 +51,9 @@ public interface StreamsMetadata {
     Set<TopicPartition> topicPartitions();
 
     /**
-     * Changelog topic partitions for the state stores the standby tasks of the Streams client replicates.
+     * Source topic partitions for which the instance acts as standby.
      *
-     * @return set of changelog topic partitions of the standby tasks
+     * @return source topic partitions of the standby tasks
      */
     Set<TopicPartition> standbyTopicPartitions();
 

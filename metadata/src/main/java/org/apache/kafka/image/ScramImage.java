@@ -39,29 +39,27 @@ import java.util.Map.Entry;
 
 /**
  * Represents the SCRAM credentials in the metadata image.
- *
+ * <p>
  * This class is thread-safe.
  */
-public final class ScramImage {
-    public static final ScramImage EMPTY = new ScramImage(Collections.emptyMap());
+public record ScramImage(Map<ScramMechanism, Map<String, ScramCredentialData>> mechanisms) {
+    public static final ScramImage EMPTY = new ScramImage(Map.of());
 
-    private final Map<ScramMechanism, Map<String, ScramCredentialData>> mechanisms;
-
-    public ScramImage(Map<ScramMechanism, Map<String, ScramCredentialData>> mechanisms) {
-        this.mechanisms = Collections.unmodifiableMap(mechanisms);
+    public ScramImage {
+        mechanisms = Collections.unmodifiableMap(mechanisms);
     }
 
     public void write(ImageWriter writer, ImageWriterOptions options) {
         if (options.metadataVersion().isScramSupported()) {
-            for (Entry<ScramMechanism, Map<String, ScramCredentialData>> mechanismEntry : mechanisms.entrySet()) {
-                for (Entry<String, ScramCredentialData> userEntry : mechanismEntry.getValue().entrySet()) {
+            for (var mechanismEntry : mechanisms.entrySet()) {
+                for (var userEntry : mechanismEntry.getValue().entrySet()) {
                     writer.write(0, userEntry.getValue().toRecord(userEntry.getKey(), mechanismEntry.getKey()));
                 }
             }
         } else {
             boolean isEmpty = true;
             StringBuilder scramImageString = new StringBuilder("ScramImage({");
-            for (Entry<ScramMechanism, Map<String, ScramCredentialData>> mechanismEntry : mechanisms.entrySet()) {
+            for (var mechanismEntry : mechanisms.entrySet()) {
                 if (!mechanismEntry.getValue().isEmpty()) {
                     scramImageString.append(mechanismEntry.getKey()).append(":");
                     List<String> users = new ArrayList<>(mechanismEntry.getValue().keySet());
@@ -87,7 +85,7 @@ public final class ScramImage {
 
         if ((users == null) || (users.isEmpty())) {
             // If there are no users listed then get all the users
-            for (Map<String, ScramCredentialData> scramCredentialDataSet : mechanisms.values()) {
+            for (var scramCredentialDataSet : mechanisms.values()) {
                 for (String user : scramCredentialDataSet.keySet()) {
                     uniqueUsers.put(user, false);
                 }
@@ -105,54 +103,37 @@ public final class ScramImage {
 
         DescribeUserScramCredentialsResponseData retval = new DescribeUserScramCredentialsResponseData();
 
-        for (Map.Entry<String, Boolean> user : uniqueUsers.entrySet()) {
+        for (Entry<String, Boolean> user : uniqueUsers.entrySet()) {
             DescribeUserScramCredentialsResult result = new DescribeUserScramCredentialsResult().setUser(user.getKey());
 
             if (!user.getValue()) {
-                boolean datafound = false;
+                boolean dataFound = false;
                 List<CredentialInfo> credentialInfos = new ArrayList<>();
-                for (Map.Entry<ScramMechanism, Map<String, ScramCredentialData>> mechanismsEntry : mechanisms.entrySet()) {
+                for (var mechanismsEntry : mechanisms.entrySet()) {
                     Map<String, ScramCredentialData> credentialDataSet = mechanismsEntry.getValue();
                     if (credentialDataSet.containsKey(user.getKey())) {
                         credentialInfos.add(new CredentialInfo().setMechanism(mechanismsEntry.getKey().type())
-                                                                .setIterations(credentialDataSet.get(user.getKey()).iterations()));
-                        datafound = true;
+                            .setIterations(credentialDataSet.get(user.getKey()).iterations()));
+                        dataFound = true;
                     }
                 }
-                if (datafound) {
+                if (dataFound) {
                     result.setCredentialInfos(credentialInfos);
                 } else {
                     result.setErrorCode(Errors.RESOURCE_NOT_FOUND.code())
-                          .setErrorMessage(DESCRIBE_USER_THAT_DOES_NOT_EXIST + user.getKey());
+                        .setErrorMessage(DESCRIBE_USER_THAT_DOES_NOT_EXIST + user.getKey());
                 }
             } else {
                 result.setErrorCode(Errors.DUPLICATE_RESOURCE.code())
-                      .setErrorMessage(DESCRIBE_DUPLICATE_USER + user.getKey());
+                    .setErrorMessage(DESCRIBE_DUPLICATE_USER + user.getKey());
             }
             retval.results().add(result);
         }
         return retval;
     }
 
-    public Map<ScramMechanism, Map<String, ScramCredentialData>> mechanisms() {
-        return mechanisms;
-    }
-
     public boolean isEmpty() {
         return mechanisms.isEmpty();
-    }
-
-    @Override
-    public int hashCode() {
-        return mechanisms.hashCode();
-    }
-
-    @Override
-    public boolean equals(Object o) {
-        if (o == null) return false;
-        if (!o.getClass().equals(ScramImage.class)) return false;
-        ScramImage other = (ScramImage) o;
-        return mechanisms.equals(other.mechanisms);
     }
 
     @Override

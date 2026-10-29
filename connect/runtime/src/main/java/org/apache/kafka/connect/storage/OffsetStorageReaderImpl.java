@@ -23,11 +23,10 @@ import org.slf4j.Logger;
 import org.slf4j.LoggerFactory;
 
 import java.nio.ByteBuffer;
-import java.util.Arrays;
 import java.util.Collection;
-import java.util.Collections;
 import java.util.HashMap;
 import java.util.HashSet;
+import java.util.List;
 import java.util.Map;
 import java.util.Set;
 import java.util.concurrent.CancellationException;
@@ -41,6 +40,10 @@ import java.util.concurrent.atomic.AtomicBoolean;
  */
 public class OffsetStorageReaderImpl implements CloseableOffsetStorageReader {
     private static final Logger log = LoggerFactory.getLogger(OffsetStorageReaderImpl.class);
+
+    private static final String CLOSED_ERR_MSG = "Offset reader is closed. This is likely because the task has already been "
+            + "scheduled to stop but has taken longer than the graceful shutdown "
+            + "period to do so.";
 
     private final OffsetBackingStore backingStore;
     private final String namespace;
@@ -61,19 +64,24 @@ public class OffsetStorageReaderImpl implements CloseableOffsetStorageReader {
 
     @Override
     public <T> Map<String, Object> offset(Map<String, T> partition) {
-        return offsets(Collections.singletonList(partition)).get(partition);
+        return offsets(List.of(partition)).get(partition);
     }
 
     @Override
-    @SuppressWarnings("unchecked")
     public <T> Map<Map<String, T>, Map<String, Object>> offsets(Collection<Map<String, T>> partitions) {
+        Map<ByteBuffer, Map<String, T>> serializedToOriginal = serializePartitions(partitions);
+        Map<ByteBuffer, ByteBuffer> raw = readOffsetsFromBackingStore(serializedToOriginal.keySet());
+        return deserializeOffsets(serializedToOriginal, raw);
+    }
+
+    private <T> Map<ByteBuffer, Map<String, T>> serializePartitions(Collection<Map<String, T>> partitions) {
         // Serialize keys so backing store can work with them
         Map<ByteBuffer, Map<String, T>> serializedToOriginal = new HashMap<>(partitions.size());
         for (Map<String, T> key : partitions) {
             try {
                 // Offsets are treated as schemaless, their format is only validated here (and the returned value below)
                 OffsetUtils.validateFormat(key);
-                byte[] keySerialized = keyConverter.fromConnectData(namespace, null, Arrays.asList(namespace, key));
+                byte[] keySerialized = keyConverter.fromConnectData(namespace, null, List.of(namespace, key));
                 ByteBuffer keyBuffer = (keySerialized != null) ? ByteBuffer.wrap(keySerialized) : null;
                 serializedToOriginal.put(keyBuffer, key);
             } catch (Throwable t) {
@@ -82,19 +90,27 @@ public class OffsetStorageReaderImpl implements CloseableOffsetStorageReader {
                         + "task or cause it to skip some data.", namespace, t);
             }
         }
+        return serializedToOriginal;
+    }
 
+    private Map<ByteBuffer, ByteBuffer> readOffsetsFromBackingStore(Set<ByteBuffer> keys) {
         // Get serialized key -> serialized value from backing store
         Map<ByteBuffer, ByteBuffer> raw;
         try {
             Future<Map<ByteBuffer, ByteBuffer>> offsetReadFuture;
+
+            if (closed.get()) {
+                throw new ConnectException(CLOSED_ERR_MSG);
+            }
+
+            // Note: this call can block for long time waiting for data flush to complete (`KafkaProducer.flush()`).
+            offsetReadFuture = backingStore.get(keys);
+
             synchronized (offsetReadFutures) {
                 if (closed.get()) {
-                    throw new ConnectException(
-                        "Offset reader is closed. This is likely because the task has already been "
-                            + "scheduled to stop but has taken longer than the graceful shutdown "
-                            + "period to do so.");
+                    offsetReadFuture.cancel(true);
+                    throw new ConnectException(CLOSED_ERR_MSG);
                 }
-                offsetReadFuture = backingStore.get(serializedToOriginal.keySet());
                 offsetReadFutures.add(offsetReadFuture);
             }
 
@@ -103,7 +119,7 @@ public class OffsetStorageReaderImpl implements CloseableOffsetStorageReader {
             } catch (CancellationException e) {
                 throw new ConnectException(
                     "Offset reader closed while attempting to read offsets. This is likely because "
-                        + "the task was been scheduled to stop but has taken longer than the "
+                        + "the task has been scheduled to stop but has taken longer than the "
                         + "graceful shutdown period to do so.");
             } finally {
                 synchronized (offsetReadFutures) {
@@ -114,9 +130,15 @@ public class OffsetStorageReaderImpl implements CloseableOffsetStorageReader {
             log.error("Failed to fetch offsets from namespace {}: ", namespace, e);
             throw new ConnectException("Failed to fetch offsets.", e);
         }
+        return raw;
+    }
 
+    @SuppressWarnings("unchecked")
+    private <T> Map<Map<String, T>, Map<String, Object>> deserializeOffsets(
+            Map<ByteBuffer, Map<String, T>> serializedToOriginal,
+            Map<ByteBuffer, ByteBuffer> raw) {
         // Deserialize all the values and map back to the original keys
-        Map<Map<String, T>, Map<String, Object>> result = new HashMap<>(partitions.size());
+        Map<Map<String, T>, Map<String, Object>> result = new HashMap<>(serializedToOriginal.size());
         for (Map.Entry<ByteBuffer, ByteBuffer> rawEntry : raw.entrySet()) {
             try {
                 // Since null could be a valid key, explicitly check whether map contains the key

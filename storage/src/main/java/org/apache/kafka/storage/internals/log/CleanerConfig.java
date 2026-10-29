@@ -16,8 +16,10 @@
  */
 package org.apache.kafka.storage.internals.log;
 
+import org.apache.kafka.common.config.AbstractConfig;
 import org.apache.kafka.common.config.ConfigDef;
 import org.apache.kafka.common.config.TopicConfig;
+import org.apache.kafka.server.config.ServerConfigs;
 import org.apache.kafka.server.config.ServerTopicConfigSynonyms;
 
 import static org.apache.kafka.common.config.ConfigDef.Importance.MEDIUM;
@@ -48,6 +50,7 @@ public class CleanerConfig {
     public static final String LOG_CLEANER_DEDUPE_BUFFER_LOAD_FACTOR_PROP = ServerTopicConfigSynonyms.LOG_CLEANER_PREFIX + "io.buffer.load.factor";
     public static final String LOG_CLEANER_BACKOFF_MS_PROP = ServerTopicConfigSynonyms.LOG_CLEANER_PREFIX + "backoff.ms";
     public static final String LOG_CLEANER_MIN_CLEAN_RATIO_PROP = ServerTopicConfigSynonyms.serverSynonym(TopicConfig.MIN_CLEANABLE_DIRTY_RATIO_CONFIG);
+    @Deprecated(since = "4.1", forRemoval = true)
     public static final String LOG_CLEANER_ENABLE_PROP = ServerTopicConfigSynonyms.LOG_CLEANER_PREFIX + "enable";
     public static final String LOG_CLEANER_DELETE_RETENTION_MS_PROP = ServerTopicConfigSynonyms.serverSynonym(TopicConfig.DELETE_RETENTION_MS_CONFIG);
     public static final String LOG_CLEANER_MIN_COMPACTION_LAG_MS_PROP = ServerTopicConfigSynonyms.serverSynonym(TopicConfig.MIN_COMPACTION_LAG_MS_CONFIG);
@@ -66,7 +69,9 @@ public class CleanerConfig {
     public static final String LOG_CLEANER_DEDUPE_BUFFER_LOAD_FACTOR_DOC = "Log cleaner dedupe buffer load factor. The percentage full the dedupe buffer can become. A higher value " +
             "will allow more log to be cleaned at once but will lead to more hash collisions";
     public static final String LOG_CLEANER_BACKOFF_MS_DOC = "The amount of time to sleep when there are no logs to clean";
-    public static final String LOG_CLEANER_ENABLE_DOC = "Enable the log cleaner process to run on the server. Should be enabled if using any topics with a cleanup.policy=compact including the internal offsets topic. If disabled those topics will not be compacted and continually grow in size.";
+    @Deprecated(since = "4.1", forRemoval = true)
+    public static final String LOG_CLEANER_ENABLE_DOC = "This configuration has been deprecated and will be removed in Kafka 5.0. Users should not set it to false to prepare for its future removal. " +
+            "Enable the log cleaner process to run on the server. Should be enabled if using any topics with a cleanup.policy=compact including the internal offsets topic. If disabled those topics will not be compacted and continually grow in size.";
     public static final String LOG_CLEANER_DELETE_RETENTION_MS_DOC = "The amount of time to retain tombstone message markers for log compacted topics. This setting also gives a bound " +
             "on the time in which a consumer must complete a read if they begin from offset 0 to ensure that they get a valid snapshot of the final stage (otherwise  " +
             "tombstones messages may be collected before a consumer completes their scan).";
@@ -127,6 +132,22 @@ public class CleanerConfig {
         this.maxIoBytesPerSecond = maxIoBytesPerSecond;
         this.backoffMs = backoffMs;
         this.enableCleaner = enableCleaner;
+    }
+
+    /**
+     * Create an instance of this class.
+     *
+     * @param config the {@link AbstractConfig} instance for initialize all variables
+     */
+    public CleanerConfig(AbstractConfig config) {
+        this.numThreads = config.getInt(LOG_CLEANER_THREADS_PROP);
+        this.dedupeBufferSize = config.getLong(LOG_CLEANER_DEDUPE_BUFFER_SIZE_PROP);
+        this.dedupeBufferLoadFactor = config.getDouble(LOG_CLEANER_DEDUPE_BUFFER_LOAD_FACTOR_PROP);
+        this.ioBufferSize = config.getInt(LOG_CLEANER_IO_BUFFER_SIZE_PROP);
+        this.maxMessageSize = config.getInt(ServerConfigs.MESSAGE_MAX_BYTES_CONFIG);
+        this.maxIoBytesPerSecond = config.getDouble(LOG_CLEANER_IO_MAX_BYTES_PER_SECOND_PROP);
+        this.backoffMs = config.getLong(LOG_CLEANER_BACKOFF_MS_PROP);
+        this.enableCleaner = config.getBoolean(LOG_CLEANER_ENABLE_PROP);
     }
 
     public String hashAlgorithm() {

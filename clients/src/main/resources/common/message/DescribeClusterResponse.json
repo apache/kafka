@@ -24,6 +24,9 @@
   //
   "validVersions": "0-2",
   "flexibleVersions": "0+",
+  "headerVersions": {
+    "0+": "1"
+  },
   "fields": [
     { "name": "ThrottleTimeMs", "type": "int32", "versions": "0+",
       "about": "The duration in milliseconds for which the request was throttled due to a quota violation, or zero if the request did not violate any quota." },
@@ -36,7 +39,7 @@
     { "name": "ClusterId", "type": "string", "versions": "0+",
       "about": "The cluster ID that responding broker belongs to." },
     { "name": "ControllerId", "type": "int32", "versions": "0+", "default": "-1", "entityType": "brokerId",
-      "about": "The ID of the controller broker." },
+      "about": "The ID of the controller. When handled by a controller, returns the current voter leader ID. When handled by a broker, returns a random alive broker ID as a fallback." },
     { "name": "Brokers", "type": "[]DescribeClusterBroker", "versions": "0+",
       "about": "Each broker in the response.", "fields": [
       { "name": "BrokerId", "type": "int32", "versions": "0+", "mapKey": true, "entityType": "brokerId",

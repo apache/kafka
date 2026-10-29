@@ -13,13 +13,11 @@
  * WITHOUT WARRANTIES OR CONDITIONS OF ANY KIND, either express or implied.
  * See the License for the specific language governing permissions and
  * limitations under the License.
- *
- * (c) Copyright 2025, SAP SE and apache/kafka contributors
  */
 package org.apache.kafka.tools.reassign;
 
-import org.apache.kafka.admin.BrokerMetadata;
 import org.apache.kafka.common.TopicPartition;
+import org.apache.kafka.metadata.placement.UsableBroker;
 
 import java.io.Serializable;
 import java.math.BigInteger;
@@ -41,20 +39,20 @@ public class StickyPartitionReassignor {
     private final Map<Integer, Integer> brokerToAssignments;
     private final Map<Integer, Integer> brokerToLeaders;
 
-    private final TreeSet<BrokerMetadata> sortedBrokersByAssignments;
+    private final TreeSet<UsableBroker> sortedBrokersByAssignments;
 
     private final Map<ReplicaId, Replica> replicas;
     private final Map<ReplicaId, Replica> unassignedReplicas;
     private final Set<Partition> partitions;
 
-    private final Map<BrokerMetadata, Map<BrokerMetadata, TreeSet<MoveFrom>>> possibleMoves;
-    private final Map<BrokerMetadata, TreeSet<MoveFrom>> possibleInitialAssignments;
+    private final Map<UsableBroker, Map<UsableBroker, TreeSet<MoveFrom>>> possibleMoves;
+    private final Map<UsableBroker, TreeSet<MoveFrom>> possibleInitialAssignments;
 
     private final Set<Optional<String>> racks;
     private final boolean rackAware;
 
 
-    public StickyPartitionReassignor(Map<TopicPartition, List<Integer>> currentAssignments, List<BrokerMetadata> brokerMetadatas) {
+    public StickyPartitionReassignor(Map<TopicPartition, List<Integer>> currentAssignments, List<UsableBroker> brokerMetadatas) {
         this.possibleMoves = new HashMap<>();
         this.possibleInitialAssignments = new HashMap<>();
         this.brokerToAssignments = new HashMap<>();
@@ -62,19 +60,19 @@ public class StickyPartitionReassignor {
         this.sortedBrokersByAssignments = new TreeSet<>(new BrokerReplicaCountComparator(this.brokerToAssignments));
 
         this.racks = new HashSet<>();
-        final Map<Integer, BrokerMetadata> brokers = new HashMap<>();
+        final Map<Integer, UsableBroker> brokers = new HashMap<>();
 
         int rackAwareBrokers = 0;
         int rackUnawareBrokers = 0;
 
-        for (final BrokerMetadata brokerMetadata : brokerMetadatas) {
-            if (brokerMetadata.rack.isPresent()) {
+        for (final UsableBroker brokerMetadata : brokerMetadatas) {
+            if (brokerMetadata.rack().isPresent()) {
                 rackAwareBrokers++;
             } else {
                 rackUnawareBrokers++;
             }
-            this.racks.add(brokerMetadata.rack);
-            brokers.put(brokerMetadata.id, brokerMetadata);
+            this.racks.add(brokerMetadata.rack());
+            brokers.put(brokerMetadata.id(), brokerMetadata);
         }
 
         if (rackAwareBrokers > 0 && rackUnawareBrokers > 0)
@@ -101,7 +99,7 @@ public class StickyPartitionReassignor {
         }
     }
 
-    private static MoveFrom getBestMoveFrom(TreeSet<MoveFrom> toBrokerMoves, BrokerMetadata fromBroker, BrokerMetadata toBroker) {
+    private static MoveFrom getBestMoveFrom(TreeSet<MoveFrom> toBrokerMoves, UsableBroker fromBroker, UsableBroker toBroker) {
         final MoveFrom moveFrom = toBrokerMoves.first();
         if (moveFrom == null)
             throw new RuntimeException(String.format("No available moves from %s to %s", fromBroker, toBroker));
@@ -112,7 +110,7 @@ public class StickyPartitionReassignor {
         return moveFrom;
     }
 
-    private static MoveFrom getBestInitialAssignmentFrom(BrokerMetadata toBroker, TreeSet<MoveFrom> toBrokerMoves) {
+    private static MoveFrom getBestInitialAssignmentFrom(UsableBroker toBroker, TreeSet<MoveFrom> toBrokerMoves) {
         final MoveFrom initialAssignment = toBrokerMoves.first();
         if (initialAssignment == null)
             throw new RuntimeException(String.format("No available moves for unassigned replicas from to %s", toBroker));
@@ -122,7 +120,7 @@ public class StickyPartitionReassignor {
         return initialAssignment;
     }
 
-    private void initReplicas(Map<TopicPartition, List<Integer>> currentAssignments, Map<Integer, BrokerMetadata> brokers) {
+    private void initReplicas(Map<TopicPartition, List<Integer>> currentAssignments, Map<Integer, UsableBroker> brokers) {
         for (final Map.Entry<TopicPartition, List<Integer>> entry : currentAssignments.entrySet()) {
             final List<Integer> replicaAssignments = entry.getValue();
             final TopicPartition topicPartition = entry.getKey();
@@ -134,7 +132,7 @@ public class StickyPartitionReassignor {
                 final Integer currentNodeId = replicaAssignments.get(i);
                 if (currentNodeId == null)
                     throw new RuntimeException(String.format("Replica assignment for %s %s was null", topicPartition, i));
-                final BrokerMetadata currentBroker = brokers.get(currentNodeId);
+                final UsableBroker currentBroker = brokers.get(currentNodeId);
 
                 final boolean isLeader = i == 0;
 
@@ -179,11 +177,11 @@ public class StickyPartitionReassignor {
         return rackScore;
     }
 
-    private long computeNewRackScore(Replica replica, BrokerMetadata to) {
+    private long computeNewRackScore(Replica replica, UsableBroker to) {
         if (!this.rackAware) return 0L;
 
-        final Optional<String> currentRack = replica.currentBroker.rack;
-        final Optional<String> newRack = to.rack;
+        final Optional<String> currentRack = replica.currentBroker.rack();
+        final Optional<String> newRack = to.rack();
 
         // The count per broker can only grow as large as replicationFactor
         // Using long arithmetic by squaring each count per broker should
@@ -204,10 +202,10 @@ public class StickyPartitionReassignor {
         return rackScore;
     }
 
-    private long computeNewRackScoreForUnassignedReplica(Replica replica, BrokerMetadata to) {
+    private long computeNewRackScoreForUnassignedReplica(Replica replica, UsableBroker to) {
         if (!this.rackAware) return 0L;
 
-        final Optional<String> newRack = to.rack;
+        final Optional<String> newRack = to.rack();
 
         // The count per broker can only grow as large as replicationFactor
         // Using long arithmetic by squaring each count per broker should
@@ -229,7 +227,7 @@ public class StickyPartitionReassignor {
     private Set<MoveFrom> getInitialAssignmentsForReplica(Replica replica) {
         final Set<MoveFrom> initialAssignments = new TreeSet<>(new MovableFromScoreComparator());
 
-        for (final BrokerMetadata broker : this.sortedBrokersByAssignments) {
+        for (final UsableBroker broker : this.sortedBrokersByAssignments) {
             // Can not move to a replica to a broker that already has a replica for the partition
             if (replica.id.partition.replicaCountPerBroker.get(broker) != null) continue;
 
@@ -331,10 +329,10 @@ public class StickyPartitionReassignor {
         this.sortedBrokersByAssignments.remove(move.to);
 
         // Update assignment counts to state after move
-        this.brokerToAssignments.compute(move.to.id, (key, value) -> value == null ? 1 : value + 1);
+        this.brokerToAssignments.compute(move.to.id(), (key, value) -> value == null ? 1 : value + 1);
 
         if (move.replica.isLeader) {
-            this.brokerToLeaders.compute(move.to.id, (key, value) -> value == null ? 1 : value + 1);
+            this.brokerToLeaders.compute(move.to.id(), (key, value) -> value == null ? 1 : value + 1);
         }
 
         // Re-add broker nodes
@@ -375,7 +373,7 @@ public class StickyPartitionReassignor {
 
         // Iterate through all brokers in ascending order by replica assignment count
         // (broker with the least assignments first, broker with the most assignments last)
-        for (BrokerMetadata toBroker : this.sortedBrokersByAssignments) {
+        for (UsableBroker toBroker : this.sortedBrokersByAssignments) {
             final BigInteger globalBrokerScore = this.computeNewGlobalBrokerScoreForUnassignedReplica(toBroker);
             BigInteger leaderScore = BigInteger.ZERO;
 
@@ -406,7 +404,7 @@ public class StickyPartitionReassignor {
 
         final long currentRackScore = this.computeCurrentRackScore(replica);
 
-        for (final BrokerMetadata broker : this.sortedBrokersByAssignments) {
+        for (final UsableBroker broker : this.sortedBrokersByAssignments) {
             if (replica.id.partition.replicaCountPerBroker.get(broker) != null) continue;
 
             final long newRackScore = this.computeNewRackScore(replica, broker);
@@ -422,8 +420,8 @@ public class StickyPartitionReassignor {
         return possibleMoves;
     }
 
-    private void adjustGlobalPossibleMoves(BrokerMetadata fromBroker, List<MoveFrom> toRemove, List<MoveFrom> toAdd) {
-        Map<BrokerMetadata, TreeSet<MoveFrom>> fromBrokerMoves = this.possibleMoves.get(fromBroker);
+    private void adjustGlobalPossibleMoves(UsableBroker fromBroker, List<MoveFrom> toRemove, List<MoveFrom> toAdd) {
+        Map<UsableBroker, TreeSet<MoveFrom>> fromBrokerMoves = this.possibleMoves.get(fromBroker);
 
         // First remove all old possible moves from the global possible moves
         // Removing old moves first is required due to the invariants defined in
@@ -524,12 +522,12 @@ public class StickyPartitionReassignor {
         this.sortedBrokersByAssignments.remove(move.to);
 
         // Update assignment counts to state after move
-        this.brokerToAssignments.compute(move.from.id, (key, value) -> value == null || value <= 1 ? null : value - 1);
-        this.brokerToAssignments.compute(move.to.id, (key, value) -> value == null ? 1 : value + 1);
+        this.brokerToAssignments.compute(move.from.id(), (key, value) -> value == null || value <= 1 ? null : value - 1);
+        this.brokerToAssignments.compute(move.to.id(), (key, value) -> value == null ? 1 : value + 1);
 
         if (move.replica.isLeader) {
-            this.brokerToLeaders.compute(move.from.id, (key, value) -> value == null || value <= 1 ? null : value - 1);
-            this.brokerToLeaders.compute(move.to.id, (key, value) -> value == null ? 1 : value + 1);
+            this.brokerToLeaders.compute(move.from.id(), (key, value) -> value == null || value <= 1 ? null : value - 1);
+            this.brokerToLeaders.compute(move.to.id(), (key, value) -> value == null ? 1 : value + 1);
         }
 
         // Re-add broker nodes
@@ -566,21 +564,21 @@ public class StickyPartitionReassignor {
 
         // Iterate through all brokers in descending order by replica assignment count
         // (broker with the most assignments first, broker with the least assignments last)
-        final Iterator<BrokerMetadata> fromBrokerIterator = this.sortedBrokersByAssignments.descendingIterator();
+        final Iterator<UsableBroker> fromBrokerIterator = this.sortedBrokersByAssignments.descendingIterator();
 
         while (fromBrokerIterator.hasNext()) {
-            final BrokerMetadata fromBroker = fromBrokerIterator.next();
-            final Map<BrokerMetadata, TreeSet<MoveFrom>> fromBrokerMoves = this.possibleMoves.get(fromBroker);
+            final UsableBroker fromBroker = fromBrokerIterator.next();
+            final Map<UsableBroker, TreeSet<MoveFrom>> fromBrokerMoves = this.possibleMoves.get(fromBroker);
 
             if (fromBrokerMoves == null) continue;
 
             // Iterate through all brokers in ascending order by replica assignment count
             // (broker with the least assignments first, broker with the most assignments last)
-            final Iterator<BrokerMetadata> toBrokerIterator = this.sortedBrokersByAssignments.iterator();
+            final Iterator<UsableBroker> toBrokerIterator = this.sortedBrokersByAssignments.iterator();
             boolean globalBrokerDistributionCouldImprove = false;
 
             while (toBrokerIterator.hasNext()) {
-                final BrokerMetadata toBroker = toBrokerIterator.next();
+                final UsableBroker toBroker = toBrokerIterator.next();
                 if (fromBroker.equals(toBroker)) continue;
 
                 final BigInteger newGlobalBrokerScore = this.computeNewGlobalBrokerScore(fromBroker, toBroker);
@@ -659,7 +657,7 @@ public class StickyPartitionReassignor {
                 final Replica replica = this.replicas.get(new ReplicaId(partition, i));
                 if (replica == null)
                     throw new RuntimeException(String.format("Replica %s does not exist for partition %s", i, partition));
-                replicaAssignments.add(replica.currentBroker.id);
+                replicaAssignments.add(replica.currentBroker.id());
             }
         }
 
@@ -676,15 +674,15 @@ public class StickyPartitionReassignor {
         // metric for ranking the distribution scores as the squared
         // residuals
         BigInteger brokerScore = BigInteger.ZERO;
-        for (final BrokerMetadata broker : this.sortedBrokersByAssignments) {
-            final long replicasOnBroker = (long) this.brokerToAssignments.getOrDefault(broker.id, 0);
+        for (final UsableBroker broker : this.sortedBrokersByAssignments) {
+            final long replicasOnBroker = (long) this.brokerToAssignments.getOrDefault(broker.id(), 0);
             final BigInteger thisScore = BigInteger.valueOf(replicasOnBroker).pow(2);
             brokerScore = brokerScore.add(thisScore);
         }
         return brokerScore;
     }
 
-    private BigInteger computeNewGlobalBrokerScore(BrokerMetadata from, BrokerMetadata to) {
+    private BigInteger computeNewGlobalBrokerScore(UsableBroker from, UsableBroker to) {
         // The count per broker can grow as large as the number of replicas in
         // the cluster.
         // Using long arithmetic as for partitionBrokerScore or rackScore
@@ -694,8 +692,8 @@ public class StickyPartitionReassignor {
         // metric for ranking the distribution scores as the squared
         // residuals
         BigInteger brokerScore = BigInteger.ZERO;
-        for (final BrokerMetadata broker : this.sortedBrokersByAssignments) {
-            long replicasOnBroker = this.brokerToAssignments.getOrDefault(broker.id, 0);
+        for (final UsableBroker broker : this.sortedBrokersByAssignments) {
+            long replicasOnBroker = this.brokerToAssignments.getOrDefault(broker.id(), 0);
             // Assume that the move was executed and remove a replica from the from-rack count
             // and add a replica to the to-rack count
             if (broker.equals(from)) replicasOnBroker--;
@@ -707,7 +705,7 @@ public class StickyPartitionReassignor {
         return brokerScore;
     }
 
-    private BigInteger computeNewGlobalBrokerScoreForUnassignedReplica(BrokerMetadata to) {
+    private BigInteger computeNewGlobalBrokerScoreForUnassignedReplica(UsableBroker to) {
         // The count per broker can grow as large as the number of replicas in
         // the cluster.
         // Using long arithmetic as for partitionBrokerScore or rackScore
@@ -717,8 +715,8 @@ public class StickyPartitionReassignor {
         // metric for ranking the distribution scores as the squared
         // residuals
         BigInteger brokerScore = BigInteger.ZERO;
-        for (final BrokerMetadata broker : this.sortedBrokersByAssignments) {
-            long replicasOnBroker = this.brokerToAssignments.getOrDefault(broker.id, 0);
+        for (final UsableBroker broker : this.sortedBrokersByAssignments) {
+            long replicasOnBroker = this.brokerToAssignments.getOrDefault(broker.id(), 0);
             // Assume that the move was executed and add a replica to the to-rack count
             if (broker.equals(to)) replicasOnBroker++;
 
@@ -738,15 +736,15 @@ public class StickyPartitionReassignor {
         // metric for ranking the distribution scores as the squared
         // residuals
         BigInteger brokerScore = BigInteger.ZERO;
-        for (final BrokerMetadata broker : this.sortedBrokersByAssignments) {
-            final long replicasOnBroker = (long) this.brokerToLeaders.getOrDefault(broker.id, 0);
+        for (final UsableBroker broker : this.sortedBrokersByAssignments) {
+            final long replicasOnBroker = (long) this.brokerToLeaders.getOrDefault(broker.id(), 0);
             final BigInteger thisScore = BigInteger.valueOf(replicasOnBroker).pow(2);
             brokerScore = brokerScore.add(thisScore);
         }
         return brokerScore;
     }
 
-    private BigInteger computeNewLeaderScore(BrokerMetadata fromBroker, BrokerMetadata to) {
+    private BigInteger computeNewLeaderScore(UsableBroker fromBroker, UsableBroker to) {
         // The leader count per broker can grow as large as the number of
         // partitions in the cluster.
         // Using long arithmetic as for partitionBrokerScore or rackScore
@@ -756,8 +754,8 @@ public class StickyPartitionReassignor {
         // metric for ranking the distribution scores as the squared
         // residuals
         BigInteger brokerScore = BigInteger.ZERO;
-        for (final BrokerMetadata broker : this.sortedBrokersByAssignments) {
-            long replicasOnBroker = this.brokerToLeaders.getOrDefault(broker.id, 0);
+        for (final UsableBroker broker : this.sortedBrokersByAssignments) {
+            long replicasOnBroker = this.brokerToLeaders.getOrDefault(broker.id(), 0);
             // Assume that the move was executed and remove a replica from the from-rack count
             // and add a replica to the to-rack count
             if (broker.equals(fromBroker)) replicasOnBroker--;
@@ -769,7 +767,7 @@ public class StickyPartitionReassignor {
         return brokerScore;
     }
 
-    private BigInteger computeNewLeaderScoreForUnassignedReplica(BrokerMetadata to) {
+    private BigInteger computeNewLeaderScoreForUnassignedReplica(UsableBroker to) {
         // The leader count per broker can grow as large as the number of
         // partitions in the cluster.
         // Using long arithmetic as for partitionBrokerScore or rackScore
@@ -779,8 +777,8 @@ public class StickyPartitionReassignor {
         // metric for ranking the distribution scores as the squared
         // residuals
         BigInteger brokerScore = BigInteger.ZERO;
-        for (final BrokerMetadata broker : this.sortedBrokersByAssignments) {
-            long replicasOnBroker = this.brokerToLeaders.getOrDefault(broker.id, 0);
+        for (final UsableBroker broker : this.sortedBrokersByAssignments) {
+            long replicasOnBroker = this.brokerToLeaders.getOrDefault(broker.id(), 0);
             // Assume that the move was executed and remove a replica from the from-rack count
             // and add a replica to the to-rack count
             if (broker.equals(to)) replicasOnBroker++;
@@ -792,14 +790,14 @@ public class StickyPartitionReassignor {
     }
 
     private record BrokerReplicaCountComparator(
-            Map<Integer, Integer> assignments) implements Comparator<BrokerMetadata>, Serializable {
+            Map<Integer, Integer> assignments) implements Comparator<UsableBroker>, Serializable {
         private static final long serialVersionUID = 1L;
 
         @Override
-        public int compare(BrokerMetadata o1, BrokerMetadata o2) {
-            int ret = this.assignments.getOrDefault(o1.id, 0).compareTo(this.assignments.getOrDefault(o2.id, 0));
+        public int compare(UsableBroker o1, UsableBroker o2) {
+            int ret = this.assignments.getOrDefault(o1.id(), 0).compareTo(this.assignments.getOrDefault(o2.id(), 0));
             if (ret != 0) return ret;
-            return o1.id - o2.id;
+            return o1.id() - o2.id();
         }
     }
 
@@ -817,7 +815,7 @@ public class StickyPartitionReassignor {
             ret = o1.rackImprovementScore.compareTo(o2.rackImprovementScore);
             if (ret != 0) return ret;
 
-            ret = o1.to.id - o2.to.id;
+            ret = o1.to.id() - o2.to.id();
             if (ret != 0) return ret;
 
             return o1.replica.compareTo(o2.replica);
@@ -846,7 +844,7 @@ public class StickyPartitionReassignor {
             ret = this.compareImprovementScores(o1, o2);
             if (ret != 0) return ret;
 
-            ret = o1.to.id - o2.to.id;
+            ret = o1.to.id() - o2.to.id();
             if (ret != 0) return ret;
 
             return o1.replica.compareTo(o2.replica);
@@ -885,7 +883,7 @@ public class StickyPartitionReassignor {
         final Set<Replica> replicas;
 
         final Map<Optional<String>, Integer> replicaCountPerRack;
-        final Map<BrokerMetadata, Integer> replicaCountPerBroker;
+        final Map<UsableBroker, Integer> replicaCountPerBroker;
 
         public Partition(TopicPartition id) {
             this.id = id;
@@ -899,8 +897,8 @@ public class StickyPartitionReassignor {
                 throw new RuntimeException(String.format("Replica %s does not belong to partition %s", replica.id, this));
             if (replica.currentBroker == null) return;
 
-            final BrokerMetadata newBroker = replica.currentBroker;
-            final Optional<String> newRack = newBroker.rack;
+            final UsableBroker newBroker = replica.currentBroker;
+            final Optional<String> newRack = newBroker.rack();
 
             this.replicaCountPerRack.compute(newRack, (key, value) -> value == null ? 1 : value + 1);
             this.replicaCountPerBroker.compute(newBroker, (key, value) -> value == null ? 1 : value + 1);
@@ -910,10 +908,10 @@ public class StickyPartitionReassignor {
             if (!move.replica.id.partition.equals(this))
                 throw new RuntimeException(String.format("Replica %s does not belong to partition %s", move.replica.id, this));
 
-            final BrokerMetadata previousBroker = move.from;
-            final Optional<String> previousRack = previousBroker.rack;
-            final BrokerMetadata newBroker = move.to;
-            final Optional<String> newRack = newBroker.rack;
+            final UsableBroker previousBroker = move.from;
+            final Optional<String> previousRack = previousBroker.rack();
+            final UsableBroker newBroker = move.to;
+            final Optional<String> newRack = newBroker.rack();
 
             this.replicaCountPerRack.compute(previousRack, (key, value) -> value == null || value <= 1 ? null : value - 1);
             this.replicaCountPerRack.compute(newRack, (key, value) -> value == null ? 1 : value + 1);
@@ -946,13 +944,13 @@ public class StickyPartitionReassignor {
 
         final ReplicaId id;
 
-        BrokerMetadata currentBroker;
+        UsableBroker currentBroker;
 
         Set<MoveFrom> possibleMoves;
         boolean moved;
         boolean isLeader;
 
-        public Replica(ReplicaId id, BrokerMetadata currentBroker, boolean isLeader) {
+        public Replica(ReplicaId id, UsableBroker currentBroker, boolean isLeader) {
             this.id = id;
             this.currentBroker = currentBroker;
             this.moved = false;
@@ -983,7 +981,7 @@ public class StickyPartitionReassignor {
         }
     }
 
-    private record MoveFrom(Replica replica, BrokerMetadata to, Long rackImprovementScore) {
+    private record MoveFrom(Replica replica, UsableBroker to, Long rackImprovementScore) {
         @Override
         public boolean equals(Object o) {
             if (o == null || getClass() != o.getClass()) return false;
@@ -1001,7 +999,7 @@ public class StickyPartitionReassignor {
         }
     }
 
-    private record Move(Replica replica, BrokerMetadata from, BrokerMetadata to,
+    private record Move(Replica replica, UsableBroker from, UsableBroker to,
                         BigInteger globalBrokerImprovementScore, Long rackImprovementScore,
                         BigInteger leaderImprovementScore) {
 

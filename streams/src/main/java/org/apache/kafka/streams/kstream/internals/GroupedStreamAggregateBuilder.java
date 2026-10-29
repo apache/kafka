@@ -25,7 +25,6 @@ import org.apache.kafka.streams.kstream.internals.graph.GraphNode;
 import org.apache.kafka.streams.kstream.internals.graph.ProcessorGraphNode;
 import org.apache.kafka.streams.kstream.internals.graph.ProcessorParameters;
 
-import java.util.Collections;
 import java.util.Set;
 
 import static org.apache.kafka.streams.kstream.internals.graph.OptimizableRepartitionNode.OptimizableRepartitionNodeBuilder;
@@ -126,8 +125,10 @@ class GroupedStreamAggregateBuilder<K, V> {
 
         if (repartitionRequired) {
             final OptimizableRepartitionNodeBuilder<K, V> repartitionNodeBuilder = optimizableRepartitionNodeBuilder();
+
             final String repartitionTopicPrefix = userProvidedRepartitionTopicName != null ? userProvidedRepartitionTopicName : storeName;
-            sourceName = createRepartitionSource(repartitionTopicPrefix, repartitionNodeBuilder);
+
+            sourceName = createRepartitionSource(repartitionTopicPrefix, repartitionNodeBuilder, userProvidedRepartitionTopicName != null || queryableStoreName != null);
 
             // First time through we need to create a repartition node.
             // Any subsequent calls to GroupedStreamAggregateBuilder#build we check if
@@ -146,7 +147,7 @@ class GroupedStreamAggregateBuilder<K, V> {
         return new KTableImpl<>(aggFunctionName,
                                 keySerde,
                                 valueSerde,
-                                sourceName.equals(this.name) ? subTopologySourceNodes : Collections.singleton(sourceName),
+                                sourceName.equals(this.name) ? subTopologySourceNodes : Set.of(sourceName),
                                 queryableStoreName,
                                 aggregateSupplier,
                                 aggProcessorNode,
@@ -157,14 +158,16 @@ class GroupedStreamAggregateBuilder<K, V> {
      * @return the new sourceName of the repartitioned source
      */
     private String createRepartitionSource(final String repartitionTopicNamePrefix,
-                                           final OptimizableRepartitionNodeBuilder<K, V> optimizableRepartitionNodeBuilder) {
+                                           final OptimizableRepartitionNodeBuilder<K, V> optimizableRepartitionNodeBuilder,
+                                           final boolean isRepartitionTopicNameProvidedByUser) {
 
         return KStreamImpl.createRepartitionedSource(builder,
                                                      keySerde,
                                                      valueSerde,
                                                      repartitionTopicNamePrefix,
                                                      null,
-                                                     optimizableRepartitionNodeBuilder);
+                                                     optimizableRepartitionNodeBuilder,
+                                                     isRepartitionTopicNameProvidedByUser);
 
     }
 }

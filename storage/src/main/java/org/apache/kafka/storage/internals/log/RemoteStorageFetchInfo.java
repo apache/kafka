@@ -16,39 +16,10 @@
  */
 package org.apache.kafka.storage.internals.log;
 
-import org.apache.kafka.common.TopicPartition;
+import org.apache.kafka.common.TopicIdPartition;
 import org.apache.kafka.common.requests.FetchRequest;
 import org.apache.kafka.server.storage.log.FetchIsolation;
 
-public class RemoteStorageFetchInfo {
-
-    public final int fetchMaxBytes;
-    public final boolean minOneMessage;
-    public final TopicPartition topicPartition;
-    public final FetchRequest.PartitionData fetchInfo;
-    public final FetchIsolation fetchIsolation;
-    public final boolean hardMaxBytesLimit;
-
-    public RemoteStorageFetchInfo(int fetchMaxBytes, boolean minOneMessage, TopicPartition topicPartition,
-                                  FetchRequest.PartitionData fetchInfo, FetchIsolation fetchIsolation,
-                                  boolean hardMaxBytesLimit) {
-        this.fetchMaxBytes = fetchMaxBytes;
-        this.minOneMessage = minOneMessage;
-        this.topicPartition = topicPartition;
-        this.fetchInfo = fetchInfo;
-        this.fetchIsolation = fetchIsolation;
-        this.hardMaxBytesLimit = hardMaxBytesLimit;
-    }
-
-    @Override
-    public String toString() {
-        return "RemoteStorageFetchInfo{" +
-                "fetchMaxBytes=" + fetchMaxBytes +
-                ", minOneMessage=" + minOneMessage +
-                ", topicPartition=" + topicPartition +
-                ", fetchInfo=" + fetchInfo +
-                ", fetchIsolation=" + fetchIsolation +
-                ", hardMaxBytesLimit=" + hardMaxBytesLimit +
-                '}';
-    }
+public record RemoteStorageFetchInfo(int fetchMaxBytes, boolean minOneMessage, TopicIdPartition topicIdPartition,
+                                     FetchRequest.PartitionData fetchInfo, FetchIsolation fetchIsolation) {
 }

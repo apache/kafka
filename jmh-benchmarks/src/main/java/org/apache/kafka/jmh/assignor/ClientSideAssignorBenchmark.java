@@ -40,11 +40,11 @@ import org.openjdk.jmh.annotations.Threads;
 import org.openjdk.jmh.annotations.Warmup;
 
 import java.util.ArrayList;
-import java.util.Collections;
 import java.util.HashMap;
 import java.util.List;
 import java.util.Map;
 import java.util.Optional;
+import java.util.Set;
 import java.util.concurrent.TimeUnit;
 
 import static org.apache.kafka.clients.consumer.internals.AbstractStickyAssignor.DEFAULT_GENERATION;
@@ -161,7 +161,7 @@ public class ClientSideAssignorBenchmark {
             partitions.addAll(partitionInfos(topicName, partitionsPerTopicCount, nodes));
         }
 
-        metadata = new Cluster("test-cluster", nodes, partitions, Collections.emptySet(), Collections.emptySet());
+        metadata = new Cluster("test-cluster", nodes, partitions, Set.of(), Set.of());
     }
 
     private void addMemberSubscriptions() {
@@ -215,7 +215,7 @@ public class ClientSideAssignorBenchmark {
         for (int i = 0; i < numberOfPartitions; i++) {
             Node[] replicas = new Node[3];
             for (int j = 0; j < 3; j++) {
-                // Assign nodes based on partition number to mimic mkMapOfPartitionRacks logic.
+                // Assign nodes based on partition number.
                 int nodeIndex = (i + j) % NUMBER_OF_RACKS;
                 replicas[j] = nodes.get(nodeIndex);
             }
@@ -230,7 +230,7 @@ public class ClientSideAssignorBenchmark {
         return new ConsumerPartitionAssignor.Subscription(
             topics,
             null,
-            Collections.emptyList(),
+            List.of(),
             DEFAULT_GENERATION,
             rackId
         );

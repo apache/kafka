@@ -16,6 +16,7 @@
  */
 package org.apache.kafka.server.log.remote.metadata.storage;
 
+import org.apache.kafka.clients.consumer.Consumer;
 import org.apache.kafka.clients.consumer.ConsumerRecord;
 import org.apache.kafka.clients.consumer.MockConsumer;
 import org.apache.kafka.clients.consumer.internals.AutoOffsetResetStrategy;
@@ -26,6 +27,7 @@ import org.apache.kafka.common.errors.AuthorizationException;
 import org.apache.kafka.common.errors.LeaderNotAvailableException;
 import org.apache.kafka.common.errors.TimeoutException;
 import org.apache.kafka.common.utils.Time;
+import org.apache.kafka.server.log.remote.metadata.storage.ConsumerTask.UserTopicIdPartition;
 import org.apache.kafka.server.log.remote.metadata.storage.serialization.RemoteLogMetadataSerde;
 import org.apache.kafka.server.log.remote.storage.RemoteLogMetadata;
 import org.apache.kafka.server.log.remote.storage.RemoteLogSegmentId;
@@ -39,8 +41,8 @@ import org.junit.jupiter.api.Test;
 import org.junit.jupiter.params.ParameterizedTest;
 import org.junit.jupiter.params.provider.CsvSource;
 
+import java.time.Duration;
 import java.util.ArrayList;
-import java.util.Collections;
 import java.util.HashMap;
 import java.util.HashSet;
 import java.util.List;
@@ -66,6 +68,10 @@ import static org.junit.jupiter.api.Assertions.assertFalse;
 import static org.junit.jupiter.api.Assertions.assertNotEquals;
 import static org.junit.jupiter.api.Assertions.assertTrue;
 import static org.junit.jupiter.api.Assertions.fail;
+import static org.mockito.ArgumentMatchers.any;
+import static org.mockito.Mockito.mock;
+import static org.mockito.Mockito.never;
+import static org.mockito.Mockito.verify;
 
 public class ConsumerTaskTest {
 
@@ -103,6 +109,18 @@ public class ConsumerTaskTest {
     public void testCloseOnNoAssignment() {
         assertDoesNotThrow(() -> consumerTask.close(), "Close method threw exception");
         assertDoesNotThrow(() -> consumerTask.closeConsumer(), "CloseConsumer method threw exception");
+    }
+
+    @Test
+    public void testCloseBeforeAssignmentDoesNotPollConsumer() {
+        final Consumer<byte[], byte[]> mockConsumer = mock(Consumer.class);
+        final ConsumerTask task = new ConsumerTask(handler, partitioner, mockConsumer, 10L, 300_000L, Time.SYSTEM);
+
+        task.close();
+        task.ingestRecords();
+
+        verify(mockConsumer).wakeup();
+        verify(mockConsumer, never()).poll(any(Duration.class));
     }
 
     @Test
@@ -161,7 +179,7 @@ public class ConsumerTaskTest {
         consumerTask.ingestRecords();
         assertTrue(consumerTask.readOffsetForMetadataPartition(partitioner.metadataPartition(tpId)).isPresent());
 
-        final Set<TopicIdPartition> removePartitions = Collections.singleton(tpId);
+        final Set<TopicIdPartition> removePartitions = Set.of(tpId);
         consumerTask.removeAssignmentsForPartitions(removePartitions);
         consumerTask.ingestRecords();
         for (final TopicIdPartition idPartition : allPartitions) {
@@ -196,7 +214,7 @@ public class ConsumerTaskTest {
                         fail(e.getMessage());
                     }
                 }
-                consumerTask.addAssignmentsForPartitions(Collections.singleton(partition));
+                consumerTask.addAssignmentsForPartitions(Set.of(partition));
                 partitionsAssigned++;
             }
             isAllPartitionsAssigned.set(true);
@@ -230,8 +248,8 @@ public class ConsumerTaskTest {
         assertEquals(partitioner.metadataPartition(tpId0), partitioner.metadataPartition(tpId2));
 
         final int metadataPartition = partitioner.metadataPartition(tpId0);
-        consumer.updateEndOffsets(Collections.singletonMap(toRemoteLogPartition(metadataPartition), 0L));
-        final Set<TopicIdPartition> assignments = Collections.singleton(tpId0);
+        consumer.updateEndOffsets(Map.of(toRemoteLogPartition(metadataPartition), 0L));
+        final Set<TopicIdPartition> assignments = Set.of(tpId0);
         consumerTask.addAssignmentsForPartitions(assignments);
         consumerTask.ingestRecords();
         assertTrue(consumerTask.isUserPartitionAssigned(tpId0), "Partition " + tpId0 + " has not been assigned");
@@ -243,7 +261,7 @@ public class ConsumerTaskTest {
         assertEquals(2, handler.metadataCounter);
 
         // should only read the tpId1 records
-        consumerTask.addAssignmentsForPartitions(Collections.singleton(tpId1));
+        consumerTask.addAssignmentsForPartitions(Set.of(tpId1));
         consumerTask.ingestRecords();
         assertTrue(consumerTask.isUserPartitionAssigned(tpId1), "Partition " + tpId1 + " has not been assigned");
 
@@ -271,9 +289,9 @@ public class ConsumerTaskTest {
         final int metadataPartition = partitioner.metadataPartition(tpId0);
         final int anotherMetadataPartition = partitioner.metadataPartition(tpId3);
 
-        consumer.updateEndOffsets(Collections.singletonMap(toRemoteLogPartition(metadataPartition), 0L));
-        consumer.updateEndOffsets(Collections.singletonMap(toRemoteLogPartition(anotherMetadataPartition), 0L));
-        final Set<TopicIdPartition> assignments = Collections.singleton(tpId0);
+        consumer.updateEndOffsets(Map.of(toRemoteLogPartition(metadataPartition), 0L));
+        consumer.updateEndOffsets(Map.of(toRemoteLogPartition(anotherMetadataPartition), 0L));
+        final Set<TopicIdPartition> assignments = Set.of(tpId0);
         consumerTask.addAssignmentsForPartitions(assignments);
         consumerTask.ingestRecords();
         assertTrue(consumerTask.isUserPartitionAssigned(tpId0), "Partition " + tpId0 + " has not been assigned");
@@ -288,7 +306,7 @@ public class ConsumerTaskTest {
         assertEquals(1, handler.metadataCounter);
 
         // Adding assignment for tpId1 after related metadata records have already been read
-        consumerTask.addAssignmentsForPartitions(Collections.singleton(tpId1));
+        consumerTask.addAssignmentsForPartitions(Set.of(tpId1));
         consumerTask.ingestRecords();
         assertTrue(consumerTask.isUserPartitionAssigned(tpId1), "Partition " + tpId1 + " has not been assigned");
 
@@ -312,8 +330,8 @@ public class ConsumerTaskTest {
     public void testMaybeMarkUserPartitionsAsReady() {
         final TopicIdPartition tpId = getIdPartitions("hello", 1).get(0);
         final int metadataPartition = partitioner.metadataPartition(tpId);
-        consumer.updateEndOffsets(Collections.singletonMap(toRemoteLogPartition(metadataPartition), 2L));
-        consumerTask.addAssignmentsForPartitions(Collections.singleton(tpId));
+        consumer.updateEndOffsets(Map.of(toRemoteLogPartition(metadataPartition), 2L));
+        consumerTask.addAssignmentsForPartitions(Set.of(tpId));
         consumerTask.ingestRecords();
 
         assertTrue(consumerTask.isUserPartitionAssigned(tpId), "Partition " + tpId + " has not been assigned");
@@ -330,9 +348,9 @@ public class ConsumerTaskTest {
     public void testMaybeMarkUserPartitionAsReadyWhenTopicIsEmpty(long beginOffset, long endOffset) {
         final TopicIdPartition tpId = getIdPartitions("world", 1).get(0);
         final int metadataPartition = partitioner.metadataPartition(tpId);
-        consumer.updateBeginningOffsets(Collections.singletonMap(toRemoteLogPartition(metadataPartition), beginOffset));
-        consumer.updateEndOffsets(Collections.singletonMap(toRemoteLogPartition(metadataPartition), endOffset));
-        consumerTask.addAssignmentsForPartitions(Collections.singleton(tpId));
+        consumer.updateBeginningOffsets(Map.of(toRemoteLogPartition(metadataPartition), beginOffset));
+        consumer.updateEndOffsets(Map.of(toRemoteLogPartition(metadataPartition), endOffset));
+        consumerTask.addAssignmentsForPartitions(Set.of(tpId));
         consumerTask.ingestRecords();
 
         assertTrue(consumerTask.isUserPartitionAssigned(tpId), "Partition " + tpId + " has not been assigned");
@@ -350,11 +368,11 @@ public class ConsumerTaskTest {
 
         final CountDownLatch latch = new CountDownLatch(1);
         final TopicIdPartition tpId = getIdPartitions("concurrent", 1).get(0);
-        consumer.updateEndOffsets(Collections.singletonMap(toRemoteLogPartition(partitioner.metadataPartition(tpId)), 0L));
+        consumer.updateEndOffsets(Map.of(toRemoteLogPartition(partitioner.metadataPartition(tpId)), 0L));
         final Thread assignmentThread = new Thread(() -> {
             try {
                 latch.await();
-                consumerTask.addAssignmentsForPartitions(Collections.singleton(tpId));
+                consumerTask.addAssignmentsForPartitions(Set.of(tpId));
             } catch (final InterruptedException e) {
                 fail("Shouldn't have thrown an exception");
             }
@@ -382,8 +400,8 @@ public class ConsumerTaskTest {
     public void testConsumerShouldNotCloseOnRetriableError() {
         final TopicIdPartition tpId = getIdPartitions("world", 1).get(0);
         final int metadataPartition = partitioner.metadataPartition(tpId);
-        consumer.updateEndOffsets(Collections.singletonMap(toRemoteLogPartition(metadataPartition), 1L));
-        consumerTask.addAssignmentsForPartitions(Collections.singleton(tpId));
+        consumer.updateEndOffsets(Map.of(toRemoteLogPartition(metadataPartition), 1L));
+        consumerTask.addAssignmentsForPartitions(Set.of(tpId));
         consumerTask.ingestRecords();
 
         assertTrue(consumerTask.isUserPartitionAssigned(tpId), "Partition " + tpId + " has not been assigned");
@@ -406,8 +424,8 @@ public class ConsumerTaskTest {
     public void testConsumerShouldCloseOnNonRetriableError() {
         final TopicIdPartition tpId = getIdPartitions("world", 1).get(0);
         final int metadataPartition = partitioner.metadataPartition(tpId);
-        consumer.updateEndOffsets(Collections.singletonMap(toRemoteLogPartition(metadataPartition), 1L));
-        consumerTask.addAssignmentsForPartitions(Collections.singleton(tpId));
+        consumer.updateEndOffsets(Map.of(toRemoteLogPartition(metadataPartition), 1L));
+        consumerTask.addAssignmentsForPartitions(Set.of(tpId));
         consumerTask.ingestRecords();
 
         assertTrue(consumerTask.isUserPartitionAssigned(tpId), "Partition " + tpId + " has not been assigned");
@@ -425,7 +443,7 @@ public class ConsumerTaskTest {
                            final TopicIdPartition idPartition,
                            final long recordOffset) {
         final RemoteLogSegmentId segmentId = new RemoteLogSegmentId(idPartition, Uuid.randomUuid());
-        final RemoteLogMetadata metadata = new RemoteLogSegmentMetadata(segmentId, 0L, 1L, 0L, 0, 0L, 1, Collections.singletonMap(0, 0L));
+        final RemoteLogMetadata metadata = new RemoteLogSegmentMetadata(segmentId, 0L, 1L, 0L, 0, 0L, 1, Map.of(0, 0L));
         final ConsumerRecord<byte[], byte[]> record = new ConsumerRecord<>(TopicBasedRemoteLogMetadataManagerConfig.REMOTE_LOG_METADATA_TOPIC_NAME, metadataPartition, recordOffset, null, serde.serialize(metadata));
         consumer.addRecord(record);
     }

@@ -69,7 +69,7 @@ public class FileStreamSinkTask extends SinkTask {
                 outputStream = new PrintStream(
                     Files.newOutputStream(Paths.get(filename), StandardOpenOption.CREATE, StandardOpenOption.APPEND),
                     false,
-                    StandardCharsets.UTF_8.name());
+                    StandardCharsets.UTF_8);
             } catch (IOException e) {
                 throw new ConnectException("Couldn't find or create file '" + filename + "' for FileStreamSinkTask", e);
             }

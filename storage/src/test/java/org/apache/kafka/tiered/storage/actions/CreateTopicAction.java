@@ -22,7 +22,6 @@ import org.apache.kafka.tiered.storage.specs.TopicSpec;
 
 import java.io.PrintStream;
 import java.util.Map;
-import java.util.concurrent.ExecutionException;
 
 import static org.apache.kafka.tiered.storage.utils.TieredStorageTestUtils.createTopicConfigForRemoteStorage;
 
@@ -35,14 +34,14 @@ public final class CreateTopicAction implements TieredStorageTestAction {
     }
 
     @Override
-    public void doExecute(TieredStorageTestContext context) throws ExecutionException, InterruptedException {
+    public void doExecute(TieredStorageTestContext context) {
         boolean enableRemoteStorage = true;
         Map<String, String> topicConfigs = createTopicConfigForRemoteStorage(
-                enableRemoteStorage, spec.getMaxBatchCountPerSegment());
-        topicConfigs.putAll(spec.getProperties());
+                enableRemoteStorage, spec.maxBatchCountPerSegment());
+        topicConfigs.putAll(spec.properties());
 
-        spec.getProperties().clear();
-        spec.getProperties().putAll(topicConfigs);
+        spec.properties().clear();
+        spec.properties().putAll(topicConfigs);
         context.createTopic(spec);
     }
 

@@ -20,8 +20,6 @@ package org.apache.kafka.trogdor.task;
 import com.fasterxml.jackson.annotation.JsonCreator;
 import com.fasterxml.jackson.annotation.JsonProperty;
 
-import java.util.Collections;
-import java.util.HashMap;
 import java.util.Map;
 
 public class SampleTaskSpec extends TaskSpec {
@@ -34,8 +32,7 @@ public class SampleTaskSpec extends TaskSpec {
                         @JsonProperty("nodeToExitMs") Map<String, Long> nodeToExitMs,
                         @JsonProperty("error") String error) {
         super(startMs, durationMs);
-        this.nodeToExitMs = nodeToExitMs == null ? new HashMap<>() :
-            Collections.unmodifiableMap(nodeToExitMs);
+        this.nodeToExitMs = nodeToExitMs == null ? Map.of() : Map.copyOf(nodeToExitMs);
         this.error = error == null ? "" : error;
     }
 

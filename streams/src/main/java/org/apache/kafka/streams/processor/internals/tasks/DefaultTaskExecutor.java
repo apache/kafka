@@ -19,8 +19,8 @@ package org.apache.kafka.streams.processor.internals.tasks;
 import org.apache.kafka.common.KafkaFuture;
 import org.apache.kafka.common.errors.TimeoutException;
 import org.apache.kafka.common.internals.KafkaFutureImpl;
-import org.apache.kafka.common.utils.LogContext;
 import org.apache.kafka.common.utils.Time;
+import org.apache.kafka.common.utils.internals.LogContext;
 import org.apache.kafka.streams.errors.StreamsException;
 import org.apache.kafka.streams.errors.TaskMigratedException;
 import org.apache.kafka.streams.processor.internals.ProcessingThread;
@@ -117,8 +117,10 @@ public class DefaultTaskExecutor implements TaskExecutor {
             if (currentTask == null) {
                 try {
                     taskManager.awaitProcessableTasks(shutdownRequested::get);
-                } catch (final InterruptedException ignored) {
-                    // Can be ignored, the cause of the interrupted will be handled in the event loop
+                } catch (final InterruptedException e) {
+                    Thread.currentThread().interrupt();
+                    // The event loop will check shutdownRequested on the next iteration
+                    log.warn("TaskExecutorThread was interrupted while waiting", e);
                 }
             } else {
                 boolean progressed = false;
@@ -181,7 +183,10 @@ public class DefaultTaskExecutor implements TaskExecutor {
                 log.error(String.format("Failed to process stream task %s due to the following error:", task.id()), e);
                 throw new StreamsException(e, task.id());
             } finally {
-                task.recordProcessBatchTime(time.milliseconds() - now);
+                final long end = time.milliseconds();
+                task.recordProcessBatchTime(end - now);
+                // record terminal e2e latency against the end time already read for the batch metric
+                task.maybeFlushTerminalE2ELatency(end);
             }
             return processed;
         }
@@ -266,7 +271,9 @@ public class DefaultTaskExecutor implements TaskExecutor {
                     throw new StreamsException("State updater thread did not shutdown within the timeout");
                 }
                 taskExecutorThread = null;
-            } catch (final InterruptedException ignored) {
+            } catch (final InterruptedException e) {
+                Thread.currentThread().interrupt();
+                log.warn("Interrupted while waiting for task executor thread to shut down", e);
             }
         }
     }

@@ -17,17 +17,15 @@
 
 package org.apache.kafka.common.acl;
 
-import org.apache.kafka.common.annotation.InterfaceStability;
+import org.apache.kafka.common.annotation.InterfaceAudience;
 
 import java.util.HashMap;
 import java.util.Locale;
 
 /**
  * Represents whether an ACL grants or denies permissions.
- *
- * The API for this class is still evolving and we may break compatibility in minor releases, if necessary.
  */
-@InterfaceStability.Evolving
+@InterfaceAudience.Public
 public enum AclPermissionType {
     /**
      * Represents any AclPermissionType which this client cannot understand,

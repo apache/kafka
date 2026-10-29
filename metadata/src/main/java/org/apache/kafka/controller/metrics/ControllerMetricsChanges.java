@@ -29,6 +29,7 @@ import java.util.Map.Entry;
  * The ControllerMetricsChanges class is used inside ControllerMetricsPublisher to track the
  * metrics changes triggered by a series of deltas.
  */
+@SuppressWarnings("NPathComplexity")
 class ControllerMetricsChanges {
     /**
      * Calculates the change between two boolean values, expressed as an integer.
@@ -43,11 +44,13 @@ class ControllerMetricsChanges {
 
     private int fencedBrokersChange = 0;
     private int activeBrokersChange = 0;
+    private int controlledShutdownBrokersChange = 0;
     private int globalTopicsChange = 0;
     private int globalPartitionsChange = 0;
     private int offlinePartitionsChange = 0;
     private int partitionsWithoutPreferredLeaderChange = 0;
     private int uncleanLeaderElection = 0;
+    private int electionFromElr = 0;
 
     public int fencedBrokersChange() {
         return fencedBrokersChange;
@@ -55,6 +58,10 @@ class ControllerMetricsChanges {
 
     public int activeBrokersChange() {
         return activeBrokersChange;
+    }
+
+    public int controlledShutdownBrokersChange() {
+        return controlledShutdownBrokersChange;
     }
 
     public int globalTopicsChange() {
@@ -69,25 +76,45 @@ class ControllerMetricsChanges {
         return offlinePartitionsChange;
     }
 
+    public int uncleanLeaderElection() {
+        return uncleanLeaderElection;
+    }
+
+    public int electionFromElr() {
+        return electionFromElr;
+    }
+
     public int partitionsWithoutPreferredLeaderChange() {
         return partitionsWithoutPreferredLeaderChange;
     }
 
-    void handleBrokerChange(BrokerRegistration prev, BrokerRegistration next) {
+    void handleBrokerChange(BrokerRegistration prev, BrokerRegistration next, ControllerMetadataMetrics metrics) {
         boolean wasFenced = false;
         boolean wasActive = false;
+        boolean wasInControlledShutdown = false;
         if (prev != null) {
             wasFenced = prev.fenced();
             wasActive = !prev.fenced();
+            wasInControlledShutdown = prev.inControlledShutdown();
+        } else {
+            metrics.addBrokerRegistrationStateMetric(next.id());
         }
         boolean isFenced = false;
         boolean isActive = false;
+        boolean isInControlledShutdown = false;
+        final int brokerId;
         if (next != null) {
             isFenced = next.fenced();
             isActive = !next.fenced();
+            isInControlledShutdown = next.inControlledShutdown();
+            brokerId = next.id();
+        } else {
+            brokerId = prev.id();
         }
+        metrics.setBrokerRegistrationState(brokerId, next);
         fencedBrokersChange += delta(wasFenced, isFenced);
         activeBrokersChange += delta(wasActive, isActive);
+        controlledShutdownBrokersChange += delta(wasInControlledShutdown, isInControlledShutdown);
     }
 
     void handleDeletedTopic(TopicImage deletedTopic) {
@@ -104,10 +131,13 @@ class ControllerMetricsChanges {
         } else {
             for (Entry<Integer, PartitionRegistration> entry : topicDelta.partitionChanges().entrySet()) {
                 int partitionId = entry.getKey();
+                PartitionRegistration prevPartition = prev.partitions().get(partitionId);
                 PartitionRegistration nextPartition = entry.getValue();
-                handlePartitionChange(prev.partitions().get(partitionId), nextPartition);
+                handlePartitionChange(prevPartition, nextPartition);
             }
         }
+        topicDelta.partitionToUncleanLeaderElectionCount().forEach((partitionId, count) -> uncleanLeaderElection += count);
+        topicDelta.partitionToElrElectionCount().forEach((partitionId, count) -> electionFromElr += count);
     }
 
     void handlePartitionChange(PartitionRegistration prev, PartitionRegistration next) {
@@ -126,11 +156,6 @@ class ControllerMetricsChanges {
             isPresent = true;
             isOffline = !next.hasLeader();
             isWithoutPreferredLeader = !next.hasPreferredLeader();
-            // take current all replicas as ISR if prev is null (new created partition), so we won't treat it as unclean election.
-            int[] prevIsr = prev != null ? prev.isr : next.replicas;
-            if (!PartitionRegistration.electionWasClean(next.leader, prevIsr)) {
-                uncleanLeaderElection++;
-            }
         }
         globalPartitionsChange += delta(wasPresent, isPresent);
         offlinePartitionsChange += delta(wasOffline, isOffline);
@@ -147,6 +172,9 @@ class ControllerMetricsChanges {
         if (activeBrokersChange != 0) {
             metrics.addToActiveBrokerCount(activeBrokersChange);
         }
+        if (controlledShutdownBrokersChange != 0) {
+            metrics.addToControlledShutdownBrokerCount(controlledShutdownBrokersChange);
+        }
         if (globalTopicsChange != 0) {
             metrics.addToGlobalTopicCount(globalTopicsChange);
         }
@@ -162,6 +190,10 @@ class ControllerMetricsChanges {
         if (uncleanLeaderElection > 0) {
             metrics.updateUncleanLeaderElection(uncleanLeaderElection);
             uncleanLeaderElection = 0;
+        }
+        if (electionFromElr > 0) {
+            metrics.updateElectionFromEligibleLeaderReplicasCount(electionFromElr);
+            electionFromElr = 0;
         }
     }
 }

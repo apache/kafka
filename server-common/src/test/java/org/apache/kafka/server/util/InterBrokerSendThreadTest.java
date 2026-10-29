@@ -21,6 +21,7 @@ import org.apache.kafka.clients.ClientResponse;
 import org.apache.kafka.clients.KafkaClient;
 import org.apache.kafka.clients.RequestCompletionHandler;
 import org.apache.kafka.common.Node;
+import org.apache.kafka.common.Uuid;
 import org.apache.kafka.common.errors.AuthenticationException;
 import org.apache.kafka.common.errors.DisconnectException;
 import org.apache.kafka.common.internals.FatalExitError;
@@ -36,7 +37,7 @@ import org.mockito.ArgumentMatchers;
 import java.io.IOException;
 import java.util.ArrayDeque;
 import java.util.Collection;
-import java.util.Collections;
+import java.util.List;
 import java.util.Queue;
 import java.util.concurrent.atomic.AtomicReference;
 import java.util.function.Consumer;
@@ -87,7 +88,7 @@ public class InterBrokerSendThreadTest {
 
         @Override
         public Collection<RequestAndCompletionHandler> generateRequests() {
-            return queue.isEmpty() ? Collections.emptyList() : Collections.singletonList(queue.poll());
+            return queue.isEmpty() ? List.of() : List.of(queue.poll());
         }
 
         @Override
@@ -147,7 +148,7 @@ public class InterBrokerSendThreadTest {
         final InterBrokerSendThread sendThread = new TestInterBrokerSendThread();
 
         // poll is always called but there should be no further invocations on NetworkClient
-        when(networkClient.poll(anyLong(), anyLong())).thenReturn(Collections.emptyList());
+        when(networkClient.poll(anyLong(), anyLong())).thenReturn(List.of());
 
         sendThread.doWork();
 
@@ -166,20 +167,20 @@ public class InterBrokerSendThreadTest {
         final TestInterBrokerSendThread sendThread = new TestInterBrokerSendThread();
 
         final ClientRequest clientRequest =
-            new ClientRequest("dest", request, 0, "1", 0, true, requestTimeoutMs, handler.handler());
+            new ClientRequest("dest", request, 0, "1", Uuid.randomUuid(), 0, true, requestTimeoutMs, handler.handler);
 
         when(networkClient.newClientRequest(
             ArgumentMatchers.eq("1"),
-            same(handler.request()),
+            same(handler.request),
             anyLong(),
             ArgumentMatchers.eq(true),
             ArgumentMatchers.eq(requestTimeoutMs),
-            same(handler.handler())
+            same(handler.handler)
         )).thenReturn(clientRequest);
 
         when(networkClient.ready(node, time.milliseconds())).thenReturn(true);
 
-        when(networkClient.poll(anyLong(), anyLong())).thenReturn(Collections.emptyList());
+        when(networkClient.poll(anyLong(), anyLong())).thenReturn(List.of());
 
         sendThread.enqueue(handler);
         sendThread.doWork();
@@ -187,11 +188,11 @@ public class InterBrokerSendThreadTest {
         verify(networkClient)
             .newClientRequest(
                 ArgumentMatchers.eq("1"),
-                same(handler.request()),
+                same(handler.request),
                 anyLong(),
                 ArgumentMatchers.eq(true),
                 ArgumentMatchers.eq(requestTimeoutMs),
-                same(handler.handler()));
+                same(handler.handler));
         verify(networkClient).ready(any(), anyLong());
         verify(networkClient).send(same(clientRequest), anyLong());
         verify(networkClient).poll(anyLong(), anyLong());
@@ -209,22 +210,22 @@ public class InterBrokerSendThreadTest {
         final TestInterBrokerSendThread sendThread = new TestInterBrokerSendThread();
 
         final ClientRequest clientRequest =
-            new ClientRequest("dest", request, 0, "1", 0, true, requestTimeoutMs, handler.handler());
+            new ClientRequest("dest", request, 0, "1", Uuid.randomUuid(), 0, true, requestTimeoutMs, handler.handler);
 
         when(networkClient.newClientRequest(
             ArgumentMatchers.eq("1"),
-            same(handler.request()),
+            same(handler.request),
             anyLong(),
             ArgumentMatchers.eq(true),
             ArgumentMatchers.eq(requestTimeoutMs),
-            same(handler.handler())
+            same(handler.handler)
         )).thenReturn(clientRequest);
 
         when(networkClient.ready(node, time.milliseconds())).thenReturn(false);
 
         when(networkClient.connectionDelay(any(), anyLong())).thenReturn(0L);
 
-        when(networkClient.poll(anyLong(), anyLong())).thenReturn(Collections.emptyList());
+        when(networkClient.poll(anyLong(), anyLong())).thenReturn(List.of());
 
         when(networkClient.connectionFailed(node)).thenReturn(true);
 
@@ -236,11 +237,11 @@ public class InterBrokerSendThreadTest {
         verify(networkClient)
             .newClientRequest(
                 ArgumentMatchers.eq("1"),
-                same(handler.request()),
+                same(handler.request),
                 anyLong(),
                 ArgumentMatchers.eq(true),
                 ArgumentMatchers.eq(requestTimeoutMs),
-                same(handler.handler()));
+                same(handler.handler));
         verify(networkClient).ready(any(), anyLong());
         verify(networkClient).connectionDelay(any(), anyLong());
         verify(networkClient).poll(anyLong(), anyLong());
@@ -261,16 +262,16 @@ public class InterBrokerSendThreadTest {
 
         final ClientRequest clientRequest =
             new ClientRequest(
-                "dest", request, 0, "1", time.milliseconds(), true, requestTimeoutMs, handler.handler());
+                "dest", request, 0, "1", Uuid.randomUuid(), time.milliseconds(), true, requestTimeoutMs, handler.handler);
         time.sleep(1500L);
 
         when(networkClient.newClientRequest(
             ArgumentMatchers.eq("1"),
-            same(handler.request()),
-            ArgumentMatchers.eq(handler.creationTimeMs()),
+            same(handler.request),
+            ArgumentMatchers.eq(handler.creationTimeMs),
             ArgumentMatchers.eq(true),
             ArgumentMatchers.eq(requestTimeoutMs),
-            same(handler.handler())
+            same(handler.handler)
         )).thenReturn(clientRequest);
 
         // make the node unready so the request is not cleared
@@ -278,7 +279,7 @@ public class InterBrokerSendThreadTest {
 
         when(networkClient.connectionDelay(any(), anyLong())).thenReturn(0L);
 
-        when(networkClient.poll(anyLong(), anyLong())).thenReturn(Collections.emptyList());
+        when(networkClient.poll(anyLong(), anyLong())).thenReturn(List.of());
 
         // rule out disconnects so the request stays for the expiry check
         when(networkClient.connectionFailed(node)).thenReturn(false);
@@ -289,11 +290,11 @@ public class InterBrokerSendThreadTest {
         verify(networkClient)
             .newClientRequest(
                 ArgumentMatchers.eq("1"),
-                same(handler.request()),
-                ArgumentMatchers.eq(handler.creationTimeMs()),
+                same(handler.request),
+                ArgumentMatchers.eq(handler.creationTimeMs),
                 ArgumentMatchers.eq(true),
                 ArgumentMatchers.eq(requestTimeoutMs),
-                same(handler.handler()));
+                same(handler.handler));
         verify(networkClient).ready(any(), anyLong());
         verify(networkClient).connectionDelay(any(), anyLong());
         verify(networkClient).poll(anyLong(), anyLong());

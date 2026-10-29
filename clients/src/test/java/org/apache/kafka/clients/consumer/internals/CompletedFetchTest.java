@@ -26,23 +26,22 @@ import org.apache.kafka.common.header.Headers;
 import org.apache.kafka.common.header.internals.RecordHeaders;
 import org.apache.kafka.common.message.FetchResponseData;
 import org.apache.kafka.common.metrics.Metrics;
-import org.apache.kafka.common.protocol.ApiKeys;
-import org.apache.kafka.common.record.ControlRecordType;
-import org.apache.kafka.common.record.EndTransactionMarker;
-import org.apache.kafka.common.record.MemoryRecords;
-import org.apache.kafka.common.record.MemoryRecordsBuilder;
-import org.apache.kafka.common.record.RecordBatch;
-import org.apache.kafka.common.record.Records;
-import org.apache.kafka.common.record.SimpleRecord;
 import org.apache.kafka.common.record.TimestampType;
+import org.apache.kafka.common.record.internal.ControlRecordType;
+import org.apache.kafka.common.record.internal.EndTransactionMarker;
+import org.apache.kafka.common.record.internal.MemoryRecords;
+import org.apache.kafka.common.record.internal.MemoryRecordsBuilder;
+import org.apache.kafka.common.record.internal.RecordBatch;
+import org.apache.kafka.common.record.internal.Records;
+import org.apache.kafka.common.record.internal.SimpleRecord;
 import org.apache.kafka.common.serialization.StringDeserializer;
 import org.apache.kafka.common.serialization.UUIDDeserializer;
 import org.apache.kafka.common.serialization.UUIDSerializer;
-import org.apache.kafka.common.utils.BufferSupplier;
-import org.apache.kafka.common.utils.LogContext;
 import org.apache.kafka.common.utils.MockTime;
 import org.apache.kafka.common.utils.Time;
 import org.apache.kafka.common.utils.Utils;
+import org.apache.kafka.common.utils.internals.BufferSupplier;
+import org.apache.kafka.common.utils.internals.LogContext;
 
 import org.junit.jupiter.api.Test;
 
@@ -93,7 +92,7 @@ public class CompletedFetchTest {
     @Test
     public void testAbortedTransactionRecordsRemoved() {
         int numRecords = 10;
-        Records rawRecords = newTranscactionalRecords(ControlRecordType.ABORT, numRecords);
+        Records rawRecords = newTransactionalRecords(ControlRecordType.ABORT, numRecords);
 
         FetchResponseData.PartitionData partitionData = new FetchResponseData.PartitionData()
                 .setRecords(rawRecords)
@@ -115,7 +114,7 @@ public class CompletedFetchTest {
     @Test
     public void testCommittedTransactionRecordsIncluded() {
         int numRecords = 10;
-        Records rawRecords = newTranscactionalRecords(ControlRecordType.COMMIT, numRecords);
+        Records rawRecords = newTransactionalRecords(ControlRecordType.COMMIT, numRecords);
         FetchResponseData.PartitionData partitionData = new FetchResponseData.PartitionData()
                 .setRecords(rawRecords);
         CompletedFetch completedFetch = newCompletedFetch(0, partitionData);
@@ -215,20 +214,19 @@ public class CompletedFetchTest {
     private CompletedFetch newCompletedFetch(long fetchOffset,
                                              FetchResponseData.PartitionData partitionData) {
         LogContext logContext = new LogContext();
-        SubscriptionState subscriptions = new SubscriptionState(logContext, AutoOffsetResetStrategy.NONE);
+        ConsumerSubscriptionState subscriptions = new ConsumerSubscriptionState(logContext, AutoOffsetResetStrategy.NONE);
         FetchMetricsRegistry metricsRegistry = new FetchMetricsRegistry();
         FetchMetricsManager metrics = new FetchMetricsManager(new Metrics(), metricsRegistry);
         FetchMetricsAggregator metricAggregator = new FetchMetricsAggregator(metrics, Collections.singleton(TP));
 
         return new CompletedFetch(
-                logContext,
+                logContext.logger(CompletedFetch.class),
                 subscriptions,
                 BufferSupplier.create(),
                 TP,
                 partitionData,
                 metricAggregator,
-                fetchOffset,
-                ApiKeys.FETCH.latestVersion());
+                fetchOffset);
     }
 
     private static Deserializers<UUID, UUID> newUuidDeserializers() {
@@ -260,7 +258,7 @@ public class CompletedFetchTest {
         }
     }
 
-    private Records newTranscactionalRecords(ControlRecordType controlRecordType, int numRecords) {
+    private Records newTransactionalRecords(ControlRecordType controlRecordType, int numRecords) {
         Time time = new MockTime();
         ByteBuffer buffer = ByteBuffer.allocate(1024);
 

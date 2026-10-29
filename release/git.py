@@ -31,14 +31,16 @@ def __defaults(kwargs):
         kwargs["cwd"] = repo_dir
 
 
-def has_staged_changes(**kwargs):
+def ensure_no_staged_changes(**kwargs):
     __defaults(kwargs)
     execute("git diff --cached --exit-code --quiet", **kwargs)
+    return True
 
 
-def has_unstaged_changes(**kwargs):
+def ensure_no_unstaged_changes(**kwargs):
     __defaults(kwargs)
     execute("git diff --exit-code --quiet", **kwargs)
+    return True
 
 
 def fetch_tags(remote=push_remote_name, **kwargs):
@@ -128,8 +130,11 @@ def create_tag(tag, **kwargs):
     cmd(f"Creating git tag {tag}", ["git", "tag", "-a", tag, "-m", tag], **kwargs)
 
 
-def push_tag(tag, remote=push_remote_name, **kwargs):
+def push_ref(ref, remote=push_remote_name, **kwargs):
     __defaults(kwargs)
-    cmd("Pushing tag {tag} to {remote}", f"git push {remote} {tag}")
+    cmd(f"Pushing ref {ref} to {remote}", f"git push {remote} {ref}")
 
 
+def merge_ref(ref, **kwargs): 
+    __defaults(kwargs)
+    cmd(f"Merging ref {ref}", f"git merge {ref}")

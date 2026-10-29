@@ -24,7 +24,7 @@ import org.apache.kafka.common.message.DescribeTransactionsResponseData;
 import org.apache.kafka.common.protocol.Errors;
 import org.apache.kafka.common.requests.DescribeTransactionsRequest;
 import org.apache.kafka.common.requests.DescribeTransactionsResponse;
-import org.apache.kafka.common.utils.LogContext;
+import org.apache.kafka.common.utils.internals.LogContext;
 
 import org.junit.jupiter.api.Test;
 
@@ -184,7 +184,7 @@ public class DescribeTransactionsHandlerTest {
                 new DescribeTransactionsResponseData.TopicData()
                     .setTopic("bar")
                     .setPartitions(asList(1, 3, 5))
-            ).iterator()));
+            )));
     }
 
     private DescribeTransactionsResponseData.TransactionState sampleTransactionState2(

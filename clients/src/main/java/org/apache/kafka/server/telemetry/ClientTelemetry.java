@@ -17,14 +17,18 @@
 
 package org.apache.kafka.server.telemetry;
 
-import org.apache.kafka.common.annotation.InterfaceStability;
 import org.apache.kafka.common.metrics.MetricsReporter;
 
 /**
  * A {@link MetricsReporter} may implement this interface to indicate support for collecting client
  * telemetry on the server side.
+ *
+ * @deprecated Since 4.2.0, use {@link ClientTelemetryExporterProvider} instead. This interface will be
+ *             removed in Kafka 5.0.0. The new interface provides a {@link ClientTelemetryExporter}
+ *             which includes additional context such as the push interval.
  */
-@InterfaceStability.Evolving
+@Deprecated(since = "4.2", forRemoval = true)
+@SuppressWarnings("removal")
 public interface ClientTelemetry {
 
     /**

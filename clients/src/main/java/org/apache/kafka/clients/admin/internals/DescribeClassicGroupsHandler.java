@@ -33,7 +33,7 @@ import org.apache.kafka.common.requests.DescribeGroupsRequest;
 import org.apache.kafka.common.requests.DescribeGroupsResponse;
 import org.apache.kafka.common.requests.FindCoordinatorRequest;
 import org.apache.kafka.common.requests.FindCoordinatorRequest.CoordinatorType;
-import org.apache.kafka.common.utils.LogContext;
+import org.apache.kafka.common.utils.internals.LogContext;
 
 import org.slf4j.Logger;
 
@@ -134,6 +134,7 @@ public class DescribeClassicGroupsHandler extends AdminApiHandler.Batched<Coordi
                 memberDescriptions.add(new MemberDescription(
                     groupMember.memberId(),
                     Optional.ofNullable(groupMember.groupInstanceId()),
+                    Optional.empty(),
                     groupMember.clientId(),
                     groupMember.clientHost(),
                     new MemberAssignment(partitions),

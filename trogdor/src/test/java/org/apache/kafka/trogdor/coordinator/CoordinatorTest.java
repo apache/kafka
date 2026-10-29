@@ -17,15 +17,15 @@
 
 package org.apache.kafka.trogdor.coordinator;
 
-import org.apache.kafka.common.utils.MockScheduler;
 import org.apache.kafka.common.utils.MockTime;
-import org.apache.kafka.common.utils.Scheduler;
 import org.apache.kafka.test.TestUtils;
 import org.apache.kafka.trogdor.agent.AgentClient;
 import org.apache.kafka.trogdor.common.CapturingCommandRunner;
 import org.apache.kafka.trogdor.common.ExpectedTasks;
 import org.apache.kafka.trogdor.common.ExpectedTasks.ExpectedTaskBuilder;
 import org.apache.kafka.trogdor.common.MiniTrogdorCluster;
+import org.apache.kafka.trogdor.common.MockScheduler;
+import org.apache.kafka.trogdor.common.Scheduler;
 import org.apache.kafka.trogdor.fault.NetworkPartitionFaultSpec;
 import org.apache.kafka.trogdor.rest.CoordinatorStatusResponse;
 import org.apache.kafka.trogdor.rest.CreateTaskRequest;
@@ -57,7 +57,6 @@ import org.slf4j.Logger;
 import org.slf4j.LoggerFactory;
 
 import java.util.ArrayList;
-import java.util.Arrays;
 import java.util.HashMap;
 import java.util.List;
 import java.util.Optional;
@@ -370,7 +369,7 @@ public class CoordinatorTest {
     private static List<List<String>> createPartitionLists(String[][] array) {
         List<List<String>> list = new ArrayList<>();
         for (String[] a : array) {
-            list.add(Arrays.asList(a));
+            list.add(List.of(a));
         }
         return list;
     }
@@ -486,7 +485,7 @@ public class CoordinatorTest {
             assertEquals(0, coordinatorClient.tasks(
                 new TasksRequest(null, 10, 0, 10, 0, Optional.empty())).tasks().size());
             TasksResponse resp1 = coordinatorClient.tasks(
-                new TasksRequest(Arrays.asList("foo", "baz"), 0, 0, 0, 0, Optional.empty()));
+                new TasksRequest(List.of("foo", "baz"), 0, 0, 0, 0, Optional.empty()));
             assertTrue(resp1.tasks().containsKey("foo"));
             assertFalse(resp1.tasks().containsKey("bar"));
             assertEquals(1, resp1.tasks().size());

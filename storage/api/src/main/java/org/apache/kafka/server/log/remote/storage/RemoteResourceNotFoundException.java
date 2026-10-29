@@ -14,7 +14,10 @@
  * See the License for the specific language governing permissions and
  * limitations under the License.
  */
+
 package org.apache.kafka.server.log.remote.storage;
+
+import org.apache.kafka.common.annotation.InterfaceAudience;
 
 /**
  * Exception thrown when a resource is not found on the remote storage.
@@ -22,6 +25,7 @@ package org.apache.kafka.server.log.remote.storage;
  * A resource can be a log segment, any of the indexes or any which was stored in remote storage for a particular log
  * segment.
  */
+@InterfaceAudience.Public
 public class RemoteResourceNotFoundException extends RemoteStorageException {
     private static final long serialVersionUID = 1L;
 

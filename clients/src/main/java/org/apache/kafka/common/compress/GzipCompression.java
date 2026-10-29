@@ -17,11 +17,11 @@
 package org.apache.kafka.common.compress;
 
 import org.apache.kafka.common.KafkaException;
-import org.apache.kafka.common.record.CompressionType;
-import org.apache.kafka.common.utils.BufferSupplier;
-import org.apache.kafka.common.utils.ByteBufferInputStream;
-import org.apache.kafka.common.utils.ByteBufferOutputStream;
-import org.apache.kafka.common.utils.ChunkedBytesStream;
+import org.apache.kafka.common.record.internal.CompressionType;
+import org.apache.kafka.common.utils.internals.BufferSupplier;
+import org.apache.kafka.common.utils.internals.ByteBufferInputStream;
+import org.apache.kafka.common.utils.internals.ByteBufferOutputStream;
+import org.apache.kafka.common.utils.internals.ChunkedBytesStream;
 
 import java.io.BufferedOutputStream;
 import java.io.InputStream;
@@ -30,7 +30,7 @@ import java.nio.ByteBuffer;
 import java.util.Objects;
 import java.util.zip.GZIPInputStream;
 
-import static org.apache.kafka.common.record.CompressionType.GZIP;
+import static org.apache.kafka.common.record.internal.CompressionType.GZIP;
 
 public class GzipCompression implements Compression {
 

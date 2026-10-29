@@ -324,7 +324,7 @@ public class SubscriptionInfo {
                 "Should never try to encode a SubscriptionInfo with version [" +
                     data.version() + "] > LATEST_SUPPORTED_VERSION [" + LATEST_SUPPORTED_VERSION + "]"
             );
-        } else return MessageUtil.toByteBuffer(data, (short) data.version());
+        } else return MessageUtil.toByteBufferAccessor(data, (short) data.version()).buffer();
     }
 
     /**

@@ -16,16 +16,19 @@
  */
 package org.apache.kafka.common.test.junit;
 
-import kafka.network.SocketServer;
 import kafka.server.BrokerServer;
 import kafka.server.ControllerServer;
 import kafka.server.KafkaBroker;
 
+import org.apache.kafka.clients.CommonClientConfigs;
+import org.apache.kafka.common.config.SaslConfigs;
+import org.apache.kafka.common.config.SslConfigs;
 import org.apache.kafka.common.network.ListenerName;
+import org.apache.kafka.common.security.auth.SecurityProtocol;
 import org.apache.kafka.common.test.ClusterInstance;
+import org.apache.kafka.common.test.JaasUtils;
 import org.apache.kafka.common.test.KafkaClusterTestKit;
 import org.apache.kafka.common.test.TestKitNodes;
-import org.apache.kafka.common.test.TestUtils;
 import org.apache.kafka.common.test.api.ClusterConfig;
 import org.apache.kafka.common.test.api.Type;
 import org.apache.kafka.common.utils.Utils;
@@ -38,31 +41,31 @@ import org.apache.kafka.server.common.MetadataVersion;
 import org.apache.kafka.server.fault.FaultHandlerException;
 
 import org.junit.jupiter.api.extension.AfterTestExecutionCallback;
-import org.junit.jupiter.api.extension.BeforeTestExecutionCallback;
+import org.junit.jupiter.api.extension.BeforeEachCallback;
 import org.junit.jupiter.api.extension.Extension;
 import org.junit.jupiter.api.extension.TestTemplateInvocationContext;
 
-import java.util.Arrays;
-import java.util.Collection;
+import java.io.IOException;
 import java.util.Collections;
+import java.util.HashMap;
 import java.util.List;
 import java.util.Map;
 import java.util.Optional;
 import java.util.Set;
 import java.util.TreeMap;
 import java.util.concurrent.ExecutionException;
+import java.util.concurrent.TimeUnit;
 import java.util.concurrent.atomic.AtomicBoolean;
 import java.util.stream.Collectors;
 import java.util.stream.Stream;
 
-import scala.jdk.javaapi.OptionConverters;
-
-
 /**
- * Wraps a {@link KafkaClusterTestKit} inside lifecycle methods for a test invocation. Each instance of this
- * class is provided with a configuration for the cluster.
+ * JUnit 5 invocation context for integration tests that run against an in-process Kafka cluster.
  *
- * This context also provides parameter resolvers for:
+ * <p>Wraps a {@link KafkaClusterTestKit} inside lifecycle methods for a test invocation.
+ * Each instance of this class is provided with a configuration for the cluster.
+ *
+ * <p>This context also provides parameter resolvers for:
  *
  * <ul>
  *     <li>ClusterConfig (the same instance passed to the constructor)</li>
@@ -74,6 +77,35 @@ public class RaftClusterInvocationContext implements TestTemplateInvocationConte
     private final String baseDisplayName;
     private final ClusterConfig clusterConfig;
     private final boolean isCombined;
+
+    /**
+     * Wait for condition to be met for at most 15 seconds and throw assertion failure otherwise.
+     * This should be used instead of {@code Thread.sleep} whenever possible as it allows a longer timeout to be used
+     * without unnecessarily increasing test time (as the condition is checked frequently). The longer timeout is needed to
+     * avoid transient failures due to slow or overloaded machines.
+     */
+    static void waitForCondition(final java.util.function.Supplier<Boolean> testCondition,
+                                        final String conditionDetails) throws InterruptedException {
+        var maxWaitMs = 15_000L;
+        long endTime = System.currentTimeMillis() + maxWaitMs;
+
+        while (System.currentTimeMillis() < endTime) {
+            try {
+                if (testCondition.get()) {
+                    return;
+                }
+            } catch (Exception e) {
+                if (System.currentTimeMillis() >= endTime) {
+                    throw new AssertionError(String.format("Assertion failed with an exception after %s ms", maxWaitMs), e);
+                }
+            }
+
+            if (System.currentTimeMillis() < endTime) {
+                TimeUnit.MILLISECONDS.sleep(100);
+            }
+        }
+        throw new AssertionError("Condition not met: " + conditionDetails);
+    }
 
     public RaftClusterInvocationContext(String baseDisplayName, ClusterConfig clusterConfig, boolean isCombined) {
         this.baseDisplayName = baseDisplayName;
@@ -89,8 +121,8 @@ public class RaftClusterInvocationContext implements TestTemplateInvocationConte
     @Override
     public List<Extension> getAdditionalExtensions() {
         RaftClusterInstance clusterInstance = new RaftClusterInstance(clusterConfig, isCombined);
-        return Arrays.asList(
-                (BeforeTestExecutionCallback) context -> {
+        return List.of(
+                (BeforeEachCallback) context -> {
                     clusterInstance.format();
                     if (clusterConfig.isAutoStart()) {
                         clusterInstance.start();
@@ -106,7 +138,7 @@ public class RaftClusterInvocationContext implements TestTemplateInvocationConte
         private final ClusterConfig clusterConfig;
         final AtomicBoolean started = new AtomicBoolean(false);
         final AtomicBoolean stopped = new AtomicBoolean(false);
-        final AtomicBoolean formated = new AtomicBoolean(false);
+        final AtomicBoolean formatted = new AtomicBoolean(false);
         private KafkaClusterTestKit clusterTestKit;
         private final boolean isCombined;
         private final ListenerName listenerName;
@@ -133,18 +165,16 @@ public class RaftClusterInvocationContext implements TestTemplateInvocationConte
         }
 
         @Override
-        public Optional<ListenerName> controllerListenerName() {
-            return controllers().values().stream()
-                    .findAny()
-                    .flatMap(s -> OptionConverters.toJava(s.config().controllerListenerNames().headOption()))
-                    .map(ListenerName::new);
-        }
-
-        @Override
-        public Collection<SocketServer> controllerSocketServers() {
-            return controllers().values().stream()
-                .map(ControllerServer::socketServer)
-                .collect(Collectors.toList());
+        public ListenerName controllerListenerName() {
+            return new ListenerName(
+                controllers()
+                    .values()
+                    .iterator()
+                    .next()
+                    .config()
+                    .controllerListenerNames()
+                    .get(0)
+            );
         }
 
         @Override
@@ -152,6 +182,36 @@ public class RaftClusterInvocationContext implements TestTemplateInvocationConte
             return Stream.concat(controllers().values().stream().map(ControllerServer::clusterId),
                 brokers().values().stream().map(KafkaBroker::clusterId)).findFirst()
                 .orElseThrow(() -> new RuntimeException("No controllers or brokers!"));
+        }
+
+        @Override
+        public Map<String, Object> setClientSslConfig(Map<String, Object> configs) {
+            Map<String, Object> props = new HashMap<>(configs);
+            if (config().brokerSecurityProtocol() == SecurityProtocol.SASL_SSL) {
+                String mechanism = clientSaslMechanism();
+                props.putIfAbsent(CommonClientConfigs.SECURITY_PROTOCOL_CONFIG, SecurityProtocol.SASL_SSL.name);
+                props.putIfAbsent(SaslConfigs.SASL_MECHANISM, mechanism);
+                if (mechanism.equalsIgnoreCase("PLAIN")) {
+                    props.putIfAbsent(
+                        SaslConfigs.SASL_JAAS_CONFIG,
+                        String.format(
+                            "org.apache.kafka.common.security.plain.PlainLoginModule required username=\"%s\" password=\"%s\";",
+                            JaasUtils.KAFKA_PLAIN_ADMIN, JaasUtils.KAFKA_PLAIN_ADMIN_PASSWORD
+                        )
+                    );
+                }
+                if (clusterTestKit.sslManager() != null) {
+                    props.putAll(clusterTestKit.sslManager().createClientSslConfig());
+                    props.put(SslConfigs.SSL_ENDPOINT_IDENTIFICATION_ALGORITHM_CONFIG, "");
+                }
+            } else if (config().brokerSecurityProtocol() == SecurityProtocol.SSL) {
+                props.putIfAbsent(CommonClientConfigs.SECURITY_PROTOCOL_CONFIG, SecurityProtocol.SSL.name);
+                if (clusterTestKit.sslManager() != null) {
+                    props.putAll(clusterTestKit.sslManager().createClientSslConfig());
+                    props.put(SslConfigs.SSL_ENDPOINT_IDENTIFICATION_ALGORITHM_CONFIG, "");
+                }
+            }
+            return props;
         }
 
         @Override
@@ -179,7 +239,7 @@ public class RaftClusterInvocationContext implements TestTemplateInvocationConte
                 format();
                 if (started.compareAndSet(false, true)) {
                     clusterTestKit.startup();
-                    TestUtils.waitForCondition(
+                    waitForCondition(
                             () -> this.clusterTestKit.brokers().values().stream().allMatch(
                                     brokers -> brokers.brokerState() == BrokerState.RUNNING
                             ), "Broker never made it to RUNNING state.");
@@ -190,10 +250,20 @@ public class RaftClusterInvocationContext implements TestTemplateInvocationConte
         }
 
         @Override
+        public boolean started() {
+            return started.get();
+        }
+
+        @Override
         public void stop() {
             if (stopped.compareAndSet(false, true)) {
                 Utils.closeQuietly(clusterTestKit, "cluster");
             }
+        }
+
+        @Override
+        public boolean stopped() {
+            return stopped.get();
         }
 
         @Override
@@ -204,6 +274,20 @@ public class RaftClusterInvocationContext implements TestTemplateInvocationConte
         @Override
         public void startBroker(int brokerId) {
             findBrokerOrThrow(brokerId).startup();
+        }
+
+        @Override
+        public void restartBroker(int brokerId, Map<String, Object> propOverrides) {
+            clusterTestKit.restartBroker(brokerId, propOverrides);
+        }
+
+        @Override
+        public void restartBrokersWithSwappedClientListenerPorts(int brokerId1, int brokerId2) {
+            try {
+                clusterTestKit.restartBrokersWithSwappedClientListenerPorts(brokerId1, brokerId2);
+            } catch (IOException e) {
+                throw new AssertionError("Failed while swapping ports for brokers", e);
+            }
         }
 
         @Override
@@ -238,7 +322,7 @@ public class RaftClusterInvocationContext implements TestTemplateInvocationConte
         }
 
         public void format() throws Exception {
-            if (formated.compareAndSet(false, true)) {
+            if (formatted.compareAndSet(false, true)) {
                 Map<String, Feature> nameToSupportedFeature = new TreeMap<>();
                 Feature.PRODUCTION_FEATURES.forEach(feature -> nameToSupportedFeature.put(feature.featureName(), feature));
                 Map<String, Short> newFeatureLevels = new TreeMap<>();
@@ -278,8 +362,15 @@ public class RaftClusterInvocationContext implements TestTemplateInvocationConte
                     }
                 }
 
+                Set<String> disabledFeatures = newFeatureLevels.entrySet().stream()
+                    .filter(featureEntry -> featureEntry.getValue() == 0)
+                    .filter(featureEntry -> !featureEntry.getKey().equals(MetadataVersion.FEATURE_NAME))
+                    .map(Map.Entry::getKey)
+                    .collect(Collectors.toSet());
+
                 TestKitNodes nodes = new TestKitNodes.Builder()
                         .setBootstrapMetadata(BootstrapMetadata.fromVersions(clusterConfig.metadataVersion(), newFeatureLevels, "testkit"))
+                        .setDisabledFeatures(disabledFeatures)
                         .setCombined(isCombined)
                         .setNumBrokerNodes(clusterConfig.numBrokers())
                         .setNumDisksPerBroker(clusterConfig.numDisksPerBroker())
@@ -293,6 +384,7 @@ public class RaftClusterInvocationContext implements TestTemplateInvocationConte
                 KafkaClusterTestKit.Builder builder = new KafkaClusterTestKit.Builder(nodes);
                 // Copy properties into the TestKit builder
                 clusterConfig.serverProperties().forEach(builder::setConfigProp);
+                builder.setStandalone(clusterConfig.standalone());
                 this.clusterTestKit = builder.build();
                 this.clusterTestKit.format();
             }

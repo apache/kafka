@@ -18,6 +18,7 @@ package org.apache.kafka.streams.state.internals;
 
 import org.apache.kafka.common.serialization.Serializer;
 import org.apache.kafka.common.utils.Bytes;
+import org.apache.kafka.common.utils.internals.ByteUtils;
 import org.apache.kafka.streams.KeyValue;
 import org.apache.kafka.streams.query.PositionBound;
 import org.apache.kafka.streams.query.Query;
@@ -87,9 +88,9 @@ public class MemoryNavigableLRUCache extends MemoryLRUCache {
 
     @Override
     public <PS extends Serializer<P>, P> KeyValueIterator<Bytes, byte[]> prefixScan(final P prefix, final PS prefixKeySerializer) {
-
+        // headers aren't needed because the prefix already arrives serialized
         final Bytes from = Bytes.wrap(prefixKeySerializer.serialize(null, prefix));
-        final Bytes to = Bytes.increment(from);
+        final Bytes to = ByteUtils.increment(from);
 
         final TreeMap<Bytes, byte[]> treeMap = toTreeMap();
 

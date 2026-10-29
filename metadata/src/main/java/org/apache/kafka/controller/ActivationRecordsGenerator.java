@@ -29,6 +29,7 @@ import org.apache.kafka.server.common.MetadataVersion;
 
 import java.util.ArrayList;
 import java.util.List;
+import java.util.Optional;
 import java.util.function.Consumer;
 
 import static org.apache.kafka.common.config.ConfigResource.Type.BROKER;
@@ -137,36 +138,27 @@ public class ActivationRecordsGenerator {
             }
         }
 
-        if (curMetadataVersion.equals(MetadataVersion.MINIMUM_KRAFT_VERSION)) {
-            logMessageBuilder.append("No metadata.version feature level record was found in the log. ")
-                .append("Treating the log as version ")
-                .append(MetadataVersion.MINIMUM_KRAFT_VERSION)
-                .append(". ");
-        }
-
         activationMessageConsumer.accept(logMessageBuilder.toString().trim());
         return ControllerResult.atomicOf(records, null);
     }
 
     /**
      * Generate the set of activation records.
-     * </p>
-     * If the log is empty, write the bootstrap records. If the log is not empty, do some validation and
+     * <p>
+     * If the metadata version is empty, write the bootstrap records. If the metadata version is not empty, do some validation and
      * possibly write some records to put the log into a valid state. For bootstrap records, if KIP-868
-     * metadata transactions are supported, ues them. Otherwise, write the bootstrap records as an
+     * metadata transactions are supported, use them. Otherwise, write the bootstrap records as an
      * atomic batch. The single atomic batch can be problematic if the bootstrap records are too large
-     * (e.g., lots of SCRAM credentials). If ZK migrations are enabled, the activation records will
-     * include a ZkMigrationState record regardless of whether the log was empty or not.
+     * (e.g., lots of SCRAM credentials).
      */
     static ControllerResult<Void> generate(
         Consumer<String> activationMessageConsumer,
-        boolean isEmpty,
         long transactionStartOffset,
         BootstrapMetadata bootstrapMetadata,
-        MetadataVersion curMetadataVersion,
+        Optional<MetadataVersion> curMetadataVersion,
         int defaultMinInSyncReplicas
     ) {
-        if (isEmpty) {
+        if (curMetadataVersion.isEmpty()) {
             return recordsForEmptyLog(activationMessageConsumer,
                     transactionStartOffset,
                     bootstrapMetadata,
@@ -175,7 +167,7 @@ public class ActivationRecordsGenerator {
         } else {
             return recordsForNonEmptyLog(activationMessageConsumer,
                     transactionStartOffset,
-                    curMetadataVersion);
+                    curMetadataVersion.get());
         }
     }
 }

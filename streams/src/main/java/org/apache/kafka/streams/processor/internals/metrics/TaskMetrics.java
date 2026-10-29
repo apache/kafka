@@ -28,7 +28,7 @@ import static org.apache.kafka.streams.processor.internals.metrics.StreamsMetric
 import static org.apache.kafka.streams.processor.internals.metrics.StreamsMetricsImpl.TOTAL_SUFFIX;
 import static org.apache.kafka.streams.processor.internals.metrics.StreamsMetricsImpl.addAvgAndMaxToSensor;
 import static org.apache.kafka.streams.processor.internals.metrics.StreamsMetricsImpl.addInvocationRateAndCountToSensor;
-import static org.apache.kafka.streams.processor.internals.metrics.StreamsMetricsImpl.addInvocationRateToSensor;
+import static org.apache.kafka.streams.processor.internals.metrics.StreamsMetricsImpl.addRateOfSumAndSumMetricsToSensor;
 import static org.apache.kafka.streams.processor.internals.metrics.StreamsMetricsImpl.addSumMetricToSensor;
 import static org.apache.kafka.streams.processor.internals.metrics.StreamsMetricsImpl.addValueMetricToSensor;
 
@@ -189,7 +189,7 @@ public class TaskMetrics {
                                        final String taskId,
                                        final StreamsMetricsImpl streamsMetrics,
                                        final Sensor... parentSensor) {
-        return invocationRateAndTotalSensor(
+        return rateAndTotalSensor(
             threadId,
             taskId,
             RESTORE,
@@ -205,7 +205,7 @@ public class TaskMetrics {
                                       final String taskId,
                                       final StreamsMetricsImpl streamsMetrics,
                                       final Sensor... parentSensor) {
-        return invocationRateAndTotalSensor(
+        return rateAndTotalSensor(
             threadId,
             taskId,
             UPDATE,
@@ -250,7 +250,7 @@ public class TaskMetrics {
     public static Sensor droppedRecordsSensor(final String threadId,
                                               final String taskId,
                                               final StreamsMetricsImpl streamsMetrics) {
-        return invocationRateAndTotalSensor(
+        return rateAndTotalSensor(
             threadId,
             taskId,
             DROPPED_RECORDS,
@@ -281,19 +281,20 @@ public class TaskMetrics {
         return sensor;
     }
 
-    private static Sensor invocationRateAndTotalSensor(final String threadId,
-                                                       final String taskId,
-                                                       final String operation,
-                                                       final String descriptionOfRate,
-                                                       final String descriptionOfTotal,
-                                                       final RecordingLevel recordingLevel,
-                                                       final StreamsMetricsImpl streamsMetrics,
-                                                       final Sensor... parentSensors) {
+    private static Sensor rateAndTotalSensor(
+        final String threadId,
+        final String taskId,
+        final String operation,
+        final String descriptionOfRate,
+        final String descriptionOfTotal,
+        final RecordingLevel recordingLevel,
+        final StreamsMetricsImpl streamsMetrics,
+        final Sensor... parentSensors
+    ) {
         final Sensor sensor = streamsMetrics.taskLevelSensor(threadId, taskId, operation, recordingLevel, parentSensors);
         final Map<String, String> tags = streamsMetrics.taskLevelTagMap(threadId, taskId);
 
-        addInvocationRateToSensor(sensor, TASK_LEVEL_GROUP, tags, operation, descriptionOfRate);
-        addSumMetricToSensor(sensor, TASK_LEVEL_GROUP, tags, operation, true, descriptionOfTotal);
+        addRateOfSumAndSumMetricsToSensor(sensor, TASK_LEVEL_GROUP, tags, operation, descriptionOfRate, descriptionOfTotal);
         return sensor;
     }
 

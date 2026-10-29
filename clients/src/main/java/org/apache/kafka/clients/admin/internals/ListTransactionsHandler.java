@@ -26,7 +26,7 @@ import org.apache.kafka.common.protocol.Errors;
 import org.apache.kafka.common.requests.AbstractResponse;
 import org.apache.kafka.common.requests.ListTransactionsRequest;
 import org.apache.kafka.common.requests.ListTransactionsResponse;
-import org.apache.kafka.common.utils.LogContext;
+import org.apache.kafka.common.utils.internals.LogContext;
 
 import org.slf4j.Logger;
 
@@ -75,6 +75,9 @@ public class ListTransactionsHandler extends AdminApiHandler.Batched<AllBrokersS
             .map(TransactionState::toString)
             .collect(Collectors.toList()));
         request.setDurationFilter(options.filteredDuration());
+        if (options.filteredTransactionalIdPattern() != null && !options.filteredTransactionalIdPattern().isEmpty()) {
+            request.setTransactionalIdPattern(options.filteredTransactionalIdPattern());
+        }
         return new ListTransactionsRequest.Builder(request);
     }
 

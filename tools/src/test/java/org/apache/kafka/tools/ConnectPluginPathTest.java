@@ -38,7 +38,6 @@ import java.io.IOException;
 import java.io.OutputStream;
 import java.io.PrintStream;
 import java.io.UncheckedIOException;
-import java.io.UnsupportedEncodingException;
 import java.net.MalformedURLException;
 import java.nio.charset.StandardCharsets;
 import java.nio.file.Files;
@@ -334,6 +333,63 @@ public class ConnectPluginPathTest {
         assertBadPackagingPluginsStatus(table, false);
     }
 
+    @Test
+    public void testListEmptyPluginPathArg() {
+        CommandResult res = runCommand(
+                "list",
+                "--plugin-path",
+                ""
+        );
+        assertNotEquals(0, res.returnCode);
+        assertEquals("'--plugin-path' must not be empty.\n", res.err);
+    }
+
+    @Test
+    public void testListEmptyPluginPathElementArg() {
+        CommandResult res = runCommand(
+                "list",
+                "--plugin-path",
+                "location-a,,location-b"
+        );
+        assertNotEquals(0, res.returnCode);
+        assertEquals("'--plugin-path' values must not be empty.\n", res.err);
+    }
+
+    @Test
+    public void testListEmptyPluginPathInWorkerConfig() {
+        Path configPath = workspace.resolve("worker-empty.properties");
+        try {
+            Files.writeString(configPath, "plugin.path=", StandardCharsets.UTF_8);
+        } catch (IOException e) {
+            fail("Failed to create test worker config: " + e.getMessage());
+        }
+
+        CommandResult res = runCommand(
+                "list",
+                "--worker-config",
+                configPath.toString()
+        );
+        assertNotEquals(0, res.returnCode);
+        assertEquals("'plugin.path' must not be empty.\n", res.err);
+    }
+
+    @Test
+    public void testListEmptyPluginPathElementInWorkerConfig() {
+        Path configPath = workspace.resolve("worker-empty-element.properties");
+        try {
+            Files.writeString(configPath, "plugin.path=location-a,,location-b", StandardCharsets.UTF_8);
+        } catch (IOException e) {
+            fail("Failed to create test worker config: " + e.getMessage());
+        }
+
+        CommandResult res = runCommand(
+                "list",
+                "--worker-config",
+                configPath.toString()
+        );
+        assertNotEquals(0, res.returnCode);
+        assertEquals("'plugin.path' values must not be empty.\n", res.err);
+    }
 
     private static Map<String, List<String[]>> assertListSuccess(CommandResult result) {
         assertEquals(0, result.returnCode);
@@ -445,13 +501,7 @@ public class ConnectPluginPathTest {
         MULTI_JAR
     }
 
-    private static class PluginLocation {
-        private final Path path;
-
-        private PluginLocation(Path path) {
-            this.path = path;
-        }
-
+    private record PluginLocation(Path path) {
         @Override
         public String toString() {
             return path.toString();
@@ -505,15 +555,7 @@ public class ConnectPluginPathTest {
         }
     }
 
-    private static class PluginPathElement {
-        private final Path root;
-        private final List<PluginLocation> locations;
-
-        private PluginPathElement(Path root, List<PluginLocation> locations) {
-            this.root = root;
-            this.locations = locations;
-        }
-
+    private record PluginPathElement(Path root, List<PluginLocation> locations) {
         @Override
         public String toString() {
             return root.toString();
@@ -536,14 +578,7 @@ public class ConnectPluginPathTest {
         return new PluginPathElement(path, locations);
     }
 
-    private static class WorkerConfig {
-        private final Path configFile;
-        private final List<PluginPathElement> pluginPathElements;
-
-        private WorkerConfig(Path configFile, List<PluginPathElement> pluginPathElements) {
-            this.configFile = configFile;
-            this.pluginPathElements = pluginPathElements;
-        }
+    private record WorkerConfig(Path configFile, List<PluginPathElement> pluginPathElements) {
 
         @Override
         public String toString() {
@@ -569,7 +604,7 @@ public class ConnectPluginPathTest {
         } catch (IOException e) {
             throw new UncheckedIOException(e);
         }
-        return new WorkerConfig(path, Arrays.asList(pluginPathElements));
+        return new WorkerConfig(path, List.of(pluginPathElements));
     }
 
     private static class CommandResult {
@@ -591,34 +626,30 @@ public class ConnectPluginPathTest {
     private static CommandResult runCommand(Object... args) {
         ByteArrayOutputStream out = new ByteArrayOutputStream();
         ByteArrayOutputStream err = new ByteArrayOutputStream();
-        try {
-            int returnCode = ConnectPluginPath.mainNoExit(
-                    Arrays.stream(args)
-                            .map(Object::toString)
-                            .collect(Collectors.toList())
-                            .toArray(new String[]{}),
-                    new PrintStream(out, true, "utf-8"),
-                    new PrintStream(err, true, "utf-8"));
-            Set<Path> pluginLocations = getPluginLocations(args);
-            ClassLoader parent = ConnectPluginPath.class.getClassLoader();
-            ClassLoaderFactory factory = new ClassLoaderFactory();
-            try (DelegatingClassLoader delegatingClassLoader = factory.newDelegatingClassLoader(parent)) {
-                Set<PluginSource> sources = PluginUtils.pluginSources(pluginLocations, delegatingClassLoader, factory);
-                String stdout = new String(out.toByteArray(), StandardCharsets.UTF_8);
-                String stderr = new String(err.toByteArray(), StandardCharsets.UTF_8);
-                log.info("STDOUT:\n{}", stdout);
-                log.info("STDERR:\n{}", stderr);
-                return new CommandResult(
-                        returnCode,
-                        stdout,
-                        stderr,
-                        new ReflectionScanner().discoverPlugins(sources),
-                        new ServiceLoaderScanner().discoverPlugins(sources)
-                );
-            } catch (IOException e) {
-                throw new RuntimeException(e);
-            }
-        } catch (UnsupportedEncodingException e) {
+        int returnCode = ConnectPluginPath.mainNoExit(
+                Arrays.stream(args)
+                        .map(Object::toString)
+                        .toList()
+                        .toArray(new String[]{}),
+                new PrintStream(out, true, StandardCharsets.UTF_8),
+                new PrintStream(err, true, StandardCharsets.UTF_8));
+        Set<Path> pluginLocations = getPluginLocations(args);
+        ClassLoader parent = ConnectPluginPath.class.getClassLoader();
+        ClassLoaderFactory factory = new ClassLoaderFactory();
+        try (DelegatingClassLoader delegatingClassLoader = factory.newDelegatingClassLoader(parent)) {
+            Set<PluginSource> sources = PluginUtils.pluginSources(pluginLocations, delegatingClassLoader, factory);
+            String stdout = out.toString(StandardCharsets.UTF_8);
+            String stderr = err.toString(StandardCharsets.UTF_8);
+            log.info("STDOUT:\n{}", stdout);
+            log.info("STDERR:\n{}", stderr);
+            return new CommandResult(
+                    returnCode,
+                    stdout,
+                    stderr,
+                    new ReflectionScanner().discoverPlugins(sources),
+                    new ServiceLoaderScanner().discoverPlugins(sources)
+            );
+        } catch (IOException e) {
             throw new RuntimeException(e);
         }
     }

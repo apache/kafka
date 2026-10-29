@@ -17,30 +17,37 @@
 package kafka.coordinator.transaction
 
 import java.util
-import java.util.Arrays.asList
-import java.util.Collections
+import java.util.Optional
 import java.util.concurrent.{Callable, Executors, Future}
-import kafka.server.{KafkaConfig, MetadataCache}
+import kafka.server.KafkaConfig
 import kafka.utils.TestUtils
 import org.apache.kafka.clients.{ClientResponse, NetworkClient}
 import org.apache.kafka.common.protocol.{ApiKeys, Errors}
-import org.apache.kafka.common.record.RecordBatch
+import org.apache.kafka.common.record.internal.RecordBatch
 import org.apache.kafka.common.requests.{RequestHeader, TransactionResult, WriteTxnMarkersRequest, WriteTxnMarkersResponse}
 import org.apache.kafka.common.utils.MockTime
-import org.apache.kafka.common.{Node, TopicPartition}
+import org.apache.kafka.common.utils.internals.LogContext
+import org.apache.kafka.common.metrics.Metrics
+import org.apache.kafka.common.{Node, TopicPartition, Uuid}
+import org.apache.kafka.common.metadata.{PartitionChangeRecord, PartitionRecord, RegisterBrokerRecord, TopicRecord}
+import org.apache.kafka.common.metadata.RegisterBrokerRecord.{BrokerEndpoint, BrokerEndpointCollection}
+import org.apache.kafka.common.network.ListenerName
+import org.apache.kafka.common.protocol.ApiMessage
+import org.apache.kafka.common.security.auth.SecurityProtocol
+import org.apache.kafka.coordinator.transaction.{CoordinatorEpochAndTxnMetadata, TransactionMetadata, TransactionState}
+import org.apache.kafka.metadata.{LeaderConstants, MetadataCache, MetadataCacheFixtures}
 import org.apache.kafka.server.common.{MetadataVersion, TransactionVersion}
 import org.apache.kafka.server.metrics.{KafkaMetricsGroup, KafkaYammerMetrics}
-import org.apache.kafka.server.util.RequestAndCompletionHandler
+import org.apache.kafka.server.util.{InterBrokerSendThread, RequestAndCompletionHandler}
 import org.junit.jupiter.api.Assertions._
 import org.junit.jupiter.api.Test
 import org.junit.jupiter.params.ParameterizedTest
-import org.junit.jupiter.params.provider.ValueSource
+import org.junit.jupiter.params.provider.{EnumSource, ValueSource}
 import org.mockito.ArgumentMatchers.any
 import org.mockito.{ArgumentCaptor, ArgumentMatchers}
 import org.mockito.Mockito.{clearInvocations, mock, mockConstruction, times, verify, verifyNoMoreInteractions, when}
 
 import scala.jdk.CollectionConverters._
-import scala.collection.mutable
 import scala.util.Try
 
 class TransactionMarkerChannelManagerTest {
@@ -66,9 +73,9 @@ class TransactionMarkerChannelManagerTest {
   private val txnTimeoutMs = 0
   private val txnResult = TransactionResult.COMMIT
   private val txnMetadata1 = new TransactionMetadata(transactionalId1, producerId1, producerId1, RecordBatch.NO_PRODUCER_ID,
-    producerEpoch, lastProducerEpoch, txnTimeoutMs, PrepareCommit, mutable.Set[TopicPartition](partition1, partition2), 0L, 0L, TransactionVersion.TV_2)
+    producerEpoch, lastProducerEpoch, txnTimeoutMs, TransactionState.PREPARE_COMMIT, util.Set.of(partition1, partition2), 0L, 0L, TransactionVersion.TV_2)
   private val txnMetadata2 = new TransactionMetadata(transactionalId2, producerId2, producerId2, RecordBatch.NO_PRODUCER_ID,
-    producerEpoch, lastProducerEpoch, txnTimeoutMs, PrepareCommit, mutable.Set[TopicPartition](partition1), 0L, 0L, TransactionVersion.TV_2)
+    producerEpoch, lastProducerEpoch, txnTimeoutMs, TransactionState.PREPARE_COMMIT, util.Set.of(partition1), 0L, 0L, TransactionVersion.TV_2)
 
   private val capturedErrorsCallback: ArgumentCaptor[Errors => Unit] = ArgumentCaptor.forClass(classOf[Errors => Unit])
   private val time = new MockTime
@@ -86,9 +93,9 @@ class TransactionMarkerChannelManagerTest {
     when(txnStateManager.partitionFor(transactionalId2))
       .thenReturn(txnTopicPartition2)
     when(txnStateManager.getTransactionState(ArgumentMatchers.eq(transactionalId1)))
-      .thenReturn(Right(Some(CoordinatorEpochAndTxnMetadata(coordinatorEpoch, txnMetadata1))))
+      .thenReturn(Right(Some(new CoordinatorEpochAndTxnMetadata(coordinatorEpoch, txnMetadata1))))
     when(txnStateManager.getTransactionState(ArgumentMatchers.eq(transactionalId2)))
-      .thenReturn(Right(Some(CoordinatorEpochAndTxnMetadata(coordinatorEpoch, txnMetadata2))))
+      .thenReturn(Right(Some(new CoordinatorEpochAndTxnMetadata(coordinatorEpoch, txnMetadata2))))
     when(metadataCache.metadataVersion())
       .thenReturn(MetadataVersion.latestProduction())
   }
@@ -128,7 +135,7 @@ class TransactionMarkerChannelManagerTest {
       ArgumentMatchers.eq(partition1.topic),
       ArgumentMatchers.eq(partition1.partition),
       any())
-    ).thenReturn(Some(broker1))
+    ).thenReturn(Optional.of(broker1))
 
     when(txnStateManager.appendTransactionToLog(
       ArgumentMatchers.eq(transactionalId2),
@@ -144,33 +151,33 @@ class TransactionMarkerChannelManagerTest {
 
     var addMarkerFuture: Future[Try[Unit]] = null
     val executor = Executors.newFixedThreadPool(1)
-    txnMetadata2.lock.lock()
     try {
-      addMarkerFuture = executor.submit((() => {
-        Try(channelManager.addTxnMarkersToSend(coordinatorEpoch, txnResult,
+      txnMetadata2.inLock(() => {
+        addMarkerFuture = executor.submit((() => {
+          Try(channelManager.addTxnMarkersToSend(coordinatorEpoch, txnResult,
             txnMetadata2, expectedTransition))
-      }): Callable[Try[Unit]])
+        }): Callable[Try[Unit]])
 
-      val header = new RequestHeader(ApiKeys.WRITE_TXN_MARKERS, 0, "client", 1)
-      val response = new WriteTxnMarkersResponse(
-        Collections.singletonMap(producerId2: java.lang.Long, Collections.singletonMap(partition1, Errors.NONE)))
-      val clientResponse = new ClientResponse(header, null, null,
-        time.milliseconds(), time.milliseconds(), false, null, null,
-        response)
+        val header = new RequestHeader(ApiKeys.WRITE_TXN_MARKERS, 0, "client", 1)
+        val response = new WriteTxnMarkersResponse(
+          util.Map.of(producerId2: java.lang.Long, util.Map.of(partition1, Errors.NONE)))
+        val clientResponse = new ClientResponse(header, null, null,
+          time.milliseconds(), time.milliseconds(), false, null, null,
+          response)
 
-      TestUtils.waitUntilTrue(() => {
-        val requests = channelManager.generateRequests().asScala
-        if (requests.nonEmpty) {
-          assertEquals(1, requests.size)
-          val request = requests.head
-          request.handler.onComplete(clientResponse)
-          true
-        } else {
-          false
-        }
-      }, "Timed out waiting for expected WriteTxnMarkers request")
+        TestUtils.waitUntilTrue(() => {
+          val requests = channelManager.generateRequests().asScala
+          if (requests.nonEmpty) {
+            assertEquals(1, requests.size)
+            val request = requests.head
+            request.handler.onComplete(clientResponse)
+            true
+          } else {
+            false
+          }
+        }, "Timed out waiting for expected WriteTxnMarkers request")
+      })
     } finally {
-      txnMetadata2.lock.unlock()
       executor.shutdown()
     }
 
@@ -197,12 +204,12 @@ class TransactionMarkerChannelManagerTest {
       ArgumentMatchers.eq(partition1.topic),
       ArgumentMatchers.eq(partition1.partition),
       any())
-    ).thenReturn(Some(broker1))
+    ).thenReturn(Optional.of(broker1))
 
     // Build a successful client response.
     val header = new RequestHeader(ApiKeys.WRITE_TXN_MARKERS, 0, "client", 1)
     val successfulResponse = new WriteTxnMarkersResponse(
-      Collections.singletonMap(producerId2: java.lang.Long, Collections.singletonMap(partition1, Errors.NONE)))
+      util.Map.of(producerId2: java.lang.Long, util.Map.of(partition1, Errors.NONE)))
     val successfulClientResponse = new ClientResponse(header, null, null,
       time.milliseconds(), time.milliseconds(), false, null, null,
       successfulResponse)
@@ -220,7 +227,7 @@ class TransactionMarkerChannelManagerTest {
       // COORDINATOR_LOAD_IN_PROGRESS
       Left(Errors.COORDINATOR_LOAD_IN_PROGRESS),
       // "Newly loaded" transaction state with the new epoch.
-      Right(Some(CoordinatorEpochAndTxnMetadata(coordinatorEpoch2, txnMetadata2)))
+      Right(Some(new CoordinatorEpochAndTxnMetadata(coordinatorEpoch2, txnMetadata2)))
     )
 
     clientResponses.foreach { clientResponse =>
@@ -251,7 +258,7 @@ class TransactionMarkerChannelManagerTest {
 
         // Now drain and complete the marker from the new epoch.
         when(txnStateManager.getTransactionState(ArgumentMatchers.eq(transactionalId2)))
-          .thenReturn(Right(Some(CoordinatorEpochAndTxnMetadata(coordinatorEpoch2, txnMetadata2))))
+          .thenReturn(Right(Some(new CoordinatorEpochAndTxnMetadata(coordinatorEpoch2, txnMetadata2))))
         val requests2 = channelManager.generateRequests().asScala
         assertEquals(1, requests2.size)
         requests2.head.handler.onComplete(successfulClientResponse)
@@ -280,12 +287,12 @@ class TransactionMarkerChannelManagerTest {
       ArgumentMatchers.eq(partition1.topic),
       ArgumentMatchers.eq(partition1.partition),
       any())
-    ).thenReturn(Some(broker1))
+    ).thenReturn(Optional.of(broker1))
     when(metadataCache.getPartitionLeaderEndpoint(
       ArgumentMatchers.eq(partition2.topic),
       ArgumentMatchers.eq(partition2.partition),
       any())
-    ).thenReturn(Some(broker2))
+    ).thenReturn(Optional.of(broker2))
 
     channelManager.addTxnMarkersToSend(coordinatorEpoch, txnResult, txnMetadata1, txnMetadata1.prepareComplete(time.milliseconds()))
     channelManager.addTxnMarkersToSend(coordinatorEpoch, txnResult, txnMetadata2, txnMetadata2.prepareComplete(time.milliseconds()))
@@ -299,10 +306,16 @@ class TransactionMarkerChannelManagerTest {
     assertEquals(0, channelManager.queueForBroker(broker2.id).get.totalNumMarkers(txnTopicPartition2))
 
     val expectedBroker1Request = new WriteTxnMarkersRequest.Builder(
-      asList(new WriteTxnMarkersRequest.TxnMarkerEntry(producerId1, producerEpoch, coordinatorEpoch, txnResult, asList(partition1)),
-        new WriteTxnMarkersRequest.TxnMarkerEntry(producerId2, producerEpoch, coordinatorEpoch, txnResult, asList(partition1)))).build()
+      util.List.of(
+        new WriteTxnMarkersRequest.TxnMarkerEntry(producerId1, producerEpoch, coordinatorEpoch, txnResult, util.List.of(partition1), TransactionVersion.TV_2.featureLevel()),
+        new WriteTxnMarkersRequest.TxnMarkerEntry(producerId2, producerEpoch, coordinatorEpoch, txnResult, util.List.of(partition1), TransactionVersion.TV_2.featureLevel())
+      )
+    ).build()
     val expectedBroker2Request = new WriteTxnMarkersRequest.Builder(
-      asList(new WriteTxnMarkersRequest.TxnMarkerEntry(producerId1, producerEpoch, coordinatorEpoch, txnResult, asList(partition2)))).build()
+      util.List.of(
+        new WriteTxnMarkersRequest.TxnMarkerEntry(producerId1, producerEpoch, coordinatorEpoch, txnResult, util.List.of(partition2), TransactionVersion.TV_2.featureLevel())
+      )
+    ).build()
 
     val requests: Map[Node, WriteTxnMarkersRequest] = channelManager.generateRequests().asScala.map { handler =>
       (handler.destination, handler.request.asInstanceOf[WriteTxnMarkersRequest.Builder].build())
@@ -320,12 +333,12 @@ class TransactionMarkerChannelManagerTest {
       ArgumentMatchers.eq(partition1.topic),
       ArgumentMatchers.eq(partition1.partition),
       any())
-    ).thenReturn(None)
+    ).thenReturn(Optional.empty())
     when(metadataCache.getPartitionLeaderEndpoint(
       ArgumentMatchers.eq(partition2.topic),
       ArgumentMatchers.eq(partition2.partition),
       any())
-    ).thenReturn(Some(broker2))
+    ).thenReturn(Optional.of(broker2))
 
     channelManager.addTxnMarkersToSend(coordinatorEpoch, txnResult, txnMetadata1, txnMetadata1.prepareComplete(time.milliseconds()))
 
@@ -344,17 +357,17 @@ class TransactionMarkerChannelManagerTest {
       ArgumentMatchers.eq(partition1.topic),
       ArgumentMatchers.eq(partition1.partition),
       any())
-    ).thenReturn(Some(Node.noNode))
-      .thenReturn(Some(Node.noNode))
-      .thenReturn(Some(Node.noNode))
-      .thenReturn(Some(Node.noNode))
-      .thenReturn(Some(broker1))
-      .thenReturn(Some(broker1))
+    ).thenReturn(Optional.of(Node.noNode))
+      .thenReturn(Optional.of(Node.noNode))
+      .thenReturn(Optional.of(Node.noNode))
+      .thenReturn(Optional.of(Node.noNode))
+      .thenReturn(Optional.of(broker1))
+      .thenReturn(Optional.of(broker1))
     when(metadataCache.getPartitionLeaderEndpoint(
       ArgumentMatchers.eq(partition2.topic),
       ArgumentMatchers.eq(partition2.partition),
       any())
-    ).thenReturn(Some(broker2))
+    ).thenReturn(Optional.of(broker2))
 
     channelManager.addTxnMarkersToSend(coordinatorEpoch, txnResult, txnMetadata1, txnMetadata1.prepareComplete(time.milliseconds()))
     channelManager.addTxnMarkersToSend(coordinatorEpoch, txnResult, txnMetadata2, txnMetadata2.prepareComplete(time.milliseconds()))
@@ -369,10 +382,16 @@ class TransactionMarkerChannelManagerTest {
     assertEquals(1, channelManager.queueForUnknownBroker.totalNumMarkers(txnTopicPartition2))
 
     val expectedBroker1Request = new WriteTxnMarkersRequest.Builder(
-      asList(new WriteTxnMarkersRequest.TxnMarkerEntry(producerId1, producerEpoch, coordinatorEpoch, txnResult, asList(partition1)),
-        new WriteTxnMarkersRequest.TxnMarkerEntry(producerId2, producerEpoch, coordinatorEpoch, txnResult, asList(partition1)))).build()
+      util.List.of(
+        new WriteTxnMarkersRequest.TxnMarkerEntry(producerId1, producerEpoch, coordinatorEpoch, txnResult, util.List.of(partition1), TransactionVersion.TV_2.featureLevel()),
+        new WriteTxnMarkersRequest.TxnMarkerEntry(producerId2, producerEpoch, coordinatorEpoch, txnResult, util.List.of(partition1), TransactionVersion.TV_2.featureLevel())
+      )
+    ).build()
     val expectedBroker2Request = new WriteTxnMarkersRequest.Builder(
-      asList(new WriteTxnMarkersRequest.TxnMarkerEntry(producerId1, producerEpoch, coordinatorEpoch, txnResult, asList(partition2)))).build()
+      util.List.of(
+        new WriteTxnMarkersRequest.TxnMarkerEntry(producerId1, producerEpoch, coordinatorEpoch, txnResult, util.List.of(partition2), TransactionVersion.TV_2.featureLevel())
+      )
+    ).build()
 
     val firstDrainedRequests: Map[Node, WriteTxnMarkersRequest] = channelManager.generateRequests().asScala.map { handler =>
       (handler.destination, handler.request.asInstanceOf[WriteTxnMarkersRequest.Builder].build())
@@ -387,6 +406,94 @@ class TransactionMarkerChannelManagerTest {
     assertEquals(Map(broker1 -> expectedBroker1Request), secondDrainedRequests)
   }
 
+  @ParameterizedTest
+  @EnumSource(classOf[TransactionResult])
+  def shouldRetryMarkersUntilLeaderEndpointIsAvailable(result: TransactionResult): Unit = {
+    mockCache()
+    txnMetadata2.state(if (result == TransactionResult.COMMIT) TransactionState.PREPARE_COMMIT else TransactionState.PREPARE_ABORT)
+    val expectedTransition = txnMetadata2.prepareComplete(time.milliseconds())
+    val cache = MetadataCacheFixtures.createCache()
+    val topicId = Uuid.randomUuid()
+    val listenerName = ListenerName.forSecurityProtocol(SecurityProtocol.PLAINTEXT)
+    MetadataCacheFixtures.updateCache(cache, util.List.of[ApiMessage](
+      new TopicRecord().setName(partition1.topic).setTopicId(topicId),
+      new PartitionRecord()
+        .setTopicId(topicId)
+        .setPartitionId(partition1.partition)
+        .setLeader(LeaderConstants.NO_LEADER)
+        .setReplicas(util.List.of[Integer](broker1.id))
+        .setIsr(util.List.of[Integer]())
+    ))
+
+    val manager = new TransactionMarkerChannelManager(
+      KafkaConfig.fromProps(TestUtils.createBrokerConfig(1)), cache, networkClient, txnStateManager, time)
+    try {
+      manager.addTxnMarkersToSend(coordinatorEpoch, result, txnMetadata2, expectedTransition)
+
+      // A known partition without a leader must retain its marker and remain pending.
+      assertTrue(manager.generateRequests().isEmpty)
+      assertEquals(1, manager.queueForUnknownBroker.totalNumMarkers)
+      assertEquals(1, manager.numTxnsWithPendingMarkers)
+      assertTrue(txnMetadata2.topicPartitions.contains(partition1))
+      verify(txnStateManager, times(0)).appendTransactionToLog(any(), any(), any(), any(), any(), any())
+
+      MetadataCacheFixtures.updateCache(cache, util.List.of[ApiMessage](
+        new PartitionChangeRecord()
+          .setTopicId(topicId)
+          .setPartitionId(partition1.partition)
+          .setLeader(broker1.id)
+          .setIsr(util.List.of[Integer](broker1.id))
+      ))
+
+      // Knowing the leader ID is insufficient while its broker registration is missing.
+      assertTrue(manager.generateRequests().isEmpty)
+      assertEquals(1, manager.queueForUnknownBroker.totalNumMarkers)
+      assertEquals(1, manager.numTxnsWithPendingMarkers)
+      assertTrue(txnMetadata2.topicPartitions.contains(partition1))
+      verify(txnStateManager, times(0)).appendTransactionToLog(any(), any(), any(), any(), any(), any())
+
+      MetadataCacheFixtures.updateCache(cache, util.List.of[ApiMessage](
+        new RegisterBrokerRecord()
+          .setBrokerId(broker1.id)
+          .setRack("rack1")
+          .setFenced(false)
+          .setEndPoints(new BrokerEndpointCollection(util.List.of(
+            new BrokerEndpoint()
+              .setHost(broker1.host)
+              .setPort(broker1.port)
+              .setSecurityProtocol(SecurityProtocol.PLAINTEXT.id)
+              .setName(listenerName.value)
+          )))
+      ))
+
+      val requests = manager.generateRequests().asScala.toList
+      assertEquals(1, requests.size)
+      assertEquals(new Node(broker1.id, broker1.host, broker1.port, "rack1"), requests.head.destination)
+      val request = requests.head.request.asInstanceOf[WriteTxnMarkersRequest.Builder].build()
+      assertEquals(util.List.of(new WriteTxnMarkersRequest.TxnMarkerEntry(
+        producerId2, producerEpoch, coordinatorEpoch, result, util.List.of(partition1), TransactionVersion.TV_2.featureLevel()
+      )), request.markers())
+      assertEquals(0, manager.queueForUnknownBroker.totalNumMarkers)
+      assertEquals(1, manager.numTxnsWithPendingMarkers)
+      verify(txnStateManager, times(0)).appendTransactionToLog(any(), any(), any(), any(), any(), any())
+
+      val response = new WriteTxnMarkersResponse(
+        util.Map.of(producerId2: java.lang.Long, util.Map.of(partition1, Errors.NONE)))
+      requests.head.handler.onComplete(new ClientResponse(
+        new RequestHeader(ApiKeys.WRITE_TXN_MARKERS, 0, "client", 1), null, null,
+        time.milliseconds(), time.milliseconds(), false, null, null, response))
+
+      assertTrue(txnMetadata2.topicPartitions.isEmpty)
+      assertEquals(0, manager.numTxnsWithPendingMarkers)
+      verify(txnStateManager).appendTransactionToLog(
+        ArgumentMatchers.eq(transactionalId2), ArgumentMatchers.eq(coordinatorEpoch),
+        ArgumentMatchers.eq(expectedTransition), any(), any(), any())
+      assertTrue(manager.generateRequests().isEmpty)
+    } finally {
+      manager.shutdown()
+    }
+  }
+
   @Test
   def shouldRemoveMarkersForTxnPartitionWhenPartitionEmigrated(): Unit = {
     mockCache()
@@ -395,12 +502,12 @@ class TransactionMarkerChannelManagerTest {
       ArgumentMatchers.eq(partition1.topic),
       ArgumentMatchers.eq(partition1.partition),
       any())
-    ).thenReturn(Some(broker1))
+    ).thenReturn(Optional.of(broker1))
     when(metadataCache.getPartitionLeaderEndpoint(
       ArgumentMatchers.eq(partition2.topic),
       ArgumentMatchers.eq(partition2.partition),
       any())
-    ).thenReturn(Some(broker2))
+    ).thenReturn(Optional.of(broker2))
 
     channelManager.addTxnMarkersToSend(coordinatorEpoch, txnResult, txnMetadata1, txnMetadata1.prepareComplete(time.milliseconds()))
     channelManager.addTxnMarkersToSend(coordinatorEpoch, txnResult, txnMetadata2, txnMetadata2.prepareComplete(time.milliseconds()))
@@ -436,12 +543,12 @@ class TransactionMarkerChannelManagerTest {
       ArgumentMatchers.eq(partition1.topic),
       ArgumentMatchers.eq(partition1.partition),
       any())
-    ).thenReturn(Some(broker1))
+    ).thenReturn(Optional.of(broker1))
     when(metadataCache.getPartitionLeaderEndpoint(
       ArgumentMatchers.eq(partition2.topic),
       ArgumentMatchers.eq(partition2.partition),
       any())
-    ).thenReturn(Some(broker2))
+    ).thenReturn(Optional.of(broker2))
 
     val txnTransitionMetadata2 = txnMetadata2.prepareComplete(time.milliseconds())
 
@@ -477,8 +584,50 @@ class TransactionMarkerChannelManagerTest {
 
     assertEquals(0, channelManager.numTxnsWithPendingMarkers)
     assertEquals(0, channelManager.queueForBroker(broker1.id).get.totalNumMarkers)
-    assertEquals(None, txnMetadata2.pendingState)
-    assertEquals(CompleteCommit, txnMetadata2.state)
+    assertEquals(Optional.empty(), txnMetadata2.pendingState)
+    assertEquals(TransactionState.COMPLETE_COMMIT, txnMetadata2.state)
+  }
+
+  @ParameterizedTest
+  @EnumSource(value = classOf[TransactionResult], names = Array("COMMIT", "ABORT"))
+  def shouldCompleteTxnWithoutSendingMarkersWhenNoPartitions(result: TransactionResult): Unit = {
+    // With transaction V2, ending a transaction with no partitions writes PrepareCommit or PrepareAbort with no partitions.
+    val (prepareState, completeState) =
+      if (result == TransactionResult.COMMIT) (TransactionState.PREPARE_COMMIT, TransactionState.COMPLETE_COMMIT)
+      else (TransactionState.PREPARE_ABORT, TransactionState.COMPLETE_ABORT)
+    val txnMetadata = new TransactionMetadata(transactionalId1, producerId1, producerId1, RecordBatch.NO_PRODUCER_ID,
+      producerEpoch, lastProducerEpoch, txnTimeoutMs, prepareState, util.Set.of, 0L, 0L, TransactionVersion.TV_2)
+    when(txnStateManager.getTransactionState(ArgumentMatchers.eq(transactionalId1)))
+      .thenReturn(Right(Some(new CoordinatorEpochAndTxnMetadata(coordinatorEpoch, txnMetadata))))
+
+    val txnTransitionMetadata = txnMetadata.prepareComplete(time.milliseconds())
+
+    when(txnStateManager.appendTransactionToLog(
+      ArgumentMatchers.eq(transactionalId1),
+      ArgumentMatchers.eq(coordinatorEpoch),
+      ArgumentMatchers.eq(txnTransitionMetadata),
+      capturedErrorsCallback.capture(),
+      any(),
+      any()))
+      .thenAnswer(_ => {
+        txnMetadata.completeTransitionTo(txnTransitionMetadata)
+        capturedErrorsCallback.getValue.apply(Errors.NONE)
+      })
+
+    channelManager.addTxnMarkersToSend(coordinatorEpoch, result, txnMetadata, txnTransitionMetadata)
+
+    // The completion is written right away since there are no markers to wait for.
+    verify(txnStateManager).appendTransactionToLog(
+      ArgumentMatchers.eq(transactionalId1),
+      ArgumentMatchers.eq(coordinatorEpoch),
+      ArgumentMatchers.eq(txnTransitionMetadata),
+      any(),
+      any(),
+      any())
+    assertTrue(channelManager.generateRequests().isEmpty)
+    assertEquals(0, channelManager.numTxnsWithPendingMarkers)
+    assertEquals(Optional.empty(), txnMetadata.pendingState)
+    assertEquals(completeState, txnMetadata.state)
   }
 
   @Test
@@ -489,12 +638,12 @@ class TransactionMarkerChannelManagerTest {
       ArgumentMatchers.eq(partition1.topic),
       ArgumentMatchers.eq(partition1.partition),
       any())
-    ).thenReturn(Some(broker1))
+    ).thenReturn(Optional.of(broker1))
     when(metadataCache.getPartitionLeaderEndpoint(
       ArgumentMatchers.eq(partition2.topic),
       ArgumentMatchers.eq(partition2.partition),
       any())
-    ).thenReturn(Some(broker2))
+    ).thenReturn(Optional.of(broker2))
 
     val txnTransitionMetadata2 = txnMetadata2.prepareComplete(time.milliseconds())
 
@@ -506,7 +655,7 @@ class TransactionMarkerChannelManagerTest {
       any(),
       any()))
       .thenAnswer(_ => {
-        txnMetadata2.pendingState = None
+        txnMetadata2.pendingState(util.Optional.empty())
         capturedErrorsCallback.getValue.apply(Errors.NOT_COORDINATOR)
       })
 
@@ -530,8 +679,8 @@ class TransactionMarkerChannelManagerTest {
 
     assertEquals(0, channelManager.numTxnsWithPendingMarkers)
     assertEquals(0, channelManager.queueForBroker(broker1.id).get.totalNumMarkers)
-    assertEquals(None, txnMetadata2.pendingState)
-    assertEquals(PrepareCommit, txnMetadata2.state)
+    assertEquals(Optional.empty(), txnMetadata2.pendingState)
+    assertEquals(TransactionState.PREPARE_COMMIT, txnMetadata2.state)
   }
 
   @ParameterizedTest
@@ -546,12 +695,12 @@ class TransactionMarkerChannelManagerTest {
       ArgumentMatchers.eq(partition1.topic),
       ArgumentMatchers.eq(partition1.partition),
       any())
-    ).thenReturn(Some(broker1))
+    ).thenReturn(Optional.of(broker1))
     when(metadataCache.getPartitionLeaderEndpoint(
       ArgumentMatchers.eq(partition2.topic),
       ArgumentMatchers.eq(partition2.partition),
       any())
-    ).thenReturn(Some(broker2))
+    ).thenReturn(Optional.of(broker2))
 
     val txnTransitionMetadata2 = txnMetadata2.prepareComplete(time.milliseconds())
 
@@ -591,8 +740,8 @@ class TransactionMarkerChannelManagerTest {
 
     assertEquals(0, channelManager.numTxnsWithPendingMarkers)
     assertEquals(0, channelManager.queueForBroker(broker1.id).get.totalNumMarkers)
-    assertEquals(None, txnMetadata2.pendingState)
-    assertEquals(CompleteCommit, txnMetadata2.state)
+    assertEquals(Optional.empty(), txnMetadata2.pendingState)
+    assertEquals(TransactionState.COMPLETE_COMMIT, txnMetadata2.state)
   }
 
   private def createPidErrorMap(errors: Errors): util.HashMap[java.lang.Long, util.Map[TopicPartition, Errors]] = {
@@ -615,6 +764,35 @@ class TransactionMarkerChannelManagerTest {
     })
   }
 
+  @Test
+  def shouldEnableApiVersionDiscoveryInFactoryMethod(): Unit = {
+    val config = KafkaConfig.fromProps(TestUtils.createBrokerConfig(1))
+    val metrics = new Metrics()
+    val logContext = new LogContext()
+    try {
+      val channelManager = TransactionMarkerChannelManager(
+        config,
+        metrics,
+        metadataCache,
+        txnStateManager,
+        time,
+        logContext
+      )
+      try {
+        val field = classOf[InterBrokerSendThread].getDeclaredField("networkClient")
+        field.setAccessible(true)
+        val client = field.get(channelManager).asInstanceOf[NetworkClient]
+        assertTrue(client.discoverBrokerVersions(),
+          "TransactionMarkerChannelManager should enable API version discovery to " +
+            "ensure compatibility during rolling upgrades")
+      } finally {
+        channelManager.shutdown()
+      }
+    } finally {
+      metrics.close()
+    }
+  }
+
   /**
    * Adjusts the transaction metadata based on the transaction version.
    * When transaction V2 is enabled, the producer epoch is incremented
@@ -631,11 +809,11 @@ class TransactionMarkerChannelManagerTest {
     txnMetadata: TransactionMetadata
   ): Unit = {
     if (isTransactionV2Enabled) {
-      txnMetadata.clientTransactionVersion = TransactionVersion.TV_2
-      txnMetadata.producerEpoch = (producerEpoch + 1).toShort
-      txnMetadata.lastProducerEpoch = producerEpoch
+      txnMetadata.clientTransactionVersion(TransactionVersion.TV_2)
+      txnMetadata.setProducerEpoch((producerEpoch + 1).toShort)
+      txnMetadata.setLastProducerEpoch(producerEpoch)
     } else {
-      txnMetadata.clientTransactionVersion = TransactionVersion.TV_1
+      txnMetadata.clientTransactionVersion(TransactionVersion.TV_1)
     }
   }
 }

@@ -17,6 +17,7 @@
 
 package kafka.server
 
+import java.util
 import java.io.File
 import kafka.utils._
 import org.apache.kafka.common.TopicPartition
@@ -25,10 +26,9 @@ import org.apache.kafka.common.message.AlterReplicaLogDirsRequestData
 import org.apache.kafka.common.protocol.Errors
 import org.apache.kafka.common.requests.{AlterReplicaLogDirsRequest, AlterReplicaLogDirsResponse}
 import org.apache.kafka.server.config.ServerLogConfigs
-import org.apache.kafka.storage.internals.log.LogFileUtils
+import org.apache.kafka.storage.internals.log.{LogConfig, LogFileUtils}
 import org.junit.jupiter.api.Assertions._
-import org.junit.jupiter.params.ParameterizedTest
-import org.junit.jupiter.params.provider.ValueSource
+import org.junit.jupiter.api.Test
 
 import java.util.Properties
 import scala.jdk.CollectionConverters._
@@ -52,13 +52,12 @@ class AlterReplicaLogDirsRequestTest extends BaseRequestTest {
       .find(p => p.partitionIndex == tp.partition).get.errorCode)
   }
 
-  @ParameterizedTest
-  @ValueSource(strings = Array("kraft"))
-  def testAlterReplicaLogDirsRequest(quorum: String): Unit = {
+  @Test
+  def testAlterReplicaLogDirsRequest(): Unit = {
     val partitionNum = 5
 
     // Alter replica dir before topic creation
-    val logDir1 = new File(brokers.head.config.logDirs(Random.nextInt(logDirCount))).getAbsolutePath
+    val logDir1 = new File(brokers.head.config.logDirs.get(Random.nextInt(logDirCount))).getAbsolutePath
     val partitionDirs1 = (0 until partitionNum).map(partition => new TopicPartition(topic, partition) -> logDir1).toMap
     val alterReplicaLogDirsResponse1 = sendAlterReplicaLogDirsRequest(partitionDirs1)
 
@@ -75,7 +74,7 @@ class AlterReplicaLogDirsRequestTest extends BaseRequestTest {
     }
 
     // Alter replica dir again after topic creation
-    val logDir2 = new File(brokers.head.config.logDirs(Random.nextInt(logDirCount))).getAbsolutePath
+    val logDir2 = new File(brokers.head.config.logDirs.get(Random.nextInt(logDirCount))).getAbsolutePath
     val partitionDirs2 = (0 until partitionNum).map(partition => new TopicPartition(topic, partition) -> logDir2).toMap
     val alterReplicaLogDirsResponse2 = sendAlterReplicaLogDirsRequest(partitionDirs2)
     // The response should succeed for all partitions
@@ -88,13 +87,12 @@ class AlterReplicaLogDirsRequestTest extends BaseRequestTest {
     }
   }
 
-  @ParameterizedTest
-  @ValueSource(strings = Array("kraft"))
-  def testAlterReplicaLogDirsRequestErrorCode(quorum: String): Unit = {
-    val offlineDir = new File(brokers.head.config.logDirs.tail.head).getAbsolutePath
-    val validDir1 = new File(brokers.head.config.logDirs(1)).getAbsolutePath
-    val validDir2 = new File(brokers.head.config.logDirs(2)).getAbsolutePath
-    val validDir3 = new File(brokers.head.config.logDirs(3)).getAbsolutePath
+  @Test
+  def testAlterReplicaLogDirsRequestErrorCode(): Unit = {
+    val offlineDir = new File(brokers.head.config.logDirs.get(1)).getAbsolutePath
+    val validDir1 = new File(brokers.head.config.logDirs.get(1)).getAbsolutePath
+    val validDir2 = new File(brokers.head.config.logDirs.get(2)).getAbsolutePath
+    val validDir3 = new File(brokers.head.config.logDirs.get(3)).getAbsolutePath
 
     // Test AlterReplicaDirRequest before topic creation
     val partitionDirs1 = mutable.Map.empty[TopicPartition, String]
@@ -127,13 +125,12 @@ class AlterReplicaLogDirsRequestTest extends BaseRequestTest {
     assertEquals(Errors.KAFKA_STORAGE_ERROR, findErrorForPartition(alterReplicaDirResponse3, new TopicPartition(topic, 2)))
   }
 
-  @ParameterizedTest
-  @ValueSource(strings = Array("kraft"))
-  def testAlterReplicaLogDirsRequestWithRetention(quorum: String): Unit = {
+  @Test
+  def testAlterReplicaLogDirsRequestWithRetention(): Unit = {
     val partitionNum = 1
 
     // Alter replica dir before topic creation
-    val logDir1 = new File(brokers.head.config.logDirs(1)).getAbsolutePath
+    val logDir1 = new File(brokers.head.config.logDirs.get(1)).getAbsolutePath
     val partitionDirs1 = (0 until partitionNum).map(partition => new TopicPartition(topic, partition) -> logDir1).toMap
     val alterReplicaLogDirsResponse1 = sendAlterReplicaLogDirsRequest(partitionDirs1)
 
@@ -142,15 +139,15 @@ class AlterReplicaLogDirsRequestTest extends BaseRequestTest {
     assertEquals(Errors.UNKNOWN_TOPIC_OR_PARTITION, findErrorForPartition(alterReplicaLogDirsResponse1, tp))
     assertTrue(brokers.head.logManager.getLog(tp).isEmpty)
 
-    val topicProperties = new Properties()
-    topicProperties.put(TopicConfig.RETENTION_BYTES_CONFIG, "1024")
-    // This test needs enough time to wait for dir movement happened.
-    // We don't want files with `.deleted` suffix are removed too fast,
-    // so we can validate there will be orphan files and orphan files will be removed eventually.
-    topicProperties.put(TopicConfig.FILE_DELETE_DELAY_MS_CONFIG, "10000")
-    topicProperties.put(TopicConfig.SEGMENT_BYTES_CONFIG, "1024")
+    val topicConfigs = util.Map.of(
+      TopicConfig.RETENTION_BYTES_CONFIG, "1024",
+      // This test needs enough time to wait for dir movement happened.
+      // We don't want files with `.deleted` suffix are removed too fast,
+      // so we can validate there will be orphan files and orphan files will be removed eventually.
+      TopicConfig.FILE_DELETE_DELAY_MS_CONFIG, "10000",
+      LogConfig.INTERNAL_SEGMENT_BYTES_CONFIG, "1024")
 
-    createTopic(topic, partitionNum, 1, topicProperties)
+    createTopic(topic, partitionNum, 1, topicConfigs)
     assertEquals(logDir1, brokers.head.logManager.getLog(tp).get.dir.getParent)
 
     // send enough records to trigger log rolling
@@ -166,7 +163,7 @@ class AlterReplicaLogDirsRequestTest extends BaseRequestTest {
     }, "timed out waiting for log segment to retention")
 
     // Alter replica dir again after topic creation
-    val logDir2 = new File(brokers.head.config.logDirs(2)).getAbsolutePath
+    val logDir2 = new File(brokers.head.config.logDirs.get(2)).getAbsolutePath
     val alterReplicaLogDirsResponse2 = sendAlterReplicaLogDirsRequest(Map(tp -> logDir2))
     // The response should succeed for all partitions
     assertEquals(Errors.NONE, findErrorForPartition(alterReplicaLogDirsResponse2, tp))

@@ -24,9 +24,9 @@ import org.apache.kafka.trogdor.task.TaskWorker;
 import com.fasterxml.jackson.annotation.JsonCreator;
 import com.fasterxml.jackson.annotation.JsonProperty;
 
-import java.util.Collections;
 import java.util.Map;
 import java.util.Optional;
+import java.util.Set;
 
 /**
  * This is the spec to pass in to be able to run the `ConfigurableProducerWorker` workload.  This allows for customized
@@ -206,7 +206,7 @@ public final class ConfigurableProducerSpec extends TaskSpec {
 
     @Override
     public TaskController newController(String id) {
-        return topology -> Collections.singleton(producerNode);
+        return topology -> Set.of(producerNode);
     }
 
     @Override

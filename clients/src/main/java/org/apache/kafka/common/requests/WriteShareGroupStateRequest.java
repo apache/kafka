@@ -20,25 +20,29 @@ package org.apache.kafka.common.requests;
 import org.apache.kafka.common.message.WriteShareGroupStateRequestData;
 import org.apache.kafka.common.message.WriteShareGroupStateResponseData;
 import org.apache.kafka.common.protocol.ApiKeys;
-import org.apache.kafka.common.protocol.ByteBufferAccessor;
 import org.apache.kafka.common.protocol.Errors;
+import org.apache.kafka.common.protocol.Readable;
 
-import java.nio.ByteBuffer;
 import java.util.ArrayList;
 import java.util.List;
 import java.util.stream.Collectors;
 
 public class WriteShareGroupStateRequest extends AbstractRequest {
+
+    private static final short LATEST_VERSION_BEFORE_REQUEST_HEADER_V3 = 1;
+
     public static class Builder extends AbstractRequest.Builder<WriteShareGroupStateRequest> {
 
         private final WriteShareGroupStateRequestData data;
 
-        public Builder(WriteShareGroupStateRequestData data) {
-            this(data, true);
-        }
-
-        public Builder(WriteShareGroupStateRequestData data, boolean enableUnstableLastVersion) {
-            super(ApiKeys.WRITE_SHARE_GROUP_STATE, enableUnstableLastVersion);
+        /**
+         * @param data               the request data
+         * @param useRequestHeaderV3 whether the versions which use request header v3 may be used
+         */
+        public Builder(WriteShareGroupStateRequestData data, boolean useRequestHeaderV3) {
+            super(ApiKeys.WRITE_SHARE_GROUP_STATE,
+                ApiKeys.WRITE_SHARE_GROUP_STATE.oldestVersion(),
+                useRequestHeaderV3 ? ApiKeys.WRITE_SHARE_GROUP_STATE.latestVersion() : LATEST_VERSION_BEFORE_REQUEST_HEADER_V3);
             this.data = data;
         }
 
@@ -64,16 +68,16 @@ public class WriteShareGroupStateRequest extends AbstractRequest {
     public WriteShareGroupStateResponse getErrorResponse(int throttleTimeMs, Throwable e) {
         List<WriteShareGroupStateResponseData.WriteStateResult> results = new ArrayList<>();
         data.topics().forEach(
-                topicResult -> results.add(new WriteShareGroupStateResponseData.WriteStateResult()
-                        .setTopicId(topicResult.topicId())
-                        .setPartitions(topicResult.partitions().stream()
-                                .map(partitionData -> new WriteShareGroupStateResponseData.PartitionResult()
-                                        .setPartition(partitionData.partition())
-                                        .setErrorCode(Errors.forException(e).code())
-                                        .setErrorMessage(Errors.forException(e).message()))
-                                .collect(Collectors.toList()))));
+            topicResult -> results.add(new WriteShareGroupStateResponseData.WriteStateResult()
+                .setTopicId(topicResult.topicId())
+                .setPartitions(topicResult.partitions().stream()
+                    .map(partitionData -> new WriteShareGroupStateResponseData.PartitionResult()
+                        .setPartition(partitionData.partition())
+                        .setErrorCode(Errors.forException(e).code())
+                        .setErrorMessage(Errors.forException(e).message()))
+                    .collect(Collectors.toList()))));
         return new WriteShareGroupStateResponse(new WriteShareGroupStateResponseData()
-                .setResults(results));
+            .setResults(results));
     }
 
     @Override
@@ -81,10 +85,10 @@ public class WriteShareGroupStateRequest extends AbstractRequest {
         return data;
     }
 
-    public static WriteShareGroupStateRequest parse(ByteBuffer buffer, short version) {
+    public static WriteShareGroupStateRequest parse(Readable readable, short version) {
         return new WriteShareGroupStateRequest(
-                new WriteShareGroupStateRequestData(new ByteBufferAccessor(buffer), version),
-                version
+            new WriteShareGroupStateRequestData(readable, version),
+            version
         );
     }
 }

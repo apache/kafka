@@ -31,12 +31,12 @@ import org.slf4j.LoggerFactory;
 
 import java.io.Closeable;
 import java.io.IOException;
-import java.util.Collections;
 import java.util.Iterator;
 import java.util.Map;
 import java.util.Objects;
 import java.util.Optional;
 import java.util.concurrent.ConcurrentHashMap;
+import java.util.concurrent.TimeUnit;
 
 /**
  * This class represents a store to maintain the {@link RemotePartitionDeleteMetadata} and {@link RemoteLogMetadataCache} for each topic partition.
@@ -124,8 +124,15 @@ public class RemotePartitionMetadataStore extends RemotePartitionMetadataEventHa
             throw new RemoteResourceNotFoundException("No resource found for partition: " + topicIdPartition);
         }
         if (!remoteLogMetadataCache.isInitialized()) {
-            // Throwing a retriable ReplicaNotAvailableException here for clients retry.
-            throw new ReplicaNotAvailableException("Remote log metadata cache is not initialized for partition: " + topicIdPartition);
+            try {
+                boolean initialized = remoteLogMetadataCache.awaitInitialized(100, TimeUnit.MILLISECONDS);
+                if (!initialized) {
+                    // Throwing a retriable ReplicaNotAvailableException here for clients retry.
+                    throw new ReplicaNotAvailableException("Remote log metadata cache is not initialized for partition: " + topicIdPartition);
+                }
+            } catch (InterruptedException ex) {
+                throw new RemoteResourceNotFoundException("Couldn't initialize remote log metadata cache for partition: " + topicIdPartition);
+            }
         }
         return remoteLogMetadataCache;
     }
@@ -154,8 +161,8 @@ public class RemotePartitionMetadataStore extends RemotePartitionMetadataEventHa
 
         // Clear the entries by creating unmodifiable empty maps.
         // Practically, we do not use the same instances that are closed.
-        idToPartitionDeleteMetadata = Collections.emptyMap();
-        idToRemoteLogMetadataCache = Collections.emptyMap();
+        idToPartitionDeleteMetadata = Map.of();
+        idToRemoteLogMetadataCache = Map.of();
     }
 
     @Override

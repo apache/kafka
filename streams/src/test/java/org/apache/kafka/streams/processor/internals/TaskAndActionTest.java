@@ -16,6 +16,7 @@
  */
 package org.apache.kafka.streams.processor.internals;
 
+import org.apache.kafka.streams.processor.StandbyUpdateListener;
 import org.apache.kafka.streams.processor.TaskId;
 
 import org.junit.jupiter.api.Test;
@@ -52,11 +53,12 @@ class TaskAndActionTest {
         final TaskId taskId = new TaskId(0, 0);
         final CompletableFuture<StateUpdater.RemovedTaskResult> future = new CompletableFuture<>();
 
-        final TaskAndAction removeTask = createRemoveTask(taskId, future);
+        final TaskAndAction removeTask = createRemoveTask(taskId, future, StandbyUpdateListener.SuspendReason.MIGRATED);
 
         assertEquals(REMOVE, removeTask.action());
         assertEquals(taskId, removeTask.taskId());
         assertEquals(future, removeTask.futureForRemove());
+        assertEquals(StandbyUpdateListener.SuspendReason.MIGRATED, removeTask.suspendReason());
         final Exception exceptionForTask = assertThrows(IllegalStateException.class, removeTask::task);
         assertEquals("Action type REMOVE cannot have a task!", exceptionForTask.getMessage());
     }
@@ -71,7 +73,7 @@ class TaskAndActionTest {
     public void shouldThrowIfRemoveTaskActionIsCreatedWithNullTaskId() {
         final Exception exception = assertThrows(
             NullPointerException.class,
-            () -> createRemoveTask(null, new CompletableFuture<>())
+            () -> createRemoveTask(null, new CompletableFuture<>(), StandbyUpdateListener.SuspendReason.MIGRATED)
         );
         assertTrue(exception.getMessage().contains("Task ID of task to remove is null!"));
     }
@@ -80,7 +82,7 @@ class TaskAndActionTest {
     public void shouldThrowIfRemoveTaskActionIsCreatedWithNullFuture() {
         final Exception exception = assertThrows(
             NullPointerException.class,
-            () -> createRemoveTask(new TaskId(0, 0), null)
+            () -> createRemoveTask(new TaskId(0, 0), null, StandbyUpdateListener.SuspendReason.MIGRATED)
         );
         assertTrue(exception.getMessage().contains("Future for task to remove is null!"));
     }

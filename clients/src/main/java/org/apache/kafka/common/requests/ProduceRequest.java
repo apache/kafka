@@ -17,23 +17,22 @@
 package org.apache.kafka.common.requests;
 
 import org.apache.kafka.common.InvalidRecordException;
-import org.apache.kafka.common.TopicPartition;
+import org.apache.kafka.common.TopicIdPartition;
 import org.apache.kafka.common.errors.UnsupportedCompressionTypeException;
 import org.apache.kafka.common.message.ProduceRequestData;
 import org.apache.kafka.common.message.ProduceResponseData;
 import org.apache.kafka.common.protocol.ApiKeys;
-import org.apache.kafka.common.protocol.ByteBufferAccessor;
 import org.apache.kafka.common.protocol.Errors;
-import org.apache.kafka.common.record.BaseRecords;
-import org.apache.kafka.common.record.CompressionType;
-import org.apache.kafka.common.record.RecordBatch;
-import org.apache.kafka.common.record.Records;
+import org.apache.kafka.common.protocol.Readable;
+import org.apache.kafka.common.record.internal.BaseRecords;
+import org.apache.kafka.common.record.internal.CompressionType;
+import org.apache.kafka.common.record.internal.RecordBatch;
+import org.apache.kafka.common.record.internal.Records;
 import org.apache.kafka.common.utils.Utils;
 
-import java.nio.ByteBuffer;
-import java.util.Collections;
 import java.util.HashMap;
 import java.util.Iterator;
+import java.util.List;
 import java.util.Map;
 import java.util.stream.Collectors;
 
@@ -97,7 +96,7 @@ public class ProduceRequest extends AbstractRequest {
     // Care should be taken in methods that use this field.
     private volatile ProduceRequestData data;
     // the partitionSizes is lazily initialized since it is used by server-side in production.
-    private volatile Map<TopicPartition, Integer> partitionSizes;
+    private volatile Map<TopicIdPartition, Integer> partitionSizes;
 
     public ProduceRequest(ProduceRequestData produceRequestData, short version) {
         super(ApiKeys.PRODUCE, version);
@@ -108,15 +107,20 @@ public class ProduceRequest extends AbstractRequest {
     }
 
     // visible for testing
-    Map<TopicPartition, Integer> partitionSizes() {
+    Map<TopicIdPartition, Integer> partitionSizes() {
         if (partitionSizes == null) {
             // this method may be called by different thread (see the comment on data)
             synchronized (this) {
                 if (partitionSizes == null) {
-                    Map<TopicPartition, Integer> tmpPartitionSizes = new HashMap<>();
+                    Map<TopicIdPartition, Integer> tmpPartitionSizes = new HashMap<>();
                     data.topicData().forEach(topicData ->
                         topicData.partitionData().forEach(partitionData ->
-                            tmpPartitionSizes.compute(new TopicPartition(topicData.name(), partitionData.index()),
+                            // While topic id and name might not be populated at the same time in the request all the time;
+                            // for example on server side they will never be populated together while in produce client they will be,
+                            // to simplify initializing `TopicIdPartition` the code will use both topic name and id.
+                            // TopicId will be Uuid.ZERO_UUID in versions < 13 and topic name will be used as main identifier of topic partition.
+                            // TopicName will be empty string in versions >= 13 and topic id will be used as the main identifier.
+                            tmpPartitionSizes.compute(new TopicIdPartition(topicData.topicId(), partitionData.index(), topicData.name()),
                                 (ignored, previousValue) ->
                                     partitionData.records().sizeInBytes() + (previousValue == null ? 0 : previousValue))
                         )
@@ -162,15 +166,15 @@ public class ProduceRequest extends AbstractRequest {
         if (acks == 0) return null;
         ApiError apiError = ApiError.fromThrowable(e);
         ProduceResponseData data = new ProduceResponseData().setThrottleTimeMs(throttleTimeMs);
-        partitionSizes().forEach((tp, ignored) -> {
-            ProduceResponseData.TopicProduceResponse tpr = data.responses().find(tp.topic());
+        partitionSizes().forEach((tpId, ignored) -> {
+            ProduceResponseData.TopicProduceResponse tpr = data.responses().find(tpId.topic(), tpId.topicId());
             if (tpr == null) {
-                tpr = new ProduceResponseData.TopicProduceResponse().setName(tp.topic());
+                tpr = new ProduceResponseData.TopicProduceResponse().setName(tpId.topic()).setTopicId(tpId.topicId());
                 data.responses().add(tpr);
             }
             tpr.partitionResponses().add(new ProduceResponseData.PartitionProduceResponse()
-                    .setIndex(tp.partition())
-                    .setRecordErrors(Collections.emptyList())
+                    .setIndex(tpId.partition())
+                    .setRecordErrors(List.of())
                     .setBaseOffset(INVALID_OFFSET)
                     .setLogAppendTimeMs(RecordBatch.NO_TIMESTAMP)
                     .setLogStartOffset(INVALID_OFFSET)
@@ -183,7 +187,7 @@ public class ProduceRequest extends AbstractRequest {
     @Override
     public Map<Errors, Integer> errorCounts(Throwable e) {
         Errors error = Errors.forException(e);
-        return Collections.singletonMap(error, partitionSizes().size());
+        return Map.of(error, partitionSizes().size());
     }
 
     public short acks() {
@@ -227,8 +231,8 @@ public class ProduceRequest extends AbstractRequest {
         }
     }
 
-    public static ProduceRequest parse(ByteBuffer buffer, short version) {
-        return new ProduceRequest(new ProduceRequestData(new ByteBufferAccessor(buffer), version), version);
+    public static ProduceRequest parse(Readable readable, short version) {
+        return new ProduceRequest(new ProduceRequestData(readable, version), version);
     }
 
     public static boolean isTransactionV2Requested(short version) {

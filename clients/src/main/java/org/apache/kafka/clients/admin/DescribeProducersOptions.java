@@ -14,9 +14,10 @@
  * See the License for the specific language governing permissions and
  * limitations under the License.
  */
+
 package org.apache.kafka.clients.admin;
 
-import org.apache.kafka.common.annotation.InterfaceStability;
+import org.apache.kafka.common.annotation.InterfaceAudience;
 
 import java.util.Collection;
 import java.util.Objects;
@@ -24,10 +25,8 @@ import java.util.OptionalInt;
 
 /**
  * Options for {@link Admin#describeProducers(Collection)}.
- *
- * The API of this class is evolving, see {@link Admin} for details.
  */
-@InterfaceStability.Evolving
+@InterfaceAudience.Public
 public class DescribeProducersOptions extends AbstractOptions<DescribeProducersOptions> {
     private OptionalInt brokerId = OptionalInt.empty();
 

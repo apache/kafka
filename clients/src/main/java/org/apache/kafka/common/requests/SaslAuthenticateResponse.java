@@ -18,10 +18,9 @@ package org.apache.kafka.common.requests;
 
 import org.apache.kafka.common.message.SaslAuthenticateResponseData;
 import org.apache.kafka.common.protocol.ApiKeys;
-import org.apache.kafka.common.protocol.ByteBufferAccessor;
 import org.apache.kafka.common.protocol.Errors;
+import org.apache.kafka.common.protocol.Readable;
 
-import java.nio.ByteBuffer;
 import java.util.Map;
 
 /**
@@ -77,7 +76,15 @@ public class SaslAuthenticateResponse extends AbstractResponse {
         return data;
     }
 
-    public static SaslAuthenticateResponse parse(ByteBuffer buffer, short version) {
-        return new SaslAuthenticateResponse(new SaslAuthenticateResponseData(new ByteBufferAccessor(buffer), version));
+    public static SaslAuthenticateResponse parse(Readable readable, short version) {
+        return new SaslAuthenticateResponse(new SaslAuthenticateResponseData(readable, version));
+    }
+
+    // Do not print authBytes, overwrite a temp copy of the data with empty bytes
+    @Override
+    public String toString() {
+        SaslAuthenticateResponseData tempData = data.duplicate();
+        tempData.setAuthBytes(new byte[0]);
+        return tempData.toString();
     }
 }

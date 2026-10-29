@@ -17,8 +17,8 @@
 package org.apache.kafka.storage.internals.log;
 
 import org.apache.kafka.common.message.FetchResponseData;
-import org.apache.kafka.common.record.MemoryRecords;
-import org.apache.kafka.common.record.Records;
+import org.apache.kafka.common.record.internal.MemoryRecords;
+import org.apache.kafka.common.record.internal.Records;
 
 import java.util.List;
 import java.util.Optional;
@@ -52,6 +52,13 @@ public class FetchDataInfo {
         this.firstEntryIncomplete = firstEntryIncomplete;
         this.abortedTransactions = abortedTransactions;
         this.delayedRemoteStorageFetch = delayedRemoteStorageFetch;
+    }
+
+    /**
+     * @return A copy of this instance with the given records
+     */
+    public FetchDataInfo withRecords(Records records) {
+        return new FetchDataInfo(fetchOffsetMetadata, records, firstEntryIncomplete, abortedTransactions, delayedRemoteStorageFetch);
     }
 
     public static FetchDataInfo empty(long fetchOffset) {

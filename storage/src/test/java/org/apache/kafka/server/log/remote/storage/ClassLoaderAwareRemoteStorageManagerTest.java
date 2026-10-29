@@ -18,7 +18,7 @@ package org.apache.kafka.server.log.remote.storage;
 
 import org.junit.jupiter.api.Test;
 
-import java.util.Collections;
+import java.util.Map;
 
 import static org.junit.jupiter.api.Assertions.assertEquals;
 import static org.junit.jupiter.api.Assertions.assertNotEquals;
@@ -38,7 +38,7 @@ public class ClassLoaderAwareRemoteStorageManagerTest {
         }).when(delegate).configure(any());
 
         assertNotEquals(dummyClassLoader, Thread.currentThread().getContextClassLoader());
-        rsm.configure(Collections.emptyMap());
+        rsm.configure(Map.of());
         assertNotEquals(dummyClassLoader, Thread.currentThread().getContextClassLoader());
     }
 

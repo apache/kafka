@@ -18,6 +18,7 @@ package org.apache.kafka.common.config;
 
 import org.apache.kafka.common.Configurable;
 import org.apache.kafka.common.KafkaException;
+import org.apache.kafka.common.annotation.InterfaceAudience;
 import org.apache.kafka.common.config.provider.ConfigProvider;
 import org.apache.kafka.common.config.types.Password;
 import org.apache.kafka.common.utils.Utils;
@@ -43,6 +44,7 @@ import java.util.stream.Collectors;
  * <p>
  * This class holds both the original configuration that was provided as well as the parsed
  */
+@InterfaceAudience.Public
 public class AbstractConfig {
 
     private static final Logger log = LoggerFactory.getLogger(AbstractConfig.class);
@@ -65,6 +67,10 @@ public class AbstractConfig {
     public static final String AUTOMATIC_CONFIG_PROVIDERS_PROPERTY = "org.apache.kafka.automatic.config.providers";
 
     public static final String CONFIG_PROVIDERS_CONFIG = "config.providers";
+    public static final String CONFIG_PROVIDERS_DOC = 
+            "Comma-separated alias names for classes implementing the <code>ConfigProvider</code> interface. " +
+            "This enables loading configuration data (such as passwords, API keys, and other credentials) from external " +
+            "sources. For example, see <a href=\"https://kafka.apache.org/documentation/#config_providers\">Configuration Providers</a>.";
 
     private static final String CONFIG_PROVIDERS_PARAM = ".param.";
 
@@ -109,8 +115,7 @@ public class AbstractConfig {
      */
     @SuppressWarnings({"this-escape"})
     public AbstractConfig(ConfigDef definition, Map<?, ?> originals, Map<String, ?> configProviderProps, boolean doLog) {
-        Map<String, Object> originalMap = Utils.castToStringObjectMap(originals);
-
+        Map<String, Object> originalMap = preProcessParsedConfig(Collections.unmodifiableMap(Utils.castToStringObjectMap(originals)));
         this.originals = resolveConfigVariables(configProviderProps, originalMap);
         this.values = definition.parse(this.originals);
         Map<String, Object> configUpdates = postProcessParsedConfig(Collections.unmodifiableMap(this.values));
@@ -130,7 +135,7 @@ public class AbstractConfig {
      * @param originals  the configuration properties plus any optional config provider properties; may not be null
      */
     public AbstractConfig(ConfigDef definition, Map<?, ?> originals) {
-        this(definition, originals, Collections.emptyMap(), true);
+        this(definition, originals, Map.of(), true);
     }
 
     /**
@@ -143,8 +148,18 @@ public class AbstractConfig {
      * @param doLog      whether the configurations should be logged
      */
     public AbstractConfig(ConfigDef definition, Map<?, ?> originals, boolean doLog) {
-        this(definition, originals, Collections.emptyMap(), doLog);
+        this(definition, originals, Map.of(), doLog);
+    }
 
+    /**
+     * Called directly after user configs got parsed (and thus default values are not set).
+     * This allows to check user's config.
+     *
+     * @param parsedValues unmodifiable map of current configuration
+     * @return a map of updates that should be applied to the configuration (will be validated to prevent bad updates)
+     */
+    protected Map<String, Object> preProcessParsedConfig(Map<String, Object> parsedValues) {
+        return parsedValues;
     }
 
     /**
@@ -155,7 +170,7 @@ public class AbstractConfig {
      * @return a map of updates that should be applied to the configuration (will be validated to prevent bad updates)
      */
     protected Map<String, Object> postProcessParsedConfig(Map<String, Object> parsedValues) {
-        return Collections.emptyMap();
+        return Map.of();
     }
 
     protected Object get(String key) {
@@ -417,7 +432,7 @@ public class AbstractConfig {
      * @return A configured instance of the class
      */
     public <T> T getConfiguredInstance(String key, Class<T> t) {
-        return getConfiguredInstance(key, t, Collections.emptyMap());
+        return getConfiguredInstance(key, t, Map.of());
     }
 
     /**
@@ -445,7 +460,7 @@ public class AbstractConfig {
      * @return The list of configured instances
      */
     public <T> List<T> getConfiguredInstances(String key, Class<T> t) {
-        return getConfiguredInstances(key, t, Collections.emptyMap());
+        return getConfiguredInstances(key, t, Map.of());
     }
 
     /**
@@ -540,13 +555,16 @@ public class AbstractConfig {
         Map<String, ConfigProvider> providers = instantiateConfigProviders(providerConfigString, configProperties, classNameFilter);
 
         if (!providers.isEmpty()) {
-            ConfigTransformer configTransformer = new ConfigTransformer(providers);
-            ConfigTransformerResult result = configTransformer.transform(indirectVariables);
-            if (!result.data().isEmpty()) {
-                resolvedOriginals.putAll(result.data());
+            try {
+                ConfigTransformer configTransformer = new ConfigTransformer(providers);
+                ConfigTransformerResult result = configTransformer.transform(indirectVariables);
+                if (!result.data().isEmpty()) {
+                    resolvedOriginals.putAll(result.data());
+                }
+            } finally {
+                providers.values().forEach(x -> Utils.closeQuietly(x, "config provider"));
             }
         }
-        providers.values().forEach(x -> Utils.closeQuietly(x, "config provider"));
 
         return new ResolvingMap<>(resolvedOriginals, originals);
     }
@@ -593,7 +611,7 @@ public class AbstractConfig {
         final String configProviders = indirectConfigs.get(CONFIG_PROVIDERS_CONFIG);
 
         if (configProviders == null || configProviders.isEmpty()) {
-            return Collections.emptyMap();
+            return Map.of();
         }
 
         Map<String, String> providerMap = new HashMap<>();
@@ -612,17 +630,23 @@ public class AbstractConfig {
         }
         // Instantiate Config Providers
         Map<String, ConfigProvider> configProviderInstances = new HashMap<>();
-        for (Map.Entry<String, String> entry : providerMap.entrySet()) {
-            try {
+        try {
+            for (Map.Entry<String, String> entry : providerMap.entrySet()) {
                 String prefix = CONFIG_PROVIDERS_CONFIG + "." + entry.getKey() + CONFIG_PROVIDERS_PARAM;
                 Map<String, ?> configProperties = configProviderProperties(prefix, providerConfigProperties);
-                ConfigProvider provider = Utils.newInstance(entry.getValue(), ConfigProvider.class);
-                provider.configure(configProperties);
+                ConfigProvider provider;
+                try {
+                    provider = Utils.newInstance(entry.getValue(), ConfigProvider.class);
+                } catch (ClassNotFoundException e) {
+                    log.error("Could not load config provider class {}", entry.getValue(), e);
+                    throw new ConfigException(providerClassProperty(entry.getKey()), entry.getValue(), "Could not load config provider class or one of its dependencies");
+                }
                 configProviderInstances.put(entry.getKey(), provider);
-            } catch (ClassNotFoundException e) {
-                log.error("Could not load config provider class {}", entry.getValue(), e);
-                throw new ConfigException(providerClassProperty(entry.getKey()), entry.getValue(), "Could not load config provider class or one of its dependencies");
+                provider.configure(configProperties);
             }
+        } catch (RuntimeException | Error e) {
+            configProviderInstances.values().forEach(x -> Utils.closeQuietly(x, "config provider"));
+            throw e;
         }
 
         return configProviderInstances;

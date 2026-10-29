@@ -18,7 +18,7 @@ package org.apache.kafka.connect.util;
 
 import org.apache.kafka.clients.CommonClientConfigs;
 import org.apache.kafka.common.InvalidRecordException;
-import org.apache.kafka.common.record.RecordBatch;
+import org.apache.kafka.common.record.internal.RecordBatch;
 import org.apache.kafka.connect.connector.Connector;
 import org.apache.kafka.connect.errors.ConnectException;
 import org.apache.kafka.connect.runtime.WorkerConfig;
@@ -51,6 +51,19 @@ public final class ConnectUtils {
             return null;
         else
             throw new InvalidRecordException(String.format("Invalid record timestamp %d", timestamp));
+    }
+
+    /**
+     * Force synchronous bootstrap DNS resolution ({@code bootstrap.resolve.timeout.ms=0}) for a client
+     * created by the Connect framework, logging a warning if a user-supplied value is overridden.
+     * Kafka Connect does not support the asynchronous bootstrap resolution mode.
+     */
+    public static void enforceSynchronousBootstrapResolution(Map<String, Object> clientProps) {
+        ensureProperty(
+                clientProps, CommonClientConfigs.BOOTSTRAP_RESOLVE_TIMEOUT_MS_CONFIG, "0",
+                "in Kafka Connect, which does not support asynchronous bootstrap resolution",
+                true
+        );
     }
 
     /**

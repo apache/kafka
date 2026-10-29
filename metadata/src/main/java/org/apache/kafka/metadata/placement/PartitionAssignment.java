@@ -37,7 +37,7 @@ public class PartitionAssignment {
 
     public PartitionAssignment(List<Integer> replicas, DefaultDirProvider defaultDirProvider) {
         this.replicas = List.copyOf(replicas);
-        this.directories = replicas.stream().map(replica -> defaultDirProvider.defaultDir(replica)).toList();
+        this.directories = replicas.stream().map(defaultDirProvider::defaultDir).toList();
     }
 
     /**

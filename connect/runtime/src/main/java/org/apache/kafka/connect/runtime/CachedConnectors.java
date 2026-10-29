@@ -50,11 +50,12 @@ public class CachedConnectors {
 
         String version = range == null ? LATEST_VERSION : range.toString();
         if (invalidVersions.containsKey(connectorName) && invalidVersions.get(connectorName).containsKey(version)) {
-            throw new VersionedPluginLoadingException(invalidVersions.get(connectorName).get(version).getMessage());
+            VersionedPluginLoadingException exception = invalidVersions.get(connectorName).get(version);
+            throw new VersionedPluginLoadingException(exception.getMessage(), exception.availableVersions());
         }
     }
 
-    private Connector lookup(String connectorName, VersionRange range) throws Exception {
+    private Connector lookup(String connectorName, VersionRange range) {
         String version = range == null ? LATEST_VERSION : range.toString();
         if (connectors.containsKey(connectorName) && connectors.get(connectorName).containsKey(version)) {
             return connectors.get(connectorName).get(version);
@@ -73,7 +74,7 @@ public class CachedConnectors {
         }
     }
 
-    public Connector getConnector(String connectorName, VersionRange range) throws Exception {
+    public Connector getConnector(String connectorName, VersionRange range) {
         validate(connectorName, range);
         return lookup(connectorName, range);
     }

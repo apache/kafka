@@ -18,9 +18,9 @@
 package kafka.server
 
 import org.apache.kafka.common.test.api.ClusterTest
-import kafka.utils.TestUtils
 import org.apache.kafka.common.test.ClusterInstance
 import org.apache.kafka.server.metrics.KafkaYammerMetrics
+import org.apache.kafka.server.util.ServerTestUtils
 import org.junit.jupiter.api.AfterEach
 import org.junit.jupiter.api.Assertions.assertEquals
 
@@ -29,7 +29,7 @@ import scala.jdk.CollectionConverters._
 class BrokerMetricNamesTest(cluster: ClusterInstance) {
   @AfterEach
   def tearDown(): Unit = {
-    TestUtils.clearYammerMetrics()
+    ServerTestUtils.clearYammerMetrics()
   }
 
   @ClusterTest
@@ -40,12 +40,7 @@ class BrokerMetricNamesTest(cluster: ClusterInstance) {
   def checkReplicaManagerMetrics(): Unit = {
     val metrics = KafkaYammerMetrics.defaultRegistry.allMetrics
     val expectedPrefix = "kafka.server:type=ReplicaManager,name"
-    val expectedMetricNames = Set(
-      "LeaderCount", "PartitionCount", "OfflineReplicaCount", "UnderReplicatedPartitions",
-      "UnderMinIsrPartitionCount", "AtMinIsrPartitionCount", "ReassigningPartitions",
-      "IsrExpandsPerSec", "IsrShrinksPerSec", "FailedIsrUpdatesPerSec",
-      "ProducerIdCount",
-    )
+    val expectedMetricNames = ReplicaManager.MetricNames
     expectedMetricNames.foreach { metricName =>
       assertEquals(1, metrics.keySet.asScala.count(_.getMBeanName == s"$expectedPrefix=$metricName"))
     }

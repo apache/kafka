@@ -48,7 +48,11 @@ public class KafkaStreamsWrapper extends KafkaStreams {
     public void setStreamThreadStateListener(final StreamThread.StateListener listener) {
         if (state == State.CREATED) {
             for (final StreamThread thread : threads) {
-                thread.setStateListener(listener);
+                final StreamThread.StateListener originalListener = thread.getStateListener();
+                thread.setStateListener((t, newState, oldState) -> {
+                    originalListener.onChange(t, newState, oldState);
+                    listener.onChange(t, newState, oldState);
+                });
             }
         } else {
             throw new IllegalStateException("Can only set StateListener in CREATED state. " +

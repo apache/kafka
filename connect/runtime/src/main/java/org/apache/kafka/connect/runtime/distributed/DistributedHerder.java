@@ -25,12 +25,12 @@ import org.apache.kafka.common.metrics.Sensor;
 import org.apache.kafka.common.metrics.stats.Avg;
 import org.apache.kafka.common.metrics.stats.CumulativeSum;
 import org.apache.kafka.common.metrics.stats.Max;
-import org.apache.kafka.common.utils.Exit;
-import org.apache.kafka.common.utils.ExponentialBackoff;
-import org.apache.kafka.common.utils.LogContext;
-import org.apache.kafka.common.utils.ThreadUtils;
 import org.apache.kafka.common.utils.Time;
 import org.apache.kafka.common.utils.Utils;
+import org.apache.kafka.common.utils.internals.Exit;
+import org.apache.kafka.common.utils.internals.ExponentialBackoff;
+import org.apache.kafka.common.utils.internals.LogContext;
+import org.apache.kafka.common.utils.internals.ThreadUtils;
 import org.apache.kafka.connect.connector.policy.ConnectorClientConfigOverridePolicy;
 import org.apache.kafka.connect.errors.AlreadyExistsException;
 import org.apache.kafka.connect.errors.ConnectException;
@@ -82,9 +82,7 @@ import org.apache.kafka.connect.util.TemporaryStage;
 import org.slf4j.Logger;
 
 import java.util.ArrayList;
-import java.util.Arrays;
 import java.util.Collection;
-import java.util.Collections;
 import java.util.HashMap;
 import java.util.HashSet;
 import java.util.List;
@@ -305,7 +303,7 @@ public class DistributedHerder extends AbstractHerder implements Runnable {
         this.restClient = restClient;
         this.isTopicTrackingEnabled = config.getBoolean(TOPIC_TRACKING_ENABLE_CONFIG);
         this.restNamespace = Objects.requireNonNull(restNamespace);
-        this.uponShutdown = Arrays.asList(uponShutdown);
+        this.uponShutdown = List.of(uponShutdown);
 
         String clientIdConfig = config.getString(CommonClientConfigs.CLIENT_ID_CONFIG);
         String clientId = clientIdConfig.isEmpty() ? "connect-" + workerId : clientIdConfig;
@@ -713,7 +711,7 @@ public class DistributedHerder extends AbstractHerder implements Runnable {
     private void processConnectorConfigUpdates(Set<String> connectorConfigUpdates) {
         // If we only have connector config updates, we can just bounce the updated connectors that are
         // currently assigned to this worker.
-        Set<String> localConnectors = assignment == null ? Collections.emptySet() : new HashSet<>(assignment.connectors());
+        Set<String> localConnectors = assignment == null ? Set.of() : new HashSet<>(assignment.connectors());
         Collection<Callable<Void>> connectorsToStart = new ArrayList<>();
         log.trace("Processing connector config updates; "
                 + "currently-owned connectors are {}, and to-be-updated connectors are {}",
@@ -769,7 +767,7 @@ public class DistributedHerder extends AbstractHerder implements Runnable {
 
     private void processTaskConfigUpdatesWithIncrementalCooperative(Set<ConnectorTaskId> taskConfigUpdates) {
         Set<ConnectorTaskId> localTasks = assignment == null
-                                          ? Collections.emptySet()
+                                          ? Set.of()
                                           : new HashSet<>(assignment.tasks());
         log.trace("Processing task config updates with incremental cooperative rebalance protocol; "
                 + "currently-owned tasks are {}, and to-be-updated tasks are {}",
@@ -781,7 +779,7 @@ public class DistributedHerder extends AbstractHerder implements Runnable {
 
     private void stopReconfiguredTasks(Set<String> connectors) {
         Set<ConnectorTaskId> localTasks = assignment == null
-                ? Collections.emptySet()
+                ? Set.of()
                 : new HashSet<>(assignment.tasks());
 
         List<ConnectorTaskId> tasksToStop = localTasks.stream()
@@ -966,7 +964,7 @@ public class DistributedHerder extends AbstractHerder implements Runnable {
             String consumerGroupId = config.get(overriddenConsumerGroupIdConfig);
             ConfigValue validatedGroupId = validatedConfig.computeIfAbsent(
                     overriddenConsumerGroupIdConfig,
-                    p -> new ConfigValue(overriddenConsumerGroupIdConfig, consumerGroupId, Collections.emptyList(), new ArrayList<>())
+                    p -> new ConfigValue(overriddenConsumerGroupIdConfig, consumerGroupId, List.of(), new ArrayList<>())
             );
             if (workerGroupId.equals(consumerGroupId)) {
                 validatedGroupId.addErrorMessage("Consumer group " + consumerGroupId +
@@ -1090,16 +1088,17 @@ public class DistributedHerder extends AbstractHerder implements Runnable {
     @Override
     public void putConnectorConfig(final String connName, final Map<String, String> config, final boolean allowReplace,
                                    final Callback<Created<ConnectorInfo>> callback) {
-        putConnectorConfig(connName, config, null, allowReplace, callback);
+        putConnectorConfig(connName, config, null, null, allowReplace, callback);
     }
 
     @Override
     public void putConnectorConfig(final String connName, final Map<String, String> config, final TargetState targetState,
-                                   final boolean allowReplace, final Callback<Created<ConnectorInfo>> callback) {
+                                   final Map<Map<String, ?>, Map<String, ?>> initialOffsets, final boolean allowReplace,
+                                   final Callback<Created<ConnectorInfo>> callback) {
         log.trace("Submitting connector config write request {}", connName);
         addRequest(
             () -> {
-                doPutConnectorConfig(connName, config, targetState, allowReplace, callback);
+                doPutConnectorConfig(connName, config, targetState, initialOffsets, allowReplace, callback);
                 return null;
             },
             forwardErrorAndTickThreadStages(callback)
@@ -1121,7 +1120,7 @@ public class DistributedHerder extends AbstractHerder implements Runnable {
                 callback.onCompletion(new NotFoundException("Connector " + connName + " not found", null), null);
             } else {
                 Map<String, String> patchedConfig = ConnectUtils.patchConfig(connectorInfo.config(), configPatch);
-                doPutConnectorConfig(connName, patchedConfig, null, true, callback);
+                doPutConnectorConfig(connName, patchedConfig, null, null, true, callback);
             }
             return null;
         }, forwardErrorAndTickThreadStages(callback));
@@ -1130,7 +1129,9 @@ public class DistributedHerder extends AbstractHerder implements Runnable {
     private void doPutConnectorConfig(
             String connName,
             Map<String, String> config,
-            TargetState targetState, boolean allowReplace,
+            TargetState targetState,
+            Map<Map<String, ?>, Map<String, ?>> initialOffsets,
+            boolean allowReplace,
             Callback<Created<ConnectorInfo>> callback) {
         validateConnectorConfig(config, callback.chainStaging((error, configInfos) -> {
             if (error != null) {
@@ -1148,33 +1149,124 @@ public class DistributedHerder extends AbstractHerder implements Runnable {
                         }
 
                         log.trace("Handling connector config request {}", connName);
-                        if (!isLeader()) {
-                            callback.onCompletion(new NotLeaderException("Only the leader can set connector configs.", leaderUrl()), null);
-                            return null;
-                        }
-                        boolean exists = configState.contains(connName);
-                        if (!allowReplace && exists) {
-                            callback.onCompletion(new AlreadyExistsException("Connector " + connName + " already exists"), null);
+                        if (!putConnectorConfigChecks(connName, allowReplace, initialOffsets != null, callback)) {
                             return null;
                         }
 
-                        log.trace("Submitting connector config {} {} {}", connName, allowReplace, configState.connectors());
-                        writeToConfigTopicAsLeader(
-                                "writing a config for connector " + connName + " to the config topic",
-                                () -> configBackingStore.putConnectorConfig(connName, config, targetState)
-                        );
-
-                        // Note that we use the updated connector config despite the fact that we don't have an updated
-                        // snapshot yet. The existing task info should still be accurate.
-                        ConnectorInfo info = new ConnectorInfo(connName, config, configState.tasks(connName),
-                                connectorType(config));
-                        callback.onCompletion(null, new Created<>(!exists, info));
+                        if (initialOffsets == null) {
+                            writeConnectorConfigAndComplete(connName, config, targetState, null, callback);
+                        } else {
+                            setInitialOffsetsThenWriteConfig(connName, config, targetState, initialOffsets, allowReplace, callback);
+                        }
                         return null;
                     },
                     forwardErrorAndTickThreadStages(callback)
             );
         }));
     }
+
+    /**
+     * Perform the checks required before writing a connector's config as the leader, completing {@code callback}
+     * exceptionally if any of them fail.
+     *
+     * @param connName the name of the connector whose config is to be written
+     * @param allowReplace whether an existing connector with this name may be overwritten
+     * @param refreshConfigs whether to read to the end of the config topic before checking whether the connector exists,
+     *                       so that a creation with initial offsets doesn't act on stale configs
+     * @param callback callback to complete exceptionally if a check fails
+     * @return true if all the checks passed, false otherwise
+     */
+    private boolean putConnectorConfigChecks(String connName, boolean allowReplace, boolean refreshConfigs,
+                                             Callback<Created<ConnectorInfo>> callback) {
+        if (!isLeader()) {
+            callback.onCompletion(new NotLeaderException("Only the leader can set connector configs.", leaderUrl()), null);
+            return false;
+        }
+        if (refreshConfigs && !refreshConfigSnapshot(workerSyncTimeoutMs)) {
+            callback.onCompletion(new ConnectException("Failed to read to end of config topic before setting initial offsets for connector " + connName), null);
+            return false;
+        }
+        if (!allowReplace && configState.contains(connName)) {
+            callback.onCompletion(new AlreadyExistsException("Connector " + connName + " already exists"), null);
+            return false;
+        }
+        return true;
+    }
+
+    /**
+     * Write a connector's initial offsets and, once they are durable, write its config. Must be invoked on the tick thread.
+     * <p>
+     * The offsets are written asynchronously, so the config write is handed back to the tick thread via a nested request
+     * rather than blocking it; this mirrors the {@link #modifyConnectorOffsets} plus zombie fencing flow, including the
+     * re-check of preconditions that may have changed while the offsets were being written.
+     */
+    private void setInitialOffsetsThenWriteConfig(String connName, Map<String, String> config, TargetState targetState,
+                                                  Map<Map<String, ?>, Map<String, ?>> initialOffsets, boolean allowReplace,
+                                                  Callback<Created<ConnectorInfo>> callback) {
+        // Validate before anything destructive happens, so an invalid request can't wipe the connector's offsets. This
+        // performs no I/O and is safe to run on the tick thread; throwing here is forwarded to the callback by the
+        // enclosing herder request.
+        validateInitialOffsets(connName, initialOffsets);
+
+        try (TickThreadStage stage = new TickThreadStage("setting initial offsets for connector " + connName)) {
+            setInitialConnectorOffsets(connName, config, initialOffsets, (offsetsError, message) -> {
+                if (offsetsError != null) {
+                    callback.onCompletion(offsetsError, null);
+                    return;
+                }
+                addRequest(
+                    () -> {
+                        // The offsets are already durable, so wipe them back out if the create can't be completed, unless
+                        // another request created the connector in the meantime, since that would reset its offsets.
+                        Callback<Created<ConnectorInfo>> wipeOnFailure = (error, ignored) -> {
+                            if (error instanceof AlreadyExistsException) {
+                                callback.onCompletion(error, null);
+                            } else {
+                                wipeInitialOffsetsAfterFailedCreate(connName, config, error, callback);
+                            }
+                        };
+                        if (!putConnectorConfigChecks(connName, allowReplace, true, wipeOnFailure)) {
+                            return null;
+                        }
+                        try {
+                            writeConnectorConfigAndComplete(connName, config, targetState, message.message(), callback);
+                        } catch (Throwable t) {
+                            wipeInitialOffsetsAfterFailedCreate(connName, config, t, callback);
+                        }
+                        return null;
+                    },
+                    forwardErrorAndTickThreadStages(callback)
+                );
+            });
+        }
+    }
+
+    /**
+     * Write a connector's config to the config topic and complete {@code callback} with the resulting
+     * {@link ConnectorInfo}. Must be invoked on the tick thread.
+     *
+     * @param offsetsStatus the outcome of writing the connector's initial offsets, to be reported back on the created
+     *                      {@link ConnectorInfo}; {@code null} if the request did not supply initial offsets, in which
+     *                      case the response is identical to one for a creation without initial offsets
+     */
+    private void writeConnectorConfigAndComplete(String connName, Map<String, String> config, TargetState targetState,
+                                                 String offsetsStatus, Callback<Created<ConnectorInfo>> callback) {
+        // Must be read before the write, which may update the snapshot and make every connector look pre-existing
+        boolean exists = configState.contains(connName);
+
+        log.trace("Submitting connector config {} {}", connName, configState.connectors());
+        writeToConfigTopicAsLeader(
+                "writing a config for connector " + connName + " to the config topic",
+                () -> configBackingStore.putConnectorConfig(connName, config, targetState)
+        );
+
+        // Note that we use the updated connector config despite the fact that we don't have an updated
+        // snapshot yet. The existing task info should still be accurate.
+        ConnectorInfo info = new ConnectorInfo(connName, config, configState.tasks(connName),
+                connectorType(config), offsetsStatus);
+        callback.onCompletion(null, new Created<>(!exists, info));
+    }
+
     @Override
     public void stopConnector(final String connName, final Callback<Void> callback) {
         log.trace("Submitting request to transition connector {} to STOPPED state", connName);
@@ -1195,7 +1287,7 @@ public class DistributedHerder extends AbstractHerder implements Runnable {
                     // if the connector is reassigned during the ensuing rebalance, it is likely that it will immediately generate
                     // a non-empty set of task configs). A STOPPED connector with a non-empty set of tasks is less acceptable
                     // and likely to confuse users.
-                    writeTaskConfigs(connName, Collections.emptyList());
+                    writeTaskConfigs(connName, List.of());
                     String stageDescription = "writing the STOPPED target stage for connector " + connName + " to the config topic";
                     try (TickThreadStage stage = new TickThreadStage(stageDescription)) {
                         configBackingStore.putTargetState(connName, TargetState.STOPPED);
@@ -1545,7 +1637,7 @@ public class DistributedHerder extends AbstractHerder implements Runnable {
             try (TickThreadStage stage = new TickThreadStage(stageDescription)) {
                 doRestartConnectorAndTasks(restartRequest);
             } catch (Exception e) {
-                log.warn("Unexpected error while trying to process " + restartRequest + ", the restart request will be skipped.", e);
+                log.warn("Unexpected error while trying to process {}, the restart request will be skipped.", restartRequest, e);
             }
         });
     }
@@ -2079,7 +2171,7 @@ public class DistributedHerder extends AbstractHerder implements Runnable {
     private void startConnector(String connectorName, Callback<Void> callback) {
         log.info("Starting connector {}", connectorName);
         final Map<String, String> configProps = configState.connectorConfig(connectorName);
-        final CloseableConnectorContext ctx = new HerderConnectorContext(this, connectorName);
+        final CloseableConnectorContext ctx = new HerderConnectorContext(this, connectorName, worker.metrics().connectorPluginMetrics(connectorName));
         final TargetState initialState = configState.targetState(connectorName);
         final Callback<TargetState> onInitialStateChange = (error, newState) -> {
             if (error != null) {
@@ -2113,11 +2205,11 @@ public class DistributedHerder extends AbstractHerder implements Runnable {
             try {
                 startConnector(connectorName, (error, result) -> {
                     if (error != null) {
-                        log.error("Failed to start connector '" + connectorName + "'", error);
+                        log.error("Failed to start connector '{}'", connectorName, error);
                     }
                 });
             } catch (Throwable t) {
-                log.error("Unexpected error while trying to start connector " + connectorName, t);
+                log.error("Unexpected error while trying to start connector {}", connectorName, t);
                 onFailure(connectorName, t);
             }
             return null;
@@ -2129,7 +2221,7 @@ public class DistributedHerder extends AbstractHerder implements Runnable {
             try {
                 worker.stopAndAwaitConnector(connectorName);
             } catch (Throwable t) {
-                log.error("Failed to shut down connector " + connectorName, t);
+                log.error("Failed to shut down connector {}", connectorName, t);
             }
             return null;
         };
@@ -2576,11 +2668,10 @@ public class DistributedHerder extends AbstractHerder implements Runnable {
     }
 
     private static Callback<Void> forwardErrorAndTickThreadStages(final Callback<?> callback) {
-        Callback<Void> cb = callback.chainStaging((error, result) -> {
+        return callback.chainStaging((error, result) -> {
             if (error != null)
                 callback.onCompletion(error, null);
         });
-        return cb;
     }
 
     private void updateDeletedConnectorStatus() {

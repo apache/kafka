@@ -17,6 +17,7 @@
 package org.apache.kafka.clients.consumer.internals;
 
 import org.apache.kafka.clients.Metadata;
+import org.apache.kafka.clients.consumer.SubscriptionPattern;
 import org.apache.kafka.common.Cluster;
 import org.apache.kafka.common.ClusterResourceListener;
 import org.apache.kafka.common.Node;
@@ -29,9 +30,9 @@ import org.apache.kafka.common.protocol.Errors;
 import org.apache.kafka.common.requests.MetadataRequest;
 import org.apache.kafka.common.requests.MetadataResponse;
 import org.apache.kafka.common.requests.RequestTestUtils;
-import org.apache.kafka.common.utils.LogContext;
 import org.apache.kafka.common.utils.MockTime;
 import org.apache.kafka.common.utils.Time;
+import org.apache.kafka.common.utils.internals.LogContext;
 
 import org.junit.jupiter.api.Test;
 import org.mockito.Mockito;
@@ -64,7 +65,7 @@ import static org.mockito.Mockito.verify;
 public class ConsumerMetadataTest {
 
     private final Node node = new Node(1, "localhost", 9092);
-    private final SubscriptionState subscription = new SubscriptionState(new LogContext(), AutoOffsetResetStrategy.EARLIEST);
+    private final ConsumerSubscriptionState subscription = new ConsumerSubscriptionState(new LogContext(), AutoOffsetResetStrategy.EARLIEST);
 
     private final Time time = new MockTime();
 
@@ -79,7 +80,7 @@ public class ConsumerMetadataTest {
     }
 
     private void testPatternSubscription(boolean includeInternalTopics) {
-        subscription.subscribe(Pattern.compile("__.*"), Optional.empty());
+        subscription.subscribe(Pattern.compile("__.*"));
         ConsumerMetadata metadata = newConsumerMetadata(includeInternalTopics);
 
         MetadataRequest.Builder builder = metadata.newMetadataRequestBuilder();
@@ -101,6 +102,78 @@ public class ConsumerMetadataTest {
     }
 
     @Test
+    public void testSubscriptionToBrokerRegexDoesNotRequestAllTopicsMetadata() {
+        // Subscribe to broker-side regex
+        subscription.subscribe(new SubscriptionPattern("__.*"));
+
+        // Receive assignment from coordinator with topic IDs only
+        Uuid assignedTopicId = Uuid.randomUuid();
+        subscription.setAssignedTopicIds(Set.of(assignedTopicId));
+
+        // Metadata request should only include the assigned topic IDs
+        try (ConsumerMetadata metadata = newConsumerMetadata(false)) {
+            MetadataRequest.Builder builder = metadata.newMetadataRequestBuilder();
+            assertFalse(builder.isAllTopics(), "Should not request all topics when using broker-side regex");
+            assertEquals(List.of(assignedTopicId), builder.topicIds(), "Should only request assigned topic IDs when using broker-side regex");
+        }
+    }
+
+    @Test
+    public void testSubscriptionToBrokerRegexRetainsAssignedTopics() {
+        // Subscribe to broker-side regex
+        subscription.subscribe(new SubscriptionPattern("__.*"));
+
+        // Receive assignment from coordinator with topic IDs only
+        Uuid assignedTopicId = Uuid.randomUuid();
+        subscription.setAssignedTopicIds(Set.of(assignedTopicId));
+
+        // Metadata request for assigned topic IDs
+        try (ConsumerMetadata metadata = newConsumerMetadata(false)) {
+            MetadataRequest.Builder builder = metadata.newMetadataRequestBuilder();
+            assertEquals(List.of(assignedTopicId), builder.topicIds());
+
+            // Metadata response with the assigned topic ID and name
+            Map<String, Uuid> topicIds = Map.of("__matching_topic", assignedTopicId);
+            MetadataResponse response = RequestTestUtils.metadataUpdateWithIds(1, singletonMap("__matching_topic", 1), topicIds);
+            metadata.updateWithCurrentRequestVersion(response, false, time.milliseconds());
+
+            assertEquals(Set.of("__matching_topic"), new HashSet<>(metadata.fetch().topics()));
+            assertEquals(Set.of("__matching_topic"), metadata.fetch().topics());
+        }
+    }
+
+    @Test
+    public void testSubscriptionToBrokerRegexAllowsTransientTopics() {
+        // Subscribe to broker-side regex
+        subscription.subscribe(new SubscriptionPattern("__.*"));
+
+        // Receive assignment from coordinator with topic IDs only
+        Uuid assignedTopicId = Uuid.randomUuid();
+        subscription.setAssignedTopicIds(Set.of(assignedTopicId));
+
+        // Metadata request should only include the assigned topic IDs
+        try (ConsumerMetadata metadata = newConsumerMetadata(false)) {
+            MetadataRequest.Builder builder = metadata.newMetadataRequestBuilder();
+            assertFalse(builder.isAllTopics());
+            assertEquals(List.of(assignedTopicId), builder.topicIds());
+
+            // Call to offsets-related APIs starts. Metadata requests should move to requesting topic names temporarily.
+            String transientTopic = "__transient_topic";
+            metadata.addTransientTopics(Set.of(transientTopic));
+            builder = metadata.newMetadataRequestBuilder();
+            assertFalse(builder.isAllTopics());
+            // assertTrue(builder.topicIds().isEmpty());
+            assertEquals(List.of(transientTopic), builder.topics());
+
+            // Call to offsets-related APIs ends. Metadata requests should move back to requesting topic IDs for RE2J.
+            metadata.clearTransientTopics();
+            builder = metadata.newMetadataRequestBuilder();
+            assertFalse(builder.isAllTopics());
+            assertEquals(List.of(assignedTopicId), builder.topicIds());
+        }
+    }
+
+    @Test
     public void testUserAssignment() {
         subscription.assignFromUser(Set.of(
                 new TopicPartition("foo", 0),
@@ -116,7 +189,7 @@ public class ConsumerMetadataTest {
 
     @Test
     public void testNormalSubscription() {
-        subscription.subscribe(Set.of("foo", "bar", "__consumer_offsets"), Optional.empty());
+        subscription.subscribe(Set.of("foo", "bar", "__consumer_offsets"));
         subscription.groupSubscribe(Set.of("baz", "foo", "bar", "__consumer_offsets"));
         testBasicSubscription(Set.of("foo", "bar", "baz"), Set.of("__consumer_offsets"));
 
@@ -128,7 +201,7 @@ public class ConsumerMetadataTest {
     public void testTransientTopics() {
         Map<String, Uuid> topicIds = new HashMap<>();
         topicIds.put("foo", Uuid.randomUuid());
-        subscription.subscribe(singleton("foo"), Optional.empty());
+        subscription.subscribe(singleton("foo"));
         ConsumerMetadata metadata = newConsumerMetadata(false);
         metadata.updateWithCurrentRequestVersion(RequestTestUtils.metadataUpdateWithIds(1, singletonMap("foo", 1), topicIds), false, time.milliseconds());
         assertEquals(topicIds.get("foo"), metadata.topicIds().get("foo"));

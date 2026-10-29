@@ -27,16 +27,15 @@ import org.apache.kafka.common.errors.SerializationException;
 import org.apache.kafka.common.header.Headers;
 import org.apache.kafka.common.header.internals.RecordHeaders;
 import org.apache.kafka.common.message.FetchResponseData;
-import org.apache.kafka.common.record.ControlRecordType;
-import org.apache.kafka.common.record.Record;
-import org.apache.kafka.common.record.RecordBatch;
 import org.apache.kafka.common.record.TimestampType;
+import org.apache.kafka.common.record.internal.ControlRecordType;
+import org.apache.kafka.common.record.internal.Record;
+import org.apache.kafka.common.record.internal.RecordBatch;
 import org.apache.kafka.common.requests.FetchRequest;
 import org.apache.kafka.common.requests.FetchResponse;
 import org.apache.kafka.common.serialization.Deserializer;
-import org.apache.kafka.common.utils.BufferSupplier;
-import org.apache.kafka.common.utils.CloseableIterator;
-import org.apache.kafka.common.utils.LogContext;
+import org.apache.kafka.common.utils.internals.BufferSupplier;
+import org.apache.kafka.common.utils.internals.CloseableIterator;
 
 import org.slf4j.Logger;
 
@@ -61,10 +60,9 @@ public class CompletedFetch {
 
     final TopicPartition partition;
     final FetchResponseData.PartitionData partitionData;
-    final short requestVersion;
 
     private final Logger log;
-    private final SubscriptionState subscriptions;
+    private final ConsumerSubscriptionState subscriptions;
     private final BufferSupplier decompressionBufferSupplier;
     private final Iterator<? extends RecordBatch> batches;
     private final Set<Long> abortedProducerIds;
@@ -80,18 +78,18 @@ public class CompletedFetch {
     private boolean corruptLastRecord = false;
     private long nextFetchOffset;
     private Optional<Integer> lastEpoch;
-    private boolean isConsumed = false;
+    private volatile boolean isConsumed = false;
+    private boolean exhausted = false;
     private boolean initialized = false;
 
-    CompletedFetch(LogContext logContext,
-                   SubscriptionState subscriptions,
+    CompletedFetch(Logger log,
+                   ConsumerSubscriptionState subscriptions,
                    BufferSupplier decompressionBufferSupplier,
                    TopicPartition partition,
                    FetchResponseData.PartitionData partitionData,
                    FetchMetricsAggregator metricAggregator,
-                   Long fetchOffset,
-                   short requestVersion) {
-        this.log = logContext.logger(CompletedFetch.class);
+                   Long fetchOffset) {
+        this.log = log;
         this.subscriptions = subscriptions;
         this.decompressionBufferSupplier = decompressionBufferSupplier;
         this.partition = partition;
@@ -99,7 +97,6 @@ public class CompletedFetch {
         this.metricAggregator = metricAggregator;
         this.batches = FetchResponse.recordsOrFail(partitionData).batches().iterator();
         this.nextFetchOffset = fetchOffset;
-        this.requestVersion = requestVersion;
         this.lastEpoch = Optional.empty();
         this.abortedProducerIds = new HashSet<>();
         this.abortedTransactions = abortedTransactions(partitionData);
@@ -123,6 +120,10 @@ public class CompletedFetch {
 
     public boolean isConsumed() {
         return isConsumed;
+    }
+
+    boolean isExhausted() {
+        return exhausted;
     }
 
 
@@ -196,7 +197,7 @@ public class CompletedFetch {
                     // fetching the same batch repeatedly).
                     if (currentBatch != null)
                         nextFetchOffset = currentBatch.nextOffset();
-                    drain();
+                    exhausted = true;
                     return null;
                 }
 

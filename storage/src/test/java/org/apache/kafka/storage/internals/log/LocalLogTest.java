@@ -21,11 +21,14 @@ import org.apache.kafka.common.TopicPartition;
 import org.apache.kafka.common.compress.Compression;
 import org.apache.kafka.common.config.TopicConfig;
 import org.apache.kafka.common.errors.KafkaStorageException;
-import org.apache.kafka.common.record.MemoryRecords;
-import org.apache.kafka.common.record.Record;
-import org.apache.kafka.common.record.SimpleRecord;
+import org.apache.kafka.common.network.FileReadException;
+import org.apache.kafka.common.record.internal.FileRecords;
+import org.apache.kafka.common.record.internal.MemoryRecords;
+import org.apache.kafka.common.record.internal.Record;
+import org.apache.kafka.common.record.internal.SimpleRecord;
 import org.apache.kafka.common.utils.Utils;
 import org.apache.kafka.server.util.MockTime;
+import org.apache.kafka.server.util.Scheduler;
 import org.apache.kafka.test.TestUtils;
 
 import org.junit.jupiter.api.AfterEach;
@@ -40,19 +43,35 @@ import java.util.ArrayList;
 import java.util.Collection;
 import java.util.Collections;
 import java.util.List;
+import java.util.Optional;
 import java.util.Properties;
+import java.util.concurrent.RejectedExecutionException;
+import java.util.concurrent.ScheduledFuture;
 import java.util.regex.Pattern;
-import java.util.stream.Collectors;
 import java.util.stream.Stream;
 
+import static org.junit.jupiter.api.Assertions.assertArrayEquals;
 import static org.junit.jupiter.api.Assertions.assertDoesNotThrow;
 import static org.junit.jupiter.api.Assertions.assertEquals;
 import static org.junit.jupiter.api.Assertions.assertFalse;
+import static org.junit.jupiter.api.Assertions.assertInstanceOf;
 import static org.junit.jupiter.api.Assertions.assertNotEquals;
+import static org.junit.jupiter.api.Assertions.assertNotNull;
+import static org.junit.jupiter.api.Assertions.assertSame;
 import static org.junit.jupiter.api.Assertions.assertThrows;
 import static org.junit.jupiter.api.Assertions.assertTrue;
+import static org.mockito.ArgumentMatchers.any;
+import static org.mockito.ArgumentMatchers.anyInt;
+import static org.mockito.ArgumentMatchers.anyLong;
+import static org.mockito.ArgumentMatchers.anyString;
 import static org.mockito.Mockito.doReturn;
+import static org.mockito.Mockito.doThrow;
+import static org.mockito.Mockito.mock;
+import static org.mockito.Mockito.never;
 import static org.mockito.Mockito.spy;
+import static org.mockito.Mockito.times;
+import static org.mockito.Mockito.verify;
+import static org.mockito.Mockito.when;
 
 class LocalLogTest {
 
@@ -101,7 +120,7 @@ class LocalLogTest {
     }
 
     private List<SimpleRecord> kvsToRecords(List<KeyValue> keyValues) {
-        return keyValues.stream().map(KeyValue::toRecord).collect(Collectors.toList());
+        return keyValues.stream().map(KeyValue::toRecord).toList();
     }
 
     private List<KeyValue> recordsToKvs(Iterable<Record> records) {
@@ -163,7 +182,7 @@ class LocalLogTest {
         List<LogSegment> deletedSegments = log.deleteAllSegments();
         assertTrue(log.segments().isEmpty());
         assertEquals(segmentsBeforeDelete, deletedSegments);
-        assertThrows(KafkaStorageException.class, () -> log.checkIfMemoryMappedBufferClosed());
+        assertThrows(KafkaStorageException.class, () -> log.checkIfClosed());
         assertTrue(logDir.exists());
     }
 
@@ -199,7 +218,7 @@ class LocalLogTest {
         assertEquals(oldConfig, log.config());
 
         Properties props = new Properties();
-        props.put(TopicConfig.SEGMENT_BYTES_CONFIG, oldConfig.segmentSize + 1);
+        props.put(TopicConfig.SEGMENT_BYTES_CONFIG, oldConfig.segmentSize() + 1);
         LogConfig newConfig = new LogConfig(props);
         log.updateConfig(newConfig);
         assertEquals(newConfig, log.config());
@@ -258,7 +277,238 @@ class LocalLogTest {
     }
 
     @Test
-    public void testLogCloseSuccess() throws IOException {
+    public void testReadFailureAfterTransferFailureMarksLogDirOffline() throws IOException {
+        try {
+            appendRecords(kvsToRecords(List.of(new KeyValue("abc", "ABC"))), 0L);
+            FileRecords records = assertInstanceOf(FileRecords.class, readRecords(0L).records);
+            assertNotNull(records.transferFailureHandler());
+            IOException readFailure = new IOException("Input/output error");
+            FileRecords unreadable = unreadableRecords(records.file(), readFailure);
+            IOException transferFailure = new IOException("Input/output error");
+
+            // The fetched records are read only when they are written to the network; a failed write is reported
+            // through their handler, which re-reads the region on the scheduler
+            records.transferFailureHandler().onTransferFailure(unreadable, 0, 100, transferFailure);
+
+            verify(unreadable).readFailure(0, 100);
+            assertTrue(logDirFailureChannel.hasOfflineLogDir(logDir.getParent()));
+            assertArrayEquals(new Throwable[] {transferFailure}, readFailure.getSuppressed());
+            assertThrows(KafkaStorageException.class, () -> readRecords(0L));
+        } finally {
+            log.closeQuietly();
+        }
+    }
+
+    /**
+     * A failed read that the network channel reported as such takes the log dir offline without reading the region
+     * again, which could succeed by then, for instance after a transient media error.
+     */
+    @Test
+    public void testReportedReadFailureMarksLogDirOfflineWithoutReread() throws IOException {
+        try {
+            appendRecords(kvsToRecords(List.of(new KeyValue("abc", "ABC"))), 0L);
+            FileRecords records = assertInstanceOf(FileRecords.class, readRecords(0L).records);
+            FileRecords spiedRecords = spy(records);
+            FileReadException readFailure = new FileReadException(7, new IOException("Input/output error"));
+
+            records.transferFailureHandler().onTransferFailure(spiedRecords, 0, records.sizeInBytes(), readFailure);
+
+            verify(spiedRecords, never()).readFailure(anyLong(), anyInt());
+            assertTrue(logDirFailureChannel.hasOfflineLogDir(logDir.getParent()));
+            assertThrows(KafkaStorageException.class, () -> readRecords(0L));
+        } finally {
+            log.closeQuietly();
+        }
+    }
+
+    /**
+     * A failed read that the network channel reported takes the log dir offline right away, also while a re-read after
+     * a failure that the network channel could not tell apart is running in the same log dir.
+     */
+    @Test
+    public void testReportedReadFailureIsNotDroppedByRunningReadCheck() throws IOException {
+        List<Runnable> scheduled = new ArrayList<>();
+        Scheduler scheduler = capturingScheduler(scheduled);
+        LogConfig config = new LogConfig(new Properties());
+        // Its own log dir, which is taken offline
+        File parentDir = TestUtils.tempDirectory();
+        LocalLog firstLog = createLocalLogWithActiveSegment(
+            TestUtils.randomPartitionLogDir(parentDir), config, scheduler);
+        LocalLog secondLog = createLocalLogWithActiveSegment(
+            TestUtils.randomPartitionLogDir(parentDir), config, scheduler);
+        try {
+            FileRecords first = fetchedRecords(firstLog);
+            FileRecords second = fetchedRecords(secondLog);
+            first.transferFailureHandler().onTransferFailure(first, 0, 10, new IOException("Broken pipe"));
+            assertEquals(1, scheduled.size());
+
+            second.transferFailureHandler().onTransferFailure(second, 0, 10,
+                new FileReadException(0, new IOException("Input/output error")));
+            assertTrue(logDirFailureChannel.hasOfflineLogDir(firstLog.parentDir()));
+            assertEquals(1, scheduled.size());
+        } finally {
+            firstLog.closeQuietly();
+            secondLog.closeQuietly();
+        }
+    }
+
+    @Test
+    public void testTransferFailureOnReadableRegionKeepsLogDirOnline() throws IOException {
+        appendRecords(kvsToRecords(List.of(new KeyValue("abc", "ABC"))), 0L);
+        FileRecords records = assertInstanceOf(FileRecords.class, readRecords(0L).records);
+
+        records.transferFailureHandler().onTransferFailure(records, 0, records.sizeInBytes(), new IOException("Broken pipe"));
+
+        assertFalse(logDirFailureChannel.hasOfflineLogDir(logDir.getParent()));
+        assertEquals(1, Utils.toList(readRecords(0L).records.records()).size());
+    }
+
+    /**
+     * A burst of failed writes across the partitions of a log dir schedules a single re-read, and another one only
+     * once it is done. Another log dir is checked on its own.
+     */
+    @Test
+    public void testOneReadCheckAtATimePerLogDir() throws IOException {
+        List<Runnable> scheduled = new ArrayList<>();
+        Scheduler scheduler = capturingScheduler(scheduled);
+        LogConfig config = new LogConfig(new Properties());
+        LocalLog firstLog = createLocalLogWithActiveSegment(TestUtils.randomPartitionLogDir(tmpDir), config, scheduler);
+        LocalLog secondLog = createLocalLogWithActiveSegment(TestUtils.randomPartitionLogDir(tmpDir), config, scheduler);
+        LocalLog otherDirLog = createLocalLogWithActiveSegment(
+            TestUtils.randomPartitionLogDir(TestUtils.tempDirectory()), config, scheduler);
+        try {
+            FileRecords first = fetchedRecords(firstLog);
+            FileRecords spiedFirst = spy(first);
+            FileRecords second = fetchedRecords(secondLog);
+            FileRecords otherDir = fetchedRecords(otherDirLog);
+
+            for (int i = 0; i < 3; i++) {
+                first.transferFailureHandler().onTransferFailure(spiedFirst, 0, 10, new IOException("Broken pipe"));
+                second.transferFailureHandler().onTransferFailure(second, 0, 10, new IOException("Broken pipe"));
+            }
+            assertEquals(1, scheduled.size());
+            otherDir.transferFailureHandler().onTransferFailure(otherDir, 0, 10, new IOException("Broken pipe"));
+            assertEquals(2, scheduled.size());
+
+            scheduled.get(0).run();
+            verify(spiedFirst).readFailure(0, 10);
+            second.transferFailureHandler().onTransferFailure(second, 0, 10, new IOException("Broken pipe"));
+            assertEquals(3, scheduled.size());
+        } finally {
+            firstLog.closeQuietly();
+            secondLog.closeQuietly();
+            otherDirLog.closeQuietly();
+        }
+    }
+
+    /**
+     * A check that fails, for instance because the re-read throws unexpectedly, must not stop the next failed write
+     * from being checked either.
+     */
+    @Test
+    public void testFailedReadCheckDoesNotBlockTheNextOne() throws IOException {
+        List<Runnable> scheduled = new ArrayList<>();
+        LocalLog otherLog = createLocalLogWithActiveSegment(TestUtils.randomPartitionLogDir(tmpDir),
+            new LogConfig(new Properties()), capturingScheduler(scheduled));
+        try {
+            FileRecords records = fetchedRecords(otherLog);
+            FileRecords failingRecords = spy(records);
+            IllegalStateException failure = new IllegalStateException("Unexpected");
+            doThrow(failure).when(failingRecords).readFailure(anyLong(), anyInt());
+            FileRecords.TransferFailureHandler handler = records.transferFailureHandler();
+
+            handler.onTransferFailure(failingRecords, 0, 10, new IOException("Broken pipe"));
+            assertSame(failure, assertThrows(IllegalStateException.class, () -> scheduled.get(0).run()));
+            handler.onTransferFailure(records, 0, 10, new IOException("Broken pipe"));
+            assertEquals(2, scheduled.size());
+        } finally {
+            otherLog.closeQuietly();
+        }
+    }
+
+    /**
+     * A check the scheduler did not take, because it is not running, it rejected it or it failed with an error, must
+     * not stop the next failed write from being checked.
+     */
+    @Test
+    public void testReadCheckNotTakenBySchedulerDoesNotBlockTheNextOne() throws IOException {
+        ScheduledFuture<?> ignored = mock(ScheduledFuture.class);
+        when(ignored.isCancelled()).thenReturn(true);
+        Scheduler scheduler = mock(Scheduler.class);
+        OutOfMemoryError error = new OutOfMemoryError("unable to create native thread");
+        doReturn(ignored).doThrow(new RejectedExecutionException()).doThrow(error).doReturn(ignored)
+            .when(scheduler).scheduleOnce(anyString(), any(Runnable.class));
+        LocalLog otherLog = createLocalLogWithActiveSegment(TestUtils.randomPartitionLogDir(tmpDir),
+            new LogConfig(new Properties()), scheduler);
+        try {
+            FileRecords records = fetchedRecords(otherLog);
+            FileRecords.TransferFailureHandler handler = records.transferFailureHandler();
+
+            handler.onTransferFailure(records, 0, 10, new IOException("Broken pipe"));
+            handler.onTransferFailure(records, 0, 10, new IOException("Broken pipe"));
+            assertSame(error, assertThrows(OutOfMemoryError.class,
+                () -> handler.onTransferFailure(records, 0, 10, new IOException("Broken pipe"))));
+            handler.onTransferFailure(records, 0, 10, new IOException("Broken pipe"));
+            verify(scheduler, times(4)).scheduleOnce(anyString(), any(Runnable.class));
+        } finally {
+            otherLog.closeQuietly();
+        }
+    }
+
+    @Test
+    public void testNoReadCheckOnceLogDirIsOffline() throws IOException {
+        Scheduler scheduler = mock(Scheduler.class);
+        File dir = TestUtils.randomPartitionLogDir(tmpDir);
+        LocalLog otherLog = createLocalLogWithActiveSegment(dir, new LogConfig(new Properties()), scheduler);
+        try {
+            FileRecords records = fetchedRecords(otherLog);
+            logDirFailureChannel.maybeAddOfflineLogDir(dir.getParent(), "offline", new IOException("Input/output error"));
+
+            records.transferFailureHandler().onTransferFailure(records, 0, 10, new IOException("Broken pipe"));
+            verify(scheduler, never()).scheduleOnce(anyString(), any(Runnable.class));
+        } finally {
+            otherLog.closeQuietly();
+            // Its log dir is offline as well
+            log.closeQuietly();
+        }
+    }
+
+    private static FileRecords fetchedRecords(LocalLog log) throws IOException {
+        log.append(0L, MemoryRecords.withRecords(0L, Compression.NONE, 0, new SimpleRecord("a".getBytes())));
+        return assertInstanceOf(FileRecords.class, log.read(0L, 1024, false, log.logEndOffsetMetadata(), false).records);
+    }
+
+    // A scheduler that keeps the tasks it is given in scheduled instead of running them
+    private static Scheduler capturingScheduler(List<Runnable> scheduled) {
+        Scheduler scheduler = mock(Scheduler.class);
+        when(scheduler.scheduleOnce(anyString(), any(Runnable.class))).thenAnswer(invocation -> {
+            scheduled.add(invocation.getArgument(1));
+            return mock(ScheduledFuture.class);
+        });
+        return scheduler;
+    }
+
+    private static FileRecords unreadableRecords(File file, IOException readFailure) {
+        FileRecords records = mock(FileRecords.class);
+        when(records.file()).thenReturn(file);
+        when(records.readFailure(anyLong(), anyInt())).thenReturn(Optional.of(readFailure));
+        return records;
+    }
+
+    @Test
+    public void testCloseIdempotent() {
+        log.close();
+        log.close();
+    }
+
+    @Test
+    public void testCloseQuietlyIdempotent() {
+        log.closeQuietly();
+        log.closeQuietly();
+    }
+
+    @Test
+    public void testClosePreventsAppend() throws IOException {
         List<KeyValue> keyValues = List.of(new KeyValue("abc", "ABC"), new KeyValue("de", "DE"));
         appendRecords(kvsToRecords(keyValues), 0L);
         log.close();
@@ -266,33 +516,11 @@ class LocalLogTest {
     }
 
     @Test
-    public void testLogCloseIdempotent() {
-        log.close();
-        // Check that LocalLog.close() is idempotent
-        log.close();
-    }
-
-    @Test
-    public void testLogCloseFailureWhenInMemoryBufferClosed() throws IOException {
+    public void testCloseQuietlyPreventsAppend() throws IOException {
         List<KeyValue> keyValues = List.of(new KeyValue("abc", "ABC"), new KeyValue("de", "DE"));
         appendRecords(kvsToRecords(keyValues), 0L);
-        log.closeHandlers();
-        assertThrows(KafkaStorageException.class, () -> log.close());
-    }
-
-    @Test
-    public void testLogCloseHandlers() throws IOException {
-        List<KeyValue> keyValues = List.of(new KeyValue("abc", "ABC"), new KeyValue("de", "DE"));
-        appendRecords(kvsToRecords(keyValues), 0L);
-        log.closeHandlers();
+        log.closeQuietly();
         assertThrows(ClosedChannelException.class, () -> appendRecords(kvsToRecords(keyValues), 2L));
-    }
-
-    @Test
-    public void testLogCloseHandlersIdempotent() {
-        log.closeHandlers();
-        // Check that LocalLog.closeHandlers() is idempotent
-        log.closeHandlers();
     }
 
     static class TestDeletionReason implements SegmentDeletionReason {
@@ -497,7 +725,7 @@ class LocalLogTest {
     private List<Long> nonActiveBaseOffsetsFrom(long startOffset) {
         return log.segments().nonActiveLogSegmentsFrom(startOffset).stream()
                 .map(LogSegment::baseOffset)
-                .collect(Collectors.toList());
+                .toList();
     }
 
     private String topicPartitionName(String topic, String partition) {
@@ -505,7 +733,7 @@ class LocalLogTest {
     }
 
     @Test
-    public void testParseTopicPartitionName() throws IOException {
+    public void testParseTopicPartitionName() {
         String topic = "test_topic";
         String partition = "143";
         File dir = new File(logDir, topicPartitionName(topic, partition));
@@ -519,7 +747,7 @@ class LocalLogTest {
      * are parsed correctly by `Log.parseTopicPartitionName` (see KAFKA-5232 for details).
      */
     @Test
-    public void testParseTopicPartitionNameWithPeriodForDeletedTopic() throws IOException {
+    public void testParseTopicPartitionNameWithPeriodForDeletedTopic() {
         String topic = "foo.bar-testtopic";
         String partition = "42";
         File dir = new File(logDir, LocalLog.logDeleteDirName(new TopicPartition(topic, Integer.parseInt(partition))));
@@ -529,9 +757,9 @@ class LocalLogTest {
     }
 
     @Test
-    public void testParseTopicPartitionNameForEmptyName() throws IOException {
+    public void testParseTopicPartitionNameForEmptyName() {
         File dir = new File("");
-        String msg = "KafkaException should have been thrown for dir: " + dir.getCanonicalPath();
+        String msg = "KafkaException should have been thrown for dir: " + dir.getAbsolutePath();
         assertThrows(KafkaException.class, () -> LocalLog.parseTopicPartitionName(dir), msg);
     }
 
@@ -543,68 +771,68 @@ class LocalLogTest {
     }
 
     @Test
-    public void testParseTopicPartitionNameForMissingSeparator() throws IOException {
+    public void testParseTopicPartitionNameForMissingSeparator() {
         String topic = "test_topic";
         String partition = "1999";
         File dir = new File(logDir, topic + partition);
-        String msg = "KafkaException should have been thrown for dir: " + dir.getCanonicalPath();
+        String msg = "KafkaException should have been thrown for dir: " + dir.getAbsolutePath();
         assertThrows(KafkaException.class, () -> LocalLog.parseTopicPartitionName(dir), msg);
         // also test the "-delete" marker case
         File deleteMarkerDir = new File(logDir, topic + partition + "." + LogFileUtils.DELETE_DIR_SUFFIX);
-        msg = "KafkaException should have been thrown for dir: " + deleteMarkerDir.getCanonicalPath();
+        msg = "KafkaException should have been thrown for dir: " + deleteMarkerDir.getAbsolutePath();
         assertThrows(KafkaException.class, () -> LocalLog.parseTopicPartitionName(deleteMarkerDir), msg);
     }
 
     @Test
-    public void testParseTopicPartitionNameForMissingTopic() throws IOException {
+    public void testParseTopicPartitionNameForMissingTopic() {
         String topic = "";
         String partition = "1999";
         File dir = new File(logDir, topicPartitionName(topic, partition));
-        String msg = "KafkaException should have been thrown for dir: " + dir.getCanonicalPath();
+        String msg = "KafkaException should have been thrown for dir: " + dir.getAbsolutePath();
         assertThrows(KafkaException.class, () -> LocalLog.parseTopicPartitionName(dir), msg);
 
         // also test the "-delete" marker case
         File deleteMarkerDir = new File(logDir, LocalLog.logDeleteDirName(new TopicPartition(topic, Integer.parseInt(partition))));
 
-        msg = "KafkaException should have been thrown for dir: " + deleteMarkerDir.getCanonicalPath();
+        msg = "KafkaException should have been thrown for dir: " + deleteMarkerDir.getAbsolutePath();
         assertThrows(KafkaException.class, () -> LocalLog.parseTopicPartitionName(deleteMarkerDir), msg);
     }
 
     @Test
-    public void testParseTopicPartitionNameForMissingPartition() throws IOException {
+    public void testParseTopicPartitionNameForMissingPartition() {
         String topic = "test_topic";
         String partition = "";
         File dir = new File(logDir.getPath() + topicPartitionName(topic, partition));
-        String msg = "KafkaException should have been thrown for dir: " + dir.getCanonicalPath();
+        String msg = "KafkaException should have been thrown for dir: " + dir.getAbsolutePath();
         assertThrows(KafkaException.class, () -> LocalLog.parseTopicPartitionName(dir), msg);
 
         // also test the "-delete" marker case
         File deleteMarkerDir = new File(logDir, topicPartitionName(topic, partition) + "." + LogFileUtils.DELETE_DIR_SUFFIX);
-        msg = "KafkaException should have been thrown for dir: " + deleteMarkerDir.getCanonicalPath();
+        msg = "KafkaException should have been thrown for dir: " + deleteMarkerDir.getAbsolutePath();
         assertThrows(KafkaException.class, () -> LocalLog.parseTopicPartitionName(deleteMarkerDir), msg);
     }
 
     @Test
-    public void testParseTopicPartitionNameForInvalidPartition() throws IOException {
+    public void testParseTopicPartitionNameForInvalidPartition() {
         String topic = "test_topic";
         String partition = "1999a";
         File dir = new File(logDir, topicPartitionName(topic, partition));
-        String msg = "KafkaException should have been thrown for dir: " + dir.getCanonicalPath();
+        String msg = "KafkaException should have been thrown for dir: " + dir.getAbsolutePath();
         assertThrows(KafkaException.class, () -> LocalLog.parseTopicPartitionName(dir), msg);
 
         // also test the "-delete" marker case
         File deleteMarkerDir = new File(logDir, topic + partition + "." + LogFileUtils.DELETE_DIR_SUFFIX);
-        msg = "KafkaException should have been thrown for dir: " + deleteMarkerDir.getCanonicalPath();
+        msg = "KafkaException should have been thrown for dir: " + deleteMarkerDir.getAbsolutePath();
         assertThrows(KafkaException.class, () -> LocalLog.parseTopicPartitionName(deleteMarkerDir), msg);
     }
 
     @Test
-    public void testParseTopicPartitionNameForExistingInvalidDir() throws IOException {
+    public void testParseTopicPartitionNameForExistingInvalidDir() {
         File dir1 = new File(logDir.getPath() + "/non_kafka_dir");
-        String msg = "KafkaException should have been thrown for dir: " + dir1.getCanonicalPath();
+        String msg = "KafkaException should have been thrown for dir: " + dir1.getAbsolutePath();
         assertThrows(KafkaException.class, () -> LocalLog.parseTopicPartitionName(dir1), msg);
         File dir2 = new File(logDir.getPath() + "/non_kafka_dir-delete");
-        msg = "KafkaException should have been thrown for dir: " + dir2.getCanonicalPath();
+        msg = "KafkaException should have been thrown for dir: " + dir2.getAbsolutePath();
         assertThrows(KafkaException.class, () -> LocalLog.parseTopicPartitionName(dir2), msg);
     }
 
@@ -653,12 +881,12 @@ class LocalLogTest {
         List<KeyValue> keyValues2 = List.of(new KeyValue("k2", "v2"));
         appendRecords(keyValues2.stream()
                 .map(kv -> kv.toRecord(MOCK_TIME.milliseconds() + 10))
-                .collect(Collectors.toList()),
+                .toList(),
                 1L);
         assertEquals(2, log.logEndOffset(), "Expect two records in the log");
         FetchDataInfo readResult = readRecords(0L);
         assertEquals(2L, Utils.toList(readResult.records.records()).size());
-        assertEquals(Stream.concat(keyValues1.stream(), keyValues2.stream()).collect(Collectors.toList()), recordsToKvs(readResult.records.records()));
+        assertEquals(Stream.concat(keyValues1.stream(), keyValues2.stream()).toList(), recordsToKvs(readResult.records.records()));
 
         // roll so that active segment is empty
         log.roll(0L);
@@ -734,6 +962,10 @@ class LocalLogTest {
     }
 
     private LocalLog createLocalLogWithActiveSegment(File dir, LogConfig config) throws IOException {
+        return createLocalLogWithActiveSegment(dir, config, MOCK_TIME.scheduler);
+    }
+
+    private LocalLog createLocalLogWithActiveSegment(File dir, LogConfig config, Scheduler scheduler) throws IOException {
         LogSegments segments = new LogSegments(topicPartition);
         segments.add(LogSegment.open(dir,
                 0L,
@@ -746,7 +978,7 @@ class LocalLogTest {
                 segments,
                 0L,
                 new LogOffsetMetadata(0L, 0L, 0),
-                MOCK_TIME.scheduler,
+                scheduler,
                 MOCK_TIME,
                 topicPartition,
                 logDirFailureChannel);

@@ -28,6 +28,7 @@ import org.apache.kafka.clients.consumer.OffsetAndMetadata;
 import org.apache.kafka.common.IsolationLevel;
 import org.apache.kafka.common.KafkaException;
 import org.apache.kafka.common.TopicPartition;
+import org.apache.kafka.common.Uuid;
 import org.apache.kafka.common.errors.InterruptException;
 import org.apache.kafka.common.errors.TimeoutException;
 import org.apache.kafka.common.metrics.KafkaMetricsContext;
@@ -37,9 +38,9 @@ import org.apache.kafka.common.metrics.MetricsContext;
 import org.apache.kafka.common.metrics.MetricsReporter;
 import org.apache.kafka.common.metrics.Sensor;
 import org.apache.kafka.common.telemetry.internals.ClientTelemetrySender;
-import org.apache.kafka.common.utils.LogContext;
 import org.apache.kafka.common.utils.Time;
 import org.apache.kafka.common.utils.Timer;
+import org.apache.kafka.common.utils.internals.LogContext;
 
 import org.slf4j.Logger;
 import org.slf4j.LoggerFactory;
@@ -69,6 +70,7 @@ public final class ConsumerUtils {
     public static final String COORDINATOR_METRICS_SUFFIX = "-coordinator-metrics";
     public static final String CONSUMER_METRICS_SUFFIX = "-metrics";
     public static final String CONSUMER_METRIC_GROUP = CONSUMER_METRIC_GROUP_PREFIX + CONSUMER_METRICS_SUFFIX;
+    public static final String CONSUMER_SHARE_METRIC_GROUP = CONSUMER_SHARE_METRIC_GROUP_PREFIX + CONSUMER_METRICS_SUFFIX;
 
     /**
      * A fixed, large enough value will suffice for max.
@@ -79,6 +81,7 @@ public final class ConsumerUtils {
     private static final Logger log = LoggerFactory.getLogger(ConsumerUtils.class);
 
     public static ConsumerNetworkClient createConsumerNetworkClient(ConsumerConfig config,
+                                                                    Uuid clientInstanceId,
                                                                     Metrics metrics,
                                                                     LogContext logContext,
                                                                     ApiVersions apiVersions,
@@ -88,6 +91,8 @@ public final class ConsumerUtils {
                                                                     long retryBackoffMs,
                                                                     ClientTelemetrySender clientTelemetrySender) {
         NetworkClient netClient = ClientUtils.createNetworkClient(config,
+                config.getList(ConsumerConfig.BOOTSTRAP_SERVERS_CONFIG),
+                clientInstanceId,
                 metrics,
                 CONSUMER_METRIC_GROUP_PREFIX,
                 logContext,
@@ -129,10 +134,10 @@ public final class ConsumerUtils {
         return IsolationLevel.valueOf(s);
     }
 
-    public static SubscriptionState createSubscriptionState(ConsumerConfig config, LogContext logContext) {
+    public static ConsumerSubscriptionState createSubscriptionState(ConsumerConfig config, LogContext logContext) {
         String s = config.getString(ConsumerConfig.AUTO_OFFSET_RESET_CONFIG);
         AutoOffsetResetStrategy strategy = AutoOffsetResetStrategy.fromString(s);
-        return new SubscriptionState(logContext, strategy);
+        return new ConsumerSubscriptionState(logContext, strategy);
     }
 
     public static Metrics createMetrics(ConsumerConfig config, Time time) {
@@ -172,10 +177,11 @@ public final class ConsumerUtils {
 
     /**
      * Update subscription state and metadata using the provided committed offsets:
-     * <li>Update partition offsets with the committed offsets</li>
-     * <li>Update the metadata with any newer leader epoch discovered in the committed offsets
-     * metadata</li>
-     * </p>
+     * <ul>
+     *   <li>Update partition offsets with the committed offsets</li>
+     *   <li>Update the metadata with any newer leader epoch discovered in the committed offsets
+     *   metadata</li>
+     * </ul>
      * This will ignore any partition included in the <code>offsetsAndMetadata</code> parameter that
      * may no longer be assigned.
      *
@@ -188,7 +194,7 @@ public final class ConsumerUtils {
      */
     public static void refreshCommittedOffsets(final Map<TopicPartition, OffsetAndMetadata> offsetsAndMetadata,
                                                final ConsumerMetadata metadata,
-                                               final SubscriptionState subscriptions) {
+                                               final ConsumerSubscriptionState subscriptions) {
         for (final Map.Entry<TopicPartition, OffsetAndMetadata> entry : offsetsAndMetadata.entrySet()) {
             final TopicPartition tp = entry.getKey();
             final OffsetAndMetadata offsetAndMetadata = entry.getValue();
@@ -200,7 +206,7 @@ public final class ConsumerUtils {
                 // so we need to ignore seeking if that's the case
                 if (subscriptions.isAssigned(tp)) {
                     final ConsumerMetadata.LeaderAndEpoch leaderAndEpoch = metadata.currentLeader(tp);
-                    final SubscriptionState.FetchPosition position = new SubscriptionState.FetchPosition(
+                    final ConsumerSubscriptionState.FetchPosition position = new ConsumerSubscriptionState.FetchPosition(
                             offsetAndMetadata.offset(), offsetAndMetadata.leaderEpoch(),
                             leaderAndEpoch);
 

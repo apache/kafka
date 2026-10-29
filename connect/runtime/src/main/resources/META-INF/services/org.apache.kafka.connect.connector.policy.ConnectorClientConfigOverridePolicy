@@ -16,3 +16,4 @@
 org.apache.kafka.connect.connector.policy.AllConnectorClientConfigOverridePolicy
 org.apache.kafka.connect.connector.policy.PrincipalConnectorClientConfigOverridePolicy
 org.apache.kafka.connect.connector.policy.NoneConnectorClientConfigOverridePolicy
+org.apache.kafka.connect.connector.policy.AllowlistConnectorClientConfigOverridePolicy

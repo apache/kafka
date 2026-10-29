@@ -61,13 +61,13 @@ public class SinkNode<KIn, VIn> extends ProcessorNode<KIn, VIn, Void, Void> {
         super.init(context);
         this.context = context;
         try {
-            keySerializer = prepareKeySerializer(keySerializer, context, this.name());
+            keySerializer = prepareKeySerializer(keySerializer, context);
         } catch (ConfigException | StreamsException e) {
             throw new StreamsException(String.format("Failed to initialize key serdes for sink node %s", name()), e, context.taskId());
         }
 
         try {
-            valSerializer = prepareValueSerializer(valSerializer, context, this.name());
+            valSerializer = prepareValueSerializer(valSerializer, context);
         } catch (final ConfigException | StreamsException e) {
             throw new StreamsException(String.format("Failed to initialize value serdes for sink node %s", name()), e, context.taskId());
         }

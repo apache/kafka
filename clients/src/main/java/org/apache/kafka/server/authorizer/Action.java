@@ -18,12 +18,12 @@
 package org.apache.kafka.server.authorizer;
 
 import org.apache.kafka.common.acl.AclOperation;
-import org.apache.kafka.common.annotation.InterfaceStability;
+import org.apache.kafka.common.annotation.InterfaceAudience;
 import org.apache.kafka.common.resource.ResourcePattern;
 
 import java.util.Objects;
 
-@InterfaceStability.Evolving
+@InterfaceAudience.Public
 public class Action {
 
     private final ResourcePattern resourcePattern;

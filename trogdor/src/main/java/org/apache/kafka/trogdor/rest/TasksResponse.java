@@ -20,7 +20,6 @@ package org.apache.kafka.trogdor.rest;
 import com.fasterxml.jackson.annotation.JsonCreator;
 import com.fasterxml.jackson.annotation.JsonProperty;
 
-import java.util.Collections;
 import java.util.Map;
 import java.util.TreeMap;
 
@@ -32,7 +31,7 @@ public class TasksResponse extends Message {
 
     @JsonCreator
     public TasksResponse(@JsonProperty("tasks") TreeMap<String, TaskState> tasks) {
-        this.tasks = Collections.unmodifiableMap((tasks == null) ? new TreeMap<>() : tasks);
+        this.tasks = tasks == null ? Map.of() : Map.copyOf(tasks);
     }
 
     @JsonProperty

@@ -25,27 +25,17 @@ import org.apache.kafka.metadata.PartitionRegistration;
 import org.apache.kafka.server.immutable.ImmutableMap;
 import org.apache.kafka.server.util.TranslatedValueMapView;
 
+import java.util.Arrays;
+import java.util.List;
 import java.util.Map;
-import java.util.Objects;
 
 /**
  * Represents the topics in the metadata image.
- *
+ * <p>
  * This class is thread-safe.
  */
-public final class TopicsImage {
-    public static final TopicsImage EMPTY =  new TopicsImage(ImmutableMap.empty(), ImmutableMap.empty());
-
-    private final ImmutableMap<Uuid, TopicImage> topicsById;
-    private final ImmutableMap<String, TopicImage> topicsByName;
-
-    public TopicsImage(
-        ImmutableMap<Uuid, TopicImage> topicsById,
-        ImmutableMap<String, TopicImage> topicsByName
-    ) {
-        this.topicsById = topicsById;
-        this.topicsByName = topicsByName;
-    }
+public record TopicsImage(ImmutableMap<Uuid, TopicImage> topicsById, ImmutableMap<String, TopicImage> topicsByName) {
+    public static final TopicsImage EMPTY = new TopicsImage(ImmutableMap.empty(), ImmutableMap.empty());
 
     public TopicsImage including(TopicImage topic) {
         return new TopicsImage(
@@ -55,14 +45,6 @@ public final class TopicsImage {
 
     public boolean isEmpty() {
         return topicsById.isEmpty() && topicsByName.isEmpty();
-    }
-
-    public ImmutableMap<Uuid, TopicImage> topicsById() {
-        return topicsById;
-    }
-
-    public ImmutableMap<String, TopicImage> topicsByName() {
-        return topicsByName;
     }
 
     public PartitionRegistration getPartition(Uuid id, int partitionId) {
@@ -85,21 +67,9 @@ public final class TopicsImage {
         }
     }
 
-    @Override
-    public boolean equals(Object o) {
-        if (!(o instanceof TopicsImage other)) return false;
-        return topicsById.equals(other.topicsById) &&
-            topicsByName.equals(other.topicsByName);
-    }
-
-    @Override
-    public int hashCode() {
-        return Objects.hash(topicsById, topicsByName);
-    }
-
     /**
      * Expose a view of this TopicsImage as a map from topic names to IDs.
-     *
+     * <p>
      * Like TopicsImage itself, this map is immutable.
      */
     public Map<String, Uuid> topicNameToIdView() {
@@ -108,7 +78,7 @@ public final class TopicsImage {
 
     /**
      * Expose a view of this TopicsImage as a map from IDs to names.
-     *
+     * <p>
      * Like TopicsImage itself, this map is immutable.
      */
     public Map<Uuid, String> topicIdToNameView() {
@@ -118,5 +88,20 @@ public final class TopicsImage {
     @Override
     public String toString() {
         return new TopicsImageByNameNode(this).stringify();
+    }
+
+    /**
+     * The list of replicas hosting the specified partition
+     * @param topicId        The topic ID
+     * @param partitionId    The partition ID
+     * @return               The list of replicas
+     */
+    public List<Integer> partitionReplicas(Uuid topicId, int partitionId) {
+        PartitionRegistration partition = getPartition(topicId, partitionId);
+        if (partition == null) {
+            return List.of();
+        } else {
+            return Arrays.stream(partition.replicas).boxed().toList();
+        }
     }
 }

@@ -22,6 +22,7 @@ import org.apache.kafka.streams.KeyValue;
 import org.apache.kafka.streams.StreamsBuilder;
 import org.apache.kafka.streams.StreamsConfig;
 import org.apache.kafka.streams.Topology;
+import org.apache.kafka.streams.TopologyConfig;
 import org.apache.kafka.streams.kstream.Aggregator;
 import org.apache.kafka.streams.kstream.Branched;
 import org.apache.kafka.streams.kstream.Consumed;
@@ -36,6 +37,8 @@ import org.apache.kafka.streams.kstream.Produced;
 import org.apache.kafka.streams.kstream.Suppressed;
 import org.apache.kafka.streams.kstream.TimeWindows;
 import org.apache.kafka.streams.kstream.ValueJoiner;
+import org.apache.kafka.streams.processor.api.ContextualFixedKeyProcessor;
+import org.apache.kafka.streams.processor.api.FixedKeyRecord;
 import org.apache.kafka.streams.processor.api.Processor;
 import org.apache.kafka.streams.processor.api.ProcessorContext;
 import org.apache.kafka.streams.processor.api.ProcessorSupplier;
@@ -127,7 +130,7 @@ public class StreamsGraphTest {
         initializer = () -> "";
         aggregator = (aggKey, value, aggregate) -> aggregate + value.length();
         final ProcessorSupplier<String, String, String, String> processorSupplier =
-            () -> new Processor<String, String, String, String>() {
+            () -> new Processor<>() {
                 private ProcessorContext<String, String> context;
 
                 @Override
@@ -185,14 +188,161 @@ public class StreamsGraphTest {
     }
 
     @Test
-    public void shouldNotOptimizeWithValueOrKeyChangingOperatorsAfterInitialKeyChange() {
+    public void shouldPartiallyOptimizeWithValueOrKeyChangingOperatorsAfterInitialKeyChangeWithFixDisabled() {
+        final Topology attemptedOptimize = getTopologyWithChangingValuesAfterChangingKey(StreamsConfig.OPTIMIZE, false);
+        final Topology noOptimization = getTopologyWithChangingValuesAfterChangingKey(StreamsConfig.NO_OPTIMIZATION, false);
 
-        final Topology attemptedOptimize = getTopologyWithChangingValuesAfterChangingKey(StreamsConfig.OPTIMIZE);
-        final Topology noOptimization = getTopologyWithChangingValuesAfterChangingKey(StreamsConfig.NO_OPTIMIZATION);
+        assertEquals("Topologies:\n" +
+                "   Sub-topology: 0\n" +
+                "    Source: KSTREAM-SOURCE-0000000000 (topics: [input])\n" +
+                "      --> KSTREAM-KEY-SELECT-0000000001\n" +
+                "    Processor: KSTREAM-KEY-SELECT-0000000001 (stores: [])\n" +
+                "      --> KSTREAM-FLATMAPVALUES-0000000010, KSTREAM-MAPVALUES-0000000002, KSTREAM-PROCESSVALUES-0000000018\n" +
+                "      <-- KSTREAM-SOURCE-0000000000\n" +
+                "    Processor: KSTREAM-FLATMAPVALUES-0000000010 (stores: [])\n" +
+                "      --> KSTREAM-FILTER-0000000014\n" +
+                "      <-- KSTREAM-KEY-SELECT-0000000001\n" +
+                "    Processor: KSTREAM-MAPVALUES-0000000002 (stores: [])\n" +
+                "      --> KSTREAM-FILTER-0000000006\n" +
+                "      <-- KSTREAM-KEY-SELECT-0000000001\n" +
+                "    Processor: KSTREAM-PROCESSVALUES-0000000018 (stores: [])\n" +
+                "      --> KSTREAM-FILTER-0000000022\n" +
+                "      <-- KSTREAM-KEY-SELECT-0000000001\n" +
+                "    Processor: KSTREAM-FILTER-0000000006 (stores: [])\n" +
+                "      --> KSTREAM-SINK-0000000005\n" +
+                "      <-- KSTREAM-MAPVALUES-0000000002\n" +
+                "    Processor: KSTREAM-FILTER-0000000014 (stores: [])\n" +
+                "      --> KSTREAM-SINK-0000000013\n" +
+                "      <-- KSTREAM-FLATMAPVALUES-0000000010\n" +
+                "    Processor: KSTREAM-FILTER-0000000022 (stores: [])\n" +
+                "      --> KSTREAM-SINK-0000000021\n" +
+                "      <-- KSTREAM-PROCESSVALUES-0000000018\n" +
+                "    Sink: KSTREAM-SINK-0000000005 (topic: KSTREAM-AGGREGATE-STATE-STORE-0000000003-repartition)\n" +
+                "      <-- KSTREAM-FILTER-0000000006\n" +
+                "    Sink: KSTREAM-SINK-0000000013 (topic: KSTREAM-AGGREGATE-STATE-STORE-0000000011-repartition)\n" +
+                "      <-- KSTREAM-FILTER-0000000014\n" +
+                "    Sink: KSTREAM-SINK-0000000021 (topic: KSTREAM-AGGREGATE-STATE-STORE-0000000019-repartition)\n" +
+                "      <-- KSTREAM-FILTER-0000000022\n" +
+                "\n" +
+                "  Sub-topology: 1\n" +
+                "    Source: KSTREAM-SOURCE-0000000007 (topics: [KSTREAM-AGGREGATE-STATE-STORE-0000000003-repartition])\n" +
+                "      --> KSTREAM-AGGREGATE-0000000004\n" +
+                "    Processor: KSTREAM-AGGREGATE-0000000004 (stores: [KSTREAM-AGGREGATE-STATE-STORE-0000000003])\n" +
+                "      --> KTABLE-TOSTREAM-0000000008\n" +
+                "      <-- KSTREAM-SOURCE-0000000007\n" +
+                "    Processor: KTABLE-TOSTREAM-0000000008 (stores: [])\n" +
+                "      --> KSTREAM-SINK-0000000009\n" +
+                "      <-- KSTREAM-AGGREGATE-0000000004\n" +
+                "    Sink: KSTREAM-SINK-0000000009 (topic: output)\n" +
+                "      <-- KTABLE-TOSTREAM-0000000008\n" +
+                "\n" +
+                "  Sub-topology: 2\n" +
+                "    Source: KSTREAM-SOURCE-0000000015 (topics: [KSTREAM-AGGREGATE-STATE-STORE-0000000011-repartition])\n" +
+                "      --> KSTREAM-AGGREGATE-0000000012\n" +
+                "    Processor: KSTREAM-AGGREGATE-0000000012 (stores: [KSTREAM-AGGREGATE-STATE-STORE-0000000011])\n" +
+                "      --> KTABLE-TOSTREAM-0000000016\n" +
+                "      <-- KSTREAM-SOURCE-0000000015\n" +
+                "    Processor: KTABLE-TOSTREAM-0000000016 (stores: [])\n" +
+                "      --> KSTREAM-SINK-0000000017\n" +
+                "      <-- KSTREAM-AGGREGATE-0000000012\n" +
+                "    Sink: KSTREAM-SINK-0000000017 (topic: windowed-output)\n" +
+                "      <-- KTABLE-TOSTREAM-0000000016\n" +
+                "\n" +
+                "  Sub-topology: 3\n" +
+                "    Source: KSTREAM-SOURCE-0000000023 (topics: [KSTREAM-AGGREGATE-STATE-STORE-0000000019-repartition])\n" +
+                "      --> KSTREAM-AGGREGATE-0000000020\n" +
+                "    Processor: KSTREAM-AGGREGATE-0000000020 (stores: [KSTREAM-AGGREGATE-STATE-STORE-0000000019])\n" +
+                "      --> KTABLE-TOSTREAM-0000000024\n" +
+                "      <-- KSTREAM-SOURCE-0000000023\n" +
+                "    Processor: KTABLE-TOSTREAM-0000000024 (stores: [])\n" +
+                "      --> KSTREAM-SINK-0000000025\n" +
+                "      <-- KSTREAM-AGGREGATE-0000000020\n" +
+                "    Sink: KSTREAM-SINK-0000000025 (topic: output)\n" +
+                "      <-- KTABLE-TOSTREAM-0000000024\n" +
+                "\n",
+            noOptimization.describe().toString()
+        );
+        assertEquals("Topologies:\n" +
+                "   Sub-topology: 0\n" +
+                "    Source: KSTREAM-SOURCE-0000000000 (topics: [input])\n" +
+                "      --> KSTREAM-KEY-SELECT-0000000001\n" +
+                "    Processor: KSTREAM-KEY-SELECT-0000000001 (stores: [])\n" +
+                "      --> KSTREAM-FLATMAPVALUES-0000000010, KSTREAM-MAPVALUES-0000000002, KSTREAM-PROCESSVALUES-0000000018\n" +
+                "      <-- KSTREAM-SOURCE-0000000000\n" +
+                "    Processor: KSTREAM-FLATMAPVALUES-0000000010 (stores: [])\n" +
+                "      --> KSTREAM-FILTER-0000000014\n" +
+                "      <-- KSTREAM-KEY-SELECT-0000000001\n" +
+                "    Processor: KSTREAM-MAPVALUES-0000000002 (stores: [])\n" +
+                "      --> KSTREAM-FILTER-0000000006\n" +
+                "      <-- KSTREAM-KEY-SELECT-0000000001\n" +
+                "    Processor: KSTREAM-PROCESSVALUES-0000000018 (stores: [])\n" +
+                "      --> KSTREAM-FILTER-0000000022\n" +
+                "      <-- KSTREAM-KEY-SELECT-0000000001\n" +
+                "    Processor: KSTREAM-FILTER-0000000006 (stores: [])\n" +
+                "      --> KSTREAM-SINK-0000000005\n" +
+                "      <-- KSTREAM-MAPVALUES-0000000002\n" +
+                "    Processor: KSTREAM-FILTER-0000000014 (stores: [])\n" +
+                "      --> KSTREAM-SINK-0000000013\n" +
+                "      <-- KSTREAM-FLATMAPVALUES-0000000010\n" +
+                "    Processor: KSTREAM-FILTER-0000000022 (stores: [])\n" +
+                "      --> KSTREAM-SINK-0000000021\n" +
+                "      <-- KSTREAM-PROCESSVALUES-0000000018\n" +
+                "    Sink: KSTREAM-SINK-0000000005 (topic: KSTREAM-AGGREGATE-STATE-STORE-0000000003-repartition)\n" +
+                "      <-- KSTREAM-FILTER-0000000006\n" +
+                "    Sink: KSTREAM-SINK-0000000013 (topic: KSTREAM-AGGREGATE-STATE-STORE-0000000011-repartition)\n" +
+                "      <-- KSTREAM-FILTER-0000000014\n" +
+                "    Sink: KSTREAM-SINK-0000000021 (topic: KSTREAM-AGGREGATE-STATE-STORE-0000000019-repartition)\n" +
+                "      <-- KSTREAM-FILTER-0000000022\n" +
+                "\n" +
+                "  Sub-topology: 1\n" +
+                "    Source: KSTREAM-SOURCE-0000000007 (topics: [KSTREAM-AGGREGATE-STATE-STORE-0000000003-repartition])\n" +
+                "      --> KSTREAM-AGGREGATE-0000000004\n" +
+                "    Processor: KSTREAM-AGGREGATE-0000000004 (stores: [KSTREAM-AGGREGATE-STATE-STORE-0000000003])\n" +
+                "      --> KTABLE-TOSTREAM-0000000008\n" +
+                "      <-- KSTREAM-SOURCE-0000000007\n" +
+                "    Processor: KTABLE-TOSTREAM-0000000008 (stores: [])\n" +
+                "      --> KSTREAM-SINK-0000000009\n" +
+                "      <-- KSTREAM-AGGREGATE-0000000004\n" +
+                "    Sink: KSTREAM-SINK-0000000009 (topic: output)\n" +
+                "      <-- KTABLE-TOSTREAM-0000000008\n" +
+                "\n" +
+                "  Sub-topology: 2\n" +
+                "    Source: KSTREAM-SOURCE-0000000015 (topics: [KSTREAM-AGGREGATE-STATE-STORE-0000000011-repartition])\n" +
+                "      --> KSTREAM-AGGREGATE-0000000012\n" +
+                "    Processor: KSTREAM-AGGREGATE-0000000012 (stores: [KSTREAM-AGGREGATE-STATE-STORE-0000000011])\n" +
+                "      --> KTABLE-TOSTREAM-0000000016\n" +
+                "      <-- KSTREAM-SOURCE-0000000015\n" +
+                "    Processor: KTABLE-TOSTREAM-0000000016 (stores: [])\n" +
+                "      --> KSTREAM-SINK-0000000017\n" +
+                "      <-- KSTREAM-AGGREGATE-0000000012\n" +
+                "    Sink: KSTREAM-SINK-0000000017 (topic: windowed-output)\n" +
+                "      <-- KTABLE-TOSTREAM-0000000016\n" +
+                "\n" +
+                "  Sub-topology: 3\n" +
+                "    Source: KSTREAM-SOURCE-0000000023 (topics: [KSTREAM-AGGREGATE-STATE-STORE-0000000019-repartition])\n" +
+                "      --> KSTREAM-AGGREGATE-0000000020\n" +
+                "    Processor: KSTREAM-AGGREGATE-0000000020 (stores: [KSTREAM-AGGREGATE-STATE-STORE-0000000019])\n" +
+                "      --> KTABLE-TOSTREAM-0000000024\n" +
+                "      <-- KSTREAM-SOURCE-0000000023\n" +
+                "    Processor: KTABLE-TOSTREAM-0000000024 (stores: [])\n" +
+                "      --> KSTREAM-SINK-0000000025\n" +
+                "      <-- KSTREAM-AGGREGATE-0000000020\n" +
+                "    Sink: KSTREAM-SINK-0000000025 (topic: output)\n" +
+                "      <-- KTABLE-TOSTREAM-0000000024\n\n",
+            noOptimization.describe().toString()
+        );
+        assertEquals(3, getCountOfRepartitionTopicsFound(attemptedOptimize.describe().toString()));
+        assertEquals(3, getCountOfRepartitionTopicsFound(noOptimization.describe().toString()));
+    }
+
+    @Test
+    public void shouldNotOptimizeWithValueOrKeyChangingOperatorsAfterInitialKeyChangeWithFixEnabled() {
+        final Topology attemptedOptimize = getTopologyWithChangingValuesAfterChangingKey(StreamsConfig.OPTIMIZE, true);
+        final Topology noOptimization = getTopologyWithChangingValuesAfterChangingKey(StreamsConfig.NO_OPTIMIZATION, true);
 
         assertEquals(attemptedOptimize.describe().toString(), noOptimization.describe().toString());
-        assertEquals(2, getCountOfRepartitionTopicsFound(attemptedOptimize.describe().toString()));
-        assertEquals(2, getCountOfRepartitionTopicsFound(noOptimization.describe().toString()));
+        assertEquals(3, getCountOfRepartitionTopicsFound(attemptedOptimize.describe().toString()));
+        assertEquals(3, getCountOfRepartitionTopicsFound(noOptimization.describe().toString()));
     }
 
     @Test
@@ -227,20 +377,30 @@ public class StreamsGraphTest {
         assertEquals(2, getCountOfRepartitionTopicsFound(noOptimization.describe().toString()));
     }
 
-    private Topology getTopologyWithChangingValuesAfterChangingKey(final String optimizeConfig) {
-
-        final StreamsBuilder builder = new StreamsBuilder();
+    private Topology getTopologyWithChangingValuesAfterChangingKey(final String optimizeConfig,
+                                                                   final boolean enableFix) {
         final Properties properties = new Properties();
+        properties.put(StreamsConfig.APPLICATION_ID_CONFIG, "application-id");
+        properties.put(StreamsConfig.BOOTSTRAP_SERVERS_CONFIG, "localhost:9092");
         properties.put(StreamsConfig.TOPOLOGY_OPTIMIZATION_CONFIG, optimizeConfig);
+        properties.put(TopologyConfig.InternalConfig.ENABLE_PROCESS_PROCESSVALUE_FIX, enableFix);
+
+        final StreamsBuilder builder = new StreamsBuilder(new TopologyConfig(new StreamsConfig(properties)));
 
         final KStream<String, String> inputStream = builder.stream("input");
         final KStream<String, String> mappedKeyStream = inputStream.selectKey((k, v) -> k + v);
 
         mappedKeyStream.mapValues(v -> v.toUpperCase(Locale.getDefault())).groupByKey().count().toStream().to("output");
         mappedKeyStream.flatMapValues(v -> Arrays.asList(v.split("\\s"))).groupByKey().windowedBy(TimeWindows.ofSizeWithNoGrace(ofMillis(5000))).count().toStream().to("windowed-output");
+        mappedKeyStream.processValues(
+            () -> new ContextualFixedKeyProcessor<>() {
+                @Override
+                public void process(final FixedKeyRecord<String, String> record) {
+                    context().forward(record.withValue(record.value().toUpperCase(Locale.getDefault())));
+                }
+            }).groupByKey().count().toStream().to("output");
 
         return builder.build(properties);
-
     }
 
     private Topology getTopologyWithRepartitionOperation(final String optimizeConfig) {

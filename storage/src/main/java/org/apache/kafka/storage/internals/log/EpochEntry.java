@@ -17,35 +17,5 @@
 package org.apache.kafka.storage.internals.log;
 
 // Mapping of epoch to the first offset of the subsequent epoch
-public class EpochEntry {
-    public final int epoch;
-    public final long startOffset;
-
-    public EpochEntry(int epoch, long startOffset) {
-        this.epoch = epoch;
-        this.startOffset = startOffset;
-    }
-
-    @Override
-    public boolean equals(Object o) {
-        if (this == o) return true;
-        if (o == null || getClass() != o.getClass()) return false;
-        EpochEntry that = (EpochEntry) o;
-        return epoch == that.epoch && startOffset == that.startOffset;
-    }
-
-    @Override
-    public int hashCode() {
-        int result = epoch;
-        result = 31 * result + Long.hashCode(startOffset);
-        return result;
-    }
-
-    @Override
-    public String toString() {
-        return "EpochEntry(" +
-                "epoch=" + epoch +
-                ", startOffset=" + startOffset +
-                ')';
-    }
+public record EpochEntry(int epoch, long startOffset) {
 }

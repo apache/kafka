@@ -17,12 +17,10 @@
 package org.apache.kafka.coordinator.group.streams.topics;
 
 import org.apache.kafka.common.errors.StreamsInvalidTopologyException;
-import org.apache.kafka.common.utils.LogContext;
 
 import org.slf4j.Logger;
 
 import java.util.Collection;
-import java.util.Collections;
 import java.util.HashMap;
 import java.util.Map;
 import java.util.Map.Entry;
@@ -45,14 +43,14 @@ public class CopartitionedTopicsEnforcer {
     /**
      * The constructor for the class.
      *
-     * @param logContext                  The context for emitting log messages.
+     * @param log                         The logger.
      * @param topicPartitionCountProvider Returns the number of partitions for a given topic, representing the current state of the broker
      *                                    as well as any partition number decisions that have already been made. In particular, we expect
      *                                    the number of partitions for all topics in all co-partitions groups to be defined.
      */
-    public CopartitionedTopicsEnforcer(final LogContext logContext,
+    public CopartitionedTopicsEnforcer(final Logger log,
                                        final Function<String, OptionalInt> topicPartitionCountProvider) {
-        this.log = logContext.logger(getClass());
+        this.log = log;
         this.topicPartitionCountProvider = topicPartitionCountProvider;
     }
 
@@ -74,7 +72,7 @@ public class CopartitionedTopicsEnforcer {
                                         final Set<String> flexibleRepartitionTopics) throws StreamsInvalidTopologyException {
         if (copartitionedTopics.isEmpty()) {
             log.debug("Ignoring unexpected empty copartitioned topics set.");
-            return Collections.emptyMap();
+            return Map.of();
         }
         final Map<String, Integer> returnedPartitionCounts = new HashMap<>();
 

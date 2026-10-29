@@ -16,6 +16,7 @@
  */
 package org.apache.kafka.streams.state.internals;
 
+import org.apache.kafka.common.header.Headers;
 import org.apache.kafka.common.serialization.Deserializer;
 import org.apache.kafka.common.utils.Bytes;
 import org.apache.kafka.streams.kstream.Window;
@@ -167,24 +168,27 @@ public class PrefixedWindowKeySchemas {
         public static <K> Windowed<K> fromStoreKey(final byte[] binaryKey,
                                                    final long windowSize,
                                                    final Deserializer<K> deserializer,
+                                                   final Headers headers,
                                                    final String topic) {
-            final K key = deserializer.deserialize(topic, extractStoreKeyBytes(binaryKey));
+            final K key = deserializer.deserialize(topic, headers, extractStoreKeyBytes(binaryKey));
             final Window window = extractStoreWindow(binaryKey, windowSize);
             return new Windowed<>(key, window);
         }
 
         public static <K> Bytes toStoreKeyBinary(final Windowed<K> timeKey,
                                                  final int seqnum,
+                                                 final Headers headers,
                                                  final StateSerdes<K, ?> serdes) {
-            final byte[] serializedKey = serdes.rawKey(timeKey.key());
+            final byte[] serializedKey = serdes.rawKey(timeKey.key(), headers);
             return toStoreKeyBinary(serializedKey, timeKey.window().start(), seqnum);
         }
 
         public static <K> Bytes toStoreKeyBinary(final K key,
                                                  final long timestamp,
                                                  final int seqnum,
+                                                 final Headers headers,
                                                  final StateSerdes<K, ?> serdes) {
-            final byte[] serializedKey = serdes.rawKey(key);
+            final byte[] serializedKey = serdes.rawKey(key, headers);
             return toStoreKeyBinary(serializedKey, timestamp, seqnum);
         }
 
@@ -308,8 +312,9 @@ public class PrefixedWindowKeySchemas {
         public static <K> Bytes toStoreKeyBinary(final K key,
                                                  final long timestamp,
                                                  final int seqnum,
+                                                 final Headers headers,
                                                  final StateSerdes<K, ?> serdes) {
-            final byte[] serializedKey = serdes.rawKey(key);
+            final byte[] serializedKey = serdes.rawKey(key, headers);
             return toStoreKeyBinary(serializedKey, timestamp, seqnum);
         }
 
@@ -320,8 +325,9 @@ public class PrefixedWindowKeySchemas {
 
         public static <K> Bytes toStoreKeyBinary(final Windowed<K> timeKey,
                                                  final int seqnum,
+                                                 final Headers headers,
                                                  final StateSerdes<K, ?> serdes) {
-            final byte[] serializedKey = serdes.rawKey(timeKey.key());
+            final byte[] serializedKey = serdes.rawKey(timeKey.key(), headers);
             return toStoreKeyBinary(serializedKey, timeKey.window().start(), seqnum);
         }
 
@@ -374,8 +380,9 @@ public class PrefixedWindowKeySchemas {
         public static <K> Windowed<K> fromStoreKey(final byte[] binaryKey,
                                                    final long windowSize,
                                                    final Deserializer<K> deserializer,
+                                                   final Headers headers,
                                                    final String topic) {
-            final K key = deserializer.deserialize(topic, extractStoreKeyBytes(binaryKey));
+            final K key = deserializer.deserialize(topic, headers, extractStoreKeyBytes(binaryKey));
             final Window window = extractStoreWindow(binaryKey, windowSize);
             return new Windowed<>(key, window);
         }

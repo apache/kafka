@@ -21,6 +21,9 @@
   "flexibleVersions": "0+",
   "fields": [
     { "name": "AssignmentEpoch", "versions": "0+", "type": "int32",
-      "about": "The assignment epoch." }
+      "about": "The assignment epoch." },
+    // Added in 4.3 (KIP-1263).
+    { "name": "AssignmentTimestamp", "versions": "0+", "taggedVersions": "0+", "tag": 0, "type": "int64", "default": 0, "ignorable": true,
+      "about": "The time at which the assignment calculation finished." }
   ]
 }

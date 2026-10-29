@@ -24,19 +24,19 @@ import static org.junit.jupiter.api.Assertions.assertNotEquals;
 
 public class StructTest {
     private static final Schema FLAT_STRUCT_SCHEMA = new Schema(
-        new Field.Int8("int8", ""),
-        new Field.Int16("int16", ""),
-        new Field.Int32("int32", ""),
-        new Field.Int64("int64", ""),
-        new Field.Bool("boolean", ""),
-        new Field.Float64("float64", ""),
-        new Field.Str("string", ""));
+        new Field("int8", Type.INT8, ""),
+        new Field("int16", Type.INT16, ""),
+        new Field("int32", Type.INT32, ""),
+        new Field("int64", Type.INT64, ""),
+        new Field("boolean", Type.BOOLEAN, ""),
+        new Field("float64", Type.FLOAT64, ""),
+        new Field("string", Type.STRING, ""));
 
-    private static final Schema ARRAY_SCHEMA = new Schema(new Field.Array("array", new ArrayOf(Type.INT8), ""));
+    private static final Schema ARRAY_SCHEMA = new Schema(new Field("array", new ArrayOf(new ArrayOf(Type.INT8)), ""));
     private static final Schema NESTED_CHILD_SCHEMA = new Schema(
-            new Field.Int8("int8", ""));
+            new Field("int8", Type.INT8, ""));
     private static final Schema NESTED_SCHEMA = new Schema(
-            new Field.Array("array", ARRAY_SCHEMA, ""),
+            new Field("array", new ArrayOf(ARRAY_SCHEMA), ""),
             new Field("nested", NESTED_CHILD_SCHEMA, ""));
 
     @Test

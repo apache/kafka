@@ -14,9 +14,11 @@
  * See the License for the specific language governing permissions and
  * limitations under the License.
  */
+
 package org.apache.kafka.common.security.auth;
 
 import org.apache.kafka.common.Configurable;
+import org.apache.kafka.common.annotation.InterfaceAudience;
 
 import java.io.Closeable;
 import java.security.KeyStore;
@@ -32,6 +34,7 @@ import javax.net.ssl.SSLEngine;
  * to be replaced with a custom provider. In scenarios where only the configuration mechanism for SSL engines
  * need to be updated, this interface provides a convenient method for overriding the default implementation.
  */
+@InterfaceAudience.Public
 public interface SslEngineFactory extends Configurable, Closeable {
 
     /**

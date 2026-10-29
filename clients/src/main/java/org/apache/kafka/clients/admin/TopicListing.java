@@ -18,10 +18,12 @@
 package org.apache.kafka.clients.admin;
 
 import org.apache.kafka.common.Uuid;
+import org.apache.kafka.common.annotation.InterfaceAudience;
 
 /**
  * A listing of a topic in the cluster.
  */
+@InterfaceAudience.Public
 public class TopicListing {
     private final String name;
     private final Uuid topicId;

@@ -38,6 +38,7 @@ import org.apache.kafka.streams.state.KeyValueStore
  * @param inner The underlying Java abstraction for KTable
  * @see `org.apache.kafka.streams.kstream.KTable`
  */
+@deprecated("Use `org.apache.kafka.streams.kstream.KTable` instead", "4.3.0")
 class KTable[K, V](val inner: KTableJ[K, V]) {
 
   /**

@@ -25,9 +25,9 @@ import org.apache.kafka.common.TopicPartition;
 import org.apache.kafka.common.config.ConfigException;
 import org.apache.kafka.common.internals.KafkaFutureImpl;
 import org.apache.kafka.common.serialization.ByteArrayDeserializer;
-import org.apache.kafka.common.utils.ThreadUtils;
 import org.apache.kafka.common.utils.Time;
 import org.apache.kafka.common.utils.Utils;
+import org.apache.kafka.common.utils.internals.ThreadUtils;
 import org.apache.kafka.trogdor.common.JsonUtil;
 import org.apache.kafka.trogdor.common.Platform;
 import org.apache.kafka.trogdor.common.WorkerUtils;
@@ -58,7 +58,6 @@ import java.util.concurrent.ScheduledExecutorService;
 import java.util.concurrent.TimeUnit;
 import java.util.concurrent.atomic.AtomicBoolean;
 import java.util.concurrent.locks.ReentrantLock;
-import java.util.stream.Collectors;
 
 
 public class ConsumeBenchWorker implements TaskWorker {
@@ -132,7 +131,7 @@ public class ConsumeBenchWorker implements TaskWorker {
                 }
             } else {
                 List<TopicPartition> partitions = populatePartitionsByTopic(consumer.consumer(), partitionsByTopic)
-                    .values().stream().flatMap(List::stream).collect(Collectors.toList());
+                    .values().stream().flatMap(List::stream).toList();
                 tasks.add(new ConsumeMessages(consumer, spec.recordProcessor(), partitions));
 
                 for (int i = 0; i < consumerCount - 1; i++) {
@@ -182,7 +181,7 @@ public class ConsumeBenchWorker implements TaskWorker {
                 if (partitions.isEmpty()) {
                     List<TopicPartition> fetchedPartitions = consumer.partitionsFor(topicName).stream()
                         .map(partitionInfo -> new TopicPartition(partitionInfo.topic(), partitionInfo.partition()))
-                        .collect(Collectors.toList());
+                        .toList();
                     partitions.addAll(fetchedPartitions);
                 }
 
@@ -550,7 +549,7 @@ public class ConsumeBenchWorker implements TaskWorker {
             this.consumerLock.lock();
             try {
                 return consumer.assignment().stream()
-                    .map(TopicPartition::toString).collect(Collectors.toList());
+                    .map(TopicPartition::toString).toList();
             } finally {
                 this.consumerLock.unlock();
             }

@@ -27,7 +27,7 @@ import org.mockito.junit.jupiter.MockitoExtension;
 import org.mockito.junit.jupiter.MockitoSettings;
 import org.mockito.quality.Strictness;
 
-import java.util.Collections;
+import java.util.List;
 
 import static org.junit.jupiter.api.Assertions.assertEquals;
 import static org.junit.jupiter.api.Assertions.assertTrue;
@@ -49,7 +49,7 @@ public class InternalSinkRecordTest {
         assertTrue(sinkRecord.headers().isEmpty());
 
         SinkRecord newRecord = internalSinkRecord.newRecord(TOPIC, 0, null, null, null,
-                null, null, Collections.singletonList(mock(Header.class)));
+                null, null, List.of(mock(Header.class)));
         assertEquals(1, newRecord.headers().size());
     }
 

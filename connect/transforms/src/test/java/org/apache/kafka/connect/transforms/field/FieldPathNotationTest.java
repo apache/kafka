@@ -81,7 +81,7 @@ class FieldPathNotationTest {
     @Test
     void shouldBuildV2WhenIncludesDotsAndBacktickPair() {
         // Given v2 and fields including dots
-        // When backticks are wrapping a field name (i.e. withing edges or between dots)
+        // When backticks are wrapping a field name (i.e. within edges or between dots)
         // Then build a path with steps separated by dots and not including backticks
         assertParseV2("`foo.bar.baz`", "foo.bar.baz");
         assertParseV2("foo.`bar.baz`", "foo", "bar.baz");
@@ -92,7 +92,7 @@ class FieldPathNotationTest {
     @Test
     void shouldBuildV2AndIgnoreBackticksThatAreNotWrapping() {
         // Given v2 and fields including dots and backticks
-        // When backticks are wrapping a field name (i.e. withing edges or between dots)
+        // When backticks are wrapping a field name (i.e. within edges or between dots)
         // Then build a path with steps separated by dots and including non-wrapping backticks
         assertParseV2("foo.``bar.baz`", "foo", "`bar.baz");
         assertParseV2("foo.`bar.baz``", "foo", "bar.baz`");
@@ -105,7 +105,7 @@ class FieldPathNotationTest {
     @Test
     void shouldBuildV2AndEscapeBackticks() {
         // Given v2 and fields including dots and backticks
-        // When backticks are wrapping a field name (i.e. withing edges or between dots)
+        // When backticks are wrapping a field name (i.e. within edges or between dots)
         // and wrapping backticks that are part of the field name are escaped with backslashes
         // Then build a path with steps separated by dots and including escaped and non-wrapping backticks
         assertParseV2("foo.`bar\\`.baz`", "foo", "bar`.baz");

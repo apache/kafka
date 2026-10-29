@@ -14,8 +14,10 @@
  * See the License for the specific language governing permissions and
  * limitations under the License.
  */
+
 package org.apache.kafka.streams.kstream;
 
+import org.apache.kafka.common.annotation.InterfaceAudience;
 
 /**
  * The {@code Aggregator} interface for aggregating values of the given key.
@@ -38,6 +40,8 @@ package org.apache.kafka.streams.kstream;
  * @see SessionWindowedKStream#aggregate(Initializer, Aggregator, Merger, Materialized)
  * @see Reducer
  */
+@FunctionalInterface
+@InterfaceAudience.Public
 public interface Aggregator<K, V, VAgg> {
 
     /**

@@ -14,18 +14,30 @@
  * See the License for the specific language governing permissions and
  * limitations under the License.
  */
+
 package org.apache.kafka.common.errors;
 
+import org.apache.kafka.common.annotation.InterfaceAudience;
+
+@InterfaceAudience.Public
 public class InvalidConfigurationException extends ApiException {
 
     private static final long serialVersionUID = 1L;
+
+    public InvalidConfigurationException(String message, Throwable cause) {
+        super(message, cause);
+    }
 
     public InvalidConfigurationException(String message) {
         super(message);
     }
 
-    public InvalidConfigurationException(String message, Throwable cause) {
-        super(message, cause);
+    public InvalidConfigurationException(Throwable cause) {
+        super(cause);
+    }
+
+    public InvalidConfigurationException() {
+        super();
     }
 
 }

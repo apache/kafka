@@ -24,9 +24,6 @@ import org.apache.kafka.image.MetadataProvenance;
 
 import org.junit.jupiter.api.Test;
 
-import java.util.Arrays;
-import java.util.Collections;
-import java.util.HashSet;
 import java.util.Map;
 import java.util.Objects;
 import java.util.Set;
@@ -41,15 +38,15 @@ public final class BrokerServerMetricsTest {
         Metrics metrics = new Metrics();
         String expectedGroup = "broker-metadata-metrics";
 
-        // Metric description is not use for metric name equality
-        Set<MetricName> expectedMetrics = new HashSet<>(Arrays.asList(
-                new MetricName("last-applied-record-offset", expectedGroup, "", Collections.emptyMap()),
-                new MetricName("last-applied-record-timestamp", expectedGroup, "", Collections.emptyMap()),
-                new MetricName("last-applied-record-lag-ms", expectedGroup, "", Collections.emptyMap()),
-                new MetricName("metadata-load-error-count", expectedGroup, "", Collections.emptyMap()),
-                new MetricName("metadata-apply-error-count", expectedGroup, "", Collections.emptyMap()),
-                new MetricName("ignored-static-voters", expectedGroup, "", Collections.emptyMap())
-        ));
+        // Metric description is not used for metric name equality
+        Set<MetricName> expectedMetrics = Set.of(
+                new MetricName("last-applied-record-offset", expectedGroup, "", Map.of()),
+                new MetricName("last-applied-record-timestamp", expectedGroup, "", Map.of()),
+                new MetricName("last-applied-record-lag-ms", expectedGroup, "", Map.of()),
+                new MetricName("metadata-load-error-count", expectedGroup, "", Map.of()),
+                new MetricName("metadata-apply-error-count", expectedGroup, "", Map.of()),
+                new MetricName("ignored-static-voters", expectedGroup, "", Map.of())
+        );
 
         try (BrokerServerMetrics ignored = new BrokerServerMetrics(metrics)) {
             Map<MetricName, KafkaMetric> metricsMap = metrics.metrics().entrySet().stream()
@@ -70,7 +67,7 @@ public final class BrokerServerMetricsTest {
         Metrics metrics = new Metrics();
         try (BrokerServerMetrics brokerMetrics = new BrokerServerMetrics(metrics)) {
             KafkaMetric offsetMetric = metrics.metrics().get(brokerMetrics.lastAppliedRecordOffsetName());
-            assertEquals((double) -1L, offsetMetric.metricValue());
+            assertEquals(-1L, offsetMetric.metricValue());
 
             // Update metric value and check
             long expectedValue = 1000;
@@ -79,7 +76,7 @@ public final class BrokerServerMetricsTest {
                     brokerMetrics.lastAppliedImageProvenance().get().lastContainedEpoch(),
                     brokerMetrics.lastAppliedTimestamp(),
                     true));
-            assertEquals((double) expectedValue, offsetMetric.metricValue());
+            assertEquals(expectedValue, offsetMetric.metricValue());
         }
     }
 
@@ -92,8 +89,8 @@ public final class BrokerServerMetricsTest {
             KafkaMetric timestampMetric = metrics.metrics().get(brokerMetrics.lastAppliedRecordTimestampName());
             KafkaMetric lagMetric = metrics.metrics().get(brokerMetrics.lastAppliedRecordLagMsName());
 
-            assertEquals((double) -1L, timestampMetric.metricValue());
-            assertEquals((double) time.milliseconds() + 1, lagMetric.metricValue());
+            assertEquals(-1L, timestampMetric.metricValue());
+            assertEquals(time.milliseconds() + 1, lagMetric.metricValue());
 
             // Update metric value and check
             long timestamp = 500L;
@@ -103,8 +100,8 @@ public final class BrokerServerMetricsTest {
                     brokerMetrics.lastAppliedImageProvenance().get().lastContainedEpoch(),
                     timestamp,
                     true));
-            assertEquals((double) timestamp, timestampMetric.metricValue());
-            assertEquals((double) time.milliseconds() - timestamp, lagMetric.metricValue());
+            assertEquals(timestamp, timestampMetric.metricValue());
+            assertEquals(time.milliseconds() - timestamp, lagMetric.metricValue());
         }
     }
 
@@ -115,12 +112,12 @@ public final class BrokerServerMetricsTest {
         try (BrokerServerMetrics brokerMetrics = new BrokerServerMetrics(metrics)) {
             KafkaMetric metadataLoadErrorCountMetric = metrics.metrics().get(brokerMetrics.metadataLoadErrorCountName());
 
-            assertEquals((double) 0L, metadataLoadErrorCountMetric.metricValue());
+            assertEquals(0L, metadataLoadErrorCountMetric.metricValue());
 
             // Update metric value and check
             long errorCount = 100;
             brokerMetrics.metadataLoadErrorCount().set(errorCount);
-            assertEquals((double) errorCount, metadataLoadErrorCountMetric.metricValue());
+            assertEquals(errorCount, metadataLoadErrorCountMetric.metricValue());
         }
     }
 
@@ -131,12 +128,12 @@ public final class BrokerServerMetricsTest {
         try (BrokerServerMetrics brokerMetrics = new BrokerServerMetrics(metrics)) {
             KafkaMetric metadataApplyErrorCountMetric = metrics.metrics().get(brokerMetrics.metadataApplyErrorCountName());
 
-            assertEquals((double) 0L, metadataApplyErrorCountMetric.metricValue());
+            assertEquals(0L, metadataApplyErrorCountMetric.metricValue());
 
             // Update metric value and check
             long errorCount = 100;
             brokerMetrics.metadataApplyErrorCount().set(errorCount);
-            assertEquals((double) errorCount, metadataApplyErrorCountMetric.metricValue());
+            assertEquals(errorCount, metadataApplyErrorCountMetric.metricValue());
         }
     }
 

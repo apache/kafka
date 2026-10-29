@@ -24,16 +24,14 @@ import java.util.Map;
 import java.util.function.Function;
 
 
-public class MetadataImageNode implements MetadataNode {
+/**
+ * @param image The metadata image.
+ */
+public record MetadataImageNode(MetadataImage image) implements MetadataNode {
     /**
      * The name of this node.
      */
     public static final String NAME = "image";
-
-    /**
-     * The metadata image.
-     */
-    private final MetadataImage image;
 
     private static final Map<String, Function<MetadataImage, MetadataNode>> CHILDREN = Map.of(
         ProvenanceNode.NAME, image -> new ProvenanceNode(image.provenance()),
@@ -43,18 +41,10 @@ public class MetadataImageNode implements MetadataNode {
         ConfigurationsImageNode.NAME, image -> new ConfigurationsImageNode(image.configs()),
         ClientQuotasImageNode.NAME, image -> new ClientQuotasImageNode(image.clientQuotas()),
         ProducerIdsImageNode.NAME, image -> new ProducerIdsImageNode(image.producerIds()),
-        AclsImageNode.NAME, image -> new AclsImageByIdNode(image.acls()),
+        AclsImageNode.NAME, image -> new AclsImageNode(image.acls()),
         ScramImageNode.NAME, image -> new ScramImageNode(image.scram()),
         DelegationTokenImageNode.NAME, image -> new DelegationTokenImageNode(image.delegationTokens())
     );
-
-    public MetadataImageNode(MetadataImage image) {
-        this.image = image;
-    }
-
-    public MetadataImage image() {
-        return image;
-    }
 
     @Override
     public Collection<String> childNames() {

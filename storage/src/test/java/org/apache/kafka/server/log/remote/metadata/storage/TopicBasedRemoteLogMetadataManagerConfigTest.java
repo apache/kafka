@@ -17,25 +17,36 @@
 package org.apache.kafka.server.log.remote.metadata.storage;
 
 import org.apache.kafka.clients.CommonClientConfigs;
+import org.apache.kafka.clients.admin.AdminClientConfig;
 import org.apache.kafka.clients.consumer.ConsumerConfig;
 import org.apache.kafka.clients.producer.ProducerConfig;
+import org.apache.kafka.common.config.ConfigException;
+import org.apache.kafka.common.config.SaslConfigs;
+import org.apache.kafka.common.config.SslConfigs;
 import org.apache.kafka.test.TestUtils;
 
 import org.junit.jupiter.api.Test;
 
 import java.util.AbstractMap;
+import java.util.Arrays;
 import java.util.HashMap;
 import java.util.Map;
 
 import static org.apache.kafka.server.log.remote.metadata.storage.TopicBasedRemoteLogMetadataManagerConfig.BROKER_ID;
+import static org.apache.kafka.server.log.remote.metadata.storage.TopicBasedRemoteLogMetadataManagerConfig.DEFAULT_REMOTE_LOG_METADATA_TOPIC_MIN_ISR;
 import static org.apache.kafka.server.log.remote.metadata.storage.TopicBasedRemoteLogMetadataManagerConfig.LOG_DIR;
+import static org.apache.kafka.server.log.remote.metadata.storage.TopicBasedRemoteLogMetadataManagerConfig.NODE_ID;
+import static org.apache.kafka.server.log.remote.metadata.storage.TopicBasedRemoteLogMetadataManagerConfig.REMOTE_LOG_METADATA_ADMIN_PREFIX;
 import static org.apache.kafka.server.log.remote.metadata.storage.TopicBasedRemoteLogMetadataManagerConfig.REMOTE_LOG_METADATA_COMMON_CLIENT_PREFIX;
 import static org.apache.kafka.server.log.remote.metadata.storage.TopicBasedRemoteLogMetadataManagerConfig.REMOTE_LOG_METADATA_CONSUMER_PREFIX;
 import static org.apache.kafka.server.log.remote.metadata.storage.TopicBasedRemoteLogMetadataManagerConfig.REMOTE_LOG_METADATA_PRODUCER_PREFIX;
+import static org.apache.kafka.server.log.remote.metadata.storage.TopicBasedRemoteLogMetadataManagerConfig.REMOTE_LOG_METADATA_TOPIC_MIN_ISR_PROP;
 import static org.apache.kafka.server.log.remote.metadata.storage.TopicBasedRemoteLogMetadataManagerConfig.REMOTE_LOG_METADATA_TOPIC_PARTITIONS_PROP;
 import static org.apache.kafka.server.log.remote.metadata.storage.TopicBasedRemoteLogMetadataManagerConfig.REMOTE_LOG_METADATA_TOPIC_REPLICATION_FACTOR_PROP;
 import static org.apache.kafka.server.log.remote.metadata.storage.TopicBasedRemoteLogMetadataManagerConfig.REMOTE_LOG_METADATA_TOPIC_RETENTION_MS_PROP;
 import static org.junit.jupiter.api.Assertions.assertEquals;
+import static org.junit.jupiter.api.Assertions.assertThrows;
+import static org.junit.jupiter.api.Assertions.assertTrue;
 
 public class TopicBasedRemoteLogMetadataManagerConfigTest {
     private static final String BOOTSTRAP_SERVERS = "localhost:2222";
@@ -53,7 +64,10 @@ public class TopicBasedRemoteLogMetadataManagerConfigTest {
         Map<String, Object> consumerConfig = new HashMap<>();
         consumerConfig.put(ConsumerConfig.ENABLE_AUTO_COMMIT_CONFIG, false);
 
-        Map<String, Object> props = createValidConfigProps(commonClientConfig, producerConfig, consumerConfig);
+        Map<String, Object> adminConfig = new HashMap<>();
+        adminConfig.put(AdminClientConfig.RECONNECT_BACKOFF_MS_CONFIG, 100);
+
+        Map<String, Object> props = createValidConfigProps(commonClientConfig, producerConfig, consumerConfig, adminConfig);
 
         // Check for topic properties
         TopicBasedRemoteLogMetadataManagerConfig rlmmConfig = new TopicBasedRemoteLogMetadataManagerConfig(props);
@@ -63,11 +77,13 @@ public class TopicBasedRemoteLogMetadataManagerConfigTest {
         assertEquals(BOOTSTRAP_SERVERS, rlmmConfig.commonProperties().get(CommonClientConfigs.BOOTSTRAP_SERVERS_CONFIG));
         assertEquals(BOOTSTRAP_SERVERS, rlmmConfig.producerProperties().get(CommonClientConfigs.BOOTSTRAP_SERVERS_CONFIG));
         assertEquals(BOOTSTRAP_SERVERS, rlmmConfig.consumerProperties().get(CommonClientConfigs.BOOTSTRAP_SERVERS_CONFIG));
+        assertEquals(BOOTSTRAP_SERVERS, rlmmConfig.adminProperties().get(CommonClientConfigs.BOOTSTRAP_SERVERS_CONFIG));
 
         for (Map.Entry<String, Object> entry : commonClientConfig.entrySet()) {
             assertEquals(entry.getValue(), rlmmConfig.commonProperties().get(entry.getKey()));
             assertEquals(entry.getValue(), rlmmConfig.producerProperties().get(entry.getKey()));
             assertEquals(entry.getValue(), rlmmConfig.consumerProperties().get(entry.getKey()));
+            assertEquals(entry.getValue(), rlmmConfig.adminProperties().get(entry.getKey()));
         }
         // Check for producer configs.
         for (Map.Entry<String, Object> entry : producerConfig.entrySet()) {
@@ -77,10 +93,14 @@ public class TopicBasedRemoteLogMetadataManagerConfigTest {
         for (Map.Entry<String, Object> entry : consumerConfig.entrySet()) {
             assertEquals(entry.getValue(), rlmmConfig.consumerProperties().get(entry.getKey()));
         }
+        // Check for admin configs.
+        for (Map.Entry<String, Object> entry : adminConfig.entrySet()) {
+            assertEquals(entry.getValue(), rlmmConfig.adminProperties().get(entry.getKey()));
+        }
     }
 
     @Test
-    public void testCommonProducerConsumerOverridesConfig() {
+    public void testCommonClientOverridesConfig() {
         Map.Entry<String, Long> overrideEntry =
                 new AbstractMap.SimpleImmutableEntry<>(CommonClientConfigs.METADATA_MAX_AGE_CONFIG, 60000L);
         Map<String, Object> commonClientConfig = new HashMap<>();
@@ -99,20 +119,64 @@ public class TopicBasedRemoteLogMetadataManagerConfigTest {
         Long overriddenConsumerPropValue = overrideEntry.getValue() * 3;
         consumerConfig.put(overrideEntry.getKey(), overriddenConsumerPropValue);
 
-        Map<String, Object> props = createValidConfigProps(commonClientConfig, producerConfig, consumerConfig);
+        Map<String, Object> adminConfig = new HashMap<>();
+        Long overriddenAdminPropValue = overrideEntry.getValue() * 4;
+        adminConfig.put(overrideEntry.getKey(), overriddenAdminPropValue);
+
+        Map<String, Object> props = createValidConfigProps(commonClientConfig, producerConfig, consumerConfig, adminConfig);
         TopicBasedRemoteLogMetadataManagerConfig rlmmConfig = new TopicBasedRemoteLogMetadataManagerConfig(props);
 
         assertEquals(overrideCommonPropValue, rlmmConfig.commonProperties().get(overrideEntry.getKey()));
         assertEquals(overriddenProducerPropValue, rlmmConfig.producerProperties().get(overrideEntry.getKey()));
         assertEquals(overriddenConsumerPropValue, rlmmConfig.consumerProperties().get(overrideEntry.getKey()));
+        assertEquals(overriddenAdminPropValue, rlmmConfig.adminProperties().get(overrideEntry.getKey()));
+    }
+
+    @Test
+    void verifyToStringRedactsSensitiveConfigurations() {
+        Map<String, Object> commonClientConfig = new HashMap<>();
+        commonClientConfig.put(CommonClientConfigs.RETRIES_CONFIG, 10);
+        commonClientConfig.put(CommonClientConfigs.RETRY_BACKOFF_MS_CONFIG, 1000L);
+        commonClientConfig.put(CommonClientConfigs.METADATA_MAX_AGE_CONFIG, 60000L);
+        addPasswordTypeConfigurationProperties(commonClientConfig);
+
+        Map<String, Object> producerConfig = new HashMap<>();
+        producerConfig.put(ProducerConfig.ACKS_CONFIG, "all");
+        addPasswordTypeConfigurationProperties(producerConfig);
+
+        Map<String, Object> consumerConfig = new HashMap<>();
+        consumerConfig.put(ConsumerConfig.ENABLE_AUTO_COMMIT_CONFIG, false);
+        addPasswordTypeConfigurationProperties(consumerConfig);
+
+        Map<String, Object> adminConfig = new HashMap<>();
+        adminConfig.put(AdminClientConfig.RECONNECT_BACKOFF_MS_CONFIG, 100);
+        addPasswordTypeConfigurationProperties(adminConfig);
+
+        Map<String, Object> props = createValidConfigProps(commonClientConfig, producerConfig, consumerConfig, adminConfig);
+
+        // Check for topic properties
+        TopicBasedRemoteLogMetadataManagerConfig rlmmConfig = new TopicBasedRemoteLogMetadataManagerConfig(props);
+
+        String configString = rlmmConfig.toString();
+        assertMaskedSensitiveConfigurations(configString);
+        //verify not redacted properties present
+        assertTrue(configString.contains("retries=10"));
+        assertTrue(configString.contains("acks=\"all\""));
+        assertTrue(configString.contains("enable.auto.commit=false"));
+        assertTrue(configString.contains("reconnect.backoff.ms=100"));
+    }
+
+    private Map<String, Object> createValidConfigProps() {
+        return this.createValidConfigProps(Map.of(), Map.of(), Map.of(), Map.of());
     }
 
     private Map<String, Object> createValidConfigProps(Map<String, Object> commonClientConfig,
                                                        Map<String, Object> producerConfig,
-                                                       Map<String, Object> consumerConfig) {
+                                                       Map<String, Object> consumerConfig,
+                                                       Map<String, Object> adminConfig) {
         Map<String, Object> props = new HashMap<>();
         props.put(REMOTE_LOG_METADATA_COMMON_CLIENT_PREFIX + CommonClientConfigs.BOOTSTRAP_SERVERS_CONFIG, BOOTSTRAP_SERVERS);
-        props.put(BROKER_ID, 1);
+        props.put(NODE_ID, 1);
         props.put(LOG_DIR, TestUtils.tempDirectory().getAbsolutePath());
         props.put(REMOTE_LOG_METADATA_TOPIC_REPLICATION_FACTOR_PROP, (short) 3);
         props.put(REMOTE_LOG_METADATA_TOPIC_PARTITIONS_PROP, 10);
@@ -130,6 +194,79 @@ public class TopicBasedRemoteLogMetadataManagerConfigTest {
         for (Map.Entry<String, Object> entry : consumerConfig.entrySet()) {
             props.put(REMOTE_LOG_METADATA_CONSUMER_PREFIX + entry.getKey(), entry.getValue());
         }
+        // admin configs
+        for (Map.Entry<String, Object> entry : adminConfig.entrySet()) {
+            props.put(REMOTE_LOG_METADATA_ADMIN_PREFIX + entry.getKey(), entry.getValue());
+        }
         return props;
+    }
+
+    /**
+     * Sample properties marked with {@link org.apache.kafka.common.config.ConfigDef.Type#PASSWORD} in the configuration.
+     */
+    private void addPasswordTypeConfigurationProperties(Map<String, Object> config) {
+        config.put(SslConfigs.SSL_KEYSTORE_PASSWORD_CONFIG, "keystorePassword");
+        config.put(SslConfigs.SSL_KEY_PASSWORD_CONFIG, "keyPassword");
+        config.put(SslConfigs.SSL_KEYSTORE_KEY_CONFIG, "keystoreKey");
+        config.put(SslConfigs.SSL_KEYSTORE_CERTIFICATE_CHAIN_CONFIG, "keystoreCertificate");
+        config.put(SslConfigs.SSL_TRUSTSTORE_CERTIFICATES_CONFIG, "truststoreCertificate");
+        config.put(SslConfigs.SSL_TRUSTSTORE_PASSWORD_CONFIG, "truststorePassword");
+        config.put(SaslConfigs.SASL_JAAS_CONFIG, "saslJaas");
+    }
+
+    private void assertMaskedSensitiveConfigurations(String configString) {
+        String[] sensitiveConfigKeys = {
+            SslConfigs.SSL_KEYSTORE_PASSWORD_CONFIG,
+            SslConfigs.SSL_KEY_PASSWORD_CONFIG,
+            SslConfigs.SSL_KEYSTORE_KEY_CONFIG,
+            SslConfigs.SSL_KEYSTORE_CERTIFICATE_CHAIN_CONFIG,
+            SslConfigs.SSL_TRUSTSTORE_CERTIFICATES_CONFIG,
+            SslConfigs.SSL_TRUSTSTORE_PASSWORD_CONFIG,
+            SaslConfigs.SASL_JAAS_CONFIG
+        };
+        Arrays.stream(sensitiveConfigKeys)
+                .forEach(config -> assertTrue(configString.contains(config + "=(redacted)")));
+    }
+
+    @Test
+    public void testDefaultMinIsr() {
+        Map<String, Object> props = createValidConfigProps();
+        TopicBasedRemoteLogMetadataManagerConfig rlmmConfig = new TopicBasedRemoteLogMetadataManagerConfig(props);
+        assertEquals(DEFAULT_REMOTE_LOG_METADATA_TOPIC_MIN_ISR, rlmmConfig.metadataTopicMinIsr());
+    }
+
+    @Test
+    public void testCustomMinIsr() {
+        Map<String, Object> props = createValidConfigProps();
+        short customMinIsr = 3;
+        props.put(REMOTE_LOG_METADATA_TOPIC_MIN_ISR_PROP, customMinIsr);
+        TopicBasedRemoteLogMetadataManagerConfig rlmmConfig = new TopicBasedRemoteLogMetadataManagerConfig(props);
+        assertEquals(customMinIsr, rlmmConfig.metadataTopicMinIsr());
+    }
+
+    @SuppressWarnings("removal")
+    @Test
+    public void testDeprecatedBrokerIdIsStillAccepted() {
+        Map<String, Object> props = createValidConfigProps();
+        props.remove(NODE_ID);
+        props.put(BROKER_ID, 1);
+        TopicBasedRemoteLogMetadataManagerConfig rlmmConfig = new TopicBasedRemoteLogMetadataManagerConfig(props);
+        assertTrue(rlmmConfig.consumerProperties().get(CommonClientConfigs.CLIENT_ID_CONFIG).toString().endsWith("_1_consumer"));
+    }
+
+    @SuppressWarnings("removal")
+    @Test
+    public void testNodeIdTakesPrecedenceOverDeprecatedBrokerId() {
+        Map<String, Object> props = createValidConfigProps();
+        props.put(BROKER_ID, 2);
+        TopicBasedRemoteLogMetadataManagerConfig rlmmConfig = new TopicBasedRemoteLogMetadataManagerConfig(props);
+        assertTrue(rlmmConfig.consumerProperties().get(CommonClientConfigs.CLIENT_ID_CONFIG).toString().endsWith("_1_consumer"));
+    }
+
+    @Test
+    public void testMissingNodeIdThrows() {
+        Map<String, Object> props = createValidConfigProps();
+        props.remove(NODE_ID);
+        assertThrows(ConfigException.class, () -> new TopicBasedRemoteLogMetadataManagerConfig(props));
     }
 }

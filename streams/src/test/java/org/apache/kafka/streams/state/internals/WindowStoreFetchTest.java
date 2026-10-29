@@ -27,11 +27,11 @@ import org.apache.kafka.streams.StreamsConfig;
 import org.apache.kafka.streams.TestInputTopic;
 import org.apache.kafka.streams.Topology;
 import org.apache.kafka.streams.TopologyTestDriver;
+import org.apache.kafka.streams.TopologyTestDriverBuilder;
 import org.apache.kafka.streams.kstream.Consumed;
 import org.apache.kafka.streams.kstream.Grouped;
 import org.apache.kafka.streams.kstream.KStream;
 import org.apache.kafka.streams.kstream.Materialized;
-import org.apache.kafka.streams.kstream.TimeWindowedKStream;
 import org.apache.kafka.streams.kstream.TimeWindows;
 import org.apache.kafka.streams.kstream.Windowed;
 import org.apache.kafka.streams.kstream.internals.TimeWindow;
@@ -61,8 +61,7 @@ import static java.time.Duration.ofMillis;
 import static org.apache.kafka.common.utils.Utils.mkEntry;
 import static org.apache.kafka.common.utils.Utils.mkMap;
 import static org.apache.kafka.common.utils.Utils.mkProperties;
-import static org.hamcrest.CoreMatchers.is;
-import static org.hamcrest.MatcherAssert.assertThat;
+import static org.junit.jupiter.api.Assertions.assertEquals;
 import static org.junit.jupiter.api.Assertions.assertNotNull;
 
 public class WindowStoreFetchTest {
@@ -87,8 +86,6 @@ public class WindowStoreFetchTest {
     private String innerHigh;
     private String innerLowBetween;
     private String innerHighBetween;
-
-    private TimeWindowedKStream<String, String> windowedStream;
 
     public void setup(final StoreType storeType, 
                       final boolean enableLogging, 
@@ -171,7 +168,7 @@ public class WindowStoreFetchTest {
 
         final Topology topology = builder.build();
 
-        try (final TopologyTestDriver driver = new TopologyTestDriver(topology)) {
+        try (final TopologyTestDriver driver = new TopologyTestDriverBuilder(topology).build()) {
             //get input topic and stateStore
             final TestInputTopic<String, String> input = driver
                     .createInputTopic("input", new StringSerializer(), new StringSerializer());
@@ -236,7 +233,7 @@ public class WindowStoreFetchTest {
              final KeyValueIterator<Windowed<String>, Long> expectedIterator = forward ? store.fetchAll(0, Long.MAX_VALUE) : store.backwardFetchAll(0, Long.MAX_VALUE)) {
             final List<KeyValue<Windowed<String>, Long>> result = Utils.toList(resultIterator);
             final List<KeyValue<Windowed<String>, Long>> expected = filterList(expectedIterator, from, to);
-            assertThat(result, is(expected));
+            assertEquals(expected, result);
         }
     }
 

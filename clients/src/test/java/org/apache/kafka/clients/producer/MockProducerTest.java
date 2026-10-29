@@ -23,7 +23,7 @@ import org.apache.kafka.common.KafkaException;
 import org.apache.kafka.common.PartitionInfo;
 import org.apache.kafka.common.TopicPartition;
 import org.apache.kafka.common.errors.ProducerFencedException;
-import org.apache.kafka.common.record.RecordBatch;
+import org.apache.kafka.common.record.internal.RecordBatch;
 import org.apache.kafka.common.serialization.IntegerSerializer;
 import org.apache.kafka.common.serialization.StringSerializer;
 import org.apache.kafka.test.MockSerializer;
@@ -48,14 +48,14 @@ import static org.junit.jupiter.api.Assertions.assertInstanceOf;
 import static org.junit.jupiter.api.Assertions.assertNotNull;
 import static org.junit.jupiter.api.Assertions.assertThrows;
 import static org.junit.jupiter.api.Assertions.assertTrue;
-import static org.junit.jupiter.api.Assertions.fail;
 
+@SuppressWarnings("removal")
 public class MockProducerTest {
 
     private final String topic = "topic";
-    private MockProducer<byte[], byte[]> producer;
-    private final ProducerRecord<byte[], byte[]> record1 = new ProducerRecord<>(topic, "key1".getBytes(), "value1".getBytes());
-    private final ProducerRecord<byte[], byte[]> record2 = new ProducerRecord<>(topic, "key2".getBytes(), "value2".getBytes());
+    private MockProducer<String, String> producer;
+    private final ProducerRecord<String, String> record1 = new ProducerRecord<>(topic, "key1", "value1");
+    private final ProducerRecord<String, String> record2 = new ProducerRecord<>(topic, "key2", "value2");
     private final String groupId = "group";
 
     private void buildMockProducer(boolean autoComplete) {
@@ -114,12 +114,10 @@ public class MockProducerTest {
         assertFalse(md2.isDone(), "Second request still incomplete");
         IllegalArgumentException e = new IllegalArgumentException("blah");
         assertTrue(producer.errorNext(e), "Complete the second request with an error");
-        try {
-            md2.get();
-            fail("Expected error to be thrown");
-        } catch (ExecutionException err) {
-            assertEquals(e, err.getCause());
-        }
+
+        ExecutionException err = assertThrows(ExecutionException.class, md2::get);
+        assertEquals(e, err.getCause());
+
         assertFalse(producer.completeNext(), "No more requests to complete");
 
         Future<RecordMetadata> md3 = producer.send(record1);
@@ -318,7 +316,7 @@ public class MockProducerTest {
 
         producer.commitTransaction();
 
-        List<ProducerRecord<byte[], byte[]>> expectedResult = new ArrayList<>();
+        List<ProducerRecord<String, String>> expectedResult = new ArrayList<>();
         expectedResult.add(record1);
         expectedResult.add(record2);
 
@@ -385,7 +383,7 @@ public class MockProducerTest {
         producer.beginTransaction();
         producer.abortTransaction();
 
-        List<ProducerRecord<byte[], byte[]>> expectedResult = new ArrayList<>();
+        List<ProducerRecord<String, String>> expectedResult = new ArrayList<>();
         expectedResult.add(record1);
         expectedResult.add(record2);
 
@@ -724,19 +722,16 @@ public class MockProducerTest {
         buildMockProducer(false);
         Future<RecordMetadata> metadata = producer.send(record2, (md, exception) -> {
             assertNotNull(md);
-            assertEquals(md.offset(), -1L, "Invalid offset");
-            assertEquals(md.timestamp(), RecordBatch.NO_TIMESTAMP, "Invalid timestamp");
-            assertEquals(md.serializedKeySize(), -1L, "Invalid Serialized Key size");
-            assertEquals(md.serializedValueSize(), -1L, "Invalid Serialized value size");
+            assertEquals(-1L, md.offset(), "Invalid offset");
+            assertEquals(RecordBatch.NO_TIMESTAMP, md.timestamp(), "Invalid timestamp");
+            assertEquals(-1L, md.serializedKeySize(), "Invalid Serialized Key size");
+            assertEquals(-1L, md.serializedValueSize(), "Invalid Serialized value size");
         });
         IllegalArgumentException e = new IllegalArgumentException("dummy exception");
         assertTrue(producer.errorNext(e), "Complete the second request with an error");
-        try {
-            metadata.get();
-            fail("Something went wrong, expected an error");
-        } catch (ExecutionException err) {
-            assertEquals(e, err.getCause());
-        }
+
+        ExecutionException err = assertThrows(ExecutionException.class, metadata::get);
+        assertEquals(e, err.getCause());
     }
 
     private boolean isError(Future<?> future) {

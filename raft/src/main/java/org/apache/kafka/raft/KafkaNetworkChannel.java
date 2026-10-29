@@ -19,11 +19,13 @@ package org.apache.kafka.raft;
 import org.apache.kafka.clients.ClientResponse;
 import org.apache.kafka.clients.KafkaClient;
 import org.apache.kafka.common.Node;
+import org.apache.kafka.common.message.AddRaftVoterRequestData;
 import org.apache.kafka.common.message.ApiVersionsRequestData;
 import org.apache.kafka.common.message.BeginQuorumEpochRequestData;
 import org.apache.kafka.common.message.EndQuorumEpochRequestData;
 import org.apache.kafka.common.message.FetchRequestData;
 import org.apache.kafka.common.message.FetchSnapshotRequestData;
+import org.apache.kafka.common.message.RemoveRaftVoterRequestData;
 import org.apache.kafka.common.message.UpdateRaftVoterRequestData;
 import org.apache.kafka.common.message.VoteRequestData;
 import org.apache.kafka.common.network.ListenerName;
@@ -31,11 +33,13 @@ import org.apache.kafka.common.protocol.ApiKeys;
 import org.apache.kafka.common.protocol.ApiMessage;
 import org.apache.kafka.common.protocol.Errors;
 import org.apache.kafka.common.requests.AbstractRequest;
+import org.apache.kafka.common.requests.AddRaftVoterRequest;
 import org.apache.kafka.common.requests.ApiVersionsRequest;
 import org.apache.kafka.common.requests.BeginQuorumEpochRequest;
 import org.apache.kafka.common.requests.EndQuorumEpochRequest;
 import org.apache.kafka.common.requests.FetchRequest;
 import org.apache.kafka.common.requests.FetchSnapshotRequest;
+import org.apache.kafka.common.requests.RemoveRaftVoterRequest;
 import org.apache.kafka.common.requests.UpdateRaftVoterRequest;
 import org.apache.kafka.common.requests.VoteRequest;
 import org.apache.kafka.common.utils.Time;
@@ -49,6 +53,8 @@ import java.util.ArrayList;
 import java.util.Collection;
 import java.util.List;
 import java.util.Queue;
+import java.util.concurrent.CompletableFuture;
+import java.util.concurrent.CompletionStage;
 import java.util.concurrent.ConcurrentLinkedQueue;
 import java.util.concurrent.atomic.AtomicInteger;
 
@@ -112,35 +118,41 @@ public class KafkaNetworkChannel implements NetworkChannel {
     }
 
     @Override
-    public void send(RaftRequest.Outbound request) {
+    public CompletionStage<RaftResponse.Inbound> send(RaftRequest.Outbound request) {
         Node node = request.destination();
         if (node != null) {
-            requestThread.sendRequest(new RequestAndCompletionHandler(
-                request.createdTimeMs(),
-                node,
-                buildRequest(request.data()),
-                response -> sendOnComplete(request, response)
-            ));
-        } else
-            sendCompleteFuture(request, errorResponse(request.data(), Errors.BROKER_NOT_AVAILABLE));
+            var future = new CompletableFuture<RaftResponse.Inbound>();
+            requestThread.sendRequest(
+                new RequestAndCompletionHandler(
+                    request.createdTimeMs(),
+                    node,
+                    buildRequest(request.data()),
+                    response -> sendOnCompleted(request, response, future)
+                )
+            );
+            return future;
+        } else {
+            return CompletableFuture.completedFuture(
+                new RaftResponse.Inbound(
+                    request.correlationId(),
+                    errorResponse(request.data(), Errors.BROKER_NOT_AVAILABLE),
+                    request.destination()
+                )
+            );
+        }
     }
 
-    private void sendCompleteFuture(RaftRequest.Outbound request, ApiMessage message) {
-        RaftResponse.Inbound response = new RaftResponse.Inbound(
-                request.correlationId(),
-                message,
-                request.destination()
-        );
-        request.completion.complete(response);
-    }
-
-    private void sendOnComplete(RaftRequest.Outbound request, ClientResponse clientResponse) {
+    private void sendOnCompleted(
+        RaftRequest.Outbound request,
+        ClientResponse clientResponse,
+        CompletableFuture<RaftResponse.Inbound> future
+    ) {
         ApiMessage response;
         if (clientResponse.versionMismatch() != null) {
             log.error("Request {} failed due to unsupported version error", request, clientResponse.versionMismatch());
             response = errorResponse(request.data(), Errors.UNSUPPORTED_VERSION);
         } else if (clientResponse.authenticationException() != null) {
-            // For now we treat authentication errors as retriable. We use the
+            // For now, we treat authentication errors as retriable. We use the
             // `NETWORK_EXCEPTION` error code for lack of a good alternative.
             // Note that `NodeToControllerChannelManager` will still log the
             // authentication errors so that users have a chance to fix the problem.
@@ -151,7 +163,14 @@ public class KafkaNetworkChannel implements NetworkChannel {
         } else {
             response = clientResponse.responseBody().data();
         }
-        sendCompleteFuture(request, response);
+
+        future.complete(
+            new RaftResponse.Inbound(
+                request.correlationId(),
+                response,
+                request.destination()
+            )
+        );
     }
 
     private ApiMessage errorResponse(ApiMessage request, Errors error) {
@@ -181,20 +200,25 @@ public class KafkaNetworkChannel implements NetworkChannel {
     static AbstractRequest.Builder<? extends AbstractRequest> buildRequest(ApiMessage requestData) {
         if (requestData instanceof VoteRequestData)
             return new VoteRequest.Builder((VoteRequestData) requestData);
-        if (requestData instanceof BeginQuorumEpochRequestData)
+        else if (requestData instanceof BeginQuorumEpochRequestData)
             return new BeginQuorumEpochRequest.Builder((BeginQuorumEpochRequestData) requestData);
-        if (requestData instanceof EndQuorumEpochRequestData)
+        else if (requestData instanceof EndQuorumEpochRequestData)
             return new EndQuorumEpochRequest.Builder((EndQuorumEpochRequestData) requestData);
-        if (requestData instanceof FetchRequestData)
+        else if (requestData instanceof FetchRequestData)
             return new FetchRequest.SimpleBuilder((FetchRequestData) requestData);
-        if (requestData instanceof FetchSnapshotRequestData)
+        else if (requestData instanceof FetchSnapshotRequestData)
             return new FetchSnapshotRequest.Builder((FetchSnapshotRequestData) requestData);
-        if (requestData instanceof UpdateRaftVoterRequestData)
+        else if (requestData instanceof UpdateRaftVoterRequestData)
             return new UpdateRaftVoterRequest.Builder((UpdateRaftVoterRequestData) requestData);
-        if (requestData instanceof ApiVersionsRequestData)
+        else if (requestData instanceof AddRaftVoterRequestData)
+            return new AddRaftVoterRequest.Builder((AddRaftVoterRequestData) requestData);
+        else if (requestData instanceof RemoveRaftVoterRequestData)
+            return new RemoveRaftVoterRequest.Builder((RemoveRaftVoterRequestData) requestData);
+        else if (requestData instanceof ApiVersionsRequestData)
             return new ApiVersionsRequest.Builder((ApiVersionsRequestData) requestData,
                 ApiKeys.API_VERSIONS.oldestVersion(),
                 ApiKeys.API_VERSIONS.latestVersion());
-        throw new IllegalArgumentException("Unexpected type for requestData: " + requestData);
+        else
+            throw new IllegalArgumentException("Unexpected type for requestData: " + requestData);
     }
 }

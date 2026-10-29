@@ -17,14 +17,12 @@
 package org.apache.kafka.server.record;
 
 import org.apache.kafka.common.compress.Compression;
-import org.apache.kafka.common.record.CompressionType;
+import org.apache.kafka.common.record.internal.CompressionType;
 
 import java.util.List;
 import java.util.Locale;
 import java.util.Optional;
 import java.util.stream.Collectors;
-
-import static java.util.Arrays.asList;
 
 public enum BrokerCompressionType {
     UNCOMPRESSED("uncompressed"),
@@ -34,7 +32,7 @@ public enum BrokerCompressionType {
     GZIP("gzip"),
     PRODUCER("producer");
 
-    private static final List<BrokerCompressionType> VALUES = asList(values());
+    private static final List<BrokerCompressionType> VALUES = List.of(values());
 
     public final String name;
 

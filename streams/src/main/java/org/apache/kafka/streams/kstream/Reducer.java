@@ -16,6 +16,7 @@
  */
 package org.apache.kafka.streams.kstream;
 
+import org.apache.kafka.common.annotation.InterfaceAudience;
 import org.apache.kafka.streams.KeyValue;
 
 /**
@@ -36,6 +37,8 @@ import org.apache.kafka.streams.KeyValue;
  * @see SessionWindowedKStream#reduce(Reducer, Materialized)
  * @see Aggregator
  */
+@FunctionalInterface
+@InterfaceAudience.Public
 public interface Reducer<V> {
 
     /**

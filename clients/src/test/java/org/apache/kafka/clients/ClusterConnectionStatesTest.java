@@ -18,8 +18,8 @@
 package org.apache.kafka.clients;
 
 import org.apache.kafka.common.errors.AuthenticationException;
-import org.apache.kafka.common.utils.LogContext;
 import org.apache.kafka.common.utils.MockTime;
+import org.apache.kafka.common.utils.internals.LogContext;
 
 import org.junit.jupiter.api.BeforeEach;
 import org.junit.jupiter.api.Test;
@@ -186,7 +186,7 @@ public class ClusterConnectionStatesTest {
 
         connectionStates.authenticationFailed(nodeId1, time.milliseconds(), new AuthenticationException("No path to CA for certificate!"));
         time.sleep(1000);
-        assertEquals(connectionStates.connectionState(nodeId1), ConnectionState.AUTHENTICATION_FAILED);
+        assertEquals(ConnectionState.AUTHENTICATION_FAILED, connectionStates.connectionState(nodeId1));
         assertNotNull(connectionStates.authenticationException(nodeId1));
         assertFalse(connectionStates.hasReadyNodes(time.milliseconds()));
         assertFalse(connectionStates.canConnect(nodeId1, time.milliseconds()));
@@ -210,7 +210,7 @@ public class ClusterConnectionStatesTest {
         connectionStates.remove(nodeId1);
         assertTrue(connectionStates.canConnect(nodeId1, time.milliseconds()));
         assertFalse(connectionStates.isBlackedOut(nodeId1, time.milliseconds()));
-        assertEquals(connectionStates.connectionDelay(nodeId1, time.milliseconds()), 0L);
+        assertEquals(0L, connectionStates.connectionDelay(nodeId1, time.milliseconds()));
     }
 
     @Test

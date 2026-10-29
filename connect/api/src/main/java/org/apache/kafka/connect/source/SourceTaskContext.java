@@ -16,6 +16,8 @@
  */
 package org.apache.kafka.connect.source;
 
+import org.apache.kafka.common.annotation.InterfaceAudience;
+import org.apache.kafka.common.metrics.PluginMetrics;
 import org.apache.kafka.connect.storage.OffsetStorageReader;
 
 import java.util.Map;
@@ -24,6 +26,7 @@ import java.util.Map;
  * SourceTaskContext is provided to SourceTasks to allow them to interact with the underlying
  * runtime.
  */
+@InterfaceAudience.Public
 public interface SourceTaskContext {
     /**
      * Get the Task configuration. This is the latest configuration and may differ from that passed on startup.
@@ -63,4 +66,26 @@ public interface SourceTaskContext {
     default TransactionContext transactionContext() {
         return null;
     }
+
+    /**
+     * Get a {@link PluginMetrics} that can be used to define metrics
+     *
+     * <p>This method was added in Apache Kafka 4.1. Tasks that use this method but want to
+     * maintain backward compatibility so they can also be deployed to older Connect runtimes
+     * should guard the call to this method with a try-catch block, since calling this method will result in a
+     * {@link NoSuchMethodError} or {@link NoClassDefFoundError} when the connector is deployed to
+     * Connect runtimes older than Kafka 4.1. For example:
+     * <pre>
+     *     PluginMetrics pluginMetrics;
+     *     try {
+     *         pluginMetrics = context.pluginMetrics();
+     *     } catch (NoSuchMethodError | NoClassDefFoundError e) {
+     *         pluginMetrics = null;
+     *     }
+     * </pre>
+     *
+     * @return the pluginMetrics instance
+     * @since 4.1
+     */
+    PluginMetrics pluginMetrics();
 }

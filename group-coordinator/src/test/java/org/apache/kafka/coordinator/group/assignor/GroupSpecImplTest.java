@@ -17,6 +17,8 @@
 package org.apache.kafka.coordinator.group.assignor;
 
 import org.apache.kafka.common.Uuid;
+import org.apache.kafka.coordinator.common.runtime.CoordinatorMetadataImage;
+import org.apache.kafka.coordinator.common.runtime.MetadataImageBuilder;
 import org.apache.kafka.coordinator.group.api.assignor.SubscriptionType;
 import org.apache.kafka.coordinator.group.modern.Assignment;
 import org.apache.kafka.coordinator.group.modern.GroupSpecImpl;
@@ -25,7 +27,6 @@ import org.apache.kafka.coordinator.group.modern.MemberSubscriptionAndAssignment
 import org.junit.jupiter.api.BeforeEach;
 import org.junit.jupiter.api.Test;
 
-import java.util.Collections;
 import java.util.HashMap;
 import java.util.Map;
 import java.util.Optional;
@@ -39,18 +40,20 @@ import static org.junit.jupiter.api.Assertions.assertTrue;
 
 public class GroupSpecImplTest {
     private static final String TEST_MEMBER = "test-member";
+    private CoordinatorMetadataImage metadataImage;
     private Map<String, MemberSubscriptionAndAssignmentImpl> members;
     private SubscriptionType subscriptionType;
-    private Map<Uuid, Map<Integer, String>> invertedTargetAssignment;
     private GroupSpecImpl groupSpec;
     private Uuid topicId;
 
     @BeforeEach
     void setUp() {
+        topicId = Uuid.randomUuid();
+        metadataImage = new MetadataImageBuilder()
+            .addTopic(topicId, "topic", 3)
+            .buildCoordinatorMetadataImage();
         members = new HashMap<>();
         subscriptionType = SubscriptionType.HOMOGENEOUS;
-        invertedTargetAssignment = new HashMap<>();
-        topicId = Uuid.randomUuid();
 
         members.put(TEST_MEMBER,  new MemberSubscriptionAndAssignmentImpl(
             Optional.empty(),
@@ -60,9 +63,9 @@ public class GroupSpecImplTest {
         ));
 
         groupSpec = new GroupSpecImpl(
+            metadataImage,
             members,
-            subscriptionType,
-            invertedTargetAssignment
+            subscriptionType
         );
     }
 
@@ -78,13 +81,25 @@ public class GroupSpecImplTest {
 
     @Test
     void testIsPartitionAssigned() {
-        Map<Integer, String> partitionMap = new HashMap<>();
-        partitionMap.put(1, "test-member");
-        invertedTargetAssignment.put(topicId, partitionMap);
+        Uuid deletedTopicId = Uuid.randomUuid();
+        members.put(TEST_MEMBER, new MemberSubscriptionAndAssignmentImpl(
+            Optional.empty(),
+            Optional.empty(),
+            Set.of(topicId, deletedTopicId),
+            new Assignment(Map.of(
+                // Partitions -1 and 3 do not exist.
+                topicId, Set.of(-1, 0, 2, 3),
+                // The deleted topic is not in the metadata image, so none of its partitions exist.
+                deletedTopicId, Set.of(0)
+            ))
+        ));
 
-        assertTrue(groupSpec.isPartitionAssigned(topicId, 1));
-        assertFalse(groupSpec.isPartitionAssigned(topicId, 2));
-        assertFalse(groupSpec.isPartitionAssigned(Uuid.randomUuid(), 2));
+        assertFalse(groupSpec.isPartitionAssigned(topicId, -1));
+        assertTrue(groupSpec.isPartitionAssigned(topicId, 0));
+        assertFalse(groupSpec.isPartitionAssigned(topicId, 1));
+        assertTrue(groupSpec.isPartitionAssigned(topicId, 2));
+        assertFalse(groupSpec.isPartitionAssigned(topicId, 3));
+        assertFalse(groupSpec.isPartitionAssigned(deletedTopicId, 0));
     }
 
     @Test
@@ -108,6 +123,23 @@ public class GroupSpecImplTest {
         ));
 
         assertEquals(topicPartitions, groupSpec.memberAssignment(TEST_MEMBER).partitions());
-        assertEquals(Collections.emptyMap(), groupSpec.memberAssignment("unknown-member").partitions());
+        assertEquals(Map.of(), groupSpec.memberAssignment("unknown-member").partitions());
+    }
+
+    @Test
+    void testIsPartitionAssignable() {
+        // Empty allowed map.
+        assertTrue(groupSpec.isPartitionAssignable(topicId, 1));
+
+        // Allowed map with data.
+        groupSpec = new GroupSpecImpl(
+            metadataImage,
+            members,
+            subscriptionType,
+            Optional.of(Map.of(topicId, Set.of(0)))
+        );
+
+        assertTrue(groupSpec.isPartitionAssignable(topicId, 0));
+        assertFalse(groupSpec.isPartitionAssignable(topicId, 1));
     }
 }

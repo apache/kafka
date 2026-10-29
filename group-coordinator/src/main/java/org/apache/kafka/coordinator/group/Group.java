@@ -19,6 +19,7 @@ package org.apache.kafka.coordinator.group;
 import org.apache.kafka.common.KafkaException;
 import org.apache.kafka.common.message.ListGroupsResponseData;
 import org.apache.kafka.coordinator.common.runtime.CoordinatorRecord;
+import org.apache.kafka.coordinator.common.runtime.CoordinatorTimer;
 
 import java.util.Arrays;
 import java.util.List;
@@ -37,6 +38,7 @@ public interface Group {
         CONSUMER("consumer"),
         CLASSIC("classic"),
         SHARE("share"),
+        STREAMS("streams"),
         UNKNOWN("unknown");
 
         private final String name;
@@ -110,14 +112,14 @@ public interface Group {
      *                                  for consumer groups.
      * @param isTransactional           Whether the offset commit is transactional or not.
      * @param apiVersion                The api version.
+     * @return A validator for per-partition validation.
      */
-    void validateOffsetCommit(
+    CommitPartitionValidator validateOffsetCommit(
         String memberId,
         String groupInstanceId,
         int generationIdOrMemberEpoch,
         boolean isTransactional,
-        short apiVersion
-
+        int apiVersion
     ) throws KafkaException;
 
     /**
@@ -160,6 +162,13 @@ public interface Group {
     void createGroupTombstoneRecords(List<CoordinatorRecord> records);
 
     /**
+     * Cancel any timers associated with the group.
+     *
+     * @param timer The coordinator timer.
+     */
+    default void cancelTimers(CoordinatorTimer<CoordinatorRecord> timer) {}
+
+    /**
      * @return Whether the group is in Empty state.
      */
     boolean isEmpty();
@@ -194,4 +203,29 @@ public interface Group {
      * @return The number of members.
      */
     int numMembers();
+
+    /**
+     * Requests a metadata refresh.
+     */
+    void requestMetadataRefresh();
+
+    /**
+     * Whether this group's metadata record should be tombstoned by the natural-expiration sweep
+     * after its offsets have been expired. Returning {@code false} preserves the group's
+     * metadata for the current sweep — useful when a group-type-specific async cleanup needs to
+     * run first (e.g. the streams topology-description plugin cycle). The next sweep
+     * re-evaluates and proceeds once the override returns {@code true}.
+     *
+     * <p><b>This does not prevent expiration of the group's offsets.</b> The caller always runs
+     * {@code cleanupExpiredOffsets} for the group before consulting this method, so a
+     * {@code false} return only suppresses the group-metadata tombstone — committed offsets
+     * past {@code offsets.retention.ms} are still removed.
+     *
+     * @param config The broker-level group coordinator config; passed so per-group-type overrides
+     *               can read broker-side feature flags (e.g. whether a streams topology plugin is
+     *               configured).
+     */
+    default boolean shouldExpire(GroupCoordinatorConfig config) {
+        return true;
+    }
 }

@@ -21,15 +21,13 @@ import org.apache.kafka.common.message.AlterPartitionRequestData.BrokerState;
 import java.util.List;
 import java.util.Objects;
 import java.util.Optional;
+import java.util.Set;
 import java.util.stream.Collectors;
 
 public class LeaderAndIsr {
     public static final int INITIAL_LEADER_EPOCH = 0;
     public static final int INITIAL_PARTITION_EPOCH = 0;
     public static final int NO_LEADER = -1;
-    public static final int NO_EPOCH = -1;
-    public static final int LEADER_DURING_DELETE = -2;
-    public static final int EPOCH_DURING_DELETE = -2;
 
     private final int leader;
     private final int leaderEpoch;
@@ -56,7 +54,7 @@ public class LeaderAndIsr {
                 leader,
                 leaderEpoch,
                 leaderRecoveryState,
-                isr.stream().map(brokerId -> new BrokerState().setBrokerId(brokerId)).collect(Collectors.toList()),
+                isr.stream().map(brokerId -> new BrokerState().setBrokerId(brokerId)).toList(),
                 partitionEpoch
         );
     }
@@ -73,10 +71,6 @@ public class LeaderAndIsr {
         this.leaderRecoveryState = leaderRecoveryState;
         this.isrWithBrokerEpoch = isrWithBrokerEpoch;
         this.partitionEpoch = partitionEpoch;
-    }
-
-    public static LeaderAndIsr duringDelete(List<Integer> isr) {
-        return new LeaderAndIsr(LEADER_DURING_DELETE, isr);
     }
 
     public int leader() {
@@ -127,24 +121,10 @@ public class LeaderAndIsr {
         return leader == LeaderAndIsr.NO_LEADER ? Optional.empty() : Optional.of(leader);
     }
 
-    public List<Integer> isr() {
+    public Set<Integer> isr() {
         return isrWithBrokerEpoch.stream()
                 .map(BrokerState::brokerId)
-                .collect(Collectors.toList());
-    }
-
-    public boolean equalsAllowStalePartitionEpoch(LeaderAndIsr other) {
-        if (this == other) {
-            return true;
-        } else if (other == null) {
-            return false;
-        } else {
-            return leader == other.leader &&
-                    leaderEpoch == other.leaderEpoch &&
-                    isrWithBrokerEpoch.equals(other.isrWithBrokerEpoch) &&
-                    leaderRecoveryState == other.leaderRecoveryState &&
-                    partitionEpoch <= other.partitionEpoch;
-        }
+                .collect(Collectors.toUnmodifiableSet());
     }
 
     @Override

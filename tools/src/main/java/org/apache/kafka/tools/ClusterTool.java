@@ -16,26 +16,33 @@
  */
 package org.apache.kafka.tools;
 
+import org.apache.kafka.clients.NodeApiVersions;
 import org.apache.kafka.clients.admin.Admin;
 import org.apache.kafka.clients.admin.DescribeClusterOptions;
+import org.apache.kafka.clients.admin.DescribeFeaturesOptions;
+import org.apache.kafka.clients.admin.internals.InternalDescribeFeaturesResult;
 import org.apache.kafka.common.Node;
 import org.apache.kafka.common.errors.UnsupportedVersionException;
-import org.apache.kafka.common.utils.Exit;
 import org.apache.kafka.common.utils.Utils;
+import org.apache.kafka.common.utils.internals.Exit;
 import org.apache.kafka.server.util.CommandLineUtils;
 
 import net.sourceforge.argparse4j.ArgumentParsers;
 import net.sourceforge.argparse4j.inf.ArgumentParser;
+import net.sourceforge.argparse4j.inf.ArgumentParserException;
 import net.sourceforge.argparse4j.inf.MutuallyExclusiveGroup;
 import net.sourceforge.argparse4j.inf.Namespace;
 import net.sourceforge.argparse4j.inf.Subparser;
 import net.sourceforge.argparse4j.inf.Subparsers;
 
 import java.io.PrintStream;
-import java.util.Arrays;
 import java.util.Collection;
+import java.util.Comparator;
+import java.util.List;
+import java.util.Map;
 import java.util.Optional;
 import java.util.Properties;
+import java.util.TreeMap;
 import java.util.concurrent.ExecutionException;
 
 import static net.sourceforge.argparse4j.impl.Arguments.store;
@@ -63,7 +70,8 @@ public class ClusterTool {
 
     static void execute(String... args) throws Exception {
         ArgumentParser parser = ArgumentParsers
-                .newArgumentParser("kafka-cluster")
+                .newFor("kafka-cluster")
+                .build()
                 .defaultHelp(true)
                 .description("The Kafka cluster tool.");
         Subparsers subparsers = parser.addSubparsers().dest("command");
@@ -72,9 +80,13 @@ public class ClusterTool {
                 .help("Get information about the ID of a cluster.");
         Subparser unregisterParser = subparsers.addParser("unregister")
                 .help("Unregister a broker.");
+        Subparser unregisterControllerParser = subparsers.addParser("unregister-controller")
+                .help("Unregister a controller.");
         Subparser listEndpoints = subparsers.addParser("list-endpoints")
                 .help("List endpoints");
-        for (Subparser subpparser : Arrays.asList(clusterIdParser, unregisterParser, listEndpoints)) {
+        Subparser apiVersionsParser = subparsers.addParser("api-versions")
+                .help("Get information about the api versions of the brokers or controllers.");
+        for (Subparser subpparser : List.of(clusterIdParser, unregisterParser, unregisterControllerParser, listEndpoints, apiVersionsParser)) {
             MutuallyExclusiveGroup connectionOptions = subpparser.addMutuallyExclusiveGroup().required(true);
             connectionOptions.addArgument("--bootstrap-server", "-b")
                     .action(store())
@@ -82,23 +94,40 @@ public class ClusterTool {
             connectionOptions.addArgument("--bootstrap-controller", "-C")
                     .action(store())
                     .help("A list of host/port pairs to use for establishing the connection to the KRaft controllers.");
-            subpparser.addArgument("--config", "-c")
+            subpparser.addArgument("--config")
                     .action(store())
-                    .help("A property file containing configurations for the Admin client.");
+                    .help("(DEPRECATED) A property file containing configurations for the Admin client. " +
+                            "This option will be removed in a future version. Use --command-config instead.");
+            subpparser.addArgument("--command-config", "-c")
+                    .action(store())
+                    .help("Config properties file for the Admin client.");
         }
         unregisterParser.addArgument("--id", "-i")
                 .type(Integer.class)
                 .action(store())
                 .required(true)
                 .help("The ID of the broker to unregister.");
+        unregisterControllerParser.addArgument("--id", "-i")
+                .type(Integer.class)
+                .action(store())
+                .required(true)
+                .help("The ID of the controller to unregister.");
         listEndpoints.addArgument("--include-fenced-brokers")
                 .action(storeTrue())
                 .help("Whether to include fenced brokers when listing broker endpoints");
 
         Namespace namespace = parser.parseArgsOrFail(args);
         String command = namespace.getString("command");
-        String configPath = namespace.getString("config");
-        Properties properties = (configPath == null) ? new Properties() : Utils.loadProps(configPath);
+        String configFile = namespace.getString("config");
+        String commandConfigFile = namespace.getString("command_config");
+        if (configFile != null && commandConfigFile != null) {
+            throw new ArgumentParserException("--config and --command-config cannot be specified together.", parser);
+        }
+        if (configFile != null) {
+            System.out.println("Option --config has been deprecated and will be removed in a future version. Use --command-config instead.");
+            commandConfigFile = configFile;
+        }
+        Properties properties = (commandConfigFile != null) ? Utils.loadProps(commandConfigFile) : new Properties();
 
         CommandLineUtils.initializeBootstrapProperties(properties,
                 Optional.ofNullable(namespace.getString("bootstrap_server")),
@@ -117,6 +146,12 @@ public class ClusterTool {
                 }
                 break;
             }
+            case "unregister-controller": {
+                try (Admin adminClient = Admin.create(properties)) {
+                    unregisterControllerCommand(System.out, adminClient, namespace.getInt("id"));
+                }
+                break;
+            }
             case "list-endpoints": {
                 try (Admin adminClient = Admin.create(properties)) {
                     boolean includeFencedBrokers = Optional.of(namespace.getBoolean("include_fenced_brokers")).orElse(false);
@@ -125,6 +160,12 @@ public class ClusterTool {
                         throw new IllegalArgumentException("The option --include-fenced-brokers is only supported with --bootstrap-server option");
                     }
                     listEndpoints(System.out, adminClient, listControllerEndpoints, includeFencedBrokers);
+                }
+                break;
+            }
+            case "api-versions": {
+                try (Admin adminClient = Admin.create(properties)) {
+                    apiVersionsCommand(System.out, adminClient);
                 }
                 break;
             }
@@ -156,18 +197,32 @@ public class ClusterTool {
         }
     }
 
+    static void unregisterControllerCommand(PrintStream stream, Admin adminClient, int id) throws Exception {
+        try {
+            adminClient.unregisterController(id).all().get();
+            stream.println("Controller " + id + " is no longer registered.");
+        } catch (ExecutionException ee) {
+            Throwable cause = ee.getCause();
+            if (cause instanceof UnsupportedVersionException) {
+                stream.println("The target cluster does not support the controller unregistration API.");
+            } else {
+                throw ee;
+            }
+        }
+    }
+
     static void listEndpoints(PrintStream stream, Admin adminClient, boolean listControllerEndpoints, boolean includeFencedBrokers) throws Exception {
         try {
             DescribeClusterOptions option = new DescribeClusterOptions().includeFencedBrokers(includeFencedBrokers);
             Collection<Node> nodes = adminClient.describeCluster(option).nodes().get();
 
             String maxHostLength = String.valueOf(nodes.stream().map(node -> node.host().length()).max(Integer::compareTo).orElse(100));
-            String maxRackLength = String.valueOf(nodes.stream().filter(node -> node.hasRack()).map(node -> node.rack().length()).max(Integer::compareTo).orElse(10));
+            String maxRackLength = String.valueOf(nodes.stream().filter(Node::hasRack).map(node -> node.rack().length()).max(Integer::compareTo).orElse(10));
 
             if (listControllerEndpoints) {
                 String format = "%-10s %-" + maxHostLength + "s %-10s %-" + maxRackLength + "s %-15s%n";
                 stream.printf(format, "ID", "HOST", "PORT", "RACK", "ENDPOINT_TYPE");
-                nodes.stream().forEach(node -> stream.printf(format,
+                nodes.forEach(node -> stream.printf(format,
                         node.idString(),
                         node.host(),
                         node.port(),
@@ -177,7 +232,7 @@ public class ClusterTool {
             } else {
                 String format = "%-10s %-" + maxHostLength + "s %-10s %-" + maxRackLength + "s %-10s %-15s%n";
                 stream.printf(format, "ID", "HOST", "PORT", "RACK", "STATE", "ENDPOINT_TYPE");
-                nodes.stream().forEach(node -> stream.printf(format,
+                nodes.forEach(node -> stream.printf(format,
                         node.idString(),
                         node.host(),
                         node.port(),
@@ -194,5 +249,27 @@ public class ClusterTool {
                 throw ee;
             }
         }
+    }
+
+    static void apiVersionsCommand(PrintStream stream, Admin adminClient) throws Exception {
+        Collection<Node> nodes = adminClient.describeCluster().nodes().get();
+        Map<Node, InternalDescribeFeaturesResult> nodeApiVersions = new TreeMap<>(Comparator.comparingInt(Node::id));
+        nodes.forEach(node -> {
+            InternalDescribeFeaturesResult result = (InternalDescribeFeaturesResult) adminClient.describeFeatures(
+                    new DescribeFeaturesOptions().nodeId(node.id()));
+            nodeApiVersions.put(node, result);
+        });
+
+        nodeApiVersions.forEach((broker, future) -> {
+            try {
+                NodeApiVersions apiVersions = future.nodeApiVersions().get();
+                stream.print(broker + " -> " + apiVersions.toString(true) + "\n");
+            } catch (ExecutionException e) {
+                stream.print(broker + " -> ERROR: " + e.getCause() + "\n");
+            } catch (InterruptedException e) {
+                Thread.currentThread().interrupt();
+                stream.print(broker + " -> ERROR: " + e + "\n");
+            }
+        });
     }
 }

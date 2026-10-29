@@ -17,7 +17,7 @@
 
 package org.apache.kafka.controller;
 
-import org.apache.kafka.common.utils.LogContext;
+import org.apache.kafka.common.utils.internals.LogContext;
 
 import org.slf4j.Logger;
 
@@ -74,12 +74,12 @@ class EventPerformanceMonitor {
     /**
      * The period in nanoseconds.
      */
-    private long periodNs;
+    private final long periodNs;
 
     /**
      * The always-log threshold in nanoseconds.
      */
-    private long alwaysLogThresholdNs;
+    private final long alwaysLogThresholdNs;
 
     /**
      * The name of the slowest event we've seen so far, or null if none has been seen.

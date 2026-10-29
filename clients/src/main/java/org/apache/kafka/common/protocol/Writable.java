@@ -18,9 +18,9 @@
 package org.apache.kafka.common.protocol;
 
 import org.apache.kafka.common.Uuid;
-import org.apache.kafka.common.record.BaseRecords;
-import org.apache.kafka.common.record.MemoryRecords;
-import org.apache.kafka.common.record.UnalignedMemoryRecords;
+import org.apache.kafka.common.record.internal.BaseRecords;
+import org.apache.kafka.common.record.internal.MemoryRecords;
+import org.apache.kafka.common.record.internal.UnalignedMemoryRecords;
 
 import java.nio.ByteBuffer;
 

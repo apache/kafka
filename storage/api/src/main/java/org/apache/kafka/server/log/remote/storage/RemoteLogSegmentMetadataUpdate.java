@@ -17,7 +17,7 @@
 package org.apache.kafka.server.log.remote.storage;
 
 import org.apache.kafka.common.TopicIdPartition;
-import org.apache.kafka.common.annotation.InterfaceStability;
+import org.apache.kafka.common.annotation.InterfaceAudience;
 import org.apache.kafka.server.log.remote.storage.RemoteLogSegmentMetadata.CustomMetadata;
 
 import java.util.Objects;
@@ -28,7 +28,7 @@ import java.util.Optional;
  * state of the remote log segment by using {@link RemoteLogMetadataManager#updateRemoteLogSegmentMetadata(RemoteLogSegmentMetadataUpdate)}.
  * This also includes the timestamp of this event.
  */
-@InterfaceStability.Evolving
+@InterfaceAudience.Public
 public class RemoteLogSegmentMetadataUpdate extends RemoteLogMetadata {
 
     /**
@@ -48,7 +48,7 @@ public class RemoteLogSegmentMetadataUpdate extends RemoteLogMetadata {
 
     /**
      * @param remoteLogSegmentId Universally unique remote log segment id.
-     * @param eventTimestampMs   Epoch time in milli seconds at which the remote log segment is copied to the remote tier storage.
+     * @param eventTimestampMs   Epoch time in milliseconds at which this remote log segment metadata event occurred.
      * @param customMetadata     Custom metadata.
      * @param state              State of the remote log segment.
      * @param brokerId           Broker id from which this event is generated.

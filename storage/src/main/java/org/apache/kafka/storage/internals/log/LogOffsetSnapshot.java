@@ -16,60 +16,11 @@
  */
 package org.apache.kafka.storage.internals.log;
 
-import java.util.Objects;
-
 /**
  * Container class which represents a snapshot of the significant offsets for a partition. This allows fetching
  * of these offsets atomically without the possibility of a leader change affecting their consistency relative
  * to each other. See {@link UnifiedLog#fetchOffsetSnapshot()}.
  */
-public class LogOffsetSnapshot {
-
-    public final long logStartOffset;
-    public final LogOffsetMetadata logEndOffset;
-    public final LogOffsetMetadata highWatermark;
-    public final LogOffsetMetadata lastStableOffset;
-
-    public LogOffsetSnapshot(long logStartOffset,
-                             LogOffsetMetadata logEndOffset,
-                             LogOffsetMetadata highWatermark,
-                             LogOffsetMetadata lastStableOffset) {
-
-        this.logStartOffset = logStartOffset;
-        this.logEndOffset = logEndOffset;
-        this.highWatermark = highWatermark;
-        this.lastStableOffset = lastStableOffset;
-    }
-
-    @Override
-    public boolean equals(Object o) {
-        if (this == o) return true;
-        if (o == null || getClass() != o.getClass()) return false;
-
-        LogOffsetSnapshot that = (LogOffsetSnapshot) o;
-
-        return logStartOffset == that.logStartOffset &&
-                Objects.equals(logEndOffset, that.logEndOffset) &&
-                Objects.equals(highWatermark, that.highWatermark) &&
-                Objects.equals(lastStableOffset, that.lastStableOffset);
-    }
-
-    @Override
-    public int hashCode() {
-        int result = (int) (logStartOffset ^ (logStartOffset >>> 32));
-        result = 31 * result + (logEndOffset != null ? logEndOffset.hashCode() : 0);
-        result = 31 * result + (highWatermark != null ? highWatermark.hashCode() : 0);
-        result = 31 * result + (lastStableOffset != null ? lastStableOffset.hashCode() : 0);
-        return result;
-    }
-
-    @Override
-    public String toString() {
-        return "LogOffsetSnapshot(" +
-                "logStartOffset=" + logStartOffset +
-                ", logEndOffset=" + logEndOffset +
-                ", highWatermark=" + highWatermark +
-                ", lastStableOffset=" + lastStableOffset +
-                ')';
-    }
+public record LogOffsetSnapshot(long logStartOffset, LogOffsetMetadata logEndOffset, LogOffsetMetadata highWatermark,
+                                LogOffsetMetadata lastStableOffset) {
 }

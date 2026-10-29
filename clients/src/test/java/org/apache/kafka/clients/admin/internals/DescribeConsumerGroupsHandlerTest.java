@@ -30,6 +30,7 @@ import org.apache.kafka.common.Uuid;
 import org.apache.kafka.common.errors.GroupAuthorizationException;
 import org.apache.kafka.common.errors.GroupIdNotFoundException;
 import org.apache.kafka.common.errors.InvalidGroupIdException;
+import org.apache.kafka.common.errors.TopicAuthorizationException;
 import org.apache.kafka.common.errors.UnsupportedVersionException;
 import org.apache.kafka.common.message.ConsumerGroupDescribeRequestData;
 import org.apache.kafka.common.message.ConsumerGroupDescribeResponseData;
@@ -41,8 +42,8 @@ import org.apache.kafka.common.protocol.ApiMessage;
 import org.apache.kafka.common.protocol.Errors;
 import org.apache.kafka.common.requests.ConsumerGroupDescribeResponse;
 import org.apache.kafka.common.requests.DescribeGroupsResponse;
-import org.apache.kafka.common.utils.LogContext;
 import org.apache.kafka.common.utils.Utils;
+import org.apache.kafka.common.utils.internals.LogContext;
 
 import org.junit.jupiter.api.Test;
 import org.junit.jupiter.params.ParameterizedTest;
@@ -52,7 +53,6 @@ import java.util.ArrayList;
 import java.util.Arrays;
 import java.util.Collection;
 import java.util.Collections;
-import java.util.HashSet;
 import java.util.Iterator;
 import java.util.LinkedHashSet;
 import java.util.List;
@@ -81,10 +81,10 @@ public class DescribeConsumerGroupsHandlerTest {
         CoordinatorKey.byGroupId(groupId2)
     ));
     private final Node coordinator = new Node(1, "host", 1234);
-    private final Set<TopicPartition> tps = new HashSet<>(Arrays.asList(
+    private final Set<TopicPartition> tps = Set.of(
         new TopicPartition("foo", 0),
         new TopicPartition("bar",  1)
-    ));
+    );
 
     @ParameterizedTest
     @ValueSource(booleans = {true, false})
@@ -158,6 +158,7 @@ public class DescribeConsumerGroupsHandlerTest {
             new MemberDescription(
                 "memberId",
                 Optional.of("instanceId"),
+                Optional.of("rackId"),
                 "clientId",
                 "host",
                 new MemberAssignment(Set.of(
@@ -172,6 +173,7 @@ public class DescribeConsumerGroupsHandlerTest {
             new MemberDescription(
                 "memberId-classic",
                 Optional.of("instanceId-classic"),
+                Optional.empty(),
                 "clientId-classic",
                 "host",
                 new MemberAssignment(Set.of(
@@ -215,7 +217,7 @@ public class DescribeConsumerGroupsHandlerTest {
                                     .setClientHost("host")
                                     .setClientId("clientId")
                                     .setMemberEpoch(10)
-                                    .setRackId("rackid")
+                                    .setRackId("rackId")
                                     .setSubscribedTopicNames(singletonList("foo"))
                                     .setSubscribedTopicRegex("regex")
                                     .setAssignment(new ConsumerGroupDescribeResponseData.Assignment()
@@ -239,7 +241,7 @@ public class DescribeConsumerGroupsHandlerTest {
                                     .setClientHost("host")
                                     .setClientId("clientId-classic")
                                     .setMemberEpoch(9)
-                                    .setRackId("rackid")
+                                    .setRackId(null)
                                     .setSubscribedTopicNames(singletonList("bar"))
                                     .setSubscribedTopicRegex("regex")
                                     .setAssignment(new ConsumerGroupDescribeResponseData.Assignment()
@@ -264,10 +266,12 @@ public class DescribeConsumerGroupsHandlerTest {
         assertCompleted(result, expected);
     }
 
+    @SuppressWarnings({"deprecation", "removal"})
     @Test
     public void testSuccessfulHandleClassicGroupResponse() {
         Collection<MemberDescription> members = singletonList(new MemberDescription(
                 "memberId",
+                Optional.empty(),
                 Optional.empty(),
                 "clientId",
                 "host",
@@ -321,6 +325,7 @@ public class DescribeConsumerGroupsHandlerTest {
     @Test
     public void testFailedHandleConsumerGroupResponse() {
         assertFailed(GroupAuthorizationException.class, handleConsumerGroupWithError(Errors.GROUP_AUTHORIZATION_FAILED));
+        assertFailed(TopicAuthorizationException.class, handleConsumerGroupWithError(Errors.TOPIC_AUTHORIZATION_FAILED));
         assertFailed(InvalidGroupIdException.class, handleConsumerGroupWithError(Errors.INVALID_GROUP_ID));
     }
 
@@ -342,7 +347,7 @@ public class DescribeConsumerGroupsHandlerTest {
                             new DescribedGroup()
                                 .setErrorCode(error.code())
                                 .setGroupId(groupId1)
-                                .setGroupState(ConsumerGroupState.STABLE.toString())
+                                .setGroupState(GroupState.STABLE.toString())
                                 .setProtocolType(protocolType)
                                 .setProtocolData("assignor")
                                 .setAuthorizedOperations(Utils.to32BitField(emptySet()))

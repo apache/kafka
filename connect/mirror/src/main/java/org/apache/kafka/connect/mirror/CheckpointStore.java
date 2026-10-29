@@ -30,7 +30,6 @@ import org.apache.kafka.connect.util.TopicAdmin;
 import org.slf4j.Logger;
 import org.slf4j.LoggerFactory;
 
-import java.util.Collections;
 import java.util.HashMap;
 import java.util.HashSet;
 import java.util.Map;
@@ -97,7 +96,7 @@ public class CheckpointStore implements AutoCloseable {
 
     public Map<TopicPartition, Checkpoint> get(String group) {
         Map<TopicPartition, Checkpoint> result = checkpointsPerConsumerGroup.get(group);
-        return result == null ? null : Collections.unmodifiableMap(result);
+        return result == null ? null : Map.copyOf(result);
     }
 
     public Map<String, Map<TopicPartition, OffsetAndMetadata>> computeConvertedUpstreamOffset() {

@@ -20,6 +20,7 @@ package org.apache.kafka.clients.admin;
 import org.apache.kafka.clients.ClientDnsLookup;
 import org.apache.kafka.clients.CommonClientConfigs;
 import org.apache.kafka.clients.MetadataRecoveryStrategy;
+import org.apache.kafka.common.annotation.InterfaceAudience;
 import org.apache.kafka.common.config.AbstractConfig;
 import org.apache.kafka.common.config.ConfigDef;
 import org.apache.kafka.common.config.ConfigDef.Importance;
@@ -30,6 +31,7 @@ import org.apache.kafka.common.metrics.Sensor;
 import org.apache.kafka.common.security.auth.SecurityProtocol;
 import org.apache.kafka.common.utils.Utils;
 
+import java.util.List;
 import java.util.Map;
 import java.util.Set;
 
@@ -40,6 +42,7 @@ import static org.apache.kafka.common.config.ConfigDef.ValidString.in;
 /**
  * The AdminClient configuration class, which also contains constants for configuration entry names.
  */
+@InterfaceAudience.Public
 public class AdminClientConfig extends AbstractConfig {
     private static final ConfigDef CONFIG;
 
@@ -85,6 +88,12 @@ public class AdminClientConfig extends AbstractConfig {
      */
     public static final String RETRY_BACKOFF_MAX_MS_CONFIG = CommonClientConfigs.RETRY_BACKOFF_MAX_MS_CONFIG;
     private static final String RETRY_BACKOFF_MAX_MS_DOC = CommonClientConfigs.RETRY_BACKOFF_MAX_MS_DOC;
+
+    /**
+     * <code>bootstrap.resolve.timeout.ms</code>
+     */
+    public static final String BOOTSTRAP_RESOLVE_TIMEOUT_MS_CONFIG = CommonClientConfigs.BOOTSTRAP_RESOLVE_TIMEOUT_MS_CONFIG;
+    private static final String BOOTSTRAP_RESOLVE_TIMEOUT_MS_DOC = CommonClientConfigs.BOOTSTRAP_RESOLVE_TIMEOUT_MS_DOC;
 
     /**
      * <code>enable.metrics.push</code>
@@ -145,6 +154,9 @@ public class AdminClientConfig extends AbstractConfig {
     public static final String METADATA_RECOVERY_REBOOTSTRAP_TRIGGER_MS_DOC = CommonClientConfigs.METADATA_RECOVERY_REBOOTSTRAP_TRIGGER_MS_DOC;
     public static final long DEFAULT_METADATA_RECOVERY_REBOOTSTRAP_TRIGGER_MS = CommonClientConfigs.DEFAULT_METADATA_RECOVERY_REBOOTSTRAP_TRIGGER_MS;
 
+    public static final String METADATA_CLUSTER_CHECK_ENABLE_CONFIG = CommonClientConfigs.METADATA_CLUSTER_CHECK_ENABLE_CONFIG;
+    public static final String METADATA_CLUSTER_CHECK_ENABLE_DOC = CommonClientConfigs.METADATA_CLUSTER_CHECK_ENABLE_DOC;
+
     /**
      * <code>security.providers</code>
      */
@@ -154,12 +166,14 @@ public class AdminClientConfig extends AbstractConfig {
     static {
         CONFIG = new ConfigDef().define(BOOTSTRAP_SERVERS_CONFIG,
                                         Type.LIST,
-                                        "",
+                                        List.of(),
+                                        ConfigDef.ValidList.anyNonDuplicateValues(true, false),
                                         Importance.HIGH,
                                         BOOTSTRAP_SERVERS_DOC).
                                  define(BOOTSTRAP_CONTROLLERS_CONFIG,
                                          Type.LIST,
-                                         "",
+                                         List.of(),
+                                         ConfigDef.ValidList.anyNonDuplicateValues(true, false),
                                          Importance.HIGH,
                                          BOOTSTRAP_CONTROLLERS_DOC)
                                 .define(CLIENT_ID_CONFIG, Type.STRING, "", Importance.MEDIUM, CLIENT_ID_DOC)
@@ -190,6 +204,12 @@ public class AdminClientConfig extends AbstractConfig {
                                         atLeast(0L),
                                         Importance.LOW,
                                         RETRY_BACKOFF_MAX_MS_DOC)
+                                .define(BOOTSTRAP_RESOLVE_TIMEOUT_MS_CONFIG,
+                                        Type.LONG,
+                                        CommonClientConfigs.DEFAULT_BOOTSTRAP_RESOLVE_TIMEOUT_MS,
+                                        atLeast(0L),
+                                        Importance.HIGH,
+                                        BOOTSTRAP_RESOLVE_TIMEOUT_MS_DOC)
                                 .define(ENABLE_METRICS_PUSH_CONFIG,
                                         Type.BOOLEAN,
                                         false,
@@ -238,6 +258,7 @@ public class AdminClientConfig extends AbstractConfig {
                                 .define(METRIC_REPORTER_CLASSES_CONFIG,
                                         Type.LIST,
                                         JmxReporter.class.getName(),
+                                        ConfigDef.ValidList.anyNonDuplicateValues(true, false),
                                         Importance.LOW,
                                         METRIC_REPORTER_CLASSES_DOC)
                                 .define(METRICS_RECORDING_LEVEL_CONFIG,
@@ -280,7 +301,18 @@ public class AdminClientConfig extends AbstractConfig {
                                         DEFAULT_METADATA_RECOVERY_REBOOTSTRAP_TRIGGER_MS,
                                         atLeast(0),
                                         Importance.LOW,
-                                        METADATA_RECOVERY_REBOOTSTRAP_TRIGGER_MS_DOC);
+                                        METADATA_RECOVERY_REBOOTSTRAP_TRIGGER_MS_DOC)
+                                .define(METADATA_CLUSTER_CHECK_ENABLE_CONFIG,
+                                        Type.BOOLEAN,
+                                        true,
+                                        Importance.LOW,
+                                        METADATA_CLUSTER_CHECK_ENABLE_DOC)
+                                .define(CONFIG_PROVIDERS_CONFIG, 
+                                        Type.LIST,
+                                        List.of(),
+                                        ConfigDef.ValidList.anyNonDuplicateValues(true, false),
+                                        Importance.LOW,
+                                        CONFIG_PROVIDERS_DOC);
     }
 
     @Override

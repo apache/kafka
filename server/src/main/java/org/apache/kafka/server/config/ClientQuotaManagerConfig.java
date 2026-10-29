@@ -15,25 +15,27 @@
  * limitations under the License.
  */
 package org.apache.kafka.server.config;
-public class ClientQuotaManagerConfig {
-    public final int numQuotaSamples;
-    public final int quotaWindowSizeSeconds;
 
+/**
+ * Configuration settings for quota management
+ *
+ * @param numQuotaSamples         The number of samples to retain in memory
+ * @param quotaWindowSizeSeconds  The time span of each sample
+ */
+public record ClientQuotaManagerConfig(
+    int numQuotaSamples,
+    int quotaWindowSizeSeconds
+) {
     /**
-     * Configuration settings for quota management
-     *
-     * @param numQuotaSamples         The number of samples to retain in memory
-     * @param quotaWindowSizeSeconds  The time span of each sample
+     * Default constructor with default values
      */
-    public ClientQuotaManagerConfig(int numQuotaSamples, int quotaWindowSizeSeconds) {
-        this.numQuotaSamples = numQuotaSamples;
-        this.quotaWindowSizeSeconds = quotaWindowSizeSeconds;
-    }
-
     public ClientQuotaManagerConfig() {
         this(QuotaConfig.NUM_QUOTA_SAMPLES_DEFAULT, QuotaConfig.QUOTA_WINDOW_SIZE_SECONDS_DEFAULT);
     }
 
+    /**
+     * Constructor with custom numQuotaSamples and default quotaWindowSizeSeconds
+     */
     public ClientQuotaManagerConfig(int numQuotaSamples) {
         this(numQuotaSamples, QuotaConfig.QUOTA_WINDOW_SIZE_SECONDS_DEFAULT);
     }

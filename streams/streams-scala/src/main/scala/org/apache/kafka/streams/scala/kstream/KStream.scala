@@ -43,6 +43,7 @@ import scala.jdk.CollectionConverters._
  * @see `org.apache.kafka.streams.kstream.KStream`
  */
 //noinspection ScalaDeprecation
+@deprecated("Use `org.apache.kafka.streams.kstream.KStream` instead", "4.3.0")
 class KStream[K, V](val inner: KStreamJ[K, V]) {
 
   /**

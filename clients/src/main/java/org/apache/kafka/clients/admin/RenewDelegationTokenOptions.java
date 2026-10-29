@@ -17,14 +17,12 @@
 
 package org.apache.kafka.clients.admin;
 
-import org.apache.kafka.common.annotation.InterfaceStability;
+import org.apache.kafka.common.annotation.InterfaceAudience;
 
 /**
  * Options for {@link Admin#renewDelegationToken(byte[], RenewDelegationTokenOptions)}.
- *
- * The API of this class is evolving, see {@link Admin} for details.
  */
-@InterfaceStability.Evolving
+@InterfaceAudience.Public
 public class RenewDelegationTokenOptions extends AbstractOptions<RenewDelegationTokenOptions> {
     private long renewTimePeriodMs = -1;
 

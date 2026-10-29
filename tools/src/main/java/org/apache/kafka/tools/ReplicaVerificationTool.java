@@ -17,6 +17,7 @@
 package org.apache.kafka.tools;
 
 import org.apache.kafka.clients.ApiVersions;
+import org.apache.kafka.clients.BootstrapConfiguration;
 import org.apache.kafka.clients.ClientRequest;
 import org.apache.kafka.clients.ClientResponse;
 import org.apache.kafka.clients.ClientUtils;
@@ -42,16 +43,16 @@ import org.apache.kafka.common.network.Selectable;
 import org.apache.kafka.common.network.Selector;
 import org.apache.kafka.common.protocol.ApiKeys;
 import org.apache.kafka.common.protocol.Errors;
-import org.apache.kafka.common.record.RecordBatch;
+import org.apache.kafka.common.record.internal.RecordBatch;
 import org.apache.kafka.common.requests.AbstractRequest;
 import org.apache.kafka.common.requests.FetchRequest;
 import org.apache.kafka.common.requests.FetchResponse;
 import org.apache.kafka.common.requests.ListOffsetsRequest;
 import org.apache.kafka.common.serialization.StringDeserializer;
-import org.apache.kafka.common.utils.Exit;
-import org.apache.kafka.common.utils.LogContext;
 import org.apache.kafka.common.utils.Time;
 import org.apache.kafka.common.utils.Utils;
+import org.apache.kafka.common.utils.internals.Exit;
+import org.apache.kafka.common.utils.internals.LogContext;
 import org.apache.kafka.server.util.CommandDefaultOptions;
 import org.apache.kafka.server.util.CommandLineUtils;
 import org.apache.kafka.server.util.ShutdownableThread;
@@ -127,7 +128,7 @@ public class ReplicaVerificationTool {
 
                 List<TopicDescription> filteredTopicMetadata = topicsMetadata.stream().filter(
                     topicMetadata -> options.topicsIncludeFilter().isTopicAllowed(topicMetadata.name(), false)
-                ).collect(Collectors.toList());
+                ).toList();
 
                 if (filteredTopicMetadata.isEmpty()) {
                     LOG.error("No topics found. {} if specified, is either filtering out all topics or there is no topic.", options.topicsIncludeOpt);
@@ -196,7 +197,7 @@ public class ReplicaVerificationTool {
                             counter.incrementAndGet()
                         );
                     })
-                    .collect(Collectors.toList());
+                    .toList();
 
                 Runtime.getRuntime().addShutdownHook(new Thread(() -> {
                     LOG.info("Stopping all fetchers");
@@ -300,12 +301,8 @@ public class ReplicaVerificationTool {
                 .ofType(Long.class)
                 .defaultsTo(30_000L);
             options = parser.parse(args);
-            if (args.length == 0 || options.has(helpOpt)) {
-                CommandLineUtils.printUsageAndExit(parser, "Validate that all replicas for a set of topics have the same data.");
-            }
-            if (options.has(versionOpt)) {
-                CommandLineUtils.printVersionAndExit();
-            }
+
+            CommandLineUtils.maybePrintHelpOrVersion(this, "Validate that all replicas for a set of topics have the same data.");
             CommandLineUtils.checkRequiredArgs(parser, options, brokerListOpt);
         }
 
@@ -348,18 +345,7 @@ public class ReplicaVerificationTool {
         }
     }
 
-    private static class MessageInfo {
-        final int replicaId;
-        final long offset;
-        final long nextOffset;
-        final long checksum;
-
-        MessageInfo(int replicaId, long offset, long nextOffset, long checksum) {
-            this.replicaId = replicaId;
-            this.offset = offset;
-            this.nextOffset = nextOffset;
-            this.checksum = checksum;
-        }
+    private record MessageInfo(int replicaId, long offset, long nextOffset, long checksum) {
     }
 
     protected static class ReplicaBuffer {
@@ -679,7 +665,7 @@ public class ReplicaVerificationTool {
                 metrics,
                 time,
                 "replica-fetcher",
-                new HashMap<String, String>() {{
+                new HashMap<>() {{
                         put("broker-id", sourceNode.idString());
                         put("fetcher-id", String.valueOf(fetcherId));
                     }},
@@ -703,7 +689,9 @@ public class ReplicaVerificationTool {
                 false,
                 new ApiVersions(),
                 logContext,
-                MetadataRecoveryStrategy.forName(consumerConfig.getString(CommonClientConfigs.METADATA_RECOVERY_STRATEGY_CONFIG))
+                MetadataRecoveryStrategy.forName(consumerConfig.getString(CommonClientConfigs.METADATA_RECOVERY_STRATEGY_CONFIG)),
+                BootstrapConfiguration.DISABLED,
+                consumerConfig.getBoolean(CommonClientConfigs.METADATA_CLUSTER_CHECK_ENABLE_CONFIG)
             );
         }
 

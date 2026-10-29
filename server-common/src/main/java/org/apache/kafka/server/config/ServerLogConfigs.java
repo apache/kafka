@@ -18,6 +18,10 @@
 package org.apache.kafka.server.config;
 
 import org.apache.kafka.common.config.TopicConfig;
+import org.apache.kafka.common.record.internal.Records;
+import org.apache.kafka.server.record.BrokerCompressionType;
+
+import java.util.List;
 
 import static org.apache.kafka.server.config.ServerTopicConfigSynonyms.LOG_PREFIX;
 
@@ -30,13 +34,27 @@ import static org.apache.kafka.server.config.ServerTopicConfigSynonyms.LOG_PREFI
 public class ServerLogConfigs {
     public static final String NUM_PARTITIONS_CONFIG = "num.partitions";
     public static final int NUM_PARTITIONS_DEFAULT = 1;
-    public static final String NUM_PARTITIONS_DOC = "The default number of log partitions per topic";
+    public static final String NUM_PARTITIONS_DOC =
+        "The default number of log partitions per topic. This configuration affects the following paths:"
+        + "<ul>"
+        + "  <li>1. Auto topic creation</li>"
+        + "  <li>2. Internal streams topic creation</li>"
+        + "  <li>3. Topic creation via <code>AdminClient#createTopics</code> when the number of partition is set to -1</li>"
+        + "</ul>"
+        + "<p>For (1), the value from the broker configuration is used only when it is explicitly set. "
+        + "If it is not explicitly configured on the broker, the value from the controller configuration is used.<br/>"
+        + "For (2) and (3), the value from the controller configuration is always used.</p>";
 
     public static final String LOG_DIRS_CONFIG = LOG_PREFIX + "dirs";
     public static final String LOG_DIR_CONFIG = LOG_PREFIX + "dir";
     public static final String LOG_DIR_DEFAULT = "/tmp/kafka-logs";
-    public static final String LOG_DIR_DOC = "The directory in which the log data is kept (supplemental for " + LOG_DIRS_CONFIG + " property)";
+    public static final String LOG_DIR_DOC = "A comma-separated list of the directories where the log data is stored. (supplemental to " + LOG_DIRS_CONFIG + " property)";
     public static final String LOG_DIRS_DOC = "A comma-separated list of the directories where the log data is stored. If not set, the value in " + LOG_DIR_CONFIG + " is used.";
+
+    public static final String CORDONED_LOG_DIRS_CONFIG = "cordoned.log.dirs";
+    public static final List<String> CORDONED_LOG_DIRS_DEFAULT = List.of();
+    public static final String CORDONED_LOG_DIRS_DOC = "A comma-separated list of the directories that are cordoned. Entries in this list must be entries in log.dirs or log.dir configuration. This can also be set to * to cordon all log directories.";
+    public static final String CORDONED_LOG_DIRS_ALL = "*";
 
     public static final String LOG_SEGMENT_BYTES_CONFIG = ServerTopicConfigSynonyms.serverSynonym(TopicConfig.SEGMENT_BYTES_CONFIG);
     public static final String LOG_SEGMENT_BYTES_DOC = "The maximum size of a single log file";
@@ -69,7 +87,7 @@ public class ServerLogConfigs {
 
     public static final String LOG_CLEANUP_POLICY_CONFIG = ServerTopicConfigSynonyms.serverSynonym(TopicConfig.CLEANUP_POLICY_CONFIG);
     public static final String LOG_CLEANUP_POLICY_DEFAULT = TopicConfig.CLEANUP_POLICY_DELETE;
-    public static final String LOG_CLEANUP_POLICY_DOC = "The default cleanup policy for segments beyond the retention window. A comma separated list of valid policies.";
+    public static final String LOG_CLEANUP_POLICY_DOC = TopicConfig.CLEANUP_POLICY_DOC;
 
     public static final String LOG_INDEX_SIZE_MAX_BYTES_CONFIG = ServerTopicConfigSynonyms.serverSynonym(TopicConfig.SEGMENT_INDEX_BYTES_CONFIG);
     public static final int LOG_INDEX_SIZE_MAX_BYTES_DEFAULT = 10 * 1024 * 1024;
@@ -123,7 +141,11 @@ public class ServerLogConfigs {
             "message timestamp and the broker's timestamp. The message timestamp can be later than or equal to the broker's " +
             "timestamp, with the maximum allowable difference determined by the value set in this configuration. " +
             "If log.message.timestamp.type=CreateTime, the message will be rejected if the difference in timestamps exceeds " +
-            "this specified threshold. This configuration is ignored if log.message.timestamp.type=LogAppendTime.";
+            "this specified threshold. This configuration is ignored if log.message.timestamp.type=LogAppendTime. " +
+            "Note that time-based retention (log.retention.ms) is based on the largest message timestamp in a segment, " +
+            "so a segment containing a message with a future timestamp is not eligible for time-based deletion until that " +
+            "timestamp plus the retention time has passed. Increasing this value above the default allows more " +
+            "future-timestamped messages and can delay segment deletion, increasing disk usage.";
 
     public static final String NUM_RECOVERY_THREADS_PER_DATA_DIR_CONFIG = "num.recovery.threads.per.data.dir";
     public static final int NUM_RECOVERY_THREADS_PER_DATA_DIR_DEFAULT = 2;
@@ -135,22 +157,16 @@ public class ServerLogConfigs {
 
     public static final String MIN_IN_SYNC_REPLICAS_CONFIG = ServerTopicConfigSynonyms.serverSynonym(TopicConfig.MIN_IN_SYNC_REPLICAS_CONFIG);
     public static final int MIN_IN_SYNC_REPLICAS_DEFAULT = 1;
-    public static final String MIN_IN_SYNC_REPLICAS_DOC = "When a producer sets acks to \"all\" (or \"-1\"), " +
-            "<code>min.insync.replicas</code> specifies the minimum number of replicas that must acknowledge " +
-            "a write for the write to be considered successful. If this minimum cannot be met, " +
-            "then the producer will raise an exception (either <code>NotEnoughReplicas</code> or " +
-            "<code>NotEnoughReplicasAfterAppend</code>).<br>When used together, <code>min.insync.replicas</code> and acks " +
-            "allow you to enforce greater durability guarantees. A typical scenario would be to " +
-            "create a topic with a replication factor of 3, set <code>min.insync.replicas</code> to 2, and " +
-            "produce with acks of \"all\". This will ensure that the producer raises an exception " +
-            "if a majority of replicas do not receive a write.";
+    public static final String MIN_IN_SYNC_REPLICAS_DOC = TopicConfig.MIN_IN_SYNC_REPLICAS_DOC;
 
     public static final String CREATE_TOPIC_POLICY_CLASS_NAME_CONFIG = "create.topic.policy.class.name";
     public static final String CREATE_TOPIC_POLICY_CLASS_NAME_DOC = "The create topic policy class that should be used for validation. The class should " +
-            "implement the <code>org.apache.kafka.server.policy.CreateTopicPolicy</code> interface.";
+            "implement the <code>org.apache.kafka.server.policy.CreateTopicPolicy</code> interface. " +
+            "<p>Note: This policy runs on the controller instead of the broker.</p>";
     public static final String ALTER_CONFIG_POLICY_CLASS_NAME_CONFIG = "alter.config.policy.class.name";
     public static final String ALTER_CONFIG_POLICY_CLASS_NAME_DOC = "The alter configs policy class that should be used for validation. The class should " +
-            "implement the <code>org.apache.kafka.server.policy.AlterConfigPolicy</code> interface.";
+            "implement the <code>org.apache.kafka.server.policy.AlterConfigPolicy</code> interface. " +
+            "<p>Note: This policy runs on the controller instead of the broker.</p>";
 
     public static final String LOG_INITIAL_TASK_DELAY_MS_CONFIG = LOG_PREFIX + "initial.task.delay.ms";
     public static final long LOG_INITIAL_TASK_DELAY_MS_DEFAULT = 30 * 1000L;
@@ -161,4 +177,8 @@ public class ServerLogConfigs {
     public static final Long LOG_DIR_FAILURE_TIMEOUT_MS_DEFAULT = 30000L;
     public static final String LOG_DIR_FAILURE_TIMEOUT_MS_DOC = "If the broker is unable to successfully communicate to the controller that some log " +
         "directory has failed for longer than this time, the broker will fail and shut down.";
+
+    public static final int MAX_MESSAGE_BYTES_DEFAULT = 1024 * 1024 + Records.LOG_OVERHEAD;
+    public static final int MAX_DECOMPRESSED_MESSAGE_BYTES_DEFAULT = Records.SOFT_MAX_ARRAY_LENGTH;
+    public static final String COMPRESSION_TYPE_DEFAULT = BrokerCompressionType.PRODUCER.name;
 }

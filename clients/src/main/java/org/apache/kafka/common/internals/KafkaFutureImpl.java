@@ -138,7 +138,7 @@ public class KafkaFutureImpl<T> extends KafkaFuture<T> {
      * (which KafkaFuture does not).
      *
      * The semantics for KafkaFuture are that all exceptional completions of the future (via #completeExceptionally()
-     * or exceptions from dependants) manifest as ExecutionException, as observed via both get() and getNow().
+     * or exceptions from dependents) manifest as ExecutionException, as observed via both get() and getNow().
      */
     private void maybeThrowCancellationException(Throwable cause) {
         if (cause instanceof CancellationException) {

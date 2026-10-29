@@ -17,8 +17,7 @@
 
 package org.apache.kafka.trogdor.common;
 
-import org.apache.kafka.common.utils.Scheduler;
-import org.apache.kafka.common.utils.ThreadUtils;
+import org.apache.kafka.common.utils.internals.ThreadUtils;
 import org.apache.kafka.trogdor.agent.Agent;
 import org.apache.kafka.trogdor.agent.AgentClient;
 import org.apache.kafka.trogdor.agent.AgentRestResource;
@@ -33,9 +32,9 @@ import org.apache.kafka.trogdor.rest.JsonRestServer;
 import org.slf4j.Logger;
 import org.slf4j.LoggerFactory;
 
-import java.util.Collections;
 import java.util.HashMap;
 import java.util.Map;
+import java.util.Set;
 import java.util.TreeMap;
 import java.util.TreeSet;
 import java.util.concurrent.Callable;
@@ -160,8 +159,7 @@ public class MiniTrogdorCluster implements AutoCloseable {
                     config.put(Platform.Config.TROGDOR_COORDINATOR_PORT,
                         Integer.toString(node.coordinatorPort));
                 }
-                node.node = new BasicNode(entry.getKey(), node.hostname, config,
-                    Collections.emptySet());
+                node.node = new BasicNode(entry.getKey(), node.hostname, config, Set.of());
             }
             TreeMap<String, Node> topologyNodes = new TreeMap<>();
             for (Map.Entry<String, NodeData> entry : nodes.entrySet()) {

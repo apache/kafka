@@ -129,7 +129,7 @@ public class NullableStructMessageTest {
     }
 
     private ByteBuffer serialize(NullableStructMessageData message, short version) {
-        return MessageUtil.toByteBuffer(message, version);
+        return MessageUtil.toByteBufferAccessor(message, version).buffer();
     }
 
     private NullableStructMessageData roundTrip(NullableStructMessageData message, short version) {

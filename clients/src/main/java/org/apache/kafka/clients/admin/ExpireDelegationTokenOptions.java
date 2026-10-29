@@ -17,14 +17,12 @@
 
 package org.apache.kafka.clients.admin;
 
-import org.apache.kafka.common.annotation.InterfaceStability;
+import org.apache.kafka.common.annotation.InterfaceAudience;
 
 /**
  * Options for {@link Admin#expireDelegationToken(byte[], ExpireDelegationTokenOptions)}.
- *
- * The API of this class is evolving, see {@link Admin} for details.
  */
-@InterfaceStability.Evolving
+@InterfaceAudience.Public
 public class ExpireDelegationTokenOptions extends AbstractOptions<ExpireDelegationTokenOptions> {
     private long expiryTimePeriodMs = -1L;
 

@@ -21,9 +21,9 @@ import org.apache.kafka.common.config.ConfigResource;
 import org.apache.kafka.common.config.ConfigResource.Type;
 import org.apache.kafka.common.metadata.ConfigRecord;
 import org.apache.kafka.common.metadata.RemoveTopicRecord;
+import org.apache.kafka.metadata.SupportedConfigChecker;
 import org.apache.kafka.server.common.MetadataVersion;
 
-import java.util.Collections;
 import java.util.HashMap;
 import java.util.Map;
 import java.util.Map.Entry;
@@ -35,9 +35,11 @@ import java.util.Map.Entry;
 public final class ConfigurationsDelta {
     private final ConfigurationsImage image;
     private final Map<ConfigResource, ConfigurationDelta> changes = new HashMap<>();
+    private final SupportedConfigChecker supportedConfigChecker;
 
-    public ConfigurationsDelta(ConfigurationsImage image) {
+    public ConfigurationsDelta(ConfigurationsImage image, SupportedConfigChecker supportedConfigChecker) {
         this.image = image;
+        this.supportedConfigChecker = supportedConfigChecker;
     }
 
     public Map<ConfigResource, ConfigurationDelta> changes() {
@@ -49,7 +51,7 @@ public final class ConfigurationsDelta {
             ConfigResource resource = entry.getKey();
             ConfigurationImage configImage = entry.getValue();
             ConfigurationDelta configDelta = changes.computeIfAbsent(resource,
-                __ -> new ConfigurationDelta(configImage));
+                __ -> new ConfigurationDelta(configImage, supportedConfigChecker));
             configDelta.finishSnapshot();
         }
     }
@@ -62,9 +64,9 @@ public final class ConfigurationsDelta {
         ConfigResource resource =
             new ConfigResource(Type.forId(record.resourceType()), record.resourceName());
         ConfigurationImage configImage = image.resourceData().getOrDefault(resource,
-                new ConfigurationImage(resource, Collections.emptyMap()));
+                new ConfigurationImage(resource, Map.of()));
         ConfigurationDelta delta = changes.computeIfAbsent(resource,
-            __ -> new ConfigurationDelta(configImage));
+            __ -> new ConfigurationDelta(configImage, supportedConfigChecker));
         delta.replay(record);
     }
 
@@ -74,7 +76,7 @@ public final class ConfigurationsDelta {
         if (image.resourceData().containsKey(resource)) {
             ConfigurationImage configImage = image.resourceData().get(resource);
             ConfigurationDelta delta = changes.computeIfAbsent(resource,
-                __ -> new ConfigurationDelta(configImage));
+                __ -> new ConfigurationDelta(configImage, supportedConfigChecker));
             delta.deleteAll();
         }
     }

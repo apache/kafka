@@ -24,7 +24,6 @@ import org.apache.kafka.common.security.auth.KafkaPrincipal;
 import org.apache.kafka.common.utils.Time;
 import org.apache.kafka.controller.metrics.QuorumControllerMetrics;
 import org.apache.kafka.metadata.BrokerHeartbeatReply;
-import org.apache.kafka.metalog.LocalLogManagerTestEnv;
 import org.apache.kafka.test.TestUtils;
 
 import org.junit.jupiter.api.Test;
@@ -57,7 +56,7 @@ public class QuorumControllerMetricsIntegrationTest {
         final AtomicBoolean closed = new AtomicBoolean(false);
 
         MockControllerMetrics() {
-            super(Optional.empty(), Time.SYSTEM);
+            super(Optional.empty(), Time.SYSTEM, 0);
         }
 
         @Override
@@ -74,9 +73,9 @@ public class QuorumControllerMetricsIntegrationTest {
     public void testClosingQuorumControllerClosesMetrics() throws Throwable {
         MockControllerMetrics metrics = new MockControllerMetrics();
         try (
-            LocalLogManagerTestEnv logEnv = new LocalLogManagerTestEnv.Builder(1).
+            MockRaftClientTestEnv clientEnv = new MockRaftClientTestEnv.Builder(1).
                 build();
-            QuorumControllerTestEnv controlEnv = new QuorumControllerTestEnv.Builder(logEnv).
+            QuorumControllerTestEnv controlEnv = new QuorumControllerTestEnv.Builder(clientEnv).
                 setControllerBuilderInitializer(controllerBuilder ->
                     controllerBuilder.setMetrics(metrics)
                 ).
@@ -97,9 +96,9 @@ public class QuorumControllerMetricsIntegrationTest {
         boolean forceFailoverUsingLogLayer
     ) throws Throwable {
         try (
-            LocalLogManagerTestEnv logEnv = new LocalLogManagerTestEnv.Builder(3).
+            MockRaftClientTestEnv clientEnv = new MockRaftClientTestEnv.Builder(3).
                 build();
-            QuorumControllerTestEnv controlEnv = new QuorumControllerTestEnv.Builder(logEnv).
+            QuorumControllerTestEnv controlEnv = new QuorumControllerTestEnv.Builder(clientEnv).
                 build()
         ) {
             registerBrokersAndUnfence(controlEnv.activeController(), 1); // wait for a controller to become active.
@@ -109,7 +108,7 @@ public class QuorumControllerMetricsIntegrationTest {
                 }
             });
             if (forceFailoverUsingLogLayer) {
-                logEnv.activeLogManager().get().throwOnNextAppend();
+                clientEnv.activeRaftClient().get().throwOnNextAppend();
 
                 TestUtils.retryOnExceptionWithTimeout(30_000, () ->
                     createTopics(controlEnv.activeController(), "test_", 1, 1)
@@ -133,9 +132,9 @@ public class QuorumControllerMetricsIntegrationTest {
     @Test
     public void testTimeoutMetrics() throws Throwable {
         try (
-            LocalLogManagerTestEnv logEnv = new LocalLogManagerTestEnv.Builder(3).
+            MockRaftClientTestEnv clientEnv = new MockRaftClientTestEnv.Builder(3).
                 build();
-            QuorumControllerTestEnv controlEnv = new QuorumControllerTestEnv.Builder(logEnv).
+            QuorumControllerTestEnv controlEnv = new QuorumControllerTestEnv.Builder(clientEnv).
                 build()
         ) {
             QuorumController active = controlEnv.activeController();
@@ -192,13 +191,13 @@ public class QuorumControllerMetricsIntegrationTest {
     @Test
     public void testEventQueueOperationsStartedMetric() throws Throwable {
         try (
-            LocalLogManagerTestEnv logEnv = new LocalLogManagerTestEnv.Builder(3).
+            MockRaftClientTestEnv clientEnv = new MockRaftClientTestEnv.Builder(3).
                                                 build();
-            QuorumControllerTestEnv controlEnv = new QuorumControllerTestEnv.Builder(logEnv).
+            QuorumControllerTestEnv controlEnv = new QuorumControllerTestEnv.Builder(clientEnv).
                                                      build()
         ) {
             QuorumController active = controlEnv.activeController();
-            Map<Integer, Long> brokerEpochs = registerBrokersAndUnfence(active, 3);
+            registerBrokersAndUnfence(active, 3);
 
             // Test that a new operation increments operationsStarted. We retry this if needed
             // to handle the case where another operation is performed in between loading

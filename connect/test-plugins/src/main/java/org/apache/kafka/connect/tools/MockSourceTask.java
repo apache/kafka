@@ -16,20 +16,21 @@
  */
 package org.apache.kafka.connect.tools;
 
-import org.apache.kafka.common.utils.AppInfoParser;
+import org.apache.kafka.common.annotation.InterfaceAudience;
+import org.apache.kafka.common.utils.internals.AppInfoParser;
 import org.apache.kafka.connect.source.SourceRecord;
 import org.apache.kafka.connect.source.SourceTask;
 
 import org.slf4j.Logger;
 import org.slf4j.LoggerFactory;
 
-import java.util.Collections;
 import java.util.List;
 import java.util.Map;
 
 /**
  * Task implementation for {@link MockSourceConnector}.
  */
+@InterfaceAudience.Public
 public class MockSourceTask extends SourceTask {
     private static final Logger log = LoggerFactory.getLogger(MockSourceTask.class);
 
@@ -67,7 +68,7 @@ public class MockSourceTask extends SourceTask {
                 throw new RuntimeException();
             }
         }
-        return Collections.emptyList();
+        return List.of();
     }
 
     @Override

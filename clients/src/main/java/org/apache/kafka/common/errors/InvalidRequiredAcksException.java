@@ -14,9 +14,13 @@
  * See the License for the specific language governing permissions and
  * limitations under the License.
  */
+
 package org.apache.kafka.common.errors;
 
-public class InvalidRequiredAcksException extends ApiException {
+import org.apache.kafka.common.annotation.InterfaceAudience;
+
+@InterfaceAudience.Public
+public class InvalidRequiredAcksException extends InvalidConfigurationException {
     private static final long serialVersionUID = 1L;
 
     public InvalidRequiredAcksException(String message) {

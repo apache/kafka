@@ -19,13 +19,15 @@ package org.apache.kafka.clients.admin.internals;
 import org.apache.kafka.common.KafkaFuture;
 import org.apache.kafka.common.internals.KafkaFutureImpl;
 
-import java.util.Collections;
+import java.util.HashMap;
 import java.util.Map;
 import java.util.Set;
 import java.util.function.Function;
 import java.util.stream.Collectors;
 
 public interface AdminApiFuture<K, V> {
+
+    Integer UNKNOWN_BROKER_ID = -1;
 
     /**
      * The initial set of lookup keys. Although this will usually match the fulfillment
@@ -39,22 +41,17 @@ public interface AdminApiFuture<K, V> {
     Set<K> lookupKeys();
 
     /**
-     * The set of request keys that do not have cached key-broker id mappings. If there
-     * is no cached key mapping, this will be the same as the lookup keys.
-     * Can be empty, but only if the cached key mapping is not empty.
-     */
-    default Set<K> uncachedLookupKeys() {
-        return lookupKeys();
-    }
-
-    /**
-     * The cached key-broker id mapping. For lookup strategies that do not make use of a
-     * cache of metadata, this will be empty.
+     * The cached key-broker id mapping. For non-cached values(or lookup strategies that do not make use of a
+     * cache of metadata) the broker id will be {@link #UNKNOWN_BROKER_ID}
      *
      * @return mapping of keys to broker ids
      */
     default Map<K, Integer> cachedKeyBrokerIdMapping() {
-        return Collections.emptyMap();
+        Map<K, Integer> result = new HashMap<>();
+        for (K key : lookupKeys()) {
+            result.put(key, UNKNOWN_BROKER_ID);
+        }
+        return result;
     }
 
     /**

@@ -32,7 +32,7 @@ class SynchronizedPartitionGroup extends AbstractPartitionGroup {
     }
 
     @Override
-    synchronized boolean readyToProcess(final long wallClockTime) {
+    synchronized ReadyToProcessResult readyToProcess(final long wallClockTime) {
         return wrapped.readyToProcess(wallClockTime);
     }
 

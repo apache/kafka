@@ -20,32 +20,7 @@ package org.apache.kafka.coordinator.group.modern;
  * A class which holds two counters. One to count subscription by name and
  * another one to count subscription by regex.
  */
-public class SubscriptionCount {
-    public final int byNameCount;
-    public final int byRegexCount;
-
-    public SubscriptionCount(int byNameCount, int byRegexCount) {
-        this.byNameCount = byNameCount;
-        this.byRegexCount = byRegexCount;
-    }
-
-    @Override
-    public boolean equals(Object o) {
-        if (this == o) return true;
-        if (o == null || getClass() != o.getClass()) return false;
-
-        SubscriptionCount that = (SubscriptionCount) o;
-
-        if (byNameCount != that.byNameCount) return false;
-        return byRegexCount == that.byRegexCount;
-    }
-
-    @Override
-    public int hashCode() {
-        int result = byNameCount;
-        result = 31 * result + byRegexCount;
-        return result;
-    }
+public record SubscriptionCount(int byNameCount, int byRegexCount) {
 
     @Override
     public String toString() {

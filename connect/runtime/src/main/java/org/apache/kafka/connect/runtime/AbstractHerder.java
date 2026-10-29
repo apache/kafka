@@ -26,6 +26,7 @@ import org.apache.kafka.common.config.ConfigDef.ConfigKey;
 import org.apache.kafka.common.config.ConfigDef.Type;
 import org.apache.kafka.common.config.ConfigTransformer;
 import org.apache.kafka.common.config.ConfigValue;
+import org.apache.kafka.common.internals.Plugin;
 import org.apache.kafka.common.utils.Time;
 import org.apache.kafka.common.utils.Utils;
 import org.apache.kafka.connect.connector.Connector;
@@ -72,7 +73,6 @@ import org.slf4j.LoggerFactory;
 
 import java.io.ByteArrayOutputStream;
 import java.io.PrintStream;
-import java.io.UnsupportedEncodingException;
 import java.nio.charset.StandardCharsets;
 import java.util.ArrayList;
 import java.util.Collection;
@@ -140,7 +140,7 @@ public abstract class AbstractHerder implements Herder, TaskStatus.Listener, Con
     protected final StatusBackingStore statusBackingStore;
     protected final ConfigBackingStore configBackingStore;
     private volatile boolean ready = false;
-    private final ConnectorClientConfigOverridePolicy connectorClientConfigOverridePolicy;
+    private final Plugin<ConnectorClientConfigOverridePolicy> connectorClientConfigOverridePolicyPlugin;
     private final ExecutorService connectorExecutor;
     private final Time time;
     protected final Loggers loggers;
@@ -160,7 +160,10 @@ public abstract class AbstractHerder implements Herder, TaskStatus.Listener, Con
         this.kafkaClusterId = kafkaClusterId;
         this.statusBackingStore = statusBackingStore;
         this.configBackingStore = configBackingStore;
-        this.connectorClientConfigOverridePolicy = connectorClientConfigOverridePolicy;
+        this.connectorClientConfigOverridePolicyPlugin = Plugin.wrapInstance(
+                connectorClientConfigOverridePolicy,
+                worker.metrics().metrics(),
+                WorkerConfig.CONNECTOR_CLIENT_POLICY_CLASS_CONFIG);
         this.connectorExecutor = Executors.newCachedThreadPool();
         this.time = time;
         this.loggers = Loggers.newInstance(time);
@@ -185,7 +188,7 @@ public abstract class AbstractHerder implements Herder, TaskStatus.Listener, Con
         this.configBackingStore.stop();
         this.worker.stop();
         this.connectorExecutor.shutdown();
-        Utils.closeQuietly(this.connectorClientConfigOverridePolicy, "connector client config override policy");
+        Utils.closeQuietly(this.connectorClientConfigOverridePolicyPlugin, "connector client config override policy");
     }
 
     protected void ready() {
@@ -200,83 +203,91 @@ public abstract class AbstractHerder implements Herder, TaskStatus.Listener, Con
     @Override
     public void onStartup(String connector) {
         statusBackingStore.put(new ConnectorStatus(connector, ConnectorStatus.State.RUNNING,
-                workerId, generation()));
+                workerId, generation(), worker.connectorVersion(connector)));
     }
 
     @Override
     public void onStop(String connector) {
         statusBackingStore.put(new ConnectorStatus(connector, AbstractStatus.State.STOPPED,
-                workerId, generation()));
+                workerId, generation(), worker.connectorVersion(connector)));
     }
 
     @Override
     public void onPause(String connector) {
         statusBackingStore.put(new ConnectorStatus(connector, ConnectorStatus.State.PAUSED,
-                workerId, generation()));
+                workerId, generation(), worker.connectorVersion(connector)));
     }
 
     @Override
     public void onResume(String connector) {
         statusBackingStore.put(new ConnectorStatus(connector, TaskStatus.State.RUNNING,
-                workerId, generation()));
+                workerId, generation(), worker.connectorVersion(connector)));
     }
 
     @Override
     public void onShutdown(String connector) {
         statusBackingStore.putSafe(new ConnectorStatus(connector, ConnectorStatus.State.UNASSIGNED,
-                workerId, generation()));
+                workerId, generation(), worker.connectorVersion(connector)));
     }
 
     @Override
     public void onFailure(String connector, Throwable cause) {
         statusBackingStore.putSafe(new ConnectorStatus(connector, ConnectorStatus.State.FAILED,
-                trace(cause), workerId, generation()));
+                trace(cause), workerId, generation(), worker.connectorVersion(connector)));
     }
 
     @Override
     public void onStartup(ConnectorTaskId id) {
-        statusBackingStore.put(new TaskStatus(id, TaskStatus.State.RUNNING, workerId, generation()));
+        statusBackingStore.put(new TaskStatus(id, TaskStatus.State.RUNNING, workerId, generation(), null,
+                worker.taskVersion(id)));
     }
 
     @Override
     public void onFailure(ConnectorTaskId id, Throwable cause) {
-        statusBackingStore.putSafe(new TaskStatus(id, TaskStatus.State.FAILED, workerId, generation(), trace(cause)));
+        statusBackingStore.putSafe(new TaskStatus(id, TaskStatus.State.FAILED, workerId, generation(), trace(cause),
+                worker.taskVersion(id)));
     }
 
     @Override
     public void onShutdown(ConnectorTaskId id) {
-        statusBackingStore.putSafe(new TaskStatus(id, TaskStatus.State.UNASSIGNED, workerId, generation()));
+        statusBackingStore.putSafe(new TaskStatus(id, TaskStatus.State.UNASSIGNED, workerId, generation(), null,
+                worker.taskVersion(id)));
     }
 
     @Override
     public void onResume(ConnectorTaskId id) {
-        statusBackingStore.put(new TaskStatus(id, TaskStatus.State.RUNNING, workerId, generation()));
+        statusBackingStore.put(new TaskStatus(id, TaskStatus.State.RUNNING, workerId, generation(), null,
+                worker.taskVersion(id)));
     }
 
     @Override
     public void onPause(ConnectorTaskId id) {
-        statusBackingStore.put(new TaskStatus(id, TaskStatus.State.PAUSED, workerId, generation()));
+        statusBackingStore.put(new TaskStatus(id, TaskStatus.State.PAUSED, workerId, generation(), null,
+                worker.taskVersion(id)));
     }
 
     @Override
     public void onDeletion(String connector) {
         for (TaskStatus status : statusBackingStore.getAll(connector))
             onDeletion(status.id());
-        statusBackingStore.put(new ConnectorStatus(connector, ConnectorStatus.State.DESTROYED, workerId, generation()));
+        statusBackingStore.put(new ConnectorStatus(connector, ConnectorStatus.State.DESTROYED, workerId, generation(),
+                worker.connectorVersion(connector)));
     }
 
     @Override
     public void onDeletion(ConnectorTaskId id) {
-        statusBackingStore.put(new TaskStatus(id, TaskStatus.State.DESTROYED, workerId, generation()));
+        statusBackingStore.put(new TaskStatus(id, TaskStatus.State.DESTROYED, workerId, generation(), null,
+                worker.taskVersion(id)));
     }
 
     public void onRestart(String connector) {
         statusBackingStore.put(new ConnectorStatus(connector, ConnectorStatus.State.RESTARTING,
-                workerId, generation()));
+                workerId, generation(), worker.connectorVersion(connector)));
     }
 
     public void onRestart(ConnectorTaskId id) {
-        statusBackingStore.put(new TaskStatus(id, TaskStatus.State.RESTARTING, workerId, generation()));
+        statusBackingStore.put(new TaskStatus(id, TaskStatus.State.RESTARTING, workerId, generation(), null,
+                worker.taskVersion(id)));
     }
 
     @Override
@@ -344,12 +355,12 @@ public abstract class AbstractHerder implements Herder, TaskStatus.Listener, Con
         Collection<TaskStatus> tasks = statusBackingStore.getAll(connName);
 
         ConnectorStateInfo.ConnectorState connectorState = new ConnectorStateInfo.ConnectorState(
-                connector.state().toString(), connector.workerId(), connector.trace());
+                connector.state().toString(), connector.workerId(), connector.trace(), connector.version());
         List<ConnectorStateInfo.TaskState> taskStates = new ArrayList<>();
 
         for (TaskStatus status : tasks) {
             taskStates.add(new ConnectorStateInfo.TaskState(status.id().task(),
-                    status.state().toString(), status.workerId(), status.trace()));
+                    status.state().toString(), status.workerId(), status.trace(), status.version()));
         }
 
         Collections.sort(taskStates);
@@ -385,7 +396,12 @@ public abstract class AbstractHerder implements Herder, TaskStatus.Listener, Con
             throw new NotFoundException("No status found for task " + id);
 
         return new ConnectorStateInfo.TaskState(id.task(), status.state().toString(),
-                status.workerId(), status.trace());
+                status.workerId(), status.trace(), status.version());
+    }
+
+    @Override
+    public ConnectMetrics connectMetrics() {
+        return worker.metrics();
     }
 
     protected Map<String, ConfigValue> validateSinkConnectorConfig(SinkConnector connector, ConfigDef configDef, Map<String, String> config) {
@@ -539,7 +555,7 @@ public abstract class AbstractHerder implements Herder, TaskStatus.Listener, Con
                 "header converter",
                 HEADER_CONVERTER_CLASS_CONFIG,
                 HEADER_CONVERTER_VERSION_CONFIG,
-                Collections.singletonMap(ConverterConfig.TYPE_CONFIG, ConverterType.HEADER.getName()),
+                Map.of(ConverterConfig.TYPE_CONFIG, ConverterType.HEADER.getName()),
                 connectorLoader,
                 reportStage
         );
@@ -552,7 +568,7 @@ public abstract class AbstractHerder implements Herder, TaskStatus.Listener, Con
                 "key converter",
                 KEY_CONVERTER_CLASS_CONFIG,
                 KEY_CONVERTER_VERSION_CONFIG,
-                Collections.singletonMap(ConverterConfig.TYPE_CONFIG, ConverterType.KEY.getName()),
+                Map.of(ConverterConfig.TYPE_CONFIG, ConverterType.KEY.getName()),
                 connectorLoader,
                 reportStage
         );
@@ -566,7 +582,7 @@ public abstract class AbstractHerder implements Herder, TaskStatus.Listener, Con
                 "value converter",
                 VALUE_CONVERTER_CLASS_CONFIG,
                 VALUE_CONVERTER_VERSION_CONFIG,
-                Collections.singletonMap(ConverterConfig.TYPE_CONFIG, ConverterType.VALUE.getName()),
+                Map.of(ConverterConfig.TYPE_CONFIG, ConverterType.VALUE.getName()),
                 connectorLoader,
                 reportStage
         );
@@ -618,7 +634,8 @@ public abstract class AbstractHerder implements Herder, TaskStatus.Listener, Con
         ConnectorStateInfo.ConnectorState connectorInfoState = new ConnectorStateInfo.ConnectorState(
                 connectorState.toString(),
                 connectorStatus.workerId(),
-                connectorStatus.trace()
+                connectorStatus.trace(),
+                connectorStatus.version()
         );
 
         // Collect the task states, If requested, mark the task as restarting
@@ -630,7 +647,8 @@ public abstract class AbstractHerder implements Herder, TaskStatus.Listener, Con
                             taskStatus.id().task(),
                             taskState.toString(),
                             taskStatus.workerId(),
-                            taskStatus.trace()
+                            taskStatus.trace(),
+                            taskStatus.version()
                     );
                 })
                 .collect(Collectors.toList());
@@ -691,7 +709,7 @@ public abstract class AbstractHerder implements Herder, TaskStatus.Listener, Con
                         connectorClass,
                         connectorType,
                         ConnectorClientConfigRequest.ClientType.PRODUCER,
-                        connectorClientConfigOverridePolicy);
+                        connectorClientConfigOverridePolicyPlugin);
             }
         }
         if (connectorUsesAdmin(connectorType, connectorProps)) {
@@ -705,7 +723,7 @@ public abstract class AbstractHerder implements Herder, TaskStatus.Listener, Con
                         connectorClass,
                         connectorType,
                         ConnectorClientConfigRequest.ClientType.ADMIN,
-                        connectorClientConfigOverridePolicy);
+                        connectorClientConfigOverridePolicyPlugin);
             }
         }
         if (connectorUsesConsumer(connectorType, connectorProps)) {
@@ -719,7 +737,7 @@ public abstract class AbstractHerder implements Herder, TaskStatus.Listener, Con
                         connectorClass,
                         connectorType,
                         ConnectorClientConfigRequest.ClientType.CONSUMER,
-                        connectorClientConfigOverridePolicy);
+                        connectorClientConfigOverridePolicyPlugin);
             }
         }
         return mergeConfigInfos(connType,
@@ -807,16 +825,20 @@ public abstract class AbstractHerder implements Herder, TaskStatus.Listener, Con
             Function<String, TemporaryStage> reportStage,
             boolean doLog
     ) {
+        connectorProps = removeCustomConfigProviders(connectorProps);
+
+        String connType = connectorProps.get(CONNECTOR_CLASS_CONFIG);
+        if (connType == null) {
+            throw new BadRequestException("Connector config contains no connector type");
+        }
+
+        Map<String, String> originalProps = new HashMap<>(connectorProps);
         String stageDescription;
         if (worker.configTransformer() != null) {
             stageDescription = "resolving transformed configuration properties for the connector";
             try (TemporaryStage stage = reportStage.apply(stageDescription)) {
                 connectorProps = worker.configTransformer().transform(connectorProps);
             }
-        }
-        String connType = connectorProps.get(CONNECTOR_CLASS_CONFIG);
-        if (connType == null) {
-            throw new BadRequestException("Connector config " + connectorProps + " contains no connector type");
         }
 
         VersionRange connVersion;
@@ -825,12 +847,14 @@ public abstract class AbstractHerder implements Herder, TaskStatus.Listener, Con
         try {
             connVersion = PluginUtils.connectorVersionRequirement(connectorProps.get(CONNECTOR_VERSION));
             connector = cachedConnectors.getConnector(connType, connVersion);
-            connectorLoader = plugins().pluginLoader(connType, connVersion);
+            connectorLoader = plugins().connectorLoader(connType, connVersion);
             log.info("Validating connector {}, version {}", connType, connector.version());
         } catch (VersionedPluginLoadingException e) {
             log.warn("Failed to load connector {} with version {}, skipping additional validations (connector, converters, transformations, client overrides) ",
                     connType, connectorProps.get(CONNECTOR_VERSION), e);
-            return invalidVersionedConnectorValidation(connectorProps, e, reportStage);
+            return redactResolvedValues(
+                    invalidVersionedConnectorValidation(connectorProps, e, reportStage),
+                    originalProps, connectorProps);
         } catch (Exception e) {
             throw new BadRequestException(e.getMessage(), e);
         }
@@ -864,12 +888,58 @@ public abstract class AbstractHerder implements Herder, TaskStatus.Listener, Con
             ConfigInfos clientOverrideInfo = validateClientOverrides(connectorProps, connectorType, connector.getClass(), reportStage, doLog);
             ConfigInfos connectorConfigInfo = validateConnectorPluginSpecifiedConfigs(connectorProps, validatedConnectorConfig, enrichedConfigDef, connector, reportStage);
 
-            return mergeConfigInfos(connType,
-                    connectorConfigInfo,
-                    clientOverrideInfo,
-                    converterConfigInfo
-            );
+            return redactResolvedValues(
+                    mergeConfigInfos(connType, connectorConfigInfo, clientOverrideInfo, converterConfigInfo),
+                    originalProps,
+                    connectorProps);
         }
+    }
+
+    static Map<String, String> removeCustomConfigProviders(Map<String, String> connectorProps) {
+        Map<String, String> sanitized = new HashMap<>(connectorProps);
+        String prefix = AbstractConfig.CONFIG_PROVIDERS_CONFIG + ".";
+        sanitized.keySet().removeIf(k -> k.equals(AbstractConfig.CONFIG_PROVIDERS_CONFIG) || k.startsWith(prefix));
+        return sanitized;
+    }
+
+    static ConfigInfos redactResolvedValues(ConfigInfos infos, Map<String, String> originalProps, Map<String, String> resolvedProps) {
+        Map<String, String> substitutedKeys = new HashMap<>();
+        for (Map.Entry<String, String> entry : originalProps.entrySet()) {
+            String resolvedValue = resolvedProps.get(entry.getKey());
+            if (resolvedValue != null && !resolvedValue.equals(entry.getValue())) {
+                substitutedKeys.put(entry.getKey(), entry.getValue());
+            }
+        }
+        if (substitutedKeys.isEmpty()) {
+            return infos;
+        }
+
+        List<ConfigInfo> redactedConfigs = new ArrayList<>();
+        int errorCount = 0;
+        for (ConfigInfo info : infos.configs()) {
+            ConfigValueInfo cv = info.configValue();
+            if (cv != null && substitutedKeys.containsKey(cv.name())) {
+                String placeholder = substitutedKeys.get(cv.name());
+                List<String> errors = List.of();
+                if (!cv.errors().isEmpty()) {
+                    if (log.isTraceEnabled()) {
+                        log.trace("Error while validating configuration {} for connector {}: {}",
+                                cv.name(), originalProps.get(CONNECTOR_CLASS_CONFIG), cv.errors());
+                    }
+                    errors = List.of("Invalid value for configuration '" + cv.name()
+                            + "': the value resolved from the config provider reference failed validation");
+                }
+                ConfigValueInfo redacted = new ConfigValueInfo(cv.name(), placeholder, List.of(), errors, cv.visible());
+                redactedConfigs.add(new ConfigInfo(info.configKey(), redacted));
+                errorCount += errors.size();
+            } else {
+                redactedConfigs.add(info);
+                if (cv != null) {
+                    errorCount += cv.errors().size();
+                }
+            }
+        }
+        return new ConfigInfos(infos.name(), errorCount, infos.groups(), redactedConfigs);
     }
 
     private static ConfigInfos mergeConfigInfos(String connType, ConfigInfos... configInfosList) {
@@ -879,7 +949,7 @@ public abstract class AbstractHerder implements Herder, TaskStatus.Listener, Con
         for (ConfigInfos configInfos : configInfosList) {
             if (configInfos != null) {
                 errorCount += configInfos.errorCount();
-                configInfoList.addAll(configInfos.values());
+                configInfoList.addAll(configInfos.configs());
                 groups.addAll(configInfos.groups());
             }
         }
@@ -893,7 +963,7 @@ public abstract class AbstractHerder implements Herder, TaskStatus.Listener, Con
                                                       Class<? extends Connector> connectorClass,
                                                       org.apache.kafka.connect.health.ConnectorType connectorType,
                                                       ConnectorClientConfigRequest.ClientType clientType,
-                                                      ConnectorClientConfigOverridePolicy connectorClientConfigOverridePolicy) {
+                                                      Plugin<ConnectorClientConfigOverridePolicy> connectorClientConfigOverridePolicyPlugin) {
         Map<String, Object> clientConfigs = new HashMap<>();
         for (Map.Entry<String, Object> rawClientConfig : connectorConfig.originalsWithPrefix(prefix).entrySet()) {
             String configName = rawClientConfig.getKey();
@@ -906,7 +976,7 @@ public abstract class AbstractHerder implements Herder, TaskStatus.Listener, Con
         }
         ConnectorClientConfigRequest connectorClientConfigRequest = new ConnectorClientConfigRequest(
             connName, connectorType, connectorClass, clientConfigs, clientType);
-        List<ConfigValue> configValues = connectorClientConfigOverridePolicy.validate(connectorClientConfigRequest);
+        List<ConfigValue> configValues = connectorClientConfigOverridePolicyPlugin.get().validate(connectorClientConfigRequest);
 
         return prefixedConfigInfos(configDef.configKeys(), configValues, prefix);
     }
@@ -1055,9 +1125,11 @@ public abstract class AbstractHerder implements Herder, TaskStatus.Listener, Con
             StringBuilder messages = new StringBuilder();
             messages.append("Connector configuration is invalid and contains the following ")
                 .append(errors).append(" error(s):");
-            for (ConfigInfo configInfo : configInfos.values()) {
-                for (String msg : configInfo.configValue().errors()) {
-                    messages.append('\n').append(msg);
+            for (ConfigInfo configInfo : configInfos.configs()) {
+                if (configInfo.configValue() != null) {
+                    for (String msg : configInfo.configValue().errors()) {
+                        messages.append('\n').append(msg);
+                    }
                 }
             }
             callback.onCompletion(
@@ -1073,12 +1145,8 @@ public abstract class AbstractHerder implements Herder, TaskStatus.Listener, Con
 
     private String trace(Throwable t) {
         ByteArrayOutputStream output = new ByteArrayOutputStream();
-        try {
-            t.printStackTrace(new PrintStream(output, false, StandardCharsets.UTF_8.name()));
-            return output.toString(StandardCharsets.UTF_8.name());
-        } catch (UnsupportedEncodingException e) {
-            return null;
-        }
+        t.printStackTrace(new PrintStream(output, false, StandardCharsets.UTF_8));
+        return output.toString(StandardCharsets.UTF_8);
     }
 
     /*
@@ -1248,6 +1316,66 @@ public abstract class AbstractHerder implements Herder, TaskStatus.Listener, Con
      */
     protected abstract void modifyConnectorOffsets(String connName, Map<Map<String, ?>, Map<String, ?>> offsets, Callback<Message> cb);
 
+    /**
+     * Validate the offsets supplied via the {@code initial_offsets} field of a connector creation request. Performs no
+     * I/O, so that an invalid request is rejected before any of the connector's existing offsets are wiped.
+     *
+     * @param connName the name of the connector being created
+     * @param initialOffsets the offsets supplied by the user; may not be {@code null}
+     * @throws BadRequestException if the offsets cannot be used as a connector's initial offsets
+     */
+    protected void validateInitialOffsets(String connName, Map<Map<String, ?>, Map<String, ?>> initialOffsets) {
+        if (initialOffsets.isEmpty()) {
+            throw new BadRequestException("The initial offsets for connector " + connName + " may not be empty");
+        }
+        // A null offset means "delete this partition's offset" when altering, but is meaningless on create: every offset
+        // the connector has is wiped before these are written, so there is nothing left to delete. Issuing the delete
+        // anyway targets the consumer group our own wipe just removed, which the alter path (unlike the reset path) does
+        // not tolerate. This is deliberately stricter than PATCH /connectors/{connector}/offsets.
+        // Not Map::containsValue, which throws rather than returning false on the immutable maps Map.of(...) produces.
+        if (initialOffsets.values().stream().anyMatch(offset -> offset == null)) {
+            throw new BadRequestException("The initial offsets for connector " + connName + " may not contain null offset "
+                    + "values. All existing offsets for the connector are removed before the initial offsets are written, "
+                    + "so a null offset has nothing to delete.");
+        }
+    }
+
+    /**
+     * Wipe every offset the connector currently has and write {@code initialOffsets} in their place.
+     * <p>
+     * Unlike {@link #alterConnectorOffsets} and {@link #resetConnectorOffsets}, this skips the usual preconditions (that
+     * the connector exists and is STOPPED with no running tasks): the connector is being created, so it is not expected
+     * to exist and has no tasks. Its config has not been written yet, so nothing can be running under this name.
+     */
+    protected void setInitialConnectorOffsets(String connName, Map<String, String> config,
+                                              Map<Map<String, ?>, Map<String, ?>> initialOffsets, Callback<Message> cb) {
+        worker.modifyConnectorOffsets(connName, config, initialOffsets, true, cb);
+    }
+
+    /**
+     * Remove the initial offsets written for a connector whose creation could not subsequently be completed, so that a
+     * failed creation does not leave offsets behind for a connector that does not exist, and then complete
+     * {@code callback} with the original failure rather than with any error from the cleanup itself.
+     */
+    protected void wipeInitialOffsetsAfterFailedCreate(String connName, Map<String, String> config,
+                                                       Throwable configWriteError, Callback<Created<ConnectorInfo>> callback) {
+        log.error("Failed to create connector {} after its initial offsets had been written; "
+                + "removing those offsets so that the failed creation does not leave them behind", connName, configWriteError);
+        Callback<Message> cleanupCallback = (wipeError, ignored) -> {
+            if (wipeError != null) {
+                log.error("Failed to remove the initial offsets for connector {} after its creation failed. Offsets may "
+                        + "remain for a connector that was not created; re-submitting the identical creation request is "
+                        + "safe and will overwrite them.", connName, wipeError);
+            }
+            callback.onCompletion(configWriteError, null);
+        };
+        try {
+            worker.modifyConnectorOffsets(connName, config, null, cleanupCallback);
+        } catch (Throwable t) {
+            cleanupCallback.onCompletion(t, null);
+        }
+    }
+
     @Override
     public LoggerLevel loggerLevel(String logger) {
         return loggers.level(logger);
@@ -1264,7 +1392,7 @@ public abstract class AbstractHerder implements Herder, TaskStatus.Listener, Con
 
         if (!loggers.isValidLevel(normalizedLevel)) {
             log.warn("Ignoring request to set invalid level '{}' for namespace {}", desiredLevelStr, namespace);
-            return Collections.emptyList();
+            return List.of();
         }
 
         return loggers.setLevel(namespace, normalizedLevel);

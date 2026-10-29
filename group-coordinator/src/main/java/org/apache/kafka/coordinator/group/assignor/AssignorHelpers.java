@@ -17,6 +17,7 @@
 package org.apache.kafka.coordinator.group.assignor;
 
 import org.apache.kafka.common.Uuid;
+import org.apache.kafka.coordinator.group.Utils;
 
 import java.util.Collections;
 import java.util.HashMap;
@@ -45,7 +46,7 @@ public final class AssignorHelpers {
      * @return A deep copy of the assignment.
      */
     public static Map<Uuid, Set<Integer>> deepCopyAssignment(Map<Uuid, Set<Integer>> map) {
-        Map<Uuid, Set<Integer>> copy = new HashMap<>(map.size());
+        Map<Uuid, Set<Integer>> copy = Utils.newHashMap(map.size());
         for (Map.Entry<Uuid, Set<Integer>> entry : map.entrySet()) {
             copy.put(entry.getKey(), new HashSet<>(entry.getValue()));
         }

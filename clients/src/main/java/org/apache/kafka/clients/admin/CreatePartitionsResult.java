@@ -18,16 +18,14 @@
 package org.apache.kafka.clients.admin;
 
 import org.apache.kafka.common.KafkaFuture;
-import org.apache.kafka.common.annotation.InterfaceStability;
+import org.apache.kafka.common.annotation.InterfaceAudience;
 
 import java.util.Map;
 
 /**
  * The result of the {@link Admin#createPartitions(Map)} call.
- *
- * The API of this class is evolving, see {@link Admin} for details.
  */
-@InterfaceStability.Evolving
+@InterfaceAudience.Public
 public class CreatePartitionsResult {
 
     private final Map<String, KafkaFuture<Void>> values;
@@ -48,6 +46,6 @@ public class CreatePartitionsResult {
      * Return a future which succeeds if all the partition creations succeed.
      */
     public KafkaFuture<Void> all() {
-        return KafkaFuture.allOf(values.values().toArray(new KafkaFuture[0]));
+        return KafkaFuture.allOf(values.values().toArray(new KafkaFuture<?>[0]));
     }
 }

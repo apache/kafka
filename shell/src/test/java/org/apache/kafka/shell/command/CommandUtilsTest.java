@@ -20,7 +20,7 @@ package org.apache.kafka.shell.command;
 import org.junit.jupiter.api.Test;
 import org.junit.jupiter.api.Timeout;
 
-import java.util.Arrays;
+import java.util.List;
 
 import static java.util.concurrent.TimeUnit.MINUTES;
 import static org.junit.jupiter.api.Assertions.assertEquals;
@@ -29,9 +29,9 @@ import static org.junit.jupiter.api.Assertions.assertEquals;
 public class CommandUtilsTest {
     @Test
     public void testSplitPath() {
-        assertEquals(Arrays.asList("alpha", "beta"),
+        assertEquals(List.of("alpha", "beta"),
             CommandUtils.splitPath("/alpha/beta"));
-        assertEquals(Arrays.asList("alpha", "beta"),
+        assertEquals(List.of("alpha", "beta"),
             CommandUtils.splitPath("//alpha/beta/"));
     }
 
@@ -39,13 +39,13 @@ public class CommandUtilsTest {
     public void testStripDotPathComponents() {
 
         //double dots
-        assertEquals(Arrays.asList("keep", "keep2"), CommandUtils.stripDotPathComponents(Arrays.asList("..", "keep", "keep2")));
+        assertEquals(List.of("keep", "keep2"), CommandUtils.stripDotPathComponents(List.of("..", "keep", "keep2")));
         //single dots
-        assertEquals(Arrays.asList("keep", "keep2"), CommandUtils.stripDotPathComponents(Arrays.asList(".", "keep", "keep2")));
+        assertEquals(List.of("keep", "keep2"), CommandUtils.stripDotPathComponents(List.of(".", "keep", "keep2")));
 
-        assertEquals(Arrays.asList(".keep", "keep2"), CommandUtils.stripDotPathComponents(Arrays.asList(".", ".keep", "keep2")));
+        assertEquals(List.of(".keep", "keep2"), CommandUtils.stripDotPathComponents(List.of(".", ".keep", "keep2")));
 
-        assertEquals(Arrays.asList(".keep", "keep2"), CommandUtils.stripDotPathComponents(Arrays.asList("..", ".keep", "keep2")));
+        assertEquals(List.of(".keep", "keep2"), CommandUtils.stripDotPathComponents(List.of("..", ".keep", "keep2")));
 
     }
 }

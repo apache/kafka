@@ -18,31 +18,40 @@
 package org.apache.kafka.server.share.persister;
 
 import org.apache.kafka.clients.ClientResponse;
+import org.apache.kafka.clients.CommonClientConfigs;
 import org.apache.kafka.clients.KafkaClient;
 import org.apache.kafka.clients.MockClient;
 import org.apache.kafka.common.Node;
 import org.apache.kafka.common.Uuid;
+import org.apache.kafka.common.errors.SaslAuthenticationException;
+import org.apache.kafka.common.errors.UnsupportedVersionException;
 import org.apache.kafka.common.message.DeleteShareGroupStateResponseData;
 import org.apache.kafka.common.message.FindCoordinatorResponseData;
+import org.apache.kafka.common.message.InitializeShareGroupStateResponseData;
 import org.apache.kafka.common.message.ReadShareGroupStateResponseData;
 import org.apache.kafka.common.message.ReadShareGroupStateSummaryResponseData;
 import org.apache.kafka.common.message.WriteShareGroupStateResponseData;
+import org.apache.kafka.common.protocol.ApiKeys;
 import org.apache.kafka.common.protocol.Errors;
 import org.apache.kafka.common.requests.AbstractRequest;
 import org.apache.kafka.common.requests.DeleteShareGroupStateRequest;
 import org.apache.kafka.common.requests.DeleteShareGroupStateResponse;
 import org.apache.kafka.common.requests.FindCoordinatorRequest;
 import org.apache.kafka.common.requests.FindCoordinatorResponse;
+import org.apache.kafka.common.requests.InitializeShareGroupStateRequest;
+import org.apache.kafka.common.requests.InitializeShareGroupStateResponse;
 import org.apache.kafka.common.requests.ReadShareGroupStateRequest;
 import org.apache.kafka.common.requests.ReadShareGroupStateResponse;
 import org.apache.kafka.common.requests.ReadShareGroupStateSummaryRequest;
 import org.apache.kafka.common.requests.ReadShareGroupStateSummaryResponse;
+import org.apache.kafka.common.requests.RequestHeader;
 import org.apache.kafka.common.requests.WriteShareGroupStateRequest;
 import org.apache.kafka.common.requests.WriteShareGroupStateResponse;
 import org.apache.kafka.common.utils.Time;
 import org.apache.kafka.common.utils.Utils;
 import org.apache.kafka.server.share.SharePartitionKey;
 import org.apache.kafka.server.util.MockTime;
+import org.apache.kafka.server.util.RequestAndCompletionHandler;
 import org.apache.kafka.server.util.timer.MockTimer;
 import org.apache.kafka.server.util.timer.SystemTimer;
 import org.apache.kafka.server.util.timer.SystemTimerReaper;
@@ -52,28 +61,39 @@ import org.apache.kafka.test.TestUtils;
 import org.junit.jupiter.api.AfterEach;
 import org.junit.jupiter.api.BeforeEach;
 import org.junit.jupiter.api.Test;
+import org.junit.jupiter.params.ParameterizedTest;
+import org.junit.jupiter.params.provider.MethodSource;
+import org.junit.jupiter.params.provider.ValueSource;
+import org.slf4j.Logger;
+import org.slf4j.LoggerFactory;
 
 import java.util.ArrayList;
-import java.util.Arrays;
-import java.util.Collections;
+import java.util.Collection;
 import java.util.List;
 import java.util.Map;
+import java.util.Optional;
 import java.util.concurrent.CompletableFuture;
 import java.util.concurrent.ExecutionException;
 import java.util.concurrent.atomic.AtomicBoolean;
+import java.util.function.BooleanSupplier;
+import java.util.stream.Stream;
 
+import static org.junit.jupiter.api.Assertions.assertDoesNotThrow;
 import static org.junit.jupiter.api.Assertions.assertEquals;
 import static org.junit.jupiter.api.Assertions.fail;
 import static org.mockito.ArgumentMatchers.any;
 import static org.mockito.Mockito.mock;
+import static org.mockito.Mockito.never;
 import static org.mockito.Mockito.spy;
 import static org.mockito.Mockito.times;
 import static org.mockito.Mockito.verify;
+import static org.mockito.Mockito.when;
 
+@SuppressWarnings("JavaNCSS")
 class PersisterStateManagerTest {
     private static final KafkaClient CLIENT = mock(KafkaClient.class);
-    private static final Time MOCK_TIME = new MockTime();
-    private static final Timer MOCK_TIMER = new MockTimer((MockTime) MOCK_TIME);
+    private static final MockTime MOCK_TIME = new MockTime();
+    private static final Timer MOCK_TIMER = new MockTimer(MOCK_TIME);
     private static final ShareCoordinatorMetadataCacheHelper CACHE_HELPER = mock(ShareCoordinatorMetadataCacheHelper.class);
     private static final int MAX_RPC_RETRY_ATTEMPTS = 5;
     public static final long REQUEST_BACKOFF_MS = 100L;
@@ -88,6 +108,7 @@ class PersisterStateManagerTest {
         private Time time = MOCK_TIME;
         private Timer timer = MOCK_TIMER;
         private ShareCoordinatorMetadataCacheHelper cacheHelper = CACHE_HELPER;
+        private int requestTimeoutMs =  Math.toIntExact(CommonClientConfigs.DEFAULT_SOCKET_CONNECTION_SETUP_TIMEOUT_MAX_MS);
 
         private PersisterStateManagerBuilder withKafkaClient(KafkaClient client) {
             this.client = client;
@@ -119,6 +140,7 @@ class PersisterStateManagerTest {
     }
 
     private abstract class TestStateHandler extends PersisterStateManager.PersisterStateManagerHandler {
+        private static final Logger LOG = LoggerFactory.getLogger(TestStateHandler.class);
         private final CompletableFuture<TestHandlerResponse> result;
 
         private class TestHandlerResponseData extends WriteShareGroupStateResponseData {
@@ -144,10 +166,15 @@ class PersisterStateManagerTest {
         }
 
         @Override
+        protected Logger log() {
+            return LOG;
+        }
+
+        @Override
         protected void handleRequestResponse(ClientResponse response) {
             this.result.complete(new TestHandlerResponse(new TestHandlerResponseData()
-                .setResults(Collections.singletonList(new WriteShareGroupStateResponseData.WriteStateResult()
-                    .setPartitions(Collections.singletonList(new WriteShareGroupStateResponseData.PartitionResult()
+                .setResults(List.of(new WriteShareGroupStateResponseData.WriteStateResult()
+                    .setPartitions(List.of(new WriteShareGroupStateResponseData.PartitionResult()
                         .setPartition(partitionKey().partition())
                         .setErrorMessage(Errors.NONE.message())
                         .setErrorCode(Errors.NONE.code()))
@@ -164,9 +191,23 @@ class PersisterStateManagerTest {
         @Override
         protected void findCoordinatorErrorResponse(Errors error, Exception exception) {
             this.result.complete(new TestHandlerResponse(new TestHandlerResponseData()
-                .setResults(Collections.singletonList(new WriteShareGroupStateResponseData.WriteStateResult()
+                .setResults(List.of(new WriteShareGroupStateResponseData.WriteStateResult()
                     .setTopicId(partitionKey().topicId())
-                    .setPartitions(Collections.singletonList(new WriteShareGroupStateResponseData.PartitionResult()
+                    .setPartitions(List.of(new WriteShareGroupStateResponseData.PartitionResult()
+                        .setPartition(partitionKey().partition())
+                        .setErrorMessage(exception == null ? error.message() : exception.getMessage())
+                        .setErrorCode(error.code()))
+                    )
+                ))
+            ));
+        }
+
+        @Override
+        protected void requestErrorResponse(Errors error, Exception exception) {
+            this.result.complete(new TestHandlerResponse(new TestHandlerResponseData()
+                .setResults(List.of(new WriteShareGroupStateResponseData.WriteStateResult()
+                    .setTopicId(partitionKey().topicId())
+                    .setPartitions(List.of(new WriteShareGroupStateResponseData.PartitionResult()
                         .setPartition(partitionKey().partition())
                         .setErrorMessage(exception == null ? error.message() : exception.getMessage())
                         .setErrorCode(error.code()))
@@ -210,12 +251,21 @@ class PersisterStateManagerTest {
 
             @Override
             public List<Node> getClusterNodes() {
-                return Collections.singletonList(suppliedNode);
+                return List.of(suppliedNode);
+            }
+
+            @Override
+            public boolean isRequestHeaderV3Supported() {
+                return true;
             }
         };
     }
 
     private ShareCoordinatorMetadataCacheHelper getCoordinatorCacheHelper(Node coordinatorNode) {
+        return getCoordinatorCacheHelper(coordinatorNode, () -> true);
+    }
+
+    private ShareCoordinatorMetadataCacheHelper getCoordinatorCacheHelper(Node coordinatorNode, BooleanSupplier requestHeaderV3Supported) {
         return new ShareCoordinatorMetadataCacheHelper() {
             @Override
             public boolean containsTopic(String topic) {
@@ -229,9 +279,25 @@ class PersisterStateManagerTest {
 
             @Override
             public List<Node> getClusterNodes() {
-                return Collections.emptyList();
+                return List.of();
+            }
+
+            @Override
+            public boolean isRequestHeaderV3Supported() {
+                return requestHeaderV3Supported.getAsBoolean();
             }
         };
+    }
+
+    private static void assertRequestVersion(
+        RequestAndCompletionHandler request,
+        ApiKeys apiKey,
+        boolean requestHeaderV3Supported,
+        short versionBeforeRequestHeaderV3
+    ) {
+        short requestVersion = request.request.latestAllowedVersion();
+        assertEquals(requestHeaderV3Supported ? apiKey.latestVersion() : versionBeforeRequestHeaderV3, requestVersion);
+        assertEquals(requestHeaderV3Supported ? (short) 3 : (short) 2, apiKey.requestHeaderVersion(requestVersion));
     }
 
     private static Timer mockTimer;
@@ -264,7 +330,7 @@ class PersisterStateManagerTest {
                 && ((FindCoordinatorRequest) body).data().coordinatorKeys().get(0).equals(coordinatorKey),
             new FindCoordinatorResponse(
                 new FindCoordinatorResponseData()
-                    .setCoordinators(Collections.singletonList(
+                    .setCoordinators(List.of(
                         new FindCoordinatorResponseData.Coordinator()
                             .setKey(coordinatorKey)
                             .setErrorCode(Errors.UNKNOWN_SERVER_ERROR.code())
@@ -325,6 +391,133 @@ class PersisterStateManagerTest {
     }
 
     @Test
+    public void testFindCoordinatorNullResponse() {
+        MockClient client = new MockClient(MOCK_TIME);
+
+        String groupId = "group1";
+        Uuid topicId = Uuid.randomUuid();
+        int partition = 10;
+
+        Node suppliedNode = new Node(0, HOST, PORT);
+
+        String coordinatorKey = SharePartitionKey.asCoordinatorKey(groupId, topicId, partition);
+
+        client.prepareResponseFrom(body -> body instanceof FindCoordinatorRequest
+                && ((FindCoordinatorRequest) body).data().keyType() == FindCoordinatorRequest.CoordinatorType.SHARE.id()
+                && ((FindCoordinatorRequest) body).data().coordinatorKeys().get(0).equals(coordinatorKey),
+            null,
+            suppliedNode
+        );
+
+        ShareCoordinatorMetadataCacheHelper cacheHelper = getDefaultCacheHelper(suppliedNode);
+
+        PersisterStateManager stateManager = PersisterStateManagerBuilder.builder()
+            .withKafkaClient(client)
+            .withTimer(mockTimer)
+            .withCacheHelper(cacheHelper)
+            .build();
+
+        stateManager.start();
+
+        CompletableFuture<TestStateHandler.TestHandlerResponse> future = new CompletableFuture<>();
+
+        TestStateHandler handler = spy(new TestStateHandler(
+            stateManager,
+            groupId,
+            topicId,
+            partition,
+            future,
+            REQUEST_BACKOFF_MS,
+            REQUEST_BACKOFF_MAX_MS,
+            MAX_RPC_RETRY_ATTEMPTS
+        ) {
+            @Override
+            protected AbstractRequest.Builder<? extends AbstractRequest> requestBuilder() {
+                return null;
+            }
+        });
+
+        stateManager.enqueue(handler);
+
+        TestStateHandler.TestHandlerResponse result = null;
+        try {
+            result = handler.result().get();
+        } catch (Exception e) {
+            fail("Failed to get result from future", e);
+        }
+
+        assertEquals(Errors.UNKNOWN_SERVER_ERROR.code(), result.data().results().get(0).partitions().get(0).errorCode());
+        verify(handler, times(1)).findShareCoordinatorBuilder();
+
+        try {
+            // Stopping the state manager
+            stateManager.stop();
+        } catch (Exception e) {
+            fail("Failed to stop state manager", e);
+        }
+    }
+
+    @Test
+    public void testFindCoordinatorDisconnect() {
+        MockClient client = new MockClient(MOCK_TIME);
+
+        String groupId = "group1";
+        Uuid topicId = Uuid.randomUuid();
+        int partition = 10;
+
+        Node suppliedNode = new Node(0, HOST, PORT);
+
+        client.setUnreachable(suppliedNode, CommonClientConfigs.DEFAULT_SOCKET_CONNECTION_SETUP_TIMEOUT_MAX_MS + 1);
+
+        ShareCoordinatorMetadataCacheHelper cacheHelper = getDefaultCacheHelper(suppliedNode);
+
+        PersisterStateManager stateManager = PersisterStateManagerBuilder.builder()
+            .withKafkaClient(client)
+            .withTimer(mockTimer)
+            .withCacheHelper(cacheHelper)
+            .build();
+
+        stateManager.start();
+
+        CompletableFuture<TestStateHandler.TestHandlerResponse> future = new CompletableFuture<>();
+
+        TestStateHandler handler = spy(new TestStateHandler(
+            stateManager,
+            groupId,
+            topicId,
+            partition,
+            future,
+            REQUEST_BACKOFF_MS,
+            REQUEST_BACKOFF_MAX_MS,
+            MAX_RPC_RETRY_ATTEMPTS
+        ) {
+            @Override
+            protected AbstractRequest.Builder<? extends AbstractRequest> requestBuilder() {
+                return null;
+            }
+        });
+
+        stateManager.enqueue(handler);
+
+        TestStateHandler.TestHandlerResponse result = null;
+        try {
+            result = handler.result().get();
+        } catch (Exception e) {
+            fail("Failed to get result from future", e);
+        }
+
+        assertEquals(Errors.NETWORK_EXCEPTION.code(), result.data().results().get(0).partitions().get(0).errorCode());
+        verify(handler, times(5)).findShareCoordinatorBuilder();    // Retriable exception
+
+        try {
+            // Stopping the state manager
+            stateManager.stop();
+        } catch (Exception e) {
+            fail("Failed to stop state manager", e);
+        }
+    }
+
+    @Test
     public void testFindCoordinatorAttemptsExhausted() {
         MockClient client = new MockClient(MOCK_TIME);
 
@@ -341,7 +534,7 @@ class PersisterStateManagerTest {
                 && ((FindCoordinatorRequest) body).data().coordinatorKeys().get(0).equals(coordinatorKey),
             new FindCoordinatorResponse(
                 new FindCoordinatorResponseData()
-                    .setCoordinators(Collections.singletonList(
+                    .setCoordinators(List.of(
                         new FindCoordinatorResponseData.Coordinator()
                             .setKey(coordinatorKey)
                             .setErrorCode(Errors.COORDINATOR_NOT_AVAILABLE.code())
@@ -358,7 +551,7 @@ class PersisterStateManagerTest {
                 && ((FindCoordinatorRequest) body).data().coordinatorKeys().get(0).equals(coordinatorKey),
             new FindCoordinatorResponse(
                 new FindCoordinatorResponseData()
-                    .setCoordinators(Collections.singletonList(
+                    .setCoordinators(List.of(
                         new FindCoordinatorResponseData.Coordinator()
                             .setKey(coordinatorKey)
                             .setErrorCode(Errors.COORDINATOR_NOT_AVAILABLE.code())
@@ -438,7 +631,7 @@ class PersisterStateManagerTest {
                 && ((FindCoordinatorRequest) body).data().coordinatorKeys().get(0).equals(coordinatorKey),
             new FindCoordinatorResponse(
                 new FindCoordinatorResponseData()
-                    .setCoordinators(Collections.singletonList(
+                    .setCoordinators(List.of(
                         new FindCoordinatorResponseData.Coordinator()
                             .setNodeId(1)
                             .setHost(HOST)
@@ -458,17 +651,17 @@ class PersisterStateManagerTest {
             return requestGroupId.equals(groupId) && requestTopicId == topicId && requestPartition == partition;
         }, new ReadShareGroupStateResponse(
             new ReadShareGroupStateResponseData()
-                .setResults(Collections.singletonList(
+                .setResults(List.of(
                     new ReadShareGroupStateResponseData.ReadStateResult()
                         .setTopicId(topicId)
-                        .setPartitions(Collections.singletonList(
+                        .setPartitions(List.of(
                             new ReadShareGroupStateResponseData.PartitionResult()
                                 .setPartition(partition)
                                 .setErrorCode(Errors.NONE.code())
                                 .setErrorMessage("")
                                 .setStateEpoch(1)
                                 .setStartOffset(0)
-                                .setStateBatches(Collections.emptyList())
+                                .setStateBatches(List.of())
                         ))
                 ))
         ), coordinatorNode);
@@ -501,9 +694,8 @@ class PersisterStateManagerTest {
 
         CompletableFuture<ReadShareGroupStateResponse> resultFuture = handler.result();
 
-        ReadShareGroupStateResponse result = null;
         try {
-            result = resultFuture.get();
+            resultFuture.get();
         } catch (Exception e) {
             fail("Failed to get result from future", e);
         }
@@ -526,7 +718,7 @@ class PersisterStateManagerTest {
         String groupId = "group1";
         Uuid topicId = Uuid.randomUuid();
         int partition = 10;
-        List<PersisterStateBatch> stateBatches = Arrays.asList(
+        List<PersisterStateBatch> stateBatches = List.of(
             new PersisterStateBatch(0, 9, (byte) 0, (short) 1),
             new PersisterStateBatch(10, 19, (byte) 1, (short) 1)
         );
@@ -541,7 +733,7 @@ class PersisterStateManagerTest {
                 && ((FindCoordinatorRequest) body).data().coordinatorKeys().get(0).equals(coordinatorKey),
             new FindCoordinatorResponse(
                 new FindCoordinatorResponseData()
-                    .setCoordinators(Collections.singletonList(
+                    .setCoordinators(List.of(
                         new FindCoordinatorResponseData.Coordinator()
                             .setNodeId(1)
                             .setHost(HOST)
@@ -561,10 +753,10 @@ class PersisterStateManagerTest {
             return requestGroupId.equals(groupId) && requestTopicId == topicId && requestPartition == partition;
         }, new WriteShareGroupStateResponse(
             new WriteShareGroupStateResponseData()
-                .setResults(Collections.singletonList(
+                .setResults(List.of(
                     new WriteShareGroupStateResponseData.WriteStateResult()
                         .setTopicId(topicId)
-                        .setPartitions(Collections.singletonList(
+                        .setPartitions(List.of(
                             new WriteShareGroupStateResponseData.PartitionResult()
                                 .setPartition(partition)
                                 .setErrorCode(Errors.NONE.code())
@@ -589,6 +781,7 @@ class PersisterStateManagerTest {
             groupId,
             topicId,
             partition,
+            0,
             0,
             0,
             0,
@@ -637,7 +830,7 @@ class PersisterStateManagerTest {
         String groupId = "group1";
         Uuid topicId = Uuid.randomUuid();
         int partition = 10;
-        List<PersisterStateBatch> stateBatches = Arrays.asList(
+        List<PersisterStateBatch> stateBatches = List.of(
             new PersisterStateBatch(0, 9, (byte) 0, (short) 1),
             new PersisterStateBatch(10, 19, (byte) 1, (short) 1)
         );
@@ -652,7 +845,7 @@ class PersisterStateManagerTest {
                 && ((FindCoordinatorRequest) body).data().coordinatorKeys().get(0).equals(coordinatorKey),
             new FindCoordinatorResponse(
                 new FindCoordinatorResponseData()
-                    .setCoordinators(Collections.singletonList(
+                    .setCoordinators(List.of(
                         new FindCoordinatorResponseData.Coordinator()
                             .setErrorCode(Errors.NOT_COORDINATOR.code())
                     ))
@@ -665,7 +858,7 @@ class PersisterStateManagerTest {
                 && ((FindCoordinatorRequest) body).data().coordinatorKeys().get(0).equals(coordinatorKey),
             new FindCoordinatorResponse(
                 new FindCoordinatorResponseData()
-                    .setCoordinators(Collections.singletonList(
+                    .setCoordinators(List.of(
                         new FindCoordinatorResponseData.Coordinator()
                             .setNodeId(1)
                             .setHost(HOST)
@@ -685,10 +878,10 @@ class PersisterStateManagerTest {
             return requestGroupId.equals(groupId) && requestTopicId == topicId && requestPartition == partition;
         }, new WriteShareGroupStateResponse(
             new WriteShareGroupStateResponseData()
-                .setResults(Collections.singletonList(
+                .setResults(List.of(
                     new WriteShareGroupStateResponseData.WriteStateResult()
                         .setTopicId(topicId)
-                        .setPartitions(Collections.singletonList(
+                        .setPartitions(List.of(
                             new WriteShareGroupStateResponseData.PartitionResult()
                                 .setPartition(partition)
                                 .setErrorCode(Errors.NONE.code())
@@ -713,6 +906,7 @@ class PersisterStateManagerTest {
             groupId,
             topicId,
             partition,
+            0,
             0,
             0,
             0,
@@ -757,7 +951,7 @@ class PersisterStateManagerTest {
         String groupId = "group1";
         Uuid topicId = Uuid.randomUuid();
         int partition = 10;
-        List<PersisterStateBatch> stateBatches = Arrays.asList(
+        List<PersisterStateBatch> stateBatches = List.of(
             new PersisterStateBatch(0, 9, (byte) 0, (short) 1),
             new PersisterStateBatch(10, 19, (byte) 1, (short) 1)
         );
@@ -772,7 +966,7 @@ class PersisterStateManagerTest {
                 && ((FindCoordinatorRequest) body).data().coordinatorKeys().get(0).equals(coordinatorKey),
             new FindCoordinatorResponse(
                 new FindCoordinatorResponseData()
-                    .setCoordinators(Collections.singletonList(
+                    .setCoordinators(List.of(
                         new FindCoordinatorResponseData.Coordinator()
                             .setErrorCode(Errors.COORDINATOR_NOT_AVAILABLE.code())
                     ))
@@ -785,7 +979,7 @@ class PersisterStateManagerTest {
                 && ((FindCoordinatorRequest) body).data().coordinatorKeys().get(0).equals(coordinatorKey),
             new FindCoordinatorResponse(
                 new FindCoordinatorResponseData()
-                    .setCoordinators(Collections.singletonList(
+                    .setCoordinators(List.of(
                         new FindCoordinatorResponseData.Coordinator()
                             .setNodeId(1)
                             .setHost(HOST)
@@ -805,10 +999,10 @@ class PersisterStateManagerTest {
             return requestGroupId.equals(groupId) && requestTopicId == topicId && requestPartition == partition;
         }, new WriteShareGroupStateResponse(
             new WriteShareGroupStateResponseData()
-                .setResults(Collections.singletonList(
+                .setResults(List.of(
                     new WriteShareGroupStateResponseData.WriteStateResult()
                         .setTopicId(topicId)
-                        .setPartitions(Collections.singletonList(
+                        .setPartitions(List.of(
                             new WriteShareGroupStateResponseData.PartitionResult()
                                 .setPartition(partition)
                                 .setErrorCode(Errors.NONE.code())
@@ -833,6 +1027,7 @@ class PersisterStateManagerTest {
             groupId,
             topicId,
             partition,
+            0,
             0,
             0,
             0,
@@ -881,7 +1076,7 @@ class PersisterStateManagerTest {
         String groupId = "group1";
         Uuid topicId = Uuid.randomUuid();
         int partition = 10;
-        List<PersisterStateBatch> stateBatches = Arrays.asList(
+        List<PersisterStateBatch> stateBatches = List.of(
             new PersisterStateBatch(0, 9, (byte) 0, (short) 1),
             new PersisterStateBatch(10, 19, (byte) 1, (short) 1)
         );
@@ -897,10 +1092,10 @@ class PersisterStateManagerTest {
             return requestGroupId.equals(groupId) && requestTopicId == topicId && requestPartition == partition;
         }, new WriteShareGroupStateResponse(
             new WriteShareGroupStateResponseData()
-                .setResults(Collections.singletonList(
+                .setResults(List.of(
                     new WriteShareGroupStateResponseData.WriteStateResult()
                         .setTopicId(topicId)
-                        .setPartitions(Collections.singletonList(
+                        .setPartitions(List.of(
                             new WriteShareGroupStateResponseData.PartitionResult()
                                 .setPartition(partition)
                                 .setErrorCode(Errors.NONE.code())
@@ -925,6 +1120,7 @@ class PersisterStateManagerTest {
             groupId,
             topicId,
             partition,
+            0,
             0,
             0,
             0,
@@ -967,6 +1163,57 @@ class PersisterStateManagerTest {
         }
     }
 
+    @ParameterizedTest
+    @ValueSource(booleans = {true, false})
+    public void testWriteStateRequestVersionGatedByRequestHeaderV3Supported(boolean requestHeaderV3Supported) {
+        String groupId = "group1";
+        Uuid topicId = Uuid.randomUuid();
+        Node coordinatorNode = new Node(1, HOST, PORT);
+
+        PersisterStateManager stateManager = PersisterStateManagerBuilder.builder()
+            .withKafkaClient(new MockClient(MOCK_TIME))
+            .withTimer(mockTimer)
+            .withCacheHelper(getCoordinatorCacheHelper(coordinatorNode, () -> requestHeaderV3Supported))
+            .build();
+
+        batchedWriteHandler(stateManager, coordinatorNode, groupId, topicId, 0);
+
+        Collection<RequestAndCompletionHandler> requests = stateManager.generateRequests();
+        assertEquals(1, requests.size());
+        assertRequestVersion(requests.iterator().next(), ApiKeys.WRITE_SHARE_GROUP_STATE, requestHeaderV3Supported, (short) 1);
+    }
+
+    @Test
+    public void testWriteStateRequestVersionFollowsRequestHeaderV3SupportedChange() {
+        String groupId = "group1";
+        Uuid topicId = Uuid.randomUuid();
+        Node coordinatorNode = new Node(1, HOST, PORT);
+        AtomicBoolean requestHeaderV3Supported = new AtomicBoolean(false);
+
+        PersisterStateManager stateManager = PersisterStateManagerBuilder.builder()
+            .withKafkaClient(new MockClient(MOCK_TIME))
+            .withTimer(mockTimer)
+            .withCacheHelper(getCoordinatorCacheHelper(coordinatorNode, requestHeaderV3Supported::get))
+            .build();
+
+        batchedWriteHandler(stateManager, coordinatorNode, groupId, topicId, 0);
+        Collection<RequestAndCompletionHandler> requests = stateManager.generateRequests();
+        assertEquals(1, requests.size());
+        RequestAndCompletionHandler request = requests.iterator().next();
+        assertRequestVersion(request, ApiKeys.WRITE_SHARE_GROUP_STATE, false, (short) 1);
+
+        // the next write to the same coordinator is only sent once this one completes
+        request.handler.onComplete(writeStateClientResponse(
+            new WriteShareGroupStateResponseData().setResults(List.of(
+                writeStateResult(topicId, writePartitionResult(0, Errors.NONE))))));
+
+        requestHeaderV3Supported.set(true);
+        batchedWriteHandler(stateManager, coordinatorNode, groupId, topicId, 0);
+        requests = stateManager.generateRequests();
+        assertEquals(1, requests.size());
+        assertRequestVersion(requests.iterator().next(), ApiKeys.WRITE_SHARE_GROUP_STATE, true, (short) 1);
+    }
+
     @Test
     public void testWriteStateRequestWithRetryAndCoordinatorNodeLookup() {
         MockClient client = new MockClient(MOCK_TIME);
@@ -974,7 +1221,7 @@ class PersisterStateManagerTest {
         String groupId = "group1";
         Uuid topicId = Uuid.randomUuid();
         int partition = 10;
-        List<PersisterStateBatch> stateBatches = Arrays.asList(
+        List<PersisterStateBatch> stateBatches = List.of(
             new PersisterStateBatch(0, 9, (byte) 0, (short) 1),
             new PersisterStateBatch(10, 19, (byte) 1, (short) 1)
         );
@@ -990,10 +1237,10 @@ class PersisterStateManagerTest {
             return requestGroupId.equals(groupId) && requestTopicId == topicId && requestPartition == partition;
         }, new WriteShareGroupStateResponse(
             new WriteShareGroupStateResponseData()
-                .setResults(Collections.singletonList(
+                .setResults(List.of(
                     new WriteShareGroupStateResponseData.WriteStateResult()
                         .setTopicId(topicId)
-                        .setPartitions(Collections.singletonList(
+                        .setPartitions(List.of(
                             new WriteShareGroupStateResponseData.PartitionResult()
                                 .setPartition(partition)
                                 .setErrorCode(Errors.COORDINATOR_LOAD_IN_PROGRESS.code())
@@ -1011,10 +1258,10 @@ class PersisterStateManagerTest {
             return requestGroupId.equals(groupId) && requestTopicId == topicId && requestPartition == partition;
         }, new WriteShareGroupStateResponse(
             new WriteShareGroupStateResponseData()
-                .setResults(Collections.singletonList(
+                .setResults(List.of(
                     new WriteShareGroupStateResponseData.WriteStateResult()
                         .setTopicId(topicId)
-                        .setPartitions(Collections.singletonList(
+                        .setPartitions(List.of(
                             new WriteShareGroupStateResponseData.PartitionResult()
                                 .setPartition(partition)
                                 .setErrorCode(Errors.NONE.code())
@@ -1039,6 +1286,7 @@ class PersisterStateManagerTest {
             groupId,
             topicId,
             partition,
+            0,
             0,
             0,
             0,
@@ -1088,7 +1336,7 @@ class PersisterStateManagerTest {
         String groupId = "group1";
         Uuid topicId = Uuid.randomUuid();
         int partition = 10;
-        List<PersisterStateBatch> stateBatches = Arrays.asList(
+        List<PersisterStateBatch> stateBatches = List.of(
             new PersisterStateBatch(0, 9, (byte) 0, (short) 1),
             new PersisterStateBatch(10, 19, (byte) 1, (short) 1)
         );
@@ -1104,10 +1352,10 @@ class PersisterStateManagerTest {
             return requestGroupId.equals(groupId) && requestTopicId == topicId && requestPartition == partition;
         }, new WriteShareGroupStateResponse(
             new WriteShareGroupStateResponseData()
-                .setResults(Collections.singletonList(
+                .setResults(List.of(
                     new WriteShareGroupStateResponseData.WriteStateResult()
                         .setTopicId(topicId)
-                        .setPartitions(Collections.singletonList(
+                        .setPartitions(List.of(
                             new WriteShareGroupStateResponseData.PartitionResult()
                                 .setPartition(partition)
                                 .setErrorCode(Errors.COORDINATOR_LOAD_IN_PROGRESS.code())
@@ -1125,10 +1373,10 @@ class PersisterStateManagerTest {
             return requestGroupId.equals(groupId) && requestTopicId == topicId && requestPartition == partition;
         }, new WriteShareGroupStateResponse(
             new WriteShareGroupStateResponseData()
-                .setResults(Collections.singletonList(
+                .setResults(List.of(
                     new WriteShareGroupStateResponseData.WriteStateResult()
                         .setTopicId(topicId)
-                        .setPartitions(Collections.singletonList(
+                        .setPartitions(List.of(
                             new WriteShareGroupStateResponseData.PartitionResult()
                                 .setPartition(partition)
                                 .setErrorCode(Errors.COORDINATOR_LOAD_IN_PROGRESS.code())
@@ -1146,10 +1394,10 @@ class PersisterStateManagerTest {
             return requestGroupId.equals(groupId) && requestTopicId == topicId && requestPartition == partition;
         }, new WriteShareGroupStateResponse(
             new WriteShareGroupStateResponseData()
-                .setResults(Collections.singletonList(
+                .setResults(List.of(
                     new WriteShareGroupStateResponseData.WriteStateResult()
                         .setTopicId(topicId)
-                        .setPartitions(Collections.singletonList(
+                        .setPartitions(List.of(
                             new WriteShareGroupStateResponseData.PartitionResult()
                                 .setPartition(partition)
                                 .setErrorCode(Errors.NONE.code())
@@ -1174,6 +1422,7 @@ class PersisterStateManagerTest {
             groupId,
             topicId,
             partition,
+            0,
             0,
             0,
             0,
@@ -1217,13 +1466,84 @@ class PersisterStateManagerTest {
     }
 
     @Test
+    public void testWriteStateClientResponseErrorRetriesExhausted() {
+        MockClient client = new MockClient(MOCK_TIME);
+
+        String groupId = "group1";
+        Uuid topicId = Uuid.randomUuid();
+        int partition = 10;
+        List<PersisterStateBatch> stateBatches = List.of(
+            new PersisterStateBatch(0, 9, (byte) 0, (short) 1),
+            new PersisterStateBatch(10, 19, (byte) 1, (short) 1)
+        );
+
+        Node coordinatorNode = new Node(1, HOST, PORT);
+        client.setUnreachable(coordinatorNode, CommonClientConfigs.DEFAULT_SOCKET_CONNECTION_SETUP_TIMEOUT_MAX_MS + 1);
+
+        ShareCoordinatorMetadataCacheHelper cacheHelper = getCoordinatorCacheHelper(coordinatorNode);
+
+        PersisterStateManager stateManager = PersisterStateManagerBuilder.builder()
+            .withKafkaClient(client)
+            .withTimer(mockTimer)
+            .withCacheHelper(cacheHelper)
+            .build();
+
+        stateManager.start();
+
+        CompletableFuture<WriteShareGroupStateResponse> future = new CompletableFuture<>();
+
+        PersisterStateManager.WriteStateHandler handler = spy(stateManager.new WriteStateHandler(
+            groupId,
+            topicId,
+            partition,
+            0,
+            0,
+            0,
+            0,
+            stateBatches,
+            future,
+            REQUEST_BACKOFF_MS,
+            REQUEST_BACKOFF_MAX_MS,
+            2
+        ));
+
+        stateManager.enqueue(handler);
+
+        CompletableFuture<WriteShareGroupStateResponse> resultFuture = handler.result();
+
+        WriteShareGroupStateResponse result = null;
+        try {
+            result = resultFuture.get();
+        } catch (Exception e) {
+            fail("Failed to get result from future", e);
+        }
+
+        WriteShareGroupStateResponseData.PartitionResult partitionResult = result.data().results().get(0).partitions().get(0);
+
+        // Verifying the coordinator node was populated correctly by the FIND_COORDINATOR request
+        assertEquals(coordinatorNode, handler.getCoordinatorNode());
+
+        // Verifying the result returned in correct
+        assertEquals(partition, partitionResult.partition());
+        assertEquals(Errors.NETWORK_EXCEPTION.code(), partitionResult.errorCode());
+        verify(handler, times(2)).handleRequestResponse(any());    // Retriable exception
+
+        try {
+            // Stopping the state manager
+            stateManager.stop();
+        } catch (Exception e) {
+            fail("Failed to stop state manager", e);
+        }
+    }
+
+    @Test
     public void testWriteStateRequestBatchingWithCoordinatorNodeLookup() throws ExecutionException, Exception {
         MockClient client = new MockClient(MOCK_TIME);
 
         String groupId = "group1";
         Uuid topicId = Uuid.randomUuid();
         int partition = 10;
-        List<PersisterStateBatch> stateBatches = Arrays.asList(
+        List<PersisterStateBatch> stateBatches = List.of(
             new PersisterStateBatch(0, 9, (byte) 0, (short) 1),
             new PersisterStateBatch(10, 19, (byte) 1, (short) 1)
         );
@@ -1239,10 +1559,10 @@ class PersisterStateManagerTest {
             return requestGroupId.equals(groupId) && requestTopicId == topicId && requestPartition == partition;
         }, new WriteShareGroupStateResponse(
             new WriteShareGroupStateResponseData()
-                .setResults(Collections.singletonList(
+                .setResults(List.of(
                     new WriteShareGroupStateResponseData.WriteStateResult()
                         .setTopicId(topicId)
-                        .setPartitions(Collections.singletonList(
+                        .setPartitions(List.of(
                             new WriteShareGroupStateResponseData.PartitionResult()
                                 .setPartition(partition)
                                 .setErrorCode(Errors.NONE.code())
@@ -1281,6 +1601,7 @@ class PersisterStateManagerTest {
                 0,
                 0,
                 0,
+                0,
                 stateBatches,
                 future,
                 REQUEST_BACKOFF_MS,
@@ -1295,6 +1616,223 @@ class PersisterStateManagerTest {
             .map(PersisterStateManager.WriteStateHandler::result).toArray(CompletableFuture[]::new)).get();
 
         TestUtils.waitForCondition(isBatchingSuccess::get, TestUtils.DEFAULT_MAX_WAIT_MS, 10L, () -> "unable to verify batching");
+    }
+
+    private static WriteShareGroupStateResponseData.PartitionResult writePartitionResult(int partition, Errors error) {
+        return new WriteShareGroupStateResponseData.PartitionResult()
+            .setPartition(partition)
+            .setErrorCode(error.code())
+            .setErrorMessage(error.message());
+    }
+
+    private static WriteShareGroupStateResponseData.WriteStateResult writeStateResult(
+        Uuid topicId,
+        WriteShareGroupStateResponseData.PartitionResult... partitions
+    ) {
+        return new WriteShareGroupStateResponseData.WriteStateResult()
+            .setTopicId(topicId)
+            .setPartitions(List.of(partitions));
+    }
+
+    private static ClientResponse writeStateClientResponse(WriteShareGroupStateResponseData data) {
+        return new ClientResponse(
+            new RequestHeader(ApiKeys.WRITE_SHARE_GROUP_STATE, ApiKeys.WRITE_SHARE_GROUP_STATE.latestVersion(), "client-id", 0),
+            null,
+            HOST,
+            MOCK_TIME.milliseconds(),
+            MOCK_TIME.milliseconds(),
+            false,
+            null,
+            null,
+            new WriteShareGroupStateResponse(data)
+        );
+    }
+
+    // Places a write handler straight into the batching map, bypassing coordinator lookup, so that a
+    // single generateRequests() call yields one coalesced request covering every handler.
+    private PersisterStateManager.WriteStateHandler batchedWriteHandler(
+        PersisterStateManager stateManager,
+        Node coordinatorNode,
+        String groupId,
+        Uuid topicId,
+        int partition
+    ) {
+        PersisterStateManager.WriteStateHandler handler = stateManager.new WriteStateHandler(
+            groupId,
+            topicId,
+            partition,
+            0,
+            0,
+            0,
+            0,
+            List.of(),
+            new CompletableFuture<>(),
+            REQUEST_BACKOFF_MS,
+            REQUEST_BACKOFF_MAX_MS,
+            MAX_RPC_RETRY_ATTEMPTS
+        );
+        handler.addRequestToNodeMap(coordinatorNode, handler);
+        return handler;
+    }
+
+    private static void assertWriteStateResult(
+        PersisterStateManager.WriteStateHandler handler,
+        Uuid expectedTopicId,
+        int expectedPartition,
+        Errors expectedError
+    ) {
+        WriteShareGroupStateResponse response = assertDoesNotThrow(() -> handler.result().get());
+        assertEquals(1, response.data().results().size());
+        WriteShareGroupStateResponseData.WriteStateResult result = response.data().results().get(0);
+        assertEquals(expectedTopicId, result.topicId());
+        assertEquals(1, result.partitions().size());
+        assertEquals(expectedPartition, result.partitions().get(0).partition());
+        assertEquals(expectedError.code(), result.partitions().get(0).errorCode());
+    }
+
+    @Test
+    public void testWriteStateCombinedResponseDemultiplexedPerTopicPartition() {
+        String groupId = "group1";
+        Uuid topicId1 = Uuid.randomUuid();
+        Uuid topicId2 = Uuid.randomUuid();
+        Node coordinatorNode = new Node(1, HOST, PORT);
+
+        PersisterStateManager stateManager = PersisterStateManagerBuilder.builder()
+            .withKafkaClient(new MockClient(MOCK_TIME))
+            .withTimer(mockTimer)
+            .withCacheHelper(getCoordinatorCacheHelper(coordinatorNode))
+            .build();
+
+        // the same partition numbers appear under both topics, so a topicId-blind lookup cannot pass
+        PersisterStateManager.WriteStateHandler topic1Partition0 = batchedWriteHandler(stateManager, coordinatorNode, groupId, topicId1, 0);
+        PersisterStateManager.WriteStateHandler topic1Partition1 = batchedWriteHandler(stateManager, coordinatorNode, groupId, topicId1, 1);
+        PersisterStateManager.WriteStateHandler topic2Partition0 = batchedWriteHandler(stateManager, coordinatorNode, groupId, topicId2, 0);
+        PersisterStateManager.WriteStateHandler topic2Partition1 = batchedWriteHandler(stateManager, coordinatorNode, groupId, topicId2, 1);
+
+        Collection<RequestAndCompletionHandler> requests = stateManager.generateRequests();
+        assertEquals(1, requests.size());
+
+        // a distinct error per (topic, partition) makes any mixed-up slice observable
+        requests.iterator().next().handler.onComplete(writeStateClientResponse(
+            new WriteShareGroupStateResponseData().setResults(List.of(
+                writeStateResult(topicId1,
+                    writePartitionResult(0, Errors.NONE),
+                    writePartitionResult(1, Errors.INVALID_REQUEST)),
+                writeStateResult(topicId2,
+                    writePartitionResult(0, Errors.FENCED_STATE_EPOCH),
+                    writePartitionResult(1, Errors.NONE))))));
+
+        assertWriteStateResult(topic1Partition0, topicId1, 0, Errors.NONE);
+        assertWriteStateResult(topic1Partition1, topicId1, 1, Errors.INVALID_REQUEST);
+        assertWriteStateResult(topic2Partition0, topicId2, 0, Errors.FENCED_STATE_EPOCH);
+        assertWriteStateResult(topic2Partition1, topicId2, 1, Errors.NONE);
+    }
+
+    @Test
+    public void testWriteStateCombinedResponseIndexedOncePerBatch() {
+        String groupId = "group1";
+        Uuid topicId = Uuid.randomUuid();
+        Node coordinatorNode = new Node(1, HOST, PORT);
+
+        PersisterStateManager stateManager = PersisterStateManagerBuilder.builder()
+            .withKafkaClient(new MockClient(MOCK_TIME))
+            .withTimer(mockTimer)
+            .withCacheHelper(getCoordinatorCacheHelper(coordinatorNode))
+            .build();
+
+        List<PersisterStateManager.WriteStateHandler> handlers = new ArrayList<>();
+        for (int partition = 0; partition < 4; partition++) {
+            PersisterStateManager.WriteStateHandler handler = spy(stateManager.new WriteStateHandler(
+                groupId,
+                topicId,
+                partition,
+                0,
+                0,
+                0,
+                0,
+                List.of(),
+                new CompletableFuture<>(),
+                REQUEST_BACKOFF_MS,
+                REQUEST_BACKOFF_MAX_MS,
+                MAX_RPC_RETRY_ATTEMPTS
+            ));
+            handler.addRequestToNodeMap(coordinatorNode, handler);
+            handlers.add(handler);
+        }
+
+        Collection<RequestAndCompletionHandler> requests = stateManager.generateRequests();
+        assertEquals(1, requests.size());
+
+        requests.iterator().next().handler.onComplete(writeStateClientResponse(
+            new WriteShareGroupStateResponseData().setResults(List.of(
+                writeStateResult(topicId,
+                    writePartitionResult(0, Errors.NONE),
+                    writePartitionResult(1, Errors.NONE),
+                    writePartitionResult(2, Errors.NONE),
+                    writePartitionResult(3, Errors.NONE))))));
+
+        // the combined response is indexed once for the whole batch, and every other handler reuses
+        // that index rather than rescanning the response
+        verify(handlers.get(0), times(1)).buildResultIndex(any());
+        for (int i = 1; i < handlers.size(); i++) {
+            verify(handlers.get(i), never()).buildResultIndex(any());
+        }
+
+        for (int partition = 0; partition < handlers.size(); partition++) {
+            assertWriteStateResult(handlers.get(partition), topicId, partition, Errors.NONE);
+        }
+    }
+
+    @Test
+    public void testWriteStateCombinedResponseMissingPartitionFailsOnlyThatHandler() {
+        String groupId = "group1";
+        Uuid topicId = Uuid.randomUuid();
+        Node coordinatorNode = new Node(1, HOST, PORT);
+
+        PersisterStateManager stateManager = PersisterStateManagerBuilder.builder()
+            .withKafkaClient(new MockClient(MOCK_TIME))
+            .withTimer(mockTimer)
+            .withCacheHelper(getCoordinatorCacheHelper(coordinatorNode))
+            .build();
+
+        PersisterStateManager.WriteStateHandler present = batchedWriteHandler(stateManager, coordinatorNode, groupId, topicId, 0);
+        PersisterStateManager.WriteStateHandler missing = batchedWriteHandler(stateManager, coordinatorNode, groupId, topicId, 1);
+
+        Collection<RequestAndCompletionHandler> requests = stateManager.generateRequests();
+        assertEquals(1, requests.size());
+
+        // partition 1 is absent from the combined response
+        requests.iterator().next().handler.onComplete(writeStateClientResponse(
+            new WriteShareGroupStateResponseData().setResults(List.of(
+                writeStateResult(topicId, writePartitionResult(0, Errors.NONE))))));
+
+        assertWriteStateResult(present, topicId, 0, Errors.NONE);
+        assertWriteStateResult(missing, topicId, 1, Errors.UNKNOWN_SERVER_ERROR);
+    }
+
+    @Test
+    public void testWriteStateCombinedResponseNullClientResponseCompletesAllHandlers() {
+        String groupId = "group1";
+        Uuid topicId = Uuid.randomUuid();
+        Node coordinatorNode = new Node(1, HOST, PORT);
+
+        PersisterStateManager stateManager = PersisterStateManagerBuilder.builder()
+            .withKafkaClient(new MockClient(MOCK_TIME))
+            .withTimer(mockTimer)
+            .withCacheHelper(getCoordinatorCacheHelper(coordinatorNode))
+            .build();
+
+        PersisterStateManager.WriteStateHandler partition0 = batchedWriteHandler(stateManager, coordinatorNode, groupId, topicId, 0);
+        PersisterStateManager.WriteStateHandler partition1 = batchedWriteHandler(stateManager, coordinatorNode, groupId, topicId, 1);
+
+        Collection<RequestAndCompletionHandler> requests = stateManager.generateRequests();
+        assertEquals(1, requests.size());
+
+        // a null response must still fail every handler in the batch rather than throwing
+        assertDoesNotThrow(() -> requests.iterator().next().handler.onComplete(null));
+
+        assertWriteStateResult(partition0, topicId, 0, Errors.UNKNOWN_SERVER_ERROR);
+        assertWriteStateResult(partition1, topicId, 1, Errors.UNKNOWN_SERVER_ERROR);
     }
 
     @Test
@@ -1315,7 +1853,7 @@ class PersisterStateManagerTest {
                 && ((FindCoordinatorRequest) body).data().coordinatorKeys().get(0).equals(coordinatorKey),
             new FindCoordinatorResponse(
                 new FindCoordinatorResponseData()
-                    .setCoordinators(Collections.singletonList(
+                    .setCoordinators(List.of(
                         new FindCoordinatorResponseData.Coordinator()
                             .setNodeId(1)
                             .setHost(HOST)
@@ -1335,17 +1873,17 @@ class PersisterStateManagerTest {
             return requestGroupId.equals(groupId) && requestTopicId == topicId && requestPartition == partition;
         }, new ReadShareGroupStateResponse(
             new ReadShareGroupStateResponseData()
-                .setResults(Collections.singletonList(
+                .setResults(List.of(
                     new ReadShareGroupStateResponseData.ReadStateResult()
                         .setTopicId(topicId)
-                        .setPartitions(Collections.singletonList(
+                        .setPartitions(List.of(
                             new ReadShareGroupStateResponseData.PartitionResult()
                                 .setPartition(partition)
                                 .setErrorCode(Errors.NONE.code())
                                 .setErrorMessage("")
                                 .setStateEpoch(1)
                                 .setStartOffset(0)
-                                .setStateBatches(Collections.emptyList())
+                                .setStateBatches(List.of())
                         ))
                 ))
         ), coordinatorNode);
@@ -1425,7 +1963,7 @@ class PersisterStateManagerTest {
                 && ((FindCoordinatorRequest) body).data().coordinatorKeys().get(0).equals(coordinatorKey),
             new FindCoordinatorResponse(
                 new FindCoordinatorResponseData()
-                    .setCoordinators(Collections.singletonList(
+                    .setCoordinators(List.of(
                         new FindCoordinatorResponseData.Coordinator()
                             .setNodeId(1)
                             .setHost(HOST)
@@ -1445,17 +1983,17 @@ class PersisterStateManagerTest {
             return requestGroupId.equals(groupId) && requestTopicId == topicId && requestPartition == partition;
         }, new ReadShareGroupStateResponse(
             new ReadShareGroupStateResponseData()
-                .setResults(Collections.singletonList(
+                .setResults(List.of(
                     new ReadShareGroupStateResponseData.ReadStateResult()
                         .setTopicId(Uuid.randomUuid())
-                        .setPartitions(Collections.singletonList(
+                        .setPartitions(List.of(
                             new ReadShareGroupStateResponseData.PartitionResult()
                                 .setPartition(500)
                                 .setErrorCode(Errors.NONE.code())
                                 .setErrorMessage("")
                                 .setStateEpoch(1)
                                 .setStartOffset(0)
-                                .setStateBatches(Collections.emptyList())
+                                .setStateBatches(List.of())
                         ))
                 ))
         ), coordinatorNode);
@@ -1532,7 +2070,7 @@ class PersisterStateManagerTest {
                 && ((FindCoordinatorRequest) body).data().coordinatorKeys().get(0).equals(coordinatorKey),
             new FindCoordinatorResponse(
                 new FindCoordinatorResponseData()
-                    .setCoordinators(Collections.singletonList(
+                    .setCoordinators(List.of(
                         new FindCoordinatorResponseData.Coordinator()
                             .setErrorCode(Errors.NOT_COORDINATOR.code())
                     ))
@@ -1545,7 +2083,7 @@ class PersisterStateManagerTest {
                 && ((FindCoordinatorRequest) body).data().coordinatorKeys().get(0).equals(coordinatorKey),
             new FindCoordinatorResponse(
                 new FindCoordinatorResponseData()
-                    .setCoordinators(Collections.singletonList(
+                    .setCoordinators(List.of(
                         new FindCoordinatorResponseData.Coordinator()
                             .setNodeId(1)
                             .setHost(HOST)
@@ -1565,17 +2103,17 @@ class PersisterStateManagerTest {
             return requestGroupId.equals(groupId) && requestTopicId == topicId && requestPartition == partition;
         }, new ReadShareGroupStateResponse(
             new ReadShareGroupStateResponseData()
-                .setResults(Collections.singletonList(
+                .setResults(List.of(
                     new ReadShareGroupStateResponseData.ReadStateResult()
                         .setTopicId(topicId)
-                        .setPartitions(Collections.singletonList(
+                        .setPartitions(List.of(
                             new ReadShareGroupStateResponseData.PartitionResult()
                                 .setPartition(partition)
                                 .setErrorCode(Errors.NONE.code())
                                 .setErrorMessage("")
                                 .setStateEpoch(1)
                                 .setStartOffset(0)
-                                .setStateBatches(Collections.emptyList())
+                                .setStateBatches(List.of())
                         ))
                 ))
         ), coordinatorNode);
@@ -1649,7 +2187,7 @@ class PersisterStateManagerTest {
                 && ((FindCoordinatorRequest) body).data().coordinatorKeys().get(0).equals(coordinatorKey),
             new FindCoordinatorResponse(
                 new FindCoordinatorResponseData()
-                    .setCoordinators(Collections.singletonList(
+                    .setCoordinators(List.of(
                         new FindCoordinatorResponseData.Coordinator()
                             .setErrorCode(Errors.NOT_COORDINATOR.code())
                     ))
@@ -1662,7 +2200,7 @@ class PersisterStateManagerTest {
                 && ((FindCoordinatorRequest) body).data().coordinatorKeys().get(0).equals(coordinatorKey),
             new FindCoordinatorResponse(
                 new FindCoordinatorResponseData()
-                    .setCoordinators(Collections.singletonList(
+                    .setCoordinators(List.of(
                         new FindCoordinatorResponseData.Coordinator()
                             .setNodeId(1)
                             .setHost(HOST)
@@ -1682,17 +2220,17 @@ class PersisterStateManagerTest {
             return requestGroupId.equals(groupId) && requestTopicId == topicId && requestPartition == partition;
         }, new ReadShareGroupStateResponse(
             new ReadShareGroupStateResponseData()
-                .setResults(Collections.singletonList(
+                .setResults(List.of(
                     new ReadShareGroupStateResponseData.ReadStateResult()
                         .setTopicId(topicId)
-                        .setPartitions(Collections.singletonList(
+                        .setPartitions(List.of(
                             new ReadShareGroupStateResponseData.PartitionResult()
                                 .setPartition(partition)
                                 .setErrorCode(Errors.NONE.code())
                                 .setErrorMessage("")
                                 .setStateEpoch(1)
                                 .setStartOffset(0)
-                                .setStateBatches(Collections.emptyList())
+                                .setStateBatches(List.of())
                         ))
                 ))
         ), coordinatorNode);
@@ -1773,17 +2311,17 @@ class PersisterStateManagerTest {
             return requestGroupId.equals(groupId) && requestTopicId == topicId && requestPartition == partition;
         }, new ReadShareGroupStateResponse(
             new ReadShareGroupStateResponseData()
-                .setResults(Collections.singletonList(
+                .setResults(List.of(
                     new ReadShareGroupStateResponseData.ReadStateResult()
                         .setTopicId(topicId)
-                        .setPartitions(Collections.singletonList(
+                        .setPartitions(List.of(
                             new ReadShareGroupStateResponseData.PartitionResult()
                                 .setPartition(partition)
                                 .setErrorCode(Errors.NONE.code())
                                 .setErrorMessage("")
                                 .setStateEpoch(1)
                                 .setStartOffset(0)
-                                .setStateBatches(Collections.emptyList())
+                                .setStateBatches(List.of())
                         ))
                 ))
         ), coordinatorNode);
@@ -1846,6 +2384,37 @@ class PersisterStateManagerTest {
         }
     }
 
+    @ParameterizedTest
+    @ValueSource(booleans = {true, false})
+    public void testReadStateRequestVersionGatedByRequestHeaderV3Supported(boolean requestHeaderV3Supported) {
+        String groupId = "group1";
+        Uuid topicId = Uuid.randomUuid();
+        Node coordinatorNode = new Node(1, HOST, PORT);
+
+        PersisterStateManager stateManager = PersisterStateManagerBuilder.builder()
+            .withKafkaClient(new MockClient(MOCK_TIME))
+            .withTimer(mockTimer)
+            .withCacheHelper(getCoordinatorCacheHelper(coordinatorNode, () -> requestHeaderV3Supported))
+            .build();
+
+        PersisterStateManager.ReadStateHandler handler = stateManager.new ReadStateHandler(
+            groupId,
+            topicId,
+            0,
+            0,
+            new CompletableFuture<>(),
+            REQUEST_BACKOFF_MS,
+            REQUEST_BACKOFF_MAX_MS,
+            MAX_RPC_RETRY_ATTEMPTS,
+            null
+        );
+        handler.addRequestToNodeMap(coordinatorNode, handler);
+
+        Collection<RequestAndCompletionHandler> requests = stateManager.generateRequests();
+        assertEquals(1, requests.size());
+        assertRequestVersion(requests.iterator().next(), ApiKeys.READ_SHARE_GROUP_STATE, requestHeaderV3Supported, (short) 0);
+    }
+
     @Test
     public void testReadStateRequestRetryWithCoordinatorNodeLookup() {
         MockClient client = new MockClient(MOCK_TIME);
@@ -1865,17 +2434,17 @@ class PersisterStateManagerTest {
             return requestGroupId.equals(groupId) && requestTopicId == topicId && requestPartition == partition;
         }, new ReadShareGroupStateResponse(
             new ReadShareGroupStateResponseData()
-                .setResults(Collections.singletonList(
+                .setResults(List.of(
                     new ReadShareGroupStateResponseData.ReadStateResult()
                         .setTopicId(topicId)
-                        .setPartitions(Collections.singletonList(
+                        .setPartitions(List.of(
                             new ReadShareGroupStateResponseData.PartitionResult()
                                 .setPartition(partition)
                                 .setErrorCode(Errors.COORDINATOR_NOT_AVAILABLE.code())
                                 .setErrorMessage("")
                                 .setStateEpoch(1)
                                 .setStartOffset(0)
-                                .setStateBatches(Collections.emptyList())
+                                .setStateBatches(List.of())
                         ))
                 ))
         ), coordinatorNode);
@@ -1889,17 +2458,17 @@ class PersisterStateManagerTest {
             return requestGroupId.equals(groupId) && requestTopicId == topicId && requestPartition == partition;
         }, new ReadShareGroupStateResponse(
             new ReadShareGroupStateResponseData()
-                .setResults(Collections.singletonList(
+                .setResults(List.of(
                     new ReadShareGroupStateResponseData.ReadStateResult()
                         .setTopicId(topicId)
-                        .setPartitions(Collections.singletonList(
+                        .setPartitions(List.of(
                             new ReadShareGroupStateResponseData.PartitionResult()
                                 .setPartition(partition)
                                 .setErrorCode(Errors.NONE.code())
                                 .setErrorMessage("")
                                 .setStateEpoch(1)
                                 .setStartOffset(0)
-                                .setStateBatches(Collections.emptyList())
+                                .setStateBatches(List.of())
                         ))
                 ))
         ), coordinatorNode);
@@ -1981,17 +2550,17 @@ class PersisterStateManagerTest {
             return requestGroupId.equals(groupId) && requestTopicId == topicId && requestPartition == partition;
         }, new ReadShareGroupStateResponse(
             new ReadShareGroupStateResponseData()
-                .setResults(Collections.singletonList(
+                .setResults(List.of(
                     new ReadShareGroupStateResponseData.ReadStateResult()
                         .setTopicId(topicId)
-                        .setPartitions(Collections.singletonList(
+                        .setPartitions(List.of(
                             new ReadShareGroupStateResponseData.PartitionResult()
                                 .setPartition(partition)
                                 .setErrorCode(Errors.COORDINATOR_NOT_AVAILABLE.code())
                                 .setErrorMessage("")
                                 .setStateEpoch(1)
                                 .setStartOffset(0)
-                                .setStateBatches(Collections.emptyList())
+                                .setStateBatches(List.of())
                         ))
                 ))
         ), coordinatorNode);
@@ -2005,17 +2574,17 @@ class PersisterStateManagerTest {
             return requestGroupId.equals(groupId) && requestTopicId == topicId && requestPartition == partition;
         }, new ReadShareGroupStateResponse(
             new ReadShareGroupStateResponseData()
-                .setResults(Collections.singletonList(
+                .setResults(List.of(
                     new ReadShareGroupStateResponseData.ReadStateResult()
                         .setTopicId(topicId)
-                        .setPartitions(Collections.singletonList(
+                        .setPartitions(List.of(
                             new ReadShareGroupStateResponseData.PartitionResult()
                                 .setPartition(partition)
                                 .setErrorCode(Errors.COORDINATOR_LOAD_IN_PROGRESS.code())
                                 .setErrorMessage("")
                                 .setStateEpoch(1)
                                 .setStartOffset(0)
-                                .setStateBatches(Collections.emptyList())
+                                .setStateBatches(List.of())
                         ))
                 ))
         ), coordinatorNode);
@@ -2067,6 +2636,70 @@ class PersisterStateManagerTest {
         // Verifying the result returned in correct
         assertEquals(partition, partitionResult.partition());
         assertEquals(Errors.COORDINATOR_LOAD_IN_PROGRESS.code(), partitionResult.errorCode());
+
+        try {
+            // Stopping the state manager
+            stateManager.stop();
+        } catch (Exception e) {
+            fail("Failed to stop state manager", e);
+        }
+    }
+
+    @Test
+    public void testReadStateClientResponseErrorRetriesExhausted() {
+        MockClient client = new MockClient(MOCK_TIME);
+
+        String groupId = "group1";
+        Uuid topicId = Uuid.randomUuid();
+        int partition = 10;
+
+        Node coordinatorNode = new Node(1, HOST, PORT);
+        client.setUnreachable(coordinatorNode, CommonClientConfigs.DEFAULT_SOCKET_CONNECTION_SETUP_TIMEOUT_MAX_MS + 1);
+
+        ShareCoordinatorMetadataCacheHelper cacheHelper = getCoordinatorCacheHelper(coordinatorNode);
+
+        PersisterStateManager stateManager = PersisterStateManagerBuilder.builder()
+            .withKafkaClient(client)
+            .withTimer(mockTimer)
+            .withCacheHelper(cacheHelper)
+            .build();
+
+        stateManager.start();
+
+        CompletableFuture<ReadShareGroupStateResponse> future = new CompletableFuture<>();
+
+        PersisterStateManager.ReadStateHandler handler = spy(stateManager.new ReadStateHandler(
+            groupId,
+            topicId,
+            partition,
+            0,
+            future,
+            REQUEST_BACKOFF_MS,
+            REQUEST_BACKOFF_MAX_MS,
+            2,
+            null
+        ));
+
+        stateManager.enqueue(handler);
+
+        CompletableFuture<ReadShareGroupStateResponse> resultFuture = handler.result();
+
+        ReadShareGroupStateResponse result = null;
+        try {
+            result = resultFuture.get();
+        } catch (Exception e) {
+            fail("Failed to get result from future", e);
+        }
+
+        ReadShareGroupStateResponseData.PartitionResult partitionResult = result.data().results().get(0).partitions().get(0);
+
+        // Verifying the coordinator node was populated correctly by the FIND_COORDINATOR request
+        assertEquals(coordinatorNode, handler.getCoordinatorNode());
+
+        // Verifying the result returned in correct
+        assertEquals(partition, partitionResult.partition());
+        assertEquals(Errors.NETWORK_EXCEPTION.code(), partitionResult.errorCode());
+        verify(handler, times(2)).handleRequestResponse(any());    // Retriable exception
 
         try {
             // Stopping the state manager
@@ -2620,6 +3253,37 @@ class PersisterStateManagerTest {
         }
     }
 
+    @ParameterizedTest
+    @ValueSource(booleans = {true, false})
+    public void testReadStateSummaryRequestVersionGatedByRequestHeaderV3Supported(boolean requestHeaderV3Supported) {
+        String groupId = "group1";
+        Uuid topicId = Uuid.randomUuid();
+        Node coordinatorNode = new Node(1, HOST, PORT);
+
+        PersisterStateManager stateManager = PersisterStateManagerBuilder.builder()
+            .withKafkaClient(new MockClient(MOCK_TIME))
+            .withTimer(mockTimer)
+            .withCacheHelper(getCoordinatorCacheHelper(coordinatorNode, () -> requestHeaderV3Supported))
+            .build();
+
+        PersisterStateManager.ReadStateSummaryHandler handler = stateManager.new ReadStateSummaryHandler(
+            groupId,
+            topicId,
+            0,
+            0,
+            new CompletableFuture<>(),
+            REQUEST_BACKOFF_MS,
+            REQUEST_BACKOFF_MAX_MS,
+            MAX_RPC_RETRY_ATTEMPTS,
+            null
+        );
+        handler.addRequestToNodeMap(coordinatorNode, handler);
+
+        Collection<RequestAndCompletionHandler> requests = stateManager.generateRequests();
+        assertEquals(1, requests.size());
+        assertRequestVersion(requests.iterator().next(), ApiKeys.READ_SHARE_GROUP_STATE_SUMMARY, requestHeaderV3Supported, (short) 1);
+    }
+
     @Test
     public void testReadStateSummaryRequestRetryWithCoordinatorNodeLookup() {
         MockClient client = new MockClient(MOCK_TIME);
@@ -2847,6 +3511,70 @@ class PersisterStateManagerTest {
     }
 
     @Test
+    public void testReadStateSummaryClientResponseErrorRetriesExhausted() {
+        MockClient client = new MockClient(MOCK_TIME);
+
+        String groupId = "group1";
+        Uuid topicId = Uuid.randomUuid();
+        int partition = 10;
+
+        Node coordinatorNode = new Node(1, HOST, PORT);
+        client.setUnreachable(coordinatorNode, CommonClientConfigs.DEFAULT_SOCKET_CONNECTION_SETUP_TIMEOUT_MAX_MS + 1);
+
+        ShareCoordinatorMetadataCacheHelper cacheHelper = getCoordinatorCacheHelper(coordinatorNode);
+
+        PersisterStateManager stateManager = PersisterStateManagerBuilder.builder()
+            .withKafkaClient(client)
+            .withTimer(mockTimer)
+            .withCacheHelper(cacheHelper)
+            .build();
+
+        stateManager.start();
+
+        CompletableFuture<ReadShareGroupStateSummaryResponse> future = new CompletableFuture<>();
+
+        PersisterStateManager.ReadStateSummaryHandler handler = spy(stateManager.new ReadStateSummaryHandler(
+            groupId,
+            topicId,
+            partition,
+            0,
+            future,
+            REQUEST_BACKOFF_MS,
+            REQUEST_BACKOFF_MAX_MS,
+            2,
+            null
+        ));
+
+        stateManager.enqueue(handler);
+
+        CompletableFuture<ReadShareGroupStateSummaryResponse> resultFuture = handler.result();
+
+        ReadShareGroupStateSummaryResponse result = null;
+        try {
+            result = resultFuture.get();
+        } catch (Exception e) {
+            fail("Failed to get result from future", e);
+        }
+
+        ReadShareGroupStateSummaryResponseData.PartitionResult partitionResult = result.data().results().get(0).partitions().get(0);
+
+        // Verifying the coordinator node was populated correctly by the FIND_COORDINATOR request
+        assertEquals(coordinatorNode, handler.getCoordinatorNode());
+
+        // Verifying the result returned in correct
+        assertEquals(partition, partitionResult.partition());
+        assertEquals(Errors.NETWORK_EXCEPTION.code(), partitionResult.errorCode());
+        verify(handler, times(2)).handleRequestResponse(any());    // Retriable exception
+
+        try {
+            // Stopping the state manager
+            stateManager.stop();
+        } catch (Exception e) {
+            fail("Failed to stop state manager", e);
+        }
+    }
+
+    @Test
     public void testDeleteStateRequestCoordinatorFoundSuccessfully() {
         MockClient client = new MockClient(MOCK_TIME);
 
@@ -2864,7 +3592,7 @@ class PersisterStateManagerTest {
                 && ((FindCoordinatorRequest) body).data().coordinatorKeys().get(0).equals(coordinatorKey),
             new FindCoordinatorResponse(
                 new FindCoordinatorResponseData()
-                    .setCoordinators(Collections.singletonList(
+                    .setCoordinators(List.of(
                         new FindCoordinatorResponseData.Coordinator()
                             .setNodeId(1)
                             .setHost(HOST)
@@ -2967,7 +3695,7 @@ class PersisterStateManagerTest {
                 && ((FindCoordinatorRequest) body).data().coordinatorKeys().get(0).equals(coordinatorKey),
             new FindCoordinatorResponse(
                 new FindCoordinatorResponseData()
-                    .setCoordinators(Collections.singletonList(
+                    .setCoordinators(List.of(
                         new FindCoordinatorResponseData.Coordinator()
                             .setErrorCode(Errors.NOT_COORDINATOR.code())
                     ))
@@ -2980,7 +3708,7 @@ class PersisterStateManagerTest {
                 && ((FindCoordinatorRequest) body).data().coordinatorKeys().get(0).equals(coordinatorKey),
             new FindCoordinatorResponse(
                 new FindCoordinatorResponseData()
-                    .setCoordinators(Collections.singletonList(
+                    .setCoordinators(List.of(
                         new FindCoordinatorResponseData.Coordinator()
                             .setNodeId(1)
                             .setHost(HOST)
@@ -3079,7 +3807,7 @@ class PersisterStateManagerTest {
                 && ((FindCoordinatorRequest) body).data().coordinatorKeys().get(0).equals(coordinatorKey),
             new FindCoordinatorResponse(
                 new FindCoordinatorResponseData()
-                    .setCoordinators(Collections.singletonList(
+                    .setCoordinators(List.of(
                         new FindCoordinatorResponseData.Coordinator()
                             .setErrorCode(Errors.COORDINATOR_NOT_AVAILABLE.code())
                     ))
@@ -3092,7 +3820,7 @@ class PersisterStateManagerTest {
                 && ((FindCoordinatorRequest) body).data().coordinatorKeys().get(0).equals(coordinatorKey),
             new FindCoordinatorResponse(
                 new FindCoordinatorResponseData()
-                    .setCoordinators(Collections.singletonList(
+                    .setCoordinators(List.of(
                         new FindCoordinatorResponseData.Coordinator()
                             .setNodeId(1)
                             .setHost(HOST)
@@ -3260,6 +3988,35 @@ class PersisterStateManagerTest {
         } catch (Exception e) {
             fail("Failed to stop state manager", e);
         }
+    }
+
+    @ParameterizedTest
+    @ValueSource(booleans = {true, false})
+    public void testDeleteStateRequestVersionGatedByRequestHeaderV3Supported(boolean requestHeaderV3Supported) {
+        String groupId = "group1";
+        Uuid topicId = Uuid.randomUuid();
+        Node coordinatorNode = new Node(1, HOST, PORT);
+
+        PersisterStateManager stateManager = PersisterStateManagerBuilder.builder()
+            .withKafkaClient(new MockClient(MOCK_TIME))
+            .withTimer(mockTimer)
+            .withCacheHelper(getCoordinatorCacheHelper(coordinatorNode, () -> requestHeaderV3Supported))
+            .build();
+
+        PersisterStateManager.DeleteStateHandler handler = stateManager.new DeleteStateHandler(
+            groupId,
+            topicId,
+            0,
+            new CompletableFuture<>(),
+            REQUEST_BACKOFF_MS,
+            REQUEST_BACKOFF_MAX_MS,
+            MAX_RPC_RETRY_ATTEMPTS
+        );
+        handler.addRequestToNodeMap(coordinatorNode, handler);
+
+        Collection<RequestAndCompletionHandler> requests = stateManager.generateRequests();
+        assertEquals(1, requests.size());
+        assertRequestVersion(requests.iterator().next(), ApiKeys.DELETE_SHARE_GROUP_STATE, requestHeaderV3Supported, (short) 0);
     }
 
     @Test
@@ -3569,6 +4326,913 @@ class PersisterStateManagerTest {
     }
 
     @Test
+    public void testDeleteStateClientResponseErrorRetriesExhausted() {
+        MockClient client = new MockClient(MOCK_TIME);
+
+        String groupId = "group1";
+        Uuid topicId = Uuid.randomUuid();
+        int partition = 10;
+
+        Node coordinatorNode = new Node(1, HOST, PORT);
+        client.setUnreachable(coordinatorNode, CommonClientConfigs.DEFAULT_SOCKET_CONNECTION_SETUP_TIMEOUT_MAX_MS + 1);
+
+        ShareCoordinatorMetadataCacheHelper cacheHelper = getCoordinatorCacheHelper(coordinatorNode);
+
+        PersisterStateManager stateManager = PersisterStateManagerBuilder.builder()
+            .withKafkaClient(client)
+            .withTimer(mockTimer)
+            .withCacheHelper(cacheHelper)
+            .build();
+
+        stateManager.start();
+
+        CompletableFuture<DeleteShareGroupStateResponse> future = new CompletableFuture<>();
+
+        PersisterStateManager.DeleteStateHandler handler = spy(stateManager.new DeleteStateHandler(
+            groupId,
+            topicId,
+            partition,
+            future,
+            REQUEST_BACKOFF_MS,
+            REQUEST_BACKOFF_MAX_MS,
+            2
+        ));
+
+        stateManager.enqueue(handler);
+
+        CompletableFuture<DeleteShareGroupStateResponse> resultFuture = handler.result();
+
+        DeleteShareGroupStateResponse result = null;
+        try {
+            result = resultFuture.get();
+        } catch (Exception e) {
+            fail("Failed to get result from future", e);
+        }
+
+        DeleteShareGroupStateResponseData.PartitionResult partitionResult = result.data().results().get(0).partitions().get(0);
+
+        // Verifying the coordinator node was populated correctly by the FIND_COORDINATOR request
+        assertEquals(coordinatorNode, handler.getCoordinatorNode());
+
+        // Verifying the result returned in correct
+        assertEquals(partition, partitionResult.partition());
+        assertEquals(Errors.NETWORK_EXCEPTION.code(), partitionResult.errorCode());
+        verify(handler, times(2)).handleRequestResponse(any());    // Retriable exception
+
+        try {
+            // Stopping the state manager
+            stateManager.stop();
+        } catch (Exception e) {
+            fail("Failed to stop state manager", e);
+        }
+    }
+
+    @Test
+    public void testInitializeStateRequestCoordinatorFoundSuccessfully() {
+        MockClient client = new MockClient(MOCK_TIME);
+
+        String groupId = "group1";
+        Uuid topicId = Uuid.randomUuid();
+        int partition = 10;
+        int stateEpoch = 1;
+        long startOffset = 10;
+
+        Node suppliedNode = new Node(0, HOST, PORT);
+        Node coordinatorNode = new Node(1, HOST, PORT);
+
+        String coordinatorKey = SharePartitionKey.asCoordinatorKey(groupId, topicId, partition);
+
+        client.prepareResponseFrom(body -> body instanceof FindCoordinatorRequest
+                && ((FindCoordinatorRequest) body).data().keyType() == FindCoordinatorRequest.CoordinatorType.SHARE.id()
+                && ((FindCoordinatorRequest) body).data().coordinatorKeys().get(0).equals(coordinatorKey),
+            new FindCoordinatorResponse(
+                new FindCoordinatorResponseData()
+                    .setCoordinators(List.of(
+                        new FindCoordinatorResponseData.Coordinator()
+                            .setNodeId(1)
+                            .setHost(HOST)
+                            .setPort(PORT)
+                            .setErrorCode(Errors.NONE.code())
+                    ))
+            ),
+            suppliedNode
+        );
+
+        client.prepareResponseFrom(body -> {
+            InitializeShareGroupStateRequest request = (InitializeShareGroupStateRequest) body;
+            String requestGroupId = request.data().groupId();
+            Uuid requestTopicId = request.data().topics().get(0).topicId();
+            int requestPartition = request.data().topics().get(0).partitions().get(0).partition();
+
+            return requestGroupId.equals(groupId) && requestTopicId == topicId && requestPartition == partition;
+        }, new InitializeShareGroupStateResponse(
+            new InitializeShareGroupStateResponseData()
+                .setResults(List.of(
+                    new InitializeShareGroupStateResponseData.InitializeStateResult()
+                        .setTopicId(topicId)
+                        .setPartitions(List.of(
+                            new InitializeShareGroupStateResponseData.PartitionResult()
+                                .setPartition(partition)
+                                .setErrorCode(Errors.NONE.code())
+                                .setErrorMessage("")
+                        ))
+                ))
+        ), coordinatorNode);
+
+        ShareCoordinatorMetadataCacheHelper cacheHelper = getDefaultCacheHelper(suppliedNode);
+
+        PersisterStateManager stateManager = PersisterStateManagerBuilder.builder()
+            .withKafkaClient(client)
+            .withTimer(mockTimer)
+            .withCacheHelper(cacheHelper)
+            .build();
+
+        stateManager.start();
+
+        CompletableFuture<InitializeShareGroupStateResponse> future = new CompletableFuture<>();
+
+        PersisterStateManager.InitializeStateHandler handler = spy(stateManager.new InitializeStateHandler(
+            groupId,
+            topicId,
+            partition,
+            stateEpoch,
+            startOffset,
+            future,
+            REQUEST_BACKOFF_MS,
+            REQUEST_BACKOFF_MAX_MS,
+            MAX_RPC_RETRY_ATTEMPTS
+        ));
+
+        stateManager.enqueue(handler);
+
+        CompletableFuture<InitializeShareGroupStateResponse> resultFuture = handler.result();
+
+        InitializeShareGroupStateResponse result = null;
+        try {
+            result = resultFuture.get();
+        } catch (Exception e) {
+            fail("Failed to get result from future", e);
+        }
+
+        InitializeShareGroupStateResponseData.PartitionResult partitionResult = result.data().results().get(0).partitions().get(0);
+
+        verify(handler, times(1)).findShareCoordinatorBuilder();
+        verify(handler, times(0)).requestBuilder();
+
+        // Verifying the coordinator node was populated correctly by the FIND_COORDINATOR request
+        assertEquals(coordinatorNode, handler.getCoordinatorNode());
+
+        // Verifying the result returned in correct
+        assertEquals(partition, partitionResult.partition());
+        assertEquals(Errors.NONE.code(), partitionResult.errorCode());
+
+        try {
+            // Stopping the state manager
+            stateManager.stop();
+        } catch (Exception e) {
+            fail("Failed to stop state manager", e);
+        }
+    }
+
+    @Test
+    public void testInitializeStateRequestRetryWithNotCoordinatorSuccessfulOnRetry() throws InterruptedException, ExecutionException {
+        MockClient client = new MockClient(MOCK_TIME);
+
+        String groupId = "group1";
+        Uuid topicId = Uuid.randomUuid();
+        int partition = 10;
+        int stateEpoch = 5;
+        int startOffset = 11;
+
+        Node suppliedNode = new Node(0, HOST, PORT);
+        Node coordinatorNode = new Node(1, HOST, PORT);
+
+        String coordinatorKey = SharePartitionKey.asCoordinatorKey(groupId, topicId, partition);
+
+        client.prepareResponseFrom(body -> body instanceof FindCoordinatorRequest
+                && ((FindCoordinatorRequest) body).data().keyType() == FindCoordinatorRequest.CoordinatorType.SHARE.id()
+                && ((FindCoordinatorRequest) body).data().coordinatorKeys().get(0).equals(coordinatorKey),
+            new FindCoordinatorResponse(
+                new FindCoordinatorResponseData()
+                    .setCoordinators(List.of(
+                        new FindCoordinatorResponseData.Coordinator()
+                            .setErrorCode(Errors.NOT_COORDINATOR.code())
+                    ))
+            ),
+            suppliedNode
+        );
+
+        client.prepareResponseFrom(body -> body instanceof FindCoordinatorRequest
+                && ((FindCoordinatorRequest) body).data().keyType() == FindCoordinatorRequest.CoordinatorType.SHARE.id()
+                && ((FindCoordinatorRequest) body).data().coordinatorKeys().get(0).equals(coordinatorKey),
+            new FindCoordinatorResponse(
+                new FindCoordinatorResponseData()
+                    .setCoordinators(List.of(
+                        new FindCoordinatorResponseData.Coordinator()
+                            .setNodeId(1)
+                            .setHost(HOST)
+                            .setPort(PORT)
+                            .setErrorCode(Errors.NONE.code())
+                    ))
+            ),
+            suppliedNode
+        );
+
+        client.prepareResponseFrom(body -> {
+            InitializeShareGroupStateRequest request = (InitializeShareGroupStateRequest) body;
+            String requestGroupId = request.data().groupId();
+            Uuid requestTopicId = request.data().topics().get(0).topicId();
+            int requestPartition = request.data().topics().get(0).partitions().get(0).partition();
+
+            return requestGroupId.equals(groupId) && requestTopicId == topicId && requestPartition == partition;
+        }, new InitializeShareGroupStateResponse(
+            new InitializeShareGroupStateResponseData()
+                .setResults(List.of(
+                    new InitializeShareGroupStateResponseData.InitializeStateResult()
+                        .setTopicId(topicId)
+                        .setPartitions(List.of(
+                            new InitializeShareGroupStateResponseData.PartitionResult()
+                                .setPartition(partition)
+                                .setErrorCode(Errors.NONE.code())
+                                .setErrorMessage("")
+                        ))
+                ))
+        ), coordinatorNode);
+
+        ShareCoordinatorMetadataCacheHelper cacheHelper = getDefaultCacheHelper(suppliedNode);
+
+        PersisterStateManager stateManager = PersisterStateManagerBuilder.builder()
+            .withKafkaClient(client)
+            .withTimer(mockTimer)
+            .withCacheHelper(cacheHelper)
+            .build();
+
+        stateManager.start();
+
+        CompletableFuture<InitializeShareGroupStateResponse> future = new CompletableFuture<>();
+
+        PersisterStateManager.InitializeStateHandler handler = spy(stateManager.new InitializeStateHandler(
+            groupId,
+            topicId,
+            partition,
+            stateEpoch,
+            startOffset,
+            future,
+            REQUEST_BACKOFF_MS,
+            REQUEST_BACKOFF_MAX_MS,
+            MAX_RPC_RETRY_ATTEMPTS
+        ));
+
+        stateManager.enqueue(handler);
+
+        CompletableFuture<InitializeShareGroupStateResponse> resultFuture = handler.result();
+
+        TestUtils.waitForCondition(resultFuture::isDone, TestUtils.DEFAULT_MAX_WAIT_MS, 10L, () -> "Failed to get result from future");
+
+        InitializeShareGroupStateResponse result = resultFuture.get();
+        InitializeShareGroupStateResponseData.PartitionResult partitionResult = result.data().results().get(0).partitions().get(0);
+
+        verify(handler, times(2)).findShareCoordinatorBuilder();
+        verify(handler, times(0)).requestBuilder();
+
+        // Verifying the coordinator node was populated correctly by the FIND_COORDINATOR request
+        assertEquals(coordinatorNode, handler.getCoordinatorNode());
+
+        // Verifying the result returned is correct
+        assertEquals(partition, partitionResult.partition());
+        assertEquals(Errors.NONE.code(), partitionResult.errorCode());
+
+        try {
+            // Stopping the state manager
+            stateManager.stop();
+        } catch (Exception e) {
+            fail("Failed to stop state manager", e);
+        }
+    }
+
+    @Test
+    public void testInitializeStateRequestCoordinatorFoundOnRetry() {
+        MockClient client = new MockClient(MOCK_TIME);
+
+        String groupId = "group1";
+        Uuid topicId = Uuid.randomUuid();
+        int partition = 10;
+        int stateEpoch = 5;
+        long startOffset = 12;
+
+        Node suppliedNode = new Node(0, HOST, PORT);
+        Node coordinatorNode = new Node(1, HOST, PORT);
+
+        String coordinatorKey = SharePartitionKey.asCoordinatorKey(groupId, topicId, partition);
+
+        client.prepareResponseFrom(body -> body instanceof FindCoordinatorRequest
+                && ((FindCoordinatorRequest) body).data().keyType() == FindCoordinatorRequest.CoordinatorType.SHARE.id()
+                && ((FindCoordinatorRequest) body).data().coordinatorKeys().get(0).equals(coordinatorKey),
+            new FindCoordinatorResponse(
+                new FindCoordinatorResponseData()
+                    .setCoordinators(List.of(
+                        new FindCoordinatorResponseData.Coordinator()
+                            .setErrorCode(Errors.COORDINATOR_NOT_AVAILABLE.code())
+                    ))
+            ),
+            suppliedNode
+        );
+
+        client.prepareResponseFrom(body -> body instanceof FindCoordinatorRequest
+                && ((FindCoordinatorRequest) body).data().keyType() == FindCoordinatorRequest.CoordinatorType.SHARE.id()
+                && ((FindCoordinatorRequest) body).data().coordinatorKeys().get(0).equals(coordinatorKey),
+            new FindCoordinatorResponse(
+                new FindCoordinatorResponseData()
+                    .setCoordinators(List.of(
+                        new FindCoordinatorResponseData.Coordinator()
+                            .setNodeId(1)
+                            .setHost(HOST)
+                            .setPort(PORT)
+                            .setErrorCode(Errors.NONE.code())
+                    ))
+            ),
+            suppliedNode
+        );
+
+        client.prepareResponseFrom(body -> {
+            InitializeShareGroupStateRequest request = (InitializeShareGroupStateRequest) body;
+            String requestGroupId = request.data().groupId();
+            Uuid requestTopicId = request.data().topics().get(0).topicId();
+            int requestPartition = request.data().topics().get(0).partitions().get(0).partition();
+
+            return requestGroupId.equals(groupId) && requestTopicId == topicId && requestPartition == partition;
+        }, new InitializeShareGroupStateResponse(
+            new InitializeShareGroupStateResponseData()
+                .setResults(List.of(
+                    new InitializeShareGroupStateResponseData.InitializeStateResult()
+                        .setTopicId(topicId)
+                        .setPartitions(List.of(
+                            new InitializeShareGroupStateResponseData.PartitionResult()
+                                .setPartition(partition)
+                                .setErrorCode(Errors.NONE.code())
+                                .setErrorMessage("")
+                        ))
+                ))
+        ), coordinatorNode);
+
+        ShareCoordinatorMetadataCacheHelper cacheHelper = getDefaultCacheHelper(suppliedNode);
+
+        PersisterStateManager stateManager = PersisterStateManagerBuilder.builder()
+            .withKafkaClient(client)
+            .withTimer(mockTimer)
+            .withCacheHelper(cacheHelper)
+            .build();
+
+        stateManager.start();
+
+        CompletableFuture<InitializeShareGroupStateResponse> future = new CompletableFuture<>();
+
+        PersisterStateManager.InitializeStateHandler handler = spy(stateManager.new InitializeStateHandler(
+            groupId,
+            topicId,
+            partition,
+            stateEpoch,
+            startOffset,
+            future,
+            REQUEST_BACKOFF_MS,
+            REQUEST_BACKOFF_MAX_MS,
+            MAX_RPC_RETRY_ATTEMPTS
+        ));
+
+        stateManager.enqueue(handler);
+
+        CompletableFuture<InitializeShareGroupStateResponse> resultFuture = handler.result();
+
+        InitializeShareGroupStateResponse result = null;
+        try {
+            result = resultFuture.get();
+        } catch (Exception e) {
+            fail("Failed to get result from future", e);
+        }
+
+        InitializeShareGroupStateResponseData.PartitionResult partitionResult = result.data().results().get(0).partitions().get(0);
+
+        verify(handler, times(2)).findShareCoordinatorBuilder();
+        verify(handler, times(0)).requestBuilder();
+
+        // Verifying the coordinator node was populated correctly by the FIND_COORDINATOR request
+        assertEquals(coordinatorNode, handler.getCoordinatorNode());
+
+        // Verifying the result returned in correct
+        assertEquals(partition, partitionResult.partition());
+        assertEquals(Errors.NONE.code(), partitionResult.errorCode());
+
+        try {
+            // Stopping the state manager
+            stateManager.stop();
+        } catch (Exception e) {
+            fail("Failed to stop state manager", e);
+        }
+    }
+
+    @Test
+    public void testInitializeStateRequestWithCoordinatorNodeLookup() {
+        MockClient client = new MockClient(MOCK_TIME);
+
+        String groupId = "group1";
+        Uuid topicId = Uuid.randomUuid();
+        int partition = 10;
+        int stateEpoch = 5;
+        long startOffset = 10;
+
+        Node coordinatorNode = new Node(1, HOST, PORT);
+
+        client.prepareResponseFrom(body -> {
+            InitializeShareGroupStateRequest request = (InitializeShareGroupStateRequest) body;
+            String requestGroupId = request.data().groupId();
+            Uuid requestTopicId = request.data().topics().get(0).topicId();
+            int requestPartition = request.data().topics().get(0).partitions().get(0).partition();
+
+            return requestGroupId.equals(groupId) && requestTopicId == topicId && requestPartition == partition;
+        }, new InitializeShareGroupStateResponse(
+            new InitializeShareGroupStateResponseData()
+                .setResults(List.of(
+                    new InitializeShareGroupStateResponseData.InitializeStateResult()
+                        .setTopicId(topicId)
+                        .setPartitions(List.of(
+                            new InitializeShareGroupStateResponseData.PartitionResult()
+                                .setPartition(partition)
+                                .setErrorCode(Errors.NONE.code())
+                                .setErrorMessage("")
+                        ))
+                ))
+        ), coordinatorNode);
+
+        ShareCoordinatorMetadataCacheHelper cacheHelper = getCoordinatorCacheHelper(coordinatorNode);
+
+        PersisterStateManager stateManager = PersisterStateManagerBuilder.builder()
+            .withKafkaClient(client)
+            .withTimer(mockTimer)
+            .withCacheHelper(cacheHelper)
+            .build();
+
+        stateManager.start();
+
+        CompletableFuture<InitializeShareGroupStateResponse> future = new CompletableFuture<>();
+
+        PersisterStateManager.InitializeStateHandler handler = spy(stateManager.new InitializeStateHandler(
+            groupId,
+            topicId,
+            partition,
+            stateEpoch,
+            startOffset,
+            future,
+            REQUEST_BACKOFF_MS,
+            REQUEST_BACKOFF_MAX_MS,
+            MAX_RPC_RETRY_ATTEMPTS
+        ));
+
+        stateManager.enqueue(handler);
+
+        CompletableFuture<InitializeShareGroupStateResponse> resultFuture = handler.result();
+
+        InitializeShareGroupStateResponse result = null;
+        try {
+            result = resultFuture.get();
+        } catch (Exception e) {
+            fail("Failed to get result from future", e);
+        }
+
+        InitializeShareGroupStateResponseData.PartitionResult partitionResult = result.data().results().get(0).partitions().get(0);
+
+        verify(handler, times(0)).findShareCoordinatorBuilder();
+        verify(handler, times(0)).requestBuilder();
+        verify(handler, times(1)).onComplete(any());
+
+        // Verifying the coordinator node was populated correctly by the FIND_COORDINATOR request
+        assertEquals(coordinatorNode, handler.getCoordinatorNode());
+
+        // Verifying the result returned in correct
+        assertEquals(partition, partitionResult.partition());
+        assertEquals(Errors.NONE.code(), partitionResult.errorCode());
+
+        try {
+            // Stopping the state manager
+            stateManager.stop();
+        } catch (Exception e) {
+            fail("Failed to stop state manager", e);
+        }
+    }
+
+    @ParameterizedTest
+    @ValueSource(booleans = {true, false})
+    public void testInitializeStateRequestVersionGatedByRequestHeaderV3Supported(boolean requestHeaderV3Supported) {
+        String groupId = "group1";
+        Uuid topicId = Uuid.randomUuid();
+        Node coordinatorNode = new Node(1, HOST, PORT);
+
+        PersisterStateManager stateManager = PersisterStateManagerBuilder.builder()
+            .withKafkaClient(new MockClient(MOCK_TIME))
+            .withTimer(mockTimer)
+            .withCacheHelper(getCoordinatorCacheHelper(coordinatorNode, () -> requestHeaderV3Supported))
+            .build();
+
+        PersisterStateManager.InitializeStateHandler handler = stateManager.new InitializeStateHandler(
+            groupId,
+            topicId,
+            0,
+            1,
+            10,
+            new CompletableFuture<>(),
+            REQUEST_BACKOFF_MS,
+            REQUEST_BACKOFF_MAX_MS,
+            MAX_RPC_RETRY_ATTEMPTS
+        );
+        handler.addRequestToNodeMap(coordinatorNode, handler);
+
+        Collection<RequestAndCompletionHandler> requests = stateManager.generateRequests();
+        assertEquals(1, requests.size());
+        assertRequestVersion(requests.iterator().next(), ApiKeys.INITIALIZE_SHARE_GROUP_STATE, requestHeaderV3Supported, (short) 0);
+    }
+
+    @Test
+    public void testInitializeStateRequestWithRetryAndCoordinatorNodeLookup() {
+        MockClient client = new MockClient(MOCK_TIME);
+
+        String groupId = "group1";
+        Uuid topicId = Uuid.randomUuid();
+        int partition = 10;
+        int stateEpoch = 5;
+        long startOffset = 10;
+
+        Node coordinatorNode = new Node(1, HOST, PORT);
+
+        client.prepareResponseFrom(body -> {
+            InitializeShareGroupStateRequest request = (InitializeShareGroupStateRequest) body;
+            String requestGroupId = request.data().groupId();
+            Uuid requestTopicId = request.data().topics().get(0).topicId();
+            int requestPartition = request.data().topics().get(0).partitions().get(0).partition();
+
+            return requestGroupId.equals(groupId) && requestTopicId == topicId && requestPartition == partition;
+        }, new InitializeShareGroupStateResponse(
+            new InitializeShareGroupStateResponseData()
+                .setResults(List.of(
+                    new InitializeShareGroupStateResponseData.InitializeStateResult()
+                        .setTopicId(topicId)
+                        .setPartitions(List.of(
+                            new InitializeShareGroupStateResponseData.PartitionResult()
+                                .setPartition(partition)
+                                .setErrorCode(Errors.COORDINATOR_LOAD_IN_PROGRESS.code())
+                                .setErrorMessage("")
+                        ))
+                ))
+        ), coordinatorNode);
+
+        client.prepareResponseFrom(body -> {
+            InitializeShareGroupStateRequest request = (InitializeShareGroupStateRequest) body;
+            String requestGroupId = request.data().groupId();
+            Uuid requestTopicId = request.data().topics().get(0).topicId();
+            int requestPartition = request.data().topics().get(0).partitions().get(0).partition();
+
+            return requestGroupId.equals(groupId) && requestTopicId == topicId && requestPartition == partition;
+        }, new InitializeShareGroupStateResponse(
+            new InitializeShareGroupStateResponseData()
+                .setResults(List.of(
+                    new InitializeShareGroupStateResponseData.InitializeStateResult()
+                        .setTopicId(topicId)
+                        .setPartitions(List.of(
+                            new InitializeShareGroupStateResponseData.PartitionResult()
+                                .setPartition(partition)
+                                .setErrorCode(Errors.NONE.code())
+                                .setErrorMessage("")
+                        ))
+                ))
+        ), coordinatorNode);
+
+        ShareCoordinatorMetadataCacheHelper cacheHelper = getCoordinatorCacheHelper(coordinatorNode);
+
+        PersisterStateManager stateManager = PersisterStateManagerBuilder.builder()
+            .withKafkaClient(client)
+            .withTimer(mockTimer)
+            .withCacheHelper(cacheHelper)
+            .build();
+
+        stateManager.start();
+
+        CompletableFuture<InitializeShareGroupStateResponse> future = new CompletableFuture<>();
+
+        PersisterStateManager.InitializeStateHandler handler = spy(stateManager.new InitializeStateHandler(
+            groupId,
+            topicId,
+            partition,
+            stateEpoch,
+            startOffset,
+            future,
+            REQUEST_BACKOFF_MS,
+            REQUEST_BACKOFF_MAX_MS,
+            MAX_RPC_RETRY_ATTEMPTS
+        ));
+
+        stateManager.enqueue(handler);
+
+        CompletableFuture<InitializeShareGroupStateResponse> resultFuture = handler.result();
+
+        InitializeShareGroupStateResponse result = null;
+        try {
+            result = resultFuture.get();
+        } catch (Exception e) {
+            fail("Failed to get result from future", e);
+        }
+
+        InitializeShareGroupStateResponseData.PartitionResult partitionResult = result.data().results().get(0).partitions().get(0);
+
+        verify(handler, times(0)).findShareCoordinatorBuilder();
+        verify(handler, times(0)).requestBuilder();
+        verify(handler, times(2)).onComplete(any());
+
+        // Verifying the coordinator node was populated correctly by the FIND_COORDINATOR request
+        assertEquals(coordinatorNode, handler.getCoordinatorNode());
+
+        // Verifying the result returned in correct
+        assertEquals(partition, partitionResult.partition());
+        assertEquals(Errors.NONE.code(), partitionResult.errorCode());
+
+        try {
+            // Stopping the state manager
+            stateManager.stop();
+        } catch (Exception e) {
+            fail("Failed to stop state manager", e);
+        }
+    }
+
+    @Test
+    public void testInitializeStateRequestFailedMaxRetriesExhausted() {
+        MockClient client = new MockClient(MOCK_TIME);
+
+        String groupId = "group1";
+        Uuid topicId = Uuid.randomUuid();
+        int partition = 10;
+        int stateEpoch = 5;
+        long startOffset = 10;
+
+        Node coordinatorNode = new Node(1, HOST, PORT);
+
+        client.prepareResponseFrom(body -> {
+            InitializeShareGroupStateRequest request = (InitializeShareGroupStateRequest) body;
+            String requestGroupId = request.data().groupId();
+            Uuid requestTopicId = request.data().topics().get(0).topicId();
+            int requestPartition = request.data().topics().get(0).partitions().get(0).partition();
+
+            return requestGroupId.equals(groupId) && requestTopicId == topicId && requestPartition == partition;
+        }, new InitializeShareGroupStateResponse(
+            new InitializeShareGroupStateResponseData()
+                .setResults(List.of(
+                    new InitializeShareGroupStateResponseData.InitializeStateResult()
+                        .setTopicId(topicId)
+                        .setPartitions(List.of(
+                            new InitializeShareGroupStateResponseData.PartitionResult()
+                                .setPartition(partition)
+                                .setErrorCode(Errors.COORDINATOR_LOAD_IN_PROGRESS.code())
+                                .setErrorMessage("")
+                        ))
+                ))
+        ), coordinatorNode);
+
+        client.prepareResponseFrom(body -> {
+            InitializeShareGroupStateRequest request = (InitializeShareGroupStateRequest) body;
+            String requestGroupId = request.data().groupId();
+            Uuid requestTopicId = request.data().topics().get(0).topicId();
+            int requestPartition = request.data().topics().get(0).partitions().get(0).partition();
+
+            return requestGroupId.equals(groupId) && requestTopicId == topicId && requestPartition == partition;
+        }, new InitializeShareGroupStateResponse(
+            new InitializeShareGroupStateResponseData()
+                .setResults(List.of(
+                    new InitializeShareGroupStateResponseData.InitializeStateResult()
+                        .setTopicId(topicId)
+                        .setPartitions(List.of(
+                            new InitializeShareGroupStateResponseData.PartitionResult()
+                                .setPartition(partition)
+                                .setErrorCode(Errors.COORDINATOR_LOAD_IN_PROGRESS.code())
+                                .setErrorMessage("")
+                        ))
+                ))
+        ), coordinatorNode);
+
+        client.prepareResponseFrom(body -> {
+            InitializeShareGroupStateRequest request = (InitializeShareGroupStateRequest) body;
+            String requestGroupId = request.data().groupId();
+            Uuid requestTopicId = request.data().topics().get(0).topicId();
+            int requestPartition = request.data().topics().get(0).partitions().get(0).partition();
+
+            return requestGroupId.equals(groupId) && requestTopicId == topicId && requestPartition == partition;
+        }, new InitializeShareGroupStateResponse(
+            new InitializeShareGroupStateResponseData()
+                .setResults(List.of(
+                    new InitializeShareGroupStateResponseData.InitializeStateResult()
+                        .setTopicId(topicId)
+                        .setPartitions(List.of(
+                            new InitializeShareGroupStateResponseData.PartitionResult()
+                                .setPartition(partition)
+                                .setErrorCode(Errors.NONE.code())
+                                .setErrorMessage("")
+                        ))
+                ))
+        ), coordinatorNode);
+
+        ShareCoordinatorMetadataCacheHelper cacheHelper = getCoordinatorCacheHelper(coordinatorNode);
+
+        PersisterStateManager stateManager = PersisterStateManagerBuilder.builder()
+            .withKafkaClient(client)
+            .withTimer(mockTimer)
+            .withCacheHelper(cacheHelper)
+            .build();
+
+        stateManager.start();
+
+        CompletableFuture<InitializeShareGroupStateResponse> future = new CompletableFuture<>();
+
+        PersisterStateManager.InitializeStateHandler handler = spy(stateManager.new InitializeStateHandler(
+            groupId,
+            topicId,
+            partition,
+            stateEpoch,
+            startOffset,
+            future,
+            REQUEST_BACKOFF_MS,
+            REQUEST_BACKOFF_MAX_MS,
+            2
+        ));
+
+        stateManager.enqueue(handler);
+
+        CompletableFuture<InitializeShareGroupStateResponse> resultFuture = handler.result();
+
+        InitializeShareGroupStateResponse result = null;
+        try {
+            result = resultFuture.get();
+        } catch (Exception e) {
+            fail("Failed to get result from future", e);
+        }
+
+        InitializeShareGroupStateResponseData.PartitionResult partitionResult = result.data().results().get(0).partitions().get(0);
+
+        verify(handler, times(0)).findShareCoordinatorBuilder();
+        verify(handler, times(0)).requestBuilder();
+        verify(handler, times(2)).onComplete(any());
+
+        // Verifying the coordinator node was populated correctly by the FIND_COORDINATOR request
+        assertEquals(coordinatorNode, handler.getCoordinatorNode());
+
+        // Verifying the result returned in correct
+        assertEquals(partition, partitionResult.partition());
+        assertEquals(Errors.COORDINATOR_LOAD_IN_PROGRESS.code(), partitionResult.errorCode());
+
+        try {
+            // Stopping the state manager
+            stateManager.stop();
+        } catch (Exception e) {
+            fail("Failed to stop state manager", e);
+        }
+    }
+
+    @Test
+    public void testInitializeStateRequestBatchingWithCoordinatorNodeLookup() throws Exception {
+        MockClient client = new MockClient(MOCK_TIME);
+
+        String groupId = "group1";
+        Uuid topicId = Uuid.randomUuid();
+        int partition = 10;
+        int stateEpoch = 5;
+        long startOffset = 10;
+
+        Node coordinatorNode = new Node(1, HOST, PORT);
+
+        client.prepareResponseFrom(body -> {
+            InitializeShareGroupStateRequest request = (InitializeShareGroupStateRequest) body;
+            String requestGroupId = request.data().groupId();
+            Uuid requestTopicId = request.data().topics().get(0).topicId();
+            int requestPartition = request.data().topics().get(0).partitions().get(0).partition();
+
+            return requestGroupId.equals(groupId) && requestTopicId == topicId && requestPartition == partition;
+        }, new InitializeShareGroupStateResponse(
+            new InitializeShareGroupStateResponseData()
+                .setResults(List.of(
+                    new InitializeShareGroupStateResponseData.InitializeStateResult()
+                        .setTopicId(topicId)
+                        .setPartitions(List.of(
+                            new InitializeShareGroupStateResponseData.PartitionResult()
+                                .setPartition(partition)
+                                .setErrorCode(Errors.NONE.code())
+                                .setErrorMessage("")
+                        ))
+                ))
+        ), coordinatorNode);
+
+        ShareCoordinatorMetadataCacheHelper cacheHelper = getCoordinatorCacheHelper(coordinatorNode);
+
+        PersisterStateManager stateManager = PersisterStateManagerBuilder.builder()
+            .withKafkaClient(client)
+            .withTimer(mockTimer)
+            .withCacheHelper(cacheHelper)
+            .build();
+
+        AtomicBoolean isBatchingSuccess = new AtomicBoolean(false);
+        stateManager.setGenerateCallback(() -> {
+            Map<PersisterStateManager.RPCType, Map<String, List<PersisterStateManager.PersisterStateManagerHandler>>> handlersPerType = stateManager.nodeRPCMap().get(coordinatorNode);
+            if (handlersPerType != null && handlersPerType.containsKey(PersisterStateManager.RPCType.INITIALIZE) && handlersPerType.get(PersisterStateManager.RPCType.INITIALIZE).containsKey(groupId)) {
+                if (handlersPerType.get(PersisterStateManager.RPCType.INITIALIZE).get(groupId).size() > 2)
+                    isBatchingSuccess.set(true);
+            }
+        });
+
+        stateManager.start();
+
+        CompletableFuture<InitializeShareGroupStateResponse> future = new CompletableFuture<>();
+
+        List<PersisterStateManager.InitializeStateHandler> handlers = new ArrayList<>();
+        for (int i = 0; i < 5; i++) {
+            PersisterStateManager.InitializeStateHandler handler = spy(stateManager.new InitializeStateHandler(
+                groupId,
+                topicId,
+                partition,
+                stateEpoch,
+                startOffset,
+                future,
+                REQUEST_BACKOFF_MS,
+                REQUEST_BACKOFF_MAX_MS,
+                MAX_RPC_RETRY_ATTEMPTS
+            ));
+            handlers.add(handler);
+            stateManager.enqueue(handler);
+        }
+
+        CompletableFuture.allOf(handlers.stream()
+            .map(PersisterStateManager.InitializeStateHandler::result).toArray(CompletableFuture[]::new)).get();
+
+        TestUtils.waitForCondition(isBatchingSuccess::get, TestUtils.DEFAULT_MAX_WAIT_MS, 10L, () -> "unable to verify batching");
+    }
+
+    @Test
+    public void testInitializeStateClientResponseErrorRetriesExhausted() {
+        MockClient client = new MockClient(MOCK_TIME);
+
+        String groupId = "group1";
+        Uuid topicId = Uuid.randomUuid();
+        int partition = 10;
+
+        Node coordinatorNode = new Node(1, HOST, PORT);
+        client.setUnreachable(coordinatorNode, CommonClientConfigs.DEFAULT_SOCKET_CONNECTION_SETUP_TIMEOUT_MAX_MS + 1);
+
+        ShareCoordinatorMetadataCacheHelper cacheHelper = getCoordinatorCacheHelper(coordinatorNode);
+
+        PersisterStateManager stateManager = PersisterStateManagerBuilder.builder()
+            .withKafkaClient(client)
+            .withTimer(mockTimer)
+            .withCacheHelper(cacheHelper)
+            .build();
+
+        stateManager.start();
+
+        CompletableFuture<InitializeShareGroupStateResponse> future = new CompletableFuture<>();
+
+        PersisterStateManager.InitializeStateHandler handler = spy(stateManager.new InitializeStateHandler(
+            groupId,
+            topicId,
+            partition,
+            0,
+            0L,
+            future,
+            REQUEST_BACKOFF_MS,
+            REQUEST_BACKOFF_MAX_MS,
+            2
+        ));
+
+        stateManager.enqueue(handler);
+
+        CompletableFuture<InitializeShareGroupStateResponse> resultFuture = handler.result();
+
+        InitializeShareGroupStateResponse result = null;
+        try {
+            result = resultFuture.get();
+        } catch (Exception e) {
+            fail("Failed to get result from future", e);
+        }
+
+        InitializeShareGroupStateResponseData.PartitionResult partitionResult = result.data().results().get(0).partitions().get(0);
+
+        // Verifying the coordinator node was populated correctly by the FIND_COORDINATOR request
+        assertEquals(coordinatorNode, handler.getCoordinatorNode());
+
+        // Verifying the result returned in correct
+        assertEquals(partition, partitionResult.partition());
+        assertEquals(Errors.NETWORK_EXCEPTION.code(), partitionResult.errorCode());
+        verify(handler, times(2)).handleRequestResponse(any());    // Retriable exception
+
+        try {
+            // Stopping the state manager
+            stateManager.stop();
+        } catch (Exception e) {
+            fail("Failed to stop state manager", e);
+        }
+    }
+
+    @Test
     public void testPersisterStateManagerClose() {
         KafkaClient client = mock(KafkaClient.class);
         Timer timer = mock(Timer.class);
@@ -3586,9 +5250,113 @@ class PersisterStateManagerTest {
             psm.stop();
 
             verify(client, times(1)).close();
-            verify(timer, times(1)).close();
+            // Timer lifecycle is the caller's responsibility, not PersisterStateManager's.
+            verify(timer, times(0)).close();
         } catch (Exception e) {
             fail("unexpected exception", e);
         }
+    }
+
+    static class TestHolder {
+        boolean hasResponse;
+        boolean wasDisconnected;
+        boolean wasTimedOut;
+        boolean authException;
+        boolean versionMismatch;
+        Optional<Errors> exp;
+
+        TestHolder(boolean hasResponse, boolean wasDisconnected, boolean wasTimedOut, boolean isAuthExp, boolean isVersionMismatch, Optional<Errors> exp) {
+            this.hasResponse = hasResponse;
+            this.wasDisconnected = wasDisconnected;
+            this.wasTimedOut = wasTimedOut;
+            this.authException = isAuthExp;
+            this.versionMismatch = isVersionMismatch;
+            this.exp = exp;
+        }
+
+        @Override
+        public String toString() {
+            return "(" +
+                "hasResponse:" + hasResponse + ", " +
+                "wasDisconnected:" + wasDisconnected + ", " +
+                "wasTimedOut:" + wasTimedOut + ", " +
+                "authException:" + authException + ", " +
+                "versionMismatch:" + versionMismatch + ", " +
+                "expErr:" + (exp.isPresent() ? exp.get() : "<empty>") +
+                ")";
+        }
+    }
+
+    private static Stream<TestHolder> generatorDifferentStates() {
+        int combs = 1 << 4; // 2^4 combinations
+        List<TestHolder> holders = new ArrayList<>();
+
+        // Let the actual handler handle since response present.
+        for (int i = 1; i <= combs; i++) {
+            holders.add(new TestHolder(true, (i & 1) != 0, (i & 2) != 0, (i & 4) != 0, (i & 8) != 0, Optional.empty()));
+        }
+
+        // Handled by checkResponseError.
+        for (int i = 1; i <= combs; i++) {
+            boolean disconnect = (i & 1) != 0;
+            boolean timedOut = (i & 2) != 0;
+            boolean authException = (i & 4) != 0;
+            boolean versionMismatch = (i & 8) != 0;
+
+            Optional<Errors> err = Optional.of(Errors.UNKNOWN_SERVER_ERROR);
+            if (authException) {
+                err = Optional.of(Errors.SASL_AUTHENTICATION_FAILED);
+            } else if (versionMismatch) {
+                err = Optional.of(Errors.UNSUPPORTED_VERSION);
+            } else if (disconnect) {
+                err = Optional.of(Errors.NETWORK_EXCEPTION);
+            } else if (timedOut) {
+                err = Optional.of(Errors.REQUEST_TIMED_OUT);
+            }
+
+            holders.add(new TestHolder(false, disconnect, timedOut, authException, versionMismatch, err));
+        }
+
+        return holders.stream();
+    }
+
+    @ParameterizedTest
+    @MethodSource("generatorDifferentStates")
+    public void testResponseErrorHandling(TestHolder holder) {
+        KafkaClient client = mock(KafkaClient.class);
+        Timer timer = mock(Timer.class);
+        PersisterStateManager psm = PersisterStateManagerBuilder
+            .builder()
+            .withTimer(timer)
+            .withKafkaClient(client)
+            .build();
+
+        SharePartitionKey key = SharePartitionKey.getInstance("group", Uuid.randomUuid(), 1);
+
+        CompletableFuture<TestStateHandler.TestHandlerResponse> future = new CompletableFuture<>();
+
+        TestStateHandler handler = spy(new TestStateHandler(
+            psm,
+            key.groupId(),
+            key.topicId(),
+            key.partition(),
+            future,
+            REQUEST_BACKOFF_MS,
+            REQUEST_BACKOFF_MAX_MS,
+            MAX_RPC_RETRY_ATTEMPTS
+        ) {
+            @Override
+            protected AbstractRequest.Builder<? extends AbstractRequest> requestBuilder() {
+                return null;
+            }
+        });
+
+        ClientResponse response = mock(ClientResponse.class);
+        when(response.hasResponse()).thenReturn(holder.hasResponse);
+        when(response.wasDisconnected()).thenReturn(holder.wasDisconnected);
+        when(response.wasTimedOut()).thenReturn(holder.wasTimedOut);
+        when(response.authenticationException()).thenReturn(holder.authException ? new SaslAuthenticationException("bad stuff") : null);
+        when(response.versionMismatch()).thenReturn(holder.versionMismatch ? new UnsupportedVersionException("worse stuff") : null);
+        assertEquals(holder.exp, handler.checkResponseError(response), holder.toString());
     }
 }

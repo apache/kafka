@@ -53,7 +53,7 @@ public class ErrorsTest {
     public void testExceptionsAreNotGeneric() {
         for (Errors error : Errors.values()) {
             if (error != Errors.NONE)
-                assertNotEquals(error.exception().getClass(), ApiException.class, "Generic ApiException should not be used");
+                assertNotEquals(ApiException.class, error.exception().getClass(), "Generic ApiException should not be used");
         }
     }
 

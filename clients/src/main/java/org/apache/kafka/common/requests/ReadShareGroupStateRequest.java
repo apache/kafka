@@ -20,25 +20,29 @@ package org.apache.kafka.common.requests;
 import org.apache.kafka.common.message.ReadShareGroupStateRequestData;
 import org.apache.kafka.common.message.ReadShareGroupStateResponseData;
 import org.apache.kafka.common.protocol.ApiKeys;
-import org.apache.kafka.common.protocol.ByteBufferAccessor;
 import org.apache.kafka.common.protocol.Errors;
+import org.apache.kafka.common.protocol.Readable;
 
-import java.nio.ByteBuffer;
 import java.util.ArrayList;
 import java.util.List;
 import java.util.stream.Collectors;
 
 public class ReadShareGroupStateRequest extends AbstractRequest {
+
+    private static final short LATEST_VERSION_BEFORE_REQUEST_HEADER_V3 = 0;
+
     public static class Builder extends AbstractRequest.Builder<ReadShareGroupStateRequest> {
 
         private final ReadShareGroupStateRequestData data;
 
-        public Builder(ReadShareGroupStateRequestData data) {
-            this(data, true);
-        }
-
-        public Builder(ReadShareGroupStateRequestData data, boolean enableUnstableLastVersion) {
-            super(ApiKeys.READ_SHARE_GROUP_STATE, enableUnstableLastVersion);
+        /**
+         * @param data               the request data
+         * @param useRequestHeaderV3 whether the versions which use request header v3 may be used
+         */
+        public Builder(ReadShareGroupStateRequestData data, boolean useRequestHeaderV3) {
+            super(ApiKeys.READ_SHARE_GROUP_STATE,
+                ApiKeys.READ_SHARE_GROUP_STATE.oldestVersion(),
+                useRequestHeaderV3 ? ApiKeys.READ_SHARE_GROUP_STATE.latestVersion() : LATEST_VERSION_BEFORE_REQUEST_HEADER_V3);
             this.data = data;
         }
 
@@ -64,16 +68,16 @@ public class ReadShareGroupStateRequest extends AbstractRequest {
     public ReadShareGroupStateResponse getErrorResponse(int throttleTimeMs, Throwable e) {
         List<ReadShareGroupStateResponseData.ReadStateResult> results = new ArrayList<>();
         data.topics().forEach(
-                topicResult -> results.add(new ReadShareGroupStateResponseData.ReadStateResult()
-                        .setTopicId(topicResult.topicId())
-                        .setPartitions(topicResult.partitions().stream()
-                                .map(partitionData -> new ReadShareGroupStateResponseData.PartitionResult()
-                                        .setPartition(partitionData.partition())
-                                        .setErrorCode(Errors.forException(e).code())
-                                        .setErrorMessage(Errors.forException(e).message()))
-                                .collect(Collectors.toList()))));
+            topicResult -> results.add(new ReadShareGroupStateResponseData.ReadStateResult()
+                .setTopicId(topicResult.topicId())
+                .setPartitions(topicResult.partitions().stream()
+                    .map(partitionData -> new ReadShareGroupStateResponseData.PartitionResult()
+                        .setPartition(partitionData.partition())
+                        .setErrorCode(Errors.forException(e).code())
+                        .setErrorMessage(Errors.forException(e).message()))
+                    .collect(Collectors.toList()))));
         return new ReadShareGroupStateResponse(new ReadShareGroupStateResponseData()
-                .setResults(results));
+            .setResults(results));
     }
 
     @Override
@@ -81,10 +85,10 @@ public class ReadShareGroupStateRequest extends AbstractRequest {
         return data;
     }
 
-    public static ReadShareGroupStateRequest parse(ByteBuffer buffer, short version) {
+    public static ReadShareGroupStateRequest parse(Readable readable, short version) {
         return new ReadShareGroupStateRequest(
-                new ReadShareGroupStateRequestData(new ByteBufferAccessor(buffer), version),
-                version
+            new ReadShareGroupStateRequestData(readable, version),
+            version
         );
     }
 }

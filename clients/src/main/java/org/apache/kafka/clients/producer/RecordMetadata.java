@@ -17,12 +17,14 @@
 package org.apache.kafka.clients.producer;
 
 import org.apache.kafka.common.TopicPartition;
-import org.apache.kafka.common.record.RecordBatch;
+import org.apache.kafka.common.annotation.InterfaceAudience;
+import org.apache.kafka.common.record.internal.RecordBatch;
 import org.apache.kafka.common.requests.ProduceResponse;
 
 /**
  * The metadata for a record that has been acknowledged by the server
  */
+@InterfaceAudience.Public
 public final class RecordMetadata {
 
     /**
@@ -64,7 +66,7 @@ public final class RecordMetadata {
 
     /**
      * The offset of the record in the topic/partition.
-     * @return the offset of the record, or -1 if {{@link #hasOffset()}} returns false.
+     * @return the offset of the record, or -1 if {@link #hasOffset()} returns false.
      */
     public long offset() {
         return this.offset;
@@ -81,7 +83,7 @@ public final class RecordMetadata {
     /**
      * The timestamp of the record in the topic/partition.
      *
-     * @return the timestamp of the record, or -1 if the {{@link #hasTimestamp()}} returns false.
+     * @return the timestamp of the record, or -1 if the {@link #hasTimestamp()} returns false.
      */
     public long timestamp() {
         return this.timestamp;

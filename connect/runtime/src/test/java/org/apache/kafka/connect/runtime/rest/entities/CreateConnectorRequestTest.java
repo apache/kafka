@@ -18,14 +18,26 @@ package org.apache.kafka.connect.runtime.rest.entities;
 
 import org.apache.kafka.connect.runtime.TargetState;
 
+import com.fasterxml.jackson.databind.ObjectMapper;
+import com.fasterxml.jackson.databind.exc.UnrecognizedPropertyException;
+
 import org.junit.jupiter.api.Test;
 
-import java.util.Collections;
+import java.util.List;
+import java.util.Map;
 
 import static org.junit.jupiter.api.Assertions.assertEquals;
+import static org.junit.jupiter.api.Assertions.assertFalse;
+import static org.junit.jupiter.api.Assertions.assertNotNull;
 import static org.junit.jupiter.api.Assertions.assertNull;
+import static org.junit.jupiter.api.Assertions.assertThrows;
+import static org.junit.jupiter.api.Assertions.assertTrue;
 
 public class CreateConnectorRequestTest {
+
+    // A bare ObjectMapper, matching what RestClient and ConnectStandalone use, so that these tests exercise the same
+    // (de)serialization behaviour as the follower -> leader forwarding path and the standalone CLI.
+    private static final ObjectMapper OBJECT_MAPPER = new ObjectMapper();
 
     @Test
     public void testToTargetState() {
@@ -33,7 +45,7 @@ public class CreateConnectorRequestTest {
         assertEquals(TargetState.PAUSED, CreateConnectorRequest.InitialState.PAUSED.toTargetState());
         assertEquals(TargetState.STOPPED, CreateConnectorRequest.InitialState.STOPPED.toTargetState());
 
-        CreateConnectorRequest createConnectorRequest = new CreateConnectorRequest("test-name", Collections.emptyMap(), null);
+        CreateConnectorRequest createConnectorRequest = new CreateConnectorRequest("test-name", Map.of(), null, null);
         assertNull(createConnectorRequest.initialTargetState());
     }
 
@@ -50,5 +62,117 @@ public class CreateConnectorRequestTest {
         assertEquals(CreateConnectorRequest.InitialState.STOPPED, CreateConnectorRequest.InitialState.forValue("stopped"));
         assertEquals(CreateConnectorRequest.InitialState.STOPPED, CreateConnectorRequest.InitialState.forValue("Stopped"));
         assertEquals(CreateConnectorRequest.InitialState.STOPPED, CreateConnectorRequest.InitialState.forValue("STOPPED"));
+    }
+
+    @Test
+    public void testDeserializeSourceInitialOffsets() throws Exception {
+        String json = "{"
+            + "\"name\": \"source-1\","
+            + "\"config\": {\"connector.class\": \"FileStreamSource\"},"
+            + "\"initial_offsets\": [{\"partition\": {\"filename\": \"test.txt\"}, \"offset\": {\"position\": 4096}}]"
+            + "}";
+
+        CreateConnectorRequest request = OBJECT_MAPPER.readValue(json, CreateConnectorRequest.class);
+
+        assertEquals("source-1", request.name());
+        assertNull(request.initialState());
+        assertEquals(1, request.initialOffsets().size());
+        assertEquals(Map.of("filename", "test.txt"), request.initialOffsets().get(0).partition());
+        assertEquals(Map.of("position", 4096), request.initialOffsets().get(0).offset());
+        assertEquals(Map.of(Map.of("filename", "test.txt"), Map.of("position", 4096)), request.initialOffsetsMap());
+    }
+
+    @Test
+    public void testDeserializeSinkInitialOffsets() throws Exception {
+        String json = "{"
+            + "\"name\": \"sink-1\","
+            + "\"config\": {\"connector.class\": \"FileStreamSink\"},"
+            + "\"initial_offsets\": [{\"partition\": {\"kafka_topic\": \"t\", \"kafka_partition\": 0},"
+            + " \"offset\": {\"kafka_offset\": 100}}]"
+            + "}";
+
+        CreateConnectorRequest request = OBJECT_MAPPER.readValue(json, CreateConnectorRequest.class);
+
+        assertEquals(Map.of(Map.of("kafka_topic", "t", "kafka_partition", 0), Map.of("kafka_offset", 100)),
+            request.initialOffsetsMap());
+    }
+
+    @Test
+    public void testInitialOffsetsRoundTrip() throws Exception {
+        // Serialize then deserialize, which relies on Jackson using the record's canonical constructor
+        CreateConnectorRequest original = new CreateConnectorRequest(
+            "source-1",
+            Map.of("connector.class", "FileStreamSource"),
+            CreateConnectorRequest.InitialState.STOPPED,
+            List.of(new ConnectorOffset(Map.of("filename", "test.txt"), Map.of("position", 4096)))
+        );
+
+        String serialized = OBJECT_MAPPER.writeValueAsString(original);
+        assertTrue(serialized.contains("\"initial_offsets\""),
+            "Serialized form should use the initial_offsets JSON property name: " + serialized);
+
+        CreateConnectorRequest roundTripped = OBJECT_MAPPER.readValue(serialized, CreateConnectorRequest.class);
+        assertEquals(original, roundTripped);
+        assertEquals(original.initialOffsetsMap(), roundTripped.initialOffsetsMap());
+    }
+
+    @Test
+    public void testInitialOffsetsAbsentIsNull() throws Exception {
+        // Absence must be distinguishable from an empty list: absent means "leave offsets alone and omit
+        // offsets_status from the response", whereas an empty list is an invalid request.
+        String json = "{\"name\": \"source-1\", \"config\": {\"connector.class\": \"FileStreamSource\"}}";
+
+        CreateConnectorRequest request = OBJECT_MAPPER.readValue(json, CreateConnectorRequest.class);
+
+        assertNull(request.initialOffsets());
+        assertNull(request.initialOffsetsMap());
+    }
+
+    @Test
+    public void testInitialOffsetsOmittedWhenNull() throws Exception {
+        // Follower workers forward create requests to the leader, so a request without initial offsets must serialize
+        // the same as before this field existed, or a leader that doesn't know the field rejects it.
+        String serialized = OBJECT_MAPPER.writeValueAsString(
+            new CreateConnectorRequest("source-1", Map.of("connector.class", "FileStreamSource"), null, null));
+
+        assertFalse(serialized.contains("initial_offsets"),
+            "initial_offsets must be omitted when null: " + serialized);
+    }
+
+    @Test
+    public void testInitialOffsetsEmptyListIsEmptyMap() throws Exception {
+        String json = "{\"name\": \"source-1\", \"config\": {}, \"initial_offsets\": []}";
+
+        CreateConnectorRequest request = OBJECT_MAPPER.readValue(json, CreateConnectorRequest.class);
+
+        assertNotNull(request.initialOffsets());
+        assertTrue(request.initialOffsets().isEmpty());
+        assertNotNull(request.initialOffsetsMap());
+        assertTrue(request.initialOffsetsMap().isEmpty());
+    }
+
+    @Test
+    public void testDeserializeNullOffsetValue() throws Exception {
+        // A null offset value is accepted by the wire format (it means "reset this partition" on
+        // PATCH /connectors/{connector}/offsets). Whether it is legal in initial_offsets is a separate
+        // validation concern; this test only pins that parsing does not fail.
+        String json = "{\"name\": \"sink-1\", \"config\": {},"
+            + " \"initial_offsets\": [{\"partition\": {\"kafka_topic\": \"t\", \"kafka_partition\": 0}, \"offset\": null}]}";
+
+        CreateConnectorRequest request = OBJECT_MAPPER.readValue(json, CreateConnectorRequest.class);
+
+        assertEquals(1, request.initialOffsets().size());
+        assertNull(request.initialOffsets().get(0).offset());
+        assertNull(request.initialOffsetsMap().get(Map.of("kafka_topic", "t", "kafka_partition", 0)));
+    }
+
+    @Test
+    public void testUnknownFieldRejected() {
+        // Pins the strictness that the follower -> leader forwarding path relies on: an old worker receiving a
+        // forwarded request with initial_offsets must fail loudly rather than silently drop the field.
+        String json = "{\"name\": \"source-1\", \"config\": {}, \"not_a_real_field\": 1}";
+
+        assertThrows(UnrecognizedPropertyException.class,
+            () -> OBJECT_MAPPER.readValue(json, CreateConnectorRequest.class));
     }
 }

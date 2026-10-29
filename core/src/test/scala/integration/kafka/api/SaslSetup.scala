@@ -17,9 +17,7 @@
 
 package kafka.api
 
-import kafka.security.JaasTestUtils
-import kafka.security.JaasTestUtils.JaasSection
-import kafka.security.minikdc.MiniKdc
+import org.apache.kafka.security.JaasTestUtils.JaasSection
 import kafka.utils.TestUtils
 import org.apache.kafka.clients.admin.{Admin, AdminClientConfig, ScramCredentialInfo, UserScramCredentialUpsertion, ScramMechanism => PublicScramMechanism}
 import org.apache.kafka.common.config.SaslConfigs
@@ -27,6 +25,8 @@ import org.apache.kafka.common.config.internals.BrokerSecurityConfigs
 import org.apache.kafka.common.security.JaasUtils
 import org.apache.kafka.common.security.auth.SecurityProtocol
 import org.apache.kafka.common.security.authenticator.LoginManager
+import org.apache.kafka.security.JaasTestUtils
+import org.apache.kafka.security.minikdc.MiniKdc
 
 import java.io.File
 import java.util
@@ -64,9 +64,9 @@ trait SaslSetup {
     val (serverKeytabFile, clientKeytabFile) = maybeCreateEmptyKeytabFiles()
     kdc = new MiniKdc(kdcConf, workDir)
     kdc.start()
-    kdc.createPrincipal(serverKeytabFile, List(JaasTestUtils.KAFKA_SERVER_PRINCIPAL_UNQUALIFIED_NAME + "/localhost").asJava)
+    kdc.createPrincipal(serverKeytabFile, java.util.List.of(JaasTestUtils.KAFKA_SERVER_PRINCIPAL_UNQUALIFIED_NAME + "/localhost"))
     kdc.createPrincipal(clientKeytabFile,
-      List(JaasTestUtils.KAFKA_CLIENT_PRINCIPAL_UNQUALIFIED_NAME, JaasTestUtils.KAFKA_CLIENT_PRINCIPAL_UNQUALIFIED_NAME_2).asJava)
+      java.util.List.of(JaasTestUtils.KAFKA_CLIENT_PRINCIPAL_UNQUALIFIED_NAME, JaasTestUtils.KAFKA_CLIENT_PRINCIPAL_UNQUALIFIED_NAME_2))
   }
 
   /** Return a tuple with the path to the server keytab file and client keytab file */
@@ -166,7 +166,7 @@ trait SaslSetup {
   def createScramCredentials(adminClient: Admin, userName: String, password: String): Unit = {
     PublicScramMechanism.values().filter(_ != PublicScramMechanism.UNKNOWN).map(mechanism => {
 
-      val results = adminClient.alterUserScramCredentials(util.Arrays.asList(
+      val results = adminClient.alterUserScramCredentials(util.List.of(
         new UserScramCredentialUpsertion(userName, new ScramCredentialInfo(mechanism, 4096), password)))
       results.all.get
     })

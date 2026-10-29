@@ -19,10 +19,8 @@ package org.apache.kafka.coordinator.group.modern.share;
 import org.apache.kafka.common.Uuid;
 import org.apache.kafka.coordinator.common.runtime.CoordinatorRecord;
 import org.apache.kafka.coordinator.group.GroupCoordinatorRecordHelpers;
+import org.apache.kafka.coordinator.group.TargetAssignmentMetadata;
 import org.apache.kafka.coordinator.group.modern.Assignment;
-import org.apache.kafka.coordinator.group.modern.TopicMetadata;
-import org.apache.kafka.image.TopicImage;
-import org.apache.kafka.image.TopicsImage;
 
 import java.util.ArrayList;
 import java.util.HashMap;
@@ -34,14 +32,16 @@ public class ShareGroupBuilder {
     private final String groupId;
     private final int groupEpoch;
     private int assignmentEpoch;
+    private long assignmentTimestamp;
     private final Map<String, ShareGroupMember> members = new HashMap<>();
     private final Map<String, Assignment> assignments = new HashMap<>();
-    private Map<String, TopicMetadata> subscriptionMetadata;
+    private long metadataHash = 0L;
 
     public ShareGroupBuilder(String groupId, int groupEpoch) {
         this.groupId = groupId;
         this.groupEpoch = groupEpoch;
-        this.assignmentEpoch = 0;
+        this.assignmentEpoch = TargetAssignmentMetadata.INITIAL.assignmentEpoch();
+        this.assignmentTimestamp = TargetAssignmentMetadata.INITIAL.assignmentTimestamp();
     }
 
     public ShareGroupBuilder withMember(ShareGroupMember member) {
@@ -49,8 +49,8 @@ public class ShareGroupBuilder {
         return this;
     }
 
-    public ShareGroupBuilder withSubscriptionMetadata(Map<String, TopicMetadata> subscriptionMetadata) {
-        this.subscriptionMetadata = subscriptionMetadata;
+    public ShareGroupBuilder withMetadataHash(long metadataHash) {
+        this.metadataHash = metadataHash;
         return this;
     }
 
@@ -64,7 +64,12 @@ public class ShareGroupBuilder {
         return this;
     }
 
-    public List<CoordinatorRecord> build(TopicsImage topicsImage) {
+    public ShareGroupBuilder withAssignmentTimestamp(long assignmentTimestamp) {
+        this.assignmentTimestamp = assignmentTimestamp;
+        return this;
+    }
+
+    public List<CoordinatorRecord> build() {
         List<CoordinatorRecord> records = new ArrayList<>();
 
         // Add subscription records for members.
@@ -72,29 +77,8 @@ public class ShareGroupBuilder {
             records.add(GroupCoordinatorRecordHelpers.newShareGroupMemberSubscriptionRecord(groupId, member))
         );
 
-        // Add subscription metadata.
-        if (subscriptionMetadata == null) {
-            subscriptionMetadata = new HashMap<>();
-            members.forEach((memberId, member) ->
-                member.subscribedTopicNames().forEach(topicName -> {
-                    TopicImage topicImage = topicsImage.getTopic(topicName);
-                    if (topicImage != null) {
-                        subscriptionMetadata.put(topicName, new TopicMetadata(
-                            topicImage.id(),
-                            topicImage.name(),
-                            topicImage.partitions().size()
-                        ));
-                    }
-                })
-            );
-        }
-
-        if (!subscriptionMetadata.isEmpty()) {
-            records.add(GroupCoordinatorRecordHelpers.newShareGroupSubscriptionMetadataRecord(groupId, subscriptionMetadata));
-        }
-
         // Add group epoch record.
-        records.add(GroupCoordinatorRecordHelpers.newShareGroupEpochRecord(groupId, groupEpoch));
+        records.add(GroupCoordinatorRecordHelpers.newShareGroupEpochRecord(groupId, groupEpoch, metadataHash));
 
         // Add target assignment records.
         assignments.forEach((memberId, assignment) ->
@@ -102,7 +86,7 @@ public class ShareGroupBuilder {
         );
 
         // Add target assignment epoch.
-        records.add(GroupCoordinatorRecordHelpers.newShareGroupTargetAssignmentEpochRecord(groupId, assignmentEpoch));
+        records.add(GroupCoordinatorRecordHelpers.newShareGroupTargetAssignmentMetadataRecord(groupId, assignmentEpoch, assignmentTimestamp));
 
         // Add current assignment records for members.
         members.forEach((memberId, member) ->

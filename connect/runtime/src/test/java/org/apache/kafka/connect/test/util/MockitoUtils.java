@@ -43,7 +43,7 @@ public class MockitoUtils {
      * <p>
      * Sample usage:
      * <p>
-     * <pre>
+     * <pre>{@code
      * Producer<byte[], byte[]> producer = mock(Producer.class);
      * // ... run through some test case that uses the mocked producer
      * assertEquals(
@@ -51,7 +51,7 @@ public class MockitoUtils {
      *     countInvocations(producer, "abortTransaction"),
      *     countInvocations(producer, "send", ProducerRecord.class, Callback.class)
      * );
-     * </pre>
+     * }</pre>
      * @param mock the mock object whose method invocations should be counted; may not be null
      * @param methodName the name of the method whose invocations should be counted; may not be null
      * @param parameters the types of the parameters for the method whose invocations should be counted;

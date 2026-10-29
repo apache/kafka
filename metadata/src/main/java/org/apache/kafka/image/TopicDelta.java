@@ -20,15 +20,14 @@ package org.apache.kafka.image;
 import org.apache.kafka.common.TopicIdPartition;
 import org.apache.kafka.common.TopicPartition;
 import org.apache.kafka.common.Uuid;
-import org.apache.kafka.common.metadata.ClearElrRecord;
 import org.apache.kafka.common.metadata.PartitionChangeRecord;
 import org.apache.kafka.common.metadata.PartitionRecord;
 import org.apache.kafka.metadata.PartitionRegistration;
 import org.apache.kafka.metadata.Replicas;
 
-import java.util.Collections;
 import java.util.HashMap;
 import java.util.HashSet;
+import java.util.List;
 import java.util.Map;
 import java.util.Map.Entry;
 import java.util.Set;
@@ -40,6 +39,8 @@ import java.util.stream.Collectors;
 public final class TopicDelta {
     private final TopicImage image;
     private final Map<Integer, PartitionRegistration> partitionChanges = new HashMap<>();
+    private final Map<Integer, Integer> partitionToUncleanLeaderElectionCount = new HashMap<>();
+    private final Map<Integer, Integer> partitionToElrElectionCount = new HashMap<>();
 
     public TopicDelta(TopicImage image) {
         this.image = image;
@@ -69,27 +70,51 @@ public final class TopicDelta {
         return image.id();
     }
 
+    public Map<Integer, Integer> partitionToElrElectionCount() {
+        return partitionToElrElectionCount;
+    }
+    public Map<Integer, Integer> partitionToUncleanLeaderElectionCount() {
+        return partitionToUncleanLeaderElectionCount;
+    }
+
     public void replay(PartitionRecord record) {
+        int partitionId = record.partitionId();
+        PartitionRegistration prevPartition = partitionChanges.get(partitionId);
+        if (prevPartition == null) {
+            prevPartition = image.partitions().get(partitionId);
+        }
+        if (prevPartition != null) {
+            updateElectionStats(partitionId, prevPartition, record.leader(), record.leaderRecoveryState());
+        }
         partitionChanges.put(record.partitionId(), new PartitionRegistration(record));
     }
 
     public void replay(PartitionChangeRecord record) {
-        PartitionRegistration partition = partitionChanges.get(record.partitionId());
-        if (partition == null) {
-            partition = image.partitions().get(record.partitionId());
-            if (partition == null) {
+        int partitionId = record.partitionId();
+        PartitionRegistration prevPartition = partitionChanges.get(partitionId);
+        if (prevPartition == null) {
+            prevPartition = image.partitions().get(partitionId);
+            if (prevPartition == null) {
                 throw new RuntimeException("Unable to find partition " +
-                    record.topicId() + ":" + record.partitionId());
+                    record.topicId() + ":" + partitionId);
             }
         }
-        partitionChanges.put(record.partitionId(), partition.merge(record));
+        updateElectionStats(partitionId, prevPartition, record.leader(), record.leaderRecoveryState());
+        partitionChanges.put(record.partitionId(), prevPartition.merge(record));
     }
 
-    public void replay(ClearElrRecord record) {
+    private void updateElectionStats(int partitionId, PartitionRegistration prevPartition, int newLeader, byte newLeaderRecoveryState) {
+        if (PartitionRegistration.electionWasUnclean(newLeaderRecoveryState)) {
+            partitionToUncleanLeaderElectionCount.put(partitionId, partitionToUncleanLeaderElectionCount.getOrDefault(partitionId, 0) + 1);
+        }
+        if (Replicas.contains(prevPartition.elr, newLeader)) {
+            partitionToElrElectionCount.put(partitionId, partitionToElrElectionCount.getOrDefault(partitionId, 0) + 1);
+        }
+    }
+
+    public void replay() {
         // Some partitions are not added to the image yet, let's check the partitionChanges first.
-        partitionChanges.forEach((partitionId, partition) -> {
-            maybeClearElr(partitionId, partition);
-        });
+        partitionChanges.forEach(this::maybeClearElr);
 
         image.partitions().forEach((partitionId, partition) -> {
             if (!partitionChanges.containsKey(partitionId)) {
@@ -104,8 +129,8 @@ public final class TopicDelta {
                 new PartitionChangeRecord().
                     setPartitionId(partitionId).
                     setTopicId(image.id()).
-                    setEligibleLeaderReplicas(Collections.emptyList()).
-                    setLastKnownElr(Collections.emptyList())
+                    setEligibleLeaderReplicas(List.of()).
+                    setLastKnownElr(List.of())
             ));
         }
     }
@@ -127,20 +152,6 @@ public final class TopicDelta {
             }
         }
         return new TopicImage(image.name(), image.id(), newPartitions);
-    }
-
-    public boolean hasPartitionsWithAssignmentChanges() {
-        for (Entry<Integer, PartitionRegistration> entry : partitionChanges.entrySet()) {
-            int partitionId = entry.getKey();
-            // New Partition.
-            if (!image.partitions().containsKey(partitionId))
-                return true;
-            PartitionRegistration previousPartition = image.partitions().get(partitionId);
-            PartitionRegistration currentPartition = entry.getValue();
-            if (!previousPartition.hasSameAssignment(currentPartition))
-                return true;
-        }
-        return false;
     }
 
     /**
@@ -200,11 +211,7 @@ public final class TopicDelta {
 
             try {
                 PartitionRegistration prevPartition = image.partitions().get(entry.getKey());
-                if (
-                        prevPartition == null ||
-                        prevPartition.directories == null ||
-                        prevPartition.directory(brokerId) != entry.getValue().directory(brokerId)
-                ) {
+                if (prevPartition == null || prevPartition.directory(brokerId) != entry.getValue().directory(brokerId)) {
                     directoryIds.put(
                         new TopicIdPartition(id(), new TopicPartition(name(), entry.getKey())),
                         entry.getValue().directory(brokerId)

@@ -14,12 +14,29 @@
  * See the License for the specific language governing permissions and
  * limitations under the License.
  */
+
 package org.apache.kafka.common.header;
 
+import org.apache.kafka.common.annotation.InterfaceAudience;
+
+/**
+ * A header is a key-value pair.
+ */
+@InterfaceAudience.Public
 public interface Header {
-   
+
+    /**
+     * Returns the key of the header.
+     *
+     * @return the header's key; must not be null.
+     */
     String key();
 
+    /**
+     * Returns the value of the header.
+     *
+     * @return the header's value; may be null.
+     */
     byte[] value();
-   
+
 }

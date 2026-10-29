@@ -21,7 +21,10 @@ import org.apache.kafka.common.errors.ApiException;
 import org.apache.kafka.common.errors.BrokerIdNotRegisteredException;
 import org.apache.kafka.common.errors.BrokerNotAvailableException;
 import org.apache.kafka.common.errors.ClusterAuthorizationException;
+import org.apache.kafka.common.errors.ClusterMirrorAlreadyExistsException;
+import org.apache.kafka.common.errors.ClusterMirrorAuthorizationException;
 import org.apache.kafka.common.errors.ConcurrentTransactionsException;
+import org.apache.kafka.common.errors.ControllerIdNotRegisteredException;
 import org.apache.kafka.common.errors.ControllerMovedException;
 import org.apache.kafka.common.errors.CoordinatorLoadInProgressException;
 import org.apache.kafka.common.errors.CoordinatorNotAvailableException;
@@ -45,6 +48,7 @@ import org.apache.kafka.common.errors.FencedStateEpochException;
 import org.apache.kafka.common.errors.FetchSessionIdNotFoundException;
 import org.apache.kafka.common.errors.FetchSessionTopicIdException;
 import org.apache.kafka.common.errors.GroupAuthorizationException;
+import org.apache.kafka.common.errors.GroupDeletionFailedException;
 import org.apache.kafka.common.errors.GroupIdNotFoundException;
 import org.apache.kafka.common.errors.GroupMaxSizeReachedException;
 import org.apache.kafka.common.errors.GroupNotEmptyException;
@@ -61,6 +65,7 @@ import org.apache.kafka.common.errors.InvalidConfigurationException;
 import org.apache.kafka.common.errors.InvalidFetchSessionEpochException;
 import org.apache.kafka.common.errors.InvalidFetchSizeException;
 import org.apache.kafka.common.errors.InvalidGroupIdException;
+import org.apache.kafka.common.errors.InvalidMirrorStateException;
 import org.apache.kafka.common.errors.InvalidPartitionsException;
 import org.apache.kafka.common.errors.InvalidPidMappingException;
 import org.apache.kafka.common.errors.InvalidPrincipalTypeException;
@@ -85,6 +90,7 @@ import org.apache.kafka.common.errors.LeaderNotAvailableException;
 import org.apache.kafka.common.errors.ListenerNotFoundException;
 import org.apache.kafka.common.errors.LogDirNotFoundException;
 import org.apache.kafka.common.errors.MemberIdRequiredException;
+import org.apache.kafka.common.errors.MirrorConfigNotAvailableException;
 import org.apache.kafka.common.errors.MismatchedEndpointTypeException;
 import org.apache.kafka.common.errors.NetworkException;
 import org.apache.kafka.common.errors.NewLeaderElectedException;
@@ -105,6 +111,7 @@ import org.apache.kafka.common.errors.PositionOutOfRangeException;
 import org.apache.kafka.common.errors.PreferredLeaderNotAvailableException;
 import org.apache.kafka.common.errors.PrincipalDeserializationException;
 import org.apache.kafka.common.errors.ProducerFencedException;
+import org.apache.kafka.common.errors.ReadOnlyTopicException;
 import org.apache.kafka.common.errors.ReassignmentInProgressException;
 import org.apache.kafka.common.errors.RebalanceInProgressException;
 import org.apache.kafka.common.errors.RebootstrapRequiredException;
@@ -115,24 +122,29 @@ import org.apache.kafka.common.errors.ResourceNotFoundException;
 import org.apache.kafka.common.errors.RetriableException;
 import org.apache.kafka.common.errors.SaslAuthenticationException;
 import org.apache.kafka.common.errors.SecurityDisabledException;
+import org.apache.kafka.common.errors.ShareSessionLimitReachedException;
 import org.apache.kafka.common.errors.ShareSessionNotFoundException;
 import org.apache.kafka.common.errors.SnapshotNotFoundException;
 import org.apache.kafka.common.errors.StaleBrokerEpochException;
 import org.apache.kafka.common.errors.StaleMemberEpochException;
 import org.apache.kafka.common.errors.StreamsInvalidTopologyEpochException;
 import org.apache.kafka.common.errors.StreamsInvalidTopologyException;
+import org.apache.kafka.common.errors.StreamsTopologyDescriptionUpdateFailedException;
 import org.apache.kafka.common.errors.StreamsTopologyFencedException;
 import org.apache.kafka.common.errors.TelemetryTooLargeException;
 import org.apache.kafka.common.errors.ThrottlingQuotaExceededException;
 import org.apache.kafka.common.errors.TimeoutException;
+import org.apache.kafka.common.errors.TopicAlreadyInClusterMirrorException;
 import org.apache.kafka.common.errors.TopicAuthorizationException;
 import org.apache.kafka.common.errors.TopicDeletionDisabledException;
 import org.apache.kafka.common.errors.TopicExistsException;
+import org.apache.kafka.common.errors.TopicNotInClusterMirrorException;
 import org.apache.kafka.common.errors.TransactionAbortableException;
 import org.apache.kafka.common.errors.TransactionCoordinatorFencedException;
 import org.apache.kafka.common.errors.TransactionalIdAuthorizationException;
 import org.apache.kafka.common.errors.TransactionalIdNotFoundException;
 import org.apache.kafka.common.errors.UnacceptableCredentialException;
+import org.apache.kafka.common.errors.UnknownClusterMirrorException;
 import org.apache.kafka.common.errors.UnknownControllerIdException;
 import org.apache.kafka.common.errors.UnknownLeaderEpochException;
 import org.apache.kafka.common.errors.UnknownMemberIdException;
@@ -228,7 +240,7 @@ public enum Errors {
             "The group member's supported protocols are incompatible with those of existing members " +
             "or first group member tried to join with empty protocol type or empty protocol list.",
             InconsistentGroupProtocolException::new),
-    INVALID_GROUP_ID(24, "The configured groupId is invalid.",
+    INVALID_GROUP_ID(24, "The group id is invalid.",
             InvalidGroupIdException::new),
     UNKNOWN_MEMBER_ID(25, "The coordinator is not aware of this member.",
             UnknownMemberIdException::new),
@@ -357,7 +369,7 @@ public enum Errors {
             MemberIdRequiredException::new),
     PREFERRED_LEADER_NOT_AVAILABLE(80, "The preferred leader was not available.",
             PreferredLeaderNotAvailableException::new),
-    GROUP_MAX_SIZE_REACHED(81, "The consumer group has reached its max size.", GroupMaxSizeReachedException::new),
+    GROUP_MAX_SIZE_REACHED(81, "The group has reached its maximum size.", GroupMaxSizeReachedException::new),
     FENCED_INSTANCE_ID(82, "The broker rejected this static consumer since " +
             "another consumer with the same group.instance.id has registered with a different member.id.",
             FencedInstanceIdException::new),
@@ -383,10 +395,7 @@ public enum Errors {
     PRINCIPAL_DESERIALIZATION_FAILURE(97, "Request principal deserialization failed during forwarding. " +
          "This indicates an internal error on the broker cluster security setup.", PrincipalDeserializationException::new),
     SNAPSHOT_NOT_FOUND(98, "Requested snapshot was not found.", SnapshotNotFoundException::new),
-    POSITION_OUT_OF_RANGE(
-        99,
-        "Requested position is not greater than or equal to zero, and less than the size of the snapshot.",
-        PositionOutOfRangeException::new),
+    POSITION_OUT_OF_RANGE(99, "Requested position is not greater than or equal to zero, and less than the size of the snapshot.", PositionOutOfRangeException::new),
     UNKNOWN_TOPIC_ID(100, "This server does not host this topic ID.", UnknownTopicIdException::new),
     DUPLICATE_BROKER_REGISTRATION(101, "This broker ID is already in use.", DuplicateBrokerRegistrationException::new),
     BROKER_ID_NOT_REGISTERED(102, "The given broker ID was not registered.", BrokerIdNotRegisteredException::new),
@@ -411,15 +420,27 @@ public enum Errors {
     INVALID_RECORD_STATE(121, "The record state is invalid. The acknowledgement of delivery could not be completed.", InvalidRecordStateException::new),
     SHARE_SESSION_NOT_FOUND(122, "The share session was not found.", ShareSessionNotFoundException::new),
     INVALID_SHARE_SESSION_EPOCH(123, "The share session epoch is invalid.", InvalidShareSessionEpochException::new),
-    FENCED_STATE_EPOCH(124, "The share coordinator rejected the request because the share-group state epoch did not match.", FencedStateEpochException::new),
+    FENCED_STATE_EPOCH(124, "The coordinator rejected the request because the state epoch did not match.", FencedStateEpochException::new),
     INVALID_VOTER_KEY(125, "The voter key doesn't match the receiving replica's key.", InvalidVoterKeyException::new),
     DUPLICATE_VOTER(126, "The voter is already part of the set of voters.", DuplicateVoterException::new),
     VOTER_NOT_FOUND(127, "The voter is not part of the set of voters.", VoterNotFoundException::new),
     INVALID_REGULAR_EXPRESSION(128, "The regular expression is not valid.", InvalidRegularExpression::new),
-    REBOOTSTRAP_REQUIRED(129, "Client metadata is stale, client should rebootstrap to obtain new metadata.", RebootstrapRequiredException::new),
+    REBOOTSTRAP_REQUIRED(129, "Client metadata is stale. The client should rebootstrap to obtain new metadata.", RebootstrapRequiredException::new),
     STREAMS_INVALID_TOPOLOGY(130, "The supplied topology is invalid.", StreamsInvalidTopologyException::new),
     STREAMS_INVALID_TOPOLOGY_EPOCH(131, "The supplied topology epoch is invalid.", StreamsInvalidTopologyEpochException::new),
-    STREAMS_TOPOLOGY_FENCED(132, "The supplied topology epoch is outdated.", StreamsTopologyFencedException::new);
+    STREAMS_TOPOLOGY_FENCED(132, "The supplied topology epoch is outdated.", StreamsTopologyFencedException::new),
+    SHARE_SESSION_LIMIT_REACHED(133, "The limit of share sessions has been reached.", ShareSessionLimitReachedException::new),
+    GROUP_DELETION_FAILED(134, "DeleteGroups could not complete; see the error message on the per-group result for details.", GroupDeletionFailedException::new),
+    STREAMS_TOPOLOGY_DESCRIPTION_UPDATE_FAILED(135, "The broker could not process the topology description update; see the error message for details.", StreamsTopologyDescriptionUpdateFailedException::new),
+    CONTROLLER_ID_NOT_REGISTERED(136, "The given controller ID was not registered.", ControllerIdNotRegisteredException::new),
+    READ_ONLY_TOPIC(137, "The topic is read-only.", ReadOnlyTopicException::new),
+    CLUSTER_MIRROR_ALREADY_EXISTS(138, "The cluster mirror already exists.", ClusterMirrorAlreadyExistsException::new),
+    UNKNOWN_CLUSTER_MIRROR(139, "The cluster mirror does not exist.", UnknownClusterMirrorException::new),
+    TOPIC_ALREADY_IN_CLUSTER_MIRROR(140, "The topic is already assigned to a cluster mirror.", TopicAlreadyInClusterMirrorException::new),
+    TOPIC_NOT_IN_CLUSTER_MIRROR(141, "The topic does not belong to the specified cluster mirror.", TopicNotInClusterMirrorException::new),
+    CLUSTER_MIRROR_AUTHORIZATION_FAILED(142, "Cluster mirror authorization failed.", ClusterMirrorAuthorizationException::new),
+    INVALID_CLUSTER_MIRROR_STATE(143, "Invalid cluster mirror state.", InvalidMirrorStateException::new),
+    MIRROR_CONFIG_NOT_AVAILABLE(144, "Mirror config is not available.", MirrorConfigNotAvailableException::new);
 
     private static final Logger log = LoggerFactory.getLogger(Errors.class);
 

@@ -18,7 +18,10 @@
 package org.apache.kafka.connect.connector.policy;
 
 import org.apache.kafka.common.Configurable;
+import org.apache.kafka.common.annotation.InterfaceAudience;
+import org.apache.kafka.common.config.ConfigDef;
 import org.apache.kafka.common.config.ConfigValue;
+import org.apache.kafka.connect.components.ConnectPlugin;
 
 import java.util.List;
 
@@ -30,8 +33,14 @@ import java.util.List;
  * <p>Kafka Connect discovers implementations of this interface using the Java {@link java.util.ServiceLoader} mechanism.
  * To support this, implementations of this interface should also contain a service provider configuration file in
  * {@code META-INF/services/org.apache.kafka.connect.connector.policy.ConnectorClientConfigOverridePolicy}.
+ * <p>
+ * Implement {@link org.apache.kafka.common.metrics.Monitorable} to enable the policy to register metrics.
+ * The following tags are automatically added to all metrics registered: <code>config</code> set to
+ * <code>connector.client.config.override.policy</code>, and <code>class</code> set to the
+ * ConnectorClientConfigOverridePolicy class name.
  */
-public interface ConnectorClientConfigOverridePolicy extends Configurable, AutoCloseable {
+@InterfaceAudience.Public
+public interface ConnectorClientConfigOverridePolicy extends Configurable, AutoCloseable, ConnectPlugin {
 
 
     /**
@@ -47,4 +56,24 @@ public interface ConnectorClientConfigOverridePolicy extends Configurable, AutoC
                {@link ConfigValue#errorMessages() error} if the configuration is not allowed by the policy; never null
      */
     List<ConfigValue> validate(ConnectorClientConfigRequest connectorClientConfigRequest);
+
+    /**
+     * Configuration specification for this policy override.
+     *
+     * @return the configuration definition for this policy override; never null
+     */
+    @Override
+    default ConfigDef config() {
+        return new ConfigDef();
+    }
+
+    /**
+     * Get the version of this component.
+     *
+     * @return the version, formatted as a String. The version may not be {@code null} or empty.
+     */
+    @Override
+    default String version() {
+        return "undefined";
+    }
 }

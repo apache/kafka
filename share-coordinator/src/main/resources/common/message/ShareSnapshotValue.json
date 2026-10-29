@@ -13,8 +13,6 @@
 // See the License for the specific language governing permissions and
 // limitations under the License.
 
-// KIP-932 is in development. This schema is subject to non-backwards-compatible changes.
-
 {
   "apiKey": 0,
   "type": "coordinator-value",
@@ -22,23 +20,30 @@
   "validVersions": "0",
   "flexibleVersions": "0+",
   "fields": [
-    { "name": "SnapshotEpoch", "type": "uint16", "versions": "0",
+    { "name": "SnapshotEpoch", "type": "int32", "versions": "0+",
       "about": "The snapshot epoch." },
     { "name": "StateEpoch", "type": "int32", "versions": "0+",
       "about": "The state epoch for this share-partition." },
     { "name": "LeaderEpoch", "type": "int32", "versions": "0+",
       "about": "The leader epoch of the share-partition." },
-    { "name": "StartOffset", "type": "int64", "versions": "0",
+    { "name": "StartOffset", "type": "int64", "versions": "0+",
       "about": "The share-partition start offset." },
-    { "name": "StateBatches", "type": "[]StateBatch", "versions": "0",
+    // DeliveryCompleteCount was added in Apache Kafka 4.2 (KIP-1226).
+    { "name": "DeliveryCompleteCount", "type": "int32", "versions": "0+", "taggedVersions": "0+", "tag": 0, "default": "-1",
+      "about": "The number of offsets greater than or equal to share-partition start offset for which delivery has been completed." },
+    { "name": "CreateTimestamp", "type": "int64", "versions": "0+",
+      "about": "The time at which the state was created." },
+    { "name": "WriteTimestamp", "type": "int64", "versions": "0+",
+      "about": "The time at which the state was written or rewritten." },
+    { "name": "StateBatches", "type": "[]StateBatch", "versions": "0+",
       "about": "The state batches.", "fields": [
-      { "name": "FirstOffset", "type": "int64", "versions": "0",
+      { "name": "FirstOffset", "type": "int64", "versions": "0+",
         "about": "The first offset of this state batch." },
-      { "name": "LastOffset", "type": "int64", "versions": "0",
+      { "name": "LastOffset", "type": "int64", "versions": "0+",
         "about": "The last offset of this state batch." },
-      { "name": "DeliveryState", "type": "int8", "versions": "0",
+      { "name": "DeliveryState", "type": "int8", "versions": "0+",
         "about": "The delivery state - 0:Available,2:Acked,4:Archived." },
-      { "name": "DeliveryCount", "type": "int16", "versions": "0",
+      { "name": "DeliveryCount", "type": "int16", "versions": "0+",
         "about": "The delivery count." }
     ]}
   ]

@@ -25,7 +25,6 @@ import org.apache.kafka.streams.processor.TaskId;
 import org.apache.kafka.streams.processor.assignment.AssignmentConfigs;
 import org.apache.kafka.streams.processor.assignment.ProcessId;
 import org.apache.kafka.streams.processor.internals.InternalTopicManager;
-import org.apache.kafka.streams.processor.internals.TopologyMetadata.Subtopology;
 
 import org.junit.jupiter.params.ParameterizedTest;
 import org.junit.jupiter.params.provider.ValueSource;
@@ -44,7 +43,6 @@ import java.util.TreeMap;
 import java.util.TreeSet;
 
 import static java.util.Arrays.asList;
-import static java.util.Collections.singleton;
 import static org.apache.kafka.streams.processor.internals.assignment.AssignmentTestUtils.EMPTY_RACK_AWARE_ASSIGNMENT_TAGS;
 import static org.apache.kafka.streams.processor.internals.assignment.AssignmentTestUtils.PID_1;
 import static org.apache.kafka.streams.processor.internals.assignment.AssignmentTestUtils.PID_2;
@@ -87,21 +85,15 @@ import static org.apache.kafka.streams.processor.internals.assignment.Assignment
 import static org.apache.kafka.streams.processor.internals.assignment.AssignmentTestUtils.mockInternalTopicManagerForChangelog;
 import static org.apache.kafka.streams.processor.internals.assignment.AssignmentTestUtils.mockInternalTopicManagerForRandomChangelog;
 import static org.apache.kafka.streams.processor.internals.assignment.AssignmentTestUtils.verifyTaskPlacementWithRackAwareAssignor;
-import static org.hamcrest.MatcherAssert.assertThat;
-import static org.hamcrest.Matchers.empty;
-import static org.hamcrest.Matchers.equalTo;
-import static org.hamcrest.Matchers.greaterThanOrEqualTo;
-import static org.hamcrest.Matchers.hasItem;
-import static org.hamcrest.Matchers.hasItems;
-import static org.hamcrest.Matchers.is;
-import static org.hamcrest.Matchers.lessThanOrEqualTo;
-import static org.hamcrest.Matchers.not;
+import static org.junit.jupiter.api.Assertions.assertEquals;
 import static org.junit.jupiter.api.Assertions.assertFalse;
+import static org.junit.jupiter.api.Assertions.assertNotEquals;
+import static org.junit.jupiter.api.Assertions.assertTrue;
 import static org.mockito.Mockito.spy;
 
 public class LegacyStickyTaskAssignorTest {
 
-    private final List<Integer> expectedTopicGroupIds = asList(1, 2);
+    private final List<Integer> expectedTopicGroupIds = List.of(1, 2);
     private final Time time = new MockTime();
     private final Map<ProcessId, ClientState> clients = new TreeMap<>();
     private boolean enableRackAwareTaskAssignor;
@@ -123,10 +115,10 @@ public class LegacyStickyTaskAssignorTest {
         createClient(PID_3, 1);
 
         final boolean probingRebalanceNeeded = assign(rackAwareStrategy, TASK_0_0, TASK_0_1, TASK_0_2);
-        assertThat(probingRebalanceNeeded, is(false));
+        assertFalse(probingRebalanceNeeded);
 
         for (final ClientState clientState : clients.values()) {
-            assertThat(clientState.activeTaskCount(), equalTo(1));
+            assertEquals(1, clientState.activeTaskCount());
         }
     }
 
@@ -143,7 +135,7 @@ public class LegacyStickyTaskAssignorTest {
         createClient(PID_3, 2);
 
         final boolean probingRebalanceNeeded = assign(rackAwareStrategy, TASK_1_0, TASK_1_1, TASK_2_2, TASK_2_0, TASK_2_1, TASK_1_2);
-        assertThat(probingRebalanceNeeded, is(false));
+        assertFalse(probingRebalanceNeeded);
 
         assertActiveTaskTopicGroupIdsEvenlyDistributed();
     }
@@ -161,7 +153,7 @@ public class LegacyStickyTaskAssignorTest {
         createClient(PID_3, 2);
 
         final boolean probingRebalanceNeeded = assign(1, rackAwareStrategy, TASK_2_0, TASK_1_1, TASK_1_2, TASK_1_0, TASK_2_1, TASK_2_2);
-        assertThat(probingRebalanceNeeded, is(false));
+        assertFalse(probingRebalanceNeeded);
 
         assertActiveTaskTopicGroupIdsEvenlyDistributed();
     }
@@ -177,11 +169,11 @@ public class LegacyStickyTaskAssignorTest {
         createClientWithPreviousActiveTasks(PID_1, 1, TASK_0_0);
         createClientWithPreviousActiveTasks(PID_2, 1, TASK_0_1);
 
-        assertThat(assign(rackAwareStrategy, TASK_0_0, TASK_0_1, TASK_0_2), is(false));
+        assertFalse(assign(rackAwareStrategy, TASK_0_0, TASK_0_1, TASK_0_2));
 
-        assertThat(clients.get(PID_1).activeTasks(), hasItems(TASK_0_0));
-        assertThat(clients.get(PID_2).activeTasks(), hasItems(TASK_0_1));
-        assertThat(allActiveTasks(), equalTo(asList(TASK_0_0, TASK_0_1, TASK_0_2)));
+        assertTrue(clients.get(PID_1).activeTasks().contains(TASK_0_0));
+        assertTrue(clients.get(PID_2).activeTasks().contains(TASK_0_1));
+        assertEquals(List.of(TASK_0_0, TASK_0_1, TASK_0_2), allActiveTasks());
 
         clients.clear();
 
@@ -189,11 +181,11 @@ public class LegacyStickyTaskAssignorTest {
         createClientWithPreviousActiveTasks(PID_1, 1, TASK_0_1);
         createClientWithPreviousActiveTasks(PID_2, 1, TASK_0_2);
 
-        assertThat(assign(rackAwareStrategy, TASK_0_0, TASK_0_1, TASK_0_2), is(false));
+        assertFalse(assign(rackAwareStrategy, TASK_0_0, TASK_0_1, TASK_0_2));
 
-        assertThat(clients.get(PID_1).activeTasks(), hasItems(TASK_0_1));
-        assertThat(clients.get(PID_2).activeTasks(), hasItems(TASK_0_2));
-        assertThat(allActiveTasks(), equalTo(asList(TASK_0_0, TASK_0_1, TASK_0_2)));
+        assertTrue(clients.get(PID_1).activeTasks().contains(TASK_0_1));
+        assertTrue(clients.get(PID_2).activeTasks().contains(TASK_0_2));
+        assertEquals(List.of(TASK_0_0, TASK_0_1, TASK_0_2), allActiveTasks());
     }
 
     @ParameterizedTest
@@ -210,11 +202,11 @@ public class LegacyStickyTaskAssignorTest {
 
         final boolean probingRebalanceNeeded = assign(rackAwareStrategy, TASK_0_0, TASK_0_1, TASK_0_2);
 
-        assertThat(probingRebalanceNeeded, is(false));
-        assertThat(clients.get(PID_2).activeTasks(), equalTo(singleton(TASK_0_1)));
-        assertThat(clients.get(PID_1).activeTasks().size(), equalTo(1));
-        assertThat(clients.get(PID_3).activeTasks().size(), equalTo(1));
-        assertThat(allActiveTasks(), equalTo(asList(TASK_0_0, TASK_0_1, TASK_0_2)));
+        assertFalse(probingRebalanceNeeded);
+        assertEquals(Set.of(TASK_0_1), clients.get(PID_2).activeTasks());
+        assertEquals(1, clients.get(PID_1).activeTasks().size());
+        assertEquals(1, clients.get(PID_3).activeTasks().size());
+        assertEquals(List.of(TASK_0_0, TASK_0_1, TASK_0_2), allActiveTasks());
     }
 
     @ParameterizedTest
@@ -229,9 +221,9 @@ public class LegacyStickyTaskAssignorTest {
         createClient(PID_2, 2);
         final boolean probingRebalanceNeeded = assign(rackAwareStrategy, TASK_0_0, TASK_0_1, TASK_0_2);
 
-        assertThat(probingRebalanceNeeded, is(false));
-        assertThat(clients.get(PID_1).activeTasks().size(), equalTo(1));
-        assertThat(clients.get(PID_2).activeTasks().size(), equalTo(2));
+        assertFalse(probingRebalanceNeeded);
+        assertEquals(1, clients.get(PID_1).activeTasks().size());
+        assertEquals(2, clients.get(PID_2).activeTasks().size());
     }
 
     @ParameterizedTest
@@ -246,20 +238,18 @@ public class LegacyStickyTaskAssignorTest {
 
         createClient(PID_2, 1);
 
-        assertThat(assign(rackAwareStrategy, TASK_1_0, TASK_0_0, TASK_0_1, TASK_0_2, TASK_0_3, TASK_0_4, TASK_0_5), is(false));
+        assertFalse(assign(rackAwareStrategy, TASK_1_0, TASK_0_0, TASK_0_1, TASK_0_2, TASK_0_3, TASK_0_4, TASK_0_5));
 
-        final Set<TaskId> allTasks = new HashSet<>(asList(TASK_0_0, TASK_0_1, TASK_1_0, TASK_0_5, TASK_0_2, TASK_0_3, TASK_0_4));
+        final Set<TaskId> allTasks = new HashSet<>(List.of(TASK_0_0, TASK_0_1, TASK_1_0, TASK_0_5, TASK_0_2, TASK_0_3, TASK_0_4));
         final Set<TaskId> client1Tasks = clients.get(PID_1).activeTasks();
         final Set<TaskId> client2Tasks = clients.get(PID_2).activeTasks();
 
         // one client should get 3 tasks and the other should have 4
-        assertThat(
-            (client1Tasks.size() == 3 && client2Tasks.size() == 4) ||
-                (client1Tasks.size() == 4 && client2Tasks.size() == 3),
-            is(true));
+        assertTrue((client1Tasks.size() == 3 && client2Tasks.size() == 4) ||
+                (client1Tasks.size() == 4 && client2Tasks.size() == 3));
         allTasks.removeAll(client1Tasks);
         // client2 should have all the remaining tasks not assigned to client 1
-        assertThat(client2Tasks, equalTo(allTasks));
+        assertEquals(allTasks, client2Tasks);
     }
 
     @ParameterizedTest
@@ -276,11 +266,11 @@ public class LegacyStickyTaskAssignorTest {
         createClient(PID_4, 1);
         createClient(PID_5, 1);
 
-        assertThat(assign(rackAwareStrategy, TASK_0_0, TASK_0_1, TASK_0_2), is(false));
+        assertFalse(assign(rackAwareStrategy, TASK_0_0, TASK_0_1, TASK_0_2));
 
-        assertThat(clients.get(PID_1).activeTasks(), equalTo(singleton(TASK_0_0)));
-        assertThat(clients.get(PID_2).activeTasks(), equalTo(singleton(TASK_0_2)));
-        assertThat(clients.get(PID_3).activeTasks(), equalTo(singleton(TASK_0_1)));
+        assertEquals(Set.of(TASK_0_0), clients.get(PID_1).activeTasks());
+        assertEquals(Set.of(TASK_0_2), clients.get(PID_2).activeTasks());
+        assertEquals(Set.of(TASK_0_1), clients.get(PID_3).activeTasks());
 
         // change up the assignment and make sure it is still sticky
         clients.clear();
@@ -290,11 +280,11 @@ public class LegacyStickyTaskAssignorTest {
         createClientWithPreviousActiveTasks(PID_4, 1, TASK_0_2);
         createClientWithPreviousActiveTasks(PID_5, 1, TASK_0_1);
 
-        assertThat(assign(rackAwareStrategy, TASK_0_0, TASK_0_1, TASK_0_2), is(false));
+        assertFalse(assign(rackAwareStrategy, TASK_0_0, TASK_0_1, TASK_0_2));
 
-        assertThat(clients.get(PID_2).activeTasks(), equalTo(singleton(TASK_0_0)));
-        assertThat(clients.get(PID_4).activeTasks(), equalTo(singleton(TASK_0_2)));
-        assertThat(clients.get(PID_5).activeTasks(), equalTo(singleton(TASK_0_1)));
+        assertEquals(Set.of(TASK_0_0), clients.get(PID_2).activeTasks());
+        assertEquals(Set.of(TASK_0_2), clients.get(PID_4).activeTasks());
+        assertEquals(Set.of(TASK_0_1), clients.get(PID_5).activeTasks());
     }
 
     @ParameterizedTest
@@ -314,11 +304,11 @@ public class LegacyStickyTaskAssignorTest {
 
         final boolean probingRebalanceNeeded = assign(rackAwareStrategy, TASK_0_0, TASK_0_1, TASK_0_2);
 
-        assertThat(probingRebalanceNeeded, is(false));
+        assertFalse(probingRebalanceNeeded);
 
-        assertThat(clients.get(PID_1).activeTasks(), equalTo(singleton(TASK_0_2)));
-        assertThat(clients.get(PID_2).activeTasks(), equalTo(singleton(TASK_0_1)));
-        assertThat(clients.get(PID_3).activeTasks(), equalTo(singleton(TASK_0_0)));
+        assertEquals(Set.of(TASK_0_2), clients.get(PID_1).activeTasks());
+        assertEquals(Set.of(TASK_0_1), clients.get(PID_2).activeTasks());
+        assertEquals(Set.of(TASK_0_0), clients.get(PID_3).activeTasks());
     }
 
     @ParameterizedTest
@@ -336,10 +326,10 @@ public class LegacyStickyTaskAssignorTest {
 
         final boolean probingRebalanceNeeded = assign(rackAwareStrategy, TASK_0_0, TASK_0_1, TASK_0_2);
 
-        assertThat(probingRebalanceNeeded, is(false));
+        assertFalse(probingRebalanceNeeded);
 
-        assertThat(clients.get(PID_1).activeTasks(), equalTo(singleton(TASK_0_0)));
-        assertThat(clients.get(PID_2).activeTasks(), equalTo(Set.of(TASK_0_2, TASK_0_1)));
+        assertEquals(Set.of(TASK_0_0), clients.get(PID_1).activeTasks());
+        assertEquals(Set.of(TASK_0_2, TASK_0_1), clients.get(PID_2).activeTasks());
     }
 
     @ParameterizedTest
@@ -356,25 +346,25 @@ public class LegacyStickyTaskAssignorTest {
         createClientWithPreviousActiveTasks(PID_4, 1, TASK_0_3);
 
         final boolean probingRebalanceNeeded = assign(1, rackAwareStrategy, TASK_0_0, TASK_0_1, TASK_0_2, TASK_0_3);
-        assertThat(probingRebalanceNeeded, is(false));
+        assertFalse(probingRebalanceNeeded);
 
 
-        assertThat(clients.get(PID_1).standbyTasks(), not(hasItems(TASK_0_0)));
-        assertThat(clients.get(PID_1).standbyTasks().size(), lessThanOrEqualTo(2));
-        assertThat(clients.get(PID_2).standbyTasks(), not(hasItems(TASK_0_1)));
-        assertThat(clients.get(PID_2).standbyTasks().size(), lessThanOrEqualTo(2));
-        assertThat(clients.get(PID_3).standbyTasks(), not(hasItems(TASK_0_2)));
-        assertThat(clients.get(PID_3).standbyTasks().size(), lessThanOrEqualTo(2));
-        assertThat(clients.get(PID_4).standbyTasks(), not(hasItems(TASK_0_3)));
-        assertThat(clients.get(PID_4).standbyTasks().size(), lessThanOrEqualTo(2));
+        assertFalse(clients.get(PID_1).standbyTasks().contains(TASK_0_0));
+        assertTrue(clients.get(PID_1).standbyTasks().size() <= 2);
+        assertFalse(clients.get(PID_2).standbyTasks().contains(TASK_0_1));
+        assertTrue(clients.get(PID_2).standbyTasks().size() <= 2);
+        assertFalse(clients.get(PID_3).standbyTasks().contains(TASK_0_2));
+        assertTrue(clients.get(PID_3).standbyTasks().size() <= 2);
+        assertFalse(clients.get(PID_4).standbyTasks().contains(TASK_0_3));
+        assertTrue(clients.get(PID_4).standbyTasks().size() <= 2);
 
         int nonEmptyStandbyTaskCount = 0;
         for (final ClientState clientState : clients.values()) {
             nonEmptyStandbyTaskCount += clientState.standbyTasks().isEmpty() ? 0 : 1;
         }
 
-        assertThat(nonEmptyStandbyTaskCount, greaterThanOrEqualTo(3));
-        assertThat(allStandbyTasks(), equalTo(asList(TASK_0_0, TASK_0_1, TASK_0_2, TASK_0_3)));
+        assertTrue(nonEmptyStandbyTaskCount >= 3);
+        assertEquals(List.of(TASK_0_0, TASK_0_1, TASK_0_2, TASK_0_3), allStandbyTasks());
     }
 
     @ParameterizedTest
@@ -390,11 +380,11 @@ public class LegacyStickyTaskAssignorTest {
         createClientWithPreviousActiveTasks(PID_3, 1, TASK_0_2);
 
         final boolean probingRebalanceNeeded = assign(2, rackAwareStrategy, TASK_0_0, TASK_0_1, TASK_0_2);
-        assertThat(probingRebalanceNeeded, is(false));
+        assertFalse(probingRebalanceNeeded);
 
-        assertThat(clients.get(PID_1).standbyTasks(), equalTo(Set.of(TASK_0_1, TASK_0_2)));
-        assertThat(clients.get(PID_2).standbyTasks(), equalTo(Set.of(TASK_0_2, TASK_0_0)));
-        assertThat(clients.get(PID_3).standbyTasks(), equalTo(Set.of(TASK_0_0, TASK_0_1)));
+        assertEquals(Set.of(TASK_0_1, TASK_0_2), clients.get(PID_1).standbyTasks());
+        assertEquals(Set.of(TASK_0_2, TASK_0_0), clients.get(PID_2).standbyTasks());
+        assertEquals(Set.of(TASK_0_0, TASK_0_1), clients.get(PID_3).standbyTasks());
     }
 
     @ParameterizedTest
@@ -407,8 +397,8 @@ public class LegacyStickyTaskAssignorTest {
         setUp(rackAwareStrategy);
         createClient(PID_1, 1);
         final boolean probingRebalanceNeeded = assign(1, rackAwareStrategy, TASK_0_0);
-        assertThat(probingRebalanceNeeded, is(false));
-        assertThat(clients.get(PID_1).standbyTasks().size(), equalTo(0));
+        assertFalse(probingRebalanceNeeded);
+        assertEquals(0, clients.get(PID_1).standbyTasks().size());
     }
 
     @ParameterizedTest
@@ -424,10 +414,10 @@ public class LegacyStickyTaskAssignorTest {
         createClient(PID_3, 1);
 
         final boolean probingRebalanceNeeded = assign(1, rackAwareStrategy, TASK_0_0, TASK_0_1, TASK_0_2);
-        assertThat(probingRebalanceNeeded, is(false));
+        assertFalse(probingRebalanceNeeded);
 
-        assertThat(allActiveTasks(), equalTo(asList(TASK_0_0, TASK_0_1, TASK_0_2)));
-        assertThat(allStandbyTasks(), equalTo(asList(TASK_0_0, TASK_0_1, TASK_0_2)));
+        assertEquals(List.of(TASK_0_0, TASK_0_1, TASK_0_2), allActiveTasks());
+        assertEquals(List.of(TASK_0_0, TASK_0_1, TASK_0_2), allStandbyTasks());
     }
 
     @ParameterizedTest
@@ -443,10 +433,10 @@ public class LegacyStickyTaskAssignorTest {
         createClient(PID_3, 1);
 
         final boolean probingRebalanceNeeded = assign(rackAwareStrategy, TASK_0_0, TASK_0_1, TASK_0_2);
-        assertThat(probingRebalanceNeeded, is(false));
-        assertThat(clients.get(PID_1).assignedTaskCount(), equalTo(1));
-        assertThat(clients.get(PID_2).assignedTaskCount(), equalTo(1));
-        assertThat(clients.get(PID_3).assignedTaskCount(), equalTo(1));
+        assertFalse(probingRebalanceNeeded);
+        assertEquals(1, clients.get(PID_1).assignedTaskCount());
+        assertEquals(1, clients.get(PID_2).assignedTaskCount());
+        assertEquals(1, clients.get(PID_3).assignedTaskCount());
     }
 
     @ParameterizedTest
@@ -465,9 +455,9 @@ public class LegacyStickyTaskAssignorTest {
         createClient(PID_6, 1);
 
         final boolean probingRebalanceNeeded = assign(rackAwareStrategy, TASK_0_0, TASK_0_1, TASK_0_2);
-        assertThat(probingRebalanceNeeded, is(false));
+        assertFalse(probingRebalanceNeeded);
 
-        assertThat(allActiveTasks(), equalTo(asList(TASK_0_0, TASK_0_1, TASK_0_2)));
+        assertEquals(List.of(TASK_0_0, TASK_0_1, TASK_0_2), allActiveTasks());
     }
 
     @ParameterizedTest
@@ -486,10 +476,10 @@ public class LegacyStickyTaskAssignorTest {
         createClient(PID_6, 1);
 
         final boolean probingRebalanceNeeded = assign(1, rackAwareStrategy, TASK_0_0, TASK_0_1, TASK_0_2);
-        assertThat(probingRebalanceNeeded, is(false));
+        assertFalse(probingRebalanceNeeded);
 
         for (final ClientState clientState : clients.values()) {
-            assertThat(clientState.assignedTaskCount(), equalTo(1));
+            assertEquals(1, clientState.assignedTaskCount());
         }
     }
 
@@ -520,9 +510,9 @@ public class LegacyStickyTaskAssignorTest {
             TASK_3_2
         );
 
-        assertThat(probingRebalanceNeeded, is(false));
-        assertThat(clients.get(PID_2).assignedTaskCount(), equalTo(8));
-        assertThat(clients.get(PID_1).assignedTaskCount(), equalTo(4));
+        assertFalse(probingRebalanceNeeded);
+        assertEquals(8, clients.get(PID_2).assignedTaskCount());
+        assertEquals(4, clients.get(PID_1).assignedTaskCount());
     }
 
     @ParameterizedTest
@@ -581,7 +571,7 @@ public class LegacyStickyTaskAssignorTest {
         );
 
         final boolean probingRebalanceNeeded = assign(configs, rackAwareTaskAssignor, taskIdArray);
-        assertThat(probingRebalanceNeeded, is(false));
+        assertFalse(probingRebalanceNeeded);
 
         Collections.sort(taskIds);
         final Set<TaskId> expectedClientOneAssignment = getExpectedTaskIdAssignment(taskIds, 0, 4, 8, 12);
@@ -591,10 +581,10 @@ public class LegacyStickyTaskAssignorTest {
 
         final Map<ProcessId, Set<TaskId>> sortedAssignments = sortClientAssignments(clients);
 
-        assertThat(sortedAssignments.get(PID_1), equalTo(expectedClientOneAssignment));
-        assertThat(sortedAssignments.get(PID_2), equalTo(expectedClientTwoAssignment));
-        assertThat(sortedAssignments.get(PID_3), equalTo(expectedClientThreeAssignment));
-        assertThat(sortedAssignments.get(PID_4), equalTo(expectedClientFourAssignment));
+        assertEquals(expectedClientOneAssignment, sortedAssignments.get(PID_1));
+        assertEquals(expectedClientTwoAssignment, sortedAssignments.get(PID_2));
+        assertEquals(expectedClientThreeAssignment, sortedAssignments.get(PID_3));
+        assertEquals(expectedClientFourAssignment, sortedAssignments.get(PID_4));
     }
 
     @ParameterizedTest
@@ -605,21 +595,20 @@ public class LegacyStickyTaskAssignorTest {
     })
     public void shouldNotHaveSameAssignmentOnAnyTwoHosts(final String rackAwareStrategy) {
         setUp(rackAwareStrategy);
-        final List<ProcessId> allProcessIds = asList(PID_1, PID_2, PID_3, PID_4);
+        final List<ProcessId> allProcessIds = List.of(PID_1, PID_2, PID_3, PID_4);
         createClient(PID_1, 1);
         createClient(PID_2, 1);
         createClient(PID_3, 1);
         createClient(PID_4, 1);
 
         final boolean probingRebalanceNeeded = assign(1, rackAwareStrategy, TASK_0_0, TASK_0_2, TASK_0_1, TASK_0_3);
-        assertThat(probingRebalanceNeeded, is(false));
+        assertFalse(probingRebalanceNeeded);
 
         for (final ProcessId uuid : allProcessIds) {
             final Set<TaskId> taskIds = clients.get(uuid).assignedTasks();
             for (final ProcessId otherProcessId : allProcessIds) {
                 if (!uuid.equals(otherProcessId)) {
-                    assertThat("clients shouldn't have same task assignment", clients.get(otherProcessId).assignedTasks(),
-                               not(equalTo(taskIds)));
+                    assertNotEquals(taskIds, clients.get(otherProcessId).assignedTasks(), "clients shouldn't have same task assignment");
                 }
             }
 
@@ -634,21 +623,20 @@ public class LegacyStickyTaskAssignorTest {
     })
     public void shouldNotHaveSameAssignmentOnAnyTwoHostsWhenThereArePreviousActiveTasks(final String rackAwareStrategy) {
         setUp(rackAwareStrategy);
-        final List<ProcessId> allProcessIds = asList(PID_1, PID_2, PID_3);
+        final List<ProcessId> allProcessIds = List.of(PID_1, PID_2, PID_3);
         createClientWithPreviousActiveTasks(PID_1, 1, TASK_0_1, TASK_0_2);
         createClientWithPreviousActiveTasks(PID_2, 1, TASK_0_3);
         createClientWithPreviousActiveTasks(PID_3, 1, TASK_0_0);
         createClient(PID_4, 1);
 
         final boolean probingRebalanceNeeded = assign(1, rackAwareStrategy, TASK_0_0, TASK_0_2, TASK_0_1, TASK_0_3);
-        assertThat(probingRebalanceNeeded, is(false));
+        assertFalse(probingRebalanceNeeded);
 
         for (final ProcessId uuid : allProcessIds) {
             final Set<TaskId> taskIds = clients.get(uuid).assignedTasks();
             for (final ProcessId otherProcessId : allProcessIds) {
                 if (!uuid.equals(otherProcessId)) {
-                    assertThat("clients shouldn't have same task assignment", clients.get(otherProcessId).assignedTasks(),
-                               not(equalTo(taskIds)));
+                    assertNotEquals(taskIds, clients.get(otherProcessId).assignedTasks(), "clients shouldn't have same task assignment");
                 }
             }
 
@@ -663,7 +651,7 @@ public class LegacyStickyTaskAssignorTest {
     })
     public void shouldNotHaveSameAssignmentOnAnyTwoHostsWhenThereArePreviousStandbyTasks(final String rackAwareStrategy) {
         setUp(rackAwareStrategy);
-        final List<ProcessId> allProcessIds = asList(PID_1, PID_2, PID_3, PID_4);
+        final List<ProcessId> allProcessIds = List.of(PID_1, PID_2, PID_3, PID_4);
 
         final ClientState c1 = createClientWithPreviousActiveTasks(PID_1, 1, TASK_0_1, TASK_0_2);
         c1.addPreviousStandbyTasks(Set.of(TASK_0_3, TASK_0_0));
@@ -674,14 +662,13 @@ public class LegacyStickyTaskAssignorTest {
         createClient(PID_4, 1);
 
         final boolean probingRebalanceNeeded = assign(1, rackAwareStrategy, TASK_0_0, TASK_0_2, TASK_0_1, TASK_0_3);
-        assertThat(probingRebalanceNeeded, is(false));
+        assertFalse(probingRebalanceNeeded);
 
         for (final ProcessId uuid : allProcessIds) {
             final Set<TaskId> taskIds = clients.get(uuid).assignedTasks();
             for (final ProcessId otherProcessId : allProcessIds) {
                 if (!uuid.equals(otherProcessId)) {
-                    assertThat("clients shouldn't have same task assignment", clients.get(otherProcessId).assignedTasks(),
-                               not(equalTo(taskIds)));
+                    assertNotEquals(taskIds, clients.get(otherProcessId).assignedTasks(), "clients shouldn't have same task assignment");
                 }
             }
         }
@@ -701,12 +688,12 @@ public class LegacyStickyTaskAssignorTest {
         createClient(PID_4, 1);
 
         final boolean probingRebalanceNeeded = assign(rackAwareStrategy, TASK_0_0, TASK_0_2, TASK_0_1, TASK_0_3);
-        assertThat(probingRebalanceNeeded, is(false));
+        assertFalse(probingRebalanceNeeded);
 
-        assertThat(clients.get(PID_1).assignedTaskCount(), equalTo(1));
-        assertThat(clients.get(PID_2).assignedTaskCount(), equalTo(1));
-        assertThat(clients.get(PID_3).assignedTaskCount(), equalTo(1));
-        assertThat(clients.get(PID_4).assignedTaskCount(), equalTo(1));
+        assertEquals(1, clients.get(PID_1).assignedTaskCount());
+        assertEquals(1, clients.get(PID_2).assignedTaskCount());
+        assertEquals(1, clients.get(PID_3).assignedTaskCount());
+        assertEquals(1, clients.get(PID_4).assignedTaskCount());
     }
 
     @ParameterizedTest
@@ -722,11 +709,11 @@ public class LegacyStickyTaskAssignorTest {
         createClient(PID_2, 1);
 
         final boolean probingRebalanceNeeded = assign(rackAwareStrategy, TASK_0_0, TASK_0_2, TASK_0_1, TASK_0_3);
-        assertThat(probingRebalanceNeeded, is(false));
+        assertFalse(probingRebalanceNeeded);
 
-        assertThat(clients.get(PID_3).assignedTaskCount(), equalTo(2));
-        assertThat(clients.get(PID_1).assignedTaskCount(), equalTo(1));
-        assertThat(clients.get(PID_2).assignedTaskCount(), equalTo(1));
+        assertEquals(2, clients.get(PID_3).assignedTaskCount());
+        assertEquals(1, clients.get(PID_1).assignedTaskCount());
+        assertEquals(1, clients.get(PID_2).assignedTaskCount());
     }
 
     @ParameterizedTest
@@ -740,9 +727,9 @@ public class LegacyStickyTaskAssignorTest {
         createClientWithPreviousActiveTasks(PID_2, 1, TASK_0_0, TASK_0_3, TASK_0_2);
         createClient(PID_3, 2);
         final boolean probingRebalanceNeeded = assign(rackAwareStrategy, TASK_0_0, TASK_0_2, TASK_0_3);
-        assertThat(probingRebalanceNeeded, is(false));
-        assertThat(clients.get(PID_2).assignedTaskCount(), equalTo(1));
-        assertThat(clients.get(PID_3).assignedTaskCount(), equalTo(2));
+        assertFalse(probingRebalanceNeeded);
+        assertEquals(1, clients.get(PID_2).assignedTaskCount());
+        assertEquals(2, clients.get(PID_3).assignedTaskCount());
     }
 
     @ParameterizedTest
@@ -754,21 +741,21 @@ public class LegacyStickyTaskAssignorTest {
     public void shouldMoveMinimalNumberOfTasksWhenPreviouslyAboveCapacityAndNewClientAdded(final String rackAwareStrategy) {
         setUp(rackAwareStrategy);
         final Set<TaskId> p1PrevTasks = new HashSet<>(List.of(TASK_0_0, TASK_0_2));
-        final Set<TaskId> p2PrevTasks = new HashSet<>(List.of(TASK_0_1, TASK_0_3));
+        final Set<TaskId> p2PrevTasks = Set.of(TASK_0_1, TASK_0_3);
 
         createClientWithPreviousActiveTasks(PID_1, 1, TASK_0_0, TASK_0_2);
         createClientWithPreviousActiveTasks(PID_2, 1, TASK_0_1, TASK_0_3);
         createClientWithPreviousActiveTasks(PID_3, 1);
 
         final boolean probingRebalanceNeeded = assign(rackAwareStrategy, TASK_0_0, TASK_0_2, TASK_0_1, TASK_0_3);
-        assertThat(probingRebalanceNeeded, is(false));
+        assertFalse(probingRebalanceNeeded);
 
         final Set<TaskId> p3ActiveTasks = clients.get(PID_3).activeTasks();
-        assertThat(p3ActiveTasks.size(), equalTo(1));
+        assertEquals(1, p3ActiveTasks.size());
         if (p1PrevTasks.removeAll(p3ActiveTasks)) {
-            assertThat(clients.get(PID_2).activeTasks(), equalTo(p2PrevTasks));
+            assertEquals(p2PrevTasks, clients.get(PID_2).activeTasks());
         } else {
-            assertThat(clients.get(PID_1).activeTasks(), equalTo(p1PrevTasks));
+            assertEquals(p1PrevTasks, clients.get(PID_1).activeTasks());
         }
     }
 
@@ -784,10 +771,10 @@ public class LegacyStickyTaskAssignorTest {
         createClientWithPreviousActiveTasks(PID_2, 1, TASK_0_2, TASK_0_3);
 
         final boolean probingRebalanceNeeded = assign(rackAwareStrategy, TASK_0_3, TASK_0_1, TASK_0_4, TASK_0_2, TASK_0_0, TASK_0_5);
-        assertThat(probingRebalanceNeeded, is(false));
+        assertFalse(probingRebalanceNeeded);
 
-        assertThat(clients.get(PID_1).activeTasks(), hasItems(TASK_0_0, TASK_0_1));
-        assertThat(clients.get(PID_2).activeTasks(), hasItems(TASK_0_2, TASK_0_3));
+        assertTrue(clients.get(PID_1).activeTasks().containsAll(List.of(TASK_0_0, TASK_0_1)));
+        assertTrue(clients.get(PID_2).activeTasks().containsAll(List.of(TASK_0_2, TASK_0_3)));
     }
 
     @ParameterizedTest
@@ -804,11 +791,11 @@ public class LegacyStickyTaskAssignorTest {
         createClient(PID_3, 1);
 
         final boolean probingRebalanceNeeded = assign(rackAwareStrategy, TASK_0_3, TASK_0_1, TASK_0_4, TASK_0_2, TASK_0_0, TASK_0_5);
-        assertThat(probingRebalanceNeeded, is(false));
+        assertFalse(probingRebalanceNeeded);
 
-        assertThat(clients.get(PID_1).activeTasks(), hasItems(TASK_0_2, TASK_0_1));
-        assertThat(clients.get(PID_2).activeTasks(), hasItems(TASK_0_0, TASK_0_3));
-        assertThat(clients.get(PID_3).activeTasks(), hasItems(TASK_0_4, TASK_0_5));
+        assertTrue(clients.get(PID_1).activeTasks().containsAll(List.of(TASK_0_2, TASK_0_1)));
+        assertTrue(clients.get(PID_2).activeTasks().containsAll(List.of(TASK_0_0, TASK_0_3)));
+        assertTrue(clients.get(PID_3).activeTasks().containsAll(List.of(TASK_0_4, TASK_0_5)));
     }
 
     @ParameterizedTest
@@ -830,18 +817,18 @@ public class LegacyStickyTaskAssignorTest {
         newClient.addPreviousStandbyTasks(Set.of(TASK_0_0, TASK_1_0, TASK_0_1, TASK_0_2, TASK_1_1, TASK_2_0, TASK_0_3, TASK_1_2, TASK_2_1, TASK_1_3, TASK_2_2, TASK_2_3));
 
         final boolean probingRebalanceNeeded = assign(rackAwareStrategy, TASK_0_0, TASK_1_0, TASK_0_1, TASK_0_2, TASK_1_1, TASK_2_0, TASK_0_3, TASK_1_2, TASK_2_1, TASK_1_3, TASK_2_2, TASK_2_3);
-        assertThat(probingRebalanceNeeded, is(false));
+        assertFalse(probingRebalanceNeeded);
 
         if (rackAwareStrategy.equals(StreamsConfig.RACK_AWARE_ASSIGNMENT_STRATEGY_BALANCE_SUBTOPOLOGY)) {
-            assertThat(c1.activeTasks(), equalTo(Set.of(TASK_0_1, TASK_1_2, TASK_2_3)));
-            assertThat(c2.activeTasks(), equalTo(Set.of(TASK_0_0, TASK_1_1, TASK_2_2)));
-            assertThat(c3.activeTasks(), equalTo(Set.of(TASK_0_2, TASK_1_3, TASK_2_1)));
-            assertThat(newClient.activeTasks(), equalTo(Set.of(TASK_0_3, TASK_1_0, TASK_2_0)));
+            assertEquals(Set.of(TASK_0_1, TASK_1_2, TASK_2_3), c1.activeTasks());
+            assertEquals(Set.of(TASK_0_0, TASK_1_1, TASK_2_2), c2.activeTasks());
+            assertEquals(Set.of(TASK_0_2, TASK_1_3, TASK_2_1), c3.activeTasks());
+            assertEquals(Set.of(TASK_0_3, TASK_1_0, TASK_2_0), newClient.activeTasks());
         } else {
-            assertThat(c1.activeTasks(), equalTo(Set.of(TASK_0_1, TASK_1_2, TASK_1_3)));
-            assertThat(c2.activeTasks(), equalTo(Set.of(TASK_0_0, TASK_1_1, TASK_2_2)));
-            assertThat(c3.activeTasks(), equalTo(Set.of(TASK_2_0, TASK_2_1, TASK_2_3)));
-            assertThat(newClient.activeTasks(), equalTo(Set.of(TASK_0_2, TASK_0_3, TASK_1_0)));
+            assertEquals(Set.of(TASK_0_1, TASK_1_2, TASK_1_3), c1.activeTasks());
+            assertEquals(Set.of(TASK_0_0, TASK_1_1, TASK_2_2), c2.activeTasks());
+            assertEquals(Set.of(TASK_2_0, TASK_2_1, TASK_2_3), c3.activeTasks());
+            assertEquals(Set.of(TASK_0_2, TASK_0_3, TASK_1_0), newClient.activeTasks());
         }
     }
 
@@ -865,18 +852,18 @@ public class LegacyStickyTaskAssignorTest {
         bounce2.addPreviousStandbyTasks(Set.of(TASK_0_2, TASK_0_3, TASK_1_0));
 
         final boolean probingRebalanceNeeded = assign(rackAwareStrategy, TASK_0_0, TASK_1_0, TASK_0_1, TASK_0_2, TASK_1_1, TASK_2_0, TASK_0_3, TASK_1_2, TASK_2_1, TASK_1_3, TASK_2_2, TASK_2_3);
-        assertThat(probingRebalanceNeeded, is(false));
+        assertFalse(probingRebalanceNeeded);
 
         if (rackAwareStrategy.equals(StreamsConfig.RACK_AWARE_ASSIGNMENT_STRATEGY_BALANCE_SUBTOPOLOGY)) {
-            assertThat(c1.activeTasks(), equalTo(Set.of(TASK_0_1, TASK_1_2, TASK_2_3)));
-            assertThat(c2.activeTasks(), equalTo(Set.of(TASK_0_0, TASK_1_1, TASK_2_2)));
-            assertThat(bounce1.activeTasks(), equalTo(Set.of(TASK_0_2, TASK_1_3, TASK_2_1)));
-            assertThat(bounce2.activeTasks(), equalTo(Set.of(TASK_0_3, TASK_1_0, TASK_2_0)));
+            assertEquals(Set.of(TASK_0_1, TASK_1_2, TASK_2_3), c1.activeTasks());
+            assertEquals(Set.of(TASK_0_0, TASK_1_1, TASK_2_2), c2.activeTasks());
+            assertEquals(Set.of(TASK_0_2, TASK_1_3, TASK_2_1), bounce1.activeTasks());
+            assertEquals(Set.of(TASK_0_3, TASK_1_0, TASK_2_0), bounce2.activeTasks());
         } else {
-            assertThat(c1.activeTasks(), equalTo(Set.of(TASK_0_1, TASK_1_2, TASK_1_3)));
-            assertThat(c2.activeTasks(), equalTo(Set.of(TASK_0_0, TASK_1_1, TASK_2_2)));
-            assertThat(bounce1.activeTasks(), equalTo(Set.of(TASK_2_0, TASK_2_1, TASK_2_3)));
-            assertThat(bounce2.activeTasks(), equalTo(Set.of(TASK_0_2, TASK_0_3, TASK_1_0)));
+            assertEquals(Set.of(TASK_0_1, TASK_1_2, TASK_1_3), c1.activeTasks());
+            assertEquals(Set.of(TASK_0_0, TASK_1_1, TASK_2_2), c2.activeTasks());
+            assertEquals(Set.of(TASK_2_0, TASK_2_1, TASK_2_3), bounce1.activeTasks());
+            assertEquals(Set.of(TASK_0_2, TASK_0_3, TASK_1_0), bounce2.activeTasks());
         }
     }
 
@@ -890,8 +877,8 @@ public class LegacyStickyTaskAssignorTest {
         setUp(rackAwareStrategy);
         createClientWithPreviousActiveTasks(PID_1, 1, TASK_0_1, TASK_0_2);
         createClient(PID_2, 1);
-        assertThat(assign(rackAwareStrategy, TASK_0_1, TASK_0_2), is(false));
-        assertThat(clients.get(PID_1).activeTaskCount(), equalTo(1));
+        assertFalse(assign(rackAwareStrategy, TASK_0_1, TASK_0_2));
+        assertEquals(1, clients.get(PID_1).activeTaskCount());
     }
 
     @ParameterizedTest
@@ -907,16 +894,16 @@ public class LegacyStickyTaskAssignorTest {
         final ClientState newClient = createClient(PID_3, 1);
 
         final boolean probingRebalanceNeeded = assign(rackAwareStrategy, TASK_0_0, TASK_0_1, TASK_0_2, TASK_0_3, TASK_0_4, TASK_0_5);
-        assertThat(probingRebalanceNeeded, is(false));
-        assertThat(c1.activeTasks(), not(hasItem(TASK_0_3)));
-        assertThat(c1.activeTasks(), not(hasItem(TASK_0_4)));
-        assertThat(c1.activeTasks(), not(hasItem(TASK_0_5)));
-        assertThat(c1.activeTaskCount(), equalTo(2));
-        assertThat(c2.activeTasks(), not(hasItems(TASK_0_0)));
-        assertThat(c2.activeTasks(), not(hasItems(TASK_0_1)));
-        assertThat(c2.activeTasks(), not(hasItems(TASK_0_2)));
-        assertThat(c2.activeTaskCount(), equalTo(2));
-        assertThat(newClient.activeTaskCount(), equalTo(2));
+        assertFalse(probingRebalanceNeeded);
+        assertFalse(c1.activeTasks().contains(TASK_0_3));
+        assertFalse(c1.activeTasks().contains(TASK_0_4));
+        assertFalse(c1.activeTasks().contains(TASK_0_5));
+        assertEquals(2, c1.activeTaskCount());
+        assertFalse(c2.activeTasks().contains(TASK_0_0));
+        assertFalse(c2.activeTasks().contains(TASK_0_1));
+        assertFalse(c2.activeTasks().contains(TASK_0_2));
+        assertEquals(2, c2.activeTaskCount());
+        assertEquals(2, newClient.activeTaskCount());
     }
 
     @ParameterizedTest
@@ -933,18 +920,18 @@ public class LegacyStickyTaskAssignorTest {
         final ClientState newClient = createClient(PID_3, 1);
 
         final boolean probingRebalanceNeeded = assign(rackAwareStrategy, TASK_0_0, TASK_0_1, TASK_0_2, TASK_0_3, TASK_0_4, TASK_0_5, TASK_0_6);
-        assertThat(probingRebalanceNeeded, is(false));
+        assertFalse(probingRebalanceNeeded);
 
         // it's possible for either client 1 or 2 to get three tasks since they both had three previously assigned
-        assertThat(c1.activeTasks(), not(hasItem(TASK_0_3)));
-        assertThat(c1.activeTasks(), not(hasItem(TASK_0_4)));
-        assertThat(c1.activeTasks(), not(hasItem(TASK_0_5)));
-        assertThat(c1.activeTaskCount(), greaterThanOrEqualTo(2));
-        assertThat(c2.activeTasks(), not(hasItems(TASK_0_0)));
-        assertThat(c2.activeTasks(), not(hasItems(TASK_0_1)));
-        assertThat(c2.activeTasks(), not(hasItems(TASK_0_2)));
-        assertThat(c2.activeTaskCount(), greaterThanOrEqualTo(2));
-        assertThat(newClient.activeTaskCount(), equalTo(2));
+        assertFalse(c1.activeTasks().contains(TASK_0_3));
+        assertFalse(c1.activeTasks().contains(TASK_0_4));
+        assertFalse(c1.activeTasks().contains(TASK_0_5));
+        assertTrue(c1.activeTaskCount() >= 2);
+        assertFalse(c2.activeTasks().contains(TASK_0_0));
+        assertFalse(c2.activeTasks().contains(TASK_0_1));
+        assertFalse(c2.activeTasks().contains(TASK_0_2));
+        assertTrue(c2.activeTaskCount() >= 2);
+        assertEquals(2, newClient.activeTaskCount());
     }
 
     @ParameterizedTest
@@ -968,7 +955,6 @@ public class LegacyStickyTaskAssignorTest {
         final Cluster cluster = getRandomCluster(nodeSize, topicSize, partitionSize);
         final Map<TaskId, Set<TopicPartition>> partitionsForTask = getTaskTopicPartitionMap(topicSize, partitionSize, false);
         final Map<TaskId, Set<TopicPartition>> changelogPartitionsForTask = getTaskTopicPartitionMap(topicSize, partitionSize, true);
-        final Map<Subtopology, Set<TaskId>> tasksForTopicGroup = new HashMap<>();
         final Map<ProcessId, Map<String, Optional<String>>> racksForProcessConsumer = getRandomProcessRacks(clientSize, nodeSize);
         final InternalTopicManager internalTopicManager = mockInternalTopicManagerForRandomChangelog(nodeSize, topicSize, partitionSize);
 
@@ -1000,10 +986,10 @@ public class LegacyStickyTaskAssignorTest {
             rackAwareTaskAssignor,
             configs
         );
-        assertThat(probingRebalanceNeeded, is(false));
+        assertFalse(probingRebalanceNeeded);
 
-        assertThat(c1.activeTasks(), equalTo(Set.of(TASK_0_0, TASK_0_1, TASK_0_2)));
-        assertThat(c2.activeTasks(), empty());
+        assertEquals(Set.of(TASK_0_0, TASK_0_1, TASK_0_2), c1.activeTasks());
+        assertTrue(c2.activeTasks().isEmpty());
     }
 
     @ParameterizedTest
@@ -1056,35 +1042,35 @@ public class LegacyStickyTaskAssignorTest {
             rackAwareTaskAssignor,
             configs
         );
-        assertThat(probingRebalanceNeeded, is(false));
+        assertFalse(probingRebalanceNeeded);
 
         if (rackAwareStrategy.equals(StreamsConfig.RACK_AWARE_ASSIGNMENT_STRATEGY_MIN_TRAFFIC)) {
             // Total cost for active stateful: 3
             // Total cost for active stateless: 0
             // Total cost for standby: 20
-            assertThat(c1.activeTasks(), equalTo(Set.of(TASK_0_3, TASK_1_0, TASK_1_2)));
-            assertThat(c1.standbyTasks(), equalTo(Set.of(TASK_0_0, TASK_0_1)));
-            assertThat(c2.activeTasks(), equalTo(Set.of(TASK_0_0, TASK_0_2, TASK_1_1)));
-            assertThat(c2.standbyTasks(), empty());
-            assertThat(c3.activeTasks(), equalTo(Set.of(TASK_0_1, TASK_1_3)));
-            assertThat(c3.standbyTasks(), equalTo(Set.of(TASK_1_0, TASK_1_1)));
+            assertEquals(Set.of(TASK_0_3, TASK_1_0, TASK_1_2), c1.activeTasks());
+            assertEquals(Set.of(TASK_0_0, TASK_0_1), c1.standbyTasks());
+            assertEquals(Set.of(TASK_0_0, TASK_0_2, TASK_1_1), c2.activeTasks());
+            assertTrue(c2.standbyTasks().isEmpty());
+            assertEquals(Set.of(TASK_0_1, TASK_1_3), c3.activeTasks());
+            assertEquals(Set.of(TASK_1_0, TASK_1_1), c3.standbyTasks());
         } else if (rackAwareStrategy.equals(StreamsConfig.RACK_AWARE_ASSIGNMENT_STRATEGY_BALANCE_SUBTOPOLOGY)) {
-            assertThat(c1.activeTasks(), equalTo(Set.of(TASK_0_0, TASK_0_3, TASK_1_2)));
-            assertThat(c1.standbyTasks(), equalTo(Set.of(TASK_1_0)));
-            assertThat(c2.activeTasks(), equalTo(Set.of(TASK_0_1, TASK_0_2, TASK_1_1)));
-            assertThat(c2.standbyTasks(), equalTo(Set.of(TASK_0_0)));
-            assertThat(c3.activeTasks(), equalTo(Set.of(TASK_1_0, TASK_1_3)));
-            assertThat(c3.standbyTasks(), equalTo(Set.of(TASK_0_1, TASK_1_1)));
+            assertEquals(Set.of(TASK_0_0, TASK_0_3, TASK_1_2), c1.activeTasks());
+            assertEquals(Set.of(TASK_1_0), c1.standbyTasks());
+            assertEquals(Set.of(TASK_0_1, TASK_0_2, TASK_1_1), c2.activeTasks());
+            assertEquals(Set.of(TASK_0_0), c2.standbyTasks());
+            assertEquals(Set.of(TASK_1_0, TASK_1_3), c3.activeTasks());
+            assertEquals(Set.of(TASK_0_1, TASK_1_1), c3.standbyTasks());
         } else {
             // Total cost for active stateful: 30
             // Total cost for active stateless: 40
             // Total cost for standby: 10
-            assertThat(c1.activeTasks(), equalTo(Set.of(TASK_0_1, TASK_0_2, TASK_1_3)));
-            assertThat(c1.standbyTasks(), equalTo(Set.of(TASK_0_0)));
-            assertThat(c2.activeTasks(), equalTo(Set.of(TASK_0_3, TASK_1_0, TASK_1_1)));
-            assertThat(c2.standbyTasks(), equalTo(Set.of(TASK_0_1)));
-            assertThat(c3.activeTasks(), equalTo(Set.of(TASK_0_0, TASK_1_2)));
-            assertThat(c3.standbyTasks(), equalTo(Set.of(TASK_1_0, TASK_1_1)));
+            assertEquals(Set.of(TASK_0_1, TASK_0_2, TASK_1_3), c1.activeTasks());
+            assertEquals(Set.of(TASK_0_0), c1.standbyTasks());
+            assertEquals(Set.of(TASK_0_3, TASK_1_0, TASK_1_1), c2.activeTasks());
+            assertEquals(Set.of(TASK_0_1), c2.standbyTasks());
+            assertEquals(Set.of(TASK_0_0, TASK_1_2), c3.activeTasks());
+            assertEquals(Set.of(TASK_1_0, TASK_1_1), c3.standbyTasks());
         }
 
     }
@@ -1260,9 +1246,122 @@ public class LegacyStickyTaskAssignorTest {
         );
 
         for (final Map.Entry<ProcessId, ClientState> entry : clientStateMap.entrySet()) {
-            assertThat(entry.getValue().statefulActiveTasks(), equalTo(clientStateMapCopy.get(entry.getKey()).statefulActiveTasks()));
-            assertThat(entry.getValue().standbyTasks(), equalTo(clientStateMapCopy.get(entry.getKey()).standbyTasks()));
+            assertEquals(clientStateMapCopy.get(entry.getKey()).statefulActiveTasks(), entry.getValue().statefulActiveTasks());
+            assertEquals(clientStateMapCopy.get(entry.getKey()).standbyTasks(), entry.getValue().standbyTasks());
         }
+    }
+
+    @ParameterizedTest
+    @ValueSource(strings = {
+        StreamsConfig.RACK_AWARE_ASSIGNMENT_STRATEGY_NONE,
+        StreamsConfig.RACK_AWARE_ASSIGNMENT_STRATEGY_MIN_TRAFFIC,
+        StreamsConfig.RACK_AWARE_ASSIGNMENT_STRATEGY_BALANCE_SUBTOPOLOGY
+    })
+    public void shouldReassignTasksWhenNewNodeJoinsWithExistingActiveAndStandbyAssignments(final String rackAwareStrategy) {
+        setUp(rackAwareStrategy);
+
+        // Initial setup: Node 1 has active tasks 0,1 and standby tasks 2,3
+        // Node 2 has active tasks 2,3 and standby tasks 0,1
+        final ClientState node1 = createClientWithPreviousActiveTasks(PID_1, 1, TASK_0_0, TASK_0_1);
+        node1.addPreviousStandbyTasks(Set.of(TASK_0_2, TASK_0_3));
+
+        final ClientState node2 = createClientWithPreviousActiveTasks(PID_2, 1, TASK_0_2, TASK_0_3);
+        node2.addPreviousStandbyTasks(Set.of(TASK_0_0, TASK_0_1));
+
+        // Node 3 joins as new client
+        final ClientState node3 = createClient(PID_3, 1);
+
+        final boolean probingRebalanceNeeded = assign(1, rackAwareStrategy, TASK_0_0, TASK_0_1, TASK_0_2, TASK_0_3);
+        assertFalse(probingRebalanceNeeded);
+
+        // Verify all active tasks are assigned
+        final Set<TaskId> allAssignedActiveTasks = new HashSet<>();
+        allAssignedActiveTasks.addAll(node1.activeTasks());
+        allAssignedActiveTasks.addAll(node2.activeTasks());
+        allAssignedActiveTasks.addAll(node3.activeTasks());
+        assertEquals(Set.of(TASK_0_0, TASK_0_1, TASK_0_2, TASK_0_3), allAssignedActiveTasks);
+
+        // Verify all standby tasks are assigned
+        final Set<TaskId> allAssignedStandbyTasks = new HashSet<>();
+        allAssignedStandbyTasks.addAll(node1.standbyTasks());
+        allAssignedStandbyTasks.addAll(node2.standbyTasks());
+        allAssignedStandbyTasks.addAll(node3.standbyTasks());
+        assertEquals(Set.of(TASK_0_0, TASK_0_1, TASK_0_2, TASK_0_3), allAssignedStandbyTasks);
+
+        // Verify each client has 1-2 active tasks and at most 3 tasks total
+        assertTrue(node1.activeTasks().size() >= 1);
+        assertTrue(node1.activeTasks().size() <= 2);
+        assertTrue(node1.activeTasks().size() + node1.standbyTasks().size() <= 3);
+
+        assertTrue(node2.activeTasks().size() >= 1);
+        assertTrue(node2.activeTasks().size() <= 2);
+        assertTrue(node2.activeTasks().size() + node2.standbyTasks().size() <= 3);
+
+        assertTrue(node3.activeTasks().size() >= 1);
+        assertTrue(node3.activeTasks().size() <= 2);
+        assertTrue(node3.activeTasks().size() + node3.standbyTasks().size() <= 3);
+    }
+
+    @ParameterizedTest
+    @ValueSource(strings = {
+        StreamsConfig.RACK_AWARE_ASSIGNMENT_STRATEGY_NONE,
+        StreamsConfig.RACK_AWARE_ASSIGNMENT_STRATEGY_MIN_TRAFFIC,
+        StreamsConfig.RACK_AWARE_ASSIGNMENT_STRATEGY_BALANCE_SUBTOPOLOGY
+    })
+    public void shouldRangeAssignTasksWhenStartingEmpty(final String rackAwareStrategy) {
+        setUp(rackAwareStrategy);
+        
+        // Two clients with capacity 1 each, starting empty (no previous tasks)
+        createClient(PID_1, 1);
+        createClient(PID_2, 1);
+        
+        // Two subtopologies with 2 tasks each (4 tasks total)
+        final boolean probingRebalanceNeeded = assign(1, rackAwareStrategy, TASK_0_0, TASK_0_1, TASK_1_0, TASK_1_1);
+        assertFalse(probingRebalanceNeeded);
+        
+        // Each client should get one active task from each subtopology
+        final ClientState client1 = clients.get(PID_1);
+        final ClientState client2 = clients.get(PID_2);
+        
+        // Check that each client has one active task from subtopology 0
+        final long client1Subtopology0ActiveCount = client1.activeTasks().stream()
+            .filter(task -> task.subtopology() == 0)
+            .count();
+        final long client2Subtopology0ActiveCount = client2.activeTasks().stream()
+            .filter(task -> task.subtopology() == 0)
+            .count();
+        assertEquals(1L, client1Subtopology0ActiveCount);
+        assertEquals(1L, client2Subtopology0ActiveCount);
+        
+        // Check that each client has one active task from subtopology 1
+        final long client1Subtopology1ActiveCount = client1.activeTasks().stream()
+            .filter(task -> task.subtopology() == 1)
+            .count();
+        final long client2Subtopology1ActiveCount = client2.activeTasks().stream()
+            .filter(task -> task.subtopology() == 1)
+            .count();
+        assertEquals(1L, client1Subtopology1ActiveCount);
+        assertEquals(1L, client2Subtopology1ActiveCount);
+        
+        // Check that each client has one standby task from subtopology 0
+        final long client1Subtopology0StandbyCount = client1.standbyTasks().stream()
+            .filter(task -> task.subtopology() == 0)
+            .count();
+        final long client2Subtopology0StandbyCount = client2.standbyTasks().stream()
+            .filter(task -> task.subtopology() == 0)
+            .count();
+        assertEquals(1L, client1Subtopology0StandbyCount);
+        assertEquals(1L, client2Subtopology0StandbyCount);
+        
+        // Check that each client has one standby task from subtopology 1
+        final long client1Subtopology1StandbyCount = client1.standbyTasks().stream()
+            .filter(task -> task.subtopology() == 1)
+            .count();
+        final long client2Subtopology1StandbyCount = client2.standbyTasks().stream()
+            .filter(task -> task.subtopology() == 1)
+            .count();
+        assertEquals(1L, client1Subtopology1StandbyCount);
+        assertEquals(1L, client2Subtopology1StandbyCount);
     }
 
     private boolean assign(final String rackAwareStrategy, final TaskId... tasks) {
@@ -1335,7 +1434,7 @@ public class LegacyStickyTaskAssignorTest {
                 topicGroupIds.add(activeTask.subtopology());
             }
             Collections.sort(topicGroupIds);
-            assertThat(topicGroupIds, equalTo(expectedTopicGroupIds));
+            assertEquals(expectedTopicGroupIds, topicGroupIds);
         }
     }
 

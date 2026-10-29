@@ -19,18 +19,13 @@ package org.apache.kafka.metadata;
 
 import java.util.Collections;
 import java.util.Map;
-import java.util.Objects;
 import java.util.Optional;
 import java.util.Set;
-
 
 /**
  * A map of feature names to their supported versions.
  */
-public class FinalizedControllerFeatures {
-    private final Map<String, Short> featureMap;
-    private final long epoch;
-
+public record FinalizedControllerFeatures(Map<String, Short> featureMap, long epoch) {
     public FinalizedControllerFeatures(Map<String, Short> featureMap, long epoch) {
         this.featureMap = Collections.unmodifiableMap(featureMap);
         this.epoch = epoch;
@@ -46,32 +41,5 @@ public class FinalizedControllerFeatures {
 
     public Set<String> featureNames() {
         return featureMap.keySet();
-    }
-
-    public Map<String, Short> featureMap() {
-        return featureMap;
-    }
-
-    public long epoch() {
-        return epoch;
-    }
-
-    @Override
-    public int hashCode() {
-        return Objects.hash(featureMap, epoch);
-    }
-
-    @Override
-    public boolean equals(Object o) {
-        if (!(o instanceof FinalizedControllerFeatures other)) return false;
-        return featureMap.equals(other.featureMap) && epoch == other.epoch;
-    }
-
-    @Override
-    public String toString() {
-        return "FinalizedControllerFeatures(" +
-                "featureMap=" + featureMap.toString() +
-                ", epoch=" + epoch +
-                ")";
     }
 }

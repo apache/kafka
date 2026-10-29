@@ -17,7 +17,7 @@
 package org.apache.kafka.server.log.remote.storage;
 
 import org.apache.kafka.common.Configurable;
-import org.apache.kafka.common.annotation.InterfaceStability;
+import org.apache.kafka.common.annotation.InterfaceAudience;
 import org.apache.kafka.server.log.remote.storage.RemoteLogSegmentMetadata.CustomMetadata;
 
 import java.io.Closeable;
@@ -38,10 +38,21 @@ import java.util.Optional;
  * This allows {@link RemoteStorageManager} to have eventual consistency on metadata (although the data is stored
  * in strongly consistent semantics).
  * <p>
- * All properties prefixed with the config: "remote.log.storage.manager.impl.prefix"
+ * "node.id" and all properties prefixed with the config: "remote.log.storage.manager.impl.prefix"
  * (default value is "rsm.config.") are passed when {@link #configure(Map)} is invoked on this instance.
+ * "broker.id" is also passed with the same value as "node.id", but it is deprecated since 4.4 and will not be passed
+ * from Apache Kafka 5.0 onwards. Implementations should read "node.id" instead.
+ *
+ * Implement {@link org.apache.kafka.common.metrics.Monitorable} to enable the manager to register metrics.
+ * The following tags are automatically added to all metrics registered: <code>config</code> set to
+ * <code>remote.log.storage.manager.class.name</code>, and <code>class</code> set to the RemoteStorageManager class name.
+ * <p>
+ * Plugin implementors of {@link RemoteStorageManager} should throw {@link RetriableRemoteStorageException}
+ * for transient errors that can be recovered by retrying. For non-recoverable errors,
+ * {@link RemoteStorageException} should be thrown. This distinction allows RemoteLogManager to
+ * handle retries gracefully and report metrics accurately.
  */
-@InterfaceStability.Evolving
+@InterfaceAudience.Public
 public interface RemoteStorageManager extends Configurable, Closeable {
 
     /**
@@ -88,11 +99,11 @@ public interface RemoteStorageManager extends Configurable, Closeable {
      * @param remoteLogSegmentMetadata metadata about the remote log segment.
      * @param logSegmentData           data to be copied to tiered storage.
      * @return custom metadata to be added to the segment metadata after copying.
-     * @throws RemoteStorageException if there are any errors in storing the data of the segment.
+     * @throws RemoteStorageException          if there are any errors in storing the data of the segment.
+     * @throws RetriableRemoteStorageException if the error is transient and the operation can be retried.
      */
     Optional<CustomMetadata> copyLogSegmentData(RemoteLogSegmentMetadata remoteLogSegmentMetadata,
-                                                LogSegmentData logSegmentData)
-            throws RemoteStorageException;
+                                                LogSegmentData logSegmentData) throws RemoteStorageException;
 
     /**
      * Returns the remote log segment data file/object as InputStream for the given {@link RemoteLogSegmentMetadata}
@@ -148,6 +159,7 @@ public interface RemoteStorageManager extends Configurable, Closeable {
      *
      * @param remoteLogSegmentMetadata metadata about the remote log segment to be deleted.
      * @throws RemoteStorageException          if there are any storage related errors occurred.
+     * @throws RetriableRemoteStorageException if the error is transient and the operation can be retried.
      */
     void deleteLogSegmentData(RemoteLogSegmentMetadata remoteLogSegmentMetadata) throws RemoteStorageException;
 }

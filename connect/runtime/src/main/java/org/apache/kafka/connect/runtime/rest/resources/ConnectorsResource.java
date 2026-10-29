@@ -41,7 +41,6 @@ import org.slf4j.Logger;
 import org.slf4j.LoggerFactory;
 
 import java.net.URI;
-import java.util.Collections;
 import java.util.HashMap;
 import java.util.List;
 import java.util.Map;
@@ -149,9 +148,9 @@ public class ConnectorsResource {
         checkAndPutConnectorConfigName(name, configs);
 
         FutureCallback<Herder.Created<ConnectorInfo>> cb = new FutureCallback<>();
-        herder.putConnectorConfig(name, configs, createRequest.initialTargetState(), false, cb);
+        herder.putConnectorConfig(name, configs, createRequest.initialTargetState(), createRequest.initialOffsetsMap(), false, cb);
         Herder.Created<ConnectorInfo> info = requestHandler.completeOrForwardRequest(cb, "/connectors", "POST", headers, createRequest,
-                new TypeReference<ConnectorInfo>() { }, new CreatedConnectorInfoTranslator(), forward);
+                new TypeReference<>() { }, new CreatedConnectorInfoTranslator(), forward);
 
         URI location = UriBuilder.fromUri("/connectors").path(name).build();
         return Response.created(location).entity(info.result()).build();
@@ -185,13 +184,13 @@ public class ConnectorsResource {
     @GET
     @Path("/{connector}/topics")
     @Operation(summary = "Get the list of topics actively used by the specified connector")
-    public Response getConnectorActiveTopics(final @PathParam("connector") String connector) {
+    public Map<String, ActiveTopicsInfo> getConnectorActiveTopics(final @PathParam("connector") String connector) {
         if (isTopicTrackingDisabled) {
             throw new ConnectRestException(Response.Status.FORBIDDEN.getStatusCode(),
                     "Topic tracking is disabled.");
         }
         ActiveTopicsInfo info = herder.connectorActiveTopics(connector);
-        return Response.ok(Collections.singletonMap(info.connector(), info)).build();
+        return Map.of(info.connector(), info);
     }
 
     @PUT
@@ -222,7 +221,7 @@ public class ConnectorsResource {
 
         herder.putConnectorConfig(connector, connectorConfig, true, cb);
         Herder.Created<ConnectorInfo> createdInfo = requestHandler.completeOrForwardRequest(cb, "/connectors/" + connector + "/config",
-                "PUT", headers, connectorConfig, new TypeReference<ConnectorInfo>() { }, new CreatedConnectorInfoTranslator(), forward);
+                "PUT", headers, connectorConfig, new TypeReference<>() { }, new CreatedConnectorInfoTranslator(), forward);
         Response.ResponseBuilder response;
         if (createdInfo.created()) {
             URI location = UriBuilder.fromUri("/connectors").path(connector).build();
@@ -235,15 +234,17 @@ public class ConnectorsResource {
 
     @PATCH
     @Path("/{connector}/config")
-    public Response patchConnectorConfig(final @PathParam("connector") String connector,
+    @Operation(summary = "Patch the configuration for the specified connector",
+               description = "Keys with null values in the request body are removed from the connector configuration")
+    public ConnectorInfo patchConnectorConfig(final @PathParam("connector") String connector,
                                          final @Context HttpHeaders headers,
                                          final @Parameter(hidden = true) @QueryParam("forward") Boolean forward,
                                          final Map<String, String> connectorConfigPatch) throws Throwable {
         FutureCallback<Herder.Created<ConnectorInfo>> cb = new FutureCallback<>();
         herder.patchConnectorConfig(connector, connectorConfigPatch, cb);
         Herder.Created<ConnectorInfo> createdInfo = requestHandler.completeOrForwardRequest(cb, "/connectors/" + connector + "/config",
-                "PATCH", headers, connectorConfigPatch, new TypeReference<ConnectorInfo>() { }, new CreatedConnectorInfoTranslator(), forward);
-        return Response.ok().entity(createdInfo.result()).build();
+                "PATCH", headers, connectorConfigPatch, new TypeReference<>() { }, new CreatedConnectorInfoTranslator(), forward);
+        return createdInfo.result();
     }
 
     @POST
@@ -270,7 +271,7 @@ public class ConnectorsResource {
         Map<String, String> queryParameters = new HashMap<>();
         queryParameters.put("includeTasks", includeTasks.toString());
         queryParameters.put("onlyFailed", onlyFailed.toString());
-        ConnectorStateInfo stateInfo = requestHandler.completeOrForwardRequest(cb, forwardingPath, "POST", headers, queryParameters, null, new TypeReference<ConnectorStateInfo>() {
+        ConnectorStateInfo stateInfo = requestHandler.completeOrForwardRequest(cb, forwardingPath, "POST", headers, queryParameters, null, new TypeReference<>() {
         }, new IdentityTranslator<>(), forward);
         return Response.accepted().entity(stateInfo).build();
     }
@@ -334,7 +335,7 @@ public class ConnectorsResource {
         FutureCallback<Void> cb = new FutureCallback<>();
         ConnectorTaskId taskId = new ConnectorTaskId(connector, task);
         herder.restartTask(taskId, cb);
-        requestHandler.completeOrForwardRequest(cb, "/connectors/" + connector + "/tasks/" + task + "/restart", "POST", headers, null, new TypeReference<Void>() { }, forward);
+        requestHandler.completeOrForwardRequest(cb, "/connectors/" + connector + "/tasks/" + task + "/restart", "POST", headers, null, new TypeReference<>() { }, forward);
     }
 
     @DELETE
@@ -345,7 +346,7 @@ public class ConnectorsResource {
                                  final @Parameter(hidden = true) @QueryParam("forward") Boolean forward) throws Throwable {
         FutureCallback<Herder.Created<ConnectorInfo>> cb = new FutureCallback<>();
         herder.deleteConnectorConfig(connector, cb);
-        requestHandler.completeOrForwardRequest(cb, "/connectors/" + connector, "DELETE", headers, null, new TypeReference<Herder.Created<ConnectorInfo>>() { }, forward);
+        requestHandler.completeOrForwardRequest(cb, "/connectors/" + connector, "DELETE", headers, null, new TypeReference<>() { }, forward);
     }
 
     @GET
@@ -360,7 +361,7 @@ public class ConnectorsResource {
     @PATCH
     @Path("/{connector}/offsets")
     @Operation(summary = "Alter the offsets for the specified connector")
-    public Response alterConnectorOffsets(final @Parameter(hidden = true) @QueryParam("forward") Boolean forward,
+    public Message alterConnectorOffsets(final @Parameter(hidden = true) @QueryParam("forward") Boolean forward,
                                           final @Context HttpHeaders headers, final @PathParam("connector") String connector,
                                           final ConnectorOffsets offsets) throws Throwable {
         if (offsets.offsets() == null || offsets.offsets().isEmpty()) {
@@ -369,21 +370,19 @@ public class ConnectorsResource {
 
         FutureCallback<Message> cb = new FutureCallback<>();
         herder.alterConnectorOffsets(connector, offsets.toMap(), cb);
-        Message msg = requestHandler.completeOrForwardRequest(cb, "/connectors/" + connector + "/offsets", "PATCH", headers, offsets,
-                new TypeReference<Message>() { }, new IdentityTranslator<>(), forward);
-        return Response.ok().entity(msg).build();
+        return requestHandler.completeOrForwardRequest(cb, "/connectors/" + connector + "/offsets", "PATCH", headers, offsets,
+                new TypeReference<>() { }, new IdentityTranslator<>(), forward);
     }
 
     @DELETE
     @Path("/{connector}/offsets")
     @Operation(summary = "Reset the offsets for the specified connector")
-    public Response resetConnectorOffsets(final @Parameter(hidden = true) @QueryParam("forward") Boolean forward,
+    public Message resetConnectorOffsets(final @Parameter(hidden = true) @QueryParam("forward") Boolean forward,
                                           final @Context HttpHeaders headers, final @PathParam("connector") String connector) throws Throwable {
         FutureCallback<Message> cb = new FutureCallback<>();
         herder.resetConnectorOffsets(connector, cb);
-        Message msg = requestHandler.completeOrForwardRequest(cb, "/connectors/" + connector + "/offsets", "DELETE", headers, null,
-                new TypeReference<Message>() { }, new IdentityTranslator<>(), forward);
-        return Response.ok().entity(msg).build();
+        return requestHandler.completeOrForwardRequest(cb, "/connectors/" + connector + "/offsets", "DELETE", headers, null,
+                new TypeReference<>() { }, new IdentityTranslator<>(), forward);
     }
 
     // Check whether the connector name from the url matches the one (if there is one) provided in the connectorConfig

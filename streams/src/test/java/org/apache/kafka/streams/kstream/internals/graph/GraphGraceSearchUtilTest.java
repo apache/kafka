@@ -24,39 +24,35 @@ import org.apache.kafka.streams.kstream.internals.KStreamSessionWindowAggregate;
 import org.apache.kafka.streams.kstream.internals.KStreamWindowAggregate;
 import org.apache.kafka.streams.kstream.internals.TimeWindow;
 import org.apache.kafka.streams.processor.api.Processor;
-import org.apache.kafka.streams.processor.api.Record;
 
 import org.junit.jupiter.api.Test;
 
 import static java.time.Duration.ofMillis;
 import static org.apache.kafka.streams.utils.TestUtils.mockStoreFactory;
-import static org.hamcrest.CoreMatchers.is;
-import static org.hamcrest.MatcherAssert.assertThat;
-import static org.junit.jupiter.api.Assertions.fail;
+import static org.junit.jupiter.api.Assertions.assertEquals;
+import static org.junit.jupiter.api.Assertions.assertThrows;
 
 public class GraphGraceSearchUtilTest {
+
     @Test
     public void shouldThrowOnNull() {
-        try {
-            GraphGraceSearchUtil.findAndVerifyWindowGrace(null);
-            fail("Should have thrown.");
-        } catch (final TopologyException e) {
-            assertThat(e.getMessage(), is("Invalid topology: Window close time is only defined for windowed computations. Got []."));
-        }
+        assertEquals(
+            "Invalid topology: Window close time is only defined for windowed computations. Got [].",
+            assertThrows(
+                TopologyException.class,
+                () -> GraphGraceSearchUtil.findAndVerifyWindowGrace(null)
+            ).getMessage()
+        );
     }
 
     @Test
     public void shouldFailIfThereIsNoGraceAncestor() {
-        // doesn't matter if this ancestor is stateless or stateful. The important thing it that there is
+        // doesn't matter if this ancestor is stateless or stateful. The important thing is that there is
         // no grace period defined on any ancestor of the node
         final ProcessorGraphNode<String, Long> gracelessAncestor = new ProcessorGraphNode<>(
             "graceless",
             new ProcessorParameters<>(
-                () -> new Processor<String, Long, String, Long>() {
-                    @Override
-                    public void process(final Record<String, Long> record) {}
-
-                },
+                () -> (Processor<String, Long, String, Long>) record -> { },
                 "graceless"
             )
         );
@@ -64,24 +60,20 @@ public class GraphGraceSearchUtilTest {
         final ProcessorGraphNode<String, Long> node = new ProcessorGraphNode<>(
             "stateless",
             new ProcessorParameters<>(
-                () -> new Processor<String, Long, String, Long>() {
-
-                    @Override
-                    public void process(final Record<String, Long> record) {}
-
-                },
+                () -> (Processor<String, Long, String, Long>) record -> { },
                 "stateless"
             )
         );
 
         gracelessAncestor.addChild(node);
 
-        try {
-            GraphGraceSearchUtil.findAndVerifyWindowGrace(node);
-            fail("should have thrown.");
-        } catch (final TopologyException e) {
-            assertThat(e.getMessage(), is("Invalid topology: Window close time is only defined for windowed computations. Got [graceless->stateless]."));
-        }
+        assertEquals(
+            "Invalid topology: Window close time is only defined for windowed computations. Got [graceless->stateless].",
+            assertThrows(
+                TopologyException.class,
+                () -> GraphGraceSearchUtil.findAndVerifyWindowGrace(node)
+            ).getMessage()
+        );
     }
 
     @Test
@@ -103,7 +95,7 @@ public class GraphGraceSearchUtilTest {
         );
 
         final long extracted = GraphGraceSearchUtil.findAndVerifyWindowGrace(node);
-        assertThat(extracted, is(1234L));
+        assertEquals(1234L, extracted);
     }
 
     @Test
@@ -127,7 +119,7 @@ public class GraphGraceSearchUtilTest {
         );
 
         final long extracted = GraphGraceSearchUtil.findAndVerifyWindowGrace(node);
-        assertThat(extracted, is(1244L));
+        assertEquals(1244L, extracted);
     }
 
     @Test
@@ -144,12 +136,7 @@ public class GraphGraceSearchUtilTest {
         final ProcessorGraphNode<String, Long> statefulParent = new ProcessorGraphNode<>(
             "stateful",
             new ProcessorParameters<>(
-                () -> new Processor<String, Long, String, Long>() {
-
-                    @Override
-                    public void process(final Record<String, Long> record) {}
-
-                },
+                () -> (Processor<String, Long, String, Long>) record -> { },
                 "dummy"
             )
         );
@@ -158,19 +145,14 @@ public class GraphGraceSearchUtilTest {
         final ProcessorGraphNode<String, Long> node = new ProcessorGraphNode<>(
             "stateless",
             new ProcessorParameters<>(
-                () -> new Processor<String, Long, String, Long>() {
-
-                    @Override
-                    public void process(final Record<String, Long> record) {}
-
-                },
+                () -> (Processor<String, Long, String, Long>) record -> { },
                 "dummyChild-graceless"
             )
         );
         statefulParent.addChild(node);
 
         final long extracted = GraphGraceSearchUtil.findAndVerifyWindowGrace(node);
-        assertThat(extracted, is(1244L));
+        assertEquals(1244L, extracted);
     }
 
     @Test
@@ -195,12 +177,7 @@ public class GraphGraceSearchUtilTest {
         final ProcessorGraphNode<String, Long> statelessParent = new ProcessorGraphNode<>(
             "statelessParent",
             new ProcessorParameters<>(
-                () -> new Processor<String, Long, String, Long>() {
-
-                    @Override
-                    public void process(final Record<String, Long> record) {}
-
-                },
+                () -> (Processor<String, Long, String, Long>) record -> { },
                 "statelessParent"
             )
         );
@@ -209,19 +186,14 @@ public class GraphGraceSearchUtilTest {
         final ProcessorGraphNode<String, Long> node = new ProcessorGraphNode<>(
             "stateless",
             new ProcessorParameters<>(
-                () -> new Processor<String, Long, String, Long>() {
-
-                    @Override
-                    public void process(final Record<String, Long> record) {}
-
-                },
+                () -> (Processor<String, Long, String, Long>) record -> { },
                 "stateless"
             )
         );
         statelessParent.addChild(node);
 
         final long extracted = GraphGraceSearchUtil.findAndVerifyWindowGrace(node);
-        assertThat(extracted, is(1244L));
+        assertEquals(1244L, extracted);
     }
 
     @Test
@@ -262,12 +234,7 @@ public class GraphGraceSearchUtilTest {
         final ProcessorGraphNode<String, Long> node = new ProcessorGraphNode<>(
             "stateless",
             new ProcessorParameters<>(
-                () -> new Processor<String, Long, String, Long>() {
-
-                    @Override
-                    public void process(final Record<String, Long> record) {}
-
-                },
+                () -> (Processor<String, Long, String, Long>) record -> { },
                 "stateless"
             )
         );
@@ -275,7 +242,7 @@ public class GraphGraceSearchUtilTest {
         rightParent.addChild(node);
 
         final long extracted = GraphGraceSearchUtil.findAndVerifyWindowGrace(node);
-        assertThat(extracted, is(4321L));
+        assertEquals(4321L, extracted);
     }
 
 }

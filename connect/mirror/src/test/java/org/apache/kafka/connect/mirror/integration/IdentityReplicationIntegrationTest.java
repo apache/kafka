@@ -19,9 +19,8 @@ package org.apache.kafka.connect.mirror.integration;
 import org.apache.kafka.connect.mirror.IdentityReplicationPolicy;
 
 import org.junit.jupiter.api.BeforeEach;
-import org.junit.jupiter.api.Tag;
 
-import java.util.HashMap;
+import java.util.Map;
 
 /**
  * Tests MM2 replication and failover logic for {@link IdentityReplicationPolicy}.
@@ -31,15 +30,14 @@ import java.util.HashMap;
  * migrated from the primary cluster to the backup cluster. Tests validate that consumer offsets
  * are translated and replicated from the primary cluster to the backup cluster during this failover.
  */
-@Tag("integration")
 public class IdentityReplicationIntegrationTest extends MirrorConnectorsIntegrationBaseTest {
     @BeforeEach
     public void startClusters() throws Exception {
         replicateBackupToPrimary = false;
-        super.startClusters(new HashMap<String, String>() {{
-                put("replication.policy.class", IdentityReplicationPolicy.class.getName());
-                put("topics", "test-topic-.*");
-            }});
+        super.startClusters(Map.of(
+                "replication.policy.class", IdentityReplicationPolicy.class.getName(),
+                "topics", "test-topic-.*"
+        ));
     }
 
     /*

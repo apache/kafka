@@ -19,10 +19,17 @@ package org.apache.kafka.metadata.bootstrap;
 
 import org.apache.kafka.common.metadata.FeatureLevelRecord;
 import org.apache.kafka.common.protocol.ApiMessage;
+import org.apache.kafka.metadata.util.BatchFileReader;
+import org.apache.kafka.metadata.util.BatchFileReader.BatchAndType;
 import org.apache.kafka.server.common.ApiMessageAndVersion;
 import org.apache.kafka.server.common.KRaftVersion;
 import org.apache.kafka.server.common.MetadataVersion;
 
+import java.io.FileNotFoundException;
+import java.io.IOException;
+import java.io.UncheckedIOException;
+import java.nio.file.Files;
+import java.nio.file.Path;
 import java.util.ArrayList;
 import java.util.Collections;
 import java.util.List;
@@ -30,18 +37,66 @@ import java.util.Map;
 import java.util.Objects;
 import java.util.Optional;
 
-import static org.apache.kafka.server.common.MetadataVersion.MINIMUM_BOOTSTRAP_VERSION;
-
-
 /**
  * The bootstrap metadata. On startup, if the metadata log is empty, we will populate the log with
  * these records. Alternately, if log is not empty, but the metadata version is not set, we will
  * use the version specified here.
  */
 public class BootstrapMetadata {
+    public static final String BINARY_BOOTSTRAP_FILENAME = "bootstrap.checkpoint";
+
     private final List<ApiMessageAndVersion> records;
-    private final MetadataVersion metadataVersion;
+    private final short metadataVersionLevel;
     private final String source;
+
+    /**
+     * Reads bootstrap metadata from the given directory. Checks the legacy bootstrap.checkpoint
+     * first and falls back to defaults if it does not exist.
+     */
+    public static BootstrapMetadata fromDirectory(Path directory) {
+        if (!Files.isDirectory(directory)) {
+            if (Files.exists(directory)) {
+                throw new IllegalStateException("Path " + directory + " exists, but is not " +
+                        "a directory.");
+            } else {
+                throw new IllegalStateException("No such directory as " + directory);
+            }
+        }
+        Path binaryBootstrapPath = directory.resolve(BINARY_BOOTSTRAP_FILENAME);
+        if (Files.exists(binaryBootstrapPath)) {
+            return fromCheckpointFile(binaryBootstrapPath);
+        }
+        return fromVersion(MetadataVersion.latestProduction(), "the default bootstrap");
+    }
+
+    /**
+     * Reads bootstrap metadata from the given checkpoint file.
+     * Throws if the file does not exist.
+     */
+    public static BootstrapMetadata fromCheckpointFile(Path file) {
+        if (!Files.exists(file)) {
+            String path = file.toString();
+            throw new UncheckedIOException(path, new FileNotFoundException(path));
+        }
+        return readFromBinaryFile(file);
+    }
+
+    private static BootstrapMetadata readFromBinaryFile(Path binaryPath) {
+        List<ApiMessageAndVersion> records = new ArrayList<>();
+        try (BatchFileReader reader = new BatchFileReader.Builder().
+                setPath(binaryPath.toString()).build()) {
+            while (reader.hasNext()) {
+                BatchAndType batchAndType = reader.next();
+                if (!batchAndType.isControl()) {
+                    records.addAll(batchAndType.batch().records());
+                }
+            }
+        } catch (IOException e) {
+            throw new UncheckedIOException("Unable to read bootstrap metadata from " + binaryPath, e);
+        }
+        return fromRecords(Collections.unmodifiableList(records),
+                "the binary bootstrap metadata file: " + binaryPath);
+    }
 
     public static BootstrapMetadata fromVersions(
         MetadataVersion metadataVersion,
@@ -70,36 +125,36 @@ public class BootstrapMetadata {
                     setFeatureLevel(level), (short) 0));
             }
         }
-        return new BootstrapMetadata(records, metadataVersion, source);
+        return new BootstrapMetadata(records, metadataVersion.featureLevel(), source);
     }
 
     public static BootstrapMetadata fromVersion(MetadataVersion metadataVersion, String source) {
-        List<ApiMessageAndVersion> records = Collections.singletonList(
+        List<ApiMessageAndVersion> records = List.of(
             new ApiMessageAndVersion(new FeatureLevelRecord().
                 setName(MetadataVersion.FEATURE_NAME).
                 setFeatureLevel(metadataVersion.featureLevel()), (short) 0));
-        return new BootstrapMetadata(records, metadataVersion, source);
+        return new BootstrapMetadata(records, metadataVersion.featureLevel(), source);
     }
 
     public static BootstrapMetadata fromRecords(List<ApiMessageAndVersion> records, String source) {
-        MetadataVersion metadataVersion = null;
+        Optional<Short> metadataVersionLevel = Optional.empty();
         for (ApiMessageAndVersion record : records) {
-            Optional<MetadataVersion> version = recordToMetadataVersion(record.message());
-            if (version.isPresent()) {
-                metadataVersion = version.get();
+            Optional<Short> level = recordToMetadataVersionLevel(record.message());
+            if (level.isPresent()) {
+                metadataVersionLevel = level;
             }
         }
-        if (metadataVersion == null) {
+        if (metadataVersionLevel.isEmpty()) {
             throw new RuntimeException("No FeatureLevelRecord for " + MetadataVersion.FEATURE_NAME +
                     " was found in the bootstrap metadata from " + source);
         }
-        return new BootstrapMetadata(records, metadataVersion, source);
+        return new BootstrapMetadata(records, metadataVersionLevel.get(), source);
     }
 
-    public static Optional<MetadataVersion> recordToMetadataVersion(ApiMessage record) {
+    private static Optional<Short> recordToMetadataVersionLevel(ApiMessage record) {
         if (record instanceof FeatureLevelRecord featureLevel) {
             if (featureLevel.name().equals(MetadataVersion.FEATURE_NAME)) {
-                return Optional.of(MetadataVersion.fromFeatureLevel(featureLevel.featureLevel()));
+                return Optional.of(featureLevel.featureLevel());
             }
         }
         return Optional.empty();
@@ -107,16 +162,11 @@ public class BootstrapMetadata {
 
     BootstrapMetadata(
         List<ApiMessageAndVersion> records,
-        MetadataVersion metadataVersion,
+        short metadataVersionLevel,
         String source
     ) {
         this.records = Objects.requireNonNull(records);
-        if (metadataVersion.isLessThan(MINIMUM_BOOTSTRAP_VERSION)) {
-            throw new RuntimeException("Bootstrap metadata.version before " +
-                    MINIMUM_BOOTSTRAP_VERSION + " are not supported. Can't load metadata from " +
-                    source);
-        }
-        this.metadataVersion = metadataVersion;
+        this.metadataVersionLevel = metadataVersionLevel;
         Objects.requireNonNull(source);
         this.source = source;
     }
@@ -126,7 +176,7 @@ public class BootstrapMetadata {
     }
 
     public MetadataVersion metadataVersion() {
-        return metadataVersion;
+        return MetadataVersion.fromFeatureLevel(metadataVersionLevel);
     }
 
     public String source() {
@@ -172,7 +222,7 @@ public class BootstrapMetadata {
 
     @Override
     public int hashCode() {
-        return Objects.hash(records, metadataVersion, source);
+        return Objects.hash(records, metadataVersionLevel, source);
     }
 
     @Override
@@ -180,14 +230,14 @@ public class BootstrapMetadata {
         if (o == null || !o.getClass().equals(this.getClass())) return false;
         BootstrapMetadata other = (BootstrapMetadata) o;
         return Objects.equals(records, other.records) &&
-            metadataVersion.equals(other.metadataVersion) &&
+            metadataVersionLevel == other.metadataVersionLevel &&
             source.equals(other.source);
     }
 
     @Override
     public String toString() {
-        return "BootstrapMetadata(records=" + records.toString() +
-            ", metadataVersion=" + metadataVersion +
+        return "BootstrapMetadata(records=" + records +
+            ", metadataVersionLevel=" + metadataVersionLevel +
             ", source=" + source +
             ")";
     }

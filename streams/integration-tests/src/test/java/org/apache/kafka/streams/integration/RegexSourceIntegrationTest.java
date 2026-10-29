@@ -72,10 +72,8 @@ import java.util.regex.Pattern;
 
 import static org.apache.kafka.streams.integration.utils.IntegrationTestUtils.startApplicationAndWaitUntilRunning;
 import static org.apache.kafka.streams.utils.TestUtils.safeUniqueTestName;
-import static org.hamcrest.CoreMatchers.equalTo;
-import static org.hamcrest.CoreMatchers.is;
-import static org.hamcrest.MatcherAssert.assertThat;
-import static org.hamcrest.Matchers.greaterThan;
+import static org.junit.jupiter.api.Assertions.assertEquals;
+import static org.junit.jupiter.api.Assertions.assertTrue;
 
 /**
  * End-to-end integration test based on using regex and named topics for creating sources, using
@@ -86,6 +84,8 @@ import static org.hamcrest.Matchers.greaterThan;
 public class RegexSourceIntegrationTest {
     private static final int NUM_BROKERS = 1;
     public static final EmbeddedKafkaCluster CLUSTER = new EmbeddedKafkaCluster(NUM_BROKERS);
+
+    private static final List<TopicPartition> ASSIGNED_PARTITIONS = new ArrayList<>();
 
     @BeforeAll
     public static void startCluster() throws IOException, InterruptedException {
@@ -212,7 +212,7 @@ public class RegexSourceIntegrationTest {
 
             final StreamsBuilder builder = new StreamsBuilder();
             final KStream<String, String> pattern1Stream = builder.stream(Pattern.compile("TEST-TOPIC-\\d"));
-            final KStream<String, String> otherStream = builder.stream(Pattern.compile("not-a-match"));
+            builder.stream(Pattern.compile("not-a-match"));
 
             pattern1Stream
                 .selectKey((k, v) -> k)
@@ -221,7 +221,7 @@ public class RegexSourceIntegrationTest {
                 .toStream().to(outputTopic, Produced.with(Serdes.String(), Serdes.String()));
 
             final Topology topology = builder.build();
-            assertThat(topology.describe().subtopologies().size(), greaterThan(1));
+            assertTrue(topology.describe().subtopologies().size() > 1);
             streams = new KafkaStreams(topology, streamsConfiguration);
 
             startApplicationAndWaitUntilRunning(streams);
@@ -246,6 +246,64 @@ public class RegexSourceIntegrationTest {
                 TestUtils.consumerConfig(CLUSTER.bootstrapServers(), StringDeserializer.class, StringDeserializer.class),
                 outputTopic,
                 Arrays.asList(record1, record2)
+            );
+
+            streams.close();
+        } finally {
+            CLUSTER.deleteTopics(topic1, topic2);
+        }
+    }
+
+    @Test
+    public void shouldNotCrashIfPatternMatchesTopicHasNoData() throws Exception {
+        final String topic1 = "TEST-TOPIC-1";
+        final String topic2 = "TEST-TOPIC-2";
+
+        try {
+            CLUSTER.createTopic(topic1);
+
+            final StreamsBuilder builder = new StreamsBuilder();
+            final KStream<String, String> pattern1Stream = builder.stream(Pattern.compile("TEST-TOPIC-\\d"));
+            builder.stream(Pattern.compile("not-a-match"));
+            final List<String> assignedTopics = new CopyOnWriteArrayList<>();
+
+            pattern1Stream
+                .selectKey((k, v) -> k)
+                .groupByKey()
+                .aggregate(() -> "", (k, v, a) -> v)
+                .toStream().to(outputTopic, Produced.with(Serdes.String(), Serdes.String()));
+
+            final Topology topology = builder.build();
+            assertTrue(topology.describe().subtopologies().size() > 1);
+            streams = new KafkaStreams(builder.build(), streamsConfiguration, new DefaultKafkaClientSupplier() {
+                @Override
+                public Consumer<byte[], byte[]> getConsumer(final Map<String, Object> config) {
+                    return new KafkaConsumer<>(config, new ByteArrayDeserializer(), new ByteArrayDeserializer()) {
+                        @Override
+                        public void subscribe(final Pattern topics, final ConsumerRebalanceListener listener) {
+                            super.subscribe(topics, new TheConsumerRebalanceListener(assignedTopics, listener));
+                        }
+                    };
+                }
+            });
+
+            startApplicationAndWaitUntilRunning(streams);
+            TestUtils.waitForCondition(() -> assignedTopics.contains(topic1) && !assignedTopics.contains(topic2), STREAM_TASKS_NOT_UPDATED);
+
+            CLUSTER.createTopic(topic2);
+            TestUtils.waitForCondition(() -> assignedTopics.contains(topic1) && assignedTopics.contains(topic2), STREAM_TASKS_NOT_UPDATED);
+
+            final KeyValue<String, String> record1 = new KeyValue<>("1", "1");
+            IntegrationTestUtils.produceKeyValuesSynchronously(
+                topic1,
+                Collections.singletonList(record1),
+                TestUtils.producerConfig(CLUSTER.bootstrapServers(), StringSerializer.class, StringSerializer.class),
+                CLUSTER.time
+            );
+            IntegrationTestUtils.waitUntilFinalKeyValueRecordsReceived(
+                TestUtils.consumerConfig(CLUSTER.bootstrapServers(), StringDeserializer.class, StringDeserializer.class),
+                outputTopic,
+                List.of(record1)
             );
 
             streams.close();
@@ -366,7 +424,7 @@ public class RegexSourceIntegrationTest {
 
         Collections.sort(actualValues);
         Collections.sort(expectedReceivedValues);
-        assertThat(actualValues, equalTo(expectedReceivedValues));
+        assertEquals(expectedReceivedValues, actualValues);
     }
 
     @Test
@@ -469,7 +527,7 @@ public class RegexSourceIntegrationTest {
             // this is fine
         }
 
-        assertThat(expectError.get(), is(true));
+        assertTrue(expectError.get());
     }
 
     private static class TheConsumerRebalanceListener implements ConsumerRebalanceListener {

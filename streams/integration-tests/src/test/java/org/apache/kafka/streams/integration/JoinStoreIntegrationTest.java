@@ -32,6 +32,7 @@ import org.apache.kafka.streams.kstream.Consumed;
 import org.apache.kafka.streams.kstream.JoinWindows;
 import org.apache.kafka.streams.kstream.KStream;
 import org.apache.kafka.streams.kstream.StreamJoined;
+import org.apache.kafka.test.StreamsTestUtils;
 import org.apache.kafka.test.TestUtils;
 
 import org.junit.jupiter.api.AfterAll;
@@ -39,8 +40,10 @@ import org.junit.jupiter.api.AfterEach;
 import org.junit.jupiter.api.BeforeAll;
 import org.junit.jupiter.api.BeforeEach;
 import org.junit.jupiter.api.Tag;
-import org.junit.jupiter.api.Test;
+import org.junit.jupiter.api.TestInfo;
 import org.junit.jupiter.api.Timeout;
+import org.junit.jupiter.params.ParameterizedTest;
+import org.junit.jupiter.params.provider.ValueSource;
 
 import java.io.IOException;
 import java.util.Collection;
@@ -53,8 +56,8 @@ import java.util.stream.Stream;
 import static java.time.Duration.ofMillis;
 import static org.apache.kafka.streams.StoreQueryParameters.fromNameAndType;
 import static org.apache.kafka.streams.state.QueryableStoreTypes.keyValueStore;
-import static org.hamcrest.MatcherAssert.assertThat;
-import static org.hamcrest.Matchers.is;
+import static org.apache.kafka.streams.utils.TestUtils.safeUniqueTestName;
+import static org.junit.jupiter.api.Assertions.assertEquals;
 import static org.junit.jupiter.api.Assertions.assertThrows;
 
 @SuppressWarnings("deprecation")
@@ -101,9 +104,10 @@ public class JoinStoreIntegrationTest {
         IntegrationTestUtils.purgeLocalStreamsState(STREAMS_CONFIG);
     }
 
-    @Test
-    public void providingAJoinStoreNameShouldNotMakeTheJoinResultQueryable() throws InterruptedException {
-        STREAMS_CONFIG.put(StreamsConfig.APPLICATION_ID_CONFIG, APP_ID + "-no-store-access");
+    @ParameterizedTest
+    @ValueSource(booleans = {false, true})
+    public void providingAJoinStoreNameShouldNotMakeTheJoinResultQueryable(final boolean withHeaders, final TestInfo testInfo) throws InterruptedException {
+        STREAMS_CONFIG.put(StreamsConfig.APPLICATION_ID_CONFIG, APP_ID + "-" + safeUniqueTestName(testInfo));
         final StreamsBuilder builder = new StreamsBuilder();
 
         final KStream<String, Integer> left = builder.stream(INPUT_TOPIC_LEFT, Consumed.with(Serdes.String(), Serdes.Integer()));
@@ -116,6 +120,7 @@ public class JoinStoreIntegrationTest {
             JoinWindows.of(ofMillis(100)),
             StreamJoined.with(Serdes.String(), Serdes.Integer(), Serdes.Integer()).withStoreName("join-store"));
 
+        StreamsTestUtils.maybeSetDslStoreFormatHeaders(STREAMS_CONFIG, withHeaders);
         try (final KafkaStreams kafkaStreams = new KafkaStreams(builder.build(), STREAMS_CONFIG)) {
             kafkaStreams.setStateListener((newState, oldState) -> {
                 if (newState == KafkaStreams.State.RUNNING) {
@@ -130,16 +135,17 @@ public class JoinStoreIntegrationTest {
                     UnknownStateStoreException.class,
                     () -> kafkaStreams.store(fromNameAndType("join-store", keyValueStore()))
                 );
-            assertThat(
-                exception.getMessage(),
-                is("Cannot get state store join-store because no such store is registered in the topology.")
-            );
+            assertEquals(
+                "Cannot get state store join-store because no such store is registered in the topology.",
+                exception.getMessage());
         }
     }
 
-    @Test
-    public void streamJoinChangelogTopicShouldBeConfiguredWithDeleteOnlyCleanupPolicy() throws Exception {
-        STREAMS_CONFIG.put(StreamsConfig.APPLICATION_ID_CONFIG, APP_ID + "-changelog-cleanup-policy");
+    @ParameterizedTest
+    @ValueSource(booleans = {false, true})
+    public void streamJoinChangelogTopicShouldBeConfiguredWithDeleteOnlyCleanupPolicy(final boolean withHeaders, final TestInfo testInfo) throws Exception {
+        final String appId = APP_ID + "-" + safeUniqueTestName(testInfo);
+        STREAMS_CONFIG.put(StreamsConfig.APPLICATION_ID_CONFIG, appId);
         final StreamsBuilder builder = new StreamsBuilder();
 
         final KStream<String, Integer> left = builder.stream(INPUT_TOPIC_LEFT, Consumed.with(Serdes.String(), Serdes.Integer()));
@@ -151,6 +157,8 @@ public class JoinStoreIntegrationTest {
             Integer::sum,
             JoinWindows.of(ofMillis(100)),
             StreamJoined.with(Serdes.String(), Serdes.Integer(), Serdes.Integer()).withStoreName("join-store"));
+
+        StreamsTestUtils.maybeSetDslStoreFormatHeaders(STREAMS_CONFIG, withHeaders);
 
         try (final KafkaStreams kafkaStreams = new KafkaStreams(builder.build(), STREAMS_CONFIG);
             final Admin admin = Admin.create(ADMIN_CONFIG)) {
@@ -164,20 +172,15 @@ public class JoinStoreIntegrationTest {
             latch.await();
 
             final Collection<ConfigResource> changelogTopics = Stream.of(
-                    "join-store-integration-test-changelog-cleanup-policy-join-store-this-join-store-changelog",
-                    "join-store-integration-test-changelog-cleanup-policy-join-store-other-join-store-changelog"
+                    appId + "-join-store-this-join-store-changelog",
+                    appId + "-join-store-other-join-store-changelog"
                 )
                 .map(name -> new ConfigResource(Type.TOPIC, name))
                 .collect(Collectors.toList());
 
             final Map<ConfigResource, org.apache.kafka.clients.admin.Config> topicConfig
                 = admin.describeConfigs(changelogTopics).all().get();
-            topicConfig.values().forEach(
-                tc -> assertThat(
-                    tc.get("cleanup.policy").value(),
-                    is("delete")
-                )
-            );
+            topicConfig.values().forEach(tc -> assertEquals("delete", tc.get("cleanup.policy").value()));
         }
     }
 }

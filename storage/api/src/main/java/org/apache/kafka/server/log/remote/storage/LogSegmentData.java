@@ -14,9 +14,10 @@
  * See the License for the specific language governing permissions and
  * limitations under the License.
  */
+
 package org.apache.kafka.server.log.remote.storage;
 
-import org.apache.kafka.common.annotation.InterfaceStability;
+import org.apache.kafka.common.annotation.InterfaceAudience;
 
 import java.nio.ByteBuffer;
 import java.nio.file.Path;
@@ -28,7 +29,7 @@ import java.util.Optional;
  * storage. This is passed with {@link RemoteStorageManager#copyLogSegmentData(RemoteLogSegmentMetadata, LogSegmentData)}
  * while copying a specific log segment to the remote storage.
  */
-@InterfaceStability.Evolving
+@InterfaceAudience.Public
 public class LogSegmentData {
 
     private final Path logSegment;

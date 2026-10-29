@@ -26,7 +26,6 @@ import org.apache.kafka.common.message.DescribeClientQuotasResponseData.EntryDat
 import org.apache.kafka.common.quota.ClientQuotaEntity;
 import org.apache.kafka.image.node.ClientQuotasImageNode;
 import org.apache.kafka.image.writer.ImageWriter;
-import org.apache.kafka.image.writer.ImageWriterOptions;
 
 import java.util.Collections;
 import java.util.HashMap;
@@ -46,51 +45,82 @@ import static org.apache.kafka.common.requests.DescribeClientQuotasRequest.MATCH
 
 /**
  * Represents the client quotas in the metadata image.
- *
+ * <p>
  * This class is thread-safe.
  */
 public final class ClientQuotasImage {
-    public static final ClientQuotasImage EMPTY = new ClientQuotasImage(Collections.emptyMap());
+    public static final ClientQuotasImage EMPTY = new ClientQuotasImage(Map.of());
 
     private final Map<ClientQuotaEntity, ClientQuotaImage> entities;
 
+    // Map from entity type to entity name to set of entries. The entity type could be "user", "client-id", and "ip".
+    // {
+    //   "user": { "user1": {entity1: image1}, "user2": {entity2: image2} },
+    //   "client-id": { "client-id1": {entity3: image3}, "client-id2": {entity4: image4} },
+    //   "ip": { "ip1": {entity5: image5}, "ip2": {entity6: image6} }
+    // }
+    private final Map<String, Map<String, Map<ClientQuotaEntity, ClientQuotaImage>>> entitiesByTypeAndName;
+
+    // Map from entity type to set of entries. The entity type could be "user", "client-id", and "ip".
+    // {
+    //   "user": { entity1: image1, entity2: image2 },
+    //   "client-id": { entity3: image3, entity4: image4 },
+    //   "ip": { entity5: image5, entity6: image6 }
+    // }
+    private final Map<String, Map<ClientQuotaEntity, ClientQuotaImage>> entitiesByType;
+
     public ClientQuotasImage(Map<ClientQuotaEntity, ClientQuotaImage> entities) {
         this.entities = Collections.unmodifiableMap(entities);
+        var entitiesByTypeAndName = new HashMap<String, Map<String, Map<ClientQuotaEntity, ClientQuotaImage>>>();
+        var entitiesByType = new HashMap<String, Map<ClientQuotaEntity, ClientQuotaImage>>();
+        for (var entry : entities.entrySet()) {
+            ClientQuotaEntity entity = entry.getKey();
+            for (var entityEntry : entity.entries().entrySet()) {
+                entitiesByTypeAndName
+                    .computeIfAbsent(entityEntry.getKey(), k -> new HashMap<>())
+                    .computeIfAbsent(entityEntry.getValue(), k -> new HashMap<>())
+                    .put(entity, entry.getValue());
+
+                entitiesByType
+                    .computeIfAbsent(entityEntry.getKey(), k -> new HashMap<>())
+                    .put(entity, entry.getValue());
+            }
+        }
+        this.entitiesByTypeAndName = Collections.unmodifiableMap(entitiesByTypeAndName);
+        this.entitiesByType = Collections.unmodifiableMap(entitiesByType);
+    }
+
+    public Map<ClientQuotaEntity, ClientQuotaImage> entities() {
+        return entities;
     }
 
     public boolean isEmpty() {
         return entities.isEmpty();
     }
 
-    // Visible for testing
-    public Map<ClientQuotaEntity, ClientQuotaImage> entities() {
-        return entities;
-    }
-
-    public void write(ImageWriter writer, ImageWriterOptions options) {
+    public void write(ImageWriter writer) {
         for (Entry<ClientQuotaEntity, ClientQuotaImage> entry : entities.entrySet()) {
             ClientQuotaEntity entity = entry.getKey();
             ClientQuotaImage clientQuotaImage = entry.getValue();
-            clientQuotaImage.write(entity, writer, options);
+            clientQuotaImage.write(entity, writer);
         }
     }
 
     public DescribeClientQuotasResponseData describe(DescribeClientQuotasRequestData request) {
-        DescribeClientQuotasResponseData response = new DescribeClientQuotasResponseData();
         Map<String, String> exactMatch = new HashMap<>();
         Set<String> typeMatch = new HashSet<>();
         for (DescribeClientQuotasRequestData.ComponentData component : request.components()) {
             if (component.entityType().isEmpty()) {
                 throw new InvalidRequestException("Invalid empty entity type.");
             } else if (exactMatch.containsKey(component.entityType()) ||
-                    typeMatch.contains(component.entityType())) {
+                typeMatch.contains(component.entityType())) {
                 throw new InvalidRequestException("Entity type " + component.entityType() +
                     " cannot appear more than once in the filter.");
             }
             if (!(component.entityType().equals(IP) || component.entityType().equals(USER) ||
-                    component.entityType().equals(CLIENT_ID))) {
+                component.entityType().equals(CLIENT_ID))) {
                 throw new UnsupportedVersionException("Unsupported entity type " +
-                        component.entityType());
+                    component.entityType());
             }
             switch (component.matchType()) {
                 case MATCH_TYPE_EXACT:
@@ -120,46 +150,67 @@ public final class ClientQuotasImage {
         }
         if (exactMatch.containsKey(IP) || typeMatch.contains(IP)) {
             if ((exactMatch.containsKey(USER) || typeMatch.contains(USER)) ||
-                    (exactMatch.containsKey(CLIENT_ID) || typeMatch.contains(CLIENT_ID))) {
+                (exactMatch.containsKey(CLIENT_ID) || typeMatch.contains(CLIENT_ID))) {
                 throw new InvalidRequestException("Invalid entity filter component " +
                     "combination. IP filter component should not be used with " +
                     "user or clientId filter component.");
             }
         }
-        // TODO: this is O(N). We should add indexing here to speed it up. See KAFKA-13022.
-        for (Entry<ClientQuotaEntity, ClientQuotaImage> entry : entities.entrySet()) {
-            ClientQuotaEntity entity = entry.getKey();
-            ClientQuotaImage quotaImage = entry.getValue();
-            if (matches(entity, exactMatch, typeMatch, request.strict())) {
-                response.entries().add(toDescribeEntry(entity, quotaImage));
+
+        return matches(exactMatch, typeMatch, request.strict());
+    }
+
+    private DescribeClientQuotasResponseData matches(
+        Map<String, String> exactMatch,
+        Set<String> typeMatch,
+        boolean strict
+    ) {
+        DescribeClientQuotasResponseData response = new DescribeClientQuotasResponseData();
+        Map<ClientQuotaEntity, ClientQuotaImage> candidates = null;
+        // Case 1: exact match exists. Filter candidates based on exact match first and then type match
+        if (!exactMatch.isEmpty()) {
+            for (Entry<String, String> exactMatchEntry : exactMatch.entrySet()) {
+                String entityType = exactMatchEntry.getKey();
+                String entityName = exactMatchEntry.getValue();
+                var nameMap = entitiesByTypeAndName.get(entityType);
+                var matches = Map.<ClientQuotaEntity, ClientQuotaImage>of();
+                if (nameMap != null) matches = nameMap.getOrDefault(entityName, Map.of());
+                if (candidates == null) {
+                    candidates = new HashMap<>(matches);
+                } else {
+                    candidates.keySet().retainAll(matches.keySet());
+                }
+            }
+
+            for (String type : typeMatch) {
+                candidates.keySet().retainAll(entitiesByType.getOrDefault(type, Map.of()).keySet());
+            }
+        } else if (!typeMatch.isEmpty()) {
+            // Case 2: no exact match, only type match exists
+            for (String type : typeMatch) {
+                Map<ClientQuotaEntity, ClientQuotaImage> matches = entitiesByType.getOrDefault(type, Map.of());
+                if (candidates == null) {
+                    candidates = new HashMap<>(matches);
+                } else {
+                    candidates.keySet().retainAll(matches.keySet());
+                }
+            }
+        } else if (!strict) {
+            // Case 3: no exact match, no type match, no strict, return all entries
+            for (Entry<ClientQuotaEntity, ClientQuotaImage> entry : entities.entrySet()) {
+                response.entries().add(toDescribeEntry(entry.getKey(), entry.getValue()));
+            }
+            return response;
+        }
+
+        if (candidates != null) {
+            for (Entry<ClientQuotaEntity, ClientQuotaImage> entry : candidates.entrySet()) {
+                if (!strict || entry.getKey().entries().size() == exactMatch.size() + typeMatch.size()) {
+                    response.entries().add(toDescribeEntry(entry.getKey(), entry.getValue()));
+                }
             }
         }
         return response;
-    }
-
-    private static boolean matches(ClientQuotaEntity entity,
-                                   Map<String, String> exactMatch,
-                                   Set<String> typeMatch,
-                                   boolean strict) {
-        if (strict) {
-            if (entity.entries().size() != exactMatch.size() + typeMatch.size()) {
-                return false;
-            }
-        }
-        for (Entry<String, String> entry : exactMatch.entrySet()) {
-            if (!entity.entries().containsKey(entry.getKey())) {
-                return false;
-            }
-            if (!Objects.equals(entity.entries().get(entry.getKey()), entry.getValue())) {
-                return false;
-            }
-        }
-        for (String type : typeMatch) {
-            if (!entity.entries().containsKey(type)) {
-                return false;
-            }
-        }
-        return true;
     }
 
     private static EntryData toDescribeEntry(ClientQuotaEntity entity,
@@ -176,6 +227,7 @@ public final class ClientQuotasImage {
 
     @Override
     public boolean equals(Object o) {
+        if (this == o) return true;
         if (!(o instanceof ClientQuotasImage other)) return false;
         return entities.equals(other.entities);
     }

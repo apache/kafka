@@ -23,7 +23,7 @@ import org.apache.kafka.image.MetadataProvenance;
 
 import com.yammer.metrics.core.Histogram;
 
-import java.util.Collections;
+import java.util.Map;
 import java.util.concurrent.atomic.AtomicBoolean;
 import java.util.concurrent.atomic.AtomicLong;
 import java.util.concurrent.atomic.AtomicReference;
@@ -36,7 +36,7 @@ public final class BrokerServerMetrics implements AutoCloseable {
 
     private final KafkaMetricsGroup metricsGroup = new KafkaMetricsGroup("kafka.server", "BrokerMetadataListener");
     private final com.yammer.metrics.core.MetricName batchProcessingTimeHistName =
-            metricsGroup.metricName("MetadataBatchProcessingTimeUs", Collections.emptyMap());
+            metricsGroup.metricName("MetadataBatchProcessingTimeUs", Map.of());
 
     /**
      * A histogram tracking the time in microseconds it took to process batches of events.
@@ -45,7 +45,7 @@ public final class BrokerServerMetrics implements AutoCloseable {
             .newHistogram(batchProcessingTimeHistName, true);
 
     private final com.yammer.metrics.core.MetricName batchSizeHistName =
-            metricsGroup.metricName("MetadataBatchSizes", Collections.emptyMap());
+            metricsGroup.metricName("MetadataBatchSizes", Map.of());
 
     /**
      * A histogram tracking the sizes of batches that we have processed.
@@ -99,11 +99,11 @@ public final class BrokerServerMetrics implements AutoCloseable {
             "1 if controller.quorum.voters is set but was not used by the broker, 0 otherwise."
         );
 
-        metrics.addMetric(lastAppliedRecordOffsetName, (config, now) -> lastAppliedImageProvenance.get().lastContainedOffset());
-        metrics.addMetric(lastAppliedRecordTimestampName, (config, now) -> lastAppliedImageProvenance.get().lastContainedLogTimeMs());
-        metrics.addMetric(lastAppliedRecordLagMsName, (config, now) -> now - lastAppliedImageProvenance.get().lastContainedLogTimeMs());
-        metrics.addMetric(metadataLoadErrorCountName, (config, now) -> metadataLoadErrorCount.get());
-        metrics.addMetric(metadataApplyErrorCountName, (config, now) -> metadataApplyErrorCount.get());
+        metrics.addMetric(lastAppliedRecordOffsetName, (Gauge<Long>) (config, now) -> lastAppliedImageProvenance.get().lastContainedOffset());
+        metrics.addMetric(lastAppliedRecordTimestampName, (Gauge<Long>) (config, now) -> lastAppliedImageProvenance.get().lastContainedLogTimeMs());
+        metrics.addMetric(lastAppliedRecordLagMsName, (Gauge<Long>) (config, now) -> now - lastAppliedImageProvenance.get().lastContainedLogTimeMs());
+        metrics.addMetric(metadataLoadErrorCountName, (Gauge<Long>) (config, now) -> metadataLoadErrorCount.get());
+        metrics.addMetric(metadataApplyErrorCountName, (Gauge<Long>) (config, now) -> metadataApplyErrorCount.get());
         metrics.addMetric(ignoredStaticVotersName, (Gauge<Integer>) (config, now) -> ignoredStaticVoters.get() ? 1 : 0);
     }
 

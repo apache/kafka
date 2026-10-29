@@ -24,9 +24,9 @@ import org.apache.kafka.common.metrics.Metrics;
 import org.apache.kafka.common.metrics.Sensor;
 import org.apache.kafka.common.metrics.stats.Avg;
 import org.apache.kafka.common.metrics.stats.Max;
-import org.apache.kafka.common.utils.LogContext;
 import org.apache.kafka.common.utils.MockTime;
 import org.apache.kafka.common.utils.Time;
+import org.apache.kafka.common.utils.internals.LogContext;
 
 import org.junit.jupiter.api.AfterEach;
 import org.junit.jupiter.api.BeforeEach;
@@ -305,7 +305,7 @@ public class FetchMetricsManagerTest {
         TopicPartition tp3 = new TopicPartition("another.topic", 1);
         int initialMetricsSize = metrics.metrics().size();
 
-        SubscriptionState subscriptionState = new SubscriptionState(new LogContext(), AutoOffsetResetStrategy.NONE);
+        ConsumerSubscriptionState subscriptionState = new ConsumerSubscriptionState(new LogContext(), AutoOffsetResetStrategy.NONE);
         subscriptionState.assignFromUser(Set.of(tp1));
 
         metricsManager.maybeUpdateAssignment(subscriptionState);
@@ -356,7 +356,7 @@ public class FetchMetricsManagerTest {
 
         int additionalRegisteredMetricsSize = metrics.metrics().size();
 
-        SubscriptionState subscriptionState = new SubscriptionState(new LogContext(), AutoOffsetResetStrategy.NONE);
+        ConsumerSubscriptionState subscriptionState = new ConsumerSubscriptionState(new LogContext(), AutoOffsetResetStrategy.NONE);
         subscriptionState.assignFromUser(Set.of(tp1, tp2, tp3));
         metricsManager.maybeUpdateAssignment(subscriptionState);
 

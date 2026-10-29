@@ -19,6 +19,8 @@ package org.apache.kafka.coordinator.share;
 
 import org.apache.kafka.common.message.DeleteShareGroupStateRequestData;
 import org.apache.kafka.common.message.DeleteShareGroupStateResponseData;
+import org.apache.kafka.common.message.InitializeShareGroupStateRequestData;
+import org.apache.kafka.common.message.InitializeShareGroupStateResponseData;
 import org.apache.kafka.common.message.ReadShareGroupStateRequestData;
 import org.apache.kafka.common.message.ReadShareGroupStateResponseData;
 import org.apache.kafka.common.message.ReadShareGroupStateSummaryRequestData;
@@ -30,8 +32,8 @@ import org.apache.kafka.image.MetadataDelta;
 import org.apache.kafka.image.MetadataImage;
 import org.apache.kafka.server.share.SharePartitionKey;
 
+import java.util.Map;
 import java.util.OptionalInt;
-import java.util.Properties;
 import java.util.concurrent.CompletableFuture;
 import java.util.function.IntSupplier;
 
@@ -45,11 +47,11 @@ public interface ShareCoordinator {
     int partitionFor(SharePartitionKey key);
 
     /**
-     * Return the configuration properties of the share-group state topic.
+     * Return the configuration of the share-group state topic.
      *
-     * @return Properties of the share-group state topic.
+     * @return The configuration of the share-group state topic.
      */
-    Properties shareGroupStateTopicConfigs();
+    Map<String, String> shareGroupStateTopicConfigs();
 
     /**
      * Start the share coordinator
@@ -97,6 +99,14 @@ public interface ShareCoordinator {
     CompletableFuture<DeleteShareGroupStateResponseData> deleteState(RequestContext context, DeleteShareGroupStateRequestData request);
 
     /**
+     * Handle initialize share group state call
+     * @param context - represents the incoming initialize share group request context
+     * @param request - actual RPC request object
+     * @return completable future representing initialize share group RPC response data
+     */
+    CompletableFuture<InitializeShareGroupStateResponseData> initializeState(RequestContext context, InitializeShareGroupStateRequestData request);
+
+    /**
      * Called when new coordinator is elected
      * @param partitionIndex - The partition index (internal topic)
      * @param partitionLeaderEpoch - Leader epoch of the partition (internal topic)
@@ -113,11 +123,11 @@ public interface ShareCoordinator {
     /**
      * A new metadata image is available.
      *
-     * @param newImage  The new metadata image.
      * @param delta     The metadata delta.
+     * @param newImage  The new metadata image.
      */
-    void onNewMetadataImage(
-        MetadataImage newImage,
-        MetadataDelta delta
+    void onMetadataUpdate(
+        MetadataDelta delta,
+        MetadataImage newImage
     );
 }

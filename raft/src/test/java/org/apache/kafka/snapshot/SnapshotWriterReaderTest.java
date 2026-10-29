@@ -18,21 +18,23 @@ package org.apache.kafka.snapshot;
 
 import org.apache.kafka.common.message.SnapshotFooterRecord;
 import org.apache.kafka.common.message.SnapshotHeaderRecord;
-import org.apache.kafka.common.record.ControlRecordUtils;
-import org.apache.kafka.common.record.Record;
-import org.apache.kafka.common.record.RecordBatch;
-import org.apache.kafka.common.utils.BufferSupplier;
-import org.apache.kafka.common.utils.BufferSupplier.GrowableBufferSupplier;
+import org.apache.kafka.common.record.internal.ControlRecordUtils;
+import org.apache.kafka.common.record.internal.Record;
+import org.apache.kafka.common.record.internal.RecordBatch;
+import org.apache.kafka.common.utils.internals.BufferSupplier;
+import org.apache.kafka.common.utils.internals.BufferSupplier.GrowableBufferSupplier;
+import org.apache.kafka.common.utils.internals.LogContext;
 import org.apache.kafka.raft.Batch;
 import org.apache.kafka.raft.ControlRecord;
-import org.apache.kafka.raft.OffsetAndEpoch;
 import org.apache.kafka.raft.RaftClientTestContext;
 import org.apache.kafka.raft.internals.StringSerde;
+import org.apache.kafka.server.common.OffsetAndEpoch;
 
 import org.junit.jupiter.api.Test;
+import org.junit.jupiter.params.ParameterizedTest;
+import org.junit.jupiter.params.provider.ValueSource;
 
 import java.util.ArrayList;
-import java.util.Collections;
 import java.util.Iterator;
 import java.util.List;
 import java.util.Optional;
@@ -49,10 +51,11 @@ import static org.junit.jupiter.api.Assertions.assertTrue;
 
 public final class SnapshotWriterReaderTest {
     private final int localId = 0;
-    private final Set<Integer> voters = Collections.singleton(localId);
+    private final Set<Integer> voters = Set.of(localId);
 
-    @Test
-    public void testSnapshotDelimiters() throws Exception {
+    @ParameterizedTest
+    @ValueSource(booleans = {false, true})
+    public void testSnapshotDelimiters(boolean controlOnly) throws Exception {
         int recordsPerBatch = 1;
         int batches = 0;
         int delimiterCount = 2;
@@ -72,7 +75,7 @@ public final class SnapshotWriterReaderTest {
         }
 
         // Verify that an empty snapshot has only the Header and Footer
-        try (SnapshotReader<String> reader = readSnapshot(context, id, Integer.MAX_VALUE)) {
+        try (SnapshotReader<String> reader = readSnapshot(context, id, Integer.MAX_VALUE, controlOnly)) {
             assertEquals(magicTimestamp, reader.lastContainedLogTimestamp());
 
             RawSnapshotReader snapshot = context.log.readSnapshot(id).get();
@@ -81,8 +84,9 @@ public final class SnapshotWriterReaderTest {
         }
     }
 
-    @Test
-    public void testWritingSnapshot() throws Exception {
+    @ParameterizedTest
+    @ValueSource(booleans = {false, true})
+    public void testWritingSnapshot(boolean controlOnly) throws Exception {
         int recordsPerBatch = 3;
         int batches = 3;
         int delimiterCount = 2;
@@ -106,13 +110,17 @@ public final class SnapshotWriterReaderTest {
             snapshot.freeze();
         }
 
-        try (SnapshotReader<String> reader = readSnapshot(context, id, Integer.MAX_VALUE)) {
+        try (SnapshotReader<String> reader = readSnapshot(context, id, Integer.MAX_VALUE, controlOnly)) {
             RawSnapshotReader snapshot = context.log.readSnapshot(id).get();
             int recordCount = validateDelimiters(snapshot, magicTimestamp);
             assertEquals((recordsPerBatch * batches) + delimiterCount, recordCount);
-            assertDataSnapshot(expected, reader);
+            if (controlOnly) {
+                assertDataRecordsSkipped(reader);
+            } else {
+                assertDataSnapshot(expected, reader);
+            }
 
-            assertEquals(magicTimestamp, Snapshots.lastContainedLogTimestamp(snapshot));
+            assertEquals(magicTimestamp, Snapshots.lastContainedLogTimestamp(snapshot, new LogContext()));
         }
     }
 
@@ -189,14 +197,26 @@ public final class SnapshotWriterReaderTest {
     private SnapshotReader<String> readSnapshot(
         RaftClientTestContext context,
         OffsetAndEpoch snapshotId,
-        int maxBatchSize
+        int maxBatchSize,
+        boolean controlOnly
     ) {
+        RawSnapshotReader rawSnapshot = context.log.readSnapshot(snapshotId).get();
+        if (controlOnly) {
+            return RecordsSnapshotReader.ofControlOnly(
+                rawSnapshot,
+                BufferSupplier.create(),
+                maxBatchSize,
+                true,
+                new LogContext()
+            );
+        }
         return RecordsSnapshotReader.of(
-            context.log.readSnapshot(snapshotId).get(),
+            rawSnapshot,
             context.serde,
             BufferSupplier.create(),
             maxBatchSize,
-            true
+            true,
+            new LogContext()
         );
     }
 
@@ -222,7 +242,7 @@ public final class SnapshotWriterReaderTest {
         countRecords += 1;
 
         SnapshotHeaderRecord headerRecord = ControlRecordUtils.deserializeSnapshotHeaderRecord(record);
-        assertEquals(headerRecord.version(), ControlRecordUtils.SNAPSHOT_HEADER_CURRENT_VERSION);
+        assertEquals(ControlRecordUtils.SNAPSHOT_HEADER_CURRENT_VERSION, headerRecord.version());
         assertEquals(headerRecord.lastContainedLogTimestamp(), lastContainedLogTime);
 
         assertFalse(records.hasNext());
@@ -242,7 +262,7 @@ public final class SnapshotWriterReaderTest {
         assertTrue(batch.isControlBatch());
 
         SnapshotFooterRecord footerRecord = ControlRecordUtils.deserializeSnapshotFooterRecord(record);
-        assertEquals(footerRecord.version(), ControlRecordUtils.SNAPSHOT_FOOTER_CURRENT_VERSION);
+        assertEquals(ControlRecordUtils.SNAPSHOT_FOOTER_CURRENT_VERSION, footerRecord.version());
 
         return countRecords;
     }
@@ -250,7 +270,14 @@ public final class SnapshotWriterReaderTest {
     public static void assertDataSnapshot(List<List<String>> batches, RawSnapshotReader reader) {
         assertDataSnapshot(
             batches,
-            RecordsSnapshotReader.of(reader, new StringSerde(), BufferSupplier.create(), Integer.MAX_VALUE, true)
+            RecordsSnapshotReader.of(
+                reader,
+                new StringSerde(),
+                BufferSupplier.create(),
+                Integer.MAX_VALUE,
+                true,
+                new LogContext()
+            )
         );
     }
 
@@ -270,6 +297,13 @@ public final class SnapshotWriterReaderTest {
         }
 
         assertEquals(expected, actual);
+    }
+
+    private static void assertDataRecordsSkipped(SnapshotReader<String> reader) {
+        while (reader.hasNext()) {
+            Batch<String> batch = reader.next();
+            assertTrue(batch.records().isEmpty());
+        }
     }
 
     public static void assertControlSnapshot(

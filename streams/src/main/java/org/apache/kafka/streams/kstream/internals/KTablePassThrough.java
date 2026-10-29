@@ -19,11 +19,12 @@ package org.apache.kafka.streams.kstream.internals;
 import org.apache.kafka.streams.processor.api.Processor;
 import org.apache.kafka.streams.processor.api.ProcessorContext;
 import org.apache.kafka.streams.processor.api.Record;
-import org.apache.kafka.streams.state.ValueAndTimestamp;
+import org.apache.kafka.streams.state.ValueTimestampHeaders;
 import org.apache.kafka.streams.state.internals.KeyValueStoreWrapper;
 
 import java.util.Collection;
 
+@SuppressWarnings("rawtypes")
 public class KTablePassThrough<KIn, VIn> implements KTableProcessorSupplier<KIn, VIn, KIn, VIn> {
     private final Collection<KStreamAggProcessorSupplier> parents;
     private final String storeName;
@@ -87,12 +88,12 @@ public class KTablePassThrough<KIn, VIn> implements KTableProcessorSupplier<KIn,
         }
 
         @Override
-        public ValueAndTimestamp<VIn> get(final KIn key) {
+        public ValueTimestampHeaders<VIn> get(final KIn key) {
             return store.get(key);
         }
 
         @Override
-        public ValueAndTimestamp<VIn> get(final KIn key, final long asOfTimestamp) {
+        public ValueTimestampHeaders<VIn> get(final KIn key, final long asOfTimestamp) {
             return store.get(key, asOfTimestamp);
         }
 

@@ -19,12 +19,13 @@ package org.apache.kafka.clients.consumer.internals;
 import org.apache.kafka.common.TopicIdPartition;
 import org.apache.kafka.common.errors.InterruptException;
 import org.apache.kafka.common.internals.IdempotentCloser;
-import org.apache.kafka.common.utils.LogContext;
 import org.apache.kafka.common.utils.Timer;
+import org.apache.kafka.common.utils.internals.LogContext;
 
 import org.slf4j.Logger;
 
 import java.util.HashSet;
+import java.util.List;
 import java.util.Set;
 import java.util.concurrent.ConcurrentLinkedQueue;
 import java.util.concurrent.TimeUnit;
@@ -32,7 +33,6 @@ import java.util.concurrent.atomic.AtomicBoolean;
 import java.util.concurrent.locks.Condition;
 import java.util.concurrent.locks.Lock;
 import java.util.concurrent.locks.ReentrantLock;
-import java.util.function.Predicate;
 
 /**
  * {@code ShareFetchBuffer} buffers up {@link ShareCompletedFetch the results} from the broker responses
@@ -51,6 +51,10 @@ public class ShareFetchBuffer implements AutoCloseable {
     private final IdempotentCloser idempotentCloser = new IdempotentCloser();
     private final AtomicBoolean wokenUp = new AtomicBoolean(false);
     private ShareCompletedFetch nextInLineFetch;
+
+    // Fetches which have been consumed but still have acknowledgements outstanding, retained here after they leave
+    // the next-in-line slot so that the share session for their node is not closed prematurely.
+    private final Set<ShareCompletedFetch> pendingAcknowledgementFetches = new HashSet<>();
 
     public ShareFetchBuffer(final LogContext logContext) {
         this.log = logContext.logger(ShareFetchBuffer.class);
@@ -73,25 +77,10 @@ public class ShareFetchBuffer implements AutoCloseable {
         }
     }
 
-    /**
-     * Return whether we have any completed fetches pending return to the user. This method is thread-safe. Has
-     * visibility for testing.
-     *
-     * @return {@code true} if there are completed fetches that match the {@link Predicate}, {@code false} otherwise
-     */
-    boolean hasCompletedFetches(Predicate<ShareCompletedFetch> predicate) {
+    void add(List<ShareCompletedFetch> fetches) {
         lock.lock();
         try {
-            return completedFetches.stream().anyMatch(predicate);
-        } finally {
-            lock.unlock();
-        }
-    }
-
-    void add(ShareCompletedFetch fetch) {
-        lock.lock();
-        try {
-            completedFetches.add(fetch);
+            completedFetches.addAll(fetches);
             notEmptyCondition.signalAll();
         } finally {
             lock.unlock();
@@ -110,6 +99,11 @@ public class ShareFetchBuffer implements AutoCloseable {
     void setNextInLineFetch(ShareCompletedFetch nextInLineFetch) {
         lock.lock();
         try {
+            // If the outgoing next-in-line fetch still has outstanding acknowledgements,
+            // retain it until the acknowledgements are sent.
+            if (this.nextInLineFetch != null && this.nextInLineFetch.hasPendingAcknowledgements()) {
+                pendingAcknowledgementFetches.add(this.nextInLineFetch);
+            }
             this.nextInLineFetch = nextInLineFetch;
         } finally {
             lock.unlock();
@@ -184,7 +178,7 @@ public class ShareFetchBuffer implements AutoCloseable {
     }
 
     /**
-     * Return the set of {@link TopicIdPartition partitions} for which we have data in the buffer.
+     * Return the set of {@link TopicIdPartition partitions} for which we have data in the buffer or pending acknowledgements.
      *
      * @return {@link TopicIdPartition Partition} set
      */
@@ -193,15 +187,48 @@ public class ShareFetchBuffer implements AutoCloseable {
         try {
             final Set<TopicIdPartition> partitions = new HashSet<>();
 
-            if (nextInLineFetch != null && !nextInLineFetch.isConsumed()) {
+            if (nextInLineFetch != null && (!nextInLineFetch.isConsumed() || nextInLineFetch.hasPendingAcknowledgements())) {
                 partitions.add(nextInLineFetch.partition);
             }
 
             completedFetches.forEach(cf -> partitions.add(cf.partition));
+
+            prunePendingAcknowledgementFetches();
+            pendingAcknowledgementFetches.forEach(cf -> partitions.add(cf.partition));
+
             return partitions;
         } finally {
             lock.unlock();
         }
+    }
+
+    /**
+     * Return the set of node IDs for which we have data in the buffer.
+     *
+     * @return Node ID set
+     */
+    Set<Integer> bufferedNodes() {
+        lock.lock();
+        try {
+            final Set<Integer> nodes = new HashSet<>();
+
+            if (nextInLineFetch != null && (!nextInLineFetch.isConsumed() || nextInLineFetch.hasPendingAcknowledgements())) {
+                nodes.add(nextInLineFetch.nodeId);
+            }
+
+            completedFetches.forEach(cf -> nodes.add(cf.nodeId));
+
+            prunePendingAcknowledgementFetches();
+            pendingAcknowledgementFetches.forEach(cf -> nodes.add(cf.nodeId));
+
+            return nodes;
+        } finally {
+            lock.unlock();
+        }
+    }
+
+    private void prunePendingAcknowledgementFetches() {
+        pendingAcknowledgementFetches.removeIf(cf -> !cf.hasPendingAcknowledgements());
     }
 
     private void drainAll() {
@@ -213,6 +240,8 @@ public class ShareFetchBuffer implements AutoCloseable {
                 nextInLineFetch.drain();
                 nextInLineFetch = null;
             }
+            pendingAcknowledgementFetches.forEach(ShareCompletedFetch::drain);
+            pendingAcknowledgementFetches.clear();
         } finally {
             lock.unlock();
         }

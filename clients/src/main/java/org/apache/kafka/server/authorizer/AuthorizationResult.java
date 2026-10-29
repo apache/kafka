@@ -17,9 +17,9 @@
 
 package org.apache.kafka.server.authorizer;
 
-import org.apache.kafka.common.annotation.InterfaceStability;
+import org.apache.kafka.common.annotation.InterfaceAudience;
 
-@InterfaceStability.Evolving
+@InterfaceAudience.Public
 public enum AuthorizationResult {
     ALLOWED,
     DENIED

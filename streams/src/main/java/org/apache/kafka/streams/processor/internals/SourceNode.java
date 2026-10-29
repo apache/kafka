@@ -77,13 +77,13 @@ public class SourceNode<KIn, VIn> extends ProcessorNode<KIn, VIn, KIn, VIn> {
         this.context = context;
 
         try {
-            keyDeserializer = prepareKeyDeserializer(keyDeserializer, context, name());
+            keyDeserializer = prepareKeyDeserializer(keyDeserializer, context);
         } catch (final ConfigException | StreamsException e) {
             throw new StreamsException(String.format("Failed to initialize key serdes for source node %s", name()), e, context.taskId());
         }
 
         try {
-            valDeserializer = prepareValueDeserializer(valDeserializer, context, name());
+            valDeserializer = prepareValueDeserializer(valDeserializer, context);
         } catch (final ConfigException | StreamsException e) {
             throw new StreamsException(String.format("Failed to initialize value serdes for source node %s", name()), e, context.taskId());
         }

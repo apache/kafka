@@ -17,28 +17,26 @@
 package org.apache.kafka.raft;
 
 import org.apache.kafka.common.Uuid;
-import org.apache.kafka.common.utils.LogContext;
 import org.apache.kafka.common.utils.Time;
 import org.apache.kafka.common.utils.Timer;
+import org.apache.kafka.common.utils.internals.LogContext;
 import org.apache.kafka.raft.internals.EpochElection;
 
 import org.slf4j.Logger;
 
 import java.util.Optional;
+import java.util.OptionalInt;
 
-public class CandidateState implements NomineeState {
+public final class CandidateState implements NomineeState {
     private final int localId;
     private final Uuid localDirectoryId;
     private final int epoch;
-    private final int retries;
     private final EpochElection epochElection;
     private final Optional<LogOffsetMetadata> highWatermark;
     private final int electionTimeoutMs;
     private final Timer electionTimer;
-    private final Timer backoffTimer;
     private final Logger log;
 
-    private boolean isBackingOff;
     /**
      * The lifetime of a candidate state is the following.
      *
@@ -54,7 +52,6 @@ public class CandidateState implements NomineeState {
         int epoch,
         VoterSet voters,
         Optional<LogOffsetMetadata> highWatermark,
-        int retries,
         int electionTimeoutMs,
         LogContext logContext
     ) {
@@ -73,26 +70,12 @@ public class CandidateState implements NomineeState {
         this.localDirectoryId = localDirectoryId;
         this.epoch = epoch;
         this.highWatermark = highWatermark;
-        this.retries = retries;
-        this.isBackingOff = false;
         this.electionTimeoutMs = electionTimeoutMs;
         this.electionTimer = time.timer(electionTimeoutMs);
-        this.backoffTimer = time.timer(0);
         this.log = logContext.logger(CandidateState.class);
 
         this.epochElection = new EpochElection(voters.voterKeys());
         epochElection.recordVote(localId, true);
-    }
-
-    /**
-     * Check if the candidate is backing off for the next election
-     */
-    public boolean isBackingOff() {
-        return isBackingOff;
-    }
-
-    public int retries() {
-        return retries;
     }
 
     @Override
@@ -118,32 +101,10 @@ public class CandidateState implements NomineeState {
         return epochElection().recordVote(remoteNodeId, false);
     }
 
-    /**
-     * Record the current election has failed since we've either received sufficient rejecting voters or election timed out
-     */
-    public void startBackingOff(long currentTimeMs, long backoffDurationMs) {
-        this.backoffTimer.update(currentTimeMs);
-        this.backoffTimer.reset(backoffDurationMs);
-        this.isBackingOff = true;
-    }
-
     @Override
     public boolean hasElectionTimeoutExpired(long currentTimeMs) {
         electionTimer.update(currentTimeMs);
         return electionTimer.isExpired();
-    }
-
-    public boolean isBackoffComplete(long currentTimeMs) {
-        backoffTimer.update(currentTimeMs);
-        return backoffTimer.isExpired();
-    }
-
-    public long remainingBackoffMs(long currentTimeMs) {
-        if (!isBackingOff) {
-            throw new IllegalStateException("Candidate is not currently backing off");
-        }
-        backoffTimer.update(currentTimeMs);
-        return backoffTimer.remainingMs();
     }
 
     @Override
@@ -164,6 +125,11 @@ public class CandidateState implements NomineeState {
     @Override
     public int epoch() {
         return epoch;
+    }
+
+    @Override
+    public LeaderAndEpoch leaderAndEpoch() {
+        return new LeaderAndEpoch(OptionalInt.empty(), epoch);
     }
 
     @Override
@@ -201,12 +167,11 @@ public class CandidateState implements NomineeState {
     @Override
     public String toString() {
         return String.format(
-            "CandidateState(localId=%d, localDirectoryId=%s, epoch=%d, retries=%d, epochElection=%s, " +
+            "CandidateState(localId=%d, localDirectoryId=%s, epoch=%d, epochElection=%s, " +
             "highWatermark=%s, electionTimeoutMs=%d)",
             localId,
             localDirectoryId,
             epoch,
-            retries,
             epochElection(),
             highWatermark,
             electionTimeoutMs

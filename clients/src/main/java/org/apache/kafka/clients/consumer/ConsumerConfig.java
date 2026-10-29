@@ -20,7 +20,10 @@ import org.apache.kafka.clients.ClientDnsLookup;
 import org.apache.kafka.clients.CommonClientConfigs;
 import org.apache.kafka.clients.MetadataRecoveryStrategy;
 import org.apache.kafka.clients.consumer.internals.AutoOffsetResetStrategy;
+import org.apache.kafka.clients.consumer.internals.ShareAcknowledgementMode;
+import org.apache.kafka.clients.consumer.internals.ShareAcquireMode;
 import org.apache.kafka.common.IsolationLevel;
+import org.apache.kafka.common.annotation.InterfaceAudience;
 import org.apache.kafka.common.config.AbstractConfig;
 import org.apache.kafka.common.config.ConfigDef;
 import org.apache.kafka.common.config.ConfigDef.Importance;
@@ -35,8 +38,10 @@ import org.apache.kafka.common.security.auth.SecurityProtocol;
 import org.apache.kafka.common.serialization.Deserializer;
 import org.apache.kafka.common.utils.Utils;
 
+import org.slf4j.Logger;
+import org.slf4j.LoggerFactory;
+
 import java.util.ArrayList;
-import java.util.Collections;
 import java.util.HashMap;
 import java.util.List;
 import java.util.Locale;
@@ -56,15 +61,17 @@ import static org.apache.kafka.common.config.ConfigDef.ValidString.in;
 /**
  * The consumer configuration keys
  */
+@InterfaceAudience.Public
 public class ConsumerConfig extends AbstractConfig {
+    private static final Logger log = LoggerFactory.getLogger(ConsumerConfig.class);
     private static final ConfigDef CONFIG;
 
     // a list contains all the assignor names that only assign subscribed topics to consumer. Should be updated when new assignor added.
     // This is to help optimize ConsumerCoordinator#performAssignment method
     public static final List<String> ASSIGN_FROM_SUBSCRIBED_ASSIGNORS = List.of(
-            RANGE_ASSIGNOR_NAME, 
-            ROUNDROBIN_ASSIGNOR_NAME, 
-            STICKY_ASSIGNOR_NAME, 
+            RANGE_ASSIGNOR_NAME,
+            ROUNDROBIN_ASSIGNOR_NAME,
+            STICKY_ASSIGNOR_NAME,
             COOPERATIVE_STICKY_ASSIGNOR_NAME
     );
 
@@ -112,18 +119,17 @@ public class ConsumerConfig extends AbstractConfig {
      */
     public static final String GROUP_PROTOCOL_CONFIG = "group.protocol";
     public static final String DEFAULT_GROUP_PROTOCOL = GroupProtocol.CLASSIC.name().toLowerCase(Locale.ROOT);
-    public static final String GROUP_PROTOCOL_DOC = "The group protocol consumer should use. We currently " +
-        "support \"classic\" or \"consumer\". If \"consumer\" is specified, then the consumer group protocol will be " +
-        "used. Otherwise, the classic group protocol will be used.";
+    public static final String GROUP_PROTOCOL_DOC = "The group protocol that the consumer uses. The " +
+        "supported values are <code>classic</code> or <code>consumer</code>. The default value is <code>classic</code>.";
 
     /**
     * <code>group.remote.assignor</code>
     */
     public static final String GROUP_REMOTE_ASSIGNOR_CONFIG = "group.remote.assignor";
     public static final String DEFAULT_GROUP_REMOTE_ASSIGNOR = null;
-    public static final String GROUP_REMOTE_ASSIGNOR_DOC = "The server-side assignor to use. If no assignor is specified, " +
-        "the group coordinator will pick one. This configuration is applied only if <code>group.protocol</code> is " +
-        "set to \"consumer\".";
+    public static final String GROUP_REMOTE_ASSIGNOR_DOC = "The name of the server-side assignor to use. " +
+        "If not specified, the group coordinator will pick the first assignor defined in the broker config group.consumer.assignors." +
+        "This configuration is applied only if <code>group.protocol</code> is set to \"consumer\".";
 
     /**
      * <code>bootstrap.servers</code>
@@ -132,6 +138,11 @@ public class ConsumerConfig extends AbstractConfig {
 
     /** <code>client.dns.lookup</code> */
     public static final String CLIENT_DNS_LOOKUP_CONFIG = CommonClientConfigs.CLIENT_DNS_LOOKUP_CONFIG;
+
+    /**
+     * <code>bootstrap.resolve.timeout.ms</code>
+     */
+    public static final String BOOTSTRAP_RESOLVE_TIMEOUT_MS_CONFIG = CommonClientConfigs.BOOTSTRAP_RESOLVE_TIMEOUT_MS_CONFIG;
 
     /**
      * <code>enable.auto.commit</code>
@@ -177,15 +188,29 @@ public class ConsumerConfig extends AbstractConfig {
             "Negative duration is not allowed.</li>" +
             "<li>none: throw exception to the consumer if no previous offset is found for the consumer's group</li>" +
             "<li>anything else: throw exception to the consumer.</li></ul>" +
-            "<p>Note that altering partition numbers while setting this config to latest may cause message delivery loss since " +
-            "producers could start to send messages to newly added partitions (i.e. no initial offsets exist yet) before consumers reset their offsets.";
+            "<p>Note that increasing a topic's partition count while this config is set to <code>latest</code> may cause silent " +
+            "message loss: producers may begin appending records to a newly created partition before the consumer discovers it, " +
+            "and <code>latest</code> resets the position to the log end offset, skipping any records produced during that discovery gap.</p>" +
+            "<p>To avoid this, prefer <code>by_duration:&lt;duration&gt;</code>. When a partition has no committed offset, " +
+            "<code>by_duration</code> determines the starting position by issuing a <code>ListOffsets</code> lookup for " +
+            "<code>now() - duration</code>. If the target timestamp is earlier than the partition's creation time, the lookup " +
+            "returns the partition's start offset, ensuring that records produced during the discovery window are still consumed. Size the duration to cover " +
+            "the worst-case partition-discovery latency for the group protocol in use:</p>" +
+            "<ul><li>With the <code>consumer</code> group protocol (KIP-848), newly assigned partitions are pushed on the next " +
+            "group heartbeat, so a value at least as large as <code>group.consumer.heartbeat.interval.ms</code> " +
+            "(server default 5000&nbsp;ms) is sufficient, for example <code>by_duration:PT5S</code>.</li>" +
+            "<li>With the <code>classic</code> group protocol, new partitions are discovered through periodic metadata refresh " +
+            "and a subsequent rebalance, so the duration must exceed <code>metadata.max.age.ms</code> (client default " +
+            "300000&nbsp;ms) plus the rebalance time, for example <code>by_duration:PT6M</code>.</li></ul>" +
+            "<p>Consumers with a valid committed offset are unaffected. The reset applies only to partitions whose offset is " +
+            "missing or out of range, so <code>by_duration</code> does not force existing consumers to replay historical data on restart.</p>";
 
     /**
      * <code>fetch.min.bytes</code>
      */
     public static final String FETCH_MIN_BYTES_CONFIG = "fetch.min.bytes";
     public static final int DEFAULT_FETCH_MIN_BYTES = 1;
-    private static final String FETCH_MIN_BYTES_DOC = "The minimum amount of data the server should return for a fetch request. If insufficient data is available the request will wait for that much data to accumulate before answering the request. The default setting of " + DEFAULT_FETCH_MIN_BYTES + " byte means that fetch requests are answered as soon as that many byte(s) of data is available or the fetch request times out waiting for data to arrive. Setting this to a larger value will cause the server to wait for larger amounts of data to accumulate which can improve server throughput a bit at the cost of some additional latency.";
+    private static final String FETCH_MIN_BYTES_DOC = "The minimum amount of data the server should return for a fetch request. If insufficient data is available the request will wait for that much data to accumulate before answering the request. The default setting of " + DEFAULT_FETCH_MIN_BYTES + " byte means that fetch requests are answered as soon as that many byte(s) of data is available or the fetch request times out waiting for data to arrive. Setting this to a larger value will cause the server to wait for larger amounts of data to accumulate which can improve server throughput a bit at the cost of some additional latency. Even if the total data available in the broker exceeds fetch.min.bytes, the actual returned size may still be less than this value due to per-partition limits max.partition.fetch.bytes and max returned limits fetch.max.bytes.";
 
     /**
      * <code>fetch.max.bytes</code>
@@ -195,7 +220,8 @@ public class ConsumerConfig extends AbstractConfig {
             "Records are fetched in batches by the consumer, and if the first record batch in the first non-empty partition of the fetch is larger than " +
             "this value, the record batch will still be returned to ensure that the consumer can make progress. As such, this is not a absolute maximum. " +
             "The maximum record batch size accepted by the broker is defined via <code>message.max.bytes</code> (broker config) or " +
-            "<code>max.message.bytes</code> (topic config). Note that the consumer performs multiple fetches in parallel.";
+            "<code>max.message.bytes</code> (topic config). A fetch request consists of many partitions, and there is another setting that controls how much " +
+            "data is returned for each partition in a fetch request - see <code>max.partition.fetch.bytes</code>. Note that the consumer performs multiple fetches in parallel.";
     public static final int DEFAULT_FETCH_MAX_BYTES = 50 * 1024 * 1024;
 
     /**
@@ -330,17 +356,6 @@ public class ConsumerConfig extends AbstractConfig {
     public static final boolean DEFAULT_EXCLUDE_INTERNAL_TOPICS = true;
 
     /**
-     * <code>internal.leave.group.on.close</code>
-     * Whether or not the consumer should leave the group on close. If set to <code>false</code> then a rebalance
-     * won't occur until <code>session.timeout.ms</code> expires.
-     *
-     * <p>
-     * Note: this is an internal configuration and could be changed in the future in a backward incompatible way
-     *
-     */
-    static final String LEAVE_GROUP_ON_CLOSE_CONFIG = "internal.leave.group.on.close";
-
-    /**
      * <code>internal.throw.on.fetch.stable.offset.unsupported</code>
      * Whether or not the consumer should throw when the new stable offset feature is supported.
      * If set to <code>true</code> then the client shall crash upon hitting it.
@@ -370,8 +385,7 @@ public class ConsumerConfig extends AbstractConfig {
     public static final String ALLOW_AUTO_CREATE_TOPICS_CONFIG = "allow.auto.create.topics";
     private static final String ALLOW_AUTO_CREATE_TOPICS_DOC = "Allow automatic topic creation on the broker when" +
             " subscribing to or assigning a topic. A topic being subscribed to will be automatically created only if the" +
-            " broker allows for it using `auto.create.topics.enable` broker configuration. This configuration must" +
-            " be set to `true` when using brokers older than 0.11.0";
+            " broker allows for it using <code>auto.create.topics.enable</code> broker configuration.";
     public static final boolean DEFAULT_ALLOW_AUTO_CREATE_TOPICS = true;
 
     /**
@@ -380,29 +394,54 @@ public class ConsumerConfig extends AbstractConfig {
     public static final String SECURITY_PROVIDERS_CONFIG = SecurityConfig.SECURITY_PROVIDERS_CONFIG;
     private static final String SECURITY_PROVIDERS_DOC = SecurityConfig.SECURITY_PROVIDERS_DOC;
 
+    /**
+     * <code>share.acknowledgement.mode</code>
+     */
+    public static final String SHARE_ACKNOWLEDGEMENT_MODE_CONFIG = "share.acknowledgement.mode";
+    private static final String SHARE_ACKNOWLEDGEMENT_MODE_DOC = "Controls the acknowledgement mode for a share consumer." +
+            " If set to <code>implicit</code>, the acknowledgement mode of the consumer is implicit and it must not" +
+            " use <code>org.apache.kafka.clients.consumer.ShareConsumer.acknowledge()</code> to acknowledge delivery of records. Instead," +
+            " delivery is acknowledged implicitly on the next call to poll or commit." +
+            " If set to <code>explicit</code>, the acknowledgement mode of the consumer is explicit and it must use" +
+            " <code>org.apache.kafka.clients.consumer.ShareConsumer.acknowledge()</code> to acknowledge delivery of records.";
+
+    /**
+     * <code>share.acquire.mode</code>
+     */
+    public static final String SHARE_ACQUIRE_MODE_CONFIG = "share.acquire.mode";
+    private static final String SHARE_ACQUIRE_MODE_DOC = "Controls the acquire mode for a share consumer." +
+            " If set to <code>record_limit</code>, the number of records returned in each poll() will not exceed the value of <code>max.poll.records</code>." +
+            " If set to <code>batch_optimized</code>, the number of records returned in each poll() call may exceed <code>max.poll.records</code>" +
+            " to align with batch boundaries for optimization.";
+    public static final String DEFAULT_SHARE_ACQUIRE_MODE = ShareAcquireMode.BATCH_OPTIMIZED.name();
+
     private static final AtomicInteger CONSUMER_CLIENT_ID_SEQUENCE = new AtomicInteger(1);
 
     /**
      * A list of configuration keys not supported for CLASSIC protocol.
      */
-    private static final List<String> CLASSIC_PROTOCOL_UNSUPPORTED_CONFIGS = Collections.singletonList(
-            GROUP_REMOTE_ASSIGNOR_CONFIG
+    private static final List<String> CLASSIC_PROTOCOL_UNSUPPORTED_CONFIGS = List.of(
+            GROUP_REMOTE_ASSIGNOR_CONFIG,
+            SHARE_ACKNOWLEDGEMENT_MODE_CONFIG,
+            SHARE_ACQUIRE_MODE_CONFIG
     );
 
     /**
      * A list of configuration keys not supported for CONSUMER protocol.
      */
     private static final List<String> CONSUMER_PROTOCOL_UNSUPPORTED_CONFIGS = List.of(
-            PARTITION_ASSIGNMENT_STRATEGY_CONFIG, 
-            HEARTBEAT_INTERVAL_MS_CONFIG, 
-            SESSION_TIMEOUT_MS_CONFIG
+            PARTITION_ASSIGNMENT_STRATEGY_CONFIG,
+            HEARTBEAT_INTERVAL_MS_CONFIG,
+            SESSION_TIMEOUT_MS_CONFIG,
+            SHARE_ACKNOWLEDGEMENT_MODE_CONFIG,
+            SHARE_ACQUIRE_MODE_CONFIG
     );
-    
+
     static {
         CONFIG = new ConfigDef().define(BOOTSTRAP_SERVERS_CONFIG,
                                         Type.LIST,
-                                        Collections.emptyList(),
-                                        new ConfigDef.NonNullValidator(),
+                                        ConfigDef.NO_DEFAULT_VALUE,
+                                        ConfigDef.ValidList.anyNonDuplicateValues(false, false),
                                         Importance.HIGH,
                                         CommonClientConfigs.BOOTSTRAP_SERVERS_DOC)
                                 .define(CLIENT_DNS_LOOKUP_CONFIG,
@@ -412,6 +451,12 @@ public class ConsumerConfig extends AbstractConfig {
                                            ClientDnsLookup.RESOLVE_CANONICAL_BOOTSTRAP_SERVERS_ONLY.toString()),
                                         Importance.MEDIUM,
                                         CommonClientConfigs.CLIENT_DNS_LOOKUP_DOC)
+                                .define(BOOTSTRAP_RESOLVE_TIMEOUT_MS_CONFIG,
+                                        Type.LONG,
+                                        CommonClientConfigs.DEFAULT_BOOTSTRAP_RESOLVE_TIMEOUT_MS,
+                                        atLeast(0L),
+                                        Importance.HIGH,
+                                        CommonClientConfigs.BOOTSTRAP_RESOLVE_TIMEOUT_MS_DOC)
                                 .define(GROUP_ID_CONFIG, Type.STRING, null, Importance.HIGH, GROUP_ID_DOC)
                                 .define(GROUP_INSTANCE_ID_CONFIG,
                                         Type.STRING,
@@ -432,7 +477,7 @@ public class ConsumerConfig extends AbstractConfig {
                                 .define(PARTITION_ASSIGNMENT_STRATEGY_CONFIG,
                                         Type.LIST,
                                         List.of(RangeAssignor.class, CooperativeStickyAssignor.class),
-                                        new ConfigDef.NonNullValidator(),
+                                        ConfigDef.ValidList.anyNonDuplicateValues(true, false),
                                         Importance.MEDIUM,
                                         PARTITION_ASSIGNMENT_STRATEGY_DOC)
                                 .define(METADATA_MAX_AGE_CONFIG,
@@ -559,7 +604,7 @@ public class ConsumerConfig extends AbstractConfig {
                                 .define(METRIC_REPORTER_CLASSES_CONFIG,
                                         Type.LIST,
                                         JmxReporter.class.getName(),
-                                        new ConfigDef.NonNullValidator(),
+                                        ConfigDef.ValidList.anyNonDuplicateValues(true, false),
                                         Importance.LOW,
                                         CommonClientConfigs.METRIC_REPORTER_CLASSES_DOC)
                                 .define(KEY_DESERIALIZER_CLASS_CONFIG,
@@ -600,8 +645,8 @@ public class ConsumerConfig extends AbstractConfig {
                                         CommonClientConfigs.CONNECTIONS_MAX_IDLE_MS_DOC)
                                 .define(INTERCEPTOR_CLASSES_CONFIG,
                                         Type.LIST,
-                                        Collections.emptyList(),
-                                        new ConfigDef.NonNullValidator(),
+                                        List.of(),
+                                        ConfigDef.ValidList.anyNonDuplicateValues(true, false),
                                         Importance.LOW,
                                         INTERCEPTOR_CLASSES_DOC)
                                 .define(MAX_POLL_RECORDS_CONFIG,
@@ -621,10 +666,6 @@ public class ConsumerConfig extends AbstractConfig {
                                         DEFAULT_EXCLUDE_INTERNAL_TOPICS,
                                         Importance.MEDIUM,
                                         EXCLUDE_INTERNAL_TOPICS_DOC)
-                                .defineInternal(LEAVE_GROUP_ON_CLOSE_CONFIG,
-                                        Type.BOOLEAN,
-                                        true,
-                                        Importance.LOW)
                                 .defineInternal(THROW_ON_FETCH_STABLE_OFFSET_UNSUPPORTED,
                                         Type.BOOLEAN,
                                         false,
@@ -678,8 +719,30 @@ public class ConsumerConfig extends AbstractConfig {
                                         CommonClientConfigs.DEFAULT_METADATA_RECOVERY_REBOOTSTRAP_TRIGGER_MS,
                                         atLeast(0),
                                         Importance.LOW,
-                                        CommonClientConfigs.METADATA_RECOVERY_REBOOTSTRAP_TRIGGER_MS_DOC);
-
+                                        CommonClientConfigs.METADATA_RECOVERY_REBOOTSTRAP_TRIGGER_MS_DOC)
+                                .define(CommonClientConfigs.METADATA_CLUSTER_CHECK_ENABLE_CONFIG,
+                                        Type.BOOLEAN,
+                                        true,
+                                        Importance.LOW,
+                                        CommonClientConfigs.METADATA_CLUSTER_CHECK_ENABLE_DOC)
+                                .define(ConsumerConfig.SHARE_ACKNOWLEDGEMENT_MODE_CONFIG,
+                                        Type.STRING,
+                                        ShareAcknowledgementMode.IMPLICIT.name(),
+                                        new ShareAcknowledgementMode.Validator(),
+                                        Importance.MEDIUM,
+                                        ConsumerConfig.SHARE_ACKNOWLEDGEMENT_MODE_DOC)
+                                .define(ConsumerConfig.SHARE_ACQUIRE_MODE_CONFIG,
+                                        Type.STRING,
+                                        DEFAULT_SHARE_ACQUIRE_MODE,
+                                        new ShareAcquireMode.Validator(),
+                                        Importance.MEDIUM,
+                                        ConsumerConfig.SHARE_ACQUIRE_MODE_DOC)
+                                .define(CONFIG_PROVIDERS_CONFIG,
+                                        Type.LIST,
+                                        List.of(),
+                                        ConfigDef.ValidList.anyNonDuplicateValues(true, false),
+                                        Importance.LOW,
+                                        CONFIG_PROVIDERS_DOC);
     }
 
     @Override
@@ -689,8 +752,25 @@ public class ConsumerConfig extends AbstractConfig {
         Map<String, Object> refinedConfigs = CommonClientConfigs.postProcessReconnectBackoffConfigs(this, parsedValues);
         maybeOverrideClientId(refinedConfigs);
         maybeOverrideEnableAutoCommit(refinedConfigs);
-        checkUnsupportedConfigs();
+        checkUnsupportedConfigsPostProcess();
+        warnIfConnectionsMaxIdleMsLowerThanMaxPollIntervalMs();
         return refinedConfigs;
+    }
+
+    private void warnIfConnectionsMaxIdleMsLowerThanMaxPollIntervalMs() {
+        String groupProtocol = getString(GROUP_PROTOCOL_CONFIG);
+        if (!GroupProtocol.CLASSIC.name().equalsIgnoreCase(groupProtocol)) {
+            return;
+        }
+        long connectionsMaxIdleMs = getLong(CONNECTIONS_MAX_IDLE_MS_CONFIG);
+        int maxPollIntervalMs = getInt(MAX_POLL_INTERVAL_MS_CONFIG);
+        if (connectionsMaxIdleMs >= 0 && connectionsMaxIdleMs < maxPollIntervalMs) {
+            log.warn("Configuration '{}' with value '{}' is lower than configuration '{}' with value '{}'. " +
+                    "This may cause the connection to the group coordinator to be closed during an ongoing rebalance, " +
+                    "which can prolong or disrupt group rejoin.",
+                CONNECTIONS_MAX_IDLE_MS_CONFIG, connectionsMaxIdleMs,
+                MAX_POLL_INTERVAL_MS_CONFIG, maxPollIntervalMs);
+        }
     }
 
     private void maybeOverrideClientId(Map<String, Object> configs) {
@@ -736,16 +816,16 @@ public class ConsumerConfig extends AbstractConfig {
         }
     }
 
-    private void checkUnsupportedConfigs() {
+    protected void checkUnsupportedConfigsPostProcess() {
         String groupProtocol = getString(GROUP_PROTOCOL_CONFIG);
         if (GroupProtocol.CLASSIC.name().equalsIgnoreCase(groupProtocol)) {
-            checkUnsupportedConfigs(GroupProtocol.CLASSIC, CLASSIC_PROTOCOL_UNSUPPORTED_CONFIGS);
+            checkUnsupportedConfigsPostProcess(GroupProtocol.CLASSIC, CLASSIC_PROTOCOL_UNSUPPORTED_CONFIGS);
         } else if (GroupProtocol.CONSUMER.name().equalsIgnoreCase(groupProtocol)) {
-            checkUnsupportedConfigs(GroupProtocol.CONSUMER, CONSUMER_PROTOCOL_UNSUPPORTED_CONFIGS);
+            checkUnsupportedConfigsPostProcess(GroupProtocol.CONSUMER, CONSUMER_PROTOCOL_UNSUPPORTED_CONFIGS);
         }
     }
 
-    private void checkUnsupportedConfigs(GroupProtocol groupProtocol, List<String> unsupportedConfigs) {
+    private void checkUnsupportedConfigsPostProcess(GroupProtocol groupProtocol, List<String> unsupportedConfigs) {
         if (getString(GROUP_PROTOCOL_CONFIG).equalsIgnoreCase(groupProtocol.name())) {
             List<String> invalidConfigs = new ArrayList<>();
             unsupportedConfigs.forEach(configName -> {
@@ -761,10 +841,20 @@ public class ConsumerConfig extends AbstractConfig {
         }
     }
 
+    /**
+     * Constructs a new ConsumerConfig with the given properties.
+     *
+     * @param props The consumer configuration properties
+     */
     public ConsumerConfig(Properties props) {
         super(CONFIG, props);
     }
 
+    /**
+     * Constructs a new ConsumerConfig with the given properties.
+     *
+     * @param props The consumer configuration properties
+     */
     public ConsumerConfig(Map<String, Object> props) {
         super(CONFIG, props);
     }
@@ -773,10 +863,20 @@ public class ConsumerConfig extends AbstractConfig {
         super(CONFIG, props, doLog);
     }
 
+    /**
+     * Returns the set of all configuration keys.
+     *
+     * @return The set of configuration keys
+     */
     public static Set<String> configNames() {
         return CONFIG.names();
     }
 
+    /**
+     * Returns the configuration definition.
+     *
+     * @return The configuration definition
+     */
     public static ConfigDef configDef() {
         return new ConfigDef(CONFIG);
     }

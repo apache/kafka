@@ -33,7 +33,7 @@ class LogCompactionTester(KafkaPathResolverMixin, BackgroundThreadService):
             "collect_default": True}
     }
 
-    def __init__(self, context, kafka, security_protocol="PLAINTEXT", stop_timeout_sec=30, tls_version=None):
+    def __init__(self, context, kafka, security_protocol="PLAINTEXT", stop_timeout_sec=30, tls_version=None, compression_config={}):
         super(LogCompactionTester, self).__init__(context, 1)
 
         self.kafka = kafka
@@ -41,6 +41,7 @@ class LogCompactionTester(KafkaPathResolverMixin, BackgroundThreadService):
         self.tls_version = tls_version
         self.security_config = SecurityConfig(self.context, security_protocol, tls_version=tls_version)
         self.stop_timeout_sec = stop_timeout_sec
+        self.compression_config = compression_config
         self.log_compaction_completed = False
 
     def _worker(self, idx, node):
@@ -63,7 +64,12 @@ class LogCompactionTester(KafkaPathResolverMixin, BackgroundThreadService):
         cmd += " export CLASSPATH;"
         cmd += self.path.script("kafka-run-class.sh", node)
         cmd += " %s" % self.java_class_name()
-        cmd += " --bootstrap-server %s --messages 1000000 --sleep 20 --duplicates 10 --percent-deletes 10" % (self.kafka.bootstrap_servers(self.security_protocol))
+        cmd += " --bootstrap-server %s --messages 1000000 --sleep 20 --duplicates 10 --percent-deletes 10" % self.kafka.bootstrap_servers(self.security_protocol)
+        
+        if 'type' in self.compression_config:
+            cmd += " --compression-type %s" % self.compression_config['type']
+        if 'level' in self.compression_config:
+            cmd += " --compression-level %s" % self.compression_config['level']
 
         cmd += " 2>> %s | tee -a %s &" % (self.logs["tool_logs"]["path"], self.logs["tool_logs"]["path"])
         return cmd
@@ -82,7 +88,7 @@ class LogCompactionTester(KafkaPathResolverMixin, BackgroundThreadService):
         node.account.ssh("rm -rf %s" % LogCompactionTester.OUTPUT_DIR, allow_fail=False)
 
     def java_class_name(self):
-        return "kafka.tools.LogCompactionTester"
+        return "org.apache.kafka.tools.LogCompactionTester"
 
     @property
     def is_done(self):

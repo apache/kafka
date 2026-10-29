@@ -17,6 +17,7 @@
 package org.apache.kafka.coordinator.group.assignor;
 
 import org.apache.kafka.common.Uuid;
+import org.apache.kafka.coordinator.group.Utils;
 import org.apache.kafka.coordinator.group.api.assignor.ConsumerGroupPartitionAssignor;
 import org.apache.kafka.coordinator.group.api.assignor.GroupAssignment;
 import org.apache.kafka.coordinator.group.api.assignor.GroupSpec;
@@ -28,7 +29,6 @@ import org.apache.kafka.coordinator.group.api.assignor.SubscriptionType;
 import org.apache.kafka.coordinator.group.modern.MemberAssignmentImpl;
 
 import java.util.ArrayList;
-import java.util.Collections;
 import java.util.HashMap;
 import java.util.List;
 import java.util.Map;
@@ -54,7 +54,7 @@ import java.util.Set;
  *
  * <p>The co-partitioned assignment will be:
  * <ul>
- * <li<code>    M0: [T1P0, T1P1, T2P0, T2P1]    </code></li>
+ * <li><code>   M0: [T1P0, T1P1, T2P0, T2P1]    </code></li>
  * <li><code>   M1: [T1P2, T2P2]                </code></li>
  * </ul>
  *
@@ -65,8 +65,8 @@ import java.util.Set;
  *
  * <p>The assignment could be completely shuffled to:
  * <ul>
- * <li><code>   M3 (was M0): [T1P2, T2P2]               (before it was [T1P0, T1P1, T2P0, T2P1])  </code>
- * <li><code>   M2 (was M1): [T1P0, T1P1, T2P0, T2P1]   (before it was [T1P2, T2P2])  </code>
+ * <li><code>   M3 (was M0): [T1P2, T2P2]               (before it was [T1P0, T1P1, T2P0, T2P1])  </code></li>
+ * <li><code>   M2 (was M1): [T1P0, T1P1, T2P0, T2P1]   (before it was [T1P2, T2P2])  </code></li>
  * </ul>
  *
  * The assignment change was caused by the change of <code>member.id</code> relative order, and
@@ -78,17 +78,17 @@ import java.util.Set;
  *
  * <p>The assignment will always be:
  * <ul>
- * <li><code>   I0: [T1P0, T1P1, T2P0, T2P1]    </code>
- * <li><code>   I1: [T1P2, T2P2]                </code>
+ * <li><code>   I0: [T1P0, T1P1, T2P0, T2P1]    </code></li>
+ * <li><code>   I1: [T1P2, T2P2]                </code></li>
  * </ul>
  * <p>
  */
 public class RangeAssignor implements ConsumerGroupPartitionAssignor {
-    public static final String RANGE_ASSIGNOR_NAME = "range";
+    public static final String NAME = "range";
 
     @Override
     public String name() {
-        return RANGE_ASSIGNOR_NAME;
+        return NAME;
     }
 
     /**
@@ -167,11 +167,10 @@ public class RangeAssignor implements ConsumerGroupPartitionAssignor {
             topics.add(m);
         }
 
-        Map<String, MemberAssignment> assignments = new HashMap<>((int) ((groupSpec.memberIds().size() / 0.75f) + 1));
-        int memberAssignmentInitialCapacity = (int) ((topics.size() / 0.75f) + 1);
+        Map<String, MemberAssignment> assignments = Utils.newHashMap(groupSpec.memberIds().size());
 
         for (String memberId : memberIds) {
-            Map<Uuid, Set<Integer>> assignment = new HashMap<>(memberAssignmentInitialCapacity);
+            Map<Uuid, Set<Integer>> assignment = Utils.newHashMap(topics.size());
             for (TopicMetadata topicMetadata : topics) {
                 topicMetadata.maybeComputeQuota();
                 addPartitionsToAssignment(topicMetadata, assignment);
@@ -212,11 +211,11 @@ public class RangeAssignor implements ConsumerGroupPartitionAssignor {
             }
         }
 
-        Map<String, MemberAssignment> assignments = new HashMap<>((int) ((groupSpec.memberIds().size() / 0.75f) + 1));
+        Map<String, MemberAssignment> assignments = Utils.newHashMap(groupSpec.memberIds().size());
 
         for (String memberId : memberIds) {
             MemberSubscription subs = groupSpec.memberSubscription(memberId);
-            Map<Uuid, Set<Integer>> assignment = new HashMap<>((int) ((subs.subscribedTopicIds().size() / 0.75f) + 1));
+            Map<Uuid, Set<Integer>> assignment = Utils.newHashMap(subs.subscribedTopicIds().size());
             for (Uuid topicId : subs.subscribedTopicIds()) {
                 TopicMetadata metadata = topics.get(topicId);
                 metadata.maybeComputeQuota();
@@ -306,7 +305,7 @@ public class RangeAssignor implements ConsumerGroupPartitionAssignor {
         SubscribedTopicDescriber subscribedTopicDescriber
     ) throws PartitionAssignorException {
         if (groupSpec.memberIds().isEmpty()) {
-            return new GroupAssignment(Collections.emptyMap());
+            return new GroupAssignment(Map.of());
         } else if (groupSpec.subscriptionType() == SubscriptionType.HOMOGENEOUS) {
             return assignHomogeneousGroup(groupSpec, subscribedTopicDescriber);
         } else {

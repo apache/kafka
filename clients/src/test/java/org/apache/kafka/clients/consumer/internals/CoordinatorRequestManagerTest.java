@@ -27,8 +27,8 @@ import org.apache.kafka.common.requests.FindCoordinatorRequest;
 import org.apache.kafka.common.requests.FindCoordinatorResponse;
 import org.apache.kafka.common.requests.RequestHeader;
 import org.apache.kafka.common.utils.LogCaptureAppender;
-import org.apache.kafka.common.utils.LogContext;
 import org.apache.kafka.common.utils.MockTime;
+import org.apache.kafka.common.utils.internals.LogContext;
 
 import org.apache.logging.log4j.Level;
 import org.junit.jupiter.api.BeforeEach;
@@ -73,7 +73,9 @@ public class CoordinatorRequestManagerTest {
 
         Optional<Node> coordinatorOpt = coordinatorManager.coordinator();
         assertTrue(coordinatorOpt.isPresent());
-        assertEquals(Integer.MAX_VALUE - node.id(), coordinatorOpt.get().id());
+        assertEquals(node.id(), coordinatorOpt.get().id());
+        assertInstanceOf(GroupCoordinatorNode.class, coordinatorOpt.get());
+        assertEquals(node.id(), Integer.parseInt(coordinatorOpt.get().idString()));
         assertEquals(node.host(), coordinatorOpt.get().host());
         assertEquals(node.port(), coordinatorOpt.get().port());
 
@@ -103,10 +105,7 @@ public class CoordinatorRequestManagerTest {
         long oneMinute = 60000;
 
         try (final LogCaptureAppender appender = LogCaptureAppender.createAndRegister()) {
-            // You'd be forgiven for assuming that a warning message would be logged at WARN, but
-            // markCoordinatorUnknown logs the warning at DEBUG. This is partly for historical parity with the
-            // ClassicKafkaConsumer.
-            appender.setClassLogger(CoordinatorRequestManager.class, Level.DEBUG);
+            appender.setClassLogger(CoordinatorRequestManager.class, Level.WARN);
             CoordinatorRequestManager coordinatorRequestManager = setupCoordinatorManager(GROUP_ID);
             assertFalse(coordinatorRequestManager.coordinator().isPresent());
 
@@ -133,7 +132,7 @@ public class CoordinatorRequestManagerTest {
     }
 
     private Optional<Long> millisecondsFromLog(LogCaptureAppender appender) {
-        Pattern pattern = Pattern.compile("\\s+(?<millis>\\d+)+ms");
+        Pattern pattern = Pattern.compile("^Consumer has been disconnected from the group coordinator for (?<millis>\\d+)+ms$");
         List<Long> milliseconds = appender.getMessages().stream()
             .map(pattern::matcher)
             .filter(Matcher::find)
@@ -237,6 +236,28 @@ public class CoordinatorRequestManagerTest {
         time.sleep(1);
         res2 = coordinatorManager.poll(time.milliseconds());
         assertEquals(1, res2.unsentRequests.size());
+    }
+
+    @Test
+    public void testNoBusyPollWhileFindCoordinatorRequestInFlight() {
+        // KAFKA-20253: while a FindCoordinator request is in flight and its backoff has already
+        // elapsed, poll() must not return timeUntilNextPollMs == 0. Doing so drives the consumer
+        // network thread into a NetworkClient.poll(0) busy-spin, since there is nothing to send
+        // until the in-flight request completes.
+        CoordinatorRequestManager coordinatorManager = setupCoordinatorManager(GROUP_ID);
+
+        // First poll sends a FindCoordinator request, marking it in-flight. Do NOT complete it.
+        NetworkClientDelegate.PollResult res = coordinatorManager.poll(time.milliseconds());
+        assertEquals(1, res.unsentRequests.size());
+
+        // Advance well past the retry backoff while the request is still in flight.
+        time.sleep(60_000);
+
+        NetworkClientDelegate.PollResult res2 = coordinatorManager.poll(time.milliseconds());
+        assertEquals(0, res2.unsentRequests.size(), "no new request should be sent while one is in flight");
+        assertTrue(res2.timeUntilNextPollMs > 0,
+            "must not busy-poll (timeUntilNextPollMs == 0) while a FindCoordinator request is in flight; got "
+                + res2.timeUntilNextPollMs);
     }
 
     @ParameterizedTest

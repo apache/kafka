@@ -40,7 +40,11 @@ public class WriteShareGroupStateParameters implements PersisterParameters {
                 .setGroupTopicPartitionData(new GroupTopicPartitionData<>(data.groupId(), data.topics().stream()
                         .map(writeStateData -> new TopicData<>(writeStateData.topicId(),
                                 writeStateData.partitions().stream()
-                                        .map(partitionData -> PartitionFactory.newPartitionStateBatchData(partitionData.partition(), partitionData.stateEpoch(), partitionData.startOffset(),
+                                        .map(partitionData -> PartitionFactory.newPartitionStateBatchData(
+                                                partitionData.partition(),
+                                                partitionData.stateEpoch(),
+                                                partitionData.startOffset(),
+                                                partitionData.deliveryCompleteCount(),
                                                 partitionData.leaderEpoch(),
                                                 partitionData.stateBatches().stream()
                                                         .map(PersisterStateBatch::from)

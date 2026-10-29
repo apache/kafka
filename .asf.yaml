@@ -15,23 +15,44 @@
 # specific language governing permissions and limitations
 # under the License.
 
+# Enable the next-gen .asf.yaml parser
+meta:
+  nextgen: true
+
 notifications:
   commits: commits@kafka.apache.org
   issues: jira@kafka.apache.org
   pullrequests: jira@kafka.apache.org
   jira_options: link label
 
-# This list allows you to triage pull requests and trigger workflow runs on GitHub Actions. It can have a maximum of 10 collaborators.
-# Read more here: https://github.com/apache/infrastructure-asfyaml
 github:
+  description: Apache Kafka - A distributed event streaming platform
+  homepage: https://kafka.apache.org/
+  labels:
+    - java
+    - scala
+    - kafka
+    - streaming
+
+  # This list allows you to triage pull requests and trigger workflow runs on GitHub Actions. It can have a maximum of 10 collaborators.
+  # Read more here: https://github.com/apache/infrastructure-asfyaml
   collaborators:
-    - FrankYang0529
-    - kirktrue
-    - brandboat
-    - AndrewJSchofield
-    - OmniaGM
-    - nizhikov
-    - dongnuo123
-    - gaurav-narula
-    - apourchet
-    - apoorvmittal10
+    - aliehsaeedii
+    - chickenchickenlove
+    - DL1231
+    - gabriellefu
+    - lucliu1108
+    - majialoong
+    - mingyen066
+    - muralibasani
+    - nicktelford
+    - see-quick
+  enabled_merge_buttons:
+    squash: true
+    squash_commit_message: PR_TITLE_AND_DESC
+    merge: false
+    rebase: false
+
+  # Disable legacy branch protections. We have manual rulesets which protect trunk
+  # and our release branches. See INFRA-26603
+  protected_branches: ~

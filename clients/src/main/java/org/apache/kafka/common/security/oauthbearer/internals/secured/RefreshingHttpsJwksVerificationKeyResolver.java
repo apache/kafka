@@ -17,6 +17,8 @@
 
 package org.apache.kafka.common.security.oauthbearer.internals.secured;
 
+import org.apache.kafka.common.KafkaException;
+
 import org.jose4j.jwk.HttpsJwks;
 import org.jose4j.jwk.JsonWebKey;
 import org.jose4j.jwk.VerificationJwkSelector;
@@ -31,6 +33,9 @@ import org.slf4j.LoggerFactory;
 import java.io.IOException;
 import java.security.Key;
 import java.util.List;
+import java.util.Map;
+
+import javax.security.auth.login.AppConfigurationEntry;
 
 /**
  * <code>RefreshingHttpsJwksVerificationKeyResolver</code> is a
@@ -80,7 +85,6 @@ import java.util.List;
  * @see RefreshingHttpsJwks
  * @see HttpsJwks
  */
-
 public class RefreshingHttpsJwksVerificationKeyResolver implements CloseableVerificationKeyResolver {
 
     private static final Logger log = LoggerFactory.getLogger(RefreshingHttpsJwksVerificationKeyResolver.class);
@@ -97,15 +101,14 @@ public class RefreshingHttpsJwksVerificationKeyResolver implements CloseableVeri
     }
 
     @Override
-    public void init() throws IOException {
+    public void configure(Map<String, ?> configs, String saslMechanism, List<AppConfigurationEntry> jaasConfigEntries) {
         try {
-            log.debug("init started");
-
+            log.debug("configure started");
             refreshingHttpsJwks.init();
+        } catch (IOException e) {
+            throw new KafkaException(e);
         } finally {
             isInitialized = true;
-
-            log.debug("init completed");
         }
     }
 
@@ -123,7 +126,7 @@ public class RefreshingHttpsJwksVerificationKeyResolver implements CloseableVeri
     @Override
     public Key resolveKey(JsonWebSignature jws, List<JsonWebStructure> nestingContext) throws UnresolvableKeyException {
         if (!isInitialized)
-            throw new IllegalStateException("Please call init() first");
+            throw new IllegalStateException("Please call configure() first");
 
         try {
             List<JsonWebKey> jwks = refreshingHttpsJwks.getJsonWebKeys();
@@ -148,5 +151,4 @@ public class RefreshingHttpsJwksVerificationKeyResolver implements CloseableVeri
             throw new UnresolvableKeyException(sb, e);
         }
     }
-
 }

@@ -16,37 +16,29 @@
  */
 package org.apache.kafka.raft.internals;
 
-import org.apache.kafka.common.protocol.ApiMessage;
-import org.apache.kafka.common.protocol.ByteBufferAccessor;
-import org.apache.kafka.common.record.ControlRecordType;
-import org.apache.kafka.common.record.ControlRecordUtils;
-import org.apache.kafka.common.record.DefaultRecordBatch;
-import org.apache.kafka.common.record.FileRecords;
-import org.apache.kafka.common.record.MemoryRecords;
-import org.apache.kafka.common.record.MutableRecordBatch;
-import org.apache.kafka.common.record.Records;
-import org.apache.kafka.common.utils.BufferSupplier;
-import org.apache.kafka.common.utils.ByteUtils;
-import org.apache.kafka.common.utils.Utils;
+import org.apache.kafka.common.record.internal.DefaultRecordBatch;
+import org.apache.kafka.common.record.internal.FileRecords;
+import org.apache.kafka.common.record.internal.MemoryRecords;
+import org.apache.kafka.common.record.internal.MutableRecordBatch;
+import org.apache.kafka.common.record.internal.Records;
+import org.apache.kafka.common.utils.internals.BufferSupplier;
+import org.apache.kafka.common.utils.internals.LogContext;
 import org.apache.kafka.raft.Batch;
-import org.apache.kafka.raft.ControlRecord;
-import org.apache.kafka.server.common.serialization.RecordSerde;
+
+import org.slf4j.Logger;
 
 import java.io.IOException;
-import java.io.InputStream;
 import java.io.UncheckedIOException;
 import java.nio.ByteBuffer;
-import java.util.ArrayList;
 import java.util.Collections;
 import java.util.Iterator;
-import java.util.List;
 import java.util.NoSuchElementException;
 import java.util.Optional;
-import java.util.function.BiFunction;
 
 public final class RecordsIterator<T> implements Iterator<Batch<T>>, AutoCloseable {
+    private final Logger logger;
     private final Records records;
-    private final RecordSerde<T> serde;
+    private final RecordsDecodingStrategy<T> decodingStrategy;
     private final BufferSupplier bufferSupplier;
     private final int batchSize;
     // Setting to true will make the RecordsIterator perform a CRC Validation
@@ -64,22 +56,24 @@ public final class RecordsIterator<T> implements Iterator<Batch<T>>, AutoCloseab
     /**
      * This class provides an iterator over records retrieved via the raft client or from a snapshot
      * @param records the records
-     * @param serde the serde to deserialize records
+     * @param decodingStrategy the strategy deciding which records to decode (control, data, or both)
      * @param bufferSupplier the buffer supplier implementation to allocate buffers when reading records. This must return ByteBuffer allocated on the heap
      * @param batchSize the maximum batch size
      */
     public RecordsIterator(
         Records records,
-        RecordSerde<T> serde,
+        RecordsDecodingStrategy<T> decodingStrategy,
         BufferSupplier bufferSupplier,
         int batchSize,
-        boolean doCrcValidation
+        boolean doCrcValidation,
+        LogContext logContext
     ) {
         this.records = records;
-        this.serde = serde;
+        this.decodingStrategy = decodingStrategy;
         this.bufferSupplier = bufferSupplier;
         this.batchSize = Math.max(batchSize, Records.HEADER_SIZE_UP_TO_MAGIC);
         this.doCrcValidation = doCrcValidation;
+        this.logger = logContext.logger(getClass());
     }
 
     @Override
@@ -142,12 +136,23 @@ public final class RecordsIterator<T> implements Iterator<Batch<T>>, AutoCloseab
 
         MemoryRecords memoryRecords = readFileRecords(fileRecords, buffer);
 
-        // firstBatchSize() is always non-null because the minimum buffer is HEADER_SIZE_UP_TO_MAGIC.
-        if (memoryRecords.firstBatchSize() <= buffer.remaining()) {
+        Integer firstBatchSize = memoryRecords.firstBatchSize();
+        // firstBatchSize is null when fewer than HEADER_SIZE_UP_TO_MAGIC bytes were read,
+        // which only happens at the end of the records. Once all records have been read,
+        // a trailing partial batch can't be completed, so return the records read so far
+        // instead of growing the buffer.
+        if (firstBatchSize == null || firstBatchSize <= buffer.remaining() ||
+            bytesRead >= fileRecords.sizeInBytes()
+        ) {
             return memoryRecords;
         } else {
+            logger.info(
+                "Creating a new buffer; previous buffer {} cannot fit at least {} bytes",
+                buffer,
+                firstBatchSize
+            );
             // Not enough bytes read; create a bigger buffer
-            ByteBuffer newBuffer = bufferSupplier.get(memoryRecords.firstBatchSize());
+            ByteBuffer newBuffer = bufferSupplier.get(firstBatchSize);
             allocatedBuffer = Optional.of(newBuffer);
 
             newBuffer.put(buffer);
@@ -204,183 +209,6 @@ public final class RecordsIterator<T> implements Iterator<Batch<T>>, AutoCloseab
             batch.ensureValid();
         }
 
-        Integer numRecords = batch.countOrNull();
-        if (numRecords == null) {
-            throw new IllegalStateException("Expected a record count for the records batch");
-        }
-
-        InputStream input = batch.recordInputStream(bufferSupplier);
-        final Batch<T> result;
-        try {
-            if (batch.isControlBatch()) {
-                List<ControlRecord> records = new ArrayList<>(numRecords);
-                for (int i = 0; i < numRecords; i++) {
-                    ControlRecord record = readRecord(
-                        input,
-                        batch.sizeInBytes(),
-                        RecordsIterator::decodeControlRecord
-                    );
-                    records.add(record);
-                }
-                result = Batch.control(
-                    batch.baseOffset(),
-                    batch.partitionLeaderEpoch(),
-                    batch.maxTimestamp(),
-                    batch.sizeInBytes(),
-                    records
-                );
-            } else {
-                List<T> records = new ArrayList<>(numRecords);
-                for (int i = 0; i < numRecords; i++) {
-                    T record = readRecord(input, batch.sizeInBytes(), this::decodeDataRecord);
-                    records.add(record);
-                }
-
-                result = Batch.data(
-                    batch.baseOffset(),
-                    batch.partitionLeaderEpoch(),
-                    batch.maxTimestamp(),
-                    batch.sizeInBytes(),
-                    records
-                );
-            }
-        } finally {
-            Utils.closeQuietly(input, "BytesStream for input containing records");
-        }
-
-        return result;
-    }
-
-    private <U> U readRecord(
-        InputStream stream,
-        int totalBatchSize,
-        BiFunction<Optional<ByteBuffer>, Optional<ByteBuffer>, U> decoder
-    ) {
-        // Read size of body in bytes
-        int size;
-        try {
-            size = ByteUtils.readVarint(stream);
-        } catch (IOException e) {
-            throw new UncheckedIOException("Unable to read record size", e);
-        }
-        if (size <= 0) {
-            throw new RuntimeException("Invalid non-positive frame size: " + size);
-        }
-        if (size > totalBatchSize) {
-            throw new RuntimeException("Specified frame size, " + size + ", is larger than the entire size of the " +
-                    "batch, which is " + totalBatchSize);
-        }
-        ByteBuffer buf = bufferSupplier.get(size);
-
-        // The last byte of the buffer is reserved for a varint set to the number of record headers, which
-        // must be 0. Therefore, we set the ByteBuffer limit to size - 1.
-        buf.limit(size - 1);
-
-        try {
-            int bytesRead = stream.read(buf.array(), 0, size);
-            if (bytesRead != size) {
-                throw new RuntimeException("Unable to read " + size + " bytes, only read " + bytesRead);
-            }
-        } catch (IOException e) {
-            throw new UncheckedIOException("Failed to read record bytes", e);
-        }
-        try {
-            ByteBufferAccessor input = new ByteBufferAccessor(buf);
-
-            // Read unused attributes
-            input.readByte();
-
-            long timestampDelta = input.readVarlong();
-            if (timestampDelta != 0) {
-                throw new IllegalArgumentException("Got timestamp delta of " + timestampDelta + ", but this is invalid because it " +
-                        "is not 0 as expected.");
-            }
-
-            // Read offset delta
-            input.readVarint();
-
-            // Read the key
-            int keySize = input.readVarint();
-            Optional<ByteBuffer> key = Optional.empty();
-            if (keySize >= 0) {
-                key = Optional.of(input.readByteBuffer(keySize));
-            }
-
-            // Read the value
-            int valueSize = input.readVarint();
-            Optional<ByteBuffer> value = Optional.empty();
-            if (valueSize >= 0) {
-                value = Optional.of(input.readByteBuffer(valueSize));
-            }
-
-            // Read the metadata record body from the file input reader
-            U record = decoder.apply(key, value);
-
-            // Read the number of headers. Currently, this must be a single byte set to 0.
-            int numHeaders = buf.array()[size - 1];
-            if (numHeaders != 0) {
-                throw new IllegalArgumentException("Got numHeaders of " + numHeaders + ", but this is invalid because " +
-                        "it is not 0 as expected.");
-            }
-
-            return record;
-        } finally {
-            bufferSupplier.release(buf);
-        }
-    }
-
-    private T decodeDataRecord(Optional<ByteBuffer> key, Optional<ByteBuffer> value) {
-        if (key.isPresent()) {
-            throw new IllegalArgumentException("Got key in the record when no key was expected");
-        }
-
-        if (value.isEmpty()) {
-            throw new IllegalArgumentException("Missing value in the record when a value was expected");
-        } else if (value.get().remaining() == 0) {
-            throw new IllegalArgumentException("Got an unexpected empty value in the record");
-        }
-
-        ByteBuffer valueBuffer = value.get();
-
-        return serde.read(new ByteBufferAccessor(valueBuffer), valueBuffer.remaining());
-    }
-
-    private static ControlRecord decodeControlRecord(Optional<ByteBuffer> key, Optional<ByteBuffer> value) {
-        if (key.isEmpty()) {
-            throw new IllegalArgumentException("Missing key in the record when a key was expected");
-        } else if (key.get().remaining() == 0) {
-            throw new IllegalArgumentException("Got an unexpected empty key in the record");
-        }
-
-        if (value.isEmpty()) {
-            throw new IllegalArgumentException("Missing value in the record when a value was expected");
-        } else if (value.get().remaining() == 0) {
-            throw new IllegalArgumentException("Got an unexpected empty value in the record");
-        }
-
-        ControlRecordType type = ControlRecordType.parse(key.get());
-
-        final ApiMessage message;
-        switch (type) {
-            case LEADER_CHANGE:
-                message = ControlRecordUtils.deserializeLeaderChangeMessage(value.get());
-                break;
-            case SNAPSHOT_HEADER:
-                message = ControlRecordUtils.deserializeSnapshotHeaderRecord(value.get());
-                break;
-            case SNAPSHOT_FOOTER:
-                message = ControlRecordUtils.deserializeSnapshotFooterRecord(value.get());
-                break;
-            case KRAFT_VERSION:
-                message = ControlRecordUtils.deserializeKRaftVersionRecord(value.get());
-                break;
-            case KRAFT_VOTERS:
-                message = ControlRecordUtils.deserializeVotersRecord(value.get());
-                break;
-            default:
-                throw new IllegalArgumentException(String.format("Unknown control record type %s", type));
-        }
-
-        return new ControlRecord(type, message);
+        return decodingStrategy.readBatch(batch, bufferSupplier);
     }
 }

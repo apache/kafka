@@ -16,9 +16,9 @@
  */
 package org.apache.kafka.raft;
 
-import org.apache.kafka.common.utils.LogContext;
 import org.apache.kafka.common.utils.Time;
 import org.apache.kafka.common.utils.Timer;
+import org.apache.kafka.common.utils.internals.LogContext;
 import org.apache.kafka.raft.internals.EpochElection;
 
 import org.slf4j.Logger;
@@ -28,7 +28,7 @@ import java.util.OptionalInt;
 
 import static org.apache.kafka.raft.QuorumState.unattachedOrProspectiveCanGrantVote;
 
-public class ProspectiveState implements NomineeState {
+public final class ProspectiveState implements NomineeState {
     private final int localId;
     private final int epoch;
     private final OptionalInt leaderId;
@@ -37,7 +37,6 @@ public class ProspectiveState implements NomineeState {
     private final VoterSet voters;
     private final EpochElection epochElection;
     private final Optional<LogOffsetMetadata> highWatermark;
-    private final int retries;
     private final long electionTimeoutMs;
     private final Timer electionTimer;
     private final Logger log;
@@ -60,7 +59,6 @@ public class ProspectiveState implements NomineeState {
         Optional<ReplicaKey> votedKey,
         VoterSet voters,
         Optional<LogOffsetMetadata> highWatermark,
-        int retries,
         int electionTimeoutMs,
         LogContext logContext
     ) {
@@ -71,7 +69,6 @@ public class ProspectiveState implements NomineeState {
         this.votedKey = votedKey;
         this.voters = voters;
         this.highWatermark = highWatermark;
-        this.retries = retries;
         this.electionTimeoutMs = electionTimeoutMs;
         this.electionTimer = time.timer(electionTimeoutMs);
         this.log = logContext.logger(ProspectiveState.class);
@@ -87,10 +84,6 @@ public class ProspectiveState implements NomineeState {
     @Override
     public EpochElection epochElection() {
         return epochElection;
-    }
-
-    public int retries() {
-        return retries;
     }
 
     @Override
@@ -148,6 +141,11 @@ public class ProspectiveState implements NomineeState {
     }
 
     @Override
+    public LeaderAndEpoch leaderAndEpoch() {
+        return new LeaderAndEpoch(leaderId, epoch);
+    }
+
+    @Override
     public Endpoints leaderEndpoints() {
         return leaderEndpoints;
     }
@@ -160,11 +158,10 @@ public class ProspectiveState implements NomineeState {
     @Override
     public String toString() {
         return String.format(
-            "ProspectiveState(epoch=%d, leaderId=%s, retries=%d, votedKey=%s, epochElection=%s, " +
+            "ProspectiveState(epoch=%d, leaderId=%s, votedKey=%s, epochElection=%s, " +
             "electionTimeoutMs=%s, highWatermark=%s)",
             epoch,
             leaderId,
-            retries,
             votedKey,
             epochElection,
             electionTimeoutMs,

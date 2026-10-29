@@ -19,10 +19,10 @@ package org.apache.kafka.common.requests;
 import org.apache.kafka.common.message.StreamsGroupHeartbeatRequestData;
 import org.apache.kafka.common.message.StreamsGroupHeartbeatResponseData;
 import org.apache.kafka.common.protocol.ApiKeys;
-import org.apache.kafka.common.protocol.ByteBufferAccessor;
 import org.apache.kafka.common.protocol.Errors;
+import org.apache.kafka.common.protocol.Readable;
 
-import java.nio.ByteBuffer;
+import java.util.List;
 
 public class StreamsGroupHeartbeatRequest extends AbstractRequest {
 
@@ -41,16 +41,27 @@ public class StreamsGroupHeartbeatRequest extends AbstractRequest {
         private final StreamsGroupHeartbeatRequestData data;
 
         public Builder(StreamsGroupHeartbeatRequestData data) {
-            this(data, false);
-        }
-
-        public Builder(StreamsGroupHeartbeatRequestData data, boolean enableUnstableLastVersion) {
-            super(ApiKeys.STREAMS_GROUP_HEARTBEAT, enableUnstableLastVersion);
+            super(ApiKeys.STREAMS_GROUP_HEARTBEAT);
             this.data = data;
         }
 
         @Override
         public StreamsGroupHeartbeatRequest build(short version) {
+            if (version == 0) {
+                // TaskOffsets/TaskEndOffsets are only supported by brokers supporting v1+ request versions
+                data.setTaskOffsets(null);
+                data.setTaskEndOffsets(null);
+                // A v0 coordinator rejects a heartbeat that reports an owned warm-up task, so a member that
+                // holds one after downgrading to v0 must report none. Unlike the two fields above, null is
+                // not a safe unconditional value here: it means "unchanged", but a v0 coordinator separately
+                // requires the three owned-task lists to be all null or all non-null, and active/standby tasks stay
+                // null on the very same heartbeats where warmup tasks would. So this only clears the list when it is
+                // non-null, i.e. only on a heartbeat that is (re-)sending the assignment this round -- the same
+                // heartbeats where active/standby tasks are non-null too.
+                if (data.warmupTasks() != null) {
+                    data.setWarmupTasks(List.of());
+                }
+            }
             return new StreamsGroupHeartbeatRequest(data, version);
         }
 
@@ -81,8 +92,8 @@ public class StreamsGroupHeartbeatRequest extends AbstractRequest {
         return data;
     }
 
-    public static StreamsGroupHeartbeatRequest parse(ByteBuffer buffer, short version) {
+    public static StreamsGroupHeartbeatRequest parse(Readable readable, short version) {
         return new StreamsGroupHeartbeatRequest(new StreamsGroupHeartbeatRequestData(
-            new ByteBufferAccessor(buffer), version), version);
+            readable, version), version);
     }
 }

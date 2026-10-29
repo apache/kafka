@@ -18,24 +18,47 @@
 package org.apache.kafka.message.checker;
 
 import org.junit.jupiter.api.Test;
+import org.junit.jupiter.api.io.TempDir;
 
 import java.io.ByteArrayOutputStream;
 import java.io.PrintStream;
+import java.nio.file.Files;
+import java.nio.file.Path;
+import java.nio.file.Paths;
 
-import static org.apache.kafka.message.checker.CheckerTestUtils.messageSpecStringToTempFile;
+import static org.apache.kafka.message.checker.CheckerTestUtils.messageSpecStringToFile;
 import static org.junit.jupiter.api.Assertions.assertEquals;
+import static org.junit.jupiter.api.Assumptions.assumeTrue;
 
 public class MetadataSchemaCheckerToolTest {
+    @TempDir
+    private Path tempDir;
+
     @Test
     public void testVerifyEvolutionGit() throws Exception {
+        // Try to find the Git root directory
+        Path rootKafkaDirectory = Paths.get("").toAbsolutePath();
+        boolean gitFound = false;
+        
+        while (rootKafkaDirectory != null) {
+            if (Files.exists(rootKafkaDirectory.resolve(".git"))) {
+                gitFound = true;
+                break;
+            }
+            rootKafkaDirectory = rootKafkaDirectory.getParent();
+        }
+        
+        assumeTrue(gitFound, "Skipping test - not in a Git repository");
+        
         try (ByteArrayOutputStream stream = new ByteArrayOutputStream()) {
+            Path schemaPath = rootKafkaDirectory.resolve("metadata/src/main/resources/common/metadata/AbortTransactionRecord.json");
             MetadataSchemaCheckerTool.run(
                 // In the CI environment because the CI fetch command only creates HEAD and refs/remotes/pull/... references.
                 // Since there may not be other branches like refs/heads/trunk in CI, HEAD serves as the baseline reference.
-                new String[]{"verify-evolution-git", "--file", "AbortTransactionRecord.json", "--ref", "HEAD"},
+                new String[]{"verify-evolution-git", "--path", schemaPath.toString(), "--ref", "HEAD"},
                 new PrintStream(stream)
             );
-            assertEquals("Successfully verified evolution of file: AbortTransactionRecord.json",
+            assertEquals("Successfully verified evolution of file: " + schemaPath,
                 stream.toString().trim());
         }
     }
@@ -43,9 +66,9 @@ public class MetadataSchemaCheckerToolTest {
     @Test
     public void testSuccessfulParse() throws Exception {
         try (ByteArrayOutputStream stream = new ByteArrayOutputStream()) {
-            String path = messageSpecStringToTempFile(
+            String path = messageSpecStringToFile(tempDir,
                 "{'apiKey':62, 'type': 'request', 'name': 'BrokerRegistrationRequest', " +
-                "'validVersions': '0-2', 'flexibleVersions': '0+', " +
+                "'validVersions': '0-2', 'flexibleVersions': '0+', 'headerVersions': {'0+': '2'}, " +
                 "'fields': [{'name': 'BrokerId', 'type': 'int32', 'versions': '0+'}]}");
             MetadataSchemaCheckerTool.run(new String[] {"parse", "--path", path}, new PrintStream(stream));
             assertEquals("Successfully parsed file as MessageSpec: " + path, stream.toString().trim());
@@ -55,13 +78,13 @@ public class MetadataSchemaCheckerToolTest {
     @Test
     public void testSuccessfulVerifyEvolution() throws Exception {
         try (ByteArrayOutputStream stream = new ByteArrayOutputStream()) {
-            String path = messageSpecStringToTempFile(
+            String path = messageSpecStringToFile(tempDir,
                 "{'apiKey':62, 'type': 'request', 'name': 'BrokerRegistrationRequest', " +
-                "'validVersions': '0-2', 'flexibleVersions': '0+', " +
+                "'validVersions': '0-2', 'flexibleVersions': '0+', 'headerVersions': {'0+': '2'}, " +
                 "'fields': [{'name': 'BrokerId', 'type': 'int32', 'versions': '0+'}]}");
             MetadataSchemaCheckerTool.run(new String[] {"verify-evolution",
-                "--path1", path, "--path2", path}, new PrintStream(stream));
-            assertEquals("Successfully verified evolution of path1: " + path + ", and path2: " + path,
+                "--path", path, "--parent_path", path}, new PrintStream(stream));
+            assertEquals("Successfully verified evolution of path: " + path + " from parent: " + path,
                 stream.toString().trim());
         }
     }

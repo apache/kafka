@@ -37,10 +37,11 @@ import java.math.RoundingMode;
 import java.util.ArrayList;
 import java.util.Arrays;
 import java.util.Calendar;
-import java.util.Collections;
 import java.util.GregorianCalendar;
 import java.util.HashMap;
 import java.util.Iterator;
+import java.util.List;
+import java.util.Map;
 import java.util.TimeZone;
 
 import static org.junit.jupiter.api.Assertions.assertEquals;
@@ -380,9 +381,9 @@ public class ConnectHeadersTest {
         assertSchemaMatches(Schema.FLOAT64_SCHEMA, 1.0d);
         assertSchemaMatches(Schema.STRING_SCHEMA, "value");
         assertSchemaMatches(SchemaBuilder.array(Schema.STRING_SCHEMA), new ArrayList<String>());
-        assertSchemaMatches(SchemaBuilder.array(Schema.STRING_SCHEMA), Collections.singletonList("value"));
+        assertSchemaMatches(SchemaBuilder.array(Schema.STRING_SCHEMA), List.of("value"));
         assertSchemaMatches(SchemaBuilder.map(Schema.STRING_SCHEMA, Schema.INT32_SCHEMA), new HashMap<String, Integer>());
-        assertSchemaMatches(SchemaBuilder.map(Schema.STRING_SCHEMA, Schema.INT32_SCHEMA), Collections.singletonMap("a", 0));
+        assertSchemaMatches(SchemaBuilder.map(Schema.STRING_SCHEMA, Schema.INT32_SCHEMA), Map.of("a", 0));
         Schema emptyStructSchema = SchemaBuilder.struct();
         assertSchemaMatches(emptyStructSchema, new Struct(emptyStructSchema));
         Schema structSchema = SchemaBuilder.struct().field("foo", Schema.OPTIONAL_BOOLEAN_SCHEMA).field("bar", Schema.STRING_SCHEMA)
@@ -511,21 +512,13 @@ public class ConnectHeadersTest {
     }
 
     protected void assertSchemaDoesNotMatch(Schema schema, Object value) {
-        try {
-            assertSchemaMatches(schema, value);
-            fail("Should have failed to validate value '" + value + "' and schema: " + schema);
-        } catch (DataException e) {
-            // expected
-        }
+        assertThrows(DataException.class, () -> assertSchemaMatches(schema, value),
+            "Should have failed to validate value '" + value + "' and schema: " + schema);
     }
 
     protected void attemptAndFailToAddHeader(String key, Schema schema, Object value) {
-        try {
-            headers.add(key, value, schema);
-            fail("Should have failed to add header with key '" + key + "', value '" + value + "', and schema: " + schema);
-        } catch (DataException e) {
-            // expected
-        }
+        assertThrows(DataException.class, () -> headers.add(key, value, schema),
+            "Should have failed to add header with key '" + key + "', value '" + value + "', and schema: " + schema);
     }
 
     protected void addHeader(String key, Schema schema, Object value) {

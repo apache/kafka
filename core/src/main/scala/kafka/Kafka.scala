@@ -22,14 +22,15 @@ import joptsimple.OptionParser
 import kafka.server.{KafkaConfig, KafkaRaftServer, Server}
 import kafka.utils.Implicits._
 import kafka.utils.Logging
-import org.apache.kafka.common.utils.{Exit, Java, LoggingSignalHandler, OperatingSystem, Time, Utils}
+import org.apache.kafka.common.utils.internals.{Exit, Java, LoggingSignalHandler, OperatingSystem}
+import org.apache.kafka.common.utils.{Time, Utils}
 import org.apache.kafka.server.util.CommandLineUtils
 
 object Kafka extends Logging {
 
   def getPropsFromArgs(args: Array[String]): Properties = {
     val optionParser = new OptionParser(false)
-    val overrideOpt = optionParser.accepts("override", "Optional property that should override values set in server.properties file")
+    val overrideOpt = optionParser.accepts("override", "Optional property that should override values set in server.properties file (e.g. Key=value)")
       .withRequiredArg()
       .ofType(classOf[String])
     // This is just to make the parameter show up in the help output, we are not actually using this due the

@@ -32,7 +32,7 @@ import java.util.stream.Collectors;
  * An immutable assignment for a member.
  */
 public class Assignment implements MemberAssignment {
-    public static final Assignment EMPTY = new Assignment(Collections.emptyMap());
+    public static final Assignment EMPTY = new Assignment(Map.of());
 
     /**
      * The partitions assigned to the member.
@@ -42,6 +42,8 @@ public class Assignment implements MemberAssignment {
     public Assignment(
         Map<Uuid, Set<Integer>> partitions
     ) {
+        // Assignments are used as input to assignors, which expect to receive immutable
+        // assignment maps, otherwise they will be modified in place.
         this.partitions = Collections.unmodifiableMap(Objects.requireNonNull(partitions));
     }
 

@@ -31,7 +31,6 @@ import java.util.Properties;
 
 import static org.apache.kafka.coordinator.group.GroupConfig.CONSUMER_HEARTBEAT_INTERVAL_MS_CONFIG;
 import static org.apache.kafka.coordinator.group.GroupConfig.CONSUMER_SESSION_TIMEOUT_MS_CONFIG;
-import static org.apache.kafka.coordinator.group.GroupConfig.SHARE_RECORD_LOCK_DURATION_MS_CONFIG;
 import static org.junit.jupiter.api.Assertions.assertEquals;
 import static org.junit.jupiter.api.Assertions.assertFalse;
 import static org.junit.jupiter.api.Assertions.assertThrows;
@@ -66,6 +65,12 @@ public class GroupConfigManagerTest {
     }
 
     @Test
+    public void testUpdateConfigWithNullGroupId() {
+        assertThrows(InvalidRequestException.class,
+            () -> configManager.updateGroupConfig(null, new Properties()));
+    }
+
+    @Test
     public void testUpdateGroupConfig() {
         String groupId = "foo";
         Properties props = new Properties();
@@ -81,11 +86,108 @@ public class GroupConfigManagerTest {
         assertEquals(6000, config.getInt(CONSUMER_HEARTBEAT_INTERVAL_MS_CONFIG));
     }
 
+    @Test
+    public void testClampWithCustomBrokerBounds() {
+        Map<String, Object> overrides = new HashMap<>();
+        overrides.put(GroupCoordinatorConfig.CONSUMER_GROUP_MAX_SESSION_TIMEOUT_MS_CONFIG, 50000);
+        overrides.put(GroupCoordinatorConfig.CONSUMER_GROUP_MIN_SESSION_TIMEOUT_MS_CONFIG, 46000);
+        overrides.put(GroupCoordinatorConfig.CONSUMER_GROUP_SESSION_TIMEOUT_MS_CONFIG, 48000);
+        configManager = createConfigManager(overrides);
+
+        String groupId = "test-group";
+
+        // Value above custom max is clamped to custom max.
+        Properties props1 = new Properties();
+        props1.put(CONSUMER_SESSION_TIMEOUT_MS_CONFIG, 55000);
+        configManager.updateGroupConfig(groupId, props1);
+        assertEquals(50000, configManager.groupConfig(groupId).get().getInt(CONSUMER_SESSION_TIMEOUT_MS_CONFIG));
+
+        // Value below custom min is clamped to custom min.
+        Properties props2 = new Properties();
+        props2.put(CONSUMER_SESSION_TIMEOUT_MS_CONFIG, 44000);
+        configManager.updateGroupConfig(groupId, props2);
+        assertEquals(46000, configManager.groupConfig(groupId).get().getInt(CONSUMER_SESSION_TIMEOUT_MS_CONFIG));
+
+        // Value within custom range is stored as-is.
+        Properties props3 = new Properties();
+        props3.put(CONSUMER_SESSION_TIMEOUT_MS_CONFIG, 49000);
+        configManager.updateGroupConfig(groupId, props3);
+        assertEquals(49000, configManager.groupConfig(groupId).get().getInt(CONSUMER_SESSION_TIMEOUT_MS_CONFIG));
+    }
+
+    @Test
+    public void testGroupIsRemovedWhenDynamicConfigsAreRemoved() {
+        String groupId1 = "foo";
+        String groupId2 = "bar";
+        Properties props = new Properties();
+        props.put(CONSUMER_SESSION_TIMEOUT_MS_CONFIG, 50000);
+        configManager.updateGroupConfig(groupId1, props);
+        configManager.updateGroupConfig(groupId2, props);
+        assertTrue(configManager.groupIds().contains(groupId1));
+
+        configManager.updateGroupConfig(groupId1, new Properties());
+        assertFalse(configManager.groupIds().contains(groupId1));
+        assertTrue(configManager.groupIds().contains(groupId2));
+    }
+
+    // Tests for isDlqAutoTopicCreateEnabled
+
+    @Test
+    public void testIsDlqAutoTopicCreateEnabledDefault() {
+        assertFalse(configManager.isDlqAutoTopicCreateEnabled());
+    }
+
+    @Test
+    public void testIsDlqAutoTopicCreateEnabledTrue() {
+        Map<String, Object> overrides = new HashMap<>();
+        overrides.put(GroupCoordinatorConfig.ERRORS_DEADLETTERQUEUE_AUTO_CREATE_TOPICS_ENABLE_CONFIG, true);
+        configManager = createConfigManager(overrides);
+
+        assertTrue(configManager.isDlqAutoTopicCreateEnabled());
+    }
+
+    @Test
+    public void testIsDlqAutoTopicCreateEnabledFalse() {
+        Map<String, Object> overrides = new HashMap<>();
+        overrides.put(GroupCoordinatorConfig.ERRORS_DEADLETTERQUEUE_AUTO_CREATE_TOPICS_ENABLE_CONFIG, false);
+        configManager = createConfigManager(overrides);
+
+        assertFalse(configManager.isDlqAutoTopicCreateEnabled());
+    }
+
+    // Tests for shareGroupDlqTopicPrefix
+
+    @Test
+    public void testShareGroupDlqTopicPrefixDefault() {
+        assertEquals(Optional.of("dlq."), configManager.shareGroupDlqTopicPrefix());
+    }
+
+    @Test
+    public void testShareGroupDlqTopicPrefixCustom() {
+        Map<String, Object> overrides = new HashMap<>();
+        overrides.put(GroupCoordinatorConfig.ERRORS_DEADLETTERQUEUE_TOPIC_NAME_PREFIX_CONFIG, "custom-dlq-");
+        configManager = createConfigManager(overrides);
+
+        assertEquals(Optional.of("custom-dlq-"), configManager.shareGroupDlqTopicPrefix());
+    }
+
+    @Test
+    public void testShareGroupDlqTopicPrefixEmpty() {
+        Map<String, Object> overrides = new HashMap<>();
+        overrides.put(GroupCoordinatorConfig.ERRORS_DEADLETTERQUEUE_TOPIC_NAME_PREFIX_CONFIG, "");
+        configManager = createConfigManager(overrides);
+
+        assertEquals(Optional.of(""), configManager.shareGroupDlqTopicPrefix());
+    }
+
     public static GroupConfigManager createConfigManager() {
-        Map<String, String> defaultConfig = new HashMap<>();
-        defaultConfig.put(CONSUMER_SESSION_TIMEOUT_MS_CONFIG, String.valueOf(GroupCoordinatorConfig.CONSUMER_GROUP_SESSION_TIMEOUT_MS_DEFAULT));
-        defaultConfig.put(CONSUMER_HEARTBEAT_INTERVAL_MS_CONFIG, String.valueOf(GroupCoordinatorConfig.CONSUMER_GROUP_HEARTBEAT_INTERVAL_MS_DEFAULT));
-        defaultConfig.put(SHARE_RECORD_LOCK_DURATION_MS_CONFIG, String.valueOf(ShareGroupConfig.SHARE_GROUP_RECORD_LOCK_DURATION_MS_DEFAULT));
-        return new GroupConfigManager(defaultConfig);
+        return createConfigManager(new HashMap<>());
+    }
+
+    public static GroupConfigManager createConfigManager(Map<String, Object> overrides) {
+        GroupCoordinatorConfig groupCoordinatorConfig = GroupCoordinatorConfig.fromProps(overrides);
+        ShareGroupConfig shareGroupConfig = ShareGroupConfig.fromProps(overrides);
+
+        return new GroupConfigManager(groupCoordinatorConfig, shareGroupConfig);
     }
 }

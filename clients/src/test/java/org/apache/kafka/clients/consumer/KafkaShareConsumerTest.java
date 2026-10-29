@@ -16,24 +16,29 @@
  */
 package org.apache.kafka.clients.consumer;
 
+import org.apache.kafka.clients.CommonClientConfigs;
 import org.apache.kafka.clients.KafkaClient;
 import org.apache.kafka.clients.MockClient;
-import org.apache.kafka.clients.consumer.internals.AutoOffsetResetStrategy;
-import org.apache.kafka.clients.consumer.internals.ConsumerMetadata;
-import org.apache.kafka.clients.consumer.internals.SubscriptionState;
+import org.apache.kafka.clients.consumer.internals.GroupCoordinatorNode;
+import org.apache.kafka.clients.consumer.internals.NetworkClientDelegateInstanceIdCapture;
+import org.apache.kafka.clients.consumer.internals.ShareConsumerMetadata;
+import org.apache.kafka.clients.consumer.internals.ShareSubscriptionState;
+import org.apache.kafka.common.KafkaException;
 import org.apache.kafka.common.Node;
 import org.apache.kafka.common.TopicIdPartition;
 import org.apache.kafka.common.TopicPartition;
 import org.apache.kafka.common.Uuid;
 import org.apache.kafka.common.compress.Compression;
+import org.apache.kafka.common.config.ConfigException;
+import org.apache.kafka.common.errors.BootstrapResolutionException;
 import org.apache.kafka.common.internals.ClusterResourceListeners;
 import org.apache.kafka.common.message.ShareAcknowledgeResponseData;
 import org.apache.kafka.common.message.ShareFetchResponseData;
 import org.apache.kafka.common.message.ShareGroupHeartbeatResponseData;
 import org.apache.kafka.common.protocol.Errors;
-import org.apache.kafka.common.record.MemoryRecords;
-import org.apache.kafka.common.record.MemoryRecordsBuilder;
 import org.apache.kafka.common.record.TimestampType;
+import org.apache.kafka.common.record.internal.MemoryRecords;
+import org.apache.kafka.common.record.internal.MemoryRecordsBuilder;
 import org.apache.kafka.common.requests.FindCoordinatorResponse;
 import org.apache.kafka.common.requests.MetadataResponse;
 import org.apache.kafka.common.requests.RequestTestUtils;
@@ -45,10 +50,9 @@ import org.apache.kafka.common.requests.ShareGroupHeartbeatRequest;
 import org.apache.kafka.common.requests.ShareGroupHeartbeatResponse;
 import org.apache.kafka.common.serialization.Deserializer;
 import org.apache.kafka.common.serialization.StringDeserializer;
-import org.apache.kafka.common.test.api.Flaky;
-import org.apache.kafka.common.utils.LogContext;
 import org.apache.kafka.common.utils.MockTime;
 import org.apache.kafka.common.utils.Time;
+import org.apache.kafka.common.utils.internals.LogContext;
 
 import org.junit.jupiter.api.Test;
 import org.junit.jupiter.api.Timeout;
@@ -56,6 +60,7 @@ import org.junit.jupiter.api.Timeout;
 import java.nio.ByteBuffer;
 import java.time.Duration;
 import java.util.HashMap;
+import java.util.LinkedHashMap;
 import java.util.LinkedList;
 import java.util.List;
 import java.util.Map;
@@ -65,7 +70,10 @@ import java.util.concurrent.atomic.AtomicInteger;
 import java.util.concurrent.atomic.AtomicReference;
 
 import static org.junit.jupiter.api.Assertions.assertEquals;
+import static org.junit.jupiter.api.Assertions.assertInstanceOf;
+import static org.junit.jupiter.api.Assertions.assertThrows;
 import static org.junit.jupiter.api.Assertions.assertTrue;
+import static org.junit.jupiter.api.Assertions.fail;
 
 // This test exercises the KafkaShareConsumer with the MockClient to validate the Kafka protocol RPCs
 @Timeout(value = 120)
@@ -86,11 +94,11 @@ public class KafkaShareConsumerTest {
     private final int heartbeatIntervalMs = 1000;
 
     private final Time time = new MockTime();
-    private final SubscriptionState subscription = new SubscriptionState(new LogContext(), AutoOffsetResetStrategy.EARLIEST);
+    private final ShareSubscriptionState subscription = new ShareSubscriptionState(new LogContext());
 
     @Test
     public void testVerifyHeartbeats() throws InterruptedException {
-        ConsumerMetadata metadata = new ConsumerMetadata(0, 0, Long.MAX_VALUE, false, false,
+        ShareConsumerMetadata metadata = new ShareConsumerMetadata(0, 0, Long.MAX_VALUE, false,
             subscription, new LogContext(), new ClusterResourceListeners());
         MockClient client = new MockClient(time, metadata);
 
@@ -140,10 +148,9 @@ public class KafkaShareConsumerTest {
         }
     }
 
-    @Flaky("KAFKA-18488")
     @Test
-    public void testVerifyFetchAndCommitSyncImplicit() throws InterruptedException {
-        ConsumerMetadata metadata = new ConsumerMetadata(0, 0, Long.MAX_VALUE, false, false,
+    public void testVerifyFetchAndCommitSyncImplicit() {
+        ShareConsumerMetadata metadata = new ShareConsumerMetadata(0, 0, Long.MAX_VALUE, false,
             subscription, new LogContext(), new ClusterResourceListeners());
         MockClient client = new MockClient(time, metadata);
 
@@ -163,9 +170,9 @@ public class KafkaShareConsumerTest {
                 return request.data().groupId().equals(groupId) &&
                     request.data().shareSessionEpoch() == 0 &&
                     request.data().batchSize() == batchSize &&
-                    request.data().topics().get(0).topicId().equals(topicId1) &&
-                    request.data().topics().get(0).partitions().size() == 1 &&
-                    request.data().topics().get(0).partitions().get(0).acknowledgementBatches().isEmpty();
+                    request.data().topics().stream().findFirst().get().topicId().equals(topicId1) &&
+                    request.data().topics().stream().findFirst().get().partitions().size() == 1 &&
+                    request.data().topics().stream().findFirst().get().partitions().stream().findFirst().get().acknowledgementBatches().isEmpty();
             } else {
                 return false;
             }
@@ -177,10 +184,10 @@ public class KafkaShareConsumerTest {
                 ShareAcknowledgeRequest request = (ShareAcknowledgeRequest) body;
                 return request.data().groupId().equals(groupId) &&
                     request.data().shareSessionEpoch() == 1 &&
-                    request.data().topics().get(0).partitions().get(0).acknowledgementBatches().get(0).firstOffset() == 0 &&
-                    request.data().topics().get(0).partitions().get(0).acknowledgementBatches().get(0).lastOffset() == 1 &&
-                    request.data().topics().get(0).partitions().get(0).acknowledgementBatches().get(0).acknowledgeTypes().size() == 1 &&
-                    request.data().topics().get(0).partitions().get(0).acknowledgementBatches().get(0).acknowledgeTypes().get(0) == (byte) 1;
+                    request.data().topics().stream().findFirst().get().partitions().stream().findFirst().get().acknowledgementBatches().get(0).firstOffset() == 0 &&
+                    request.data().topics().stream().findFirst().get().partitions().stream().findFirst().get().acknowledgementBatches().get(0).lastOffset() == 1 &&
+                    request.data().topics().stream().findFirst().get().partitions().stream().findFirst().get().acknowledgementBatches().get(0).acknowledgeTypes().size() == 1 &&
+                    request.data().topics().stream().findFirst().get().partitions().stream().findFirst().get().acknowledgementBatches().get(0).acknowledgeTypes().get(0) == (byte) 1;
             } else {
                 return false;
             }
@@ -216,8 +223,8 @@ public class KafkaShareConsumerTest {
     }
 
     @Test
-    public void testVerifyFetchAndCloseImplicit() throws InterruptedException {
-        ConsumerMetadata metadata = new ConsumerMetadata(0, 0, Long.MAX_VALUE, false, false,
+    public void testVerifyFetchAndCloseImplicit() {
+        ShareConsumerMetadata metadata = new ShareConsumerMetadata(0, 0, Long.MAX_VALUE, false,
             subscription, new LogContext(), new ClusterResourceListeners());
         MockClient client = new MockClient(time, metadata);
 
@@ -237,9 +244,9 @@ public class KafkaShareConsumerTest {
                 return request.data().groupId().equals(groupId) &&
                     request.data().shareSessionEpoch() == 0 &&
                     request.data().batchSize() == batchSize &&
-                    request.data().topics().get(0).topicId().equals(topicId1) &&
-                    request.data().topics().get(0).partitions().size() == 1 &&
-                    request.data().topics().get(0).partitions().get(0).acknowledgementBatches().isEmpty();
+                    request.data().topics().stream().findFirst().get().topicId().equals(topicId1) &&
+                    request.data().topics().stream().findFirst().get().partitions().size() == 1 &&
+                    request.data().topics().stream().findFirst().get().partitions().stream().findFirst().get().acknowledgementBatches().isEmpty();
             } else {
                 return false;
             }
@@ -273,12 +280,12 @@ public class KafkaShareConsumerTest {
     }
 
     private KafkaShareConsumer<String, String> newShareConsumer(String clientId,
-                                                                ConsumerMetadata metadata,
+                                                                ShareConsumerMetadata metadata,
                                                                 KafkaClient client) {
         LogContext logContext = new LogContext();
         Deserializer<String> keyDeserializer = new StringDeserializer();
         Deserializer<String> valueDeserializer = new StringDeserializer();
-        ConsumerConfig config = newConsumerConfig(clientId);
+        ShareConsumerConfig config = newConsumerConfig(clientId);
 
         return new KafkaShareConsumer<>(
             logContext,
@@ -294,14 +301,15 @@ public class KafkaShareConsumerTest {
         );
     }
 
-    private ConsumerConfig newConsumerConfig(String clientId) {
+    private ShareConsumerConfig newConsumerConfig(String clientId) {
         Map<String, Object> configs = new HashMap<>();
         configs.put(ConsumerConfig.CLIENT_ID_CONFIG, clientId);
         configs.put(ConsumerConfig.GROUP_ID_CONFIG, groupId);
         configs.put(ConsumerConfig.KEY_DESERIALIZER_CLASS_CONFIG, StringDeserializer.class);
         configs.put(ConsumerConfig.VALUE_DESERIALIZER_CLASS_CONFIG, StringDeserializer.class);
         configs.put(ConsumerConfig.MAX_POLL_RECORDS_CONFIG, batchSize);
-        return new ConsumerConfig(configs);
+        configs.put(ConsumerConfig.BOOTSTRAP_SERVERS_CONFIG, "localhost:9092");
+        return new ShareConsumerConfig(configs);
     }
 
     private void initMetadata(MockClient client, Map<String, Integer> partitions) {
@@ -317,7 +325,7 @@ public class KafkaShareConsumerTest {
 
     private Node findCoordinator(MockClient client, Node node) {
         client.prepareResponseFrom(FindCoordinatorResponse.prepareResponse(Errors.NONE, groupId, node), node);
-        return new Node(Integer.MAX_VALUE - node.id(), node.host(), node.port());
+        return new GroupCoordinatorNode(node.id(), node.host(), node.port());
     }
 
     // This method generates a sequence of prepared SHARE_GROUP_HEARTBEAT responses with increasing member epochs.
@@ -387,13 +395,7 @@ public class KafkaShareConsumerTest {
             .setPartitionIndex(tip.partition())
             .setRecords(records)
             .setAcquiredRecords(List.of(new ShareFetchResponseData.AcquiredRecords().setFirstOffset(0).setLastOffset(count - 1).setDeliveryCount((short) 1)));
-        ShareFetchResponseData.ShareFetchableTopicResponse topicResponse = new ShareFetchResponseData.ShareFetchableTopicResponse()
-            .setTopicId(tip.topicId())
-            .setPartitions(List.of(partData));
-        return new ShareFetchResponse(
-            new ShareFetchResponseData()
-                .setResponses(List.of(topicResponse))
-        );
+        return ShareFetchResponse.of(Errors.NONE, 0, new LinkedHashMap<>(Map.of(tip, partData)), List.of(), 0);
     }
 
     private ShareAcknowledgeResponse shareAcknowledgeResponse() {
@@ -411,7 +413,77 @@ public class KafkaShareConsumerTest {
             .setPartitions(List.of(partData));
         return new ShareAcknowledgeResponse(
             new ShareAcknowledgeResponseData()
-                .setResponses(List.of(topicResponse))
+                .setResponses(new ShareAcknowledgeResponseData.ShareAcknowledgeTopicResponseCollection(List.of(topicResponse)))
         );
+    }
+
+    @Test
+    public void testShareConsumerBootstrapResolutionExceptionPropagatedToPoll() {
+        // Use an invalid hostname that will fail DNS resolution (using RFC 6761 reserved .invalid TLD)
+        String invalidHost = "unresolvable.invalid:9092";
+
+        Map<String, Object> configs = Map.of(
+            ConsumerConfig.KEY_DESERIALIZER_CLASS_CONFIG, StringDeserializer.class.getName(),
+            ConsumerConfig.VALUE_DESERIALIZER_CLASS_CONFIG, StringDeserializer.class.getName(),
+            CommonClientConfigs.BOOTSTRAP_SERVERS_CONFIG, invalidHost,
+            // Set a short bootstrap timeout so the test doesn't take too long
+            CommonClientConfigs.BOOTSTRAP_RESOLVE_TIMEOUT_MS_CONFIG, "3000",
+            ConsumerConfig.GROUP_ID_CONFIG, "test-share-group"
+        );
+
+        KafkaShareConsumer<String, String> consumer = new KafkaShareConsumer<>(configs);
+        try {
+            consumer.subscribe(Set.of("test-topic"));
+
+            // Poll continuously until we get the BootstrapResolutionException
+            // The exception should be thrown after bootstrap.resolve.timeout.ms expires
+            BootstrapResolutionException exception =
+                assertThrows(BootstrapResolutionException.class, () -> {
+                    long startTime = System.currentTimeMillis();
+                    long maxWaitTime = 15000; // 15 seconds max to prevent test hanging
+
+                    while (System.currentTimeMillis() - startTime < maxWaitTime) {
+                        consumer.poll(Duration.ofMillis(100));
+                    }
+                    fail("Expected BootstrapResolutionException to be thrown within " + maxWaitTime + "ms");
+                });
+
+            // Verify the exception message contains information about DNS resolution failure
+            assertTrue(exception.getMessage().contains("Failed to resolve bootstrap servers") ||
+                       exception.getMessage().contains("DNS resolution"),
+                       "Exception message should mention DNS resolution failure: " + exception.getMessage());
+
+            // After the first failure, any further API call must also throw. This guards against
+            // accidentally clearing the bootstrap error from the metadata layer.
+            assertThrows(BootstrapResolutionException.class, () -> consumer.poll(Duration.ofMillis(100)));
+        } finally {
+            consumer.close();
+        }
+    }
+
+    @Test
+    public void testShareConsumerConstructorFailsWithConfigExceptionOnUnresolvableBootstrapWhenTimeoutZero() {
+        // Default bootstrap.resolve.timeout.ms=0 resolves DNS synchronously in the constructor;
+        // any failure surfaces as ConfigException (wrapped in KafkaException by the constructor's
+        // outer try/catch), so no share consumer instance is created.
+        String invalidHost = "unresolvable.invalid:9092";
+        Map<String, Object> configs = Map.of(
+            ConsumerConfig.KEY_DESERIALIZER_CLASS_CONFIG, StringDeserializer.class.getName(),
+            ConsumerConfig.VALUE_DESERIALIZER_CLASS_CONFIG, StringDeserializer.class.getName(),
+            CommonClientConfigs.BOOTSTRAP_SERVERS_CONFIG, invalidHost,
+            ConsumerConfig.GROUP_ID_CONFIG, "test-share-group"
+        );
+
+        KafkaException e = assertThrows(KafkaException.class, () -> new KafkaShareConsumer<>(configs));
+        assertInstanceOf(ConfigException.class, e.getCause());
+    }
+
+    @Test
+    public void testClientInstanceIdIsPassedToTheNetworkClient() {
+        Map<String, Object> configs = new HashMap<>();
+        configs.put(ConsumerConfig.BOOTSTRAP_SERVERS_CONFIG, "localhost:9999");
+        configs.put(ConsumerConfig.GROUP_ID_CONFIG, "group");
+        NetworkClientDelegateInstanceIdCapture.assertGenerated(
+            () -> new KafkaShareConsumer<>(configs, new StringDeserializer(), new StringDeserializer()));
     }
 }

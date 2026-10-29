@@ -17,11 +17,12 @@
 package org.apache.kafka.connect.runtime;
 
 import org.apache.kafka.common.utils.LogCaptureAppender;
-import org.apache.kafka.common.utils.ThreadUtils;
+import org.apache.kafka.common.utils.internals.ThreadUtils;
 import org.apache.kafka.connect.errors.ConnectException;
 import org.apache.kafka.connect.runtime.standalone.StandaloneConfig;
 import org.apache.kafka.connect.util.ConnectorTaskId;
 
+import org.apache.logging.log4j.Level;
 import org.junit.jupiter.api.BeforeEach;
 import org.junit.jupiter.api.Test;
 import org.junit.jupiter.api.extension.ExtendWith;
@@ -40,8 +41,8 @@ import java.util.concurrent.ScheduledExecutorService;
 import java.util.concurrent.ScheduledFuture;
 import java.util.concurrent.TimeUnit;
 
-import static java.util.Collections.singletonMap;
 import static org.junit.jupiter.api.Assertions.assertEquals;
+import static org.junit.jupiter.api.Assertions.assertFalse;
 import static org.junit.jupiter.api.Assertions.assertNotNull;
 import static org.junit.jupiter.api.Assertions.assertThrows;
 import static org.junit.jupiter.api.Assertions.assertTrue;
@@ -73,6 +74,7 @@ public class SourceTaskOffsetCommitterTest {
     @BeforeEach
     public void setup() {
         Map<String, String> workerProps = new HashMap<>();
+        workerProps.put(WorkerConfig.BOOTSTRAP_SERVERS_CONFIG, "localhost:9092");
         workerProps.put("key.converter", "org.apache.kafka.connect.json.JsonConverter");
         workerProps.put("value.converter", "org.apache.kafka.connect.json.JsonConverter");
         workerProps.put("offset.storage.file.filename", "/tmp/connect.offsets");
@@ -94,7 +96,7 @@ public class SourceTaskOffsetCommitterTest {
 
         committer.schedule(taskId, task);
         assertNotNull(taskWrapper.getValue());
-        assertEquals(singletonMap(taskId, commitFuture), committers);
+        assertEquals(Map.of(taskId, commitFuture), committers);
     }
 
     @Test
@@ -106,7 +108,7 @@ public class SourceTaskOffsetCommitterTest {
 
         try (LogCaptureAppender logCaptureAppender = LogCaptureAppender.createAndRegister(ThreadUtils.class)) {
             committer.close(timeoutMs);
-            assertTrue(logCaptureAppender.getEvents().stream().anyMatch(e -> e.getLevel().equals("ERROR")));
+            assertFalse(logCaptureAppender.getMessages(Level.ERROR).isEmpty());
         }
 
         verify(executor).shutdown();
@@ -146,9 +148,9 @@ public class SourceTaskOffsetCommitterTest {
 
         committers.put(taskId, taskFuture);
         try (LogCaptureAppender logCaptureAppender = LogCaptureAppender.createAndRegister(SourceTaskOffsetCommitter.class)) {
-            logCaptureAppender.setClassLogger(SourceTaskOffsetCommitter.class, org.apache.logging.log4j.Level.TRACE);
+            logCaptureAppender.setClassLogger(SourceTaskOffsetCommitter.class, Level.TRACE);
             committer.remove(taskId);
-            assertTrue(logCaptureAppender.getEvents().stream().anyMatch(e -> e.getLevel().equals("TRACE")));
+            assertFalse(logCaptureAppender.getMessages(Level.TRACE).isEmpty());
         }
         assertTrue(committers.isEmpty());
     }

@@ -18,13 +18,12 @@ package org.apache.kafka.connect.mirror;
 
 import org.apache.kafka.clients.admin.Admin;
 import org.apache.kafka.common.config.ConfigDef;
-import org.apache.kafka.common.utils.AppInfoParser;
 import org.apache.kafka.common.utils.Utils;
+import org.apache.kafka.common.utils.internals.AppInfoParser;
 import org.apache.kafka.connect.connector.Task;
 import org.apache.kafka.connect.errors.ConnectException;
 import org.apache.kafka.connect.source.SourceConnector;
 
-import java.util.Collections;
 import java.util.List;
 import java.util.Map;
 
@@ -73,10 +72,10 @@ public class MirrorHeartbeatConnector extends SourceConnector {
         // if the heartbeats emission is disabled by setting `emit.heartbeats.enabled` to `false`,
         // the interval heartbeat emission will be negative and no `MirrorHeartbeatTask` will be created
         if (config.emitHeartbeatsInterval().isNegative()) {
-            return Collections.emptyList();
+            return List.of();
         }
         // just need a single task
-        return Collections.singletonList(config.originalsStrings());
+        return List.of(config.originalsStrings());
     }
 
     @Override

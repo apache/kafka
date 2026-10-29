@@ -27,6 +27,7 @@ import org.apache.kafka.common.config.ConfigDef.Type;
 import org.apache.kafka.common.metrics.JmxReporter;
 import org.apache.kafka.common.metrics.Sensor;
 import org.apache.kafka.common.utils.Utils;
+import org.apache.kafka.connect.connector.policy.AllowlistConnectorClientConfigOverridePolicy;
 import org.apache.kafka.connect.errors.ConnectException;
 import org.apache.kafka.connect.runtime.isolation.PluginDiscoveryMode;
 import org.apache.kafka.connect.runtime.rest.RestServerConfig;
@@ -37,7 +38,6 @@ import org.slf4j.LoggerFactory;
 
 import java.util.ArrayList;
 import java.util.Arrays;
-import java.util.Collections;
 import java.util.List;
 import java.util.Locale;
 import java.util.Map;
@@ -59,13 +59,12 @@ public class WorkerConfig extends AbstractConfig {
     private static final Logger log = LoggerFactory.getLogger(WorkerConfig.class);
 
     public static final String BOOTSTRAP_SERVERS_CONFIG = "bootstrap.servers";
-    public static final String BOOTSTRAP_SERVERS_DOC = 
+    public static final String BOOTSTRAP_SERVERS_DOC =
                 "A list of host/port pairs used to establish the initial connection to the Kafka cluster. "
                         + "Clients use this list to bootstrap and discover the full set of Kafka brokers. "
                         + "While the order of servers in the list does not matter, we recommend including more than one server to ensure resilience if any servers are down. "
                         + "This list does not need to contain the entire set of brokers, as Kafka clients automatically manage and update connections to the cluster efficiently. "
                         + "This list must be in the form <code>host1:port1,host2:port2,...</code>.";
-    public static final String BOOTSTRAP_SERVERS_DEFAULT = "localhost:9092";
 
     public static final String CLIENT_DNS_LOOKUP_CONFIG = CommonClientConfigs.CLIENT_DNS_LOOKUP_CONFIG;
     public static final String CLIENT_DNS_LOOKUP_DOC = CommonClientConfigs.CLIENT_DNS_LOOKUP_DOC;
@@ -129,15 +128,24 @@ public class WorkerConfig extends AbstractConfig {
 
     public static final String PLUGIN_PATH_CONFIG = "plugin.path";
     protected static final String PLUGIN_PATH_DOC = "List of paths separated by commas (,) that "
-            + "contain plugins (connectors, converters, transformations). The list should consist"
-            + " of top level directories that include any combination of: \n"
-            + "a) directories immediately containing jars with plugins and their dependencies\n"
-            + "b) uber-jars with plugins and their dependencies\n"
-            + "c) directories immediately containing the package directory structure of classes of "
-            + "plugins and their dependencies\n"
-            + "Note: symlinks will be followed to discover dependencies or plugins.\n"
+            + "contain plugins (connectors, converters, transformations). A path may be a plugin "
+            + "archive (JAR or ZIP), or a directory containing plugins. When the path is a directory, "
+            + "each direct child directory or archive is loaded separately and may be: \n"
+            + "a) a directory containing JARs or ZIPs with plugins and their dependencies\n"
+            + "b) an uber-jar with plugins and their dependencies\n"
+            + "c) a directory containing the package directory structure of classes of plugins and "
+            + "their dependencies\n"
+            + "Each direct child directory is scanned recursively, so archives, classes and dependencies "
+            + "may be located in nested subdirectories. Multiple plugins placed under the same direct "
+            + "child directory share the same class loader. For class loading isolation, place each "
+            + "plugin and its dependencies in its own direct child directory under a path listed in "
+            + "plugin.path. Symlinks will be followed to discover dependencies or plugins.\n"
             + "Examples: plugin.path=/usr/local/share/java,/usr/local/share/kafka/plugins,"
-            + "/opt/connectors\n" 
+            + "/opt/connectors\n"
+            + "With plugin.path=/opt/connectors, place each plugin in its own direct child "
+            + "of /opt/connectors. A plugin can be a directory such as /opt/connectors/my-plugin/ "
+            + "(dependencies may be nested, e.g. /opt/connectors/my-plugin/lib/dep.jar), or "
+            + "an uber-jar such as /opt/connectors/another-plugin.jar.\n"
             + "Do not use config provider variables in this property, since the raw path is used "
             + "by the worker's scanner before config providers are initialized and used to "
             + "replace variables.";
@@ -154,19 +162,16 @@ public class WorkerConfig extends AbstractConfig {
             + "* " + SERVICE_LOAD + ": Discover plugins only by ServiceLoader. Faster startup than other modes. "
             + "Plugins which are not discoverable by ServiceLoader may not be usable.";
 
-    public static final String CONFIG_PROVIDERS_CONFIG = "config.providers";
-    protected static final String CONFIG_PROVIDERS_DOC =
-            "Comma-separated names of <code>ConfigProvider</code> classes, loaded and used "
-            + "in the order specified. Implementing the interface  "
-            + "<code>ConfigProvider</code> allows you to replace variable references in connector configurations, "
-            + "such as for externalized secrets. ";
+    public static final String CONFIG_PROVIDERS_CONFIG = AbstractConfig.CONFIG_PROVIDERS_CONFIG;
+    protected static final String CONFIG_PROVIDERS_DOC = AbstractConfig.CONFIG_PROVIDERS_DOC;
 
     public static final String CONNECTOR_CLIENT_POLICY_CLASS_CONFIG = "connector.client.config.override.policy";
     public static final String CONNECTOR_CLIENT_POLICY_CLASS_DOC =
         "Class name or alias of implementation of <code>ConnectorClientConfigOverridePolicy</code>. Defines what client configurations can be "
-        + "overridden by the connector. The default implementation is `All`, meaning connector configurations can override all client properties. "
-        + "The other possible policies in the framework include `None` to disallow connectors from overriding client properties, "
-        + "and `Principal` to allow connectors to override only client principals.";
+        + "overridden by the connector. The default policy is <code>All</code>, meaning connector configurations can override all client properties. "
+        + "The other possible policies in the framework include <code>Allowlist</code> to specify allowed configurations via "
+        + "<code>" + AllowlistConnectorClientConfigOverridePolicy.ALLOWLIST_CONFIG + "</code>, <code>None</code> to disallow connectors from overriding "
+        + "client properties, and <code>Principal</code> (now deprecated) to allow connectors to override only client principals.";
     public static final String CONNECTOR_CLIENT_POLICY_CLASS_DEFAULT = "All";
 
 
@@ -191,7 +196,7 @@ public class WorkerConfig extends AbstractConfig {
     public static final String TOPIC_CREATION_ENABLE_CONFIG = "topic.creation.enable";
     protected static final String TOPIC_CREATION_ENABLE_DOC = "Whether to allow "
             + "automatic creation of topics used by source connectors, when source connectors "
-            + "are configured with `" + TOPIC_CREATION_PREFIX + "` properties. Each task will use an "
+            + "are configured with <code>" + TOPIC_CREATION_PREFIX + "</code> properties. Each task will use an "
             + "admin client to create its topics and will not depend on the Kafka brokers "
             + "to create topics automatically.";
     protected static final boolean TOPIC_CREATION_ENABLE_DEFAULT = true;
@@ -203,7 +208,8 @@ public class WorkerConfig extends AbstractConfig {
      */
     protected static ConfigDef baseConfigDef() {
         ConfigDef result = new ConfigDef()
-                .define(BOOTSTRAP_SERVERS_CONFIG, Type.LIST, BOOTSTRAP_SERVERS_DEFAULT,
+                .define(BOOTSTRAP_SERVERS_CONFIG, Type.LIST, ConfigDef.NO_DEFAULT_VALUE,
+                        ConfigDef.ValidList.anyNonDuplicateValues(false, false),
                         Importance.HIGH, BOOTSTRAP_SERVERS_DOC)
                 .define(CLIENT_DNS_LOOKUP_CONFIG,
                         Type.STRING,
@@ -230,6 +236,7 @@ public class WorkerConfig extends AbstractConfig {
                 .define(PLUGIN_PATH_CONFIG,
                         Type.LIST,
                         null,
+                        ConfigDef.ValidList.anyNonDuplicateValues(false, true),
                         Importance.LOW,
                         PLUGIN_PATH_DOC)
                 .define(PLUGIN_DISCOVERY_CONFIG,
@@ -250,15 +257,19 @@ public class WorkerConfig extends AbstractConfig {
                         Importance.LOW,
                         CommonClientConfigs.METRICS_RECORDING_LEVEL_DOC)
                 .define(METRIC_REPORTER_CLASSES_CONFIG, Type.LIST,
-                        JmxReporter.class.getName(), Importance.LOW,
+                        JmxReporter.class.getName(),
+                        ConfigDef.ValidList.anyNonDuplicateValues(true, false),
+                        Importance.LOW,
                         CommonClientConfigs.METRIC_REPORTER_CLASSES_DOC)
                 .define(HEADER_CONVERTER_CLASS_CONFIG, Type.CLASS,
                         HEADER_CONVERTER_CLASS_DEFAULT,
                         Importance.LOW, HEADER_CONVERTER_CLASS_DOC)
                 .define(HEADER_CONVERTER_VERSION, Type.STRING,
                         HEADER_CONVERTER_VERSION_DEFAULT, Importance.LOW, HEADER_CONVERTER_VERSION_DOC)
-                .define(CONFIG_PROVIDERS_CONFIG, Type.LIST,
-                        Collections.emptyList(),
+                .define(CONFIG_PROVIDERS_CONFIG,
+                        Type.LIST,
+                        List.of(),
+                        ConfigDef.ValidList.anyNonDuplicateValues(true, false),
                         Importance.LOW, CONFIG_PROVIDERS_DOC)
                 .define(CONNECTOR_CLIENT_POLICY_CLASS_CONFIG, Type.STRING, CONNECTOR_CLIENT_POLICY_CLASS_DEFAULT,
                         Importance.MEDIUM, CONNECTOR_CLIENT_POLICY_CLASS_DOC)
@@ -320,7 +331,7 @@ public class WorkerConfig extends AbstractConfig {
 
     private void logInternalConverterRemovalWarnings(Map<String, String> props) {
         List<String> removedProperties = new ArrayList<>();
-        for (String property : Arrays.asList("internal.key.converter", "internal.value.converter")) {
+        for (String property : List.of("internal.key.converter", "internal.value.converter")) {
             if (props.containsKey(property)) {
                 removedProperties.add(property);
             }
@@ -329,12 +340,7 @@ public class WorkerConfig extends AbstractConfig {
         if (!removedProperties.isEmpty()) {
             log.warn(
                     "The worker has been configured with one or more internal converter properties ({}). "
-                            + "Support for these properties was deprecated in version 2.0 and removed in version 3.0, "
-                            + "and specifying them will have no effect. "
-                            + "Instead, an instance of the JsonConverter with schemas.enable "
-                            + "set to false will be used. For more information, please visit "
-                            + "https://kafka.apache.org/documentation/#upgrade and consult the upgrade notes"
-                            + "for the 3.0 release.",
+                     + "These properties have been removed since version 3.0 and an instance of the JsonConverter with schemas.enable set to false will be used instead.",
                     removedProperties);
         }
     }
@@ -347,8 +353,8 @@ public class WorkerConfig extends AbstractConfig {
         if (!Objects.equals(rawPluginPath, transformedPluginPath)) {
             log.warn(
                 "Variables cannot be used in the 'plugin.path' property, since the property is "
-                + "used by plugin scanning before the config providers that replace the " 
-                + "variables are initialized. The raw value '{}' was used for plugin scanning, as " 
+                + "used by plugin scanning before the config providers that replace the "
+                + "variables are initialized. The raw value '{}' was used for plugin scanning, as "
                 + "opposed to the transformed value '{}', and this may cause unexpected results.",
                 rawPluginPath,
                 transformedPluginPath
@@ -402,6 +408,18 @@ public class WorkerConfig extends AbstractConfig {
      */
     public boolean connectorOffsetsTopicsPermitted() {
         return false;
+    }
+
+    /**
+     * Determine whether this worker should automatically create internal topics used by Connect
+     * (such as the offset, config, and status topics).
+     * The default implementation returns {@code true}. Subclasses may override this method
+     * to respect user-provided configuration.
+     *
+     * @return whether the worker should automatically create internal topics
+     */
+    public boolean internalTopicsCreationEnabled() {
+        return true;
     }
 
     /**

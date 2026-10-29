@@ -26,22 +26,21 @@ import org.apache.kafka.common.errors.TopicAuthorizationException;
 import org.apache.kafka.common.internals.ClusterResourceListeners;
 import org.apache.kafka.common.message.FetchResponseData;
 import org.apache.kafka.common.metrics.Metrics;
-import org.apache.kafka.common.protocol.ApiKeys;
 import org.apache.kafka.common.protocol.Errors;
-import org.apache.kafka.common.record.ControlRecordType;
-import org.apache.kafka.common.record.EndTransactionMarker;
-import org.apache.kafka.common.record.MemoryRecords;
-import org.apache.kafka.common.record.MemoryRecordsBuilder;
-import org.apache.kafka.common.record.RecordBatch;
-import org.apache.kafka.common.record.Records;
-import org.apache.kafka.common.record.SimpleRecord;
 import org.apache.kafka.common.record.TimestampType;
+import org.apache.kafka.common.record.internal.ControlRecordType;
+import org.apache.kafka.common.record.internal.EndTransactionMarker;
+import org.apache.kafka.common.record.internal.MemoryRecords;
+import org.apache.kafka.common.record.internal.MemoryRecordsBuilder;
+import org.apache.kafka.common.record.internal.RecordBatch;
+import org.apache.kafka.common.record.internal.Records;
+import org.apache.kafka.common.record.internal.SimpleRecord;
 import org.apache.kafka.common.serialization.StringDeserializer;
 import org.apache.kafka.common.serialization.StringSerializer;
-import org.apache.kafka.common.utils.BufferSupplier;
-import org.apache.kafka.common.utils.LogContext;
 import org.apache.kafka.common.utils.MockTime;
 import org.apache.kafka.common.utils.Time;
+import org.apache.kafka.common.utils.internals.BufferSupplier;
+import org.apache.kafka.common.utils.internals.LogContext;
 
 import org.junit.jupiter.api.Test;
 import org.junit.jupiter.params.ParameterizedTest;
@@ -54,11 +53,11 @@ import java.nio.ByteBuffer;
 import java.util.ArrayList;
 import java.util.Arrays;
 import java.util.Collections;
-import java.util.HashSet;
 import java.util.List;
 import java.util.Optional;
 import java.util.Properties;
 import java.util.Set;
+import java.util.concurrent.atomic.AtomicLong;
 import java.util.stream.Stream;
 
 import static org.apache.kafka.clients.consumer.internals.ConsumerUtils.createFetchMetricsManager;
@@ -73,7 +72,9 @@ import static org.junit.jupiter.api.Assertions.assertThrows;
 import static org.junit.jupiter.api.Assertions.assertTrue;
 import static org.mockito.ArgumentMatchers.any;
 import static org.mockito.ArgumentMatchers.eq;
+import static org.mockito.Mockito.doAnswer;
 import static org.mockito.Mockito.mock;
+import static org.mockito.Mockito.spy;
 import static org.mockito.Mockito.verify;
 import static org.mockito.Mockito.when;
 
@@ -94,7 +95,7 @@ public class FetchCollectorTest {
     private final Set<TopicPartition> allPartitions = partitions(topicAPartition0, topicAPartition1, topicAPartition2);
     private final LogContext logContext = new LogContext();
 
-    private SubscriptionState subscriptions;
+    private ConsumerSubscriptionState subscriptions;
     private FetchConfig fetchConfig;
     private FetchMetricsManager metricsManager;
     private ConsumerMetadata metadata;
@@ -145,7 +146,7 @@ public class FetchCollectorTest {
 
         // Validate that the next fetch position has been updated to point to the record after our last fetched
         // record.
-        SubscriptionState.FetchPosition position = subscriptions.position(topicAPartition0);
+        ConsumerSubscriptionState.FetchPosition position = subscriptions.position(topicAPartition0);
         assertEquals(recordCount, position.offset);
 
         // Now attempt to collect more records from the fetch buffer.
@@ -160,6 +161,35 @@ public class FetchCollectorTest {
         // However, once we read *past* the end of the records in the CompletedFetch, then we will call
         // drain on it, and it will be considered all consumed.
         assertTrue(completedFetch.isConsumed());
+    }
+
+    @Test
+    public void testPositionUpdatedBeforeDrainOnExhaustedFetch() {
+        // Set maxPollRecords to DEFAULT_RECORD_COUNT + 1 so the fetchRecords loop calls nextFetchedRecord
+        // one extra time, triggering exhaustion and drain within the same collectFetch.
+        buildDependencies(DEFAULT_RECORD_COUNT + 1);
+        assignAndSeek(topicAPartition0);
+
+        CompletedFetch completedFetch = spy(completedFetchBuilder
+            .recordCount(DEFAULT_RECORD_COUNT)
+            .build());
+
+        // Record the subscription position at the moment drain() is called.
+        AtomicLong positionAtDrainTime = new AtomicLong(-1);
+        doAnswer(invocation -> {
+            positionAtDrainTime.set(subscriptions.position(topicAPartition0).offset);
+            invocation.callRealMethod();
+            return null;
+        }).when(completedFetch).drain();
+
+        fetchBuffer.add(completedFetch);
+
+        Fetch<String, String> fetch = fetchCollector.collectFetch(fetchBuffer);
+        assertEquals(DEFAULT_RECORD_COUNT, fetch.numRecords());
+        assertTrue(completedFetch.isConsumed());
+
+        // Verify that when drain() was invoked, the position had already been advanced.
+        assertEquals(DEFAULT_RECORD_COUNT, positionAtDrainTime.get());
     }
 
     @Test
@@ -188,8 +218,8 @@ public class FetchCollectorTest {
     public void testNoResultsIfInitializing() {
         buildDependencies();
 
-        // Intentionally call assign (vs. assignAndSeek) so that we don't set the position. The SubscriptionState
-        // will consider the partition as in the SubscriptionState.FetchStates.INITIALIZED state.
+        // Intentionally call assign (vs. assignAndSeek) so that we don't set the position. The ConsumerSubscriptionState
+        // will consider the partition as in the ConsumerSubscriptionState.FetchStates.INITIALIZED state.
         assign(topicAPartition0);
 
         // The position should thus be null and considered un-fetchable and invalid.
@@ -251,7 +281,7 @@ public class FetchCollectorTest {
         buildDependencies();
         assignAndSeek(topicAPartition0);
 
-        // The partition should not be 'paused' in the SubscriptionState until we explicitly tell it to.
+        // The partition should not be 'paused' in the ConsumerSubscriptionState until we explicitly tell it to.
         assertFalse(subscriptions.isPaused(topicAPartition0));
         subscriptions.pause(topicAPartition0);
         assertTrue(subscriptions.isPaused(topicAPartition0));
@@ -442,7 +472,7 @@ public class FetchCollectorTest {
     @Test
     public void testCollectFetchInitializationWithNullPosition() {
         final TopicPartition topicPartition0 = new TopicPartition("topic", 0);
-        final SubscriptionState subscriptions = mock(SubscriptionState.class);
+        final ConsumerSubscriptionState subscriptions = mock(ConsumerSubscriptionState.class);
         when(subscriptions.hasValidPosition(topicPartition0)).thenReturn(true);
         when(subscriptions.positionOrNull(topicPartition0)).thenReturn(null);
         final FetchCollector<String, String> fetchCollector = createFetchCollector(subscriptions);
@@ -470,9 +500,9 @@ public class FetchCollectorTest {
         final TopicPartition topicPartition0 = new TopicPartition("topic", 0);
         final long fetchOffset = 42;
         final long highWatermark = 1000;
-        final SubscriptionState subscriptions = mock(SubscriptionState.class);
+        final ConsumerSubscriptionState subscriptions = mock(ConsumerSubscriptionState.class);
         when(subscriptions.hasValidPosition(topicPartition0)).thenReturn(true);
-        when(subscriptions.positionOrNull(topicPartition0)).thenReturn(new SubscriptionState.FetchPosition(fetchOffset));
+        when(subscriptions.positionOrNull(topicPartition0)).thenReturn(new ConsumerSubscriptionState.FetchPosition(fetchOffset));
         when(subscriptions.tryUpdatingHighWatermark(topicPartition0, highWatermark)).thenReturn(false);
         final FetchCollector<String, String> fetchCollector = createFetchCollector(subscriptions);
         final Records records = createRecords();
@@ -501,9 +531,9 @@ public class FetchCollectorTest {
         final long fetchOffset = 42;
         final long highWatermark = 1000;
         final long logStartOffset = 10;
-        final SubscriptionState subscriptions = mock(SubscriptionState.class);
+        final ConsumerSubscriptionState subscriptions = mock(ConsumerSubscriptionState.class);
         when(subscriptions.hasValidPosition(topicPartition0)).thenReturn(true);
-        when(subscriptions.positionOrNull(topicPartition0)).thenReturn(new SubscriptionState.FetchPosition(fetchOffset));
+        when(subscriptions.positionOrNull(topicPartition0)).thenReturn(new ConsumerSubscriptionState.FetchPosition(fetchOffset));
         when(subscriptions.tryUpdatingHighWatermark(topicPartition0, highWatermark)).thenReturn(true);
         when(subscriptions.tryUpdatingLogStartOffset(topicPartition0, logStartOffset)).thenReturn(false);
         final FetchCollector<String, String> fetchCollector = createFetchCollector(subscriptions);
@@ -535,9 +565,9 @@ public class FetchCollectorTest {
         final long highWatermark = 1000;
         final long logStartOffset = 10;
         final long lastStableOffset = 900;
-        final SubscriptionState subscriptions = mock(SubscriptionState.class);
+        final ConsumerSubscriptionState subscriptions = mock(ConsumerSubscriptionState.class);
         when(subscriptions.hasValidPosition(topicPartition0)).thenReturn(true);
-        when(subscriptions.positionOrNull(topicPartition0)).thenReturn(new SubscriptionState.FetchPosition(fetchOffset));
+        when(subscriptions.positionOrNull(topicPartition0)).thenReturn(new ConsumerSubscriptionState.FetchPosition(fetchOffset));
         when(subscriptions.tryUpdatingHighWatermark(topicPartition0, highWatermark)).thenReturn(true);
         when(subscriptions.tryUpdatingLogStartOffset(topicPartition0, logStartOffset)).thenReturn(true);
         when(subscriptions.tryUpdatingLastStableOffset(topicPartition0, lastStableOffset)).thenReturn(false);
@@ -572,9 +602,9 @@ public class FetchCollectorTest {
         final long logStartOffset = 10;
         final long lastStableOffset = 900;
         final int preferredReadReplicaId = 21;
-        final SubscriptionState subscriptions = mock(SubscriptionState.class);
+        final ConsumerSubscriptionState subscriptions = mock(ConsumerSubscriptionState.class);
         when(subscriptions.hasValidPosition(topicPartition0)).thenReturn(true);
-        when(subscriptions.positionOrNull(topicPartition0)).thenReturn(new SubscriptionState.FetchPosition(fetchOffset));
+        when(subscriptions.positionOrNull(topicPartition0)).thenReturn(new ConsumerSubscriptionState.FetchPosition(fetchOffset));
         when(subscriptions.tryUpdatingHighWatermark(topicPartition0, highWatermark)).thenReturn(true);
         when(subscriptions.tryUpdatingLogStartOffset(topicPartition0, logStartOffset)).thenReturn(true);
         when(subscriptions.tryUpdatingLastStableOffset(topicPartition0, lastStableOffset)).thenReturn(true);
@@ -606,7 +636,7 @@ public class FetchCollectorTest {
     @Test
     public void testCollectFetchInitializationOffsetOutOfRangeErrorWithNullPosition() {
         final TopicPartition topicPartition0 = new TopicPartition("topic", 0);
-        final SubscriptionState subscriptions = mock(SubscriptionState.class);
+        final ConsumerSubscriptionState subscriptions = mock(ConsumerSubscriptionState.class);
         when(subscriptions.hasValidPosition(topicPartition0)).thenReturn(true);
         when(subscriptions.positionOrNull(topicPartition0)).thenReturn(null);
         final FetchCollector<String, String> fetchCollector = createFetchCollector(subscriptions);
@@ -631,9 +661,9 @@ public class FetchCollectorTest {
     public void testCollectFetchInitializationOffsetOutOfRangeErrorWithOffsetReset() {
         final TopicPartition topicPartition0 = new TopicPartition("topic", 0);
         final long fetchOffset = 42;
-        final SubscriptionState subscriptions = mock(SubscriptionState.class);
+        final ConsumerSubscriptionState subscriptions = mock(ConsumerSubscriptionState.class);
         when(subscriptions.hasValidPosition(topicPartition0)).thenReturn(true);
-        when(subscriptions.positionOrNull(topicPartition0)).thenReturn(new SubscriptionState.FetchPosition(fetchOffset));
+        when(subscriptions.positionOrNull(topicPartition0)).thenReturn(new ConsumerSubscriptionState.FetchPosition(fetchOffset));
         when(subscriptions.hasDefaultOffsetResetPolicy()).thenReturn(true);
         final FetchCollector<String, String> fetchCollector = createFetchCollector(subscriptions);
         FetchResponseData.PartitionData partitionData = new FetchResponseData.PartitionData()
@@ -705,7 +735,7 @@ public class FetchCollectorTest {
         return Collections.singletonList(abortedTransaction);
     }
 
-    private FetchCollector<String, String> createFetchCollector(final SubscriptionState subscriptions) {
+    private FetchCollector<String, String> createFetchCollector(final ConsumerSubscriptionState subscriptions) {
         final Properties consumerProps = consumerProps();
         return new FetchCollector<>(
             logContext,
@@ -722,7 +752,7 @@ public class FetchCollectorTest {
      * This is a handy utility method for returning a set from a varargs array.
      */
     private static Set<TopicPartition> partitions(TopicPartition... partitions) {
-        return new HashSet<>(Arrays.asList(partitions));
+        return Set.of(partitions);
     }
 
     private void buildDependencies() {
@@ -915,14 +945,13 @@ public class FetchCollectorTest {
 
             FetchMetricsAggregator metricsAggregator = new FetchMetricsAggregator(metricsManager, allPartitions);
             return new CompletedFetch(
-                    logContext,
+                    logContext.logger(CompletedFetch.class),
                     subscriptions,
                     BufferSupplier.create(),
                     topicPartition,
                     partitionData,
                     metricsAggregator,
-                    fetchOffset,
-                    ApiKeys.FETCH.latestVersion());
+                    fetchOffset);
         }
     }
 

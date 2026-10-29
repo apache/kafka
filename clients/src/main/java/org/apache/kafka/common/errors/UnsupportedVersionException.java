@@ -14,7 +14,10 @@
  * See the License for the specific language governing permissions and
  * limitations under the License.
  */
+
 package org.apache.kafka.common.errors;
+
+import org.apache.kafka.common.annotation.InterfaceAudience;
 
 import java.util.Map;
 
@@ -28,7 +31,8 @@ import java.util.Map;
  * is raised from {@link org.apache.kafka.clients.consumer.KafkaConsumer#offsetsForTimes(Map)}, it would
  * be possible to revert to alternative logic to set the consumer's position.
  */
-public class UnsupportedVersionException extends ApiException {
+@InterfaceAudience.Public
+public class UnsupportedVersionException extends InvalidConfigurationException {
     private static final long serialVersionUID = 1L;
 
     public UnsupportedVersionException(String message, Throwable cause) {

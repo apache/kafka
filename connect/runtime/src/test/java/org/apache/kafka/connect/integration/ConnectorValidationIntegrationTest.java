@@ -17,11 +17,16 @@
 package org.apache.kafka.connect.integration;
 
 import org.apache.kafka.common.config.ConfigDef;
+import org.apache.kafka.common.config.provider.FileConfigProvider;
 import org.apache.kafka.common.utils.Utils;
 import org.apache.kafka.connect.data.Schema;
 import org.apache.kafka.connect.data.SchemaAndValue;
 import org.apache.kafka.connect.runtime.WorkerConfig;
 import org.apache.kafka.connect.runtime.isolation.TestPlugins;
+import org.apache.kafka.connect.runtime.rest.entities.ConfigInfo;
+import org.apache.kafka.connect.runtime.rest.entities.ConfigInfos;
+import org.apache.kafka.connect.runtime.rest.entities.ConfigValueInfo;
+import org.apache.kafka.connect.runtime.rest.errors.ConnectRestException;
 import org.apache.kafka.connect.storage.Converter;
 import org.apache.kafka.connect.storage.HeaderConverter;
 import org.apache.kafka.connect.storage.StringConverter;
@@ -33,13 +38,17 @@ import org.junit.jupiter.api.AfterAll;
 import org.junit.jupiter.api.BeforeAll;
 import org.junit.jupiter.api.Tag;
 import org.junit.jupiter.api.Test;
+import org.junit.jupiter.api.io.TempDir;
 
 import java.io.IOException;
+import java.nio.file.Files;
+import java.nio.file.Path;
 import java.util.HashMap;
 import java.util.Map;
 
 import static org.apache.kafka.clients.consumer.ConsumerConfig.GROUP_ID_CONFIG;
-import static org.apache.kafka.connect.integration.MonitorableSourceConnector.TOPIC_CONFIG;
+import static org.apache.kafka.common.config.AbstractConfig.CONFIG_PROVIDERS_CONFIG;
+import static org.apache.kafka.connect.integration.TestableSourceConnector.TOPIC_CONFIG;
 import static org.apache.kafka.connect.runtime.ConnectorConfig.CONNECTOR_CLASS_CONFIG;
 import static org.apache.kafka.connect.runtime.ConnectorConfig.CONNECTOR_CLIENT_CONSUMER_OVERRIDES_PREFIX;
 import static org.apache.kafka.connect.runtime.ConnectorConfig.HEADER_CONVERTER_CLASS_CONFIG;
@@ -53,6 +62,10 @@ import static org.apache.kafka.connect.runtime.SinkConnectorConfig.DLQ_TOPIC_NAM
 import static org.apache.kafka.connect.runtime.SinkConnectorConfig.TOPICS_CONFIG;
 import static org.apache.kafka.connect.runtime.SinkConnectorConfig.TOPICS_REGEX_CONFIG;
 import static org.apache.kafka.connect.runtime.SourceConnectorConfig.TOPIC_CREATION_GROUPS_CONFIG;
+import static org.junit.jupiter.api.Assertions.assertEquals;
+import static org.junit.jupiter.api.Assertions.assertFalse;
+import static org.junit.jupiter.api.Assertions.assertNotEquals;
+import static org.junit.jupiter.api.Assertions.assertThrows;
 
 /**
  * Integration test for preflight connector config validation
@@ -61,14 +74,24 @@ import static org.apache.kafka.connect.runtime.SourceConnectorConfig.TOPIC_CREAT
 public class ConnectorValidationIntegrationTest {
 
     private static final String WORKER_GROUP_ID = "connect-worker-group-id";
+    private static final String VALUE = "provider-value";
+    private static final String KEY = "provider-key";
 
     // Use a single embedded cluster for all test cases in order to cut down on runtime
     private static EmbeddedConnectCluster connect;
+    @TempDir
+    private static Path tempDir;
+    private static Path providerFile;
 
     @BeforeAll
-    public static void setup() {
+    public static void setup() throws Exception {
+        providerFile = Files.createFile(tempDir.resolve("provider.properties"));
+        Files.writeString(providerFile, KEY + "=" + VALUE);
+
         Map<String, String> workerProps = new HashMap<>();
         workerProps.put(GROUP_ID_CONFIG, WORKER_GROUP_ID);
+        workerProps.put(CONFIG_PROVIDERS_CONFIG, "file");
+        workerProps.put(CONFIG_PROVIDERS_CONFIG + ".file.class", FileConfigProvider.class.getName());
 
         TestPlugins.TestPlugin[] testPlugins = new TestPlugins.TestPlugin[] {
             TestPlugins.TestPlugin.BAD_PACKAGING_DEFAULT_CONSTRUCTOR_THROWS_CONVERTER,
@@ -90,7 +113,7 @@ public class ConnectorValidationIntegrationTest {
     }
 
     @AfterAll
-    public static void close() {
+    public static void close() throws Exception {
         if (connect != null) {
             Utils.closeQuietly(connect::stop, "Embedded Connect cluster");
         }
@@ -228,7 +251,7 @@ public class ConnectorValidationIntegrationTest {
         Map<String, String> config = defaultSinkConnectorProps();
         String transformName = "t";
         config.put(TRANSFORMS_CONFIG, transformName);
-        config.put(TRANSFORMS_CONFIG + "." + transformName + ".type", MonitorableSinkConnector.class.getName());
+        config.put(TRANSFORMS_CONFIG + "." + transformName + ".type", TestableSinkConnector.class.getName());
         connect.assertions().assertExactlyNumErrorsOnConnectorConfigValidation(
                 config.get(CONNECTOR_CLASS_CONFIG),
                 config,
@@ -289,7 +312,7 @@ public class ConnectorValidationIntegrationTest {
         Map<String, String> config = defaultSinkConnectorProps();
         String predicateName = "p";
         config.put(PREDICATES_CONFIG, predicateName);
-        config.put(PREDICATES_CONFIG + "." + predicateName + ".type", MonitorableSinkConnector.class.getName());
+        config.put(PREDICATES_CONFIG + "." + predicateName + ".type", TestableSinkConnector.class.getName());
         connect.assertions().assertExactlyNumErrorsOnConnectorConfigValidation(
                 config.get(CONNECTOR_CLASS_CONFIG),
                 config,
@@ -315,7 +338,7 @@ public class ConnectorValidationIntegrationTest {
     @Test
     public void testConnectorHasInvalidConverterClassType() throws InterruptedException {
         Map<String, String> config = defaultSinkConnectorProps();
-        config.put(KEY_CONVERTER_CLASS_CONFIG, MonitorableSinkConnector.class.getName());
+        config.put(KEY_CONVERTER_CLASS_CONFIG, TestableSinkConnector.class.getName());
         connect.assertions().assertExactlyNumErrorsOnConnectorConfigValidation(
                 config.get(CONNECTOR_CLASS_CONFIG),
                 config,
@@ -413,7 +436,7 @@ public class ConnectorValidationIntegrationTest {
     @Test
     public void testConnectorHasInvalidHeaderConverterClassType() throws InterruptedException {
         Map<String, String> config = defaultSinkConnectorProps();
-        config.put(HEADER_CONVERTER_CLASS_CONFIG, MonitorableSinkConnector.class.getName());
+        config.put(HEADER_CONVERTER_CLASS_CONFIG, TestableSinkConnector.class.getName());
         connect.assertions().assertExactlyNumErrorsOnConnectorConfigValidation(
                 config.get(CONNECTOR_CLASS_CONFIG),
                 config,
@@ -495,7 +518,109 @@ public class ConnectorValidationIntegrationTest {
         );
     }
 
+    @Test
+    public void testValidationResponseDoesNotContainResolvedValue() {
+        Map<String, String> config = defaultSourceConnectorProps();
+        String placeholder = providerRef();
+        config.put(NAME_CONFIG, placeholder);
+
+        ConfigInfos result = connect.validateConnectorConfig(config.get(CONNECTOR_CLASS_CONFIG), config);
+
+        ConfigValueInfo nameValue = result.configs().stream()
+                .map(ConfigInfo::configValue)
+                .filter(v -> NAME_CONFIG.equals(v.name()))
+                .findFirst()
+                .orElseThrow(() -> new AssertionError("No config entry found for " + NAME_CONFIG));
+
+        assertNotEquals(VALUE, nameValue.value());
+        assertEquals(placeholder, nameValue.value());
+        for (ConfigInfo info : result.configs()) {
+            ConfigValueInfo cv = info.configValue();
+            assertNotEquals(VALUE, cv.value());
+        }
+    }
+
+    @Test
+    public void testValidationErrorMessagesDoNotContainResolvedValueOnTypeMismatch() {
+        assertErrorMessages(providerRef(), VALUE);
+    }
+
+    @Test
+    public void testValidationErrorMessagesDoNotContainResolvedValueOnValidatorRejection() throws Exception {
+        String value = "-9999";
+        Path localProviderFile = Files.createFile(tempDir.resolve("provider-validator.properties"));
+        Files.writeString(localProviderFile, KEY + "=" + value);
+        String placeholder = "${file:" + localProviderFile.toAbsolutePath() + ":" + KEY + "}";
+        assertErrorMessages(placeholder, value);
+    }
+
+    private void assertErrorMessages(String placeholder, String value) {
+        Map<String, String> config = defaultSourceConnectorProps();
+        config.put(TASKS_MAX_CONFIG, placeholder);
+
+        ConfigInfos result = connect.validateConnectorConfig(config.get(CONNECTOR_CLASS_CONFIG), config);
+
+        ConfigValueInfo tasksMaxValue = result.configs().stream()
+                .map(ConfigInfo::configValue)
+                .filter(v -> TASKS_MAX_CONFIG.equals(v.name()))
+                .findFirst()
+                .orElseThrow(() -> new AssertionError("No config entry found for " + TASKS_MAX_CONFIG));
+
+        assertEquals(placeholder, tasksMaxValue.value());
+        assertFalse(tasksMaxValue.errors().isEmpty());
+        for (String error : tasksMaxValue.errors()) {
+            assertFalse(error.contains(value));
+        }
+        for (ConfigInfo info : result.configs()) {
+            for (String error : info.configValue().errors()) {
+                assertFalse(error.contains(value));
+            }
+        }
+    }
+
+    @Test
+    public void testMissingConnectorClassErrorDoesNotContainResolvedValue() {
+        Map<String, String> config = new HashMap<>();
+        config.put(NAME_CONFIG, providerRef());
+        config.put(TASKS_MAX_CONFIG, "1");
+
+        ConnectRestException e = assertThrows(ConnectRestException.class, () ->
+                connect.validateConnectorConfig(TestableSourceConnector.class.getSimpleName(), config));
+        assertFalse(e.getMessage().contains(VALUE));
+    }
+
+    @Test
+    public void testConnectorDeclaredConfigProviderDoesNotContainResolvedValue() {
+        String providerName = "connectorfile";
+        String ref = "${" + providerName + ":" + providerFile.toAbsolutePath() + ":" + KEY + "}";
+
+        Map<String, String> config = defaultSourceConnectorProps();
+        config.put(CONFIG_PROVIDERS_CONFIG, providerName);
+        config.put(CONFIG_PROVIDERS_CONFIG + "." + providerName + ".class", FileConfigProvider.class.getName());
+        config.put("producer.override.client.id", ref);
+
+        ConfigInfos result = connect.validateConnectorConfig(
+                config.get(CONNECTOR_CLASS_CONFIG), config);
+
+        for (ConfigInfo info : result.configs()) {
+            ConfigValueInfo cv = info.configValue();
+            assertNotEquals(VALUE, cv.value());
+            for (String error : cv.errors()) {
+                assertFalse(error.contains(VALUE));
+            }
+        }
+    }
+
+    private String providerRef() {
+        return "${file:" + providerFile.toAbsolutePath() + ":" + KEY + "}";
+    }
+
     public abstract static class TestConverter implements Converter, HeaderConverter {
+
+        @Override
+        public String version() {
+            return "";
+        }
 
         // Defined by both Converter and HeaderConverter interfaces
         @Override
@@ -560,7 +685,7 @@ public class ConnectorValidationIntegrationTest {
         // setup up props for the source connector
         Map<String, String> props = new HashMap<>();
         props.put(NAME_CONFIG, "source-connector");
-        props.put(CONNECTOR_CLASS_CONFIG, MonitorableSourceConnector.class.getSimpleName());
+        props.put(CONNECTOR_CLASS_CONFIG, TestableSourceConnector.class.getSimpleName());
         props.put(TASKS_MAX_CONFIG, "1");
         props.put(TOPIC_CONFIG, "t1");
         props.put(KEY_CONVERTER_CLASS_CONFIG, StringConverter.class.getName());
@@ -572,7 +697,7 @@ public class ConnectorValidationIntegrationTest {
         // setup up props for the sink connector
         Map<String, String> props = new HashMap<>();
         props.put(NAME_CONFIG, "sink-connector");
-        props.put(CONNECTOR_CLASS_CONFIG, MonitorableSinkConnector.class.getSimpleName());
+        props.put(CONNECTOR_CLASS_CONFIG, TestableSinkConnector.class.getSimpleName());
         props.put(TASKS_MAX_CONFIG, "1");
         props.put(TOPICS_CONFIG, "t1");
         props.put(KEY_CONVERTER_CLASS_CONFIG, StringConverter.class.getName());

@@ -16,6 +16,7 @@
  */
 package org.apache.kafka.streams.kstream;
 
+import org.apache.kafka.common.annotation.InterfaceAudience;
 import org.apache.kafka.common.serialization.Serde;
 
 import java.time.Duration;
@@ -29,6 +30,7 @@ import java.time.Duration;
  * @param <VLeft> type of left record value
  * @param <VRight> type of right record value
  */
+@InterfaceAudience.Public
 public class Joined<K, VLeft, VRight> implements NamedOperation<Joined<K, VLeft, VRight>> {
 
     protected final Serde<K> keySerde;
@@ -169,7 +171,7 @@ public class Joined<K, VLeft, VRight> implements NamedOperation<Joined<K, VLeft,
 
 
     /**
-     * Create an instance of {@code Joined} with aother value {@link Serde}.
+     * Create an instance of {@code Joined} with another value {@link Serde}.
      * {@code null} values are accepted and will be replaced by the default value serde as defined in config.
      *
      * @param rightValueSerde

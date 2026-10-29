@@ -13,8 +13,6 @@
  * WITHOUT WARRANTIES OR CONDITIONS OF ANY KIND, either express or implied.
  * See the License for the specific language governing permissions and
  * limitations under the License.
- *
- * (c) Copyright 2025, SAP SE and apache/kafka contributors
  */
 package org.apache.kafka.tools.reassign;
 
@@ -24,7 +22,7 @@ import net.jqwik.api.Combinators;
 import net.jqwik.api.ForAll;
 import net.jqwik.api.Property;
 import net.jqwik.api.Provide;
-import org.apache.kafka.admin.BrokerMetadata;
+import org.apache.kafka.metadata.placement.UsableBroker;
 import org.apache.kafka.common.TopicPartition;
 import org.junit.jupiter.api.Assertions;
 
@@ -50,10 +48,10 @@ import static org.hamcrest.number.OrderingComparison.lessThanOrEqualTo;
 
 public class StickyPartitionReassignorUnitTest {
 
-    private static List<BrokerMetadata> brokersNoRackAwarenessFromBrokerLength(int brokersLength) {
-        final List<BrokerMetadata> brokers = new ArrayList<>();
+    private static List<UsableBroker> brokersNoRackAwarenessFromBrokerLength(int brokersLength) {
+        final List<UsableBroker> brokers = new ArrayList<>();
         for (int j = 0; j < brokersLength; j++) {
-            brokers.add(new BrokerMetadata(j, Optional.empty()));
+            brokers.add(new UsableBroker(j, Optional.empty(), false));
         }
         return brokers;
     }
@@ -66,17 +64,17 @@ public class StickyPartitionReassignorUnitTest {
         return racks;
     }
 
-    private static Arbitrary<List<BrokerMetadata>> assignBrokersToRacks(List<String> racks, List<BrokerMetadata> brokers) {
+    private static Arbitrary<List<UsableBroker>> assignBrokersToRacks(List<String> racks, List<UsableBroker> brokers) {
         if (racks.size() > brokers.size())
             throw new RuntimeException("Can not represent each rack with available brokers");
         // Fast track
         if (racks.size() == brokers.size()) {
             return Arbitraries.shuffle(racks).map(shuffledRacks -> {
-                final List<BrokerMetadata> newBrokers = new ArrayList<>();
+                final List<UsableBroker> newBrokers = new ArrayList<>();
                 for (int i = 0; i < brokers.size(); i++) {
                     final String rack = racks.get(i);
-                    final BrokerMetadata broker = brokers.get(i);
-                    newBrokers.add(new BrokerMetadata(broker.id, Optional.of(rack)));
+                    final UsableBroker broker = brokers.get(i);
+                    newBrokers.add(new UsableBroker(broker.id(), Optional.of(rack), false));
                 }
                 return newBrokers;
             });
@@ -85,53 +83,53 @@ public class StickyPartitionReassignorUnitTest {
         final Arbitrary<String> rackArbitrary = Arbitraries.of(racks);
 
         return Arbitraries.shuffle(racks).flatMap(shuffledRacks -> {
-            final List<Arbitrary<BrokerMetadata>> brokerArbitraries = new ArrayList<>();
+            final List<Arbitrary<UsableBroker>> brokerArbitraries = new ArrayList<>();
             // Make sure that each rack is assigned to at least one broker
             for (int i = 0; i < shuffledRacks.size(); i++) {
                 final String rack = shuffledRacks.get(i);
-                final BrokerMetadata broker = brokers.get(i);
-                brokerArbitraries.add(Arbitraries.just(new BrokerMetadata(broker.id, Optional.of(rack))));
+                final UsableBroker broker = brokers.get(i);
+                brokerArbitraries.add(Arbitraries.just(new UsableBroker(broker.id(), Optional.of(rack), false)));
             }
             // Assign all other brokers a randomly selected rack
             for (int i = shuffledRacks.size(); i < brokers.size(); i++) {
-                final BrokerMetadata broker = brokers.get(i);
-                brokerArbitraries.add(rackArbitrary.map(rack -> new BrokerMetadata(broker.id, Optional.of(rack))));
+                final UsableBroker broker = brokers.get(i);
+                brokerArbitraries.add(rackArbitrary.map(rack -> new UsableBroker(broker.id(), Optional.of(rack), false)));
             }
 
             return Combinators.combine(brokerArbitraries).as(newBrokers -> newBrokers);
         });
     }
 
-    private static Arbitrary<List<BrokerMetadata>> brokerMetadataNoRackAwareness() {
+    private static Arbitrary<List<UsableBroker>> brokerMetadataNoRackAwareness() {
         return Arbitraries.integers().between(2, 20).map(StickyPartitionReassignorUnitTest::brokersNoRackAwarenessFromBrokerLength);
     }
 
-    private static Arbitrary<List<BrokerMetadata>> brokerMetadatas() {
+    private static Arbitrary<List<UsableBroker>> brokerMetadatas() {
         return Arbitraries.integers().between(2, 15).map(StickyPartitionReassignorUnitTest::racksFromRacksLength).flatMap(racks -> Arbitraries.integers().between(racks.size(), 20).map(StickyPartitionReassignorUnitTest::brokersNoRackAwarenessFromBrokerLength).flatMap(brokers -> assignBrokersToRacks(racks, brokers)));
     }
 
-    private static Arbitrary<List<BrokerMetadata>> brokerMetadatasEquallyDistributedRacks() {
+    private static Arbitrary<List<UsableBroker>> brokerMetadatasEquallyDistributedRacks() {
         return Arbitraries.integers().between(2, 5).flatMap(racksLength -> Arbitraries.integers().between(1, 4).map(brokersPerRack -> {
             final int brokersLength = racksLength * brokersPerRack;
-            final List<BrokerMetadata> brokers = new ArrayList<>();
+            final List<UsableBroker> brokers = new ArrayList<>();
 
             for (int i = 0; i < brokersLength; i++) {
                 final int rack = i % racksLength;
-                brokers.add(new BrokerMetadata(i, Optional.of(Integer.toString(rack))));
+                brokers.add(new UsableBroker(i, Optional.of(Integer.toString(rack)), false));
             }
 
             return brokers;
         }));
     }
 
-    private static Arbitrary<List<Integer>> replicasFromBrokers(List<BrokerMetadata> brokers, int replicationFactor) {
+    private static Arbitrary<List<Integer>> replicasFromBrokers(List<UsableBroker> brokers, int replicationFactor) {
         if (brokers.size() < replicationFactor)
             throw new RuntimeException("Replication factor is larger than available brokers");
         // Fast track
         if (brokers.size() == replicationFactor) {
             final List<Integer> replicas = new ArrayList<>();
-            for (final BrokerMetadata broker : brokers) {
-                replicas.add(broker.id);
+            for (final UsableBroker broker : brokers) {
+                replicas.add(broker.id());
             }
             return Arbitraries.shuffle(replicas);
         }
@@ -139,23 +137,23 @@ public class StickyPartitionReassignorUnitTest {
         return Arbitraries.shuffle(brokers).flatMap(shuffledBrokers -> {
             final List<Integer> replicas = new ArrayList<>();
             for (int i = 0; i < replicationFactor; i++) {
-                final BrokerMetadata broker = shuffledBrokers.get(i);
-                replicas.add(broker.id);
+                final UsableBroker broker = shuffledBrokers.get(i);
+                replicas.add(broker.id());
             }
             return Arbitraries.shuffle(replicas);
         });
     }
 
-    private static Arbitrary<List<List<Integer>>> generatePartitionReplicasFixedReplicationFactor(List<BrokerMetadata> brokers, int replicationFactor) {
+    private static Arbitrary<List<List<Integer>>> generatePartitionReplicasFixedReplicationFactor(List<UsableBroker> brokers, int replicationFactor) {
         return replicasFromBrokers(brokers, replicationFactor).list().ofMinSize(1).ofMaxSize(16);
     }
 
-    private static Arbitrary<List<List<Integer>>> generatePartitionReplicas(List<BrokerMetadata> brokers, int maxReplicationFactor) {
+    private static Arbitrary<List<List<Integer>>> generatePartitionReplicas(List<UsableBroker> brokers, int maxReplicationFactor) {
         if (brokers.isEmpty()) throw new RuntimeException("No brokers to assign partitions to");
         return Arbitraries.integers().between(1, maxReplicationFactor).flatMap(replicationFactor -> generatePartitionReplicasFixedReplicationFactor(brokers, replicationFactor));
     }
 
-    private static Arbitrary<Map<TopicPartition, List<Integer>>> generateAssignments(List<BrokerMetadata> brokers, int maxReplicationFactor) {
+    private static Arbitrary<Map<TopicPartition, List<Integer>>> generateAssignments(List<UsableBroker> brokers, int maxReplicationFactor) {
         return generatePartitionReplicas(brokers, maxReplicationFactor).list().ofMinSize(1).ofMaxSize(100).map(topics -> {
             final Map<TopicPartition, List<Integer>> map = new HashMap<>();
 
@@ -175,13 +173,13 @@ public class StickyPartitionReassignorUnitTest {
         });
     }
 
-    private static Arbitrary<ClusterState> metadataForBrokers(Arbitrary<List<BrokerMetadata>> brokerArbitrary) {
+    private static Arbitrary<ClusterState> metadataForBrokers(Arbitrary<List<UsableBroker>> brokerArbitrary) {
         return brokerArbitrary.flatMap(brokers -> generateAssignments(brokers, brokers.size()).map(assignments -> new ClusterState(brokers, assignments)));
     }
 
-    private static Arbitrary<ClusterState> metadataForBrokersBrokersRemoved(Arbitrary<List<BrokerMetadata>> brokerArbitrary) {
+    private static Arbitrary<ClusterState> metadataForBrokersBrokersRemoved(Arbitrary<List<UsableBroker>> brokerArbitrary) {
         return brokerArbitrary.filter(brokers -> brokers.size() > 1).flatMap(brokers -> Arbitraries.integers().between(1, brokers.size() - 1).flatMap(brokersRemoved -> {
-            final List<BrokerMetadata> brokersDuringRebalancing = new ArrayList<>();
+            final List<UsableBroker> brokersDuringRebalancing = new ArrayList<>();
             for (int i = 0; i < brokers.size(); i++) {
                 if (i >= brokersRemoved) brokersDuringRebalancing.add(brokers.get(i));
             }
@@ -190,10 +188,10 @@ public class StickyPartitionReassignorUnitTest {
         }));
     }
 
-    private static Map<Integer, BrokerMetadata> brokerMap(List<BrokerMetadata> brokers) {
-        final Map<Integer, BrokerMetadata> brokerMap = new HashMap<>();
-        for (final BrokerMetadata broker : brokers) {
-            brokerMap.put(broker.id, broker);
+    private static Map<Integer, UsableBroker> brokerMap(List<UsableBroker> brokers) {
+        final Map<Integer, UsableBroker> brokerMap = new HashMap<>();
+        for (final UsableBroker broker : brokers) {
+            brokerMap.put(broker.id(), broker);
         }
         return brokerMap;
     }
@@ -208,19 +206,19 @@ public class StickyPartitionReassignorUnitTest {
         return replicaCountPerBroker;
     }
 
-    private static Set<Optional<String>> racks(List<BrokerMetadata> brokers) {
+    private static Set<Optional<String>> racks(List<UsableBroker> brokers) {
         final Set<Optional<String>> racks = new HashSet<>();
-        for (final BrokerMetadata broker : brokers) {
-            racks.add(broker.rack);
+        for (final UsableBroker broker : brokers) {
+            racks.add(broker.rack());
         }
         return racks;
     }
 
-    private static long topicPartitionRackScore(Map<Integer, BrokerMetadata> brokers, Set<Optional<String>> racks, List<Integer> assignments) {
+    private static long topicPartitionRackScore(Map<Integer, UsableBroker> brokers, Set<Optional<String>> racks, List<Integer> assignments) {
         final Map<Optional<String>, Integer> countPerRacks = new HashMap<>();
         for (final Integer nodeId : assignments) {
-            final BrokerMetadata broker = brokers.get(nodeId);
-            countPerRacks.compute(broker.rack, (key, value) -> value == null ? 1 : value + 1);
+            final UsableBroker broker = brokers.get(nodeId);
+            countPerRacks.compute(broker.rack(), (key, value) -> value == null ? 1 : value + 1);
         }
 
         long score = 0;
@@ -231,25 +229,25 @@ public class StickyPartitionReassignorUnitTest {
         return score;
     }
 
-    private static long topicPartitionBrokerScore(Map<Integer, BrokerMetadata> brokers, List<Integer> assignments) {
+    private static long topicPartitionBrokerScore(Map<Integer, UsableBroker> brokers, List<Integer> assignments) {
         final Map<Integer, Integer> countPerBroker = new HashMap<>();
         for (final Integer nodeId : assignments) {
             countPerBroker.compute(nodeId, (key, value) -> value == null ? 1 : value + 1);
         }
 
         long score = 0;
-        for (final Map.Entry<Integer, BrokerMetadata> entry : brokers.entrySet()) {
+        for (final Map.Entry<Integer, UsableBroker> entry : brokers.entrySet()) {
             final Integer countForBroker = countPerBroker.getOrDefault(entry.getKey(), 0);
             score += (long) Math.pow(countForBroker, 2);
         }
         return score;
     }
 
-    private static BigInteger globalBrokerScore(Map<Integer, BrokerMetadata> brokers, Map<TopicPartition, List<Integer>> assignments) {
+    private static BigInteger globalBrokerScore(Map<Integer, UsableBroker> brokers, Map<TopicPartition, List<Integer>> assignments) {
         final Map<Integer, Integer> countPerBroker = replicaCountPerBroker(assignments);
 
         BigInteger score = BigInteger.ZERO;
-        for (final Map.Entry<Integer, BrokerMetadata> entry : brokers.entrySet()) {
+        for (final Map.Entry<Integer, UsableBroker> entry : brokers.entrySet()) {
             final long countForBroker = (long) countPerBroker.getOrDefault(entry.getKey(), 0);
             final BigInteger brokerScore = BigInteger.valueOf(countForBroker).pow(2);
             score = score.add(brokerScore);
@@ -316,7 +314,7 @@ public class StickyPartitionReassignorUnitTest {
         final StickyPartitionReassignor assignor = new StickyPartitionReassignor(metadata.assignments, metadata.brokers);
         final Map<TopicPartition, List<Integer>> newPartitionAssignments = assignor.reassign();
 
-        final Map<Integer, BrokerMetadata> brokers = brokerMap(metadata.brokers);
+        final Map<Integer, UsableBroker> brokers = brokerMap(metadata.brokers);
         final Set<Optional<String>> racks = racks(metadata.brokers);
 
         Assertions.assertEquals(metadata.assignments.size(), newPartitionAssignments.size());
@@ -341,7 +339,7 @@ public class StickyPartitionReassignorUnitTest {
         final StickyPartitionReassignor assignor = new StickyPartitionReassignor(metadata.assignments, metadata.brokers);
         final Map<TopicPartition, List<Integer>> newPartitionAssignments = assignor.reassign();
 
-        final Map<Integer, BrokerMetadata> brokers = brokerMap(metadata.brokers);
+        final Map<Integer, UsableBroker> brokers = brokerMap(metadata.brokers);
 
         assertThat(newPartitionAssignments.size(), is(equalTo(metadata.assignments.size())));
 
@@ -362,7 +360,7 @@ public class StickyPartitionReassignorUnitTest {
 
     @Property
     void globalBrokerDistributionIsNotWorseThanBefore(@ForAll("anyMetadata") ClusterState metadata) {
-        final Map<Integer, BrokerMetadata> brokers = brokerMap(metadata.brokers);
+        final Map<Integer, UsableBroker> brokers = brokerMap(metadata.brokers);
         final BigInteger currentDistributionScore = globalBrokerScore(brokers, metadata.assignments);
 
         final StickyPartitionReassignor assignor = new StickyPartitionReassignor(metadata.assignments, metadata.brokers);
@@ -384,8 +382,8 @@ public class StickyPartitionReassignorUnitTest {
         final Map<Integer, Integer> newCountPerBroker = replicaCountPerBroker(newPartitionAssignments);
         Integer newMinCount = null;
         Integer newMaxCount = null;
-        for (final BrokerMetadata broker : metadata.brokers) {
-            final int brokerReplicaCount = newCountPerBroker.getOrDefault(broker.id, 0);
+        for (final UsableBroker broker : metadata.brokers) {
+            final int brokerReplicaCount = newCountPerBroker.getOrDefault(broker.id(), 0);
             if (newMinCount == null || newMinCount > brokerReplicaCount) newMinCount = brokerReplicaCount;
             if (newMaxCount == null || newMaxCount < brokerReplicaCount) newMaxCount = brokerReplicaCount;
         }
@@ -400,7 +398,7 @@ public class StickyPartitionReassignorUnitTest {
 
     @Property
     void reachesBetterGlobalBrokerDistributionOrRequiresAtLeastSameMoveCountForSameGlobalBrokerDistribution(@ForAll("anyMetadata") ClusterState metadata) {
-        final Map<Integer, BrokerMetadata> brokers = brokerMap(metadata.brokers);
+        final Map<Integer, UsableBroker> brokers = brokerMap(metadata.brokers);
 
         final Map<TopicPartition, List<Integer>> oldPartitionAssignments = ReassignPartitionsCommand.calculateAssignment(metadata.assignments, metadata.brokers);
         final int oldMovesCount = countMoves(metadata.assignments, oldPartitionAssignments);
@@ -428,7 +426,7 @@ public class StickyPartitionReassignorUnitTest {
         final StickyPartitionReassignor assignor = new StickyPartitionReassignor(metadata.assignments, metadata.brokers);
         final Map<TopicPartition, List<Integer>> newPartitionAssignments = assignor.reassign();
 
-        final Map<Integer, BrokerMetadata> brokers = brokerMap(metadata.brokers);
+        final Map<Integer, UsableBroker> brokers = brokerMap(metadata.brokers);
 
         assertThat(newPartitionAssignments.size(), is(equalTo(metadata.assignments.size())));
 
@@ -441,11 +439,11 @@ public class StickyPartitionReassignorUnitTest {
             assertThat(newAssignments.size(), is(equalTo(currentAssignments.size())));
 
             for (final int nodeId : newAssignments) {
-                assertThat(brokers, hasEntry(is(equalTo(nodeId)), is(any(BrokerMetadata.class))));
+                assertThat(brokers, hasEntry(is(equalTo(nodeId)), is(any(UsableBroker.class))));
             }
         }
     }
 
-    private record ClusterState(List<BrokerMetadata> brokers, Map<TopicPartition, List<Integer>> assignments) {
+    private record ClusterState(List<UsableBroker> brokers, Map<TopicPartition, List<Integer>> assignments) {
     }
 }

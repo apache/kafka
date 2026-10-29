@@ -31,6 +31,7 @@ import org.apache.kafka.common.serialization.ByteArrayDeserializer;
 import org.apache.kafka.common.serialization.ByteArraySerializer;
 import org.apache.kafka.common.utils.Time;
 import org.apache.kafka.connect.errors.ConnectException;
+import org.apache.kafka.connect.runtime.SourceConnectorConfig;
 import org.apache.kafka.connect.runtime.WorkerConfig;
 import org.apache.kafka.connect.runtime.distributed.DistributedConfig;
 import org.apache.kafka.connect.util.Callback;
@@ -45,7 +46,6 @@ import org.slf4j.LoggerFactory;
 import java.nio.ByteBuffer;
 import java.time.Duration;
 import java.util.Collection;
-import java.util.Collections;
 import java.util.HashMap;
 import java.util.Map;
 import java.util.Objects;
@@ -102,6 +102,11 @@ public class KafkaOffsetBackingStore extends KafkaTopicBasedBackingStore impleme
                         ignored -> true
                 );
             }
+
+            @Override
+            protected String getTopicConfig() {
+                return SourceConnectorConfig.OFFSETS_TOPIC_CONFIG;
+            }
         };
     }
 
@@ -134,6 +139,11 @@ public class KafkaOffsetBackingStore extends KafkaTopicBasedBackingStore impleme
                         topicInitializer(topic, newTopicDescription(topic, config), config, Time.SYSTEM),
                         ignored -> true
                 );
+            }
+
+            @Override
+            protected String getTopicConfig() {
+                return SourceConnectorConfig.OFFSETS_TOPIC_CONFIG;
             }
         };
     }
@@ -193,12 +203,14 @@ public class KafkaOffsetBackingStore extends KafkaTopicBasedBackingStore impleme
         producerProps.put(ProducerConfig.ENABLE_IDEMPOTENCE_CONFIG, "false");
         producerProps.put(CommonClientConfigs.CLIENT_ID_CONFIG, clientId);
         ConnectUtils.addMetricsContextProperties(producerProps, config, clusterId);
+        ConnectUtils.enforceSynchronousBootstrapResolution(producerProps);
 
         Map<String, Object> consumerProps = new HashMap<>(originals);
         consumerProps.put(ConsumerConfig.KEY_DESERIALIZER_CLASS_CONFIG, ByteArrayDeserializer.class.getName());
         consumerProps.put(ConsumerConfig.VALUE_DESERIALIZER_CLASS_CONFIG, ByteArrayDeserializer.class.getName());
         consumerProps.put(CommonClientConfigs.CLIENT_ID_CONFIG, clientId);
         ConnectUtils.addMetricsContextProperties(consumerProps, config, clusterId);
+        ConnectUtils.enforceSynchronousBootstrapResolution(consumerProps);
         if (config.exactlyOnceSourceEnabled()) {
             ConnectUtils.ensureProperty(
                     consumerProps, ConsumerConfig.ISOLATION_LEVEL_CONFIG, IsolationLevel.READ_COMMITTED.toString(),
@@ -210,6 +222,7 @@ public class KafkaOffsetBackingStore extends KafkaTopicBasedBackingStore impleme
         Map<String, Object> adminProps = new HashMap<>(originals);
         adminProps.put(CommonClientConfigs.CLIENT_ID_CONFIG, clientId);
         ConnectUtils.addMetricsContextProperties(adminProps, config, clusterId);
+        ConnectUtils.enforceSynchronousBootstrapResolution(adminProps);
         NewTopic topicDescription = newTopicDescription(topic, config);
 
         this.offsetLog = createKafkaBasedLog(topic, producerProps, consumerProps, consumedCallback, topicDescription, topicAdminSupplier, config, Time.SYSTEM);
@@ -218,7 +231,7 @@ public class KafkaOffsetBackingStore extends KafkaTopicBasedBackingStore impleme
     protected NewTopic newTopicDescription(final String topic, final WorkerConfig config) {
         Map<String, Object> topicSettings = config instanceof DistributedConfig
                 ? ((DistributedConfig) config).offsetStorageTopicSettings()
-                : Collections.emptyMap();
+                : Map.of();
         return TopicAdmin.defineTopic(topic)
                 .config(topicSettings) // first so that we override user-supplied settings as needed
                 .compacted()
@@ -265,7 +278,7 @@ public class KafkaOffsetBackingStore extends KafkaTopicBasedBackingStore impleme
 
     @Override
     public Future<Map<ByteBuffer, ByteBuffer>> get(final Collection<ByteBuffer> keys) {
-        ConvertingFutureCallback<Void, Map<ByteBuffer, ByteBuffer>> future = new ConvertingFutureCallback<Void, Map<ByteBuffer, ByteBuffer>>() {
+        ConvertingFutureCallback<Void, Map<ByteBuffer, ByteBuffer>> future = new ConvertingFutureCallback<>() {
             @Override
             public Map<ByteBuffer, ByteBuffer> convert(Void result) {
                 Map<ByteBuffer, ByteBuffer> values = new HashMap<>();
@@ -297,7 +310,7 @@ public class KafkaOffsetBackingStore extends KafkaTopicBasedBackingStore impleme
 
     @Override
     public Set<Map<String, Object>> connectorPartitions(String connectorName) {
-        return connectorPartitions.getOrDefault(connectorName, Collections.emptySet());
+        return connectorPartitions.getOrDefault(connectorName, Set.of());
     }
 
     protected final Callback<ConsumerRecord<byte[], byte[]>> consumedCallback = (error, record) -> {

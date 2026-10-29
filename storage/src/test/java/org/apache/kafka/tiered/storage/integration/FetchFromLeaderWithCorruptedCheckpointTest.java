@@ -16,45 +16,70 @@
  */
 package org.apache.kafka.tiered.storage.integration;
 
-import kafka.log.LogManager;
 import kafka.server.ReplicaManager;
 
+import org.apache.kafka.clients.consumer.GroupProtocol;
+import org.apache.kafka.common.test.ClusterInstance;
+import org.apache.kafka.common.test.api.ClusterConfig;
+import org.apache.kafka.common.test.api.ClusterTemplate;
+import org.apache.kafka.common.test.api.Type;
 import org.apache.kafka.storage.internals.checkpoint.CleanShutdownFileHandler;
+import org.apache.kafka.storage.internals.log.LogManager;
 import org.apache.kafka.tiered.storage.TieredStorageTestBuilder;
-import org.apache.kafka.tiered.storage.TieredStorageTestHarness;
 import org.apache.kafka.tiered.storage.specs.KeyValueSpec;
 
-import java.util.Arrays;
 import java.util.List;
+import java.util.Locale;
 import java.util.Map;
+import java.util.Set;
 
 import static org.apache.kafka.common.utils.Utils.mkEntry;
 import static org.apache.kafka.common.utils.Utils.mkMap;
+import static org.apache.kafka.tiered.storage.utils.TieredStorageTestUtils.createServerPropsForRemoteStorage;
 
-public class FetchFromLeaderWithCorruptedCheckpointTest extends TieredStorageTestHarness {
+public final class FetchFromLeaderWithCorruptedCheckpointTest {
+    private static final int BROKER_COUNT = 3;
+    private static final int NUM_REMOTE_LOG_METADATA_PARTITIONS = 2;
 
-    @Override
-    public int brokerCount() {
-        return 2;
+    @SuppressWarnings("unused")
+    private static List<ClusterConfig> clusterConfig() {
+        return List.of(ClusterConfig.defaultBuilder()
+                .setTypes(Set.of(Type.KRAFT))
+                .setBrokers(BROKER_COUNT)
+                .setServerProperties(createServerPropsForRemoteStorage(
+                        FetchFromLeaderWithCorruptedCheckpointTest.class.getSimpleName().toLowerCase(Locale.ROOT),
+                        BROKER_COUNT,
+                        NUM_REMOTE_LOG_METADATA_PARTITIONS))
+                .build());
     }
 
-    @Override
-    protected void writeTestSpecifications(TieredStorageTestBuilder builder) {
-        final Integer broker0 = 0;
-        final Integer broker1 = 1;
+    @ClusterTemplate("clusterConfig")
+    public void testFetchFromLeaderWithCorruptedCheckpointWithClassicGroupProtocol(ClusterInstance clusterInstance) throws Exception {
+        executeFetchFromLeaderWithCorruptedCheckpointTest(clusterInstance, GroupProtocol.CLASSIC);
+    }
+
+    @ClusterTemplate("clusterConfig")
+    public void testFetchFromLeaderWithCorruptedCheckpointWithConsumerGroupProtocol(ClusterInstance clusterInstance) throws Exception {
+        executeFetchFromLeaderWithCorruptedCheckpointTest(clusterInstance, GroupProtocol.CONSUMER);
+    }
+
+    private void executeFetchFromLeaderWithCorruptedCheckpointTest(ClusterInstance clusterInstance, GroupProtocol groupProtocol) throws Exception {
+        final int broker0 = 0;
+        final int broker1 = 1;
         final String topicA = "topicA";
-        final Integer p0 = 0;
-        final Integer partitionCount = 1;
-        final Integer replicationFactor = 2;
-        final Integer maxBatchCountPerSegment = 1;
+        final int p0 = 0;
+        final int partitionCount = 1;
+        final int replicationFactor = 2;
+        final int maxBatchCountPerSegment = 1;
         final boolean enableRemoteLogStorage = true;
-        final Map<Integer, List<Integer>> assignment = mkMap(mkEntry(p0, Arrays.asList(broker0, broker1)));
-        final List<String> checkpointFiles = Arrays.asList(
+        final Map<Integer, List<Integer>> assignment = mkMap(mkEntry(p0, List.of(broker0, broker1)));
+        final List<String> checkpointFiles = List.of(
                 ReplicaManager.HighWatermarkFilename(),
-                LogManager.RecoveryPointCheckpointFile(),
+                LogManager.RECOVERY_POINT_CHECKPOINT_FILE,
                 CleanShutdownFileHandler.CLEAN_SHUTDOWN_FILE_NAME);
 
-        builder.createTopic(topicA, partitionCount, replicationFactor, maxBatchCountPerSegment, assignment,
+        final TieredStorageTestBuilder builder = new TieredStorageTestBuilder()
+                .createTopic(topicA, partitionCount, replicationFactor, maxBatchCountPerSegment, assignment,
                         enableRemoteLogStorage)
                 // send records to partition 0
                 .expectSegmentToBeOffloaded(broker0, topicA, p0, 0, new KeyValueSpec("k0", "v0"))
@@ -81,5 +106,6 @@ public class FetchFromLeaderWithCorruptedCheckpointTest extends TieredStorageTes
                 .expectFetchFromTieredStorage(broker0, topicA, p0, 4)
                 .consume(topicA, p0, 0L, 5, 4);
 
+        builder.build().execute(clusterInstance, groupProtocol);
     }
 }

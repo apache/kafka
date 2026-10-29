@@ -23,7 +23,6 @@ import org.apache.kafka.streams.processor.StateStore;
 import org.apache.kafka.streams.state.KeyValueBytesStoreSupplier;
 import org.apache.kafka.streams.state.TimestampedKeyValueStore;
 
-import org.hamcrest.CoreMatchers;
 import org.junit.jupiter.api.Test;
 import org.junit.jupiter.api.extension.ExtendWith;
 import org.mockito.Mock;
@@ -33,9 +32,8 @@ import org.mockito.quality.Strictness;
 
 import java.util.Collections;
 
-import static org.hamcrest.MatcherAssert.assertThat;
-import static org.hamcrest.Matchers.equalTo;
-import static org.hamcrest.core.IsInstanceOf.instanceOf;
+import static org.junit.jupiter.api.Assertions.assertEquals;
+import static org.junit.jupiter.api.Assertions.assertInstanceOf;
 import static org.junit.jupiter.api.Assertions.assertThrows;
 import static org.mockito.Mockito.when;
 
@@ -70,16 +68,16 @@ public class TimestampedKeyValueStoreBuilderTest {
     public void shouldHaveMeteredStoreAsOuterStore() {
         setUp();
         final TimestampedKeyValueStore<String, String> store = builder.build();
-        assertThat(store, instanceOf(MeteredTimestampedKeyValueStore.class));
+        assertInstanceOf(MeteredTimestampedKeyValueStore.class, store);
     }
 
     @Test
     public void shouldHaveChangeLoggingStoreByDefault() {
         setUp();
         final TimestampedKeyValueStore<String, String> store = builder.build();
-        assertThat(store, instanceOf(MeteredTimestampedKeyValueStore.class));
+        assertInstanceOf(MeteredTimestampedKeyValueStore.class, store);
         final StateStore next = ((WrappedStateStore) store).wrapped();
-        assertThat(next, instanceOf(ChangeLoggingTimestampedKeyValueBytesStore.class));
+        assertInstanceOf(ChangeLoggingTimestampedKeyValueBytesStore.class, next);
     }
 
     @Test
@@ -87,7 +85,7 @@ public class TimestampedKeyValueStoreBuilderTest {
         setUp();
         final TimestampedKeyValueStore<String, String> store = builder.withLoggingDisabled().build();
         final StateStore next = ((WrappedStateStore) store).wrapped();
-        assertThat(next, CoreMatchers.equalTo(inner));
+        assertEquals(inner, next);
     }
 
     @Test
@@ -95,8 +93,8 @@ public class TimestampedKeyValueStoreBuilderTest {
         setUp();
         final TimestampedKeyValueStore<String, String> store = builder.withCachingEnabled().build();
         final StateStore wrapped = ((WrappedStateStore) store).wrapped();
-        assertThat(store, instanceOf(MeteredTimestampedKeyValueStore.class));
-        assertThat(wrapped, instanceOf(CachingKeyValueStore.class));
+        assertInstanceOf(MeteredTimestampedKeyValueStore.class, store);
+        assertInstanceOf(CachingKeyValueStore.class, wrapped);
     }
 
     @Test
@@ -106,9 +104,9 @@ public class TimestampedKeyValueStoreBuilderTest {
             .withLoggingEnabled(Collections.emptyMap())
             .build();
         final StateStore wrapped = ((WrappedStateStore) store).wrapped();
-        assertThat(store, instanceOf(MeteredTimestampedKeyValueStore.class));
-        assertThat(wrapped, instanceOf(ChangeLoggingTimestampedKeyValueBytesStore.class));
-        assertThat(((WrappedStateStore) wrapped).wrapped(), CoreMatchers.equalTo(inner));
+        assertInstanceOf(MeteredTimestampedKeyValueStore.class, store);
+        assertInstanceOf(ChangeLoggingTimestampedKeyValueBytesStore.class, wrapped);
+        assertEquals(inner, ((WrappedStateStore) wrapped).wrapped());
     }
 
     @Test
@@ -120,10 +118,10 @@ public class TimestampedKeyValueStoreBuilderTest {
             .build();
         final WrappedStateStore caching = (WrappedStateStore) ((WrappedStateStore) store).wrapped();
         final WrappedStateStore changeLogging = (WrappedStateStore) caching.wrapped();
-        assertThat(store, instanceOf(MeteredTimestampedKeyValueStore.class));
-        assertThat(caching, instanceOf(CachingKeyValueStore.class));
-        assertThat(changeLogging, instanceOf(ChangeLoggingTimestampedKeyValueBytesStore.class));
-        assertThat(changeLogging.wrapped(), CoreMatchers.equalTo(inner));
+        assertInstanceOf(MeteredTimestampedKeyValueStore.class, store);
+        assertInstanceOf(CachingKeyValueStore.class, caching);
+        assertInstanceOf(ChangeLoggingTimestampedKeyValueBytesStore.class, changeLogging);
+        assertEquals(inner, changeLogging.wrapped());
     }
 
     @Test
@@ -135,7 +133,7 @@ public class TimestampedKeyValueStoreBuilderTest {
             .withLoggingDisabled()
             .withCachingDisabled()
             .build();
-        assertThat(((WrappedStateStore) store).wrapped(), instanceOf(RocksDBTimestampedStore.class));
+        assertInstanceOf(RocksDBTimestampedStore.class, ((WrappedStateStore) store).wrapped());
     }
 
     @Test
@@ -147,7 +145,7 @@ public class TimestampedKeyValueStoreBuilderTest {
             .withLoggingDisabled()
             .withCachingDisabled()
             .build();
-        assertThat(((WrappedStateStore) store).wrapped(), instanceOf(KeyValueToTimestampedKeyValueByteStoreAdapter.class));
+        assertInstanceOf(KeyValueToTimestampedKeyValueByteStoreAdapter.class, ((WrappedStateStore) store).wrapped());
     }
 
     @SuppressWarnings("all")
@@ -184,7 +182,7 @@ public class TimestampedKeyValueStoreBuilderTest {
 
         final Exception e = assertThrows(NullPointerException.class,
             () -> new TimestampedKeyValueStoreBuilder<>(supplier, Serdes.String(), Serdes.String(), new MockTime()));
-        assertThat(e.getMessage(), equalTo("storeSupplier's metricsScope can't be null"));
+        assertEquals("storeSupplier's metricsScope can't be null", e.getMessage());
     }
 
 }

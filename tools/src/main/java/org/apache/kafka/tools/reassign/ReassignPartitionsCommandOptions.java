@@ -43,6 +43,7 @@ public class ReassignPartitionsCommandOptions extends CommandDefaultOptions {
     final OptionSpec<Long> timeoutOpt;
     final OptionSpec<?> additionalOpt;
     final OptionSpec<?> preserveThrottlesOpt;
+    final OptionSpec<?> disallowReplicationFactorChangeOpt;
 
     public ReassignPartitionsCommandOptions(String[] args) {
         super(args);
@@ -117,6 +118,7 @@ public class ReassignPartitionsCommandOptions extends CommandDefaultOptions {
         additionalOpt = parser.accepts("additional", "Execute this reassignment in addition to any " +
             "other ongoing ones. This option can also be used to change the throttle of an ongoing reassignment.");
         preserveThrottlesOpt = parser.accepts("preserve-throttles", "Do not modify broker or topic throttles.");
+        disallowReplicationFactorChangeOpt = parser.accepts("disallow-replication-factor-change", "Denies the ability to change a partition's replication factor as part of this reassignment through adding validation against it.");
 
         options = parser.parse(args);
     }

@@ -23,13 +23,14 @@ import org.apache.kafka.common.message.OffsetCommitResponseData.OffsetCommitResp
 import org.apache.kafka.common.protocol.ApiKeys;
 import org.apache.kafka.common.protocol.Errors;
 import org.apache.kafka.common.protocol.MessageUtil;
+import org.apache.kafka.common.protocol.Readable;
 
 import org.junit.jupiter.api.BeforeEach;
 import org.junit.jupiter.api.Test;
 
-import java.nio.ByteBuffer;
 import java.util.Arrays;
 import java.util.Collections;
+import java.util.EnumMap;
 import java.util.HashMap;
 import java.util.Map;
 
@@ -54,7 +55,7 @@ public class OffsetCommitResponseTest {
 
     @BeforeEach
     public void setUp() {
-        expectedErrorCounts = new HashMap<>();
+        expectedErrorCounts = new EnumMap<>(Errors.class);
         expectedErrorCounts.put(errorOne, 1);
         expectedErrorCounts.put(errorTwo, 1);
 
@@ -87,8 +88,8 @@ public class OffsetCommitResponseTest {
             .setThrottleTimeMs(throttleTimeMs);
 
         for (short version : ApiKeys.OFFSET_COMMIT.allVersions()) {
-            ByteBuffer buffer = MessageUtil.toByteBuffer(data, version);
-            OffsetCommitResponse response = OffsetCommitResponse.parse(buffer, version);
+            Readable readable = MessageUtil.toByteBufferAccessor(data, version);
+            OffsetCommitResponse response = OffsetCommitResponse.parse(readable, version);
             assertEquals(expectedErrorCounts, response.errorCounts());
 
             if (version >= 3) {

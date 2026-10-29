@@ -31,12 +31,14 @@ import java.util.HashMap;
 import java.util.HashSet;
 import java.util.List;
 import java.util.Map;
+import java.util.Set;
 
 import javax.security.auth.callback.Callback;
 import javax.security.auth.callback.UnsupportedCallbackException;
 
 import static org.junit.jupiter.api.Assertions.assertEquals;
 import static org.junit.jupiter.api.Assertions.assertNotNull;
+import static org.junit.jupiter.api.Assertions.assertNull;
 import static org.junit.jupiter.api.Assertions.assertThrows;
 
 public class OAuthBearerUnsecuredLoginCallbackHandlerTest {
@@ -73,6 +75,32 @@ public class OAuthBearerUnsecuredLoginCallbackHandlerTest {
         assertThrows(IOException.class, () -> callbackHandler.handle(new Callback[] {callback}));
     }
 
+    /**
+     * KAFKA-21143: When the JAAS module options contain only non-unsecured-login
+     * options (e.g. ssl.* for JWKS endpoint TLS trust), the handler should
+     * produce a tokenless (null) login instead of attempting to mint an unsecured JWS.
+     */
+    @Test
+    public void sslOnlyModuleOptionsProduceTokenlessLogin() throws IOException, UnsupportedCallbackException {
+        Map<String, String> options = new HashMap<>();
+        options.put("ssl.truststore.location", "/path/to/truststore.jks");
+        options.put("ssl.truststore.type", "JKS");
+        options.put("ssl.truststore.password", "changeit");
+        OAuthBearerUnsecuredLoginCallbackHandler callbackHandler = createCallbackHandler(options, new MockTime());
+        OAuthBearerTokenCallback callback = new OAuthBearerTokenCallback();
+        callbackHandler.handle(new Callback[] {callback});
+        assertNull(callback.token(), "SSL-only module options should result in a tokenless login");
+    }
+
+    @Test
+    public void emptyModuleOptionsProduceTokenlessLogin() throws IOException, UnsupportedCallbackException {
+        Map<String, String> options = new HashMap<>();
+        OAuthBearerUnsecuredLoginCallbackHandler callbackHandler = createCallbackHandler(options, new MockTime());
+        OAuthBearerTokenCallback callback = new OAuthBearerTokenCallback();
+        callbackHandler.handle(new Callback[] {callback});
+        assertNull(callback.token(), "Empty module options should result in a tokenless login");
+    }
+
     @Test
     public void minimalToken() throws IOException, UnsupportedCallbackException {
         Map<String, String> options = new HashMap<>();
@@ -86,7 +114,23 @@ public class OAuthBearerUnsecuredLoginCallbackHandlerTest {
         assertNotNull(jws, "create token failed");
         long startMs = mockTime.milliseconds();
         confirmCorrectValues(jws, user, startMs, 1000 * 60 * 60);
-        assertEquals(new HashSet<>(Arrays.asList("sub", "iat", "exp")), jws.claims().keySet());
+        assertEquals(Set.of("sub", "iat", "exp"), jws.claims().keySet());
+    }
+
+    @Test
+    public void unsecuredLoginWithSslOptionsStillProducesToken() throws IOException, UnsupportedCallbackException {
+        Map<String, String> options = new HashMap<>();
+        String user = "user";
+        options.put("unsecuredLoginStringClaim_sub", user);
+        options.put("ssl.truststore.location", "/path/to/truststore.jks");
+        options.put("ssl.truststore.type", "JKS");
+        MockTime mockTime = new MockTime();
+        OAuthBearerUnsecuredLoginCallbackHandler callbackHandler = createCallbackHandler(options, mockTime);
+        OAuthBearerTokenCallback callback = new OAuthBearerTokenCallback();
+        callbackHandler.handle(new Callback[] {callback});
+        OAuthBearerUnsecuredJws jws = (OAuthBearerUnsecuredJws) callback.token();
+        assertNotNull(jws, "Token should be created when unsecuredLogin options are present alongside ssl options");
+        assertEquals(user, jws.principalName());
     }
 
     @SuppressWarnings("unchecked")
@@ -123,11 +167,11 @@ public class OAuthBearerUnsecuredLoginCallbackHandlerTest {
             long startMs = mockTime.milliseconds();
             confirmCorrectValues(jws, user, startMs, lifetimeSeconds * 1000);
             Map<String, Object> claims = jws.claims();
-            assertEquals(new HashSet<>(Arrays.asList(actualScopeClaimName, principalClaimName, "iat", "exp", "number",
-                    "list", "emptyList1", "emptyList2")), claims.keySet());
-            assertEquals(new HashSet<>(Arrays.asList(explicitScope1, explicitScope2)),
+            assertEquals(Set.of(actualScopeClaimName, principalClaimName, "iat", "exp", "number",
+                    "list", "emptyList1", "emptyList2"), claims.keySet());
+            assertEquals(Set.of(explicitScope1, explicitScope2),
                     new HashSet<>((List<String>) claims.get(actualScopeClaimName)));
-            assertEquals(new HashSet<>(Arrays.asList(explicitScope1, explicitScope2)), jws.scope());
+            assertEquals(Set.of(explicitScope1, explicitScope2), jws.scope());
             assertEquals(1.0, jws.claim("number", Number.class));
             assertEquals(Arrays.asList("1", "2", ""), jws.claim("list", List.class));
             assertEquals(Collections.emptyList(), jws.claim("emptyList1", List.class));
@@ -151,7 +195,7 @@ public class OAuthBearerUnsecuredLoginCallbackHandlerTest {
     private static void confirmCorrectValues(OAuthBearerUnsecuredJws jws, String user, long startMs,
             long lifetimeSeconds) throws OAuthBearerIllegalTokenException {
         Map<String, Object> header = jws.header();
-        assertEquals(header.size(), 1);
+        assertEquals(1, header.size());
         assertEquals("none", header.get("alg"));
         assertEquals(user != null ? user : "<unknown>", jws.principalName());
         assertEquals(Long.valueOf(startMs), jws.startTimeMs());

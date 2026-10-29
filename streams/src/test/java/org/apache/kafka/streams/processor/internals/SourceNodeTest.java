@@ -38,15 +38,13 @@ import org.mockito.MockedStatic;
 import org.mockito.Mockito;
 
 import java.nio.charset.StandardCharsets;
+import java.util.List;
 import java.util.Map;
 import java.util.stream.Collectors;
 
 import static org.apache.kafka.common.utils.Utils.mkEntry;
 import static org.apache.kafka.common.utils.Utils.mkMap;
-import static org.hamcrest.CoreMatchers.is;
-import static org.hamcrest.MatcherAssert.assertThat;
-import static org.hamcrest.Matchers.contains;
-import static org.hamcrest.Matchers.equalTo;
+import static org.junit.jupiter.api.Assertions.assertEquals;
 import static org.junit.jupiter.api.Assertions.assertThrows;
 import static org.junit.jupiter.api.Assertions.assertTrue;
 import static org.mockito.ArgumentMatchers.any;
@@ -70,7 +68,7 @@ public class SourceNodeTest {
         final SourceNode<String, String> sourceNode = new MockSourceNode<>(new TheDeserializer(), new TheDeserializer());
         final RecordHeaders headers = new RecordHeaders();
         final String deserializeKey = sourceNode.deserializeKey("topic", headers, "data".getBytes(StandardCharsets.UTF_8));
-        assertThat(deserializeKey, is("topic" + headers + "data"));
+        assertEquals("topic" + headers + "data", deserializeKey);
     }
 
     @Test
@@ -78,7 +76,7 @@ public class SourceNodeTest {
         final SourceNode<String, String> sourceNode = new MockSourceNode<>(new TheDeserializer(), new TheDeserializer());
         final RecordHeaders headers = new RecordHeaders();
         final String deserializedValue = sourceNode.deserializeValue("topic", headers, "data".getBytes(StandardCharsets.UTF_8));
-        assertThat(deserializedValue, is("topic" + headers + "data"));
+        assertEquals("topic" + headers + "data", deserializedValue);
     }
 
     public static class TheDeserializer implements Deserializer<String> {
@@ -97,7 +95,7 @@ public class SourceNodeTest {
     public void shouldExposeProcessMetrics() {
         final Metrics metrics = new Metrics();
         final StreamsMetricsImpl streamsMetrics =
-            new StreamsMetricsImpl(metrics, "test-client", "processId", new MockTime());
+            new StreamsMetricsImpl(metrics, "test-client", new MockTime());
         final InternalMockProcessorContext<String, String> context = new InternalMockProcessorContext<>(streamsMetrics);
         final SourceNode<String, String> node =
             new SourceNode<>(context.currentNode().name(), new TheDeserializer(), new TheDeserializer());
@@ -124,10 +122,9 @@ public class SourceNodeTest {
         final Sensor processSensor =
             metrics.getSensor(sensorNamePrefix + ".node." + context.currentNode().name() + ".s.process");
         final SensorAccessor sensorAccessor = new SensorAccessor(processSensor);
-        assertThat(
-            sensorAccessor.parents().stream().map(Sensor::name).collect(Collectors.toList()),
-            contains(sensorNamePrefix + ".s.process")
-        );
+        assertEquals(
+            List.of(sensorNamePrefix + ".s.process"),
+            sensorAccessor.parents().stream().map(Sensor::name).collect(Collectors.toList()));
     }
 
     @Test
@@ -137,19 +134,13 @@ public class SourceNodeTest {
         final SourceNode<String, String> node =
             new SourceNode<>(context.currentNode().name(), new TheDeserializer(), new TheDeserializer());
 
-        utilsMock.when(() -> WrappingNullableUtils.prepareKeyDeserializer(any(), any(), any()))
+        utilsMock.when(() -> WrappingNullableUtils.prepareKeyDeserializer(any(), any()))
             .thenThrow(new ConfigException("Please set StreamsConfig#DEFAULT_KEY_SERDE_CLASS_CONFIG"));
 
         final Throwable exception = assertThrows(StreamsException.class, () -> node.init(context));
 
-        assertThat(
-            exception.getMessage(),
-            equalTo("Failed to initialize key serdes for source node TESTING_NODE")
-        );
-        assertThat(
-            exception.getCause().getMessage(),
-            equalTo("Please set StreamsConfig#DEFAULT_KEY_SERDE_CLASS_CONFIG")
-        );
+        assertEquals("Failed to initialize key serdes for source node TESTING_NODE", exception.getMessage());
+        assertEquals("Please set StreamsConfig#DEFAULT_KEY_SERDE_CLASS_CONFIG", exception.getCause().getMessage());
     }
 
     @Test
@@ -159,19 +150,13 @@ public class SourceNodeTest {
         final SourceNode<String, String> node =
             new SourceNode<>(context.currentNode().name(), new TheDeserializer(), new TheDeserializer());
 
-        utilsMock.when(() -> WrappingNullableUtils.prepareValueDeserializer(any(), any(), any()))
+        utilsMock.when(() -> WrappingNullableUtils.prepareValueDeserializer(any(), any()))
             .thenThrow(new ConfigException("Please set StreamsConfig#DEFAULT_VALUE_SERDE_CLASS_CONFIG"));
 
         final Throwable exception = assertThrows(StreamsException.class, () -> node.init(context));
 
-        assertThat(
-            exception.getMessage(),
-            equalTo("Failed to initialize value serdes for source node TESTING_NODE")
-        );
-        assertThat(
-            exception.getCause().getMessage(),
-            equalTo("Please set StreamsConfig#DEFAULT_VALUE_SERDE_CLASS_CONFIG")
-        );
+        assertEquals("Failed to initialize value serdes for source node TESTING_NODE", exception.getMessage());
+        assertEquals("Please set StreamsConfig#DEFAULT_VALUE_SERDE_CLASS_CONFIG", exception.getCause().getMessage());
     }
 
     @Test
@@ -181,10 +166,10 @@ public class SourceNodeTest {
         final SourceNode<String, String> node =
             new SourceNode<>(context.currentNode().name(), new TheDeserializer(), new TheDeserializer());
 
-        utilsMock.when(() -> WrappingNullableUtils.prepareKeyDeserializer(any(), any(), any())).thenThrow(new StreamsException(""));
+        utilsMock.when(() -> WrappingNullableUtils.prepareKeyDeserializer(any(), any())).thenThrow(new StreamsException(""));
 
         final Throwable exception = assertThrows(StreamsException.class, () -> node.init(context));
 
-        assertThat(exception.getMessage(), equalTo("Failed to initialize key serdes for source node TESTING_NODE"));
+        assertEquals("Failed to initialize key serdes for source node TESTING_NODE", exception.getMessage());
     }
 }

@@ -18,25 +18,21 @@ package kafka.utils
 
 import java.lang.reflect.Method
 import java.util
-import java.util.{Collections, Optional}
+import java.util.Optional
 
 import org.junit.jupiter.api.TestInfo
 import org.apache.kafka.clients.consumer.GroupProtocol
 
 class EmptyTestInfo extends TestInfo {
   override def getDisplayName: String = ""
-  override def getTags: util.Set[String] = Collections.emptySet()
+  override def getTags: util.Set[String] = java.util.Set.of()
   override def getTestClass: Optional[Class[_]] = Optional.empty()
   override def getTestMethod: Optional[Method] = Optional.empty()
 }
 
 object TestInfoUtils {
-  
-  final val TestWithParameterizedQuorumAndGroupProtocolNames = "{displayName}.quorum={0}.groupProtocol={1}"
 
-  def isShareGroupTest(testInfo: TestInfo): Boolean = {
-    testInfo.getDisplayName.contains("kraft+kip932")
-  }
+  final val TestWithParameterizedGroupProtocolNames = "{displayName}.groupProtocol={0}"
 
   def maybeGroupProtocolSpecified(testInfo: TestInfo): Option[GroupProtocol] = {
     if (testInfo.getDisplayName.contains("groupProtocol=classic"))
@@ -53,13 +49,5 @@ object TestInfoUtils {
    */
   def isTransactionV2Enabled(testInfo: TestInfo): Boolean = {
     !testInfo.getDisplayName.contains("isTV2Enabled=false")
-  }
-
-  /**
-   * Returns whether eligible leader replicas version 1 is enabled.
-   * When no parameter is provided, the default returned is false.
-   */
-  def isEligibleLeaderReplicasV1Enabled(testInfo: TestInfo): Boolean = {
-    testInfo.getDisplayName.contains("isELRV1Enabled=true")
   }
 }

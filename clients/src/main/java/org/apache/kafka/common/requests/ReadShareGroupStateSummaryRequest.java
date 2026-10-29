@@ -20,25 +20,29 @@ package org.apache.kafka.common.requests;
 import org.apache.kafka.common.message.ReadShareGroupStateSummaryRequestData;
 import org.apache.kafka.common.message.ReadShareGroupStateSummaryResponseData;
 import org.apache.kafka.common.protocol.ApiKeys;
-import org.apache.kafka.common.protocol.ByteBufferAccessor;
 import org.apache.kafka.common.protocol.Errors;
+import org.apache.kafka.common.protocol.Readable;
 
-import java.nio.ByteBuffer;
 import java.util.ArrayList;
 import java.util.List;
 import java.util.stream.Collectors;
 
 public class ReadShareGroupStateSummaryRequest extends AbstractRequest {
+
+    private static final short LATEST_VERSION_BEFORE_REQUEST_HEADER_V3 = 1;
+
     public static class Builder extends AbstractRequest.Builder<ReadShareGroupStateSummaryRequest> {
 
         private final ReadShareGroupStateSummaryRequestData data;
 
-        public Builder(ReadShareGroupStateSummaryRequestData data) {
-            this(data, false);
-        }
-
-        public Builder(ReadShareGroupStateSummaryRequestData data, boolean enableUnstableLastVersion) {
-            super(ApiKeys.READ_SHARE_GROUP_STATE_SUMMARY, enableUnstableLastVersion);
+        /**
+         * @param data               the request data
+         * @param useRequestHeaderV3 whether the versions which use request header v3 may be used
+         */
+        public Builder(ReadShareGroupStateSummaryRequestData data, boolean useRequestHeaderV3) {
+            super(ApiKeys.READ_SHARE_GROUP_STATE_SUMMARY,
+                ApiKeys.READ_SHARE_GROUP_STATE_SUMMARY.oldestVersion(),
+                useRequestHeaderV3 ? ApiKeys.READ_SHARE_GROUP_STATE_SUMMARY.latestVersion() : LATEST_VERSION_BEFORE_REQUEST_HEADER_V3);
             this.data = data;
         }
 
@@ -81,9 +85,9 @@ public class ReadShareGroupStateSummaryRequest extends AbstractRequest {
         return data;
     }
 
-    public static ReadShareGroupStateSummaryRequest parse(ByteBuffer buffer, short version) {
+    public static ReadShareGroupStateSummaryRequest parse(Readable readable, short version) {
         return new ReadShareGroupStateSummaryRequest(
-            new ReadShareGroupStateSummaryRequestData(new ByteBufferAccessor(buffer), version),
+            new ReadShareGroupStateSummaryRequestData(readable, version),
             version
         );
     }

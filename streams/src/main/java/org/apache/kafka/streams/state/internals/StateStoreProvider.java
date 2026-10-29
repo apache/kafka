@@ -16,6 +16,7 @@
  */
 package org.apache.kafka.streams.state.internals;
 
+import org.apache.kafka.common.IsolationLevel;
 import org.apache.kafka.streams.processor.StateStore;
 import org.apache.kafka.streams.state.QueryableStoreType;
 import org.apache.kafka.streams.state.QueryableStoreTypes;
@@ -40,4 +41,14 @@ public interface StateStoreProvider {
      * @return  List of the instances of the store in this topology. Empty List if not found
      */
     <T> List<T> stores(String storeName, QueryableStoreType<T> queryableStoreType);
+
+    /**
+     * The default {@link IsolationLevel} that composite read-only stores apply when
+     * invoking typed read methods on the underlying stores. Defaults to
+     * {@link IsolationLevel#READ_UNCOMMITTED} for providers that don't have access to the
+     * Streams configuration.
+     */
+    default IsolationLevel defaultIsolationLevel() {
+        return IsolationLevel.READ_UNCOMMITTED;
+    }
 }

@@ -32,6 +32,7 @@ import static org.mockito.Mockito.doReturn;
 import static org.mockito.Mockito.mock;
 import static org.mockito.Mockito.times;
 import static org.mockito.Mockito.verify;
+import static org.mockito.Mockito.verifyNoMoreInteractions;
 
 class TransactionLogConfigTest {
     @Test
@@ -44,6 +45,7 @@ class TransactionLogConfigTest {
         assertEquals(declaredConfigs,  TransactionLogConfig.CONFIG_DEF.names());
     }
 
+    @SuppressWarnings("ResultOfMethodCallIgnored")
     @Test
     void ShouldGetStaticValueFromClassAttribute() {
         AbstractConfig config = mock(AbstractConfig.class);
@@ -53,7 +55,9 @@ class TransactionLogConfigTest {
         doReturn(4).when(config).getInt(TransactionLogConfig.TRANSACTIONS_TOPIC_PARTITIONS_CONFIG);
         doReturn(5).when(config).getInt(TransactionLogConfig.TRANSACTIONS_TOPIC_SEGMENT_BYTES_CONFIG);
         doReturn(6).when(config).getInt(TransactionLogConfig.PRODUCER_ID_EXPIRATION_CHECK_INTERVAL_MS_CONFIG);
-
+        doReturn(false).when(config).getBoolean(TransactionLogConfig.TRANSACTION_PARTITION_VERIFICATION_ENABLE_CONFIG);
+        doReturn(88).when(config).getInt(TransactionLogConfig.PRODUCER_ID_EXPIRATION_MS_CONFIG);
+        
         TransactionLogConfig transactionLogConfig = new TransactionLogConfig(config);
 
         assertEquals(1, transactionLogConfig.transactionTopicMinISR());
@@ -62,16 +66,20 @@ class TransactionLogConfigTest {
         assertEquals(4, transactionLogConfig.transactionTopicPartitions());
         assertEquals(5, transactionLogConfig.transactionTopicSegmentBytes());
         assertEquals(6, transactionLogConfig.producerIdExpirationCheckIntervalMs());
+        assertFalse(transactionLogConfig.transactionPartitionVerificationEnable());
+        assertEquals(88, transactionLogConfig.producerIdExpirationMs());
 
-
-        // If the following calls are missing, we won’t be able to distinguish whether the value is set in the constructor or if
-        // it fetches the latest value from AbstractConfig with each call.
+        // This TransactionLogConfig instance is expected to be replaced entirely when dynamic config updates occur.
+        // Calling the getters a second time ensures they return the values established at construction,
+        // rather than invoking AbstractConfig again on each call.
         transactionLogConfig.transactionTopicMinISR();
         transactionLogConfig.transactionLoadBufferSize();
         transactionLogConfig.transactionTopicReplicationFactor();
         transactionLogConfig.transactionTopicPartitions();
         transactionLogConfig.transactionTopicSegmentBytes();
         transactionLogConfig.producerIdExpirationCheckIntervalMs();
+        transactionLogConfig.transactionPartitionVerificationEnable();
+        transactionLogConfig.producerIdExpirationMs();
 
         verify(config, times(1)).getInt(TransactionLogConfig.TRANSACTIONS_TOPIC_MIN_ISR_CONFIG);
         verify(config, times(1)).getInt(TransactionLogConfig.TRANSACTIONS_LOAD_BUFFER_SIZE_CONFIG);
@@ -79,25 +87,8 @@ class TransactionLogConfigTest {
         verify(config, times(1)).getInt(TransactionLogConfig.TRANSACTIONS_TOPIC_PARTITIONS_CONFIG);
         verify(config, times(1)).getInt(TransactionLogConfig.TRANSACTIONS_TOPIC_SEGMENT_BYTES_CONFIG);
         verify(config, times(1)).getInt(TransactionLogConfig.PRODUCER_ID_EXPIRATION_CHECK_INTERVAL_MS_CONFIG);
-    }
-
-    @Test
-    void ShouldGetDynamicValueFromAbstractConfig() {
-        AbstractConfig config = mock(AbstractConfig.class);
-        doReturn(false).when(config).getBoolean(TransactionLogConfig.TRANSACTION_PARTITION_VERIFICATION_ENABLE_CONFIG);
-        doReturn(88).when(config).getInt(TransactionLogConfig.PRODUCER_ID_EXPIRATION_MS_CONFIG);
-
-        TransactionLogConfig transactionLogConfig = new TransactionLogConfig(config);
-
-        assertFalse(transactionLogConfig.transactionPartitionVerificationEnable());
-        assertEquals(88, transactionLogConfig.producerIdExpirationMs());
-
-        // If the following calls are missing, we won’t be able to distinguish whether the value is set in the constructor or if
-        // it fetches the latest value from AbstractConfig with each call.
-        transactionLogConfig.transactionPartitionVerificationEnable();
-        transactionLogConfig.producerIdExpirationMs();
-
-        verify(config, times(2)).getBoolean(TransactionLogConfig.TRANSACTION_PARTITION_VERIFICATION_ENABLE_CONFIG);
-        verify(config, times(2)).getInt(TransactionLogConfig.PRODUCER_ID_EXPIRATION_MS_CONFIG);
+        verify(config, times(1)).getBoolean(TransactionLogConfig.TRANSACTION_PARTITION_VERIFICATION_ENABLE_CONFIG);
+        verify(config, times(1)).getInt(TransactionLogConfig.PRODUCER_ID_EXPIRATION_MS_CONFIG);
+        verifyNoMoreInteractions(config);
     }
 }

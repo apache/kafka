@@ -17,7 +17,7 @@
 
 package org.apache.kafka.deferred;
 
-import org.apache.kafka.common.utils.LogContext;
+import org.apache.kafka.common.utils.internals.LogContext;
 
 import org.slf4j.Logger;
 
@@ -76,7 +76,7 @@ public class DeferredEventQueue {
      *
      * @param exception     The exception to fail the entries with.
      */
-    public void failAll(Exception exception) {
+    public void failAll(Throwable exception) {
         Iterator<Entry<Long, List<DeferredEvent>>> iter = pending.entrySet().iterator();
         while (iter.hasNext()) {
             Entry<Long, List<DeferredEvent>> entry = iter.next();

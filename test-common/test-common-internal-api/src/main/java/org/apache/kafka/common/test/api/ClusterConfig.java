@@ -56,23 +56,18 @@ public class ClusterConfig {
     private final MetadataVersion metadataVersion;
 
     private final Map<String, String> serverProperties;
-    private final Map<String, String> producerProperties;
-    private final Map<String, String> consumerProperties;
-    private final Map<String, String> adminClientProperties;
-    private final Map<String, String> saslServerProperties;
-    private final Map<String, String> saslClientProperties;
     private final List<String> tags;
     private final Map<Integer, Map<String, String>> perServerProperties;
     private final Map<Feature, Short> features;
+    private final boolean standalone;
 
     @SuppressWarnings("checkstyle:ParameterNumber")
     private ClusterConfig(Set<Type> types, int brokers, int controllers, int disksPerBroker, boolean autoStart,
                   SecurityProtocol brokerSecurityProtocol, ListenerName brokerListenerName,
                   SecurityProtocol controllerSecurityProtocol, ListenerName controllerListenerName, File trustStoreFile,
-                  MetadataVersion metadataVersion, Map<String, String> serverProperties, Map<String, String> producerProperties,
-                  Map<String, String> consumerProperties, Map<String, String> adminClientProperties, Map<String, String> saslServerProperties,
-                  Map<String, String> saslClientProperties, Map<Integer, Map<String, String>> perServerProperties, List<String> tags,
-                  Map<Feature, Short> features) {
+                  MetadataVersion metadataVersion, Map<String, String> serverProperties,
+                  Map<Integer, Map<String, String>> perServerProperties, List<String> tags, Map<Feature, Short> features,
+                  boolean standalone) {
         // do fail fast. the following values are invalid for kraft modes.
         if (brokers < 0) throw new IllegalArgumentException("Number of brokers must be greater or equal to zero.");
         if (controllers < 0) throw new IllegalArgumentException("Number of controller must be greater or equal to zero.");
@@ -90,14 +85,10 @@ public class ClusterConfig {
         this.trustStoreFile = trustStoreFile;
         this.metadataVersion = Objects.requireNonNull(metadataVersion);
         this.serverProperties = Objects.requireNonNull(serverProperties);
-        this.producerProperties = Objects.requireNonNull(producerProperties);
-        this.consumerProperties = Objects.requireNonNull(consumerProperties);
-        this.adminClientProperties = Objects.requireNonNull(adminClientProperties);
-        this.saslServerProperties = Objects.requireNonNull(saslServerProperties);
-        this.saslClientProperties = Objects.requireNonNull(saslClientProperties);
         this.perServerProperties = Objects.requireNonNull(perServerProperties);
         this.tags = Objects.requireNonNull(tags);
         this.features = Objects.requireNonNull(features);
+        this.standalone = standalone;
     }
 
     public Set<Type> clusterTypes() {
@@ -124,26 +115,6 @@ public class ClusterConfig {
         return serverProperties;
     }
 
-    public Map<String, String> producerProperties() {
-        return producerProperties;
-    }
-
-    public Map<String, String> consumerProperties() {
-        return consumerProperties;
-    }
-
-    public Map<String, String> adminClientProperties() {
-        return adminClientProperties;
-    }
-
-    public Map<String, String> saslServerProperties() {
-        return saslServerProperties;
-    }
-
-    public Map<String, String> saslClientProperties() {
-        return saslClientProperties;
-    }
-
     public SecurityProtocol brokerSecurityProtocol() {
         return brokerSecurityProtocol;
     }
@@ -166,6 +137,10 @@ public class ClusterConfig {
 
     public MetadataVersion metadataVersion() {
         return metadataVersion;
+    }
+
+    public boolean standalone() {
+        return standalone;
     }
 
     public Map<Integer, Map<String, String>> perServerOverrideProperties() {
@@ -222,14 +197,10 @@ public class ClusterConfig {
                 .setTrustStoreFile(clusterConfig.trustStoreFile)
                 .setMetadataVersion(clusterConfig.metadataVersion)
                 .setServerProperties(clusterConfig.serverProperties)
-                .setProducerProperties(clusterConfig.producerProperties)
-                .setConsumerProperties(clusterConfig.consumerProperties)
-                .setAdminClientProperties(clusterConfig.adminClientProperties)
-                .setSaslServerProperties(clusterConfig.saslServerProperties)
-                .setSaslClientProperties(clusterConfig.saslClientProperties)
                 .setPerServerProperties(clusterConfig.perServerProperties)
                 .setTags(clusterConfig.tags)
-                .setFeatures(clusterConfig.features);
+                .setFeatures(clusterConfig.features)
+                .setStandalone(clusterConfig.standalone);
     }
 
     public static class Builder {
@@ -244,15 +215,11 @@ public class ClusterConfig {
         private ListenerName controllerListenerName;
         private File trustStoreFile;
         private MetadataVersion metadataVersion;
-        private Map<String, String> serverProperties = Collections.emptyMap();
-        private Map<String, String> producerProperties = Collections.emptyMap();
-        private Map<String, String> consumerProperties = Collections.emptyMap();
-        private Map<String, String> adminClientProperties = Collections.emptyMap();
-        private Map<String, String> saslServerProperties = Collections.emptyMap();
-        private Map<String, String> saslClientProperties = Collections.emptyMap();
-        private Map<Integer, Map<String, String>> perServerProperties = Collections.emptyMap();
-        private List<String> tags = Collections.emptyList();
-        private Map<Feature, Short> features = Collections.emptyMap();
+        private Map<String, String> serverProperties = Map.of();
+        private Map<Integer, Map<String, String>> perServerProperties = Map.of();
+        private List<String> tags = List.of();
+        private Map<Feature, Short> features = Map.of();
+        private boolean standalone = false;
 
         private Builder() {}
 
@@ -316,31 +283,6 @@ public class ClusterConfig {
             return this;
         }
 
-        public Builder setConsumerProperties(Map<String, String> consumerProperties) {
-            this.consumerProperties = Map.copyOf(consumerProperties);
-            return this;
-        }
-
-        public Builder setProducerProperties(Map<String, String> producerProperties) {
-            this.producerProperties = Map.copyOf(producerProperties);
-            return this;
-        }
-
-        public Builder setAdminClientProperties(Map<String, String> adminClientProperties) {
-            this.adminClientProperties = Map.copyOf(adminClientProperties);
-            return this;
-        }
-
-        public Builder setSaslServerProperties(Map<String, String> saslServerProperties) {
-            this.saslServerProperties = Map.copyOf(saslServerProperties);
-            return this;
-        }
-
-        public Builder setSaslClientProperties(Map<String, String> saslClientProperties) {
-            this.saslClientProperties = Map.copyOf(saslClientProperties);
-            return this;
-        }
-
         public Builder setPerServerProperties(Map<Integer, Map<String, String>> perServerProperties) {
             this.perServerProperties = Collections.unmodifiableMap(
                     perServerProperties.entrySet().stream()
@@ -358,12 +300,15 @@ public class ClusterConfig {
             return this;
         }
 
+        public Builder setStandalone(boolean standalone) {
+            this.standalone = standalone;
+            return this;
+        }
+
         public ClusterConfig build() {
             return new ClusterConfig(types, brokers, controllers, disksPerBroker, autoStart,
                     brokerSecurityProtocol, brokerListenerName, controllerSecurityProtocol, controllerListenerName,
-                    trustStoreFile, metadataVersion, serverProperties, producerProperties, consumerProperties,
-                    adminClientProperties, saslServerProperties, saslClientProperties,
-                    perServerProperties, tags, features);
+                    trustStoreFile, metadataVersion, serverProperties, perServerProperties, tags, features, standalone);
         }
     }
 }

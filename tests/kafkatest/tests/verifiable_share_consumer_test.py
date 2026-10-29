@@ -49,10 +49,10 @@ class VerifiableShareConsumerTest(KafkaTest):
         """Override this since we're adding services outside of the constructor"""
         return super(VerifiableShareConsumerTest, self).min_cluster_size() + self.num_consumers + self.num_producers
 
-    def setup_share_group(self, topic, acknowledgement_mode="auto", group_id="test_group_id", offset_reset_strategy="", **kwargs):
+    def setup_share_group(self, topic, acknowledgement_mode="auto", group_id="test_group_id", **kwargs):
         return VerifiableShareConsumer(self.test_context, self.num_consumers, self.kafka,
-                                  topic, group_id, acknowledgement_mode=acknowledgement_mode,
-                                  offset_reset_strategy=offset_reset_strategy, log_level="TRACE", **kwargs)
+                                  topic, group_id, acknowledgement_mode=acknowledgement_mode, 
+                                  log_level="TRACE", **kwargs)
 
     def setup_producer(self, topic, max_messages=-1, throughput=500):
         return VerifiableProducer(self.test_context, self.num_producers, self.kafka, topic,
@@ -60,8 +60,10 @@ class VerifiableShareConsumerTest(KafkaTest):
                                   request_timeout_sec=self.PRODUCER_REQUEST_TIMEOUT_SEC,
                                   log_level="DEBUG")
 
-    def await_produced_messages(self, producer, min_messages=1000, timeout_sec=10):
-        current_acked = producer.num_acked
+    def await_produced_messages(self, producer, min_messages=1000, timeout_sec=10, total=False):
+        current_acked = 0
+        if total is False:
+            current_acked = producer.num_acked
         wait_until(lambda: producer.num_acked >= current_acked + min_messages, timeout_sec=timeout_sec,
                    err_msg="Timeout awaiting messages to be produced and acked")
 

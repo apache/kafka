@@ -38,8 +38,8 @@ public class AlterConfigPolicyTest {
 
         assertEquals(requestMetadata, requestMetadata);
 
-        assertNotEquals(requestMetadata, null);
-        assertNotEquals(requestMetadata, new Object());
+        assertNotEquals(null, requestMetadata);
+        assertNotEquals(new Object(), requestMetadata);
         assertNotEquals(requestMetadata, new RequestMetadata(
             new ConfigResource(Type.BROKER, "1"),
             Collections.singletonMap("foo", "bar")

@@ -28,6 +28,8 @@ public interface PartitionStateBatchData extends PartitionInfoData, PartitionIdD
 
     long startOffset();
 
+    int deliveryCompleteCount();
+
     int leaderEpoch();
 
     List<PersisterStateBatch> stateBatches();

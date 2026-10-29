@@ -25,18 +25,20 @@ import org.apache.kafka.streams.processor.internals.metrics.StreamsMetricsImpl;
 import org.junit.jupiter.api.Test;
 
 import java.util.Collections;
+import java.util.LinkedHashMap;
 import java.util.Map;
 
 import static org.apache.kafka.streams.processor.internals.metrics.StreamsMetricsImpl.CLIENT_LEVEL_GROUP;
-import static org.hamcrest.CoreMatchers.is;
-import static org.hamcrest.MatcherAssert.assertThat;
+import static org.junit.jupiter.api.Assertions.assertEquals;
 import static org.mockito.Mockito.eq;
 import static org.mockito.Mockito.mock;
 import static org.mockito.Mockito.verify;
 import static org.mockito.Mockito.when;
 
 public class ClientMetricsTest {
+    private static final String APPLICATION_ID = "test-application-id";
     private static final String COMMIT_ID = "test-commit-ID";
+    private static final String PROCESS_ID = "test-process-id";
     private static final String VERSION = "test-version";
 
     private final StreamsMetricsImpl streamsMetrics = mock(StreamsMetricsImpl.class);
@@ -89,7 +91,7 @@ public class ClientMetricsTest {
     public void shouldAddStateMetric() {
         final String name = "state";
         final String description = "The state of the Kafka Streams client";
-        final Gauge<State> stateProvider = (config, now) -> State.RUNNING;
+        final Gauge<String> stateProvider = (config, now) -> State.RUNNING.name();
         setUpAndVerifyMutableMetric(
             name,
             description,
@@ -116,11 +118,19 @@ public class ClientMetricsTest {
         final String name = "client-state";
         final String description = "The state of the Kafka Streams client";
         final Gauge<Integer> stateProvider = (config, now) -> State.RUNNING.ordinal();
-        setUpAndVerifyMutableMetric(
-                name,
-                description,
-                stateProvider,
-                () -> ClientMetrics.addClientStateTelemetryMetric(streamsMetrics, stateProvider)
+
+        final Map<String, String> additionalTags = new LinkedHashMap<>();
+        additionalTags.put("process-id", PROCESS_ID);
+        additionalTags.put("application-id", APPLICATION_ID);
+
+        ClientMetrics.addClientStateTelemetryMetric(PROCESS_ID, APPLICATION_ID, streamsMetrics, stateProvider);
+
+        verify(streamsMetrics).addClientLevelMutableMetric(
+            eq(name),
+            eq(description),
+            eq(additionalTags),
+            eq(RecordingLevel.INFO),
+            eq(stateProvider)
         );
     }
 
@@ -129,11 +139,15 @@ public class ClientMetricsTest {
         final String name = "recording-level";
         final String description = "The metrics recording level of the Kafka Streams client";
         final int recordingLevel = 1;
-        setUpAndVerifyImmutableMetric(
-                name,
-                description,
-                recordingLevel,
-                () -> ClientMetrics.addClientRecordingLevelMetric(streamsMetrics, recordingLevel)
+
+        ClientMetrics.addClientRecordingLevelMetric(PROCESS_ID, streamsMetrics, recordingLevel);
+
+        verify(streamsMetrics).addClientLevelImmutableMetric(
+            eq(name),
+            eq(description),
+            eq(Collections.singletonMap("process-id", PROCESS_ID)),
+            eq(RecordingLevel.INFO),
+            eq(recordingLevel)
         );
     }
 
@@ -153,7 +167,7 @@ public class ClientMetricsTest {
         );
 
         final Sensor sensor = ClientMetrics.failedStreamThreadSensor(streamsMetrics);
-        assertThat(sensor, is(expectedSensor));
+        assertEquals(expectedSensor, sensor);
     }
 
     private <K> void setUpAndVerifyMutableMetric(final String name,
@@ -174,21 +188,6 @@ public class ClientMetricsTest {
     private void setUpAndVerifyImmutableMetric(final String name,
                                                final String description,
                                                final String value,
-                                               final Runnable metricAdder) {
-
-        metricAdder.run();
-
-        verify(streamsMetrics).addClientLevelImmutableMetric(
-                eq(name),
-                eq(description),
-                eq(RecordingLevel.INFO),
-                eq(value)
-        );
-    }
-
-    private void setUpAndVerifyImmutableMetric(final String name,
-                                               final String description,
-                                               final int value,
                                                final Runnable metricAdder) {
 
         metricAdder.run();

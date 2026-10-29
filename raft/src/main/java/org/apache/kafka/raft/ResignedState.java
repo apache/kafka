@@ -16,15 +16,16 @@
  */
 package org.apache.kafka.raft;
 
-import org.apache.kafka.common.utils.LogContext;
 import org.apache.kafka.common.utils.Time;
 import org.apache.kafka.common.utils.Timer;
+import org.apache.kafka.common.utils.internals.LogContext;
 
 import org.slf4j.Logger;
 
 import java.util.HashSet;
 import java.util.List;
 import java.util.Optional;
+import java.util.OptionalInt;
 import java.util.Set;
 
 /**
@@ -34,14 +35,14 @@ import java.util.Set;
  * any other candidate in this epoch.
  *
  * A resigned leader may initiate a new election by sending `EndQuorumEpoch`
- * requests to all of the voters. This state tracks delivery of this request
+ * requests to all the voters. This state tracks delivery of this request
  * in order to prevent unnecessary retries.
  *
  * A voter will remain in the `Resigned` state until we either learn about
  * another election, or our own election timeout expires and we become a
  * Candidate.
  */
-public class ResignedState implements EpochState {
+public final class ResignedState implements EpochState {
     private final int localId;
     private final int epoch;
     private final Endpoints endpoints;
@@ -82,6 +83,11 @@ public class ResignedState implements EpochState {
     @Override
     public int epoch() {
         return epoch;
+    }
+
+    @Override
+    public LeaderAndEpoch leaderAndEpoch() {
+        return new LeaderAndEpoch(OptionalInt.of(localId), epoch);
     }
 
     @Override

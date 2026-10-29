@@ -72,8 +72,7 @@ import static org.apache.kafka.common.utils.Utils.mkMap;
 import static org.apache.kafka.common.utils.Utils.mkObjectProperties;
 import static org.apache.kafka.common.utils.Utils.mkProperties;
 import static org.apache.kafka.streams.utils.TestUtils.safeUniqueTestName;
-import static org.hamcrest.MatcherAssert.assertThat;
-import static org.hamcrest.Matchers.is;
+import static org.junit.jupiter.api.Assertions.assertEquals;
 
 @Timeout(600)
 @Tag("integration")
@@ -236,13 +235,13 @@ public class HighAvailabilityTaskAssignorIntegrationTest {
                     }
                 },
                 120_000L,
-                "Never saw a first assignment after scale out: " + assignmentsCompleted.get()
+                    () -> "Never saw a first assignment after scale out: " + assignmentsCompleted.get()
             );
 
             TestUtils.waitForCondition(
                 assignmentStable::get,
                 120_000L,
-                "Assignment hasn't become stable: " + assignmentsCompleted.get() +
+                    () -> "Assignment hasn't become stable: " + assignmentsCompleted.get() +
                     " Note, if this does fail, check and see if the new instance just failed to catch up within" +
                     " the probing rebalance interval. A full minute should be long enough to read ~500 records" +
                     " in any test environment, but you never know..."
@@ -251,9 +250,9 @@ public class HighAvailabilityTaskAssignorIntegrationTest {
             restoreCompleteLatch.await();
             // We should finalize the restoration without having restored any records (because they're already in
             // the store). Otherwise, we failed to properly re-use the state from the standby.
-            assertThat(instance1TotalRestored.get(), is(0L));
+            assertEquals(0L, instance1TotalRestored.get());
             // Belt-and-suspenders check that we never even attempt to restore any records.
-            assertThat(instance1NumRestored.get(), is(-1L));
+            assertEquals(-1L, instance1NumRestored.get());
         }
     }
 

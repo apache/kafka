@@ -17,6 +17,7 @@
 package org.apache.kafka.streams.state.internals;
 
 import org.apache.kafka.common.MetricName;
+import org.apache.kafka.common.header.internals.RecordHeaders;
 import org.apache.kafka.common.metrics.KafkaMetric;
 import org.apache.kafka.common.metrics.Metrics;
 import org.apache.kafka.common.metrics.Sensor;
@@ -62,19 +63,16 @@ import java.util.stream.Collectors;
 import static org.apache.kafka.common.utils.Utils.mkEntry;
 import static org.apache.kafka.common.utils.Utils.mkMap;
 import static org.apache.kafka.streams.state.VersionedKeyValueStore.PUT_RETURN_CODE_VALID_TO_UNDEFINED;
-import static org.hamcrest.CoreMatchers.equalTo;
-import static org.hamcrest.CoreMatchers.nullValue;
-import static org.hamcrest.MatcherAssert.assertThat;
-import static org.hamcrest.Matchers.empty;
-import static org.hamcrest.Matchers.greaterThan;
-import static org.hamcrest.Matchers.is;
-import static org.hamcrest.Matchers.not;
 import static org.junit.jupiter.api.Assertions.assertEquals;
+import static org.junit.jupiter.api.Assertions.assertFalse;
+import static org.junit.jupiter.api.Assertions.assertNotNull;
 import static org.junit.jupiter.api.Assertions.assertThrows;
+import static org.junit.jupiter.api.Assertions.assertTrue;
 import static org.mockito.ArgumentMatchers.any;
 import static org.mockito.ArgumentMatchers.anyString;
 import static org.mockito.Mockito.doThrow;
 import static org.mockito.Mockito.mock;
+import static org.mockito.Mockito.never;
 import static org.mockito.Mockito.verify;
 import static org.mockito.Mockito.when;
 
@@ -110,7 +108,7 @@ public class MeteredVersionedKeyValueStoreTest {
     @BeforeEach
     public void setUp() {
         when(inner.name()).thenReturn(STORE_NAME);
-        when(context.metrics()).thenReturn(new StreamsMetricsImpl(metrics, "test", "processId", mockTime));
+        when(context.metrics()).thenReturn(new StreamsMetricsImpl(metrics, "test", mockTime));
         when(context.applicationId()).thenReturn(APPLICATION_ID);
         when(context.taskId()).thenReturn(TASK_ID);
 
@@ -166,6 +164,7 @@ public class MeteredVersionedKeyValueStoreTest {
         when(keySerde.serializer()).thenReturn(keySerializer);
         when(valueSerde.serializer()).thenReturn(valueSerializer);
         when(valueSerde.deserializer()).thenReturn(valueDeserializer);
+        when(context.headers()).thenReturn(new RecordHeaders());
 
         store.close();
         store = new MeteredVersionedKeyValueStore<>(
@@ -179,15 +178,10 @@ public class MeteredVersionedKeyValueStoreTest {
 
         store.put(KEY, VALUE, TIMESTAMP);
 
-        verify(keySerializer).serialize(changelogTopicName, KEY);
-        verify(valueSerializer).serialize(changelogTopicName, VALUE);
-    }
-
-    @Test
-    public void shouldRecordMetricsOnInit() {
-        // init is called in setUp(). it suffices to verify one restore metric since all restore
-        // metrics are recorded by the same sensor, and the sensor is tested elsewhere.
-        assertThat((Double) getMetric("restore-rate").metricValue(), greaterThan(0.0));
+        verify(keySerializer).serialize(changelogTopicName, new RecordHeaders(), KEY);
+        verify(valueSerializer).serialize(changelogTopicName, new RecordHeaders(), VALUE);
+        verify(keySerializer, never()).serialize(changelogTopicName, KEY);
+        verify(valueSerializer, never()).serialize(changelogTopicName, VALUE);
     }
 
     @Test
@@ -196,8 +190,8 @@ public class MeteredVersionedKeyValueStoreTest {
 
         final long validto = store.put(KEY, VALUE, TIMESTAMP);
 
-        assertThat(validto, is(PUT_RETURN_CODE_VALID_TO_UNDEFINED));
-        assertThat((Double) getMetric("put-rate").metricValue(), greaterThan(0.0));
+        assertEquals(PUT_RETURN_CODE_VALID_TO_UNDEFINED, validto);
+        assertTrue(Double.compare((Double) getMetric("put-rate").metricValue(), 0.0) > 0);
     }
 
     @Test
@@ -206,8 +200,8 @@ public class MeteredVersionedKeyValueStoreTest {
 
         final VersionedRecord<String> result = store.delete(KEY, TIMESTAMP);
 
-        assertThat(result, is(new VersionedRecord<>(VALUE, TIMESTAMP)));
-        assertThat((Double) getMetric("delete-rate").metricValue(), greaterThan(0.0));
+        assertEquals(new VersionedRecord<>(VALUE, TIMESTAMP), result);
+        assertTrue(Double.compare((Double) getMetric("delete-rate").metricValue(), 0.0) > 0);
     }
 
     @Test
@@ -216,8 +210,8 @@ public class MeteredVersionedKeyValueStoreTest {
 
         final VersionedRecord<String> result = store.get(KEY);
 
-        assertThat(result, is(new VersionedRecord<>(VALUE, TIMESTAMP)));
-        assertThat((Double) getMetric("get-rate").metricValue(), greaterThan(0.0));
+        assertEquals(new VersionedRecord<>(VALUE, TIMESTAMP), result);
+        assertTrue(Double.compare((Double) getMetric("get-rate").metricValue(), 0.0) > 0);
     }
 
     @Test
@@ -226,41 +220,41 @@ public class MeteredVersionedKeyValueStoreTest {
 
         final VersionedRecord<String> result = store.get(KEY, TIMESTAMP);
 
-        assertThat(result, is(new VersionedRecord<>(VALUE, TIMESTAMP)));
-        assertThat((Double) getMetric("get-rate").metricValue(), greaterThan(0.0));
+        assertEquals(new VersionedRecord<>(VALUE, TIMESTAMP), result);
+        assertTrue(Double.compare((Double) getMetric("get-rate").metricValue(), 0.0) > 0);
     }
 
     @Test
-    public void shouldDelegateAndRecordMetricsOnFlush() {
-        store.flush();
+    public void shouldDelegateAndRecordMetricsOnCommit() {
+        store.commit(Map.of());
 
-        verify(inner).flush();
-        assertThat((Double) getMetric("flush-rate").metricValue(), greaterThan(0.0));
+        verify(inner).commit(Map.of());
+        assertTrue(Double.compare((Double) getMetric("commit-rate").metricValue(), 0.0) > 0);
     }
 
     @Test
     public void shouldDelegateAndRemoveMetricsOnClose() {
-        assertThat(storeMetrics(), not(empty()));
+        assertFalse(storeMetrics().isEmpty());
 
         store.close();
 
         verify(inner).close();
-        assertThat(storeMetrics(), empty());
+        assertTrue(storeMetrics().isEmpty());
     }
 
     @Test
     public void shouldRemoveMetricsOnCloseEvenIfInnerThrows() {
         doThrow(new RuntimeException("uh oh")).when(inner).close();
-        assertThat(storeMetrics(), not(empty()));
+        assertFalse(storeMetrics().isEmpty());
 
         assertThrows(RuntimeException.class, () -> store.close());
 
-        assertThat(storeMetrics(), empty());
+        assertTrue(storeMetrics().isEmpty());
     }
 
     @Test
     public void shouldNotSetFlushListenerIfInnerIsNotCaching() {
-        assertThat(store.setFlushListener(null, false), is(false));
+        assertFalse(store.setFlushListener(null, false));
     }
 
     @Test
@@ -317,7 +311,7 @@ public class MeteredVersionedKeyValueStoreTest {
         when(inner.query(query, positionBound, queryConfig)).thenReturn((QueryResult) result);
         when(queryConfig.isCollectExecutionInfo()).thenReturn(true);
 
-        assertThat(store.query(query, positionBound, queryConfig), is(result));
+        assertEquals(result, store.query(query, positionBound, queryConfig));
         verify(result).addExecutionInfo(anyString());
     }
 
@@ -325,29 +319,29 @@ public class MeteredVersionedKeyValueStoreTest {
     public void shouldDelegateName() {
         when(inner.name()).thenReturn(STORE_NAME);
 
-        assertThat(store.name(), is(STORE_NAME));
+        assertEquals(STORE_NAME, store.name());
     }
 
     @Test
     public void shouldDelegatePersistent() {
         // `persistent = true` case
         when(inner.persistent()).thenReturn(true);
-        assertThat(store.persistent(), is(true));
+        assertTrue(store.persistent());
 
         // `persistent = false` case
         when(inner.persistent()).thenReturn(false);
-        assertThat(store.persistent(), is(false));
+        assertFalse(store.persistent());
     }
 
     @Test
     public void shouldDelegateIsOpen() {
         // `isOpen = true` case
         when(inner.isOpen()).thenReturn(true);
-        assertThat(store.isOpen(), is(true));
+        assertTrue(store.isOpen());
 
         // `isOpen = false` case
         when(inner.isOpen()).thenReturn(false);
-        assertThat(store.isOpen(), is(false));
+        assertFalse(store.isOpen());
     }
 
     @Test
@@ -355,7 +349,7 @@ public class MeteredVersionedKeyValueStoreTest {
         final Position position = mock(Position.class);
         when(inner.getPosition()).thenReturn(position);
 
-        assertThat(store.getPosition(), is(position));
+        assertEquals(position, store.getPosition());
     }
 
     @SuppressWarnings("unused")
@@ -368,17 +362,17 @@ public class MeteredVersionedKeyValueStoreTest {
             QueryResult.forResult(new LogicalSegmentIterator(Collections.emptyListIterator(), RAW_KEY, 0L, 0L, ResultOrder.ANY)));
 
         final KafkaMetric openIteratorsMetric = getMetric("num-open-iterators");
-        assertThat(openIteratorsMetric, not(nullValue()));
+        assertNotNull(openIteratorsMetric);
 
-        assertThat((Long) openIteratorsMetric.metricValue(), equalTo(0L));
+        assertEquals(0L, (Long) openIteratorsMetric.metricValue());
 
         final QueryResult<VersionedRecordIterator<String>> result = store.query(query, bound, config);
 
         try (final VersionedRecordIterator<String> unused = result.getResult()) {
-            assertThat((Long) openIteratorsMetric.metricValue(), equalTo(1L));
+            assertEquals(1L, (Long) openIteratorsMetric.metricValue());
         }
 
-        assertThat((Long) openIteratorsMetric.metricValue(), equalTo(0L));
+        assertEquals(0L, (Long) openIteratorsMetric.metricValue());
     }
 
     @SuppressWarnings("unused")
@@ -392,11 +386,11 @@ public class MeteredVersionedKeyValueStoreTest {
 
         final KafkaMetric iteratorDurationAvgMetric = getMetric("iterator-duration-avg");
         final KafkaMetric iteratorDurationMaxMetric = getMetric("iterator-duration-max");
-        assertThat(iteratorDurationAvgMetric, not(nullValue()));
-        assertThat(iteratorDurationMaxMetric, not(nullValue()));
+        assertNotNull(iteratorDurationAvgMetric);
+        assertNotNull(iteratorDurationMaxMetric);
 
-        assertThat((Double) iteratorDurationAvgMetric.metricValue(), equalTo(Double.NaN));
-        assertThat((Double) iteratorDurationMaxMetric.metricValue(), equalTo(Double.NaN));
+        assertEquals(Double.NaN, (Double) iteratorDurationAvgMetric.metricValue());
+        assertEquals(Double.NaN, (Double) iteratorDurationMaxMetric.metricValue());
 
         final QueryResult<VersionedRecordIterator<String>> first = store.query(query, bound, config);
         try (final VersionedRecordIterator<String> unused = first.getResult()) {
@@ -404,8 +398,8 @@ public class MeteredVersionedKeyValueStoreTest {
             mockTime.sleep(2);
         }
 
-        assertThat((double) iteratorDurationAvgMetric.metricValue(), equalTo(2.0 * TimeUnit.MILLISECONDS.toNanos(1)));
-        assertThat((double) iteratorDurationMaxMetric.metricValue(), equalTo(2.0 * TimeUnit.MILLISECONDS.toNanos(1)));
+        assertEquals(2.0 * TimeUnit.MILLISECONDS.toNanos(1), (double) iteratorDurationAvgMetric.metricValue());
+        assertEquals(2.0 * TimeUnit.MILLISECONDS.toNanos(1), (double) iteratorDurationMaxMetric.metricValue());
 
         final QueryResult<VersionedRecordIterator<String>> second = store.query(query, bound, config);
         try (final VersionedRecordIterator<String> unused = second.getResult()) {
@@ -413,8 +407,8 @@ public class MeteredVersionedKeyValueStoreTest {
             mockTime.sleep(3);
         }
 
-        assertThat((double) iteratorDurationAvgMetric.metricValue(), equalTo(2.5 * TimeUnit.MILLISECONDS.toNanos(1)));
-        assertThat((double) iteratorDurationMaxMetric.metricValue(), equalTo(3.0 * TimeUnit.MILLISECONDS.toNanos(1)));
+        assertEquals(2.5 * TimeUnit.MILLISECONDS.toNanos(1), (double) iteratorDurationAvgMetric.metricValue());
+        assertEquals(3.0 * TimeUnit.MILLISECONDS.toNanos(1), (double) iteratorDurationMaxMetric.metricValue());
     }
 
     @SuppressWarnings("unused")
@@ -427,17 +421,16 @@ public class MeteredVersionedKeyValueStoreTest {
                 QueryResult.forResult(new LogicalSegmentIterator(Collections.emptyListIterator(), RAW_KEY, 0L, 0L, ResultOrder.ANY)));
 
         final KafkaMetric oldestIteratorTimestampMetric = getMetric("oldest-iterator-open-since-ms");
-        assertThat(oldestIteratorTimestampMetric, not(nullValue()));
-
-        assertThat(oldestIteratorTimestampMetric.metricValue(), nullValue());
+        assertNotNull(oldestIteratorTimestampMetric);
 
         final QueryResult<VersionedRecordIterator<String>> first = store.query(query, bound, config);
         VersionedRecordIterator<String> secondIterator = null;
         final long secondTime;
         try {
             try (final VersionedRecordIterator<String> unused = first.getResult()) {
+
                 final long oldestTimestamp = mockTime.milliseconds();
-                assertThat((Long) oldestIteratorTimestampMetric.metricValue(), equalTo(oldestTimestamp));
+                assertEquals(oldestTimestamp, (Long) oldestIteratorTimestampMetric.metricValue());
                 mockTime.sleep(100);
 
                 // open a second iterator before closing the first to test that we still produce the first iterator's timestamp
@@ -445,19 +438,19 @@ public class MeteredVersionedKeyValueStoreTest {
                 secondIterator = second.getResult();
                 secondTime = mockTime.milliseconds();
 
-                assertThat((Long) oldestIteratorTimestampMetric.metricValue(), equalTo(oldestTimestamp));
+                assertEquals(oldestTimestamp, (Long) oldestIteratorTimestampMetric.metricValue());
                 mockTime.sleep(100);
             }
 
             // now that the first iterator is closed, check that the timestamp has advanced to the still open second iterator
-            assertThat((Long) oldestIteratorTimestampMetric.metricValue(), equalTo(secondTime));
+            assertEquals(secondTime, (Long) oldestIteratorTimestampMetric.metricValue());
         } finally {
             if (secondIterator != null) {
                 secondIterator.close();
             }
         }
-
-        assertThat((Integer) oldestIteratorTimestampMetric.metricValue(), nullValue());
+        // no open iterators left, timestamp should be reset to 0
+        assertEquals(0L, (Long) oldestIteratorTimestampMetric.metricValue());
     }
 
     private KafkaMetric getMetric(final String name) {

@@ -30,6 +30,13 @@ import java.util.Optional;
 import java.util.concurrent.atomic.AtomicReference;
 import java.util.function.Supplier;
 
+/**
+ * Plugins have the following tags:
+ * <ul>
+ *   <li><code>config</code> set to the name of the configuration to specifying the plugin</li>
+ *   <li><code>class</code> set to the name of the instance class</li>
+ * </ul>
+ */
 public class Plugin<T> implements Supplier<T>, AutoCloseable {
 
     private final T instance;
@@ -40,8 +47,49 @@ public class Plugin<T> implements Supplier<T>, AutoCloseable {
         this.pluginMetrics = Optional.ofNullable(pluginMetrics);
     }
 
+    /**
+     * Wrap an instance into a Plugin.
+     * @param instance the instance to wrap
+     * @param metrics the metrics
+     * @param tagsSupplier supplier to retrieve the tags
+     * @return the plugin
+     */
+    public static <T> Plugin<T> wrapInstance(T instance, Metrics metrics, Supplier<Map<String, String>> tagsSupplier) {
+        PluginMetricsImpl pluginMetrics = null;
+        if (instance instanceof Monitorable && metrics != null) {
+            pluginMetrics = new PluginMetricsImpl(metrics, tagsSupplier.get());
+            ((Monitorable) instance).withPluginMetrics(pluginMetrics);
+        }
+        return new Plugin<>(instance, pluginMetrics);
+    }
+
+    /**
+     * Wrap an instance into a Plugin.
+     * @param instance the instance to wrap
+     * @param metrics the metrics
+     * @param key the value for the <code>config</code> tag
+     * @return the plugin
+     */
     public static <T> Plugin<T> wrapInstance(T instance, Metrics metrics, String key) {
         return wrapInstance(instance, metrics, () -> tags(key, instance));
+    }
+
+    /**
+     * Wrap an instance into a Plugin.
+     * @param instance the instance to wrap
+     * @param metrics the metrics
+     * @param name extra tag name to add
+     * @param value extra tag value to add
+     * @param key the value for the <code>config</code> tag
+     * @return the plugin
+     */
+    public static <T> Plugin<T> wrapInstance(T instance, Metrics metrics, String key, String name, String value) {
+        Supplier<Map<String, String>> tagsSupplier = () -> {
+            Map<String, String> tags = tags(key, instance);
+            tags.put(name, value);
+            return tags;
+        };
+        return wrapInstance(instance, metrics, tagsSupplier);
     }
 
     private static <T> Map<String, String> tags(String key, T instance) {
@@ -51,21 +99,19 @@ public class Plugin<T> implements Supplier<T>, AutoCloseable {
         return tags;
     }
 
+    /**
+     * Wrap a list of instances into Plugins.
+     * @param instances the instances to wrap
+     * @param metrics the metrics
+     * @param key the value for the <code>config</code> tag
+     * @return the list of plugins
+     */
     public static <T> List<Plugin<T>> wrapInstances(List<T> instances, Metrics metrics, String key) {
         List<Plugin<T>> plugins = new ArrayList<>();
         for (T instance : instances) {
             plugins.add(wrapInstance(instance, metrics, key));
         }
         return plugins;
-    }
-
-    public static <T> Plugin<T> wrapInstance(T instance, Metrics metrics, Supplier<Map<String, String>> tagsSupplier) {
-        PluginMetricsImpl pluginMetrics = null;
-        if (instance instanceof Monitorable && metrics != null) {
-            pluginMetrics = new PluginMetricsImpl(metrics, tagsSupplier.get());
-            ((Monitorable) instance).withPluginMetrics(pluginMetrics);
-        }
-        return new Plugin<>(instance, pluginMetrics);
     }
 
     @Override

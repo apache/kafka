@@ -16,6 +16,7 @@
  */
 package org.apache.kafka.streams.processor.internals;
 
+import org.apache.kafka.common.header.Headers;
 import org.apache.kafka.common.serialization.ByteArraySerializer;
 import org.apache.kafka.common.serialization.BytesSerializer;
 import org.apache.kafka.common.utils.Bytes;
@@ -120,6 +121,7 @@ public interface InternalProcessorContext<KOut, VOut>
                    final Bytes key,
                    final byte[] value,
                    final long timestamp,
+                   final Headers headers,
                    final Position position);
 
     String changelogFor(final String storeName);

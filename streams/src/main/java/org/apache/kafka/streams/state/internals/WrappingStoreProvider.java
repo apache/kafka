@@ -16,6 +16,7 @@
  */
 package org.apache.kafka.streams.state.internals;
 
+import org.apache.kafka.common.IsolationLevel;
 import org.apache.kafka.streams.StoreQueryParameters;
 import org.apache.kafka.streams.errors.InvalidStateStoreException;
 import org.apache.kafka.streams.errors.InvalidStateStorePartitionException;
@@ -28,15 +29,29 @@ import java.util.List;
 /**
  * Provides a wrapper over multiple underlying {@link StateStoreProvider}s
  */
+@SuppressWarnings("rawtypes")
 public class WrappingStoreProvider implements StateStoreProvider {
 
     private final Collection<StreamThreadStateStoreProvider> storeProviders;
     private StoreQueryParameters storeQueryParameters;
+    private final IsolationLevel defaultIsolationLevel;
+
+    public WrappingStoreProvider(final Collection<StreamThreadStateStoreProvider> storeProviders,
+                                 final StoreQueryParameters storeQueryParameters) {
+        this(storeProviders, storeQueryParameters, IsolationLevel.READ_UNCOMMITTED);
+    }
 
     WrappingStoreProvider(final Collection<StreamThreadStateStoreProvider> storeProviders,
-                          final StoreQueryParameters storeQueryParameters) {
+                          final StoreQueryParameters storeQueryParameters,
+                          final IsolationLevel defaultIsolationLevel) {
         this.storeProviders = storeProviders;
         this.storeQueryParameters = storeQueryParameters;
+        this.defaultIsolationLevel = defaultIsolationLevel;
+    }
+
+    @Override
+    public IsolationLevel defaultIsolationLevel() {
+        return defaultIsolationLevel;
     }
 
     //visible for testing
@@ -44,6 +59,7 @@ public class WrappingStoreProvider implements StateStoreProvider {
         this.storeQueryParameters = storeQueryParameters;
     }
 
+    @SuppressWarnings("unchecked")
     @Override
     public <T> List<T> stores(final String storeName,
                               final QueryableStoreType<T> queryableStoreType) {

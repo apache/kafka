@@ -167,10 +167,8 @@ public final class EventHandlerExceptionInfo {
             bld.append("event unable to start processing because of ");
         }
         bld.append(internalException.getClass().getSimpleName());
-        if (externalException.isPresent()) {
-            bld.append(" (treated as ").
-                append(externalException.get().getClass().getSimpleName()).append(")");
-        }
+        externalException.ifPresent(e -> bld.append(" (treated as ")
+                .append(e.getClass().getSimpleName()).append(")"));
         if (causesFailover()) {
             bld.append(" at epoch ").append(epoch);
         }

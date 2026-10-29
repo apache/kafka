@@ -26,20 +26,25 @@ import org.apache.kafka.clients.consumer.internals.events.ErrorEvent;
 import org.apache.kafka.clients.consumer.internals.metrics.AsyncConsumerMetrics;
 import org.apache.kafka.common.Node;
 import org.apache.kafka.common.errors.AuthenticationException;
+import org.apache.kafka.common.errors.BootstrapResolutionException;
 import org.apache.kafka.common.errors.DisconnectException;
+import org.apache.kafka.common.errors.NetworkException;
 import org.apache.kafka.common.errors.TimeoutException;
+import org.apache.kafka.common.internals.ClusterResourceListeners;
 import org.apache.kafka.common.message.FindCoordinatorRequestData;
 import org.apache.kafka.common.metrics.Metrics;
 import org.apache.kafka.common.protocol.Errors;
 import org.apache.kafka.common.requests.FindCoordinatorRequest;
 import org.apache.kafka.common.requests.FindCoordinatorResponse;
 import org.apache.kafka.common.serialization.StringDeserializer;
-import org.apache.kafka.common.utils.LogContext;
 import org.apache.kafka.common.utils.MockTime;
+import org.apache.kafka.common.utils.internals.LogContext;
 import org.apache.kafka.test.TestUtils;
 
 import org.junit.jupiter.api.BeforeEach;
 import org.junit.jupiter.api.Test;
+import org.junit.jupiter.params.ParameterizedTest;
+import org.junit.jupiter.params.provider.MethodSource;
 
 import java.util.ArrayList;
 import java.util.Collections;
@@ -49,11 +54,11 @@ import java.util.Properties;
 import java.util.concurrent.BlockingQueue;
 import java.util.concurrent.LinkedBlockingQueue;
 
+import static org.apache.kafka.clients.consumer.ConsumerConfig.BOOTSTRAP_SERVERS_CONFIG;
 import static org.apache.kafka.clients.consumer.ConsumerConfig.GROUP_ID_CONFIG;
 import static org.apache.kafka.clients.consumer.ConsumerConfig.KEY_DESERIALIZER_CLASS_CONFIG;
 import static org.apache.kafka.clients.consumer.ConsumerConfig.REQUEST_TIMEOUT_MS_CONFIG;
 import static org.apache.kafka.clients.consumer.ConsumerConfig.VALUE_DESERIALIZER_CLASS_CONFIG;
-import static org.apache.kafka.clients.consumer.internals.ConsumerUtils.CONSUMER_METRIC_GROUP;
 import static org.junit.jupiter.api.Assertions.assertEquals;
 import static org.junit.jupiter.api.Assertions.assertFalse;
 import static org.junit.jupiter.api.Assertions.assertInstanceOf;
@@ -129,7 +134,7 @@ public class NetworkClientDelegateTest {
             time.sleep(REQUEST_TIMEOUT_MS);
             ncd.poll(0, time.milliseconds());
             assertTrue(unsentRequest.future().isDone());
-            TestUtils.assertFutureThrows(unsentRequest.future(), TimeoutException.class);
+            TestUtils.assertFutureThrows(TimeoutException.class, unsentRequest.future());
         }
     }
 
@@ -142,7 +147,7 @@ public class NetworkClientDelegateTest {
             time.sleep(REQUEST_TIMEOUT_MS);
             ncd.poll(0, time.milliseconds());
             assertTrue(unsentRequest.future().isDone());
-            TestUtils.assertFutureThrows(unsentRequest.future(), DisconnectException.class);
+            TestUtils.assertFutureThrows(DisconnectException.class, unsentRequest.future());
         }
     }
 
@@ -247,9 +252,55 @@ public class NetworkClientDelegateTest {
     }
 
     @Test
-    public void testRecordUnsentRequestsQueueTime() throws Exception {
+    public void testBootstrapResolutionExceptionPropagatedViaErrorEventOnce() throws Exception {
+        BootstrapResolutionException bootstrapException = new BootstrapResolutionException("DNS resolution failed");
+
+        BlockingQueue<BackgroundEvent> backgroundEventQueue = new LinkedBlockingQueue<>();
+        this.backgroundEventHandler = new BackgroundEventHandler(backgroundEventQueue, time, mock(AsyncConsumerMetrics.class));
+        Metadata realMetadata = new Metadata(50, 50, 5000, new LogContext(), new ClusterResourceListeners());
+
+        LogContext logContext = new LogContext();
+        Properties properties = new Properties();
+        properties.put(KEY_DESERIALIZER_CLASS_CONFIG, StringDeserializer.class);
+        properties.put(VALUE_DESERIALIZER_CLASS_CONFIG, StringDeserializer.class);
+        properties.put(GROUP_ID_CONFIG, GROUP_ID);
+        properties.put(REQUEST_TIMEOUT_MS_CONFIG, REQUEST_TIMEOUT_MS);
+        properties.put(BOOTSTRAP_SERVERS_CONFIG, "localhost:9092");
+
+        try (NetworkClientDelegate ncd = new NetworkClientDelegate(time,
+                new ConsumerConfig(properties),
+                logContext,
+                this.client,
+                realMetadata,
+                this.backgroundEventHandler,
+                true,
+                mock(AsyncConsumerMetrics.class))) {
+
+            // Simulate NetworkClient recording a permanent bootstrap failure on the metadata.
+            realMetadata.bootstrapFatalError(bootstrapException);
+
+            assertEquals(0, backgroundEventQueue.size());
+            ncd.poll(0, time.milliseconds());
+            assertEquals(1, backgroundEventQueue.size());
+
+            BackgroundEvent event = backgroundEventQueue.poll();
+            assertNotNull(event);
+            assertEquals(BackgroundEvent.Type.ERROR, event.type());
+            assertEquals(bootstrapException, ((ErrorEvent) event).error());
+
+            // Subsequent polls must NOT keep flooding the queue with duplicate ErrorEvents,
+            // even though metadata.maybeThrowAnyException keeps surfacing the permanent error.
+            ncd.poll(0, time.milliseconds());
+            ncd.poll(0, time.milliseconds());
+            assertEquals(0, backgroundEventQueue.size());
+        }
+    }
+
+    @ParameterizedTest
+    @MethodSource("org.apache.kafka.clients.consumer.internals.metrics.AsyncConsumerMetricsTest#groupNameProvider")
+    public void testRecordUnsentRequestsQueueTime(String groupName) throws Exception {
         try (Metrics metrics = new Metrics();
-             AsyncConsumerMetrics asyncConsumerMetrics = new AsyncConsumerMetrics(metrics);
+             AsyncConsumerMetrics asyncConsumerMetrics = new AsyncConsumerMetrics(metrics, groupName);
              NetworkClientDelegate networkClientDelegate = newNetworkClientDelegate(false, asyncConsumerMetrics)) {
             NetworkClientDelegate.UnsentRequest unsentRequest = newUnsentFindCoordinatorRequest();
             networkClientDelegate.add(unsentRequest);
@@ -261,21 +312,66 @@ public class NetworkClientDelegateTest {
             assertEquals(
                 0,
                 (double) metrics.metric(
-                    metrics.metricName("unsent-requests-queue-size", CONSUMER_METRIC_GROUP)
+                    metrics.metricName("unsent-requests-queue-size", groupName)
                 ).metricValue()
             );
             assertEquals(
                 10,
                 (double) metrics.metric(
-                    metrics.metricName("unsent-requests-queue-time-avg", CONSUMER_METRIC_GROUP)
+                    metrics.metricName("unsent-requests-queue-time-avg", groupName)
                 ).metricValue()
             );
             assertEquals(
                 10,
                 (double) metrics.metric(
-                    metrics.metricName("unsent-requests-queue-time-max", CONSUMER_METRIC_GROUP)
+                    metrics.metricName("unsent-requests-queue-time-max", groupName)
                 ).metricValue()
             );
+        }
+    }
+
+    @Test
+    public void testPollWithOnClose() throws Exception {
+        try (NetworkClientDelegate ncd = newNetworkClientDelegate(false)) {
+            NetworkClientDelegate.UnsentRequest unsentRequest = newUnsentFindCoordinatorRequest();
+            ncd.add(unsentRequest);
+
+            // First poll without onClose
+            ncd.poll(0, time.milliseconds());
+            assertTrue(ncd.hasAnyPendingRequests());
+
+            // Poll with onClose=true
+            ncd.poll(0, time.milliseconds(), true);
+            assertTrue(ncd.hasAnyPendingRequests());
+
+            // Complete the request
+            client.respond(FindCoordinatorResponse.prepareResponse(Errors.NONE, GROUP_ID, mockNode()));
+            ncd.poll(0, time.milliseconds(), true);
+            assertFalse(ncd.hasAnyPendingRequests());
+        }
+    }
+
+    @Test
+    public void testCheckDisconnectsWithOnClose() throws Exception {
+        try (NetworkClientDelegate ncd = newNetworkClientDelegate(false)) {
+            NetworkClientDelegate.UnsentRequest unsentRequest = newUnsentFindCoordinatorRequest();
+            ncd.add(unsentRequest);
+
+            // Mark node as disconnected
+            Node node = mockNode();
+            client.setUnreachable(node, REQUEST_TIMEOUT_MS);
+
+            // Poll with onClose=false (default)
+            ncd.poll(0, time.milliseconds());
+            assertTrue(ncd.hasAnyPendingRequests());
+
+            // Poll with onClose=true
+            ncd.poll(0, time.milliseconds(), true);
+
+            // Verify the request is absent since we're removing unsent requests on close.
+            assertFalse(ncd.hasAnyPendingRequests());
+            assertTrue(unsentRequest.future().isDone());
+            TestUtils.assertFutureThrows(NetworkException.class, unsentRequest.future());
         }
     }
 
@@ -290,6 +386,7 @@ public class NetworkClientDelegateTest {
         properties.put(VALUE_DESERIALIZER_CLASS_CONFIG, StringDeserializer.class);
         properties.put(GROUP_ID_CONFIG, GROUP_ID);
         properties.put(REQUEST_TIMEOUT_MS_CONFIG, REQUEST_TIMEOUT_MS);
+        properties.put(BOOTSTRAP_SERVERS_CONFIG, "localhost:9092");
         return new NetworkClientDelegate(time,
                 new ConsumerConfig(properties),
                 logContext,

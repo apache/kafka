@@ -18,17 +18,16 @@ package org.apache.kafka.raft.internals;
 
 import org.apache.kafka.common.message.KRaftVersionRecord;
 import org.apache.kafka.common.message.VotersRecord;
-import org.apache.kafka.common.utils.BufferSupplier;
-import org.apache.kafka.common.utils.LogContext;
+import org.apache.kafka.common.utils.internals.BufferSupplier;
+import org.apache.kafka.common.utils.internals.LogContext;
 import org.apache.kafka.raft.Batch;
 import org.apache.kafka.raft.ControlRecord;
 import org.apache.kafka.raft.ExternalKRaftMetrics;
 import org.apache.kafka.raft.Isolation;
 import org.apache.kafka.raft.LogFetchInfo;
-import org.apache.kafka.raft.ReplicatedLog;
+import org.apache.kafka.raft.RaftLog;
 import org.apache.kafka.raft.VoterSet;
 import org.apache.kafka.server.common.KRaftVersion;
-import org.apache.kafka.server.common.serialization.RecordSerde;
 import org.apache.kafka.snapshot.RawSnapshotReader;
 import org.apache.kafka.snapshot.RecordsSnapshotReader;
 import org.apache.kafka.snapshot.SnapshotReader;
@@ -52,9 +51,8 @@ public final class KRaftControlRecordStateMachine {
     private static final long STARTING_NEXT_OFFSET = -1;
     private static final long SMALLEST_LOG_OFFSET = 0;
 
-    private final ReplicatedLog log;
-    private final RecordSerde<?> serde;
-    private final BufferSupplier bufferSupplier;
+    private final LogContext logContext;
+    private final RaftLog log;
     private final Logger logger;
     private final int maxBatchSizeBytes;
 
@@ -80,27 +78,22 @@ public final class KRaftControlRecordStateMachine {
      *
      * @param staticVoterSet the set of voter statically configured
      * @param log the on disk topic partition
-     * @param serde the record decoder for data records
-     * @param bufferSupplier the supplier of byte buffers
      * @param maxBatchSizeBytes the maximum size of record batch
      * @param logContext the log context
      */
     public KRaftControlRecordStateMachine(
         VoterSet staticVoterSet,
-        ReplicatedLog log,
-        RecordSerde<?> serde,
-        BufferSupplier bufferSupplier,
+        RaftLog log,
         int maxBatchSizeBytes,
         LogContext logContext,
         KafkaRaftMetrics kafkaRaftMetrics,
         ExternalKRaftMetrics externalKRaftMetrics
     ) {
+        this.logContext = logContext;
         this.log = log;
         this.voterSetHistory = new VoterSetHistory(staticVoterSet, logContext);
-        this.serde = serde;
-        this.bufferSupplier = bufferSupplier;
         this.maxBatchSizeBytes = maxBatchSizeBytes;
-        this.logger = logContext.logger(this.getClass());
+        this.logger = logContext.logger(getClass());
         this.kafkaRaftMetrics = kafkaRaftMetrics;
         this.externalKRaftMetrics = externalKRaftMetrics;
         this.staticVoterSet = staticVoterSet;
@@ -230,20 +223,27 @@ public final class KRaftControlRecordStateMachine {
     }
 
     private void maybeLoadLog() {
-        while (log.endOffset().offset() > nextOffset) {
-            LogFetchInfo info = log.read(nextOffset, Isolation.UNCOMMITTED);
-            try (RecordsIterator<?> iterator = new RecordsIterator<>(
-                    info.records,
-                    serde,
-                    bufferSupplier,
-                    maxBatchSizeBytes,
-                    true // Validate batch CRC
-                )
-            ) {
-                while (iterator.hasNext()) {
-                    Batch<?> batch = iterator.next();
-                    handleBatch(batch, OptionalLong.empty());
-                    nextOffset = batch.lastOffset() + 1;
+        try (BufferSupplier bufferSupplier = BufferSupplier.create()) {
+            while (log.endOffset().offset() > nextOffset) {
+                LogFetchInfo info = log.read(
+                    nextOffset,
+                    Isolation.UNCOMMITTED,
+                    Integer.MAX_VALUE
+                );
+                try (RecordsIterator<?> iterator = new RecordsIterator<>(
+                        info.records,
+                        RecordsDecodingStrategy.controlOnly(),
+                        bufferSupplier,
+                        maxBatchSizeBytes,
+                        true, // Validate batch CRC
+                        logContext
+                    )
+                ) {
+                    while (iterator.hasNext()) {
+                        Batch<?> batch = iterator.next();
+                        handleBatch(batch, OptionalLong.empty());
+                        nextOffset = batch.lastOffset() + 1;
+                    }
                 }
             }
         }
@@ -261,12 +261,13 @@ public final class KRaftControlRecordStateMachine {
             }
 
             // Load the snapshot since the listener is at the start of the log or the log doesn't have the next entry.
-            try (SnapshotReader<?> reader = RecordsSnapshotReader.of(
+            try (BufferSupplier bufferSupplier = BufferSupplier.create();
+                 SnapshotReader<?> reader = RecordsSnapshotReader.ofControlOnly(
                     rawSnapshot,
-                    serde,
                     bufferSupplier,
                     maxBatchSizeBytes,
-                    true // Validate batch CRC
+                    true, // Validate batch CRC
+                    logContext
                 )
             ) {
                 logger.info(

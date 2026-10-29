@@ -16,6 +16,8 @@
  */
 package org.apache.kafka.streams.state.internals;
 
+import org.apache.kafka.common.IsolationLevel;
+import org.apache.kafka.common.TopicPartition;
 import org.apache.kafka.streams.KeyValue;
 import org.apache.kafka.streams.errors.InvalidStateStoreException;
 import org.apache.kafka.streams.internals.ApiUtils;
@@ -47,6 +49,7 @@ public class ReadOnlyWindowStoreStub<K, V> implements ReadOnlyWindowStore<K, V>,
     private final long windowSize;
     private final NavigableMap<Long, NavigableMap<K, V>> data = new TreeMap<>();
     private boolean open = true;
+    public IsolationLevel isolationLevel;
 
     ReadOnlyWindowStoreStub(final long windowSize) {
         this.windowSize = windowSize;
@@ -110,7 +113,7 @@ public class ReadOnlyWindowStoreStub<K, V> implements ReadOnlyWindowStore<K, V>,
         }
         final Iterator<KeyValue<Windowed<K>, V>> iterator = results.iterator();
 
-        return new KeyValueIterator<Windowed<K>, V>() {
+        return new KeyValueIterator<>() {
             @Override
             public void close() {
             }
@@ -149,7 +152,7 @@ public class ReadOnlyWindowStoreStub<K, V> implements ReadOnlyWindowStore<K, V>,
         }
         final Iterator<KeyValue<Windowed<K>, V>> iterator = results.iterator();
 
-        return new KeyValueIterator<Windowed<K>, V>() {
+        return new KeyValueIterator<>() {
             @Override
             public void close() {
             }
@@ -191,7 +194,7 @@ public class ReadOnlyWindowStoreStub<K, V> implements ReadOnlyWindowStore<K, V>,
         }
         final Iterator<KeyValue<Windowed<K>, V>> iterator = results.iterator();
 
-        return new KeyValueIterator<Windowed<K>, V>() {
+        return new KeyValueIterator<>() {
             @Override
             public void close() {
             }
@@ -235,7 +238,7 @@ public class ReadOnlyWindowStoreStub<K, V> implements ReadOnlyWindowStore<K, V>,
         }
         final Iterator<KeyValue<Windowed<K>, V>> iterator = results.iterator();
 
-        return new KeyValueIterator<Windowed<K>, V>() {
+        return new KeyValueIterator<>() {
             @Override
             public void close() {
             }
@@ -286,7 +289,7 @@ public class ReadOnlyWindowStoreStub<K, V> implements ReadOnlyWindowStore<K, V>,
         }
         final Iterator<KeyValue<Windowed<K>, V>> iterator = results.iterator();
 
-        return new KeyValueIterator<Windowed<K>, V>() {
+        return new KeyValueIterator<>() {
             @Override
             public void close() {
             }
@@ -342,7 +345,7 @@ public class ReadOnlyWindowStoreStub<K, V> implements ReadOnlyWindowStore<K, V>,
         }
         final Iterator<KeyValue<Windowed<K>, V>> iterator = results.iterator();
 
-        return new KeyValueIterator<Windowed<K>, V>() {
+        return new KeyValueIterator<>() {
             @Override
             public void close() {
             }
@@ -381,7 +384,7 @@ public class ReadOnlyWindowStoreStub<K, V> implements ReadOnlyWindowStore<K, V>,
     public void init(final StateStoreContext stateStoreContext, final StateStore root) {}
 
     @Override
-    public void flush() {
+    public void commit(final Map<TopicPartition, Long> changelogOffsets) {
     }
 
     @Override
@@ -405,6 +408,12 @@ public class ReadOnlyWindowStoreStub<K, V> implements ReadOnlyWindowStore<K, V>,
 
     void setOpen(final boolean open) {
         this.open = open;
+    }
+
+    @Override
+    public ReadOnlyWindowStore<K, V> readOnly(final IsolationLevel level) {
+        this.isolationLevel = level;
+        return this;
     }
 
     private static class TheWindowStoreIterator<E> implements WindowStoreIterator<E> {

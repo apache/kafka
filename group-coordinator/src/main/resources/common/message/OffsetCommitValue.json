@@ -32,6 +32,8 @@
     { "name": "commitTimestamp", "type": "int64", "versions": "0+",
       "about": "The time at which the commit was added to the log."},
     { "name": "expireTimestamp", "type": "int64", "versions": "1", "default": -1, "ignorable": true,
-      "about": "The time at which the offset will expire."}
+      "about": "The time at which the offset will expire."},
+    { "name": "topicId", "type": "uuid", "versions": "4+", "taggedVersions": "4+", "tag": 0, "ignorable": true,
+      "about": "The topic id of the committed offset."}
   ]
 }

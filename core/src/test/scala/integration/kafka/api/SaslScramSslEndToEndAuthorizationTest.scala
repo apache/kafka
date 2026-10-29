@@ -16,20 +16,17 @@
   */
 package kafka.api
 
-import kafka.security.JaasTestUtils
-
 import java.util.Properties
 import kafka.utils._
 import org.apache.kafka.common.security.auth.KafkaPrincipal
 import org.apache.kafka.common.security.scram.internals.ScramMechanism
 import org.apache.kafka.metadata.storage.Formatter
+import org.apache.kafka.security.JaasTestUtils
 import org.apache.kafka.test.TestSslUtils
 
 import scala.jdk.CollectionConverters._
 import org.junit.jupiter.api.Assertions._
-import org.junit.jupiter.api.{BeforeEach, TestInfo}
-import org.junit.jupiter.params.ParameterizedTest
-import org.junit.jupiter.params.provider.ValueSource
+import org.junit.jupiter.api.{BeforeEach, Test, TestInfo}
 
 class SaslScramSslEndToEndAuthorizationTest extends SaslEndToEndAuthorizationTest {
   override protected def kafkaClientSaslMechanism = "SCRAM-SHA-256"
@@ -49,8 +46,8 @@ class SaslScramSslEndToEndAuthorizationTest extends SaslEndToEndAuthorizationTes
   // Create the admin credentials for KRaft as part of controller initialization
   override def addFormatterSettings(formatter: Formatter): Unit = {
     formatter.setClusterId("XcZZOzUqS4yHOjhMQB6JLQ")
-    formatter.setScramArguments(List(
-      s"SCRAM-SHA-256=[name=${JaasTestUtils.KAFKA_SCRAM_ADMIN},password=${JaasTestUtils.KAFKA_SCRAM_ADMIN_PASSWORD}]").asJava)
+    formatter.setScramArguments(java.util.List.of(
+      s"SCRAM-SHA-256=[name=${JaasTestUtils.KAFKA_SCRAM_ADMIN},password=${JaasTestUtils.KAFKA_SCRAM_ADMIN_PASSWORD}]"))
   }
 
   override def configureListeners(props: collection.Seq[Properties]): Unit = {
@@ -68,9 +65,8 @@ class SaslScramSslEndToEndAuthorizationTest extends SaslEndToEndAuthorizationTes
       createScramCredentialsViaPrivilegedAdminClient(JaasTestUtils.KAFKA_SCRAM_USER_2, JaasTestUtils.KAFKA_SCRAM_PASSWORD_2)
   }
 
-  @ParameterizedTest
-  @ValueSource(strings = Array("kraft"))
-  def testAuthentications(quorum: String): Unit = {
+  @Test
+  def testAuthentications(): Unit = {
     val successfulAuths = TestUtils.totalMetricValue(brokers.head, "successful-authentication-total")
     assertTrue(successfulAuths > 0, "No successful authentications")
     val failedAuths = TestUtils.totalMetricValue(brokers.head, "failed-authentication-total")

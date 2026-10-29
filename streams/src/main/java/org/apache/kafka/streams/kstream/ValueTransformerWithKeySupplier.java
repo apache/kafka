@@ -16,6 +16,7 @@
  */
 package org.apache.kafka.streams.kstream;
 
+import org.apache.kafka.common.annotation.InterfaceAudience;
 import org.apache.kafka.streams.processor.ConnectedStoreProvider;
 
 import java.util.function.Supplier;
@@ -35,6 +36,8 @@ import java.util.function.Supplier;
  * @see Transformer
  * @see TransformerSupplier
  */
+@FunctionalInterface
+@InterfaceAudience.Public
 public interface ValueTransformerWithKeySupplier<K, V, VR> extends ConnectedStoreProvider, Supplier<ValueTransformerWithKey<K, V, VR>> {
 
     /**

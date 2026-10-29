@@ -17,3 +17,4 @@ from .performance import PerformanceService, throughput, latency, compute_aggreg
 from .end_to_end_latency import EndToEndLatencyService
 from .producer_performance import ProducerPerformanceService
 from .consumer_performance import ConsumerPerformanceService
+from .share_consumer_performance import ShareConsumerPerformanceService

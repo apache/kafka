@@ -17,12 +17,15 @@
 package org.apache.kafka.streams.integration;
 
 import org.apache.kafka.clients.consumer.ConsumerConfig;
+import org.apache.kafka.common.TopicPartition;
 import org.apache.kafka.common.config.TopicConfig;
 import org.apache.kafka.common.serialization.IntegerDeserializer;
 import org.apache.kafka.common.serialization.IntegerSerializer;
 import org.apache.kafka.common.serialization.Serdes;
 import org.apache.kafka.common.serialization.StringSerializer;
 import org.apache.kafka.common.utils.Bytes;
+import org.apache.kafka.streams.CloseOptions;
+import org.apache.kafka.streams.CloseOptions.GroupMembershipOperation;
 import org.apache.kafka.streams.KafkaStreams;
 import org.apache.kafka.streams.KeyValue;
 import org.apache.kafka.streams.StreamsBuilder;
@@ -62,6 +65,8 @@ import org.junit.jupiter.api.BeforeEach;
 import org.junit.jupiter.api.Tag;
 import org.junit.jupiter.api.Test;
 import org.junit.jupiter.api.TestInfo;
+import org.junit.jupiter.params.ParameterizedTest;
+import org.junit.jupiter.params.provider.ValueSource;
 
 import java.io.IOException;
 import java.time.Duration;
@@ -75,8 +80,7 @@ import java.util.Optional;
 import java.util.Properties;
 
 import static org.apache.kafka.streams.utils.TestUtils.safeUniqueTestName;
-import static org.hamcrest.CoreMatchers.equalTo;
-import static org.hamcrest.MatcherAssert.assertThat;
+import static org.junit.jupiter.api.Assertions.assertEquals;
 
 @Tag("integration")
 public class VersionedKeyValueStoreIntegrationTest {
@@ -124,8 +128,15 @@ public class VersionedKeyValueStoreIntegrationTest {
         }
     }
 
-    @Test
-    public void shouldPutGetAndDelete() throws Exception {
+    private void closeAndLeaveGroupBeforeRestart() {
+        // Leave the group so the immediate restart with the same application id
+        // does not wait for the previous member's session timeout.
+        kafkaStreams.close(CloseOptions.groupMembershipOperation(GroupMembershipOperation.LEAVE_GROUP));
+    }
+
+    @ParameterizedTest
+    @ValueSource(booleans = {false, true})
+    public void shouldPutGetAndDelete(final boolean transactionalStateStores) throws Exception {
         // build topology and start app
         final StreamsBuilder streamsBuilder = new StreamsBuilder();
 
@@ -141,7 +152,7 @@ public class VersionedKeyValueStoreIntegrationTest {
             .process(() -> new VersionedStoreContentCheckerProcessor(true), STORE_NAME)
             .to(outputStream, Produced.with(Serdes.Integer(), Serdes.Integer()));
 
-        final Properties props = props();
+        final Properties props = props(transactionalStateStores);
         kafkaStreams = new KafkaStreams(streamsBuilder.build(), props);
         kafkaStreams.start();
 
@@ -164,7 +175,7 @@ public class VersionedKeyValueStoreIntegrationTest {
 
         for (final KeyValue<Integer, Integer> receivedRecord : receivedRecords) {
             // verify zero failed checks for each record
-            assertThat(receivedRecord.value, equalTo(0));
+            assertEquals(0, receivedRecord.value);
         }
     }
 
@@ -203,12 +214,13 @@ public class VersionedKeyValueStoreIntegrationTest {
         // verify changelog topic properties
         final String changelogTopic = props.getProperty(StreamsConfig.APPLICATION_ID_CONFIG) + "-versioned-store-changelog";
         final Properties changelogTopicConfig = CLUSTER.getLogConfig(changelogTopic);
-        assertThat(changelogTopicConfig.getProperty("cleanup.policy"), equalTo("compact"));
-        assertThat(changelogTopicConfig.getProperty("min.compaction.lag.ms"), equalTo(Long.toString(HISTORY_RETENTION + 24 * 60 * 60 * 1000L)));
+        assertEquals("compact", changelogTopicConfig.getProperty("cleanup.policy"));
+        assertEquals(Long.toString(HISTORY_RETENTION + 24 * 60 * 60 * 1000L), changelogTopicConfig.getProperty("min.compaction.lag.ms"));
     }
 
-    @Test
-    public void shouldRestore() throws Exception {
+    @ParameterizedTest
+    @ValueSource(booleans = {false, true})
+    public void shouldRestore(final boolean transactionalStateStores) throws Exception {
         // build topology and start app
         StreamsBuilder streamsBuilder = new StreamsBuilder();
 
@@ -224,7 +236,7 @@ public class VersionedKeyValueStoreIntegrationTest {
             .process(() -> new VersionedStoreContentCheckerProcessor(true), STORE_NAME)
             .to(outputStream, Produced.with(Serdes.Integer(), Serdes.Integer()));
 
-        final Properties props = props();
+        final Properties props = props(transactionalStateStores);
         kafkaStreams = new KafkaStreams(streamsBuilder.build(), props);
         kafkaStreams.start();
 
@@ -248,7 +260,7 @@ public class VersionedKeyValueStoreIntegrationTest {
             initialRecordsProduced);
 
         // wipe out state store to trigger restore process on restart
-        kafkaStreams.close();
+        closeAndLeaveGroupBeforeRestart();
         kafkaStreams.cleanUp();
 
         // restart app and pass expected store contents to processor
@@ -283,7 +295,7 @@ public class VersionedKeyValueStoreIntegrationTest {
 
         for (final KeyValue<Integer, Integer> receivedRecord : receivedRecords) {
             // verify zero failed checks for each record
-            assertThat(receivedRecord.value, equalTo(0));
+            assertEquals(0, receivedRecord.value);
         }
     }
 
@@ -314,7 +326,7 @@ public class VersionedKeyValueStoreIntegrationTest {
                 .withPartitions(Collections.singleton(0));
         final StateQueryResult<String> result =
             IntegrationTestUtils.iqv2WaitForResult(kafkaStreams, request);
-        assertThat(result.getOnlyPartitionResult().getResult(), equalTo("success"));
+        assertEquals("success", result.getOnlyPartitionResult().getResult());
     }
 
     @Test
@@ -383,11 +395,11 @@ public class VersionedKeyValueStoreIntegrationTest {
 
         for (final KeyValue<Integer, Integer> receivedRecord : receivedRecords) {
             // verify zero failed checks for each record
-            assertThat(receivedRecord.value, equalTo(0));
+            assertEquals(0, receivedRecord.value);
         }
 
         // wipe out state store to trigger restore process on restart
-        kafkaStreams.close();
+        closeAndLeaveGroupBeforeRestart();
         kafkaStreams.cleanUp();
 
         // restart app with versioned store, and pass expected store contents to processor
@@ -422,11 +434,15 @@ public class VersionedKeyValueStoreIntegrationTest {
 
         for (final KeyValue<Integer, Integer> receivedRecord : receivedRecords) {
             // verify zero failed checks for each record
-            assertThat(receivedRecord.value, equalTo(0));
+            assertEquals(0, receivedRecord.value);
         }
     }
 
     private Properties props() {
+        return props(false);
+    }
+
+    private Properties props(final boolean transactionalStateStores) {
         final String safeTestName = safeUniqueTestName(testInfo);
         final Properties streamsConfiguration = new Properties();
         streamsConfiguration.put(StreamsConfig.APPLICATION_ID_CONFIG, "app-" + safeTestName);
@@ -434,6 +450,11 @@ public class VersionedKeyValueStoreIntegrationTest {
         streamsConfiguration.put(StreamsConfig.STATE_DIR_CONFIG, TestUtils.tempDirectory().getPath());
         streamsConfiguration.put(StreamsConfig.COMMIT_INTERVAL_MS_CONFIG, 1000L);
         streamsConfiguration.put(ConsumerConfig.AUTO_OFFSET_RESET_CONFIG, "earliest");
+        if (transactionalStateStores) {
+            // Transactional state stores are only supported under exactly-once.
+            streamsConfiguration.put(StreamsConfig.TRANSACTIONAL_STATE_STORES_CONFIG, true);
+            streamsConfiguration.put(StreamsConfig.PROCESSING_GUARANTEE_CONFIG, StreamsConfig.EXACTLY_ONCE_V2);
+        }
         return streamsConfiguration;
     }
 
@@ -821,7 +842,7 @@ public class VersionedKeyValueStoreIntegrationTest {
             }
 
             @Override
-            public void flush() {
+            public void commit(final Map<TopicPartition, Long> changelogOffsets) {
                 // do nothing
             }
 

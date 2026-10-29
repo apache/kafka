@@ -27,7 +27,7 @@ import java.util.stream.Collectors;
  * The consumer group state.
  * @deprecated Since 4.0. Use {@link GroupState} instead.
  */
-@Deprecated
+@Deprecated(since = "4.0", forRemoval = true)
 public enum ConsumerGroupState {
     UNKNOWN("Unknown"),
     PREPARING_REBALANCE("PreparingRebalance"),

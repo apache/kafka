@@ -23,12 +23,12 @@ import org.apache.kafka.common.TopicPartition;
 import org.apache.kafka.common.compress.Compression;
 import org.apache.kafka.common.header.Header;
 import org.apache.kafka.common.header.internals.RecordHeader;
-import org.apache.kafka.common.record.CompressionType;
-import org.apache.kafka.common.record.MemoryRecords;
-import org.apache.kafka.common.record.MemoryRecordsBuilder;
-import org.apache.kafka.common.record.Record;
-import org.apache.kafka.common.record.RecordBatch;
 import org.apache.kafka.common.record.TimestampType;
+import org.apache.kafka.common.record.internal.CompressionType;
+import org.apache.kafka.common.record.internal.MemoryRecords;
+import org.apache.kafka.common.record.internal.MemoryRecordsBuilder;
+import org.apache.kafka.common.record.internal.Record;
+import org.apache.kafka.common.record.internal.RecordBatch;
 import org.apache.kafka.test.TestUtils;
 
 import org.junit.jupiter.api.Test;
@@ -44,9 +44,9 @@ import java.util.OptionalInt;
 import java.util.concurrent.ExecutionException;
 import java.util.function.Function;
 
-import static org.apache.kafka.common.record.RecordBatch.MAGIC_VALUE_V0;
-import static org.apache.kafka.common.record.RecordBatch.MAGIC_VALUE_V1;
-import static org.apache.kafka.common.record.RecordBatch.MAGIC_VALUE_V2;
+import static org.apache.kafka.common.record.internal.RecordBatch.MAGIC_VALUE_V0;
+import static org.apache.kafka.common.record.internal.RecordBatch.MAGIC_VALUE_V1;
+import static org.apache.kafka.common.record.internal.RecordBatch.MAGIC_VALUE_V2;
 import static org.junit.jupiter.api.Assertions.assertEquals;
 import static org.junit.jupiter.api.Assertions.assertFalse;
 import static org.junit.jupiter.api.Assertions.assertNotNull;
@@ -100,12 +100,7 @@ public class ProducerBatchTest {
         assertEquals(exception, callback.exception);
         assertNull(callback.metadata);
 
-        try {
-            batch.abort(new KafkaException());
-            fail("Expected exception from abort");
-        } catch (IllegalStateException e) {
-            // expected
-        }
+        assertThrows(IllegalStateException.class, () -> batch.abort(new KafkaException()), "Expected exception from abort");
 
         assertEquals(1, callback.invocations);
         assertTrue(future.isDone());
@@ -352,7 +347,7 @@ public class ProducerBatchTest {
 
         for (int i = 0; i < futures.size(); i++) {
             FutureRecordMetadata future = futures.get(i);
-            RuntimeException caughtException = TestUtils.assertFutureThrows(future, RuntimeException.class);
+            RuntimeException caughtException = TestUtils.assertFutureThrows(RuntimeException.class, future);
             RuntimeException expectedException = recordExceptions.apply(i);
             assertEquals(expectedException, caughtException);
         }

@@ -21,9 +21,8 @@ import org.apache.kafka.common.config.ConfigResource;
 import org.apache.kafka.common.message.AlterConfigsRequestData;
 import org.apache.kafka.common.message.AlterConfigsResponseData;
 import org.apache.kafka.common.protocol.ApiKeys;
-import org.apache.kafka.common.protocol.ByteBufferAccessor;
+import org.apache.kafka.common.protocol.Readable;
 
-import java.nio.ByteBuffer;
 import java.util.Collection;
 import java.util.Map;
 import java.util.Objects;
@@ -88,6 +87,11 @@ public class AlterConfigsRequest extends AbstractRequest {
         public AlterConfigsRequest build(short version) {
             return new AlterConfigsRequest(data, version);
         }
+
+        @Override
+        public String toString() {
+            return maskData(data);
+        }
     }
 
     private final AlterConfigsRequestData data;
@@ -132,7 +136,23 @@ public class AlterConfigsRequest extends AbstractRequest {
 
     }
 
-    public static AlterConfigsRequest parse(ByteBuffer buffer, short version) {
-        return new AlterConfigsRequest(new AlterConfigsRequestData(new ByteBufferAccessor(buffer), version), version);
+    public static AlterConfigsRequest parse(Readable readable, short version) {
+        return new AlterConfigsRequest(new AlterConfigsRequestData(readable, version), version);
+    }
+
+    // It is not safe to print all config values
+    private static String maskData(AlterConfigsRequestData data) {
+        AlterConfigsRequestData tempData = data.duplicate();
+        tempData.resources().forEach(resource -> {
+            resource.configs().forEach(config -> {
+                config.setValue("REDACTED");
+            });
+        });
+        return tempData.toString();
+    }
+
+    @Override
+    public String toString() {
+        return maskData(data);
     }
 }

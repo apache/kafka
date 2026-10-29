@@ -24,6 +24,7 @@ import org.apache.kafka.common.protocol.Errors;
 import org.junit.jupiter.api.Test;
 
 import java.util.Arrays;
+import java.util.EnumMap;
 import java.util.HashMap;
 import java.util.Map;
 
@@ -44,7 +45,7 @@ public class DeleteGroupsResponseTest {
                         .setErrorCode(Errors.NONE.code()),
                     new DeletableGroupResult()
                         .setGroupId(GROUP_ID_2)
-                        .setErrorCode(Errors.GROUP_AUTHORIZATION_FAILED.code())).iterator()
+                        .setErrorCode(Errors.GROUP_AUTHORIZATION_FAILED.code()))
                 )
             )
             .setThrottleTimeMs(THROTTLE_TIME_MS));
@@ -60,7 +61,7 @@ public class DeleteGroupsResponseTest {
         expectedErrors.put(GROUP_ID_2, Errors.GROUP_AUTHORIZATION_FAILED);
         assertEquals(expectedErrors, DELETE_GROUPS_RESPONSE.errors());
 
-        Map<Errors, Integer> expectedErrorCounts = new HashMap<>();
+        Map<Errors, Integer> expectedErrorCounts = new EnumMap<>(Errors.class);
         expectedErrorCounts.put(Errors.NONE, 1);
         expectedErrorCounts.put(Errors.GROUP_AUTHORIZATION_FAILED, 1);
         assertEquals(expectedErrorCounts, DELETE_GROUPS_RESPONSE.errorCounts());

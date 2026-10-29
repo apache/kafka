@@ -17,12 +17,13 @@ import json
 import os
 
 from ducktape.services.background_thread import BackgroundThreadService
+from ducktape.utils.util import wait_until
 
 from kafkatest.directory_layout.kafka_path import KafkaPathResolverMixin
 from kafkatest.services.kafka import TopicPartition, consumer_group
 from kafkatest.services.kafka.util import get_log4j_config_param, get_log4j_config_for_tools
 from kafkatest.services.verifiable_client import VerifiableClientMixin
-from kafkatest.version import DEV_BRANCH, V_2_3_0, V_2_3_1, V_3_7_0, V_4_0_0
+from kafkatest.version import get_version, DEV_BRANCH, V_2_3_0, V_2_3_1, V_3_7_0, V_4_0_0
 
 
 class ConsumerState:
@@ -42,7 +43,8 @@ class ConsumerEventHandler(object):
 
     def __init__(self, node, verify_offsets, idx, state=ConsumerState.Dead,
                  revoked_count=0, assigned_count=0, assignment=None,
-                 position=None, committed=None, total_consumed=0):
+                 position=None, committed=None, total_consumed=0,
+                 shutdown_complete=False, startup_complete=False):
         self.node = node
         self.verify_offsets = verify_offsets
         self.idx = idx
@@ -53,17 +55,21 @@ class ConsumerEventHandler(object):
         self.position = position if position is not None else {}
         self.committed = committed if committed is not None else {}
         self.total_consumed = total_consumed
+        self.shutdown_complete = shutdown_complete
+        self.startup_complete = startup_complete
 
     def handle_shutdown_complete(self, node=None, logger=None):
         self.state = ConsumerState.Dead
         self.assignment = []
         self.position = {}
+        self.shutdown_complete = True 
 
         if node is not None and logger is not None:
             logger.debug("Shut down %s" % node.account.hostname)
 
     def handle_startup_complete(self, node, logger):
         self.state = ConsumerState.Started
+        self.startup_complete = True
         logger.debug("Started %s" % node.account.hostname)
 
     def handle_offsets_committed(self, event, node, logger):
@@ -234,9 +240,11 @@ class VerifiableConsumer(KafkaPathResolverMixin, VerifiableClientMixin, Backgrou
                  static_membership=False, max_messages=-1, session_timeout_sec=0, enable_autocommit=False,
                  assignment_strategy=None, group_protocol=None, group_remote_assignor=None,
                  version=DEV_BRANCH, stop_timeout_sec=30, log_level="INFO", jaas_override_variables=None,
-                 on_record_consumed=None, reset_policy="earliest", verify_offsets=True, prop_file=""):
+                 on_record_consumed=None, reset_policy="earliest", verify_offsets=True,
+                 close_timeout_sec=15, prop_file=""):
         """
         :param jaas_override_variables: A dict of variables to be used in the jaas.conf template file
+        :param close_timeout_sec: Timeout in seconds for closing the consumer (default: 15)
         """
         super(VerifiableConsumer, self).__init__(context, num_nodes)
         self.log_level = log_level
@@ -253,6 +261,7 @@ class VerifiableConsumer(KafkaPathResolverMixin, VerifiableClientMixin, Backgrou
         self.assignment_strategy = assignment_strategy
         self.prop_file = prop_file
         self.stop_timeout_sec = stop_timeout_sec
+        self.close_timeout_sec = close_timeout_sec
         self.on_record_consumed = on_record_consumed
         self.verify_offsets = verify_offsets
 
@@ -263,6 +272,19 @@ class VerifiableConsumer(KafkaPathResolverMixin, VerifiableClientMixin, Backgrou
 
         for node in self.nodes:
             node.version = version
+
+    def start(self, **kwargs):
+        super().start(**kwargs)
+        timeout_sec = kwargs.get("timeout_sec", 120)
+        wait_until(lambda: len(self.startup_complete_nodes()) == len(self.nodes),
+                   timeout_sec=timeout_sec,
+                   err_msg="Verifiable consumer didn't finish startup in %d seconds" % timeout_sec)
+
+    def start_node(self, node, **kwargs):
+        with self.lock:
+            if maybe_already_started_node := self.event_handlers.get(node):
+                maybe_already_started_node.startup_complete = False
+        super().start_node(node, **kwargs)
 
     def java_class_name(self):
         return "VerifiableConsumer"
@@ -277,7 +299,10 @@ class VerifiableConsumer(KafkaPathResolverMixin, VerifiableClientMixin, Backgrou
                                      assignment=existing_handler.assignment,
                                      position=existing_handler.position,
                                      committed=existing_handler.committed,
-                                     total_consumed=existing_handler.total_consumed)
+                                     total_consumed=existing_handler.total_consumed,
+                                     shutdown_complete=existing_handler.shutdown_complete,
+                                     startup_complete=existing_handler.startup_complete,
+                                     )
             else:
                 return handler_class(node, self.verify_offsets, idx)
         existing_handler = self.event_handlers[node] if node in self.event_handlers else None
@@ -292,6 +317,7 @@ class VerifiableConsumer(KafkaPathResolverMixin, VerifiableClientMixin, Backgrou
         with self.lock:
             self.event_handlers[node] = self.create_event_handler(idx, node)
             handler = self.event_handlers[node]
+            handler.shutdown_complete = False
 
         node.account.ssh("mkdir -p %s" % VerifiableConsumer.PERSISTENT_ROOT, allow_fail=False)
 
@@ -339,6 +365,8 @@ class VerifiableConsumer(KafkaPathResolverMixin, VerifiableClientMixin, Backgrou
                         handler.handle_partitions_revoked(event, node, self.logger)
                     elif name == "partitions_assigned":
                         handler.handle_partitions_assigned(event, node, self.logger)
+                    elif name == "shutdown_requested":
+                        self.logger.debug("Shutdown has been requested")
                     else:
                         self.logger.debug("%s: ignoring unknown event: %s" % (str(node.account), event))
 
@@ -424,7 +452,16 @@ class VerifiableConsumer(KafkaPathResolverMixin, VerifiableClientMixin, Backgrou
         if self.max_messages > 0:
             cmd += " --max-messages %s" % str(self.max_messages)
 
-        cmd += " --consumer.config %s" % VerifiableConsumer.CONFIG_FILE
+        version = get_version(node)
+
+        if self.close_timeout_sec >= 0 and version.supports_consumer_close_timeout():
+            cmd += " --close-timeout %s" % (self.close_timeout_sec * 1000)
+
+        if version.supports_command_config():
+            cmd += " --command-config %s" % VerifiableConsumer.CONFIG_FILE
+        else:
+            cmd += " --consumer.config %s" % VerifiableConsumer.CONFIG_FILE
+
         cmd += " 2>> %s | tee -a %s &" % (VerifiableConsumer.STDOUT_CAPTURE, VerifiableConsumer.STDOUT_CAPTURE)
         return cmd
 
@@ -501,6 +538,11 @@ class VerifiableConsumer(KafkaPathResolverMixin, VerifiableClientMixin, Backgrou
             return max(handler.revoked_count for handler in self.event_handlers.values()
                        if handler.idx <= keep_alive)
 
+    def startup_complete_nodes(self):
+        with self.lock:
+            return [handler.node for handler in self.event_handlers.values()
+                    if handler.startup_complete]
+
     def joined_nodes(self):
         with self.lock:
             return [handler.node for handler in self.event_handlers.values()
@@ -520,6 +562,11 @@ class VerifiableConsumer(KafkaPathResolverMixin, VerifiableClientMixin, Backgrou
         with self.lock:
             return [handler.node for handler in self.event_handlers.values()
                     if handler.state != ConsumerState.Dead]
+
+    def shutdown_complete_nodes(self):
+        with self.lock:
+            return [handler.node for handler in self.event_handlers.values()
+                    if handler.shutdown_complete]
 
     def is_consumer_group_protocol_enabled(self):
         return self.group_protocol and self.group_protocol.lower() == consumer_group.consumer_group_protocol

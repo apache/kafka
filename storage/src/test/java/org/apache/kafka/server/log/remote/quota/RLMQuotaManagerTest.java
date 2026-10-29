@@ -26,7 +26,7 @@ import org.apache.kafka.server.quota.QuotaType;
 
 import org.junit.jupiter.api.Test;
 
-import java.util.Collections;
+import java.util.List;
 import java.util.Map;
 import java.util.stream.Collectors;
 
@@ -37,7 +37,7 @@ import static org.junit.jupiter.api.Assertions.assertTrue;
 
 public class RLMQuotaManagerTest {
     private final MockTime time = new MockTime();
-    private final Metrics metrics = new Metrics(new MetricConfig(), Collections.emptyList(), time);
+    private final Metrics metrics = new Metrics(new MetricConfig(), List.of(), time);
     private static final QuotaType QUOTA_TYPE = QuotaType.RLM_FETCH;
     private static final String DESCRIPTION = "Tracking byte rate";
 

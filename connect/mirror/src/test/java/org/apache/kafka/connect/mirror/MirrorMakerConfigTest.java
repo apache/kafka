@@ -29,12 +29,12 @@ import org.apache.kafka.common.security.auth.SecurityProtocol;
 import org.junit.jupiter.api.Test;
 
 import java.util.Arrays;
-import java.util.Collections;
 import java.util.HashMap;
 import java.util.List;
 import java.util.Locale;
 import java.util.Map;
 import java.util.Set;
+import java.util.concurrent.atomic.AtomicInteger;
 
 import static org.junit.jupiter.api.Assertions.assertEquals;
 import static org.junit.jupiter.api.Assertions.assertFalse;
@@ -106,7 +106,7 @@ public class MirrorMakerConfigTest {
             "replication.policy.separator is picked up in MirrorClientConfig");
         assertEquals("b__topic1", aClientConfig.replicationPolicy().formatRemoteTopic("b", "topic1"),
             "replication.policy.separator is honored");
-        assertEquals(clusterABootstrap, aClientConfig.adminConfig().get("bootstrap.servers"),
+        assertEquals(Arrays.stream(clusterABootstrap.split(",")).map(String::trim).toList(), aClientConfig.adminConfig().get("bootstrap.servers"),
             "client configs include bootstrap.servers");
         try (ForwardingAdmin forwardingAdmin = aClientConfig.forwardingAdmin(aClientConfig.adminConfig())) {
             assertEquals(ForwardingAdmin.class.getName(), forwardingAdmin.getClass().getName(),
@@ -152,11 +152,11 @@ public class MirrorMakerConfigTest {
         MirrorSourceConfig sourceConfig = new MirrorSourceConfig(connectorProps);
         assertEquals(100, (int) sourceConfig.getInt("tasks.max"),
             "Connector properties like tasks.max should be passed through to underlying Connectors.");
-        assertEquals(Collections.singletonList("topic-1"), sourceConfig.getList("topics"),
+        assertEquals(List.of("topic-1"), sourceConfig.getList("topics"),
             "Topics include should be passed through to underlying Connectors.");
-        assertEquals(Collections.singletonList("property-3"), sourceConfig.getList("config.properties.exclude"),
+        assertEquals(List.of("property-3"), sourceConfig.getList("config.properties.exclude"),
                 "Config properties exclude should be passed through to underlying Connectors.");
-        assertEquals(Collections.singletonList("FakeMetricsReporter"), sourceConfig.getList("metric.reporters"),
+        assertEquals(List.of("FakeMetricsReporter"), sourceConfig.getList("metric.reporters"),
                 "Metrics reporters should be passed through to underlying Connectors.");
         assertEquals("DefaultTopicFilter", sourceConfig.getClass("topic.filter.class").getSimpleName(),
                 "Filters should be passed through to underlying Connectors.");
@@ -166,7 +166,7 @@ public class MirrorMakerConfigTest {
                 "Unknown properties should not be passed through to Connectors.");
 
         MirrorCheckpointConfig checkpointConfig = new MirrorCheckpointConfig(connectorProps);
-        assertEquals(Collections.singletonList("group-2"), checkpointConfig.getList("groups"),
+        assertEquals(List.of("group-2"), checkpointConfig.getList("groups"),
             "Groups include should be passed through to underlying Connectors.");
 
     }
@@ -180,11 +180,11 @@ public class MirrorMakerConfigTest {
         SourceAndTarget sourceAndTarget = new SourceAndTarget("source", "target");
         Map<String, String> connectorProps = mirrorConfig.connectorBaseConfig(sourceAndTarget,
             MirrorSourceConnector.class);
-        DefaultTopicFilter.TopicFilterConfig filterConfig = 
+        DefaultTopicFilter.TopicFilterConfig filterConfig =
             new DefaultTopicFilter.TopicFilterConfig(connectorProps);
-        assertEquals(Arrays.asList("topic1", "topic2"), filterConfig.getList("topics"),
+        assertEquals(List.of("topic1", "topic2"), filterConfig.getList("topics"),
             "source->target.topics should be passed through to TopicFilters.");
-        assertEquals(Collections.singletonList("topic3"), filterConfig.getList("topics.exclude"),
+        assertEquals(List.of("topic3"), filterConfig.getList("topics.exclude"),
             "source->target.topics.exclude should be passed through to TopicFilters.");
     }
 
@@ -318,7 +318,10 @@ public class MirrorMakerConfigTest {
     @Test
     public void testClientInvalidSecurityProtocol() {
         ConfigException ce = assertThrows(ConfigException.class,
-                () -> new MirrorClientConfig(makeProps(CommonClientConfigs.SECURITY_PROTOCOL_CONFIG, "abc")));
+                () -> new MirrorClientConfig(makeProps(
+                        CommonClientConfigs.SECURITY_PROTOCOL_CONFIG, "abc",
+                        CommonClientConfigs.BOOTSTRAP_SERVERS_CONFIG, "localhost:9092"
+                )));
         assertTrue(ce.getMessage().contains(CommonClientConfigs.SECURITY_PROTOCOL_CONFIG));
     }
 
@@ -326,7 +329,9 @@ public class MirrorMakerConfigTest {
     public void testCaseInsensitiveSecurityProtocol() {
         final String saslSslLowerCase = SecurityProtocol.SASL_SSL.name.toLowerCase(Locale.ROOT);
         final MirrorClientConfig config = new MirrorClientConfig(makeProps(
-                CommonClientConfigs.SECURITY_PROTOCOL_CONFIG, saslSslLowerCase));
+                CommonClientConfigs.SECURITY_PROTOCOL_CONFIG, saslSslLowerCase,
+                CommonClientConfigs.BOOTSTRAP_SERVERS_CONFIG, "localhost:9092"
+        ));
         assertEquals(saslSslLowerCase, config.originalsStrings().get(CommonClientConfigs.SECURITY_PROTOCOL_CONFIG));
     }
 
@@ -365,9 +370,29 @@ public class MirrorMakerConfigTest {
             "connector properties should not be transformed");
     }
 
+    @Test
+    public void testTransformClosesConfigProvidersWhenGetFails() {
+        try {
+            MirrorMakerConfig mirrorConfig = new MirrorMakerConfig(makeProps(
+                "clusters", "a, b",
+                "config.providers", "fake",
+                "config.providers.fake.class", FailingGetConfigProvider.class.getName()));
+
+            // the constructor instantiates its own FailingGetConfigProvider and must close it too
+            assertEquals(1, FailingGetConfigProvider.CLOSED_COUNT.get());
+
+            assertThrows(RuntimeException.class,
+                () -> mirrorConfig.transform(Map.of("ssl.key.password", "${fake:secret:password}")));
+
+            assertEquals(2, FailingGetConfigProvider.CLOSED_COUNT.get());
+        } finally {
+            FailingGetConfigProvider.CLOSED_COUNT.set(0);
+        }
+    }
+
     public static class FakeConfigProvider implements ConfigProvider {
 
-        Map<String, String> secrets = Collections.singletonMap("password", "secret2");
+        Map<String, String> secrets = Map.of("password", "secret2");
 
         @Override
         public void configure(Map<String, ?> props) {
@@ -380,6 +405,29 @@ public class MirrorMakerConfigTest {
         @Override
         public ConfigData get(String path) {
             return new ConfigData(secrets);
+        }
+
+        @Override
+        public ConfigData get(String path, Set<String> keys) {
+            return get(path);
+        }
+    }
+
+    public static class FailingGetConfigProvider implements ConfigProvider {
+        static final AtomicInteger CLOSED_COUNT = new AtomicInteger();
+
+        @Override
+        public void configure(Map<String, ?> props) {
+        }
+
+        @Override
+        public void close() {
+            CLOSED_COUNT.incrementAndGet();
+        }
+
+        @Override
+        public ConfigData get(String path) {
+            throw new RuntimeException("get failed");
         }
 
         @Override

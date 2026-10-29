@@ -1,0 +1,163 @@
+/*
+ * Licensed to the Apache Software Foundation (ASF) under one or more
+ * contributor license agreements. See the NOTICE file distributed with
+ * this work for additional information regarding copyright ownership.
+ * The ASF licenses this file to You under the Apache License, Version 2.0
+ * (the "License"); you may not use this file except in compliance with
+ * the License. You may obtain a copy of the License at
+ *
+ *    http://www.apache.org/licenses/LICENSE-2.0
+ *
+ * Unless required by applicable law or agreed to in writing, software
+ * distributed under the License is distributed on an "AS IS" BASIS,
+ * WITHOUT WARRANTIES OR CONDITIONS OF ANY KIND, either express or implied.
+ * See the License for the specific language governing permissions and
+ * limitations under the License.
+ */
+package org.apache.kafka.coordinator.common.runtime;
+
+import org.apache.kafka.common.utils.Time;
+
+import java.util.ArrayList;
+import java.util.Comparator;
+import java.util.HashMap;
+import java.util.List;
+import java.util.Map;
+import java.util.PriorityQueue;
+import java.util.concurrent.TimeUnit;
+
+/**
+ * A simple mock for the {@link CoordinatorTimer}. The mock does not automatically
+ * expire timeouts. They are only expired when {@link MockCoordinatorTimer#poll()}
+ * is called.
+ */
+public class MockCoordinatorTimer<U> implements CoordinatorTimer<U> {
+    /**
+     * Represents a scheduled timeout.
+     */
+    public record ScheduledTimeout<U>(String key, long deadlineMs, TimeoutOperation<U> operation) {
+    }
+
+    /**
+     * Represents an expired timeout.
+     */
+    public record ExpiredTimeout<U>(String key, CoordinatorResult<Void, U> result) {
+    }
+
+    private final Time time;
+
+    private final Map<String, ScheduledTimeout<U>> timeoutMap = new HashMap<>();
+    private final PriorityQueue<ScheduledTimeout<U>> timeoutQueue = new PriorityQueue<>(
+        Comparator.comparingLong(entry -> entry.deadlineMs)
+    );
+
+    public MockCoordinatorTimer(Time time) {
+        this.time = time;
+    }
+
+    /**
+     * Schedules a timeout.
+     */
+    @Override
+    public void schedule(
+        String key,
+        long delay,
+        TimeUnit unit,
+        boolean retry,
+        long retryBackoff,
+        TimeoutOperation<U> operation
+    ) {
+        cancel(key);
+
+        long deadlineMs = time.milliseconds() + unit.toMillis(delay);
+        ScheduledTimeout<U> timeout = new ScheduledTimeout<>(key, deadlineMs, operation);
+        timeoutQueue.add(timeout);
+        timeoutMap.put(key, timeout);
+    }
+
+    @Override
+    public void schedule(
+        String key,
+        long delay,
+        TimeUnit unit,
+        boolean retry,
+        TimeoutOperation<U> operation
+    ) {
+        schedule(key, delay, unit, retry, 500L, operation);
+    }
+
+    @Override
+    public void scheduleIfAbsent(
+        String key,
+        long delay,
+        TimeUnit unit,
+        boolean retry,
+        TimeoutOperation<U> operation
+    ) {
+        if (!timeoutMap.containsKey(key)) {
+            schedule(key, delay, unit, retry, 500L, operation);
+        }
+    }
+
+    /**
+     * Cancels a timeout.
+     */
+    @Override
+    public void cancel(String key) {
+        ScheduledTimeout<U> timeout = timeoutMap.remove(key);
+        if (timeout != null) {
+            timeoutQueue.remove(timeout);
+        }
+    }
+
+    /**
+     * Checks if a timeout with the given key is scheduled.
+     */
+    @Override
+    public boolean isScheduled(String key) {
+        return timeoutMap.containsKey(key);
+    }
+
+    /**
+     * @return True if a timeout with the key exists; false otherwise.
+     */
+    public boolean contains(String key) {
+        return timeoutMap.containsKey(key);
+    }
+
+    /**
+     * @return The scheduled timeout for the key; null otherwise.
+     */
+    public ScheduledTimeout<U> timeout(String key) {
+        return timeoutMap.get(key);
+    }
+
+    /**
+     * @return The number of scheduled timeouts.
+     */
+    public int size() {
+        return timeoutMap.size();
+    }
+
+    /**
+     * @return A list of expired timeouts based on the current time.
+     */
+    public List<ExpiredTimeout<U>> poll() {
+        List<ExpiredTimeout<U>> results = new ArrayList<>();
+
+        ScheduledTimeout<U> timeout = timeoutQueue.peek();
+        while (timeout != null && timeout.deadlineMs <= time.milliseconds()) {
+            timeoutQueue.poll();
+            timeoutMap.remove(timeout.key, timeout);
+
+            results.add(new ExpiredTimeout<>(
+                timeout.key,
+                timeout.operation.generateRecords()
+            ));
+
+            timeout = timeoutQueue.peek();
+        }
+
+        return results;
+    }
+}

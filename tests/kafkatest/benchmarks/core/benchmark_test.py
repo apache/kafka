@@ -13,15 +13,19 @@
 # See the License for the specific language governing permissions and
 # limitations under the License.
 
+from ducktape.utils.util import wait_until
 from ducktape.mark import matrix
 from ducktape.mark import parametrize
 from ducktape.mark.resource import cluster
 from ducktape.services.service import Service
 from ducktape.tests.test import Test
 
-from kafkatest.services.kafka import KafkaService, quorum
-from kafkatest.services.performance import ProducerPerformanceService, EndToEndLatencyService, ConsumerPerformanceService, throughput, latency, compute_aggregate_throughput
+from kafkatest.services.kafka import KafkaService, quorum, consumer_group
+from kafkatest.services.performance import ProducerPerformanceService, EndToEndLatencyService, ConsumerPerformanceService, ShareConsumerPerformanceService, throughput, latency, compute_aggregate_throughput
+from kafkatest.services.security.security_config import SecurityConfig
 from kafkatest.version import DEV_BRANCH, KafkaVersion
+
+import os
 
 TOPIC_REP_ONE = "topic-replication-factor-one"
 TOPIC_REP_THREE = "topic-replication-factor-three"
@@ -155,12 +159,16 @@ class Benchmark(Test):
 
     @cluster(num_nodes=8)
     @matrix(security_protocol=['SSL'], interbroker_security_protocol=['PLAINTEXT'], tls_version=['TLSv1.2', 'TLSv1.3'],
-            compression_type=["none", "snappy"], metadata_quorum=[quorum.isolated_kraft])
-    @matrix(security_protocol=['PLAINTEXT'], compression_type=["none", "snappy"], metadata_quorum=[quorum.isolated_kraft])
-    @matrix(security_protocol=['SASL_PLAINTEXT', 'SASL_SSL'], compression_type=["none", "snappy"], metadata_quorum=[quorum.isolated_kraft])
+            compression_type=["none", "snappy"], metadata_quorum=[quorum.isolated_kraft],
+            group_protocol=consumer_group.all_group_protocols)
+    @matrix(security_protocol=['PLAINTEXT'], compression_type=["none", "snappy"], metadata_quorum=[quorum.isolated_kraft],
+            group_protocol=consumer_group.all_group_protocols)
+    @matrix(security_protocol=['SASL_PLAINTEXT', 'SASL_SSL'], compression_type=["none", "snappy"], metadata_quorum=[quorum.isolated_kraft],
+            group_protocol=consumer_group.all_group_protocols)
     def test_end_to_end_latency(self, compression_type="none", security_protocol="PLAINTEXT", tls_version=None,
                                 interbroker_security_protocol=None, client_version=str(DEV_BRANCH),
-                                broker_version=str(DEV_BRANCH), metadata_quorum=quorum.isolated_kraft):
+                                broker_version=str(DEV_BRANCH), metadata_quorum=quorum.isolated_kraft,
+                                group_protocol=None):
         """
         Setup: 3 node kafka cluster
         Produce (acks = 1) and consume 10e3 messages to a topic with 6 partitions and replication-factor 3,
@@ -180,18 +188,22 @@ class Benchmark(Test):
         self.perf = EndToEndLatencyService(
             self.test_context, 1, self.kafka,
             topic=TOPIC_REP_THREE, num_records=10000,
-            compression_type=compression_type, version=client_version
+            version=client_version,
+            settings=consumer_group.maybe_set_group_protocol(group_protocol, config={'compression.type': compression_type})
         )
         self.perf.run()
         return latency(self.perf.results[0]['latency_50th_ms'],  self.perf.results[0]['latency_99th_ms'], self.perf.results[0]['latency_999th_ms'])
 
     @cluster(num_nodes=8)
     @matrix(security_protocol=['SSL'], interbroker_security_protocol=['PLAINTEXT'], tls_version=['TLSv1.2', 'TLSv1.3'],
-            compression_type=["none", "snappy"], metadata_quorum=[quorum.isolated_kraft])
-    @matrix(security_protocol=['PLAINTEXT'], compression_type=["none", "snappy"], metadata_quorum=[quorum.isolated_kraft])
+            compression_type=["none", "snappy"], metadata_quorum=[quorum.isolated_kraft],
+            group_protocol=consumer_group.all_group_protocols)
+    @matrix(security_protocol=['PLAINTEXT'], compression_type=["none", "snappy"], metadata_quorum=[quorum.isolated_kraft],
+            group_protocol=consumer_group.all_group_protocols)
     def test_producer_and_consumer(self, compression_type="none", security_protocol="PLAINTEXT", tls_version=None,
                                    interbroker_security_protocol=None,
-                                   client_version=str(DEV_BRANCH), broker_version=str(DEV_BRANCH), metadata_quorum=quorum.isolated_kraft):
+                                   client_version=str(DEV_BRANCH), broker_version=str(DEV_BRANCH), metadata_quorum=quorum.isolated_kraft,
+                                   group_protocol=None):
         """
         Setup: 3 node kafka cluster
         Concurrently produce and consume 10e6 messages with a single producer and a single consumer,
@@ -220,7 +232,8 @@ class Benchmark(Test):
             }
         )
         self.consumer = ConsumerPerformanceService(
-            self.test_context, 1, self.kafka, topic=TOPIC_REP_THREE, messages=num_records)
+            self.test_context, 1, self.kafka, topic=TOPIC_REP_THREE, messages=num_records,
+            settings=consumer_group.maybe_set_group_protocol(group_protocol))
         Service.run_parallel(self.producer, self.consumer)
 
         data = {
@@ -232,14 +245,81 @@ class Benchmark(Test):
             str(data)]
         self.logger.info("\n".join(summary))
         return data
-
+    
     @cluster(num_nodes=8)
     @matrix(security_protocol=['SSL'], interbroker_security_protocol=['PLAINTEXT'], tls_version=['TLSv1.2', 'TLSv1.3'],
             compression_type=["none", "snappy"], metadata_quorum=[quorum.isolated_kraft])
     @matrix(security_protocol=['PLAINTEXT'], compression_type=["none", "snappy"], metadata_quorum=[quorum.isolated_kraft])
+    def test_producer_and_share_consumer(self, compression_type="none", security_protocol="PLAINTEXT", tls_version=None,
+                                   interbroker_security_protocol=None, client_version=str(DEV_BRANCH), broker_version=str(DEV_BRANCH), 
+                                   metadata_quorum=quorum.isolated_kraft):
+        """
+        Setup: 3 node kafka cluster
+        Concurrently produce and consume 1e6 messages with a single producer and a single share consumer,
+
+        Return aggregate throughput statistics for both producer and share consumer.
+
+        (Under the hood, this runs ProducerPerformance.java, and ShareConsumerPerformance.java)
+        """
+        client_version = KafkaVersion(client_version)
+        broker_version = KafkaVersion(broker_version)
+        self.validate_versions(client_version, broker_version)
+        if interbroker_security_protocol is None:
+            interbroker_security_protocol = security_protocol
+        self.start_kafka(security_protocol, interbroker_security_protocol, broker_version, tls_version)
+        num_records = 1000 * 1000  # 1e6
+
+        self.producer = ProducerPerformanceService(
+            self.test_context, 1, self.kafka,
+            topic=TOPIC_REP_THREE,
+            num_records=num_records, record_size=DEFAULT_RECORD_SIZE, throughput=-1, version=client_version,
+            settings={
+                'acks': 1,
+                'compression.type': compression_type,
+                'batch.size': self.batch_size,
+                'buffer.memory': self.buffer_memory
+            }
+        )
+
+        share_group = "perf-share-consumer"
+
+        kafka_node = self.kafka.nodes[0]
+        PERSISTENT_ROOT = "/mnt/share_consumer_performance"
+        COMMAND_CONFIG_FILE = os.path.join(PERSISTENT_ROOT, "command.properties")
+
+        if security_protocol is not SecurityConfig.PLAINTEXT:
+            prop_file = str(self.kafka.security_config.client_config())
+            self.logger.debug(prop_file)
+            kafka_node.account.ssh("mkdir -p %s" % PERSISTENT_ROOT, allow_fail=False)
+            kafka_node.account.create_file(COMMAND_CONFIG_FILE, prop_file)
+
+        wait_until(lambda: self.kafka.set_share_group_offset_reset_strategy(group=share_group, strategy="earliest", command_config=COMMAND_CONFIG_FILE),
+                   timeout_sec=20, backoff_sec=2, err_msg="share.auto.offset.reset not set to earliest")
+
+        self.share_consumer = ShareConsumerPerformanceService(
+            self.test_context, 1, self.kafka, topic=TOPIC_REP_THREE, messages=num_records, group=share_group, timeout=20000)
+        Service.run_parallel(self.producer, self.share_consumer)
+
+        data = {
+            "producer": compute_aggregate_throughput(self.producer),
+            "share_consumer": compute_aggregate_throughput(self.share_consumer)
+        }
+        summary = [
+            "Producer + share_consumer:",
+            str(data)]
+        self.logger.info("\n".join(summary))
+        return data
+
+    @cluster(num_nodes=8)
+    @matrix(security_protocol=['SSL'], interbroker_security_protocol=['PLAINTEXT'], tls_version=['TLSv1.2', 'TLSv1.3'],
+            compression_type=["none", "snappy"], metadata_quorum=[quorum.isolated_kraft],
+            group_protocol=consumer_group.all_group_protocols)
+    @matrix(security_protocol=['PLAINTEXT'], compression_type=["none", "snappy"], metadata_quorum=[quorum.isolated_kraft],
+            group_protocol=consumer_group.all_group_protocols)
     def test_consumer_throughput(self, compression_type="none", security_protocol="PLAINTEXT", tls_version=None,
                                  interbroker_security_protocol=None, num_consumers=1,
-                                 client_version=str(DEV_BRANCH), broker_version=str(DEV_BRANCH), metadata_quorum=quorum.isolated_kraft):
+                                 client_version=str(DEV_BRANCH), broker_version=str(DEV_BRANCH), metadata_quorum=quorum.isolated_kraft,
+                                 group_protocol=None):
         """
         Consume 10e6 100-byte messages with 1 or more consumers from a topic with 6 partitions
         and report throughput.
@@ -269,10 +349,66 @@ class Benchmark(Test):
         # consume
         self.consumer = ConsumerPerformanceService(
             self.test_context, num_consumers, self.kafka,
-            topic=TOPIC_REP_THREE, messages=num_records)
+            topic=TOPIC_REP_THREE, messages=num_records,
+            settings=consumer_group.maybe_set_group_protocol(group_protocol))
         self.consumer.group = "test-consumer-group"
         self.consumer.run()
         return compute_aggregate_throughput(self.consumer)
+    
+    @cluster(num_nodes=8)
+    @matrix(security_protocol=['SSL'], interbroker_security_protocol=['PLAINTEXT'], tls_version=['TLSv1.2', 'TLSv1.3'],
+            compression_type=["none", "snappy"], metadata_quorum=[quorum.isolated_kraft])
+    @matrix(security_protocol=['PLAINTEXT'], compression_type=["none", "snappy"], metadata_quorum=[quorum.isolated_kraft])
+    def test_share_consumer_throughput(self, compression_type="none", security_protocol="PLAINTEXT", tls_version=None,
+                                 interbroker_security_protocol=None, num_consumers=1, client_version=str(DEV_BRANCH), 
+                                 broker_version=str(DEV_BRANCH), metadata_quorum=quorum.isolated_kraft):
+        """
+        Consume 1e6 100-byte messages with 1 or more consumers from a topic with 6 partitions
+        and report throughput.
+        """
+        client_version = KafkaVersion(client_version)
+        broker_version = KafkaVersion(broker_version)
+        self.validate_versions(client_version, broker_version)
+        if interbroker_security_protocol is None:
+            interbroker_security_protocol = security_protocol
+        self.start_kafka(security_protocol, interbroker_security_protocol, broker_version, tls_version)
+        num_records = 1000 * 1000  # 1e6
+
+        # seed kafka w/messages
+        self.producer = ProducerPerformanceService(
+            self.test_context, 1, self.kafka,
+            topic=TOPIC_REP_THREE,
+            num_records=num_records, record_size=DEFAULT_RECORD_SIZE, throughput=-1, version=client_version,
+            settings={
+                'acks': 1,
+                'compression.type': compression_type,
+                'batch.size': self.batch_size,
+                'buffer.memory': self.buffer_memory
+            }
+        )
+        self.producer.run()
+
+        share_group = "test-share-consumer-group"
+
+        kafka_node = self.kafka.nodes[0]
+        PERSISTENT_ROOT = "/mnt/share_consumer_performance"
+        COMMAND_CONFIG_FILE = os.path.join(PERSISTENT_ROOT, "command.properties")
+
+        if security_protocol is not SecurityConfig.PLAINTEXT:
+            prop_file = str(self.kafka.security_config.client_config())
+            self.logger.debug(prop_file)
+            kafka_node.account.ssh("mkdir -p %s" % PERSISTENT_ROOT, allow_fail=False)
+            kafka_node.account.create_file(COMMAND_CONFIG_FILE, prop_file)
+
+        wait_until(lambda: self.kafka.set_share_group_offset_reset_strategy(group=share_group, strategy="earliest", command_config=COMMAND_CONFIG_FILE),
+                   timeout_sec=20, backoff_sec=2, err_msg="share.auto.offset.reset not set to earliest")
+
+        # consume
+        self.share_consumer = ShareConsumerPerformanceService(
+            self.test_context, num_consumers, self.kafka,
+            topic=TOPIC_REP_THREE, messages=num_records, group=share_group, timeout=20000)
+        self.share_consumer.run()
+        return compute_aggregate_throughput(self.share_consumer)
 
     def validate_versions(self, client_version, broker_version):
-        assert client_version <= broker_version, "Client version %s should be <= than broker version %s" (client_version, broker_version)
+        assert client_version <= broker_version, "Client version %s should be <= broker version %s" % (client_version, broker_version)

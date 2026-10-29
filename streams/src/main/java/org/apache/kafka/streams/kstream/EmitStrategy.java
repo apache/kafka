@@ -16,6 +16,7 @@
  */
 package org.apache.kafka.streams.kstream;
 
+import org.apache.kafka.common.annotation.InterfaceAudience;
 import org.apache.kafka.streams.kstream.internals.UnlimitedWindow;
 import org.apache.kafka.streams.kstream.internals.emitstrategy.WindowCloseStrategy;
 import org.apache.kafka.streams.kstream.internals.emitstrategy.WindowUpdateStrategy;
@@ -29,6 +30,7 @@ import java.util.Map;
 /**
  * This interface controls the strategy that can be used to control how we emit results in a processor.
  */
+@InterfaceAudience.Public
 public interface EmitStrategy {
 
     Logger log = LoggerFactory.getLogger(EmitStrategy.class);

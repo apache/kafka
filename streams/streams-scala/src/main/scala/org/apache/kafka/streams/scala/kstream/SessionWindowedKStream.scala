@@ -36,6 +36,7 @@ import org.apache.kafka.streams.scala.FunctionsCompatConversions.{
  * @param inner The underlying Java abstraction for SessionWindowedKStream
  * @see `org.apache.kafka.streams.kstream.SessionWindowedKStream`
  */
+@deprecated("Use `org.apache.kafka.streams.kstream.SessionWindowedKStream` instead", "4.3.0")
 class SessionWindowedKStream[K, V](val inner: SessionWindowedKStreamJ[K, V]) {
 
   /**

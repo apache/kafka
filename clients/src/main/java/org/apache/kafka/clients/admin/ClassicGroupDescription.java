@@ -20,6 +20,7 @@ package org.apache.kafka.clients.admin;
 import org.apache.kafka.common.ClassicGroupState;
 import org.apache.kafka.common.Node;
 import org.apache.kafka.common.acl.AclOperation;
+import org.apache.kafka.common.annotation.InterfaceAudience;
 
 import java.util.Collection;
 import java.util.List;
@@ -30,6 +31,7 @@ import java.util.stream.Collectors;
 /**
  * A detailed description of a single classic group in the cluster.
  */
+@InterfaceAudience.Public
 public class ClassicGroupDescription {
     private final String groupId;
     private final String protocol;
@@ -137,7 +139,7 @@ public class ClassicGroupDescription {
     /**
      * authorizedOperations for this group, or null if that information is not known.
      */
-    public  Set<AclOperation> authorizedOperations() {
+    public Set<AclOperation> authorizedOperations() {
         return authorizedOperations;
     }
 

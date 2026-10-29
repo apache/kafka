@@ -17,8 +17,10 @@
 
 package org.apache.kafka.image.loader;
 
-import org.apache.kafka.common.utils.LogContext;
+import org.apache.kafka.common.message.KRaftVersionRecord;
+import org.apache.kafka.common.record.internal.ControlRecordType;
 import org.apache.kafka.common.utils.Time;
+import org.apache.kafka.common.utils.internals.LogContext;
 import org.apache.kafka.image.MetadataDelta;
 import org.apache.kafka.image.MetadataImage;
 import org.apache.kafka.image.MetadataProvenance;
@@ -26,13 +28,17 @@ import org.apache.kafka.image.loader.metrics.MetadataLoaderMetrics;
 import org.apache.kafka.image.publisher.MetadataPublisher;
 import org.apache.kafka.image.writer.ImageReWriter;
 import org.apache.kafka.image.writer.ImageWriterOptions;
+import org.apache.kafka.metadata.SupportedConfigChecker;
 import org.apache.kafka.queue.EventQueue;
 import org.apache.kafka.queue.KafkaEventQueue;
 import org.apache.kafka.raft.Batch;
 import org.apache.kafka.raft.BatchReader;
+import org.apache.kafka.raft.ControlRecord;
 import org.apache.kafka.raft.LeaderAndEpoch;
 import org.apache.kafka.raft.RaftClient;
 import org.apache.kafka.server.common.ApiMessageAndVersion;
+import org.apache.kafka.server.common.KRaftVersion;
+import org.apache.kafka.server.common.MetadataVersion;
 import org.apache.kafka.server.fault.FaultHandler;
 import org.apache.kafka.server.fault.FaultHandlerException;
 import org.apache.kafka.snapshot.SnapshotReader;
@@ -76,6 +82,7 @@ public class MetadataLoader implements RaftClient.Listener<ApiMessageAndVersion>
         private FaultHandler faultHandler = FaultHandlerException::new;
         private MetadataLoaderMetrics metrics = null;
         private Supplier<OptionalLong> highWaterMarkAccessor = null;
+        private SupportedConfigChecker supportedConfigChecker = SupportedConfigChecker.TRUE;
 
         public Builder setNodeId(int nodeId) {
             this.nodeId = nodeId;
@@ -107,6 +114,11 @@ public class MetadataLoader implements RaftClient.Listener<ApiMessageAndVersion>
             return this;
         }
 
+        public Builder setSupportedConfigChecker(SupportedConfigChecker supportedConfigChecker) {
+            this.supportedConfigChecker = supportedConfigChecker;
+            return this;
+        }
+
         public MetadataLoader build() {
             if (logContext == null) {
                 logContext = new LogContext("[MetadataLoader id=" + nodeId + "] ");
@@ -115,7 +127,8 @@ public class MetadataLoader implements RaftClient.Listener<ApiMessageAndVersion>
                 throw new RuntimeException("You must set the high water mark accessor.");
             }
             if (metrics == null) {
-                metrics = new MetadataLoaderMetrics(Optional.empty(),
+                metrics = new MetadataLoaderMetrics(
+                    Optional.empty(),
                     __ -> { },
                     __ -> { },
                     new AtomicReference<>(MetadataProvenance.EMPTY));
@@ -123,11 +136,11 @@ public class MetadataLoader implements RaftClient.Listener<ApiMessageAndVersion>
             return new MetadataLoader(
                 time,
                 logContext,
-                nodeId,
                 threadNamePrefix,
                 faultHandler,
                 metrics,
-                highWaterMarkAccessor);
+                highWaterMarkAccessor,
+                supportedConfigChecker);
         }
     }
 
@@ -191,20 +204,26 @@ public class MetadataLoader implements RaftClient.Listener<ApiMessageAndVersion>
      */
     private final KafkaEventQueue eventQueue;
 
+    /**
+     * Config checker for filtering unsupported configurations.
+     */
+    private final SupportedConfigChecker supportedConfigChecker;
+
     private MetadataLoader(
         Time time,
         LogContext logContext,
-        int nodeId,
         String threadNamePrefix,
         FaultHandler faultHandler,
         MetadataLoaderMetrics metrics,
-        Supplier<OptionalLong> highWaterMarkAccessor
+        Supplier<OptionalLong> highWaterMarkAccessor,
+        SupportedConfigChecker supportedConfigChecker
     ) {
         this.log = logContext.logger(MetadataLoader.class);
         this.time = time;
         this.faultHandler = faultHandler;
         this.metrics = metrics;
         this.highWaterMarkAccessor = highWaterMarkAccessor;
+        this.supportedConfigChecker = supportedConfigChecker;
         this.uninitializedPublishers = new LinkedHashMap<>();
         this.publishers = new LinkedHashMap<>();
         this.image = MetadataImage.EMPTY;
@@ -212,12 +231,14 @@ public class MetadataLoader implements RaftClient.Listener<ApiMessageAndVersion>
             logContext,
             time,
             faultHandler,
-            this::maybePublishMetadata);
+            this::maybePublishMetadata,
+            supportedConfigChecker);
         this.eventQueue = new KafkaEventQueue(
-            Time.SYSTEM,
+            time,
             logContext,
             threadNamePrefix + "metadata-loader-",
-            new ShutdownEvent());
+            new ShutdownEvent(),
+            metrics::updateIdleTime);
     }
 
     // VisibleForTesting
@@ -291,10 +312,11 @@ public class MetadataLoader implements RaftClient.Listener<ApiMessageAndVersion>
         // haven't seen anything previously.
         MetadataDelta delta = new MetadataDelta.Builder().
                 setImage(MetadataImage.EMPTY).
+                setSupportedConfigChecker(supportedConfigChecker).
                 build();
         ImageReWriter writer = new ImageReWriter(delta);
-        image.write(writer, new ImageWriterOptions.Builder().
-                setMetadataVersion(image.features().metadataVersion()).
+        image.write(writer, new ImageWriterOptions.Builder(image.features().metadataVersionOrThrow()).
+                setEligibleLeaderReplicasEnabled(image.features().isElrEnabled()).
                 build());
         // ImageReWriter#close invokes finishSnapshot, so we don't need to invoke it here.
         SnapshotManifest manifest = new SnapshotManifest(
@@ -347,7 +369,24 @@ public class MetadataLoader implements RaftClient.Listener<ApiMessageAndVersion>
             }
         }
         metrics.updateLastAppliedImageProvenance(image.provenance());
-        metrics.setCurrentMetadataVersion(image.features().metadataVersion());
+        MetadataVersion metadataVersion = image.features().metadataVersionOrThrow();
+        metrics.setCurrentMetadataVersion(metadataVersion);
+
+        // Set the metadata version feature level, since it is handled separately from other features
+        metrics.recordFinalizedFeatureLevel(
+            MetadataVersion.FEATURE_NAME,
+            metadataVersion.featureLevel()
+        );
+
+        // Set all production feature levels from the image
+        metrics.maybeRemoveFinalizedFeatureLevelMetrics(image.features().finalizedVersions());
+        for (var featureEntry : image.features().finalizedVersions().entrySet()) {
+            metrics.recordFinalizedFeatureLevel(
+                featureEntry.getKey(),
+                featureEntry.getValue()
+            );
+        }
+
         if (!uninitializedPublishers.isEmpty()) {
             scheduleInitializeNewPublishers(0);
         }
@@ -359,6 +398,7 @@ public class MetadataLoader implements RaftClient.Listener<ApiMessageAndVersion>
             try (reader) {
                 while (reader.hasNext()) {
                     Batch<ApiMessageAndVersion> batch = reader.next();
+                    loadControlRecords(batch);
                     long elapsedNs = batchLoader.loadBatch(batch, currentLeaderAndEpoch);
                     metrics.updateBatchSize(batch.records().size());
                     metrics.updateBatchProcessingTimeNs(elapsedNs);
@@ -383,6 +423,7 @@ public class MetadataLoader implements RaftClient.Listener<ApiMessageAndVersion>
                     snapshotName, numLoaded);
                 MetadataDelta delta = new MetadataDelta.Builder().
                     setImage(image).
+                    setSupportedConfigChecker(supportedConfigChecker).
                     build();
                 SnapshotManifest manifest = loadSnapshot(delta, reader);
                 log.info("handleLoadSnapshot({}): generated a metadata delta between offset {} " +
@@ -403,9 +444,15 @@ public class MetadataLoader implements RaftClient.Listener<ApiMessageAndVersion>
         });
     }
 
+    @Override
+    public void handleLoadBootstrap(SnapshotReader<ApiMessageAndVersion> reader) {
+        // MetadataLoader does not process uncommitted bootstrap snapshots.
+        reader.close();
+    }
+
     /**
-     * Load a snapshot. This is relatively straightforward since we don't track as many things as
-     * we do in loadLogDelta. The main complication here is that we have to maintain an index
+     * Load a snapshot.
+     * The main complication here is that we have to maintain an index
      * of what record we are processing so that we can give useful error messages.
      *
      * @param delta     The metadata delta we are preparing.
@@ -420,6 +467,7 @@ public class MetadataLoader implements RaftClient.Listener<ApiMessageAndVersion>
         int snapshotIndex = 0;
         while (reader.hasNext()) {
             Batch<ApiMessageAndVersion> batch = reader.next();
+            loadControlRecords(batch);
             for (ApiMessageAndVersion record : batch.records()) {
                 try {
                     delta.replay(record.message());
@@ -435,6 +483,15 @@ public class MetadataLoader implements RaftClient.Listener<ApiMessageAndVersion>
                 reader.lastContainedLogEpoch(), reader.lastContainedLogTimestamp(), true);
         return new SnapshotManifest(provenance,
                 time.nanoseconds() - startNs);
+    }
+
+    void loadControlRecords(Batch<ApiMessageAndVersion> batch) {
+        for (ControlRecord controlRecord : batch.controlRecords()) {
+            if (controlRecord.type() == ControlRecordType.KRAFT_VERSION) {
+                final var kRaftVersionRecord = (KRaftVersionRecord) controlRecord.message();
+                metrics.recordFinalizedFeatureLevel(KRaftVersion.FEATURE_NAME, kRaftVersionRecord.kRaftVersion());
+            }
+        }
     }
 
     @Override

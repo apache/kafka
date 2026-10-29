@@ -14,21 +14,21 @@
  * See the License for the specific language governing permissions and
  * limitations under the License.
  */
+
 package org.apache.kafka.clients.admin;
 
 import org.apache.kafka.common.KafkaFuture;
-import org.apache.kafka.common.annotation.InterfaceStability;
+import org.apache.kafka.common.annotation.InterfaceAudience;
 
 import java.util.Collection;
 import java.util.HashMap;
 import java.util.Map;
 
 /**
- * The result of the {@link Admin#deleteConsumerGroups(Collection)} call.
- *
- * The API of this class is evolving, see {@link Admin} for details.
+ * The result of the {@link Admin#deleteConsumerGroups(Collection, DeleteConsumerGroupsOptions)} call for
+ * {@code Collection<String>} input.
  */
-@InterfaceStability.Evolving
+@InterfaceAudience.Public
 public class DeleteConsumerGroupsResult {
     private final Map<String, KafkaFuture<Void>> futures;
 
@@ -50,6 +50,6 @@ public class DeleteConsumerGroupsResult {
      * Return a future which succeeds only if all the consumer group deletions succeed.
      */
     public KafkaFuture<Void> all() {
-        return KafkaFuture.allOf(futures.values().toArray(new KafkaFuture[0]));
+        return KafkaFuture.allOf(futures.values().toArray(new KafkaFuture<?>[0]));
     }
 }

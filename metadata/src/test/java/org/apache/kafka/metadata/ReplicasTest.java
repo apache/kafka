@@ -20,9 +20,8 @@ package org.apache.kafka.metadata;
 import org.junit.jupiter.api.Test;
 import org.junit.jupiter.api.Timeout;
 
-import java.util.Arrays;
-import java.util.Collections;
-import java.util.HashSet;
+import java.util.List;
+import java.util.Set;
 
 import static org.junit.jupiter.api.Assertions.assertArrayEquals;
 import static org.junit.jupiter.api.Assertions.assertEquals;
@@ -34,16 +33,16 @@ import static org.junit.jupiter.api.Assertions.assertTrue;
 public class ReplicasTest {
     @Test
     public void testToList() {
-        assertEquals(Arrays.asList(1, 2, 3, 4), Replicas.toList(new int[] {1, 2, 3, 4}));
-        assertEquals(Collections.emptyList(), Replicas.toList(Replicas.NONE));
-        assertEquals(Collections.singletonList(2), Replicas.toList(new int[] {2}));
+        assertEquals(List.of(1, 2, 3, 4), Replicas.toList(new int[] {1, 2, 3, 4}));
+        assertEquals(List.of(), Replicas.toList(Replicas.NONE));
+        assertEquals(List.of(2), Replicas.toList(new int[] {2}));
     }
 
     @Test
     public void testToArray() {
-        assertArrayEquals(new int[] {3, 2, 1}, Replicas.toArray(Arrays.asList(3, 2, 1)));
-        assertArrayEquals(new int[] {}, Replicas.toArray(Collections.emptyList()));
-        assertArrayEquals(new int[] {2}, Replicas.toArray(Collections.singletonList(2)));
+        assertArrayEquals(new int[] {3, 2, 1}, Replicas.toArray(List.of(3, 2, 1)));
+        assertArrayEquals(new int[] {}, Replicas.toArray(List.of()));
+        assertArrayEquals(new int[] {2}, Replicas.toArray(List.of(2)));
     }
 
     @Test
@@ -108,21 +107,21 @@ public class ReplicasTest {
 
     @Test
     public void testToSet() {
-        assertEquals(Collections.emptySet(), Replicas.toSet(new int[] {}));
-        assertEquals(new HashSet<>(Arrays.asList(3, 1, 5)),
+        assertEquals(Set.of(), Replicas.toSet(new int[] {}));
+        assertEquals(Set.of(3, 1, 5),
             Replicas.toSet(new int[] {1, 3, 5}));
-        assertEquals(new HashSet<>(Arrays.asList(1, 2, 10)),
+        assertEquals(Set.of(1, 2, 10),
             Replicas.toSet(new int[] {1, 1, 2, 10, 10}));
     }
 
     @Test
     public void testContains2() {
-        assertTrue(Replicas.contains(Collections.emptyList(), Replicas.NONE));
-        assertFalse(Replicas.contains(Collections.emptyList(), new int[] {1}));
-        assertTrue(Replicas.contains(Arrays.asList(1, 2, 3), new int[] {3, 2, 1}));
-        assertTrue(Replicas.contains(Arrays.asList(1, 2, 3, 4), new int[] {3}));
-        assertTrue(Replicas.contains(Arrays.asList(1, 2, 3, 4), new int[] {3, 1}));
-        assertFalse(Replicas.contains(Arrays.asList(1, 2, 3, 4), new int[] {3, 1, 7}));
-        assertTrue(Replicas.contains(Arrays.asList(1, 2, 3, 4), new int[] {}));
+        assertTrue(Replicas.contains(List.of(), Replicas.NONE));
+        assertFalse(Replicas.contains(List.of(), new int[] {1}));
+        assertTrue(Replicas.contains(List.of(1, 2, 3), new int[] {3, 2, 1}));
+        assertTrue(Replicas.contains(List.of(1, 2, 3, 4), new int[] {3}));
+        assertTrue(Replicas.contains(List.of(1, 2, 3, 4), new int[] {3, 1}));
+        assertFalse(Replicas.contains(List.of(1, 2, 3, 4), new int[] {3, 1, 7}));
+        assertTrue(Replicas.contains(List.of(1, 2, 3, 4), new int[] {}));
     }
 }

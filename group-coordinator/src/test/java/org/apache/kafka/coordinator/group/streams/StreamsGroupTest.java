@@ -1,0 +1,1604 @@
+/*
+ * Licensed to the Apache Software Foundation (ASF) under one or more
+ * contributor license agreements. See the NOTICE file distributed with
+ * this work for additional information regarding copyright ownership.
+ * The ASF licenses this file to You under the Apache License, Version 2.0
+ * (the "License"); you may not use this file except in compliance with
+ * the License. You may obtain a copy of the License at
+ *
+ *    http://www.apache.org/licenses/LICENSE-2.0
+ *
+ * Unless required by applicable law or agreed to in writing, software
+ * distributed under the License is distributed on an "AS IS" BASIS,
+ * WITHOUT WARRANTIES OR CONDITIONS OF ANY KIND, either express or implied.
+ * See the License for the specific language governing permissions and
+ * limitations under the License.
+ */
+package org.apache.kafka.coordinator.group.streams;
+
+import org.apache.kafka.common.Uuid;
+import org.apache.kafka.common.errors.GroupNotEmptyException;
+import org.apache.kafka.common.errors.StaleMemberEpochException;
+import org.apache.kafka.common.errors.UnknownMemberIdException;
+import org.apache.kafka.common.errors.UnsupportedVersionException;
+import org.apache.kafka.common.message.ListGroupsResponseData;
+import org.apache.kafka.common.message.StreamsGroupDescribeResponseData;
+import org.apache.kafka.common.message.StreamsGroupHeartbeatResponseData;
+import org.apache.kafka.common.protocol.ApiKeys;
+import org.apache.kafka.common.protocol.ApiMessage;
+import org.apache.kafka.common.utils.MockTime;
+import org.apache.kafka.common.utils.annotation.ApiKeyVersionsSource;
+import org.apache.kafka.common.utils.internals.LogContext;
+import org.apache.kafka.coordinator.common.runtime.CoordinatorRecord;
+import org.apache.kafka.coordinator.common.runtime.CoordinatorTimer;
+import org.apache.kafka.coordinator.common.runtime.KRaftCoordinatorMetadataImage;
+import org.apache.kafka.coordinator.common.runtime.MetadataImageBuilder;
+import org.apache.kafka.coordinator.group.CommitPartitionValidator;
+import org.apache.kafka.coordinator.group.GroupCoordinatorConfig;
+import org.apache.kafka.coordinator.group.OffsetAndMetadata;
+import org.apache.kafka.coordinator.group.OffsetExpirationCondition;
+import org.apache.kafka.coordinator.group.OffsetExpirationConditionImpl;
+import org.apache.kafka.coordinator.group.generated.StreamsGroupCurrentMemberAssignmentKey;
+import org.apache.kafka.coordinator.group.generated.StreamsGroupMemberMetadataKey;
+import org.apache.kafka.coordinator.group.generated.StreamsGroupMemberMetadataValue;
+import org.apache.kafka.coordinator.group.generated.StreamsGroupMetadataKey;
+import org.apache.kafka.coordinator.group.generated.StreamsGroupTargetAssignmentMemberKey;
+import org.apache.kafka.coordinator.group.generated.StreamsGroupTargetAssignmentMetadataKey;
+import org.apache.kafka.coordinator.group.generated.StreamsGroupTopologyKey;
+import org.apache.kafka.coordinator.group.generated.StreamsGroupTopologyValue;
+import org.apache.kafka.coordinator.group.streams.StreamsGroup.StreamsGroupState;
+import org.apache.kafka.coordinator.group.streams.topics.ConfiguredTopology;
+import org.apache.kafka.image.MetadataImage;
+import org.apache.kafka.timeline.SnapshotRegistry;
+
+import org.junit.jupiter.api.Test;
+import org.junit.jupiter.params.ParameterizedTest;
+import org.junit.jupiter.params.provider.EnumSource;
+
+import java.util.ArrayList;
+import java.util.Arrays;
+import java.util.HashMap;
+import java.util.List;
+import java.util.Map;
+import java.util.Optional;
+import java.util.OptionalInt;
+import java.util.OptionalLong;
+import java.util.Set;
+import java.util.TreeMap;
+import java.util.stream.Collectors;
+
+import static org.apache.kafka.coordinator.group.streams.TaskAssignmentTestUtil.mkTasks;
+import static org.apache.kafka.coordinator.group.streams.TaskAssignmentTestUtil.mkTasksPerSubtopology;
+import static org.apache.kafka.coordinator.group.streams.TaskAssignmentTestUtil.mkTasksPerSubtopologyWithCommonEpoch;
+import static org.junit.jupiter.api.Assertions.assertDoesNotThrow;
+import static org.junit.jupiter.api.Assertions.assertEquals;
+import static org.junit.jupiter.api.Assertions.assertFalse;
+import static org.junit.jupiter.api.Assertions.assertNotEquals;
+import static org.junit.jupiter.api.Assertions.assertNotNull;
+import static org.junit.jupiter.api.Assertions.assertNull;
+import static org.junit.jupiter.api.Assertions.assertThrows;
+import static org.junit.jupiter.api.Assertions.assertTrue;
+import static org.mockito.Mockito.mock;
+import static org.mockito.Mockito.verify;
+import static org.mockito.Mockito.when;
+
+public class StreamsGroupTest {
+
+    private static final LogContext LOG_CONTEXT = new LogContext();
+
+    private StreamsGroup createStreamsGroup(String groupId) {
+        SnapshotRegistry snapshotRegistry = new SnapshotRegistry(LOG_CONTEXT);
+        return new StreamsGroup(
+            LOG_CONTEXT,
+            snapshotRegistry,
+            groupId
+        );
+    }
+
+    @Test
+    public void testGetOrCreateUninitializedMember() {
+        StreamsGroup streamsGroup = createStreamsGroup("foo");
+        StreamsGroupMember uninitializedMember = new StreamsGroupMember.Builder("member-id").build();
+        StreamsGroupMember member = streamsGroup.getOrCreateUninitializedMember("member-id");
+
+        assertEquals(uninitializedMember, member);
+
+        StreamsGroupMember updatedMember = new StreamsGroupMember.Builder(member).setInstanceId("unique-new-id").build();
+        streamsGroup.updateMember(updatedMember);
+
+        assertEquals(updatedMember, streamsGroup.getOrCreateUninitializedMember("member-id"));
+        assertNotEquals(uninitializedMember, streamsGroup.getOrCreateUninitializedMember("member-id"));
+    }
+
+    @Test
+    public void testUpdateAndRetrieveTaskOffsets() {
+        StreamsGroup streamsGroup = createStreamsGroup("foo");
+
+        assertEquals(MemberTaskOffsets.EMPTY, streamsGroup.taskOffsets("member-id"));
+        assertEquals(Map.of(), streamsGroup.taskOffsets());
+
+        MemberTaskOffsets offsets = new MemberTaskOffsets(
+            Map.of("sub-1", Map.of(0, 10L)),
+            Map.of("sub-1", Map.of(0, 20L))
+        );
+        streamsGroup.updateTaskOffsets("member-id", offsets);
+
+        assertEquals(offsets, streamsGroup.taskOffsets("member-id"));
+        assertEquals(Map.of("member-id", offsets), streamsGroup.taskOffsets());
+
+        // A new report replaces the previous one.
+        MemberTaskOffsets newerOffsets = new MemberTaskOffsets(
+            Map.of("sub-1", Map.of(0, 15L)),
+            Map.of("sub-1", Map.of(0, 25L))
+        );
+        streamsGroup.updateTaskOffsets("member-id", newerOffsets);
+        assertEquals(newerOffsets, streamsGroup.taskOffsets("member-id"));
+    }
+
+    @Test
+    public void testUpdateAndRetrieveHeartbeatVersions() {
+        StreamsGroup streamsGroup = createStreamsGroup("foo");
+        streamsGroup.updateHeartbeatVersion("old", 0);
+        streamsGroup.updateHeartbeatVersion("new", 1);
+
+        assertEquals(Map.of("old", 0, "new", 1), streamsGroup.heartbeatVersions());
+        // The refiner must not be able to change what the coordinator knows.
+        assertThrows(UnsupportedOperationException.class, () -> streamsGroup.heartbeatVersions().put("old", 1));
+
+        streamsGroup.updateHeartbeatVersion("old", 1);
+        assertEquals(1, streamsGroup.heartbeatVersions().get("old"));
+    }
+
+    @Test
+    public void testRemoveMemberForgetsItsHeartbeatVersion() {
+        StreamsGroup streamsGroup = createStreamsGroup("foo");
+        streamsGroup.updateMember(new StreamsGroupMember.Builder("member-id").build());
+        streamsGroup.updateHeartbeatVersion("member-id", 1);
+
+        streamsGroup.removeMember("member-id");
+
+        assertEquals(Map.of(), streamsGroup.heartbeatVersions());
+    }
+
+    @Test
+    public void testCacheAndRetrieveRefinedAssignment() {
+        StreamsGroup streamsGroup = createStreamsGroup("foo");
+
+        assertNull(streamsGroup.refinedAssignment(0));
+
+        Map<String, TasksTuple> refinedAssignment = Map.of(
+            "member-id", new TasksTuple(Map.of("sub-1", Set.of(0)), Map.of(), Map.of())
+        );
+        streamsGroup.setRefinedAssignment(5, refinedAssignment);
+
+        assertEquals(refinedAssignment, streamsGroup.refinedAssignment(5));
+        // An intermediate assignment derived for one assignment epoch must not be used for another one: a new epoch is
+        // a new refinement step.
+        assertNull(streamsGroup.refinedAssignment(4));
+        assertNull(streamsGroup.refinedAssignment(6));
+    }
+
+    @Test
+    public void testCachedRefinedAssignmentDoesNotTrackTheCallersMap() {
+        StreamsGroup streamsGroup = createStreamsGroup("foo");
+
+        TasksTuple memberTasks = new TasksTuple(Map.of("sub-1", Set.of(0)), Map.of(), Map.of());
+        Map<String, TasksTuple> derived = new HashMap<>();
+        derived.put("member-id", memberTasks);
+
+        streamsGroup.setRefinedAssignment(5, derived);
+
+        // The intermediate assignment of an epoch is fixed once derived. A refiner that returns the target assignment
+        // as-is hands over a view of it, which changes as records are replayed, so the cache must copy rather than alias.
+        derived.put("late-member-id", new TasksTuple(Map.of("sub-1", Set.of(1)), Map.of(), Map.of()));
+        derived.remove("member-id");
+
+        assertEquals(Map.of("member-id", memberTasks), streamsGroup.refinedAssignment(5));
+    }
+
+    @Test
+    public void testRelabelRefinedAssignment() {
+        StreamsGroup streamsGroup = createStreamsGroup("foo");
+
+        TasksTuple oldMemberTasks = new TasksTuple(Map.of("sub-1", Set.of(0)), Map.of(), Map.of());
+        TasksTuple otherMemberTasks = new TasksTuple(Map.of("sub-1", Set.of(1)), Map.of(), Map.of());
+        streamsGroup.setRefinedAssignment(5, Map.of(
+            "old-member-id", oldMemberTasks,
+            "other-member-id", otherMemberTasks
+        ));
+
+        streamsGroup.relabelRefinedAssignment("old-member-id", "new-member-id");
+
+        // The replaced member's slice moves to its new ID and every other member's slice is left exactly as derived:
+        // the epoch's decisions must not change while the group reconciles towards it.
+        assertEquals(
+            Map.of("new-member-id", oldMemberTasks, "other-member-id", otherMemberTasks),
+            streamsGroup.refinedAssignment(5)
+        );
+        // Re-keying does not make the entry apply to a different epoch.
+        assertNull(streamsGroup.refinedAssignment(6));
+    }
+
+    @Test
+    public void testRelabelRefinedAssignmentOfUnknownMemberIsANoOp() {
+        StreamsGroup streamsGroup = createStreamsGroup("foo");
+
+        Map<String, TasksTuple> refinedAssignment = Map.of(
+            "member-id", new TasksTuple(Map.of("sub-1", Set.of(0)), Map.of(), Map.of())
+        );
+        streamsGroup.setRefinedAssignment(5, refinedAssignment);
+
+        // Nothing was derived for that member, so there is nothing to re-key -- and in particular the cached
+        // assignment of the epoch must not be disturbed.
+        streamsGroup.relabelRefinedAssignment("not-in-the-cache", "new-member-id");
+
+        assertEquals(refinedAssignment, streamsGroup.refinedAssignment(5));
+    }
+
+    @Test
+    public void testRefinedAssignmentCacheHoldsOnlyTheLatestEpoch() {
+        StreamsGroup streamsGroup = createStreamsGroup("foo");
+
+        Map<String, TasksTuple> refinedAssignmentOfEpoch5 = Map.of(
+            "member-id", new TasksTuple(Map.of("sub-1", Set.of(0)), Map.of(), Map.of())
+        );
+        Map<String, TasksTuple> refinedAssignmentOfEpoch6 = Map.of(
+            "member-id", new TasksTuple(Map.of("sub-1", Set.of(0, 1)), Map.of(), Map.of())
+        );
+
+        streamsGroup.setRefinedAssignment(5, refinedAssignmentOfEpoch5);
+        streamsGroup.setRefinedAssignment(6, refinedAssignmentOfEpoch6);
+
+        // The cache is a single slot, so deriving for a new epoch evicts the previous one rather than accumulating an
+        // entry per epoch. Only the epoch the members are currently reconciling towards is ever asked for.
+        assertEquals(refinedAssignmentOfEpoch6, streamsGroup.refinedAssignment(6));
+        assertNull(streamsGroup.refinedAssignment(5));
+    }
+
+    @Test
+    public void testRemoveMemberClearsTaskOffsets() {
+        StreamsGroup streamsGroup = createStreamsGroup("foo");
+        streamsGroup.updateMember(new StreamsGroupMember.Builder("member-id").build());
+        streamsGroup.updateTaskOffsets("member-id", new MemberTaskOffsets(
+            Map.of("sub-1", Map.of(0, 10L)),
+            Map.of("sub-1", Map.of(0, 20L))
+        ));
+
+        streamsGroup.removeMember("member-id");
+
+        assertEquals(MemberTaskOffsets.EMPTY, streamsGroup.taskOffsets("member-id"));
+        assertEquals(Map.of(), streamsGroup.taskOffsets());
+    }
+
+    @Test
+    public void testGetOrCreateDefaultMember() {
+        StreamsGroup streamsGroup = createStreamsGroup("foo");
+        StreamsGroupMember defaultMember = StreamsGroupMember.Builder.withDefaults("member-id").build();
+        StreamsGroupMember member = streamsGroup.getOrCreateDefaultMember("member-id");
+
+        assertEquals(defaultMember, member);
+
+        StreamsGroupMember updatedMember = new StreamsGroupMember.Builder(member).setInstanceId("unique-new-id").build();
+        streamsGroup.updateMember(updatedMember);
+
+        assertEquals(updatedMember, streamsGroup.getOrCreateDefaultMember("member-id"));
+        assertNotEquals(defaultMember, streamsGroup.getOrCreateDefaultMember("member-id"));
+    }
+
+    @Test
+    public void testGetMemberOrThrow() {
+        StreamsGroup streamsGroup = createStreamsGroup("foo");
+        StreamsGroupMember member;
+
+        // Create a member.
+        member = streamsGroup.getOrCreateDefaultMember("member-id");
+        assertEquals("member-id", member.memberId());
+
+        // Add member to the group.
+        streamsGroup.updateMember(member);
+
+        // Get that member back.
+        member = streamsGroup.getMemberOrThrow("member-id");
+        assertEquals("member-id", member.memberId());
+
+        assertThrows(UnknownMemberIdException.class, () ->
+            streamsGroup.getMemberOrThrow("does-not-exist"));
+    }
+
+    @Test
+    public void testUpdateMember() {
+        StreamsGroup streamsGroup = createStreamsGroup("foo");
+        StreamsGroupMember member;
+
+        member = streamsGroup.getOrCreateDefaultMember("member");
+
+        member = new StreamsGroupMember.Builder(member).build();
+
+        streamsGroup.updateMember(member);
+
+        assertEquals(member, streamsGroup.getMemberOrThrow("member"));
+    }
+
+    @Test
+    public void testNoStaticMember() {
+        StreamsGroup streamsGroup = createStreamsGroup("foo");
+
+        // Create a new member which is not static
+        streamsGroup.getOrCreateDefaultMember("member");
+        assertNull(streamsGroup.staticMember("instance-id"));
+    }
+
+    @Test
+    public void testGetStaticMemberByInstanceId() {
+        StreamsGroup streamsGroup = createStreamsGroup("foo");
+        StreamsGroupMember member;
+
+        member = streamsGroup.getOrCreateDefaultMember("member");
+
+        member = new StreamsGroupMember.Builder(member)
+            .setInstanceId("instance")
+            .build();
+
+        streamsGroup.updateMember(member);
+
+        assertEquals(member, streamsGroup.staticMember("instance"));
+        assertEquals(member, streamsGroup.getMemberOrThrow("member"));
+        assertEquals(member.memberId(), streamsGroup.staticMemberId("instance"));
+    }
+
+    @Test
+    public void testRemoveMember() {
+        StreamsGroup streamsGroup = createStreamsGroup("foo");
+
+        StreamsGroupMember member = streamsGroup.getOrCreateDefaultMember("member");
+        streamsGroup.updateMember(member);
+        assertTrue(streamsGroup.hasMember("member"));
+
+        streamsGroup.removeMember("member");
+        assertFalse(streamsGroup.hasMember("member"));
+    }
+
+    @Test
+    public void testRemoveStaticMember() {
+        StreamsGroup streamsGroup = createStreamsGroup("foo");
+
+        StreamsGroupMember member = new StreamsGroupMember.Builder("member")
+            .setInstanceId("instance")
+            .build();
+
+        streamsGroup.updateMember(member);
+        assertTrue(streamsGroup.hasMember("member"));
+
+        streamsGroup.removeMember("member");
+        assertFalse(streamsGroup.hasMember("member"));
+        assertNull(streamsGroup.staticMember("instance"));
+        assertNull(streamsGroup.staticMemberId("instance"));
+    }
+
+    @Test
+    public void testUpdatingMemberUpdatesProcessId() {
+        String fooSubtopology = "foo-sub";
+        String barSubtopology = "bar-sub";
+        String zarSubtopology = "zar-sub";
+
+        StreamsGroup streamsGroup = createStreamsGroup("foo");
+        StreamsGroupMember member;
+
+        member = new StreamsGroupMember.Builder("member")
+            .setProcessId("process")
+            .setAssignedTasks(
+                new TasksTupleWithEpochs(
+                    mkTasksPerSubtopologyWithCommonEpoch(10, mkTasks(fooSubtopology, 1)),
+                    mkTasksPerSubtopology(mkTasks(fooSubtopology, 2)),
+                    mkTasksPerSubtopology(mkTasks(fooSubtopology, 3))
+                )
+            )
+            .setTasksPendingRevocation(
+                new TasksTupleWithEpochs(
+                    mkTasksPerSubtopologyWithCommonEpoch(10, mkTasks(barSubtopology, 4)),
+                    mkTasksPerSubtopology(mkTasks(barSubtopology, 5)),
+                    mkTasksPerSubtopology(mkTasks(barSubtopology, 6))
+                )
+            )
+            .build();
+
+        streamsGroup.updateMember(member);
+
+        assertEquals("process", streamsGroup.currentActiveTaskProcessId(fooSubtopology, 1));
+        assertEquals(Set.of("process"),
+            streamsGroup.currentStandbyTaskProcessIds(fooSubtopology, 2));
+        assertEquals(Set.of("process"),
+            streamsGroup.currentWarmupTaskProcessIds(fooSubtopology, 3));
+        assertEquals("process", streamsGroup.currentActiveTaskProcessId(barSubtopology, 4));
+        assertEquals(Set.of("process"),
+            streamsGroup.currentStandbyTaskProcessIds(barSubtopology, 5));
+        assertEquals(Set.of("process"),
+            streamsGroup.currentWarmupTaskProcessIds(barSubtopology, 6));
+        assertNull(streamsGroup.currentActiveTaskProcessId(zarSubtopology, 7));
+        assertEquals(Set.of(),
+            streamsGroup.currentStandbyTaskProcessIds(zarSubtopology, 8));
+        assertEquals(Set.of(),
+            streamsGroup.currentWarmupTaskProcessIds(zarSubtopology, 9));
+
+        member = new StreamsGroupMember.Builder(member)
+            .setProcessId("process1")
+            .setAssignedTasks(
+                new TasksTupleWithEpochs(
+                    mkTasksPerSubtopologyWithCommonEpoch(10, mkTasks(fooSubtopology, 1)),
+                    mkTasksPerSubtopology(mkTasks(fooSubtopology, 2)),
+                    mkTasksPerSubtopology(mkTasks(fooSubtopology, 3))
+                )
+            )
+            .setTasksPendingRevocation(
+                new TasksTupleWithEpochs(
+                    mkTasksPerSubtopologyWithCommonEpoch(10, mkTasks(barSubtopology, 4)),
+                    mkTasksPerSubtopology(mkTasks(barSubtopology, 5)),
+                    mkTasksPerSubtopology(mkTasks(barSubtopology, 6))
+                )
+            )
+            .build();
+
+        streamsGroup.updateMember(member);
+
+        assertEquals("process1", streamsGroup.currentActiveTaskProcessId(fooSubtopology, 1));
+        assertEquals(Set.of("process1"),
+            streamsGroup.currentStandbyTaskProcessIds(fooSubtopology, 2));
+        assertEquals(Set.of("process1"),
+            streamsGroup.currentWarmupTaskProcessIds(fooSubtopology, 3));
+        assertEquals("process1", streamsGroup.currentActiveTaskProcessId(barSubtopology, 4));
+        assertEquals(Set.of("process1"),
+            streamsGroup.currentStandbyTaskProcessIds(barSubtopology, 5));
+        assertEquals(Set.of("process1"),
+            streamsGroup.currentWarmupTaskProcessIds(barSubtopology, 6));
+        assertNull(streamsGroup.currentActiveTaskProcessId(zarSubtopology, 7));
+        assertEquals(Set.of(),
+            streamsGroup.currentStandbyTaskProcessIds(zarSubtopology, 8));
+        assertEquals(Set.of(),
+            streamsGroup.currentWarmupTaskProcessIds(zarSubtopology, 9));
+    }
+
+    @Test
+    public void testUpdatingMemberUpdatesTaskProcessIdWhenPartitionIsReassignedBeforeBeingRevoked() {
+        String fooSubtopologyId = "foo-sub";
+
+        StreamsGroup streamsGroup = createStreamsGroup("foo");
+        StreamsGroupMember member;
+
+        member = new StreamsGroupMember.Builder("member")
+            .setProcessId("process")
+            .setAssignedTasks(TasksTupleWithEpochs.EMPTY)
+            .setTasksPendingRevocation(
+                new TasksTupleWithEpochs(
+                    mkTasksPerSubtopologyWithCommonEpoch(10, mkTasks(fooSubtopologyId, 1)),
+                    mkTasksPerSubtopology(mkTasks(fooSubtopologyId, 2)),
+                    mkTasksPerSubtopology(mkTasks(fooSubtopologyId, 3))
+                )
+            )
+            .build();
+
+        streamsGroup.updateMember(member);
+
+        assertEquals("process", streamsGroup.currentActiveTaskProcessId(fooSubtopologyId, 1));
+
+        member = new StreamsGroupMember.Builder(member)
+            .setProcessId("process1")
+            .setAssignedTasks(
+                new TasksTupleWithEpochs(
+                    mkTasksPerSubtopologyWithCommonEpoch(10, mkTasks(fooSubtopologyId, 1)),
+                    mkTasksPerSubtopology(mkTasks(fooSubtopologyId, 2)),
+                    mkTasksPerSubtopology(mkTasks(fooSubtopologyId, 3))
+                )
+            )
+            .setTasksPendingRevocation(TasksTupleWithEpochs.EMPTY)
+            .build();
+
+        streamsGroup.updateMember(member);
+
+        assertEquals("process1", streamsGroup.currentActiveTaskProcessId(fooSubtopologyId, 1));
+    }
+
+    @Test
+    public void testUpdatingMemberUpdatesTaskProcessIdWhenPartitionIsNotReleased() {
+        String fooSubtopologyId = "foo-sub";
+        StreamsGroup streamsGroup = createStreamsGroup("foo");
+
+        StreamsGroupMember m1 = new StreamsGroupMember.Builder("m1")
+            .setProcessId("process1")
+            .setAssignedTasks(
+                new TasksTupleWithEpochs(
+                    mkTasksPerSubtopologyWithCommonEpoch(10, mkTasks(fooSubtopologyId, 1)),
+                    Map.of(),
+                    Map.of()
+                )
+            )
+            .build();
+
+        streamsGroup.updateMember(m1);
+
+        StreamsGroupMember m2 = new StreamsGroupMember.Builder("m2")
+            .setProcessId("process2")
+            .setAssignedTasks(
+                new TasksTupleWithEpochs(
+                    mkTasksPerSubtopologyWithCommonEpoch(9, mkTasks(fooSubtopologyId, 1)),
+                    Map.of(),
+                    Map.of()
+                )
+            )
+            .build();
+
+        // We allow m2 to acquire foo-1 despite the fact that m1 has ownership because the processId is different.
+        streamsGroup.updateMember(m2);
+
+        assertEquals("process2", streamsGroup.currentActiveTaskProcessId(fooSubtopologyId, 1));
+    }
+
+
+    @ParameterizedTest
+    @EnumSource(TaskRole.class)
+    public void testRemoveTaskProcessIds(TaskRole taskRole) {
+        String fooSubtopologyId = "foo-sub";
+        StreamsGroup streamsGroup = createStreamsGroup("foo");
+
+        // Removing should be a no-op when there is no process id set.
+        streamsGroup.removeTaskProcessIds(
+            TaskAssignmentTestUtil.mkTasksTupleWithCommonEpoch(taskRole, 10, mkTasks(fooSubtopologyId, 1)),
+            "process"
+        );
+
+        StreamsGroupMember m1 = new StreamsGroupMember.Builder("m1")
+            .setProcessId("process")
+            .setAssignedTasks(TaskAssignmentTestUtil.mkTasksTupleWithCommonEpoch(taskRole, 10, mkTasks(fooSubtopologyId, 1)))
+            .build();
+
+        streamsGroup.updateMember(m1);
+
+        // Removing with incorrect process id should do nothing. 
+        // A debug message is logged, no exception is thrown.
+        streamsGroup.removeTaskProcessIds(
+            TaskAssignmentTestUtil.mkTasksTupleWithCommonEpoch(taskRole, 9, mkTasks(fooSubtopologyId, 1)),
+            "process1"
+        );
+        if (taskRole == TaskRole.ACTIVE) {
+            assertEquals("process", streamsGroup.currentActiveTaskProcessId(fooSubtopologyId, 1));
+        }
+    }
+
+    @Test
+    public void testAddTaskProcessIds() {
+        String fooSubtopologyId = "foo-sub";
+        StreamsGroup streamsGroup = createStreamsGroup("foo");
+
+        streamsGroup.addTaskProcessId(
+            new TasksTupleWithEpochs(
+                mkTasksPerSubtopologyWithCommonEpoch(10, mkTasks(fooSubtopologyId, 1)),
+                mkTasksPerSubtopology(mkTasks(fooSubtopologyId, 2)),
+                mkTasksPerSubtopology(mkTasks(fooSubtopologyId, 3))
+            ),
+            "process"
+        );
+
+        // We allow replacing with a different process id.
+        streamsGroup.addTaskProcessId(
+            new TasksTupleWithEpochs(
+                mkTasksPerSubtopologyWithCommonEpoch(10, mkTasks(fooSubtopologyId, 1)),
+                mkTasksPerSubtopology(mkTasks(fooSubtopologyId, 2)),
+                mkTasksPerSubtopology(mkTasks(fooSubtopologyId, 3))
+            ),
+            "process2"
+        );
+
+        assertEquals("process2", streamsGroup.currentActiveTaskProcessId(fooSubtopologyId, 1));
+    }
+
+    @Test
+    public void testDeletingMemberRemovesProcessId() {
+        String fooSubtopology = "foo-sub";
+        String barSubtopology = "bar-sub";
+        String zarSubtopology = "zar-sub";
+
+        StreamsGroup streamsGroup = createStreamsGroup("foo");
+        StreamsGroupMember member;
+
+        member = new StreamsGroupMember.Builder("member")
+            .setProcessId("process")
+            .setAssignedTasks(
+                new TasksTupleWithEpochs(
+                    mkTasksPerSubtopologyWithCommonEpoch(10, mkTasks(fooSubtopology, 1)),
+                    mkTasksPerSubtopology(mkTasks(fooSubtopology, 2)),
+                    mkTasksPerSubtopology(mkTasks(fooSubtopology, 3))
+                )
+            )
+            .setTasksPendingRevocation(
+                new TasksTupleWithEpochs(
+                    mkTasksPerSubtopologyWithCommonEpoch(10, mkTasks(barSubtopology, 4)),
+                    mkTasksPerSubtopology(mkTasks(barSubtopology, 5)),
+                    mkTasksPerSubtopology(mkTasks(barSubtopology, 6))
+                )
+            )
+            .build();
+
+        streamsGroup.updateMember(member);
+
+        assertEquals("process", streamsGroup.currentActiveTaskProcessId(fooSubtopology, 1));
+        assertEquals(Set.of("process"), streamsGroup.currentStandbyTaskProcessIds(fooSubtopology, 2));
+        assertEquals(Set.of("process"), streamsGroup.currentWarmupTaskProcessIds(fooSubtopology, 3));
+        assertEquals("process", streamsGroup.currentActiveTaskProcessId(barSubtopology, 4));
+        assertEquals(Set.of("process"), streamsGroup.currentStandbyTaskProcessIds(barSubtopology, 5));
+        assertEquals(Set.of("process"), streamsGroup.currentWarmupTaskProcessIds(barSubtopology, 6));
+        assertNull(streamsGroup.currentActiveTaskProcessId(zarSubtopology, 7));
+        assertEquals(Set.of(), streamsGroup.currentStandbyTaskProcessIds(zarSubtopology, 8));
+        assertEquals(Set.of(), streamsGroup.currentWarmupTaskProcessIds(zarSubtopology, 9));
+
+        streamsGroup.removeMember(member.memberId());
+
+        assertNull(streamsGroup.currentActiveTaskProcessId(zarSubtopology, 1));
+        assertEquals(Set.of(), streamsGroup.currentStandbyTaskProcessIds(zarSubtopology, 2));
+        assertEquals(Set.of(), streamsGroup.currentWarmupTaskProcessIds(zarSubtopology, 3));
+        assertNull(streamsGroup.currentActiveTaskProcessId(zarSubtopology, 3));
+        assertEquals(Set.of(), streamsGroup.currentStandbyTaskProcessIds(zarSubtopology, 4));
+        assertEquals(Set.of(), streamsGroup.currentWarmupTaskProcessIds(zarSubtopology, 5));
+        assertNull(streamsGroup.currentActiveTaskProcessId(zarSubtopology, 7));
+        assertEquals(Set.of(), streamsGroup.currentStandbyTaskProcessIds(zarSubtopology, 8));
+        assertEquals(Set.of(), streamsGroup.currentWarmupTaskProcessIds(zarSubtopology, 9));
+    }
+
+    @Test
+    public void testTopologyDescriptionPluginEpochs() {
+        StreamsGroup group = createStreamsGroup("foo");
+
+        // KIP-1331: both fields default to -1, meaning "no topology description ever stored / failed".
+        assertEquals(-1, group.storedDescriptionTopologyEpoch());
+        assertEquals(-1, group.failedDescriptionTopologyEpoch());
+
+        group.setStoredDescriptionTopologyEpoch(7);
+        group.setFailedDescriptionTopologyEpoch(5);
+        assertEquals(7, group.storedDescriptionTopologyEpoch());
+        assertEquals(5, group.failedDescriptionTopologyEpoch());
+
+        group.setStoredDescriptionTopologyEpoch(-1);
+        group.setFailedDescriptionTopologyEpoch(-1);
+        assertEquals(-1, group.storedDescriptionTopologyEpoch());
+        assertEquals(-1, group.failedDescriptionTopologyEpoch());
+    }
+
+    @Test
+    public void testCurrentTopologyEpochReflectsLatestTopology() {
+        StreamsGroup group = createStreamsGroup("foo");
+
+        // No topology yet → -1.
+        assertEquals(-1, group.currentTopologyEpoch());
+
+        group.setTopology(new StreamsTopology(3, Map.of()));
+        assertEquals(3, group.currentTopologyEpoch());
+
+        group.setTopology(new StreamsTopology(4, Map.of()));
+        assertEquals(4, group.currentTopologyEpoch());
+    }
+
+    @Test
+    public void testGroupState() {
+        StreamsGroup streamsGroup = createStreamsGroup("foo");
+        assertEquals(StreamsGroupState.EMPTY, streamsGroup.state());
+
+        StreamsGroupMember member1 = new StreamsGroupMember.Builder("member1")
+            .setState(MemberState.STABLE)
+            .setMemberEpoch(2)
+            .setPreviousMemberEpoch(0)
+            .build();
+
+        streamsGroup.updateMember(member1);
+        streamsGroup.setGroupEpoch(2);
+
+        assertEquals(MemberState.STABLE, member1.state());
+        assertEquals(StreamsGroup.StreamsGroupState.NOT_READY, streamsGroup.state());
+
+        streamsGroup.setTopology(new StreamsTopology(1, Map.of()));
+        streamsGroup.setConfiguredTopology(new ConfiguredTopology(1, 0, Optional.of(new TreeMap<>()), Map.of(), Optional.empty()));
+        streamsGroup.setValidatedTopologyEpoch(1);
+
+        assertEquals(MemberState.STABLE, member1.state());
+        assertEquals(StreamsGroup.StreamsGroupState.ASSIGNING, streamsGroup.state());
+
+        StreamsGroupMember member2 = new StreamsGroupMember.Builder("member2")
+            .setState(MemberState.STABLE)
+            .setMemberEpoch(2)
+            .setPreviousMemberEpoch(0)
+            .build();
+
+        streamsGroup.updateMember(member2);
+        streamsGroup.setGroupEpoch(3);
+
+        assertEquals(MemberState.STABLE, member2.state());
+        assertEquals(StreamsGroup.StreamsGroupState.ASSIGNING, streamsGroup.state());
+
+        streamsGroup.setTargetAssignmentMetadata(3, 12345L);
+
+        assertEquals(StreamsGroup.StreamsGroupState.RECONCILING, streamsGroup.state());
+
+        member1 = new StreamsGroupMember.Builder(member1)
+            .setState(MemberState.STABLE)
+            .setMemberEpoch(3)
+            .setPreviousMemberEpoch(2)
+            .build();
+
+        streamsGroup.updateMember(member1);
+
+        assertEquals(MemberState.STABLE, member1.state());
+        assertEquals(StreamsGroup.StreamsGroupState.RECONCILING, streamsGroup.state());
+
+        // Member 2 is not stable so the group stays in reconciling state.
+        member2 = new StreamsGroupMember.Builder(member2)
+            .setState(MemberState.UNREVOKED_TASKS)
+            .setMemberEpoch(3)
+            .setPreviousMemberEpoch(2)
+            .build();
+
+        streamsGroup.updateMember(member2);
+
+        assertEquals(MemberState.UNREVOKED_TASKS, member2.state());
+        assertEquals(StreamsGroup.StreamsGroupState.RECONCILING, streamsGroup.state());
+
+        member2 = new StreamsGroupMember.Builder(member2)
+            .setState(MemberState.STABLE)
+            .setMemberEpoch(3)
+            .setPreviousMemberEpoch(2)
+            .build();
+
+        streamsGroup.updateMember(member2);
+
+        assertEquals(MemberState.STABLE, member2.state());
+        assertEquals(StreamsGroup.StreamsGroupState.STABLE, streamsGroup.state());
+
+        streamsGroup.removeMember("member1");
+        streamsGroup.removeMember("member2");
+
+        assertEquals(StreamsGroup.StreamsGroupState.EMPTY, streamsGroup.state());
+    }
+
+    @Test
+    public void testMetadataRefreshDeadline() {
+        MockTime time = new MockTime();
+        StreamsGroup group = createStreamsGroup("group-foo");
+
+        // Group epoch starts at 1.
+        assertEquals(1, group.groupEpoch());
+
+        // The refresh time deadline should be empty when the group is created or loaded.
+        assertTrue(group.hasMetadataExpired(time.milliseconds()));
+        assertEquals(0L, group.metadataRefreshDeadline().deadlineMs);
+        assertEquals(0, group.metadataRefreshDeadline().epoch);
+
+        // Set the refresh deadline. The metadata remains valid because the deadline
+        // has not past and the group epoch is correct.
+        group.setMetadataRefreshDeadline(time.milliseconds() + 1000, group.groupEpoch());
+        assertFalse(group.hasMetadataExpired(time.milliseconds()));
+        assertEquals(time.milliseconds() + 1000, group.metadataRefreshDeadline().deadlineMs);
+        assertEquals(group.groupEpoch(), group.metadataRefreshDeadline().epoch);
+
+        // Advance past the deadline. The metadata should have expired.
+        time.sleep(1001L);
+        assertTrue(group.hasMetadataExpired(time.milliseconds()));
+
+        // Set the refresh time deadline with a higher group epoch. The metadata is considered
+        // as expired because the group epoch attached to the deadline is higher than the
+        // current group epoch.
+        group.setMetadataRefreshDeadline(time.milliseconds() + 1000, group.groupEpoch() + 1);
+        assertTrue(group.hasMetadataExpired(time.milliseconds()));
+        assertEquals(time.milliseconds() + 1000, group.metadataRefreshDeadline().deadlineMs);
+        assertEquals(group.groupEpoch() + 1, group.metadataRefreshDeadline().epoch);
+
+        // Advance the group epoch.
+        group.setGroupEpoch(group.groupEpoch() + 1);
+
+        // Set the refresh deadline. The metadata remains valid because the deadline
+        // has not past and the group epoch is correct.
+        group.setMetadataRefreshDeadline(time.milliseconds() + 1000, group.groupEpoch());
+        assertFalse(group.hasMetadataExpired(time.milliseconds()));
+        assertEquals(time.milliseconds() + 1000, group.metadataRefreshDeadline().deadlineMs);
+        assertEquals(group.groupEpoch(), group.metadataRefreshDeadline().epoch);
+
+        // Request metadata refresh. The metadata expires immediately.
+        group.requestMetadataRefresh();
+        assertTrue(group.hasMetadataExpired(time.milliseconds()));
+        assertEquals(0L, group.metadataRefreshDeadline().deadlineMs);
+        assertEquals(0, group.metadataRefreshDeadline().epoch);
+    }
+
+    @ParameterizedTest
+    @ApiKeyVersionsSource(apiKey = ApiKeys.TXN_OFFSET_COMMIT)
+    public void testValidateTransactionalOffsetCommit(short version) {
+        boolean isTransactional = true;
+        StreamsGroup group = createStreamsGroup("group-foo");
+
+
+        // Simulate a call from the admin client without member ID and member epoch.
+        // This should pass only if the group is empty.
+        group.validateOffsetCommit("", "", -1, isTransactional, version);
+
+        // The member does not exist.
+        assertThrows(UnknownMemberIdException.class, () ->
+            group.validateOffsetCommit("member-id", null, 0, isTransactional, version));
+
+        // Create a member.
+        group.updateMember(new StreamsGroupMember.Builder("member-id").setMemberEpoch(0).build());
+
+        // A call from the admin client should fail as the group is not empty.
+        assertThrows(UnknownMemberIdException.class, () ->
+            group.validateOffsetCommit("", "", -1, isTransactional, version));
+
+        // The member epoch is stale.
+        assertThrows(StaleMemberEpochException.class, () ->
+            group.validateOffsetCommit("member-id", "", 10, isTransactional, version));
+
+        // This should succeed.
+        group.validateOffsetCommit("member-id", "", 0, isTransactional, version);
+
+        // This should succeed.
+        group.validateOffsetCommit("", null, -1, isTransactional, version);
+    }
+
+    @ParameterizedTest
+    @ApiKeyVersionsSource(apiKey = ApiKeys.OFFSET_COMMIT)
+    public void testValidateOffsetCommit(short version) {
+        boolean isTransactional = false;
+        StreamsGroup group = createStreamsGroup("group-foo");
+
+        // Simulate a call from the admin client without member ID and member epoch.
+        // This should pass only if the group is empty.
+        group.validateOffsetCommit("", "", -1, isTransactional, version);
+
+        // The member does not exist.
+        assertThrows(UnknownMemberIdException.class, () ->
+            group.validateOffsetCommit("member-id", null, 0, isTransactional, version));
+
+        // Create members.
+        group.updateMember(
+            new StreamsGroupMember
+                .Builder("new-protocol-member-id").setMemberEpoch(0).build()
+        );
+
+        // A call from the admin client should fail as the group is not empty.
+        assertThrows(UnknownMemberIdException.class, () ->
+            group.validateOffsetCommit("", "", -1, isTransactional, version));
+        assertThrows(UnknownMemberIdException.class, () ->
+            group.validateOffsetCommit("", null, -1, isTransactional, version));
+
+        // The member epoch is stale (newer than current).
+        if (version >= 9) {
+            assertThrows(StaleMemberEpochException.class, () ->
+                group.validateOffsetCommit("new-protocol-member-id", "", 10, isTransactional, version));
+        } else {
+            assertThrows(UnsupportedVersionException.class, () ->
+                group.validateOffsetCommit("new-protocol-member-id", "", 10, isTransactional, version));
+        }
+
+        // This should succeed (matching member epoch).
+        if (version >= 9) {
+            group.validateOffsetCommit("new-protocol-member-id", "", 0, isTransactional, version);
+        } else {
+            assertThrows(UnsupportedVersionException.class, () ->
+                group.validateOffsetCommit("new-protocol-member-id", "", 0, isTransactional, version));
+        }
+    }
+
+    @Test
+    public void testValidateOffsetCommitWithOlderEpoch() {
+        StreamsGroup group = createStreamsGroup("group-foo");
+        
+        group.setTopology(new StreamsTopology(1, Map.of("0", new StreamsGroupTopologyValue.Subtopology()
+            .setSubtopologyId("0")
+            .setSourceTopics(List.of("input-topic")))));
+        
+        group.updateMember(new StreamsGroupMember.Builder("member-1")
+            .setMemberEpoch(2)
+            .setAssignedTasks(new TasksTupleWithEpochs(
+                Map.of("0", Map.of(0, 2, 1, 1)),
+                Map.of(), Map.of()))
+            .build());
+        
+        CommitPartitionValidator validator = group.validateOffsetCommit(
+            "member-1", "", 1, false, ApiKeys.OFFSET_COMMIT.latestVersion());
+        
+        // Received epoch (1) < assignment epoch (2) should throw
+        assertThrows(StaleMemberEpochException.class, () ->
+            validator.validate("input-topic", Uuid.ZERO_UUID, 0));
+    }
+
+    @Test
+    public void testValidateOffsetCommitWithOlderEpochMissingTopology() {
+        StreamsGroup group = createStreamsGroup("group-foo");
+        
+        group.updateMember(new StreamsGroupMember.Builder("member-1")
+            .setMemberEpoch(2)
+            .build());
+        
+        // Topology is retrieved when creating validator, so exception is thrown here
+        assertThrows(StaleMemberEpochException.class, () ->
+            group.validateOffsetCommit("member-1", "", 1, false, ApiKeys.OFFSET_COMMIT.latestVersion()));
+    }
+
+    @Test
+    public void testValidateOffsetCommitWithOlderEpochMissingSubtopology() {
+        StreamsGroup group = createStreamsGroup("group-foo");
+        
+        group.setTopology(new StreamsTopology(1, Map.of("0", new StreamsGroupTopologyValue.Subtopology()
+            .setSubtopologyId("0")
+            .setSourceTopics(List.of("input-topic")))));
+        
+        group.updateMember(new StreamsGroupMember.Builder("member-1")
+            .setMemberEpoch(2)
+            .build());
+        
+        CommitPartitionValidator validator = group.validateOffsetCommit(
+            "member-1", "", 1, false, ApiKeys.OFFSET_COMMIT.latestVersion());
+        
+        assertThrows(StaleMemberEpochException.class, () ->
+            validator.validate("unknown-topic", Uuid.ZERO_UUID, 0));
+    }
+
+    @Test
+    public void testValidateOffsetCommitWithOlderEpochUnassignedPartition() {
+        StreamsGroup group = createStreamsGroup("group-foo");
+        
+        group.setTopology(new StreamsTopology(1, Map.of("0", new StreamsGroupTopologyValue.Subtopology()
+            .setSubtopologyId("0")
+            .setSourceTopics(List.of("input-topic")))));
+        
+        group.updateMember(new StreamsGroupMember.Builder("member-1")
+            .setMemberEpoch(2)
+            .setAssignedTasks(new TasksTupleWithEpochs(
+                Map.of("0", Map.of(0, 1)),
+                Map.of(), Map.of()))
+            .setTasksPendingRevocation(TasksTupleWithEpochs.EMPTY)
+            .build());
+        
+        CommitPartitionValidator validator = group.validateOffsetCommit(
+            "member-1", "", 1, false, ApiKeys.OFFSET_COMMIT.latestVersion());
+
+        // Partition 1 not assigned should throw
+        assertThrows(StaleMemberEpochException.class, () ->
+            validator.validate("input-topic", Uuid.ZERO_UUID, 1));
+    }
+
+    @Test
+    public void testValidateOffsetCommitWithOlderEpochValidAssignment() {
+        StreamsGroup group = createStreamsGroup("group-foo");
+        
+        group.setTopology(new StreamsTopology(1, Map.of("0", new StreamsGroupTopologyValue.Subtopology()
+            .setSubtopologyId("0")
+            .setSourceTopics(List.of("input-topic")))));
+        
+        group.updateMember(new StreamsGroupMember.Builder("member-1")
+            .setMemberEpoch(5)
+            .setAssignedTasks(new TasksTupleWithEpochs(
+                Map.of("0", Map.of(0, 2, 1, 2)),
+                Map.of(), Map.of()))
+            .build());
+        
+        CommitPartitionValidator validator = group.validateOffsetCommit(
+            "member-1", "", 2, false, ApiKeys.OFFSET_COMMIT.latestVersion());
+        
+        // Received epoch 2 == assignment epoch 2 should succeed
+        validator.validate("input-topic", Uuid.ZERO_UUID, 0);
+        validator.validate("input-topic", Uuid.ZERO_UUID, 1);
+    }
+
+    @Test
+    public void testAsListedGroup() {
+        SnapshotRegistry snapshotRegistry = new SnapshotRegistry(LOG_CONTEXT);
+        StreamsGroup group = new StreamsGroup(
+            LOG_CONTEXT,
+            snapshotRegistry,
+            "group-foo"
+        );
+        group.setGroupEpoch(1);
+        group.setTopology(new StreamsTopology(1, Map.of()));
+        group.setValidatedTopologyEpoch(1);
+        group.setConfiguredTopology(new ConfiguredTopology(1, 0, Optional.of(new TreeMap<>()), Map.of(), Optional.empty()));
+        group.setTargetAssignmentMetadata(1, 12345L);
+        group.updateMember(new StreamsGroupMember.Builder("member1")
+            .setMemberEpoch(1)
+            .build());
+        snapshotRegistry.idempotentCreateSnapshot(1);
+
+        ListGroupsResponseData.ListedGroup listedGroup = group.asListedGroup(1);
+
+        assertEquals("group-foo", listedGroup.groupId());
+        assertEquals("streams", listedGroup.protocolType());
+        assertEquals("Reconciling", listedGroup.groupState());
+        assertEquals("streams", listedGroup.groupType());
+    }
+
+    @Test
+    public void testValidateOffsetFetch() {
+        SnapshotRegistry snapshotRegistry = new SnapshotRegistry(LOG_CONTEXT);
+        StreamsGroup group = new StreamsGroup(
+            LOG_CONTEXT,
+            snapshotRegistry,
+            "group-foo"
+        );
+
+        // Simulate a call from the admin client without member ID and member epoch.
+        group.validateOffsetFetch(null, -1, Long.MAX_VALUE);
+
+        // The member does not exist.
+        assertThrows(UnknownMemberIdException.class, () ->
+            group.validateOffsetFetch("member-id", 0, Long.MAX_VALUE));
+
+        // Create a member.
+        snapshotRegistry.idempotentCreateSnapshot(0);
+        group.updateMember(new StreamsGroupMember.Builder("member-id").setMemberEpoch(0).build());
+
+        // The member does not exist at last committed offset 0.
+        assertThrows(UnknownMemberIdException.class, () ->
+            group.validateOffsetFetch("member-id", 0, 0));
+
+        // The member exists but the epoch is stale when the last committed offset is not considered.
+        assertThrows(StaleMemberEpochException.class, () ->
+            group.validateOffsetFetch("member-id", 10, Long.MAX_VALUE));
+
+        // This should succeed.
+        group.validateOffsetFetch("member-id", 0, Long.MAX_VALUE);
+    }
+
+    @Test
+    public void testValidateDeleteGroup() {
+        StreamsGroup streamsGroup = createStreamsGroup("foo");
+
+        assertEquals(StreamsGroupState.EMPTY, streamsGroup.state());
+        assertDoesNotThrow(streamsGroup::validateDeleteGroup);
+
+        StreamsGroupMember member1 = new StreamsGroupMember.Builder("member1")
+            .setMemberEpoch(2)
+            .setPreviousMemberEpoch(0)
+            .setState(MemberState.STABLE)
+            .build();
+        streamsGroup.updateMember(member1);
+
+        assertEquals(StreamsGroup.StreamsGroupState.NOT_READY, streamsGroup.state());
+        assertThrows(GroupNotEmptyException.class, streamsGroup::validateDeleteGroup);
+
+        streamsGroup.setTopology(new StreamsTopology(1, Map.of()));
+        streamsGroup.setConfiguredTopology(new ConfiguredTopology(1, 0, Optional.of(new TreeMap<>()), Map.of(), Optional.empty()));
+        streamsGroup.setValidatedTopologyEpoch(1);
+
+        assertEquals(StreamsGroup.StreamsGroupState.RECONCILING, streamsGroup.state());
+        assertThrows(GroupNotEmptyException.class, streamsGroup::validateDeleteGroup);
+
+        streamsGroup.setGroupEpoch(2);
+
+        assertEquals(StreamsGroup.StreamsGroupState.ASSIGNING, streamsGroup.state());
+        assertThrows(GroupNotEmptyException.class, streamsGroup::validateDeleteGroup);
+
+        streamsGroup.setTargetAssignmentMetadata(2, 12345L);
+
+        assertEquals(StreamsGroup.StreamsGroupState.STABLE, streamsGroup.state());
+        assertThrows(GroupNotEmptyException.class, streamsGroup::validateDeleteGroup);
+
+        streamsGroup.removeMember("member1");
+        assertEquals(StreamsGroup.StreamsGroupState.EMPTY, streamsGroup.state());
+        assertDoesNotThrow(streamsGroup::validateDeleteGroup);
+    }
+
+    @Test
+    public void testOffsetExpirationCondition() {
+        long currentTimestamp = 30000L;
+        long commitTimestamp = 20000L;
+        long offsetsRetentionMs = 10000L;
+        OffsetAndMetadata offsetAndMetadata = new OffsetAndMetadata(15000L, OptionalInt.empty(), "", commitTimestamp, OptionalLong.empty(), Uuid.ZERO_UUID);
+        StreamsGroup group = new StreamsGroup(LOG_CONTEXT, new SnapshotRegistry(LOG_CONTEXT), "group-id");
+
+        Optional<OffsetExpirationCondition> offsetExpirationCondition = group.offsetExpirationCondition();
+        assertTrue(offsetExpirationCondition.isPresent());
+
+        OffsetExpirationConditionImpl condition = (OffsetExpirationConditionImpl) offsetExpirationCondition.get();
+        assertEquals(commitTimestamp, condition.baseTimestamp().apply(offsetAndMetadata));
+        assertTrue(condition.isOffsetExpired(offsetAndMetadata, currentTimestamp, offsetsRetentionMs));
+    }
+
+    @Test
+    public void testAsDescribedGroup() {
+        SnapshotRegistry snapshotRegistry = new SnapshotRegistry(new LogContext());
+        StreamsGroup group = new StreamsGroup(LOG_CONTEXT, snapshotRegistry, "group-id-1");
+        snapshotRegistry.idempotentCreateSnapshot(0);
+        assertEquals(StreamsGroup.StreamsGroupState.EMPTY.toString(), group.stateAsString(0));
+
+        group.setGroupEpoch(1);
+        group.setTopology(new StreamsTopology(1, Map.of()));
+        group.setConfiguredTopology(new ConfiguredTopology(1, 0, Optional.of(new TreeMap<>()), Map.of(), Optional.empty()));
+        group.setValidatedTopologyEpoch(1);
+        group.setTargetAssignmentMetadata(1, 12345L);
+        group.updateMember(new StreamsGroupMember.Builder("member1")
+            .setMemberEpoch(1)
+            .setPreviousMemberEpoch(0)
+            .setState(MemberState.STABLE)
+            .setInstanceId("instance1")
+            .setRackId("rack1")
+            .setClientId("client1")
+            .setClientHost("host1")
+            .setRebalanceTimeoutMs(1000)
+            .setTopologyEpoch(1)
+            .setProcessId("process1")
+            .setUserEndpoint(new StreamsGroupMemberMetadataValue.Endpoint().setHost("host1").setPort(9092))
+            .setClientTags(Map.of("tag1", "value1"))
+            .setAssignedTasks(TasksTupleWithEpochs.EMPTY)
+            .setTasksPendingRevocation(TasksTupleWithEpochs.EMPTY)
+            .build());
+        group.updateMember(new StreamsGroupMember.Builder("member2")
+            .setMemberEpoch(1)
+            .setPreviousMemberEpoch(0)
+            .setState(MemberState.STABLE)
+            .setInstanceId("instance2")
+            .setRackId("rack2")
+            .setClientId("client2")
+            .setClientHost("host2")
+            .setRebalanceTimeoutMs(1000)
+            .setTopologyEpoch(1)
+            .setProcessId("process2")
+            .setUserEndpoint(new StreamsGroupMemberMetadataValue.Endpoint().setHost("host2").setPort(9092))
+            .setClientTags(Map.of("tag2", "value2"))
+            .setAssignedTasks(TasksTupleWithEpochs.EMPTY)
+            .setTasksPendingRevocation(TasksTupleWithEpochs.EMPTY)
+            .build());
+        snapshotRegistry.idempotentCreateSnapshot(1);
+
+        StreamsGroupDescribeResponseData.DescribedGroup expected = new StreamsGroupDescribeResponseData.DescribedGroup()
+            .setGroupId("group-id-1")
+            .setGroupState(StreamsGroup.StreamsGroupState.STABLE.toString())
+            .setGroupEpoch(1)
+            .setTopology(new StreamsGroupDescribeResponseData.Topology().setEpoch(1).setSubtopologies(List.of()))
+            .setAssignmentEpoch(1)
+            .setAssignorName("sticky")
+            .setMembers(Arrays.asList(
+                new StreamsGroupDescribeResponseData.Member()
+                    .setMemberId("member1")
+                    .setMemberEpoch(1)
+                    .setInstanceId("instance1")
+                    .setRackId("rack1")
+                    .setClientId("client1")
+                    .setClientHost("host1")
+                    .setTopologyEpoch(1)
+                    .setProcessId("process1")
+                    .setUserEndpoint(new StreamsGroupDescribeResponseData.Endpoint().setHost("host1").setPort(9092))
+                    .setClientTags(List.of(new StreamsGroupDescribeResponseData.KeyValue().setKey("tag1").setValue("value1")))
+                    .setAssignment(new StreamsGroupDescribeResponseData.Assignment())
+                    .setTargetAssignment(new StreamsGroupDescribeResponseData.Assignment()),
+                new StreamsGroupDescribeResponseData.Member()
+                    .setMemberId("member2")
+                    .setMemberEpoch(1)
+                    .setInstanceId("instance2")
+                    .setRackId("rack2")
+                    .setClientId("client2")
+                    .setClientHost("host2")
+                    .setTopologyEpoch(1)
+                    .setProcessId("process2")
+                    .setUserEndpoint(new StreamsGroupDescribeResponseData.Endpoint().setHost("host2").setPort(9092))
+                    .setClientTags(List.of(new StreamsGroupDescribeResponseData.KeyValue().setKey("tag2").setValue("value2")))
+                    .setAssignment(new StreamsGroupDescribeResponseData.Assignment())
+                    .setTargetAssignment(new StreamsGroupDescribeResponseData.Assignment())
+            ));
+        StreamsGroupDescribeResponseData.DescribedGroup actual = group.asDescribedGroup(1, "sticky");
+
+        assertEquals(expected, actual);
+    }
+
+    @Test
+    public void testIsInStatesCaseInsensitiveAndUnderscored() {
+        SnapshotRegistry snapshotRegistry = new SnapshotRegistry(LOG_CONTEXT);
+        StreamsGroup group = new StreamsGroup(LOG_CONTEXT, snapshotRegistry, "group-foo");
+        snapshotRegistry.idempotentCreateSnapshot(0);
+        assertTrue(group.isInStates(Set.of("empty"), 0));
+        assertFalse(group.isInStates(Set.of("Empty"), 0));
+
+        group.updateMember(new StreamsGroupMember.Builder("member1")
+            .build());
+        snapshotRegistry.idempotentCreateSnapshot(1);
+        assertTrue(group.isInStates(Set.of("empty"), 0));
+        assertTrue(group.isInStates(Set.of("not_ready"), 1));
+        assertFalse(group.isInStates(Set.of("empty"), 1));
+    }
+
+    @Test
+    public void testComputeMetadataHash() {
+        SnapshotRegistry snapshotRegistry = new SnapshotRegistry(LOG_CONTEXT);
+        StreamsGroup streamsGroup = new StreamsGroup(
+            LOG_CONTEXT,
+            snapshotRegistry,
+            "group-foo"
+        );
+
+        MetadataImage metadataImage = new MetadataImageBuilder()
+            .addTopic(Uuid.randomUuid(), "topic1", 1)
+            .build();
+
+        StreamsTopology topology = mock(StreamsTopology.class);
+        when(topology.requiredTopics()).thenReturn(Set.of("topic1"));
+
+        long metadataHash = streamsGroup.computeMetadataHash(new KRaftCoordinatorMetadataImage(metadataImage), new HashMap<>(), topology);
+        // The metadata hash means no topic.
+        assertNotEquals(0, metadataHash);
+    }
+
+    @Test
+    void testCreateGroupTombstoneRecords() {
+        SnapshotRegistry snapshotRegistry = new SnapshotRegistry(LOG_CONTEXT);
+        StreamsGroup streamsGroup = new StreamsGroup(
+            LOG_CONTEXT,
+            snapshotRegistry,
+            "test-group"
+        );
+        streamsGroup.updateMember(new StreamsGroupMember.Builder("member1")
+            .setMemberEpoch(1)
+            .build());
+        List<CoordinatorRecord> records = new ArrayList<>();
+
+        streamsGroup.createGroupTombstoneRecords(records);
+
+        assertEquals(6, records.size());
+        for (CoordinatorRecord record : records) {
+            assertNotNull(record.key());
+            assertNull(record.value());
+        }
+        final Set<ApiMessage> keys = records.stream().map(CoordinatorRecord::key).collect(Collectors.toSet());
+        assertTrue(keys.contains(new StreamsGroupMetadataKey().setGroupId("test-group")));
+        assertTrue(keys.contains(new StreamsGroupTargetAssignmentMetadataKey().setGroupId("test-group")));
+        assertTrue(keys.contains(new StreamsGroupTopologyKey().setGroupId("test-group")));
+        assertTrue(keys.contains(new StreamsGroupMemberMetadataKey().setGroupId("test-group").setMemberId("member1")));
+        assertTrue(keys.contains(new StreamsGroupTargetAssignmentMemberKey().setGroupId("test-group").setMemberId("member1")));
+        assertTrue(keys.contains(new StreamsGroupCurrentMemberAssignmentKey().setGroupId("test-group").setMemberId("member1")));
+    }
+
+    @Test
+    public void testIsSubscribedToTopic() {
+        LogContext logContext = new LogContext();
+        SnapshotRegistry snapshotRegistry = new SnapshotRegistry(logContext);
+        StreamsGroup streamsGroup = new StreamsGroup(logContext, snapshotRegistry, "test-group");
+
+        assertFalse(streamsGroup.isSubscribedToTopic("test-topic1"));
+        assertFalse(streamsGroup.isSubscribedToTopic("test-topic2"));
+        assertFalse(streamsGroup.isSubscribedToTopic("non-existent-topic"));
+
+        StreamsTopology topology = new StreamsTopology(1,
+            Map.of("test-subtopology",
+                new StreamsGroupTopologyValue.Subtopology()
+                    .setSubtopologyId("test-subtopology")
+                    .setSourceTopics(List.of("test-topic1"))
+                    .setRepartitionSourceTopics(List.of(new StreamsGroupTopologyValue.TopicInfo().setName("test-topic2")))
+                    .setRepartitionSinkTopics(List.of("test-topic2"))
+            ));
+        streamsGroup.setTopology(topology);
+
+        streamsGroup.updateMember(streamsGroup.getOrCreateDefaultMember("member-id"));
+        
+        assertTrue(streamsGroup.isSubscribedToTopic("test-topic1"));
+        assertTrue(streamsGroup.isSubscribedToTopic("test-topic2"));
+        assertFalse(streamsGroup.isSubscribedToTopic("non-existent-topic"));
+
+        streamsGroup.removeMember("member-id");
+
+        assertFalse(streamsGroup.isSubscribedToTopic("test-topic1"));
+        assertFalse(streamsGroup.isSubscribedToTopic("test-topic2"));
+        assertFalse(streamsGroup.isSubscribedToTopic("non-existent-topic"));
+    }
+
+    @Test
+    public void testShutdownRequestedMethods() {
+        String memberId1 = "test-member-id1";
+        String memberId2 = "test-member-id2";
+        LogContext logContext = new LogContext();
+        SnapshotRegistry snapshotRegistry = new SnapshotRegistry(logContext);
+        StreamsGroup streamsGroup = new StreamsGroup(logContext, snapshotRegistry, "test-group");
+
+        streamsGroup.updateMember(streamsGroup.getOrCreateDefaultMember(memberId1));
+        streamsGroup.updateMember(streamsGroup.getOrCreateDefaultMember(memberId2));
+
+        // Initially, shutdown should not be requested
+        assertTrue(streamsGroup.getShutdownRequestMemberId().isEmpty());
+
+        // Set shutdown requested
+        streamsGroup.setShutdownRequestMemberId(memberId1);
+        assertEquals(Optional.of(memberId1), streamsGroup.getShutdownRequestMemberId());
+
+        // Setting shutdown requested again will be ignored
+        streamsGroup.setShutdownRequestMemberId(memberId2);
+        assertEquals(Optional.of(memberId1), streamsGroup.getShutdownRequestMemberId());
+
+        // As long as group not empty, remain in shutdown requested state
+        streamsGroup.removeMember(memberId1);
+        assertEquals(Optional.of(memberId1), streamsGroup.getShutdownRequestMemberId());
+
+        // As soon as the group is empty, clear the shutdown requested state
+        streamsGroup.removeMember(memberId2);
+        assertEquals(Optional.empty(), streamsGroup.getShutdownRequestMemberId());
+    }
+
+    @Test
+    public void testAsDescribedGroupWithStreamsTopologyHavingSubtopologies() {
+        SnapshotRegistry snapshotRegistry = new SnapshotRegistry(new LogContext());
+        StreamsGroup group = new StreamsGroup(LOG_CONTEXT, snapshotRegistry, "group-id-with-topology");
+        snapshotRegistry.idempotentCreateSnapshot(0);
+
+        // Create a topology with subtopologies
+        Map<String, StreamsGroupTopologyValue.Subtopology> subtopologies = Map.of(
+            "sub-1", new StreamsGroupTopologyValue.Subtopology()
+                .setSubtopologyId("sub-1")
+                .setSourceTopics(List.of("input-topic"))
+                .setRepartitionSourceTopics(List.of(
+                    new StreamsGroupTopologyValue.TopicInfo().setName("repartition-topic")
+                ))
+                .setStateChangelogTopics(List.of(
+                    new StreamsGroupTopologyValue.TopicInfo().setName("changelog-topic")
+                ))
+        );
+
+        group.setGroupEpoch(2);
+        group.setTopology(new StreamsTopology(2, subtopologies));
+        group.setTargetAssignmentMetadata(2, 12345L);
+        group.updateMember(new StreamsGroupMember.Builder("member1")
+            .setMemberEpoch(2)
+            .setPreviousMemberEpoch(1)
+            .setState(MemberState.STABLE)
+            .setInstanceId("instance1")
+            .setRackId("rack1")
+            .setClientId("client1")
+            .setClientHost("host1")
+            .setRebalanceTimeoutMs(1000)
+            .setTopologyEpoch(2)
+            .setProcessId("process1")
+            .setUserEndpoint(new StreamsGroupMemberMetadataValue.Endpoint().setHost("host1").setPort(9092))
+            .setClientTags(Map.of("tag1", "value1"))
+            .setAssignedTasks(TasksTupleWithEpochs.EMPTY)
+            .setTasksPendingRevocation(TasksTupleWithEpochs.EMPTY)
+            .build());
+        // Transient, unpersisted per-task offsets reported by the member; the describe path must surface them.
+        group.updateTaskOffsets("member1", new MemberTaskOffsets(
+            Map.of("sub-1", Map.of(0, 5L)),
+            Map.of("sub-1", Map.of(0, 9L))
+        ));
+        snapshotRegistry.idempotentCreateSnapshot(1);
+
+        StreamsGroupDescribeResponseData.DescribedGroup describedGroup = group.asDescribedGroup(1, "sticky");
+
+        assertEquals("group-id-with-topology", describedGroup.groupId());
+        assertEquals(StreamsGroup.StreamsGroupState.NOT_READY.toString(), describedGroup.groupState());
+        assertEquals(2, describedGroup.groupEpoch());
+        assertEquals(2, describedGroup.assignmentEpoch());
+        assertEquals("sticky", describedGroup.assignorName());
+
+        // Verify topology is correctly described
+        assertNotNull(describedGroup.topology());
+        assertEquals(2, describedGroup.topology().epoch());
+        assertEquals(1, describedGroup.topology().subtopologies().size());
+
+        StreamsGroupDescribeResponseData.Subtopology subtopology = describedGroup.topology().subtopologies().get(0);
+        assertEquals("sub-1", subtopology.subtopologyId());
+        assertEquals(List.of("input-topic"), subtopology.sourceTopics());
+        assertEquals(1, subtopology.repartitionSourceTopics().size());
+        assertEquals("repartition-topic", subtopology.repartitionSourceTopics().get(0).name());
+        assertEquals(1, subtopology.stateChangelogTopics().size());
+        assertEquals("changelog-topic", subtopology.stateChangelogTopics().get(0).name());
+
+        assertEquals(1, describedGroup.members().size());
+        assertEquals("member1", describedGroup.members().get(0).memberId());
+        assertEquals(
+            List.of(new StreamsGroupDescribeResponseData.TaskOffset().setSubtopologyId("sub-1").setPartition(0).setOffset(5L)),
+            describedGroup.members().get(0).taskOffsets()
+        );
+        assertEquals(
+            List.of(new StreamsGroupDescribeResponseData.TaskOffset().setSubtopologyId("sub-1").setPartition(0).setOffset(9L)),
+            describedGroup.members().get(0).taskEndOffsets()
+        );
+    }
+
+    @Test
+    public void testAsDescribedGroupPrefersConfiguredTopologyOverStreamsTopology() {
+        SnapshotRegistry snapshotRegistry = new SnapshotRegistry(new LogContext());
+        StreamsGroup group = new StreamsGroup(LOG_CONTEXT, snapshotRegistry, "group-id-configured");
+        snapshotRegistry.idempotentCreateSnapshot(0);
+
+        // Create both StreamsTopology and ConfiguredTopology
+        Map<String, StreamsGroupTopologyValue.Subtopology> subtopologies = Map.of(
+            "sub-1", new StreamsGroupTopologyValue.Subtopology()
+                .setSubtopologyId("sub-1")
+                .setSourceTopics(List.of("streams-topic"))
+        );
+
+        group.setGroupEpoch(3);
+        group.setTopology(new StreamsTopology(2, subtopologies));
+        group.setConfiguredTopology(new ConfiguredTopology(3, 0, Optional.of(new TreeMap<>()), Map.of(), Optional.empty()));
+        group.setTargetAssignmentMetadata(3, 12345L);
+        snapshotRegistry.idempotentCreateSnapshot(1);
+
+        StreamsGroupDescribeResponseData.DescribedGroup describedGroup = group.asDescribedGroup(1, "sticky");
+
+        // Should prefer ConfiguredTopology over StreamsTopology
+        assertNotNull(describedGroup.topology());
+        assertEquals(3, describedGroup.topology().epoch()); // ConfiguredTopology epoch
+        assertEquals(0, describedGroup.topology().subtopologies().size()); // Empty configured topology
+    }
+
+    @Test
+    public void testAsDescribedGroupFallbackToStreamsTopologyWhenConfiguredTopologyEmpty() {
+        SnapshotRegistry snapshotRegistry = new SnapshotRegistry(new LogContext());
+        StreamsGroup group = new StreamsGroup(LOG_CONTEXT, snapshotRegistry, "group-id-fallback");
+        snapshotRegistry.idempotentCreateSnapshot(0);
+
+        // Create StreamsTopology with subtopologies
+        Map<String, StreamsGroupTopologyValue.Subtopology> subtopologies = Map.of(
+            "sub-1", new StreamsGroupTopologyValue.Subtopology()
+                .setSubtopologyId("sub-1")
+                .setSourceTopics(List.of("fallback-topic"))
+        );
+
+        group.setGroupEpoch(4);
+        group.setTopology(new StreamsTopology(4, subtopologies));
+        // No ConfiguredTopology set, so should fallback to StreamsTopology
+        group.setTargetAssignmentMetadata(4, 12345L);
+        snapshotRegistry.idempotentCreateSnapshot(1);
+
+        StreamsGroupDescribeResponseData.DescribedGroup describedGroup = group.asDescribedGroup(1, "sticky");
+
+        // Should use StreamsTopology when ConfiguredTopology is not available
+        assertNotNull(describedGroup.topology());
+        assertEquals(4, describedGroup.topology().epoch()); // StreamsTopology epoch
+        assertEquals(1, describedGroup.topology().subtopologies().size());
+        assertEquals("sub-1", describedGroup.topology().subtopologies().get(0).subtopologyId());
+        assertEquals(List.of("fallback-topic"), describedGroup.topology().subtopologies().get(0).sourceTopics());
+    }
+
+    @SuppressWarnings("unchecked")
+    @Test
+    public void testCancelTimers() {
+        StreamsGroup streamsGroup = createStreamsGroup("test-group");
+        CoordinatorTimer<CoordinatorRecord> timer = mock(CoordinatorTimer.class);
+
+        streamsGroup.cancelTimers(timer);
+
+        verify(timer).cancel("initial-rebalance-timeout-test-group");
+    }
+
+    // Endpoint-to-partitions cache tests
+
+    @Test
+    public void testGetCachedEndpointToPartitionsReturnsEmptyWhenNoCache() {
+        StreamsGroup streamsGroup = createStreamsGroup("test-group");
+
+        Optional<StreamsGroupHeartbeatResponseData.EndpointToPartitions> cached =
+            streamsGroup.cachedEndpointToPartitions("member-1");
+
+        assertTrue(cached.isEmpty());
+    }
+
+    @Test
+    public void testCacheEndpointToPartitionsAndRetrieve() {
+        StreamsGroup streamsGroup = createStreamsGroup("test-group");
+        StreamsGroupHeartbeatResponseData.EndpointToPartitions endpointToPartitions =
+            new StreamsGroupHeartbeatResponseData.EndpointToPartitions();
+        endpointToPartitions.setUserEndpoint(
+            new StreamsGroupHeartbeatResponseData.Endpoint().setHost("localhost").setPort(9092)
+        );
+
+        streamsGroup.cacheEndpointToPartitions("member-1", endpointToPartitions);
+        Optional<StreamsGroupHeartbeatResponseData.EndpointToPartitions> cached =
+            streamsGroup.cachedEndpointToPartitions("member-1");
+
+        assertTrue(cached.isPresent());
+        assertEquals(endpointToPartitions, cached.get());
+    }
+
+    @Test
+    public void testUpdateMemberInvalidatesCache() {
+        StreamsGroup streamsGroup = createStreamsGroup("test-group");
+        StreamsGroupHeartbeatResponseData.EndpointToPartitions endpointToPartitions =
+            new StreamsGroupHeartbeatResponseData.EndpointToPartitions();
+
+        // Create initial member
+        StreamsGroupMember member = StreamsGroupMember.Builder.withDefaults("member-1")
+            .setProcessId("process-1")
+            .build();
+        streamsGroup.updateMember(member);
+
+        // Cache endpoint info
+        streamsGroup.cacheEndpointToPartitions("member-1", endpointToPartitions);
+
+        // Update member
+        StreamsGroupMember updatedMember = StreamsGroupMember.Builder.withDefaults("member-1")
+            .setProcessId("process-1")
+            .build();
+        streamsGroup.updateMember(updatedMember);
+
+        // Cache should be invalidated
+        assertTrue(streamsGroup.cachedEndpointToPartitions("member-1").isEmpty());
+    }
+
+    @Test
+    public void testRemoveMemberRemovesCacheEntry() {
+        StreamsGroup streamsGroup = createStreamsGroup("test-group");
+        StreamsGroupHeartbeatResponseData.EndpointToPartitions endpointToPartitions =
+            new StreamsGroupHeartbeatResponseData.EndpointToPartitions();
+
+        // Create member
+        StreamsGroupMember member = StreamsGroupMember.Builder.withDefaults("member-1")
+            .setProcessId("process-1")
+            .build();
+        streamsGroup.updateMember(member);
+
+        // Cache endpoint info
+        streamsGroup.cacheEndpointToPartitions("member-1", endpointToPartitions);
+
+        // Remove member
+        streamsGroup.removeMember("member-1");
+
+        // Cache should be cleared for that member
+        assertTrue(streamsGroup.cachedEndpointToPartitions("member-1").isEmpty());
+    }
+
+    @Test
+    public void testSetConfiguredTopologyClearsCache() {
+        StreamsGroup streamsGroup = createStreamsGroup("test-group");
+        StreamsGroupHeartbeatResponseData.EndpointToPartitions endpointToPartitions =
+            new StreamsGroupHeartbeatResponseData.EndpointToPartitions();
+
+        // Cache some entries
+        streamsGroup.cacheEndpointToPartitions("member-1", endpointToPartitions);
+        streamsGroup.cacheEndpointToPartitions("member-2", endpointToPartitions);
+
+        // Set configured topology (even null should clear cache)
+        streamsGroup.setConfiguredTopology(null);
+
+        // All cache entries should be cleared
+        assertTrue(streamsGroup.cachedEndpointToPartitions("member-1").isEmpty());
+        assertTrue(streamsGroup.cachedEndpointToPartitions("member-2").isEmpty());
+    }
+
+    @Test
+    public void testShouldExpireFalseWhenPluginConfiguredAndEpochStored() {
+        // Defer holds: a topology plugin is configured on this broker and the group has a
+        // non-default stored epoch — the natural-expiration sweep must wait for the broker-level
+        // topology-cleanup cycle to drive plugin.deleteTopology and clear the field before the
+        // group is tombstoned.
+        StreamsGroup streamsGroup = createStreamsGroup("group-id");
+        streamsGroup.setStoredDescriptionTopologyEpoch(4);
+        GroupCoordinatorConfig config = mock(GroupCoordinatorConfig.class);
+        when(config.isStreamsGroupTopologyDescriptionPluginConfigured()).thenReturn(true);
+
+        assertFalse(streamsGroup.shouldExpire(config));
+    }
+
+    @Test
+    public void testShouldExpireFalseWhenStoredEpochUncertain() {
+        // UNCERTAIN (-2) also defers the tombstone: the plugin may still hold data for this
+        // group, so it must stay reclaimable by the cleanup cycle until the epoch is cleared.
+        StreamsGroup streamsGroup = createStreamsGroup("group-id");
+        streamsGroup.setStoredDescriptionTopologyEpoch(StreamsGroup.STORED_TOPOLOGY_EPOCH_UNCERTAIN);
+        GroupCoordinatorConfig config = mock(GroupCoordinatorConfig.class);
+        when(config.isStreamsGroupTopologyDescriptionPluginConfigured()).thenReturn(true);
+
+        assertFalse(streamsGroup.shouldExpire(config));
+    }
+
+    @Test
+    public void testShouldExpireTrueWhenStoredEpochIsDefault() {
+        // storedDescriptionTopologyEpoch == -1: no plugin row exists for this group (either the
+        // topology cleanup cycle has already cleared it on a previous tick, or one was never
+        // pushed). The tombstone proceeds.
+        StreamsGroup streamsGroup = createStreamsGroup("group-id");
+        GroupCoordinatorConfig config = mock(GroupCoordinatorConfig.class);
+        when(config.isStreamsGroupTopologyDescriptionPluginConfigured()).thenReturn(true);
+
+        assertTrue(streamsGroup.shouldExpire(config));
+    }
+
+    @Test
+    public void testShouldExpireTrueWhenNoPluginConfigured() {
+        // No plugin configured on this broker: no topology cleanup cycle will ever run to clear
+        // the field, so blocking the tombstone would prevent natural expiration indefinitely.
+        // The stored epoch value is irrelevant in this branch.
+        StreamsGroup streamsGroup = createStreamsGroup("group-id");
+        streamsGroup.setStoredDescriptionTopologyEpoch(4);
+        GroupCoordinatorConfig config = mock(GroupCoordinatorConfig.class);
+        when(config.isStreamsGroupTopologyDescriptionPluginConfigured()).thenReturn(false);
+
+        assertTrue(streamsGroup.shouldExpire(config));
+    }
+}

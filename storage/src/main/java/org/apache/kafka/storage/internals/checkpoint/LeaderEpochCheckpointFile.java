@@ -74,7 +74,7 @@ public class LeaderEpochCheckpointFile {
     private static class Formatter implements EntryFormatter<EpochEntry> {
 
         public String toString(EpochEntry entry) {
-            return entry.epoch + " " + entry.startOffset;
+            return entry.epoch() + " " + entry.startOffset();
         }
 
         public Optional<EpochEntry> fromString(String line) {

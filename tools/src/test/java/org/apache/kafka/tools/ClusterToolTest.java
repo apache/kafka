@@ -16,25 +16,42 @@
  */
 package org.apache.kafka.tools;
 
+import org.apache.kafka.clients.NodeApiVersions;
 import org.apache.kafka.clients.admin.Admin;
+import org.apache.kafka.clients.admin.AdminClientConfig;
 import org.apache.kafka.clients.admin.MockAdminClient;
-import org.apache.kafka.common.errors.UnsupportedEndpointTypeException;
+import org.apache.kafka.common.message.ApiMessageType;
+import org.apache.kafka.common.message.ApiVersionsResponseData.ApiVersion;
+import org.apache.kafka.common.protocol.ApiKeys;
+import org.apache.kafka.common.requests.ApiVersionsResponse;
 import org.apache.kafka.common.test.ClusterInstance;
+import org.apache.kafka.common.test.api.ClusterConfigProperty;
 import org.apache.kafka.common.test.api.ClusterTest;
 import org.apache.kafka.common.test.api.Type;
+import org.apache.kafka.server.config.ServerConfigs;
+import org.apache.kafka.test.TestUtils;
+
+import net.sourceforge.argparse4j.inf.ArgumentParserException;
 
 import org.junit.jupiter.api.Test;
+import org.mockito.ArgumentCaptor;
+import org.mockito.MockedStatic;
+import org.mockito.Mockito;
 
 import java.io.ByteArrayOutputStream;
+import java.io.File;
+import java.io.IOException;
 import java.io.PrintStream;
 import java.util.Arrays;
+import java.util.EnumSet;
+import java.util.Iterator;
 import java.util.List;
+import java.util.Properties;
 import java.util.Set;
-import java.util.concurrent.ExecutionException;
-import java.util.stream.Collectors;
 
 import static org.junit.jupiter.api.Assertions.assertDoesNotThrow;
 import static org.junit.jupiter.api.Assertions.assertEquals;
+import static org.junit.jupiter.api.Assertions.assertFalse;
 import static org.junit.jupiter.api.Assertions.assertNotNull;
 import static org.junit.jupiter.api.Assertions.assertThrows;
 import static org.junit.jupiter.api.Assertions.assertTrue;
@@ -74,10 +91,10 @@ public class ClusterToolTest {
 
     @ClusterTest(brokers = 2, types = {Type.KRAFT, Type.CO_KRAFT})
     public void testListEndpointsArgumentWithBootstrapServer(ClusterInstance clusterInstance) {
-        List<Integer> brokerIds = clusterInstance.brokerIds().stream().collect(Collectors.toList());
+        List<Integer> brokerIds = clusterInstance.brokerIds().stream().toList();
         clusterInstance.shutdownBroker(brokerIds.get(0));
 
-        List<String> ports = Arrays.stream(clusterInstance.bootstrapServers().split(",")).map(b ->  b.split(":")[1]).collect(Collectors.toList());
+        List<String> ports = Arrays.stream(clusterInstance.bootstrapServers().split(",")).map(b ->  b.split(":")[1]).toList();
         String format = "%-10s %-9s %-10s %-10s %-10s %-15s%n%-10s %-9s %-10s %-10s %-10s %-15s%n%-10s %-9s %-10s %-10s %-10s %-6s";
         String expected = String.format(format,
                 "ID", "HOST", "PORT", "RACK", "STATE", "ENDPOINT_TYPE",
@@ -102,13 +119,7 @@ public class ClusterToolTest {
         brokerIds.removeAll(clusterInstance.controllerIds());
         int brokerId = assertDoesNotThrow(() -> brokerIds.stream().findFirst().get());
         clusterInstance.shutdownBroker(brokerId);
-        ExecutionException exception =
-                assertThrows(ExecutionException.class,
-                        () -> ClusterTool.execute("unregister", "--bootstrap-controller", clusterInstance.bootstrapControllers(), "--id", String.valueOf(brokerId)));
-        assertNotNull(exception.getCause());
-        assertEquals(UnsupportedEndpointTypeException.class, exception.getCause().getClass());
-        assertEquals("This Admin API is not yet supported when communicating directly with " +
-                "the controller quorum.", exception.getCause().getMessage());
+        assertDoesNotThrow(() -> ClusterTool.execute("unregister", "--bootstrap-controller", clusterInstance.bootstrapControllers(), "--id", String.valueOf(brokerId)));
     }
 
     @ClusterTest(brokers = 3, types = {Type.KRAFT, Type.CO_KRAFT})
@@ -119,7 +130,7 @@ public class ClusterToolTest {
         int id = clusterInstance.controllerIds().iterator().next();
         String format = "%-10s %-9s %-10s %-10s %-15s%n%-10s %-9s %-10s %-10s %-10s";
         String expected = String.format(format, "ID", "HOST", "PORT", "RACK", "ENDPOINT_TYPE", id, "localhost", port, "null", "controller");
-        assertTrue(output.equals(expected));
+        assertEquals(expected, output);
     }
 
     @ClusterTest(brokers = 3, types = {Type.KRAFT, Type.CO_KRAFT})
@@ -128,6 +139,137 @@ public class ClusterToolTest {
                 assertThrows(RuntimeException.class,
                         () -> ClusterTool.execute("list-endpoints", "--bootstrap-controller", clusterInstance.bootstrapControllers(), "--include-fenced-brokers"));
         assertEquals("The option --include-fenced-brokers is only supported with --bootstrap-server option", exception.getMessage());
+    }
+
+    @ClusterTest
+    public void testDeprecatedConfig(ClusterInstance clusterInstance) throws IOException {
+        File configFile = TestUtils.tempFile("client.id=my-client");
+
+        try (final MockedStatic<Admin> mockedAdmin = Mockito.mockStatic(Admin.class, Mockito.CALLS_REAL_METHODS)) {
+            String output = ToolsTestUtils.captureStandardOut(() ->
+                assertDoesNotThrow(() -> ClusterTool.execute(
+                    "cluster-id",
+                    "--bootstrap-server", clusterInstance.bootstrapServers(),
+                    "--config", configFile.getAbsolutePath()
+                ))
+            );
+            assertTrue(output.contains("Option --config has been deprecated and will be removed in a future version. Use --command-config instead."));
+
+            ArgumentCaptor<Properties> argumentCaptor = ArgumentCaptor.forClass(Properties.class);
+            mockedAdmin.verify(() -> Admin.create(argumentCaptor.capture()));
+            final Properties actualProps = argumentCaptor.getValue();
+            assertEquals("my-client", actualProps.get(AdminClientConfig.CLIENT_ID_CONFIG));
+        }
+    }
+
+    @ClusterTest
+    public void testCommandConfig(ClusterInstance clusterInstance) throws IOException {
+        File configFile = TestUtils.tempFile("client.id=my-client");
+
+        try (final MockedStatic<Admin> mockedAdmin = Mockito.mockStatic(Admin.class, Mockito.CALLS_REAL_METHODS)) {
+            String output = ToolsTestUtils.captureStandardOut(() ->
+                assertDoesNotThrow(() -> ClusterTool.execute(
+                    "cluster-id",
+                    "--bootstrap-server", clusterInstance.bootstrapServers(),
+                    "--command-config", configFile.getAbsolutePath()
+                ))
+            );
+            assertTrue(output.contains("Cluster ID: " + clusterInstance.clusterId()));
+
+            ArgumentCaptor<Properties> argumentCaptor = ArgumentCaptor.forClass(Properties.class);
+            mockedAdmin.verify(() -> Admin.create(argumentCaptor.capture()));
+            final Properties actualProps = argumentCaptor.getValue();
+            assertEquals("my-client", actualProps.get(AdminClientConfig.CLIENT_ID_CONFIG));
+        }
+    }
+
+    @ClusterTest
+    public void testCommandConfigAndDeprecatedConfigPresent(ClusterInstance clusterInstance) throws IOException {
+        File configFile = TestUtils.tempFile("client.id=my-client");
+
+        ArgumentParserException ex = assertThrows(ArgumentParserException.class, () ->
+            ClusterTool.execute(
+                "cluster-id",
+                "--bootstrap-server", clusterInstance.bootstrapServers(),
+                "--config", configFile.getAbsolutePath(),
+                "--command-config", configFile.getAbsolutePath()
+            )
+        );
+        assertEquals("--config and --command-config cannot be specified together.", ex.getMessage());
+    }
+
+    @ClusterTest(types = {Type.KRAFT, Type.CO_KRAFT}, serverProperties = {
+        @ClusterConfigProperty(key = ServerConfigs.UNSTABLE_API_VERSIONS_ENABLE_CONFIG, value = "true"),
+    })
+    public void testApiVersionsCommandOutputUsingBrokerServer(ClusterInstance clusterInstance) {
+        testApiVersionsCommandOutput(clusterInstance, false);
+    }
+
+    @ClusterTest(types = {Type.KRAFT, Type.CO_KRAFT}, serverProperties = {
+        @ClusterConfigProperty(key = ServerConfigs.UNSTABLE_API_VERSIONS_ENABLE_CONFIG, value = "true"),
+    })
+    public void testApiVersionsCommandOutputUsingController(ClusterInstance clusterInstance) {
+        testApiVersionsCommandOutput(clusterInstance, true);
+    }
+
+    private void testApiVersionsCommandOutput(ClusterInstance clusterInstance, boolean usingBootstrapController) {
+        String output = ToolsTestUtils.grabConsoleOutput(() -> {
+            if (usingBootstrapController) {
+                assertDoesNotThrow(() -> ClusterTool.execute("api-versions", "--bootstrap-controller", clusterInstance.bootstrapControllers()));
+            } else {
+                assertDoesNotThrow(() -> ClusterTool.execute("api-versions", "--bootstrap-server", clusterInstance.bootstrapServers()));
+            }
+        });
+        Iterator<String> lineIter = Arrays.stream(output.split("\n")).iterator();
+        assertTrue(lineIter.hasNext());
+        ApiMessageType.ListenerType listenerType = usingBootstrapController ?
+                ApiMessageType.ListenerType.CONTROLLER : ApiMessageType.ListenerType.BROKER;
+
+        if (usingBootstrapController) {
+            int id = clusterInstance.type() == Type.CO_KRAFT ? 0 : 3000;
+            assertEquals(clusterInstance.bootstrapControllers() + " (id: " + id + " rack: null isFenced: false) -> (", lineIter.next());
+        } else {
+            assertEquals(clusterInstance.bootstrapServers() + " (id: 0 rack: null isFenced: false) -> (", lineIter.next());
+        }
+
+        EnumSet<ApiKeys> apiKeys = EnumSet.copyOf(ApiKeys.clientApis());
+
+        // Controller will return all apis
+        if (listenerType == ApiMessageType.ListenerType.CONTROLLER) {
+            apiKeys.addAll(ApiKeys.controllerApis());
+        }
+
+        Iterator<ApiKeys> apiKeysIter = apiKeys.iterator();
+
+        NodeApiVersions nodeApiVersions = new NodeApiVersions(
+                ApiVersionsResponse.filterApis(listenerType, true, true),
+                List.of());
+        while (apiKeysIter.hasNext()) {
+            ApiKeys apiKey = apiKeysIter.next();
+            String terminator = apiKeysIter.hasNext() ? "," : "";
+            StringBuilder lineBuilder = new StringBuilder().append("\t");
+            if (apiKey.inScope(listenerType)) {
+                ApiVersion apiVersion = nodeApiVersions.apiVersion(apiKey);
+                assertNotNull(apiVersion, "No apiVersion found for " + apiKey);
+
+                String versionRangeStr = (apiVersion.minVersion() == apiVersion.maxVersion()) ?
+                        String.valueOf(apiVersion.minVersion()) :
+                        apiVersion.minVersion() + " to " + apiVersion.maxVersion();
+                short usableVersion = nodeApiVersions.latestUsableVersion(apiKey);
+                if (apiKey == ApiKeys.GET_TELEMETRY_SUBSCRIPTIONS || apiKey == ApiKeys.PUSH_TELEMETRY) {
+                    lineBuilder.append(apiKey.name).append("(").append(apiKey.id).append("): UNSUPPORTED").append(terminator);
+                } else {
+                    lineBuilder.append(apiKey.name).append("(").append(apiKey.id).append("): ").append(versionRangeStr).append(" [usable: ").append(usableVersion).append("]").append(terminator);
+                }
+            } else {
+                lineBuilder.append(apiKey.name).append("(").append(apiKey.id).append("): UNSUPPORTED").append(terminator);
+            }
+            assertTrue(lineIter.hasNext());
+            assertEquals(lineBuilder.toString(), lineIter.next());
+        }
+        assertTrue(lineIter.hasNext());
+        assertEquals(")", lineIter.next());
+        assertFalse(lineIter.hasNext());
     }
 
     @Test
@@ -158,6 +300,26 @@ public class ClusterToolTest {
         ByteArrayOutputStream stream = new ByteArrayOutputStream();
         ClusterTool.unregisterCommand(new PrintStream(stream), adminClient, 0);
         assertEquals("Broker 0 is no longer registered.\n", stream.toString());
+    }
+
+    @Test
+    public void testUnregisterController() throws Exception {
+        Admin adminClient = new MockAdminClient.Builder().numBrokers(3).
+                usingRaftController(true).
+                build();
+        ByteArrayOutputStream stream = new ByteArrayOutputStream();
+        ClusterTool.unregisterControllerCommand(new PrintStream(stream), adminClient, 0);
+        assertEquals("Controller 0 is no longer registered.\n", stream.toString());
+    }
+
+    @Test
+    public void testLegacyModeClusterCannotUnregisterController() throws Exception {
+        Admin adminClient = new MockAdminClient.Builder().numBrokers(3).
+                usingRaftController(false).
+                build();
+        ByteArrayOutputStream stream = new ByteArrayOutputStream();
+        ClusterTool.unregisterControllerCommand(new PrintStream(stream), adminClient, 0);
+        assertEquals("The target cluster does not support the controller unregistration API.\n", stream.toString());
     }
 
     @Test

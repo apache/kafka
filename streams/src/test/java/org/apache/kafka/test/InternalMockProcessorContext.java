@@ -56,7 +56,9 @@ import org.apache.kafka.streams.state.internals.ThreadCache;
 import org.apache.kafka.streams.state.internals.ThreadCache.DirtyEntryFlushListener;
 
 import java.io.File;
+import java.nio.charset.StandardCharsets;
 import java.time.Duration;
+import java.time.Instant;
 import java.util.ArrayList;
 import java.util.HashMap;
 import java.util.LinkedHashMap;
@@ -89,7 +91,7 @@ public class InternalMockProcessorContext<KOut, VOut>
         this(null,
             null,
             null,
-            new StreamsMetricsImpl(new Metrics(), "mock", "processId", new MockTime()),
+            new StreamsMetricsImpl(new Metrics(), "mock", new MockTime()),
             new StreamsConfig(StreamsTestUtils.getStreamsConfig()),
             null,
             null,
@@ -106,7 +108,6 @@ public class InternalMockProcessorContext<KOut, VOut>
             new StreamsMetricsImpl(
                 new Metrics(),
                 "mock",
-                "processId",
                 new MockTime()
             ),
             config,
@@ -139,7 +140,6 @@ public class InternalMockProcessorContext<KOut, VOut>
             new StreamsMetricsImpl(
                 new Metrics(),
                 "mock",
-                "processId",
                 new MockTime()
             ),
             config,
@@ -157,7 +157,7 @@ public class InternalMockProcessorContext<KOut, VOut>
             stateDir,
             keySerde,
             valueSerde,
-            new StreamsMetricsImpl(new Metrics(), "mock", "processId", new MockTime()),
+            new StreamsMetricsImpl(new Metrics(), "mock", new MockTime()),
             config,
             null,
             null,
@@ -177,7 +177,7 @@ public class InternalMockProcessorContext<KOut, VOut>
             null,
             serdes.keySerde(),
             serdes.valueSerde(),
-            new StreamsMetricsImpl(metrics, "mock", "processId", new MockTime()),
+            new StreamsMetricsImpl(metrics, "mock", new MockTime()),
             new StreamsConfig(StreamsTestUtils.getStreamsConfig()),
             () -> collector,
             null,
@@ -194,11 +194,29 @@ public class InternalMockProcessorContext<KOut, VOut>
             stateDir,
             keySerde,
             valueSerde,
-            new StreamsMetricsImpl(new Metrics(), "mock", "processId", new MockTime()),
+            new StreamsMetricsImpl(new Metrics(), "mock", new MockTime()),
             new StreamsConfig(StreamsTestUtils.getStreamsConfig()),
             () -> collector,
             cache,
             Time.SYSTEM
+        );
+    }
+
+    public InternalMockProcessorContext(final File stateDir,
+                                        final Serde<?> keySerde,
+                                        final Serde<?> valueSerde,
+                                        final RecordCollector collector,
+                                        final ThreadCache cache,
+                                        final StreamsConfig config) {
+        this(
+                stateDir,
+                keySerde,
+                valueSerde,
+                new StreamsMetricsImpl(new Metrics(), "mock", new MockTime()),
+                config,
+                () -> collector,
+                cache,
+                Time.SYSTEM
         );
     }
 
@@ -244,7 +262,9 @@ public class InternalMockProcessorContext<KOut, VOut>
                 0,
                 0,
                 "topic",
-                new RecordHeaders()
+                new RecordHeaders(),
+                "sourceKey".getBytes(StandardCharsets.UTF_8),
+                "sourceValue".getBytes(StandardCharsets.UTF_8)
         );
     }
 
@@ -320,6 +340,14 @@ public class InternalMockProcessorContext<KOut, VOut>
     }
 
     @Override
+    public Cancellable schedule(final Instant startTime,
+                                final Duration interval,
+                                final PunctuationType type,
+                                final Punctuator callback) throws IllegalArgumentException {
+        throw new UnsupportedOperationException("schedule() not supported.");
+    }
+
+    @Override
     public void commit() {}
 
     @Override
@@ -388,14 +416,6 @@ public class InternalMockProcessorContext<KOut, VOut>
     }
 
     @Override
-    public long timestamp() {
-        if (recordContext == null) {
-            return timestamp;
-        }
-        return recordContext.timestamp();
-    }
-
-    @Override
     public long currentSystemTimeMs() {
         return time.milliseconds();
     }
@@ -403,38 +423,6 @@ public class InternalMockProcessorContext<KOut, VOut>
     @Override
     public long currentStreamTimeMs() {
         throw new UnsupportedOperationException("this method is not supported in InternalMockProcessorContext");
-    }
-
-    @Override
-    public String topic() {
-        if (recordContext == null) {
-            return null;
-        }
-        return recordContext.topic();
-    }
-
-    @Override
-    public int partition() {
-        if (recordContext == null) {
-            return -1;
-        }
-        return recordContext.partition();
-    }
-
-    @Override
-    public long offset() {
-        if (recordContext == null) {
-            return -1L;
-        }
-        return recordContext.offset();
-    }
-
-    @Override
-    public Headers headers() {
-        if (recordContext == null) {
-            return new RecordHeaders();
-        }
-        return recordContext.headers();
     }
 
     @Override
@@ -447,17 +435,11 @@ public class InternalMockProcessorContext<KOut, VOut>
                           final Bytes key,
                           final byte[] value,
                           final long timestamp,
+                          final Headers headers,
                           final Position position) {
 
-        Headers headers = new RecordHeaders();
-        if (!consistencyEnabled) {
-            headers = null;
-        } else {
-            // Add the vector clock to the header part of every record
-            headers.add(ChangelogRecordDeserializationHelper.CHANGELOG_VERSION_HEADER_RECORD_CONSISTENCY);
-            headers.add(new RecordHeader(
-                    ChangelogRecordDeserializationHelper.CHANGELOG_POSITION_HEADER_KEY,
-                    PositionSerde.serialize(position).array()));
+        if (consistencyEnabled) {
+            addVectorClockToHeaders(headers, position);
         }
 
         recordCollector().send(
@@ -471,6 +453,13 @@ public class InternalMockProcessorContext<KOut, VOut>
             BYTEARRAY_VALUE_SERIALIZER,
             null,
             null);
+    }
+
+    private void addVectorClockToHeaders(Headers headers, Position position) {
+        headers.add(ChangelogRecordDeserializationHelper.CHANGELOG_VERSION_HEADER_RECORD_CONSISTENCY);
+        headers.add(new RecordHeader(
+            ChangelogRecordDeserializationHelper.CHANGELOG_POSITION_HEADER_KEY,
+            PositionSerde.serialize(position).array()));
     }
 
     @Override

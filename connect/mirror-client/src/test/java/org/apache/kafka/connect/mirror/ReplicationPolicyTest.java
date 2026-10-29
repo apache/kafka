@@ -20,7 +20,6 @@ package org.apache.kafka.connect.mirror;
 import org.junit.jupiter.api.BeforeEach;
 import org.junit.jupiter.api.Test;
 
-import java.util.Collections;
 import java.util.HashMap;
 import java.util.Map;
 
@@ -33,7 +32,7 @@ public class ReplicationPolicyTest {
 
     @BeforeEach
     public void setUp() {
-        DEFAULT_REPLICATION_POLICY.configure(Collections.emptyMap());
+        DEFAULT_REPLICATION_POLICY.configure(Map.of());
     }
 
     @Test

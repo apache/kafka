@@ -17,20 +17,33 @@
 package org.apache.kafka.streams.state.internals;
 
 import org.apache.kafka.common.serialization.Serde;
+import org.apache.kafka.common.serialization.Serdes;
+import org.apache.kafka.common.utils.Bytes;
 import org.apache.kafka.streams.KeyValue;
+import org.apache.kafka.streams.StreamsConfig;
 import org.apache.kafka.streams.processor.StateStoreContext;
+import org.apache.kafka.streams.query.PositionBound;
+import org.apache.kafka.streams.query.QueryConfig;
+import org.apache.kafka.streams.query.QueryResult;
+import org.apache.kafka.streams.query.RangeQuery;
+import org.apache.kafka.streams.state.KeyValueIterator;
 import org.apache.kafka.streams.state.KeyValueStore;
 import org.apache.kafka.streams.state.StoreBuilder;
 import org.apache.kafka.streams.state.Stores;
+import org.apache.kafka.test.InternalMockProcessorContext;
+import org.apache.kafka.test.StreamsTestUtils;
+import org.apache.kafka.test.TestUtils;
 
 import org.junit.jupiter.api.Test;
 
 import java.util.Arrays;
 import java.util.List;
+import java.util.Map;
+import java.util.concurrent.TimeUnit;
+import java.util.concurrent.atomic.AtomicReference;
 
-import static org.hamcrest.CoreMatchers.equalTo;
-import static org.hamcrest.MatcherAssert.assertThat;
 import static org.junit.jupiter.api.Assertions.assertEquals;
+import static org.junit.jupiter.api.Assertions.assertFalse;
 import static org.junit.jupiter.api.Assertions.assertTrue;
 
 public class InMemoryLRUCacheStoreTest extends AbstractKeyValueStoreTest {
@@ -57,10 +70,10 @@ public class InMemoryLRUCacheStoreTest extends AbstractKeyValueStoreTest {
 
         store.putAll(kvPairs);
 
-        assertThat(store.approximateNumEntries(), equalTo(3L));
+        assertEquals(3L, store.approximateNumEntries());
 
         for (final KeyValue<Integer, String> kvPair : kvPairs) {
-            assertThat(store.get(kvPair.key), equalTo(kvPair.value));
+            assertEquals(kvPair.value, store.get(kvPair.key));
         }
     }
 
@@ -79,10 +92,10 @@ public class InMemoryLRUCacheStoreTest extends AbstractKeyValueStoreTest {
 
         store.putAll(updatedKvPairs);
 
-        assertThat(store.approximateNumEntries(), equalTo(3L));
+        assertEquals(3L, store.approximateNumEntries());
         
         for (final KeyValue<Integer, String> kvPair : updatedKvPairs) {
-            assertThat(store.get(kvPair.key), equalTo(kvPair.value));
+            assertEquals(kvPair.value, store.get(kvPair.key));
         }
     }
 
@@ -102,35 +115,35 @@ public class InMemoryLRUCacheStoreTest extends AbstractKeyValueStoreTest {
         assertEquals(10, driver.sizeOf(store));
 
         store.put(10, "ten");
-        store.flush();
+        store.commit(Map.of());
         assertEquals(10, driver.sizeOf(store));
-        assertTrue(driver.flushedEntryRemoved(0));
-        assertEquals(1, driver.numFlushedEntryRemoved());
+        assertTrue(driver.committedEntryRemoved(0));
+        assertEquals(1, driver.numCommittedEntryRemoved());
 
         store.delete(1);
-        store.flush();
+        store.commit(Map.of());
         assertEquals(9, driver.sizeOf(store));
-        assertTrue(driver.flushedEntryRemoved(0));
-        assertTrue(driver.flushedEntryRemoved(1));
-        assertEquals(2, driver.numFlushedEntryRemoved());
+        assertTrue(driver.committedEntryRemoved(0));
+        assertTrue(driver.committedEntryRemoved(1));
+        assertEquals(2, driver.numCommittedEntryRemoved());
 
         store.put(11, "eleven");
-        store.flush();
+        store.commit(Map.of());
         assertEquals(10, driver.sizeOf(store));
-        assertEquals(2, driver.numFlushedEntryRemoved());
+        assertEquals(2, driver.numCommittedEntryRemoved());
 
         store.put(2, "two-again");
-        store.flush();
+        store.commit(Map.of());
         assertEquals(10, driver.sizeOf(store));
-        assertEquals(2, driver.numFlushedEntryRemoved());
+        assertEquals(2, driver.numCommittedEntryRemoved());
 
         store.put(12, "twelve");
-        store.flush();
+        store.commit(Map.of());
         assertEquals(10, driver.sizeOf(store));
-        assertTrue(driver.flushedEntryRemoved(0));
-        assertTrue(driver.flushedEntryRemoved(1));
-        assertTrue(driver.flushedEntryRemoved(3));
-        assertEquals(3, driver.numFlushedEntryRemoved());
+        assertTrue(driver.committedEntryRemoved(0));
+        assertTrue(driver.committedEntryRemoved(1));
+        assertTrue(driver.committedEntryRemoved(3));
+        assertEquals(3, driver.numCommittedEntryRemoved());
     }
 
     @Test
@@ -155,10 +168,66 @@ public class InMemoryLRUCacheStoreTest extends AbstractKeyValueStoreTest {
         store = createKeyValueStore(driver.context());
         context.restore(store.name(), driver.restoredEntries());
         // Verify that the store's changelog does not get more appends ...
-        assertEquals(0, driver.numFlushedEntryStored());
-        assertEquals(0, driver.numFlushedEntryRemoved());
+        assertEquals(0, driver.numCommittedEntryStored());
+        assertEquals(0, driver.numCommittedEntryRemoved());
 
         // and there are no other entries ...
         assertEquals(10, driver.sizeOf(store));
+    }
+
+    @Test
+    public void shouldNotDeadlockOnConcurrentPutAndQuery() throws Exception {
+        // KAFKA-19629: put() takes the store monitor and then the position lock, so IQ queries
+        // must take the two locks in the same order.
+        final InternalMockProcessorContext<Bytes, byte[]> ctx = new InternalMockProcessorContext<>(
+            TestUtils.tempDirectory(),
+            new Serdes.BytesSerde(),
+            new Serdes.ByteArraySerde(),
+            new StreamsConfig(StreamsTestUtils.getStreamsConfig()));
+        final MemoryNavigableLRUCache cache = new MemoryNavigableLRUCache("lru-put-store", 100);
+        cache.init((StateStoreContext) ctx, cache);
+
+        final int iterations = 5000;
+        final AtomicReference<Throwable> failure = new AtomicReference<>();
+
+        final Thread writer = new Thread(() -> {
+            try {
+                for (int i = 0; i < iterations; i++) {
+                    cache.put(
+                        Bytes.wrap(("key" + (i % 100)).getBytes()),
+                        ("value" + i).getBytes());
+                }
+            } catch (final Throwable t) {
+                failure.set(t);
+            }
+        }, "writer");
+
+        final Thread reader = new Thread(() -> {
+            try {
+                for (int i = 0; i < iterations; i++) {
+                    final QueryResult<KeyValueIterator<Bytes, byte[]>> result = cache.query(
+                        RangeQuery.withNoBounds(),
+                        PositionBound.unbounded(),
+                        new QueryConfig(false));
+                    result.getResult().close();
+                }
+            } catch (final Throwable t) {
+                failure.set(t);
+            }
+        }, "iq-reader");
+
+        writer.setDaemon(true);
+        reader.setDaemon(true);
+        writer.start();
+        reader.start();
+        final long deadlineMs = System.currentTimeMillis() + TimeUnit.SECONDS.toMillis(60);
+        writer.join(Math.max(1, deadlineMs - System.currentTimeMillis()));
+        reader.join(Math.max(1, deadlineMs - System.currentTimeMillis()));
+
+        if (failure.get() != null) {
+            throw new AssertionError(failure.get());
+        }
+        assertFalse(writer.isAlive() || reader.isAlive(),
+            "deadlock between concurrent put and IQ query");
     }
 }

@@ -45,9 +45,9 @@ public class HeartbeatTest {
                                                                         heartbeatIntervalMs,
                                                                         "group_id",
                                                                         Optional.empty(),
+                                                                        null,
                                                                         retryBackoffMs,
-                                                                        retryBackoffMaxMs,
-                                                                        true);
+                                                                        retryBackoffMaxMs);
         heartbeat = new Heartbeat(rebalanceConfig, time);
     }
 

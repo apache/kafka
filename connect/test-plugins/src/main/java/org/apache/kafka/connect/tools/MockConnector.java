@@ -16,15 +16,15 @@
  */
 package org.apache.kafka.connect.tools;
 
+import org.apache.kafka.common.annotation.InterfaceAudience;
 import org.apache.kafka.common.config.ConfigDef;
-import org.apache.kafka.common.utils.AppInfoParser;
+import org.apache.kafka.common.utils.internals.AppInfoParser;
 import org.apache.kafka.connect.connector.Connector;
 import org.apache.kafka.connect.connector.Task;
 
 import org.slf4j.Logger;
 import org.slf4j.LoggerFactory;
 
-import java.util.Collections;
 import java.util.List;
 import java.util.Map;
 import java.util.concurrent.Executors;
@@ -43,6 +43,7 @@ import java.util.concurrent.TimeUnit;
  * @see MockSinkConnector
  * @see MockSourceConnector
  */
+@InterfaceAudience.Public
 public class MockConnector extends Connector {
     public static final String MOCK_MODE_KEY = "mock_mode";
     public static final String DELAY_MS_KEY = "delay_ms";
@@ -91,7 +92,7 @@ public class MockConnector extends Connector {
     @Override
     public List<Map<String, String>> taskConfigs(int maxTasks) {
         log.debug("Creating single task for MockConnector");
-        return Collections.singletonList(config);
+        return List.of(config);
     }
 
     @Override

@@ -17,6 +17,8 @@
 
 package org.apache.kafka.streams.state.internals;
 
+import org.apache.kafka.common.header.Headers;
+import org.apache.kafka.common.header.internals.RecordHeaders;
 import org.apache.kafka.common.serialization.Deserializer;
 import org.apache.kafka.common.serialization.Serde;
 import org.apache.kafka.common.serialization.Serdes;
@@ -44,11 +46,10 @@ import java.util.function.Function;
 import static java.util.Arrays.asList;
 import static org.apache.kafka.common.utils.Utils.mkEntry;
 import static org.apache.kafka.common.utils.Utils.mkMap;
-import static org.hamcrest.MatcherAssert.assertThat;
-import static org.hamcrest.core.IsEqual.equalTo;
 import static org.junit.jupiter.api.Assertions.assertArrayEquals;
 import static org.junit.jupiter.api.Assertions.assertEquals;
 import static org.junit.jupiter.api.Assertions.assertNull;
+import static org.junit.jupiter.api.Assertions.assertTrue;
 
 public class SessionKeySchemaTest {
     private static final Map<SchemaType, KeySchema> SCHEMA_TYPE_MAP = mkMap(
@@ -76,17 +77,17 @@ public class SessionKeySchemaTest {
     );
 
     @FunctionalInterface
-    interface TriFunction<A, B, C, R> {
-        R apply(A a, B b, C c);
+    interface QuadFunction<A, B, C, D, R> {
+        R apply(A a, B b, C c, D d);
     }
 
-    private static final Map<SchemaType, TriFunction<Windowed<String>, Serializer<String>, String, byte[]>> SERDE_TO_STORE_BINARY_MAP = mkMap(
+    private static final Map<SchemaType, QuadFunction<Windowed<String>, Serializer<String>, Headers, String, byte[]>> SERDE_TO_STORE_BINARY_MAP = mkMap(
         mkEntry(SchemaType.SessionKeySchema, SessionKeySchema::toBinary),
         mkEntry(SchemaType.PrefixedKeyFirstSchema, KeyFirstSessionKeySchema::toBinary),
         mkEntry(SchemaType.PrefixedTimeFirstSchema, TimeFirstSessionKeySchema::toBinary)
     );
 
-    private static final Map<SchemaType, TriFunction<byte[], Deserializer<String>, String, Windowed<String>>> SERDE_FROM_BYTES_MAP = mkMap(
+    private static final Map<SchemaType, QuadFunction<byte[], Deserializer<String>, Headers, String, Windowed<String>>> SERDE_FROM_BYTES_MAP = mkMap(
         mkEntry(SchemaType.SessionKeySchema, SessionKeySchema::from),
         mkEntry(SchemaType.PrefixedKeyFirstSchema, KeyFirstSessionKeySchema::from),
         mkEntry(SchemaType.PrefixedTimeFirstSchema, TimeFirstSessionKeySchema::from)
@@ -124,8 +125,8 @@ public class SessionKeySchemaTest {
     private DelegatingPeekingKeyValueIterator<Bytes, Integer> iterator;
     private SchemaType schemaType;
     private Function<Windowed<Bytes>, Bytes> toBinary;
-    private TriFunction<Windowed<String>, Serializer<String>, String, byte[]> serdeToBinary;
-    private TriFunction<byte[], Deserializer<String>, String, Windowed<String>> serdeFromBytes;
+    private QuadFunction<Windowed<String>, Serializer<String>, Headers, String, byte[]> serdeToBinary;
+    private QuadFunction<byte[], Deserializer<String>, Headers, String, Windowed<String>> serdeFromBytes;
     private Function<Bytes, Windowed<Bytes>> fromBytes;
     private Function<byte[], Long> extractStartTS;
     private Function<byte[], Long> extractEndTS;
@@ -171,7 +172,7 @@ public class SessionKeySchemaTest {
         setUp(type);
         final Bytes key = Bytes.wrap(new byte[]{0});
         final List<Integer> result = getValues(keySchema.hasNextCondition(key, key, 0, Long.MAX_VALUE, true));
-        assertThat(result, equalTo(asList(2, 4)));
+        assertEquals(List.of(2, 4), result);
     }
 
     @ParameterizedTest
@@ -181,7 +182,7 @@ public class SessionKeySchemaTest {
         final Bytes key = Bytes.wrap(new byte[]{0, 0});
         final HasNextCondition hasNextCondition = keySchema.hasNextCondition(key, key, 0, Long.MAX_VALUE, true);
         final List<Integer> results = getValues(hasNextCondition);
-        assertThat(results, equalTo(asList(1, 5)));
+        assertEquals(List.of(1, 5), results);
     }
 
     @ParameterizedTest
@@ -190,7 +191,7 @@ public class SessionKeySchemaTest {
         setUp(type);
         final HasNextCondition hasNextCondition = keySchema.hasNextCondition(null, null, 0, Long.MAX_VALUE, true);
         final List<Integer> results = getValues(hasNextCondition);
-        assertThat(results, equalTo(asList(1, 2, 3, 4, 5, 6)));
+        assertEquals(List.of(1, 2, 3, 4, 5, 6), results);
     }
     
     @ParameterizedTest
@@ -199,35 +200,24 @@ public class SessionKeySchemaTest {
         setUp(type);
         final Bytes upper = keySchema.upperRange(Bytes.wrap(new byte[]{0xA, 0xB, 0xC}), Long.MAX_VALUE);
 
-        assertThat(
-            "shorter key with max timestamp should be in range",
+        assertTrue(
             upper.compareTo(toBinary.apply(
-                new Windowed<>(
-                    Bytes.wrap(new byte[]{0xA}),
-                    new SessionWindow(Long.MAX_VALUE, Long.MAX_VALUE))
-            )) >= 0
-        );
+                new Windowed<>(Bytes.wrap(new byte[]{0xA}), new SessionWindow(Long.MAX_VALUE, Long.MAX_VALUE)))) >= 0,
+            "shorter key with max timestamp should be in range");
 
-        assertThat(
-            "shorter key with max timestamp should be in range",
+        assertTrue(
             upper.compareTo(toBinary.apply(
-                new Windowed<>(
-                    Bytes.wrap(new byte[]{0xA, 0xB}),
-                    new SessionWindow(Long.MAX_VALUE, Long.MAX_VALUE))
-
-            )) >= 0
-        );
+                new Windowed<>(Bytes.wrap(new byte[]{0xA, 0xB}), new SessionWindow(Long.MAX_VALUE, Long.MAX_VALUE)))) >= 0,
+            "shorter key with max timestamp should be in range");
 
         if (schemaType == SchemaType.PrefixedTimeFirstSchema) {
-            assertThat(upper, equalTo(toBinary.apply(
-                new Windowed<>(Bytes.wrap(new byte[]{0xA, 0xB, 0xC}),
-                    new SessionWindow(Long.MAX_VALUE, Long.MAX_VALUE))))
-            );
+            assertEquals(
+                toBinary.apply(new Windowed<>(Bytes.wrap(new byte[]{0xA, 0xB, 0xC}), new SessionWindow(Long.MAX_VALUE, Long.MAX_VALUE))),
+                upper);
         } else {
-            assertThat(upper, equalTo(toBinary.apply(
-                new Windowed<>(Bytes.wrap(new byte[]{0xA}),
-                    new SessionWindow(Long.MAX_VALUE, Long.MAX_VALUE))))
-            );
+            assertEquals(
+                toBinary.apply(new Windowed<>(Bytes.wrap(new byte[]{0xA}), new SessionWindow(Long.MAX_VALUE, Long.MAX_VALUE))),
+                upper);
         }
     }
 
@@ -237,19 +227,15 @@ public class SessionKeySchemaTest {
         setUp(type);
         final Bytes upper = keySchema.upperRange(Bytes.wrap(new byte[]{0xA, (byte) 0x8F, (byte) 0x9F}), Long.MAX_VALUE);
 
-        assertThat(
-            "shorter key with max timestamp should be in range",
+        assertTrue(
             upper.compareTo(toBinary.apply(
-                new Windowed<>(
-                    Bytes.wrap(new byte[]{0xA, (byte) 0x8F}),
-                    new SessionWindow(Long.MAX_VALUE, Long.MAX_VALUE))
-                )
-            ) >= 0
-        );
+                new Windowed<>(Bytes.wrap(new byte[]{0xA, (byte) 0x8F}), new SessionWindow(Long.MAX_VALUE, Long.MAX_VALUE)))) >= 0,
+            "shorter key with max timestamp should be in range");
 
-        assertThat(upper, equalTo(toBinary.apply(
-            new Windowed<>(Bytes.wrap(new byte[]{0xA, (byte) 0x8F, (byte) 0x9F}), new SessionWindow(Long.MAX_VALUE, Long.MAX_VALUE))))
-        );
+        assertEquals(
+            toBinary.apply(
+                new Windowed<>(Bytes.wrap(new byte[]{0xA, (byte) 0x8F, (byte) 0x9F}), new SessionWindow(Long.MAX_VALUE, Long.MAX_VALUE))),
+            upper);
     }
 
     @ParameterizedTest
@@ -260,13 +246,9 @@ public class SessionKeySchemaTest {
         final Function<Windowed<Bytes>, Bytes> toBinary = WINDOW_TO_STORE_BINARY_MAP.get(schemaType);
 
         if (schemaType == SchemaType.PrefixedTimeFirstSchema) {
-            assertThat(upper, equalTo(toBinary.apply(
-                new Windowed<>(Bytes.wrap(new byte[]{0xA, 0xB, 0xC}), new SessionWindow(0, Long.MAX_VALUE))))
-            );
+            assertEquals(toBinary.apply(new Windowed<>(Bytes.wrap(new byte[]{0xA, 0xB, 0xC}), new SessionWindow(0, Long.MAX_VALUE))), upper);
         } else {
-            assertThat(upper, equalTo(toBinary.apply(
-                new Windowed<>(Bytes.wrap(new byte[]{0xA}), new SessionWindow(0, Long.MAX_VALUE))))
-            );
+            assertEquals(toBinary.apply(new Windowed<>(Bytes.wrap(new byte[]{0xA}), new SessionWindow(0, Long.MAX_VALUE))), upper);
         }
     }
 
@@ -275,7 +257,7 @@ public class SessionKeySchemaTest {
     public void testLowerBoundWithZeroTimestamp(final SchemaType type) {
         setUp(type);
         final Bytes lower = keySchema.lowerRange(Bytes.wrap(new byte[]{0xA, 0xB, 0xC}), 0);
-        assertThat(lower, equalTo(toBinary.apply(new Windowed<>(Bytes.wrap(new byte[]{0xA, 0xB, 0xC}), new SessionWindow(0, 0)))));
+        assertEquals(toBinary.apply(new Windowed<>(Bytes.wrap(new byte[]{0xA, 0xB, 0xC}), new SessionWindow(0, 0))), lower);
     }
 
     @ParameterizedTest
@@ -284,21 +266,16 @@ public class SessionKeySchemaTest {
         setUp(type);
         final Bytes lower = keySchema.lowerRange(Bytes.wrap(new byte[]{0xA, 0xB, 0xC}), Long.MAX_VALUE);
 
-        assertThat(
-            "appending zeros to key should still be in range",
-            lower.compareTo(toBinary.apply(
-                new Windowed<>(
-                    Bytes.wrap(new byte[]{0xA, 0xB, 0xC, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0}),
-                    new SessionWindow(Long.MAX_VALUE, Long.MAX_VALUE))
-            )) < 0
-        );
+        assertTrue(
+            lower.compareTo(toBinary.apply(new Windowed<>(
+                Bytes.wrap(new byte[]{0xA, 0xB, 0xC, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0}),
+                new SessionWindow(Long.MAX_VALUE, Long.MAX_VALUE)))) < 0,
+            "appending zeros to key should still be in range");
 
         if (schemaType == SchemaType.PrefixedTimeFirstSchema) {
-            assertThat(lower, equalTo(toBinary.apply(
-                new Windowed<>(Bytes.wrap(new byte[]{0xA, 0xB, 0xC}), new SessionWindow(0, Long.MAX_VALUE)))));
+            assertEquals(toBinary.apply(new Windowed<>(Bytes.wrap(new byte[]{0xA, 0xB, 0xC}), new SessionWindow(0, Long.MAX_VALUE))), lower);
         } else {
-            assertThat(lower, equalTo(toBinary.apply(
-                new Windowed<>(Bytes.wrap(new byte[]{0xA, 0xB, 0xC}), new SessionWindow(0, 0)))));
+            assertEquals(toBinary.apply(new Windowed<>(Bytes.wrap(new byte[]{0xA, 0xB, 0xC}), new SessionWindow(0, 0))), lower);
         }
     }
 
@@ -336,8 +313,8 @@ public class SessionKeySchemaTest {
     @EnumSource(SchemaType.class)
     public void shouldConvertToBinaryAndBack(final SchemaType type) {
         setUp(type);
-        final byte[] serialized = serdeToBinary.apply(windowedKey, serde.serializer(), "dummy");
-        final Windowed<String> result = serdeFromBytes.apply(serialized, Serdes.String().deserializer(), "dummy");
+        final byte[] serialized = serdeToBinary.apply(windowedKey, serde.serializer(), new RecordHeaders(), "dummy");
+        final Windowed<String> result = serdeFromBytes.apply(serialized, Serdes.String().deserializer(), new RecordHeaders(), "dummy");
         assertEquals(windowedKey, result);
     }
 
@@ -345,7 +322,7 @@ public class SessionKeySchemaTest {
     @EnumSource(SchemaType.class)
     public void shouldExtractEndTimeFromBinary(final SchemaType type) {
         setUp(type);
-        final byte[] serialized = serdeToBinary.apply(windowedKey, serde.serializer(), "dummy");
+        final byte[] serialized = serdeToBinary.apply(windowedKey, serde.serializer(), new RecordHeaders(), "dummy");
         assertEquals(endTime, (long) extractEndTS.apply(serialized));
     }
 
@@ -353,7 +330,7 @@ public class SessionKeySchemaTest {
     @EnumSource(SchemaType.class)
     public void shouldExtractStartTimeFromBinary(final SchemaType type) {
         setUp(type);
-        final byte[] serialized = serdeToBinary.apply(windowedKey, serde.serializer(), "dummy");
+        final byte[] serialized = serdeToBinary.apply(windowedKey, serde.serializer(), new RecordHeaders(), "dummy");
         assertEquals(startTime, (long) extractStartTS.apply(serialized));
     }
 
@@ -361,7 +338,7 @@ public class SessionKeySchemaTest {
     @EnumSource(SchemaType.class)
     public void shouldExtractWindowFromBindary(final SchemaType type) {
         setUp(type);
-        final byte[] serialized = serdeToBinary.apply(windowedKey, serde.serializer(), "dummy");
+        final byte[] serialized = serdeToBinary.apply(windowedKey, serde.serializer(), new RecordHeaders(), "dummy");
         assertEquals(window, extractWindow.apply(serialized));
     }
 
@@ -369,7 +346,7 @@ public class SessionKeySchemaTest {
     @EnumSource(SchemaType.class)
     public void shouldExtractKeyBytesFromBinary(final SchemaType type) {
         setUp(type);
-        final byte[] serialized = serdeToBinary.apply(windowedKey, serde.serializer(), "dummy");
+        final byte[] serialized = serdeToBinary.apply(windowedKey, serde.serializer(), new RecordHeaders(), "dummy");
         assertArrayEquals(key.getBytes(), extractKeyBytes.apply(serialized));
     }
 
@@ -377,8 +354,8 @@ public class SessionKeySchemaTest {
     @EnumSource(SchemaType.class)
     public void shouldExtractKeyFromBinary(final SchemaType type) {
         setUp(type);
-        final byte[] serialized = serdeToBinary.apply(windowedKey, serde.serializer(), "dummy");
-        assertEquals(windowedKey, serdeFromBytes.apply(serialized, serde.deserializer(), "dummy"));
+        final byte[] serialized = serdeToBinary.apply(windowedKey, serde.serializer(), new RecordHeaders(), "dummy");
+        assertEquals(windowedKey, serdeFromBytes.apply(serialized, serde.deserializer(), new RecordHeaders(), "dummy"));
     }
 
     @ParameterizedTest

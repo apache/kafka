@@ -24,7 +24,6 @@ import org.apache.kafka.connect.util.ConnectorTaskId;
 import org.apache.kafka.connect.util.Table;
 
 import java.util.Collection;
-import java.util.Collections;
 import java.util.HashMap;
 import java.util.HashSet;
 import java.util.Map;
@@ -119,8 +118,8 @@ public class MemoryStatusBackingStore implements StatusBackingStore {
     public Collection<TopicStatus> getAllTopics(String connector) {
         ConcurrentMap<String, TopicStatus> activeTopics = topics.get(Objects.requireNonNull(connector));
         return activeTopics != null
-               ? Collections.unmodifiableCollection(activeTopics.values())
-               : Collections.emptySet();
+               ? Set.copyOf(activeTopics.values())
+               : Set.of();
     }
 
     @Override

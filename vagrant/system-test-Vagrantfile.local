@@ -18,7 +18,7 @@
 # it to Vagrantfile.local
 num_zookeepers = 0
 num_brokers = 0
-num_workers = 9
+num_workers = 14
 base_box = "kafkatest-worker"
 
 

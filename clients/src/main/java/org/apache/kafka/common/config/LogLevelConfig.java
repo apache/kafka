@@ -17,13 +17,14 @@
 
 package org.apache.kafka.common.config;
 
-import java.util.Arrays;
-import java.util.HashSet;
+import org.apache.kafka.common.annotation.InterfaceAudience;
+
 import java.util.Set;
 
 /**
  * This class holds definitions for log level configurations related to Kafka's application logging. See KIP-412 for additional information
  */
+@InterfaceAudience.Public
 public class LogLevelConfig {
     /*
      * NOTE: DO NOT CHANGE EITHER CONFIG NAMES AS THESE ARE PART OF THE PUBLIC API AND CHANGE WILL BREAK USER CODE.
@@ -64,8 +65,8 @@ public class LogLevelConfig {
      */
     public static final String TRACE_LOG_LEVEL = "TRACE";
 
-    public static final Set<String> VALID_LOG_LEVELS = new HashSet<>(Arrays.asList(
+    public static final Set<String> VALID_LOG_LEVELS = Set.of(
             FATAL_LOG_LEVEL, ERROR_LOG_LEVEL, WARN_LOG_LEVEL,
             INFO_LOG_LEVEL, DEBUG_LOG_LEVEL, TRACE_LOG_LEVEL
-    ));
+    );
 }

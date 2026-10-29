@@ -22,15 +22,16 @@ import org.apache.kafka.common.errors.UnknownServerException;
 import org.apache.kafka.common.metadata.ProducerIdsRecord;
 import org.apache.kafka.common.metadata.RegisterBrokerRecord;
 import org.apache.kafka.common.security.auth.SecurityProtocol;
-import org.apache.kafka.common.utils.LogContext;
 import org.apache.kafka.common.utils.MockTime;
+import org.apache.kafka.common.utils.internals.LogContext;
+import org.apache.kafka.raft.KRaftConfigs;
 import org.apache.kafka.server.common.ProducerIdsBlock;
 import org.apache.kafka.timeline.SnapshotRegistry;
 
 import org.junit.jupiter.api.BeforeEach;
 import org.junit.jupiter.api.Test;
 
-import java.util.Collections;
+import java.util.Set;
 
 import static org.junit.jupiter.api.Assertions.assertEquals;
 import static org.junit.jupiter.api.Assertions.assertThrows;
@@ -48,7 +49,8 @@ public class ProducerIdControlManagerTest {
             setSnapshotRegistry(snapshotRegistry).
             setQuorumFeatures(new QuorumFeatures(0,
                 QuorumFeatures.defaultSupportedFeatureMap(true),
-                Collections.singletonList(0))).
+                () -> Set.of(0))).
+            setMaxRecordsPerBatch(KRaftConfigs.CONTROLLER_MAX_RECORDS_PER_BATCH_DEFAULT).
             build();
         ClusterControlManager clusterControl = new ClusterControlManager.Builder().
             setTime(time).
@@ -154,12 +156,11 @@ public class ProducerIdControlManagerTest {
         assertEquals(new ProducerIdsBlock(3, 100000, 1000), producerIdControlManager.nextProducerBlock());
     }
 
-    static ProducerIdsBlock generateProducerIds(
+    static void generateProducerIds(
             ProducerIdControlManager producerIdControlManager, int brokerId, long brokerEpoch) {
         ControllerResult<ProducerIdsBlock> result =
             producerIdControlManager.generateNextProducerId(brokerId, brokerEpoch);
         result.records().forEach(apiMessageAndVersion ->
             producerIdControlManager.replay((ProducerIdsRecord) apiMessageAndVersion.message()));
-        return result.response();
     }
 }

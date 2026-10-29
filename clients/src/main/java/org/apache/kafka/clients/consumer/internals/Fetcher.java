@@ -25,9 +25,9 @@ import org.apache.kafka.common.Node;
 import org.apache.kafka.common.TopicPartition;
 import org.apache.kafka.common.internals.IdempotentCloser;
 import org.apache.kafka.common.requests.FetchRequest;
-import org.apache.kafka.common.utils.LogContext;
 import org.apache.kafka.common.utils.Time;
 import org.apache.kafka.common.utils.Timer;
+import org.apache.kafka.common.utils.internals.LogContext;
 
 import org.slf4j.Logger;
 
@@ -47,7 +47,7 @@ import java.util.Map;
  * <ul>
  *     <li>If a response handler accesses any shared state of the Fetcher (e.g. FetchSessionHandler),
  *     all access to that state must be synchronized on the Fetcher instance.</li>
- *     <li>If a response handler accesses any shared state of the coordinator (e.g. SubscriptionState),
+ *     <li>If a response handler accesses any shared state of the coordinator (e.g. ConsumerSubscriptionState),
  *     it is assumed that all access to that state is synchronized on the coordinator instance by
  *     the caller.</li>
  *     <li>At most one request is pending for each node at any time. Nodes with pending requests are
@@ -65,7 +65,7 @@ public class Fetcher<K, V> extends AbstractFetch {
     public Fetcher(LogContext logContext,
                    ConsumerNetworkClient client,
                    ConsumerMetadata metadata,
-                   SubscriptionState subscriptions,
+                   ConsumerSubscriptionState subscriptions,
                    FetchConfig fetchConfig,
                    Deserializers<K, V> deserializers,
                    FetchMetricsManager metricsManager,
@@ -103,7 +103,7 @@ public class Fetcher<K, V> extends AbstractFetch {
      * @return number of fetches sent
      */
     public synchronized int sendFetches() {
-        final Map<Node, FetchSessionHandler.FetchRequestData> fetchRequests = prepareFetchRequests();
+        final Map<Node, FetchSessionHandler.FetchRequestData> fetchRequests = prepareFetchRequests().requests();
         sendFetchesInternal(
                 fetchRequests,
                 (fetchTarget, data, clientResponse) -> {
@@ -121,7 +121,7 @@ public class Fetcher<K, V> extends AbstractFetch {
 
     protected void maybeCloseFetchSessions(final Timer timer) {
         final List<RequestFuture<ClientResponse>> requestFutures = sendFetchesInternal(
-                prepareCloseFetchSessionRequests(),
+                prepareCloseFetchSessionRequests().requests(),
                 this::handleCloseFetchSessionSuccess,
                 this::handleCloseFetchSessionFailure
         );
@@ -138,7 +138,7 @@ public class Fetcher<K, V> extends AbstractFetch {
             // here.
             log.debug("All requests couldn't be sent in the specific timeout period {}ms. " +
                     "This may result in unnecessary fetch sessions at the broker. Consider increasing the timeout passed for " +
-                    "KafkaConsumer.close(Duration timeout)", timer.timeoutMs());
+                    "KafkaConsumer.close(...)", timer.timeoutMs());
         }
     }
 
@@ -147,12 +147,11 @@ public class Fetcher<K, V> extends AbstractFetch {
     }
 
     /**
-     * This method is called by {@link #close(Timer)} which is guarded by the {@link IdempotentCloser}) such as to only
+     * This method is called by {@link #close(Timer)} which is guarded by the {@link IdempotentCloser} such as to only
      * be executed once the first time that any of the {@link #close()} methods are called. Subclasses can override
      * this method without the need for extra synchronization at the instance level.
      *
-     * <p/>
-     *
+     * <p>
      * <em>Note</em>: this method is <code>synchronized</code> to reinstitute the 3.5 behavior:
      *
      * <blockquote>
@@ -172,7 +171,7 @@ public class Fetcher<K, V> extends AbstractFetch {
 
     /**
      * Creates the {@link FetchRequest.Builder fetch request},
-     * {@link NetworkClient#send(ClientRequest, long) enqueues/sends it, and adds the {@link RequestFuture callback}
+     * {@link NetworkClient#send(ClientRequest, long)} enqueues/sends it, and adds the {@link RequestFuture callback}
      * for the response.
      *
      * @param fetchRequests  {@link Map} of {@link Node nodes} to their

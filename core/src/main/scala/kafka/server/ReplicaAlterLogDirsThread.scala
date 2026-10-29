@@ -24,7 +24,11 @@ import org.apache.kafka.common.requests.FetchResponse
 import org.apache.kafka.server.common.{DirectoryEventHandler, OffsetAndEpoch, TopicIdPartition}
 import org.apache.kafka.storage.internals.log.{LogAppendInfo, LogStartOffsetIncrementReason}
 import org.apache.kafka.storage.log.metrics.BrokerTopicStats
+import org.apache.kafka.server.LeaderEndPoint
+import org.apache.kafka.server.PartitionFetchState
+import org.apache.kafka.server.quota.ReplicationQuotaManager
 
+import java.util.Optional
 import java.util.concurrent.ConcurrentHashMap
 import scala.collection.{Map, Set}
 
@@ -49,7 +53,7 @@ class ReplicaAlterLogDirsThread(name: String,
   // Visible for testing
   private[server] val promotionStates: ConcurrentHashMap[TopicPartition, PromotionState] = new ConcurrentHashMap()
 
-  override protected def latestEpoch(topicPartition: TopicPartition): Option[Int] = {
+  override protected def latestEpoch(topicPartition: TopicPartition): Optional[Integer] = {
     replicaMgr.futureLocalLogOrException(topicPartition).latestEpoch
   }
 
@@ -61,14 +65,19 @@ class ReplicaAlterLogDirsThread(name: String,
     replicaMgr.futureLocalLogOrException(topicPartition).logEndOffset
   }
 
-  override protected def endOffsetForEpoch(topicPartition: TopicPartition, epoch: Int): Option[OffsetAndEpoch] = {
+  override protected def endOffsetForEpoch(topicPartition: TopicPartition, epoch: Int): Optional[OffsetAndEpoch] = {
     replicaMgr.futureLocalLogOrException(topicPartition).endOffsetForEpoch(epoch)
   }
 
+  override protected def shouldFetchFromLastTieredOffset(topicPartition: TopicPartition, leaderEndOffset: Long, replicaEndOffset: Long): Boolean = false
+
   // process fetched data
-  override def processPartitionData(topicPartition: TopicPartition,
-                                    fetchOffset: Long,
-                                    partitionData: FetchData): Option[LogAppendInfo] = {
+  override def processPartitionData(
+    topicPartition: TopicPartition,
+    fetchOffset: Long,
+    partitionLeaderEpoch: Int,
+    partitionData: FetchData
+  ): Option[LogAppendInfo] = {
     val partition = replicaMgr.getPartitionOrException(topicPartition)
     val futureLog = partition.futureLocalLogOrException
     val records = toMemoryRecords(FetchResponse.recordsOrFail(partitionData))
@@ -78,7 +87,7 @@ class ReplicaAlterLogDirsThread(name: String,
         topicPartition, fetchOffset, futureLog.logEndOffset))
 
     val logAppendInfo = if (records.sizeInBytes() > 0)
-      partition.appendRecordsToFollowerOrFutureReplica(records, isFuture = true)
+      partition.appendRecordsToFollowerOrFutureReplica(records, isFuture = true, partitionLeaderEpoch)
     else
       None
 
@@ -170,22 +179,18 @@ class ReplicaAlterLogDirsThread(name: String,
   }
 
   /**
-   * Truncate the log for each partition based on current replica's returned epoch and offset.
+   * Truncate the future replica's log to the given offset.
    *
-   * The logic for finding the truncation offset is the same as in ReplicaFetcherThread
-   * and mainly implemented in AbstractFetcherThread.getOffsetTruncationState. One difference is
-   * that the initial fetch offset for topic partition could be set to the truncation offset of
-   * the current replica if that replica truncates. Otherwise, it is high watermark as in ReplicaFetcherThread.
-   *
-   * The reason we have to follow the leader epoch approach for truncating a future replica is to
-   * cover the case where a future replica is offline when the current replica truncates and
-   * re-replicates offsets that may have already been copied to the future replica. In that case,
-   * the future replica may miss "mark for truncation" event and must use the offset for leader epoch
-   * exchange with the current replica to truncate to the largest common log prefix for the topic partition
+   * When the offset comes from a diverging epoch returned by the current replica in the fetch
+   * response, the logic for finding it is the same as in ReplicaFetcherThread and mainly implemented
+   * in AbstractFetcherThread.truncationOffset. The local fetch carries the future replica's latest
+   * epoch as the last fetched epoch, so if the current replica truncates (e.g. while the future
+   * replica is offline), the divergence is detected on the next fetch and the future replica
+   * truncates to the largest common log prefix for the topic partition.
    */
-  override def truncate(topicPartition: TopicPartition, truncationState: OffsetTruncationState): Unit = {
+  override def truncate(topicPartition: TopicPartition, offset: Long): Unit = {
     val partition = replicaMgr.getPartitionOrException(topicPartition)
-    partition.truncateTo(truncationState.offset, isFuture = true)
+    partition.truncateTo(offset, isFuture = true)
   }
 
   override protected def truncateFullyAndStartAt(topicPartition: TopicPartition, offset: Long): Unit = {

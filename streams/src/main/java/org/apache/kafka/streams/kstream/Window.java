@@ -16,6 +16,7 @@
  */
 package org.apache.kafka.streams.kstream;
 
+import org.apache.kafka.common.annotation.InterfaceAudience;
 import org.apache.kafka.streams.processor.TimestampExtractor;
 
 import java.time.Instant;
@@ -34,6 +35,7 @@ import java.time.Instant;
  * @see org.apache.kafka.streams.kstream.internals.UnlimitedWindow
  * @see TimestampExtractor
  */
+@InterfaceAudience.Public
 public abstract class Window {
 
     protected final long startMs;

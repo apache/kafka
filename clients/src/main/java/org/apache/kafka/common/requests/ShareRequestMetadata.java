@@ -33,17 +33,12 @@ public class ShareRequestMetadata {
     public static final int FINAL_EPOCH = -1;
 
     /**
+     * Whether this session is a new session.
      *
+     * @return Whether the session epoch is the initial epoch.
      */
     public boolean isNewSession() {
         return epoch == INITIAL_EPOCH;
-    }
-
-    /**
-     * Returns true if this is a full share fetch request.
-     */
-    public boolean isFull() {
-        return (this.epoch == INITIAL_EPOCH) || (this.epoch == FINAL_EPOCH);
     }
 
     /**

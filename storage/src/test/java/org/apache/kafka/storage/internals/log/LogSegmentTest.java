@@ -19,17 +19,18 @@ package org.apache.kafka.storage.internals.log;
 import org.apache.kafka.common.TopicPartition;
 import org.apache.kafka.common.compress.Compression;
 import org.apache.kafka.common.config.TopicConfig;
-import org.apache.kafka.common.record.ControlRecordType;
-import org.apache.kafka.common.record.EndTransactionMarker;
-import org.apache.kafka.common.record.FileLogInputStream;
-import org.apache.kafka.common.record.FileRecords;
-import org.apache.kafka.common.record.MemoryRecords;
-import org.apache.kafka.common.record.MemoryRecordsBuilder;
-import org.apache.kafka.common.record.Record;
-import org.apache.kafka.common.record.RecordBatch;
-import org.apache.kafka.common.record.Records;
-import org.apache.kafka.common.record.SimpleRecord;
+import org.apache.kafka.common.message.AbortedTxn;
 import org.apache.kafka.common.record.TimestampType;
+import org.apache.kafka.common.record.internal.ControlRecordType;
+import org.apache.kafka.common.record.internal.EndTransactionMarker;
+import org.apache.kafka.common.record.internal.FileLogInputStream;
+import org.apache.kafka.common.record.internal.FileRecords;
+import org.apache.kafka.common.record.internal.MemoryRecords;
+import org.apache.kafka.common.record.internal.MemoryRecordsBuilder;
+import org.apache.kafka.common.record.internal.Record;
+import org.apache.kafka.common.record.internal.RecordBatch;
+import org.apache.kafka.common.record.internal.Records;
+import org.apache.kafka.common.record.internal.SimpleRecord;
 import org.apache.kafka.common.utils.MockTime;
 import org.apache.kafka.common.utils.Time;
 import org.apache.kafka.common.utils.Utils;
@@ -41,6 +42,7 @@ import org.apache.kafka.test.TestUtils;
 import org.junit.jupiter.api.AfterEach;
 import org.junit.jupiter.api.BeforeEach;
 import org.junit.jupiter.api.Test;
+import org.junit.jupiter.api.Timeout;
 import org.junit.jupiter.params.ParameterizedTest;
 import org.junit.jupiter.params.provider.CsvSource;
 import org.junit.jupiter.params.provider.ValueSource;
@@ -51,13 +53,16 @@ import java.io.RandomAccessFile;
 import java.nio.ByteBuffer;
 import java.time.Duration;
 import java.util.ArrayList;
-import java.util.Arrays;
 import java.util.HashMap;
 import java.util.Iterator;
 import java.util.List;
 import java.util.Map;
 import java.util.Optional;
 import java.util.OptionalLong;
+import java.util.concurrent.ExecutorService;
+import java.util.concurrent.Executors;
+import java.util.concurrent.Future;
+import java.util.concurrent.TimeUnit;
 
 import static org.junit.jupiter.api.Assertions.assertDoesNotThrow;
 import static org.junit.jupiter.api.Assertions.assertEquals;
@@ -66,7 +71,11 @@ import static org.junit.jupiter.api.Assertions.assertIterableEquals;
 import static org.junit.jupiter.api.Assertions.assertNull;
 import static org.junit.jupiter.api.Assertions.assertThrows;
 import static org.junit.jupiter.api.Assertions.assertTrue;
+import static org.mockito.Mockito.clearInvocations;
 import static org.mockito.Mockito.mock;
+import static org.mockito.Mockito.spy;
+import static org.mockito.Mockito.times;
+import static org.mockito.Mockito.verify;
 import static org.mockito.Mockito.when;
 
 public class LogSegmentTest {
@@ -144,7 +153,6 @@ public class LogSegmentTest {
     })
     public void testAppendForLogSegmentOffsetOverflowException(long baseOffset, long largestOffset) throws IOException {
         try (LogSegment seg = createSegment(baseOffset, 10, Time.SYSTEM)) {
-            long currentTime = Time.SYSTEM.milliseconds();
             MemoryRecords memoryRecords = v1Records(0, "hello");
             assertThrows(LogSegmentOffsetOverflowException.class, () -> seg.append(largestOffset, memoryRecords));
         }
@@ -264,7 +272,7 @@ public class LogSegmentTest {
 
                 // check that we can read back both messages
                 FetchDataInfo read = seg.read(offset, 10000);
-                assertIterableEquals(Arrays.asList(ms1.records().iterator().next(), ms2.records().iterator().next()), read.records.records());
+                assertIterableEquals(List.of(ms1.records().iterator().next(), ms2.records().iterator().next()), read.records.records());
 
                 // Now truncate off the last message
                 seg.truncateTo(offset + 1);
@@ -286,6 +294,8 @@ public class LogSegmentTest {
         try (LogSegment seg = createSegment(0L, time)) {
             seg.timeIndex(); // Force load indexes before closing the segment
             seg.offsetIndex();
+            // Trim indexes to simulate a segment from a previous clean shutdown
+            seg.onBecomeInactiveSegment();
             seg.close();
 
             LogSegment reopened = createSegment(0L, time);
@@ -379,17 +389,17 @@ public class LogSegmentTest {
 
             assertEquals(490, seg.largestTimestamp());
             // Search for an indexed timestamp
-            assertEquals(42, seg.findOffsetByTimestamp(420, 0L).get().offset);
-            assertEquals(43, seg.findOffsetByTimestamp(421, 0L).get().offset);
+            assertEquals(42, seg.findOffsetByTimestamp(420, 0L, Records.SOFT_MAX_ARRAY_LENGTH).get().offset);
+            assertEquals(43, seg.findOffsetByTimestamp(421, 0L, Records.SOFT_MAX_ARRAY_LENGTH).get().offset);
             // Search for an un-indexed timestamp
-            assertEquals(43, seg.findOffsetByTimestamp(430, 0L).get().offset);
-            assertEquals(44, seg.findOffsetByTimestamp(431, 0L).get().offset);
+            assertEquals(43, seg.findOffsetByTimestamp(430, 0L, Records.SOFT_MAX_ARRAY_LENGTH).get().offset);
+            assertEquals(44, seg.findOffsetByTimestamp(431, 0L, Records.SOFT_MAX_ARRAY_LENGTH).get().offset);
             // Search beyond the last timestamp
-            assertEquals(Optional.empty(), seg.findOffsetByTimestamp(491, 0L));
+            assertEquals(Optional.empty(), seg.findOffsetByTimestamp(491, 0L, Records.SOFT_MAX_ARRAY_LENGTH));
             // Search before the first indexed timestamp
-            assertEquals(41, seg.findOffsetByTimestamp(401, 0L).get().offset);
+            assertEquals(41, seg.findOffsetByTimestamp(401, 0L, Records.SOFT_MAX_ARRAY_LENGTH).get().offset);
             // Search before the first timestamp
-            assertEquals(40, seg.findOffsetByTimestamp(399, 0L).get().offset);
+            assertEquals(40, seg.findOffsetByTimestamp(399, 0L, Records.SOFT_MAX_ARRAY_LENGTH).get().offset);
         }
     }
 
@@ -502,9 +512,12 @@ public class LogSegmentTest {
 
             // recover again, assuming the transaction from pid2 began on a previous segment
             stateManager = newProducerStateManager();
-            stateManager.loadProducerEntry(new ProducerStateEntry(pid2, producerEpoch, 0,
-                RecordBatch.NO_TIMESTAMP, OptionalLong.of(75L),
-                Optional.of(new BatchMetadata(10, 10L, 5, RecordBatch.NO_TIMESTAMP))));
+
+            ProducerStateEntry stateEntry = new ProducerStateEntry(pid2, producerEpoch, 0,
+                RecordBatch.NO_TIMESTAMP, OptionalLong.of(75L));
+            stateEntry.addBatch(producerEpoch, 10, 10L, 5, RecordBatch.NO_TIMESTAMP);
+
+            stateManager.loadProducerEntry(stateEntry);
             segment.recover(stateManager, mock(LeaderEpochFileCache.class));
             assertEquals(108L, stateManager.mapEndOffset());
 
@@ -541,7 +554,7 @@ public class LogSegmentTest {
                 new SimpleRecord("a".getBytes()), new SimpleRecord("b".getBytes())));
 
             seg.recover(newProducerStateManager(), cache);
-            assertEquals(Arrays.asList(
+            assertEquals(List.of(
                 new EpochEntry(0, 104L),
                 new EpochEntry(1, 106L),
                 new EpochEntry(2, 110L)), cache.epochEntries());
@@ -579,9 +592,9 @@ public class LogSegmentTest {
             writeNonsenseToFile(timeIndexFile, 5, (int) timeIndexFile.length());
             seg.recover(newProducerStateManager(), mock(LeaderEpochFileCache.class));
             for (int i = 0; i < 100; i++) {
-                assertEquals(i, seg.findOffsetByTimestamp(i * 10, 0L).get().offset);
+                assertEquals(i, seg.findOffsetByTimestamp(i * 10, 0L, Records.SOFT_MAX_ARRAY_LENGTH).get().offset);
                 if (i < 99) {
-                    assertEquals(i + 1, seg.findOffsetByTimestamp(i * 10 + 1, 0L).get().offset);
+                    assertEquals(i + 1, seg.findOffsetByTimestamp(i * 10 + 1, 0L, Records.SOFT_MAX_ARRAY_LENGTH).get().offset);
                 }
             }
         }
@@ -601,7 +614,7 @@ public class LogSegmentTest {
                 int offsetToBeginCorruption = TestUtils.RANDOM.nextInt(messagesAppended);
                 // start corrupting somewhere in the middle of the chosen record all the way to the end
 
-                FileRecords.LogOffsetPosition recordPosition = seg.log().searchForOffsetWithSize(offsetToBeginCorruption, 0);
+                FileRecords.LogOffsetPosition recordPosition = seg.log().searchForOffsetFromPosition(offsetToBeginCorruption, 0);
                 int position = recordPosition.position + TestUtils.RANDOM.nextInt(15);
                 writeNonsenseToFile(seg.log().file(), position, (int) (seg.log().file().length() - position));
                 seg.recover(newProducerStateManager(), mock(LeaderEpochFileCache.class));
@@ -665,8 +678,9 @@ public class LogSegmentTest {
             long oldPosition = seg.log().channel().position();
             long oldFileSize = seg.log().file().length();
             assertEquals(512 * 1024 * 1024, oldFileSize);
+            seg.onBecomeInactiveSegment();
             seg.close();
-            // After close, file should be trimmed
+            // After onBecomeInactiveSegment, file should be trimmed
             assertEquals(oldSize, seg.log().file().length());
 
             LogSegment segReopen = LogSegment.open(tempDir, 40, logConfig, Time.SYSTEM,
@@ -817,8 +831,8 @@ public class LogSegmentTest {
         segment.append(2L, record);
 
         assertEquals(2, segment.offsetIndex().entries());
-        assertEquals(1, segment.offsetIndex().entry(0).offset);
-        assertEquals(2, segment.offsetIndex().entry(1).offset);
+        assertEquals(1, segment.offsetIndex().entry(0).offset());
+        assertEquals(2, segment.offsetIndex().entry(1).offset());
 
         assertEquals(2, segment.timeIndex().entries());
         assertEquals(new TimestampOffset(1, 1), segment.timeIndex().entry(0));
@@ -850,12 +864,48 @@ public class LogSegmentTest {
         segment.append(2L, record);
 
         assertEquals(2, segment.offsetIndex().entries());
-        assertEquals(1, segment.offsetIndex().entry(0).offset);
-        assertEquals(2, segment.offsetIndex().entry(1).offset);
+        assertEquals(1, segment.offsetIndex().entry(0).offset());
+        assertEquals(2, segment.offsetIndex().entry(1).offset());
 
         assertEquals(2, segment.timeIndex().entries());
         assertEquals(new TimestampOffset(1, 0), segment.timeIndex().entry(0));
         assertEquals(new TimestampOffset(2, 2), segment.timeIndex().entry(1));
+    }
+
+    @Test
+    @Timeout(30)
+    public void testConcurrentAccessToMaxTimestampSoFar() throws Exception {
+        int numThreads = 16;
+        ExecutorService executor = Executors.newFixedThreadPool(numThreads);
+        TimeIndex mockTimeIndex = mock(TimeIndex.class);
+        when(mockTimeIndex.lastEntry()).thenReturn(new TimestampOffset(RecordBatch.NO_TIMESTAMP, 0L));
+
+        try {
+            // to reproduce race, we iterate test for certain duration
+            long remainingDurationNanos = Duration.ofSeconds(1).toNanos();
+            while (remainingDurationNanos > 0) {
+                long t0 = System.nanoTime();
+                clearInvocations(mockTimeIndex);
+                try (LogSegment seg = spy(LogTestUtils.createSegment(0, logDir, 10, Time.SYSTEM))) {
+                    when(seg.timeIndex()).thenReturn(mockTimeIndex);
+                    List<Future<?>> futures = new ArrayList<>();
+                    for (int i = 0; i < numThreads; i++) {
+                        futures.add(executor.submit(() -> assertDoesNotThrow(seg::maxTimestampSoFar)));
+                    }
+                    for (Future<?> future : futures) {
+                        future.get();
+                    }
+                    // timeIndex.lastEntry should be called once if no race
+                    verify(mockTimeIndex, times(1)).lastEntry();
+
+                    long elapsedNanos = System.nanoTime() - t0;
+                    remainingDurationNanos -= elapsedNanos;
+                }
+            }
+        } finally {
+            executor.shutdown();
+            executor.awaitTermination(Long.MAX_VALUE, TimeUnit.SECONDS);
+        }
     }
 
     private ProducerStateManager newProducerStateManager() throws IOException {

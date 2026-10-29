@@ -18,9 +18,9 @@ package org.apache.kafka.clients.consumer.internals.events;
 
 import org.apache.kafka.clients.consumer.internals.ConsumerUtils;
 import org.apache.kafka.common.errors.TimeoutException;
-import org.apache.kafka.common.utils.LogContext;
 import org.apache.kafka.common.utils.MockTime;
 import org.apache.kafka.common.utils.Time;
+import org.apache.kafka.common.utils.internals.LogContext;
 
 import org.junit.jupiter.api.Test;
 
@@ -47,7 +47,7 @@ public class CompletableEventReaperTest {
         UnsubscribeEvent event = new UnsubscribeEvent(calculateDeadlineMs(time.milliseconds(), timeoutMs));
         reaper.add(event);
 
-        // Without any time passing, we check the reaper and verify that the event is not done amd is still
+        // Without any time passing, we check the reaper and verify that the event is not done and is still
         // being tracked.
         assertEquals(0, reaper.reap(time.milliseconds()));
         assertFalse(event.future().isDone());
@@ -75,7 +75,7 @@ public class CompletableEventReaperTest {
         UnsubscribeEvent event = new UnsubscribeEvent(calculateDeadlineMs(time.milliseconds(), timeoutMs));
         reaper.add(event);
 
-        // Without any time passing, we check the reaper and verify that the event is not done amd is still
+        // Without any time passing, we check the reaper and verify that the event is not done and is still
         // being tracked.
         assertEquals(0, reaper.reap(time.milliseconds()));
         assertFalse(event.future().isDone());
@@ -106,7 +106,7 @@ public class CompletableEventReaperTest {
         reaper.add(event1);
         reaper.add(event2);
 
-        // Without any time passing, we check the reaper and verify that the event is not done amd is still
+        // Without any time passing, we check the reaper and verify that the event is not done and is still
         // being tracked.
         assertEquals(0, reaper.reap(time.milliseconds()));
         assertFalse(event1.future().isDone());

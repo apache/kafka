@@ -18,7 +18,6 @@
 package org.apache.kafka.clients.admin;
 
 import org.apache.kafka.common.KafkaFuture;
-import org.apache.kafka.common.annotation.InterfaceStability;
 import org.apache.kafka.common.internals.KafkaFutureImpl;
 
 import java.util.Collection;
@@ -26,9 +25,9 @@ import java.util.Collection;
 /**
  * The result of the {@link Admin#listClientMetricsResources()} call.
  * <p>
- * The API of this class is evolving, see {@link Admin} for details.
+ * @deprecated Since 4.1. Use {@link ListConfigResourcesResult} instead.
  */
-@InterfaceStability.Evolving
+@Deprecated(since = "4.1")
 public class ListClientMetricsResourcesResult {
     private final KafkaFuture<Collection<ClientMetricsResourceListing>> future;
 

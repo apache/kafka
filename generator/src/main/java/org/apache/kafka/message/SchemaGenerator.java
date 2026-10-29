@@ -90,12 +90,10 @@ final class SchemaGenerator {
         }
 
         // Generate schemas for inline structures
-        generateSchemas(message.dataClassName(), message.struct(),
-            message.struct().versions());
+        generateSchemas(message.dataClassName(), message.struct(), message.struct().versions());
     }
 
-    void generateSchemas(String className, StructSpec struct,
-                         Versions parentVersions) {
+    void generateSchemas(String className, StructSpec struct, Versions parentVersions) {
         Versions versions = parentVersions.intersect(struct.versions());
         MessageInfo messageInfo = messages.get(className);
         if (messageInfo != null) {
@@ -217,15 +215,13 @@ final class SchemaGenerator {
         return fieldTypeToSchemaType(field.type(),
             field.nullableVersions().contains(version),
             version,
-            fieldFlexibleVersions,
-            field.zeroCopy());
+            fieldFlexibleVersions);
     }
 
     private String fieldTypeToSchemaType(FieldType type,
                                          boolean nullable,
                                          short version,
-                                         Versions fieldFlexibleVersions,
-                                         boolean zeroCopy) {
+                                         Versions fieldFlexibleVersions) {
         if (type instanceof FieldType.BoolFieldType) {
             headerGenerator.addImport(MessageGenerator.TYPE_CLASS);
             if (nullable) {
@@ -297,9 +293,9 @@ final class SchemaGenerator {
         } else if (type.isRecords()) {
             headerGenerator.addImport(MessageGenerator.TYPE_CLASS);
             if (fieldFlexibleVersions.contains(version)) {
-                return "Type.COMPACT_RECORDS";
+                return nullable ? "Type.COMPACT_NULLABLE_RECORDS" : "Type.COMPACT_RECORDS";
             } else {
-                return "Type.RECORDS";
+                return nullable ? "Type.NULLABLE_RECORDS" : "Type.RECORDS";
             }
         } else if (type.isArray()) {
             if (fieldFlexibleVersions.contains(version)) {
@@ -307,18 +303,22 @@ final class SchemaGenerator {
                 FieldType.ArrayType arrayType = (FieldType.ArrayType) type;
                 String prefix = nullable ? "CompactArrayOf.nullable" : "new CompactArrayOf";
                 return String.format("%s(%s)", prefix,
-                        fieldTypeToSchemaType(arrayType.elementType(), false, version, fieldFlexibleVersions, false));
+                        fieldTypeToSchemaType(arrayType.elementType(), false, version, fieldFlexibleVersions));
 
             } else {
                 headerGenerator.addImport(MessageGenerator.ARRAYOF_CLASS);
                 FieldType.ArrayType arrayType = (FieldType.ArrayType) type;
                 String prefix = nullable ? "ArrayOf.nullable" : "new ArrayOf";
                 return String.format("%s(%s)", prefix,
-                        fieldTypeToSchemaType(arrayType.elementType(), false, version, fieldFlexibleVersions, false));
+                        fieldTypeToSchemaType(arrayType.elementType(), false, version, fieldFlexibleVersions));
             }
         } else if (type.isStruct()) {
-            return String.format("%s.SCHEMA_%d", type,
+            if (nullable) {
+                headerGenerator.addImport(MessageGenerator.NULLABLE_SCHEMA_CLASS);
+            }
+            String schemaType = String.format("%s.SCHEMA_%d", type,
                 floorVersion(type.toString(), version));
+            return nullable ? String.format("new NullableSchema(%s)", schemaType) : schemaType;
         } else {
             throw new RuntimeException("Unsupported type " + type);
         }

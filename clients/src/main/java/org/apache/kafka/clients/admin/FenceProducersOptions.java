@@ -17,16 +17,14 @@
 
 package org.apache.kafka.clients.admin;
 
-import org.apache.kafka.common.annotation.InterfaceStability;
+import org.apache.kafka.common.annotation.InterfaceAudience;
 
 import java.util.Collection;
 
 /**
  * Options for {@link Admin#fenceProducers(Collection, FenceProducersOptions)}
- *
- * The API of this class is evolving. See {@link Admin} for details.
  */
-@InterfaceStability.Evolving
+@InterfaceAudience.Public
 public class FenceProducersOptions extends AbstractOptions<FenceProducersOptions> {
 
     @Override

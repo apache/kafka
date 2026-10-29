@@ -23,53 +23,24 @@ import com.fasterxml.jackson.annotation.JsonProperty;
 import java.util.List;
 import java.util.Objects;
 
-public class ConnectorStateInfo {
-
-    private final String name;
-    private final ConnectorState connector;
-    private final List<TaskState> tasks;
-    private final ConnectorType type;
-
-    @JsonCreator
-    public ConnectorStateInfo(@JsonProperty("name") String name,
-                              @JsonProperty("connector") ConnectorState connector,
-                              @JsonProperty("tasks") List<TaskState> tasks,
-                              @JsonProperty("type") ConnectorType type) {
-        this.name = name;
-        this.connector = connector;
-        this.tasks = tasks;
-        this.type = type;
-    }
-
-    @JsonProperty
-    public String name() {
-        return name;
-    }
-
-    @JsonProperty
-    public ConnectorState connector() {
-        return connector;
-    }
-
-    @JsonProperty
-    public List<TaskState> tasks() {
-        return tasks;
-    }
-
-    @JsonProperty
-    public ConnectorType type() {
-        return type;
-    }
+public record ConnectorStateInfo(
+    @JsonProperty String name,
+    @JsonProperty ConnectorState connector,
+    @JsonProperty List<TaskState> tasks,
+    @JsonProperty ConnectorType type
+) {
 
     public abstract static class AbstractState {
         private final String state;
         private final String trace;
         private final String workerId;
+        private final String version;
 
-        public AbstractState(String state, String workerId, String trace) {
+        public AbstractState(String state, String workerId, String trace, String version) {
             this.state = state;
             this.workerId = workerId;
             this.trace = trace;
+            this.version = version;
         }
 
         @JsonProperty
@@ -87,14 +58,21 @@ public class ConnectorStateInfo {
         public String trace() {
             return trace;
         }
+
+        @JsonProperty
+        @JsonInclude(value = JsonInclude.Include.CUSTOM, valueFilter = PluginInfo.NoVersionFilter.class)
+        public String version() {
+            return version;
+        }
     }
 
     public static class ConnectorState extends AbstractState {
         @JsonCreator
         public ConnectorState(@JsonProperty("state") String state,
                               @JsonProperty("worker_id") String worker,
-                              @JsonProperty("msg") String msg) {
-            super(state, worker, msg);
+                              @JsonProperty("msg") String msg,
+                              @JsonProperty("version") String version) {
+            super(state, worker, msg, version);
         }
     }
 
@@ -105,8 +83,9 @@ public class ConnectorStateInfo {
         public TaskState(@JsonProperty("id") int id,
                          @JsonProperty("state") String state,
                          @JsonProperty("worker_id") String worker,
-                         @JsonProperty("msg") String msg) {
-            super(state, worker, msg);
+                         @JsonProperty("msg") String msg,
+                         @JsonProperty("version") String version) {
+            super(state, worker, msg, version);
             this.id = id;
         }
 
@@ -134,5 +113,4 @@ public class ConnectorStateInfo {
             return Objects.hash(id);
         }
     }
-
 }

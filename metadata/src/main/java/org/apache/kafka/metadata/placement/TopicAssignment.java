@@ -18,42 +18,14 @@
 package org.apache.kafka.metadata.placement;
 
 import java.util.List;
-import java.util.Objects;
 
 /**
  * The topic assignment.
- *
+ * <p>
  * This class is immutable. It's internal state does not change.
  */
-public class TopicAssignment {
-    private final List<PartitionAssignment> assignments;
-
-    public TopicAssignment(List<PartitionAssignment> assignments) {
-        this.assignments = List.copyOf(assignments);
-    }
-
-    /**
-     * @return The replica assignment for each partition, where the index in the list corresponds to different partition.
-     */
-    public List<PartitionAssignment> assignments() {
-        return assignments;
-    }
-
-    @Override
-    public boolean equals(Object o) {
-        if (!(o instanceof TopicAssignment other)) return false;
-        return assignments.equals(other.assignments);
-    }
-
-    @Override
-    public int hashCode() {
-        return Objects.hash(assignments);
-    }
-
-    @Override
-    public String toString() {
-        return "TopicAssignment" +
-            "(assignments=" + assignments +
-            ")";
+public record TopicAssignment(List<PartitionAssignment> assignments) {
+    public TopicAssignment {
+        assignments = List.copyOf(assignments);
     }
 }

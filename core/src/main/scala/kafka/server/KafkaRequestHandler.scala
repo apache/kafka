@@ -25,21 +25,24 @@ import java.util.concurrent.{CountDownLatch, TimeUnit}
 import java.util.concurrent.atomic.AtomicInteger
 import com.yammer.metrics.core.Meter
 import org.apache.kafka.common.internals.FatalExitError
-import org.apache.kafka.common.utils.{Exit, KafkaThread, Time}
+import org.apache.kafka.common.utils.internals.{Exit, KafkaThread}
+import org.apache.kafka.common.utils.Time
+import org.apache.kafka.network.{CallbackRequest, Request, ShutdownRequest, WakeupRequest}
 import org.apache.kafka.server.common.RequestLocal
 import org.apache.kafka.server.metrics.KafkaMetricsGroup
 
+import java.util.OptionalLong
 import scala.collection.mutable
 
 trait ApiRequestHandler {
-  def handle(request: RequestChannel.Request, requestLocal: RequestLocal): Unit
+  def handle(request: Request, requestLocal: RequestLocal): Unit
   def tryCompleteActions(): Unit = {}
 }
 
 object KafkaRequestHandler {
   // Support for scheduling callbacks on a request thread.
   private val threadRequestChannel = new ThreadLocal[RequestChannel]
-  private val threadCurrentRequest = new ThreadLocal[RequestChannel.Request]
+  private val threadCurrentRequest = new ThreadLocal[Request]
 
   // For testing
   @volatile private var bypassThreadCheck = false
@@ -75,7 +78,7 @@ object KafkaRequestHandler {
         } else {
           // The requestChannel and request are captured in this lambda, so when it's executed on the callback thread
           // we can re-schedule the original callback on a request thread and update the metrics accordingly.
-          requestChannel.sendCallbackRequest(RequestChannel.CallbackRequest(newRequestLocal => asyncCompletionCallback(newRequestLocal, t), currentRequest))
+          requestChannel.sendCallbackRequest(new CallbackRequest(newRequestLocal => asyncCompletionCallback(newRequestLocal, t), currentRequest))
         }
       }
     }
@@ -89,13 +92,15 @@ class KafkaRequestHandler(
   id: Int,
   brokerId: Int,
   val aggregateIdleMeter: Meter,
-  val totalHandlerThreads: AtomicInteger,
+  val aggregateThreads: AtomicInteger,
+  val poolIdleMeter: Meter,
+  val poolHandlerThreads: AtomicInteger,
   val requestChannel: RequestChannel,
   apis: ApiRequestHandler,
   time: Time,
-  nodeName: String = "broker"
+  nodeName: String
 ) extends Runnable with Logging {
-  this.logIdent = s"[Kafka Request Handler $id on ${nodeName.capitalize} $brokerId], "
+  this.logIdent = s"[Kafka Request Handler $id on ${nodeName.capitalize} $brokerId] "
   private val shutdownComplete = new CountDownLatch(1)
   private val requestLocal = RequestLocal.withThreadConfinedCaching
   @volatile private var stopped = false
@@ -112,31 +117,35 @@ class KafkaRequestHandler(
       val req = requestChannel.receiveRequest(300)
       val endTime = time.nanoseconds
       val idleTime = endTime - startSelectTime
-      aggregateIdleMeter.mark(idleTime / totalHandlerThreads.get)
+      // Per-pool idle ratio uses the pool's own thread count as denominator
+      poolIdleMeter.mark(idleTime / poolHandlerThreads.get)
+      // Aggregate idle ratio uses the total threads across all pools as denominator
+      aggregateIdleMeter.mark(idleTime / aggregateThreads.get)
 
       req match {
-        case RequestChannel.ShutdownRequest =>
+        case _: ShutdownRequest =>
           debug(s"Kafka request handler $id on broker $brokerId received shut down command")
           completeShutdown()
           return
 
-        case callback: RequestChannel.CallbackRequest =>
+        case callback: CallbackRequest =>
           val originalRequest = callback.originalRequest
           try {
 
-            // If we've already executed a callback for this request, reset the times and subtract the callback time from the 
+            // If we've already executed a callback for this request, reset the times and subtract the callback time from the
             // new dequeue time. This will allow calculation of multiple callback times.
             // Otherwise, set dequeue time to now.
-            if (originalRequest.callbackRequestDequeueTimeNanos.isDefined) {
-              val prevCallbacksTimeNanos = originalRequest.callbackRequestCompleteTimeNanos.getOrElse(0L) - originalRequest.callbackRequestDequeueTimeNanos.getOrElse(0L)
-              originalRequest.callbackRequestCompleteTimeNanos = None
-              originalRequest.callbackRequestDequeueTimeNanos = Some(time.nanoseconds() - prevCallbacksTimeNanos)
+            if (originalRequest.callbackRequestDequeueTimeNanos.isPresent) {
+              val prevCallbacksTimeNanos = originalRequest.callbackRequestCompleteTimeNanos.orElse(0L) -
+                originalRequest.callbackRequestDequeueTimeNanos.orElse(0L)
+              originalRequest.callbackRequestCompleteTimeNanos(OptionalLong.empty)
+              originalRequest.callbackRequestDequeueTimeNanos(OptionalLong.of(time.nanoseconds() - prevCallbacksTimeNanos))
             } else {
-              originalRequest.callbackRequestDequeueTimeNanos = Some(time.nanoseconds())
+              originalRequest.callbackRequestDequeueTimeNanos(OptionalLong.of(time.nanoseconds()))
             }
-            
+
             threadCurrentRequest.set(originalRequest)
-            callback.fun(requestLocal)
+            callback.fun().accept(requestLocal)
           } catch {
             case e: FatalExitError =>
               completeShutdown()
@@ -146,13 +155,13 @@ class KafkaRequestHandler(
             // When handling requests, we try to complete actions after, so we should try to do so here as well.
             apis.tryCompleteActions()
             if (originalRequest.callbackRequestCompleteTimeNanos.isEmpty)
-              originalRequest.callbackRequestCompleteTimeNanos = Some(time.nanoseconds())
+              originalRequest.callbackRequestCompleteTimeNanos(OptionalLong.of(time.nanoseconds()))
             threadCurrentRequest.remove()
           }
 
-        case request: RequestChannel.Request =>
+        case request: Request =>
           try {
-            request.requestDequeueTimeNanos = endTime
+            request.requestDequeueTimeNanos(endTime)
             trace(s"Kafka request handler $id on broker $brokerId handling request $request")
             threadCurrentRequest.set(request)
             apis.handle(request, requestLocal)
@@ -166,7 +175,7 @@ class KafkaRequestHandler(
             request.releaseBuffer()
           }
 
-        case RequestChannel.WakeupRequest => 
+        case _: WakeupRequest =>
           // We should handle this in receiveRequest by polling callbackQueue.
           warn("Received a wakeup request outside of typical usage.")
 
@@ -192,31 +201,83 @@ class KafkaRequestHandler(
 
 }
 
+/**
+ * Factory for creating KafkaRequestHandlerPool instances with shared aggregate metrics.
+ * All pools created by the same factory share the same aggregateThreads counter.
+ */
+class KafkaRequestHandlerPoolFactory {
+  private[this] val aggregateThreads = new AtomicInteger(0)
+  private[this] val RequestHandlerAvgIdleMetricName = "RequestHandlerAvgIdlePercent"
+  
+  def createPool(
+    brokerId: Int,
+    requestChannel: RequestChannel,
+    apis: ApiRequestHandler,
+    time: Time,
+    numThreads: Int,
+    nodeName: String
+  ): KafkaRequestHandlerPool = {
+    new KafkaRequestHandlerPool(aggregateThreads, RequestHandlerAvgIdleMetricName, brokerId, requestChannel, apis, time, numThreads, nodeName)
+  }
+
+  // Only used for test purpose
+  def aggregateThreadCount: Int = aggregateThreads.get()
+}
+
 class KafkaRequestHandlerPool(
+  val aggregateThreads: AtomicInteger,
+  val requestHandlerAvgIdleMetricName: String,
   val brokerId: Int,
   val requestChannel: RequestChannel,
   val apis: ApiRequestHandler,
   time: Time,
   numThreads: Int,
-  requestHandlerAvgIdleMetricName: String,
-  logAndThreadNamePrefix : String,
-  nodeName: String = "broker"
+  nodeName: String
 ) extends Logging {
-  private val metricsGroup = new KafkaMetricsGroup(this.getClass)
+  // Changing the package or class name may cause incompatibility with existing code and metrics configuration
+  private val metricsPackage = "kafka.server"
+  private val metricsClassName = "KafkaRequestHandlerPool"
+  private val metricsGroup = new KafkaMetricsGroup(metricsPackage, metricsClassName)
 
   val threadPoolSize: AtomicInteger = new AtomicInteger(numThreads)
-  /* a meter to track the average free capacity of the request handlers */
+  private val perPoolIdleMeterName = if (nodeName == "broker") {
+    "BrokerRequestHandlerAvgIdlePercent"
+  } else if (nodeName == "controller") {
+    "ControllerRequestHandlerAvgIdlePercent"
+  } else {
+    throw new IllegalArgumentException("Invalid node name:" + nodeName)
+  }
+  /* Per-pool idle meter (broker-only or controller-only) */
+  private val perPoolIdleMeter = metricsGroup.newMeter(perPoolIdleMeterName, "percent", TimeUnit.NANOSECONDS)
+  /* Aggregate meter to track the average free capacity of the request handlers */
   private val aggregateIdleMeter = metricsGroup.newMeter(requestHandlerAvgIdleMetricName, "percent", TimeUnit.NANOSECONDS)
 
-  this.logIdent = "[" + logAndThreadNamePrefix + " Kafka Request Handler on Broker " + brokerId + "], "
+  this.logIdent = s"[data-plane Kafka Request Handler on ${nodeName.capitalize} $brokerId] "
   val runnables = new mutable.ArrayBuffer[KafkaRequestHandler](numThreads)
   for (i <- 0 until numThreads) {
     createHandler(i)
   }
 
-  def createHandler(id: Int): Unit = synchronized {
-    runnables += new KafkaRequestHandler(id, brokerId, aggregateIdleMeter, threadPoolSize, requestChannel, apis, time, nodeName)
-    KafkaThread.daemon(logAndThreadNamePrefix + "-kafka-request-handler-" + id, runnables(id)).start()
+  private def createHandler(id: Int): Unit = {
+    runnables += new KafkaRequestHandler(
+      id,
+      brokerId,
+      aggregateIdleMeter,
+      aggregateThreads,
+      perPoolIdleMeter,
+      threadPoolSize,
+      requestChannel,
+      apis,
+      time,
+      nodeName
+    )
+    aggregateThreads.getAndIncrement()
+    KafkaThread.daemon("data-plane-kafka-request-handler-" + id, runnables(id)).start()
+  }
+
+  private def deleteHandler(id: Int): Unit = {
+    runnables.remove(id).stop()
+    aggregateThreads.getAndDecrement()
   }
 
   def resizeThreadPool(newSize: Int): Unit = synchronized {
@@ -228,7 +289,7 @@ class KafkaRequestHandlerPool(
       }
     } else if (newSize < currentSize) {
       for (i <- 1 to (currentSize - newSize)) {
-        runnables.remove(currentSize - i).stop()
+        deleteHandler(currentSize - i)
       }
     }
     threadPoolSize.set(newSize)
@@ -240,6 +301,8 @@ class KafkaRequestHandlerPool(
       handler.initiateShutdown()
     for (handler <- runnables)
       handler.awaitShutdown()
+    // Unregister this pool's threads from shared aggregate counter
+    aggregateThreads.addAndGet(-threadPoolSize.get)
     info("shut down completely")
   }
 }

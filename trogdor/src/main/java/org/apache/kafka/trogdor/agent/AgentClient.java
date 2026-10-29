@@ -17,7 +17,7 @@
 
 package org.apache.kafka.trogdor.agent;
 
-import org.apache.kafka.common.utils.Exit;
+import org.apache.kafka.common.utils.internals.Exit;
 import org.apache.kafka.trogdor.common.JsonUtil;
 import org.apache.kafka.trogdor.common.StringFormatter;
 import org.apache.kafka.trogdor.rest.AgentStatusResponse;
@@ -45,7 +45,6 @@ import org.slf4j.LoggerFactory;
 import java.time.OffsetDateTime;
 import java.time.ZoneOffset;
 import java.util.ArrayList;
-import java.util.Arrays;
 import java.util.List;
 import java.util.Map;
 
@@ -200,7 +199,8 @@ public class AgentClient {
 
     public static void main(String[] args) throws Exception {
         ArgumentParser rootParser = ArgumentParsers
-            .newArgumentParser("trogdor-agent-client")
+            .newFor("trogdor-agent-client")
+            .build()
             .defaultHelp(true)
             .description("The Trogdor agent client.");
         Subparsers subParsers = rootParser.addSubparsers().
@@ -275,9 +275,7 @@ public class AgentClient {
                     System.out.printf("\tStart time: %s%n",
                         dateString(status.serverStartMs(), localOffset));
                     List<List<String>> lines = new ArrayList<>();
-                    List<String> header = new ArrayList<>(
-                        Arrays.asList("WORKER_ID", "TASK_ID", "STATE", "TASK_TYPE"));
-                    lines.add(header);
+                    lines.add(List.of("WORKER_ID", "TASK_ID", "STATE", "TASK_TYPE"));
                     for (Map.Entry<Long, WorkerState> entry : status.workers().entrySet()) {
                         List<String> cols = new ArrayList<>();
                         cols.add(Long.toString(entry.getKey()));

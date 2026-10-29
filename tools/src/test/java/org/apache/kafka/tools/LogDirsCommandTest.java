@@ -20,7 +20,6 @@ import org.apache.kafka.clients.CommonClientConfigs;
 import org.apache.kafka.clients.admin.Admin;
 import org.apache.kafka.clients.admin.LogDirDescription;
 import org.apache.kafka.clients.admin.MockAdminClient;
-import org.apache.kafka.clients.admin.NewTopic;
 import org.apache.kafka.common.Node;
 import org.apache.kafka.common.TopicPartition;
 import org.apache.kafka.common.test.ClusterInstance;
@@ -31,8 +30,6 @@ import com.fasterxml.jackson.databind.ObjectMapper;
 
 import org.junit.jupiter.api.Test;
 
-import java.util.Arrays;
-import java.util.Collections;
 import java.util.HashMap;
 import java.util.HashSet;
 import java.util.List;
@@ -52,8 +49,8 @@ public class LogDirsCommandTest {
 
     @ClusterTest(brokers = 3)
     public void testLogDirsWithoutBrokers(ClusterInstance clusterInstance) {
-        createTopic(clusterInstance, TOPIC);
-        try (Admin admin = Admin.create(Collections.singletonMap(CommonClientConfigs.BOOTSTRAP_SERVERS_CONFIG, clusterInstance.bootstrapServers()))) {
+        clusterInstance.createTopicWithAssignment(TOPIC, Map.of(0, List.of(0)));
+        try (Admin admin = Admin.create(Map.of(CommonClientConfigs.BOOTSTRAP_SERVERS_CONFIG, clusterInstance.bootstrapServers()))) {
             String output = assertDoesNotThrow(() -> execute(fromArgsToOptions("--bootstrap-server", clusterInstance.bootstrapServers(), "--describe"), admin));
 
             // check all brokers are present
@@ -72,8 +69,8 @@ public class LogDirsCommandTest {
 
     @ClusterTest(brokers = 3)
     public void testLogDirsWithBrokers(ClusterInstance clusterInstance) {
-        createTopic(clusterInstance, TOPIC);
-        try (Admin admin = Admin.create(Collections.singletonMap(CommonClientConfigs.BOOTSTRAP_SERVERS_CONFIG, clusterInstance.bootstrapServers()))) {
+        clusterInstance.createTopicWithAssignment(TOPIC, Map.of(0, List.of(0)));
+        try (Admin admin = Admin.create(Map.of(CommonClientConfigs.BOOTSTRAP_SERVERS_CONFIG, clusterInstance.bootstrapServers()))) {
             int brokerId = 0;
             String output = assertDoesNotThrow(() -> execute(fromArgsToOptions("--bootstrap-server", clusterInstance.bootstrapServers(), "--broker-list", String.valueOf(brokerId), "--describe"), admin));
 
@@ -82,7 +79,7 @@ public class LogDirsCommandTest {
             clusterInstance.brokerIds().stream().filter(id -> id != brokerId).forEach(id -> assertFalse(output.contains("\"broker\":" + id)));
 
             // check log dir and topic partition are present
-            Map<Integer, Map<String, LogDirDescription>> logDirs = assertDoesNotThrow(() -> admin.describeLogDirs(Collections.singleton(brokerId)).allDescriptions().get());
+            Map<Integer, Map<String, LogDirDescription>> logDirs = assertDoesNotThrow(() -> admin.describeLogDirs(Set.of(brokerId)).allDescriptions().get());
             assertEquals(1, logDirs.size());
             logDirs.forEach((brokerIdValue, logDirInfo) -> {
                 assertFalse(logDirInfo.isEmpty());
@@ -98,7 +95,7 @@ public class LogDirsCommandTest {
 
     @ClusterTest
     public void testLogDirsWithNonExistentTopic(ClusterInstance clusterInstance) {
-        try (Admin admin = Admin.create(Collections.singletonMap(CommonClientConfigs.BOOTSTRAP_SERVERS_CONFIG, clusterInstance.bootstrapServers()))) {
+        try (Admin admin = Admin.create(Map.of(CommonClientConfigs.BOOTSTRAP_SERVERS_CONFIG, clusterInstance.bootstrapServers()))) {
             String output = assertDoesNotThrow(() -> execute(fromArgsToOptions("--bootstrap-server", clusterInstance.bootstrapServers(), "--topic-list", TOPIC, "--describe"), admin));
             // check all brokers are present
             clusterInstance.brokerIds().forEach(brokerId -> assertTrue(output.contains("\"broker\":" + brokerId)));
@@ -109,18 +106,18 @@ public class LogDirsCommandTest {
             logDirs.forEach((brokerId, logDirInfo) ->
                 logDirInfo.forEach((logDir, logDirInfoValue) -> {
                     assertTrue(output.contains("\"logDir\":\"" + logDir + "\""));
-                    logDirInfoValue.replicaInfos().forEach((topicPartition, replicaInfo) -> {
-                        assertFalse(output.contains("\"partition\":\"" + topicPartition + "\""));
-                    });
+                    logDirInfoValue.replicaInfos().forEach((topicPartition, replicaInfo) ->
+                        assertFalse(output.contains("\"partition\":\"" + topicPartition + "\""))
+                    );
                 }));
         }
     }
 
     @ClusterTest
     public void testLogDirsWithSpecificTopic(ClusterInstance clusterInstance) {
-        createTopic(clusterInstance, TOPIC);
-        createTopic(clusterInstance, "other-topic");
-        try (Admin admin = Admin.create(Collections.singletonMap(CommonClientConfigs.BOOTSTRAP_SERVERS_CONFIG, clusterInstance.bootstrapServers()))) {
+        clusterInstance.createTopicWithAssignment(TOPIC, Map.of(0, List.of(0)));
+        clusterInstance.createTopicWithAssignment("other-topic", Map.of(0, List.of(0)));
+        try (Admin admin = Admin.create(Map.of(CommonClientConfigs.BOOTSTRAP_SERVERS_CONFIG, clusterInstance.bootstrapServers()))) {
             String output = assertDoesNotThrow(() -> execute(fromArgsToOptions("--bootstrap-server", clusterInstance.bootstrapServers(), "--topic-list", TOPIC, "--describe"), admin));
             // check all brokers are present
             clusterInstance.brokerIds().forEach(brokerId -> assertTrue(output.contains("\"broker\":" + brokerId)));
@@ -133,9 +130,9 @@ public class LogDirsCommandTest {
             logDirs.forEach((brokerId, logDirInfo) ->
                 logDirInfo.forEach((logDir, logDirInfoValue) -> {
                     assertTrue(output.contains("\"logDir\":\"" + logDir + "\""));
-                    logDirInfoValue.replicaInfos().keySet().stream().filter(tp -> !tp.topic().equals(TOPIC)).forEach(tp -> {
-                        assertFalse(output.contains("\"partition\":\"" + tp + "\""));
-                    });
+                    logDirInfoValue.replicaInfos().keySet().stream().filter(tp -> !tp.topic().equals(TOPIC)).forEach(tp ->
+                        assertFalse(output.contains("\"partition\":\"" + tp + "\""))
+                    );
                 }));
         }
     }
@@ -143,7 +140,7 @@ public class LogDirsCommandTest {
     @Test
     public void shouldThrowWhenQueryingNonExistentBrokers() {
         Node broker = new Node(1, "hostname", 9092);
-        try (MockAdminClient adminClient = new MockAdminClient(Collections.singletonList(broker), broker)) {
+        try (MockAdminClient adminClient = new MockAdminClient(List.of(broker), broker)) {
             RuntimeException exception = assertThrows(RuntimeException.class, () -> execute(fromArgsToOptions("--bootstrap-server", "EMPTY", "--broker-list", "0,1,2", "--describe"), adminClient));
             assertNotNull(exception.getCause());
             assertEquals(TerseException.class, exception.getCause().getClass());
@@ -155,7 +152,7 @@ public class LogDirsCommandTest {
     @SuppressWarnings("unchecked")
     public void shouldNotThrowWhenDuplicatedBrokers() throws JsonProcessingException {
         Node broker = new Node(1, "hostname", 9092);
-        try (MockAdminClient adminClient = new MockAdminClient(Collections.singletonList(broker), broker)) {
+        try (MockAdminClient adminClient = new MockAdminClient(List.of(broker), broker)) {
             String standardOutput = execute(fromArgsToOptions("--bootstrap-server", "EMPTY", "--broker-list", "1,1", "--describe"), adminClient);
             String[] standardOutputLines = standardOutput.split("\n");
             assertEquals(3, standardOutputLines.length);
@@ -172,18 +169,18 @@ public class LogDirsCommandTest {
     public void shouldQueryAllBrokersIfNonSpecified() throws JsonProcessingException {
         Node brokerOne = new Node(1, "hostname", 9092);
         Node brokerTwo = new Node(2, "hostname", 9092);
-        try (MockAdminClient adminClient = new MockAdminClient(Arrays.asList(brokerTwo, brokerOne), brokerOne)) {
+        try (MockAdminClient adminClient = new MockAdminClient(List.of(brokerTwo, brokerOne), brokerOne)) {
             String standardOutput = execute(fromArgsToOptions("--bootstrap-server", "EMPTY", "--describe"), adminClient);
             String[] standardOutputLines = standardOutput.split("\n");
             assertEquals(3, standardOutputLines.length);
             Map<String, Object> information = new ObjectMapper().readValue(standardOutputLines[2], HashMap.class);
             List<Object> brokersInformation = (List<Object>) information.get("brokers");
-            Set<Integer> brokerIds = new HashSet<Integer>() {{
+            Set<Integer> brokerIds = new HashSet<>() {{
                     add((Integer) ((HashMap<String, Object>) brokersInformation.get(0)).get("broker"));
                     add((Integer) ((HashMap<String, Object>) brokersInformation.get(1)).get("broker"));
                 }};
             assertEquals(2, brokersInformation.size());
-            assertEquals(new HashSet<>(Arrays.asList(2, 1)), brokerIds);
+            assertEquals(Set.of(2, 1), brokerIds);
         }
     }
 
@@ -192,7 +189,7 @@ public class LogDirsCommandTest {
     public void shouldQuerySpecifiedBroker() throws JsonProcessingException {
         Node brokerOne = new Node(1, "hostname", 9092);
         Node brokerTwo = new Node(2, "hostname", 9092);
-        try (MockAdminClient adminClient = new MockAdminClient(Arrays.asList(brokerOne, brokerTwo), brokerOne)) {
+        try (MockAdminClient adminClient = new MockAdminClient(List.of(brokerOne, brokerTwo), brokerOne)) {
             String standardOutput = execute(fromArgsToOptions("--bootstrap-server", "EMPTY", "--broker-list", "1", "--describe"), adminClient);
             String[] standardOutputLines = standardOutput.split("\n");
             assertEquals(3, standardOutputLines.length);
@@ -217,12 +214,5 @@ public class LogDirsCommandTest {
             }
         };
         return ToolsTestUtils.captureStandardOut(runnable);
-    }
-
-    private void createTopic(ClusterInstance clusterInstance, String topic) {
-        try (Admin admin = Admin.create(Collections.singletonMap(CommonClientConfigs.BOOTSTRAP_SERVERS_CONFIG, clusterInstance.bootstrapServers()))) {
-            assertDoesNotThrow(() -> admin.createTopics(Collections.singletonList(new NewTopic(topic, Collections.singletonMap(0, Collections.singletonList(0))))).topicId(topic).get());
-            assertDoesNotThrow(() -> clusterInstance.waitForTopic(topic, 1));
-        }
     }
 }

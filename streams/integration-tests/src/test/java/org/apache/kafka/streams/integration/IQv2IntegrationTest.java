@@ -22,10 +22,13 @@ import org.apache.kafka.clients.producer.Producer;
 import org.apache.kafka.clients.producer.ProducerConfig;
 import org.apache.kafka.clients.producer.ProducerRecord;
 import org.apache.kafka.clients.producer.RecordMetadata;
+import org.apache.kafka.common.TopicPartition;
 import org.apache.kafka.common.serialization.IntegerSerializer;
 import org.apache.kafka.common.serialization.Serdes;
 import org.apache.kafka.common.utils.Bytes;
 import org.apache.kafka.common.utils.Time;
+import org.apache.kafka.streams.CloseOptions;
+import org.apache.kafka.streams.CloseOptions.GroupMembershipOperation;
 import org.apache.kafka.streams.KafkaStreams;
 import org.apache.kafka.streams.KeyValue;
 import org.apache.kafka.streams.StreamsBuilder;
@@ -57,11 +60,12 @@ import org.apache.kafka.test.TestUtils;
 import org.junit.jupiter.api.AfterAll;
 import org.junit.jupiter.api.AfterEach;
 import org.junit.jupiter.api.BeforeAll;
-import org.junit.jupiter.api.BeforeEach;
 import org.junit.jupiter.api.Tag;
-import org.junit.jupiter.api.Test;
 import org.junit.jupiter.api.TestInfo;
 import org.junit.jupiter.api.Timeout;
+import org.junit.jupiter.params.ParameterizedTest;
+import org.junit.jupiter.params.provider.Arguments;
+import org.junit.jupiter.params.provider.MethodSource;
 
 import java.io.IOException;
 import java.lang.reflect.Field;
@@ -76,15 +80,14 @@ import java.util.concurrent.ExecutionException;
 import java.util.concurrent.Future;
 import java.util.concurrent.TimeUnit;
 import java.util.concurrent.TimeoutException;
+import java.util.stream.Stream;
 
 import static java.util.Collections.singleton;
 import static org.apache.kafka.streams.query.StateQueryRequest.inStore;
 import static org.apache.kafka.streams.utils.TestUtils.safeUniqueTestName;
-import static org.hamcrest.MatcherAssert.assertThat;
-import static org.hamcrest.Matchers.equalTo;
-import static org.hamcrest.Matchers.is;
-import static org.hamcrest.Matchers.matchesPattern;
+import static org.junit.jupiter.api.Assertions.assertEquals;
 import static org.junit.jupiter.api.Assertions.assertThrows;
+import static org.junit.jupiter.api.Assertions.assertTrue;
 
 @Timeout(600)
 @Tag("integration")
@@ -99,6 +102,7 @@ public class IQv2IntegrationTest {
     public static final EmbeddedKafkaCluster CLUSTER = new EmbeddedKafkaCluster(NUM_BROKERS);
 
     private KafkaStreams kafkaStreams;
+    private String groupProtocol;
 
     @BeforeAll
     public static void before()
@@ -132,7 +136,7 @@ public class IQv2IntegrationTest {
 
             for (final Future<RecordMetadata> future : futures) {
                 final RecordMetadata recordMetadata = future.get(1, TimeUnit.MINUTES);
-                assertThat(recordMetadata.hasOffset(), is(true));
+                assertTrue(recordMetadata.hasOffset());
                 INPUT_POSITION.withComponent(
                     recordMetadata.topic(),
                     recordMetadata.partition(),
@@ -141,16 +145,16 @@ public class IQv2IntegrationTest {
             }
         }
 
-        assertThat(INPUT_POSITION, equalTo(
+        assertEquals(
             Position
                 .emptyPosition()
                 .withComponent(INPUT_TOPIC_NAME, 0, 1L)
-                .withComponent(INPUT_TOPIC_NAME, 1, 0L)
-        ));
+                .withComponent(INPUT_TOPIC_NAME, 1, 0L),
+            INPUT_POSITION);
     }
 
-    @BeforeEach
-    public void beforeTest(final TestInfo testInfo) {
+    private void setup(final String groupProtocol, final TestInfo testInfo) {
+        this.groupProtocol = groupProtocol;
         final StreamsBuilder builder = new StreamsBuilder();
 
         builder.table(
@@ -159,7 +163,6 @@ public class IQv2IntegrationTest {
             Materialized.as(STORE_NAME)
         );
 
-
         final String safeTestName = safeUniqueTestName(testInfo);
         kafkaStreams = new KafkaStreams(builder.build(), streamsConfiguration(safeTestName));
         kafkaStreams.cleanUp();
@@ -167,8 +170,10 @@ public class IQv2IntegrationTest {
 
     @AfterEach
     public void afterTest() {
-        kafkaStreams.close(Duration.ofSeconds(60));
-        kafkaStreams.cleanUp();
+        if (kafkaStreams != null) {
+            kafkaStreams.close(Duration.ofSeconds(60));
+            kafkaStreams.cleanUp();
+        }
     }
 
     @AfterAll
@@ -176,8 +181,10 @@ public class IQv2IntegrationTest {
         CLUSTER.stop();
     }
 
-    @Test
-    public void shouldFailUnknownStore() {
+    @ParameterizedTest(name = "{1}")
+    @MethodSource("groupProtocolParameters")
+    public void shouldFailUnknownStore(final String groupProtocol, final String testName, final TestInfo testInfo) {
+        setup(groupProtocol, testInfo);
         final KeyQuery<Integer, ValueAndTimestamp<Integer>> query = KeyQuery.withKey(1);
         final StateQueryRequest<ValueAndTimestamp<Integer>> request =
             inStore("unknown-store").withQuery(query);
@@ -185,8 +192,10 @@ public class IQv2IntegrationTest {
         assertThrows(UnknownStateStoreException.class, () -> kafkaStreams.query(request));
     }
 
-    @Test
-    public void shouldFailNotStarted() {
+    @ParameterizedTest(name = "{1}")
+    @MethodSource("groupProtocolParameters")
+    public void shouldFailNotStarted(final String groupProtocol, final String testName, final TestInfo testInfo) {
+        setup(groupProtocol, testInfo);
         final KeyQuery<Integer, ValueAndTimestamp<Integer>> query = KeyQuery.withKey(1);
         final StateQueryRequest<ValueAndTimestamp<Integer>> request =
             inStore(STORE_NAME).withQuery(query);
@@ -194,8 +203,10 @@ public class IQv2IntegrationTest {
         assertThrows(StreamsNotStartedException.class, () -> kafkaStreams.query(request));
     }
 
-    @Test
-    public void shouldFailStopped() {
+    @ParameterizedTest(name = "{1}")
+    @MethodSource("groupProtocolParameters")
+    public void shouldFailStopped(final String groupProtocol, final String testName, final TestInfo testInfo) {
+        setup(groupProtocol, testInfo);
         final KeyQuery<Integer, ValueAndTimestamp<Integer>> query = KeyQuery.withKey(1);
         final StateQueryRequest<ValueAndTimestamp<Integer>> request =
             inStore(STORE_NAME).withQuery(query);
@@ -205,9 +216,11 @@ public class IQv2IntegrationTest {
         assertThrows(StreamsStoppedException.class, () -> kafkaStreams.query(request));
     }
 
-    @Test
-    public void shouldRejectNonRunningActive()
+    @ParameterizedTest(name = "{1}")
+    @MethodSource("groupProtocolParameters")
+    public void shouldRejectNonRunningActive(final String groupProtocol, final String testName, final TestInfo testInfo)
         throws NoSuchFieldException, IllegalAccessException {
+        setup(groupProtocol, testInfo);
         final KeyQuery<Integer, ValueAndTimestamp<Integer>> query = KeyQuery.withKey(1);
         final StateQueryRequest<ValueAndTimestamp<Integer>> request =
             inStore(STORE_NAME).withQuery(query).requireActive();
@@ -245,24 +258,22 @@ public class IQv2IntegrationTest {
                     partitions
                 );
 
-            assertThat(result.getPartitionResults().keySet(), is(partitions));
+            assertEquals(partitions, result.getPartitionResults().keySet());
             for (final Integer partition : partitions) {
-                assertThat(result.getPartitionResults().get(partition).isFailure(), is(true));
-                assertThat(
-                    result.getPartitionResults().get(partition).getFailureReason(),
-                    is(FailureReason.NOT_ACTIVE)
-                );
-                assertThat(
-                    result.getPartitionResults().get(partition).getFailureMessage(),
-                    is("Query requires a running active task,"
-                        + " but partition was in state PARTITIONS_ASSIGNED and was active.")
+                assertTrue(result.getPartitionResults().get(partition).isFailure());
+                assertEquals(FailureReason.NOT_ACTIVE, result.getPartitionResults().get(partition).getFailureReason());
+                assertEquals(
+                    "Query requires a running active task, but partition was in state PARTITIONS_ASSIGNED and was active.",
+                    result.getPartitionResults().get(partition).getFailureMessage()
                 );
             }
         }
     }
 
-    @Test
-    public void shouldFetchFromPartition() {
+    @ParameterizedTest(name = "{1}")
+    @MethodSource("groupProtocolParameters")
+    public void shouldFetchFromPartition(final String groupProtocol, final String testName, final TestInfo testInfo) {
+        setup(groupProtocol, testInfo);
         final KeyQuery<Integer, ValueAndTimestamp<Integer>> query = KeyQuery.withKey(1);
         final int partition = 1;
         final Set<Integer> partitions = singleton(partition);
@@ -273,11 +284,13 @@ public class IQv2IntegrationTest {
         final StateQueryResult<ValueAndTimestamp<Integer>> result =
             IntegrationTestUtils.iqv2WaitForResult(kafkaStreams, request);
 
-        assertThat(result.getPartitionResults().keySet(), equalTo(partitions));
+        assertEquals(partitions, result.getPartitionResults().keySet());
     }
 
-    @Test
-    public void shouldFetchExplicitlyFromAllPartitions() {
+    @ParameterizedTest(name = "{1}")
+    @MethodSource("groupProtocolParameters")
+    public void shouldFetchExplicitlyFromAllPartitions(final String groupProtocol, final String testName, final TestInfo testInfo) {
+        setup(groupProtocol, testInfo);
         final KeyQuery<Integer, ValueAndTimestamp<Integer>> query = KeyQuery.withKey(1);
         final Set<Integer> partitions = Set.of(0, 1);
         final StateQueryRequest<ValueAndTimestamp<Integer>> request =
@@ -287,11 +300,13 @@ public class IQv2IntegrationTest {
         final StateQueryResult<ValueAndTimestamp<Integer>> result =
             IntegrationTestUtils.iqv2WaitForPartitions(kafkaStreams, request, partitions);
 
-        assertThat(result.getPartitionResults().keySet(), equalTo(partitions));
+        assertEquals(partitions, result.getPartitionResults().keySet());
     }
 
-    @Test
-    public void shouldNotRequireQueryHandler(final TestInfo testInfo) {
+    @ParameterizedTest(name = "{1}")
+    @MethodSource("groupProtocolParameters")
+    public void shouldNotRequireQueryHandler(final String groupProtocol, final String testName, final TestInfo testInfo) {
+        setup(groupProtocol, testInfo);
         final KeyQuery<Integer, ValueAndTimestamp<Integer>> query = KeyQuery.withKey(1);
         final int partition = 1;
         final Set<Integer> partitions = singleton(partition);
@@ -365,7 +380,7 @@ public class IQv2IntegrationTest {
                         }
 
                         @Override
-                        public void flush() {
+                        public void commit(final Map<TopicPartition, Long> changelogOffsets) {
 
                         }
 
@@ -423,8 +438,11 @@ public class IQv2IntegrationTest {
         );
 
         // Discard the basic streams and replace with test-specific topology
-        kafkaStreams.close();
+        if (kafkaStreams != null) {
+            kafkaStreams.close(CloseOptions.groupMembershipOperation(GroupMembershipOperation.LEAVE_GROUP));
+        }
         final String safeTestName = safeUniqueTestName(testInfo);
+        this.groupProtocol = groupProtocol;
         kafkaStreams = new KafkaStreams(builder.build(), streamsConfiguration(safeTestName));
         kafkaStreams.cleanUp();
 
@@ -434,9 +452,9 @@ public class IQv2IntegrationTest {
 
         final QueryResult<ValueAndTimestamp<Integer>> queryResult =
             result.getPartitionResults().get(partition);
-        assertThat(queryResult.isFailure(), is(true));
-        assertThat(queryResult.getFailureReason(), is(FailureReason.UNKNOWN_QUERY_TYPE));
-        assertThat(queryResult.getFailureMessage(), matchesPattern(
+        assertTrue(queryResult.isFailure());
+        assertEquals(FailureReason.UNKNOWN_QUERY_TYPE, queryResult.getFailureReason());
+        assertTrue(queryResult.getFailureMessage().matches(
             "This store (.*) doesn't know how to execute the given query (.*)."
                 + " Contact the store maintainer if you need support for a new query type."
         ));
@@ -446,7 +464,7 @@ public class IQv2IntegrationTest {
     private Properties streamsConfiguration(final String safeTestName) {
         final Properties config = new Properties();
         config.put(StreamsConfig.TOPOLOGY_OPTIMIZATION_CONFIG, StreamsConfig.OPTIMIZE);
-        config.put(StreamsConfig.APPLICATION_ID_CONFIG, "app-" + safeTestName);
+        config.put(StreamsConfig.APPLICATION_ID_CONFIG, "app-" + safeTestName + "-" + groupProtocol);
         config.put(StreamsConfig.APPLICATION_SERVER_CONFIG, "localhost:" + (++port));
         config.put(StreamsConfig.BOOTSTRAP_SERVERS_CONFIG, CLUSTER.bootstrapServers());
         config.put(StreamsConfig.STATE_DIR_CONFIG, TestUtils.tempDirectory().getPath());
@@ -454,10 +472,16 @@ public class IQv2IntegrationTest {
         config.put(StreamsConfig.DEFAULT_VALUE_SERDE_CLASS_CONFIG, Serdes.Integer().getClass());
         config.put(StreamsConfig.NUM_STANDBY_REPLICAS_CONFIG, 1);
         config.put(ConsumerConfig.MAX_POLL_RECORDS_CONFIG, 100);
-        config.put(ConsumerConfig.HEARTBEAT_INTERVAL_MS_CONFIG, 200);
-        config.put(ConsumerConfig.SESSION_TIMEOUT_MS_CONFIG, 1000);
         config.put(StreamsConfig.COMMIT_INTERVAL_MS_CONFIG, 100L);
         config.put(StreamsConfig.NUM_STREAM_THREADS_CONFIG, 1);
+        config.put(StreamsConfig.GROUP_PROTOCOL_CONFIG, groupProtocol);
         return config;
+    }
+
+    private static Stream<Arguments> groupProtocolParameters() {
+        return Stream.of(
+            Arguments.of("classic", "CLASSIC protocol"),
+            Arguments.of("streams", "STREAMS protocol")
+        );
     }
 }

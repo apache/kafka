@@ -17,8 +17,9 @@
 package org.apache.kafka.common.telemetry.internals;
 
 import org.apache.kafka.common.Uuid;
+import org.apache.kafka.common.errors.TelemetryTooLargeException;
 import org.apache.kafka.common.protocol.Errors;
-import org.apache.kafka.common.record.CompressionType;
+import org.apache.kafka.common.record.internal.CompressionType;
 import org.apache.kafka.common.utils.Utils;
 
 import org.junit.jupiter.api.Test;
@@ -30,17 +31,10 @@ import java.io.IOException;
 import java.nio.ByteBuffer;
 import java.time.Instant;
 import java.util.ArrayList;
-import java.util.Arrays;
-import java.util.Collections;
 import java.util.List;
 import java.util.Optional;
+import java.util.Set;
 import java.util.function.Predicate;
-
-import io.opentelemetry.proto.metrics.v1.Metric;
-import io.opentelemetry.proto.metrics.v1.MetricsData;
-import io.opentelemetry.proto.metrics.v1.ResourceMetrics;
-import io.opentelemetry.proto.metrics.v1.ScopeMetrics;
-import io.opentelemetry.proto.resource.v1.Resource;
 
 import static org.junit.jupiter.api.Assertions.assertArrayEquals;
 import static org.junit.jupiter.api.Assertions.assertEquals;
@@ -69,12 +63,12 @@ public class ClientTelemetryUtilsTest {
     @Test
     public void testGetSelectorFromRequestedMetrics() {
         // no metrics selector
-        assertEquals(ClientTelemetryUtils.SELECTOR_NO_METRICS, ClientTelemetryUtils.getSelectorFromRequestedMetrics(Collections.emptyList()));
+        assertEquals(ClientTelemetryUtils.SELECTOR_NO_METRICS, ClientTelemetryUtils.getSelectorFromRequestedMetrics(List.of()));
         assertEquals(ClientTelemetryUtils.SELECTOR_NO_METRICS, ClientTelemetryUtils.getSelectorFromRequestedMetrics(null));
         // all metrics selector
-        assertEquals(ClientTelemetryUtils.SELECTOR_ALL_METRICS, ClientTelemetryUtils.getSelectorFromRequestedMetrics(Collections.singletonList("*")));
+        assertEquals(ClientTelemetryUtils.SELECTOR_ALL_METRICS, ClientTelemetryUtils.getSelectorFromRequestedMetrics(List.of("*")));
         // specific metrics selector
-        Predicate<? super MetricKeyable> selector = ClientTelemetryUtils.getSelectorFromRequestedMetrics(Arrays.asList("metric1", "metric2"));
+        Predicate<? super MetricKeyable> selector = ClientTelemetryUtils.getSelectorFromRequestedMetrics(List.of("metric1", "metric2"));
         assertNotEquals(ClientTelemetryUtils.SELECTOR_NO_METRICS, selector);
         assertNotEquals(ClientTelemetryUtils.SELECTOR_ALL_METRICS, selector);
         assertTrue(selector.test(new MetricKey("metric1.test")));
@@ -86,7 +80,7 @@ public class ClientTelemetryUtilsTest {
     @Test
     public void testGetCompressionTypesFromAcceptedList() {
         assertEquals(0, ClientTelemetryUtils.getCompressionTypesFromAcceptedList(null).size());
-        assertEquals(0, ClientTelemetryUtils.getCompressionTypesFromAcceptedList(Collections.emptyList()).size());
+        assertEquals(0, ClientTelemetryUtils.getCompressionTypesFromAcceptedList(List.of()).size());
 
         List<Byte> compressionTypes = new ArrayList<>();
         compressionTypes.add(CompressionType.GZIP.id);
@@ -104,6 +98,7 @@ public class ClientTelemetryUtilsTest {
     public void testValidateClientInstanceId() {
         assertThrows(IllegalArgumentException.class, () -> ClientTelemetryUtils.validateClientInstanceId(null));
         assertThrows(IllegalArgumentException.class, () -> ClientTelemetryUtils.validateClientInstanceId(Uuid.ZERO_UUID));
+        assertThrows(IllegalArgumentException.class, () -> ClientTelemetryUtils.validateClientInstanceId(Uuid.ONE_UUID));
 
         Uuid uuid = Uuid.randomUuid();
         assertEquals(uuid, ClientTelemetryUtils.validateClientInstanceId(uuid));
@@ -123,59 +118,81 @@ public class ClientTelemetryUtilsTest {
 
     @Test
     public void testPreferredCompressionType() {
-        assertEquals(CompressionType.NONE, ClientTelemetryUtils.preferredCompressionType(Collections.emptyList()));
-        assertEquals(CompressionType.NONE, ClientTelemetryUtils.preferredCompressionType(null));
-        assertEquals(CompressionType.NONE, ClientTelemetryUtils.preferredCompressionType(Arrays.asList(CompressionType.NONE, CompressionType.GZIP)));
-        assertEquals(CompressionType.GZIP, ClientTelemetryUtils.preferredCompressionType(Arrays.asList(CompressionType.GZIP, CompressionType.NONE)));
+        // Test with no unsupported types
+        assertEquals(CompressionType.NONE, ClientTelemetryUtils.preferredCompressionType(List.of(), Set.of()));
+        assertEquals(CompressionType.NONE, ClientTelemetryUtils.preferredCompressionType(List.of(CompressionType.NONE, CompressionType.GZIP), Set.of()));
+        assertEquals(CompressionType.GZIP, ClientTelemetryUtils.preferredCompressionType(List.of(CompressionType.GZIP, CompressionType.NONE), Set.of()));
+
+        // Test unsupported type filtering (returns first available type, or NONE if all are unsupported)
+        assertEquals(CompressionType.LZ4, ClientTelemetryUtils.preferredCompressionType(List.of(CompressionType.GZIP, CompressionType.LZ4), Set.of(CompressionType.GZIP)));
+        assertEquals(CompressionType.SNAPPY, ClientTelemetryUtils.preferredCompressionType(List.of(CompressionType.GZIP, CompressionType.LZ4, CompressionType.SNAPPY), Set.of(CompressionType.GZIP, CompressionType.LZ4)));
+        assertEquals(CompressionType.NONE, ClientTelemetryUtils.preferredCompressionType(List.of(CompressionType.GZIP, CompressionType.LZ4), Set.of(CompressionType.GZIP, CompressionType.LZ4)));
+        
+        // Test edge case: no match between requested and supported types
+        assertEquals(CompressionType.GZIP, ClientTelemetryUtils.preferredCompressionType(List.of(CompressionType.GZIP, CompressionType.LZ4), Set.of(CompressionType.SNAPPY)));
+
+        // Test NullPointerException for null parameters
+        assertThrows(NullPointerException.class, () ->
+            ClientTelemetryUtils.preferredCompressionType(null, Set.of()));
+        assertThrows(NullPointerException.class, () ->
+            ClientTelemetryUtils.preferredCompressionType(List.of(CompressionType.GZIP, CompressionType.NONE), null));
     }
 
     @ParameterizedTest
     @EnumSource(CompressionType.class)
     public void testCompressDecompress(CompressionType compressionType) throws IOException {
-        MetricsData metricsData = getMetricsData();
-        byte[] raw = metricsData.toByteArray();
-        ByteBuffer compressed = ClientTelemetryUtils.compress(metricsData, compressionType);
+        List<SinglePointMetric> metrics = sampleMetrics();
+        byte[] raw = Utils.toArray(ClientTelemetryUtils.compressMetrics(metrics, CompressionType.NONE));
+        ByteBuffer compressed = ClientTelemetryUtils.compressMetrics(metrics, compressionType);
         assertNotNull(compressed);
         if (compressionType != CompressionType.NONE) {
             assertTrue(compressed.limit() < raw.length);
         } else {
             assertArrayEquals(raw, Utils.toArray(compressed));
         }
-        ByteBuffer decompressed = ClientTelemetryUtils.decompress(compressed, compressionType);
+        ByteBuffer decompressed = ClientTelemetryUtils.decompress(compressed, compressionType, 1024 * 1024);
         assertNotNull(decompressed);
-        byte[] actualResult = Utils.toArray(decompressed);
-        assertArrayEquals(raw, actualResult);
+        assertArrayEquals(raw, Utils.toArray(decompressed));
     }
 
-    private MetricsData getMetricsData() {
-        List<Metric> metricsList = new ArrayList<>();
-        metricsList.add(SinglePointMetric.sum(
-                        new MetricKey("metricName"), 1.0, true, Instant.now(), null, Collections.emptySet())
-                .builder().build());
-        metricsList.add(SinglePointMetric.sum(
-                        new MetricKey("metricName1"), 100.0, false, Instant.now(),  Instant.now(), Collections.emptySet())
-                .builder().build());
-        metricsList.add(SinglePointMetric.deltaSum(
-                        new MetricKey("metricName2"), 1.0, true, Instant.now(), Instant.now(), Collections.emptySet())
-                .builder().build());
-        metricsList.add(SinglePointMetric.gauge(
-                        new MetricKey("metricName3"), 1.0, Instant.now(), Collections.emptySet())
-                .builder().build());
-        metricsList.add(SinglePointMetric.gauge(
-                        new MetricKey("metricName4"), Long.valueOf(100), Instant.now(), Collections.emptySet())
-                .builder().build());
+    private List<SinglePointMetric> sampleMetrics() {
+        List<SinglePointMetric> metrics = new ArrayList<>();
+        metrics.add(SinglePointMetric.sum(
+            new MetricKey("metricName"), 1.0, true, Instant.now(), null, Set.of()));
+        metrics.add(SinglePointMetric.sum(
+            new MetricKey("metricName1"), 100.0, false, Instant.now(), Instant.now(), Set.of()));
+        metrics.add(SinglePointMetric.deltaSum(
+            new MetricKey("metricName2"), 1.0, true, Instant.now(), Instant.now(), Set.of()));
+        metrics.add(SinglePointMetric.gauge(
+            new MetricKey("metricName3"), 1.0, Instant.now(), Set.of()));
+        metrics.add(SinglePointMetric.gauge(
+            new MetricKey("metricName4"), Long.valueOf(100), Instant.now(), Set.of()));
+        return metrics;
+    }
 
-        MetricsData.Builder builder = MetricsData.newBuilder();
-        for (Metric metric : metricsList) {
-            ResourceMetrics rm = ResourceMetrics.newBuilder()
-                    .setResource(Resource.newBuilder().build())
-                    .addScopeMetrics(ScopeMetrics.newBuilder()
-                            .addMetrics(metric)
-                            .build()
-                    ).build();
-            builder.addResourceMetrics(rm);
-        }
+    @Test
+    public void testDecompressExceedingMaxSizeThrows() throws IOException {
+        // Compress a payload then verify decompression with a small limit throws.
+        List<SinglePointMetric> metrics = sampleMetrics();
+        byte[] raw = Utils.toArray(ClientTelemetryUtils.compressMetrics(metrics, CompressionType.NONE));
+        ByteBuffer compressed = ClientTelemetryUtils.compressMetrics(metrics, CompressionType.GZIP);
 
-        return builder.build();
+        // Set limit smaller than the actual decompressed size
+        int smallLimit = raw.length - 1;
+        TelemetryTooLargeException ex = assertThrows(TelemetryTooLargeException.class,
+            () -> ClientTelemetryUtils.decompress(compressed.duplicate(), CompressionType.GZIP, smallLimit));
+        assertTrue(ex.getMessage().contains("Decompressed telemetry metrics exceed maximum allowed size: " + smallLimit));
+    }
+
+    @Test
+    public void testDecompressWithPayloadSizeSucceeds() throws IOException {
+        List<SinglePointMetric> metrics = sampleMetrics();
+        byte[] raw = Utils.toArray(ClientTelemetryUtils.compressMetrics(metrics, CompressionType.NONE));
+        ByteBuffer compressed = ClientTelemetryUtils.compressMetrics(metrics, CompressionType.GZIP);
+
+        // Set limit to exact limit prior compression.
+        ByteBuffer result = ClientTelemetryUtils.decompress(compressed, CompressionType.GZIP, raw.length);
+        assertNotNull(result);
+        assertArrayEquals(raw, Utils.toArray(result));
     }
 }

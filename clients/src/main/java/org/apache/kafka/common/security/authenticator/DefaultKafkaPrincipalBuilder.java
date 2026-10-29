@@ -25,7 +25,6 @@ import org.apache.kafka.common.protocol.MessageUtil;
 import org.apache.kafka.common.security.auth.AuthenticationContext;
 import org.apache.kafka.common.security.auth.KafkaPrincipal;
 import org.apache.kafka.common.security.auth.KafkaPrincipalBuilder;
-import org.apache.kafka.common.security.auth.KafkaPrincipalSerde;
 import org.apache.kafka.common.security.auth.PlaintextAuthenticationContext;
 import org.apache.kafka.common.security.auth.SaslAuthenticationContext;
 import org.apache.kafka.common.security.auth.SslAuthenticationContext;
@@ -50,7 +49,7 @@ import javax.security.sasl.SaslServer;
  *
  * NOTE: This is an internal class and can change without notice.
  */
-public class DefaultKafkaPrincipalBuilder implements KafkaPrincipalBuilder, KafkaPrincipalSerde {
+public class DefaultKafkaPrincipalBuilder implements KafkaPrincipalBuilder {
     private final KerberosShortNamer kerberosShortNamer;
     private final SslPrincipalMapper sslPrincipalMapper;
 

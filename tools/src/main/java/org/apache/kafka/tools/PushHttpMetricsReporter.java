@@ -235,91 +235,24 @@ public class PushHttpMetricsReporter implements MetricsReporter {
 
     // Static package-private so unit tests can mock reading response
     static String readResponse(InputStream is) {
-        try (Scanner s = new Scanner(is, StandardCharsets.UTF_8.name()).useDelimiter("\\A")) {
+        try (Scanner s = new Scanner(is, StandardCharsets.UTF_8).useDelimiter("\\A")) {
             return s.hasNext() ? s.next() : "";
         }
     }
 
-    private static class MetricsReport {
-        private final MetricClientInfo client;
-        private final Collection<MetricValue> metrics;
-
-        MetricsReport(MetricClientInfo client, Collection<MetricValue> metrics) {
-            this.client = client;
-            this.metrics = metrics;
-        }
-
-        @JsonProperty
-        public MetricClientInfo client() {
-            return client;
-        }
-
-        @JsonProperty
-        public Collection<MetricValue> metrics() {
-            return metrics;
-        }
+    private record MetricsReport(@JsonProperty("client") MetricClientInfo client, 
+                                @JsonProperty("metrics") Collection<MetricValue> metrics) {
     }
 
-    private static class MetricClientInfo {
-        private final String host;
-        private final String clientId;
-        private final long time;
-
-        MetricClientInfo(String host, String clientId, long time) {
-            this.host = host;
-            this.clientId = clientId;
-            this.time = time;
-        }
-
-        @JsonProperty
-        public String host() {
-            return host;
-        }
-
-        @JsonProperty("client_id")
-        public String clientId() {
-            return clientId;
-        }
-
-        @JsonProperty
-        public long time() {
-            return time;
-        }
+    private record MetricClientInfo(@JsonProperty("host") String host, 
+                                   @JsonProperty("client_id") String clientId, 
+                                   @JsonProperty("time") long time) {
     }
 
-    private static class MetricValue {
-
-        private final String name;
-        private final String group;
-        private final Map<String, String> tags;
-        private final Object value;
-
-        MetricValue(String name, String group, Map<String, String> tags, Object value) {
-            this.name = name;
-            this.group = group;
-            this.tags = tags;
-            this.value = value;
-        }
-
-        @JsonProperty
-        public String name() {
-            return name;
-        }
-
-        @JsonProperty
-        public String group() {
-            return group;
-        }
-
-        @JsonProperty
-        public Map<String, String> tags() {
-            return tags;
-        }
-
-        @JsonProperty
-        public Object value() {
-            return value;
-        }
+    private record MetricValue(@JsonProperty("name") String name, 
+                              @JsonProperty("group") String group, 
+                              @JsonProperty("tags") Map<String, String> tags, 
+                              @JsonProperty("value") Object value) {
     }
 
     // The signature for getInt changed from returning int to Integer so to remain compatible with 0.8.2.2 jars

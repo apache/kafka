@@ -90,12 +90,6 @@ public class SessionWindowedKStreamImpl<K, V> extends AbstractStream<K, V> imple
         return doCount(named, materialized);
     }
 
-    @Override
-    public SessionWindowedKStream<K, V> emitStrategy(final EmitStrategy emitStrategy) {
-        this.emitStrategy = emitStrategy;
-        return this;
-    }
-
     private KTable<Windowed<K>, Long> doCount(final Named named,
                                               final Materialized<K, Long, SessionStore<Bytes, byte[]>> materialized) {
         final MaterializedInternal<K, Long, SessionStore<Bytes, byte[]>> materializedInternal =
@@ -152,7 +146,7 @@ public class SessionWindowedKStreamImpl<K, V> extends AbstractStream<K, V> imple
         Objects.requireNonNull(reducer, "reducer can't be null");
         Objects.requireNonNull(named, "named can't be null");
         Objects.requireNonNull(materialized, "materialized can't be null");
-        final Aggregator<K, V, V> reduceAggregator = aggregatorForReducer(reducer);
+        final Aggregator<K, V, V> reduceAggregator = aggregatorFromReducer(reducer);
         final MaterializedInternal<K, V, SessionStore<Bytes, byte[]>> materializedInternal =
             new MaterializedInternal<>(materialized, builder, REDUCE_NAME);
         if (materializedInternal.keySerde() == null) {
@@ -176,7 +170,7 @@ public class SessionWindowedKStreamImpl<K, V> extends AbstractStream<K, V> imple
                 emitStrategy,
                 aggregateBuilder.reduceInitializer,
                 reduceAggregator,
-                mergerForAggregator(reduceAggregator)
+                mergerFromAggregator(reduceAggregator)
             ),
             materializedInternal.queryableStoreName(),
             materializedInternal.keySerde() != null ? new WindowedSerdes.SessionWindowedSerde<>(materializedInternal.keySerde()) : null,
@@ -184,40 +178,48 @@ public class SessionWindowedKStreamImpl<K, V> extends AbstractStream<K, V> imple
             false);
     }
 
+    private Aggregator<K, V, V> aggregatorFromReducer(final Reducer<V> reducer) {
+        return (aggKey, value, aggregate) -> aggregate == null ? value : reducer.apply(aggregate, value);
+    }
+
+    private Merger<K, V> mergerFromAggregator(final Aggregator<K, V, V> aggregator) {
+        return (aggKey, aggOne, aggTwo) -> aggregator.apply(aggKey, aggTwo, aggOne);
+    }
+
     @Override
-    public <T> KTable<Windowed<K>, T> aggregate(final Initializer<T> initializer,
-                                                final Aggregator<? super K, ? super V, T> aggregator,
-                                                final Merger<? super K, T> sessionMerger) {
+    public <VOut> KTable<Windowed<K>, VOut> aggregate(final Initializer<VOut> initializer,
+                                                      final Aggregator<? super K, ? super V, VOut> aggregator,
+                                                      final Merger<? super K, VOut> sessionMerger) {
         return aggregate(initializer, aggregator, sessionMerger, NamedInternal.empty());
     }
 
     @Override
-    public <T> KTable<Windowed<K>, T> aggregate(final Initializer<T> initializer,
-                                                final Aggregator<? super K, ? super V, T> aggregator,
-                                                final Merger<? super K, T> sessionMerger,
-                                                final Named named) {
+    public <VOut> KTable<Windowed<K>, VOut> aggregate(final Initializer<VOut> initializer,
+                                                      final Aggregator<? super K, ? super V, VOut> aggregator,
+                                                      final Merger<? super K, VOut> sessionMerger,
+                                                      final Named named) {
         return aggregate(initializer, aggregator, sessionMerger, named, Materialized.with(keySerde, null));
     }
 
     @Override
-    public <VR> KTable<Windowed<K>, VR> aggregate(final Initializer<VR> initializer,
-                                                  final Aggregator<? super K, ? super V, VR> aggregator,
-                                                  final Merger<? super K, VR> sessionMerger,
-                                                  final Materialized<K, VR, SessionStore<Bytes, byte[]>> materialized) {
+    public <VOut> KTable<Windowed<K>, VOut> aggregate(final Initializer<VOut> initializer,
+                                                      final Aggregator<? super K, ? super V, VOut> aggregator,
+                                                      final Merger<? super K, VOut> sessionMerger,
+                                                      final Materialized<K, VOut, SessionStore<Bytes, byte[]>> materialized) {
         return aggregate(initializer, aggregator, sessionMerger, NamedInternal.empty(), materialized);
     }
 
     @Override
-    public <VR> KTable<Windowed<K>, VR> aggregate(final Initializer<VR> initializer,
-                                                  final Aggregator<? super K, ? super V, VR> aggregator,
-                                                  final Merger<? super K, VR> sessionMerger,
-                                                  final Named named,
-                                                  final Materialized<K, VR, SessionStore<Bytes, byte[]>> materialized) {
+    public <VOut> KTable<Windowed<K>, VOut> aggregate(final Initializer<VOut> initializer,
+                                                      final Aggregator<? super K, ? super V, VOut> aggregator,
+                                                      final Merger<? super K, VOut> sessionMerger,
+                                                      final Named named,
+                                                      final Materialized<K, VOut, SessionStore<Bytes, byte[]>> materialized) {
         Objects.requireNonNull(initializer, "initializer can't be null");
         Objects.requireNonNull(aggregator, "aggregator can't be null");
         Objects.requireNonNull(sessionMerger, "sessionMerger can't be null");
         Objects.requireNonNull(materialized, "materialized can't be null");
-        final MaterializedInternal<K, VR, SessionStore<Bytes, byte[]>> materializedInternal =
+        final MaterializedInternal<K, VOut, SessionStore<Bytes, byte[]>> materializedInternal =
             new MaterializedInternal<>(materialized, builder, AGGREGATE_NAME);
 
         if (materializedInternal.keySerde() == null) {
@@ -245,11 +247,10 @@ public class SessionWindowedKStreamImpl<K, V> extends AbstractStream<K, V> imple
             false);
     }
 
-    private Merger<K, V> mergerForAggregator(final Aggregator<K, V, V> aggregator) {
-        return (aggKey, aggOne, aggTwo) -> aggregator.apply(aggKey, aggTwo, aggOne);
+    @Override
+    public SessionWindowedKStream<K, V> emitStrategy(final EmitStrategy emitStrategy) {
+        this.emitStrategy = emitStrategy;
+        return this;
     }
 
-    private Aggregator<K, V, V> aggregatorForReducer(final Reducer<V> reducer) {
-        return (aggKey, value, aggregate) -> aggregate == null ? value : reducer.apply(aggregate, value);
-    }
 }

@@ -16,35 +16,22 @@
  */
 package org.apache.kafka.streams.state.internals;
 
-import org.apache.kafka.common.metrics.Metrics;
-import org.apache.kafka.common.serialization.Serdes;
 import org.apache.kafka.common.utils.Bytes;
-import org.apache.kafka.common.utils.LogContext;
 import org.apache.kafka.streams.errors.InvalidStateStoreException;
-import org.apache.kafka.streams.processor.internals.MockStreamsMetrics;
-import org.apache.kafka.streams.query.Position;
 import org.apache.kafka.streams.state.KeyValueIterator;
 import org.apache.kafka.streams.state.internals.metrics.RocksDBMetricsRecorder;
-import org.apache.kafka.test.InternalMockProcessorContext;
-import org.apache.kafka.test.MockRecordCollector;
-import org.apache.kafka.test.TestUtils;
 
-import org.junit.jupiter.api.AfterEach;
-import org.junit.jupiter.api.BeforeEach;
 import org.junit.jupiter.api.Test;
 
 import java.io.File;
 import java.util.List;
 
-import static org.hamcrest.CoreMatchers.is;
-import static org.hamcrest.CoreMatchers.nullValue;
-import static org.hamcrest.MatcherAssert.assertThat;
 import static org.junit.jupiter.api.Assertions.assertEquals;
 import static org.junit.jupiter.api.Assertions.assertNull;
 import static org.junit.jupiter.api.Assertions.assertThrows;
 import static org.junit.jupiter.api.Assertions.assertTrue;
 
-public class LogicalKeyValueSegmentsTest {
+public class LogicalKeyValueSegmentsTest extends AbstractSegmentsTest<LogicalKeyValueSegments> {
 
     private static final long SEGMENT_INTERVAL = 100L;
     private static final long RETENTION_PERIOD = 4 * SEGMENT_INTERVAL;
@@ -52,33 +39,16 @@ public class LogicalKeyValueSegmentsTest {
     private static final String METRICS_SCOPE = "metrics-scope";
     private static final String DB_FILE_DIR = "rocksdb";
 
-    private InternalMockProcessorContext context;
 
-    private LogicalKeyValueSegments segments;
-
-    @BeforeEach
-    public void setUp() {
-        context = new InternalMockProcessorContext<>(
-            TestUtils.tempDirectory(),
-            Serdes.String(),
-            Serdes.Long(),
-            new MockRecordCollector(),
-            new ThreadCache(new LogContext("testCache "), 0, new MockStreamsMetrics(new Metrics()))
-        );
-        segments = new LogicalKeyValueSegments(
+    @Override
+    public LogicalKeyValueSegments getSegments() {
+        return new LogicalKeyValueSegments(
             STORE_NAME,
             DB_FILE_DIR,
             RETENTION_PERIOD,
             SEGMENT_INTERVAL,
             new RocksDBMetricsRecorder(METRICS_SCOPE, STORE_NAME)
         );
-        segments.setPosition(Position.emptyPosition());
-        segments.openExisting(context, 0L);
-    }
-
-    @AfterEach
-    public void tearDown() {
-        segments.close();
     }
 
     @Test
@@ -135,8 +105,8 @@ public class LogicalKeyValueSegmentsTest {
 
     @Test
     public void shouldCleanupSegmentsThatHaveExpired() {
-        final LogicalKeyValueSegment segment1 = segments.getOrCreateSegmentIfLive(0, context, 0);
-        final LogicalKeyValueSegment segment2 = segments.getOrCreateSegmentIfLive(2, context, SEGMENT_INTERVAL * 2L);
+        segments.getOrCreateSegmentIfLive(0, context, 0);
+        segments.getOrCreateSegmentIfLive(2, context, SEGMENT_INTERVAL * 2L);
         final LogicalKeyValueSegment segment3 = segments.getOrCreateSegmentIfLive(3, context, SEGMENT_INTERVAL * 3L);
         final LogicalKeyValueSegment segment4 = segments.getOrCreateSegmentIfLive(7, context, SEGMENT_INTERVAL * 7L);
 
@@ -151,7 +121,7 @@ public class LogicalKeyValueSegmentsTest {
     @Test
     public void shouldNotCleanUpReservedSegments() {
         final LogicalKeyValueSegment reservedSegment = segments.createReservedSegment(-1, "reserved");
-        final LogicalKeyValueSegment segment1 = segments.getOrCreateSegmentIfLive(1, context, SEGMENT_INTERVAL);
+        segments.getOrCreateSegmentIfLive(1, context, SEGMENT_INTERVAL);
         final LogicalKeyValueSegment segment2 = segments.getOrCreateSegmentIfLive(2, context, SEGMENT_INTERVAL * 2L);
 
         segments.cleanupExpiredSegments(SEGMENT_INTERVAL * 6L);
@@ -159,7 +129,7 @@ public class LogicalKeyValueSegmentsTest {
         final List<LogicalKeyValueSegment> allSegments = segments.allSegments(true);
         assertEquals(1, allSegments.size());
         assertEquals(segment2, allSegments.get(0));
-        assertEquals(reservedSegment, segments.getReservedSegment(-1));
+        assertEquals(reservedSegment, segments.getReservedSegment());
     }
 
     @Test
@@ -226,8 +196,8 @@ public class LogicalKeyValueSegmentsTest {
 
         segments.close();
 
-        assertThat(segments.segmentForTimestamp(0), is(nullValue()));
-        assertThat(segments.getReservedSegment(-1), is(nullValue()));
+        assertNull(segments.segmentForTimestamp(0));
+        assertNull(segments.getReservedSegment());
         // verify iterators closed as well
         assertThrows(InvalidStateStoreException.class, all1::hasNext);
         assertThrows(InvalidStateStoreException.class, all2::hasNext);

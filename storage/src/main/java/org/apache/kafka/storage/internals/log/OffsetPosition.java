@@ -21,14 +21,7 @@ package org.apache.kafka.storage.internals.log;
  * in some log file of the beginning of the message set entry with the
  * given offset.
  */
-public final class OffsetPosition implements IndexEntry {
-    public final long offset;
-    public final int position;
-
-    public OffsetPosition(long offset, int position) {
-        this.offset = offset;
-        this.position = position;
-    }
+public record OffsetPosition(long offset, int position) implements IndexEntry {
 
     @Override
     public long indexKey() {
@@ -38,33 +31,5 @@ public final class OffsetPosition implements IndexEntry {
     @Override
     public long indexValue() {
         return position;
-    }
-
-    @Override
-    public boolean equals(Object o) {
-        if (this == o)
-            return true;
-        if (o == null || getClass() != o.getClass())
-            return false;
-
-        OffsetPosition that = (OffsetPosition) o;
-
-        return offset == that.offset
-            && position == that.position;
-    }
-
-    @Override
-    public int hashCode() {
-        int result = Long.hashCode(offset);
-        result = 31 * result + position;
-        return result;
-    }
-
-    @Override
-    public String toString() {
-        return "OffsetPosition(" +
-            "offset=" + offset +
-            ", position=" + position +
-            ')';
     }
 }

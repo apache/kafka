@@ -19,11 +19,9 @@ package org.apache.kafka.common.requests;
 
 import org.apache.kafka.common.message.AddRaftVoterResponseData;
 import org.apache.kafka.common.protocol.ApiKeys;
-import org.apache.kafka.common.protocol.ByteBufferAccessor;
 import org.apache.kafka.common.protocol.Errors;
+import org.apache.kafka.common.protocol.Readable;
 
-import java.nio.ByteBuffer;
-import java.util.Collections;
 import java.util.Map;
 
 public class AddRaftVoterResponse extends AbstractResponse {
@@ -52,14 +50,14 @@ public class AddRaftVoterResponse extends AbstractResponse {
     @Override
     public Map<Errors, Integer> errorCounts() {
         if (data.errorCode() != Errors.NONE.code()) {
-            return Collections.singletonMap(Errors.forCode(data.errorCode()), 1);
+            return Map.of(Errors.forCode(data.errorCode()), 1);
         } else {
-            return Collections.emptyMap();
+            return Map.of();
         }
     }
 
-    public static AddRaftVoterResponse parse(ByteBuffer buffer, short version) {
+    public static AddRaftVoterResponse parse(Readable readable, short version) {
         return new AddRaftVoterResponse(
-            new AddRaftVoterResponseData(new ByteBufferAccessor(buffer), version));
+            new AddRaftVoterResponseData(readable, version));
     }
 }

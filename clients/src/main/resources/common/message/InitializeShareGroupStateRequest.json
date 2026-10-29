@@ -18,9 +18,13 @@
   "type": "request",
   "listeners": ["broker"],
   "name": "InitializeShareGroupStateRequest",
-  "validVersions": "0",
+  // Version 1 uses the v3 request header (KIP-1313).
+  "validVersions": "0-1",
   "flexibleVersions": "0+",
-  "latestVersionUnstable": true,
+  "headerVersions": {
+    "0": "2",
+    "1+": "3"
+  },
   "fields": [
     { "name": "GroupId", "type": "string", "versions": "0+",
       "about": "The group identifier." },
@@ -29,7 +33,7 @@
       { "name": "TopicId", "type": "uuid", "versions": "0+",
         "about": "The topic identifier." },
       { "name": "Partitions", "type": "[]PartitionData", "versions": "0+",
-        "about":  "The data for the partitions.", "fields": [
+        "about": "The data for the partitions.", "fields": [
         { "name": "Partition", "type": "int32", "versions": "0+",
           "about": "The partition index." },
         { "name": "StateEpoch", "type": "int32", "versions": "0+",

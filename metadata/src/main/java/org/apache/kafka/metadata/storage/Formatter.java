@@ -20,14 +20,12 @@ package org.apache.kafka.metadata.storage;
 import org.apache.kafka.common.Uuid;
 import org.apache.kafka.common.utils.Time;
 import org.apache.kafka.metadata.MetadataRecordSerde;
-import org.apache.kafka.metadata.bootstrap.BootstrapDirectory;
 import org.apache.kafka.metadata.bootstrap.BootstrapMetadata;
 import org.apache.kafka.metadata.properties.MetaProperties;
 import org.apache.kafka.metadata.properties.MetaPropertiesEnsemble;
 import org.apache.kafka.metadata.properties.MetaPropertiesVersion;
 import org.apache.kafka.raft.DynamicVoters;
 import org.apache.kafka.raft.KafkaRaftClient;
-import org.apache.kafka.raft.VoterSet;
 import org.apache.kafka.server.common.ApiMessageAndVersion;
 import org.apache.kafka.server.common.Feature;
 import org.apache.kafka.server.common.FeatureVersion;
@@ -43,7 +41,6 @@ import java.nio.file.Files;
 import java.nio.file.Paths;
 import java.util.ArrayList;
 import java.util.Collection;
-import java.util.Collections;
 import java.util.EnumSet;
 import java.util.HashMap;
 import java.util.List;
@@ -104,6 +101,11 @@ public class Formatter {
     private BootstrapMetadata bootstrapMetadata;
 
     /**
+     * Additional bootstrap records to include beyond feature levels and SCRAM.
+     */
+    private List<ApiMessageAndVersion> additionalBootstrapRecords = List.of();
+
+    /**
      * True if we should enable unstable feature versions.
      */
     private boolean unstableFeatureVersionsEnabled = false;
@@ -116,7 +118,7 @@ public class Formatter {
     /**
      * The arguments passed to --add-scram
      */
-    private List<String> scramArguments = Collections.emptyList();
+    private List<String> scramArguments = List.of();
 
     /**
      * The name of the initial controller listener.
@@ -132,7 +134,8 @@ public class Formatter {
      * The initial KIP-853 voters.
      */
     private Optional<DynamicVoters> initialControllers = Optional.empty();
-    private boolean noInitialControllersFlag = false;
+    private boolean hasDynamicQuorum = false;
+    private boolean writeBootstrapSnapshot = true;
 
     public Formatter setPrintStream(PrintStream printStream) {
         this.printStream = printStream;
@@ -183,6 +186,11 @@ public class Formatter {
         return this;
     }
 
+    public Formatter setAdditionalBootstrapRecords(List<ApiMessageAndVersion> additionalBootstrapRecords) {
+        this.additionalBootstrapRecords = additionalBootstrapRecords;
+        return this;
+    }
+
     public Formatter setUnstableFeatureVersionsEnabled(boolean unstableFeatureVersionsEnabled) {
         this.unstableFeatureVersionsEnabled = unstableFeatureVersionsEnabled;
         return this;
@@ -208,18 +216,18 @@ public class Formatter {
         return this;
     }
 
-    public Formatter setMetadataLogDirectory(Optional<String> metadataLogDirectory) {
-        this.metadataLogDirectory = metadataLogDirectory;
-        return this;
-    }
-
     public Formatter setInitialControllers(DynamicVoters initialControllers) {
         this.initialControllers = Optional.of(initialControllers);
         return this;
     }
 
-    public Formatter setNoInitialControllersFlag(boolean noInitialControllersFlag) {
-        this.noInitialControllersFlag = noInitialControllersFlag;
+    public Formatter setHasDynamicQuorum(boolean hasDynamicQuorum) {
+        this.hasDynamicQuorum = hasDynamicQuorum;
+        return this;
+    }
+
+    public Formatter setWriteBootstrapSnapshot(boolean writeBootstrapSnapshot) {
+        this.writeBootstrapSnapshot = writeBootstrapSnapshot;
         return this;
     }
 
@@ -228,7 +236,7 @@ public class Formatter {
     }
 
     boolean hasDynamicQuorum() {
-        return initialControllers.isPresent() || noInitialControllersFlag;
+        return hasDynamicQuorum;
     }
 
     public BootstrapMetadata bootstrapMetadata() {
@@ -284,10 +292,6 @@ public class Formatter {
     }
 
     MetadataVersion verifyReleaseVersion(MetadataVersion metadataVersion) {
-        if (!metadataVersion.isKRaftSupported()) {
-            throw new FormatterException(MetadataVersion.FEATURE_NAME + " " + metadataVersion +
-                " is too old to be supported.");
-        }
         if (!unstableFeatureVersionsEnabled) {
             if (!metadataVersion.isProduction()) {
                 throw new FormatterException(MetadataVersion.FEATURE_NAME + " " + metadataVersion +
@@ -342,8 +346,8 @@ public class Formatter {
     /**
      * Calculate the effective feature level for kraft.version. In order to keep existing
      * command-line invocations of StorageTool working, we default this to 0 if no dynamic
-     * voter quorum arguments were provided. As a convenience, if dynamic voter quorum arguments
-     * were passed, we set the latest kraft.version. (Currently there is only 1 non-zero version).
+     * voter quorum arguments were provided. As a convenience, if the static voters config is
+     * empty, we set the latest kraft.version. (Currently there is only 1 non-zero version).
      *
      * @param configuredKRaftVersionLevel   The configured level for kraft.version
      * @return                              The effective feature level.
@@ -352,15 +356,21 @@ public class Formatter {
         if (configuredKRaftVersionLevel.isPresent()) {
             if (configuredKRaftVersionLevel.get() == 0) {
                 if (hasDynamicQuorum()) {
-                    throw new FormatterException("Cannot set kraft.version to " +
-                        configuredKRaftVersionLevel.get() + " if KIP-853 configuration is present. " +
-                            "Try removing the --feature flag for kraft.version.");
+                    throw new FormatterException(
+                        "Cannot set kraft.version to 0 if controller.quorum.voters is empty and one of the flags " +
+                        "--standalone, --initial-controllers, or --no-initial-controllers is used. For dynamic " +
+                        "controllers support, try removing the --feature flag for kraft.version."
+                    );
                 }
             } else {
                 if (!hasDynamicQuorum()) {
-                    throw new FormatterException("Cannot set kraft.version to " +
-                        configuredKRaftVersionLevel.get() + " unless KIP-853 configuration is present. " +
-                            "Try removing the --feature flag for kraft.version.");
+                    throw new FormatterException(
+                        "Cannot set kraft.version to " + configuredKRaftVersionLevel.get() +
+                        " unless controller.quorum.voters is empty and one of the flags --standalone, " +
+                        "--initial-controllers, or --no-initial-controllers is used. " +
+                        "For dynamic controllers support, try using one of --standalone, --initial-controllers, " +
+                        "or --no-initial-controllers and removing controller.quorum.voters."
+                    );
                 }
             }
             return configuredKRaftVersionLevel.get();
@@ -381,6 +391,9 @@ public class Formatter {
                         " " + MetadataVersion.IBP_3_5_IV2 + " or later.");
             }
             bootstrapRecords.addAll(ScramParser.parse(scramArguments));
+        }
+        if (!additionalBootstrapRecords.isEmpty()) {
+            bootstrapRecords.addAll(additionalBootstrapRecords);
         }
         return BootstrapMetadata.fromRecords(bootstrapRecords, "format command");
     }
@@ -413,6 +426,7 @@ public class Formatter {
         if (ensemble.emptyLogDirs().isEmpty()) {
             printStream.println("All of the log directories are already formatted.");
         } else {
+            printStream.println("Bootstrap metadata: " + bootstrapMetadata);
             Map<String, DirectoryType> directoryTypes = new HashMap<>();
             for (String emptyLogDir : ensemble.emptyLogDirs()) {
                 DirectoryType directoryType = DirectoryType.calculate(emptyLogDir,
@@ -431,15 +445,15 @@ public class Formatter {
                     build());
             }
             copier.setPreWriteHandler((writeLogDir, __, ____) -> {
+                DirectoryType directoryType = directoryTypes.get(writeLogDir);
                 printStream.printf("Formatting %s %s with %s %s.%n",
-                    directoryTypes.get(writeLogDir).description(), writeLogDir,
+                    directoryType.description(), writeLogDir,
                     MetadataVersion.FEATURE_NAME, releaseVersion);
                 Files.createDirectories(Paths.get(writeLogDir));
-                BootstrapDirectory bootstrapDirectory = new BootstrapDirectory(writeLogDir, Optional.empty());
-                bootstrapDirectory.writeBinaryFile(bootstrapMetadata);
-                if (directoryTypes.get(writeLogDir).isDynamicMetadataDirectory()) {
-                    writeDynamicQuorumSnapshot(writeLogDir,
-                        initialControllers.get(),
+                if (writeBootstrapSnapshot && directoryType.isMetadataDirectory()) {
+                    writeBoostrapSnapshot(writeLogDir,
+                        bootstrapMetadata,
+                        initialControllers,
                         featureLevels.get(KRaftVersion.FEATURE_NAME),
                         controllerListenerName);
                 }
@@ -459,22 +473,16 @@ public class Formatter {
         DYNAMIC_METADATA_VOTER_DIRECTORY;
 
         String description() {
-            switch (this) {
-                case LOG_DIRECTORY:
-                    return "data directory";
-                case STATIC_METADATA_DIRECTORY:
-                    return "metadata directory";
-                case DYNAMIC_METADATA_NON_VOTER_DIRECTORY:
-                    return "dynamic metadata directory";
-                case DYNAMIC_METADATA_VOTER_DIRECTORY:
-                    return "dynamic metadata voter directory";
-            }
-            throw new RuntimeException("invalid enum type " + this);
+            return switch (this) {
+                case LOG_DIRECTORY -> "data directory";
+                case STATIC_METADATA_DIRECTORY -> "metadata directory";
+                case DYNAMIC_METADATA_NON_VOTER_DIRECTORY -> "dynamic metadata directory";
+                case DYNAMIC_METADATA_VOTER_DIRECTORY -> "dynamic metadata voter directory";
+            };
         }
 
-        boolean isDynamicMetadataDirectory() {
-            return this == DYNAMIC_METADATA_NON_VOTER_DIRECTORY ||
-                this == DYNAMIC_METADATA_VOTER_DIRECTORY;
+        boolean isMetadataDirectory() {
+            return this != LOG_DIRECTORY;
         }
 
         static DirectoryType calculate(
@@ -495,9 +503,10 @@ public class Formatter {
         }
     }
 
-    static void writeDynamicQuorumSnapshot(
+    public static void writeBoostrapSnapshot(
         String writeLogDir,
-        DynamicVoters initialControllers,
+        BootstrapMetadata bootstrapMetadata,
+        Optional<DynamicVoters> initialControllers,
         short kraftVersion,
         String controllerListenerName
     ) {
@@ -505,16 +514,17 @@ public class Formatter {
         File clusterMetadataDirectory = new File(parentDir, String.format("%s-%d",
                 CLUSTER_METADATA_TOPIC_PARTITION.topic(),
                 CLUSTER_METADATA_TOPIC_PARTITION.partition()));
-        VoterSet voterSet = initialControllers.toVoterSet(controllerListenerName);
         RecordsSnapshotWriter.Builder builder = new RecordsSnapshotWriter.Builder().
             setLastContainedLogTimestamp(Time.SYSTEM.milliseconds()).
-            setMaxBatchSize(KafkaRaftClient.MAX_BATCH_SIZE_BYTES).
+            setMaxBatchSizeBytes(KafkaRaftClient.MAX_BATCH_SIZE_BYTES).
             setRawSnapshotWriter(FileRawSnapshotWriter.create(
                 clusterMetadataDirectory.toPath(),
                 Snapshots.BOOTSTRAP_SNAPSHOT_ID)).
             setKraftVersion(KRaftVersion.fromFeatureLevel(kraftVersion)).
-            setVoterSet(Optional.of(voterSet));
-        try (RecordsSnapshotWriter writer = builder.build(new MetadataRecordSerde())) {
+            setVoterSet(initialControllers.map(controllers -> controllers.toVoterSet(controllerListenerName)));
+
+        try (RecordsSnapshotWriter<ApiMessageAndVersion> writer = builder.build(MetadataRecordSerde.INSTANCE)) {
+            writer.append(bootstrapMetadata.records());
             writer.freeze();
         }
     }

@@ -41,12 +41,11 @@ fi
 result=$(/opt/kafka/kafka.Kafka setup \
       --default-configs-dir /etc/kafka/docker \
       --mounted-configs-dir /mnt/shared/config \
-      --final-configs-dir /opt/kafka/config \
-      -Dlog4j.configuration=file:/opt/kafka/config/tools-log4j.properties 2>&1) || \
+      --final-configs-dir /opt/kafka/config 2>&1) || \
       echo $result | grep -i "already formatted" || \
       { echo $result && (exit 1) }
 
 echo "WARNING: THIS IS AN EXPERIMENTAL DOCKER IMAGE RECOMMENDED FOR LOCAL TESTING AND DEVELOPMENT PURPOSES."
 
-KAFKA_LOG4J_CMD_OPTS="-Dkafka.logs.dir=/opt/kafka/logs/ -Dlog4j.configuration=file:/opt/kafka/config/log4j.properties"
+KAFKA_LOG4J_CMD_OPTS="-Dkafka.logs.dir=/opt/kafka/logs/ -Dlog4j2.configurationFile=file:/opt/kafka/config/log4j2.yaml"
 exec /opt/kafka/kafka.Kafka start --config /opt/kafka/config/server.properties $KAFKA_LOG4J_CMD_OPTS $KAFKA_JMX_OPTS ${KAFKA_OPTS-}

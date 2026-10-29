@@ -30,7 +30,7 @@ class ProduceConsumeValidateTest(Test):
     def __init__(self, test_context):
         super(ProduceConsumeValidateTest, self).__init__(test_context=test_context)
         # How long to wait for the producer to declare itself healthy? This can
-        # be overidden by inheriting classes.
+        # be overridden by inheriting classes.
         self.producer_start_timeout_sec = 20
 
         # How long to wait for the consumer to start consuming messages?

@@ -16,6 +16,7 @@
  */
 package org.apache.kafka.streams.processor.assignment;
 
+import org.apache.kafka.common.annotation.InterfaceAudience;
 import org.apache.kafka.streams.KeyValue;
 import org.apache.kafka.streams.StreamsConfig;
 import org.apache.kafka.streams.processor.TaskId;
@@ -52,6 +53,7 @@ import static org.apache.kafka.streams.processor.internals.assignment.RackAwareT
 /**
  * A set of utilities to help implement task assignment via the {@link TaskAssignor}
  */
+@InterfaceAudience.Public
 public final class TaskAssignmentUtils {
     private static final Logger LOG = LoggerFactory.getLogger(TaskAssignmentUtils.class);
 

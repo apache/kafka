@@ -25,9 +25,9 @@ import org.apache.kafka.common.metrics.Metrics;
 import org.apache.kafka.common.protocol.Errors;
 import org.apache.kafka.common.requests.ShareGroupHeartbeatRequest;
 import org.apache.kafka.common.requests.ShareGroupHeartbeatResponse;
-import org.apache.kafka.common.utils.LogContext;
 import org.apache.kafka.common.utils.Time;
 import org.apache.kafka.common.utils.Timer;
+import org.apache.kafka.common.utils.internals.LogContext;
 
 import java.util.ArrayList;
 import java.util.TreeSet;
@@ -54,12 +54,15 @@ public class ShareHeartbeatRequestManager extends AbstractHeartbeatRequestManage
     public static final String SHARE_PROTOCOL_NOT_SUPPORTED_MSG = "The cluster does not support the share group protocol. " +
         "To use share groups, the cluster must have the share group protocol enabled.";
 
+    public static final String SHARE_PROTOCOL_VERSION_NOT_SUPPORTED_MSG = "The cluster does not support the share group protocol " +
+        "using ShareGroupHeartbeat API version 1 or later. This version of the API was introduced in Apache Kafka v4.1.";
+
     public ShareHeartbeatRequestManager(
             final LogContext logContext,
             final Time time,
             final ConsumerConfig config,
             final CoordinatorRequestManager coordinatorRequestManager,
-            final SubscriptionState subscriptions,
+            final ShareSubscriptionState subscriptions,
             final ShareMembershipManager membershipManager,
             final BackgroundEventHandler backgroundEventHandler,
             final Metrics metrics) {
@@ -77,7 +80,7 @@ public class ShareHeartbeatRequestManager extends AbstractHeartbeatRequestManage
             final CoordinatorRequestManager coordinatorRequestManager,
             final ShareMembershipManager membershipManager,
             final HeartbeatState heartbeatState,
-            final AbstractHeartbeatRequestManager.HeartbeatRequestState heartbeatRequestState,
+            final HeartbeatRequestState heartbeatRequestState,
             final BackgroundEventHandler backgroundEventHandler,
             final Metrics metrics) {
         super(logContext, timer, config, coordinatorRequestManager, heartbeatRequestState, backgroundEventHandler,
@@ -93,8 +96,8 @@ public class ShareHeartbeatRequestManager extends AbstractHeartbeatRequestManage
     public boolean handleSpecificFailure(Throwable exception) {
         boolean errorHandled = false;
         if (exception instanceof UnsupportedVersionException) {
-            logger.error("{} failed due to {}: {}", heartbeatRequestName(), exception.getMessage(), SHARE_PROTOCOL_NOT_SUPPORTED_MSG);
-            handleFatalFailure(new UnsupportedVersionException(SHARE_PROTOCOL_NOT_SUPPORTED_MSG, exception));
+            logger.error("{} failed due to {}: {}", heartbeatRequestName(), exception.getMessage(), SHARE_PROTOCOL_VERSION_NOT_SUPPORTED_MSG);
+            handleFatalFailure(new UnsupportedVersionException(SHARE_PROTOCOL_VERSION_NOT_SUPPORTED_MSG, exception));
             errorHandled = true;
         }
         return errorHandled;
@@ -183,18 +186,23 @@ public class ShareHeartbeatRequestManager extends AbstractHeartbeatRequestManage
         return membershipManager;
     }
 
+    @Override
+    protected boolean shouldSendLeaveHeartbeatNow() {
+        return membershipManager().state() == MemberState.LEAVING;
+    }
+
     /**
      * Builds the heartbeat requests correctly, ensuring that all information is sent according to
      * the protocol, but subsequent requests do not send information which has not changed. This
      * is important to ensure that reconciliation completes successfully.
      */
     static class HeartbeatState {
-        private final SubscriptionState subscriptions;
+        private final ShareSubscriptionState subscriptions;
         private final ShareMembershipManager shareMembershipManager;
         private final SentFields sentFields;
 
         public HeartbeatState(
-                final SubscriptionState subscriptions,
+                final ShareSubscriptionState subscriptions,
                 final ShareMembershipManager shareMembershipManager) {
             this.subscriptions = subscriptions;
             this.shareMembershipManager = shareMembershipManager;

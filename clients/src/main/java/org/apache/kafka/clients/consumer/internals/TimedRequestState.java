@@ -16,9 +16,9 @@
  */
 package org.apache.kafka.clients.consumer.internals;
 
-import org.apache.kafka.common.utils.LogContext;
 import org.apache.kafka.common.utils.Time;
 import org.apache.kafka.common.utils.Timer;
+import org.apache.kafka.common.utils.internals.LogContext;
 
 /**
  * {@code TimedRequestState} adds to a {@link RequestState} a {@link Timer} with which to keep track
@@ -51,6 +51,10 @@ public class TimedRequestState extends RequestState {
     public boolean isExpired() {
         timer.update();
         return timer.isExpired();
+    }
+
+    public void resetTimeout(long timeoutMs) {
+        timer.updateAndReset(timeoutMs);
     }
 
     public long remainingMs() {

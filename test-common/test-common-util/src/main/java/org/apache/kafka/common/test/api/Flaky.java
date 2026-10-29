@@ -34,7 +34,7 @@ public @interface Flaky {
     String value();
 
     /**
-     * Optional comment describing the reason for quarantined.
+     * Optional comment describing the reason.
      */
     String comment() default "";
 }

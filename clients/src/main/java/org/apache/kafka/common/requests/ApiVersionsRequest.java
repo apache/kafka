@@ -20,11 +20,10 @@ import org.apache.kafka.common.message.ApiVersionsRequestData;
 import org.apache.kafka.common.message.ApiVersionsResponseData;
 import org.apache.kafka.common.message.ApiVersionsResponseData.ApiVersionCollection;
 import org.apache.kafka.common.protocol.ApiKeys;
-import org.apache.kafka.common.protocol.ByteBufferAccessor;
 import org.apache.kafka.common.protocol.Errors;
-import org.apache.kafka.common.utils.AppInfoParser;
+import org.apache.kafka.common.protocol.Readable;
+import org.apache.kafka.common.utils.internals.AppInfoParser;
 
-import java.nio.ByteBuffer;
 import java.util.regex.Pattern;
 
 public class ApiVersionsRequest extends AbstractRequest {
@@ -55,6 +54,14 @@ public class ApiVersionsRequest extends AbstractRequest {
         ) {
             super(ApiKeys.API_VERSIONS, oldestAllowedVersion, latestAllowedVersion);
             this.data = data.duplicate();
+        }
+
+        public void setClusterId(String clusterId) {
+            this.data.setClusterId(clusterId);
+        }
+
+        public void setNodeId(int nodeId) {
+            this.data.setNodeId(nodeId);
         }
 
         @Override
@@ -95,6 +102,13 @@ public class ApiVersionsRequest extends AbstractRequest {
     }
 
     public boolean isValid() {
+        if (version() >= 5) {
+            // Either cluster ID and node ID are both specified, or neither is.
+            if ((data.clusterId() == null && data.nodeId() != -1) || (data.clusterId() != null && data.nodeId() == -1)) {
+                return false;
+            }
+        }
+
         if (version() >= 3) {
             return SOFTWARE_NAME_VERSION_PATTERN.matcher(data.clientSoftwareName()).matches() &&
                 SOFTWARE_NAME_VERSION_PATTERN.matcher(data.clientSoftwareVersion()).matches();
@@ -128,8 +142,8 @@ public class ApiVersionsRequest extends AbstractRequest {
         return new ApiVersionsResponse(data);
     }
 
-    public static ApiVersionsRequest parse(ByteBuffer buffer, short version) {
-        return new ApiVersionsRequest(new ApiVersionsRequestData(new ByteBufferAccessor(buffer), version), version);
+    public static ApiVersionsRequest parse(Readable readable, short version) {
+        return new ApiVersionsRequest(new ApiVersionsRequestData(readable, version), version);
     }
 
 }

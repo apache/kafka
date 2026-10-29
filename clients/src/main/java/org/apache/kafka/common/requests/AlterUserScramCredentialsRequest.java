@@ -19,9 +19,8 @@ package org.apache.kafka.common.requests;
 import org.apache.kafka.common.message.AlterUserScramCredentialsRequestData;
 import org.apache.kafka.common.message.AlterUserScramCredentialsResponseData;
 import org.apache.kafka.common.protocol.ApiKeys;
-import org.apache.kafka.common.protocol.ByteBufferAccessor;
+import org.apache.kafka.common.protocol.Readable;
 
-import java.nio.ByteBuffer;
 import java.util.List;
 import java.util.Set;
 import java.util.stream.Collectors;
@@ -44,7 +43,7 @@ public class AlterUserScramCredentialsRequest extends AbstractRequest {
 
         @Override
         public String toString() {
-            return data.toString();
+            return maskData(data);
         }
     }
 
@@ -55,8 +54,8 @@ public class AlterUserScramCredentialsRequest extends AbstractRequest {
         this.data = data;
     }
 
-    public static AlterUserScramCredentialsRequest parse(ByteBuffer buffer, short version) {
-        return new AlterUserScramCredentialsRequest(new AlterUserScramCredentialsRequestData(new ByteBufferAccessor(buffer), version), version);
+    public static AlterUserScramCredentialsRequest parse(Readable readable, short version) {
+        return new AlterUserScramCredentialsRequest(new AlterUserScramCredentialsRequestData(readable, version), version);
     }
 
     @Override
@@ -81,5 +80,20 @@ public class AlterUserScramCredentialsRequest extends AbstractRequest {
                                 .setErrorMessage(errorMessage))
                         .collect(Collectors.toList());
         return new AlterUserScramCredentialsResponse(new AlterUserScramCredentialsResponseData().setResults(results));
+    }
+
+    private static String maskData(AlterUserScramCredentialsRequestData data) {
+        AlterUserScramCredentialsRequestData tempData = data.duplicate();
+        tempData.upsertions().forEach(upsertion -> {
+            upsertion.setSalt(new byte[0]);
+            upsertion.setSaltedPassword(new byte[0]);
+        });
+        return tempData.toString();
+    }
+
+    // Do not print salt or saltedPassword
+    @Override
+    public String toString() {
+        return maskData(data);
     }
 }

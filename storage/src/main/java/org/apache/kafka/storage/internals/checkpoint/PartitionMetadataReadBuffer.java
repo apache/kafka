@@ -64,7 +64,7 @@ public class PartitionMetadataReadBuffer {
                         throw malformedLineException(line);
                     }
                 } else {
-                    throw new IOException("Unrecognized version of partition metadata file + (" + location + "): " + version);
+                    throw new IOException("Unrecognized version of partition metadata file (" + location + "): " + version);
                 }
             } else {
                 throw malformedLineException(line);
@@ -76,10 +76,10 @@ public class PartitionMetadataReadBuffer {
     }
 
     private IOException malformedLineException(String line) {
-        return new IOException(String.format("Malformed line in checkpoint file [%s]: %s", location, line));
+        return new IOException(String.format("Malformed line in partition metadata file [%s]: %s", location, line));
     }
 
     private IOException malformedLineException(String line, Exception e) {
-        return new IOException(String.format("Malformed line in checkpoint file [%s]: %s", location, line), e);
+        return new IOException(String.format("Malformed line in partition metadata file [%s]: %s", location, line), e);
     }
 }

@@ -23,7 +23,6 @@ import java.util.Collections;
 import java.util.Map;
 import java.util.Objects;
 import java.util.Optional;
-import java.util.stream.Collectors;
 
 /**
  * Captures the properties required for configuring the internal topics we create for changelogs and repartitioning etc.
@@ -33,7 +32,7 @@ import java.util.stream.Collectors;
  *
  * @param name               The name of the topic.
  * @param numberOfPartitions The number of partitions for the topic.
- * @param replicationFactor  The replication factor of the topic. If undefiend, the broker default is used.
+ * @param replicationFactor  The replication factor of the topic. If undefined, the broker default is used.
  * @param topicConfigs       The topic configurations of the topic.
  */
 public record ConfiguredInternalTopic(String name,
@@ -57,12 +56,11 @@ public record ConfiguredInternalTopic(String name,
             .setPartitions(numberOfPartitions)
             .setReplicationFactor(replicationFactor.orElse((short) 0))
             .setTopicConfigs(
-                topicConfigs != null ?
-                    topicConfigs.entrySet().stream().map(
-                        y -> new StreamsGroupDescribeResponseData.KeyValue()
-                            .setKey(y.getKey())
-                            .setValue(y.getValue())
-                    ).collect(Collectors.toList()) : null
+                topicConfigs.entrySet().stream().map(
+                    y -> new StreamsGroupDescribeResponseData.KeyValue()
+                        .setKey(y.getKey())
+                        .setValue(y.getValue())
+                ).toList()
             );
     }
 

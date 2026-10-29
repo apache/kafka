@@ -17,14 +17,13 @@
 
 package kafka.api
 
-import kafka.security.JaasTestUtils
-
 import java.util.Properties
 import org.apache.kafka.common.config.SslConfigs
 import org.apache.kafka.common.config.internals.BrokerSecurityConfigs
 import org.apache.kafka.common.network.ConnectionMode
 import org.apache.kafka.common.security.auth._
 import org.apache.kafka.common.security.authenticator.DefaultKafkaPrincipalBuilder
+import org.apache.kafka.security.JaasTestUtils
 import org.junit.jupiter.api.{BeforeEach, TestInfo}
 
 import java.util.Optional
@@ -68,7 +67,7 @@ class SslEndToEndAuthorizationTest extends EndToEndAuthorizationTest {
   // - a space character occurring at the end of the string
   // - one of the characters ",", "+", """, "\", "<", ">" or ";"
   //
-  // Leading and trailing spaces in Kafka principal dont work with ACLs, but we can workaround by using
+  // Leading and trailing spaces in Kafka principal don't work with ACLs, but we can workaround by using
   // a PrincipalBuilder that removes/replaces them.
   private val clientCn = """\#A client with special chars in CN : (\, \+ \" \\ \< \> \; ')"""
   override val clientPrincipal = new KafkaPrincipal(KafkaPrincipal.USER_TYPE, s"O=A client,CN=$clientCn")

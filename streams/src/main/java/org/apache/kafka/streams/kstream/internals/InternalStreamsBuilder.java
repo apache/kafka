@@ -48,7 +48,6 @@ import org.slf4j.Logger;
 import org.slf4j.LoggerFactory;
 
 import java.util.Collection;
-import java.util.Collections;
 import java.util.Comparator;
 import java.util.HashMap;
 import java.util.HashSet;
@@ -72,6 +71,7 @@ public class InternalStreamsBuilder implements InternalNameProvider {
     private static final String TABLE_SOURCE_SUFFIX = "-source";
 
     final InternalTopologyBuilder internalTopologyBuilder;
+    private final boolean processProcessValueFixEnabled;
     private final AtomicInteger index = new AtomicInteger(0);
 
     private final AtomicInteger buildPriorityIndex = new AtomicInteger(0);
@@ -79,7 +79,7 @@ public class InternalStreamsBuilder implements InternalNameProvider {
     private final LinkedHashSet<GraphNode> mergeNodes = new LinkedHashSet<>();
     private final LinkedHashSet<GraphNode> tableSourceNodes = new LinkedHashSet<>();
     private final LinkedHashSet<GraphNode> versionedSemanticsNodes = new LinkedHashSet<>();
-    private final LinkedHashSet<TableSuppressNode> tableSuppressNodesNodes = new LinkedHashSet<>();
+    private final LinkedHashSet<TableSuppressNode<?, ?>> tableSuppressNodesNodes = new LinkedHashSet<>();
 
     private static final String TOPOLOGY_ROOT = "root";
     private static final Logger LOG = LoggerFactory.getLogger(InternalStreamsBuilder.class);
@@ -91,8 +91,10 @@ public class InternalStreamsBuilder implements InternalNameProvider {
         }
     };
 
-    public InternalStreamsBuilder(final InternalTopologyBuilder internalTopologyBuilder) {
+    public InternalStreamsBuilder(final InternalTopologyBuilder internalTopologyBuilder,
+                                  final boolean processProcessValueFixEnabled) {
         this.internalTopologyBuilder = internalTopologyBuilder;
+        this.processProcessValueFixEnabled = processProcessValueFixEnabled;
     }
 
     public <K, V> KStream<K, V> stream(final Collection<String> topics,
@@ -106,7 +108,7 @@ public class InternalStreamsBuilder implements InternalNameProvider {
         return new KStreamImpl<>(name,
                                  consumed.keySerde(),
                                  consumed.valueSerde(),
-                                 Collections.singleton(name),
+                                 Set.of(name),
                                  false,
                                  streamSourceNode,
                                  this);
@@ -122,7 +124,7 @@ public class InternalStreamsBuilder implements InternalNameProvider {
         return new KStreamImpl<>(name,
                                  consumed.keySerde(),
                                  consumed.valueSerde(),
-                                 Collections.singleton(name),
+                                 Set.of(name),
                                  false,
                                  streamPatternSourceNode,
                                  this);
@@ -157,7 +159,7 @@ public class InternalStreamsBuilder implements InternalNameProvider {
         return new KTableImpl<>(tableSourceName,
                                 consumed.keySerde(),
                                 consumed.valueSerde(),
-                                Collections.singleton(sourceName),
+                                Set.of(sourceName),
                                 materialized.queryableStoreName(),
                                 tableSource,
                                 tableSourceNode,
@@ -242,7 +244,7 @@ public class InternalStreamsBuilder implements InternalNameProvider {
         addGraphNode(root, globalStoreNode);
     }
 
-    void addGraphNode(final GraphNode parent,
+    public void addGraphNode(final GraphNode parent,
                       final GraphNode child) {
         Objects.requireNonNull(parent, "parent node can't be null");
         Objects.requireNonNull(child, "child node can't be null");
@@ -251,7 +253,7 @@ public class InternalStreamsBuilder implements InternalNameProvider {
         maybeAddNodeForVersionedSemanticsMetadata(child);
     }
 
-    void addGraphNode(final Collection<GraphNode> parents,
+    public void addGraphNode(final Collection<GraphNode> parents,
                       final GraphNode child) {
         Objects.requireNonNull(parents, "parent node can't be null");
         Objects.requireNonNull(child, "child node can't be null");
@@ -328,6 +330,9 @@ public class InternalStreamsBuilder implements InternalNameProvider {
             }
         }
         internalTopologyBuilder.validateCopartition();
+
+        internalTopologyBuilder.checkUnprovidedNames();
+
     }
 
     /**
@@ -337,7 +342,7 @@ public class InternalStreamsBuilder implements InternalNameProvider {
     private void optimizeTopology(final Properties props) {
         final Set<String> optimizationConfigs;
         if (props == null || !props.containsKey(StreamsConfig.TOPOLOGY_OPTIMIZATION_CONFIG)) {
-            optimizationConfigs = Collections.emptySet();
+            optimizationConfigs = Set.of();
         } else {
             optimizationConfigs = StreamsConfig.verifyTopologyOptimizationConfigs(
                 (String) props.get(StreamsConfig.TOPOLOGY_OPTIMIZATION_CONFIG));
@@ -431,12 +436,11 @@ public class InternalStreamsBuilder implements InternalNameProvider {
      * We iterate over all the siblings to identify these two nodes so that we can remove the
      * latter.
      */
-    @SuppressWarnings("unchecked")
     private void rewriteSingleStoreSelfJoin(
         final GraphNode currentNode, final Map<GraphNode, Boolean> visited) {
         visited.put(currentNode, true);
         if (currentNode instanceof StreamStreamJoinNode && currentNode.parentNodes().size() == 1) {
-            final StreamStreamJoinNode joinNode = (StreamStreamJoinNode) currentNode;
+            final StreamStreamJoinNode<?, ?, ?, ?> joinNode = (StreamStreamJoinNode<?, ?, ?, ?>) currentNode;
             // Remove JoinOtherWindowed node
             final GraphNode parent = joinNode.parentNodes().stream().findFirst().get();
             GraphNode left = null, right = null;
@@ -589,7 +593,8 @@ public class InternalStreamsBuilder implements InternalNameProvider {
                 valueSerde,
                 repartitionTopicName,
                 null,
-                repartitionNodeBuilder
+                repartitionNodeBuilder,
+                true
         );
 
         // ensures setting the repartition topic to the name of the
@@ -682,20 +687,25 @@ public class InternalStreamsBuilder implements InternalNameProvider {
         return isVersionedUpstream(startSeekingNode);
     }
 
-    private GraphNode findParentNodeMatching(final GraphNode startSeekingNode,
+    // Visible for testing.
+    GraphNode findParentNodeMatching(final GraphNode startSeekingNode,
                                              final Predicate<GraphNode> parentNodePredicate) {
         if (parentNodePredicate.test(startSeekingNode)) {
             return startSeekingNode;
         }
-        GraphNode foundParentNode = null;
 
         for (final GraphNode parentNode : startSeekingNode.parentNodes()) {
             if (parentNodePredicate.test(parentNode)) {
                 return parentNode;
             }
-            foundParentNode = findParentNodeMatching(parentNode, parentNodePredicate);
+
+            final GraphNode foundParentNode = findParentNodeMatching(parentNode, parentNodePredicate);
+            if (foundParentNode != null) {
+                return foundParentNode;
+            }
         }
-        return foundParentNode;
+
+        return null;
     }
 
     public GraphNode root() {
@@ -706,4 +716,7 @@ public class InternalStreamsBuilder implements InternalNameProvider {
         return internalTopologyBuilder;
     }
 
+    public boolean processProcessValueFixEnabled() {
+        return processProcessValueFixEnabled;
+    }
 }

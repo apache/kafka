@@ -32,7 +32,9 @@ import java.util.stream.Stream;
 /**
  * Allows all {@code sasl} configurations to be overridden via the connector configs by setting {@code connector.client.config.override.policy} to
  * {@code Principal}. This allows to set a principal per connector.
+ * @deprecated Use {@link AllowlistConnectorClientConfigOverridePolicy} instead.
  */
+@Deprecated(since = " 4.2", forRemoval = true)
 public class PrincipalConnectorClientConfigOverridePolicy extends AbstractConnectorClientConfigOverridePolicy {
     private static final Logger log = LoggerFactory.getLogger(PrincipalConnectorClientConfigOverridePolicy.class);
 
@@ -52,6 +54,9 @@ public class PrincipalConnectorClientConfigOverridePolicy extends AbstractConnec
 
     @Override
     public void configure(Map<String, ?> configs) {
+        log.warn("The Principal ConnectorClientConfigOverridePolicy is deprecated, use the Allowlist policy instead. "
+                 + "To replicate the Principal policy behavior, set the connector.client.config.override.allowlist configuration to \"{}\"",
+                 String.join(",", ALLOWED_CONFIG));
         log.info("Setting up Principal policy for ConnectorClientConfigOverride. This will allow `sasl` client configuration to be "
                  + "overridden.");
     }

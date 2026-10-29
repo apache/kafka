@@ -34,8 +34,6 @@ import org.mockito.junit.jupiter.MockitoExtension;
 import org.mockito.junit.jupiter.MockitoSettings;
 import org.mockito.quality.Strictness;
 
-import java.util.Arrays;
-import java.util.Collections;
 import java.util.HashMap;
 import java.util.List;
 import java.util.Map;
@@ -72,7 +70,7 @@ public class MockLoggersTest {
 
         Loggers loggers = new TestLoggers(root, a, b);
 
-        Map<String, LoggerLevel> expectedLevels = Collections.singletonMap(
+        Map<String, LoggerLevel> expectedLevels = Map.of(
                 "b",
                 new LoggerLevel(Level.INFO.toString(), null)
         );
@@ -137,7 +135,7 @@ public class MockLoggersTest {
         TestLoggers loggers = new TestLoggers(root, x, y, z, w);
 
         List<String> modified = loggers.setLevel("a.b.c.p", Level.WARN.name());
-        assertEquals(Arrays.asList("a.b.c.p", "a.b.c.p.X", "a.b.c.p.Y", "a.b.c.p.Z"), modified);
+        assertEquals(List.of("a.b.c.p", "a.b.c.p.X", "a.b.c.p.Y", "a.b.c.p.Z"), modified);
         assertEquals(Level.WARN.toString(), loggers.level("a.b.c.p").level());
         assertEquals(Level.WARN, x.getLevel());
         assertEquals(Level.WARN, y.getLevel());
@@ -201,7 +199,7 @@ public class MockLoggersTest {
         Loggers loggers = new TestLoggers(root, x, y, z, w);
 
         List<String> modified = loggers.setLevel(rootLoggerName, Level.DEBUG.name());
-        assertEquals(Arrays.asList("a.b.c.p.X", "a.b.c.p.Y", "a.b.c.p.Z", "a.b.c.s.W", rootLoggerName), modified);
+        assertEquals(List.of("a.b.c.p.X", "a.b.c.p.Y", "a.b.c.p.Z", "a.b.c.s.W", rootLoggerName), modified);
 
         assertEquals(Level.DEBUG, p.getLevel());
 

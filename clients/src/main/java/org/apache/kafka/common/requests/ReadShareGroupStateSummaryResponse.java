@@ -18,12 +18,13 @@
 package org.apache.kafka.common.requests;
 
 import org.apache.kafka.common.Uuid;
+import org.apache.kafka.common.message.ReadShareGroupStateSummaryRequestData;
 import org.apache.kafka.common.message.ReadShareGroupStateSummaryResponseData;
 import org.apache.kafka.common.protocol.ApiKeys;
-import org.apache.kafka.common.protocol.ByteBufferAccessor;
 import org.apache.kafka.common.protocol.Errors;
+import org.apache.kafka.common.protocol.Readable;
 
-import java.nio.ByteBuffer;
+import java.util.ArrayList;
 import java.util.HashMap;
 import java.util.List;
 import java.util.Map;
@@ -62,9 +63,9 @@ public class ReadShareGroupStateSummaryResponse extends AbstractResponse {
         // No op
     }
 
-    public static ReadShareGroupStateSummaryResponse parse(ByteBuffer buffer, short version) {
+    public static ReadShareGroupStateSummaryResponse parse(Readable readable, short version) {
         return new ReadShareGroupStateSummaryResponse(
-            new ReadShareGroupStateSummaryResponseData(new ByteBufferAccessor(buffer), version)
+            new ReadShareGroupStateSummaryResponseData(readable, version)
         );
     }
 
@@ -98,6 +99,8 @@ public class ReadShareGroupStateSummaryResponse extends AbstractResponse {
         Uuid topicId,
         int partition,
         long startOffset,
+        int deliveryCompleteCount,
+        int leaderEpoch,
         int stateEpoch
     ) {
         return new ReadShareGroupStateSummaryResponseData()
@@ -108,6 +111,8 @@ public class ReadShareGroupStateSummaryResponse extends AbstractResponse {
                         new ReadShareGroupStateSummaryResponseData.PartitionResult()
                             .setPartition(partition)
                             .setStartOffset(startOffset)
+                            .setDeliveryCompleteCount(deliveryCompleteCount)
+                            .setLeaderEpoch(leaderEpoch)
                             .setStateEpoch(stateEpoch)
                     ))
             ));
@@ -120,5 +125,17 @@ public class ReadShareGroupStateSummaryResponse extends AbstractResponse {
         return new ReadShareGroupStateSummaryResponseData.ReadStateSummaryResult()
             .setTopicId(topicId)
             .setPartitions(partitionResults);
+    }
+
+    public static ReadShareGroupStateSummaryResponseData toGlobalErrorResponse(ReadShareGroupStateSummaryRequestData request, Errors error) {
+        List<ReadShareGroupStateSummaryResponseData.ReadStateSummaryResult> readStateSummaryResults = new ArrayList<>();
+        request.topics().forEach(topicData -> {
+            List<ReadShareGroupStateSummaryResponseData.PartitionResult> partitionResults = new ArrayList<>();
+            topicData.partitions().forEach(partitionData -> partitionResults.add(
+                toErrorResponsePartitionResult(partitionData.partition(), error, error.message()))
+            );
+            readStateSummaryResults.add(toResponseReadStateSummaryResult(topicData.topicId(), partitionResults));
+        });
+        return new ReadShareGroupStateSummaryResponseData().setResults(readStateSummaryResults);
     }
 }

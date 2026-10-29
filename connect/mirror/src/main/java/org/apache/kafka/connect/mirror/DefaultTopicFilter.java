@@ -26,7 +26,7 @@ import java.util.regex.Pattern;
 
 /** Uses an include and exclude pattern. */
 public class DefaultTopicFilter implements TopicFilter {
-    
+
     public static final String TOPICS_INCLUDE_CONFIG = "topics";
     private static final String TOPICS_INCLUDE_DOC = "List of topics and/or regexes to replicate.";
     public static final String TOPICS_INCLUDE_DEFAULT = ".*";
@@ -64,11 +64,13 @@ public class DefaultTopicFilter implements TopicFilter {
             .define(TOPICS_INCLUDE_CONFIG,
                     Type.LIST,
                     TOPICS_INCLUDE_DEFAULT,
+                    ConfigDef.ValidList.anyNonDuplicateValues(true, false),
                     Importance.HIGH,
                     TOPICS_INCLUDE_DOC)
             .define(TOPICS_EXCLUDE_CONFIG,
                     Type.LIST,
                     TOPICS_EXCLUDE_DEFAULT,
+                    ConfigDef.ValidList.anyNonDuplicateValues(true, false),
                     Importance.HIGH,
                     TOPICS_EXCLUDE_DOC);
 

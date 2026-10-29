@@ -30,6 +30,7 @@ import scala.jdk.CollectionConverters._
 /**
  * Wraps the Java class StreamsBuilder and delegates method calls to the underlying Java object.
  */
+@deprecated("Use `org.apache.kafka.streams.StreamsBuilder` instead", "4.3.0")
 class StreamsBuilder(inner: StreamsBuilderJ = new StreamsBuilderJ) {
 
   /**

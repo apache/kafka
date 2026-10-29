@@ -16,6 +16,7 @@
  */
 package org.apache.kafka.streams.kstream;
 
+import org.apache.kafka.common.annotation.InterfaceAudience;
 import org.apache.kafka.common.utils.Bytes;
 import org.apache.kafka.streams.KafkaStreams;
 import org.apache.kafka.streams.StoreQueryParameters;
@@ -25,19 +26,17 @@ import org.apache.kafka.streams.state.KeyValueStore;
 import org.apache.kafka.streams.state.ReadOnlyKeyValueStore;
 
 /**
- * {@code KGroupedTable} is an abstraction of a <i>re-grouped changelog stream</i> from a primary-keyed table,
- * usually on a different grouping key than the original primary key.
- * <p>
- * It is an intermediate representation after a re-grouping of a {@link KTable} before an aggregation is applied to the
- * new partitions resulting in a new {@link KTable}.
- * <p>
- * A {@code KGroupedTable} must be obtained from a {@link KTable} via {@link KTable#groupBy(KeyValueMapper)
- * groupBy(...)}.
+ * {@code KGroupedTable} is an abstraction of a <em>re-grouped changelog stream</em> from a primary-keyed table,
+ * on a different grouping key than the original primary key.
+ * It is an intermediate representation of a {@link KTable} in order to apply an aggregation operation on the original
+ * {@link KTable} records.
  *
- * @param <K> Type of keys
- * @param <V> Type of values
- * @see KTable
+ * <p>A {@code KGroupedTable} is obtained from a {@link KTable} via {@link KTable#groupBy(KeyValueMapper) groupBy(...)}.
+ *
+ * @param <K> the (new) grouping key type of this re-grouped table
+ * @param <V> the (new) value type of this re-grouped table
  */
+@InterfaceAudience.Public
 public interface KGroupedTable<K, V> {
 
     /**
@@ -192,7 +191,7 @@ public interface KGroupedTable<K, V> {
      * mapped} to the same key into a new instance of {@link KTable}.
      * Records with {@code null} key are ignored.
      * Combining implies that the type of the aggregate result is the same as the type of the input value
-     * (c.f. {@link #aggregate(Initializer, Aggregator, Aggregator, Materialized)}).
+     * (cf. {@link #aggregate(Initializer, Aggregator, Aggregator, Materialized)}).
      * The result is written into a local {@link KeyValueStore} (which is basically an ever-updating materialized view)
      * that can be queried using the provided {@code queryableStoreName}.
      * Furthermore, updates to the store are sent downstream into a {@link KTable} changelog stream.
@@ -266,7 +265,7 @@ public interface KGroupedTable<K, V> {
      * mapped} to the same key into a new instance of {@link KTable}.
      * Records with {@code null} key are ignored.
      * Combining implies that the type of the aggregate result is the same as the type of the input value
-     * (c.f. {@link #aggregate(Initializer, Aggregator, Aggregator, Materialized)}).
+     * (cf. {@link #aggregate(Initializer, Aggregator, Aggregator, Materialized)}).
      * The result is written into a local {@link KeyValueStore} (which is basically an ever-updating materialized view)
      * that can be queried using the provided {@code queryableStoreName}.
      * Furthermore, updates to the store are sent downstream into a {@link KTable} changelog stream.
@@ -341,7 +340,7 @@ public interface KGroupedTable<K, V> {
      * mapped} to the same key into a new instance of {@link KTable}.
      * Records with {@code null} key are ignored.
      * Combining implies that the type of the aggregate result is the same as the type of the input value
-     * (c.f. {@link #aggregate(Initializer, Aggregator, Aggregator)}).
+     * (cf. {@link #aggregate(Initializer, Aggregator, Aggregator)}).
      * The result is written into a local {@link KeyValueStore} (which is basically an ever-updating materialized view)
      * Furthermore, updates to the store are sent downstream into a {@link KTable} changelog stream.
      * <p>

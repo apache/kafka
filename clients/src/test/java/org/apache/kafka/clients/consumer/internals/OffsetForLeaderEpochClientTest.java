@@ -27,9 +27,9 @@ import org.apache.kafka.common.message.OffsetForLeaderEpochResponseData.EpochEnd
 import org.apache.kafka.common.message.OffsetForLeaderEpochResponseData.OffsetForLeaderTopicResult;
 import org.apache.kafka.common.protocol.Errors;
 import org.apache.kafka.common.requests.OffsetsForLeaderEpochResponse;
-import org.apache.kafka.common.utils.LogContext;
 import org.apache.kafka.common.utils.MockTime;
 import org.apache.kafka.common.utils.Time;
+import org.apache.kafka.common.utils.internals.LogContext;
 
 import org.junit.jupiter.api.Test;
 
@@ -66,8 +66,8 @@ public class OffsetForLeaderEpochClientTest {
 
     @Test
     public void testUnexpectedEmptyResponse() {
-        Map<TopicPartition, SubscriptionState.FetchPosition> positionMap = new HashMap<>();
-        positionMap.put(tp0, new SubscriptionState.FetchPosition(0, Optional.of(1),
+        Map<TopicPartition, ConsumerSubscriptionState.FetchPosition> positionMap = new HashMap<>();
+        positionMap.put(tp0, new ConsumerSubscriptionState.FetchPosition(0, Optional.of(1),
                 new Metadata.LeaderAndEpoch(Optional.empty(), Optional.of(1))));
 
         OffsetsForLeaderEpochClient offsetClient = newOffsetClient();
@@ -86,8 +86,8 @@ public class OffsetForLeaderEpochClientTest {
 
     @Test
     public void testOkResponse() {
-        Map<TopicPartition, SubscriptionState.FetchPosition> positionMap = new HashMap<>();
-        positionMap.put(tp0, new SubscriptionState.FetchPosition(0, Optional.of(1),
+        Map<TopicPartition, ConsumerSubscriptionState.FetchPosition> positionMap = new HashMap<>();
+        positionMap.put(tp0, new ConsumerSubscriptionState.FetchPosition(0, Optional.of(1),
                 new Metadata.LeaderAndEpoch(Optional.empty(), Optional.of(1))));
 
         OffsetsForLeaderEpochClient offsetClient = newOffsetClient();
@@ -102,14 +102,14 @@ public class OffsetForLeaderEpochClientTest {
         assertTrue(result.partitionsToRetry().isEmpty());
         assertTrue(result.endOffsets().containsKey(tp0));
         assertEquals(result.endOffsets().get(tp0).errorCode(), Errors.NONE.code());
-        assertEquals(result.endOffsets().get(tp0).leaderEpoch(), 1);
-        assertEquals(result.endOffsets().get(tp0).endOffset(), 10L);
+        assertEquals(1, result.endOffsets().get(tp0).leaderEpoch());
+        assertEquals(10L, result.endOffsets().get(tp0).endOffset());
     }
 
     @Test
     public void testUnauthorizedTopic() {
-        Map<TopicPartition, SubscriptionState.FetchPosition> positionMap = new HashMap<>();
-        positionMap.put(tp0, new SubscriptionState.FetchPosition(0, Optional.of(1),
+        Map<TopicPartition, ConsumerSubscriptionState.FetchPosition> positionMap = new HashMap<>();
+        positionMap.put(tp0, new ConsumerSubscriptionState.FetchPosition(0, Optional.of(1),
                 new Metadata.LeaderAndEpoch(Optional.empty(), Optional.of(1))));
 
         OffsetsForLeaderEpochClient offsetClient = newOffsetClient();
@@ -121,14 +121,14 @@ public class OffsetForLeaderEpochClientTest {
         consumerClient.pollNoWakeup();
 
         assertTrue(future.failed());
-        assertEquals(future.exception().getClass(), TopicAuthorizationException.class);
+        assertEquals(TopicAuthorizationException.class, future.exception().getClass());
         assertTrue(((TopicAuthorizationException) future.exception()).unauthorizedTopics().contains(tp0.topic()));
     }
 
     @Test
     public void testRetriableError() {
-        Map<TopicPartition, SubscriptionState.FetchPosition> positionMap = new HashMap<>();
-        positionMap.put(tp0, new SubscriptionState.FetchPosition(0, Optional.of(1),
+        Map<TopicPartition, ConsumerSubscriptionState.FetchPosition> positionMap = new HashMap<>();
+        positionMap.put(tp0, new ConsumerSubscriptionState.FetchPosition(0, Optional.of(1),
                 new Metadata.LeaderAndEpoch(Optional.empty(), Optional.of(1))));
 
         OffsetsForLeaderEpochClient offsetClient = newOffsetClient();
@@ -153,7 +153,7 @@ public class OffsetForLeaderEpochClientTest {
     private void buildDependencies(AutoOffsetResetStrategy offsetResetStrategy) {
         LogContext logContext = new LogContext();
         Time time = new MockTime(1);
-        SubscriptionState subscriptions = new SubscriptionState(logContext, offsetResetStrategy);
+        ConsumerSubscriptionState subscriptions = new ConsumerSubscriptionState(logContext, offsetResetStrategy);
         Metadata metadata = new ConsumerMetadata(0, 0, Long.MAX_VALUE, false, false,
                 subscriptions, logContext, new ClusterResourceListeners());
         client = new MockClient(time, metadata);

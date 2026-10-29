@@ -29,9 +29,9 @@ import org.apache.kafka.common.Node;
 import org.apache.kafka.common.PartitionInfo;
 import org.apache.kafka.common.TopicPartition;
 import org.apache.kafka.common.errors.TimeoutException;
-import org.apache.kafka.common.utils.LogContext;
 import org.apache.kafka.common.utils.Time;
 import org.apache.kafka.common.utils.Utils;
+import org.apache.kafka.common.utils.internals.LogContext;
 import org.apache.kafka.streams.errors.MissingSourceTopicException;
 import org.apache.kafka.streams.errors.StreamsException;
 import org.apache.kafka.streams.errors.TaskAssignmentException;
@@ -216,11 +216,13 @@ public class StreamsPartitionAssignor implements ConsumerPartitionAssignor, Conf
     private Queue<StreamsException> nonFatalExceptionsToHandle;
     private Time time;
 
+    // since live upgrades from 2.3 (or earlier) to 4.0 or above are no longer supported, we can always
+    // start with the latest supported metadata version since version probing will take
+    // care of downgrading it if/when necessary
     protected int usedSubscriptionMetadataVersion = LATEST_SUPPORTED_VERSION;
 
     private InternalTopicManager internalTopicManager;
     private CopartitionedTopicsEnforcer copartitionedTopicsEnforcer;
-    private RebalanceProtocol rebalanceProtocol;
     private AssignmentListener assignmentListener;
 
     private Supplier<Optional<org.apache.kafka.streams.processor.assignment.TaskAssignor>>
@@ -242,7 +244,6 @@ public class StreamsPartitionAssignor implements ConsumerPartitionAssignor, Conf
 
         logPrefix = assignorConfiguration.logPrefix();
         log = new LogContext(logPrefix).logger(getClass());
-        usedSubscriptionMetadataVersion = assignorConfiguration.configuredMetadataVersion(usedSubscriptionMetadataVersion);
 
         final ReferenceContainer referenceContainer = assignorConfiguration.referenceContainer();
         mainConsumerSupplier = () -> Objects.requireNonNull(referenceContainer.mainConsumer, "Main consumer was not specified");
@@ -258,7 +259,6 @@ public class StreamsPartitionAssignor implements ConsumerPartitionAssignor, Conf
         userEndPoint = assignorConfiguration.userEndPoint();
         internalTopicManager = assignorConfiguration.internalTopicManager();
         copartitionedTopicsEnforcer = assignorConfiguration.copartitionedTopicsEnforcer();
-        rebalanceProtocol = assignorConfiguration.rebalanceProtocol();
         customTaskAssignorSupplier = assignorConfiguration::customTaskAssignor;
         legacyTaskAssignorSupplier = assignorConfiguration::taskAssignor;
         assignmentListener = assignorConfiguration.assignmentListener();
@@ -273,12 +273,7 @@ public class StreamsPartitionAssignor implements ConsumerPartitionAssignor, Conf
 
     @Override
     public List<RebalanceProtocol> supportedProtocols() {
-        final List<RebalanceProtocol> supportedProtocols = new ArrayList<>();
-        supportedProtocols.add(RebalanceProtocol.EAGER);
-        if (rebalanceProtocol == RebalanceProtocol.COOPERATIVE) {
-            supportedProtocols.add(rebalanceProtocol);
-        }
-        return supportedProtocols;
+        return List.of(RebalanceProtocol.COOPERATIVE);
     }
 
     @Override
@@ -316,12 +311,12 @@ public class StreamsPartitionAssignor implements ConsumerPartitionAssignor, Conf
         for (final ClientMetadata clientMetadata : clientsMetadata.values()) {
             for (final String consumerId : clientMetadata.consumers) {
                 assignment.put(consumerId, new Assignment(
-                    Collections.emptyList(),
+                    List.of(),
                     new AssignmentInfo(LATEST_SUPPORTED_VERSION,
-                        Collections.emptyList(),
-                        Collections.emptyMap(),
-                        Collections.emptyMap(),
-                        Collections.emptyMap(),
+                        List.of(),
+                        Map.of(),
+                        Map.of(),
+                        Map.of(),
                         errorCode).encode()
                 ));
             }
@@ -380,7 +375,7 @@ public class StreamsPartitionAssignor implements ConsumerPartitionAssignor, Conf
                 futureMetadataVersion = usedVersion;
                 processId = FUTURE_ID;
                 if (!clientMetadataMap.containsKey(FUTURE_ID)) {
-                    clientMetadataMap.put(FUTURE_ID, new ClientMetadata(FUTURE_ID, null, Collections.emptyMap(), subscription.rackId()));
+                    clientMetadataMap.put(FUTURE_ID, new ClientMetadata(FUTURE_ID, null, Map.of(), subscription.rackId()));
                 }
             } else {
                 processId = info.processId();
@@ -590,7 +585,7 @@ public class StreamsPartitionAssignor implements ConsumerPartitionAssignor, Conf
                                                    final Map<ProcessId, ClientMetadata> clientMetadataMap,
                                                    final GroupSubscription groupSubscription) {
         if (assignmentError == AssignmentError.UNKNOWN_PROCESS_ID || assignmentError == AssignmentError.UNKNOWN_TASK_ID) {
-            assignor.onAssignmentComputed(new GroupAssignment(Collections.emptyMap()), groupSubscription, assignmentError);
+            assignor.onAssignmentComputed(new GroupAssignment(Map.of()), groupSubscription, assignmentError);
             log.error("Rebalance failed due to task assignor returning assignment with error {}, " +
                       "assignor callback will receive empty GroupAssignment due to this error", assignmentError);
             throw new StreamsException("Task assignment with " + assignor.getClass().getName() +
@@ -1133,7 +1128,7 @@ public class StreamsPartitionAssignor implements ConsumerPartitionAssignor, Conf
             final List<TopicPartition> activePartitionsList = new ArrayList<>();
             final List<TaskId> assignedActiveList = new ArrayList<>();
 
-            final Set<TaskId> activeTasksRemovedPendingRevokation = populateActiveTaskAndPartitionsLists(
+            final Set<TaskId> activeTasksRemovedPendingRevocation = populateActiveTaskAndPartitionsLists(
                 activePartitionsList,
                 assignedActiveList,
                 consumer,
@@ -1146,7 +1141,7 @@ public class StreamsPartitionAssignor implements ConsumerPartitionAssignor, Conf
             final Map<TaskId, Set<TopicPartition>> standbyTaskMap = buildStandbyTaskMap(
                     consumer,
                     standbyTaskAssignments.get(consumer),
-                    activeTasksRemovedPendingRevokation,
+                    activeTasksRemovedPendingRevocation,
                     statefulTasks,
                     partitionsForTask,
                     clientMetadata.state
@@ -1162,7 +1157,7 @@ public class StreamsPartitionAssignor implements ConsumerPartitionAssignor, Conf
                 AssignorError.NONE.code()
             );
 
-            if (!activeTasksRemovedPendingRevokation.isEmpty()) {
+            if (!activeTasksRemovedPendingRevocation.isEmpty()) {
                 // TODO: once KAFKA-10078 is resolved we can leave it to the client to trigger this rebalance
                 log.info("Requesting followup rebalance be scheduled immediately by {} due to tasks changing ownership.", consumer);
                 info.setNextRebalanceTime(0L);
@@ -1499,9 +1494,9 @@ public class StreamsPartitionAssignor implements ConsumerPartitionAssignor, Conf
                 validateActiveTaskEncoding(partitions, info, logPrefix);
 
                 activeTasks = getActiveTasks(partitions, info);
-                partitionsByHost = Collections.emptyMap();
-                standbyPartitionsByHost = Collections.emptyMap();
-                topicToPartitionInfo = Collections.emptyMap();
+                partitionsByHost = Map.of();
+                standbyPartitionsByHost = Map.of();
+                topicToPartitionInfo = Map.of();
                 encodedNextScheduledRebalanceMs = Long.MAX_VALUE;
                 break;
             case 2:
@@ -1512,7 +1507,7 @@ public class StreamsPartitionAssignor implements ConsumerPartitionAssignor, Conf
 
                 activeTasks = getActiveTasks(partitions, info);
                 partitionsByHost = info.partitionsByHost();
-                standbyPartitionsByHost = Collections.emptyMap();
+                standbyPartitionsByHost = Map.of();
                 topicToPartitionInfo = getTopicPartitionInfo(partitionsByHost);
                 encodedNextScheduledRebalanceMs = Long.MAX_VALUE;
                 break;
@@ -1667,10 +1662,6 @@ public class StreamsPartitionAssignor implements ConsumerPartitionAssignor, Conf
     // following functions are for test only
     void setInternalTopicManager(final InternalTopicManager internalTopicManager) {
         this.internalTopicManager = internalTopicManager;
-    }
-
-    RebalanceProtocol rebalanceProtocol() {
-        return rebalanceProtocol;
     }
 
     protected String userEndPoint() {

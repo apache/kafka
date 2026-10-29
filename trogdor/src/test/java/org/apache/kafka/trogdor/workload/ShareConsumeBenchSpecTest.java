@@ -16,23 +16,30 @@
  */
 package org.apache.kafka.trogdor.workload;
 
+import org.apache.kafka.clients.consumer.AcknowledgeType;
+import org.apache.kafka.clients.consumer.ConsumerRecord;
+import org.apache.kafka.trogdor.common.JsonUtil;
+
+import com.fasterxml.jackson.databind.JsonMappingException;
+
 import org.junit.jupiter.api.Test;
 
-import java.util.Arrays;
-import java.util.Collections;
 import java.util.HashSet;
 import java.util.List;
+import java.util.Map;
 import java.util.Optional;
 import java.util.Set;
 
 import static org.junit.jupiter.api.Assertions.assertEquals;
+import static org.junit.jupiter.api.Assertions.assertFalse;
 import static org.junit.jupiter.api.Assertions.assertThrows;
+import static org.junit.jupiter.api.Assertions.assertTrue;
 
 class ShareConsumeBenchSpecTest {
 
     @Test
     public void testExpandTopicNames() {
-        ShareConsumeBenchSpec shareConsumeBenchSpec = shareConsumeBenchSpec(Arrays.asList("foo[1-3]", "bar"));
+        ShareConsumeBenchSpec shareConsumeBenchSpec = shareConsumeBenchSpec(List.of("foo[1-3]", "bar"));
         Set<String> expectedNames = new HashSet<>();
 
         expectedNames.add("foo1");
@@ -45,16 +52,130 @@ class ShareConsumeBenchSpecTest {
 
     @Test
     public void testInvalidNameRaisesException() {
-        for (String invalidName : Arrays.asList("In:valid", "invalid:", ":invalid[]", "in:valid:", "invalid[1-3]:")) {
-            assertThrows(IllegalArgumentException.class, () -> shareConsumeBenchSpec(Collections.singletonList(invalidName)).expandTopicNames());
+        for (String invalidName : List.of("In:valid", "invalid:", ":invalid[]", "in:valid:", "invalid[1-3]:")) {
+            assertThrows(IllegalArgumentException.class, () -> shareConsumeBenchSpec(List.of(invalidName)).expandTopicNames());
         }
+    }
+
+    @Test
+    public void testDefaultShareGroupName() {
+        ShareConsumeBenchSpec shareConsumeBenchSpec = new ShareConsumeBenchSpec(0, 0, "node", "localhost",
+                123, 1234, null, Map.of(), Map.of(), Map.of(), 1,
+                Optional.empty(), List.of("abc"), null, Optional.empty(), null);
+        assertEquals("share", shareConsumeBenchSpec.shareGroup());
+    }
+
+    @Test
+    public void testAcknowledgeTypeAbsentByDefault() throws Exception {
+        ShareConsumeBenchSpec spec = parseSpec(null);
+        assertEquals(Optional.empty(), spec.acknowledgeType());
+    }
+
+    @Test
+    public void testAcknowledgeTypeParsedFromJson() throws Exception {
+        assertEquals(Optional.of(AcknowledgeType.ACCEPT), parseSpec("ACCEPT").acknowledgeType());
+        assertEquals(Optional.of(AcknowledgeType.REJECT), parseSpec("REJECT").acknowledgeType());
+        assertEquals(Optional.of(AcknowledgeType.RELEASE), parseSpec("RELEASE").acknowledgeType());
+    }
+
+    @Test
+    public void testUnsupportedAcknowledgeTypeRaisesException() {
+        for (String unsupported : List.of("RENEW", "bogus")) {
+            assertThrows(JsonMappingException.class, () -> parseSpec(unsupported));
+        }
+        assertThrows(IllegalArgumentException.class, () -> new ShareConsumeBenchSpec(0, 0, "node", "localhost",
+                123, 1234, "sg-1", Map.of(), Map.of(), Map.of(), 1,
+                Optional.empty(), List.of("abc"), AcknowledgeType.RENEW, Optional.empty(), null));
+    }
+
+    @Test
+    public void testRecordAcknowledgerAndDLQConfigAbsentByDefault() throws Exception {
+        ShareConsumeBenchSpec spec = parseSpec(null);
+        assertEquals(Optional.empty(), spec.recordAcknowledger());
+        assertEquals(Optional.empty(), spec.shareGroupDLQConfig());
+    }
+
+    @Test
+    public void testRecordAcknowledgerParsedFromJson() throws Exception {
+        ShareConsumeBenchSpec spec = parseSpec(null, ", \"recordAcknowledger\": " +
+                "{\"type\": \"random\", \"rejectPercent\": 20, \"releasePercent\": 10}");
+        RandomRecordAcknowledger acknowledger = (RandomRecordAcknowledger) spec.recordAcknowledger().get();
+        assertEquals(20, acknowledger.rejectPercent());
+        assertEquals(10, acknowledger.releasePercent());
+    }
+
+    @Test
+    public void testInvalidRecordAcknowledgerRaisesException() {
+        assertThrows(JsonMappingException.class, () -> parseSpec(null, ", \"recordAcknowledger\": " +
+                "{\"type\": \"random\", \"rejectPercent\": 80, \"releasePercent\": 30}"));
+        assertThrows(JsonMappingException.class, () -> parseSpec(null, ", \"recordAcknowledger\": " +
+                "{\"type\": \"random\", \"rejectPercent\": -1}"));
+    }
+
+    @Test
+    public void testAcknowledgeTypeAndRecordAcknowledgerAreMutuallyExclusive() {
+        assertThrows(JsonMappingException.class, () -> parseSpec("REJECT", ", \"recordAcknowledger\": " +
+                "{\"type\": \"random\", \"rejectPercent\": 20}"));
+    }
+
+    @Test
+    public void testRandomRecordAcknowledger() {
+        RandomRecordAcknowledger rejectAll = new RandomRecordAcknowledger(100, 0);
+        RandomRecordAcknowledger releaseAll = new RandomRecordAcknowledger(0, 100);
+        RandomRecordAcknowledger acceptAll = new RandomRecordAcknowledger(0, 0);
+        ConsumerRecord<byte[], byte[]> record = new ConsumerRecord<>("topic", 0, 0L, new byte[0], new byte[0]);
+        for (int i = 0; i < 20; i++) {
+            assertEquals(AcknowledgeType.REJECT, rejectAll.acknowledge(record));
+            assertEquals(AcknowledgeType.RELEASE, releaseAll.acknowledge(record));
+            assertEquals(AcknowledgeType.ACCEPT, acceptAll.acknowledge(record));
+        }
+        assertEquals(20, rejectAll.acknowledgerStatus().get("rejected").asLong());
+        assertEquals(0, rejectAll.acknowledgerStatus().get("accepted").asLong());
+    }
+
+    @Test
+    public void testShareGroupDLQConfigParsedFromJson() throws Exception {
+        ShareConsumeBenchSpec spec = parseSpec(null, ", \"shareGroupDLQConfig\": {\"topicName\": \"dlq\", " +
+                "\"topicSpec\": {\"numPartitions\": 2, \"replicationFactor\": 1}, \"copyRecordEnable\": true}");
+        ShareGroupDLQConfig dlqConfig = spec.shareGroupDLQConfig().get();
+        assertEquals("dlq", dlqConfig.topicName());
+        assertEquals(2, dlqConfig.topicSpec().numPartitions());
+        assertEquals(1, dlqConfig.topicSpec().replicationFactor());
+        assertTrue(dlqConfig.copyRecordEnable());
+    }
+
+    @Test
+    public void testShareGroupDLQConfigDefaults() throws Exception {
+        ShareGroupDLQConfig dlqConfig = parseSpec(null, ", \"shareGroupDLQConfig\": {\"topicName\": \"dlq\"}")
+                .shareGroupDLQConfig().get();
+        assertFalse(dlqConfig.copyRecordEnable());
+        assertEquals(List.of(0), dlqConfig.topicSpec().partitionNumbers());
+    }
+
+    @Test
+    public void testInvalidShareGroupDLQTopicNameRaisesException() {
+        for (String json : List.of("{}", "{\"topicName\": \"\"}", "{\"topicName\": \"__dlq\"}")) {
+            assertThrows(JsonMappingException.class, () -> parseSpec(null, ", \"shareGroupDLQConfig\": " + json));
+        }
+    }
+
+    private ShareConsumeBenchSpec parseSpec(String acknowledgeType) throws Exception {
+        return parseSpec(acknowledgeType, "");
+    }
+
+    private ShareConsumeBenchSpec parseSpec(String acknowledgeType, String extraJson) throws Exception {
+        String ackJson = acknowledgeType == null ? "" : String.format(", \"acknowledgeType\": \"%s\"", acknowledgeType);
+        String json = "{\"class\": \"org.apache.kafka.trogdor.workload.ShareConsumeBenchSpec\", " +
+                "\"startMs\": 0, \"durationMs\": 0, \"consumerNode\": \"node\", \"bootstrapServers\": \"localhost\", " +
+                "\"maxMessages\": 10, \"activeTopics\": [\"abc\"]" + ackJson + extraJson + "}";
+        return JsonUtil.JSON_SERDE.readValue(json, ShareConsumeBenchSpec.class);
     }
 
     private ShareConsumeBenchSpec shareConsumeBenchSpec(List<String> activeTopics) {
         return new ShareConsumeBenchSpec(0, 0, "node", "localhost",
                 123, 1234, "sg-1",
-                Collections.emptyMap(), Collections.emptyMap(), Collections.emptyMap(), 1,
-                Optional.empty(), activeTopics);
+                Map.of(), Map.of(), Map.of(), 1,
+                Optional.empty(), activeTopics, null, Optional.empty(), null);
     }
 
 }

@@ -25,60 +25,81 @@ Usage:
 
     Example command:-
         docker_build_test.py <image_name> --image-tag <image_tag> --image-type <image_type> --kafka-url <kafka_url>
+        docker_build_test.py <image_name> --image-tag <image_tag> --image-type <image_type> --kafka-archive <kafka_archive>
 
         This command will build an image with <image_name> as image name, <image_tag> as image_tag (it will be latest by default),
         <image_type> as image type (jvm by default), <kafka_url> for the kafka inside the image and run tests on the image.
+        <kafka_archive> can be passed as an alternative to <kafka_url> to use a local kafka archive. The path of kafka_archive should be absolute.
         -b can be passed as additional argument if you just want to build the image.
         -t can be passed if you just want to run tests on the image.
+        --base-image can be passed to build the jvm image on a different Alpine-based JRE image than the default.
 """
 
 from datetime import date
 import argparse
-from distutils.dir_util import copy_tree
 import shutil
-from test.docker_sanity_test import run_tests
-from common import execute, build_docker_image_runner
+from common import (
+    execute,
+    build_docker_image_runner,
+    detect_compose_command,
+    detect_container_runtime,
+)
 import tempfile
 import os
 
-def build_docker_image(image, tag, kafka_url, image_type):
-    image = f'{image}:{tag}'
-    build_docker_image_runner(f"docker build -f $DOCKER_FILE -t {image} --build-arg kafka_url={kafka_url} --build-arg build_date={date.today()} $DOCKER_DIR", image_type)
+def run_docker_tests(image, tag, kafka_url, kafka_archive, image_type, container_runtime="docker"):
+    # Imported here rather than at module scope so that building an image (-b) does not require the
+    # test dependencies (pytest, pytest-html). Only the test path needs them.
+    from test.docker_sanity_test import run_tests
 
-def run_docker_tests(image, tag, kafka_url, image_type):
+    compose_command = detect_compose_command(container_runtime)
     temp_dir_path = tempfile.mkdtemp()
     try:
         current_dir = os.path.dirname(os.path.realpath(__file__))
-        copy_tree(f"{current_dir}/test/fixtures", f"{temp_dir_path}/fixtures")
-        execute(["wget", "-nv", "-O", f"{temp_dir_path}/kafka.tgz", kafka_url])
+        shutil.copytree(f"{current_dir}/test/fixtures", f"{temp_dir_path}/fixtures", dirs_exist_ok=True)
+        if kafka_url is not None:
+            execute(["wget", "-nv", "-O", f"{temp_dir_path}/kafka.tgz", kafka_url])
+        elif kafka_archive is not None:
+            shutil.copy(kafka_archive, f"{temp_dir_path}/kafka.tgz")
+        else:
+            raise ValueError("Either --kafka-url or --kafka-archive must be passed")
         execute(["mkdir", f"{temp_dir_path}/fixtures/kafka"])
         execute(["tar", "xfz", f"{temp_dir_path}/kafka.tgz", "-C", f"{temp_dir_path}/fixtures/kafka", "--strip-components", "1"])
-        failure_count = run_tests(f"{image}:{tag}", image_type, temp_dir_path)
+        test_exit_code = run_tests(f"{image}:{tag}", image_type, temp_dir_path, container_runtime, compose_command)
     except:
         raise SystemError("Failed to run the tests")
     finally:
         shutil.rmtree(temp_dir_path)
     test_report_location_text = f"To view test report please check {current_dir}/test/report_{image_type}.html"
-    if failure_count != 0:
-        raise SystemError(f"{failure_count} tests have failed. {test_report_location_text}")
-    else:
-        print(f"All tests passed successfully. {test_report_location_text}")
+    if test_exit_code != 0:
+        raise SystemError(f"Tests failed with pytest exit code {test_exit_code}. {test_report_location_text}")
+    print(f"All tests passed successfully. {test_report_location_text}")
 
 if __name__ == '__main__':
     parser = argparse.ArgumentParser()
     parser.add_argument("image", help="Image name that you want to keep for the Docker image")
     parser.add_argument("--image-tag", "-tag", default="latest", dest="tag", help="Image tag that you want to add to the image")
     parser.add_argument("--image-type", "-type", choices=["jvm", "native"], default="jvm", dest="image_type", help="Image type you want to build")
-    parser.add_argument("--kafka-url", "-u", dest="kafka_url", help="Kafka url to be used to download kafka binary tarball in the docker image")
     parser.add_argument("--build", "-b", action="store_true", dest="build_only", default=False, help="Only build the image, don't run tests")
     parser.add_argument("--test", "-t", action="store_true", dest="test_only", default=False, help="Only run the tests, don't build the image")
+    parser.add_argument("--base-image", dest="base_image", default=None, help="Base image for the jvm image type, overriding the Dockerfile's default (e.g. docker.io/library/eclipse-temurin:25-jre-alpine)")
+
+    archive_group = parser.add_mutually_exclusive_group(required=True)
+    archive_group.add_argument("--kafka-url", "-u", dest="kafka_url", help="Kafka url to be used to download kafka binary tarball in the docker image")
+    archive_group.add_argument("--kafka-archive", "-a", dest="kafka_archive", help="Kafka archive to be used to extract kafka binary tarball in the docker image")
+
     args = parser.parse_args()
+    if args.base_image and args.image_type != "jvm":
+        parser.error("--base-image is only supported for the jvm image type")
+    base_image_arg = f"--build-arg base_image={args.base_image} " if args.base_image else ""
+
+    container_runtime = detect_container_runtime()
 
     if args.build_only or not (args.build_only or args.test_only):
         if args.kafka_url:
-            build_docker_image(args.image, args.tag, args.kafka_url, args.image_type)
-        else:
-            raise ValueError("--kafka-url is a required argument for docker image")
-    
+            build_docker_image_runner(f"{container_runtime} build -f $DOCKER_FILE -t {args.image}:{args.tag} {base_image_arg}--build-arg kafka_url={args.kafka_url} --build-arg build_date={date.today()} --no-cache $DOCKER_DIR", args.image_type)
+        elif args.kafka_archive:
+            build_docker_image_runner(f"{container_runtime} build -f $DOCKER_FILE -t {args.image}:{args.tag} {base_image_arg}--build-arg build_date={date.today()} --no-cache $DOCKER_DIR", args.image_type, args.kafka_archive)
+
     if args.test_only or not (args.build_only or args.test_only):
-        run_docker_tests(args.image, args.tag, args.kafka_url, args.image_type)
+        run_docker_tests(args.image, args.tag, args.kafka_url, args.kafka_archive, args.image_type, container_runtime)

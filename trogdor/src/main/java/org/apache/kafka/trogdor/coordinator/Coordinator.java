@@ -17,11 +17,11 @@
 
 package org.apache.kafka.trogdor.coordinator;
 
-import org.apache.kafka.common.utils.Exit;
-import org.apache.kafka.common.utils.Scheduler;
 import org.apache.kafka.common.utils.Time;
+import org.apache.kafka.common.utils.internals.Exit;
 import org.apache.kafka.trogdor.common.Node;
 import org.apache.kafka.trogdor.common.Platform;
+import org.apache.kafka.trogdor.common.Scheduler;
 import org.apache.kafka.trogdor.rest.CoordinatorStatusResponse;
 import org.apache.kafka.trogdor.rest.CreateTaskRequest;
 import org.apache.kafka.trogdor.rest.DestroyTaskRequest;
@@ -129,7 +129,8 @@ public final class Coordinator {
 
     public static void main(String[] args) throws Exception {
         ArgumentParser parser = ArgumentParsers
-            .newArgumentParser("trogdor-coordinator")
+            .newFor("trogdor-coordinator")
+            .build()
             .defaultHelp(true)
             .description("The Trogdor fault injection coordinator");
         parser.addArgument("--coordinator.config", "-c")

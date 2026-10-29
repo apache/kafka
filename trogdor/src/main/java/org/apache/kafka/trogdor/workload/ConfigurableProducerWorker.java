@@ -26,8 +26,8 @@ import org.apache.kafka.clients.producer.RecordMetadata;
 import org.apache.kafka.common.TopicPartition;
 import org.apache.kafka.common.internals.KafkaFutureImpl;
 import org.apache.kafka.common.serialization.ByteArraySerializer;
-import org.apache.kafka.common.utils.ThreadUtils;
 import org.apache.kafka.common.utils.Time;
+import org.apache.kafka.common.utils.internals.ThreadUtils;
 import org.apache.kafka.trogdor.common.JsonUtil;
 import org.apache.kafka.trogdor.common.Platform;
 import org.apache.kafka.trogdor.common.WorkerUtils;
@@ -182,10 +182,8 @@ public class ConfigurableProducerWorker implements TaskWorker {
             long startTimeMs = Time.SYSTEM.milliseconds();
             try {
                 try {
-                    long sentMessages = 0;
                     while (true) {
                         sendMessage();
-                        sentMessages++;
                     }
                 } catch (Exception e) {
                     throw e;

@@ -16,9 +16,9 @@
  */
 package org.apache.kafka.connect.cli;
 
-import org.apache.kafka.common.utils.Exit;
 import org.apache.kafka.common.utils.Time;
 import org.apache.kafka.common.utils.Utils;
+import org.apache.kafka.common.utils.internals.Exit;
 import org.apache.kafka.connect.connector.policy.ConnectorClientConfigOverridePolicy;
 import org.apache.kafka.connect.errors.ConnectException;
 import org.apache.kafka.connect.json.JsonConverter;
@@ -49,7 +49,6 @@ import org.slf4j.LoggerFactory;
 import java.io.File;
 import java.io.IOException;
 import java.nio.file.Paths;
-import java.util.Collections;
 import java.util.Map;
 
 import static org.apache.kafka.connect.runtime.ConnectorConfig.NAME_CONFIG;
@@ -91,6 +90,7 @@ public class ConnectStandalone extends AbstractConnectCli<StandaloneHerder, Stan
                 connect.herder().putConnectorConfig(
                     createConnectorRequest.name(), createConnectorRequest.config(),
                     createConnectorRequest.initialTargetState(),
+                    createConnectorRequest.initialOffsetsMap(),
                     false, cb);
                 cb.get();
             }
@@ -127,7 +127,7 @@ public class ConnectStandalone extends AbstractConnectCli<StandaloneHerder, Stan
                 throw new ConnectException("Connector configuration at '" + filePath + "' is missing the mandatory '" + NAME_CONFIG + "' "
                     + "configuration");
             }
-            return new CreateConnectorRequest(connectorConfigs.get(NAME_CONFIG), connectorConfigs, null);
+            return new CreateConnectorRequest(connectorConfigs.get(NAME_CONFIG), connectorConfigs, null, null);
         } catch (StreamReadException | DatabindException e) {
             log.debug("Could not parse connector configuration file '{}' into a Map with String keys and values", filePath);
         }
@@ -154,7 +154,7 @@ public class ConnectStandalone extends AbstractConnectCli<StandaloneHerder, Stan
             throw new ConnectException("Connector configuration at '" + filePath + "' is missing the mandatory '" + NAME_CONFIG + "' "
                 + "configuration");
         }
-        return new CreateConnectorRequest(connectorConfigs.get(NAME_CONFIG), connectorConfigs, null);
+        return new CreateConnectorRequest(connectorConfigs.get(NAME_CONFIG), connectorConfigs, null, null);
     }
 
     @Override
@@ -163,7 +163,7 @@ public class ConnectStandalone extends AbstractConnectCli<StandaloneHerder, Stan
                                   RestServer restServer, RestClient restClient) {
 
         OffsetBackingStore offsetBackingStore = new FileOffsetBackingStore(plugins.newInternalConverter(
-                true, JsonConverter.class.getName(), Collections.singletonMap(JsonConverterConfig.SCHEMAS_ENABLE_CONFIG, "false")));
+                true, JsonConverter.class.getName(), Map.of(JsonConverterConfig.SCHEMAS_ENABLE_CONFIG, "false")));
         offsetBackingStore.configure(config);
 
         Worker worker = new Worker(workerId, Time.SYSTEM, plugins, config, offsetBackingStore,

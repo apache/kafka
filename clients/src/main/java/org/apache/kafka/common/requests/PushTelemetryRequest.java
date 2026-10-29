@@ -16,12 +16,13 @@
  */
 package org.apache.kafka.common.requests;
 
+import org.apache.kafka.common.Uuid;
 import org.apache.kafka.common.message.PushTelemetryRequestData;
 import org.apache.kafka.common.message.PushTelemetryResponseData;
 import org.apache.kafka.common.protocol.ApiKeys;
-import org.apache.kafka.common.protocol.ByteBufferAccessor;
 import org.apache.kafka.common.protocol.Errors;
-import org.apache.kafka.common.record.CompressionType;
+import org.apache.kafka.common.protocol.Readable;
+import org.apache.kafka.common.record.internal.CompressionType;
 import org.apache.kafka.common.telemetry.internals.ClientTelemetryUtils;
 
 import java.nio.ByteBuffer;
@@ -45,6 +46,11 @@ public class PushTelemetryRequest extends AbstractRequest {
 
         @Override
         public PushTelemetryRequest build(short version) {
+            // From v1 the client instance ID is carried by the request header (KIP-1313) and the body
+            // field only exists in v0, so a non-zero value must not reach the writer.
+            if (version >= 1 && !Uuid.ZERO_UUID.equals(data.clientInstanceId())) {
+                return new PushTelemetryRequest(data.duplicate().setClientInstanceId(Uuid.ZERO_UUID), version);
+            }
             return new PushTelemetryRequest(data, version);
         }
 
@@ -85,14 +91,14 @@ public class PushTelemetryRequest extends AbstractRequest {
         return OTLP_CONTENT_TYPE;
     }
 
-    public ByteBuffer metricsData() {
+    public ByteBuffer metricsData(int maxDecompressedBytes) {
         CompressionType cType = CompressionType.forId(this.data.compressionType());
         return (cType == CompressionType.NONE) ?
-            this.data.metrics() : ClientTelemetryUtils.decompress(this.data.metrics(), cType);
+            this.data.metrics() : ClientTelemetryUtils.decompress(this.data.metrics(), cType, maxDecompressedBytes);
     }
 
-    public static PushTelemetryRequest parse(ByteBuffer buffer, short version) {
+    public static PushTelemetryRequest parse(Readable readable, short version) {
         return new PushTelemetryRequest(new PushTelemetryRequestData(
-                new ByteBufferAccessor(buffer), version), version);
+                readable, version), version);
     }
 }

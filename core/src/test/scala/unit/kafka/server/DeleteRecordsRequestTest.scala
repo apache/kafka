@@ -25,20 +25,19 @@ import org.apache.kafka.common.protocol.Errors
 import org.apache.kafka.common.requests.{DeleteRecordsRequest, DeleteRecordsResponse}
 import org.apache.kafka.common.serialization.StringSerializer
 import org.junit.jupiter.api.Assertions.{assertEquals, assertTrue}
-import org.junit.jupiter.params.ParameterizedTest
-import org.junit.jupiter.params.provider.ValueSource
+import org.junit.jupiter.api.Test
 
 import java.util.Collections
 import java.util.concurrent.TimeUnit
 import scala.collection.Seq
+import scala.jdk.OptionConverters.RichOptional
 
 class DeleteRecordsRequestTest extends BaseRequestTest {
   private val TIMEOUT_MS = 1000
   private val MESSAGES_PRODUCED_PER_PARTITION = 10
 
-  @ParameterizedTest
-  @ValueSource(strings = Array("kraft"))
-  def testDeleteRecordsHappyCase(quorum: String): Unit = {
+  @Test
+  def testDeleteRecordsHappyCase(): Unit = {
     val (topicPartition: TopicPartition, leaderId: Int) = createTopicAndSendRecords
 
     // Create the DeleteRecord request requesting deletion of offset which is not present
@@ -61,9 +60,8 @@ class DeleteRecordsRequestTest extends BaseRequestTest {
     validateLogStartOffsetForTopic(topicPartition, offsetToDelete)
   }
 
-  @ParameterizedTest
-  @ValueSource(strings = Array("kraft"))
-  def testErrorWhenDeletingRecordsWithInvalidOffset(quorum: String): Unit = {
+  @Test
+  def testErrorWhenDeletingRecordsWithInvalidOffset(): Unit = {
     val (topicPartition: TopicPartition, leaderId: Int) = createTopicAndSendRecords
 
     // Create the DeleteRecord request requesting deletion of offset which is not present
@@ -86,9 +84,8 @@ class DeleteRecordsRequestTest extends BaseRequestTest {
     validateLogStartOffsetForTopic(topicPartition, 0)
   }
 
-  @ParameterizedTest
-  @ValueSource(strings = Array("kraft"))
-  def testErrorWhenDeletingRecordsWithInvalidTopic(quorum: String): Unit = {
+  @Test
+  def testErrorWhenDeletingRecordsWithInvalidTopic(): Unit = {
     val invalidTopicPartition = new TopicPartition("invalid-topic", 0)
     // Create the DeleteRecord request requesting deletion of offset which is not present
     val offsetToDelete = 1
@@ -160,7 +157,7 @@ class DeleteRecordsRequestTest extends BaseRequestTest {
   }
 
   private def validateLogStartOffsetForTopic(topicPartition: TopicPartition, expectedStartOffset: Long): Unit = {
-    val logForTopicPartition = brokers.flatMap(_.replicaManager.logManager.getLog(topicPartition)).headOption
+    val logForTopicPartition = brokers.flatMap(_.replicaManager.logManager.getLog(topicPartition).toScala).headOption
     // logManager should exist for the provided partition
     assertTrue(logForTopicPartition.isDefined)
     // assert that log start offset is equal to the expectedStartOffset after DeleteRecords has been called.

@@ -18,43 +18,12 @@ package org.apache.kafka.connect.runtime.rest.entities;
 
 import org.apache.kafka.connect.util.ConnectorTaskId;
 
-import com.fasterxml.jackson.annotation.JsonCreator;
 import com.fasterxml.jackson.annotation.JsonProperty;
 
 import java.util.Map;
-import java.util.Objects;
 
-public class TaskInfo {
-    private final ConnectorTaskId id;
-    private final Map<String, String> config;
-
-    @JsonCreator
-    public TaskInfo(@JsonProperty("id") ConnectorTaskId id, @JsonProperty("config") Map<String, String> config) {
-        this.id = id;
-        this.config = config;
-    }
-
-    @JsonProperty
-    public ConnectorTaskId id() {
-        return id;
-    }
-
-    @JsonProperty
-    public Map<String, String> config() {
-        return config;
-    }
-
-    @Override
-    public boolean equals(Object o) {
-        if (this == o) return true;
-        if (o == null || getClass() != o.getClass()) return false;
-        TaskInfo taskInfo = (TaskInfo) o;
-        return Objects.equals(id, taskInfo.id) &&
-                Objects.equals(config, taskInfo.config);
-    }
-
-    @Override
-    public int hashCode() {
-        return Objects.hash(id, config);
-    }
+public record TaskInfo(
+    @JsonProperty("id") ConnectorTaskId id,
+    @JsonProperty("config") Map<String, String> config
+) {
 }

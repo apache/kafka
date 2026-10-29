@@ -16,32 +16,58 @@
  */
 package kafka.coordinator.group
 
-import kafka.cluster.PartitionListener
-import kafka.server.{AddPartitionsToTxnManager, ReplicaManager}
-import org.apache.kafka.common.TopicPartition
+import kafka.server.ReplicaManager
+import org.apache.kafka.common.{TopicIdPartition, TopicPartition}
 import org.apache.kafka.common.protocol.Errors
-import org.apache.kafka.common.record.{MemoryRecords, RecordBatch}
-import org.apache.kafka.common.requests.ProduceResponse.PartitionResponse
+import org.apache.kafka.common.record.internal.{MemoryRecords, RecordBatch}
 import org.apache.kafka.coordinator.common.runtime.PartitionWriter
 import org.apache.kafka.server.ActionQueue
 import org.apache.kafka.server.common.RequestLocal
+import org.apache.kafka.server.partition.PartitionListener
+import org.apache.kafka.server.transaction.AddPartitionsToTxnManager
 import org.apache.kafka.storage.internals.log.{AppendOrigin, LogConfig, VerificationGuard}
 
 import java.util.concurrent.CompletableFuture
+import java.util.concurrent.atomic.AtomicBoolean
 import scala.collection.Map
 
 /**
  * ListenerAdapter adapts the PartitionListener interface to the
  * PartitionWriter.Listener interface.
+ *
+ * This upholds the PartitionWriter.Listener contract that high watermark updates are
+ * delivered only while the partition is led by this broker. When the partition
+ * transitions to follower, is deleted or fails, its local log can be truncated and
+ * re-replicated from the new leader, so the high watermark would advance over records
+ * that this broker did not write; propagating those updates would corrupt the
+ * coordinator's committed state. The partition notifies these transitions before its
+ * fetcher is restarted (see ReplicaManager#applyDelta), i.e. before any such update can
+ * be produced, so gating on this flag is sufficient to stop them.
  */
 private[group] class ListenerAdapter(
   val listener: PartitionWriter.Listener
 ) extends PartitionListener {
+  private val active = new AtomicBoolean(true)
+
   override def onHighWatermarkUpdated(
     tp: TopicPartition,
     offset: Long
   ): Unit = {
-    listener.onHighWatermarkUpdated(tp, offset)
+    if (active.get()) {
+      listener.onHighWatermarkUpdated(tp, offset)
+    }
+  }
+
+  override def onBecomingFollower(tp: TopicPartition): Unit = {
+    active.set(false)
+  }
+
+  override def onFailed(tp: TopicPartition): Unit = {
+    active.set(false)
+  }
+
+  override def onDeleted(tp: TopicPartition): Unit = {
+    active.set(false)
   }
 
   override def equals(that: Any): Boolean = that match {
@@ -108,7 +134,7 @@ class CoordinatorPartitionWriter(
     transactionalId: String,
     producerId: Long,
     producerEpoch: Short,
-    apiVersion: Short
+    apiVersion: Int
   ): CompletableFuture[VerificationGuard] = {
     val transactionSupportedOperation = AddPartitionsToTxnManager.txnOffsetCommitRequestVersionToTransactionSupportedOperation(apiVersion)
     val future = new CompletableFuture[VerificationGuard]()
@@ -137,33 +163,33 @@ class CoordinatorPartitionWriter(
   override def append(
     tp: TopicPartition,
     verificationGuard: VerificationGuard,
-    records: MemoryRecords
+    records: MemoryRecords,
+    transactionVersion: Short
   ): Long = {
-    var appendResults: Map[TopicPartition, PartitionResponse] = Map.empty
-    replicaManager.appendRecords(
-      timeout = 0L,
+    // We write synchronously to the leader replica without waiting on replication.
+    val topicIdPartition: TopicIdPartition = replicaManager.topicIdPartition(tp)
+    val appendResults = replicaManager.appendRecordsToLeader(
       requiredAcks = 1,
       internalTopicsAllowed = true,
       origin = AppendOrigin.COORDINATOR,
-      entriesPerPartition = Map(tp -> records),
-      responseCallback = results => appendResults = results,
+      entriesPerPartition = Map(topicIdPartition -> records),
       requestLocal = RequestLocal.noCaching,
       verificationGuards = Map(tp -> verificationGuard),
-      delayedProduceLock = None,
       // We can directly complete the purgatories here because we don't hold
       // any conflicting locks.
-      actionQueue = directActionQueue
+      actionQueue = directActionQueue,
+      transactionVersion = transactionVersion
     )
 
-    val partitionResult = appendResults.getOrElse(tp,
+    val partitionResult = appendResults.getOrElse(topicIdPartition,
       throw new IllegalStateException(s"Append status $appendResults should have partition $tp."))
 
     if (partitionResult.error != Errors.NONE) {
-      throw partitionResult.error.exception()
+      throw partitionResult.error.exception(partitionResult.errorMessage)
     }
 
     // Required offset.
-    partitionResult.lastOffset + 1
+    partitionResult.logAppendSummary.lastOffset + 1
   }
 
   override def deleteRecords(tp: TopicPartition, deleteBeforeOffset: Long): CompletableFuture[Void] = {

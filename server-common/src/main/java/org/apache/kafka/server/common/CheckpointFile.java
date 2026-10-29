@@ -31,7 +31,6 @@ import java.nio.file.Path;
 import java.nio.file.Paths;
 import java.util.ArrayList;
 import java.util.Collection;
-import java.util.Collections;
 import java.util.List;
 import java.util.Optional;
 
@@ -146,7 +145,7 @@ public class CheckpointFile<T> {
         public List<T> read() throws IOException {
             String line = reader.readLine();
             if (line == null)
-                return Collections.emptyList();
+                return List.of();
 
             int readVersion = toInt(line);
             if (readVersion != version) {
@@ -156,7 +155,7 @@ public class CheckpointFile<T> {
 
             line = reader.readLine();
             if (line == null) {
-                return Collections.emptyList();
+                return List.of();
             }
             int expectedSize = toInt(line);
             List<T> entries = new ArrayList<>(expectedSize);

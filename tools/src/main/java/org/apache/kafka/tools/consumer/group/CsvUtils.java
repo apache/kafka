@@ -25,11 +25,11 @@ import com.fasterxml.jackson.dataformat.csv.CsvSchema;
 public class CsvUtils {
     private static final CsvMapper MAPPER = new CsvMapper();
 
-    static ObjectReader readerFor(Class<?> clazz) {
+    public static ObjectReader readerFor(Class<?> clazz) {
         return MAPPER.readerFor(clazz).with(getSchema(clazz));
     }
 
-    static ObjectWriter writerFor(Class<?> clazz) {
+    public static ObjectWriter writerFor(Class<?> clazz) {
         return MAPPER.writerFor(clazz).with(getSchema(clazz));
     }
 

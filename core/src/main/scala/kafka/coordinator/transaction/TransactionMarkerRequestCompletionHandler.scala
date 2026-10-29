@@ -22,6 +22,7 @@ import org.apache.kafka.clients.{ClientResponse, RequestCompletionHandler}
 import org.apache.kafka.common.TopicPartition
 import org.apache.kafka.common.protocol.Errors
 import org.apache.kafka.common.requests.WriteTxnMarkersResponse
+import org.apache.kafka.coordinator.transaction.PendingCompleteTxnAndMarkerEntry
 
 import scala.collection.mutable
 import scala.jdk.CollectionConverters._
@@ -131,7 +132,7 @@ class TransactionMarkerRequestCompletionHandler(brokerId: Int,
               txnMarkerChannelManager.removeMarkersForTxn(pendingCompleteTxn)
               abortSending = true
             } else {
-              txnMetadata.inLock {
+              txnMetadata.inLock(() => {
                 for ((topicPartition, error) <- errors.asScala) {
                   error match {
                     case Errors.NONE =>
@@ -178,7 +179,7 @@ class TransactionMarkerRequestCompletionHandler(brokerId: Int,
                       throw new IllegalStateException(s"Unexpected error ${other.exceptionName} while sending txn marker for $transactionalId")
                   }
                 }
-              }
+              })
             }
 
             if (!abortSending) {

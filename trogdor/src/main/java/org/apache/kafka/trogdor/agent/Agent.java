@@ -18,12 +18,12 @@
 package org.apache.kafka.trogdor.agent;
 
 import org.apache.kafka.common.KafkaFuture;
-import org.apache.kafka.common.utils.Exit;
-import org.apache.kafka.common.utils.Scheduler;
 import org.apache.kafka.common.utils.Time;
+import org.apache.kafka.common.utils.internals.Exit;
 import org.apache.kafka.trogdor.common.JsonUtil;
 import org.apache.kafka.trogdor.common.Node;
 import org.apache.kafka.trogdor.common.Platform;
+import org.apache.kafka.trogdor.common.Scheduler;
 import org.apache.kafka.trogdor.rest.AgentStatusResponse;
 import org.apache.kafka.trogdor.rest.CreateWorkerRequest;
 import org.apache.kafka.trogdor.rest.DestroyWorkerRequest;
@@ -200,7 +200,8 @@ public final class Agent {
 
     public static void main(String[] args) throws Exception {
         ArgumentParser parser = ArgumentParsers
-            .newArgumentParser("trogdor-agent")
+            .newFor("trogdor-agent")
+            .build()
             .defaultHelp(true)
             .description("The Trogdor fault injection agent");
         parser.addArgument("--agent.config", "-c")

@@ -17,7 +17,7 @@
 
 package org.apache.kafka.common.protocol;
 
-import org.apache.kafka.common.utils.ByteUtils;
+import org.apache.kafka.common.utils.internals.ByteUtils;
 
 import java.nio.ByteBuffer;
 
@@ -143,6 +143,11 @@ public class ByteBufferAccessor implements Readable, Writable {
     @Override
     public int remaining() {
         return buf.remaining();
+    }
+
+    @Override
+    public Readable slice() {
+        return new ByteBufferAccessor(buf.slice());
     }
 
     public void flip() {

@@ -14,15 +14,33 @@
  * See the License for the specific language governing permissions and
  * limitations under the License.
  */
+
 package org.apache.kafka.clients.admin;
 
-import org.apache.kafka.common.annotation.InterfaceStability;
+import org.apache.kafka.common.annotation.InterfaceAudience;
+
+import java.util.OptionalInt;
 
 /**
  * Options for {@link AdminClient#describeFeatures(DescribeFeaturesOptions)}.
- *
- * The API of this class is evolving. See {@link Admin} for details.
  */
-@InterfaceStability.Evolving
+@InterfaceAudience.Public
 public class DescribeFeaturesOptions extends AbstractOptions<DescribeFeaturesOptions> {
+    private OptionalInt nodeId = OptionalInt.empty();
+
+    /**
+     * Set the node id to which the request should be sent.
+     */
+    public DescribeFeaturesOptions nodeId(int nodeId) {
+        this.nodeId = OptionalInt.of(nodeId);
+        return this;
+    }
+
+    /**
+     * The node id to which the request should be sent. If the node id is empty, the request will be sent to the
+     * arbitrary controller/broker.
+     */
+    public OptionalInt nodeId() {
+        return nodeId;
+    }
 }

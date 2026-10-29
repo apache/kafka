@@ -16,11 +16,10 @@
  */
 package org.apache.kafka.tiered.storage.actions;
 
-import kafka.log.UnifiedLog;
-
 import org.apache.kafka.common.TopicPartition;
 import org.apache.kafka.storage.internals.epoch.LeaderEpochFileCache;
 import org.apache.kafka.storage.internals.log.EpochEntry;
+import org.apache.kafka.storage.internals.log.UnifiedLog;
 import org.apache.kafka.test.TestUtils;
 import org.apache.kafka.tiered.storage.TieredStorageTestAction;
 import org.apache.kafka.tiered.storage.TieredStorageTestContext;
@@ -58,8 +57,8 @@ public final class ExpectLeaderEpochCheckpointAction implements TieredStorageTes
                 earliestEntry = leaderEpochCache.earliestEntry().orElse(null);
             }
             earliestEntryOpt.set(earliestEntry);
-            return earliestEntry != null && beginEpoch == earliestEntry.epoch
-                    && startOffset == earliestEntry.startOffset;
+            return earliestEntry != null && beginEpoch == earliestEntry.epoch()
+                    && startOffset == earliestEntry.startOffset();
         }, 2000L, "leader-epoch-checkpoint begin-epoch: " + beginEpoch + " and start-offset: "
                 + startOffset + " doesn't match with actual: " + earliestEntryOpt.get());
     }

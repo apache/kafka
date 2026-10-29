@@ -247,7 +247,7 @@ public class GetOffsetShellParsingTest {
     @Test
     public void testInvalidOffset() {
         assertEquals("Malformed time argument foo. " +
-                        "Please use -1 or latest / -2 or earliest / -3 or max-timestamp / -4 or earliest-local / -5 or latest-tiered, or a specified long format timestamp",
+                        "Please use -1 or latest / -2 or earliest / -3 or max-timestamp / -4 or earliest-local / -5 or latest-tiered / -6 or earliest-pending-upload, or a specified long format timestamp",
                 assertThrows(TerseException.class, () -> GetOffsetShell.parseOffsetSpec("foo")).getMessage());
     }
 

@@ -19,7 +19,7 @@ package org.apache.kafka.tiered.storage.actions;
 import org.apache.kafka.clients.consumer.ConsumerRecord;
 import org.apache.kafka.clients.producer.ProducerRecord;
 import org.apache.kafka.common.TopicPartition;
-import org.apache.kafka.common.record.Record;
+import org.apache.kafka.common.record.internal.Record;
 import org.apache.kafka.common.serialization.Serde;
 import org.apache.kafka.common.serialization.Serdes;
 import org.apache.kafka.server.log.remote.storage.LocalTieredStorage;
@@ -35,13 +35,11 @@ import java.util.List;
 import java.util.concurrent.ExecutionException;
 import java.util.concurrent.TimeUnit;
 import java.util.concurrent.TimeoutException;
-import java.util.stream.Collectors;
 
 import static org.apache.kafka.server.log.remote.storage.LocalTieredStorageCondition.expectEvent;
 import static org.apache.kafka.server.log.remote.storage.LocalTieredStorageEvent.EventType.COPY_SEGMENT;
-import static org.apache.kafka.tiered.storage.utils.RecordsKeyValueMatcher.correspondTo;
+import static org.apache.kafka.tiered.storage.utils.RecordsKeyValueAssert.assertRecordsCorrespondTo;
 import static org.apache.kafka.tiered.storage.utils.TieredStorageTestUtils.tieredStorageRecords;
-import static org.hamcrest.MatcherAssert.assertThat;
 
 public final class ProduceAction implements TieredStorageTestAction {
 
@@ -81,11 +79,11 @@ public final class ProduceAction implements TieredStorageTestAction {
                 .map(spec -> expectEvent(
                         tieredStorages,
                         COPY_SEGMENT,
-                        spec.getSourceBrokerId(),
-                        spec.getTopicPartition(),
-                        spec.getBaseOffset(),
+                        spec.sourceBrokerId(),
+                        spec.topicPartition(),
+                        spec.baseOffset(),
                         false))
-                .collect(Collectors.toList());
+                .toList();
 
         // Retrieve the offset of the next record which would be consumed from the topic-partition
         // before records are produced. This allows consuming only the newly produced records afterwards.
@@ -110,7 +108,7 @@ public final class ProduceAction implements TieredStorageTestAction {
         TopicSpec topicSpec = context.topicSpec(topicPartition.topic());
         long earliestLocalOffset = expectedEarliestLocalOffset != -1L ? expectedEarliestLocalOffset
                 : startOffset + recordsToProduce.size()
-                - (recordsToProduce.size() % topicSpec.getMaxBatchCountPerSegment()) - 1;
+                - (recordsToProduce.size() % topicSpec.maxBatchCountPerSegment()) - 1;
 
         for (BrokerLocalStorage localStorage : localStorages) {
             // Select brokers which are assigned a replica of the topic-partition
@@ -129,7 +127,7 @@ public final class ProduceAction implements TieredStorageTestAction {
         // Verify that the produced records can be consumed from the topic-partition.
         List<ConsumerRecord<String, String>> consumedRecords =
                 context.consume(topicPartition, recordsToProduce.size(), startOffset);
-        assertThat(consumedRecords, correspondTo(recordsToProduce, topicPartition, serde, serde));
+        assertRecordsCorrespondTo(recordsToProduce, consumedRecords, topicPartition, serde, serde);
 
         // Take a physical snapshot of the second-tier storage, and compare the records found with
         // those of the expected log segments.
@@ -139,8 +137,8 @@ public final class ProduceAction implements TieredStorageTestAction {
                 tieredStorageRecords.subList((int) (startOffset - beginOffset), tieredStorageRecords.size());
 
         List<ProducerRecord<String, String>> producerRecords = offloadedSegmentSpecs.stream()
-                .flatMap(spec -> spec.getRecords().stream())
-                .collect(Collectors.toList());
+                .flatMap(spec -> spec.records().stream())
+                .toList();
         compareRecords(discoveredRecords, producerRecords, topicPartition);
     }
 
@@ -161,6 +159,6 @@ public final class ProduceAction implements TieredStorageTestAction {
     private void compareRecords(List<Record> discoveredRecords,
                                 List<ProducerRecord<String, String>> producerRecords,
                                 TopicPartition topicPartition) {
-        assertThat(discoveredRecords, correspondTo(producerRecords, topicPartition, serde, serde));
+        assertRecordsCorrespondTo(producerRecords, discoveredRecords, topicPartition, serde, serde);
     }
 }

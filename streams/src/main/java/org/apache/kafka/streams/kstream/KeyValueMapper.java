@@ -16,6 +16,7 @@
  */
 package org.apache.kafka.streams.kstream;
 
+import org.apache.kafka.common.annotation.InterfaceAudience;
 import org.apache.kafka.streams.KeyValue;
 
 /**
@@ -44,6 +45,8 @@ import org.apache.kafka.streams.KeyValue;
  * @see KTable#groupBy(KeyValueMapper, Grouped)
  * @see KTable#toStream(KeyValueMapper)
  */
+@FunctionalInterface
+@InterfaceAudience.Public
 public interface KeyValueMapper<K, V, VR> {
 
     /**

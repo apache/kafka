@@ -23,6 +23,7 @@ import org.apache.kafka.common.MetricName;
 import org.apache.kafka.common.PartitionInfo;
 import org.apache.kafka.common.TopicPartition;
 import org.apache.kafka.common.Uuid;
+import org.apache.kafka.common.annotation.InterfaceAudience;
 import org.apache.kafka.common.errors.ProducerFencedException;
 import org.apache.kafka.common.metrics.KafkaMetric;
 
@@ -37,12 +38,20 @@ import java.util.concurrent.Future;
  * @see KafkaProducer
  * @see MockProducer
  */
+@InterfaceAudience.Public
 public interface Producer<K, V> extends Closeable {
 
     /**
      * See {@link KafkaProducer#initTransactions()}
      */
-    void initTransactions();
+    default void initTransactions() {
+        initTransactions(false);
+    }
+
+    /**
+     * See {@link KafkaProducer#initTransactions(boolean)}
+     */
+    void initTransactions(boolean keepPreparedTxn);
 
     /**
      * See {@link KafkaProducer#beginTransaction()}
@@ -56,6 +65,11 @@ public interface Producer<K, V> extends Closeable {
                                   ConsumerGroupMetadata groupMetadata) throws ProducerFencedException;
 
     /**
+     * See {@link KafkaProducer#prepareTransaction()}
+     */
+    PreparedTxnState prepareTransaction() throws ProducerFencedException;
+
+    /**
      * See {@link KafkaProducer#commitTransaction()}
      */
     void commitTransaction() throws ProducerFencedException;
@@ -66,12 +80,17 @@ public interface Producer<K, V> extends Closeable {
     void abortTransaction() throws ProducerFencedException;
 
     /**
-     * @see KafkaProducer#registerMetricForSubscription(KafkaMetric) 
+     * See {@link KafkaProducer#completeTransaction(PreparedTxnState)}
+     */
+    void completeTransaction(PreparedTxnState preparedTxnState) throws ProducerFencedException;
+
+    /**
+     * See {@link KafkaProducer#registerMetricForSubscription(KafkaMetric)}
      */
     void registerMetricForSubscription(KafkaMetric metric);
 
     /**
-     * @see KafkaProducer#unregisterMetricFromSubscription(KafkaMetric) 
+     * See {@link KafkaProducer#unregisterMetricFromSubscription(KafkaMetric)}
      */
     void unregisterMetricFromSubscription(KafkaMetric metric);
 
@@ -101,7 +120,7 @@ public interface Producer<K, V> extends Closeable {
     Map<MetricName, ? extends Metric> metrics();
 
     /**
-     * See {@link KafkaProducer#clientInstanceId(Duration)}}
+     * See {@link KafkaProducer#clientInstanceId(Duration)}
      */
     Uuid clientInstanceId(Duration timeout);
 

@@ -16,39 +16,16 @@
  */
 package org.apache.kafka.server.share.fetch;
 
+import org.apache.kafka.common.TopicIdPartition;
 import org.apache.kafka.common.Uuid;
-
-import java.util.Objects;
 
 /**
  * A key for delayed share fetch purgatory that refers to the topic partition.
  */
-public class DelayedShareFetchPartitionKey implements DelayedShareFetchKey {
-    private final Uuid topicId;
-    private final int partition;
+public record DelayedShareFetchPartitionKey(Uuid topicId, int partition) implements DelayedShareFetchKey {
 
-    public DelayedShareFetchPartitionKey(Uuid topicId, int partition) {
-        this.topicId = topicId;
-        this.partition = partition;
-    }
-
-    @Override
-    public boolean equals(Object o) {
-        if (this == o) return true;
-        if (o == null || getClass() != o.getClass()) return false;
-        DelayedShareFetchPartitionKey that = (DelayedShareFetchPartitionKey) o;
-        return topicId.equals(that.topicId) && partition == that.partition;
-    }
-
-    @Override
-    public int hashCode() {
-        return Objects.hash(topicId, partition);
-    }
-
-    @Override
-    public String toString() {
-        return "DelayedShareFetchPartitionKey(topicId=" + topicId +
-            ", partition=" + partition + ")";
+    public DelayedShareFetchPartitionKey(TopicIdPartition topicIdPartition) {
+        this(topicIdPartition.topicId(), topicIdPartition.partition());
     }
 
     @Override

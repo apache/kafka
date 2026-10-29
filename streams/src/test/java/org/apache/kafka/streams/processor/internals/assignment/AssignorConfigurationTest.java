@@ -28,9 +28,9 @@ import java.util.HashMap;
 import java.util.Map;
 
 import static org.apache.kafka.streams.processor.internals.assignment.AssignmentTestUtils.EMPTY_RACK_AWARE_ASSIGNMENT_TAGS;
-import static org.hamcrest.MatcherAssert.assertThat;
-import static org.hamcrest.Matchers.containsString;
+import static org.junit.jupiter.api.Assertions.assertDoesNotThrow;
 import static org.junit.jupiter.api.Assertions.assertThrows;
+import static org.junit.jupiter.api.Assertions.assertTrue;
 import static org.mockito.Mockito.mock;
 
 public class AssignorConfigurationTest {
@@ -50,34 +50,25 @@ public class AssignorConfigurationTest {
             () -> new AssignmentConfigs(1L, 0, 1, 1L, EMPTY_RACK_AWARE_ASSIGNMENT_TAGS)
         );
 
-        assertThat(exception.getMessage(), containsString("Invalid value 0 for configuration max.warmup.replicas"));
+        assertTrue(exception.getMessage().contains("Invalid value 0 for configuration max.warmup.replicas"));
     }
 
     @Test
-    public void rebalanceProtocolShouldSupportAllUpgradeFromVersions() {
+    public void shouldSupportAllUpgradeFromVersionsFromCooperativeRebalancingOn() {
+        boolean beforeCooperative = true;
         for (final UpgradeFromValues upgradeFrom : UpgradeFromValues.values()) {
-            config.put(StreamsConfig.UPGRADE_FROM_CONFIG, upgradeFrom.toString());
-            final AssignorConfiguration assignorConfiguration = new AssignorConfiguration(config);
+            if (upgradeFrom.toString().equals("2.4")) {
+                beforeCooperative = false;
+            }
 
-            try {
-                assignorConfiguration.rebalanceProtocol();
-            } catch (final Exception error) {
-                throw new AssertionError("Upgrade from " + upgradeFrom + " failed with " + error.getMessage() + "!");
+            config.put(StreamsConfig.UPGRADE_FROM_CONFIG, upgradeFrom.toString());
+
+            if (beforeCooperative) {
+                assertThrows(ConfigException.class, () -> new AssignorConfiguration(config));
+            } else {
+                assertDoesNotThrow(() -> new AssignorConfiguration(config));
             }
         }
     }
 
-    @Test
-    public void configuredMetadataVersionShouldSupportAllUpgradeFromVersions() {
-        for (final UpgradeFromValues upgradeFrom : UpgradeFromValues.values()) {
-            config.put(StreamsConfig.UPGRADE_FROM_CONFIG, upgradeFrom.toString());
-            final AssignorConfiguration assignorConfiguration = new AssignorConfiguration(config);
-
-            try {
-                assignorConfiguration.configuredMetadataVersion(0);
-            } catch (final Exception error) {
-                throw new AssertionError("Upgrade from " + upgradeFrom + " failed with " + error.getMessage() + "!");
-            }
-        }
-    }
 }

@@ -17,8 +17,8 @@
   */
 package kafka.server
 
-import kafka.security.JaasTestUtils
-import kafka.security.JaasTestUtils.JaasSection
+import org.apache.kafka.security.JaasTestUtils.JaasSection
+import org.apache.kafka.security.JaasTestUtils
 
 import java.util.Properties
 import scala.collection.Seq
@@ -39,7 +39,7 @@ class MultipleListenersWithAdditionalJaasContextTest extends MultipleListenersWi
     val props = new Properties
     kafkaServerSaslMechanisms(SecureInternal).foreach { mechanism =>
       addDynamicJaasSection(props, SecureInternal, mechanism,
-        JaasTestUtils.kafkaServerSection("secure_internal.KafkaServer", Seq(mechanism).asJava, None.toJava))
+        JaasTestUtils.kafkaServerSection("secure_internal.KafkaServer", java.util.List.of(mechanism), None.toJava))
     }
     props
   }

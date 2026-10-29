@@ -18,7 +18,6 @@ package org.apache.kafka.coordinator.group;
 
 import org.apache.kafka.common.Uuid;
 import org.apache.kafka.coordinator.group.api.assignor.GroupAssignment;
-import org.apache.kafka.coordinator.group.modern.MemberSubscriptionAndAssignmentImpl;
 
 import java.util.AbstractMap;
 import java.util.Arrays;
@@ -71,6 +70,30 @@ public class AssignmentTestUtil {
         return Collections.unmodifiableMap(assignment);
     }
 
+    public static Map.Entry<Uuid, Map<Integer, Integer>> mkTopicAssignmentWithEpochs(
+        Uuid topicId,
+        int epoch,
+        Integer... partitions
+    ) {
+        Map<Integer, Integer> partitionEpochs = new HashMap<>();
+        for (Integer partition : partitions) {
+            partitionEpochs.put(partition, epoch);
+        }
+        return new AbstractMap.SimpleEntry<>(topicId, partitionEpochs);
+    }
+
+    @SafeVarargs
+    public static Map<Uuid, Map<Integer, Integer>> mkAssignmentWithEpochs(
+        Map.Entry<Uuid, Map<Integer, Integer>>... entries
+    ) {
+        Map<Uuid, Map<Integer, Integer>> assignment = new HashMap<>();
+        for (Map.Entry<Uuid, Map<Integer, Integer>> entry : entries) {
+            assignment.computeIfAbsent(entry.getKey(), k -> new HashMap<>()).putAll(entry.getValue());
+        }
+        assignment.replaceAll((id, innerMap) -> Collections.unmodifiableMap(innerMap));
+        return Collections.unmodifiableMap(assignment);
+    }
+
     /**
      * Verifies that the expected assignment is equal to the computed assignment for every member in the group.
      */
@@ -83,33 +106,5 @@ public class AssignmentTestUtil {
             Map<Uuid, Set<Integer>> computedAssignmentForMember = memberAssignment.partitions();
             assertEquals(expectedAssignment.get(memberId), computedAssignmentForMember);
         });
-    }
-
-    /**
-     * Generate a reverse look up map of partition to member target assignments from the given metadata.
-     *
-     * @param members       The member subscription specs.
-     * @return Map of topic partition to member assignments.
-     */
-    public static Map<Uuid, Map<Integer, String>> invertedTargetAssignment(
-        Map<String, MemberSubscriptionAndAssignmentImpl> members
-    ) {
-        Map<Uuid, Map<Integer, String>> invertedTargetAssignment = new HashMap<>();
-        for (Map.Entry<String, MemberSubscriptionAndAssignmentImpl> memberEntry : members.entrySet()) {
-            String memberId = memberEntry.getKey();
-            Map<Uuid, Set<Integer>> memberAssignment = memberEntry.getValue().partitions();
-
-            for (Map.Entry<Uuid, Set<Integer>> topicEntry : memberAssignment.entrySet()) {
-                Uuid topicId = topicEntry.getKey();
-                Set<Integer> partitions = topicEntry.getValue();
-
-                Map<Integer, String> partitionMap = invertedTargetAssignment.computeIfAbsent(topicId, k -> new HashMap<>());
-
-                for (Integer partitionId : partitions) {
-                    partitionMap.put(partitionId, memberId);
-                }
-            }
-        }
-        return invertedTargetAssignment;
     }
 }

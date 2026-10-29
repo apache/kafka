@@ -19,10 +19,8 @@ package org.apache.kafka.common.requests;
 import org.apache.kafka.common.message.RenewDelegationTokenRequestData;
 import org.apache.kafka.common.message.RenewDelegationTokenResponseData;
 import org.apache.kafka.common.protocol.ApiKeys;
-import org.apache.kafka.common.protocol.ByteBufferAccessor;
 import org.apache.kafka.common.protocol.Errors;
-
-import java.nio.ByteBuffer;
+import org.apache.kafka.common.protocol.Readable;
 
 public class RenewDelegationTokenRequest extends AbstractRequest {
 
@@ -33,9 +31,9 @@ public class RenewDelegationTokenRequest extends AbstractRequest {
         this.data = data;
     }
 
-    public static RenewDelegationTokenRequest parse(ByteBuffer buffer, short version) {
+    public static RenewDelegationTokenRequest parse(Readable readable, short version) {
         return new RenewDelegationTokenRequest(new RenewDelegationTokenRequestData(
-            new ByteBufferAccessor(buffer), version), version);
+            readable, version), version);
     }
 
     @Override
@@ -66,7 +64,19 @@ public class RenewDelegationTokenRequest extends AbstractRequest {
 
         @Override
         public String toString() {
-            return data.toString();
+            return maskData(data);
         }
+    }
+
+    private static String maskData(RenewDelegationTokenRequestData data) {
+        RenewDelegationTokenRequestData tempData = data.duplicate();
+        tempData.setHmac(new byte[0]);
+        return tempData.toString();
+    }
+
+    // Do not print Hmac, overwrite a temp copy of the data with empty content
+    @Override
+    public String toString() {
+        return maskData(data);
     }
 }

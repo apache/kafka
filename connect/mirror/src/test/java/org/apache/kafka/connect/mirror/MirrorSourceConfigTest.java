@@ -22,7 +22,6 @@ import org.apache.kafka.common.config.ConfigException;
 
 import org.junit.jupiter.api.Test;
 
-import java.util.Arrays;
 import java.util.HashSet;
 import java.util.List;
 import java.util.Map;
@@ -38,7 +37,7 @@ public class MirrorSourceConfigTest {
 
     @Test
     public void testTaskConfigTopicPartitions() {
-        List<TopicPartition> topicPartitions = Arrays.asList(new TopicPartition("topic-1", 2),
+        List<TopicPartition> topicPartitions = List.of(new TopicPartition("topic-1", 2),
                 new TopicPartition("topic-3", 4), new TopicPartition("topic-5", 6));
         MirrorSourceConfig config = new MirrorSourceConfig(makeProps());
         Map<String, String> props = config.taskConfigForTopicPartitions(topicPartitions, 1);

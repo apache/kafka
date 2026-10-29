@@ -21,19 +21,17 @@ import org.apache.kafka.common.KafkaException;
 import org.apache.kafka.common.TopicIdPartition;
 import org.apache.kafka.common.errors.TopicAuthorizationException;
 import org.apache.kafka.common.protocol.Errors;
-import org.apache.kafka.common.record.RecordBatch;
+import org.apache.kafka.common.record.internal.RecordBatch;
 import org.apache.kafka.common.requests.ShareFetchResponse;
-import org.apache.kafka.common.utils.LogContext;
+import org.apache.kafka.common.utils.internals.LogContext;
 
 import org.slf4j.Logger;
 
-import java.util.Collections;
-
-import static org.apache.kafka.clients.consumer.internals.FetchUtils.requestMetadataUpdate;
+import java.util.Set;
 
 /**
  * {@code ShareFetchCollector} operates at the {@link RecordBatch} level, as that is what is stored in the
- * {@link ShareFetchBuffer}. Each {@link org.apache.kafka.common.record.Record} in the {@link RecordBatch} is converted
+ * {@link ShareFetchBuffer}. Each {@link org.apache.kafka.common.record.internal.Record} in the {@link RecordBatch} is converted
  * to a {@link ConsumerRecord} and added to the returned {@link Fetch}.
  *
  * @param <K> Record key type
@@ -42,20 +40,17 @@ import static org.apache.kafka.clients.consumer.internals.FetchUtils.requestMeta
 public class ShareFetchCollector<K, V> {
 
     private final Logger log;
-    private final ConsumerMetadata metadata;
-    private final SubscriptionState subscriptions;
-    private final FetchConfig fetchConfig;
+    private final ShareConsumerMetadata metadata;
+    private final ShareFetchConfig shareFetchConfig;
     private final Deserializers<K, V> deserializers;
 
     public ShareFetchCollector(final LogContext logContext,
-                               final ConsumerMetadata metadata,
-                               final SubscriptionState subscriptions,
-                               final FetchConfig fetchConfig,
+                               final ShareConsumerMetadata metadata,
+                               final ShareFetchConfig shareFetchConfig,
                                final Deserializers<K, V> deserializers) {
         this.log = logContext.logger(ShareFetchCollector.class);
         this.metadata = metadata;
-        this.subscriptions = subscriptions;
-        this.fetchConfig = fetchConfig;
+        this.shareFetchConfig = shareFetchConfig;
         this.deserializers = deserializers;
     }
 
@@ -69,7 +64,7 @@ public class ShareFetchCollector<K, V> {
      */
     public ShareFetch<K, V> collect(final ShareFetchBuffer fetchBuffer) {
         ShareFetch<K, V> fetch = ShareFetch.empty();
-        int recordsRemaining = fetchConfig.maxPollRecords;
+        int recordsRemaining = shareFetchConfig.maxPollRecords;
 
         try {
             while (recordsRemaining > 0) {
@@ -102,7 +97,7 @@ public class ShareFetchCollector<K, V> {
                     ShareInFlightBatch<K, V> batch = nextInLineFetch.fetchRecords(
                             deserializers,
                             recordsRemaining,
-                            fetchConfig.checkCrcs);
+                            shareFetchConfig.checkCrcs);
 
                     if (batch.isEmpty()) {
                         nextInLineFetch.drain();
@@ -112,13 +107,16 @@ public class ShareFetchCollector<K, V> {
                     fetch.add(tp, batch);
 
                     if (batch.getException() != null) {
-                        throw batch.getException();
+                        throw new ShareFetchException(fetch, batch.getException().cause());
                     } else if (batch.hasCachedException()) {
                         break;
                     }
                 }
             }
         } catch (KafkaException e) {
+            // Records already collected from other partitions must be returned rather than lost, otherwise
+            // they can never be acknowledged and the completed fetches which delivered them will never be drained.
+            // The failing fetch is still at the head of the queue and will be handled again on the next poll.
             if (fetch.isEmpty()) {
                 throw e;
             }
@@ -159,20 +157,20 @@ public class ShareFetchCollector<K, V> {
                 error == Errors.FENCED_LEADER_EPOCH ||
                 error == Errors.OFFSET_NOT_AVAILABLE) {
             log.debug("Error in fetch for partition {}: {}", tp, error.exceptionName());
-            requestMetadataUpdate(metadata, subscriptions, tp.topicPartition());
+            metadata.requestUpdate(false);
         } else if (error == Errors.UNKNOWN_TOPIC_OR_PARTITION) {
             log.warn("Received unknown topic or partition error in fetch for partition {}.", tp);
-            requestMetadataUpdate(metadata, subscriptions, tp.topicPartition());
+            metadata.requestUpdate(false);
         } else if (error == Errors.UNKNOWN_TOPIC_ID) {
             log.warn("Received unknown topic ID error in fetch for partition {}.", tp);
-            requestMetadataUpdate(metadata, subscriptions, tp.topicPartition());
+            metadata.requestUpdate(false);
         } else if (error == Errors.INCONSISTENT_TOPIC_ID) {
             log.warn("Received inconsistent topic ID error in fetch for partition {}.", tp);
-            requestMetadataUpdate(metadata, subscriptions, tp.topicPartition());
+            metadata.requestUpdate(false);
         } else if (error == Errors.TOPIC_AUTHORIZATION_FAILED) {
             // Log the actual partition and not just the topic to help with ACL propagation issues in large clusters
             log.warn("Not authorized to read from partition {}.", tp.topicPartition());
-            throw new TopicAuthorizationException(Collections.singleton(tp.topic()));
+            throw new TopicAuthorizationException(Set.of(tp.topic()));
         } else if (error == Errors.UNKNOWN_LEADER_EPOCH) {
             log.debug("Received unknown leader epoch error in fetch for partition {}.", tp);
         } else if (error == Errors.UNKNOWN_SERVER_ERROR) {
@@ -182,7 +180,7 @@ public class ShareFetchCollector<K, V> {
             throw new KafkaException("Encountered corrupt message when fetching topic-partition "
                     + tp.topicPartition());
         } else {
-            throw new IllegalStateException("Unexpected error code " + error.code()
+            throw new KafkaException("Unexpected error code " + error.code()
                     + " while fetching from topic-partition " + tp.topicPartition());
         }
     }

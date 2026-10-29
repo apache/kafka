@@ -36,7 +36,10 @@
       { "name": "TopicId", "type": "uuid", "versions": "0+",
         "about": "The topic Id." },
       { "name": "Partitions", "type": "[]int32", "versions": "0+",
-        "about": "The partition Ids." }
+        "about": "The partition Ids." },
+      { "name": "AssignmentEpochs", "versions": "0+", "nullableVersions": "0+",
+        "taggedVersions": "0+", "tag": 0, "type": "[]int32", "default": null,
+        "about": "The epoch at which the partition was assigned to the member. Used to fence zombie commits requests. Of the same length as Partitions." }
     ]}
   ]
 }

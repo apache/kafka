@@ -25,7 +25,7 @@ import org.apache.kafka.common.protocol.Errors;
 import org.apache.kafka.common.quota.ClientQuotaAlteration;
 import org.apache.kafka.common.quota.ClientQuotaEntity;
 import org.apache.kafka.common.requests.ApiError;
-import org.apache.kafka.common.utils.LogContext;
+import org.apache.kafka.common.utils.internals.LogContext;
 import org.apache.kafka.server.common.ApiMessageAndVersion;
 import org.apache.kafka.server.config.QuotaConfig;
 import org.apache.kafka.server.mutable.BoundedList;
@@ -38,7 +38,6 @@ import java.net.InetAddress;
 import java.net.UnknownHostException;
 import java.util.ArrayList;
 import java.util.Collection;
-import java.util.Collections;
 import java.util.HashMap;
 import java.util.List;
 import java.util.Map;
@@ -47,13 +46,12 @@ import java.util.Objects;
 import java.util.function.Supplier;
 import java.util.stream.Collectors;
 
-import static org.apache.kafka.controller.QuorumController.MAX_RECORDS_PER_USER_OP;
-
 
 public class ClientQuotaControlManager {
     static class Builder {
         private LogContext logContext = null;
         private SnapshotRegistry snapshotRegistry = null;
+        private int maxRecordsPerBatch;
 
         Builder setLogContext(LogContext logContext) {
             this.logContext = logContext;
@@ -65,10 +63,18 @@ public class ClientQuotaControlManager {
             return this;
         }
 
+        Builder setMaxRecordsPerBatch(int maxRecordsPerBatch) {
+            this.maxRecordsPerBatch = maxRecordsPerBatch;
+            return this;
+        }
+
         ClientQuotaControlManager build() {
+            if (maxRecordsPerBatch <= 0) {
+                throw new IllegalStateException("Max records per batch must be greater than zero");
+            }
             if (logContext == null) logContext = new LogContext();
             if (snapshotRegistry == null) snapshotRegistry = new SnapshotRegistry(logContext);
-            return new ClientQuotaControlManager(logContext, snapshotRegistry);
+            return new ClientQuotaControlManager(logContext, snapshotRegistry, maxRecordsPerBatch);
         }
     }
 
@@ -76,14 +82,18 @@ public class ClientQuotaControlManager {
 
     private final SnapshotRegistry snapshotRegistry;
 
+    private final int maxRecordsPerBatch;
+
     final TimelineHashMap<ClientQuotaEntity, TimelineHashMap<String, Double>> clientQuotaData;
 
     ClientQuotaControlManager(
         LogContext logContext,
-        SnapshotRegistry snapshotRegistry
+        SnapshotRegistry snapshotRegistry,
+        int maxRecordsPerBatch
     ) {
         this.log = logContext.logger(ClientQuotaControlManager.class);
         this.snapshotRegistry = snapshotRegistry;
+        this.maxRecordsPerBatch = maxRecordsPerBatch;
         this.clientQuotaData = new TimelineHashMap<>(snapshotRegistry, 0);
     }
 
@@ -98,7 +108,7 @@ public class ClientQuotaControlManager {
     ControllerResult<Map<ClientQuotaEntity, ApiError>> alterClientQuotas(
             Collection<ClientQuotaAlteration> quotaAlterations) {
         List<ApiMessageAndVersion> outputRecords =
-                BoundedList.newArrayBacked(MAX_RECORDS_PER_USER_OP);
+                BoundedList.newArrayBacked(maxRecordsPerBatch);
         Map<ClientQuotaEntity, ApiError> outputResults = new HashMap<>();
 
         quotaAlterations.forEach(quotaAlteration -> {
@@ -182,7 +192,7 @@ public class ClientQuotaControlManager {
 
         List<ApiMessageAndVersion> newRecords = new ArrayList<>(newQuotaConfigs.size());
         Map<String, Double> currentQuotas = clientQuotaData.containsKey(entity) ?
-                clientQuotaData.get(entity) : Collections.emptyMap();
+                clientQuotaData.get(entity) : Map.of();
         for (Map.Entry<String, Double> entry : newQuotaConfigs.entrySet()) {
             String key = entry.getKey();
             Double newValue = entry.getValue();
@@ -257,37 +267,40 @@ public class ClientQuotaControlManager {
         if (configKey == null) {
             return new ApiError(Errors.INVALID_REQUEST, "Invalid configuration key " + key);
         }
+        if (!Double.isFinite(value)) {
+            return new ApiError(Errors.INVALID_REQUEST, "Quota " + key + " must be a finite number");
+        }
         if (value <= 0.0) {
             return new ApiError(Errors.INVALID_REQUEST, "Quota " + key + " must be greater than 0");
         }
 
         // Ensure the quota value is valid
-        switch (configKey.type()) {
-            case DOUBLE:
-                return ApiError.NONE;
-            case SHORT:
+        return switch (configKey.type()) {
+            case DOUBLE -> ApiError.NONE;
+            case SHORT -> {
                 if (value > Short.MAX_VALUE) {
-                    return new ApiError(Errors.INVALID_REQUEST,
+                    yield new ApiError(Errors.INVALID_REQUEST,
                         "Proposed value for " + key + " is too large for a SHORT.");
                 }
-                return getErrorForIntegralQuotaValue(value, key);
-            case INT:
+                yield getErrorForIntegralQuotaValue(value, key);
+            }
+            case INT -> {
                 if (value > Integer.MAX_VALUE) {
-                    return new ApiError(Errors.INVALID_REQUEST,
+                    yield new ApiError(Errors.INVALID_REQUEST,
                         "Proposed value for " + key + " is too large for an INT.");
                 }
-                return getErrorForIntegralQuotaValue(value, key);
-            case LONG: {
+                yield getErrorForIntegralQuotaValue(value, key);
+            }
+            case LONG -> {
                 if (value > Long.MAX_VALUE) {
-                    return new ApiError(Errors.INVALID_REQUEST,
+                    yield new ApiError(Errors.INVALID_REQUEST,
                         "Proposed value for " + key + " is too large for a LONG.");
                 }
-                return getErrorForIntegralQuotaValue(value, key);
+                yield getErrorForIntegralQuotaValue(value, key);
             }
-            default:
-                return new ApiError(Errors.UNKNOWN_SERVER_ERROR,
-                        "Unexpected config type " + configKey.type() + " should be Long or Double");
-        }
+            default -> new ApiError(Errors.UNKNOWN_SERVER_ERROR,
+                    "Unexpected config type " + configKey.type() + " should be Long or Double");
+        };
     }
 
     static ApiError getErrorForIntegralQuotaValue(double value, String key) {

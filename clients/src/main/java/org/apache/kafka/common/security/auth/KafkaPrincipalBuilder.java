@@ -14,7 +14,10 @@
  * See the License for the specific language governing permissions and
  * limitations under the License.
  */
+
 package org.apache.kafka.common.security.auth;
+
+import org.apache.kafka.common.annotation.InterfaceAudience;
 
 /**
  * Pluggable principal builder interface which supports both SSL authentication through
@@ -24,7 +27,8 @@ package org.apache.kafka.common.security.auth;
  * interfaces are respected if implemented. Additionally, implementations must provide a
  * default no-arg constructor.
  */
-public interface KafkaPrincipalBuilder {
+@InterfaceAudience.Public
+public interface KafkaPrincipalBuilder extends KafkaPrincipalSerde {
     /**
      * Build a kafka principal from the authentication context.
      * @param context The authentication context (either {@link SslAuthenticationContext} or

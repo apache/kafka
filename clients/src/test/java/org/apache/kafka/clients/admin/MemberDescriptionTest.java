@@ -30,6 +30,7 @@ public class MemberDescriptionTest {
 
     private static final String MEMBER_ID = "member_id";
     private static final Optional<String> INSTANCE_ID = Optional.of("instanceId");
+    private static final Optional<String> RACK_ID = Optional.of("rackId");
     private static final String CLIENT_ID = "client_id";
     private static final String HOST = "host";
     private static final MemberAssignment ASSIGNMENT;
@@ -39,6 +40,7 @@ public class MemberDescriptionTest {
         ASSIGNMENT = new MemberAssignment(Collections.singleton(new TopicPartition("topic", 1)));
         STATIC_MEMBER_DESCRIPTION = new MemberDescription(MEMBER_ID,
                                                           INSTANCE_ID,
+                                                          RACK_ID,
                                                           CLIENT_ID,
                                                           HOST,
                                                           ASSIGNMENT,
@@ -51,6 +53,7 @@ public class MemberDescriptionTest {
     public void testEqualsWithoutGroupInstanceId() {
         MemberDescription dynamicMemberDescription = new MemberDescription(MEMBER_ID,
                                                                            Optional.empty(),
+                                                                           Optional.empty(),
                                                                            CLIENT_ID,
                                                                            HOST,
                                                                            ASSIGNMENT,
@@ -59,6 +62,7 @@ public class MemberDescriptionTest {
                                                                            Optional.empty());
 
         MemberDescription identityDescription = new MemberDescription(MEMBER_ID,
+                                                                      Optional.empty(),
                                                                       Optional.empty(),
                                                                       CLIENT_ID,
                                                                       HOST,
@@ -83,6 +87,7 @@ public class MemberDescriptionTest {
 
         MemberDescription identityDescription = new MemberDescription(MEMBER_ID,
                                                                       INSTANCE_ID,
+                                                                      RACK_ID,
                                                                       CLIENT_ID,
                                                                       HOST,
                                                                       ASSIGNMENT,
@@ -98,6 +103,7 @@ public class MemberDescriptionTest {
     public void testNonEqual() {
         MemberDescription newMemberDescription = new MemberDescription("new_member",
                                                                        INSTANCE_ID,
+                                                                       RACK_ID,
                                                                        CLIENT_ID,
                                                                        HOST,
                                                                        ASSIGNMENT,
@@ -110,6 +116,7 @@ public class MemberDescriptionTest {
 
         MemberDescription newInstanceDescription = new MemberDescription(MEMBER_ID,
                                                                          Optional.of("new_instance"),
+                                                                         RACK_ID,
                                                                          CLIENT_ID,
                                                                          HOST,
                                                                          ASSIGNMENT,
@@ -122,6 +129,7 @@ public class MemberDescriptionTest {
 
         MemberDescription newTargetAssignmentDescription = new MemberDescription(MEMBER_ID,
                                                                                  INSTANCE_ID,
+                                                                                 RACK_ID,
                                                                                  CLIENT_ID,
                                                                                  HOST,
                                                                                  ASSIGNMENT,
@@ -133,6 +141,7 @@ public class MemberDescriptionTest {
 
         MemberDescription newMemberEpochDescription = new MemberDescription(MEMBER_ID,
                                                                             INSTANCE_ID,
+                                                                            RACK_ID,
                                                                             CLIENT_ID,
                                                                             HOST,
                                                                             ASSIGNMENT,
@@ -144,6 +153,7 @@ public class MemberDescriptionTest {
 
         MemberDescription newIsClassicDescription = new MemberDescription(MEMBER_ID,
                                                                           INSTANCE_ID,
+                                                                          RACK_ID,
                                                                           CLIENT_ID,
                                                                           HOST,
                                                                           ASSIGNMENT,

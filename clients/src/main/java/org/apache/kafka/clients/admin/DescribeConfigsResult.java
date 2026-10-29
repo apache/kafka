@@ -18,7 +18,7 @@
 package org.apache.kafka.clients.admin;
 
 import org.apache.kafka.common.KafkaFuture;
-import org.apache.kafka.common.annotation.InterfaceStability;
+import org.apache.kafka.common.annotation.InterfaceAudience;
 import org.apache.kafka.common.config.ConfigResource;
 
 import java.util.Collection;
@@ -28,10 +28,8 @@ import java.util.concurrent.ExecutionException;
 
 /**
  * The result of the {@link KafkaAdminClient#describeConfigs(Collection)} call.
- *
- * The API of this class is evolving, see {@link Admin} for details.
  */
-@InterfaceStability.Evolving
+@InterfaceAudience.Public
 public class DescribeConfigsResult {
 
     private final Map<ConfigResource, KafkaFuture<Config>> futures;
@@ -52,7 +50,7 @@ public class DescribeConfigsResult {
      * Return a future which succeeds only if all the config descriptions succeed.
      */
     public KafkaFuture<Map<ConfigResource, Config>> all() {
-        return KafkaFuture.allOf(futures.values().toArray(new KafkaFuture[0])).
+        return KafkaFuture.allOf(futures.values().toArray(new KafkaFuture<?>[0])).
                 thenApply(v -> {
                     Map<ConfigResource, Config> configs = new HashMap<>(futures.size());
                     for (Map.Entry<ConfigResource, KafkaFuture<Config>> entry : futures.entrySet()) {

@@ -19,12 +19,11 @@ package org.apache.kafka.coordinator.group.streams.topics;
 import org.apache.kafka.common.message.CreateTopicsRequestData.CreatableTopic;
 import org.apache.kafka.common.message.StreamsGroupDescribeResponseData;
 
-import java.util.Collections;
+import java.util.List;
 import java.util.Map;
 import java.util.Objects;
 import java.util.Optional;
 import java.util.SortedMap;
-import java.util.stream.Collectors;
 
 /**
  * This class captures the result of taking a topology definition sent by the client and using the current state of the topics inside the
@@ -32,6 +31,7 @@ import java.util.stream.Collectors;
  *
  * @param topologyEpoch               The epoch of the topology. Same as the topology epoch in the heartbeat request that last initialized
  *                                    the topology.
+ * @param metadataHash                The metadata hash of the group.
  * @param subtopologies               Contains the subtopologies that have been configured. This can be used by the task assignors, since it
  *                                    specifies the number of tasks available for every subtopology. Undefined if topology configuration
  *                                    failed.
@@ -42,6 +42,7 @@ import java.util.stream.Collectors;
  *                                    reported back to the client.
  */
 public record ConfiguredTopology(int topologyEpoch,
+                                 long metadataHash,
                                  Optional<SortedMap<String, ConfiguredSubtopology>> subtopologies,
                                  Map<String, CreatableTopic> internalTopicsToBeCreated,
                                  Optional<TopicConfigurationException> topicConfigurationException) {
@@ -68,7 +69,7 @@ public record ConfiguredTopology(int topologyEpoch,
             .setSubtopologies(
                 subtopologies.map(stringConfiguredSubtopologyMap -> stringConfiguredSubtopologyMap.entrySet().stream().map(
                     entry -> entry.getValue().asStreamsGroupDescribeSubtopology(entry.getKey())
-                ).collect(Collectors.toList())).orElse(Collections.emptyList())
+                ).toList()).orElse(List.of())
             );
     }
 

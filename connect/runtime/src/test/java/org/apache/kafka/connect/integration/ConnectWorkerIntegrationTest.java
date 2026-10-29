@@ -45,6 +45,7 @@ import org.apache.kafka.connect.util.clusters.EmbeddedConnectCluster;
 import org.apache.kafka.connect.util.clusters.WorkerHandle;
 import org.apache.kafka.test.TestUtils;
 
+import org.apache.logging.log4j.Level;
 import org.junit.jupiter.api.AfterEach;
 import org.junit.jupiter.api.BeforeEach;
 import org.junit.jupiter.api.Tag;
@@ -58,7 +59,6 @@ import java.io.File;
 import java.io.FileOutputStream;
 import java.nio.file.Path;
 import java.util.Collection;
-import java.util.Collections;
 import java.util.HashMap;
 import java.util.List;
 import java.util.Map;
@@ -73,15 +73,13 @@ import java.util.stream.IntStream;
 import jakarta.ws.rs.core.Response;
 
 import static jakarta.ws.rs.core.Response.Status.INTERNAL_SERVER_ERROR;
-import static org.apache.kafka.clients.CommonClientConfigs.BOOTSTRAP_SERVERS_CONFIG;
 import static org.apache.kafka.clients.CommonClientConfigs.METADATA_RECOVERY_STRATEGY_CONFIG;
 import static org.apache.kafka.common.config.AbstractConfig.CONFIG_PROVIDERS_CONFIG;
 import static org.apache.kafka.common.config.TopicConfig.DELETE_RETENTION_MS_CONFIG;
 import static org.apache.kafka.common.config.TopicConfig.SEGMENT_MS_CONFIG;
 import static org.apache.kafka.connect.integration.BlockingConnectorTest.TASK_STOP;
-import static org.apache.kafka.connect.integration.MonitorableSourceConnector.TOPIC_CONFIG;
+import static org.apache.kafka.connect.integration.TestableSourceConnector.TOPIC_CONFIG;
 import static org.apache.kafka.connect.runtime.ConnectorConfig.CONNECTOR_CLASS_CONFIG;
-import static org.apache.kafka.connect.runtime.ConnectorConfig.CONNECTOR_CLIENT_PRODUCER_OVERRIDES_PREFIX;
 import static org.apache.kafka.connect.runtime.ConnectorConfig.HEADER_CONVERTER_CLASS_CONFIG;
 import static org.apache.kafka.connect.runtime.ConnectorConfig.KEY_CONVERTER_CLASS_CONFIG;
 import static org.apache.kafka.connect.runtime.ConnectorConfig.PREDICATES_CONFIG;
@@ -212,9 +210,9 @@ public class ConnectWorkerIntegrationTest {
 
         // setup up props for the source connector
         Map<String, String> props = defaultSourceConnectorProps(TOPIC_NAME);
-        // Properties for the source connector. The task should fail at startup due to the bad broker address.
+        // Properties for the source connector. The task should fail at startup due to injected error.
         props.put(TASKS_MAX_CONFIG, Objects.toString(numTasks));
-        props.put(CONNECTOR_CLIENT_PRODUCER_OVERRIDES_PREFIX + BOOTSTRAP_SERVERS_CONFIG, "nobrokerrunningatthisaddress");
+        props.put("task-" + CONNECTOR_NAME + "-0.start.inject.error", "true");
 
         // Try to start the connector and its single task.
         connect.configureConnector(CONNECTOR_NAME, props);
@@ -222,14 +220,14 @@ public class ConnectWorkerIntegrationTest {
         connect.assertions().assertConnectorIsRunningAndTasksHaveFailed(CONNECTOR_NAME, numTasks,
                 "Connector tasks did not fail in time");
 
-        // Reconfigure the connector without the bad broker address.
-        props.remove(CONNECTOR_CLIENT_PRODUCER_OVERRIDES_PREFIX + BOOTSTRAP_SERVERS_CONFIG);
+        // Reconfigure the connector without the injected error.
+        props.remove("task-" + CONNECTOR_NAME + "-0.start.inject.error");
         connect.configureConnector(CONNECTOR_NAME, props);
 
         // Restart the failed task
         String taskRestartEndpoint = connect.endpointForResource(
             String.format("connectors/%s/tasks/0/restart", CONNECTOR_NAME));
-        connect.requestPost(taskRestartEndpoint, "", Collections.emptyMap());
+        connect.requestPost(taskRestartEndpoint, "", Map.of());
 
         // Ensure the task started successfully this time
         connect.assertions().assertConnectorAndAtLeastNumTasksAreRunning(CONNECTOR_NAME, numTasks,
@@ -326,7 +324,7 @@ public class ConnectWorkerIntegrationTest {
 
         // base connector props
         Map<String, String> props = defaultSourceConnectorProps(TOPIC_NAME);
-        props.put(CONNECTOR_CLASS_CONFIG, MonitorableSourceConnector.class.getSimpleName());
+        props.put(CONNECTOR_CLASS_CONFIG, TestableSourceConnector.class.getSimpleName());
 
         // start the connector with only one task
         int initialNumTasks = 1;
@@ -374,7 +372,7 @@ public class ConnectWorkerIntegrationTest {
             NUM_TASKS, "Connector tasks did not start in time");
         connector.awaitRecords(TimeUnit.MINUTES.toMillis(1));
 
-        // Then if we delete the connector, it and each of its tasks should be stopped by the framework
+        // Then, if we delete the connector, it and each of its tasks should be stopped by the framework
         // even though the producer is blocked because there is no topic
         StartAndStopLatch stopCounter = connector.expectedStops(1);
         connect.deleteConnector(CONNECTOR_NAME);
@@ -434,8 +432,8 @@ public class ConnectWorkerIntegrationTest {
                 "Connector did not stop in time"
         );
         // If the connector is truly stopped, we should also see an empty set of tasks and task configs
-        assertEquals(Collections.emptyList(), connect.connectorInfo(CONNECTOR_NAME).tasks());
-        assertEquals(Collections.emptyList(), connect.taskConfigs(CONNECTOR_NAME));
+        assertEquals(List.of(), connect.connectorInfo(CONNECTOR_NAME).tasks());
+        assertEquals(List.of(), connect.taskConfigs(CONNECTOR_NAME));
 
         // Transition to RUNNING
         connect.resumeConnector(CONNECTOR_NAME);
@@ -463,8 +461,8 @@ public class ConnectWorkerIntegrationTest {
                 CONNECTOR_NAME,
                 "Connector did not stop in time"
         );
-        assertEquals(Collections.emptyList(), connect.connectorInfo(CONNECTOR_NAME).tasks());
-        assertEquals(Collections.emptyList(), connect.taskConfigs(CONNECTOR_NAME));
+        assertEquals(List.of(), connect.connectorInfo(CONNECTOR_NAME).tasks());
+        assertEquals(List.of(), connect.taskConfigs(CONNECTOR_NAME));
 
         // Transition to PAUSED
         connect.pauseConnector(CONNECTOR_NAME);
@@ -520,8 +518,8 @@ public class ConnectWorkerIntegrationTest {
                 "Connector did not stop in time"
         );
         // If the connector is truly stopped, we should also see an empty set of tasks and task configs
-        assertEquals(Collections.emptyList(), connect.connectorInfo(CONNECTOR_NAME).tasks());
-        assertEquals(Collections.emptyList(), connect.taskConfigs(CONNECTOR_NAME));
+        assertEquals(List.of(), connect.connectorInfo(CONNECTOR_NAME).tasks());
+        assertEquals(List.of(), connect.taskConfigs(CONNECTOR_NAME));
 
         // Can resume a connector after its Connector has failed before shutdown after receiving a stop request
         props.remove("connector.start.inject.error");
@@ -542,8 +540,8 @@ public class ConnectWorkerIntegrationTest {
                 CONNECTOR_NAME,
                 "Connector did not stop in time"
         );
-        assertEquals(Collections.emptyList(), connect.connectorInfo(CONNECTOR_NAME).tasks());
-        assertEquals(Collections.emptyList(), connect.taskConfigs(CONNECTOR_NAME));
+        assertEquals(List.of(), connect.connectorInfo(CONNECTOR_NAME).tasks());
+        assertEquals(List.of(), connect.taskConfigs(CONNECTOR_NAME));
 
         // Can resume a connector after its Connector has failed during shutdown after receiving a stop request
         connect.resumeConnector(CONNECTOR_NAME);
@@ -570,7 +568,7 @@ public class ConnectWorkerIntegrationTest {
         CreateConnectorRequest createConnectorRequest = new CreateConnectorRequest(
             CONNECTOR_NAME,
             defaultSourceConnectorProps(TOPIC_NAME),
-            CreateConnectorRequest.InitialState.PAUSED
+            CreateConnectorRequest.InitialState.PAUSED, null
         );
         connect.configureConnector(createConnectorRequest);
 
@@ -580,8 +578,8 @@ public class ConnectWorkerIntegrationTest {
             0,
             "Connector was not created in a paused state"
         );
-        assertEquals(Collections.emptyList(), connect.connectorInfo(CONNECTOR_NAME).tasks());
-        assertEquals(Collections.emptyList(), connect.taskConfigs(CONNECTOR_NAME));
+        assertEquals(List.of(), connect.connectorInfo(CONNECTOR_NAME).tasks());
+        assertEquals(List.of(), connect.taskConfigs(CONNECTOR_NAME));
 
         // Verify that a connector created in the PAUSED state can be resumed successfully
         connect.resumeConnector(CONNECTOR_NAME);
@@ -606,7 +604,7 @@ public class ConnectWorkerIntegrationTest {
         CreateConnectorRequest createConnectorRequest = new CreateConnectorRequest(
             CONNECTOR_NAME,
             props,
-            CreateConnectorRequest.InitialState.STOPPED
+            CreateConnectorRequest.InitialState.STOPPED, null
         );
         connect.configureConnector(createConnectorRequest);
 
@@ -615,16 +613,16 @@ public class ConnectWorkerIntegrationTest {
             CONNECTOR_NAME,
             "Connector was not created in a stopped state"
         );
-        assertEquals(Collections.emptyList(), connect.connectorInfo(CONNECTOR_NAME).tasks());
-        assertEquals(Collections.emptyList(), connect.taskConfigs(CONNECTOR_NAME));
+        assertEquals(List.of(), connect.connectorInfo(CONNECTOR_NAME).tasks());
+        assertEquals(List.of(), connect.taskConfigs(CONNECTOR_NAME));
 
         // Verify that the offsets can be modified for a source connector created in the STOPPED state
 
         // Alter the offsets so that only 5 messages are produced
         connect.alterSourceConnectorOffset(
             CONNECTOR_NAME,
-            Collections.singletonMap("task.id", CONNECTOR_NAME + "-0"),
-            Collections.singletonMap("saved", 5L)
+            Map.of("task.id", CONNECTOR_NAME + "-0"),
+            Map.of("saved", 5L)
         );
 
         // Verify that a connector created in the STOPPED state can be resumed successfully
@@ -660,7 +658,7 @@ public class ConnectWorkerIntegrationTest {
         CreateConnectorRequest createConnectorRequest = new CreateConnectorRequest(
             CONNECTOR_NAME,
             props,
-            CreateConnectorRequest.InitialState.STOPPED
+            CreateConnectorRequest.InitialState.STOPPED, null
         );
         connect.configureConnector(createConnectorRequest);
 
@@ -669,8 +667,8 @@ public class ConnectWorkerIntegrationTest {
             CONNECTOR_NAME,
             "Connector was not created in a stopped state"
         );
-        assertEquals(Collections.emptyList(), connect.connectorInfo(CONNECTOR_NAME).tasks());
-        assertEquals(Collections.emptyList(), connect.taskConfigs(CONNECTOR_NAME));
+        assertEquals(List.of(), connect.connectorInfo(CONNECTOR_NAME).tasks());
+        assertEquals(List.of(), connect.taskConfigs(CONNECTOR_NAME));
 
         // Verify that the offsets can be modified for a sink connector created in the STOPPED state
 
@@ -716,7 +714,7 @@ public class ConnectWorkerIntegrationTest {
         CreateConnectorRequest createConnectorRequest = new CreateConnectorRequest(
             CONNECTOR_NAME,
             defaultSourceConnectorProps(TOPIC_NAME),
-            CreateConnectorRequest.InitialState.PAUSED
+            CreateConnectorRequest.InitialState.PAUSED, null
         );
         connect.configureConnector(createConnectorRequest);
 
@@ -726,8 +724,8 @@ public class ConnectWorkerIntegrationTest {
             0,
             "Connector was not created in a paused state"
         );
-        assertEquals(Collections.emptyList(), connect.connectorInfo(CONNECTOR_NAME).tasks());
-        assertEquals(Collections.emptyList(), connect.taskConfigs(CONNECTOR_NAME));
+        assertEquals(List.of(), connect.connectorInfo(CONNECTOR_NAME).tasks());
+        assertEquals(List.of(), connect.taskConfigs(CONNECTOR_NAME));
 
         // Verify that a connector created in the PAUSED state can be deleted successfully
         connect.deleteConnector(CONNECTOR_NAME);
@@ -738,7 +736,7 @@ public class ConnectWorkerIntegrationTest {
         createConnectorRequest = new CreateConnectorRequest(
             CONNECTOR_NAME,
             defaultSourceConnectorProps(TOPIC_NAME),
-            CreateConnectorRequest.InitialState.STOPPED
+            CreateConnectorRequest.InitialState.STOPPED, null
         );
         connect.configureConnector(createConnectorRequest);
 
@@ -747,12 +745,101 @@ public class ConnectWorkerIntegrationTest {
             CONNECTOR_NAME,
             "Connector was not created in a stopped state"
         );
-        assertEquals(Collections.emptyList(), connect.connectorInfo(CONNECTOR_NAME).tasks());
-        assertEquals(Collections.emptyList(), connect.taskConfigs(CONNECTOR_NAME));
+        assertEquals(List.of(), connect.connectorInfo(CONNECTOR_NAME).tasks());
+        assertEquals(List.of(), connect.taskConfigs(CONNECTOR_NAME));
 
         // Verify that a connector created in the STOPPED state can be deleted successfully
         connect.deleteConnector(CONNECTOR_NAME);
         connect.assertions().assertConnectorDoesNotExist(CONNECTOR_NAME, "Connector wasn't deleted in time");
+    }
+
+    @Test
+    public void testCreateSourceConnectorWithInitialOffsets() throws Exception {
+        connect = connectBuilder.build();
+        // start the clusters
+        connect.start();
+
+        Map<String, String> props = defaultSourceConnectorProps(TOPIC_NAME);
+        // Configure the connector to produce a maximum of 10 messages
+        props.put("max.messages", "10");
+        props.put(TASKS_MAX_CONFIG, "1");
+
+        // Create the connector already positioned at offset 5. The TestableSourceConnector produces messages with
+        // sequence numbers starting after the supplied offset, so it should produce only the last 5 of its 10 messages.
+        CreateConnectorRequest createConnectorRequest = new CreateConnectorRequest(
+            CONNECTOR_NAME,
+            props,
+            null,
+            List.of(new ConnectorOffset(Map.of("task.id", CONNECTOR_NAME + "-0"), Map.of("saved", 5L)))
+        );
+        String response = connect.configureConnector(createConnectorRequest);
+        // The creation response must carry offsets_status because initial_offsets was supplied
+        assertTrue(response.contains("offsets_status"),
+            "Create response should include offsets_status when initial_offsets is supplied: " + response);
+
+        connect.assertions().assertConnectorAndExactlyNumTasksAreRunning(
+            CONNECTOR_NAME,
+            1,
+            "Connector or tasks did not start running healthily in time"
+        );
+
+        // Verify that only 5 messages were produced, i.e. the connector started from the supplied initial offset
+        // rather than from the beginning. We consume 5 first to ensure at least 5 are available before counting all.
+        long timeoutMs = TimeUnit.SECONDS.toMillis(10);
+        connect.kafka().consume(5, timeoutMs, TOPIC_NAME);
+        assertEquals(5, connect.kafka().consumeAll(timeoutMs, TOPIC_NAME).count());
+    }
+
+    @Test
+    public void testCreateSinkConnectorWithInitialOffsets() throws Exception {
+        connect = connectBuilder.build();
+        // start the clusters
+        connect.start();
+
+        // Create topic and produce 10 messages
+        connect.kafka().createTopic(TOPIC_NAME);
+        for (int i = 0; i < 10; i++) {
+            connect.kafka().produce(TOPIC_NAME, "Message " + i);
+        }
+
+        Map<String, String> props = defaultSinkConnectorProps(TOPIC_NAME);
+        props.put(TASKS_MAX_CONFIG, "1");
+
+        // This will cause the connector task to fail if it encounters a record with offset < 5
+        TaskHandle taskHandle = RuntimeHandles.get().connectorHandle(CONNECTOR_NAME).taskHandle(CONNECTOR_NAME + "-0",
+            sinkRecord -> {
+                if (sinkRecord.kafkaOffset() < 5L) {
+                    throw new ConnectException("Unexpected record encountered: " + sinkRecord);
+                }
+            });
+        // We produced 10 records and create the connector already positioned at offset 5, so we expect only the last 5 to be consumed
+        taskHandle.expectedRecords(5);
+
+        Map<String, Object> partition = new HashMap<>();
+        partition.put(SinkUtils.KAFKA_TOPIC_KEY, TOPIC_NAME);
+        partition.put(SinkUtils.KAFKA_PARTITION_KEY, 0);
+        CreateConnectorRequest createConnectorRequest = new CreateConnectorRequest(
+            CONNECTOR_NAME,
+            props,
+            null,
+            List.of(new ConnectorOffset(partition, Map.of(SinkUtils.KAFKA_OFFSET_KEY, 5)))
+        );
+        connect.configureConnector(createConnectorRequest);
+
+        connect.assertions().assertConnectorAndExactlyNumTasksAreRunning(
+            CONNECTOR_NAME,
+            1,
+            "Connector or tasks did not start running healthily in time"
+        );
+
+        taskHandle.awaitRecords(TimeUnit.SECONDS.toMillis(10));
+
+        // Confirm that the task is still running (i.e. it didn't fail due to encountering any records with offset < 5)
+        connect.assertions().assertConnectorAndExactlyNumTasksAreRunning(
+            CONNECTOR_NAME,
+            1,
+            "Connector or tasks did not start running healthily in time"
+        );
     }
 
     @Test
@@ -792,7 +879,7 @@ public class ConnectWorkerIntegrationTest {
     private Map<String, String> defaultSinkConnectorProps(String topics) {
         // setup props for the sink connector
         Map<String, String> props = new HashMap<>();
-        props.put(CONNECTOR_CLASS_CONFIG, MonitorableSinkConnector.class.getSimpleName());
+        props.put(CONNECTOR_CLASS_CONFIG, TestableSinkConnector.class.getSimpleName());
         props.put(TASKS_MAX_CONFIG, String.valueOf(NUM_TASKS));
         props.put(TOPICS_CONFIG, topics);
 
@@ -895,11 +982,10 @@ public class ConnectWorkerIntegrationTest {
 
         try (LogCaptureAppender logCaptureAppender = LogCaptureAppender.createAndRegister(DistributedHerder.class)) {
             connect.restartTask(CONNECTOR_NAME, 0);
-            TestUtils.waitForCondition(() -> logCaptureAppender.getEvents().stream().anyMatch(e -> e.getLevel().equals("WARN")) &&
-                    logCaptureAppender.getEvents().stream().anyMatch(e ->
+            TestUtils.waitForCondition(() -> logCaptureAppender.getMessages(Level.WARN).stream().anyMatch(m ->
                         // Ensure that the tick thread is blocked on the stage which we expect it to be, i.e restarting the task.
-                        e.getMessage().contains("worker poll timeout has expired") &&
-                        e.getMessage().contains("The last known action being performed by the worker is : restarting task " + CONNECTOR_NAME + "-0")
+                        m.contains("worker poll timeout has expired") &&
+                        m.contains("The last known action being performed by the worker is : restarting task " + CONNECTOR_NAME + "-0")
                     ),
                 "Coordinator did not poll for rebalance.timeout.ms");
             // This clean up ensures that the test ends quickly as o/w we will wait for task#stop.
@@ -987,7 +1073,7 @@ public class ConnectWorkerIntegrationTest {
         int maxTasks = 1;
         connectorProps.put(TASKS_MAX_CONFIG, Integer.toString(maxTasks));
         int numTasks = 2;
-        connectorProps.put(MonitorableSourceConnector.NUM_TASKS, Integer.toString(numTasks));
+        connectorProps.put(TestableSourceConnector.NUM_TASKS, Integer.toString(numTasks));
         connect.configureConnector(CONNECTOR_NAME, connectorProps);
 
         // A connector that generates excessive tasks will be failed with an expected error message
@@ -1014,12 +1100,12 @@ public class ConnectWorkerIntegrationTest {
         // an existing set of task configs that was written before the cluster was upgraded
         try (JsonConverter converter = new JsonConverter()) {
             converter.configure(
-                    Collections.singletonMap(JsonConverterConfig.SCHEMAS_ENABLE_CONFIG, "false"),
+                    Map.of(JsonConverterConfig.SCHEMAS_ENABLE_CONFIG, "false"),
                     false
             );
 
             for (int i = 0; i < numTasks; i++) {
-                Map<String, String> taskConfig = MonitorableSourceConnector.taskConfig(
+                Map<String, String> taskConfig = TestableSourceConnector.taskConfig(
                         connectorProps,
                         CONNECTOR_NAME,
                         i
@@ -1070,7 +1156,7 @@ public class ConnectWorkerIntegrationTest {
         );
 
         numTasks++;
-        connectorProps.put(MonitorableSourceConnector.NUM_TASKS, Integer.toString(numTasks));
+        connectorProps.put(TestableSourceConnector.NUM_TASKS, Integer.toString(numTasks));
         connect.configureConnector(CONNECTOR_NAME, connectorProps);
 
         // A connector will be allowed to generate excessive tasks when tasks.max.enforce is set to false
@@ -1081,7 +1167,7 @@ public class ConnectWorkerIntegrationTest {
         );
 
         numTasks = maxTasks;
-        connectorProps.put(MonitorableSourceConnector.NUM_TASKS, Integer.toString(numTasks));
+        connectorProps.put(TestableSourceConnector.NUM_TASKS, Integer.toString(numTasks));
         connectorProps.put(TASKS_MAX_ENFORCE_CONFIG, "true");
         connect.configureConnector(CONNECTOR_NAME, connectorProps);
 
@@ -1092,7 +1178,7 @@ public class ConnectWorkerIntegrationTest {
         );
 
         numTasks = maxTasks + 1;
-        connectorProps.put(MonitorableSourceConnector.NUM_TASKS, Integer.toString(numTasks));
+        connectorProps.put(TestableSourceConnector.NUM_TASKS, Integer.toString(numTasks));
         connect.configureConnector(CONNECTOR_NAME, connectorProps);
 
         // A connector that generates excessive tasks after being reconfigured will be failed, but its existing tasks will continue running
@@ -1326,7 +1412,7 @@ public class ConnectWorkerIntegrationTest {
                 "Connector did not start or task did not fail in time"
         );
         assertEquals(
-                new ConnectorOffsets(Collections.emptyList()),
+                new ConnectorOffsets(List.of()),
                 connect.connectorOffsets(CONNECTOR_NAME),
                 "Connector should not have any committed offsets when only task fails on first record"
         );
@@ -1346,9 +1432,9 @@ public class ConnectWorkerIntegrationTest {
         Map<String, Object> expectedOffsetKey = new HashMap<>();
         expectedOffsetKey.put(SinkUtils.KAFKA_TOPIC_KEY, topic);
         expectedOffsetKey.put(SinkUtils.KAFKA_PARTITION_KEY, 0);
-        Map<String, Object> expectedOffsetValue = Collections.singletonMap(SinkUtils.KAFKA_OFFSET_KEY, 1);
+        Map<String, Object> expectedOffsetValue = Map.of(SinkUtils.KAFKA_OFFSET_KEY, 1);
         ConnectorOffset expectedOffset = new ConnectorOffset(expectedOffsetKey, expectedOffsetValue);
-        ConnectorOffsets expectedOffsets = new ConnectorOffsets(Collections.singletonList(expectedOffset));
+        ConnectorOffsets expectedOffsets = new ConnectorOffsets(List.of(expectedOffset));
 
         // Wait for it to commit offsets, signaling that it has successfully processed the record we produced earlier
         waitForCondition(
@@ -1386,7 +1472,7 @@ public class ConnectWorkerIntegrationTest {
         final String sourceConnectorName = "plugins-alias-test-source";
         Map<String, String> sourceConnectorConfig = new HashMap<>(baseConnectorConfig);
         // Aliased source connector class
-        sourceConnectorConfig.put(CONNECTOR_CLASS_CONFIG, MonitorableSourceConnector.class.getSimpleName());
+        sourceConnectorConfig.put(CONNECTOR_CLASS_CONFIG, TestableSourceConnector.class.getSimpleName());
         // Connector-specific properties
         sourceConnectorConfig.put(TOPIC_CONFIG, topic);
         sourceConnectorConfig.put("throughput", "10");
@@ -1400,7 +1486,7 @@ public class ConnectWorkerIntegrationTest {
         final String sinkConnectorName = "plugins-alias-test-sink";
         Map<String, String> sinkConnectorConfig = new HashMap<>(baseConnectorConfig);
         // Aliased sink connector class
-        sinkConnectorConfig.put(CONNECTOR_CLASS_CONFIG, MonitorableSinkConnector.class.getSimpleName());
+        sinkConnectorConfig.put(CONNECTOR_CLASS_CONFIG, TestableSinkConnector.class.getSimpleName());
         // Connector-specific properties
         sinkConnectorConfig.put(TOPICS_CONFIG, topic);
         // Create the connector and ensure it and its tasks can start
@@ -1412,7 +1498,7 @@ public class ConnectWorkerIntegrationTest {
     private Map<String, String> defaultSourceConnectorProps(String topic) {
         // setup props for the source connector
         Map<String, String> props = new HashMap<>();
-        props.put(CONNECTOR_CLASS_CONFIG, MonitorableSourceConnector.class.getSimpleName());
+        props.put(CONNECTOR_CLASS_CONFIG, TestableSourceConnector.class.getSimpleName());
         props.put(TASKS_MAX_CONFIG, String.valueOf(NUM_TASKS));
         props.put(TOPIC_CONFIG, topic);
         props.put("throughput", "10");
@@ -1443,7 +1529,7 @@ public class ConnectWorkerIntegrationTest {
         @Override
         public List<Map<String, String>> taskConfigs(int maxTasks) {
             return IntStream.range(0, maxTasks)
-                    .mapToObj(i -> Collections.<String, String>emptyMap())
+                    .mapToObj(i -> Map.<String, String>of())
                     .collect(Collectors.toList());
         }
 

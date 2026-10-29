@@ -19,7 +19,7 @@ package org.apache.kafka.streams.kstream.internals;
 import org.apache.kafka.streams.processor.StateStore;
 import org.apache.kafka.streams.processor.api.Record;
 import org.apache.kafka.streams.processor.internals.InternalProcessorContext;
-import org.apache.kafka.streams.state.ValueAndTimestamp;
+import org.apache.kafka.streams.state.ValueTimestampHeaders;
 import org.apache.kafka.streams.state.internals.WrappedStateStore;
 
 import org.junit.jupiter.api.Test;
@@ -44,9 +44,9 @@ public class TimestampedTupleForwarderTest {
 
     private void setFlushListener(final boolean sendOldValues) {
         @SuppressWarnings("unchecked")
-        final WrappedStateStore<StateStore, Object, ValueAndTimestamp<Object>> store = mock(WrappedStateStore.class);
+        final WrappedStateStore<StateStore, Object, ValueTimestampHeaders<Object>> store = mock(WrappedStateStore.class);
         @SuppressWarnings("unchecked")
-        final TimestampedCacheFlushListener<Object, Object> flushListener = mock(TimestampedCacheFlushListener.class);
+        final TimestampedCacheFlushListenerWithHeaders<Object, Object> flushListener = mock(TimestampedCacheFlushListenerWithHeaders.class);
 
         when(store.setFlushListener(flushListener, sendOldValues)).thenReturn(false);
 

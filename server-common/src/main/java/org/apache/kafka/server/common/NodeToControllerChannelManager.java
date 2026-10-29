@@ -26,7 +26,7 @@ public interface NodeToControllerChannelManager {
 
     void start();
 
-    void shutdown();
+    void shutdown() throws InterruptedException;
 
     Optional<NodeApiVersions> controllerApiVersions();
 

@@ -14,22 +14,24 @@
  * See the License for the specific language governing permissions and
  * limitations under the License.
  */
+
 package org.apache.kafka.common;
 
+import org.apache.kafka.common.annotation.InterfaceAudience;
 
 import java.util.Objects;
 
 /**
  * The <code>ClusterResource</code> class encapsulates metadata for a Kafka cluster.
  */
+@InterfaceAudience.Public
 public class ClusterResource {
 
     private final String clusterId;
 
     /**
      * Create {@link ClusterResource} with a cluster id. Note that cluster id may be {@code null} if the
-     * metadata request was sent to a broker without support for cluster ids. The first version of Kafka
-     * to support cluster id is 0.10.1.0.
+     * metadata request was sent to a broker without support for cluster ids.
      * @param clusterId The cluster id
      */
     public ClusterResource(String clusterId) {
@@ -38,7 +40,7 @@ public class ClusterResource {
 
     /**
      * Return the cluster id. Note that it may be {@code null} if the metadata request was sent to a broker without
-     * support for cluster ids. The first version of Kafka to support cluster id is 0.10.1.0.
+     * support for cluster ids.
      */
     public String clusterId() {
         return clusterId;

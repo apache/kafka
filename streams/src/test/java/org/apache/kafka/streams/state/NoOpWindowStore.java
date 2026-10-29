@@ -16,12 +16,14 @@
  */
 package org.apache.kafka.streams.state;
 
+import org.apache.kafka.common.TopicPartition;
 import org.apache.kafka.streams.KeyValue;
 import org.apache.kafka.streams.processor.StateStore;
 import org.apache.kafka.streams.processor.StateStoreContext;
 import org.apache.kafka.streams.query.Position;
 
 import java.time.Instant;
+import java.util.Map;
 import java.util.NoSuchElementException;
 
 public class NoOpWindowStore implements ReadOnlyWindowStore, StateStore {
@@ -59,7 +61,7 @@ public class NoOpWindowStore implements ReadOnlyWindowStore, StateStore {
     public void init(final StateStoreContext stateStoreContext, final StateStore root) {}
 
     @Override
-    public void flush() {
+    public void commit(final Map<TopicPartition, Long> changelogOffsets) {
 
     }
 

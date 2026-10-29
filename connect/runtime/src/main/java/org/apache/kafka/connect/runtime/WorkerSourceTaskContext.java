@@ -16,6 +16,7 @@
  */
 package org.apache.kafka.connect.runtime;
 
+import org.apache.kafka.common.metrics.PluginMetrics;
 import org.apache.kafka.connect.source.SourceTaskContext;
 import org.apache.kafka.connect.storage.ClusterConfigState;
 import org.apache.kafka.connect.storage.OffsetStorageReader;
@@ -29,15 +30,18 @@ public class WorkerSourceTaskContext implements SourceTaskContext {
     private final ConnectorTaskId id;
     private final ClusterConfigState configState;
     private final WorkerTransactionContext transactionContext;
+    private final PluginMetrics pluginMetrics;
 
     public WorkerSourceTaskContext(OffsetStorageReader reader,
                                    ConnectorTaskId id,
                                    ClusterConfigState configState,
-                                   WorkerTransactionContext transactionContext) {
+                                   WorkerTransactionContext transactionContext,
+                                   PluginMetrics pluginMetrics) {
         this.reader = reader;
         this.id = id;
         this.configState = configState;
         this.transactionContext = transactionContext;
+        this.pluginMetrics = pluginMetrics;
     }
 
     @Override
@@ -53,5 +57,10 @@ public class WorkerSourceTaskContext implements SourceTaskContext {
     @Override
     public WorkerTransactionContext transactionContext() {
         return transactionContext;
+    }
+
+    @Override
+    public PluginMetrics pluginMetrics() {
+        return pluginMetrics;
     }
 }

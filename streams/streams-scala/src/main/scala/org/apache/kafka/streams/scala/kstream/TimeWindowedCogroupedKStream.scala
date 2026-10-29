@@ -28,6 +28,7 @@ import org.apache.kafka.streams.scala.FunctionsCompatConversions.InitializerFrom
  * @param inner The underlying Java abstraction for TimeWindowedCogroupedKStream
  * @see `org.apache.kafka.streams.kstream.TimeWindowedCogroupedKStream`
  */
+@deprecated("Use `org.apache.kafka.streams.kstream.TimeWindowedCogroupedKStream` instead", "4.3.0")
 class TimeWindowedCogroupedKStream[K, V](val inner: TimeWindowedCogroupedKStreamJ[K, V]) {
 
   /**

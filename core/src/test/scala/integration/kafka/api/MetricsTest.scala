@@ -13,7 +13,6 @@
 package kafka.api
 
 import com.yammer.metrics.core.{Gauge, Histogram, Meter}
-import kafka.security.JaasTestUtils
 import kafka.server.KafkaBroker
 import kafka.utils.TestUtils
 import org.apache.kafka.clients.consumer.{Consumer, ConsumerConfig}
@@ -24,6 +23,7 @@ import org.apache.kafka.common.network.ListenerName
 import org.apache.kafka.common.security.auth.SecurityProtocol
 import org.apache.kafka.common.security.authenticator.TestJaasConfig
 import org.apache.kafka.common.{Metric, MetricName, TopicPartition}
+import org.apache.kafka.security.JaasTestUtils
 import org.apache.kafka.server.config.ServerLogConfigs
 import org.apache.kafka.server.log.remote.storage.{NoOpRemoteLogMetadataManager, NoOpRemoteStorageManager, RemoteLogManagerConfig, RemoteStorageMetrics}
 import org.apache.kafka.server.metrics.KafkaYammerMetrics
@@ -79,9 +79,9 @@ class MetricsTest extends IntegrationTestHarness with SaslSetup {
   /**
    * Verifies some of the metrics of producer, consumer as well as server.
    */
-  @ParameterizedTest(name = "testMetrics with systemRemoteStorageEnabled: {1}")
-  @CsvSource(Array("kraft, true", "kraft, false"))
-  def testMetrics(quorum: String, systemRemoteStorageEnabled: Boolean): Unit = {
+  @ParameterizedTest(name = "testMetrics with systemRemoteStorageEnabled: {0}")
+  @CsvSource(Array("true", "false"))
+  def testMetrics(systemRemoteStorageEnabled: Boolean): Unit = {
     val topic = "mytopic"
     createTopic(topic,
       numPartitions = 1,
@@ -98,7 +98,7 @@ class MetricsTest extends IntegrationTestHarness with SaslSetup {
     sendRecords(producer, numRecords, recordSize, tp)
 
     val consumer = createConsumer()
-    consumer.assign(List(tp).asJava)
+    consumer.assign(java.util.List.of(tp))
     consumer.seek(tp, 0)
     TestUtils.consumeRecords(consumer, numRecords)
 

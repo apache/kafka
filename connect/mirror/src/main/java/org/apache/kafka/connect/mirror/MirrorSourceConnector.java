@@ -43,8 +43,8 @@ import org.apache.kafka.common.resource.PatternType;
 import org.apache.kafka.common.resource.ResourcePattern;
 import org.apache.kafka.common.resource.ResourcePatternFilter;
 import org.apache.kafka.common.resource.ResourceType;
-import org.apache.kafka.common.utils.AppInfoParser;
 import org.apache.kafka.common.utils.Utils;
+import org.apache.kafka.common.utils.internals.AppInfoParser;
 import org.apache.kafka.connect.connector.Task;
 import org.apache.kafka.connect.errors.ConnectException;
 import org.apache.kafka.connect.source.ExactlyOnceSupport;
@@ -55,7 +55,6 @@ import org.slf4j.LoggerFactory;
 
 import java.util.ArrayList;
 import java.util.Collection;
-import java.util.Collections;
 import java.util.HashMap;
 import java.util.HashSet;
 import java.util.List;
@@ -99,8 +98,8 @@ public class MirrorSourceConnector extends SourceConnector {
     private String connectorName;
     private TopicFilter topicFilter;
     private ConfigPropertyFilter configPropertyFilter;
-    private List<TopicPartition> knownSourceTopicPartitions = Collections.emptyList();
-    private List<TopicPartition> knownTargetTopicPartitions = Collections.emptyList();
+    private List<TopicPartition> knownSourceTopicPartitions = List.of();
+    private List<TopicPartition> knownTargetTopicPartitions = List.of();
     private ReplicationPolicy replicationPolicy;
     private int replicationFactor;
     private Admin sourceAdminClient;
@@ -202,7 +201,7 @@ public class MirrorSourceConnector extends SourceConnector {
     @Override
     public List<Map<String, String>> taskConfigs(int maxTasks) {
         if (!config.enabled() || knownSourceTopicPartitions.isEmpty()) {
-            return Collections.emptyList();
+            return List.of();
         }
         int numTasks = Math.min(maxTasks, knownSourceTopicPartitions.size());
         List<List<TopicPartition>> roundRobinByTask = new ArrayList<>(numTasks);
@@ -456,11 +455,9 @@ public class MirrorSourceConnector extends SourceConnector {
     void computeAndCreateTopicPartitions() throws ExecutionException, InterruptedException {
         // get source and target topics with respective partition counts
         Map<String, Long> sourceTopicToPartitionCounts = knownSourceTopicPartitions.stream()
-                .collect(Collectors.groupingBy(TopicPartition::topic, Collectors.counting())).entrySet().stream()
-                .collect(Collectors.toMap(Entry::getKey, Entry::getValue));
+                .collect(Collectors.groupingBy(TopicPartition::topic, Collectors.counting()));
         Map<String, Long> targetTopicToPartitionCounts = knownTargetTopicPartitions.stream()
-                .collect(Collectors.groupingBy(TopicPartition::topic, Collectors.counting())).entrySet().stream()
-                .collect(Collectors.toMap(Entry::getKey, Entry::getValue));
+                .collect(Collectors.groupingBy(TopicPartition::topic, Collectors.counting()));
 
         Set<String> knownSourceTopics = sourceTopicToPartitionCounts.keySet();
         Set<String> knownTargetTopics = targetTopicToPartitionCounts.keySet();
@@ -623,8 +620,10 @@ public class MirrorSourceConnector extends SourceConnector {
                                 + sourceAndTarget.target() + "' is not compatible with " +
                                 "IncrementalAlterConfigs " +
                                 "API", e));
-                    } else {
+                    } else if (e != null) {
                         log.warn("Could not alter configuration of topic {}.", k.name(), e);
+                    } else {
+                        log.debug("Successfully altered configuration of topic {}.", k.name());
                     }
                 }));
             return null;
@@ -719,7 +718,16 @@ public class MirrorSourceConnector extends SourceConnector {
         String source = replicationPolicy.topicSource(topic);
         if (source == null) {
             return false;
-        } else if (source.equals(sourceAndTarget.target())) {
+        }
+
+        final boolean condition;
+        if (replicationPolicy instanceof IdentityReplicationPolicy) {
+            condition = source.equals(sourceAndTarget.target());
+        } else {
+            condition = source.equals(sourceAndTarget.source()) || source.equals(sourceAndTarget.target());
+        }
+
+        if (condition) {
             return true;
         } else {
             String upstreamTopic = replicationPolicy.upstreamTopic(topic);

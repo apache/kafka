@@ -14,11 +14,15 @@
  * See the License for the specific language governing permissions and
  * limitations under the License.
  */
+
 package org.apache.kafka.clients.admin;
+
+import org.apache.kafka.common.annotation.InterfaceAudience;
 
 /**
  * A description of a replica on a particular broker.
  */
+@InterfaceAudience.Public
 public class ReplicaInfo {
 
     private final long size;
@@ -33,6 +37,7 @@ public class ReplicaInfo {
 
     /**
      * The total size of the log segments in this replica in bytes.
+     * This value does not include the size of data stored in remote storage.
      */
     public long size() {
         return size;

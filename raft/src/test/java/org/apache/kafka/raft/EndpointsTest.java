@@ -31,7 +31,6 @@ import org.junit.jupiter.api.Test;
 
 import java.net.InetSocketAddress;
 import java.util.ArrayList;
-import java.util.Collections;
 import java.util.List;
 import java.util.Map;
 import java.util.Optional;
@@ -176,7 +175,7 @@ final class EndpointsTest {
 
     @Test
     void testFromVotersRecordEndpointsWithEmptyEndpoint() {
-        List<VotersRecord.Endpoint> votersEndpoints = Collections.emptyList();
+        List<VotersRecord.Endpoint> votersEndpoints = List.of();
 
         assertEquals(Endpoints.empty(), Endpoints.fromVotersRecordEndpoints(votersEndpoints));
     }

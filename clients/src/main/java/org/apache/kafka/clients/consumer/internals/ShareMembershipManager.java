@@ -16,21 +16,25 @@
  */
 package org.apache.kafka.clients.consumer.internals;
 
+import org.apache.kafka.clients.Metadata;
 import org.apache.kafka.clients.consumer.ConsumerConfig;
+import org.apache.kafka.clients.consumer.internals.NetworkClientDelegate.PollResult;
 import org.apache.kafka.clients.consumer.internals.metrics.ShareRebalanceMetricsManager;
+import org.apache.kafka.common.TopicPartition;
 import org.apache.kafka.common.Uuid;
 import org.apache.kafka.common.message.ShareGroupHeartbeatResponseData;
 import org.apache.kafka.common.metrics.Metrics;
-import org.apache.kafka.common.protocol.Errors;
 import org.apache.kafka.common.requests.ShareGroupHeartbeatRequest;
 import org.apache.kafka.common.requests.ShareGroupHeartbeatResponse;
-import org.apache.kafka.common.utils.LogContext;
 import org.apache.kafka.common.utils.Time;
+import org.apache.kafka.common.utils.internals.LogContext;
 
 import java.util.HashMap;
 import java.util.Map;
+import java.util.Optional;
 import java.util.SortedSet;
 import java.util.TreeSet;
+import java.util.concurrent.CompletableFuture;
 
 /**
  * Group manager for a single consumer that has a group id defined in the config
@@ -70,7 +74,7 @@ import java.util.TreeSet;
  * </ol>
  *
  */
-public class ShareMembershipManager extends AbstractMembershipManager<ShareGroupHeartbeatResponse> {
+public class ShareMembershipManager extends AbstractMembershipManager<ShareGroupHeartbeatResponse, ShareSubscriptionState> {
 
     /**
      * Rack ID of the member, if specified.
@@ -80,8 +84,8 @@ public class ShareMembershipManager extends AbstractMembershipManager<ShareGroup
     public ShareMembershipManager(LogContext logContext,
                                   String groupId,
                                   String rackId,
-                                  SubscriptionState subscriptions,
-                                  ConsumerMetadata metadata,
+                                  ShareSubscriptionState subscriptions,
+                                  Metadata metadata,
                                   Time time,
                                   Metrics metrics) {
         this(logContext,
@@ -97,8 +101,8 @@ public class ShareMembershipManager extends AbstractMembershipManager<ShareGroup
     ShareMembershipManager(LogContext logContext,
                            String groupId,
                            String rackId,
-                           SubscriptionState subscriptions,
-                           ConsumerMetadata metadata,
+                           ShareSubscriptionState subscriptions,
+                           Metadata metadata,
                            Time time,
                            ShareRebalanceMetricsManager metricsManager) {
         super(groupId,
@@ -106,7 +110,8 @@ public class ShareMembershipManager extends AbstractMembershipManager<ShareGroup
                 metadata,
                 logContext.logger(ShareMembershipManager.class),
                 time,
-                metricsManager);
+                metricsManager,
+                false);
         this.rackId = rackId;
     }
 
@@ -117,53 +122,39 @@ public class ShareMembershipManager extends AbstractMembershipManager<ShareGroup
         return rackId;
     }
 
+    @Override
+    protected short errorCode(ShareGroupHeartbeatResponse response) {
+        return response.data().errorCode();
+    }
+
+    @Override
+    protected int memberEpoch(ShareGroupHeartbeatResponse response) {
+        return response.data().memberEpoch();
+    }
+
+    @Override
+    protected Optional<Map<Uuid, SortedSet<Integer>>> extractAssignment(ShareGroupHeartbeatResponse response) {
+        ShareGroupHeartbeatResponseData.Assignment assignment = response.data().assignment();
+        if (assignment == null) {
+            return Optional.empty();
+        }
+        Map<Uuid, SortedSet<Integer>> newAssignment = new HashMap<>();
+        assignment.topicPartitions().forEach(topicPartition ->
+            newAssignment.put(topicPartition.topicId(), new TreeSet<>(topicPartition.partitions())));
+        return Optional.of(newAssignment);
+    }
+
     /**
      * {@inheritDoc}
+     * <p>
+     * For the ShareConsumer, assignment changes are applied immediately in the background thread.
      */
     @Override
-    public void onHeartbeatSuccess(ShareGroupHeartbeatResponse response) {
-        ShareGroupHeartbeatResponseData responseData = response.data();
-        if (responseData.errorCode() != Errors.NONE.code()) {
-            String errorMessage = String.format(
-                    "Unexpected error in Heartbeat response. Expected no error, but received: %s",
-                    Errors.forCode(responseData.errorCode())
-            );
-            throw new IllegalArgumentException(errorMessage);
-        }
-        MemberState state = state();
-        if (state == MemberState.LEAVING) {
-            log.debug("Ignoring heartbeat response received from broker. Member {} with epoch {} is " +
-                    "already leaving the group.", memberId, memberEpoch);
-            return;
-        }
-        if (state == MemberState.UNSUBSCRIBED && maybeCompleteLeaveInProgress()) {
-            log.debug("Member {} with epoch {} received a successful response to the heartbeat " +
-                    "to leave the group and completed the leave operation. ", memberId, memberEpoch);
-            return;
-        }
-        if (isNotInGroup()) {
-            log.debug("Ignoring heartbeat response received from broker. Member {} is in {} state" +
-                    " so it's not a member of the group. ", memberId, state);
-            return;
-        }
-
-        updateMemberEpoch(responseData.memberEpoch());
-
-        ShareGroupHeartbeatResponseData.Assignment assignment = responseData.assignment();
-
-        if (assignment != null) {
-            if (!state.canHandleNewAssignment()) {
-                // New assignment received but member is in a state where it cannot take new
-                // assignments (ex. preparing to leave the group)
-                log.debug("Ignoring new assignment {} received from server because member is in {} state.",
-                        assignment, state);
-                return;
-            }
-
-            Map<Uuid, SortedSet<Integer>> newAssignment = new HashMap<>();
-            assignment.topicPartitions().forEach(topicPartition -> newAssignment.put(topicPartition.topicId(), new TreeSet<>(topicPartition.partitions())));
-            processAssignmentReceived(newAssignment);
-        }
+    protected CompletableFuture<Void> signalPartitionsAssigned(TopicIdPartitionSet assignedPartitions,
+                                                               SortedSet<TopicPartition> addedPartitions) {
+        subscriptions.assignFromSubscribed(assignedPartitions.topicPartitions());
+        notifyAssignmentChange(assignedPartitions.topicPartitions());
+        return CompletableFuture.completedFuture(null);
     }
 
     @Override
@@ -174,5 +165,17 @@ public class ShareMembershipManager extends AbstractMembershipManager<ShareGroup
     @Override
     public int leaveGroupEpoch() {
         return ShareGroupHeartbeatRequest.LEAVE_GROUP_MEMBER_EPOCH;
+    }
+
+    /**
+     * {@inheritDoc}
+     * <p>
+     * For the ShareConsumer, full reconciliations can always be triggered from the background thread
+     * (fully updates assignment).
+     */
+    @Override
+    public PollResult poll(final long currentTimeMs) {
+        maybeReconcile(true);
+        return PollResult.EMPTY;
     }
 }

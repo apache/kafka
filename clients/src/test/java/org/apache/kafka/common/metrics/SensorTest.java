@@ -45,7 +45,6 @@ import static org.junit.jupiter.api.Assertions.assertFalse;
 import static org.junit.jupiter.api.Assertions.assertNull;
 import static org.junit.jupiter.api.Assertions.assertThrows;
 import static org.junit.jupiter.api.Assertions.assertTrue;
-import static org.junit.jupiter.api.Assertions.fail;
 
 public class SensorTest {
 
@@ -70,12 +69,12 @@ public class SensorTest {
         assertTrue(Sensor.RecordingLevel.DEBUG.shouldRecord(configLevel.id));
         assertTrue(Sensor.RecordingLevel.TRACE.shouldRecord(configLevel.id));
 
-        assertEquals(Sensor.RecordingLevel.valueOf(Sensor.RecordingLevel.DEBUG.toString()),
-            Sensor.RecordingLevel.DEBUG);
-        assertEquals(Sensor.RecordingLevel.valueOf(Sensor.RecordingLevel.INFO.toString()),
-            Sensor.RecordingLevel.INFO);
-        assertEquals(Sensor.RecordingLevel.valueOf(Sensor.RecordingLevel.TRACE.toString()),
-            Sensor.RecordingLevel.TRACE);
+        assertEquals(Sensor.RecordingLevel.DEBUG,
+            Sensor.RecordingLevel.valueOf(Sensor.RecordingLevel.DEBUG.toString()));
+        assertEquals(Sensor.RecordingLevel.INFO,
+            Sensor.RecordingLevel.valueOf(Sensor.RecordingLevel.INFO.toString()));
+        assertEquals(Sensor.RecordingLevel.TRACE,
+            Sensor.RecordingLevel.valueOf(Sensor.RecordingLevel.TRACE.toString()));
     }
 
     @Test
@@ -159,12 +158,7 @@ public class SensorTest {
 
         // but adding the same metric to a DIFFERENT sensor is an error
         final Sensor anotherSensor = metrics.sensor("another-sensor");
-        try {
-            anotherSensor.add(metrics.metricName("test-metric", "test-group"), new Avg());
-            fail("should have thrown");
-        } catch (final IllegalArgumentException ignored) {
-            // pass
-        }
+        assertThrows(IllegalArgumentException.class, () -> anotherSensor.add(metrics.metricName("test-metric", "test-group"), new Avg()));
 
         // note that adding a different metric with the same name is also a no-op
         assertTrue(sensor.add(metrics.metricName("test-metric", "test-group"), new WindowedSum()));

@@ -14,9 +14,13 @@
  * See the License for the specific language governing permissions and
  * limitations under the License.
  */
+
 package org.apache.kafka.common.errors;
 
-public class AuthorizationException extends ApiException {
+import org.apache.kafka.common.annotation.InterfaceAudience;
+
+@InterfaceAudience.Public
+public class AuthorizationException extends InvalidConfigurationException {
 
     public AuthorizationException(String message) {
         super(message);

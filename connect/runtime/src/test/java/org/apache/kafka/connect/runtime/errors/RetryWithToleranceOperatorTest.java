@@ -44,8 +44,6 @@ import org.mockito.junit.jupiter.MockitoSettings;
 import org.mockito.quality.Strictness;
 import org.mockito.stubbing.OngoingStubbing;
 
-import java.util.Arrays;
-import java.util.Collections;
 import java.util.HashMap;
 import java.util.List;
 import java.util.Map;
@@ -54,11 +52,8 @@ import java.util.concurrent.CompletableFuture;
 import java.util.concurrent.CountDownLatch;
 import java.util.concurrent.Future;
 import java.util.concurrent.TimeUnit;
-import java.util.stream.Collectors;
 import java.util.stream.IntStream;
 
-import static java.util.Collections.emptyMap;
-import static java.util.Collections.singletonMap;
 import static org.apache.kafka.common.utils.Time.SYSTEM;
 import static org.apache.kafka.connect.runtime.ConnectorConfig.ERRORS_RETRY_MAX_DELAY_CONFIG;
 import static org.apache.kafka.connect.runtime.ConnectorConfig.ERRORS_RETRY_MAX_DELAY_DEFAULT;
@@ -93,6 +88,7 @@ public class RetryWithToleranceOperatorTest {
             put(CommonClientConfigs.METRICS_RECORDING_LEVEL_CONFIG, Sensor.RecordingLevel.INFO.toString());
 
             // define required properties
+            put(WorkerConfig.BOOTSTRAP_SERVERS_CONFIG, "localhost:9092");
             put(WorkerConfig.KEY_CONVERTER_CLASS_CONFIG, TestConverter.class.getName());
             put(WorkerConfig.VALUE_CONVERTER_CLASS_CONFIG, TestConverter.class.getName());
         }};
@@ -232,22 +228,22 @@ public class RetryWithToleranceOperatorTest {
 
     @Test
     public void testExecAndHandleRetriableErrorOnce() throws Exception {
-        execAndHandleRetriableError(6000, 1, Collections.singletonList(300L), new RetriableException("Test"), true);
+        execAndHandleRetriableError(6000, 1, List.of(300L), new RetriableException("Test"), true);
     }
 
     @Test
     public void testExecAndHandleRetriableErrorThrice() throws Exception {
-        execAndHandleRetriableError(6000, 3, Arrays.asList(300L, 600L, 1200L), new RetriableException("Test"), true);
+        execAndHandleRetriableError(6000, 3, List.of(300L, 600L, 1200L), new RetriableException("Test"), true);
     }
 
     @Test
     public void testExecAndHandleRetriableErrorWithInfiniteRetries() throws Exception {
-        execAndHandleRetriableError(-1, 8, Arrays.asList(300L, 600L, 1200L, 2400L, 4800L, 9600L, 19200L, 38400L), new RetriableException("Test"), true);
+        execAndHandleRetriableError(-1, 8, List.of(300L, 600L, 1200L, 2400L, 4800L, 9600L, 19200L, 38400L), new RetriableException("Test"), true);
     }
 
     @Test
     public void testExecAndHandleRetriableErrorWithMaxRetriesExceeded() throws Exception {
-        execAndHandleRetriableError(6000, 6, Arrays.asList(300L, 600L, 1200L, 2400L, 1500L), new RetriableException("Test"), false);
+        execAndHandleRetriableError(6000, 6, List.of(300L, 600L, 1200L, 2400L, 1500L), new RetriableException("Test"), false);
     }
 
     public void execAndHandleRetriableError(long errorRetryTimeout, int numRetriableExceptionsThrown, List<Long> expectedWaits, Exception e, boolean successExpected) throws Exception {
@@ -396,10 +392,10 @@ public class RetryWithToleranceOperatorTest {
 
     @Test
     public void testDefaultConfigs() {
-        ConnectorConfig configuration = config(emptyMap());
-        assertEquals(configuration.errorRetryTimeout(), ERRORS_RETRY_TIMEOUT_DEFAULT);
-        assertEquals(configuration.errorMaxDelayInMillis(), ERRORS_RETRY_MAX_DELAY_DEFAULT);
-        assertEquals(configuration.errorToleranceType(), ERRORS_TOLERANCE_DEFAULT);
+        ConnectorConfig configuration = config(Map.of());
+        assertEquals(ERRORS_RETRY_TIMEOUT_DEFAULT, configuration.errorRetryTimeout());
+        assertEquals(ERRORS_RETRY_MAX_DELAY_DEFAULT, configuration.errorMaxDelayInMillis());
+        assertEquals(ERRORS_TOLERANCE_DEFAULT, configuration.errorToleranceType());
     }
 
     ConnectorConfig config(Map<String, String> connProps) {
@@ -413,14 +409,14 @@ public class RetryWithToleranceOperatorTest {
     @Test
     public void testSetConfigs() {
         ConnectorConfig configuration;
-        configuration = config(singletonMap(ERRORS_RETRY_TIMEOUT_CONFIG, "100"));
-        assertEquals(configuration.errorRetryTimeout(), 100);
+        configuration = config(Map.of(ERRORS_RETRY_TIMEOUT_CONFIG, "100"));
+        assertEquals(100, configuration.errorRetryTimeout());
 
-        configuration = config(singletonMap(ERRORS_RETRY_MAX_DELAY_CONFIG, "100"));
-        assertEquals(configuration.errorMaxDelayInMillis(), 100);
+        configuration = config(Map.of(ERRORS_RETRY_MAX_DELAY_CONFIG, "100"));
+        assertEquals(100, configuration.errorMaxDelayInMillis());
 
-        configuration = config(singletonMap(ERRORS_TOLERANCE_CONFIG, "none"));
-        assertEquals(configuration.errorToleranceType(), ToleranceType.NONE);
+        configuration = config(Map.of(ERRORS_TOLERANCE_CONFIG, "none"));
+        assertEquals(ToleranceType.NONE, configuration.errorToleranceType());
     }
 
     @Test
@@ -438,8 +434,8 @@ public class RetryWithToleranceOperatorTest {
         CountDownLatch exitLatch = mock(CountDownLatch.class);
         RetryWithToleranceOperator<ConsumerRecord<byte[], byte[]>> retryWithToleranceOperator = new RetryWithToleranceOperator<>(-1, ERRORS_RETRY_MAX_DELAY_DEFAULT, ALL, time, errorHandlingMetrics, exitLatch);
         ConsumerRecord<byte[], byte[]> consumerRecord = new ConsumerRecord<>("t", 0, 0, null, null);
-        List<CompletableFuture<RecordMetadata>> fs = IntStream.range(0, numberOfReports).mapToObj(i -> new CompletableFuture<RecordMetadata>()).collect(Collectors.toList());
-        List<ErrorReporter<ConsumerRecord<byte[], byte[]>>> reporters = IntStream.range(0, numberOfReports).mapToObj(i -> (ErrorReporter<ConsumerRecord<byte[], byte[]>>) c -> fs.get(i)).collect(Collectors.toList());
+        List<CompletableFuture<RecordMetadata>> fs = IntStream.range(0, numberOfReports).mapToObj(i -> new CompletableFuture<RecordMetadata>()).toList();
+        List<ErrorReporter<ConsumerRecord<byte[], byte[]>>> reporters = IntStream.range(0, numberOfReports).mapToObj(i -> (ErrorReporter<ConsumerRecord<byte[], byte[]>>) c -> fs.get(i)).toList();
         retryWithToleranceOperator.reporters(reporters);
         ProcessingContext<ConsumerRecord<byte[], byte[]>> context = new ProcessingContext<>(consumerRecord);
         Future<Void> result = retryWithToleranceOperator.report(context);
@@ -458,7 +454,7 @@ public class RetryWithToleranceOperatorTest {
 
         RetryWithToleranceOperator<SourceRecord> retryWithToleranceOperator = allOperator();
 
-        retryWithToleranceOperator.reporters(Arrays.asList(reporterA, reporterB));
+        retryWithToleranceOperator.reporters(List.of(reporterA, reporterB));
 
         // Even though the reporters throw exceptions, they should both still be closed.
 
@@ -475,7 +471,7 @@ public class RetryWithToleranceOperatorTest {
 
         RetryWithToleranceOperator<SourceRecord> retryWithToleranceOperator = allOperator();
 
-        retryWithToleranceOperator.reporters(Arrays.asList(reporterA, reporterB));
+        retryWithToleranceOperator.reporters(List.of(reporterA, reporterB));
 
         // Even though the reporters throw exceptions, they should both still be closed.
         doThrow(new RuntimeException()).when(reporterA).close();

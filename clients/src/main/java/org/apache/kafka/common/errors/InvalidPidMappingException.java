@@ -14,9 +14,13 @@
  * See the License for the specific language governing permissions and
  * limitations under the License.
  */
+
 package org.apache.kafka.common.errors;
 
-public class InvalidPidMappingException extends ApiException {
+import org.apache.kafka.common.annotation.InterfaceAudience;
+
+@InterfaceAudience.Public
+public class InvalidPidMappingException extends ApplicationRecoverableException {
     public InvalidPidMappingException(String message) {
         super(message);
     }

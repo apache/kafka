@@ -46,11 +46,13 @@ See: https://cli.github.com/
 brew install gh
 ```
 
-## Find Reviewers
+## Find Reviewers and Update to PR body
 
 The reviewers.py script is used to simplify the process of producing our "Reviewers:"
-Git trailer. It parses the Git log to gather a set of "Authors" and "Reviewers". 
-Some simple string prefix matching is done to find candidates.
+Git trailer to PR body. It parses the Git log to gather a set of "Authors" and "Reviewers". 
+Some simple string prefix matching is done to find candidates. 
+After entering the pull request number, the script updates the "Reviewers:" trailer accordingly. 
+If the PR body already contains a "Reviewers:" trailer, the script replaces it with the updated list of reviewers.
 
 Usage:
 
@@ -99,5 +101,5 @@ python find-unfinished-test.py ~/Downloads/logs_28218821016/5_build\ _\ JUnit\ t
 
 Found tests that were started, but not finished:
 
-2024-09-10T20:31:26.6830206Z Gradle Test Run :streams:test > Gradle Test Executor 47 > StreamThreadTest > shouldReturnErrorIfProducerInstanceIdNotInitialized(boolean, boolean) > "shouldReturnErrorIfProducerInstanceIdNotInitialized(boolean, boolean).stateUpdaterEnabled=true, processingThreadsEnabled=true" STARTED
+2024-09-10T20:31:26.6830206Z Gradle Test Run :streams:test > Gradle Test Executor 47 > StreamThreadTest > shouldReturnErrorIfProducerInstanceIdNotInitialized(boolean) > "shouldReturnErrorIfProducerInstanceIdNotInitialized(boolean).processingThreadsEnabled=true" STARTED
 ```

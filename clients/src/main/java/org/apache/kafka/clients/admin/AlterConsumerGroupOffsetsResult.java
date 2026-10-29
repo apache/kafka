@@ -18,7 +18,7 @@ package org.apache.kafka.clients.admin;
 
 import org.apache.kafka.common.KafkaFuture;
 import org.apache.kafka.common.TopicPartition;
-import org.apache.kafka.common.annotation.InterfaceStability;
+import org.apache.kafka.common.annotation.InterfaceAudience;
 import org.apache.kafka.common.internals.KafkaFutureImpl;
 import org.apache.kafka.common.protocol.Errors;
 
@@ -28,10 +28,8 @@ import java.util.stream.Collectors;
 
 /**
  * The result of the {@link AdminClient#alterConsumerGroupOffsets(String, Map)} call.
- *
- * The API of this class is evolving, see {@link AdminClient} for details.
  */
-@InterfaceStability.Evolving
+@InterfaceAudience.Public
 public class AlterConsumerGroupOffsetsResult {
 
     private final KafkaFuture<Map<TopicPartition, Errors>> future;
@@ -78,7 +76,7 @@ public class AlterConsumerGroupOffsetsResult {
             for (Errors error : topicPartitionErrorsMap.values()) {
                 if (error != Errors.NONE) {
                     throw error.exception(
-                        "Failed altering consumer group offsets for the following partitions: " + partitionsFailed);
+                        "Failed altering group offsets for the following partitions: " + partitionsFailed);
                 }
             }
             return null;

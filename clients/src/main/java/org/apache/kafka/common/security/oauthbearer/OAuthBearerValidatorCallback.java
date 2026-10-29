@@ -14,9 +14,10 @@
  * See the License for the specific language governing permissions and
  * limitations under the License.
  */
+
 package org.apache.kafka.common.security.oauthbearer;
 
-import org.apache.kafka.common.annotation.InterfaceStability;
+import org.apache.kafka.common.annotation.InterfaceAudience;
 
 import java.util.Objects;
 
@@ -33,14 +34,8 @@ import javax.security.auth.callback.Callback;
  * "https://www.iana.org/assignments/oauth-parameters/oauth-parameters.xhtml#extensions-error">IANA
  * OAuth Extensions Error Registry</a>. Callback handlers should communicate
  * other problems by raising an {@code IOException}.
- * <p>
- * This class was introduced in 2.0.0 and, while it feels stable, it could
- * evolve. We will try to evolve the API in a compatible manner, but we reserve
- * the right to make breaking changes in minor releases, if necessary. We will
- * update the {@code InterfaceStability} annotation and this notice once the API
- * is considered stable.
  */
-@InterfaceStability.Evolving
+@InterfaceAudience.Public
 public class OAuthBearerValidatorCallback implements Callback {
     private final String tokenValue;
     private OAuthBearerToken token = null;

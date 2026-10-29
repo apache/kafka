@@ -14,16 +14,19 @@
  * See the License for the specific language governing permissions and
  * limitations under the License.
  */
+
 package org.apache.kafka.common.metrics;
 
 import org.apache.kafka.common.MetricName;
+import org.apache.kafka.common.annotation.InterfaceAudience;
 
-import java.util.Map;
+import java.util.LinkedHashMap;
 
 /**
  * This allows plugins to register metrics and sensors.
- * Any metrics registered by the plugin are automatically removed when the plugin  closed.
+ * Any metrics registered by the plugin are automatically removed when the plugin is closed.
  */
+@InterfaceAudience.Public
 public interface PluginMetrics {
 
     /**
@@ -35,7 +38,7 @@ public interface PluginMetrics {
      * @param tags        Additional tags for the metric
      * @throws IllegalArgumentException if any of the tag names collide with the default tags for the plugin
      */
-    MetricName metricName(String name, String description, Map<String, String> tags);
+    MetricName metricName(String name, String description, LinkedHashMap<String, String> tags);
 
     /**
      * Add a metric to monitor an object that implements {@link MetricValueProvider}. This metric won't be associated with any

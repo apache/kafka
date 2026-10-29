@@ -41,7 +41,6 @@ import org.openjdk.jmh.annotations.Warmup;
 import java.io.IOException;
 import java.nio.file.Files;
 import java.nio.file.Path;
-import java.util.Optional;
 import java.util.OptionalLong;
 import java.util.concurrent.TimeUnit;
 
@@ -78,8 +77,7 @@ public class ProducerStateManagerBench {
                 epoch,
                 0,
                 time.milliseconds(),
-                OptionalLong.empty(),
-                Optional.empty()
+                OptionalLong.empty()
             );
             manager.loadProducerEntry(entry);
         }

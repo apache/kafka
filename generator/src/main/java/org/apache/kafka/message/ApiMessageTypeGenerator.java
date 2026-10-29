@@ -22,7 +22,6 @@ import java.io.IOException;
 import java.util.ArrayList;
 import java.util.Arrays;
 import java.util.Collection;
-import java.util.Collections;
 import java.util.EnumMap;
 import java.util.Iterator;
 import java.util.List;
@@ -213,7 +212,7 @@ public final class ApiMessageTypeGenerator implements TypeClassGenerator {
 
             final Collection<String> listeners;
             if (apiData.requestSpec.listeners() == null) {
-                listeners = Collections.emptyList();
+                listeners = List.of();
             } else {
                 listeners = apiData.requestSpec.listeners().stream()
                     .map(RequestListenerType::name)
@@ -360,29 +359,14 @@ public final class ApiMessageTypeGenerator implements TypeClassGenerator {
 
             buffer.printf("case %d: // %s%n", apiKey, MessageGenerator.capitalizeFirst(name));
             buffer.incrementIndent();
-            if (type.equals("response") && apiKey == 18) {
+            if (type.equals("response") && apiKey == MessageSpec.API_VERSIONS_API_KEY) {
                 buffer.printf("// ApiVersionsResponse always includes a v0 header.%n");
                 buffer.printf("// See KIP-511 for details.%n");
-                buffer.printf("return (short) 0;%n");
-                buffer.decrementIndent();
-                continue;
             }
-            VersionConditional.forVersions(spec.flexibleVersions(),
-                spec.validVersions()).
-                ifMember(__ -> {
-                    if (type.equals("request")) {
-                        buffer.printf("return (short) 2;%n");
-                    } else {
-                        buffer.printf("return (short) 1;%n");
-                    }
-                }).
-                ifNotMember(__ -> {
-                    if (type.equals("request")) {
-                        buffer.printf("return (short) 1;%n");
-                    } else {
-                        buffer.printf("return (short) 0;%n");
-                    }
-                }).generate(buffer);
+            // MessageSpec guarantees a map for every request/response with valid versions.
+            HeaderVersions headerVersions = spec.headerVersions().orElseThrow(() ->
+                new RuntimeException("Message " + spec.name() + " has valid versions but no headerVersions."));
+            generateHeaderVersionFromMap(headerVersions, spec.validVersions());
             buffer.decrementIndent();
         }
         buffer.printf("default:%n");
@@ -395,6 +379,35 @@ public final class ApiMessageTypeGenerator implements TypeClassGenerator {
         buffer.printf("}%n");
         buffer.decrementIndent();
         buffer.printf("}%n");
+    }
+
+    private void generateHeaderVersionFromMap(HeaderVersions headerVersions, Versions validVersions) {
+        // The map covers every version the schema describes; only the valid ones need code.
+        List<HeaderVersions.Entry> entries = new ArrayList<>();
+        for (HeaderVersions.Entry entry : headerVersions.entries()) {
+            Versions range = entry.range().intersect(validVersions);
+            if (!range.empty()) {
+                entries.add(new HeaderVersions.Entry(range, entry.headerVersion()));
+            }
+        }
+        if (entries.size() == 1) {
+            buffer.printf("return (short) %d;%n", entries.get(0).headerVersion());
+        } else {
+            boolean firstBranch = true;
+            for (int i = entries.size() - 1; i >= 1; i--) {
+                buffer.printf("%s (_version >= %d) {%n",
+                    firstBranch ? "if" : "} else if", entries.get(i).range().lowest());
+                buffer.incrementIndent();
+                buffer.printf("return (short) %d;%n", entries.get(i).headerVersion());
+                buffer.decrementIndent();
+                firstBranch = false;
+            }
+            buffer.printf("} else {%n");
+            buffer.incrementIndent();
+            buffer.printf("return (short) %d;%n", entries.get(0).headerVersion());
+            buffer.decrementIndent();
+            buffer.printf("}%n");
+        }
     }
 
     private static MessageSpec messageSpec(String type, short apiKey, ApiData apiData) {

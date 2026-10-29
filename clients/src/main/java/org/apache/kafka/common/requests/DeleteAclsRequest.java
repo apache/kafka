@@ -20,18 +20,17 @@ import org.apache.kafka.common.acl.AccessControlEntryFilter;
 import org.apache.kafka.common.acl.AclBindingFilter;
 import org.apache.kafka.common.acl.AclOperation;
 import org.apache.kafka.common.acl.AclPermissionType;
-import org.apache.kafka.common.errors.UnsupportedVersionException;
+import org.apache.kafka.common.internals.UnsupportedProtocolFieldException;
 import org.apache.kafka.common.message.DeleteAclsRequestData;
 import org.apache.kafka.common.message.DeleteAclsRequestData.DeleteAclsFilter;
 import org.apache.kafka.common.message.DeleteAclsResponseData;
 import org.apache.kafka.common.message.DeleteAclsResponseData.DeleteAclsFilterResult;
 import org.apache.kafka.common.protocol.ApiKeys;
-import org.apache.kafka.common.protocol.ByteBufferAccessor;
+import org.apache.kafka.common.protocol.Readable;
 import org.apache.kafka.common.resource.PatternType;
 import org.apache.kafka.common.resource.ResourcePatternFilter;
 import org.apache.kafka.common.resource.ResourceType;
 
-import java.nio.ByteBuffer;
 import java.util.Collections;
 import java.util.List;
 import java.util.stream.Collectors;
@@ -77,9 +76,9 @@ public class DeleteAclsRequest extends AbstractRequest {
                 // to LITERAL. Note that the wildcard `*` is considered `LITERAL` for compatibility reasons.
                 if (patternType == PatternType.ANY)
                     filter.setPatternTypeFilter(PatternType.LITERAL.code());
-                else if (patternType != PatternType.LITERAL)
-                    throw new UnsupportedVersionException("Version 0 does not support pattern type " +
-                            patternType + " (only LITERAL and ANY are supported)");
+                else if (patternType != PatternType.LITERAL) {
+                    throw new UnsupportedProtocolFieldException(patternType.name(), apiKey().name(), version(), 1);
+                }
             }
         }
 
@@ -116,8 +115,8 @@ public class DeleteAclsRequest extends AbstractRequest {
             .setFilterResults(filterResults), version());
     }
 
-    public static DeleteAclsRequest parse(ByteBuffer buffer, short version) {
-        return new DeleteAclsRequest(new DeleteAclsRequestData(new ByteBufferAccessor(buffer), version), version);
+    public static DeleteAclsRequest parse(Readable readable, short version) {
+        return new DeleteAclsRequest(new DeleteAclsRequestData(readable, version), version);
     }
 
     public static DeleteAclsFilter deleteAclsFilter(AclBindingFilter filter) {

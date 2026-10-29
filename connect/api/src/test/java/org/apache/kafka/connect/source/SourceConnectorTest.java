@@ -17,6 +17,7 @@
 package org.apache.kafka.connect.source;
 
 import org.apache.kafka.common.config.ConfigDef;
+import org.apache.kafka.common.metrics.PluginMetrics;
 import org.apache.kafka.connect.connector.ConnectorContext;
 import org.apache.kafka.connect.connector.ConnectorTest;
 import org.apache.kafka.connect.connector.Task;
@@ -51,6 +52,12 @@ public class SourceConnectorTest extends ConnectorTest {
 
         @Override
         public void raiseError(Exception e) {
+            // Unexpected in these tests
+            throw new UnsupportedOperationException();
+        }
+
+        @Override
+        public PluginMetrics pluginMetrics() {
             // Unexpected in these tests
             throw new UnsupportedOperationException();
         }

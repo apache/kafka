@@ -20,7 +20,6 @@ package org.apache.kafka.image;
 import org.apache.kafka.common.config.ConfigResource;
 import org.apache.kafka.image.node.ConfigurationsImageNode;
 import org.apache.kafka.image.writer.ImageWriter;
-import org.apache.kafka.image.writer.ImageWriterOptions;
 
 import java.util.Collections;
 import java.util.Map;
@@ -36,7 +35,7 @@ import java.util.Properties;
  */
 public final class ConfigurationsImage {
     public static final ConfigurationsImage EMPTY =
-        new ConfigurationsImage(Collections.emptyMap());
+        new ConfigurationsImage(Map.of());
 
     private final Map<ConfigResource, ConfigurationImage> data;
 
@@ -70,15 +69,15 @@ public final class ConfigurationsImage {
         if (configurationImage != null) {
             return configurationImage.toMap();
         } else {
-            return Collections.emptyMap();
+            return Map.of();
         }
     }
 
-    public void write(ImageWriter writer, ImageWriterOptions options) {
+    public void write(ImageWriter writer) {
         for (Entry<ConfigResource, ConfigurationImage> entry : data.entrySet()) {
             ConfigResource configResource = entry.getKey();
             ConfigurationImage configImage = entry.getValue();
-            configImage.write(configResource, writer, options);
+            configImage.write(configResource, writer);
         }
     }
 

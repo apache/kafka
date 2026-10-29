@@ -25,8 +25,8 @@ import org.apache.kafka.common.message.FetchResponseData;
 import org.apache.kafka.common.network.Send;
 import org.apache.kafka.common.protocol.ApiKeys;
 import org.apache.kafka.common.protocol.Errors;
-import org.apache.kafka.common.record.MemoryRecords;
-import org.apache.kafka.common.record.SimpleRecord;
+import org.apache.kafka.common.record.internal.MemoryRecords;
+import org.apache.kafka.common.record.internal.SimpleRecord;
 import org.apache.kafka.common.requests.ByteBufferChannel;
 import org.apache.kafka.common.requests.FetchResponse;
 import org.apache.kafka.common.requests.ResponseHeader;
@@ -48,6 +48,7 @@ import java.io.IOException;
 import java.nio.charset.StandardCharsets;
 import java.util.HashMap;
 import java.util.LinkedHashMap;
+import java.util.List;
 import java.util.Map;
 import java.util.UUID;
 import java.util.concurrent.TimeUnit;
@@ -103,19 +104,19 @@ public class FetchResponseBenchmark {
         }
 
         this.header = new ResponseHeader(100, ApiKeys.FETCH.responseHeaderVersion(ApiKeys.FETCH.latestVersion()));
-        this.fetchResponse = FetchResponse.of(Errors.NONE, 0, 0, responseData);
+        this.fetchResponse = FetchResponse.of(Errors.NONE, 0, 0, responseData, List.of());
         this.fetchResponseData = this.fetchResponse.data();
     }
 
     @Benchmark
     public int testConstructFetchResponse() {
-        FetchResponse fetchResponse = FetchResponse.of(Errors.NONE, 0, 0, responseData);
+        FetchResponse fetchResponse = FetchResponse.of(Errors.NONE, 0, 0, responseData, List.of());
         return fetchResponse.data().responses().size();
     }
 
     @Benchmark
     public int testPartitionMapFromData() {
-        return new FetchResponse(fetchResponseData).responseData(topicNames, ApiKeys.FETCH.latestVersion()).size();
+        return FetchResponse.of(fetchResponseData).responseData(topicNames, ApiKeys.FETCH.latestVersion()).size();
     }
 
     @Benchmark

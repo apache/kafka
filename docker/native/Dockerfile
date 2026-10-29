@@ -13,13 +13,14 @@
 # See the License for the specific language governing permissions and
 # limitations under the License.
 
-FROM ghcr.io/graalvm/graalvm-community:21 AS build-native-image
+# GraalVM 25+ required: earlier versions call getpwuid (not thread-safe), causing
+# intermittent segfaults (~2%) on startup. GraalVM 25 switches to getpwuid_r.
+FROM ghcr.io/graalvm/graalvm-community:25 AS build-native-image
 
-ARG kafka_url
+ARG kafka_url=""
 
 WORKDIR /app
 
-ENV KAFKA_URL=$kafka_url
 ENV NATIVE_IMAGE_PATH="native-image"
 ENV KAFKA_DIR="/app/kafka"
 ENV NATIVE_CONFIGS_DIR="/app/native-image-configs"
@@ -29,15 +30,19 @@ ENV TARGET_PATH="$KAFKA_DIR/kafka.Kafka"
 COPY native-image-configs $NATIVE_CONFIGS_DIR
 COPY native_command.sh native_command.sh
 
-RUN mkdir $KAFKA_DIR; \
-    microdnf install wget; \
-    wget -nv -O kafka.tgz "$KAFKA_URL"; \
-    wget -nv -O kafka.tgz.asc "$KAFKA_URL.asc"; \
+COPY *kafka.tgz /app
+
+RUN set -eux ; \
+    if [ -n "$kafka_url" ]; then \
+        microdnf install wget gnupg2; \
+        wget -nv -O kafka.tgz "$kafka_url"; \
+        wget -nv -O kafka.tgz.asc "$kafka_url.asc"; \
+        wget -nv -O KEYS https://downloads.apache.org/kafka/KEYS; \
+        gpg --import KEYS; \
+        gpg --batch --verify kafka.tgz.asc kafka.tgz; \
+    fi; \
+    mkdir $KAFKA_DIR; \
     tar xfz kafka.tgz -C $KAFKA_DIR --strip-components 1; \
-    wget -nv -O KEYS https://downloads.apache.org/kafka/KEYS; \
-    gpg --import KEYS; \
-    gpg --batch --verify kafka.tgz.asc kafka.tgz; \
-    rm kafka.tgz ; \
 # Build the native-binary of the apache kafka using graalVM native-image.
     /app/native_command.sh $NATIVE_IMAGE_PATH $NATIVE_CONFIGS_DIR $KAFKA_LIBS_DIR $TARGET_PATH
 
@@ -52,9 +57,11 @@ LABEL org.label-schema.name="kafka" \
       org.label-schema.description="Apache Kafka" \
       org.label-schema.build-date="${build_date}" \
       org.label-schema.vcs-url="https://github.com/apache/kafka" \
-      maintainer="Apache Kafka"
+      org.opencontainers.image.authors="Apache Kafka"
 
 RUN apk update ; \
+    # Fix CVE-2026-28390 and CVE-2026-22184. Remove this if alpine:latest is updated to a version that has these CVEs fixed.
+    apk upgrade --no-cache libcrypto3 libssl3 zlib; \
     apk add --no-cache gcompat ; \
     apk add --no-cache bash ; \
     mkdir -p /etc/kafka/docker /mnt/shared/config /opt/kafka/config /etc/kafka/secrets ; \
@@ -62,8 +69,8 @@ RUN apk update ; \
     chown appuser:root -R /etc/kafka /opt/kafka /mnt/shared/config ; \
     chmod -R ug+w /etc/kafka /opt/kafka /mnt/shared/config ;
 
+COPY server.properties /etc/kafka/docker/server.properties
 COPY --chown=appuser:root --from=build-native-image /app/kafka/kafka.Kafka /opt/kafka/
-COPY --chown=appuser:root --from=build-native-image /app/kafka/config/server.properties /etc/kafka/docker/
 COPY --chown=appuser:root --from=build-native-image /app/kafka/config/log4j2.yaml /etc/kafka/docker/
 COPY --chown=appuser:root --from=build-native-image /app/kafka/config/tools-log4j2.yaml /etc/kafka/docker/
 COPY --chown=appuser:root resources/common-scripts /etc/kafka/docker/

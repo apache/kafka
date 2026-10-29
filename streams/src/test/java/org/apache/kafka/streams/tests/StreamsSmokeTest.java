@@ -16,8 +16,8 @@
  */
 package org.apache.kafka.streams.tests;
 
-import org.apache.kafka.common.utils.Exit;
 import org.apache.kafka.common.utils.Utils;
+import org.apache.kafka.common.utils.internals.Exit;
 import org.apache.kafka.streams.StreamsConfig;
 
 import java.io.IOException;
@@ -86,7 +86,12 @@ public class StreamsSmokeTest {
                     // do their bounces, etc.
                     final Map<String, Set<Integer>> allData =
                         generate(kafka, numKeys, maxRecordsPerKey, Duration.ofSeconds(90));
-                    SmokeTestDriver.verify(kafka, allData, maxRecordsPerKey);
+                    SmokeTestDriver.verify(
+                        kafka,
+                        allData,
+                        maxRecordsPerKey,
+                        StreamsConfig.EXACTLY_ONCE_V2.equals(processingGuarantee)
+                    );
                 }
                 break;
             case "process":

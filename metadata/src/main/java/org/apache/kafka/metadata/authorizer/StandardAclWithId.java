@@ -21,32 +21,12 @@ import org.apache.kafka.common.Uuid;
 import org.apache.kafka.common.acl.AclBinding;
 import org.apache.kafka.common.metadata.AccessControlEntryRecord;
 
-import java.util.Objects;
-
-
 /**
  * A tuple of (id, acl)
  */
-public final class StandardAclWithId {
+public record StandardAclWithId(Uuid id, StandardAcl acl) {
     public static StandardAclWithId fromRecord(AccessControlEntryRecord record) {
         return new StandardAclWithId(record.id(), StandardAcl.fromRecord(record));
-    }
-
-    private final Uuid id;
-    private final StandardAcl acl;
-
-    public StandardAclWithId(Uuid id,
-                             StandardAcl acl) {
-        this.id = id;
-        this.acl = acl;
-    }
-
-    public Uuid id() {
-        return id;
-    }
-
-    public StandardAcl acl() {
-        return acl;
     }
 
     public AccessControlEntryRecord toRecord() {
@@ -63,27 +43,5 @@ public final class StandardAclWithId {
 
     public AclBinding toBinding() {
         return acl.toBinding();
-    }
-
-    @Override
-    public boolean equals(Object o) {
-        if (o == null || !o.getClass().equals(StandardAclWithId.class)) return false;
-        if (o == this) return true;
-        StandardAclWithId other = (StandardAclWithId) o;
-        return id.equals(other.id) &&
-            acl.equals(other.acl);
-    }
-
-    @Override
-    public int hashCode() {
-        return Objects.hash(id, acl);
-    }
-
-    @Override
-    public String toString() {
-        return "StandardAclWithId(" +
-            "id=" + id +
-            ", acl=" + acl +
-            ")";
     }
 }

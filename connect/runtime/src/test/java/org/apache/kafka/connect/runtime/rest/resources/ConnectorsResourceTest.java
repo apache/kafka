@@ -55,9 +55,7 @@ import org.mockito.stubbing.Stubber;
 
 import java.net.URI;
 import java.util.ArrayList;
-import java.util.Arrays;
 import java.util.Collection;
-import java.util.Collections;
 import java.util.HashMap;
 import java.util.HashSet;
 import java.util.List;
@@ -142,14 +140,14 @@ public class ConnectorsResourceTest {
         CONNECTOR_CONFIG_WITH_EMPTY_NAME.put(ConnectorConfig.NAME_CONFIG, "");
         CONNECTOR_CONFIG_WITH_EMPTY_NAME.put("sample_config", "test_config");
     }
-    private static final List<ConnectorTaskId> CONNECTOR_TASK_NAMES = Arrays.asList(
+    private static final List<ConnectorTaskId> CONNECTOR_TASK_NAMES = List.of(
             new ConnectorTaskId(CONNECTOR_NAME, 0),
             new ConnectorTaskId(CONNECTOR_NAME, 1)
     );
     private static final List<Map<String, String>> TASK_CONFIGS = new ArrayList<>();
     static {
-        TASK_CONFIGS.add(Collections.singletonMap("config", "value"));
-        TASK_CONFIGS.add(Collections.singletonMap("config", "other_value"));
+        TASK_CONFIGS.add(Map.of("config", "value"));
+        TASK_CONFIGS.add(Map.of("config", "other_value"));
     }
     private static final List<TaskInfo> TASK_INFOS = new ArrayList<>();
     static {
@@ -158,7 +156,7 @@ public class ConnectorsResourceTest {
     }
 
     private static final Set<String> CONNECTOR_ACTIVE_TOPICS = new HashSet<>(
-            Arrays.asList("foo_topic", "bar_topic"));
+            List.of("foo_topic", "bar_topic"));
 
     private static final RestRequestTimeout REQUEST_TIMEOUT = RestRequestTimeout.constant(
         DEFAULT_REST_REQUEST_TIMEOUT_MS,
@@ -196,16 +194,16 @@ public class ConnectorsResourceTest {
         MultivaluedMap<String, String> queryParams = new MultivaluedHashMap<>();
         queryParams.putSingle("forward", "true");
         when(forward.getQueryParameters()).thenReturn(queryParams);
-        when(herder.connectors()).thenReturn(Arrays.asList(CONNECTOR2_NAME, CONNECTOR_NAME));
+        when(herder.connectors()).thenReturn(List.of(CONNECTOR2_NAME, CONNECTOR_NAME));
 
         Collection<String> connectors = (Collection<String>) connectorsResource.listConnectors(forward, NULL_HEADERS).getEntity();
         // Ordering isn't guaranteed, compare sets
-        assertEquals(new HashSet<>(Arrays.asList(CONNECTOR_NAME, CONNECTOR2_NAME)), new HashSet<>(connectors));
+        assertEquals(Set.of(CONNECTOR_NAME, CONNECTOR2_NAME), new HashSet<>(connectors));
     }
 
     @Test
     public void testExpandConnectorsStatus() {
-        when(herder.connectors()).thenReturn(Arrays.asList(CONNECTOR2_NAME, CONNECTOR_NAME));
+        when(herder.connectors()).thenReturn(List.of(CONNECTOR2_NAME, CONNECTOR_NAME));
         ConnectorStateInfo connector = mock(ConnectorStateInfo.class);
         ConnectorStateInfo connector2 = mock(ConnectorStateInfo.class);
         when(herder.connectorStatus(CONNECTOR2_NAME)).thenReturn(connector2);
@@ -218,14 +216,14 @@ public class ConnectorsResourceTest {
 
         Map<String, Map<String, Object>> expanded = (Map<String, Map<String, Object>>) connectorsResource.listConnectors(forward, NULL_HEADERS).getEntity();
         // Ordering isn't guaranteed, compare sets
-        assertEquals(new HashSet<>(Arrays.asList(CONNECTOR_NAME, CONNECTOR2_NAME)), expanded.keySet());
+        assertEquals(Set.of(CONNECTOR_NAME, CONNECTOR2_NAME), expanded.keySet());
         assertEquals(connector2, expanded.get(CONNECTOR2_NAME).get("status"));
         assertEquals(connector, expanded.get(CONNECTOR_NAME).get("status"));
     }
 
     @Test
     public void testExpandConnectorsInfo() {
-        when(herder.connectors()).thenReturn(Arrays.asList(CONNECTOR2_NAME, CONNECTOR_NAME));
+        when(herder.connectors()).thenReturn(List.of(CONNECTOR2_NAME, CONNECTOR_NAME));
         ConnectorInfo connector = mock(ConnectorInfo.class);
         ConnectorInfo connector2 = mock(ConnectorInfo.class);
         when(herder.connectorInfo(CONNECTOR2_NAME)).thenReturn(connector2);
@@ -238,14 +236,14 @@ public class ConnectorsResourceTest {
 
         Map<String, Map<String, Object>> expanded = (Map<String, Map<String, Object>>) connectorsResource.listConnectors(forward, NULL_HEADERS).getEntity();
         // Ordering isn't guaranteed, compare sets
-        assertEquals(new HashSet<>(Arrays.asList(CONNECTOR_NAME, CONNECTOR2_NAME)), expanded.keySet());
+        assertEquals(Set.of(CONNECTOR_NAME, CONNECTOR2_NAME), expanded.keySet());
         assertEquals(connector2, expanded.get(CONNECTOR2_NAME).get("info"));
         assertEquals(connector, expanded.get(CONNECTOR_NAME).get("info"));
     }
 
     @Test
     public void testFullExpandConnectors() {
-        when(herder.connectors()).thenReturn(Arrays.asList(CONNECTOR2_NAME, CONNECTOR_NAME));
+        when(herder.connectors()).thenReturn(List.of(CONNECTOR2_NAME, CONNECTOR_NAME));
         ConnectorInfo connectorInfo = mock(ConnectorInfo.class);
         ConnectorInfo connectorInfo2 = mock(ConnectorInfo.class);
         when(herder.connectorInfo(CONNECTOR2_NAME)).thenReturn(connectorInfo2);
@@ -257,12 +255,12 @@ public class ConnectorsResourceTest {
 
         forward = mock(UriInfo.class);
         MultivaluedMap<String, String> queryParams = new MultivaluedHashMap<>();
-        queryParams.put("expand", Arrays.asList("info", "status"));
+        queryParams.put("expand", List.of("info", "status"));
         when(forward.getQueryParameters()).thenReturn(queryParams);
 
         Map<String, Map<String, Object>> expanded = (Map<String, Map<String, Object>>) connectorsResource.listConnectors(forward, NULL_HEADERS).getEntity();
         // Ordering isn't guaranteed, compare sets
-        assertEquals(new HashSet<>(Arrays.asList(CONNECTOR_NAME, CONNECTOR2_NAME)), expanded.keySet());
+        assertEquals(Set.of(CONNECTOR_NAME, CONNECTOR2_NAME), expanded.keySet());
         assertEquals(connectorInfo2, expanded.get(CONNECTOR2_NAME).get("info"));
         assertEquals(connectorInfo, expanded.get(CONNECTOR_NAME).get("info"));
         assertEquals(connector2, expanded.get(CONNECTOR2_NAME).get("status"));
@@ -271,7 +269,7 @@ public class ConnectorsResourceTest {
 
     @Test
     public void testExpandConnectorsWithConnectorNotFound() {
-        when(herder.connectors()).thenReturn(Arrays.asList(CONNECTOR2_NAME, CONNECTOR_NAME));
+        when(herder.connectors()).thenReturn(List.of(CONNECTOR2_NAME, CONNECTOR_NAME));
         ConnectorStateInfo connector2 = mock(ConnectorStateInfo.class);
         when(herder.connectorStatus(CONNECTOR2_NAME)).thenReturn(connector2);
         doThrow(mock(NotFoundException.class)).when(herder).connectorStatus(CONNECTOR_NAME);
@@ -283,7 +281,7 @@ public class ConnectorsResourceTest {
 
         Map<String, Map<String, Object>> expanded = (Map<String, Map<String, Object>>) connectorsResource.listConnectors(forward, NULL_HEADERS).getEntity();
         // Ordering isn't guaranteed, compare sets
-        assertEquals(Collections.singleton(CONNECTOR2_NAME), expanded.keySet());
+        assertEquals(Set.of(CONNECTOR2_NAME), expanded.keySet());
         assertEquals(connector2, expanded.get(CONNECTOR2_NAME).get("status"));
     }
 
@@ -291,12 +289,12 @@ public class ConnectorsResourceTest {
     @Test
     public void testCreateConnector() throws Throwable {
         CreateConnectorRequest body = new CreateConnectorRequest(CONNECTOR_NAME,
-            Collections.singletonMap(ConnectorConfig.NAME_CONFIG, CONNECTOR_NAME), null);
+            Map.of(ConnectorConfig.NAME_CONFIG, CONNECTOR_NAME), null, null);
 
         final ArgumentCaptor<Callback<Herder.Created<ConnectorInfo>>> cb = ArgumentCaptor.forClass(Callback.class);
         expectAndCallbackResult(cb, new Herder.Created<>(true, new ConnectorInfo(CONNECTOR_NAME, CONNECTOR_CONFIG,
             CONNECTOR_TASK_NAMES, ConnectorType.SOURCE))
-        ).when(herder).putConnectorConfig(eq(CONNECTOR_NAME), eq(body.config()), isNull(), eq(false), cb.capture());
+        ).when(herder).putConnectorConfig(eq(CONNECTOR_NAME), eq(body.config()), isNull(), isNull(), eq(false), cb.capture());
 
         connectorsResource.createConnector(FORWARD, NULL_HEADERS, body);
     }
@@ -304,12 +302,12 @@ public class ConnectorsResourceTest {
     @Test
     public void testCreateConnectorWithPausedInitialState() throws Throwable {
         CreateConnectorRequest body = new CreateConnectorRequest(CONNECTOR_NAME,
-            Collections.singletonMap(ConnectorConfig.NAME_CONFIG, CONNECTOR_NAME), CreateConnectorRequest.InitialState.PAUSED);
+            Map.of(ConnectorConfig.NAME_CONFIG, CONNECTOR_NAME), CreateConnectorRequest.InitialState.PAUSED, null);
 
         final ArgumentCaptor<Callback<Herder.Created<ConnectorInfo>>> cb = ArgumentCaptor.forClass(Callback.class);
         expectAndCallbackResult(cb, new Herder.Created<>(true, new ConnectorInfo(CONNECTOR_NAME, CONNECTOR_CONFIG,
             CONNECTOR_TASK_NAMES, ConnectorType.SOURCE))
-        ).when(herder).putConnectorConfig(eq(CONNECTOR_NAME), eq(body.config()), eq(TargetState.PAUSED), eq(false), cb.capture());
+        ).when(herder).putConnectorConfig(eq(CONNECTOR_NAME), eq(body.config()), eq(TargetState.PAUSED), isNull(), eq(false), cb.capture());
 
         connectorsResource.createConnector(FORWARD, NULL_HEADERS, body);
     }
@@ -317,12 +315,12 @@ public class ConnectorsResourceTest {
     @Test
     public void testCreateConnectorWithStoppedInitialState() throws Throwable {
         CreateConnectorRequest body = new CreateConnectorRequest(CONNECTOR_NAME,
-            Collections.singletonMap(ConnectorConfig.NAME_CONFIG, CONNECTOR_NAME), CreateConnectorRequest.InitialState.STOPPED);
+            Map.of(ConnectorConfig.NAME_CONFIG, CONNECTOR_NAME), CreateConnectorRequest.InitialState.STOPPED, null);
 
         final ArgumentCaptor<Callback<Herder.Created<ConnectorInfo>>> cb = ArgumentCaptor.forClass(Callback.class);
         expectAndCallbackResult(cb, new Herder.Created<>(true, new ConnectorInfo(CONNECTOR_NAME, CONNECTOR_CONFIG,
             CONNECTOR_TASK_NAMES, ConnectorType.SOURCE))
-        ).when(herder).putConnectorConfig(eq(CONNECTOR_NAME), eq(body.config()), eq(TargetState.STOPPED), eq(false), cb.capture());
+        ).when(herder).putConnectorConfig(eq(CONNECTOR_NAME), eq(body.config()), eq(TargetState.STOPPED), isNull(), eq(false), cb.capture());
 
         connectorsResource.createConnector(FORWARD, NULL_HEADERS, body);
     }
@@ -330,24 +328,40 @@ public class ConnectorsResourceTest {
     @Test
     public void testCreateConnectorWithRunningInitialState() throws Throwable {
         CreateConnectorRequest body = new CreateConnectorRequest(CONNECTOR_NAME,
-            Collections.singletonMap(ConnectorConfig.NAME_CONFIG, CONNECTOR_NAME), CreateConnectorRequest.InitialState.RUNNING);
+            Map.of(ConnectorConfig.NAME_CONFIG, CONNECTOR_NAME), CreateConnectorRequest.InitialState.RUNNING, null);
 
         final ArgumentCaptor<Callback<Herder.Created<ConnectorInfo>>> cb = ArgumentCaptor.forClass(Callback.class);
         expectAndCallbackResult(cb, new Herder.Created<>(true, new ConnectorInfo(CONNECTOR_NAME, CONNECTOR_CONFIG,
             CONNECTOR_TASK_NAMES, ConnectorType.SOURCE))
-        ).when(herder).putConnectorConfig(eq(CONNECTOR_NAME), eq(body.config()), eq(TargetState.STARTED), eq(false), cb.capture());
+        ).when(herder).putConnectorConfig(eq(CONNECTOR_NAME), eq(body.config()), eq(TargetState.STARTED), isNull(), eq(false), cb.capture());
 
         connectorsResource.createConnector(FORWARD, NULL_HEADERS, body);
     }
 
     @Test
+    public void testCreateConnectorWithInitialOffsets() throws Throwable {
+        CreateConnectorRequest body = new CreateConnectorRequest(CONNECTOR_NAME,
+            Map.of(ConnectorConfig.NAME_CONFIG, CONNECTOR_NAME), null,
+            List.of(new ConnectorOffset(Map.of("partitionKey", "partitionValue"), Map.of("offsetKey", "offsetValue"))));
+        String offsetsStatus = "The offsets for this connector have been set successfully";
+
+        final ArgumentCaptor<Callback<Herder.Created<ConnectorInfo>>> cb = ArgumentCaptor.forClass(Callback.class);
+        expectAndCallbackResult(cb, new Herder.Created<>(true, new ConnectorInfo(CONNECTOR_NAME, CONNECTOR_CONFIG,
+            CONNECTOR_TASK_NAMES, ConnectorType.SOURCE).withOffsetsStatus(offsetsStatus))
+        ).when(herder).putConnectorConfig(eq(CONNECTOR_NAME), eq(body.config()), isNull(), eq(body.initialOffsetsMap()), eq(false), cb.capture());
+
+        Response response = connectorsResource.createConnector(FORWARD, NULL_HEADERS, body);
+        assertEquals(offsetsStatus, ((ConnectorInfo) response.getEntity()).offsetsStatus());
+    }
+
+    @Test
     public void testCreateConnectorNotLeader() throws Throwable {
         CreateConnectorRequest body = new CreateConnectorRequest(CONNECTOR_NAME,
-            Collections.singletonMap(ConnectorConfig.NAME_CONFIG, CONNECTOR_NAME), null);
+            Map.of(ConnectorConfig.NAME_CONFIG, CONNECTOR_NAME), null, null);
 
         final ArgumentCaptor<Callback<Herder.Created<ConnectorInfo>>> cb = ArgumentCaptor.forClass(Callback.class);
         expectAndCallbackNotLeaderException(cb).when(herder)
-            .putConnectorConfig(eq(CONNECTOR_NAME), eq(body.config()), isNull(), eq(false), cb.capture());
+            .putConnectorConfig(eq(CONNECTOR_NAME), eq(body.config()), isNull(), isNull(), eq(false), cb.capture());
 
         when(restClient.httpRequest(eq(LEADER_URL + "connectors?forward=false"), eq("POST"), isNull(), eq(body), any()))
                 .thenReturn(new RestClient.HttpResponse<>(201, new HashMap<>(), new ConnectorInfo(CONNECTOR_NAME, CONNECTOR_CONFIG, CONNECTOR_TASK_NAMES, ConnectorType.SOURCE)));
@@ -357,11 +371,11 @@ public class ConnectorsResourceTest {
     @Test
     public void testCreateConnectorWithHeaders() throws Throwable {
         CreateConnectorRequest body = new CreateConnectorRequest(CONNECTOR_NAME,
-            Collections.singletonMap(ConnectorConfig.NAME_CONFIG, CONNECTOR_NAME), null);
+            Map.of(ConnectorConfig.NAME_CONFIG, CONNECTOR_NAME), null, null);
         final ArgumentCaptor<Callback<Herder.Created<ConnectorInfo>>> cb = ArgumentCaptor.forClass(Callback.class);
         HttpHeaders httpHeaders = mock(HttpHeaders.class);
         expectAndCallbackNotLeaderException(cb)
-            .when(herder).putConnectorConfig(eq(CONNECTOR_NAME), eq(body.config()), isNull(), eq(false), cb.capture());
+            .when(herder).putConnectorConfig(eq(CONNECTOR_NAME), eq(body.config()), isNull(), isNull(), eq(false), cb.capture());
 
         when(restClient.httpRequest(eq(LEADER_URL + "connectors?forward=false"), eq("POST"), eq(httpHeaders), any(), any()))
                 .thenReturn(new RestClient.HttpResponse<>(202, new HashMap<>(), null));
@@ -371,11 +385,11 @@ public class ConnectorsResourceTest {
     @Test
     public void testCreateConnectorExists() {
         CreateConnectorRequest body = new CreateConnectorRequest(CONNECTOR_NAME,
-            Collections.singletonMap(ConnectorConfig.NAME_CONFIG, CONNECTOR_NAME), null);
+            Map.of(ConnectorConfig.NAME_CONFIG, CONNECTOR_NAME), null, null);
 
         final ArgumentCaptor<Callback<Herder.Created<ConnectorInfo>>> cb = ArgumentCaptor.forClass(Callback.class);
         expectAndCallbackException(cb, new AlreadyExistsException("already exists"))
-            .when(herder).putConnectorConfig(eq(CONNECTOR_NAME), eq(body.config()), isNull(), eq(false), cb.capture());
+            .when(herder).putConnectorConfig(eq(CONNECTOR_NAME), eq(body.config()), isNull(), isNull(), eq(false), cb.capture());
         assertThrows(AlreadyExistsException.class, () -> connectorsResource.createConnector(FORWARD, NULL_HEADERS, body));
     }
 
@@ -384,13 +398,13 @@ public class ConnectorsResourceTest {
         // Clone CONNECTOR_CONFIG_WITHOUT_NAME Map, as createConnector changes it (puts the name in it) and this
         // will affect later tests
         Map<String, String> inputConfig = getConnectorConfig(CONNECTOR_CONFIG_WITHOUT_NAME);
-        final CreateConnectorRequest bodyIn = new CreateConnectorRequest(CONNECTOR_NAME_PADDING_WHITESPACES, inputConfig, null);
-        final CreateConnectorRequest bodyOut = new CreateConnectorRequest(CONNECTOR_NAME, CONNECTOR_CONFIG, null);
+        final CreateConnectorRequest bodyIn = new CreateConnectorRequest(CONNECTOR_NAME_PADDING_WHITESPACES, inputConfig, null, null);
+        final CreateConnectorRequest bodyOut = new CreateConnectorRequest(CONNECTOR_NAME, CONNECTOR_CONFIG, null, null);
 
         final ArgumentCaptor<Callback<Herder.Created<ConnectorInfo>>> cb = ArgumentCaptor.forClass(Callback.class);
         expectAndCallbackResult(cb, new Herder.Created<>(true, new ConnectorInfo(bodyOut.name(), bodyOut.config(),
             CONNECTOR_TASK_NAMES, ConnectorType.SOURCE))
-        ).when(herder).putConnectorConfig(eq(bodyOut.name()), eq(bodyOut.config()), isNull(), eq(false), cb.capture());
+        ).when(herder).putConnectorConfig(eq(bodyOut.name()), eq(bodyOut.config()), isNull(), isNull(), eq(false), cb.capture());
 
         connectorsResource.createConnector(FORWARD, NULL_HEADERS, bodyIn);
     }
@@ -400,13 +414,13 @@ public class ConnectorsResourceTest {
         // Clone CONNECTOR_CONFIG_WITHOUT_NAME Map, as createConnector changes it (puts the name in it) and this
         // will affect later tests
         Map<String, String> inputConfig = getConnectorConfig(CONNECTOR_CONFIG_WITHOUT_NAME);
-        final CreateConnectorRequest bodyIn = new CreateConnectorRequest(CONNECTOR_NAME_ALL_WHITESPACES, inputConfig, null);
-        final CreateConnectorRequest bodyOut = new CreateConnectorRequest("", CONNECTOR_CONFIG_WITH_EMPTY_NAME, null);
+        final CreateConnectorRequest bodyIn = new CreateConnectorRequest(CONNECTOR_NAME_ALL_WHITESPACES, inputConfig, null, null);
+        final CreateConnectorRequest bodyOut = new CreateConnectorRequest("", CONNECTOR_CONFIG_WITH_EMPTY_NAME, null, null);
 
         final ArgumentCaptor<Callback<Herder.Created<ConnectorInfo>>> cb = ArgumentCaptor.forClass(Callback.class);
         expectAndCallbackResult(cb, new Herder.Created<>(true, new ConnectorInfo(bodyOut.name(), bodyOut.config(),
             CONNECTOR_TASK_NAMES, ConnectorType.SOURCE))
-        ).when(herder).putConnectorConfig(eq(bodyOut.name()), eq(bodyOut.config()), isNull(), eq(false), cb.capture());
+        ).when(herder).putConnectorConfig(eq(bodyOut.name()), eq(bodyOut.config()), isNull(), isNull(), eq(false), cb.capture());
 
         connectorsResource.createConnector(FORWARD, NULL_HEADERS, bodyIn);
     }
@@ -416,13 +430,13 @@ public class ConnectorsResourceTest {
         // Clone CONNECTOR_CONFIG_WITHOUT_NAME Map, as createConnector changes it (puts the name in it) and this
         // will affect later tests
         Map<String, String> inputConfig = getConnectorConfig(CONNECTOR_CONFIG_WITHOUT_NAME);
-        final CreateConnectorRequest bodyIn = new CreateConnectorRequest(null, inputConfig, null);
-        final CreateConnectorRequest bodyOut = new CreateConnectorRequest("", CONNECTOR_CONFIG_WITH_EMPTY_NAME, null);
+        final CreateConnectorRequest bodyIn = new CreateConnectorRequest(null, inputConfig, null, null);
+        final CreateConnectorRequest bodyOut = new CreateConnectorRequest("", CONNECTOR_CONFIG_WITH_EMPTY_NAME, null, null);
 
         final ArgumentCaptor<Callback<Herder.Created<ConnectorInfo>>> cb = ArgumentCaptor.forClass(Callback.class);
         expectAndCallbackResult(cb, new Herder.Created<>(true, new ConnectorInfo(bodyOut.name(), bodyOut.config(),
             CONNECTOR_TASK_NAMES, ConnectorType.SOURCE))
-        ).when(herder).putConnectorConfig(eq(bodyOut.name()), eq(bodyOut.config()), isNull(), eq(false), cb.capture());
+        ).when(herder).putConnectorConfig(eq(bodyOut.name()), eq(bodyOut.config()), isNull(), isNull(), eq(false), cb.capture());
 
         connectorsResource.createConnector(FORWARD, NULL_HEADERS, bodyIn);
     }
@@ -496,7 +510,7 @@ public class ConnectorsResourceTest {
         connectorTask0Configs.put("connector-task1-config0", "321");
         connectorTask0Configs.put("connector-task1-config1", "654");
         final ConnectorTaskId connector2Task0 = new ConnectorTaskId(CONNECTOR2_NAME, 0);
-        final Map<String, String> connector2Task0Configs = Collections.singletonMap("connector2-task0-config0", "789");
+        final Map<String, String> connector2Task0Configs = Map.of("connector2-task0-config0", "789");
 
         final List<TaskInfo> expectedTasksConnector = new ArrayList<>();
         expectedTasksConnector.add(new TaskInfo(connectorTask0, connectorTask0Configs));
@@ -529,12 +543,12 @@ public class ConnectorsResourceTest {
     @Test
     public void testCreateConnectorWithSpecialCharsInName() throws Throwable {
         CreateConnectorRequest body = new CreateConnectorRequest(CONNECTOR_NAME_SPECIAL_CHARS,
-            Collections.singletonMap(ConnectorConfig.NAME_CONFIG, CONNECTOR_NAME_SPECIAL_CHARS), null);
+            Map.of(ConnectorConfig.NAME_CONFIG, CONNECTOR_NAME_SPECIAL_CHARS), null, null);
 
         final ArgumentCaptor<Callback<Herder.Created<ConnectorInfo>>> cb = ArgumentCaptor.forClass(Callback.class);
         expectAndCallbackResult(cb, new Herder.Created<>(true, new ConnectorInfo(CONNECTOR_NAME_SPECIAL_CHARS, CONNECTOR_CONFIG,
             CONNECTOR_TASK_NAMES, ConnectorType.SOURCE))
-        ).when(herder).putConnectorConfig(eq(CONNECTOR_NAME_SPECIAL_CHARS), eq(body.config()), isNull(), eq(false), cb.capture());
+        ).when(herder).putConnectorConfig(eq(CONNECTOR_NAME_SPECIAL_CHARS), eq(body.config()), isNull(), isNull(), eq(false), cb.capture());
 
         String rspLocation = connectorsResource.createConnector(FORWARD, NULL_HEADERS, body).getLocation().toString();
         String decoded = new URI(rspLocation).getPath();
@@ -544,12 +558,12 @@ public class ConnectorsResourceTest {
     @Test
     public void testCreateConnectorWithControlSequenceInName() throws Throwable {
         CreateConnectorRequest body = new CreateConnectorRequest(CONNECTOR_NAME_CONTROL_SEQUENCES1,
-            Collections.singletonMap(ConnectorConfig.NAME_CONFIG, CONNECTOR_NAME_CONTROL_SEQUENCES1), null);
+            Map.of(ConnectorConfig.NAME_CONFIG, CONNECTOR_NAME_CONTROL_SEQUENCES1), null, null);
 
         final ArgumentCaptor<Callback<Herder.Created<ConnectorInfo>>> cb = ArgumentCaptor.forClass(Callback.class);
         expectAndCallbackResult(cb, new Herder.Created<>(true, new ConnectorInfo(CONNECTOR_NAME_CONTROL_SEQUENCES1, CONNECTOR_CONFIG,
             CONNECTOR_TASK_NAMES, ConnectorType.SOURCE))
-        ).when(herder).putConnectorConfig(eq(CONNECTOR_NAME_CONTROL_SEQUENCES1), eq(body.config()), isNull(), eq(false), cb.capture());
+        ).when(herder).putConnectorConfig(eq(CONNECTOR_NAME_CONTROL_SEQUENCES1), eq(body.config()), isNull(), isNull(), eq(false), cb.capture());
 
         String rspLocation = connectorsResource.createConnector(FORWARD, NULL_HEADERS, body).getLocation().toString();
         String decoded = new URI(rspLocation).getPath();
@@ -594,7 +608,7 @@ public class ConnectorsResourceTest {
     public void testCreateConnectorConfigNameMismatch() {
         Map<String, String> connConfig = new HashMap<>();
         connConfig.put(ConnectorConfig.NAME_CONFIG, "mismatched-name");
-        CreateConnectorRequest request = new CreateConnectorRequest(CONNECTOR_NAME, connConfig, null);
+        CreateConnectorRequest request = new CreateConnectorRequest(CONNECTOR_NAME, connConfig, null, null);
         assertThrows(BadRequestException.class, () -> connectorsResource.createConnector(FORWARD, NULL_HEADERS, request));
     }
 
@@ -688,11 +702,9 @@ public class ConnectorsResourceTest {
     @Test
     public void testRestartConnectorAndTasksRequestAccepted() throws Throwable {
         ConnectorStateInfo.ConnectorState state = new ConnectorStateInfo.ConnectorState(
-                AbstractStatus.State.RESTARTING.name(),
-                "foo",
-                null
+                AbstractStatus.State.RESTARTING.name(), "foo", null, null
         );
-        ConnectorStateInfo connectorStateInfo = new ConnectorStateInfo(CONNECTOR_NAME, state, Collections.emptyList(), ConnectorType.SOURCE);
+        ConnectorStateInfo connectorStateInfo = new ConnectorStateInfo(CONNECTOR_NAME, state, List.of(), ConnectorType.SOURCE);
 
         RestartRequest restartRequest = new RestartRequest(CONNECTOR_NAME, true, false);
         final ArgumentCaptor<Callback<ConnectorStateInfo>> cb = ArgumentCaptor.forClass(Callback.class);
@@ -820,12 +832,10 @@ public class ConnectorsResourceTest {
             .thenReturn(new ActiveTopicsInfo(CONNECTOR_NAME, CONNECTOR_ACTIVE_TOPICS));
         connectorsResource = new ConnectorsResource(herder, serverConfig, restClient, REQUEST_TIMEOUT);
 
-        Response response = connectorsResource.getConnectorActiveTopics(CONNECTOR_NAME);
-        assertEquals(Response.Status.OK.getStatusCode(), response.getStatus());
-        Map<String, Map<String, Object>> body = (Map<String, Map<String, Object>>) response.getEntity();
-        assertEquals(CONNECTOR_NAME, ((ActiveTopicsInfo) body.get(CONNECTOR_NAME)).connector());
+        Map<String, ActiveTopicsInfo> body = connectorsResource.getConnectorActiveTopics(CONNECTOR_NAME);
+        assertEquals(CONNECTOR_NAME, body.get(CONNECTOR_NAME).connector());
         assertEquals(new HashSet<>(CONNECTOR_ACTIVE_TOPICS),
-                ((ActiveTopicsInfo) body.get(CONNECTOR_NAME)).topics());
+                body.get(CONNECTOR_NAME).topics());
     }
 
     @Test
@@ -861,9 +871,9 @@ public class ConnectorsResourceTest {
     @Test
     public void testGetOffsets() throws Throwable {
         final ArgumentCaptor<Callback<ConnectorOffsets>> cb = ArgumentCaptor.forClass(Callback.class);
-        ConnectorOffsets offsets = new ConnectorOffsets(Arrays.asList(
-                new ConnectorOffset(Collections.singletonMap("partitionKey", "partitionValue"), Collections.singletonMap("offsetKey", "offsetValue")),
-                new ConnectorOffset(Collections.singletonMap("partitionKey", "partitionValue2"), Collections.singletonMap("offsetKey", "offsetValue"))
+        ConnectorOffsets offsets = new ConnectorOffsets(List.of(
+                new ConnectorOffset(Map.of("partitionKey", "partitionValue"), Map.of("offsetKey", "offsetValue")),
+                new ConnectorOffset(Map.of("partitionKey", "partitionValue2"), Map.of("offsetKey", "offsetValue"))
         ));
         expectAndCallbackResult(cb, offsets).when(herder).connectorOffsets(eq(CONNECTOR_NAME), cb.capture());
 
@@ -873,7 +883,7 @@ public class ConnectorsResourceTest {
     @Test
     public void testAlterOffsetsEmptyOffsets() {
         assertThrows(BadRequestException.class, () -> connectorsResource.alterConnectorOffsets(
-                false, NULL_HEADERS, CONNECTOR_NAME, new ConnectorOffsets(Collections.emptyList())));
+                false, NULL_HEADERS, CONNECTOR_NAME, new ConnectorOffsets(List.of())));
     }
 
     @Test
@@ -881,7 +891,7 @@ public class ConnectorsResourceTest {
         Map<String, ?> partition = new HashMap<>();
         Map<String, ?> offset = new HashMap<>();
         ConnectorOffset connectorOffset = new ConnectorOffset(partition, offset);
-        ConnectorOffsets body = new ConnectorOffsets(Collections.singletonList(connectorOffset));
+        ConnectorOffsets body = new ConnectorOffsets(List.of(connectorOffset));
 
         final ArgumentCaptor<Callback<Message>> cb = ArgumentCaptor.forClass(Callback.class);
         expectAndCallbackNotLeaderException(cb).when(herder).alterConnectorOffsets(eq(CONNECTOR_NAME), eq(body.toMap()), cb.capture());
@@ -896,7 +906,7 @@ public class ConnectorsResourceTest {
         Map<String, ?> partition = new HashMap<>();
         Map<String, ?> offset = new HashMap<>();
         ConnectorOffset connectorOffset = new ConnectorOffset(partition, offset);
-        ConnectorOffsets body = new ConnectorOffsets(Collections.singletonList(connectorOffset));
+        ConnectorOffsets body = new ConnectorOffsets(List.of(connectorOffset));
         final ArgumentCaptor<Callback<Message>> cb = ArgumentCaptor.forClass(Callback.class);
         expectAndCallbackException(cb, new NotFoundException("Connector not found"))
                 .when(herder).alterConnectorOffsets(eq(CONNECTOR_NAME), eq(body.toMap()), cb.capture());
@@ -906,10 +916,10 @@ public class ConnectorsResourceTest {
 
     @Test
     public void testAlterOffsets() throws Throwable {
-        Map<String, ?> partition = Collections.singletonMap("partitionKey", "partitionValue");
-        Map<String, ?> offset = Collections.singletonMap("offsetKey", "offsetValue");
+        Map<String, ?> partition = Map.of("partitionKey", "partitionValue");
+        Map<String, ?> offset = Map.of("offsetKey", "offsetValue");
         ConnectorOffset connectorOffset = new ConnectorOffset(partition, offset);
-        ConnectorOffsets body = new ConnectorOffsets(Collections.singletonList(connectorOffset));
+        ConnectorOffsets body = new ConnectorOffsets(List.of(connectorOffset));
 
         final ArgumentCaptor<Callback<Message>> cb = ArgumentCaptor.forClass(Callback.class);
         Message msg = new Message("The offsets for this connector have been altered successfully");
@@ -917,9 +927,8 @@ public class ConnectorsResourceTest {
             cb.getValue().onCompletion(null, msg);
             return null;
         }).when(herder).alterConnectorOffsets(eq(CONNECTOR_NAME), eq(body.toMap()), cb.capture());
-        Response response = connectorsResource.alterConnectorOffsets(null, NULL_HEADERS, CONNECTOR_NAME, body);
-        assertEquals(200, response.getStatus());
-        assertEquals(msg, response.getEntity());
+        Message result = connectorsResource.alterConnectorOffsets(null, NULL_HEADERS, CONNECTOR_NAME, body);
+        assertEquals(msg, result);
     }
 
     @Test
@@ -949,9 +958,8 @@ public class ConnectorsResourceTest {
             cb.getValue().onCompletion(null, msg);
             return null;
         }).when(herder).resetConnectorOffsets(eq(CONNECTOR_NAME), cb.capture());
-        Response response = connectorsResource.resetConnectorOffsets(null, NULL_HEADERS, CONNECTOR_NAME);
-        assertEquals(200, response.getStatus());
-        assertEquals(msg, response.getEntity());
+        Message result = connectorsResource.resetConnectorOffsets(null, NULL_HEADERS, CONNECTOR_NAME);
+        assertEquals(msg, result);
     }
 
     private <T> Stubber expectAndCallbackResult(final ArgumentCaptor<Callback<T>> cb, final T value) {

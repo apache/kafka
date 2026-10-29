@@ -19,6 +19,7 @@ package org.apache.kafka.common.protocol;
 import org.junit.jupiter.api.Test;
 
 import static org.junit.jupiter.api.Assertions.assertFalse;
+import static org.junit.jupiter.api.Assertions.assertTrue;
 
 public class ProtocolTest {
 
@@ -27,6 +28,18 @@ public class ProtocolTest {
         var html = Protocol.toHtml();
         assertFalse(html.isBlank());
         assertFalse(html.contains("LeaderAndIsr"), "Removed LeaderAndIsr should not show in HTML");
+
+        String requestVersion;
+        String responseVersion;
+        for (ApiKeys key : ApiKeys.clientApis()) {
+            for (short version = key.oldestVersion(); version <= key.latestVersion(); version++) {
+                requestVersion = key.name + " Request (Version: " + version;
+                responseVersion = key.name + " Response (Version: " + version;
+
+                assertTrue(html.contains(requestVersion), "Missing request header for " + key.name + " version:" + version);
+                assertTrue(html.contains(responseVersion), "Missing response header for " + key.name + " version:" + version);
+            }
+        }
     }
 
 }

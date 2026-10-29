@@ -17,54 +17,64 @@
 package org.apache.kafka.tiered.storage.integration;
 
 import org.apache.kafka.clients.admin.OffsetSpec;
+import org.apache.kafka.clients.consumer.GroupProtocol;
+import org.apache.kafka.common.test.ClusterInstance;
+import org.apache.kafka.common.test.api.ClusterConfig;
+import org.apache.kafka.common.test.api.ClusterTemplate;
+import org.apache.kafka.common.test.api.Type;
 import org.apache.kafka.common.utils.MockTime;
 import org.apache.kafka.common.utils.Time;
 import org.apache.kafka.storage.internals.log.EpochEntry;
 import org.apache.kafka.tiered.storage.TieredStorageTestBuilder;
-import org.apache.kafka.tiered.storage.TieredStorageTestHarness;
 import org.apache.kafka.tiered.storage.specs.KeyValueSpec;
 
-import org.junit.jupiter.params.ParameterizedTest;
-import org.junit.jupiter.params.provider.MethodSource;
-
-import java.util.Arrays;
 import java.util.List;
+import java.util.Locale;
 import java.util.Map;
+import java.util.Set;
 
-import static org.apache.kafka.common.record.RecordBatch.NO_PARTITION_LEADER_EPOCH;
+import static org.apache.kafka.common.record.internal.RecordBatch.NO_PARTITION_LEADER_EPOCH;
 import static org.apache.kafka.common.utils.Utils.mkEntry;
 import static org.apache.kafka.common.utils.Utils.mkMap;
 import static org.apache.kafka.server.log.remote.storage.LocalTieredStorageEvent.EventType.DELETE_SEGMENT;
+import static org.apache.kafka.tiered.storage.utils.TieredStorageTestUtils.createServerPropsForRemoteStorage;
 
-public class ListOffsetsTest extends TieredStorageTestHarness {
-    @Override
-    public int brokerCount() {
-        return 2;
+public final class ListOffsetsTest {
+
+    private static final int BROKER_COUNT = 3;
+    private static final int NUM_REMOTE_LOG_METADATA_PARTITIONS = 5;
+
+    private static List<ClusterConfig> clusterConfig() {
+        return List.of(ClusterConfig.defaultBuilder()
+                .setTypes(Set.of(Type.KRAFT))
+                .setBrokers(BROKER_COUNT)
+                .setServerProperties(createServerPropsForRemoteStorage(
+                        ListOffsetsTest.class.getSimpleName().toLowerCase(Locale.ROOT),
+                        BROKER_COUNT,
+                        NUM_REMOTE_LOG_METADATA_PARTITIONS))
+                .build());
     }
 
-    /**
-     * We are running this test only for the Kraft mode, since ZK mode is deprecated now. Note that:
-     * 1. In ZK mode, the leader-epoch gets bumped during reassignment (0 -> 1 -> 2) and leader-election (2 -> 3).
-     * 2. In Kraft mode, the leader-epoch gets bumped only for leader-election (0 -> 1) and not for reassignment.
-     * @param quorum The quorum to use for the test.
-     */
-    @ParameterizedTest(name = "{displayName}.quorum={0}.groupProtocol={1}")
-    @MethodSource("getTestQuorumAndGroupProtocolParametersAll")
-    @Override
-    public void executeTieredStorageTest(String quorum, String groupProtocol) {
-        super.executeTieredStorageTest(quorum, groupProtocol);
+    @ClusterTemplate("clusterConfig")
+    public void testListOffsetsWithClassicGroupProtocol(ClusterInstance clusterInstance) throws Exception {
+        executeListOffsetsTest(clusterInstance, GroupProtocol.CLASSIC);
     }
 
-    @Override
-    protected void writeTestSpecifications(TieredStorageTestBuilder builder) {
+    @ClusterTemplate("clusterConfig")
+    public void testListOffsetsWithConsumerGroupProtocol(ClusterInstance clusterInstance) throws Exception {
+        executeListOffsetsTest(clusterInstance, GroupProtocol.CONSUMER);
+    }
+
+    private void executeListOffsetsTest(ClusterInstance clusterInstance, GroupProtocol groupProtocol) throws Exception {
         final int broker0 = 0;
         final int broker1 = 1;
         final String topicA = "topicA";
         final int p0 = 0;
         final Time time = new MockTime();
         final long timestamp = time.milliseconds();
-        final Map<Integer, List<Integer>> assignment = mkMap(mkEntry(p0, Arrays.asList(broker0, broker1)));
+        final Map<Integer, List<Integer>> assignment = mkMap(mkEntry(p0, List.of(broker0, broker1)));
 
+        TieredStorageTestBuilder builder = new TieredStorageTestBuilder();
         builder
                 .createTopic(topicA, 1, 2, 2, assignment, true)
                 // send records to partition 0 and expect the first segment to be offloaded
@@ -78,7 +88,7 @@ public class ListOffsetsTest extends TieredStorageTestHarness {
                         new KeyValueSpec("k2", "v2", timestamp + 2))
 
                 // switch leader and send more records to partition 0 and expect the second segment to be offloaded.
-                .reassignReplica(topicA, p0, Arrays.asList(broker1, broker0))
+                .reassignReplica(topicA, p0, List.of(broker1, broker0))
                 // After leader election, the partition's leader-epoch gets bumped from 0 -> 1
                 .expectLeader(topicA, p0, broker1, true)
                 .expectEarliestLocalOffsetInLogDirectory(topicA, p0, 4L)
@@ -123,5 +133,7 @@ public class ListOffsetsTest extends TieredStorageTestHarness {
                 .expectListOffsets(topicA, p0, OffsetSpec.earliestLocal(), new EpochEntry(1, 4))
                 .expectListOffsets(topicA, p0, OffsetSpec.latestTiered(), new EpochEntry(NO_PARTITION_LEADER_EPOCH, 3))
                 .expectListOffsets(topicA, p0, OffsetSpec.latest(), new EpochEntry(1, 6));
+
+        builder.build().execute(clusterInstance, groupProtocol);
     }
 }

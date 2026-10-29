@@ -16,22 +16,9 @@
 # specific language governing permissions and limitations
 # under the License.
 
-if ! git config --get alias.update-cache > /dev/null; then
-  printf '\e[36m%s\n\n  %s\n\e[0m\n' \
-    'Hint: you can create a Git alias to execute this script. Example:' \
-    "git config alias.update-cache '!bash $(realpath "$0")'"
-fi
-
-key="$(
-  gh cache list \
-    --key 'gradle-home-v1|Linux-X64|test' \
-    --sort 'created_at' \
-    --limit 1 \
-    --json 'key' \
-    --jq '.[].key'
-)"
-
-sha="$(cut -d '-' -f 5 <<< "$key")"
+# Get the latest commit SHA that contains the Gradle build cache.
+sha=$(curl -s "https://api.github.com/repos/apache/kafka/actions/caches?key=gradle-home-v1&ref=refs/heads/trunk" \
+  | jq -r '.actions_caches | max_by(.created_at) | .key | split("-")[4]')
 
 if ! git show "$sha" &> /dev/null; then
   printf '\e[33m%s\n%s\e[0m\n' \

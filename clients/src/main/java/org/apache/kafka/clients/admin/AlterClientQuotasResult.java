@@ -18,7 +18,7 @@
 package org.apache.kafka.clients.admin;
 
 import org.apache.kafka.common.KafkaFuture;
-import org.apache.kafka.common.annotation.InterfaceStability;
+import org.apache.kafka.common.annotation.InterfaceAudience;
 import org.apache.kafka.common.quota.ClientQuotaEntity;
 
 import java.util.Collection;
@@ -26,10 +26,8 @@ import java.util.Map;
 
 /**
  * The result of the {@link Admin#alterClientQuotas(Collection, AlterClientQuotasOptions)} call.
- *
- * The API of this class is evolving, see {@link Admin} for details.
  */
-@InterfaceStability.Evolving
+@InterfaceAudience.Public
 public class AlterClientQuotasResult {
 
     private final Map<ClientQuotaEntity, KafkaFuture<Void>> futures;
@@ -54,6 +52,6 @@ public class AlterClientQuotasResult {
      * Returns a future which succeeds only if all quota alterations succeed.
      */
     public KafkaFuture<Void> all() {
-        return KafkaFuture.allOf(futures.values().toArray(new KafkaFuture[0]));
+        return KafkaFuture.allOf(futures.values().toArray(new KafkaFuture<?>[0]));
     }
 }

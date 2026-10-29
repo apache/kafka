@@ -23,6 +23,7 @@ import java.util.UUID
 import org.apache.kafka.common.serialization.{Deserializer, Serde, Serdes => JSerdes, Serializer}
 import org.apache.kafka.streams.kstream.WindowedSerdes
 
+@deprecated("Use org.apache.kafka.common.serialization.Serdes instead", "4.3.0")
 object Serdes extends LowPrioritySerdes {
   implicit def stringSerde: Serde[String] = JSerdes.String()
   implicit def longSerde: Serde[Long] = JSerdes.Long().asInstanceOf[Serde[Long]]

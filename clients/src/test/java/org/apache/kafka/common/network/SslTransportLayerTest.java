@@ -29,9 +29,9 @@ import org.apache.kafka.common.security.TestSecurityConfig;
 import org.apache.kafka.common.security.auth.SecurityProtocol;
 import org.apache.kafka.common.security.ssl.DefaultSslEngineFactory;
 import org.apache.kafka.common.security.ssl.SslFactory;
-import org.apache.kafka.common.utils.LogContext;
 import org.apache.kafka.common.utils.Time;
 import org.apache.kafka.common.utils.Utils;
+import org.apache.kafka.common.utils.internals.LogContext;
 import org.apache.kafka.test.TestSslUtils;
 import org.apache.kafka.test.TestUtils;
 
@@ -50,18 +50,25 @@ import java.net.InetAddress;
 import java.net.InetSocketAddress;
 import java.net.Socket;
 import java.nio.ByteBuffer;
+import java.nio.channels.AsynchronousCloseException;
 import java.nio.channels.Channels;
+import java.nio.channels.ClosedChannelException;
+import java.nio.channels.FileChannel;
 import java.nio.channels.SelectionKey;
 import java.nio.channels.SocketChannel;
 import java.nio.charset.StandardCharsets;
 import java.util.ArrayList;
+import java.util.Arrays;
 import java.util.Collection;
 import java.util.Collections;
 import java.util.HashMap;
 import java.util.List;
 import java.util.Map;
+import java.util.concurrent.Callable;
+import java.util.concurrent.atomic.AtomicBoolean;
 import java.util.concurrent.atomic.AtomicInteger;
 import java.util.concurrent.atomic.AtomicLong;
+import java.util.concurrent.atomic.AtomicReference;
 import java.util.function.Function;
 import java.util.stream.Stream;
 
@@ -76,9 +83,13 @@ import static org.junit.jupiter.api.Assertions.assertArrayEquals;
 import static org.junit.jupiter.api.Assertions.assertEquals;
 import static org.junit.jupiter.api.Assertions.assertFalse;
 import static org.junit.jupiter.api.Assertions.assertInstanceOf;
+import static org.junit.jupiter.api.Assertions.assertSame;
 import static org.junit.jupiter.api.Assertions.assertThrows;
 import static org.junit.jupiter.api.Assertions.assertTrue;
+import static org.junit.jupiter.api.Assumptions.assumeTrue;
 import static org.mockito.ArgumentMatchers.any;
+import static org.mockito.ArgumentMatchers.anyLong;
+import static org.mockito.ArgumentMatchers.eq;
 import static org.mockito.Mockito.doReturn;
 import static org.mockito.Mockito.doThrow;
 import static org.mockito.Mockito.mock;
@@ -94,6 +105,8 @@ import static org.mockito.Mockito.when;
 public class SslTransportLayerTest {
 
     private static final int BUFFER_SIZE = 4 * 1024;
+    // The size of SslTransportLayer's file channel buffer
+    private static final int TRANSFER_SIZE = 32 * 1024;
     private static final Time TIME = Time.SYSTEM;
 
     private static class Args {
@@ -110,7 +123,8 @@ public class SslTransportLayerTest {
             this.useInlinePem = useInlinePem;
             sslConfigOverrides = new HashMap<>();
             sslConfigOverrides.put(SslConfigs.SSL_PROTOCOL_CONFIG, tlsProtocol);
-            sslConfigOverrides.put(SslConfigs.SSL_ENABLED_PROTOCOLS_CONFIG, Collections.singletonList(tlsProtocol));
+            sslConfigOverrides.put(SslConfigs.SSL_ENABLED_PROTOCOLS_CONFIG, List.of(tlsProtocol));
+            sslConfigOverrides.put(SslConfigs.SSL_CIPHER_SUITES_CONFIG, List.of());
             init();
         }
 
@@ -475,6 +489,8 @@ public class SslTransportLayerTest {
     @ArgumentsSource(SslTransportLayerArgumentsForTLS2Provider.class)
     public void testDsaKeyPair(Args args) throws Exception {
         // DSA algorithms are not supported for TLSv1.3.
+        // Skip test if DSA is not supported by the JVM
+        assumeTrue(isDsaSupported(), "DSA algorithm is not supported by this JVM");
         args.serverCertStores = certBuilder(true, "server", args.useInlinePem).keyAlgorithm("DSA").build();
         args.clientCertStores = certBuilder(false, "client", args.useInlinePem).keyAlgorithm("DSA").build();
         args.sslServerConfigs = args.getTrustingConfig(args.serverCertStores, args.clientCertStores);
@@ -607,7 +623,7 @@ public class SslTransportLayerTest {
     public void testTlsDefaults(Args args) throws Exception {
         args.sslServerConfigs = args.serverCertStores.getTrustingConfig(args.clientCertStores);
         args.sslClientConfigs = args.clientCertStores.getTrustingConfig(args.serverCertStores);
-
+        args.sslClientConfigs.put(SslConfigs.SSL_CIPHER_SUITES_CONFIG, List.of());
         assertEquals(SslConfigs.DEFAULT_SSL_PROTOCOL, args.sslServerConfigs.get(SslConfigs.SSL_PROTOCOL_CONFIG));
         assertEquals(SslConfigs.DEFAULT_SSL_PROTOCOL, args.sslClientConfigs.get(SslConfigs.SSL_PROTOCOL_CONFIG));
 
@@ -766,11 +782,10 @@ public class SslTransportLayerTest {
     @ParameterizedTest
     @ArgumentsSource(SslTransportLayerArgumentsProvider.class)
     public void testNetworkThreadTimeRecorded(Args args) throws Exception {
-        LogContext logContext = new LogContext();
-        ChannelBuilder channelBuilder = new SslChannelBuilder(ConnectionMode.CLIENT, null, false, logContext);
+        ChannelBuilder channelBuilder = new SslChannelBuilder(ConnectionMode.CLIENT, null, false);
         channelBuilder.configure(args.sslClientConfigs);
         try (Selector selector = new Selector(NetworkReceive.UNLIMITED, Selector.NO_IDLE_TIMEOUT_MS, new Metrics(), Time.SYSTEM,
-                "MetricGroup", new HashMap<>(), false, true, channelBuilder, MemoryPool.NONE, logContext)) {
+                "MetricGroup", new HashMap<>(), false, true, channelBuilder, MemoryPool.NONE, new LogContext())) {
 
             String node = "0";
             server = createEchoServer(args, SecurityProtocol.SSL);
@@ -966,7 +981,7 @@ public class SslTransportLayerTest {
     }
 
     private SslChannelBuilder newClientChannelBuilder() {
-        return new SslChannelBuilder(ConnectionMode.CLIENT, null, false, new LogContext());
+        return new SslChannelBuilder(ConnectionMode.CLIENT, null, false);
     }
 
     private void testClose(Args args, SecurityProtocol securityProtocol, ChannelBuilder clientChannelBuilder) throws Exception {
@@ -1096,14 +1111,14 @@ public class SslTransportLayerTest {
 
         CertStores invalidCertStores = certBuilder(true, "server", args.useInlinePem).addHostName("127.0.0.1").build();
         Map<String, Object>  invalidConfigs = args.getTrustingConfig(invalidCertStores, args.clientCertStores);
-        verifyInvalidReconfigure(reconfigurableBuilder, invalidConfigs, "keystore with different SubjectAltName");
+        verifyInvalidReconfigure(reconfigurableBuilder, invalidConfigs);
 
         Map<String, Object>  missingStoreConfigs = new HashMap<>();
         missingStoreConfigs.put(SslConfigs.SSL_KEYSTORE_TYPE_CONFIG, "PKCS12");
         missingStoreConfigs.put(SslConfigs.SSL_KEYSTORE_LOCATION_CONFIG, "some.keystore.path");
         missingStoreConfigs.put(SslConfigs.SSL_KEYSTORE_PASSWORD_CONFIG, new Password("some.keystore.password"));
         missingStoreConfigs.put(SslConfigs.SSL_KEY_PASSWORD_CONFIG, new Password("some.key.password"));
-        verifyInvalidReconfigure(reconfigurableBuilder, missingStoreConfigs, "keystore not found");
+        verifyInvalidReconfigure(reconfigurableBuilder, missingStoreConfigs);
 
         // Verify that new connections continue to work with the server with previously configured keystore after failed reconfiguration
         newClientSelector.connect("3", addr, BUFFER_SIZE, BUFFER_SIZE);
@@ -1167,7 +1182,7 @@ public class SslTransportLayerTest {
         for (String propName : CertStores.KEYSTORE_PROPS) {
             invalidKeystoreConfigs.put(propName, invalidConfig.get(propName));
         }
-        verifyInvalidReconfigure(reconfigurableBuilder, invalidKeystoreConfigs, "keystore without existing SubjectAltName");
+        verifyInvalidReconfigure(reconfigurableBuilder, invalidKeystoreConfigs);
         String node3 = "3";
         selector.connect(node3, addr, BUFFER_SIZE, BUFFER_SIZE);
         NetworkTestUtils.checkClientConnection(selector, node3, 100, 10);
@@ -1223,13 +1238,13 @@ public class SslTransportLayerTest {
 
         Map<String, Object>  invalidConfigs = new HashMap<>(newTruststoreConfigs);
         invalidConfigs.put(SslConfigs.SSL_TRUSTSTORE_TYPE_CONFIG, "INVALID_TYPE");
-        verifyInvalidReconfigure(reconfigurableBuilder, invalidConfigs, "invalid truststore type");
+        verifyInvalidReconfigure(reconfigurableBuilder, invalidConfigs);
 
         Map<String, Object>  missingStoreConfigs = new HashMap<>();
         missingStoreConfigs.put(SslConfigs.SSL_TRUSTSTORE_TYPE_CONFIG, "PKCS12");
         missingStoreConfigs.put(SslConfigs.SSL_TRUSTSTORE_LOCATION_CONFIG, "some.truststore.path");
         missingStoreConfigs.put(SslConfigs.SSL_TRUSTSTORE_PASSWORD_CONFIG, new Password("some.truststore.password"));
-        verifyInvalidReconfigure(reconfigurableBuilder, missingStoreConfigs, "truststore not found");
+        verifyInvalidReconfigure(reconfigurableBuilder, missingStoreConfigs);
 
         // Verify that new connections continue to work with the server with previously configured keystore after failed reconfiguration
         newClientSelector.connect("3", addr, BUFFER_SIZE, BUFFER_SIZE);
@@ -1279,8 +1294,192 @@ public class SslTransportLayerTest {
         assertThrows(KafkaException.class, () -> createSelector(args.sslClientConfigs));
     }
 
+    /**
+     * A failed read of the file being transferred is thrown as a FileReadException at the position of the read, even
+     * after part of the transfer was sent, and must not leave the previous read in the buffer to be sent as the
+     * contents of the failed position.
+     */
+    @ParameterizedTest
+    @ArgumentsSource(SslTransportLayerArgumentsProvider.class)
+    public void testTransferFromDoesNotSendStaleBytesAfterFailedRead(Args args) throws Exception {
+        ByteArrayOutputStream sent = new ByteArrayOutputStream();
+        SslTransportLayer layer = connectRecordingWrites(args, sent);
+        IOException readFailure = new IOException("Input/output error");
+        FileChannel fileChannel = fileChannelReadableUpTo(TRANSFER_SIZE, () -> {
+            throw readFailure;
+        });
+
+        // The readable part is sent, then the read of the next part fails
+        FileReadException thrown = assertThrows(FileReadException.class,
+            () -> layer.transferFrom(fileChannel, 0, 3 * TRANSFER_SIZE));
+        assertEquals(TRANSFER_SIZE, thrown.position());
+        assertSame(readFailure, thrown.getCause());
+        assertArrayEquals(fileContents(TRANSFER_SIZE), sent.toByteArray());
+        // A transfer from the unreadable position must fail as well instead of sending what was read before
+        thrown = assertThrows(FileReadException.class,
+            () -> layer.transferFrom(fileChannel, TRANSFER_SIZE, 2 * TRANSFER_SIZE));
+        assertEquals(TRANSFER_SIZE, thrown.position());
+        assertArrayEquals(fileContents(TRANSFER_SIZE), sent.toByteArray());
+    }
+
+    /**
+     * Failing to get the size of the file counts as failing to read it.
+     */
+    @ParameterizedTest
+    @ArgumentsSource(SslTransportLayerArgumentsProvider.class)
+    public void testTransferFromThrowsFileReadExceptionWhenSizeFails(Args args) throws Exception {
+        ByteArrayOutputStream sent = new ByteArrayOutputStream();
+        SslTransportLayer layer = connectRecordingWrites(args, sent);
+        FileChannel fileChannel = fileChannelReadableUpTo(TRANSFER_SIZE, () -> -1);
+        IOException sizeFailure = new IOException("Input/output error");
+        when(fileChannel.size()).thenThrow(sizeFailure);
+
+        FileReadException thrown = assertThrows(FileReadException.class,
+            () -> layer.transferFrom(fileChannel, TRANSFER_SIZE, TRANSFER_SIZE));
+        assertEquals(TRANSFER_SIZE, thrown.position());
+        assertSame(sizeFailure, thrown.getCause());
+        assertEquals(0, sent.size());
+    }
+
+    /**
+     * A file channel closed during the transfer, for instance by a deletion, says nothing about the medium, so it is
+     * not a failed read.
+     */
+    @ParameterizedTest
+    @ArgumentsSource(SslTransportLayerArgumentsProvider.class)
+    public void testTransferFromThrowsClosedFileChannelAsIs(Args args) throws Exception {
+        ByteArrayOutputStream sent = new ByteArrayOutputStream();
+        SslTransportLayer layer = connectRecordingWrites(args, sent);
+        ClosedChannelException closed = new AsynchronousCloseException();
+        FileChannel closedBeforeSize = fileChannelReadableUpTo(TRANSFER_SIZE, () -> -1);
+        when(closedBeforeSize.size()).thenThrow(closed);
+        FileChannel closedDuringRead = fileChannelReadableUpTo(TRANSFER_SIZE, () -> {
+            throw closed;
+        });
+
+        assertSame(closed, assertThrows(IOException.class,
+            () -> layer.transferFrom(closedBeforeSize, 0, TRANSFER_SIZE)));
+        assertEquals(0, sent.size());
+        assertSame(closed, assertThrows(IOException.class,
+            () -> layer.transferFrom(closedDuringRead, 0, 3 * TRANSFER_SIZE)));
+        assertArrayEquals(fileContents(TRANSFER_SIZE), sent.toByteArray());
+    }
+
+    /**
+     * A failed write to the network channel is not a failed read, though it follows a read of the file.
+     */
+    @ParameterizedTest
+    @ArgumentsSource(SslTransportLayerArgumentsProvider.class)
+    public void testTransferFromDoesNotReportFailedWriteAsFailedRead(Args args) throws Exception {
+        IOException writeFailure = new IOException("Broken pipe");
+        SslTransportLayer layer = connectAndThenWrite(args, src -> {
+            throw writeFailure;
+        });
+        FileChannel fileChannel = fileChannelReadableUpTo(TRANSFER_SIZE, () -> -1);
+
+        assertSame(writeFailure, assertThrows(IOException.class,
+            () -> layer.transferFrom(fileChannel, 0, TRANSFER_SIZE)));
+        verify(fileChannel).read(any(ByteBuffer.class), eq(0L));
+    }
+
+    /**
+     * Nor must the previous read be sent when the file ends early, for instance because it was truncated during the
+     * transfer: that throws nothing.
+     */
+    @ParameterizedTest
+    @ArgumentsSource(SslTransportLayerArgumentsProvider.class)
+    public void testTransferFromDoesNotSendStaleBytesAtEndOfFile(Args args) throws Exception {
+        ByteArrayOutputStream sent = new ByteArrayOutputStream();
+        SslTransportLayer layer = connectRecordingWrites(args, sent);
+        FileChannel fileChannel = fileChannelReadableUpTo(TRANSFER_SIZE, () -> -1);
+
+        assertEquals(TRANSFER_SIZE, layer.transferFrom(fileChannel, 0, 3 * TRANSFER_SIZE));
+        assertArrayEquals(fileContents(TRANSFER_SIZE), sent.toByteArray());
+        assertEquals(0, layer.transferFrom(fileChannel, TRANSFER_SIZE, 2 * TRANSFER_SIZE));
+        assertArrayEquals(fileContents(TRANSFER_SIZE), sent.toByteArray());
+    }
+
+    /**
+     * Connects to an echo server and returns the client's transport layer, which from then on records what is
+     * written to it instead of sending it.
+     */
+    private SslTransportLayer connectRecordingWrites(Args args, ByteArrayOutputStream sent) throws Exception {
+        return connectAndThenWrite(args, src -> {
+            int length = src.remaining();
+            byte[] bytes = new byte[length];
+            src.get(bytes);
+            sent.write(bytes);
+            return length;
+        });
+    }
+
+    // What a write to the transport layer does instead of sending, see connectAndThenWrite
+    private interface Write {
+        int write(ByteBuffer src) throws IOException;
+    }
+
+    /**
+     * Connects to an echo server and returns the client's transport layer, whose writes from then on are done by
+     * afterConnect instead of being sent. Data is exchanged first, as with TLSv1.3 the transport layer only becomes
+     * ready for transferFrom once it has read some.
+     */
+    private SslTransportLayer connectAndThenWrite(Args args, Write afterConnect) throws Exception {
+        String node = "0";
+        server = createEchoServer(args, SecurityProtocol.SSL);
+        AtomicBoolean record = new AtomicBoolean(false);
+        AtomicReference<SslTransportLayer> transportLayer = new AtomicReference<>();
+        TestSslChannelBuilder channelBuilder = new TestSslChannelBuilder(ConnectionMode.CLIENT) {
+            @Override
+            protected TestSslTransportLayer newTransportLayer(String id, SelectionKey key, SSLEngine sslEngine) {
+                TestSslTransportLayer layer = new TestSslTransportLayer(id, key, sslEngine) {
+                    @Override
+                    public int write(ByteBuffer src) throws IOException {
+                        if (!record.get())
+                            return super.write(src);
+                        return afterConnect.write(src);
+                    }
+                };
+                transportLayer.set(layer);
+                return layer;
+            }
+        };
+        channelBuilder.configure(args.sslClientConfigs);
+        selector = new Selector(5000, new Metrics(), TIME, "MetricGroup", channelBuilder, new LogContext());
+        selector.connect(node, new InetSocketAddress("localhost", server.port()), BUFFER_SIZE, BUFFER_SIZE);
+        NetworkTestUtils.checkClientConnection(selector, node, 100, 10);
+        record.set(true);
+        return transportLayer.get();
+    }
+
+    /**
+     * A file channel of three times readableSize bytes whose content is fileContents up to readableSize, and whose
+     * reads from there on are answered by beyondReadable.
+     */
+    private static FileChannel fileChannelReadableUpTo(int readableSize, Callable<Integer> beyondReadable) throws IOException {
+        FileChannel fileChannel = mock(FileChannel.class);
+        when(fileChannel.size()).thenReturn(3L * readableSize);
+        when(fileChannel.read(any(ByteBuffer.class), anyLong())).thenAnswer(invocation -> {
+            ByteBuffer buffer = invocation.getArgument(0);
+            long position = invocation.getArgument(1);
+            if (position >= readableSize)
+                return beyondReadable.call();
+            int length = (int) Math.min(buffer.remaining(), readableSize - position);
+            for (int i = 0; i < length; i++)
+                buffer.put((byte) (position + i));
+            return length;
+        });
+        return fileChannel;
+    }
+
+    private static byte[] fileContents(int size) {
+        byte[] contents = new byte[size];
+        for (int i = 0; i < size; i++)
+            contents[i] = (byte) i;
+        return contents;
+    }
+
     private void verifyInvalidReconfigure(ListenerReconfigurable reconfigurable,
-                                          Map<String, Object>  invalidConfigs, String errorMessage) {
+                                          Map<String, Object>  invalidConfigs) {
         assertThrows(KafkaException.class, () -> reconfigurable.validateReconfiguration(invalidConfigs));
         assertThrows(KafkaException.class, () -> reconfigurable.reconfigure(invalidConfigs));
     }
@@ -1310,10 +1509,9 @@ public class SslTransportLayerTest {
     }
 
     private Selector createSelector(Args args) {
-        LogContext logContext = new LogContext();
-        ChannelBuilder channelBuilder = new SslChannelBuilder(ConnectionMode.CLIENT, null, false, logContext);
+        ChannelBuilder channelBuilder = new SslChannelBuilder(ConnectionMode.CLIENT, null, false);
         channelBuilder.configure(args.sslClientConfigs);
-        selector = new Selector(5000, new Metrics(), TIME, "MetricGroup", channelBuilder, logContext);
+        selector = new Selector(5000, new Metrics(), TIME, "MetricGroup", channelBuilder, new LogContext());
         return selector;
     }
 
@@ -1346,6 +1544,39 @@ public class SslTransportLayerTest {
                 .usePem(useInlinePem);
     }
 
+    /**
+     * Check if DSA algorithm is supported by the JVM and if there are compatible cipher suites
+     * available for TLSv1.2. This is important because even if DSA KeyPairGenerator is available,
+     * the SSL handshake may fail if no DSA-compatible cipher suites are available.
+     * @return true if DSA KeyPairGenerator is available and DSA-compatible cipher suites exist, false otherwise
+     */
+    private static boolean isDsaSupported() {
+        // First check if DSA KeyPairGenerator is available
+        try {
+            java.security.KeyPairGenerator.getInstance("DSA");
+        } catch (java.security.NoSuchAlgorithmException e) {
+            return false;
+        }
+
+        // Check if there are DSA-compatible cipher suites available for TLSv1.2
+        // DSA algorithms are not supported for TLSv1.3, so we only check TLSv1.2
+        try {
+            SSLContext context = SSLContext.getInstance("TLSv1.2");
+            context.init(null, null, null);
+            SSLParameters params = context.getDefaultSSLParameters();
+            String[] cipherSuites = params.getCipherSuites();
+
+            // Check if any cipher suite supports DSA
+            // In TLS standards and JVM implementations, DSA signature cipher suites use "_DSS_" naming
+            // Common patterns: TLS_DHE_DSS_*, TLS_DH_DSS_*, SSL_DHE_DSS_*, SSL_DH_DSS_*
+            return Arrays.stream(cipherSuites)
+                    .anyMatch(suite -> suite.contains("_DSS_"));
+        } catch (Exception e) {
+            // If we can't check cipher suites, assume DSA is not fully supported
+            return false;
+        }
+    }
+
     @FunctionalInterface
     private interface FailureAction {
         FailureAction NO_OP = () -> { };
@@ -1370,7 +1601,7 @@ public class SslTransportLayerTest {
         int flushDelayCount = 0;
 
         public TestSslChannelBuilder(ConnectionMode connectionMode) {
-            super(connectionMode, null, false, new LogContext());
+            super(connectionMode, null, false);
         }
 
         public void configureBufferSizes(Integer netReadBufSize, Integer netWriteBufSize, Integer appBufSize) {

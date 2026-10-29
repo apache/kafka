@@ -16,6 +16,7 @@
  */
 package org.apache.kafka.streams.kstream;
 
+import org.apache.kafka.common.annotation.InterfaceAudience;
 import org.apache.kafka.common.serialization.Serde;
 import org.apache.kafka.streams.kstream.internals.WindowedSerializer;
 import org.apache.kafka.streams.kstream.internals.WindowedStreamPartitioner;
@@ -30,6 +31,7 @@ import org.apache.kafka.streams.processor.internals.DefaultStreamPartitioner;
  * @see KStream#repartition()
  * @see KStream#repartition(Repartitioned)
  */
+@InterfaceAudience.Public
 public class Repartitioned<K, V> implements NamedOperation<Repartitioned<K, V>> {
 
     protected final String name;
@@ -93,7 +95,7 @@ public class Repartitioned<K, V> implements NamedOperation<Repartitioned<K, V>> 
      *
      * @param partitioner the function used to determine how records are distributed among partitions of the topic,
      *                    if not specified and the key serde provides a {@link WindowedSerializer} for the key
-     *                    {@link WindowedStreamPartitioner} will be used—otherwise {@link DefaultStreamPartitioner} will be used
+     *                    {@link WindowedStreamPartitioner} will be used-otherwise {@link DefaultStreamPartitioner} will be used
      * @param <K>         key type
      * @param <V>         value type
      * @return A new {@code Repartitioned} instance configured with partitioner
@@ -162,7 +164,7 @@ public class Repartitioned<K, V> implements NamedOperation<Repartitioned<K, V>> 
      *
      * @param partitioner the function used to determine how records are distributed among partitions of the topic,
      *                    if not specified and the key serde provides a {@link WindowedSerializer} for the key
-     *                    {@link WindowedStreamPartitioner} will be used—otherwise {@link DefaultStreamPartitioner} will be used
+     *                    {@link WindowedStreamPartitioner} will be used-otherwise {@link DefaultStreamPartitioner} will be used
      * @return a new {@code Repartitioned} instance configured with provided partitioner
      */
     public Repartitioned<K, V> withStreamPartitioner(final StreamPartitioner<K, V> partitioner) {

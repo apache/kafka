@@ -30,7 +30,6 @@ import java.util.Base64;
 import java.util.Collections;
 import java.util.HashMap;
 import java.util.HashSet;
-import java.util.Iterator;
 import java.util.List;
 import java.util.Map;
 import java.util.Map.Entry;
@@ -295,12 +294,11 @@ public class OAuthBearerUnsecuredJws implements OAuthBearerToken {
     public static Map<String, Object> toMap(String split) throws OAuthBearerIllegalTokenException {
         Map<String, Object> retval = new HashMap<>();
         try {
-            byte[] decode = Base64.getDecoder().decode(split);
+            byte[] decode = Base64.getUrlDecoder().decode(split);
             JsonNode jsonNode = new ObjectMapper().readTree(decode);
             if (jsonNode == null)
                 throw new OAuthBearerIllegalTokenException(OAuthBearerValidationResult.newFailure("malformed JSON"));
-            for (Iterator<Entry<String, JsonNode>> iterator = jsonNode.fields(); iterator.hasNext();) {
-                Entry<String, JsonNode> entry = iterator.next();
+            for (Entry<String, JsonNode> entry : jsonNode.properties()) {
                 retval.put(entry.getKey(), convert(entry.getValue()));
             }
             return Collections.unmodifiableMap(retval);
@@ -347,14 +345,14 @@ public class OAuthBearerUnsecuredJws implements OAuthBearerToken {
         if (isClaimType(scopeClaimName, String.class)) {
             String scopeClaimValue = claim(scopeClaimName, String.class);
             if (Utils.isBlank(scopeClaimValue))
-                return Collections.emptySet();
+                return Set.of();
             else {
                 return Set.of(scopeClaimValue.trim());
             }
         }
         List<?> scopeClaimValue = claim(scopeClaimName, List.class);
         if (scopeClaimValue == null || scopeClaimValue.isEmpty())
-            return Collections.emptySet();
+            return Set.of();
         @SuppressWarnings("unchecked")
         List<String> stringList = (List<String>) scopeClaimValue;
         Set<String> retval = new HashSet<>();

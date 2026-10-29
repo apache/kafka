@@ -20,9 +20,7 @@ package org.apache.kafka.common.requests;
 import org.apache.kafka.common.message.DescribeClusterRequestData;
 import org.apache.kafka.common.message.DescribeClusterResponseData;
 import org.apache.kafka.common.protocol.ApiKeys;
-import org.apache.kafka.common.protocol.ByteBufferAccessor;
-
-import java.nio.ByteBuffer;
+import org.apache.kafka.common.protocol.Readable;
 
 public class DescribeClusterRequest extends AbstractRequest {
 
@@ -71,7 +69,7 @@ public class DescribeClusterRequest extends AbstractRequest {
         return data.toString();
     }
 
-    public static DescribeClusterRequest parse(ByteBuffer buffer, short version) {
-        return new DescribeClusterRequest(new DescribeClusterRequestData(new ByteBufferAccessor(buffer), version), version);
+    public static DescribeClusterRequest parse(Readable readable, short version) {
+        return new DescribeClusterRequest(new DescribeClusterRequestData(readable, version), version);
     }
 }

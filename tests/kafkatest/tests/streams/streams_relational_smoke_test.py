@@ -20,13 +20,13 @@ from ducktape.utils.util import wait_until
 from kafkatest.services.kafka import quorum
 from kafkatest.services.kafka.util import get_log4j_config_param, get_log4j_config_for_tools
 from kafkatest.services.streams import StreamsTestBaseService
-from kafkatest.tests.kafka_test import KafkaTest
+from kafkatest.tests.streams.base_streams_test import BaseStreamsTest
 from kafkatest.version import LATEST_4_0
 from kafkatest.version import get_version
 
 
 class StreamsRelationalSmokeTestService(StreamsTestBaseService):
-    def __init__(self, test_context, kafka, mode, nodeId, processing_guarantee):
+    def __init__(self, test_context, kafka, mode, nodeId, processing_guarantee, group_protocol):
         super(StreamsRelationalSmokeTestService, self).__init__(
             test_context,
             kafka,
@@ -36,12 +36,13 @@ class StreamsRelationalSmokeTestService(StreamsTestBaseService):
         self.mode = mode
         self.nodeId = nodeId
         self.processing_guarantee = processing_guarantee
+        self.group_protocol = group_protocol
         self.log4j_template = "log4j2_template.yaml" if (get_version(self.node) >= LATEST_4_0) else "log4j_template.properties"
 
     def start_cmd(self, node):
         return "( export KAFKA_LOG4J_OPTS=\"%(log4j_param)s%(log4j)s\"; " \
                "INCLUDE_TEST_JARS=true %(kafka_run_class)s org.apache.kafka.streams.tests.RelationalSmokeTest " \
-               " %(mode)s %(kafka)s %(nodeId)s %(processing_guarantee)s %(state_dir)s" \
+               " %(mode)s %(kafka)s %(nodeId)s %(processing_guarantee)s %(group_protocol)s %(state_dir)s" \
                " & echo $! >&3 ) 1>> %(stdout)s 2>> %(stderr)s 3> %(pidfile)s" % {
                    "log4j_param": get_log4j_config_param(node),
                    "log4j": get_log4j_config_for_tools(node),
@@ -50,6 +51,7 @@ class StreamsRelationalSmokeTestService(StreamsTestBaseService):
                    "kafka": self.kafka.bootstrap_servers(),
                    "nodeId": self.nodeId,
                    "processing_guarantee": self.processing_guarantee,
+                   "group_protocol": self.group_protocol,
                    "state_dir": self.PERSISTENT_ROOT,
                    "stdout": self.STDOUT_FILE,
                    "stderr": self.STDERR_FILE,
@@ -75,13 +77,13 @@ class StreamsRelationalSmokeTestService(StreamsTestBaseService):
                    )
 
 
-class StreamsRelationalSmokeTest(KafkaTest):
+class StreamsRelationalSmokeTest(BaseStreamsTest):
     """
     Simple test of Kafka Streams.
     """
 
     def __init__(self, test_context):
-        super(StreamsRelationalSmokeTest, self).__init__(test_context, num_zk=1, num_brokers=3, topics={
+        super(StreamsRelationalSmokeTest, self).__init__(test_context, num_controllers=1, num_brokers=3, topics={
             'in-article': {'partitions': 3, 'replication-factor': 1},
             'in-comment': {'partitions': 5, 'replication-factor': 1},
             'out-augmented-article': {'partitions': 3, 'replication-factor': 1},
@@ -91,15 +93,16 @@ class StreamsRelationalSmokeTest(KafkaTest):
 
     @cluster(num_nodes=8)
     @matrix(crash=[False, True],
-            metadata_quorum=[quorum.combined_kraft])
-    def test_streams(self, crash, metadata_quorum):
-        driver = StreamsRelationalSmokeTestService(self.test_context, self.kafka, "driver", "ignored", "ignored")
+            metadata_quorum=[quorum.combined_kraft],
+            group_protocol=["classic", "streams"])
+    def test_streams(self, crash, metadata_quorum, group_protocol):
+        driver = StreamsRelationalSmokeTestService(self.test_context, self.kafka, "driver", "ignored", "ignored", "ignored")
         processing_guarantee='exactly_once_v2'
 
         LOG_FILE = driver.LOG_FILE  # this is the same for all instances of the service, so we can just declare a "constant"
 
-        processor1 = StreamsRelationalSmokeTestService(self.test_context, self.kafka, "application", "processor1", processing_guarantee)
-        processor2 = StreamsRelationalSmokeTestService(self.test_context, self.kafka, "application", "processor2", processing_guarantee)
+        processor1 = StreamsRelationalSmokeTestService(self.test_context, self.kafka, "application", "processor1", processing_guarantee, group_protocol)
+        processor2 = StreamsRelationalSmokeTestService(self.test_context, self.kafka, "application", "processor2", processing_guarantee, group_protocol)
 
         processor1.start()
         processor2.start()
@@ -114,7 +117,7 @@ class StreamsRelationalSmokeTest(KafkaTest):
 
         processor1.stop_nodes(not crash)
 
-        processor3 = StreamsRelationalSmokeTestService(self.test_context, self.kafka, "application", "processor3", processing_guarantee)
+        processor3 = StreamsRelationalSmokeTestService(self.test_context, self.kafka, "application", "processor3", processing_guarantee, group_protocol)
         processor3.start()
         processor3.await_command("grep -q 'Streams has started' %s" % LOG_FILE)
 

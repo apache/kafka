@@ -16,6 +16,7 @@
  */
 package org.apache.kafka.streams.state.internals;
 
+import org.apache.kafka.common.TopicPartition;
 import org.apache.kafka.streams.errors.InvalidStateStoreException;
 import org.apache.kafka.streams.processor.StateStore;
 import org.apache.kafka.streams.processor.StateStoreContext;
@@ -24,8 +25,11 @@ import org.apache.kafka.streams.query.PositionBound;
 import org.apache.kafka.streams.query.Query;
 import org.apache.kafka.streams.query.QueryConfig;
 import org.apache.kafka.streams.query.QueryResult;
+import org.apache.kafka.streams.state.HeadersBytesStore;
 import org.apache.kafka.streams.state.TimestampedBytesStore;
 import org.apache.kafka.streams.state.VersionedBytesStore;
+
+import java.util.Map;
 
 /**
  * A storage engine wrapper for utilities like logging, caching, and metering.
@@ -52,10 +56,34 @@ public abstract class WrappedStateStore<S extends StateStore, K, V> implements S
         }
     }
 
+    public static boolean isHeadersAware(final StateStore stateStore) {
+        if (stateStore instanceof HeadersBytesStore) {
+            return true;
+        } else if (stateStore instanceof WrappedStateStore) {
+            return isHeadersAware(((WrappedStateStore<?, ?, ?>) stateStore).wrapped());
+        } else {
+            return false;
+        }
+    }
+
     private final S wrapped;
 
     public WrappedStateStore(final S wrapped) {
         this.wrapped = wrapped;
+    }
+
+    /**
+     * Walks the wrapped-store chain rooted at this store's {@code wrapped()} until it
+     * finds an instance of {@code innerType}, or returns {@code null} if none is present.
+     */
+    public <T extends StateStore> T findInner(final Class<T> innerType) {
+        if (innerType.isInstance(wrapped)) {
+            return innerType.cast(wrapped);
+        } else if (wrapped instanceof WrappedStateStore) {
+            return ((WrappedStateStore<?, ?, ?>) wrapped).findInner(innerType);
+        } else {
+            return null;
+        }
     }
 
     @Override
@@ -110,8 +138,19 @@ public abstract class WrappedStateStore<S extends StateStore, K, V> implements S
     }
 
     @Override
-    public void flush() {
-        wrapped.flush();
+    public void commit(final Map<TopicPartition, Long> changelogOffsets) {
+        wrapped.commit(changelogOffsets);
+    }
+
+    @SuppressWarnings("deprecation")
+    @Override
+    public boolean managesOffsets() {
+        return wrapped.managesOffsets();
+    }
+
+    @Override
+    public Long committedOffset(final TopicPartition partition) {
+        return wrapped.committedOffset(partition);
     }
 
     @Override
@@ -133,6 +172,11 @@ public abstract class WrappedStateStore<S extends StateStore, K, V> implements S
                     + "ns");
         }
         return result;
+    }
+
+    @Override
+    public long approximateNumUncommittedBytes() {
+        return wrapped.approximateNumUncommittedBytes();
     }
 
     @Override

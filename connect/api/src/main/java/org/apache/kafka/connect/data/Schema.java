@@ -16,6 +16,7 @@
  */
 package org.apache.kafka.connect.data;
 
+import org.apache.kafka.common.annotation.InterfaceAudience;
 import org.apache.kafka.connect.errors.DataException;
 
 import java.util.List;
@@ -40,6 +41,7 @@ import java.util.Map;
  *     Schemas can be created directly, but in most cases using {@link SchemaBuilder} will be simpler.
  * </p>
  */
+@InterfaceAudience.Public
 public interface Schema {
     /**
      * The type of a schema. These only include the core types; logical types must be determined by checking the schema name.
@@ -117,19 +119,10 @@ public interface Schema {
         }
 
         public boolean isPrimitive() {
-            switch (this) {
-                case INT8:
-                case INT16:
-                case INT32:
-                case INT64:
-                case FLOAT32:
-                case FLOAT64:
-                case BOOLEAN:
-                case STRING:
-                case BYTES:
-                    return true;
-            }
-            return false;
+            return switch (this) {
+                case INT8, INT16, INT32, INT64, FLOAT32, FLOAT64, BOOLEAN, STRING, BYTES -> true;
+                default -> false;
+            };
         }
     }
 

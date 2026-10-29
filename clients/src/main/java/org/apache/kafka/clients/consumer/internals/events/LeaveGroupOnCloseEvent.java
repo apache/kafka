@@ -16,6 +16,7 @@
  */
 package org.apache.kafka.clients.consumer.internals.events;
 
+import org.apache.kafka.clients.consumer.CloseOptions;
 import org.apache.kafka.clients.consumer.Consumer;
 import org.apache.kafka.clients.consumer.internals.ConsumerMembershipManager;
 import org.apache.kafka.clients.consumer.internals.ConsumerUtils;
@@ -31,7 +32,17 @@ import java.time.Duration;
  */
 public class LeaveGroupOnCloseEvent extends CompletableApplicationEvent<Void> {
 
-    public LeaveGroupOnCloseEvent(final long deadlineMs) {
+    /**
+     * @see org.apache.kafka.clients.consumer.CloseOptions.GroupMembershipOperation
+     */
+    private final CloseOptions.GroupMembershipOperation membershipOperation;
+
+    public LeaveGroupOnCloseEvent(final long deadlineMs, final CloseOptions.GroupMembershipOperation membershipOperation) {
         super(Type.LEAVE_GROUP_ON_CLOSE, deadlineMs);
+        this.membershipOperation = membershipOperation;
+    }
+
+    public CloseOptions.GroupMembershipOperation membershipOperation() {
+        return membershipOperation;
     }
 }

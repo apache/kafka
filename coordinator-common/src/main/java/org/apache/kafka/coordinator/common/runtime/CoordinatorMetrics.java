@@ -21,7 +21,6 @@ import org.apache.kafka.server.metrics.KafkaYammerMetrics;
 import org.apache.kafka.timeline.SnapshotRegistry;
 
 import com.yammer.metrics.core.MetricName;
-import com.yammer.metrics.core.MetricsRegistry;
 
 /**
  * CoordinatorMetrics contain all coordinator related metrics. It delegates metrics collection to
@@ -51,11 +50,6 @@ public abstract class CoordinatorMetrics {
      * @param shard  The metrics shard.
      */
     public abstract void deactivateMetricsShard(CoordinatorMetricsShard shard);
-
-    /**
-     * @return The metrics registry.
-     */
-    public abstract MetricsRegistry registry();
 
     /**
      * Generate the Yammer MetricName.

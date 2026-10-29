@@ -26,9 +26,8 @@ import org.apache.kafka.connect.runtime.rest.resources.RootResource;
 import org.glassfish.hk2.utilities.binding.AbstractBinder;
 import org.glassfish.jersey.server.ResourceConfig;
 
-import java.util.Arrays;
 import java.util.Collection;
-import java.util.Collections;
+import java.util.List;
 import java.util.Map;
 
 public class ConnectRestServer extends RestServer {
@@ -48,7 +47,7 @@ public class ConnectRestServer extends RestServer {
 
     @Override
     protected Collection<Class<?>> regularResources() {
-        return Arrays.asList(
+        return List.of(
                 RootResource.class,
                 ConnectorsResource.class,
                 InternalConnectResource.class,
@@ -58,15 +57,22 @@ public class ConnectRestServer extends RestServer {
 
     @Override
     protected Collection<Class<?>> adminResources() {
-        return Collections.singletonList(
-                LoggingResource.class
-        );
+        return List.of(LoggingResource.class);
     }
 
     @Override
     protected void configureRegularResources(ResourceConfig resourceConfig) {
-        registerRestExtensions(herder, resourceConfig);
         resourceConfig.register(new Binder());
+    }
+
+    @Override
+    protected void configureAdminResources(ResourceConfig resourceConfig) {
+        resourceConfig.register(new Binder());
+    }
+
+    @Override
+    protected void configureExtensions(ResourceConfig resourceConfig, ResourceConfig adminResourceConfig) {
+        registerRestExtensions(herder, resourceConfig, adminResourceConfig);
     }
 
     private class Binder extends AbstractBinder {
@@ -76,11 +82,6 @@ public class ConnectRestServer extends RestServer {
             bind(restClient).to(RestClient.class);
             bind(config).to(RestServerConfig.class);
         }
-    }
-
-    @Override
-    protected void configureAdminResources(ResourceConfig resourceConfig) {
-        resourceConfig.register(new Binder());
     }
 
 }

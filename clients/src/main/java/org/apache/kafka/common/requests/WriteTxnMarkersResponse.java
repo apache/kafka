@@ -22,11 +22,11 @@ import org.apache.kafka.common.message.WriteTxnMarkersResponseData.WritableTxnMa
 import org.apache.kafka.common.message.WriteTxnMarkersResponseData.WritableTxnMarkerResult;
 import org.apache.kafka.common.message.WriteTxnMarkersResponseData.WritableTxnMarkerTopicResult;
 import org.apache.kafka.common.protocol.ApiKeys;
-import org.apache.kafka.common.protocol.ByteBufferAccessor;
 import org.apache.kafka.common.protocol.Errors;
+import org.apache.kafka.common.protocol.Readable;
 
-import java.nio.ByteBuffer;
 import java.util.ArrayList;
+import java.util.EnumMap;
 import java.util.HashMap;
 import java.util.List;
 import java.util.Map;
@@ -115,7 +115,7 @@ public class WriteTxnMarkersResponse extends AbstractResponse {
 
     @Override
     public Map<Errors, Integer> errorCounts() {
-        Map<Errors, Integer> errorCounts = new HashMap<>();
+        Map<Errors, Integer> errorCounts = new EnumMap<>(Errors.class);
         for (WritableTxnMarkerResult marker : data.markers()) {
             for (WritableTxnMarkerTopicResult topic : marker.topics()) {
                 for (WritableTxnMarkerPartitionResult partitionResult : topic.partitions())
@@ -125,7 +125,7 @@ public class WriteTxnMarkersResponse extends AbstractResponse {
         return errorCounts;
     }
 
-    public static WriteTxnMarkersResponse parse(ByteBuffer buffer, short version) {
-        return new WriteTxnMarkersResponse(new WriteTxnMarkersResponseData(new ByteBufferAccessor(buffer), version));
+    public static WriteTxnMarkersResponse parse(Readable readable, short version) {
+        return new WriteTxnMarkersResponse(new WriteTxnMarkersResponseData(readable, version));
     }
 }

@@ -21,11 +21,12 @@ import org.apache.kafka.clients.consumer.internals.ConsumerUtils;
 import org.apache.kafka.clients.consumer.internals.NetworkClientDelegate;
 import org.apache.kafka.clients.consumer.internals.RequestManagers;
 import org.apache.kafka.clients.consumer.internals.metrics.AsyncConsumerMetrics;
+import org.apache.kafka.common.KafkaException;
 import org.apache.kafka.common.errors.InterruptException;
 import org.apache.kafka.common.internals.IdempotentCloser;
-import org.apache.kafka.common.utils.LogContext;
 import org.apache.kafka.common.utils.Time;
 import org.apache.kafka.common.utils.Utils;
+import org.apache.kafka.common.utils.internals.LogContext;
 
 import org.slf4j.Logger;
 
@@ -51,6 +52,7 @@ public class ApplicationEventHandler implements Closeable {
 
     public ApplicationEventHandler(final LogContext logContext,
                                    final Time time,
+                                   final int initializationTimeoutMs,
                                    final BlockingQueue<ApplicationEvent> applicationEventQueue,
                                    final CompletableEventReaper applicationEventReaper,
                                    final Supplier<ApplicationEventProcessor> applicationEventProcessorSupplier,
@@ -61,7 +63,7 @@ public class ApplicationEventHandler implements Closeable {
         this.time = time;
         this.applicationEventQueue = applicationEventQueue;
         this.asyncConsumerMetrics = asyncConsumerMetrics;
-        this.networkThread = new ConsumerNetworkThread(logContext,
+        ConsumerNetworkThread networkThread = new ConsumerNetworkThread(logContext,
                 time,
                 applicationEventQueue,
                 applicationEventReaper,
@@ -69,7 +71,19 @@ public class ApplicationEventHandler implements Closeable {
                 networkClientDelegateSupplier,
                 requestManagersSupplier,
                 asyncConsumerMetrics);
-        this.networkThread.start();
+
+        try {
+            networkThread.start(initializationTimeoutMs);
+        } catch (Exception e) {
+            try {
+                networkThread.close();
+            } finally {
+                networkThread = null;
+            }
+            throw e;
+        } finally {
+            this.networkThread = networkThread;
+        }
     }
 
     /**
@@ -77,9 +91,11 @@ public class ApplicationEventHandler implements Closeable {
      * to alert the network I/O thread that it has something to process.
      *
      * @param event An {@link ApplicationEvent} created by the application thread
+     * @throws KafkaException if the consumer background thread is no longer alive
      */
     public void add(final ApplicationEvent event) {
         Objects.requireNonNull(event, "ApplicationEvent provided to add must be non-null");
+        ensureNetworkThreadAlive();
         event.setEnqueuedMs(time.milliseconds());
         // Record the updated queue size before actually adding the event to the queue
         // to avoid race conditions (the background thread is continuously removing from this queue)
@@ -141,5 +157,24 @@ public class ApplicationEventHandler implements Closeable {
                 () -> Utils.closeQuietly(() -> networkThread.close(timeout), "consumer network thread"),
                 () -> log.warn("The application event handler was already closed")
         );
+    }
+
+    /**
+     * Best-effort check that the consumer network thread is still alive. If the thread has
+     * already terminated (due to a failure or shutdown), it will never process any events from
+     * the queue. Rather than blocking indefinitely or timing out with a misleading error, this
+     * fails fast with a clear error message.
+     *
+     * <p>Note: this is inherently racy — the thread could die between this check and the
+     * subsequent {@code applicationEventQueue.add()}. That narrow window is acceptable because
+     * any subsequent call to {@code add()} will detect the dead thread immediately.
+     *
+     * @throws KafkaException if the background thread is not alive
+     */
+    private void ensureNetworkThreadAlive() {
+        if (networkThread == null || !networkThread.isAlive()) {
+            throw new KafkaException(
+                "The consumer background thread is not running and cannot process requests.");
+        }
     }
 }
