@@ -184,7 +184,7 @@ public class StreamsGroupHeartbeatRequestManager implements RequestManager {
                     || taskOffsetIntervalPassed(now)
                     || hasAtLeastOneHotWarmupTask(reconciledAssignment.warmupTasks(), taskOffsetSum, taskEndOffsetSum)
                     || hasAtLeastOneHotRestoringActiveTask(reconciledAssignment.activeTasks(), taskOffsetSum, taskEndOffsetSum)
-                    || hasAtLeastOneActiveTaskFinishedRestoring(reconciledAssignment.activeTasks(), taskOffsetSum)
+                    || hasAtLeastOneActiveTaskStartedOrFinishedRestoring(reconciledAssignment.activeTasks(), taskOffsetSum)
                 ) {
                     // Task offsets and end-offsets are reported independently. A null field means "unchanged since the
                     // last heartbeat", so we send each one only when its value actually changed and leave it null
@@ -223,10 +223,6 @@ public class StreamsGroupHeartbeatRequestManager implements RequestManager {
             final Map<StreamsRebalanceData.TaskId, Long> taskOffsetSum,
             final Map<StreamsRebalanceData.TaskId, Long> taskEndOffsetSum
         ) {
-            if (warmupTasks.isEmpty()) {
-                return false;
-            }
-
             return warmupTasks.stream().anyMatch(taskId -> isHot(taskId, taskOffsetSum, taskEndOffsetSum));
         }
 
@@ -263,11 +259,11 @@ public class StreamsGroupHeartbeatRequestManager implements RequestManager {
         }
 
         /**
-         * Whether an active task is in the last sent task offsets but not in the current ones: a client reports the
-         * offsets of an active task only while restoring it, so the task finished restoring. Until the broker receives
-         * offsets without the task, it takes the task's owner to still be restoring it.
+         * Whether an active task is in exactly one of the last sent task offsets and the current ones: a client reports
+         * the offsets of an active task only while restoring it, so the task finished restoring, or started restoring
+         * again without an assignment change, as after a {@code TaskCorruptedException}.
          */
-        private boolean hasAtLeastOneActiveTaskFinishedRestoring(
+        private boolean hasAtLeastOneActiveTaskStartedOrFinishedRestoring(
             final Set<StreamsRebalanceData.TaskId> activeTasks,
             final Map<StreamsRebalanceData.TaskId, Long> taskOffsetSum
         ) {
@@ -277,7 +273,7 @@ public class StreamsGroupHeartbeatRequestManager implements RequestManager {
             }
 
             return activeTasks.stream()
-                .anyMatch(taskId -> lastSentTaskOffsets.containsKey(taskId) && !taskOffsetSum.containsKey(taskId));
+                .anyMatch(taskId -> lastSentTaskOffsets.containsKey(taskId) != taskOffsetSum.containsKey(taskId));
         }
 
         private static List<StreamsGroupHeartbeatRequestData.TaskIds> fromStreamsToHeartbeatRequest(final Set<StreamsRebalanceData.TaskId> tasks) {

@@ -1394,6 +1394,51 @@ class StreamsGroupHeartbeatRequestManagerTest {
     }
 
     @Test
+    public void testActiveTaskStartedRestoringTriggersSend() {
+        // An active task can restore again under the same assignment, as after a TaskCorruptedException. Its offsets
+        // reappear, and the next heartbeat reports that before the task-offset interval elapses, so the broker stops
+        // taking the owner to be processing the task.
+        final StreamsRebalanceData.TaskId activeTaskId = new StreamsRebalanceData.TaskId(SUBTOPOLOGY_NAME_1, 0);
+        final AtomicReference<Map<StreamsRebalanceData.TaskId, Long>> offsets = new AtomicReference<>(Map.of());
+        final AtomicReference<Map<StreamsRebalanceData.TaskId, Long>> endOffsets = new AtomicReference<>(Map.of());
+        final StreamsRebalanceData rebalanceData = new StreamsRebalanceData(
+            PROCESS_ID,
+            Optional.of(ENDPOINT),
+            Optional.of(RACK_ID),
+            SUBTOPOLOGIES,
+            CLIENT_TAGS,
+            offsets::get,
+            endOffsets::get
+        );
+        rebalanceData.setReconciledAssignment(new StreamsRebalanceData.Assignment(
+            Set.of(activeTaskId),
+            Set.of(),
+            Set.of(),
+            true
+        ));
+        rebalanceData.setTaskOffsetIntervalMs(1000);
+        rebalanceData.setAcceptableRecoveryLag(100L);
+
+        final StreamsGroupHeartbeatRequestManager.HeartbeatState heartbeatState =
+            new StreamsGroupHeartbeatRequestManager.HeartbeatState(rebalanceData, membershipManager, 1234, time);
+        when(membershipManager.state()).thenReturn(MemberState.STABLE);
+
+        assertEquals(List.of(), heartbeatState.buildRequestData().taskOffsets());
+
+        // The task restores again, and that is sent without advancing time. The lag is above the threshold, so the
+        // send is not triggered by the task being hot.
+        offsets.set(Map.of(activeTaskId, 500L));
+        endOffsets.set(Map.of(activeTaskId, 1000L));
+        final StreamsGroupHeartbeatRequestData second = heartbeatState.buildRequestData();
+        assertEquals(500L, second.taskOffsets().get(0).offset());
+        assertEquals(1000L, second.taskEndOffsets().get(0).offset());
+
+        // Reported once: the task is in the last sent offsets too, so progress waits for the interval.
+        offsets.set(Map.of(activeTaskId, 600L));
+        assertNull(heartbeatState.buildRequestData().taskOffsets());
+    }
+
+    @Test
     public void testHotRestoringActiveTaskTriggersSend() {
         // An active task restoring with a lag at or below the threshold has its progress reported before the
         // task-offset interval elapses, so the broker learns early that the owner is close to running the task.
