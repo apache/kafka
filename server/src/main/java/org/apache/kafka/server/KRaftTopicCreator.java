@@ -33,6 +33,7 @@ import org.apache.kafka.server.common.NodeToControllerChannelManager;
 
 import java.io.IOException;
 import java.util.concurrent.CompletableFuture;
+import java.util.function.Supplier;
 
 /**
  * KRaft implementation of TopicCreator that forwards CreateTopics requests to the controller.
@@ -42,9 +43,11 @@ import java.util.concurrent.CompletableFuture;
 public class KRaftTopicCreator implements TopicCreator {
 
     private final NodeToControllerChannelManager channelManager;
+    private final Supplier<Short> requestHeaderVersionSupplier;
 
-    public KRaftTopicCreator(NodeToControllerChannelManager channelManager) {
+    public KRaftTopicCreator(NodeToControllerChannelManager channelManager, Supplier<Short> requestHeaderVersionSupplier) {
         this.channelManager = channelManager;
+        this.requestHeaderVersionSupplier = requestHeaderVersionSupplier;
     }
 
     @Override
@@ -68,7 +71,8 @@ public class KRaftTopicCreator implements TopicCreator {
         AbstractRequest.Builder<? extends AbstractRequest> envelopeRequest = ForwardingManagerUtil.buildEnvelopeRequest(
             requestContext,
             createTopicsRequest.build(requestHeader.apiVersion())
-                .serializeWithHeader(requestHeader)
+                .serializeWithHeader(requestHeader),
+            requestHeaderVersionSupplier.get()
         );
 
         ControllerRequestCompletionHandler handler = new ControllerRequestCompletionHandler() {
