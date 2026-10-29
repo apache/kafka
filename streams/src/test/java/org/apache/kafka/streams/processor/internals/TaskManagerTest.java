@@ -82,6 +82,7 @@ import java.util.Map;
 import java.util.Optional;
 import java.util.Set;
 import java.util.concurrent.CompletableFuture;
+import java.util.concurrent.atomic.AtomicBoolean;
 import java.util.stream.Collectors;
 
 import static java.util.Arrays.asList;
@@ -5325,5 +5326,129 @@ public class TaskManagerTest {
         verify(initializedTask).closeDirty();
         verify(activeTaskCreator).close();
         verify(tasks).clear();
+    }
+
+    @Test
+    // waitForFuture retries in a loop, so a lost interrupt would hang this test
+    @Timeout(30)
+    public void shouldClearInterruptWhileClosingRemainingResourcesAndRestoreItAfterShutdown() {
+        final StreamTask taskInStateUpdater = statefulTask(taskId00, taskId00ChangelogPartitions)
+            .inState(State.RESTORING)
+            .withInputPartitions(taskId00Partitions).build();
+        final StreamTask initializedTask = statefulTask(taskId01, taskId01ChangelogPartitions)
+            .inState(State.RUNNING)
+            .withInputPartitions(taskId01Partitions).build();
+
+        final TasksRegistry tasks = mock(TasksRegistry.class);
+        final TaskManager taskManager = setUpTaskManager(ProcessingMode.AT_LEAST_ONCE, tasks);
+
+        when(stateUpdater.tasks()).thenReturn(Set.of(taskInStateUpdater));
+        when(stateUpdater.remove(eq(taskInStateUpdater.id()), eq(SuspendReason.MIGRATED)))
+            .thenReturn(new CompletableFuture<>());
+        when(tasks.activeInitializedTasks()).thenReturn(Set.of(initializedTask));
+        when(stateUpdater.drainQueuedTasks()).thenReturn(Set.of(taskInStateUpdater));
+
+        // closing the thread producer joins its sender thread, which fails if the interrupt status is set
+        final AtomicBoolean interruptedWhileClosingProducer = new AtomicBoolean(true);
+        doAnswer(invocation -> {
+            interruptedWhileClosingProducer.set(Thread.currentThread().isInterrupted());
+            return null;
+        }).when(activeTaskCreator).close();
+
+        final boolean interruptStatusRestored;
+        try {
+            Thread.currentThread().interrupt(); // set the flag only after all stubbing is done
+            taskManager.shutdown(true);
+            interruptStatusRestored = Thread.currentThread().isInterrupted();
+        } finally {
+            Thread.interrupted(); // clear the flag so that it does not leak into the other tests
+        }
+
+        assertFalse(interruptedWhileClosingProducer.get(),
+            "the interrupt status should be cleared while closing the remaining resources");
+        assertTrue(interruptStatusRestored, "shutdown should restore the interrupt status for the caller");
+        verify(activeTaskCreator).close();
+        verify(tasks).clear();
+    }
+
+    @Test
+    // waitForFuture retries in a loop, so a lost interrupt would hang this test
+    @Timeout(30)
+    public void shouldClearInterruptWhileShuttingDownProcessingThreadsAndLockingTasks() {
+        final StreamTask taskInStateUpdater = statefulTask(taskId00, taskId00ChangelogPartitions)
+            .inState(State.RESTORING)
+            .withInputPartitions(taskId00Partitions).build();
+        final StreamTask initializedTask = statefulTask(taskId01, taskId01ChangelogPartitions)
+            .inState(State.RUNNING)
+            .withInputPartitions(taskId01Partitions).build();
+
+        final TasksRegistry tasks = mock(TasksRegistry.class);
+        final TaskManager taskManager = setUpTaskManager(ProcessingMode.AT_LEAST_ONCE, tasks, true);
+
+        when(stateUpdater.tasks()).thenReturn(Set.of(taskInStateUpdater));
+        when(stateUpdater.remove(eq(taskInStateUpdater.id()), eq(SuspendReason.MIGRATED)))
+            .thenReturn(new CompletableFuture<>());
+        when(tasks.activeInitializedTasks()).thenReturn(Set.of(initializedTask));
+        when(stateUpdater.drainQueuedTasks()).thenReturn(Set.of(taskInStateUpdater));
+
+        // an interrupt can abort the join of the task executor threads, and it interrupts the wait for
+        // the task locks, which is then retried
+        final AtomicBoolean interruptedWhileShuttingDownExecutors = new AtomicBoolean(true);
+        doAnswer(invocation -> {
+            interruptedWhileShuttingDownExecutors.set(Thread.currentThread().isInterrupted());
+            return null;
+        }).when(schedulingTaskManager).shutdown(any());
+        final AtomicBoolean interruptedWhileLockingTasks = new AtomicBoolean(true);
+        when(schedulingTaskManager.lockTasks(any())).thenAnswer(invocation -> {
+            interruptedWhileLockingTasks.set(Thread.currentThread().isInterrupted());
+            return KafkaFuture.completedFuture(null);
+        });
+
+        final boolean interruptStatusRestored;
+        try {
+            Thread.currentThread().interrupt(); // set the flag only after all stubbing is done
+            taskManager.shutdown(true);
+            interruptStatusRestored = Thread.currentThread().isInterrupted();
+        } finally {
+            Thread.interrupted(); // clear the flag so that it does not leak into the other tests
+        }
+
+        assertFalse(interruptedWhileShuttingDownExecutors.get(),
+            "the interrupt status should be cleared while shutting down the task executors");
+        assertFalse(interruptedWhileLockingTasks.get(),
+            "the interrupt status should be cleared while locking the tasks to close");
+        assertTrue(interruptStatusRestored, "shutdown should restore the interrupt status for the caller");
+        verify(schedulingTaskManager).shutdown(any());
+        verify(schedulingTaskManager).lockTasks(Set.of(taskId01));
+    }
+
+    @Test
+    // waitForFuture retries in a loop, so a lost interrupt would hang this test
+    @Timeout(30)
+    public void shouldRestoreInterruptStatusWhenShutdownThrowsAfterClearingIt() {
+        final StreamTask taskInStateUpdater = statefulTask(taskId00, taskId00ChangelogPartitions)
+            .inState(State.RESTORING)
+            .withInputPartitions(taskId00Partitions).build();
+
+        final TasksRegistry tasks = mock(TasksRegistry.class);
+        final TaskManager taskManager = setUpTaskManager(ProcessingMode.AT_LEAST_ONCE, tasks);
+
+        when(stateUpdater.tasks()).thenReturn(Set.of(taskInStateUpdater));
+        when(stateUpdater.remove(eq(taskInStateUpdater.id()), eq(SuspendReason.MIGRATED)))
+            .thenReturn(new CompletableFuture<>());
+        // the interrupted removal wait records and clears the interrupt status before this throws
+        doThrow(new StreamsException("State updater thread did not shutdown within the timeout"))
+            .when(stateUpdater).shutdown(any());
+
+        final boolean interruptStatusRestored;
+        try {
+            Thread.currentThread().interrupt(); // set the flag only after all stubbing is done
+            assertThrows(StreamsException.class, () -> taskManager.shutdown(false));
+            interruptStatusRestored = Thread.currentThread().isInterrupted();
+        } finally {
+            Thread.interrupted(); // clear the flag so that it does not leak into the other tests
+        }
+
+        assertTrue(interruptStatusRestored, "shutdown should restore the interrupt status even when it throws");
     }
 }
