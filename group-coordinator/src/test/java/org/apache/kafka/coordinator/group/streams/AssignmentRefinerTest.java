@@ -2787,6 +2787,71 @@ public class AssignmentRefinerTest {
         );
     }
 
+    @Test
+    public void shouldNotPromoteAnUnobservableStandbyWhileAMemberStillRestoresTheTaskAsActive() {
+        // memberA runs the task but reports that it is still restoring it, so it is granted away. The task is not an
+        // orphan, so memberC's standby is not promoted, and memberB takes the task over.
+        final Map<String, StreamsGroupMember> members = Map.of(
+            "memberA", member("memberA", "processA", mkTasksTuple(TaskRole.ACTIVE, mkTasks(STATEFUL, 0))),
+            "memberB", member("memberB", "processB", TasksTuple.EMPTY),
+            "memberC", member("memberC", "processC", mkTasksTuple(TaskRole.STANDBY, mkTasks(STATEFUL, 0)))
+        );
+        final Map<String, MemberTaskOffsets> taskOffsets = Map.of("memberA", offsets(500L, 10_000L));
+
+        final AssignmentRefinerImpl.TaskDecisions decisions = analyze(
+            members, orphanTargetAssignment(), taskOffsets, heartbeatVersions(members, Map.of("memberC", 0)));
+
+        assertEquals(List.of(new AssignmentRefinerImpl.TaskGrant(STATEFUL_0, "memberB")), decisions.grantedTasks());
+        assertEquals(List.of(), decisions.stagedMigrations());
+    }
+
+    @Test
+    public void shouldNotPromoteAWarmupTaskOfUnknownLag() {
+        // memberC has not heartbeated since the coordinator loaded the group, and holds a warm-up task of the orphan
+        // that the target assignment turns into a standby task. Only standby tasks are promoted without a known lag.
+        final Map<String, StreamsGroupMember> members = Map.of(
+            "memberA", member("memberA", "processA", TasksTuple.EMPTY),
+            "memberB", member("memberB", "processB", TasksTuple.EMPTY),
+            "memberC", member("memberC", "processC", mkTasksTuple(TaskRole.WARMUP, mkTasks(STATEFUL, 0)))
+        );
+        final Map<String, Integer> heartbeatVersions = heartbeatVersions(members, Map.of());
+        heartbeatVersions.remove("memberC");
+
+        final AssignmentRefinerImpl.TaskDecisions decisions =
+            analyze(members, orphanTargetAssignment(), Map.of(), heartbeatVersions);
+
+        assertEquals(List.of(new AssignmentRefinerImpl.TaskGrant(STATEFUL_0, "memberB")), decisions.grantedTasks());
+        assertEquals(List.of(), decisions.stagedMigrations());
+    }
+
+    @Test
+    public void shouldPromoteACaughtUpCopyAheadOfAStandbyOfUnknownLag() {
+        // memberD reports a caught-up standby task, which is preferred over memberC's standby task of unknown lag.
+        final Map<String, StreamsGroupMember> members = Map.of(
+            "memberA", member("memberA", "processA", TasksTuple.EMPTY),
+            "memberB", member("memberB", "processB", TasksTuple.EMPTY),
+            "memberC", member("memberC", "processC", mkTasksTuple(TaskRole.STANDBY, mkTasks(STATEFUL, 0))),
+            "memberD", member("memberD", "processD", mkTasksTuple(TaskRole.STANDBY, mkTasks(STATEFUL, 0)))
+        );
+        final Map<String, TasksTuple> targetAssignment = Map.of(
+            "memberA", TasksTuple.EMPTY,
+            "memberB", mkTasksTuple(TaskRole.ACTIVE, mkTasks(STATEFUL, 0)),
+            "memberC", mkTasksTuple(TaskRole.STANDBY, mkTasks(STATEFUL, 0)),
+            "memberD", mkTasksTuple(TaskRole.STANDBY, mkTasks(STATEFUL, 0))
+        );
+        final Map<String, MemberTaskOffsets> taskOffsets = Map.of("memberD", offsets(10_000L, 10_000L));
+
+        final AssignmentRefinerImpl.TaskDecisions decisions = analyze(
+            members, targetAssignment, taskOffsets, heartbeatVersions(members, Map.of("memberC", 0)));
+
+        assertEquals(List.of(), decisions.grantedTasks());
+        assertEquals(
+            List.of(new AssignmentRefinerImpl.StagedMigration(
+                STATEFUL_0, "memberD", "memberB", Optional.of("processB"), Optional.empty())),
+            decisions.stagedMigrations()
+        );
+    }
+
     private static Map<String, StreamsGroupMember> orphanWithAStandbyOnC() {
         return Map.of(
             "memberA", member("memberA", "processA", TasksTuple.EMPTY),

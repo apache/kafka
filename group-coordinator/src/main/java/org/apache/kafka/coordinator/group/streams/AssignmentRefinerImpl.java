@@ -236,8 +236,9 @@ public class AssignmentRefinerImpl implements AssignmentRefiner {
      * process: (1) either the old owner of the task keeps running it, or (2) caught-up copy which we temporarily
      * promote as active is running it.
      *
-     * <p>Only an active-running or caught-up copy is ever promoted, with one exception: the standby task of an orphan
-     * on a member that does not report its restore progress, see {@link #unobservableStandbyToPromote}.
+     * <p>Only an active-running or caught-up copy is ever promoted, with one exception: the standby task of a task
+     * that no member runs as an active task, on a member that does not report its restore progress, see
+     * {@link #unobservableStandbyToPromote}.
      *
      * <p>A task whose target owner is {@link WarmupSupport#NOT_SUPPORTED} is never staged: its target owner never
      * reports its restore progress, so no warm-up task could ever be seen to complete the migration.
@@ -359,14 +360,9 @@ public class AssignmentRefinerImpl implements AssignmentRefiner {
             // is restoring -- and the copy-holder detour would cost a second restore, a slot and a hand-over.
             return Optional.empty();
         }
-        final Optional<String> copy = bestCopyToPromote(currentAssignment, task, targetStandbyHolders, processLoad);
-        // Only for an orphan whose target owner's process holds no copy of the task. A copy there is warmer than one
-        // of unknown lag elsewhere, and is what a hand-over that is already under way completes with.
-        if (copy.isEmpty() && holder == null && findCopyOnProcess(currentAssignment, task, targetProcessId).isEmpty()) {
-            return unobservableStandbyToPromote(
-                currentAssignment, task, targetProcessId, targetStandbyHolders, heartbeatVersions, processLoad);
-        }
-        return copy;
+        return bestCopyToPromote(currentAssignment, task, targetStandbyHolders, processLoad)
+            .or(() -> unobservableStandbyToPromote(
+                currentAssignment, task, targetProcessId, targetStandbyHolders, heartbeatVersions, processLoad));
     }
 
     /**
@@ -397,20 +393,20 @@ public class AssignmentRefinerImpl implements AssignmentRefiner {
     }
 
     /**
-     * The standby task of an orphan that is promoted to run the task although the coordinator cannot tell how far
-     * behind it is, because its holder does not report its restore progress: a member that is not
-     * {@link WarmupSupport#SUPPORTED}. Only a standby task that the target assignment also gives to that member, and
-     * that is not on the target owner's process, is promoted. The target owner's process is {@code null} if the
-     * target owner has left the group.
+     * Picks a standby task to run a task that no member runs as an active task, while the target owner warms it up,
+     * even though the standby's holder does not report how far it has restored: the holder heartbeats with version 0,
+     * or has not heartbeated since the coordinator loaded the group.
      *
-     * <p>This is the one place where a copy of unknown lag is acted on. Elsewhere, the alternative to promoting a
-     * lagging copy is keeping a running owner, here it is a restore from scratch on the target owner next to a copy
-     * that would have to restore anyway: a stale copy is restored as an active task by the temporary owner before it
-     * processes anything, which is the restore the target assignment demands of it as a standby holder, and a copy
-     * that is close resumes processing at once. When the target owner's warm-up task has caught up, the hand-over
-     * demotes the temporary owner to its standby task in place.
+     * <p>Without this, the target owner would restore the task from scratch while nobody runs it. On the standby's
+     * holder, the task runs sooner: a standby that is behind catches up before it processes, which it would have to
+     * do as a standby anyway, and one that is close processes right away. Once the target owner's warm-up task has
+     * caught up, the task moves there and the holder keeps it as a standby task.
      *
-     * <p>Among several candidates, the least loaded process wins, without comparing lags.
+     * <p>It applies only if no member runs the task as an active task, the target owner's process holds no copy of
+     * the task, which the target owner would otherwise continue from, and the target assignment keeps the standby
+     * task on its holder. If several standby tasks qualify, the one on the least loaded process is picked.
+     *
+     * @param targetProcessId The process of the target owner, or {@code null} if the target owner has left the group.
      */
     private static Optional<String> unobservableStandbyToPromote(
         final CurrentAssignmentIndex currentAssignment,
@@ -420,10 +416,13 @@ public class AssignmentRefinerImpl implements AssignmentRefiner {
         final Map<String, Integer> heartbeatVersions,
         final Map<String, ProcessLoad> processLoad
     ) {
+        if (currentAssignment.activeHolder().containsKey(task)
+            || targetProcessId != null && findCopyOnProcess(currentAssignment, task, targetProcessId).isPresent()) {
+            return Optional.empty();
+        }
         final Set<String> designatedStandbyHolders = targetStandbyHolders.getOrDefault(task, Set.of());
         return currentAssignment.taskCopies().getOrDefault(task, List.of()).stream()
             .filter(copy -> copy.role() == TaskRole.STANDBY
-                && !copy.processId().equals(targetProcessId)
                 && designatedStandbyHolders.contains(copy.memberId())
                 && WarmupSupport.of(heartbeatVersions.get(copy.memberId())) != WarmupSupport.SUPPORTED)
             .min(Comparator
@@ -1311,11 +1310,11 @@ public class AssignmentRefinerImpl implements AssignmentRefiner {
      *        The task being migrated.
      * @param currentOwner
      *        The member the task runs on for now: the member holding it as an active task, or, when that member is
-     *        too far behind to run it or there is none, the caught-up copy holder promoted to run it. For an orphan,
-     *        it can also be a standby holder that does not report its restore progress, see
-     *        {@link #unobservableStandbyToPromote}. When the target assignment names a member the group no longer has,
-     *        it can also be a holder that is still restoring the task, which is better than taking the task away from
-     *        a restore that is part-way through.
+     *        too far behind to run it or there is none, the caught-up copy holder promoted to run it. For a task that
+     *        no member runs as an active task, it can also be a standby holder that does not report its restore
+     *        progress, see {@link #unobservableStandbyToPromote}. When the target assignment names a member the group
+     *        no longer has, it can also be a holder that is still restoring the task, which is better than taking the
+     *        task away from a restore that is part-way through.
      * @param targetOwner
      *        The member the target assignment moves the task to.
      * @param targetProcessId
