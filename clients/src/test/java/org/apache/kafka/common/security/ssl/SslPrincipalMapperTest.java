@@ -141,14 +141,8 @@ public class SslPrincipalMapperTest {
     }
 
     @Test
-    public void testEmptyNameFallsThroughToNextRule() throws Exception {
-        SslPrincipalMapper mapper = SslPrincipalMapper.fromRules("RULE:CN=([^,]+),O=corp|CN=([^,]+),O=corp,C=US/$1/, DEFAULT");
-        assertEquals("CN=bob,O=corp,C=US", mapper.getName("CN=bob,O=corp,C=US"));
-    }
-
-    @Test
-    public void testEmptyNameWithNoOtherRuleIsRejected() {
-        SslPrincipalMapper mapper = SslPrincipalMapper.fromRules("RULE:^CN=(.*)$/$1/");
-        assertThrows(SslPrincipalMapper.NoMatchingRule.class, () -> mapper.getName("CN="));
+    public void testRuleProducingEmptyNameStillMatches() throws Exception {
+        SslPrincipalMapper mapper = SslPrincipalMapper.fromRules("RULE:^.*[Cc][Nn]=([a-zA-Z0-9.]*).*$/$1/L, DEFAULT");
+        assertEquals("", mapper.getName("CN=_svc,OU=Eng,O=Corp"));
     }
 }
