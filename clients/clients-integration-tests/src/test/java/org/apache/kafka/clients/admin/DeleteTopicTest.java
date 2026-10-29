@@ -78,62 +78,49 @@ public class DeleteTopicTest {
     })
     public void testCreateAndDeleteTopic(ClusterInstance cluster) throws Exception {
         String testTopic = "test-topic";
-        try (Admin admin = cluster.admin()) {
-            // Create a test topic
-            cluster.createTopic(testTopic, 1, (short) 3);
-            TopicPartition topicPartition = new TopicPartition(testTopic, 0);
-            waitForReplicaCreated(cluster.brokers(), topicPartition, "Replicas were not created");
+        cluster.createTopic(testTopic, 1, (short) 3);
+        TopicPartition topicPartition = new TopicPartition(testTopic, 0);
+        waitForReplicaCreated(cluster.brokers(), topicPartition, "Replicas were not created");
 
-            // Delete topic
-            DeleteTopicsResult deleteResult = admin.deleteTopics(List.of(testTopic));
-            deleteResult.all().get();
-
-            // Wait for topic deletion
-            cluster.waitTopicDeletion(testTopic);
-            // Ensure that the topic directories are hard-deleted
-            TestUtils.waitForCondition(() -> topicDirectories(cluster, testTopic).isEmpty(),
-                "Failed to hard-delete the delete directory");
-        }
+        // Delete topic and wait for topic deletion
+        cluster.deleteTopic(testTopic);
+        // Ensure that the topic directories are hard-deleted
+        TestUtils.waitForCondition(() -> topicDirectories(cluster, testTopic).isEmpty(),
+            "Failed to hard-delete the delete directory");
     }
 
     @ClusterTest(brokers = 1, serverProperties = {
         @ClusterConfigProperty(key = "log.segment.delete.delay.ms", value = "3600000")
     })
     public void testDeleteTopicFilesAfterBrokerRestart(ClusterInstance cluster) throws Exception {
-        try (Admin admin = cluster.admin()) {
-            cluster.createTopic(DEFAULT_TOPIC, 1, (short) 1);
-            TopicPartition topicPartition = new TopicPartition(DEFAULT_TOPIC, 0);
-            waitForReplicaCreated(cluster.brokers(), topicPartition, "Replica was not created");
+        cluster.createTopic(DEFAULT_TOPIC, 1, (short) 1);
+        TopicPartition topicPartition = new TopicPartition(DEFAULT_TOPIC, 0);
+        waitForReplicaCreated(cluster.brokers(), topicPartition, "Replica was not created");
 
-            admin.deleteTopics(List.of(DEFAULT_TOPIC)).all().get();
-            cluster.waitTopicDeletion(DEFAULT_TOPIC);
-            TestUtils.waitForCondition(() -> {
-                List<File> directories = topicDirectories(cluster, DEFAULT_TOPIC);
-                return directories.size() == 1 && directories.stream().allMatch(dir -> dir.getName().endsWith(DELETE_DIR_SUFFIX));
-            }, "Topic directory was not renamed for deletion");
+        cluster.deleteTopic(DEFAULT_TOPIC);
+        TestUtils.waitForCondition(() -> {
+            List<File> directories = topicDirectories(cluster, DEFAULT_TOPIC);
+            return directories.size() == 1 && directories.stream().allMatch(dir -> dir.getName().endsWith(DELETE_DIR_SUFFIX));
+        }, "Topic directory was not renamed for deletion");
 
-            // The long deletion delay keeps the renamed directories on disk until the broker restarts.
-            cluster.shutdownBroker(0);
-            List<File> deletedDirectories = topicDirectories(cluster, DEFAULT_TOPIC);
-            assertEquals(1, deletedDirectories.size(), "Topic directory should remain on disk until the broker restarts");
-            deletedDirectories.forEach(dir -> assertTrue(dir.getName().endsWith(DELETE_DIR_SUFFIX)));
+        // The long deletion delay keeps the renamed directories on disk until the broker restarts.
+        cluster.shutdownBroker(0);
+        List<File> deletedDirectories = topicDirectories(cluster, DEFAULT_TOPIC);
+        assertEquals(1, deletedDirectories.size(), "Topic directory should remain on disk until the broker restarts");
+        deletedDirectories.forEach(dir -> assertTrue(dir.getName().endsWith(DELETE_DIR_SUFFIX)));
 
-            cluster.restartBroker(0, Map.of(
-                LOG_INITIAL_TASK_DELAY_MS_CONFIG, "100",
-                LOG_DELETE_DELAY_MS_CONFIG, "1000"
-            ));
-            TestUtils.waitForCondition(() -> deletedDirectories.stream().noneMatch(File::exists),
-                "Topic directories were not deleted from disk after the broker restarted");
-        }
+        cluster.restartBroker(0, Map.of(
+            LOG_INITIAL_TASK_DELAY_MS_CONFIG, "100",
+            LOG_DELETE_DELAY_MS_CONFIG, "1000"
+        ));
+        TestUtils.waitForCondition(() -> deletedDirectories.stream().noneMatch(File::exists),
+            "Topic directories were not deleted from disk after the broker restarted");
     }
 
     @ClusterTest
-    public void testDeleteTopicWithAllAliveReplicas(ClusterInstance cluster) throws Exception {
-        try (Admin admin = cluster.admin()) {
-            cluster.createTopicWithAssignment(DEFAULT_TOPIC, expectedReplicaAssignment);
-            admin.deleteTopics(List.of(DEFAULT_TOPIC)).all().get();
-            cluster.waitTopicDeletion(DEFAULT_TOPIC);
-        }
+    public void testDeleteTopicWithAllAliveReplicas(ClusterInstance cluster) {
+        cluster.createTopicWithAssignment(DEFAULT_TOPIC, expectedReplicaAssignment);
+        cluster.deleteTopic(DEFAULT_TOPIC);
     }
 
     @ClusterTest
@@ -254,15 +241,12 @@ public class DeleteTopicTest {
 
     @ClusterTest
     public void testRecreateTopicAfterDeletion(ClusterInstance cluster) throws Exception {
-        try (Admin admin = cluster.admin()) {
-            cluster.createTopicWithAssignment(DEFAULT_TOPIC, expectedReplicaAssignment);
-            TopicPartition topicPartition = new TopicPartition(DEFAULT_TOPIC, 0);
-            admin.deleteTopics(List.of(DEFAULT_TOPIC)).all().get();
-            cluster.waitTopicDeletion(DEFAULT_TOPIC);
-            // re-create topic on same replicas
-            cluster.createTopicWithAssignment(DEFAULT_TOPIC, expectedReplicaAssignment);
-            waitForReplicaCreated(cluster.brokers(), topicPartition, "Replicas for topic " + DEFAULT_TOPIC + " not created.");
-        }
+        cluster.createTopicWithAssignment(DEFAULT_TOPIC, expectedReplicaAssignment);
+        TopicPartition topicPartition = new TopicPartition(DEFAULT_TOPIC, 0);
+        cluster.deleteTopic(DEFAULT_TOPIC);
+        // re-create topic on same replicas
+        cluster.createTopicWithAssignment(DEFAULT_TOPIC, expectedReplicaAssignment);
+        waitForReplicaCreated(cluster.brokers(), topicPartition, "Replicas for topic " + DEFAULT_TOPIC + " not created.");
     }
 
     @ClusterTest
@@ -293,23 +277,20 @@ public class DeleteTopicTest {
         @ClusterConfigProperty(key = "log.cleaner.dedupe.buffer.size", value = "1048577")
     })
     public void testDeleteTopicWithCleaner(ClusterInstance cluster) throws Exception {
-        try (Admin admin = cluster.admin()) {
-            cluster.createTopicWithAssignment(DEFAULT_TOPIC, expectedReplicaAssignment);
-            TopicPartition topicPartition = new TopicPartition(DEFAULT_TOPIC, 0);
-            // for simplicity, we are validating cleaner offsets on a single broker
-            KafkaBroker server = cluster.brokers().values().stream().findFirst().orElseThrow();
-            TestUtils.waitForCondition(() -> server.logManager().getLog(topicPartition, false).isPresent(),
-                "Replicas for topic test not created.");
-            UnifiedLog log = server.logManager().getLog(topicPartition, false).get();
-            writeDups(100, 3, log);
-            // force roll the segment so that cleaner can work on it
-            server.logManager().getLog(topicPartition, false).get().roll(Optional.empty());
-            // wait for cleaner to clean
-            server.logManager().cleaner().awaitCleaned(topicPartition, 0, 60000);
-            admin.deleteTopics(List.of(DEFAULT_TOPIC)).all().get();
+        cluster.createTopicWithAssignment(DEFAULT_TOPIC, expectedReplicaAssignment);
+        TopicPartition topicPartition = new TopicPartition(DEFAULT_TOPIC, 0);
+        // for simplicity, we are validating cleaner offsets on a single broker
+        KafkaBroker server = cluster.brokers().values().stream().findFirst().orElseThrow();
+        TestUtils.waitForCondition(() -> server.logManager().getLog(topicPartition, false).isPresent(),
+            "Replicas for topic test not created.");
+        UnifiedLog log = server.logManager().getLog(topicPartition, false).get();
+        writeDups(100, 3, log);
+        // force roll the segment so that cleaner can work on it
+        server.logManager().getLog(topicPartition, false).get().roll(Optional.empty());
+        // wait for cleaner to clean
+        server.logManager().cleaner().awaitCleaned(topicPartition, 0, 60000);
 
-            cluster.waitTopicDeletion(DEFAULT_TOPIC);
-        }
+        cluster.deleteTopic(DEFAULT_TOPIC);
     }
 
     @ClusterTest

@@ -28,12 +28,15 @@ import org.apache.kafka.common.protocol.Errors;
 import org.apache.kafka.coordinator.group.GroupConfig;
 import org.apache.kafka.coordinator.group.GroupConfigManager;
 import org.apache.kafka.metadata.MetadataCache;
+import org.apache.kafka.server.common.MetadataVersion;
 import org.apache.kafka.server.config.ServerLogConfigs;
 import org.apache.kafka.server.share.SharePartitionKey;
 import org.apache.kafka.server.share.dlq.ShareGroupDLQMetadataCacheHelper;
 import org.apache.kafka.server.share.persister.ShareCoordinatorMetadataCacheHelper;
 
 import org.junit.jupiter.api.Test;
+import org.junit.jupiter.params.ParameterizedTest;
+import org.junit.jupiter.params.provider.CsvSource;
 
 import java.util.Arrays;
 import java.util.List;
@@ -500,6 +503,57 @@ public class ShareCoordinatorMetadataCacheHelperImplTest {
         verify(mockMetadataCache, times(1)).getAliveBrokerNodes(eq(mockListenerName));
     }
 
+    @Test
+    public void testIsRequestHeaderV3SupportedReturnsTrue() {
+        MetadataCache mockMetadataCache = mock(MetadataCache.class);
+        when(mockMetadataCache.metadataVersion()).thenReturn(MetadataVersion.IBP_4_5_IV0);
+
+        ShareCoordinatorMetadataCacheHelperImpl cache = new ShareCoordinatorMetadataCacheHelperImpl(
+            mockMetadataCache,
+            sharePartitionKey -> 0,
+            mock(ListenerName.class),
+            mock(GroupConfigManager.class),
+            () -> ServerLogConfigs.MAX_MESSAGE_BYTES_DEFAULT
+        );
+
+        assertTrue(cache.isRequestHeaderV3Supported());
+        verify(mockMetadataCache, times(1)).metadataVersion();
+    }
+
+    @Test
+    public void testIsRequestHeaderV3SupportedReturnsFalseOnOlderMetadataVersion() {
+        MetadataCache mockMetadataCache = mock(MetadataCache.class);
+        when(mockMetadataCache.metadataVersion()).thenReturn(MetadataVersion.IBP_4_4_IV2);
+
+        ShareCoordinatorMetadataCacheHelperImpl cache = new ShareCoordinatorMetadataCacheHelperImpl(
+            mockMetadataCache,
+            sharePartitionKey -> 0,
+            mock(ListenerName.class),
+            mock(GroupConfigManager.class),
+            () -> ServerLogConfigs.MAX_MESSAGE_BYTES_DEFAULT
+        );
+
+        assertFalse(cache.isRequestHeaderV3Supported());
+        verify(mockMetadataCache, times(1)).metadataVersion();
+    }
+
+    @Test
+    public void testIsRequestHeaderV3SupportedReturnsFalseOnException() {
+        MetadataCache mockMetadataCache = mock(MetadataCache.class);
+        when(mockMetadataCache.metadataVersion()).thenThrow(new IllegalStateException("Unknown metadata version"));
+
+        ShareCoordinatorMetadataCacheHelperImpl cache = new ShareCoordinatorMetadataCacheHelperImpl(
+            mockMetadataCache,
+            sharePartitionKey -> 0,
+            mock(ListenerName.class),
+            mock(GroupConfigManager.class),
+            () -> ServerLogConfigs.MAX_MESSAGE_BYTES_DEFAULT
+        );
+
+        assertFalse(cache.isRequestHeaderV3Supported());
+        verify(mockMetadataCache, times(1)).metadataVersion();
+    }
+
     // Tests for shareGroupDlqTopic
 
     @Test
@@ -738,6 +792,43 @@ public class ShareCoordinatorMetadataCacheHelperImplTest {
         assertFalse(cache.isDlqEnabledOnTopic("test-topic"));
     }
 
+    private ShareCoordinatorMetadataCacheHelperImpl helperWithTopicProps(Properties props) {
+        MetadataCache mockMetadataCache = mock(MetadataCache.class);
+        when(mockMetadataCache.topicConfig("test-topic")).thenReturn(props);
+        return new ShareCoordinatorMetadataCacheHelperImpl(
+            mockMetadataCache,
+            sharePartitionKey -> 0,
+            mock(ListenerName.class),
+            mock(GroupConfigManager.class),
+            () -> ServerLogConfigs.MAX_MESSAGE_BYTES_DEFAULT
+        );
+    }
+
+    @Test
+    public void testIsDlqEnabledOnTopicParsesPaddedStringAndBoolean() {
+        Properties padded = new Properties();
+        padded.put(TopicConfig.ERRORS_DEADLETTERQUEUE_GROUP_ENABLE_CONFIG, " TRUE ");
+        assertTrue(helperWithTopicProps(padded).isDlqEnabledOnTopic("test-topic"));
+
+        Properties bool = new Properties();
+        bool.put(TopicConfig.ERRORS_DEADLETTERQUEUE_GROUP_ENABLE_CONFIG, true);
+        assertTrue(helperWithTopicProps(bool).isDlqEnabledOnTopic("test-topic"));
+    }
+
+    @Test
+    public void testIsDlqEnabledOnTopicReturnsFalseForInvalidValue() {
+        Properties props = new Properties();
+        props.put(TopicConfig.ERRORS_DEADLETTERQUEUE_GROUP_ENABLE_CONFIG, "not-a-boolean");
+        assertFalse(helperWithTopicProps(props).isDlqEnabledOnTopic("test-topic"));
+    }
+
+    @Test
+    public void testIsDlqEnabledOnTopicReturnsFalseWhenFlagMissing() {
+        Properties props = new Properties();
+        props.put(TopicConfig.MAX_MESSAGE_BYTES_CONFIG, "1000");
+        assertFalse(helperWithTopicProps(props).isDlqEnabledOnTopic("test-topic"));
+    }
+
     // Tests for dlqTopicMaxMessageBytes
 
     @Test
@@ -807,6 +898,25 @@ public class ShareCoordinatorMetadataCacheHelperImplTest {
         );
 
         assertEquals(5_000_000, cache.dlqTopicMaxMessageBytes("test-topic"));
+    }
+
+    @ParameterizedTest
+    @CsvSource({"0, 0", "1, 1", "2147483647, 2147483647", "-1, 5000000", "-2147483648, 5000000"})
+    public void testDlqTopicMaxMessageBytesAppliesTopicConfigBounds(String override, int expected) {
+        MetadataCache mockMetadataCache = mock(MetadataCache.class);
+        Properties props = new Properties();
+        props.put(TopicConfig.MAX_MESSAGE_BYTES_CONFIG, override);
+        when(mockMetadataCache.topicConfig("test-topic")).thenReturn(props);
+
+        ShareCoordinatorMetadataCacheHelperImpl cache = new ShareCoordinatorMetadataCacheHelperImpl(
+            mockMetadataCache,
+            sharePartitionKey -> 0,
+            mock(ListenerName.class),
+            mock(GroupConfigManager.class),
+            () -> 5_000_000
+        );
+
+        assertEquals(expected, cache.dlqTopicMaxMessageBytes("test-topic"));
     }
 
     // Tests for topicName

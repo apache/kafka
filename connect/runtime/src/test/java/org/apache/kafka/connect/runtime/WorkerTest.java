@@ -975,6 +975,7 @@ public class WorkerTest {
         mockVersionedTaskConverterFromConnector(ConnectorConfig.VALUE_CONVERTER_CLASS_CONFIG, ConnectorConfig.VALUE_CONVERTER_VERSION_CONFIG, taskValueConverter);
         mockVersionedTaskHeaderConverterFromConnector(taskHeaderConverter);
 
+        @SuppressWarnings("unchecked")
         Transformation<SourceRecord> brokenTransform = mock(Transformation.class);
         when(brokenTransform.config()).thenReturn(new ConfigDef());
         doThrow(new RuntimeException("Failed to configure transform")).when(brokenTransform).configure(any());

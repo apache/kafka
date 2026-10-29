@@ -265,14 +265,14 @@ public class PlaintextConsumerAssignorsTest {
                 assertTrue(consumer1.assignment().isEmpty());
                 assertTrue(consumer2.assignment().isEmpty());
                 var metadata = new AtomicReference<ConsumerGroupMetadata>();
-                var listener = new ConsumerRebalanceListener() {
+                var listener = new RebalanceListener() {
                     @Override
-                    public void onPartitionsRevoked(Collection<TopicPartition> revoked) {
+                    public void onPartitionsRevoked(Collection<TopicPartition> revoked, RebalanceConsumer rebalanceConsumer) {
                     }
 
                     @Override
-                    public void onPartitionsAssigned(Collection<TopicPartition> assigned) {
-                        metadata.set(consumer1.groupMetadata());
+                    public void onPartitionsAssigned(Collection<TopicPartition> assigned, RebalanceConsumer rebalanceConsumer) {
+                        metadata.set(rebalanceConsumer.groupMetadata());
                     }
                 };
                 var poller1 = startPolling(pollers, consumer1, List.of("topic1"), listener);
@@ -331,7 +331,7 @@ public class PlaintextConsumerAssignorsTest {
 
     private ConsumerAssignmentPoller startPolling(List<ConsumerAssignmentPoller> pollers,
                                                   Consumer<byte[], byte[]> consumer, List<String> topics,
-                                                  ConsumerRebalanceListener listener) {
+                                                  RebalanceListener listener) {
         var poller = new ConsumerAssignmentPoller(consumer, topics, Set.of(), listener);
         pollers.add(poller);
         poller.start();
