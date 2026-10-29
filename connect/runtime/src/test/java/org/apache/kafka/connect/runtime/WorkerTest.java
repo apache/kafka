@@ -376,6 +376,7 @@ public class WorkerTest {
         verify(sourceConnector).initialize(any(ConnectorContext.class));
         verify(sourceConnector).start(connectorProps);
         verify(connectorStatusListener).onStartup(CONNECTOR_ID);
+        verify(connectorStatusListener, never()).onFailure(any(), any());
         verify(sourceConnector).stop();
         verify(connectorStatusListener).onShutdown(CONNECTOR_ID);
         verify(ctx).close();
@@ -648,6 +649,58 @@ public class WorkerTest {
         // Nothing should be left, so this should effectively be a nop
         worker.stop();
         assertStatistics(worker, 0, 0);
+
+        verifyKafkaClusterId();
+        verifyVersionedTaskIsolation(SampleSourceConnector.class, TestSourceTask.class, null, task);
+        verifyVersionedTaskConverterFromConnector(ConnectorConfig.KEY_CONVERTER_CLASS_CONFIG, ConnectorConfig.KEY_CONVERTER_VERSION_CONFIG);
+        verifyVersionedTaskConverterFromConnector(ConnectorConfig.VALUE_CONVERTER_CLASS_CONFIG, ConnectorConfig.VALUE_CONVERTER_VERSION_CONFIG);
+        verifyVersionedTaskHeaderConverterFromConnector();
+
+        verifyExecutorSubmit();
+    }
+
+    @ParameterizedTest
+    @ValueSource(booleans = {true, false})
+    public void testStartTaskThatAlreadyExistsIsIgnored(boolean enableTopicCreation) {
+        setup(enableTopicCreation);
+        mockKafkaClusterId();
+        mockVersionedTaskIsolation(SampleSourceConnector.class, TestSourceTask.class, null, sourceConnector, task);
+        mockVersionedTaskConverterFromConnector(ConnectorConfig.KEY_CONVERTER_CLASS_CONFIG, ConnectorConfig.KEY_CONVERTER_VERSION_CONFIG, taskKeyConverter);
+        mockVersionedTaskConverterFromConnector(ConnectorConfig.VALUE_CONVERTER_CLASS_CONFIG, ConnectorConfig.VALUE_CONVERTER_VERSION_CONFIG, taskValueConverter);
+        mockVersionedTaskHeaderConverterFromConnector(taskHeaderConverter);
+        mockExecutorFakeSubmit(WorkerTask.class);
+        Map<String, String> origProps = Map.of(TaskConfig.TASK_CLASS_CONFIG, TestSourceTask.class.getName());
+
+        worker = new Worker(WORKER_ID, new MockTime(), plugins, config, offsetBackingStore, executorService,
+                noneConnectorClientConfigOverridePolicy, null);
+        worker.herder = herder;
+        worker.start();
+
+        Map<String, String> connectorConfigs = anyConnectorConfigMap();
+        ClusterConfigState configState = new ClusterConfigState(
+                0,
+                null,
+                Map.of(CONNECTOR_ID, 1),
+                Map.of(CONNECTOR_ID, connectorConfigs),
+                Map.of(CONNECTOR_ID, TargetState.STARTED),
+                Map.of(TASK_ID, origProps),
+                Map.of(),
+                Map.of(),
+                Map.of(CONNECTOR_ID, new AppliedConnectorConfig(connectorConfigs)),
+                Set.of(),
+                Set.of()
+        );
+        assertTrue(worker.startSourceTask(TASK_ID, configState, connectorConfigs, origProps, taskStatusListener, TargetState.STARTED));
+        assertFalse(worker.startSourceTask(TASK_ID, configState, connectorConfigs, origProps, taskStatusListener, TargetState.STARTED));
+
+        assertStatistics(worker, 0, 1);
+        assertEquals(Set.of(TASK_ID), worker.taskIds());
+        verify(taskStatusListener, never()).onFailure(any(), any());
+
+        worker.stopAndAwaitTask(TASK_ID);
+        assertStatistics(worker, 0, 0);
+        assertEquals(Set.of(), worker.taskIds());
+        worker.stop();
 
         verifyKafkaClusterId();
         verifyVersionedTaskIsolation(SampleSourceConnector.class, TestSourceTask.class, null, task);
