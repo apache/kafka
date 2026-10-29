@@ -316,20 +316,6 @@ public class GroupMetadataManager {
         }
     }
 
-    /**
-     * The result of updating a streams group's target assignment.
-     *
-     * @param targetAssignmentEpoch The target assignment epoch.
-     * @param targetAssignment      All members' target assignments.
-     * @param members               The members the target assignment is keyed by: the group's members with the
-     *                              unwritten membership change of the heartbeat applied.
-     */
-    private record UpdateStreamsTargetAssignmentResult(
-        int targetAssignmentEpoch,
-        Map<String, TasksTuple> targetAssignment,
-        Map<String, StreamsGroupMember> members
-    ) { }
-
     public static class Builder {
         private LogContext logContext = null;
         private SnapshotRegistry snapshotRegistry = null;
@@ -2338,13 +2324,25 @@ public class GroupMetadataManager {
             }
         }
 
+        // Apply the unwritten membership change (e.g. a joining member, or the relabelling of a replacing static
+        // member) to the members and the target assignment, so both the assignor and the refiner see a consistent
+        // view. The records are only queued during this heartbeat and not yet replayed into the in-memory group.
+        UpdatedMembersAndTargetAssignmentView<StreamsGroupMember, TasksTuple> updatedMembersAndTargetAssignment =
+            new UpdatedMembersAndTargetAssignmentView<>(
+                group.members(),
+                group.staticMembers(),
+                group.targetAssignment(),
+                m -> m.instanceId().orElse(null)
+            );
+        updatedMembersAndTargetAssignment.addOrUpdateMember(updatedMember.memberId(), updatedMember);
+
         // 4. Update the target assignment if the group epoch is larger than the target assignment epoch or a static member
         // replaces an existing static member.
         // The delta between the existing and the new target assignment is persisted to the partition.
-        UpdateStreamsTargetAssignmentResult updateTargetAssignmentResult = maybeUpdateStreamsTargetAssignment(
+        UpdateTargetAssignmentResult<Map<String, TasksTuple>> updateTargetAssignmentResult = maybeUpdateStreamsTargetAssignment(
             group,
             groupEpoch,
-            Optional.of(updatedMember),
+            updatedMembersAndTargetAssignment,
             updatedConfiguredTopology,
             metadataImage,
             records,
@@ -2363,8 +2361,8 @@ public class GroupMetadataManager {
             refinedGroupAssignment = refinedAssignmentForEpoch(
                 group,
                 updateTargetAssignmentResult.targetAssignmentEpoch(),
-                updateTargetAssignmentResult.members(),
-                updateTargetAssignmentResult.targetAssignment(),
+                updatedMembersAndTargetAssignment.members(),
+                updateTargetAssignmentResult.targetAssignment,
                 updatedConfiguredTopology
             );
         } else {
@@ -4565,18 +4563,19 @@ public class GroupMetadataManager {
      *
      * @param group                The StreamsGroup.
      * @param groupEpoch           The group epoch.
-     * @param updatedMember        The updated member (optional).
+     * @param updatedMembersAndTargetAssignment The group's members and target assignment, with the unwritten
+     *                                          membership change applied.
      * @param metadataImage        The metadata image.
      * @param records              The list to accumulate any new records.
      * @param returnedStatus       A mutable collection of status to be returned in the response.
      * @param refineOnly           If true, only advance the assignment epoch of the unchanged final target (warm-up refinement step)
      *                             instead of re-running the assignor.
-     * @return The target assignment epoch, the full per-member target assignment, and the members it is keyed by.
+     * @return The target assignment epoch and the full per-member target assignment.
      */
-    private UpdateStreamsTargetAssignmentResult maybeUpdateStreamsTargetAssignment(
+    private UpdateTargetAssignmentResult<Map<String, TasksTuple>> maybeUpdateStreamsTargetAssignment(
         StreamsGroup group,
         int groupEpoch,
-        Optional<StreamsGroupMember> updatedMember,
+        UpdatedMembersAndTargetAssignmentView<StreamsGroupMember, TasksTuple> updatedMembersAndTargetAssignment,
         ConfiguredTopology configuredTopology,
         CoordinatorMetadataImage metadataImage,
         List<CoordinatorRecord> records,
@@ -4584,21 +4583,6 @@ public class GroupMetadataManager {
         AssignmentConfigs assignmentConfigs,
         boolean refineOnly
     ) {
-        // Apply the unwritten membership change (e.g. a joining member, or the relabelling of a replacing static
-        // member) to the members and the target assignment, so both the assignor and the refiner see a consistent
-        // view. The records are only queued during this heartbeat and not yet replayed into the in-memory group.
-        UpdatedMembersAndTargetAssignmentView<StreamsGroupMember, TasksTuple> updatedMembersAndTargetAssignment =
-            new UpdatedMembersAndTargetAssignmentView<>(
-                group.members(),
-                group.staticMembers(),
-                group.targetAssignment(),
-                m -> m.instanceId().orElse(null)
-            );
-        updatedMember.ifPresent(member ->
-            updatedMembersAndTargetAssignment.addOrUpdateMember(member.memberId(), member)
-        );
-        Map<String, StreamsGroupMember> updatedMembers = updatedMembersAndTargetAssignment.members();
-
         boolean initialDelayActive = timer.isScheduled(streamsInitialRebalanceKey(group.groupId()));
         if (initialDelayActive) {
             returnedStatus.ifPresent(statusList -> statusList.add(
@@ -4607,12 +4591,12 @@ public class GroupMetadataManager {
                     .setStatusDetail("Assignment delayed due to the configured initial rebalance delay.")
             ));
 
-            return new UpdateStreamsTargetAssignmentResult(group.assignmentEpoch(), Map.of(), updatedMembers);
+            return new UpdateTargetAssignmentResult<>(group.assignmentEpoch(), Map.of());
         }
 
         if (group.assignmentEpoch() >= groupEpoch) {
             // The assignment is up to date.
-            return new UpdateStreamsTargetAssignmentResult(group.assignmentEpoch(), updatedMembersAndTargetAssignment.targetAssignment(), updatedMembers);
+            return new UpdateTargetAssignmentResult<>(group.assignmentEpoch(), updatedMembersAndTargetAssignment.targetAssignment());
         }
 
         // The second condition rules out taking the shortcut while an assignment is still pending (deferred by the
@@ -4623,7 +4607,7 @@ public class GroupMetadataManager {
             // re-reconcile toward the next in-memory intermediate assignment. The assignor is not run and the per-member target
             // assignment records are left untouched; only the (small) target-assignment metadata record carrying the epoch is written.
             records.add(newStreamsGroupTargetAssignmentMetadataRecord(group.groupId(), groupEpoch, group.assignmentTimestamp()));
-            return new UpdateStreamsTargetAssignmentResult(groupEpoch, updatedMembersAndTargetAssignment.targetAssignment(), updatedMembers);
+            return new UpdateTargetAssignmentResult<>(groupEpoch, updatedMembersAndTargetAssignment.targetAssignment());
         }
 
         boolean canComputeNextTargetAssignment = canComputeNextTargetAssignment(
@@ -4638,7 +4622,7 @@ public class GroupMetadataManager {
                     .setStatusDetail("Assignment delayed due to the configured assignment interval.")
             ));
 
-            return new UpdateStreamsTargetAssignmentResult(group.assignmentEpoch(), updatedMembersAndTargetAssignment.targetAssignment(), updatedMembers);
+            return new UpdateTargetAssignmentResult<>(group.assignmentEpoch(), updatedMembersAndTargetAssignment.targetAssignment());
         }
 
         TaskAssignor assignor = streamsGroupAssignor(group.groupId(), true);
@@ -4646,7 +4630,7 @@ public class GroupMetadataManager {
             long startTimeMs = time.milliseconds();
             org.apache.kafka.coordinator.group.api.streams.assignor.GroupSpec groupSpec =
                 new org.apache.kafka.coordinator.group.streams.GroupSpecBuilder(assignmentConfigs)
-                    .withMembers(updatedMembers)
+                    .withMembers(updatedMembersAndTargetAssignment.members())
                     .withTaskOffsets(group.taskOffsets())
                     .build();
 
@@ -4671,13 +4655,13 @@ public class GroupMetadataManager {
 
             new TargetAssignmentRecordsBuilder.StreamsTargetAssignmentRecordsBuilder(log, group.groupId())
                 .withTargetAssignmentMetadata(assignmentResult.targetAssignmentMetadata())
-                .withCurrentMemberIds(updatedMembers.keySet())
+                .withCurrentMemberIds(updatedMembersAndTargetAssignment.members().keySet())
                 .withUnchangedStaticMembers()
                 .withCurrentTargetAssignment(updatedMembersAndTargetAssignment.targetAssignment())
                 .withNewTargetAssignment(assignmentResult.targetAssignment())
                 .build(records);
 
-            return new UpdateStreamsTargetAssignmentResult(groupEpoch, assignmentResult.targetAssignment(), updatedMembers);
+            return new UpdateTargetAssignmentResult<>(groupEpoch, assignmentResult.targetAssignment());
         } catch (TaskAssignorException ex) {
             String msg = String.format("Failed to compute a new target assignment for epoch %d: %s",
                 groupEpoch, ex.getMessage());
@@ -4826,7 +4810,12 @@ public class GroupMetadataManager {
             maybeUpdateStreamsTargetAssignment(
                 group,
                 group.groupEpoch(),
-                Optional.empty(),
+                new UpdatedMembersAndTargetAssignmentView<>(
+                    group.members(),
+                    group.staticMembers(),
+                    group.targetAssignment(),
+                    m -> m.instanceId().orElse(null)
+                ),
                 group.configuredTopology().get(),
                 metadataImage,
                 records,
