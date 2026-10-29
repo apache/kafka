@@ -4384,7 +4384,6 @@ public class GroupMetadataManager {
                 .withMembers(updatedMembersAndTargetAssignment.members())
                 .withSubscriptionType(subscriptionType)
                 .withTargetAssignment(updatedMembersAndTargetAssignment.targetAssignment())
-                .withInvertedTargetAssignment(group.invertedTargetAssignment())
                 .withMetadataImage(metadataImage)
                 .withResolvedRegularExpressions(group.resolvedRegularExpressions())
                 .build();
@@ -4480,7 +4479,6 @@ public class GroupMetadataManager {
                 .withSubscriptionType(subscriptionType)
                 .withTargetAssignment(updatedMembersAndTargetAssignment.targetAssignment())
                 .withTopicAssignablePartitionsMap(initializedTopicPartitions)
-                .withInvertedTargetAssignment(group.invertedTargetAssignment())
                 .withMetadataImage(metadataImage)
                 .build();
 

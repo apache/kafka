@@ -17,12 +17,15 @@
 package org.apache.kafka.coordinator.group.modern;
 
 import org.apache.kafka.common.Uuid;
+import org.apache.kafka.coordinator.common.runtime.CoordinatorMetadataImage;
 import org.apache.kafka.coordinator.group.api.assignor.GroupSpec;
 import org.apache.kafka.coordinator.group.api.assignor.MemberAssignment;
 import org.apache.kafka.coordinator.group.api.assignor.MemberSubscription;
 import org.apache.kafka.coordinator.group.api.assignor.SubscriptionType;
 
+import java.util.BitSet;
 import java.util.Collection;
+import java.util.HashMap;
 import java.util.Map;
 import java.util.Objects;
 import java.util.Optional;
@@ -32,6 +35,19 @@ import java.util.Set;
  * The assignment specification for a modern group.
  */
 public class GroupSpecImpl implements GroupSpec {
+    /**
+     * The partitions of a topic which are currently assigned to a member.
+     *
+     * @param partitions     The assigned partitions.
+     * @param partitionCount The number of partitions in the topic.
+     */
+    private record AssignedPartitions(BitSet partitions, int partitionCount) { }
+
+    /**
+     * The metadata image, used to look up the partition count of each topic.
+     */
+    private final CoordinatorMetadataImage metadataImage;
+
     /**
      * Member subscription metadata keyed by member Id.
      */
@@ -43,10 +59,10 @@ public class GroupSpecImpl implements GroupSpec {
     private final SubscriptionType subscriptionType;
 
     /**
-     * Reverse lookup map representing topic partitions with
-     * their current member assignments.
+     * The partitions which are currently assigned to a member,
+     * keyed by topic id.
      */
-    private final Map<Uuid, Map<Integer, String>> invertedMemberAssignment;
+    private Map<Uuid, AssignedPartitions> assignedTopicPartitions;
 
     /**
      * In case of share groups, this map will be queried to decide
@@ -56,22 +72,22 @@ public class GroupSpecImpl implements GroupSpec {
     private final Optional<Map<Uuid, Set<Integer>>> topicPartitionAllowedMap;
 
     public GroupSpecImpl(
+        CoordinatorMetadataImage metadataImage,
         Map<String, MemberSubscriptionAndAssignmentImpl> members,
-        SubscriptionType subscriptionType,
-        Map<Uuid, Map<Integer, String>> invertedMemberAssignment
+        SubscriptionType subscriptionType
     ) {
-        this(members, subscriptionType, invertedMemberAssignment, Optional.empty());
+        this(metadataImage, members, subscriptionType, Optional.empty());
     }
 
     public GroupSpecImpl(
+        CoordinatorMetadataImage metadataImage,
         Map<String, MemberSubscriptionAndAssignmentImpl> members,
         SubscriptionType subscriptionType,
-        Map<Uuid, Map<Integer, String>> invertedMemberAssignment,
         Optional<Map<Uuid, Set<Integer>>> topicPartitionAllowedMap
     ) {
+        this.metadataImage = Objects.requireNonNull(metadataImage);
         this.members = Objects.requireNonNull(members);
         this.subscriptionType = Objects.requireNonNull(subscriptionType);
-        this.invertedMemberAssignment = Objects.requireNonNull(invertedMemberAssignment);
         this.topicPartitionAllowedMap = Objects.requireNonNull(topicPartitionAllowedMap);
     }
 
@@ -93,14 +109,43 @@ public class GroupSpecImpl implements GroupSpec {
 
     /**
      * {@inheritDoc}
+     * <p>
+     * Partitions which do not exist in the metadata image are reported as unassigned.
      */
     @Override
     public boolean isPartitionAssigned(Uuid topicId, int partitionId) {
-        Map<Integer, String> partitionMap = invertedMemberAssignment.get(topicId);
-        if (partitionMap == null) {
-            return false;
+        if (assignedTopicPartitions == null) {
+            assignedTopicPartitions = computeAssignedTopicPartitions();
         }
-        return partitionMap.containsKey(partitionId);
+        AssignedPartitions assignedPartitions = assignedTopicPartitions.get(topicId);
+        return assignedPartitions != null && partitionId >= 0 && assignedPartitions.partitions().get(partitionId);
+    }
+
+    private Map<Uuid, AssignedPartitions> computeAssignedTopicPartitions() {
+        Map<Uuid, AssignedPartitions> assignedTopicPartitions = new HashMap<>();
+        for (MemberSubscriptionAndAssignmentImpl member : members.values()) {
+            for (Map.Entry<Uuid, Set<Integer>> entry : member.partitions().entrySet()) {
+                AssignedPartitions assignedPartitions = assignedTopicPartitions.computeIfAbsent(
+                    entry.getKey(),
+                    topicId -> {
+                        int partitionCount = metadataImage.topicMetadata(topicId)
+                            .map(CoordinatorMetadataImage.TopicMetadata::partitionCount)
+                            .orElse(0);
+                        return new AssignedPartitions(new BitSet(partitionCount), partitionCount);
+                    }
+                );
+                for (int partition : entry.getValue()) {
+                    if (partition < 0 || partition >= assignedPartitions.partitionCount()) {
+                        // Drop partitions that do not exist.
+                        continue;
+                    }
+
+                    assignedPartitions.partitions().set(partition);
+                }
+            }
+        }
+
+        return assignedTopicPartitions;
     }
 
     /**
@@ -141,13 +186,12 @@ public class GroupSpecImpl implements GroupSpec {
         if (!(o instanceof GroupSpecImpl groupSpec)) return false;
         return Objects.equals(members, groupSpec.members) &&
             subscriptionType == groupSpec.subscriptionType &&
-            Objects.equals(invertedMemberAssignment, groupSpec.invertedMemberAssignment) &&
             Objects.equals(topicPartitionAllowedMap, groupSpec.topicPartitionAllowedMap);
     }
 
     @Override
     public int hashCode() {
-        return Objects.hash(members, subscriptionType, invertedMemberAssignment, topicPartitionAllowedMap);
+        return Objects.hash(members, subscriptionType, topicPartitionAllowedMap);
     }
 
     @Override
@@ -155,7 +199,6 @@ public class GroupSpecImpl implements GroupSpec {
         return "GroupSpecImpl(" +
             "members=" + members +
             ", subscriptionType=" + subscriptionType +
-            ", invertedMemberAssignment=" + invertedMemberAssignment +
             ", topicPartitionAllowedMap=" + topicPartitionAllowedMap +
             ')';
     }

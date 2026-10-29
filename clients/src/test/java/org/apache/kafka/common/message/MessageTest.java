@@ -64,6 +64,7 @@ import com.fasterxml.jackson.databind.JsonNode;
 import org.junit.jupiter.api.Test;
 import org.junit.jupiter.api.Timeout;
 import org.junit.jupiter.params.ParameterizedTest;
+import org.junit.jupiter.params.provider.ValueSource;
 
 import java.lang.reflect.Method;
 import java.nio.ByteBuffer;
@@ -856,6 +857,57 @@ public final class MessageTest {
         createTopics.unknownTaggedFields().add(field1000);
         verifyWriteRaisesUve((short) 0, "Tagged fields were set", createTopics);
         verifyWriteSucceeds((short) 6, createTopics);
+    }
+
+    @ParameterizedTest
+    @ValueSource(shorts = {1, 2})
+    public void testTaggedFieldsWrittenInAscendingTagOrder(short version) {
+        SimpleExampleMessageData message = new SimpleExampleMessageData()
+            .setMyTaggedIntArray(List.of(1))
+            .setMyNullableString("a")
+            .setMyInt16((short) 1)
+            .setMyFloat64(1.0)
+            .setMyString("b")
+            .setMyBytes(new byte[] {0x1})
+            .setTaggedUuid(new Uuid(1L, 2L))
+            .setTaggedLong(1L);
+        List<Integer> expectedTags;
+        if (version == 1) {
+            // Tags 8 and 9 are only defined from version 2, so here they are unknown tags.
+            addUnknownTaggedFields(message, 8, 9);
+            expectedTags = List.of(0, 1, 2, 3, 4, 5, 6, 7, 8, 9);
+        } else {
+            message.setMyTaggedStruct(new SimpleExampleMessageData.TaggedStruct().setStructId("c"))
+                .setTaggedLongFlexibleVersionSubset(1L);
+            addUnknownTaggedFields(message, 10, 11);
+            expectedTags = List.of(0, 1, 2, 3, 4, 5, 6, 7, 8, 9, 10, 11);
+        }
+        assertEquals(expectedTags, writtenTaggedFieldTags(message, version));
+    }
+
+    private void addUnknownTaggedFields(SimpleExampleMessageData message, int... tags) {
+        for (int tag : tags) {
+            message.unknownTaggedFields().add(new RawTaggedField(tag, new byte[] {0x1}));
+        }
+    }
+
+    private List<Integer> writtenTaggedFieldTags(SimpleExampleMessageData message, short version) {
+        ObjectSerializationCache cache = new ObjectSerializationCache();
+        ByteBuffer buf = ByteBuffer.allocate(message.size(cache, version));
+        message.write(new ByteBufferAccessor(buf), cache, version);
+        buf.flip();
+
+        // The tagged-fields section comes last; a message with no tagged fields set has the same
+        // bytes before it, followed by a single zero byte for its empty section.
+        buf.position(new SimpleExampleMessageData().size(new ObjectSerializationCache(), version) - 1);
+        ByteBufferAccessor accessor = new ByteBufferAccessor(buf);
+        int numTaggedFields = accessor.readUnsignedVarint();
+        List<Integer> tags = new ArrayList<>(numTaggedFields);
+        for (int i = 0; i < numTaggedFields; i++) {
+            tags.add(accessor.readUnsignedVarint());
+            accessor.readArray(accessor.readUnsignedVarint());
+        }
+        return tags;
     }
 
     private byte[] rawTaggedFieldsSection(int declaredCount, int... tagsAndSizes) {

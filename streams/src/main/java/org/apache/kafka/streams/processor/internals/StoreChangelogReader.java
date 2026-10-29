@@ -664,12 +664,9 @@ public class StoreChangelogReader implements ChangelogReader {
                     entry.getValue().stateManager.changelogAsSource(entry.getKey()))
                 .map(Map.Entry::getKey).collect(Collectors.toSet());
 
-            for (final TopicPartition partition : changelogsWithLimitOffsets) {
-                if (!changelogs.get(partition).bufferedRecords().isEmpty()) {
-                    updateLimitOffsetsForStandbyChangelogs(committedOffsetForChangelogs(tasks, changelogsWithLimitOffsets));
-                    lastUpdateOffsetTime = time.milliseconds();
-                    break;
-                }
+            if (changelogsWithLimitOffsets.stream().anyMatch(partition -> !changelogs.get(partition).bufferedRecords().isEmpty())) {
+                updateLimitOffsetsForStandbyChangelogs(committedOffsetForChangelogs(tasks, changelogsWithLimitOffsets));
+                lastUpdateOffsetTime = time.milliseconds();
             }
         }
     }
