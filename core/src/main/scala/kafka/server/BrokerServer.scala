@@ -49,7 +49,7 @@ import org.apache.kafka.server.FetchSession.FetchSessionCache
 import org.apache.kafka.server.authorizer.Authorizer
 import org.apache.kafka.server.quota.QuotaFactory
 import org.apache.kafka.server.common.{ApiMessageAndVersion, DirectoryEventHandler, NodeToControllerChannelManager, ShareVersion, TopicIdPartition}
-import org.apache.kafka.server.config.{ConfigType, DelegationTokenManagerConfigs}
+import org.apache.kafka.server.config.{ConfigType, DelegationTokenManagerConfigs, QuotaConfig}
 import org.apache.kafka.server.log.remote.metadata.storage.BrokerReadyCallback
 import org.apache.kafka.server.log.remote.storage.{RemoteLogManager, RemoteLogManagerConfig}
 import org.apache.kafka.server.metrics.{ClientTelemetryExporterPlugin, KafkaYammerMetrics}
@@ -209,6 +209,11 @@ class BrokerServer(
       val clientTelemetryExporterPlugin = new ClientTelemetryExporterPlugin()
 
       config.dynamicConfig.initialize(Some(clientTelemetryExporterPlugin))
+      QuotaConfig.BROKER_QUOTA_CONFIGS.asScala.foreach { configName =>
+        if (config.dynamicConfig.staticBrokerConfigs.contains(configName)) {
+          warn(s"$configName is set in the static configuration file but is ignored at runtime; configure this property dynamically to take effect.")
+        }
+      }
       quotaManagers = QuotaFactory.instantiate(config, metrics, time, s"broker-${config.nodeId}-", ProcessRole.BrokerRole.toString)
       DynamicBrokerConfig.readDynamicBrokerConfigsFromSnapshot(raftManager, config, quotaManagers, logContext)
 
