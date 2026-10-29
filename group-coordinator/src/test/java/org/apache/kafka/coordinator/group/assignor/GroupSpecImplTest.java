@@ -21,6 +21,7 @@ import org.apache.kafka.coordinator.common.runtime.CoordinatorMetadataImage;
 import org.apache.kafka.coordinator.common.runtime.MetadataImageBuilder;
 import org.apache.kafka.coordinator.group.api.assignor.SubscriptionType;
 import org.apache.kafka.coordinator.group.modern.Assignment;
+import org.apache.kafka.coordinator.group.modern.ConsumerGroupSpecImpl;
 import org.apache.kafka.coordinator.group.modern.GroupSpecImpl;
 import org.apache.kafka.coordinator.group.modern.MemberSubscriptionAndAssignmentImpl;
 
@@ -62,7 +63,7 @@ public class GroupSpecImplTest {
             Assignment.EMPTY
         ));
 
-        groupSpec = new GroupSpecImpl(
+        groupSpec = new ConsumerGroupSpecImpl(
             metadataImage,
             members,
             subscriptionType

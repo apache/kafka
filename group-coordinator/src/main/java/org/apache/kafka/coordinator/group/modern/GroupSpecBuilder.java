@@ -102,7 +102,7 @@ public abstract class GroupSpecBuilder<T extends ModernGroupMember, U extends Gr
             Map<String, MemberSubscriptionAndAssignmentImpl> members,
             SubscriptionType subscriptionType
         ) {
-            return new GroupSpecImpl(metadataImage, members, subscriptionType);
+            return new ConsumerGroupSpecImpl(metadataImage, members, subscriptionType);
         }
     }
 

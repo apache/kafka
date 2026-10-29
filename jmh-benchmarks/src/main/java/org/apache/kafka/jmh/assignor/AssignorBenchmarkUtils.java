@@ -25,7 +25,7 @@ import org.apache.kafka.coordinator.group.Utils;
 import org.apache.kafka.coordinator.group.api.assignor.GroupSpec;
 import org.apache.kafka.coordinator.group.api.assignor.SubscriptionType;
 import org.apache.kafka.coordinator.group.modern.Assignment;
-import org.apache.kafka.coordinator.group.modern.GroupSpecImpl;
+import org.apache.kafka.coordinator.group.modern.ConsumerGroupSpecImpl;
 import org.apache.kafka.coordinator.group.modern.MemberSubscriptionAndAssignmentImpl;
 import org.apache.kafka.coordinator.group.modern.ShareGroupSpecImpl;
 import org.apache.kafka.coordinator.group.modern.TopicIds;
@@ -116,7 +116,7 @@ public class AssignorBenchmarkUtils {
             ));
         }
 
-        return new GroupSpecImpl(
+        return new ConsumerGroupSpecImpl(
             metadataImage,
             memberSpecs,
             subscriptionType

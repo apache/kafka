@@ -33,7 +33,7 @@ import java.util.Set;
 /**
  * The assignment specification for a modern group.
  */
-public class GroupSpecImpl implements GroupSpec {
+public abstract class GroupSpecImpl implements GroupSpec {
     /**
      * The partitions of a topic which are currently assigned to a member.
      *
@@ -63,7 +63,7 @@ public class GroupSpecImpl implements GroupSpec {
      */
     private Map<Uuid, AssignedPartitions> assignedTopicPartitions;
 
-    public GroupSpecImpl(
+    protected GroupSpecImpl(
         CoordinatorMetadataImage metadataImage,
         Map<String, MemberSubscriptionAndAssignmentImpl> members,
         SubscriptionType subscriptionType

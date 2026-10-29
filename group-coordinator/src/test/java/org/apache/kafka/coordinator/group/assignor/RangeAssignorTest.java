@@ -26,7 +26,7 @@ import org.apache.kafka.coordinator.group.api.assignor.PartitionAssignorExceptio
 import org.apache.kafka.coordinator.group.api.assignor.SubscribedTopicDescriber;
 import org.apache.kafka.coordinator.group.api.assignor.SubscriptionType;
 import org.apache.kafka.coordinator.group.modern.Assignment;
-import org.apache.kafka.coordinator.group.modern.GroupSpecImpl;
+import org.apache.kafka.coordinator.group.modern.ConsumerGroupSpecImpl;
 import org.apache.kafka.coordinator.group.modern.MemberAssignmentImpl;
 import org.apache.kafka.coordinator.group.modern.MemberSubscriptionAndAssignmentImpl;
 import org.apache.kafka.coordinator.group.modern.SubscribedTopicDescriberImpl;
@@ -88,7 +88,7 @@ public class RangeAssignorTest {
             )
         );
 
-        GroupSpec groupSpec = new GroupSpecImpl(
+        GroupSpec groupSpec = new ConsumerGroupSpecImpl(
             metadataImage,
             members,
             HOMOGENEOUS
@@ -126,7 +126,7 @@ public class RangeAssignorTest {
             )
         );
 
-        GroupSpec groupSpec = new GroupSpecImpl(
+        GroupSpec groupSpec = new ConsumerGroupSpecImpl(
             metadataImage,
             members,
             HOMOGENEOUS
@@ -159,7 +159,7 @@ public class RangeAssignorTest {
             Assignment.EMPTY
         ));
 
-        GroupSpec groupSpec = new GroupSpecImpl(
+        GroupSpec groupSpec = new ConsumerGroupSpecImpl(
             metadataImage,
             members,
             HOMOGENEOUS
@@ -217,7 +217,7 @@ public class RangeAssignorTest {
             Assignment.EMPTY
         ));
 
-        GroupSpec groupSpec = new GroupSpecImpl(
+        GroupSpec groupSpec = new ConsumerGroupSpecImpl(
             metadataImage,
             members,
             HETEROGENEOUS
@@ -277,7 +277,7 @@ public class RangeAssignorTest {
             Assignment.EMPTY
         ));
 
-        GroupSpec groupSpec = new GroupSpecImpl(
+        GroupSpec groupSpec = new ConsumerGroupSpecImpl(
             metadataImage,
             members,
             HOMOGENEOUS
@@ -331,7 +331,7 @@ public class RangeAssignorTest {
             Assignment.EMPTY
         ));
 
-        GroupSpec groupSpec = new GroupSpecImpl(
+        GroupSpec groupSpec = new ConsumerGroupSpecImpl(
             metadataImage,
             members,
             SubscriptionType.HOMOGENEOUS
@@ -351,7 +351,7 @@ public class RangeAssignorTest {
             Assignment.EMPTY
         ));
 
-        groupSpec = new GroupSpecImpl(
+        groupSpec = new ConsumerGroupSpecImpl(
             metadataImage,
             members,
             SubscriptionType.HOMOGENEOUS
@@ -406,7 +406,7 @@ public class RangeAssignorTest {
             Assignment.EMPTY
         ));
 
-        GroupSpec groupSpec = new GroupSpecImpl(
+        GroupSpec groupSpec = new ConsumerGroupSpecImpl(
             metadataImage,
             members,
             SubscriptionType.HOMOGENEOUS
@@ -426,7 +426,7 @@ public class RangeAssignorTest {
             Assignment.EMPTY
         ));
 
-        groupSpec = new GroupSpecImpl(
+        groupSpec = new ConsumerGroupSpecImpl(
             metadataImage,
             members,
             SubscriptionType.HOMOGENEOUS
@@ -491,7 +491,7 @@ public class RangeAssignorTest {
             Assignment.EMPTY
         ));
 
-        GroupSpec groupSpec = new GroupSpecImpl(
+        GroupSpec groupSpec = new ConsumerGroupSpecImpl(
             metadataImage,
             members,
             HOMOGENEOUS
@@ -550,7 +550,7 @@ public class RangeAssignorTest {
             ))
         ));
 
-        GroupSpec groupSpec = new GroupSpecImpl(
+        GroupSpec groupSpec = new ConsumerGroupSpecImpl(
             metadataImage,
             members,
             HOMOGENEOUS
@@ -614,7 +614,7 @@ public class RangeAssignorTest {
             Assignment.EMPTY
         ));
 
-        GroupSpec groupSpec = new GroupSpecImpl(
+        GroupSpec groupSpec = new ConsumerGroupSpecImpl(
             metadataImage,
             members,
             HOMOGENEOUS
@@ -683,7 +683,7 @@ public class RangeAssignorTest {
             Assignment.EMPTY
         ));
 
-        GroupSpec groupSpec = new GroupSpecImpl(
+        GroupSpec groupSpec = new ConsumerGroupSpecImpl(
             metadataImage,
             members,
             HETEROGENEOUS
@@ -734,7 +734,7 @@ public class RangeAssignorTest {
             ))
         ));
 
-        GroupSpec groupSpec = new GroupSpecImpl(
+        GroupSpec groupSpec = new ConsumerGroupSpecImpl(
             metadataImage,
             members,
             HOMOGENEOUS
@@ -798,7 +798,7 @@ public class RangeAssignorTest {
             ))
         ));
 
-        GroupSpec groupSpec = new GroupSpecImpl(
+        GroupSpec groupSpec = new ConsumerGroupSpecImpl(
             metadataImage,
             members,
             HETEROGENEOUS

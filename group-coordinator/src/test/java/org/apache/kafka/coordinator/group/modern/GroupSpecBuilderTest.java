@@ -55,7 +55,7 @@ public class GroupSpecBuilderTest {
                 .withResolvedRegularExpressions(Map.of());
 
         assertEquals(
-            new GroupSpecImpl(
+            new ConsumerGroupSpecImpl(
                 metadataImage,
                 Map.of(),
                 HOMOGENEOUS
@@ -114,7 +114,7 @@ public class GroupSpecBuilderTest {
                 .withResolvedRegularExpressions(Map.of());
 
         assertEquals(
-            new GroupSpecImpl(
+            new ConsumerGroupSpecImpl(
                 metadataImage,
                 Map.of(
                     "member-1", new MemberSubscriptionAndAssignmentImpl(
@@ -183,7 +183,7 @@ public class GroupSpecBuilderTest {
                 ));
 
         assertEquals(
-            new GroupSpecImpl(
+            new ConsumerGroupSpecImpl(
                 metadataImage,
                 Map.of(
                     "member-1", new MemberSubscriptionAndAssignmentImpl(
@@ -286,7 +286,7 @@ public class GroupSpecBuilderTest {
         resolvedRegularExpressions.clear();
 
         assertEquals(
-            new GroupSpecImpl(
+            new ConsumerGroupSpecImpl(
                 metadataImage,
                 // members
                 Map.of("member-1", new MemberSubscriptionAndAssignmentImpl(
