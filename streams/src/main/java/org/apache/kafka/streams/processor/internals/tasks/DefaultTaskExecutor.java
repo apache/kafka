@@ -124,15 +124,17 @@ public class DefaultTaskExecutor implements TaskExecutor {
                 }
             } else {
                 boolean progressed = false;
+                // while paused, the task makes no progress, so it is released below
+                final boolean processingPaused = taskManager.processingPaused();
 
-                if (taskExecutionMetadata.canProcessTask(currentTask, nowMs) && currentTask.isProcessable(nowMs)) {
+                if (!processingPaused && taskExecutionMetadata.canProcessTask(currentTask, nowMs) && currentTask.isProcessable(nowMs)) {
                     if (processTask(currentTask, nowMs, time)) {
                         log.trace("processed a record for {}", currentTask.id());
                         progressed = true;
                     }
                 }
 
-                if (taskExecutionMetadata.canPunctuateTask(currentTask)) {
+                if (!processingPaused && taskExecutionMetadata.canPunctuateTask(currentTask)) {
                     if (currentTask.maybePunctuateStreamTime()) {
                         log.trace("punctuated stream time for task {} ", currentTask.id());
                         progressed = true;
