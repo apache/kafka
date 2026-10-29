@@ -83,6 +83,8 @@ import static org.junit.jupiter.api.Assertions.assertArrayEquals;
 import static org.junit.jupiter.api.Assertions.assertEquals;
 import static org.junit.jupiter.api.Assertions.assertFalse;
 import static org.junit.jupiter.api.Assertions.assertInstanceOf;
+import static org.junit.jupiter.api.Assertions.assertNotNull;
+import static org.junit.jupiter.api.Assertions.assertNull;
 import static org.junit.jupiter.api.Assertions.assertThrows;
 import static org.junit.jupiter.api.Assertions.assertTrue;
 import static org.junit.jupiter.api.Assumptions.assumeTrue;
@@ -1442,6 +1444,19 @@ public class SslTransportLayerTest {
     }
 
     /**
+     * Tests that a client delivers a zero-length message that arrives with a close_notify and no TCP FIN, and reports
+     * the disconnect at once.
+     */
+    @ParameterizedTest
+    @ArgumentsSource(SslTransportLayerArgumentsProvider.class)
+    public void testCloseNotifyAfterZeroLengthResponseWithoutFinDeliversResponseAndDisconnects(Args args) throws Exception {
+        ByteBuffer zeroLengthResponse = ByteBuffer.allocate(4).putInt(0);
+        zeroLengthResponse.flip();
+
+        assertEquals(1, receiveFromCloseNotifyPeer(args, zeroLengthResponse, false));
+    }
+
+    /**
      * Connects a client Selector to a TLS peer that writes {@code response} and a close_notify in a single write and
      * keeps the TCP connection open, and verifies that the client reports the disconnect within 5 seconds. If
      * {@code muteOnReceive} is set, the client mutes the channel for a while after the first completed receive and
@@ -1476,7 +1491,7 @@ public class SslTransportLayerTest {
                 selector.poll(10);
                 peerSelector.poll(10);
                 return selector.isChannelReady(node) && peerSelector.isChannelReady(peerId);
-            }, "TLS handshake did not complete");
+            }, TestUtils.DEFAULT_MAX_WAIT_MS, 1, () -> "TLS handshake did not complete");
 
             // Bypass the peer's transport layer so that the response and the close_notify go out in a single write
             // and the TCP connection stays open. The peer selector is not polled again.
@@ -1506,7 +1521,9 @@ public class SslTransportLayerTest {
                     long unmuteAt = System.currentTimeMillis() + 500;
                     while (System.currentTimeMillis() < unmuteAt) {
                         selector.poll(50);
-                        assertFalse(selector.disconnected().containsKey(node), "Disconnected while muted");
+                        // A muted channel closed by a read would be tracked as closing rather than disconnected.
+                        assertNotNull(selector.channel(node), "Channel closed while muted");
+                        assertNull(selector.closingChannel(node), "Channel closed while muted");
                     }
                     selector.unmute(node);
                     start = System.currentTimeMillis();
@@ -1932,5 +1949,26 @@ public class SslTransportLayerTest {
         assertEquals(3, sslTransportLayer.read(dsts, 0, 2));
         assertArrayEquals("Hel".getBytes(StandardCharsets.UTF_8), dsts[0].array());
         assertThrows(EOFException.class, () -> sslTransportLayer.read(dsts, 1, 1));
+    }
+
+    @Test
+    public void testHasBytesBufferedOnceInboundIsDone() {
+        SSLEngine sslEngine = mock(SSLEngine.class);
+        SslTransportLayer sslTransportLayer = spy(new SslTransportLayer(
+                "test-channel",
+                mock(SelectionKey.class),
+                sslEngine,
+                mock(ChannelMetadataRegistry.class)
+        ));
+        doReturn(true).when(sslTransportLayer).ready();
+        assertFalse(sslTransportLayer.hasBytesBuffered());
+
+        // Set by any read that unwraps a close_notify, including one that ends in an exception.
+        when(sslEngine.isInboundDone()).thenReturn(true);
+        assertTrue(sslTransportLayer.hasBytesBuffered());
+
+        // Not after a local close or a handshake failure, which also close the engine's inbound side.
+        doReturn(false).when(sslTransportLayer).ready();
+        assertFalse(sslTransportLayer.hasBytesBuffered());
     }
 }
