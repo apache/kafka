@@ -29,6 +29,7 @@ import org.apache.kafka.common.resource.ResourceType;
 
 import org.junit.jupiter.api.Test;
 
+import java.util.List;
 import java.util.Properties;
 
 import static org.junit.jupiter.api.Assertions.assertEquals;
@@ -294,7 +295,7 @@ public class ClusterMirrorConfigTest {
 
         assertEquals(1, config.aclIncludeRules().size());
         ClusterMirrorConfig.MirrorAclRule rule = config.aclIncludeRules().get(0);
-        assertEquals(ClusterMirrorConfig.MirrorAclRule.MATCH_ALL_RULE, rule);
+        assertEquals(ClusterMirrorConfig.MirrorAclRule.MATCH_ALL, rule);
     }
 
     @Test
@@ -610,7 +611,7 @@ public class ClusterMirrorConfigTest {
 
         assertEquals(1, config.aclExcludeRules().size());
         ClusterMirrorConfig.MirrorAclRule rule = config.aclExcludeRules().get(0);
-        assertEquals(ClusterMirrorConfig.MirrorAclRule.MATCH_ALL_RULE, rule);
+        assertEquals(ClusterMirrorConfig.MirrorAclRule.MATCH_ALL, rule);
     }
 
     @Test
@@ -631,13 +632,19 @@ public class ClusterMirrorConfigTest {
     @Test
     public void testAclRuleWithEmptyHost() {
         Properties props = new Properties();
-        props.setProperty(ClusterMirrorConfig.ACLS_INCLUDE_CONFIG, "TOPIC;.*;;;;;READ;ALLOW;User:alice");
+        props.setProperty(ClusterMirrorConfig.ACLS_INCLUDE_CONFIG, "TOPIC;.*;;READ;ALLOW;User:alice");
 
         ClusterMirrorConfig config = ClusterMirrorConfig.fromProperties(props);
 
         assertEquals(1, config.aclIncludeRules().size());
         ClusterMirrorConfig.MirrorAclRule rule = config.aclIncludeRules().get(0);
+        assertEquals(ResourceType.TOPIC, rule.resourceType());
+        assertNotNull(rule.resourceNamePattern());
+        assertTrue(rule.resourceNamePattern().matcher("any-topic").matches());
         assertNull(rule.hostPattern());
+        assertEquals(AclOperation.READ, rule.operation());
+        assertEquals(AclPermissionType.ALLOW, rule.permissionType());
+        assertEquals("User:alice", rule.principal());
     }
 
     @Test
@@ -689,6 +696,46 @@ public class ClusterMirrorConfigTest {
 
         ClusterMirrorConfig.MirrorAclRule ruleNoMatch = ClusterMirrorConfig.MirrorAclRule.parse("TOPIC;.*;10\\..*;READ;ALLOW;User:alice");
         assertFalse(ruleNoMatch.matches(binding));
+    }
+
+    @Test
+    public void testAclsDocumentationExamples() {
+        // match all ACLs
+        ClusterMirrorConfig.MirrorAclRule matchAllRule = ClusterMirrorConfig.MirrorAclRule.parse(".*");
+        assertEquals(ClusterMirrorConfig.MirrorAclRule.MATCH_ALL, matchAllRule);
+
+        // match all ACLs for topics matching orders.*
+        ClusterMirrorConfig.MirrorAclRule topicOrdersRule = ClusterMirrorConfig.MirrorAclRule.parse("TOPIC;orders.*");
+        assertEquals(ResourceType.TOPIC, topicOrdersRule.resourceType());
+        assertNotNull(topicOrdersRule.resourceNamePattern());
+        assertTrue(topicOrdersRule.resourceNamePattern().matcher("orders-1").matches());
+        assertFalse(topicOrdersRule.resourceNamePattern().matcher("payments-1").matches());
+
+        // match all topic READ and WRITE ALLOW ACLs
+        List<ClusterMirrorConfig.MirrorAclRule> topicAllowRules = ClusterMirrorConfig
+                .MirrorAclRule.parseList("TOPIC;.*;.*;READ;ALLOW||TOPIC;.*;.*;WRITE;ALLOW");
+        assertEquals(2, topicAllowRules.size());
+        ClusterMirrorConfig.MirrorAclRule readAllowRule = topicAllowRules.get(0);
+        assertEquals(ResourceType.TOPIC, readAllowRule.resourceType());
+        assertEquals(AclOperation.READ, readAllowRule.operation());
+        assertEquals(AclPermissionType.ALLOW, readAllowRule.permissionType());
+        ClusterMirrorConfig.MirrorAclRule writeAllowRule = topicAllowRules.get(1);
+        assertEquals(ResourceType.TOPIC, writeAllowRule.resourceType());
+        assertEquals(AclOperation.WRITE, writeAllowRule.operation());
+        assertEquals(AclPermissionType.ALLOW, writeAllowRule.permissionType());
+
+        // match all ACLs for principal User:alice
+        ClusterMirrorConfig.MirrorAclRule aliceRule = ClusterMirrorConfig.MirrorAclRule.parse("ANY;.*;.*;ANY;ANY;User:alice");
+        assertNull(aliceRule.resourceType());
+        assertNull(aliceRule.operation());
+        assertNull(aliceRule.permissionType());
+        assertEquals("User:alice", aliceRule.principal());
+
+        // match all WRITE ACLs
+        ClusterMirrorConfig.MirrorAclRule writeRule = ClusterMirrorConfig.MirrorAclRule.parse("ANY;.*;.*;WRITE;ANY;.*");
+        assertNull(writeRule.resourceType());
+        assertEquals(AclOperation.WRITE, writeRule.operation());
+        assertNull(writeRule.permissionType());
     }
 
     @Test

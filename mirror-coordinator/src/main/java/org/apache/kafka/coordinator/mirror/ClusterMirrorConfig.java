@@ -80,7 +80,7 @@ public final class ClusterMirrorConfig extends AbstractConfig {
 
     public static final String SOCKET_TIMEOUT_MS_CONFIG = "socket.timeout.ms";
     private static final String SOCKET_TIMEOUT_MS_DOC = "The socket timeout for network requests.";
-    private static final int SOCKET_TIMEOUT_MS_DEFAULT = 30 * 1000;
+    private static final long SOCKET_TIMEOUT_MS_DEFAULT = 30 * 1000;
 
     public static final String SOCKET_RECEIVE_BUFFER_BYTES_CONFIG = "socket.receive.buffer.bytes";
     private static final String SOCKET_RECEIVE_BUFFER_BYTES_DOC = "The socket receive buffer for network requests to the source cluster.";
@@ -145,17 +145,12 @@ public final class ClusterMirrorConfig extends AbstractConfig {
     private static final String GROUPS_EXCLUDE_DEFAULT = "";
 
     public static final String ACLS_INCLUDE_CONFIG = "acls.include";
-    private static final String ACLS_INCLUDE_DOC = "ACL include rules. " + MirrorAclRule.DOC
-            + "Examples: .* (match all ACLs), TOPIC;orders.* (all ACLs for topics matching orders.*), "
-            + "TOPIC;.*;READ;ALLOW||TOPIC;.*;WRITE;ALLOW (all topic READ and WRITE ALLOW ACLs), "
-            + "ANY;.*;ANY;ANY;User:alice (all ACLs for principal User:alice).";
+    private static final String ACLS_INCLUDE_DOC = "ACL include rules.\n\n" + MirrorAclRule.DOC;
     private static final String ACLS_INCLUDE_DEFAULT = ".*";
 
     public static final String ACLS_EXCLUDE_CONFIG = "acls.exclude";
-    private static final String ACLS_EXCLUDE_DOC = "ACL exclude rules. " + MirrorAclRule.DOC
-            + "Exclusions take precedence over inclusions. "
-            + "Examples: .* (exclude all ACLs), ANY;.*;WRITE (exclude all WRITE ACLs), "
-            + "ANY;.*;ANY;ANY;User:bob (exclude all ACLs for User:bob).";
+    private static final String ACLS_EXCLUDE_DOC = "ACL exclude rules. "
+            + "Exclusions take precedence over inclusions.\n\n" + MirrorAclRule.DOC;
     private static final String ACLS_EXCLUDE_DEFAULT = "";
 
     public static final String SECURITY_PROTOCOL_CONFIG = CommonClientConfigs.SECURITY_PROTOCOL_CONFIG;
@@ -208,7 +203,7 @@ public final class ClusterMirrorConfig extends AbstractConfig {
                     throw new ConfigException(name, value, "Invalid ACL rule: " + e.getMessage());
                 }
             },
-            () -> "Valid ACL rules separated by || with five semicolon-separated fields"
+            () -> "Valid ACL rules separated by || with six semicolon-separated fields"
     );
 
     private static final ConfigDef CONFIG_DEF = buildConfigDef();
@@ -230,7 +225,7 @@ public final class ClusterMirrorConfig extends AbstractConfig {
                 .define(FETCH_RESPONSE_MAX_BYTES_CONFIG, INT, FETCH_RESPONSE_MAX_BYTES_DEFAULT,
                         atLeast(0), MEDIUM, FETCH_RESPONSE_MAX_BYTES_DOC)
                 .define(FETCH_MAX_BYTES_CONFIG, INT, FETCH_MAX_BYTES_DEFAULT, atLeast(0), MEDIUM, FETCH_MAX_BYTES_DOC)
-                .define(SOCKET_TIMEOUT_MS_CONFIG, INT, SOCKET_TIMEOUT_MS_DEFAULT, atLeast(0), MEDIUM, SOCKET_TIMEOUT_MS_DOC)
+                .define(SOCKET_TIMEOUT_MS_CONFIG, LONG, SOCKET_TIMEOUT_MS_DEFAULT, atLeast(0), MEDIUM, SOCKET_TIMEOUT_MS_DOC)
                 .define(SOCKET_RECEIVE_BUFFER_BYTES_CONFIG, INT, SOCKET_RECEIVE_BUFFER_BYTES_DEFAULT,
                         SOCKET_RECEIVE_BUFFER_BYTES_VALIDATOR, MEDIUM, SOCKET_RECEIVE_BUFFER_BYTES_DOC)
                 .define(TOPIC_PROPERTIES_EXCLUDE_CONFIG, LIST, TOPIC_PROPERTIES_EXCLUDE_DEFAULT,
@@ -402,19 +397,24 @@ public final class ClusterMirrorConfig extends AbstractConfig {
     ) {
         private static final String SEPARATOR = ";";
         private static final String WILDCARD = ".*";
-        public static final MirrorAclRule MATCH_ALL_RULE =
+        public static final MirrorAclRule MATCH_ALL =
                 new MirrorAclRule(null, null, null, null, null, null);
 
-        // Using a small domain-specific language to make ACLs filtering easier
-        private static final String DOC = "Rules are separated by || (double pipe). "
-                + "Each rule uses semicolon-separated fields: "
+        private static final String DOC = "ACLs filtering uses a small domain-specific language. "
+                + "Rules are separated by || (double pipe). Each rule uses semicolon-separated fields: "
                 + "resourceType;resourceName;host;operation;permissionType;principal. "
                 + "The resourceType, operation, and permissionType fields use enum values (e.g. TOPIC, READ, ALLOW). "
                 + "Use ANY or empty to match all values for these fields. "
                 + "The resourceName and host fields support regex patterns (e.g. test-.*, 192\\.168\\..*). "
                 + "The principal field uses exact string matching (e.g. User:alice, User:*). "
                 + "Empty principal means match all. "
-                + "Use .* as the entire value to match all ACLs.";
+                + "Use .* as the entire value to match all ACLs."
+                + "\n\nExamples:\n"
+                + ".* (match all ACLs)\n"
+                + "TOPIC;orders.* (all ACLs for topics matching orders.*)\n"
+                + "TOPIC;.*;.*;READ;ALLOW||TOPIC;.*;.*;WRITE;ALLOW (all topic READ and WRITE ALLOW ACLs)\n"
+                + "ANY;.*;.*;ANY;ANY;User:alice (all ACLs for principal User:alice)\n"
+                + "ANY;.*;.*;WRITE;.* (exclude all WRITE ACLs)";
 
         public static List<MirrorAclRule> parseList(String rules) {
             if (rules == null || rules.isEmpty()) {
@@ -430,7 +430,7 @@ public final class ClusterMirrorConfig extends AbstractConfig {
         public static MirrorAclRule parse(String rule) {
             String trimmed = rule.trim();
             if (trimmed.equals(WILDCARD)) {
-                return MATCH_ALL_RULE;
+                return MATCH_ALL;
             }
             // Split with limit 6 to preserve any extra semicolons in the principal (6th field).
             // This ensures that principals containing semicolons are preserved as-is.
