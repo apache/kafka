@@ -57,12 +57,14 @@ import org.apache.kafka.common.protocol.MessageUtil;
 import org.apache.kafka.common.protocol.ObjectSerializationCache;
 import org.apache.kafka.common.protocol.types.RawTaggedField;
 import org.apache.kafka.common.utils.annotation.ApiKeyVersionsSource;
+import org.apache.kafka.common.utils.internals.ByteUtils;
 
 import com.fasterxml.jackson.databind.JsonNode;
 
 import org.junit.jupiter.api.Test;
 import org.junit.jupiter.api.Timeout;
 import org.junit.jupiter.params.ParameterizedTest;
+import org.junit.jupiter.params.provider.ValueSource;
 
 import java.lang.reflect.Method;
 import java.nio.ByteBuffer;
@@ -855,6 +857,119 @@ public final class MessageTest {
         createTopics.unknownTaggedFields().add(field1000);
         verifyWriteRaisesUve((short) 0, "Tagged fields were set", createTopics);
         verifyWriteSucceeds((short) 6, createTopics);
+    }
+
+    @ParameterizedTest
+    @ValueSource(shorts = {1, 2})
+    public void testTaggedFieldsWrittenInAscendingTagOrder(short version) {
+        SimpleExampleMessageData message = new SimpleExampleMessageData()
+            .setMyTaggedIntArray(List.of(1))
+            .setMyNullableString("a")
+            .setMyInt16((short) 1)
+            .setMyFloat64(1.0)
+            .setMyString("b")
+            .setMyBytes(new byte[] {0x1})
+            .setTaggedUuid(new Uuid(1L, 2L))
+            .setTaggedLong(1L);
+        List<Integer> expectedTags;
+        if (version == 1) {
+            // Tags 8 and 9 are only defined from version 2, so here they are unknown tags.
+            addUnknownTaggedFields(message, 8, 9);
+            expectedTags = List.of(0, 1, 2, 3, 4, 5, 6, 7, 8, 9);
+        } else {
+            message.setMyTaggedStruct(new SimpleExampleMessageData.TaggedStruct().setStructId("c"))
+                .setTaggedLongFlexibleVersionSubset(1L);
+            addUnknownTaggedFields(message, 10, 11);
+            expectedTags = List.of(0, 1, 2, 3, 4, 5, 6, 7, 8, 9, 10, 11);
+        }
+        assertEquals(expectedTags, writtenTaggedFieldTags(message, version));
+    }
+
+    private void addUnknownTaggedFields(SimpleExampleMessageData message, int... tags) {
+        for (int tag : tags) {
+            message.unknownTaggedFields().add(new RawTaggedField(tag, new byte[] {0x1}));
+        }
+    }
+
+    private List<Integer> writtenTaggedFieldTags(SimpleExampleMessageData message, short version) {
+        ObjectSerializationCache cache = new ObjectSerializationCache();
+        ByteBuffer buf = ByteBuffer.allocate(message.size(cache, version));
+        message.write(new ByteBufferAccessor(buf), cache, version);
+        buf.flip();
+
+        // The tagged-fields section comes last; a message with no tagged fields set has the same
+        // bytes before it, followed by a single zero byte for its empty section.
+        buf.position(new SimpleExampleMessageData().size(new ObjectSerializationCache(), version) - 1);
+        ByteBufferAccessor accessor = new ByteBufferAccessor(buf);
+        int numTaggedFields = accessor.readUnsignedVarint();
+        List<Integer> tags = new ArrayList<>(numTaggedFields);
+        for (int i = 0; i < numTaggedFields; i++) {
+            tags.add(accessor.readUnsignedVarint());
+            accessor.readArray(accessor.readUnsignedVarint());
+        }
+        return tags;
+    }
+
+    private byte[] rawTaggedFieldsSection(int declaredCount, int... tagsAndSizes) {
+        ByteBuffer scratch = ByteBuffer.allocate(64);
+        ByteUtils.writeUnsignedVarint(declaredCount, scratch);
+        for (int i = 0; i < tagsAndSizes.length; i += 2) {
+            ByteUtils.writeUnsignedVarint(tagsAndSizes[i], scratch);
+            ByteUtils.writeUnsignedVarint(tagsAndSizes[i + 1], scratch);
+        }
+        scratch.flip();
+        byte[] bytes = new byte[scratch.remaining()];
+        scratch.get(bytes);
+        return bytes;
+    }
+
+    private ByteBuffer messageWithTaggedFieldsSection(short version, byte[] taggedFieldsSection) {
+        SimpleExampleMessageData message = new SimpleExampleMessageData();
+        ObjectSerializationCache cache = new ObjectSerializationCache();
+        int size = message.size(cache, version);
+        ByteBuffer prefix = ByteBuffer.allocate(size);
+        message.write(new ByteBufferAccessor(prefix), cache, version);
+        prefix.flip();
+        byte[] prefixBytes = new byte[prefix.remaining() - 1];
+        prefix.get(prefixBytes);
+        assertEquals((byte) 0, prefix.get(), "expected an empty tagged-fields section to replace");
+        ByteBuffer result = ByteBuffer.allocate(prefixBytes.length + taggedFieldsSection.length);
+        result.put(prefixBytes);
+        result.put(taggedFieldsSection);
+        result.flip();
+        return result;
+    }
+
+    @Test
+    public void testTaggedFieldCountRejectedWhenLargerThanRemainingBytes() {
+        short version = 1;
+        ByteBuffer buf = messageWithTaggedFieldsSection(version, rawTaggedFieldsSection(1_000_000));
+        SimpleExampleMessageData message = new SimpleExampleMessageData();
+        RuntimeException e = assertThrows(RuntimeException.class,
+            () -> message.read(new ByteBufferAccessor(buf), version));
+        assertTrue(e.getMessage().contains("tagged fields"),
+            "Expected a bounded-count rejection, but got: " + e.getMessage());
+    }
+
+    @Test
+    public void testTaggedFieldCountRejectedWhenExceedingHardCap() {
+        short version = 1;
+        int declaredCount = MessageUtil.MAX_TAGGED_FIELD_COUNT + 1;
+        ByteBuffer scratch = ByteBuffer.allocate(16);
+        ByteUtils.writeUnsignedVarint(declaredCount, scratch);
+        scratch.flip();
+        byte[] countBytes = new byte[scratch.remaining()];
+        scratch.get(countBytes);
+        byte[] padding = new byte[declaredCount];
+        ByteBuffer section = ByteBuffer.allocate(countBytes.length + padding.length);
+        section.put(countBytes);
+        section.put(padding);
+        ByteBuffer buf = messageWithTaggedFieldsSection(version, section.array());
+        SimpleExampleMessageData message = new SimpleExampleMessageData();
+        RuntimeException e = assertThrows(RuntimeException.class,
+            () -> message.read(new ByteBufferAccessor(buf), version));
+        assertTrue(e.getMessage().contains("exceeds the maximum allowed count"),
+            "Expected a hard-cap rejection, but got: " + e.getMessage());
     }
 
     @Test

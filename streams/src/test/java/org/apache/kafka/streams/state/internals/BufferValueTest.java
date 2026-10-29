@@ -24,8 +24,7 @@ import org.junit.jupiter.api.Test;
 import java.nio.ByteBuffer;
 import java.util.Arrays;
 
-import static org.hamcrest.MatcherAssert.assertThat;
-import static org.hamcrest.Matchers.is;
+import static org.junit.jupiter.api.Assertions.assertArrayEquals;
 import static org.junit.jupiter.api.Assertions.assertEquals;
 import static org.junit.jupiter.api.Assertions.assertNotEquals;
 import static org.junit.jupiter.api.Assertions.assertNull;
@@ -101,7 +100,7 @@ public class BufferValueTest {
         final byte[] bytes = new BufferValue(null, null, null, context).serialize(0).array();
         final byte[] withoutContext = Arrays.copyOfRange(bytes, serializedContext.length, bytes.length);
 
-        assertThat(withoutContext, is(ByteBuffer.allocate(Integer.BYTES * 3).putInt(-1).putInt(-1).putInt(-1).array()));
+        assertArrayEquals(ByteBuffer.allocate(Integer.BYTES * 3).putInt(-1).putInt(-1).putInt(-1).array(), withoutContext);
     }
 
     @Test
@@ -112,7 +111,7 @@ public class BufferValueTest {
         final byte[] bytes = new BufferValue(priorValue, null, null, context).serialize(0).array();
         final byte[] withoutContext = Arrays.copyOfRange(bytes, serializedContext.length, bytes.length);
 
-        assertThat(withoutContext, is(ByteBuffer.allocate(Integer.BYTES * 3 + 1).putInt(1).put(priorValue).putInt(-1).putInt(-1).array()));
+        assertArrayEquals(ByteBuffer.allocate(Integer.BYTES * 3 + 1).putInt(1).put(priorValue).putInt(-1).putInt(-1).array(), withoutContext);
     }
 
     @Test
@@ -123,7 +122,7 @@ public class BufferValueTest {
         final byte[] bytes = new BufferValue(null, oldValue, null, context).serialize(0).array();
         final byte[] withoutContext = Arrays.copyOfRange(bytes, serializedContext.length, bytes.length);
 
-        assertThat(withoutContext, is(ByteBuffer.allocate(Integer.BYTES * 3 + 1).putInt(-1).putInt(1).put(oldValue).putInt(-1).array()));
+        assertArrayEquals(ByteBuffer.allocate(Integer.BYTES * 3 + 1).putInt(-1).putInt(1).put(oldValue).putInt(-1).array(), withoutContext);
     }
 
     @Test
@@ -134,7 +133,7 @@ public class BufferValueTest {
         final byte[] bytes = new BufferValue(null, null, newValue, context).serialize(0).array();
         final byte[] withoutContext = Arrays.copyOfRange(bytes, serializedContext.length, bytes.length);
 
-        assertThat(withoutContext, is(ByteBuffer.allocate(Integer.BYTES * 3 + 1).putInt(-1).putInt(-1).putInt(1).put(newValue).array()));
+        assertArrayEquals(ByteBuffer.allocate(Integer.BYTES * 3 + 1).putInt(-1).putInt(-1).putInt(1).put(newValue).array(), withoutContext);
     }
 
     @Test
@@ -145,7 +144,7 @@ public class BufferValueTest {
         final byte[] bytes = new BufferValue(duplicate, duplicate, null, context).serialize(0).array();
         final byte[] withoutContext = Arrays.copyOfRange(bytes, serializedContext.length, bytes.length);
 
-        assertThat(withoutContext, is(ByteBuffer.allocate(Integer.BYTES * 3 + 1).putInt(1).put(duplicate).putInt(-2).putInt(-1).array()));
+        assertArrayEquals(ByteBuffer.allocate(Integer.BYTES * 3 + 1).putInt(1).put(duplicate).putInt(-2).putInt(-1).array(), withoutContext);
     }
 
     @Test
@@ -160,7 +159,7 @@ public class BufferValueTest {
         serialValue.position(0);
 
         final BufferValue deserialize = BufferValue.deserialize(serialValue);
-        assertThat(deserialize, is(new BufferValue(priorValue, null, null, context)));
+        assertEquals(new BufferValue(priorValue, null, null, context), deserialize);
     }
 
     @Test
@@ -174,7 +173,7 @@ public class BufferValueTest {
                 .put(serializedContext).putInt(-1).putInt(1).put(oldValue).putInt(-1);
         serialValue.position(0);
 
-        assertThat(BufferValue.deserialize(serialValue), is(new BufferValue(null, oldValue, null, context)));
+        assertEquals(new BufferValue(null, oldValue, null, context), BufferValue.deserialize(serialValue));
     }
 
     @Test
@@ -188,7 +187,7 @@ public class BufferValueTest {
                 .put(serializedContext).putInt(-1).putInt(-1).putInt(1).put(newValue);
         serialValue.position(0);
 
-        assertThat(BufferValue.deserialize(serialValue), is(new BufferValue(null, null, newValue, context)));
+        assertEquals(new BufferValue(null, null, newValue, context), BufferValue.deserialize(serialValue));
     }
 
     @Test
@@ -203,7 +202,7 @@ public class BufferValueTest {
         serialValue.position(0);
 
         final BufferValue bufferValue = BufferValue.deserialize(serialValue);
-        assertThat(bufferValue, is(new BufferValue(duplicate, duplicate, null, context)));
+        assertEquals(new BufferValue(duplicate, duplicate, null, context), bufferValue);
         assertSame(bufferValue.priorValue(), bufferValue.oldValue());
     }
 }

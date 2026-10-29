@@ -41,8 +41,7 @@ import org.rocksdb.Statistics;
 import org.rocksdb.StatsLevel;
 import org.rocksdb.TickerType;
 
-import static org.hamcrest.CoreMatchers.is;
-import static org.hamcrest.MatcherAssert.assertThat;
+import static org.junit.jupiter.api.Assertions.assertEquals;
 import static org.junit.jupiter.api.Assertions.assertThrows;
 import static org.mockito.ArgumentMatchers.any;
 import static org.mockito.ArgumentMatchers.eq;
@@ -162,7 +161,7 @@ public class RocksDBMetricsRecorderTest {
         dbMetrics.verify(() -> RocksDBMetrics.addEstimateNumKeysMetric(eq(streamsMetrics), eq(metricsContext), any()));
         dbMetrics.verify(() -> RocksDBMetrics.addEstimateTableReadersMemMetric(eq(streamsMetrics), eq(metricsContext), any()));
         dbMetrics.verify(() -> RocksDBMetrics.addBackgroundErrorsMetric(eq(streamsMetrics), eq(metricsContext), any()));
-        assertThat(recorder.taskId(), is(TASK_ID1));
+        assertEquals(TASK_ID1, recorder.taskId());
     }
 
     @Test
@@ -220,11 +219,11 @@ public class RocksDBMetricsRecorderTest {
             IllegalStateException.class,
             () -> recorder.addValueProviders(SEGMENT_STORE_NAME_1, dbToAdd1, cacheToAdd1, statisticsToAdd2)
         );
-        assertThat(
-            exception.getMessage(),
-            is("Value providers for store " + SEGMENT_STORE_NAME_1 + " of task " + TASK_ID1 +
+        assertEquals(
+            "Value providers for store " + SEGMENT_STORE_NAME_1 + " of task " + TASK_ID1 +
                 " has been already added. This is a bug in Kafka Streams. " +
-                "Please open a bug report under https://issues.apache.org/jira/projects/KAFKA/issues")
+                "Please open a bug report under https://issues.apache.org/jira/projects/KAFKA/issues",
+            exception.getMessage()
         );
     }
 
@@ -236,12 +235,12 @@ public class RocksDBMetricsRecorderTest {
             IllegalStateException.class,
             () -> recorder.addValueProviders(SEGMENT_STORE_NAME_2, dbToAdd2, cacheToAdd2, statisticsToAdd2)
         );
-        assertThat(
-            exception.getMessage(),
-            is("Statistics for segment " + SEGMENT_STORE_NAME_2 + " of task " + TASK_ID1 +
+        assertEquals(
+            "Statistics for segment " + SEGMENT_STORE_NAME_2 + " of task " + TASK_ID1 +
                 " is not null although the statistics of another segment in this metrics recorder is null. " +
                 "This is a bug in Kafka Streams. " +
-                "Please open a bug report under https://issues.apache.org/jira/projects/KAFKA/issues")
+                "Please open a bug report under https://issues.apache.org/jira/projects/KAFKA/issues",
+            exception.getMessage()
         );
     }
 
@@ -253,12 +252,12 @@ public class RocksDBMetricsRecorderTest {
             IllegalStateException.class,
             () -> recorder.addValueProviders(SEGMENT_STORE_NAME_2, dbToAdd2, cacheToAdd2, null)
         );
-        assertThat(
-            exception.getMessage(),
-            is("Statistics for segment " + SEGMENT_STORE_NAME_2 + " of task " + TASK_ID1 +
+        assertEquals(
+            "Statistics for segment " + SEGMENT_STORE_NAME_2 + " of task " + TASK_ID1 +
                 " is null although the statistics of another segment in this metrics recorder is not null. " +
                 "This is a bug in Kafka Streams. " +
-                "Please open a bug report under https://issues.apache.org/jira/projects/KAFKA/issues")
+                "Please open a bug report under https://issues.apache.org/jira/projects/KAFKA/issues",
+            exception.getMessage()
         );
     }
 
@@ -270,12 +269,12 @@ public class RocksDBMetricsRecorderTest {
             IllegalStateException.class,
             () -> recorder.addValueProviders(SEGMENT_STORE_NAME_2, dbToAdd2, cacheToAdd1, statisticsToAdd1)
         );
-        assertThat(
-            exception.getMessage(),
-            is("Cache for segment " + SEGMENT_STORE_NAME_2 + " of task " + TASK_ID1 +
+        assertEquals(
+            "Cache for segment " + SEGMENT_STORE_NAME_2 + " of task " + TASK_ID1 +
                 " is not null although the cache of another segment in this metrics recorder is null. " +
                 "This is a bug in Kafka Streams. " +
-                "Please open a bug report under https://issues.apache.org/jira/projects/KAFKA/issues")
+                "Please open a bug report under https://issues.apache.org/jira/projects/KAFKA/issues",
+            exception.getMessage()
         );
     }
 
@@ -287,12 +286,12 @@ public class RocksDBMetricsRecorderTest {
             IllegalStateException.class,
             () -> recorder.addValueProviders(SEGMENT_STORE_NAME_2, dbToAdd2, null, statisticsToAdd2)
         );
-        assertThat(
-            exception.getMessage(),
-            is("Cache for segment " + SEGMENT_STORE_NAME_2 + " of task " + TASK_ID1 +
+        assertEquals(
+            "Cache for segment " + SEGMENT_STORE_NAME_2 + " of task " + TASK_ID1 +
                 " is null although the cache of another segment in this metrics recorder is not null. " +
                 "This is a bug in Kafka Streams. " +
-                "Please open a bug report under https://issues.apache.org/jira/projects/KAFKA/issues")
+                "Please open a bug report under https://issues.apache.org/jira/projects/KAFKA/issues",
+            exception.getMessage()
         );
     }
 
@@ -305,11 +304,11 @@ public class RocksDBMetricsRecorderTest {
             IllegalStateException.class,
             () -> recorder.addValueProviders(SEGMENT_STORE_NAME_3, dbToAdd3, cacheToAdd2, statisticsToAdd3)
         );
-        assertThat(
-            exception.getMessage(),
-            is("Caches for store " + STORE_NAME + " of task " + TASK_ID1 +
+        assertEquals(
+            "Caches for store " + STORE_NAME + " of task " + TASK_ID1 +
                 " are either not all distinct or do not all refer to the same cache. This is a bug in Kafka Streams. " +
-                "Please open a bug report under https://issues.apache.org/jira/projects/KAFKA/issues")
+                "Please open a bug report under https://issues.apache.org/jira/projects/KAFKA/issues",
+            exception.getMessage()
         );
     }
 
@@ -322,11 +321,11 @@ public class RocksDBMetricsRecorderTest {
             IllegalStateException.class,
             () -> recorder.addValueProviders(SEGMENT_STORE_NAME_3, dbToAdd3, cacheToAdd1, statisticsToAdd3)
         );
-        assertThat(
-            exception.getMessage(),
-            is("Caches for store " + STORE_NAME + " of task " + TASK_ID1 +
+        assertEquals(
+            "Caches for store " + STORE_NAME + " of task " + TASK_ID1 +
                 " are either not all distinct or do not all refer to the same cache. This is a bug in Kafka Streams. " +
-                "Please open a bug report under https://issues.apache.org/jira/projects/KAFKA/issues")
+                "Please open a bug report under https://issues.apache.org/jira/projects/KAFKA/issues",
+            exception.getMessage()
         );
     }
 
@@ -338,11 +337,11 @@ public class RocksDBMetricsRecorderTest {
             IllegalStateException.class,
             () -> recorder.addValueProviders(SEGMENT_STORE_NAME_2, dbToAdd1, cacheToAdd2, statisticsToAdd2)
         );
-        assertThat(
-            exception.getMessage(),
-            is("DB instance for store " + SEGMENT_STORE_NAME_2 + " of task " + TASK_ID1 +
+        assertEquals(
+            "DB instance for store " + SEGMENT_STORE_NAME_2 + " of task " + TASK_ID1 +
                 " was already added for another segment as a value provider. This is a bug in Kafka Streams. " +
-                "Please open a bug report under https://issues.apache.org/jira/projects/KAFKA/issues")
+                "Please open a bug report under https://issues.apache.org/jira/projects/KAFKA/issues",
+            exception.getMessage()
         );
     }
 

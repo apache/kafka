@@ -59,8 +59,6 @@ import java.util.function.Supplier;
 import java.util.regex.Pattern;
 import java.util.stream.Collectors;
 
-import static java.util.Collections.emptySet;
-
 public class TopologyMetadata {
     private Logger log;
 
@@ -398,7 +396,7 @@ public class TopologyMetadata {
     }
 
     public Set<String> namedTopologiesView() {
-        return hasNamedTopologies() ? Collections.unmodifiableSet(builders.keySet()) : emptySet();
+        return hasNamedTopologies() ? Collections.unmodifiableSet(builders.keySet()) : Set.of();
     }
 
     /**

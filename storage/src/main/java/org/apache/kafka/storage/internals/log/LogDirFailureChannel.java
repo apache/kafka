@@ -20,6 +20,7 @@ import org.slf4j.Logger;
 import org.slf4j.LoggerFactory;
 
 import java.io.IOException;
+import java.util.Set;
 import java.util.concurrent.ArrayBlockingQueue;
 import java.util.concurrent.BlockingQueue;
 import java.util.concurrent.ConcurrentHashMap;
@@ -39,6 +40,8 @@ public class LogDirFailureChannel {
     private static final Logger log = LoggerFactory.getLogger(LogDirFailureChannel.class);
     private final ConcurrentMap<String, String> offlineLogDirs;
     private final BlockingQueue<String> offlineLogDirQueue;
+    // Log dirs with a read check running, see tryStartReadCheck
+    private final Set<String> logDirsWithReadCheck = ConcurrentHashMap.newKeySet();
 
     public LogDirFailureChannel(int logDirNum) {
         this.offlineLogDirs = new ConcurrentHashMap<>();
@@ -50,18 +53,41 @@ public class LogDirFailureChannel {
     }
 
     /**
-     * If the given logDir is not already offline, add it to the
-     * set of offline log dirs and enqueue it to the logDirFailureEvent queue.
+     * If the given logDir is not already offline, add it to the set of offline
+     * log dirs, log the error and enqueue logDir to the logDirFailureEvent queue.
+     * An error in a log dir that is already offline is not logged, so that the
+     * failures that follow the first one in a failing log dir do not flood the log.
      * 
      * @param logDir The offline logDir.
      * @param msg Error message.
      * @param e Exception instance.
      */
     public void maybeAddOfflineLogDir(String logDir, String msg, IOException e) {
-        log.error(msg, e);
         if (offlineLogDirs.putIfAbsent(logDir, logDir) == null) {
+            log.error(msg, e);
             offlineLogDirQueue.add(logDir);
         }
+    }
+
+    /**
+     * Start a check of whether the given log dir can still be read, unless it is already offline or a check is already
+     * running. Taking the log dir offline is all or nothing, so one check at a time per log dir is enough, and a failing
+     * disk then holds at most one thread per log dir. A started check must be finished with {@link #finishReadCheck}.
+     *
+     * @param logDir The log dir to check.
+     * @return true if the check was started, false if the log dir is offline or a check is already running.
+     */
+    public boolean tryStartReadCheck(String logDir) {
+        return !hasOfflineLogDir(logDir) && logDirsWithReadCheck.add(logDir);
+    }
+
+    /**
+     * Finish a check started with {@link #tryStartReadCheck}.
+     *
+     * @param logDir The checked log dir.
+     */
+    public void finishReadCheck(String logDir) {
+        logDirsWithReadCheck.remove(logDir);
     }
 
     /**

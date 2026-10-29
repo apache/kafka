@@ -49,8 +49,7 @@ import java.util.List;
 import java.util.function.Predicate;
 import java.util.function.Supplier;
 
-import static org.hamcrest.CoreMatchers.is;
-import static org.hamcrest.MatcherAssert.assertThat;
+import static org.junit.jupiter.api.Assertions.assertEquals;
 import static org.junit.jupiter.api.Assertions.assertNotNull;
 
 @Tag("integration")
@@ -173,7 +172,7 @@ public class KTableEfficientRangeQueryTest {
              final KeyValueIterator<String, String> expectedIterator = forward ? store.all() : store.reverseAll()) {
             final List<KeyValue<String, String>> result = Utils.toList(resultIterator);
             final List<KeyValue<String, String>> expected = filterList(expectedIterator, from, to);
-            assertThat(result, is(expected));
+            assertEquals(expected, result);
         }
     }
 

@@ -19,14 +19,22 @@ package org.apache.kafka.server.share.dlq;
 
 import org.apache.kafka.clients.KafkaClient;
 import org.apache.kafka.common.utils.Time;
+import org.apache.kafka.common.utils.Utils;
+import org.apache.kafka.common.utils.internals.KafkaThread;
 import org.apache.kafka.server.share.LogReader;
 import org.apache.kafka.server.share.metrics.ShareGroupMetrics;
 import org.apache.kafka.server.util.timer.Timer;
 
 import org.slf4j.Logger;
 import org.slf4j.LoggerFactory;
+import org.slf4j.event.Level;
 
 import java.util.concurrent.CompletableFuture;
+import java.util.concurrent.ExecutorService;
+import java.util.concurrent.Executors;
+import java.util.concurrent.TimeUnit;
+import java.util.concurrent.atomic.AtomicInteger;
+import java.util.function.IntSupplier;
 
 /**
  * The default share group DLQ manager responsible for processing
@@ -39,6 +47,14 @@ public class DefaultShareGroupDLQManager implements ShareGroupDLQManager {
      */
     private final ShareGroupDLQStateManager stateManager;
 
+    /**
+     * Executor on which the state manager reads the source records of DLQ requests from the log, so
+     * that the read never blocks the thread which submitted the request. Owned by this manager.
+     */
+    private final ExecutorService fetchExecutor;
+
+    private static final long FETCH_EXECUTOR_SHUTDOWN_TIMEOUT_MS = 5_000L;
+
     private static final Logger log = LoggerFactory.getLogger(DefaultShareGroupDLQManager.class);
 
     public static ShareGroupDLQManager instance(
@@ -47,9 +63,10 @@ public class DefaultShareGroupDLQManager implements ShareGroupDLQManager {
         Time time,
         Timer timer,
         ShareGroupMetrics shareGroupMetrics,
+        IntSupplier shareGroupDLQManagerFetcherNumThreads,
         LogReader logReader
     ) {
-        DefaultShareGroupDLQManager instance = new DefaultShareGroupDLQManager(client, cacheHelper, time, timer, shareGroupMetrics, logReader);
+        DefaultShareGroupDLQManager instance = new DefaultShareGroupDLQManager(client, cacheHelper, time, timer, shareGroupMetrics, shareGroupDLQManagerFetcherNumThreads, logReader);
         instance.start();
         return instance;
     }
@@ -60,19 +77,29 @@ public class DefaultShareGroupDLQManager implements ShareGroupDLQManager {
         Time time,
         Timer timer,
         ShareGroupMetrics shareGroupMetrics,
+        IntSupplier shareGroupDLQManagerFetcherNumThreads,
         LogReader logReader
     ) {
-        stateManager = new ShareGroupDLQStateManager(client, cacheHelper, time, timer, shareGroupMetrics, logReader);
+        AtomicInteger threadId = new AtomicInteger();
+        fetchExecutor = Executors.newFixedThreadPool(
+            shareGroupDLQManagerFetcherNumThreads.getAsInt(),
+            runnable -> KafkaThread.daemon("share-group-dlq-record-fetcher-" + threadId.getAndIncrement(), runnable));
+        stateManager = new ShareGroupDLQStateManager(client, cacheHelper, time, timer, shareGroupMetrics, logReader, fetchExecutor);
     }
 
     private void start() {
         stateManager.start();
     }
 
+    // Visibility for tests
+    ExecutorService fetchExecutor() {
+        return fetchExecutor;
+    }
+
     @Override
     public CompletableFuture<Void> enqueue(ShareGroupDLQRecordParameter param) {
         try {
-            validate(param);
+            ShareGroupDLQValidator.validateParam(param);
             return stateManager.dlq(param);
         } catch (Exception e) {
             log.error("Unable to enqueue DLQ request", e);
@@ -82,45 +109,20 @@ public class DefaultShareGroupDLQManager implements ShareGroupDLQManager {
 
     @Override
     public void stop() {
+        // Drain the reads first - they enqueue onto the state manager when they finish. Queued reads
+        // still run after shutdown(). shutdownNow() is deliberately not used: it would interrupt a
+        // thread which may be reading a log segment, and an interrupt during a FileChannel operation
+        // closes the channel for every other user of that segment. A read which does not finish in
+        // time is abandoned and left to complete on its daemon thread. The futures of requests that
+        // never complete are not awaited by anything on the shutdown path.
+        fetchExecutor.shutdown();
         try {
-            stateManager.stop();
-        } catch (Exception e) {
-            log.error("Unable to stop DLQ state manager", e);
+            if (!fetchExecutor.awaitTermination(FETCH_EXECUTOR_SHUTDOWN_TIMEOUT_MS, TimeUnit.MILLISECONDS)) {
+                log.warn("DLQ fetch executor did not finish its pending reads in {} ms.", FETCH_EXECUTOR_SHUTDOWN_TIMEOUT_MS);
+            }
+        } catch (InterruptedException e) {
+            Thread.currentThread().interrupt();
         }
-    }
-
-    private static void validate(ShareGroupDLQRecordParameter param) {
-        String prefix = "DLQ records parameters";
-        if (param == null) {
-            throw new IllegalArgumentException(prefix + " cannot be null.");
-        }
-
-        if (param.groupId() == null || param.groupId().isEmpty()) {
-            throw new IllegalArgumentException(prefix + " group cannot be null or empty.");
-        }
-
-        if (param.topicIdPartition() == null) {
-            throw new IllegalArgumentException(prefix + " topic/partition data cannot be null or empty.");
-        }
-
-        if (param.topicIdPartition().topicId() == null) {
-            throw new IllegalArgumentException(prefix + " topic id data cannot be null or empty.");
-        }
-
-        if (param.topicIdPartition().partition() < 0) {
-            throw new IllegalArgumentException(prefix + " partition cannot be negative.");
-        }
-
-        if (param.firstOffset() < 0) {
-            throw new IllegalArgumentException(prefix + " first offset cannot be negative.");
-        }
-
-        if (param.lastOffset() < 0) {
-            throw new IllegalArgumentException(prefix + " last offset cannot be negative.");
-        }
-
-        if (param.lastOffset() < param.firstOffset()) {
-            throw new IllegalArgumentException(prefix + " last offset cannot be less than first offset.");
-        }
+        Utils.swallow(log, Level.ERROR, "Unable to stop DLQ state manager", stateManager::stop);
     }
 }

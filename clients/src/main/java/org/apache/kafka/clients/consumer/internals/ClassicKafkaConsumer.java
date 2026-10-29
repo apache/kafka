@@ -135,7 +135,7 @@ public class ClassicKafkaConsumer<K, V> implements ConsumerDelegate<K, V> {
 
     private final Time time;
     private final ConsumerNetworkClient client;
-    private final SubscriptionState subscriptions;
+    private final ConsumerSubscriptionState subscriptions;
     private final ConsumerMetadata metadata;
     private final long retryBackoffMs;
     private final long retryBackoffMaxMs;
@@ -175,7 +175,8 @@ public class ClassicKafkaConsumer<K, V> implements ConsumerDelegate<K, V> {
             this.defaultApiTimeoutMs = config.getInt(ConsumerConfig.DEFAULT_API_TIMEOUT_MS_CONFIG);
             this.time = Time.SYSTEM;
             List<MetricsReporter> reporters = CommonClientConfigs.metricsReporters(clientId, config);
-            this.clientTelemetryReporter = CommonClientConfigs.telemetryReporter(clientId, config);
+            Uuid clientInstanceId = Uuid.randomUuid();
+            this.clientTelemetryReporter = CommonClientConfigs.telemetryReporter(clientId, clientInstanceId, config);
             this.clientTelemetryReporter.ifPresent(reporters::add);
             this.metrics = createMetrics(config, time, reporters);
             this.retryBackoffMs = config.getLong(ConsumerConfig.RETRY_BACKOFF_MS_CONFIG);
@@ -199,6 +200,7 @@ public class ClassicKafkaConsumer<K, V> implements ConsumerDelegate<K, V> {
 
             ApiVersions apiVersions = new ApiVersions();
             this.client = createConsumerNetworkClient(config,
+                    clientInstanceId,
                     metrics,
                     logContext,
                     apiVersions,
@@ -300,7 +302,7 @@ public class ClassicKafkaConsumer<K, V> implements ConsumerDelegate<K, V> {
                          Deserializer<K> keyDeserializer,
                          Deserializer<V> valueDeserializer,
                          KafkaClient client,
-                         SubscriptionState subscriptions,
+                         ConsumerSubscriptionState subscriptions,
                          ConsumerMetadata metadata,
                          List<ConsumerPartitionAssignor> assignors) {
         this.log = logContext.logger(getClass());
@@ -490,7 +492,7 @@ public class ClassicKafkaConsumer<K, V> implements ConsumerDelegate<K, V> {
      *                               previously (without a subsequent call to {@link #unsubscribe()}), or if not
      *                               configured at-least one partition assignment strategy
      */
-    private void subscribeInternal(Collection<String> topics, ConsumerRebalanceListener listener) {
+    private void subscribeInternal(Collection<String> topics, RebalanceListener listener) {
         acquireAndEnsureOpen();
         try {
             throwIfGroupIdNotDefined();
@@ -563,8 +565,8 @@ public class ClassicKafkaConsumer<K, V> implements ConsumerDelegate<K, V> {
      * This can be controlled through the {@code metadata.max.age.ms} configuration: by lowering
      * the max metadata age, the consumer will refresh metadata more often and check for matching topics.
      * <p>
-     * See {@link #subscribe(Collection, ConsumerRebalanceListener)} for details on the
-     * use of the {@link ConsumerRebalanceListener}. Generally rebalances are triggered when there
+     * See {@link RebalanceListener} for details on the
+     * use of rebalance callbacks. Generally rebalances are triggered when there
      * is a change to the topics matching the provided pattern and when consumer group membership changes.
      * Group rebalances only take place during an active call to {@link #poll(Duration)}.
      *
@@ -576,7 +578,7 @@ public class ClassicKafkaConsumer<K, V> implements ConsumerDelegate<K, V> {
      *                               previously (without a subsequent call to {@link #unsubscribe()}), or if not
      *                               configured at-least one partition assignment strategy
      */
-    private void subscribeInternal(Pattern pattern, ConsumerRebalanceListener listener) {
+    private void subscribeInternal(Pattern pattern, RebalanceListener listener) {
         throwIfGroupIdNotDefined();
         if (pattern == null || pattern.toString().isEmpty())
             throw new IllegalArgumentException("Topic pattern to subscribe to cannot be " + (pattern == null ?
@@ -816,7 +818,7 @@ public class ClassicKafkaConsumer<K, V> implements ConsumerDelegate<K, V> {
         acquireAndEnsureOpen();
         try {
             log.info("Seeking to offset {} for partition {}", offset, partition);
-            SubscriptionState.FetchPosition newPosition = new SubscriptionState.FetchPosition(
+            ConsumerSubscriptionState.FetchPosition newPosition = new ConsumerSubscriptionState.FetchPosition(
                     offset,
                     Optional.empty(), // This will ensure we skip validation
                     this.metadata.currentLeader(partition));
@@ -842,7 +844,7 @@ public class ClassicKafkaConsumer<K, V> implements ConsumerDelegate<K, V> {
                 log.info("Seeking to offset {} for partition {}", offset, partition);
             }
             Metadata.LeaderAndEpoch currentLeaderAndEpoch = this.metadata.currentLeader(partition);
-            SubscriptionState.FetchPosition newPosition = new SubscriptionState.FetchPosition(
+            ConsumerSubscriptionState.FetchPosition newPosition = new ConsumerSubscriptionState.FetchPosition(
                     offsetAndMetadata.offset(),
                     offsetAndMetadata.leaderEpoch(),
                     currentLeaderAndEpoch);
@@ -895,7 +897,7 @@ public class ClassicKafkaConsumer<K, V> implements ConsumerDelegate<K, V> {
 
             Timer timer = time.timer(timeout);
             do {
-                SubscriptionState.FetchPosition position = this.subscriptions.validPosition(partition);
+                ConsumerSubscriptionState.FetchPosition position = this.subscriptions.validPosition(partition);
                 if (position != null)
                     return position.offset;
 

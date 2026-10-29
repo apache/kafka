@@ -83,7 +83,7 @@ public class PlaintextConsumerCommitTest {
     }
 
     @BeforeEach
-    public void setup() throws InterruptedException {
+    public void setup() {
         cluster.createTopic(topic, 2, (short) BROKER_COUNT);
     }
 
@@ -334,14 +334,14 @@ public class PlaintextConsumerCommitTest {
                 producer.send(new ProducerRecord<>(tp.topic(), tp.partition(), ("key " + i).getBytes(), ("value " + i).getBytes()));
             }
 
-            var rebalanceListener = new ConsumerRebalanceListener() {
+            var rebalanceListener = new RebalanceListener() {
                 @Override
-                public void onPartitionsAssigned(Collection<TopicPartition> partitions) {
+                public void onPartitionsAssigned(Collection<TopicPartition> partitions, RebalanceConsumer rebalanceConsumer) {
                     // keep partitions paused in this test so that we can verify the commits based on specific seeks
-                    consumer.pause(partitions);
+                    rebalanceConsumer.pause(partitions);
                 }
                 @Override
-                public void onPartitionsRevoked(Collection<TopicPartition> partitions) {
+                public void onPartitionsRevoked(Collection<TopicPartition> partitions, RebalanceConsumer rebalanceConsumer) {
                     // No-op
                 }
             };
@@ -448,26 +448,28 @@ public class PlaintextConsumerCommitTest {
         try (var consumer = createConsumer(groupProtocol, true)) {
             sendRecords(cluster, tp, 1000);
 
-            var rebalanceListener = new ConsumerRebalanceListener() {
+            var rebalanceListener = new RebalanceListener() {
                 @Override
-                public void onPartitionsAssigned(Collection<TopicPartition> partitions) {
+                public void onPartitionsAssigned(Collection<TopicPartition> partitions, RebalanceConsumer rebalanceConsumer) {
                     // keep partitions paused in this test so that we can verify the commits based on specific seeks
-                    consumer.pause(partitions);
+                    rebalanceConsumer.pause(partitions);
                 }
 
                 @Override
-                public void onPartitionsRevoked(Collection<TopicPartition> partitions) {
+                public void onPartitionsRevoked(Collection<TopicPartition> partitions, RebalanceConsumer rebalanceConsumer) {
 
                 }
             };
 
-            consumer.subscribe(List.of(topic), rebalanceListener);
+            consumer.setRebalanceListener(rebalanceListener);
+            consumer.subscribe(List.of(topic));
             awaitAssignment(consumer, Set.of(tp, tp1));
 
             consumer.seek(tp, 300);
             consumer.seek(tp1, 500);
             // change subscription to trigger rebalance
-            consumer.subscribe(List.of(topic, topic2), rebalanceListener);
+            consumer.setRebalanceListener(rebalanceListener);
+            consumer.subscribe(List.of(topic, topic2));
 
             var newAssignment = Set.of(tp, tp1, new TopicPartition(topic2, 0), new TopicPartition(topic2, 1));
             awaitAssignment(consumer, newAssignment);
@@ -580,7 +582,7 @@ public class PlaintextConsumerCommitTest {
 
     // TODO: This only works in the new consumer, but should be fixed for the old consumer as well
     @ClusterTest
-    public void testCommitAsyncCompletedBeforeConsumerCloses() throws InterruptedException {
+    public void testCommitAsyncCompletedBeforeConsumerCloses() {
         // This is testing the contract that asynchronous offset commit are completed before the consumer
         // is closed, even when no commit sync is performed as part of the close (due to auto-commit
         // disabled, or simply because there are no consumed offsets).
@@ -719,9 +721,10 @@ public class PlaintextConsumerCommitTest {
         Consumer<byte[], byte[]> consumer,
         List<String> topicsToSubscribe,
         Set<TopicPartition> expectedAssignment,
-        ConsumerRebalanceListener rebalanceListener
+        RebalanceListener rebalanceListener
     ) throws InterruptedException {
-        consumer.subscribe(topicsToSubscribe, rebalanceListener);
+        consumer.setRebalanceListener(rebalanceListener);
+        consumer.subscribe(topicsToSubscribe);
         awaitAssignment(consumer, expectedAssignment);
     }
 }

@@ -149,6 +149,7 @@ class TransactionLogTest {
         buffer.getShort(); // skip version prefix
         var value = new TransactionLogValue(new ByteBufferAccessor(buffer), (short) 1);
 
+        assertEquals(4, value.lastProducerEpoch());
         assertEquals(200L, value.producerId());
         assertEquals(100L, value.previousProducerId());
         assertEquals(201L, value.nextProducerId());
@@ -157,13 +158,13 @@ class TransactionLogTest {
     @Test
     void shouldNotPersistProducerIdsAtVersion0() {
         // Version 0 is non-flexible, so tagged fields (previousProducerId,
-        // nextProducerId) cannot be written. They fall back to defaults (-1).
+        // nextProducerId, lastProducerEpoch) cannot be written. They fall back to defaults (-1).
         var txnTransitMetadata = new TxnTransitMetadata(
             200L,       // producerId
             100L,       // prevProducerId — not persisted at v0
             201L,       // nextProducerId — not persisted at v0
             (short) 5,  // producerEpoch
-            (short) 4,  // lastProducerEpoch
+            (short) 4,  // lastProducerEpoch - not persisted at v0
             1000,       // txnTimeoutMs
             TransactionState.PREPARE_COMMIT,
             new HashSet<>(Set.of(new TopicPartition("topic", 0))),
@@ -179,6 +180,7 @@ class TransactionLogTest {
         var readResult = assertInstanceOf(TransactionLog.TxnRecord.class, TransactionLog.read(record.key(), record.value()));
         var deserialized = readResult.metadata();
 
+        assertEquals(RecordBatch.NO_PRODUCER_EPOCH, deserialized.lastProducerEpoch());
         assertEquals(200L, deserialized.producerId());
         assertEquals(-1L, deserialized.prevProducerId());
     }
@@ -206,6 +208,7 @@ class TransactionLogTest {
         var txnLogValue = new TransactionLogValue()
             .setProducerId(100)
             .setProducerEpoch((short) 50)
+            .setLastProducerEpoch((short) 49)
             .setTransactionStatus(TransactionState.COMPLETE_COMMIT.id())
             .setTransactionStartTimestampMs(750L)
             .setTransactionLastUpdateTimestampMs(1000L)
@@ -219,6 +222,7 @@ class TransactionLogTest {
 
         assertEquals(100, deserialized.producerId());
         assertEquals(50, deserialized.producerEpoch());
+        assertEquals(49, deserialized.lastProducerEpoch());
         assertEquals(TransactionState.COMPLETE_COMMIT, deserialized.state());
         assertEquals(750L, deserialized.txnStartTimestamp());
         assertEquals(1000L, deserialized.txnLastUpdateTimestamp());

@@ -21,6 +21,9 @@
   // Version 2 handles PreVote requests
   "validVersions": "0-2",
   "flexibleVersions": "0+",
+  "headerVersions": {
+    "0+": "1"
+  },
   "fields": [
     { "name": "ErrorCode", "type": "int16", "versions": "0+",
       "about": "The top level error code."},

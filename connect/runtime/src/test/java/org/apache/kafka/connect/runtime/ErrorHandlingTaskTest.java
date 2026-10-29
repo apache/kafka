@@ -17,11 +17,11 @@
 package org.apache.kafka.connect.runtime;
 
 import org.apache.kafka.clients.admin.NewTopic;
-import org.apache.kafka.clients.consumer.ConsumerRebalanceListener;
 import org.apache.kafka.clients.consumer.ConsumerRecord;
 import org.apache.kafka.clients.consumer.ConsumerRecords;
 import org.apache.kafka.clients.consumer.KafkaConsumer;
 import org.apache.kafka.clients.consumer.OffsetAndMetadata;
+import org.apache.kafka.clients.consumer.RebalanceListener;
 import org.apache.kafka.clients.producer.KafkaProducer;
 import org.apache.kafka.common.TopicPartition;
 import org.apache.kafka.common.config.ConfigDef;
@@ -389,8 +389,8 @@ public class ErrorHandlingTaskTest {
     private void verifyInitializeSink() {
         verify(sinkTask).start(TASK_PROPS);
         verify(sinkTask).initialize(any(WorkerSinkTaskContext.class));
-        verify(consumer).subscribe(eq(List.of(TOPIC)),
-                any(ConsumerRebalanceListener.class));
+        verify(consumer).setRebalanceListener(any(RebalanceListener.class));
+        verify(consumer).subscribe(eq(List.of(TOPIC)));
     }
 
     private void assertSourceMetricValue(String name, double expected) {

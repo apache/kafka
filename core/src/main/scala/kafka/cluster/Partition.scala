@@ -44,7 +44,7 @@ import org.apache.kafka.storage.internals.log.{AppendOrigin, AsyncOffsetReader, 
 import org.apache.kafka.common.metrics.internals.MetricsUtils
 import org.apache.kafka.server.metrics.KafkaMetricsGroup
 import org.apache.kafka.server.partition.{AlterPartitionListener, AlterPartitionManager, AssignmentState, CommittedPartitionState, OngoingReassignmentState, PartitionListener, PartitionState, PendingExpandIsr, PendingPartitionChange, PendingShrinkIsr, SimpleAssignmentState}
-import org.apache.kafka.server.purgatory.{DelayedDeleteRecords, DelayedOperationPurgatory, DelayedProduce, TopicPartitionOperationKey}
+import org.apache.kafka.server.purgatory.{DelayedDeleteRecords, DelayedFetch, DelayedOperationPurgatory, DelayedProduce, TopicPartitionOperationKey}
 import org.apache.kafka.server.replica.Replica
 import org.apache.kafka.server.share.fetch.DelayedShareFetchPartitionKey
 import org.apache.kafka.server.storage.log.{FetchIsolation, FetchParams, UnexpectedAppendOffsetException}
@@ -265,6 +265,8 @@ class Partition(val topicPartition: TopicPartition,
   def removeExpiredProducers(currentTimeMs: Long): Unit = log.foreach(_.removeExpiredProducers(currentTimeMs))
 
   def inSyncReplicaIds: Set[Int] = partitionState.isr.asScala.map(_.toInt).toSet
+
+  def isReplicaInSync(replicaId: Int): Boolean = partitionState.isr.contains(replicaId)
 
   def maybeAddListener(listener: PartitionListener): Boolean = {
     inReadLock(leaderIsrUpdateLock, () => {
@@ -996,7 +998,8 @@ class Partition(val topicPartition: TopicPartition,
    * advancing the HW, the follower's log end offset may keep falling behind the HW (determined by the leader's log end
    * offset) and therefore will never be added to ISR.
    *
-   * The HW can only advance if the ISR size is equal or large than the min ISR(min.insync.replicas).
+   * The HW can only advance if the ISR size is equal to or larger than the effective min ISR
+   * (min(min.insync.replicas, replica count) - see effectiveMinIsr).
    *
    * With the addition of AlterPartition, we also consider newly added replicas as part of the ISR when advancing
    * the HW. These replicas have not yet been committed to the ISR by the controller, so we could revert to the previously

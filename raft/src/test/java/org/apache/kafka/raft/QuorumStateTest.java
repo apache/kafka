@@ -83,7 +83,7 @@ public class QuorumStateTest {
             localDirectoryId,
             mockPartitionState,
             localId.isPresent() ? voterSet.listeners(localId.getAsInt()) : Endpoints.empty(),
-            Feature.KRAFT_VERSION.supportedVersionRange(),
+            Feature.KRAFT_VERSION.supportedVersionRange(true),
             electionTimeoutMs,
             fetchTimeoutMs,
             store,

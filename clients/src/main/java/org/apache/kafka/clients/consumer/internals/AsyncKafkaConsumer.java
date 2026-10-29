@@ -34,6 +34,7 @@ import org.apache.kafka.clients.consumer.NoOffsetForPartitionException;
 import org.apache.kafka.clients.consumer.OffsetAndMetadata;
 import org.apache.kafka.clients.consumer.OffsetAndTimestamp;
 import org.apache.kafka.clients.consumer.OffsetCommitCallback;
+import org.apache.kafka.clients.consumer.RebalanceConsumer;
 import org.apache.kafka.clients.consumer.RebalanceListener;
 import org.apache.kafka.clients.consumer.SubscriptionPattern;
 import org.apache.kafka.clients.consumer.internals.events.AllTopicsMetadataEvent;
@@ -186,7 +187,7 @@ public class AsyncKafkaConsumer<K, V> implements ConsumerDelegate<K, V> {
      *
      * <ul>
      *     <li>Errors that occur in the network thread that need to be propagated to the application thread</li>
-     *     <li>{@link ConsumerRebalanceListener} callbacks that are to be executed on the application thread</li>
+     *     <li>{@link RebalanceListener} callbacks that are to be executed on the application thread</li>
      * </ul>
      */
     private class BackgroundEventProcessor implements EventProcessor<BackgroundEvent> {
@@ -388,7 +389,7 @@ public class AsyncKafkaConsumer<K, V> implements ConsumerDelegate<K, V> {
     private final ConsumerInterceptors<K, V> interceptors;
     private final IsolationLevel isolationLevel;
 
-    private final SubscriptionState subscriptions;
+    private final ConsumerSubscriptionState subscriptions;
 
     /**
      * This is a snapshot of the partitions assigned to this consumer. HOWEVER, this is only populated and used in
@@ -484,7 +485,8 @@ public class AsyncKafkaConsumer<K, V> implements ConsumerDelegate<K, V> {
             this.defaultApiTimeoutMs = Duration.ofMillis(config.getInt(ConsumerConfig.DEFAULT_API_TIMEOUT_MS_CONFIG));
             this.time = time;
             List<MetricsReporter> reporters = CommonClientConfigs.metricsReporters(clientId, config);
-            this.clientTelemetryReporter = CommonClientConfigs.telemetryReporter(clientId, config);
+            Uuid clientInstanceId = Uuid.randomUuid();
+            this.clientTelemetryReporter = CommonClientConfigs.telemetryReporter(clientId, clientInstanceId, config);
             this.clientTelemetryReporter.ifPresent(reporters::add);
             this.metrics = createMetrics(config, time, reporters);
             this.asyncConsumerMetrics = new AsyncConsumerMetrics(metrics, CONSUMER_METRIC_GROUP);
@@ -523,6 +525,7 @@ public class AsyncKafkaConsumer<K, V> implements ConsumerDelegate<K, V> {
                     metadata,
                     config,
                     apiVersions,
+                    clientInstanceId,
                     metrics,
                     fetchMetricsManager.throttleTimeSensor(),
                     clientTelemetryReporter.map(ClientTelemetryReporter::telemetrySender).orElse(null),
@@ -620,7 +623,7 @@ public class AsyncKafkaConsumer<K, V> implements ConsumerDelegate<K, V> {
                        CompletableEventReaper backgroundEventReaper,
                        ConsumerRebalanceListenerInvoker rebalanceListenerInvoker,
                        Metrics metrics,
-                       SubscriptionState subscriptions,
+                       ConsumerSubscriptionState subscriptions,
                        ConsumerMetadata metadata,
                        long retryBackoffMs,
                        int requestTimeoutMs,
@@ -670,7 +673,7 @@ public class AsyncKafkaConsumer<K, V> implements ConsumerDelegate<K, V> {
                        Deserializer<K> keyDeserializer,
                        Deserializer<V> valueDeserializer,
                        KafkaClient client,
-                       SubscriptionState subscriptions,
+                       ConsumerSubscriptionState subscriptions,
                        ConsumerMetadata metadata) {
         this.log = logContext.logger(getClass());
         this.subscriptions = subscriptions;
@@ -803,7 +806,7 @@ public class AsyncKafkaConsumer<K, V> implements ConsumerDelegate<K, V> {
         FetchCollector<K, V> build(
             final LogContext logContext,
             final ConsumerMetadata metadata,
-            final SubscriptionState subscriptions,
+            final ConsumerSubscriptionState subscriptions,
             final FetchConfig fetchConfig,
             final Deserializers<K, V> deserializers,
             final FetchMetricsManager metricsManager,
@@ -817,7 +820,7 @@ public class AsyncKafkaConsumer<K, V> implements ConsumerDelegate<K, V> {
 
         ConsumerMetadata build(
             final ConsumerConfig config,
-            final SubscriptionState subscriptions,
+            final ConsumerSubscriptionState subscriptions,
             final LogContext logContext,
             final ClusterResourceListeners clusterResourceListeners
         );
@@ -1240,7 +1243,7 @@ public class AsyncKafkaConsumer<K, V> implements ConsumerDelegate<K, V> {
 
             Timer timer = time.timer(timeout);
             do {
-                SubscriptionState.FetchPosition position = subscriptions.validPosition(partition);
+                ConsumerSubscriptionState.FetchPosition position = subscriptions.validPosition(partition);
                 if (position != null)
                     return position.offset;
 
@@ -1584,37 +1587,37 @@ public class AsyncKafkaConsumer<K, V> implements ConsumerDelegate<K, V> {
      *
      * <ol>
      *     <li>
-     *         The execution of the {@link ConsumerRebalanceListener} callback (if applicable) must be performed on
+     *         The execution of the {@link RebalanceListener} callback (if applicable) must be performed on
      *         the application thread to ensure it does not interfere with the network I/O on the background thread.
      *     </li>
      *     <li>
-     *         The {@link ConsumerRebalanceListener} callback execution must complete before an attempt to leave
+     *         The {@link RebalanceListener} callback execution must complete before an attempt to leave
      *         the consumer group is performed. In this context, “complete” does not necessarily imply
      *         <em>success</em>; execution is “complete” even if the execution <em>fails</em> with an error.
      *     </li>
      *     <li>
-     *         Any error thrown during the {@link ConsumerRebalanceListener} callback execution will be caught to
+     *         Any error thrown during the {@link RebalanceListener} callback execution will be caught to
      *         ensure it does not prevent execution of the remaining {@link #close()} logic.
      *     </li>
      *     <li>
      *         The application thread will be blocked during the entire duration of the execution of the
-     *         {@link ConsumerRebalanceListener}. The consumer does not employ a mechanism to short-circuit the
+     *         {@link RebalanceListener}. The consumer does not employ a mechanism to short-circuit the
      *         callback execution, so execution is not bound by the timeout in {@link #close(Duration)}.
      *     </li>
      *     <li>
-     *         A given {@link ConsumerRebalanceListener} implementation may be affected by the application thread's
+     *         A given {@link RebalanceListener} implementation may be affected by the application thread's
      *         interrupt state. If the callback implementation performs any blocking operations, it may result in
      *         an error. An implementation may choose to preemptively check the thread's interrupt flag via
      *         {@link Thread#isInterrupted()} or {@link Thread#isInterrupted()} and alter its behavior.
      *     </li>
      *     <li>
      *         If the application thread was interrupted <em>prior</em> to the execution of the
-     *         {@link ConsumerRebalanceListener} callback, the thread's interrupt state will be preserved for the
-     *         {@link ConsumerRebalanceListener} execution.
+     *         {@link RebalanceListener} callback, the thread's interrupt state will be preserved for the
+     *         {@link RebalanceListener} execution.
      *     </li>
      *     <li>
      *         If the application thread was interrupted <em>prior</em> to the execution of the
-     *         {@link ConsumerRebalanceListener} callback <em>but</em> the callback cleared out the interrupt state,
+     *         {@link RebalanceListener} callback <em>but</em> the callback cleared out the interrupt state,
      *         the {@link #close()} method will not make any effort to restore the application thread's interrupt
      *         state for the remainder of the execution of {@link #close()}.
      *     </li>
@@ -1985,28 +1988,29 @@ public class AsyncKafkaConsumer<K, V> implements ConsumerDelegate<K, V> {
             return fetch;
         }
 
-        long pollTimeout = isCommittedOffsetsManagementEnabled()
-                ? Math.min(applicationEventHandler.maximumTimeToWait(), timer.remainingMs())
-                : timer.remainingMs();
-        // With the non-blocking poll design, it's possible that at this point the background thread is
-        // concurrently working to update positions. Therefore, a _copy_ of the current assignment is retrieved
-        // and iterated looking for any partitions with invalid positions. This is done to avoid being stuck
-        // in poll for an unnecessarily long amount of time if we are missing some positions since the offset
-        // lookup may be backing off after a failure.
-        if (pollTimeout > retryBackoffMs) {
-            Set<TopicPartition> partitions = subscriptions.assignedPartitions();
+        long pollTimeout = Math.min(applicationEventHandler.maximumTimeToWait(), timer.remainingMs());
 
-            if (partitions.isEmpty()) {
-                // If there aren't any assigned partitions, this could mean that this consumer's group membership
-                // has not been established or assignments have been removed and not yet reassigned. In either case,
-                // reduce the poll time for the fetch buffer wait.
+        // Bound the wait when background progress may make fetching possible soon.
+        // Use the current application-thread state to avoid relying on stale state from the network thread.
+        if (pollTimeout > retryBackoffMs) {
+            if (subscriptions.numAssignedPartitions() == 0) {
+                // If there are no assigned partitions, reduce the fetch buffer wait time. This may happen when
+                // group membership has not been established yet, assignments have been revoked but not reassigned,
+                // bootstrap DNS resolution is still in progress, or manual assignment has not happened yet.
+                pollTimeout = retryBackoffMs;
+            } else if (!subscriptions.hasAllFetchPositions()) {
+                // If some partitions do not have valid positions, the background thread may still be resolving them,
+                // for example by fetching committed offsets, looking up offsets by timestamp, or backing off after a
+                // failure. Reduce the wait time so the application thread can consume data promptly once positions are
+                // resolved.
                 pollTimeout = retryBackoffMs;
             } else {
-                for (TopicPartition tp : partitions) {
-                    if (!subscriptions.hasValidPosition(tp)) {
-                        pollTimeout = retryBackoffMs;
-                        break;
-                    }
+                Set<TopicPartition> buffered = fetchBuffer.bufferedPartitions();
+                if (subscriptions.hasFetchablePartitions(tp -> !buffered.contains(tp))) {
+                    // If any fetchable partition has no buffered data, it may have been skipped due to reconnect
+                    // backoff, an in-flight request, or a missing leader. Bound the wait so the application thread
+                    // can retry once the condition clears.
+                    pollTimeout = retryBackoffMs;
                 }
             }
         }
@@ -2035,7 +2039,7 @@ public class AsyncKafkaConsumer<K, V> implements ConsumerDelegate<K, V> {
     /**
      * Perform the "{@link FetchCollector#collectFetch(FetchBuffer) fetch collection}" step by reading raw data out
      * of the {@link #fetchBuffer}, converting it to a well-formed {@link CompletedFetch}, validating that it and
-     * the internal {@link SubscriptionState state} are correct, and then converting it all into a {@link Fetch}
+     * the internal {@link ConsumerSubscriptionState state} are correct, and then converting it all into a {@link Fetch}
      * for returning.
      */
     private Fetch<K, V> collectFetch() {
@@ -2066,7 +2070,7 @@ public class AsyncKafkaConsumer<K, V> implements ConsumerDelegate<K, V> {
 
         // With the non-blocking async poll, it's critical that the application thread wait until the background
         // thread has completed the stage of validating positions. This prevents a race condition where both
-        // threads may attempt to update the SubscriptionState.position() for a given partition. So if the background
+        // threads may attempt to update the ConsumerSubscriptionState.position() for a given partition. So if the background
         // thread has not completed that stage for the inflight event, don't attempt to collect data from the fetch
         // buffer. If the inflight event was nulled out by checkInflightPoll(), that implies that it is safe to
         // attempt to collect data from the fetch buffer.
@@ -2101,15 +2105,6 @@ public class AsyncKafkaConsumer<K, V> implements ConsumerDelegate<K, V> {
             wakeupTrigger.clearTask();
         }
         return true;
-    }
-
-    /**
-     *
-     * Indicates if the consumer is using the Kafka-based offset management strategy,
-     * according to config {@link CommonClientConfigs#GROUP_ID_CONFIG}
-     */
-    private boolean isCommittedOffsetsManagementEnabled() {
-        return groupMetadata.get().isPresent();
     }
 
     /**
@@ -2255,7 +2250,7 @@ public class AsyncKafkaConsumer<K, V> implements ConsumerDelegate<K, V> {
             currentThread.set(NO_CURRENT_THREAD);
     }
 
-    private void subscribeInternal(Pattern pattern, ConsumerRebalanceListener listener) {
+    private void subscribeInternal(Pattern pattern, RebalanceListener listener) {
         acquireAndEnsureOpen();
         try {
             throwIfGroupIdNotDefined();
@@ -2279,7 +2274,7 @@ public class AsyncKafkaConsumer<K, V> implements ConsumerDelegate<K, V> {
      * subscription state, so it's included in the next heartbeat request sent to the broker.
      * No validation of the pattern is performed by the client (other than null/empty checks).
      */
-    private void subscribeToRegex(SubscriptionPattern pattern, ConsumerRebalanceListener listener) {
+    private void subscribeToRegex(SubscriptionPattern pattern, RebalanceListener listener) {
         acquireAndEnsureOpen();
         try {
             throwIfGroupIdNotDefined();
@@ -2304,7 +2299,7 @@ public class AsyncKafkaConsumer<K, V> implements ConsumerDelegate<K, V> {
         }
     }
 
-    private void subscribeInternal(Collection<String> topics, ConsumerRebalanceListener listener) {
+    private void subscribeInternal(Collection<String> topics, RebalanceListener listener) {
         acquireAndEnsureOpen();
         try {
             throwIfGroupIdNotDefined();
@@ -2439,7 +2434,7 @@ public class AsyncKafkaConsumer<K, V> implements ConsumerDelegate<K, V> {
      * As an example, take {@link #unsubscribe()}. To start unsubscribing, the application thread enqueues an
      * {@link UnsubscribeEvent} on the application event queue. That event will eventually trigger the
      * rebalancing logic in the background thread. Critically, as part of this rebalancing work, the
-     * {@link ConsumerRebalanceListener#onPartitionsRevoked(Collection)} callback needs to be invoked for any
+     * {@link RebalanceListener#onPartitionsRevoked(Collection, RebalanceConsumer)} callback needs to be invoked for any
      * partitions the consumer owns. However,
      * this callback must be executed on the application thread. To achieve this, the background thread enqueues a
      * {@link PartitionsRemovedEvent} on its background event queue. That event queue is
@@ -2448,7 +2443,7 @@ public class AsyncKafkaConsumer<K, V> implements ConsumerDelegate<K, V> {
      * {@link ConsumerRebalanceListenerCallbackCompletedEvent} is then enqueued by the application thread on the
      * application event queue. Moments later, the background thread will see that event, process it, and continue
      * execution of the rebalancing logic. The rebalancing logic cannot complete until the
-     * {@link ConsumerRebalanceListener} callback is performed.
+     * {@link RebalanceListener} callback is performed.
      *
      * @param future                    Event that contains a {@link CompletableFuture}; it is on this future that the
      *                                  application thread will wait for completion
@@ -2553,7 +2548,7 @@ public class AsyncKafkaConsumer<K, V> implements ConsumerDelegate<K, V> {
     }
 
     // Visible for testing
-    SubscriptionState subscriptions() {
+    ConsumerSubscriptionState subscriptions() {
         return subscriptions;
     }
 

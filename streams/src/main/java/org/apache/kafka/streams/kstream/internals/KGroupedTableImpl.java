@@ -33,7 +33,6 @@ import org.apache.kafka.streams.processor.api.ProcessorSupplier;
 import org.apache.kafka.streams.state.KeyValueStore;
 import org.apache.kafka.streams.state.VersionedBytesStoreSupplier;
 
-import java.util.Collections;
 import java.util.Objects;
 import java.util.Set;
 
@@ -102,7 +101,7 @@ public class KGroupedTableImpl<K, V> extends AbstractStream<K, V> implements KGr
         return new KTableImpl<>(funcName,
                                 materialized.keySerde(),
                                 materialized.valueSerde(),
-                                Collections.singleton(sourceName),
+                                Set.of(sourceName),
                                 materialized.queryableStoreName(),
                                 aggregateSupplier,
                                 statefulProcessorNode,

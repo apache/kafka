@@ -78,6 +78,14 @@ public class DistributedConfigTest {
     }
 
     @Test
+    public void shouldIgnoreUserSpecifiedBootstrapResolveTimeout() {
+        Map<String, String> configs = configs();
+        configs.put(CommonClientConfigs.BOOTSTRAP_RESOLVE_TIMEOUT_MS_CONFIG, "120000");
+        DistributedConfig config = new DistributedConfig(configs);
+        assertEquals(0L, config.getLong(CommonClientConfigs.BOOTSTRAP_RESOLVE_TIMEOUT_MS_CONFIG));
+    }
+
+    @Test
     public void testDefaultAlgorithmsNotPresent() throws NoSuchAlgorithmException {
         final String fakeKeyGenerationAlgorithm = "FakeKeyGenerationAlgorithm";
         final String fakeMacAlgorithm = "FakeMacAlgorithm";
