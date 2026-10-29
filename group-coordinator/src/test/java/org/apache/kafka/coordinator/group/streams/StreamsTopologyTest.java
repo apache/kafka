@@ -24,21 +24,25 @@ import org.apache.kafka.coordinator.group.generated.StreamsGroupTopologyValue.To
 
 import org.junit.jupiter.api.Test;
 import org.junit.jupiter.params.ParameterizedTest;
+import org.junit.jupiter.params.provider.Arguments;
+import org.junit.jupiter.params.provider.MethodSource;
 import org.junit.jupiter.params.provider.ValueSource;
 
 import java.lang.reflect.Modifier;
 import java.util.Arrays;
 import java.util.Collections;
 import java.util.Comparator;
+import java.util.LinkedHashMap;
 import java.util.List;
 import java.util.Map;
 import java.util.Set;
+import java.util.function.Consumer;
+import java.util.stream.Stream;
 
 import static org.apache.kafka.common.utils.Utils.mkEntry;
 import static org.apache.kafka.common.utils.Utils.mkMap;
 import static org.junit.jupiter.api.Assertions.assertEquals;
 import static org.junit.jupiter.api.Assertions.assertFalse;
-import static org.junit.jupiter.api.Assertions.assertNotEquals;
 import static org.junit.jupiter.api.Assertions.assertThrows;
 import static org.junit.jupiter.api.Assertions.assertTrue;
 
@@ -130,13 +134,12 @@ public class StreamsTopologyTest {
 
     @ParameterizedTest
     @ValueSource(strings = {"source", "regex", "repartition"})
-    public void copartitionOrderShouldNotAffectMatching(String topicType) {
-        // request has - [[0], [0, 1], [2, 3]]
-        // replayed has - [[3, 2], [1, 0], [0]]
-        StreamsGroupHeartbeatRequestData.Topology request = topologyWithCopartitionGroups(topicType);
-        StreamsGroupHeartbeatRequestData.Topology originalRequest = request.duplicate();
+    public void fromRecordShouldNormalizeCopartitionGroupsWithoutMutation(String topicType) {
+        StreamsGroupTopologyValue alreadySortedExpected = StreamsCoordinatorRecordHelpers.convertToStreamsGroupTopologyRecord(
+            topologyWithCopartitionGroups(topicType)
+        );
 
-        StreamsGroupTopologyValue record = StreamsCoordinatorRecordHelpers.convertToStreamsGroupTopologyRecord(request).duplicate();
+        StreamsGroupTopologyValue record = alreadySortedExpected.duplicate();
         List<StreamsGroupTopologyValue.CopartitionGroup> groups = record.subtopologies().get(0).copartitionGroups();
         Collections.reverse(groups);
         for (StreamsGroupTopologyValue.CopartitionGroup group : groups) {
@@ -147,14 +150,40 @@ public class StreamsTopologyTest {
         StreamsGroupTopologyValue originalRecord = record.duplicate();
 
         StreamsTopology replayed = StreamsTopology.fromRecord(record);
-        StreamsTopology received = StreamsTopology.fromHeartbeatRequest(request);
 
-        assertTrue(replayed.matches(request));
-        assertTrue(received.matches(request));
-        assertNotEquals(received, replayed);
+        Subtopology expectedSubtopology = alreadySortedExpected.subtopologies().get(0);
+        assertEquals(
+            expectedSubtopology,
+            replayed.subtopologies().get(expectedSubtopology.subtopologyId())
+        );
         assertEquals(originalRecord, record);
-        assertEquals(originalRequest, request);
     }
+
+
+    @ParameterizedTest
+    @ValueSource(strings = {"source", "regex", "repartition"})
+    public void reorderedRequestShouldMatchWithoutMutation(String topicType) {
+        StreamsGroupHeartbeatRequestData.Topology request =
+            topologyWithCopartitionGroups(topicType);
+        StreamsTopology stored = StreamsTopology.fromRecord(
+            StreamsCoordinatorRecordHelpers.convertToStreamsGroupTopologyRecord(request)
+        );
+
+        // Stored groups: [[0], [0, 1], [2, 3]]
+        // Request groups: [[3, 2], [1, 0], [0]]
+        StreamsGroupHeartbeatRequestData.Topology reorderedRequest = request.duplicate();
+        reorderedRequest.subtopologies().get(0).setCopartitionGroups(List.of(
+            copartitionGroup(topicType, List.of((short) 3, (short) 2)),
+            copartitionGroup(topicType, List.of((short) 1, (short) 0)),
+            copartitionGroup(topicType, List.of((short) 0))
+        ));
+        StreamsGroupHeartbeatRequestData.Topology originalRequest =
+            reorderedRequest.duplicate();
+
+        assertTrue(stored.matches(reorderedRequest));
+        assertEquals(originalRequest, reorderedRequest);
+    }
+
 
     @Test
     public void mixedCopartitionGroupsShouldMatchRegardlessOfOrder() {
@@ -196,6 +225,72 @@ public class StreamsTopologyTest {
             .set(2, copartitionGroup(topicType, List.of((short) 1, (short) 3)));
 
         assertFalse(original.matches(changed));
+    }
+
+    private static Stream<Arguments> nonCopartitionFieldChanges() {
+        Map<String, Consumer<StreamsGroupHeartbeatRequestData.Topology>> changes = new LinkedHashMap<>();
+        changes.put("source topic", topology -> topology.subtopologies().get(0).sourceTopics().set(0, "different-source"));
+        changes.put("source topic regex", topology -> topology.subtopologies().get(0).sourceTopicRegex().set(0, "different.*"));
+        changes.put("repartition sink topic", topology -> topology.subtopologies().get(0).repartitionSinkTopics().set(0, "different-sink"));
+        changes.put("repartition source name", topology -> topology.subtopologies().get(0).repartitionSourceTopics().get(0).setName("different-repartition"));
+        changes.put("repartition source partitions", topology -> topology.subtopologies().get(0).repartitionSourceTopics().get(0).setPartitions(4));
+        changes.put("repartition source replication factor", topology -> topology.subtopologies().get(0).repartitionSourceTopics().get(0).setReplicationFactor((short) 3));
+        changes.put("repartition source config key", topology -> topology.subtopologies().get(0).repartitionSourceTopics().get(0).topicConfigs().get(0).setKey("segment.ms"));
+        changes.put("repartition source config value", topology -> topology.subtopologies().get(0).repartitionSourceTopics().get(0).topicConfigs().get(0).setValue("7200000"));
+        changes.put("changelog name", topology -> topology.subtopologies().get(0).stateChangelogTopics().get(0).setName("different-changelog"));
+        changes.put("changelog partitions", topology -> topology.subtopologies().get(0).stateChangelogTopics().get(0).setPartitions(4));
+        changes.put("changelog replication factor", topology -> topology.subtopologies().get(0).stateChangelogTopics().get(0).setReplicationFactor((short) 3));
+        changes.put("changelog config key", topology -> topology.subtopologies().get(0).stateChangelogTopics().get(0).topicConfigs().get(0).setKey("segment.ms"));
+        changes.put("changelog config value", topology -> topology.subtopologies().get(0).stateChangelogTopics().get(0).topicConfigs().get(0).setValue("7200000"));
+        changes.put("missing subtopology", topology -> topology.subtopologies().remove(1));
+        changes.put("unknown subtopology ID", topology -> topology.subtopologies().get(1).setSubtopologyId("unknown-subtopology"));
+
+        // Keep the size unchanged and duplicate all fields so only the repeated ID causes a mismatch.
+        changes.put("duplicate subtopology ID", topology -> topology.subtopologies().set(1, topology.subtopologies().get(0).duplicate()));
+        return changes.entrySet().stream()
+            .map(entry -> Arguments.of(entry.getKey(), entry.getValue()));
+    }
+
+    @ParameterizedTest(name = "{0}")
+    @MethodSource("nonCopartitionFieldChanges")
+    public void differentNonCopartitionFieldsShouldNotMatch(
+        String changedField,
+        Consumer<StreamsGroupHeartbeatRequestData.Topology> change
+    ) {
+
+        StreamsGroupHeartbeatRequestData.Subtopology subtopology = mkRequestSubtopology1()
+            .setSourceTopicRegex(
+                List.of("source.*")
+            );
+
+        StreamsGroupHeartbeatRequestData.TopicInfo repartitionTopic = subtopology.repartitionSourceTopics().get(0);
+        repartitionTopic
+            .setPartitions(3)
+            .setReplicationFactor((short) 2)
+            .setTopicConfigs(List.of(new StreamsGroupHeartbeatRequestData.KeyValue()
+                .setKey("retention.ms")
+                .setValue("3600000")));
+
+        StreamsGroupHeartbeatRequestData.TopicInfo changelogTopic = subtopology.stateChangelogTopics().get(0);
+        changelogTopic
+            .setPartitions(3)
+            .setReplicationFactor((short) 2)
+            .setTopicConfigs(List.of(new StreamsGroupHeartbeatRequestData.KeyValue()
+                .setKey("retention.ms")
+                .setValue("3600000")));
+
+        StreamsGroupHeartbeatRequestData.Topology request = new StreamsGroupHeartbeatRequestData.Topology()
+            .setEpoch(1)
+            .setSubtopologies(List.of(subtopology, mkRequestSubtopology2()));
+
+        StreamsGroupHeartbeatRequestData.Topology changed = request.duplicate();
+        change.accept(changed);
+
+        StreamsTopology stored = StreamsTopology.fromRecord(
+            StreamsCoordinatorRecordHelpers.convertToStreamsGroupTopologyRecord(request)
+        );
+
+        assertFalse(stored.matches(changed), changedField);
     }
 
     @Test
