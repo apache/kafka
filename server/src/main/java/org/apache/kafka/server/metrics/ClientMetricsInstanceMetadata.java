@@ -22,7 +22,6 @@ import org.apache.kafka.common.requests.RequestContext;
 import java.util.HashMap;
 import java.util.Map;
 import java.util.Objects;
-import java.util.regex.Pattern;
 
 /**
  * Information from the client's metadata is gathered from the client's request.
@@ -48,7 +47,7 @@ public class ClientMetricsInstanceMetadata {
         attributesMap.put(ClientMetricsConfigs.CLIENT_SOURCE_PORT, requestContext.clientPort.map(String::valueOf).orElse(null));
     }
 
-    public boolean isMatch(Map<String, Pattern> patterns) {
+    public boolean isMatch(Map<String, ClientMatchPattern> patterns) {
         if (!patterns.isEmpty()) {
             return matchPatterns(patterns);
         }
@@ -56,11 +55,11 @@ public class ClientMetricsInstanceMetadata {
         return true;
     }
 
-    private boolean matchPatterns(Map<String, Pattern> matchingPatterns) {
+    private boolean matchPatterns(Map<String, ClientMatchPattern> matchingPatterns) {
         return matchingPatterns.entrySet().stream()
             .allMatch(entry -> {
                 String attribute = attributesMap.get(entry.getKey());
-                return attribute != null && entry.getValue().matcher(attribute).matches();
+                return attribute != null && entry.getValue().matches(attribute);
             });
     }
 }

@@ -18,7 +18,6 @@ package org.apache.kafka.server;
 
 import org.apache.kafka.common.MetricName;
 import org.apache.kafka.common.Uuid;
-import org.apache.kafka.common.errors.InvalidRequestException;
 import org.apache.kafka.common.errors.TelemetryTooLargeException;
 import org.apache.kafka.common.message.GetTelemetrySubscriptionsRequestData;
 import org.apache.kafka.common.message.PushTelemetryRequestData;
@@ -33,8 +32,10 @@ import org.apache.kafka.common.requests.PushTelemetryRequest;
 import org.apache.kafka.common.requests.PushTelemetryRequest.Builder;
 import org.apache.kafka.common.requests.PushTelemetryResponse;
 import org.apache.kafka.common.utils.MockTime;
+import org.apache.kafka.server.metrics.ClientMatchPattern;
 import org.apache.kafka.server.metrics.ClientMetricsConfigs;
 import org.apache.kafka.server.metrics.ClientMetricsInstance;
+import org.apache.kafka.server.metrics.ClientMetricsInstanceMetadata;
 import org.apache.kafka.server.metrics.ClientMetricsTestUtils;
 import org.apache.kafka.server.metrics.ClientTelemetryExporterPlugin;
 import org.apache.kafka.server.util.timer.SystemTimer;
@@ -130,11 +131,9 @@ public class ClientMetricsManagerTest {
         // Validate match patterns.
         assertEquals(ClientMetricsTestUtils.MATCH_TEST_DEFAULT.size(),
             subscriptionInfo.matchPattern().size());
-        ClientMetricsTestUtils.MATCH_TEST_DEFAULT.forEach(pattern -> {
-            String[] split = pattern.split("=");
-            assertTrue(subscriptionInfo.matchPattern().containsKey(split[0]));
-            assertEquals(split[1], subscriptionInfo.matchPattern().get(split[0]).pattern());
-        });
+        ClientMetricsInstanceMetadata instanceMetadata =
+            new ClientMetricsInstanceMetadata(Uuid.randomUuid(), ClientMetricsTestUtils.requestContext());
+        assertTrue(instanceMetadata.isMatch(subscriptionInfo.matchPattern()));
         assertEquals(1, clientMetricsManager.subscriptionUpdateVersion());
         // Validate metrics should have instance count metric, 2 unknown subscription count metrics
         // and kafka metrics count registered i.e. 4 metrics.
@@ -165,12 +164,34 @@ public class ClientMetricsManagerTest {
     }
 
     @Test
-    public void testUpdateSubscriptionWithInvalidMetricsProperties() {
+    public void testUpdateSubscriptionIgnoresUnknownProperties() {
+        // Unknown keys are only rejected by the controller at admission time; updateSubscription
+        // (live update or broker reload) silently ignores them instead of rejecting the subscription.
         assertTrue(clientMetricsManager.subscriptions().isEmpty());
 
         Properties properties = new Properties();
         properties.put("random", "random");
-        assertThrows(InvalidRequestException.class, () -> clientMetricsManager.updateSubscription("sub-1", properties));
+        clientMetricsManager.updateSubscription("sub-1", properties);
+
+        ClientMetricsManager.SubscriptionInfo subscriptionInfo = clientMetricsManager.subscriptionInfo("sub-1");
+        assertNotNull(subscriptionInfo);
+        assertEquals(ClientMetricsConfigs.INTERVAL_MS_DEFAULT, subscriptionInfo.intervalMs());
+    }
+
+    @Test
+    public void testUpdateSubscriptionAcceptsLegacyPattern() {
+        // A backreference is valid java.util.regex syntax but unsupported by RE2/J.
+        // updateSubscription must still accept such a pre-existing pattern.
+        Properties properties = new Properties();
+        properties.put(ClientMetricsConfigs.MATCH_CONFIG, "client_software_version=(\\d+)\\.\\1");
+
+        clientMetricsManager.updateSubscription("sub-1", properties);
+
+        ClientMetricsManager.SubscriptionInfo subscriptionInfo = clientMetricsManager.subscriptionInfo("sub-1");
+        assertNotNull(subscriptionInfo);
+        ClientMatchPattern versionPattern = subscriptionInfo.matchPattern().get(ClientMetricsConfigs.CLIENT_SOFTWARE_VERSION);
+        assertTrue(versionPattern.matches("12.12"));
+        assertFalse(versionPattern.matches("12.13"));
     }
 
     @Test
