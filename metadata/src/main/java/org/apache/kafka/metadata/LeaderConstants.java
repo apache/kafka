@@ -29,4 +29,10 @@ public class LeaderConstants {
      * partition leader.
      */
     public static final int NO_LEADER_CHANGE = -2;
+
+    /**
+     * A special value used to represent a PartitionChangeRecord that does not set the
+     * partition leader epoch.
+     */
+    public static final int NO_LEADER_EPOCH_CHANGE = -1;
 }

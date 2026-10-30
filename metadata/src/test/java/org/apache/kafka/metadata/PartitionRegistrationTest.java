@@ -19,8 +19,11 @@ package org.apache.kafka.metadata;
 
 import org.apache.kafka.common.DirectoryId;
 import org.apache.kafka.common.Uuid;
+import org.apache.kafka.common.errors.UnsupportedVersionException;
 import org.apache.kafka.common.metadata.PartitionChangeRecord;
 import org.apache.kafka.common.metadata.PartitionRecord;
+import org.apache.kafka.common.protocol.ByteBufferAccessor;
+import org.apache.kafka.common.protocol.ObjectSerializationCache;
 import org.apache.kafka.image.writer.ImageWriterOptions;
 import org.apache.kafka.image.writer.UnwritableMetadataException;
 import org.apache.kafka.server.common.ApiMessageAndVersion;
@@ -32,6 +35,7 @@ import org.junit.jupiter.params.ParameterizedTest;
 import org.junit.jupiter.params.provider.Arguments;
 import org.junit.jupiter.params.provider.MethodSource;
 
+import java.nio.ByteBuffer;
 import java.util.ArrayList;
 import java.util.List;
 import java.util.stream.Stream;
@@ -111,6 +115,72 @@ public class PartitionRegistrationTest {
         assertEquals(new PartitionRegistration.Builder().setReplicas(new int[] {1, 2, 4}).
             setDirectories(new Uuid[]{dir1, dir2, DirectoryId.UNASSIGNED}).
             setIsr(new int[] {1, 2, 4}).setLeader(1).setLeaderRecoveryState(LeaderRecoveryState.RECOVERED).setLeaderEpoch(100).setPartitionEpoch(202).build(), partition2);
+    }
+
+    private static PartitionRegistration leaderEpochTestPartition() {
+        return new PartitionRegistration.Builder().setReplicas(new int[] {1, 2, 3}).
+            setDirectories(DirectoryId.migratingArray(3)).
+            setIsr(new int[] {1, 2, 3}).setLeader(1).setLeaderRecoveryState(LeaderRecoveryState.RECOVERED).
+            setLeaderEpoch(100).setPartitionEpoch(200).build();
+    }
+
+    @Test
+    public void testMergeDerivesLeaderEpochWhenRecordDoesNotSetIt() {
+        PartitionRegistration partition = leaderEpochTestPartition();
+
+        PartitionRegistration leaderChanged = partition.merge(new PartitionChangeRecord().setLeader(2));
+        assertEquals(2, leaderChanged.leader);
+        assertEquals(101, leaderChanged.leaderEpoch);
+
+        PartitionRegistration leaderUnchanged = partition.merge(new PartitionChangeRecord().setIsr(List.of(1, 2)));
+        assertEquals(1, leaderUnchanged.leader);
+        assertEquals(100, leaderUnchanged.leaderEpoch);
+    }
+
+    @Test
+    public void testMergeUsesLeaderEpochFromRecord() {
+        PartitionRegistration partition = leaderEpochTestPartition();
+
+        PartitionRegistration merged = partition.merge(new PartitionChangeRecord().setLeader(2).setLeaderEpoch(150));
+        assertEquals(2, merged.leader);
+        assertEquals(150, merged.leaderEpoch);
+        assertEquals(201, merged.partitionEpoch);
+    }
+
+    @Test
+    public void testMergeLeaderEpochChangeWithoutLeaderChange() {
+        PartitionRegistration partition = leaderEpochTestPartition();
+
+        PartitionRegistration merged = partition.merge(new PartitionChangeRecord().setLeaderEpoch(101));
+        assertEquals(1, merged.leader);
+        assertEquals(101, merged.leaderEpoch);
+        assertEquals(201, merged.partitionEpoch);
+    }
+
+    @Test
+    public void testPartitionChangeRecordLeaderEpochVersioning() {
+        PartitionChangeRecord withEpoch = new PartitionChangeRecord().
+            setTopicId(Uuid.fromString("FbRuu7CeQtq5YFreEzg16g")).setLeader(2).setLeaderEpoch(101);
+
+        // Version 3 carries the leader epoch.
+        assertEquals(101, roundTrip(withEpoch, (short) 3).leaderEpoch());
+
+        // Older versions cannot carry the leader epoch, so the controller must not set it.
+        assertThrows(UnsupportedVersionException.class, () -> roundTrip(withEpoch, (short) 2));
+
+        // A version 2 record read by a newer node has no leader epoch, so it is derived from the leader change.
+        PartitionChangeRecord withoutEpoch = roundTrip(new PartitionChangeRecord().
+            setTopicId(withEpoch.topicId()).setLeader(2), (short) 2);
+        assertEquals(-1, withoutEpoch.leaderEpoch());
+        assertEquals(101, leaderEpochTestPartition().merge(withoutEpoch).leaderEpoch);
+    }
+
+    private static PartitionChangeRecord roundTrip(PartitionChangeRecord record, short version) {
+        ObjectSerializationCache cache = new ObjectSerializationCache();
+        ByteBuffer buffer = ByteBuffer.allocate(record.size(cache, version));
+        record.write(new ByteBufferAccessor(buffer), cache, version);
+        buffer.flip();
+        return new PartitionChangeRecord(new ByteBufferAccessor(buffer), version);
     }
 
     @Test
