@@ -20,7 +20,7 @@
   "validVersions": "0",
   "flexibleVersions": "0+",
   "fields": [
-    { "name": "LastMirrorEpoch", "type": "int32", "versions": "0+",
+    { "name": "LastMirrorEpoch", "type": "int32", "versions": "0+", "default": "-1",
       "about": "The last mirror leader epoch for this partition." },
     { "name": "LastMirrorOffset", "type": "int64", "versions": "0+", "default": "-1",
       "about": "The last mirror offset for this partition." }

@@ -96,7 +96,7 @@ class MirrorCoordinatorRecordSerdeTest {
         assertEquals((byte) -1, state.previousState());
 
         LastMirrorEpochsValue epochs = new LastMirrorEpochsValue();
-        assertEquals(0, epochs.lastMirrorEpoch());
+        assertEquals(-1, epochs.lastMirrorEpoch());
         assertEquals(-1L, epochs.lastMirrorOffset());
 
         assertRoundTrip(CoordinatorRecord.record(stateRecord(null).key(), new ApiMessageAndVersion(state, (short) 0)));
