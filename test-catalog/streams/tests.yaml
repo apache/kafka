@@ -1708,6 +1708,10 @@ org.apache.kafka.streams.kstream.internals.foreignkeyjoin.SubscriptionWrapperSer
 - shouldThrowExceptionOnNullKeyV1Test
 - shouldThrowExceptionOnNullPrimaryPartitionV1Test
 - shouldThrowExceptionOnUnsupportedVersionTest
+- shouldThrowOnDataShorterThanHeaderTest
+- shouldThrowOnTruncatedV1DataWithHashTest
+- shouldThrowOnTruncatedV1DataWithNullHashTest
+- shouldThrowOnUnsupportedVersionDuringDeserializationTest
 org.apache.kafka.streams.kstream.internals.graph.GraphGraceSearchUtilTest:
 - shouldExtractGraceFromKStreamSessionWindowAggregateNode
 - shouldExtractGraceFromKStreamWindowAggregateNode

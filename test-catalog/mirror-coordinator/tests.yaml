@@ -1,0 +1,11 @@
+org.apache.kafka.coordinator.mirror.MirrorCoordinatorRecordSerdeTest:
+- testLastMirrorEpochsWireFormat
+- testMirrorPartitionStateWireFormat
+- testRoundTrip
+- testSchemaDefaults
+- testTombstone
+- testTruncatedKey
+- testTruncatedValue
+- testUnknownRecordType
+- testUnknownTaggedFields
+- testUnsupportedValueVersion

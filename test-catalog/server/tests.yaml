@@ -493,6 +493,9 @@ org.apache.kafka.server.metrics.LinuxIoMetricsCollectorTest:
 - testUnableToReadNonexistentProcFile
 org.apache.kafka.server.metrics.NodeMetricsTest:
 - testMetricsExported
+org.apache.kafka.server.mirror.MirrorCoordinatorRecordSerdeIntegrationTest:
+- testRecordsSurviveBrokerRestart
+- testTombstonesSurviveBrokerRestart
 org.apache.kafka.server.partition.AlterPartitionManagerTest:
 - testAuthorizationFailed
 - testBasic
