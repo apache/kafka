@@ -139,7 +139,7 @@ class RocksDBTransactionBuffer extends AbstractTransactionBuffer<Bytes> {
     /**
      * Stages a range deletion for an explicit column family. Updates the shared
      * {@code pendingWrites} and {@code rangeTombstones} so iterators opened before
-     * commit hide the deleted range, and records the range delete for {@code cf} so
+     * commits hide the deleted range, and records the range delete for {@code cf} so
      * {@link #prepareFlush()} adds it to the {@link WriteBatch}.
      */
     void stageDeleteRange(final ColumnFamilyHandle cf, final Bytes from, final Bytes to) {
