@@ -2520,16 +2520,15 @@ public class GroupMetadataManager {
                                                 final StreamsGroup group,
                                                 final List<CoordinatorRecord> records) {
         if (topology != null) {
-            StreamsTopology streamsTopologyFromRequest = StreamsTopology.fromHeartbeatRequest(topology);
             if (group.topology().isEmpty()) {
                 log.info("[GroupId {}][MemberId {}] Member initialized the topology with epoch {}", groupId, memberId, topology.epoch());
                 StreamsGroupTopologyValue recordValue = convertToStreamsGroupTopologyRecord(topology);
                 records.add(newStreamsGroupTopologyRecord(groupId, recordValue));
-                return streamsTopologyFromRequest;
+                return StreamsTopology.fromRecord(recordValue);
             } else if (group.topology().get().topologyEpoch() > topology.epoch()) {
                 log.info("[GroupId {}][MemberId {}] Member joined with stale topology epoch {}", groupId, memberId, topology.epoch());
                 return group.topology().get();
-            } else if (!group.topology().get().equals(streamsTopologyFromRequest)) {
+            } else if (!group.topology().get().matches(topology)) {
                 throw new InvalidRequestException("Topology updates are not supported yet.");
             } else {
                 log.debug("[GroupId {}][MemberId {}] Member joined with currently initialized topology {}", groupId, memberId, topology.epoch());
