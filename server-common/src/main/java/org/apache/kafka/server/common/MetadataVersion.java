@@ -264,7 +264,7 @@ public enum MetadataVersion {
         return this.isAtLeast(MetadataVersion.IBP_4_4_IV2);
     }
 
-    public short requestHeaderVersion() {
+    public short shareGroupStateRequestHeaderVersion() {
         return this.isAtLeast(MetadataVersion.IBP_4_5_IV0) ? (short) 3 : (short) 2;
     }
 

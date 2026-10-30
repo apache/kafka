@@ -193,10 +193,10 @@ public class ShareCoordinatorMetadataCacheHelperImpl implements ShareCoordinator
     @Override
     public short requestHeaderVersion() {
         try {
-            return metadataCache.metadataVersion().requestHeaderVersion();
+            return metadataCache.metadataVersion().shareGroupStateRequestHeaderVersion();
         } catch (IllegalStateException e) {
             // The metadata version is unknown until the first metadata image is loaded.
-            return MetadataVersion.MINIMUM_VERSION.requestHeaderVersion();
+            return MetadataVersion.MINIMUM_VERSION.shareGroupStateRequestHeaderVersion();
         }
     }
 

@@ -550,7 +550,7 @@ public class ShareCoordinatorMetadataCacheHelperImplTest {
             () -> ServerLogConfigs.MAX_MESSAGE_BYTES_DEFAULT
         );
 
-        assertEquals(MetadataVersion.MINIMUM_VERSION.requestHeaderVersion(), cache.requestHeaderVersion());
+        assertEquals(MetadataVersion.MINIMUM_VERSION.shareGroupStateRequestHeaderVersion(), cache.requestHeaderVersion());
         verify(mockMetadataCache, times(1)).metadataVersion();
     }
 
