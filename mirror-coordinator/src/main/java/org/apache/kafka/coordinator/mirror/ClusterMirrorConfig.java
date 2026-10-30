@@ -80,7 +80,7 @@ public final class ClusterMirrorConfig extends AbstractConfig {
 
     public static final String SOCKET_TIMEOUT_MS_CONFIG = "socket.timeout.ms";
     private static final String SOCKET_TIMEOUT_MS_DOC = "The socket timeout for network requests.";
-    private static final long SOCKET_TIMEOUT_MS_DEFAULT = 30 * 1000;
+    private static final long SOCKET_TIMEOUT_MS_DEFAULT = 30 * 1000L;
 
     public static final String SOCKET_RECEIVE_BUFFER_BYTES_CONFIG = "socket.receive.buffer.bytes";
     private static final String SOCKET_RECEIVE_BUFFER_BYTES_DOC = "The socket receive buffer for network requests to the source cluster.";
@@ -323,8 +323,8 @@ public final class ClusterMirrorConfig extends AbstractConfig {
         return getLong(CONNECTIONS_MAX_IDLE_MS_CONFIG);
     }
 
-    public int socketTimeoutMs() {
-        return getInt(SOCKET_TIMEOUT_MS_CONFIG);
+    public long socketTimeoutMs() {
+        return getLong(SOCKET_TIMEOUT_MS_CONFIG);
     }
 
     public int socketReceiveBufferBytes() {
@@ -414,7 +414,7 @@ public final class ClusterMirrorConfig extends AbstractConfig {
                 + "TOPIC;orders.* (all ACLs for topics matching orders.*)\n"
                 + "TOPIC;.*;.*;READ;ALLOW||TOPIC;.*;.*;WRITE;ALLOW (all topic READ and WRITE ALLOW ACLs)\n"
                 + "ANY;.*;.*;ANY;ANY;User:alice (all ACLs for principal User:alice)\n"
-                + "ANY;.*;.*;WRITE;.* (exclude all WRITE ACLs)";
+                + "ANY;.*;.*;WRITE;ANY (all WRITE ACLs)";
 
         public static List<MirrorAclRule> parseList(String rules) {
             if (rules == null || rules.isEmpty()) {
