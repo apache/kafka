@@ -17,13 +17,15 @@
 package kafka.server
 
 import org.apache.kafka.common.test.api.{ClusterConfigProperty, ClusterTest, ClusterTestDefaults, Type}
-import org.apache.kafka.common.message.ListGroupsResponseData
+import org.apache.kafka.common.message.{ListGroupsResponseData, StreamsGroupHeartbeatRequestData}
 import org.apache.kafka.common.protocol.{ApiKeys, Errors}
 import org.apache.kafka.common.test.ClusterInstance
 import org.apache.kafka.coordinator.group.classic.ClassicGroupState
 import org.apache.kafka.coordinator.group.modern.consumer.ConsumerGroup.ConsumerGroupState
 import org.apache.kafka.coordinator.group.{Group, GroupCoordinatorConfig}
 import org.junit.jupiter.api.Assertions.assertEquals
+
+import scala.jdk.CollectionConverters._
 
 @ClusterTestDefaults(
   types = Array(Type.KRAFT),
@@ -86,22 +88,14 @@ class ListGroupsRequestTest(cluster: ClusterInstance) extends GroupCoordinatorBa
       expectedError = Errors.NONE
     )
 
-    def groupIds(requireCommittedOffsets: Boolean, typesFilter: List[String] = List.empty): Set[String] = {
-      listGroups(
-        statesFilter = List.empty,
-        typesFilter = typesFilter,
-        requireCommittedOffsets = requireCommittedOffsets
-      ).map(_.groupId).toSet
-    }
-
     // Without the filter, all groups are returned.
-    assertEquals(Set("grp-1", "grp-2", "grp-3"), groupIds(requireCommittedOffsets = false))
+    assertEquals(Set("grp-1", "grp-2", "grp-3"), listGroupIds(requireCommittedOffsets = false))
 
     // With the filter, only groups with committed offsets are returned.
-    assertEquals(Set("grp-1", "grp-3"), groupIds(requireCommittedOffsets = true))
+    assertEquals(Set("grp-1", "grp-3"), listGroupIds(requireCommittedOffsets = true))
 
     // The filter is combined with the types filter.
-    assertEquals(Set("grp-3"), groupIds(requireCommittedOffsets = true, typesFilter = List(Group.GroupType.CONSUMER.toString)))
+    assertEquals(Set("grp-3"), listGroupIds(requireCommittedOffsets = true, typesFilter = List(Group.GroupType.CONSUMER.toString)))
 
     // Delete the only offset of grp-1. The classic group must be empty first.
     leaveGroup(
@@ -117,8 +111,79 @@ class ListGroupsRequestTest(cluster: ClusterInstance) extends GroupCoordinatorBa
       version = ApiKeys.OFFSET_DELETE.latestVersion(isUnstableApiEnabled)
     )
 
-    assertEquals(Set("grp-3"), groupIds(requireCommittedOffsets = true))
-    assertEquals(Set("grp-1", "grp-2", "grp-3"), groupIds(requireCommittedOffsets = false))
+    assertEquals(Set("grp-3"), listGroupIds(requireCommittedOffsets = true))
+    assertEquals(Set("grp-1", "grp-2", "grp-3"), listGroupIds(requireCommittedOffsets = false))
+  }
+
+  @ClusterTest(
+    serverProperties = Array(
+      new ClusterConfigProperty(key = GroupCoordinatorConfig.OFFSETS_TOPIC_PARTITIONS_CONFIG, value = "1"),
+      new ClusterConfigProperty(key = GroupCoordinatorConfig.OFFSETS_TOPIC_REPLICATION_FACTOR_CONFIG, value = "1"),
+      new ClusterConfigProperty(key = GroupCoordinatorConfig.STREAMS_GROUP_INITIAL_REBALANCE_DELAY_MS_CONFIG, value = "0"),
+      new ClusterConfigProperty(key = GroupCoordinatorConfig.STREAMS_GROUP_ASSIGNMENT_INTERVAL_MS_CONFIG, value = "0"),
+      new ClusterConfigProperty(key = GroupCoordinatorConfig.SHARE_GROUP_ASSIGNMENT_INTERVAL_MS_CONFIG, value = "0"),
+      new ClusterConfigProperty(key = "group.share.persister.class.name", value = "")
+    )
+  )
+  def testListGroupsWithRequireCommittedOffsetsForStreamsAndShareGroups(): Unit = {
+    // Creates the __consumer_offsets topics because it won't be created automatically
+    // in this test because it does not use FindCoordinator API.
+    createOffsetsTopic()
+
+    // Create the topic.
+    val topicId = createTopic(
+      topic = "foo",
+      numPartitions = 3
+    )
+
+    // streams-grp is a streams group with a committed offset.
+    val topology = new StreamsGroupHeartbeatRequestData.Topology()
+      .setEpoch(1)
+      .setSubtopologies(List(
+        new StreamsGroupHeartbeatRequestData.Subtopology()
+          .setSubtopologyId("subtopology-1")
+          .setSourceTopics(List("foo").asJava)
+          .setRepartitionSinkTopics(List.empty.asJava)
+          .setRepartitionSourceTopics(List.empty.asJava)
+      ).asJava)
+    val streamsMember = streamsGroupHeartbeat(
+      groupId = "streams-grp",
+      memberId = "streams-member",
+      rebalanceTimeoutMs = 1000,
+      activeTasks = List.empty,
+      standbyTasks = List.empty,
+      warmupTasks = List.empty,
+      topology = topology
+    )
+    commitOffset(
+      groupId = "streams-grp",
+      memberId = streamsMember.memberId,
+      memberEpoch = streamsMember.memberEpoch,
+      topic = "foo",
+      topicId = topicId,
+      partition = 0,
+      offset = 10L,
+      expectedError = Errors.NONE
+    )
+
+    // share-grp is a share group. Share groups never have committed offsets.
+    shareGroupHeartbeat(
+      groupId = "share-grp",
+      subscribedTopicNames = List("foo")
+    )
+
+    assertEquals(Set("streams-grp", "share-grp"), listGroupIds(requireCommittedOffsets = false))
+    assertEquals(Set("streams-grp"), listGroupIds(requireCommittedOffsets = true))
+    assertEquals(Set.empty, listGroupIds(requireCommittedOffsets = true, typesFilter = List(Group.GroupType.SHARE.toString)))
+    assertEquals(Set("share-grp"), listGroupIds(requireCommittedOffsets = false, typesFilter = List(Group.GroupType.SHARE.toString)))
+  }
+
+  private def listGroupIds(requireCommittedOffsets: Boolean, typesFilter: List[String] = List.empty): Set[String] = {
+    listGroups(
+      statesFilter = List.empty,
+      typesFilter = typesFilter,
+      requireCommittedOffsets = requireCommittedOffsets
+    ).map(_.groupId).toSet
   }
 
   private def testListGroups(useNewProtocol: Boolean): Unit = {
