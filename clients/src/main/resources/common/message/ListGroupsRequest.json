@@ -25,7 +25,9 @@
   // Version 4 adds the StatesFilter field (KIP-518).
   //
   // Version 5 adds the TypesFilter field (KIP-848).
-  "validVersions": "0-5",
+  //
+  // Version 6 adds the RequireCommittedOffsets field (KIP-1388).
+  "validVersions": "0-6",
   "flexibleVersions": "3+",
   "headerVersions": {
     "0-2": "1",
@@ -35,6 +37,8 @@
     { "name": "StatesFilter", "type": "[]string", "versions": "4+",
       "about": "The states of the groups we want to list. If empty, all groups are returned with their state." },
     { "name": "TypesFilter", "type": "[]string", "versions": "5+",
-      "about": "The types of the groups we want to list. If empty, all groups are returned with their type." }
+      "about": "The types of the groups we want to list. If empty, all groups are returned with their type." },
+    { "name": "RequireCommittedOffsets", "type": "bool", "versions": "6+", "default": "false",
+      "about": "If true, only groups with at least one committed offset are returned." }
   ]
 }
