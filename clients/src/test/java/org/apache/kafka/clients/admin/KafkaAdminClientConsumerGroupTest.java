@@ -517,6 +517,44 @@ public class KafkaAdminClientConsumerGroupTest extends KafkaAdminClientTestBase 
     }
 
     @Test
+    public void testListGroupsWithRequireCommittedOffsetsMixedBrokerVersions() throws Exception {
+        try (AdminClientUnitTestEnv env = new AdminClientUnitTestEnv(mockCluster(2, 0))) {
+            env.kafkaClient().setNodeApiVersions(NodeApiVersions.create());
+            env.kafkaClient().prepareResponse(prepareMetadataResponse(env.cluster(), Errors.NONE));
+
+            // Broker 1 supports the filter and returns its groups.
+            env.kafkaClient().prepareResponseFrom(
+                expectListGroupsRequestWithFilters(Set.of(), Set.of(), true),
+                new ListGroupsResponse(new ListGroupsResponseData()
+                    .setErrorCode(Errors.NONE.code())
+                    .setGroups(List.of(
+                        new ListGroupsResponseData.ListedGroup()
+                            .setGroupId("group-1")
+                            .setProtocolType(ConsumerProtocol.PROTOCOL_TYPE)
+                            .setGroupState(GroupState.STABLE.toString())
+                            .setGroupType(GroupType.CONSUMER.toString())))),
+                env.cluster().nodeById(1));
+
+            // Broker 0 does not support the filter.
+            env.kafkaClient().prepareUnsupportedVersionResponse(request ->
+                request instanceof ListGroupsRequest && ((ListGroupsRequest) request).data().requireCommittedOffsets()
+            );
+
+            ListGroupsResult result = env.adminClient().listGroups(new ListGroupsOptions().requireCommittedOffsets(true));
+
+            // all() fails, errors() has one entry for the unsupported broker, and valid() has
+            // only the groups from the broker that supports the filter.
+            TestUtils.assertFutureThrows(UnsupportedVersionException.class, result.all());
+            assertEquals(1, result.errors().get().size());
+            assertInstanceOf(UnsupportedVersionException.class, result.errors().get().iterator().next());
+            assertEquals(
+                List.of(new GroupListing("group-1", Optional.of(GroupType.CONSUMER), ConsumerProtocol.PROTOCOL_TYPE, Optional.of(GroupState.STABLE))),
+                new ArrayList<>(result.valid().get())
+            );
+        }
+    }
+
+    @Test
     public void testListConsumerGroups() throws Exception {
         try (AdminClientUnitTestEnv env = new AdminClientUnitTestEnv(mockCluster(4, 0),
                 AdminClientConfig.RETRIES_CONFIG, "2")) {

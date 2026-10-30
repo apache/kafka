@@ -1057,6 +1057,11 @@ public class OffsetMetadataManager {
      * that read operations only observe committed state, so a concurrent uncommitted offset
      * commit or pending-transaction record must not flip the eligibility outcome on us.
      */
+    public boolean groupHasNoOffsets(String groupId, long committedOffset) {
+        return offsets.offsetsByGroup.get(groupId, committedOffset) == null
+            && !openTransactions.contains(groupId, committedOffset);
+    }
+
     /**
      * @return true iff the group has at least one committed offset in the snapshot at
      * {@code committedOffset}. Pending transactional offsets are not considered because
@@ -1066,11 +1071,6 @@ public class OffsetMetadataManager {
      */
     public boolean hasCommittedOffsets(String groupId, long committedOffset) {
         return offsets.offsetsByGroup.get(groupId, committedOffset) != null;
-    }
-
-    public boolean groupHasNoOffsets(String groupId, long committedOffset) {
-        return offsets.offsetsByGroup.get(groupId, committedOffset) == null
-            && !openTransactions.contains(groupId, committedOffset);
     }
 
     /**
