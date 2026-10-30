@@ -2703,8 +2703,8 @@ org.apache.kafka.clients.consumer.internals.ShareSubscriptionStateTest:
 - testMarkPendingRevocationIsNoOp
 - testMetadataTopics
 - testMovePartitionToEndRoundRobin
+- testSubscribe
 - testSubscribeToEmptySetStillMarksSubscribed
-- testSubscribeToShareGroup
 - testUnsubscribeClearsAllState
 org.apache.kafka.clients.consumer.internals.StreamsGroupHeartbeatRequestManagerTest:
 - testBuildingHeartbeatAllOwnedTaskListsSentWhenOnlyOneRoleChanges
@@ -2783,6 +2783,7 @@ org.apache.kafka.clients.consumer.internals.StreamsGroupHeartbeatRequestManagerT
 - testTaskOffsetsResentAfterReset
 - testTaskOffsetsResentWhenChangedAcrossInterval
 - testTopicAuthorizationFailedErrorResponse
+- testUnknownStatusCodeFailsMemberFatally
 - testUnsupportedVersionFailureWhileSending
 org.apache.kafka.clients.consumer.internals.StreamsGroupTopologyDescriptionRequestManagerTest:
 - testCoordinatorErrorTriggersRediscovery
@@ -2885,6 +2886,7 @@ org.apache.kafka.clients.consumer.internals.StreamsMembershipManagerTest:
 - testStandbyTaskOfUnknownSubtopologyInHeartbeatResponseFailsMember
 - testStandbyTasksAreNullInHeartbeatResponse
 - testStaticMemberUsesExpectedLeaveEpochOnClose
+- testTransitionToFatalAfterLeaveRequestGenerated
 - testTransitionToFatalMarksPendingRevocationBeforeCallback
 - testTransitionToFatalWhenInAcknowledging
 - testTransitionToFatalWhenInJoining

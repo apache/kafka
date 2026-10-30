@@ -1693,6 +1693,7 @@ org.apache.kafka.streams.kstream.internals.foreignkeyjoin.SubscriptionSendProces
 - leftJoinShouldPropagateNewPrimaryKeyWithNullFK
 - leftJoinShouldPropagateNewRecordOfUnchangedFK
 - leftJoinShouldPropagateNothingWhenOldAndNewLeftValueIsNull
+- shouldUseTaskPartitionAsPrimaryPartitionWhenRecordMetadataIsUndefined
 org.apache.kafka.streams.kstream.internals.foreignkeyjoin.SubscriptionWrapperSerdeTest:
 - shouldPassHeadersToUnderlyingDeserializer
 - shouldPassHeadersToUnderlyingSerializer
