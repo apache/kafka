@@ -1652,6 +1652,19 @@ public class StreamsMembershipManagerTest {
         assertTrue(groupLeft.isDone());
     }
 
+    @Test
+    public void testTransitionToFatalAfterLeaveRequestGenerated() {
+        joining();
+        final CompletableFuture<Void> groupLeft = leavingAtMemberEpochZero();
+        membershipManager.onHeartbeatRequestGenerated();
+        assertFalse(groupLeft.isDone());
+
+        membershipManager.transitionToFatal();
+
+        assertTrue(groupLeft.isDone());
+        assertEquals(MemberState.FATAL, membershipManager.state());
+    }
+
     @ParameterizedTest
     @ValueSource(booleans = {true, false})
     public void testOnHeartbeatFailure(boolean retriable) {

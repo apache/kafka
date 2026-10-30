@@ -490,6 +490,7 @@ public class StreamsMembershipManager implements RequestManager {
         if (previousState == MemberState.UNSUBSCRIBED) {
             log.debug("Member {} with epoch {} got fatal error from the broker but it already " +
                 "left the group, so onAllTasksLost callback won't be triggered.", memberId, memberEpoch);
+            maybeCompleteLeaveInProgress();
             return;
         }
 
