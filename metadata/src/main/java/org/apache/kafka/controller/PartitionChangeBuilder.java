@@ -43,6 +43,7 @@ import java.util.stream.Collectors;
 
 import static org.apache.kafka.metadata.LeaderConstants.NO_LEADER;
 import static org.apache.kafka.metadata.LeaderConstants.NO_LEADER_CHANGE;
+import static org.apache.kafka.metadata.LeaderConstants.NO_LEADER_EPOCH_CHANGE;
 
 /**
  * PartitionChangeBuilder handles changing partition registrations.
@@ -55,6 +56,7 @@ public class PartitionChangeBuilder {
         if (record.eligibleLeaderReplicas() != null) return false;
         if (record.lastKnownElr() != null) return false;
         if (record.leader() != NO_LEADER_CHANGE) return false;
+        if (record.leaderEpoch() != NO_LEADER_EPOCH_CHANGE) return false;
         if (record.replicas() != null) return false;
         if (record.removingReplicas() != null) return false;
         if (record.addingReplicas() != null) return false;
@@ -96,6 +98,7 @@ public class PartitionChangeBuilder {
     private List<Integer> uncleanShutdownReplicas;
     private Election election = Election.ONLINE;
     private LeaderRecoveryState targetLeaderRecoveryState;
+    private int targetLeaderEpoch = NO_LEADER_EPOCH_CHANGE;
     private boolean eligibleLeaderReplicasEnabled;
     private DefaultDirProvider defaultDirProvider;
 
@@ -174,6 +177,18 @@ public class PartitionChangeBuilder {
 
     public PartitionChangeBuilder setTargetLeaderRecoveryState(LeaderRecoveryState targetLeaderRecoveryState) {
         this.targetLeaderRecoveryState = targetLeaderRecoveryState;
+        return this;
+    }
+
+    /**
+     * Set the minimum new leader epoch. A lower target has no effect, so the leader epoch never decreases.
+     */
+    public PartitionChangeBuilder setTargetLeaderEpoch(int targetLeaderEpoch) {
+        if (!metadataVersion.isClusterMirroringSupported()) {
+            throw new IllegalStateException("Cannot set a target leader epoch with metadata version " +
+                metadataVersion + ", because it does not support Cluster Mirroring.");
+        }
+        this.targetLeaderEpoch = targetLeaderEpoch;
         return this;
     }
 
@@ -458,10 +473,30 @@ public class PartitionChangeBuilder {
             record.setLeaderRecoveryState(targetLeaderRecoveryState.value());
         }
 
+        maybeSetLeaderEpoch(record);
+
         if (changeRecordIsNoOp(record)) {
             return Optional.empty();
         } else {
             return Optional.of(new ApiMessageAndVersion(record, metadataVersion.partitionChangeRecordVersion()));
+        }
+    }
+
+    /**
+     * Set the new leader epoch in the record if the metadata version supports it.
+     *
+     * Setting the leader field signals a leader epoch bump, so this must be called after every
+     * step that may set the leader field.
+     */
+    private void maybeSetLeaderEpoch(PartitionChangeRecord record) {
+        if (!metadataVersion.isClusterMirroringSupported()) {
+            return;
+        }
+        int newLeaderEpoch = (record.leader() != NO_LEADER_CHANGE) ?
+            partition.leaderEpoch + 1 : partition.leaderEpoch;
+        newLeaderEpoch = Math.max(newLeaderEpoch, targetLeaderEpoch);
+        if (newLeaderEpoch != partition.leaderEpoch) {
+            record.setLeaderEpoch(newLeaderEpoch);
         }
     }
 
