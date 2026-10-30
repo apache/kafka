@@ -354,7 +354,7 @@ public final class AssignmentsManager {
             "prior to sending.", newInFlight.size(), numInvalid);
         if (!newInFlight.isEmpty()) {
             sendAssignments(image.cluster().brokerEpoch(nodeId), newInFlight,
-                image.features().metadataVersionOrThrow().requestHeaderVersion());
+                image.features().metadataVersionOrThrow().assignReplicasToDirsRequestHeaderVersion());
         }
     }
 

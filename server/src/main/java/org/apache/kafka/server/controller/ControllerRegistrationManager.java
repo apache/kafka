@@ -250,7 +250,7 @@ public class ControllerRegistrationManager implements MetadataPublisher {
         } else if (pendingRpc) {
             logger.info("maybeSendControllerRegistration: waiting for the previous RPC to complete.");
         } else {
-            sendControllerRegistration(metadataVersion.get().requestHeaderVersion());
+            sendControllerRegistration(metadataVersion.get().controllerRegistrationRequestHeaderVersion());
         }
     }
 

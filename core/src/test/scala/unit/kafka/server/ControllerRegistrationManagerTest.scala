@@ -248,8 +248,8 @@ class ControllerRegistrationManagerTest {
       })
 
       val requestVersion = request.get.version
-      assertEquals(ApiKeys.CONTROLLER_REGISTRATION.latestVersionForRequestHeader(metadataVersion.requestHeaderVersion), requestVersion)
-      assertEquals(metadataVersion.requestHeaderVersion, ApiKeys.CONTROLLER_REGISTRATION.requestHeaderVersion(requestVersion))
+      assertEquals(ApiKeys.CONTROLLER_REGISTRATION.latestVersionForRequestHeader(metadataVersion.controllerRegistrationRequestHeaderVersion), requestVersion)
+      assertEquals(metadataVersion.controllerRegistrationRequestHeaderVersion, ApiKeys.CONTROLLER_REGISTRATION.requestHeaderVersion(requestVersion))
     } finally {
       manager.close()
     }

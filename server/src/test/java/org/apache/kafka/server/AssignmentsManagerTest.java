@@ -328,8 +328,8 @@ public class AssignmentsManagerTest {
             TestUtils.retryOnExceptionWithTimeout(60_000, () -> assertEquals(1, testEnv.assignmentsManager.numInFlight()));
 
             short requestVersion = testEnv.channelManager.callbacks.peek().getKey().version();
-            assertEquals(ApiKeys.ASSIGN_REPLICAS_TO_DIRS.latestVersionForRequestHeader(metadataVersion.requestHeaderVersion()), requestVersion);
-            assertEquals(metadataVersion.requestHeaderVersion(), ApiKeys.ASSIGN_REPLICAS_TO_DIRS.requestHeaderVersion(requestVersion));
+            assertEquals(ApiKeys.ASSIGN_REPLICAS_TO_DIRS.latestVersionForRequestHeader(metadataVersion.assignReplicasToDirsRequestHeaderVersion()), requestVersion);
+            assertEquals(metadataVersion.assignReplicasToDirsRequestHeaderVersion(), ApiKeys.ASSIGN_REPLICAS_TO_DIRS.requestHeaderVersion(requestVersion));
         }
     }
 
