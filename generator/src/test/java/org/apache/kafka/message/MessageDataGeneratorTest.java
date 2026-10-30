@@ -20,8 +20,11 @@ package org.apache.kafka.message;
 import org.junit.jupiter.api.Test;
 import org.junit.jupiter.api.Timeout;
 
+import java.io.BufferedWriter;
+import java.io.StringWriter;
 import java.util.Arrays;
 
+import static org.junit.jupiter.api.Assertions.assertEquals;
 import static org.junit.jupiter.api.Assertions.assertThrows;
 import static org.junit.jupiter.api.Assertions.assertTrue;
 import static org.junit.jupiter.api.Assertions.fail;
@@ -75,6 +78,83 @@ public class MessageDataGeneratorTest {
     private void assertStringContains(String substring, String value) {
         assertTrue(value.contains(substring),
                    "Expected string to contain '" + substring + "', but it was " + value);
+    }
+
+    private String generateMessageSource(MessageSpec spec) throws Exception {
+        MessageDataGenerator generator = new MessageDataGenerator("org.apache.kafka.common.message");
+        generator.generate(spec);
+        StringWriter writer = new StringWriter();
+        try (BufferedWriter buffered = new BufferedWriter(writer)) {
+            generator.write(buffered);
+        }
+        return writer.toString();
+    }
+
+    private MessageSpec parseSpec(String... lines) throws Exception {
+        return MessageGenerator.JSON_SERDE.readValue(String.join("", Arrays.asList(lines)), MessageSpec.class);
+    }
+
+    @Test
+    public void testArrayPreallocationIsCapped() throws Exception {
+        MessageSpec spec = parseSpec(
+                "{",
+                "  \"type\": \"request\", \"name\": \"CapTest\", \"validVersions\": \"0-2\", \"flexibleVersions\": \"none\",",
+                "  \"fields\": [",
+                "    { \"name\": \"Foo\", \"type\": \"[]int32\", \"versions\": \"0+\" },",
+                "    { \"name\": \"Bar\", \"type\": \"[]Baz\", \"versions\": \"1+\", \"fields\": [",
+                "      { \"name\": \"Key\", \"type\": \"int32\", \"versions\": \"1+\", \"mapKey\": true },",
+                "      { \"name\": \"Value\", \"type\": \"[]Bam\", \"versions\": \"2+\", \"fields\": [",
+                "        {\"name\": \"NestedKey\", \"type\": \"string\", \"versions\": \"2+\", \"mapKey\": true },",
+                "        { \"name\": \"NestedValue\", \"type\": \"string\", \"versions\": \"2+\" }",
+                "      ]}",
+                "    ]}",
+                "  ]",
+                "}");
+        String source = generateMessageSource(spec);
+        assertStringContains("new ArrayList<>(Math.min(arrayLength, MessageUtil.MAX_PREALLOCATED_ARRAY_CAPACITY))", source);
+        assertStringContains("BazCollection(Math.min(arrayLength, MessageUtil.MAX_PREALLOCATED_ARRAY_CAPACITY))", source);
+        assertStringContains("BamCollection(Math.min(arrayLength, MessageUtil.MAX_PREALLOCATED_ARRAY_CAPACITY))", source);
+    }
+
+    @Test
+    public void testArrayLengthIsCapped() throws Exception {
+        MessageSpec spec = parseSpec(
+                "{",
+                "  \"type\": \"request\", \"name\": \"CapTest\", \"validVersions\": \"0-2\", \"flexibleVersions\": \"none\",",
+                "  \"fields\": [",
+                "    { \"name\": \"Foo\", \"type\": \"[]int32\", \"versions\": \"0+\" },",
+                "    { \"name\": \"Bar\", \"type\": \"[]Baz\", \"versions\": \"1+\", \"fields\": [",
+                "      { \"name\": \"Key\", \"type\": \"int32\", \"versions\": \"1+\", \"mapKey\": true },",
+                "      { \"name\": \"Value\", \"type\": \"[]Bam\", \"versions\": \"2+\", \"fields\": [",
+                "        {\"name\": \"NestedKey\", \"type\": \"string\", \"versions\": \"2+\", \"mapKey\": true },",
+                "        { \"name\": \"NestedValue\", \"type\": \"string\", \"versions\": \"2+\" }",
+                "      ]}",
+                "    ]}",
+                "  ]",
+                "}");
+        String source = generateMessageSource(spec);
+        int occurrences = source.split("if \\(arrayLength > MessageUtil.MAX_ARRAY_LENGTH\\) \\{", -1).length - 1;
+        assertEquals(3, occurrences,
+                "Expected the cap check for all 3 array fields (Foo, Bar, Value), but found " + occurrences);
+    }
+
+    @Test
+    public void testTaggedFieldCountIsBounded() throws Exception {
+        MessageSpec spec = parseSpec(
+                "{",
+                "  \"type\": \"request\", \"name\": \"TagBoundTest\", \"validVersions\": \"0-1\", \"flexibleVersions\": \"1+\",",
+                "  \"fields\": [",
+                "    { \"name\": \"Foo\", \"type\": \"int32\", \"versions\": \"1+\", \"taggedVersions\": \"1+\", \"tag\": 0, \"default\": \"0\" }",
+                "  ]",
+                "}");
+        String source = generateMessageSource(spec);
+        assertStringContains("if (_numTaggedFields < 0) {", source);
+        assertStringContains("if (_numTaggedFields > _readable.remaining()) {", source);
+        assertStringContains("Tried to read \" + _numTaggedFields + \" tagged fields, but there are only \" + " +
+                "_readable.remaining() + \" bytes remaining.", source);
+        assertStringContains("if (_numTaggedFields > MessageUtil.MAX_TAGGED_FIELD_COUNT) {", source);
+        assertStringContains("Tried to read \" + _numTaggedFields + \" tagged fields, which exceeds the maximum " +
+                "allowed count of \" + MessageUtil.MAX_TAGGED_FIELD_COUNT + \".\"", source);
     }
 
     @Test
