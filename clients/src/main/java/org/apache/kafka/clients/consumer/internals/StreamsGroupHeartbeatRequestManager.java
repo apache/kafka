@@ -301,6 +301,21 @@ public class StreamsGroupHeartbeatRequestManager implements RequestManager {
 
             return copartitionGroups.stream()
                 .map(x -> getCopartitionGroupFromStreams(x, sourceTopicsMap, repartitionSourceTopics))
+                .sorted(
+                    Comparator
+                        .comparing(
+                            StreamsGroupHeartbeatRequestData.CopartitionGroup::sourceTopics,
+                            HeartbeatState::compareTopicIndexes
+                        )
+                        .thenComparing(
+                            StreamsGroupHeartbeatRequestData.CopartitionGroup::sourceTopicRegex,
+                            HeartbeatState::compareTopicIndexes
+                        )
+                        .thenComparing(
+                            StreamsGroupHeartbeatRequestData.CopartitionGroup::repartitionSourceTopics,
+                            HeartbeatState::compareTopicIndexes
+                        )
+                )
                 .collect(Collectors.toList());
         }
 
@@ -321,7 +336,21 @@ public class StreamsGroupHeartbeatRequestManager implements RequestManager {
                 }
             });
 
+            copartitionGroup.sourceTopics().sort(Short::compare);
+            copartitionGroup.sourceTopicRegex().sort(Short::compare);
+            copartitionGroup.repartitionSourceTopics().sort(Short::compare);
+
             return copartitionGroup;
+        }
+
+        private static int compareTopicIndexes(List<Short> first, List<Short> second) {
+            for (int i = 0; i < Math.min(first.size(), second.size()); i++) {
+                int comparison = Short.compare(first.get(i), second.get(i));
+                if (comparison != 0) {
+                    return comparison;
+                }
+            }
+            return Integer.compare(first.size(), second.size());
         }
 
         private static List<StreamsGroupHeartbeatRequestData.TopicInfo> getRepartitionTopicsInfoFromStreams(final StreamsRebalanceData.Subtopology subtopologyDataFromStreams) {
