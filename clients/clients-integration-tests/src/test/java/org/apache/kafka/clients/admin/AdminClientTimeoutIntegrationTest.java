@@ -209,6 +209,7 @@ public class AdminClientTimeoutIntegrationTest {
         }
     }
 
+    @SuppressWarnings("removal")
     @Test
     public void testListClientMetricsResourcesTimeoutMs() {
         try (Admin admin = createInvalidAdminClient()) {
