@@ -2861,7 +2861,7 @@ class StreamsGroupHeartbeatRequestManagerTest {
     @Test
     public void testUnknownStatusCodeFailsMemberFatally() {
         try (
-            final MockedConstruction<HeartbeatRequestState> ignored = mockConstruction(
+            final MockedConstruction<HeartbeatRequestState> heartbeatRequestStateMockedConstruction = mockConstruction(
                 HeartbeatRequestState.class,
                 (mock, context) -> when(mock.canSendRequest(time.milliseconds())).thenReturn(true))
         ) {
@@ -2890,6 +2890,7 @@ class StreamsGroupHeartbeatRequestManagerTest {
 
             // Fatal, not swallowed: the member must be told, and the error must reach the application.
             verify(membershipManager).transitionToFatal();
+            verify(membershipManager).onFatalHeartbeatFailure();
             final ArgumentCaptor<BackgroundEvent> eventCaptor = ArgumentCaptor.forClass(BackgroundEvent.class);
             verify(backgroundEventHandler).add(eventCaptor.capture());
             final ErrorEvent errorEvent = assertInstanceOf(ErrorEvent.class, eventCaptor.getValue());
@@ -2905,6 +2906,11 @@ class StreamsGroupHeartbeatRequestManagerTest {
             verify(membershipManager, never()).onHeartbeatSuccess(any());
             assertEquals(List.of(), streamsRebalanceData.statuses());
             assertEquals(-1, streamsRebalanceData.heartbeatIntervalMs());
+
+            // The request is recorded as a failed attempt, as on the other fatal paths.
+            final HeartbeatRequestState heartbeatRequestState = heartbeatRequestStateMockedConstruction.constructed().get(0);
+            verify(heartbeatRequestState).onFailedAttempt(time.milliseconds());
+            verify(heartbeatRequestState, never()).onSuccessfulAttempt(anyLong());
         }
     }
 

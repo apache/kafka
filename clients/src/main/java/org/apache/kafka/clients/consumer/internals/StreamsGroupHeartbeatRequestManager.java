@@ -673,7 +673,10 @@ public class StreamsGroupHeartbeatRequestManager implements RequestManager {
                 StreamsGroupHeartbeatResponse.Status.knownCodes()
             );
             logger.error(errorMessage);
+            heartbeatRequestState.onFailedAttempt(currentTimeMs);
+            heartbeatState.reset();
             handleFatalFailure(new KafkaException(errorMessage));
+            membershipManager.onFatalHeartbeatFailure();
             return;
         }
 
