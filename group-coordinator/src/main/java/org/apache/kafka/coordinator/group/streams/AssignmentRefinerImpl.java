@@ -236,7 +236,9 @@ public class AssignmentRefinerImpl implements AssignmentRefiner {
      * process: (1) either the old owner of the task keeps running it, or (2) caught-up copy which we temporarily
      * promote as active is running it.
      *
-     * <p>Only an active-running or caught-up copy is ever promoted.
+     * <p>Only an active-running or caught-up copy is ever promoted, with one exception: the standby task of a task
+     * that no member holds as an active task, on a member that does not report its restore progress, see
+     * {@link #unobservableStandbyToPromote}.
      *
      * <p>A task whose target owner is {@link WarmupSupport#NOT_SUPPORTED} is never staged: its target owner never
      * reports its restore progress, so no warm-up task could ever be seen to complete the migration.
@@ -287,13 +289,16 @@ public class AssignmentRefinerImpl implements AssignmentRefiner {
             // was removed from the group in the meantime. For this case, all previously owned tasks of this member
             // (which were not moved to a new owner) will be dangling, which the next assignor run fixes.
             // Furthermore, we stage all tasks the assignor moves to this member on their old owners to keep them
-            // "online". A task nobody holds as an active task is put on a caught-up copy holder instead, which is the
-            // only way it runs at all before the next assignor run.
+            // "online". A task nobody holds as an active task is put on a caught-up copy holder instead, or on a
+            // standby holder that does not report its progress, which is the only way it runs at all before the next
+            // assignor run.
             final StreamsGroupMember targetMember = members.get(targetOwner);
             if (targetMember == null) {
                 final Optional<String> currentOwner = holder != null
                     ? Optional.of(holder.memberId())
-                    : bestCopyToPromote(currentAssignment, task, targetStandbyHolders, processLoad);
+                    : bestCopyToPromote(currentAssignment, task, targetStandbyHolders, processLoad)
+                        .or(() -> unobservableStandbyToPromote(
+                            currentAssignment, task, null, targetStandbyHolders, heartbeatVersions, processLoad));
                 currentOwner.ifPresent(owner -> stagedMigrations.add(
                     stagedMigration(currentAssignment, task, owner, targetOwner, Optional.empty())));
                 continue;
@@ -317,21 +322,8 @@ public class AssignmentRefinerImpl implements AssignmentRefiner {
                 continue;
             }
 
-            // Which member the task keeps running on until the target owner is warm. 'Empty' hands the task to the
-            // target owner in this step instead, cold unless its own process still has the state on disk.
-            final Optional<String> currentOwner;
-            if (holder != null && holder.hot()) {
-                currentOwner = Optional.of(holder.memberId());
-            } else if (holder == null && onDisk(currentAssignment, targetProcessId, task)) {
-                // The target owner's process still has this task's state on disk and reopens it, so the task goes
-                // there rather than onto a copy holder: the usual way into this branch is a member that restarted
-                // inside the session timeout and got its own tasks back, where that state is exact. A stale disk
-                // state is not told apart from a fresh one -- a process reports an end offset only for a task it
-                // is restoring -- and the copy-holder detour would cost a second restore, a slot and a hand-over.
-                currentOwner = Optional.empty();
-            } else {
-                currentOwner = bestCopyToPromote(currentAssignment, task, targetStandbyHolders, processLoad);
-            }
+            final Optional<String> currentOwner = keepRunningOn(
+                currentAssignment, task, holder, targetProcessId, targetStandbyHolders, heartbeatVersions, processLoad);
 
             if (currentOwner.isEmpty()) {
                 grantedTasks.add(new TaskGrant(task, targetOwner));
@@ -342,6 +334,35 @@ public class AssignmentRefinerImpl implements AssignmentRefiner {
         }
 
         return new TaskDecisions(List.copyOf(stagedMigrations), List.copyOf(grantedTasks));
+    }
+
+    /**
+     * Which member the task keeps running on until the target owner is warm. 'Empty' hands the task to the target
+     * owner in this step instead, cold unless its own process still has the state on disk.
+     */
+    private static Optional<String> keepRunningOn(
+        final CurrentAssignmentIndex currentAssignment,
+        final TaskId task,
+        final ActiveHolder holder,
+        final String targetProcessId,
+        final Map<TaskId, Set<String>> targetStandbyHolders,
+        final Map<String, Integer> heartbeatVersions,
+        final Map<String, ProcessLoad> processLoad
+    ) {
+        if (holder != null && holder.hot()) {
+            return Optional.of(holder.memberId());
+        }
+        if (holder == null && onDisk(currentAssignment, targetProcessId, task)) {
+            // The target owner's process still has this task's state on disk and reopens it, so the task goes
+            // there rather than onto a copy holder: the usual way into this branch is a member that restarted
+            // inside the session timeout and got its own tasks back, where that state is exact. A stale disk
+            // state is not told apart from a fresh one -- a process reports an end offset only for a task it
+            // is restoring -- and the copy-holder detour would cost a second restore, a slot and a hand-over.
+            return Optional.empty();
+        }
+        return bestCopyToPromote(currentAssignment, task, targetStandbyHolders, processLoad)
+            .or(() -> unobservableStandbyToPromote(
+                currentAssignment, task, targetProcessId, targetStandbyHolders, heartbeatVersions, processLoad));
     }
 
     /**
@@ -367,6 +388,38 @@ public class AssignmentRefinerImpl implements AssignmentRefiner {
             .min(Comparator
                 .comparingInt((TaskCopy copy) -> designatedStandbyHolders.contains(copy.memberId()) ? 1 : 0)
                 .thenComparingDouble(copy -> processLoad.get(copy.processId()).load())
+                .thenComparing(TaskCopy::memberId))
+            .map(TaskCopy::memberId);
+    }
+
+    /**
+     * The standby holder of the task to promote although its lag is unknown, because the holder is not
+     * {@link WarmupSupport#SUPPORTED}. Only if no member holds the task as an active task, the target owner's process
+     * holds no copy of the task, and the target assignment keeps the standby task on its holder; among several, the
+     * least loaded process wins. A standby task that is behind restores before it processes, which it has to do as a
+     * standby task anyway.
+     *
+     * @param targetProcessId The process of the target owner, or {@code null} if the target owner has left the group.
+     */
+    private static Optional<String> unobservableStandbyToPromote(
+        final CurrentAssignmentIndex currentAssignment,
+        final TaskId task,
+        final String targetProcessId,
+        final Map<TaskId, Set<String>> targetStandbyHolders,
+        final Map<String, Integer> heartbeatVersions,
+        final Map<String, ProcessLoad> processLoad
+    ) {
+        if (currentAssignment.activeHolder().containsKey(task)
+            || targetProcessId != null && findCopyOnProcess(currentAssignment, task, targetProcessId).isPresent()) {
+            return Optional.empty();
+        }
+        final Set<String> designatedStandbyHolders = targetStandbyHolders.getOrDefault(task, Set.of());
+        return currentAssignment.taskCopies().getOrDefault(task, List.of()).stream()
+            .filter(copy -> copy.role() == TaskRole.STANDBY
+                && designatedStandbyHolders.contains(copy.memberId())
+                && WarmupSupport.of(heartbeatVersions.get(copy.memberId())) != WarmupSupport.SUPPORTED)
+            .min(Comparator
+                .comparingDouble((TaskCopy copy) -> processLoad.get(copy.processId()).load())
                 .thenComparing(TaskCopy::memberId))
             .map(TaskCopy::memberId);
     }
@@ -1253,9 +1306,11 @@ public class AssignmentRefinerImpl implements AssignmentRefiner {
      *        The task being migrated.
      * @param currentOwner
      *        The member the task runs on for now: the member holding it as an active task, or, when that member is
-     *        too far behind to run it or there is none, the caught-up copy holder promoted to run it. When the target
-     *        assignment names a member the group no longer has, it can also be a holder that is still restoring the
-     *        task, which is better than taking the task away from a restore that is part-way through.
+     *        too far behind to run it or there is none, the caught-up copy holder promoted to run it. For a task that
+     *        no member holds as an active task, it can also be a standby holder that does not report its restore
+     *        progress, see {@link #unobservableStandbyToPromote}. When the target assignment names a member the group
+     *        no longer has, it can also be a holder that is still restoring the task, which is better than taking the
+     *        task away from a restore that is part-way through.
      * @param targetOwner
      *        The member the target assignment moves the task to.
      * @param targetProcessId
