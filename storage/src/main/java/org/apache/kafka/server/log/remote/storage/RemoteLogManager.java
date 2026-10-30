@@ -752,12 +752,20 @@ public class RemoteLogManager implements Closeable, AsyncOffsetReader {
                     List<LogSegment> segmentsCopy = unifiedLog.logSegments();
                     if (segmentsCopy.isEmpty() || rlsMetadata.startOffset() < segmentsCopy.get(0).baseOffset()) {
                         // search in remote-log
-                        return lookupTimestamp(rlsMetadata, timestamp, startingOffset, maxRecordBodySize);
+                        Optional<FileRecords.TimestampAndOffset> timestampAndOffset =
+                                lookupTimestamp(rlsMetadata, timestamp, startingOffset, maxRecordBodySize);
+                        if (timestampAndOffset.isPresent()) {
+                            return timestampAndOffset;
+                        }
                     } else {
                         // search in local-log
                         for (LogSegment segment : segmentsCopy) {
                             if (segment.largestTimestamp() >= timestamp) {
-                                return segment.findOffsetByTimestamp(timestamp, startingOffset, maxRecordBodySize);
+                                Optional<FileRecords.TimestampAndOffset> timestampAndOffset =
+                                        segment.findOffsetByTimestamp(timestamp, startingOffset, maxRecordBodySize);
+                                if (timestampAndOffset.isPresent()) {
+                                    return timestampAndOffset;
+                                }
                             }
                         }
                     }
