@@ -30,6 +30,7 @@ import org.apache.kafka.common.errors.IllegalGenerationException;
 import org.apache.kafka.common.errors.InconsistentGroupProtocolException;
 import org.apache.kafka.common.errors.InvalidRequestException;
 import org.apache.kafka.common.errors.RebalanceInProgressException;
+import org.apache.kafka.common.errors.StreamsInvalidTopologyEpochException;
 import org.apache.kafka.common.errors.UnknownMemberIdException;
 import org.apache.kafka.common.errors.UnknownServerException;
 import org.apache.kafka.common.errors.UnreleasedInstanceIdException;
@@ -2504,8 +2505,12 @@ public class GroupMetadataManager {
      *
      *  - If the topology of the group is uninitialized, it is initialized with the topology from the request. A corresponding
      *    record is added to records.
-     *  - If the topology of the group is initialized, and the request defines a topology, they are compared. If they
-     *    are not empty, an InvalidRequestException is thrown.
+     *  - If the topology of the group is initialized, and the request defines a topology with a lower epoch, the
+     *    request topology is ignored and the member is reported as stale.
+     *  - If the request defines a different topology with the same epoch as the group, a
+     *    StreamsInvalidTopologyEpochException is thrown.
+     *  - If the request defines a different topology with a higher epoch than the group, an InvalidRequestException
+     *    is thrown, since topology updates are not supported yet.
      *
      * @param groupId  The group ID.
      * @param memberId The member ID.
@@ -2530,6 +2535,11 @@ public class GroupMetadataManager {
                 log.info("[GroupId {}][MemberId {}] Member joined with stale topology epoch {}", groupId, memberId, topology.epoch());
                 return group.topology().get();
             } else if (!group.topology().get().equals(streamsTopologyFromRequest)) {
+                if (group.topology().get().topologyEpoch() == topology.epoch()) {
+                    throw new StreamsInvalidTopologyEpochException(String.format(
+                        "The topology sent by the member differs from the group's topology with the same epoch %d. " +
+                            "Make sure all members of the group run the same topology.", topology.epoch()));
+                }
                 throw new InvalidRequestException("Topology updates are not supported yet.");
             } else {
                 log.debug("[GroupId {}][MemberId {}] Member joined with currently initialized topology {}", groupId, memberId, topology.epoch());
@@ -8795,7 +8805,7 @@ public class GroupMetadataManager {
      * Validates that a streams group exists, that the given member is a current member of it,
      * and that {@code pushedEpoch} matches the group's current topology epoch. Used by the
      * StreamsGroupTopologyDescriptionUpdate RPC handler to enforce the
-     * GROUP_ID_NOT_FOUND / UNKNOWN_MEMBER_ID / INVALID_REQUEST contract before consulting
+     * GROUP_ID_NOT_FOUND / UNKNOWN_MEMBER_ID / STREAMS_INVALID_TOPOLOGY_EPOCH contract before consulting
      * the topology description plugin.
      *
      * <p>The epoch check rejects stale or out-of-order pushes so they cannot regress
@@ -8810,20 +8820,20 @@ public class GroupMetadataManager {
      * @return The matching {@link StreamsGroupMember}.
      * @throws GroupIdNotFoundException if no streams group with this id exists.
      * @throws UnknownMemberIdException if the member is not currently in the group.
-     * @throws InvalidRequestException  if {@code pushedEpoch} does not match the group's
-     *                                  current topology epoch.
+     * @throws StreamsInvalidTopologyEpochException if {@code pushedEpoch} does not match the
+     *                                              group's current topology epoch.
      */
     public StreamsGroupMember validateStreamsGroupTopologyDescriptionUpdate(
         String groupId,
         String memberId,
         int pushedEpoch,
         long committedOffset
-    ) throws GroupIdNotFoundException, UnknownMemberIdException, InvalidRequestException {
+    ) throws GroupIdNotFoundException, UnknownMemberIdException, StreamsInvalidTopologyEpochException {
         StreamsGroup group = streamsGroup(groupId, committedOffset);
         StreamsGroupMember member = group.getMemberOrThrow(memberId, committedOffset);
         int currentEpoch = group.currentTopologyEpoch();
         if (pushedEpoch != currentEpoch) {
-            throw new InvalidRequestException(
+            throw new StreamsInvalidTopologyEpochException(
                 "Topology epoch " + pushedEpoch + " does not match the group's current topology epoch "
                     + currentEpoch + ".");
         }
