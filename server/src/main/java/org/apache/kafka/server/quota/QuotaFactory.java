@@ -20,10 +20,10 @@ import org.apache.kafka.common.TopicPartition;
 import org.apache.kafka.common.internals.Plugin;
 import org.apache.kafka.common.metrics.Metrics;
 import org.apache.kafka.common.metrics.Quota;
-import org.apache.kafka.common.quota.ClientQuotaEntity;
 import org.apache.kafka.common.utils.Time;
 import org.apache.kafka.common.utils.Utils;
 import org.apache.kafka.common.utils.internals.Sanitizer;
+import org.apache.kafka.metadata.publisher.DynamicClientQuotaPublisher.UserClientQuotaUpdater;
 import org.apache.kafka.metadata.publisher.QuotaConfigChangeListener;
 import org.apache.kafka.server.config.AbstractKafkaConfig;
 import org.apache.kafka.server.config.ClientQuotaManagerConfig;
@@ -35,8 +35,6 @@ import org.apache.kafka.server.quota.ClientQuotaManager.UserEntity;
 
 import java.util.Map;
 import java.util.Optional;
-import java.util.OptionalDouble;
-import java.util.function.BiConsumer;
 
 import static org.apache.kafka.common.quota.ClientQuotaEntity.CLIENT_ID;
 import static org.apache.kafka.common.quota.ClientQuotaEntity.USER;
@@ -89,7 +87,7 @@ public class QuotaFactory {
             };
         }
 
-        public Map<String, BiConsumer<ClientQuotaEntity, OptionalDouble>> userClientQuotaUpdaters() {
+        public Map<String, UserClientQuotaUpdater> userClientQuotaUpdaters() {
             return Map.of(
                 QuotaConfig.CONSUMER_BYTE_RATE_OVERRIDE_CONFIG, userClientQuotaUpdater(fetch),
                 QuotaConfig.PRODUCER_BYTE_RATE_OVERRIDE_CONFIG, userClientQuotaUpdater(produce),
@@ -98,7 +96,7 @@ public class QuotaFactory {
             );
         }
 
-        private static BiConsumer<ClientQuotaEntity, OptionalDouble> userClientQuotaUpdater(ClientQuotaManager manager) {
+        private static UserClientQuotaUpdater userClientQuotaUpdater(ClientQuotaManager manager) {
             return (entity, newValue) -> {
                 Map<String, String> entries = entity.entries();
                 // Metadata uses null for default entities, so use containsKey to distinguish them from absent dimensions.

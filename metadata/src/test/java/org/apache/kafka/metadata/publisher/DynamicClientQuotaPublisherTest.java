@@ -24,6 +24,8 @@ import org.apache.kafka.image.MetadataDelta;
 import org.apache.kafka.image.MetadataImage;
 import org.apache.kafka.image.MetadataProvenance;
 import org.apache.kafka.image.loader.SnapshotManifest;
+import org.apache.kafka.metadata.publisher.DynamicClientQuotaPublisher.IpQuotaUpdater;
+import org.apache.kafka.metadata.publisher.DynamicClientQuotaPublisher.UserClientQuotaUpdater;
 import org.apache.kafka.server.fault.FaultHandler;
 
 import org.junit.jupiter.api.Test;
@@ -39,7 +41,6 @@ import java.util.Map;
 import java.util.Optional;
 import java.util.OptionalDouble;
 import java.util.OptionalInt;
-import java.util.function.BiConsumer;
 
 import static org.apache.kafka.common.quota.ClientQuotaEntity.CLIENT_ID;
 import static org.apache.kafka.common.quota.ClientQuotaEntity.IP;
@@ -55,10 +56,8 @@ import static org.mockito.Mockito.verifyNoInteractions;
 public class DynamicClientQuotaPublisherTest {
     private static final SnapshotManifest MANIFEST = new SnapshotManifest(MetadataProvenance.EMPTY, 0);
 
-    @SuppressWarnings("unchecked")
-    private final BiConsumer<ClientQuotaEntity, OptionalDouble> userClientQuotaUpdater = mock(BiConsumer.class);
-    @SuppressWarnings("unchecked")
-    private final BiConsumer<Optional<InetAddress>, OptionalInt> ipQuotaUpdater = mock(BiConsumer.class);
+    private final UserClientQuotaUpdater userClientQuotaUpdater = mock(UserClientQuotaUpdater.class);
+    private final IpQuotaUpdater ipQuotaUpdater = mock(IpQuotaUpdater.class);
     private final FaultHandler faultHandler = mock(FaultHandler.class);
     private final DynamicClientQuotaPublisher publisher = new DynamicClientQuotaPublisher(
         0, faultHandler, "broker", Map.of(PRODUCER_BYTE_RATE_OVERRIDE_CONFIG, userClientQuotaUpdater), ipQuotaUpdater);
@@ -90,11 +89,11 @@ public class DynamicClientQuotaPublisherTest {
 
             publisher.onMetadataUpdate(createMetadataDelta(entity, Map.of(PRODUCER_BYTE_RATE_OVERRIDE_CONFIG, OptionalDouble.of(123.5))),
                 MetadataImage.EMPTY, MANIFEST);
-            verify(userClientQuotaUpdater).accept(expectedEntity, OptionalDouble.of(123.5));
+            verify(userClientQuotaUpdater).updateQuota(expectedEntity, OptionalDouble.of(123.5));
 
             publisher.onMetadataUpdate(createMetadataDelta(entity, Map.of(PRODUCER_BYTE_RATE_OVERRIDE_CONFIG, OptionalDouble.empty())),
                 MetadataImage.EMPTY, MANIFEST);
-            verify(userClientQuotaUpdater).accept(expectedEntity, OptionalDouble.empty());
+            verify(userClientQuotaUpdater).updateQuota(expectedEntity, OptionalDouble.empty());
         }
     }
 
@@ -107,11 +106,11 @@ public class DynamicClientQuotaPublisherTest {
 
         publisher.onMetadataUpdate(createMetadataDelta(entity, Map.of(IP_CONNECTION_RATE_OVERRIDE_CONFIG, OptionalDouble.of(123))),
             MetadataImage.EMPTY, MANIFEST);
-        verify(ipQuotaUpdater).accept(inetAddress, OptionalInt.of(123));
+        verify(ipQuotaUpdater).updateQuota(inetAddress, OptionalInt.of(123));
 
         publisher.onMetadataUpdate(createMetadataDelta(entity, Map.of(IP_CONNECTION_RATE_OVERRIDE_CONFIG, OptionalDouble.empty())),
             MetadataImage.EMPTY, MANIFEST);
-        verify(ipQuotaUpdater).accept(inetAddress, OptionalInt.empty());
+        verify(ipQuotaUpdater).updateQuota(inetAddress, OptionalInt.empty());
     }
 
     private static MetadataDelta createMetadataDelta(Map<String, String> entity, Map<String, OptionalDouble> quotaChanges) {

@@ -106,7 +106,7 @@ public class QuotaFactoryTest {
         Optional<ConfigEntity> expectedUser = Optional.of(new ClientQuotaManager.UserEntity("user"));
         Optional<ConfigEntity> expectedClient = Optional.of(new ClientQuotaManager.ClientIdEntity("client"));
         expectedManagers.forEach((key, manager) -> {
-            userClientQuotaUpdaters.get(key).accept(entity, quota);
+            userClientQuotaUpdaters.get(key).updateQuota(entity, quota);
             verify(manager).updateQuota(expectedUser, expectedClient, Optional.of(Quota.upperBound(123.5)));
         });
     }
@@ -128,11 +128,11 @@ public class QuotaFactoryTest {
         var entity = new ClientQuotaEntity(entries);
 
         // Verify quota updates.
-        userClientQuotaUpdater.accept(entity, OptionalDouble.of(123.5));
+        userClientQuotaUpdater.updateQuota(entity, OptionalDouble.of(123.5));
         verify(manager).updateQuota(expectedUser, expectedClient, Optional.of(Quota.upperBound(123.5)));
 
         // Verify quota removal.
-        userClientQuotaUpdater.accept(entity, OptionalDouble.empty());
+        userClientQuotaUpdater.updateQuota(entity, OptionalDouble.empty());
         verify(manager).updateQuota(expectedUser, expectedClient, Optional.empty());
     }
 }
