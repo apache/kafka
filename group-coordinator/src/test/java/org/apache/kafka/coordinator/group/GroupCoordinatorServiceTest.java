@@ -1524,6 +1524,34 @@ public class GroupCoordinatorServiceTest {
     }
 
     @Test
+    public void testListGroupsForwardsRequireCommittedOffsets() {
+        CoordinatorRuntime<GroupCoordinatorShard, CoordinatorRecord> runtime = mockRuntime();
+        GroupCoordinatorService service = new GroupCoordinatorServiceBuilder()
+            .setConfig(createConfig())
+            .setRuntime(runtime)
+            .build();
+        service.startup(() -> 1);
+
+        @SuppressWarnings("unchecked")
+        ArgumentCaptor<CoordinatorRuntime.CoordinatorReadOperation<GroupCoordinatorShard, List<ListGroupsResponseData.ListedGroup>>> readOperationCaptor =
+            ArgumentCaptor.forClass(CoordinatorRuntime.CoordinatorReadOperation.class);
+
+        when(runtime.scheduleReadAllOperation(
+            ArgumentMatchers.eq("list-groups"),
+            readOperationCaptor.capture()
+        )).thenReturn(List.of(CompletableFuture.completedFuture(List.of())));
+
+        service.listGroups(
+            requestContext(ApiKeys.LIST_GROUPS),
+            new ListGroupsRequestData().setRequireCommittedOffsets(true)
+        );
+
+        GroupCoordinatorShard shard = mock(GroupCoordinatorShard.class);
+        readOperationCaptor.getValue().generateResponse(shard, 42L);
+        verify(shard).listGroups(List.of(), List.of(), true, 42L);
+    }
+
+    @Test
     public void testListGroupsFailedWithNotCoordinatorException()
         throws InterruptedException, ExecutionException, TimeoutException {
         CoordinatorRuntime<GroupCoordinatorShard, CoordinatorRecord> runtime = mockRuntime();
