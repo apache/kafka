@@ -88,6 +88,7 @@ class ZkMigrationFailoverTest extends Logging {
 
   def buildMigrationDriver(nodeId: Int, zkMigrationClient: ZkMigrationClient): (KRaftMigrationDriver, CapturingFaultHandler) = {
     val faultHandler = new CapturingFaultHandler(nodeId)
+    val migrationConflictFaultHandler = new CapturingFaultHandler(nodeId)
     val driver = KRaftMigrationDriver.newBuilder
       .setNodeId(nodeId)
       .setZkRecordConsumer(new ZkRecordConsumer {
@@ -102,6 +103,7 @@ class ZkMigrationFailoverTest extends Logging {
       .setInitialZkLoadHandler((_: MetadataPublisher) => {})
       .setZkMigrationClient(zkMigrationClient)
       .setFaultHandler(faultHandler)
+      .setMigrationConflictFaultHandler(migrationConflictFaultHandler)
       .setQuorumFeatures(new QuorumFeatures(nodeId, QuorumFeatures.defaultFeatureMap(true), util.Arrays.asList(3000, 3001, 3002)))
       .setConfigSchema(KafkaConfigSchema.EMPTY)
       .setControllerMetrics(new QuorumControllerMetrics(Optional.empty(), Time.SYSTEM, true))
