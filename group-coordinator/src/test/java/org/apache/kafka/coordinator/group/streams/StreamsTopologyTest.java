@@ -32,7 +32,6 @@ import java.lang.reflect.Modifier;
 import java.util.Arrays;
 import java.util.Collections;
 import java.util.Comparator;
-import java.util.LinkedHashMap;
 import java.util.List;
 import java.util.Map;
 import java.util.Set;
@@ -228,27 +227,88 @@ public class StreamsTopologyTest {
     }
 
     private static Stream<Arguments> nonCopartitionFieldChanges() {
-        Map<String, Consumer<StreamsGroupHeartbeatRequestData.Topology>> changes = new LinkedHashMap<>();
-        changes.put("source topic", topology -> topology.subtopologies().get(0).sourceTopics().set(0, "different-source"));
-        changes.put("source topic regex", topology -> topology.subtopologies().get(0).sourceTopicRegex().set(0, "different.*"));
-        changes.put("repartition sink topic", topology -> topology.subtopologies().get(0).repartitionSinkTopics().set(0, "different-sink"));
-        changes.put("repartition source name", topology -> topology.subtopologies().get(0).repartitionSourceTopics().get(0).setName("different-repartition"));
-        changes.put("repartition source partitions", topology -> topology.subtopologies().get(0).repartitionSourceTopics().get(0).setPartitions(4));
-        changes.put("repartition source replication factor", topology -> topology.subtopologies().get(0).repartitionSourceTopics().get(0).setReplicationFactor((short) 3));
-        changes.put("repartition source config key", topology -> topology.subtopologies().get(0).repartitionSourceTopics().get(0).topicConfigs().get(0).setKey("segment.ms"));
-        changes.put("repartition source config value", topology -> topology.subtopologies().get(0).repartitionSourceTopics().get(0).topicConfigs().get(0).setValue("7200000"));
-        changes.put("changelog name", topology -> topology.subtopologies().get(0).stateChangelogTopics().get(0).setName("different-changelog"));
-        changes.put("changelog partitions", topology -> topology.subtopologies().get(0).stateChangelogTopics().get(0).setPartitions(4));
-        changes.put("changelog replication factor", topology -> topology.subtopologies().get(0).stateChangelogTopics().get(0).setReplicationFactor((short) 3));
-        changes.put("changelog config key", topology -> topology.subtopologies().get(0).stateChangelogTopics().get(0).topicConfigs().get(0).setKey("segment.ms"));
-        changes.put("changelog config value", topology -> topology.subtopologies().get(0).stateChangelogTopics().get(0).topicConfigs().get(0).setValue("7200000"));
-        changes.put("missing subtopology", topology -> topology.subtopologies().remove(1));
-        changes.put("unknown subtopology ID", topology -> topology.subtopologies().get(1).setSubtopologyId("unknown-subtopology"));
-
-        // Keep the size unchanged and duplicate all fields so only the repeated ID causes a mismatch.
-        changes.put("duplicate subtopology ID", topology -> topology.subtopologies().set(1, topology.subtopologies().get(0).duplicate()));
-        return changes.entrySet().stream()
-            .map(entry -> Arguments.of(entry.getKey(), entry.getValue()));
+        return Stream.of(
+            Arguments.of(
+                "source topic",
+                (Consumer<StreamsGroupHeartbeatRequestData.Topology>)
+                    t -> t.subtopologies().get(0).sourceTopics().set(0, "different-source")
+            ),
+            Arguments.of(
+                "source topic regex",
+                (Consumer<StreamsGroupHeartbeatRequestData.Topology>)
+                    t -> t.subtopologies().get(0).sourceTopicRegex().set(0, "different.*")
+            ),
+            Arguments.of(
+                "repartition sink topic",
+                (Consumer<StreamsGroupHeartbeatRequestData.Topology>)
+                    t -> t.subtopologies().get(0).repartitionSinkTopics().set(0, "different-sink")
+            ),
+            Arguments.of(
+                "repartition source name",
+                (Consumer<StreamsGroupHeartbeatRequestData.Topology>)
+                    t -> t.subtopologies().get(0).repartitionSourceTopics().get(0).setName("different-repartition")
+            ),
+            Arguments.of(
+                "repartition source partitions",
+                (Consumer<StreamsGroupHeartbeatRequestData.Topology>)
+                    t -> t.subtopologies().get(0).repartitionSourceTopics().get(0).setPartitions(4)
+            ),
+            Arguments.of(
+                "repartition source replication factor",
+                (Consumer<StreamsGroupHeartbeatRequestData.Topology>)
+                    t -> t.subtopologies().get(0).repartitionSourceTopics().get(0).setReplicationFactor((short) 3)
+            ),
+            Arguments.of(
+                "repartition source config key",
+                (Consumer<StreamsGroupHeartbeatRequestData.Topology>)
+                    t -> t.subtopologies().get(0).repartitionSourceTopics().get(0).topicConfigs().get(0).setKey("segment.ms")
+            ),
+            Arguments.of(
+                "repartition source config value",
+                (Consumer<StreamsGroupHeartbeatRequestData.Topology>)
+                    t -> t.subtopologies().get(0).repartitionSourceTopics().get(0).topicConfigs().get(0).setValue("7200000")
+            ),
+            Arguments.of(
+                "changelog name",
+                (Consumer<StreamsGroupHeartbeatRequestData.Topology>)
+                    t -> t.subtopologies().get(0).stateChangelogTopics().get(0).setName("different-changelog")
+            ),
+            Arguments.of(
+                "changelog partitions",
+                (Consumer<StreamsGroupHeartbeatRequestData.Topology>)
+                    t -> t.subtopologies().get(0).stateChangelogTopics().get(0).setPartitions(4)
+            ),
+            Arguments.of(
+                "changelog replication factor",
+                (Consumer<StreamsGroupHeartbeatRequestData.Topology>)
+                    t -> t.subtopologies().get(0).stateChangelogTopics().get(0).setReplicationFactor((short) 3)
+            ),
+            Arguments.of(
+                "changelog config key",
+                (Consumer<StreamsGroupHeartbeatRequestData.Topology>)
+                    t -> t.subtopologies().get(0).stateChangelogTopics().get(0).topicConfigs().get(0).setKey("segment.ms")
+            ),
+            Arguments.of(
+                "changelog config value",
+                (Consumer<StreamsGroupHeartbeatRequestData.Topology>)
+                    t -> t.subtopologies().get(0).stateChangelogTopics().get(0).topicConfigs().get(0).setValue("7200000")
+            ),
+            Arguments.of(
+                "missing subtopology",
+                (Consumer<StreamsGroupHeartbeatRequestData.Topology>)
+                    t -> t.subtopologies().remove(1)
+            ),
+            Arguments.of(
+                "unknown subtopology ID",
+                (Consumer<StreamsGroupHeartbeatRequestData.Topology>)
+                    t -> t.subtopologies().get(1).setSubtopologyId("unknown-subtopology")
+            ),
+            Arguments.of(
+                "duplicate subtopology ID",
+                (Consumer<StreamsGroupHeartbeatRequestData.Topology>)
+                    t -> t.subtopologies().set(1, t.subtopologies().get(0).duplicate())
+            )
+        );
     }
 
     @ParameterizedTest(name = "{0}")

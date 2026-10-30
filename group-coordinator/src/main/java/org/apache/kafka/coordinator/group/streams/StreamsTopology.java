@@ -128,10 +128,7 @@ public record StreamsTopology(int topologyEpoch,
      * @return The instance of StreamsTopology created from the request.
      */
     public static StreamsTopology fromHeartbeatRequest(StreamsGroupHeartbeatRequestData.Topology topology) {
-        StreamsGroupTopologyValue recordValue = StreamsCoordinatorRecordHelpers.convertToStreamsGroupTopologyRecord(topology);
-        final Map<String, StreamsGroupTopologyValue.Subtopology> subtopologyMap = recordValue.subtopologies().stream()
-            .collect(Collectors.toMap(StreamsGroupTopologyValue.Subtopology::subtopologyId, x -> x));
-        return new StreamsTopology(topology.epoch(), subtopologyMap);
+        return fromRecord(StreamsCoordinatorRecordHelpers.convertToStreamsGroupTopologyRecord(topology));
     }
 
     /**
@@ -169,14 +166,20 @@ public record StreamsTopology(int topologyEpoch,
         // Copy before sorting: the record may be persisted as-is, and its lists
         // may be unmodifiable or shared with the heartbeat request.
         Subtopology copy = subtopology.duplicate();
+        normalizeCopartitionGroups(copy.copartitionGroups());
+        return copy;
+    }
 
-        for (CopartitionGroup group : copy.copartitionGroups()) {
+    private static void normalizeCopartitionGroups(List<CopartitionGroup> copartitionGroups) {
+        // Copy before sorting: the record may be persisted as-is, and its lists
+        // may be unmodifiable or shared with the heartbeat request.
+        for (CopartitionGroup group : copartitionGroups) {
             Collections.sort(group.sourceTopics());
             Collections.sort(group.sourceTopicRegex());
             Collections.sort(group.repartitionSourceTopics());
         }
 
-        copy.copartitionGroups().sort(
+        copartitionGroups.sort(
             Comparator
                 .comparing(
                     CopartitionGroup::sourceTopics,
@@ -191,7 +194,6 @@ public record StreamsTopology(int topologyEpoch,
                     StreamsTopology::compareTopicIndexes
                 )
         );
-        return copy;
     }
 
     private static int compareTopicIndexes(List<Short> first, List<Short> second) {
@@ -259,53 +261,16 @@ public record StreamsTopology(int topologyEpoch,
             return false;
         }
 
-        // TODO: Consider removing request normalization if a future protocol version
-        // requires canonical copartition ordering and older versions are no longer
-        // supported. Validate the required ordering before comparing.
-
-        // Copy before sorting to preserve the request and its index lists.
-        List<StreamsGroupHeartbeatRequestData.CopartitionGroup> sortedRequested =
-            new ArrayList<>(requested.size());
-
+        List<CopartitionGroup> copies = new ArrayList<>(requested.size());
         for (StreamsGroupHeartbeatRequestData.CopartitionGroup group : requested) {
-            StreamsGroupHeartbeatRequestData.CopartitionGroup copy = group.duplicate();
-            Collections.sort(copy.sourceTopics());
-            Collections.sort(copy.sourceTopicRegex());
-            Collections.sort(copy.repartitionSourceTopics());
-            sortedRequested.add(copy);
+            copies.add(new CopartitionGroup()
+                .setSourceTopics(new ArrayList<>(group.sourceTopics()))
+                .setSourceTopicRegex(new ArrayList<>(group.sourceTopicRegex()))
+                .setRepartitionSourceTopics(new ArrayList<>(group.repartitionSourceTopics())));
         }
 
-        sortedRequested.sort(
-            Comparator.comparing(
-                    StreamsGroupHeartbeatRequestData.CopartitionGroup::sourceTopics,
-                    StreamsTopology::compareTopicIndexes
-                )
-                .thenComparing(
-                    StreamsGroupHeartbeatRequestData.CopartitionGroup::sourceTopicRegex,
-                    StreamsTopology::compareTopicIndexes
-                )
-                .thenComparing(
-                    StreamsGroupHeartbeatRequestData.CopartitionGroup::repartitionSourceTopics,
-                    StreamsTopology::compareTopicIndexes
-                )
-        );
-
-        // Stored groups were already sorted by fromRecord.
-        for (int i = 0; i < current.size(); i++) {
-            if (!matchesCopartitionGroup(current.get(i), sortedRequested.get(i))) {
-                return false;
-            }
-        }
-        return true;
-    }
-
-    private static boolean matchesCopartitionGroup(
-        CopartitionGroup current,
-        StreamsGroupHeartbeatRequestData.CopartitionGroup requested
-    ) {
-        return current.sourceTopics().equals(requested.sourceTopics())
-            && current.sourceTopicRegex().equals(requested.sourceTopicRegex())
-            && current.repartitionSourceTopics().equals(requested.repartitionSourceTopics());
+        normalizeCopartitionGroups(copies);
+        return current.equals(copies);
     }
 
     public StreamsGroupDescribeResponseData.Topology asStreamsGroupDescribeTopology() {
