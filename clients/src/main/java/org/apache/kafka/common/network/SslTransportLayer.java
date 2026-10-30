@@ -566,6 +566,11 @@ public class SslTransportLayer implements TransportLayer {
         if (appReadBuffer.position() > 0) {
             read = readFromAppBuffer(dst);
         }
+        // An earlier read() unwrapped the peer's close_notify and all data before it has now been returned.
+        // Report end-of-stream rather than reading from the socket, which may never deliver a TCP FIN.
+        // A read into a full buffer, such as the empty payload of a zero-length frame, still returns 0.
+        if (read == 0 && dst.hasRemaining() && appReadBuffer.position() == 0 && sslEngine.isInboundDone())
+            throw new EOFException("Peer sent close_notify");
 
         boolean readFromNetwork = false;
         boolean isClosed = false;
@@ -650,7 +655,7 @@ public class SslTransportLayer implements TransportLayer {
         }
         updateBytesBuffered(readFromNetwork || read > 0);
         // If data has been read and unwrapped, return the data even if end-of-stream, channel will be closed
-        // on a subsequent poll.
+        // on a subsequent poll, see hasBytesBuffered().
         return read;
     }
 
@@ -685,7 +690,15 @@ public class SslTransportLayer implements TransportLayer {
         int i = offset;
         while (i < offset + length) {
             if (dsts[i].hasRemaining()) {
-                int read = read(dsts[i]);
+                int read;
+                try {
+                    read = read(dsts[i]);
+                } catch (EOFException e) {
+                    // Return the bytes already read; the next read reports the end-of-stream again.
+                    if (totalRead > 0)
+                        return totalRead;
+                    throw e;
+                }
                 if (read > 0)
                     totalRead += read;
                 else
@@ -985,7 +998,9 @@ public class SslTransportLayer implements TransportLayer {
 
     @Override
     public boolean hasBytesBuffered() {
-        return hasBytesBuffered;
+        // A peer may send close_notify without a TCP FIN, so the socket may never become readable again. Once the
+        // engine has received it, keep the channel readable so that the next read() reports the end-of-stream.
+        return hasBytesBuffered || (ready() && sslEngine.isInboundDone());
     }
 
     // Update `hasBytesBuffered` status. If any bytes were read from the network or
