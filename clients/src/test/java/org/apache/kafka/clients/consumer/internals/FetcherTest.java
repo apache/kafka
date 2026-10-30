@@ -1284,14 +1284,11 @@ public class FetcherTest {
     public void testFetchRequestInternalError() {
         buildFetcher();
         makeFetchRequestWithIncompleteRecord();
-        try {
-            collectFetch();
-            fail("collectFetch should have thrown a KafkaException");
-        } catch (KafkaException e) {
-            assertTrue(e.getMessage().startsWith("Failed to make progress reading messages"));
-            // the position should not advance since no data has been returned
-            assertEquals(0, subscriptions.position(tp0).offset);
-        }
+        KafkaException e = assertThrows(KafkaException.class, this::collectFetch,
+                "collectFetch should have thrown a KafkaException");
+        assertTrue(e.getMessage().startsWith("Failed to make progress reading messages"));
+        // the position should not advance since no data has been returned
+        assertEquals(0, subscriptions.position(tp0).offset);
     }
 
     private void makeFetchRequestWithIncompleteRecord() {
@@ -1316,12 +1313,9 @@ public class FetcherTest {
         assertEquals(1, sendFetches());
         client.prepareResponse(fullFetchResponse(tidp0, records, Errors.TOPIC_AUTHORIZATION_FAILED, 100L, 0));
         consumerClient.poll(time.timer(0));
-        try {
-            collectFetch();
-            fail("collectFetch should have thrown a TopicAuthorizationException");
-        } catch (TopicAuthorizationException e) {
-            assertEquals(singleton(topicName), e.unauthorizedTopics());
-        }
+        TopicAuthorizationException e = assertThrows(TopicAuthorizationException.class, this::collectFetch,
+                "collectFetch should have thrown a TopicAuthorizationException");
+        assertEquals(singleton(topicName), e.unauthorizedTopics());
     }
 
     @Test
