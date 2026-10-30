@@ -45,6 +45,82 @@ class ListGroupsRequestTest(cluster: ClusterInstance) extends GroupCoordinatorBa
     testListGroups(false)
   }
 
+  @ClusterTest
+  def testListGroupsWithRequireCommittedOffsets(): Unit = {
+    // Creates the __consumer_offsets topics because it won't be created automatically
+    // in this test because it does not use FindCoordinator API.
+    createOffsetsTopic()
+
+    // Create the topic.
+    val topicId = createTopic(
+      topic = "foo",
+      numPartitions = 3
+    )
+
+    // grp-1 is a classic group with a committed offset.
+    val (memberId1, generationId1) = joinDynamicConsumerGroupWithOldProtocol(groupId = "grp-1")
+    commitOffset(
+      groupId = "grp-1",
+      memberId = memberId1,
+      memberEpoch = generationId1,
+      topic = "foo",
+      topicId = topicId,
+      partition = 0,
+      offset = 10L,
+      expectedError = Errors.NONE
+    )
+
+    // grp-2 is a classic group without offsets.
+    joinDynamicConsumerGroupWithOldProtocol(groupId = "grp-2")
+
+    // grp-3 is a consumer group with a committed offset.
+    val (memberId3, memberEpoch3) = joinConsumerGroup("grp-3", useNewProtocol = true)
+    commitOffset(
+      groupId = "grp-3",
+      memberId = memberId3,
+      memberEpoch = memberEpoch3,
+      topic = "foo",
+      topicId = topicId,
+      partition = 0,
+      offset = 10L,
+      expectedError = Errors.NONE
+    )
+
+    def groupIds(requireCommittedOffsets: Boolean, typesFilter: List[String] = List.empty): Set[String] = {
+      listGroups(
+        statesFilter = List.empty,
+        typesFilter = typesFilter,
+        requireCommittedOffsets = requireCommittedOffsets
+      ).map(_.groupId).toSet
+    }
+
+    // Without the filter, all groups are returned.
+    assertEquals(Set("grp-1", "grp-2", "grp-3"), groupIds(requireCommittedOffsets = false))
+
+    // With the filter, only groups with committed offsets are returned.
+    assertEquals(Set("grp-1", "grp-3"), groupIds(requireCommittedOffsets = true))
+
+    // The filter is combined with the types filter.
+    assertEquals(Set("grp-3"), groupIds(requireCommittedOffsets = true, typesFilter = List(Group.GroupType.CONSUMER.toString)))
+
+    // Delete the only offset of grp-1. The classic group must be empty first.
+    leaveGroup(
+      groupId = "grp-1",
+      memberId = memberId1,
+      useNewProtocol = false,
+      version = ApiKeys.LEAVE_GROUP.latestVersion(isUnstableApiEnabled)
+    )
+    deleteOffset(
+      groupId = "grp-1",
+      topic = "foo",
+      partition = 0,
+      version = ApiKeys.OFFSET_DELETE.latestVersion(isUnstableApiEnabled)
+    )
+
+    assertEquals(Set("grp-3"), groupIds(requireCommittedOffsets = true))
+    assertEquals(Set("grp-1", "grp-2", "grp-3"), groupIds(requireCommittedOffsets = false))
+  }
+
   private def testListGroups(useNewProtocol: Boolean): Unit = {
     // Creates the __consumer_offsets topics because it won't be created automatically
     // in this test because it does not use FindCoordinator API.
