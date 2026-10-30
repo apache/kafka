@@ -1381,7 +1381,7 @@ public class GroupMetadataManager {
             log.warn("Cannot downgrade the consumer group {}: fail to parse the Consumer Protocol {}.",
                 consumerGroup.groupId(), ConsumerProtocol.PROTOCOL_TYPE, e);
 
-            throw new GroupIdNotFoundException(String.format("Cannot downgrade the classic group %s: %s.",
+            throw new GroupIdNotFoundException(String.format("Cannot downgrade the consumer group %s: %s.",
                 consumerGroup.groupId(), e.getMessage()));
         }
         classicGroup.createClassicGroupRecords(records);
@@ -2306,7 +2306,7 @@ public class GroupMetadataManager {
                 group.storedDescriptionTopologyEpoch(),
                 group.failedDescriptionTopologyEpoch()
             ));
-            log.info("[GroupId {}][MemberId {}] Bumped streams group epoch to {} with metadata hash {} and validated topic epoch {}.", groupId, memberId, groupEpoch, metadataHash, validatedTopologyEpoch);
+            log.info("[GroupId {}][MemberId {}] Bumped streams group epoch to {} with metadata hash {} and validated topology epoch {}.", groupId, memberId, groupEpoch, metadataHash, validatedTopologyEpoch);
             metrics.record(STREAMS_GROUP_REBALANCES_SENSOR_NAME);
             group.setMetadataRefreshDeadline(currentTimeMs + METADATA_REFRESH_INTERVAL_MS, groupEpoch);
         }
@@ -5373,7 +5373,7 @@ public class GroupMetadataManager {
             streamsGroupSessionTimeoutMs(groupId),
             TimeUnit.MILLISECONDS,
             true,
-            () -> streamsGroupFenceMemberOperation(groupId, memberId, "the member session expired.")
+            () -> streamsGroupFenceMemberOperation(groupId, memberId, "the member session expired")
         );
     }
 
@@ -5588,7 +5588,7 @@ public class GroupMetadataManager {
                     return new CoordinatorResult<>(List.of());
                 }
             } catch (GroupIdNotFoundException ex) {
-                log.debug("[GroupId {}] Could not fence {}} because the group does not exist.",
+                log.debug("[GroupId {}] Could not fence {} because the group does not exist.",
                     groupId, memberId);
             } catch (UnknownMemberIdException ex) {
                 log.debug("[GroupId {}] Could not fence {} because the member does not exist.",
@@ -5631,7 +5631,7 @@ public class GroupMetadataManager {
                     return new CoordinatorResult<>(List.of());
                 }
             } catch (GroupIdNotFoundException ex) {
-                log.debug("[GroupId {}] Could not fence {}} because the group does not exist.",
+                log.debug("[GroupId {}] Could not fence {} because the group does not exist.",
                     groupId, memberId);
             } catch (UnknownMemberIdException ex) {
                 log.debug("[GroupId {}] Could not fence {} because the member does not exist.",
@@ -6512,7 +6512,7 @@ public class GroupMetadataManager {
             }
             if (shareGroup.assignmentEpoch() != -1) {
                 throw new IllegalStateException("Received a tombstone record to delete group " + groupId
-                    + " but target assignment epoch in invalid.");
+                    + " but did not receive ShareGroupTargetAssignmentMetadataValue tombstone.");
             }
             removeGroup(groupId);
         }
@@ -8485,7 +8485,7 @@ public class GroupMetadataManager {
                         if (t != null) {
                             Errors error = appendGroupMetadataErrorToResponseError(Errors.forException(t));
                             resetAndPropagateAssignmentWithError(group, error);
-                            maybePrepareRebalanceOrCompleteJoin(group, "Error " + error + " when storing group assignment" +
+                            maybePrepareRebalanceOrCompleteJoin(group, "Error " + error + " when storing group assignment " +
                                 "during SyncGroup (member: " + memberId + ").");
                         } else {
                             // Update group's assignment and propagate to all members.
