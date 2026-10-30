@@ -43,6 +43,7 @@ import java.util.stream.Collectors;
 
 import static org.apache.kafka.metadata.LeaderConstants.NO_LEADER;
 import static org.apache.kafka.metadata.LeaderConstants.NO_LEADER_CHANGE;
+import static org.apache.kafka.metadata.LeaderConstants.NO_LEADER_EPOCH_CHANGE;
 
 /**
  * PartitionChangeBuilder handles changing partition registrations.
@@ -55,6 +56,7 @@ public class PartitionChangeBuilder {
         if (record.eligibleLeaderReplicas() != null) return false;
         if (record.lastKnownElr() != null) return false;
         if (record.leader() != NO_LEADER_CHANGE) return false;
+        if (record.leaderEpoch() != NO_LEADER_EPOCH_CHANGE) return false;
         if (record.replicas() != null) return false;
         if (record.removingReplicas() != null) return false;
         if (record.addingReplicas() != null) return false;
@@ -458,10 +460,27 @@ public class PartitionChangeBuilder {
             record.setLeaderRecoveryState(targetLeaderRecoveryState.value());
         }
 
+        maybeSetLeaderEpoch(record);
+
         if (changeRecordIsNoOp(record)) {
             return Optional.empty();
         } else {
             return Optional.of(new ApiMessageAndVersion(record, metadataVersion.partitionChangeRecordVersion()));
+        }
+    }
+
+    /**
+     * Set the new leader epoch in the record if the metadata version supports it.
+     *
+     * Setting the leader field signals a leader epoch bump, so this must be called after every
+     * step that may set the leader field.
+     */
+    private void maybeSetLeaderEpoch(PartitionChangeRecord record) {
+        if (!metadataVersion.isClusterMirrorSupported()) {
+            return;
+        }
+        if (record.leader() != NO_LEADER_CHANGE) {
+            record.setLeaderEpoch(partition.leaderEpoch + 1);
         }
     }
 
