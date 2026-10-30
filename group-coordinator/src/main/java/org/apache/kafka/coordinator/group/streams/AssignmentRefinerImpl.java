@@ -237,7 +237,7 @@ public class AssignmentRefinerImpl implements AssignmentRefiner {
      * promote as active is running it.
      *
      * <p>Only an active-running or caught-up copy is ever promoted, with one exception: the standby task of a task
-     * that no member runs as an active task, on a member that does not report its restore progress, see
+     * that no member holds as an active task, on a member that does not report its restore progress, see
      * {@link #unobservableStandbyToPromote}.
      *
      * <p>A task whose target owner is {@link WarmupSupport#NOT_SUPPORTED} is never staged: its target owner never
@@ -393,18 +393,11 @@ public class AssignmentRefinerImpl implements AssignmentRefiner {
     }
 
     /**
-     * Picks a standby task to run a task that no member runs as an active task, while the target owner warms it up,
-     * even though the standby's holder does not report how far it has restored: the holder heartbeats with version 0,
-     * or has not heartbeated since the coordinator loaded the group.
-     *
-     * <p>Without this, the target owner would restore the task from scratch while nobody runs it. On the standby's
-     * holder, the task runs sooner: a standby that is behind catches up before it processes, which it would have to
-     * do as a standby anyway, and one that is close processes right away. Once the target owner's warm-up task has
-     * caught up, the task moves there and the holder keeps it as a standby task.
-     *
-     * <p>It applies only if no member runs the task as an active task, the target owner's process holds no copy of
-     * the task, which the target owner would otherwise continue from, and the target assignment keeps the standby
-     * task on its holder. If several standby tasks qualify, the one on the least loaded process is picked.
+     * The standby holder of the task to promote although its lag is unknown, because the holder is not
+     * {@link WarmupSupport#SUPPORTED}. Only if no member holds the task as an active task, the target owner's process
+     * holds no copy of the task, and the target assignment keeps the standby task on its holder; among several, the
+     * least loaded process wins. A standby task that is behind restores before it processes, which it has to do as a
+     * standby task anyway.
      *
      * @param targetProcessId The process of the target owner, or {@code null} if the target owner has left the group.
      */
@@ -1311,7 +1304,7 @@ public class AssignmentRefinerImpl implements AssignmentRefiner {
      * @param currentOwner
      *        The member the task runs on for now: the member holding it as an active task, or, when that member is
      *        too far behind to run it or there is none, the caught-up copy holder promoted to run it. For a task that
-     *        no member runs as an active task, it can also be a standby holder that does not report its restore
+     *        no member holds as an active task, it can also be a standby holder that does not report its restore
      *        progress, see {@link #unobservableStandbyToPromote}. When the target assignment names a member the group
      *        no longer has, it can also be a holder that is still restoring the task, which is better than taking the
      *        task away from a restore that is part-way through.
