@@ -104,15 +104,42 @@ public interface AssignmentRefiner {
         Map<String, TasksTuple> targetAssignment,
         Map<String, TasksTuple> refinedAssignment
     ) {
-        return countActiveTasks(targetAssignment) == countActiveTasks(refinedAssignment);
+        // Skip the count when the refined assignment is the target assignment itself, which the built-in refiners
+        // return whenever nothing is held back, for example on every call in a settled group.
+        if (refinedAssignment == targetAssignment) {
+            return true;
+        }
+        // A member whose tasks the refined assignment hands back as the target assignment's own object holds the same
+        // active tasks in both, so only the other members are counted: the difference of the two totals is the sum of
+        // theirs.
+        int[] difference = new int[1];
+        int[] membersInBoth = new int[1];
+        refinedAssignment.forEach((memberId, refinedTasks) -> {
+            TasksTuple targetTasks = targetAssignment.get(memberId);
+            if (targetTasks != null) {
+                membersInBoth[0]++;
+            }
+            if (refinedTasks != targetTasks) {
+                difference[0] += countActiveTasks(refinedTasks);
+                if (targetTasks != null) {
+                    difference[0] -= countActiveTasks(targetTasks);
+                }
+            }
+        });
+        if (membersInBoth[0] < targetAssignment.size()) {
+            targetAssignment.forEach((memberId, targetTasks) -> {
+                if (!refinedAssignment.containsKey(memberId)) {
+                    difference[0] -= countActiveTasks(targetTasks);
+                }
+            });
+        }
+        return difference[0] == 0;
     }
 
-    private static int countActiveTasks(Map<String, TasksTuple> assignment) {
+    private static int countActiveTasks(TasksTuple tasks) {
         int count = 0;
-        for (TasksTuple tasks : assignment.values()) {
-            for (Set<Integer> partitionIds : tasks.activeTasks().values()) {
-                count += partitionIds.size();
-            }
+        for (Set<Integer> partitionIds : tasks.activeTasks().values()) {
+            count += partitionIds.size();
         }
         return count;
     }
