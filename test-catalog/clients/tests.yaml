@@ -4302,6 +4302,10 @@ org.apache.kafka.common.network.SslTransportLayerTest:
 - testClientAuthenticationRequiredUntrustedProvided
 - testClientAuthenticationRequiredValidProvided
 - testClientEndpointNotValidated
+- testCloseNotifyAfterFullResponseWithoutFinDeliversResponseAndDisconnects
+- testCloseNotifyAfterFullResponseWithoutFinDisconnectsOnUnmute
+- testCloseNotifyAfterPartialResponseWithoutFinDisconnects
+- testCloseNotifyAfterZeroLengthResponseWithoutFinDeliversResponseAndDisconnects
 - testClosePlaintext
 - testCloseSsl
 - testCustomClientAndServerSslEngineFactory
@@ -4315,6 +4319,7 @@ org.apache.kafka.common.network.SslTransportLayerTest:
 - testGracefulRemoteCloseDuringHandshakeRead
 - testGracefulRemoteCloseDuringHandshakeWrite
 - testHandshakeUnwrapContinuesUnwrappingOnNeedUnwrapAfterAllBytesRead
+- testHasBytesBufferedOnceInboundIsDone
 - testIOExceptionsDuringHandshakeRead
 - testIOExceptionsDuringHandshakeWrite
 - testInterBrokerSslConfigValidation
@@ -4337,6 +4342,7 @@ org.apache.kafka.common.network.SslTransportLayerTest:
 - testPemFilesWithoutServerKeyPassword
 - testSSLEngineCloseInboundInvokedOnClose
 - testScatteringRead
+- testScatteringReadReturnsBytesReadBeforeEof
 - testSelectorPollReadSize
 - testServerKeystoreDynamicUpdate
 - testServerKeystoreDynamicUpdateWithNewSubjectAltName
