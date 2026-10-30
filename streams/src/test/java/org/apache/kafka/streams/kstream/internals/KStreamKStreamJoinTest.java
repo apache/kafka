@@ -1046,7 +1046,7 @@ public class KStreamKStreamJoinTest {
             }
             processor.checkAndClearProcessResult();
 
-            // push four items to the other stream with with incremented timestamp; this should produce one item
+            // push four items to the other stream with incremented timestamp; this should produce one item
             // w1 = { 0:A0 (ts: 0), 1:A1 (ts: 0),
             //        0:B0 (ts: 1000), 1:B1 (ts: 1001), 2:B2 (ts: 1002), 3:B3 (ts: 1003)  }
             // w2 = { 0:a0 (ts: 0), 1:a1 (ts: 0),
@@ -1074,7 +1074,7 @@ public class KStreamKStreamJoinTest {
                 new KeyValueTimestamp<>(0, "B0+h0", 1000L)
             );
 
-            // push four items to the other stream with with incremented timestamp; this should produce two items
+            // push four items to the other stream with incremented timestamp; this should produce two items
             // w1 = { 0:A0 (ts: 0), 1:A1 (ts: 0),
             //        0:B0 (ts: 1000), 1:B1 (ts: 1001), 2:B2 (ts: 1002), 3:B3 (ts: 1003)  }
             // w2 = { 0:a0 (ts: 0), 1:a1 (ts: 0),
@@ -1105,7 +1105,7 @@ public class KStreamKStreamJoinTest {
                 new KeyValueTimestamp<>(1, "B1+i1", 1001L)
             );
 
-            // push four items to the other stream with with incremented timestamp; this should produce three items
+            // push four items to the other stream with incremented timestamp; this should produce three items
             // w1 = { 0:A0 (ts: 0), 1:A1 (ts: 0),
             //        0:B0 (ts: 1000), 1:B1 (ts: 1001), 2:B2 (ts: 1002), 3:B3 (ts: 1003)  }
             // w2 = { 0:a0 (ts: 0), 1:a1 (ts: 0),
@@ -1139,7 +1139,7 @@ public class KStreamKStreamJoinTest {
                 new KeyValueTimestamp<>(2, "B2+j2", 1002L)
             );
 
-            // push four items to the other stream with with incremented timestamp; this should produce four items
+            // push four items to the other stream with incremented timestamp; this should produce four items
             // w1 = { 0:A0 (ts: 0), 1:A1 (ts: 0),
             //        0:B0 (ts: 1000), 1:B1 (ts: 1001), 2:B2 (ts: 1002), 3:B3 (ts: 1003)  }
             // w2 = { 0:a0 (ts: 0), 1:a1 (ts: 0),
