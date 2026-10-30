@@ -32,6 +32,7 @@ type: docs
 
 ### Notable changes in 4.5.0
 
+  * `ListGroupsOptions` has a new `requireCommittedOffsets(boolean)` option. When set to true, `Admin.listGroups` returns only groups that have at least one committed offset. The option requires brokers running 4.5.0 or later. Against an older broker, the request fails with `UnsupportedVersionException`, and in a cluster with mixed broker versions `ListGroupsResult.all()` fails, `errors()` reports each unsupported broker, and `valid()` contains only the groups from the brokers that support the option. For further details, please refer to [KIP-1388](https://cwiki.apache.org/confluence/spaces/KAFKA/pages/462815620/KIP-1388+Add+a+committed-offsets+filter+to+ListGroups).
   * `ssl.principal.mapping.rules` now builds the principal name from the same full match that is used to check the rule. Previously, a rule that is not anchored with both `^` and `$`, or that uses alternation, could build the name from a shorter match or apply the replacement twice. For example, `RULE:CN=(.*?),OU=(.*?)/$1/` mapped `CN=bob,OU=eng` to `bobeng` instead of `bob`. Rules anchored with `^` and `$`, such as the documented examples, are not affected. If you use such rules, check that ACLs, quotas and `super.users` refer to the corrected principal names before upgrading.
 
 ## Upgrading to 4.4.0
