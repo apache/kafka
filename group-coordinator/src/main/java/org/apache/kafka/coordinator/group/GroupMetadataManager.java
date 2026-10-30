@@ -6512,7 +6512,7 @@ public class GroupMetadataManager {
             }
             if (shareGroup.assignmentEpoch() != -1) {
                 throw new IllegalStateException("Received a tombstone record to delete group " + groupId
-                    + " but the target assignment epoch is invalid.");
+                    + " but did not receive ShareGroupTargetAssignmentMetadataValue tombstone.");
             }
             removeGroup(groupId);
         }
