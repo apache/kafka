@@ -92,7 +92,7 @@ public class SubscribedTopicDescriberImpl implements SubscribedTopicDescriber {
 
     @Override
     public String toString() {
-        return "SubscribedTopicMetadata(" +
+        return "SubscribedTopicDescriberImpl(" +
             "metadataImage=" + metadataImage +
             ')';
     }

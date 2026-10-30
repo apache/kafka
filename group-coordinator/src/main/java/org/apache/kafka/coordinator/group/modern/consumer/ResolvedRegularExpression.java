@@ -36,7 +36,7 @@ public record ResolvedRegularExpression(Set<String> topics, long version, long t
 
     @Override
     public String toString() {
-        return "RegularExpressionMetadata(" +
+        return "ResolvedRegularExpression(" +
             "topics=" + topics +
             ", version=" + version +
             ", timestamp=" + timestamp +
