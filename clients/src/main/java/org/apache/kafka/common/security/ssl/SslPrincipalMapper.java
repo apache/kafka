@@ -138,9 +138,6 @@ public class SslPrincipalMapper {
                 final StringBuilder sb = new StringBuilder();
                 m.appendReplacement(sb, escapeLiteralBackReferences(replacement, m.groupCount()));
                 result = sb.toString();
-                if (result.isEmpty()) {
-                    return null;
-                }
             }
 
             if (toLowerCase && result != null) {
