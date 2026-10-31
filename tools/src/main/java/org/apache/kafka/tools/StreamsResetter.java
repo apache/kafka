@@ -174,6 +174,14 @@ public class StreamsResetter {
                 exitCode |= maybeDeleteInternalTopics(adminClient, options);
                 return exitCode;
             }
+        } catch (CommandLineUtils.HelpOrVersionException e) {
+            if (e.getMessage() != null) {
+                System.err.println(e.getMessage());
+            }
+            return EXIT_CODE_SUCCESS;
+        } catch (IllegalArgumentException e) {
+            System.err.println("ERROR: " + e.getMessage());
+            return EXIT_CODE_ERROR;
         } catch (Throwable e) {
             System.err.println("ERROR: " + e);
             e.printStackTrace(System.err);
@@ -673,7 +681,7 @@ public class StreamsResetter {
                 CommandLineUtils.checkInvalidArgs(parser, options, shiftByOption, toOffsetOption, toDatetimeOption, byDurationOption, toEarliestOption, toLatestOption, fromFileOption);
                 CommandLineUtils.checkInvalidArgs(parser, options, configOption, commandConfigOption);
             } catch (final OptionException e) {
-                CommandLineUtils.printUsageAndExit(parser, e.getMessage());
+                CommandLineUtils.printUsageAndThrow(parser, e.getMessage());
             }
         }
 
