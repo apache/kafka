@@ -3422,6 +3422,112 @@ public class ReplicationControlManagerTest {
         assertEquals(NONE_REASSIGNING, replication.listPartitionReassignments(null, Long.MAX_VALUE));
     }
 
+    @Test
+    public void testNewReassignmentWithEmptyAddingClearsPreviousAddingReplicas() {
+        ReplicationControlTestContext ctx = new ReplicationControlTestContext.Builder().build();
+        ReplicationControlManager replication = ctx.replicationControl;
+        ctx.registerBrokers(0, 1, 2, 3);
+        ctx.unfenceBrokers(0, 1, 2, 3);
+        String topic = "foo";
+        Uuid topicId = ctx.createTestTopic(topic, new int[][] {new int[] {0, 1}}).topicId();
+
+        ctx.replay(reassign(replication, topic, List.of(2, 3)).records());
+        assertEquals(reassigning(topic, List.of(2, 3, 0, 1), List.of(2, 3), List.of(0, 1)),
+            replication.listPartitionReassignments(null, Long.MAX_VALUE));
+
+        ctx.replay(reassign(replication, topic, List.of(0, 1)).records());
+        assertEquals(NONE_REASSIGNING, replication.listPartitionReassignments(null, Long.MAX_VALUE));
+        assertArrayEquals(new int[] {0, 1}, replication.getPartition(topicId, 0).replicas);
+    }
+
+    @Test
+    public void testNewReassignmentWithEmptyRemovingClearsPreviousRemovingReplicas() {
+        ReplicationControlTestContext ctx = new ReplicationControlTestContext.Builder().build();
+        ReplicationControlManager replication = ctx.replicationControl;
+        ctx.registerBrokers(0, 1, 2, 3, 4);
+        ctx.unfenceBrokers(0, 1, 2, 3, 4);
+        String topic = "foo";
+        Uuid topicId = ctx.createTestTopic(topic, new int[][] {new int[] {1, 2, 0}}).topicId();
+
+        ctx.replay(reassign(replication, topic, List.of(1, 2, 3)).records());
+        assertEquals(reassigning(topic, List.of(1, 2, 3, 0), List.of(3), List.of(0)),
+            replication.listPartitionReassignments(null, Long.MAX_VALUE));
+
+        ctx.replay(reassign(replication, topic, List.of(1, 2, 3, 0, 4)).records());
+        assertEquals(reassigning(topic, List.of(1, 2, 3, 0, 4), List.of(4), List.of()),
+            replication.listPartitionReassignments(null, Long.MAX_VALUE));
+
+        PartitionRegistration partition = replication.getPartition(topicId, 0);
+        ControllerResult<AlterPartitionResponseData> alterPartitionResult = replication.alterPartition(
+            anonymousContextFor(ApiKeys.ALTER_PARTITION),
+            new AlterPartitionRequest.Builder(new AlterPartitionRequestData().
+                setBrokerId(partition.leader).
+                setBrokerEpoch(ctx.currentBrokerEpoch(partition.leader)).
+                setTopics(List.of(new TopicData().
+                    setTopicId(topicId).
+                    setPartitions(List.of(new PartitionData().
+                        setPartitionIndex(0).
+                        setPartitionEpoch(partition.partitionEpoch).
+                        setLeaderEpoch(partition.leaderEpoch).
+                        setNewIsrWithEpochs(isrWithDefaultEpoch(1, 2, 0, 4))))))).build().data());
+        ctx.replay(alterPartitionResult.records());
+
+        assertEquals(NONE_REASSIGNING, replication.listPartitionReassignments(null, Long.MAX_VALUE));
+        assertArrayEquals(new int[] {1, 2, 3, 0, 4}, replication.getPartition(topicId, 0).replicas);
+    }
+
+    @Test
+    public void testNewReassignmentWithEmptyAddingAndRemovingEndsPreviousReassignment() {
+        ReplicationControlTestContext ctx = new ReplicationControlTestContext.Builder().build();
+        ReplicationControlManager replication = ctx.replicationControl;
+        ctx.registerBrokers(0, 1, 2, 3);
+        ctx.unfenceBrokers(0, 1, 2, 3);
+        String topic = "foo";
+        Uuid topicId = ctx.createTestTopic(topic, new int[][] {new int[] {0, 1}}).topicId();
+
+        ctx.replay(reassign(replication, topic, List.of(2, 3)).records());
+        assertEquals(reassigning(topic, List.of(2, 3, 0, 1), List.of(2, 3), List.of(0, 1)),
+            replication.listPartitionReassignments(null, Long.MAX_VALUE));
+
+        ControllerResult<AlterPartitionReassignmentsResponseData> result =
+            reassign(replication, topic, List.of(2, 3, 0, 1));
+        assertEquals(1, result.records().size());
+        ctx.replay(result.records());
+
+        assertEquals(NONE_REASSIGNING, replication.listPartitionReassignments(null, Long.MAX_VALUE));
+        assertArrayEquals(new int[] {2, 3, 0, 1}, replication.getPartition(topicId, 0).replicas);
+    }
+
+    private static ControllerResult<AlterPartitionReassignmentsResponseData> reassign(
+        ReplicationControlManager replication,
+        String topic,
+        List<Integer> replicas
+    ) {
+        ControllerResult<AlterPartitionReassignmentsResponseData> result =
+            replication.alterPartitionReassignments(
+                new AlterPartitionReassignmentsRequestData().setTopics(List.of(
+                    new ReassignableTopic().setName(topic).setPartitions(List.of(
+                        new ReassignablePartition().setPartitionIndex(0).
+                            setReplicas(replicas))))));
+        assertEquals(NONE.code(), result.response().responses().get(0).partitions().get(0).errorCode());
+        return result;
+    }
+
+    private static ListPartitionReassignmentsResponseData reassigning(
+        String topic,
+        List<Integer> replicas,
+        List<Integer> adding,
+        List<Integer> removing
+    ) {
+        return new ListPartitionReassignmentsResponseData().setErrorMessage(null).
+            setTopics(List.of(new OngoingTopicReassignment().
+                setName(topic).setPartitions(List.of(
+                    new OngoingPartitionReassignment().setPartitionIndex(0).
+                        setRemovingReplicas(removing).
+                        setAddingReplicas(adding).
+                        setReplicas(replicas)))));
+    }
+
     private static BrokerState brokerState(int brokerId, Long brokerEpoch) {
         return new BrokerState().setBrokerId(brokerId).setBrokerEpoch(brokerEpoch);
     }

@@ -2341,12 +2341,8 @@ public class ReplicationControlManager {
         if (!reassignment.replicas().equals(currentReplicas)) {
             builder.setTargetReplicas(reassignment.replicas());
         }
-        if (!reassignment.removing().isEmpty()) {
-            builder.setTargetRemoving(reassignment.removing());
-        }
-        if (!reassignment.adding().isEmpty()) {
-            builder.setTargetAdding(reassignment.adding());
-        }
+        builder.setTargetRemoving(reassignment.removing());
+        builder.setTargetAdding(reassignment.adding());
         return builder.setDefaultDirProvider(clusterDescriber).build();
     }
 
