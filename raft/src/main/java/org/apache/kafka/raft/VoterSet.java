@@ -159,6 +159,16 @@ public final class VoterSet {
     }
 
     /**
+     * Returns the voter key for a voter id.
+     *
+     * @param voterId the id of the voter
+     * @return the voter key if the id is a voter, otherwise {@code Optional.empty()}
+     */
+    public Optional<ReplicaKey> voterKey(int voterId) {
+        return Optional.ofNullable(voters.get(voterId)).map(VoterNode::voterKey);
+    }
+
+    /**
      * Returns the number of voters in the voter set.
      */
     public int size() {
