@@ -20,6 +20,14 @@ import org.apache.kafka.common.TopicIdPartition;
 import org.apache.kafka.common.requests.FetchRequest;
 import org.apache.kafka.server.storage.log.FetchIsolation;
 
+import java.util.Optional;
+
 public record RemoteStorageFetchInfo(int fetchMaxBytes, boolean minOneMessage, TopicIdPartition topicIdPartition,
-                                     FetchRequest.PartitionData fetchInfo, FetchIsolation fetchIsolation) {
+                                     FetchRequest.PartitionData fetchInfo, FetchIsolation fetchIsolation,
+                                     Optional<String> clientId) {
+
+    public RemoteStorageFetchInfo(int fetchMaxBytes, boolean minOneMessage, TopicIdPartition topicIdPartition,
+                                  FetchRequest.PartitionData fetchInfo, FetchIsolation fetchIsolation) {
+        this(fetchMaxBytes, minOneMessage, topicIdPartition, fetchInfo, fetchIsolation, Optional.empty());
+    }
 }
