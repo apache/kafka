@@ -16,7 +16,6 @@
  */
 package org.apache.kafka.storage.internals.checkpoint;
 
-import org.apache.kafka.server.common.CheckpointFile.EntryFormatter;
 import org.apache.kafka.storage.internals.log.EpochEntry;
 import org.apache.kafka.storage.internals.log.LogDirFailureChannel;
 
@@ -46,10 +45,10 @@ public class LeaderEpochCheckpointFile {
     private static final Pattern WHITE_SPACES_PATTERN = Pattern.compile("\\s+");
     private static final int CURRENT_VERSION = 0;
 
-    private final CheckpointFileWithFailureHandler<EpochEntry> checkpoint;
+    private final CheckpointFile<EpochEntry> checkpoint;
 
     public LeaderEpochCheckpointFile(File file, LogDirFailureChannel logDirFailureChannel) throws IOException {
-        checkpoint = new CheckpointFileWithFailureHandler<>(file, CURRENT_VERSION, FORMATTER, logDirFailureChannel, file.getParentFile().getParent());
+        checkpoint = new CheckpointFile<>(file, CURRENT_VERSION, FORMATTER, logDirFailureChannel, file.getParentFile().getParent());
     }
 
     public void write(Collection<EpochEntry> epochs) {
@@ -71,7 +70,7 @@ public class LeaderEpochCheckpointFile {
         return new File(dir, LEADER_EPOCH_CHECKPOINT_FILENAME);
     }
 
-    private static class Formatter implements EntryFormatter<EpochEntry> {
+    private static class Formatter implements CheckpointFile.EntryFormatter<EpochEntry> {
 
         public String toString(EpochEntry entry) {
             return entry.epoch() + " " + entry.startOffset();
