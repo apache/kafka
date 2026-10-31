@@ -473,6 +473,10 @@ public class StreamTask extends AbstractTask implements ProcessorNodePunctuator,
                 throw new IllegalStateException("Unknown state " + state() + " while preparing active task " + id + " for committing");
         }
     }
+    
+    Set<TopicPartition> partitionsForOffsetReset() {
+        return Set.copyOf(resetOffsetsForPartitions);
+    }
 
     private Optional<OffsetAndMetadata> findOffsetAndMetadata(final TopicPartition partition) {
         Long offset = partitionGroup.headRecordOffset(partition);
