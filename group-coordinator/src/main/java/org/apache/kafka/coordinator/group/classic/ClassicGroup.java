@@ -1474,7 +1474,7 @@ public class ClassicGroup implements Group {
 
     @Override
     public String toString() {
-        return "ClassicGroupMetadata(" +
+        return "ClassicGroup(" +
             "groupId=" + groupId + ", " +
             "generation=" + generationId + ", " +
             "protocolType=" + protocolType + ", " +
