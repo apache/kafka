@@ -28,23 +28,23 @@ type: docs
 
 Apache Kafka allows clients to use SSL for encryption of traffic as well as authentication. By default, SSL is disabled but can be turned on if needed. The following paragraphs explain in detail how to set up your own PKI infrastructure, use it to create certificates and configure Kafka to use these. 
 
+**Note on naming:** SSL (Secure Sockets Layer) is the predecessor of TLS (Transport Layer Security). All SSL protocol versions are insecure and disabled in current JDKs, Kafka uses TLS (TLSv1.2 and TLSv1.3 by default). The SSL name is kept for historical reasons in Kafka's configuration: the `SSL` and `SASL_SSL` security protocols, the `ssl.*` configuration properties and listener names such as `SSL://` all refer to TLS. In this guide, as in Kafka's configuration, "SSL" means TLS. 
+
 ### Generate SSL key and certificate for each Kafka broker
 
 The first step of deploying one or more brokers with SSL support is to generate a public/private keypair for every server. Since Kafka expects all keys and certificates to be stored in keystores we will use Java's keytool command for this task. The tool supports two different keystore formats, the Java specific jks format which has been deprecated by now, as well as PKCS12. PKCS12 is the default format as of Java version 9, to ensure this format is being used regardless of the Java version in use all following commands explicitly specify the PKCS12 format. 
 
 ```bash
-$ keytool -keystore {keystorefile} -alias localhost -validity {validity} -genkey -keyalg RSA -storetype pkcs12
+$ keytool -keystore {keystorefile} -alias localhost -genkey -keyalg RSA -storetype pkcs12
 ```
 
-You need to specify two parameters in the above command: 
-1. keystorefile: the keystore file that stores the keys (and later the certificate) for this broker. The keystore file contains the private and public keys of this broker, therefore it needs to be kept safe. Ideally this step is run on the Kafka broker that the key will be used on, as this key should never be transmitted/leave the server that it is intended for.
-2. validity: the valid time of the key in days. Please note that this differs from the validity period for the certificate, which will be determined in Signing the certificate. You can use the same key to request multiple certificates: if your key has a validity of 10 years, but your CA will only sign certificates that are valid for one year, you can use the same key with 10 certificates over time.
+The `{keystorefile}` parameter refers to the keystore file that stores the keys (and later the certificate) for this broker, e.g. `server.keystore.p12` as used in the rest of this guide. The keystore file contains the private and public keys of this broker, therefore it needs to be kept safe. Ideally this step is run on the Kafka broker that the key will be used on, as this key should never be transmitted/leave the server that it is intended for.
   
 To obtain a certificate that can be used with the private key that was just created a certificate signing request needs to be created. This signing request, when signed by a trusted CA results in the actual certificate which can then be installed in the keystore and used for authentication purposes.  
 To generate certificate signing requests run the following command for all server keystores created so far. 
 
 ```bash
-$ keytool -keystore server.keystore.jks -alias localhost -validity {validity} -genkey -keyalg RSA -destkeystoretype pkcs12 -ext SAN=DNS:{FQDN},IP:{IPADDRESS1}
+$ keytool -keystore server.keystore.p12 -alias localhost -certreq -file server.csr -ext SAN=DNS:{FQDN},IP:{IPADDRESS1}
 ```
 
 This command assumes that you want to add hostname information to the certificate, if this is not the case, you can omit the extension parameter `-ext SAN=DNS:{FQDN},IP:{IPADDRESS1}`. Please see below for more information on this. 
@@ -74,7 +74,7 @@ Another advantage is that if the SAN field is used for hostname verification the
 To add a SAN field append the following argument ` -ext SAN=DNS:{FQDN},IP:{IPADDRESS}` to the keytool command: 
 
 ```bash
-$ keytool -keystore server.keystore.jks -alias localhost -validity {validity} -genkey -keyalg RSA -destkeystoretype pkcs12 -ext SAN=DNS:{FQDN},IP:{IPADDRESS1}
+$ keytool -keystore server.keystore.p12 -alias localhost -certreq -file server.csr -ext SAN=DNS:{FQDN},IP:{IPADDRESS1}
 ```
 
 ### Creating your own CA
@@ -85,7 +85,7 @@ A certificate authority (CA) is responsible for signing certificates. CAs works 
 
 For this guide we will be our own Certificate Authority. When setting up a production cluster in a corporate environment these certificates would usually be signed by a corporate CA that is trusted throughout the company. Please see Common Pitfalls in Production for some things to consider for this case. 
 
-Due to a [bug](https://www.openssl.org/docs/man1.1.1/man1/x509.html#BUGS) in OpenSSL, the x509 module will not copy requested extension fields from CSRs into the final certificate. Since we want the SAN extension to be present in our certificate to enable hostname verification, we'll use the _ca_ module instead. This requires some additional configuration to be in place before we generate our CA keypair.  
+By default, the OpenSSL x509 module does not copy requested extension fields from CSRs into the final certificate (OpenSSL 3.0 and later can do this with `-copy_extensions copy`). Since we want the SAN extension to be present in our certificate to enable hostname verification, we'll use the _ca_ module instead, which works with all versions. This requires some additional configuration to be in place before we generate our CA keypair.  
 Save the following listing into a file called openssl-ca.cnf and adjust the values for validity and common attributes as necessary. 
 
 ```ini
@@ -179,10 +179,11 @@ $ echo 01 > serial.txt
 $ touch index.txt
 ```
 
-With these steps done you are now ready to generate your CA that will be used to sign certificates later. 
+With these steps done you are now ready to generate your CA that will be used to sign certificates later.  
+The validity of the CA certificate itself is set with `-days` and defaults to 30 days. The `default_days` setting in the configuration file only applies to the certificates signed by the CA, so choose a `-days` value that is longer than the validity of any certificate the CA will sign. 
 
 ```bash
-$ openssl req -x509 -config openssl-ca.cnf -newkey rsa:4096 -sha256 -nodes -out cacert.pem -outform PEM
+$ openssl req -x509 -config openssl-ca.cnf -newkey rsa:4096 -sha256 -nodes -days 3650 -out cacert.pem -outform PEM
 ```
 
 The CA is simply a public/private key pair and certificate that is signed by itself, and is only intended to sign other certificates.  
@@ -190,13 +191,13 @@ This keypair should be kept very safe, if someone gains access to it, they can c
 The next step is to add the generated CA to the **clients' truststore** so that the clients can trust this CA: 
 
 ```bash
-$ keytool -keystore client.truststore.jks -alias CARoot -import -file ca-cert
+$ keytool -keystore client.truststore.p12 -storetype pkcs12 -alias CARoot -import -file cacert.pem
 ```
 
 **Note:** If you configure the Kafka brokers to require client authentication by setting ssl.client.auth to be "requested" or "required" in the Kafka brokers config then you must provide a truststore for the Kafka brokers as well and it should have all the CA certificates that clients' keys were signed by. 
 
 ```bash
-$ keytool -keystore server.truststore.jks -alias CARoot -import -file ca-cert
+$ keytool -keystore server.truststore.p12 -storetype pkcs12 -alias CARoot -import -file cacert.pem
 ```
 
 In contrast to the keystore in step 1 that stores each machine's own identity, the truststore of a client stores all the certificates that the client should trust. Importing a certificate into one's truststore also means trusting all certificates that are signed by that certificate. As the analogy above, trusting the government (CA) also means trusting all passports (certificates) that it has issued. This attribute is called the chain of trust, and it is particularly useful when deploying SSL on a large Kafka cluster. You can sign all certificates in the cluster with a single CA, and have all machines share the same truststore that trusts the CA. That way all machines can authenticate all other machines. 
@@ -212,7 +213,7 @@ Finally, you need to import both the certificate of the CA and the signed certif
 
 ```bash
 $ keytool -keystore {keystore} -alias CARoot -import -file {CA certificate}
-$ keytool -keystore {keystore} -alias localhost -import -file cert-signed
+$ keytool -keystore {keystore} -alias localhost -import -file {server certificate}
 ```
 
 The definitions of the parameters are the following: 
@@ -220,14 +221,15 @@ The definitions of the parameters are the following:
 2. CA certificate: the certificate of the CA
 3. certificate signing request: the csr created with the server key
 4. server certificate: the file to write the signed certificate of the server to
-This will leave you with one truststore called _truststore.jks_ \- this can be the same for all clients and brokers and does not contain any sensitive information, so there is no need to secure this.  
-Additionally you will have one _server.keystore.jks_ file per node which contains that nodes keys, certificate and your CAs certificate, please refer to Configuring Kafka Brokers and Configuring Kafka Clients for information on how to use these files. 
+
+This will leave you with a truststore (_client.truststore.p12_ and _server.truststore.p12_, both containing only the CA certificate) \- this can be the same for all clients and brokers and does not contain any sensitive information, so there is no need to secure this.  
+Additionally you will have one _server.keystore.p12_ file per node which contains that nodes keys, certificate and your CAs certificate, please refer to Configuring Kafka Brokers and Configuring Kafka Clients for information on how to use these files. 
 
 For some tooling assistance on this topic, please check out the [easyRSA](https://github.com/OpenVPN/easy-rsa) project which has extensive scripting in place to help with these steps.
 
 ### SSL key and certificates in PEM format
 
-From 2.7.0 onwards, SSL key and trust stores can be configured for Kafka brokers and clients directly in the configuration in PEM format. This avoids the need to store separate files on the file system and benefits from password protection features of Kafka configuration. PEM may also be used as the store type for file-based key and trust stores in addition to JKS and PKCS12. To configure PEM key store directly in the broker or client configuration, private key in PEM format should be provided in `ssl.keystore.key` and the certificate chain in PEM format should be provided in `ssl.keystore.certificate.chain`. To configure trust store, trust certificates, e.g. public certificate of CA, should be provided in `ssl.truststore.certificates`. Since PEM is typically stored as multi-line base-64 strings, the configuration value can be included in Kafka configuration as multi-line strings with lines terminating in backslash ('\') for line continuation. 
+From 2.7.0 onwards, SSL key and trust stores can be configured for Kafka brokers and clients directly in the configuration in PEM format. This avoids the need to store separate files on the file system and benefits from password protection features of Kafka configuration. PEM may also be used as the store type for file-based key and trust stores in addition to JKS and PKCS12. To configure PEM key store directly in the broker or client configuration, private key in PEM format should be provided in `ssl.keystore.key` and the certificate chain in PEM format should be provided in `ssl.keystore.certificate.chain`. To configure trust store, trust certificates, e.g. public certificate of CA, should be provided in `ssl.truststore.certificates`. Since PEM is typically stored as multi-line base-64 strings, the configuration value can be included in Kafka configuration as multi-line strings with lines terminating in backslash (`\`) for line continuation. 
 
 Store password configs `ssl.keystore.password` and `ssl.truststore.password` are not used for PEM. If private key is encrypted using a password, the key password must be provided in `ssl.key.password`. Private keys may be provided in unencrypted form without a password. In production deployments, configs should be encrypted or externalized using password protection feature in Kafka in this case. Note that the default SSL engine factory has limited capabilities for decryption of encrypted private keys when external tools like OpenSSL are used for encryption. Third party libraries like BouncyCastle may be integrated with a custom `SslEngineFactory` to support a wider range of encrypted private keys.
 
@@ -260,44 +262,43 @@ listeners=PLAINTEXT://host.name:port,SSL://host.name:port
 Following SSL configs are needed on the broker side:
 
 ```java-properties
-ssl.keystore.location=/var/private/ssl/server.keystore.jks
+ssl.keystore.location=/var/private/ssl/server.keystore.p12
 ssl.keystore.password=test1234
 ssl.key.password=test1234
-ssl.truststore.location=/var/private/ssl/server.truststore.jks
+ssl.keystore.type=PKCS12
+ssl.truststore.location=/var/private/ssl/server.truststore.p12
 ssl.truststore.password=test1234
+ssl.truststore.type=PKCS12
 ```
 
-Note: ssl.truststore.password is technically optional but highly recommended. If a password is not set access to the truststore is still available, but integrity checking is disabled. Optional settings that are worth considering: 
+Kafka's `ssl.keystore.type` and `ssl.truststore.type` default to `JKS`, regardless of the JDK's default keystore format, so set them to `PKCS12` to match the stores created above. (With its default settings the JDK can still load PKCS12 files as `JKS`, see [JDK-8062552](https://bugs.java.com/bugdatabase/JDK-8062552), but setting the type explicitly avoids relying on that.) Note: ssl.truststore.password is technically optional but highly recommended. If a password is not set access to the truststore is still available, but integrity checking is disabled. Optional settings that are worth considering: 
 1. ssl.client.auth=none ("required" => client authentication is required, "requested" => client authentication is requested and client without certs can still connect. The usage of "requested" is discouraged as it provides a false sense of security and misconfigured clients will still connect successfully.)
 2. ssl.cipher.suites (Optional). A cipher suite is a named combination of authentication, encryption, MAC and key exchange algorithm used to negotiate the security settings for a network connection using TLS or SSL network protocol. (Default is an empty list)
-3. ssl.enabled.protocols=TLSv1.2,TLSv1.1,TLSv1 (list out the SSL protocols that you are going to accept from clients. Do note that SSL is deprecated in favor of TLS and using SSL in production is not recommended)
-4. ssl.keystore.type=JKS
-5. ssl.truststore.type=JKS
-6. ssl.secure.random.implementation=SHA1PRNG
+3. ssl.enabled.protocols=TLSv1.2,TLSv1.3 (list out the TLS protocols that you are going to accept from clients. TLSv1 and TLSv1.1 are deprecated and disabled by default in current JDKs, they should not be used)
+4. ssl.secure.random.implementation=SHA1PRNG
 If you want to enable SSL for inter-broker communication, add the following to the server.properties file (it defaults to PLAINTEXT):
 
 ```java-properties
 security.inter.broker.protocol=SSL
 ```
 
-Due to import regulations in some countries, the Oracle implementation limits the strength of cryptographic algorithms available by default. If stronger algorithms are needed (for example, AES with 256-bit keys), the [JCE Unlimited Strength Jurisdiction Policy Files](https://www.oracle.com/technetwork/java/javase/downloads/index.html) must be obtained and installed in the JDK/JRE. See the [JCA Providers Documentation](https://docs.oracle.com/javase/8/docs/technotes/guides/security/SunProviders.html) for more information. 
-
 The JRE/JDK will have a default pseudo-random number generator (PRNG) that is used for cryptography operations, so it is not required to configure the implementation used with the `ssl.secure.random.implementation`. However, there are performance issues with some implementations (notably, the default chosen on Linux systems, `NativePRNG`, utilizes a global lock). In cases where performance of SSL connections becomes an issue, consider explicitly setting the implementation to be used. The `SHA1PRNG` implementation is non-blocking, and has shown very good performance characteristics under heavy load (50 MB/sec of produced messages, plus replication traffic, per-broker). 
 
 Once you start the broker you should be able to see in the server.log:
 
 ```text
-with addresses: PLAINTEXT -> EndPoint(192.168.64.1,9092,PLAINTEXT),SSL -> EndPoint(192.168.64.1,9093,SSL)
+Created data-plane acceptor and processors for endpoint : ListenerName(SSL) (kafka.network.SocketServer)
+Awaiting socket connections on host.name:9093. (kafka.network.DataPlaneAcceptor)
 ```
 
 To check quickly if the server keystore and truststore are setup properly you can run the following command:
 
 ```bash
-$ openssl s_client -debug -connect localhost:9093 -tls1
+$ openssl s_client -debug -connect localhost:9093 -tls1_2 -CAfile cacert.pem
 ```
 
-(Note: TLSv1 should be listed under ssl.enabled.protocols)  
-In the output of this command you should see server's certificate: 
+(Note: the protocol must be listed under ssl.enabled.protocols.)  
+In the output of this command you should see server's certificate:
 
 ```text
 -----BEGIN CERTIFICATE-----
@@ -310,29 +311,29 @@ issuer=/C=US/ST=CA/L=Santa Clara/O=org/OU=org/CN=kafka/emailAddress=test@test.co
 If the certificate does not show up or if there are any other error messages then your keystore is not setup properly.
 ### Configuring Kafka Clients
 
-SSL is supported only for the new Kafka Producer and Consumer, the older API is not supported. The configs for SSL will be the same for both producer and consumer.  
+The configs for SSL will be the same for both producer and consumer.  
 If client authentication is not required in the broker, then the following is a minimal configuration example: 
 
 ```java-properties
 security.protocol=SSL
-ssl.truststore.location=/var/private/ssl/client.truststore.jks
+ssl.truststore.location=/var/private/ssl/client.truststore.p12
 ssl.truststore.password=test1234
+ssl.truststore.type=PKCS12
 ```
 
 Note: ssl.truststore.password is technically optional but highly recommended. If a password is not set access to the truststore is still available, but integrity checking is disabled. If client authentication is required, then a keystore must be created like in step 1 and the following must also be configured: 
 
 ```java-properties
-ssl.keystore.location=/var/private/ssl/client.keystore.jks
+ssl.keystore.location=/var/private/ssl/client.keystore.p12
 ssl.keystore.password=test1234
 ssl.key.password=test1234
+ssl.keystore.type=PKCS12
 ```
 
 Other configuration settings that may also be needed depending on our requirements and the broker configuration: 
 1. ssl.provider (Optional). The name of the security provider used for SSL connections. Default value is the default security provider of the JVM.
 2. ssl.cipher.suites (Optional). A cipher suite is a named combination of authentication, encryption, MAC and key exchange algorithm used to negotiate the security settings for a network connection using TLS or SSL network protocol.
-3. ssl.enabled.protocols=TLSv1.2,TLSv1.1,TLSv1. It should list at least one of the protocols configured on the broker side
-4. ssl.truststore.type=JKS
-5. ssl.keystore.type=JKS
+3. ssl.enabled.protocols=TLSv1.2,TLSv1.3. It should list at least one of the protocols configured on the broker side
   
 Examples using console-producer and console-consumer: 
 
