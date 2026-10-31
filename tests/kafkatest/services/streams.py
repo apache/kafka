@@ -357,7 +357,12 @@ class StreamsSmokeTestBaseService(StreamsTestBaseService):
                       "auto.offset.reset": "earliest",
                       "acks": "all",
                       "acceptable.recovery.lag": "9223372036854775807", # enable a one-shot assignment
-                      "session.timeout.ms": "10000" # set back to 10s for tests. See KIP-735
+                      "session.timeout.ms": "10000", # set back to 10s for tests. See KIP-735
+                      # SmokeTestDriver writes records two days in the past, so window changelogs
+                      # need more than the default one-day additional retention. SmokeTestClient
+                      # sets this itself; the old client copies in streams/upgrade-system-tests-*
+                      # only get it from this file.
+                      "windowstore.changelog.additional.retention.ms": 3 * 24 * 60 * 60 * 1000
                       }
 
         if self.UPGRADE_FROM is not None:
