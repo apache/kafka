@@ -62,26 +62,40 @@ public class ClientQuotasImageNode implements MetadataNode {
         String clientId = null;
         String ip = null;
         String user = null;
+        boolean hasClientId = false;
+        boolean hasIp = false;
+        boolean hasUser = false;
         for (Map.Entry<String, String> entry : entity.entries().entrySet()) {
             switch (entry.getKey()) {
-                case CLIENT_ID -> clientId = entry.getValue();
-                case IP -> ip = entry.getValue();
-                case USER -> user = entry.getValue();
+                case CLIENT_ID -> {
+                    clientId = entry.getValue();
+                    hasClientId = true;
+                }
+                case IP -> {
+                    ip = entry.getValue();
+                    hasIp = true;
+                }
+                case USER -> {
+                    user = entry.getValue();
+                    hasUser = true;
+                }
                 default -> throw new RuntimeException("Invalid entity type " + entry.getKey());
             }
         }
+        // A null entity name denotes the built-in default entity (see ClientQuotaEntity), so it
+        // must still be rendered (as an empty name) rather than being treated as absent.
         StringBuilder bld = new StringBuilder();
         String prefix = "";
-        if (clientId != null) {
-            bld.append(prefix).append("clientId(").append(escape(clientId)).append(")");
+        if (hasClientId) {
+            bld.append(prefix).append("clientId(").append(escape(clientId == null ? "" : clientId)).append(")");
             prefix = "_";
         }
-        if (ip != null) {
-            bld.append(prefix).append("ip(").append(escape(ip)).append(")");
+        if (hasIp) {
+            bld.append(prefix).append("ip(").append(escape(ip == null ? "" : ip)).append(")");
             prefix = "_";
         }
-        if (user != null) {
-            bld.append(prefix).append("user(").append(escape(user)).append(")");
+        if (hasUser) {
+            bld.append(prefix).append("user(").append(escape(user == null ? "" : user)).append(")");
         }
         return bld.toString();
     }
@@ -128,7 +142,9 @@ public class ClientQuotasImageNode implements MetadataNode {
                 } else {
                     switch (c) {
                         case ')':
-                            entries.put(type, value.toString());
+                            // An empty name denotes the built-in default entity, which is
+                            // represented by a null value (see ClientQuotaEntity).
+                            entries.put(type, value.length() == 0 ? null : value.toString());
                             type = null;
                             value = new StringBuilder();
                             break;
