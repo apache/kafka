@@ -204,6 +204,7 @@ import java.util.SortedMap;
 import java.util.concurrent.CompletableFuture;
 import java.util.concurrent.TimeUnit;
 import java.util.function.BiFunction;
+import java.util.function.BiPredicate;
 import java.util.function.Function;
 import java.util.function.Predicate;
 import java.util.stream.Collectors;
@@ -2170,6 +2171,7 @@ public class GroupMetadataManager {
                 memberId,
                 memberEpoch,
                 instanceId,
+                processId,
                 ownedActiveTasks,
                 ownedStandbyTasks,
                 ownedWarmupTasks,
@@ -3567,6 +3569,7 @@ public class GroupMetadataManager {
      * @param memberId              The member id from the request.
      * @param memberEpoch           The member epoch from the request.
      * @param instanceId            The static instance id from the request.
+     * @param processId             The process id from the request or null.
      * @param ownedActiveTasks      The owned active tasks from the request.
      * @param ownedStandbyTasks     The owned standby tasks from the request.
      * @param ownedWarmupTasks      The owned warmup tasks from the request.
@@ -3580,6 +3583,7 @@ public class GroupMetadataManager {
         String memberId,
         int memberEpoch,
         String instanceId,
+        String processId,
         List<StreamsGroupHeartbeatRequestData.TaskIds> ownedActiveTasks,
         List<StreamsGroupHeartbeatRequestData.TaskIds> ownedStandbyTasks,
         List<StreamsGroupHeartbeatRequestData.TaskIds> ownedWarmupTasks,
@@ -3638,10 +3642,17 @@ public class GroupMetadataManager {
         throwIfInstanceIdIsUnreleased(previousStaticMemberOrNull, group.groupId(), memberId, instanceId);
 
         // Copy the previous member but with the new member id.
-        StreamsGroupMember newMember = new StreamsGroupMember.Builder(previousStaticMemberOrNull, memberId)
+        StreamsGroupMember.Builder newMemberBuilder = new StreamsGroupMember.Builder(previousStaticMemberOrNull, memberId)
             .setMemberEpoch(0)
-            .setPreviousMemberEpoch(0)
-            .build();
+            .setPreviousMemberEpoch(0);
+        if (processId != null && !processId.equals(previousStaticMemberOrNull.processId())) {
+            // The member re-joins from another process, and the tasks it keeps move to that process with it. The
+            // reconciler only checks that a process never holds a task twice when it grants a task, so drop the tasks
+            // that another member already holds on the new process, and let the reconciler grant them again.
+            newMemberBuilder.setAssignedTasks(
+                withoutTasksHeldOnProcess(group, previousStaticMemberOrNull.assignedTasks(), processId));
+        }
+        StreamsGroupMember newMember = newMemberBuilder.build();
 
         replaceStreamsMember(records, group, previousStaticMemberOrNull, newMember);
 
@@ -3659,6 +3670,53 @@ public class GroupMetadataManager {
             group.groupId(), memberId, instanceId, memberId, previousStaticMemberOrNull.memberId());
 
         return newMember;
+    }
+
+    /**
+     * Returns the given tasks without those that a member of the group holds on the given process, in any role.
+     *
+     * @param group     The streams group.
+     * @param tasks     The tasks to filter.
+     * @param processId The process ID.
+     *
+     * @return The tasks that no member holds on the process.
+     */
+    private static TasksTupleWithEpochs withoutTasksHeldOnProcess(
+        StreamsGroup group,
+        TasksTupleWithEpochs tasks,
+        String processId
+    ) {
+        BiPredicate<String, Integer> heldOnProcess = (subtopologyId, partitionId) ->
+            processId.equals(group.currentActiveTaskProcessId(subtopologyId, partitionId))
+                || group.currentStandbyTaskProcessIds(subtopologyId, partitionId).contains(processId)
+                || group.currentWarmupTaskProcessIds(subtopologyId, partitionId).contains(processId);
+
+        Map<String, Map<Integer, Integer>> activeTasksWithEpochs = new HashMap<>();
+        tasks.activeTasksWithEpochs().forEach((subtopologyId, partitionsWithEpochs) ->
+            partitionsWithEpochs.forEach((partitionId, epoch) -> {
+                if (!heldOnProcess.test(subtopologyId, partitionId)) {
+                    activeTasksWithEpochs.computeIfAbsent(subtopologyId, __ -> new HashMap<>()).put(partitionId, epoch);
+                }
+            }));
+
+        return new TasksTupleWithEpochs(
+            activeTasksWithEpochs,
+            withoutTasks(tasks.standbyTasks(), heldOnProcess),
+            withoutTasks(tasks.warmupTasks(), heldOnProcess)
+        );
+    }
+
+    private static Map<String, Set<Integer>> withoutTasks(
+        Map<String, Set<Integer>> tasks,
+        BiPredicate<String, Integer> drop
+    ) {
+        Map<String, Set<Integer>> keptTasks = new HashMap<>();
+        tasks.forEach((subtopologyId, partitionIds) -> partitionIds.forEach(partitionId -> {
+            if (!drop.test(subtopologyId, partitionId)) {
+                keptTasks.computeIfAbsent(subtopologyId, __ -> new HashSet<>()).add(partitionId);
+            }
+        }));
+        return keptTasks;
     }
 
     /**
