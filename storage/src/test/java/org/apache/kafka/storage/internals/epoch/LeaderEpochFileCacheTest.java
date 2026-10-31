@@ -17,13 +17,15 @@
 package org.apache.kafka.storage.internals.epoch;
 
 import org.apache.kafka.common.TopicPartition;
+import org.apache.kafka.common.utils.Time;
+import org.apache.kafka.server.util.KafkaScheduler;
+import org.apache.kafka.server.util.MockScheduler;
 import org.apache.kafka.server.util.MockTime;
 import org.apache.kafka.storage.internals.checkpoint.LeaderEpochCheckpointFile;
 import org.apache.kafka.storage.internals.log.EpochEntry;
 import org.apache.kafka.storage.internals.log.LogDirFailureChannel;
 import org.apache.kafka.test.TestUtils;
 
-import org.junit.jupiter.api.BeforeEach;
 import org.junit.jupiter.api.Test;
 
 import java.io.File;
@@ -44,15 +46,9 @@ import static org.junit.jupiter.api.Assertions.assertEquals;
 public class LeaderEpochFileCacheTest {
     private final TopicPartition tp = new TopicPartition("TestTopic", 5);
 
-    private LeaderEpochCheckpointFile checkpoint;
-    private LeaderEpochFileCache cache;
-
-    @BeforeEach
-    public void setup() throws IOException {
-        MockTime mockTime = new MockTime();
-        checkpoint = new LeaderEpochCheckpointFile(TestUtils.tempFile(), new LogDirFailureChannel(1));
-        cache = new LeaderEpochFileCache(tp, checkpoint, mockTime.scheduler);
-    }
+    private final LeaderEpochCheckpointFile checkpoint = assertDoesNotThrow(() ->
+            new LeaderEpochCheckpointFile(TestUtils.tempFile(), new LogDirFailureChannel(1)));
+    private final LeaderEpochFileCache cache = new LeaderEpochFileCache(tp, checkpoint, new MockScheduler(Time.SYSTEM));
 
     @Test
     public void testPreviousEpoch() {
@@ -79,6 +75,20 @@ public class LeaderEpochFileCacheTest {
         assertEquals(Optional.of(2), cache.latestEpoch());
         assertEquals(new EpochEntry(2, 10), cache.epochEntries().get(0));
         assertEquals(Map.entry(2, logEndOffset), cache.endOffsetFor(2, logEndOffset));
+    }
+
+    @Test
+    public void shouldAddEpochEntriesToCacheAndPersistThem() {
+        List<EpochEntry> entries = List.of(
+                new EpochEntry(1, 0),
+                new EpochEntry(2, 10));
+
+        cache.assign(entries);
+
+        assertEquals(entries, cache.epochEntries());
+        LeaderEpochFileCache restoredCache = new LeaderEpochFileCache(
+                tp, checkpoint, new MockScheduler(Time.SYSTEM));
+        assertEquals(entries, restoredCache.epochEntries());
     }
 
     @Test
@@ -319,6 +329,30 @@ public class LeaderEpochFileCacheTest {
         cache.truncateFromEndAsyncFlush(8);
 
         assertEquals(List.of(new EpochEntry(2, 6)), cache.epochEntries());
+    }
+
+    @Test
+    public void shouldFlushTruncatedEntriesAsynchronously() throws Exception {
+        LeaderEpochCheckpointFile checkpoint = new LeaderEpochCheckpointFile(
+                TestUtils.tempFile(), new LogDirFailureChannel(1));
+        KafkaScheduler scheduler = new KafkaScheduler(1);
+        scheduler.startup();
+
+        try {
+            LeaderEpochFileCache cache = new LeaderEpochFileCache(tp, checkpoint, scheduler);
+            cache.assign(2, 6);
+            cache.assign(3, 8);
+            cache.assign(4, 11);
+
+            List<EpochEntry> expectedEntries = List.of(new EpochEntry(2, 6));
+            cache.truncateFromEndAsyncFlush(8);
+
+            TestUtils.waitForCondition(
+                    () -> checkpoint.read().equals(expectedEntries),
+                    "Checkpoint was not asynchronously flushed after truncating entries");
+        } finally {
+            scheduler.shutdown();
+        }
     }
 
     @Test
