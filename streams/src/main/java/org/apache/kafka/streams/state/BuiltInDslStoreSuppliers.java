@@ -109,7 +109,7 @@ public class BuiltInDslStoreSuppliers {
         @Override
         public SessionBytesStoreSupplier sessionStore(final DslSessionParams params) {
             if (params.emitStrategy().type() == EmitStrategy.StrategyType.ON_WINDOW_CLOSE) {
-                if (params.storeFormat() == DslStoreFormat.HEADERS) {
+                if (params.dslStoreFormat() == DslStoreFormat.HEADERS) {
                     return new RocksDbTimeOrderedSessionHeadersBytesStoreSupplier(
                         params.name(),
                         params.retentionPeriod().toMillis(),
@@ -124,7 +124,7 @@ public class BuiltInDslStoreSuppliers {
                 }
             }
 
-            if (params.storeFormat() == DslStoreFormat.HEADERS) {
+            if (params.dslStoreFormat() == DslStoreFormat.HEADERS) {
                 return Stores.persistentSessionStoreWithHeaders(params.name(), params.retentionPeriod());
             }
             return Stores.persistentSessionStore(params.name(), params.retentionPeriod());
