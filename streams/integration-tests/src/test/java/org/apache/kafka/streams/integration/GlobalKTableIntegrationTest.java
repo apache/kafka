@@ -22,9 +22,11 @@ import org.apache.kafka.common.serialization.Serdes;
 import org.apache.kafka.common.serialization.StringSerializer;
 import org.apache.kafka.common.utils.Bytes;
 import org.apache.kafka.server.util.MockTime;
+import org.apache.kafka.streams.CloseOptions;
 import org.apache.kafka.streams.KafkaStreams;
 import org.apache.kafka.streams.KafkaStreams.State;
 import org.apache.kafka.streams.KeyValue;
+import org.apache.kafka.streams.KeyValueTimestamp;
 import org.apache.kafka.streams.StreamsBuilder;
 import org.apache.kafka.streams.StreamsConfig;
 import org.apache.kafka.streams.errors.ErrorHandlerContext;
@@ -58,13 +60,16 @@ import org.junit.jupiter.api.Tag;
 import org.junit.jupiter.api.TestInfo;
 import org.junit.jupiter.api.Timeout;
 import org.junit.jupiter.params.ParameterizedTest;
+import org.junit.jupiter.params.provider.CsvSource;
 import org.junit.jupiter.params.provider.ValueSource;
 
 import java.io.IOException;
 import java.time.Duration;
 import java.util.Arrays;
+import java.util.Collections;
 import java.util.HashMap;
 import java.util.Map;
+import java.util.Optional;
 import java.util.Properties;
 import java.util.concurrent.atomic.AtomicBoolean;
 
@@ -345,6 +350,108 @@ public class GlobalKTableIntegrationTest {
         assertEquals(4L, store.approximateNumEntries());
         timestampedStore = IntegrationTestUtils.getStore(globalStore, kafkaStreams, QueryableStoreTypes.timestampedKeyValueStore());
         assertEquals(4L, timestampedStore.approximateNumEntries());
+    }
+
+    @ParameterizedTest
+    @CsvSource({"false,false", "false,true", "true,false", "true,true"})
+    public void shouldConsumeAndRestoreSharedTopic(final boolean globalFirst,
+                                                   final boolean optimize) throws Exception {
+        builder = new StreamsBuilder();
+        final Consumed<Long, String> consumed = Consumed.with(Serdes.Long(), Serdes.String());
+        if (globalFirst) {
+            builder.globalTable(globalTableTopic, consumed, Materialized.as(globalStore));
+        }
+        builder.table(globalTableTopic, consumed, Materialized.as("local-store"));
+        if (!globalFirst) {
+            builder.globalTable(globalTableTopic, consumed, Materialized.as(globalStore));
+        }
+        streamsConfiguration.put(StreamsConfig.TOPOLOGY_OPTIMIZATION_CONFIG,
+            optimize ? StreamsConfig.OPTIMIZE : StreamsConfig.NO_OPTIMIZATION);
+        final Properties secondConfiguration = new Properties();
+        secondConfiguration.putAll(streamsConfiguration);
+        secondConfiguration.put(StreamsConfig.STATE_DIR_CONFIG, TestUtils.tempDirectory().getPath());
+        final KafkaStreams secondInstance = new KafkaStreams(builder.build(streamsConfiguration), secondConfiguration);
+        try {
+            produceSharedTopicValue(0, 1L, "A");
+            produceSharedTopicValue(1, 2L, "B");
+            kafkaStreams = new KafkaStreams(builder.build(streamsConfiguration), streamsConfiguration);
+            kafkaStreams.start();
+            secondInstance.start();
+            waitForApplicationState(Arrays.asList(kafkaStreams, secondInstance), State.RUNNING, Duration.ofSeconds(30));
+
+            final Map<Long, String> initial = Map.of(1L, "A", 2L, "B");
+            final ReadOnlyKeyValueStore<Long, String> firstLocal = IntegrationTestUtils
+                .getStore("local-store", kafkaStreams, QueryableStoreTypes.keyValueStore());
+            final ReadOnlyKeyValueStore<Long, String> secondLocal = IntegrationTestUtils
+                .getStore("local-store", secondInstance, QueryableStoreTypes.keyValueStore());
+            final ReadOnlyKeyValueStore<Long, String> firstGlobal = IntegrationTestUtils
+                .getStore(globalStore, kafkaStreams, QueryableStoreTypes.keyValueStore());
+            final ReadOnlyKeyValueStore<Long, String> secondGlobal = IntegrationTestUtils
+                .getStore(globalStore, secondInstance, QueryableStoreTypes.keyValueStore());
+            TestUtils.waitForCondition(() -> {
+                final Map<Long, String> first = sharedTopicStoreContents(firstLocal);
+                final Map<Long, String> second = sharedTopicStoreContents(secondLocal);
+                final Map<Long, String> combined = new HashMap<>(first);
+                combined.putAll(second);
+                return first.size() == 1 && second.size() == 1
+                    && Collections.disjoint(first.keySet(), second.keySet())
+                    && combined.equals(initial)
+                    && sharedTopicStoreContents(firstGlobal).equals(initial)
+                    && sharedTopicStoreContents(secondGlobal).equals(initial);
+            }, 30000L, "Both instances should replicate global state and split local partitions");
+
+            produceSharedTopicValue(0, 1L, "updated");
+            produceSharedTopicValue(1, 2L, null);
+            final Map<Long, String> updated = Map.of(1L, "updated");
+            TestUtils.waitForCondition(() -> {
+                final Map<Long, String> combined = sharedTopicStoreContents(firstLocal);
+                combined.putAll(sharedTopicStoreContents(secondLocal));
+                return combined.equals(updated)
+                    && sharedTopicStoreContents(firstGlobal).equals(updated)
+                    && sharedTopicStoreContents(secondGlobal).equals(updated);
+            }, 30000L, "Both processing paths should apply updates and tombstones");
+
+            if (optimize) {
+                assertTrue(kafkaStreams.allLocalStorePartitionLags().containsKey("local-store"));
+                assertFalse(kafkaStreams.allLocalStorePartitionLags().containsKey(globalStore));
+                assertTrue(secondInstance.allLocalStorePartitionLags().containsKey("local-store"));
+                assertFalse(secondInstance.allLocalStorePartitionLags().containsKey(globalStore));
+            }
+            final CloseOptions closeOptions = CloseOptions.timeout(Duration.ofSeconds(60))
+                .withGroupMembershipOperation(CloseOptions.GroupMembershipOperation.LEAVE_GROUP);
+            assertTrue(secondInstance.close(closeOptions));
+            assertTrue(kafkaStreams.close(closeOptions));
+            kafkaStreams.cleanUp();
+            kafkaStreams = new KafkaStreams(builder.build(streamsConfiguration), streamsConfiguration);
+            kafkaStreams.start();
+            waitForApplicationState(singletonList(kafkaStreams), State.RUNNING, Duration.ofSeconds(30));
+            final ReadOnlyKeyValueStore<Long, String> restoredLocal = IntegrationTestUtils
+                .getStore("local-store", kafkaStreams, QueryableStoreTypes.keyValueStore());
+            final ReadOnlyKeyValueStore<Long, String> restoredGlobal = IntegrationTestUtils
+                .getStore(globalStore, kafkaStreams, QueryableStoreTypes.keyValueStore());
+            TestUtils.waitForCondition(() -> sharedTopicStoreContents(restoredLocal).equals(updated)
+                && sharedTopicStoreContents(restoredGlobal).equals(updated),
+                30000L, "Both local and global stores should restore from Kafka after deleting local state");
+        } finally {
+            secondInstance.close(CloseOptions.timeout(Duration.ofSeconds(60))
+                .withGroupMembershipOperation(CloseOptions.GroupMembershipOperation.LEAVE_GROUP));
+            IntegrationTestUtils.purgeLocalStreamsState(secondConfiguration);
+        }
+    }
+
+    private Map<Long, String> sharedTopicStoreContents(final ReadOnlyKeyValueStore<Long, String> store) {
+        final Map<Long, String> contents = new HashMap<>();
+        try (final KeyValueIterator<Long, String> iterator = store.all()) {
+            iterator.forEachRemaining(entry -> contents.put(entry.key, entry.value));
+        }
+        return contents;
+    }
+
+    private void produceSharedTopicValue(final int partition, final long key, final String value) {
+        IntegrationTestUtils.produceSynchronously(
+            TestUtils.producerConfig(CLUSTER.bootstrapServers(), LongSerializer.class, StringSerializer.class),
+            false, globalTableTopic, Optional.of(partition),
+            singletonList(new KeyValueTimestamp<>(key, value, mockTime.milliseconds())));
     }
 
     @ParameterizedTest

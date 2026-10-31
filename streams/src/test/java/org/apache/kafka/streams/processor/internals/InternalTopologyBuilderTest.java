@@ -53,6 +53,9 @@ import org.apache.kafka.test.MockTimestampExtractor;
 import org.apache.kafka.test.StreamsTestUtils;
 
 import org.junit.jupiter.api.Test;
+import org.junit.jupiter.params.ParameterizedTest;
+import org.junit.jupiter.params.provider.CsvSource;
+import org.junit.jupiter.params.provider.ValueSource;
 
 import java.time.Duration;
 import java.util.Arrays;
@@ -69,6 +72,7 @@ import java.util.regex.Pattern;
 
 import static java.time.Duration.ofSeconds;
 import static java.util.Arrays.asList;
+import static java.util.stream.Collectors.toSet;
 import static org.apache.kafka.common.utils.Utils.mkEntry;
 import static org.apache.kafka.common.utils.Utils.mkMap;
 import static org.apache.kafka.common.utils.Utils.mkProperties;
@@ -1359,6 +1363,73 @@ public class InternalTopologyBuilderTest {
         ))));
 
         assertEquals(globalTopic, builder.buildGlobalStateTopology().storeToChangelogTopic().get(globalStoreName));
+    }
+
+    @ParameterizedTest
+    @CsvSource({"false,false", "false,true", "true,false", "true,true"})
+    public void shouldAllowRegularAndGlobalSourcesOnSameTopic(final boolean globalFirst,
+                                                              final boolean usePattern) {
+        final Runnable addGlobalStore = () -> builder.addGlobalStore(
+            "global-source", null, null, null, "shared-topic", "global-processor",
+            new StoreDelegatingProcessorSupplier<>(new MockApiProcessorSupplier<>(), Set.of(storeBuilder)), false);
+        if (globalFirst) {
+            addGlobalStore.run();
+        }
+        if (usePattern) {
+            builder.addSource(null, "local-source", null, null, null, Pattern.compile("shared-.*"));
+        } else {
+            builder.addSource(null, "local-source", null, null, null, "shared-topic", "other-topic");
+        }
+        builder.addProcessor("local-processor", new MockApiProcessorSupplier<>(), "local-source");
+        if (!globalFirst) {
+            addGlobalStore.run();
+        }
+        builder.rewriteTopology(new StreamsConfig(StreamsTestUtils.getStreamsConfig()));
+        if (usePattern) {
+            builder.addSubscribedTopicsFromMetadata(Set.of("shared-topic", "shared-other"), "test-thread");
+        }
+
+        final ProcessorTopology localTopology = builder.buildTopology();
+        final ProcessorTopology globalTopology = builder.buildGlobalStateTopology();
+        assertEquals("local-source", localTopology.source("shared-topic").name());
+        assertEquals("global-source", globalTopology.source("shared-topic").name());
+        assertEquals(2, localTopology.processors().size());
+        assertEquals(2, globalTopology.processors().size());
+        assertEquals(1, builder.describe().subtopologies().size());
+        assertEquals(1, builder.describe().globalStores().size());
+        assertEquals(Set.of("shared-topic", usePattern ? "shared-other" : "other-topic"),
+            builder.subtopologyToTopicsInfo().values().stream()
+                .flatMap(info -> info.sourceTopics.stream()).collect(toSet()));
+
+        assertThrows(TopologyException.class, () -> builder.addGlobalStore(
+            "duplicate-global-source", null, null, null, "shared-topic", "duplicate-global-processor",
+            new StoreDelegatingProcessorSupplier<>(new MockApiProcessorSupplier<>(),
+                Set.of(new MockKeyValueStoreBuilder("other-store", false))), false));
+        assertThrows(TopologyException.class, () ->
+            builder.addSource(null, "duplicate-local-source", null, null, null, "shared-topic"));
+    }
+
+    @ParameterizedTest
+    @ValueSource(booleans = {false, true})
+    public void shouldResolveSharedChangelogTopicToLocalStore(final boolean globalFirst) {
+        final Runnable addGlobalStore = () -> builder.addGlobalStore(
+            "global-source", null, null, null, "shared-topic", "global-processor",
+            new StoreDelegatingProcessorSupplier<>(new MockApiProcessorSupplier<>(), Set.of(storeBuilder)), false);
+        if (globalFirst) {
+            addGlobalStore.run();
+        }
+        builder.addSource(null, "local-source", null, null, null, "shared-topic");
+        builder.addProcessor("local-processor", new MockApiProcessorSupplier<>(), "local-source");
+        builder.addStateStore(new MockKeyValueStoreBuilder("local-store", false), "local-processor");
+        builder.connectSourceStoreAndTopic("local-store", "shared-topic");
+        if (!globalFirst) {
+            addGlobalStore.run();
+        }
+
+        assertEquals("local-store", builder.storeForChangelogTopic("shared-topic"));
+        builder.rewriteTopology(new StreamsConfig(StreamsTestUtils.getStreamsConfig()));
+        assertEquals("shared-topic", builder.buildTopology().storeToChangelogTopic().get("local-store"));
+        assertEquals("shared-topic", builder.buildGlobalStateTopology().storeToChangelogTopic().get("testStore"));
     }
 
     @Test
