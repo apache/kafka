@@ -888,23 +888,22 @@ public class GroupCoordinatorService implements GroupCoordinator {
         Errors error = Errors.forException(exp);
         data.setErrorCode(error.code())
             .setErrorMessage(exp.getMessage())
-            .setResponses(response.responses());
-        data.setResponses(
-            new AlterShareGroupOffsetsResponseData.AlterShareGroupOffsetsResponseTopicCollection(response.responses().stream()
-                .map(topic -> {
-                    AlterShareGroupOffsetsResponseData.AlterShareGroupOffsetsResponseTopic topicData = new AlterShareGroupOffsetsResponseData.AlterShareGroupOffsetsResponseTopic()
-                        .setTopicName(topic.topicName())
-                        .setTopicId(topic.topicId());
-                    topic.partitions().forEach(partition -> {
-                        AlterShareGroupOffsetsResponseData.AlterShareGroupOffsetsResponsePartition partitionData = new AlterShareGroupOffsetsResponseData.AlterShareGroupOffsetsResponsePartition()
-                            .setPartitionIndex(partition.partitionIndex())
-                            .setErrorCode(error.code())
-                            .setErrorMessage(error.message());
-                        topicData.partitions().add(partitionData);
-                    });
-                    return topicData;
-                })
-                .iterator()));
+            .setResponses(
+                new AlterShareGroupOffsetsResponseData.AlterShareGroupOffsetsResponseTopicCollection(response.responses().stream()
+                    .map(topic -> {
+                        AlterShareGroupOffsetsResponseData.AlterShareGroupOffsetsResponseTopic topicData = new AlterShareGroupOffsetsResponseData.AlterShareGroupOffsetsResponseTopic()
+                            .setTopicName(topic.topicName())
+                            .setTopicId(topic.topicId());
+                        topic.partitions().forEach(partition -> {
+                            AlterShareGroupOffsetsResponseData.AlterShareGroupOffsetsResponsePartition partitionData = new AlterShareGroupOffsetsResponseData.AlterShareGroupOffsetsResponsePartition()
+                                .setPartitionIndex(partition.partitionIndex())
+                                .setErrorCode(error.code())
+                                .setErrorMessage(error.message());
+                            topicData.partitions().add(partitionData);
+                        });
+                        return topicData;
+                    })
+                    .iterator()));
         // don't uninitialized share group state here, as we regard this alter share group offsets request failed.
         return data;
     }
@@ -2641,7 +2640,6 @@ public class GroupCoordinatorService implements GroupCoordinator {
 
         log.info("Starting up.");
         numPartitions = groupMetadataTopicPartitionCount.getAsInt();
-        isActive.set(true);
         // Arm the periodic topology-description cleanup cycle on the manager; no-op when no
         // plugin is configured. The manager owns the timer + single-flight harness and the
         // cycle body itself; runOneStreamsTopologyCleanupCycle is a thin delegate to it kept
@@ -2665,7 +2663,6 @@ public class GroupCoordinatorService implements GroupCoordinator {
         }
 
         log.info("Shutting down.");
-        isActive.set(false);
         Utils.closeQuietly(streamsGroupTopologyDescriptionManager, "streams group topology description manager");
         Utils.closeQuietly(runtime, "coordinator runtime");
         Utils.closeQuietly(groupCoordinatorMetrics, "group coordinator metrics");
