@@ -17,9 +17,7 @@
 package org.apache.kafka.common.record.internal;
 
 import org.apache.kafka.common.record.TimestampType;
-import org.apache.kafka.common.utils.internals.BufferSupplier;
 import org.apache.kafka.common.utils.internals.ByteBufferOutputStream;
-import org.apache.kafka.common.utils.internals.CloseableIterator;
 
 /**
  * A mutable record batch is one that can be modified in place (without copying). This is used by the broker
@@ -57,22 +55,4 @@ public interface MutableRecordBatch extends RecordBatch {
      * @param outputStream The buffer to write the batch to
      */
     void writeTo(ByteBufferOutputStream outputStream);
-
-    /**
-     * Return an iterator which skips parsing key, value and headers from the record stream, and therefore the resulted
-     * {@code org.apache.kafka.common.record.internal.Record}'s key and value fields would be empty. This iterator is used
-     * when the read record's key and value are not needed and hence can save some byte buffer allocating / GC overhead.
-     *
-     * @return The closeable iterator
-     */
-    CloseableIterator<Record> skipKeyValueIterator(BufferSupplier bufferSupplier);
-
-    /**
-     * Variant of {@link #skipKeyValueIterator(BufferSupplier)} that rejects any record whose declared
-     * (decompressed) body size exceeds {@code maxRecordBodySize}; see
-     * {@link RecordBatch#streamingIterator(BufferSupplier, int)}.
-     *
-     * @return The closeable iterator
-     */
-    CloseableIterator<Record> skipKeyValueIterator(BufferSupplier bufferSupplier, int maxRecordBodySize);
 }

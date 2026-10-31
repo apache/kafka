@@ -250,6 +250,18 @@ public interface RecordBatch extends Iterable<Record> {
     CloseableIterator<Record> streamingIterator(BufferSupplier decompressionBufferSupplier, int maxRecordBodySize);
 
     /**
+     * Return an iterator which skips parsing key, value and headers, so the returned {@link Record}s expose only the
+     * offset, timestamp, sequence and sizes. Use it when the key and value are not needed to avoid allocating them.
+     * Only compressed batches benefit: uncompressed batches slice the underlying buffer without copying. No buffer
+     * sized by a record is allocated, so unlike {@link #streamingIterator(BufferSupplier, int)} there is no limit on
+     * the record size. Callers should ensure that the iterator is closed.
+     *
+     * @param bufferSupplier The supplier of ByteBuffer(s) used for decompression if supported.
+     * @return The closeable iterator
+     */
+    CloseableIterator<Record> skipKeyValueIterator(BufferSupplier bufferSupplier);
+
+    /**
      * Check whether this is a control batch (i.e. whether the control bit is set in the batch attributes).
      * For magic versions prior to 2, this is always false.
      *
@@ -262,15 +274,12 @@ public interface RecordBatch extends Iterable<Record> {
      * noted:
      * 1) that the earliest offset will return if there are multi records having same (max) timestamp
      * 2) it always returns None if the {@link RecordBatch#magic()} is equal to {@link RecordBatch#MAGIC_VALUE_V0}
-     * @param maxRecordBodySize The maximum declared (decompressed) body size of a single record; a compressed record
-     *                          exceeding it is rejected with an InvalidRecordException before its body is allocated.
-     *                          Pass {@link Records#SOFT_MAX_ARRAY_LENGTH} for no limit beyond the array-length ceiling.
      * @return offset of max timestamp
      */
-    default Optional<Long> offsetOfMaxTimestamp(int maxRecordBodySize) {
+    default Optional<Long> offsetOfMaxTimestamp() {
         if (magic() == RecordBatch.MAGIC_VALUE_V0) return Optional.empty();
         long maxTimestamp = maxTimestamp();
-        try (CloseableIterator<Record> iter = streamingIterator(BufferSupplier.create(), maxRecordBodySize)) {
+        try (CloseableIterator<Record> iter = skipKeyValueIterator(BufferSupplier.create())) {
             while (iter.hasNext()) {
                 Record record = iter.next();
                 if (maxTimestamp == record.timestamp()) return Optional.of(record.offset());
