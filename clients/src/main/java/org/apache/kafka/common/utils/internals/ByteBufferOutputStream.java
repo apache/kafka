@@ -20,8 +20,8 @@ import java.io.OutputStream;
 import java.nio.ByteBuffer;
 
 /**
- * An {@link OutputStream} backed by one or more {@link ByteBuffer}s, exposing the written bytes via
- * {@link #buffer()}. The default single-buffer implementation is {@link SingleByteBufferOutputStream}.
+ * An {@link OutputStream} backed by one or more {@link ByteBuffer}s.
+ * The default single-buffer implementation is {@link SingleByteBufferOutputStream}.
  */
 public abstract class ByteBufferOutputStream extends OutputStream {
 
@@ -32,8 +32,6 @@ public abstract class ByteBufferOutputStream extends OutputStream {
     public abstract void write(byte[] bytes, int off, int len);
 
     public abstract void write(ByteBuffer sourceBuffer);
-
-    public abstract ByteBuffer buffer();
 
     public abstract int position();
 
