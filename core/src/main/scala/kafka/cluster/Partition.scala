@@ -1464,7 +1464,7 @@ class Partition(val topicPartition: TopicPartition,
 
     def getOffsetByTimestamp: OffsetResultHolder = {
       logManager.getLog(topicPartition)
-        .map(log => log.fetchOffsetByTimestamp(timestamp, remoteLogManager.asInstanceOf[Option[AsyncOffsetReader]].toJava))
+        .map(log => log.fetchOffsetByTimestamp(timestamp, remoteLogManager.asInstanceOf[Option[AsyncOffsetReader]].toJava, lastFetchableOffset))
         .orElse(new OffsetResultHolder(Optional.empty[FileRecords.TimestampAndOffset]()))
     }
 
