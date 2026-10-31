@@ -916,34 +916,43 @@ class TestAnalyzer:
         
         return persistent_failures
 
-def get_develocity_class_link(class_name: str, threshold_days: int) -> str:
+def get_develocity_class_link(class_name: str, start_time, end_time=None) -> str:
     """
-    Generate Develocity link for a test class
+    Generate Develocity link for a test class with absolute time range
     
     Args:
         class_name: Name of the test class
-        threshold_days: Number of days to look back in search
+        start_time: Start time (datetime object or None for threshold_days)
+        end_time: End time (datetime object or None for current time)
     """
     base_url = "https://develocity.apache.org/scans/tests"
     params = {
         "search.rootProjectNames": "kafka",
         "search.tags": "github,trunk",
         "search.timeZoneId": "UTC",
-        "search.relativeStartTime": f"P{threshold_days}D",
         "tests.container": class_name,
         "search.tasks": "test"
     }
-        
+    
+    if isinstance(start_time, datetime):
+        params["search.startTimeMin"] = int(start_time.timestamp() * 1000)
+
+        if end_time and isinstance(end_time, datetime):
+            params["search.startTimeMax"] = int(end_time.timestamp() * 1000)
+        else:
+            params["search.startTimeMax"] = int(datetime.now(pytz.UTC).timestamp() * 1000)
+
     return f"{base_url}?{'&'.join(f'{k}={requests.utils.quote(str(v))}' for k, v in params.items())}"
 
-def get_develocity_method_link(class_name: str, method_name: str, threshold_days: int) -> str:
+def get_develocity_method_link(class_name: str, method_name: str, start_time, end_time=None) -> str:
     """
-    Generate Develocity link for a test method
+    Generate Develocity link for a test method with absolute time range
     
     Args:
         class_name: Name of the test class
         method_name: Name of the test method
-        threshold_days: Number of days to look back in search
+        start_time: Start time (datetime object or None for threshold_days)
+        end_time: End time (datetime object or None for current time)
     """
     base_url = "https://develocity.apache.org/scans/tests"
     
@@ -955,16 +964,23 @@ def get_develocity_method_link(class_name: str, method_name: str, threshold_days
         "search.rootProjectNames": "kafka",
         "search.tags": "github,trunk",
         "search.timeZoneId": "UTC",
-        "search.relativeStartTime": f"P{threshold_days}D",
         "tests.container": class_name,
         "tests.test": method_name,
         "search.tasks": "test"
     }
-        
+    
+    if isinstance(start_time, datetime):
+        params["search.startTimeMin"] = int(start_time.timestamp() * 1000)
+
+        if end_time and isinstance(end_time, datetime):
+            params["search.startTimeMax"] = int(end_time.timestamp() * 1000)
+        else:
+            params["search.startTimeMax"] = int(datetime.now(pytz.UTC).timestamp() * 1000)
+
     return f"{base_url}?{'&'.join(f'{k}={requests.utils.quote(str(v))}' for k, v in params.items())}"
 
-def print_most_problematic_tests(problematic_tests: Dict[str, Dict], threshold_days: int):
-    """Print a summary of the most problematic tests"""
+def print_most_problematic_tests(problematic_tests: Dict[str, Dict], start_time, end_time=None, threshold_days=None):
+    """Print a summary of the most problematic tests with absolute time range in links"""
     print("\n## Most Problematic Tests")
     if not problematic_tests:
         print("No high-priority problematic tests found.")
@@ -979,7 +995,7 @@ def print_most_problematic_tests(problematic_tests: Dict[str, Dict], threshold_d
     for test_name, details in sorted(problematic_tests.items(), 
                                    key=lambda x: x[1]['failure_rate'],
                                    reverse=True):
-        class_link = get_develocity_class_link(test_name, threshold_days)
+        class_link = get_develocity_class_link(test_name, start_time, end_time)
         print(f"<tr><td colspan=\"4\">{test_name}</td><td><a href=\"{class_link}\">↗️</a></td></tr>")
         
         for test_case in sorted(details['test_cases'],
@@ -988,7 +1004,7 @@ def print_most_problematic_tests(problematic_tests: Dict[str, Dict], threshold_d
                               reverse=True):
             method_name = test_case.name.split('.')[-1]
             if method_name != 'N/A':
-                method_link = get_develocity_method_link(test_name, test_case.name, threshold_days)
+                method_link = get_develocity_method_link(test_name, test_case.name, start_time, end_time)
                 total_runs = test_case.outcome_distribution.total
                 failure_rate = (test_case.outcome_distribution.failed + test_case.outcome_distribution.flaky) / total_runs if total_runs > 0 else 0
                 print(f"<tr><td></td><td>{method_name}</td>"
@@ -1028,8 +1044,8 @@ def print_most_problematic_tests(problematic_tests: Dict[str, Dict], threshold_d
     
     print("</details>")
 
-def print_flaky_regressions(flaky_regressions: Dict[str, Dict], threshold_days: int):
-    """Print tests that have recently started showing flaky behavior"""
+def print_flaky_regressions(flaky_regressions: Dict[str, Dict], start_time, end_time=None):
+    """Print tests that have recently started showing flaky behavior with absolute time range in links"""
     print("\n## Flaky Test Regressions")
     if not flaky_regressions:
         print("No flaky test regressions found.")
@@ -1042,7 +1058,7 @@ def print_flaky_regressions(flaky_regressions: Dict[str, Dict], threshold_days: 
     print("<tr><td>Test Class</td><td>Recent Flaky Rate</td><td>Historical Rate</td><td>Recent Executions</td><td>Link</td></tr>")
     
     for test_name, details in flaky_regressions.items():
-        class_link = get_develocity_class_link(test_name, threshold_days)
+        class_link = get_develocity_class_link(test_name, start_time, end_time)
         print(f"<tr><td colspan=\"4\">{test_name}</td><td><a href=\"{class_link}\">↗️</a></td></tr>")
         print(f"<tr><td></td><td>{details['recent_flaky_rate']:.2%}</td>"
               f"<td>{details['historical_flaky_rate']:.2%}</td>"
@@ -1076,8 +1092,8 @@ def print_flaky_regressions(flaky_regressions: Dict[str, Dict], threshold_days: 
     
     print("</details>")
 
-def print_persistent_failing_tests(persistent_failures: Dict[str, Dict], threshold_days: int):
-    """Print tests that have been consistently failing over time"""
+def print_persistent_failing_tests(persistent_failures: Dict[str, Dict], start_time, end_time=None):
+    """Print tests that have been consistently failing over time with absolute time range in links"""
     print("\n## Persistently Failing/Flaky Tests")
     if not persistent_failures:
         print("No persistently failing tests found.")
@@ -1092,7 +1108,7 @@ def print_persistent_failing_tests(persistent_failures: Dict[str, Dict], thresho
     for class_name, class_details in sorted(persistent_failures.items(),
                                           key=lambda x: x[1]['failure_rate'],
                                           reverse=True):
-        class_link = get_develocity_class_link(class_name, threshold_days)
+        class_link = get_develocity_class_link(class_name, start_time, end_time)
         
         # Print class row
         print(f"<tr><td colspan=\"5\">{class_name}</td>"
@@ -1102,7 +1118,7 @@ def print_persistent_failing_tests(persistent_failures: Dict[str, Dict], thresho
         for test_name, test_details in sorted(class_details['test_cases'].items(),
                                             key=lambda x: x[1]['failure_rate'],
                                             reverse=True):
-            test_link = get_develocity_method_link(class_name, test_name, threshold_days)
+            test_link = get_develocity_method_link(class_name, test_name, start_time, end_time)
             print(f"<tr><td></td>"
                   f"<td>{test_name}</td>"
                   f"<td>{test_details['failure_rate']:.2%}</td>"
@@ -1137,8 +1153,8 @@ def print_persistent_failing_tests(persistent_failures: Dict[str, Dict], thresho
     
     print("</details>")
 
-def print_cleared_tests(cleared_tests: Dict[str, Dict], threshold_days: int):
-    """Print tests that are ready to be unquarantined"""
+def print_cleared_tests(cleared_tests: Dict[str, Dict], start_time, end_time=None):
+    """Print tests that are ready to be unquarantined with absolute time range in links"""
     print("\n## Cleared Tests (Ready for Unquarantine)")
     if not cleared_tests:
         print("No tests ready to be cleared from quarantine.")
@@ -1157,7 +1173,7 @@ def print_cleared_tests(cleared_tests: Dict[str, Dict], threshold_days: int):
     for test_name, details in sorted(cleared_tests.items(),
                                    key=lambda x: x[1]['success_rate'],
                                    reverse=True):
-        class_link = get_develocity_class_link(test_name, threshold_days)
+        class_link = get_develocity_class_link(test_name, start_time, end_time)
         print(f"<tr><td colspan=\"5\">{test_name}</td><td><a href=\"{class_link}\">↗️</a></td></tr>")
         print(f"<tr><td></td><td>Class Overall</td>"
               f"<td>{details['success_rate']:.2%}</td>"
@@ -1166,7 +1182,7 @@ def print_cleared_tests(cleared_tests: Dict[str, Dict], threshold_days: int):
         
         for test_case in details['test_cases']:
             method_name = test_case['name'].split('.')[-1]
-            method_link = get_develocity_method_link(test_name, test_case['name'], threshold_days)
+            method_link = get_develocity_method_link(test_name, test_case['name'], start_time, end_time)
             recent_status = "N/A"
             if test_case['recent_executions']:
                 recent_status = test_case['recent_executions'][-1].outcome
@@ -1224,6 +1240,9 @@ def main():
     SUCCESS_THRESHOLD = 0.7  # For cleared tests
     MIN_FLAKY_RATE = 0.2    # For flaky regressions
 
+    current_time = datetime.now(pytz.UTC)
+    quarantine_start_time = current_time - timedelta(days=QUARANTINE_THRESHOLD_DAYS)
+    regular_start_time = current_time - timedelta(days=QUARANTINE_THRESHOLD_DAYS)
     analyzer = TestAnalyzer(BASE_URL, token)
     
     try:
@@ -1275,14 +1294,15 @@ def main():
         )
         
         # Print report header
-        print(f"\n# Flaky Test Report for {datetime.now(pytz.UTC).strftime('%Y-%m-%d')}")
-        print(f"This report was run on {datetime.now(pytz.UTC).strftime('%Y-%m-%d %H:%M:%S')} UTC")
+        print(f"\n# Flaky Test Report for {current_time.strftime('%Y-%m-%d')}")
+        print(f"This report was run on {current_time.strftime('%Y-%m-%d %H:%M:%S')} UTC")
+        print(f"Data range: {quarantine_start_time.strftime('%Y-%m-%d %H:%M:%S')} to {current_time.strftime('%Y-%m-%d %H:%M:%S')} UTC")
         
         # Print each section
-        print_most_problematic_tests(problematic_tests, QUARANTINE_THRESHOLD_DAYS)
-        print_flaky_regressions(flaky_regressions, QUARANTINE_THRESHOLD_DAYS)
-        print_persistent_failing_tests(persistent_failures, QUARANTINE_THRESHOLD_DAYS)
-        print_cleared_tests(cleared_tests, QUARANTINE_THRESHOLD_DAYS)
+        print_most_problematic_tests(problematic_tests, quarantine_start_time, current_time, threshold_days=QUARANTINE_THRESHOLD_DAYS)
+        print_flaky_regressions(flaky_regressions, regular_start_time, current_time)
+        print_persistent_failing_tests(persistent_failures, regular_start_time, current_time)
+        print_cleared_tests(cleared_tests, quarantine_start_time, current_time)
 
     except Exception as e:
         logger.exception("Error occurred during report generation")
