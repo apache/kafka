@@ -127,6 +127,16 @@ public class ShareGroupMemberTest {
     }
 
     @Test
+    public void testSetSubscribedTopicNamesWithNull() {
+        ShareGroupMember member = new ShareGroupMember.Builder("member-id")
+            .setSubscribedTopicNames(Arrays.asList("foo", "bar"))
+            .setSubscribedTopicNames(null)
+            .build();
+
+        assertEquals(Set.of("foo", "bar"), member.subscribedTopicNames());
+    }
+
+    @Test
     public void testUpdateWithShareGroupMemberMetadataValue() {
         ShareGroupMemberMetadataValue record = new ShareGroupMemberMetadataValue()
             .setClientId("client-id")

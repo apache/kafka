@@ -160,7 +160,7 @@ public class ConsumerGroupMember extends ModernGroupMember {
         }
 
         public Builder setSubscribedTopicNames(List<String> subscribedTopicList) {
-            if (subscribedTopicNames != null) this.subscribedTopicNames = new HashSet<>(subscribedTopicList);
+            if (subscribedTopicList != null) this.subscribedTopicNames = new HashSet<>(subscribedTopicList);
             return this;
         }
 
