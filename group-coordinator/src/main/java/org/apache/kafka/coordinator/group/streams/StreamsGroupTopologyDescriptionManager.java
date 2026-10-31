@@ -478,8 +478,8 @@ public class StreamsGroupTopologyDescriptionManager implements AutoCloseable {
             try {
                 return maybeSetTopologyDescriptionRequired(result, groupId, apiVersion, memberEpoch);
             } catch (Throwable t) {
-                log.warn("Failed to apply topology-description post-processing on the "
-                    + "streams group heartbeat response for group {}; returning the response unmodified.",
+                log.warn("[GroupId {}] Failed to apply topology-description post-processing on the "
+                    + "streams group heartbeat response; returning the response unmodified.",
                     groupId, t);
                 return result;
             }
@@ -923,7 +923,7 @@ public class StreamsGroupTopologyDescriptionManager implements AutoCloseable {
     ) {
         if (throwable != null) {
             Throwable cause = Errors.maybeUnwrapException(throwable);
-            log.warn("Topology description plugin getTopology failed for group {}.",
+            log.warn("[GroupId {}] Topology description plugin getTopology failed.",
                 describedGroup.groupId(), cause != null ? cause : throwable);
             recordGetError();
             describedGroup.setTopologyDescriptionStatus(TOPOLOGY_DESCRIPTION_STATUS_ERROR);
