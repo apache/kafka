@@ -144,6 +144,21 @@ public class ConnectUtilsTest {
     }
 
     @Test
+    public void testApplyDefaultTaskBootstrapResolveTimeout() {
+        Map<String, Object> props = new HashMap<>();
+        ConnectUtils.applyDefaultTaskBootstrapResolveTimeout(props);
+        assertEquals(
+                String.valueOf(ConnectUtils.TASK_CLIENT_DEFAULT_BOOTSTRAP_RESOLVE_TIMEOUT_MS),
+                props.get(CommonClientConfigs.BOOTSTRAP_RESOLVE_TIMEOUT_MS_CONFIG)
+        );
+
+        // A user-supplied value must be left untouched, unlike ensureProperty-based forcing.
+        props.put(CommonClientConfigs.BOOTSTRAP_RESOLVE_TIMEOUT_MS_CONFIG, "999999");
+        ConnectUtils.applyDefaultTaskBootstrapResolveTimeout(props);
+        assertEquals("999999", props.get(CommonClientConfigs.BOOTSTRAP_RESOLVE_TIMEOUT_MS_CONFIG));
+    }
+
+    @Test
     public void testClientIdBase() {
         String groupId = "connect-cluster";
         String userSpecifiedClientId = "worker-57";
