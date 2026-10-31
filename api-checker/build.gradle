@@ -34,7 +34,7 @@ def kafkaVersion = providers.gradleProperty('kafkaPluginsVersion')
         .orElse('1.0.0-SNAPSHOT')
 
 // Single source of truth for every dependency version used in the api-checker build.
-// Cross-referenced against the root Kafka build's gradle/dependencies.gradle for the deps
+// Cross-referenced against the root Kafka build's gradle/libs.versions.toml for the deps
 // that exist on both sides (junit, slf4j, mockito); when bumping those in the root catalog,
 // bump them here too. ASM and the Maven plugin family are unique to this included build.
 //

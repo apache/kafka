@@ -134,7 +134,7 @@ kraft:
 dependencies:
   - changed-files:
     - any-glob-to-any-file:
-      - "grade/dependencies.gradle"
+      - "gradle/libs.versions.toml"
       - "LICENSE-binary"
 
 tiered-storage:
