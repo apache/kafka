@@ -290,6 +290,11 @@ public class StreamTask extends AbstractTask implements ProcessorNodePunctuator,
         resetOffsetsForPartitions.addAll(partitionsForOffsetReset);
     }
 
+    @Override
+    public Set<TopicPartition> partitionsForOffsetReset() {
+        return Set.copyOf(resetOffsetsForPartitions);
+    }
+
     /**
      * @throws TimeoutException if fetching committed offsets timed out
      */
