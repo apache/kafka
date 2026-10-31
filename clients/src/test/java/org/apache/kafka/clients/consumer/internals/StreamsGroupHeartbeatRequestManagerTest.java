@@ -92,6 +92,7 @@ import static org.mockito.Mockito.verify;
 import static org.mockito.Mockito.when;
 
 @ExtendWith(MockitoExtension.class)
+@SuppressWarnings("ClassDataAbstractionCoupling")
 class StreamsGroupHeartbeatRequestManagerTest {
 
     private static final LogContext LOG_CONTEXT = new LogContext("test");
@@ -676,6 +677,7 @@ class StreamsGroupHeartbeatRequestManagerTest {
                 ).activePartitions();
             assertEquals(ENDPOINT_TO_PARTITIONS.get(0).activePartitions().get(0).topic(), topicPartitions.get(0).topic());
             assertEquals(ENDPOINT_TO_PARTITIONS.get(0).activePartitions().get(0).partitions().get(0), topicPartitions.get(0).partition());
+            assertEquals(Map.of("topic", 4), streamsRebalanceData.topicPartitionCounts());
             assertEquals(
                 1.0,
                 metrics.metric(metrics.metricName("heartbeat-total", "consumer-coordinator-metrics")).metricValue()
@@ -2792,6 +2794,10 @@ class StreamsGroupHeartbeatRequestManagerTest {
             new StreamsGroupHeartbeatResponse(
                 new StreamsGroupHeartbeatResponseData()
                     .setPartitionsByUserEndpoint(ENDPOINT_TO_PARTITIONS)
+                    .setTopicPartitionCounts(List.of(
+                        new StreamsGroupHeartbeatResponseData.TopicPartitionCount()
+                            .setTopic("topic")
+                            .setPartitionCount(4)))
                     .setHeartbeatIntervalMs((int) RECEIVED_HEARTBEAT_INTERVAL_MS)
                     .setTaskOffsetIntervalMs(RECEIVED_TASK_OFFSET_INTERVAL_MS)
                     .setAcceptableRecoveryLag(RECEIVED_ACCEPTABLE_RECOVERY_LAG)
