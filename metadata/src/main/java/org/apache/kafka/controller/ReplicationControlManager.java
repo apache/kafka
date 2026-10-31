@@ -2328,7 +2328,7 @@ public class ReplicationControlManager {
 
         List<Integer> currentReplicas = Replicas.toList(part.replicas);
         PartitionReassignmentReplicas reassignment =
-            new PartitionReassignmentReplicas(currentAssignment, targetAssignment);
+            new PartitionReassignmentReplicas(currentAssignment, targetAssignment, Replicas.toList(part.addingReplicas));
         PartitionChangeBuilder builder = new PartitionChangeBuilder(
             part,
             tp.topicId(),
