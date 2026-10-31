@@ -20,6 +20,7 @@ import org.apache.kafka.clients.admin.Admin;
 import org.apache.kafka.clients.admin.AlterConfigOp;
 import org.apache.kafka.clients.admin.ConfigEntry;
 import org.apache.kafka.clients.admin.FeatureUpdate;
+import org.apache.kafka.clients.admin.NewPartitionReassignment;
 import org.apache.kafka.clients.admin.OffsetSpec;
 import org.apache.kafka.clients.admin.TopicDescription;
 import org.apache.kafka.clients.consumer.Consumer;
@@ -51,6 +52,7 @@ import java.util.ArrayList;
 import java.util.Collection;
 import java.util.List;
 import java.util.Map;
+import java.util.Optional;
 import java.util.Set;
 import java.util.concurrent.ExecutionException;
 import java.util.function.BiFunction;
@@ -353,13 +355,48 @@ public class EligibleLeaderReplicasIntegrationTest {
         }
     }
 
+    @ClusterTest(types = {Type.KRAFT}, metadataVersion = MetadataVersion.IBP_4_0_IV1)
+    public void testElrUsesReplicationFactorOfTargetPartition() throws Exception {
+        try (var admin = clusterInstance.admin()) {
+            String testTopicName = "testElrUsesReplicationFactorOfTargetPartition";
+            admin.updateFeatures(
+                Map.of(EligibleLeaderReplicasVersion.FEATURE_NAME,
+                    new FeatureUpdate(EligibleLeaderReplicasVersion.ELRV_1.featureLevel(), FeatureUpdate.UpgradeType.UPGRADE))).all().get();
+            clusterInstance.createTopicWithAssignment(testTopicName, Map.of(
+                0, List.of(4, 0, 1, 2),
+                1, List.of(0, 1, 2, 3)));
+
+            // Decrease the replication factor of partition 0 only.
+            admin.alterPartitionReassignments(Map.of(new TopicPartition(testTopicName, 0),
+                Optional.of(new NewPartitionReassignment(List.of(4))))).all().get();
+            TestUtils.waitForCondition(() -> admin.listPartitionReassignments().reassignments().get().isEmpty() &&
+                partition(admin, testTopicName, 0).replicas().size() == 1,
+                "Timed out waiting for the reassignment of partition 0");
+
+            ConfigResource configResource = new ConfigResource(ConfigResource.Type.TOPIC, testTopicName);
+            admin.incrementalAlterConfigs(Map.of(configResource, List.of(new AlterConfigOp(
+                new ConfigEntry(TopicConfig.MIN_IN_SYNC_REPLICAS_CONFIG, "3"), AlterConfigOp.OpType.SET)))).all().get();
+
+            // The ISR of partition 1 still meets the min ISR, so broker 0 does not join the ELR.
+            clusterInstance.shutdownBroker(0);
+            waitForIsrAndElr((isrSize, elrSize) -> isrSize == 3 && elrSize == 0, admin, testTopicName, 1);
+
+            // The ISR of partition 1 drops below the min ISR, so broker 1 joins the ELR.
+            clusterInstance.shutdownBroker(1);
+            waitForIsrAndElr((isrSize, elrSize) -> isrSize == 2 && elrSize == 1, admin, testTopicName, 1);
+        }
+    }
+
     void waitForIsrAndElr(BiFunction<Integer, Integer, Boolean> isIsrAndElrSizeSatisfied, Admin admin, String testTopicName) throws InterruptedException {
+        waitForIsrAndElr(isIsrAndElrSizeSatisfied, admin, testTopicName, 0);
+    }
+
+    void waitForIsrAndElr(BiFunction<Integer, Integer, Boolean> isIsrAndElrSizeSatisfied, Admin admin, String testTopicName,
+                          int partitionId) throws InterruptedException {
         TestUtils.waitForCondition(
             () -> {
                 try {
-                    TopicDescription topicDescription = admin.describeTopics(List.of(testTopicName))
-                        .allTopicNames().get().get(testTopicName);
-                    TopicPartitionInfo partition = topicDescription.partitions().get(0);
+                    TopicPartitionInfo partition = partition(admin, testTopicName, partitionId);
                     return isIsrAndElrSizeSatisfied.apply(partition.isr().size(), partition.elr().size());
                 } catch (Exception e) {
                     return false;
@@ -368,5 +405,10 @@ public class EligibleLeaderReplicasIntegrationTest {
             DEFAULT_MAX_WAIT_MS,
             () -> String.format("Partition metadata for %s is not propagated", testTopicName)
         );
+    }
+
+    private static TopicPartitionInfo partition(Admin admin, String topic, int partitionId) throws Exception {
+        return admin.describeTopics(List.of(topic)).allTopicNames().get().get(topic).partitions().stream()
+            .filter(p -> p.partition() == partitionId).findFirst().orElseThrow();
     }
 }
