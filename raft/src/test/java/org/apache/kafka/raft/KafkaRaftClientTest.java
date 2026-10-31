@@ -2032,7 +2032,8 @@ class KafkaRaftClientTest {
 
         context.time.sleep(context.fetchTimeoutMs);
         context.pollUntilRequest();
-        assertTrue(context.client.quorum().isFollower());
+        assertFalse(context.client.quorum().isProspective());
+        assertTrue(context.client.quorum().isUnattached());
 
         // transitions to unattached
         context.deliverRequest(context.voteRequest(epoch + 1, replicaKey(otherNodeId, withKip853Rpc), epoch, 1));
