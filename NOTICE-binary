@@ -76,25 +76,180 @@ possession, or use, and re-export of encryption software, to see if this is
 permitted.
 
 
-Apache Yetus - Audience Annotations
-Copyright 2015-2017 The Apache Software Foundation
-
-This product includes software developed at
-The Apache Software Foundation (http://www.apache.org/).
-
-
-Apache Commons CLI
-Copyright 2001-2017 The Apache Software Foundation
-
-This product includes software developed at
-The Apache Software Foundation (http://www.apache.org/).
-
-
-Apache Commons IO
-Copyright 2002-2021 The Apache Software Foundation
+Apache Commons BeanUtils
+Copyright 2000-2025 The Apache Software Foundation
 
 This product includes software developed at
 The Apache Software Foundation (https://www.apache.org/).
+
+
+Apache Commons Collections
+Copyright 2001-2015 The Apache Software Foundation
+
+This product includes software developed by
+The Apache Software Foundation (http://www.apache.org/).
+
+
+Apache Commons Digester
+Copyright 2001-2010 The Apache Software Foundation
+
+This product includes software developed by
+The Apache Software Foundation (http://www.apache.org/).
+
+
+Apache Commons Logging
+Copyright 2001-2025 The Apache Software Foundation
+
+This product includes software developed at
+The Apache Software Foundation (https://www.apache.org/).
+
+
+Apache Commons Validator
+Copyright 2002-2025 The Apache Software Foundation
+
+This product includes software developed at
+The Apache Software Foundation (https://www.apache.org/).
+
+
+# Jackson JSON processor
+
+Jackson is a high-performance, Free/Open Source JSON processing library.
+It was originally written by Tatu Saloranta (tatu.saloranta@iki.fi), and has
+been in development since 2007.
+It is currently developed by a community of developers.
+
+## Copyright
+
+Copyright 2007-, Tatu Saloranta (tatu.saloranta@iki.fi)
+
+## Licensing
+
+Jackson 2.x core and extension components are licensed under Apache License 2.0
+To find the details that apply to this artifact see the accompanying LICENSE file.
+
+## Credits
+
+A list of contributors may be found from CREDITS(-2.x) file, which is included
+in some artifacts (usually source distributions); but is always available
+from the source code management (SCM) system project uses.
+
+
+# Jackson JSON processor
+
+Jackson is a high-performance, Free/Open Source JSON processing library.
+It was originally written by Tatu Saloranta (tatu.saloranta@iki.fi), and has
+been in development since 2007.
+It is currently developed by a community of developers.
+
+## Copyright
+
+Copyright 2007-, Tatu Saloranta (tatu.saloranta@iki.fi)
+
+## Licensing
+
+Jackson components are licensed under Apache (Software) License, version 2.0,
+as per accompanying LICENSE file.
+
+## Credits
+
+A list of contributors may be found from CREDITS file, which is included
+in some artifacts (usually source distributions); but is always available
+from the source code management (SCM) system project uses.
+
+
+# Jackson JSON processor
+
+Jackson is a high-performance, Free/Open Source JSON processing library.
+It was originally written by Tatu Saloranta (tatu.saloranta@iki.fi), and has
+been in development since 2007.
+It is currently developed by a community of developers.
+
+## Copyright
+
+Copyright 2007-, Tatu Saloranta (tatu.saloranta@iki.fi)
+
+## Licensing
+
+Jackson 2.x core and extension components are licensed under Apache License 2.0
+To find the details that apply to this artifact see the accompanying LICENSE file.
+
+## Credits
+
+A list of contributors may be found from CREDITS(-2.x) file, which is included
+in some artifacts (usually source distributions); but is always available
+from the source code management (SCM) system project uses.
+
+## FastDoubleParser
+
+jackson-core bundles a shaded copy of FastDoubleParser <https://github.com/wrandelshofer/FastDoubleParser>.
+That code is available under an MIT license <https://github.com/wrandelshofer/FastDoubleParser/blob/main/LICENSE>
+under the following copyright.
+
+Copyright © 2023 Werner Randelshofer, Switzerland. MIT License.
+
+See FastDoubleParser-NOTICE for details of other source code included in FastDoubleParser
+and the licenses and copyrights that apply to that code.
+
+
+# FastDoubleParser
+
+This is a Java port of Daniel Lemire's fast_float project.
+This project provides parsers for double, float, BigDecimal and BigInteger values.
+
+## Copyright
+
+Copyright © 2024 Werner Randelshofer, Switzerland.
+
+## Licensing
+
+This code is licensed under MIT License.
+https://github.com/wrandelshofer/FastDoubleParser/blob/522be16e145f43308c43b23094e31d5efcaa580e/LICENSE
+(The file 'LICENSE' is included in the sources and classes Jar files that are released by this project
+- as is required by that license.)
+
+Some portions of the code have been derived from other projects.
+All these projects require that we include a copyright notice, and some require that we also include some text of their
+license file.
+
+fast_double_parser, Copyright (c) 2022 Daniel Lemire. BSL License.
+https://github.com/lemire/fast_double_parser
+https://github.com/lemire/fast_double_parser/blob/07d9189a8fb815fe800cb15ca022e7a07093236e/LICENSE.BSL
+(The file 'thirdparty-LICENSE' is included in the sources and classes Jar files that are released by this project
+- as is required by that license.)
+
+fast_float, Copyright (c) 2021 The fast_float authors. MIT License.
+https://github.com/fastfloat/fast_float
+https://github.com/fastfloat/fast_float/blob/cc1e01e9eee74128e48d51488a6b1df4a767a810/LICENSE-MIT
+(The file 'thirdparty-LICENSE' is included in the sources and classes Jar files that are released by this project
+- as is required by that license.)
+
+bigint, Copyright 2020 Tim Buktu. 2-clause BSD License.
+https://github.com/tbuktu/bigint/tree/floatfft
+https://github.com/tbuktu/bigint/blob/617c8cd8a7c5e4fb4d919c6a4d11e2586107f029/LICENSE
+https://github.com/wrandelshofer/FastDoubleParser/blob/39e123b15b71f29a38a087d16a0bc620fc879aa6/bigint-LICENSE
+(We only use those portions of the bigint project that can be licensed under 2-clause BSD License.)
+(The file 'thirdparty-LICENSE' is included in the sources and classes Jar files that are released by this project
+- as is required by that license.)
+
+
+# Jackson JSON processor
+
+Jackson is a high-performance, Free/Open Source JSON processing library.
+It was originally written by Tatu Saloranta (tatu.saloranta@iki.fi), and has
+been in development since 2007.
+It is currently developed by a community of developers.
+
+## Licensing
+
+Jackson components are licensed under Apache (Software) License, version 2.0,
+as per accompanying LICENSE file.
+
+## Credits
+
+A list of contributors may be found from CREDITS file, which is included
+in some artifacts (usually source distributions); but is always available
+from the source code management (SCM) system project uses.
+
 
 # Jackson JSON processor
 
@@ -106,7 +261,7 @@ commercially by FasterXML.com.
 
 ## Licensing
 
-Jackson core and extension components may licensed under different licenses.
+Jackson core and extension components may be licensed under different licenses.
 To find the details that apply to this artifact see the accompanying LICENSE file.
 For more information, including possible other licensing options, contact
 FasterXML.com (http://fasterxml.com).
@@ -118,9 +273,32 @@ in some artifacts (usually source distributions); but is always available
 from the source code management (SCM) system project uses.
 
 
-# Notices for Eclipse Project for JAF
+# Jackson JSON processor
 
-This content is produced and maintained by the Eclipse Project for JAF project.
+Jackson is a high-performance, Free/Open Source JSON processing library.
+It was originally written by Tatu Saloranta (tatu.saloranta@iki.fi), and has
+been in development since 2007.
+It is currently developed by a community of developers, as well as supported
+commercially by FasterXML.com.
+
+## Licensing
+
+Jackson core and extension components (as well their dependencies) may be licensed under
+different licenses.
+To find the details that apply to this artifact see the accompanying LICENSE file.
+For more information, including possible other licensing options, contact
+FasterXML.com (http://fasterxml.com).
+
+## Credits
+
+A list of contributors may be found from CREDITS file, which is included
+in some artifacts (usually source distributions); but is always available
+from the source code management (SCM) system project uses.
+
+
+# Notices for Jakarta Activation
+
+This content is produced and maintained by Jakarta Activation project.
 
 * Project home: https://projects.eclipse.org/projects/ee4j.jaf
 
@@ -144,13 +322,48 @@ The project maintains the following source code repositories:
 
 * https://github.com/eclipse-ee4j/jaf
 
+
+# Notices for Eclipse Jakarta Dependency Injection
+
+This content is produced and maintained by the Eclipse Jakarta Dependency Injection project.
+
+* Project home: https://projects.eclipse.org/projects/cdi.batch
+
+## Trademarks
+
+Jakarta Dependency Injection is a trademark of the Eclipse Foundation.
+
+## Copyright
+
+All content is the property of the respective authors or their employers. For
+more information regarding authorship of content, please consult the listed
+source code repository logs.
+
+## Declared Project Licenses
+
+This program and the accompanying materials are made available under the terms
+of the Apache License, Version 2.0 which is available at
+https://www.apache.org/licenses/LICENSE-2.0.
+
+SPDX-License-Identifier: Apache-2.0
+
+## Source Code
+
+The project maintains the following source code repositories:
+
+https://github.com/eclipse-ee4j/injection-api
+https://github.com/eclipse-ee4j/injection-spec
+https://github.com/eclipse-ee4j/injection-tck
+
 ## Third-party Content
 
 This project leverages the following third party content.
 
-JUnit (4.12)
+None
 
-* License: Eclipse Public License
+## Cryptography
+
+None
 
 
 # Notices for Jakarta Annotations
@@ -193,7 +406,7 @@ possession, or use, and re-export of encryption software, to see if this is
 permitted.
 
 
-# Notices for the Jakarta RESTful Web Services Project
+# Notices for Jakarta RESTful Web Services
 
 This content is produced and maintained by the **Jakarta RESTful Web Services**
 project.
@@ -255,15 +468,24 @@ possession, or use, and re-export of encryption software, to see if this is
 permitted.
 
 
-# Notices for Eclipse Project for JAXB
+[//]: # " Copyright (c) 2018, 2019 Oracle and/or its affiliates. All rights reserved. "
+[//]: # "  "
+[//]: # " This program and the accompanying materials are made available under the "
+[//]: # " terms of the Eclipse Distribution License v. 1.0, which is available at "
+[//]: # " http://www.eclipse.org/org/documents/edl-v10.php. "
+[//]: # "  "
+[//]: # " SPDX-License-Identifier: BSD-3-Clause "
 
-This content is produced and maintained by the Eclipse Project for JAXB project.
+# Notices for Jakarta XML Binding
+
+This content is produced and maintained by the Jakarta XML Binding
+project.
 
 * Project home: https://projects.eclipse.org/projects/ee4j.jaxb
 
 ## Trademarks
 
-Eclipse Project for JAXB is a trademark of the Eclipse Foundation.
+Jakarta XML Binding is a trademark of the Eclipse Foundation.
 
 ## Copyright
 
@@ -274,8 +496,8 @@ source code repository logs.
 ## Declared Project Licenses
 
 This program and the accompanying materials are made available under the terms
-of the Eclipse Distribution License v. 1.0 which is available
-at http://www.eclipse.org/org/documents/edl-v10.php.
+of the Eclipse Distribution License v. 1.0 which is available at
+http://www.eclipse.org/org/documents/edl-v10.php.
 
 SPDX-License-Identifier: BSD-3-Clause
 
@@ -284,12 +506,36 @@ SPDX-License-Identifier: BSD-3-Clause
 The project maintains the following source code repositories:
 
 * https://github.com/eclipse-ee4j/jaxb-api
+* https://github.com/eclipse-ee4j/jaxb-tck
 
 ## Third-party Content
 
 This project leverages the following third party content.
 
-None
+Apache River (3.0.0)
+
+* License: Apache-2.0 AND BSD-3-Clause
+
+ASM 7 (n/a)
+
+* License: BSD-3-Clause
+* Project: https://asm.ow2.io/
+* Source:
+   https://repository.ow2.org/nexus/#nexus-search;gav~org.ow2.asm~asm-commons~~~~kw,versionexpand
+
+JTHarness (5.0)
+
+* License: (GPL-2.0 OR GPL-2.0 WITH Classpath-exception-2.0)
+* Project: https://wiki.openjdk.java.net/display/CodeTools/JT+Harness
+* Source: http://hg.openjdk.java.net/code-tools/jtharness/
+
+normalize.css (3.0.2)
+
+* License: MIT
+
+SigTest (n/a)
+
+* License: GPL-2.0 OR GPL-2.0 WITH Classpath-exception-2.0
 
 ## Cryptography
 
@@ -299,6 +545,40 @@ another country, of encryption software. BEFORE using any encryption software,
 please check the country's laws, regulations and policies concerning the import,
 possession, or use, and re-export of encryption software, to see if this is
 permitted.
+
+
+Apache Log4j 1.x Compatibility API
+Copyright 1999-2026 The Apache Software Foundation
+
+
+This product includes software developed at
+The Apache Software Foundation (http://www.apache.org/).
+
+
+Apache Log4j API
+Copyright 1999-2026 The Apache Software Foundation
+
+
+This product includes software developed at
+The Apache Software Foundation (http://www.apache.org/).
+
+
+Apache Log4j Core
+Copyright 1999-2012 Apache Software Foundation
+
+This product includes software developed at
+The Apache Software Foundation (http://www.apache.org/).
+
+ResolverUtil.java
+Copyright 2005-2006 Tim Fennell
+
+
+SLF4J 1 Binding for Log4j API
+Copyright 1999-2026 The Apache Software Foundation
+
+
+This product includes software developed at
+The Apache Software Foundation (http://www.apache.org/).
 
 
 # Notice for Jersey
@@ -337,20 +617,20 @@ The project maintains the following source code repositories:
 Angular JS, v1.6.6
 * License MIT (http://www.opensource.org/licenses/mit-license.php)
 * Project: http://angularjs.org
-* Copyright: (c) 2010-2017 Google, Inc.
+* Coyright: (c) 2010-2017 Google, Inc.
 
 aopalliance Version 1
 * License: all the source code provided by AOP Alliance is Public Domain.
 * Project: http://aopalliance.sourceforge.net
 * Copyright: Material in the public domain is not protected by copyright
 
-Bean Validation API 2.0.2
+Bean Validation API 3.0.2
 * License: Apache License, 2.0
-* Project: http://beanvalidation.org/1.1/
+* Project: https://projects.eclipse.org/projects/ee4j.bean-validation
 * Copyright: 2009, Red Hat, Inc. and/or its affiliates, and individual contributors
 * by the @authors tag.
 
-Hibernate Validator CDI, 6.1.2.Final
+Hibernate Validator CDI, 8.0.1.Final
 * License: Apache License, 2.0
 * Project: https://beanvalidation.org/
 * Repackaged in org.glassfish.jersey.server.validation.internal.hibernate
@@ -360,25 +640,25 @@ Bootstrap v3.3.7
 * Project: http://getbootstrap.com
 * Copyright: 2011-2016 Twitter, Inc
 
-Google Guava Version 18.0
+Google Guava Version 33.3.0-jre
 * License: Apache License, 2.0
-* Copyright (C) 2009 The Guava Authors
+* Copyright (C) 2009, 2024 The Guava Authors
 
-javax.inject Version: 1
+jakarta.inject Version: 2.0.1
 * License: Apache License, 2.0
-* Copyright (C) 2009 The JSR-330 Expert Group
+* Copyright (C) 2009, 2021 The JSR-330 Expert Group
 
-Javassist Version 3.25.0-GA
+Javassist Version 3.30.2-GA
 * License: Apache License, 2.0
 * Project: http://www.javassist.org/
 * Copyright (C) 1999- Shigeru Chiba. All Rights Reserved.
 
-Jackson JAX-RS Providers Version 2.10.1
+Jackson JAX-RS Providers Version 2.18.0
 * License: Apache License, 2.0
 * Project: https://github.com/FasterXML/jackson-jaxrs-providers
-* Copyright: (c) 2009-2011 FasterXML, LLC. All rights reserved unless otherwise indicated.
+* Copyright: (c) 2009-2024 FasterXML, LLC. All rights reserved unless otherwise indicated.
 
-jQuery v1.12.4
+jQuery v3.7.1
 * License: jquery.org/license
 * Project: jquery.org
 * Copyright: (c) jQuery Foundation
@@ -398,8 +678,8 @@ KineticJS, v4.7.1
 * Project: http://www.kineticjs.com, https://github.com/ericdrowell/KineticJS
 * Copyright: Eric Rowell
 
-org.objectweb.asm Version 8.0
-* License: Modified BSD (http://asm.objectweb.org/license.html)
+org.objectweb.asm Version 9.7.1
+* License: Modified BSD (https://asm.ow2.io/license.html)
 * Copyright (c) 2000-2011 INRIA, France Telecom. All rights reserved.
 
 org.osgi.core version 6.0.0
@@ -416,135 +696,102 @@ W3.org documents
 * Copyright: Copyright (c) 1994-2001 World Wide Web Consortium, (Massachusetts Institute of Technology, Institut National de Recherche en Informatique et en Automatique, Keio University). All Rights Reserved. http://www.w3.org/Consortium/Legal/
 
 
-==============================================================
- Jetty Web Container
- Copyright 1995-2018 Mort Bay Consulting Pty Ltd.
-==============================================================
-
-The Jetty Web Container is Copyright Mort Bay Consulting Pty Ltd
-unless otherwise noted.
-
-Jetty is dual licensed under both
-
-  * The Apache 2.0 License
-    http://www.apache.org/licenses/LICENSE-2.0.html
-
-      and
-
-  * The Eclipse Public 1.0 License
-    http://www.eclipse.org/legal/epl-v10.html
-
-Jetty may be distributed under either license.
-
-------
-Eclipse
-
-The following artifacts are EPL.
- * org.eclipse.jetty.orbit:org.eclipse.jdt.core
-
-The following artifacts are EPL and ASL2.
- * org.eclipse.jetty.orbit:javax.security.auth.message
+# Notice for Jersey Core Common module
+This content is produced and maintained by the Eclipse Jersey project.
 
 
-The following artifacts are EPL and CDDL 1.0.
- * org.eclipse.jetty.orbit:javax.mail.glassfish
+* https://projects.eclipse.org/projects/ee4j.jersey
+
+## Trademarks
+Eclipse Jersey is a trademark of the Eclipse Foundation.
+
+## Copyright
+
+All content is the property of the respective authors or their employers. For
+more information regarding authorship of content, please consult the listed
+source code repository logs.
+
+## Declared Project Licenses
+
+This program and the accompanying materials are made available under the terms
+of the Eclipse Public License v. 2.0 which is available at
+http://www.eclipse.org/legal/epl-2.0. This Source Code may also be made
+available under the following Secondary Licenses when the conditions for such
+availability set forth in the Eclipse Public License v. 2.0 are satisfied: GNU
+General Public License, version 2 with the GNU Classpath Exception which is
+available at https://www.gnu.org/software/classpath/license.html.
+
+SPDX-License-Identifier: EPL-2.0 OR GPL-2.0 WITH Classpath-exception-2.0
+
+## Source Code
+The project maintains the following source code repositories:
+
+* https://github.com/eclipse-ee4j/jersey
+
+## Third-party Content
+
+Google Guava Version 18.0
+* License: Apache License, 2.0
+* Copyright: (C) 2009 The Guava Authors
+
+JSR-166 Extension - JEP 266
+* License: Creative Commons 1.0 (CC0)
+* No copyright
+* Written by Doug Lea with assistance from members of JCP JSR-166
+* Expert Group and released to the public domain, as explained at
+* http://creativecommons.org/publicdomain/zero/1.0/
 
 
-------
-Oracle
+# Notice for Jersey Core Server module
+This content is produced and maintained by the Eclipse Jersey project.
 
-The following artifacts are CDDL + GPLv2 with classpath exception.
-https://glassfish.dev.java.net/nonav/public/CDDL+GPL.html
+* https://projects.eclipse.org/projects/ee4j.jersey
 
- * javax.servlet:javax.servlet-api
- * javax.annotation:javax.annotation-api
- * javax.transaction:javax.transaction-api
- * javax.websocket:javax.websocket-api
+## Trademarks
+Eclipse Jersey is a trademark of the Eclipse Foundation.
 
-------
-Oracle OpenJDK
+## Copyright
 
-If ALPN is used to negotiate HTTP/2 connections, then the following
-artifacts may be included in the distribution or downloaded when ALPN
-module is selected.
+All content is the property of the respective authors or their employers. For
+more information regarding authorship of content, please consult the listed
+source code repository logs.
 
- * java.sun.security.ssl
+## Declared Project Licenses
 
-These artifacts replace/modify OpenJDK classes.  The modififications
-are hosted at github and both modified and original are under GPL v2 with
-classpath exceptions.
-http://openjdk.java.net/legal/gplv2+ce.html
+This program and the accompanying materials are made available under the terms
+of the Eclipse Public License v. 2.0 which is available at
+http://www.eclipse.org/legal/epl-2.0. This Source Code may also be made
+available under the following Secondary Licenses when the conditions for such
+availability set forth in the Eclipse Public License v. 2.0 are satisfied: GNU
+General Public License, version 2 with the GNU Classpath Exception which is
+available at https://www.gnu.org/software/classpath/license.html.
 
+SPDX-License-Identifier: EPL-2.0 OR GPL-2.0 WITH Classpath-exception-2.0
 
-------
-OW2
+## Source Code
+The project maintains the following source code repositories:
 
-The following artifacts are licensed by the OW2 Foundation according to the
-terms of http://asm.ow2.org/license.html
+* https://github.com/eclipse-ee4j/jersey
 
-org.ow2.asm:asm-commons
-org.ow2.asm:asm
+## Third-party Content
 
+org.glassfish.jersey.server.internal.monitoring.core
+* License: Apache License, 2.0
+* Copyright (c) 2015-2018 Oracle and/or its affiliates. All rights reserved.
+* Copyright 2010-2013 Coda Hale and Yammer, Inc.
 
-------
-Apache
+org.objectweb.asm Version 9.7.1
+* License: Modified BSD (https://asm.ow2.io/license.html)
+* Copyright: (c) 2000-2011 INRIA, France Telecom. All rights reserved.
 
-The following artifacts are ASL2 licensed.
-
-org.apache.taglibs:taglibs-standard-spec
-org.apache.taglibs:taglibs-standard-impl
-
-
-------
-MortBay
-
-The following artifacts are ASL2 licensed.  Based on selected classes from
-following Apache Tomcat jars, all ASL2 licensed.
-
-org.mortbay.jasper:apache-jsp
-  org.apache.tomcat:tomcat-jasper
-  org.apache.tomcat:tomcat-juli
-  org.apache.tomcat:tomcat-jsp-api
-  org.apache.tomcat:tomcat-el-api
-  org.apache.tomcat:tomcat-jasper-el
-  org.apache.tomcat:tomcat-api
-  org.apache.tomcat:tomcat-util-scan
-  org.apache.tomcat:tomcat-util
-
-org.mortbay.jasper:apache-el
-  org.apache.tomcat:tomcat-jasper-el
-  org.apache.tomcat:tomcat-el-api
-
-
-------
-Mortbay
-
-The following artifacts are CDDL + GPLv2 with classpath exception.
-
-https://glassfish.dev.java.net/nonav/public/CDDL+GPL.html
-
-org.eclipse.jetty.toolchain:jetty-schemas
-
-------
-Assorted
-
-The UnixCrypt.java code implements the one way cryptography used by
-Unix systems for simple password protection.  Copyright 1996 Aki Yoshida,
-modified April 2001  by Iris Van den Broeke, Daniel Deville.
-Permission to use, copy, modify and distribute UnixCrypt
-for non-commercial or commercial purposes and without fee is
-granted provided that the copyright notice appears in all copies.
-
-
-Apache log4j
-Copyright 2007 The Apache Software Foundation
-
-This product includes software developed at
-The Apache Software Foundation (http://www.apache.org/).
+W3.org documents
+* License: W3C License
+* Copyright: Copyright (c) 1994-2001 World Wide Web Consortium, (Massachusetts Institute of Technology, Institut National de Recherche en Informatique et en Automatique, Keio University). All Rights Reserved. http://www.w3.org/Consortium/Legal/
 
 
 Maven Artifact
-Copyright 2001-2024 The Apache Software Foundation
+Copyright 2001-2026 The Apache Software Foundation
+
 
 This product includes software developed at
 The Apache Software Foundation (http://www.apache.org/).
@@ -567,12 +814,12 @@ Rome (https://rome.dev.java.net/).
 
 
 Scala
-Copyright (c) 2002-2020 EPFL
-Copyright (c) 2011-2020 Lightbend, Inc.
+Copyright (c) 2002-2025 EPFL
+Copyright (c) 2011-2025 Lightbend, Inc. dba Akka
 
 Scala includes software developed at
 LAMP/EPFL (https://lamp.epfl.ch/) and
-Lightbend, Inc. (https://www.lightbend.com/).
+Akka (https://akka.io/).
 
 Licensed under the Apache License, Version 2.0 (the "License").
 Unless required by applicable law or agreed to in writing, software
@@ -584,216 +831,7 @@ limitations under the License.
 This software includes projects with other licenses -- see `doc/LICENSE.md`.
 
 
--------------------------------------------------------------------------------
-This product contains the extensions to Java Collections Framework which has
-been derived from the works by JSR-166 EG, Doug Lea, and Jason T. Greene:
-
-  * LICENSE:
-    * license/LICENSE.jsr166y.txt (Public Domain)
-  * HOMEPAGE:
-    * http://gee.cs.oswego.edu/cgi-bin/viewcvs.cgi/jsr166/
-    * http://viewvc.jboss.org/cgi-bin/viewvc.cgi/jbosscache/experimental/jsr166/
-
-This product contains a modified version of Robert Harder's Public Domain
-Base64 Encoder and Decoder, which can be obtained at:
-
-  * LICENSE:
-    * license/LICENSE.base64.txt (Public Domain)
-  * HOMEPAGE:
-    * http://iharder.sourceforge.net/current/java/base64/
-
-This product contains a modified portion of 'Webbit', an event based
-WebSocket and HTTP server, which can be obtained at:
-
-  * LICENSE:
-    * license/LICENSE.webbit.txt (BSD License)
-  * HOMEPAGE:
-    * https://github.com/joewalnes/webbit
-
-This product contains a modified portion of 'SLF4J', a simple logging
-facade for Java, which can be obtained at:
-
-  * LICENSE:
-    * license/LICENSE.slf4j.txt (MIT License)
-  * HOMEPAGE:
-    * https://www.slf4j.org/
-
-This product contains a modified portion of 'Apache Harmony', an open source
-Java SE, which can be obtained at:
-
-  * NOTICE:
-    * license/NOTICE.harmony.txt
-  * LICENSE:
-    * license/LICENSE.harmony.txt (Apache License 2.0)
-  * HOMEPAGE:
-    * https://archive.apache.org/dist/harmony/
-
-This product contains a modified portion of 'jbzip2', a Java bzip2 compression
-and decompression library written by Matthew J. Francis. It can be obtained at:
-
-  * LICENSE:
-    * license/LICENSE.jbzip2.txt (MIT License)
-  * HOMEPAGE:
-    * https://code.google.com/p/jbzip2/
-
-This product contains a modified portion of 'libdivsufsort', a C API library to construct
-the suffix array and the Burrows-Wheeler transformed string for any input string of
-a constant-size alphabet written by Yuta Mori. It can be obtained at:
-
-  * LICENSE:
-    * license/LICENSE.libdivsufsort.txt (MIT License)
-  * HOMEPAGE:
-    * https://github.com/y-256/libdivsufsort
-
-This product contains a modified portion of Nitsan Wakart's 'JCTools', Java Concurrency Tools for the JVM,
- which can be obtained at:
-
-  * LICENSE:
-    * license/LICENSE.jctools.txt (ASL2 License)
-  * HOMEPAGE:
-    * https://github.com/JCTools/JCTools
-
-This product optionally depends on 'JZlib', a re-implementation of zlib in
-pure Java, which can be obtained at:
-
-  * LICENSE:
-    * license/LICENSE.jzlib.txt (BSD style License)
-  * HOMEPAGE:
-    * http://www.jcraft.com/jzlib/
-
-This product optionally depends on 'Compress-LZF', a Java library for encoding and
-decoding data in LZF format, written by Tatu Saloranta. It can be obtained at:
-
-  * LICENSE:
-    * license/LICENSE.compress-lzf.txt (Apache License 2.0)
-  * HOMEPAGE:
-    * https://github.com/ning/compress
-
-This product optionally depends on 'lz4', a LZ4 Java compression
-and decompression library written by Adrien Grand. It can be obtained at:
-
-  * LICENSE:
-    * license/LICENSE.lz4.txt (Apache License 2.0)
-  * HOMEPAGE:
-    * https://github.com/yawkat/lz4-java
-
-This product optionally depends on 'lzma-java', a LZMA Java compression
-and decompression library, which can be obtained at:
-
-  * LICENSE:
-    * license/LICENSE.lzma-java.txt (Apache License 2.0)
-  * HOMEPAGE:
-    * https://github.com/jponge/lzma-java
-
-This product contains a modified portion of 'jfastlz', a Java port of FastLZ compression
-and decompression library written by William Kinney. It can be obtained at:
-
-  * LICENSE:
-    * license/LICENSE.jfastlz.txt (MIT License)
-  * HOMEPAGE:
-    * https://code.google.com/p/jfastlz/
-
-This product contains a modified portion of and optionally depends on 'Protocol Buffers', Google's data
-interchange format, which can be obtained at:
-
-  * LICENSE:
-    * license/LICENSE.protobuf.txt (New BSD License)
-  * HOMEPAGE:
-    * https://github.com/google/protobuf
-
-This product optionally depends on 'Bouncy Castle Crypto APIs' to generate
-a temporary self-signed X.509 certificate when the JVM does not provide the
-equivalent functionality.  It can be obtained at:
-
-  * LICENSE:
-    * license/LICENSE.bouncycastle.txt (MIT License)
-  * HOMEPAGE:
-    * https://www.bouncycastle.org/
-
-This product optionally depends on 'Snappy', a compression library produced
-by Google Inc, which can be obtained at:
-
-  * LICENSE:
-    * license/LICENSE.snappy.txt (New BSD License)
-  * HOMEPAGE:
-    * https://github.com/google/snappy
-
-This product optionally depends on 'JBoss Marshalling', an alternative Java
-serialization API, which can be obtained at:
-
-  * LICENSE:
-    * license/LICENSE.jboss-marshalling.txt (Apache License 2.0)
-  * HOMEPAGE:
-    * https://github.com/jboss-remoting/jboss-marshalling
-
-This product optionally depends on 'Caliper', Google's micro-
-benchmarking framework, which can be obtained at:
-
-  * LICENSE:
-    * license/LICENSE.caliper.txt (Apache License 2.0)
-  * HOMEPAGE:
-    * https://github.com/google/caliper
-
-This product optionally depends on 'Apache Commons Logging', a logging
-framework, which can be obtained at:
-
-  * LICENSE:
-    * license/LICENSE.commons-logging.txt (Apache License 2.0)
-  * HOMEPAGE:
-    * https://commons.apache.org/logging/
-
-This product optionally depends on 'Apache Log4J', a logging framework, which
-can be obtained at:
-
-  * LICENSE:
-    * license/LICENSE.log4j.txt (Apache License 2.0)
-  * HOMEPAGE:
-    * https://logging.apache.org/log4j/
-
-This product optionally depends on 'Aalto XML', an ultra-high performance
-non-blocking XML processor, which can be obtained at:
-
-  * LICENSE:
-    * license/LICENSE.aalto-xml.txt (Apache License 2.0)
-  * HOMEPAGE:
-    * http://wiki.fasterxml.com/AaltoHome
-
-This product contains a modified version of 'HPACK', a Java implementation of
-the HTTP/2 HPACK algorithm written by Twitter. It can be obtained at:
-
-  * LICENSE:
-    * license/LICENSE.hpack.txt (Apache License 2.0)
-  * HOMEPAGE:
-    * https://github.com/twitter/hpack
-
-This product contains a modified version of 'HPACK', a Java implementation of
-the HTTP/2 HPACK algorithm written by Cory Benfield. It can be obtained at:
-
-  * LICENSE:
-    * license/LICENSE.hyper-hpack.txt (MIT License)
-  * HOMEPAGE:
-    * https://github.com/python-hyper/hpack/
-
-This product contains a modified version of 'HPACK', a Java implementation of
-the HTTP/2 HPACK algorithm written by Tatsuhiro Tsujikawa. It can be obtained at:
-
-  * LICENSE:
-    * license/LICENSE.nghttp2-hpack.txt (MIT License)
-  * HOMEPAGE:
-    * https://github.com/nghttp2/nghttp2/
-
-This product contains the Maven wrapper scripts from 'Maven Wrapper', that provides an easy way to ensure a user has everything necessary to run the Maven build.
-
-  * LICENSE:
-    * license/LICENSE.mvn-wrapper.txt (Apache License 2.0)
-  * HOMEPAGE:
-    * https://github.com/takari/maven-wrapper
-
-This product contains the dnsinfo.h header file, that provides a way to retrieve the system DNS configuration on MacOS.
-This private header is also used by Apple's open source
- mDNSResponder (https://opensource.apple.com/tarballs/mDNSResponder/).
-
- * LICENSE:
-    * license/LICENSE.dnsinfo.txt (Apple Public Source License 2.0)
-  * HOMEPAGE:
-    * https://www.opensource.apple.com/source/configd/configd-453.19/dnsinfo/dnsinfo.h
+Swagger Core - swagger-annotations
+Copyright (c) 2015. SmartBear Software Inc.
+Swagger Core - swagger-annotations  is licensed under Apache 2.0 license.
+Copy of the Apache 2.0 license can be found in `LICENSE` file.
