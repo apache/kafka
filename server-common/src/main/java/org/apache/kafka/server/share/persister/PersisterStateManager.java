@@ -1398,6 +1398,18 @@ public class PersisterStateManager {
         }
 
         @Override
+        protected PartitionResultIndex<DeleteShareGroupStateResponseData.PartitionResult> buildResultIndex(ClientResponse response) {
+            if (response == null || !response.hasResponse()) {
+                return null;
+            }
+            return PartitionResultIndex.build(
+                ((DeleteShareGroupStateResponse) response.responseBody()).data().results(),
+                DeleteShareGroupStateResponseData.DeleteStateResult::topicId,
+                DeleteShareGroupStateResponseData.DeleteStateResult::partitions,
+                DeleteShareGroupStateResponseData.PartitionResult::partition);
+        }
+
+        @Override
         protected void handleRequestResponse(ClientResponse response) {
             log().debug("Delete state response received - {}", response);
             deleteStateBackoff.incrementAttempt();
@@ -1406,56 +1418,44 @@ public class PersisterStateManager {
 
             switch (clientResponseError) {
                 case NONE:
-                    // response can be a combined one for large number of requests
-                    // we need to deconstruct it
-                    DeleteShareGroupStateResponse combinedResponse = (DeleteShareGroupStateResponse) response.responseBody();
+                    DeleteShareGroupStateResponseData.PartitionResult partitionResult = lookupPartitionResult(response);
+                    if (partitionResult != null) {
+                        Errors error = Errors.forCode(partitionResult.errorCode());
+                        String errorMessage = partitionResult.errorMessage();
+                        if (errorMessage == null || errorMessage.isEmpty()) {
+                            errorMessage = error.message();
+                        }
 
-                    for (DeleteShareGroupStateResponseData.DeleteStateResult deleteStateResult : combinedResponse.data().results()) {
-                        if (deleteStateResult.topicId().equals(partitionKey().topicId())) {
-                            Optional<DeleteShareGroupStateResponseData.PartitionResult> partitionStateData =
-                                deleteStateResult.partitions().stream()
-                                    .filter(partitionResult -> partitionResult.partition() == partitionKey().partition())
-                                    .findFirst();
+                        switch (error) {
+                            case NONE:
+                                deleteStateBackoff.resetAttempts();
+                                DeleteShareGroupStateResponseData.DeleteStateResult result = DeleteShareGroupStateResponse.toResponseDeleteStateResult(
+                                    partitionKey().topicId(),
+                                    List.of(partitionResult)
+                                );
+                                this.result.complete(new DeleteShareGroupStateResponse(
+                                    new DeleteShareGroupStateResponseData().setResults(List.of(result))));
+                                return;
 
-                            if (partitionStateData.isPresent()) {
-                                Errors error = Errors.forCode(partitionStateData.get().errorCode());
-                                String errorMessage = partitionStateData.get().errorMessage();
-                                if (errorMessage == null || errorMessage.isEmpty()) {
-                                    errorMessage = error.message();
+                            // check retriable errors
+                            case COORDINATOR_NOT_AVAILABLE:
+                            case COORDINATOR_LOAD_IN_PROGRESS:
+                            case NOT_COORDINATOR:
+                            case UNKNOWN_TOPIC_OR_PARTITION:
+                                log().debug("Received retriable error in delete state RPC for key {}: {}", partitionKey(), errorMessage);
+                                if (!deleteStateBackoff.canAttempt()) {
+                                    log().error("Exhausted max retries for delete state RPC for key {} without success.", partitionKey());
+                                    requestErrorResponse(error, new Exception("Exhausted max retries to complete delete state RPC without success."));
+                                    return;
                                 }
+                                super.resetCoordinatorNode();
+                                timer.add(new PersisterTimerTask(deleteStateBackoff.backOff(), this));
+                                return;
 
-                                switch (error) {
-                                    case NONE:
-                                        deleteStateBackoff.resetAttempts();
-                                        DeleteShareGroupStateResponseData.DeleteStateResult result = DeleteShareGroupStateResponse.toResponseDeleteStateResult(
-                                            partitionKey().topicId(),
-                                            List.of(partitionStateData.get())
-                                        );
-                                        this.result.complete(new DeleteShareGroupStateResponse(
-                                            new DeleteShareGroupStateResponseData().setResults(List.of(result))));
-                                        return;
-
-                                    // check retriable errors
-                                    case COORDINATOR_NOT_AVAILABLE:
-                                    case COORDINATOR_LOAD_IN_PROGRESS:
-                                    case NOT_COORDINATOR:
-                                    case UNKNOWN_TOPIC_OR_PARTITION:
-                                        log().debug("Received retriable error in delete state RPC for key {}: {}", partitionKey(), errorMessage);
-                                        if (!deleteStateBackoff.canAttempt()) {
-                                            log().error("Exhausted max retries for delete state RPC for key {} without success.", partitionKey());
-                                            requestErrorResponse(error, new Exception("Exhausted max retries to complete delete state RPC without success."));
-                                            return;
-                                        }
-                                        super.resetCoordinatorNode();
-                                        timer.add(new PersisterTimerTask(deleteStateBackoff.backOff(), this));
-                                        return;
-
-                                    default:
-                                        log().error("Unable to perform delete state RPC for key {}: {}", partitionKey(), errorMessage);
-                                        requestErrorResponse(error, new Exception(errorMessage));
-                                        return;
-                                }
-                            }
+                            default:
+                                log().error("Unable to perform delete state RPC for key {}: {}", partitionKey(), errorMessage);
+                                requestErrorResponse(error, new Exception(errorMessage));
+                                return;
                         }
                     }
 
