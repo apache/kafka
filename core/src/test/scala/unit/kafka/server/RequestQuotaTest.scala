@@ -741,19 +741,19 @@ class RequestQuotaTest extends BaseRequestTest {
           new UpdateRaftVoterRequest.Builder(new UpdateRaftVoterRequestData())
 
         case ApiKeys.INITIALIZE_SHARE_GROUP_STATE =>
-          new InitializeShareGroupStateRequest.Builder(new InitializeShareGroupStateRequestData(), true)
+          new InitializeShareGroupStateRequest.Builder(new InitializeShareGroupStateRequestData(), 3.toShort)
 
         case ApiKeys.READ_SHARE_GROUP_STATE =>
-          new ReadShareGroupStateRequest.Builder(new ReadShareGroupStateRequestData(), true)
+          new ReadShareGroupStateRequest.Builder(new ReadShareGroupStateRequestData(), 3.toShort)
 
         case ApiKeys.WRITE_SHARE_GROUP_STATE =>
-          new WriteShareGroupStateRequest.Builder(new WriteShareGroupStateRequestData(), true)
+          new WriteShareGroupStateRequest.Builder(new WriteShareGroupStateRequestData(), 3.toShort)
 
         case ApiKeys.DELETE_SHARE_GROUP_STATE =>
-          new DeleteShareGroupStateRequest.Builder(new DeleteShareGroupStateRequestData(), true)
+          new DeleteShareGroupStateRequest.Builder(new DeleteShareGroupStateRequestData(), 3.toShort)
 
         case ApiKeys.READ_SHARE_GROUP_STATE_SUMMARY =>
-          new ReadShareGroupStateSummaryRequest.Builder(new ReadShareGroupStateSummaryRequestData(), true)
+          new ReadShareGroupStateSummaryRequest.Builder(new ReadShareGroupStateSummaryRequestData(), 3.toShort)
           
         case ApiKeys.STREAMS_GROUP_HEARTBEAT =>
           new StreamsGroupHeartbeatRequest.Builder(new StreamsGroupHeartbeatRequestData())
