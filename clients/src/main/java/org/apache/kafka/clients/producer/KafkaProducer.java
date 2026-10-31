@@ -1585,6 +1585,10 @@ public class KafkaProducer<K, V> implements Producer<K, V> {
      * If invoked from within a {@link Callback} this method will not block and will be equivalent to
      * <code>close(Duration.ofMillis(0))</code>. This is done since no further sending will happen while
      * blocking the I/O thread of the producer.
+     * <p>
+     * If the producer has to be force closed and its I/O thread does not stop within <code>max.block.ms</code>,
+     * for example because a {@link Callback} is blocking it, this method logs a warning and returns without
+     * waiting any longer.
      *
      * @param timeout The maximum time to wait for producer to complete any pending requests. The value should be
      *                non-negative. Specifying a timeout of zero means do not wait for pending send requests to complete.
@@ -1625,7 +1629,7 @@ public class KafkaProducer<K, V> implements Producer<K, V> {
                 }
                 if (this.ioThread != null) {
                     try {
-                        this.ioThread.join(closeTimer.remainingMs());
+                        joinIoThread(closeTimer.remainingMs());
                     } catch (InterruptedException t) {
                         firstException.compareAndSet(null, new InterruptException(t));
                         log.error("Interrupted while joining ioThread", t);
@@ -1643,7 +1647,7 @@ public class KafkaProducer<K, V> implements Producer<K, V> {
             // Only join the sender thread when not calling from callback.
             if (!invokedFromCallback) {
                 try {
-                    this.ioThread.join();
+                    joinIoThreadAfterForceClose();
                 } catch (InterruptedException e) {
                     firstException.compareAndSet(null, new InterruptException(e));
                 }
@@ -1666,6 +1670,29 @@ public class KafkaProducer<K, V> implements Producer<K, V> {
             throw new KafkaException("Failed to close kafka producer", exception);
         }
         log.debug("Kafka producer has been closed");
+    }
+
+    /**
+     * Waits for the I/O thread to stop after the producer was force closed. That normally takes milliseconds, but a
+     * callback that blocks the I/O thread could make it last forever, so wait no longer than max.block.ms.
+     */
+    private void joinIoThreadAfterForceClose() throws InterruptedException {
+        joinIoThread(maxBlockTimeMs);
+        if (this.ioThread.isAlive()) {
+            log.warn("The producer I/O thread did not stop within {} ms ({}) after the producer was force closed, " +
+                    "possibly because a callback is blocking it. Continuing to close without waiting for it.",
+                    maxBlockTimeMs, ProducerConfig.MAX_BLOCK_MS_CONFIG);
+        }
+    }
+
+    /**
+     * Waits at most {@code timeoutMs} milliseconds for the I/O thread to stop. Unlike {@link Thread#join(long)},
+     * a timeout of zero does not wait at all, rather than waiting forever.
+     */
+    private void joinIoThread(long timeoutMs) throws InterruptedException {
+        if (timeoutMs > 0) {
+            this.ioThread.join(timeoutMs);
+        }
     }
 
     /**
