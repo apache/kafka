@@ -3565,6 +3565,58 @@ public class UnifiedLogTest {
                 log.fetchOffsetByTimestamp(ListOffsetsRequest.MAX_TIMESTAMP, Optional.empty()));
     }
 
+    @ParameterizedTest
+    @CsvSource({"false, 10, 1", "false, 20, 1", "false, 30, 3",
+                "true, 10, 1", "true, 20, 1", "true, 30, 3"})
+    public void testMaxTimestampAfterLogStartOffsetAdvances(boolean compressed, long laterTimestampDelta,
+                                                          long expectedOffset) throws IOException {
+        log = createLog(logDir, new LogTestUtils.LogConfigBuilder().indexIntervalBytes(1).build());
+        long timestamp = mockTime.milliseconds();
+        Compression compression = compressed ? Compression.gzip().build() : Compression.NONE;
+        // The cached maximum is removed, but the same batch still contains eligible records.
+        log.appendAsLeader(MemoryRecords.withRecords(compression,
+                new SimpleRecord(timestamp + 100, new byte[0]),
+                new SimpleRecord(timestamp + 20, new byte[0]),
+                new SimpleRecord(timestamp + 5, new byte[0])), 0);
+        log.roll();
+        log.appendAsLeader(singletonRecords(new byte[0], timestamp + laterTimestampDelta), 1);
+        log.updateHighWatermark(log.logEndOffset());
+        log.maybeIncrementLogStartOffset(1L, LogStartOffsetIncrementReason.ClientRecordDeletion);
+
+        assertEquals(2, log.numberOfSegments());
+        assertEquals(new OffsetResultHolder(new FileRecords.TimestampAndOffset(
+                        timestamp + Math.max(20, laterTimestampDelta), expectedOffset,
+                        Optional.of(expectedOffset == 1L ? 0 : 1))),
+                log.fetchOffsetByTimestamp(ListOffsetsRequest.MAX_TIMESTAMP, Optional.empty()));
+    }
+
+    @Test
+    public void testMaxTimestampSkipsSegmentsBeforeLogStartOffset() throws IOException {
+        log = createLog(logDir, new LogTestUtils.LogConfigBuilder().indexIntervalBytes(1).build());
+        long timestamp = mockTime.milliseconds();
+        log.appendAsLeader(singletonRecords(new byte[0], timestamp + 100), 0);
+        log.roll();
+        log.appendAsLeader(singletonRecords(new byte[0], timestamp + 80), 0);
+        log.appendAsLeader(singletonRecords(new byte[0], timestamp + 20), 0);
+        log.roll();
+        log.appendAsLeader(singletonRecords(new byte[0], timestamp + 30), 1);
+        log.updateHighWatermark(log.logEndOffset());
+
+        // Segments remain on disk after advancing the logical start offset.
+        log.maybeIncrementLogStartOffset(1L, LogStartOffsetIncrementReason.ClientRecordDeletion);
+        assertEquals(3, log.numberOfSegments());
+        assertEquals(new OffsetResultHolder(new FileRecords.TimestampAndOffset(timestamp + 80, 1L, Optional.of(0))),
+                log.fetchOffsetByTimestamp(ListOffsetsRequest.MAX_TIMESTAMP, Optional.empty()));
+
+        log.maybeIncrementLogStartOffset(2L, LogStartOffsetIncrementReason.ClientRecordDeletion);
+        assertEquals(new OffsetResultHolder(new FileRecords.TimestampAndOffset(timestamp + 30, 3L, Optional.of(1))),
+                log.fetchOffsetByTimestamp(ListOffsetsRequest.MAX_TIMESTAMP, Optional.empty()));
+
+        log.maybeIncrementLogStartOffset(log.logEndOffset(), LogStartOffsetIncrementReason.ClientRecordDeletion);
+        assertEquals(new OffsetResultHolder(Optional.empty()),
+                log.fetchOffsetByTimestamp(ListOffsetsRequest.MAX_TIMESTAMP, Optional.empty()));
+    }
+
     @Test
     public void testFetchOffsetByTimestampFromRemoteStorage() throws Exception {
         DelayedOperationPurgatory<DelayedRemoteListOffsets> purgatory = new DelayedOperationPurgatory<DelayedRemoteListOffsets>("RemoteListOffsets", 0);
@@ -6303,6 +6355,29 @@ public class UnifiedLogTest {
         // Once the oversized batch holds the max timestamp, the lookup is rejected before its body is allocated
         log.appendAsFollower(MemoryRecords.withRecords(2L, gzip, 0,
                 new SimpleRecord(firstTimestamp + 2, "key".getBytes(), new byte[1000])), 0);
+        InvalidRecordException e = assertThrows(InvalidRecordException.class,
+                () -> log.fetchOffsetByTimestamp(ListOffsetsRequest.MAX_TIMESTAMP, Optional.empty()));
+        assertTrue(e.getMessage().contains("exceeds the configured maximum record size of 100"), e.getMessage());
+    }
+
+    @Test
+    public void testMaxTimestampAfterLogStartOffsetAdvancesHonorsDecompressionLimit() throws IOException {
+        log = createLog(logDir, new LogTestUtils.LogConfigBuilder().maxDecompressedMessageBytes(100).build());
+        long timestamp = mockTime.milliseconds();
+        Compression gzip = Compression.gzip().build();
+        log.appendAsFollower(MemoryRecords.withRecords(0L, gzip, 0,
+                new SimpleRecord(timestamp + 100, new byte[1000])), 0);
+        log.appendAsFollower(MemoryRecords.withRecords(1L, gzip, 0,
+                new SimpleRecord(timestamp + 20, new byte[10])), 0);
+        log.updateHighWatermark(log.logEndOffset());
+        log.maybeIncrementLogStartOffset(1L, LogStartOffsetIncrementReason.ClientRecordDeletion);
+
+        // The expired batch holds the cached maximum, but should not be decompressed.
+        assertEquals(new OffsetResultHolder(new FileRecords.TimestampAndOffset(timestamp + 20, 1L, Optional.of(0))),
+                log.fetchOffsetByTimestamp(ListOffsetsRequest.MAX_TIMESTAMP, Optional.empty()));
+
+        log.appendAsFollower(MemoryRecords.withRecords(2L, gzip, 0,
+                new SimpleRecord(timestamp + 30, new byte[1000])), 0);
         InvalidRecordException e = assertThrows(InvalidRecordException.class,
                 () -> log.fetchOffsetByTimestamp(ListOffsetsRequest.MAX_TIMESTAMP, Optional.empty()));
         assertTrue(e.getMessage().contains("exceeds the configured maximum record size of 100"), e.getMessage());
