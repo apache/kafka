@@ -23,12 +23,19 @@ import org.apache.kafka.clients.consumer.internals.AutoOffsetResetStrategy;
 import org.apache.kafka.common.PartitionInfo;
 import org.apache.kafka.common.TopicPartition;
 import org.apache.kafka.common.errors.TimeoutException;
+import org.apache.kafka.common.header.Header;
+import org.apache.kafka.common.header.Headers;
+import org.apache.kafka.common.header.internals.RecordHeader;
+import org.apache.kafka.common.header.internals.RecordHeaders;
+import org.apache.kafka.common.record.TimestampType;
 import org.apache.kafka.common.serialization.Deserializer;
 import org.apache.kafka.common.utils.LogCaptureAppender;
 import org.apache.kafka.common.utils.MockTime;
 import org.apache.kafka.common.utils.internals.LogContext;
 import org.apache.kafka.streams.KeyValue;
 import org.apache.kafka.streams.StreamsConfig;
+import org.apache.kafka.streams.errors.DeserializationExceptionHandler;
+import org.apache.kafka.streams.errors.ErrorHandlerContext;
 import org.apache.kafka.streams.errors.LogAndContinueExceptionHandler;
 import org.apache.kafka.streams.errors.ProcessorStateException;
 import org.apache.kafka.streams.errors.StreamsException;
@@ -51,6 +58,7 @@ import org.junit.jupiter.api.Test;
 import java.io.File;
 import java.io.IOException;
 import java.io.OutputStream;
+import java.nio.charset.StandardCharsets;
 import java.nio.file.Files;
 import java.time.Duration;
 import java.util.ArrayList;
@@ -63,7 +71,9 @@ import java.util.Map;
 import java.util.Optional;
 import java.util.Properties;
 import java.util.Set;
+import java.util.concurrent.atomic.AtomicBoolean;
 import java.util.concurrent.atomic.AtomicInteger;
+import java.util.concurrent.atomic.AtomicReference;
 
 import static java.util.Arrays.asList;
 import static org.apache.kafka.common.utils.Utils.mkEntry;
@@ -1170,11 +1180,10 @@ public class GlobalStateManagerImplTest {
     }
 
     @SuppressWarnings("unchecked")
-    private void setUpReprocessing() {
+    private void setUpReprocessing(final Deserializer deserializer) {
         final InternalTopologyBuilder.ReprocessFactory reprocessFactory = mock(InternalTopologyBuilder.ReprocessFactory.class);
         final ProcessorSupplier processorSupplier = mock(ProcessorSupplier.class);
         final Processor processor = mock(Processor.class);
-        final Deserializer deserializer = mock(Deserializer.class);
 
         when(optionalMockReprocessFactory.isPresent()).thenReturn(true);
         when(optionalMockReprocessFactory.get()).thenReturn(reprocessFactory);
@@ -1183,7 +1192,13 @@ public class GlobalStateManagerImplTest {
         when(reprocessFactory.keyDeserializer()).thenReturn(deserializer);
         when(reprocessFactory.valueDeserializer()).thenReturn(deserializer);
         when(reprocessFactory.processorName()).thenReturn("test-processor");
+    }
+
+    @SuppressWarnings("unchecked")
+    private void setUpReprocessing() {
+        final Deserializer deserializer = mock(Deserializer.class);
         when(deserializer.deserialize(any(), any())).thenThrow(new StreamsException("fail"));
+        setUpReprocessing(deserializer);
     }
 
     @Test
@@ -1208,6 +1223,65 @@ public class GlobalStateManagerImplTest {
 
         stateManager.registerStore(store5, stateRestoreCallback, null);
         assertEquals(0, stateRestoreCallback.restored.size());
+    }
+
+    @Test
+    public void shouldPreserveHeadersWhenDeserializationMutatesHeadersDuringReprocessing() {
+        final AtomicReference<Headers> capturedHeaders = new AtomicReference<>();
+        final AtomicBoolean deserializerInvoked = new AtomicBoolean();
+        final DeserializationExceptionHandler exceptionHandler = new DeserializationExceptionHandler() {
+            @Override
+            public Response handleError(final ErrorHandlerContext handlerContext,
+                                        final ConsumerRecord<byte[], byte[]> record,
+                                        final Exception exception) {
+                capturedHeaders.set(handlerContext.headers());
+                return Response.resume();
+            }
+
+            @Override
+            public void configure(final Map<String, ?> configs) { }
+        };
+        final Deserializer<Object> headerMutatingDeserializer = new Deserializer<>() {
+            @Override
+            public Object deserialize(final String topic, final byte[] data) {
+                return null;
+            }
+
+            @Override
+            public Object deserialize(final String topic, final Headers headers, final byte[] data) {
+                deserializerInvoked.set(true);
+                headers.remove("source-only");
+                throw new StreamsException("deserialization failed");
+            }
+        };
+        stateManager.setDeserializationExceptionHandler(exceptionHandler);
+        setUpReprocessing(headerMutatingDeserializer);
+        initializeConsumer(0, 0, t1, t2, t3, t4, t5);
+        initializeConsumer(0, 0, t1, t2, t3, t4);
+        initializeConsumer(2, 0, t5);
+        final Headers sourceHeaders = new RecordHeaders(new Header[] {
+            new RecordHeader("source-only", "kept".getBytes(StandardCharsets.UTF_8))
+        });
+        consumer.addRecord(new ConsumerRecord<>(
+            t5.topic(),
+            t5.partition(),
+            2L,
+            0L,
+            TimestampType.CREATE_TIME,
+            0,
+            0,
+            "key".getBytes(StandardCharsets.UTF_8),
+            "value".getBytes(StandardCharsets.UTF_8),
+            new RecordHeaders(sourceHeaders),
+            Optional.empty()
+        ));
+        consumer.updateEndOffsets(Collections.singletonMap(t5, 3L));
+        processorContext.setStateManger(stateManager);
+
+        stateManager.initialize();
+
+        assertTrue(deserializerInvoked.get());
+        assertEquals(sourceHeaders, capturedHeaders.get());
     }
 
     @Test

@@ -18,6 +18,8 @@ package org.apache.kafka.streams.processor.internals;
 
 import org.apache.kafka.clients.consumer.ConsumerRecord;
 import org.apache.kafka.common.TopicPartition;
+import org.apache.kafka.common.header.Headers;
+import org.apache.kafka.common.header.internals.RecordHeaders;
 import org.apache.kafka.common.metrics.Sensor;
 import org.apache.kafka.common.utils.internals.LogContext;
 import org.apache.kafka.streams.errors.DeserializationExceptionHandler;
@@ -212,8 +214,9 @@ public class RecordQueue {
 
         while (headRecord == null && !fifoQueue.isEmpty()) {
             final ConsumerRecord<byte[], byte[]> raw = fifoQueue.pollFirst();
+            final Headers sourceRawHeaders = new RecordHeaders(raw.headers());
             final ConsumerRecord<Object, Object> deserialized =
-                recordDeserializer.deserialize(processorContext, raw);
+                recordDeserializer.deserialize(processorContext, raw, sourceRawHeaders);
 
             if (deserialized == null) {
                 // this only happens if the deserializer decides to skip. It has already logged the reason.
@@ -243,7 +246,7 @@ public class RecordQueue {
                 lastCorruptedRecord = raw;
                 continue;
             }
-            headRecord = new StampedRecord(deserialized, timestamp, raw.key(), raw.value());
+            headRecord = new StampedRecord(deserialized, timestamp, raw.key(), raw.value(), sourceRawHeaders);
             headRecordSizeInBytes = consumerRecordSizeInBytes(raw);
         }
 

@@ -543,7 +543,8 @@ public final class InMemoryTimeOrderedKeyValueChangeBuffer<K, V, T> implements T
             context.topic(),
             headers,
             context.sourceRawKey(),
-            context.sourceRawValue()
+            context.sourceRawValue(),
+            context.sourceRawHeaders()
         );
     }
 
