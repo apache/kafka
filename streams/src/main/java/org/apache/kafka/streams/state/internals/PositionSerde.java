@@ -39,6 +39,7 @@ public final class PositionSerde {
         switch (version) {
             case (byte) 0: // actual position, v0
                 final int nTopics = buffer.getInt();
+                validateCount(nTopics, 2 * Integer.BYTES, buffer, "topic");
                 final Map<String, Map<Integer, Long>> position = new HashMap<>(nTopics);
                 for (int i = 0; i < nTopics; i++) {
                     final int topicNameLength = buffer.getInt();
@@ -46,6 +47,7 @@ public final class PositionSerde {
                     final String topic = new String(topicNameBytes, StandardCharsets.UTF_8);
 
                     final int numPairs = buffer.getInt();
+                    validateCount(numPairs, Integer.BYTES + Long.BYTES, buffer, "partition offset pair");
                     final Map<Integer, Long> partitionOffsets = new HashMap<>(numPairs);
                     for (int j = 0; j < numPairs; j++) {
                         partitionOffsets.put(buffer.getInt(), buffer.getLong());
@@ -57,6 +59,18 @@ public final class PositionSerde {
                 throw new IllegalArgumentException(
                         "Unknown version " + version + " when deserializing Position"
                 );
+        }
+    }
+
+    private static void validateCount(final int count,
+                                      final int minBytesPerEntry,
+                                      final ByteBuffer buffer,
+                                      final String entryType) {
+        if (count < 0 || (long) count * minBytesPerEntry > buffer.remaining()) {
+            throw new IllegalArgumentException(
+                    "Invalid " + entryType + " count " + count + " when deserializing Position: only "
+                            + buffer.remaining() + " bytes remain in the buffer"
+            );
         }
     }
 
