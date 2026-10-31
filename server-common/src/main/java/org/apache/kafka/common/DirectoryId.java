@@ -17,10 +17,9 @@
 package org.apache.kafka.common;
 
 import java.util.Arrays;
-import java.util.Collections;
 import java.util.HashMap;
-import java.util.List;
 import java.util.Map;
+import java.util.Set;
 
 public class DirectoryId {
     /**
@@ -117,12 +116,12 @@ public class DirectoryId {
     }
 
     /**
-     * Check if a directory is online, given a sorted list of online directories.
-     * @param dir              The directory to check
-     * @param sortedOnlineDirs The sorted list of online directories
-     * @return                 true if the directory is considered online, false otherwise
+     * Check if a directory is online, given the set of online directories.
+     * @param dir        The directory to check
+     * @param onlineDirs The set of online directories
+     * @return           true if the directory is considered online, false otherwise
      */
-    public static boolean isOnline(Uuid dir, List<Uuid> sortedOnlineDirs) {
+    public static boolean isOnline(Uuid dir, Set<Uuid> onlineDirs) {
         if (UNASSIGNED.equals(dir) || MIGRATING.equals(dir)) {
             return true;
         }
@@ -136,9 +135,9 @@ public class DirectoryId {
         // that a broker will halt if all its log directories are down. Eventually the broker
         // will send another registration request with information about all log directories.
         // Refer KAFKA-16162 for more information
-        if (sortedOnlineDirs.isEmpty()) {
+        if (onlineDirs.isEmpty()) {
             return true;
         }
-        return Collections.binarySearch(sortedOnlineDirs, dir) >= 0;
+        return onlineDirs.contains(dir);
     }
 }
