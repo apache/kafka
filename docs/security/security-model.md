@@ -95,7 +95,7 @@ ACLs are managed with `kafka-acls.sh` or the AdminClient `createAcls`/`deleteAcl
 
 ## Encryption in Transit
 
-TLS is configured per-listener via the standard `ssl.*` properties (`ssl.keystore.*`, `ssl.truststore.*`, `ssl.protocol`, `ssl.cipher.suites`, `ssl.enabled.protocols`). Recommendations:
+TLS is configured per-listener via the standard `ssl.*` properties (`ssl.keystore.*`, `ssl.truststore.*`, `ssl.protocol`, `ssl.cipher.suites`, `ssl.named.groups`, `ssl.enabled.protocols`). Recommendations:
 
 - Disable TLS versions below 1.2; prefer 1.3 where the JDK supports it.
 - Use distinct keystores for the inter-broker listener and any client-facing listener so that a leaked client-facing key cannot impersonate a broker.
