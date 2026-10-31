@@ -1167,16 +1167,9 @@ public class ClassicGroup implements Group {
         if (protocolName.isPresent()) {
             try {
                 Set<String> allSubscribedTopics = new HashSet<>();
-                members.values().forEach(member -> {
-                    // The consumer protocol is parsed with V0 which is the based prefix of all versions.
-                    // This way the consumer group manager does not depend on any specific existing or
-                    // future versions of the consumer protocol. VO must prefix all new versions.
-                    ByteBuffer buffer = ByteBuffer.wrap(member.metadata(protocolName.get()));
-                    ConsumerProtocol.deserializeVersion(buffer);
-                    allSubscribedTopics.addAll(new HashSet<>(
-                        ConsumerProtocol.deserializeConsumerProtocolSubscription(buffer, (short) 0).topics()
-                    ));
-                });
+                members.values().forEach(member ->
+                    allSubscribedTopics.addAll(deserializeSubscribedTopics(member.metadata(protocolName.get())))
+                );
                 return Optional.of(allSubscribedTopics);
             } catch (SchemaException e) {
                 log.warn("Failed to parse Consumer Protocol {}:{} of group {}. Consumer group coordinator is not aware of the subscribed topics.",
@@ -1185,6 +1178,25 @@ public class ClassicGroup implements Group {
         }
 
         return Optional.empty();
+    }
+
+    /**
+     * Deserializes the subscribed topics from consumer protocol metadata.
+     *
+     * <p>The consumer protocol is parsed with V0, which is the base prefix of all versions. This way the
+     * consumer group manager does not depend on any specific existing or future version of the consumer
+     * protocol. V0 must prefix all new versions.
+     *
+     * @param metadata the version-prefixed consumer protocol metadata.
+     * @return the subscribed topics.
+     * @throws SchemaException if the consumer protocol metadata cannot be parsed.
+     */
+    public static Set<String> deserializeSubscribedTopics(byte[] metadata) {
+        ByteBuffer buffer = ByteBuffer.wrap(metadata);
+        ConsumerProtocol.deserializeVersion(buffer);
+        return new HashSet<>(
+            ConsumerProtocol.deserializeConsumerProtocolSubscription(buffer, (short) 0).topics()
+        );
     }
 
     /**
