@@ -120,20 +120,6 @@ public class ShareGroupAutoOffsetResetStrategy {
                 '}';
     }
 
-    /**
-     * Factory method for creating EARLIEST strategy.
-     */
-    public static ShareGroupAutoOffsetResetStrategy earliest() {
-        return new ShareGroupAutoOffsetResetStrategy(AutoOffsetResetStrategy.EARLIEST, StrategyType.EARLIEST);
-    }
-
-    /**
-     * Factory method for creating LATEST strategy.
-     */
-    public static ShareGroupAutoOffsetResetStrategy latest() {
-        return new ShareGroupAutoOffsetResetStrategy(AutoOffsetResetStrategy.LATEST, StrategyType.LATEST);
-    }
-
     public static class Validator implements ConfigDef.Validator {
         @Override
         public void ensureValid(String name, Object value) {
