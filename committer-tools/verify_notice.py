@@ -26,35 +26,30 @@ import sys
 import tarfile
 import tempfile
 import zipfile
-from collections import defaultdict, namedtuple
+from collections import defaultdict
 
 # Kafka-own jars carry the project's NOTICE already covered by the hand-written
 # header of NOTICE-binary, so we exclude them from the third-party scan.
 KAFKA_JAR_PATTERN = re.compile(r"(kafka|connect|trogdor)", re.IGNORECASE)
 
-# Matches NOTICE-like files anywhere in a jar.  Accepts plain `NOTICE`,
-# `NOTICE.{txt,md,markdown}`, and prefix/suffix variants such as
-# `META-INF/FastDoubleParser-NOTICE` shipped inside `jackson-core`.
-# The `[-_.]` boundary blocks false positives like `NOTICEABLE.java`.
+# Finds NOTICE-like filenames anywhere in a jar, ignoring case.
+# Optional prefixes are separated from NOTICE by '-', '_', or '.', e.g.
+# FastDoubleParser-NOTICE. The full suffix is validated during extraction;
+# unsupported candidates cause an error.
 NOTICE_FILE_PATTERN = re.compile(
-    r"(?:^|/)(?:[^/]*[-_.])?NOTICE(?:[-_.][^/]*)?(?:\.(?:txt|md|markdown))?$",
+    r"(?:^|/)(?:[^/]*[-_.])?NOTICE(?P<suffix>[-_.][^/]*)?\Z",
     re.IGNORECASE,
 )
 
-# Marker that ends Kafka's own header inside NOTICE-binary; everything before
-# it (inclusive) is preserved verbatim and not validated against jar NOTICEs.
-# If you change the comment block around line 22 of NOTICE-binary, update this.
+# Marker within the final comment block of Kafka's own header in NOTICE-binary.
+# The header ends at the first blank line after this marker and is excluded
+# from validation against jar NOTICEs. Update this if the marker text changes.
 KAFKA_HEADER_END_MARKER = (
     "// NOTICE file corresponding to the section 4d of The Apache License,"
 )
 
-WHITESPACE_PATTERN = re.compile(r"\s+")
-
-
-NoticeIndex = namedtuple(
-    "NoticeIndex",
-    "notice_to_jars notice_to_sources canonical_text",
-)
+# Sentinel placed where a region has already been consumed.
+_CONSUMED_SENTINEL = "\x00"
 
 
 def run_gradlew(project_dir):
@@ -100,38 +95,47 @@ def extract_notices_from_jar(jar_path):
     found = []
     with zipfile.ZipFile(jar_path, "r") as zf:
         for info in zf.infolist():
-            if info.is_dir() or not NOTICE_FILE_PATTERN.search(info.filename):
+            if info.is_dir():
                 continue
-            raw = zf.read(info)
+
+            match = NOTICE_FILE_PATTERN.search(info.filename)
+            if match is None:
+                continue
+
+            suffix = (match.group("suffix") or "").lower()
+            # Add new supported NOTICE suffixes here in lowercase.
+            if suffix not in ("", ".txt", ".md", ".markdown"):
+                print(
+                    f"Error: unsupported NOTICE-like filename "
+                    f"{info.filename!r} in {jar_path!r}."
+                )
+                sys.exit(1)
+
             try:
-                text = raw.decode("utf-8")
-            except UnicodeDecodeError:
-                text = raw.decode("latin-1", errors="replace")
-            text = text.strip()
+                text = zf.read(info).decode("utf-8").strip()
+            except UnicodeDecodeError as error:
+                print(
+                    f"Error: cannot decode NOTICE file {info.filename!r} "
+                    f"in {jar_path!r} as UTF-8: {error}"
+                )
+                sys.exit(1)
             if text:
                 found.append((info.filename, text))
     return found
 
 
 def collect_notices(jars):
-    notice_to_jars = defaultdict(list)
     notice_to_sources = defaultdict(list)
     canonical_text = {}
 
     for jar in jars:
         jar_name = os.path.basename(jar)
-        notices = extract_notices_from_jar(jar)
-        seen_keys = set()
-        for entry, text in notices:
-            key = normalize(text)
+        for entry, text in extract_notices_from_jar(jar):
+            key = " ".join(text.split())
             notice_to_sources[key].append((jar_name, entry))
-            if key in seen_keys:
-                continue
-            seen_keys.add(key)
-            notice_to_jars[key].append(jar_name)
             canonical_text.setdefault(key, text)
 
-    return NoticeIndex(notice_to_jars, notice_to_sources, canonical_text)
+    return notice_to_sources, canonical_text
 
 
 def split_kafka_header(notice_binary_text):
@@ -146,16 +150,7 @@ def split_kafka_header(notice_binary_text):
     return notice_binary_text[:end_of_block], notice_binary_text[end_of_block:]
 
 
-def normalize(text):
-    return WHITESPACE_PATTERN.sub(" ", text).strip()
-
-
-# Sentinel placed where a region has already been consumed.
-_CONSUMED_SENTINEL = "\x00"
-
-
-def find_match_span(body, notice_text, matched_mask):
-    normalized_notice = normalize(notice_text)
+def find_match_span(body, normalized_notice, matched_mask):
     normalized_chars = []
     original_offsets = []
     previous_char = _CONSUMED_SENTINEL
@@ -203,36 +198,31 @@ def find_leftover_regions(body, matched_mask, notice_binary_text, body_start):
             region_end += 1
         region_text = body[region_start:region_end]
         if region_text.strip():
-            lines = region_text.splitlines()
+            lines = region_text.split("\n")
             first_content_line, content_end_line = trim_blank_edges(lines)
-            if first_content_line < content_end_line:
-                absolute_start = body_start + region_start
-                line_start = notice_binary_text[:absolute_start].count("\n") + 1 + first_content_line
-                line_end = line_start + (content_end_line - first_content_line - 1)
-                regions.append((line_start, line_end))
+            absolute_start = body_start + region_start
+            line_start = notice_binary_text.count("\n", 0, absolute_start) + 1 + first_content_line
+            line_end = line_start + (content_end_line - first_content_line - 1)
+            regions.append((line_start, line_end))
         region_start = region_end
     return regions
 
 
-def print_sources(sources, indent_str):
+def print_sources(sources):
     for idx, (jar, entry) in enumerate(sources):
         if idx > 0:
             print()
-        print(f"{indent_str}- {jar}")
-        print(f"{indent_str}  NOTICE file inside JAR: {entry}")
+        print(f"  - {jar}")
+        print(f"    NOTICE file inside JAR: {entry}")
 
 
 def print_section_header(title):
-    print()
-    print("=" * 78)
+    print("\n" + "=" * 78)
     print(title)
     print("=" * 78)
 
 
 def print_update_summary(unmatched, leftover):
-    if not unmatched and not leftover:
-        return
-
     print("\nNOTICE-binary needs updates:")
     step = 1
     if leftover:
@@ -243,20 +233,23 @@ def print_update_summary(unmatched, leftover):
         print(f"  {step}. Add the {len(unmatched)} NOTICE block{'s' if len(unmatched) != 1 else ''} below.")
 
 
-def match_notices(body, notice_index):
+def match_notices(body, notice_to_sources, canonical_text):
     # Match the longest normalized NOTICEs first so a shorter one can't consume
     # part of a longer match.
     ordered_notices = sorted(
-        notice_index.notice_to_jars,
-        key=lambda notice_key: (-len(notice_key), min(notice_index.notice_to_jars[notice_key])),
+        notice_to_sources,
+        key=lambda notice_key: (
+            -len(notice_key),
+            min(jar_name for jar_name, _ in notice_to_sources[notice_key]),
+        ),
     )
     matched_mask = [False] * len(body)
     unmatched = []
     for notice_key in ordered_notices:
-        notice_text = notice_index.canonical_text[notice_key]
-        span = find_match_span(body, notice_text, matched_mask)
+        notice_text = canonical_text[notice_key]
+        span = find_match_span(body, notice_key, matched_mask)
         if span is None:
-            sources = sorted(notice_index.notice_to_sources[notice_key])
+            sources = sorted(notice_to_sources[notice_key])
             unmatched.append((sources, notice_text))
         else:
             for offset in range(span[0], span[1]):
@@ -269,33 +262,27 @@ def print_notices_to_add(unmatched):
     print("Copy only the text between COPY START and COPY END into NOTICE-binary.")
 
     for idx, (sources, text) in enumerate(unmatched, 1):
-        print()
-        print(f" NOTICE TEXT [{idx:02d}] ".center(78, "-"))
-        print()
-        print("Source JARs:")
-        print_sources(sources, "  ")
-        print()
-        print(f">>> COPY START [{idx:02d}]")
-        print()
+        print("\n" + f" NOTICE TEXT [{idx:02d}] ".center(78, "-"))
+        print("\nSource JARs:")
+        print_sources(sources)
+        print(f"\n>>> COPY START [{idx:02d}]\n")
         print(text)
-        print()
-        print(f"<<< COPY END [{idx:02d}]")
+        print(f"\n<<< COPY END [{idx:02d}]")
 
 
-def print_blocks_to_remove(regions, notice_binary_label):
+def print_blocks_to_remove(regions):
     print_section_header(f"REMOVE FROM NOTICE-binary (line ranges: {len(regions)})")
     print("Line numbers refer to the file as checked.")
     print("Delete these ranges in the order shown (bottom to top) before adding new text:")
     for idx, (line_start, line_end) in enumerate(reversed(regions), 1):
-        print(f"  [{idx:02d}] {notice_binary_label}: lines {line_start}-{line_end}")
+        print(f"  [{idx:02d}] NOTICE-binary: lines {line_start}-{line_end}")
 
 
-def print_notice_update_actions(unmatched, leftover, notice_binary_label):
-    print_update_summary(unmatched, leftover)
-
+def print_notice_update_actions(unmatched, leftover):
     if unmatched or leftover:
+        print_update_summary(unmatched, leftover)
         if leftover:
-            print_blocks_to_remove(leftover, notice_binary_label)
+            print_blocks_to_remove(leftover)
         if unmatched:
             print_notices_to_add(unmatched)
         print("\nAfter updating NOTICE-binary, run:")
@@ -337,16 +324,15 @@ def main():
 
         third_party_jars = get_third_party_jars(libs_dir)
 
-        notice_index = collect_notices(third_party_jars)
+        notice_to_sources, canonical_text = collect_notices(third_party_jars)
 
         header, body = split_kafka_header(notice_binary_text)
         body_start = len(header)
 
-        matched_mask, unmatched = match_notices(body, notice_index)
+        matched_mask, unmatched = match_notices(body, notice_to_sources, canonical_text)
         leftover = find_leftover_regions(body, matched_mask, notice_binary_text, body_start)
 
-        notice_binary_label = os.path.relpath(notice_binary_path, project_dir)
-        print_notice_update_actions(unmatched, leftover, notice_binary_label)
+        print_notice_update_actions(unmatched, leftover)
 
         if unmatched or leftover:
             sys.exit(1)
