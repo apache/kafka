@@ -27,6 +27,7 @@ import org.apache.kafka.common.errors.UnreleasedInstanceIdException;
 import org.apache.kafka.common.message.StreamsGroupHeartbeatRequestData;
 import org.apache.kafka.common.message.StreamsGroupHeartbeatResponseData;
 import org.apache.kafka.common.requests.StreamsGroupHeartbeatRequest;
+import org.apache.kafka.coordinator.common.runtime.CoordinatorMetadataImage;
 import org.apache.kafka.coordinator.common.runtime.CoordinatorRecord;
 import org.apache.kafka.coordinator.common.runtime.CoordinatorResult;
 import org.apache.kafka.coordinator.common.runtime.MetadataImageBuilder;
@@ -44,9 +45,11 @@ import org.apache.kafka.coordinator.group.streams.StreamsGroupBuilder;
 import org.apache.kafka.coordinator.group.streams.StreamsGroupHeartbeatResult;
 import org.apache.kafka.coordinator.group.streams.StreamsGroupMember;
 import org.apache.kafka.coordinator.group.streams.StreamsTopology;
+import org.apache.kafka.coordinator.group.streams.TaskRole;
 import org.apache.kafka.coordinator.group.streams.TasksTuple;
 import org.apache.kafka.coordinator.group.streams.TasksTupleWithEpochs;
 import org.apache.kafka.coordinator.group.streams.assignor.AssignmentConfigsImpl;
+import org.apache.kafka.coordinator.group.streams.assignor.StickyTaskAssignor;
 
 import org.junit.jupiter.api.Test;
 import org.junit.jupiter.params.ParameterizedTest;
@@ -59,6 +62,7 @@ import java.util.ArrayList;
 import java.util.List;
 import java.util.Map;
 import java.util.Optional;
+import java.util.Set;
 import java.util.stream.Stream;
 
 import static org.apache.kafka.common.requests.StreamsGroupHeartbeatRequest.JOIN_GROUP_MEMBER_EPOCH;
@@ -70,15 +74,22 @@ import static org.apache.kafka.coordinator.group.GroupMetadataManager.groupSessi
 import static org.apache.kafka.coordinator.group.GroupMetadataManagerTestContext.DEFAULT_CLIENT_ADDRESS;
 import static org.apache.kafka.coordinator.group.GroupMetadataManagerTestContext.DEFAULT_CLIENT_ID;
 import static org.apache.kafka.coordinator.group.GroupMetadataManagerTestContext.DEFAULT_PROCESS_ID;
+import static org.apache.kafka.coordinator.group.StreamsGroupTestUtil.mkResponseTasks;
 import static org.apache.kafka.coordinator.group.StreamsGroupTestUtil.resetAssignedTasksEpochsToZero;
 import static org.apache.kafka.coordinator.group.StreamsGroupTestUtil.staticHeartbeat;
 import static org.apache.kafka.coordinator.group.StreamsGroupTestUtil.staticJoinHeartbeat;
 import static org.apache.kafka.coordinator.group.StreamsGroupTestUtil.streamsGroupMemberBuilderWithDefaults;
 import static org.apache.kafka.coordinator.group.StreamsGroupTestUtil.streamsTopicFixture;
+import static org.apache.kafka.coordinator.group.Utils.computeGroupHash;
+import static org.apache.kafka.coordinator.group.Utils.computeTopicHash;
+import static org.apache.kafka.coordinator.group.streams.TaskAssignmentTestUtil.mkTasks;
+import static org.apache.kafka.coordinator.group.streams.TaskAssignmentTestUtil.mkTasksTuple;
+import static org.apache.kafka.coordinator.group.streams.TaskAssignmentTestUtil.mkTasksTupleWithCommonEpoch;
 import static org.junit.jupiter.api.Assertions.assertDoesNotThrow;
 import static org.junit.jupiter.api.Assertions.assertEquals;
 import static org.junit.jupiter.api.Assertions.assertFalse;
 import static org.junit.jupiter.api.Assertions.assertNotNull;
+import static org.junit.jupiter.api.Assertions.assertNull;
 import static org.junit.jupiter.api.Assertions.assertThrows;
 import static org.junit.jupiter.api.Assertions.assertTrue;
 
@@ -647,6 +658,81 @@ class StreamsGroupStaticMemberGroupMetadataManagerTest {
         );
 
         assertEquals(groupEpoch, result.response().data().memberEpoch());
+    }
+
+    @Test
+    public void testStaticMemberRejoinFromNewProcessDropsTaskHeldThereAsStandby() {
+        String groupId = "fooup";
+        int groupEpoch = DEFAULT_GROUP_EPOCH;
+
+        String instanceId1 = Uuid.randomUuid().toString();
+        String instanceId2 = Uuid.randomUuid().toString();
+        String oldMemberId1 = Uuid.randomUuid().toString();
+        String oldMemberId2 = Uuid.randomUuid().toString();
+        String rejoinMemberId1 = Uuid.randomUuid().toString();
+        String rejoinMemberId2 = Uuid.randomUuid().toString();
+
+        String oldProcessId = "old-process-id";
+        String newProcessId = "new-process-id";
+
+        String subtopologyId = "subtopology1";
+        String sourceTopicName = "foo";
+        String changelogTopicName = "foo-changelog";
+        StreamsGroupHeartbeatRequestData.Topology topology = new StreamsGroupHeartbeatRequestData.Topology()
+            .setSubtopologies(List.of(new StreamsGroupHeartbeatRequestData.Subtopology()
+                .setSubtopologyId(subtopologyId)
+                .setSourceTopics(List.of(sourceTopicName))
+                .setStateChangelogTopics(List.of(new StreamsGroupHeartbeatRequestData.TopicInfo().setName(changelogTopicName)))));
+        CoordinatorMetadataImage metadataImage = new MetadataImageBuilder()
+            .addTopic(Uuid.randomUuid(), sourceTopicName, 1)
+            .addTopic(Uuid.randomUuid(), changelogTopicName, 1)
+            .buildCoordinatorMetadataImage();
+
+        // Two members of one process left with epoch -2. The first one held the active task of the only, stateful,
+        // task. Both rejoin from a new process.
+        GroupMetadataManagerTestContext context = new GroupMetadataManagerTestContext.Builder()
+            .withStreamsGroupTaskAssignors(List.of(new StickyTaskAssignor()))
+            .withMetadataImage(metadataImage)
+            .withConfig(GroupCoordinatorConfig.STREAMS_GROUP_NUM_STANDBY_REPLICAS_CONFIG, 1)
+            .withStreamsGroup(new StreamsGroupBuilder(groupId, groupEpoch)
+                .withMember(streamsGroupMemberBuilderWithDefaults(oldMemberId1, instanceId1)
+                    .setMemberEpoch(LEAVE_GROUP_STATIC_MEMBER_EPOCH)
+                    .setPreviousMemberEpoch(groupEpoch)
+                    .setProcessId(oldProcessId)
+                    .setAssignedTasks(mkTasksTupleWithCommonEpoch(TaskRole.ACTIVE, groupEpoch, mkTasks(subtopologyId, 0)))
+                    .build())
+                .withMember(streamsGroupMemberBuilderWithDefaults(oldMemberId2, instanceId2)
+                    .setMemberEpoch(LEAVE_GROUP_STATIC_MEMBER_EPOCH)
+                    .setPreviousMemberEpoch(groupEpoch)
+                    .setProcessId(oldProcessId)
+                    .build())
+                .withTargetAssignment(oldMemberId1, mkTasksTuple(TaskRole.ACTIVE, mkTasks(subtopologyId, 0)))
+                .withTargetAssignment(oldMemberId2, TasksTuple.EMPTY)
+                .withTargetAssignmentEpoch(groupEpoch)
+                .withTopology(StreamsTopology.fromHeartbeatRequest(topology))
+                .withValidatedTopologyEpoch(0)
+                .withMetadataHash(computeGroupHash(Map.of(
+                    sourceTopicName, computeTopicHash(sourceTopicName, metadataImage),
+                    changelogTopicName, computeTopicHash(changelogTopicName, metadataImage))))
+                .withLastAssignmentConfigs(new AssignmentConfigsImpl(1, List.of())))
+            .build();
+        StreamsGroup group = context.groupMetadataManager.streamsGroup(groupId);
+
+        // The second member rejoins first and gets the standby task, since the active task is still on the old process.
+        CoordinatorResult<StreamsGroupHeartbeatResult, CoordinatorRecord> result = context.streamsGroupHeartbeat(
+            staticJoinHeartbeat(groupId, rejoinMemberId2, instanceId2, newProcessId)
+        );
+        assertEquals(mkResponseTasks(subtopologyId, 0), result.response().data().standbyTasks());
+
+        // The first member copies its old member's active task, which the second member already holds on the new
+        // process as a standby task, so the copy drops it.
+        result = context.streamsGroupHeartbeat(
+            staticJoinHeartbeat(groupId, rejoinMemberId1, instanceId1, newProcessId)
+        );
+        assertEquals(List.of(), result.response().data().activeTasks());
+        assertEquals(TasksTupleWithEpochs.EMPTY, group.getMemberOrThrow(rejoinMemberId1).assignedTasks());
+        assertNull(group.currentActiveTaskProcessId(subtopologyId, 0));
+        assertEquals(Set.of(newProcessId), group.currentStandbyTaskProcessIds(subtopologyId, 0));
     }
 
     @Test
