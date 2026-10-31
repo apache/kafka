@@ -695,13 +695,25 @@ public class TransactionManager {
             }
             if (currentState != State.INITIALIZING && !hasProducerId()) {
                 transitionTo(State.INITIALIZING);
-                InitProducerIdRequestData requestData = new InitProducerIdRequestData()
-                        .setTransactionalId(null)
-                        .setTransactionTimeoutMs(Integer.MAX_VALUE);
-                InitProducerIdHandler handler = new InitProducerIdHandler(new InitProducerIdRequest.Builder(requestData), false);
-                enqueueRequest(handler);
+                enqueueInitProducerIdRequest();
+            } else if (currentState == State.INITIALIZING && !hasProducerId()
+                    && pendingRequests.isEmpty() && !hasInFlightRequest()) {
+                // The previous InitProducerId request was dequeued but lost before it could
+                // be sent (e.g., due to an authentication error during connection). Re-enqueue
+                // to allow recovery without requiring a producer restart.
+                log.info("Re-enqueuing InitProducerId request after previous attempt was lost");
+                enqueueInitProducerIdRequest();
             }
         }
+    }
+
+    private void enqueueInitProducerIdRequest() {
+        InitProducerIdRequestData requestData = new InitProducerIdRequestData()
+                .setTransactionalId(null)
+                .setTransactionTimeoutMs(Integer.MAX_VALUE);
+        InitProducerIdHandler handler = new InitProducerIdHandler(
+                new InitProducerIdRequest.Builder(requestData), false);
+        enqueueRequest(handler);
     }
 
     /**
