@@ -4470,10 +4470,6 @@ public class GroupMetadataManager {
         }
 
         try {
-            Map<Uuid, Set<Integer>> initializedTopicPartitions = shareGroupStatePartitionMetadata.containsKey(group.groupId()) ?
-                stripInitValue(shareGroupStatePartitionMetadata.get(group.groupId()).initializedTopics()) :
-                Map.of();
-
             UpdatedMembersAndTargetAssignmentView<ShareGroupMember, Assignment> updatedMembersAndTargetAssignment =
                 new UpdatedMembersAndTargetAssignmentView<>(
                     group.members(),
@@ -4483,13 +4479,18 @@ public class GroupMetadataManager {
                 );
             updatedMembersAndTargetAssignment.addOrUpdateMember(updatedMember.memberId(), updatedMember);
 
+            ShareGroupStatePartitionMetadataInfo statePartitionMetadata = shareGroupStatePartitionMetadata.getOrDefault(
+                group.groupId(),
+                ShareGroupStatePartitionMetadataInfo.EMPTY
+            );
+
             long startTimeMs = time.milliseconds();
             GroupSpec groupSpec = new GroupSpecBuilder.ShareGroupSpecBuilder()
                 .withMembers(updatedMembersAndTargetAssignment.members())
                 .withSubscriptionType(subscriptionType)
                 .withTargetAssignment(updatedMembersAndTargetAssignment.targetAssignment())
-                .withTopicAssignablePartitionsMap(initializedTopicPartitions)
                 .withMetadataImage(metadataImage)
+                .withShareGroupStatePartitionMetadata(statePartitionMetadata)
                 .build();
 
             TargetAssignmentBuilder assignmentResultBuilder =

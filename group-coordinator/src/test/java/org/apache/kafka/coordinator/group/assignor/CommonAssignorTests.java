@@ -24,7 +24,7 @@ import org.apache.kafka.coordinator.group.api.assignor.GroupSpec;
 import org.apache.kafka.coordinator.group.api.assignor.PartitionAssignor;
 import org.apache.kafka.coordinator.group.api.assignor.SubscriptionType;
 import org.apache.kafka.coordinator.group.modern.Assignment;
-import org.apache.kafka.coordinator.group.modern.GroupSpecImpl;
+import org.apache.kafka.coordinator.group.modern.ConsumerGroupSpecImpl;
 import org.apache.kafka.coordinator.group.modern.MemberSubscriptionAndAssignmentImpl;
 import org.apache.kafka.coordinator.group.modern.SubscribedTopicDescriberImpl;
 
@@ -87,7 +87,7 @@ public class CommonAssignorTests {
             Assignment.EMPTY
         ));
 
-        GroupSpec groupSpec = new GroupSpecImpl(
+        GroupSpec groupSpec = new ConsumerGroupSpecImpl(
             metadataImage,
             members,
             subscriptionType
@@ -109,7 +109,7 @@ public class CommonAssignorTests {
                 new Assignment(firstAssignment.members().get(memberId).partitions())
             ));
         }
-        GroupSpec groupSpecWithAssignment = new GroupSpecImpl(
+        GroupSpec groupSpecWithAssignment = new ConsumerGroupSpecImpl(
             metadataImage,
             membersWithAssignment,
             subscriptionType
@@ -169,7 +169,7 @@ public class CommonAssignorTests {
             Assignment.EMPTY
         ));
 
-        GroupSpec groupSpec = new GroupSpecImpl(
+        GroupSpec groupSpec = new ConsumerGroupSpecImpl(
             metadataImage,
             members,
             subscriptionType
@@ -206,7 +206,7 @@ public class CommonAssignorTests {
                     new Assignment(firstAssignment.members().get(memberId).partitions())
                 ));
             }
-            GroupSpec groupSpecWithAssignment = new GroupSpecImpl(
+            GroupSpec groupSpecWithAssignment = new ConsumerGroupSpecImpl(
                 metadataImage,
                 membersWithAssignment,
                 subscriptionType

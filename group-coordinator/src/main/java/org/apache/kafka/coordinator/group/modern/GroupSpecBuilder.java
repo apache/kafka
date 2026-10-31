@@ -23,6 +23,8 @@ import org.apache.kafka.coordinator.group.api.assignor.GroupSpec;
 import org.apache.kafka.coordinator.group.api.assignor.SubscriptionType;
 import org.apache.kafka.coordinator.group.modern.consumer.ConsumerGroupMember;
 import org.apache.kafka.coordinator.group.modern.consumer.ResolvedRegularExpression;
+import org.apache.kafka.coordinator.group.modern.share.ShareGroup.InitMapValue;
+import org.apache.kafka.coordinator.group.modern.share.ShareGroup.ShareGroupStatePartitionMetadataInfo;
 import org.apache.kafka.coordinator.group.modern.share.ShareGroupMember;
 import org.apache.kafka.coordinator.group.util.UnionSet;
 
@@ -93,9 +95,37 @@ public abstract class GroupSpecBuilder<T extends ModernGroupMember, U extends Gr
                 memberAssignment
             );
         }
+
+        @Override
+        protected GroupSpecImpl newGroupSpec(
+            CoordinatorMetadataImage metadataImage,
+            Map<String, MemberSubscriptionAndAssignmentImpl> members,
+            SubscriptionType subscriptionType
+        ) {
+            return new ConsumerGroupSpecImpl(metadataImage, members, subscriptionType);
+        }
     }
 
     public static class ShareGroupSpecBuilder extends GroupSpecBuilder<ShareGroupMember, ShareGroupSpecBuilder> {
+
+        /**
+         * The initialized topic partitions, which are the only assignable partitions.
+         */
+        private Map<Uuid, InitMapValue> initializedTopics = Map.of();
+
+        /**
+         * Adds the share group state partition metadata.
+         *
+         * @param shareGroupStatePartitionMetadata The share group state partition metadata.
+         * @return This object.
+         */
+        public ShareGroupSpecBuilder withShareGroupStatePartitionMetadata(
+            ShareGroupStatePartitionMetadataInfo shareGroupStatePartitionMetadata
+        ) {
+            this.initializedTopics = shareGroupStatePartitionMetadata.initializedTopics();
+            return self();
+        }
+
         @Override
         protected ShareGroupSpecBuilder self() {
             return this;
@@ -113,6 +143,15 @@ public abstract class GroupSpecBuilder<T extends ModernGroupMember, U extends Gr
                 new TopicIds(member.subscribedTopicNames(), topicResolver),
                 memberAssignment
             );
+        }
+
+        @Override
+        protected GroupSpecImpl newGroupSpec(
+            CoordinatorMetadataImage metadataImage,
+            Map<String, MemberSubscriptionAndAssignmentImpl> members,
+            SubscriptionType subscriptionType
+        ) {
+            return new ShareGroupSpecImpl(metadataImage, members, subscriptionType, initializedTopics);
         }
     }
 
@@ -135,18 +174,6 @@ public abstract class GroupSpecBuilder<T extends ModernGroupMember, U extends Gr
      * The metadata image.
      */
     private CoordinatorMetadataImage metadataImage = CoordinatorMetadataImage.EMPTY;
-
-    /**
-     * Topic partition assignable map.
-     */
-    private Optional<Map<Uuid, Set<Integer>>> topicAssignablePartitionsMap = Optional.empty();
-
-    /**
-     * Whether the {@link GroupSpec} produced by {@link GroupSpecBuilder#build()} will be used on a
-     * background thread. When {@code true}, {@link GroupSpecBuilder#build()} takes copies of any
-     * mutable collections, so that subsequent changes are not visible to the assignor.
-     */
-    private boolean assignorOffload;
 
     /**
      * Adds all the existing members.
@@ -200,27 +227,6 @@ public abstract class GroupSpecBuilder<T extends ModernGroupMember, U extends Gr
         return self();
     }
 
-    public U withTopicAssignablePartitionsMap(
-        Map<Uuid, Set<Integer>> topicAssignablePartitionsMap
-    ) {
-        this.topicAssignablePartitionsMap = Optional.of(topicAssignablePartitionsMap);
-        return self();
-    }
-
-    /**
-     * Sets whether the {@link GroupSpec} produced by {@link GroupSpecBuilder#build()} will be used
-     * on a background thread. When {@code true}, {@link GroupSpecBuilder#build()} takes copies of
-     * any mutable collections, so that subsequent changes are not visible to the assignor.
-     *
-     * @param assignorOffload Whether the produced {@link GroupSpec} will be consumed on a
-     *                        background thread.
-     * @return This object.
-     */
-    public U withAssignorOffload(boolean assignorOffload) {
-        this.assignorOffload = assignorOffload;
-        return self();
-    }
-
     /**
      * Builds the {@link GroupSpec} to be passed to the assignor.
      *
@@ -242,22 +248,10 @@ public abstract class GroupSpecBuilder<T extends ModernGroupMember, U extends Gr
             ))
         );
 
-        Optional<Map<Uuid, Set<Integer>>> topicAssignablePartitionsMap = this.topicAssignablePartitionsMap;
-        if (assignorOffload) {
-            if (topicAssignablePartitionsMap.isPresent()) {
-                Map<Uuid, Set<Integer>> topicAssignablePartitionsMapCopy = Utils.newHashMap(topicAssignablePartitionsMap.get().size());
-                for (Map.Entry<Uuid, Set<Integer>> entry : topicAssignablePartitionsMap.get().entrySet()) {
-                    topicAssignablePartitionsMapCopy.put(entry.getKey(), Set.copyOf(entry.getValue()));
-                }
-                topicAssignablePartitionsMap = Optional.of(topicAssignablePartitionsMapCopy);
-            }
-        }
-
-        return new GroupSpecImpl(
+        return newGroupSpec(
             metadataImage,
             Collections.unmodifiableMap(memberSpecs),
-            subscriptionType,
-            topicAssignablePartitionsMap
+            subscriptionType
         );
     }
 
@@ -267,5 +261,11 @@ public abstract class GroupSpecBuilder<T extends ModernGroupMember, U extends Gr
         T member,
         Assignment memberAssignment,
         TopicIds.TopicResolver topicResolver
+    );
+
+    protected abstract GroupSpecImpl newGroupSpec(
+        CoordinatorMetadataImage metadataImage,
+        Map<String, MemberSubscriptionAndAssignmentImpl> members,
+        SubscriptionType subscriptionType
     );
 }
