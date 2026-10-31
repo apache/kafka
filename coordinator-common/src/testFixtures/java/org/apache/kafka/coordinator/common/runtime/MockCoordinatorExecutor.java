@@ -19,10 +19,12 @@ package org.apache.kafka.coordinator.common.runtime;
 import java.util.ArrayDeque;
 import java.util.ArrayList;
 import java.util.HashMap;
+import java.util.HashSet;
 import java.util.List;
 import java.util.Map;
 import java.util.Objects;
 import java.util.Queue;
+import java.util.Set;
 
 public class MockCoordinatorExecutor<T> implements CoordinatorExecutor<T> {
     private class ExecutorTask<R> {
@@ -70,6 +72,12 @@ public class MockCoordinatorExecutor<T> implements CoordinatorExecutor<T> {
     private final Map<String, TaskRunnable<?>> tasks = new HashMap<>();
     private final Queue<ExecutorTask<?>> queue = new ArrayDeque<>();
 
+    /**
+     * The keys of the tasks scheduled by the operations in the current batch. These tasks are
+     * cancelled by {@link #onBatchReverted()}.
+     */
+    private final Set<String> currentBatchTasks = new HashSet<>();
+
     @Override
     public <R> boolean schedule(
         String key,
@@ -77,6 +85,7 @@ public class MockCoordinatorExecutor<T> implements CoordinatorExecutor<T> {
         TaskOperation<T, R> operation
     ) {
         if (tasks.putIfAbsent(key, task) != null) return false;
+        currentBatchTasks.add(key);
         return queue.add(new ExecutorTask<>(key, task, operation));
     }
 
@@ -102,5 +111,22 @@ public class MockCoordinatorExecutor<T> implements CoordinatorExecutor<T> {
         }
         queue.clear();
         return results;
+    }
+
+    /**
+     * Forgets the tasks scheduled by the operations in the current batch, now that the batch
+     * has been written. Unlike the real executor, the tasks were already queued.
+     */
+    public void onBatchWritten() {
+        currentBatchTasks.clear();
+    }
+
+    /**
+     * Cancels the tasks scheduled by the operations in the current batch, now that the batch
+     * has been reverted.
+     */
+    public void onBatchReverted() {
+        currentBatchTasks.forEach(this::cancel);
+        currentBatchTasks.clear();
     }
 }
