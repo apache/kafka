@@ -1314,6 +1314,15 @@ public class ClassicGroupTest {
     }
 
     @Test
+    public void testDeserializeSubscribedTopics() {
+        byte[] metadata = Utils.toArray(ConsumerProtocol.serializeSubscription(
+            new ConsumerPartitionAssignor.Subscription(List.of("foo", "bar"))
+        ));
+
+        assertEquals(Set.of("foo", "bar"), ClassicGroup.deserializeSubscribedTopics(metadata));
+    }
+
+    @Test
     public void testIsInStates() {
         ClassicGroup group = new ClassicGroup(new LogContext(), "groupId", EMPTY, Time.SYSTEM);
         assertTrue(group.isInStates(Set.of("empty"), 0));
