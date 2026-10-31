@@ -1491,7 +1491,7 @@ public class KTableImpl<K, S, V> extends AbstractStream<K, V> implements KTable<
         }
     }
 
-    private static class DefaultForeignResponseSinkPartitioner<K, VO> implements StreamPartitioner<K, SubscriptionResponseWrapper<VO>> {
+    static class DefaultForeignResponseSinkPartitioner<K, VO> implements StreamPartitioner<K, SubscriptionResponseWrapper<VO>> {
         @SuppressWarnings("removal")
         @Override
         public Optional<Set<Integer>> partitions(final String topic, final K key, final SubscriptionResponseWrapper<VO> value, final int numPartitions) {
@@ -1505,7 +1505,15 @@ public class KTableImpl<K, S, V> extends AbstractStream<K, V> implements KTable<
                                                  final Headers headers,
                                                  final int numPartitions) {
             final Integer partition = value.primaryPartition();
-            return partition == null ? Optional.empty() : Optional.of(Set.of(partition));
+            if (partition == null) {
+                return Optional.empty();
+            }
+            if (partition < 0 || partition >= numPartitions) {
+                LOG.warn("Ignoring invalid partition {} for foreign-key join response topic {} with {} partitions; using the default partitioner.",
+                    partition, topic, numPartitions);
+                return Optional.empty();
+            }
+            return Optional.of(Set.of(partition));
         }
     }
 }
