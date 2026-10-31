@@ -130,6 +130,7 @@ import java.util.stream.IntStream;
 
 import static org.apache.kafka.common.config.TopicConfig.SEGMENT_BYTES_CONFIG;
 import static org.apache.kafka.common.metadata.MetadataRecordType.CLEAR_ELR_RECORD;
+import static org.apache.kafka.common.metadata.MetadataRecordType.PARTITION_CHANGE_RECORD;
 import static org.apache.kafka.common.protocol.Errors.ELECTION_NOT_NEEDED;
 import static org.apache.kafka.common.protocol.Errors.ELIGIBLE_LEADERS_NOT_AVAILABLE;
 import static org.apache.kafka.common.protocol.Errors.INELIGIBLE_REPLICA;
@@ -1710,6 +1711,43 @@ public class ReplicationControlManagerTest {
         assertArrayEquals(
                 new Uuid[] {DirectoryId.UNASSIGNED, Uuid.fromString("dxCDSgNjQvS4WuyqEKoCwA")},
                 replicationControl.getPartition(replicationControl.getTopicId("foo"), 5).directories);
+    }
+
+    @Test
+    public void testCreatePartitionsUsesReplicationFactorOfPartitionZero() {
+        ReplicationControlTestContext ctx = new ReplicationControlTestContext.Builder().build();
+        ReplicationControlManager replicationControl = ctx.replicationControl;
+        ctx.registerBrokers(0, 1, 2);
+        ctx.unfenceBrokers(0, 1, 2);
+        // The partitions are kept in a hash map. With 3 partitions, iterating over it does not
+        // start at partition 0, so this test fails if the controller uses the iterator's first
+        // partition instead of partition 0.
+        int[][] replicas = new int[3][];
+        for (int i = 0; i < replicas.length; i++) {
+            replicas[i] = new int[] {i % 3};
+        }
+        Uuid fooId = ctx.createTestTopic("foo", replicas).topicId();
+        // Increase the replication factor of partition 0 only.
+        ctx.replay(List.of(new ApiMessageAndVersion(new PartitionChangeRecord().
+            setTopicId(fooId).
+            setPartitionId(0).
+            setReplicas(List.of(0, 1, 2)).
+            setIsr(List.of(0, 1, 2)).
+            setDirectories(List.of(DirectoryId.UNASSIGNED, DirectoryId.UNASSIGNED, DirectoryId.UNASSIGNED)),
+            PARTITION_CHANGE_RECORD.highestSupportedVersion())));
+
+        ControllerRequestContext requestContext = anonymousContextFor(ApiKeys.CREATE_PARTITIONS);
+        ControllerResult<List<CreatePartitionsTopicResult>> result = replicationControl.createPartitions(
+            requestContext, List.of(new CreatePartitionsTopic().setName("foo").setCount(4).setAssignments(null)));
+        assertEquals(NONE.code(), result.response().get(0).errorCode());
+        ctx.replay(result.records());
+        assertEquals(3, replicationControl.getPartition(fooId, 3).replicas.length);
+
+        // Manual assignments are also validated against partition 0.
+        result = replicationControl.createPartitions(requestContext, List.of(new CreatePartitionsTopic().
+            setName("foo").setCount(5).setAssignments(List.of(
+                new CreatePartitionsAssignment().setBrokerIds(List.of(0))))));
+        assertEquals(INVALID_REPLICA_ASSIGNMENT.code(), result.response().get(0).errorCode());
     }
 
     @Test
