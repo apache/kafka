@@ -211,7 +211,7 @@ public abstract class SaslAuthenticatorFailureDelayTest {
 
     private NioEchoServer createEchoServer(ListenerName listenerName, SecurityProtocol securityProtocol) throws Exception {
         return NetworkTestUtils.createEchoServer(listenerName, securityProtocol,
-                new TestSecurityConfig(saslServerConfigs), credentialCache, time);
+                new TestSecurityConfig(saslServerConfigs), credentialCache, failedAuthenticationDelayMs, time);
     }
 
     private void createClientConnection(SecurityProtocol securityProtocol, String node) throws Exception {
