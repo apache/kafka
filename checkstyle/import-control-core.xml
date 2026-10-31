@@ -59,6 +59,10 @@
     <allow class="com.fasterxml.jackson.annotation.JsonProperty" />
     <allow class="com.fasterxml.jackson.annotation.JsonPropertyOrder" />
     <allow class="com.fasterxml.jackson.annotation.JsonIgnoreProperties" />
+    <allow class="com.fasterxml.jackson.databind.JsonNode" />
+    <allow class="com.fasterxml.jackson.databind.ObjectMapper" />
+    <allow pkg="io.github.classgraph" />
+    <allow pkg="org.apache.kafka.common.config" />
   </subpackage>
 
   <subpackage name="server">
