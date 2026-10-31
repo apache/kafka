@@ -43,6 +43,11 @@ public interface AbstractSubscriptionState {
     Set<TopicPartition> assignedPartitions();
 
     /**
+     * @return The number of currently assigned partitions.
+     */
+    int numAssignedPartitions();
+
+    /**
      * @return {@code true} if partitions are assigned automatically from a subscription (as
      * opposed to manual assignment).
      */
