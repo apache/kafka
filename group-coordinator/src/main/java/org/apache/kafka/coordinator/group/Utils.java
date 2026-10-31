@@ -41,6 +41,7 @@ import java.util.Collections;
 import java.util.HashMap;
 import java.util.HashSet;
 import java.util.Iterator;
+import java.util.LinkedHashSet;
 import java.util.List;
 import java.util.Map;
 import java.util.Optional;
@@ -367,22 +368,6 @@ public class Utils {
     }
 
     /**
-     * Throws an InvalidRequestException if the value is not null and non-empty.
-     *
-     * @param value The value.
-     * @param error The error message.
-     * @throws InvalidRequestException
-     */
-    static void throwIfNotNullOrEmpty(
-        Collection<?> value,
-        String error
-    ) throws InvalidRequestException {
-        if (value != null && !value.isEmpty()) {
-            throw new InvalidRequestException(error);
-        }
-    }
-
-    /**
      * Throws an InvalidRequestException if the value is non-null.
      *
      * @param value The value.
@@ -519,5 +504,43 @@ public class Utils {
         }
 
         return hasher.getAsLong();
+    }
+
+    /**
+     * Constructs a HashMap that can hold the expected number of mappings without resizing. This is
+     * equivalent to HashMap.newHashMap which is introduced in Java 19.
+     * @param numMappings The expected number of mappings.
+     * @return The newly created map.
+     */
+    public static <K, V> HashMap<K, V> newHashMap(int numMappings) {
+        return new HashMap<>(hashCapacity(numMappings));
+    }
+
+    /**
+     * Constructs a HashSet that can hold the expected number of elements without resizing. This is
+     * equivalent to HashSet.newHashSet which is introduced in Java 19.
+     * @param numElements The expected number of elements.
+     * @return The newly created set.
+     */
+    public static <E> HashSet<E> newHashSet(int numElements) {
+        return new HashSet<>(hashCapacity(numElements));
+    }
+
+    /**
+     * Constructs a LinkedHashSet that can hold the expected number of elements without resizing.
+     * This is equivalent to LinkedHashSet.newLinkedHashSet which is introduced in Java 19.
+     * @param numElements The expected number of elements.
+     * @return The newly created set.
+     */
+    public static <E> LinkedHashSet<E> newLinkedHashSet(int numElements) {
+        return new LinkedHashSet<>(hashCapacity(numElements));
+    }
+
+    /**
+     * @return The smallest initial capacity of a HashMap or HashSet, with the default load factor
+     * of 0.75, that holds the given number of entries without resizing.
+     */
+    static int hashCapacity(int numEntries) {
+        return (int) Math.ceil(numEntries / 0.75);
     }
 }

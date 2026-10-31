@@ -1218,7 +1218,7 @@ public class RequestResponseTest {
             case CONSUMER_GROUP_HEARTBEAT: return createConsumerGroupHeartbeatResponse();
             case CONSUMER_GROUP_DESCRIBE: return createConsumerGroupDescribeResponse();
             case CONTROLLER_REGISTRATION: return createControllerRegistrationResponse();
-            case GET_TELEMETRY_SUBSCRIPTIONS: return createGetTelemetrySubscriptionsResponse();
+            case GET_TELEMETRY_SUBSCRIPTIONS: return createGetTelemetrySubscriptionsResponse(version);
             case PUSH_TELEMETRY: return createPushTelemetryResponse();
             case ASSIGN_REPLICAS_TO_DIRS: return createAssignReplicasToDirsResponse();
             case LIST_CONFIG_RESOURCES: return createListConfigResourcesResponse();
@@ -3709,9 +3709,12 @@ public class RequestResponseTest {
         ).build(version);
     }
 
-    private GetTelemetrySubscriptionsResponse createGetTelemetrySubscriptionsResponse() {
+    private GetTelemetrySubscriptionsResponse createGetTelemetrySubscriptionsResponse(short version) {
         GetTelemetrySubscriptionsResponseData response = new GetTelemetrySubscriptionsResponseData();
-        response.setClientInstanceId(Uuid.randomUuid());
+        // Only the v0 response has the client instance ID field.
+        if (version == 0) {
+            response.setClientInstanceId(Uuid.randomUuid());
+        }
         response.setSubscriptionId(1);
         response.setAcceptedCompressionTypes(Collections.singletonList(CompressionType.GZIP.id));
         response.setPushIntervalMs(60 * 1000);
@@ -3761,7 +3764,7 @@ public class RequestResponseTest {
                     .setPartition(0)
                     .setStateEpoch(0)
                     .setStartOffset(0)))));
-        return new InitializeShareGroupStateRequest.Builder(data).build(version);
+        return new InitializeShareGroupStateRequest.Builder(data, true).build(version);
     }
 
     private InitializeShareGroupStateResponse createInitializeShareGroupStateResponse() {
@@ -3781,7 +3784,7 @@ public class RequestResponseTest {
                 .setTopicId(Uuid.randomUuid())
                 .setPartitions(Collections.singletonList(new ReadShareGroupStateRequestData.PartitionData()
                     .setPartition(0)))));
-        return new ReadShareGroupStateRequest.Builder(data).build(version);
+        return new ReadShareGroupStateRequest.Builder(data, true).build(version);
     }
 
     private ReadShareGroupStateResponse createReadShareGroupStateResponse() {
@@ -3816,7 +3819,7 @@ public class RequestResponseTest {
                         .setLastOffset(0)
                         .setDeliveryState((byte) 0x0)
                         .setDeliveryCount((short) 0)))))));
-        return new WriteShareGroupStateRequest.Builder(data).build(version);
+        return new WriteShareGroupStateRequest.Builder(data, true).build(version);
     }
 
     private WriteShareGroupStateResponse createWriteShareGroupStateResponse() {
@@ -3836,7 +3839,7 @@ public class RequestResponseTest {
                 .setTopicId(Uuid.randomUuid())
                 .setPartitions(Collections.singletonList(new DeleteShareGroupStateRequestData.PartitionData()
                     .setPartition(0)))));
-        return new DeleteShareGroupStateRequest.Builder(data).build(version);
+        return new DeleteShareGroupStateRequest.Builder(data, true).build(version);
     }
 
     private DeleteShareGroupStateResponse createDeleteShareGroupStateResponse() {
@@ -3856,7 +3859,7 @@ public class RequestResponseTest {
                 .setTopicId(Uuid.randomUuid())
                 .setPartitions(Collections.singletonList(new ReadShareGroupStateSummaryRequestData.PartitionData()
                     .setPartition(0)))));
-        return new ReadShareGroupStateSummaryRequest.Builder(data).build(version);
+        return new ReadShareGroupStateSummaryRequest.Builder(data, true).build(version);
     }
 
     private ReadShareGroupStateSummaryResponse createReadShareGroupStateSummaryResponse() {

@@ -19,7 +19,7 @@ package org.apache.kafka.coordinator.group;
 import org.apache.kafka.common.Uuid;
 import org.apache.kafka.common.errors.GroupIdNotFoundException;
 import org.apache.kafka.common.errors.GroupNotEmptyException;
-import org.apache.kafka.common.errors.InvalidRequestException;
+import org.apache.kafka.common.errors.StreamsInvalidTopologyEpochException;
 import org.apache.kafka.common.errors.UnknownMemberIdException;
 import org.apache.kafka.common.message.ConsumerGroupHeartbeatRequestData;
 import org.apache.kafka.common.message.ConsumerGroupHeartbeatResponseData;
@@ -266,10 +266,10 @@ public class GroupCoordinatorShardTest {
         assertThrows(UnknownMemberIdException.class,
             () -> coordinator.validateStreamsGroupTopologyDescriptionUpdate("foo", "stranger", 3, 100L));
 
-        // Stale topology epoch propagates as INVALID_REQUEST.
+        // Stale topology epoch propagates as STREAMS_INVALID_TOPOLOGY_EPOCH.
         when(groupMetadataManager.validateStreamsGroupTopologyDescriptionUpdate("foo", "m1", 2, 100L))
-            .thenThrow(new InvalidRequestException("stale epoch"));
-        assertThrows(InvalidRequestException.class,
+            .thenThrow(new StreamsInvalidTopologyEpochException("stale epoch"));
+        assertThrows(StreamsInvalidTopologyEpochException.class,
             () -> coordinator.validateStreamsGroupTopologyDescriptionUpdate("foo", "m1", 2, 100L));
     }
 

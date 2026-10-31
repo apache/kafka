@@ -22,6 +22,7 @@ import org.apache.kafka.common.errors.KafkaStorageException;
 import org.apache.kafka.common.errors.OffsetOutOfRangeException;
 import org.apache.kafka.common.message.AbortedTxn;
 import org.apache.kafka.common.message.FetchResponseData;
+import org.apache.kafka.common.network.FileReadException;
 import org.apache.kafka.common.record.internal.FileLogInputStream;
 import org.apache.kafka.common.record.internal.FileRecords;
 import org.apache.kafka.common.record.internal.MemoryRecords;
@@ -45,6 +46,7 @@ import java.util.List;
 import java.util.Optional;
 import java.util.Set;
 import java.util.UUID;
+import java.util.concurrent.ScheduledFuture;
 import java.util.concurrent.atomic.AtomicLong;
 import java.util.function.Consumer;
 import java.util.function.Supplier;
@@ -83,6 +85,7 @@ public class LocalLog {
     private final Time time;
     private final TopicPartition topicPartition;
     private final LogDirFailureChannel logDirFailureChannel;
+    private final FileRecords.TransferFailureHandler transferFailureHandler = this::onTransferFailure;
     private final Logger logger;
 
     private volatile LogOffsetMetadata nextOffsetMetadata;
@@ -515,7 +518,7 @@ public class LocalLog {
                         }
                     }
                     if (fetchDataInfo != null) {
-                        return fetchDataInfo;
+                        return withTransferFailureHandler(fetchDataInfo);
                     } else {
                         // okay we are beyond the end of the last segment with no data fetched although the start offset is in range,
                         // this can happen when all messages with offset larger than start offsets have been deleted.
@@ -524,6 +527,60 @@ public class LocalLog {
                     }
                 }
         );
+    }
+
+    /**
+     * The records of a fetch are read from the segment only when they are written to the network, after this log
+     * has returned them, so an IOException from that read cannot be caught here. Have the records report a failed
+     * write instead, so that the log directory is marked offline if the segment cannot be read, as for any other
+     * IOException in this log.
+     */
+    private FetchDataInfo withTransferFailureHandler(FetchDataInfo fetchDataInfo) {
+        if (!(fetchDataInfo.records instanceof FileRecords fileRecords))
+            return fetchDataInfo;
+        return fetchDataInfo.withRecords(fileRecords.withTransferFailureHandler(transferFailureHandler));
+    }
+
+    /**
+     * Called on the network thread when writing fetched records failed in a way that may come from a failed read of
+     * the segment. A {@link FileReadException} means that the segment could not be read, so the log dir is marked
+     * offline right away. Any other exception may be a socket or a storage failure, which re-reading the region tells
+     * apart. The re-read is done on the scheduler rather than on the network thread, at most once at a time per log
+     * dir, so that a burst of failed sends or a slow failing disk does not take up the threads of the scheduler, which
+     * other tasks of the broker share.
+     */
+    private void onTransferFailure(FileRecords records, long position, int count, IOException transferFailure) {
+        String logDir = parentDir;
+        if (transferFailure instanceof FileReadException readFailure) {
+            logDirFailureChannel.maybeAddOfflineLogDir(logDir, "Failed to read " + records.file().getAbsolutePath()
+                + " at position " + readFailure.position() + " while writing " + count + " bytes from position "
+                + position + " to a network channel", readFailure);
+            return;
+        }
+        if (!logDirFailureChannel.tryStartReadCheck(logDir))
+            return;
+        // Once the scheduler has taken the check, the check finishes it; until then it is finished here, whatever is
+        // thrown, since a check that is never finished would stop this log dir from being checked for good
+        boolean scheduled = false;
+        try {
+            ScheduledFuture<?> check = scheduler.scheduleOnce("check-read-after-transfer-failure", () -> {
+                try {
+                    records.readFailure(position, count).ifPresent(readFailure -> {
+                        readFailure.addSuppressed(transferFailure);
+                        logDirFailureChannel.maybeAddOfflineLogDir(logDir, readFailure.getMessage(), readFailure);
+                    });
+                } finally {
+                    logDirFailureChannel.finishReadCheck(logDir);
+                }
+            });
+            // A scheduler that is not running ignores the task
+            scheduled = !check.isCancelled();
+        } catch (RuntimeException e) {
+            logger.warn("Could not schedule a read check of {} after a failed transfer", records.file().getAbsolutePath(), e);
+        } finally {
+            if (!scheduled)
+                logDirFailureChannel.finishReadCheck(logDir);
+        }
     }
 
     public void append(long lastOffset, MemoryRecords records) throws IOException {

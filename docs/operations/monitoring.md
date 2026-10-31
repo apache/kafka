@@ -509,7 +509,7 @@ kafka.server:type=ReplicaManager,name=UnderReplicatedPartitions
 <tr>  
 <td>
 
-\# of under minIsr partitions (|ISR| < min.insync.replicas)
+\# of under minIsr partitions (|ISR| < min(min.insync.replicas, replica count))
 </td>  
 <td>
 
@@ -522,7 +522,7 @@ kafka.server:type=ReplicaManager,name=UnderMinIsrPartitionCount
 <tr>  
 <td>
 
-\# of at minIsr partitions (|ISR| = min.insync.replicas)
+\# of at minIsr partitions (|ISR| = min(min.insync.replicas, replica count))
 </td>  
 <td>
 

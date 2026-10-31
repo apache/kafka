@@ -23,6 +23,7 @@ import org.apache.kafka.common.config.AbstractConfig;
 import org.apache.kafka.common.config.ConfigDef;
 import org.apache.kafka.common.config.ConfigException;
 import org.apache.kafka.common.config.ConfigResource;
+import org.apache.kafka.common.config.TopicConfig;
 import org.apache.kafka.common.config.internals.BrokerSecurityConfigs;
 import org.apache.kafka.common.config.types.Password;
 import org.apache.kafka.common.network.ListenerName;
@@ -33,6 +34,7 @@ import org.apache.kafka.coordinator.group.Group.GroupType;
 import org.apache.kafka.coordinator.group.GroupConfig;
 import org.apache.kafka.coordinator.group.GroupCoordinatorConfig;
 import org.apache.kafka.coordinator.group.modern.share.ShareGroupConfig;
+import org.apache.kafka.coordinator.mirror.ClusterMirrorConfigs;
 import org.apache.kafka.coordinator.share.ShareCoordinatorConfig;
 import org.apache.kafka.coordinator.transaction.AddPartitionsToTxnConfig;
 import org.apache.kafka.coordinator.transaction.TransactionLogConfig;
@@ -52,6 +54,7 @@ import org.apache.commons.validator.routines.InetAddressValidator;
 import org.slf4j.Logger;
 import org.slf4j.LoggerFactory;
 
+import java.io.File;
 import java.util.Collections;
 import java.util.HashMap;
 import java.util.HashSet;
@@ -95,15 +98,65 @@ public abstract class AbstractKafkaConfig extends AbstractConfig {
         QuotaConfig.CONFIG_DEF,
         BrokerSecurityConfigs.CONFIG_DEF,
         DelegationTokenManagerConfigs.CONFIG_DEF,
-        AddPartitionsToTxnConfig.CONFIG_DEF
+        AddPartitionsToTxnConfig.CONFIG_DEF,
+        ClusterMirrorConfigs.brokerConfigDef()
     ));
 
     public AbstractKafkaConfig(ConfigDef definition, Map<?, ?> originals, Map<String, ?> configProviderProps, boolean doLog) {
         super(definition, originals, configProviderProps, doLog);
     }
 
+    public RemoteLogManagerConfig remoteLogManagerConfig() {
+        return new RemoteLogManagerConfig(this);
+    }
+
+    /**
+     * Copy the subset of properties that are relevant to Logs. The individual properties
+     * are listed here since the names are slightly different in each Config class...
+     */
+    public Map<String, Object> extractLogConfigMap() {
+        Map<String, Object> logProps = new HashMap<>();
+        logProps.put(TopicConfig.SEGMENT_BYTES_CONFIG, logSegmentBytes());
+        logProps.put(TopicConfig.SEGMENT_MS_CONFIG, logRollTimeMillis());
+        logProps.put(TopicConfig.SEGMENT_JITTER_MS_CONFIG, logRollTimeJitterMillis());
+        logProps.put(TopicConfig.SEGMENT_INDEX_BYTES_CONFIG, logIndexSizeMaxBytes());
+        logProps.put(TopicConfig.FLUSH_MESSAGES_INTERVAL_CONFIG, logFlushIntervalMessages());
+        logProps.put(TopicConfig.FLUSH_MS_CONFIG, logFlushIntervalMs());
+        logProps.put(TopicConfig.RETENTION_BYTES_CONFIG, logRetentionBytes());
+        logProps.put(TopicConfig.RETENTION_MS_CONFIG, logRetentionTimeMillis());
+        logProps.put(TopicConfig.MAX_MESSAGE_BYTES_CONFIG, messageMaxBytes());
+        logProps.put(TopicConfig.MAX_DECOMPRESSED_MESSAGE_BYTES_CONFIG, maxDecompressedMessageBytes());
+        logProps.put(TopicConfig.INDEX_INTERVAL_BYTES_CONFIG, logIndexIntervalBytes());
+        logProps.put(TopicConfig.DELETE_RETENTION_MS_CONFIG, logCleanerDeleteRetentionMs());
+        logProps.put(TopicConfig.MIN_COMPACTION_LAG_MS_CONFIG, logCleanerMinCompactionLagMs());
+        logProps.put(TopicConfig.MAX_COMPACTION_LAG_MS_CONFIG, logCleanerMaxCompactionLagMs());
+        logProps.put(TopicConfig.FILE_DELETE_DELAY_MS_CONFIG, logDeleteDelayMs());
+        logProps.put(TopicConfig.MIN_CLEANABLE_DIRTY_RATIO_CONFIG, logCleanerMinCleanRatio());
+        logProps.put(TopicConfig.CLEANUP_POLICY_CONFIG, logCleanupPolicy());
+        logProps.put(TopicConfig.MIN_IN_SYNC_REPLICAS_CONFIG, minInSyncReplicas());
+        logProps.put(TopicConfig.COMPRESSION_TYPE_CONFIG, compressionType());
+        logProps.put(TopicConfig.COMPRESSION_GZIP_LEVEL_CONFIG, gzipCompressionLevel());
+        logProps.put(TopicConfig.COMPRESSION_LZ4_LEVEL_CONFIG, lz4CompressionLevel());
+        logProps.put(TopicConfig.COMPRESSION_ZSTD_LEVEL_CONFIG, zstdCompressionLevel());
+        logProps.put(TopicConfig.UNCLEAN_LEADER_ELECTION_ENABLE_CONFIG, uncleanLeaderElectionEnable());
+        logProps.put(TopicConfig.PREALLOCATE_CONFIG, logPreAllocateEnable());
+        logProps.put(TopicConfig.MESSAGE_TIMESTAMP_TYPE_CONFIG, logMessageTimestampType().name);
+        logProps.put(TopicConfig.MESSAGE_TIMESTAMP_BEFORE_MAX_MS_CONFIG, logMessageTimestampBeforeMaxMs());
+        logProps.put(TopicConfig.MESSAGE_TIMESTAMP_AFTER_MAX_MS_CONFIG, logMessageTimestampAfterMaxMs());
+        RemoteLogManagerConfig remoteLogManagerConfig = remoteLogManagerConfig();
+        logProps.put(TopicConfig.LOCAL_LOG_RETENTION_MS_CONFIG, remoteLogManagerConfig.logLocalRetentionMs());
+        logProps.put(TopicConfig.LOCAL_LOG_RETENTION_BYTES_CONFIG, remoteLogManagerConfig.logLocalRetentionBytes());
+        logProps.put(TopicConfig.REMOTE_COPY_LAG_MS_CONFIG, remoteLogManagerConfig.logRemoteCopyLagMs());
+        logProps.put(TopicConfig.REMOTE_COPY_LAG_BYTES_CONFIG, remoteLogManagerConfig.logRemoteCopyLagBytes());
+        return Collections.unmodifiableMap(logProps);
+    }
+
     public List<String> logDirs() {
         return Optional.ofNullable(getList(ServerLogConfigs.LOG_DIRS_CONFIG)).orElse(getList(ServerLogConfigs.LOG_DIR_CONFIG));
+    }
+
+    public List<String> absoluteLogDirs() {
+        return toAbsolutePaths(logDirs());
     }
 
     public List<String> cordonedLogDirs() {
@@ -112,6 +165,16 @@ public abstract class AbstractKafkaConfig extends AbstractConfig {
             return logDirs();
         }
         return configuredCordonedLogDirs;
+    }
+
+    public List<String> absoluteCordonedLogDirs() {
+        return toAbsolutePaths(cordonedLogDirs());
+    }
+
+    private static List<String> toAbsolutePaths(List<String> paths) {
+        return paths.stream()
+            .map(path -> new File(path).getAbsolutePath())
+            .toList();
     }
 
     public int numIoThreads() {
@@ -157,6 +220,22 @@ public abstract class AbstractKafkaConfig extends AbstractConfig {
 
     public SecurityProtocol interBrokerSecurityProtocol() {
         return interBrokerListenerNameAndSecurityProtocol().getValue();
+    }
+
+    public ListenerName mirrorAdminListenerName() {
+        String mirrorAdminListenerName = getString(ReplicationConfigs.MIRROR_ADMIN_LISTENER_NAME_CONFIG);
+        if (mirrorAdminListenerName == null) {
+            return interBrokerListenerName();
+        }
+
+        ListenerName listenerName = ListenerName.normalised(mirrorAdminListenerName);
+        SecurityProtocol securityProtocol = effectiveListenerSecurityProtocolMap().get(listenerName);
+        if (securityProtocol == null) {
+            throw new ConfigException("Listener with name " + listenerName.value() + " defined in " +
+                    ReplicationConfigs.MIRROR_ADMIN_LISTENER_NAME_CONFIG + " not found in " +
+                    SocketServerConfigs.LISTENER_SECURITY_PROTOCOL_MAP_CONFIG + ".");
+        }
+        return listenerName;
     }
 
     public int initialRegistrationTimeoutMs() {
@@ -720,6 +799,10 @@ public abstract class AbstractKafkaConfig extends AbstractConfig {
         return getInt(ServerConfigs.MESSAGE_MAX_BYTES_CONFIG);
     }
 
+    public Integer maxDecompressedMessageBytes() {
+        return getInt(ServerConfigs.MAX_DECOMPRESSED_MESSAGE_BYTES_CONFIG);
+    }
+
     public int getNumReplicaAlterLogDirsThreads() {
         Integer numThreads = getInt(ServerConfigs.NUM_REPLICA_ALTER_LOG_DIRS_THREADS_CONFIG);
         return numThreads != null ? numThreads : logDirs().size();
@@ -912,6 +995,11 @@ public abstract class AbstractKafkaConfig extends AbstractConfig {
 
     public String saslMechanismInterBrokerProtocol() {
         return getString(BrokerSecurityConfigs.SASL_MECHANISM_INTER_BROKER_PROTOCOL_CONFIG);
+    }
+
+    public String saslMechanismMirrorAdminProtocol() {
+        String configured = getString(BrokerSecurityConfigs.SASL_MECHANISM_MIRROR_ADMIN_PROTOCOL_CONFIG);
+        return configured != null ? configured : saslMechanismInterBrokerProtocol();
     }
 
     // ********* Fetch Configuration **********

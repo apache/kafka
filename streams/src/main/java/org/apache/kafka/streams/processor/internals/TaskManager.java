@@ -1876,6 +1876,15 @@ public class TaskManager {
     }
 
     /**
+     * Pause or resume processing and punctuation on the processing threads, if they are enabled.
+     */
+    void setProcessingThreadsPaused(final boolean paused) {
+        if (schedulingTaskManager != null) {
+            schedulingTaskManager.setProcessingPaused(paused);
+        }
+    }
+
+    /**
      * Take records and add them to each respective task
      *
      * @param records Records, can be null
@@ -2204,7 +2213,7 @@ public class TaskManager {
             e -> {
                 throw e;
             },
-            e -> log.debug("Ignoring error in unclean {}", name));
+            e -> log.warn("Ignoring error in unclean {}", name, e));
     }
 
     private boolean canTryInitializeTask(final TaskId taskId, final long nowMs) {

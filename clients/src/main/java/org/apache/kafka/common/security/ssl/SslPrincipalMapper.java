@@ -135,7 +135,9 @@ public class SslPrincipalMapper {
             final Matcher m = pattern.matcher(distinguishedName);
 
             if (m.matches()) {
-                result = distinguishedName.replaceAll(pattern.pattern(), escapeLiteralBackReferences(replacement, m.groupCount()));
+                final StringBuilder sb = new StringBuilder();
+                m.appendReplacement(sb, escapeLiteralBackReferences(replacement, m.groupCount()));
+                result = sb.toString();
             }
 
             if (toLowerCase && result != null) {

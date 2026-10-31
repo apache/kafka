@@ -1800,6 +1800,7 @@ public class RemoteLogManagerTest {
         });
 
         when(mockLog.logEndOffset()).thenReturn(300L);
+        remoteLogManager.close();
         remoteLogManager = new RemoteLogManager(config, brokerId, logDir, clusterId, time,
                 partition -> Optional.of(mockLog),
                 (topicPartition, offset) -> currentLogStartOffset.set(offset),
@@ -2617,6 +2618,7 @@ public class RemoteLogManagerTest {
             }
         };
 
+        remoteLogManager.close();
         remoteLogManager = new RemoteLogManager(config, brokerId, logDir, clusterId, time,
                 tp -> Optional.of(mockLog),
                 (topicPartition, offset) -> currentLogStartOffset.set(offset),
@@ -4185,7 +4187,7 @@ public class RemoteLogManagerTest {
         when(remoteStorageManager.fetchLogSegment(any(RemoteLogSegmentMetadata.class), anyInt()))
                 .thenReturn(fileInputStream);
 
-        RemoteLogManager remoteLogManager = new RemoteLogManager(config, brokerId, logDir, clusterId, time,
+        try (RemoteLogManager remoteLogManager = new RemoteLogManager(config, brokerId, logDir, clusterId, time,
                 tp -> Optional.of(mockLog),
                 (topicPartition, offset) -> currentLogStartOffset.set(offset),
                 brokerTopicStats, metrics, endPoint) {
@@ -4201,20 +4203,21 @@ public class RemoteLogManagerTest {
             int lookupPositionForOffset(RemoteLogSegmentMetadata remoteLogSegmentMetadata, long offset) {
                 return 0;
             }
-        };
-        remoteLogManager.onLeadershipChange(
-                Set.of(mockPartition(leaderTopicIdPartition)), Set.of(), topicIds);
+        }) {
+            remoteLogManager.onLeadershipChange(
+                    Set.of(mockPartition(leaderTopicIdPartition)), Set.of(), topicIds);
 
-        long fetchOffset = 10;
-        FetchRequest.PartitionData partitionData = new FetchRequest.PartitionData(
-                Uuid.randomUuid(), fetchOffset, 0, 100, Optional.empty());
-        RemoteStorageFetchInfo remoteStorageFetchInfo = new RemoteStorageFetchInfo(
-                1048576, true, leaderTopicIdPartition,
-                partitionData, FetchIsolation.HIGH_WATERMARK);
-        FetchDataInfo fetchDataInfo = remoteLogManager.read(remoteStorageFetchInfo);
-        // firstBatch baseOffset may not be equal to the fetchOffset
-        assertEquals(9, fetchDataInfo.fetchOffsetMetadata.messageOffset);
-        assertEquals(273, fetchDataInfo.fetchOffsetMetadata.relativePositionInSegment);
+            long fetchOffset = 10;
+            FetchRequest.PartitionData partitionData = new FetchRequest.PartitionData(
+                    Uuid.randomUuid(), fetchOffset, 0, 100, Optional.empty());
+            RemoteStorageFetchInfo remoteStorageFetchInfo = new RemoteStorageFetchInfo(
+                    1048576, true, leaderTopicIdPartition,
+                    partitionData, FetchIsolation.HIGH_WATERMARK);
+            FetchDataInfo fetchDataInfo = remoteLogManager.read(remoteStorageFetchInfo);
+            // firstBatch baseOffset may not be equal to the fetchOffset
+            assertEquals(9, fetchDataInfo.fetchOffsetMetadata.messageOffset);
+            assertEquals(273, fetchDataInfo.fetchOffsetMetadata.relativePositionInSegment);
+        }
     }
 
     @Test

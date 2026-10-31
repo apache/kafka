@@ -583,7 +583,8 @@ public class VerifiableShareConsumer implements Closeable, AcknowledgementCommit
 
     private static ArgumentParser argParser() {
         ArgumentParser parser = ArgumentParsers
-            .newArgumentParser("verifiable-share-consumer")
+            .newFor("verifiable-share-consumer")
+            .build()
             .defaultHelp(true)
             .description("This tool creates a share group and consumes messages from a specific topic and emits share consumer events (e.g. share consumer startup, received messages, and offsets acknowledged) as JSON objects to STDOUT.");
         MutuallyExclusiveGroup connectionGroup = parser.addMutuallyExclusiveGroup("Connection Group")

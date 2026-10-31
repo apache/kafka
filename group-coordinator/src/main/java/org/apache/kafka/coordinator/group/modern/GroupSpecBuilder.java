@@ -18,16 +18,15 @@ package org.apache.kafka.coordinator.group.modern;
 
 import org.apache.kafka.common.Uuid;
 import org.apache.kafka.coordinator.common.runtime.CoordinatorMetadataImage;
+import org.apache.kafka.coordinator.group.Utils;
 import org.apache.kafka.coordinator.group.api.assignor.GroupSpec;
 import org.apache.kafka.coordinator.group.api.assignor.SubscriptionType;
-import org.apache.kafka.coordinator.group.assignor.AssignorHelpers;
 import org.apache.kafka.coordinator.group.modern.consumer.ConsumerGroupMember;
 import org.apache.kafka.coordinator.group.modern.consumer.ResolvedRegularExpression;
 import org.apache.kafka.coordinator.group.modern.share.ShareGroupMember;
 import org.apache.kafka.coordinator.group.util.UnionSet;
 
 import java.util.Collections;
-import java.util.HashMap;
 import java.util.Map;
 import java.util.Optional;
 import java.util.Set;
@@ -133,12 +132,6 @@ public abstract class GroupSpecBuilder<T extends ModernGroupMember, U extends Gr
     private Map<String, Assignment> targetAssignment = Map.of();
 
     /**
-     * Reverse lookup map representing topic partitions with
-     * their current member assignments.
-     */
-    private Map<Uuid, Map<Integer, String>> invertedTargetAssignment = Map.of();
-
-    /**
      * The metadata image.
      */
     private CoordinatorMetadataImage metadataImage = CoordinatorMetadataImage.EMPTY;
@@ -195,19 +188,6 @@ public abstract class GroupSpecBuilder<T extends ModernGroupMember, U extends Gr
     }
 
     /**
-     * Adds the existing topic partition assignments.
-     *
-     * @param invertedTargetAssignment   The reverse lookup map of the current target assignment.
-     * @return This object.
-     */
-    public U withInvertedTargetAssignment(
-        Map<Uuid, Map<Integer, String>> invertedTargetAssignment
-    ) {
-        this.invertedTargetAssignment = invertedTargetAssignment;
-        return self();
-    }
-
-    /**
      * Adds the metadata image.
      *
      * @param metadataImage    The metadata image.
@@ -250,7 +230,7 @@ public abstract class GroupSpecBuilder<T extends ModernGroupMember, U extends Gr
         if (subscriptionType == null)
             throw new IllegalArgumentException("Subscription type must be set.");
 
-        Map<String, MemberSubscriptionAndAssignmentImpl> memberSpecs = new HashMap<>();
+        Map<String, MemberSubscriptionAndAssignmentImpl> memberSpecs = Utils.newHashMap(members.size());
         TopicIds.TopicResolver topicResolver = new TopicIds.CachedTopicResolver(metadataImage);
 
         // Prepare the member spec for all members.
@@ -262,17 +242,10 @@ public abstract class GroupSpecBuilder<T extends ModernGroupMember, U extends Gr
             ))
         );
 
-        Map<Uuid, Map<Integer, String>> invertedTargetAssignment = this.invertedTargetAssignment;
         Optional<Map<Uuid, Set<Integer>>> topicAssignablePartitionsMap = this.topicAssignablePartitionsMap;
         if (assignorOffload) {
-            Map<Uuid, Map<Integer, String>> invertedTargetAssignmentCopy = AssignorHelpers.newHashMap(invertedTargetAssignment.size());
-            for (Map.Entry<Uuid, Map<Integer, String>> entry : invertedTargetAssignment.entrySet()) {
-                invertedTargetAssignmentCopy.put(entry.getKey(), Map.copyOf(entry.getValue()));
-            }
-            invertedTargetAssignment = invertedTargetAssignmentCopy;
-
             if (topicAssignablePartitionsMap.isPresent()) {
-                Map<Uuid, Set<Integer>> topicAssignablePartitionsMapCopy = AssignorHelpers.newHashMap(topicAssignablePartitionsMap.get().size());
+                Map<Uuid, Set<Integer>> topicAssignablePartitionsMapCopy = Utils.newHashMap(topicAssignablePartitionsMap.get().size());
                 for (Map.Entry<Uuid, Set<Integer>> entry : topicAssignablePartitionsMap.get().entrySet()) {
                     topicAssignablePartitionsMapCopy.put(entry.getKey(), Set.copyOf(entry.getValue()));
                 }
@@ -281,9 +254,9 @@ public abstract class GroupSpecBuilder<T extends ModernGroupMember, U extends Gr
         }
 
         return new GroupSpecImpl(
+            metadataImage,
             Collections.unmodifiableMap(memberSpecs),
             subscriptionType,
-            invertedTargetAssignment,
             topicAssignablePartitionsMap
         );
     }

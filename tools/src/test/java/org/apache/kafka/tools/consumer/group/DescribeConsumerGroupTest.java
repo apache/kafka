@@ -21,7 +21,6 @@ import org.apache.kafka.clients.admin.Admin;
 import org.apache.kafka.clients.admin.AdminClientConfig;
 import org.apache.kafka.clients.admin.ConsumerGroupDescription;
 import org.apache.kafka.clients.admin.MemberDescription;
-import org.apache.kafka.clients.admin.NewTopic;
 import org.apache.kafka.clients.consumer.ConsumerConfig;
 import org.apache.kafka.clients.consumer.GroupProtocol;
 import org.apache.kafka.clients.consumer.KafkaConsumer;
@@ -123,7 +122,7 @@ public class DescribeConsumerGroupTest {
         for (GroupProtocol groupProtocol: clusterInstance.supportedGroupProtocols()) {
             String topic = TOPIC_PREFIX + groupProtocol.name();
             String group = GROUP_PREFIX + groupProtocol.name();
-            createTopic(topic);
+            clusterInstance.createTopic(topic, 1, (short) 1);
 
             // run one consumer in the group consuming from a single-partition topic
             try (AutoCloseable protocolConsumerGroupExecutor = consumerGroupClosable(groupProtocol, group, topic, Map.of());
@@ -146,7 +145,7 @@ public class DescribeConsumerGroupTest {
         for (GroupProtocol groupProtocol: clusterInstance.supportedGroupProtocols()) {
             String topic = TOPIC_PREFIX + groupProtocol.name();
             String group = GROUP_PREFIX + groupProtocol.name();
-            createTopic(topic);
+            clusterInstance.createTopic(topic, 1, (short) 1);
             try (AutoCloseable protocolConsumerGroupExecutor = consumerGroupClosable(groupProtocol, group, topic, Map.of());
                  // note the group to be queried is a different (non-existing) group
                  ConsumerGroupCommand.ConsumerGroupService service = consumerGroupService(new String[]{"--bootstrap-server", clusterInstance.bootstrapServers(), "--describe", "--group", missingGroup})
@@ -167,7 +166,7 @@ public class DescribeConsumerGroupTest {
         for (GroupProtocol groupProtocol: clusterInstance.supportedGroupProtocols()) {
             String topic = TOPIC_PREFIX + groupProtocol.name();
             String group = GROUP_PREFIX + groupProtocol.name();
-            createTopic(topic);
+            clusterInstance.createTopic(topic, 1, (short) 1);
             try (AutoCloseable protocolConsumerGroupExecutor = consumerGroupClosable(groupProtocol, group, topic, Map.of());
                  // note the group to be queried is a different (non-existing) group
                  ConsumerGroupCommand.ConsumerGroupService service = consumerGroupService(new String[]{"--bootstrap-server", clusterInstance.bootstrapServers(), "--describe", "--group", missingGroup})
@@ -366,7 +365,7 @@ public class DescribeConsumerGroupTest {
         this.clusterInstance = clusterInstance;
         for (GroupProtocol groupProtocol: clusterInstance.supportedGroupProtocols()) {
             String topic = TOPIC_PREFIX + groupProtocol.name();
-            createTopic(topic);
+            clusterInstance.createTopic(topic, 1, (short) 1);
 
             // Create N single-threaded consumer groups from a single-partition topic
             List<AutoCloseable> protocolConsumerGroupExecutors = new ArrayList<>();
@@ -407,7 +406,7 @@ public class DescribeConsumerGroupTest {
         this.clusterInstance = clusterInstance;
         for (GroupProtocol groupProtocol: clusterInstance.supportedGroupProtocols()) {
             String topic = TOPIC_PREFIX + groupProtocol.name();
-            createTopic(topic);
+            clusterInstance.createTopic(topic, 1, (short) 1);
 
             // Create N single-threaded consumer groups from a single-partition topic
             List<AutoCloseable> protocolConsumerGroupExecutors = new ArrayList<>();
@@ -438,7 +437,7 @@ public class DescribeConsumerGroupTest {
                 }
                 // remove previous consumer groups, so we can have a clean cluster for next consumer group protocol test.
                 deleteConsumerGroups(groups);
-                deleteTopic(topic);
+                clusterInstance.deleteTopic(topic);
             }
         }
     }
@@ -449,7 +448,7 @@ public class DescribeConsumerGroupTest {
         for (GroupProtocol groupProtocol: clusterInstance.supportedGroupProtocols()) {
             String topic = TOPIC_PREFIX + groupProtocol.name();
             String group = GROUP_PREFIX + groupProtocol.name();
-            createTopic(topic);
+            clusterInstance.createTopic(topic, 1, (short) 1);
 
             // run one consumer in the group consuming from a single-partition topic
             try (AutoCloseable protocolConsumerGroupExecutor = consumerGroupClosable(groupProtocol, group, topic, Map.of());
@@ -489,7 +488,7 @@ public class DescribeConsumerGroupTest {
         for (GroupProtocol groupProtocol: clusterInstance.supportedGroupProtocols()) {
             String topic = TOPIC_PREFIX + groupProtocol.name();
             String group = GROUP_PREFIX + groupProtocol.name();
-            createTopic(topic);
+            clusterInstance.createTopic(topic, 1, (short) 1);
 
             // run one consumer in the group consuming from a single-partition topic
             try (AutoCloseable protocolConsumerGroupExecutor = consumerGroupClosable(groupProtocol, group, topic, Map.of());
@@ -516,7 +515,7 @@ public class DescribeConsumerGroupTest {
         for (GroupProtocol groupProtocol: clusterInstance.supportedGroupProtocols()) {
             String topic = TOPIC_PREFIX + groupProtocol.name();
             String group = GROUP_PREFIX + groupProtocol.name();
-            createTopic(topic);
+            clusterInstance.createTopic(topic, 1, (short) 1);
 
             // run one consumer in the group consuming from a single-partition topic
             try (AutoCloseable protocolConsumerGroupExecutor = consumerGroupClosable(groupProtocol, group, topic, Map.of(ConsumerConfig.GROUP_REMOTE_ASSIGNOR_CONFIG, groupProtocol == GroupProtocol.CONSUMER ? "range" : ""));
@@ -539,7 +538,7 @@ public class DescribeConsumerGroupTest {
         for (GroupProtocol groupProtocol: clusterInstance.supportedGroupProtocols()) {
             String topic = TOPIC_PREFIX + groupProtocol.name();
             String group = GROUP_PREFIX + groupProtocol.name();
-            createTopic(topic);
+            clusterInstance.createTopic(topic, 1, (short) 1);
 
             // run one consumer in the group consuming from a single-partition topic
             AutoCloseable protocolConsumerGroupExecutor = null;
@@ -576,7 +575,7 @@ public class DescribeConsumerGroupTest {
         this.clusterInstance = clusterInstance;
         for (GroupProtocol groupProtocol: clusterInstance.supportedGroupProtocols()) {
             String topic = TOPIC_PREFIX + groupProtocol.name();
-            createTopic(topic);
+            clusterInstance.createTopic(topic, 1, (short) 1);
 
             for (List<String> describeType : DESCRIBE_TYPES) {
                 String group = GROUP_PREFIX + groupProtocol.name() + String.join("", describeType);
@@ -608,7 +607,7 @@ public class DescribeConsumerGroupTest {
         for (GroupProtocol groupProtocol: clusterInstance.supportedGroupProtocols()) {
             String topic = TOPIC_PREFIX + groupProtocol.name();
             String group = GROUP_PREFIX + groupProtocol.name();
-            createTopic(topic);
+            clusterInstance.createTopic(topic, 1, (short) 1);
 
             // run one consumer in the group consuming from a single-partition topic
             try (AutoCloseable protocolConsumerGroupExecutor = consumerGroupClosable(groupProtocol, group, topic, Map.of());
@@ -645,7 +644,7 @@ public class DescribeConsumerGroupTest {
         for (GroupProtocol groupProtocol: clusterInstance.supportedGroupProtocols()) {
             String topic = TOPIC_PREFIX + groupProtocol.name();
             String group = GROUP_PREFIX + groupProtocol.name();
-            createTopic(topic);
+            clusterInstance.createTopic(topic, 1, (short) 1);
 
             // run one consumer in the group consuming from a single-partition topic
             try (AutoCloseable protocolConsumerGroupExecutor = consumerGroupClosable(groupProtocol, group, topic, Map.of());
@@ -674,7 +673,7 @@ public class DescribeConsumerGroupTest {
         for (GroupProtocol groupProtocol: clusterInstance.supportedGroupProtocols()) {
             String topic = TOPIC_PREFIX + groupProtocol.name();
             String group = GROUP_PREFIX + groupProtocol.name();
-            createTopic(topic);
+            clusterInstance.createTopic(topic, 1, (short) 1);
 
             // run one consumer in the group consuming from a single-partition topic
             try (AutoCloseable protocolConsumerGroupExecutor = consumerGroupClosable(groupProtocol, group, topic, Map.of());
@@ -704,7 +703,7 @@ public class DescribeConsumerGroupTest {
         this.clusterInstance = clusterInstance;
         for (GroupProtocol groupProtocol: clusterInstance.supportedGroupProtocols()) {
             String topic = TOPIC_PREFIX + groupProtocol.name();
-            createTopic(topic);
+            clusterInstance.createTopic(topic, 1, (short) 1);
 
             for (List<String> describeType : DESCRIBE_TYPES) {
                 String group = GROUP_PREFIX + groupProtocol.name() + String.join("", describeType);
@@ -732,7 +731,7 @@ public class DescribeConsumerGroupTest {
         for (GroupProtocol groupProtocol: clusterInstance.supportedGroupProtocols()) {
             String topic = TOPIC_PREFIX + groupProtocol.name();
             String group = GROUP_PREFIX + groupProtocol.name();
-            createTopic(topic);
+            clusterInstance.createTopic(topic, 1, (short) 1);
 
             // run two consumers in the group consuming from a single-partition topic
             try (AutoCloseable protocolConsumerGroupExecutor = consumerGroupClosable(groupProtocol, group, topic, Map.of(), 2);
@@ -755,7 +754,7 @@ public class DescribeConsumerGroupTest {
         for (GroupProtocol groupProtocol: clusterInstance.supportedGroupProtocols()) {
             String topic = TOPIC_PREFIX + groupProtocol.name();
             String group = GROUP_PREFIX + groupProtocol.name();
-            createTopic(topic);
+            clusterInstance.createTopic(topic, 1, (short) 1);
 
             // run two consumers in the group consuming from a single-partition topic
             try (AutoCloseable protocolConsumerGroupExecutor = consumerGroupClosable(groupProtocol, group, topic, Map.of(), 2);
@@ -785,7 +784,7 @@ public class DescribeConsumerGroupTest {
         for (GroupProtocol groupProtocol: clusterInstance.supportedGroupProtocols()) {
             String topic = TOPIC_PREFIX + groupProtocol.name();
             String group = GROUP_PREFIX + groupProtocol.name();
-            createTopic(topic);
+            clusterInstance.createTopic(topic, 1, (short) 1);
 
             // run two consumers in the group consuming from a single-partition topic
             try (AutoCloseable protocolConsumerGroupExecutor = consumerGroupClosable(groupProtocol, group, topic, Map.of(), 2);
@@ -804,7 +803,7 @@ public class DescribeConsumerGroupTest {
         this.clusterInstance = clusterInstance;
         for (GroupProtocol groupProtocol: clusterInstance.supportedGroupProtocols()) {
             String topic = TOPIC_PREFIX + groupProtocol.name();
-            createTopic(topic, 2);
+            clusterInstance.createTopic(topic, 2, (short) 1);
 
             for (List<String> describeType : DESCRIBE_TYPES) {
                 String group = GROUP_PREFIX + groupProtocol.name() + String.join("", describeType);
@@ -832,7 +831,7 @@ public class DescribeConsumerGroupTest {
         for (GroupProtocol groupProtocol: clusterInstance.supportedGroupProtocols()) {
             String topic = TOPIC_PREFIX + groupProtocol.name();
             String group = GROUP_PREFIX + groupProtocol.name();
-            createTopic(topic, 2);
+            clusterInstance.createTopic(topic, 2, (short) 1);
 
             // run two consumers in the group consuming from a two-partition topic
             try (AutoCloseable protocolConsumerGroupExecutor = consumerGroupClosable(groupProtocol, group, topic, Map.of(), 2);
@@ -856,7 +855,7 @@ public class DescribeConsumerGroupTest {
         for (GroupProtocol groupProtocol: clusterInstance.supportedGroupProtocols()) {
             String topic = TOPIC_PREFIX + groupProtocol.name();
             String group = GROUP_PREFIX + groupProtocol.name();
-            createTopic(topic, 2);
+            clusterInstance.createTopic(topic, 2, (short) 1);
 
             // run two consumers in the group consuming from a two-partition topic
             try (AutoCloseable protocolConsumerGroupExecutor = consumerGroupClosable(groupProtocol, group, topic, Map.of(), 2);
@@ -884,7 +883,7 @@ public class DescribeConsumerGroupTest {
         for (GroupProtocol groupProtocol: clusterInstance.supportedGroupProtocols()) {
             String topic = TOPIC_PREFIX + groupProtocol.name();
             String group = GROUP_PREFIX + groupProtocol.name();
-            createTopic(topic, 2);
+            clusterInstance.createTopic(topic, 2, (short) 1);
 
             // run two consumers in the group consuming from a two-partition topic
             try (AutoCloseable protocolConsumerGroupExecutor = consumerGroupClosable(groupProtocol, group, topic, Map.of(), 2);
@@ -904,7 +903,7 @@ public class DescribeConsumerGroupTest {
         GroupProtocol groupProtocol = GroupProtocol.CLASSIC;
         String topic = TOPIC_PREFIX + groupProtocol.name();
         String group = GROUP_PREFIX + groupProtocol.name();
-        createTopic(topic, 2);
+        clusterInstance.createTopic(topic, 2, (short) 1);
 
         try (AutoCloseable protocolConsumerGroupExecutor = consumerGroupClosable(groupProtocol, group, Set.of(new TopicPartition(topic, 0), new TopicPartition(topic, 1)), Map.of());
              ConsumerGroupCommand.ConsumerGroupService service = consumerGroupService(new String[]{"--bootstrap-server", clusterInstance.bootstrapServers(), "--describe", "--group", group})
@@ -922,7 +921,7 @@ public class DescribeConsumerGroupTest {
         this.clusterInstance = clusterInstance;
         GroupProtocol groupProtocol = GroupProtocol.CONSUMER;
         String topic = TOPIC_PREFIX + groupProtocol.name();
-        createTopic(topic);
+        clusterInstance.createTopic(topic, 1, (short) 1);
 
         // Let creation of the offsets topic happen during group initialization to ensure that initialization doesn't
         // complete before the timeout expires
@@ -948,7 +947,7 @@ public class DescribeConsumerGroupTest {
         GroupProtocol groupProtocol = GroupProtocol.CONSUMER;
         String topic = TOPIC_PREFIX + groupProtocol.name();
         String group = GROUP_PREFIX + groupProtocol.name();
-        createTopic(topic);
+        clusterInstance.createTopic(topic, 1, (short) 1);
 
         // Let creation of the offsets topic happen during group initialization to ensure that initialization doesn't
         // complete before the timeout expires
@@ -969,7 +968,7 @@ public class DescribeConsumerGroupTest {
         GroupProtocol groupProtocol = GroupProtocol.CONSUMER;
         String topic = TOPIC_PREFIX + groupProtocol.name();
         String group = GROUP_PREFIX + groupProtocol.name();
-        createTopic(topic);
+        clusterInstance.createTopic(topic, 1, (short) 1);
 
         // Let creation of the offsets topic happen during group initialization to ensure that initialization doesn't
         // complete before the timeout expires
@@ -990,7 +989,7 @@ public class DescribeConsumerGroupTest {
         GroupProtocol groupProtocol = GroupProtocol.CONSUMER;
         String topic = TOPIC_PREFIX + groupProtocol.name();
         String group = GROUP_PREFIX + groupProtocol.name();
-        createTopic(topic);
+        clusterInstance.createTopic(topic, 1, (short) 1);
 
         // Let creation of the offsets topic happen during group initialization to ensure that initialization doesn't
         // complete before the timeout expires
@@ -1011,7 +1010,7 @@ public class DescribeConsumerGroupTest {
         for (GroupProtocol groupProtocol: clusterInstance.supportedGroupProtocols()) {
             String topic = TOPIC_PREFIX + groupProtocol.name();
             String group = GROUP_PREFIX + groupProtocol.name();
-            createTopic(topic);
+            clusterInstance.createTopic(topic, 1, (short) 1);
 
             // run one consumer in the group consuming from a single-partition topic
             try (AutoCloseable protocolConsumerGroupExecutor = consumerGroupClosable(groupProtocol, group, topic, Map.of(ConsumerConfig.ENABLE_AUTO_COMMIT_CONFIG, "false"));
@@ -1138,25 +1137,9 @@ public class DescribeConsumerGroupTest {
         );
     }
 
-    private void createTopic(String topic) {
-        createTopic(topic, 1);
-    }
-
-    private void createTopic(String topic, int numPartitions) {
-        try (Admin admin = Admin.create(Map.of(CommonClientConfigs.BOOTSTRAP_SERVERS_CONFIG, clusterInstance.bootstrapServers()))) {
-            Assertions.assertDoesNotThrow(() -> admin.createTopics(List.of(new NewTopic(topic, numPartitions, (short) 1))).topicId(topic).get());
-        }
-    }
-
     private void deleteConsumerGroups(Collection<String> groupIds) {
         try (Admin admin = Admin.create(Map.of(CommonClientConfigs.BOOTSTRAP_SERVERS_CONFIG, clusterInstance.bootstrapServers()))) {
             Assertions.assertDoesNotThrow(() -> admin.deleteConsumerGroups(groupIds).all().get());
-        }
-    }
-
-    private void deleteTopic(String topic) {
-        try (Admin admin = Admin.create(Map.of(CommonClientConfigs.BOOTSTRAP_SERVERS_CONFIG, clusterInstance.bootstrapServers()))) {
-            Assertions.assertDoesNotThrow(() -> admin.deleteTopics(List.of(topic)).topicNameValues().get(topic).get());
         }
     }
 

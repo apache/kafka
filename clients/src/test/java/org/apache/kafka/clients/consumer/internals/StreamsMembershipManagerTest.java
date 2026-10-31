@@ -110,7 +110,7 @@ public class StreamsMembershipManagerTest {
     private StreamsMembershipManager membershipManager;
 
     @Mock
-    private SubscriptionState subscriptionState;
+    private ConsumerSubscriptionState subscriptionState;
 
     @Mock
     private BackgroundEventHandler backgroundEventHandler;
@@ -1824,6 +1824,19 @@ public class StreamsMembershipManagerTest {
         membershipManager.onRetriableHeartbeatFailure();
 
         assertTrue(groupLeft.isDone());
+    }
+
+    @Test
+    public void testTransitionToFatalAfterLeaveRequestGenerated() {
+        joining();
+        final CompletableFuture<Void> groupLeft = leavingAtMemberEpochZero();
+        membershipManager.onHeartbeatRequestGenerated();
+        assertFalse(groupLeft.isDone());
+
+        membershipManager.transitionToFatal();
+
+        assertTrue(groupLeft.isDone());
+        assertEquals(MemberState.FATAL, membershipManager.state());
     }
 
     @ParameterizedTest

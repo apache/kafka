@@ -17,6 +17,7 @@
 
 package kafka.server
 
+import java.io.File
 import java.net.InetSocketAddress
 import java.nio.file.Files
 import java.util
@@ -39,6 +40,7 @@ import org.apache.kafka.coordinator.share.ShareCoordinatorConfig
 import org.apache.kafka.coordinator.transaction.{TransactionLogConfig, TransactionStateManagerConfig}
 import org.apache.kafka.network.SocketServerConfigs
 import org.apache.kafka.raft.{KRaftConfigs, MetadataLogConfig, QuorumConfig}
+import org.apache.kafka.coordinator.mirror.ClusterMirrorConfigs
 import org.apache.kafka.server.config.{AbstractKafkaConfig, DelegationTokenManagerConfigs, QuotaConfig, ReplicationConfigs, ServerConfigs, ServerLogConfigs, ServerTopicConfigSynonyms}
 import org.apache.kafka.server.log.remote.storage.RemoteLogManagerConfig
 import org.apache.kafka.server.metrics.MetricConfigs
@@ -648,6 +650,42 @@ class KafkaConfigTest {
   }
 
   @Test
+  def testMirrorAdminListenerNameDefaultsToInterBrokerListenerName(): Unit = {
+    val props = createDefaultConfig()
+    val config = KafkaConfig.fromProps(props)
+    assertEquals(config.interBrokerListenerName, config.mirrorAdminListenerName)
+  }
+
+  @Test
+  def testMirrorAdminListenerNameExplicitlySet(): Unit = {
+    val props = createDefaultConfig()
+    props.setProperty(SocketServerConfigs.LISTENERS_CONFIG, "PLAINTEXT://localhost:0,CONTROLLER://localhost:5000,MIRROR://localhost:5001")
+    props.setProperty(SocketServerConfigs.LISTENER_SECURITY_PROTOCOL_MAP_CONFIG, "MIRROR:PLAINTEXT,CONTROLLER:SASL_SSL,PLAINTEXT:PLAINTEXT")
+    props.setProperty(ReplicationConfigs.MIRROR_ADMIN_LISTENER_NAME_CONFIG, "MIRROR")
+    val config = KafkaConfig.fromProps(props)
+    assertNotEquals(ListenerName.normalised("MIRROR"), config.interBrokerListenerName())
+    assertEquals(ListenerName.normalised("MIRROR"), config.mirrorAdminListenerName)
+  }
+
+  @Test
+  def testSaslMechanismMirrorAdminProtocolDefaultsToInterBrokerProtocol(): Unit = {
+    val props = createDefaultConfig()
+    props.setProperty(BrokerSecurityConfigs.SASL_MECHANISM_INTER_BROKER_PROTOCOL_CONFIG, "PLAIN")
+    val config = KafkaConfig.fromProps(props)
+    assertEquals(config.saslMechanismInterBrokerProtocol, config.saslMechanismMirrorAdminProtocol)
+  }
+
+  @Test
+  def testSaslMechanismMirrorAdminProtocolExplicitlySet(): Unit = {
+    val props = createDefaultConfig()
+    props.setProperty(BrokerSecurityConfigs.SASL_MECHANISM_INTER_BROKER_PROTOCOL_CONFIG, "PLAIN")
+    props.setProperty(BrokerSecurityConfigs.SASL_MECHANISM_MIRROR_ADMIN_PROTOCOL_CONFIG, "SCRAM-SHA-256")
+    val config = KafkaConfig.fromProps(props)
+    assertEquals("SCRAM-SHA-256", config.saslMechanismMirrorAdminProtocol)
+    assertEquals("PLAIN", config.saslMechanismInterBrokerProtocol)
+  }
+
+  @Test
   def testCaseInsensitiveListenerProtocol(): Unit = {
     val props = new Properties()
     props.setProperty(KRaftConfigs.PROCESS_ROLES_CONFIG, "broker")
@@ -931,6 +969,7 @@ class KafkaConfigTest {
         case ReplicationConfigs.REPLICA_FETCH_MIN_BYTES_CONFIG => assertPropertyInvalid(baseProperties, name, "not_a_number")
         case ReplicationConfigs.REPLICA_FETCH_RESPONSE_MAX_BYTES_CONFIG => assertPropertyInvalid(baseProperties, name, "not_a_number")
         case ReplicationConfigs.REPLICA_SELECTOR_CLASS_CONFIG => // Ignore string
+        case ReplicationConfigs.MIRROR_ADMIN_LISTENER_NAME_CONFIG => // ignore string
         case ReplicationConfigs.NUM_REPLICA_FETCHERS_CONFIG => assertPropertyInvalid(baseProperties, name, "not_a_number", "0", "-1")
         case ReplicationConfigs.REPLICA_HIGH_WATERMARK_CHECKPOINT_INTERVAL_MS_CONFIG => assertPropertyInvalid(baseProperties, name, "not_a_number")
         case ReplicationConfigs.FETCH_PURGATORY_PURGE_INTERVAL_REQUESTS_CONFIG => assertPropertyInvalid(baseProperties, name, "not_a_number")
@@ -939,6 +978,20 @@ class KafkaConfigTest {
         case ReplicationConfigs.AUTO_LEADER_REBALANCE_ENABLE_CONFIG => assertPropertyInvalid(baseProperties, name, "not_a_boolean", "0")
         case ReplicationConfigs.LEADER_IMBALANCE_CHECK_INTERVAL_SECONDS_CONFIG => assertPropertyInvalid(baseProperties, name, "not_a_number")
         case ReplicationConfigs.UNCLEAN_LEADER_ELECTION_ENABLE_CONFIG => assertPropertyInvalid(baseProperties, name, "not_a_boolean", "0")
+
+        /** Cluster mirror configs */
+        case ClusterMirrorConfigs.MIRROR_COORDINATOR_THREADS_CONFIG => assertPropertyInvalid(baseProperties, name, "not_a_number", "0")
+        case ClusterMirrorConfigs.MIRROR_COORDINATOR_WRITE_TIMEOUT_MS_CONFIG => assertPropertyInvalid(baseProperties, name, "not_a_number", "0")
+        case ClusterMirrorConfigs.MIRROR_COORDINATOR_APPEND_LINGER_MS_CONFIG => assertPropertyInvalid(baseProperties, name, "not_a_number", "-1")
+        case ClusterMirrorConfigs.MIRROR_COORDINATOR_LOAD_BUFFER_SIZE_CONFIG => assertPropertyInvalid(baseProperties, name, "not_a_number", "0")
+        case ClusterMirrorConfigs.MIRROR_STATE_TOPIC_NUM_PARTITIONS_CONFIG => assertPropertyInvalid(baseProperties, name, "not_a_number", "0")
+        case ClusterMirrorConfigs.MIRROR_STATE_TOPIC_REPLICATION_FACTOR_CONFIG => assertPropertyInvalid(baseProperties, name, "not_a_number", "0")
+        case ClusterMirrorConfigs.MIRROR_NUM_REPLICA_FETCHERS_CONFIG => assertPropertyInvalid(baseProperties, name, "not_a_number", "0")
+        case ClusterMirrorConfigs.MIRROR_METADATA_REFRESH_INTERVAL_MS_CONFIG => assertPropertyInvalid(baseProperties, name, "not_a_number", "-1")
+        case ClusterMirrorConfigs.MIRROR_FAILED_RETRY_INITIAL_BACKOFF_MS_CONFIG => assertPropertyInvalid(baseProperties, name, "not_a_number", "0")
+        case ClusterMirrorConfigs.MIRROR_FAILED_RETRY_MAX_BACKOFF_MS_CONFIG => assertPropertyInvalid(baseProperties, name, "not_a_number", "0")
+        case ClusterMirrorConfigs.MIRROR_FAILED_RETRY_MAX_ATTEMPTS_CONFIG => assertPropertyInvalid(baseProperties, name, "not_a_number", "-1")
+
         case ServerConfigs.CONTROLLED_SHUTDOWN_ENABLE_CONFIG => assertPropertyInvalid(baseProperties, name, "not_a_boolean", "0")
         case GroupCoordinatorConfig.GROUP_MIN_SESSION_TIMEOUT_MS_CONFIG => assertPropertyInvalid(baseProperties, name, "not_a_number")
         case GroupCoordinatorConfig.GROUP_MAX_SESSION_TIMEOUT_MS_CONFIG => assertPropertyInvalid(baseProperties, name, "not_a_number")
@@ -1000,6 +1053,7 @@ class KafkaConfigTest {
         //Sasl Configs
         case KRaftConfigs.SASL_MECHANISM_CONTROLLER_PROTOCOL_CONFIG => // ignore
         case BrokerSecurityConfigs.SASL_MECHANISM_INTER_BROKER_PROTOCOL_CONFIG => // ignore
+        case BrokerSecurityConfigs.SASL_MECHANISM_MIRROR_ADMIN_PROTOCOL_CONFIG => // ignore string
         case BrokerSecurityConfigs.SASL_ENABLED_MECHANISMS_CONFIG =>
         case SaslConfigs.SASL_CLIENT_CALLBACK_HANDLER_CLASS =>
         case BrokerSecurityConfigs.SASL_SERVER_CALLBACK_HANDLER_CLASS_CONFIG =>
@@ -1142,6 +1196,7 @@ class KafkaConfigTest {
         case GroupConfig.ERRORS_DEADLETTERQUEUE_TOPIC_NAME_CONFIG => // ignore string
         case GroupConfig.ERRORS_DEADLETTERQUEUE_COPY_RECORD_ENABLE_CONFIG => assertPropertyInvalid(baseProperties, name, "not_a_boolean")
         case ShareGroupConfig.SHARE_GROUP_DLQ_MANAGER_CLASS_NAME_CONFIG => //ignore string
+        case ShareGroupConfig.SHARE_GROUP_DLQ_MANAGER_FETCHER_THREAD_COUNT_CONFIG => assertPropertyInvalid(baseProperties, name, "not_a_number", 0, -1)
 
         /** Streams groups configs */
         case GroupCoordinatorConfig.STREAMS_GROUP_SESSION_TIMEOUT_MS_CONFIG => assertPropertyInvalid(baseProperties, name, "not_a_number", 0, -1)
@@ -1265,6 +1320,10 @@ class KafkaConfigTest {
         case QuotaConfig.FOLLOWER_REPLICATION_THROTTLED_REPLICAS_CONFIG =>
         // topic only config
         case QuotaConfig.LEADER_REPLICATION_THROTTLED_REPLICAS_CONFIG =>
+        // topic only config
+        case QuotaConfig.MIRROR_REPLICATION_THROTTLED_REPLICAS_CONFIG =>
+        // topic only config
+        case TopicConfig.MIRROR_UNCLEAN_LEADER_ELECTION_ENABLE_CONFIG =>
         // topic only config
         case "internal.segment.bytes" =>
         // topic internal config
@@ -1662,6 +1721,32 @@ class KafkaConfigTest {
     val config = KafkaConfig.fromProps(props)
     assertEquals(dataDir1, config.metadataLogDir)
     assertEquals(util.List.of(dataDir1, dataDir2), config.logDirs)
+  }
+
+  @Test
+  def testRelativeLogDirWithRelativeOrAbsoluteCordon(): Unit = {
+    val relativeLogDir = "relative/path/to/data/dir"
+
+    val props = new Properties()
+    props.setProperty(KRaftConfigs.PROCESS_ROLES_CONFIG, "broker")
+    props.setProperty(KRaftConfigs.CONTROLLER_LISTENER_NAMES_CONFIG, "SSL")
+    props.setProperty(ServerLogConfigs.LOG_DIR_CONFIG, relativeLogDir)
+    props.setProperty(ServerLogConfigs.CORDONED_LOG_DIRS_CONFIG, relativeLogDir)
+    props.setProperty(KRaftConfigs.NODE_ID_CONFIG, "1")
+    props.setProperty(QuorumConfig.QUORUM_VOTERS_CONFIG, "2@localhost:9093")
+
+    val config = KafkaConfig.fromProps(props)
+    val absoluteLogDir = new File(relativeLogDir).getAbsolutePath
+    assertEquals(util.List.of(relativeLogDir), config.logDirs())
+    assertEquals(util.List.of(absoluteLogDir), config.absoluteLogDirs())
+    assertEquals(util.List.of(relativeLogDir), config.cordonedLogDirs())
+    assertEquals(util.List.of(absoluteLogDir), config.absoluteCordonedLogDirs())
+
+    props.setProperty(ServerLogConfigs.CORDONED_LOG_DIRS_CONFIG, absoluteLogDir)
+    val configWithAbsoluteCordon = KafkaConfig.fromProps(props)
+    assertEquals(util.List.of(relativeLogDir), configWithAbsoluteCordon.logDirs())
+    assertEquals(util.List.of(absoluteLogDir), configWithAbsoluteCordon.cordonedLogDirs())
+    assertEquals(util.List.of(absoluteLogDir), configWithAbsoluteCordon.absoluteCordonedLogDirs())
   }
 
   @Test

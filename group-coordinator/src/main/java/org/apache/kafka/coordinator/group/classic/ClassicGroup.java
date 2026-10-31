@@ -639,7 +639,7 @@ public class ClassicGroup implements Group {
     public boolean addPendingSyncMember(String memberId) {
         if (!hasMember(memberId)) {
             throw new IllegalStateException("Attempt to add pending sync member " + memberId +
-                " which is already a stable member of the group.");
+                " which is not a member of the group.");
         }
 
         return pendingSyncMembers.add(memberId);
@@ -653,8 +653,8 @@ public class ClassicGroup implements Group {
      */
     public boolean removePendingSyncMember(String memberId) {
         if (!hasMember(memberId)) {
-            throw new IllegalStateException("Attempt to add pending member " + memberId +
-                " which is already a stable member of the group.");
+            throw new IllegalStateException("Attempt to remove pending sync member " + memberId +
+                " which is not a member of the group.");
         }
         return pendingSyncMembers.remove(memberId);
     }

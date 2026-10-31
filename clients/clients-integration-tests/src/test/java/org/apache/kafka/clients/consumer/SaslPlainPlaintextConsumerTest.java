@@ -70,7 +70,7 @@ public class SaslPlainPlaintextConsumerTest {
     }
 
     @BeforeEach
-    public void setUp() throws InterruptedException {
+    public void setUp() {
         cluster.createTopic(ClientsTestUtils.BaseConsumerTestcase.TOPIC, 2, (short) ClientsTestUtils.BaseConsumerTestcase.BROKER_COUNT);
     }
 

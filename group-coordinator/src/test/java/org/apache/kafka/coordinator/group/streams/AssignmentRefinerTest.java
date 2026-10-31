@@ -228,9 +228,14 @@ public class AssignmentRefinerTest {
     }
 
     @Test
-    public void shouldNotBeCaughtUpWhenTheRestoreHasNotStarted() {
-        // Long.MAX_VALUE is the client's way of saying that it has not started restoring the task, so no lag can be
-        // computed from it.
+    public void shouldNotBeCaughtUpWhileTheEndOffsetIsNotKnown() {
+        // The client reports an end offset of Long.MAX_VALUE until it has fetched the changelog's end offset.
+        assertFalse(AssignmentRefinerImpl.isCaughtUp(offsets(0L, Long.MAX_VALUE), STATEFUL_0, ACCEPTABLE_RECOVERY_LAG));
+    }
+
+    @Test
+    public void shouldNotBeCaughtUpWhenAnOffsetSumOverflowed() {
+        // The client pins an offset sum that overflows to Long.MAX_VALUE, so no lag can be computed from it.
         assertFalse(AssignmentRefinerImpl.isCaughtUp(offsets(Long.MAX_VALUE, 1000L), STATEFUL_0, ACCEPTABLE_RECOVERY_LAG));
         assertFalse(AssignmentRefinerImpl.isCaughtUp(offsets(1000L, Long.MAX_VALUE), STATEFUL_0, ACCEPTABLE_RECOVERY_LAG));
     }
@@ -284,13 +289,14 @@ public class AssignmentRefinerTest {
 
     @Test
     public void shouldIndexAnActiveHolderWhoseRestoreHasNotStartedAsNotProcessing() {
-        // Long.MAX_VALUE is the "restore not started" cap; it is still a report, so the task is still restoring.
+        // Before its restore starts, the client reports a position of 0 and an end offset of Long.MAX_VALUE; it is
+        // still a report, so the task is still restoring.
         final Map<String, StreamsGroupMember> members = Map.of(
             "memberA", member("memberA", "processA", mkTasksTuple(TaskRole.ACTIVE, mkTasks(STATEFUL, 0)))
         );
 
         final AssignmentRefinerImpl.CurrentAssignmentIndex index =
-            index(members, Map.of("memberA", offsets(Long.MAX_VALUE, Long.MAX_VALUE)));
+            index(members, Map.of("memberA", offsets(0L, Long.MAX_VALUE)));
 
         assertEquals(
             Map.of(STATEFUL_0, new AssignmentRefinerImpl.ActiveHolder("memberA", true, false)),
@@ -335,7 +341,7 @@ public class AssignmentRefinerTest {
         assertEquals(
             Set.of(
                 new AssignmentRefinerImpl.TaskCopy("memberA", "processA", TaskRole.STANDBY, true, true),
-                new AssignmentRefinerImpl.TaskCopy("memberB", "processB", TaskRole.WARMUP, false, true)
+                new AssignmentRefinerImpl.TaskCopy("memberB", "processB", TaskRole.WARMUP, false, false)
             ),
             Set.copyOf(index.taskCopies().get(STATEFUL_0))
         );
@@ -343,17 +349,20 @@ public class AssignmentRefinerTest {
 
     @Test
     public void shouldIndexWhetherACopyHasStartedItsRestore() {
-        // A reported position means the member has restored some of the task, which is what makes an in-flight
-        // warm-up task worth keeping once it stops making progress. The cap the client reports before a restore
-        // begins does not count, and neither does reporting nothing at all.
+        // A position above 0 means the member has restored some of the task, which is what makes an in-flight
+        // warm-up task worth keeping once it stops making progress. A position of 0 is what the client reports
+        // before it restores anything, so it does not count, and neither does reporting nothing at all. A position
+        // sum that overflowed to Long.MAX_VALUE counts.
         final Map<String, StreamsGroupMember> members = Map.of(
             "memberA", member("memberA", "processA", mkTasksTuple(TaskRole.STANDBY, mkTasks(STATEFUL, 0))),
             "memberB", member("memberB", "processB", mkTasksTuple(TaskRole.WARMUP, mkTasks(STATEFUL, 0))),
-            "memberC", member("memberC", "processC", mkTasksTuple(TaskRole.STANDBY, mkTasks(STATEFUL, 0)))
+            "memberC", member("memberC", "processC", mkTasksTuple(TaskRole.STANDBY, mkTasks(STATEFUL, 0))),
+            "memberD", member("memberD", "processD", mkTasksTuple(TaskRole.STANDBY, mkTasks(STATEFUL, 0)))
         );
         final Map<String, MemberTaskOffsets> taskOffsets = Map.of(
             "memberA", offsets(1000L, 2000L),
-            "memberB", offsets(Long.MAX_VALUE, Long.MAX_VALUE)
+            "memberB", offsets(0L, Long.MAX_VALUE),
+            "memberD", offsets(Long.MAX_VALUE, Long.MAX_VALUE)
         );
 
         final AssignmentRefinerImpl.CurrentAssignmentIndex index = index(members, taskOffsets);
@@ -362,7 +371,8 @@ public class AssignmentRefinerTest {
             Set.of(
                 new AssignmentRefinerImpl.TaskCopy("memberA", "processA", TaskRole.STANDBY, false, true),
                 new AssignmentRefinerImpl.TaskCopy("memberB", "processB", TaskRole.WARMUP, false, false),
-                new AssignmentRefinerImpl.TaskCopy("memberC", "processC", TaskRole.STANDBY, false, false)
+                new AssignmentRefinerImpl.TaskCopy("memberC", "processC", TaskRole.STANDBY, false, false),
+                new AssignmentRefinerImpl.TaskCopy("memberD", "processD", TaskRole.STANDBY, false, true)
             ),
             Set.copyOf(index.taskCopies().get(STATEFUL_0))
         );
@@ -645,7 +655,7 @@ public class AssignmentRefinerTest {
                 "memberA",
                 "memberB",
                 Optional.of("processB"),
-                Optional.of(new AssignmentRefinerImpl.TaskCopy("memberB", "processB", TaskRole.STANDBY, false, true))
+                Optional.of(new AssignmentRefinerImpl.TaskCopy("memberB", "processB", TaskRole.STANDBY, false, false))
             )),
             decisions.stagedMigrations()
         );
@@ -1836,8 +1846,11 @@ public class AssignmentRefinerTest {
             "memberB", mkTasksTuple(TaskRole.ACTIVE, mkTasks(STATEFUL, 0, 1)),
             "memberC", mkTasksTuple(TaskRole.ACTIVE, mkTasks(STATEFUL, 2, 3))
         );
-        // memberB reports its restoring active task and nothing for the warm-up task, which has not started.
-        final Map<String, MemberTaskOffsets> taskOffsets = Map.of("memberB", offsets(1, 500L, 10_000L));
+        // memberB reports its restoring active task, and a position of 0 for the warm-up task, which has restored
+        // nothing yet.
+        final Map<String, MemberTaskOffsets> taskOffsets = Map.of(
+            "memberB", offsets(Map.of(0, 0L, 1, 500L), Map.of(0, 10_000L, 1, 10_000L))
+        );
 
         final AssignmentRefinerImpl.WarmupPlan plan = plan(members, targetAssignment, taskOffsets, 1);
 
@@ -2556,6 +2569,319 @@ public class AssignmentRefinerTest {
     }
 
     // ---------------------------------------------------------------------------------------------------------------
+    // Members that cannot be warmed up
+    // ---------------------------------------------------------------------------------------------------------------
+
+    @Test
+    public void shouldGrantATaskAtOnceToATargetOwnerThatCannotBeWarmedUp() {
+        // memberB heartbeats with version 0, so it never reports its restore progress and a warm-up task on it could
+        // never be promoted. The migration that would be staged for any other target owner is completed in this step.
+        final Map<String, StreamsGroupMember> members = Map.of(
+            "memberA", member("memberA", "processA", mkTasksTuple(TaskRole.ACTIVE, mkTasks(STATEFUL, 0))),
+            "memberB", member("memberB", "processB", TasksTuple.EMPTY)
+        );
+        final Map<String, TasksTuple> targetAssignment = Map.of(
+            "memberA", TasksTuple.EMPTY,
+            "memberB", mkTasksTuple(TaskRole.ACTIVE, mkTasks(STATEFUL, 0))
+        );
+        final Map<String, Integer> heartbeatVersions = heartbeatVersions(members, Map.of("memberB", 0));
+
+        final AssignmentRefinerImpl.TaskDecisions decisions =
+            analyze(members, targetAssignment, Map.of(), heartbeatVersions);
+
+        assertEquals(List.of(new AssignmentRefinerImpl.TaskGrant(STATEFUL_0, "memberB")), decisions.grantedTasks());
+        assertEquals(List.of(), decisions.stagedMigrations());
+        assertEquals(targetAssignment, assemble(members, targetAssignment, Map.of(), heartbeatVersions, 2));
+    }
+
+    @Test
+    public void shouldGrantATaskAtOnceToATargetOwnerThatCannotBeWarmedUpAndAlreadyHoldsAStandby() {
+        // memberB holds a standby task of the task, which would be borrowed to warm the migration for a target owner
+        // that reports its progress. memberB never does, so the standby would never be seen to catch up and the
+        // migration would stay staged forever. The task is granted instead, and the client recycles the standby.
+        final Map<String, StreamsGroupMember> members = Map.of(
+            "memberA", member("memberA", "processA", mkTasksTuple(TaskRole.ACTIVE, mkTasks(STATEFUL, 0))),
+            "memberB", member("memberB", "processB", mkTasksTuple(TaskRole.STANDBY, mkTasks(STATEFUL, 0)))
+        );
+        final Map<String, TasksTuple> targetAssignment = Map.of(
+            "memberA", TasksTuple.EMPTY,
+            "memberB", mkTasksTuple(TaskRole.ACTIVE, mkTasks(STATEFUL, 0))
+        );
+
+        assertEquals(Set.of(STATEFUL_0), plan(members, targetAssignment, Map.of(), 1).borrowedMigrations());
+
+        final Map<String, Integer> heartbeatVersions = heartbeatVersions(members, Map.of("memberB", 0));
+        final AssignmentRefinerImpl.TaskDecisions decisions =
+            analyze(members, targetAssignment, Map.of(), heartbeatVersions);
+
+        assertEquals(List.of(new AssignmentRefinerImpl.TaskGrant(STATEFUL_0, "memberB")), decisions.grantedTasks());
+        assertEquals(List.of(), decisions.stagedMigrations());
+        assertEquals(targetAssignment, assemble(members, targetAssignment, Map.of(), heartbeatVersions, 1));
+    }
+
+    @Test
+    public void shouldNotDetourThroughACaughtUpCopyWhenTheTargetOwnerCannotBeWarmedUp() {
+        // memberC holds a caught-up standby task, which would be promoted for a target owner that can be warmed up. For
+        // memberB it would only postpone the same cold grant and add a second hand-over.
+        final Map<String, StreamsGroupMember> members = Map.of(
+            "memberA", member("memberA", "processA", TasksTuple.EMPTY),
+            "memberB", member("memberB", "processB", TasksTuple.EMPTY),
+            "memberC", member("memberC", "processC", mkTasksTuple(TaskRole.STANDBY, mkTasks(STATEFUL, 0)))
+        );
+        final Map<String, TasksTuple> targetAssignment = Map.of(
+            "memberA", TasksTuple.EMPTY,
+            "memberB", mkTasksTuple(TaskRole.ACTIVE, mkTasks(STATEFUL, 0)),
+            "memberC", mkTasksTuple(TaskRole.STANDBY, mkTasks(STATEFUL, 0))
+        );
+        final Map<String, MemberTaskOffsets> taskOffsets = Map.of("memberC", offsets(10_000L, 10_000L));
+
+        assertEquals(
+            List.of(new AssignmentRefinerImpl.StagedMigration(
+                STATEFUL_0, "memberC", "memberB", Optional.of("processB"), Optional.empty())),
+            analyze(members, targetAssignment, taskOffsets).stagedMigrations()
+        );
+        assertEquals(
+            List.of(new AssignmentRefinerImpl.TaskGrant(STATEFUL_0, "memberB")),
+            analyze(members, targetAssignment, taskOffsets, heartbeatVersions(members, Map.of("memberB", 0)))
+                .grantedTasks()
+        );
+    }
+
+    @Test
+    public void shouldKeepATaskRunningOnACurrentOwnerThatCannotBeWarmedUp() {
+        // A member processing a task is hot by definition, whatever it reports. So a version 0 owner keeps the task
+        // while a target owner that can be warmed up restores it.
+        final Map<String, StreamsGroupMember> members = Map.of(
+            "memberA", member("memberA", "processA", mkTasksTuple(TaskRole.ACTIVE, mkTasks(STATEFUL, 0))),
+            "memberB", member("memberB", "processB", TasksTuple.EMPTY)
+        );
+        final Map<String, TasksTuple> targetAssignment = Map.of(
+            "memberA", TasksTuple.EMPTY,
+            "memberB", mkTasksTuple(TaskRole.ACTIVE, mkTasks(STATEFUL, 0))
+        );
+
+        final Map<String, TasksTuple> refined =
+            assemble(members, targetAssignment, Map.of(), heartbeatVersions(members, Map.of("memberA", 0)), 2);
+
+        assertEquals(mkTasksTuple(TaskRole.ACTIVE, mkTasks(STATEFUL, 0)), refined.get("memberA"));
+        assertEquals(mkTasksTuple(TaskRole.WARMUP, mkTasks(STATEFUL, 0)), refined.get("memberB"));
+    }
+
+    @Test
+    public void shouldRunAnOrphanOnTheStandbyHolderThatCannotReportItsProgress() {
+        // Nobody runs the task. memberC holds a standby task of it, and the target assignment keeps it there, but
+        // memberC never reports how far it has restored. The task runs on memberC while memberB warms up, instead of
+        // being restored from scratch on memberB next to a standby task that has to restore anyway.
+        final Map<String, StreamsGroupMember> members = orphanWithAStandbyOnC();
+        final Map<String, TasksTuple> targetAssignment = orphanTargetAssignment();
+        final Map<String, Integer> versionZero = heartbeatVersions(members, Map.of("memberC", 0));
+        final Map<String, Integer> unknownVersion = heartbeatVersions(members, Map.of());
+        unknownVersion.remove("memberC");
+
+        for (final Map<String, Integer> heartbeatVersions : List.of(versionZero, unknownVersion)) {
+            final AssignmentRefinerImpl.TaskDecisions decisions =
+                analyze(members, targetAssignment, Map.of(), heartbeatVersions);
+
+            assertEquals(List.of(), decisions.grantedTasks());
+            assertEquals(
+                List.of(new AssignmentRefinerImpl.StagedMigration(
+                    STATEFUL_0, "memberC", "memberB", Optional.of("processB"), Optional.empty())),
+                decisions.stagedMigrations()
+            );
+        }
+    }
+
+    @Test
+    public void shouldGrantAnOrphanWhoseStandbyHolderReportsItsProgressAndIsBehind() {
+        // memberC reports that its standby task is far behind, so it is neither promoted nor protected, as always.
+        final Map<String, StreamsGroupMember> members = orphanWithAStandbyOnC();
+        final Map<String, MemberTaskOffsets> taskOffsets = Map.of("memberC", offsets(100L, 10_000L));
+
+        final AssignmentRefinerImpl.TaskDecisions decisions =
+            analyze(members, orphanTargetAssignment(), taskOffsets);
+
+        assertEquals(List.of(new AssignmentRefinerImpl.TaskGrant(STATEFUL_0, "memberB")), decisions.grantedTasks());
+        assertEquals(List.of(), decisions.stagedMigrations());
+    }
+
+    @Test
+    public void shouldGrantAnOrphanWhenTheTargetAssignmentDoesNotKeepTheStandbyOnItsHolder() {
+        final Map<String, StreamsGroupMember> members = orphanWithAStandbyOnC();
+        final Map<String, TasksTuple> targetAssignment = Map.of(
+            "memberA", TasksTuple.EMPTY,
+            "memberB", mkTasksTuple(TaskRole.ACTIVE, mkTasks(STATEFUL, 0)),
+            "memberC", TasksTuple.EMPTY
+        );
+
+        final AssignmentRefinerImpl.TaskDecisions decisions =
+            analyze(members, targetAssignment, Map.of(), heartbeatVersions(members, Map.of("memberC", 0)));
+
+        assertEquals(List.of(new AssignmentRefinerImpl.TaskGrant(STATEFUL_0, "memberB")), decisions.grantedTasks());
+        assertEquals(List.of(), decisions.stagedMigrations());
+    }
+
+    @Test
+    public void shouldGrantAnOrphanToATargetOwnerThatCannotBeWarmedUpEvenIfAStandbyHolderCannotReport() {
+        final Map<String, StreamsGroupMember> members = orphanWithAStandbyOnC();
+
+        final AssignmentRefinerImpl.TaskDecisions decisions = analyze(
+            members, orphanTargetAssignment(), Map.of(),
+            heartbeatVersions(members, Map.of("memberB", 0, "memberC", 0)));
+
+        assertEquals(List.of(new AssignmentRefinerImpl.TaskGrant(STATEFUL_0, "memberB")), decisions.grantedTasks());
+        assertEquals(List.of(), decisions.stagedMigrations());
+    }
+
+    @Test
+    public void shouldRunAnOrphanOnTheUnobservableStandbyHolderWhileTheTargetOwnerWarmsUp() {
+        final Map<String, StreamsGroupMember> members = orphanWithAStandbyOnC();
+        final Map<String, TasksTuple> targetAssignment = orphanTargetAssignment();
+
+        final Map<String, TasksTuple> refined = assemble(
+            members, targetAssignment, Map.of(), heartbeatVersions(members, Map.of("memberC", 0)), 1);
+
+        assertEquals(mkTasksTuple(TaskRole.ACTIVE, mkTasks(STATEFUL, 0)), refined.get("memberC"));
+        assertEquals(mkTasksTuple(TaskRole.WARMUP, mkTasks(STATEFUL, 0)), refined.get("memberB"));
+    }
+
+    @Test
+    public void shouldCompleteAHandOverToAWarmTargetOwnerRatherThanPromoteAnUnobservableStandby() {
+        // Right after a coordinator failover, nobody has reported offsets yet. The previous owner has already given the
+        // task up, and memberB holds the warm-up task the hand-over completes with. The standby on memberC is not
+        // promoted, which would undo the hand-over in favour of a copy of unknown lag.
+        final Map<String, StreamsGroupMember> members = Map.of(
+            "memberA", member("memberA", "processA", TasksTuple.EMPTY),
+            "memberB", member("memberB", "processB", mkTasksTuple(TaskRole.WARMUP, mkTasks(STATEFUL, 0))),
+            "memberC", member("memberC", "processC", mkTasksTuple(TaskRole.STANDBY, mkTasks(STATEFUL, 0)))
+        );
+
+        final AssignmentRefinerImpl.TaskDecisions decisions =
+            analyze(members, orphanTargetAssignment(), Map.of(), Map.of());
+
+        assertEquals(List.of(new AssignmentRefinerImpl.TaskGrant(STATEFUL_0, "memberB")), decisions.grantedTasks());
+        assertEquals(List.of(), decisions.stagedMigrations());
+    }
+
+    @Test
+    public void shouldNotPromoteAnUnobservableStandbyWhenTheTargetProcessHoldsACopy() {
+        // memberB reports that its own standby task is behind. The client recycles it into the active task on the
+        // grant, which is warmer than a copy of unknown lag on memberC.
+        final Map<String, StreamsGroupMember> members = Map.of(
+            "memberA", member("memberA", "processA", TasksTuple.EMPTY),
+            "memberB", member("memberB", "processB", mkTasksTuple(TaskRole.STANDBY, mkTasks(STATEFUL, 0))),
+            "memberC", member("memberC", "processC", mkTasksTuple(TaskRole.STANDBY, mkTasks(STATEFUL, 0)))
+        );
+        final Map<String, MemberTaskOffsets> taskOffsets = Map.of("memberB", offsets(100L, 10_000L));
+
+        final AssignmentRefinerImpl.TaskDecisions decisions = analyze(
+            members, orphanTargetAssignment(), taskOffsets, heartbeatVersions(members, Map.of("memberC", 0)));
+
+        assertEquals(List.of(new AssignmentRefinerImpl.TaskGrant(STATEFUL_0, "memberB")), decisions.grantedTasks());
+        assertEquals(List.of(), decisions.stagedMigrations());
+    }
+
+    @Test
+    public void shouldRunAnOrphanOnTheUnobservableStandbyHolderWhenTheTargetOwnerHasLeft() {
+        // The target assignment still names memberB, who has left the group. Until the next assignor run, the standby
+        // holder memberC is the only member the task can run on.
+        final Map<String, StreamsGroupMember> members = Map.of(
+            "memberA", member("memberA", "processA", TasksTuple.EMPTY),
+            "memberC", member("memberC", "processC", mkTasksTuple(TaskRole.STANDBY, mkTasks(STATEFUL, 0)))
+        );
+
+        final AssignmentRefinerImpl.TaskDecisions decisions = analyze(
+            members, orphanTargetAssignment(), Map.of(), heartbeatVersions(members, Map.of("memberC", 0)));
+
+        assertEquals(List.of(), decisions.grantedTasks());
+        assertEquals(
+            List.of(new AssignmentRefinerImpl.StagedMigration(
+                STATEFUL_0, "memberC", "memberB", Optional.empty(), Optional.empty())),
+            decisions.stagedMigrations()
+        );
+    }
+
+    @Test
+    public void shouldNotPromoteAnUnobservableStandbyWhileAMemberStillRestoresTheTaskAsActive() {
+        // memberA runs the task but reports that it is still restoring it, so it is granted away. The task is not an
+        // orphan, so memberC's standby is not promoted, and memberB takes the task over.
+        final Map<String, StreamsGroupMember> members = Map.of(
+            "memberA", member("memberA", "processA", mkTasksTuple(TaskRole.ACTIVE, mkTasks(STATEFUL, 0))),
+            "memberB", member("memberB", "processB", TasksTuple.EMPTY),
+            "memberC", member("memberC", "processC", mkTasksTuple(TaskRole.STANDBY, mkTasks(STATEFUL, 0)))
+        );
+        final Map<String, MemberTaskOffsets> taskOffsets = Map.of("memberA", offsets(500L, 10_000L));
+
+        final AssignmentRefinerImpl.TaskDecisions decisions = analyze(
+            members, orphanTargetAssignment(), taskOffsets, heartbeatVersions(members, Map.of("memberC", 0)));
+
+        assertEquals(List.of(new AssignmentRefinerImpl.TaskGrant(STATEFUL_0, "memberB")), decisions.grantedTasks());
+        assertEquals(List.of(), decisions.stagedMigrations());
+    }
+
+    @Test
+    public void shouldNotPromoteAWarmupTaskOfUnknownLag() {
+        // memberC has not heartbeated since the coordinator loaded the group, and holds a warm-up task of the orphan
+        // that the target assignment turns into a standby task. Only standby tasks are promoted without a known lag.
+        final Map<String, StreamsGroupMember> members = Map.of(
+            "memberA", member("memberA", "processA", TasksTuple.EMPTY),
+            "memberB", member("memberB", "processB", TasksTuple.EMPTY),
+            "memberC", member("memberC", "processC", mkTasksTuple(TaskRole.WARMUP, mkTasks(STATEFUL, 0)))
+        );
+        final Map<String, Integer> heartbeatVersions = heartbeatVersions(members, Map.of());
+        heartbeatVersions.remove("memberC");
+
+        final AssignmentRefinerImpl.TaskDecisions decisions =
+            analyze(members, orphanTargetAssignment(), Map.of(), heartbeatVersions);
+
+        assertEquals(List.of(new AssignmentRefinerImpl.TaskGrant(STATEFUL_0, "memberB")), decisions.grantedTasks());
+        assertEquals(List.of(), decisions.stagedMigrations());
+    }
+
+    @Test
+    public void shouldPromoteACaughtUpCopyAheadOfAStandbyOfUnknownLag() {
+        // memberD reports a caught-up standby task, which is preferred over memberC's standby task of unknown lag.
+        final Map<String, StreamsGroupMember> members = Map.of(
+            "memberA", member("memberA", "processA", TasksTuple.EMPTY),
+            "memberB", member("memberB", "processB", TasksTuple.EMPTY),
+            "memberC", member("memberC", "processC", mkTasksTuple(TaskRole.STANDBY, mkTasks(STATEFUL, 0))),
+            "memberD", member("memberD", "processD", mkTasksTuple(TaskRole.STANDBY, mkTasks(STATEFUL, 0)))
+        );
+        final Map<String, TasksTuple> targetAssignment = Map.of(
+            "memberA", TasksTuple.EMPTY,
+            "memberB", mkTasksTuple(TaskRole.ACTIVE, mkTasks(STATEFUL, 0)),
+            "memberC", mkTasksTuple(TaskRole.STANDBY, mkTasks(STATEFUL, 0)),
+            "memberD", mkTasksTuple(TaskRole.STANDBY, mkTasks(STATEFUL, 0))
+        );
+        final Map<String, MemberTaskOffsets> taskOffsets = Map.of("memberD", offsets(10_000L, 10_000L));
+
+        final AssignmentRefinerImpl.TaskDecisions decisions = analyze(
+            members, targetAssignment, taskOffsets, heartbeatVersions(members, Map.of("memberC", 0)));
+
+        assertEquals(List.of(), decisions.grantedTasks());
+        assertEquals(
+            List.of(new AssignmentRefinerImpl.StagedMigration(
+                STATEFUL_0, "memberD", "memberB", Optional.of("processB"), Optional.empty())),
+            decisions.stagedMigrations()
+        );
+    }
+
+    private static Map<String, StreamsGroupMember> orphanWithAStandbyOnC() {
+        return Map.of(
+            "memberA", member("memberA", "processA", TasksTuple.EMPTY),
+            "memberB", member("memberB", "processB", TasksTuple.EMPTY),
+            "memberC", member("memberC", "processC", mkTasksTuple(TaskRole.STANDBY, mkTasks(STATEFUL, 0)))
+        );
+    }
+
+    private static Map<String, TasksTuple> orphanTargetAssignment() {
+        return Map.of(
+            "memberA", TasksTuple.EMPTY,
+            "memberB", mkTasksTuple(TaskRole.ACTIVE, mkTasks(STATEFUL, 0)),
+            "memberC", mkTasksTuple(TaskRole.STANDBY, mkTasks(STATEFUL, 0))
+        );
+    }
+
+    // ---------------------------------------------------------------------------------------------------------------
     // Fixtures
     // ---------------------------------------------------------------------------------------------------------------
 
@@ -2576,13 +2902,35 @@ public class AssignmentRefinerTest {
         final Map<String, TasksTuple> targetAssignment,
         final Map<String, MemberTaskOffsets> taskOffsets
     ) {
+        return analyze(members, targetAssignment, taskOffsets, heartbeatVersions(members, Map.of()));
+    }
+
+    private static AssignmentRefinerImpl.TaskDecisions analyze(
+        final Map<String, StreamsGroupMember> members,
+        final Map<String, TasksTuple> targetAssignment,
+        final Map<String, MemberTaskOffsets> taskOffsets,
+        final Map<String, Integer> heartbeatVersions
+    ) {
         return AssignmentRefinerImpl.analyzeTasks(
             index(members, taskOffsets),
             targetAssignment,
             members,
+            heartbeatVersions,
             subtopologies(),
             load(members)
         );
+    }
+
+    /**
+     * Every member of the group heartbeats with version 1, except for the members that {@code versions} names.
+     */
+    private static Map<String, Integer> heartbeatVersions(
+        final Map<String, StreamsGroupMember> members,
+        final Map<String, Integer> versions
+    ) {
+        final Map<String, Integer> heartbeatVersions = new HashMap<>();
+        members.keySet().forEach(memberId -> heartbeatVersions.put(memberId, versions.getOrDefault(memberId, 1)));
+        return heartbeatVersions;
     }
 
     private static Map<String, AssignmentRefinerImpl.ProcessLoad> load(
@@ -2652,10 +3000,21 @@ public class AssignmentRefinerTest {
         final Map<String, MemberTaskOffsets> taskOffsets,
         final int numWarmupReplicas
     ) {
+        return assemble(members, targetAssignment, taskOffsets, heartbeatVersions(members, Map.of()), numWarmupReplicas);
+    }
+
+    private static Map<String, TasksTuple> assemble(
+        final Map<String, StreamsGroupMember> members,
+        final Map<String, TasksTuple> targetAssignment,
+        final Map<String, MemberTaskOffsets> taskOffsets,
+        final Map<String, Integer> heartbeatVersions,
+        final int numWarmupReplicas
+    ) {
         return new AssignmentRefinerImpl().refine(
             members,
             targetAssignment,
             taskOffsets,
+            heartbeatVersions,
             subtopologies(),
             numWarmupReplicas,
             ACCEPTABLE_RECOVERY_LAG

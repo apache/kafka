@@ -104,7 +104,6 @@ import static org.apache.kafka.clients.consumer.internals.ConsumerUtils.CONSUMER
 import static org.apache.kafka.clients.consumer.internals.ConsumerUtils.DEFAULT_CLOSE_TIMEOUT_MS;
 import static org.apache.kafka.clients.consumer.internals.ConsumerUtils.createMetrics;
 import static org.apache.kafka.clients.consumer.internals.ConsumerUtils.createShareFetchMetricsManager;
-import static org.apache.kafka.clients.consumer.internals.ConsumerUtils.createSubscriptionState;
 import static org.apache.kafka.clients.consumer.internals.events.CompletableEvent.calculateDeadlineMs;
 import static org.apache.kafka.common.utils.Utils.closeQuietly;
 import static org.apache.kafka.common.utils.Utils.isBlank;
@@ -197,7 +196,7 @@ public class ShareConsumerImpl<K, V> implements ShareConsumerDelegate<K, V> {
     private final ShareFetchBuffer fetchBuffer;
     private final ShareFetchCollector<K, V> fetchCollector;
 
-    private final SubscriptionState subscriptions;
+    private final ShareSubscriptionState subscriptions;
     private final ShareConsumerMetadata metadata;
     private final Metrics metrics;
     private final int requestTimeoutMs;
@@ -259,7 +258,8 @@ public class ShareConsumerImpl<K, V> implements ShareConsumerDelegate<K, V> {
             this.defaultApiTimeoutMs = config.getInt(ConsumerConfig.DEFAULT_API_TIMEOUT_MS_CONFIG);
             this.time = time;
             List<MetricsReporter> reporters = CommonClientConfigs.metricsReporters(clientId, config);
-            this.clientTelemetryReporter = CommonClientConfigs.telemetryReporter(clientId, config);
+            Uuid clientInstanceId = Uuid.randomUuid();
+            this.clientTelemetryReporter = CommonClientConfigs.telemetryReporter(clientId, clientInstanceId, config);
             this.clientTelemetryReporter.ifPresent(reporters::add);
             this.metrics = createMetrics(config, time, reporters);
             this.asyncConsumerMetrics = new AsyncConsumerMetrics(metrics, CONSUMER_SHARE_METRIC_GROUP);
@@ -267,7 +267,7 @@ public class ShareConsumerImpl<K, V> implements ShareConsumerDelegate<K, V> {
             this.acknowledgementMode = initializeAcknowledgementMode(config);
             this.deserializers = new Deserializers<>(config, keyDeserializer, valueDeserializer, metrics);
             this.currentFetch = ShareFetch.empty();
-            this.subscriptions = createSubscriptionState(config, logContext);
+            this.subscriptions = new ShareSubscriptionState(logContext);
             ClusterResourceListeners clusterResourceListeners = ClientUtils.configureClusterResourceListeners(
                     metrics.reporters(),
                     Arrays.asList(deserializers.keyDeserializer(), deserializers.valueDeserializer()));
@@ -284,7 +284,6 @@ public class ShareConsumerImpl<K, V> implements ShareConsumerDelegate<K, V> {
 
             // This FetchBuffer is shared between the application and network threads.
             this.fetchBuffer = new ShareFetchBuffer(logContext);
-            Uuid clientInstanceId = Uuid.randomUuid();
             final Supplier<NetworkClientDelegate> networkClientDelegateSupplier = NetworkClientDelegate.supplier(
                     time,
                     logContext,
@@ -340,7 +339,6 @@ public class ShareConsumerImpl<K, V> implements ShareConsumerDelegate<K, V> {
             this.fetchCollector = fetchCollectorFactory.build(
                     logContext,
                     metadata,
-                    subscriptions,
                     new ShareFetchConfig(config),
                     deserializers);
 
@@ -369,7 +367,7 @@ public class ShareConsumerImpl<K, V> implements ShareConsumerDelegate<K, V> {
                       final Deserializer<V> valueDeserializer,
                       final Time time,
                       final KafkaClient client,
-                      final SubscriptionState subscriptions,
+                      final ShareSubscriptionState subscriptions,
                       final ShareConsumerMetadata metadata) {
         this.clientId = clientId;
         this.groupId = groupId;
@@ -392,7 +390,6 @@ public class ShareConsumerImpl<K, V> implements ShareConsumerDelegate<K, V> {
         this.fetchCollector = new ShareFetchCollector<>(
                 logContext,
                 metadata,
-                subscriptions,
                 new ShareFetchConfig(config),
                 deserializers);
         this.kafkaShareConsumerMetrics = new KafkaShareConsumerMetrics(metrics);
@@ -467,7 +464,7 @@ public class ShareConsumerImpl<K, V> implements ShareConsumerDelegate<K, V> {
                       final BlockingQueue<BackgroundEvent> backgroundEventQueue,
                       final CompletableEventReaper backgroundEventReaper,
                       final Metrics metrics,
-                      final SubscriptionState subscriptions,
+                      final ShareSubscriptionState subscriptions,
                       final ShareConsumerMetadata metadata,
                       final int requestTimeoutMs,
                       final int defaultApiTimeoutMs,
@@ -525,7 +522,6 @@ public class ShareConsumerImpl<K, V> implements ShareConsumerDelegate<K, V> {
         ShareFetchCollector<K, V> build(
                 final LogContext logContext,
                 final ShareConsumerMetadata metadata,
-                final SubscriptionState subscriptions,
                 final ShareFetchConfig shareFetchConfig,
                 final Deserializers<K, V> deserializers
         );
@@ -615,7 +611,7 @@ public class ShareConsumerImpl<K, V> implements ShareConsumerDelegate<K, V> {
 
             kafkaShareConsumerMetrics.recordPollStart(timer.currentTimeMs());
 
-            if (subscriptions.hasNoSubscriptionOrUserAssignment()) {
+            if (!subscriptions.isSubscribed()) {
                 throw new IllegalStateException("Consumer is not subscribed to any topics.");
             }
 
@@ -1397,11 +1393,6 @@ public class ShareConsumerImpl<K, V> implements ShareConsumerDelegate<K, V> {
         } catch (Exception e) {
             firstException.compareAndSet(null, e);
         }
-    }
-
-    @Override
-    public String clientId() {
-        return clientId;
     }
 
     @Override
