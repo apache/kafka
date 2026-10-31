@@ -3543,7 +3543,7 @@ public class UnifiedLogTest {
     }
 
     @Test
-    public void testFetchOffsetByTimestampContinuesAfterEmptyEligibleSegment() throws IOException {
+    public void testFetchOffsetByTimestampSearchesNextSegmentWhenMatchIsBelowLogStartOffset() throws IOException {
         long targetTimestamp = mockTime.milliseconds();
         LogConfig logConfig = new LogTestUtils.LogConfigBuilder()
                 .indexIntervalBytes(1)
