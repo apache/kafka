@@ -40,8 +40,7 @@ import org.apache.kafka.raft.{KRaftConfigs, KafkaRaftClient}
 import org.apache.kafka.server.{DynamicThreadPool, ProcessRole}
 import org.apache.kafka.server.common.ApiMessageAndVersion
 import org.apache.kafka.server.config.DynamicBrokerConfig.DynamicClusterMirrorConfig
-import org.apache.kafka.server.config.{BrokerReconfigurable => JBrokerReconfigurable, DynamicConfig, DynamicLogConfig, DynamicProducerStateManagerConfig, ServerConfigs, DynamicBrokerConfig => JDynamicBrokerConfig}
-import org.apache.kafka.server.log.remote.storage.RemoteLogManagerConfig
+import org.apache.kafka.server.config.{AbstractKafkaConfig, BrokerReconfigurable, DynamicConfig, DynamicLogConfig, DynamicProducerStateManagerConfig, DynamicRemoteLogConfig, ServerConfigs, DynamicBrokerConfig => JDynamicBrokerConfig}
 import org.apache.kafka.server.metrics.{ClientTelemetryExporterPlugin, MetricConfigs}
 import org.apache.kafka.server.quota.QuotaFactory
 import org.apache.kafka.server.telemetry.{ClientTelemetry, ClientTelemetryExporterProvider}
@@ -51,6 +50,7 @@ import org.apache.kafka.snapshot.RecordsSnapshotReader
 import scala.util.Using
 import scala.collection._
 import scala.jdk.CollectionConverters._
+import scala.jdk.OptionConverters._
 
 /**
   * Dynamic broker configurations may be defined at two levels:
@@ -199,7 +199,7 @@ class DynamicBrokerConfig(private val kafkaConfig: KafkaConfig) extends Logging 
     addBrokerReconfigurable(new DynamicListenerConfig(kafkaServer))
     addBrokerReconfigurable(kafkaServer.socketServer)
     addBrokerReconfigurable(new DynamicProducerStateManagerConfig(kafkaServer.logManager.producerStateManagerConfig))
-    addBrokerReconfigurable(new DynamicRemoteLogConfig(kafkaServer))
+    addBrokerReconfigurable(new DynamicRemoteLogConfig(() => kafkaServer.config, kafkaServer.remoteLogManagerOpt.toJava))
     addBrokerReconfigurable(new DynamicClusterMirrorConfig(() => kafkaServer.config))
   }
 
@@ -228,17 +228,6 @@ class DynamicBrokerConfig(private val kafkaConfig: KafkaConfig) extends Logging 
   def addReconfigurable(reconfigurable: Reconfigurable): Unit = {
     verifyReconfigurableConfigs(reconfigurable.reconfigurableConfigs)
     reconfigurables.add(reconfigurable)
-  }
-
-  def addBrokerReconfigurable(reconfigurable: JBrokerReconfigurable): Unit = {
-    verifyReconfigurableConfigs(reconfigurable.reconfigurableConfigs)
-    brokerReconfigurables.add(new BrokerReconfigurable {
-      override def reconfigurableConfigs: util.Set[String] = reconfigurable.reconfigurableConfigs
-
-      override def validateReconfiguration(newConfig: KafkaConfig): Unit = reconfigurable.validateReconfiguration(newConfig)
-
-      override def reconfigure(oldConfig: KafkaConfig, newConfig: KafkaConfig): Unit = reconfigurable.reconfigure(oldConfig, newConfig)
-    })
   }
 
   def addBrokerReconfigurable(reconfigurable: BrokerReconfigurable): Unit = {
@@ -532,29 +521,17 @@ class DynamicBrokerConfig(private val kafkaConfig: KafkaConfig) extends Logging 
   }
 }
 
-/**
- * Implement [[JBrokerReconfigurable]] instead.
- */
-trait BrokerReconfigurable {
-
-  def reconfigurableConfigs: util.Set[String]
-
-  def validateReconfiguration(newConfig: KafkaConfig): Unit
-
-  def reconfigure(oldConfig: KafkaConfig, newConfig: KafkaConfig): Unit
-}
-
 class ControllerDynamicThreadPool(controller: ControllerServer) extends BrokerReconfigurable {
 
   override def reconfigurableConfigs: util.Set[String] = {
     util.Set.of(ServerConfigs.NUM_IO_THREADS_CONFIG)
   }
 
-  override def validateReconfiguration(newConfig: KafkaConfig): Unit = {
+  override def validateReconfiguration(newConfig: AbstractKafkaConfig): Unit = {
     DynamicThreadPool.validateReconfiguration(controller.config, newConfig) // common validation
   }
 
-  override def reconfigure(oldConfig: KafkaConfig, newConfig: KafkaConfig): Unit = {
+  override def reconfigure(oldConfig: AbstractKafkaConfig, newConfig: AbstractKafkaConfig): Unit = {
     if (newConfig.numIoThreads != oldConfig.numIoThreads)
       controller.controllerApisHandlerPool.resizeThreadPool(newConfig.numIoThreads)
   }
@@ -566,11 +543,11 @@ class BrokerDynamicThreadPool(server: KafkaBroker) extends BrokerReconfigurable 
     DynamicThreadPool.RECONFIGURABLE_CONFIGS
   }
 
-  override def validateReconfiguration(newConfig: KafkaConfig): Unit = {
+  override def validateReconfiguration(newConfig: AbstractKafkaConfig): Unit = {
     DynamicThreadPool.validateReconfiguration(server.config, newConfig)
   }
 
-  override def reconfigure(oldConfig: KafkaConfig, newConfig: KafkaConfig): Unit = {
+  override def reconfigure(oldConfig: AbstractKafkaConfig, newConfig: AbstractKafkaConfig): Unit = {
     if (newConfig.numIoThreads != oldConfig.numIoThreads)
       server.dataPlaneRequestHandlerPool.resizeThreadPool(newConfig.numIoThreads)
     if (newConfig.numReplicaFetchers != oldConfig.numReplicaFetchers)
@@ -746,7 +723,8 @@ class DynamicListenerConfig(server: KafkaBroker) extends BrokerReconfigurable wi
     JDynamicBrokerConfig.DynamicListenerConfig.RECONFIGURABLE_CONFIGS
   }
 
-  def validateReconfiguration(newConfig: KafkaConfig): Unit = {
+  override def validateReconfiguration(newAbstractConfig: AbstractKafkaConfig): Unit = {
+    val newConfig = newAbstractConfig.asInstanceOf[KafkaConfig]
     val oldConfig = server.config
     val newListeners = newConfig.listeners.map(l => ListenerName.normalised(l.listener)).toSet
     val oldAdvertisedListeners = oldConfig.effectiveAdvertisedBrokerListeners.map(l => ListenerName.normalised(l.listener)).toSet
@@ -770,7 +748,9 @@ class DynamicListenerConfig(server: KafkaBroker) extends BrokerReconfigurable wi
     }
   }
 
-  def reconfigure(oldConfig: KafkaConfig, newConfig: KafkaConfig): Unit = {
+  override def reconfigure(oldAbstractConfig: AbstractKafkaConfig, newAbstractConfig: AbstractKafkaConfig): Unit = {
+    val oldConfig = oldAbstractConfig.asInstanceOf[KafkaConfig]
+    val newConfig = newAbstractConfig.asInstanceOf[KafkaConfig]
     val newListeners = newConfig.listeners
     val newListenerMap = listenersToMap(newListeners)
     val oldListeners = oldConfig.listeners
@@ -787,107 +767,4 @@ class DynamicListenerConfig(server: KafkaBroker) extends BrokerReconfigurable wi
   private def listenersToMap(listeners: Seq[Endpoint]): Map[ListenerName, Endpoint] =
     listeners.map(e => (ListenerName.normalised(e.listener), e)).toMap
 
-}
-
-class DynamicRemoteLogConfig(server: KafkaBroker) extends BrokerReconfigurable with Logging {
-  override def reconfigurableConfigs: util.Set[String] = {
-    JDynamicBrokerConfig.DynamicRemoteLogConfig.RECONFIGURABLE_CONFIGS
-  }
-
-  override def validateReconfiguration(newConfig: KafkaConfig): Unit = {
-    newConfig.values.forEach { (k, v) =>
-      if (RemoteLogManagerConfig.REMOTE_LOG_INDEX_FILE_CACHE_TOTAL_SIZE_BYTES_PROP.equals(k) ||
-        RemoteLogManagerConfig.REMOTE_LOG_MANAGER_COPY_MAX_BYTES_PER_SECOND_PROP.equals(k) ||
-        RemoteLogManagerConfig.REMOTE_LOG_MANAGER_FETCH_MAX_BYTES_PER_SECOND_PROP.equals(k)) {
-        val newValue = v.asInstanceOf[Long]
-        val oldValue = getValue(server.config, k)
-        if (newValue != oldValue && newValue <= 0) {
-          val errorMsg = s"Dynamic remote log manager config update validation failed for $k=$v"
-          throw new ConfigException(s"$errorMsg, value should be at least 1")
-        }
-      }
-
-      if (RemoteLogManagerConfig.REMOTE_LOG_READER_THREADS_PROP.equals(k) ||
-          RemoteLogManagerConfig.REMOTE_LOG_MANAGER_COPIER_THREAD_POOL_SIZE_PROP.equals(k) ||
-          RemoteLogManagerConfig.REMOTE_LOG_MANAGER_EXPIRATION_THREAD_POOL_SIZE_PROP.equals(k) ||
-          RemoteLogManagerConfig.REMOTE_LOG_MANAGER_FOLLOWER_THREAD_POOL_SIZE_PROP.equals(k)) {
-        val newValue = v.asInstanceOf[Int]
-        val oldValue: Int = {
-          // This logic preserves backward compatibility in scenarios where
-          // `remote.log.manager.thread.pool.size` is configured in config file,
-          // but `remote.log.manager.follower.thread.pool.size` is set dynamically.
-          // This can be removed once `remote.log.manager.thread.pool.size` is removed.
-          if (RemoteLogManagerConfig.REMOTE_LOG_MANAGER_FOLLOWER_THREAD_POOL_SIZE_PROP.equals(k))
-            server.config.remoteLogManagerConfig.remoteLogManagerFollowerThreadPoolSize()
-          else
-            server.config.getInt(k)
-        }
-        if (newValue != oldValue) {
-          val errorMsg = s"Dynamic thread count update validation failed for $k=$v"
-          if (newValue <= 0)
-            throw new ConfigException(s"$errorMsg, value should be at least 1")
-          if (newValue < oldValue / 2)
-            throw new ConfigException(s"$errorMsg, value should be at least half the current value $oldValue")
-          if (newValue > oldValue * 2)
-            throw new ConfigException(s"$errorMsg, value should not be greater than double the current value $oldValue")
-        }
-      }
-    }
-  }
-
-  override def reconfigure(oldConfig: KafkaConfig, newConfig: KafkaConfig): Unit = {
-    def oldLongValue(k: String): Long = oldConfig.getLong(k)
-    def newLongValue(k: String): Long = newConfig.getLong(k)
-
-    def isChangedLongValue(k : String): Boolean = oldLongValue(k) != newLongValue(k)
-
-    if (server.remoteLogManagerOpt.nonEmpty) {
-      val remoteLogManager = server.remoteLogManagerOpt.get
-      if (isChangedLongValue(RemoteLogManagerConfig.REMOTE_LOG_INDEX_FILE_CACHE_TOTAL_SIZE_BYTES_PROP)) {
-        val oldValue = oldLongValue(RemoteLogManagerConfig.REMOTE_LOG_INDEX_FILE_CACHE_TOTAL_SIZE_BYTES_PROP)
-        val newValue = newLongValue(RemoteLogManagerConfig.REMOTE_LOG_INDEX_FILE_CACHE_TOTAL_SIZE_BYTES_PROP)
-        remoteLogManager.resizeCacheSize(newValue)
-        info(s"Dynamic remote log manager config: ${RemoteLogManagerConfig.REMOTE_LOG_INDEX_FILE_CACHE_TOTAL_SIZE_BYTES_PROP} updated, " +
-          s"old value: $oldValue, new value: $newValue")
-      }
-      if (isChangedLongValue(RemoteLogManagerConfig.REMOTE_LOG_MANAGER_COPY_MAX_BYTES_PER_SECOND_PROP)) {
-        val oldValue = oldLongValue(RemoteLogManagerConfig.REMOTE_LOG_MANAGER_COPY_MAX_BYTES_PER_SECOND_PROP)
-        val newValue = newLongValue(RemoteLogManagerConfig.REMOTE_LOG_MANAGER_COPY_MAX_BYTES_PER_SECOND_PROP)
-        remoteLogManager.updateCopyQuota(newValue)
-        info(s"Dynamic remote log manager config: ${RemoteLogManagerConfig.REMOTE_LOG_MANAGER_COPY_MAX_BYTES_PER_SECOND_PROP} updated, " +
-          s"old value: $oldValue, new value: $newValue")
-      }
-      if (isChangedLongValue(RemoteLogManagerConfig.REMOTE_LOG_MANAGER_FETCH_MAX_BYTES_PER_SECOND_PROP)) {
-        val oldValue = oldLongValue(RemoteLogManagerConfig.REMOTE_LOG_MANAGER_FETCH_MAX_BYTES_PER_SECOND_PROP)
-        val newValue = newLongValue(RemoteLogManagerConfig.REMOTE_LOG_MANAGER_FETCH_MAX_BYTES_PER_SECOND_PROP)
-        remoteLogManager.updateFetchQuota(newValue)
-        info(s"Dynamic remote log manager config: ${RemoteLogManagerConfig.REMOTE_LOG_MANAGER_FETCH_MAX_BYTES_PER_SECOND_PROP} updated, " +
-          s"old value: $oldValue, new value: $newValue")
-      }
-
-      val newRLMConfig = newConfig.remoteLogManagerConfig
-      val oldRLMConfig = oldConfig.remoteLogManagerConfig
-      if (newRLMConfig.remoteLogManagerCopierThreadPoolSize() != oldRLMConfig.remoteLogManagerCopierThreadPoolSize())
-        remoteLogManager.resizeCopierThreadPool(newRLMConfig.remoteLogManagerCopierThreadPoolSize())
-
-      if (newRLMConfig.remoteLogManagerExpirationThreadPoolSize() != oldRLMConfig.remoteLogManagerExpirationThreadPoolSize())
-        remoteLogManager.resizeExpirationThreadPool(newRLMConfig.remoteLogManagerExpirationThreadPoolSize())
-
-      if (newRLMConfig.remoteLogManagerFollowerThreadPoolSize() != oldRLMConfig.remoteLogManagerFollowerThreadPoolSize())
-        remoteLogManager.resizeFollowerThreadPool(newRLMConfig.remoteLogManagerFollowerThreadPoolSize())
-
-      if (newRLMConfig.remoteLogReaderThreads() != oldRLMConfig.remoteLogReaderThreads())
-        remoteLogManager.resizeReaderThreadPool(newRLMConfig.remoteLogReaderThreads())
-    }
-  }
-
-  private def getValue(config: KafkaConfig, name: String): Long = {
-    name match {
-      case RemoteLogManagerConfig.REMOTE_LOG_INDEX_FILE_CACHE_TOTAL_SIZE_BYTES_PROP |
-           RemoteLogManagerConfig.REMOTE_LOG_MANAGER_COPY_MAX_BYTES_PER_SECOND_PROP |
-           RemoteLogManagerConfig.REMOTE_LOG_MANAGER_FETCH_MAX_BYTES_PER_SECOND_PROP =>
-        config.getLong(name)
-      case n => throw new IllegalStateException(s"Unexpected dynamic remote log manager config $n")
-    }
-  }
 }
