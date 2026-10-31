@@ -21,7 +21,7 @@ import java.util.Objects;
 import java.util.Set;
 
 /**
- * The metadata associated with a regular expression in a Consumer Group.
+ * The topics that a regular expression of a consumer group resolves to.
  *
  * @param topics    The set of resolved topics.
  * @param version   The version of the metadata image used to resolve the topics.
@@ -36,7 +36,7 @@ public record ResolvedRegularExpression(Set<String> topics, long version, long t
 
     @Override
     public String toString() {
-        return "RegularExpressionMetadata(" +
+        return "ResolvedRegularExpression(" +
             "topics=" + topics +
             ", version=" + version +
             ", timestamp=" + timestamp +
