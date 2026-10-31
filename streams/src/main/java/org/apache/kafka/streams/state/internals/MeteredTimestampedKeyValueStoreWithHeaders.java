@@ -692,14 +692,19 @@ public class MeteredTimestampedKeyValueStoreWithHeaders<K, V>
 
             final KeyValue<Bytes, byte[]> keyValue = iter.next();
             final ValueTimestampHeaders<V> valueTimestampHeaders = valueTimestampHeadersDeserializer.apply(keyValue.value);
-            final Headers headers = valueTimestampHeaders.headers();
+            final Headers headers = valueTimestampHeaders != null
+                ? valueTimestampHeaders.headers()
+                : new RecordHeaders();
+            final K key = deserializeKey(keyValue.key.get(), headers);
 
-            if (returnPlainValue) {
-                return KeyValue.pair(deserializeKey(keyValue.key.get(), headers), valueTimestampHeaders.value());
+            if (valueTimestampHeaders == null) {
+                return KeyValue.pair(key, null);
+            } else if (returnPlainValue) {
+                return KeyValue.pair(key, valueTimestampHeaders.value());
             } else {
                 // Return as ValueAndTimestamp
                 return KeyValue.pair(
-                    deserializeKey(keyValue.key.get(), headers),
+                    key,
                     (V) ValueAndTimestamp.make(valueTimestampHeaders.value(), valueTimestampHeaders.timestamp())
                 );
             }
@@ -719,13 +724,15 @@ public class MeteredTimestampedKeyValueStoreWithHeaders<K, V>
      * {@link ReadOnlyRecord} (implemented by {@link Record}) carrying key, value, timestamp, and the
      * stored headers, with the headers frozen so a caller cannot mutate the read-only result.
      *
-     * <p>A {@link ReadOnlyRecord} timestamp is contractually non-negative, so an entry with a negative
-     * stored timestamp cannot be represented. The dominant, deterministic cause is a store that does
-     * not persist timestamps: a {@code WithHeaders} store built over a plain {@link KeyValueStore}
-     * supplier surfaces every entry with {@code NO_TIMESTAMP} (-1). A genuine negative write is
-     * otherwise blocked (the source {@code RecordQueue} drops negative-timestamp records at ingestion),
-     * though {@link ValueAndTimestamp#make}/{@link ValueTimestampHeaders#make} do not themselves reject
-     * one written directly.
+     * <p>A {@link ReadOnlyRecord} requires a value and a contractually non-negative timestamp, so an
+     * entry whose value deserializes to null or whose stored timestamp is negative cannot be represented.
+     * The null-value check is a fail-fast safety net because a native store cannot hold a null value. The
+     * dominant, deterministic cause of a negative timestamp is a store that does not persist timestamps:
+     * a {@code WithHeaders} store built over a plain {@link KeyValueStore} supplier surfaces every entry
+     * with {@code NO_TIMESTAMP} (-1). A genuine negative write is otherwise blocked (the source
+     * {@code RecordQueue} drops negative-timestamp records at ingestion), though
+     * {@link ValueAndTimestamp#make}/{@link ValueTimestampHeaders#make} do not themselves reject one
+     * written directly.
      *
      * <p>This mirrors the rule the point query {@link TimestampedKeyWithHeadersQuery} applies. But
      * because a lazily-evaluated range has already returned a successful {@link QueryResult} before any
@@ -755,8 +762,16 @@ public class MeteredTimestampedKeyValueStoreWithHeaders<K, V>
         public ReadOnlyRecord<K, V> next() {
             final KeyValue<Bytes, byte[]> keyValue = iter.next();
             final ValueTimestampHeaders<V> valueTimestampHeaders = valueTimestampHeadersDeserializer.apply(keyValue.value);
-            final Headers headers = valueTimestampHeaders.headers();
+            // Use empty headers for a null value so the key can still be deserialized for the error message.
+            final Headers headers = valueTimestampHeaders != null
+                ? valueTimestampHeaders.headers()
+                : new RecordHeaders();
             final K key = deserializeKey(keyValue.key.get(), headers);
+            if (valueTimestampHeaders == null) {
+                throw new StreamsException(
+                    "Cannot represent the stored record for key [" + key
+                        + "] as a ReadOnlyRecord: its value is null.");
+            }
             if (valueTimestampHeaders.timestamp() < 0) {
                 throw new StreamsException(
                     "Cannot represent the stored record for key [" + key + "] as a ReadOnlyRecord: its "
@@ -799,7 +814,10 @@ public class MeteredTimestampedKeyValueStoreWithHeaders<K, V>
 
             final KeyValue<Bytes, byte[]> keyValue = iter.next();
             final ValueTimestampHeaders<V> valueTimestampHeaders = deserializeValue(keyValue.value);
-            final K key = deserializeKey(keyValue.key.get(), valueTimestampHeaders.headers());
+            final Headers headers = valueTimestampHeaders != null
+                ? valueTimestampHeaders.headers()
+                : new RecordHeaders();
+            final K key = deserializeKey(keyValue.key.get(), headers);
             return KeyValue.pair(key, valueTimestampHeaders);
         }
 
