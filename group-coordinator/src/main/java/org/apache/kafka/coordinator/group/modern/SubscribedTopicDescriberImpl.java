@@ -28,7 +28,7 @@ import java.util.Optional;
 import java.util.Set;
 
 /**
- * The subscribed topic metadata class is used by the {@link PartitionAssignor} to obtain
+ * The subscribed topic describer is used by the {@link PartitionAssignor} to obtain
  * topic and partition metadata for the topics that the modern group is subscribed to.
  */
 public class SubscribedTopicDescriberImpl implements SubscribedTopicDescriber {
