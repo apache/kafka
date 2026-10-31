@@ -1,0 +1,35 @@
+#
+# Licensed to the Apache Software Foundation (ASF) under one or more
+# contributor license agreements.  See the NOTICE file distributed with
+# this work for additional information regarding copyright ownership.
+# The ASF licenses this file to You under the Apache License, Version 2.0
+# (the "License"); you may not use this file except in compliance with
+# the License.  You may obtain a copy of the License at
+#
+#    http://www.apache.org/licenses/LICENSE-2.0
+#
+# Unless required by applicable law or agreed to in writing, software
+# distributed under the License is distributed on an "AS IS" BASIS,
+# WITHOUT WARRANTIES OR CONDITIONS OF ANY KIND, either express or implied.
+# See the License for the specific language governing permissions and
+# limitations under the License.
+#
+
+# Names to show in the contributor list of the release announcement (see contributors.py).
+# Add an entry only when:
+#  1. a contributor asks to be shown with another name,
+#  2. credits are known to be the same person but share no email, name or GitHub login,
+#     so they cannot be matched automatically, or
+#  3. a wrong email in some commit merges two people. Map that name and email to the right
+#     email, e.g. "Right Name <right@email> Right Name <wrong@email>".
+# Note why each entry was added, so that it can be checked later.
+#
+# The format is the one of git mailmap (see https://git-scm.com/docs/gitmailmap), but this
+# file is only used by contributors.py and does not change how git shows names elsewhere.
+
+# 1. Asked for in https://github.com/apache/kafka-site/pull/928
+Gabriella Fu <100360154+gabriellefu@users.noreply.github.com>
+Jiayao Sun <jiayao.s@outlook.com>
+
+# 2. The GitHub account imavishek also commits as Avishek Das <avishek.akd@gmail.com>
+Avishek Das <imavishek@users.noreply.github.com>
