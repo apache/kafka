@@ -834,7 +834,7 @@ public class ShareConsumerImplTest {
         consumer = newConsumer(fetchBuffer, subscriptions, "group-id", "client-id", "implicit");
 
         TopicPartition tp = new TopicPartition("topic1", 0);
-        subscriptions.subscribeToShareGroup(Collections.singleton(tp.topic()));
+        subscriptions.subscribe(Collections.singleton(tp.topic()));
         subscriptions.assignFromSubscribed(Collections.singleton(tp));
 
         // Keep pollForFetches from spinning by making it "wait" and advance MockTime.
@@ -1088,7 +1088,7 @@ public class ShareConsumerImplTest {
     private void completeShareSubscriptionChangeApplicationEventSuccessfully(ShareSubscriptionState subscriptions, List<String> topics) {
         doAnswer(invocation -> {
             ShareSubscriptionChangeEvent event = invocation.getArgument(0);
-            subscriptions.subscribeToShareGroup(new HashSet<>(topics));
+            subscriptions.subscribe(new HashSet<>(topics));
             event.future().complete(null);
             return null;
         }).when(applicationEventHandler).addAndGet(ArgumentMatchers.isA(ShareSubscriptionChangeEvent.class));

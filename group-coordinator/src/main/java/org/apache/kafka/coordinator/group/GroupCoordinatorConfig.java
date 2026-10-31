@@ -110,7 +110,7 @@ public class GroupCoordinatorConfig {
     public static final String OFFSETS_LOAD_BUFFER_SIZE_CONFIG = "offsets.load.buffer.size";
     public static final int OFFSETS_LOAD_BUFFER_SIZE_DEFAULT = 5 * 1024 * 1024;
     public static final String OFFSETS_LOAD_BUFFER_SIZE_DOC = "Batch size for reading from the offsets segments when loading group metadata " +
-        " into the cache (soft-limit, overridden if records are too large).";
+        "into the cache (soft-limit, overridden if records are too large).";
 
     public static final String OFFSET_COMMIT_TIMEOUT_MS_CONFIG = "offsets.commit.timeout.ms";
     public static final int OFFSET_COMMIT_TIMEOUT_MS_DEFAULT = 5000;
@@ -223,7 +223,7 @@ public class GroupCoordinatorConfig {
         new RangeAssignor()
     );
     public static final String CONSUMER_GROUP_ASSIGNORS_CONFIG = "group.consumer.assignors";
-    public static final String CONSUMER_GROUP_ASSIGNORS_DOC = "The server side assignors as a list of either names for builtin assignors or full class names for customer assignors. " +
+    public static final String CONSUMER_GROUP_ASSIGNORS_DOC = "The server side assignors as a list of either names for builtin assignors or full class names for custom assignors. " +
         "The first one in the list is considered as the default assignor to be used in the case where the consumer does not specify an assignor. " +
         "Changing the default assignor does not trigger a rebalance for existing groups; the new default takes effect on the next rebalance. " +
         "The supported builtin assignors are: " + CONSUMER_GROUP_BUILTIN_ASSIGNORS.stream().map(ConsumerGroupPartitionAssignor::name).collect(Collectors.joining(", ")) + ".";
