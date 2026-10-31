@@ -86,11 +86,16 @@ public class EOSUncleanShutdownIntegrationTest {
 
     private static final int RECORD_TOTAL = 3;
 
+    // Exercises the non-transactional store path: without transactional state stores, an unclean
+    // shutdown under EOS may leave uncommitted data on disk, so the state directory is wiped.
     @Test
     public void shouldWorkWithUncleanShutdownWipeOutStateStore() throws InterruptedException {
         final String appId = "shouldWorkWithUncleanShutdownWipeOutStateStore";
-        STREAMS_CONFIG.put(StreamsConfig.APPLICATION_ID_CONFIG, appId);
-        STREAMS_CONFIG.put(StreamsConfig.PROCESSING_GUARANTEE_CONFIG, StreamsConfig.EXACTLY_ONCE_V2);
+        final Properties config = new Properties();
+        config.putAll(STREAMS_CONFIG);
+        config.put(StreamsConfig.APPLICATION_ID_CONFIG, appId);
+        config.put(StreamsConfig.PROCESSING_GUARANTEE_CONFIG, StreamsConfig.EXACTLY_ONCE_V2);
+        config.put(StreamsConfig.TRANSACTIONAL_STATE_STORES_CONFIG, "false");
 
         final String input = "input-topic";
         cleanStateBeforeTest(CLUSTER, input);
@@ -120,7 +125,7 @@ public class EOSUncleanShutdownIntegrationTest {
             mkEntry(ProducerConfig.VALUE_SERIALIZER_CLASS_CONFIG, ((Serializer<String>) STRING_SERIALIZER).getClass().getName()),
             mkEntry(ProducerConfig.BOOTSTRAP_SERVERS_CONFIG, CLUSTER.bootstrapServers())
         ));
-        final KafkaStreams driver =  new KafkaStreams(builder.build(), STREAMS_CONFIG);
+        final KafkaStreams driver =  new KafkaStreams(builder.build(), config);
         driver.cleanUp();
         driver.start();
 
@@ -159,6 +164,82 @@ public class EOSUncleanShutdownIntegrationTest {
             assertTrue(!taskStateDir.exists()
                 || (taskStateDir.exists() && taskStateDir.list().length > 0 && !taskCheckpointFile.exists())
                 || (taskCheckpointFile.exists() && taskCheckpointFile.length() == 0L));
+
+            quietlyCleanStateAfterTest(CLUSTER, driver);
+        }
+    }
+
+    // With transactional state stores enabled, uncommitted writes never reach the base store, so
+    // an unclean shutdown (that is not due to store corruption) must NOT wipe the state directory.
+    @Test
+    public void shouldNotWipeStateStoreOnUncleanShutdownWhenTransactional() throws InterruptedException {
+        final String appId = "shouldNotWipeStateStoreOnUncleanShutdownWhenTransactional";
+        final Properties config = new Properties();
+        config.putAll(STREAMS_CONFIG);
+        config.put(StreamsConfig.APPLICATION_ID_CONFIG, appId);
+        config.put(StreamsConfig.PROCESSING_GUARANTEE_CONFIG, StreamsConfig.EXACTLY_ONCE_V2);
+        config.put(StreamsConfig.TRANSACTIONAL_STATE_STORES_CONFIG, "true");
+
+        final String input = "input-topic-transactional";
+        cleanStateBeforeTest(CLUSTER, input);
+
+        final StreamsBuilder builder = new StreamsBuilder();
+
+        final KStream<String, String> inputStream = builder.stream(input);
+
+        final AtomicInteger recordCount = new AtomicInteger(0);
+
+        final KTable<String, String> valueCounts = inputStream
+            .groupByKey()
+            .aggregate(
+                () -> "()",
+                (key, value, aggregate) -> aggregate + ",(" + key + ": " + value + ")",
+                Materialized.as("aggregated_value"));
+
+        valueCounts.toStream().peek((key, value) -> {
+            if (recordCount.incrementAndGet() >= RECORD_TOTAL) {
+                throw new IllegalStateException("Crash on the " + RECORD_TOTAL + " record");
+            }
+        });
+
+        final Properties producerConfig = mkProperties(mkMap(
+            mkEntry(ProducerConfig.CLIENT_ID_CONFIG, "anything"),
+            mkEntry(ProducerConfig.KEY_SERIALIZER_CLASS_CONFIG, ((Serializer<String>) STRING_SERIALIZER).getClass().getName()),
+            mkEntry(ProducerConfig.VALUE_SERIALIZER_CLASS_CONFIG, ((Serializer<String>) STRING_SERIALIZER).getClass().getName()),
+            mkEntry(ProducerConfig.BOOTSTRAP_SERVERS_CONFIG, CLUSTER.bootstrapServers())
+        ));
+        final KafkaStreams driver =  new KafkaStreams(builder.build(), config);
+        driver.cleanUp();
+        driver.start();
+
+        TestUtils.waitForCondition(() -> driver.state().equals(State.RUNNING),
+                () -> "Expected RUNNING state but driver is on " + driver.state());
+
+        // Task's StateDir
+        final File taskStateDir = new File(String.join("/", TEST_FOLDER.getPath(), appId, "0_0"));
+
+        try {
+            IntegrationTestUtils.produceSynchronously(producerConfig, false, input, Optional.empty(),
+                singletonList(new KeyValueTimestamp<>("k1", "v1", 0L)));
+
+            // wait until the first request is processed and some files are created in it
+            TestUtils.waitForCondition(() -> taskStateDir.exists() && taskStateDir.isDirectory() && taskStateDir.list().length > 0,
+                "Failed awaiting CreateTopics first request failure");
+            IntegrationTestUtils.produceSynchronously(producerConfig, false, input, Optional.empty(),
+                asList(new KeyValueTimestamp<>("k2", "v2", 1L),
+                    new KeyValueTimestamp<>("k3", "v3", 2L)));
+
+            TestUtils.waitForCondition(() -> recordCount.get() == RECORD_TOTAL,
+                    () -> "Expected " + RECORD_TOTAL + " records processed but only got " + recordCount.get());
+        } catch (final Exception e) {
+            e.printStackTrace();
+        } finally {
+            TestUtils.waitForCondition(() -> driver.state().equals(State.ERROR),
+                    () -> "Expected ERROR state but driver is on " + driver.state());
+
+            driver.close();
+
+            assertTrue(taskStateDir.exists());
 
             quietlyCleanStateAfterTest(CLUSTER, driver);
         }

@@ -90,6 +90,7 @@ public class ConnectStandalone extends AbstractConnectCli<StandaloneHerder, Stan
                 connect.herder().putConnectorConfig(
                     createConnectorRequest.name(), createConnectorRequest.config(),
                     createConnectorRequest.initialTargetState(),
+                    createConnectorRequest.initialOffsetsMap(),
                     false, cb);
                 cb.get();
             }
@@ -126,7 +127,7 @@ public class ConnectStandalone extends AbstractConnectCli<StandaloneHerder, Stan
                 throw new ConnectException("Connector configuration at '" + filePath + "' is missing the mandatory '" + NAME_CONFIG + "' "
                     + "configuration");
             }
-            return new CreateConnectorRequest(connectorConfigs.get(NAME_CONFIG), connectorConfigs, null);
+            return new CreateConnectorRequest(connectorConfigs.get(NAME_CONFIG), connectorConfigs, null, null);
         } catch (StreamReadException | DatabindException e) {
             log.debug("Could not parse connector configuration file '{}' into a Map with String keys and values", filePath);
         }
@@ -153,7 +154,7 @@ public class ConnectStandalone extends AbstractConnectCli<StandaloneHerder, Stan
             throw new ConnectException("Connector configuration at '" + filePath + "' is missing the mandatory '" + NAME_CONFIG + "' "
                 + "configuration");
         }
-        return new CreateConnectorRequest(connectorConfigs.get(NAME_CONFIG), connectorConfigs, null);
+        return new CreateConnectorRequest(connectorConfigs.get(NAME_CONFIG), connectorConfigs, null, null);
     }
 
     @Override

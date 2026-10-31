@@ -89,7 +89,7 @@ public interface SegmentedBytesStore extends StateStore {
     KeyValueIterator<Bytes, byte[]> backwardAll();
 
     /**
-     * Gets all the key-value pairs that belong to the windows within in the given time range.
+     * Gets all the key-value pairs that belong to the windows within the given time range.
      *
      * @param from the beginning of the time slot from which to search (inclusive)
      * @param to   the end of the time slot from which to search (inclusive)

@@ -17,9 +17,12 @@
 
 package org.apache.kafka.clients.admin;
 
+import org.apache.kafka.common.annotation.InterfaceAudience;
+
 /**
  * Options for {@link Admin#forceTerminateTransaction(String, TerminateTransactionOptions)}.
  */
+@InterfaceAudience.Public
 public class TerminateTransactionOptions extends AbstractOptions<TerminateTransactionOptions> {
 
     @Override

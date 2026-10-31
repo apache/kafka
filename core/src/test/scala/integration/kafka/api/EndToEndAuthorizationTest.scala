@@ -156,7 +156,7 @@ abstract class EndToEndAuthorizationTest extends IntegrationTestHarness with Sas
     // create the test topic with all the brokers as replicas
     val superuserAdminClient = createSuperuserAdminClient()
     TestUtils.createTopicWithAdmin(admin = superuserAdminClient, topic = topic, brokers = brokers, controllers = controllerServers,
-      replicationFactor = 3, topicConfig = new Properties)
+      replicationFactor = 3, topicConfig = util.Map.of())
   }
 
   /**

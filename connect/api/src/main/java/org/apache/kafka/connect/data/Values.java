@@ -16,6 +16,7 @@
  */
 package org.apache.kafka.connect.data;
 
+import org.apache.kafka.common.annotation.InterfaceAudience;
 import org.apache.kafka.common.utils.Utils;
 import org.apache.kafka.connect.data.Schema.Type;
 import org.apache.kafka.connect.errors.DataException;
@@ -58,6 +59,7 @@ import java.util.regex.Pattern;
  * <p>This class is able to convert any value to a string representation as well as parse those string representations back into most of
  * the types. The only exception is {@link Struct} values that require a schema and thus cannot be parsed from a simple string.
  */
+@InterfaceAudience.Public
 public class Values {
 
     private static final TimeZone UTC = TimeZone.getTimeZone("UTC");

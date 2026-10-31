@@ -17,11 +17,14 @@
 
 package org.apache.kafka.clients.admin;
 
+import org.apache.kafka.common.annotation.InterfaceAudience;
+
 import java.util.Objects;
 
 /**
  * Options for {@link Admin#listTopics()}.
  */
+@InterfaceAudience.Public
 public class ListTopicsOptions extends AbstractOptions<ListTopicsOptions> {
 
     private boolean listInternal = false;

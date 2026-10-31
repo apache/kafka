@@ -641,6 +641,13 @@
   "name":"java.rmi.server.UID"
 },
 {
+  "name":"java.security.AccessControlContext"
+},
+{
+  "name":"java.security.AccessController",
+  "methods":[{"name":"doPrivileged","parameterTypes":["java.security.PrivilegedAction"] }, {"name":"getContext","parameterTypes":[] }]
+},
+{
   "name":"java.security.AlgorithmParametersSpi"
 },
 {
@@ -794,6 +801,10 @@
 {
   "name":"javax.management.remote.rmi.RMIServerImpl_Stub",
   "methods":[{"name":"<init>","parameterTypes":["java.rmi.server.RemoteRef"] }]
+},
+{
+  "name":"javax.security.auth.Subject",
+  "methods":[{"name":"callAs","parameterTypes":["javax.security.auth.Subject","java.util.concurrent.Callable"] }, {"name":"current","parameterTypes":[] }, {"name":"doAs","parameterTypes":["javax.security.auth.Subject","java.security.PrivilegedExceptionAction"] }, {"name":"getSubject","parameterTypes":["java.security.AccessControlContext"] }]
 },
 {
   "name":"javax.security.auth.x500.X500Principal",
@@ -1024,10 +1035,64 @@
   "methods":[{"name":"<init>","parameterTypes":[] }]
 },
 {
-  "name":"org.apache.kafka.common.security.oauthbearer.DefaultJwtRetriever"
+  "name":"org.apache.kafka.common.security.oauthbearer.ClientCredentialsJwtRetriever",
+  "methods":[{"name":"<init>","parameterTypes":[] }]
 },
 {
-  "name":"org.apache.kafka.common.security.oauthbearer.DefaultJwtValidator"
+  "name":"org.apache.kafka.common.security.oauthbearer.DefaultJwtRetriever",
+  "methods":[{"name":"<init>","parameterTypes":[] }]
+},
+{
+  "name":"org.apache.kafka.common.security.oauthbearer.FileJwtRetriever",
+  "methods":[{"name":"<init>","parameterTypes":[] }]
+},
+{
+  "name":"org.apache.kafka.common.security.oauthbearer.JwtBearerJwtRetriever",
+  "methods":[{"name":"<init>","parameterTypes":[] }]
+},
+{
+  "name":"org.apache.kafka.common.security.oauthbearer.BrokerJwtValidator",
+  "methods":[{"name":"<init>","parameterTypes":[] }]
+},
+{
+  "name":"org.apache.kafka.common.security.oauthbearer.ClientJwtValidator",
+  "methods":[{"name":"<init>","parameterTypes":[] }]
+},
+{
+  "name":"org.apache.kafka.common.security.oauthbearer.DefaultJwtValidator",
+  "methods":[{"name":"<init>","parameterTypes":[] }]
+},
+{
+  "name":"org.apache.kafka.common.security.oauthbearer.OAuthBearerLoginCallbackHandler",
+  "methods":[{"name":"<init>","parameterTypes":[] }]
+},
+{
+  "name":"org.apache.kafka.common.security.oauthbearer.OAuthBearerLoginModule",
+  "methods":[{"name":"<init>","parameterTypes":[] }]
+},
+{
+  "name":"org.apache.kafka.common.security.oauthbearer.OAuthBearerValidatorCallbackHandler",
+  "methods":[{"name":"<init>","parameterTypes":[] }]
+},
+{
+  "name":"org.apache.kafka.common.security.oauthbearer.internals.OAuthBearerRefreshingLogin",
+  "methods":[{"name":"<init>","parameterTypes":[] }]
+},
+{
+  "name":"org.apache.kafka.common.security.oauthbearer.internals.OAuthBearerSaslClient$OAuthBearerSaslClientFactory",
+  "methods":[{"name":"<init>","parameterTypes":[] }]
+},
+{
+  "name":"org.apache.kafka.common.security.oauthbearer.internals.OAuthBearerSaslClientCallbackHandler",
+  "methods":[{"name":"<init>","parameterTypes":[] }]
+},
+{
+  "name":"org.apache.kafka.common.security.oauthbearer.internals.OAuthBearerSaslServer$OAuthBearerSaslServerFactory",
+  "methods":[{"name":"<init>","parameterTypes":[] }]
+},
+{
+  "name":"org.apache.kafka.common.security.oauthbearer.internals.unsecured.OAuthBearerUnsecuredLoginCallbackHandler",
+  "methods":[{"name":"<init>","parameterTypes":[] }]
 },
 {
   "name":"org.apache.kafka.common.security.plain.PlainLoginModule",
@@ -1070,6 +1135,10 @@
   "methods":[{"name":"<init>","parameterTypes":[] }]
 },
 {
+  "name":"org.apache.kafka.coordinator.group.streams.NoOpAssignmentRefiner",
+  "methods":[{"name":"<init>","parameterTypes":[] }]
+},
+{
   "name":"org.apache.kafka.metadata.authorizer.StandardAuthorizer",
   "methods":[{"name":"<init>","parameterTypes":[] }]
 },
@@ -1080,10 +1149,6 @@
 {
   "name":"org.apache.kafka.server.logger.LoggingControllerMBean",
   "queryAllPublicMethods":true
-},
-{
-  "name":"org.apache.kafka.server.share.persister.DefaultStatePersister",
-  "methods":[{"name":"<init>","parameterTypes":["org.apache.kafka.server.share.persister.PersisterStateManager"] }]
 },
 {
   "name":"org.apache.kafka.storage.internals.checkpoint.CleanShutdownFileHandler$Content",

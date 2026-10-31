@@ -39,6 +39,7 @@ import org.apache.kafka.server.telemetry.ClientTelemetryExporter;
 import org.apache.kafka.server.telemetry.ClientTelemetryExporterProvider;
 import org.apache.kafka.shaded.io.opentelemetry.proto.metrics.v1.MetricsData;
 import org.apache.kafka.streams.ClientInstanceIds;
+import org.apache.kafka.streams.CloseOptions;
 import org.apache.kafka.streams.KafkaClientSupplier;
 import org.apache.kafka.streams.KafkaStreams;
 import org.apache.kafka.streams.StreamsBuilder;
@@ -289,7 +290,8 @@ public class KafkaStreamsTelemetryIntegrationTest {
     }
 
     private void shouldPassMetrics(final Topology topology, final int clientInstance) throws Exception {
-        try (final KafkaStreams streams = new KafkaStreams(topology, streamsApplicationProperties)) {
+        final KafkaStreams streams = new KafkaStreams(topology, streamsApplicationProperties);
+        try {
             IntegrationTestUtils.startApplicationAndWaitUntilRunning(streams);
 
             final List<MetricName> streamsThreadMetrics = streams.metrics().values().stream().map(Metric::metricName)
@@ -309,6 +311,10 @@ public class KafkaStreamsTelemetryIntegrationTest {
 
             assertEquals(streamsClientMetrics.size(), adminPassedStreamClientMetricNames.size());
             adminPassedStreamClientMetricNames.forEach(metricName -> assertTrue(streamsClientMetrics.contains(metricName), "Client metrics doesn't contain " + metricName));
+        } finally {
+            streams.close(
+                CloseOptions.groupMembershipOperation(CloseOptions.GroupMembershipOperation.LEAVE_GROUP)
+            );
         }
     }
 

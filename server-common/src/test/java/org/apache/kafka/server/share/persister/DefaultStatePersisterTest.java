@@ -126,6 +126,11 @@ class DefaultStatePersisterTest {
             public List<Node> getClusterNodes() {
                 return List.of(suppliedNode);
             }
+
+            @Override
+            public boolean isRequestHeaderV3Supported() {
+                return true;
+            }
         };
     }
 

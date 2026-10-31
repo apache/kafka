@@ -27,8 +27,7 @@ import java.util.Collections;
 import java.util.Map;
 import java.util.function.Supplier;
 
-import static org.hamcrest.CoreMatchers.is;
-import static org.hamcrest.MatcherAssert.assertThat;
+import static org.junit.jupiter.api.Assertions.assertEquals;
 import static org.mockito.Mockito.mock;
 import static org.mockito.Mockito.mockStatic;
 import static org.mockito.Mockito.when;
@@ -283,7 +282,7 @@ public class StateStoreMetricsTest {
                     descriptionOfMax
                 )
             );
-            assertThat(sensor, is(expectedSensor));
+            assertEquals(expectedSensor, sensor);
         }
     }
 
@@ -362,7 +361,7 @@ public class StateStoreMetricsTest {
                     descriptionOfMax
                 )
             );
-            assertThat(sensor, is(expectedSensor));
+            assertEquals(expectedSensor, sensor);
         }
     }
 
@@ -398,7 +397,7 @@ public class StateStoreMetricsTest {
                     descriptionOfMax
                 )
             );
-            assertThat(sensor, is(expectedSensor));
+            assertEquals(expectedSensor, sensor);
         }
     }
 
@@ -432,7 +431,7 @@ public class StateStoreMetricsTest {
                     descriptionOfMax
                 )
             );
-            assertThat(sensor, is(expectedSensor));
+            assertEquals(expectedSensor, sensor);
         }
     }
 }

@@ -36,6 +36,7 @@ import org.junit.jupiter.api.BeforeEach;
 import org.junit.jupiter.api.Test;
 
 import java.nio.ByteBuffer;
+import java.util.ArrayList;
 import java.util.LinkedHashMap;
 import java.util.List;
 import java.util.Map;
@@ -170,6 +171,28 @@ public class ShareFetchTest {
         // Validate failed share fetch request metrics, 1 topic partition failed and 1 succeeded.
         assertEquals(1, brokerTopicStats.allTopicsStats().failedShareFetchRequestRate().count());
         assertEquals(1, brokerTopicStats.topicStats("foo").failedShareFetchRequestRate().count());
+    }
+
+    @Test
+    public void testMaybeCompletePreservesPartitionOrder() {
+        TopicIdPartition topicIdPartition0 = new TopicIdPartition(Uuid.randomUuid(), new TopicPartition("foo", 0));
+        TopicIdPartition topicIdPartition1 = new TopicIdPartition(Uuid.randomUuid(), new TopicPartition("foo", 1));
+        TopicIdPartition topicIdPartition2 = new TopicIdPartition(Uuid.randomUuid(), new TopicPartition("foo", 2));
+
+        CompletableFuture<Map<TopicIdPartition, PartitionData>> future = new CompletableFuture<>();
+        ShareFetch shareFetch = new ShareFetch(mock(FetchParams.class), GROUP_ID, MEMBER_ID, future,
+            List.of(topicIdPartition0, topicIdPartition1, topicIdPartition2), BATCH_OPTIMIZED, BATCH_SIZE, 100, brokerTopicStats);
+
+        // The partitions were read in an order which differs from the request order.
+        LinkedHashMap<TopicIdPartition, PartitionData> partitionData = new LinkedHashMap<>();
+        partitionData.put(topicIdPartition1, new PartitionData().setPartitionIndex(1));
+        partitionData.put(topicIdPartition0, new PartitionData().setPartitionIndex(0));
+        shareFetch.addErroneous(topicIdPartition2, new RuntimeException());
+        shareFetch.maybeComplete(partitionData);
+
+        // The share session re-orders its partitions from the response, hence the response must keep the
+        // order in which the partitions were read, with the erroneous partitions appended.
+        assertEquals(List.of(topicIdPartition1, topicIdPartition0, topicIdPartition2), new ArrayList<>(future.join().keySet()));
     }
 
     @Test

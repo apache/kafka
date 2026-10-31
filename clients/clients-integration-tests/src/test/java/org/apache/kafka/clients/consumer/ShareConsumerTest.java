@@ -19,6 +19,7 @@ package org.apache.kafka.clients.consumer;
 import kafka.server.KafkaBroker;
 
 import org.apache.kafka.clients.admin.Admin;
+import org.apache.kafka.clients.admin.NewPartitions;
 import org.apache.kafka.clients.admin.RecordsToDelete;
 import org.apache.kafka.clients.admin.SharePartitionOffsetInfo;
 import org.apache.kafka.clients.producer.Producer;
@@ -32,10 +33,9 @@ import org.apache.kafka.common.Uuid;
 import org.apache.kafka.common.errors.GroupMaxSizeReachedException;
 import org.apache.kafka.common.errors.InterruptException;
 import org.apache.kafka.common.errors.InvalidTopicException;
-import org.apache.kafka.common.errors.NotLeaderOrFollowerException;
+import org.apache.kafka.common.errors.NetworkException;
 import org.apache.kafka.common.errors.RecordDeserializationException;
 import org.apache.kafka.common.errors.SerializationException;
-import org.apache.kafka.common.errors.ShareSessionNotFoundException;
 import org.apache.kafka.common.errors.UnknownTopicIdException;
 import org.apache.kafka.common.errors.WakeupException;
 import org.apache.kafka.common.header.Header;
@@ -63,7 +63,6 @@ import org.junit.jupiter.api.Timeout;
 import java.nio.ByteBuffer;
 import java.time.Duration;
 import java.util.ArrayList;
-import java.util.Arrays;
 import java.util.HashMap;
 import java.util.HashSet;
 import java.util.Iterator;
@@ -1053,7 +1052,7 @@ public class ShareConsumerTest extends ShareConsumerTestBase {
 
             AtomicBoolean callbackCalled = new AtomicBoolean(false);
             shareConsumer.setAcknowledgementCommitCallback((offsetsByTopicPartition, exception) -> {
-                assertInstanceOf(NotLeaderOrFollowerException.class, exception);
+                assertInstanceOf(NetworkException.class, exception);
                 callbackCalled.set(true);
             });
 
@@ -1082,7 +1081,7 @@ public class ShareConsumerTest extends ShareConsumerTestBase {
             assertEquals(1, commitResult.size());
             TopicIdPartition tidp = commitResult.keySet().iterator().next();
             assertTrue(commitResult.get(tidp).isPresent());
-            assertInstanceOf(NotLeaderOrFollowerException.class, commitResult.get(tidp).get());
+            assertInstanceOf(NetworkException.class, commitResult.get(tidp).get());
 
             assertTrue(callbackCalled.get());
         }
@@ -1097,7 +1096,7 @@ public class ShareConsumerTest extends ShareConsumerTestBase {
 
             AtomicBoolean callbackCalled = new AtomicBoolean(false);
             shareConsumer.setAcknowledgementCommitCallback((offsetsByTopicPartition, exception) -> {
-                assertInstanceOf(NotLeaderOrFollowerException.class, exception);
+                assertInstanceOf(NetworkException.class, exception);
                 callbackCalled.set(true);
             });
 
@@ -1146,7 +1145,7 @@ public class ShareConsumerTest extends ShareConsumerTestBase {
 
             AtomicBoolean callbackCalled = new AtomicBoolean(false);
             shareConsumer.setAcknowledgementCommitCallback((offsetsByTopicPartition, exception) -> {
-                assertInstanceOf(ShareSessionNotFoundException.class, exception);
+                assertInstanceOf(NetworkException.class, exception);
                 callbackCalled.set(true);
             });
 
@@ -1439,7 +1438,10 @@ public class ShareConsumerTest extends ShareConsumerTestBase {
         verifyShareGroupStateTopicRecordsProduced();
     }
 
-    @ClusterTest
+    @ClusterTest(serverProperties = {
+        @ClusterConfigProperty(key = "group.share.min.record.lock.duration.ms", value = "5000"),
+        @ClusterConfigProperty(key = "group.share.record.lock.duration.ms", value = "5000")
+    })
     public void testAcquisitionLockTimeoutOnConsumer() throws InterruptedException {
         alterShareAutoOffsetReset("group1", "earliest");
         try (Producer<byte[], byte[]> producer = createProducer();
@@ -1483,7 +1485,7 @@ public class ShareConsumerTest extends ShareConsumerTestBase {
             assertEquals(1, consumerRecords.count());
 
             // Allow the acquisition lock to time out.
-            Thread.sleep(20000);
+            Thread.sleep(8000);
 
             consumerRecords = shareConsumer.poll(Duration.ofMillis(5000));
             consumerRecord = consumerRecords.records(tp).get(0);
@@ -1623,29 +1625,26 @@ public class ShareConsumerTest extends ShareConsumerTestBase {
             ProducerRecord<byte[], byte[]> recordTopic2 = new ProducerRecord<>(topic2, 0, null, "key".getBytes(), "value".getBytes());
 
             // Consumer subscribes to the topics -> bar and baz.
-            shareConsumer.subscribe(Arrays.asList(topic1, topic2));
+            shareConsumer.subscribe(List.of(topic1, topic2));
 
             producer.send(recordTopic1).get();
-            TestUtils.waitForCondition(() -> shareConsumer.poll(Duration.ofMillis(2000)).count() == 1,
-                DEFAULT_MAX_WAIT_MS, 100L, () -> "incorrect number of records");
+            ConsumerRecords<byte[], byte[]> records = waitedPoll(shareConsumer, 2000L, 1);
+            assertEquals(topic1, records.iterator().next().topic());
 
             producer.send(recordTopic2).get();
-            TestUtils.waitForCondition(() -> shareConsumer.poll(Duration.ofMillis(2000)).count() == 1,
-                DEFAULT_MAX_WAIT_MS, 100L, () -> "incorrect number of records");
+            records = waitedPoll(shareConsumer, 2000L, 1);
+            assertEquals(topic2, records.iterator().next().topic());
 
-            // Topic bar is deleted, hence poll should not give any results.
+            // Topic bar is deleted, so its partition should be revoked and the member should end up assigned
+            // only the partition of topic baz. The subscription itself is unchanged.
             deleteTopic(topic1);
-            ConsumerRecords<byte[], byte[]> records = shareConsumer.poll(Duration.ofMillis(500));
-            assertEquals(0, records.count());
+            waitForExactAssignment("group1", Set.of(new TopicPartition(topic2, 0)));
+            assertEquals(Set.of(topic1, topic2), shareConsumer.subscription());
 
-            producer.send(recordTopic2).get();
             // Poll should give the record from the non-deleted topic baz.
-            TestUtils.waitForCondition(() -> shareConsumer.poll(Duration.ofMillis(2000)).count() == 1,
-                DEFAULT_MAX_WAIT_MS, 100L, () -> "incorrect number of records");
-
             producer.send(recordTopic2).get();
-            TestUtils.waitForCondition(() -> shareConsumer.poll(Duration.ofMillis(2000)).count() == 1,
-                DEFAULT_MAX_WAIT_MS, 100L, () -> "incorrect number of records");
+            records = waitedPoll(shareConsumer, 2000L, 1);
+            assertEquals(topic2, records.iterator().next().topic());
             verifyShareGroupStateTopicRecordsProduced();
         }
     }
@@ -1860,23 +1859,32 @@ public class ShareConsumerTest extends ShareConsumerTestBase {
 
         // Produce a fixed number of messages for deterministic testing.
         int targetRecordCount = 2000;
+        int producerBatchSize = 100;
         service.execute(() -> {
             try (Producer<byte[], byte[]> producer = createProducer()) {
                 do {
                     ProducerRecord<byte[], byte[]> record = new ProducerRecord<>(multiTp.topic(), multiTp.partition(), null, "key".getBytes(), "value".getBytes());
                     producer.send(record);
-                    producer.flush();
-                } while (prodState.count().incrementAndGet() < targetRecordCount);
+                    if (prodState.count().incrementAndGet() % producerBatchSize == 0) {
+                        producer.flush();
+                    }
+                } while (prodState.count().get() < targetRecordCount);
+                producer.flush();
                 prodState.done().set(true);
             }
         });
 
         // Init a complex share consumer.
+        // ComplexShareConsumer builds its KafkaShareConsumer directly rather than going through
+        // cluster.shareConsumer(), so it is the one consumer in this suite that does not get the
+        // harness's client security settings injected for it. Route the configs through
+        // setClientSaslConfig() so it authenticates on clusters that require it; the default
+        // implementation is a no-op unless the broker security protocol is SASL_PLAINTEXT.
         ComplexShareConsumer<byte[], byte[]> complexCons1 = new ComplexShareConsumer<>(
             cluster.bootstrapServers(),
             topicName,
             groupId,
-            Map.of(ConsumerConfig.SHARE_ACKNOWLEDGEMENT_MODE_CONFIG, EXPLICIT)
+            cluster.setClientSaslConfig(Map.of(ConsumerConfig.SHARE_ACKNOWLEDGEMENT_MODE_CONFIG, EXPLICIT))
         );
         alterShareAutoOffsetReset(groupId, "earliest");
 
@@ -2028,6 +2036,65 @@ public class ShareConsumerTest extends ShareConsumerTestBase {
             assertNull(sharePartitionOffsetInfo);
         } catch (ExecutionException | InterruptedException e) {
             throw new RuntimeException(e);
+        }
+    }
+
+    @ClusterTest
+    public void testAddedPartitionsOfKnownTopicStartAtOffsetZero() throws InterruptedException, ExecutionException {
+        String groupId = "expand-group";
+        String topic = "expand-topic";
+        createTopic(topic, 1, 1);
+
+        alterShareAutoOffsetReset(groupId, "latest");
+
+        try (Producer<byte[], byte[]> producer = createProducer();
+             Admin admin = createAdminClient();
+             ShareConsumer<byte[], byte[]> shareConsumer = createShareConsumer(groupId)) {
+
+            // Produce 10 records to partition 0 before anyone subscribes.
+            for (int i = 0; i < 10; i++) {
+                producer.send(new ProducerRecord<>(topic, 0, null, ("p0-key-" + i).getBytes(), ("p0-value-" + i).getBytes()));
+            }
+            producer.flush();
+
+            // The consumer joins and polls: with "latest" it starts partition 0 at the log end, so it receives
+            // none of the pre-existing records. This also makes the group aware of (initializes) the topic.
+            shareConsumer.subscribe(Set.of(topic));
+            int received = 0;
+            long deadline = System.currentTimeMillis() + 10000L;
+            while (System.currentTimeMillis() < deadline) {
+                received += shareConsumer.poll(Duration.ofMillis(1000)).count();
+            }
+            assertEquals(0, received, "latest reset should skip records produced before the topic was known");
+
+            // Expand the topic and produce 10 records to the brand-new partition 1, each with a distinct,
+            // known value so we can assert all of them are delivered (none skipped by the latest reset).
+            admin.createPartitions(Map.of(topic, NewPartitions.increaseTo(2))).all().get();
+            cluster.waitTopicCreation(topic, 2);
+
+            List<String> expectedValues = new ArrayList<>();
+            for (int i = 0; i < 10; i++) {
+                String value = "p1-value-" + i;
+                expectedValues.add(value);
+                producer.send(new ProducerRecord<>(topic, 1, null, ("p1-key-" + i).getBytes(), value.getBytes()));
+            }
+            producer.flush();
+
+            // Partition 1 belongs to an already-known topic, so it must be initialized at offset 0 and deliver
+            // every record produced above — even though it was created under a "latest" reset. Share consumers
+            // deliver at-least-once, so records may be redelivered; track distinct values in a set so
+            // duplicates don't cause spurious failures, then assert the count of distinct records.
+            Set<String> receivedValues = new HashSet<>();
+            waitForCondition(() -> {
+                ConsumerRecords<byte[], byte[]> records = shareConsumer.poll(Duration.ofMillis(1000));
+                for (ConsumerRecord<byte[], byte[]> record : records) {
+                    if (record.partition() == 1) {
+                        receivedValues.add(new String(record.value()));
+                    }
+                }
+                return receivedValues.size() >= expectedValues.size();
+            }, 30000L, 500L, () -> "did not receive all records from the newly added partition");
+            assertEquals(expectedValues.size(), receivedValues.size());
         }
     }
 }

@@ -1,6 +1,6 @@
 ---
 title: Consumer Rebalance Protocol
-description: Consumer Rebalance Protocol
+description: Kafka consumer rebalance protocol behavior, migration paths, and limitations.
 weight: 10
 tags: ['kafka', 'docs']
 aliases: 

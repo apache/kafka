@@ -30,6 +30,10 @@
   // Version 6 returns error code GROUP_ID_NOT_FOUND if the group ID is not found (KIP-1043).
   "validVersions": "0-6",
   "flexibleVersions": "5+",
+  "headerVersions": {
+    "0-4": "0",
+    "5+": "1"
+  },
   "fields": [
     { "name": "ThrottleTimeMs", "type": "int32", "versions": "1+", "ignorable": true,
       "about": "The duration in milliseconds for which the request was throttled due to a quota violation, or zero if the request did not violate any quota." },

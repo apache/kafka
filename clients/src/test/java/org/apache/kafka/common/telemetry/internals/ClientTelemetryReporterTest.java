@@ -21,6 +21,7 @@ import org.apache.kafka.clients.consumer.ConsumerConfig;
 import org.apache.kafka.clients.producer.ProducerConfig;
 import org.apache.kafka.common.KafkaException;
 import org.apache.kafka.common.Uuid;
+import org.apache.kafka.common.compress.Compression;
 import org.apache.kafka.common.errors.AuthorizationException;
 import org.apache.kafka.common.errors.DisconnectException;
 import org.apache.kafka.common.errors.NetworkException;
@@ -52,6 +53,7 @@ import org.mockito.Mockito;
 import org.mockito.internal.stubbing.answers.CallsRealMethods;
 
 import java.io.IOException;
+import java.io.OutputStream;
 import java.time.Duration;
 import java.util.Collections;
 import java.util.HashMap;
@@ -62,8 +64,6 @@ import java.util.concurrent.CountDownLatch;
 import java.util.concurrent.TimeUnit;
 import java.util.concurrent.atomic.AtomicReference;
 
-import io.opentelemetry.proto.common.v1.KeyValue;
-
 import static org.junit.jupiter.api.Assertions.assertEquals;
 import static org.junit.jupiter.api.Assertions.assertFalse;
 import static org.junit.jupiter.api.Assertions.assertInstanceOf;
@@ -72,7 +72,7 @@ import static org.junit.jupiter.api.Assertions.assertNull;
 import static org.junit.jupiter.api.Assertions.assertThrows;
 import static org.junit.jupiter.api.Assertions.assertTrue;
 import static org.mockito.ArgumentMatchers.any;
-import static org.mockito.ArgumentMatchers.eq;
+import static org.mockito.ArgumentMatchers.anyByte;
 
 public class ClientTelemetryReporterTest {
 
@@ -86,11 +86,11 @@ public class ClientTelemetryReporterTest {
     @BeforeEach
     public void setUp() {
         time = new MockTime();
-        clientTelemetryReporter = new ClientTelemetryReporter(time);
+        uuid = Uuid.randomUuid();
+        clientTelemetryReporter = new ClientTelemetryReporter(time, uuid);
         configs = new HashMap<>();
         metricsContext = new KafkaMetricsContext("test");
-        uuid = Uuid.randomUuid();
-        subscription = new ClientTelemetryReporter.ClientTelemetrySubscription(uuid, 1234, 20000,
+        subscription = new ClientTelemetryReporter.ClientTelemetrySubscription(1234, 20000,
             Collections.emptyList(), true, null);
     }
 
@@ -102,11 +102,9 @@ public class ClientTelemetryReporterTest {
         clientTelemetryReporter.configure(configs);
         clientTelemetryReporter.contextChange(metricsContext);
         assertNotNull(clientTelemetryReporter.metricsCollector());
-        assertNotNull(clientTelemetryReporter.telemetryProvider().resource());
-        assertEquals(1, clientTelemetryReporter.telemetryProvider().resource().getAttributesCount());
-        assertEquals(
-            ClientTelemetryProvider.CLIENT_RACK, clientTelemetryReporter.telemetryProvider().resource().getAttributes(0).getKey());
-        assertEquals("rack", clientTelemetryReporter.telemetryProvider().resource().getAttributes(0).getValue().getStringValue());
+        Map<String, String> labels = clientTelemetryReporter.telemetryProvider().resourceLabels();
+        assertEquals(1, labels.size());
+        assertEquals("rack", labels.get(ClientTelemetryProvider.CLIENT_RACK));
     }
 
     @Test
@@ -130,17 +128,11 @@ public class ClientTelemetryReporterTest {
         clientTelemetryReporter.configure(configs);
         clientTelemetryReporter.contextChange(new KafkaMetricsContext("kafka.producer"));
         assertNotNull(clientTelemetryReporter.metricsCollector());
-        assertNotNull(clientTelemetryReporter.telemetryProvider().resource());
 
-        List<KeyValue> attributes = clientTelemetryReporter.telemetryProvider().resource().getAttributesList();
-        assertEquals(2, attributes.size());
-        attributes.forEach(attribute -> {
-            if (attribute.getKey().equals(ClientTelemetryProvider.CLIENT_RACK)) {
-                assertEquals("rack", attribute.getValue().getStringValue());
-            } else if (attribute.getKey().equals(ClientTelemetryProvider.TRANSACTIONAL_ID)) {
-                assertEquals("transaction-id", attribute.getValue().getStringValue());
-            }
-        });
+        Map<String, String> labels = clientTelemetryReporter.telemetryProvider().resourceLabels();
+        assertEquals(2, labels.size());
+        assertEquals("rack", labels.get(ClientTelemetryProvider.CLIENT_RACK));
+        assertEquals("transaction-id", labels.get(ClientTelemetryProvider.TRANSACTIONAL_ID));
     }
 
     @Test
@@ -154,19 +146,12 @@ public class ClientTelemetryReporterTest {
         clientTelemetryReporter.configure(configs);
         clientTelemetryReporter.contextChange(new KafkaMetricsContext("kafka.consumer"));
         assertNotNull(clientTelemetryReporter.metricsCollector());
-        assertNotNull(clientTelemetryReporter.telemetryProvider().resource());
 
-        List<KeyValue> attributes = clientTelemetryReporter.telemetryProvider().resource().getAttributesList();
-        assertEquals(3, attributes.size());
-        attributes.forEach(attribute -> {
-            if (attribute.getKey().equals(ClientTelemetryProvider.CLIENT_RACK)) {
-                assertEquals("rack", attribute.getValue().getStringValue());
-            } else if (attribute.getKey().equals(ClientTelemetryProvider.GROUP_ID)) {
-                assertEquals("group-id", attribute.getValue().getStringValue());
-            } else if (attribute.getKey().equals(ClientTelemetryProvider.GROUP_INSTANCE_ID)) {
-                assertEquals("group-instance-id", attribute.getValue().getStringValue());
-            }
-        });
+        Map<String, String> labels = clientTelemetryReporter.telemetryProvider().resourceLabels();
+        assertEquals(3, labels.size());
+        assertEquals("rack", labels.get(ClientTelemetryProvider.CLIENT_RACK));
+        assertEquals("group-id", labels.get(ClientTelemetryProvider.GROUP_ID));
+        assertEquals("group-instance-id", labels.get(ClientTelemetryProvider.GROUP_INSTANCE_ID));
     }
 
     @Test
@@ -188,34 +173,19 @@ public class ClientTelemetryReporterTest {
     public void testUpdateMetricsLabels() {
         clientTelemetryReporter.configure(configs);
         clientTelemetryReporter.contextChange(metricsContext);
-        assertTrue(clientTelemetryReporter.telemetryProvider().resource().getAttributesList().isEmpty());
+        assertTrue(clientTelemetryReporter.telemetryProvider().resourceLabels().isEmpty());
 
         clientTelemetryReporter.updateMetricsLabels(Collections.singletonMap("key1", "value1"));
-        assertEquals(1, clientTelemetryReporter.telemetryProvider().resource().getAttributesList().size());
-        assertEquals("key1", clientTelemetryReporter.telemetryProvider().resource().getAttributesList().get(0).getKey());
-        assertEquals("value1", clientTelemetryReporter.telemetryProvider().resource().getAttributesList().get(0).getValue().getStringValue());
+        assertEquals(Collections.singletonMap("key1", "value1"),
+            clientTelemetryReporter.telemetryProvider().resourceLabels());
 
         clientTelemetryReporter.updateMetricsLabels(Collections.singletonMap("key2", "value2"));
-        assertEquals(2, clientTelemetryReporter.telemetryProvider().resource().getAttributesList().size());
-        clientTelemetryReporter.telemetryProvider().resource().getAttributesList().forEach(attribute -> {
-            if (attribute.getKey().equals("key1")) {
-                assertEquals("value1", attribute.getValue().getStringValue());
-            } else {
-                assertEquals("key2", attribute.getKey());
-                assertEquals("value2", attribute.getValue().getStringValue());
-            }
-        });
+        assertEquals(Map.of("key1", "value1", "key2", "value2"),
+            clientTelemetryReporter.telemetryProvider().resourceLabels());
 
         clientTelemetryReporter.updateMetricsLabels(Collections.singletonMap("key2", "valueUpdated"));
-        assertEquals(2, clientTelemetryReporter.telemetryProvider().resource().getAttributesList().size());
-        clientTelemetryReporter.telemetryProvider().resource().getAttributesList().forEach(attribute -> {
-            if (attribute.getKey().equals("key1")) {
-                assertEquals("value1", attribute.getValue().getStringValue());
-            } else {
-                assertEquals("key2", attribute.getKey());
-                assertEquals("valueUpdated", attribute.getValue().getStringValue());
-            }
-        });
+        assertEquals(Map.of("key1", "value1", "key2", "valueUpdated"),
+            clientTelemetryReporter.telemetryProvider().resourceLabels());
     }
 
     @Test
@@ -257,10 +227,11 @@ public class ClientTelemetryReporterTest {
         assertNotNull(requestOptional);
         assertTrue(requestOptional.isPresent());
         assertInstanceOf(GetTelemetrySubscriptionsRequest.class, requestOptional.get().build());
-        GetTelemetrySubscriptionsRequest request = (GetTelemetrySubscriptionsRequest) requestOptional.get().build();
+        // Built at v0, where the client instance ID is part of the body rather than the request header.
+        GetTelemetrySubscriptionsRequest request = (GetTelemetrySubscriptionsRequest) requestOptional.get().build((short) 0);
 
         GetTelemetrySubscriptionsRequest expectedResult = new GetTelemetrySubscriptionsRequest.Builder(
-            new GetTelemetrySubscriptionsRequestData().setClientInstanceId(Uuid.ZERO_UUID), true).build();
+            new GetTelemetrySubscriptionsRequestData().setClientInstanceId(uuid), true).build((short) 0);
 
         assertEquals(expectedResult.data(), request.data());
         assertEquals(ClientTelemetryState.SUBSCRIPTION_IN_PROGRESS, telemetrySender.state());
@@ -276,10 +247,10 @@ public class ClientTelemetryReporterTest {
         assertNotNull(requestOptional);
         assertTrue(requestOptional.isPresent());
         assertInstanceOf(GetTelemetrySubscriptionsRequest.class, requestOptional.get().build());
-        GetTelemetrySubscriptionsRequest request = (GetTelemetrySubscriptionsRequest) requestOptional.get().build();
+        GetTelemetrySubscriptionsRequest request = (GetTelemetrySubscriptionsRequest) requestOptional.get().build((short) 0);
 
         GetTelemetrySubscriptionsRequest expectedResult = new GetTelemetrySubscriptionsRequest.Builder(
-            new GetTelemetrySubscriptionsRequestData().setClientInstanceId(subscription.clientInstanceId()), true).build();
+            new GetTelemetrySubscriptionsRequestData().setClientInstanceId(uuid), true).build((short) 0);
 
         assertEquals(expectedResult.data(), request.data());
         assertEquals(ClientTelemetryState.SUBSCRIPTION_IN_PROGRESS, telemetrySender.state());
@@ -300,11 +271,11 @@ public class ClientTelemetryReporterTest {
         assertNotNull(requestOptional);
         assertTrue(requestOptional.isPresent());
         assertInstanceOf(PushTelemetryRequest.class, requestOptional.get().build());
-        PushTelemetryRequest request = (PushTelemetryRequest) requestOptional.get().build();
+        PushTelemetryRequest request = (PushTelemetryRequest) requestOptional.get().build((short) 0);
 
         PushTelemetryRequest expectedResult = new PushTelemetryRequest.Builder(
-            new PushTelemetryRequestData().setClientInstanceId(subscription.clientInstanceId())
-                .setSubscriptionId(subscription.subscriptionId()), true).build();
+            new PushTelemetryRequestData().setClientInstanceId(uuid)
+                .setSubscriptionId(subscription.subscriptionId()), true).build((short) 0);
 
         assertEquals(expectedResult.data(), request.data());
         assertEquals(ClientTelemetryState.PUSH_IN_PROGRESS, telemetrySender.state());
@@ -365,6 +336,65 @@ public class ClientTelemetryReporterTest {
         assertEquals(now + 1000, telemetrySender.lastRequestMs());
     }
 
+    @Test
+    public void testCreateRequestPushPayloadFailureRetriesOnNextInterval() {
+        clientTelemetryReporter.configure(configs);
+        clientTelemetryReporter.contextChange(metricsContext);
+
+        KafkaMetricsCollector failingCollector = Mockito.mock(KafkaMetricsCollector.class);
+        Mockito.doThrow(new RuntimeException("Error collecting metrics")).when(failingCollector).collect(any());
+        clientTelemetryReporter.metricsCollector(failingCollector);
+
+        ClientTelemetryReporter.DefaultClientTelemetrySender telemetrySender = (ClientTelemetryReporter.DefaultClientTelemetrySender) clientTelemetryReporter.telemetrySender();
+        assertTrue(telemetrySender.maybeSetState(ClientTelemetryState.SUBSCRIPTION_IN_PROGRESS));
+        assertTrue(telemetrySender.maybeSetState(ClientTelemetryState.PUSH_NEEDED));
+        telemetrySender.updateSubscriptionResult(subscription, time.milliseconds());
+
+        assertFalse(telemetrySender.createRequest().isPresent());
+        /*
+         No request was sent, so no response or failure callback can arrive to move the state on.
+         The sender must not be left in PUSH_IN_PROGRESS, otherwise timeToNextUpdate keeps
+         returning requestTimeoutMs and no telemetry request is ever made again.
+        */
+        assertEquals(ClientTelemetryState.PUSH_NEEDED, telemetrySender.state());
+        assertTrue(telemetrySender.enabled());
+
+        // The push is retried once the push interval elapses.
+        assertEquals(subscription.pushIntervalMs(), telemetrySender.timeToNextUpdate(100));
+        time.sleep(subscription.pushIntervalMs());
+        assertEquals(0, telemetrySender.timeToNextUpdate(100));
+
+        Mockito.reset(failingCollector);
+        Optional<AbstractRequest.Builder<?>> requestOptional = telemetrySender.createRequest();
+        assertTrue(requestOptional.isPresent());
+        assertInstanceOf(PushTelemetryRequest.class, requestOptional.get().build());
+        assertEquals(ClientTelemetryState.PUSH_IN_PROGRESS, telemetrySender.state());
+    }
+
+    @Test
+    public void testCreateRequestTerminatingPushPayloadFailure() {
+        clientTelemetryReporter.configure(configs);
+        clientTelemetryReporter.contextChange(metricsContext);
+
+        KafkaMetricsCollector failingCollector = Mockito.mock(KafkaMetricsCollector.class);
+        Mockito.doThrow(new RuntimeException("Error collecting metrics")).when(failingCollector).collect(any());
+        clientTelemetryReporter.metricsCollector(failingCollector);
+
+        ClientTelemetryReporter.DefaultClientTelemetrySender telemetrySender = (ClientTelemetryReporter.DefaultClientTelemetrySender) clientTelemetryReporter.telemetrySender();
+        assertTrue(telemetrySender.maybeSetState(ClientTelemetryState.SUBSCRIPTION_IN_PROGRESS));
+        assertTrue(telemetrySender.maybeSetState(ClientTelemetryState.TERMINATING_PUSH_NEEDED));
+        telemetrySender.updateSubscriptionResult(subscription, time.milliseconds());
+
+        assertFalse(telemetrySender.createRequest().isPresent());
+        // A terminating push can only transition to TERMINATED, and close() follows it, so
+        // remaining in TERMINATING_PUSH_IN_PROGRESS is expected rather than a stuck state.
+        assertEquals(ClientTelemetryState.TERMINATING_PUSH_IN_PROGRESS, telemetrySender.state());
+        assertTrue(telemetrySender.enabled());
+
+        telemetrySender.close();
+        assertEquals(ClientTelemetryState.TERMINATED, telemetrySender.state());
+    }
+
     @ParameterizedTest
     @EnumSource(CompressionType.class)
     public void testCreateRequestPushCompression(CompressionType compressionType) {
@@ -376,23 +406,24 @@ public class ClientTelemetryReporterTest {
         assertTrue(telemetrySender.maybeSetState(ClientTelemetryState.PUSH_NEEDED));
 
         ClientTelemetryReporter.ClientTelemetrySubscription subscription = new ClientTelemetryReporter.ClientTelemetrySubscription(
-            uuid, 1234, 20000, Collections.singletonList(compressionType), true, null);
+            1234, 20000, Collections.singletonList(compressionType), true, null);
         telemetrySender.updateSubscriptionResult(subscription, time.milliseconds());
 
         Optional<AbstractRequest.Builder<?>> requestOptional = telemetrySender.createRequest();
         assertNotNull(requestOptional);
         assertTrue(requestOptional.isPresent());
         assertInstanceOf(PushTelemetryRequest.class, requestOptional.get().build());
-        PushTelemetryRequest request = (PushTelemetryRequest) requestOptional.get().build();
+        // Built at v0, where the client instance ID is part of the body rather than the request header.
+        PushTelemetryRequest request = (PushTelemetryRequest) requestOptional.get().build((short) 0);
 
-        assertEquals(subscription.clientInstanceId(), request.data().clientInstanceId());
+        assertEquals(uuid, request.data().clientInstanceId());
         assertEquals(subscription.subscriptionId(), request.data().subscriptionId());
         assertEquals(compressionType.id, request.data().compressionType());
         assertEquals(ClientTelemetryState.PUSH_IN_PROGRESS, telemetrySender.state());
     }
 
     @Test
-    public void testCreateRequestPushCompressionException() {
+    public void testCreateRequestPushCompressionException() throws IOException {
         clientTelemetryReporter.configure(configs);
         clientTelemetryReporter.contextChange(metricsContext);
 
@@ -401,19 +432,21 @@ public class ClientTelemetryReporterTest {
         assertTrue(telemetrySender.maybeSetState(ClientTelemetryState.PUSH_NEEDED));
 
         ClientTelemetryReporter.ClientTelemetrySubscription subscription = new ClientTelemetryReporter.ClientTelemetrySubscription(
-            uuid, 1234, 20000, Collections.singletonList(CompressionType.GZIP), true, null);
+            1234, 20000, Collections.singletonList(CompressionType.GZIP), true, null);
         telemetrySender.updateSubscriptionResult(subscription, time.milliseconds());
 
-        try (MockedStatic<ClientTelemetryUtils> mockedCompress = Mockito.mockStatic(ClientTelemetryUtils.class, new CallsRealMethods())) {
-            mockedCompress.when(() -> ClientTelemetryUtils.compress(any(), any())).thenThrow(new IOException());
+        Compression.Builder<? extends Compression> failingCompression = compressionFailingWithIOException();
+        try (MockedStatic<Compression> mockedCompression = Mockito.mockStatic(Compression.class, new CallsRealMethods())) {
+            mockedCompression.when(() -> Compression.of(CompressionType.GZIP)).thenReturn(failingCompression);
 
             Optional<AbstractRequest.Builder<?>> requestOptional = telemetrySender.createRequest();
             assertNotNull(requestOptional);
             assertTrue(requestOptional.isPresent());
             assertInstanceOf(PushTelemetryRequest.class, requestOptional.get().build());
-            PushTelemetryRequest request = (PushTelemetryRequest) requestOptional.get().build();
+            // Built at v0, where the client instance ID is part of the body rather than the request header.
+            PushTelemetryRequest request = (PushTelemetryRequest) requestOptional.get().build((short) 0);
 
-            assertEquals(subscription.clientInstanceId(), request.data().clientInstanceId());
+            assertEquals(uuid, request.data().clientInstanceId());
             assertEquals(subscription.subscriptionId(), request.data().subscriptionId());
             // CompressionType.NONE is used when compression fails.
             assertEquals(CompressionType.NONE.id, request.data().compressionType());
@@ -432,12 +465,12 @@ public class ClientTelemetryReporterTest {
 
         // Set up subscription with multiple compression types: GZIP -> LZ4 -> SNAPPY
         ClientTelemetryReporter.ClientTelemetrySubscription subscription = new ClientTelemetryReporter.ClientTelemetrySubscription(
-            uuid, 1234, 20000, List.of(CompressionType.GZIP, CompressionType.LZ4, CompressionType.SNAPPY), true, null);
+            1234, 20000, List.of(CompressionType.GZIP, CompressionType.LZ4, CompressionType.SNAPPY), true, null);
         telemetrySender.updateSubscriptionResult(subscription, time.milliseconds());
 
-        try (MockedStatic<ClientTelemetryUtils> mockedCompress = Mockito.mockStatic(ClientTelemetryUtils.class, new CallsRealMethods())) {
+        try (MockedStatic<Compression> mockedCompression = Mockito.mockStatic(Compression.class, new CallsRealMethods())) {
             // First request: GZIP fails with NoClassDefFoundError, should use NONE for this request
-            mockedCompress.when(() -> ClientTelemetryUtils.compress(any(), eq(CompressionType.GZIP))).thenThrow(new NoClassDefFoundError("GZIP not available"));
+            mockedCompression.when(() -> Compression.of(CompressionType.GZIP)).thenThrow(new NoClassDefFoundError("GZIP not available"));
 
             Optional<AbstractRequest.Builder<?>> requestOptional = telemetrySender.createRequest();
             assertNotNull(requestOptional);
@@ -454,7 +487,7 @@ public class ClientTelemetryReporterTest {
 
             // Second request: LZ4 is selected (since GZIP is now cached as unsupported), LZ4 fails, should use NONE
             // Note that some libraries eg. LZ4 return KafkaException with cause as NoClassDefFoundError
-            mockedCompress.when(() -> ClientTelemetryUtils.compress(any(), eq(CompressionType.LZ4))).thenThrow(new KafkaException(new NoClassDefFoundError("LZ4 not available")));
+            mockedCompression.when(() -> Compression.of(CompressionType.LZ4)).thenThrow(new KafkaException(new NoClassDefFoundError("LZ4 not available")));
 
             requestOptional = telemetrySender.createRequest();
             assertNotNull(requestOptional);
@@ -470,7 +503,7 @@ public class ClientTelemetryReporterTest {
             assertTrue(telemetrySender.maybeSetState(ClientTelemetryState.PUSH_NEEDED));
 
             // Third request: SNAPPY is selected (since GZIP and LZ4 are now cached as unsupported), SNAPPY fails, should use NONE
-            mockedCompress.when(() -> ClientTelemetryUtils.compress(any(), eq(CompressionType.SNAPPY))).thenThrow(new NoClassDefFoundError("SNAPPY not available"));
+            mockedCompression.when(() -> Compression.of(CompressionType.SNAPPY)).thenThrow(new NoClassDefFoundError("SNAPPY not available"));
 
             requestOptional = telemetrySender.createRequest();
             assertNotNull(requestOptional);
@@ -509,13 +542,13 @@ public class ClientTelemetryReporterTest {
 
         // Set up subscription with ZSTD compression type
         ClientTelemetryReporter.ClientTelemetrySubscription subscription = new ClientTelemetryReporter.ClientTelemetrySubscription(
-            uuid, 1234, 20000, List.of(CompressionType.ZSTD, CompressionType.LZ4), true, null);
+            1234, 20000, List.of(CompressionType.ZSTD, CompressionType.LZ4), true, null);
         telemetrySender.updateSubscriptionResult(subscription, time.milliseconds());
 
-        try (MockedStatic<ClientTelemetryUtils> mockedCompress = Mockito.mockStatic(ClientTelemetryUtils.class, new CallsRealMethods())) {
-            
+        try (MockedStatic<Compression> mockedCompression = Mockito.mockStatic(Compression.class, new CallsRealMethods())) {
+
             // === Test 1: NoClassDefFoundError fallback (recoverable) ===
-            mockedCompress.when(() -> ClientTelemetryUtils.compress(any(), eq(CompressionType.ZSTD)))
+            mockedCompression.when(() -> Compression.of(CompressionType.ZSTD))
                     .thenThrow(new NoClassDefFoundError("com/github/luben/zstd/BufferPool"));
             
             assertEquals(ClientTelemetryState.PUSH_NEEDED, telemetrySender.state());
@@ -532,8 +565,8 @@ public class ClientTelemetryReporterTest {
             assertTrue(telemetrySender.maybeSetState(ClientTelemetryState.PUSH_NEEDED));
             
             // === Test 2: OutOfMemoryError causes termination (non-recoverable Error) ===
-            mockedCompress.reset();
-            mockedCompress.when(() -> ClientTelemetryUtils.compress(any(), eq(CompressionType.LZ4)))
+            mockedCompression.reset();
+            mockedCompression.when(() -> Compression.of(CompressionType.LZ4))
                     .thenThrow(new OutOfMemoryError("Out of memory during compression"));
             
             assertEquals(ClientTelemetryState.PUSH_NEEDED, telemetrySender.state());
@@ -549,15 +582,28 @@ public class ClientTelemetryReporterTest {
         }
     }
 
+    /**
+     * Builds a {@link Compression.Builder} whose stream raises an {@link IOException} while writing the
+     * payload, so that {@link ClientTelemetryUtils#compress} surfaces a recoverable compression failure.
+     */
+    @SuppressWarnings("unchecked")
+    private static Compression.Builder<? extends Compression> compressionFailingWithIOException() throws IOException {
+        OutputStream out = Mockito.mock(OutputStream.class);
+        Mockito.doThrow(new IOException()).when(out).close();
+        Compression compression = Mockito.mock(Compression.class);
+        Mockito.when(compression.wrapForOutput(any(), anyByte())).thenReturn(out);
+        Compression.Builder<? extends Compression> builder = Mockito.mock(Compression.Builder.class);
+        Mockito.doReturn(compression).when(builder).build();
+        return builder;
+    }
+
     @Test
     public void testHandleResponseGetSubscriptions() {
         ClientTelemetryReporter.DefaultClientTelemetrySender telemetrySender = (ClientTelemetryReporter.DefaultClientTelemetrySender) clientTelemetryReporter.telemetrySender();
         assertTrue(telemetrySender.maybeSetState(ClientTelemetryState.SUBSCRIPTION_IN_PROGRESS));
 
-        Uuid clientInstanceId = Uuid.randomUuid();
         GetTelemetrySubscriptionsResponse response = new GetTelemetrySubscriptionsResponse(
             new GetTelemetrySubscriptionsResponseData()
-                .setClientInstanceId(clientInstanceId)
                 .setSubscriptionId(5678)
                 .setAcceptedCompressionTypes(Collections.singletonList(CompressionType.GZIP.id))
                 .setPushIntervalMs(20000)
@@ -568,7 +614,7 @@ public class ClientTelemetryReporterTest {
 
         ClientTelemetryReporter.ClientTelemetrySubscription subscription = telemetrySender.subscription();
         assertNotNull(subscription);
-        assertEquals(clientInstanceId, subscription.clientInstanceId());
+        assertEquals(Optional.of(uuid), telemetrySender.clientInstanceId(Duration.ZERO));
         assertEquals(5678, subscription.subscriptionId());
         assertEquals(Collections.singletonList(CompressionType.GZIP), subscription.acceptedCompressionTypes());
         assertEquals(20000, subscription.pushIntervalMs());
@@ -576,14 +622,19 @@ public class ClientTelemetryReporterTest {
     }
 
     @Test
+    public void testReporterRejectsInvalidClientInstanceId() {
+        assertThrows(IllegalArgumentException.class, () -> new ClientTelemetryReporter(time, null));
+        assertThrows(IllegalArgumentException.class, () -> new ClientTelemetryReporter(time, Uuid.ZERO_UUID));
+        assertThrows(IllegalArgumentException.class, () -> new ClientTelemetryReporter(time, Uuid.ONE_UUID));
+    }
+
+    @Test
     public void testHandleResponseGetSubscriptionsWithoutMetrics() {
         ClientTelemetryReporter.DefaultClientTelemetrySender telemetrySender = (ClientTelemetryReporter.DefaultClientTelemetrySender) clientTelemetryReporter.telemetrySender();
         assertTrue(telemetrySender.maybeSetState(ClientTelemetryState.SUBSCRIPTION_IN_PROGRESS));
 
-        Uuid clientInstanceId = Uuid.randomUuid();
         GetTelemetrySubscriptionsResponse response = new GetTelemetrySubscriptionsResponse(
             new GetTelemetrySubscriptionsResponseData()
-                .setClientInstanceId(clientInstanceId)
                 .setSubscriptionId(5678)
                 .setAcceptedCompressionTypes(Collections.singletonList(CompressionType.GZIP.id))
                 .setPushIntervalMs(20000));
@@ -594,7 +645,6 @@ public class ClientTelemetryReporterTest {
 
         ClientTelemetryReporter.ClientTelemetrySubscription subscription = telemetrySender.subscription();
         assertNotNull(subscription);
-        assertEquals(clientInstanceId, subscription.clientInstanceId());
         assertEquals(5678, subscription.subscriptionId());
         assertEquals(Collections.singletonList(CompressionType.GZIP), subscription.acceptedCompressionTypes());
         assertEquals(20000, subscription.pushIntervalMs());
@@ -657,10 +707,8 @@ public class ClientTelemetryReporterTest {
         clientTelemetryReporter.metricsCollector(kafkaMetricsCollector);
         assertTrue(telemetrySender.maybeSetState(ClientTelemetryState.SUBSCRIPTION_IN_PROGRESS));
 
-        Uuid clientInstanceId = Uuid.randomUuid();
         GetTelemetrySubscriptionsResponse response = new GetTelemetrySubscriptionsResponse(
             new GetTelemetrySubscriptionsResponseData()
-                .setClientInstanceId(clientInstanceId)
                 .setSubscriptionId(15678)
                 .setAcceptedCompressionTypes(Collections.singletonList(CompressionType.ZSTD.id))
                 .setPushIntervalMs(10000)
@@ -672,7 +720,6 @@ public class ClientTelemetryReporterTest {
 
         ClientTelemetryReporter.ClientTelemetrySubscription responseSubscription = telemetrySender.subscription();
         assertNotNull(responseSubscription);
-        assertEquals(clientInstanceId, responseSubscription.clientInstanceId());
         assertEquals(15678, responseSubscription.subscriptionId());
         assertEquals(Collections.singletonList(CompressionType.ZSTD), responseSubscription.acceptedCompressionTypes());
         assertEquals(10000, responseSubscription.pushIntervalMs());

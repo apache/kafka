@@ -12,9 +12,9 @@
   */
 package kafka.api
 
-import kafka.security.JaasTestUtils
 import kafka.utils.{TestInfoUtils, TestUtils}
 import org.apache.kafka.common.security.auth.SecurityProtocol
+import org.apache.kafka.security.JaasTestUtils
 import org.junit.jupiter.api.{AfterEach, BeforeEach, TestInfo, Timeout}
 import org.junit.jupiter.params.ParameterizedTest
 import org.junit.jupiter.params.provider.MethodSource

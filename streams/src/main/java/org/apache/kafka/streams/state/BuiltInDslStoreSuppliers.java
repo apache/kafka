@@ -16,6 +16,7 @@
  */
 package org.apache.kafka.streams.state;
 
+import org.apache.kafka.common.annotation.InterfaceAudience;
 import org.apache.kafka.streams.DslStoreFormat;
 import org.apache.kafka.streams.kstream.EmitStrategy;
 import org.apache.kafka.streams.state.internals.RocksDbIndexedTimeOrderedWindowBytesStoreSupplier;
@@ -27,6 +28,7 @@ import org.apache.kafka.streams.state.internals.RocksDbTimeOrderedSessionHeaders
  * Collection of builtin {@link DslStoreSuppliers} for Kafka Streams. Today we
  * support RocksDb and InMemory stores out of the box.
  */
+@InterfaceAudience.Public
 public class BuiltInDslStoreSuppliers {
 
     public static final DslStoreSuppliers ROCKS_DB = new RocksDBDslStoreSuppliers();

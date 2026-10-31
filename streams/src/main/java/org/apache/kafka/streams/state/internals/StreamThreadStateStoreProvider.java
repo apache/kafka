@@ -33,7 +33,6 @@ import org.apache.kafka.streams.state.TimestampedWindowStoreWithHeaders;
 
 import java.util.ArrayList;
 import java.util.Collection;
-import java.util.Collections;
 import java.util.List;
 
 public class StreamThreadStateStoreProvider {
@@ -48,7 +47,7 @@ public class StreamThreadStateStoreProvider {
     public <T> List<T> stores(final StoreQueryParameters storeQueryParams) {
         final StreamThread.State state = streamThread.state();
         if (state == StreamThread.State.DEAD) {
-            return Collections.emptyList();
+            return List.of();
         }
 
         final String storeName = storeQueryParams.storeName();
@@ -68,10 +67,10 @@ public class StreamThreadStateStoreProvider {
                         task.store(storeName) != null &&
                         storeName.equals(task.store(storeName).name())) {
                         final T typedStore = validateAndCastStores(task.store(storeName), queryableStoreType, storeName, task.id());
-                        return Collections.singletonList(typedStore);
+                        return List.of(typedStore);
                     }
                 }
-                return Collections.emptyList();
+                return List.of();
             } else {
                 final List<T> list = new ArrayList<>();
                 for (final Task task : tasks) {

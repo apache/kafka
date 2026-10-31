@@ -711,6 +711,22 @@ public class TestUtils {
         );
     }
 
+    public static ApiVersionsResponse errorApiVersionsResponse(
+        int throttleTimeMs,
+        Errors error,
+        ApiMessageType.ListenerType listenerType
+    ) {
+        return new ApiVersionsResponse.Builder().
+            setError(error).
+            setThrottleTimeMs(throttleTimeMs).
+            setApiVersions(ApiVersionsResponse.filterApis(listenerType, false, true)).
+            setSupportedFeatures(Features.emptySupportedFeatures()).
+            setFinalizedFeatures(Collections.emptyMap()).
+            setFinalizedFeaturesEpoch(ApiVersionsResponse.UNKNOWN_FINALIZED_FEATURES_EPOCH).
+            setZkMigrationEnabled(false).
+            build();
+    }
+
     public static ApiVersionsResponse createApiVersionsResponse(
             int throttleTimeMs,
             ApiVersionsResponseData.ApiVersionCollection apiVersions

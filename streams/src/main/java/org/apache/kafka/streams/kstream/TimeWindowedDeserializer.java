@@ -16,6 +16,7 @@
  */
 package org.apache.kafka.streams.kstream;
 
+import org.apache.kafka.common.annotation.InterfaceAudience;
 import org.apache.kafka.common.config.ConfigException;
 import org.apache.kafka.common.header.Headers;
 import org.apache.kafka.common.header.internals.RecordHeaders;
@@ -30,6 +31,7 @@ import org.slf4j.LoggerFactory;
 
 import java.util.Map;
 
+@InterfaceAudience.Public
 public class TimeWindowedDeserializer<T> implements Deserializer<Windowed<T>> {
 
     /**

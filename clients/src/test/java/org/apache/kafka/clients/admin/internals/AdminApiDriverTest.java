@@ -190,6 +190,25 @@ class AdminApiDriverTest {
     }
 
     @Test
+    public void testRetryLookupIsNoOpForFixedBrokerStrategy() {
+        // For a lookup strategy that targets a fixed broker, a fulfillment request whose broker has
+        // left the cluster cannot be re-resolved by another lookup. maybeRetryLookup must report it
+        // made no progress (return false) and leave the key mapped, so the caller does not spin
+        // retrying it and exhaust the retry budget.
+        TestContext ctx = TestContext.staticMapped(map("foo", 1));
+        ctx.handler.expectRequest(Set.of("foo"), completed("foo", 1L));
+
+        List<RequestSpec<String>> requestSpecs = ctx.driver.poll();
+        assertEquals(1, requestSpecs.size());
+        RequestSpec<String> spec = requestSpecs.get(0);
+        assertEquals(OptionalInt.of(1), spec.scope.destinationBrokerId());
+
+        assertFalse(ctx.driver.maybeRetryLookup(ctx.time.milliseconds(), spec));
+        // The key remains mapped to its fixed broker.
+        assertEquals(OptionalInt.of(1), ctx.driver.keyToBrokerId("foo"));
+    }
+
+    @Test
     public void testFulfillmentFailure() {
         TestContext ctx = TestContext.staticMapped(map(
             "foo", 0,

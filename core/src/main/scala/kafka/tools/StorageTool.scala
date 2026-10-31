@@ -24,7 +24,7 @@ import kafka.utils.Logging
 import net.sourceforge.argparse4j.ArgumentParsers
 import net.sourceforge.argparse4j.impl.Arguments.{append, store, storeTrue}
 import net.sourceforge.argparse4j.inf.{ArgumentParserException, Namespace, Subparser, Subparsers}
-import net.sourceforge.argparse4j.internal.HelpScreenException
+import net.sourceforge.argparse4j.helper.HelpScreenException
 import org.apache.kafka.common.Uuid
 import org.apache.kafka.common.utils.Utils
 import org.apache.kafka.common.utils.internals.Exit
@@ -82,7 +82,7 @@ object StorageTool extends Logging {
     command match {
       case "info" =>
         val directories = configToLogDirectories(config.get)
-        infoCommand(printStream, config.get.processRoles.nonEmpty, directories)
+        infoCommand(printStream, !config.get.processRoles.isEmpty, directories)
 
       case "format" =>
         runFormatCommand(namespace, config.get, printStream)
@@ -125,6 +125,7 @@ object StorageTool extends Logging {
     val formatter = new Formatter().
       setPrintStream(printStream).
       setNodeId(config.nodeId).
+      setWriteBootstrapSnapshot(config.processRoles.contains(ProcessRole.ControllerRole)).
       setClusterId(namespace.getString("cluster_id")).
       setUnstableFeatureVersionsEnabled(config.unstableFeatureVersionsEnabled).
       setIgnoreFormatted(namespace.getBoolean("ignore_formatted")).
@@ -290,7 +291,7 @@ object StorageTool extends Logging {
 
   def parseArguments(args: Array[String]): Namespace = {
     val parser = ArgumentParsers
-      .newArgumentParser("kafka-storage", /* defaultHelp */true, /* prefixChars */"-", /* fromFilePrefix */ "@")
+      .newFor("kafka-storage").fromFilePrefix("@").build()
       .description("The Kafka storage tool.")
 
     val subparsers = parser.addSubparsers().dest("command")
@@ -335,7 +336,9 @@ object StorageTool extends Logging {
     formatParser.addArgument("--release-version", "-r")
       .action(store())
       .help(s"The release version to use for the initial feature settings. The minimum is " +
-        s"${MetadataVersion.MINIMUM_VERSION}; the default is ${MetadataVersion.LATEST_PRODUCTION}")
+        s"${MetadataVersion.MINIMUM_VERSION}; the default is ${MetadataVersion.LATEST_PRODUCTION}. " +
+        s"Note: formatted directories are not forward-compatible — the broker version must be greater " +
+        s"than or equal to the kafka-storage tool that formatted the directory, regardless of this setting.")
 
     formatParser.addArgument("--feature", "-f")
       .help("The setting to use for a specific feature, in feature=level format. For example: `kraft.version=1`.")

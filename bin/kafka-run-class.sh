@@ -123,11 +123,6 @@ do
   CLASSPATH="$CLASSPATH":"$file"
 done
 
-for file in "$streams_dependant_clients_lib_dir"/*hamcrest*.jar;
-do
-  CLASSPATH="$CLASSPATH":"$file"
-done
-
 for file in "$base_dir"/shell/build/libs/kafka-shell*.jar;
 do
   if should_include_file "$file"; then

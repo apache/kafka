@@ -17,6 +17,8 @@
 
 package org.apache.kafka.connect.health;
 
+import org.apache.kafka.common.annotation.InterfaceAudience;
+
 import java.util.Collection;
 import java.util.Map;
 
@@ -26,6 +28,7 @@ import java.util.Map;
  * {@link org.apache.kafka.connect.rest.ConnectRestExtension} implementations. The Connect framework
  * provides the implementation for this interface.
  */
+@InterfaceAudience.Public
 public interface ConnectClusterState {
 
     /**

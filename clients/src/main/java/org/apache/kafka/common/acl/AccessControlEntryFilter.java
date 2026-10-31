@@ -17,11 +17,14 @@
 
 package org.apache.kafka.common.acl;
 
+import org.apache.kafka.common.annotation.InterfaceAudience;
+
 import java.util.Objects;
 
 /**
  * Represents a filter which matches access control entries.
  */
+@InterfaceAudience.Public
 public class AccessControlEntryFilter {
     private final AccessControlEntryData data;
 

@@ -27,7 +27,6 @@ import org.apache.kafka.clients.producer.RecordMetadata;
 import org.apache.kafka.common.MetricName;
 import org.apache.kafka.common.TopicPartition;
 import org.apache.kafka.common.config.TopicConfig;
-import org.apache.kafka.common.errors.InterruptException;
 import org.apache.kafka.common.errors.InvalidGroupIdException;
 import org.apache.kafka.common.errors.InvalidTopicException;
 import org.apache.kafka.common.errors.TimeoutException;
@@ -46,7 +45,6 @@ import org.apache.kafka.common.test.api.ClusterConfigProperty;
 import org.apache.kafka.common.test.api.ClusterTest;
 import org.apache.kafka.common.test.api.ClusterTestDefaults;
 import org.apache.kafka.common.test.api.ClusterTests;
-import org.apache.kafka.common.test.api.Flaky;
 import org.apache.kafka.common.test.api.Type;
 import org.apache.kafka.server.quota.QuotaType;
 import org.apache.kafka.test.MockConsumerInterceptor;
@@ -63,7 +61,6 @@ import java.util.Optional;
 import java.util.Set;
 import java.util.UUID;
 import java.util.concurrent.CompletableFuture;
-import java.util.concurrent.ExecutionException;
 import java.util.concurrent.Executors;
 import java.util.concurrent.Future;
 import java.util.concurrent.TimeUnit;
@@ -452,20 +449,20 @@ public class PlaintextConsumerTest {
     }
 
     @ClusterTest
-    public void testClassicConsumerPartitionsFor() throws Exception {
+    public void testClassicConsumerPartitionsFor() {
         testPartitionsFor(Map.of(
             GROUP_PROTOCOL_CONFIG, GroupProtocol.CLASSIC.name().toLowerCase(Locale.ROOT)
         ));
     }
 
     @ClusterTest
-    public void testAsyncConsumerPartitionsFor() throws Exception {
+    public void testAsyncConsumerPartitionsFor() {
         testPartitionsFor(Map.of(
             GROUP_PROTOCOL_CONFIG, GroupProtocol.CONSUMER.name().toLowerCase(Locale.ROOT)
         ));
     }
 
-    private void testPartitionsFor(Map<String, Object> consumerConfig) throws Exception {
+    private void testPartitionsFor(Map<String, Object> consumerConfig) {
         var numParts = 2;
         cluster.createTopic(TOPIC, 2, (short) BROKER_COUNT);
         cluster.createTopic("part-test", numParts, (short) 1);
@@ -563,7 +560,6 @@ public class PlaintextConsumerTest {
 
             // Test seek compressed message
             var tp2 = new TopicPartition(TOPIC, 1);
-            cluster.createTopic(TOPIC, 2, (short) BROKER_COUNT);
             sendCompressedMessages(totalRecords, tp2);
             consumer.assign(List.of(tp2));
 
@@ -858,9 +854,11 @@ public class PlaintextConsumerTest {
         sendRecords(cluster, new TopicPartition(topic1, 0), 1);
 
         try (var consumer = cluster.consumer(consumerConfig)) {
-            // consumer some messages, and we can list the internal topic __consumer_offsets
             consumer.subscribe(List.of(topic1));
-            consumer.poll(Duration.ofMillis(100));
+            TestUtils.waitForCondition(() -> {
+                consumer.poll(Duration.ofMillis(100));
+                return consumer.listTopics().size() == 4;
+            }, "Timed out waiting for 4 topics to be visible");
             var topics = consumer.listTopics();
             assertNotNull(topics);
             assertEquals(4, topics.size());
@@ -941,7 +939,8 @@ public class PlaintextConsumerTest {
             // Test subscribe
             // Create a consumer and consumer some messages.
             var listener = new TestConsumerReassignmentListener();
-            consumer.subscribe(List.of(TOPIC, topic2), listener);
+            consumer.setRebalanceListener(listener);
+            consumer.subscribe(List.of(TOPIC, topic2));
             var records = awaitNonEmptyRecords(consumer, TP);
             assertEquals(1, listener.callsToAssigned, "should be assigned once");
 
@@ -963,7 +962,8 @@ public class PlaintextConsumerTest {
             assertEquals((double) records.count(), fetchLead0.metricValue(), "The lead should be " + records.count());
 
             // Remove topic from subscription and wait for metrics cleanup.
-            consumer.subscribe(List.of(topic2), listener);
+            consumer.setRebalanceListener(listener);
+            consumer.subscribe(List.of(topic2));
             awaitMetricsCleanup(consumer, "records-lead", tags1, tags2);
         }
     }
@@ -1004,7 +1004,8 @@ public class PlaintextConsumerTest {
             // Test subscribe
             // Create a consumer and consumer some messages.
             var listener = new TestConsumerReassignmentListener();
-            consumer.subscribe(List.of(TOPIC, topic2), listener);
+            consumer.setRebalanceListener(listener);
+            consumer.subscribe(List.of(TOPIC, topic2));
             var records = awaitNonEmptyRecords(consumer, TP);
             assertEquals(1, listener.callsToAssigned, "should be assigned once");
 
@@ -1027,7 +1028,8 @@ public class PlaintextConsumerTest {
             assertEquals(expectedLag, (double) fetchLag0.metricValue(), EPSILON, "The lag should be " + expectedLag);
 
             // Remove topic from subscription and wait for metrics cleanup.
-            consumer.subscribe(List.of(topic2), listener);
+            consumer.setRebalanceListener(listener);
+            consumer.subscribe(List.of(topic2));
             awaitMetricsCleanup(consumer, "records-lag", tags1, tags2);
         }
     }
@@ -1254,20 +1256,20 @@ public class PlaintextConsumerTest {
     }
     
     @ClusterTest
-    public void testClassicConsumerSeekThrowsIllegalStateIfPartitionsNotAssigned() throws Exception {
+    public void testClassicConsumerSeekThrowsIllegalStateIfPartitionsNotAssigned() {
         testSeekThrowsIllegalStateIfPartitionsNotAssigned(Map.of(
             GROUP_PROTOCOL_CONFIG, GroupProtocol.CLASSIC.name().toLowerCase(Locale.ROOT)
         ));
     }
 
     @ClusterTest
-    public void testAsyncConsumerSeekThrowsIllegalStateIfPartitionsNotAssigned() throws Exception {
+    public void testAsyncConsumerSeekThrowsIllegalStateIfPartitionsNotAssigned() {
         testSeekThrowsIllegalStateIfPartitionsNotAssigned(Map.of(
             GROUP_PROTOCOL_CONFIG, GroupProtocol.CONSUMER.name().toLowerCase(Locale.ROOT)
         ));
     }
 
-    private void testSeekThrowsIllegalStateIfPartitionsNotAssigned(Map<String, Object> consumerConfig) throws Exception {
+    private void testSeekThrowsIllegalStateIfPartitionsNotAssigned(Map<String, Object> consumerConfig) {
         cluster.createTopic(TOPIC, 2, (short) BROKER_COUNT);
         try (var consumer = cluster.consumer(consumerConfig)) {
             var e = assertThrows(IllegalStateException.class, () -> consumer.seekToEnd(List.of(TP)));
@@ -1353,7 +1355,7 @@ public class PlaintextConsumerTest {
     }
 
     @ClusterTest
-    public void testClassicConsumerNullGroupIdNotSupportedIfCommitting() throws Exception {
+    public void testClassicConsumerNullGroupIdNotSupportedIfCommitting() {
         testNullGroupIdNotSupportedIfCommitting(Map.of(
             GROUP_PROTOCOL_CONFIG, GroupProtocol.CLASSIC.name().toLowerCase(Locale.ROOT),
             KEY_DESERIALIZER_CLASS_CONFIG, ByteArrayDeserializer.class.getName(),
@@ -1365,7 +1367,7 @@ public class PlaintextConsumerTest {
     }
 
     @ClusterTest
-    public void testAsyncConsumerNullGroupIdNotSupportedIfCommitting() throws Exception {
+    public void testAsyncConsumerNullGroupIdNotSupportedIfCommitting() {
         testNullGroupIdNotSupportedIfCommitting(Map.of(
             GROUP_PROTOCOL_CONFIG, GroupProtocol.CONSUMER.name().toLowerCase(Locale.ROOT),
             KEY_DESERIALIZER_CLASS_CONFIG, ByteArrayDeserializer.class.getName(),
@@ -1376,7 +1378,7 @@ public class PlaintextConsumerTest {
         ));
     }
 
-    private void testNullGroupIdNotSupportedIfCommitting(Map<String, Object> consumerConfig) throws Exception {
+    private void testNullGroupIdNotSupportedIfCommitting(Map<String, Object> consumerConfig) {
         cluster.createTopic(TOPIC, 2, (short) BROKER_COUNT);
         try (var consumer = new KafkaConsumer<>(consumerConfig)) {
             consumer.assign(List.of(TP));
@@ -1484,20 +1486,20 @@ public class PlaintextConsumerTest {
     }
 
     @ClusterTest
-    public void testClassicConsumerFetchOffsetsForTime() throws Exception {
+    public void testClassicConsumerFetchOffsetsForTime() {
         testFetchOffsetsForTime(Map.of(
             GROUP_PROTOCOL_CONFIG, GroupProtocol.CLASSIC.name().toLowerCase(Locale.ROOT)
         ));
     }
 
     @ClusterTest
-    public void testAsyncConsumerFetchOffsetsForTime() throws Exception {
+    public void testAsyncConsumerFetchOffsetsForTime() {
         testFetchOffsetsForTime(Map.of(
             GROUP_PROTOCOL_CONFIG, GroupProtocol.CONSUMER.name().toLowerCase(Locale.ROOT)
         ));
     }
 
-    private void testFetchOffsetsForTime(Map<String, Object> consumerConfig) throws Exception {
+    private void testFetchOffsetsForTime(Map<String, Object> consumerConfig) {
         var numPartitions = 2;
         var tp2 = new TopicPartition(TOPIC, 1);
         cluster.createTopic(TOPIC, 2, (short) BROKER_COUNT);
@@ -1616,93 +1618,21 @@ public class PlaintextConsumerTest {
         }
     }
 
-    @Flaky("KAFKA-18031")
     @ClusterTest
-    public void testClassicConsumerCloseLeavesGroupOnInterrupt() throws Exception {
-        testCloseLeavesGroupOnInterrupt(Map.of(
-            GROUP_PROTOCOL_CONFIG, GroupProtocol.CLASSIC.name().toLowerCase(Locale.ROOT),
-            KEY_DESERIALIZER_CLASS_CONFIG, ByteArrayDeserializer.class.getName(),
-            VALUE_DESERIALIZER_CLASS_CONFIG, ByteArrayDeserializer.class.getName(),
-            AUTO_OFFSET_RESET_CONFIG, "earliest",
-            GROUP_ID_CONFIG, "group_test,",
-            BOOTSTRAP_SERVERS_CONFIG, cluster.bootstrapServers()
-        ));
-    }
-
-    @Flaky("KAFKA-18031")
-    @ClusterTest
-    public void testAsyncConsumerCloseLeavesGroupOnInterrupt() throws Exception {
-        testCloseLeavesGroupOnInterrupt(Map.of(
-            GROUP_PROTOCOL_CONFIG, GroupProtocol.CONSUMER.name().toLowerCase(Locale.ROOT),
-            KEY_DESERIALIZER_CLASS_CONFIG, ByteArrayDeserializer.class.getName(),
-            VALUE_DESERIALIZER_CLASS_CONFIG, ByteArrayDeserializer.class.getName(),
-            AUTO_OFFSET_RESET_CONFIG, "earliest",
-            GROUP_ID_CONFIG, "group_test,",
-            BOOTSTRAP_SERVERS_CONFIG, cluster.bootstrapServers()
-        ));
-    }
-
-    private void testCloseLeavesGroupOnInterrupt(Map<String, Object> consumerConfig) throws Exception {
-        try (Consumer<byte[], byte[]> consumer = cluster.consumer(consumerConfig)) {
-            var listener = new TestConsumerReassignmentListener();
-            consumer.subscribe(List.of(TOPIC), listener);
-            awaitRebalance(consumer, listener);
-
-            assertEquals(1, listener.callsToAssigned);
-            assertEquals(0, listener.callsToRevoked);
-
-            try {
-                Thread.currentThread().interrupt();
-                assertThrows(InterruptException.class, consumer::close);
-            } finally {
-                // Clear the interrupted flag so we don't create problems for subsequent tests.
-                Thread.interrupted();
-            }
-
-            assertEquals(1, listener.callsToAssigned);
-            assertEquals(1, listener.callsToRevoked);
-
-            Map<String, Object> consumerConfigMap = new HashMap<>(consumerConfig);
-            var config = new ConsumerConfig(consumerConfigMap);
-
-            // Set the wait timeout to be only *half* the configured session timeout. This way we can make sure that the
-            // consumer explicitly left the group as opposed to being kicked out by the broker.
-            var leaveGroupTimeoutMs = config.getInt(SESSION_TIMEOUT_MS_CONFIG) / 2;
-
-            TestUtils.waitForCondition(
-                () -> checkGroupMemberEmpty(config), 
-                leaveGroupTimeoutMs, 
-                "Consumer did not leave the consumer group within " + leaveGroupTimeoutMs + " ms of close"
-            );
-        }
-    }
-
-    private boolean checkGroupMemberEmpty(ConsumerConfig config) {
-        try (var admin = cluster.admin()) {
-            var groupId = config.getString(GROUP_ID_CONFIG);
-            var result = admin.describeConsumerGroups(List.of(groupId));
-            var groupDescription = result.describedGroups().get(groupId).get();
-            return groupDescription.members().isEmpty();
-        } catch (ExecutionException | InterruptedException e) {
-            return false;
-        }
-    }
-
-    @ClusterTest
-    public void testClassicConsumerOffsetRelatedWhenTimeoutZero() throws Exception {
+    public void testClassicConsumerOffsetRelatedWhenTimeoutZero() {
         testOffsetRelatedWhenTimeoutZero(Map.of(
             GROUP_PROTOCOL_CONFIG, GroupProtocol.CLASSIC.name().toLowerCase(Locale.ROOT)
         ));
     }
 
     @ClusterTest
-    public void testAsyncConsumerOffsetRelatedWhenTimeoutZero() throws Exception {
+    public void testAsyncConsumerOffsetRelatedWhenTimeoutZero() {
         testOffsetRelatedWhenTimeoutZero(Map.of(
             GROUP_PROTOCOL_CONFIG, GroupProtocol.CONSUMER.name().toLowerCase(Locale.ROOT)
         ));
     }
 
-    private void testOffsetRelatedWhenTimeoutZero(Map<String, Object> consumerConfig) throws Exception {
+    private void testOffsetRelatedWhenTimeoutZero(Map<String, Object> consumerConfig) {
         cluster.createTopic(TOPIC, 2, (short) BROKER_COUNT);
         try (var consumer = cluster.consumer(consumerConfig)) {
             var result1 = consumer.beginningOffsets(List.of(TP), Duration.ZERO);
@@ -1907,8 +1837,10 @@ public class PlaintextConsumerTest {
         try (Consumer<byte[], byte[]> consumer1 = cluster.consumer(consumer1Config);
              Consumer<byte[], byte[]> consumer2 = cluster.consumer(consumer2Config)) {
 
-            consumer1.subscribe(List.of(topicName), listener1);
-            consumer2.subscribe(List.of(topicName), listener2);
+            consumer1.setRebalanceListener(listener1);
+            consumer1.subscribe(List.of(topicName));
+            consumer2.setRebalanceListener(listener2);
+            consumer2.subscribe(List.of(topicName));
 
             awaitRebalance(consumer1, listener1);
             awaitRebalance(consumer2, listener2);

@@ -17,6 +17,7 @@
 package org.apache.kafka.connect.transforms.predicates;
 
 import org.apache.kafka.common.Configurable;
+import org.apache.kafka.common.annotation.InterfaceAudience;
 import org.apache.kafka.connect.components.ConnectPlugin;
 import org.apache.kafka.connect.connector.ConnectRecord;
 
@@ -37,6 +38,7 @@ import org.apache.kafka.connect.connector.ConnectRecord;
  *
  * @param <R> The type of record.
  */
+@InterfaceAudience.Public
 public interface Predicate<R extends ConnectRecord<R>> extends Configurable, AutoCloseable, ConnectPlugin {
 
 

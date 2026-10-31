@@ -336,7 +336,7 @@ public class ClientQuotaManager {
             clientSensors.quotaSensor().record(value, timeMs, true);
             return 0;
         } catch (QuotaViolationException e) {
-            var throttleTimeMs = (int) throttleTime(e, timeMs);
+            var throttleTimeMs = (int) Math.min(throttleTime(e, timeMs), Integer.MAX_VALUE);
             if (LOG.isDebugEnabled()) {
                 LOG.debug("Quota violated for sensor ({}). Delay time: ({})",
                         clientSensors.quotaSensor().name(), throttleTimeMs);

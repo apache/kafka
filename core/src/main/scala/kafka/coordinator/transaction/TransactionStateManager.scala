@@ -17,13 +17,12 @@
 package kafka.coordinator.transaction
 
 import java.nio.ByteBuffer
-import java.util.Properties
 import java.util.concurrent.{ConcurrentHashMap, ConcurrentMap}
 import java.util.concurrent.atomic.AtomicBoolean
 import java.util.concurrent.locks.ReentrantReadWriteLock
 import kafka.server.ReplicaManager
 import kafka.utils.Logging
-import org.apache.kafka.common.config.TopicConfig
+import org.apache.kafka.common.compress.Compression
 import org.apache.kafka.common.internals.Topic
 import org.apache.kafka.common.message.ListTransactionsResponseData
 import org.apache.kafka.common.metrics.Metrics
@@ -35,11 +34,10 @@ import org.apache.kafka.common.requests.ProduceResponse.PartitionResponse
 import org.apache.kafka.common.requests.TransactionResult
 import org.apache.kafka.common.utils.{Time, Utils}
 import org.apache.kafka.common.{KafkaException, TopicIdPartition, TopicPartition}
-import org.apache.kafka.coordinator.transaction.{TransactionLog, TransactionLogConfig, TransactionMetadata, TransactionState, TransactionStateManagerConfig, TxnTransitMetadata}
+import org.apache.kafka.coordinator.transaction.{CoordinatorEpochAndTxnMetadata, TransactionConfig, TransactionLog, TransactionMetadata, TransactionState, TransactionStateManagerConfig, TransactionPartitionAndLeaderEpoch, TransactionalIdAndProducerIdEpoch, TransactionalIdCoordinatorEpochAndMetadata, TransactionalIdCoordinatorEpochAndTransitMetadata, TxnMetadataCacheEntry, TxnTransitMetadata}
 import org.apache.kafka.metadata.MetadataCache
 import org.apache.kafka.server.common.{RequestLocal, TransactionVersion}
-import org.apache.kafka.server.config.ServerConfigs
-import org.apache.kafka.server.record.BrokerCompressionType
+import org.apache.kafka.server.partition.PartitionListener
 import org.apache.kafka.server.storage.log.FetchIsolation
 import org.apache.kafka.server.util.Scheduler
 import org.apache.kafka.server.util.LockUtils.{inReadLock, inWriteLock}
@@ -118,7 +116,7 @@ class TransactionStateManager(brokerId: Int,
 
   // visible for testing only
   private[transaction] def addLoadingPartition(partitionId: Int, coordinatorEpoch: Int): Unit = {
-    val partitionAndLeaderEpoch = TransactionPartitionAndLeaderEpoch(partitionId, coordinatorEpoch)
+    val partitionAndLeaderEpoch = new TransactionPartitionAndLeaderEpoch(partitionId, coordinatorEpoch)
     inWriteLock(stateLock, () => {
       loadingPartitions.add(partitionAndLeaderEpoch)
     })
@@ -145,7 +143,7 @@ class TransactionStateManager(brokerId: Int,
             }
           }
         }.map { case (txnId, txnMetadata) =>
-          TransactionalIdAndProducerIdEpoch(txnId, txnMetadata.producerId, txnMetadata.producerEpoch)
+          new TransactionalIdAndProducerIdEpoch(txnId, txnMetadata.producerId, txnMetadata.producerEpoch)
         }
       }
     })
@@ -184,7 +182,7 @@ class TransactionStateManager(brokerId: Int,
                 if (recordsBuilder == null) {
                   recordsBuilder = MemoryRecords.builder(
                     ByteBuffer.allocate(math.min(16384, maxBatchSize)),
-                    TransactionLog.ENFORCED_COMPRESSION,
+                    Compression.NONE,
                     TimestampType.CREATE_TIME,
                     0L,
                     maxBatchSize
@@ -193,7 +191,7 @@ class TransactionStateManager(brokerId: Int,
 
                 if (maybeAppendExpiration(txnMetadata, recordsBuilder, currentTimeMs)) {
                   val transitMetadata = txnMetadata.prepareDead()
-                  expired += TransactionalIdCoordinatorEpochAndMetadata(
+                  expired += new TransactionalIdCoordinatorEpochAndMetadata(
                     transactionalId,
                     txnMetadataCacheEntry.coordinatorEpoch,
                     transitMetadata
@@ -248,8 +246,12 @@ class TransactionStateManager(brokerId: Int,
   private[transaction] def removeExpiredTransactionalIds(): Unit = {
     inReadLock[Exception](stateLock, () => {
       transactionMetadataCache.foreachEntry { (partitionId, partitionCacheEntry) =>
-        val transactionPartition = new TopicPartition(Topic.TRANSACTION_STATE_TOPIC_NAME, partitionId)
-        removeExpiredTransactionalIds(transactionPartition, partitionCacheEntry)
+        // the cache entry of a partition that is being reloaded (e.g. after a leader epoch bump) is about to be
+        // replaced, and the load relies on the log end offset not changing while it waits for the high watermark
+        if (!loadingPartitions.exists(_.txnPartitionId == partitionId)) {
+          val transactionPartition = new TopicPartition(Topic.TRANSACTION_STATE_TOPIC_NAME, partitionId)
+          removeExpiredTransactionalIds(transactionPartition, partitionCacheEntry)
+        }
       }
     })
   }
@@ -291,7 +293,7 @@ class TransactionStateManager(brokerId: Int,
     inReadLock[Exception](stateLock, () => {
       replicaManager.appendRecords(
         timeout = config.requestTimeoutMs,
-        requiredAcks = TransactionLog.ENFORCED_REQUIRED_ACKS,
+        requiredAcks = TransactionCoordinator.EnforcedRequiredAcks,
         internalTopicsAllowed = true,
         origin = AppendOrigin.COORDINATOR,
         entriesPerPartition = Map(replicaManager.topicIdPartition(transactionPartition) -> tombstoneRecords),
@@ -395,6 +397,14 @@ class TransactionStateManager(brokerId: Int,
   }
 
   /**
+   * Check whether this broker still leads the given transaction state partition at the given coordinator epoch.
+   * The cache entry is only removed on resignation, which happens after the replica becomes a follower.
+   */
+  private def isCoordinatorFor(partitionId: Int, coordinatorEpoch: Int): Boolean =
+    replicaManager.onlinePartition(new TopicPartition(Topic.TRANSACTION_STATE_TOPIC_NAME, partitionId))
+      .exists(partition => partition.isLeader && partition.getLeaderEpoch == coordinatorEpoch)
+
+  /**
    * Get the transaction metadata associated with the given transactional id, or an error if
    * the coordinator does not own the transaction partition or is still loading it; if not found
    * either return None or create a new metadata and added to the cache
@@ -409,6 +419,10 @@ class TransactionStateManager(brokerId: Int,
         Left(Errors.COORDINATOR_LOAD_IN_PROGRESS)
       else {
         transactionMetadataCache.get(partitionId) match {
+          // leadership moved but the partition has not been unloaded or reloaded yet, so the cache may be stale
+          case Some(cacheEntry) if !isCoordinatorFor(partitionId, cacheEntry.coordinatorEpoch) =>
+            Left(Errors.NOT_COORDINATOR)
+
           case Some(cacheEntry) =>
             val txnMetadata = Option(cacheEntry.metadataPerTransactionalId.get(transactionalId)).orElse {
               createdTxnMetadataOpt.map { createdTxnMetadata =>
@@ -416,7 +430,7 @@ class TransactionStateManager(brokerId: Int,
                   .getOrElse(createdTxnMetadata)
               }
             }
-            Right(txnMetadata.map(CoordinatorEpochAndTxnMetadata(cacheEntry.coordinatorEpoch, _)))
+            Right(txnMetadata.map(new CoordinatorEpochAndTxnMetadata(cacheEntry.coordinatorEpoch, _)))
 
           case None =>
             Left(Errors.NOT_COORDINATOR)
@@ -437,19 +451,6 @@ class TransactionStateManager(brokerId: Int,
    */
   def validateTransactionTimeoutMs(enableTwoPC: Boolean, txnTimeoutMs: Int): Boolean = {
     enableTwoPC || (txnTimeoutMs <= config.transactionMaxTimeoutMs && txnTimeoutMs > 0)
-  }
-
-  def transactionTopicConfigs: Properties = {
-    val props = new Properties
-
-    // enforce disabled unclean leader election, no compression types, and compact cleanup policy
-    props.put(TopicConfig.UNCLEAN_LEADER_ELECTION_ENABLE_CONFIG, "false")
-    props.put(TopicConfig.COMPRESSION_TYPE_CONFIG, BrokerCompressionType.UNCOMPRESSED.name)
-    props.put(TopicConfig.CLEANUP_POLICY_CONFIG, TopicConfig.CLEANUP_POLICY_COMPACT)
-    props.put(TopicConfig.MIN_IN_SYNC_REPLICAS_CONFIG, config.transactionLogMinInsyncReplicas.toString)
-    props.put(TopicConfig.SEGMENT_BYTES_CONFIG, config.transactionLogSegmentBytes.toString)
-
-    props
   }
 
   def partitionFor(transactionalId: String): Int = Utils.abs(transactionalId.hashCode) % transactionTopicPartitionCount
@@ -537,7 +538,7 @@ class TransactionStateManager(brokerId: Int,
   private[transaction] def addLoadedTransactionsToCache(txnTopicPartition: Int,
                                                         coordinatorEpoch: Int,
                                                         loadedTransactions: ConcurrentMap[String, TransactionMetadata]): Unit = {
-    val txnMetadataCacheEntry = TxnMetadataCacheEntry(coordinatorEpoch, loadedTransactions)
+    val txnMetadataCacheEntry = new TxnMetadataCacheEntry(coordinatorEpoch, loadedTransactions)
     val previousTxnMetadataCacheEntryOpt = transactionMetadataCache.put(txnTopicPartition, txnMetadataCacheEntry)
 
     previousTxnMetadataCacheEntryOpt.foreach { previousTxnMetadataCacheEntry =>
@@ -553,14 +554,14 @@ class TransactionStateManager(brokerId: Int,
    */
   def loadTransactionsForTxnTopicPartition(partitionId: Int, coordinatorEpoch: Int, sendTxnMarkers: SendTxnMarkersCallback): Unit = {
     val topicPartition = new TopicPartition(Topic.TRANSACTION_STATE_TOPIC_NAME, partitionId)
-    val partitionAndLeaderEpoch = TransactionPartitionAndLeaderEpoch(partitionId, coordinatorEpoch)
+    val partitionAndLeaderEpoch = new TransactionPartitionAndLeaderEpoch(partitionId, coordinatorEpoch)
 
     inWriteLock(stateLock, () => {
       loadingPartitions.add(partitionAndLeaderEpoch)
     })
 
-    def loadTransactions(startTimeMs: java.lang.Long): Unit = {
-      val schedulerTimeMs = time.milliseconds() - startTimeMs
+    def loadTransactions(startTimeMs: java.lang.Long, hwmWaitTimeMs: Long): Unit = {
+      val schedulerTimeMs = time.milliseconds() - startTimeMs - hwmWaitTimeMs
       info(s"Loading transaction metadata from $topicPartition at epoch $coordinatorEpoch")
       validateTransactionTopicPartitionCountIsStable()
 
@@ -569,7 +570,8 @@ class TransactionStateManager(brokerId: Int,
       val totalLoadingTimeMs = endTimeMs - startTimeMs
       partitionLoadSensor.record(totalLoadingTimeMs.toDouble, endTimeMs, false)
       info(s"Finished loading ${loadedTransactions.size} transaction metadata from $topicPartition in " +
-        s"$totalLoadingTimeMs milliseconds, of which $schedulerTimeMs milliseconds was spent in the scheduler.")
+        s"$totalLoadingTimeMs milliseconds, of which $hwmWaitTimeMs milliseconds was spent waiting for the high watermark " +
+        s"to reach the log end offset and $schedulerTimeMs milliseconds was spent in the scheduler.")
 
       inWriteLock[Exception](stateLock, () => {
         if (loadingPartitions.contains(partitionAndLeaderEpoch)) {
@@ -582,10 +584,10 @@ class TransactionStateManager(brokerId: Int,
               txnMetadata.state match {
                 case TransactionState.PREPARE_ABORT =>
                   transactionsPendingForCompletion +=
-                    TransactionalIdCoordinatorEpochAndTransitMetadata(transactionalId, coordinatorEpoch, TransactionResult.ABORT, txnMetadata, txnMetadata.prepareComplete(time.milliseconds()))
+                    new TransactionalIdCoordinatorEpochAndTransitMetadata(transactionalId, coordinatorEpoch, TransactionResult.ABORT, txnMetadata, txnMetadata.prepareComplete(time.milliseconds()))
                 case TransactionState.PREPARE_COMMIT =>
                   transactionsPendingForCompletion +=
-                    TransactionalIdCoordinatorEpochAndTransitMetadata(transactionalId, coordinatorEpoch, TransactionResult.COMMIT, txnMetadata, txnMetadata.prepareComplete(time.milliseconds()))
+                    new TransactionalIdCoordinatorEpochAndTransitMetadata(transactionalId, coordinatorEpoch, TransactionResult.COMMIT, txnMetadata, txnMetadata.prepareComplete(time.milliseconds()))
                 case _ =>
                 // nothing needs to be done
               }
@@ -609,7 +611,88 @@ class TransactionStateManager(brokerId: Int,
     }
 
     val scheduleStartMs = time.milliseconds()
-    scheduler.scheduleOnce(s"load-txns-for-partition-$topicPartition", () => loadTransactions(scheduleStartMs))
+
+    def scheduleLoad(hwmWaitTimeMs: Long): Unit =
+      scheduler.scheduleOnce(s"load-txns-for-partition-$topicPartition", () => loadTransactions(scheduleStartMs, hwmWaitTimeMs))
+
+    // The listener is invoked with partition locks held, so instead of blocking on stateLock there, this runs on
+    // the scheduler, which also serializes it with the load tasks for the partition.
+    def scheduleAbandonLoad(reason: String): Unit =
+      scheduler.scheduleOnce(s"abandon-load-txns-for-partition-$topicPartition", () => {
+        inWriteLock[Exception](stateLock, () => {
+          loadingPartitions.remove(partitionAndLeaderEpoch)
+        })
+        info(s"Abandoned loading transaction metadata from $topicPartition at epoch $coordinatorEpoch because $reason")
+      })
+
+    // The load reads up to the log end offset, but a newly elected leader may have records above the high watermark
+    // that are not committed yet and may still get truncated. The coordinator does not write to the partition while
+    // it is loading, so the log end offset doesn't change; wait until the high watermark catches up to it so that
+    // all the records the load reads are committed. The high watermark of the leader advances as the followers in the
+    // ISR fetch from it, or when a lagging follower is removed from the ISR.
+    replicaManager.getLog(topicPartition) match {
+      case Some(log) if log.highWatermark < log.logEndOffset =>
+        val logEndOffset = log.logEndOffset
+        info(s"Waiting for the high watermark of $topicPartition (currently ${log.highWatermark}) to reach the log end " +
+          s"offset $logEndOffset before loading transaction metadata at epoch $coordinatorEpoch")
+        val listener = new HighWatermarkWaitListener(topicPartition, logEndOffset, coordinatorEpoch, scheduleLoad, scheduleAbandonLoad)
+        if (!replicaManager.maybeAddListener(topicPartition, listener)) {
+          listener.abandon(s"$topicPartition is not online")
+        } else {
+          // the high watermark may have been updated after it was read above but before the listener was added,
+          // in which case the listener isn't notified of the update: check it again now that the listener is added
+          listener.onHighWatermarkUpdated(topicPartition, log.highWatermark)
+          // the wait may have finished before the listener was added; in that case remove it again
+          if (listener.isFinished)
+            replicaManager.removeListener(topicPartition, listener)
+        }
+      case _ =>
+        // either all the records are already committed, or there is no local log, in which case the load finds
+        // no records
+        scheduleLoad(0L)
+    }
+  }
+
+  /**
+   * Waits for the high watermark of a transaction log partition to reach the given log end offset and then
+   * schedules the load. If this broker stops being the leader first, the load is abandoned instead.
+   */
+  private class HighWatermarkWaitListener(topicPartition: TopicPartition,
+                                          logEndOffset: Long,
+                                          coordinatorEpoch: Int,
+                                          scheduleLoad: Long => Unit,
+                                          scheduleAbandonLoad: String => Unit) extends PartitionListener {
+    private val waitStartMs = time.milliseconds()
+    private val finished = new AtomicBoolean(false)
+
+    def isFinished: Boolean = finished.get
+
+    def abandon(reason: String): Unit = {
+      if (finished.compareAndSet(false, true))
+        finish(scheduleAbandonLoad(reason))
+    }
+
+    private def finish(schedule: => Unit): Unit = {
+      try {
+        schedule
+      } finally {
+        replicaManager.removeListener(topicPartition, this)
+      }
+    }
+
+    override def onHighWatermarkUpdated(partition: TopicPartition, offset: Long): Unit = {
+      if (offset >= logEndOffset && finished.compareAndSet(false, true)) {
+        val hwmWaitTimeMs = time.milliseconds() - waitStartMs
+        info(s"The high watermark of $topicPartition reached $offset after waiting $hwmWaitTimeMs milliseconds")
+        finish(scheduleLoad(hwmWaitTimeMs))
+      }
+    }
+
+    override def onBecomingFollower(partition: TopicPartition): Unit = abandon("it became a follower")
+
+    override def onFailed(partition: TopicPartition): Unit = abandon("it failed")
+
+    override def onDeleted(partition: TopicPartition): Unit = abandon("it was deleted")
   }
 
   def removeTransactionsForTxnTopicPartition(partitionId: Int): Unit = {
@@ -673,7 +756,7 @@ class TransactionStateManager(brokerId: Int,
     val valueBytes = TransactionLog.valueToBytes(newMetadata, transactionVersionLevel())
     val timestamp = time.milliseconds()
 
-    val records = MemoryRecords.withRecords(TransactionLog.ENFORCED_COMPRESSION, new SimpleRecord(timestamp, keyBytes, valueBytes))
+    val records = MemoryRecords.withRecords(Compression.NONE, new SimpleRecord(timestamp, keyBytes, valueBytes))
     val transactionStateTopicPartition = new TopicPartition(Topic.TRANSACTION_STATE_TOPIC_NAME, partitionFor(transactionalId))
     val transactionStateTopicIdPartition = replicaManager.topicIdPartition(transactionStateTopicPartition)
     val recordsPerPartition = Map(transactionStateTopicIdPartition -> records)
@@ -816,7 +899,7 @@ class TransactionStateManager(brokerId: Int,
           if (append) {
             replicaManager.appendRecords(
               timeout = newMetadata.txnTimeoutMs.toLong,
-              requiredAcks = TransactionLog.ENFORCED_REQUIRED_ACKS,
+              requiredAcks = TransactionCoordinator.EnforcedRequiredAcks,
               internalTopicsAllowed = true,
               origin = AppendOrigin.COORDINATOR,
               entriesPerPartition = recordsPerPartition,
@@ -844,38 +927,3 @@ class TransactionStateManager(brokerId: Int,
     info("Shutdown complete")
   }
 }
-
-
-private[transaction] case class TxnMetadataCacheEntry(coordinatorEpoch: Int,
-                                                      metadataPerTransactionalId: ConcurrentMap[String, TransactionMetadata]) {
-  override def toString: String = {
-    s"TxnMetadataCacheEntry(coordinatorEpoch=$coordinatorEpoch, numTransactionalEntries=${metadataPerTransactionalId.size})"
-  }
-}
-
-private[transaction] case class CoordinatorEpochAndTxnMetadata(coordinatorEpoch: Int,
-                                                               transactionMetadata: TransactionMetadata)
-
-private[transaction] case class TransactionConfig(transactionalIdExpirationMs: Int = TransactionStateManagerConfig.TRANSACTIONAL_ID_EXPIRATION_MS_DEFAULT,
-                                                  transactionMaxTimeoutMs: Int = TransactionStateManagerConfig.TRANSACTIONS_MAX_TIMEOUT_MS_DEFAULT,
-                                                  transactionLogNumPartitions: Int = TransactionLogConfig.TRANSACTIONS_TOPIC_PARTITIONS_DEFAULT,
-                                                  transactionLogReplicationFactor: Short = TransactionLogConfig.TRANSACTIONS_TOPIC_REPLICATION_FACTOR_DEFAULT,
-                                                  transactionLogSegmentBytes: Int = TransactionLogConfig.TRANSACTIONS_TOPIC_SEGMENT_BYTES_DEFAULT,
-                                                  transactionLogLoadBufferSize: Int = TransactionLogConfig.TRANSACTIONS_LOAD_BUFFER_SIZE_DEFAULT,
-                                                  transactionLogMinInsyncReplicas: Int = TransactionLogConfig.TRANSACTIONS_TOPIC_MIN_ISR_DEFAULT,
-                                                  abortTimedOutTransactionsIntervalMs: Int = TransactionStateManagerConfig.TRANSACTIONS_ABORT_TIMED_OUT_TRANSACTION_CLEANUP_INTERVAL_MS_DEFAULT,
-                                                  removeExpiredTransactionalIdsIntervalMs: Int = TransactionStateManagerConfig.TRANSACTIONS_REMOVE_EXPIRED_TRANSACTIONAL_ID_CLEANUP_INTERVAL_MS_DEFAULT,
-                                                  transaction2PCEnable: Boolean = TransactionStateManagerConfig.TRANSACTIONS_2PC_ENABLED_DEFAULT,
-                                                  requestTimeoutMs: Int = ServerConfigs.REQUEST_TIMEOUT_MS_DEFAULT)
-
-case class TransactionalIdAndProducerIdEpoch(transactionalId: String, producerId: Long, producerEpoch: Short) {
-  override def toString: String = {
-    s"(transactionalId=$transactionalId, producerId=$producerId, producerEpoch=$producerEpoch)"
-  }
-}
-
-case class TransactionPartitionAndLeaderEpoch(txnPartitionId: Int, coordinatorEpoch: Int)
-
-case class TransactionalIdCoordinatorEpochAndMetadata(transactionalId: String, coordinatorEpoch: Int, transitMetadata: TxnTransitMetadata)
-
-case class TransactionalIdCoordinatorEpochAndTransitMetadata(transactionalId: String, coordinatorEpoch: Int, result: TransactionResult, txnMetadata: TransactionMetadata, transitMetadata: TxnTransitMetadata)

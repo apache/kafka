@@ -27,6 +27,7 @@ import org.apache.kafka.common.utils.Utils;
 
 import java.util.List;
 
+import static org.apache.kafka.common.config.ConfigDef.Importance.HIGH;
 import static org.apache.kafka.common.config.ConfigDef.Importance.LOW;
 import static org.apache.kafka.common.config.ConfigDef.Importance.MEDIUM;
 import static org.apache.kafka.common.config.ConfigDef.Type.BOOLEAN;
@@ -132,6 +133,10 @@ public class BrokerSecurityConfigs {
     public static final String SASL_MECHANISM_INTER_BROKER_PROTOCOL_CONFIG = "sasl.mechanism.inter.broker.protocol";
     public static final String SASL_MECHANISM_INTER_BROKER_PROTOCOL_DOC = "SASL mechanism used for inter-broker communication. Default is GSSAPI.";
 
+    public static final String SASL_MECHANISM_MIRROR_ADMIN_PROTOCOL_CONFIG = "sasl.mechanism.mirror.admin.protocol";
+    public static final String SASL_MECHANISM_MIRROR_ADMIN_PROTOCOL_DOC = "SASL mechanism used for mirror admin communication on destination cluster. " +
+            "If this is unset, it defaults to the value of " + SASL_MECHANISM_INTER_BROKER_PROTOCOL_CONFIG + ".";
+
     // The allowlist of the SASL OAUTHBEARER endpoints
     public static final String ALLOWED_SASL_OAUTHBEARER_URLS_CONFIG = "org.apache.kafka.sasl.oauthbearer.allowed.urls";
     public static final String ALLOWED_SASL_OAUTHBEARER_URLS_DEFAULT = "";
@@ -173,6 +178,7 @@ public class BrokerSecurityConfigs {
 
             // Sasl Configuration
             .define(BrokerSecurityConfigs.SASL_MECHANISM_INTER_BROKER_PROTOCOL_CONFIG, STRING, SaslConfigs.DEFAULT_SASL_MECHANISM, MEDIUM, BrokerSecurityConfigs.SASL_MECHANISM_INTER_BROKER_PROTOCOL_DOC)
+            .defineInternal(BrokerSecurityConfigs.SASL_MECHANISM_MIRROR_ADMIN_PROTOCOL_CONFIG, STRING, null, null, MEDIUM, BrokerSecurityConfigs.SASL_MECHANISM_MIRROR_ADMIN_PROTOCOL_DOC)
             .define(BrokerSecurityConfigs.SASL_ENABLED_MECHANISMS_CONFIG, LIST, BrokerSecurityConfigs.DEFAULT_SASL_ENABLED_MECHANISMS, ConfigDef.ValidList.anyNonDuplicateValues(true, false), MEDIUM, BrokerSecurityConfigs.SASL_ENABLED_MECHANISMS_DOC)
             .define(BrokerSecurityConfigs.SASL_SERVER_CALLBACK_HANDLER_CLASS_CONFIG, CLASS, null, MEDIUM, BrokerSecurityConfigs.SASL_SERVER_CALLBACK_HANDLER_CLASS_DOC)
             .define(BrokerSecurityConfigs.SASL_KERBEROS_PRINCIPAL_TO_LOCAL_RULES_CONFIG, LIST, BrokerSecurityConfigs.DEFAULT_SASL_KERBEROS_PRINCIPAL_TO_LOCAL_RULES, ConfigDef.ValidList.anyNonDuplicateValues(true, false), MEDIUM, BrokerSecurityConfigs.SASL_KERBEROS_PRINCIPAL_TO_LOCAL_RULES_DOC)
@@ -217,6 +223,8 @@ public class BrokerSecurityConfigs {
             .define(SaslConfigs.SASL_OAUTHBEARER_JWKS_ENDPOINT_RETRY_BACKOFF_MS, LONG, SaslConfigs.DEFAULT_SASL_OAUTHBEARER_JWKS_ENDPOINT_RETRY_BACKOFF_MS, LOW, SaslConfigs.SASL_OAUTHBEARER_JWKS_ENDPOINT_RETRY_BACKOFF_MS_DOC)
             .define(SaslConfigs.SASL_OAUTHBEARER_JWKS_ENDPOINT_RETRY_BACKOFF_MAX_MS, LONG, SaslConfigs.DEFAULT_SASL_OAUTHBEARER_JWKS_ENDPOINT_RETRY_BACKOFF_MAX_MS, LOW, SaslConfigs.SASL_OAUTHBEARER_JWKS_ENDPOINT_RETRY_BACKOFF_MAX_MS_DOC)
             .define(SaslConfigs.SASL_OAUTHBEARER_CLOCK_SKEW_SECONDS, INT, SaslConfigs.DEFAULT_SASL_OAUTHBEARER_CLOCK_SKEW_SECONDS, LOW, SaslConfigs.SASL_OAUTHBEARER_CLOCK_SKEW_SECONDS_DOC)
-            .define(SaslConfigs.SASL_OAUTHBEARER_EXPECTED_AUDIENCE, LIST, List.of(), ConfigDef.ValidList.anyNonDuplicateValues(true, false), LOW, SaslConfigs.SASL_OAUTHBEARER_EXPECTED_AUDIENCE_DOC)
-            .define(SaslConfigs.SASL_OAUTHBEARER_EXPECTED_ISSUER, STRING, null, LOW, SaslConfigs.SASL_OAUTHBEARER_EXPECTED_ISSUER_DOC);
+            .define(SaslConfigs.SASL_OAUTHBEARER_ALLOW_UNVERIFIED_AUDIENCE, BOOLEAN, false, MEDIUM, SaslConfigs.SASL_OAUTHBEARER_ALLOW_UNVERIFIED_AUDIENCE_DOC)
+            .define(SaslConfigs.SASL_OAUTHBEARER_EXPECTED_AUDIENCE, LIST, List.of(), ConfigDef.ValidList.anyNonDuplicateValues(true, false), HIGH, SaslConfigs.SASL_OAUTHBEARER_EXPECTED_AUDIENCE_DOC)
+            .define(SaslConfigs.SASL_OAUTHBEARER_ALLOW_UNVERIFIED_ISSUER, BOOLEAN, false, MEDIUM, SaslConfigs.SASL_OAUTHBEARER_ALLOW_UNVERIFIED_ISSUER_DOC)
+            .define(SaslConfigs.SASL_OAUTHBEARER_EXPECTED_ISSUER, STRING, null, HIGH, SaslConfigs.SASL_OAUTHBEARER_EXPECTED_ISSUER_DOC);
 }

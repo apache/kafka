@@ -66,6 +66,7 @@ public final class ServerTopicConfigSynonyms {
             new ConfigSynonym("retention.minutes", ConfigSynonym.MINUTES_TO_MILLISECONDS),
             new ConfigSynonym("retention.hours", ConfigSynonym.HOURS_TO_MILLISECONDS)),
         single(TopicConfig.MAX_MESSAGE_BYTES_CONFIG, "message.max.bytes"),
+        sameName(TopicConfig.MAX_DECOMPRESSED_MESSAGE_BYTES_CONFIG),
         sameNameWithLogPrefix(TopicConfig.INDEX_INTERVAL_BYTES_CONFIG),
         sameNameWithLogCleanerPrefix(TopicConfig.DELETE_RETENTION_MS_CONFIG),
         sameNameWithLogCleanerPrefix(TopicConfig.MIN_COMPACTION_LAG_MS_CONFIG),
@@ -84,7 +85,9 @@ public final class ServerTopicConfigSynonyms {
         sameNameWithLogPrefix(TopicConfig.MESSAGE_TIMESTAMP_BEFORE_MAX_MS_CONFIG),
         sameNameWithLogPrefix(TopicConfig.MESSAGE_TIMESTAMP_AFTER_MAX_MS_CONFIG),
         sameNameWithLogPrefix(TopicConfig.LOCAL_LOG_RETENTION_MS_CONFIG),
-        sameNameWithLogPrefix(TopicConfig.LOCAL_LOG_RETENTION_BYTES_CONFIG)
+        sameNameWithLogPrefix(TopicConfig.LOCAL_LOG_RETENTION_BYTES_CONFIG),
+        sameNameWithLogPrefix(TopicConfig.REMOTE_COPY_LAG_MS_CONFIG),
+        sameNameWithLogPrefix(TopicConfig.REMOTE_COPY_LAG_BYTES_CONFIG)
     );
 
     /**

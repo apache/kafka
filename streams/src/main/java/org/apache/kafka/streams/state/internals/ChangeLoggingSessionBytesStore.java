@@ -16,6 +16,7 @@
  */
 package org.apache.kafka.streams.state.internals;
 
+import org.apache.kafka.common.IsolationLevel;
 import org.apache.kafka.common.header.internals.RecordHeaders;
 import org.apache.kafka.common.utils.Bytes;
 import org.apache.kafka.streams.kstream.Windowed;
@@ -23,6 +24,7 @@ import org.apache.kafka.streams.processor.StateStore;
 import org.apache.kafka.streams.processor.StateStoreContext;
 import org.apache.kafka.streams.processor.internals.InternalProcessorContext;
 import org.apache.kafka.streams.state.KeyValueIterator;
+import org.apache.kafka.streams.state.ReadOnlySessionStore;
 import org.apache.kafka.streams.state.SessionStore;
 
 import static org.apache.kafka.streams.processor.internals.ProcessorContextUtils.asInternalProcessorContext;
@@ -45,6 +47,11 @@ public class ChangeLoggingSessionBytesStore
     public void init(final StateStoreContext stateStoreContext, final StateStore root) {
         internalContext = asInternalProcessorContext(stateStoreContext);
         super.init(stateStoreContext, root);
+    }
+
+    @Override
+    public ReadOnlySessionStore<Bytes, byte[]> readOnly(final IsolationLevel isolationLevel) {
+        return wrapped().readOnly(isolationLevel);
     }
 
     @Override

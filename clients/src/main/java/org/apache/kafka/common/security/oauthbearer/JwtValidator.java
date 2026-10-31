@@ -17,8 +17,9 @@
 
 package org.apache.kafka.common.security.oauthbearer;
 
+import org.apache.kafka.common.annotation.InterfaceAudience;
+import org.apache.kafka.common.annotation.SuppressKafkaInternalApiUsage;
 import org.apache.kafka.common.security.oauthbearer.internals.secured.OAuthBearerConfigurable;
-
 
 /**
  * An instance of <code>JwtValidator</code> acts as a function object that, given an access
@@ -46,6 +47,8 @@ import org.apache.kafka.common.security.oauthbearer.internals.secured.OAuthBeare
  *                         contents and verify the signature
  */
 
+@InterfaceAudience.Public
+@SuppressKafkaInternalApiUsage("KIP-1265: extends internal OAuthBearerConfigurable — pending KIP review to promote the parent or refactor the OAuthBearer interface hierarchy")
 public interface JwtValidator extends OAuthBearerConfigurable {
 
     /**

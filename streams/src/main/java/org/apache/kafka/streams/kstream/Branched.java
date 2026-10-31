@@ -14,7 +14,10 @@
  * See the License for the specific language governing permissions and
  * limitations under the License.
  */
+
 package org.apache.kafka.streams.kstream;
+
+import org.apache.kafka.common.annotation.InterfaceAudience;
 
 import java.util.Objects;
 import java.util.function.Consumer;
@@ -27,6 +30,7 @@ import java.util.function.Function;
  * @param <K> type of record key
  * @param <V> type of record value
  */
+@InterfaceAudience.Public
 public class Branched<K, V> implements NamedOperation<Branched<K, V>> {
 
     protected final String name;

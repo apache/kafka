@@ -14,7 +14,10 @@
  * See the License for the specific language governing permissions and
  * limitations under the License.
  */
+
 package org.apache.kafka.streams.errors;
+
+import org.apache.kafka.common.annotation.InterfaceAudience;
 
 /**
  * Indicates that the state store being queried is already closed. This could happen when Kafka Streams is in
@@ -23,6 +26,7 @@ package org.apache.kafka.streams.errors;
  * {@link org.apache.kafka.streams.KafkaStreams.State#ERROR ERROR} state.
  */
 @SuppressWarnings("unused")
+@InterfaceAudience.Public
 public class StateStoreNotAvailableException extends InvalidStateStoreException {
 
     private static final long serialVersionUID = 1L;

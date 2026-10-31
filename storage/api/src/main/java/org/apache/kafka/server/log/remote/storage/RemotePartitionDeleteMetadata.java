@@ -14,9 +14,11 @@
  * See the License for the specific language governing permissions and
  * limitations under the License.
  */
+
 package org.apache.kafka.server.log.remote.storage;
 
 import org.apache.kafka.common.TopicIdPartition;
+import org.apache.kafka.common.annotation.InterfaceAudience;
 
 import java.util.Objects;
 
@@ -24,6 +26,7 @@ import java.util.Objects;
  * This class represents the metadata about the remote partition. It can be created/updated with {@link RemoteLogMetadataManager#putRemotePartitionDeleteMetadata(RemotePartitionDeleteMetadata)}.
  * Possible state transitions are mentioned at {@link RemotePartitionDeleteState}.
  */
+@InterfaceAudience.Public
 public class RemotePartitionDeleteMetadata extends RemoteLogMetadata {
 
     private final TopicIdPartition topicIdPartition;
@@ -34,7 +37,7 @@ public class RemotePartitionDeleteMetadata extends RemoteLogMetadata {
      *
      * @param topicIdPartition topic partition for which this event is meant for.
      * @param state            State of the remote topic partition.
-     * @param eventTimestampMs Epoch time in milliseconds at which this event is occurred.
+     * @param eventTimestampMs Epoch time in milliseconds at which this event occurred.
      * @param brokerId         Id of the broker in which this event is raised.
      */
     public RemotePartitionDeleteMetadata(TopicIdPartition topicIdPartition,

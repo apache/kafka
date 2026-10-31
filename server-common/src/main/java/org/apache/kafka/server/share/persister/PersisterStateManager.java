@@ -78,6 +78,8 @@ import java.util.concurrent.CompletableFuture;
 import java.util.concurrent.ConcurrentLinkedQueue;
 import java.util.concurrent.atomic.AtomicBoolean;
 import java.util.function.Consumer;
+import java.util.function.Function;
+import java.util.function.ToIntFunction;
 import java.util.stream.Collectors;
 
 /**
@@ -165,7 +167,6 @@ public class PersisterStateManager {
     public void start() {
         if (isStarted.compareAndSet(false, true)) {
             this.sender.start();
-            isStarted.set(true);
         }
     }
 
@@ -180,8 +181,57 @@ public class PersisterStateManager {
         return nodeRPCMap;
     }
 
+    // test visibility
+    Collection<RequestAndCompletionHandler> generateRequests() {
+        return sender.generateRequests();
+    }
+
     public void setGenerateCallback(Runnable generateCallback) {
         this.generateCallback = generateCallback;
+    }
+
+    /**
+     * Demultiplexes a combined RPC response into topicId -> partition -> per-partition result, so that
+     * each handler of a coalesced request finds its own slice in O(1) rather than rescanning the whole
+     * response (which costs O(N) per handler, hence O(N^2) per batch).
+     *
+     * @param <P> per-partition result type of the RPC, e.g. {@link WriteShareGroupStateResponseData.PartitionResult}
+     */
+    static final class PartitionResultIndex<P> {
+        private final Map<Uuid, Map<Integer, P>> index;
+
+        private PartitionResultIndex(Map<Uuid, Map<Integer, P>> index) {
+            this.index = index;
+        }
+
+        /**
+         * @param results    per-topic results of the combined response
+         * @param topicId    extracts the topic id from a per-topic result
+         * @param partitions extracts the per-partition results of a per-topic result
+         * @param partition  extracts the partition number from a per-partition result
+         * @param <T>        per-topic result type of the RPC, e.g. {@link WriteShareGroupStateResponseData.WriteStateResult}
+         * @param <P>        per-partition result type of the RPC
+         */
+        static <T, P> PartitionResultIndex<P> build(
+            List<T> results,
+            Function<T, Uuid> topicId,
+            Function<T, List<P>> partitions,
+            ToIntFunction<P> partition
+        ) {
+            Map<Uuid, Map<Integer, P>> index = new HashMap<>();
+            for (T result : results) {
+                Map<Integer, P> byPartition = index.computeIfAbsent(topicId.apply(result), t -> new HashMap<>());
+                for (P p : partitions.apply(result)) {
+                    byPartition.put(partition.applyAsInt(p), p);
+                }
+            }
+            return new PartitionResultIndex<>(index);
+        }
+
+        P get(SharePartitionKey key) {
+            Map<Integer, P> byPartition = index.get(key.topicId());
+            return byPartition == null ? null : byPartition.get(key.partition());
+        }
     }
 
     /**
@@ -197,6 +247,9 @@ public class PersisterStateManager {
         private final ExponentialBackoffManager findCoordBackoff;
         private Consumer<ClientResponse> onCompleteCallback;
         protected final SharePartitionKey partitionKey;
+        // Index of the combined response, shared across the handlers of one coalesced request; assigned
+        // before onComplete and read-and-cleared by lookupPartitionResult (KAFKA-20803).
+        private PartitionResultIndex<?> sharedResultIndex;
 
         public PersisterStateManagerHandler(
             String groupId,
@@ -238,6 +291,35 @@ public class PersisterStateManager {
          * @param response - Client response
          */
         protected abstract void handleRequestResponse(ClientResponse response);
+
+        /**
+         * Indexes a combined response so every handler of the batch can look up its own slice. Overridden
+         * per RPC type; the base implementation leaves the O(1) path disabled. Implementations must tolerate
+         * a null or bodyless response and return null for it.
+         *
+         * @param response - Client response, possibly null
+         * @return index of the combined response, or null when there is no usable body
+         */
+        protected PartitionResultIndex<?> buildResultIndex(ClientResponse response) {
+            return null;
+        }
+
+        /**
+         * Returns this handler's per-partition result from the combined response in O(1), preferring the
+         * index built once for the whole batch and otherwise indexing the response on its own.
+         *
+         * @param response - Client response
+         * @return the per-partition result, or null when the response carries none for this partition
+         */
+        @SuppressWarnings("unchecked")
+        protected final <R> R lookupPartitionResult(ClientResponse response) {
+            PartitionResultIndex<?> index = sharedResultIndex;
+            sharedResultIndex = null;
+            if (index == null) {
+                index = buildResultIndex(response);
+            }
+            return index == null ? null : ((PartitionResultIndex<R>) index).get(partitionKey());
+        }
 
         /**
          * Returns true if the response is valid for the respective child class.
@@ -777,6 +859,18 @@ public class PersisterStateManager {
         }
 
         @Override
+        protected PartitionResultIndex<WriteShareGroupStateResponseData.PartitionResult> buildResultIndex(ClientResponse response) {
+            if (response == null || !response.hasResponse()) {
+                return null;
+            }
+            return PartitionResultIndex.build(
+                ((WriteShareGroupStateResponse) response.responseBody()).data().results(),
+                WriteShareGroupStateResponseData.WriteStateResult::topicId,
+                WriteShareGroupStateResponseData.WriteStateResult::partitions,
+                WriteShareGroupStateResponseData.PartitionResult::partition);
+        }
+
+        @Override
         protected void handleRequestResponse(ClientResponse response) {
             log().debug("Write state response received - {}", response);
             writeStateBackoff.incrementAttempt();
@@ -784,55 +878,44 @@ public class PersisterStateManager {
             String clientResponseErrorMessage = clientResponseError.message();
             switch (clientResponseError) {
                 case NONE:
-                    // response can be a combined one for large number of requests
-                    // we need to deconstruct it
-                    WriteShareGroupStateResponse combinedResponse = (WriteShareGroupStateResponse) response.responseBody();
+                    WriteShareGroupStateResponseData.PartitionResult partitionResult = lookupPartitionResult(response);
+                    if (partitionResult != null) {
+                        Errors error = Errors.forCode(partitionResult.errorCode());
+                        String errorMessage = partitionResult.errorMessage();
+                        if (errorMessage == null || errorMessage.isEmpty()) {
+                            errorMessage = error.message();
+                        }
 
-                    for (WriteShareGroupStateResponseData.WriteStateResult writeStateResult : combinedResponse.data().results()) {
-                        if (writeStateResult.topicId().equals(partitionKey().topicId())) {
-                            Optional<WriteShareGroupStateResponseData.PartitionResult> partitionStateData =
-                                writeStateResult.partitions().stream().filter(partitionResult -> partitionResult.partition() == partitionKey().partition())
-                                    .findFirst();
+                        switch (error) {
+                            case NONE:
+                                writeStateBackoff.resetAttempts();
+                                WriteShareGroupStateResponseData.WriteStateResult result = WriteShareGroupStateResponse.toResponseWriteStateResult(
+                                    partitionKey().topicId(),
+                                    List.of(partitionResult)
+                                );
+                                this.result.complete(new WriteShareGroupStateResponse(
+                                    new WriteShareGroupStateResponseData().setResults(List.of(result))));
+                                return;
 
-                            if (partitionStateData.isPresent()) {
-                                Errors error = Errors.forCode(partitionStateData.get().errorCode());
-                                String errorMessage = partitionStateData.get().errorMessage();
-                                if (errorMessage == null || errorMessage.isEmpty()) {
-                                    errorMessage = error.message();
+                            // check retriable errors
+                            case COORDINATOR_NOT_AVAILABLE:
+                            case COORDINATOR_LOAD_IN_PROGRESS:
+                            case NOT_COORDINATOR:
+                            case UNKNOWN_TOPIC_OR_PARTITION:
+                                log().debug("Received retriable error in write state RPC for key {}: {}", partitionKey(), errorMessage);
+                                if (!writeStateBackoff.canAttempt()) {
+                                    log().error("Exhausted max retries for write state RPC for key {} without success.", partitionKey());
+                                    requestErrorResponse(error, new Exception("Exhausted max retries to complete write state RPC without success."));
+                                    return;
                                 }
+                                super.resetCoordinatorNode();
+                                timer.add(new PersisterTimerTask(writeStateBackoff.backOff(), this));
+                                return;
 
-                                switch (error) {
-                                    case NONE:
-                                        writeStateBackoff.resetAttempts();
-                                        WriteShareGroupStateResponseData.WriteStateResult result = WriteShareGroupStateResponse.toResponseWriteStateResult(
-                                            partitionKey().topicId(),
-                                            List.of(partitionStateData.get())
-                                        );
-                                        this.result.complete(new WriteShareGroupStateResponse(
-                                            new WriteShareGroupStateResponseData().setResults(List.of(result))));
-                                        return;
-
-                                    // check retriable errors
-                                    case COORDINATOR_NOT_AVAILABLE:
-                                    case COORDINATOR_LOAD_IN_PROGRESS:
-                                    case NOT_COORDINATOR:
-                                    case UNKNOWN_TOPIC_OR_PARTITION:
-                                        log().debug("Received retriable error in write state RPC for key {}: {}", partitionKey(), errorMessage);
-                                        if (!writeStateBackoff.canAttempt()) {
-                                            log().error("Exhausted max retries for write state RPC for key {} without success.", partitionKey());
-                                            requestErrorResponse(error, new Exception("Exhausted max retries to complete write state RPC without success."));
-                                            return;
-                                        }
-                                        super.resetCoordinatorNode();
-                                        timer.add(new PersisterTimerTask(writeStateBackoff.backOff(), this));
-                                        return;
-
-                                    default:
-                                        log().error("Unable to perform write state RPC for key {}: {}", partitionKey(), errorMessage);
-                                        requestErrorResponse(error, new Exception(errorMessage));
-                                        return;
-                                }
-                            }
+                            default:
+                                log().error("Unable to perform write state RPC for key {}: {}", partitionKey(), errorMessage);
+                                requestErrorResponse(error, new Exception(errorMessage));
+                                return;
                         }
                     }
 
@@ -1536,6 +1619,7 @@ public class PersisterStateManager {
             // 9. when W1 completes, it will clear inFlight and raise wakeup event.
             // 10. at this point W2, W3, etc. could be sent as a combined request thus achieving batching.
             final Map<RPCType, Set<Node>> sending = new HashMap<>();
+            final boolean useRequestHeaderV3 = cacheHelper.isRequestHeaderV3Supported();
             synchronized (nodeMapLock) {
                 nodeRPCMap.forEach((coordNode, rpcTypesPerNode) ->
                     rpcTypesPerNode.forEach((rpcType, groupsPerRpcType) ->
@@ -1544,7 +1628,7 @@ public class PersisterStateManager {
                             // to not be sent immediately but get batched
                             if (!inFlight.containsKey(rpcType) || !inFlight.get(rpcType).contains(coordNode)) {
                                 AbstractRequest.Builder<? extends AbstractRequest> combinedRequestPerTypePerGroup =
-                                    RequestCoalescerHelper.coalesceRequests(groupId, rpcType, handlersPerGroup);
+                                    RequestCoalescerHelper.coalesceRequests(groupId, rpcType, handlersPerGroup, useRequestHeaderV3);
                                 requests.add(new RequestAndCompletionHandler(
                                     time.milliseconds(),
                                     coordNode,
@@ -1554,10 +1638,15 @@ public class PersisterStateManager {
                                             oldVal.remove(coordNode);
                                             return oldVal;
                                         });
-                                        // now the combined request has completed
-                                        // we need to create responses for individual
-                                        // requests which composed the combined request
-                                        handlersPerGroup.forEach(handler1 -> handler1.onComplete(response));
+                                        // Demux the combined response once and share it across the handlers
+                                        // which composed the combined request (KAFKA-20803).
+                                        if (!handlersPerGroup.isEmpty()) {
+                                            PartitionResultIndex<?> sharedResultIndex = handlersPerGroup.get(0).buildResultIndex(response);
+                                            handlersPerGroup.forEach(handler1 -> {
+                                                handler1.sharedResultIndex = sharedResultIndex;
+                                                handler1.onComplete(response);
+                                            });
+                                        }
                                         wakeup();
                                     }));
                                 sending.computeIfAbsent(rpcType, key -> new HashSet<>()).add(coordNode);
@@ -1606,18 +1695,21 @@ public class PersisterStateManager {
      * batching requests.
      */
     private static class RequestCoalescerHelper {
-        public static AbstractRequest.Builder<? extends AbstractRequest> coalesceRequests(String groupId, RPCType rpcType, List<? extends PersisterStateManagerHandler> handlers) {
+        private static final Logger LOG = LoggerFactory.getLogger(RequestCoalescerHelper.class);
+
+        public static AbstractRequest.Builder<? extends AbstractRequest> coalesceRequests(String groupId, RPCType rpcType, List<? extends PersisterStateManagerHandler> handlers, boolean useRequestHeaderV3) {
+            LOG.trace("Received coalesce request for {} handlers of RPC type {}", handlers.size(), rpcType);
             return switch (rpcType) {
-                case WRITE -> coalesceWrites(groupId, handlers);
-                case READ -> coalesceReads(groupId, handlers);
-                case SUMMARY -> coalesceReadSummaries(groupId, handlers);
-                case DELETE -> coalesceDeletes(groupId, handlers);
-                case INITIALIZE -> coalesceInitializations(groupId, handlers);
+                case WRITE -> coalesceWrites(groupId, handlers, useRequestHeaderV3);
+                case READ -> coalesceReads(groupId, handlers, useRequestHeaderV3);
+                case SUMMARY -> coalesceReadSummaries(groupId, handlers, useRequestHeaderV3);
+                case DELETE -> coalesceDeletes(groupId, handlers, useRequestHeaderV3);
+                case INITIALIZE -> coalesceInitializations(groupId, handlers, useRequestHeaderV3);
                 default -> throw new RuntimeException("Unknown rpc type: " + rpcType);
             };
         }
 
-        private static AbstractRequest.Builder<? extends AbstractRequest> coalesceWrites(String groupId, List<? extends PersisterStateManagerHandler> handlers) {
+        private static AbstractRequest.Builder<? extends AbstractRequest> coalesceWrites(String groupId, List<? extends PersisterStateManagerHandler> handlers, boolean useRequestHeaderV3) {
             Map<Uuid, List<WriteShareGroupStateRequestData.PartitionData>> partitionData = new HashMap<>();
             handlers.forEach(persHandler -> {
                 assert persHandler instanceof WriteStateHandler;
@@ -1646,10 +1738,12 @@ public class PersisterStateManager {
                     .map(entry -> new WriteShareGroupStateRequestData.WriteStateData()
                         .setTopicId(entry.getKey())
                         .setPartitions(entry.getValue()))
-                    .collect(Collectors.toList())));
+                    .collect(Collectors.toList())),
+                useRequestHeaderV3
+            );
         }
 
-        private static AbstractRequest.Builder<? extends AbstractRequest> coalesceReads(String groupId, List<? extends PersisterStateManagerHandler> handlers) {
+        private static AbstractRequest.Builder<? extends AbstractRequest> coalesceReads(String groupId, List<? extends PersisterStateManagerHandler> handlers, boolean useRequestHeaderV3) {
             Map<Uuid, List<ReadShareGroupStateRequestData.PartitionData>> partitionData = new HashMap<>();
             handlers.forEach(persHandler -> {
                 assert persHandler instanceof ReadStateHandler;
@@ -1668,10 +1762,12 @@ public class PersisterStateManager {
                     .map(entry -> new ReadShareGroupStateRequestData.ReadStateData()
                         .setTopicId(entry.getKey())
                         .setPartitions(entry.getValue()))
-                    .collect(Collectors.toList())));
+                    .collect(Collectors.toList())),
+                useRequestHeaderV3
+            );
         }
 
-        private static AbstractRequest.Builder<? extends AbstractRequest> coalesceReadSummaries(String groupId, List<? extends PersisterStateManagerHandler> handlers) {
+        private static AbstractRequest.Builder<? extends AbstractRequest> coalesceReadSummaries(String groupId, List<? extends PersisterStateManagerHandler> handlers, boolean useRequestHeaderV3) {
             Map<Uuid, List<ReadShareGroupStateSummaryRequestData.PartitionData>> partitionData = new HashMap<>();
             handlers.forEach(persisterStateManagerHandler -> {
                 assert persisterStateManagerHandler instanceof ReadStateSummaryHandler;
@@ -1690,11 +1786,12 @@ public class PersisterStateManager {
                     .map(entry -> new ReadShareGroupStateSummaryRequestData.ReadStateSummaryData()
                         .setTopicId(entry.getKey())
                         .setPartitions(entry.getValue()))
-                    .collect(Collectors.toList()))
+                    .collect(Collectors.toList())),
+                useRequestHeaderV3
             );
         }
 
-        private static AbstractRequest.Builder<? extends AbstractRequest> coalesceDeletes(String groupId, List<? extends PersisterStateManagerHandler> handlers) {
+        private static AbstractRequest.Builder<? extends AbstractRequest> coalesceDeletes(String groupId, List<? extends PersisterStateManagerHandler> handlers, boolean useRequestHeaderV3) {
             Map<Uuid, List<DeleteShareGroupStateRequestData.PartitionData>> partitionData = new HashMap<>();
             handlers.forEach(persHandler -> {
                 assert persHandler instanceof DeleteStateHandler;
@@ -1712,10 +1809,12 @@ public class PersisterStateManager {
                     .map(entry -> new DeleteShareGroupStateRequestData.DeleteStateData()
                         .setTopicId(entry.getKey())
                         .setPartitions(entry.getValue()))
-                    .toList()));
+                    .toList()),
+                useRequestHeaderV3
+            );
         }
 
-        private static AbstractRequest.Builder<? extends AbstractRequest> coalesceInitializations(String groupId, List<? extends PersisterStateManagerHandler> handlers) {
+        private static AbstractRequest.Builder<? extends AbstractRequest> coalesceInitializations(String groupId, List<? extends PersisterStateManagerHandler> handlers, boolean useRequestHeaderV3) {
             Map<Uuid, List<InitializeShareGroupStateRequestData.PartitionData>> partitionData = new HashMap<>();
             handlers.forEach(persHandler -> {
                 assert persHandler instanceof InitializeStateHandler;
@@ -1735,7 +1834,9 @@ public class PersisterStateManager {
                     .map(entry -> new InitializeShareGroupStateRequestData.InitializeStateData()
                         .setTopicId(entry.getKey())
                         .setPartitions(entry.getValue()))
-                    .toList()));
+                    .toList()),
+                useRequestHeaderV3
+            );
         }
     }
 }

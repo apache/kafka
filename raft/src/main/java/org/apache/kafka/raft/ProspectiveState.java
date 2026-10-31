@@ -28,7 +28,7 @@ import java.util.OptionalInt;
 
 import static org.apache.kafka.raft.QuorumState.unattachedOrProspectiveCanGrantVote;
 
-public class ProspectiveState implements NomineeState {
+public final class ProspectiveState implements NomineeState {
     private final int localId;
     private final int epoch;
     private final OptionalInt leaderId;
@@ -138,6 +138,11 @@ public class ProspectiveState implements NomineeState {
     @Override
     public int epoch() {
         return epoch;
+    }
+
+    @Override
+    public LeaderAndEpoch leaderAndEpoch() {
+        return new LeaderAndEpoch(leaderId, epoch);
     }
 
     @Override

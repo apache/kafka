@@ -17,6 +17,7 @@
 package org.apache.kafka.streams.processor;
 
 import org.apache.kafka.common.TopicPartition;
+import org.apache.kafka.common.annotation.InterfaceAudience;
 import org.apache.kafka.common.annotation.InterfaceStability.Evolving;
 import org.apache.kafka.streams.errors.StreamsException;
 import org.apache.kafka.streams.processor.api.ProcessorContext;
@@ -48,6 +49,7 @@ import java.util.Map;
  * functionality required to reload a storage engine from its changelog as well
  * as basic lifecycle management.
  */
+@InterfaceAudience.Public
 public interface StateStore {
 
     /**
@@ -213,6 +215,15 @@ public interface StateStore {
         final QueryConfig config) {
         // If a store doesn't implement a query handler, then all queries are unknown.
         return QueryResult.forUnknownQueryType(query, this);
+    }
+
+    /**
+     * Returns an approximation of the number of uncommitted bytes currently buffered in this store's
+     * transaction buffer, or 0 if the store is not transactional. This is used to trigger early
+     * commits when the buffer grows too large.
+     */
+    default long approximateNumUncommittedBytes() {
+        return 0;
     }
 
     /**

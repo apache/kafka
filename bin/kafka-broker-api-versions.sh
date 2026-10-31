@@ -14,4 +14,5 @@
 # See the License for the specific language governing permissions and
 # limitations under the License.
 
+echo "WARNING: kafka-broker-api-versions.sh is deprecated and will be removed in the next major release. Use 'kafka-cluster.sh api-versions' instead." 1>&2
 exec $(dirname $0)/kafka-run-class.sh org.apache.kafka.tools.BrokerApiVersionsCommand "$@"

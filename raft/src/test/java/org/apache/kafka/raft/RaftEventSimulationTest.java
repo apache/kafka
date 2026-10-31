@@ -20,14 +20,19 @@ import org.apache.kafka.common.Node;
 import org.apache.kafka.common.TopicPartition;
 import org.apache.kafka.common.Uuid;
 import org.apache.kafka.common.config.AbstractConfig;
+import org.apache.kafka.common.feature.Features;
+import org.apache.kafka.common.feature.SupportedVersionRange;
 import org.apache.kafka.common.memory.MemoryPool;
 import org.apache.kafka.common.message.ApiMessageType;
+import org.apache.kafka.common.message.ApiVersionsResponseData;
 import org.apache.kafka.common.metrics.Metrics;
 import org.apache.kafka.common.network.ListenerName;
+import org.apache.kafka.common.protocol.ApiKeys;
 import org.apache.kafka.common.protocol.ObjectSerializationCache;
 import org.apache.kafka.common.protocol.Readable;
 import org.apache.kafka.common.protocol.Writable;
 import org.apache.kafka.common.protocol.types.Type;
+import org.apache.kafka.common.requests.ApiVersionsResponse;
 import org.apache.kafka.common.utils.MockTime;
 import org.apache.kafka.common.utils.Time;
 import org.apache.kafka.common.utils.internals.BufferSupplier;
@@ -36,16 +41,13 @@ import org.apache.kafka.raft.MockLog.LogBatch;
 import org.apache.kafka.raft.MockLog.LogEntry;
 import org.apache.kafka.raft.internals.BatchMemoryPool;
 import org.apache.kafka.server.common.Feature;
+import org.apache.kafka.server.common.KRaftVersion;
 import org.apache.kafka.server.common.serialization.RecordSerde;
 import org.apache.kafka.snapshot.RecordsSnapshotReader;
 import org.apache.kafka.snapshot.SnapshotReader;
 
-import net.jqwik.api.AfterFailureMode;
-import net.jqwik.api.ForAll;
-import net.jqwik.api.Property;
-import net.jqwik.api.Tag;
-import net.jqwik.api.constraints.IntRange;
-
+import org.junit.jupiter.api.Tag;
+import org.junit.jupiter.api.Test;
 import org.mockito.Mockito;
 
 import java.net.InetSocketAddress;
@@ -63,12 +65,15 @@ import java.util.OptionalLong;
 import java.util.PriorityQueue;
 import java.util.Random;
 import java.util.Set;
+import java.util.concurrent.CompletableFuture;
+import java.util.concurrent.CompletionStage;
 import java.util.concurrent.atomic.AtomicInteger;
 import java.util.concurrent.atomic.AtomicLong;
 import java.util.function.Consumer;
 import java.util.function.Supplier;
 import java.util.stream.Collectors;
 
+import static org.junit.jupiter.api.Assertions.assertDoesNotThrow;
 import static org.junit.jupiter.api.Assertions.assertEquals;
 import static org.junit.jupiter.api.Assertions.assertFalse;
 import static org.junit.jupiter.api.Assertions.assertTrue;
@@ -78,26 +83,26 @@ import static org.junit.jupiter.api.Assertions.fail;
  * The simulation testing framework provides a way to verify quorum behavior under
  * different conditions. It is similar to system testing in that the test involves
  * independently executing nodes, but there are several important differences:
- *
- * 1. Simulation behavior is deterministic provided an initial random seed. This
+ * <ol>
+ * <li>Simulation behavior is deterministic provided an initial random seed. This
  *    makes it easy to reproduce and debug test failures.
- * 2. The simulation uses an in-memory message router instead of a real network.
+ * <li>The simulation uses an in-memory message router instead of a real network.
  *    Not only is this much cheaper and faster, it provides an easy way to create
  *    flaky network conditions or even network partitions without losing the
  *    simulation determinism.
- * 3. Similarly, persistent state is stored in memory. We can nevertheless simulate
+ * <li>Similarly, persistent state is stored in memory. We can nevertheless simulate
  *    different kinds of failures, such as the loss of unflushed data after a hard
  *    node restart using {@link MockLog}.
  *
- * The framework uses a single event scheduler in order to provide deterministic
+ * <p>The framework uses a single event scheduler in order to provide deterministic
  * executions. Each test is setup as a specific scenario with a variable number of
  * voters and observers. Much like system tests, there is typically a warmup
  * period, followed by some cluster event (such as a node failure), and then some
  * logic to validate behavior after recovery.
  *
- * If any of the tests fail, the output will indicate the arguments that failed.
+ * <p>If any of the tests fail, the output will indicate the arguments that failed.
  * The easiest way to reproduce the failure for debugging is to create a separate
- * `@Test` case which invokes the `@Property` method with those arguments directly.
+ * test case which invokes the test method with those arguments directly.
  * This ensures that logging output will only include output from a single
  * simulation execution.
  */
@@ -112,366 +117,317 @@ public class RaftEventSimulationTest {
     private static final int FETCH_MAX_WAIT_MS = 100;
     private static final int LINGER_MS = 0;
 
-    @Property(tries = 100, afterFailure = AfterFailureMode.SAMPLE_ONLY)
-    void canElectInitialLeader(
-        @ForAll int seed,
-        @ForAll @IntRange(min = 1, max = 5) int numVoters,
-        @ForAll @IntRange(min = 0, max = 5) int numObservers
-    ) {
-        Random random = new Random(seed);
-        Cluster cluster = new Cluster(numVoters, numObservers, random);
-        MessageRouter router = new MessageRouter(cluster);
-        EventScheduler scheduler = schedulerWithDefaultInvariants(cluster);
-
-        cluster.startAll();
-        schedulePolling(scheduler, cluster, 3, 5);
-        scheduler.schedule(router::deliverAll, 0, 2, 1);
-        scheduler.schedule(new SequentialAppendAction(cluster), 0, 2, 3);
-        scheduler.runUntil(cluster::hasConsistentLeader);
-        scheduler.runUntil(() -> cluster.allReachedHighWatermark(10));
+    private interface SeedObservers {
+        void accept(long seed, int observer);
     }
 
-    @Property(tries = 100, afterFailure = AfterFailureMode.SAMPLE_ONLY)
-    void canElectNewLeaderAfterOldLeaderFailure(
-        @ForAll int seed,
-        @ForAll @IntRange(min = 3, max = 5) int numVoters,
-        @ForAll @IntRange(min = 0, max = 5) int numObservers,
-        @ForAll boolean isGracefulShutdown
-    ) {
-        Random random = new Random(seed);
-        Cluster cluster = new Cluster(numVoters, numObservers, random);
-        MessageRouter router = new MessageRouter(cluster);
-        EventScheduler scheduler = schedulerWithDefaultInvariants(cluster);
+    private interface SeedVotersObservers {
+        void accept(long seed, int voter, int observer);
+    }
 
-        // Seed the cluster with some data
-        cluster.startAll();
-        schedulePolling(scheduler, cluster, 3, 5);
-        scheduler.schedule(router::deliverAll, 0, 2, 1);
-        scheduler.schedule(new SequentialAppendAction(cluster), 0, 2, 3);
-        scheduler.runUntil(cluster::hasConsistentLeader);
-        scheduler.runUntil(() -> cluster.anyReachedHighWatermark(10));
+    private interface SeedVotersObserversIsGracefulShutdown {
+        void accept(long seed, int voter, int observer, boolean isGracefulShutdown);
+    }
 
-        // Shutdown the leader and write some more data. We can verify the new leader has been elected
-        // by verifying that the high watermark can still advance.
-        int leaderId = cluster.latestLeader().orElseThrow(() ->
-            new AssertionError("Failed to find current leader")
+    private static void withObservers(int minObservers, int maxObservers, SeedObservers so) {
+        withVotersObserversIsGracefulShutdown(0, 0, minObservers, maxObservers, (seed, numVoters, numObservers, isGracefulShutdown) ->
+            so.accept(seed, numObservers)
         );
+    }
 
-        if (isGracefulShutdown) {
-            cluster.shutdown(leaderId);
-        } else {
-            cluster.kill(leaderId);
+    private static void withVotersObservers(int minVoters, int maxVoters, int minObservers, int maxObservers, SeedVotersObservers svo) {
+        withVotersObserversIsGracefulShutdown(minVoters, maxVoters, minObservers, maxObservers, (seed, numVoters, numObservers, isGracefulShutdown) ->
+            svo.accept(seed, numVoters, numObservers)
+        );
+    }
+
+    private static void withVotersObserversIsGracefulShutdown(int minVoters, int maxVoters, int minObservers, int maxObservers, SeedVotersObserversIsGracefulShutdown svos) {
+        for (int run = 0; run < 100; run++) {
+            long seed = System.nanoTime() + run;
+            Random random = new Random(seed);
+            int numVoters = random.nextInt(minVoters, maxVoters + 1);
+            int numObservers = random.nextInt(minObservers, maxObservers + 1);
+            boolean isGracefulShutdown = random.nextBoolean();
+            assertDoesNotThrow(
+                    () -> svos.accept(seed, numVoters, numObservers, isGracefulShutdown),
+                    () -> "Failed with seed=" + seed +
+                        ", numVoters=" + numVoters + ", numObservers=" + numObservers +
+                        ", isGracefulShutdown=" + isGracefulShutdown);
         }
-
-        scheduler.runUntil(() -> cluster.allReachedHighWatermark(20));
-        long highWatermark = cluster.maxHighWatermarkReached();
-
-        // Restart the node and verify it catches up
-        cluster.start(leaderId);
-        scheduler.runUntil(() -> cluster.allReachedHighWatermark(highWatermark + 10));
     }
 
-    @Property(tries = 100, afterFailure = AfterFailureMode.SAMPLE_ONLY)
-    void canRecoverAfterAllNodesKilled(
-        @ForAll int seed,
-        @ForAll @IntRange(min = 1, max = 5) int numVoters,
-        @ForAll @IntRange(min = 0, max = 5) int numObservers
-    ) {
-        Random random = new Random(seed);
-        Cluster cluster = new Cluster(numVoters, numObservers, random);
-        MessageRouter router = new MessageRouter(cluster);
-        EventScheduler scheduler = schedulerWithDefaultInvariants(cluster);
-
-        // Seed the cluster with some data
-        cluster.startAll();
-        schedulePolling(scheduler, cluster, 3, 5);
-        scheduler.schedule(router::deliverAll, 0, 2, 1);
-        scheduler.schedule(new SequentialAppendAction(cluster), 0, 2, 3);
-        scheduler.runUntil(cluster::hasConsistentLeader);
-        scheduler.runUntil(() -> cluster.anyReachedHighWatermark(10));
-        long highWatermark = cluster.maxHighWatermarkReached();
-
-        // We kill all of the nodes. Then we bring back a majority and verify that
-        // they are able to elect a leader and continue making progress
-        cluster.killAll();
-
-        Iterator<Integer> nodeIdsIterator = cluster.nodeIds().iterator();
-        for (int i = 0; i < cluster.majoritySize(); i++) {
-            Integer nodeId = nodeIdsIterator.next();
-            cluster.start(nodeId);
-        }
-
-        scheduler.runUntil(() -> cluster.allReachedHighWatermark(highWatermark + 10));
+    @Test
+    void canElectInitialLeader() {
+        withVotersObservers(1, 5, 0, 5, (seed, numVoters, numObservers) -> {
+            Cluster cluster = new Cluster(numVoters, numObservers, seed);
+            MessageRouter router = new MessageRouter(cluster);
+            EventScheduler scheduler = schedulerWithDefaultInvariants(cluster);
+            cluster.startAll();
+            schedulePolling(scheduler, cluster, 3, 5);
+            scheduler.schedule(router::deliverAll, 0, 2, 1);
+            scheduler.schedule(new SequentialAppendAction(cluster), 0, 2, 3);
+            scheduler.runUntil(cluster::hasConsistentLeader);
+            scheduler.runUntil(() -> cluster.allReachedHighWatermark(10));
+        });
     }
 
-    @Property(tries = 100, afterFailure = AfterFailureMode.SAMPLE_ONLY)
-    void canElectNewLeaderAfterOldLeaderPartitionedAway(
-        @ForAll int seed,
-        @ForAll @IntRange(min = 3, max = 5) int numVoters,
-        @ForAll @IntRange(min = 0, max = 5) int numObservers
-    ) {
-        Random random = new Random(seed);
-        Cluster cluster = new Cluster(numVoters, numObservers, random);
-        MessageRouter router = new MessageRouter(cluster);
-        EventScheduler scheduler = schedulerWithDefaultInvariants(cluster);
+    @Test
+    void canElectNewLeaderAfterOldLeaderFailure() {
+        withVotersObserversIsGracefulShutdown(3, 5, 0, 5, (seed, numVoters, numObservers, isGracefulShutdown) -> {
+            Cluster cluster = new Cluster(numVoters, numObservers, seed);
+            MessageRouter router = new MessageRouter(cluster);
+            EventScheduler scheduler = schedulerWithDefaultInvariants(cluster);
 
-        // Seed the cluster with some data
-        cluster.startAll();
-        schedulePolling(scheduler, cluster, 3, 5);
-        scheduler.schedule(router::deliverAll, 0, 2, 2);
-        scheduler.schedule(new SequentialAppendAction(cluster), 0, 2, 3);
-        scheduler.runUntil(cluster::hasConsistentLeader);
-        scheduler.runUntil(() -> cluster.anyReachedHighWatermark(10));
+            cluster.startAll();
+            schedulePolling(scheduler, cluster, 3, 5);
+            scheduler.schedule(router::deliverAll, 0, 2, 1);
+            scheduler.schedule(new SequentialAppendAction(cluster), 0, 2, 3);
+            scheduler.runUntil(cluster::hasConsistentLeader);
+            scheduler.runUntil(() -> cluster.anyReachedHighWatermark(10));
 
-        // The leader gets partitioned off. We can verify the new leader has been elected
-        // by writing some data and ensuring that it gets replicated
-        int leaderId = cluster.latestLeader().orElseThrow(() ->
-            new AssertionError("Failed to find current leader")
-        );
-        router.filter(leaderId, new DropAllTraffic());
+            int leaderId = cluster.latestLeader().orElseThrow(() ->
+                new AssertionError("Failed to find current leader")
+            );
 
-        Set<Integer> nonPartitionedNodes = new HashSet<>(cluster.nodeIds());
-        nonPartitionedNodes.remove(leaderId);
-
-        scheduler.runUntil(() -> cluster.allReachedHighWatermark(20, nonPartitionedNodes));
-    }
-
-    @Property(tries = 100, afterFailure = AfterFailureMode.SAMPLE_ONLY)
-    void canMakeProgressIfMajorityIsReachable(
-        @ForAll int seed,
-        @ForAll @IntRange(min = 0, max = 3) int numObservers
-    ) {
-        int numVoters = 5;
-        Random random = new Random(seed);
-        Cluster cluster = new Cluster(numVoters, numObservers, random);
-        MessageRouter router = new MessageRouter(cluster);
-        EventScheduler scheduler = schedulerWithDefaultInvariants(cluster);
-
-        // Seed the cluster with some data
-        cluster.startAll();
-        schedulePolling(scheduler, cluster, 3, 5);
-        scheduler.schedule(router::deliverAll, 0, 2, 2);
-        scheduler.schedule(new SequentialAppendAction(cluster), 0, 2, 3);
-        scheduler.runUntil(cluster::hasConsistentLeader);
-        scheduler.runUntil(() -> cluster.anyReachedHighWatermark(10));
-
-        // Partition the nodes into two sets. Nodes are reachable within each set,
-        // but the two sets cannot communicate with each other. We should be able
-        // to make progress even if an election is needed in the larger set.
-        router.filter(
-            0,
-            new DropOutboundRequestsTo(cluster.endpointsFromIds(Set.of(2, 3, 4)))
-        );
-        router.filter(
-            1,
-            new DropOutboundRequestsTo(cluster.endpointsFromIds(Set.of(2, 3, 4)))
-        );
-        router.filter(2, new DropOutboundRequestsTo(cluster.endpointsFromIds(Set.of(0, 1))));
-        router.filter(3, new DropOutboundRequestsTo(cluster.endpointsFromIds(Set.of(0, 1))));
-        router.filter(4, new DropOutboundRequestsTo(cluster.endpointsFromIds(Set.of(0, 1))));
-
-        long partitionLogEndOffset = cluster.maxLogEndOffset();
-        scheduler.runUntil(() -> cluster.anyReachedHighWatermark(2 * partitionLogEndOffset));
-
-        long minorityHighWatermark = cluster.maxHighWatermarkReached(Set.of(0, 1));
-        long majorityHighWatermark = cluster.maxHighWatermarkReached(Set.of(2, 3, 4));
-
-        assertTrue(
-            majorityHighWatermark > minorityHighWatermark,
-            String.format(
-                "majorityHighWatermark = %s, minorityHighWatermark = %s",
-                majorityHighWatermark,
-                minorityHighWatermark
-            )
-        );
-
-        // Now restore the partition and verify everyone catches up
-        router.filter(0, new PermitAllTraffic());
-        router.filter(1, new PermitAllTraffic());
-        router.filter(2, new PermitAllTraffic());
-        router.filter(3, new PermitAllTraffic());
-        router.filter(4, new PermitAllTraffic());
-
-        long restoredLogEndOffset = cluster.maxLogEndOffset();
-        scheduler.runUntil(() -> cluster.allReachedHighWatermark(2 * restoredLogEndOffset));
-    }
-
-    @Property(tries = 100, afterFailure = AfterFailureMode.SAMPLE_ONLY)
-    void leadershipAssignedOnlyOnceWithNetworkPartitionIfThereExistsMajority(
-        @ForAll int seed,
-        @ForAll @IntRange(min = 0, max = 3) int numObservers
-    ) {
-        int numVoters = 5;
-        Random random = new Random(seed);
-        Cluster cluster = new Cluster(numVoters, numObservers, random);
-        MessageRouter router = new MessageRouter(cluster);
-        EventScheduler scheduler = schedulerWithDefaultInvariants(cluster);
-        scheduler.addInvariant(new StableLeadership(cluster));
-
-        // Create network partition which would result in ping-pong of leadership between nodes 2 and 3 without PreVote
-        // Scenario explained in detail in KIP-996
-        // 0   1
-        // |   |
-        // 2 - 3
-        //  \ /
-        //   4
-        router.filter(
-            0,
-            new DropOutboundRequestsTo(cluster.endpointsFromIds(Set.of(1, 3, 4)))
-        );
-        router.filter(
-            1,
-            new DropOutboundRequestsTo(cluster.endpointsFromIds(Set.of(0, 2, 4)))
-        );
-        router.filter(2, new DropOutboundRequestsTo(cluster.endpointsFromIds(Set.of(1))));
-        router.filter(3, new DropOutboundRequestsTo(cluster.endpointsFromIds(Set.of(0))));
-        router.filter(4, new DropOutboundRequestsTo(cluster.endpointsFromIds(Set.of(0, 1))));
-
-        // Start cluster
-        cluster.startAll();
-        schedulePolling(scheduler, cluster, 3, 5);
-        scheduler.schedule(router::deliverAll, 0, 2, 1);
-        scheduler.schedule(new SequentialAppendAction(cluster), 0, 2, 1);
-        scheduler.runUntil(cluster::hasConsistentLeader);
-
-        // Check that leadership remains stable after majority processes some data
-        int leaderId = cluster.latestLeader().getAsInt();
-        // Determine the voters in the majority based on the leader
-        Set<Integer> majority = new HashSet<>(Set.of(0, 1, 2, 3, 4));
-        switch (leaderId) {
-            case 2 -> majority.remove(1);
-            case 3 -> majority.remove(0);
-            case 4 -> {
-                majority.remove(0);
-                majority.remove(1);
+            if (isGracefulShutdown) {
+                cluster.shutdown(leaderId);
+            } else {
+                cluster.kill(leaderId);
             }
-            default -> throw new IllegalStateException("Unexpected leader: " + leaderId);
-        }
-        scheduler.runUntil(() -> cluster.allReachedHighWatermark(20, majority));
+
+            scheduler.runUntil(() -> cluster.allReachedHighWatermark(20));
+            long highWatermark = cluster.maxHighWatermarkReached();
+
+            cluster.start(leaderId);
+            scheduler.runUntil(() -> cluster.allReachedHighWatermark(highWatermark + 10));
+        });
     }
 
-    @Property(tries = 100, afterFailure = AfterFailureMode.SAMPLE_ONLY)
-    void leadershipWillNotChangeDuringNetworkPartitionIfMajorityStillReachable(
-        @ForAll int seed,
-        @ForAll @IntRange(min = 0, max = 3) int numObservers
-    ) {
-        int numVoters = 5;
-        Random random = new Random(seed);
-        Cluster cluster = new Cluster(numVoters, numObservers, random);
-        MessageRouter router = new MessageRouter(cluster);
-        EventScheduler scheduler = schedulerWithDefaultInvariants(cluster);
-        scheduler.addInvariant(new StableLeadership(cluster));
+    @Test
+    void canRecoverAfterAllNodesKilled() {
+        withVotersObservers(1, 5, 0, 5, (seed, numVoters, numObservers) -> {
+            Cluster cluster = new Cluster(numVoters, numObservers, seed);
+            MessageRouter router = new MessageRouter(cluster);
+            EventScheduler scheduler = schedulerWithDefaultInvariants(cluster);
 
-        // Seed the cluster with some data
-        cluster.startAll();
-        schedulePolling(scheduler, cluster, 3, 5);
-        scheduler.schedule(router::deliverAll, 0, 2, 1);
-        scheduler.schedule(new SequentialAppendAction(cluster), 0, 2, 1);
-        scheduler.runUntil(cluster::hasConsistentLeader);
-        scheduler.runUntil(() -> cluster.allReachedHighWatermark(5));
+            cluster.startAll();
+            schedulePolling(scheduler, cluster, 3, 5);
+            scheduler.schedule(router::deliverAll, 0, 2, 1);
+            scheduler.schedule(new SequentialAppendAction(cluster), 0, 2, 3);
+            scheduler.runUntil(cluster::hasConsistentLeader);
+            scheduler.runUntil(() -> cluster.anyReachedHighWatermark(10));
+            long highWatermark = cluster.maxHighWatermarkReached();
 
-        int leaderId = cluster.latestLeader().orElseThrow(() ->
-            new AssertionError("Failed to find current leader during setup")
-        );
+            cluster.killAll();
 
-        // Create network partition which would result in ping-pong of leadership between nodes C and D without PreVote
-        // Scenario explained in detail in KIP-996
-        // A   B
-        // |   |
-        // C - D  (have leader start in position C)
-        //  \ /
-        //   E
-        int nodeA = (leaderId + 1) % numVoters;
-        int nodeB = (leaderId + 2) % numVoters;
-        int nodeD = (leaderId + 3) % numVoters;
-        int nodeE = (leaderId + 4) % numVoters;
-        router.filter(
-            nodeA,
-            new DropOutboundRequestsTo(cluster.endpointsFromIds(Set.of(nodeB, nodeD, nodeE)))
-        );
-        router.filter(
-            nodeB,
-            new DropOutboundRequestsTo(cluster.endpointsFromIds(Set.of(nodeA, leaderId, nodeE)))
-        );
-        router.filter(leaderId, new DropOutboundRequestsTo(cluster.endpointsFromIds(Set.of(nodeB))));
-        router.filter(nodeD, new DropOutboundRequestsTo(cluster.endpointsFromIds(Set.of(nodeA))));
-        router.filter(nodeE, new DropOutboundRequestsTo(cluster.endpointsFromIds(Set.of(nodeA, nodeB))));
+            Iterator<Integer> nodeIdsIterator = cluster.nodeIds().iterator();
+            for (int i = 0; i < cluster.majoritySize(); i++) {
+                Integer nodeId = nodeIdsIterator.next();
+                cluster.start(nodeId);
+            }
 
-        // Check that leadership remains stable
-        scheduler.runUntil(() -> cluster.allReachedHighWatermark(20, Set.of(nodeA, leaderId, nodeD, nodeE)));
+            scheduler.runUntil(() -> cluster.allReachedHighWatermark(highWatermark + 10));
+        });
     }
 
-    @Property(tries = 100, afterFailure = AfterFailureMode.SAMPLE_ONLY)
-    void canMakeProgressAfterBackToBackLeaderFailures(
-        @ForAll int seed,
-        @ForAll @IntRange(min = 3, max = 5) int numVoters,
-        @ForAll @IntRange(min = 0, max = 5) int numObservers
-    ) {
-        Random random = new Random(seed);
-        Cluster cluster = new Cluster(numVoters, numObservers, random);
-        MessageRouter router = new MessageRouter(cluster);
-        EventScheduler scheduler = schedulerWithDefaultInvariants(cluster);
+    @Test
+    void canElectNewLeaderAfterOldLeaderPartitionedAway() {
+        withVotersObservers(3, 5, 0, 5, (seed, numVoters, numObservers) -> {
+            Cluster cluster = new Cluster(numVoters, numObservers, seed);
+            MessageRouter router = new MessageRouter(cluster);
+            EventScheduler scheduler = schedulerWithDefaultInvariants(cluster);
 
-        // Seed the cluster with some data
-        cluster.startAll();
-        schedulePolling(scheduler, cluster, 3, 5);
-        scheduler.schedule(router::deliverAll, 0, 2, 5);
-        scheduler.schedule(new SequentialAppendAction(cluster), 0, 2, 3);
-        scheduler.runUntil(cluster::hasConsistentLeader);
-        scheduler.runUntil(() -> cluster.anyReachedHighWatermark(10));
+            cluster.startAll();
+            schedulePolling(scheduler, cluster, 3, 5);
+            scheduler.schedule(router::deliverAll, 0, 2, 2);
+            scheduler.schedule(new SequentialAppendAction(cluster), 0, 2, 3);
+            scheduler.runUntil(cluster::hasConsistentLeader);
+            scheduler.runUntil(() -> cluster.anyReachedHighWatermark(10));
 
-        int leaderId = cluster.latestLeader().getAsInt();
-        router.filter(leaderId, new DropAllTraffic());
-        scheduler.runUntil(() -> cluster.latestLeader().isPresent() && cluster.latestLeader().getAsInt() != leaderId);
+            int leaderId = cluster.latestLeader().orElseThrow(() ->
+                new AssertionError("Failed to find current leader")
+            );
+            router.filter(leaderId, new DropAllTraffic());
 
-        // As soon as we have a new leader, restore traffic to the old leader and partition the new leader
-        int newLeaderId = cluster.latestLeader().getAsInt();
-        router.filter(leaderId, new PermitAllTraffic());
-        router.filter(newLeaderId, new DropAllTraffic());
+            Set<Integer> nonPartitionedNodes = new HashSet<>(cluster.nodeIds());
+            nonPartitionedNodes.remove(leaderId);
 
-        // Verify now that we can make progress
-        long targetHighWatermark = cluster.maxHighWatermarkReached() + 10;
-        scheduler.runUntil(() -> cluster.anyReachedHighWatermark(targetHighWatermark));
+            scheduler.runUntil(() -> cluster.allReachedHighWatermark(20, nonPartitionedNodes));
+        });
     }
 
-    @Property(tries = 100, afterFailure = AfterFailureMode.SAMPLE_ONLY)
-    void canRecoverFromSingleNodeCommittedDataLoss(
-        @ForAll int seed,
-        @ForAll @IntRange(min = 3, max = 5) int numVoters,
-        @ForAll @IntRange(min = 0, max = 2) int numObservers
-    ) {
-        // We run this test without the `MonotonicEpoch` and `MajorityReachedHighWatermark`
-        // invariants since the loss of committed data on one node can violate them.
+    @Test
+    void canMakeProgressIfMajorityIsReachable() {
+        withObservers(0, 3, (seed, numObservers) -> {
+            int numVoters = 5;
+            Cluster cluster = new Cluster(numVoters, numObservers, seed);
+            MessageRouter router = new MessageRouter(cluster);
+            EventScheduler scheduler = schedulerWithDefaultInvariants(cluster);
 
-        Random random = new Random(seed);
-        Cluster cluster = new Cluster(numVoters, numObservers, random);
-        EventScheduler scheduler = new EventScheduler(cluster.random, cluster.time);
-        scheduler.addInvariant(new MonotonicHighWatermark(cluster));
-        scheduler.addInvariant(new SingleLeader(cluster));
-        scheduler.addValidation(new ConsistentCommittedData(cluster));
+            cluster.startAll();
+            schedulePolling(scheduler, cluster, 3, 5);
+            scheduler.schedule(router::deliverAll, 0, 2, 2);
+            scheduler.schedule(new SequentialAppendAction(cluster), 0, 2, 3);
+            scheduler.runUntil(cluster::hasConsistentLeader);
+            scheduler.runUntil(() -> cluster.anyReachedHighWatermark(10));
 
-        MessageRouter router = new MessageRouter(cluster);
+            router.filter(0, new DropOutboundRequestsTo(cluster.endpointsFromIds(Set.of(2, 3, 4))));
+            router.filter(1, new DropOutboundRequestsTo(cluster.endpointsFromIds(Set.of(2, 3, 4))));
+            router.filter(2, new DropOutboundRequestsTo(cluster.endpointsFromIds(Set.of(0, 1))));
+            router.filter(3, new DropOutboundRequestsTo(cluster.endpointsFromIds(Set.of(0, 1))));
+            router.filter(4, new DropOutboundRequestsTo(cluster.endpointsFromIds(Set.of(0, 1))));
 
-        cluster.startAll();
-        schedulePolling(scheduler, cluster, 3, 5);
-        scheduler.schedule(router::deliverAll, 0, 2, 5);
-        scheduler.schedule(new SequentialAppendAction(cluster), 0, 2, 3);
-        scheduler.runUntil(() -> cluster.anyReachedHighWatermark(10));
+            long partitionLogEndOffset = cluster.maxLogEndOffset();
+            scheduler.runUntil(() -> cluster.anyReachedHighWatermark(2 * partitionLogEndOffset));
 
-        RaftNode node = cluster.randomRunning().orElseThrow(() ->
-            new AssertionError("Failed to find running node")
-        );
+            long minorityHighWatermark = cluster.maxHighWatermarkReached(Set.of(0, 1));
+            long majorityHighWatermark = cluster.maxHighWatermarkReached(Set.of(2, 3, 4));
 
-        // Kill a random node and drop all of its persistent state. The Raft
-        // protocol guarantees should still ensure we lose no committed data
-        // as long as a new leader is elected before the failed node is restarted.
-        cluster.killAndDeletePersistentState(node.nodeId);
-        scheduler.runUntil(() -> !cluster.hasLeader(node.nodeId) && cluster.hasConsistentLeader());
+            assertTrue(
+                majorityHighWatermark > minorityHighWatermark,
+                String.format(
+                    "majorityHighWatermark = %s, minorityHighWatermark = %s",
+                    majorityHighWatermark,
+                    minorityHighWatermark
+                )
+            );
 
-        // Now restart the failed node and ensure that it recovers.
-        long highWatermarkBeforeRestart = cluster.maxHighWatermarkReached();
-        cluster.start(node.nodeId);
-        scheduler.runUntil(() -> cluster.allReachedHighWatermark(highWatermarkBeforeRestart + 10));
+            router.filter(0, new PermitAllTraffic());
+            router.filter(1, new PermitAllTraffic());
+            router.filter(2, new PermitAllTraffic());
+            router.filter(3, new PermitAllTraffic());
+            router.filter(4, new PermitAllTraffic());
+
+            long restoredLogEndOffset = cluster.maxLogEndOffset();
+            scheduler.runUntil(() -> cluster.allReachedHighWatermark(2 * restoredLogEndOffset));
+        });
+    }
+
+    @Test
+    void leadershipAssignedOnlyOnceWithNetworkPartitionIfThereExistsMajority() {
+        withObservers(0, 3, (seed, numObservers) -> {
+            int numVoters = 5;
+            Cluster cluster = new Cluster(numVoters, numObservers, seed);
+            MessageRouter router = new MessageRouter(cluster);
+            EventScheduler scheduler = schedulerWithDefaultInvariants(cluster);
+            scheduler.addInvariant(new StableLeadership(cluster));
+
+            router.filter(0, new DropOutboundRequestsTo(cluster.endpointsFromIds(Set.of(1, 3, 4))));
+            router.filter(1, new DropOutboundRequestsTo(cluster.endpointsFromIds(Set.of(0, 2, 4))));
+            router.filter(2, new DropOutboundRequestsTo(cluster.endpointsFromIds(Set.of(1))));
+            router.filter(3, new DropOutboundRequestsTo(cluster.endpointsFromIds(Set.of(0))));
+            router.filter(4, new DropOutboundRequestsTo(cluster.endpointsFromIds(Set.of(0, 1))));
+
+            cluster.startAll();
+            schedulePolling(scheduler, cluster, 3, 5);
+            scheduler.schedule(router::deliverAll, 0, 2, 1);
+            scheduler.schedule(new SequentialAppendAction(cluster), 0, 2, 1);
+            scheduler.runUntil(cluster::hasConsistentLeader);
+
+            int leaderId = cluster.latestLeader().getAsInt();
+            Set<Integer> majority = new HashSet<>(Set.of(0, 1, 2, 3, 4));
+            switch (leaderId) {
+                case 2 -> majority.remove(1);
+                case 3 -> majority.remove(0);
+                case 4 -> {
+                    majority.remove(0);
+                    majority.remove(1);
+                }
+                default -> throw new IllegalStateException("Unexpected leader: " + leaderId);
+            }
+            scheduler.runUntil(() -> cluster.allReachedHighWatermark(20, majority));
+        });
+    }
+
+    @Test
+    void leadershipWillNotChangeDuringNetworkPartitionIfMajorityStillReachable() {
+        withObservers(0, 3, (seed, numObservers) -> {
+            int numVoters = 5;
+            Cluster cluster = new Cluster(numVoters, numObservers, seed);
+            MessageRouter router = new MessageRouter(cluster);
+            EventScheduler scheduler = schedulerWithDefaultInvariants(cluster);
+            scheduler.addInvariant(new StableLeadership(cluster));
+
+            cluster.startAll();
+            schedulePolling(scheduler, cluster, 3, 5);
+            scheduler.schedule(router::deliverAll, 0, 2, 1);
+            scheduler.schedule(new SequentialAppendAction(cluster), 0, 2, 1);
+            scheduler.runUntil(cluster::hasConsistentLeader);
+            scheduler.runUntil(() -> cluster.allReachedHighWatermark(5));
+
+            int leaderId = cluster.latestLeader().orElseThrow(() ->
+                new AssertionError("Failed to find current leader during setup")
+            );
+
+            int nodeA = (leaderId + 1) % numVoters;
+            int nodeB = (leaderId + 2) % numVoters;
+            int nodeD = (leaderId + 3) % numVoters;
+            int nodeE = (leaderId + 4) % numVoters;
+            router.filter(nodeA, new DropOutboundRequestsTo(cluster.endpointsFromIds(Set.of(nodeB, nodeD, nodeE))));
+            router.filter(nodeB, new DropOutboundRequestsTo(cluster.endpointsFromIds(Set.of(nodeA, leaderId, nodeE))));
+            router.filter(leaderId, new DropOutboundRequestsTo(cluster.endpointsFromIds(Set.of(nodeB))));
+            router.filter(nodeD, new DropOutboundRequestsTo(cluster.endpointsFromIds(Set.of(nodeA))));
+            router.filter(nodeE, new DropOutboundRequestsTo(cluster.endpointsFromIds(Set.of(nodeA, nodeB))));
+
+            scheduler.runUntil(() -> cluster.allReachedHighWatermark(20, Set.of(nodeA, leaderId, nodeD, nodeE)));
+        });
+    }
+
+    @Test
+    void canMakeProgressAfterBackToBackLeaderFailures() {
+        withVotersObservers(3, 5, 0, 5, (seed, numVoters, numObservers) -> {
+            Cluster cluster = new Cluster(numVoters, numObservers, seed);
+            MessageRouter router = new MessageRouter(cluster);
+            EventScheduler scheduler = schedulerWithDefaultInvariants(cluster);
+
+            cluster.startAll();
+            schedulePolling(scheduler, cluster, 3, 5);
+            scheduler.schedule(router::deliverAll, 0, 2, 5);
+            scheduler.schedule(new SequentialAppendAction(cluster), 0, 2, 3);
+            scheduler.runUntil(cluster::hasConsistentLeader);
+            scheduler.runUntil(() -> cluster.anyReachedHighWatermark(10));
+
+            int leaderId = cluster.latestLeader().getAsInt();
+            router.filter(leaderId, new DropAllTraffic());
+            scheduler.runUntil(() -> cluster.latestLeader().isPresent() && cluster.latestLeader().getAsInt() != leaderId);
+
+            int newLeaderId = cluster.latestLeader().getAsInt();
+            router.filter(leaderId, new PermitAllTraffic());
+            router.filter(newLeaderId, new DropAllTraffic());
+
+            long targetHighWatermark = cluster.maxHighWatermarkReached() + 10;
+            scheduler.runUntil(() -> cluster.anyReachedHighWatermark(targetHighWatermark));
+        });
+    }
+
+    @Test
+    void canRecoverFromSingleNodeCommittedDataLoss() {
+        withVotersObservers(3, 5, 0, 2, (seed, numVoters, numObservers) -> {
+            Cluster cluster = new Cluster(numVoters, numObservers, seed);
+            EventScheduler scheduler = new EventScheduler(cluster.random, cluster.time);
+            scheduler.addInvariant(new MonotonicHighWatermark(cluster));
+            scheduler.addInvariant(new SingleLeader(cluster));
+            scheduler.addValidation(new ConsistentCommittedData(cluster));
+
+            MessageRouter router = new MessageRouter(cluster);
+
+            cluster.startAll();
+            schedulePolling(scheduler, cluster, 3, 5);
+            scheduler.schedule(router::deliverAll, 0, 2, 5);
+            scheduler.schedule(new SequentialAppendAction(cluster), 0, 2, 3);
+            scheduler.runUntil(() -> cluster.anyReachedHighWatermark(10));
+
+            RaftNode node = cluster.randomRunning().orElseThrow(() ->
+                new AssertionError("Failed to find running node")
+            );
+
+            cluster.killAndDeletePersistentState(node.nodeId);
+            scheduler.runUntil(() -> !cluster.hasLeader(node.nodeId) && cluster.hasConsistentLeader());
+
+            long highWatermarkBeforeRestart = cluster.maxHighWatermarkReached();
+            cluster.start(node.nodeId);
+            scheduler.runUntil(() -> cluster.allReachedHighWatermark(highWatermarkBeforeRestart + 10));
+        });
     }
 
     private EventScheduler schedulerWithDefaultInvariants(Cluster cluster) {
@@ -643,8 +599,8 @@ public class RaftEventSimulationTest {
         final Map<Integer, PersistentState> nodes = new HashMap<>();
         final Map<Integer, RaftNode> running = new HashMap<>();
 
-        private Cluster(int numVoters, int numObservers, Random random) {
-            this.random = random;
+        private Cluster(int numVoters, int numObservers, long seed) {
+            this.random = new Random(seed);
 
             for (int nodeId = 0; nodeId < numVoters; nodeId++) {
                 voters.put(nodeId, nodeFromId(nodeId));
@@ -898,7 +854,7 @@ public class RaftEventSimulationTest {
                 clusterId,
                 List.of(),
                 endpointsFromId(nodeId, channel.listenerName()),
-                Feature.KRAFT_VERSION.supportedVersionRange(),
+                Feature.KRAFT_VERSION.supportedVersionRange(true),
                 logContext,
                 random,
                 quorumConfig
@@ -911,8 +867,6 @@ public class RaftEventSimulationTest {
                 messageQueue,
                 persistentState.store,
                 logContext,
-                time,
-                random,
                 serde
             );
             node.initialize(voterAddressMap, metrics);
@@ -940,8 +894,6 @@ public class RaftEventSimulationTest {
             MockMessageQueue messageQueue,
             MockQuorumStateStore store,
             LogContext logContext,
-            Time time,
-            Random random,
             RecordSerde<Integer> intSerde
         ) {
             this.logContext = logContext;
@@ -972,6 +924,40 @@ public class RaftEventSimulationTest {
                 } while (client.isRunning() && !messageQueue.isEmpty());
             } catch (Exception e) {
                 throw new RuntimeException("Uncaught exception during poll of node " + nodeId, e);
+            }
+        }
+
+        CompletionStage<RaftResponse.Outbound> handle(RaftRequest.Inbound request) {
+            var apiKey = ApiKeys.forId(request.data().apiKey());
+            switch (apiKey) {
+                case API_VERSIONS:
+                    // KRaft doesn't handle ApiVersions request. These are handle by the "node".
+                    // This creates a simple implementation that simply replies with the
+                    // supported kraft versions.
+                    var apiVersionsResponse = new ApiVersionsResponse.Builder()
+                        .setSupportedFeatures(
+                            Features.supportedFeatures(
+                                Map.of(
+                                    KRaftVersion.FEATURE_NAME,
+                                    new SupportedVersionRange(
+                                        KRaftVersion.KRAFT_VERSION_0.featureLevel(),
+                                        KRaftVersion.LATEST_PRODUCTION.featureLevel()
+                                    )
+                                )
+                            )
+                        )
+                        .setApiVersions(new ApiVersionsResponseData.ApiVersionCollection())
+                        .setFinalizedFeatures(Map.of())
+                        .build()
+                        .data();
+                    var apiVersions = new RaftResponse.Outbound(
+                        request.correlationId(),
+                        apiVersionsResponse
+                    );
+                    return CompletableFuture.completedFuture(apiVersions);
+
+                default:
+                    return client.handle(request);
             }
         }
 
@@ -1405,13 +1391,12 @@ public class RaftEventSimulationTest {
             cluster.nodeIfRunning(destination.id()).ifPresent(node -> {
                 inflight.put(correlationId, new InflightRequest(senderId, destination));
 
-                inbound.completion.whenComplete((response, exception) -> {
+                node.handle(inbound).whenComplete((response, exception) -> {
                     if (response != null && filters.get(destination.id()).acceptOutbound(response)) {
                         deliver(response);
                     }
                 });
 
-                node.client.handle(inbound);
             });
         }
 

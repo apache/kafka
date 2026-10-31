@@ -16,6 +16,7 @@
  */
 package org.apache.kafka.streams.state.internals;
 
+import org.apache.kafka.common.IsolationLevel;
 import org.apache.kafka.common.TopicPartition;
 import org.apache.kafka.common.utils.Bytes;
 import org.apache.kafka.streams.KeyValue;
@@ -29,6 +30,7 @@ import org.apache.kafka.streams.processor.internals.InternalProcessorContext;
 import org.apache.kafka.streams.processor.internals.ProcessorRecordContext;
 import org.apache.kafka.streams.processor.internals.RecordQueue;
 import org.apache.kafka.streams.state.KeyValueIterator;
+import org.apache.kafka.streams.state.ReadOnlySessionStore;
 import org.apache.kafka.streams.state.SessionStore;
 
 import org.slf4j.Logger;
@@ -69,6 +71,83 @@ public class CachingSessionStore
         this.keySchema = new SessionKeySchema();
         this.cacheFunction = new SegmentedCacheFunction(keySchema, segmentInterval);
         this.maxObservedTimestamp = RecordQueue.UNKNOWN;
+    }
+
+    @Override
+    public ReadOnlySessionStore<Bytes, byte[]> readOnly(final IsolationLevel isolationLevel) {
+        Objects.requireNonNull(isolationLevel, "isolationLevel cannot be null");
+        if (isolationLevel == IsolationLevel.READ_COMMITTED) {
+            return wrapped().readOnly(isolationLevel);
+        }
+        return new ReadOnlyView(wrapped().readOnly(isolationLevel));
+    }
+
+    private final class ReadOnlyView implements ReadOnlySessionStore<Bytes, byte[]> {
+
+        private final ReadOnlySessionStore<Bytes, byte[]> underlying;
+
+        ReadOnlyView(final ReadOnlySessionStore<Bytes, byte[]> underlying) {
+            this.underlying = underlying;
+        }
+
+        @Override
+        public byte[] fetchSession(final Bytes key,
+                                   final long earliestSessionEndTime,
+                                   final long latestSessionStartTime) {
+            return fetchSessionInternal(key, earliestSessionEndTime, latestSessionStartTime, underlying);
+        }
+
+        @Override
+        public KeyValueIterator<Windowed<Bytes>, byte[]> findSessions(final Bytes key,
+                                                                      final long earliestSessionEndTime,
+                                                                      final long latestSessionStartTime) {
+            return findSessionsInternal(key, earliestSessionEndTime, latestSessionStartTime, underlying);
+        }
+
+        @Override
+        public KeyValueIterator<Windowed<Bytes>, byte[]> backwardFindSessions(final Bytes key,
+                                                                              final long earliestSessionEndTime,
+                                                                              final long latestSessionStartTime) {
+            return backwardFindSessionsInternal(key, earliestSessionEndTime, latestSessionStartTime, underlying);
+        }
+
+        @Override
+        public KeyValueIterator<Windowed<Bytes>, byte[]> findSessions(final Bytes keyFrom,
+                                                                      final Bytes keyTo,
+                                                                      final long earliestSessionEndTime,
+                                                                      final long latestSessionStartTime) {
+            return findSessionsInternal(keyFrom, keyTo, earliestSessionEndTime, latestSessionStartTime, underlying);
+        }
+
+        @Override
+        public KeyValueIterator<Windowed<Bytes>, byte[]> backwardFindSessions(final Bytes keyFrom,
+                                                                              final Bytes keyTo,
+                                                                              final long earliestSessionEndTime,
+                                                                              final long latestSessionStartTime) {
+            return backwardFindSessionsInternal(keyFrom, keyTo, earliestSessionEndTime, latestSessionStartTime, underlying);
+        }
+
+        @Override
+        public KeyValueIterator<Windowed<Bytes>, byte[]> fetch(final Bytes key) {
+            Objects.requireNonNull(key, "key cannot be null");
+            return findSessions(key, 0, Long.MAX_VALUE);
+        }
+
+        @Override
+        public KeyValueIterator<Windowed<Bytes>, byte[]> backwardFetch(final Bytes key) {
+            Objects.requireNonNull(key, "key cannot be null");
+            return backwardFindSessions(key, 0, Long.MAX_VALUE);
+        }
+
+        @Override
+        public KeyValueIterator<Windowed<Bytes>, byte[]> fetch(final Bytes keyFrom, final Bytes keyTo) {
+            return findSessions(keyFrom, keyTo, 0, Long.MAX_VALUE);
+        }
+
+        @Override
+        public KeyValueIterator<Windowed<Bytes>, byte[]> backwardFetch(final Bytes keyFrom, final Bytes keyTo) {
+            return backwardFindSessions(keyFrom, keyTo, 0, Long.MAX_VALUE);
+        }
     }
 
     @Override
@@ -161,6 +240,13 @@ public class CachingSessionStore
     public KeyValueIterator<Windowed<Bytes>, byte[]> findSessions(final Bytes key,
                                                                   final long earliestSessionEndTime,
                                                                   final long latestSessionStartTime) {
+        return findSessionsInternal(key, earliestSessionEndTime, latestSessionStartTime, wrapped());
+    }
+
+    private KeyValueIterator<Windowed<Bytes>, byte[]> findSessionsInternal(final Bytes key,
+                                                                           final long earliestSessionEndTime,
+                                                                           final long latestSessionStartTime,
+                                                                           final ReadOnlySessionStore<Bytes, byte[]> underlying) {
         validateStoreOpen();
 
         final PeekingKeyValueIterator<Bytes, LRUCacheEntry> cacheIterator = wrapped().persistent() ?
@@ -170,9 +256,8 @@ public class CachingSessionStore
                         cacheFunction.cacheKey(keySchema.upperRangeFixedSize(key, latestSessionStartTime))
             );
 
-        final KeyValueIterator<Windowed<Bytes>, byte[]> storeIterator = wrapped().findSessions(key,
-                                                                                               earliestSessionEndTime,
-                                                                                               latestSessionStartTime);
+        final KeyValueIterator<Windowed<Bytes>, byte[]> storeIterator =
+            underlying.findSessions(key, earliestSessionEndTime, latestSessionStartTime);
         final HasNextCondition hasNextCondition = keySchema.hasNextCondition(key,
                                                                              key,
                                                                              earliestSessionEndTime,
@@ -187,6 +272,13 @@ public class CachingSessionStore
     public KeyValueIterator<Windowed<Bytes>, byte[]> backwardFindSessions(final Bytes key,
                                                                           final long earliestSessionEndTime,
                                                                           final long latestSessionStartTime) {
+        return backwardFindSessionsInternal(key, earliestSessionEndTime, latestSessionStartTime, wrapped());
+    }
+
+    private KeyValueIterator<Windowed<Bytes>, byte[]> backwardFindSessionsInternal(final Bytes key,
+                                                                                   final long earliestSessionEndTime,
+                                                                                   final long latestSessionStartTime,
+                                                                                   final ReadOnlySessionStore<Bytes, byte[]> underlying) {
         validateStoreOpen();
 
         final PeekingKeyValueIterator<Bytes, LRUCacheEntry> cacheIterator = wrapped().persistent() ?
@@ -198,11 +290,8 @@ public class CachingSessionStore
                 )
             );
 
-        final KeyValueIterator<Windowed<Bytes>, byte[]> storeIterator = wrapped().backwardFindSessions(
-            key,
-            earliestSessionEndTime,
-            latestSessionStartTime
-        );
+        final KeyValueIterator<Windowed<Bytes>, byte[]> storeIterator =
+            underlying.backwardFindSessions(key, earliestSessionEndTime, latestSessionStartTime);
         final HasNextCondition hasNextCondition = keySchema.hasNextCondition(
             key,
             key,
@@ -220,6 +309,14 @@ public class CachingSessionStore
                                                                   final Bytes keyTo,
                                                                   final long earliestSessionEndTime,
                                                                   final long latestSessionStartTime) {
+        return findSessionsInternal(keyFrom, keyTo, earliestSessionEndTime, latestSessionStartTime, wrapped());
+    }
+
+    private KeyValueIterator<Windowed<Bytes>, byte[]> findSessionsInternal(final Bytes keyFrom,
+                                                                           final Bytes keyTo,
+                                                                           final long earliestSessionEndTime,
+                                                                           final long latestSessionStartTime,
+                                                                           final ReadOnlySessionStore<Bytes, byte[]> underlying) {
         if (keyFrom != null && keyTo != null && keyFrom.compareTo(keyTo) > 0) {
             LOG.warn(INVALID_RANGE_WARN_MSG);
             return KeyValueIterators.emptyIterator();
@@ -231,9 +328,8 @@ public class CachingSessionStore
         final Bytes cacheKeyTo = keyTo == null ? null : cacheFunction.cacheKey(keySchema.upperRange(keyTo, latestSessionStartTime));
         final ThreadCache.MemoryLRUCacheBytesIterator cacheIterator = internalContext.cache().range(cacheName, cacheKeyFrom, cacheKeyTo);
 
-        final KeyValueIterator<Windowed<Bytes>, byte[]> storeIterator = wrapped().findSessions(
-            keyFrom, keyTo, earliestSessionEndTime, latestSessionStartTime
-        );
+        final KeyValueIterator<Windowed<Bytes>, byte[]> storeIterator =
+            underlying.findSessions(keyFrom, keyTo, earliestSessionEndTime, latestSessionStartTime);
         final HasNextCondition hasNextCondition = keySchema.hasNextCondition(keyFrom,
                                                                              keyTo,
                                                                              earliestSessionEndTime,
@@ -249,6 +345,14 @@ public class CachingSessionStore
                                                                           final Bytes keyTo,
                                                                           final long earliestSessionEndTime,
                                                                           final long latestSessionStartTime) {
+        return backwardFindSessionsInternal(keyFrom, keyTo, earliestSessionEndTime, latestSessionStartTime, wrapped());
+    }
+
+    private KeyValueIterator<Windowed<Bytes>, byte[]> backwardFindSessionsInternal(final Bytes keyFrom,
+                                                                                   final Bytes keyTo,
+                                                                                   final long earliestSessionEndTime,
+                                                                                   final long latestSessionStartTime,
+                                                                                   final ReadOnlySessionStore<Bytes, byte[]> underlying) {
         if (keyFrom != null && keyTo != null && keyFrom.compareTo(keyTo) > 0) {
             LOG.warn(INVALID_RANGE_WARN_MSG);
             return KeyValueIterators.emptyIterator();
@@ -261,7 +365,7 @@ public class CachingSessionStore
         final ThreadCache.MemoryLRUCacheBytesIterator cacheIterator = internalContext.cache().reverseRange(cacheName, cacheKeyFrom, cacheKeyTo);
 
         final KeyValueIterator<Windowed<Bytes>, byte[]> storeIterator =
-            wrapped().backwardFindSessions(keyFrom, keyTo, earliestSessionEndTime, latestSessionStartTime);
+            underlying.backwardFindSessions(keyFrom, keyTo, earliestSessionEndTime, latestSessionStartTime);
         final HasNextCondition hasNextCondition = keySchema.hasNextCondition(
             keyFrom,
             keyTo,
@@ -277,16 +381,23 @@ public class CachingSessionStore
     @Override
     public byte[] fetchSession(final Bytes key, final long earliestSessionEndTime, final long latestSessionStartTime) {
         Objects.requireNonNull(key, "key cannot be null");
+        return fetchSessionInternal(key, earliestSessionEndTime, latestSessionStartTime, wrapped());
+    }
+
+    private byte[] fetchSessionInternal(final Bytes key,
+                                        final long earliestSessionEndTime,
+                                        final long latestSessionStartTime,
+                                        final ReadOnlySessionStore<Bytes, byte[]> underlying) {
         validateStoreOpen();
         if (internalContext.cache() == null) {
-            return wrapped().fetchSession(key, earliestSessionEndTime, latestSessionStartTime);
+            return underlying.fetchSession(key, earliestSessionEndTime, latestSessionStartTime);
         } else {
             final Bytes bytesKey = SessionKeySchema.toBinary(key, earliestSessionEndTime,
                 latestSessionStartTime);
             final Bytes cacheKey = cacheFunction.cacheKey(bytesKey);
             final LRUCacheEntry entry = internalContext.cache().get(cacheName, cacheKey);
             if (entry == null) {
-                return wrapped().fetchSession(key, earliestSessionEndTime, latestSessionStartTime);
+                return underlying.fetchSession(key, earliestSessionEndTime, latestSessionStartTime);
             } else {
                 return entry.value();
             }

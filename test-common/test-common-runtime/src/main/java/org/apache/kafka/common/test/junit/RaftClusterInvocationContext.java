@@ -45,6 +45,7 @@ import org.junit.jupiter.api.extension.BeforeEachCallback;
 import org.junit.jupiter.api.extension.Extension;
 import org.junit.jupiter.api.extension.TestTemplateInvocationContext;
 
+import java.io.IOException;
 import java.util.Collections;
 import java.util.HashMap;
 import java.util.List;
@@ -59,10 +60,12 @@ import java.util.stream.Collectors;
 import java.util.stream.Stream;
 
 /**
- * Wraps a {@link KafkaClusterTestKit} inside lifecycle methods for a test invocation. Each instance of this
- * class is provided with a configuration for the cluster.
+ * JUnit 5 invocation context for integration tests that run against an in-process Kafka cluster.
  *
- * This context also provides parameter resolvers for:
+ * <p>Wraps a {@link KafkaClusterTestKit} inside lifecycle methods for a test invocation.
+ * Each instance of this class is provided with a configuration for the cluster.
+ *
+ * <p>This context also provides parameter resolvers for:
  *
  * <ul>
  *     <li>ClusterConfig (the same instance passed to the constructor)</li>
@@ -185,15 +188,24 @@ public class RaftClusterInvocationContext implements TestTemplateInvocationConte
         public Map<String, Object> setClientSslConfig(Map<String, Object> configs) {
             Map<String, Object> props = new HashMap<>(configs);
             if (config().brokerSecurityProtocol() == SecurityProtocol.SASL_SSL) {
+                String mechanism = clientSaslMechanism();
                 props.putIfAbsent(CommonClientConfigs.SECURITY_PROTOCOL_CONFIG, SecurityProtocol.SASL_SSL.name);
-                props.putIfAbsent(SaslConfigs.SASL_MECHANISM, "PLAIN");
-                props.putIfAbsent(
-                    SaslConfigs.SASL_JAAS_CONFIG,
-                    String.format(
-                        "org.apache.kafka.common.security.plain.PlainLoginModule required username=\"%s\" password=\"%s\";",
-                        JaasUtils.KAFKA_PLAIN_ADMIN, JaasUtils.KAFKA_PLAIN_ADMIN_PASSWORD
-                    )
-                );
+                props.putIfAbsent(SaslConfigs.SASL_MECHANISM, mechanism);
+                if (mechanism.equalsIgnoreCase("PLAIN")) {
+                    props.putIfAbsent(
+                        SaslConfigs.SASL_JAAS_CONFIG,
+                        String.format(
+                            "org.apache.kafka.common.security.plain.PlainLoginModule required username=\"%s\" password=\"%s\";",
+                            JaasUtils.KAFKA_PLAIN_ADMIN, JaasUtils.KAFKA_PLAIN_ADMIN_PASSWORD
+                        )
+                    );
+                }
+                if (clusterTestKit.sslManager() != null) {
+                    props.putAll(clusterTestKit.sslManager().createClientSslConfig());
+                    props.put(SslConfigs.SSL_ENDPOINT_IDENTIFICATION_ALGORITHM_CONFIG, "");
+                }
+            } else if (config().brokerSecurityProtocol() == SecurityProtocol.SSL) {
+                props.putIfAbsent(CommonClientConfigs.SECURITY_PROTOCOL_CONFIG, SecurityProtocol.SSL.name);
                 if (clusterTestKit.sslManager() != null) {
                     props.putAll(clusterTestKit.sslManager().createClientSslConfig());
                     props.put(SslConfigs.SSL_ENDPOINT_IDENTIFICATION_ALGORITHM_CONFIG, "");
@@ -262,6 +274,20 @@ public class RaftClusterInvocationContext implements TestTemplateInvocationConte
         @Override
         public void startBroker(int brokerId) {
             findBrokerOrThrow(brokerId).startup();
+        }
+
+        @Override
+        public void restartBroker(int brokerId, Map<String, Object> propOverrides) {
+            clusterTestKit.restartBroker(brokerId, propOverrides);
+        }
+
+        @Override
+        public void restartBrokersWithSwappedClientListenerPorts(int brokerId1, int brokerId2) {
+            try {
+                clusterTestKit.restartBrokersWithSwappedClientListenerPorts(brokerId1, brokerId2);
+            } catch (IOException e) {
+                throw new AssertionError("Failed while swapping ports for brokers", e);
+            }
         }
 
         @Override
@@ -336,8 +362,15 @@ public class RaftClusterInvocationContext implements TestTemplateInvocationConte
                     }
                 }
 
+                Set<String> disabledFeatures = newFeatureLevels.entrySet().stream()
+                    .filter(featureEntry -> featureEntry.getValue() == 0)
+                    .filter(featureEntry -> !featureEntry.getKey().equals(MetadataVersion.FEATURE_NAME))
+                    .map(Map.Entry::getKey)
+                    .collect(Collectors.toSet());
+
                 TestKitNodes nodes = new TestKitNodes.Builder()
                         .setBootstrapMetadata(BootstrapMetadata.fromVersions(clusterConfig.metadataVersion(), newFeatureLevels, "testkit"))
+                        .setDisabledFeatures(disabledFeatures)
                         .setCombined(isCombined)
                         .setNumBrokerNodes(clusterConfig.numBrokers())
                         .setNumDisksPerBroker(clusterConfig.numDisksPerBroker())

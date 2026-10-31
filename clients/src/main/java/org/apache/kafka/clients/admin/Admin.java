@@ -29,6 +29,7 @@ import org.apache.kafka.common.TopicPartitionReplica;
 import org.apache.kafka.common.Uuid;
 import org.apache.kafka.common.acl.AclBinding;
 import org.apache.kafka.common.acl.AclBindingFilter;
+import org.apache.kafka.common.annotation.InterfaceAudience;
 import org.apache.kafka.common.annotation.InterfaceStability;
 import org.apache.kafka.common.config.ConfigResource;
 import org.apache.kafka.common.errors.FeatureUpdateFailedException;
@@ -122,6 +123,7 @@ import java.util.Set;
  * version required.
  * <p>
  */
+@InterfaceAudience.Public
 public interface Admin extends AutoCloseable {
 
     /**
@@ -694,6 +696,15 @@ public interface Admin extends AutoCloseable {
 
     /**
      * Delete records whose offset is smaller than the given offset of the corresponding partition.
+     * <p>
+     * The following exceptions can be anticipated when calling {@code get()} on the futures obtained from
+     * the returned {@link DeleteRecordsResult}:
+     * <ul>
+     * <li>{@link org.apache.kafka.common.errors.PolicyViolationException}
+     * if the records of the partition can not be deleted due to the configured {@code cleanup.policy},
+     * for example because the topic's {@code cleanup.policy} is {@code compact} and does not include
+     * {@code delete}.</li>
+     * </ul>
      * <p>
      * This operation is supported by brokers with version 0.11.0.0 or higher.
      *
@@ -1681,6 +1692,48 @@ public interface Admin extends AutoCloseable {
     UnregisterBrokerResult unregisterBroker(int brokerId, UnregisterBrokerOptions options);
 
     /**
+     * Unregister a controller.
+     *
+     * This is a convenience method for {@link #unregisterController(int, UnregisterControllerOptions)}
+     *
+     * @param controllerId  the controller id to unregister.
+     *
+     * @return the {@link UnregisterControllerResult} containing the result
+     */
+    @InterfaceStability.Unstable
+    default UnregisterControllerResult unregisterController(int controllerId) {
+        return unregisterController(controllerId, new UnregisterControllerOptions());
+    }
+
+    /**
+     * Unregister a controller.
+     *
+     * The following exceptions can be anticipated when calling {@code get()} on the future from the
+     * returned {@link UnregisterControllerResult}:
+     * <ul>
+     *   <li>{@link org.apache.kafka.common.errors.TimeoutException}
+     *   If the request timed out before the unregister operation could finish.</li>
+     *   <li>{@link org.apache.kafka.common.errors.UnsupportedVersionException}
+     *   If the software is too old to support the unregistration API.</li>
+     *   <li>{@link org.apache.kafka.common.errors.ControllerIdNotRegisteredException}
+     *   If the requested controller id is not currently registered.</li>
+     *   <li>{@link org.apache.kafka.common.errors.NotControllerException}
+     *   If the request does not arrive at the active controller.</li>
+     *   <li>{@link org.apache.kafka.common.errors.InvalidRequestException}
+     *   If the request tries to unregister a controller id which is part of the voter set.</li>
+     *
+     * </ul>
+     * <p>
+     *
+     * @param controllerId  the controller id to unregister.
+     * @param options       the options to use.
+     *
+     * @return the {@link UnregisterControllerResult} containing the result
+     */
+    @InterfaceStability.Unstable
+    UnregisterControllerResult unregisterController(int controllerId, UnregisterControllerOptions options);
+
+    /**
      * Describe producer state on a set of topic partitions. See
      * {@link #describeProducers(Collection, DescribeProducersOptions)} for more details.
      *
@@ -1843,8 +1896,8 @@ public interface Admin extends AutoCloseable {
      * The ID is useful for correlating client operations with telemetry sent to the broker and
      * to its eventual monitoring destinations.
      * <p>
-     * If telemetry is enabled, this will first require a connection to the cluster to generate
-     * the unique client instance ID. This method waits up to {@code timeout} for the admin
+     * If telemetry is enabled, this will first require a connection to the cluster to receive
+     * a telemetry subscription. This method waits up to {@code timeout} for the admin
      * client to complete the request.
      * <p>
      * Client telemetry is controlled by the {@link AdminClientConfig#ENABLE_METRICS_PUSH_CONFIG}
@@ -1860,7 +1913,7 @@ public interface Admin extends AutoCloseable {
      * @throws IllegalArgumentException If the {@code timeout} is negative.
      * @throws IllegalStateException If telemetry is not enabled ie, config `{@code enable.metrics.push}`
      *                               is set to `{@code false}`.
-     * @return The client's assigned instance id used for metrics collection.
+     * @return The client's instance id used for metrics collection.
      */
     Uuid clientInstanceId(Duration timeout);
 

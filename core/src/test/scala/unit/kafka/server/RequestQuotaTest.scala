@@ -666,6 +666,9 @@ class RequestQuotaTest extends BaseRequestTest {
         case ApiKeys.UNREGISTER_BROKER =>
           new UnregisterBrokerRequest.Builder(new UnregisterBrokerRequestData())
 
+        case ApiKeys.UNREGISTER_CONTROLLER =>
+          new UnregisterControllerRequest.Builder(new UnregisterControllerRequestData())
+
         case ApiKeys.DESCRIBE_TRANSACTIONS =>
           new DescribeTransactionsRequest.Builder(new DescribeTransactionsRequestData()
             .setTransactionalIds(util.List.of("test-transactional-id")))
@@ -738,25 +741,28 @@ class RequestQuotaTest extends BaseRequestTest {
           new UpdateRaftVoterRequest.Builder(new UpdateRaftVoterRequestData())
 
         case ApiKeys.INITIALIZE_SHARE_GROUP_STATE =>
-          new InitializeShareGroupStateRequest.Builder(new InitializeShareGroupStateRequestData())
+          new InitializeShareGroupStateRequest.Builder(new InitializeShareGroupStateRequestData(), true)
 
         case ApiKeys.READ_SHARE_GROUP_STATE =>
-          new ReadShareGroupStateRequest.Builder(new ReadShareGroupStateRequestData())
+          new ReadShareGroupStateRequest.Builder(new ReadShareGroupStateRequestData(), true)
 
         case ApiKeys.WRITE_SHARE_GROUP_STATE =>
-          new WriteShareGroupStateRequest.Builder(new WriteShareGroupStateRequestData())
+          new WriteShareGroupStateRequest.Builder(new WriteShareGroupStateRequestData(), true)
 
         case ApiKeys.DELETE_SHARE_GROUP_STATE =>
-          new DeleteShareGroupStateRequest.Builder(new DeleteShareGroupStateRequestData())
+          new DeleteShareGroupStateRequest.Builder(new DeleteShareGroupStateRequestData(), true)
 
         case ApiKeys.READ_SHARE_GROUP_STATE_SUMMARY =>
-          new ReadShareGroupStateSummaryRequest.Builder(new ReadShareGroupStateSummaryRequestData())
+          new ReadShareGroupStateSummaryRequest.Builder(new ReadShareGroupStateSummaryRequestData(), true)
           
         case ApiKeys.STREAMS_GROUP_HEARTBEAT =>
           new StreamsGroupHeartbeatRequest.Builder(new StreamsGroupHeartbeatRequestData())
 
         case ApiKeys.STREAMS_GROUP_DESCRIBE =>
           new StreamsGroupDescribeRequest.Builder(new StreamsGroupDescribeRequestData())
+
+        case ApiKeys.STREAMS_GROUP_TOPOLOGY_DESCRIPTION_UPDATE =>
+          new StreamsGroupTopologyDescriptionUpdateRequest.Builder(new StreamsGroupTopologyDescriptionUpdateRequestData())
 
         case ApiKeys.DESCRIBE_SHARE_GROUP_OFFSETS =>
           new DescribeShareGroupOffsetsRequest.Builder(new DescribeShareGroupOffsetsRequestData())

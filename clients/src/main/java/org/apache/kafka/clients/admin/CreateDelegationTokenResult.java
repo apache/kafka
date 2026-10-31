@@ -18,11 +18,13 @@
 package org.apache.kafka.clients.admin;
 
 import org.apache.kafka.common.KafkaFuture;
+import org.apache.kafka.common.annotation.InterfaceAudience;
 import org.apache.kafka.common.security.token.delegation.DelegationToken;
 
 /**
  * The result of the {@link KafkaAdminClient#createDelegationToken(CreateDelegationTokenOptions)} call.
  */
+@InterfaceAudience.Public
 public class CreateDelegationTokenResult {
     private final KafkaFuture<DelegationToken> delegationToken;
 

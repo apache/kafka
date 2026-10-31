@@ -17,11 +17,14 @@
 
 package org.apache.kafka.clients.admin;
 
+import org.apache.kafka.common.annotation.InterfaceAudience;
+
 import java.util.Collection;
 
 /**
  * Options for the {@link Admin#deleteAcls(Collection)} call.
  */
+@InterfaceAudience.Public
 public class DeleteAclsOptions extends AbstractOptions<DeleteAclsOptions> {
 
     /**

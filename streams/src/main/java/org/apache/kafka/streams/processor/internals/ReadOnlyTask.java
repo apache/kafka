@@ -165,6 +165,11 @@ public class ReadOnlyTask implements Task {
     }
 
     @Override
+    public void maybeFlushTerminalE2ELatency(final long endMs) {
+        throw new UnsupportedOperationException("This task is read-only");
+    }
+
+    @Override
     public void recordProcessTimeRatioAndBufferSize(final long allTaskProcessMs, final long now) {
         throw new UnsupportedOperationException("This task is read-only");
     }
@@ -205,7 +210,7 @@ public class ReadOnlyTask implements Task {
     }
 
     @Override
-    public void recordRestoration(final Time time, final long numRecords, final boolean initRemaining) {
+    public void recordRestoration(final Time time, final long numRecords, final long numOffsets, final boolean initRemaining) {
         throw new UnsupportedOperationException("This task is read-only");
     }
 
@@ -244,6 +249,11 @@ public class ReadOnlyTask implements Task {
 
     @Override
     public ProcessorStateManager stateManager() {
+        throw new UnsupportedOperationException("This task is read-only");
+    }
+
+    @Override
+    public long approximateNumUncommittedBytes() {
         throw new UnsupportedOperationException("This task is read-only");
     }
 }

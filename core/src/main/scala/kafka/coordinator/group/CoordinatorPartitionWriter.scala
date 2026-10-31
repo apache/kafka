@@ -28,20 +28,46 @@ import org.apache.kafka.server.transaction.AddPartitionsToTxnManager
 import org.apache.kafka.storage.internals.log.{AppendOrigin, LogConfig, VerificationGuard}
 
 import java.util.concurrent.CompletableFuture
+import java.util.concurrent.atomic.AtomicBoolean
 import scala.collection.Map
 
 /**
  * ListenerAdapter adapts the PartitionListener interface to the
  * PartitionWriter.Listener interface.
+ *
+ * This upholds the PartitionWriter.Listener contract that high watermark updates are
+ * delivered only while the partition is led by this broker. When the partition
+ * transitions to follower, is deleted or fails, its local log can be truncated and
+ * re-replicated from the new leader, so the high watermark would advance over records
+ * that this broker did not write; propagating those updates would corrupt the
+ * coordinator's committed state. The partition notifies these transitions before its
+ * fetcher is restarted (see ReplicaManager#applyDelta), i.e. before any such update can
+ * be produced, so gating on this flag is sufficient to stop them.
  */
 private[group] class ListenerAdapter(
   val listener: PartitionWriter.Listener
 ) extends PartitionListener {
+  private val active = new AtomicBoolean(true)
+
   override def onHighWatermarkUpdated(
     tp: TopicPartition,
     offset: Long
   ): Unit = {
-    listener.onHighWatermarkUpdated(tp, offset)
+    if (active.get()) {
+      listener.onHighWatermarkUpdated(tp, offset)
+    }
+  }
+
+  override def onBecomingFollower(tp: TopicPartition): Unit = {
+    active.set(false)
+  }
+
+  override def onFailed(tp: TopicPartition): Unit = {
+    active.set(false)
+  }
+
+  override def onDeleted(tp: TopicPartition): Unit = {
+    active.set(false)
   }
 
   override def equals(that: Any): Boolean = that match {

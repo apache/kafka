@@ -17,6 +17,7 @@
 package org.apache.kafka.connect.transforms;
 
 import org.apache.kafka.common.Configurable;
+import org.apache.kafka.common.annotation.InterfaceAudience;
 import org.apache.kafka.connect.components.ConnectPlugin;
 import org.apache.kafka.connect.connector.ConnectRecord;
 
@@ -36,6 +37,7 @@ import java.io.Closeable;
  *
  * @param <R> The type of record (must be an implementation of {@link ConnectRecord})
  */
+@InterfaceAudience.Public
 public interface Transformation<R extends ConnectRecord<R>> extends Configurable, Closeable, ConnectPlugin {
 
     /**

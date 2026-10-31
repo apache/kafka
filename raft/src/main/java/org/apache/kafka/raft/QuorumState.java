@@ -831,8 +831,7 @@ public class QuorumState {
     }
 
     public LeaderAndEpoch leaderAndEpoch() {
-        ElectionState election = state.election();
-        return new LeaderAndEpoch(election.optionalLeaderId(), election.epoch());
+        return state.leaderAndEpoch();
     }
 
     public boolean isFollower() {

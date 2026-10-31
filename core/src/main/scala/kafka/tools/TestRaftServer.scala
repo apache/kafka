@@ -83,7 +83,7 @@ class TestRaftServer(
     val apiVersionManager = new SimpleApiVersionManager(
       ListenerType.CONTROLLER,
       true,
-      () => FinalizedFeatures.fromKRaftVersion(MetadataVersion.MINIMUM_VERSION))
+      () => FinalizedFeatures.fromMetadataVersion(MetadataVersion.MINIMUM_VERSION))
     socketServer = new SocketServer(config, metrics, time, credentialProvider, apiVersionManager)
 
     val endpoints = Endpoints.fromInetSocketAddresses(

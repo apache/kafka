@@ -19,12 +19,8 @@ package org.apache.kafka.jmh.metadata;
 
 import kafka.coordinator.transaction.TransactionCoordinator;
 import kafka.network.RequestChannel;
-import kafka.server.AutoTopicCreationManager;
-import kafka.server.ClientRequestQuotaManager;
-import kafka.server.ForwardingManager;
 import kafka.server.KafkaApis;
 import kafka.server.KafkaConfig;
-import kafka.server.QuotaFactory;
 import kafka.server.ReplicaManager;
 import kafka.server.builders.KafkaApisBuilder;
 import kafka.server.share.SharePartitionManager;
@@ -57,14 +53,18 @@ import org.apache.kafka.network.RequestConvertToJson;
 import org.apache.kafka.network.metrics.RequestChannelMetrics;
 import org.apache.kafka.raft.KRaftConfigs;
 import org.apache.kafka.raft.QuorumConfig;
+import org.apache.kafka.server.AutoTopicCreationManager;
 import org.apache.kafka.server.ClientMetricsManager;
 import org.apache.kafka.server.FetchManager;
+import org.apache.kafka.server.ForwardingManager;
 import org.apache.kafka.server.SimpleApiVersionManager;
 import org.apache.kafka.server.common.FinalizedFeatures;
 import org.apache.kafka.server.common.KRaftVersion;
 import org.apache.kafka.server.common.MetadataVersion;
 import org.apache.kafka.server.quota.ClientQuotaManager;
+import org.apache.kafka.server.quota.ClientRequestQuotaManager;
 import org.apache.kafka.server.quota.ControllerMutationQuotaManager;
+import org.apache.kafka.server.quota.QuotaFactory;
 import org.apache.kafka.server.quota.ReplicationQuotaManager;
 import org.apache.kafka.storage.log.metrics.BrokerTopicStats;
 
@@ -114,7 +114,7 @@ public class KRaftMetadataRequestBenchmark {
     private final ReplicationQuotaManager replicaQuotaManager = Mockito.mock(ReplicationQuotaManager.class);
     private final QuotaFactory.QuotaManagers quotaManagers = new QuotaFactory.QuotaManagers(clientQuotaManager,
             clientQuotaManager, clientRequestQuotaManager, controllerMutationQuotaManager, replicaQuotaManager,
-            replicaQuotaManager, replicaQuotaManager, Optional.empty());
+            replicaQuotaManager, replicaQuotaManager, replicaQuotaManager, Optional.empty());
     private final FetchManager fetchManager = Mockito.mock(FetchManager.class);
     private final ShareCoordinator shareCoordinator = Mockito.mock(ShareCoordinator.class);
     private final SharePartitionManager sharePartitionManager = Mockito.mock(SharePartitionManager.class);
@@ -209,7 +209,7 @@ public class KRaftMetadataRequestBenchmark {
                 setApiVersionManager(new SimpleApiVersionManager(
                         ApiMessageType.ListenerType.BROKER,
                         false,
-                        () -> FinalizedFeatures.fromKRaftVersion(MetadataVersion.latestTesting()))).
+                        () -> FinalizedFeatures.fromMetadataVersion(MetadataVersion.latestTesting()))).
                 setGroupConfigManager(groupConfigManager).
                 build();
     }
