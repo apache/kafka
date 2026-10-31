@@ -727,6 +727,8 @@ public class StreamTask extends AbstractTask implements ProcessorNodePunctuator,
     /**
      * An active task is processable if its buffer contains data for all of its input
      * source topic partitions, or if it is enforced to be processable.
+     * Prolonged waits are logged at INFO, except routine idleness (no buffered records
+     * or waiting for new data within max.task.idle.ms), which is logged at DEBUG.
      */
     public boolean isProcessable(final long wallClockTime) {
         if (state() == State.CLOSED) {
@@ -746,7 +748,7 @@ public class StreamTask extends AbstractTask implements ProcessorNodePunctuator,
                 // READY -> NOT_READY - start timer
                 lastNotReadyLogTime = Optional.of(wallClockTime);
             } else {
-                maybeLogNotReady(wallClockTime, "Task is not ready to process: has pending transaction commit");
+                maybeLogNotReady(wallClockTime, "Task is not ready to process: has pending transaction commit", false);
             }
             return false;
         }
@@ -758,7 +760,7 @@ public class StreamTask extends AbstractTask implements ProcessorNodePunctuator,
                 lastNotReadyLogTime = Optional.of(wallClockTime);
                 timeCurrentIdlingStarted = Optional.of(wallClockTime);
             } else {
-                maybeLogNotReady(wallClockTime, readyToProcess.getLogMessage().orElseThrow());
+                maybeLogNotReady(wallClockTime, readyToProcess.getLogMessage().orElseThrow(), readyToProcess.isNormalIdling());
             }
         } else {
             // Task is ready - clear the timer
@@ -769,11 +771,15 @@ public class StreamTask extends AbstractTask implements ProcessorNodePunctuator,
         return readyToProcess.isReady();
     }
 
-    private void maybeLogNotReady(final long wallClockTime, final String logMessage) {
+    private void maybeLogNotReady(final long wallClockTime, final String logMessage, final boolean isNormalIdling) {
         // NOT_READY - check if it should log
         final long timeSinceLastLog = lastNotReadyLogTime.map(aLong -> wallClockTime - aLong).orElse(-1L);
         if (timeSinceLastLog >= NOT_READY_LOG_INTERVAL_MS) {
-            log.info(logMessage);
+            if (isNormalIdling) {
+                log.debug(logMessage);
+            } else {
+                log.info(logMessage);
+            }
             lastNotReadyLogTime = Optional.of(wallClockTime);
         }
     }
