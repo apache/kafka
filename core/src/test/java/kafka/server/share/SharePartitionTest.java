@@ -434,7 +434,7 @@ public class SharePartitionTest {
         GroupConfigManager groupConfigManager = Mockito.mock(GroupConfigManager.class);
         GroupConfig groupConfig = Mockito.mock(GroupConfig.class);
         Mockito.when(groupConfigManager.groupConfig(GROUP_ID)).thenReturn(Optional.of(groupConfig));
-        Mockito.when(groupConfig.shareAutoOffsetReset()).thenReturn(Optional.of(ShareGroupAutoOffsetResetStrategy.EARLIEST));
+        Mockito.when(groupConfig.shareAutoOffsetReset()).thenReturn(Optional.of(ShareGroupAutoOffsetResetStrategy.fromString("earliest")));
 
         ReplicaManager replicaManager = Mockito.mock(ReplicaManager.class);
 
@@ -485,7 +485,7 @@ public class SharePartitionTest {
         GroupConfigManager groupConfigManager = Mockito.mock(GroupConfigManager.class);
         GroupConfig groupConfig = Mockito.mock(GroupConfig.class);
         Mockito.when(groupConfigManager.groupConfig(GROUP_ID)).thenReturn(Optional.of(groupConfig));
-        Mockito.when(groupConfig.shareAutoOffsetReset()).thenReturn(Optional.of(ShareGroupAutoOffsetResetStrategy.LATEST));
+        Mockito.when(groupConfig.shareAutoOffsetReset()).thenReturn(Optional.of(ShareGroupAutoOffsetResetStrategy.fromString("latest")));
 
         ReplicaManager replicaManager = Mockito.mock(ReplicaManager.class);
 
@@ -695,7 +695,7 @@ public class SharePartitionTest {
         GroupConfigManager groupConfigManager = Mockito.mock(GroupConfigManager.class);
         GroupConfig groupConfig = Mockito.mock(GroupConfig.class);
         Mockito.when(groupConfigManager.groupConfig(GROUP_ID)).thenReturn(Optional.of(groupConfig));
-        Mockito.when(groupConfig.shareAutoOffsetReset()).thenReturn(Optional.of(ShareGroupAutoOffsetResetStrategy.EARLIEST));
+        Mockito.when(groupConfig.shareAutoOffsetReset()).thenReturn(Optional.of(ShareGroupAutoOffsetResetStrategy.fromString("earliest")));
 
         ReplicaManager replicaManager = Mockito.mock(ReplicaManager.class);
 

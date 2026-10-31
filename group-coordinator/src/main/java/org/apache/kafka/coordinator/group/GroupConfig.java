@@ -71,7 +71,7 @@ public final class GroupConfig extends AbstractConfig {
     public static final String SHARE_PARTITION_MAX_RECORD_LOCKS_CONFIG = "share.partition.max.record.locks";
 
     public static final String SHARE_AUTO_OFFSET_RESET_CONFIG = "share.auto.offset.reset";
-    public static final String SHARE_AUTO_OFFSET_RESET_DEFAULT = ShareGroupAutoOffsetResetStrategy.LATEST.name();
+    public static final String SHARE_AUTO_OFFSET_RESET_DEFAULT = ShareGroupAutoOffsetResetStrategy.StrategyType.LATEST.toString();
     public static final String SHARE_AUTO_OFFSET_RESET_DOC = "The strategy to initialize the share-partition start offset. " +
         "<ul><li>earliest: automatically reset the offset to the earliest offset</li>" +
         "<li>latest: automatically reset the offset to the latest offset</li>" +

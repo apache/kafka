@@ -117,11 +117,11 @@ public class ShareGroupConfigProviderTest {
     void testAutoOffsetResetWithGroupConfig() {
         GroupConfigManager groupConfigManager = mock(GroupConfigManager.class);
         GroupConfig groupConfig = mock(GroupConfig.class);
-        when(groupConfig.shareAutoOffsetReset()).thenReturn(Optional.of(ShareGroupAutoOffsetResetStrategy.EARLIEST));
+        when(groupConfig.shareAutoOffsetReset()).thenReturn(Optional.of(ShareGroupAutoOffsetResetStrategy.fromString("earliest")));
         when(groupConfigManager.groupConfig("test-group")).thenReturn(Optional.of(groupConfig));
         provider = new ShareGroupConfigProvider(groupConfigManager);
 
-        assertEquals(ShareGroupAutoOffsetResetStrategy.EARLIEST, provider.autoOffsetReset("test-group"));
+        assertEquals(ShareGroupAutoOffsetResetStrategy.fromString("earliest"), provider.autoOffsetReset("test-group"));
     }
 
     @Test
