@@ -60,6 +60,7 @@ public class ClusterConfig {
     private final Map<Integer, Map<String, String>> perServerProperties;
     private final Map<Feature, Short> features;
     private final boolean standalone;
+    private final boolean skipJaasFileSetup;
 
     @SuppressWarnings("checkstyle:ParameterNumber")
     private ClusterConfig(Set<Type> types, int brokers, int controllers, int disksPerBroker, boolean autoStart,
@@ -67,7 +68,7 @@ public class ClusterConfig {
                   SecurityProtocol controllerSecurityProtocol, ListenerName controllerListenerName, File trustStoreFile,
                   MetadataVersion metadataVersion, Map<String, String> serverProperties,
                   Map<Integer, Map<String, String>> perServerProperties, List<String> tags, Map<Feature, Short> features,
-                  boolean standalone) {
+                  boolean standalone, boolean skipJaasFileSetup) {
         // do fail fast. the following values are invalid for kraft modes.
         if (brokers < 0) throw new IllegalArgumentException("Number of brokers must be greater or equal to zero.");
         if (controllers < 0) throw new IllegalArgumentException("Number of controller must be greater or equal to zero.");
@@ -89,6 +90,7 @@ public class ClusterConfig {
         this.tags = Objects.requireNonNull(tags);
         this.features = Objects.requireNonNull(features);
         this.standalone = standalone;
+        this.skipJaasFileSetup = skipJaasFileSetup;
     }
 
     public Set<Type> clusterTypes() {
@@ -141,6 +143,10 @@ public class ClusterConfig {
 
     public boolean standalone() {
         return standalone;
+    }
+
+    public boolean skipJaasFileSetup() {
+        return skipJaasFileSetup;
     }
 
     public Map<Integer, Map<String, String>> perServerOverrideProperties() {
@@ -200,7 +206,8 @@ public class ClusterConfig {
                 .setPerServerProperties(clusterConfig.perServerProperties)
                 .setTags(clusterConfig.tags)
                 .setFeatures(clusterConfig.features)
-                .setStandalone(clusterConfig.standalone);
+                .setStandalone(clusterConfig.standalone)
+                .setSkipJaasFileSetup(clusterConfig.skipJaasFileSetup);
     }
 
     public static class Builder {
@@ -220,6 +227,7 @@ public class ClusterConfig {
         private List<String> tags = List.of();
         private Map<Feature, Short> features = Map.of();
         private boolean standalone = false;
+        private boolean skipJaasFileSetup = false;
 
         private Builder() {}
 
@@ -305,10 +313,16 @@ public class ClusterConfig {
             return this;
         }
 
+        public Builder setSkipJaasFileSetup(boolean skipJaasFileSetup) {
+            this.skipJaasFileSetup = skipJaasFileSetup;
+            return this;
+        }
+
         public ClusterConfig build() {
             return new ClusterConfig(types, brokers, controllers, disksPerBroker, autoStart,
                     brokerSecurityProtocol, brokerListenerName, controllerSecurityProtocol, controllerListenerName,
-                    trustStoreFile, metadataVersion, serverProperties, perServerProperties, tags, features, standalone);
+                    trustStoreFile, metadataVersion, serverProperties, perServerProperties, tags, features, standalone,
+                    skipJaasFileSetup);
         }
     }
 }
