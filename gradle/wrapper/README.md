@@ -6,9 +6,9 @@ This directory contains the Gradle wrapper files for the Apache Kafka project.
 
 When upgrading the Gradle version used by the Kafka project, update the following files in order:
 
-1. **Update Gradle version** in `gradle/dependencies.gradle`:
-   ```groovy
-   gradle: "9.2.0"
+1. **Update Gradle version** in `gradle/libs.versions.toml`:
+   ```toml
+   gradle = "9.2.0"
    ```
 
 2. **You may have to update the wrapper JAR commit and checksum** in `wrapper.gradle`:

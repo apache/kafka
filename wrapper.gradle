@@ -23,7 +23,7 @@
 // and not the version installed on the machine running the task.
 // Read more about the wrapper here: https://docs.gradle.org/current/userguide/gradle_wrapper.html
 wrapper {
-    gradleVersion = versions.gradle
+    gradleVersion = rootProject.gradleVersion
 }
 
 // Custom task to inject support for downloading the gradle wrapper jar if it doesn't exist.
