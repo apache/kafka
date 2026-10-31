@@ -140,4 +140,5 @@ class ShareConsumerPerformanceService(PerformanceService):
                 'total_mb': float(parts[2]),
                 'mbps': float(parts[3]),
                 'records_per_sec': float(parts[4]),
+                'records': int(parts[5]),
             }
