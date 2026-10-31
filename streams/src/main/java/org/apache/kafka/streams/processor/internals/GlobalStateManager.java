@@ -31,4 +31,6 @@ public interface GlobalStateManager extends StateManager {
     Set<String> initialize();
 
     long approximateNumUncommittedBytes();
+
+    long maxStoreUncommittedBytes();
 }

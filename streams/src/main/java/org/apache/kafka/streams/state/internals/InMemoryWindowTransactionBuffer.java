@@ -109,11 +109,6 @@ class InMemoryWindowTransactionBuffer extends AbstractTransactionBuffer<InMemory
     }
 
     @Override
-    void stageToBackend(final WindowEntryKey key, final byte[] value) {
-        // no-op — staging map is sufficient; no write-batch concept for in-memory
-    }
-
-    @Override
     ManagedKeyValueIterator<WindowEntryKey, byte[]> newBaseIterator(final WindowEntryKey from, final WindowEntryKey to) {
         return newBaseIterator(from, to, true, true);
     }
