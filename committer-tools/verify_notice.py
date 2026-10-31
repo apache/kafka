@@ -53,7 +53,7 @@ WHITESPACE_PATTERN = re.compile(r"\s+")
 
 NoticeIndex = namedtuple(
     "NoticeIndex",
-    "jar_to_notices jars_without_notice notice_to_jars notice_to_sources canonical_text",
+    "notice_to_jars notice_to_sources canonical_text",
 )
 
 
@@ -70,9 +70,9 @@ def get_tarball_path(project_dir):
 
     pattern = re.compile(r"^kafka_2\.13-(?!.*docs).+\.tgz$", re.IGNORECASE)
     candidates = [
-        os.path.join(distributions_dir, f)
-        for f in os.listdir(distributions_dir)
-        if pattern.match(f)
+        os.path.join(distributions_dir, filename)
+        for filename in os.listdir(distributions_dir)
+        if pattern.match(filename)
     ]
     if not candidates:
         print("Error: No tarball matching 'kafka_2.13-*.tgz' found in:", distributions_dir)
@@ -88,17 +88,12 @@ def extract_tarball(tarball, extract_dir):
             tar.extractall(path=extract_dir)
 
 
-def classify_jars(libs_dir):
-    third_party, kafka_own = [], []
-    for fname in sorted(os.listdir(libs_dir)):
-        if not fname.endswith(".jar"):
-            continue
-        path = os.path.join(libs_dir, fname)
-        if KAFKA_JAR_PATTERN.search(fname):
-            kafka_own.append(path)
-        else:
-            third_party.append(path)
-    return third_party, kafka_own
+def get_third_party_jars(libs_dir):
+    return [
+        os.path.join(libs_dir, jar_name)
+        for jar_name in sorted(os.listdir(libs_dir))
+        if jar_name.endswith(".jar") and not KAFKA_JAR_PATTERN.search(jar_name)
+    ]
 
 
 def extract_notices_from_jar(jar_path):
@@ -119,8 +114,6 @@ def extract_notices_from_jar(jar_path):
 
 
 def collect_notices(jars):
-    jar_to_notices = {}
-    jars_without_notice = []
     notice_to_jars = defaultdict(list)
     notice_to_sources = defaultdict(list)
     canonical_text = {}
@@ -128,10 +121,6 @@ def collect_notices(jars):
     for jar in jars:
         jar_name = os.path.basename(jar)
         notices = extract_notices_from_jar(jar)
-        if not notices:
-            jars_without_notice.append(jar_name)
-            continue
-        jar_to_notices[jar_name] = notices
         seen_keys = set()
         for entry, text in notices:
             key = normalize(text)
@@ -142,16 +131,15 @@ def collect_notices(jars):
             notice_to_jars[key].append(jar_name)
             canonical_text.setdefault(key, text)
 
-    return NoticeIndex(jar_to_notices, jars_without_notice,
-                       notice_to_jars, notice_to_sources, canonical_text)
+    return NoticeIndex(notice_to_jars, notice_to_sources, canonical_text)
 
 
 def split_kafka_header(notice_binary_text):
-    idx = notice_binary_text.find(KAFKA_HEADER_END_MARKER)
-    if idx < 0:
+    marker_start = notice_binary_text.find(KAFKA_HEADER_END_MARKER)
+    if marker_start < 0:
         print(f"Error: header marker not found in NOTICE-binary: {KAFKA_HEADER_END_MARKER!r}")
         sys.exit(1)
-    end_of_block = notice_binary_text.find("\n\n", idx)
+    end_of_block = notice_binary_text.find("\n\n", marker_start)
     if end_of_block < 0:
         print("Error: no blank line found after the header marker in NOTICE-binary.")
         sys.exit(1)
@@ -166,63 +154,63 @@ def normalize(text):
 _CONSUMED_SENTINEL = "\x00"
 
 
-def find_match_span(haystack, needle, mask):
-    needle_norm = normalize(needle)
-    norm_chars = []
-    orig_offsets = []
-    prev_char = _CONSUMED_SENTINEL
-    for i, ch in enumerate(haystack):
-        if mask[i]:
-            if prev_char != _CONSUMED_SENTINEL:
-                norm_chars.append(_CONSUMED_SENTINEL)
-                orig_offsets.append(i)
-                prev_char = _CONSUMED_SENTINEL
+def find_match_span(body, notice_text, matched_mask):
+    normalized_notice = normalize(notice_text)
+    normalized_chars = []
+    original_offsets = []
+    previous_char = _CONSUMED_SENTINEL
+    for offset, char in enumerate(body):
+        if matched_mask[offset]:
+            if previous_char != _CONSUMED_SENTINEL:
+                normalized_chars.append(_CONSUMED_SENTINEL)
+                original_offsets.append(offset)
+                previous_char = _CONSUMED_SENTINEL
             continue
-        if ch.isspace():
-            if prev_char != " " and prev_char != _CONSUMED_SENTINEL:
-                norm_chars.append(" ")
-                orig_offsets.append(i)
-                prev_char = " "
+        if char.isspace():
+            if previous_char != " " and previous_char != _CONSUMED_SENTINEL:
+                normalized_chars.append(" ")
+                original_offsets.append(offset)
+                previous_char = " "
         else:
-            norm_chars.append(ch)
-            orig_offsets.append(i)
-            prev_char = ch
+            normalized_chars.append(char)
+            original_offsets.append(offset)
+            previous_char = char
 
-    pos = "".join(norm_chars).find(needle_norm)
-    if pos < 0:
+    match_start = "".join(normalized_chars).find(normalized_notice)
+    if match_start < 0:
         return None
-    return orig_offsets[pos], orig_offsets[pos + len(needle_norm) - 1] + 1
+    return original_offsets[match_start], original_offsets[match_start + len(normalized_notice) - 1] + 1
 
 
 def trim_blank_edges(lines):
-    head, tail = 0, len(lines)
-    while head < tail and not lines[head].strip():
-        head += 1
-    while tail > head and not lines[tail - 1].strip():
-        tail -= 1
-    return head, tail
+    first_content_line, content_end_line = 0, len(lines)
+    while first_content_line < content_end_line and not lines[first_content_line].strip():
+        first_content_line += 1
+    while content_end_line > first_content_line and not lines[content_end_line - 1].strip():
+        content_end_line -= 1
+    return first_content_line, content_end_line
 
 
-def find_leftover_regions(body, mask, notice_binary_text, body_start):
+def find_leftover_regions(body, matched_mask, notice_binary_text, body_start):
     regions = []
-    i, n = 0, len(body)
-    while i < n:
-        if mask[i]:
-            i += 1
+    region_start, body_length = 0, len(body)
+    while region_start < body_length:
+        if matched_mask[region_start]:
+            region_start += 1
             continue
-        j = i
-        while j < n and not mask[j]:
-            j += 1
-        chunk = body[i:j]
-        if chunk.strip():
-            lines = chunk.splitlines()
-            head, tail = trim_blank_edges(lines)
-            if head < tail:
-                full_start = body_start + i
-                line_start = notice_binary_text[:full_start].count("\n") + 1 + head
-                line_end = line_start + (tail - head - 1)
-                regions.append((line_start, line_end, lines[head:tail]))
-        i = j
+        region_end = region_start
+        while region_end < body_length and not matched_mask[region_end]:
+            region_end += 1
+        region_text = body[region_start:region_end]
+        if region_text.strip():
+            lines = region_text.splitlines()
+            first_content_line, content_end_line = trim_blank_edges(lines)
+            if first_content_line < content_end_line:
+                absolute_start = body_start + region_start
+                line_start = notice_binary_text[:absolute_start].count("\n") + 1 + first_content_line
+                line_end = line_start + (content_end_line - first_content_line - 1)
+                regions.append((line_start, line_end))
+        region_start = region_end
     return regions
 
 
@@ -255,34 +243,28 @@ def print_update_summary(unmatched, leftover):
         print(f"  {step}. Add the {len(unmatched)} NOTICE block{'s' if len(unmatched) != 1 else ''} below.")
 
 
-def match_notices(body, index):
-    # Longest NOTICEs first so a shorter one can't be absorbed as a substring of
-    # a longer one and fragment the longer match.
-    ordered = sorted(
-        index.notice_to_jars.items(),
-        key=lambda kv: (-len(index.canonical_text[kv[0]]), min(kv[1])),
+def match_notices(body, notice_index):
+    # Match the longest normalized NOTICEs first so a shorter one can't consume
+    # part of a longer match.
+    ordered_notices = sorted(
+        notice_index.notice_to_jars,
+        key=lambda notice_key: (-len(notice_key), min(notice_index.notice_to_jars[notice_key])),
     )
-    mask = [False] * len(body)
-    matched = []
+    matched_mask = [False] * len(body)
     unmatched = []
-    for key, _jars in ordered:
-        sources = sorted(index.notice_to_sources[key])
-        span = find_match_span(body, index.canonical_text[key], mask)
+    for notice_key in ordered_notices:
+        notice_text = notice_index.canonical_text[notice_key]
+        span = find_match_span(body, notice_text, matched_mask)
         if span is None:
-            unmatched.append((sources, index.canonical_text[key]))
+            sources = sorted(notice_index.notice_to_sources[notice_key])
+            unmatched.append((sources, notice_text))
         else:
-            for i in range(span[0], span[1]):
-                mask[i] = True
-            matched.append(sources)
-    return mask, matched, unmatched
+            for offset in range(span[0], span[1]):
+                matched_mask[offset] = True
+    return matched_mask, unmatched
 
 
 def print_notices_to_add(unmatched):
-    if not unmatched:
-        print_section_header("ADD TO NOTICE-binary")
-        print("No NOTICE text needs to be added.")
-        return
-
     print_section_header(f"ADD TO NOTICE-binary (NOTICE blocks: {len(unmatched)})")
     print("Copy only the text between COPY START and COPY END into NOTICE-binary.")
 
@@ -301,15 +283,10 @@ def print_notices_to_add(unmatched):
 
 
 def print_blocks_to_remove(regions, notice_binary_label):
-    if not regions:
-        print_section_header("REMOVE FROM NOTICE-binary")
-        print("No existing block needs to be removed.")
-        return
-
     print_section_header(f"REMOVE FROM NOTICE-binary (line ranges: {len(regions)})")
     print("Line numbers refer to the file as checked.")
     print("Delete these ranges in the order shown (bottom to top) before adding new text:")
-    for idx, (line_start, line_end, _lines) in enumerate(reversed(regions), 1):
+    for idx, (line_start, line_end) in enumerate(reversed(regions), 1):
         print(f"  [{idx:02d}] {notice_binary_label}: lines {line_start}-{line_end}")
 
 
@@ -358,15 +335,15 @@ def main():
         extract_tarball(tarball, tmp_dir)
         libs_dir = os.path.join(tmp_dir, os.listdir(tmp_dir)[0], "libs")
 
-        third_party_jars, _ = classify_jars(libs_dir)
+        third_party_jars = get_third_party_jars(libs_dir)
 
-        index = collect_notices(third_party_jars)
+        notice_index = collect_notices(third_party_jars)
 
         header, body = split_kafka_header(notice_binary_text)
         body_start = len(header)
 
-        mask, _matched, unmatched = match_notices(body, index)
-        leftover = find_leftover_regions(body, mask, notice_binary_text, body_start)
+        matched_mask, unmatched = match_notices(body, notice_index)
+        leftover = find_leftover_regions(body, matched_mask, notice_binary_text, body_start)
 
         notice_binary_label = os.path.relpath(notice_binary_path, project_dir)
         print_notice_update_actions(unmatched, leftover, notice_binary_label)
