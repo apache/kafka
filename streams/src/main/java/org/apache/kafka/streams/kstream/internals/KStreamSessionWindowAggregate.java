@@ -217,7 +217,7 @@ public class KStreamSessionWindowAggregate<KIn, VIn, VAgg> implements KStreamAgg
 
                 agg = aggregator.apply(record.key(), record.value(), agg);
                 final Windowed<KIn> sessionKey = new Windowed<>(record.key(), mergedWindow);
-                store.put(sessionKey, AggregationWithHeaders.make(agg, new RecordHeaders()));
+                store.put(sessionKey, AggregationWithHeaders.make(agg, record.headers()));
 
                 maybeForwardUpdate(sessionKey, null, agg);
             }
