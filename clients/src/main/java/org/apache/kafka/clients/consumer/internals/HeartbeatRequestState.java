@@ -70,6 +70,11 @@ public class HeartbeatRequestState extends RequestState {
 
     public long timeToNextHeartbeatMs(final long currentTimeMs) {
         if (heartbeatTimer.isExpired()) {
+            if (requestInFlight()) {
+                // The heartbeat timer can expire while a request is in flight, and the backoff since the
+                // last response may already be exhausted. Wait the retry backoff to avoid a busy loop.
+                return retryBackoffMs();
+            }
             return remainingBackoffMs(currentTimeMs);
         }
         return heartbeatTimer.remainingMs();
