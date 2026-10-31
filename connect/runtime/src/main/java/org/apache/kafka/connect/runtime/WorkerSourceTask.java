@@ -266,6 +266,7 @@ class WorkerSourceTask extends AbstractWorkerSourceTask {
         try {
             shouldFlush = offsetWriter.beginFlush(timeout - time.milliseconds(), TimeUnit.MILLISECONDS);
         } catch (InterruptedException e) {
+            Thread.currentThread().interrupt();
             log.warn("{} Interrupted while waiting for previous offset flush to complete, cancelling", this);
             recordCommitFailure(time.milliseconds() - started);
             return false;
@@ -307,6 +308,7 @@ class WorkerSourceTask extends AbstractWorkerSourceTask {
             // errors, is only wasteful in this minor edge case, and the worst result is that the log
             // could look a little confusing.
         } catch (InterruptedException e) {
+            Thread.currentThread().interrupt();
             log.warn("{} Flush of offsets interrupted, cancelling", this);
             offsetWriter.cancelFlush();
             recordCommitFailure(time.milliseconds() - started);
