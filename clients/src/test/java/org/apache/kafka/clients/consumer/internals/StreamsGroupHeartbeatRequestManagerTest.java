@@ -63,6 +63,7 @@ import java.util.Arrays;
 import java.util.Collection;
 import java.util.Collections;
 import java.util.Comparator;
+import java.util.LinkedHashSet;
 import java.util.List;
 import java.util.Map;
 import java.util.Optional;
@@ -968,6 +969,75 @@ class StreamsGroupHeartbeatRequestManagerTest {
         assertNull(nonJoiningRequestData.topology());
     }
 
+    @Test
+    public void testBuildingHeartbeatRequestSortsCopartitionGroups() {
+        // Initial Order
+        // CopartitionGroup B
+        //├── sourceTopics: [2]
+        //└── repartitionSourceTopics: [] 
+        // CopartitionGroup A
+        //├── sourceTopics: [1, 0]
+        //└── repartitionSourceTopics: [1, 0]
+        final Set<String> groupA = new LinkedHashSet<>(List.of(
+            SOURCE_TOPIC_2,
+            REPARTITION_SOURCE_TOPIC_2,
+            SOURCE_TOPIC_1,
+            REPARTITION_SOURCE_TOPIC_1
+        ));
+        final Set<String> groupB = Set.of(SOURCE_TOPIC_3);
+
+        final StreamsRebalanceData.Subtopology subtopology =
+            new StreamsRebalanceData.Subtopology(
+                Set.of(SOURCE_TOPIC_1, SOURCE_TOPIC_2, SOURCE_TOPIC_3),
+                Set.of(),
+                REPARTITION_SOURCE_TOPICS,
+                Map.of(),
+                List.of(groupB, groupA)
+            );
+
+        final StreamsRebalanceData rebalanceData = new StreamsRebalanceData(
+            PROCESS_ID,
+            Optional.empty(),
+            Optional.empty(),
+            Map.of(SUBTOPOLOGY_NAME_1, subtopology),
+            Map.of(),
+            Map::of,
+            Map::of
+        );
+
+        final StreamsGroupHeartbeatRequestManager.HeartbeatState heartbeatState =
+            new StreamsGroupHeartbeatRequestManager.HeartbeatState(
+                rebalanceData,
+                membershipManager,
+                1000,
+                time
+            );
+        when(membershipManager.state()).thenReturn(MemberState.JOINING);
+
+        StreamsGroupHeartbeatRequestData request = heartbeatState.buildRequestData();
+
+        // Expected Order
+        // CopartitionGroup A
+        //├── sourceTopics: [0, 1]
+        //└── repartitionSourceTopics: [0, 1]
+        // CopartitionGroup B
+        //├── sourceTopics: [2]
+        //└── repartitionSourceTopics: []
+        final StreamsGroupHeartbeatRequestData.CopartitionGroup expectedGroupA =
+            new StreamsGroupHeartbeatRequestData.CopartitionGroup()
+                .setSourceTopics(List.of((short) 0, (short) 1))
+                .setRepartitionSourceTopics(List.of((short) 0, (short) 1));
+
+        final StreamsGroupHeartbeatRequestData.CopartitionGroup expectedGroupB =
+            new StreamsGroupHeartbeatRequestData.CopartitionGroup()
+                .setSourceTopics(List.of((short) 2));
+
+        assertEquals(
+            List.of(expectedGroupA, expectedGroupB),
+            request.topology().subtopologies().get(0).copartitionGroups()
+        );
+    }
+    
     @Test
     public void testHotWarmupTaskDisabledWhenAcceptableRecoveryLagIsNegative() {
         // A v0 broker (or a yet-unreachable coordinator) leaves acceptableRecoveryLag at its
