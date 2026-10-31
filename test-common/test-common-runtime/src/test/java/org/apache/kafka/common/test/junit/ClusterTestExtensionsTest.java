@@ -389,7 +389,7 @@ public class ClusterTestExtensionsTest {
         }
     }
 
-    @ClusterTest(types = {Type.KRAFT})
+    @ClusterTest(types = {Type.KRAFT, Type.CO_KRAFT})
     public void testControllerRestart(ClusterInstance cluster) throws ExecutionException, InterruptedException {
         try (Admin admin = cluster.admin()) {
 
