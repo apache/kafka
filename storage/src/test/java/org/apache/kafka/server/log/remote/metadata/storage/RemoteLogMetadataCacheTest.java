@@ -167,6 +167,88 @@ public class RemoteLogMetadataCacheTest {
         assertTrue(cache.isInitialized());
     }
 
+    @Test
+    public void testLeaderEpochEntryCleanupOnDeleteFinished() throws RemoteResourceNotFoundException {
+        cache.markInitialized();
+        int leaderEpoch = 2;
+        long startOffset = 0L;
+        long endOffset = 100L;
+        RemoteLogSegmentId segmentId = new RemoteLogSegmentId(tpId0, Uuid.randomUuid());
+        RemoteLogSegmentMetadata segmentMetadata = new RemoteLogSegmentMetadata(segmentId, startOffset, endOffset,
+                -1L, brokerId0, time.milliseconds(), segmentSize, Map.of(leaderEpoch, startOffset));
+        cache.addCopyInProgressSegment(segmentMetadata);
+
+        RemoteLogSegmentMetadataUpdate copyFinished = new RemoteLogSegmentMetadataUpdate(
+                segmentId, time.milliseconds(), Optional.empty(), RemoteLogSegmentState.COPY_SEGMENT_FINISHED, brokerId1);
+        cache.updateRemoteLogSegmentMetadata(copyFinished);
+
+        assertTrue(cache.leaderEpochEntries.containsKey(leaderEpoch));
+        assertEquals(Optional.of(endOffset), cache.highestOffsetForEpoch(leaderEpoch));
+
+        RemoteLogSegmentMetadataUpdate deleteStarted = new RemoteLogSegmentMetadataUpdate(
+                segmentId, time.milliseconds(), Optional.empty(), RemoteLogSegmentState.DELETE_SEGMENT_STARTED, brokerId1);
+        cache.updateRemoteLogSegmentMetadata(deleteStarted);
+        RemoteLogSegmentMetadataUpdate deleteFinished = new RemoteLogSegmentMetadataUpdate(
+                segmentId, time.milliseconds(), Optional.empty(), RemoteLogSegmentState.DELETE_SEGMENT_FINISHED, brokerId1);
+        cache.updateRemoteLogSegmentMetadata(deleteFinished);
+
+        assertFalse(cache.leaderEpochEntries.containsKey(leaderEpoch));
+        assertEquals(Optional.of(endOffset), cache.highestOffsetForEpoch(leaderEpoch));
+    }
+
+    @Test
+    public void testHighestOffsetForEpochIsMonotonic() throws RemoteResourceNotFoundException {
+        cache.markInitialized();
+        int leaderEpoch = 1;
+
+        RemoteLogSegmentId highSegmentId = new RemoteLogSegmentId(tpId0, Uuid.randomUuid());
+        RemoteLogSegmentMetadata highSegment = new RemoteLogSegmentMetadata(highSegmentId, 51L, 100L,
+                -1L, brokerId0, time.milliseconds(), segmentSize, Map.of(leaderEpoch, 51L));
+        cache.addCopyInProgressSegment(highSegment);
+        cache.updateRemoteLogSegmentMetadata(new RemoteLogSegmentMetadataUpdate(
+                highSegmentId, time.milliseconds(), Optional.empty(), RemoteLogSegmentState.COPY_SEGMENT_FINISHED, brokerId1));
+
+        RemoteLogSegmentId lowSegmentId = new RemoteLogSegmentId(tpId0, Uuid.randomUuid());
+        RemoteLogSegmentMetadata lowSegment = new RemoteLogSegmentMetadata(lowSegmentId, 0L, 50L,
+                -1L, brokerId0, time.milliseconds(), segmentSize, Map.of(leaderEpoch, 0L));
+        cache.addCopyInProgressSegment(lowSegment);
+        cache.updateRemoteLogSegmentMetadata(new RemoteLogSegmentMetadataUpdate(
+                lowSegmentId, time.milliseconds(), Optional.empty(), RemoteLogSegmentState.COPY_SEGMENT_FINISHED, brokerId1));
+
+        assertEquals(Optional.of(100L), cache.highestOffsetForEpoch(leaderEpoch));
+    }
+
+    @Test
+    public void testLeaderEpochEntryRetainedWhenSegmentsRemain() throws RemoteResourceNotFoundException {
+        cache.markInitialized();
+        int leaderEpoch = 3;
+
+        RemoteLogSegmentId segmentId1 = new RemoteLogSegmentId(tpId0, Uuid.randomUuid());
+        RemoteLogSegmentMetadata segment1 = new RemoteLogSegmentMetadata(segmentId1, 0L, 100L,
+                -1L, brokerId0, time.milliseconds(), segmentSize, Map.of(leaderEpoch, 0L));
+        cache.addCopyInProgressSegment(segment1);
+        cache.updateRemoteLogSegmentMetadata(new RemoteLogSegmentMetadataUpdate(
+                segmentId1, time.milliseconds(), Optional.empty(), RemoteLogSegmentState.COPY_SEGMENT_FINISHED, brokerId1));
+
+        RemoteLogSegmentId segmentId2 = new RemoteLogSegmentId(tpId0, Uuid.randomUuid());
+        RemoteLogSegmentMetadata segment2 = new RemoteLogSegmentMetadata(segmentId2, 101L, 200L,
+                -1L, brokerId0, time.milliseconds(), segmentSize, Map.of(leaderEpoch, 101L));
+        cache.addCopyInProgressSegment(segment2);
+        cache.updateRemoteLogSegmentMetadata(new RemoteLogSegmentMetadataUpdate(
+                segmentId2, time.milliseconds(), Optional.empty(), RemoteLogSegmentState.COPY_SEGMENT_FINISHED, brokerId1));
+
+        assertTrue(cache.leaderEpochEntries.containsKey(leaderEpoch));
+        assertEquals(Optional.of(200L), cache.highestOffsetForEpoch(leaderEpoch));
+
+        cache.updateRemoteLogSegmentMetadata(new RemoteLogSegmentMetadataUpdate(
+                segmentId1, time.milliseconds(), Optional.empty(), RemoteLogSegmentState.DELETE_SEGMENT_STARTED, brokerId1));
+        cache.updateRemoteLogSegmentMetadata(new RemoteLogSegmentMetadataUpdate(
+                segmentId1, time.milliseconds(), Optional.empty(), RemoteLogSegmentState.DELETE_SEGMENT_FINISHED, brokerId1));
+
+        assertTrue(cache.leaderEpochEntries.containsKey(leaderEpoch));
+        assertEquals(Optional.of(200L), cache.highestOffsetForEpoch(leaderEpoch));
+    }
+
     private void updateAndVerifyCacheContents(RemoteLogSegmentMetadataUpdate updatedMetadata,
                                               RemoteLogSegmentState expectedSegmentState,
                                               int leaderEpoch) throws RemoteResourceNotFoundException {
