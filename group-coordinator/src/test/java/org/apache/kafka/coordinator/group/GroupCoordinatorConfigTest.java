@@ -321,6 +321,27 @@ public class GroupCoordinatorConfigTest {
         }
     }
 
+    public static class LeadingWhitespaceTaskAssignor extends CustomTaskAssignor {
+        @Override
+        public String name() {
+            return " regional";
+        }
+    }
+
+    public static class TrailingWhitespaceTaskAssignor extends CustomTaskAssignor {
+        @Override
+        public String name() {
+            return "regional ";
+        }
+    }
+
+    public static class TabAndNewlineTaskAssignor extends CustomTaskAssignor {
+        @Override
+        public String name() {
+            return "\tregional\n";
+        }
+    }
+
     public static class NoDefaultConstructorTaskAssignor implements TaskAssignor {
         public NoDefaultConstructorTaskAssignor(String unused) {
         }
@@ -422,6 +443,22 @@ public class GroupCoordinatorConfigTest {
         assertEquals(2, assignors.size());
         assertInstanceOf(StickyTaskAssignor.class, assignors.get(0));
         assertInstanceOf(CustomTaskAssignor.class, assignors.get(1));
+    }
+
+    @Test
+    public void testStreamsGroupAssignorsWithSurroundingWhitespaceFails() {
+        for (TaskAssignor assignor : List.of(
+            new LeadingWhitespaceTaskAssignor(),
+            new TrailingWhitespaceTaskAssignor(),
+            new TabAndNewlineTaskAssignor()
+        )) {
+            Map<String, Object> configs = Map.of(
+                GroupCoordinatorConfig.STREAMS_GROUP_ASSIGNORS_CONFIG, assignor.getClass().getName());
+            assertEquals("Invalid value " + assignor.getClass().getName() +
+                    " for configuration group.streams.assignors: Assignor name '" + assignor.name() +
+                    "' must not contain leading or trailing whitespace.",
+                assertThrows(ConfigException.class, () -> createConfig(configs)).getMessage());
+        }
     }
 
     @Test
