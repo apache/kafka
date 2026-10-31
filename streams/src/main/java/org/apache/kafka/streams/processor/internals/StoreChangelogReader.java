@@ -470,17 +470,17 @@ public class StoreChangelogReader implements ChangelogReader {
             .collect(Collectors.toSet());
     }
 
-    // Report a conservative value (higher than the real value) as fallback.
-    // Only "source topic optimized" changelogs have a logical end offset from `ChangelogMetadata` (the committed offset on the source topic).
-    // If not known (not set yet, or no "source topic optimization"), fall back to physical end offset.
+    // The end offset of each changelog as the next offset to fetch: the restore end offset if known (for an active task,
+    // or the committed offset of a source topic), and otherwise one past the store's end offset, which is the last
+    // offset of the changelog. Null while neither is known.
     @Override
     public Map<TopicPartition, Long> logicalChangelogEndOffsets() {
         final Map<TopicPartition, Long> endOffsets = new HashMap<>(changelogs.size());
         for (final Map.Entry<TopicPartition, ChangelogMetadata> entry : changelogs.entrySet()) {
             final ChangelogMetadata metadata = entry.getValue();
             Long endOffset = metadata.restoreEndOffset;
-            if (endOffset == null) {
-                endOffset = metadata.storeMetadata.endOffset();
+            if (endOffset == null && metadata.storeMetadata.endOffset() != null) {
+                endOffset = metadata.storeMetadata.endOffset() + 1L;
             }
             endOffsets.put(entry.getKey(), endOffset);
         }
@@ -781,7 +781,8 @@ public class StoreChangelogReader implements ChangelogReader {
      * Advance a standby store's restored offset only once restoration has actually reached the end
      * offset — the limit offset for changelogs piggy-backed on a source topic. A zero-record poll is
      * not sufficient: retention seeks, source buffering, and incomplete fetches can leave the consumer
-     * at a non-zero position while records remain to apply.
+     * at a non-zero position while records remain to apply. A dedicated changelog that has reached its end also
+     * records its end offset.
      */
     private void maybeAdvanceStandbyRestoredOffset(final ProcessorStateManager stateManager,
                                                    final ChangelogMetadata changelogMetadata,
@@ -800,7 +801,11 @@ public class StoreChangelogReader implements ChangelogReader {
                 // the next offset to fetch, not last-applied
                 final OptionalLong lag = restoreConsumer.currentLag(partition);
                 if (lag.isPresent() && lag.getAsLong() == 0L) {
-                    stateManager.advanceRestoredOffsetTo(storeMetadata, restoreConsumer.position(partition, Duration.ZERO));
+                    final long position = restoreConsumer.position(partition, Duration.ZERO);
+                    stateManager.advanceRestoredOffsetTo(storeMetadata, position);
+                    // the end offset is otherwise only learned from a restored batch, which never comes when
+                    // there is nothing to restore; like there, it is the last offset, -1 for an empty changelog
+                    storeMetadata.setEndOffset(position - 1L);
                 }
             } else if (restoreEndOffset > 0L) {
                 // source changelog: restoreEndOffset is the committed-offset limit; advance only up to
