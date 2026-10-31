@@ -43,9 +43,9 @@ import org.junit.jupiter.api.Assertions._
 import org.junit.jupiter.api.Test
 import org.junit.jupiter.params.ParameterizedTest
 import org.junit.jupiter.params.provider.{EnumSource, ValueSource}
-import org.mockito.ArgumentMatchers.any
+import org.mockito.ArgumentMatchers.{any, anyLong}
 import org.mockito.{ArgumentCaptor, ArgumentMatchers}
-import org.mockito.Mockito.{clearInvocations, mock, mockConstruction, times, verify, verifyNoMoreInteractions, when}
+import org.mockito.Mockito.{clearInvocations, mock, mockConstruction, never, times, verify, verifyNoMoreInteractions, when}
 
 import scala.jdk.CollectionConverters._
 import scala.util.Try
@@ -404,6 +404,57 @@ class TransactionMarkerChannelManagerTest {
     }.toMap
 
     assertEquals(Map(broker1 -> expectedBroker1Request), secondDrainedRequests)
+  }
+
+  @Test
+  def shouldNotWakeUpWhenRetryingMarkersForUnknownBroker(): Unit = {
+    mockCache()
+
+    when(metadataCache.getPartitionLeaderEndpoint(
+      ArgumentMatchers.eq(partition1.topic),
+      ArgumentMatchers.eq(partition1.partition),
+      any())
+    ).thenReturn(Optional.of(Node.noNode))
+
+    channelManager.addTxnMarkersToSend(coordinatorEpoch, txnResult, txnMetadata2, txnMetadata2.prepareComplete(time.milliseconds()))
+
+    // Adding a marker from outside the sender thread must wake it up
+    verify(networkClient).wakeup()
+    clearInvocations(networkClient)
+
+    // Re-parking a marker whose leader is still unavailable must not wake up the sender thread again,
+    // otherwise the next poll returns immediately and the retry becomes a busy loop
+    assertTrue(channelManager.generateRequests().isEmpty)
+    assertTrue(channelManager.generateRequests().isEmpty)
+    assertEquals(1, channelManager.queueForUnknownBroker.totalNumMarkers)
+    assertEquals(1, channelManager.numTxnsWithPendingMarkers)
+    verify(networkClient, never()).wakeup()
+  }
+
+  @Test
+  def shouldBackOffWhileMarkersArePendingForUnknownBroker(): Unit = {
+    mockCache()
+
+    when(metadataCache.getPartitionLeaderEndpoint(
+      ArgumentMatchers.eq(partition1.topic),
+      ArgumentMatchers.eq(partition1.partition),
+      any())
+    ).thenReturn(Optional.of(Node.noNode))
+
+    // Nothing to retry: block until woken up
+    channelManager.doWork()
+    verify(networkClient).poll(ArgumentMatchers.eq(Long.MaxValue), anyLong())
+    clearInvocations(networkClient)
+
+    channelManager.addTxnMarkersToSend(coordinatorEpoch, txnResult, txnMetadata2, txnMetadata2.prepareComplete(time.milliseconds()))
+    clearInvocations(networkClient)
+
+    // A parked marker is retried after a bounded poll, since re-parking it does not wake up the sender thread
+    channelManager.doWork()
+    verify(networkClient).poll(ArgumentMatchers.eq(TransactionMarkerChannelManager.UnknownDestinationRetryBackoffMs), anyLong())
+    verify(networkClient, never()).wakeup()
+    assertEquals(1, channelManager.queueForUnknownBroker.totalNumMarkers)
+    assertEquals(1, channelManager.numTxnsWithPendingMarkers)
   }
 
   @ParameterizedTest
