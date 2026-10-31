@@ -21,6 +21,7 @@ import org.apache.kafka.common.TopicPartition;
 import org.apache.kafka.common.compress.Compression;
 import org.apache.kafka.common.config.AbstractConfig;
 import org.apache.kafka.common.config.ConfigDef;
+import org.apache.kafka.common.config.ConfigException;
 import org.apache.kafka.common.config.TopicConfig;
 import org.apache.kafka.common.errors.CorruptRecordException;
 import org.apache.kafka.common.message.AbortedTxn;
@@ -2337,6 +2338,33 @@ public class LogCleanerTest {
         } finally {
             logCleaner.shutdown();
         }
+    }
+
+    @Test
+    public void testValidateReconfigurationOfNumThreads() {
+        LogCleaner logCleaner = new LogCleaner(numThreadsConfig(4),
+            List.of(TestUtils.tempDirectory()),
+            new ConcurrentHashMap<>(),
+            new LogDirFailureChannel(1),
+            time);
+
+        try {
+            logCleaner.validateReconfiguration(numThreadsConfig(2), true);
+            logCleaner.validateReconfiguration(numThreadsConfig(8), true);
+            assertThrows(ConfigException.class, () -> logCleaner.validateReconfiguration(numThreadsConfig(1), true));
+            assertThrows(ConfigException.class, () -> logCleaner.validateReconfiguration(numThreadsConfig(9), true));
+
+            // Without the bounds, the threads num may change by any amount, but must still be at least 1
+            logCleaner.validateReconfiguration(numThreadsConfig(1), false);
+            logCleaner.validateReconfiguration(numThreadsConfig(9), false);
+            assertThrows(ConfigException.class, () -> logCleaner.validateReconfiguration(numThreadsConfig(0), false));
+        } finally {
+            logCleaner.shutdown();
+        }
+    }
+
+    private CleanerConfig numThreadsConfig(int numThreads) {
+        return makeReconfigureConfig(Map.of(CleanerConfig.LOG_CLEANER_THREADS_PROP, numThreads));
     }
 
     @Test
