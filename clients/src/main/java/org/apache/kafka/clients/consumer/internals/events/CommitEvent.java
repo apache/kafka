@@ -29,7 +29,7 @@ public abstract class CommitEvent extends CompletableApplicationEvent<Map<TopicP
     /**
      * Offsets to commit per partition.
      */
-    private final Optional<Map<TopicPartition, OffsetAndMetadata>> offsets;
+    private volatile Optional<Map<TopicPartition, OffsetAndMetadata>> offsets;
 
     /**
      * Future that completes when allConsumed offsets have been calculated.
@@ -71,6 +71,13 @@ public abstract class CommitEvent extends CompletableApplicationEvent<Map<TopicP
 
     public void markOffsetsReady() {
         offsetsReady.complete(null);
+    }
+
+    public void setOffsetsIfOffsetsIsEmpty(Map<TopicPartition, OffsetAndMetadata> newOffsets) {
+        if (offsets.isPresent()) {
+            return;
+        }
+        offsets = validate(Optional.ofNullable(newOffsets));
     }
 
     @Override
