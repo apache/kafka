@@ -367,7 +367,7 @@ public abstract class Cast<R extends ConnectRecord<R>> implements Transformation
         if (value instanceof java.util.Date dateValue) {
             return Values.dateFormatFor(dateValue).format(dateValue);
         } else if (value instanceof ByteBuffer byteBuffer) {
-            return Base64.getEncoder().encodeToString(Utils.readBytes(byteBuffer));
+            return Base64.getEncoder().encodeToString(Utils.toArray(byteBuffer));
         } else if (value instanceof byte[] rawBytes) {
             return Base64.getEncoder().encodeToString(rawBytes);
         } else {
