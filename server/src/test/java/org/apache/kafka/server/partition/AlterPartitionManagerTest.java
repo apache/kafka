@@ -55,6 +55,7 @@ import java.util.concurrent.CompletableFuture;
 import java.util.concurrent.ExecutionException;
 import java.util.concurrent.TimeUnit;
 import java.util.concurrent.TimeoutException;
+import java.util.concurrent.atomic.AtomicBoolean;
 import java.util.stream.Collectors;
 
 import static org.apache.kafka.test.TestUtils.assertFutureThrows;
@@ -87,7 +88,7 @@ public class AlterPartitionManagerTest {
     @Test
     public void testBasic() {
         var scheduler = new MockScheduler(time);
-        var alterPartitionManager = new DefaultAlterPartitionManager(brokerToController, scheduler, brokerId, () -> 2L);
+        var alterPartitionManager = new DefaultAlterPartitionManager(brokerToController, scheduler, brokerId, () -> 2L, () -> true);
         alterPartitionManager.start();
         alterPartitionManager.submit(tp0, new LeaderAndIsr(1, 1, List.of(1, 2, 3), LeaderRecoveryState.RECOVERED, 10));
         verify(brokerToController).start();
@@ -97,7 +98,7 @@ public class AlterPartitionManagerTest {
     @Test
     public void testBasicWithBrokerEpoch() {
         var scheduler = new MockScheduler(time);
-        var alterPartitionManager = new DefaultAlterPartitionManager(brokerToController, scheduler, brokerId, () -> 101L);
+        var alterPartitionManager = new DefaultAlterPartitionManager(brokerToController, scheduler, brokerId, () -> 101L, () -> true);
         alterPartitionManager.start();
         ArrayList<BrokerState> isrWithBrokerEpoch = new ArrayList<>();
         for (int i = 1; i <= 3; i++) {
@@ -136,7 +137,7 @@ public class AlterPartitionManagerTest {
         ArgumentCaptor<AbstractRequest.Builder<AlterPartitionRequest>> requestCapture = ArgumentCaptor.captor();
 
         var scheduler = new MockScheduler(time);
-        var alterPartitionManager = new DefaultAlterPartitionManager(brokerToController, scheduler, brokerId, () -> 2L);
+        var alterPartitionManager = new DefaultAlterPartitionManager(brokerToController, scheduler, brokerId, () -> 2L, () -> true);
         alterPartitionManager.start();
         alterPartitionManager.submit(tp0, new LeaderAndIsr(1, 1, List.of(1), leaderRecoveryState, 10));
         verify(brokerToController).start();
@@ -147,12 +148,39 @@ public class AlterPartitionManagerTest {
     }
 
     @Test
+    public void testRequestVersionFollowsRequestHeaderV3SupportedChange() {
+        ArgumentCaptor<AbstractRequest.Builder<AlterPartitionRequest>> requestCapture = ArgumentCaptor.captor();
+        ArgumentCaptor<ControllerRequestCompletionHandler> callbackCapture = ArgumentCaptor.captor();
+        var requestHeaderV3Supported = new AtomicBoolean(false);
+
+        var scheduler = new MockScheduler(time);
+        var alterPartitionManager = new DefaultAlterPartitionManager(brokerToController, scheduler, brokerId, () -> 2L, requestHeaderV3Supported::get);
+        alterPartitionManager.start();
+        alterPartitionManager.submit(tp0, new LeaderAndIsr(1, 1, List.of(1, 2, 3), LeaderRecoveryState.RECOVERED, 10));
+
+        verify(brokerToController).sendRequest(requestCapture.capture(), callbackCapture.capture());
+        short requestVersion = requestCapture.getValue().latestAllowedVersion();
+        assertEquals((short) 3, requestVersion);
+        assertEquals((short) 2, ApiKeys.ALTER_PARTITION.requestHeaderVersion(requestVersion));
+
+        // The response omits tp0, so it is retried
+        requestHeaderV3Supported.set(true);
+        callbackCapture.getValue().onComplete(new ClientResponse(null, null, "", 0L, 0L,
+                false, null, null, new AlterPartitionResponse(new AlterPartitionResponseData())));
+
+        verify(brokerToController, times(2)).sendRequest(requestCapture.capture(), callbackCapture.capture());
+        requestVersion = requestCapture.getValue().latestAllowedVersion();
+        assertEquals(ApiKeys.ALTER_PARTITION.latestVersion(), requestVersion);
+        assertEquals((short) 3, ApiKeys.ALTER_PARTITION.requestHeaderVersion(requestVersion));
+    }
+
+    @Test
     public void testOverwriteWithinBatch() {
         ArgumentCaptor<AbstractRequest.Builder<AlterPartitionRequest>> capture = ArgumentCaptor.captor();
         ArgumentCaptor<ControllerRequestCompletionHandler> callbackCapture = ArgumentCaptor.captor();
 
         var scheduler = new MockScheduler(time);
-        var alterPartitionManager = new DefaultAlterPartitionManager(brokerToController, scheduler, brokerId, () -> 2L);
+        var alterPartitionManager = new DefaultAlterPartitionManager(brokerToController, scheduler, brokerId, () -> 2L, () -> true);
         alterPartitionManager.start();
 
         // Only send one ISR update for a given topic+partition
@@ -193,7 +221,7 @@ public class AlterPartitionManagerTest {
         ArgumentCaptor<ControllerRequestCompletionHandler> callbackCapture = ArgumentCaptor.captor();
 
         var scheduler = new MockScheduler(time);
-        var alterPartitionManager = new DefaultAlterPartitionManager(brokerToController, scheduler, brokerId, () -> 2L);
+        var alterPartitionManager = new DefaultAlterPartitionManager(brokerToController, scheduler, brokerId, () -> 2L, () -> true);
         alterPartitionManager.start();
 
         // First request will send batch of one
@@ -238,7 +266,7 @@ public class AlterPartitionManagerTest {
         ArgumentCaptor<ControllerRequestCompletionHandler> callbackCapture = ArgumentCaptor.captor();
 
         var scheduler = new MockScheduler(time);
-        var alterPartitionManager = new DefaultAlterPartitionManager(brokerToController, scheduler, brokerId, () -> 2L);
+        var alterPartitionManager = new DefaultAlterPartitionManager(brokerToController, scheduler, brokerId, () -> 2L, () -> true);
         alterPartitionManager.start();
         var future = alterPartitionManager.submit(tp0, leaderAndIsr);
         var finalFuture = new CompletableFuture<LeaderAndIsr>();
@@ -313,7 +341,7 @@ public class AlterPartitionManagerTest {
         ArgumentCaptor<ControllerRequestCompletionHandler> callbackCapture = ArgumentCaptor.captor();
 
         var scheduler = new MockScheduler(time);
-        var alterPartitionManager = new DefaultAlterPartitionManager(brokerToController, scheduler, brokerId, () -> 2L);
+        var alterPartitionManager = new DefaultAlterPartitionManager(brokerToController, scheduler, brokerId, () -> 2L, () -> true);
         alterPartitionManager.start();
         alterPartitionManager.submit(tp0, leaderAndIsr);
 
@@ -371,7 +399,7 @@ public class AlterPartitionManagerTest {
         reset(brokerToController);
 
         var scheduler = new MockScheduler(time);
-        var alterPartitionManager = new DefaultAlterPartitionManager(brokerToController, scheduler, brokerId, () -> 2L);
+        var alterPartitionManager = new DefaultAlterPartitionManager(brokerToController, scheduler, brokerId, () -> 2L, () -> true);
         alterPartitionManager.start();
 
         var future = alterPartitionManager.submit(tp, new LeaderAndIsr(1, 1, List.of(1, 2, 3), LeaderRecoveryState.RECOVERED, 10));
@@ -393,7 +421,7 @@ public class AlterPartitionManagerTest {
         ArgumentCaptor<ControllerRequestCompletionHandler> callbackCapture = ArgumentCaptor.captor();
 
         var scheduler = new MockScheduler(time);
-        var alterPartitionManager = new DefaultAlterPartitionManager(brokerToController, scheduler, brokerId, () -> 2L);
+        var alterPartitionManager = new DefaultAlterPartitionManager(brokerToController, scheduler, brokerId, () -> 2L, () -> true);
         alterPartitionManager.start();
 
         // First submit will send the request
@@ -422,7 +450,7 @@ public class AlterPartitionManagerTest {
         var expectedVersion = ApiKeys.ALTER_PARTITION.latestVersion();
         var leaderAndIsr = new LeaderAndIsr(1, 1, List.of(1, 2, 3), LeaderRecoveryState.RECOVERED, 10);
         var scheduler = new MockScheduler(time);
-        var alterPartitionManager = new DefaultAlterPartitionManager(brokerToController, scheduler, brokerId, () -> 2L);
+        var alterPartitionManager = new DefaultAlterPartitionManager(brokerToController, scheduler, brokerId, () -> 2L, () -> true);
         alterPartitionManager.start();
 
         // The first `submit` will send the `AlterIsr` request

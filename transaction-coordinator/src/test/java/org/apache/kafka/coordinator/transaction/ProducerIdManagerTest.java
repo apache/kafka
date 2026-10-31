@@ -21,7 +21,10 @@ import org.apache.kafka.common.errors.AuthenticationException;
 import org.apache.kafka.common.errors.CoordinatorLoadInProgressException;
 import org.apache.kafka.common.errors.UnsupportedVersionException;
 import org.apache.kafka.common.message.AllocateProducerIdsResponseData;
+import org.apache.kafka.common.protocol.ApiKeys;
 import org.apache.kafka.common.protocol.Errors;
+import org.apache.kafka.common.requests.AbstractRequest;
+import org.apache.kafka.common.requests.AllocateProducerIdsRequest;
 import org.apache.kafka.common.requests.AllocateProducerIdsResponse;
 import org.apache.kafka.common.utils.MockTime;
 import org.apache.kafka.common.utils.Time;
@@ -33,6 +36,7 @@ import org.junit.jupiter.api.Test;
 import org.junit.jupiter.params.ParameterizedTest;
 import org.junit.jupiter.params.provider.EnumSource;
 import org.junit.jupiter.params.provider.ValueSource;
+import org.mockito.ArgumentCaptor;
 import org.mockito.Mockito;
 
 import java.util.Collections;
@@ -78,7 +82,7 @@ public class ProducerIdManagerTest {
                               boolean hasAuthenticationException,
                               boolean hasVersionMismatch,
                               boolean hasNoResponse) {
-            super(brokerId, time, () -> 1L, brokerToController);
+            super(brokerId, time, () -> 1L, brokerToController, () -> true);
             this.idStart = idStart;
             this.idLen = idLen;
             this.errorQueue = errorQueue;
@@ -279,6 +283,26 @@ public class ProducerIdManagerTest {
         manager.handleAllocateProducerIdsResponse(clientResponse);
 
         assertNull(manager.nextProducerIdBlock.get(), "The manager should have rejected the overlapping block.");
+    }
+
+    @Test
+    public void testRequestVersionFollowsRequestHeaderV3SupportedChange() {
+        ArgumentCaptor<AbstractRequest.Builder<AllocateProducerIdsRequest>> requestCapture = ArgumentCaptor.captor();
+        var requestHeaderV3Supported = new AtomicBoolean(false);
+        var manager = new RPCProducerIdManager(0, new MockTime(), () -> 1L, brokerToController, requestHeaderV3Supported::get);
+
+        manager.sendRequest();
+        Mockito.verify(brokerToController).sendRequest(requestCapture.capture(), Mockito.any());
+        short requestVersion = requestCapture.getValue().latestAllowedVersion();
+        assertEquals((short) 0, requestVersion);
+        assertEquals((short) 2, ApiKeys.ALLOCATE_PRODUCER_IDS.requestHeaderVersion(requestVersion));
+
+        requestHeaderV3Supported.set(true);
+        manager.sendRequest();
+        Mockito.verify(brokerToController, Mockito.times(2)).sendRequest(requestCapture.capture(), Mockito.any());
+        requestVersion = requestCapture.getValue().latestAllowedVersion();
+        assertEquals(ApiKeys.ALLOCATE_PRODUCER_IDS.latestVersion(), requestVersion);
+        assertEquals((short) 3, ApiKeys.ALLOCATE_PRODUCER_IDS.requestHeaderVersion(requestVersion));
     }
 
     private Queue<Errors> queue(Errors... errors) {
