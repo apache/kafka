@@ -34,8 +34,8 @@ public class ShareGroupAutoOffsetResetStrategyTest {
 
     @Test
     public void testFromString() {
-        assertEquals(ShareGroupAutoOffsetResetStrategy.StrategyType.EARLIEST, ShareGroupAutoOffsetResetStrategy.fromString("earliest").type());
-        assertEquals(ShareGroupAutoOffsetResetStrategy.StrategyType.LATEST, ShareGroupAutoOffsetResetStrategy.fromString("latest").type());
+        assertEquals(ShareGroupAutoOffsetResetStrategy.EARLIEST, ShareGroupAutoOffsetResetStrategy.fromString("earliest"));
+        assertEquals(ShareGroupAutoOffsetResetStrategy.LATEST, ShareGroupAutoOffsetResetStrategy.fromString("latest"));
         assertThrows(IllegalArgumentException.class, () -> ShareGroupAutoOffsetResetStrategy.fromString("invalid"));
         assertThrows(IllegalArgumentException.class, () -> ShareGroupAutoOffsetResetStrategy.fromString("by_duration:invalid"));
         assertThrows(IllegalArgumentException.class, () -> ShareGroupAutoOffsetResetStrategy.fromString("by_duration:-PT1H"));

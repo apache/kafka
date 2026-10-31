@@ -38,6 +38,9 @@ import java.util.stream.Collectors;
  */
 public class ShareGroupAutoOffsetResetStrategy {
 
+    public static final ShareGroupAutoOffsetResetStrategy EARLIEST = new ShareGroupAutoOffsetResetStrategy(AutoOffsetResetStrategy.EARLIEST, StrategyType.EARLIEST);
+    public static final ShareGroupAutoOffsetResetStrategy LATEST = new ShareGroupAutoOffsetResetStrategy(AutoOffsetResetStrategy.LATEST, StrategyType.LATEST);
+
     public enum StrategyType {
         LATEST, EARLIEST, BY_DURATION;
 

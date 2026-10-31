@@ -645,7 +645,7 @@ public class GroupConfigTest {
         assertEquals(Optional.of(20000), config.shareRecordLockDurationMs());
         assertEquals(Optional.of(5), config.shareDeliveryCountLimit());
         assertEquals(Optional.of(1000), config.sharePartitionMaxRecordLocks());
-        assertEquals(Optional.of(ShareGroupAutoOffsetResetStrategy.fromString("earliest")), config.shareAutoOffsetReset());
+        assertEquals(Optional.of(ShareGroupAutoOffsetResetStrategy.EARLIEST), config.shareAutoOffsetReset());
         assertEquals(Optional.of(2500), config.shareAssignmentIntervalMs());
         assertEquals(Optional.of(true), config.shareAssignorOffloadEnable());
         assertEquals(Optional.of(IsolationLevel.READ_COMMITTED), config.shareIsolationLevel());
