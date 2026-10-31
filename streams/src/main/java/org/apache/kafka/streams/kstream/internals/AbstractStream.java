@@ -73,6 +73,8 @@ public abstract class AbstractStream<K, V> {
         this.valueSerde = valueSerde;
         this.subTopologySourceNodes = subTopologySourceNodes;
         this.graphNode = graphNode;
+
+        this.graphNode.setValueSerde(valueSerde);
     }
 
     // This method allows to expose the InternalTopologyBuilder instance
