@@ -54,14 +54,26 @@ public class ChangelogRecordDeserializationHelper {
         if (versionHeader == null) {
             return;
         } else {
-            switch (versionHeader.value()[0]) {
+            final byte[] version = versionHeader.value();
+            if (version == null || version.length == 0) {
+                log.warn("Changelog record has a version header with a null or empty value. " +
+                        "Skipping consistency information for this record.");
+                return;
+            }
+            switch (version[0]) {
                 case 0:
                     final Header vectorHeader = record.headers().lastHeader(CHANGELOG_POSITION_HEADER_KEY);
                     if (vectorHeader == null) {
                         throw new StreamsException("This should not happen. Consistency is enabled but the changelog "
                                 + "contains records without consistency information.");
                     }
-                    position.merge(PositionSerde.deserialize(ByteBuffer.wrap(vectorHeader.value())));
+                    final byte[] vector = vectorHeader.value();
+                    if (vector == null || vector.length == 0) {
+                        log.warn("Changelog record has a position header with a null or empty value. " +
+                                "Skipping consistency information for this record.");
+                        return;
+                    }
+                    position.merge(PositionSerde.deserialize(ByteBuffer.wrap(vector)));
                     break;
                 default:
                     log.warn("Changelog records have been encoded using a larger version than this server understands." +
