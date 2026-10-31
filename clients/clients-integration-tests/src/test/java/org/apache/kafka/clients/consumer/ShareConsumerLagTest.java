@@ -30,8 +30,6 @@ import org.apache.kafka.common.test.api.ClusterTestDefaults;
 import org.apache.kafka.common.test.api.Type;
 import org.apache.kafka.test.TestUtils;
 
-import org.junit.jupiter.api.Timeout;
-
 import java.util.List;
 import java.util.Map;
 import java.util.Objects;
@@ -42,7 +40,6 @@ import static org.apache.kafka.test.TestUtils.DEFAULT_POLL_INTERVAL_MS;
 import static org.junit.jupiter.api.Assertions.assertEquals;
 import static org.junit.jupiter.api.Assertions.fail;
 
-@Timeout(1200)
 @ClusterTestDefaults(
     types = {Type.KRAFT},
     serverProperties = {
