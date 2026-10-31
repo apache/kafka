@@ -74,7 +74,7 @@ import java.util.concurrent.locks.{Condition, ReentrantLock}
 import java.util.concurrent.{CompletableFuture, ExecutionException, TimeUnit, TimeoutException}
 import scala.collection.Map
 import scala.jdk.CollectionConverters._
-import scala.jdk.OptionConverters.RichOption
+import scala.jdk.OptionConverters.{RichOption, RichOptional, RichOptionalInt}
 
 
 /**
@@ -149,8 +149,6 @@ class BrokerServer(
   @volatile var metadataCache: KRaftMetadataCache = _
 
   var quotaManagers: QuotaFactory.QuotaManagers = _
-
-  var clientQuotaMetadataManager: ClientQuotaMetadataManager = _
 
   @volatile var brokerTopicStats: BrokerTopicStats = _
 
@@ -298,8 +296,6 @@ class BrokerServer(
         apiVersionManager,
         sharedServer.socketFactory,
         connectionDisconnectListeners)
-
-      clientQuotaMetadataManager = new ClientQuotaMetadataManager(quotaManagers, socketServer.connectionQuotas)
 
       val listenerInfo = ListenerInfo.create(Optional.of(config.interBrokerListenerName.value()),
           config.effectiveAdvertisedBrokerListeners.asJava).
@@ -550,7 +546,8 @@ class BrokerServer(
           config.nodeId,
           sharedServer.metadataPublishingFaultHandler,
           "broker",
-          clientQuotaMetadataManager,
+          quotaManagers.userClientQuotaUpdaters(),
+          (ip, quota) => socketServer.connectionQuotas.updateIpConnectionRateQuota(ip.toScala, quota.toScala),
         ),
         new DynamicTopicClusterQuotaPublisher(
           clusterId,

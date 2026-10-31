@@ -21,7 +21,7 @@ import kafka.network.SocketServer
 import kafka.raft.KafkaRaftManager
 import org.apache.kafka.server.quota.QuotaFactory
 import org.apache.kafka.server.quota.QuotaFactory.QuotaManagers
-import kafka.server.metadata.{ClientQuotaMetadataManager, DynamicConfigPublisher}
+import kafka.server.metadata.DynamicConfigPublisher
 
 import scala.collection.immutable
 import kafka.utils.Logging
@@ -61,7 +61,7 @@ import java.util.{Optional, OptionalLong}
 import java.util.concurrent.locks.ReentrantLock
 import java.util.concurrent.{CompletableFuture, TimeUnit}
 import scala.jdk.CollectionConverters._
-import scala.jdk.OptionConverters.RichOption
+import scala.jdk.OptionConverters.{RichOption, RichOptional, RichOptionalInt}
 
 
 /**
@@ -101,7 +101,6 @@ class ControllerServer(
   @volatile var quorumControllerMetrics: QuorumControllerMetrics = _
   var controller: Controller = _
   var quotaManagers: QuotaManagers = _
-  var clientQuotaMetadataManager: ClientQuotaMetadataManager = _
   var controllerApis: ControllerApis = _
   var controllerApisHandlerPool: KafkaRequestHandlerPool = _
   def kafkaYammerMetrics: KafkaYammerMetrics = KafkaYammerMetrics.INSTANCE
@@ -283,7 +282,6 @@ class ControllerServer(
         metrics,
         time,
         s"controller-${config.nodeId}-", ProcessRole.ControllerRole.toString)
-      clientQuotaMetadataManager = new ClientQuotaMetadataManager(quotaManagers, socketServer.connectionQuotas)
       controllerApis = new ControllerApis(socketServer.dataPlaneRequestChannel,
         authorizerPlugin,
         quotaManagers,
@@ -349,7 +347,8 @@ class ControllerServer(
         config.nodeId,
         sharedServer.metadataPublishingFaultHandler,
         "controller",
-        clientQuotaMetadataManager
+        quotaManagers.userClientQuotaUpdaters(),
+        (ip, quota) => socketServer.connectionQuotas.updateIpConnectionRateQuota(ip.toScala, quota.toScala)
       ))
 
       // Set up the DynamicTopicClusterQuotaPublisher. This will enable quotas for the cluster and topics.
