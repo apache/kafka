@@ -152,6 +152,9 @@ def split_kafka_header(notice_binary_text):
         print(f"Error: header marker not found in NOTICE-binary: {KAFKA_HEADER_END_MARKER!r}")
         sys.exit(1)
     end_of_block = notice_binary_text.find("\n\n", idx)
+    if end_of_block < 0:
+        print("Error: no blank line found after the header marker in NOTICE-binary.")
+        sys.exit(1)
     return notice_binary_text[:end_of_block], notice_binary_text[end_of_block:]
 
 
@@ -252,41 +255,6 @@ def print_update_summary(unmatched, leftover):
         print(f"  {step}. Add the {len(unmatched)} NOTICE block{'s' if len(unmatched) != 1 else ''} below.")
 
 
-def print_jar_overview(third_party_jars, kafka_own_jars):
-    print(f"\nKafka-own jars excluded by regex {KAFKA_JAR_PATTERN.pattern!r} "
-          f"({len(kafka_own_jars)}):")
-    for jar in kafka_own_jars:
-        print("  -", os.path.basename(jar))
-
-    print(f"\nThird-party jars to inspect ({len(third_party_jars)}):")
-    for jar in third_party_jars:
-        print("  -", os.path.basename(jar))
-
-
-def print_notice_inventory(index):
-    print(f"\nJars containing a NOTICE file ({len(index.jar_to_notices)}):")
-    for jar, notices in sorted(index.jar_to_notices.items()):
-        entries = ", ".join(entry for entry, _ in notices)
-        print(f"  + {jar}  [{entries}]")
-
-    print(f"\nJars WITHOUT a NOTICE file ({len(index.jars_without_notice)}):")
-    for jar in index.jars_without_notice:
-        print(f"  - {jar}")
-
-    shared_groups = [(k, v) for k, v in index.notice_to_jars.items() if len(v) > 1]
-    singletons = len(index.notice_to_jars) - len(shared_groups)
-    total_notice_files = sum(len(n) for n in index.jar_to_notices.values())
-    print(f"\nNOTICE de-duplication: {total_notice_files} NOTICE file(s) "
-          f"across {len(index.jar_to_notices)} jar(s) -> "
-          f"{len(index.notice_to_jars)} unique NOTICE text(s) "
-          f"({len(shared_groups)} shared group(s) + {singletons} singleton(s)).")
-    if shared_groups:
-        print(f"\nShared NOTICE groups ({len(shared_groups)}):")
-        for key, jars in shared_groups:
-            print("  *", ", ".join(sorted(jars)))
-            print_sources(sorted(index.notice_to_sources[key]), "      ")
-
-
 def match_notices(body, index):
     # Longest NOTICEs first so a shorter one can't be absorbed as a substring of
     # a longer one and fragment the longer match.
@@ -307,14 +275,6 @@ def match_notices(body, index):
                 mask[i] = True
             matched.append(sources)
     return mask, matched, unmatched
-
-
-def print_matched(matched):
-    print(f"\nMatched upstream NOTICEs already present in NOTICE-binary "
-          f"({len(matched)}):")
-    for idx, sources in enumerate(matched, 1):
-        print(f"  [{idx:02d}] OK  source(s):")
-        print_sources(sources, "          ")
 
 
 def print_notices_to_add(unmatched):
