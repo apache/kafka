@@ -31922,6 +31922,37 @@ public class GroupMetadataManagerTest {
             result2.records()
         );
 
+        // Joining the group does not imply that the member has a target assignment yet.
+        CoordinatorResult<StreamsGroupHeartbeatResult, CoordinatorRecord> pendingResult = context.streamsGroupHeartbeat(
+            new StreamsGroupHeartbeatRequestData()
+                .setGroupId(groupId)
+                .setMemberId(memberId2)
+                .setMemberEpoch(2));
+
+        assertEquals(result2.response().data().status(), pendingResult.response().data().status());
+        assertEquals(2, pendingResult.response().data().memberEpoch());
+        assertRecordsEquals(List.of(), pendingResult.records());
+
+        // An existing assignment remains ready while the next assignment is delayed.
+        CoordinatorResult<StreamsGroupHeartbeatResult, CoordinatorRecord> retainedResult = context.streamsGroupHeartbeat(
+            new StreamsGroupHeartbeatRequestData()
+                .setGroupId(groupId)
+                .setMemberId(memberId1)
+                .setMemberEpoch(2));
+
+        assertResponseEquals(
+            new StreamsGroupHeartbeatResponseData()
+                .setMemberId(memberId1)
+                .setMemberEpoch(2)
+                .setHeartbeatIntervalMs(5000)
+                .setStatus(List.of())
+                .setTaskOffsetIntervalMs(60_000)
+                .setAcceptableRecoveryLag(10_000L),
+            retainedResult.response().data()
+        );
+        assertRecordsEquals(List.of(), retainedResult.records());
+        assertEquals(expectedMember1, context.groupMetadataManager.streamsGroup(groupId).getMemberOrThrow(memberId1));
+
         // Wait a little more. The next target assignment can be computed now.
         context.time.sleep(10);
 
