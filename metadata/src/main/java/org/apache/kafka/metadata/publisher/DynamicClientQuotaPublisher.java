@@ -115,21 +115,22 @@ public class DynamicClientQuotaPublisher implements MetadataPublisher {
     }
 
     private void handleIpQuota(ClientQuotaEntity entity, ClientQuotaDelta quotaDelta) {
-        // An empty Optional represents the default IP entity.
-        Optional<InetAddress> inetAddress = Optional.ofNullable(entity.entries().get(IP)).map(ip -> {
-            try {
-                return InetAddress.getByName(ip);
-            } catch (UnknownHostException e) {
-                throw new IllegalArgumentException("Unable to resolve address " + ip);
-            }
-        });
-
         quotaDelta.changes().forEach((key, value) -> {
             // The connection quota only understands the connection rate limit.
             if (!key.equals(QuotaConfig.IP_CONNECTION_RATE_OVERRIDE_CONFIG)) {
                 log.warn("Ignoring unexpected quota key {} for entity {}", key, entity);
                 return;
             }
+
+            // An empty Optional represents the default IP entity.
+            Optional<InetAddress> inetAddress = Optional.ofNullable(entity.entries().get(IP)).map(ip -> {
+                try {
+                    return InetAddress.getByName(ip);
+                } catch (UnknownHostException e) {
+                    throw new IllegalArgumentException("Unable to resolve address " + ip, e);
+                }
+            });
+
             try {
                 ipQuotaUpdater.updateQuota(inetAddress, value.isPresent() ? OptionalInt.of((int) value.getAsDouble()) : OptionalInt.empty());
             } catch (Throwable t) {

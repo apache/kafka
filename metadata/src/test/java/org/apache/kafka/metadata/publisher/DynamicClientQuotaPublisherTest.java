@@ -32,6 +32,7 @@ import org.junit.jupiter.api.Test;
 import org.junit.jupiter.params.ParameterizedTest;
 import org.junit.jupiter.params.provider.NullSource;
 import org.junit.jupiter.params.provider.ValueSource;
+import org.mockito.ArgumentCaptor;
 
 import java.net.InetAddress;
 import java.net.UnknownHostException;
@@ -47,7 +48,8 @@ import static org.apache.kafka.common.quota.ClientQuotaEntity.IP;
 import static org.apache.kafka.common.quota.ClientQuotaEntity.USER;
 import static org.apache.kafka.server.config.QuotaConfig.IP_CONNECTION_RATE_OVERRIDE_CONFIG;
 import static org.apache.kafka.server.config.QuotaConfig.PRODUCER_BYTE_RATE_OVERRIDE_CONFIG;
-import static org.mockito.ArgumentMatchers.any;
+import static org.junit.jupiter.api.Assertions.assertEquals;
+import static org.junit.jupiter.api.Assertions.assertInstanceOf;
 import static org.mockito.ArgumentMatchers.eq;
 import static org.mockito.Mockito.mock;
 import static org.mockito.Mockito.verify;
@@ -71,10 +73,23 @@ public class DynamicClientQuotaPublisherTest {
 
     @Test
     public void testInvalidIpAddressIsReportedToFaultHandler() {
-        publisher.onMetadataUpdate(createMetadataDelta(Map.of(IP, "invalid address"), Map.of()), MetadataImage.EMPTY, MANIFEST);
+        publisher.onMetadataUpdate(createMetadataDelta(Map.of(IP, "invalid address"),
+            Map.of(IP_CONNECTION_RATE_OVERRIDE_CONFIG, OptionalDouble.of(123))), MetadataImage.EMPTY, MANIFEST);
+        ArgumentCaptor<IllegalArgumentException> exceptionCaptor = ArgumentCaptor.forClass(IllegalArgumentException.class);
         verify(faultHandler).handleFault(
             eq("Uncaught exception while publishing dynamic client quota changes from MetadataDelta up to -1"),
-            any(IllegalArgumentException.class));
+            exceptionCaptor.capture());
+        assertEquals("Unable to resolve address invalid address", exceptionCaptor.getValue().getMessage());
+        assertInstanceOf(UnknownHostException.class, exceptionCaptor.getValue().getCause());
+    }
+
+    @Test
+    public void testIpAddressIsNotResolvedWithoutConnectionRateChanges() {
+        Map<String, String> entity = Map.of(IP, "invalid address");
+        publisher.onMetadataUpdate(createMetadataDelta(entity, Map.of()), MetadataImage.EMPTY, MANIFEST);
+        publisher.onMetadataUpdate(createMetadataDelta(entity, Map.of(PRODUCER_BYTE_RATE_OVERRIDE_CONFIG, OptionalDouble.of(123))),
+            MetadataImage.EMPTY, MANIFEST);
+        verifyNoInteractions(ipQuotaUpdater, faultHandler);
     }
 
     @Test
