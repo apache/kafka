@@ -1934,14 +1934,6 @@ org.apache.kafka.coordinator.group.streams.TasksTupleWithEpochsTest:
 - testReturnUnmodifiableTaskAssignments
 - testTasksCannotBeNull
 - testToString
-org.apache.kafka.coordinator.group.streams.TopicMetadataTest:
-- testConstructor
-- testConstructorWithEmptyName
-- testConstructorWithNegativeNumPartitions
-- testConstructorWithNullName
-- testConstructorWithNullUuid
-- testConstructorWithZeroNumPartitions
-- testConstructorWithZeroUuid
 org.apache.kafka.coordinator.group.streams.TopologyMetadataTest:
 - testIsStateful
 - testIsStatefulThrowsExceptionWhenSubtopologyIdDoesNotExist
