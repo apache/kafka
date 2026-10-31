@@ -28,6 +28,7 @@ import org.apache.kafka.common.protocol.ObjectSerializationCache;
 import org.apache.kafka.common.record.internal.RecordBatch;
 
 import java.nio.ByteBuffer;
+import java.nio.charset.StandardCharsets;
 import java.util.ArrayList;
 import java.util.Collection;
 import java.util.Collections;
@@ -43,6 +44,20 @@ public class RequestTestUtils {
 
     public static boolean hasIdempotentRecords(ProduceRequest request) {
         return RequestUtils.flag(request, RecordBatch::hasProducerId);
+    }
+
+    public static ByteBuffer serializeRequestHeaderPrefix(ApiKeys apiKey, short apiVersion, int correlationId,
+                                                          String clientId, byte[] trailingBytes) {
+        byte[] clientIdBytes = clientId == null ? new byte[0] : clientId.getBytes(StandardCharsets.UTF_8);
+        ByteBuffer buffer = ByteBuffer.allocate(2 + 2 + 4 + 2 + clientIdBytes.length + trailingBytes.length);
+        buffer.putShort(apiKey.id);
+        buffer.putShort(apiVersion);
+        buffer.putInt(correlationId);
+        buffer.putShort(clientId == null ? (short) -1 : (short) clientIdBytes.length);
+        buffer.put(clientIdBytes);
+        buffer.put(trailingBytes);
+        buffer.flip();
+        return buffer;
     }
 
     public static ByteBuffer serializeRequestHeader(RequestHeader header) {
