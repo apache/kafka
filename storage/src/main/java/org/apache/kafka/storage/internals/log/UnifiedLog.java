@@ -1812,7 +1812,10 @@ public class UnifiedLog implements AutoCloseable {
         return logStartOffset == logEndOffset();
     }
 
-    private Optional<FileRecords.TimestampAndOffset> searchOffsetInLocalLog(long targetTimestamp, long startOffset) throws IOException {
+    /**
+     * Find the first local record at or after startOffset whose timestamp is at least targetTimestamp.
+     */
+    public Optional<FileRecords.TimestampAndOffset> searchOffsetInLocalLog(long targetTimestamp, long startOffset) throws IOException {
         // Cache to avoid race conditions.
         List<LogSegment> segments = logSegments();
         // Use base offsets to skip segments before the one containing startOffset without reading their tails.
