@@ -26,47 +26,47 @@ public abstract class ModernGroupMember {
     /**
      * The member id.
      */
-    protected String memberId;
+    protected final String memberId;
 
     /**
      * The current member epoch.
      */
-    protected int memberEpoch;
+    protected final int memberEpoch;
 
     /**
      * The previous member epoch.
      */
-    protected int previousMemberEpoch;
+    protected final int previousMemberEpoch;
 
     /**
      * The member state.
      */
-    protected MemberState state;
+    protected final MemberState state;
 
     /**
      * The instance id provided by the member.
      */
-    protected String instanceId;
+    protected final String instanceId;
 
     /**
      * The rack id provided by the member.
      */
-    protected String rackId;
+    protected final String rackId;
 
     /**
      * The client id reported by the member.
      */
-    protected String clientId;
+    protected final String clientId;
 
     /**
      * The host reported by the member.
      */
-    protected String clientHost;
+    protected final String clientHost;
 
     /**
      * The list of subscriptions (topic names) configured by the member.
      */
-    protected Set<String> subscribedTopicNames;
+    protected final Set<String> subscribedTopicNames;
 
     protected ModernGroupMember(
         String memberId,
