@@ -1535,6 +1535,125 @@ public class GroupMetadataManagerTest {
     }
 
     @Test
+    public void testUpdatingRackIdTriggersEpochBump() {
+        String groupId = "fooup";
+        String memberId = Uuid.randomUuid().toString();
+        Uuid fooTopicId = Uuid.randomUuid();
+        String fooTopicName = "foo";
+
+        CoordinatorMetadataImage metadataImage = new MetadataImageBuilder()
+            .addTopic(fooTopicId, fooTopicName, 1)
+            .addRacks()
+            .buildCoordinatorMetadataImage();
+
+        MockPartitionAssignor assignor = new MockPartitionAssignor("range");
+        GroupMetadataManagerTestContext context = new GroupMetadataManagerTestContext.Builder()
+            .withConfig(GroupCoordinatorConfig.CONSUMER_GROUP_ASSIGNORS_CONFIG, List.of(assignor))
+            .withMetadataImage(metadataImage)
+            .withConsumerGroup(new ConsumerGroupBuilder(groupId, 10)
+                .withMember(new ConsumerGroupMember.Builder(memberId)
+                    .setState(MemberState.STABLE)
+                    .setMemberEpoch(10)
+                    .setPreviousMemberEpoch(9)
+                    .setClientId(DEFAULT_CLIENT_ID)
+                    .setClientHost(DEFAULT_CLIENT_ADDRESS.toString())
+                    .setRackId("rack-a")
+                    .setSubscribedTopicNames(List.of(fooTopicName))
+                    .setServerAssignorName("range")
+                    .setAssignedPartitions(toAssignmentWithEpochs(mkAssignment(
+                        mkTopicAssignment(fooTopicId, 0)), 10))
+                    .build())
+                .withAssignment(memberId, mkAssignment(mkTopicAssignment(fooTopicId, 0)))
+                .withAssignmentEpoch(10)
+                .withMetadataHash(computeGroupHash(Map.of(
+                    fooTopicName, computeTopicHash(fooTopicName, metadataImage)))))
+            .build();
+
+        assignor.prepareGroupAssignment(new GroupAssignment(
+            Map.of(memberId, new MemberAssignmentImpl(mkAssignment(mkTopicAssignment(fooTopicId, 0))))
+        ));
+
+        CoordinatorResult<ConsumerGroupHeartbeatResponseData, CoordinatorRecord> result = context.consumerGroupHeartbeat(
+            new ConsumerGroupHeartbeatRequestData()
+                .setGroupId(groupId)
+                .setMemberId(memberId)
+                .setMemberEpoch(10)
+                .setRackId("rack-b"));
+
+        assertResponseEquals(
+            new ConsumerGroupHeartbeatResponseData()
+                .setMemberId(memberId)
+                .setMemberEpoch(11)
+                .setHeartbeatIntervalMs(5000),
+            result.response()
+        );
+    }
+
+    @ParameterizedTest
+    @MethodSource("testSameRackIdKeepGroupEpochSource")
+    public void testSameRackIdKeepGroupEpochSource(String oldRackId, String newRackId) {
+        String groupId = "fooup";
+        String memberId = Uuid.randomUuid().toString();
+        Uuid fooTopicId = Uuid.randomUuid();
+        String fooTopicName = "foo";
+
+        CoordinatorMetadataImage metadataImage = new MetadataImageBuilder()
+            .addTopic(fooTopicId, fooTopicName, 1)
+            .addRacks()
+            .buildCoordinatorMetadataImage();
+
+        MockPartitionAssignor assignor = new MockPartitionAssignor("range");
+        GroupMetadataManagerTestContext context = new GroupMetadataManagerTestContext.Builder()
+            .withConfig(GroupCoordinatorConfig.CONSUMER_GROUP_ASSIGNORS_CONFIG, List.of(assignor))
+            .withMetadataImage(metadataImage)
+            .withConsumerGroup(new ConsumerGroupBuilder(groupId, 10)
+                .withMember(new ConsumerGroupMember.Builder(memberId)
+                    .setState(MemberState.STABLE)
+                    .setMemberEpoch(10)
+                    .setPreviousMemberEpoch(9)
+                    .setClientId(DEFAULT_CLIENT_ID)
+                    .setClientHost(DEFAULT_CLIENT_ADDRESS.toString())
+                    .setRackId(oldRackId)
+                    .setSubscribedTopicNames(List.of(fooTopicName))
+                    .setServerAssignorName("range")
+                    .setAssignedPartitions(toAssignmentWithEpochs(mkAssignment(
+                        mkTopicAssignment(fooTopicId, 0)), 10))
+                    .build())
+                .withAssignment(memberId, mkAssignment(mkTopicAssignment(fooTopicId, 0)))
+                .withAssignmentEpoch(10)
+                .withMetadataHash(computeGroupHash(Map.of(
+                    fooTopicName, computeTopicHash(fooTopicName, metadataImage)))))
+            .build();
+
+        assignor.prepareGroupAssignment(new GroupAssignment(
+            Map.of(memberId, new MemberAssignmentImpl(mkAssignment(mkTopicAssignment(fooTopicId, 0))))
+        ));
+
+        CoordinatorResult<ConsumerGroupHeartbeatResponseData, CoordinatorRecord> result = context.consumerGroupHeartbeat(
+            new ConsumerGroupHeartbeatRequestData()
+                .setGroupId(groupId)
+                .setMemberId(memberId)
+                .setMemberEpoch(10)
+                .setRackId(newRackId));
+
+        assertResponseEquals(
+            new ConsumerGroupHeartbeatResponseData()
+                .setMemberId(memberId)
+                .setMemberEpoch(10)
+                .setHeartbeatIntervalMs(5000),
+            result.response()
+        );
+    }
+
+    private static Stream<Arguments> testSameRackIdKeepGroupEpochSource() {
+        return Stream.of(
+            Arguments.of(null, null),
+            Arguments.of("rack-a", null),
+            Arguments.of("rack-a", "rack-a")
+        );
+    }
+
+    @Test
     public void testNewRacksDataInMetadataImageTriggersEpochBump() {
         String groupId = "fooup";
         // Use a static member id as it makes the test easier.
