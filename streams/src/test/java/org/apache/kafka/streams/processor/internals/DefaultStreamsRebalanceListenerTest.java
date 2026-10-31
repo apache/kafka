@@ -295,9 +295,10 @@ public class DefaultStreamsRebalanceListenerTest {
         
         assertDoesNotThrow(() -> defaultStreamsRebalanceListener.onAllTasksLost());
         
-        final InOrder inOrder = inOrder(taskManager, streamsRebalanceData);
+        final InOrder inOrder = inOrder(taskManager, streamsRebalanceData, streamThread);
         inOrder.verify(taskManager).handleLostAll();
         inOrder.verify(streamsRebalanceData).setReconciledAssignment(StreamsRebalanceData.Assignment.EMPTY);
+        inOrder.verify(streamThread).clearBufferOverflowTracking();
     }
 
     @Test
@@ -314,6 +315,7 @@ public class DefaultStreamsRebalanceListenerTest {
         assertEquals(exception, actualException);
         verify(taskManager).handleLostAll();
         verify(streamsRebalanceData, never()).setReconciledAssignment(any());
+        verify(streamThread, never()).clearBufferOverflowTracking();
     }
 
     @Test

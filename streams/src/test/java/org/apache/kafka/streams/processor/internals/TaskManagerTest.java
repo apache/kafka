@@ -418,11 +418,29 @@ public class TaskManagerTest {
         final TasksRegistry tasks = mock(TasksRegistry.class);
         final TaskManager taskManager = setUpTaskManager(ProcessingMode.AT_LEAST_ONCE, tasks);
         when(tasks.activeInitializedTasks()).thenReturn(Set.of(activeTask1, activeTask2));
+        final Set<TopicPartition> excludedPartitions = Set.of(t1p0);
 
-        taskManager.resumePollingForPartitionsWithAvailableSpace();
+        taskManager.resumePollingForPartitionsWithAvailableSpace(excludedPartitions);
 
-        verify(activeTask1).resumePollingForPartitionsWithAvailableSpace();
-        verify(activeTask2).resumePollingForPartitionsWithAvailableSpace();
+        verify(activeTask1).resumePollingForPartitionsWithAvailableSpace(excludedPartitions);
+        verify(activeTask2).resumePollingForPartitionsWithAvailableSpace(excludedPartitions);
+    }
+
+    @Test
+    public void shouldReturnInputPartitionsOfActiveInitializedTasks() {
+        final StreamTask activeTask1 = statefulTask(taskId00, taskId00ChangelogPartitions)
+            .inState(State.RUNNING)
+            .withInputPartitions(taskId00Partitions).build();
+        final StreamTask activeTask2 = statefulTask(taskId01, taskId01ChangelogPartitions)
+            .inState(State.RUNNING)
+            .withInputPartitions(taskId01Partitions).build();
+        final TasksRegistry tasks = mock(TasksRegistry.class);
+        final TaskManager taskManager = setUpTaskManager(ProcessingMode.AT_LEAST_ONCE, tasks);
+        when(tasks.activeInitializedTasks()).thenReturn(Set.of(activeTask1, activeTask2));
+
+        final Set<TopicPartition> expected = new HashSet<>(taskId00Partitions);
+        expected.addAll(taskId01Partitions);
+        assertEquals(expected, taskManager.activeInitializedInputPartitions());
     }
 
     @Test

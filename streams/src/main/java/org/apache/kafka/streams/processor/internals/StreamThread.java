@@ -376,6 +376,10 @@ public class StreamThread extends Thread implements ProcessingThread {
 
     // These are used to signal from outside the stream thread, but the variables themselves are internal to the thread
     private final AtomicLong cacheResizeSize = new AtomicLong(-1L);
+    private final AtomicLong maxBufferSizeInBytes = new AtomicLong();
+
+    // Tracked separately so we don't resume partitions paused by rebalance settle / offset reset.
+    private final Set<TopicPartition> partitionsPausedForBufferOverflow = new HashSet<>();
     private final AtomicReference<org.apache.kafka.streams.CloseOptions.GroupMembershipOperation> leaveGroupRequested =
         new AtomicReference<>(org.apache.kafka.streams.CloseOptions.GroupMembershipOperation.DEFAULT);
     // Makes the shutdown-state transition and the operation write atomic, so that the
@@ -414,6 +418,7 @@ public class StreamThread extends Thread implements ProcessingThread {
                                       final StreamsMetadataState streamsMetadataState,
                                       final long cacheSizeBytes,
                                       final long maxUncommittedBytesPerThread,
+                                      final long maxBufferSizeInBytes,
                                       final StateDirectory stateDirectory,
                                       final StateRestoreListener userStateRestoreListener,
                                       final StandbyUpdateListener userStandbyUpdateListener,
@@ -557,6 +562,7 @@ public class StreamThread extends Thread implements ProcessingThread {
             shutdownErrorHook,
             streamsUncaughtExceptionHandler,
             cache::resize,
+            maxBufferSizeInBytes,
             mainConsumerSetup.streamsRebalanceData,
             streamsMetadataState,
             metricsReporter,
@@ -826,6 +832,7 @@ public class StreamThread extends Thread implements ProcessingThread {
                         final Runnable shutdownErrorHook,
                         final BiConsumer<Throwable, Boolean> streamsUncaughtExceptionHandler,
                         final java.util.function.Consumer<Long> cacheResizer,
+                        final long maxBufferSizeInBytes,
                         final Optional<StreamsRebalanceData> streamsRebalanceData,
                         final StreamsMetadataState streamsMetadataState,
                         final StreamsThreadMetricsDelegatingReporter metricsReporter,
@@ -853,6 +860,7 @@ public class StreamThread extends Thread implements ProcessingThread {
         this.shutdownErrorHook = shutdownErrorHook;
         this.streamsUncaughtExceptionHandler = streamsUncaughtExceptionHandler;
         this.cacheResizer = cacheResizer;
+        this.maxBufferSizeInBytes.set(maxBufferSizeInBytes);
         this.metricsConfig = streamsMetrics.metricsRegistry().config();
         this.metricsReporter = metricsReporter;
 
@@ -1216,8 +1224,37 @@ public class StreamThread extends Thread implements ProcessingThread {
         }
     }
 
-    public void resizeCache(final long size) {
-        cacheResizeSize.set(size);
+    public void resizeCacheAndBufferMemory(final long cacheSize, final long maxBufferSize) {
+        cacheResizeSize.set(cacheSize);
+        maxBufferSizeInBytes.set(maxBufferSize);
+    }
+
+    // Drop revoked partitions so we never later resume one now owned by another path (reset/rebalance).
+    void removePartitionsFromBufferOverflowTracking(final Collection<TopicPartition> revokedPartitions) {
+        partitionsPausedForBufferOverflow.removeAll(revokedPartitions);
+    }
+
+    // All tasks are gone (streams-protocol onAllTasksLost), so no tracked partition is ours to resume.
+    void clearBufferOverflowTracking() {
+        partitionsPausedForBufferOverflow.clear();
+    }
+
+    private void maybeResumePartitionsPausedForBufferOverflow() {
+        if (partitionsPausedForBufferOverflow.isEmpty()) {
+            return;
+        }
+        if (taskManager.getInputBufferSizeInBytes() <= maxBufferSizeInBytes.get()) {
+            // defensive copy — we clear the tracking set right after.
+            final Set<TopicPartition> toResume = new HashSet<>(partitionsPausedForBufferOverflow);
+            toResume.retainAll(mainConsumer.assignment());
+            // closeDirtyAndRevive keeps a corrupted task's partitions assigned but removes the task and pauses them
+            // for offset reset; resuming them would break the reset and poll records getActiveTask cannot route.
+            toResume.retainAll(taskManager.activeInitializedInputPartitions());
+            log.debug("Buffered records size is at or below {}. Resuming partitions paused by buffer overflow {}",
+                maxBufferSizeInBytes.get(), toResume);
+            mainConsumer.resume(toResume);
+            partitionsPausedForBufferOverflow.clear();
+        }
     }
 
     /**
@@ -1244,7 +1281,12 @@ public class StreamThread extends Thread implements ProcessingThread {
         now = startMs;
 
         final long pollLatency;
-        taskManager.resumePollingForPartitionsWithAvailableSpace();
+        // skip partitions the bytes guard paused, so the legacy per-partition resume cannot undo that pause
+        // when both guards are active (only the deprecated buffered.records.per.partition set).
+        taskManager.resumePollingForPartitionsWithAvailableSpace(partitionsPausedForBufferOverflow);
+        // resume here too (mirrors runOnceWithProcessingThreads) so a drain outside a processing
+        // state still resumes paused partitions.
+        maybeResumePartitionsPausedForBufferOverflow();
         pollLatency = pollPhase();
         totalPolledSinceLastSummary += 1;
 
@@ -1309,6 +1351,7 @@ public class StreamThread extends Thread implements ProcessingThread {
                 }
                 final long processLatency = advanceNowAndComputeLatency();
                 totalProcessLatency += processLatency;
+                maybeResumePartitionsPausedForBufferOverflow();
                 if (processed > 0) {
                     // It makes no difference to the outcome of these metrics when we record "0",
                     // so we can just avoid the method call when we didn't process anything.
@@ -1412,7 +1455,10 @@ public class StreamThread extends Thread implements ProcessingThread {
         now = startMs;
 
         final long pollLatency;
-        taskManager.resumePollingForPartitionsWithAvailableSpace();
+        // skip partitions the bytes guard paused (see runOnceWithoutProcessingThreads)
+        taskManager.resumePollingForPartitionsWithAvailableSpace(partitionsPausedForBufferOverflow);
+        // processor threads drain async, so the bytes-guard resume check runs here each iteration.
+        maybeResumePartitionsPausedForBufferOverflow();
         pollLatency = pollPhase();
 
         if (streamsRebalanceData.isPresent()) {
@@ -1555,6 +1601,22 @@ public class StreamThread extends Thread implements ProcessingThread {
         }
         if (!records.nextOffsets().isEmpty()) {
             taskManager.updateNextOffsets(records.nextOffsets());
+        }
+
+        // soft cap — read isn't atomic across tasks, so small overshoots are fine.
+        final long bufferSize = taskManager.getInputBufferSizeInBytes();
+        if (bufferSize > maxBufferSizeInBytes.get()) {
+            // pause only non-empty partitions; pausing empty ones risks ordering deadlock (KAFKA-13152).
+            // copy first — nonEmptyPartitions may be immutable, and pausing an unassigned partition
+            // throws, so intersect with assignment (mirrors resume side).
+            final Set<TopicPartition> nonEmptyPartitions = new HashSet<>(taskManager.nonEmptyPartitions());
+            nonEmptyPartitions.retainAll(mainConsumer.assignment());
+            if (!nonEmptyPartitions.isEmpty()) {
+                log.debug("Buffered records size {} bytes exceeds {}. Pausing partitions {} from the consumer",
+                    bufferSize, maxBufferSizeInBytes.get(), nonEmptyPartitions);
+                mainConsumer.pause(nonEmptyPartitions);
+                partitionsPausedForBufferOverflow.addAll(nonEmptyPartitions);
+            }
         }
 
         while (!nonFatalExceptionsToHandle.isEmpty()) {
