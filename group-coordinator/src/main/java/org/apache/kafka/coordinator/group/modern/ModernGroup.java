@@ -135,6 +135,7 @@ public abstract class ModernGroup<T extends ModernGroupMember> implements Group 
     /**
      * @return the group formatted as a list group response based on the committed offset.
      */
+    @Override
     public ListGroupsResponseData.ListedGroup asListedGroup(long committedOffset) {
         return new ListGroupsResponseData.ListedGroup()
             .setGroupId(groupId)

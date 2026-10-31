@@ -257,6 +257,7 @@ public class ClassicGroup implements Group {
     /**
      * @return the group id.
      */
+    @Override
     public String groupId() {
         return this.groupId;
     }
@@ -1138,6 +1139,7 @@ public class ClassicGroup implements Group {
      *
      * @return whether the group is subscribed to the topic.
      */
+    @Override
     public boolean isSubscribedToTopic(String topic) {
         return subscribedTopics.map(topics -> topics.contains(topic))
             .orElse(usesConsumerGroupProtocol());
@@ -1319,6 +1321,7 @@ public class ClassicGroup implements Group {
     /**
      * @return the group formatted as a list group response based on the committed offset.
      */
+    @Override
     public ListGroupsResponseData.ListedGroup asListedGroup(long committedOffset) {
         return new ListGroupsResponseData.ListedGroup()
             .setGroupId(groupId)
