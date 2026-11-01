@@ -1496,20 +1496,16 @@ class ReplicaManager(val config: KafkaConfig,
             val status = {
               if (resultHolder.timestampAndOffsetOpt().isPresent) {
                 // This case is for normal topic that does not have remote storage.
+                // The log search is already bounded by the last fetchable offset, so there is no need to check the
+                // returned offset against it here.
                 val timestampAndOffsetOpt = resultHolder.timestampAndOffsetOpt.get
-                var partitionResponse = buildErrorResponse(Errors.NONE, partition)
-                if (resultHolder.lastFetchableOffset.isPresent &&
-                  timestampAndOffsetOpt.offset >= resultHolder.lastFetchableOffset.get) {
-                  resultHolder.maybeOffsetsError.map(e => throw e)
-                } else {
-                  partitionResponse = new ListOffsetsPartitionResponse()
-                    .setPartitionIndex(partition.partitionIndex)
-                    .setErrorCode(Errors.NONE.code)
-                    .setTimestamp(timestampAndOffsetOpt.timestamp)
-                    .setOffset(timestampAndOffsetOpt.offset)
-                  if (timestampAndOffsetOpt.leaderEpoch.isPresent && version >= 4)
-                    partitionResponse.setLeaderEpoch(timestampAndOffsetOpt.leaderEpoch.get)
-                }
+                val partitionResponse = new ListOffsetsPartitionResponse()
+                  .setPartitionIndex(partition.partitionIndex)
+                  .setErrorCode(Errors.NONE.code)
+                  .setTimestamp(timestampAndOffsetOpt.timestamp)
+                  .setOffset(timestampAndOffsetOpt.offset)
+                if (timestampAndOffsetOpt.leaderEpoch.isPresent && version >= 4)
+                  partitionResponse.setLeaderEpoch(timestampAndOffsetOpt.leaderEpoch.get)
                 ListOffsetsPartitionStatus.builder().responseOpt(Optional.of(partitionResponse)).build()
               } else if (resultHolder.timestampAndOffsetOpt.isEmpty && resultHolder.futureHolderOpt.isEmpty) {
                 // This is an empty offset response scenario

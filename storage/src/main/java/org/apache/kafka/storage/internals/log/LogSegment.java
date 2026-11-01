@@ -775,23 +775,6 @@ public class LogSegment implements Closeable {
     }
 
     /**
-     * Largest timestamp in this segment, and the offset of the record that holds it.
-     * Empty when the segment has no batches or the batch does not expose a timestamp offset.
-     */
-    public Optional<FileRecords.TimestampAndOffset> fetchMaxTimestampAndOffset(int maxRecordBodySize) throws IOException {
-        if (size() == 0)
-            return Optional.empty();
-
-        TimestampOffset maxTimestampSoFar = readMaxTimestampAndOffsetSoFar();
-        int position = offsetIndex().lookup(maxTimestampSoFar.offset()).position();
-        for (RecordBatch batch : log.batchesFrom(position)) {
-            if (batch.maxTimestamp() == maxTimestampSoFar.timestamp())
-                return toTimestampAndOffset(batch, maxRecordBodySize);
-        }
-        return Optional.empty();
-    }
-
-    /**
      * Largest timestamp among batches whose base offset is strictly less than {@code exclusiveEndOffset}.
      * The high watermark and last stable offset are batch boundaries, so a batch is either entirely included or not.
      * When this segment's own max timestamp is already below the bound, that value is used. Otherwise the time index
@@ -803,61 +786,46 @@ public class LogSegment implements Closeable {
 
         TimestampOffset segmentMax = readMaxTimestampAndOffsetSoFar();
         if (segmentMax.offset() < exclusiveEndOffset)
-            return fetchMaxTimestampAndOffset(maxRecordBodySize);
+            return batchWithMaxTimestamp(segmentMax, log.sizeInBytes(), maxRecordBodySize);
 
+        // Every batch before the last indexed entry has a timestamp no larger than that entry, and the scan below
+        // includes the batch that the entry points at, so the scan finds the largest timestamp below the bound.
         TimestampOffset indexed = timeIndex().lastEntryWithOffsetBelow(exclusiveEndOffset);
         int scanStart = offsetIndex().lookup(indexed.offset()).position();
         int scanEnd = endPosition(exclusiveEndOffset);
-
-        RecordBatch bestBatch = null;
-        long bestTimestamp = RecordBatch.NO_TIMESTAMP;
-        for (RecordBatch batch : log.batchesFrom(scanStart, scanEnd)) {
-            if (batch.baseOffset() >= exclusiveEndOffset)
-                break;
-            long timestamp = batch.maxTimestamp();
-            if (bestBatch == null || timestamp > bestTimestamp) {
-                bestTimestamp = timestamp;
-                bestBatch = batch;
-            }
-        }
-
-        // The indexed timestamp can sit on a batch that the offset-index checkpoint starts after.
-        if (indexed.timestamp() > bestTimestamp) {
-            Optional<FileRecords.TimestampAndOffset> indexedResult =
-                    timestampAndOffsetAt(indexed.offset(), indexed.timestamp(), scanEnd, maxRecordBodySize);
-            if (indexedResult.isPresent())
-                return indexedResult;
-        }
-        if (bestBatch == null)
+        FileRecords.TimestampAndOffset largest = log.largestTimestampAfter(scanStart, scanEnd);
+        if (largest.offset < 0)
             return Optional.empty();
-        return toTimestampAndOffset(bestBatch, maxRecordBodySize);
+        return batchWithMaxTimestamp(new TimestampOffset(largest.timestamp, largest.offset), scanEnd, maxRecordBodySize);
+    }
+
+    /**
+     * Find the batch that holds {@code maxTimestamp}, and return the timestamp and the offset of the record in it.
+     * {@code maxTimestamp.offset()} is the last offset of that batch, which lets us skip to it through the offset index.
+     * The first batch with that timestamp is the one that was recorded as the max.
+     */
+    private Optional<FileRecords.TimestampAndOffset> batchWithMaxTimestamp(TimestampOffset maxTimestamp, int endPosition,
+                                                                           int maxRecordBodySize) throws IOException {
+        int position = offsetIndex().lookup(maxTimestamp.offset()).position();
+        for (RecordBatch batch : log.batchesFrom(position, endPosition)) {
+            if (batch.maxTimestamp() == maxTimestamp.timestamp())
+                return toTimestampAndOffset(batch, maxRecordBodySize);
+        }
+        return Optional.empty();
     }
 
     /**
      * File position of the first batch at or after {@code exclusiveEndOffset}, or the segment size when every
-     * batch starts below it. {@link Long#MAX_VALUE} means the whole segment.
+     * batch starts below it. {@link Long#MAX_VALUE} means the whole segment. Callers must make sure that
+     * {@code exclusiveEndOffset} is greater than the base offset of this segment.
      */
     private int endPosition(long exclusiveEndOffset) throws IOException {
         if (exclusiveEndOffset == Long.MAX_VALUE)
             return log.sizeInBytes();
-        if (exclusiveEndOffset <= baseOffset)
-            return 0;
         LogOffsetPosition mapping = translateOffset(exclusiveEndOffset);
         if (mapping == null)
             return log.sizeInBytes();
         return mapping.position;
-    }
-
-    private Optional<FileRecords.TimestampAndOffset> timestampAndOffsetAt(long offset, long timestamp, int scanEnd,
-                                                                          int maxRecordBodySize) throws IOException {
-        int position = offsetIndex().lookup(offset).position();
-        for (RecordBatch batch : log.batchesFrom(position, scanEnd)) {
-            if (batch.maxTimestamp() == timestamp && batch.lastOffset() >= offset)
-                return toTimestampAndOffset(batch, maxRecordBodySize);
-            if (batch.baseOffset() > offset)
-                break;
-        }
-        return Optional.empty();
     }
 
     private static Optional<FileRecords.TimestampAndOffset> toTimestampAndOffset(RecordBatch batch, int maxRecordBodySize) {

@@ -1698,7 +1698,9 @@ public class UnifiedLog implements AutoCloseable {
     }
 
     /**
-     * Same as {@link #fetchOffsetByTimestamp(long, Optional)} but ignores offsets at or after {@code lastFetchableOffset}.
+     * Same as {@link #fetchOffsetByTimestamp(long, Optional)} but, for {@link ListOffsetsRequest#MAX_TIMESTAMP} and
+     * for a timestamp search in the local log, ignores offsets at or after {@code lastFetchableOffset}. The other
+     * special timestamps (earliest, latest, ...) do not depend on it.
      * That bound is the high watermark, the last stable offset, or the log end. It is always a batch boundary.
      * Pass {@link Long#MAX_VALUE} to search the whole log.
      */
@@ -1748,34 +1750,9 @@ public class UnifiedLog implements AutoCloseable {
                     } else if (targetTimestamp == ListOffsetsRequest.EARLIEST_PENDING_UPLOAD_TIMESTAMP) {
                         return fetchEarliestPendingUploadOffset(remoteOffsetReader);
                     } else if (targetTimestamp == ListOffsetsRequest.MAX_TIMESTAMP) {
-                        // A bound below the log end means the segment with the global max timestamp may hold that
-                        // max past the high watermark. Search only the fetchable prefix. See KAFKA-21204.
-                        if (lastFetchableOffset < logEndOffset())
-                            return new OffsetResultHolder(maxTimestampBelow(lastFetchableOffset));
-
-                        // Cache to avoid race conditions.
-                        List<LogSegment> segments = logSegments();
-                        LogSegment latestTimestampSegment = null;
-                        for (LogSegment segment : segments) {
-                            if (latestTimestampSegment == null) {
-                                latestTimestampSegment = segment;
-                            } else if (segment.maxTimestampSoFar() > latestTimestampSegment.maxTimestampSoFar()) {
-                                latestTimestampSegment = segment;
-                            }
-                        }
-                        // cache the timestamp and offset
-                        TimestampOffset maxTimestampSoFar = latestTimestampSegment.readMaxTimestampAndOffsetSoFar();
-                        // lookup the position of batch to avoid extra I/O
-                        OffsetPosition position = latestTimestampSegment.offsetIndex().lookup(maxTimestampSoFar.offset());
-                        Optional<FileRecords.TimestampAndOffset> timestampAndOffsetOpt = findFirst(
-                                latestTimestampSegment.log().batchesFrom(position.position()),
-                                item -> item.maxTimestamp() == maxTimestampSoFar.timestamp())
-                                    .flatMap(batch -> batch.offsetOfMaxTimestamp(config().maxDecompressedMessageBytes())
-                                        .map(offset -> new FileRecords.TimestampAndOffset(
-                                            batch.maxTimestamp(),
-                                            offset,
-                                            Optional.of(batch.partitionLeaderEpoch()).filter(epoch -> epoch >= 0))));
-                        return new OffsetResultHolder(timestampAndOffsetOpt);
+                        // Only offsets below lastFetchableOffset are visible, so the global max timestamp may not be
+                        // returned if it sits at or after that bound. See KAFKA-21204.
+                        return new OffsetResultHolder(maxTimestampBelow(lastFetchableOffset));
                     } else {
                         // We need to search the first segment whose largest timestamp is >= the target timestamp if there is one.
                         if (remoteLogEnabled() && !isEmpty()) {
@@ -1785,8 +1762,7 @@ public class UnifiedLog implements AutoCloseable {
 
                             AsyncOffsetReadFutureHolder<OffsetResultHolder.FileRecordsOrError> asyncOffsetReadFutureHolder =
                                     remoteOffsetReader.get().asyncOffsetRead(topicPartition(), targetTimestamp,
-                                    logStartOffset, leaderEpochCache,
-                                        () -> searchOffsetInLocalLog(targetTimestamp, localLogStartOffset(), lastFetchableOffset));
+                                    logStartOffset, leaderEpochCache, () -> searchOffsetInLocalLog(targetTimestamp, localLogStartOffset(), lastFetchableOffset));
                             return new OffsetResultHolder(Optional.empty(), Optional.of(asyncOffsetReadFutureHolder));
                         } else {
                             return new OffsetResultHolder(searchOffsetInLocalLog(targetTimestamp, logStartOffset, lastFetchableOffset));
@@ -1829,25 +1805,43 @@ public class UnifiedLog implements AutoCloseable {
     }
 
     /**
-     * Largest timestamp among records with offset strictly less than {@code exclusiveEndOffset}.
-     * Segments that end before the bound contribute their full max. The segment that contains the bound
+     * Largest timestamp among records with offset strictly less than {@code exclusiveEndOffset}. Pass
+     * {@link Long#MAX_VALUE} to consider the whole log.
+     * <p>
+     * Segments that end before the bound are compared using their cached max timestamp, which needs no I/O. Only the
+     * winning one of those, and the segment that contains the bound, are read. The segment that contains the bound
      * contributes only the prefix below it, so a later uncommitted timestamp cannot hide an earlier one.
+     * On a tie, the earliest offset wins.
      */
     private Optional<FileRecords.TimestampAndOffset> maxTimestampBelow(long exclusiveEndOffset) throws IOException {
-        List<LogSegment> segments = logSegments();
         int maxRecordBodySize = config().maxDecompressedMessageBytes();
-        FileRecords.TimestampAndOffset best = null;
-        for (LogSegment segment : segments) {
+        LogSegment winner = null;
+        TimestampOffset winnerMax = null;
+        Optional<FileRecords.TimestampAndOffset> boundCandidate = Optional.empty();
+        // Cache to avoid race conditions.
+        for (LogSegment segment : logSegments()) {
             if (segment.baseOffset() >= exclusiveEndOffset)
                 break;
-            Optional<FileRecords.TimestampAndOffset> candidate = segment.maxTimestampBelow(exclusiveEndOffset, maxRecordBodySize);
-            if (candidate.isPresent()) {
-                FileRecords.TimestampAndOffset found = candidate.get();
-                if (best == null || found.timestamp > best.timestamp)
-                    best = found;
+            TimestampOffset segmentMax = segment.readMaxTimestampAndOffsetSoFar();
+            if (segmentMax.offset() < exclusiveEndOffset) {
+                if (winner == null || segmentMax.timestamp() > winnerMax.timestamp()) {
+                    winner = segment;
+                    winnerMax = segmentMax;
+                }
+            } else {
+                // Only the segment that contains the bound gets here.
+                boundCandidate = segment.maxTimestampBelow(exclusiveEndOffset, maxRecordBodySize);
             }
         }
-        return Optional.ofNullable(best);
+
+        Optional<FileRecords.TimestampAndOffset> winnerCandidate = winner == null
+                ? Optional.empty()
+                : winner.maxTimestampBelow(exclusiveEndOffset, maxRecordBodySize);
+        if (winnerCandidate.isEmpty())
+            return boundCandidate;
+        if (boundCandidate.isPresent() && boundCandidate.get().timestamp > winnerCandidate.get().timestamp)
+            return boundCandidate;
+        return winnerCandidate;
     }
 
     private Optional<FileRecords.TimestampAndOffset> searchOffsetInLocalLog(long targetTimestamp, long startOffset, long exclusiveEndOffset) throws IOException {

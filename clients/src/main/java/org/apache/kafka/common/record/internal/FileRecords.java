@@ -337,6 +337,9 @@ public class FileRecords extends AbstractRecords implements Closeable {
      * - Message's position in the log file is greater than or equals to the startingPosition.
      * - Message's offset is greater than or equals to the startingOffset.
      *
+     * This overload is only used by tests. Production code uses
+     * {@link #searchForTimestamp(long, int, int, long, int)}, which also bounds the search by an end position.
+     *
      * @param targetTimestamp The timestamp to search for.
      * @param startingPosition The starting position to search.
      * @param startingOffset The starting offset to search.
@@ -348,8 +351,7 @@ public class FileRecords extends AbstractRecords implements Closeable {
      */
     public TimestampAndOffset searchForTimestamp(long targetTimestamp, int startingPosition, long startingOffset,
                                                  int maxRecordBodySize) {
-        int endPosition = isSlice ? end : sizeInBytes();
-        return searchForTimestamp(targetTimestamp, startingPosition, endPosition, startingOffset, maxRecordBodySize);
+        return searchForTimestamp(targetTimestamp, startingPosition, Integer.MAX_VALUE, startingOffset, maxRecordBodySize);
     }
 
     /**
@@ -358,7 +360,8 @@ public class FileRecords extends AbstractRecords implements Closeable {
      * - Message's position in the log file is greater than or equals to the startingPosition and less than endPosition.
      * - Message's offset is greater than or equals to the startingOffset.
      *
-     * {@code endPosition} is an exclusive file position. It must not extend into a preallocated tail.
+     * {@code endPosition} is an exclusive file position. It is capped at the end of the valid data, so a
+     * preallocated tail is never read.
      */
     public TimestampAndOffset searchForTimestamp(long targetTimestamp, int startingPosition, int endPosition,
                                                  long startingOffset, int maxRecordBodySize) {
@@ -385,11 +388,23 @@ public class FileRecords extends AbstractRecords implements Closeable {
      * @return The largest timestamp of the messages after the given position.
      */
     public TimestampAndOffset largestTimestampAfter(int startingPosition) {
+        return largestTimestampAfter(startingPosition, Integer.MAX_VALUE);
+    }
+
+    /**
+     * Return the largest timestamp of the messages in {@code [startingPosition, endPosition)} of this file message set.
+     * {@code endPosition} is capped at the end of the valid data, so a preallocated tail is never read.
+     * @param startingPosition The starting position.
+     * @param endPosition The exclusive end position.
+     * @return The largest timestamp of the messages in the given range. The timestamp is
+     *         {@link RecordBatch#NO_TIMESTAMP} and the offset is -1 if the range has no batches.
+     */
+    public TimestampAndOffset largestTimestampAfter(int startingPosition, int endPosition) {
         long maxTimestamp = RecordBatch.NO_TIMESTAMP;
         long shallowOffsetOfMaxTimestamp = -1L;
         int leaderEpochOfMaxTimestamp = RecordBatch.NO_PARTITION_LEADER_EPOCH;
 
-        for (RecordBatch batch : batchesFrom(startingPosition)) {
+        for (RecordBatch batch : batchesFrom(startingPosition, endPosition)) {
             long timestamp = batch.maxTimestamp();
             if (timestamp > maxTimestamp) {
                 maxTimestamp = timestamp;
@@ -438,8 +453,8 @@ public class FileRecords extends AbstractRecords implements Closeable {
     }
 
     /**
-     * Iterate batches in {@code [start, end)}. {@code end} is a file position. For a full segment, callers should
-     * pass a position no larger than {@link #sizeInBytes()} so a preallocated tail is not read.
+     * Iterate batches in {@code [start, end)}. {@code end} is a file position that is capped at the end of the
+     * valid data ({@link #sizeInBytes()}, or the slice end), so a preallocated tail is never read.
      */
     public Iterable<FileChannelRecordBatch> batchesFrom(final int start, final int end) {
         return () -> batchIterator(start, end);
@@ -451,16 +466,11 @@ public class FileRecords extends AbstractRecords implements Closeable {
     }
 
     private AbstractIterator<FileChannelRecordBatch> batchIterator(int start) {
-        final int end;
-        if (isSlice)
-            end = this.end;
-        else
-            end = this.sizeInBytes();
-        return batchIterator(start, end);
+        return batchIterator(start, Integer.MAX_VALUE);
     }
 
     private AbstractIterator<FileChannelRecordBatch> batchIterator(int start, int end) {
-        int boundedEnd = isSlice ? Math.min(end, this.end) : end;
+        int boundedEnd = Math.min(end, isSlice ? this.end : sizeInBytes());
         FileLogInputStream inputStream = new FileLogInputStream(this, start, boundedEnd);
         return new RecordBatchIterator<>(inputStream);
     }
