@@ -415,7 +415,7 @@ public class KafkaRaftClientPreVoteTest {
         context.poll();
 
         context.assertSentVoteResponse(Errors.NONE, leaderEpoch, OptionalInt.of(localId), false);
-        context.assertElectedLeader(leaderEpoch, localId);
+        context.assertElectedLeaderWithLocalVotedKey(leaderEpoch);
     }
 
     @ParameterizedTest
