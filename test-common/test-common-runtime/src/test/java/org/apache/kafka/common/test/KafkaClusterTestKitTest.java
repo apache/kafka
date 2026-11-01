@@ -18,11 +18,21 @@
 package org.apache.kafka.common.test;
 
 import org.apache.kafka.clients.admin.Admin;
+import org.apache.kafka.clients.admin.AdminClientConfig;
 import org.apache.kafka.common.Endpoint;
+import org.apache.kafka.common.Uuid;
 import org.apache.kafka.common.acl.AclBinding;
 import org.apache.kafka.common.acl.AclBindingFilter;
+import org.apache.kafka.common.config.ConfigResource;
+import org.apache.kafka.common.errors.InvalidRequestException;
+import org.apache.kafka.common.message.DescribeClusterRequestData;
+import org.apache.kafka.common.metadata.ConfigRecord;
+import org.apache.kafka.common.metadata.FeatureLevelRecord;
 import org.apache.kafka.common.network.ListenerName;
+import org.apache.kafka.common.requests.DescribeClusterRequest;
+import org.apache.kafka.common.requests.DescribeClusterResponse;
 import org.apache.kafka.metadata.BrokerState;
+import org.apache.kafka.metadata.bootstrap.BootstrapMetadata;
 import org.apache.kafka.metadata.properties.MetaPropertiesEnsemble;
 import org.apache.kafka.network.SocketServerConfigs;
 import org.apache.kafka.server.authorizer.AclCreateResult;
@@ -32,7 +42,10 @@ import org.apache.kafka.server.authorizer.AuthorizableRequestContext;
 import org.apache.kafka.server.authorizer.AuthorizationResult;
 import org.apache.kafka.server.authorizer.Authorizer;
 import org.apache.kafka.server.authorizer.AuthorizerServerInfo;
+import org.apache.kafka.server.common.ApiMessageAndVersion;
+import org.apache.kafka.server.common.MetadataVersion;
 import org.apache.kafka.server.config.ReplicationConfigs;
+import org.apache.kafka.test.TestUtils;
 
 import org.junit.jupiter.api.Tag;
 import org.junit.jupiter.api.Test;
@@ -45,6 +58,7 @@ import java.io.IOException;
 import java.nio.file.Files;
 import java.nio.file.Path;
 import java.nio.file.Paths;
+import java.time.Duration;
 import java.util.HashMap;
 import java.util.HashSet;
 import java.util.List;
@@ -52,9 +66,13 @@ import java.util.Map;
 import java.util.Set;
 import java.util.concurrent.CompletionStage;
 import java.util.concurrent.ExecutionException;
+import java.util.function.Consumer;
 import java.util.stream.Collectors;
 import java.util.stream.IntStream;
 
+import static org.apache.kafka.server.IntegrationTestUtils.connectAndReceive;
+import static org.apache.kafka.test.TestUtils.assertFutureThrows;
+import static org.junit.jupiter.api.Assertions.assertDoesNotThrow;
 import static org.junit.jupiter.api.Assertions.assertEquals;
 import static org.junit.jupiter.api.Assertions.assertNotNull;
 import static org.junit.jupiter.api.Assertions.assertThrows;
@@ -214,6 +232,24 @@ public class KafkaClusterTestKitTest {
         }
     }
 
+    /**
+     * Test a single broker, single controller cluster at the minimum bootstrap level. This tests
+     * that we can function without having periodic NoOpRecords written.
+     */
+    @Test
+    public void testSingleControllerSingleBrokerCluster() throws Exception {
+        try (KafkaClusterTestKit cluster = new KafkaClusterTestKit.Builder(
+            new TestKitNodes.Builder()
+                .setBootstrapMetadataVersion(MetadataVersion.MINIMUM_VERSION)
+                .setNumBrokerNodes(1)
+                .setNumControllerNodes(1)
+                .build()).build()) {
+            cluster.format();
+            cluster.startup();
+            cluster.waitForReadyBrokers();
+        }
+    }
+
     @Test
     public void testCreateClusterAndRestartBrokerNode() throws Exception {
         try (KafkaClusterTestKit cluster = new KafkaClusterTestKit.Builder(
@@ -227,6 +263,39 @@ public class KafkaClusterTestKitTest {
             var broker = cluster.brokers().values().iterator().next();
             broker.shutdown();
             broker.startup();
+        }
+    }
+
+    @SuppressWarnings("unchecked")
+    @Test
+    public void testCreateClusterAndRestartControllerNode() throws Exception {
+        try (KafkaClusterTestKit cluster = new KafkaClusterTestKit.Builder(
+            new TestKitNodes.Builder()
+                .setNumBrokerNodes(1)
+                .setNumControllerNodes(3)
+                .build()).build()) {
+            cluster.format();
+            cluster.startup();
+            var controller = cluster.controllers().values().stream()
+                .filter(c -> c.controller().isActive())
+                .findFirst()
+                .get();
+            var port = controller.socketServer().boundPort(
+                ListenerName.normalised(controller.config().controllerListeners().head().listener()));
+
+            // shutdown active controller
+            controller.shutdown();
+            // Rewrite The `listeners` config to avoid controller socket server init using different port
+            var config = controller.sharedServer().controllerConfig().props();
+            ((Map<String, String>) config).put(SocketServerConfigs.LISTENERS_CONFIG,
+                "CONTROLLER://localhost:" + port);
+            controller.sharedServer().controllerConfig().updateCurrentConfig(config);
+
+            // restart controller
+            controller.startup();
+            TestUtils.waitForCondition(() -> cluster.controllers().values().stream()
+                .anyMatch(c -> c.controller().isActive()),
+                "Timeout waiting for new controller election");
         }
     }
 
@@ -248,6 +317,97 @@ public class KafkaClusterTestKitTest {
                 assertEquals(cluster.nodes().clusterId(),
                     admin.describeCluster().clusterId().get());
             }
+        }
+    }
+
+    @Test
+    public void testCreateClusterWithAdvertisedPortZero() throws Exception {
+        Map<Integer, Map<String, String>> brokerPropertyOverrides = new HashMap<>();
+        for (int brokerId = 0; brokerId < 3; brokerId++) {
+            Map<String, String> props = new HashMap<>();
+            props.put(SocketServerConfigs.LISTENERS_CONFIG, "EXTERNAL://localhost:0");
+            props.put(SocketServerConfigs.ADVERTISED_LISTENERS_CONFIG, "EXTERNAL://localhost:0");
+            brokerPropertyOverrides.put(brokerId, props);
+        }
+
+        TestKitNodes nodes = new TestKitNodes.Builder()
+            .setNumControllerNodes(1)
+            .setNumBrokerNodes(3)
+            .setPerServerProperties(brokerPropertyOverrides)
+            .build();
+
+        doOnStartedKafkaCluster(nodes, cluster ->
+            sendDescribeClusterRequestToBoundPortUntilAllBrokersPropagated(cluster.nodes().brokerListenerName(), Duration.ofSeconds(15), cluster)
+                .nodes().values().forEach(broker -> {
+                    assertEquals("localhost", broker.host(),
+                        "Did not advertise configured advertised host");
+                    assertEquals(cluster.brokers().get(broker.id()).socketServer().boundPort(cluster.nodes().brokerListenerName()), broker.port(),
+                        "Did not advertise bound socket port");
+                })
+        );
+    }
+
+    @Test
+    public void testCreateClusterWithAdvertisedHostAndPortDifferentFromSocketServer() throws Exception {
+        var brokerPropertyOverrides = IntStream.range(0, 3).boxed().collect(Collectors.toMap(brokerId -> brokerId, brokerId -> Map.of(
+            SocketServerConfigs.LISTENERS_CONFIG, "EXTERNAL://localhost:0",
+            SocketServerConfigs.ADVERTISED_LISTENERS_CONFIG, "EXTERNAL://advertised-host-" + brokerId + ":" + (brokerId + 100)
+        )));
+
+        TestKitNodes nodes = new TestKitNodes.Builder()
+            .setNumControllerNodes(1)
+            .setNumBrokerNodes(3)
+            .setNumDisksPerBroker(1)
+            .setPerServerProperties(brokerPropertyOverrides)
+            .build();
+
+        doOnStartedKafkaCluster(nodes, cluster ->
+            sendDescribeClusterRequestToBoundPortUntilAllBrokersPropagated(cluster.nodes().brokerListenerName(), Duration.ofSeconds(15), cluster)
+                .nodes().values().forEach(broker -> {
+                    assertEquals("advertised-host-" + broker.id(), broker.host(), "Did not advertise configured advertised host");
+                    assertEquals(broker.id() + 100, broker.port(), "Did not advertise configured advertised port");
+                })
+        );
+    }
+
+    private void doOnStartedKafkaCluster(TestKitNodes nodes, Consumer<KafkaClusterTestKit> action) throws Exception {
+        try (KafkaClusterTestKit cluster = new KafkaClusterTestKit.Builder(nodes).build()) {
+            cluster.format();
+            cluster.startup();
+            action.accept(cluster);
+        }
+    }
+
+    private DescribeClusterResponse sendDescribeClusterRequestToBoundPortUntilAllBrokersPropagated(
+        ListenerName listenerName,
+        Duration waitTime,
+        KafkaClusterTestKit cluster
+    ) throws RuntimeException {
+        try {
+            long startTime = System.currentTimeMillis();
+            TestUtils.waitForCondition(() -> cluster.brokers().get(0).brokerState() == BrokerState.RUNNING,
+                "Broker never made it to RUNNING state.");
+            TestUtils.waitForCondition(() -> cluster.raftManagers().get(0).client().leaderAndEpoch().leaderId().isPresent(),
+                "RaftManager was not initialized.");
+
+            Duration remainingWaitTime = waitTime.minus(Duration.ofMillis(System.currentTimeMillis() - startTime));
+
+            final DescribeClusterResponse[] currentResponse = new DescribeClusterResponse[1];
+            int expectedBrokerCount = cluster.nodes().brokerNodes().size();
+            TestUtils.waitForCondition(
+                () -> {
+                    currentResponse[0] = connectAndReceive(
+                        new DescribeClusterRequest.Builder(new DescribeClusterRequestData()).build(),
+                        cluster.brokers().get(0).socketServer().boundPort(listenerName)
+                    );
+                    return currentResponse[0].nodes().size() == expectedBrokerCount;
+                },
+                remainingWaitTime.toMillis(),
+                String.format("After %s ms Broker is only aware of %s brokers, but %s are expected", remainingWaitTime.toMillis(), expectedBrokerCount, expectedBrokerCount)
+            );
+            return currentResponse[0];
+        } catch (InterruptedException e) {
+            throw new RuntimeException(e);
         }
     }
 
@@ -275,6 +435,123 @@ public class KafkaClusterTestKitTest {
                 assertEquals(cluster.nodes().clusterId(),
                     admin.describeCluster().clusterId().get());
             }
+        }
+    }
+
+    @ParameterizedTest
+    @ValueSource(booleans = {true, false})
+    public void testUnregisterController(boolean usingBootstrapControllers) throws Exception {
+        final var nodes = new TestKitNodes.Builder().
+            setNumBrokerNodes(3).
+            setNumControllerNodes(3).
+            build();
+        final Map<Integer, Uuid> initialVoters = new HashMap<>();
+        for (final var controllerNode : nodes.controllerNodes().values()) {
+            initialVoters.put(
+                controllerNode.id(),
+                controllerNode.metadataDirectoryId()
+            );
+        }
+
+        try (KafkaClusterTestKit cluster = new KafkaClusterTestKit.Builder(nodes).
+            setInitialVoterSet(initialVoters).
+            build()
+        ) {
+            cluster.format();
+            cluster.startup();
+            int controllerIdToUnregister = cluster.controllers().keySet().iterator().next();
+            cluster.controllers().get(controllerIdToUnregister).shutdown();
+            cluster.waitForActiveController();
+
+            try (Admin admin = cluster.admin(Map.of(AdminClientConfig.CLIENT_ID_CONFIG, getClass().getName()), usingBootstrapControllers)) {
+                // The controller is still part of the voter set, so it can't be unregistered yet
+                assertFutureThrows(
+                    InvalidRequestException.class,
+                    admin.unregisterController(controllerIdToUnregister).all(),
+                    "Cannot unregister controller " + controllerIdToUnregister +
+                        " because it is part of the voter set."
+                );
+
+                admin.removeRaftVoter(
+                    controllerIdToUnregister,
+                    initialVoters.get(controllerIdToUnregister)
+                ).all().get();
+
+                assertDoesNotThrow(() -> admin.unregisterController(controllerIdToUnregister).all().get());
+            }
+
+            TestUtils.waitForCondition(() -> !cluster.brokers().get(1).metadataCache().currentImage().cluster().controllers().containsKey(controllerIdToUnregister),
+                    "Timed out waiting for controller to be unregistered.");
+        }
+    }
+
+    @Test
+    public void testStartupWithNonDefaultKControllerDynamicConfiguration() throws Exception {
+        var bootstrapRecords = List.of(
+            new ApiMessageAndVersion(new FeatureLevelRecord()
+                .setName(MetadataVersion.FEATURE_NAME)
+                .setFeatureLevel(MetadataVersion.IBP_3_7_IV0.featureLevel()), (short) 0),
+            new ApiMessageAndVersion(new ConfigRecord()
+                .setResourceType(ConfigResource.Type.BROKER.id())
+                .setResourceName("")
+                .setName("num.io.threads")
+                .setValue("9"), (short) 0));
+        try (KafkaClusterTestKit cluster = new KafkaClusterTestKit.Builder(
+            new TestKitNodes.Builder(BootstrapMetadata.fromRecords(bootstrapRecords, "testRecords"))
+                .setNumBrokerNodes(1)
+                .setNumControllerNodes(1)
+                .build())
+            .build()) {
+            cluster.format();
+            cluster.startup();
+            var controller = cluster.controllers().values().iterator().next();
+            TestUtils.retryOnExceptionWithTimeout(60000, () -> {
+                assertNotNull(controller.controllerApisHandlerPool());
+                assertEquals(9, controller.controllerApisHandlerPool().threadPoolSize().get());
+            });
+        }
+    }
+
+    /**
+     * Test that once a cluster is formatted, a bootstrap.metadata file that contains an unsupported
+     * MetadataVersion is not a problem. This is a regression test for KAFKA-19192.
+     */
+    @Test
+    public void testOldBootstrapMetadataFile() throws Exception {
+        var baseDirectory = TestUtils.tempDirectory().toPath();
+        try (var cluster = new KafkaClusterTestKit.Builder(
+            new TestKitNodes.Builder()
+                .setNumBrokerNodes(1)
+                .setNumControllerNodes(1)
+                .setBaseDirectory(baseDirectory)
+                .build())
+            .setDeleteOnClose(false)
+            .build()) {
+            cluster.format();
+            cluster.startup();
+            cluster.waitForReadyBrokers();
+        }
+        var oldBootstrapMetadata = BootstrapMetadata.fromRecords(
+            List.of(
+                new ApiMessageAndVersion(
+                    new FeatureLevelRecord()
+                        .setName(MetadataVersion.FEATURE_NAME)
+                        .setFeatureLevel((short) 1),
+                    (short) 0)
+            ),
+            "oldBootstrapMetadata");
+        // Re-create the cluster using the same directory structure as above.
+        // Since we do not need to use the bootstrap metadata, the fact that
+        // it specifies an obsolete metadata.version should not be a problem.
+        try (var cluster = new KafkaClusterTestKit.Builder(
+            new TestKitNodes.Builder()
+                .setNumBrokerNodes(1)
+                .setNumControllerNodes(1)
+                .setBaseDirectory(baseDirectory)
+                .setBootstrapMetadata(oldBootstrapMetadata)
+                .build()).build()) {
+            cluster.startup();
+            cluster.waitForReadyBrokers();
         }
     }
 
