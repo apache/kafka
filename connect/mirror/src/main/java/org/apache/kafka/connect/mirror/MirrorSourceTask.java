@@ -36,6 +36,7 @@ import org.slf4j.LoggerFactory;
 
 import java.time.Duration;
 import java.util.ArrayList;
+import java.util.HashMap;
 import java.util.List;
 import java.util.Map;
 import java.util.Set;
@@ -59,6 +60,7 @@ public class MirrorSourceTask extends SourceTask {
     private boolean stopping = false;
     private Semaphore consumerAccess;
     private OffsetSyncWriter offsetSyncWriter;
+    private HashMap<TopicPartition, Long> lastEmittedOffsets = new HashMap<>();
 
     public MirrorSourceTask() {}
 
@@ -144,6 +146,7 @@ public class MirrorSourceTask extends SourceTask {
                 SourceRecord converted = convertRecord(record);
                 sourceRecords.add(converted);
                 TopicPartition topicPartition = new TopicPartition(converted.topic(), converted.kafkaPartition());
+                validate(topicPartition, record.offset());
                 long age = System.currentTimeMillis() - record.timestamp();
                 long size = byteSize(record.value());
                 if (legacyMetrics != null) {
@@ -176,6 +179,50 @@ public class MirrorSourceTask extends SourceTask {
         }
     }
  
+    public Boolean isInternalTopic(TopicPartition topicPartition) {
+        return replicationPolicy.isInternalTopic(topicPartition.topic())
+        || replicationPolicy.isCheckpointsTopic(topicPartition.topic())
+        || replicationPolicy.isHeartbeatsTopic(topicPartition.topic())
+        || replicationPolicy.isMM2InternalTopic(topicPartition.topic());
+    }
+
+    public void validate(TopicPartition topicPartition, Long offset) {
+        /*
+            This function validates the offsets of partition per topic for a given record.
+            It validates if the offset is previously seen is monotonically increasing by 1 for a given partition and topic.
+            If We see any gaps, we throw an exception and stop the task to ensure data consistency.
+            If we observe that offset is rested to 0 while previous seen offset is >=0,
+            Then we expect that topic was recreated and reset the offset tracking.
+        */
+        if (isInternalTopic(topicPartition)) {
+            // Not verfying consecutive offsets for internal topics
+            return;
+        }
+        if (lastEmittedOffsets.containsKey(topicPartition)) {
+            long previousOffset = lastEmittedOffsets.get(topicPartition);
+            if (offset == 0) {
+                String timestamp = String.valueOf(System.currentTimeMillis());
+                log.warn("Offset for topic-partition {} reset to 0 at {}. This likely indicates that the topic was recreated. Previous offset was {}.",
+                    topicPartition, timestamp, previousOffset);
+                lastEmittedOffsets.put(topicPartition, offset);
+                consumer.seek(topicPartition, offset);
+                return;
+            }
+            if (offset != previousOffset + 1) {
+                log.error("Non-consecutive offsets for topic-partition {}: previous offset was {}, current offset is {}.",
+                        topicPartition, previousOffset, offset);
+                throw new RuntimeException("Non-consecutive offsets for topic-partition " + topicPartition + ": previous offset was " + previousOffset + ", current offset is " + offset);
+            }
+            lastEmittedOffsets.put(topicPartition, offset);
+        } else {
+            if (offset != 0) {
+                log.error("First offset for topic-partition {} is {}, not 0.", topicPartition, offset);
+                throw new RuntimeException("Non-consecutive offsets for topic-partition " + topicPartition + ": first offset is " + offset + ", not 0.");
+            }
+            lastEmittedOffsets.put(topicPartition, offset);    
+        }
+    }
+
     @Override
     public void commitRecord(SourceRecord record, RecordMetadata metadata) {
         if (stopping) {
