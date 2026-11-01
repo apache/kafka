@@ -3334,12 +3334,10 @@ public abstract class ConsumerCoordinatorTest {
 
         subscriptions.assignFromUser(singleton(t1p));
         client.prepareResponse(offsetFetchResponse(Errors.GROUP_AUTHORIZATION_FAILED, List.of()));
-        try {
-            coordinator.initWithCommittedOffsetsIfNeeded(time.timer(Long.MAX_VALUE));
-            fail("Expected group authorization error");
-        } catch (GroupAuthorizationException e) {
-            assertEquals(groupId, e.groupId());
-        }
+        GroupAuthorizationException e = assertThrows(GroupAuthorizationException.class,
+                () -> coordinator.initWithCommittedOffsetsIfNeeded(time.timer(Long.MAX_VALUE)),
+                "Expected group authorization error");
+        assertEquals(groupId, e.groupId());
     }
 
     @Test
