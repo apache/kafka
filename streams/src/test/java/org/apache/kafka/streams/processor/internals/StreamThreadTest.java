@@ -20,12 +20,13 @@ import org.apache.kafka.clients.admin.MockAdminClient;
 import org.apache.kafka.clients.consumer.CloseOptions.GroupMembershipOperation;
 import org.apache.kafka.clients.consumer.Consumer;
 import org.apache.kafka.clients.consumer.ConsumerGroupMetadata;
-import org.apache.kafka.clients.consumer.ConsumerRebalanceListener;
 import org.apache.kafka.clients.consumer.ConsumerRecord;
 import org.apache.kafka.clients.consumer.ConsumerRecords;
 import org.apache.kafka.clients.consumer.InvalidOffsetException;
 import org.apache.kafka.clients.consumer.MockConsumer;
 import org.apache.kafka.clients.consumer.OffsetAndMetadata;
+import org.apache.kafka.clients.consumer.RebalanceConsumer;
+import org.apache.kafka.clients.consumer.RebalanceListener;
 import org.apache.kafka.clients.consumer.internals.AsyncKafkaConsumer;
 import org.apache.kafka.clients.consumer.internals.AutoOffsetResetStrategy;
 import org.apache.kafka.clients.consumer.internals.StreamsRebalanceData;
@@ -174,6 +175,7 @@ import static org.mockito.Mockito.mock;
 import static org.mockito.Mockito.never;
 import static org.mockito.Mockito.times;
 import static org.mockito.Mockito.verify;
+import static org.mockito.Mockito.verifyNoInteractions;
 import static org.mockito.Mockito.when;
 
 @ExtendWith(MockitoExtension.class)
@@ -204,6 +206,9 @@ public class StreamThreadTest {
     @Mock
     private Consumer<byte[], byte[]> consumer;
 
+    @Mock
+    private RebalanceConsumer rebalanceConsumer;
+
     private static final BiConsumer<Throwable, Boolean> HANDLER = (e, b) -> {
         if (e instanceof RuntimeException) {
             throw (RuntimeException) e;
@@ -233,6 +238,7 @@ public class StreamThreadTest {
         final Set<Thread> t = Collections.unmodifiableSet(Thread.getAllStackTraces().keySet());
         assertTrue(t.stream().noneMatch(thread -> thread.getName().contains("TaskExecutor")));
         assertTrue(t.stream().noneMatch(thread -> thread.getName().contains("StateUpdater")));
+        verifyNoInteractions(rebalanceConsumer);
         stateDirectory = null;
     }
 
@@ -363,7 +369,7 @@ public class StreamThreadTest {
         thread.setStateListener(stateListener);
         assertEquals(StreamThread.State.CREATED, thread.state());
 
-        final ConsumerRebalanceListener rebalanceListener = thread.rebalanceListener();
+        final RebalanceListener rebalanceListener = thread.rebalanceListener();
 
         final List<TopicPartition> revokedPartitions;
         final List<TopicPartition> assignedPartitions;
@@ -371,7 +377,7 @@ public class StreamThreadTest {
         // revoke nothing
         thread.setState(StreamThread.State.STARTING);
         revokedPartitions = Collections.emptyList();
-        rebalanceListener.onPartitionsRevoked(revokedPartitions);
+        rebalanceListener.onPartitionsRevoked(revokedPartitions, rebalanceConsumer);
 
         assertEquals(StreamThread.State.PARTITIONS_REVOKED, thread.state());
 
@@ -381,7 +387,7 @@ public class StreamThreadTest {
         final MockConsumer<byte[], byte[]> mockConsumer = (MockConsumer<byte[], byte[]>) thread.mainConsumer();
         mockConsumer.assign(assignedPartitions);
         mockConsumer.updateBeginningOffsets(Collections.singletonMap(t1p1, 0L));
-        rebalanceListener.onPartitionsAssigned(assignedPartitions);
+        rebalanceListener.onPartitionsAssigned(assignedPartitions, rebalanceConsumer);
         runOnce(processingThreadsEnabled);
         assertEquals(StreamThread.State.RUNNING, thread.state());
         assertEquals(4, stateListener.numChanges);
@@ -1125,7 +1131,7 @@ public class StreamThreadTest {
         final MockConsumer<byte[], byte[]> mockConsumer = (MockConsumer<byte[], byte[]>) thread.mainConsumer();
         mockConsumer.assign(Collections.singleton(t1p1));
         mockConsumer.updateBeginningOffsets(Collections.singletonMap(t1p1, 0L));
-        thread.rebalanceListener().onPartitionsAssigned(assignedPartitions);
+        thread.rebalanceListener().onPartitionsAssigned(assignedPartitions, rebalanceConsumer);
         runOnce(false);
 
         // processed one record, punctuated after the first record, and hence num.iterations is still 1
@@ -1551,7 +1557,7 @@ public class StreamThreadTest {
         final Map<TaskId, Set<TopicPartition>> activeTasks = new HashMap<>();
         activeTasks.put(task1, Collections.singleton(t1p1));
         thread.taskManager().handleAssignment(activeTasks, emptyMap());
-        thread.rebalanceListener().onPartitionsAssigned(Collections.singleton(t1p1));
+        thread.rebalanceListener().onPartitionsAssigned(Collections.singleton(t1p1), rebalanceConsumer);
 
         assertTrue(
             Double.isNaN(
@@ -1608,7 +1614,7 @@ public class StreamThreadTest {
         thread = createStreamThread(CLIENT_ID, config);
 
         thread.setState(StreamThread.State.STARTING);
-        thread.rebalanceListener().onPartitionsRevoked(Collections.emptyList());
+        thread.rebalanceListener().onPartitionsRevoked(Collections.emptyList(), rebalanceConsumer);
 
         final Map<TaskId, Set<TopicPartition>> activeTasks = new HashMap<>();
         final List<TopicPartition> assignedPartitions = new ArrayList<>();
@@ -1627,7 +1633,7 @@ public class StreamThreadTest {
         beginOffsets.put(t1p1, 0L);
         beginOffsets.put(t1p2, 0L);
         mockConsumer.updateBeginningOffsets(beginOffsets);
-        thread.rebalanceListener().onPartitionsAssigned(new HashSet<>(assignedPartitions));
+        thread.rebalanceListener().onPartitionsAssigned(new HashSet<>(assignedPartitions), rebalanceConsumer);
 
         assertEquals(1, clientSupplier.producers.size());
         final Producer<byte[], byte[]> globalProducer = clientSupplier.producers.get(0);
@@ -1648,7 +1654,7 @@ public class StreamThreadTest {
 
         thread.setState(StreamThread.State.STARTING);
         thread.taskManager().init();
-        thread.rebalanceListener().onPartitionsRevoked(Collections.emptyList());
+        thread.rebalanceListener().onPartitionsRevoked(Collections.emptyList(), rebalanceConsumer);
 
         final Map<TaskId, Set<TopicPartition>> activeTasks = new HashMap<>();
         final List<TopicPartition> assignedPartitions = new ArrayList<>();
@@ -1667,7 +1673,7 @@ public class StreamThreadTest {
         beginOffsets.put(t1p1, 0L);
         beginOffsets.put(t1p2, 0L);
         mockConsumer.updateBeginningOffsets(beginOffsets);
-        thread.rebalanceListener().onPartitionsAssigned(new HashSet<>(assignedPartitions));
+        thread.rebalanceListener().onPartitionsAssigned(new HashSet<>(assignedPartitions), rebalanceConsumer);
 
         runOnce(processingThreadsEnabled);
 
@@ -1722,7 +1728,7 @@ public class StreamThreadTest {
         assertEquals(Set.of(task1, task2), thread.taskManager().allTasks().keySet());
         assertEquals(StreamThread.State.PENDING_SHUTDOWN, thread.state());
 
-        thread.rebalanceListener().onPartitionsAssigned(assignedPartitions);
+        thread.rebalanceListener().onPartitionsAssigned(assignedPartitions, rebalanceConsumer);
 
         TestUtils.waitForCondition(
             () -> thread.state() == StreamThread.State.DEAD,
@@ -2073,7 +2079,7 @@ public class StreamThreadTest {
         thread = createStreamThread(CLIENT_ID, config);
 
         thread.setState(StreamThread.State.STARTING);
-        thread.rebalanceListener().onPartitionsRevoked(Collections.emptyList());
+        thread.rebalanceListener().onPartitionsRevoked(Collections.emptyList(), rebalanceConsumer);
 
         final Map<TaskId, Set<TopicPartition>> standbyTasks = new HashMap<>();
 
@@ -2082,7 +2088,7 @@ public class StreamThreadTest {
 
         thread.taskManager().handleAssignment(emptyMap(), standbyTasks);
 
-        thread.rebalanceListener().onPartitionsAssigned(Collections.emptyList());
+        thread.rebalanceListener().onPartitionsAssigned(Collections.emptyList(), rebalanceConsumer);
     }
 
     @ParameterizedTest
@@ -2100,7 +2106,7 @@ public class StreamThreadTest {
 
         thread.setState(StreamThread.State.STARTING);
         thread.taskManager().init();
-        thread.rebalanceListener().onPartitionsRevoked(Collections.emptySet());
+        thread.rebalanceListener().onPartitionsRevoked(Collections.emptySet(), rebalanceConsumer);
 
         final Map<TaskId, Set<TopicPartition>> activeTasks = new HashMap<>();
         final List<TopicPartition> assignedPartitions = new ArrayList<>();
@@ -2114,7 +2120,7 @@ public class StreamThreadTest {
         final MockConsumer<byte[], byte[]> mockConsumer = (MockConsumer<byte[], byte[]>) thread.mainConsumer();
         mockConsumer.assign(assignedPartitions);
         mockConsumer.updateBeginningOffsets(Collections.singletonMap(t1p1, 0L));
-        thread.rebalanceListener().onPartitionsAssigned(assignedPartitions);
+        thread.rebalanceListener().onPartitionsAssigned(assignedPartitions, rebalanceConsumer);
 
         runOnce(processingThreadsEnabled);
         assertEquals(1, thread.readOnlyActiveTasks().size());
@@ -2166,7 +2172,7 @@ public class StreamThreadTest {
 
         thread.setState(StreamThread.State.STARTING);
         thread.taskManager().init();
-        thread.rebalanceListener().onPartitionsRevoked(Collections.emptySet());
+        thread.rebalanceListener().onPartitionsRevoked(Collections.emptySet(), rebalanceConsumer);
 
         final Map<TaskId, Set<TopicPartition>> activeTasks = new HashMap<>();
         final List<TopicPartition> assignedPartitions = new ArrayList<>();
@@ -2180,7 +2186,7 @@ public class StreamThreadTest {
         final MockConsumer<byte[], byte[]> mockConsumer = (MockConsumer<byte[], byte[]>) thread.mainConsumer();
         mockConsumer.assign(assignedPartitions);
         mockConsumer.updateBeginningOffsets(Collections.singletonMap(t1p1, 0L));
-        thread.rebalanceListener().onPartitionsAssigned(assignedPartitions);
+        thread.rebalanceListener().onPartitionsAssigned(assignedPartitions, rebalanceConsumer);
 
         runOnce(processingThreadsEnabled);
 
@@ -2195,7 +2201,7 @@ public class StreamThreadTest {
         }
 
         producer.commitTransactionException = e;
-        assertThrows(TaskMigratedException.class, () -> thread.rebalanceListener().onPartitionsRevoked(assignedPartitions));
+        assertThrows(TaskMigratedException.class, () -> thread.rebalanceListener().onPartitionsRevoked(assignedPartitions, rebalanceConsumer));
         assertFalse(producer.transactionCommitted());
         assertFalse(producer.closed());
         assertEquals(1, thread.readOnlyActiveTasks().size());
@@ -2249,7 +2255,7 @@ public class StreamThreadTest {
 
         thread.setState(StreamThread.State.STARTING);
         thread.taskManager().init();
-        thread.rebalanceListener().onPartitionsRevoked(Collections.emptySet());
+        thread.rebalanceListener().onPartitionsRevoked(Collections.emptySet(), rebalanceConsumer);
 
         final Map<TaskId, Set<TopicPartition>> activeTasks = new HashMap<>();
         final List<TopicPartition> assignedPartitions = new ArrayList<>();
@@ -2273,7 +2279,7 @@ public class StreamThreadTest {
         final MockAdminClient admin = (MockAdminClient) thread.adminClient();
         admin.updateEndOffsets(singletonMap(storeChangelogTopicPartition, 0L));
 
-        thread.rebalanceListener().onPartitionsAssigned(assignedPartitions);
+        thread.rebalanceListener().onPartitionsAssigned(assignedPartitions, rebalanceConsumer);
 
 
         // the first iteration completes the restoration
@@ -2339,7 +2345,7 @@ public class StreamThreadTest {
 
         thread.setState(StreamThread.State.STARTING);
         thread.taskManager().init();
-        thread.rebalanceListener().onPartitionsRevoked(Collections.emptySet());
+        thread.rebalanceListener().onPartitionsRevoked(Collections.emptySet(), rebalanceConsumer);
 
         final Map<TaskId, Set<TopicPartition>> activeTasks = new HashMap<>();
         final List<TopicPartition> assignedPartitions = new ArrayList<>();
@@ -2353,7 +2359,7 @@ public class StreamThreadTest {
         final MockConsumer<byte[], byte[]> mockConsumer = (MockConsumer<byte[], byte[]>) thread.mainConsumer();
         mockConsumer.assign(assignedPartitions);
         mockConsumer.updateBeginningOffsets(Collections.singletonMap(t1p1, 0L));
-        thread.rebalanceListener().onPartitionsAssigned(assignedPartitions);
+        thread.rebalanceListener().onPartitionsAssigned(assignedPartitions, rebalanceConsumer);
 
         runOnce(processingThreadsEnabled);
         assertEquals(1, thread.readOnlyActiveTasks().size());
@@ -2404,7 +2410,7 @@ public class StreamThreadTest {
 
         thread.setState(StreamThread.State.STARTING);
         thread.taskManager().init();
-        thread.rebalanceListener().onPartitionsRevoked(Collections.emptySet());
+        thread.rebalanceListener().onPartitionsRevoked(Collections.emptySet(), rebalanceConsumer);
 
         final Map<TaskId, Set<TopicPartition>> activeTasks = new HashMap<>();
         final List<TopicPartition> assignedPartitions = new ArrayList<>();
@@ -2418,7 +2424,7 @@ public class StreamThreadTest {
         final MockConsumer<byte[], byte[]> mockConsumer = (MockConsumer<byte[], byte[]>) thread.mainConsumer();
         mockConsumer.assign(assignedPartitions);
         mockConsumer.updateBeginningOffsets(Collections.singletonMap(t1p1, 0L));
-        thread.rebalanceListener().onPartitionsAssigned(assignedPartitions);
+        thread.rebalanceListener().onPartitionsAssigned(assignedPartitions, rebalanceConsumer);
 
         runOnce(processingThreadsEnabled);
 
@@ -2434,7 +2440,7 @@ public class StreamThreadTest {
             runOnce(processingThreadsEnabled);
         }
 
-        thread.rebalanceListener().onPartitionsRevoked(assignedPartitions);
+        thread.rebalanceListener().onPartitionsRevoked(assignedPartitions, rebalanceConsumer);
         assertTrue(producer.transactionCommitted());
         assertTrue(producer.transactionCommitted());
         assertFalse(producer.closed());
@@ -2486,7 +2492,7 @@ public class StreamThreadTest {
 
         thread.setState(StreamThread.State.STARTING);
         thread.taskManager().init();
-        thread.rebalanceListener().onPartitionsRevoked(Collections.emptySet());
+        thread.rebalanceListener().onPartitionsRevoked(Collections.emptySet(), rebalanceConsumer);
 
         final Map<TaskId, Set<TopicPartition>> activeTasks = new HashMap<>();
         final List<TopicPartition> assignedPartitions = new ArrayList<>();
@@ -2500,7 +2506,7 @@ public class StreamThreadTest {
         final MockConsumer<byte[], byte[]> mockConsumer = (MockConsumer<byte[], byte[]>) thread.mainConsumer();
         mockConsumer.assign(assignedPartitions);
         mockConsumer.updateBeginningOffsets(Collections.singletonMap(t1p1, 0L));
-        thread.rebalanceListener().onPartitionsAssigned(assignedPartitions);
+        thread.rebalanceListener().onPartitionsAssigned(assignedPartitions, rebalanceConsumer);
 
         runOnce(processingThreadsEnabled);
 
@@ -2547,7 +2553,7 @@ public class StreamThreadTest {
 
         thread.setState(StreamThread.State.STARTING);
         thread.taskManager().init();
-        thread.rebalanceListener().onPartitionsRevoked(Collections.emptySet());
+        thread.rebalanceListener().onPartitionsRevoked(Collections.emptySet(), rebalanceConsumer);
 
         final Map<TaskId, Set<TopicPartition>> standbyTasks = new HashMap<>();
 
@@ -2556,7 +2562,7 @@ public class StreamThreadTest {
 
         thread.taskManager().handleAssignment(emptyMap(), standbyTasks);
 
-        thread.rebalanceListener().onPartitionsAssigned(Collections.emptyList());
+        thread.rebalanceListener().onPartitionsAssigned(Collections.emptyList(), rebalanceConsumer);
 
         runOnce(processingThreadsEnabled);
 
@@ -2622,7 +2628,7 @@ public class StreamThreadTest {
 
         thread.setState(StreamThread.State.STARTING);
         thread.taskManager().init();
-        thread.rebalanceListener().onPartitionsRevoked(Collections.emptySet());
+        thread.rebalanceListener().onPartitionsRevoked(Collections.emptySet(), rebalanceConsumer);
         final List<TopicPartition> assignedPartitions = new ArrayList<>();
 
         final Map<TaskId, Set<TopicPartition>> activeTasks = new HashMap<>();
@@ -2635,7 +2641,7 @@ public class StreamThreadTest {
 
         clientSupplier.consumer.assign(assignedPartitions);
         clientSupplier.consumer.updateBeginningOffsets(Collections.singletonMap(t1p1, 0L));
-        thread.rebalanceListener().onPartitionsAssigned(assignedPartitions);
+        thread.rebalanceListener().onPartitionsAssigned(assignedPartitions, rebalanceConsumer);
 
         runOnce(false);
 
@@ -2700,7 +2706,7 @@ public class StreamThreadTest {
 
         thread.setState(StreamThread.State.STARTING);
         thread.taskManager().init();
-        thread.rebalanceListener().onPartitionsRevoked(Collections.emptySet());
+        thread.rebalanceListener().onPartitionsRevoked(Collections.emptySet(), rebalanceConsumer);
         final List<TopicPartition> assignedPartitions = new ArrayList<>();
 
         final Map<TaskId, Set<TopicPartition>> activeTasks = new HashMap<>();
@@ -2713,7 +2719,7 @@ public class StreamThreadTest {
 
         clientSupplier.consumer.assign(assignedPartitions);
         clientSupplier.consumer.updateBeginningOffsets(Collections.singletonMap(t1p1, 0L));
-        thread.rebalanceListener().onPartitionsAssigned(assignedPartitions);
+        thread.rebalanceListener().onPartitionsAssigned(assignedPartitions, rebalanceConsumer);
 
         runOnce(false);
         assertEquals(0, peekedContextTime.size());
@@ -2817,7 +2823,7 @@ public class StreamThreadTest {
 
         mockConsumer.schedulePollTask(() -> {
             thread.setState(StreamThread.State.PARTITIONS_REVOKED);
-            thread.rebalanceListener().onPartitionsAssigned(topicPartitionSet);
+            thread.rebalanceListener().onPartitionsAssigned(topicPartitionSet, rebalanceConsumer);
         });
 
         thread.start();
@@ -2900,7 +2906,7 @@ public class StreamThreadTest {
         final MockConsumer<byte[], byte[]> mockConsumer = (MockConsumer<byte[], byte[]>) thread.mainConsumer();
         mockConsumer.assign(Collections.singleton(t1p1));
         mockConsumer.updateBeginningOffsets(Collections.singletonMap(t1p1, 0L));
-        thread.rebalanceListener().onPartitionsAssigned(assignedPartitions);
+        thread.rebalanceListener().onPartitionsAssigned(assignedPartitions, rebalanceConsumer);
         runOnce(processingThreadsEnabled);
 
         long offset = -1;
@@ -2961,7 +2967,7 @@ public class StreamThreadTest {
 
         consumer.schedulePollTask(() -> {
             thread.setState(StreamThread.State.PARTITIONS_REVOKED);
-            thread.rebalanceListener().onPartitionsLost(assignedPartitions);
+            thread.rebalanceListener().onPartitionsLost(assignedPartitions, rebalanceConsumer);
         });
 
         thread.setState(StreamThread.State.STARTING);
@@ -2989,7 +2995,7 @@ public class StreamThreadTest {
 
         consumer.schedulePollTask(() -> {
             thread.setState(StreamThread.State.PARTITIONS_REVOKED);
-            thread.rebalanceListener().onPartitionsRevoked(assignedPartitions);
+            thread.rebalanceListener().onPartitionsRevoked(assignedPartitions, rebalanceConsumer);
         });
 
         thread.setState(StreamThread.State.STARTING);
@@ -3056,7 +3062,8 @@ public class StreamThreadTest {
 
         thread.run();
 
-        verify(consumer).subscribe((Collection<String>) any(), any());
+        verify(consumer).setRebalanceListener(any());
+        verify(consumer).subscribe((Collection<String>) any());
     }
 
     @ParameterizedTest
@@ -3124,7 +3131,8 @@ public class StreamThreadTest {
 
         assertTrue(exceptionHandlerInvoked.get());
 
-        verify(consumer).subscribe((Collection<String>) any(), any());
+        verify(consumer).setRebalanceListener(any());
+        verify(consumer).subscribe((Collection<String>) any());
     }
 
     @ParameterizedTest
@@ -3191,7 +3199,8 @@ public class StreamThreadTest {
         thread.setState(StreamThread.State.STARTING);
         thread.runLoop();
 
-        verify(consumer, times(2)).subscribe((Collection<String>) any(), any());
+        verify(consumer, times(2)).setRebalanceListener(any());
+        verify(consumer, times(2)).subscribe((Collection<String>) any());
         verify(consumer).unsubscribe();
     }
 
@@ -3259,7 +3268,8 @@ public class StreamThreadTest {
         thread.setState(StreamThread.State.STARTING);
         thread.runLoop();
 
-        verify(consumer).subscribe((Collection<String>) any(), any());
+        verify(consumer).setRebalanceListener(any());
+        verify(consumer).subscribe((Collection<String>) any());
         verify(consumer).enforceRebalance("Active tasks corrupted");
     }
 
@@ -3402,7 +3412,8 @@ public class StreamThreadTest {
         thread.setState(StreamThread.State.STARTING);
         thread.runLoop();
 
-        verify(consumer).subscribe((Collection<String>) any(), any());
+        verify(consumer).setRebalanceListener(any());
+        verify(consumer).subscribe((Collection<String>) any());
     }
 
     @ParameterizedTest
@@ -3473,7 +3484,7 @@ public class StreamThreadTest {
         final MockConsumer<byte[], byte[]> mockConsumer = (MockConsumer<byte[], byte[]>) thread.mainConsumer();
         mockConsumer.assign(Collections.singleton(t1p1));
         mockConsumer.updateBeginningOffsets(Collections.singletonMap(t1p1, 0L));
-        thread.rebalanceListener().onPartitionsAssigned(assignedPartitions);
+        thread.rebalanceListener().onPartitionsAssigned(assignedPartitions, rebalanceConsumer);
         runOnce(processingThreadsEnabled);
 
         try (final LogCaptureAppender appender = LogCaptureAppender.createAndRegister(RecordQueue.class)) {
