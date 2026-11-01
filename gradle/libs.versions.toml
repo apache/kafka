@@ -1,0 +1,201 @@
+# Licensed to the Apache Software Foundation (ASF) under one or more
+# contributor license agreements.  See the NOTICE file distributed with
+# this work for additional information regarding copyright ownership.
+# The ASF licenses this file to You under the Apache License, Version 2.0
+# (the "License"); you may not use this file except in compliance with
+# the License.  You may obtain a copy of the License at
+#
+#    http://www.apache.org/licenses/LICENSE-2.0
+#
+# Unless required by applicable law or agreed to in writing, software
+# distributed under the License is distributed on an "AS IS" BASIS,
+# WITHOUT WARRANTIES OR CONDITIONS OF ANY KIND, either express or implied.
+# See the License for the specific language governing permissions and
+# limitations under the License.
+
+[versions]
+apacheda = "1.0.2"
+apacheds = "2.0.0-M24"
+argparse4j = "0.9.0"
+bcpkix = "1.86"
+caffeine = "3.2.4"
+commons-validator = "1.11.0"
+commons-net = "3.13.0"
+classgraph = "4.8.196"
+gradle = "9.8.2"
+httpclient = "4.5.14"
+jackson = "2.22.4"
+jackson-annotations = "2.22"
+jacoco = "0.8.15"
+javassist = "3.30.2-GA"
+# Verify Jetty does not use SLF4J 2.x fluent APIs in production code.
+jetty = "12.0.39"
+jersey = "3.1.10"
+jgit = "7.8.0.202609011348-r"
+jline = "3.30.17"
+jmh = "1.37"
+scala-logging = "3.9.6"
+jakarta-annotation-api = "2.1.1"
+jakarta-rs = "3.1.0"
+jakarta-servlet-api = "6.1.0"
+jfreechart = "1.5.6"
+jopt = "5.0.4"
+jose4j = "0.9.6"
+junit = "5.14.4"
+kafka-0110 = "0.11.0.3"
+kafka-10 = "1.0.2"
+kafka-11 = "1.1.1"
+kafka-20 = "2.0.1"
+kafka-21 = "2.1.1"
+kafka-22 = "2.2.2"
+kafka-23 = "2.3.1"
+kafka-24 = "2.4.1"
+kafka-25 = "2.5.1"
+kafka-26 = "2.6.3"
+kafka-27 = "2.7.2"
+kafka-28 = "2.8.2"
+kafka-30 = "3.0.2"
+kafka-31 = "3.1.2"
+kafka-32 = "3.2.3"
+kafka-33 = "3.3.2"
+kafka-34 = "3.4.1"
+kafka-35 = "3.5.2"
+kafka-36 = "3.6.2"
+kafka-37 = "3.7.2"
+kafka-38 = "3.8.1"
+kafka-39 = "3.9.2"
+kafka-40 = "4.0.1"
+kafka-41 = "4.1.2"
+kafka-42 = "4.2.2"
+kafka-43 = "4.3.1"
+log4j2 = "2.25.5"
+# When updating lz4, ensure Kafka's compression levels remain valid.
+lz4 = "1.11.4"
+maven-artifact = "3.9.16"
+metrics = "2.2.0"
+mockito = "5.24.0"
+opentelemetry-proto = "1.3.2-alpha"
+# protobuf is a dependency of opentelemetry-proto.
+protobuf = "3.25.5"
+pcollections = "4.0.2"
+re2j = "1.8"
+rocks-db = "10.10.1.1"
+# Also update checkstyle/.scalafmt.conf when changing scalafmt.
+scalafmt = "3.10.3"
+scoverage = "2.5.2"
+slf4j = "1.7.36"
+snappy = "1.1.10.11"
+spotbugs = "4.9.8"
+testcontainers-keycloak = "4.3.1"
+mock-oauth2-server = "2.3.0"
+zinc = "1.12.1"
+# When updating zstd, ensure Kafka's compression levels remain valid.
+zstd = "1.5.7-17"
+junit-platform = "1.14.4"
+hdr-histogram = "2.2.2"
+hash4j = "0.22.0"
+checkstyle = "12.3.1"
+scala = "2.13.18"
+swagger = "2.2.55"
+
+[plugins]
+swagger = { id = "io.swagger.core.v3.swagger-gradle-plugin", version.ref = "swagger" }
+
+[libraries]
+# When adding, removing, or updating dependencies, also update LICENSE-binary.
+# See https://issues.apache.org/jira/browse/KAFKA-12622 for verification steps.
+apacheda = { module = "org.apache.directory.api:api-all", version.ref = "apacheda" }
+apacheds-core-api = { module = "org.apache.directory.server:apacheds-core-api", version.ref = "apacheds" }
+apacheds-interceptor-kerberos = { module = "org.apache.directory.server:apacheds-interceptor-kerberos", version.ref = "apacheds" }
+apacheds-protocol-shared = { module = "org.apache.directory.server:apacheds-protocol-shared", version.ref = "apacheds" }
+apacheds-protocol-kerberos = { module = "org.apache.directory.server:apacheds-protocol-kerberos", version.ref = "apacheds" }
+apacheds-protocol-ldap = { module = "org.apache.directory.server:apacheds-protocol-ldap", version.ref = "apacheds" }
+apacheds-ldif-partition = { module = "org.apache.directory.server:apacheds-ldif-partition", version.ref = "apacheds" }
+apacheds-mavibot-partition = { module = "org.apache.directory.server:apacheds-mavibot-partition", version.ref = "apacheds" }
+apacheds-jdbm-partition = { module = "org.apache.directory.server:apacheds-jdbm-partition", version.ref = "apacheds" }
+argparse4j = { module = "net.sourceforge.argparse4j:argparse4j", version.ref = "argparse4j" }
+bcpkix = { module = "org.bouncycastle:bcpkix-jdk18on", version.ref = "bcpkix" }
+caffeine = { module = "com.github.ben-manes.caffeine:caffeine", version.ref = "caffeine" }
+classgraph = { module = "io.github.classgraph:classgraph", version.ref = "classgraph" }
+commons-net = { module = "commons-net:commons-net", version.ref = "commons-net" }
+commons-validator = { module = "commons-validator:commons-validator", version.ref = "commons-validator" }
+jackson-annotations = { module = "com.fasterxml.jackson.core:jackson-annotations", version.ref = "jackson-annotations" }
+jackson-databind = { module = "com.fasterxml.jackson.core:jackson-databind", version.ref = "jackson" }
+jackson-dataformat-csv = { module = "com.fasterxml.jackson.dataformat:jackson-dataformat-csv", version.ref = "jackson" }
+jackson-dataformat-yaml = { module = "com.fasterxml.jackson.dataformat:jackson-dataformat-yaml", version.ref = "jackson" }
+jackson-jdk8-datatypes = { module = "com.fasterxml.jackson.datatype:jackson-datatype-jdk8", version.ref = "jackson" }
+jackson-blackbird = { module = "com.fasterxml.jackson.module:jackson-module-blackbird", version.ref = "jackson" }
+jackson-jakartars-json-provider = { module = "com.fasterxml.jackson.jakarta.rs:jackson-jakarta-rs-json-provider", version.ref = "jackson" }
+jakarta-annotation-api = { module = "jakarta.annotation:jakarta.annotation-api", version.ref = "jakarta-annotation-api" }
+jakarta-rs-api = { module = "jakarta.ws.rs:jakarta.ws.rs-api", version.ref = "jakarta-rs" }
+jakarta-servlet-api = { module = "jakarta.servlet:jakarta.servlet-api", version.ref = "jakarta-servlet-api" }
+jaxrs2-jakarta = { module = "io.swagger.core.v3:swagger-jaxrs2-jakarta", version.ref = "swagger" }
+javassist = { module = "org.javassist:javassist", version.ref = "javassist" }
+jetty-server = { module = "org.eclipse.jetty:jetty-server", version.ref = "jetty" }
+jetty-client = { module = "org.eclipse.jetty:jetty-client", version.ref = "jetty" }
+jetty-servlet = { module = "org.eclipse.jetty.ee10:jetty-ee10-servlet", version.ref = "jetty" }
+jetty-servlets = { module = "org.eclipse.jetty.ee10:jetty-ee10-servlets", version.ref = "jetty" }
+jersey-container-servlet = { module = "org.glassfish.jersey.containers:jersey-container-servlet", version.ref = "jersey" }
+jersey-hk2 = { module = "org.glassfish.jersey.inject:jersey-hk2", version.ref = "jersey" }
+jgit = { module = "org.eclipse.jgit:org.eclipse.jgit", version.ref = "jgit" }
+jgit-ssh-apache = { module = "org.eclipse.jgit:org.eclipse.jgit.ssh.apache", version.ref = "jgit" }
+jgit-gpg-bc = { module = "org.eclipse.jgit:org.eclipse.jgit.gpg.bc", version.ref = "jgit" }
+jline = { module = "org.jline:jline-reader", version.ref = "jline" }
+jmh-core = { module = "org.openjdk.jmh:jmh-core", version.ref = "jmh" }
+jmh-generator-ann-process = { module = "org.openjdk.jmh:jmh-generator-annprocess", version.ref = "jmh" }
+jopt-simple = { module = "net.sf.jopt-simple:jopt-simple", version.ref = "jopt" }
+jose4j = { module = "org.bitbucket.b_c:jose4j", version.ref = "jose4j" }
+junit-jupiter = { module = "org.junit.jupiter:junit-jupiter", version.ref = "junit" }
+junit-jupiter-api = { module = "org.junit.jupiter:junit-jupiter-api", version.ref = "junit" }
+junit-platform-suite-engine = { module = "org.junit.platform:junit-platform-suite-engine", version.ref = "junit-platform" }
+junit-platform-launcher = { module = "org.junit.platform:junit-platform-launcher", version.ref = "junit-platform" }
+kafka-streams-0110 = { module = "org.apache.kafka:kafka-streams", version.ref = "kafka-0110" }
+kafka-streams-10 = { module = "org.apache.kafka:kafka-streams", version.ref = "kafka-10" }
+kafka-streams-11 = { module = "org.apache.kafka:kafka-streams", version.ref = "kafka-11" }
+kafka-streams-20 = { module = "org.apache.kafka:kafka-streams", version.ref = "kafka-20" }
+kafka-streams-21 = { module = "org.apache.kafka:kafka-streams", version.ref = "kafka-21" }
+kafka-streams-22 = { module = "org.apache.kafka:kafka-streams", version.ref = "kafka-22" }
+kafka-streams-23 = { module = "org.apache.kafka:kafka-streams", version.ref = "kafka-23" }
+kafka-streams-24 = { module = "org.apache.kafka:kafka-streams", version.ref = "kafka-24" }
+kafka-streams-25 = { module = "org.apache.kafka:kafka-streams", version.ref = "kafka-25" }
+kafka-streams-26 = { module = "org.apache.kafka:kafka-streams", version.ref = "kafka-26" }
+kafka-streams-27 = { module = "org.apache.kafka:kafka-streams", version.ref = "kafka-27" }
+kafka-streams-28 = { module = "org.apache.kafka:kafka-streams", version.ref = "kafka-28" }
+kafka-streams-30 = { module = "org.apache.kafka:kafka-streams", version.ref = "kafka-30" }
+kafka-streams-31 = { module = "org.apache.kafka:kafka-streams", version.ref = "kafka-31" }
+kafka-streams-32 = { module = "org.apache.kafka:kafka-streams", version.ref = "kafka-32" }
+kafka-streams-33 = { module = "org.apache.kafka:kafka-streams", version.ref = "kafka-33" }
+kafka-streams-34 = { module = "org.apache.kafka:kafka-streams", version.ref = "kafka-34" }
+kafka-streams-35 = { module = "org.apache.kafka:kafka-streams", version.ref = "kafka-35" }
+kafka-streams-36 = { module = "org.apache.kafka:kafka-streams", version.ref = "kafka-36" }
+kafka-streams-37 = { module = "org.apache.kafka:kafka-streams", version.ref = "kafka-37" }
+kafka-streams-38 = { module = "org.apache.kafka:kafka-streams", version.ref = "kafka-38" }
+kafka-streams-39 = { module = "org.apache.kafka:kafka-streams", version.ref = "kafka-39" }
+kafka-streams-40 = { module = "org.apache.kafka:kafka-streams", version.ref = "kafka-40" }
+kafka-streams-41 = { module = "org.apache.kafka:kafka-streams", version.ref = "kafka-41" }
+kafka-streams-42 = { module = "org.apache.kafka:kafka-streams", version.ref = "kafka-42" }
+kafka-streams-43 = { module = "org.apache.kafka:kafka-streams", version.ref = "kafka-43" }
+log4j1-bridge2-api = { module = "org.apache.logging.log4j:log4j-1.2-api", version.ref = "log4j2" }
+log4j2-api = { module = "org.apache.logging.log4j:log4j-api", version.ref = "log4j2" }
+log4j2-core = { module = "org.apache.logging.log4j:log4j-core", version.ref = "log4j2" }
+lz4 = { module = "at.yawk.lz4:lz4-java", version.ref = "lz4" }
+metrics = { module = "com.yammer.metrics:metrics-core", version.ref = "metrics" }
+mockito-core = { module = "org.mockito:mockito-core", version.ref = "mockito" }
+mockito-junit-jupiter = { module = "org.mockito:mockito-junit-jupiter", version.ref = "mockito" }
+pcollections = { module = "org.pcollections:pcollections", version.ref = "pcollections" }
+opentelemetry-proto = { module = "io.opentelemetry.proto:opentelemetry-proto", version.ref = "opentelemetry-proto" }
+protobuf = { module = "com.google.protobuf:protobuf-java", version.ref = "protobuf" }
+re2j = { module = "com.google.re2j:re2j", version.ref = "re2j" }
+rocks-dbjni = { module = "org.rocksdb:rocksdbjni", version.ref = "rocks-db" }
+slf4j-api = { module = "org.slf4j:slf4j-api", version.ref = "slf4j" }
+slf4j-log4j2 = { module = "org.apache.logging.log4j:log4j-slf4j-impl", version.ref = "log4j2" }
+snappy = { module = "org.xerial.snappy:snappy-java", version.ref = "snappy" }
+swagger-annotations = { module = "io.swagger.core.v3:swagger-annotations", version.ref = "swagger" }
+testcontainers-keycloak = { module = "com.github.dasniko:testcontainers-keycloak", version.ref = "testcontainers-keycloak" }
+mock-oauth2-server = { module = "no.nav.security:mock-oauth2-server", version.ref = "mock-oauth2-server" }
+jfreechart = { module = "org.jfree:jfreechart", version.ref = "jfreechart" }
+maven-artifact = { module = "org.apache.maven:maven-artifact", version.ref = "maven-artifact" }
+zstd = { module = "com.github.luben:zstd-jni", version.ref = "zstd" }
+httpclient = { module = "org.apache.httpcomponents:httpclient", version.ref = "httpclient" }
+hdr-histogram = { module = "org.hdrhistogram:HdrHistogram", version.ref = "hdr-histogram" }
+hash4j = { module = "com.dynatrace.hash4j:hash4j", version.ref = "hash4j" }
