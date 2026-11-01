@@ -761,6 +761,57 @@ public class SimpleAssignorTest {
     }
 
     @Test
+    public void testAssignWithTopicUnsubscribedByAllMembersHeterogeneous() {
+        CoordinatorMetadataImage metadataImage = new MetadataImageBuilder()
+            .addTopic(TOPIC_1_UUID, TOPIC_1_NAME, 4)
+            .addTopic(TOPIC_2_UUID, TOPIC_2_NAME, 2)
+            .addTopic(TOPIC_3_UUID, TOPIC_3_NAME, 2)
+            .buildCoordinatorMetadataImage();
+        SubscribedTopicDescriberImpl subscribedTopicMetadata = new SubscribedTopicDescriberImpl(
+            metadataImage
+        );
+
+        // No member subscribes to topic 2 anymore, but both members still have a partition of it
+        Map<String, MemberSubscriptionAndAssignmentImpl> members = new HashMap<>();
+        members.put(MEMBER_A, new MemberSubscriptionAndAssignmentImpl(
+            Optional.empty(),
+            Optional.empty(),
+            Set.of(TOPIC_1_UUID),
+            new Assignment(mkAssignment(
+                mkTopicAssignment(TOPIC_1_UUID, 0),
+                mkTopicAssignment(TOPIC_2_UUID, 0)))
+        ));
+        members.put(MEMBER_B, new MemberSubscriptionAndAssignmentImpl(
+            Optional.empty(),
+            Optional.empty(),
+            Set.of(TOPIC_1_UUID, TOPIC_3_UUID),
+            new Assignment(mkAssignment(
+                mkTopicAssignment(TOPIC_1_UUID, 1),
+                mkTopicAssignment(TOPIC_2_UUID, 1)))
+        ));
+
+        GroupSpec groupSpec = new GroupSpecImpl(metadataImage, members, HETEROGENEOUS);
+        GroupAssignment computedAssignment = assignor.assign(groupSpec, subscribedTopicMetadata);
+
+        assertEquals(Set.of(MEMBER_A, MEMBER_B), computedAssignment.members().keySet());
+
+        // Topic 2 is revoked from both members and topic 3 goes to member B
+        Map<Uuid, Set<Integer>> memberAAssignment = computedAssignment.members().get(MEMBER_A).partitions();
+        Map<Uuid, Set<Integer>> memberBAssignment = computedAssignment.members().get(MEMBER_B).partitions();
+        assertEquals(Set.of(TOPIC_1_UUID), memberAAssignment.keySet());
+        assertEquals(Set.of(TOPIC_1_UUID, TOPIC_3_UUID), memberBAssignment.keySet());
+        assertEquals(Set.of(0, 1), memberBAssignment.get(TOPIC_3_UUID));
+
+        // Each member keeps its partition of topic 1 and gets one of the free ones
+        assertEquals(2, memberAAssignment.get(TOPIC_1_UUID).size());
+        assertEquals(2, memberBAssignment.get(TOPIC_1_UUID).size());
+        assertTrue(memberAAssignment.get(TOPIC_1_UUID).contains(0));
+        assertTrue(memberBAssignment.get(TOPIC_1_UUID).contains(1));
+
+        assertEveryPartitionGetsAssignment(6, computedAssignment);
+    }
+
+    @Test
     public void testAssignWithCurrentAssignmentHeterogeneous() {
         // Current assignment setup - 3 members A - {T1, T2}, B - {T3}, C - {T2, T3}.
         CoordinatorMetadataImage metadataImage1 = new MetadataImageBuilder()

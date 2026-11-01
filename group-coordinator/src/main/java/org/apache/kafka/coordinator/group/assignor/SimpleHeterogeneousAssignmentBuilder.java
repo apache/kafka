@@ -126,6 +126,9 @@ public class SimpleHeterogeneousAssignmentBuilder {
     }
 
     /**
+     * First, the topics which no member subscribes to anymore are revoked from the existing assignment, since
+     * the assignment process does not visit them.
+     * <p>
      * Here's the step-by-step breakdown of the assignment process, performed for each subscribed topic in turn:
      * <ol>
      *   <li>Revoke partitions from the existing assignment that are no longer part of each member's subscriptions.</li>
@@ -138,6 +141,8 @@ public class SimpleHeterogeneousAssignmentBuilder {
         if (subscribedTopicIds.isEmpty()) {
             return new GroupAssignment(Map.of());
         }
+
+        revokeUnsubscribedTopics();
 
         // Compute the partition assignments for each topic separately.
         subscribedTopicIds.forEach(topicId -> {
@@ -158,6 +163,20 @@ public class SimpleHeterogeneousAssignmentBuilder {
         }
 
         return new GroupAssignment(targetAssignment);
+    }
+
+    /**
+     * Revoke the topics in the existing assignment which no member subscribes to anymore.
+     */
+    private void revokeUnsubscribedTopics() {
+        oldGroupAssignment.forEach((memberIndex, oldMemberAssignment) -> {
+            if (!subscribedTopicIds.containsAll(oldMemberAssignment.keySet())) {
+                // We create a deep copy of the original assignment so we can alter it.
+                Map<Uuid, Set<Integer>> newMemberAssignment = AssignorHelpers.deepCopyAssignment(oldMemberAssignment);
+                newMemberAssignment.keySet().retainAll(subscribedTopicIds);
+                newGroupAssignment.put(memberIndex, newMemberAssignment);
+            }
+        });
     }
 
     /**
@@ -314,29 +333,17 @@ public class SimpleHeterogeneousAssignmentBuilder {
             for (Map.Entry<Integer, Map<Uuid, Set<Integer>>> entry : oldGroupAssignment.entrySet()) {
                 Integer memberIndex = entry.getKey();
                 Map<Uuid, Set<Integer>> oldMemberAssignment = entry.getValue();
-                Map<Uuid, Set<Integer>> newMemberAssignment = null;
 
                 if (oldMemberAssignment.isEmpty()) {
                     continue;
                 }
 
+                // The topics which no member subscribes to were already revoked by revokeUnsubscribedTopics.
                 Set<Integer> assignedPartitions = oldMemberAssignment.get(topicId);
                 if (assignedPartitions != null) {
-                    if (subscribedTopicIds.contains(topicId)) {
-                        for (int partition : assignedPartitions) {
-                            finalAssignmentByPartition.computeIfAbsent(partition, k -> new HashSet<>()).add(memberIndex);
-                            finalAssignmentByMember.computeIfAbsent(memberIndex, k -> new HashSet<>()).add(partition);
-                        }
-                    } else {
-                        // We create a deep copy of the original assignment so we can alter it.
-                        newMemberAssignment = AssignorHelpers.deepCopyAssignment(oldMemberAssignment);
-
-                        // Remove the entire topic.
-                        newMemberAssignment.remove(topicId);
-                    }
-
-                    if (newMemberAssignment != null) {
-                        newGroupAssignment.put(memberIndex, newMemberAssignment);
+                    for (int partition : assignedPartitions) {
+                        finalAssignmentByPartition.computeIfAbsent(partition, k -> new HashSet<>()).add(memberIndex);
+                        finalAssignmentByMember.computeIfAbsent(memberIndex, k -> new HashSet<>()).add(partition);
                     }
                 }
             }
