@@ -2418,6 +2418,7 @@ public class AsyncKafkaConsumerTest {
     }
 
     @Test
+    @SuppressWarnings("removal")
     public void testSubscribeToRe2JPatternValidation() {
         consumer = newConsumer();
 
@@ -2434,6 +2435,7 @@ public class AsyncKafkaConsumerTest {
     }
 
     @Test
+    @SuppressWarnings("removal")
     public void testSubscribeToRe2JPatternThrowsIfNoGroupId() {
         consumer = newConsumer(requiredConsumerConfig());
         assertThrows(InvalidGroupIdException.class, () -> consumer.subscribe(new SubscriptionPattern("t*")));
@@ -2442,6 +2444,7 @@ public class AsyncKafkaConsumerTest {
     }
 
     @Test
+    @SuppressWarnings("removal")
     public void testSubscribeToRe2JPatternGeneratesEvent() {
         consumer = newConsumer();
         completeTopicRe2JPatternSubscriptionChangeEventSuccessfully();

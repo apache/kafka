@@ -189,6 +189,7 @@ public class MockConsumer<K, V> implements Consumer<K, V> {
     }
 
     @Override
+    @SuppressWarnings("removal")
     public synchronized void subscribe(Pattern pattern, final ConsumerRebalanceListener listener) {
         if (listener == null)
             throw new IllegalArgumentException("RebalanceListener cannot be null");
@@ -202,6 +203,7 @@ public class MockConsumer<K, V> implements Consumer<K, V> {
     }
 
     @Override
+    @SuppressWarnings("removal")
     public synchronized void subscribe(SubscriptionPattern pattern, ConsumerRebalanceListener listener) {
         if (listener == null)
             throw new IllegalArgumentException("RebalanceListener cannot be null");
@@ -215,6 +217,7 @@ public class MockConsumer<K, V> implements Consumer<K, V> {
     }
 
     @Override
+    @SuppressWarnings("removal")
     public void subscribe(Collection<String> topics, final ConsumerRebalanceListener listener) {
         if (listener == null)
             throw new IllegalArgumentException("RebalanceListener cannot be null");
