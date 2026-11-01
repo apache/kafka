@@ -374,6 +374,9 @@ public class StreamsBuilder {
      * Create a {@link GlobalKTable} for the specified topic.
      * Input {@link KeyValue records} with {@code null} key will be dropped.
      * <p>
+     * The same topic may also be consumed as a {@link KStream} or {@link KTable}.
+     * The regular source and global table are updated independently, without ordering guarantees between them.
+     * <p>
      * The resulting {@link GlobalKTable} will be materialized in a local {@link KeyValueStore} with an internal
      * store name. Note that store name may not be queryable through Interactive Queries.
      * No internal changelog topic is created since the original input topic can be used for recovery (cf.
