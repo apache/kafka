@@ -255,6 +255,10 @@ public interface Task {
         return 0;
     }
 
+    default long maxStoreUncommittedBytes() {
+        return 0;
+    }
+
     default boolean commitRequested() {
         return false;
     }

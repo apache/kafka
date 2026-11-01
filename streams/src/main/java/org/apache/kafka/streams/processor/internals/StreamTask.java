@@ -1460,6 +1460,11 @@ public class StreamTask extends AbstractTask implements ProcessorNodePunctuator,
     }
 
     @Override
+    public long maxStoreUncommittedBytes() {
+        return stateMgr.maxStoreUncommittedBytes();
+    }
+
+    @Override
     public boolean commitNeeded() {
         // we need to do an extra check if the flag was false, that
         // if the consumer position has been updated; this is because

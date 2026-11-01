@@ -852,7 +852,9 @@ public class StreamsConfig extends AbstractConfig {
     private static final String STATESTORE_UNCOMMITTED_MAX_BYTES_DOC =
         "The maximum number of uncommitted bytes across all transactional state stores on this " +
         "application instance before an early commit is triggered, regardless of commit.interval.ms. " +
-        "The limit is divided equally across the configured number of stream threads, and the global state thread," +
+        "The check adds the uncommitted bytes of the largest single state store to the total, " +
+        "because the commit of a store can need that much extra memory. " +
+        "The limit is divided equally across the configured number of stream threads, and the global state thread, " +
         "if the topology has any global stores. Set to -1 to disable. Default is 67108864 (64 MB).";
     private static final long STATESTORE_UNCOMMITTED_MAX_BYTES_DEFAULT = 67_108_864L;
 

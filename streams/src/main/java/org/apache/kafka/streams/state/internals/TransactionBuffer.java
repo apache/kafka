@@ -80,7 +80,7 @@ interface TransactionBuffer<K extends Comparable<K>> extends Closeable {
 
     /**
      * Returns an approximation of the number of uncommitted bytes currently staged in this buffer.
-     * This is not exact — it does not account for overwrites of the same key, and may not include
+     * This is not exact — it may not include
      * all overhead (e.g. object headers in the staging map). It is intended for use in triggering
      * early commits when the buffer grows too large.
      */

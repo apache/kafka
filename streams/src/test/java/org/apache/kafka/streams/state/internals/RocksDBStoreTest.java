@@ -1404,7 +1404,7 @@ public class RocksDBStoreTest extends AbstractKeyValueStoreTest {
         rocksDBStore = getRocksDBStore();
         rocksDBStore.init(eosContext, rocksDBStore);
 
-        // An empty RocksDB WriteBatch already reports a fixed header size, so the baseline is non-zero.
+        // An empty buffer reports zero uncommitted bytes.
         final long emptyBufferBytes = rocksDBStore.approximateNumUncommittedBytes();
 
         final List<KeyValue<byte[], byte[]>> entries = new ArrayList<>();
@@ -1687,7 +1687,7 @@ public class RocksDBStoreTest extends AbstractKeyValueStoreTest {
         rocksDBStore = getRocksDBStore();
         rocksDBStore.init(eosContext, rocksDBStore);
 
-        // An empty RocksDB WriteBatch already reports a fixed header size, so the baseline is non-zero.
+        // An empty buffer reports zero uncommitted bytes.
         final long emptyBufferBytes = rocksDBStore.approximateNumUncommittedBytes();
 
         final Bytes k1 = new Bytes(stringSerializer.serialize(null, "k1"));
