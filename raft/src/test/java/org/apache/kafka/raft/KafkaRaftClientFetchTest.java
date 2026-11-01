@@ -34,6 +34,7 @@ import org.junit.jupiter.params.provider.ArgumentsSource;
 
 import java.nio.ByteBuffer;
 import java.util.List;
+import java.util.Map;
 import java.util.Optional;
 import java.util.OptionalInt;
 import java.util.OptionalLong;
@@ -761,5 +762,123 @@ public final class KafkaRaftClientFetchTest {
             assertEquals(epoch, partitionResponse.currentLeader().leaderEpoch());
             assertEquals(localLogEndOffset, partitionResponse.highWatermark());
         }
+    }
+
+    @Test
+    void testObserverFetchesBetweenLeaderAndBootstrapServers() throws Exception {
+        final var epoch = 2;
+        final var local = KafkaRaftClientTest.replicaKey(
+            KafkaRaftClientTest.randomReplicaId(),
+            true
+        );
+        final var leader = KafkaRaftClientTest.replicaKey(local.id() + 1, true);
+        final var bootstrapVoter = KafkaRaftClientTest.replicaKey(local.id() + 2, true);
+        final var voters = VoterSet.fromMap(
+            Map.of(
+                leader.id(), VoterSetTest.voterNode(leader),
+                bootstrapVoter.id(), VoterSetTest.voterNode(bootstrapVoter)
+            )
+        );
+
+        final var context = new RaftClientTestContext.Builder(
+            local.id(),
+            local.directoryId().get()
+        )
+            .withStartingVoters(voters, KRaftVersion.KRAFT_VERSION_1)
+            // configure the bootstrap servers to only include the bootstrap voter
+            // to reliably check the destination of the observer's fetch requests
+            // alternates between the leader and the bootstrap voter
+            .withBootstrapServers(
+                Optional.of(List.of(RaftClientTestContext.mockAddress(bootstrapVoter.id())))
+            )
+            .withRaftProtocol(RaftClientTestContext.RaftProtocol.KIP_1186_PROTOCOL)
+            .build();
+
+        // The observer initially fetches from the bootstrap servers,
+        // where it will discover the leader's endpoints.
+        final var bootstrapFetch = pollAndCheckObserverFetchRequest(
+            context,
+            true,
+            bootstrapVoter.id()
+        );
+        context.deliverResponse(
+            bootstrapFetch.correlationId(),
+            bootstrapFetch.destination(),
+            context.fetchResponse(
+                epoch,
+                leader.id(),
+                MemoryRecords.EMPTY,
+                0L,
+                Errors.NOT_LEADER_OR_FOLLOWER
+            )
+        );
+
+        // Subsequent fetch from the observer is sent to the leader
+        // Return a BROKER_NOT_AVAILABLE error, handle that response, and then
+        // advance time past the fetch timeout.
+        // This is to simulate the leader endpoints being unreachable, which will
+        // cause the observer to fetch from the bootstrap servers after the fetch timeout expires.
+        final var leaderFetch = pollAndCheckObserverFetchRequest(
+            context,
+            false,
+            leader.id()
+        );
+        context.deliverResponse(
+            leaderFetch.correlationId(),
+            leaderFetch.destination(),
+            RaftUtil.errorResponse(
+                ApiKeys.FETCH,
+                Errors.BROKER_NOT_AVAILABLE
+            )
+        );
+        context.client.poll();
+
+        // The fetch timeout is much greater than the request manager's configured backoff, so the
+        // current unreachable connection will no longer be backing off when the next fetch is sent.
+        // Expire the fetch timeout and check that the next fetch is sent to the bootstrap server again.
+        context.time.sleep(context.fetchTimeoutMs + 1);
+        final var nextBootstrapFetch = pollAndCheckObserverFetchRequest(
+            context,
+            true,
+            bootstrapVoter.id()
+        );
+        context.deliverResponse(
+            nextBootstrapFetch.correlationId(),
+            nextBootstrapFetch.destination(),
+            context.fetchResponse(
+                epoch,
+                leader.id(),
+                MemoryRecords.EMPTY,
+                0L,
+                Errors.NOT_LEADER_OR_FOLLOWER
+            )
+        );
+
+        // Discovering the leader from a bootstrap fetch means the observer resumes fetching from the leader
+        pollAndCheckObserverFetchRequest(
+            context,
+            false,
+            leader.id()
+        );
+    }
+
+    private RaftRequest.Outbound pollAndCheckObserverFetchRequest(
+        RaftClientTestContext context,
+        boolean isBootstrapFetch,
+        int expectedDestinationId
+    ) throws Exception {
+        context.pollUntilRequest();
+        RaftRequest.Outbound fetchRequest = context.assertSentFetchRequest();
+        if (isBootstrapFetch) {
+            assertTrue(fetchRequest.destination().id() < -1);
+        } else {
+            assertEquals(expectedDestinationId, fetchRequest.destination().id());
+        }
+        // only need to check port since the host is always "localhost" for the mock addresses
+        assertEquals(
+            RaftClientTestContext.mockAddress(expectedDestinationId).getPort(),
+            fetchRequest.destination().port()
+        );
+        return fetchRequest;
     }
 }
