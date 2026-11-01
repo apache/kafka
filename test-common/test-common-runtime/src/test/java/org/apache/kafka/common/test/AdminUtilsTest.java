@@ -32,6 +32,7 @@ import java.util.List;
 
 import static org.junit.jupiter.api.Assertions.assertEquals;
 import static org.junit.jupiter.api.Assertions.assertThrows;
+import static org.junit.jupiter.api.Assertions.assertTrue;
 import static org.mockito.ArgumentMatchers.anyCollection;
 import static org.mockito.Mockito.mock;
 import static org.mockito.Mockito.when;
@@ -83,5 +84,51 @@ public class AdminUtilsTest {
         assertThrows(AssertionError.class, () ->
                         AdminUtils.fetchOrWaitForLeader(admin, topic, partition, 1),
                 "Timing out after 1 ms since a leader was not elected for partition test-topic-0");
+    }
+
+    @Test
+    void testWaitForExpectedLeader() throws Exception {
+        String topic = "test-topic";
+        int partition = 0;
+        int expectedLeader = 1;
+        Admin admin = mock(Admin.class);
+        when(admin.describeTopics(anyCollection())).thenAnswer(new Answer<Object>() {
+            boolean called = false;
+
+            @Override
+            public Object answer(InvocationOnMock invocation) {
+                if (called) {
+                    return resultWithLeader(new Node(expectedLeader, "", 0));
+                } else {
+                    called = true;
+                    return resultWithLeader(new Node(2, "", 0));
+                }
+            }
+
+            DescribeTopicsResult resultWithLeader(Node leader) {
+                TopicPartitionInfo topicPartitionInfo = new TopicPartitionInfo(partition, leader, List.of(), List.of());
+                return AdminClientTestUtils.describeTopicsResult(topic,
+                    new TopicDescription(topic, false, List.of(topicPartitionInfo)));
+            }
+        });
+
+        AdminUtils.waitForExpectedLeader(admin, topic, partition, expectedLeader, 1000);
+    }
+
+    @Test
+    void testWaitForExpectedLeaderTimesOut() {
+        String topic = "test-topic";
+        int partition = 0;
+        TopicPartitionInfo topicPartitionInfo = new TopicPartitionInfo(partition, new Node(2, "", 0), List.of(), List.of());
+        DescribeTopicsResult describeResult = AdminClientTestUtils.describeTopicsResult(topic,
+            new TopicDescription(topic, false, List.of(topicPartitionInfo)));
+        Admin admin = mock(Admin.class);
+        when(admin.describeTopics(anyCollection())).thenReturn(describeResult);
+
+        AssertionError error = assertThrows(AssertionError.class, () ->
+            AdminUtils.waitForExpectedLeader(admin, topic, partition, 1, 1));
+        assertTrue(error.getCause().getMessage().contains(
+            "Timing out after 1 ms waiting for partition test-topic-0 leader to become 1, last observed=2"),
+            error.getCause().getMessage());
     }
 }
