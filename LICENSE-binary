@@ -208,6 +208,7 @@ License Version 2.0:
 - caffeine-3.2.4
 - commons-beanutils-1.11.0
 - commons-collections-3.2.2
+- commons-collections4-4.5.0
 - commons-digester-2.1
 - commons-logging-1.4.0
 - commons-net-3.13.0
