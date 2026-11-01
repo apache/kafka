@@ -207,6 +207,76 @@ public class StoreChangelogReaderCaughtUpOffsetTest {
             assertEquals(StoreChangelogReader.ChangelogState.RESTORING, reader.changelogMetadata(tp).state());
             assertNull(stateManager.storeMetadata(tp).offset());
             assertEquals(Collections.singletonMap(tp, 0L), stateManager.changelogOffsets());
+            assertNull(reader.logicalChangelogEndOffsets().get(tp));
+        } finally {
+            stateManager.close();
+            Utils.delete(stateDir);
+        }
+    }
+
+    @Test
+    public void shouldReportEndOffsetOfStandbyWithNothingToRestore() throws IOException {
+        final long changelogEndOffset = 20_000L;
+        final File stateDir = TestUtils.tempDirectory();
+        final ProcessorStateManager stateManager = newRealStateManager(STANDBY, stateDir, false);
+        final MockKeyValueStore kvStore = new MockKeyValueStore(storeName, true);
+        try {
+            stateManager.registerStore(kvStore, kvStore.stateRestoreCallback, null);
+            stateManager.initializeStoreOffsets(true);
+
+            consumer.updateBeginningOffsets(Collections.singletonMap(tp, changelogEndOffset));
+            consumer.updateEndOffsets(Collections.singletonMap(tp, changelogEndOffset));
+
+            final StoreChangelogReader reader = new StoreChangelogReader(
+                time,
+                config,
+                logContext,
+                adminClient,
+                consumer,
+                callback,
+                standbyListener
+            );
+            reader.register(tp, stateManager);
+            reader.transitToUpdateStandby();
+            reader.restore(Collections.singletonMap(new TaskId(0, 0), mock(Task.class)));
+
+            assertEquals(changelogEndOffset - 1L, stateManager.storeMetadata(tp).endOffset());
+            assertEquals(Collections.singletonMap(tp, changelogEndOffset), reader.logicalChangelogEndOffsets());
+            assertEquals(Collections.singletonMap(tp, changelogEndOffset), stateManager.changelogOffsets());
+        } finally {
+            stateManager.close();
+            Utils.delete(stateDir);
+        }
+    }
+
+    @Test
+    public void shouldReportEndOffsetOfStandbyOnEmptyChangelog() throws IOException {
+        final File stateDir = TestUtils.tempDirectory();
+        final ProcessorStateManager stateManager = newRealStateManager(STANDBY, stateDir, false);
+        final MockKeyValueStore kvStore = new MockKeyValueStore(storeName, true);
+        try {
+            stateManager.registerStore(kvStore, kvStore.stateRestoreCallback, null);
+            stateManager.initializeStoreOffsets(true);
+
+            consumer.updateBeginningOffsets(Collections.singletonMap(tp, 0L));
+            consumer.updateEndOffsets(Collections.singletonMap(tp, 0L));
+
+            final StoreChangelogReader reader = new StoreChangelogReader(
+                time,
+                config,
+                logContext,
+                adminClient,
+                consumer,
+                callback,
+                standbyListener
+            );
+            reader.register(tp, stateManager);
+            reader.transitToUpdateStandby();
+            reader.restore(Collections.singletonMap(new TaskId(0, 0), mock(Task.class)));
+
+            assertEquals(-1L, stateManager.storeMetadata(tp).endOffset());
+            assertEquals(Collections.singletonMap(tp, 0L), reader.logicalChangelogEndOffsets());
+            assertEquals(Collections.singletonMap(tp, 0L), stateManager.changelogOffsets());
         } finally {
             stateManager.close();
             Utils.delete(stateDir);
@@ -311,6 +381,7 @@ public class StoreChangelogReaderCaughtUpOffsetTest {
 
             assertEquals(1, timedOutPositionCalls.get());
             assertNull(stateManager.storeMetadata(tp).offset());
+            assertNull(stateManager.storeMetadata(tp).endOffset());
             assertEquals(Collections.singletonMap(tp, 0L), stateManager.changelogOffsets());
             verify(task, never()).maybeInitTaskTimeoutOrThrow(anyLong(), any());
         } finally {
