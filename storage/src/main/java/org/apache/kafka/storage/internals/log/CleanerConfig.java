@@ -34,7 +34,7 @@ import static org.apache.kafka.common.config.ConfigDef.Type.LONG;
  * Configuration parameters for the log cleaner.
  */
 public class CleanerConfig {
-    public static final String HASH_ALGORITHM = "MD5";
+    public static final String HASH_ALGORITHM = "SHA-256";
     public static final int LOG_CLEANER_THREADS = 1;
     public static final double LOG_CLEANER_IO_MAX_BYTES_PER_SECOND = Double.MAX_VALUE;
     public static final long LOG_CLEANER_DEDUPE_BUFFER_SIZE = 128 * 1024 * 1024L;
