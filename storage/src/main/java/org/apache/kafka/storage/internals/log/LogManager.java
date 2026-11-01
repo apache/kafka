@@ -612,6 +612,7 @@ public class LogManager {
         Set<Map.Entry<String, IOException>> offlineDirs = new HashSet<>();
         List<List<Future<?>>> jobs = new ArrayList<>();
         int numTotalLogs = 0;
+        final int recoveryThreadsPerDataDir = numRecoveryThreadsPerDataDir;
         // log dir path -> number of Remaining logs map for remainingLogsToRecover metric
         ConcurrentMap<String, Integer> numRemainingLogs = new ConcurrentHashMap<>();
         // log recovery thread name -> number of remaining segments map for remainingSegmentsToRecover metric
@@ -622,7 +623,7 @@ public class LogManager {
             String logDirAbsolutePath = dir.getAbsolutePath();
             final AtomicBoolean hadCleanShutdown = new AtomicBoolean(false);
             try {
-                ExecutorService pool = Executors.newFixedThreadPool(numRecoveryThreadsPerDataDir,
+                ExecutorService pool = Executors.newFixedThreadPool(recoveryThreadsPerDataDir,
                         new LogRecoveryThreadFactory(logDirAbsolutePath));
                 threadPools.add(pool);
 
@@ -714,7 +715,7 @@ public class LogManager {
         }
 
         try {
-            addLogRecoveryMetrics(numRemainingLogs, numRemainingSegments);
+            addLogRecoveryMetrics(numRemainingLogs, numRemainingSegments, recoveryThreadsPerDataDir);
             for (List<Future<?>> dirJobs : jobs) {
                 for (Future<?> job : dirJobs) {
                     job.get();
@@ -728,7 +729,7 @@ public class LogManager {
             LOG.error("There was an error in one of the threads during logs loading", e.getCause());
             throw (Exception) e.getCause();
         } finally {
-            removeLogRecoveryMetrics();
+            removeLogRecoveryMetrics(recoveryThreadsPerDataDir);
             threadPools.forEach(ExecutorService::shutdown);
         }
 
@@ -738,12 +739,14 @@ public class LogManager {
     }
 
     // Visible for testing
-    public void addLogRecoveryMetrics(ConcurrentMap<String, Integer> numRemainingLogs, ConcurrentMap<String, Integer> numRemainingSegments) {
+    public void addLogRecoveryMetrics(ConcurrentMap<String, Integer> numRemainingLogs,
+                                      ConcurrentMap<String, Integer> numRemainingSegments,
+                                      int recoveryThreadsPerDataDir) {
         LOG.debug("Adding log recovery metrics");
         for (File dir : logDirs) {
             metricsGroup.newGauge("remainingLogsToRecover", () -> numRemainingLogs.get(dir.getAbsolutePath()),
                     Map.of("dir", dir.getAbsolutePath()));
-            for (int i = 0; i < numRecoveryThreadsPerDataDir; i++) {
+            for (int i = 0; i < recoveryThreadsPerDataDir; i++) {
                 String threadName = logRecoveryThreadName(dir.getAbsolutePath(), i);
                 LinkedHashMap<String, String> tags = new LinkedHashMap<>();
                 tags.put("dir", dir.getAbsolutePath());
@@ -754,11 +757,11 @@ public class LogManager {
     }
 
     // Visible for testing
-    public void removeLogRecoveryMetrics() {
+    public void removeLogRecoveryMetrics(int recoveryThreadsPerDataDir) {
         LOG.debug("Removing log recovery metrics");
         for (File dir : logDirs) {
             metricsGroup.removeMetric("remainingLogsToRecover", Map.of("dir", dir.getAbsolutePath()));
-            for (int i = 0; i < numRecoveryThreadsPerDataDir; i++) {
+            for (int i = 0; i < recoveryThreadsPerDataDir; i++) {
                 LinkedHashMap<String, String> tags = new LinkedHashMap<>();
                 tags.put("dir", dir.getAbsolutePath());
                 tags.put("threadNum", String.valueOf(i));
