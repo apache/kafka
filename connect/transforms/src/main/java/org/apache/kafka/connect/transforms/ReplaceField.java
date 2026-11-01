@@ -83,7 +83,6 @@ public abstract class ReplaceField<R extends ConnectRecord<R>> implements Transf
     private Set<String> exclude;
     private Set<String> include;
     private Map<String, String> renames;
-    private Map<String, String> reverseRenames;
     private boolean replaceNullWithDefault;
 
     private Cache<Schema, Schema> schemaUpdateCache;
@@ -100,7 +99,6 @@ public abstract class ReplaceField<R extends ConnectRecord<R>> implements Transf
         exclude = new HashSet<>(config.getList(ConfigName.EXCLUDE));
         include = new HashSet<>(config.getList(ConfigName.INCLUDE));
         renames = parseRenameMappings(config.getList(ConfigName.RENAMES));
-        reverseRenames = invert(renames);
         replaceNullWithDefault = config.getBoolean(ConfigName.REPLACE_NULL_WITH_DEFAULT_CONFIG);
 
         schemaUpdateCache = new SynchronizedCache<>(new LRUCache<>(16));
@@ -118,25 +116,12 @@ public abstract class ReplaceField<R extends ConnectRecord<R>> implements Transf
         return m;
     }
 
-    static Map<String, String> invert(Map<String, String> source) {
-        final Map<String, String> m = new HashMap<>();
-        for (Map.Entry<String, String> e : source.entrySet()) {
-            m.put(e.getValue(), e.getKey());
-        }
-        return m;
-    }
-
     boolean filter(String fieldName) {
         return !exclude.contains(fieldName) && (include.isEmpty() || include.contains(fieldName));
     }
 
     String renamed(String fieldName) {
         final String mapping = renames.get(fieldName);
-        return mapping == null ? fieldName : mapping;
-    }
-
-    String reverseRenamed(String fieldName) {
-        final String mapping = reverseRenames.get(fieldName);
         return mapping == null ? fieldName : mapping;
     }
 
@@ -178,9 +163,11 @@ public abstract class ReplaceField<R extends ConnectRecord<R>> implements Transf
 
         final Struct updatedValue = new Struct(updatedSchema);
 
-        for (Field field : updatedSchema.fields()) {
-            final Object fieldValue = replaceNullWithDefault ? value.get(reverseRenamed(field.name())) : value.getWithoutDefault(reverseRenamed(field.name()));
-            updatedValue.put(field.name(), fieldValue);
+        for (Field field : value.schema().fields()) {
+            if (filter(field.name())) {
+                final Object fieldValue = replaceNullWithDefault ? value.get(field) : value.getWithoutDefault(field.name());
+                updatedValue.put(renamed(field.name()), fieldValue);
+            }
         }
 
         return newRecord(record, updatedSchema, updatedValue);
