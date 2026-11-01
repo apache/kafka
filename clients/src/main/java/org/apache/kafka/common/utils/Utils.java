@@ -430,6 +430,7 @@ public final class Utils {
 
     /**
      * Look up a class by name.
+     * The context class loader is tried first, followed by Kafka's defining class loader only if the class is not found.
      * @param klass class name
      * @param base super class of the class for verification
      * @param <T> the type of the base class
@@ -437,10 +438,25 @@ public final class Utils {
      */
     public static <T> Class<? extends T> loadClass(String klass, Class<T> base) throws ClassNotFoundException {
         ClassLoader contextOrKafkaClassLoader = Utils.getContextOrKafkaClassLoader();
+        ClassLoader kafkaClassLoader = Utils.class.getClassLoader();
         // Use loadClass here instead of Class.forName because the name we use here may be an alias
         // and not match the name of the class that gets loaded. If that happens, Class.forName can
         // throw an exception.
-        Class<?> loadedClass = contextOrKafkaClassLoader.loadClass(klass);
+        Class<?> loadedClass;
+        try {
+            loadedClass = contextOrKafkaClassLoader.loadClass(klass);
+        } catch (ClassNotFoundException contextClassNotFound) {
+            if (kafkaClassLoader == null || kafkaClassLoader == contextOrKafkaClassLoader) {
+                throw contextClassNotFound;
+            }
+            try {
+                loadedClass = kafkaClassLoader.loadClass(klass);
+                contextOrKafkaClassLoader = kafkaClassLoader;
+            } catch (ClassNotFoundException kafkaClassNotFound) {
+                kafkaClassNotFound.addSuppressed(contextClassNotFound);
+                throw kafkaClassNotFound;
+            }
+        }
         // Invoke forName here with the true name of the requested class to cause class
         // initialization to take place.
         return Class.forName(loadedClass.getName(), true, contextOrKafkaClassLoader).asSubclass(base);
