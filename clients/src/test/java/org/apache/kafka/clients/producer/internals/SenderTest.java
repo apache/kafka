@@ -137,6 +137,7 @@ import static org.junit.jupiter.api.Assertions.assertNull;
 import static org.junit.jupiter.api.Assertions.assertSame;
 import static org.junit.jupiter.api.Assertions.assertThrows;
 import static org.junit.jupiter.api.Assertions.assertTrue;
+import static org.junit.jupiter.api.Assertions.fail;
 import static org.mockito.AdditionalMatchers.geq;
 import static org.mockito.ArgumentMatchers.any;
 import static org.mockito.ArgumentMatchers.anyBoolean;
@@ -2853,9 +2854,7 @@ public class SenderTest {
             sender.initiateClose();
             txnManager.beginCommit();
             AssertEndTxnRequestMatcher endTxnMatcher = new AssertEndTxnRequestMatcher(TransactionResult.COMMIT);
-            client.prepareResponse(endTxnMatcher, new EndTxnResponse(new EndTxnResponseData()
-                                                                         .setErrorCode(Errors.NONE.code())
-                                                                         .setThrottleTimeMs(0)));
+            client.prepareResponse(endTxnMatcher, endTxnResponse(Errors.NONE));
             sender.run();
             assertTrue(endTxnMatcher.matched, "Response didn't match in test");
         } finally {
@@ -2984,9 +2983,7 @@ public class SenderTest {
     private void respondToEndTxn(Errors error) {
         client.respond(
             request -> request instanceof EndTxnRequest,
-            new EndTxnResponse(new EndTxnResponseData()
-                .setErrorCode(error.code())
-                .setThrottleTimeMs(0))
+            endTxnResponse(error)
         );
     }
 
@@ -3013,9 +3010,7 @@ public class SenderTest {
             sender.runOnce();
             sender.initiateClose();
             AssertEndTxnRequestMatcher endTxnMatcher = new AssertEndTxnRequestMatcher(TransactionResult.ABORT);
-            client.prepareResponse(endTxnMatcher, new EndTxnResponse(new EndTxnResponseData()
-                                                                         .setErrorCode(Errors.NONE.code())
-                                                                         .setThrottleTimeMs(0)));
+            client.prepareResponse(endTxnMatcher, endTxnResponse(Errors.NONE));
             sender.run();
             assertTrue(endTxnMatcher.matched, "Response didn't match in test");
         } finally {
@@ -3057,6 +3052,49 @@ public class SenderTest {
         } finally {
             m.close();
         }
+    }
+
+    @Test
+    public void testAbortOnShutdownGivesUpAfterTransactionTimeout() throws InterruptedException {
+        int transactionTimeoutMs = 1000;
+        TransactionManager txnManager = startTransactionOnSender("testAbortOnShutdownGivesUpAfterTransactionTimeout", transactionTimeoutMs);
+
+        // Far more retriable errors than can be consumed within the transaction timeout.
+        int retriableErrors = 100;
+        for (int i = 0; i < retriableErrors; i++)
+            client.prepareResponse(endTxnResponse(Errors.CONCURRENT_TRANSACTIONS));
+
+        sender.initiateClose();
+        long closeStartMs = time.milliseconds();
+        runSenderUntilShutdown();
+        long elapsedMs = time.milliseconds() - closeStartMs;
+
+        assertTrue(elapsedMs >= transactionTimeoutMs, "Sender gave up on the abort after " + elapsedMs + " ms, before the transaction timeout");
+        assertTrue(elapsedMs < 2 * transactionTimeoutMs, "Sender kept retrying the abort for " + elapsedMs + " ms, well past the transaction timeout");
+        assertTrue(client.numAwaitingResponses() > 0, "Sender used up all the retriable errors instead of giving up at the transaction timeout");
+        assertFalse(txnManager.isReady());
+    }
+
+    @Test
+    public void testAbortOnShutdownSucceedsAfterRetriableErrors() throws InterruptedException {
+        int transactionTimeoutMs = 1000;
+        TransactionManager txnManager = startTransactionOnSender("testAbortOnShutdownSucceedsAfterRetriableErrors", transactionTimeoutMs);
+
+        client.prepareResponse(endTxnResponse(Errors.CONCURRENT_TRANSACTIONS));
+        client.prepareResponse(endTxnResponse(Errors.CONCURRENT_TRANSACTIONS));
+        AssertEndTxnRequestMatcher endTxnMatcher = new AssertEndTxnRequestMatcher(TransactionResult.ABORT);
+        client.prepareResponse(endTxnMatcher, endTxnResponse(Errors.NONE));
+
+        sender.initiateClose();
+        long closeStartMs = time.milliseconds();
+        runSenderUntilShutdown();
+        long elapsedMs = time.milliseconds() - closeStartMs;
+
+        assertTrue(endTxnMatcher.matched, "The transaction was not aborted");
+        assertTrue(elapsedMs < transactionTimeoutMs, "The abort took " + elapsedMs + " ms, longer than the transaction timeout");
+        assertEquals(0, client.numAwaitingResponses());
+        // The transaction manager only becomes ready again if the abort completed, not if the sender gave up.
+        assertTrue(txnManager.isReady());
     }
 
     @Test
@@ -3364,8 +3402,7 @@ public class SenderTest {
         sender.runOnce();
 
         // Commit API with TRANSACTION_ABORTABLE error should set TM to Abortable state
-        client.prepareResponse(new EndTxnResponse(new EndTxnResponseData()
-                .setErrorCode(Errors.TRANSACTION_ABORTABLE.code())));
+        client.prepareResponse(endTxnResponse(Errors.TRANSACTION_ABORTABLE));
 
         // Attempt to commit transaction
         TransactionalRequestResult commitResult = transactionManager.beginCommit();
@@ -3375,8 +3412,7 @@ public class SenderTest {
         assertEquals(TransactionAbortableException.class, commitResult.error().getClass());
 
         // Abort API with TRANSACTION_ABORTABLE error should convert to Fatal error i.e. KafkaException
-        client.prepareResponse(new EndTxnResponse(new EndTxnResponseData()
-                .setErrorCode(Errors.TRANSACTION_ABORTABLE.code())));
+        client.prepareResponse(endTxnResponse(Errors.TRANSACTION_ABORTABLE));
 
         // Attempt to abort transaction
         TransactionalRequestResult abortResult = transactionManager.beginAbort();
@@ -3988,6 +4024,22 @@ public class SenderTest {
         assertTrue(expectedError.isAssignableFrom(e.getCause().getClass()));
     }
 
+    /**
+     * Runs the sender's shutdown on its own thread. The sender swallows interrupts, so if it never stops on its own
+     * the test thread could not be rescued by a test timeout; force close it and fail instead.
+     */
+    private void runSenderUntilShutdown() throws InterruptedException {
+        Thread senderThread = new Thread(sender, "sender-shutdown-test");
+        senderThread.setDaemon(true);
+        senderThread.start();
+        senderThread.join(5000);
+        if (senderThread.isAlive()) {
+            sender.forceClose();
+            senderThread.join(5000);
+            fail("The sender did not shut down on its own");
+        }
+    }
+
     private void prepareAndReceiveInitProducerId(long producerId, Errors error) {
         prepareAndReceiveInitProducerId(producerId, (short) 0, error);
     }
@@ -4012,6 +4064,12 @@ public class SenderTest {
         return new InitProducerIdResponse(responseData);
     }
 
+    private EndTxnResponse endTxnResponse(Errors error) {
+        return new EndTxnResponse(new EndTxnResponseData()
+            .setErrorCode(error.code())
+            .setThrottleTimeMs(0));
+    }
+
     private void doInitTransactions(TransactionManager transactionManager, ProducerIdAndEpoch producerIdAndEpoch) {
         TransactionalRequestResult result = transactionManager.initializeTransactions(false);
         prepareFindCoordinatorResponse(Errors.NONE, transactionManager.transactionalId());
@@ -4022,6 +4080,18 @@ public class SenderTest {
         sender.runOnce();
         assertTrue(transactionManager.hasProducerId());
         result.await(Long.MAX_VALUE, TimeUnit.MILLISECONDS, "Unexpected time out during the test.");
+    }
+
+    private TransactionManager startTransactionOnSender(String transactionalId, int transactionTimeoutMs) {
+        TransactionManager txnManager = new TransactionManager(logContext, transactionalId, transactionTimeoutMs, 100, apiVersions, metadata, false);
+        setupWithTransactionState(txnManager);
+        doInitTransactions(txnManager, new ProducerIdAndEpoch(123456L, (short) 0));
+
+        txnManager.beginTransaction();
+        txnManager.maybeAddPartition(tp0);
+        client.prepareResponse(buildAddPartitionsToTxnResponseData(0, Collections.singletonMap(tp0, Errors.NONE)));
+        sender.runOnce();
+        return txnManager;
     }
 
     private void prepareFindCoordinatorResponse(Errors error, String txnid) {
