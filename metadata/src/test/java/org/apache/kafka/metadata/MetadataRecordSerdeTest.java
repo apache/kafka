@@ -156,6 +156,30 @@ class MetadataRecordSerdeTest {
     }
 
     /**
+     * Test attempting to parse an event whose version varint encodes a value at or above 2^31.
+     * readUnsignedVarint returns such a value as a negative int, which must be rejected rather
+     * than silently truncated to its low 16 bits by the cast to short.
+     */
+    @Test
+    public void testParsingVersionEncodedAboveIntMax() {
+        ByteBuffer buffer = ByteBuffer.allocate(64);
+        buffer.clear();
+        buffer.put((byte) 0x01); // frame version
+        buffer.put((byte) 0x08); // apiKey
+        buffer.put((byte) 0x81); // api version
+        buffer.put((byte) 0x80); // api version
+        buffer.put((byte) 0x80); // api version
+        buffer.put((byte) 0x80); // api version
+        buffer.put((byte) 0x08); // api version end, decodes to -2147483647
+        buffer.put((byte) 0x80);
+        buffer.position(0);
+        buffer.limit(64);
+        assertStartsWith("Value for version was too large",
+                assertThrows(MetadataParseException.class,
+                        () -> MetadataRecordSerde.INSTANCE.read(new ByteBufferAccessor(buffer), buffer.remaining())).getMessage());
+    }
+
+    /**
      * Test attempting to parse an event which has a unsupported version
      */
     @Test
