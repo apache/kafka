@@ -2866,7 +2866,10 @@ public class GroupMetadataManager {
             records
         );
 
-        boolean bumpGroupEpoch = hasMemberSubscriptionChanged || updateRegularExpressionStatus.regexUpdated();
+        boolean hasRackIdChanged = !Objects.equals(member.rackId(), updatedMember.rackId());
+        boolean bumpGroupEpoch = hasMemberSubscriptionChanged ||
+            updateRegularExpressionStatus.regexUpdated() ||
+            hasRackIdChanged;
 
         if (bumpGroupEpoch || group.hasMetadataExpired(currentTimeMs)) {
             // The subscription metadata is updated in two cases:

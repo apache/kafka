@@ -16296,6 +16296,60 @@ public class GroupMetadataManagerTest {
     }
 
     @Test
+    public void testJoiningConsumerGroupWithUpdatedRackId() {
+        String groupId = "group-id";
+        String memberId = Uuid.randomUuid().toString();
+        String oldRackId = "rack-a";
+        String newRackId = "rack-b";
+
+        JoinGroupRequestProtocolCollection protocols = new JoinGroupRequestProtocolCollection(1);
+        protocols.add(new JoinGroupRequestProtocol()
+            .setName("range")
+            .setMetadata(Utils.toArray(ConsumerProtocol.serializeSubscription(new ConsumerPartitionAssignor.Subscription(
+                List.of(), null, List.of(), 10, Optional.of(oldRackId)
+            ))))
+        );
+
+        GroupMetadataManagerTestContext context = new GroupMetadataManagerTestContext.Builder()
+            .withConfig(GroupCoordinatorConfig.CONSUMER_GROUP_ASSIGNORS_CONFIG, List.of(new NoOpPartitionAssignor()))
+            .withConsumerGroup(new ConsumerGroupBuilder(groupId, 10)
+                .withMember(new ConsumerGroupMember.Builder(memberId)
+                    .setState(MemberState.STABLE)
+                    .setMemberEpoch(10)
+                    .setPreviousMemberEpoch(9)
+                    .setRackId(oldRackId)
+                    .setClassicMemberMetadata(new ConsumerGroupMemberMetadataValue.ClassicMemberMetadata()
+                        .setSessionTimeoutMs(500)
+                        .setSupportedProtocols(ConsumerGroupMember.classicProtocolListFromJoinRequestProtocolCollection(protocols)))
+                    .build())
+                .withAssignmentEpoch(10))
+            .build();
+        ConsumerGroup group = context.groupMetadataManager.consumerGroup(groupId);
+        group.setMetadataRefreshDeadline(Long.MAX_VALUE, 10);
+
+        // The member rejoins with only its rack ID changed.
+        protocols.find("range").setMetadata(Utils.toArray(ConsumerProtocol.serializeSubscription(
+            new ConsumerPartitionAssignor.Subscription(
+                List.of(),
+                null,
+                List.of(),
+                10,
+                Optional.of(newRackId)
+            ))));
+        JoinGroupRequestData request = new GroupMetadataManagerTestContext.JoinGroupRequestBuilder()
+            .withGroupId(groupId)
+            .withMemberId(memberId)
+            .withProtocols(protocols)
+            .build();
+        GroupMetadataManagerTestContext.JoinResult joinResult = context.sendClassicGroupJoin(request);
+        joinResult.appendFuture.complete(null);
+
+        assertEquals(newRackId, group.getOrMaybeCreateMember(memberId, false).rackId());
+        assertEquals(11, group.groupEpoch());
+        assertEquals(11, group.assignmentEpoch());
+    }
+
+    @Test
     public void testJoiningConsumerGroupFailingToPersistRecords() throws Exception {
         String groupId = "group-id";
         Uuid fooTopicId = Uuid.randomUuid();
