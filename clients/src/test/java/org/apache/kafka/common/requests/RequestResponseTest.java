@@ -1199,10 +1199,10 @@ public class RequestResponseTest {
             case ALTER_CLIENT_QUOTAS: return createAlterClientQuotasResponse();
             case DESCRIBE_USER_SCRAM_CREDENTIALS: return createDescribeUserScramCredentialsResponse();
             case ALTER_USER_SCRAM_CREDENTIALS: return createAlterUserScramCredentialsResponse();
-            case VOTE: return createVoteResponse();
-            case BEGIN_QUORUM_EPOCH: return createBeginQuorumEpochResponse();
-            case END_QUORUM_EPOCH: return createEndQuorumEpochResponse();
-            case DESCRIBE_QUORUM: return createDescribeQuorumResponse();
+            case VOTE: return createVoteResponse(version);
+            case BEGIN_QUORUM_EPOCH: return createBeginQuorumEpochResponse(version);
+            case END_QUORUM_EPOCH: return createEndQuorumEpochResponse(version);
+            case DESCRIBE_QUORUM: return createDescribeQuorumResponse(version);
             case ALTER_PARTITION: return createAlterPartitionResponse();
             case UPDATE_FEATURES: return createUpdateFeaturesResponse();
             case ENVELOPE: return createEnvelopeResponse();
@@ -1666,9 +1666,40 @@ public class RequestResponseTest {
         return new DescribeQuorumRequest.Builder(data).build(version);
     }
 
-    private DescribeQuorumResponse createDescribeQuorumResponse() {
+    private DescribeQuorumResponse createDescribeQuorumResponse(short version) {
+        DescribeQuorumResponseData.ReplicaState replicaState = new DescribeQuorumResponseData.ReplicaState()
+                .setReplicaId(1);
+        if (version >= 1) {
+            replicaState.setLastFetchTimestamp(123L)
+                .setLastCaughtUpTimestamp(123L);
+        }
+        if (version >= 2) {
+            replicaState.setReplicaDirectoryId(Uuid.randomUuid());
+        }
+        DescribeQuorumResponseData.PartitionData partitionData = new DescribeQuorumResponseData.PartitionData()
+                .setPartitionIndex(0)
+                .setCurrentVoters(singletonList(replicaState))
+                .setObservers(singletonList(replicaState));
+        DescribeQuorumResponseData.TopicData topicData = new DescribeQuorumResponseData.TopicData()
+                .setTopicName("__cluster_metadata")
+                .setPartitions(singletonList(partitionData));
         DescribeQuorumResponseData data = new DescribeQuorumResponseData()
-                .setErrorCode(Errors.NONE.code());
+                .setErrorCode(Errors.NONE.code())
+                .setTopics(singletonList(topicData));
+        if (version >= 2) {
+            partitionData.setErrorMessage("error message");
+            data.setErrorMessage("error message");
+            DescribeQuorumResponseData.NodeCollection nodes = new DescribeQuorumResponseData.NodeCollection(1);
+            DescribeQuorumResponseData.ListenerCollection listeners = new DescribeQuorumResponseData.ListenerCollection(1);
+            listeners.add(new DescribeQuorumResponseData.Listener()
+                    .setName("CONTROLLER")
+                    .setHost("localhost")
+                    .setPort(9012));
+            nodes.add(new DescribeQuorumResponseData.Node()
+                    .setNodeId(1)
+                    .setListeners(listeners));
+            data.setNodes(nodes);
+        }
         return new DescribeQuorumResponse(data);
     }
 
@@ -1685,14 +1716,25 @@ public class RequestResponseTest {
         return new EndQuorumEpochRequest.Builder(data).build(version);
     }
 
-    private EndQuorumEpochResponse createEndQuorumEpochResponse() {
+    private EndQuorumEpochResponse createEndQuorumEpochResponse(short version) {
         EndQuorumEpochResponseData data = new EndQuorumEpochResponseData()
                 .setErrorCode(Errors.NONE.code())
                 .setTopics(singletonList(new EndQuorumEpochResponseData.TopicData()
                         .setPartitions(singletonList(new EndQuorumEpochResponseData.PartitionData()
                                 .setErrorCode(Errors.NONE.code())
+                                .setLeaderId(1)
                                 .setLeaderEpoch(1)))
                         .setTopicName("topic1")));
+        if (version >= 1) {
+            EndQuorumEpochResponseData.NodeEndpointCollection nodeEndpoints = new EndQuorumEpochResponseData.NodeEndpointCollection(1);
+            nodeEndpoints.add(
+                new EndQuorumEpochResponseData.NodeEndpoint()
+                        .setNodeId(1)
+                        .setHost("localhost")
+                        .setPort(9092)
+            );
+            data.setNodeEndpoints(nodeEndpoints);
+        }
         return new EndQuorumEpochResponse(data);
     }
 
@@ -1707,7 +1749,7 @@ public class RequestResponseTest {
         return new BeginQuorumEpochRequest.Builder(data).build(version);
     }
 
-    private BeginQuorumEpochResponse createBeginQuorumEpochResponse() {
+    private BeginQuorumEpochResponse createBeginQuorumEpochResponse(short version) {
         BeginQuorumEpochResponseData data = new BeginQuorumEpochResponseData()
                 .setErrorCode(Errors.NONE.code())
                 .setTopics(singletonList(new BeginQuorumEpochResponseData.TopicData()
@@ -1716,6 +1758,17 @@ public class RequestResponseTest {
                                 .setLeaderEpoch(0)
                                 .setLeaderId(1)
                                 .setPartitionIndex(2)))));
+        if (version >= 1) {
+            BeginQuorumEpochResponseData.NodeEndpointCollection nodeEndpoints = new BeginQuorumEpochResponseData.NodeEndpointCollection(1);
+            nodeEndpoints.add(
+                new BeginQuorumEpochResponseData.NodeEndpoint()
+                        .setNodeId(1)
+                        .setHost("localhost")
+                        .setPort(9092)
+            );
+
+            data.setNodeEndpoints(nodeEndpoints);
+        }
         return new BeginQuorumEpochResponse(data);
     }
 
@@ -1737,7 +1790,7 @@ public class RequestResponseTest {
         return new VoteRequest.Builder(data).build(version);
     }
 
-    private VoteResponse createVoteResponse() {
+    private VoteResponse createVoteResponse(short version) {
         VoteResponseData.PartitionData partitionData = new VoteResponseData.PartitionData()
             .setErrorCode(Errors.NONE.code())
             .setLeaderEpoch(0)
@@ -1748,6 +1801,16 @@ public class RequestResponseTest {
                 .setErrorCode(Errors.NONE.code())
                 .setTopics(singletonList(new VoteResponseData.TopicData()
                         .setPartitions(singletonList(partitionData))));
+        if (version >= 1) {
+            VoteResponseData.NodeEndpointCollection nodeEndpoints = new VoteResponseData.NodeEndpointCollection(1);
+            nodeEndpoints.add(
+                new VoteResponseData.NodeEndpoint()
+                        .setNodeId(2)
+                        .setHost("localhost")
+                        .setPort(9092)
+            );
+            data.setNodeEndpoints(nodeEndpoints);
+        }
         return new VoteResponse(data);
     }
 
