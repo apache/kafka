@@ -28,7 +28,6 @@ import org.apache.kafka.common.metrics.Metrics;
 import org.apache.kafka.common.record.TimestampType;
 import org.apache.kafka.common.record.internal.AbstractRecords;
 import org.apache.kafka.common.record.internal.CompressionType;
-import org.apache.kafka.common.record.internal.MemoryRecordsBuilder;
 import org.apache.kafka.common.record.internal.Record;
 import org.apache.kafka.common.record.internal.RecordBatch;
 import org.apache.kafka.common.utils.Time;
@@ -258,8 +257,9 @@ public class ChunkedRecordAccumulator extends RecordAccumulator {
                     // Reuse the new-batch size estimate as the write-limit basis.
                     // TODO: review when compression is supported.
                     final NewBatchBuffer pendingNewBatch = newBatch;
-                    appendResult = appendNewBatch(tp, dq, timestamp, key, value, headers, callbacks,
-                            () -> chunkedRecordsBuilder(pendingNewBatch.stream, pendingNewBatch.firstAppendSize), nowMs);
+                    final long createdMs = nowMs;
+                    appendResult = appendNewBatch(tp, dq, timestamp, key, value, headers, callbacks, () -> createChunkedProducerBatch(tp,
+                            chunkedRecordsBuilder(pendingNewBatch.stream, pendingNewBatch.firstAppendSize), createdMs), nowMs);
                     if (appendResult.needsNewBatch())
                         throw new IllegalStateException("appendNewBatch must not return a needsNewBatch result");
                     if (appendResult.needsBufferExtension()) {
@@ -360,22 +360,28 @@ public class ChunkedRecordAccumulator extends RecordAccumulator {
         return super.tryAppend(timestamp, key, value, headers, callback, deque, nowMs);
     }
 
-    @Override
-    protected ProducerBatch createProducerBatch(TopicPartition tp, MemoryRecordsBuilder recordsBuilder, long nowMs) {
+    /**
+     * Create the {@link ChunkedProducerBatch} for a new batch. Tests override this to observe the
+     * batches this accumulator creates.
+     */
+    protected ChunkedProducerBatch createChunkedProducerBatch(TopicPartition tp, CompositeMemoryRecordsBuilder recordsBuilder,
+                                                              long nowMs) {
         return new ChunkedProducerBatch(tp, recordsBuilder, nowMs);
     }
 
     /**
-     * Build a {@link MemoryRecordsBuilder} backed by the chunked stream.
+     * Build a {@link CompositeMemoryRecordsBuilder} backed by the chunked stream: it finalizes into a
+     * multi-buffer {@link CompositeMemoryRecords} over the
+     * chunk list rather than flattening (scatter-gather send, KAFKA-20580).
      *
      * @param bufferStream    the chunked stream backing the batch
      * @param firstRecordSize the first record's uncompressed size upper bound. Used to set the
      *                        builder's write limit used by {@code hasRoomFor}/{@code isFull}
      */
-    private MemoryRecordsBuilder chunkedRecordsBuilder(ChunkedByteBufferOutputStream bufferStream,
-                                                       int firstRecordSize) {
+    private CompositeMemoryRecordsBuilder chunkedRecordsBuilder(ChunkedByteBufferOutputStream bufferStream,
+                                                                int firstRecordSize) {
         int writeLimit = Math.max(batchSize, firstRecordSize);
-        return new MemoryRecordsBuilder(bufferStream, RecordBatch.CURRENT_MAGIC_VALUE, compression,
+        return new CompositeMemoryRecordsBuilder(bufferStream, RecordBatch.CURRENT_MAGIC_VALUE, compression,
                 TimestampType.CREATE_TIME, 0L, RecordBatch.NO_TIMESTAMP, RecordBatch.NO_PRODUCER_ID,
                 RecordBatch.NO_PRODUCER_EPOCH, RecordBatch.NO_SEQUENCE, false, false,
                 RecordBatch.NO_PARTITION_LEADER_EPOCH, writeLimit);

@@ -79,7 +79,9 @@ public class SingleByteBufferOutputStream extends ByteBufferOutputStream {
         buffer.put(sourceBuffer);
     }
 
-    @Override
+    /**
+     * The written bytes as a single contiguous buffer.
+     */
     public ByteBuffer buffer() {
         return buffer;
     }
