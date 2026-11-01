@@ -50,6 +50,7 @@ import java.util.Optional;
 import java.util.Set;
 import java.util.concurrent.ExecutionException;
 import java.util.stream.Collectors;
+import java.util.stream.IntStream;
 import java.util.stream.Stream;
 
 import static org.apache.kafka.tools.reassign.ReassignPartitionsCommand.alterPartitionReassignments;
@@ -755,6 +756,26 @@ public class ReassignPartitionsUnitTest {
             Map<ConfigResource, Config> results = adminClient.describeConfigs(topics).all().get();
             verifyTopicThrottleResults(results.get(topics.get(0)), "leaderBar", "followerBar");
             verifyTopicThrottleResults(results.get(topics.get(1)), "leaderFoo", "");
+        }
+    }
+
+    @Test
+    public void testModifyTopicThrottlesFallsBackToWildcardWhenTooLong() throws Exception {
+        try (MockAdminClient adminClient = new MockAdminClient.Builder().numBrokers(4).build()) {
+            addTopics(adminClient);
+
+            String tooLongThrottle = IntStream.range(0, 5000)
+                .mapToObj(partition -> partition + ":0")
+                .collect(Collectors.joining(","));
+
+            modifyTopicThrottles(adminClient,
+                Map.of("foo", tooLongThrottle, "bar", "leaderBar"),
+                Map.of("foo", "followerFoo", "bar", tooLongThrottle));
+            List<ConfigResource> topics = Stream.of("bar", "foo").map(
+                id -> new ConfigResource(ConfigResource.Type.TOPIC, id)).toList();
+            Map<ConfigResource, Config> results = adminClient.describeConfigs(topics).all().get();
+            verifyTopicThrottleResults(results.get(topics.get(0)), "leaderBar", "*");
+            verifyTopicThrottleResults(results.get(topics.get(1)), "*", "followerFoo");
         }
     }
 
