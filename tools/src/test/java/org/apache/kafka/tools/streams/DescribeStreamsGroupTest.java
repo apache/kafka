@@ -24,7 +24,6 @@ import org.apache.kafka.common.test.api.ClusterConfigProperty;
 import org.apache.kafka.common.test.api.ClusterTest;
 import org.apache.kafka.common.test.api.ClusterTestDefaults;
 import org.apache.kafka.common.test.api.Type;
-import org.apache.kafka.common.utils.internals.Exit;
 import org.apache.kafka.streams.GroupProtocol;
 import org.apache.kafka.streams.KafkaStreams;
 import org.apache.kafka.streams.StreamsBuilder;
@@ -45,7 +44,6 @@ import java.util.Locale;
 import java.util.Map;
 import java.util.Properties;
 import java.util.Set;
-import java.util.concurrent.atomic.AtomicBoolean;
 import java.util.concurrent.atomic.AtomicReference;
 import java.util.stream.Collectors;
 
@@ -58,7 +56,6 @@ import static org.apache.kafka.coordinator.group.GroupCoordinatorConfig.STREAMS_
 import static org.apache.kafka.coordinator.group.GroupCoordinatorConfig.STREAMS_GROUP_MIN_SESSION_TIMEOUT_MS_CONFIG;
 import static org.apache.kafka.coordinator.group.GroupCoordinatorConfig.STREAMS_GROUP_TOPOLOGY_DESCRIPTION_PLUGIN_CLASS_CONFIG;
 import static org.junit.jupiter.api.Assertions.assertEquals;
-import static org.junit.jupiter.api.Assertions.assertNotEquals;
 import static org.junit.jupiter.api.Assertions.assertThrows;
 import static org.junit.jupiter.api.Assertions.assertTrue;
 
@@ -95,17 +92,8 @@ public class DescribeStreamsGroupTest {
     @Test
     public void testDescribeWithoutGroupOption() {
         final String[] args = new String[]{"--bootstrap-server", "localhost:9092", "--describe"};
-        AtomicBoolean exited = new AtomicBoolean(false);
-        Exit.setExitProcedure(((statusCode, message) -> {
-            assertNotEquals(0, statusCode);
-            assertTrue(message.contains("Option [describe] takes one of these options: [all-groups], [group]"));
-            exited.set(true);
-        }));
-        try (StreamsGroupCommand.StreamsGroupService ignored = getStreamsGroupService(args)) {
-            assertTrue(exited.get());
-        } finally {
-            Exit.resetExitProcedure();
-        }
+        IllegalArgumentException e = assertThrows(IllegalArgumentException.class, () -> getStreamsGroupService(args));
+        assertTrue(e.getMessage().contains("Option [describe] takes one of these options: [all-groups], [group]"));
     }
 
     @ClusterTest

@@ -69,7 +69,12 @@ public class ConsoleProducer {
             Exit.addShutdownHook("producer-shutdown-hook", producer::close);
 
             loopReader(producer, reader, opts.sync());
-        } catch (OptionException e) {
+        } catch (CommandLineUtils.HelpOrVersionException e) {
+            if (e.getMessage() != null) {
+                System.err.println(e.getMessage());
+            }
+            Exit.exit(0);
+        } catch (IllegalArgumentException | OptionException e) {
             System.err.println(e.getMessage());
             Exit.exit(1);
         } catch (Exception e) {
@@ -305,7 +310,7 @@ public class ConsoleProducer {
             try {
                 options = parser.parse(args);
             } catch (OptionException e) {
-                CommandLineUtils.printUsageAndExit(parser, e.getMessage());
+                CommandLineUtils.printUsageAndThrow(parser, e.getMessage());
             }
 
             checkArgs();
@@ -317,13 +322,13 @@ public class ConsoleProducer {
             CommandLineUtils.checkRequiredArgs(parser, options, topicOpt);
 
             if (options.has(commandConfigOpt) && options.has(producerConfigOpt)) {
-                CommandLineUtils.printUsageAndExit(parser, "Options --command-config and --producer.config cannot be specified together.");
+                CommandLineUtils.printUsageAndThrow(parser, "Options --command-config and --producer.config cannot be specified together.");
             }
             if (options.has(commandPropertyOpt) && options.has(producerPropertyOpt)) {
-                CommandLineUtils.printUsageAndExit(parser, "Options --command-property and --producer-property cannot be specified together.");
+                CommandLineUtils.printUsageAndThrow(parser, "Options --command-property and --producer-property cannot be specified together.");
             }
             if (options.has(readerPropertyOpt) && options.has(propertyOpt)) {
-                CommandLineUtils.printUsageAndExit(parser, "Options --reader-property and --property cannot be specified together.");
+                CommandLineUtils.printUsageAndThrow(parser, "Options --reader-property and --property cannot be specified together.");
             }
 
             if (options.has(producerPropertyOpt)) {
@@ -348,7 +353,7 @@ public class ConsoleProducer {
             try {
                 ToolsUtils.validateBootstrapServer(options.valueOf(bootstrapServerOpt));
             } catch (IllegalArgumentException e) {
-                CommandLineUtils.printUsageAndExit(parser, e.getMessage());
+                CommandLineUtils.printUsageAndThrow(parser, e.getMessage());
             }
         }
 
