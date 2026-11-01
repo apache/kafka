@@ -205,6 +205,16 @@ public class ConsumerGroupMemberTest {
     }
 
     @Test
+    public void testSetSubscribedTopicNamesWithNull() {
+        ConsumerGroupMember member = new ConsumerGroupMember.Builder("member-id")
+            .setSubscribedTopicNames(Arrays.asList("foo", "bar"))
+            .setSubscribedTopicNames(null)
+            .build();
+
+        assertEquals(Set.of("foo", "bar"), member.subscribedTopicNames());
+    }
+
+    @Test
     public void testUpdateWithConsumerGroupMemberMetadataValue() {
         ConsumerGroupMemberMetadataValue record = new ConsumerGroupMemberMetadataValue()
             .setServerAssignor("range")
