@@ -56,7 +56,7 @@ public class ByteBufferAccessor implements Readable, Writable {
     @Override
     public byte[] readArray(int size) {
         int remaining = buf.remaining();
-        if (size > remaining) {
+        if (size < 0 || size > remaining) {
             throw new RuntimeException("Error reading byte array of " + size + " byte(s): only " + remaining +
                     " byte(s) available");
         }
@@ -72,6 +72,9 @@ public class ByteBufferAccessor implements Readable, Writable {
 
     @Override
     public ByteBuffer readByteBuffer(int length) {
+        if (length < 0) {
+            throw new RuntimeException("Error reading byte buffer of " + length + " byte(s): length cannot be negative");
+        }
         ByteBuffer res = buf.slice();
         res.limit(length);
 
