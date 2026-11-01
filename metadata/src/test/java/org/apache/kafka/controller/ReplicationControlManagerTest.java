@@ -1247,6 +1247,40 @@ public class ReplicationControlManagerTest {
         assertEquals(3, replicationControl.getTopicEffectiveMinIsr("foo"));
     }
 
+    // KAFKA-20532: getTopicEffectiveMinIsr must tolerate whitespace-padded min.insync.replicas
+    // values. Validation goes through ConfigDef.parseType(), which trims before parsing, but
+    // ConfigurationControlManager persists the raw ConfigRecord value, so a padded value can
+    // pass validation and still be stored untrimmed.
+    @ParameterizedTest
+    @ValueSource(strings = {" 2", "2 ", " 2 "})
+    public void testGetTopicEffectiveMinIsrTolerateWhitespace(String minIsr) {
+        ReplicationControlTestContext ctx = new ReplicationControlTestContext.Builder().setIsElrEnabled(true).build();
+        ReplicationControlManager replicationControl = ctx.replicationControl;
+        ctx.registerBrokers(0, 1, 2);
+        ctx.unfenceBrokers(0, 1, 2);
+        ctx.createTestTopic("foo", new int[][]{new int[]{0, 1, 2}});
+
+        ctx.alterTopicConfig("foo", TopicConfig.MIN_IN_SYNC_REPLICAS_CONFIG, minIsr);
+
+        // Must not throw NumberFormatException and must return the correct integer value.
+        assertEquals(2, replicationControl.getTopicEffectiveMinIsr("foo"));
+    }
+
+    @Test
+    public void testGetTopicEffectiveMinIsrWhitespaceCappedByReplicationFactor() {
+        // Verify that the replication-factor cap still applies correctly after trimming.
+        ReplicationControlTestContext ctx = new ReplicationControlTestContext.Builder().setIsElrEnabled(true).build();
+        ReplicationControlManager replicationControl = ctx.replicationControl;
+        ctx.registerBrokers(0, 1, 2);
+        ctx.unfenceBrokers(0, 1, 2);
+        ctx.createTestTopic("foo", new int[][]{new int[]{0, 1, 2}});
+
+        // Whitespace-padded value that exceeds replication factor (3) should still be capped at 3.
+        ctx.alterTopicConfig("foo", TopicConfig.MIN_IN_SYNC_REPLICAS_CONFIG, " 5");
+
+        assertEquals(3, replicationControl.getTopicEffectiveMinIsr("foo"));
+    }
+
     @Test
     public void testEligibleLeaderReplicas_CleanElection() {
         ReplicationControlTestContext ctx = new ReplicationControlTestContext.Builder()
