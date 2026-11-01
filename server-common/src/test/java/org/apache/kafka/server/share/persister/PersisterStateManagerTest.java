@@ -74,6 +74,7 @@ import java.util.Map;
 import java.util.Optional;
 import java.util.concurrent.CompletableFuture;
 import java.util.concurrent.ExecutionException;
+import java.util.concurrent.TimeUnit;
 import java.util.concurrent.atomic.AtomicBoolean;
 import java.util.concurrent.atomic.AtomicInteger;
 import java.util.function.IntSupplier;
@@ -3576,6 +3577,210 @@ class PersisterStateManagerTest {
         } catch (Exception e) {
             fail("Failed to stop state manager", e);
         }
+    }
+
+    private static DeleteShareGroupStateResponseData.PartitionResult deleteStatePartitionResult(int partition, Errors error) {
+        return new DeleteShareGroupStateResponseData.PartitionResult()
+            .setPartition(partition)
+            .setErrorCode(error.code())
+            .setErrorMessage(error.message());
+    }
+
+    private static DeleteShareGroupStateResponseData.DeleteStateResult deleteStateResult(
+        Uuid topicId,
+        DeleteShareGroupStateResponseData.PartitionResult... partitions
+    ) {
+        return new DeleteShareGroupStateResponseData.DeleteStateResult()
+            .setTopicId(topicId)
+            .setPartitions(List.of(partitions));
+    }
+
+    private static ClientResponse deleteStateClientResponse(DeleteShareGroupStateResponseData data) {
+        return new ClientResponse(
+            new RequestHeader(ApiKeys.DELETE_SHARE_GROUP_STATE, ApiKeys.DELETE_SHARE_GROUP_STATE.latestVersion(), "client-id", 0),
+            null,
+            HOST,
+            MOCK_TIME.milliseconds(),
+            MOCK_TIME.milliseconds(),
+            false,
+            null,
+            null,
+            new DeleteShareGroupStateResponse(data)
+        );
+    }
+
+    private PersisterStateManager.DeleteStateHandler batchedDeleteHandler(
+        PersisterStateManager stateManager,
+        Node coordinatorNode,
+        String groupId,
+        Uuid topicId,
+        int partition
+    ) {
+        PersisterStateManager.DeleteStateHandler handler = stateManager.new DeleteStateHandler(
+            groupId,
+            topicId,
+            partition,
+            new CompletableFuture<>(),
+            REQUEST_BACKOFF_MS,
+            REQUEST_BACKOFF_MAX_MS,
+            MAX_RPC_RETRY_ATTEMPTS
+        );
+        handler.addRequestToNodeMap(coordinatorNode, handler);
+        return handler;
+    }
+
+    private static void assertDeleteStateResult(
+        PersisterStateManager.DeleteStateHandler handler,
+        Uuid expectedTopicId,
+        int expectedPartition,
+        Errors expectedError
+    ) {
+        DeleteShareGroupStateResponse response = assertDoesNotThrow(() -> handler.result().get(5, TimeUnit.SECONDS));
+        assertEquals(1, response.data().results().size());
+        DeleteShareGroupStateResponseData.DeleteStateResult result = response.data().results().get(0);
+        assertEquals(expectedTopicId, result.topicId());
+        assertEquals(1, result.partitions().size());
+        assertEquals(expectedPartition, result.partitions().get(0).partition());
+        assertEquals(expectedError.code(), result.partitions().get(0).errorCode());
+    }
+
+    @Test
+    public void testDeleteStateCombinedResponseDemultiplexedPerTopicPartition() {
+        String groupId = "group1";
+        Uuid topicId1 = Uuid.randomUuid();
+        Uuid topicId2 = Uuid.randomUuid();
+        Node coordinatorNode = new Node(1, HOST, PORT);
+
+        PersisterStateManager stateManager = PersisterStateManagerBuilder.builder()
+            .withKafkaClient(new MockClient(MOCK_TIME))
+            .withTimer(mockTimer)
+            .withCacheHelper(getCoordinatorCacheHelper(coordinatorNode))
+            .build();
+
+        PersisterStateManager.DeleteStateHandler topic1Partition0 = batchedDeleteHandler(stateManager, coordinatorNode, groupId, topicId1, 0);
+        PersisterStateManager.DeleteStateHandler topic1Partition1 = batchedDeleteHandler(stateManager, coordinatorNode, groupId, topicId1, 1);
+        PersisterStateManager.DeleteStateHandler topic2Partition0 = batchedDeleteHandler(stateManager, coordinatorNode, groupId, topicId2, 0);
+        PersisterStateManager.DeleteStateHandler topic2Partition1 = batchedDeleteHandler(stateManager, coordinatorNode, groupId, topicId2, 1);
+
+        Collection<RequestAndCompletionHandler> requests = stateManager.generateRequests();
+        assertEquals(1, requests.size());
+
+        requests.iterator().next().handler.onComplete(deleteStateClientResponse(
+            new DeleteShareGroupStateResponseData().setResults(List.of(
+                deleteStateResult(topicId1,
+                    deleteStatePartitionResult(0, Errors.NONE),
+                    deleteStatePartitionResult(1, Errors.INVALID_REQUEST)),
+                deleteStateResult(topicId2,
+                    deleteStatePartitionResult(0, Errors.FENCED_STATE_EPOCH),
+                    deleteStatePartitionResult(1, Errors.NONE))))));
+
+        assertDeleteStateResult(topic1Partition0, topicId1, 0, Errors.NONE);
+        assertDeleteStateResult(topic1Partition1, topicId1, 1, Errors.INVALID_REQUEST);
+        assertDeleteStateResult(topic2Partition0, topicId2, 0, Errors.FENCED_STATE_EPOCH);
+        assertDeleteStateResult(topic2Partition1, topicId2, 1, Errors.NONE);
+    }
+
+    @ParameterizedTest
+    @ValueSource(ints = {1, 16, 256})
+    public void testDeleteStateCombinedResponseIndexedOncePerBatch(int partitionCount) {
+        String groupId = "group1";
+        Uuid topicId = Uuid.randomUuid();
+        Node coordinatorNode = new Node(1, HOST, PORT);
+
+        PersisterStateManager stateManager = PersisterStateManagerBuilder.builder()
+            .withKafkaClient(new MockClient(MOCK_TIME))
+            .withTimer(mockTimer)
+            .withCacheHelper(getCoordinatorCacheHelper(coordinatorNode))
+            .build();
+
+        List<PersisterStateManager.DeleteStateHandler> handlers = new ArrayList<>();
+        for (int partition = 0; partition < partitionCount; partition++) {
+            PersisterStateManager.DeleteStateHandler handler = spy(stateManager.new DeleteStateHandler(
+                groupId,
+                topicId,
+                partition,
+                new CompletableFuture<>(),
+                REQUEST_BACKOFF_MS,
+                REQUEST_BACKOFF_MAX_MS,
+                MAX_RPC_RETRY_ATTEMPTS
+            ));
+            handler.addRequestToNodeMap(coordinatorNode, handler);
+            handlers.add(handler);
+        }
+
+        Collection<RequestAndCompletionHandler> requests = stateManager.generateRequests();
+        assertEquals(1, requests.size());
+
+        List<DeleteShareGroupStateResponseData.PartitionResult> partitions = new ArrayList<>();
+        for (int partition = 0; partition < partitionCount; partition++) {
+            partitions.add(spy(deleteStatePartitionResult(partition, Errors.NONE)));
+        }
+        requests.iterator().next().handler.onComplete(deleteStateClientResponse(
+            new DeleteShareGroupStateResponseData().setResults(List.of(
+                new DeleteShareGroupStateResponseData.DeleteStateResult().setTopicId(topicId).setPartitions(partitions)))));
+
+        for (var partition : partitions) {
+            verify(partition, times(1)).partition();
+        }
+
+        verify(handlers.get(0), times(1)).buildResultIndex(any());
+        for (int i = 1; i < handlers.size(); i++) {
+            verify(handlers.get(i), never()).buildResultIndex(any());
+        }
+
+        for (int partition = 0; partition < handlers.size(); partition++) {
+            assertDeleteStateResult(handlers.get(partition), topicId, partition, Errors.NONE);
+        }
+    }
+
+    @Test
+    public void testDeleteStateCombinedResponseMissingPartitionFailsOnlyThatHandler() {
+        String groupId = "group1";
+        Uuid topicId = Uuid.randomUuid();
+        Node coordinatorNode = new Node(1, HOST, PORT);
+
+        PersisterStateManager stateManager = PersisterStateManagerBuilder.builder()
+            .withKafkaClient(new MockClient(MOCK_TIME))
+            .withTimer(mockTimer)
+            .withCacheHelper(getCoordinatorCacheHelper(coordinatorNode))
+            .build();
+
+        PersisterStateManager.DeleteStateHandler present = batchedDeleteHandler(stateManager, coordinatorNode, groupId, topicId, 0);
+        PersisterStateManager.DeleteStateHandler missing = batchedDeleteHandler(stateManager, coordinatorNode, groupId, topicId, 1);
+
+        Collection<RequestAndCompletionHandler> requests = stateManager.generateRequests();
+        assertEquals(1, requests.size());
+
+        requests.iterator().next().handler.onComplete(deleteStateClientResponse(
+            new DeleteShareGroupStateResponseData().setResults(List.of(
+                deleteStateResult(topicId, deleteStatePartitionResult(0, Errors.NONE))))));
+
+        assertDeleteStateResult(present, topicId, 0, Errors.NONE);
+        assertDeleteStateResult(missing, topicId, 1, Errors.UNKNOWN_SERVER_ERROR);
+    }
+
+    @Test
+    public void testDeleteStateCombinedResponseNullClientResponseCompletesAllHandlers() {
+        String groupId = "group1";
+        Uuid topicId = Uuid.randomUuid();
+        Node coordinatorNode = new Node(1, HOST, PORT);
+
+        PersisterStateManager stateManager = PersisterStateManagerBuilder.builder()
+            .withKafkaClient(new MockClient(MOCK_TIME))
+            .withTimer(mockTimer)
+            .withCacheHelper(getCoordinatorCacheHelper(coordinatorNode))
+            .build();
+
+        PersisterStateManager.DeleteStateHandler partition0 = batchedDeleteHandler(stateManager, coordinatorNode, groupId, topicId, 0);
+        PersisterStateManager.DeleteStateHandler partition1 = batchedDeleteHandler(stateManager, coordinatorNode, groupId, topicId, 1);
+
+        Collection<RequestAndCompletionHandler> requests = stateManager.generateRequests();
+        assertEquals(1, requests.size());
+
+        assertDoesNotThrow(() -> requests.iterator().next().handler.onComplete(null));
+
+        assertDeleteStateResult(partition0, topicId, 0, Errors.UNKNOWN_SERVER_ERROR);
+        assertDeleteStateResult(partition1, topicId, 1, Errors.UNKNOWN_SERVER_ERROR);
     }
 
     @Test
