@@ -32,6 +32,7 @@ import java.util.List;
 import java.util.Objects;
 
 import static org.apache.kafka.metadata.LeaderConstants.NO_LEADER_CHANGE;
+import static org.apache.kafka.metadata.LeaderConstants.NO_LEADER_EPOCH_CHANGE;
 
 
 public class PartitionRegistration {
@@ -249,14 +250,16 @@ public class PartitionRegistration {
         int[] newAddingReplicas = (record.addingReplicas() == null) ?
             addingReplicas : Replicas.toArray(record.addingReplicas());
 
-        int newLeader;
+        int newLeader = (record.leader() == NO_LEADER_CHANGE) ? leader : record.leader();
         int newLeaderEpoch;
-        if (record.leader() == NO_LEADER_CHANGE) {
-            newLeader = leader;
-            newLeaderEpoch = leaderEpoch;
-        } else {
-            newLeader = record.leader();
+        if (record.leaderEpoch() != NO_LEADER_EPOCH_CHANGE) {
+            // Since version 3, the controller sets the new leader epoch in the record.
+            newLeaderEpoch = record.leaderEpoch();
+        } else if (record.leader() != NO_LEADER_CHANGE) {
+            // Older records do not carry the leader epoch, so derive it from the leader change.
             newLeaderEpoch = leaderEpoch + 1;
+        } else {
+            newLeaderEpoch = leaderEpoch;
         }
 
         LeaderRecoveryState newLeaderRecoveryState = leaderRecoveryState.changeTo(record.leaderRecoveryState());
