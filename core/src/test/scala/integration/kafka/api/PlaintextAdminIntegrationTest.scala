@@ -1146,6 +1146,22 @@ class PlaintextAdminIntegrationTest extends BaseAdminIntegrationTest {
     val negativeOffsetCause = assertThrows(classOf[ExecutionException],
       () => client.deleteRecords(util.Map.of(topicPartition, RecordsToDelete.beforeOffset(-2L))).lowWatermarks.get(topicPartition).get).getCause
     assertEquals(classOf[OffsetOutOfRangeException], negativeOffsetCause.getClass)
+
+    // The failed requests did not delete any records
+    assertEquals(5L, client.listOffsets(util.Map.of(topicPartition, OffsetSpec.earliest()))
+      .partitionResult(topicPartition).get.offset)
+  }
+
+  @Test
+  def testDeleteRecordsToHighWatermark(): Unit = {
+    createTopic(topic, replicationFactor = brokerCount)
+    client = createAdminClient
+
+    val producer = createProducer()
+    sendRecords(producer, 10, topicPartition)
+
+    assertEquals(10L, client.deleteRecords(util.Map.of(topicPartition, RecordsToDelete.beforeOffset(-1L)))
+      .lowWatermarks.get(topicPartition).get.lowWatermark)
   }
 
   private def subscribeAndWaitForAssignment(topic: String, consumer: Consumer[Array[Byte], Array[Byte]]): Unit = {
