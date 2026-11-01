@@ -74,6 +74,7 @@ import java.util.Map;
 import java.util.Optional;
 import java.util.concurrent.CompletableFuture;
 import java.util.concurrent.ExecutionException;
+import java.util.concurrent.TimeUnit;
 import java.util.concurrent.atomic.AtomicBoolean;
 import java.util.concurrent.atomic.AtomicInteger;
 import java.util.function.IntSupplier;
@@ -4389,6 +4390,214 @@ class PersisterStateManagerTest {
         } catch (Exception e) {
             fail("Failed to stop state manager", e);
         }
+    }
+
+    private static InitializeShareGroupStateResponseData.PartitionResult initializeStatePartitionResult(int partition, Errors error) {
+        return new InitializeShareGroupStateResponseData.PartitionResult()
+            .setPartition(partition)
+            .setErrorCode(error.code())
+            .setErrorMessage(error.message());
+    }
+
+    private static InitializeShareGroupStateResponseData.InitializeStateResult initializeStateResult(
+        Uuid topicId,
+        InitializeShareGroupStateResponseData.PartitionResult... partitions
+    ) {
+        return new InitializeShareGroupStateResponseData.InitializeStateResult()
+            .setTopicId(topicId)
+            .setPartitions(List.of(partitions));
+    }
+
+    private static ClientResponse initializeStateClientResponse(InitializeShareGroupStateResponseData data) {
+        return new ClientResponse(
+            new RequestHeader(ApiKeys.INITIALIZE_SHARE_GROUP_STATE, ApiKeys.INITIALIZE_SHARE_GROUP_STATE.latestVersion(), "client-id", 0),
+            null,
+            HOST,
+            MOCK_TIME.milliseconds(),
+            MOCK_TIME.milliseconds(),
+            false,
+            null,
+            null,
+            new InitializeShareGroupStateResponse(data)
+        );
+    }
+
+    private PersisterStateManager.InitializeStateHandler batchedInitializeHandler(
+        PersisterStateManager stateManager,
+        Node coordinatorNode,
+        String groupId,
+        Uuid topicId,
+        int partition
+    ) {
+        PersisterStateManager.InitializeStateHandler handler = stateManager.new InitializeStateHandler(
+            groupId,
+            topicId,
+            partition,
+            0,
+            0,
+            new CompletableFuture<>(),
+            REQUEST_BACKOFF_MS,
+            REQUEST_BACKOFF_MAX_MS,
+            MAX_RPC_RETRY_ATTEMPTS
+        );
+        handler.addRequestToNodeMap(coordinatorNode, handler);
+        return handler;
+    }
+
+    private static void assertInitializeStateResult(
+        PersisterStateManager.InitializeStateHandler handler,
+        Uuid expectedTopicId,
+        int expectedPartition,
+        Errors expectedError
+    ) {
+        InitializeShareGroupStateResponse response = assertDoesNotThrow(() -> handler.result().get(5, TimeUnit.SECONDS));
+        assertEquals(1, response.data().results().size());
+        InitializeShareGroupStateResponseData.InitializeStateResult result = response.data().results().get(0);
+        assertEquals(expectedTopicId, result.topicId());
+        assertEquals(1, result.partitions().size());
+        assertEquals(expectedPartition, result.partitions().get(0).partition());
+        assertEquals(expectedError.code(), result.partitions().get(0).errorCode());
+    }
+
+    @Test
+    public void testInitializeStateCombinedResponseDemultiplexedPerTopicPartition() {
+        String groupId = "group1";
+        Uuid topicId1 = Uuid.randomUuid();
+        Uuid topicId2 = Uuid.randomUuid();
+        Node coordinatorNode = new Node(1, HOST, PORT);
+
+        PersisterStateManager stateManager = PersisterStateManagerBuilder.builder()
+            .withKafkaClient(new MockClient(MOCK_TIME))
+            .withTimer(mockTimer)
+            .withCacheHelper(getCoordinatorCacheHelper(coordinatorNode))
+            .build();
+
+        PersisterStateManager.InitializeStateHandler topic1Partition0 = batchedInitializeHandler(stateManager, coordinatorNode, groupId, topicId1, 0);
+        PersisterStateManager.InitializeStateHandler topic1Partition1 = batchedInitializeHandler(stateManager, coordinatorNode, groupId, topicId1, 1);
+        PersisterStateManager.InitializeStateHandler topic2Partition0 = batchedInitializeHandler(stateManager, coordinatorNode, groupId, topicId2, 0);
+        PersisterStateManager.InitializeStateHandler topic2Partition1 = batchedInitializeHandler(stateManager, coordinatorNode, groupId, topicId2, 1);
+
+        Collection<RequestAndCompletionHandler> requests = stateManager.generateRequests();
+        assertEquals(1, requests.size());
+
+        requests.iterator().next().handler.onComplete(initializeStateClientResponse(
+            new InitializeShareGroupStateResponseData().setResults(List.of(
+                initializeStateResult(topicId1,
+                    initializeStatePartitionResult(0, Errors.NONE),
+                    initializeStatePartitionResult(1, Errors.INVALID_REQUEST)),
+                initializeStateResult(topicId2,
+                    initializeStatePartitionResult(0, Errors.FENCED_STATE_EPOCH),
+                    initializeStatePartitionResult(1, Errors.NONE))))));
+
+        assertInitializeStateResult(topic1Partition0, topicId1, 0, Errors.NONE);
+        assertInitializeStateResult(topic1Partition1, topicId1, 1, Errors.INVALID_REQUEST);
+        assertInitializeStateResult(topic2Partition0, topicId2, 0, Errors.FENCED_STATE_EPOCH);
+        assertInitializeStateResult(topic2Partition1, topicId2, 1, Errors.NONE);
+    }
+
+    @ParameterizedTest
+    @ValueSource(ints = {1, 16, 256})
+    public void testInitializeStateCombinedResponseIndexedOncePerBatch(int partitionCount) {
+        String groupId = "group1";
+        Uuid topicId = Uuid.randomUuid();
+        Node coordinatorNode = new Node(1, HOST, PORT);
+
+        PersisterStateManager stateManager = PersisterStateManagerBuilder.builder()
+            .withKafkaClient(new MockClient(MOCK_TIME))
+            .withTimer(mockTimer)
+            .withCacheHelper(getCoordinatorCacheHelper(coordinatorNode))
+            .build();
+
+        List<PersisterStateManager.InitializeStateHandler> handlers = new ArrayList<>();
+        for (int partition = 0; partition < partitionCount; partition++) {
+            PersisterStateManager.InitializeStateHandler handler = spy(stateManager.new InitializeStateHandler(
+                groupId,
+                topicId,
+                partition,
+                0,
+                0,
+                new CompletableFuture<>(),
+                REQUEST_BACKOFF_MS,
+                REQUEST_BACKOFF_MAX_MS,
+                MAX_RPC_RETRY_ATTEMPTS
+            ));
+            handler.addRequestToNodeMap(coordinatorNode, handler);
+            handlers.add(handler);
+        }
+
+        Collection<RequestAndCompletionHandler> requests = stateManager.generateRequests();
+        assertEquals(1, requests.size());
+
+        List<InitializeShareGroupStateResponseData.PartitionResult> partitions = new ArrayList<>();
+        for (int partition = 0; partition < partitionCount; partition++) {
+            partitions.add(spy(initializeStatePartitionResult(partition, Errors.NONE)));
+        }
+        requests.iterator().next().handler.onComplete(initializeStateClientResponse(
+            new InitializeShareGroupStateResponseData().setResults(List.of(
+                new InitializeShareGroupStateResponseData.InitializeStateResult().setTopicId(topicId).setPartitions(partitions)))));
+
+        for (var partition : partitions) {
+            verify(partition, times(1)).partition();
+        }
+
+        verify(handlers.get(0), times(1)).buildResultIndex(any());
+        for (int i = 1; i < handlers.size(); i++) {
+            verify(handlers.get(i), never()).buildResultIndex(any());
+        }
+
+        for (int partition = 0; partition < handlers.size(); partition++) {
+            assertInitializeStateResult(handlers.get(partition), topicId, partition, Errors.NONE);
+        }
+    }
+
+    @Test
+    public void testInitializeStateCombinedResponseMissingPartitionFailsOnlyThatHandler() {
+        String groupId = "group1";
+        Uuid topicId = Uuid.randomUuid();
+        Node coordinatorNode = new Node(1, HOST, PORT);
+
+        PersisterStateManager stateManager = PersisterStateManagerBuilder.builder()
+            .withKafkaClient(new MockClient(MOCK_TIME))
+            .withTimer(mockTimer)
+            .withCacheHelper(getCoordinatorCacheHelper(coordinatorNode))
+            .build();
+
+        PersisterStateManager.InitializeStateHandler present = batchedInitializeHandler(stateManager, coordinatorNode, groupId, topicId, 0);
+        PersisterStateManager.InitializeStateHandler missing = batchedInitializeHandler(stateManager, coordinatorNode, groupId, topicId, 1);
+
+        Collection<RequestAndCompletionHandler> requests = stateManager.generateRequests();
+        assertEquals(1, requests.size());
+
+        requests.iterator().next().handler.onComplete(initializeStateClientResponse(
+            new InitializeShareGroupStateResponseData().setResults(List.of(
+                initializeStateResult(topicId, initializeStatePartitionResult(0, Errors.NONE))))));
+
+        assertInitializeStateResult(present, topicId, 0, Errors.NONE);
+        assertInitializeStateResult(missing, topicId, 1, Errors.UNKNOWN_SERVER_ERROR);
+    }
+
+    @Test
+    public void testInitializeStateCombinedResponseNullClientResponseCompletesAllHandlers() {
+        String groupId = "group1";
+        Uuid topicId = Uuid.randomUuid();
+        Node coordinatorNode = new Node(1, HOST, PORT);
+
+        PersisterStateManager stateManager = PersisterStateManagerBuilder.builder()
+            .withKafkaClient(new MockClient(MOCK_TIME))
+            .withTimer(mockTimer)
+            .withCacheHelper(getCoordinatorCacheHelper(coordinatorNode))
+            .build();
+
+        PersisterStateManager.InitializeStateHandler partition0 = batchedInitializeHandler(stateManager, coordinatorNode, groupId, topicId, 0);
+        PersisterStateManager.InitializeStateHandler partition1 = batchedInitializeHandler(stateManager, coordinatorNode, groupId, topicId, 1);
+
+        Collection<RequestAndCompletionHandler> requests = stateManager.generateRequests();
+        assertEquals(1, requests.size());
+
+        assertDoesNotThrow(() -> requests.iterator().next().handler.onComplete(null));
+
+        assertInitializeStateResult(partition0, topicId, 0, Errors.UNKNOWN_SERVER_ERROR);
+        assertInitializeStateResult(partition1, topicId, 1, Errors.UNKNOWN_SERVER_ERROR);
     }
 
     @Test

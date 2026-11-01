@@ -657,6 +657,18 @@ public class PersisterStateManager {
         }
 
         @Override
+        protected PartitionResultIndex<InitializeShareGroupStateResponseData.PartitionResult> buildResultIndex(ClientResponse response) {
+            if (response == null || !response.hasResponse()) {
+                return null;
+            }
+            return PartitionResultIndex.build(
+                ((InitializeShareGroupStateResponse) response.responseBody()).data().results(),
+                InitializeShareGroupStateResponseData.InitializeStateResult::topicId,
+                InitializeShareGroupStateResponseData.InitializeStateResult::partitions,
+                InitializeShareGroupStateResponseData.PartitionResult::partition);
+        }
+
+        @Override
         protected void handleRequestResponse(ClientResponse response) {
             log().debug("Initialize state response received - {}", response);
             initializeStateBackoff.incrementAttempt();
@@ -665,55 +677,44 @@ public class PersisterStateManager {
 
             switch (clientResponseError) {
                 case NONE:
-                    // response can be a combined one for large number of requests
-                    // we need to deconstruct it
-                    InitializeShareGroupStateResponse combinedResponse = (InitializeShareGroupStateResponse) response.responseBody();
+                    InitializeShareGroupStateResponseData.PartitionResult partitionResult = lookupPartitionResult(response);
+                    if (partitionResult != null) {
+                        Errors error = Errors.forCode(partitionResult.errorCode());
+                        String errorMessage = partitionResult.errorMessage();
+                        if (errorMessage == null || errorMessage.isEmpty()) {
+                            errorMessage = error.message();
+                        }
 
-                    for (InitializeShareGroupStateResponseData.InitializeStateResult initializeStateResult : combinedResponse.data().results()) {
-                        if (initializeStateResult.topicId().equals(partitionKey().topicId())) {
-                            Optional<InitializeShareGroupStateResponseData.PartitionResult> partitionStateData =
-                                initializeStateResult.partitions().stream().filter(partitionResult -> partitionResult.partition() == partitionKey().partition())
-                                    .findFirst();
+                        switch (error) {
+                            case NONE:
+                                initializeStateBackoff.resetAttempts();
+                                InitializeShareGroupStateResponseData.InitializeStateResult result = InitializeShareGroupStateResponse.toResponseInitializeStateResult(
+                                    partitionKey().topicId(),
+                                    List.of(partitionResult)
+                                );
+                                this.result.complete(new InitializeShareGroupStateResponse(
+                                    new InitializeShareGroupStateResponseData().setResults(List.of(result))));
+                                return;
 
-                            if (partitionStateData.isPresent()) {
-                                Errors error = Errors.forCode(partitionStateData.get().errorCode());
-                                String errorMessage = partitionStateData.get().errorMessage();
-                                if (errorMessage == null || errorMessage.isEmpty()) {
-                                    errorMessage = error.message();
+                            // check retriable errors
+                            case COORDINATOR_NOT_AVAILABLE:
+                            case COORDINATOR_LOAD_IN_PROGRESS:
+                            case NOT_COORDINATOR:
+                            case UNKNOWN_TOPIC_OR_PARTITION:
+                                log().debug("Received retriable error in initialize state RPC for key {}: {}", partitionKey(), errorMessage);
+                                if (!initializeStateBackoff.canAttempt()) {
+                                    log().error("Exhausted max retries for initialize state RPC for key {} without success.", partitionKey());
+                                    requestErrorResponse(error, new Exception("Exhausted max retries to complete initialize state RPC without success."));
+                                    return;
                                 }
+                                super.resetCoordinatorNode();
+                                timer.add(new PersisterTimerTask(initializeStateBackoff.backOff(), this));
+                                return;
 
-                                switch (error) {
-                                    case NONE:
-                                        initializeStateBackoff.resetAttempts();
-                                        InitializeShareGroupStateResponseData.InitializeStateResult result = InitializeShareGroupStateResponse.toResponseInitializeStateResult(
-                                            partitionKey().topicId(),
-                                            List.of(partitionStateData.get())
-                                        );
-                                        this.result.complete(new InitializeShareGroupStateResponse(
-                                            new InitializeShareGroupStateResponseData().setResults(List.of(result))));
-                                        return;
-
-                                    // check retriable errors
-                                    case COORDINATOR_NOT_AVAILABLE:
-                                    case COORDINATOR_LOAD_IN_PROGRESS:
-                                    case NOT_COORDINATOR:
-                                    case UNKNOWN_TOPIC_OR_PARTITION:
-                                        log().debug("Received retriable error in initialize state RPC for key {}: {}", partitionKey(), errorMessage);
-                                        if (!initializeStateBackoff.canAttempt()) {
-                                            log().error("Exhausted max retries for initialize state RPC for key {} without success.", partitionKey());
-                                            requestErrorResponse(error, new Exception("Exhausted max retries to complete initialize state RPC without success."));
-                                            return;
-                                        }
-                                        super.resetCoordinatorNode();
-                                        timer.add(new PersisterTimerTask(initializeStateBackoff.backOff(), this));
-                                        return;
-
-                                    default:
-                                        log().error("Unable to perform initialize state RPC for key {}: {}", partitionKey(), errorMessage);
-                                        requestErrorResponse(error, new Exception(errorMessage));
-                                        return;
-                                }
-                            }
+                            default:
+                                log().error("Unable to perform initialize state RPC for key {}: {}", partitionKey(), errorMessage);
+                                requestErrorResponse(error, new Exception(errorMessage));
+                                return;
                         }
                     }
 
