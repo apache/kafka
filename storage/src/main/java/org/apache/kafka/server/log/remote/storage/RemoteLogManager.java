@@ -44,7 +44,6 @@ import org.apache.kafka.common.utils.internals.ChildFirstClassLoader;
 import org.apache.kafka.common.utils.internals.CloseableIterator;
 import org.apache.kafka.common.utils.internals.LogContext;
 import org.apache.kafka.common.utils.internals.ThreadUtils;
-import org.apache.kafka.server.common.CheckpointFile;
 import org.apache.kafka.server.common.OffsetAndEpoch;
 import org.apache.kafka.server.common.StopPartition;
 import org.apache.kafka.server.log.remote.TopicPartitionLog;
@@ -59,6 +58,7 @@ import org.apache.kafka.server.purgatory.DelayedRemoteListOffsets;
 import org.apache.kafka.server.purgatory.TopicPartitionOperationKey;
 import org.apache.kafka.server.quota.QuotaType;
 import org.apache.kafka.server.storage.log.FetchIsolation;
+import org.apache.kafka.storage.internals.checkpoint.CheckpointFile;
 import org.apache.kafka.storage.internals.checkpoint.LeaderEpochCheckpointFile;
 import org.apache.kafka.storage.internals.epoch.LeaderEpochFileCache;
 import org.apache.kafka.storage.internals.log.AsyncOffsetReadFutureHolder;
@@ -2298,9 +2298,7 @@ public class RemoteLogManager implements Closeable, AsyncOffsetReader {
     static ByteBuffer epochEntriesAsByteBuffer(List<EpochEntry> epochEntries) throws IOException {
         ByteArrayOutputStream stream = new ByteArrayOutputStream();
         try (BufferedWriter writer = new BufferedWriter(new OutputStreamWriter(stream, StandardCharsets.UTF_8))) {
-            CheckpointFile.CheckpointWriteBuffer<EpochEntry> writeBuffer =
-                    new CheckpointFile.CheckpointWriteBuffer<>(writer, 0, LeaderEpochCheckpointFile.FORMATTER);
-            writeBuffer.write(epochEntries);
+            CheckpointFile.write(writer, 0, LeaderEpochCheckpointFile.FORMATTER, epochEntries);
             writer.flush();
         }
 
