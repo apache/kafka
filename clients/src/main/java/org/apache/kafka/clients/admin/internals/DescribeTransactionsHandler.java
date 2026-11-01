@@ -120,9 +120,8 @@ public class DescribeTransactionsHandler extends AdminApiHandler.Batched<Coordin
                 continue;
             }
 
-            OptionalLong transactionStartTimeMs = transactionState.transactionStartTimeMs() < 0 ?
-                OptionalLong.empty() :
-                OptionalLong.of(transactionState.transactionStartTimeMs());
+            OptionalLong transactionStartTimeMs = optionalTimestamp(transactionState.transactionStartTimeMs());
+            OptionalLong transactionLastUpdateTimeMs = optionalTimestamp(transactionState.transactionLastUpdateTimeMs());
 
             completed.put(transactionalIdKey, new TransactionDescription(
                 broker.id(),
@@ -131,11 +130,16 @@ public class DescribeTransactionsHandler extends AdminApiHandler.Batched<Coordin
                 transactionState.producerEpoch(),
                 transactionState.transactionTimeoutMs(),
                 transactionStartTimeMs,
+                transactionLastUpdateTimeMs,
                 collectTopicPartitions(transactionState)
             ));
         }
 
         return new ApiResult<>(completed, failed, unmapped);
+    }
+
+    private static OptionalLong optionalTimestamp(long timestampMs) {
+        return timestampMs < 0 ? OptionalLong.empty() : OptionalLong.of(timestampMs);
     }
 
     private Set<TopicPartition> collectTopicPartitions(

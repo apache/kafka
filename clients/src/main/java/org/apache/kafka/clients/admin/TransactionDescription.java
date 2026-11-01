@@ -32,6 +32,7 @@ public class TransactionDescription {
     private final int producerEpoch;
     private final long transactionTimeoutMs;
     private final OptionalLong transactionStartTimeMs;
+    private final OptionalLong transactionLastUpdateTimeMs;
     private final Set<TopicPartition> topicPartitions;
 
     public TransactionDescription(
@@ -43,12 +44,27 @@ public class TransactionDescription {
         OptionalLong transactionStartTimeMs,
         Set<TopicPartition> topicPartitions
     ) {
+        this(coordinatorId, state, producerId, producerEpoch, transactionTimeoutMs,
+            transactionStartTimeMs, OptionalLong.empty(), topicPartitions);
+    }
+
+    public TransactionDescription(
+        int coordinatorId,
+        TransactionState state,
+        long producerId,
+        int producerEpoch,
+        long transactionTimeoutMs,
+        OptionalLong transactionStartTimeMs,
+        OptionalLong transactionLastUpdateTimeMs,
+        Set<TopicPartition> topicPartitions
+    ) {
         this.coordinatorId = coordinatorId;
         this.state = state;
         this.producerId = producerId;
         this.producerEpoch = producerEpoch;
         this.transactionTimeoutMs = transactionTimeoutMs;
         this.transactionStartTimeMs = transactionStartTimeMs;
+        this.transactionLastUpdateTimeMs = transactionLastUpdateTimeMs;
         this.topicPartitions = topicPartitions;
     }
 
@@ -76,6 +92,10 @@ public class TransactionDescription {
         return transactionStartTimeMs;
     }
 
+    public OptionalLong transactionLastUpdateTimeMs() {
+        return transactionLastUpdateTimeMs;
+    }
+
     public Set<TopicPartition> topicPartitions() {
         return topicPartitions;
     }
@@ -91,12 +111,14 @@ public class TransactionDescription {
             transactionTimeoutMs == that.transactionTimeoutMs &&
             state == that.state &&
             Objects.equals(transactionStartTimeMs, that.transactionStartTimeMs) &&
+            Objects.equals(transactionLastUpdateTimeMs, that.transactionLastUpdateTimeMs) &&
             Objects.equals(topicPartitions, that.topicPartitions);
     }
 
     @Override
     public int hashCode() {
-        return Objects.hash(coordinatorId, state, producerId, producerEpoch, transactionTimeoutMs, transactionStartTimeMs, topicPartitions);
+        return Objects.hash(coordinatorId, state, producerId, producerEpoch, transactionTimeoutMs,
+            transactionStartTimeMs, transactionLastUpdateTimeMs, topicPartitions);
     }
 
     @Override
@@ -108,6 +130,7 @@ public class TransactionDescription {
             ", producerEpoch=" + producerEpoch +
             ", transactionTimeoutMs=" + transactionTimeoutMs +
             ", transactionStartTimeMs=" + transactionStartTimeMs +
+            ", transactionLastUpdateTimeMs=" + transactionLastUpdateTimeMs +
             ", topicPartitions=" + topicPartitions +
             ')';
     }

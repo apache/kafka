@@ -29,6 +29,7 @@ import org.apache.kafka.common.utils.internals.LogContext;
 import org.junit.jupiter.api.Test;
 
 import java.util.HashSet;
+import java.util.OptionalLong;
 import java.util.Set;
 import java.util.stream.Collectors;
 
@@ -78,9 +79,9 @@ public class DescribeTransactionsHandlerTest {
             node, keys, response);
 
         assertEquals(keys, result.completedKeys.keySet());
-        assertMatchingTransactionState(node.id(), transactionState1,
+        assertMatchingTransactionState(node.id(), transactionState1, OptionalLong.of(1599152791L),
             result.completedKeys.get(CoordinatorKey.byTransactionalId(transactionalId1)));
-        assertMatchingTransactionState(node.id(), transactionState2,
+        assertMatchingTransactionState(node.id(), transactionState2, OptionalLong.empty(),
             result.completedKeys.get(CoordinatorKey.byTransactionalId(transactionalId2)));
     }
 
@@ -176,6 +177,7 @@ public class DescribeTransactionsHandlerTest {
             .setProducerId(12345L)
             .setProducerEpoch((short) 15)
             .setTransactionStartTimeMs(1599151791L)
+            .setTransactionLastUpdateTimeMs(1599152791L)
             .setTransactionTimeoutMs(10000)
             .setTopics(new DescribeTransactionsResponseData.TopicDataCollection(asList(
                 new DescribeTransactionsResponseData.TopicData()
@@ -202,6 +204,7 @@ public class DescribeTransactionsHandlerTest {
     private void assertMatchingTransactionState(
         int expectedCoordinatorId,
         DescribeTransactionsResponseData.TransactionState expected,
+        OptionalLong expectedLastUpdateTimeMs,
         TransactionDescription actual
     ) {
         assertEquals(expectedCoordinatorId, actual.coordinatorId());
@@ -209,6 +212,7 @@ public class DescribeTransactionsHandlerTest {
         assertEquals(expected.producerEpoch(), actual.producerEpoch());
         assertEquals(expected.transactionTimeoutMs(), actual.transactionTimeoutMs());
         assertEquals(expected.transactionStartTimeMs(), actual.transactionStartTimeMs().orElse(-1));
+        assertEquals(expectedLastUpdateTimeMs, actual.transactionLastUpdateTimeMs());
         assertEquals(collectTransactionPartitions(expected), actual.topicPartitions());
     }
 
