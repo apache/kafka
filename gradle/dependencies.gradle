@@ -133,7 +133,9 @@ versions += [
   zstd: "1.5.7-17",
   junitPlatform: "1.14.4",
   hdrHistogram: "2.2.2",
-  hash4j: "0.22.0"
+  hash4j: "0.22.0",
+  hamcrest: "2.2",
+  jqwik: "1.9.2"
 ]
 
 libs += [
@@ -236,5 +238,7 @@ libs += [
   zstd: "com.github.luben:zstd-jni:$versions.zstd",
   httpclient: "org.apache.httpcomponents:httpclient:$versions.httpclient",
   hdrHistogram: "org.hdrhistogram:HdrHistogram:$versions.hdrHistogram",
+  hamcrest: "org.hamcrest:hamcrest:$versions.hamcrest",
   hash4j: "com.dynatrace.hash4j:hash4j:$versions.hash4j",
+  jqwik: "net.jqwik:jqwik:$versions.jqwik",
 ]

@@ -336,6 +336,8 @@
     <allow pkg="org.apache.kafka.tools" />
     <allow pkg="org.apache.kafka.image" />
     <allow pkg="org.apache.kafka.security" />
+    <allow pkg="net.jqwik" />
+    <allow pkg="org.hamcrest" />
 
     <subpackage name="consumer">
       <allow pkg="org.apache.kafka.coordinator.common.runtime" />
