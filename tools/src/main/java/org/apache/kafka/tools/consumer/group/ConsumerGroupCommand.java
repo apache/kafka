@@ -80,6 +80,8 @@ import joptsimple.OptionSpec;
 public class ConsumerGroupCommand {
 
     static final String MISSING_COLUMN_VALUE = "-";
+    // Keep each describe request bounded so --all-groups remains usable on large clusters.
+    static final int DESCRIBE_GROUPS_BATCH_SIZE = 50;
 
     public static void main(String[] args) {
         ConsumerGroupCommandOptions opts = ConsumerGroupCommandOptions.fromArgs(args);
@@ -806,13 +808,17 @@ public class ConsumerGroupCommand {
 
         Map<String, ConsumerGroupDescription> describeConsumerGroups(Collection<String> groupIds) throws Exception {
             Map<String, ConsumerGroupDescription> res = new HashMap<>();
-            Map<String, KafkaFuture<ConsumerGroupDescription>> stringKafkaFutureMap = adminClient.describeConsumerGroups(
-                groupIds,
-                withTimeoutMs(new DescribeConsumerGroupsOptions())
-            ).describedGroups();
+            List<String> groupIdList = new ArrayList<>(groupIds);
+            for (int batchStart = 0; batchStart < groupIdList.size(); batchStart += DESCRIBE_GROUPS_BATCH_SIZE) {
+                int batchEnd = Math.min(batchStart + DESCRIBE_GROUPS_BATCH_SIZE, groupIdList.size());
+                Map<String, KafkaFuture<ConsumerGroupDescription>> descriptions = adminClient.describeConsumerGroups(
+                    groupIdList.subList(batchStart, batchEnd),
+                    withTimeoutMs(new DescribeConsumerGroupsOptions())
+                ).describedGroups();
 
-            for (Entry<String, KafkaFuture<ConsumerGroupDescription>> e : stringKafkaFutureMap.entrySet()) {
-                res.put(e.getKey(), e.getValue().get());
+                for (Entry<String, KafkaFuture<ConsumerGroupDescription>> description : descriptions.entrySet()) {
+                    res.put(description.getKey(), description.getValue().get());
+                }
             }
             return res;
         }
