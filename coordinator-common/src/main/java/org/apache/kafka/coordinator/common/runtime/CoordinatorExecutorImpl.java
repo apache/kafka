@@ -23,7 +23,9 @@ import org.apache.kafka.common.utils.internals.LogContext;
 
 import org.slf4j.Logger;
 
+import java.util.HashSet;
 import java.util.Map;
+import java.util.Set;
 import java.util.concurrent.ConcurrentHashMap;
 import java.util.concurrent.ExecutorService;
 import java.util.concurrent.RejectedExecutionException;
@@ -176,6 +178,14 @@ public class CoordinatorExecutorImpl<U> implements CoordinatorExecutor<U> {
     private final CoordinatorShardScheduler<U> scheduler;
     private final Map<String, Task<?>> tasks = new ConcurrentHashMap<>();
 
+    /**
+     * The keys of the tasks scheduled by the operations in the current batch. Their submission to
+     * the executor service is delayed until the batch is written, by {@link #onBatchWritten()},
+     * and they are cancelled without being submitted if the batch is reverted, by
+     * {@link #onBatchReverted()}. Cancelling a task removes it from here too.
+     */
+    private final Set<String> currentBatchTasks = new HashSet<>();
+
     public CoordinatorExecutorImpl(
         LogContext logContext,
         ExecutorService executor,
@@ -208,8 +218,8 @@ public class CoordinatorExecutorImpl<U> implements CoordinatorExecutor<U> {
         // Put the task if the key is free. Otherwise, reject it.
         if (tasks.putIfAbsent(key, task) != null) return false;
 
-        // Submit the task.
-        executor.submit(task::run);
+        // Submit the task once the current batch is written.
+        currentBatchTasks.add(key);
 
         return true;
     }
@@ -222,7 +232,10 @@ public class CoordinatorExecutorImpl<U> implements CoordinatorExecutor<U> {
     @Override
     public void cancel(String key) {
         var task = tasks.remove(key);
-        if (task != null) task.cancel();
+        if (task != null) {
+            currentBatchTasks.remove(key);
+            task.cancel();
+        }
     }
 
     /**
@@ -230,6 +243,39 @@ public class CoordinatorExecutorImpl<U> implements CoordinatorExecutor<U> {
      */
     public void cancelAll() {
         tasks.keySet().forEach(this::cancel);
+    }
+
+    /**
+     * Submits the tasks scheduled by the operations in the current batch, now that the batch
+     * has been written.
+     */
+    public void onBatchWritten() {
+        for (String key : currentBatchTasks) {
+            var task = tasks.get(key);
+            if (task == null) continue;
+            try {
+                executor.submit(task::run);
+            } catch (RejectedExecutionException ex) {
+                // The executor service only rejects tasks once it is shut down, which means that
+                // the coordinator is shutting down too, so there is no need to complete the task's
+                // operation.
+                log.debug("The task {} was not submitted because the executor service is shutting down.", key);
+                if (tasks.remove(key, task)) task.cancel();
+            }
+        }
+        currentBatchTasks.clear();
+    }
+
+    /**
+     * Cancels the unsubmitted tasks scheduled by the operations in the current batch, now that
+     * the batch has been reverted.
+     */
+    public void onBatchReverted() {
+        for (String key : currentBatchTasks) {
+            var task = tasks.remove(key);
+            if (task != null) task.cancel();
+        }
+        currentBatchTasks.clear();
     }
 
     /**
