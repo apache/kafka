@@ -163,7 +163,7 @@ public class ClientUtils {
                 final String msg = String.format("Error while attempting to read end offsets for partition '%s'", partition.toString());
                 throw new StreamsException(msg, cause);
             } catch (final InterruptedException e) {
-                Thread.interrupted();
+                Thread.currentThread().interrupt();
                 final String msg = String.format("Interrupted while attempting to read end offsets for partition '%s'", partition.toString());
                 throw new StreamsException(msg, e);
             }
