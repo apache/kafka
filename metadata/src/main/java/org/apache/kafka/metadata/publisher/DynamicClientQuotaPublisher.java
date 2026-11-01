@@ -115,28 +115,29 @@ public class DynamicClientQuotaPublisher implements MetadataPublisher {
     }
 
     private void handleIpQuota(ClientQuotaEntity entity, ClientQuotaDelta quotaDelta) {
-        quotaDelta.changes().forEach((key, value) -> {
-            // The connection quota only understands the connection rate limit.
-            if (!key.equals(QuotaConfig.IP_CONNECTION_RATE_OVERRIDE_CONFIG)) {
-                log.warn("Ignoring unexpected quota key {} for entity {}", key, entity);
-                return;
-            }
+        // The connection quota only understands the connection rate limit.
+        OptionalDouble value = quotaDelta.changes().get(QuotaConfig.IP_CONNECTION_RATE_OVERRIDE_CONFIG);
+        quotaDelta.changes().keySet().stream()
+            .filter(key -> !key.equals(QuotaConfig.IP_CONNECTION_RATE_OVERRIDE_CONFIG))
+            .forEach(key -> log.warn("Ignoring unexpected quota key {} for entity {}", key, entity));
+        if (value == null) {
+            return;
+        }
 
-            // An empty Optional represents the default IP entity.
-            Optional<InetAddress> inetAddress = Optional.ofNullable(entity.entries().get(IP)).map(ip -> {
-                try {
-                    return InetAddress.getByName(ip);
-                } catch (UnknownHostException e) {
-                    throw new IllegalArgumentException("Unable to resolve address " + ip, e);
-                }
-            });
-
+        // An empty Optional represents the default IP entity.
+        Optional<InetAddress> inetAddress = Optional.ofNullable(entity.entries().get(IP)).map(ip -> {
             try {
-                ipQuotaUpdater.updateQuota(inetAddress, value.isPresent() ? OptionalInt.of((int) value.getAsDouble()) : OptionalInt.empty());
-            } catch (Throwable t) {
-                log.error("Failed to update IP quota {}", entity, t);
+                return InetAddress.getByName(ip);
+            } catch (UnknownHostException e) {
+                throw new IllegalArgumentException("Unable to resolve address " + ip, e);
             }
         });
+
+        try {
+            ipQuotaUpdater.updateQuota(inetAddress, value.isPresent() ? OptionalInt.of((int) value.getAsDouble()) : OptionalInt.empty());
+        } catch (Throwable t) {
+            log.error("Failed to update IP quota {}", entity, t);
+        }
     }
 
     private void handleUserClientQuota(ClientQuotaEntity entity, ClientQuotaDelta quotaDelta) {
