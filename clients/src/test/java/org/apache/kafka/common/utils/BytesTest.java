@@ -18,6 +18,8 @@ package org.apache.kafka.common.utils;
 
 import org.junit.jupiter.api.Test;
 
+import java.nio.charset.StandardCharsets;
+
 import static org.junit.jupiter.api.Assertions.assertArrayEquals;
 import static org.junit.jupiter.api.Assertions.assertEquals;
 import static org.junit.jupiter.api.Assertions.assertNotEquals;
@@ -111,5 +113,17 @@ public class BytesTest {
         byte[] raw = new byte[]{0x0A, 0x0B, 0x0C};
         Bytes bytes = Bytes.wrap(raw);
         assertArrayEquals(raw, bytes.get());
+    }
+
+    @Test
+    public void toStringEscapesNonPrintableCharacters() {
+        assertEquals("", Bytes.wrap(new byte[]{}).toString());
+        assertEquals("abc", Bytes.wrap("abc".getBytes(StandardCharsets.UTF_8)).toString());
+        // backslash is printable but intentionally hex-escaped
+        assertEquals("\\x5C", Bytes.wrap(new byte[]{'\\'}).toString());
+        // control chars and high bytes escape to \xHH (uppercase hex)
+        assertEquals("\\x00\\x05\\xFF", Bytes.wrap(new byte[]{0x00, 0x05, (byte) 0xFF}).toString());
+        // mix of printable and escaped
+        assertEquals("A\\x0AB", Bytes.wrap(new byte[]{'A', '\n', 'B'}).toString());
     }
 }
