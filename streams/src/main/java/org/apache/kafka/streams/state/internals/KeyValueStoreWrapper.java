@@ -18,7 +18,6 @@ package org.apache.kafka.streams.state.internals;
 
 import org.apache.kafka.common.TopicPartition;
 import org.apache.kafka.common.header.Headers;
-import org.apache.kafka.common.header.internals.RecordHeaders;
 import org.apache.kafka.streams.errors.InvalidStateStoreException;
 import org.apache.kafka.streams.processor.StateStore;
 import org.apache.kafka.streams.processor.StateStoreContext;
@@ -32,6 +31,7 @@ import org.apache.kafka.streams.state.TimestampedKeyValueStore;
 import org.apache.kafka.streams.state.TimestampedKeyValueStoreWithHeaders;
 import org.apache.kafka.streams.state.ValueTimestampHeaders;
 import org.apache.kafka.streams.state.VersionedKeyValueStore;
+import org.apache.kafka.streams.state.VersionedKeyValueStoreWithHeaders;
 import org.apache.kafka.streams.state.VersionedRecord;
 
 import java.util.Map;
@@ -51,6 +51,7 @@ public class KeyValueStoreWrapper<K, V> implements StateStore {
 
     private TimestampedKeyValueStoreWithHeaders<K, V> headersStore = null;
     private VersionedKeyValueStore<K, V> versionedStore = null;
+    private VersionedKeyValueStoreWithHeaders<K, V> versionedStoreWithHeaders = null;
 
     // same as either timestampedStore or versionedStore above. kept merely as a convenience
     // to simplify implementation for methods which do not depend on store type.
@@ -79,6 +80,9 @@ public class KeyValueStoreWrapper<K, V> implements StateStore {
         try {
             versionedStore = context.getStateStore(storeName);
             store = versionedStore;
+            if (versionedStore instanceof VersionedKeyValueStoreWithHeaders) {
+                versionedStoreWithHeaders = (VersionedKeyValueStoreWithHeaders<K, V>) versionedStore;
+            }
         } catch (final ClassCastException e) {
             store = context.getStateStore(storeName);
             final String storeType = store == null ? "null" : store.getClass().getName();
@@ -93,9 +97,13 @@ public class KeyValueStoreWrapper<K, V> implements StateStore {
         }
         if (versionedStore != null) {
             final VersionedRecord<V> versionedRecord = versionedStore.get(key);
-            return versionedRecord == null
-                ? null
-                : ValueTimestampHeaders.make(versionedRecord.value(), versionedRecord.timestamp(), new RecordHeaders());
+            if (versionedRecord == null) {
+                return null;
+            }
+            return ValueTimestampHeaders.make(
+                versionedRecord.value(),
+                versionedRecord.timestamp(),
+                versionedRecord.headers());
         }
         throw new IllegalStateException("KeyValueStoreWrapper must be initialized with either headers or versioned store");
     }
@@ -105,7 +113,13 @@ public class KeyValueStoreWrapper<K, V> implements StateStore {
             throw new UnsupportedOperationException("get(key, timestamp) is only supported for versioned stores");
         }
         final VersionedRecord<V> versionedRecord = versionedStore.get(key, asOfTimestamp);
-        return versionedRecord == null ? null : ValueTimestampHeaders.make(versionedRecord.value(), versionedRecord.timestamp(), new RecordHeaders());
+        if (versionedRecord == null) {
+            return null;
+        }
+        return ValueTimestampHeaders.make(
+            versionedRecord.value(),
+            versionedRecord.timestamp(),
+            versionedRecord.headers());
     }
 
     /**
@@ -119,6 +133,9 @@ public class KeyValueStoreWrapper<K, V> implements StateStore {
             return PUT_RETURN_CODE_IS_LATEST;
         }
         if (versionedStore != null) {
+            if (versionedStoreWithHeaders != null) {
+                return versionedStoreWithHeaders.put(key, value, timestamp, headers);
+            }
             return versionedStore.put(key, value, timestamp);
         }
         throw new IllegalStateException("KeyValueStoreWrapper must be initialized with either headers or versioned store");
