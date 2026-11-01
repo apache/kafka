@@ -32,8 +32,6 @@ import org.apache.kafka.server.common.ApiMessageAndVersion;
 import org.apache.kafka.snapshot.RecordsSnapshotReader;
 import org.apache.kafka.test.TestUtils;
 
-import org.junit.jupiter.api.Timeout;
-
 import java.util.HashMap;
 import java.util.Map;
 import java.util.stream.Collectors;
@@ -44,7 +42,6 @@ import static org.junit.jupiter.api.Assertions.assertEquals;
 import static org.junit.jupiter.api.Assertions.assertNotEquals;
 import static org.junit.jupiter.api.Assertions.assertTrue;
 
-@Timeout(120)
 @ClusterTestDefaults(
         types = Type.KRAFT,
         brokers = RaftClusterSnapshotTest.BROKER_COUNT,

@@ -28,8 +28,6 @@ import org.apache.kafka.common.test.api.Type;
 import org.apache.kafka.test.NoRetryException;
 import org.apache.kafka.test.TestUtils;
 
-import org.junit.jupiter.api.Timeout;
-
 import java.time.Duration;
 import java.util.ArrayList;
 import java.util.Collection;
@@ -48,7 +46,6 @@ import static org.junit.jupiter.api.Assertions.assertTrue;
 /**
  * Integration tests for client-side and server-side consumer assignors.
  */
-@Timeout(600)
 @ClusterTestDefaults(
     types = {Type.KRAFT},
     brokers = 3,
