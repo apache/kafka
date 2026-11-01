@@ -77,6 +77,8 @@ public class MirrorCheckpointConfig extends MirrorConnectorConfig {
     public static final String GROUP_FILTER_CLASS = "group.filter.class";
     private static final String GROUP_FILTER_CLASS_DOC = "GroupFilter to use. Selects consumer groups to replicate.";
     public static final Class<?> GROUP_FILTER_CLASS_DEFAULT = DefaultGroupFilter.class;
+    public static final String GROUP_MIRRORING_POLICY_CLASS = MirrorClientConfig.GROUP_MIRRORING_POLICY_CLASS;
+    public static final Class<?> GROUP_MIRRORING_POLICY_CLASS_DEFAULT = MirrorClientConfig.GROUP_MIRRORING_POLICY_CLASS_DEFAULT;
     public static final String OFFSET_SYNCS_SOURCE_CONSUMER_ROLE = OFFSET_SYNCS_CLIENT_ROLE_PREFIX + "source-consumer";
     public static final String OFFSET_SYNCS_TARGET_CONSUMER_ROLE = OFFSET_SYNCS_CLIENT_ROLE_PREFIX + "target-consumer";
     public static final String OFFSET_SYNCS_SOURCE_ADMIN_ROLE = OFFSET_SYNCS_CLIENT_ROLE_PREFIX + "source-admin";
@@ -115,6 +117,10 @@ public class MirrorCheckpointConfig extends MirrorConnectorConfig {
 
     GroupFilter groupFilter() {
         return getConfiguredInstance(GROUP_FILTER_CLASS, GroupFilter.class);
+    }
+
+    GroupMirroringPolicy groupMirroringPolicy() {
+        return getConfiguredInstance(GROUP_MIRRORING_POLICY_CLASS, GroupMirroringPolicy.class);
     }
 
     TopicFilter topicFilter() {
@@ -220,6 +226,12 @@ public class MirrorCheckpointConfig extends MirrorConnectorConfig {
                         GROUP_FILTER_CLASS_DEFAULT,
                         ConfigDef.Importance.LOW,
                         GROUP_FILTER_CLASS_DOC)
+                .define(
+                        GROUP_MIRRORING_POLICY_CLASS,
+                        ConfigDef.Type.CLASS,
+                        GROUP_MIRRORING_POLICY_CLASS_DEFAULT,
+                        ConfigDef.Importance.LOW,
+                        "Class which defines the consumer group naming convention on the target cluster.")
                 .define(
                         REFRESH_GROUPS_ENABLED,
                         ConfigDef.Type.BOOLEAN,
