@@ -109,6 +109,7 @@ public class ReconfigurableQuorumIntegrationTest {
     }
 
     @Test
+    @SuppressWarnings("removal")
     public void testRemoveController() throws Exception {
         final var nodes = new TestKitNodes.Builder().
             setNumBrokerNodes(1).
@@ -144,6 +145,7 @@ public class ReconfigurableQuorumIntegrationTest {
     }
 
     @Test
+    @SuppressWarnings("removal")
     public void testRemoveAndAddSameController() throws Exception {
         final var nodes = new TestKitNodes.Builder().
             setNumBrokerNodes(1).
@@ -253,6 +255,7 @@ public class ReconfigurableQuorumIntegrationTest {
     }
 
     @Test
+    @SuppressWarnings("removal")
     public void testRemoveAndAddVoterWithValidClusterId() throws Exception {
         final var nodes = new TestKitNodes.Builder()
             .setClusterId("test-cluster")
@@ -303,6 +306,7 @@ public class ReconfigurableQuorumIntegrationTest {
     }
 
     @Test
+    @SuppressWarnings("removal")
     public void testRemoveAndAddVoterWithInconsistentClusterId() throws Exception {
         final var nodes = new TestKitNodes.Builder()
             .setClusterId("test-cluster")
