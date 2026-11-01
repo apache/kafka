@@ -22,17 +22,24 @@ import org.apache.kafka.clients.admin.internals.CoordinatorKey;
 import org.apache.kafka.clients.consumer.OffsetAndMetadata;
 import org.apache.kafka.common.KafkaException;
 import org.apache.kafka.common.KafkaFuture;
+import org.apache.kafka.common.Node;
 import org.apache.kafka.common.TopicPartition;
 import org.apache.kafka.common.Uuid;
 import org.apache.kafka.common.config.ConfigResource;
+import org.apache.kafka.common.errors.LeaderNotAvailableException;
+import org.apache.kafka.common.errors.UnknownTopicOrPartitionException;
 import org.apache.kafka.common.internals.KafkaFutureImpl;
+import org.apache.kafka.test.TestCondition;
+import org.apache.kafka.test.TestUtils;
 
 import java.util.Arrays;
 import java.util.Collection;
 import java.util.Collections;
+import java.util.List;
 import java.util.Map;
 import java.util.Optional;
 import java.util.Set;
+import java.util.concurrent.ExecutionException;
 import java.util.stream.Collectors;
 
 public class AdminClientTestUtils {
@@ -216,5 +223,63 @@ public class AdminClientTestUtils {
      */
     public static Admin create(Map<String, Object> conf, HostResolver hostResolver) {
         return KafkaAdminClient.createInternal(new AdminClientConfig(conf, true), null, hostResolver);
+    }
+
+    /**
+     * Fetch the partition leader or wait up to {@link TestUtils#DEFAULT_MAX_WAIT_MS} until one is elected
+     * using the provided admin client.
+     */
+    public static int fetchOrWaitForLeader(Admin admin, TopicPartition topicPartition) throws InterruptedException {
+        return fetchOrWaitForLeader(admin, topicPartition.topic(), topicPartition.partition(), TestUtils.DEFAULT_MAX_WAIT_MS);
+    }
+
+    /**
+     * Fetch the partition leader or wait until one is elected using the provided admin client.
+     */
+    public static int fetchOrWaitForLeader(Admin admin,
+                                           String topic,
+                                           int partitionNumber,
+                                           long timeoutMs) throws InterruptedException {
+
+        var condition = new TestCondition() {
+            int leader = Node.noNode().id();
+            @Override
+            public boolean conditionMet() {
+                checkLeader();
+                return this.leader != Node.noNode().id();
+            }
+
+            public void checkLeader() {
+                try {
+                    TopicDescription topicDescription = admin.describeTopics(List.of(topic))
+                            .allTopicNames().get().get(topic);
+
+                    Optional<Integer> leader = topicDescription.partitions().stream()
+                            .filter(partitionInfo -> partitionInfo.partition() == partitionNumber)
+                            .findFirst()
+                            .flatMap(partitionInfo -> Optional.ofNullable(partitionInfo.leader()))
+                            .map(node -> {
+                                int leaderId = node.id();
+                                return leaderId == Node.noNode().id() ? null : leaderId;
+                            });
+
+                    leader.ifPresent(integer -> this.leader = integer);
+                } catch (ExecutionException e) {
+                    Throwable cause = e.getCause();
+                    boolean isTransient = cause instanceof UnknownTopicOrPartitionException
+                            || cause instanceof LeaderNotAvailableException;
+                    if (!isTransient) {
+                        throw new RuntimeException(e);
+                    }
+                } catch (InterruptedException e) {
+                    Thread.currentThread().interrupt();
+                    throw new RuntimeException(e);
+                }
+            }
+        };
+
+        TestUtils.waitForCondition(condition, timeoutMs, String.format("Timing out after %d ms since a leader was not elected for partition %s-%d", timeoutMs, topic, partitionNumber));
+
+        return condition.leader;
     }
 }

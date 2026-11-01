@@ -78,7 +78,7 @@ public class DescribeProducersWithBrokerIdTest {
     
     private int getFollowerBrokerId(Admin admin) throws Exception {
         var replicaBrokerIds = getReplicaBrokerIds(admin);
-        var leaderBrokerId = clusterInstance.getLeaderBrokerId(TOPIC_PARTITION);
+        var leaderBrokerId = AdminClientTestUtils.fetchOrWaitForLeader(admin, TOPIC_PARTITION);
         return replicaBrokerIds.stream()
             .filter(id -> id != leaderBrokerId)
             .findFirst()
@@ -93,7 +93,7 @@ public class DescribeProducersWithBrokerIdTest {
             
             var stateWithExplicitLeader = admin.describeProducers(
                 List.of(TOPIC_PARTITION), 
-                new DescribeProducersOptions().brokerId(clusterInstance.getLeaderBrokerId(TOPIC_PARTITION))
+                new DescribeProducersOptions().brokerId(AdminClientTestUtils.fetchOrWaitForLeader(admin, TOPIC_PARTITION))
             ).partitionResult(TOPIC_PARTITION).get();
             
             var stateWithDefaultRouting = admin.describeProducers(

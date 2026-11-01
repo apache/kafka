@@ -19,6 +19,7 @@ package org.apache.kafka.server.requests;
 import kafka.server.KafkaBroker;
 
 import org.apache.kafka.clients.admin.Admin;
+import org.apache.kafka.clients.admin.AdminClientTestUtils;
 import org.apache.kafka.clients.admin.AlterConfigOp;
 import org.apache.kafka.clients.admin.ConfigEntry;
 import org.apache.kafka.clients.admin.TopicDescription;
@@ -115,7 +116,7 @@ public class ProduceRequestTest {
     @ClusterTest
     public void testProduceToNonReplica() throws Exception {
         cluster.createTopic(TOPIC, 1, (short) 1);
-        int leaderId = cluster.getLeaderBrokerId(new TopicPartition(TOPIC, 0));
+        int leaderId = getLeaderId();
         Uuid topicId = getTopicId();
 
         int nonReplicaId = cluster.brokers().keySet().stream()
@@ -200,7 +201,7 @@ public class ProduceRequestTest {
     public void testZSTDProduceRequest() throws Exception {
         cluster.createTopic(TOPIC, 1, (short) 1,
             Map.of(TopicConfig.COMPRESSION_TYPE_CONFIG, "zstd"));
-        int leaderId = cluster.getLeaderBrokerId(new TopicPartition(TOPIC, 0));
+        int leaderId = getLeaderId();
 
         MemoryRecords memoryRecords = MemoryRecords.withRecords(Compression.zstd().build(),
             new SimpleRecord(System.currentTimeMillis(), "key".getBytes(), "value".getBytes()));
@@ -237,7 +238,7 @@ public class ProduceRequestTest {
         // creation was completing, and then being retried), and accepting the non-zero first sequence
         // would permanently prevent the retried first request from being appended to the log.
         cluster.createTopic(TOPIC, 1, (short) 1);
-        int leaderId = cluster.getLeaderBrokerId(new TopicPartition(TOPIC, 0));
+        int leaderId = getLeaderId();
 
         long producerId = 1000L;
         short producerEpoch = 0;
@@ -283,7 +284,7 @@ public class ProduceRequestTest {
     public void testProduceRejectsCompressedRecordExceedingMaxDecompressedMessageBytes() throws Exception {
         cluster.createTopic(TOPIC, 1, (short) 1,
             Map.of(TopicConfig.MAX_DECOMPRESSED_MESSAGE_BYTES_CONFIG, SMALL_MAX_DECOMPRESSED_MESSAGE_BYTES));
-        int leaderId = cluster.getLeaderBrokerId(new TopicPartition(TOPIC, 0));
+        int leaderId = getLeaderId();
         Uuid topicId = getTopicId();
 
         var rejected = onlyPartitionResponse(sendProduceRequest(leaderId,
@@ -310,7 +311,7 @@ public class ProduceRequestTest {
     @ClusterTest
     public void testMaxDecompressedMessageBytesIsDynamicallyReconfigurable() throws Exception {
         cluster.createTopic(TOPIC, 1, (short) 1);
-        int leaderId = cluster.getLeaderBrokerId(new TopicPartition(TOPIC, 0));
+        int leaderId = getLeaderId();
         Uuid topicId = getTopicId();
 
         var before = onlyPartitionResponse(sendProduceRequest(leaderId,
@@ -344,7 +345,7 @@ public class ProduceRequestTest {
     })
     public void testBrokerDefaultMaxDecompressedMessageBytesAppliesToTopicWithoutOverride() throws Exception {
         cluster.createTopic(TOPIC, 1, (short) 1);
-        int leaderId = cluster.getLeaderBrokerId(new TopicPartition(TOPIC, 0));
+        int leaderId = getLeaderId();
         Uuid topicId = getTopicId();
 
         var rejected = onlyPartitionResponse(sendProduceRequest(leaderId,
@@ -361,7 +362,7 @@ public class ProduceRequestTest {
     @ClusterTest
     public void testBrokerDefaultMaxDecompressedMessageBytesIsDynamicallyReconfigurable() throws Exception {
         cluster.createTopic(TOPIC, 1, (short) 1);
-        int leaderId = cluster.getLeaderBrokerId(new TopicPartition(TOPIC, 0));
+        int leaderId = getLeaderId();
         Uuid topicId = getTopicId();
 
         var before = onlyPartitionResponse(sendProduceRequest(leaderId,
@@ -452,7 +453,7 @@ public class ProduceRequestTest {
 
     private void doTestProduceWithInvalidTimestamp(String timestampConfig, long recordTimestamp) throws Exception {
         cluster.createTopic(TOPIC, 1, (short) 1, Map.of(timestampConfig, "1000"));
-        int leaderId = cluster.getLeaderBrokerId(new TopicPartition(TOPIC, 0));
+        int leaderId = getLeaderId();
         Uuid topicId = getTopicId();
 
         ByteBuffer buf = ByteBuffer.allocate(512);
@@ -490,6 +491,12 @@ public class ProduceRequestTest {
         }
         assertEquals("One or more records have been rejected due to invalid timestamp",
             partitionResponse.errorMessage());
+    }
+
+    private int getLeaderId() throws InterruptedException {
+        try (Admin admin = cluster.admin()) {
+            return AdminClientTestUtils.fetchOrWaitForLeader(admin, new TopicPartition(TOPIC, 0));
+        }
     }
 
     private Uuid getTopicId() throws ExecutionException, InterruptedException {

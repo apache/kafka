@@ -15,12 +15,8 @@
  * limitations under the License.
  */
 
-package org.apache.kafka.common.test;
+package org.apache.kafka.clients.admin;
 
-import org.apache.kafka.clients.admin.Admin;
-import org.apache.kafka.clients.admin.AdminClientTestUtils;
-import org.apache.kafka.clients.admin.DescribeTopicsResult;
-import org.apache.kafka.clients.admin.TopicDescription;
 import org.apache.kafka.common.Node;
 import org.apache.kafka.common.TopicPartitionInfo;
 
@@ -37,7 +33,7 @@ import static org.mockito.Mockito.mock;
 import static org.mockito.Mockito.when;
 
 @SuppressWarnings("resource")
-public class AdminUtilsTest {
+public class AdminClientTestUtilsTest {
 
     @Test
     void testFetchOrWaitForLeader() throws Exception {
@@ -64,7 +60,7 @@ public class AdminUtilsTest {
             }
         });
 
-        int result = AdminUtils.fetchOrWaitForLeader(admin, topic, partition, 1000);
+        int result = AdminClientTestUtils.fetchOrWaitForLeader(admin, topic, partition, 1000);
 
         assertEquals(1, result);
     }
@@ -81,7 +77,7 @@ public class AdminUtilsTest {
         when(admin.describeTopics(anyCollection())).thenReturn(describeResult);
 
         assertThrows(AssertionError.class, () ->
-                        AdminUtils.fetchOrWaitForLeader(admin, topic, partition, 1),
+                        AdminClientTestUtils.fetchOrWaitForLeader(admin, topic, partition, 1),
                 "Timing out after 1 ms since a leader was not elected for partition test-topic-0");
     }
 }
