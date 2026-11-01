@@ -50,7 +50,7 @@ public class TargetAssignmentBuilderTest {
         CoordinatorMetadataImage metadataImage = new MetadataImageBuilder()
             .buildCoordinatorMetadataImage();
 
-        GroupSpec groupSpec = new GroupSpecImpl(
+        GroupSpec groupSpec = new ConsumerGroupSpecImpl(
             metadataImage,
             Map.of(),
             HOMOGENEOUS
@@ -92,7 +92,7 @@ public class TargetAssignmentBuilderTest {
             .addTopic(barTopicId, "bar", 6)
             .buildCoordinatorMetadataImage();
 
-        GroupSpec groupSpec = new GroupSpecImpl(
+        GroupSpec groupSpec = new ConsumerGroupSpecImpl(
             metadataImage,
             Map.of(
                 "member-1", new MemberSubscriptionAndAssignmentImpl(

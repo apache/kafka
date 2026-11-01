@@ -23,7 +23,7 @@ import org.apache.kafka.coordinator.group.api.assignor.GroupAssignment;
 import org.apache.kafka.coordinator.group.api.assignor.GroupSpec;
 import org.apache.kafka.coordinator.group.api.assignor.PartitionAssignorException;
 import org.apache.kafka.coordinator.group.modern.Assignment;
-import org.apache.kafka.coordinator.group.modern.GroupSpecImpl;
+import org.apache.kafka.coordinator.group.modern.ConsumerGroupSpecImpl;
 import org.apache.kafka.coordinator.group.modern.MemberSubscriptionAndAssignmentImpl;
 import org.apache.kafka.coordinator.group.modern.SubscribedTopicDescriberImpl;
 
@@ -93,7 +93,7 @@ public class UniformHeterogeneousAssignmentBuilderTest {
             Assignment.EMPTY
         ));
 
-        GroupSpec groupSpec = new GroupSpecImpl(
+        GroupSpec groupSpec = new ConsumerGroupSpecImpl(
             metadataImage,
             members,
             HETEROGENEOUS
@@ -130,7 +130,7 @@ public class UniformHeterogeneousAssignmentBuilderTest {
             Assignment.EMPTY
         ));
 
-        GroupSpec groupSpec = new GroupSpecImpl(
+        GroupSpec groupSpec = new ConsumerGroupSpecImpl(
             metadataImage,
             members,
             HETEROGENEOUS
@@ -164,7 +164,7 @@ public class UniformHeterogeneousAssignmentBuilderTest {
             Assignment.EMPTY
         ));
 
-        GroupSpec groupSpec = new GroupSpecImpl(
+        GroupSpec groupSpec = new ConsumerGroupSpecImpl(
             metadataImage,
             members,
             HETEROGENEOUS
@@ -220,7 +220,7 @@ public class UniformHeterogeneousAssignmentBuilderTest {
             Assignment.EMPTY
         ));
 
-        GroupSpec groupSpec = new GroupSpecImpl(
+        GroupSpec groupSpec = new ConsumerGroupSpecImpl(
             metadataImage,
             members,
             HETEROGENEOUS
@@ -289,7 +289,7 @@ public class UniformHeterogeneousAssignmentBuilderTest {
             ))
         ));
 
-        GroupSpec groupSpec = new GroupSpecImpl(
+        GroupSpec groupSpec = new ConsumerGroupSpecImpl(
             metadataImage,
             members,
             HETEROGENEOUS
@@ -353,7 +353,7 @@ public class UniformHeterogeneousAssignmentBuilderTest {
             ))
         ));
 
-        GroupSpec groupSpec = new GroupSpecImpl(
+        GroupSpec groupSpec = new ConsumerGroupSpecImpl(
             metadataImage,
             members,
             HETEROGENEOUS
@@ -418,7 +418,7 @@ public class UniformHeterogeneousAssignmentBuilderTest {
             Assignment.EMPTY
         ));
 
-        GroupSpec groupSpec = new GroupSpecImpl(
+        GroupSpec groupSpec = new ConsumerGroupSpecImpl(
             metadataImage,
             members,
             HETEROGENEOUS
@@ -478,7 +478,7 @@ public class UniformHeterogeneousAssignmentBuilderTest {
 
         // Member C was removed
 
-        GroupSpec groupSpec = new GroupSpecImpl(
+        GroupSpec groupSpec = new ConsumerGroupSpecImpl(
             metadataImage,
             members,
             HETEROGENEOUS
@@ -534,7 +534,7 @@ public class UniformHeterogeneousAssignmentBuilderTest {
             ))
         ));
 
-        GroupSpec groupSpec = new GroupSpecImpl(
+        GroupSpec groupSpec = new ConsumerGroupSpecImpl(
             metadataImage,
             members,
             HETEROGENEOUS
@@ -593,7 +593,7 @@ public class UniformHeterogeneousAssignmentBuilderTest {
             Assignment.EMPTY
         ));
 
-        GroupSpec groupSpec = new GroupSpecImpl(
+        GroupSpec groupSpec = new ConsumerGroupSpecImpl(
             metadataImage,
             members,
             HETEROGENEOUS
@@ -642,7 +642,7 @@ public class UniformHeterogeneousAssignmentBuilderTest {
             Assignment.EMPTY
         ));
 
-        GroupSpec groupSpec = new GroupSpecImpl(
+        GroupSpec groupSpec = new ConsumerGroupSpecImpl(
             metadataImage,
             members,
             HETEROGENEOUS

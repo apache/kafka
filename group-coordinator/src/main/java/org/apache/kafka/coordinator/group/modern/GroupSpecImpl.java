@@ -28,13 +28,12 @@ import java.util.Collection;
 import java.util.HashMap;
 import java.util.Map;
 import java.util.Objects;
-import java.util.Optional;
 import java.util.Set;
 
 /**
  * The assignment specification for a modern group.
  */
-public class GroupSpecImpl implements GroupSpec {
+public abstract class GroupSpecImpl implements GroupSpec {
     /**
      * The partitions of a topic which are currently assigned to a member.
      *
@@ -51,12 +50,12 @@ public class GroupSpecImpl implements GroupSpec {
     /**
      * Member subscription metadata keyed by member Id.
      */
-    private final Map<String, MemberSubscriptionAndAssignmentImpl> members;
+    protected final Map<String, MemberSubscriptionAndAssignmentImpl> members;
 
     /**
      * The subscription type of the group.
      */
-    private final SubscriptionType subscriptionType;
+    protected final SubscriptionType subscriptionType;
 
     /**
      * The partitions which are currently assigned to a member,
@@ -64,31 +63,14 @@ public class GroupSpecImpl implements GroupSpec {
      */
     private Map<Uuid, AssignedPartitions> assignedTopicPartitions;
 
-    /**
-     * In case of share groups, this map will be queried to decide
-     * which partition is assignable. For non-share groups,
-     * this optional should be empty.
-     */
-    private final Optional<Map<Uuid, Set<Integer>>> topicPartitionAllowedMap;
-
-    public GroupSpecImpl(
+    protected GroupSpecImpl(
         CoordinatorMetadataImage metadataImage,
         Map<String, MemberSubscriptionAndAssignmentImpl> members,
         SubscriptionType subscriptionType
     ) {
-        this(metadataImage, members, subscriptionType, Optional.empty());
-    }
-
-    public GroupSpecImpl(
-        CoordinatorMetadataImage metadataImage,
-        Map<String, MemberSubscriptionAndAssignmentImpl> members,
-        SubscriptionType subscriptionType,
-        Optional<Map<Uuid, Set<Integer>>> topicPartitionAllowedMap
-    ) {
         this.metadataImage = Objects.requireNonNull(metadataImage);
         this.members = Objects.requireNonNull(members);
         this.subscriptionType = Objects.requireNonNull(subscriptionType);
-        this.topicPartitionAllowedMap = Objects.requireNonNull(topicPartitionAllowedMap);
     }
 
     /**
@@ -153,7 +135,7 @@ public class GroupSpecImpl implements GroupSpec {
      */
     @Override
     public boolean isPartitionAssignable(Uuid topicId, int partitionId) {
-        return topicPartitionAllowedMap.map(allowedMap -> allowedMap.containsKey(topicId) && allowedMap.get(topicId).contains(partitionId)).orElse(true);
+        return true;
     }
 
     /**
@@ -183,15 +165,15 @@ public class GroupSpecImpl implements GroupSpec {
     @Override
     public boolean equals(Object o) {
         if (this == o) return true;
-        if (!(o instanceof GroupSpecImpl groupSpec)) return false;
+        if (o == null || getClass() != o.getClass()) return false;
+        GroupSpecImpl groupSpec = (GroupSpecImpl) o;
         return Objects.equals(members, groupSpec.members) &&
-            subscriptionType == groupSpec.subscriptionType &&
-            Objects.equals(topicPartitionAllowedMap, groupSpec.topicPartitionAllowedMap);
+            subscriptionType == groupSpec.subscriptionType;
     }
 
     @Override
     public int hashCode() {
-        return Objects.hash(members, subscriptionType, topicPartitionAllowedMap);
+        return Objects.hash(members, subscriptionType);
     }
 
     @Override
@@ -199,7 +181,6 @@ public class GroupSpecImpl implements GroupSpec {
         return "GroupSpecImpl(" +
             "members=" + members +
             ", subscriptionType=" + subscriptionType +
-            ", topicPartitionAllowedMap=" + topicPartitionAllowedMap +
             ')';
     }
 }
