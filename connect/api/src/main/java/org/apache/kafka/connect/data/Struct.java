@@ -17,6 +17,7 @@
 package org.apache.kafka.connect.data;
 
 import org.apache.kafka.common.annotation.InterfaceAudience;
+import org.apache.kafka.common.utils.Utils;
 import org.apache.kafka.connect.errors.DataException;
 
 import java.nio.ByteBuffer;
@@ -166,7 +167,9 @@ public class Struct {
     public byte[] getBytes(String fieldName) {
         Object bytes = getCheckType(fieldName, Schema.Type.BYTES);
         if (bytes instanceof ByteBuffer)
-            return ((ByteBuffer) bytes).array();
+            // ByteBuffer.array() ignores position/limit/arrayOffset and throws
+            // for direct buffers; return the logical remaining bytes instead.
+            return Utils.toArray((ByteBuffer) bytes);
         return (byte[]) bytes;
     }
 
@@ -242,12 +245,34 @@ public class Struct {
         if (o == null || getClass() != o.getClass()) return false;
         Struct struct = (Struct) o;
         return Objects.equals(schema, struct.schema) &&
-                Arrays.deepEquals(values, struct.values);
+                Arrays.deepEquals(normalizedBytesValues(), struct.normalizedBytesValues());
     }
 
     @Override
     public int hashCode() {
-        return Objects.hash(schema, Arrays.deepHashCode(values));
+        return Objects.hash(schema, Arrays.deepHashCode(normalizedBytesValues()));
+    }
+
+    /**
+     * Returns a copy of {@link #values} with top-level BYTES fields stored as
+     * {@code byte[]}, so that an equivalent value supplied as {@code byte[]} or
+     * {@code ByteBuffer} compares equal and hashes the same. The original
+     * {@link #values} array is left untouched; callers that observe a field via
+     * {@link #get(String)} still see whatever representation was put in.
+     */
+    private Object[] normalizedBytesValues() {
+        Object[] normalized = null;
+        List<Field> fields = schema.fields();
+        for (int i = 0; i < values.length; i++) {
+            Object value = values[i];
+            if (!(value instanceof ByteBuffer)) continue;
+            if (i >= fields.size() || fields.get(i).schema().type() != Schema.Type.BYTES) continue;
+            if (normalized == null) {
+                normalized = values.clone();
+            }
+            normalized[i] = Utils.toArray((ByteBuffer) value);
+        }
+        return normalized == null ? values : normalized;
     }
 
     private Field lookupField(String fieldName) {
