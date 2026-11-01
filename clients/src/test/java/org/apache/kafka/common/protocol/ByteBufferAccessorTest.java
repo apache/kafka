@@ -40,6 +40,12 @@ public class ByteBufferAccessorTest {
         assertEquals("Error reading byte array of 3 byte(s): only 0 byte(s) available",
             assertThrows(RuntimeException.class,
                 () -> accessor.readArray(3)).getMessage());
+        assertEquals("Error reading byte array of -1 byte(s): only 0 byte(s) available",
+            assertThrows(RuntimeException.class,
+                () -> accessor.readArray(-1)).getMessage());
+        assertEquals("Error reading byte buffer of -1 byte(s): length cannot be negative",
+            assertThrows(RuntimeException.class,
+                () -> accessor.readByteBuffer(-1)).getMessage());
     }
 
     @Test
