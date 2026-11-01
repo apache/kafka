@@ -2143,7 +2143,7 @@ public class ReplicationControlManagerTest {
                         setNewIsrWithEpochs(isrWithDefaultEpoch(3, 0, 2, 1))))));
         ControllerResult<AlterPartitionResponseData> alterPartitionResult = replication.alterPartition(
             requestContext,
-            new AlterPartitionRequest.Builder(alterPartitionRequestData).build(version).data());
+            new AlterPartitionRequest.Builder(alterPartitionRequestData, true).build(version).data());
         Errors expectedError = NEW_LEADER_ELECTED;
         assertEquals(new AlterPartitionResponseData().setTopics(List.of(
             new AlterPartitionResponseData.TopicData().
@@ -2334,7 +2334,7 @@ public class ReplicationControlManagerTest {
             anonymousContextFor(ApiKeys.ALTER_PARTITION, version);
 
         ControllerResult<AlterPartitionResponseData> alterPartitionResult =
-            replication.alterPartition(requestContext, new AlterPartitionRequest.Builder(alterIsrRequest).build(version).data());
+            replication.alterPartition(requestContext, new AlterPartitionRequest.Builder(alterIsrRequest, true).build(version).data());
 
         Errors expectedError = INELIGIBLE_REPLICA;
         assertEquals(
@@ -2416,7 +2416,7 @@ public class ReplicationControlManagerTest {
             anonymousContextFor(ApiKeys.ALTER_PARTITION, version);
 
         ControllerResult<AlterPartitionResponseData> alterPartitionResult =
-            replication.alterPartition(requestContext, new AlterPartitionRequest.Builder(alterIsrRequest).build(version).data());
+            replication.alterPartition(requestContext, new AlterPartitionRequest.Builder(alterIsrRequest, true).build(version).data());
 
         // The late arrived AlterPartition request should be rejected when version >= 3.
         if (version >= 3) {
@@ -2479,7 +2479,7 @@ public class ReplicationControlManagerTest {
             anonymousContextFor(ApiKeys.ALTER_PARTITION, version);
 
         ControllerResult<AlterPartitionResponseData> alterPartitionResult =
-            replication.alterPartition(requestContext, new AlterPartitionRequest.Builder(alterIsrRequest).build(version).data());
+            replication.alterPartition(requestContext, new AlterPartitionRequest.Builder(alterIsrRequest, true).build(version).data());
 
         Errors expectedError = INELIGIBLE_REPLICA;
         assertEquals(
@@ -3330,7 +3330,7 @@ public class ReplicationControlManagerTest {
                     setNewIsrWithEpochs(isrWithDefaultEpoch(0, 1, 2))))));
         ControllerResult<AlterPartitionResponseData> alterPartitionResult = replication.alterPartition(
             anonymousContextFor(ApiKeys.ALTER_PARTITION),
-            new AlterPartitionRequest.Builder(alterPartitionRequestData).build().data());
+            new AlterPartitionRequest.Builder(alterPartitionRequestData, true).build().data());
         assertEquals(new AlterPartitionResponseData().setTopics(List.of(
             new AlterPartitionResponseData.TopicData().
                 setTopicId(topicId).
@@ -3405,7 +3405,7 @@ public class ReplicationControlManagerTest {
                     setNewIsrWithEpochs(isrWithDefaultEpoch(0, 1, 2, 3, 4, 5))))));
         ControllerResult<AlterPartitionResponseData> alterPartitionResultTwo = replication.alterPartition(
             anonymousContextFor(ApiKeys.ALTER_PARTITION),
-            new AlterPartitionRequest.Builder(alterPartitionRequestDataTwo).build().data());
+            new AlterPartitionRequest.Builder(alterPartitionRequestDataTwo, true).build().data());
         assertEquals(new AlterPartitionResponseData().setTopics(List.of(
                 new AlterPartitionResponseData.TopicData().
                     setTopicId(topicId).

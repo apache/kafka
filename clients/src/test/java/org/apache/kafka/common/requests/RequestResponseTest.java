@@ -1298,7 +1298,7 @@ public class RequestResponseTest {
                                                 ))
                                 ))
                 ));
-        return new AssignReplicasToDirsRequest.Builder(data).build(version);
+        return new AssignReplicasToDirsRequest.Builder(data, true).build(version);
     }
 
     private AssignReplicasToDirsResponse createAssignReplicasToDirsResponse() {
@@ -1872,7 +1872,7 @@ public class RequestResponseTest {
             .setTopics(singletonList(new AlterPartitionRequestData.TopicData()
                 .setTopicId(Uuid.randomUuid())
                 .setPartitions(singletonList(partitionData))));
-        return new AlterPartitionRequest.Builder(data).build(version);
+        return new AlterPartitionRequest.Builder(data, true).build(version);
     }
 
     private AlterPartitionResponse createAlterPartitionResponse() {
@@ -1923,7 +1923,7 @@ public class RequestResponseTest {
         AllocateProducerIdsRequestData data = new AllocateProducerIdsRequestData()
                 .setBrokerEpoch(123L)
                 .setBrokerId(2);
-        return new AllocateProducerIdsRequest.Builder(data).build(version);
+        return new AllocateProducerIdsRequest.Builder(data, true).build(version);
     }
 
     private AllocateProducerIdsResponse createAllocateProducerIdsResponse() {
