@@ -2174,6 +2174,7 @@ public class GroupMetadataManager {
                 ownedStandbyTasks,
                 ownedWarmupTasks,
                 isJoining,
+                processId,
                 records
             );
         }
@@ -2393,8 +2394,9 @@ public class GroupMetadataManager {
         // 1. The member is joining.
         // 2. The member's assignment has been updated.
         // 3. The member reports all owned task sets, including when acknowledging an assignment or retrying after a heartbeat failure.
-        boolean assignedTaskChanged = hasAssignedTasksChanged(member, updatedMember);
-        boolean endpointChanged = hasUserEndpointChanged(member, updatedMember);
+        StreamsGroupMember previousMember = replaceStaticOldMember != null ? replaceStaticOldMember : member;
+        boolean assignedTaskChanged = hasAssignedTasksChanged(previousMember, updatedMember);
+        boolean endpointChanged = hasUserEndpointChanged(previousMember, updatedMember);
         boolean hasOwnedTasksReported = ownedActiveTasks != null && ownedStandbyTasks != null && ownedWarmupTasks != null;
 
         // Echo the assignment when joining, when it changes, or when all owned task sets are reported.
@@ -3584,6 +3586,7 @@ public class GroupMetadataManager {
         List<StreamsGroupHeartbeatRequestData.TaskIds> ownedStandbyTasks,
         List<StreamsGroupHeartbeatRequestData.TaskIds> ownedWarmupTasks,
         boolean memberIsJoining,
+        String processId,
         List<CoordinatorRecord> records
     ) {
         if (!memberIsJoining) {
@@ -3608,6 +3611,10 @@ public class GroupMetadataManager {
                 null : existingMemberOrNull.instanceId().orElse(null);
             throwIfMemberIdHasDifferentInstanceId(group.groupId(), memberId, existingInstanceId, instanceId);
 
+            // The standard Streams client generates a member ID per membership manager and
+            // keeps its process ID unchanged for that manager's lifetime. We therefore assume
+            // that a rejoin with the same member ID also uses the same process ID.
+            // This assumption is not validated here. (See, KAFKA-21401)
             if (existingMemberOrNull.memberEpoch() == LEAVE_GROUP_STATIC_MEMBER_EPOCH) {
                 // The static member re-joins after leaving the group. Its epoch is reset so that
                 // it is reconciled from scratch, like a member replacing it would be.
@@ -3638,11 +3645,20 @@ public class GroupMetadataManager {
         throwIfInstanceIdIsUnreleased(previousStaticMemberOrNull, group.groupId(), memberId, instanceId);
 
         // Copy the previous member but with the new member id.
-        StreamsGroupMember newMember = new StreamsGroupMember.Builder(previousStaticMemberOrNull, memberId)
+        StreamsGroupMember.Builder newMemberBuilder = new StreamsGroupMember.Builder(previousStaticMemberOrNull, memberId)
             .setMemberEpoch(0)
-            .setPreviousMemberEpoch(0)
-            .build();
+            .setPreviousMemberEpoch(0);
 
+        if (processId != null && !Objects.equals(previousStaticMemberOrNull.processId(), processId)) {
+            // Do not inherit the previous static member's current assignments when the process changes.
+            // Another member on the new process may already own the same tasks, so reconciliation
+            // must check ownership before granting them.
+            newMemberBuilder
+                .setState(org.apache.kafka.coordinator.group.streams.MemberState.STABLE)
+                .setAssignedTasks(TasksTupleWithEpochs.EMPTY)
+                .setTasksPendingRevocation(TasksTupleWithEpochs.EMPTY);
+        }
+        StreamsGroupMember newMember = newMemberBuilder.build();
         replaceStreamsMember(records, group, previousStaticMemberOrNull, newMember);
 
         // Replacing a static member relabels its target assignment from the old to the new member ID without
