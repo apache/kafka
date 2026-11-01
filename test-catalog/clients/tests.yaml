@@ -4454,6 +4454,7 @@ org.apache.kafka.common.protocol.ApiKeysTest:
 - testForIdWithInvalidIdLow
 - testHasValidVersions
 - testHtmlOnlyHaveStableApi
+- testLatestVersionForRequestHeader
 - testResponseThrottleTime
 org.apache.kafka.common.protocol.ByteBufferAccessorTest:
 - testReadArray
