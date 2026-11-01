@@ -201,6 +201,7 @@ public class ConsumerGroup extends ModernGroup<ConsumerGroupMember> {
     /**
      * @return The current state as a String with given committedOffset.
      */
+    @Override
     public String stateAsString(long committedOffset) {
         return state.get(committedOffset).toString();
     }
@@ -252,6 +253,7 @@ public class ConsumerGroup extends ModernGroup<ConsumerGroupMember> {
      * @return A ConsumerGroupMember.
      * @throws UnknownMemberIdException when the member does not exist and createIfNotExists is false.
      */
+    @Override
     public ConsumerGroupMember getOrMaybeCreateMember(
         String memberId,
         boolean createIfNotExists

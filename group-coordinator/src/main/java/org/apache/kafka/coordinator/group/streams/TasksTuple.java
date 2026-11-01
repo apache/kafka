@@ -135,6 +135,7 @@ public record TasksTuple(Map<String, Set<Integer>> activeTasks,
         );
     }
 
+    @Override
     public String toString() {
         return "(active=" + taskAssignmentToString(activeTasks) +
             ", standby=" + taskAssignmentToString(standbyTasks) +

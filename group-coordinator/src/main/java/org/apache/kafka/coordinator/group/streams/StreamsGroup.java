@@ -363,6 +363,7 @@ public class StreamsGroup implements Group {
     /**
      * @return The current state as a String with given committedOffset.
      */
+    @Override
     public String stateAsString(long committedOffset) {
         return state.get(committedOffset).toString();
     }
@@ -370,6 +371,7 @@ public class StreamsGroup implements Group {
     /**
      * @return the group formatted as a list group response based on the committed offset.
      */
+    @Override
     public ListGroupsResponseData.ListedGroup asListedGroup(long committedOffset) {
         return new ListGroupsResponseData.ListedGroup()
             .setGroupId(groupId)
@@ -719,6 +721,7 @@ public class StreamsGroup implements Group {
      * @param memberId The member ID.
      * @return A boolean indicating whether the member exists or not.
      */
+    @Override
     public boolean hasMember(String memberId) {
         return members.containsKey(memberId);
     }
@@ -726,6 +729,7 @@ public class StreamsGroup implements Group {
     /**
      * @return The number of members.
      */
+    @Override
     public int numMembers() {
         return members.size();
     }
