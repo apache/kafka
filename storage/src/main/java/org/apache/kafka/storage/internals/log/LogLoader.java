@@ -38,6 +38,7 @@ import java.util.HashSet;
 import java.util.Iterator;
 import java.util.List;
 import java.util.Optional;
+import java.util.OptionalLong;
 import java.util.Set;
 import java.util.concurrent.ConcurrentMap;
 import java.util.stream.Collectors;
@@ -52,10 +53,10 @@ public class LogLoader {
     private final Scheduler scheduler;
     private final Time time;
     private final LogDirFailureChannel logDirFailureChannel;
-    private final boolean hadCleanShutdown;
+    private boolean hadCleanShutdown;
     private final LogSegments segments;
     private final long logStartOffsetCheckpoint;
-    private final long recoveryPointCheckpoint;
+    private long recoveryPointCheckpoint;
     private final LeaderEpochFileCache leaderEpochCache;
     private final ProducerStateManager producerStateManager;
     private final ConcurrentMap<String, Integer> numRemainingSegments;
@@ -193,17 +194,10 @@ public class LogLoader {
         }
 
         // Fourth pass: load all the log and index files.
-        // We might encounter legacy log segments with offset overflow (KAFKA-6264). We need to split such segments. When
-        // this happens, restart loading segment files from scratch.
-        retryOnOffsetOverflow(() -> {
-            // In case we encounter a segment with offset overflow, the retry logic will split it after which we need to retry
-            // loading of segments. In that case, we also need to close all segments that could have been left open in previous
-            // call to loadSegmentFiles().
-            segments.close();
-            segments.clear();
-            loadSegmentFiles();
-            return null;
-        });
+        // Offset overflow (KAFKA-6264) is handled in recoverLog(). Missing or corrupt indexes cause us to treat
+        // the log as unclean and move the recovery point back so recoverLog() rebuilds those segments (and the
+        // transaction index after a subsequent split).
+        loadSegmentFiles();
 
         RecoveryOffsets recoveryOffsets;
         if (!dir.getAbsolutePath().endsWith(LogFileUtils.DELETE_DIR_SUFFIX)) {
@@ -347,12 +341,8 @@ public class LogLoader {
      * Loads segments from disk.
      * <br/>
      * This method does not need to convert {@link IOException} to {@link KafkaStorageException} because it is only
-     * called before all logs are loaded. It is possible that we encounter a segment with index offset overflow in
-     * which case the {@link LogSegmentOffsetOverflowException} will be thrown. Note that any segments that were opened
-     * before we encountered the exception will remain open and the caller is responsible for closing them
-     * appropriately, if needed.
-     *
-     * @throws LogSegmentOffsetOverflowException if the log directory contains a segment with messages that overflow the index offset
+     * called before all logs are loaded. Missing or corrupt indexes are not recovered here: the recovery point is
+     * moved back and {@link #hadCleanShutdown} is cleared so that {@link #recoverLog()} rebuilds those segments.
      */
     private void loadSegmentFiles() throws IOException {
         // load segments in ascending order because transactional data from one segment may depend on the
@@ -378,12 +368,18 @@ public class LogLoader {
                     segment.sanityCheck(timeIndexFileNewlyCreated);
                 } catch (NoSuchFileException nsfe) {
                     if (hadCleanShutdown || segment.baseOffset() < recoveryPointCheckpoint) {
-                        logger.error("Could not find offset index file corresponding to log file {}, recovering segment and rebuilding index files...", segment.log().file().getAbsolutePath());
+                        logger.error("Could not find offset index file corresponding to log file {}, " +
+                                "will recover the segment and rebuild index files during log recovery.",
+                                segment.log().file().getAbsolutePath());
                     }
-                    recoverSegment(segment);
+                    hadCleanShutdown = false;
+                    recoveryPointCheckpoint = Math.min(recoveryPointCheckpoint, segment.baseOffset());
                 } catch (CorruptIndexException cie) {
-                    logger.warn("Found a corrupted index file corresponding to log file {} due to {}, recovering segment and rebuilding index files...", segment.log().file().getAbsolutePath(), cie.getMessage());
-                    recoverSegment(segment);
+                    logger.warn("Found a corrupted index file corresponding to log file {} due to {}, " +
+                            "will recover the segment and rebuild index files during log recovery.",
+                            segment.log().file().getAbsolutePath(), cie.getMessage());
+                    hadCleanShutdown = false;
+                    recoveryPointCheckpoint = Math.min(recoveryPointCheckpoint, segment.baseOffset());
                 }
                 segments.add(segment);
             }
@@ -394,10 +390,9 @@ public class LogLoader {
      * Just recovers the given segment.
      *
      * @param segment The {@link LogSegment} to recover
-     * @return The number of bytes truncated from the segment
-     * @throws LogSegmentOffsetOverflowException if the segment contains messages that cause index offset overflow
+     * @return the number of bytes truncated from the segment and the first overflowing offset, if any
      */
-    private int recoverSegment(LogSegment segment) throws IOException {
+    private LogSegment.RecoveryResult recoverSegment(LogSegment segment) throws IOException {
         ProducerStateManager producerStateManager = new ProducerStateManager(
                 topicPartition,
                 dir,
@@ -412,11 +407,11 @@ public class LogLoader {
                 time,
                 false,
                 logPrefix);
-        int bytesTruncated = segment.recover(producerStateManager, leaderEpochCache);
+        LogSegment.RecoveryResult recoveryResult = segment.recover(producerStateManager, leaderEpochCache);
         // once we have recovered the segment's data, take a snapshot to ensure that we won't
         // need to reload the same segment again while recovering another segment.
         producerStateManager.takeSnapshot();
-        return bytesTruncated;
+        return recoveryResult;
     }
 
     /** return the log end offset if valid */
@@ -467,15 +462,19 @@ public class LogLoader {
             while (unflushedIter.hasNext() && !truncated) {
                 LogSegment segment = unflushedIter.next();
                 logger.info("Recovering unflushed segment {}. {} recovered for {}.", segment.baseOffset(), numFlushed / numUnflushed, topicPartition);
-                int truncatedBytes;
+                LogSegment.RecoveryResult recoveryResult;
                 try {
-                    truncatedBytes = recoverSegment(segment);
+                    recoveryResult = recoverSegment(segment);
                 } catch (InvalidOffsetException | IOException ioe) {
                     long startOffset = segment.baseOffset();
                     logger.warn("Found invalid offset during recovery. Deleting the corrupt segment and creating an empty one with starting offset {}", startOffset);
-                    truncatedBytes = segment.truncateTo(startOffset);
+                    recoveryResult = new LogSegment.RecoveryResult(segment.truncateTo(startOffset), OptionalLong.empty());
                 }
-                if (truncatedBytes > 0) {
+                // Truncated bytes mean this segment ended in corruption, so the remaining segments must be deleted
+                // now. This has to happen before we throw for an offset overflow below: recover() has already
+                // trimmed the invalid tail, so when retryOnOffsetOverflow() re-runs recoverLog() after the split
+                // the truncated bytes would no longer be visible.
+                if (recoveryResult.truncatedBytes() > 0) {
                     // we had an invalid message, delete all remaining log
                     logger.warn("Corruption found in segment {}, truncating to offset {}", segment.baseOffset(), segment.readNextOffset());
                     Collection<LogSegment> unflushedRemaining = new ArrayList<>();
@@ -487,6 +486,11 @@ public class LogLoader {
                 } else {
                     numFlushed += 1;
                     numRemainingSegments.put(threadName, numUnflushed - numFlushed);
+                }
+                if (recoveryResult.overflowOffset().isPresent()) {
+                    // retryOnOffsetOverflow() splits the segment and calls recoverLog() again, which rebuilds the
+                    // transaction index of the split segments.
+                    throw new LogSegmentOffsetOverflowException(segment, recoveryResult.overflowOffset().getAsLong());
                 }
             }
         }

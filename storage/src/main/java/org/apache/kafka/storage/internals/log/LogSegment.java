@@ -469,42 +469,51 @@ public class LogSegment implements Closeable {
     }
 
     /**
+     * Outcome of {@link #recover}. Overflowing batches are valid records and remain in the file so the caller can
+     * split the segment; {@link #overflowOffset} is the first such offset when present.
+     *
+     * @param truncatedBytes number of invalid bytes removed from the end of the log
+     * @param overflowOffset the first offset that overflows the indexes, or empty if none
+     */
+    public record RecoveryResult(int truncatedBytes, OptionalLong overflowOffset) {
+    }
+
+    /**
      * Run recovery on the given segment. This will rebuild the index from the log file and lop off any invalid bytes
      * from the end of the log and index.
+     *
+     * Offset overflow does not abort the scan: overflowing batches are valid records and must remain in the file so
+     * the caller can split them. The scan continues until the first corrupt batch (for example a preallocated
+     * zero-filled tail). That tail is truncated before returning. The caller is responsible for splitting the
+     * segment when {@link RecoveryResult#overflowOffset()} is present.
      *
      * This method is not thread-safe.
      *
      * @param producerStateManager Producer state corresponding to the segment's base offset. This is needed to recover
      *                             the transaction index.
      * @param leaderEpochCache a cache for updating the leader epoch during recovery.
-     * @return The number of bytes truncated from the log
-     * @throws LogSegmentOffsetOverflowException if the log segment contains an offset that causes the index offset to overflow.
-     *         The invalid tail is still truncated before this is thrown, so a preallocated zero-filled tail is not
-     *         left on the segment for the subsequent split.
+     * @return the number of bytes truncated from the log and the first overflowing offset, if any
      */
-    public int recover(ProducerStateManager producerStateManager, LeaderEpochFileCache leaderEpochCache) throws IOException {
+    public RecoveryResult recover(ProducerStateManager producerStateManager, LeaderEpochFileCache leaderEpochCache) throws IOException {
         offsetIndex().reset();
         timeIndex().reset();
         txnIndex.reset();
         int validBytes = 0;
         int lastIndexEntry = 0;
         maxTimestampAndOffsetSoFar = TimestampOffset.UNKNOWN;
-        // Offset overflow aborts indexing, but the bytes of that batch and any later valid batches must stay in the
-        // file so the caller can split them. Keep scanning until the first corrupt batch (the preallocated zero tail)
-        // so truncate below removes only that tail, then rethrow.
-        LogSegmentOffsetOverflowException overflowException = null;
+        OptionalLong overflowOffset = OptionalLong.empty();
         try {
             for (RecordBatch batch : log.batches()) {
                 batch.ensureValid();
-                if (overflowException == null) {
+                if (overflowOffset.isEmpty()) {
                     try {
                         ensureOffsetInRange(batch.lastOffset());
                     } catch (LogSegmentOffsetOverflowException e) {
-                        overflowException = e;
+                        overflowOffset = OptionalLong.of(e.offset);
                     }
                 }
 
-                if (overflowException == null) {
+                if (overflowOffset.isEmpty()) {
                     // The max timestamp is exposed at the batch level, so no need to iterate the records
                     if (batch.maxTimestamp() > maxTimestampSoFar()) {
                         maxTimestampAndOffsetSoFar = new TimestampOffset(batch.maxTimestamp(), batch.lastOffset());
@@ -539,9 +548,7 @@ public class LogSegment implements Closeable {
         // A normally closed segment always appends the biggest timestamp ever seen into log segment, we do this as well.
         timeIndex().maybeAppend(maxTimestampSoFar(), shallowOffsetOfMaxTimestampSoFar(), true);
         timeIndex().trimToValidSize();
-        if (overflowException != null)
-            throw overflowException;
-        return truncated;
+        return new RecoveryResult(truncated, overflowOffset);
     }
 
     /**

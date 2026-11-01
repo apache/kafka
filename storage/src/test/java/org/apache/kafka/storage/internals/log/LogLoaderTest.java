@@ -474,9 +474,15 @@ public class LogLoaderTest {
     }
 
     private List<Long> keysInRawLog(File dir) throws IOException {
+        return keysInRawLog(dir, Long.MAX_VALUE);
+    }
+
+    /** Keys of the log files in {@code dir} whose base offset is at most {@code maxBaseOffset}. */
+    private List<Long> keysInRawLog(File dir, long maxBaseOffset) throws IOException {
         List<Long> keys = new ArrayList<>();
         List<File> logFiles = Stream.of(dir.listFiles())
                 .filter(file -> file.isFile() && LogFileUtils.isLogFile(file))
+                .filter(file -> LogFileUtils.offsetFromFile(file) <= maxBaseOffset)
                 .sorted(Comparator.comparing(File::getName))
                 .toList();
         for (File file : logFiles) {
@@ -505,6 +511,17 @@ public class LogLoaderTest {
             }
         }
         throw new AssertionError("Failed to find an overflowed segment in " + dir);
+    }
+
+    private static void deleteLastSegment(File dir) throws IOException {
+        long lastBaseOffset = Stream.of(dir.listFiles())
+                .filter(file -> file.isFile() && LogFileUtils.isLogFile(file))
+                .mapToLong(LogFileUtils::offsetFromFile)
+                .max()
+                .orElseThrow();
+        Files.delete(LogFileUtils.logFile(dir, lastBaseOffset).toPath());
+        Files.deleteIfExists(LogFileUtils.offsetIndexFile(dir, lastBaseOffset).toPath());
+        Files.deleteIfExists(LogFileUtils.timeIndexFile(dir, lastBaseOffset).toPath());
     }
 
     private static void padWithZeros(File file, int bytes) throws IOException {
@@ -1243,9 +1260,14 @@ public class LogLoaderTest {
         }
     }
 
+    /**
+     * A preallocated zero tail on the active segment must be trimmed before the overflowed segment is split, so that
+     * the split does not read past the real batches.
+     */
     @Test
     public void testRecoveryOfPreallocatedSegmentWithOffsetOverflow() throws IOException {
         LogTestUtils.initializeLogDirWithOverflowedSegment(logDir);
+        deleteLastSegment(logDir);
         List<Long> expectedKeys = keysInRawLog(logDir);
         padWithZeros(overflowLogFile(logDir), 1024 * 1024);
 
@@ -1254,6 +1276,57 @@ public class LogLoaderTest {
                 .fileDeleteDelayMs(1000)
                 .build();
         UnifiedLog recoveredLog = recoverAndCheck(logConfig, expectedKeys);
+        assertEquals(expectedKeys, LogTestUtils.keysInLog(recoveredLog));
+        assertFalse(LogTestUtils.hasOffsetOverflow(recoveredLog));
+    }
+
+    /**
+     * Invalid bytes found while recovering an overflowed segment still mean that the segments after it are corrupt.
+     * They must be deleted even though recover() has already trimmed the tail by the time the segment is split and
+     * recoverLog() runs again.
+     */
+    @Test
+    public void testRecoveryOfOffsetOverflowWithCorruptTailDeletesRemainingSegments() throws IOException {
+        LogTestUtils.initializeLogDirWithOverflowedSegment(logDir);
+        File overflowLogFile = overflowLogFile(logDir);
+        long overflowBaseOffset = LogFileUtils.offsetFromFile(overflowLogFile);
+        List<Long> expectedKeys = keysInRawLog(logDir, overflowBaseOffset);
+        assertTrue(expectedKeys.size() < keysInRawLog(logDir).size());
+        padWithZeros(overflowLogFile, 1024 * 1024);
+
+        LogConfig logConfig = new LogTestUtils.LogConfigBuilder()
+                .indexIntervalBytes(1)
+                .fileDeleteDelayMs(1000)
+                .build();
+        UnifiedLog recoveredLog = recoverAndCheck(logConfig, expectedKeys);
+        assertEquals(expectedKeys, LogTestUtils.keysInLog(recoveredLog));
+        // The segment after the overflowed one starts at overflowBaseOffset + 2 * Integer.MAX_VALUE and must be gone.
+        long deletedSegmentBaseOffset = overflowBaseOffset + 2L * Integer.MAX_VALUE;
+        assertTrue(recoveredLog.logSegments().stream().allMatch(s -> s.baseOffset() < deletedSegmentBaseOffset));
+    }
+
+    /**
+     * A missing offset index on a segment with offset overflow is not recovered while loading segment files. The log
+     * is recovered (and the segment split) by recoverLog() even after a clean shutdown.
+     */
+    @Test
+    public void testRecoveryOfSegmentWithOffsetOverflowAndMissingIndexAfterCleanShutdown() throws IOException {
+        LogTestUtils.initializeLogDirWithOverflowedSegment(logDir);
+        List<Long> expectedKeys = keysInRawLog(logDir);
+        File overflowLogFile = overflowLogFile(logDir);
+        long overflowBaseOffset = LogFileUtils.offsetFromFile(overflowLogFile);
+        Files.delete(LogFileUtils.offsetIndexFile(logDir, overflowBaseOffset).toPath());
+
+        LogConfig logConfig = new LogTestUtils.LogConfigBuilder()
+                .indexIntervalBytes(1)
+                .fileDeleteDelayMs(1000)
+                .build();
+        UnifiedLog recoveredLog = LogTestUtils.createLog(logDir, logConfig, brokerTopicStats, mockTime.scheduler, mockTime,
+                0L, Long.MAX_VALUE, producerStateManagerConfig,
+                TransactionLogConfig.PRODUCER_ID_EXPIRATION_CHECK_INTERVAL_MS_DEFAULT,
+                true, Optional.empty(), new ConcurrentHashMap<>());
+        logsToClose.add(recoveredLog);
+        mockTime.sleep(logConfig.fileDeleteDelayMs + 1);
         assertEquals(expectedKeys, LogTestUtils.keysInLog(recoveredLog));
         assertFalse(LogTestUtils.hasOffsetOverflow(recoveredLog));
     }
