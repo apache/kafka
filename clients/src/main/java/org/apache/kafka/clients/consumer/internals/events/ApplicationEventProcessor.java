@@ -23,6 +23,7 @@ import org.apache.kafka.clients.consumer.internals.Acknowledgements;
 import org.apache.kafka.clients.consumer.internals.CachedSupplier;
 import org.apache.kafka.clients.consumer.internals.CommitRequestManager;
 import org.apache.kafka.clients.consumer.internals.ConsumerMembershipManager;
+import org.apache.kafka.clients.consumer.internals.ConsumerMetadata;
 import org.apache.kafka.clients.consumer.internals.ConsumerNetworkThread;
 import org.apache.kafka.clients.consumer.internals.ConsumerSubscriptionState;
 import org.apache.kafka.clients.consumer.internals.ConsumerUtils;
@@ -872,19 +873,32 @@ public class ApplicationEventProcessor implements EventProcessor<ApplicationEven
     public static Supplier<ApplicationEventProcessor> supplier(final LogContext logContext,
                                                                final Metadata metadata,
                                                                final ShareSubscriptionState shareSubscriptions,
-                                                               final Supplier<RequestManagers> requestManagersSupplier) {
+                                                               final Supplier<RequestManagers>
+                                                                       requestManagersSupplier) {
         return new CachedSupplier<>() {
             @Override
             protected ApplicationEventProcessor create() {
                 RequestManagers requestManagers = requestManagersSupplier.get();
                 return new ApplicationEventProcessor(
-                    logContext,
-                    requestManagers,
-                    metadata,
-                    shareSubscriptions
+                        logContext,
+                        requestManagers,
+                        metadata,
+                        shareSubscriptions
                 );
             }
         };
+    }
+
+    /**
+     * Topics a metadata error may legitimately concern. {@link ConsumerMetadata} also tracks
+     * transient topics, registered temporarily by offset-related APIs (e.g.
+     * {@code offsetsForTimes}/{@code beginningOffsets}/{@code endOffsets}) for topics outside
+     * the subscription, so errors about those must be propagated as well.
+     */
+    public Set<String> subscribedAssignedAndTransientTopics() {
+        if (metadata instanceof ConsumerMetadata)
+            return ((ConsumerMetadata) metadata).subscribedAssignedAndTransientTopics();
+        return subscriptions.subscribedOrAssignedTopics();
     }
 
     private void maybeUpdatePatternSubscription(MembershipManagerShim membershipManager) {
