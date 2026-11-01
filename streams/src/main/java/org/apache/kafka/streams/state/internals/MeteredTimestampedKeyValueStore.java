@@ -304,6 +304,7 @@ public class MeteredTimestampedKeyValueStore<K, V>
         private final Sensor sensor;
         private final long startNs;
         private final long startTimestampMs;
+        private final long sequenceNumber = SEQUENCE_NUMBERS.getAndIncrement();
         private final Function<byte[], ValueAndTimestamp<V>> valueAndTimestampDeserializer;
 
         private final boolean returnPlainValue;
@@ -324,6 +325,11 @@ public class MeteredTimestampedKeyValueStore<K, V>
         @Override
         public long startTimestamp() {
             return startTimestampMs;
+        }
+
+        @Override
+        public long sequenceNumber() {
+            return sequenceNumber;
         }
 
         @Override

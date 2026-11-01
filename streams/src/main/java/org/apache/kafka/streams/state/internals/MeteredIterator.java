@@ -16,6 +16,9 @@
  */
 package org.apache.kafka.streams.state.internals;
 
+import java.util.Comparator;
+import java.util.concurrent.atomic.AtomicLong;
+
 /**
  * Common super-interface of all Metered Iterator types.
  *
@@ -23,8 +26,25 @@ package org.apache.kafka.streams.state.internals;
  */
 public interface MeteredIterator {
 
+    AtomicLong SEQUENCE_NUMBERS = new AtomicLong();
+
+    /**
+     * Orders Iterators by the time they were opened, oldest first, falling back to the sequence
+     * number for Iterators opened within the same millisecond. The fallback is what makes this
+     * ordering total: any two distinct Iterators must compare as unequal, or a sorted set of open
+     * Iterators would discard one of them as a duplicate.
+     */
+    Comparator<MeteredIterator> OPENED_FIRST = Comparator
+        .comparingLong(MeteredIterator::startTimestamp)
+        .thenComparingLong(MeteredIterator::sequenceNumber);
+
     /**
      * @return The UNIX timestamp, in milliseconds, that this Iterator was created/opened.
      */
     long startTimestamp();
+
+    /**
+     * @return A number, unique across all Iterators, that increases in the order Iterators are created.
+     */
+    long sequenceNumber();
 }
