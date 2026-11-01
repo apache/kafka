@@ -305,6 +305,7 @@ public class ClusterTestExtensions implements TestTemplateInvocationContextProvi
             .setTags(List.of(clusterTest.tags()))
             .setFeatures(features)
             .setStandalone(clusterTest.standalone())
+            .setSkipJaasFileSetup(clusterTest.skipJaasFileSetup())
             .build();
 
         return Arrays.stream(types)
