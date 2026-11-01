@@ -631,7 +631,7 @@ public class JsonConverter implements Converter, HeaderConverter {
                     if (value instanceof byte[])
                         return JSON_NODE_FACTORY.binaryNode((byte[]) value);
                     else if (value instanceof ByteBuffer)
-                        return JSON_NODE_FACTORY.binaryNode(((ByteBuffer) value).array());
+                        return JSON_NODE_FACTORY.binaryNode(Utils.toArray((ByteBuffer) value));
                     else
                         throw new DataException("Invalid type for bytes type: " + value.getClass());
                 case ARRAY: {
