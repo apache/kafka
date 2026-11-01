@@ -19,6 +19,7 @@ package org.apache.kafka.coordinator.group.streams.assignor;
 
 import org.junit.jupiter.api.Test;
 
+import java.util.Map;
 import java.util.Set;
 
 import static org.junit.jupiter.api.Assertions.assertEquals;
@@ -35,8 +36,8 @@ public class ProcessStateTest {
 
         processState.addTask("member1", taskId, true, true);
 
-        assertTrue(processState.assignedActiveTasks().contains(taskId));
-        assertEquals(1, processState.memberToTaskCounts().get("member1"));
+        assertEquals(Map.of("member1", Set.of(taskId)), processState.assignedActiveTasksByMember());
+        assertEquals(Map.of("member1", 1), processState.memberToTaskCounts());
     }
 
     @Test
@@ -47,55 +48,34 @@ public class ProcessStateTest {
 
         processState.addTask("member1", taskId, false, true);
 
-        assertTrue(processState.assignedStandbyTasks().contains(taskId));
-        assertEquals(1, processState.memberToTaskCounts().get("member1"));
+        assertEquals(Map.of("member1", Set.of(taskId)), processState.assignedStandbyTasksByMember());
+        assertEquals(Map.of("member1", 1), processState.memberToTaskCounts());
     }
 
     @Test
-    void shouldIncreaseCapacity() {
-        ProcessState processState = new ProcessState("process1");
-
-        processState.addMember("member1");
-
-        assertEquals(1, processState.capacity());
-    }
-
-    @Test
-    void shouldReturnTrueWhenCapacityIsAvailable() {
+    void shouldComputeLoadFromTaskCountAndCapacity() {
         ProcessState processState = new ProcessState("process1");
         processState.addMember("member1");
+        processState.addMember("member2");
 
-        assertTrue(processState.hasCapacity());
-    }
-
-    @Test
-    void shouldReturnFalseWhenCapacityIsFull() {
-        ProcessState processState = new ProcessState("process1");
-        processState.addMember("member1");
         processState.addTask("member1", new TaskId("id1", 0), true, true);
+        assertEquals(0.5, processState.load());
 
-        assertFalse(processState.hasCapacity());
-    }
-
-    @Test
-    void shouldCompareBasedOnLoadAndCapacity() {
-        ProcessState processState1 = new ProcessState("process1");
-        ProcessState processState2 = new ProcessState("process2");
-        processState1.addMember("member1");
-        processState2.addMember("member2");
-        processState1.addTask("member1", new TaskId("id1", 0), true, true);
-
-        assertTrue(processState1.compareTo(processState2) > 0);
+        processState.addTask("member2", new TaskId("id1", 1), true, true);
+        assertEquals(1.0, processState.load());
     }
 
     @Test
     void shouldReturnTrueIfTaskIsAssigned() {
         ProcessState processState = new ProcessState("process1");
         processState.addMember("member1");
-        TaskId taskId = new TaskId("id1", 0);
-        processState.addTask("member1", taskId, true, true);
+        TaskId activeTaskId = new TaskId("id1", 0);
+        TaskId standbyTaskId = new TaskId("id1", 1);
+        processState.addTask("member1", activeTaskId, true, true);
+        processState.addTask("member1", standbyTaskId, false, true);
 
-        assertTrue(processState.hasTask(taskId));
+        assertTrue(processState.hasTask(activeTaskId));
+        assertTrue(processState.hasTask(standbyTaskId));
     }
 
     @Test
@@ -105,20 +85,5 @@ public class ProcessStateTest {
         TaskId taskId = new TaskId("id1", 0);
 
         assertFalse(processState.hasTask(taskId));
-    }
-
-    @Test
-    void shouldReturnAllAssignedTasks() {
-        ProcessState processState = new ProcessState("process1");
-        processState.addMember("member1");
-        TaskId activeTaskId = new TaskId("id1", 0);
-        TaskId standbyTaskId = new TaskId("id1", 1);
-        processState.addTask("member1", activeTaskId, true, true);
-        processState.addTask("member1", standbyTaskId, false, true);
-
-        Set<TaskId> assignedTasks = processState.assignedTasks();
-
-        assertTrue(assignedTasks.contains(activeTaskId));
-        assertTrue(assignedTasks.contains(standbyTaskId));
     }
 }

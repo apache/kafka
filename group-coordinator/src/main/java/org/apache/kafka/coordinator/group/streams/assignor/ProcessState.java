@@ -24,7 +24,6 @@ import java.util.HashSet;
 import java.util.Map;
 import java.util.PriorityQueue;
 import java.util.Set;
-import java.util.stream.Collectors;
 
 /**
  * Represents the state of a process in the group coordinator.
@@ -60,10 +59,6 @@ public class ProcessState {
         return processId;
     }
 
-    public int capacity() {
-        return capacity;
-    }
-
     public double load() {
         return load;
     }
@@ -79,20 +74,8 @@ public class ProcessState {
         return statelessActiveLoad;
     }
 
-    public Set<TaskId> assignedActiveTasks() {
-        return assignedActiveTasks.values().stream()
-            .flatMap(Set::stream)
-            .collect(Collectors.toSet());
-    }
-
     public Map<String, Set<TaskId>> assignedActiveTasksByMember() {
         return assignedActiveTasks;
-    }
-
-    public Set<TaskId> assignedStandbyTasks() {
-        return assignedStandbyTasks.values().stream()
-            .flatMap(Set::stream)
-            .collect(Collectors.toSet());
     }
 
     public Map<String, Set<TaskId>> assignedStandbyTasksByMember() {
@@ -181,7 +164,7 @@ public class ProcessState {
         computeLoad();
     }
 
-    public void computeLoad() {
+    private void computeLoad() {
         if (capacity <= 0) {
             this.load = -1;
             this.statelessActiveLoad = -1;
@@ -196,23 +179,7 @@ public class ProcessState {
         incrementCapacity();
     }
 
-    public boolean hasCapacity() {
-        return this.load < 1.0;
-    }
-
-    public int compareTo(final ProcessState other) {
-        int loadCompare = Double.compare(this.load, other.load());
-        if (loadCompare == 0) {
-            return Integer.compare(other.capacity, this.capacity);
-        }
-        return loadCompare;
-    }
-
     public boolean hasTask(final TaskId taskId) {
         return assignedTasks.contains(taskId);
-    }
-
-    Set<TaskId> assignedTasks() {
-        return assignedTasks;
     }
 }
