@@ -65,6 +65,7 @@ import java.util.OptionalInt;
 import java.util.OptionalLong;
 import java.util.Set;
 import java.util.TreeMap;
+import java.util.function.Supplier;
 import java.util.stream.Collectors;
 
 import static org.apache.kafka.coordinator.group.streams.TaskAssignmentTestUtil.mkTasks;
@@ -561,6 +562,78 @@ public class StreamsGroupTest {
         if (taskRole == TaskRole.ACTIVE) {
             assertEquals("process", streamsGroup.currentActiveTaskProcessId(fooSubtopologyId, 1));
         }
+    }
+
+    @ParameterizedTest
+    @EnumSource(value = TaskRole.class, names = {"STANDBY", "WARMUP"})
+    public void testAddingTaskProcessIdIsRevertedOnRollback(TaskRole taskRole) {
+        String subtopologyId = "foo-sub";
+        SnapshotRegistry snapshotRegistry = new SnapshotRegistry(LOG_CONTEXT);
+        StreamsGroup streamsGroup = new StreamsGroup(LOG_CONTEXT, snapshotRegistry, "foo");
+        Supplier<Set<String>> currentProcessIds = taskRole == TaskRole.STANDBY
+            ? () -> streamsGroup.currentStandbyTaskProcessIds(subtopologyId, 1)
+            : () -> streamsGroup.currentWarmupTaskProcessIds(subtopologyId, 1);
+        TasksTupleWithEpochs tasks = TaskAssignmentTestUtil.mkTasksTupleWithCommonEpoch(
+            taskRole, 10, mkTasks(subtopologyId, 1));
+        StreamsGroupMember member1 = new StreamsGroupMember.Builder("member1")
+            .setProcessId("process1")
+            .setAssignedTasks(tasks)
+            .build();
+        StreamsGroupMember member2 = new StreamsGroupMember.Builder("member2")
+            .setProcessId("process2")
+            .setAssignedTasks(TasksTupleWithEpochs.EMPTY)
+            .build();
+
+        streamsGroup.updateMember(member1);
+        streamsGroup.updateMember(member2);
+        assertEquals(Set.of("process1"), currentProcessIds.get());
+        snapshotRegistry.idempotentCreateSnapshot(0);
+
+        // Add an owner to an existing task so the change must restore the previous owner set.
+        StreamsGroupMember updatedMember2 = new StreamsGroupMember.Builder(member2)
+            .setAssignedTasks(tasks)
+            .build();
+        streamsGroup.updateMember(updatedMember2);
+        assertEquals(updatedMember2, streamsGroup.getMemberOrThrow("member2"));
+        assertEquals(Set.of("process1", "process2"), currentProcessIds.get());
+
+        snapshotRegistry.revertToSnapshot(0);
+
+        assertEquals(member1, streamsGroup.getMemberOrThrow("member1"));
+        assertEquals(member2, streamsGroup.getMemberOrThrow("member2"));
+        assertEquals(Set.of("process1"), currentProcessIds.get());
+    }
+
+    @ParameterizedTest
+    @EnumSource(value = TaskRole.class, names = {"STANDBY", "WARMUP"})
+    public void testRemovingTaskProcessIdIsRevertedOnRollback(TaskRole taskRole) {
+        String subtopologyId = "foo-sub";
+        SnapshotRegistry snapshotRegistry = new SnapshotRegistry(LOG_CONTEXT);
+        StreamsGroup streamsGroup = new StreamsGroup(LOG_CONTEXT, snapshotRegistry, "foo");
+        Supplier<Set<String>> currentProcessIds = taskRole == TaskRole.STANDBY
+            ? () -> streamsGroup.currentStandbyTaskProcessIds(subtopologyId, 1)
+            : () -> streamsGroup.currentWarmupTaskProcessIds(subtopologyId, 1);
+        StreamsGroupMember member = new StreamsGroupMember.Builder("member")
+            .setProcessId("process")
+            .setAssignedTasks(TaskAssignmentTestUtil.mkTasksTupleWithCommonEpoch(
+                taskRole, 10, mkTasks(subtopologyId, 1)))
+            .build();
+
+        streamsGroup.updateMember(member);
+        assertEquals(Set.of("process"), currentProcessIds.get());
+        snapshotRegistry.idempotentCreateSnapshot(0);
+
+        StreamsGroupMember updatedMember = new StreamsGroupMember.Builder(member)
+            .setAssignedTasks(TasksTupleWithEpochs.EMPTY)
+            .build();
+        streamsGroup.updateMember(updatedMember);
+        assertEquals(updatedMember, streamsGroup.getMemberOrThrow("member"));
+        assertEquals(Set.of(), currentProcessIds.get());
+
+        snapshotRegistry.revertToSnapshot(0);
+
+        assertEquals(member, streamsGroup.getMemberOrThrow("member"));
+        assertEquals(Set.of("process"), currentProcessIds.get());
     }
 
     @Test
