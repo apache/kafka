@@ -570,6 +570,9 @@ org.apache.kafka.server.quota.ControllerMutationQuotaManagerTest:
 - testPermissiveControllerMutationQuotaViolation
 - testStrictControllerMutationQuotaViolation
 - testThrottleTime
+org.apache.kafka.server.quota.QuotaFactoryTest:
+- testUserClientQuotaUpdaterConvertsEntityAndQuota
+- testUserClientQuotaUpdatersDispatchToManagers
 org.apache.kafka.server.quota.ReplicationQuotaManagerTest:
 - shouldExceedQuotaThenReturnBackBelowBoundAsTimePasses
 - shouldSupportWildcardThrottledReplicas
