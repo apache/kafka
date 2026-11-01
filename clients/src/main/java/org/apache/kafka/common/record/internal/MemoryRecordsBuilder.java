@@ -835,8 +835,24 @@ public class MemoryRecordsBuilder implements AutoCloseable {
         if (compression.type() == CompressionType.NONE) {
             return batchHeaderSizeInBytes + uncompressedSize;
         } else {
-            return batchHeaderSizeInBytes + (int) (uncompressedSize * estimatedCompressionRatio * COMPRESSION_RATE_ESTIMATION_FACTOR);
+            return estimatedCompressedSizeInBytes(batchHeaderSizeInBytes, uncompressedSize, estimatedCompressionRatio);
         }
+    }
+
+    /**
+     * Estimated size of a compressed batch: the batch header plus {@code uncompressedSize} bytes of records
+     * scaled by the compression ratio estimate, padded by {@link #COMPRESSION_RATE_ESTIMATION_FACTOR} (5%)
+     * because the estimate is an average and an individual batch can compress worse. This is the formula
+     * the builder's fullness checks use for a compressed batch; it is exposed so the incremental strategy
+     * can size a new batch's first record the same way.
+     *
+     * @param batchHeaderSizeInBytes    the size of the batch header, which is not compressed
+     * @param uncompressedSize          the total uncompressed size of the batch's records
+     * @param estimatedCompressionRatio the compression ratio estimate, compressed size over uncompressed size
+     */
+    public static int estimatedCompressedSizeInBytes(int batchHeaderSizeInBytes, int uncompressedSize,
+                                                     float estimatedCompressionRatio) {
+        return batchHeaderSizeInBytes + (int) (uncompressedSize * estimatedCompressionRatio * COMPRESSION_RATE_ESTIMATION_FACTOR);
     }
 
     /**
