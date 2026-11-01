@@ -704,6 +704,10 @@ public interface Admin extends AutoCloseable {
      * if the records of the partition can not be deleted due to the configured {@code cleanup.policy},
      * for example because the topic's {@code cleanup.policy} is {@code compact} and does not include
      * {@code delete}.</li>
+     * <li>{@link org.apache.kafka.common.errors.OffsetOutOfRangeException}
+     * if the given offset is negative and not {@code -1}, or is larger than the high watermark
+     * of the partition. An offset of {@code -1} is replaced with the high watermark. When this
+     * exception is thrown, no records are deleted.</li>
      * </ul>
      * <p>
      * This operation is supported by brokers with version 0.11.0.0 or higher.

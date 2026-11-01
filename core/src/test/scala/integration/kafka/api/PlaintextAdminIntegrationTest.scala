@@ -1141,6 +1141,11 @@ class PlaintextAdminIntegrationTest extends BaseAdminIntegrationTest {
     val cause = assertThrows(classOf[ExecutionException],
       () => client.deleteRecords(util.Map.of(topicPartition, RecordsToDelete.beforeOffset(20L))).lowWatermarks.get(topicPartition).get).getCause
     assertEquals(classOf[OffsetOutOfRangeException], cause.getClass)
+
+    // OffsetOutOfRangeException if offset is negative and not -1
+    val negativeOffsetCause = assertThrows(classOf[ExecutionException],
+      () => client.deleteRecords(util.Map.of(topicPartition, RecordsToDelete.beforeOffset(-2L))).lowWatermarks.get(topicPartition).get).getCause
+    assertEquals(classOf[OffsetOutOfRangeException], negativeOffsetCause.getClass)
   }
 
   private def subscribeAndWaitForAssignment(topic: String, consumer: Consumer[Array[Byte], Array[Byte]]): Unit = {
