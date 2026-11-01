@@ -40,6 +40,7 @@ import java.util.Map;
 import java.util.Optional;
 import java.util.Properties;
 import java.util.Set;
+import java.util.function.BooleanSupplier;
 import java.util.function.Function;
 import java.util.function.Supplier;
 import java.util.regex.Matcher;
@@ -290,9 +291,11 @@ public class DynamicBrokerConfig {
                 ClusterMirrorConfigs.MIRROR_METADATA_REFRESH_INTERVAL_MS_CONFIG);
 
         private final Supplier<AbstractKafkaConfig> currentConfig;
+        private final BooleanSupplier enforceThreadCountBounds;
 
-        public DynamicClusterMirrorConfig(Supplier<AbstractKafkaConfig> currentConfig) {
+        public DynamicClusterMirrorConfig(Supplier<AbstractKafkaConfig> currentConfig, BooleanSupplier enforceThreadCountBounds) {
             this.currentConfig = currentConfig;
+            this.enforceThreadCountBounds = enforceThreadCountBounds;
         }
 
         @Override
@@ -302,16 +305,11 @@ public class DynamicBrokerConfig {
 
         @Override
         public void validateReconfiguration(AbstractKafkaConfig newConfig) {
-            int newFetchers = newConfig.getInt(ClusterMirrorConfigs.MIRROR_NUM_REPLICA_FETCHERS_CONFIG);
-            int oldFetchers = currentConfig.get().getInt(ClusterMirrorConfigs.MIRROR_NUM_REPLICA_FETCHERS_CONFIG);
-            if (newFetchers != oldFetchers) {
-                String errorMsg = "Dynamic thread count update validation failed for "
-                        + ClusterMirrorConfigs.MIRROR_NUM_REPLICA_FETCHERS_CONFIG + "=" + newFetchers;
-                if (newFetchers < oldFetchers / 2)
-                    throw new ConfigException(errorMsg + ", Value should be at least half the current value " + oldFetchers);
-                if (newFetchers > oldFetchers * 2)
-                    throw new ConfigException(errorMsg + ", Value should not be greater than double the current value " + oldFetchers);
-            }
+            DynamicThreadPool.validateThreadCount(
+                    ClusterMirrorConfigs.MIRROR_NUM_REPLICA_FETCHERS_CONFIG,
+                    currentConfig.get().getInt(ClusterMirrorConfigs.MIRROR_NUM_REPLICA_FETCHERS_CONFIG),
+                    newConfig.getInt(ClusterMirrorConfigs.MIRROR_NUM_REPLICA_FETCHERS_CONFIG),
+                    enforceThreadCountBounds.getAsBoolean());
         }
 
         @Override

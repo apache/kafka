@@ -255,16 +255,19 @@ public class LogCleaner {
      * Validate the new cleaner threads num is reasonable.
      *
      * @param newConfig the submitted cleaner config
+     * @param enforceBounds whether the new threads num must be within [current / 2, current * 2]
      */
-    public void validateReconfiguration(CleanerConfig newConfig) {
+    public void validateReconfiguration(CleanerConfig newConfig, boolean enforceBounds) {
         int numThreads = newConfig.numThreads;
         int currentThreads = config.numThreads;
         if (numThreads < 1)
             throw new ConfigException("Log cleaner threads should be at least 1");
-        if (numThreads < currentThreads / 2)
-            throw new ConfigException("Log cleaner threads cannot be reduced to less than half the current value " + currentThreads);
-        if (numThreads > currentThreads * 2)
-            throw new ConfigException("Log cleaner threads cannot be increased to more than double the current value " + currentThreads);
+        if (enforceBounds) {
+            if (numThreads < currentThreads / 2)
+                throw new ConfigException("Log cleaner threads cannot be reduced to less than half the current value " + currentThreads);
+            if (numThreads > currentThreads * 2)
+                throw new ConfigException("Log cleaner threads cannot be increased to more than double the current value " + currentThreads);
+        }
 
     }
 
