@@ -66,8 +66,8 @@ public class TimestampTest {
 
     @Test
     public void testToLogical() {
-        assertEquals(EPOCH.getTime(), Timestamp.toLogical(Timestamp.SCHEMA, 0L));
-        assertEquals(EPOCH_PLUS_MILLIS.getTime(), Timestamp.toLogical(Timestamp.SCHEMA, TOTAL_MILLIS));
+        assertEquals(Timestamp.toLogical(Timestamp.SCHEMA, 0L), EPOCH.getTime());
+        assertEquals(Timestamp.toLogical(Timestamp.SCHEMA, TOTAL_MILLIS), EPOCH_PLUS_MILLIS.getTime());
     }
 
     @Test
