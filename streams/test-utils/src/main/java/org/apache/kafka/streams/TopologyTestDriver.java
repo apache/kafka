@@ -251,7 +251,8 @@ public class TopologyTestDriver implements Closeable {
 
     private final Map<String, TopicPartition> partitionsByInputTopic = new HashMap<>();
     private final Map<String, TopicPartition> globalPartitionsByInputTopic = new HashMap<>();
-    private final Map<TopicPartition, AtomicLong> offsetsByTopicOrPatternPartition = new HashMap<>();
+    private final Map<String, AtomicLong> offsetsByInputTopic = new HashMap<>();
+    private final Map<TopicPartition, AtomicLong> offsetsByGlobalTopicPartition = new HashMap<>();
 
     private final Map<String, Queue<ProducerRecord<byte[], byte[]>>> outputRecordsByTopic = new HashMap<>();
     private final StreamsConfigUtils.ProcessingMode processingMode;
@@ -424,7 +425,6 @@ public class TopologyTestDriver implements Closeable {
         for (final String topic : processorTopology.sourceTopics()) {
             final TopicPartition tp = new TopicPartition(topic, PARTITION_ID);
             partitionsByInputTopic.put(topic, tp);
-            offsetsByTopicOrPatternPartition.put(tp, new AtomicLong());
         }
 
         stateDirectory = new StateDirectory(streamsConfig, mockWallClockTime, internalTopologyBuilder.hasPersistentStores(), false);
@@ -439,7 +439,7 @@ public class TopologyTestDriver implements Closeable {
             for (final String topicName : globalTopology.sourceTopics()) {
                 final TopicPartition partition = new TopicPartition(topicName, 0);
                 globalPartitionsByInputTopic.put(topicName, partition);
-                offsetsByTopicOrPatternPartition.put(partition, new AtomicLong());
+                offsetsByGlobalTopicPartition.put(partition, new AtomicLong());
                 globalConsumer.updatePartitions(topicName, Collections.singletonList(
                     new PartitionInfo(topicName, 0, null, null, null)));
                 globalConsumer.updateBeginningOffsets(Collections.singletonMap(partition, 0L));
@@ -584,7 +584,8 @@ public class TopologyTestDriver implements Closeable {
                                    final byte[] key,
                                    final byte[] value,
                                    final Headers headers) {
-        final long offset = offsetsByTopicOrPatternPartition.get(topicOrPatternPartition).incrementAndGet() - 1;
+        // Matching topics share a task queue, but each concrete topic has its own record offsets.
+        final long offset = offsetsByInputTopic.computeIfAbsent(inputTopic, ignored -> new AtomicLong()).getAndIncrement();
         task.addRecords(topicOrPatternPartition, Collections.singleton(new ConsumerRecord<>(
             inputTopic,
             topicOrPatternPartition.partition(),
@@ -652,7 +653,7 @@ public class TopologyTestDriver implements Closeable {
         globalStateTask.update(new ConsumerRecord<>(
             globalInputTopicPartition.topic(),
             globalInputTopicPartition.partition(),
-            offsetsByTopicOrPatternPartition.get(globalInputTopicPartition).incrementAndGet() - 1,
+            offsetsByGlobalTopicPartition.get(globalInputTopicPartition).incrementAndGet() - 1,
             timestamp,
             TimestampType.CREATE_TIME,
             key == null ? ConsumerRecord.NULL_SIZE : key.length,
