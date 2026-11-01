@@ -1197,7 +1197,7 @@ public class OffsetMetadataManager {
             }
 
             if (producerId == RecordBatch.NO_PRODUCER_ID) {
-                log.debug("Replaying offset commit with key {}, value {}", key, value);
+                log.debug("[GroupId {}] Replaying offset commit with key {}, value {}", groupId, key, value);
                 // If the offset is not part of a transaction, it is directly stored
                 // in the offsets store.
                 OffsetAndMetadata previousValue = offsets.put(
@@ -1210,7 +1210,7 @@ public class OffsetMetadataManager {
                     metrics.incrementNumOffsets();
                 }
             } else {
-                log.debug("Replaying transactional offset commit with producer id {}, key {}, value {}", producerId, key, value);
+                log.debug("[GroupId {}] Replaying transactional offset commit with producer id {}, key {}, value {}", groupId, producerId, key, value);
                 // Otherwise, the transaction offset is stored in the pending transactional
                 // offsets store. Pending offsets there are moved to the main store when
                 // the transaction is committed; or removed when the transaction is aborted.
@@ -1284,9 +1284,9 @@ public class OffsetMetadataManager {
                         // offset commits. Without preserving information of the commit record offset, compaction of the
                         // __consumer_offsets topic itself may result in the wrong offset commit being materialized.
                         if (existingOffsetAndMetadata == null || offsetAndMetadata.recordOffset > existingOffsetAndMetadata.recordOffset) {
-                            log.debug("Committed transactional offset commit {} for producer id {} in group {} " +
+                            log.debug("[GroupId {}] Committed transactional offset commit {} for producer id {} " +
                                 "with topic {} and partition {}.",
-                                offsetAndMetadata, producerId, groupId, topicName, partitionId);
+                                groupId, offsetAndMetadata, producerId, topicName, partitionId);
                             OffsetAndMetadata previousValue = offsets.put(
                                 groupId,
                                 topicName,
@@ -1297,9 +1297,9 @@ public class OffsetMetadataManager {
                                 metrics.incrementNumOffsets();
                             }
                         } else {
-                            log.info("Skipped the materialization of transactional offset commit {} for producer id {} in group {} with topic {}, " +
+                            log.info("[GroupId {}] Skipped the materialization of transactional offset commit {} for producer id {} with topic {}, " +
                                 "partition {} since its record offset {} is smaller than the record offset {} of the last committed offset.",
-                                offsetAndMetadata, producerId, groupId, topicName, partitionId, offsetAndMetadata.recordOffset, existingOffsetAndMetadata.recordOffset);
+                                groupId, offsetAndMetadata, producerId, topicName, partitionId, offsetAndMetadata.recordOffset, existingOffsetAndMetadata.recordOffset);
                         }
                     });
                 });

@@ -514,9 +514,10 @@ public class ClassicGroup implements Group {
                 for (ClassicGroupMember member : members.values()) {
                     if (member.isAwaitingJoin()) {
                         leaderId = Optional.of(member.memberId());
-                        log.info("Group leader [memberId: {}, groupInstanceId: {}] " +
+                        log.info("[GroupId {}] Group leader [memberId: {}, groupInstanceId: {}] " +
                                 "failed to join before the rebalance timeout. Member {} " +
                                 "was elected as the new leader.",
+                            groupId,
                             currentLeader.memberId(),
                             currentLeader.groupInstanceId().orElse("None"),
                             member
@@ -524,10 +525,11 @@ public class ClassicGroup implements Group {
                         return true;
                     }
                 }
-                log.info("Group leader [memberId: {}, groupInstanceId: {}] " +
+                log.info("[GroupId {}] Group leader [memberId: {}, groupInstanceId: {}] " +
                         "failed to join before the rebalance timeout and the " +
                         "group couldn't proceed to the next generation because " +
                         "no member joined.",
+                    groupId,
                     currentLeader.memberId(),
                     currentLeader.groupInstanceId().orElse("None")
                 );
@@ -805,9 +807,9 @@ public class ClassicGroup implements Group {
             if (existingMemberId == null) {
                 throw Errors.UNKNOWN_MEMBER_ID.exception();
             } else if (!existingMemberId.equals(memberId)) {
-                log.info("Request memberId={} for static member with groupInstanceId={} " +
+                log.info("[GroupId {}] Request memberId={} for static member with groupInstanceId={} " +
                          "is fenced by existing memberId={} during operation {}",
-                    memberId, groupInstanceId, existingMemberId, operation);
+                    groupId, memberId, groupInstanceId, existingMemberId, operation);
                 throw Errors.FENCED_INSTANCE_ID.exception();
             }
         }
@@ -1179,8 +1181,8 @@ public class ClassicGroup implements Group {
                 });
                 return Optional.of(allSubscribedTopics);
             } catch (SchemaException e) {
-                log.warn("Failed to parse Consumer Protocol {}:{} of group {}. Consumer group coordinator is not aware of the subscribed topics.",
-                        ConsumerProtocol.PROTOCOL_TYPE, protocolName.get(), groupId, e);
+                log.warn("[GroupId {}] Failed to parse Consumer Protocol {}:{}. Consumer group coordinator is not aware of the subscribed topics.",
+                        groupId, ConsumerProtocol.PROTOCOL_TYPE, protocolName.get(), e);
             }
         }
 

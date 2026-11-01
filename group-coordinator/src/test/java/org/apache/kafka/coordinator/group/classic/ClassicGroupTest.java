@@ -1058,7 +1058,7 @@ public class ClassicGroupTest {
                 () -> group.validateOffsetCommit("member-id", "instance-id", 1, false, version));
 
             assertEquals(1, appender.getMessages(Level.INFO).stream()
-                .filter(msg -> msg.contains("Request memberId=member-id for static member with groupInstanceId=instance-id is fenced by existing memberId=new-member-id during operation offset-commit"))
+                .filter(msg -> msg.contains("[GroupId groupId] Request memberId=member-id for static member with groupInstanceId=instance-id is fenced by existing memberId=new-member-id during operation offset-commit"))
                 .count());
         }
 
@@ -1068,7 +1068,7 @@ public class ClassicGroupTest {
                 () -> group.validateOffsetCommit("member-id", "instance-id", 1, true, version));
 
             assertEquals(1, appender.getMessages(Level.INFO).stream()
-                .filter(msg -> msg.contains("Request memberId=member-id for static member with groupInstanceId=instance-id is fenced by existing memberId=new-member-id during operation txn-offset-commit"))
+                .filter(msg -> msg.contains("[GroupId groupId] Request memberId=member-id for static member with groupInstanceId=instance-id is fenced by existing memberId=new-member-id during operation txn-offset-commit"))
                 .count());
         }
 
