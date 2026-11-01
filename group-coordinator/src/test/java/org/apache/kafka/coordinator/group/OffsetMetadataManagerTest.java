@@ -3760,6 +3760,43 @@ public class OffsetMetadataManagerTest {
     }
 
     @Test
+    public void testCleanupExpiredOffsetsWithNonEmptyRecords() {
+        GroupMetadataManager groupMetadataManager = mock(GroupMetadataManager.class);
+        Group group = mock(Group.class);
+
+        OffsetMetadataManagerTestContext context = new OffsetMetadataManagerTestContext.Builder()
+            .withGroupMetadataManager(groupMetadataManager)
+            .withOffsetsRetentionMinutes(1)
+            .build();
+
+        long commitTimestamp = context.time.milliseconds();
+        context.commitOffset("group-id", "topic", 0, 100L, 0, commitTimestamp);
+        context.time.sleep(Duration.ofMinutes(1).toMillis());
+
+        when(groupMetadataManager.group("group-id")).thenReturn(group);
+        when(group.offsetExpirationCondition()).thenReturn(Optional.of(
+            new OffsetExpirationConditionImpl(offsetAndMetadata -> offsetAndMetadata.commitTimestampMs)));
+        when(group.isSubscribedToTopic("topic")).thenReturn(false);
+
+        // The list is shared across groups, so it already holds records of another group.
+        List<CoordinatorRecord> records = new ArrayList<>(List.of(
+            GroupCoordinatorRecordHelpers.newOffsetCommitTombstoneRecord("other-group-id", "topic", 0),
+            GroupCoordinatorRecordHelpers.newOffsetCommitTombstoneRecord("other-group-id", "topic", 1)
+        ));
+        assertTrue(context.offsetMetadataManager.cleanupExpiredOffsets("group-id", records));
+
+        assertEquals(
+            List.of(
+                GroupCoordinatorRecordHelpers.newOffsetCommitTombstoneRecord("other-group-id", "topic", 0),
+                GroupCoordinatorRecordHelpers.newOffsetCommitTombstoneRecord("other-group-id", "topic", 1),
+                GroupCoordinatorRecordHelpers.newOffsetCommitTombstoneRecord("group-id", "topic", 0)
+            ),
+            records
+        );
+        verify(context.metrics).record(OFFSET_EXPIRED_SENSOR_NAME, 1);
+    }
+
+    @Test
     public void testOffsetDeletionsSensor() {
         OffsetMetadataManagerTestContext context = new OffsetMetadataManagerTestContext.Builder().build();
         ClassicGroup group = context.groupMetadataManager.getOrMaybeCreateClassicGroup("foo", true);
