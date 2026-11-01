@@ -2333,7 +2333,6 @@ public class GroupMetadataManager {
             groupEpoch,
             Optional.of(updatedMember),
             updatedConfiguredTopology,
-            metadataImage,
             records,
             Optional.of(returnedStatus),
             currentAssignmentConfigs,
@@ -4554,7 +4553,6 @@ public class GroupMetadataManager {
      * @param group                The StreamsGroup.
      * @param groupEpoch           The group epoch.
      * @param updatedMember        The updated member (optional).
-     * @param metadataImage        The metadata image.
      * @param records              The list to accumulate any new records.
      * @param returnedStatus       A mutable collection of status to be returned in the response.
      * @param refineOnly           If true, only advance the assignment epoch of the unchanged final target (warm-up refinement step)
@@ -4566,7 +4564,6 @@ public class GroupMetadataManager {
         int groupEpoch,
         Optional<StreamsGroupMember> updatedMember,
         ConfiguredTopology configuredTopology,
-        CoordinatorMetadataImage metadataImage,
         List<CoordinatorRecord> records,
         Optional<List<Status>> returnedStatus,
         AssignmentConfigs assignmentConfigs,
@@ -4811,7 +4808,6 @@ public class GroupMetadataManager {
                 group.groupEpoch(),
                 Optional.empty(),
                 group.configuredTopology().get(),
-                metadataImage,
                 records,
                 Optional.empty(),
                 group.lastAssignmentConfigs(),
