@@ -61,6 +61,7 @@ import java.util.Objects;
 import java.util.Optional;
 import java.util.Set;
 import java.util.function.Function;
+import java.util.function.Supplier;
 import java.util.stream.Collectors;
 
 import static org.apache.kafka.streams.StreamsConfig.PROCESSING_EXCEPTION_HANDLER_CLASS_CONFIG;
@@ -746,7 +747,7 @@ public class StreamTask extends AbstractTask implements ProcessorNodePunctuator,
                 // READY -> NOT_READY - start timer
                 lastNotReadyLogTime = Optional.of(wallClockTime);
             } else {
-                maybeLogNotReady(wallClockTime, "Task is not ready to process: has pending transaction commit");
+                maybeLogNotReady(wallClockTime, () -> "Task is not ready to process: has pending transaction commit");
             }
             return false;
         }
@@ -758,7 +759,7 @@ public class StreamTask extends AbstractTask implements ProcessorNodePunctuator,
                 lastNotReadyLogTime = Optional.of(wallClockTime);
                 timeCurrentIdlingStarted = Optional.of(wallClockTime);
             } else {
-                maybeLogNotReady(wallClockTime, readyToProcess.getLogMessage().orElseThrow());
+                maybeLogNotReady(wallClockTime, () -> readyToProcess.getLogMessage().orElseThrow());
             }
         } else {
             // Task is ready - clear the timer
@@ -769,11 +770,11 @@ public class StreamTask extends AbstractTask implements ProcessorNodePunctuator,
         return readyToProcess.isReady();
     }
 
-    private void maybeLogNotReady(final long wallClockTime, final String logMessage) {
+    private void maybeLogNotReady(final long wallClockTime, final Supplier<String> logMessage) {
         // NOT_READY - check if it should log
         final long timeSinceLastLog = lastNotReadyLogTime.map(aLong -> wallClockTime - aLong).orElse(-1L);
         if (timeSinceLastLog >= NOT_READY_LOG_INTERVAL_MS) {
-            log.info(logMessage);
+            log.info(logMessage.get());
             lastNotReadyLogTime = Optional.of(wallClockTime);
         }
     }
