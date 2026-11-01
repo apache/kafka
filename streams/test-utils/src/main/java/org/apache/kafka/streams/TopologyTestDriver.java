@@ -248,6 +248,7 @@ public class TopologyTestDriver implements Closeable {
     private final MockConsumer<byte[], byte[]> consumer;
     private final MockProducer<byte[], byte[]> producer;
     private final StreamsProducer testDriverProducer;
+    private final Map<String, Pattern> compiledPatterns = new HashMap<>();
 
     private final Map<String, TopicPartition> partitionsByInputTopic = new HashMap<>();
     private final Map<String, TopicPartition> globalPartitionsByInputTopic = new HashMap<>();
@@ -667,12 +668,16 @@ public class TopologyTestDriver implements Closeable {
 
     private void validateSourceTopicNameRegexPattern(final String inputRecordTopic) {
         for (final String sourceTopicName : internalTopologyBuilder.fullSourceTopicNames()) {
-            if (!sourceTopicName.equals(inputRecordTopic) && Pattern.compile(sourceTopicName).matcher(inputRecordTopic).matches()) {
+            if (!sourceTopicName.equals(inputRecordTopic) && getOrCompileRegex(sourceTopicName).matcher(inputRecordTopic).matches()) {
                 throw new TopologyException("Topology add source of type String for topic: " + sourceTopicName +
                                                 " cannot contain regex pattern for input record topic: " + inputRecordTopic +
                                                 " and hence cannot process the message.");
             }
         }
+    }
+
+    private Pattern getOrCompileRegex(final String regex) {
+        return compiledPatterns.computeIfAbsent(regex, Pattern::compile);
     }
 
     private TopicPartition getInputTopicOrPatternPartition(final String topicName) {
@@ -683,7 +688,7 @@ public class TopologyTestDriver implements Closeable {
         final TopicPartition topicPartition = partitionsByInputTopic.get(topicName);
         if (topicPartition == null) {
             for (final Map.Entry<String, TopicPartition> entry : partitionsByInputTopic.entrySet()) {
-                if (Pattern.compile(entry.getKey()).matcher(topicName).matches()) {
+                if (getOrCompileRegex(entry.getKey()).matcher(topicName).matches()) {
                     return entry.getValue();
                 }
             }
