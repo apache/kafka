@@ -451,4 +451,94 @@ public class Lz4CompressionTest {
         }
         return output.toByteArray();
     }
+
+    @Test
+    public void testContentSizeWrittenInHeader() throws IOException {
+        byte[] data = "hello world".getBytes(StandardCharsets.UTF_8);
+        long expectedContentSize = data.length;
+
+        ByteArrayOutputStream output = new ByteArrayOutputStream();
+        Lz4BlockOutputStream lz4 = new Lz4BlockOutputStream(
+            output,
+            Lz4BlockOutputStream.BLOCKSIZE_64KB,
+            LZ4.defaultLevel(),
+            false,
+            false,
+            expectedContentSize
+        );
+        lz4.write(data);
+        lz4.close();
+
+        byte[] compressed = output.toByteArray();
+
+        // Byte 4 is the FLG byte; bit 3 (Content Size flag) should be set
+        byte flgByte = compressed[4];
+        int contentSizeFlag = (flgByte >>> 3) & 1;
+        assertEquals(1, contentSizeFlag, "Content size flag (FLG bit 3) should be set");
+
+        // Bytes 6..13 are the 8-byte little-endian content size (after FLG at 4 and BD at 5)
+        ByteBuffer buf = ByteBuffer.wrap(compressed, 6, 8).order(ByteOrder.LITTLE_ENDIAN);
+        long writtenContentSize = buf.getLong();
+        assertEquals(expectedContentSize, writtenContentSize, "Content size in header should match");
+    }
+
+    @Test
+    public void testContentSizeRoundTrip() throws IOException {
+        byte[] data = String.join("", Collections.nCopies(256, "data")).getBytes(StandardCharsets.UTF_8);
+
+        ByteArrayOutputStream output = new ByteArrayOutputStream();
+        Lz4BlockOutputStream lz4 = new Lz4BlockOutputStream(
+            output,
+            Lz4BlockOutputStream.BLOCKSIZE_64KB,
+            LZ4.defaultLevel(),
+            false,
+            false,
+            data.length
+        );
+        lz4.write(data);
+        lz4.close();
+
+        byte[] compressed = output.toByteArray();
+
+        // Decompress and verify the data round-trips correctly
+        Lz4BlockInputStream decompressed = new Lz4BlockInputStream(
+            ByteBuffer.wrap(compressed), BufferSupplier.create(), false);
+        byte[] result = new byte[data.length];
+        int totalRead = 0;
+        int n;
+        while ((n = decompressed.read(result, totalRead, result.length - totalRead)) != -1) {
+            totalRead += n;
+        }
+        assertEquals(data.length, totalRead);
+        assertArrayEquals(data, result);
+    }
+
+    @Test
+    public void testDefaultConstructorOmitsContentSize() throws IOException {
+        ByteArrayOutputStream output = new ByteArrayOutputStream();
+        Lz4BlockOutputStream lz4 = new Lz4BlockOutputStream(
+            output,
+            Lz4BlockOutputStream.BLOCKSIZE_64KB,
+            LZ4.defaultLevel(),
+            false,
+            false
+        );
+        lz4.write(new byte[]{1, 2, 3});
+        lz4.close();
+
+        byte[] compressed = output.toByteArray();
+
+        // FLG byte is at offset 4; bit 3 should NOT be set when using default constructor
+        byte flgByte = compressed[4];
+        int contentSizeFlag = (flgByte >>> 3) & 1;
+        assertEquals(0, contentSizeFlag, "Content size flag should not be set for default constructor");
+
+        // Header should be 7 bytes (magic=4 + FLG=1 + BD=1 + HC=1), not 15 (with 8-byte content size)
+        // Verify by checking the frame can be decompressed
+        Lz4BlockInputStream decompressed = new Lz4BlockInputStream(
+            ByteBuffer.wrap(compressed), BufferSupplier.create(), false);
+        byte[] result = new byte[3];
+        assertEquals(3, decompressed.read(result));
+        assertArrayEquals(new byte[]{1, 2, 3}, result);
+    }
 }
