@@ -59,6 +59,7 @@ import java.util.ArrayList;
 import java.util.List;
 import java.util.Map;
 import java.util.Optional;
+import java.util.Set;
 import java.util.stream.Stream;
 
 import static org.apache.kafka.common.requests.StreamsGroupHeartbeatRequest.JOIN_GROUP_MEMBER_EPOCH;
@@ -833,6 +834,276 @@ class StreamsGroupStaticMemberGroupMetadataManagerTest {
         String memberId = Uuid.randomUuid().toString();
 
         verifyStaticMemberLeaveAndRejoinNoGroupBump(instanceId, memberId, memberId);
+    }
+
+    @Test
+    public void testStaticMemberRejoinWithChangedProcessIdWaitsForStandbyReleaseAndUpdatesEndpoint() {
+        /*
+         * M1old/new = memberId1WithOldProcess / memberId1WithNewProcess (same instanceId1).
+         * M2old/new = memberId2WithOldProcess / memberId2WithNewProcess (same instanceId2).
+         * M3 = memberId3WithProcess2. Task numbers are partitions of subtopology1.
+         * A = active, S = standby, {} = empty. Warmup tasks are always empty.
+         * Cells show assignedTasks after each step's heartbeats and record replay.
+         * R denotes tasksPendingRevocation, which still retain ownership until the member ACKs.
+         * A member marked * has left with epoch -2; its coordinator records retain its tasks.
+         *
+         * Step                       | oldProcessId                    | newProcessId                         | processId2
+         * ---------------------------|---------------------------------|--------------------------------------|----------------
+         * 0. Initial state           | M1old: A{0}; M2old: A{1} S{2}   | None                                 | M3: A{2} S{0,1}
+         * 1. Both old members leave  | M1old*: A{0}; M2old*: A{1} S{2} | None                                 | M3: A{2} S{0,1}
+         * 2. M1new joins             | M2old*: A{1} S{2}               | M1new: S{1,2}                        | M3: A{2} S{0,1}
+         * 3. M1new heartbeats        | M2old*: A{1} S{2}               | M1new: A{0} S{1,2}                   | M3: A{2} S{0,1}
+         * 4. M2new joins             | None                            | M1new: A{0} S{1,2}; M2new: {}        | M3: A{2} S{0,1}
+         * 5. M1new receives revoke   | None                            | M1new: A{0}, R=S{1,2}; M2new: {}     | M3: A{2} S{0,1}
+         * 6. M2new heartbeats, waits | None                            | M1new: A{0}, R=S{1,2}; M2new: {}     | M3: A{2} S{0,1}
+         * 7. M1new ACKs revocation   | None                            | M1new: A{0}, R={}; M2new: {}         | M3: A{2} S{0,1}
+         * 8. M2new heartbeats        | None                            | M1new: A{0}; M2new: A{1} S{2}        | M3: A{2} S{0,1}
+         *
+         * Targets differ from the current assignments above:
+         * Steps | Member 1 target    | Member 2 target    | Member 3 target
+         * ------|--------------------|--------------------|----------------
+         * 0-1   | M1old: A{0}        | M2old: A{1} S{2}   | M3: A{2} S{0,1}
+         * 2-3   | M1new: A{0} S{1,2} | M2old: A{1} S{2}   | M3: A{2} S{0,1}
+         * 4-8   | M1new: A{0}        | M2new: A{1} S{2}   | M3: A{2} S{0,1}
+         *
+         */
+        int groupEpoch = DEFAULT_GROUP_EPOCH;
+        int memberEpoch = DEFAULT_MEMBER_EPOCH;
+        String groupId = "streams-group";
+
+        String memberId1WithOldProcess = Uuid.randomUuid().toString();
+        String memberId2WithOldProcess = Uuid.randomUuid().toString();
+        String memberId1WithNewProcess = Uuid.randomUuid().toString();
+        String memberId2WithNewProcess = Uuid.randomUuid().toString();
+        String memberId3WithProcess2 = Uuid.randomUuid().toString();
+
+        String instanceId1 = Uuid.randomUuid().toString();
+        String instanceId2 = Uuid.randomUuid().toString();
+        String instanceId3 = Uuid.randomUuid().toString();
+
+        String oldProcessId = "old-process-1";
+        String newProcessId = "new-process-1";
+        String processId2 = "process-2";
+
+        String subtopologyId = "subtopology1";
+
+        StreamsTopicFixture topic = streamsTopicFixture(subtopologyId, "foo", 3);
+        topic.topology().subtopologies().get(0).setStateChangelogTopics(List.of(
+            new StreamsGroupHeartbeatRequestData.TopicInfo().setName("foo")
+        ));
+
+        // New Target Assignment
+        TasksTuple memberId1WithNewProcessTargetAssignment = new TasksTuple(
+            Map.of(subtopologyId, Set.of(0)),
+            Map.of(subtopologyId, Set.of(1, 2)),
+            Map.of()
+        );
+        TasksTuple memberId2WithNewProcessTargetAssignment = new TasksTuple(
+            Map.of(subtopologyId, Set.of(1)),
+            Map.of(subtopologyId, Set.of(2)),
+            Map.of()
+        );
+        TasksTuple memberId3WithProcess2TargetAssignment = new TasksTuple(
+            Map.of(subtopologyId, Set.of(2)),
+            Map.of(subtopologyId, Set.of(0, 1)),
+            Map.of()
+        );
+
+        // Current Assignment
+        TasksTupleWithEpochs memberId1WithOldProcessCurrentAssignment = topic.assignedTasks(memberEpoch, 0);
+        TasksTupleWithEpochs memberId2WithOldProcessCurrentAssignment = new TasksTupleWithEpochs(
+            topic.assignedTasks(memberEpoch, 1).activeTasksWithEpochs(),
+            memberId2WithNewProcessTargetAssignment.standbyTasks(),
+            Map.of()
+        );
+        TasksTupleWithEpochs memberId3WithProcess2CurrentAssignment = new TasksTupleWithEpochs(
+            topic.assignedTasks(memberEpoch, 2).activeTasksWithEpochs(),
+            memberId3WithProcess2TargetAssignment.standbyTasks(),
+            Map.of()
+        );
+        TasksTupleWithEpochs memberId1WithNewProcessInitialCurrentAssignment = new TasksTupleWithEpochs(
+            Map.of(),
+            Map.of(subtopologyId, Set.of(1, 2)),
+            Map.of()
+        );
+
+        MockTaskAssignor assignor = new MockTaskAssignor("sticky");
+        GroupMetadataManagerTestContext context = new GroupMetadataManagerTestContext.Builder()
+            .withStreamsGroupTaskAssignors(List.of(assignor))
+            .withMetadataImage(topic.metadataImage())
+            .withConfig(GroupCoordinatorConfig.STREAMS_GROUP_NUM_STANDBY_REPLICAS_CONFIG, 2)
+            .withConfig(GroupCoordinatorConfig.STREAMS_GROUP_ASSIGNMENT_INTERVAL_MS_CONFIG, 0)
+            .withStreamsGroup(new StreamsGroupBuilder(groupId, groupEpoch)
+                .withMember(streamsGroupMemberBuilderWithDefaults(memberId1WithOldProcess, instanceId1)
+                    .setProcessId(oldProcessId)
+                    .setMemberEpoch(memberEpoch)
+                    .setAssignedTasks(memberId1WithOldProcessCurrentAssignment)
+                    .build())
+                .withMember(streamsGroupMemberBuilderWithDefaults(memberId2WithOldProcess, instanceId2)
+                    .setProcessId(oldProcessId)
+                    .setMemberEpoch(memberEpoch)
+                    .setAssignedTasks(memberId2WithOldProcessCurrentAssignment)
+                    .setUserEndpoint(userEndpointForMetadata("foo.com", 8080))
+                    .build())
+                .withMember(streamsGroupMemberBuilderWithDefaults(memberId3WithProcess2, instanceId3)
+                    .setProcessId(processId2)
+                    .setMemberEpoch(memberEpoch)
+                    .setAssignedTasks(memberId3WithProcess2CurrentAssignment)
+                    .build())
+                .withTargetAssignment(memberId1WithOldProcess, topic.targetAssignment(0))
+                .withTargetAssignment(memberId2WithOldProcess, memberId2WithNewProcessTargetAssignment)
+                .withTargetAssignment(memberId3WithProcess2, memberId3WithProcess2TargetAssignment)
+                .withTargetAssignmentEpoch(groupEpoch)
+                .withTopology(StreamsTopology.fromHeartbeatRequest(topic.topology()))
+                .withValidatedTopologyEpoch(0)
+                .withMetadataHash(topic.metadataHash())
+                .withLastAssignmentConfigs(AssignmentConfigsImpl.DEFAULT.withNumStandbyReplicas(2)))
+            .build();
+
+
+        StreamsGroup group = context.groupMetadataManager.streamsGroup(groupId);
+        StreamsGroupHeartbeatResponseData.EndpointToPartitions endpointWithStandby =
+            new StreamsGroupHeartbeatResponseData.EndpointToPartitions()
+                .setUserEndpoint(new StreamsGroupHeartbeatResponseData.Endpoint().setHost("foo.com").setPort(8080))
+                .setActivePartitions(List.of(topicPartition("foo", List.of(1))))
+                .setStandbyPartitions(List.of(topicPartition("foo", List.of(2))));
+
+        // The peer caches the old member's endpoint mapping before the static member leaves.
+        CoordinatorResult<StreamsGroupHeartbeatResult, CoordinatorRecord> initialPeerHeartbeat = context.streamsGroupHeartbeat(
+            staticHeartbeat(groupId, memberId3WithProcess2, instanceId3, memberEpoch)
+                .setEndpointInformationEpoch(-1)
+        );
+
+        assertEquals(
+            List.of(endpointWithStandby),
+            initialPeerHeartbeat.response().data().partitionsByUserEndpoint()
+        );
+        int initialEndpointEpoch = initialPeerHeartbeat.response().data().endpointInformationEpoch();
+
+        // Both members leave process 1 with epoch -2, retaining their task ownership.
+        context.streamsGroupHeartbeat(staticHeartbeat(groupId, memberId1WithOldProcess, instanceId1, LEAVE_GROUP_STATIC_MEMBER_EPOCH));
+        context.streamsGroupHeartbeat(staticHeartbeat(groupId, memberId2WithOldProcess, instanceId2, LEAVE_GROUP_STATIC_MEMBER_EPOCH));
+        assertEquals(LEAVE_GROUP_STATIC_MEMBER_EPOCH, group.getMemberOrThrow(memberId1WithOldProcess).memberEpoch());
+        assertEquals(LEAVE_GROUP_STATIC_MEMBER_EPOCH, group.getMemberOrThrow(memberId2WithOldProcess).memberEpoch());
+        assertEquals(Set.of(oldProcessId), group.currentStandbyTaskProcessIds(subtopologyId, 2));
+
+        // Member 1 rejoins process 1-1 and acquires standby task 2 while member 2 still owns it on process 1.
+        assignor.prepareGroupAssignment(Map.of(
+            memberId1WithNewProcess, memberId1WithNewProcessTargetAssignment,
+            memberId2WithOldProcess, memberId2WithNewProcessTargetAssignment,
+            memberId3WithProcess2, memberId3WithProcess2TargetAssignment
+        ));
+
+
+        CoordinatorResult<StreamsGroupHeartbeatResult, CoordinatorRecord> firstRejoinResult = context.streamsGroupHeartbeat(
+            staticJoinHeartbeat(groupId, memberId1WithNewProcess, instanceId1, topic)
+                .setProcessId(newProcessId)
+                .setClientTags(List.of())
+        );
+        assertFalse(group.hasMember(memberId1WithOldProcess));
+        assertEquals(memberId1WithNewProcess, group.staticMember(instanceId1).memberId());
+        assertEquals(memberId1WithNewProcessInitialCurrentAssignment, group.getMemberOrThrow(memberId1WithNewProcess).assignedTasks());
+        assertEquals(Set.of(oldProcessId, newProcessId), group.currentStandbyTaskProcessIds(subtopologyId, 2));
+        context.streamsGroupHeartbeat(
+            staticHeartbeat(groupId, memberId1WithNewProcess, instanceId1, firstRejoinResult.response().data().memberEpoch())
+                .setActiveTasks(List.of())
+                .setStandbyTasks(topic.requestTasks(List.of(1, 2)))
+                .setWarmupTasks(List.of())
+        );
+        assertEquals(topic.targetAssignment(0).activeTasks(), group.getMemberOrThrow(memberId1WithNewProcess).assignedTasks().activeTasks());
+
+        // Member 2 rejoins the same new process. Its target requires member 1 to release the standby tasks.
+        assignor.prepareGroupAssignment(Map.of(
+            memberId1WithNewProcess, topic.targetAssignment(0),
+            memberId2WithNewProcess, memberId2WithNewProcessTargetAssignment,
+            memberId3WithProcess2, memberId3WithProcess2TargetAssignment
+        ));
+        CoordinatorResult<StreamsGroupHeartbeatResult, CoordinatorRecord> rejoinResult = context.streamsGroupHeartbeat(
+            staticJoinHeartbeat(groupId, memberId2WithNewProcess, instanceId2, topic)
+                .setProcessId(newProcessId)
+                .setUserEndpoint(userEndpoint("foo.com", 8080))
+                .setClientTags(List.of())
+        );
+        assertFalse(group.hasMember(memberId2WithOldProcess));
+        assertEquals(memberId2WithNewProcess, group.staticMember(instanceId2).memberId());
+        assertEquals(memberId2WithNewProcessTargetAssignment, group.targetAssignment().get(memberId2WithNewProcess));
+        assertEquals(List.of(), rejoinResult.response().data().standbyTasks());
+        assertEquals(TasksTupleWithEpochs.EMPTY, group.getMemberOrThrow(memberId2WithNewProcess).assignedTasks());
+        assertEquals(MemberState.UNRELEASED_TASKS, group.getMemberOrThrow(memberId2WithNewProcess).state());
+        assertEquals(memberId1WithNewProcessTargetAssignment.standbyTasks(),
+            group.getMemberOrThrow(memberId1WithNewProcess).assignedTasks().standbyTasks());
+        assertEquals(Set.of(newProcessId), group.currentStandbyTaskProcessIds(subtopologyId, 2));
+
+        // The endpoint address is unchanged, but it must no longer advertise the inherited standby.
+        int waitingEndpointEpoch = rejoinResult.response().data().endpointInformationEpoch();
+        assertTrue(waitingEndpointEpoch > initialEndpointEpoch);
+        CoordinatorResult<StreamsGroupHeartbeatResult, CoordinatorRecord> waitingPeerHeartbeat = context.streamsGroupHeartbeat(
+            staticHeartbeat(groupId, memberId3WithProcess2, instanceId3, group.getMemberOrThrow(memberId3WithProcess2).memberEpoch())
+                .setEndpointInformationEpoch(initialEndpointEpoch)
+        );
+        assertEquals(waitingEndpointEpoch, waitingPeerHeartbeat.response().data().endpointInformationEpoch());
+        assertEquals(List.of(endpointWithStandby.duplicate().setActivePartitions(List.of()).setStandbyPartitions(List.of())),
+            waitingPeerHeartbeat.response().data().partitionsByUserEndpoint());
+
+        CoordinatorResult<StreamsGroupHeartbeatResult, CoordinatorRecord> revokeResult = context.streamsGroupHeartbeat(
+            staticHeartbeat(groupId, memberId1WithNewProcess, instanceId1, group.getMemberOrThrow(memberId1WithNewProcess).memberEpoch())
+                .setActiveTasks(topic.requestTasks(List.of(0)))
+                .setStandbyTasks(topic.requestTasks(List.of(1, 2)))
+                .setWarmupTasks(List.of())
+        );
+        assertEquals(List.of(), revokeResult.response().data().standbyTasks());
+        assertEquals(MemberState.UNREVOKED_TASKS, group.getMemberOrThrow(memberId1WithNewProcess).state());
+        assertEquals(
+            new TasksTupleWithEpochs(Map.of(), Map.of(subtopologyId, Set.of(1, 2)), Map.of()),
+            group.getMemberOrThrow(memberId1WithNewProcess).tasksPendingRevocation()
+        );
+        assertEquals(Set.of(newProcessId), group.currentStandbyTaskProcessIds(subtopologyId, 2));
+
+        // A revocation instruction is not a release: the replacement must still wait for the ACK.
+        CoordinatorResult<StreamsGroupHeartbeatResult, CoordinatorRecord> waitingResult = context.streamsGroupHeartbeat(
+            staticHeartbeat(groupId, memberId2WithNewProcess, instanceId2, group.getMemberOrThrow(memberId2WithNewProcess).memberEpoch())
+                .setActiveTasks(List.of())
+                .setStandbyTasks(List.of())
+                .setWarmupTasks(List.of())
+        );
+        assertEquals(List.of(), waitingResult.response().data().standbyTasks());
+        assertEquals(MemberState.UNRELEASED_TASKS, group.getMemberOrThrow(memberId2WithNewProcess).state());
+        assertEquals(TasksTupleWithEpochs.EMPTY, group.getMemberOrThrow(memberId2WithNewProcess).assignedTasks());
+        assertEquals(Set.of(newProcessId), group.currentStandbyTaskProcessIds(subtopologyId, 2));
+
+        context.streamsGroupHeartbeat(
+            staticHeartbeat(groupId, memberId1WithNewProcess, instanceId1, revokeResult.response().data().memberEpoch())
+                .setActiveTasks(topic.requestTasks(List.of(0)))
+                .setStandbyTasks(List.of())
+                .setWarmupTasks(List.of())
+        );
+        assertEquals(topic.targetAssignment(0).activeTasks(), group.getMemberOrThrow(memberId1WithNewProcess).assignedTasks().activeTasks());
+        assertEquals(Map.of(), group.getMemberOrThrow(memberId1WithNewProcess).assignedTasks().standbyTasks());
+        assertEquals(TasksTupleWithEpochs.EMPTY, group.getMemberOrThrow(memberId1WithNewProcess).tasksPendingRevocation());
+        assertEquals(Set.of(), group.currentStandbyTaskProcessIds(subtopologyId, 2));
+
+        CoordinatorResult<StreamsGroupHeartbeatResult, CoordinatorRecord> assignedResult = context.streamsGroupHeartbeat(
+            staticHeartbeat(groupId, memberId2WithNewProcess, instanceId2, waitingResult.response().data().memberEpoch())
+                .setActiveTasks(List.of())
+                .setStandbyTasks(List.of())
+                .setWarmupTasks(List.of())
+        );
+        assertEquals(topic.responseTasks(1), assignedResult.response().data().activeTasks());
+        assertEquals(topic.responseTasks(2), assignedResult.response().data().standbyTasks());
+        assertEquals(memberId2WithNewProcessTargetAssignment.activeTasks(), group.getMemberOrThrow(memberId2WithNewProcess).assignedTasks().activeTasks());
+        assertEquals(memberId2WithNewProcessTargetAssignment.standbyTasks(), group.getMemberOrThrow(memberId2WithNewProcess).assignedTasks().standbyTasks());
+        assertEquals(MemberState.STABLE, group.getMemberOrThrow(memberId2WithNewProcess).state());
+        assertEquals(Set.of(newProcessId), group.currentStandbyTaskProcessIds(subtopologyId, 2));
+        assertEquals(processId2, group.currentActiveTaskProcessId(subtopologyId, 2));
+        assertTrue(assignedResult.response().data().endpointInformationEpoch() > waitingEndpointEpoch);
+
+        CoordinatorResult<StreamsGroupHeartbeatResult, CoordinatorRecord> assignedPeerHeartbeat = context.streamsGroupHeartbeat(
+            staticHeartbeat(groupId, memberId3WithProcess2, instanceId3, group.getMemberOrThrow(memberId3WithProcess2).memberEpoch())
+                .setEndpointInformationEpoch(waitingEndpointEpoch)
+        );
+        assertEquals(List.of(endpointWithStandby), assignedPeerHeartbeat.response().data().partitionsByUserEndpoint());
+        assertEquals(assignedResult.response().data().endpointInformationEpoch(),
+            assignedPeerHeartbeat.response().data().endpointInformationEpoch());
     }
 
     private void verifyStaticMemberLeaveAndRejoinNoGroupBump(String instanceId, String oldMemberId, String newMemberId) {
