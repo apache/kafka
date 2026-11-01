@@ -18,6 +18,7 @@ package org.apache.kafka.connect.runtime.rest.resources;
 
 import org.apache.kafka.connect.errors.NotFoundException;
 import org.apache.kafka.connect.runtime.Herder;
+import org.apache.kafka.connect.runtime.rest.entities.ErrorMessage;
 import org.apache.kafka.connect.runtime.rest.entities.LoggerLevel;
 import org.apache.kafka.connect.runtime.rest.errors.BadRequestException;
 
@@ -30,6 +31,13 @@ import java.util.Objects;
 
 import io.swagger.v3.oas.annotations.Operation;
 import io.swagger.v3.oas.annotations.Parameter;
+import io.swagger.v3.oas.annotations.media.ArraySchema;
+import io.swagger.v3.oas.annotations.media.Content;
+import io.swagger.v3.oas.annotations.media.Schema;
+import io.swagger.v3.oas.annotations.media.SchemaProperty;
+import io.swagger.v3.oas.annotations.parameters.RequestBody;
+import io.swagger.v3.oas.annotations.responses.ApiResponse;
+import io.swagger.v3.oas.annotations.responses.ApiResponses;
 import jakarta.inject.Inject;
 import jakarta.ws.rs.Consumes;
 import jakarta.ws.rs.DefaultValue;
@@ -68,6 +76,11 @@ public class LoggingResource {
      */
     @GET
     @Operation(summary = "List the current loggers that have their levels explicitly set and their log levels")
+    @ApiResponse(
+        responseCode = "200",
+        description = "Logger levels retrieved successfully",
+        content = @Content(mediaType = MediaType.APPLICATION_JSON, schema = @Schema(type = "object", additionalPropertiesSchema = LoggerLevel.class))
+    )
     public Map<String, LoggerLevel> listLoggers() {
         return herder.allLoggerLevels();
     }
@@ -81,7 +94,19 @@ public class LoggingResource {
     @GET
     @Path("/{logger}")
     @Operation(summary = "Get the log level for the specified logger")
-    public LoggerLevel getLogger(final @PathParam("logger") String namedLogger) {
+    @ApiResponses({
+        @ApiResponse(
+            responseCode = "200",
+            description = "Logger level retrieved successfully",
+            content = @Content(mediaType = MediaType.APPLICATION_JSON, schema = @Schema(implementation = LoggerLevel.class))
+        ),
+        @ApiResponse(
+            responseCode = "404",
+            description = "Logger not found",
+            content = @Content(mediaType = MediaType.APPLICATION_JSON, schema = @Schema(implementation = ErrorMessage.class))
+        )
+    })
+    public LoggerLevel getLogger(final @PathParam("logger") @Parameter(description = "The name of the logger") String namedLogger) {
         Objects.requireNonNull(namedLogger, "require non-null name");
 
         LoggerLevel loggerLevel = herder.loggerLevel(namedLogger);
@@ -101,9 +126,48 @@ public class LoggingResource {
      */
     @PUT
     @Path("/{logger}")
-    @Operation(summary = "Set the log level for the specified logger")
+    @Operation(
+        summary = "Set the log level for the specified logger",
+        requestBody = @RequestBody(
+            description = "The log level configuration",
+            required = true,
+            content = @Content(
+                mediaType = MediaType.APPLICATION_JSON,
+                schema = @Schema(type = "object", requiredProperties = "level"),
+                schemaProperties = @SchemaProperty(name = "level", schema = @Schema(type = "string", description = "The log level to set"))
+            )
+        )
+    )
+    @ApiResponses({
+        @ApiResponse(
+            responseCode = "200",
+            description = "Worker logger level set successfully",
+            content = @Content(
+                mediaType = MediaType.APPLICATION_JSON,
+                array = @ArraySchema(schema = @Schema(type = "string", description = "The names of loggers whose levels were changed")))
+        ),
+        @ApiResponse(
+            responseCode = "204",
+            description = "Cluster logger level set successfully"
+        ),
+        @ApiResponse(
+            responseCode = "400",
+            description = "Log level was not specified",
+            content = @Content(mediaType = MediaType.APPLICATION_JSON, schema = @Schema(implementation = ErrorMessage.class))
+        ),
+        @ApiResponse(
+            responseCode = "404",
+            description = "Invalid log level",
+            content = @Content(mediaType = MediaType.APPLICATION_JSON, schema = @Schema(implementation = ErrorMessage.class))
+        ),
+        @ApiResponse(
+            responseCode = "500",
+            description = "Request timed out or failed unexpectedly while setting the cluster logger level",
+            content = @Content(mediaType = MediaType.APPLICATION_JSON, schema = @Schema(implementation = ErrorMessage.class))
+        )
+    })
     @SuppressWarnings("fallthrough")
-    public List<String> setLevel(final @PathParam("logger") String namespace,
+    public List<String> setLevel(final @PathParam("logger") @Parameter(description = "The name of the logger") String namespace,
                              final Map<String, String> levelMap,
                              @DefaultValue("worker") @QueryParam("scope") @Parameter(description = "The scope for the logging modification (single-worker, cluster-wide, etc.)") String scope) {
         if (scope == null) {
