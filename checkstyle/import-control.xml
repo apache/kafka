@@ -308,6 +308,7 @@
     <allow pkg="org.apache.kafka.server.log.remote.metadata.storage" />
     <allow pkg="org.apache.kafka.server.log.remote.storage" />
     <allow pkg="org.apache.kafka.server.metrics" />
+    <allow pkg="org.apache.kafka.server.mirror" />
     <allow pkg="org.apache.kafka.server.quota" />
     <allow pkg="org.apache.kafka.streams" />
     <allow pkg="org.apache.kafka.clients" />
@@ -329,6 +330,7 @@
     <allow pkg="org.apache.kafka.coordinator.transaction" />
     <allow pkg="org.apache.kafka.coordinator.group" />
     <allow pkg="org.apache.kafka.coordinator.common.runtime" />
+    <allow pkg="org.apache.kafka.coordinator.mirror" />
     <allow pkg="org.apache.kafka.coordinator.share" />
     <allow pkg="org.apache.kafka.snapshot" />
     <allow pkg="org.apache.kafka.server.storage.log" />
