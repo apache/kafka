@@ -65,6 +65,7 @@ public class DeleteRecordsTest {
         sendRecords(cluster, TOPIC_PARTITION, NUM_RECORDS);
         try (Admin admin = cluster.admin()) {
             assertEquals(NUM_RECORDS, deleteRecords(admin, -1L).get().lowWatermark());
+            assertEquals(NUM_RECORDS, earliestOffset(admin));
         }
     }
 
