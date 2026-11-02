@@ -94,6 +94,17 @@ public enum MirrorPartitionState {
         return value;
     }
 
+    /**
+     * Returns the state name, or the numeric value as a string for an unrecognized state.
+     */
+    public static String nameOf(byte value) {
+        try {
+            return fromValue(value).name();
+        } catch (IllegalArgumentException e) {
+            return String.valueOf(value);
+        }
+    }
+
     public static MirrorPartitionState fromValue(byte value) {
         switch (value) {
             case 0: return LOG_ALIGNMENT;
