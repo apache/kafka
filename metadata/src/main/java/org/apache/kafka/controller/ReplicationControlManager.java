@@ -2305,6 +2305,13 @@ public class ReplicationControlManager {
      * that merely rearranges existing replicas in the list can bypass step #1 and #2 and
      * complete immediately.
      *
+     * If a reassignment is already in progress, the new target replaces it. The replicas
+     * the previous reassignment was still adding are not yet guaranteed to be in sync, so
+     * any of them that the new target keeps stay in addingReplicas and the new reassignment
+     * waits for them to join the ISR as well. Any of them that the new target drops are
+     * removed through removingReplicas like every other replica that is not in the target,
+     * which keeps the current leader in the replica list until a new one is elected.
+     *
      * @param tp                The topic id and partition id.
      * @param part              The existing partition info.
      * @param target            The target partition info.
@@ -2327,8 +2334,8 @@ public class ReplicationControlManager {
         }
 
         List<Integer> currentReplicas = Replicas.toList(part.replicas);
-        PartitionReassignmentReplicas reassignment =
-            new PartitionReassignmentReplicas(currentAssignment, targetAssignment);
+        PartitionReassignmentReplicas reassignment = new PartitionReassignmentReplicas(
+            currentAssignment, Replicas.toList(part.addingReplicas), targetAssignment);
         PartitionChangeBuilder builder = new PartitionChangeBuilder(
             part,
             tp.topicId(),
