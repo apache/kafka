@@ -97,7 +97,7 @@ public class ForwardingManagerTest {
         client = new MockClient(time);
         metrics = new Metrics();
         brokerToController = new MockNodeToControllerChannelManager(client, time, controllerNodeProvider, controllerApiVersions());
-        forwardingManager = new ForwardingManagerImpl(brokerToController, metrics, () -> (short) 3);
+        forwardingManager = new ForwardingManagerImpl(brokerToController, metrics, () -> LATEST_REQUEST_HEADER_VERSION);
         queueTimeMsP999 = metrics.metrics().get(forwardingManager.forwardingManagerMetrics().queueTimeMsHist().latencyP999Name());
         queueLength = metrics.metrics().get(forwardingManager.forwardingManagerMetrics().queueLengthName());
         remoteTimeMsP999 = metrics.metrics().get(forwardingManager.forwardingManagerMetrics().remoteTimeMsHist().latencyP999Name());

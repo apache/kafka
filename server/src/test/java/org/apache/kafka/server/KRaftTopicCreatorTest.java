@@ -96,7 +96,7 @@ public class KRaftTopicCreatorTest {
         when(brokerToController.controllerApiVersions())
             .thenReturn(Optional.of(NodeApiVersions.create(Set.of(createTopicApiVersion))));
 
-        kraftTopicCreator = new KRaftTopicCreator(brokerToController, () -> (short) 3);
+        kraftTopicCreator = new KRaftTopicCreator(brokerToController, () -> LATEST_REQUEST_HEADER_VERSION);
     }
 
     @Test

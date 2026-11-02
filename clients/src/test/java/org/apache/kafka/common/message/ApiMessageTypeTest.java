@@ -118,9 +118,11 @@ public class ApiMessageTypeTest {
         assertEquals((short) 0, ApiMessageType.API_VERSIONS.responseHeaderVersion((short) 3));
         assertEquals((short) 0, ApiMessageType.API_VERSIONS.responseHeaderVersion((short) 6));
 
-        // Envelope is flexible from v0: header v2 request / v1 response everywhere.
+        // Envelope is flexible from v0: header v2 request / v1 response; v1 uses the v3 request header (KIP-1313).
         assertEquals((short) 2, ApiMessageType.ENVELOPE.requestHeaderVersion((short) 0));
         assertEquals((short) 1, ApiMessageType.ENVELOPE.responseHeaderVersion((short) 0));
+        assertEquals((short) 3, ApiMessageType.ENVELOPE.requestHeaderVersion((short) 1));
+        assertEquals((short) 1, ApiMessageType.ENVELOPE.responseHeaderVersion((short) 1));
 
         // WriteTxnMarkers is flexible across its valid versions (1-2): header v2 request / v1 response.
         assertEquals((short) 2, ApiMessageType.WRITE_TXN_MARKERS.requestHeaderVersion((short) 1));
