@@ -662,19 +662,23 @@ public class KTableImplTest {
         assertThrows(NullPointerException.class, () -> table.transformValues(mock(), (String[]) null));
     }
 
-    @Test
-    public void shouldUseForeignKeyJoinResponsePartitionWhenValid() {
+    @ParameterizedTest
+    @ValueSource(ints = {0, 1, 2})
+    public void shouldUseForeignKeyJoinResponsePartitionWhenValid(final int partition) {
         final KTableImpl.DefaultForeignResponseSinkPartitioner<String, String> partitioner = new KTableImpl.DefaultForeignResponseSinkPartitioner<>();
-        assertEquals(Optional.of(Set.of(0)), partitioner.partitions("topic", "key", new SubscriptionResponseWrapper<>(null, "value", 0), new RecordHeaders(), 3));
-        assertEquals(Optional.of(Set.of(2)), partitioner.partitions("topic", "key", new SubscriptionResponseWrapper<>(null, "value", 2), new RecordHeaders(), 3));
-        assertEquals(Optional.empty(), partitioner.partitions("topic", "key", new SubscriptionResponseWrapper<>(null, "value", null), new RecordHeaders(), 3));
+        assertEquals(Optional.of(Set.of(partition)), partitioner.partitions("topic", "key", new SubscriptionResponseWrapper<>(null, "value", partition), new RecordHeaders(), 3));
+    }
+
+    @ParameterizedTest
+    @ValueSource(ints = {-1, 3, Integer.MAX_VALUE, Integer.MIN_VALUE})
+    public void shouldUseDefaultPartitionerForInvalidForeignKeyJoinResponsePartition(final int partition) {
+        final KTableImpl.DefaultForeignResponseSinkPartitioner<String, String> partitioner = new KTableImpl.DefaultForeignResponseSinkPartitioner<>();
+        assertEquals(Optional.empty(), partitioner.partitions("topic", "key", new SubscriptionResponseWrapper<>(null, "value", partition), new RecordHeaders(), 3));
     }
 
     @Test
-    public void shouldUseDefaultPartitionerForInvalidForeignKeyJoinResponsePartition() {
+    public void shouldUseDefaultPartitionerWhenForeignKeyJoinResponsePartitionIsNull() {
         final KTableImpl.DefaultForeignResponseSinkPartitioner<String, String> partitioner = new KTableImpl.DefaultForeignResponseSinkPartitioner<>();
-        assertEquals(Optional.empty(), partitioner.partitions("topic", "key", new SubscriptionResponseWrapper<>(null, "value", -1), new RecordHeaders(), 3));
-        assertEquals(Optional.empty(), partitioner.partitions("topic", "key", new SubscriptionResponseWrapper<>(null, "value", 3), new RecordHeaders(), 3));
-        assertEquals(Optional.empty(), partitioner.partitions("topic", "key", new SubscriptionResponseWrapper<>(null, "value", Integer.MAX_VALUE), new RecordHeaders(), 3));
+        assertEquals(Optional.empty(), partitioner.partitions("topic", "key", new SubscriptionResponseWrapper<>(null, "value", null), new RecordHeaders(), 3));
     }
 }

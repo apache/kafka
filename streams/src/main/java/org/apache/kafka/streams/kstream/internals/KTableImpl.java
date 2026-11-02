@@ -1509,7 +1509,7 @@ public class KTableImpl<K, S, V> extends AbstractStream<K, V> implements KTable<
                 return Optional.empty();
             }
             if (partition < 0 || partition >= numPartitions) {
-                LOG.warn("Ignoring invalid partition {} for foreign-key join response topic {} with {} partitions; using the default partitioner.",
+                LOG.trace("Ignoring invalid partition {} for foreign-key join response topic {} with {} partitions; using the default partitioner.",
                     partition, topic, numPartitions);
                 return Optional.empty();
             }

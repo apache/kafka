@@ -40,6 +40,7 @@ import org.apache.kafka.streams.kstream.internals.foreignkeyjoin.SubscriptionWra
 import org.apache.kafka.streams.kstream.internals.foreignkeyjoin.SubscriptionWrapperSerde;
 import org.apache.kafka.streams.processor.StreamPartitioner;
 import org.apache.kafka.streams.state.KeyValueStore;
+import org.apache.kafka.streams.state.internals.Murmur3;
 import org.apache.kafka.streams.test.TestRecord;
 import org.apache.kafka.streams.utils.UniqueTopicSerdeScope;
 import org.apache.kafka.test.StreamsTestUtils;
@@ -49,6 +50,7 @@ import org.junit.jupiter.api.Test;
 import org.junit.jupiter.params.ParameterizedTest;
 import org.junit.jupiter.params.provider.ValueSource;
 
+import java.nio.charset.StandardCharsets;
 import java.util.Collections;
 import java.util.HashMap;
 import java.util.Map;
@@ -406,12 +408,12 @@ public class KTableKTableForeignKeyJoinScenarioTest {
             assertEquals(Map.of(2, "(lhsValue1|1,rhsValue1)"), output.readKeyValuesToMap());
 
             subscriptionInput.pipeInput(1, new SubscriptionWrapper<>(
-                new long[] {1L, 2L},
+                Murmur3.hash128("lhsValue1|1".getBytes(StandardCharsets.UTF_8)),
                 SubscriptionWrapper.Instruction.PROPAGATE_ONLY_IF_FK_VAL_AVAILABLE,
                 2,
                 -1
             ));
-            assertTrue(output.isEmpty());
+            assertEquals(Map.of(2, "(lhsValue1|1,rhsValue1)"), output.readKeyValuesToMap());
         }
     }
 
