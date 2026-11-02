@@ -232,13 +232,9 @@ public class ConsumerNetworkClientTest {
     @Test
     public void testAuthenticationExceptionPropagatedFromMetadata() {
         metadata.fatalError(new AuthenticationException("Authentication failed"));
-        try {
-            consumerClient.poll(time.timer(Duration.ZERO));
-            fail("Expected authentication error thrown");
-        } catch (AuthenticationException e) {
-            // After the exception is raised, it should have been cleared
-            metadata.maybeThrowAnyException();
-        }
+        assertThrows(AuthenticationException.class, () -> consumerClient.poll(time.timer(Duration.ZERO)));
+        // After the exception is raised, it should have been cleared
+        metadata.maybeThrowAnyException();
     }
 
     @Test
