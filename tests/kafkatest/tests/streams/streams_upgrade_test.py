@@ -73,7 +73,7 @@ which are outlined here:
    you'll need to update settings.gradle file to include the name of the module you just created
    for gradle to recognize the newly added module.
 
-6. Then you'll need to update any version changes in gradle/dependencies.gradle
+6. Then you'll need to update any version changes in gradle/libs.versions.toml
 
 """
 
@@ -546,4 +546,3 @@ class StreamsUpgradeTest(Test):
                 return False
 
         return True
-
