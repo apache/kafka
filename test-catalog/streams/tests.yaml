@@ -1807,6 +1807,14 @@ org.apache.kafka.streams.processor.internals.ActiveTaskCreatorTest:
 - shouldReturnStreamsProducerIfEosV2Enabled
 - shouldThrowStreamsExceptionOnErrorCloseIfEosDisabled
 - shouldThrowStreamsExceptionOnErrorCloseIfEosV2Enabled
+org.apache.kafka.streams.processor.internals.ChangelogRecordDeserializationHelperTest:
+- shouldIgnoreHeadersWhenConsistencyIsDisabled
+- shouldSkipRecordWithEmptyPositionHeader
+- shouldSkipRecordWithEmptyVersionHeader
+- shouldSkipRecordWithNullPositionHeader
+- shouldSkipRecordWithNullVersionHeader
+- shouldThrowWhenPositionHeaderIsMissing
+- shouldUpdatePositionFromConsistencyHeaders
 org.apache.kafka.streams.processor.internals.ChangelogTopicsTest:
 - shouldContainBothTypesOfPreExistingChangelogs
 - shouldNotContainAnyPreExistingChangelogsIfChangelogIsNewlyCreated
