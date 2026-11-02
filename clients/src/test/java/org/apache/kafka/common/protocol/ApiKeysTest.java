@@ -16,6 +16,7 @@
  */
 package org.apache.kafka.common.protocol;
 
+import org.apache.kafka.common.errors.UnsupportedVersionException;
 import org.apache.kafka.common.protocol.types.BoundField;
 import org.apache.kafka.common.protocol.types.Schema;
 
@@ -98,6 +99,15 @@ public class ApiKeysTest {
             else
                 assertTrue(apiKey.hasValidVersion());
         }
+    }
+
+    @Test
+    public void testLatestVersionForRequestHeader() {
+        assertEquals(ApiKeys.WRITE_SHARE_GROUP_STATE.latestVersion(),
+            ApiKeys.WRITE_SHARE_GROUP_STATE.latestVersionForRequestHeader((short) 3));
+        assertEquals((short) 1, ApiKeys.WRITE_SHARE_GROUP_STATE.latestVersionForRequestHeader((short) 2));
+        assertThrows(UnsupportedVersionException.class,
+            () -> ApiKeys.WRITE_SHARE_GROUP_STATE.latestVersionForRequestHeader((short) 1));
     }
 
     @Test

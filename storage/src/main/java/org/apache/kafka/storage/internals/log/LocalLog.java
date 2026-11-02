@@ -22,6 +22,7 @@ import org.apache.kafka.common.errors.KafkaStorageException;
 import org.apache.kafka.common.errors.OffsetOutOfRangeException;
 import org.apache.kafka.common.message.AbortedTxn;
 import org.apache.kafka.common.message.FetchResponseData;
+import org.apache.kafka.common.network.FileReadException;
 import org.apache.kafka.common.record.internal.FileLogInputStream;
 import org.apache.kafka.common.record.internal.FileRecords;
 import org.apache.kafka.common.record.internal.MemoryRecords;
@@ -84,7 +85,7 @@ public class LocalLog {
     private final Time time;
     private final TopicPartition topicPartition;
     private final LogDirFailureChannel logDirFailureChannel;
-    private final FileRecords.TransferFailureHandler transferFailureHandler = this::checkReadAfterTransferFailure;
+    private final FileRecords.TransferFailureHandler transferFailureHandler = this::onTransferFailure;
     private final Logger logger;
 
     private volatile LogOffsetMetadata nextOffsetMetadata;
@@ -541,13 +542,21 @@ public class LocalLog {
     }
 
     /**
-     * Called on the network thread when writing fetched records failed, which may be a socket or a storage failure.
-     * Re-reading the region tells them apart, so it is done on the scheduler rather than on the network thread, at
-     * most once at a time per log dir, so that a burst of failed sends or a slow failing disk does not take up the
-     * threads of the scheduler, which other tasks of the broker share.
+     * Called on the network thread when writing fetched records failed in a way that may come from a failed read of
+     * the segment. A {@link FileReadException} means that the segment could not be read, so the log dir is marked
+     * offline right away. Any other exception may be a socket or a storage failure, which re-reading the region tells
+     * apart. The re-read is done on the scheduler rather than on the network thread, at most once at a time per log
+     * dir, so that a burst of failed sends or a slow failing disk does not take up the threads of the scheduler, which
+     * other tasks of the broker share.
      */
-    private void checkReadAfterTransferFailure(FileRecords records, long position, int count, IOException transferFailure) {
+    private void onTransferFailure(FileRecords records, long position, int count, IOException transferFailure) {
         String logDir = parentDir;
+        if (transferFailure instanceof FileReadException readFailure) {
+            logDirFailureChannel.maybeAddOfflineLogDir(logDir, "Failed to read " + records.file().getAbsolutePath()
+                + " at position " + readFailure.position() + " while writing " + count + " bytes from position "
+                + position + " to a network channel", readFailure);
+            return;
+        }
         if (!logDirFailureChannel.tryStartReadCheck(logDir))
             return;
         // Once the scheduler has taken the check, the check finishes it; until then it is finished here, whatever is

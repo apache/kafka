@@ -380,8 +380,7 @@ public class TopicCommandTest {
             Assertions.assertTrue(adminClient.listTopics().names().get().contains(testTopicName),
                     "Admin client didn't see the created topic. It saw: " + adminClient.listTopics().names().get());
 
-            adminClient.deleteTopics(List.of(testTopicName));
-            clusterInstance.waitTopicDeletion(testTopicName);
+            clusterInstance.deleteTopic(testTopicName);
             Assertions.assertTrue(adminClient.listTopics().names().get().isEmpty(),
                     "Admin client see the created topic. It saw: " + adminClient.listTopics().names().get());
         }
@@ -405,8 +404,7 @@ public class TopicCommandTest {
             Assertions.assertEquals(defaultNumPartitions, partitions.size(), "Unequal partition size: " + partitions.size());
             Assertions.assertEquals(defaultReplicationFactor, (short) partitions.get(0).replicas().size(), "Unequal replication factor: " + partitions.get(0).replicas().size());
 
-            adminClient.deleteTopics(List.of(testTopicName));
-            clusterInstance.waitTopicDeletion(testTopicName);
+            clusterInstance.deleteTopic(testTopicName);
             Assertions.assertTrue(adminClient.listTopics().names().get().isEmpty(),
                     "Admin client see the created topic. It saw: " + adminClient.listTopics().names().get());
         }

@@ -30,6 +30,7 @@ import org.apache.kafka.common.errors.IllegalGenerationException;
 import org.apache.kafka.common.errors.InconsistentGroupProtocolException;
 import org.apache.kafka.common.errors.InvalidRequestException;
 import org.apache.kafka.common.errors.RebalanceInProgressException;
+import org.apache.kafka.common.errors.StreamsInvalidTopologyEpochException;
 import org.apache.kafka.common.errors.UnknownMemberIdException;
 import org.apache.kafka.common.errors.UnknownServerException;
 import org.apache.kafka.common.errors.UnreleasedInstanceIdException;
@@ -1293,15 +1294,15 @@ public class GroupMetadataManager {
         if (!consumerGroup.allMembersUseClassicProtocolExcept(fencedMembers)) {
             return false;
         } else if (consumerGroup.numMembers() - fencedMembers.size() <= 0) {
-            log.debug("Skip downgrading the consumer group {} to classic group because it's empty.",
+            log.debug("[GroupId {}] Skip downgrading the consumer group to classic group because it's empty.",
                 consumerGroup.groupId());
             return false;
         } else if (!config.consumerGroupMigrationPolicy().isDowngradeEnabled()) {
-            log.info("Cannot downgrade consumer group {} to classic group because the online downgrade is disabled.",
+            log.info("[GroupId {}] Cannot downgrade the consumer group to classic group because the online downgrade is disabled.",
                 consumerGroup.groupId());
             return false;
         } else if (consumerGroup.numMembers() - fencedMembers.size() > config.classicGroupMaxSize()) {
-            log.info("Cannot downgrade consumer group {} to classic group because its group size is greater than classic group max size.",
+            log.info("[GroupId {}] Cannot downgrade the consumer group to classic group because its group size is greater than classic group max size.",
                 consumerGroup.groupId());
             return false;
         }
@@ -1324,11 +1325,11 @@ public class GroupMetadataManager {
         if (!consumerGroup.allMembersUseClassicProtocolExcept(replacedMember)) {
             return false;
         } else if (!config.consumerGroupMigrationPolicy().isDowngradeEnabled()) {
-            log.info("Cannot downgrade consumer group {} to classic group because the online downgrade is disabled.",
+            log.info("[GroupId {}] Cannot downgrade the consumer group to classic group because the online downgrade is disabled.",
                 consumerGroup.groupId());
             return false;
         } else if (consumerGroup.numMembers() > config.classicGroupMaxSize()) {
-            log.info("Cannot downgrade consumer group {} to classic group because its group size is greater than classic group max size.",
+            log.info("[GroupId {}] Cannot downgrade the consumer group to classic group because its group size is greater than classic group max size.",
                 consumerGroup.groupId());
             return false;
         }
@@ -1377,10 +1378,10 @@ public class GroupMetadataManager {
                 metadataImage
             );
         } catch (SchemaException e) {
-            log.warn("Cannot downgrade the consumer group {}: fail to parse the Consumer Protocol {}.",
+            log.warn("[GroupId {}] Cannot downgrade the consumer group: fail to parse the Consumer Protocol {}.",
                 consumerGroup.groupId(), ConsumerProtocol.PROTOCOL_TYPE, e);
 
-            throw new GroupIdNotFoundException(String.format("Cannot downgrade the classic group %s: %s.",
+            throw new GroupIdNotFoundException(String.format("Cannot downgrade the consumer group %s: %s.",
                 consumerGroup.groupId(), e.getMessage()));
         }
         classicGroup.createClassicGroupRecords(records);
@@ -1407,19 +1408,19 @@ public class GroupMetadataManager {
      */
     private void validateOnlineUpgrade(ClassicGroup classicGroup) {
         if (!config.consumerGroupMigrationPolicy().isUpgradeEnabled()) {
-            log.info("Cannot upgrade classic group {} to consumer group because online upgrade is disabled.",
+            log.info("[GroupId {}] Cannot upgrade the classic group to consumer group because online upgrade is disabled.",
                 classicGroup.groupId());
             throw new GroupIdNotFoundException(
                 String.format("Cannot upgrade classic group %s to consumer group because online upgrade is disabled.", classicGroup.groupId())
             );
         } else if (!classicGroup.usesConsumerGroupProtocol()) {
-            log.info("Cannot upgrade classic group {} to consumer group because the group does not use the consumer embedded protocol.",
+            log.info("[GroupId {}] Cannot upgrade the classic group to consumer group because the group does not use the consumer embedded protocol.",
                 classicGroup.groupId());
             throw new GroupIdNotFoundException(
                 String.format("Cannot upgrade classic group %s to consumer group because the group does not use the consumer embedded protocol.", classicGroup.groupId())
             );
         } else if (classicGroup.numMembers() > config.consumerGroupMaxSize()) {
-            log.info("Cannot upgrade classic group {} to consumer group because the group size exceeds the consumer group maximum size.",
+            log.info("[GroupId {}] Cannot upgrade the classic group to consumer group because the group size exceeds the consumer group maximum size.",
                 classicGroup.groupId());
             throw new GroupIdNotFoundException(
                 String.format("Cannot upgrade classic group %s to consumer group because the group size exceeds the consumer group maximum size.", classicGroup.groupId())
@@ -1436,7 +1437,7 @@ public class GroupMetadataManager {
      */
     private void throwIfClassicMemberCannotJoinConsumerGroup(ConsumerGroup consumerGroup) {
         if (config.consumerGroupMigrationPolicy() == ConsumerGroupMigrationPolicy.DISABLED) {
-            log.info("Cannot join the consumer group {} with the classic protocol because the group migration is disabled.",
+            log.info("[GroupId {}] Cannot join the consumer group with the classic protocol because the group migration is disabled.",
                 consumerGroup.groupId());
             throw Errors.INCONSISTENT_GROUP_PROTOCOL.exception(
                 String.format("Cannot join the consumer group %s with the classic protocol because the group migration is disabled.", consumerGroup.groupId())
@@ -1471,14 +1472,14 @@ public class GroupMetadataManager {
                 metadataImage
             );
         } catch (SchemaException e) {
-            log.warn("Cannot upgrade classic group {} to consumer group because the embedded consumer protocol is malformed: {}.",
+            log.warn("[GroupId {}] Cannot upgrade the classic group to consumer group because the embedded consumer protocol is malformed: {}.",
                 classicGroup.groupId(), e.getMessage(), e);
 
             throw new GroupIdNotFoundException(
                 String.format("Cannot upgrade classic group %s to consumer group because the embedded consumer protocol is malformed.", classicGroup.groupId())
             );
         } catch (UnsupportedVersionException e) {
-            log.warn("Cannot upgrade classic group {} to consumer group: {}.", classicGroup.groupId(), e.getMessage(), e);
+            log.warn("[GroupId {}] Cannot upgrade the classic group to consumer group: {}.", classicGroup.groupId(), e.getMessage(), e);
 
             throw new GroupIdNotFoundException(
                 String.format("Cannot upgrade classic group %s to consumer group because an unsupported custom assignor is in use. " +
@@ -2305,7 +2306,7 @@ public class GroupMetadataManager {
                 group.storedDescriptionTopologyEpoch(),
                 group.failedDescriptionTopologyEpoch()
             ));
-            log.info("[GroupId {}][MemberId {}] Bumped streams group epoch to {} with metadata hash {} and validated topic epoch {}.", groupId, memberId, groupEpoch, metadataHash, validatedTopologyEpoch);
+            log.info("[GroupId {}][MemberId {}] Bumped streams group epoch to {} with metadata hash {} and validated topology epoch {}.", groupId, memberId, groupEpoch, metadataHash, validatedTopologyEpoch);
             metrics.record(STREAMS_GROUP_REBALANCES_SENSOR_NAME);
             group.setMetadataRefreshDeadline(currentTimeMs + METADATA_REFRESH_INTERVAL_MS, groupEpoch);
         }
@@ -2332,7 +2333,6 @@ public class GroupMetadataManager {
             groupEpoch,
             Optional.of(updatedMember),
             updatedConfiguredTopology,
-            metadataImage,
             records,
             Optional.of(returnedStatus),
             currentAssignmentConfigs,
@@ -2504,8 +2504,12 @@ public class GroupMetadataManager {
      *
      *  - If the topology of the group is uninitialized, it is initialized with the topology from the request. A corresponding
      *    record is added to records.
-     *  - If the topology of the group is initialized, and the request defines a topology, they are compared. If they
-     *    are not empty, an InvalidRequestException is thrown.
+     *  - If the topology of the group is initialized, and the request defines a topology with a lower epoch, the
+     *    request topology is ignored and the member is reported as stale.
+     *  - If the request defines a different topology with the same epoch as the group, a
+     *    StreamsInvalidTopologyEpochException is thrown.
+     *  - If the request defines a different topology with a higher epoch than the group, an InvalidRequestException
+     *    is thrown, since topology updates are not supported yet.
      *
      * @param groupId  The group ID.
      * @param memberId The member ID.
@@ -2530,6 +2534,11 @@ public class GroupMetadataManager {
                 log.info("[GroupId {}][MemberId {}] Member joined with stale topology epoch {}", groupId, memberId, topology.epoch());
                 return group.topology().get();
             } else if (!group.topology().get().equals(streamsTopologyFromRequest)) {
+                if (group.topology().get().topologyEpoch() == topology.epoch()) {
+                    throw new StreamsInvalidTopologyEpochException(String.format(
+                        "The topology sent by the member differs from the group's topology with the same epoch %d. " +
+                            "Make sure all members of the group run the same topology.", topology.epoch()));
+                }
                 throw new InvalidRequestException("Topology updates are not supported yet.");
             } else {
                 log.debug("[GroupId {}][MemberId {}] Member joined with currently initialized topology {}", groupId, memberId, topology.epoch());
@@ -3315,7 +3324,7 @@ public class GroupMetadataManager {
             finalInitializingMap.keySet().forEach(key -> {
                 if (currentDeleting.remove(key)) {
                     String topicName = metadataImage.topicMetadata(key).map(CoordinatorMetadataImage.TopicMetadata::name).orElse(null);
-                    log.warn("Initializing topic {} for share group {} found in deleting state as well, removing from deleting.", topicName, groupId);
+                    log.warn("[GroupId {}] Initializing topic {} for the share group found in deleting state as well, removing from deleting.", groupId, topicName);
                 }
             });
         }
@@ -4494,10 +4503,10 @@ public class GroupMetadataManager {
 
             if (log.isDebugEnabled()) {
                 log.debug("[GroupId {}] Computed a new target assignment for epoch {} with '{}' assignor in {}ms: {}.",
-                    group.groupId(), groupEpoch, shareGroupAssignor, assignorTimeMs, assignmentResult.targetAssignment());
+                    group.groupId(), groupEpoch, shareGroupAssignor.name(), assignorTimeMs, assignmentResult.targetAssignment());
             } else {
                 log.info("[GroupId {}] Computed a new target assignment for epoch {} with '{}' assignor in {}ms.",
-                    group.groupId(), groupEpoch, shareGroupAssignor, assignorTimeMs);
+                    group.groupId(), groupEpoch, shareGroupAssignor.name(), assignorTimeMs);
             }
 
             new TargetAssignmentRecordsBuilder.ShareTargetAssignmentRecordsBuilder(log, group.groupId())
@@ -4544,7 +4553,6 @@ public class GroupMetadataManager {
      * @param group                The StreamsGroup.
      * @param groupEpoch           The group epoch.
      * @param updatedMember        The updated member (optional).
-     * @param metadataImage        The metadata image.
      * @param records              The list to accumulate any new records.
      * @param returnedStatus       A mutable collection of status to be returned in the response.
      * @param refineOnly           If true, only advance the assignment epoch of the unchanged final target (warm-up refinement step)
@@ -4556,7 +4564,6 @@ public class GroupMetadataManager {
         int groupEpoch,
         Optional<StreamsGroupMember> updatedMember,
         ConfiguredTopology configuredTopology,
-        CoordinatorMetadataImage metadataImage,
         List<CoordinatorRecord> records,
         Optional<List<Status>> returnedStatus,
         AssignmentConfigs assignmentConfigs,
@@ -4640,10 +4647,10 @@ public class GroupMetadataManager {
 
             if (log.isDebugEnabled()) {
                 log.debug("[GroupId {}] Computed a new target assignment for epoch {} with '{}' assignor in {}ms: {}.",
-                    group.groupId(), groupEpoch, assignor, assignorTimeMs, assignmentResult.targetAssignment());
+                    group.groupId(), groupEpoch, assignor.name(), assignorTimeMs, assignmentResult.targetAssignment());
             } else {
                 log.info("[GroupId {}] Computed a new target assignment for epoch {} with '{}' assignor in {}ms.",
-                    group.groupId(), groupEpoch, assignor, assignorTimeMs);
+                    group.groupId(), groupEpoch, assignor.name(), assignorTimeMs);
             }
 
             new TargetAssignmentRecordsBuilder.StreamsTargetAssignmentRecordsBuilder(log, group.groupId())
@@ -4801,7 +4808,6 @@ public class GroupMetadataManager {
                 group.groupEpoch(),
                 Optional.empty(),
                 group.configuredTopology().get(),
-                metadataImage,
                 records,
                 Optional.empty(),
                 group.lastAssignmentConfigs(),
@@ -5363,7 +5369,7 @@ public class GroupMetadataManager {
             streamsGroupSessionTimeoutMs(groupId),
             TimeUnit.MILLISECONDS,
             true,
-            () -> streamsGroupFenceMemberOperation(groupId, memberId, "the member session expired.")
+            () -> streamsGroupFenceMemberOperation(groupId, memberId, "the member session expired")
         );
     }
 
@@ -5578,7 +5584,7 @@ public class GroupMetadataManager {
                     return new CoordinatorResult<>(List.of());
                 }
             } catch (GroupIdNotFoundException ex) {
-                log.debug("[GroupId {}] Could not fence {}} because the group does not exist.",
+                log.debug("[GroupId {}] Could not fence {} because the group does not exist.",
                     groupId, memberId);
             } catch (UnknownMemberIdException ex) {
                 log.debug("[GroupId {}] Could not fence {} because the member does not exist.",
@@ -5621,7 +5627,7 @@ public class GroupMetadataManager {
                     return new CoordinatorResult<>(List.of());
                 }
             } catch (GroupIdNotFoundException ex) {
-                log.debug("[GroupId {}] Could not fence {}} because the group does not exist.",
+                log.debug("[GroupId {}] Could not fence {} because the group does not exist.",
                     groupId, memberId);
             } catch (UnknownMemberIdException ex) {
                 log.debug("[GroupId {}] Could not fence {} because the member does not exist.",
@@ -6437,10 +6443,10 @@ public class GroupMetadataManager {
             shareGroup = getOrMaybeCreatePersistedShareGroup(groupId, value != null);
             oldMember = shareGroup.getOrMaybeCreateMember(memberId, value != null);
         } catch (GroupIdNotFoundException ex) {
-            log.debug("ShareGroupMemberMetadata tombstone without group - {}", groupId, ex);
+            log.debug("[GroupId {}] ShareGroupMemberMetadata tombstone without group", groupId, ex);
             return;
         } catch (UnknownMemberIdException ex) {
-            log.debug("ShareGroupMemberMetadata tombstone for groupId - {} without member - {}", groupId, memberId, ex);
+            log.debug("[GroupId {}] ShareGroupMemberMetadata tombstone without member {}", groupId, memberId, ex);
             return;
         }
 
@@ -6483,7 +6489,7 @@ public class GroupMetadataManager {
         try {
             shareGroup = getOrMaybeCreatePersistedShareGroup(groupId, value != null);
         } catch (GroupIdNotFoundException ex) {
-            log.debug("ShareGroupMetadata tombstone without group - {}", groupId, ex);
+            log.debug("[GroupId {}] ShareGroupMetadata tombstone without group", groupId, ex);
             return;
         }
 
@@ -6502,7 +6508,7 @@ public class GroupMetadataManager {
             }
             if (shareGroup.assignmentEpoch() != -1) {
                 throw new IllegalStateException("Received a tombstone record to delete group " + groupId
-                    + " but target assignment epoch in invalid.");
+                    + " but did not receive ShareGroupTargetAssignmentMetadataValue tombstone.");
             }
             removeGroup(groupId);
         }
@@ -6687,7 +6693,7 @@ public class GroupMetadataManager {
         try {
             group = getOrMaybeCreatePersistedShareGroup(groupId, value != null);
         } catch (GroupIdNotFoundException ex) {
-            log.debug("ShareGroupTargetAssignmentMember tombstone without group - {}", groupId, ex);
+            log.debug("[GroupId {}] ShareGroupTargetAssignmentMember tombstone without group", groupId, ex);
             return;
         }
 
@@ -6716,7 +6722,7 @@ public class GroupMetadataManager {
         try {
             group = getOrMaybeCreatePersistedShareGroup(groupId, value != null);
         } catch (GroupIdNotFoundException ex) {
-            log.debug("ShareGroupTargetAssignmentMetadata tombstone without group - {}", groupId, ex);
+            log.debug("[GroupId {}] ShareGroupTargetAssignmentMetadata tombstone without group", groupId, ex);
             return;
         }
 
@@ -6752,10 +6758,10 @@ public class GroupMetadataManager {
             group = getOrMaybeCreatePersistedShareGroup(groupId, value != null);
             oldMember = group.getOrMaybeCreateMember(memberId, value != null);
         } catch (GroupIdNotFoundException ex) {
-            log.debug("ShareGroupCurrentMemberAssignment tombstone without group - {}", groupId, ex);
+            log.debug("[GroupId {}] ShareGroupCurrentMemberAssignment tombstone without group", groupId, ex);
             return;
         } catch (UnknownMemberIdException ex) {
-            log.debug("ShareGroupCurrentMemberAssignment tombstone for groupId - {} without member - {}", groupId, memberId, ex);
+            log.debug("[GroupId {}] ShareGroupCurrentMemberAssignment tombstone without member {}", groupId, memberId, ex);
             return;
         }
 
@@ -6792,7 +6798,7 @@ public class GroupMetadataManager {
             getOrMaybeCreatePersistedShareGroup(groupId, value != null);
         } catch (GroupIdNotFoundException ex) {
             // Ignore tombstone if group not found.
-            log.debug("ShareGroupStatePartitionMetadata tombstone for non-existent share group {}", groupId, ex);
+            log.debug("[GroupId {}] ShareGroupStatePartitionMetadata tombstone without group", groupId, ex);
         }
 
         if (value == null) {
@@ -6909,9 +6915,9 @@ public class GroupMetadataManager {
             switch (group.type()) {
                 case STREAMS:
                     StreamsGroup streamsGroup = (StreamsGroup) group;
-                    log.info("Loaded streams group {} with {} members.", groupId, streamsGroup.members().size());
+                    log.info("[GroupId {}] Loaded the streams group with {} members.", groupId, streamsGroup.members().size());
                     streamsGroup.members().forEach((memberId, member) -> {
-                        log.debug("Loaded member {} in streams group {}.", memberId, groupId);
+                        log.debug("[GroupId {}] Loaded member {} in the streams group.", groupId, memberId);
                         scheduleStreamsGroupSessionTimeout(groupId, memberId);
                         if (member.state() == org.apache.kafka.coordinator.group.streams.MemberState.UNREVOKED_TASKS) {
                             scheduleStreamsGroupRebalanceTimeout(
@@ -6926,9 +6932,9 @@ public class GroupMetadataManager {
 
                 case CONSUMER:
                     ConsumerGroup consumerGroup = (ConsumerGroup) group;
-                    log.info("Loaded consumer group {} with {} members.", groupId, consumerGroup.members().size());
+                    log.info("[GroupId {}] Loaded the consumer group with {} members.", groupId, consumerGroup.members().size());
                     consumerGroup.members().forEach((memberId, member) -> {
-                        log.debug("Loaded member {} in consumer group {}.", memberId, groupId);
+                        log.debug("[GroupId {}] Loaded member {} in the consumer group.", groupId, memberId);
                         scheduleConsumerGroupSessionTimeout(
                             groupId,
                             memberId,
@@ -6947,9 +6953,9 @@ public class GroupMetadataManager {
 
                 case CLASSIC:
                     ClassicGroup classicGroup = (ClassicGroup) group;
-                    log.info("Loaded classic group {} with {} members.", groupId, classicGroup.allMembers().size());
+                    log.info("[GroupId {}] Loaded the classic group with {} members.", groupId, classicGroup.allMembers().size());
                     classicGroup.allMembers().forEach(member -> {
-                        log.debug("Loaded member {} in classic group {}.", member.memberId(), groupId);
+                        log.debug("[GroupId {}] Loaded member {} in the classic group.", groupId, member.memberId());
                         rescheduleClassicGroupMemberHeartbeat(classicGroup, member);
                     });
 
@@ -6965,15 +6971,15 @@ public class GroupMetadataManager {
 
                 case SHARE:
                     ShareGroup shareGroup = (ShareGroup) group;
-                    log.info("Loaded share group {} with {} members.", groupId, shareGroup.members().size());
+                    log.info("[GroupId {}] Loaded the share group with {} members.", groupId, shareGroup.members().size());
                     shareGroup.members().forEach((memberId, member) -> {
-                        log.debug("Loaded member {} in share group {}.", memberId, groupId);
+                        log.debug("[GroupId {}] Loaded member {} in the share group.", groupId, memberId);
                         scheduleShareGroupSessionTimeout(groupId, memberId);
                     });
                     break;
 
                 default:
-                    log.warn("Loaded group {} with an unknown group type {}.", groupId, group.type());
+                    log.warn("[GroupId {}] Loaded the group with an unknown group type {}.", groupId, group.type());
                     break;
             }
         });
@@ -6989,17 +6995,17 @@ public class GroupMetadataManager {
             switch (group.type()) {
                 case STREAMS:
                     StreamsGroup streamsGroup = (StreamsGroup) group;
-                    log.info("[GroupId={}] Unloaded group metadata for group epoch {}.",
+                    log.info("[GroupId {}] Unloaded group metadata for group epoch {}.",
                         streamsGroup.groupId(), streamsGroup.groupEpoch());
                     break;
                 case CONSUMER:
                     ConsumerGroup consumerGroup = (ConsumerGroup) group;
-                    log.info("[GroupId={}] Unloaded group metadata for group epoch {}.",
+                    log.info("[GroupId {}] Unloaded group metadata for group epoch {}.",
                         consumerGroup.groupId(), consumerGroup.groupEpoch());
                     break;
                 case CLASSIC:
                     ClassicGroup classicGroup = (ClassicGroup) group;
-                    log.info("[GroupId={}] Unloading group metadata for generation {}.",
+                    log.info("[GroupId {}] Unloading group metadata for generation {}.",
                         classicGroup.groupId(), classicGroup.generationId());
 
                     classicGroup.transitionTo(DEAD);
@@ -7025,12 +7031,12 @@ public class GroupMetadataManager {
                     break;
                 case SHARE:
                     ShareGroup shareGroup = (ShareGroup) group;
-                    log.info("[GroupId={}] Unloaded group metadata for group epoch {}.",
+                    log.info("[GroupId {}] Unloaded group metadata for group epoch {}.",
                         shareGroup.groupId(), shareGroup.groupEpoch());
                     break;
 
                 default:
-                    log.warn("onUnloaded group with an unknown group type {}.", group.type());
+                    log.warn("[GroupId {}] Unloaded the group with an unknown group type {}.", group.groupId(), group.type());
                     break;
             }
         });
@@ -7245,7 +7251,7 @@ public class GroupMetadataManager {
                 if (t != null) {
                     // We failed to write the empty group metadata. This will revert the snapshot, removing
                     // the newly created group.
-                    log.warn("Failed to write empty metadata for group {}: {}", group.groupId(), t.getMessage());
+                    log.warn("[GroupId {}] Failed to write empty metadata: {}", group.groupId(), t.getMessage());
 
                     responseFuture.complete(new JoinGroupResponseData()
                         .setErrorCode(appendGroupMetadataErrorToResponseError(Errors.forException(t)).code()));
@@ -7271,19 +7277,19 @@ public class GroupMetadataManager {
      */
     private CoordinatorResult<Void, CoordinatorRecord> maybeCompleteJoinPhase(ClassicGroup group) {
         if (!group.isInState(PREPARING_REBALANCE)) {
-            log.debug("Cannot complete join phase of group {} because the group is in {} state.",
+            log.debug("[GroupId {}] Cannot complete join phase because the group is in {} state.",
                 group.groupId(), group.currentState());
             return EMPTY_RESULT;
         }
 
         if (group.previousState() == EMPTY) {
-            log.debug("Cannot complete join phase of group {} because this is an initial rebalance.",
+            log.debug("[GroupId {}] Cannot complete join phase because this is an initial rebalance.",
                 group.groupId());
             return EMPTY_RESULT;
         }
 
         if (!group.hasAllMembersJoined()) {
-            log.debug("Cannot complete join phase of group {} because not all the members have rejoined. " +
+            log.debug("[GroupId {}] Cannot complete join phase because not all the members have rejoined. " +
                 "Members={}, AwaitingJoinResponses={}, PendingJoinMembers={}.",
                 group.groupId(), group.numMembers(), group.numAwaitingJoinResponse(), group.numPendingJoinMembers());
             return EMPTY_RESULT;
@@ -7370,9 +7376,9 @@ public class GroupMetadataManager {
         String groupInstanceId = request.groupInstanceId();
         String existingMemberId = group.staticMemberId(groupInstanceId);
         if (existingMemberId != null) {
-            log.info("Static member with groupInstanceId={} and unknown member id joins " +
-                    "group {} in {} state. Replacing previously mapped member {} with this groupInstanceId.",
-                groupInstanceId, group.groupId(), group.currentState(), existingMemberId);
+            log.info("[GroupId {}] Static member with groupInstanceId={} and unknown member id joins " +
+                    "the group in {} state. Replacing previously mapped member {} with this groupInstanceId.",
+                group.groupId(), groupInstanceId, group.currentState(), existingMemberId);
 
             return updateStaticMemberThenRebalanceOrCompleteJoin(
                 context,
@@ -7383,9 +7389,9 @@ public class GroupMetadataManager {
                 responseFuture
             );
         } else {
-            log.info("Static member with groupInstanceId={} and unknown member id joins " +
-                    "group {} in {} state. Created a new member id {} for this member and added to the group.",
-                groupInstanceId, group.groupId(), group.currentState(), newMemberId);
+            log.info("[GroupId {}] Static member with groupInstanceId={} and unknown member id joins " +
+                    "the group in {} state. Created a new member id {} for this member and added to the group.",
+                group.groupId(), groupInstanceId, group.currentState(), newMemberId);
 
             return addMemberThenRebalanceOrCompleteJoin(context, request, group, newMemberId, responseFuture);
         }
@@ -7416,7 +7422,7 @@ public class GroupMetadataManager {
         if (JoinGroupRequest.requiresKnownMemberId(context.requestVersion())) {
             // If member id required, register the member in the pending member list and send
             // back a response to call for another join group request with allocated member id.
-            log.info("Dynamic member with unknown member id joins group {} in {} state. " +
+            log.info("[GroupId {}] Dynamic member with unknown member id joins the group in {} state. " +
                     "Created a new member id {} and requesting the member to rejoin with this id.",
                 group.groupId(), group.currentState(), newMemberId);
 
@@ -7436,7 +7442,7 @@ public class GroupMetadataManager {
                 .setErrorCode(Errors.MEMBER_ID_REQUIRED.code())
             );
         } else {
-            log.info("Dynamic member with unknown member id joins group {} in state {}. " +
+            log.info("[GroupId {}] Dynamic member with unknown member id joins the group in state {}. " +
                     "Created a new member id {} and added the member to the group.",
                 group.groupId(), group.currentState(), newMemberId);
 
@@ -7486,8 +7492,8 @@ public class GroupMetadataManager {
                     groupInstanceId + " for pending member with memberId=" + memberId);
             }
 
-            log.info("Pending dynamic member with id {} joins group {} in {} state. Adding to the group now.",
-                memberId, group.groupId(), group.currentState());
+            log.info("[GroupId {}] Pending dynamic member with id {} joins the group in {} state. Adding to the group now.",
+                group.groupId(), memberId, group.currentState());
 
             return addMemberThenRebalanceOrCompleteJoin(
                 context,
@@ -7586,8 +7592,8 @@ public class GroupMetadataManager {
                 }
             } else {
                 // Group reached unexpected (Empty) state. Let the joining member reset their generation and rejoin.
-                log.warn("Attempt to add rejoining member {} of group {} in unexpected group state {}",
-                    memberId, group.groupId(), group.stateAsString());
+                log.warn("[GroupId {}] Attempt to add rejoining member {} in unexpected group state {}",
+                    group.groupId(), memberId, group.stateAsString());
 
                 responseFuture.complete(new JoinGroupResponseData()
                     .setMemberId(memberId)
@@ -7609,7 +7615,7 @@ public class GroupMetadataManager {
         try {
             group = getOrMaybeCreateClassicGroup(groupId, false);
         } catch (GroupIdNotFoundException exception) {
-            log.debug("Cannot find the group, skipping rebalance stage.", exception);
+            log.debug("[GroupId {}] Cannot find the group, skipping rebalance stage.", groupId, exception);
             return EMPTY_RESULT;
         }
         return completeClassicGroupJoin(group);
@@ -7645,17 +7651,17 @@ public class GroupMetadataManager {
                 timer.cancel(classicGroupHeartbeatKey(group.groupId(), failedMember.memberId()));
             });
 
-            log.info("Group {} removed dynamic members who haven't joined: {}",
+            log.info("[GroupId {}] Removed dynamic members who haven't joined: {}",
                 groupId, notYetRejoinedDynamicMembers.keySet());
         }
 
         if (group.isInState(DEAD)) {
-            log.info("Group {} is dead, skipping rebalance stage.", groupId);
+            log.info("[GroupId {}] Group is dead, skipping rebalance stage.", groupId);
         } else if (!group.maybeElectNewJoinedLeader() && !group.allMembers().isEmpty()) {
             // If all members are not rejoining, we will postpone the completion
             // of rebalance preparing stage, and send out another delayed operation
             // until session timeout removes all the non-responsive members.
-            log.error("Group {} could not complete rebalance because no members rejoined.", groupId);
+            log.error("[GroupId {}] Could not complete rebalance because no members rejoined.", groupId);
 
             timer.schedule(
                 classicGroupJoinKey(groupId),
@@ -7669,7 +7675,7 @@ public class GroupMetadataManager {
         } else {
             group.initNextGeneration();
             if (group.isInState(EMPTY)) {
-                log.info("Group {} with generation {} is now empty.", groupId, group.generationId());
+                log.info("[GroupId {}] Group with generation {} is now empty.", groupId, group.generationId());
 
                 CompletableFuture<Void> appendFuture = new CompletableFuture<>();
                 appendFuture.whenComplete((__, t) -> {
@@ -7678,7 +7684,7 @@ public class GroupMetadataManager {
                         // the previous generation written to the log will become active again (and most likely timeout).
                         // This should be safe since there are no active members in an empty generation, so we just warn.
                         Errors error = appendGroupMetadataErrorToResponseError(Errors.forException(t));
-                        log.warn("Failed to write empty metadata for group {}: {}", group.groupId(), error.message());
+                        log.warn("[GroupId {}] Failed to write empty metadata: {}", group.groupId(), error.message());
                     }
                 });
 
@@ -7688,7 +7694,7 @@ public class GroupMetadataManager {
                 return new CoordinatorResult<>(records, appendFuture, false);
 
             } else {
-                log.info("Stabilized group {} generation {} with {} members.",
+                log.info("[GroupId {}] Stabilized group generation {} with {} members.",
                     groupId, group.generationId(), group.numMembers());
 
                 // Complete the awaiting join group response future for all the members after rebalancing
@@ -7753,27 +7759,27 @@ public class GroupMetadataManager {
         try {
             group = getOrMaybeCreateClassicGroup(groupId, false);
         } catch (GroupIdNotFoundException exception) {
-            log.debug("Received notification of heartbeat expiration for member {} after group {} " +
-                "had already been deleted or upgraded.", memberId, groupId);
+            log.debug("[GroupId {}] Received notification of heartbeat expiration for member {} after the group " +
+                "had already been deleted or upgraded.", groupId, memberId);
             return EMPTY_RESULT;
         }
 
         if (group.isInState(DEAD)) {
-            log.info("Received notification of heartbeat expiration for member {} after group {} " +
+            log.info("[GroupId {}] Received notification of heartbeat expiration for member {} after the group " +
                     "had already been unloaded or deleted.",
-                memberId, group.groupId());
+                group.groupId(), memberId);
         } else if (group.isPendingMember(memberId)) {
-            log.info("Pending member {} in group {} has been removed after session timeout expiration.",
-                memberId, group.groupId());
+            log.info("[GroupId {}] Pending member {} has been removed after session timeout expiration.",
+                group.groupId(), memberId);
 
             return removePendingMemberAndUpdateClassicGroup(group, memberId);
         } else if (!group.hasMember(memberId)) {
-            log.debug("Member {} has already been removed from the group.", memberId);
+            log.debug("[GroupId {}] Member {} has already been removed from the group.", group.groupId(), memberId);
         } else {
             ClassicGroupMember member = group.member(memberId);
             if (!member.hasSatisfiedHeartbeat()) {
-                log.info("Member {} in group {} has failed, removing it from the group.",
-                    member.memberId(), group.groupId());
+                log.info("[GroupId {}] Member {} has failed, removing it from the group.",
+                    group.groupId(), member.memberId());
 
                 return removeMemberAndUpdateClassicGroup(
                     group,
@@ -7978,7 +7984,7 @@ public class GroupMetadataManager {
 
         group.transitionTo(PREPARING_REBALANCE);
 
-        log.info("Preparing to rebalance group {} in state {} with old generation {} (reason: {}).",
+        log.info("[GroupId {}] Preparing to rebalance the group in state {} with old generation {} (reason: {}).",
             group.groupId(), group.currentState(), group.generationId(), reason);
 
         return isInitialRebalance ? EMPTY_RESULT : maybeCompleteJoinElseSchedule(group);
@@ -8027,7 +8033,7 @@ public class GroupMetadataManager {
         try {
             group = getOrMaybeCreateClassicGroup(groupId, false);
         } catch (GroupIdNotFoundException exception) {
-            log.debug("Cannot find the group, skipping the initial rebalance stage.", exception);
+            log.debug("[GroupId {}] Cannot find the group, skipping the initial rebalance stage.", groupId, exception);
             return EMPTY_RESULT;
         }
 
@@ -8102,8 +8108,8 @@ public class GroupMetadataManager {
 
         for (ClassicGroupMember member : group.allMembers()) {
             if (!member.hasAssignment() && error == Errors.NONE) {
-                log.warn("Sending empty assignment to member {} of {} for " + "generation {} with no errors",
-                    member.memberId(), group.groupId(), group.generationId());
+                log.warn("[GroupId {}] Sending empty assignment to member {} for " + "generation {} with no errors",
+                    group.groupId(), member.memberId(), group.generationId());
             }
 
             if (group.completeSyncFuture(member,
@@ -8184,16 +8190,16 @@ public class GroupMetadataManager {
         try {
             group = getOrMaybeCreateClassicGroup(groupId, false);
         } catch (GroupIdNotFoundException exception) {
-            log.debug("Received notification of sync expiration for an unknown classic group {}.", groupId);
+            log.debug("[GroupId {}] Received notification of sync expiration for an unknown classic group.", groupId);
             return EMPTY_RESULT;
         }
 
         if (generationId != group.generationId()) {
-            log.error("Received unexpected notification of sync expiration for {} with an old " +
+            log.error("[GroupId {}] Received unexpected notification of sync expiration with an old " +
                 "generation {} while the group has {}.", group.groupId(), generationId, group.generationId());
         } else {
             if (group.isInState(DEAD) || group.isInState(EMPTY) || group.isInState(PREPARING_REBALANCE)) {
-                log.error("Received unexpected notification of sync expiration after group {} already " +
+                log.error("[GroupId {}] Received unexpected notification of sync expiration after the group already " +
                     "transitioned to {} state.", group.groupId(), group.stateAsString());
             } else if (group.isInState(COMPLETING_REBALANCE) || group.isInState(STABLE)) {
                 if (!group.hasReceivedSyncFromAllMembers()) {
@@ -8203,7 +8209,7 @@ public class GroupMetadataManager {
                         timer.cancel(classicGroupHeartbeatKey(group.groupId(), memberId));
                     });
 
-                    log.debug("Group {} removed members who haven't sent their sync requests: {}",
+                    log.debug("[GroupId {}] Removed members who haven't sent their sync requests: {}",
                         group.groupId(), pendingSyncMembers);
 
                     return prepareRebalance(group, "Removing " + pendingSyncMembers + " on pending sync request expiration");
@@ -8290,14 +8296,14 @@ public class GroupMetadataManager {
             String groupInstanceId = request.groupInstanceId();
             String selectedProtocolForNextGeneration = group.selectProtocol();
             if (group.protocolName().orElse("").equals(selectedProtocolForNextGeneration)) {
-                log.info("Static member which joins during Stable stage and doesn't affect " +
-                    "the selected protocol will not trigger a rebalance.");
+                log.info("[GroupId {}] Static member which joins during Stable stage and doesn't affect " +
+                    "the selected protocol will not trigger a rebalance.", group.groupId());
 
                 Map<String, byte[]> groupAssignment = group.groupAssignment();
                 CompletableFuture<Void> appendFuture = new CompletableFuture<>();
                 appendFuture.whenComplete((__, t) -> {
                     if (t != null) {
-                        log.warn("Failed to persist metadata for group {} static member {} with " +
+                        log.warn("[GroupId {}] Failed to persist metadata for static member {} with " +
                             "group instance id {} due to {}. Reverting to old member id {}.",
                             group.groupId(), newMemberId, groupInstanceId, t.getMessage(), oldMemberId);
 
@@ -8442,9 +8448,9 @@ public class GroupMetadataManager {
 
             // If this is the leader, then we can attempt to persist state and transition to stable
             if (group.isLeader(memberId)) {
-                log.info("Assignment received from leader {} for group {} for generation {}. " +
+                log.info("[GroupId {}] Assignment received from leader {} for generation {}. " +
                     "The group has {} members, {} of which are static.",
-                    memberId, groupId, group.generationId(), group.numMembers(), group.allStaticMemberIds().size());
+                    groupId, memberId, group.generationId(), group.numMembers(), group.allStaticMemberIds().size());
 
                 // Fill all members with corresponding member assignment. If the member assignment
                 // does not exist, fill with an empty assignment.
@@ -8462,8 +8468,8 @@ public class GroupMetadataManager {
                 assignment.putAll(membersWithMissingAssignment);
 
                 if (!membersWithMissingAssignment.isEmpty()) {
-                    log.warn("Setting empty assignments for members {} of {} for generation {}.",
-                        membersWithMissingAssignment, groupId, group.generationId());
+                    log.warn("[GroupId {}] Setting empty assignments for members {} for generation {}.",
+                        groupId, membersWithMissingAssignment, group.generationId());
                 }
 
                 CompletableFuture<Void> appendFuture = new CompletableFuture<>();
@@ -8475,7 +8481,7 @@ public class GroupMetadataManager {
                         if (t != null) {
                             Errors error = appendGroupMetadataErrorToResponseError(Errors.forException(t));
                             resetAndPropagateAssignmentWithError(group, error);
-                            maybePrepareRebalanceOrCompleteJoin(group, "Error " + error + " when storing group assignment" +
+                            maybePrepareRebalanceOrCompleteJoin(group, "Error " + error + " when storing group assignment " +
                                 "during SyncGroup (member: " + memberId + ").");
                         } else {
                             // Update group's assignment and propagate to all members.
@@ -8795,7 +8801,7 @@ public class GroupMetadataManager {
      * Validates that a streams group exists, that the given member is a current member of it,
      * and that {@code pushedEpoch} matches the group's current topology epoch. Used by the
      * StreamsGroupTopologyDescriptionUpdate RPC handler to enforce the
-     * GROUP_ID_NOT_FOUND / UNKNOWN_MEMBER_ID / INVALID_REQUEST contract before consulting
+     * GROUP_ID_NOT_FOUND / UNKNOWN_MEMBER_ID / STREAMS_INVALID_TOPOLOGY_EPOCH contract before consulting
      * the topology description plugin.
      *
      * <p>The epoch check rejects stale or out-of-order pushes so they cannot regress
@@ -8810,20 +8816,20 @@ public class GroupMetadataManager {
      * @return The matching {@link StreamsGroupMember}.
      * @throws GroupIdNotFoundException if no streams group with this id exists.
      * @throws UnknownMemberIdException if the member is not currently in the group.
-     * @throws InvalidRequestException  if {@code pushedEpoch} does not match the group's
-     *                                  current topology epoch.
+     * @throws StreamsInvalidTopologyEpochException if {@code pushedEpoch} does not match the
+     *                                              group's current topology epoch.
      */
     public StreamsGroupMember validateStreamsGroupTopologyDescriptionUpdate(
         String groupId,
         String memberId,
         int pushedEpoch,
         long committedOffset
-    ) throws GroupIdNotFoundException, UnknownMemberIdException, InvalidRequestException {
+    ) throws GroupIdNotFoundException, UnknownMemberIdException, StreamsInvalidTopologyEpochException {
         StreamsGroup group = streamsGroup(groupId, committedOffset);
         StreamsGroupMember member = group.getMemberOrThrow(memberId, committedOffset);
         int currentEpoch = group.currentTopologyEpoch();
         if (pushedEpoch != currentEpoch) {
-            throw new InvalidRequestException(
+            throw new StreamsInvalidTopologyEpochException(
                 "Topology epoch " + pushedEpoch + " does not match the group's current topology epoch "
                     + currentEpoch + ".");
         }
@@ -9237,7 +9243,7 @@ public class GroupMetadataManager {
             } else if (group.isPendingMember(member.memberId())) {
                 group.remove(member.memberId());
                 timer.cancel(classicGroupHeartbeatKey(group.groupId(), member.memberId()));
-                log.info("[Group {}] Pending member {} has left group through explicit `LeaveGroup` request; client reason: {}",
+                log.info("[GroupId {}] Pending member {} has left group through explicit `LeaveGroup` request; client reason: {}",
                     group.groupId(), member.memberId(), reason);
 
                 memberResponses.add(
@@ -9315,7 +9321,7 @@ public class GroupMetadataManager {
     ) {
         ClassicGroupMember member = group.member(memberId);
         timer.cancel(classicGroupHeartbeatKey(group.groupId(), memberId));
-        log.info("[Group {}] Member {} has left group through explicit `LeaveGroup` request; client reason: {}",
+        log.info("[GroupId {}] Member {} has left group through explicit `LeaveGroup` request; client reason: {}",
             group.groupId(), memberId, reason);
 
         // New members may timeout with a pending JoinGroup while the group is still rebalancing, so we have
@@ -9409,11 +9415,11 @@ public class GroupMetadataManager {
         }
 
         if (!deletingToIgnore.isEmpty()) {
-            log.warn("Some topics for share group id {} were not found in the metadata image - {}", shareGroupId, deletingToIgnore);
+            log.warn("[GroupId {}] Some topics for the share group were not found in the metadata image - {}", shareGroupId, deletingToIgnore);
         }
 
         if (!deleteRetryCandidates.isEmpty()) {
-            log.info("Existing deleting entries found in share group {} - {}", shareGroupId, deleteRetryCandidates);
+            log.info("[GroupId {}] Existing deleting entries found in the share group - {}", shareGroupId, deleteRetryCandidates);
             deleteCandidates = combineInitMaps(deleteCandidates, deleteRetryCandidates);
         }
 

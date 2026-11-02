@@ -169,6 +169,7 @@ public class ShareGroup extends ModernGroup<ShareGroupMember> {
     /**
      * @return The current state as a String with given committedOffset.
      */
+    @Override
     public String stateAsString(long committedOffset) {
         return state.get(committedOffset).toString();
     }
@@ -197,6 +198,7 @@ public class ShareGroup extends ModernGroup<ShareGroupMember> {
      * @return A ShareGroupMember.
      * @throws UnknownMemberIdException when the member does not exist and createIfNotExists is false.
      */
+    @Override
     public ShareGroupMember getOrMaybeCreateMember(
         String memberId,
         boolean createIfNotExists
@@ -236,6 +238,7 @@ public class ShareGroup extends ModernGroup<ShareGroupMember> {
      *
      * @param memberId The member id to remove.
      */
+    @Override
     public void removeMember(String memberId) {
         ShareGroupMember oldMember = members.remove(memberId);
         maybeUpdateSubscribedTopicNames(oldMember, null);

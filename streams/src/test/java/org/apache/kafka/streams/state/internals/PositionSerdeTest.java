@@ -22,20 +22,46 @@ import org.apache.kafka.streams.query.Position;
 import org.junit.jupiter.api.Test;
 
 import java.nio.ByteBuffer;
+import java.util.Arrays;
 
 import static org.junit.jupiter.api.Assertions.assertEquals;
 import static org.junit.jupiter.api.Assertions.assertThrows;
 
 public class PositionSerdeTest {
 
+    private static final Position POSITION = Position.emptyPosition()
+        .withComponent("topic1", 0, 1L)
+        .withComponent("topic1", 1, 5L)
+        .withComponent("topic2", 3, 100L);
+
+    @Test
+    public void shouldSerializeToExactSize() {
+        final ByteBuffer buffer = PositionSerde.serialize(POSITION);
+
+        assertEquals(1 + 4 + 2 * (4 + 6 + 4) + 3 * (4 + 8), buffer.array().length);
+        assertEquals(buffer.limit(), buffer.array().length);
+        assertEquals(POSITION, PositionSerde.deserialize(ByteBuffer.wrap(buffer.array())));
+    }
+
+    @Test
+    public void shouldSerializeEmptyPositionToExactSize() {
+        final ByteBuffer buffer = PositionSerde.serialize(Position.emptyPosition());
+
+        assertEquals(1 + 4, buffer.array().length);
+        assertEquals(Position.emptyPosition(), PositionSerde.deserialize(ByteBuffer.wrap(buffer.array())));
+    }
+
+    @Test
+    public void shouldDeserializePositionWithTrailingBytes() {
+        final byte[] bytes = PositionSerde.serialize(POSITION).array();
+        final byte[] padded = Arrays.copyOf(bytes, bytes.length * 8);
+
+        assertEquals(POSITION, PositionSerde.deserialize(ByteBuffer.wrap(padded)));
+    }
+
     @Test
     public void shouldRoundTripPosition() {
-        final Position position = Position.emptyPosition()
-            .withComponent("topic1", 0, 1L)
-            .withComponent("topic1", 1, 5L)
-            .withComponent("topic2", 3, 100L);
-
-        assertEquals(position, PositionSerde.deserialize(PositionSerde.serialize(position)));
+        assertEquals(POSITION, PositionSerde.deserialize(PositionSerde.serialize(POSITION)));
     }
 
     @Test

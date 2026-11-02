@@ -78,10 +78,10 @@ public final class PositionSerde {
     public static ByteBuffer serialize(final Position position) {
         final byte version = (byte) 0;
 
-        int arraySize = Byte.SIZE; // version
+        int arraySize = Byte.BYTES; // version
 
         final int nTopics = position.getTopics().size();
-        arraySize += Integer.SIZE;
+        arraySize += Integer.BYTES;
 
         final ArrayList<String> entries =
                 new ArrayList<>(position.getTopics());
@@ -91,12 +91,12 @@ public final class PositionSerde {
             final String topic = entries.get(i);
             final byte[] topicBytes = topic.getBytes(StandardCharsets.UTF_8);
             topics[i] = topicBytes;
-            arraySize += Integer.SIZE; // topic name length
+            arraySize += Integer.BYTES; // topic name length
             arraySize += topicBytes.length; // topic name itself
 
             final Map<Integer, Long> partitionOffsets = position.getPartitionPositions(topic);
-            arraySize += Integer.SIZE; // Number of PartitionOffset pairs
-            arraySize += (Integer.SIZE + Long.SIZE)
+            arraySize += Integer.BYTES; // Number of PartitionOffset pairs
+            arraySize += (Integer.BYTES + Long.BYTES)
                     * partitionOffsets.size(); // partitionOffsets themselves
         }
 
