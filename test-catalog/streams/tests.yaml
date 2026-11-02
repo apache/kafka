@@ -5837,6 +5837,10 @@ org.apache.kafka.streams.state.internals.PlainToHeadersWindowStoreAdapterTest:
 - shouldHandleWindowRangeQuerySuccessfully
 - shouldNotCollectExecutionInfoWhenNotRequested
 - shouldReportRetentionPeriodOfUnderlyingStore
+org.apache.kafka.streams.state.internals.PositionSerdeTest:
+- shouldDeserializePositionWithTrailingBytes
+- shouldSerializeEmptyPositionToExactSize
+- shouldSerializeToExactSize
 org.apache.kafka.streams.state.internals.QueryableStoreProviderTest:
 - shouldFindGlobalStores
 - shouldResolveDefaultIsolationLevelAtQueryTime
