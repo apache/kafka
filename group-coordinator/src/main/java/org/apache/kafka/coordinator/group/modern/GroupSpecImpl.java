@@ -22,6 +22,7 @@ import org.apache.kafka.coordinator.group.api.assignor.GroupSpec;
 import org.apache.kafka.coordinator.group.api.assignor.MemberAssignment;
 import org.apache.kafka.coordinator.group.api.assignor.MemberSubscription;
 import org.apache.kafka.coordinator.group.api.assignor.SubscriptionType;
+import org.apache.kafka.coordinator.group.modern.share.ShareGroup.InitMapValue;
 
 import java.util.BitSet;
 import java.util.Collection;
@@ -34,6 +35,73 @@ import java.util.Set;
  * The assignment specification for a modern group.
  */
 public abstract class GroupSpecImpl implements GroupSpec {
+
+    /**
+     * The assignment specification for a consumer group.
+     */
+    public static class ConsumerGroupSpec extends GroupSpecImpl {
+        public ConsumerGroupSpec(
+            CoordinatorMetadataImage metadataImage,
+            Map<String, MemberSubscriptionAndAssignmentImpl> members,
+            SubscriptionType subscriptionType
+        ) {
+            super(metadataImage, members, subscriptionType);
+        }
+    }
+
+    /**
+     * The assignment specification for a share group.
+     */
+    public static class ShareGroupSpec extends GroupSpecImpl {
+        /**
+         * The initialized topic partitions, which are the only assignable partitions.
+         */
+        private final Map<Uuid, InitMapValue> initializedTopics;
+
+        public ShareGroupSpec(
+            CoordinatorMetadataImage metadataImage,
+            Map<String, MemberSubscriptionAndAssignmentImpl> members,
+            SubscriptionType subscriptionType,
+            Map<Uuid, InitMapValue> initializedTopics
+        ) {
+            super(metadataImage, members, subscriptionType);
+            this.initializedTopics = Objects.requireNonNull(initializedTopics);
+        }
+
+        /**
+         * {@inheritDoc}
+         */
+        @Override
+        public boolean isPartitionAssignable(Uuid topicId, int partitionId) {
+            InitMapValue initMapValue = initializedTopics.get(topicId);
+            if (initMapValue == null) {
+                return false;
+            }
+            return initMapValue.partitions().contains(partitionId);
+        }
+
+        @Override
+        public boolean equals(Object o) {
+            if (!super.equals(o)) return false;
+            ShareGroupSpec groupSpec = (ShareGroupSpec) o;
+            return Objects.equals(initializedTopics, groupSpec.initializedTopics);
+        }
+
+        @Override
+        public int hashCode() {
+            return Objects.hash(super.hashCode(), initializedTopics);
+        }
+
+        @Override
+        public String toString() {
+            return "ShareGroupSpec(" +
+                "members=" + members +
+                ", subscriptionType=" + subscriptionType +
+                ", initializedTopics=" + initializedTopics +
+                ')';
+        }
+    }
+
     /**
      * The partitions of a topic which are currently assigned to a member.
      *

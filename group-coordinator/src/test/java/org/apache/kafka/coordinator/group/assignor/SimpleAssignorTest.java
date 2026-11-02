@@ -24,8 +24,8 @@ import org.apache.kafka.coordinator.group.api.assignor.GroupSpec;
 import org.apache.kafka.coordinator.group.api.assignor.MemberAssignment;
 import org.apache.kafka.coordinator.group.api.assignor.PartitionAssignorException;
 import org.apache.kafka.coordinator.group.modern.Assignment;
+import org.apache.kafka.coordinator.group.modern.GroupSpecImpl;
 import org.apache.kafka.coordinator.group.modern.MemberSubscriptionAndAssignmentImpl;
-import org.apache.kafka.coordinator.group.modern.ShareGroupSpecImpl;
 import org.apache.kafka.coordinator.group.modern.SubscribedTopicDescriberImpl;
 import org.apache.kafka.coordinator.group.modern.share.ShareGroup.InitMapValue;
 import org.apache.kafka.server.common.TopicIdPartition;
@@ -78,7 +78,7 @@ public class SimpleAssignorTest {
             metadataImage
         );
 
-        GroupSpec groupSpec = new ShareGroupSpecImpl(
+        GroupSpec groupSpec = new GroupSpecImpl.ShareGroupSpec(
             metadataImage,
             Map.of(),
             HOMOGENEOUS,
@@ -92,7 +92,7 @@ public class SimpleAssignorTest {
 
         assertEquals(Map.of(), groupAssignment.members());
 
-        groupSpec = new ShareGroupSpecImpl(
+        groupSpec = new GroupSpecImpl.ShareGroupSpec(
             metadataImage,
             Map.of(),
             HETEROGENEOUS,
@@ -124,7 +124,7 @@ public class SimpleAssignorTest {
             )
         );
 
-        GroupSpec groupSpec = new ShareGroupSpecImpl(
+        GroupSpec groupSpec = new GroupSpecImpl.ShareGroupSpec(
             metadataImage,
             members,
             HOMOGENEOUS,
@@ -158,7 +158,7 @@ public class SimpleAssignorTest {
             )
         );
 
-        GroupSpec groupSpec = new ShareGroupSpecImpl(
+        GroupSpec groupSpec = new GroupSpecImpl.ShareGroupSpec(
             metadataImage,
             members,
             HOMOGENEOUS,
@@ -196,7 +196,7 @@ public class SimpleAssignorTest {
             Assignment.EMPTY
         ));
 
-        GroupSpec groupSpec = new ShareGroupSpecImpl(
+        GroupSpec groupSpec = new GroupSpecImpl.ShareGroupSpec(
             metadataImage,
             members,
             HOMOGENEOUS,
@@ -244,7 +244,7 @@ public class SimpleAssignorTest {
             Assignment.EMPTY
         ));
 
-        GroupSpec groupSpec = new ShareGroupSpecImpl(
+        GroupSpec groupSpec = new GroupSpecImpl.ShareGroupSpec(
             metadataImage,
             members,
             HOMOGENEOUS,
@@ -292,7 +292,7 @@ public class SimpleAssignorTest {
             Assignment.EMPTY
         ));
 
-        GroupSpec groupSpec = new ShareGroupSpecImpl(
+        GroupSpec groupSpec = new GroupSpecImpl.ShareGroupSpec(
             metadataImage,
             members,
             HOMOGENEOUS,
@@ -348,7 +348,7 @@ public class SimpleAssignorTest {
             Assignment.EMPTY
         ));
 
-        GroupSpec groupSpec = new ShareGroupSpecImpl(
+        GroupSpec groupSpec = new GroupSpecImpl.ShareGroupSpec(
             metadataImage,
             members,
             HETEROGENEOUS,
@@ -408,7 +408,7 @@ public class SimpleAssignorTest {
             Assignment.EMPTY
         ));
 
-        GroupSpec groupSpec = new ShareGroupSpecImpl(
+        GroupSpec groupSpec = new GroupSpecImpl.ShareGroupSpec(
             metadataImage,
             members,
             HETEROGENEOUS,
@@ -469,7 +469,7 @@ public class SimpleAssignorTest {
             Assignment.EMPTY
         ));
 
-        GroupSpec groupSpec = new ShareGroupSpecImpl(
+        GroupSpec groupSpec = new GroupSpecImpl.ShareGroupSpec(
             metadataImage,
             members,
             HETEROGENEOUS,
@@ -528,7 +528,7 @@ public class SimpleAssignorTest {
             Assignment.EMPTY
         ));
 
-        GroupSpec groupSpec = new ShareGroupSpecImpl(
+        GroupSpec groupSpec = new GroupSpecImpl.ShareGroupSpec(
             metadataImage,
             members,
             HETEROGENEOUS,
@@ -594,7 +594,7 @@ public class SimpleAssignorTest {
                 Assignment.EMPTY
             ));
 
-            GroupSpec groupSpec = new ShareGroupSpecImpl(
+            GroupSpec groupSpec = new GroupSpecImpl.ShareGroupSpec(
                 metadataImage,
                 members,
                 HOMOGENEOUS,
@@ -650,7 +650,7 @@ public class SimpleAssignorTest {
             ));
         }
 
-        GroupSpec groupSpec = new ShareGroupSpecImpl(
+        GroupSpec groupSpec = new GroupSpecImpl.ShareGroupSpec(
             metadataImage,
             members,
             HOMOGENEOUS,
@@ -675,7 +675,7 @@ public class SimpleAssignorTest {
             String newMemberId = "M" + member;
             members.remove(newMemberId);
 
-            groupSpec = new ShareGroupSpecImpl(
+            groupSpec = new GroupSpecImpl.ShareGroupSpec(
                 metadataImage,
                 members,
                 HOMOGENEOUS,
@@ -724,7 +724,7 @@ public class SimpleAssignorTest {
                 mkTopicAssignment(TOPIC_2_UUID, 1)))
         ));
 
-        GroupSpec groupSpec = new ShareGroupSpecImpl(
+        GroupSpec groupSpec = new GroupSpecImpl.ShareGroupSpec(
             metadataImage,
             members,
             HOMOGENEOUS,
@@ -779,7 +779,7 @@ public class SimpleAssignorTest {
                 mkTopicAssignment(TOPIC_2_UUID, 1)))
         ));
 
-        GroupSpec groupSpec = new ShareGroupSpecImpl(
+        GroupSpec groupSpec = new GroupSpecImpl.ShareGroupSpec(
             metadataImage,
             members,
             HETEROGENEOUS,
@@ -845,7 +845,7 @@ public class SimpleAssignorTest {
             Assignment.EMPTY
         ));
 
-        GroupSpec groupSpec1 = new ShareGroupSpecImpl(
+        GroupSpec groupSpec1 = new GroupSpecImpl.ShareGroupSpec(
             metadataImage1,
             members1,
             HETEROGENEOUS,
@@ -903,7 +903,7 @@ public class SimpleAssignorTest {
                 mkTopicAssignment(TOPIC_3_UUID, 0, 1)))
         ));
 
-        GroupSpec groupSpec2 = new ShareGroupSpecImpl(
+        GroupSpec groupSpec2 = new GroupSpecImpl.ShareGroupSpec(
             metadataImage2,
             members2,
             HETEROGENEOUS,
@@ -992,7 +992,7 @@ public class SimpleAssignorTest {
                 Assignment.EMPTY
             ));
 
-            GroupSpec groupSpec = new ShareGroupSpecImpl(
+            GroupSpec groupSpec = new GroupSpecImpl.ShareGroupSpec(
                 metadataImage,
                 members,
                 HETEROGENEOUS,
@@ -1079,7 +1079,7 @@ public class SimpleAssignorTest {
             ));
         }
 
-        GroupSpec groupSpec = new ShareGroupSpecImpl(
+        GroupSpec groupSpec = new GroupSpecImpl.ShareGroupSpec(
             metadataImage,
             members,
             HETEROGENEOUS,
@@ -1104,7 +1104,7 @@ public class SimpleAssignorTest {
             String newMemberId = "M" + member;
             members.remove(newMemberId);
 
-            groupSpec = new ShareGroupSpecImpl(
+            groupSpec = new GroupSpecImpl.ShareGroupSpec(
                 metadataImage,
                 members,
                 HETEROGENEOUS,

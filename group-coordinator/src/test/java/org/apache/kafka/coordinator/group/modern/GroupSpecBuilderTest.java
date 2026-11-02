@@ -55,7 +55,7 @@ public class GroupSpecBuilderTest {
                 .withResolvedRegularExpressions(Map.of());
 
         assertEquals(
-            new ConsumerGroupSpecImpl(
+            new GroupSpecImpl.ConsumerGroupSpec(
                 metadataImage,
                 Map.of(),
                 HOMOGENEOUS
@@ -114,7 +114,7 @@ public class GroupSpecBuilderTest {
                 .withResolvedRegularExpressions(Map.of());
 
         assertEquals(
-            new ConsumerGroupSpecImpl(
+            new GroupSpecImpl.ConsumerGroupSpec(
                 metadataImage,
                 Map.of(
                     "member-1", new MemberSubscriptionAndAssignmentImpl(
@@ -183,7 +183,7 @@ public class GroupSpecBuilderTest {
                 ));
 
         assertEquals(
-            new ConsumerGroupSpecImpl(
+            new GroupSpecImpl.ConsumerGroupSpec(
                 metadataImage,
                 Map.of(
                     "member-1", new MemberSubscriptionAndAssignmentImpl(
@@ -232,7 +232,7 @@ public class GroupSpecBuilderTest {
             .build();
 
         assertEquals(
-            new ShareGroupSpecImpl(
+            new GroupSpecImpl.ShareGroupSpec(
                 metadataImage,
                 Map.of(),
                 HOMOGENEOUS,
@@ -286,7 +286,7 @@ public class GroupSpecBuilderTest {
         resolvedRegularExpressions.clear();
 
         assertEquals(
-            new ConsumerGroupSpecImpl(
+            new GroupSpecImpl.ConsumerGroupSpec(
                 metadataImage,
                 // members
                 Map.of("member-1", new MemberSubscriptionAndAssignmentImpl(
@@ -335,7 +335,7 @@ public class GroupSpecBuilderTest {
         // convention. New share group specific fields should be modified here.
 
         assertEquals(
-            new ShareGroupSpecImpl(
+            new GroupSpecImpl.ShareGroupSpec(
                 metadataImage,
                 Map.of(),
                 HOMOGENEOUS,

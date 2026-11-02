@@ -102,7 +102,7 @@ public abstract class GroupSpecBuilder<T extends ModernGroupMember, U extends Gr
             Map<String, MemberSubscriptionAndAssignmentImpl> members,
             SubscriptionType subscriptionType
         ) {
-            return new ConsumerGroupSpecImpl(metadataImage, members, subscriptionType);
+            return new GroupSpecImpl.ConsumerGroupSpec(metadataImage, members, subscriptionType);
         }
     }
 
@@ -151,7 +151,12 @@ public abstract class GroupSpecBuilder<T extends ModernGroupMember, U extends Gr
             Map<String, MemberSubscriptionAndAssignmentImpl> members,
             SubscriptionType subscriptionType
         ) {
-            return new ShareGroupSpecImpl(metadataImage, members, subscriptionType, initializedTopics);
+            return new GroupSpecImpl.ShareGroupSpec(
+                metadataImage,
+                members,
+                subscriptionType,
+                initializedTopics
+            );
         }
     }
 

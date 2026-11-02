@@ -21,8 +21,8 @@ import org.apache.kafka.coordinator.common.runtime.CoordinatorMetadataImage;
 import org.apache.kafka.coordinator.common.runtime.MetadataImageBuilder;
 import org.apache.kafka.coordinator.group.api.assignor.SubscriptionType;
 import org.apache.kafka.coordinator.group.modern.Assignment;
+import org.apache.kafka.coordinator.group.modern.GroupSpecImpl;
 import org.apache.kafka.coordinator.group.modern.MemberSubscriptionAndAssignmentImpl;
-import org.apache.kafka.coordinator.group.modern.ShareGroupSpecImpl;
 import org.apache.kafka.coordinator.group.modern.share.ShareGroup.InitMapValue;
 
 import org.junit.jupiter.api.BeforeEach;
@@ -38,7 +38,7 @@ import static org.junit.jupiter.api.Assertions.assertTrue;
 
 public class ShareGroupSpecImplTest {
     private static final String TEST_MEMBER = "test-member";
-    private ShareGroupSpecImpl groupSpec;
+    private GroupSpecImpl.ShareGroupSpec groupSpec;
     private Uuid topicId;
 
     @BeforeEach
@@ -57,7 +57,7 @@ public class ShareGroupSpecImplTest {
             Assignment.EMPTY
         ));
 
-        groupSpec = new ShareGroupSpecImpl(
+        groupSpec = new GroupSpecImpl.ShareGroupSpec(
             metadataImage,
             members,
             subscriptionType,
