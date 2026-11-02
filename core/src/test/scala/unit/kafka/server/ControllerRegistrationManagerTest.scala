@@ -45,6 +45,10 @@ import scala.jdk.CollectionConverters._
 @Timeout(value = 60)
 class ControllerRegistrationManagerTest {
   private val controller1 = new Node(1, "localhost", 7000)
+  private val oldestRequestHeaderVersion =
+    ApiKeys.CONTROLLER_REGISTRATION.requestHeaderVersion(ApiKeys.CONTROLLER_REGISTRATION.oldestVersion)
+  private val latestRequestHeaderVersion =
+    ApiKeys.CONTROLLER_REGISTRATION.requestHeaderVersion(ApiKeys.CONTROLLER_REGISTRATION.latestVersion)
 
   private def configProperties = {
     val properties = new Properties()
@@ -247,9 +251,11 @@ class ControllerRegistrationManagerTest {
         assertTrue(request.isDone)
       })
 
+      val requestHeaderVersion =
+        if (metadataVersion.isAtLeast(MetadataVersion.IBP_4_5_IV0)) latestRequestHeaderVersion else oldestRequestHeaderVersion
       val requestVersion = request.get.version
-      assertEquals(ApiKeys.CONTROLLER_REGISTRATION.latestVersionForRequestHeader(metadataVersion.controllerRegistrationRequestHeaderVersion), requestVersion)
-      assertEquals(metadataVersion.controllerRegistrationRequestHeaderVersion, ApiKeys.CONTROLLER_REGISTRATION.requestHeaderVersion(requestVersion))
+      assertEquals(ApiKeys.CONTROLLER_REGISTRATION.latestVersionForRequestHeader(requestHeaderVersion), requestVersion)
+      assertEquals(requestHeaderVersion, ApiKeys.CONTROLLER_REGISTRATION.requestHeaderVersion(requestVersion))
     } finally {
       manager.close()
     }

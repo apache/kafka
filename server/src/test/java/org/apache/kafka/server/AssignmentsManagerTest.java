@@ -79,6 +79,10 @@ public class AssignmentsManagerTest {
     private static final Uuid DIR_1 = Uuid.fromString("cbgD8WdLQCyzLrFIMBhv3w");
     private static final Uuid DIR_2 = Uuid.fromString("zO0bDc0vSuam7Db9iH7rYQ");
     private static final Uuid DIR_3 = Uuid.fromString("CGBWbrFkRkeJQy6Aryzq2Q");
+    private static final short OLDEST_REQUEST_HEADER_VERSION =
+        ApiKeys.ASSIGN_REPLICAS_TO_DIRS.requestHeaderVersion(ApiKeys.ASSIGN_REPLICAS_TO_DIRS.oldestVersion());
+    private static final short LATEST_REQUEST_HEADER_VERSION =
+        ApiKeys.ASSIGN_REPLICAS_TO_DIRS.requestHeaderVersion(ApiKeys.ASSIGN_REPLICAS_TO_DIRS.latestVersion());
 
     private static final MetadataImage TEST_IMAGE;
 
@@ -327,9 +331,10 @@ public class AssignmentsManagerTest {
             testEnv.onAssignment(new TopicIdPartition(TOPIC_1, 0), DIR_1);
             TestUtils.retryOnExceptionWithTimeout(60_000, () -> assertEquals(1, testEnv.assignmentsManager.numInFlight()));
 
+            short requestHeaderVersion = metadataVersion.isAtLeast(MetadataVersion.IBP_4_5_IV0) ? LATEST_REQUEST_HEADER_VERSION : OLDEST_REQUEST_HEADER_VERSION;
             short requestVersion = testEnv.channelManager.callbacks.peek().getKey().version();
-            assertEquals(ApiKeys.ASSIGN_REPLICAS_TO_DIRS.latestVersionForRequestHeader(metadataVersion.assignReplicasToDirsRequestHeaderVersion()), requestVersion);
-            assertEquals(metadataVersion.assignReplicasToDirsRequestHeaderVersion(), ApiKeys.ASSIGN_REPLICAS_TO_DIRS.requestHeaderVersion(requestVersion));
+            assertEquals(ApiKeys.ASSIGN_REPLICAS_TO_DIRS.latestVersionForRequestHeader(requestHeaderVersion), requestVersion);
+            assertEquals(requestHeaderVersion, ApiKeys.ASSIGN_REPLICAS_TO_DIRS.requestHeaderVersion(requestVersion));
         }
     }
 
