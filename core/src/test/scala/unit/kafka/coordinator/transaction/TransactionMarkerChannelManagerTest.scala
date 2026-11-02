@@ -400,6 +400,70 @@ class TransactionMarkerChannelManagerTest {
     assertEquals(Map(broker1 -> expectedBroker1Request), secondDrainedRequests)
   }
 
+  @ParameterizedTest
+  @EnumSource(classOf[TransactionResult])
+  def shouldRetryMarkersUntilLeaderEndpointIsAvailable(result: TransactionResult): Unit = {
+    mockCache()
+    txnMetadata2.state(if (result == TransactionResult.COMMIT) TransactionState.PREPARE_COMMIT else TransactionState.PREPARE_ABORT)
+    val expectedTransition = txnMetadata2.prepareComplete(time.milliseconds())
+    // Return noNode for addTxnMarkersToSend, and the first two generateRequests()
+    when(metadataCache.getPartitionLeaderEndpoint(
+      ArgumentMatchers.eq(partition1.topic),
+      ArgumentMatchers.eq(partition1.partition),
+      any())
+    ).thenReturn(Optional.of(Node.noNode))
+      .thenReturn(Optional.of(Node.noNode))
+      .thenReturn(Optional.of(Node.noNode))
+      .thenReturn(Optional.of(broker1)
+    )
+
+    val manager = new TransactionMarkerChannelManager(
+      KafkaConfig.fromProps(TestUtils.createBrokerConfig(1)), metadataCache, networkClient, txnStateManager, time)
+    try {
+      manager.addTxnMarkersToSend(coordinatorEpoch, result, txnMetadata2, expectedTransition)
+
+      // A known partition without a leader must retain its marker and remain pending.
+      assertTrue(manager.generateRequests().isEmpty)
+      assertEquals(1, manager.queueForUnknownBroker.totalNumMarkers)
+      assertEquals(1, manager.numTxnsWithPendingMarkers)
+      assertTrue(txnMetadata2.topicPartitions.contains(partition1))
+      verify(txnStateManager, times(0)).appendTransactionToLog(any(), any(), any(), any(), any(), any())
+
+      // Knowing the leader ID is insufficient while its broker registration is missing.
+      assertTrue(manager.generateRequests().isEmpty)
+      assertEquals(1, manager.queueForUnknownBroker.totalNumMarkers)
+      assertEquals(1, manager.numTxnsWithPendingMarkers)
+      assertTrue(txnMetadata2.topicPartitions.contains(partition1))
+      verify(txnStateManager, times(0)).appendTransactionToLog(any(), any(), any(), any(), any(), any())
+
+      val requests = manager.generateRequests().asScala.toList
+      assertEquals(1, requests.size)
+      assertEquals(broker1, requests.head.destination)
+      val request = requests.head.request.asInstanceOf[WriteTxnMarkersRequest.Builder].build()
+      assertEquals(util.List.of(new WriteTxnMarkersRequest.TxnMarkerEntry(
+        producerId2, producerEpoch, coordinatorEpoch, result, util.List.of(partition1), TransactionVersion.TV_2.featureLevel()
+      )), request.markers())
+      assertEquals(0, manager.queueForUnknownBroker.totalNumMarkers)
+      assertEquals(1, manager.numTxnsWithPendingMarkers)
+      verify(txnStateManager, times(0)).appendTransactionToLog(any(), any(), any(), any(), any(), any())
+
+      val response = new WriteTxnMarkersResponse(
+        util.Map.of(producerId2: java.lang.Long, util.Map.of(partition1, Errors.NONE)))
+      requests.head.handler.onComplete(new ClientResponse(
+        new RequestHeader(ApiKeys.WRITE_TXN_MARKERS, 0, "client", 1), null, null,
+        time.milliseconds(), time.milliseconds(), false, null, null, response))
+
+      assertTrue(txnMetadata2.topicPartitions.isEmpty)
+      assertEquals(0, manager.numTxnsWithPendingMarkers)
+      verify(txnStateManager).appendTransactionToLog(
+        ArgumentMatchers.eq(transactionalId2), ArgumentMatchers.eq(coordinatorEpoch),
+        ArgumentMatchers.eq(expectedTransition), any(), any(), any())
+      assertTrue(manager.generateRequests().isEmpty)
+    } finally {
+      manager.shutdown()
+    }
+  }
+
   @Test
   def shouldRemoveMarkersForTxnPartitionWhenPartitionEmigrated(): Unit = {
     mockCache()
