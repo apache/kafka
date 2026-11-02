@@ -5847,6 +5847,12 @@ org.apache.kafka.streams.state.internals.PlainToHeadersWindowStoreAdapterTest:
 - shouldReportRetentionPeriodOfUnderlyingStore
 org.apache.kafka.streams.state.internals.PositionSerdeTest:
 - shouldDeserializePositionWithTrailingBytes
+- shouldRejectNegativePartitionCount
+- shouldRejectNegativeTopicCount
+- shouldRejectPartitionCountLargerThanRemainingBuffer
+- shouldRejectTopicCountLargerThanRemainingBuffer
+- shouldRoundTripEmptyPosition
+- shouldRoundTripPosition
 - shouldSerializeEmptyPositionToExactSize
 - shouldSerializeToExactSize
 org.apache.kafka.streams.state.internals.QueryableStoreProviderTest:
