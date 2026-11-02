@@ -1314,7 +1314,7 @@ public class GroupCoordinatorConfig {
     }
 
     /**
-     * The consumer group heartbeat interval in milliseconds.
+     * The share group heartbeat interval in milliseconds.
      */
     public int shareGroupHeartbeatIntervalMs() {
         return shareGroupHeartbeatIntervalMs;

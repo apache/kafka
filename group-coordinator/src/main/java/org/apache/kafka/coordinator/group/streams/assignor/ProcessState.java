@@ -140,7 +140,7 @@ public class ProcessState {
     }
 
     /**
-     * Assigns a task to the least loaded member of this process
+     * Assigns a task to the least loaded member of this process.
      *
      * @param taskId     The task to assign.
      * @param isActive   Whether the task is an active task (true) or a standby task (false).

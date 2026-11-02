@@ -91,9 +91,10 @@ public class ShareGroupAutoOffsetResetStrategy {
 
     /**
      * Delegates the timestamp calculation to the base strategy.
-     * @return the timestamp for the OffsetResetStrategy,
-     * if the strategy is EARLIEST or LATEST or duration is provided
-     * else return Optional.empty()
+     *
+     * @return {@code ListOffsetsRequest.EARLIEST_TIMESTAMP} for the EARLIEST strategy,
+     *         {@code ListOffsetsRequest.LATEST_TIMESTAMP} for the LATEST strategy, or the current
+     *         time minus the duration for the BY_DURATION strategy.
      */
     public Long timestamp() {
         return delegate.timestamp().get();
