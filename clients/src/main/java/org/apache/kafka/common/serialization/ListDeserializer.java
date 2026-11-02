@@ -35,9 +35,10 @@ import java.io.EOFException;
 import java.io.IOException;
 import java.lang.reflect.Constructor;
 import java.lang.reflect.InvocationTargetException;
-import java.util.ArrayList;
+import java.util.HashSet;
 import java.util.List;
 import java.util.Map;
+import java.util.Set;
 
 import static org.apache.kafka.common.serialization.Serdes.ListSerde.SerializationStrategy;
 
@@ -151,7 +152,7 @@ public class ListDeserializer<Inner> implements Deserializer<List<Inner>> {
         return SerializationStrategy.VALUES[serializationStrategyFlag];
     }
 
-    private List<Integer> deserializeNullIndexList(final DataInputStream dis, final int length) throws IOException {
+    private Set<Integer> deserializeNullIndexList(final DataInputStream dis, final int length) throws IOException {
         int nullIndexListSize = dis.readInt();
         if (nullIndexListSize < 0) {
             throw new SerializationException("Corrupted byte[]. The number of null list entries cannot be negative.");
@@ -159,7 +160,7 @@ public class ListDeserializer<Inner> implements Deserializer<List<Inner>> {
         if (nullIndexListSize > length / Integer.BYTES) {
             throw new SerializationException("Corrupted byte[]. The number of null list entries cannot be larger than overall number of elements.");
         }
-        List<Integer> nullIndexList = new ArrayList<>(nullIndexListSize);
+        Set<Integer> nullIndexList = new HashSet<>(nullIndexListSize);
         while (nullIndexListSize != 0) {
             nullIndexList.add(dis.readInt());
             nullIndexListSize--;
@@ -179,7 +180,7 @@ public class ListDeserializer<Inner> implements Deserializer<List<Inner>> {
         }
         try (final DataInputStream dis = new DataInputStream(new ByteArrayInputStream(data))) {
             SerializationStrategy serStrategy = parseSerializationStrategyFlag(dis.readByte());
-            List<Integer> nullIndexList = null;
+            Set<Integer> nullIndexList = null;
             if (serStrategy == SerializationStrategy.CONSTANT_SIZE) {
                 if (primitiveSize == null) {
                     throw new SerializationException("Data is encoded as constant size entries, but configured inner deserializer is not a known fixed-size deserializer.");
@@ -188,6 +189,9 @@ public class ListDeserializer<Inner> implements Deserializer<List<Inner>> {
                 nullIndexList = deserializeNullIndexList(dis, data.length);
             }
             final int size = readListSize(dis, data.length);
+            if (nullIndexList != null && size - nullIndexList.size() > dis.available() / primitiveSize) {
+                throw new SerializationException("Corrupted byte[]. The declared number of list entries cannot be larger than the number of entries the remaining bytes can hold.");
+            }
             List<Inner> deserializedList = createListInstance(size);
             for (int i = 0; i < size; i++) {
                 int entrySize = readEntrySize(dis, serStrategy, data.length);
