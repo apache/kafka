@@ -494,7 +494,11 @@ public class AssignmentInfo {
         }
         final Set<TopicPartition> partitions = new HashSet<>(numPartitions);
         for (int j = 0; j < numPartitions; j++) {
-            partitions.add(new TopicPartition(topicIndexDict.get(in.readInt()), in.readInt()));
+            final String topic = topicIndexDict.get(in.readInt());
+            if (topic == null) {
+                throw new TaskAssignmentException("Corrupted user data byte[]. Topic dictionary index is out of range.");
+            }
+            partitions.add(new TopicPartition(topic, in.readInt()));
         }
         return partitions;
     }
