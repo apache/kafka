@@ -3550,8 +3550,8 @@ public class UnifiedLogTest {
                 .build();
         log = createLog(logDir, logConfig);
 
-        // The expired record makes the first segment eligible, but its only retained record has a lower timestamp.
-        log.appendAsLeader(singletonRecords("expired-max".getBytes(), targetTimestamp), 0);
+        // DeleteRecords moves the start offset past the matching record, leaving a lower-timestamp record in the segment.
+        log.appendAsLeader(singletonRecords("deleted-max".getBytes(), targetTimestamp), 0);
         log.appendAsLeader(singletonRecords("retained-low-timestamp".getBytes(), targetTimestamp - 1), 0);
         log.roll();
         log.appendAsLeader(singletonRecords("valid-later-record".getBytes(), targetTimestamp), 0);

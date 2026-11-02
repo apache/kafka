@@ -151,6 +151,7 @@ import static org.junit.jupiter.api.Assertions.assertTrue;
 import static org.junit.jupiter.api.Assertions.fail;
 import static org.mockito.ArgumentMatchers.any;
 import static org.mockito.ArgumentMatchers.anyInt;
+import static org.mockito.ArgumentMatchers.anyList;
 import static org.mockito.ArgumentMatchers.anyLong;
 import static org.mockito.ArgumentMatchers.anyMap;
 import static org.mockito.ArgumentMatchers.anySet;
@@ -1680,7 +1681,7 @@ public class RemoteLogManagerTest {
 
     @ParameterizedTest
     @CsvSource({"false, false", "true, false", "true, true"})
-    void testFindOffsetByTimestampContinuesAfterEmptyRemoteSegment(boolean nextEpoch, boolean spansEpochs) throws Exception {
+    void testFindOffsetByTimestampSearchesNextRemoteSegmentWhenMatchIsBelowLogStartOffset(boolean nextEpoch, boolean spansEpochs) throws Exception {
         // Register the partition without starting background tasks while the lookup mocks are configured.
         remoteLogManager = spy(remoteLogManager);
         doNothing().when(remoteLogManager).doHandleLeaderPartition(eq(leaderTopicIdPartition), eq(false));
@@ -1733,7 +1734,7 @@ public class RemoteLogManagerTest {
 
     @ParameterizedTest
     @ValueSource(booleans = {false, true})
-    void testFindOffsetByTimestampContinuesAfterEmptyLocalSegment(boolean laterMatch) throws Exception {
+    void testFindOffsetByTimestampSearchesNextLocalSegmentWhenMatchIsBelowLogStartOffset(boolean laterMatch) throws Exception {
         long timestamp = time.milliseconds();
         int leaderEpoch = 10;
         LeaderEpochFileCache cache = new LeaderEpochFileCache(leaderTopicIdPartition.topicPartition(), checkpoint, scheduler);
@@ -1758,7 +1759,7 @@ public class RemoteLogManagerTest {
             laterSegment.append(2L, MemoryRecords.withRecords(2L, Compression.NONE, leaderEpoch,
                     new SimpleRecord(laterMatch ? timestamp : timestamp - 1, new byte[0])));
             when(mockLog.logSegments()).thenReturn(List.of(firstSegment, laterSegment));
-            when(mockLog.searchOffsetInLocalLog(anyLong(), anyLong())).thenCallRealMethod();
+            when(mockLog.searchOffsetInLocalLog(anyList(), anyLong(), anyLong())).thenCallRealMethod();
 
             Optional<FileRecords.TimestampAndOffset> expected = laterMatch
                     ? Optional.of(new FileRecords.TimestampAndOffset(timestamp, 2L, Optional.of(leaderEpoch)))
@@ -1766,7 +1767,42 @@ public class RemoteLogManagerTest {
             assertEquals(expected, remoteLogManager.findOffsetByTimestamp(
                     leaderTopicIdPartition.topicPartition(), timestamp, 1L, cache));
             verify(firstSegment).findOffsetByTimestamp(timestamp, 1L, mockLog.config().maxDecompressedMessageBytes());
-            verify(mockLog).searchOffsetInLocalLog(timestamp, 1L);
+            verify(mockLog).searchOffsetInLocalLog(List.of(firstSegment, laterSegment), timestamp, 1L);
+            verify(remoteStorageManager, never()).fetchLogSegment(any(), anyInt());
+        }
+    }
+
+    @ParameterizedTest
+    @ValueSource(booleans = {false, true})
+    void testFindOffsetByTimestampUsesLocalSegmentSnapshot(boolean laterMatch) throws Exception {
+        remoteLogManager = spy(remoteLogManager);
+        doNothing().when(remoteLogManager).doHandleFollowerPartition(leaderTopicIdPartition);
+        long timestamp = time.milliseconds();
+        int leaderEpoch = 10;
+        LeaderEpochFileCache cache = new LeaderEpochFileCache(leaderTopicIdPartition.topicPartition(), checkpoint, scheduler);
+        cache.assign(leaderEpoch, 0L);
+        RemoteLogSegmentMetadata metadata = new RemoteLogSegmentMetadata(
+                new RemoteLogSegmentId(leaderTopicIdPartition, Uuid.randomUuid()), 0L, 0L,
+                timestamp, brokerId, timestamp, 1024, Optional.empty(), RemoteLogSegmentState.COPY_SEGMENT_FINISHED,
+                new TreeMap<>(Map.of(leaderEpoch, 0L)));
+        when(remoteLogMetadataManager.listRemoteLogSegments(leaderTopicIdPartition, leaderEpoch))
+                .thenAnswer(invocation -> List.of(metadata).iterator());
+        when(mockLog.logEndOffset()).thenReturn(2L);
+        remoteLogManager.onLeadershipChange(Set.of(), Set.of(mockPartition(leaderTopicIdPartition)), topicIds);
+
+        try (LogSegment firstSegment = LogSegment.open(new File(logDir), 0L, mockLog.config(), time, 0, false);
+             LogSegment laterSegment = LogSegment.open(new File(logDir), 1L, mockLog.config(), time, 0, false)) {
+            firstSegment.append(0L, MemoryRecords.withRecords(0L, Compression.NONE, leaderEpoch,
+                    new SimpleRecord(timestamp, new byte[0])));
+            laterSegment.append(1L, MemoryRecords.withRecords(1L, Compression.NONE, leaderEpoch,
+                    new SimpleRecord(laterMatch ? timestamp + 1 : timestamp - 1, new byte[0])));
+            // Model retention removing the first segment from the local log after the coverage check.
+            when(mockLog.logSegments()).thenReturn(List.of(firstSegment, laterSegment), List.of(laterSegment));
+            when(mockLog.searchOffsetInLocalLog(anyList(), anyLong(), anyLong())).thenCallRealMethod();
+
+            assertEquals(Optional.of(new FileRecords.TimestampAndOffset(timestamp, 0L, Optional.of(leaderEpoch))),
+                    remoteLogManager.findOffsetByTimestamp(leaderTopicIdPartition.topicPartition(), timestamp, 0L, cache));
+            verify(mockLog).logSegments();
             verify(remoteStorageManager, never()).fetchLogSegment(any(), anyInt());
         }
     }
@@ -1895,7 +1931,7 @@ public class RemoteLogManagerTest {
         });
 
         when(mockLog.logEndOffset()).thenReturn(300L);
-        when(mockLog.searchOffsetInLocalLog(anyLong(), anyLong())).thenCallRealMethod();
+        when(mockLog.searchOffsetInLocalLog(anyList(), anyLong(), anyLong())).thenCallRealMethod();
         remoteLogManager.close();
         remoteLogManager = new RemoteLogManager(config, brokerId, logDir, clusterId, time,
                 partition -> Optional.of(mockLog),

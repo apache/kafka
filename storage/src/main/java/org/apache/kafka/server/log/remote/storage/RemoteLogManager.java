@@ -745,7 +745,7 @@ public class RemoteLogManager implements Closeable, AsyncOffsetReader {
             Iterator<RemoteLogSegmentMetadata> iterator = remoteLogMetadataManagerPlugin.get().listRemoteLogSegments(topicIdPartition, epoch);
             while (iterator.hasNext()) {
                 RemoteLogSegmentMetadata rlsMetadata = iterator.next();
-                // A segment spanning multiple leader epochs is listed once for each epoch.
+                // Skip segments already searched: a segment spanning multiple leader epochs is listed once for each epoch.
                 if (rlsMetadata.endOffset() <= searchedThrough) {
                     continue;
                 }
@@ -765,7 +765,7 @@ public class RemoteLogManager implements Closeable, AsyncOffsetReader {
                         searchedThrough = rlsMetadata.endOffset();
                     } else {
                         // The local log covers this segment and all later offsets, so its result is final.
-                        return unifiedLog.searchOffsetInLocalLog(timestamp, startingOffset);
+                        return unifiedLog.searchOffsetInLocalLog(segmentsCopy, timestamp, startingOffset);
                     }
                 }
             }
