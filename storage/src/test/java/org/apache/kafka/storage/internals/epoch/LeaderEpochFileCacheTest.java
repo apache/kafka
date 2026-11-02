@@ -20,7 +20,6 @@ import org.apache.kafka.common.TopicPartition;
 import org.apache.kafka.common.utils.Time;
 import org.apache.kafka.server.util.KafkaScheduler;
 import org.apache.kafka.server.util.MockScheduler;
-import org.apache.kafka.server.util.MockTime;
 import org.apache.kafka.storage.internals.checkpoint.LeaderEpochCheckpointFile;
 import org.apache.kafka.storage.internals.log.EpochEntry;
 import org.apache.kafka.storage.internals.log.LogDirFailureChannel;
@@ -48,7 +47,8 @@ public class LeaderEpochFileCacheTest {
 
     private final LeaderEpochCheckpointFile checkpoint = assertDoesNotThrow(() ->
             new LeaderEpochCheckpointFile(TestUtils.tempFile(), new LogDirFailureChannel(1)));
-    private final LeaderEpochFileCache cache = new LeaderEpochFileCache(tp, checkpoint, new MockScheduler(Time.SYSTEM));
+    private final MockScheduler mockScheduler = new MockScheduler(Time.SYSTEM);
+    private final LeaderEpochFileCache cache = new LeaderEpochFileCache(tp, checkpoint, mockScheduler);
 
     @Test
     public void testPreviousEpoch() {
@@ -218,13 +218,13 @@ public class LeaderEpochFileCacheTest {
                 new File(checkpointPath),
                 new LogDirFailureChannel(1));
 
-        LeaderEpochFileCache cache = new LeaderEpochFileCache(tp, checkpoint, new MockTime().scheduler);
+        LeaderEpochFileCache cache = new LeaderEpochFileCache(tp, checkpoint, mockScheduler);
         cache.assign(2, 6);
 
         LeaderEpochCheckpointFile checkpoint2 = new LeaderEpochCheckpointFile(
                 new File(checkpointPath),
                 new LogDirFailureChannel(1));
-        LeaderEpochFileCache cache2 = new LeaderEpochFileCache(tp, checkpoint2, new MockTime().scheduler);
+        LeaderEpochFileCache cache2 = new LeaderEpochFileCache(tp, checkpoint2, mockScheduler);
 
         assertEquals(1, cache2.epochEntries().size());
         assertEquals(new EpochEntry(2, 6), cache2.epochEntries().get(0));

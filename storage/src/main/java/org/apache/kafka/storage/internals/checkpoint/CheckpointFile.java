@@ -205,8 +205,17 @@ public class CheckpointFile<T> {
      * @param <T> entry type
      */
     public interface EntryFormatter<T> {
+        /**
+         * @param entry entry to be converted into string.
+         * @return String representation of the given entry.
+         */
         String toString(T entry);
 
+        /**
+         * @param value string representation of an entry.
+         * @return entry converted from the given string representation if possible. {@link Optional#empty()} represents
+         * that the given string representation could not be converted into an entry.
+         */
         Optional<T> fromString(String value);
     }
 }
