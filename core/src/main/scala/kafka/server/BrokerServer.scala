@@ -896,9 +896,6 @@ class BrokerServer(
       if (transactionCoordinator != null)
         Utils.swallow(this.logger.underlying, () => transactionCoordinator.shutdown())
 
-      if (groupConfigManager != null)
-        Utils.swallow(this.logger.underlying, () => groupConfigManager.close())
-
       if (groupCoordinator != null)
         Utils.swallow(this.logger.underlying, () => groupCoordinator.shutdown())
 

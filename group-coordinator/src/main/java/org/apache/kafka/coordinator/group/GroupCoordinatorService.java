@@ -2689,7 +2689,6 @@ public class GroupCoordinatorService implements GroupCoordinator {
         Utils.closeQuietly(streamsGroupTopologyDescriptionManager, "streams group topology description manager");
         Utils.closeQuietly(runtime, "coordinator runtime");
         Utils.closeQuietly(groupCoordinatorMetrics, "group coordinator metrics");
-        Utils.closeQuietly(groupConfigManager, "group config manager");
         log.info("Shutdown complete.");
     }
 

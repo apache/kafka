@@ -28,9 +28,9 @@ import java.util.Properties;
 import java.util.concurrent.ConcurrentHashMap;
 
 /**
- * The group config manager is responsible for config modification and cleaning.
+ * The group config manager is responsible for config modification.
  */
-public class GroupConfigManager implements AutoCloseable {
+public class GroupConfigManager {
 
     /**
      * The group configs for each group.
@@ -113,13 +113,5 @@ public class GroupConfigManager implements AutoCloseable {
 
     public boolean isDlqAutoTopicCreateEnabled() {
         return groupCoordinatorConfig.errorsDLQAutoCreateTopicsEnable();
-    }
-
-    /**
-     * Remove all group configs.
-     */
-    @Override
-    public void close() {
-        configMap.clear();
     }
 }
