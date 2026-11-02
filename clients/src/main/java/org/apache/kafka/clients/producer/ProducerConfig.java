@@ -395,11 +395,21 @@ public class ProducerConfig extends AbstractConfig {
     private static final String TRANSACTION_TWO_PHASE_COMMIT_ENABLE_DOC = "If set to true, then the broker is informed that the client is participating in " +
             "two phase commit protocol and transactions that this client starts never expire.";
 
-    /**
-     * <code>security.providers</code>
-     */
+    /** <code>security.protocol</code> */
+    public static final String SECURITY_PROTOCOL_CONFIG = CommonClientConfigs.SECURITY_PROTOCOL_CONFIG;
+
+    /** <code>security.providers</code> */
     public static final String SECURITY_PROVIDERS_CONFIG = SecurityConfig.SECURITY_PROVIDERS_CONFIG;
     private static final String SECURITY_PROVIDERS_DOC = SecurityConfig.SECURITY_PROVIDERS_DOC;
+
+    /** <code>metadata.recovery.strategy</code> */
+    public static final String METADATA_RECOVERY_STRATEGY_CONFIG = CommonClientConfigs.METADATA_RECOVERY_STRATEGY_CONFIG;
+
+    /** <code>metadata.recovery.rebootstrap.trigger.ms</code> */
+    public static final String METADATA_RECOVERY_REBOOTSTRAP_TRIGGER_MS_CONFIG = CommonClientConfigs.METADATA_RECOVERY_REBOOTSTRAP_TRIGGER_MS_CONFIG;
+
+    /** <code>metadata.cluster.check.enable</code> */
+    public static final String METADATA_CLUSTER_CHECK_ENABLE_CONFIG = CommonClientConfigs.METADATA_CLUSTER_CHECK_ENABLE_CONFIG;
 
     private static final AtomicInteger PRODUCER_CLIENT_ID_SEQUENCE = new AtomicInteger(1);
 
@@ -557,7 +567,7 @@ public class ProducerConfig extends AbstractConfig {
                                         ConfigDef.ValidList.anyNonDuplicateValues(true, false),
                                         Importance.LOW,
                                         INTERCEPTOR_CLASSES_DOC)
-                                .define(CommonClientConfigs.SECURITY_PROTOCOL_CONFIG,
+                                .define(SECURITY_PROTOCOL_CONFIG,
                                         Type.STRING,
                                         CommonClientConfigs.DEFAULT_SECURITY_PROTOCOL,
                                         ConfigDef.CaseInsensitiveValidString
@@ -592,20 +602,20 @@ public class ProducerConfig extends AbstractConfig {
                                         false,
                                         Importance.LOW,
                                         TRANSACTION_TWO_PHASE_COMMIT_ENABLE_DOC)
-                                .define(CommonClientConfigs.METADATA_RECOVERY_STRATEGY_CONFIG,
+                                .define(METADATA_RECOVERY_STRATEGY_CONFIG,
                                         Type.STRING,
                                         CommonClientConfigs.DEFAULT_METADATA_RECOVERY_STRATEGY,
                                         ConfigDef.CaseInsensitiveValidString
                                                 .in(Utils.enumOptions(MetadataRecoveryStrategy.class)),
                                         Importance.LOW,
                                         CommonClientConfigs.METADATA_RECOVERY_STRATEGY_DOC)
-                                .define(CommonClientConfigs.METADATA_RECOVERY_REBOOTSTRAP_TRIGGER_MS_CONFIG,
+                                .define(METADATA_RECOVERY_REBOOTSTRAP_TRIGGER_MS_CONFIG,
                                         Type.LONG,
                                         CommonClientConfigs.DEFAULT_METADATA_RECOVERY_REBOOTSTRAP_TRIGGER_MS,
                                         atLeast(0),
                                         Importance.LOW,
                                         CommonClientConfigs.METADATA_RECOVERY_REBOOTSTRAP_TRIGGER_MS_DOC)
-                                .define(CommonClientConfigs.METADATA_CLUSTER_CHECK_ENABLE_CONFIG,
+                                .define(METADATA_CLUSTER_CHECK_ENABLE_CONFIG,
                                         Type.BOOLEAN,
                                         true,
                                         Importance.LOW,

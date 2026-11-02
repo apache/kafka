@@ -149,7 +149,7 @@ import static org.apache.kafka.common.config.ConfigDef.parseType;
  *   <li>{@link ConsumerConfig#ALLOW_AUTO_CREATE_TOPICS_CONFIG "allow.auto.create.topics"} (false) - Consumers will never trigger automatic topic creation</li>
  *   <li>{@link ConsumerConfig#GROUP_PROTOCOL_CONFIG "group.protocol"} as a consumer config, e.g. {@code consumer.group.protocol} (classic) -
  *       Streams ignores it; to select the rebalance protocol, set the Streams config {@link #GROUP_PROTOCOL_CONFIG "group.protocol"} instead</li>
- *   <li>{@link CommonClientConfigs#BOOTSTRAP_RESOLVE_TIMEOUT_MS_CONFIG "bootstrap.resolve.timeout.ms"} (0) - All clients created by Streams
+ *   <li>{@link ConsumerConfig#BOOTSTRAP_RESOLVE_TIMEOUT_MS_CONFIG "bootstrap.resolve.timeout.ms"} (0) - All clients created by Streams
  *       will always resolve bootstrap servers synchronously</li>
  * </ul>
  *
@@ -583,6 +583,22 @@ public class StreamsConfig extends AbstractConfig {
     public static final String DEFAULT_VALUE_SERDE_CLASS_CONFIG = "default.value.serde";
     private static final String DEFAULT_VALUE_SERDE_CLASS_DOC = "Default serializer / deserializer class for value that implements the <code>org.apache.kafka.common.serialization.Serde</code> interface. ";
 
+    /** {@code default.list.key.serde.inner} */
+    @SuppressWarnings("WeakerAccess")
+    public static final String DEFAULT_LIST_KEY_SERDE_INNER_CLASS_CONFIG = CommonClientConfigs.DEFAULT_LIST_KEY_SERDE_INNER_CLASS;
+
+    /** {@code default.list.value.serde.inner} */
+    @SuppressWarnings("WeakerAccess")
+    public static final String DEFAULT_LIST_VALUE_SERDE_INNER_CLASS_CONFIG = CommonClientConfigs.DEFAULT_LIST_VALUE_SERDE_INNER_CLASS;
+
+    /** {@code default.list.key.serde.type} */
+    @SuppressWarnings("WeakerAccess")
+    public static final String DEFAULT_LIST_KEY_SERDE_TYPE_CLASS_CONFIG = CommonClientConfigs.DEFAULT_LIST_KEY_SERDE_TYPE_CLASS;
+
+    /** {@code default.list.value.serde.type} */
+    @SuppressWarnings("WeakerAccess")
+    public static final String DEFAULT_LIST_VALUE_SERDE_TYPE_CLASS_CONFIG = CommonClientConfigs.DEFAULT_LIST_VALUE_SERDE_TYPE_CLASS;
+
     /** {@code default.timestamp.extractor} */
     @SuppressWarnings("WeakerAccess")
     public static final String DEFAULT_TIMESTAMP_EXTRACTOR_CLASS_CONFIG = "default.timestamp.extractor";
@@ -784,6 +800,18 @@ public class StreamsConfig extends AbstractConfig {
     /** {@code retry.backoff.ms} */
     @SuppressWarnings("WeakerAccess")
     public static final String RETRY_BACKOFF_MS_CONFIG = CommonClientConfigs.RETRY_BACKOFF_MS_CONFIG;
+
+    /** {@code metadata.recovery.strategy} */
+    @SuppressWarnings("WeakerAccess")
+    public static final String METADATA_RECOVERY_STRATEGY_CONFIG = CommonClientConfigs.METADATA_RECOVERY_STRATEGY_CONFIG;
+
+    /** {@code metadata.recovery.rebootstrap.trigger.ms} */
+    @SuppressWarnings("WeakerAccess")
+    public static final String METADATA_RECOVERY_REBOOTSTRAP_TRIGGER_MS_CONFIG = CommonClientConfigs.METADATA_RECOVERY_REBOOTSTRAP_TRIGGER_MS_CONFIG;
+
+    /** {@code metadata.cluster.check.enable} */
+    @SuppressWarnings("WeakerAccess")
+    public static final String METADATA_CLUSTER_CHECK_ENABLE_CONFIG = CommonClientConfigs.METADATA_CLUSTER_CHECK_ENABLE_CONFIG;
 
     /** {@code rocksdb.config.setter} */
     @SuppressWarnings("WeakerAccess")
@@ -996,22 +1024,22 @@ public class StreamsConfig extends AbstractConfig {
                     null,
                     Importance.MEDIUM,
                     DEFAULT_KEY_SERDE_CLASS_DOC)
-            .define(CommonClientConfigs.DEFAULT_LIST_KEY_SERDE_INNER_CLASS,
+            .define(DEFAULT_LIST_KEY_SERDE_INNER_CLASS_CONFIG,
                     Type.CLASS,
                     null,
                     Importance.MEDIUM,
                     CommonClientConfigs.DEFAULT_LIST_KEY_SERDE_INNER_CLASS_DOC)
-            .define(CommonClientConfigs.DEFAULT_LIST_VALUE_SERDE_INNER_CLASS,
+            .define(DEFAULT_LIST_VALUE_SERDE_INNER_CLASS_CONFIG,
                     Type.CLASS,
                     null,
                     Importance.MEDIUM,
                     CommonClientConfigs.DEFAULT_LIST_VALUE_SERDE_INNER_CLASS_DOC)
-            .define(CommonClientConfigs.DEFAULT_LIST_KEY_SERDE_TYPE_CLASS,
+            .define(DEFAULT_LIST_KEY_SERDE_TYPE_CLASS_CONFIG,
                     Type.CLASS,
                     null,
                     Importance.MEDIUM,
                     CommonClientConfigs.DEFAULT_LIST_KEY_SERDE_TYPE_CLASS_DOC)
-            .define(CommonClientConfigs.DEFAULT_LIST_VALUE_SERDE_TYPE_CLASS,
+            .define(DEFAULT_LIST_VALUE_SERDE_TYPE_CLASS_CONFIG,
                     Type.CLASS,
                     null,
                     Importance.MEDIUM,
@@ -1302,20 +1330,20 @@ public class StreamsConfig extends AbstractConfig {
                     atLeast(0),
                     Importance.LOW,
                     CommonClientConfigs.REQUEST_TIMEOUT_MS_DOC)
-            .define(CommonClientConfigs.METADATA_RECOVERY_STRATEGY_CONFIG,
+            .define(METADATA_RECOVERY_STRATEGY_CONFIG,
                     Type.STRING,
                     CommonClientConfigs.DEFAULT_METADATA_RECOVERY_STRATEGY,
                     ConfigDef.CaseInsensitiveValidString
                     .in(Utils.enumOptions(MetadataRecoveryStrategy.class)),
                     Importance.LOW,
                     CommonClientConfigs.METADATA_RECOVERY_STRATEGY_DOC)
-            .define(CommonClientConfigs.METADATA_RECOVERY_REBOOTSTRAP_TRIGGER_MS_CONFIG,
+            .define(METADATA_RECOVERY_REBOOTSTRAP_TRIGGER_MS_CONFIG,
                     Type.LONG,
                     CommonClientConfigs.DEFAULT_METADATA_RECOVERY_REBOOTSTRAP_TRIGGER_MS,
                     atLeast(0),
                     Importance.LOW,
                     CommonClientConfigs.METADATA_RECOVERY_REBOOTSTRAP_TRIGGER_MS_DOC)
-            .define(CommonClientConfigs.METADATA_CLUSTER_CHECK_ENABLE_CONFIG,
+            .define(METADATA_CLUSTER_CHECK_ENABLE_CONFIG,
                     Type.BOOLEAN,
                     true,
                     Importance.LOW,

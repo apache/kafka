@@ -47,7 +47,7 @@ import static org.junit.jupiter.api.Assertions.assertTrue;
 public class AddPartitionsTest {
 
     @ClusterTest
-    public void testWrongReplicaCount(ClusterInstance cluster) throws Exception {
+    public void testWrongReplicaCount(ClusterInstance cluster) {
         try (Admin admin = cluster.admin()) {
             cluster.createTopicWithAssignment("topic1", Map.of(0, List.of(0, 1)));
 
@@ -87,7 +87,7 @@ public class AddPartitionsTest {
     }
 
     @ClusterTest
-    public void testMissingPartitionsInCreatePartitions(ClusterInstance cluster) throws Exception {
+    public void testMissingPartitionsInCreatePartitions(ClusterInstance cluster) {
         try (Admin admin = cluster.admin()) {
             cluster.createTopicWithAssignment("topic1", Map.of(0, List.of(0, 1)));
 

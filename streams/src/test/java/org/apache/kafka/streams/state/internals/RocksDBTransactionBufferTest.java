@@ -426,6 +426,39 @@ public class RocksDBTransactionBufferTest {
     }
 
     @Test
+    public void shouldReportNoUncommittedBytesWhenNothingStaged() {
+        assertEquals(0L, buffer.approximateNumUncommittedBytes());
+    }
+
+    @Test
+    public void shouldReportNoUncommittedBytesAfterCommit() {
+        buffer.stage(key("x"), val("v"));
+        assertTrue(buffer.approximateNumUncommittedBytes() > 0);
+
+        buffer.commit();
+
+        assertEquals(0L, buffer.approximateNumUncommittedBytes());
+    }
+
+    @Test
+    public void shouldReportNoUncommittedBytesAfterRollback() {
+        buffer.stage(key("x"), val("v"));
+        buffer.stageDeleteRange(cfHandle, key("a"), key("c"));
+        assertTrue(buffer.approximateNumUncommittedBytes() > 0);
+
+        buffer.rollback();
+
+        assertEquals(0L, buffer.approximateNumUncommittedBytes());
+    }
+
+    @Test
+    public void shouldReportUncommittedBytesForStagedRangeDelete() {
+        buffer.stageDeleteRange(cfHandle, key("a"), key("c"));
+
+        assertTrue(buffer.approximateNumUncommittedBytes() > 0);
+    }
+
+    @Test
     public void shouldRollbackRangeDelete() throws RocksDBException {
         buffer.stageDeleteRange(cfHandle, key("a"), key("c"));
         buffer.rollback();

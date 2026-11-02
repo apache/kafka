@@ -72,8 +72,8 @@ import java.util.function.Function;
 
 import static org.junit.jupiter.api.Assertions.assertEquals;
 import static org.junit.jupiter.api.Assertions.assertFalse;
+import static org.junit.jupiter.api.Assertions.assertThrows;
 import static org.junit.jupiter.api.Assertions.assertTrue;
-import static org.junit.jupiter.api.Assertions.fail;
 import static org.mockito.ArgumentMatchers.any;
 import static org.mockito.ArgumentMatchers.anyMap;
 import static org.mockito.ArgumentMatchers.anyString;
@@ -444,21 +444,13 @@ public class WorkerSinkTaskThreadedTest {
             assertEquals(Set.of(TOPIC_PARTITION, TOPIC_PARTITION2, TOPIC_PARTITION3), sinkTaskContext.getValue().assignment());
             return null;
         }).doAnswer(invocation -> {
-            try {
-                sinkTaskContext.getValue().pause(UNASSIGNED_TOPIC_PARTITION);
-                fail("Trying to pause unassigned partition should have thrown an Connect exception");
-            } catch (ConnectException e) {
-                // expected
-            }
+            assertThrows(ConnectException.class, () -> sinkTaskContext.getValue().pause(UNASSIGNED_TOPIC_PARTITION),
+                "Trying to pause unassigned partition should have thrown an Connect exception");
             sinkTaskContext.getValue().pause(TOPIC_PARTITION, TOPIC_PARTITION2);
             return null;
         }).doAnswer(invocation -> {
-            try {
-                sinkTaskContext.getValue().resume(UNASSIGNED_TOPIC_PARTITION);
-                fail("Trying to resume unassigned partition should have thrown an Connect exception");
-            } catch (ConnectException e) {
-                // expected
-            }
+            assertThrows(ConnectException.class, () -> sinkTaskContext.getValue().resume(UNASSIGNED_TOPIC_PARTITION),
+                "Trying to resume unassigned partition should have thrown an Connect exception");
             sinkTaskContext.getValue().resume(TOPIC_PARTITION, TOPIC_PARTITION2);
             return null;
         }).when(sinkTask).put(any(Collection.class));

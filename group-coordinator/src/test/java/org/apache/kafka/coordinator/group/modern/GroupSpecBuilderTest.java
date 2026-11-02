@@ -51,15 +51,14 @@ public class GroupSpecBuilderTest {
                 .withMembers(Map.of())
                 .withSubscriptionType(HOMOGENEOUS)
                 .withTargetAssignment(Map.of())
-                .withInvertedTargetAssignment(Map.of())
                 .withMetadataImage(metadataImage)
                 .withResolvedRegularExpressions(Map.of());
 
         assertEquals(
             new GroupSpecImpl(
+                metadataImage,
                 Map.of(),
-                HOMOGENEOUS,
-                Map.of()
+                HOMOGENEOUS
             ),
             builder.build()
         );
@@ -111,29 +110,12 @@ public class GroupSpecBuilderTest {
                     "member-2", assignment2,
                     "member-3", assignment3
                 ))
-                .withInvertedTargetAssignment(Map.of(
-                    fooTopicId, Map.of(
-                        1, "member-1",
-                        2, "member-1",
-                        3, "member-2",
-                        4, "member-2",
-                        5, "member-3",
-                        6, "member-3"
-                    ),
-                    barTopicId, Map.of(
-                        1, "member-1",
-                        2, "member-1",
-                        3, "member-2",
-                        4, "member-2",
-                        5, "member-3",
-                        6, "member-3"
-                    )
-                ))
                 .withMetadataImage(metadataImage)
                 .withResolvedRegularExpressions(Map.of());
 
         assertEquals(
             new GroupSpecImpl(
+                metadataImage,
                 Map.of(
                     "member-1", new MemberSubscriptionAndAssignmentImpl(
                         Optional.empty(),
@@ -154,25 +136,7 @@ public class GroupSpecBuilderTest {
                         assignment3
                     )
                 ),
-                HETEROGENEOUS,
-                Map.of(
-                    fooTopicId, Map.of(
-                        1, "member-1",
-                        2, "member-1",
-                        3, "member-2",
-                        4, "member-2",
-                        5, "member-3",
-                        6, "member-3"
-                    ),
-                    barTopicId, Map.of(
-                        1, "member-1",
-                        2, "member-1",
-                        3, "member-2",
-                        4, "member-2",
-                        5, "member-3",
-                        6, "member-3"
-                    )
-                )
+                HETEROGENEOUS
             ),
             builder.build()
         );
@@ -209,7 +173,6 @@ public class GroupSpecBuilderTest {
                     "member-2", Assignment.EMPTY,
                     "member-3", Assignment.EMPTY
                 ))
-                .withInvertedTargetAssignment(Map.of())
                 .withMetadataImage(metadataImage)
                 .withResolvedRegularExpressions(Map.of(
                     "foo*", new ResolvedRegularExpression(
@@ -221,6 +184,7 @@ public class GroupSpecBuilderTest {
 
         assertEquals(
             new GroupSpecImpl(
+                metadataImage,
                 Map.of(
                     "member-1", new MemberSubscriptionAndAssignmentImpl(
                         Optional.empty(),
@@ -241,8 +205,7 @@ public class GroupSpecBuilderTest {
                         Assignment.EMPTY
                     )
                 ),
-                HETEROGENEOUS,
-                Map.of()
+                HETEROGENEOUS
             ),
             builder.build()
         );
@@ -268,14 +231,6 @@ public class GroupSpecBuilderTest {
             ))
         ));
 
-        Map<Integer, String> fooInvertedTargetAssignment = new HashMap<>(Map.of(
-            1, "member-1",
-            2, "member-1"
-        ));
-        Map<Uuid, Map<Integer, String>> invertedTargetAssignment = new HashMap<>(Map.of(
-            fooTopicId, fooInvertedTargetAssignment
-        ));
-
         Map<String, ResolvedRegularExpression> resolvedRegularExpressions = new HashMap<>(Map.of(
             "foo*", new ResolvedRegularExpression(
                 Set.of("foo"),
@@ -293,7 +248,6 @@ public class GroupSpecBuilderTest {
             .withMembers(members)
             .withSubscriptionType(HOMOGENEOUS)
             .withTargetAssignment(targetAssignment)
-            .withInvertedTargetAssignment(invertedTargetAssignment)
             .withMetadataImage(metadataImage)
             .withResolvedRegularExpressions(resolvedRegularExpressions)
             .withTopicAssignablePartitionsMap(topicAssignablePartitions)
@@ -303,14 +257,13 @@ public class GroupSpecBuilderTest {
         // Modifications after the GroupSpec has been built should not be visible in the GroupSpec.
         members.clear();
         targetAssignment.clear();
-        fooInvertedTargetAssignment.clear();
-        invertedTargetAssignment.clear();
         resolvedRegularExpressions.clear();
         fooAssignablePartitions.clear();
         topicAssignablePartitions.clear();
 
         assertEquals(
             new GroupSpecImpl(
+                metadataImage,
                 // members
                 Map.of("member-1", new MemberSubscriptionAndAssignmentImpl(
                     Optional.empty(),
@@ -324,8 +277,6 @@ public class GroupSpecBuilderTest {
                     new Assignment(mkAssignment(mkTopicAssignment(fooTopicId, 1, 2)))
                 )),
                 HOMOGENEOUS,
-                // invertedTargetAssignment
-                Map.of(fooTopicId, Map.of(1, "member-1", 2, "member-1")),
                 // topicAssignablePartitionsMap
                 Optional.of(Map.of(fooTopicId, Set.of(1, 2, 3)))
             ),

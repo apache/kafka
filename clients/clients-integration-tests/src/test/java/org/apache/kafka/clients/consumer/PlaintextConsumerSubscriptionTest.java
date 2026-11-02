@@ -81,7 +81,7 @@ public class PlaintextConsumerSubscriptionTest {
     }
 
     @BeforeEach
-    public void setup() throws InterruptedException {
+    public void setup() {
         cluster.createTopic(topic, 2, (short) BROKER_COUNT);
     }
 

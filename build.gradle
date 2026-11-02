@@ -1046,6 +1046,9 @@ project(':server') {
     testFixturesImplementation.exclude group: 'org.bouncycastle', module: 'bcprov-jdk15on'
     testCompileClasspath.exclude group: 'org.bouncycastle', module: 'bcprov-jdk15on'
     testRuntimeClasspath.exclude group: 'org.bouncycastle', module: 'bcprov-jdk15on'
+    // JUnit 4 is a transitive runtime dependency of mock-oauth2-server (via okhttp3 mockwebserver),
+    // keep it off the compile classpath so tests can't accidentally use JUnit 4 APIs.
+    testCompileClasspath.exclude group: 'junit', module: 'junit'
   }
 
   dependencies {
@@ -1068,6 +1071,7 @@ project(':server') {
     implementation log4j2Libs
 
     testImplementation testFixtures(project(':clients'))
+    testImplementation project(':coordinator-common')
     testImplementation libs.mockitoCore
     testImplementation libs.junitJupiter
     testImplementation testLog4j2Libs
@@ -1076,6 +1080,7 @@ project(':server') {
     testImplementation testFixtures(project(':storage:storage-api'))
     testImplementation testFixtures(project(':server-common'))
     testImplementation testFixtures(project(':metadata'))
+    testImplementation libs.mockOAuth2Server
 
     testFixturesImplementation project(':clients')
     testFixturesImplementation testFixtures(project(':clients'))
@@ -1975,19 +1980,55 @@ project(':mirror-coordinator') {
     archivesName = "kafka-mirror-coordinator"
   }
 
-  dependencies {
-    implementation project(':clients')
+  configurations {
+    generator
+  }
 
+  dependencies {
+    implementation libs.jacksonDatabind
+    implementation project(':clients')
+    implementation project(':coordinator-common')
+
+    testImplementation project(':server-common')
     testImplementation libs.junitJupiter
     testImplementation libs.mockitoCore
     testImplementation testLog4j2Libs
 
     testRuntimeOnly runtimeTestLibs
+
+    generator project(':generator')
+  }
+
+  sourceSets {
+    main {
+      java {
+        srcDirs = ["src/main/java", "${projectDir}/build/generated/main/java"]
+      }
+    }
   }
 
   checkstyle {
     configProperties = checkstyleConfigProperties("import-control-mirror-coordinator.xml")
   }
+
+  tasks.register('processMessages', JavaExec) {
+    mainClass = "org.apache.kafka.message.MessageGenerator"
+    classpath = configurations.generator
+    args = [ "-p", "org.apache.kafka.coordinator.mirror.generated",
+             "-o", "${projectDir}/build/generated/main/java/org/apache/kafka/coordinator/mirror/generated",
+             "-i", "src/main/resources/common/message",
+             "-m", "MessageDataGenerator", "JsonConverterGenerator",
+             "-t", "CoordinatorRecordTypeGenerator", "CoordinatorRecordJsonConvertersGenerator"
+    ]
+    inputs.dir("src/main/resources/common/message")
+            .withPropertyName("messages")
+            .withPathSensitivity(PathSensitivity.RELATIVE)
+    outputs.cacheIf { true }
+    outputs.dir("${projectDir}/build/generated/main/java/org/apache/kafka/coordinator/mirror/generated")
+  }
+
+  compileJava.dependsOn 'processMessages'
+  srcJar.dependsOn 'processMessages'
 
   javadoc {
     enabled = false
@@ -2225,6 +2266,17 @@ project(':clients') {
     include "**/org/apache/kafka/server/policy/*"
     include "**/org/apache/kafka/server/quota/*"
     include "**/org/apache/kafka/server/telemetry/*"
+    exclude(
+        'org/apache/kafka/common/errors/ReadOnlyTopicException.java',
+        'org/apache/kafka/common/errors/ClusterMirrorAuthorizationException.java',
+        'org/apache/kafka/common/errors/UnknownClusterMirrorException.java',
+        'org/apache/kafka/common/errors/TopicAlreadyInClusterMirrorException.java',
+        'org/apache/kafka/common/errors/MirrorConfigNotAvailableException.java',
+        'org/apache/kafka/common/errors/ClusterMirrorAlreadyExistsException.java',
+        'org/apache/kafka/common/errors/SourceMetadataNotAvailableException.java',
+        'org/apache/kafka/common/errors/TopicNotInClusterMirrorException.java',
+        'org/apache/kafka/common/errors/InvalidMirrorStateException.java'
+    )
   }
 }
 

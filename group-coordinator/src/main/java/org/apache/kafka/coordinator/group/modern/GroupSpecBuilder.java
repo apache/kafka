@@ -132,12 +132,6 @@ public abstract class GroupSpecBuilder<T extends ModernGroupMember, U extends Gr
     private Map<String, Assignment> targetAssignment = Map.of();
 
     /**
-     * Reverse lookup map representing topic partitions with
-     * their current member assignments.
-     */
-    private Map<Uuid, Map<Integer, String>> invertedTargetAssignment = Map.of();
-
-    /**
      * The metadata image.
      */
     private CoordinatorMetadataImage metadataImage = CoordinatorMetadataImage.EMPTY;
@@ -190,19 +184,6 @@ public abstract class GroupSpecBuilder<T extends ModernGroupMember, U extends Gr
         Map<String, Assignment> targetAssignment
     ) {
         this.targetAssignment = targetAssignment;
-        return self();
-    }
-
-    /**
-     * Adds the existing topic partition assignments.
-     *
-     * @param invertedTargetAssignment   The reverse lookup map of the current target assignment.
-     * @return This object.
-     */
-    public U withInvertedTargetAssignment(
-        Map<Uuid, Map<Integer, String>> invertedTargetAssignment
-    ) {
-        this.invertedTargetAssignment = invertedTargetAssignment;
         return self();
     }
 
@@ -261,15 +242,8 @@ public abstract class GroupSpecBuilder<T extends ModernGroupMember, U extends Gr
             ))
         );
 
-        Map<Uuid, Map<Integer, String>> invertedTargetAssignment = this.invertedTargetAssignment;
         Optional<Map<Uuid, Set<Integer>>> topicAssignablePartitionsMap = this.topicAssignablePartitionsMap;
         if (assignorOffload) {
-            Map<Uuid, Map<Integer, String>> invertedTargetAssignmentCopy = Utils.newHashMap(invertedTargetAssignment.size());
-            for (Map.Entry<Uuid, Map<Integer, String>> entry : invertedTargetAssignment.entrySet()) {
-                invertedTargetAssignmentCopy.put(entry.getKey(), Map.copyOf(entry.getValue()));
-            }
-            invertedTargetAssignment = invertedTargetAssignmentCopy;
-
             if (topicAssignablePartitionsMap.isPresent()) {
                 Map<Uuid, Set<Integer>> topicAssignablePartitionsMapCopy = Utils.newHashMap(topicAssignablePartitionsMap.get().size());
                 for (Map.Entry<Uuid, Set<Integer>> entry : topicAssignablePartitionsMap.get().entrySet()) {
@@ -280,9 +254,9 @@ public abstract class GroupSpecBuilder<T extends ModernGroupMember, U extends Gr
         }
 
         return new GroupSpecImpl(
+            metadataImage,
             Collections.unmodifiableMap(memberSpecs),
             subscriptionType,
-            invertedTargetAssignment,
             topicAssignablePartitionsMap
         );
     }

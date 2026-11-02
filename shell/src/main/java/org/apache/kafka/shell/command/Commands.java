@@ -21,12 +21,12 @@ import org.apache.kafka.shell.InteractiveShell;
 import org.apache.kafka.shell.state.MetadataShellState;
 
 import net.sourceforge.argparse4j.ArgumentParsers;
+import net.sourceforge.argparse4j.helper.HelpScreenException;
 import net.sourceforge.argparse4j.inf.ArgumentParser;
 import net.sourceforge.argparse4j.inf.ArgumentParserException;
 import net.sourceforge.argparse4j.inf.Namespace;
 import net.sourceforge.argparse4j.inf.Subparser;
 import net.sourceforge.argparse4j.inf.Subparsers;
-import net.sourceforge.argparse4j.internal.HelpScreenException;
 
 import org.jline.reader.Candidate;
 
@@ -104,7 +104,7 @@ public final class Commands {
      * @param addShellCommands  True if we should include the shell-only commands.
      */
     public Commands(boolean addShellCommands) {
-        this.parser = ArgumentParsers.newArgumentParser("", false);
+        this.parser = ArgumentParsers.newFor("").addHelp(false).build();
         Subparsers subparsers = this.parser.addSubparsers().dest("command");
         for (Type type : TYPES.values()) {
             if (addShellCommands || !type.shellOnly()) {

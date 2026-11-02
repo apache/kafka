@@ -39,11 +39,13 @@ import org.mockito.ArgumentCaptor;
 
 import java.io.File;
 import java.io.IOException;
+import java.time.Duration;
 import java.util.Collections;
 import java.util.HashMap;
 import java.util.Map;
 import java.util.Properties;
 import java.util.Set;
+import java.util.concurrent.atomic.AtomicInteger;
 
 import static org.apache.kafka.common.utils.Utils.mkEntry;
 import static org.apache.kafka.common.utils.Utils.mkMap;
@@ -53,8 +55,10 @@ import static org.junit.jupiter.api.Assertions.assertEquals;
 import static org.junit.jupiter.api.Assertions.assertNull;
 import static org.junit.jupiter.api.Assertions.assertTrue;
 import static org.mockito.ArgumentMatchers.any;
+import static org.mockito.ArgumentMatchers.anyLong;
 import static org.mockito.Mockito.atLeastOnce;
 import static org.mockito.Mockito.mock;
+import static org.mockito.Mockito.never;
 import static org.mockito.Mockito.verify;
 
 public class StoreChangelogReaderCaughtUpOffsetTest {
@@ -229,6 +233,11 @@ public class StoreChangelogReaderCaughtUpOffsetTest {
             reader.register(tp, stateManager);
             reader.restore(Collections.singletonMap(new TaskId(0, 0), mock(Task.class)));
 
+            // position 0 is behind the committed limit 7 with nothing applied yet: advertising the
+            // limit now would let a commit skip [0, 7) for good
+            assertNull(stateManager.storeMetadata(tp).offset());
+            assertEquals(Collections.singletonMap(tp, 0L), stateManager.changelogOffsets());
+
             final byte[] keyBytes = new byte[] {0x0, 0x0, 0x0, 0x1};
             for (long offset = 5L; offset <= 11L; offset++) {
                 consumer.addRecord(new ConsumerRecord<>(topicName, 0, offset, keyBytes, "value".getBytes()));
@@ -282,16 +291,14 @@ public class StoreChangelogReaderCaughtUpOffsetTest {
         final File stateDir = TestUtils.tempDirectory();
         final ProcessorStateManager stateManager = newRealStateManager(STANDBY, stateDir, false);
         final MockKeyValueStore kvStore = new MockKeyValueStore(storeName, true);
-        final MockConsumer<byte[], byte[]> timeoutConsumer = new MockConsumer<>(AutoOffsetResetStrategy.EARLIEST.name()) {
-            @Override
-            public long position(final TopicPartition partition) {
-                throw new TimeoutException("KABOOM!");
-            }
-        };
+        final AtomicInteger timedOutPositionCalls = new AtomicInteger();
+        final MockConsumer<byte[], byte[]> timeoutConsumer = newPositionTimeoutConsumer(timedOutPositionCalls);
+        final Task task = mock(Task.class);
         try {
             stateManager.registerStore(kvStore, kvStore.stateRestoreCallback, null);
             stateManager.initializeStoreOffsets(true);
 
+            // the log is empty from 20_000 on, so the lag is 0 and only the position lookup fails
             timeoutConsumer.updateBeginningOffsets(Collections.singletonMap(tp, 20_000L));
             timeoutConsumer.updateEndOffsets(Collections.singletonMap(tp, 20_000L));
             adminClient.updateEndOffsets(Collections.singletonMap(tp, 20_000L));
@@ -300,10 +307,47 @@ public class StoreChangelogReaderCaughtUpOffsetTest {
                 new StoreChangelogReader(time, config, logContext, adminClient, timeoutConsumer, callback, standbyListener);
             reader.register(tp, stateManager);
             reader.transitToUpdateStandby();
-            reader.restore(Collections.singletonMap(new TaskId(0, 0), mock(Task.class)));
+            reader.restore(Collections.singletonMap(new TaskId(0, 0), task));
 
+            assertEquals(1, timedOutPositionCalls.get());
             assertNull(stateManager.storeMetadata(tp).offset());
             assertEquals(Collections.singletonMap(tp, 0L), stateManager.changelogOffsets());
+            verify(task, never()).maybeInitTaskTimeoutOrThrow(anyLong(), any());
+        } finally {
+            stateManager.close();
+            Utils.delete(stateDir);
+        }
+    }
+
+    @Test
+    public void shouldNotAdvanceStandbySourceChangelogOffsetWhenPositionTimesOut() throws IOException {
+        final File stateDir = TestUtils.tempDirectory();
+        final ProcessorStateManager stateManager = newRealStateManager(STANDBY, stateDir, true);
+        final MockKeyValueStore kvStore = new MockKeyValueStore(storeName, true);
+        final AtomicInteger timedOutPositionCalls = new AtomicInteger();
+        final MockConsumer<byte[], byte[]> timeoutConsumer = newPositionTimeoutConsumer(timedOutPositionCalls);
+        final Task task = mock(Task.class);
+        try {
+            stateManager.registerStore(kvStore, kvStore.stateRestoreCallback, null);
+            stateManager.initializeStoreOffsets(true);
+
+            // a resolved position (20_000) would reach the committed limit and advance the offset
+            timeoutConsumer.updateBeginningOffsets(Collections.singletonMap(tp, 20_000L));
+            timeoutConsumer.updateEndOffsets(Collections.singletonMap(tp, 20_000L));
+            adminClient.updateEndOffsets(Collections.singletonMap(tp, 20_000L));
+            adminClient.updateConsumerGroupOffsets(Collections.singletonMap(tp, 10_000L));
+
+            final StoreChangelogReader reader =
+                new StoreChangelogReader(time, config, logContext, adminClient, timeoutConsumer, callback, standbyListener);
+            reader.transitToUpdateStandby();
+            reader.register(tp, stateManager);
+            reader.restore(Collections.singletonMap(new TaskId(0, 0), task));
+
+            assertEquals(10_000L, (long) reader.changelogMetadata(tp).endOffset());
+            assertEquals(1, timedOutPositionCalls.get());
+            assertNull(stateManager.storeMetadata(tp).offset());
+            assertEquals(Collections.singletonMap(tp, 0L), stateManager.changelogOffsets());
+            verify(task, never()).maybeInitTaskTimeoutOrThrow(anyLong(), any());
         } finally {
             stateManager.close();
             Utils.delete(stateDir);
@@ -491,6 +535,18 @@ public class StoreChangelogReaderCaughtUpOffsetTest {
             stateManager.close();
             Utils.delete(stateDir);
         }
+    }
+
+    // only the timed position() lookup times out; the untimed one used elsewhere by the reader and by
+    // MockConsumer.currentLag() still resolves, so the failure is isolated to the standby advance
+    private MockConsumer<byte[], byte[]> newPositionTimeoutConsumer(final AtomicInteger timedOutPositionCalls) {
+        return new MockConsumer<>(AutoOffsetResetStrategy.EARLIEST.name()) {
+            @Override
+            public synchronized long position(final TopicPartition partition, final Duration timeout) {
+                timedOutPositionCalls.incrementAndGet();
+                throw new TimeoutException("KABOOM!");
+            }
+        };
     }
 
     private ProcessorStateManager newRealStateManager(final Task.TaskType type,

@@ -63,7 +63,6 @@ import org.junit.jupiter.api.Timeout;
 import java.nio.ByteBuffer;
 import java.time.Duration;
 import java.util.ArrayList;
-import java.util.Arrays;
 import java.util.HashMap;
 import java.util.HashSet;
 import java.util.Iterator;
@@ -1626,29 +1625,26 @@ public class ShareConsumerTest extends ShareConsumerTestBase {
             ProducerRecord<byte[], byte[]> recordTopic2 = new ProducerRecord<>(topic2, 0, null, "key".getBytes(), "value".getBytes());
 
             // Consumer subscribes to the topics -> bar and baz.
-            shareConsumer.subscribe(Arrays.asList(topic1, topic2));
+            shareConsumer.subscribe(List.of(topic1, topic2));
 
             producer.send(recordTopic1).get();
-            TestUtils.waitForCondition(() -> shareConsumer.poll(Duration.ofMillis(2000)).count() == 1,
-                DEFAULT_MAX_WAIT_MS, 100L, () -> "incorrect number of records");
+            ConsumerRecords<byte[], byte[]> records = waitedPoll(shareConsumer, 2000L, 1);
+            assertEquals(topic1, records.iterator().next().topic());
 
             producer.send(recordTopic2).get();
-            TestUtils.waitForCondition(() -> shareConsumer.poll(Duration.ofMillis(2000)).count() == 1,
-                DEFAULT_MAX_WAIT_MS, 100L, () -> "incorrect number of records");
+            records = waitedPoll(shareConsumer, 2000L, 1);
+            assertEquals(topic2, records.iterator().next().topic());
 
-            // Topic bar is deleted, hence poll should not give any results.
+            // Topic bar is deleted, so its partition should be revoked and the member should end up assigned
+            // only the partition of topic baz. The subscription itself is unchanged.
             deleteTopic(topic1);
-            ConsumerRecords<byte[], byte[]> records = shareConsumer.poll(Duration.ofMillis(500));
-            assertEquals(0, records.count());
+            waitForExactAssignment("group1", Set.of(new TopicPartition(topic2, 0)));
+            assertEquals(Set.of(topic1, topic2), shareConsumer.subscription());
 
-            producer.send(recordTopic2).get();
             // Poll should give the record from the non-deleted topic baz.
-            TestUtils.waitForCondition(() -> shareConsumer.poll(Duration.ofMillis(2000)).count() == 1,
-                DEFAULT_MAX_WAIT_MS, 100L, () -> "incorrect number of records");
-
             producer.send(recordTopic2).get();
-            TestUtils.waitForCondition(() -> shareConsumer.poll(Duration.ofMillis(2000)).count() == 1,
-                DEFAULT_MAX_WAIT_MS, 100L, () -> "incorrect number of records");
+            records = waitedPoll(shareConsumer, 2000L, 1);
+            assertEquals(topic2, records.iterator().next().topic());
             verifyShareGroupStateTopicRecordsProduced();
         }
     }
