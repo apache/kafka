@@ -132,6 +132,7 @@ public class ShareGroupAutoOffsetResetStrategy {
             }
         }
 
+        @Override
         public String toString() {
             String values = Arrays.stream(StrategyType.values())
                 .map(strategyType -> {
