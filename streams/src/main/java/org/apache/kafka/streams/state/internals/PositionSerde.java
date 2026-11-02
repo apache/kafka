@@ -16,6 +16,7 @@
  */
 package org.apache.kafka.streams.state.internals;
 
+import org.apache.kafka.common.errors.SerializationException;
 import org.apache.kafka.streams.query.Position;
 
 import java.nio.ByteBuffer;
@@ -67,7 +68,7 @@ public final class PositionSerde {
                                       final ByteBuffer buffer,
                                       final String entryType) {
         if (count < 0 || (long) count * minBytesPerEntry > buffer.remaining()) {
-            throw new IllegalArgumentException(
+            throw new SerializationException(
                     "Invalid " + entryType + " count " + count + " when deserializing Position: only "
                             + buffer.remaining() + " bytes remain in the buffer"
             );

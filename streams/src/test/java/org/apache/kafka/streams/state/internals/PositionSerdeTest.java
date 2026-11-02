@@ -16,6 +16,7 @@
  */
 package org.apache.kafka.streams.state.internals;
 
+import org.apache.kafka.common.errors.SerializationException;
 import org.apache.kafka.streams.query.Position;
 
 import org.junit.jupiter.api.Test;
@@ -54,7 +55,7 @@ public class PositionSerdeTest {
         buffer.putInt(0);
         buffer.flip();
 
-        assertThrows(IllegalArgumentException.class, () -> PositionSerde.deserialize(buffer));
+        assertThrows(SerializationException.class, () -> PositionSerde.deserialize(buffer));
     }
 
     @Test
@@ -64,7 +65,7 @@ public class PositionSerdeTest {
         buffer.putInt(-1);
         buffer.flip();
 
-        assertThrows(IllegalArgumentException.class, () -> PositionSerde.deserialize(buffer));
+        assertThrows(SerializationException.class, () -> PositionSerde.deserialize(buffer));
     }
 
     @Test
@@ -79,7 +80,7 @@ public class PositionSerdeTest {
         buffer.putLong(0L);
         buffer.flip();
 
-        assertThrows(IllegalArgumentException.class, () -> PositionSerde.deserialize(buffer));
+        assertThrows(SerializationException.class, () -> PositionSerde.deserialize(buffer));
     }
 
     @Test
@@ -92,6 +93,6 @@ public class PositionSerdeTest {
         buffer.putInt(-1);
         buffer.flip();
 
-        assertThrows(IllegalArgumentException.class, () -> PositionSerde.deserialize(buffer));
+        assertThrows(SerializationException.class, () -> PositionSerde.deserialize(buffer));
     }
 }
