@@ -47,6 +47,14 @@ public abstract class GroupSpecImpl implements GroupSpec {
         ) {
             super(metadataImage, members, subscriptionType);
         }
+
+        @Override
+        public String toString() {
+            return "ConsumerGroupSpec(" +
+                "members=" + members +
+                ", subscriptionType=" + subscriptionType +
+                ')';
+        }
     }
 
     /**
@@ -242,13 +250,5 @@ public abstract class GroupSpecImpl implements GroupSpec {
     @Override
     public int hashCode() {
         return Objects.hash(members, subscriptionType);
-    }
-
-    @Override
-    public String toString() {
-        return "GroupSpecImpl(" +
-            "members=" + members +
-            ", subscriptionType=" + subscriptionType +
-            ')';
     }
 }
