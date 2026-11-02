@@ -33,7 +33,7 @@ smoke_test_versions = [str(LATEST_2_4), str(LATEST_2_5), str(LATEST_2_6),
                        str(LATEST_4_0), str(LATEST_4_1), str(LATEST_4_2),
                        str(LATEST_4_3), str(LATEST_4_4)]
 
-# The headers-aware suppress buffer (KAFKA-20413) is only on trunk, so 4.3 is the newest
+# The headers-aware suppress buffer (KAFKA-20413) shipped in 4.4.0, so 4.3 is the newest
 # release that still writes plain V3 suppress-changelog records even with this config set.
 DSL_STORE_FORMAT_CONFIG = "dsl.store.format"
 DSL_STORE_FORMAT_HEADERS = "HEADERS"
