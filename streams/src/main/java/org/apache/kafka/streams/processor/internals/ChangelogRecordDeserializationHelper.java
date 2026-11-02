@@ -56,7 +56,7 @@ public class ChangelogRecordDeserializationHelper {
         } else {
             final byte[] version = versionHeader.value();
             if (version == null || version.length == 0) {
-                log.warn("Changelog record has a version header with a null or empty value. " +
+                log.trace("Changelog record has a version header with a null or empty value. " +
                         "Skipping consistency information for this record.");
                 return;
             }
@@ -69,14 +69,14 @@ public class ChangelogRecordDeserializationHelper {
                     }
                     final byte[] vector = vectorHeader.value();
                     if (vector == null || vector.length == 0) {
-                        log.warn("Changelog record has a position header with a null or empty value. " +
+                        log.trace("Changelog record has a position header with a null or empty value. " +
                                 "Skipping consistency information for this record.");
                         return;
                     }
                     position.merge(PositionSerde.deserialize(ByteBuffer.wrap(vector)));
                     break;
                 default:
-                    log.warn("Changelog records have been encoded using a larger version than this server understands." +
+                    log.warn("Changelog records have been encoded using a larger version than this server understands. " +
                             "Please upgrade your server.");
             }
         }
