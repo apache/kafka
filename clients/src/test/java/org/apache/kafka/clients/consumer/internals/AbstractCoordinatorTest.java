@@ -1286,7 +1286,6 @@ public class AbstractCoordinatorTest {
                 Thread.sleep(10);
                 coordinator.timeToNextHeartbeat(0);
             }
-            fail("Expected timeToNextHeartbeat to raise an error in 1 second");
         });
         assertEquals(e, exception);
 
@@ -1296,7 +1295,6 @@ public class AbstractCoordinatorTest {
                 Thread.sleep(10);
                 coordinator.pollHeartbeat(mockTime.milliseconds());
             }
-            fail("Expected pollHeartbeat to raise an error in 1 second");
         });
         assertEquals(e, exception);
     }
