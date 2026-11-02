@@ -36,7 +36,10 @@ public enum EntityType {
     TOPIC_NAME(FieldType.StringFieldType.INSTANCE),
 
     @JsonProperty("brokerId")
-    BROKER_ID(FieldType.Int32FieldType.INSTANCE);
+    BROKER_ID(FieldType.Int32FieldType.INSTANCE),
+
+    @JsonProperty("mirrorName")
+    MIRROR_NAME(FieldType.StringFieldType.INSTANCE);
 
     private final FieldType baseType;
 

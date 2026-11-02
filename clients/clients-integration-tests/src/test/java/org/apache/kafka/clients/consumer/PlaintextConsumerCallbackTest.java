@@ -29,6 +29,7 @@ import java.util.Locale;
 import java.util.Map;
 import java.util.Set;
 import java.util.concurrent.atomic.AtomicBoolean;
+import java.util.concurrent.atomic.AtomicInteger;
 import java.util.concurrent.atomic.AtomicReference;
 import java.util.function.BiConsumer;
 
@@ -482,6 +483,56 @@ public class PlaintextConsumerCallbackTest {
                 assertNotNull(metadata.groupId());
             });
         }
+    }
+
+    @ClusterTest
+    public void testClassicConsumerRebalanceListenerRetainedAfterUnsubscribe() throws InterruptedException {
+        testRebalanceListenerRetainedAfterUnsubscribe(CLASSIC);
+    }
+
+    @ClusterTest
+    public void testAsyncConsumerRebalanceListenerRetainedAfterUnsubscribe() throws InterruptedException {
+        testRebalanceListenerRetainedAfterUnsubscribe(CONSUMER);
+    }
+
+    private void testRebalanceListenerRetainedAfterUnsubscribe(GroupProtocol groupProtocol) throws InterruptedException {
+        var assignedCount = new AtomicInteger(0);
+        var revokedCount = new AtomicInteger(0);
+        try (var consumer = createConsumer(groupProtocol)) {
+            consumer.setRebalanceListener(new RebalanceListener() {
+                @Override
+                public void onPartitionsAssigned(Collection<TopicPartition> partitions, RebalanceConsumer rc) {
+                    if (partitions.contains(tp)) {
+                        assignedCount.incrementAndGet();
+                    }
+                }
+
+                @Override
+                public void onPartitionsRevoked(Collection<TopicPartition> partitions, RebalanceConsumer rc) {
+                    if (partitions.contains(tp)) {
+                        revokedCount.incrementAndGet();
+                    }
+                }
+            });
+            consumer.subscribe(List.of(topic));
+            ClientsTestUtils.pollUntilTrue(
+                    consumer,
+                    () -> assignedCount.get() == 1,
+                    "Timed out before expected rebalance completed"
+            );
+
+            consumer.unsubscribe();
+            assertEquals(1, revokedCount.get());
+
+            // The listener registered before unsubscribe() should still be invoked after re-subscribing
+            consumer.subscribe(List.of(topic));
+            ClientsTestUtils.pollUntilTrue(
+                    consumer,
+                    () -> assignedCount.get() == 2,
+                    "Timed out waiting for the rebalance listener to be invoked after re-subscribing"
+            );
+        }
+        assertEquals(2, revokedCount.get());
     }
 
     private void triggerOnPartitionsAssignedConsumerAware(

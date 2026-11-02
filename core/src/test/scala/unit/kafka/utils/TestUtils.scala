@@ -28,7 +28,6 @@ import org.apache.kafka.common.acl.{AccessControlEntry, AccessControlEntryFilter
 import org.apache.kafka.common.compress.Compression
 import org.apache.kafka.common.config.{ConfigException, ConfigResource}
 import org.apache.kafka.common.errors.{TopicExistsException, UnknownTopicOrPartitionException}
-import org.apache.kafka.common.header.Header
 import org.apache.kafka.common.internals.{Plugin, Topic}
 import org.apache.kafka.common.network.{ConnectionMode, ListenerName}
 import org.apache.kafka.common.record.TimestampType
@@ -58,14 +57,13 @@ import org.mockito.Mockito
 
 import java.io._
 import java.nio._
-import java.nio.charset.StandardCharsets
 import java.nio.file.{Files, StandardOpenOption}
 import java.time.Duration
 import java.util
 import java.util.concurrent._
 import java.util.{Optional, Properties}
 import scala.collection.mutable.ArrayBuffer
-import scala.collection.{Map, Seq, mutable}
+import scala.collection.{Map, Seq}
 import scala.concurrent.duration.FiniteDuration
 import scala.concurrent.{Await, ExecutionContext, Future}
 import scala.jdk.CollectionConverters._
@@ -88,9 +86,6 @@ object TestUtils extends Logging {
 
   // CN in SSL certificates - this is used for endpoint validation when enabled
   val SslCertificateCn = "localhost"
-
-  private val transactionStatusKey = "transactionStatus"
-  private val committedValue : Array[Byte] = "committed".getBytes(StandardCharsets.UTF_8)
 
   sealed trait LogDirFailureType
   case object Roll extends LogDirFailureType
@@ -1064,77 +1059,6 @@ object TestUtils extends Logging {
     props.put(ProducerConfig.REQUEST_TIMEOUT_MS_CONFIG, requestTimeoutMs.toString)
     props.put(ProducerConfig.MAX_IN_FLIGHT_REQUESTS_PER_CONNECTION, maxInFlight.toString)
     new KafkaProducer[Array[Byte], Array[Byte]](props, new ByteArraySerializer, new ByteArraySerializer)
-  }
-
-  // Seeds the given topic with records with keys and values in the range [0..numRecords)
-  def seedTopicWithNumberedRecords[B <: KafkaBroker](
-      topic: String,
-      numRecords: Int,
-      brokers: Seq[B]): Unit = {
-    val props = new Properties()
-    props.put(ProducerConfig.ENABLE_IDEMPOTENCE_CONFIG, "true")
-    props.put(ProducerConfig.BOOTSTRAP_SERVERS_CONFIG, plaintextBootstrapServers(brokers))
-    val producer = new KafkaProducer[Array[Byte], Array[Byte]](props, new ByteArraySerializer, new ByteArraySerializer)
-    try {
-      for (i <- 0 until numRecords) {
-        producer.send(new ProducerRecord[Array[Byte], Array[Byte]](topic, asBytes(i.toString), asBytes(i.toString)))
-      }
-      producer.flush()
-    } finally {
-      producer.close()
-    }
-  }
-
-  private def asString(bytes: Array[Byte]) = new String(bytes, StandardCharsets.UTF_8)
-
-  private def asBytes(string: String) = string.getBytes(StandardCharsets.UTF_8)
-
-  // Verifies that the record was intended to be committed by checking the headers for an expected transaction status
-  // If true, this will return the value as a string. It is expected that the record in question should have been created
-  // by the `producerRecordWithExpectedTransactionStatus` method.
-  def assertCommittedAndGetValue(record: ConsumerRecord[Array[Byte], Array[Byte]]) : String = {
-    record.headers.headers(transactionStatusKey).asScala.headOption match {
-      case Some(header) =>
-        assertEquals(asString(committedValue), asString(header.value), s"Got ${asString(header.value)} but expected the value to indicate " +
-          s"committed status.")
-      case None =>
-        fail("expected the record header to include an expected transaction status, but received nothing.")
-    }
-    recordValueAsString(record)
-  }
-
-  def recordValueAsString(record: ConsumerRecord[Array[Byte], Array[Byte]]) : String = {
-    asString(record.value)
-  }
-
-  def producerRecordWithExpectedTransactionStatus(topic: String, partition: Integer, key: Array[Byte], value: Array[Byte], willBeCommitted: Boolean): ProducerRecord[Array[Byte], Array[Byte]] = {
-    val header = new Header {override def key() = transactionStatusKey
-      override def value() = if (willBeCommitted)
-        committedValue
-      else
-        "aborted".getBytes(StandardCharsets.UTF_8)
-    }
-    new ProducerRecord[Array[Byte], Array[Byte]](topic, partition, key, value, util.Set.of(header))
-  }
-
-  // Collect the current positions for all partition in the consumers current assignment.
-  def consumerPositions(consumer: Consumer[Array[Byte], Array[Byte]]) : Map[TopicPartition, OffsetAndMetadata]  = {
-    val offsetsToCommit = new mutable.HashMap[TopicPartition, OffsetAndMetadata]()
-    consumer.assignment.forEach { topicPartition =>
-      offsetsToCommit.put(topicPartition, new OffsetAndMetadata(consumer.position(topicPartition)))
-    }
-    offsetsToCommit.toMap
-  }
-
-  def resetToCommittedPositions(consumer: Consumer[Array[Byte], Array[Byte]]): Unit = {
-    val committed = consumer.committed(consumer.assignment).asScala.filter(_._2 != null).map { case (k, v) => k -> v.offset }
-
-    consumer.assignment.forEach { topicPartition =>
-      if (committed.contains(topicPartition))
-        consumer.seek(topicPartition, committed(topicPartition))
-      else
-        consumer.seekToBeginning(util.List.of(topicPartition))
-    }
   }
 
   def incrementalAlterConfigs[B <: KafkaBroker](

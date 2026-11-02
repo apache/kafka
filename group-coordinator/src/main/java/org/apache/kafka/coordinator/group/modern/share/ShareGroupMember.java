@@ -285,13 +285,13 @@ public class ShareGroupMember extends ModernGroupMember {
     public String toString() {
         return "ShareGroupMember(" +
             "memberId='" + memberId + '\'' +
-            ", memberEpoch=" + memberEpoch + '\'' +
-            ", previousMemberEpoch=" + previousMemberEpoch + '\'' +
+            ", memberEpoch=" + memberEpoch +
+            ", previousMemberEpoch=" + previousMemberEpoch +
             ", state='" + state + '\'' +
             ", rackId='" + rackId + '\'' +
             ", clientId='" + clientId + '\'' +
             ", clientHost='" + clientHost + '\'' +
-            ", subscribedTopicNames=" + subscribedTopicNames + '\'' +
+            ", subscribedTopicNames=" + subscribedTopicNames +
             ", assignedPartitions=" + assignedPartitions +
             ')';
     }

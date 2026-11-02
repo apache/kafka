@@ -57,17 +57,17 @@ The configuration prefixed with `local` are to specify the time/size the "local"
 
 ## Quick Start Example
 
-Apache Kafka doesn't provide an out-of-the-box RemoteStorageManager implementation. To have a preview of the tiered storage feature, the [LocalTieredStorage](https://github.com/apache/kafka/blob/trunk/storage/src/test/java/org/apache/kafka/server/log/remote/storage/LocalTieredStorage.java) implemented for integration test can be used, which will create a temporary directory in local storage to simulate the remote storage. 
+Apache Kafka doesn't provide an out-of-the-box RemoteStorageManager implementation. To have a preview of the tiered storage feature, the [LocalTieredStorage](https://github.com/apache/kafka/blob/trunk/storage/src/testFixtures/java/org/apache/kafka/server/log/remote/storage/LocalTieredStorage.java) implemented for integration test can be used, which will create a temporary directory in local storage to simulate the remote storage. 
 
 To adopt the `LocalTieredStorage`, the test library needs to be built locally:
 
 ```bash
 # please checkout to the specific version tag you're using before building it
-# ex: `git checkout 4.3.0`
-$ ./gradlew clean :storage:testJar
+# ex: `git checkout 4.4.0`
+$ ./gradlew clean :storage:testFixturesJar
 ```
 
-After build successfully, there should be a `kafka-storage-x.x.x-test.jar` file under `storage/build/libs`. Next, setting configurations in the broker side to enable tiered storage feature.
+After build successfully, there should be a `kafka-storage-x.x.x-test-fixtures.jar` file under `storage/build/libs`. Next, setting configurations in the broker side to enable tiered storage feature.
 
 ```properties
 # Sample KRaft broker server.properties listening on PLAINTEXT://:9092
@@ -80,7 +80,7 @@ remote.log.metadata.manager.listener.name=PLAINTEXT
 # This is the mandatory configuration for tiered storage.
 # Here, we use the `LocalTieredStorage` built above.
 remote.log.storage.manager.class.name=org.apache.kafka.server.log.remote.storage.LocalTieredStorage
-remote.log.storage.manager.class.path=/PATH/TO/kafka-storage-4.3.0-test.jar
+remote.log.storage.manager.class.path=/PATH/TO/kafka-storage-4.4.0-test-fixtures.jar
 
 # These 2 prefix are default values, but customizable
 remote.log.storage.manager.impl.prefix=rsm.config.
@@ -166,6 +166,37 @@ $ bin/kafka-topics.sh --delete --topic tieredTopic --bootstrap-server localhost:
 ```
 
 After topics are deleted, you're safe to set `remote.log.storage.system.enable=false` in the broker configuration.
+
+## Delay Upload
+
+By default, non-active log segments are uploaded to remote storage as soon as they are eligible, keeping data in remote storage as up to date as possible. As a result, some segments before local retention are stored redundantly in both the local and remote tiers. If you do not need remote storage to always hold the newest data, you can delay upload with `remote.copy.lag.ms` and `remote.copy.lag.bytes` to reduce this redundancy and save remote storage space. The remote log manager uses these time-based and size-based lag parameters to decide when a segment becomes eligible for upload; the same settings are also available at the broker level as `log.remote.copy.lag.ms` and `log.remote.copy.lag.bytes`.
+
+For example, assume a topic with 7-day overall retention, 3-day local retention, and no size limits:
+
+```properties
+retention.ms=604800000
+retention.bytes=-1
+local.retention.ms=259200000
+local.retention.bytes=-1
+```
+
+* Delay upload by 1 day (so remote storage does not hold a redundant copy of the newest day of data). Because `local.retention.bytes` is unlimited, the default `remote.copy.lag.bytes=-1` does not enable a size-based check:
+
+```properties
+# 1 day. Default is 0 (upload immediately).
+remote.copy.lag.ms=86400000
+```
+
+* Delay upload until there is at least 10 GiB of newer local data after a segment. Do not leave `remote.copy.lag.ms` at its default of 0, or uploads remain immediately eligible; set it to `-1` so the time-based check follows `local.retention.ms` (3 days). A segment becomes eligible when either the size lag or the time lag is met:
+
+```properties
+# Follow local.retention.ms (3 days). Default is 0 (upload immediately).
+remote.copy.lag.ms=-1
+# 10 GiB. Default is -1 (follow local.retention.bytes).
+remote.copy.lag.bytes=10737418240
+```
+
+For more examples and information, please check [KIP-1241](https://cwiki.apache.org/confluence/x/A4LMFw).
 
 ## Limitations
 

@@ -53,7 +53,7 @@ public class RequestManagersTest {
         LogContext logContext = new LogContext();
         MockTime time = new MockTime();
         ConsumerMetadata metadata = mock(ConsumerMetadata.class);
-        SubscriptionState subscriptions = mock(SubscriptionState.class);
+        ConsumerSubscriptionState subscriptions = mock(ConsumerSubscriptionState.class);
         ApiVersions apiVersions = mock(ApiVersions.class);
         final RequestManagers requestManagers = RequestManagers.supplier(
             time,
@@ -100,7 +100,7 @@ public class RequestManagersTest {
         LogContext logContext = new LogContext();
         MockTime time = new MockTime();
         ConsumerMetadata metadata = mock(ConsumerMetadata.class);
-        SubscriptionState subscriptions = mock(SubscriptionState.class);
+        ConsumerSubscriptionState subscriptions = mock(ConsumerSubscriptionState.class);
         ApiVersions apiVersions = mock(ApiVersions.class);
         final RequestManagers requestManagers = RequestManagers.supplier(
             time,

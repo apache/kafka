@@ -65,7 +65,7 @@ import static org.mockito.Mockito.verify;
 public class ConsumerMetadataTest {
 
     private final Node node = new Node(1, "localhost", 9092);
-    private final SubscriptionState subscription = new SubscriptionState(new LogContext(), AutoOffsetResetStrategy.EARLIEST);
+    private final ConsumerSubscriptionState subscription = new ConsumerSubscriptionState(new LogContext(), AutoOffsetResetStrategy.EARLIEST);
 
     private final Time time = new MockTime();
 

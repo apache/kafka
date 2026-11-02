@@ -21,11 +21,14 @@ import org.apache.kafka.common.TopicPartition;
 import org.apache.kafka.common.compress.Compression;
 import org.apache.kafka.common.config.TopicConfig;
 import org.apache.kafka.common.errors.KafkaStorageException;
+import org.apache.kafka.common.network.FileReadException;
+import org.apache.kafka.common.record.internal.FileRecords;
 import org.apache.kafka.common.record.internal.MemoryRecords;
 import org.apache.kafka.common.record.internal.Record;
 import org.apache.kafka.common.record.internal.SimpleRecord;
 import org.apache.kafka.common.utils.Utils;
 import org.apache.kafka.server.util.MockTime;
+import org.apache.kafka.server.util.Scheduler;
 import org.apache.kafka.test.TestUtils;
 
 import org.junit.jupiter.api.AfterEach;
@@ -40,18 +43,35 @@ import java.util.ArrayList;
 import java.util.Collection;
 import java.util.Collections;
 import java.util.List;
+import java.util.Optional;
 import java.util.Properties;
+import java.util.concurrent.RejectedExecutionException;
+import java.util.concurrent.ScheduledFuture;
 import java.util.regex.Pattern;
 import java.util.stream.Stream;
 
+import static org.junit.jupiter.api.Assertions.assertArrayEquals;
 import static org.junit.jupiter.api.Assertions.assertDoesNotThrow;
 import static org.junit.jupiter.api.Assertions.assertEquals;
 import static org.junit.jupiter.api.Assertions.assertFalse;
+import static org.junit.jupiter.api.Assertions.assertInstanceOf;
 import static org.junit.jupiter.api.Assertions.assertNotEquals;
+import static org.junit.jupiter.api.Assertions.assertNotNull;
+import static org.junit.jupiter.api.Assertions.assertSame;
 import static org.junit.jupiter.api.Assertions.assertThrows;
 import static org.junit.jupiter.api.Assertions.assertTrue;
+import static org.mockito.ArgumentMatchers.any;
+import static org.mockito.ArgumentMatchers.anyInt;
+import static org.mockito.ArgumentMatchers.anyLong;
+import static org.mockito.ArgumentMatchers.anyString;
 import static org.mockito.Mockito.doReturn;
+import static org.mockito.Mockito.doThrow;
+import static org.mockito.Mockito.mock;
+import static org.mockito.Mockito.never;
 import static org.mockito.Mockito.spy;
+import static org.mockito.Mockito.times;
+import static org.mockito.Mockito.verify;
+import static org.mockito.Mockito.when;
 
 class LocalLogTest {
 
@@ -254,6 +274,225 @@ class LocalLogTest {
         FetchDataInfo fetchDataInfo = readRecords(0L);
         assertEquals(2L, Utils.toList(fetchDataInfo.records.records()).size());
         assertEquals(keyValues, recordsToKvs(fetchDataInfo.records.records()));
+    }
+
+    @Test
+    public void testReadFailureAfterTransferFailureMarksLogDirOffline() throws IOException {
+        try {
+            appendRecords(kvsToRecords(List.of(new KeyValue("abc", "ABC"))), 0L);
+            FileRecords records = assertInstanceOf(FileRecords.class, readRecords(0L).records);
+            assertNotNull(records.transferFailureHandler());
+            IOException readFailure = new IOException("Input/output error");
+            FileRecords unreadable = unreadableRecords(records.file(), readFailure);
+            IOException transferFailure = new IOException("Input/output error");
+
+            // The fetched records are read only when they are written to the network; a failed write is reported
+            // through their handler, which re-reads the region on the scheduler
+            records.transferFailureHandler().onTransferFailure(unreadable, 0, 100, transferFailure);
+
+            verify(unreadable).readFailure(0, 100);
+            assertTrue(logDirFailureChannel.hasOfflineLogDir(logDir.getParent()));
+            assertArrayEquals(new Throwable[] {transferFailure}, readFailure.getSuppressed());
+            assertThrows(KafkaStorageException.class, () -> readRecords(0L));
+        } finally {
+            log.closeQuietly();
+        }
+    }
+
+    /**
+     * A failed read that the network channel reported as such takes the log dir offline without reading the region
+     * again, which could succeed by then, for instance after a transient media error.
+     */
+    @Test
+    public void testReportedReadFailureMarksLogDirOfflineWithoutReread() throws IOException {
+        try {
+            appendRecords(kvsToRecords(List.of(new KeyValue("abc", "ABC"))), 0L);
+            FileRecords records = assertInstanceOf(FileRecords.class, readRecords(0L).records);
+            FileRecords spiedRecords = spy(records);
+            FileReadException readFailure = new FileReadException(7, new IOException("Input/output error"));
+
+            records.transferFailureHandler().onTransferFailure(spiedRecords, 0, records.sizeInBytes(), readFailure);
+
+            verify(spiedRecords, never()).readFailure(anyLong(), anyInt());
+            assertTrue(logDirFailureChannel.hasOfflineLogDir(logDir.getParent()));
+            assertThrows(KafkaStorageException.class, () -> readRecords(0L));
+        } finally {
+            log.closeQuietly();
+        }
+    }
+
+    /**
+     * A failed read that the network channel reported takes the log dir offline right away, also while a re-read after
+     * a failure that the network channel could not tell apart is running in the same log dir.
+     */
+    @Test
+    public void testReportedReadFailureIsNotDroppedByRunningReadCheck() throws IOException {
+        List<Runnable> scheduled = new ArrayList<>();
+        Scheduler scheduler = capturingScheduler(scheduled);
+        LogConfig config = new LogConfig(new Properties());
+        // Its own log dir, which is taken offline
+        File parentDir = TestUtils.tempDirectory();
+        LocalLog firstLog = createLocalLogWithActiveSegment(
+            TestUtils.randomPartitionLogDir(parentDir), config, scheduler);
+        LocalLog secondLog = createLocalLogWithActiveSegment(
+            TestUtils.randomPartitionLogDir(parentDir), config, scheduler);
+        try {
+            FileRecords first = fetchedRecords(firstLog);
+            FileRecords second = fetchedRecords(secondLog);
+            first.transferFailureHandler().onTransferFailure(first, 0, 10, new IOException("Broken pipe"));
+            assertEquals(1, scheduled.size());
+
+            second.transferFailureHandler().onTransferFailure(second, 0, 10,
+                new FileReadException(0, new IOException("Input/output error")));
+            assertTrue(logDirFailureChannel.hasOfflineLogDir(firstLog.parentDir()));
+            assertEquals(1, scheduled.size());
+        } finally {
+            firstLog.closeQuietly();
+            secondLog.closeQuietly();
+        }
+    }
+
+    @Test
+    public void testTransferFailureOnReadableRegionKeepsLogDirOnline() throws IOException {
+        appendRecords(kvsToRecords(List.of(new KeyValue("abc", "ABC"))), 0L);
+        FileRecords records = assertInstanceOf(FileRecords.class, readRecords(0L).records);
+
+        records.transferFailureHandler().onTransferFailure(records, 0, records.sizeInBytes(), new IOException("Broken pipe"));
+
+        assertFalse(logDirFailureChannel.hasOfflineLogDir(logDir.getParent()));
+        assertEquals(1, Utils.toList(readRecords(0L).records.records()).size());
+    }
+
+    /**
+     * A burst of failed writes across the partitions of a log dir schedules a single re-read, and another one only
+     * once it is done. Another log dir is checked on its own.
+     */
+    @Test
+    public void testOneReadCheckAtATimePerLogDir() throws IOException {
+        List<Runnable> scheduled = new ArrayList<>();
+        Scheduler scheduler = capturingScheduler(scheduled);
+        LogConfig config = new LogConfig(new Properties());
+        LocalLog firstLog = createLocalLogWithActiveSegment(TestUtils.randomPartitionLogDir(tmpDir), config, scheduler);
+        LocalLog secondLog = createLocalLogWithActiveSegment(TestUtils.randomPartitionLogDir(tmpDir), config, scheduler);
+        LocalLog otherDirLog = createLocalLogWithActiveSegment(
+            TestUtils.randomPartitionLogDir(TestUtils.tempDirectory()), config, scheduler);
+        try {
+            FileRecords first = fetchedRecords(firstLog);
+            FileRecords spiedFirst = spy(first);
+            FileRecords second = fetchedRecords(secondLog);
+            FileRecords otherDir = fetchedRecords(otherDirLog);
+
+            for (int i = 0; i < 3; i++) {
+                first.transferFailureHandler().onTransferFailure(spiedFirst, 0, 10, new IOException("Broken pipe"));
+                second.transferFailureHandler().onTransferFailure(second, 0, 10, new IOException("Broken pipe"));
+            }
+            assertEquals(1, scheduled.size());
+            otherDir.transferFailureHandler().onTransferFailure(otherDir, 0, 10, new IOException("Broken pipe"));
+            assertEquals(2, scheduled.size());
+
+            scheduled.get(0).run();
+            verify(spiedFirst).readFailure(0, 10);
+            second.transferFailureHandler().onTransferFailure(second, 0, 10, new IOException("Broken pipe"));
+            assertEquals(3, scheduled.size());
+        } finally {
+            firstLog.closeQuietly();
+            secondLog.closeQuietly();
+            otherDirLog.closeQuietly();
+        }
+    }
+
+    /**
+     * A check that fails, for instance because the re-read throws unexpectedly, must not stop the next failed write
+     * from being checked either.
+     */
+    @Test
+    public void testFailedReadCheckDoesNotBlockTheNextOne() throws IOException {
+        List<Runnable> scheduled = new ArrayList<>();
+        LocalLog otherLog = createLocalLogWithActiveSegment(TestUtils.randomPartitionLogDir(tmpDir),
+            new LogConfig(new Properties()), capturingScheduler(scheduled));
+        try {
+            FileRecords records = fetchedRecords(otherLog);
+            FileRecords failingRecords = spy(records);
+            IllegalStateException failure = new IllegalStateException("Unexpected");
+            doThrow(failure).when(failingRecords).readFailure(anyLong(), anyInt());
+            FileRecords.TransferFailureHandler handler = records.transferFailureHandler();
+
+            handler.onTransferFailure(failingRecords, 0, 10, new IOException("Broken pipe"));
+            assertSame(failure, assertThrows(IllegalStateException.class, () -> scheduled.get(0).run()));
+            handler.onTransferFailure(records, 0, 10, new IOException("Broken pipe"));
+            assertEquals(2, scheduled.size());
+        } finally {
+            otherLog.closeQuietly();
+        }
+    }
+
+    /**
+     * A check the scheduler did not take, because it is not running, it rejected it or it failed with an error, must
+     * not stop the next failed write from being checked.
+     */
+    @Test
+    public void testReadCheckNotTakenBySchedulerDoesNotBlockTheNextOne() throws IOException {
+        ScheduledFuture<?> ignored = mock(ScheduledFuture.class);
+        when(ignored.isCancelled()).thenReturn(true);
+        Scheduler scheduler = mock(Scheduler.class);
+        OutOfMemoryError error = new OutOfMemoryError("unable to create native thread");
+        doReturn(ignored).doThrow(new RejectedExecutionException()).doThrow(error).doReturn(ignored)
+            .when(scheduler).scheduleOnce(anyString(), any(Runnable.class));
+        LocalLog otherLog = createLocalLogWithActiveSegment(TestUtils.randomPartitionLogDir(tmpDir),
+            new LogConfig(new Properties()), scheduler);
+        try {
+            FileRecords records = fetchedRecords(otherLog);
+            FileRecords.TransferFailureHandler handler = records.transferFailureHandler();
+
+            handler.onTransferFailure(records, 0, 10, new IOException("Broken pipe"));
+            handler.onTransferFailure(records, 0, 10, new IOException("Broken pipe"));
+            assertSame(error, assertThrows(OutOfMemoryError.class,
+                () -> handler.onTransferFailure(records, 0, 10, new IOException("Broken pipe"))));
+            handler.onTransferFailure(records, 0, 10, new IOException("Broken pipe"));
+            verify(scheduler, times(4)).scheduleOnce(anyString(), any(Runnable.class));
+        } finally {
+            otherLog.closeQuietly();
+        }
+    }
+
+    @Test
+    public void testNoReadCheckOnceLogDirIsOffline() throws IOException {
+        Scheduler scheduler = mock(Scheduler.class);
+        File dir = TestUtils.randomPartitionLogDir(tmpDir);
+        LocalLog otherLog = createLocalLogWithActiveSegment(dir, new LogConfig(new Properties()), scheduler);
+        try {
+            FileRecords records = fetchedRecords(otherLog);
+            logDirFailureChannel.maybeAddOfflineLogDir(dir.getParent(), "offline", new IOException("Input/output error"));
+
+            records.transferFailureHandler().onTransferFailure(records, 0, 10, new IOException("Broken pipe"));
+            verify(scheduler, never()).scheduleOnce(anyString(), any(Runnable.class));
+        } finally {
+            otherLog.closeQuietly();
+            // Its log dir is offline as well
+            log.closeQuietly();
+        }
+    }
+
+    private static FileRecords fetchedRecords(LocalLog log) throws IOException {
+        log.append(0L, MemoryRecords.withRecords(0L, Compression.NONE, 0, new SimpleRecord("a".getBytes())));
+        return assertInstanceOf(FileRecords.class, log.read(0L, 1024, false, log.logEndOffsetMetadata(), false).records);
+    }
+
+    // A scheduler that keeps the tasks it is given in scheduled instead of running them
+    private static Scheduler capturingScheduler(List<Runnable> scheduled) {
+        Scheduler scheduler = mock(Scheduler.class);
+        when(scheduler.scheduleOnce(anyString(), any(Runnable.class))).thenAnswer(invocation -> {
+            scheduled.add(invocation.getArgument(1));
+            return mock(ScheduledFuture.class);
+        });
+        return scheduler;
+    }
+
+    private static FileRecords unreadableRecords(File file, IOException readFailure) {
+        FileRecords records = mock(FileRecords.class);
+        when(records.file()).thenReturn(file);
+        when(records.readFailure(anyLong(), anyInt())).thenReturn(Optional.of(readFailure));
+        return records;
     }
 
     @Test
@@ -723,6 +962,10 @@ class LocalLogTest {
     }
 
     private LocalLog createLocalLogWithActiveSegment(File dir, LogConfig config) throws IOException {
+        return createLocalLogWithActiveSegment(dir, config, MOCK_TIME.scheduler);
+    }
+
+    private LocalLog createLocalLogWithActiveSegment(File dir, LogConfig config, Scheduler scheduler) throws IOException {
         LogSegments segments = new LogSegments(topicPartition);
         segments.add(LogSegment.open(dir,
                 0L,
@@ -735,7 +978,7 @@ class LocalLogTest {
                 segments,
                 0L,
                 new LogOffsetMetadata(0L, 0L, 0),
-                MOCK_TIME.scheduler,
+                scheduler,
                 MOCK_TIME,
                 topicPartition,
                 logDirFailureChannel);

@@ -23,6 +23,7 @@ import org.apache.kafka.coordinator.mirror.ClusterMirrorConfigs;
 import org.apache.kafka.server.config.DynamicBrokerConfig.DynamicClusterMirrorConfig;
 
 import org.junit.jupiter.api.Test;
+import org.junit.jupiter.api.io.TempDir;
 
 import java.io.IOException;
 import java.nio.file.Files;
@@ -39,20 +40,19 @@ import static org.mockito.Mockito.when;
 
 public class DynamicBrokerConfigTest {
 
+    @TempDir
+    private Path tempDir;
+
     @Test
     public void testValidateConfigTypesResolvesConfigProviders() throws IOException {
-        Path providerFile = Files.createTempFile("provider", ".properties");
-        try {
-            Files.writeString(providerFile, "token=42");
-            Properties props = new Properties();
-            props.setProperty(AbstractConfig.CONFIG_PROVIDERS_CONFIG, "file");
-            props.setProperty(AbstractConfig.CONFIG_PROVIDERS_CONFIG + ".file.class", FileConfigProvider.class.getName());
-            props.setProperty(ServerConfigs.NUM_IO_THREADS_CONFIG, "${file:" + providerFile.toAbsolutePath() + ":token}");
+        Path providerFile = Files.createFile(tempDir.resolve("provider.properties"));
+        Files.writeString(providerFile, "token=42");
+        Properties props = new Properties();
+        props.setProperty(AbstractConfig.CONFIG_PROVIDERS_CONFIG, "file");
+        props.setProperty(AbstractConfig.CONFIG_PROVIDERS_CONFIG + ".file.class", FileConfigProvider.class.getName());
+        props.setProperty(ServerConfigs.NUM_IO_THREADS_CONFIG, "${file:" + providerFile.toAbsolutePath() + ":token}");
 
-            assertDoesNotThrow(() -> DynamicBrokerConfig.validateConfigTypes(props));
-        } finally {
-            Files.deleteIfExists(providerFile);
-        }
+        assertDoesNotThrow(() -> DynamicBrokerConfig.validateConfigTypes(props));
     }
 
     @Test

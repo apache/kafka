@@ -16,39 +16,47 @@
  */
 package org.apache.kafka.clients.admin;
 
+import org.apache.kafka.clients.HostResolver;
+import org.apache.kafka.common.TopicPartition;
+import org.apache.kafka.common.config.ConfigResource;
 import org.apache.kafka.common.errors.TimeoutException;
 import org.apache.kafka.common.test.ClusterInstance;
 import org.apache.kafka.common.test.api.ClusterTest;
 import org.apache.kafka.common.test.api.ClusterTestDefaults;
 import org.apache.kafka.common.test.api.Type;
+import org.apache.kafka.common.utils.Time;
 
+import org.junit.jupiter.api.Test;
 import org.slf4j.Logger;
 import org.slf4j.LoggerFactory;
 
+import java.net.InetAddress;
+import java.time.Duration;
+import java.util.List;
 import java.util.Map;
+import java.util.Set;
 import java.util.concurrent.ExecutionException;
 import java.util.stream.Stream;
 
+import static org.apache.kafka.test.TestUtils.assertFutureThrows;
 import static org.junit.jupiter.api.Assertions.assertEquals;
 import static org.junit.jupiter.api.Assertions.assertInstanceOf;
 import static org.junit.jupiter.api.Assertions.assertThrows;
+import static org.junit.jupiter.api.Assertions.assertTimeout;
+import static org.junit.jupiter.api.Assertions.assertTrue;
 
 @ClusterTestDefaults(types = { Type.KRAFT })
 public class AdminClientTimeoutIntegrationTest {
 
+    private static final int INCORRECT_BROKER_PORT = 225;
+
     private static final Logger log = LoggerFactory.getLogger(AdminClientTimeoutIntegrationTest.class);
-
-    private final ClusterInstance clusterInstance;
-
-    public AdminClientTimeoutIntegrationTest(ClusterInstance clusterInstance) {
-        this.clusterInstance = clusterInstance;
-    }
 
     /**
      * Test injecting timeouts for calls that are in flight.
      */
     @ClusterTest
-    public void testCallInFlightTimeouts() throws Exception {
+    public void testCallInFlightTimeouts(ClusterInstance clusterInstance) throws Exception {
         var config = Map.of(
                 AdminClientConfig.BOOTSTRAP_SERVERS_CONFIG, clusterInstance.bootstrapServers(),
                 AdminClientConfig.RETRIES_CONFIG, "0",
@@ -73,6 +81,159 @@ public class AdminClientTimeoutIntegrationTest {
             future2.get();
             assertEquals(1, factory.failuresInjected());
         }
+    }
+
+    @ClusterTest
+    public void testAdminClientHandlingBadIPWithoutTimeout(ClusterInstance clusterInstance) throws Exception {
+        Map<String, Object> config = Map.of(
+            AdminClientConfig.BOOTSTRAP_SERVERS_CONFIG, clusterInstance.bootstrapServers(),
+            AdminClientConfig.REQUEST_TIMEOUT_MS_CONFIG, "20000",
+            AdminClientConfig.DEFAULT_API_TIMEOUT_MS_CONFIG, "40000",
+            AdminClientConfig.SOCKET_CONNECTION_SETUP_TIMEOUT_MS_CONFIG, "1000");
+        HostResolver returnBadAddressFirst = host -> new InetAddress[] {
+            InetAddress.getByName("10.200.20.100"),
+            InetAddress.getByName(host)
+        };
+        try (Admin admin = AdminClientTestUtils.create(config, returnBadAddressFirst)) {
+            admin.describeCluster().nodes().get();
+        }
+    }
+
+    @Test
+    public void testDescribeConfigWithOptionTimeoutMs() {
+        try (Admin admin = createInvalidAdminClient()) {
+            List<ConfigResource> configResources = List.of(
+                new ConfigResource(ConfigResource.Type.BROKER, "1"),
+                new ConfigResource(ConfigResource.Type.BROKER, "2"));
+
+            ExecutionException exception = assertTimeout(Duration.ofSeconds(30),
+                () -> assertThrows(ExecutionException.class,
+                    () -> admin.describeConfigs(configResources, new DescribeConfigsOptions().timeoutMs(0)).all().get()));
+            assertInstanceOf(TimeoutException.class, exception.getCause());
+        }
+    }
+
+    @Test
+    public void testDescribeUserScramCredentialsTimeout() {
+        try (Admin admin = createInvalidAdminClient()) {
+            ExecutionException exception = assertTimeout(Duration.ofSeconds(10),
+                () -> assertThrows(ExecutionException.class,
+                    () -> admin.describeUserScramCredentials(List.of("tom4"),
+                        new DescribeUserScramCredentialsOptions().timeoutMs(0)).all().get()));
+            assertInstanceOf(TimeoutException.class, exception.getCause());
+        }
+    }
+
+    @Test
+    public void testDescribeTransactionsTimeout() {
+        try (Admin admin = createInvalidAdminClient()) {
+            String transactionId = "foo";
+            ExecutionException exception = assertTimeout(Duration.ofSeconds(10),
+                () -> assertThrows(ExecutionException.class,
+                    () -> admin.describeTransactions(Set.of(transactionId),
+                        new DescribeTransactionsOptions().timeoutMs(0)).description(transactionId).get()));
+            assertInstanceOf(TimeoutException.class, exception.getCause());
+        }
+    }
+
+    @Test
+    public void testAbortTransactionTimeout() {
+        try (Admin admin = createInvalidAdminClient()) {
+            ExecutionException exception = assertTimeout(Duration.ofSeconds(10),
+                () -> assertThrows(ExecutionException.class,
+                    () -> admin.abortTransaction(
+                        new AbortTransactionSpec(new TopicPartition("topic", 0), 1, (short) 1, 1),
+                        new AbortTransactionOptions().timeoutMs(0)).all().get()));
+            assertInstanceOf(TimeoutException.class, exception.getCause());
+        }
+    }
+
+    @ClusterTest
+    public void testClose(ClusterInstance clusterInstance) {
+        Admin admin = clusterInstance.admin();
+        admin.close();
+        admin.close(); // double close has no effect
+    }
+
+    /**
+     * Test closing the AdminClient with a generous timeout. Calls in progress should be completed,
+     * since they can be done within the timeout. New calls should receive exceptions.
+     */
+    @ClusterTest
+    public void testDelayedClose(ClusterInstance clusterInstance) throws Exception {
+        List<NewTopic> newTopics = Stream.of("mytopic", "mytopic2")
+            .map(topic -> new NewTopic(topic, 1, (short) 1)).toList();
+        try (Admin admin = clusterInstance.admin()) {
+            var future = admin.createTopics(newTopics, new CreateTopicsOptions().validateOnly(true)).all();
+            admin.close(Duration.ofHours(2));
+            var future2 = admin.createTopics(newTopics, new CreateTopicsOptions().validateOnly(true)).all();
+            assertFutureThrows(IllegalStateException.class, future2);
+            future.get();
+            admin.close(Duration.ofMinutes(30)); // multiple close-with-timeout should have no effect
+        }
+    }
+
+    /**
+     * Test closing the AdminClient with a timeout of 0, when there are calls with extremely long
+     * timeouts in progress. The calls should be aborted after the hard shutdown timeout elapses.
+     */
+    @Test
+    public void testForceClose() {
+        try (Admin admin = createInvalidAdminClient()) {
+            var future = admin.createTopics(Stream.of("mytopic", "mytopic2")
+                    .map(topic -> new NewTopic(topic, 1, (short) 1)).toList(),
+                new CreateTopicsOptions().timeoutMs(900_000)).all();
+            admin.close(Duration.ZERO);
+            assertFutureThrows(TimeoutException.class, future);
+        }
+    }
+
+    /**
+     * Check that a call with a timeout does not complete before the minimum timeout has elapsed,
+     * even when the default request timeout is shorter.
+     */
+    @Test
+    public void testMinimumRequestTimeouts() {
+        Map<String, Object> config = Map.of(
+            AdminClientConfig.BOOTSTRAP_SERVERS_CONFIG, "localhost:" + INCORRECT_BROKER_PORT,
+            AdminClientConfig.REQUEST_TIMEOUT_MS_CONFIG, "0");
+        try (Admin admin = Admin.create(config)) {
+            long startTimeMs = Time.SYSTEM.milliseconds();
+            var future = admin.createTopics(Stream.of("mytopic", "mytopic2")
+                    .map(topic -> new NewTopic(topic, 1, (short) 1)).toList(),
+                new CreateTopicsOptions().timeoutMs(2)).all();
+            assertFutureThrows(TimeoutException.class, future);
+            long endTimeMs = Time.SYSTEM.milliseconds();
+            assertTrue(endTimeMs > startTimeMs,
+                "Expected the timeout to take at least one millisecond.");
+        }
+    }
+
+    @Test
+    public void testListClientMetricsResourcesTimeoutMs() {
+        try (Admin admin = createInvalidAdminClient()) {
+            ListClientMetricsResourcesOptions timeoutOption = new ListClientMetricsResourcesOptions().timeoutMs(0);
+            ExecutionException exception = assertTimeout(Duration.ofSeconds(30),
+                () -> assertThrows(ExecutionException.class,
+                    () -> admin.listClientMetricsResources(timeoutOption).all().get()));
+            assertInstanceOf(TimeoutException.class, exception.getCause());
+        }
+    }
+
+    @Test
+    public void testListConfigResourcesTimeoutMs() {
+        try (Admin admin = createInvalidAdminClient()) {
+            ListConfigResourcesOptions timeoutOption = new ListConfigResourcesOptions().timeoutMs(0);
+            ExecutionException exception = assertTimeout(Duration.ofSeconds(30),
+                () -> assertThrows(ExecutionException.class,
+                    () -> admin.listConfigResources(Set.of(), timeoutOption).all().get()));
+            assertInstanceOf(TimeoutException.class, exception.getCause());
+        }
+    }
+
+    private Admin createInvalidAdminClient() {
+        return Admin.create(Map.of(
+            AdminClientConfig.BOOTSTRAP_SERVERS_CONFIG, "localhost:" + INCORRECT_BROKER_PORT));
     }
 
 

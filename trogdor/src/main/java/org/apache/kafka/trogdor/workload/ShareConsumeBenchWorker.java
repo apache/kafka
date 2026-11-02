@@ -17,16 +17,23 @@
 
 package org.apache.kafka.trogdor.workload;
 
+import org.apache.kafka.clients.admin.Admin;
+import org.apache.kafka.clients.admin.AlterConfigOp;
+import org.apache.kafka.clients.admin.ConfigEntry;
+import org.apache.kafka.clients.admin.NewTopic;
 import org.apache.kafka.clients.consumer.AcknowledgeType;
 import org.apache.kafka.clients.consumer.ConsumerConfig;
 import org.apache.kafka.clients.consumer.ConsumerRecord;
 import org.apache.kafka.clients.consumer.ConsumerRecords;
 import org.apache.kafka.clients.consumer.KafkaShareConsumer;
+import org.apache.kafka.common.config.ConfigResource;
+import org.apache.kafka.common.config.TopicConfig;
 import org.apache.kafka.common.internals.KafkaFutureImpl;
 import org.apache.kafka.common.serialization.ByteArrayDeserializer;
 import org.apache.kafka.common.utils.Time;
 import org.apache.kafka.common.utils.Utils;
 import org.apache.kafka.common.utils.internals.ThreadUtils;
+import org.apache.kafka.coordinator.group.GroupConfig;
 import org.apache.kafka.trogdor.common.JsonUtil;
 import org.apache.kafka.trogdor.common.Platform;
 import org.apache.kafka.trogdor.common.WorkerUtils;
@@ -42,6 +49,7 @@ import org.slf4j.LoggerFactory;
 
 import java.time.Duration;
 import java.util.ArrayList;
+import java.util.Collection;
 import java.util.HashMap;
 import java.util.HashSet;
 import java.util.List;
@@ -86,6 +94,17 @@ public class ShareConsumeBenchWorker implements TaskWorker {
             throw new IllegalStateException("ShareConsumeBenchWorker is already running.");
         }
         log.info("{}: Activating ShareConsumeBenchWorker with {}", id, spec);
+        if (spec.shareGroupDLQConfig().isPresent()) {
+            try {
+                setupDLQ(spec.shareGroupDLQConfig().get());
+            } catch (Throwable e) {
+                running.set(false);
+                if (e instanceof Exception) {
+                    throw (Exception) e;
+                }
+                throw new RuntimeException("Failed to set up the DLQ for share group " + shareGroup(), e);
+            }
+        }
         this.statusUpdater = new StatusUpdater();
         this.executor = Executors.newScheduledThreadPool(
                 spec.threadsPerWorker() + 2, // 1 thread for all the ConsumeStatusUpdater and 1 for the StatusUpdater
@@ -94,6 +113,61 @@ public class ShareConsumeBenchWorker implements TaskWorker {
         this.workerStatus = status;
         this.doneFuture = doneFuture;
         executor.submit(new Prepare());
+    }
+
+    /**
+     * Creates the DLQ topic, enables it for use as a DLQ and configures the share group to use it.
+     */
+    private void setupDLQ(ShareGroupDLQConfig dlqConfig) throws Throwable {
+        String dlqTopic = dlqConfig.topicName();
+        NewTopic newTopic = dlqConfig.topicSpec().newTopic(dlqTopic);
+        WorkerUtils.createTopics(log, spec.bootstrapServers(), spec.commonClientConf(), spec.adminClientConf(),
+                Map.of(dlqTopic, newTopic), false);
+
+        try (Admin adminClient = WorkerUtils.createAdminClient(spec.bootstrapServers(), spec.commonClientConf(), spec.adminClientConf())) {
+            // Also done for a pre-existing topic, which would not have been created with the DLQ config.
+            alterConfigs(adminClient, new ConfigResource(ConfigResource.Type.TOPIC, dlqTopic), List.of(
+                    setOp(TopicConfig.ERRORS_DEADLETTERQUEUE_GROUP_ENABLE_CONFIG, "true")));
+            alterConfigs(adminClient, new ConfigResource(ConfigResource.Type.GROUP, shareGroup()), List.of(
+                    setOp(GroupConfig.ERRORS_DEADLETTERQUEUE_TOPIC_NAME_CONFIG, dlqTopic),
+                    setOp(GroupConfig.ERRORS_DEADLETTERQUEUE_COPY_RECORD_ENABLE_CONFIG,
+                            String.valueOf(dlqConfig.copyRecordEnable()))));
+        }
+        log.info("{}: Share group {} will use {} as its DLQ topic.", id, shareGroup(), dlqTopic);
+    }
+
+    private static AlterConfigOp setOp(String name, String value) {
+        return new AlterConfigOp(new ConfigEntry(name, value), AlterConfigOp.OpType.SET);
+    }
+
+    private static void alterConfigs(Admin adminClient, ConfigResource resource, Collection<AlterConfigOp> ops) throws Exception {
+        try {
+            adminClient.incrementalAlterConfigs(Map.of(resource, ops)).all().get(60, TimeUnit.SECONDS);
+        } catch (Exception e) {
+            throw new RuntimeException("Failed to alter configs " + ops + " of " + resource, e);
+        }
+    }
+
+    private String shareGroup() {
+        return spec.shareGroup();
+    }
+
+    private boolean explicitAcknowledgement() {
+        return spec.acknowledgeType().isPresent() || spec.recordAcknowledger().isPresent();
+    }
+
+    /**
+     * Returns the acknowledge type for the record, or empty if the consumers use implicit acknowledgement.
+     */
+    private Optional<AcknowledgeType> acknowledgeTypeFor(ConsumerRecord<byte[], byte[]> record) {
+        if (spec.recordAcknowledger().isPresent()) {
+            AcknowledgeType type = spec.recordAcknowledger().get().acknowledge(record);
+            if (type == null) {
+                throw new IllegalStateException("RecordAcknowledger must return an acknowledge type, but returned null");
+            }
+            return Optional.of(type);
+        }
+        return spec.acknowledgeType();
     }
 
     public class Prepare implements Runnable {
@@ -140,20 +214,17 @@ public class ShareConsumeBenchWorker implements TaskWorker {
             props.put(ConsumerConfig.GROUP_ID_CONFIG, shareGroup);
             props.put(ConsumerConfig.MAX_POLL_INTERVAL_MS_CONFIG, 100000);
             // an explicit acknowledge type requires the consumer to acknowledge each record itself
-            spec.acknowledgeType().ifPresent(type ->
-                    props.put(ConsumerConfig.SHARE_ACKNOWLEDGEMENT_MODE_CONFIG, "explicit"));
+            if (explicitAcknowledgement()) {
+                props.put(ConsumerConfig.SHARE_ACKNOWLEDGEMENT_MODE_CONFIG, "explicit");
+            }
             // these defaults maybe over-written by the user-specified commonClientConf or consumerConf
             WorkerUtils.addConfigsToProperties(props, spec.commonClientConf(), spec.consumerConf());
-            if (spec.acknowledgeType().isPresent()
+            if (explicitAcknowledgement()
                     && "implicit".equalsIgnoreCase(String.valueOf(props.get(ConsumerConfig.SHARE_ACKNOWLEDGEMENT_MODE_CONFIG)))) {
-                throw new IllegalArgumentException(String.format("acknowledgeType %s requires %s=explicit",
-                        spec.acknowledgeType().get(), ConsumerConfig.SHARE_ACKNOWLEDGEMENT_MODE_CONFIG));
+                throw new IllegalArgumentException(String.format("acknowledgeType or recordAcknowledger requires %s=explicit",
+                        ConsumerConfig.SHARE_ACKNOWLEDGEMENT_MODE_CONFIG));
             }
             return new ThreadSafeShareConsumer(new KafkaShareConsumer<>(props, new ByteArrayDeserializer(), new ByteArrayDeserializer()), clientId);
-        }
-
-        private String shareGroup() {
-            return spec.shareGroup();
         }
     }
 
@@ -213,7 +284,7 @@ public class ShareConsumeBenchWorker implements TaskWorker {
 
                     for (ConsumerRecord<byte[], byte[]> record : records) {
                         // Explicit acknowledgement requires acknowledging each record individually.
-                        spec.acknowledgeType().ifPresent(type -> consumer.acknowledge(record, type));
+                        acknowledgeTypeFor(record).ifPresent(type -> consumer.acknowledge(record, type));
                         messagesConsumed++;
                         long messageBytes = 0;
                         if (record.key() != null) {
@@ -234,7 +305,9 @@ public class ShareConsumeBenchWorker implements TaskWorker {
                 }
                 // Send the pending acknowledgements while the consumer is still a member of the share group.
                 // Records after the maxMessages break are deliberately left unacknowledged.
-                spec.acknowledgeType().ifPresent(__ -> consumer.commitSync());
+                if (explicitAcknowledgement()) {
+                    consumer.commitSync();
+                }
             } catch (Exception e) {
                 WorkerUtils.abort(log, "ConsumeRecords", e, doneFuture);
             } finally {
@@ -336,6 +409,8 @@ public class ShareConsumeBenchWorker implements TaskWorker {
                 recordProcessorStatus = Optional.of(recordProcessor.get().processorStatus());
             }
 
+            Optional<JsonNode> recordAcknowledgerStatus = spec.recordAcknowledger().map(RecordAcknowledger::acknowledgerStatus);
+
             StatusData statusData = new StatusData(
                     consumer.subscription(),
                     latSummary.numSamples(),
@@ -345,7 +420,8 @@ public class ShareConsumeBenchWorker implements TaskWorker {
                     latSummary.percentiles().get(0).value(),
                     latSummary.percentiles().get(1).value(),
                     latSummary.percentiles().get(2).value(),
-                    recordProcessorStatus);
+                    recordProcessorStatus,
+                    recordAcknowledgerStatus);
             statusUpdater.updateConsumeStatus(consumer.clientId(), statusData);
             log.info("Status={}", JsonUtil.toJsonString(statusData));
             return statusData;
@@ -362,6 +438,7 @@ public class ShareConsumeBenchWorker implements TaskWorker {
         private final int p95LatencyMs;
         private final int p99LatencyMs;
         private final Optional<JsonNode> recordProcessorStatus;
+        private final Optional<JsonNode> recordAcknowledgerStatus;
 
         /**
          * The percentiles to use when calculating the histogram data.
@@ -377,7 +454,8 @@ public class ShareConsumeBenchWorker implements TaskWorker {
                    @JsonProperty("p50LatencyMs") int p50latencyMs,
                    @JsonProperty("p95LatencyMs") int p95latencyMs,
                    @JsonProperty("p99LatencyMs") int p99latencyMs,
-                   @JsonProperty("recordProcessorStatus") Optional<JsonNode> recordProcessorStatus) {
+                   @JsonProperty("recordProcessorStatus") Optional<JsonNode> recordProcessorStatus,
+                   @JsonProperty("recordAcknowledgerStatus") Optional<JsonNode> recordAcknowledgerStatus) {
             this.subscription = subscription;
             this.totalMessagesReceived = totalMessagesReceived;
             this.totalBytesReceived = totalBytesReceived;
@@ -387,6 +465,7 @@ public class ShareConsumeBenchWorker implements TaskWorker {
             this.p95LatencyMs = p95latencyMs;
             this.p99LatencyMs = p99latencyMs;
             this.recordProcessorStatus = recordProcessorStatus;
+            this.recordAcknowledgerStatus = recordAcknowledgerStatus;
         }
 
         @JsonProperty
@@ -432,6 +511,11 @@ public class ShareConsumeBenchWorker implements TaskWorker {
         @JsonProperty
         public JsonNode recordProcessorStatus() {
             return recordProcessorStatus.orElse(null);
+        }
+
+        @JsonProperty
+        public JsonNode recordAcknowledgerStatus() {
+            return recordAcknowledgerStatus.orElse(null);
         }
     }
 
