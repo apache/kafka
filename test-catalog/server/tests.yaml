@@ -361,6 +361,9 @@ org.apache.kafka.server.LogOffsetTest:
 - testGetOffsetsBeforeEarliestTime
 - testGetOffsetsBeforeLatestTime
 - testGetOffsetsForUnknownTopic
+org.apache.kafka.server.MessageMaxArrayLengthIntegrationTest:
+- testDefaultMaxArrayLength
+- testMaxArrayLengthFromServerProperties
 org.apache.kafka.server.MetadataRequestTest:
 - testAliveBrokersWithNoTopics
 - testAllTopicsRequest

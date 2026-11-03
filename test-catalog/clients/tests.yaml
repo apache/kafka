@@ -4104,7 +4104,9 @@ org.apache.kafka.common.message.RecordsSerdeTest:
 org.apache.kafka.common.message.SimpleArraysMessageTest:
 - testArrayBoundsChecking
 - testArrayBoundsCheckingOtherArray
+- testArrayLengthAboveDefaultMaxIsAcceptedWhenRaised
 - testArrayLengthAboveMaxIsRejected
+- testArrayLengthHonorsLoweredMax
 - testDeclaredLengthAboveInitialCapacityStillParses
 - testKeyedArrayLengthAboveMaxIsRejected
 - testKeyedDeclaredLengthAboveInitialCapacityStillParses
@@ -4480,6 +4482,7 @@ org.apache.kafka.common.protocol.MessageUtilTest:
 - testInvalidBinaryNode
 - testJsonNodeToInt
 - testJsonNodeToLong
+- testMaxArrayLength
 org.apache.kafka.common.protocol.ProtoUtilsTest:
 - testDelayedAllocationSchemaDetection
 org.apache.kafka.common.protocol.ProtocolTest:
@@ -4494,6 +4497,7 @@ org.apache.kafka.common.protocol.types.ProtocolSerializationTest:
 - testNullableDefault
 - testNulls
 - testReadArrayLengthAboveMaxIsRejected
+- testReadArrayLengthHonorsConfiguredMax
 - testReadArraySizeTooLarge
 - testReadBytesBeyondItsSize
 - testReadBytesSizeTooLarge
