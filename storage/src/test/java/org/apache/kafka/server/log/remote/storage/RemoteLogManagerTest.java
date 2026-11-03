@@ -1776,6 +1776,8 @@ public class RemoteLogManagerTest {
     @ValueSource(booleans = {false, true})
     void testFindOffsetByTimestampUsesLocalSegmentSnapshot(boolean laterMatch) throws Exception {
         remoteLogManager = spy(remoteLogManager);
+        // Register the partition without starting the follower task, so background remote-offset updates
+        // do not interact with the lookup mocks.
         doNothing().when(remoteLogManager).doHandleFollowerPartition(leaderTopicIdPartition);
         long timestamp = time.milliseconds();
         int leaderEpoch = 10;

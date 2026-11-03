@@ -1815,14 +1815,15 @@ public class UnifiedLog implements AutoCloseable {
     /**
      * Find the first local record at or after startOffset whose timestamp is at least targetTimestamp.
      */
-    public Optional<FileRecords.TimestampAndOffset> searchOffsetInLocalLog(long targetTimestamp, long startOffset) throws IOException {
+    private Optional<FileRecords.TimestampAndOffset> searchOffsetInLocalLog(long targetTimestamp, long startOffset) throws IOException {
         // Cache to avoid race conditions.
         return searchOffsetInLocalLog(logSegments(), targetTimestamp, startOffset);
     }
 
     /**
      * Find the first record at or after startOffset in the given snapshot of local segments whose timestamp is at
-     * least targetTimestamp. The starting offset may be below the first segment.
+     * least targetTimestamp. The segments must be sorted by base offset in ascending order.
+     * The starting offset may be below the first segment.
      */
     public Optional<FileRecords.TimestampAndOffset> searchOffsetInLocalLog(List<LogSegment> segments, long targetTimestamp,
                                                                           long startOffset) throws IOException {
