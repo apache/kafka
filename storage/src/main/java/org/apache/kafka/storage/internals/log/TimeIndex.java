@@ -161,6 +161,23 @@ public class TimeIndex extends AbstractIndex {
     }
 
     /**
+     * Last time-index entry whose offset is strictly less than {@code boundOffset}.
+     * The entry timestamp is the largest timestamp indexed at an offset below the bound.
+     * Returns {@code (NO_TIMESTAMP, baseOffset)} when the index has no such entry.
+     */
+    public TimestampOffset lastEntryWithOffsetBelow(long boundOffset) {
+        return inRemapReadLock(() -> {
+            if (entries() == 0 || boundOffset <= baseOffset())
+                return new TimestampOffset(RecordBatch.NO_TIMESTAMP, baseOffset());
+            ByteBuffer idx = mmap().duplicate();
+            int slot = largestLowerBoundSlotFor(idx, boundOffset - 1, IndexSearchType.VALUE);
+            if (slot < 0)
+                return new TimestampOffset(RecordBatch.NO_TIMESTAMP, baseOffset());
+            return parseEntry(idx, slot);
+        });
+    }
+
+    /**
      * Equivalent to invoking `maybeAppend(timestamp, offset, false)`.
      *
      * @see #maybeAppend(long, long, boolean)
