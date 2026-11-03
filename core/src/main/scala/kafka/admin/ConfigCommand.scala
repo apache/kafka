@@ -239,7 +239,7 @@ object ConfigCommand extends Logging {
       passwordEncoderConfigs.asScala.keySet.foreach(configsToBeAdded.remove)
     }
 
-    DynamicBrokerConfig.validateConfigs(configsToBeAdded, configsToBeAdded, perBrokerConfig)
+    DynamicBrokerConfig.validateConfigs(configsToBeAdded, perBrokerConfig)
     val passwordConfigs = configsToBeAdded.asScala.keySet.filter(DynamicBrokerConfig.isPasswordConfig)
     if (passwordConfigs.nonEmpty) {
       require(passwordEncoderConfigs.containsKey(PasswordEncoderConfigs.PASSWORD_ENCODER_SECRET_CONFIG),

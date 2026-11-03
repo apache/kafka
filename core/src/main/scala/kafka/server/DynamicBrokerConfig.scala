@@ -139,6 +139,10 @@ object DynamicBrokerConfig {
     }
   }
 
+  def validateConfigs(props: Properties, perBrokerConfig: Boolean): Unit = {
+    validateConfigs(props, resolveVariableConfigs(props), perBrokerConfig)
+  }
+
   def validateConfigs(propsOriginal: Properties, propsResolved: Properties, perBrokerConfig: Boolean): Unit = {
     def checkInvalidProps(invalidPropNames: Set[String], errorMessage: String): Unit = {
       if (invalidPropNames.nonEmpty)
