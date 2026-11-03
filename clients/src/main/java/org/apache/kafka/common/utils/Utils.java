@@ -301,6 +301,10 @@ public final class Utils {
      * @param size The number of bytes to read into the array
      */
     public static byte[] toArray(ByteBuffer buffer, int offset, int size) {
+        if (size < 0 || size > buffer.remaining() - offset) {
+            // preemptively throw this when the read is doomed to fail, so we don't have to allocate the array.
+            throw new BufferUnderflowException();
+        }
         byte[] dest = new byte[size];
         if (buffer.hasArray()) {
             System.arraycopy(buffer.array(), buffer.position() + buffer.arrayOffset() + offset, dest, 0, size);
@@ -333,7 +337,7 @@ public final class Utils {
      * @return The array
      */
     public static byte[] getNullableArray(final ByteBuffer buffer, final int size) {
-        if (size > buffer.remaining()) {
+        if (size < -1 || size > buffer.remaining()) {
             // preemptively throw this when the read is doomed to fail, so we don't have to allocate the array.
             throw new BufferUnderflowException();
         }
@@ -713,6 +717,10 @@ public final class Utils {
      * Read a buffer into a Byte array for the given offset and length
      */
     public static byte[] readBytes(ByteBuffer buffer, int offset, int length) {
+        if (length < 0 || length > buffer.limit() - offset) {
+            // preemptively throw this when the read is doomed to fail, so we don't have to allocate the array.
+            throw new BufferUnderflowException();
+        }
         byte[] dest = new byte[length];
         if (buffer.hasArray()) {
             System.arraycopy(buffer.array(), buffer.arrayOffset() + offset, dest, 0, length);
