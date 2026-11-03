@@ -97,10 +97,12 @@ final class ShareSinkConsumerController implements Runnable {
             }
             started = true;
         }
+        boolean constructionStarted = false;
         try {
             if (stopRequested) {
                 return;
             }
+            constructionStarted = true;
             consumer = Objects.requireNonNull(consumerFactory.get());
             consumer.subscribe(topics);
             while (!stopRequested) {
@@ -126,7 +128,7 @@ final class ShareSinkConsumerController implements Runnable {
             fail(new ConnectException("Share consumer controller failed", e));
             throw e;
         } finally {
-            finish();
+            finish(constructionStarted);
         }
     }
 
@@ -475,7 +477,7 @@ final class ShareSinkConsumerController implements Runnable {
         }
     }
 
-    private void finish() {
+    private void finish(boolean constructionStarted) {
         signal();
         boolean interrupted = Thread.interrupted();
         boolean cleaned = false;
@@ -484,7 +486,7 @@ final class ShareSinkConsumerController implements Runnable {
             if (current != null) {
                 current.close(Duration.ofMillis(settings.requestTimeoutMs));
             }
-            cleaned = true;
+            cleaned = current != null || !constructionStarted;
         } catch (RuntimeException e) {
             fail(e);
         } catch (Error e) {

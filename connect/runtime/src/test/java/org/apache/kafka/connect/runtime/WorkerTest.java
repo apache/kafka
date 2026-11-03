@@ -2259,6 +2259,43 @@ public class WorkerTest {
         verifyKafkaClusterId();
     }
 
+    @Test
+    public void testShareSinkConstructorFailureKeepsWorkerAdmissionClosed() {
+        setup(false);
+        mockKafkaClusterId();
+        mockGenericIsolation();
+        ConnectException constructorFailure = new ConnectException("Task construction failed after allocation");
+        when(plugins.newTask(TestShareSinkTask.class)).thenThrow(constructorFailure);
+        connectorProps.put(CONNECTOR_CLASS_CONFIG, SampleSinkConnector.class.getName());
+        connectorProps.put(TOPICS_CONFIG, "orders");
+        connectorProps.put(SinkConnectorConfig.CONSUMER_TYPE_CONFIG, "share");
+        connectorProps.put(SinkConnectorConfig.SHARE_PROCESSING_MAX_AGE_MS_CONFIG, "120000");
+        connectorProps.put(SinkConnectorConfig.SHARE_PROCESSING_CANCEL_GRACE_MS_CONFIG, "1000");
+        Map<String, String> taskProps = Map.of(TaskConfig.TASK_CLASS_CONFIG, TestShareSinkTask.class.getName());
+        worker = new Worker(WORKER_ID, new MockTime(), plugins, config, offsetBackingStore, executorService,
+                noneConnectorClientConfigOverridePolicy, null);
+        worker.herder = herder;
+        worker.start();
+
+        assertFalse(worker.startSinkTask(TASK_ID, ClusterConfigState.EMPTY, connectorProps, taskProps,
+                taskStatusListener, TargetState.STARTED));
+        verify(taskStatusListener).onFailure(TASK_ID, constructorFailure);
+        ConnectorTaskId anotherTask = new ConnectorTaskId(TASK_ID.connector(), 1);
+        assertFalse(worker.startSinkTask(anotherTask, ClusterConfigState.EMPTY, connectorProps, taskProps,
+                taskStatusListener, TargetState.STARTED));
+
+        ArgumentCaptor<Throwable> admissionFailure = ArgumentCaptor.forClass(Throwable.class);
+        verify(taskStatusListener).onFailure(eq(anotherTask), admissionFailure.capture());
+        assertTrue(admissionFailure.getValue().getMessage().contains("orphaned share execution"));
+        verify(plugins).newTask(TestShareSinkTask.class);
+        verify(plugins, never()).newConverter(any(AbstractConfig.class), anyString(), anyString());
+        verify(plugins, never()).newHeaderConverter(any(AbstractConfig.class), anyString(), anyString());
+        verify(executorService, never()).submit(any(Runnable.class));
+        assertTrue(worker.taskIds().isEmpty());
+        worker.stop();
+        verifyKafkaClusterId();
+    }
+
     @ParameterizedTest
     @ValueSource(strings = {"fetch", "alter", "replace", "reset"})
     @SuppressWarnings("unchecked")

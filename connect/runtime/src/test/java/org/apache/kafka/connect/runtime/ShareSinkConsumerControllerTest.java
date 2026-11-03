@@ -190,6 +190,22 @@ class ShareSinkConsumerControllerTest {
         }
     }
 
+    @Test
+    void failedConsumerConstructionCannotReportSuccessfulCleanup() throws Exception {
+        ConnectException constructionFailure = new ConnectException("Constructor failed before returning its resources");
+        ShareSinkConsumerController controller = new ShareSinkConsumerController(() -> {
+            throw constructionFailure;
+        }, List.of(ORDERS.topic()), INCARNATION,
+                new ShareSinkConsumerController.Settings(1_000, 25, 100, 10_000, 1, 1_024), new MockTime());
+
+        controller.run();
+
+        assertTrue(controller.awaitStopped(Duration.ZERO));
+        assertFalse(controller.cleanupComplete());
+        assertSame(constructionFailure, controller.failure().orElseThrow());
+        assertThrows(ConnectException.class, controller::awaitUnit);
+    }
+
     private static void await(CountDownLatch latch) throws InterruptedException {
         assertTrue(latch.await(TEST_TIMEOUT.toMillis(), TimeUnit.MILLISECONDS));
     }

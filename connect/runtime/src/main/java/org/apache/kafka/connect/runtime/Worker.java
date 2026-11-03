@@ -720,7 +720,7 @@ public final class Worker {
                     final TaskConfig taskConfig = new TaskConfig(taskProps);
                     final Class<? extends Task> taskClass = taskConfig.getClass(TaskConfig.TASK_CLASS_CONFIG).asSubclass(Task.class);
                     requireShareTaskCapability(taskClass, shareReservation);
-                    final Task task = plugins.newTask(taskClass);
+                    final Task task = taskBuilder.allocateStartupResource(() -> plugins.newTask(taskClass));
                     taskBuilder.withTask(task);
                     log.info("Instantiated task {} with version {} of type {}", id, task.version(), taskClass.getName());
 
@@ -861,9 +861,11 @@ public final class Worker {
         String workerConverterVersionConfig = isKey ? WorkerConfig.KEY_CONVERTER_VERSION : WorkerConfig.VALUE_CONVERTER_VERSION;
         String converterName = isKey ? "key converter" : "value converter";
 
-        Converter converter = plugins.newConverter(connConfig, connectorConverterClassConfig, connectorConverterVersionConfig);
+        Converter converter = builder.allocateStartupResource(() ->
+                plugins.newConverter(connConfig, connectorConverterClassConfig, connectorConverterVersionConfig));
         if (converter == null) {
-            converter = plugins.newConverter(config, workerConverterClassConfig, workerConverterVersionConfig);
+            converter = builder.allocateStartupResource(() ->
+                    plugins.newConverter(config, workerConverterClassConfig, workerConverterVersionConfig));
             log.info("Set up the {} {} for task {} using the worker config", converterName, converter.getClass(), id);
         } else {
             log.info("Set up the {} {} for task {} using the connector config", converterName, converter.getClass(), id);
@@ -883,9 +885,11 @@ public final class Worker {
      */
     private Plugin<HeaderConverter> newHeaderConverterPlugin(ConnectorTaskId id, ConnectorConfig connConfig,
                                                             TaskBuilder<?, ?> builder) {
-        HeaderConverter converter = plugins.newHeaderConverter(connConfig, ConnectorConfig.HEADER_CONVERTER_CLASS_CONFIG, ConnectorConfig.HEADER_CONVERTER_VERSION_CONFIG);
+        HeaderConverter converter = builder.allocateStartupResource(() -> plugins.newHeaderConverter(
+                connConfig, ConnectorConfig.HEADER_CONVERTER_CLASS_CONFIG, ConnectorConfig.HEADER_CONVERTER_VERSION_CONFIG));
         if (converter == null) {
-            converter = plugins.newHeaderConverter(config, WorkerConfig.HEADER_CONVERTER_CLASS_CONFIG, WorkerConfig.HEADER_CONVERTER_VERSION);
+            converter = builder.allocateStartupResource(() -> plugins.newHeaderConverter(
+                    config, WorkerConfig.HEADER_CONVERTER_CLASS_CONFIG, WorkerConfig.HEADER_CONVERTER_VERSION));
             log.info("Set up the header converter {} for task {} using the worker config", converter.getClass(), id);
         } else {
             log.info("Set up the header converter {} for task {} using the connector config", converter.getClass(), id);
@@ -2136,6 +2140,17 @@ public final class Worker {
         public TaskBuilder<T, R> withClassLoader(ClassLoader classLoader) {
             this.classLoader = classLoader;
             return this;
+        }
+
+        private <P> P allocateStartupResource(Supplier<P> factory) {
+            if (shareReservation == null) {
+                return factory.get();
+            }
+            boolean previousCleanupComplete = startupCleanupComplete;
+            startupCleanupComplete = false;
+            P resource = factory.get();
+            startupCleanupComplete = previousCleanupComplete;
+            return resource;
         }
 
         private void releaseStartupReferences() {
