@@ -264,6 +264,6 @@ public class AssignmentInfoTest {
             TaskAssignmentException.class,
             () -> AssignmentInfo.decode(ByteBuffer.wrap(bytes))
         );
-        assertEquals("Corrupted user data byte[]. Topic dictionary index is out of range.", exception.getMessage());
+        assertEquals("Corrupted user data byte[]. Topic index is not in the topic dictionary.", exception.getMessage());
     }
 }

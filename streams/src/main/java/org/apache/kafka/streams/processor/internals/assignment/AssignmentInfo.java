@@ -496,7 +496,7 @@ public class AssignmentInfo {
         for (int j = 0; j < numPartitions; j++) {
             final String topic = topicIndexDict.get(in.readInt());
             if (topic == null) {
-                throw new TaskAssignmentException("Corrupted user data byte[]. Topic dictionary index is out of range.");
+                throw new TaskAssignmentException("Corrupted user data byte[]. Topic index is not in the topic dictionary.");
             }
             partitions.add(new TopicPartition(topic, in.readInt()));
         }
