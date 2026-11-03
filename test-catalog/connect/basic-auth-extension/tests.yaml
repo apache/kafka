@@ -10,10 +10,14 @@ org.apache.kafka.connect.rest.basic.auth.extension.JaasBasicAuthFilterTest:
 - testInternalTaskConfigEndpointSkipped
 - testInternalZombieFencingEndpointSkipped
 - testNoFileOption
+- testPasswordIsComparedForUnknownUser
+- testPasswordIsComparedInConstantTime
 - testPostNotChangingConnectorTask
 - testSecurityContextSet
 - testSuccess
 - testUnknownBearer
 - testUnknownCredentialsFile
 - testUnknownLoginModule
+- testUnknownUserWithDummyPassword
+- testUnknownUserWithEmptyPassword
 - testUnsupportedCallback

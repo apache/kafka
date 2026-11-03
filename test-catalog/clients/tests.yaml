@@ -4460,6 +4460,7 @@ org.apache.kafka.common.protocol.ApiKeysTest:
 - testResponseThrottleTime
 org.apache.kafka.common.protocol.ByteBufferAccessorTest:
 - testReadArray
+- testReadByteBuffer
 - testReadString
 org.apache.kafka.common.protocol.DataOutputStreamWritableTest:
 - testWritingSlicedByteBuffer
@@ -5555,6 +5556,8 @@ org.apache.kafka.common.security.plain.internals.PlainSaslServerTest:
 - authorizationIdNotEqualsAuthenticationId
 - emptyTokens
 - noAuthorizationIdSpecified
+- passwordIsComparedForUnknownUser
+- unknownUserOrInvalidPassword
 org.apache.kafka.common.security.scram.internals.ScramCredentialUtilsTest:
 - scramCredentialCache
 org.apache.kafka.common.security.scram.internals.ScramFormatterTest:
@@ -5685,6 +5688,7 @@ org.apache.kafka.common.security.token.delegation.TokenInformationTest:
 org.apache.kafka.common.serialization.ListDeserializerTest:
 - shouldDeserializeListEndingInEmptyEntry
 - shouldPassHeadersToUnderlyingDeserializer
+- shouldThrowIfListSizeIsLargerThanRemainingBytesCanHold
 - shouldThrowOnEntryTruncatedMidStream
 - shouldThrowOnNegativeEntrySize
 - shouldThrowOnNegativeLength

@@ -2846,6 +2846,3 @@ kafka.utils.LoggingTest:
 - testLog4jControllerIsRegistered
 - testLogName
 - testLogNameOverride
-unit.kafka.server.AllocateProducerIdsRequestTest:
-- testAllocateProducersIdSentToController
-- testAllocateProducersIdSentToNonController
