@@ -126,10 +126,37 @@ public class JaasBasicAuthFilterTest {
     }
 
     @Test
+    public void testPasswordIsComparedForUnknownUser() throws IOException {
+        File credentialFile = setupPropertyLoginFile(true);
+        JaasBasicAuthFilter jaasBasicAuthFilter = setupJaasFilter("KafkaConnect", credentialFile.getPath());
+        ContainerRequestContext requestContext = setMock("Basic", "unknown", "password");
+        try (MockedStatic<Utils> mockedUtils = mockStatic(Utils.class, Mockito.CALLS_REAL_METHODS)) {
+            jaasBasicAuthFilter.filter(requestContext);
+            mockedUtils.verify(() -> Utils.isEqualConstantTime(aryEq("password".toCharArray()), any(char[].class)));
+        }
+
+        verify(requestContext).abortWith(any(Response.class));
+        verify(requestContext, atLeastOnce()).getMethod();
+        verify(requestContext).getHeaderString(JaasBasicAuthFilter.AUTHORIZATION);
+    }
+
+    @Test
     public void testUnknownUserWithEmptyPassword() throws IOException {
         File credentialFile = setupPropertyLoginFile(true);
         JaasBasicAuthFilter jaasBasicAuthFilter = setupJaasFilter("KafkaConnect", credentialFile.getPath());
         ContainerRequestContext requestContext = setMock("Basic", "unknown", "");
+        jaasBasicAuthFilter.filter(requestContext);
+
+        verify(requestContext).abortWith(any(Response.class));
+        verify(requestContext, atLeastOnce()).getMethod();
+        verify(requestContext).getHeaderString(JaasBasicAuthFilter.AUTHORIZATION);
+    }
+
+    @Test
+    public void testUnknownUserWithDummyPassword() throws IOException {
+        File credentialFile = setupPropertyLoginFile(true);
+        JaasBasicAuthFilter jaasBasicAuthFilter = setupJaasFilter("KafkaConnect", credentialFile.getPath());
+        ContainerRequestContext requestContext = setMock("Basic", "unknown", "\0");
         jaasBasicAuthFilter.filter(requestContext);
 
         verify(requestContext).abortWith(any(Response.class));

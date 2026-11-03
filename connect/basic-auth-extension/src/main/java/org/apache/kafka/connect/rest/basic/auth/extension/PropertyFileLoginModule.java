@@ -50,6 +50,7 @@ import javax.security.auth.spi.LoginModule;
 public class PropertyFileLoginModule implements LoginModule {
     private static final Logger log = LoggerFactory.getLogger(PropertyFileLoginModule.class);
     private static final String FILE_OPTIONS = "file";
+    private static final char[] UNKNOWN_USER_DUMMY_PASSWORD = {'\0'};
     private static final Map<String, Properties> CREDENTIAL_PROPERTIES = new ConcurrentHashMap<>();
 
     private CallbackHandler callbackHandler;
@@ -131,7 +132,11 @@ public class PropertyFileLoginModule implements LoginModule {
     }
 
     private static boolean passwordMatches(char[] password, String expectedPassword) {
-        return password != null && expectedPassword != null && Utils.isEqualConstantTime(password, expectedPassword.toCharArray());
+        if (password == null)
+            return false;
+        char[] comparedPassword = expectedPassword != null ? expectedPassword.toCharArray() : UNKNOWN_USER_DUMMY_PASSWORD;
+        boolean matches = Utils.isEqualConstantTime(password, comparedPassword);
+        return matches && expectedPassword != null;
     }
 
     @Override
