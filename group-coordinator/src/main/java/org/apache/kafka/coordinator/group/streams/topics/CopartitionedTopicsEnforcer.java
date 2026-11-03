@@ -44,9 +44,11 @@ public class CopartitionedTopicsEnforcer {
      * The constructor for the class.
      *
      * @param log                         The logger.
-     * @param topicPartitionCountProvider Returns the number of partitions for a given topic, representing the current state of the broker
-     *                                    as well as any partition number decisions that have already been made. In particular, we expect
-     *                                    the number of partitions for all topics in all co-partitions groups to be defined.
+     * @param topicPartitionCountProvider Returns the number of partitions for a given topic,
+     *                                    representing the current state of the broker as well as
+     *                                    any partition number decisions that have already been
+     *                                    made. In particular, we expect the number of partitions
+     *                                    for all topics in all co-partition groups to be defined.
      */
     public CopartitionedTopicsEnforcer(final Logger log,
                                        final Function<String, OptionalInt> topicPartitionCountProvider) {

@@ -1425,6 +1425,9 @@ public class AssignmentRefinerImpl implements AssignmentRefiner {
      *        What this migration needs from the budget, decided once when the migration is classified. The funding
      *        order reads it, as does the fall-back: a {@link Warming#SIBLING_MOVE} that does not get a warm-up slot
      *        falls back to borrowing the standby where it sits, everything else parks.
+     * @param tier
+     *        The round of funding this migration competes in, lowest first, as decided by
+     *        {@link AssignmentRefinerImpl#fundingTier}.
      */
     private record FundingCandidate(
         TaskId task,

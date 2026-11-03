@@ -122,7 +122,7 @@ public abstract class GroupSpecBuilder<T extends ModernGroupMember, U extends Gr
     private Map<String, T> members = Map.of();
 
     /**
-     * The subscription type of the consumer group.
+     * The subscription type of the group.
      */
     private SubscriptionType subscriptionType;
 
@@ -151,7 +151,7 @@ public abstract class GroupSpecBuilder<T extends ModernGroupMember, U extends Gr
     /**
      * Adds all the existing members.
      *
-     * @param members   The existing members in the consumer group.
+     * @param members   The existing members in the group.
      * @return This object.
      */
     public U withMembers(
