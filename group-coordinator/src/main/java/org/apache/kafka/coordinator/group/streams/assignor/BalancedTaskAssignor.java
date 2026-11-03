@@ -63,14 +63,12 @@ import java.util.stream.Collectors;
  *     With equal member counts this is a round-robin over the processes in ID order. The per-member loads of any
  *     two processes differ by at most one, and moving a single task from one process to another would not bring
  *     their loads closer.</li>
- *     <li>Standby tasks are placed on the least loaded process that does not hold the task yet, and then moved
- *     between processes as long as a move reduces the skew of the per-member task load. With
- *     {@code rack.aware.assignment.tags}, a standby first goes to the least loaded process that makes its task more
- *     rack-diverse and has a member below the per-member task quota of the {@link StickyTaskAssignor}, if there is
- *     one, and a move must not lower the rack diversity of its task.</li>
  *     <li>Stateless active tasks continue the deal of step 1 where the stateful tasks stopped, so that all active
- *     tasks together are dealt in proportion to the member counts. With {@code rack.aware.assignment.tags}, they are
- *     dealt before the standbys, so that the quota and the load of the standbys count them.</li>
+ *     tasks together are dealt in proportion to the member counts.</li>
+ *     <li>Standby tasks are placed on the least loaded process that does not hold the task yet, preferring one that
+ *     makes the task more rack-diverse and has a member below the per-member task quota. They are then moved between
+ *     processes as long as a move reduces the skew of the per-member task load and keeps the rack diversity of the
+ *     task.</li>
  *     <li>Within a process, the tasks are spread over its members in three rounds, as the classic client spreads a
  *     process's tasks over its stream threads: stateful active tasks, then standby tasks, then stateless active
  *     tasks. Each round levels the members' total task counts. A stateful task stays on the member that currently
@@ -130,28 +128,16 @@ public class BalancedTaskAssignor implements TaskAssignor {
         final ProcessTasks[] processesById = processes.values().toArray(new ProcessTasks[0]);
         final int[] period = dealPeriod(processesById);
         dealTasks(processesById, period, 0, statefulTasks, process -> process.statefulActiveTasks);
+        dealTasks(processesById, period, statefulTasks.size(), statelessTasks, process -> process.statelessActiveTasks);
 
         final int numStandbyReplicas = groupSpec.configs().numStandbyReplicas();
-        final List<String> rackAwareAssignmentTags = groupSpec.configs().rackAwareAssignmentTags();
-        // Without tags, the stateless tasks come after the standbys, so that the load by which the standbys are placed
-        // counts stateful tasks only. With tags, they come before, so that the quota of the rack-aware standbys counts
-        // every task, as in the sticky assignor. Where they go does not depend on the standbys.
-        final boolean statelessBeforeStandbys = numStandbyReplicas > 0 && !rackAwareAssignmentTags.isEmpty();
-        if (statelessBeforeStandbys) {
-            dealTasks(processesById, period, statefulTasks.size(), statelessTasks, process -> process.statelessActiveTasks);
-        }
-
         if (numStandbyReplicas > 0) {
             assignStandbyReplicaTasks(
                 processes.values(),
                 statefulTasks,
                 numStandbyReplicas,
-                rackAwareAssignmentTags
+                groupSpec.configs().rackAwareAssignmentTags()
             );
-        }
-
-        if (!statelessBeforeStandbys) {
-            dealTasks(processesById, period, statefulTasks.size(), statelessTasks, process -> process.statelessActiveTasks);
         }
 
         return buildGroupAssignment(processes.values());
