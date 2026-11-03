@@ -37,7 +37,7 @@ public interface ProducerIdManager {
                                  Time time,
                                  Supplier<Long> brokerEpochSupplier,
                                  NodeToControllerChannelManager controllerChannel,
-                                 Supplier<Short> requestHeaderVersion) {
-        return new RPCProducerIdManager(brokerId, time, brokerEpochSupplier, controllerChannel, requestHeaderVersion);
+                                 Supplier<Short> requestHeaderVersionSupplier) {
+        return new RPCProducerIdManager(brokerId, time, brokerEpochSupplier, controllerChannel, requestHeaderVersionSupplier);
     }
 }
