@@ -21,7 +21,7 @@ import kafka.common.LogCleaningAbortedException
 import kafka.log.LogCleaner.{MaxBufferUtilizationPercentMetricName, MaxCleanTimeMetricName, MaxCompactionDelayMetricsName}
 import kafka.server.{BrokerTopicStats, KafkaConfig}
 import kafka.utils.{CoreUtils, Logging, Pool, TestUtils}
-import org.apache.kafka.common.TopicPartition
+import org.apache.kafka.common.{InvalidRecordException, TopicPartition}
 import org.apache.kafka.common.compress.Compression
 import org.apache.kafka.common.config.TopicConfig
 import org.apache.kafka.common.errors.CorruptRecordException
@@ -286,6 +286,33 @@ class LogCleanerTest extends Logging {
 
     assertTrue(log.logSegments.iterator.next().log.channel.size < originalMaxFileSize,
       "Cleaned segment file should be trimmed to its real size.")
+  }
+
+  /**
+   * Compaction rejects a compressed record whose decompressed body exceeds
+   * max.decompressed.message.bytes with InvalidRecordException (mapped to an uncleanable
+   * partition by LogCleaner) rather than OOMing. Injected via follower append to skip produce
+   * validation, mirroring a record that was already durable before the limit was lowered.
+   */
+  @Test
+  def testCleanRejectsRecordExceedingConfiguredMaxDecompressedMessageBytes(): Unit = {
+    val cleaner = makeCleaner(10)
+    val logProps = new Properties()
+    logProps.put(TopicConfig.CLEANUP_POLICY_CONFIG, TopicConfig.CLEANUP_POLICY_COMPACT)
+    logProps.put(TopicConfig.MAX_DECOMPRESSED_MESSAGE_BYTES_CONFIG, "10")
+    val log = makeLog(config = LogConfig.fromProps(logConfig.originals, logProps))
+
+    // partitionLeaderEpoch must be valid (>= 0) for follower append to assign it to the epoch cache.
+    val oversized = MemoryRecords.withIdempotentRecords(RecordBatch.CURRENT_MAGIC_VALUE, 0L,
+      Compression.gzip().build(), RecordBatch.NO_PRODUCER_ID, RecordBatch.NO_PRODUCER_EPOCH,
+      RecordBatch.NO_SEQUENCE, 0, new SimpleRecord("k".getBytes, new Array[Byte](100)))
+    log.appendAsFollower(oversized, Int.MaxValue)
+    log.roll()
+
+    val e = assertThrows(classOf[InvalidRecordException],
+      () => cleaner.clean(LogToClean(new TopicPartition("test", 0), log, 0L, log.activeSegment.baseOffset)))
+    assertTrue(e.getMessage.contains("exceeds the configured maximum record size"),
+      "expected the configured-maximum guard message, got: " + e.getMessage)
   }
 
   @Test

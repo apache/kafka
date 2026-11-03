@@ -808,7 +808,8 @@ class UnifiedLog(@volatile var logStartOffset: Long,
                 config.messageTimestampAfterMaxMs,
                 leaderEpoch,
                 origin,
-                interBrokerProtocolVersion
+                interBrokerProtocolVersion,
+                config.maxDecompressedMessageBytes
               )
               validator.validateMessagesAndAssignOffsets(offset,
                 validatorMetricsRecorder,
@@ -1397,7 +1398,7 @@ class UnifiedLog(@volatile var logStartOffset: Long,
         val position = latestTimestampSegment.offsetIndex.lookup(maxTimestampSoFar.offset)
         latestTimestampSegment.log.batchesFrom(position.position).asScala
           .find(_.maxTimestamp() == maxTimestampSoFar.timestamp)
-          .flatMap(batch => batch.offsetOfMaxTimestamp().asScala.map(new TimestampAndOffset(batch.maxTimestamp(), _,
+          .flatMap(batch => batch.offsetOfMaxTimestamp(config.maxDecompressedMessageBytes).asScala.map(new TimestampAndOffset(batch.maxTimestamp(), _,
             Optional.of[Integer](batch.partitionLeaderEpoch()).filter(_ >= 0))))
       } else {
         // We need to search the first segment whose largest timestamp is >= the target timestamp if there is one.
@@ -1428,7 +1429,7 @@ class UnifiedLog(@volatile var logStartOffset: Long,
     // constant time access while being safe to use with concurrent collections unlike `toArray`.
     val segmentsCopy = logSegments.asScala.toBuffer
     val targetSeg = segmentsCopy.find(_.largestTimestamp >= targetTimestamp)
-    targetSeg.flatMap(_.findOffsetByTimestamp(targetTimestamp, startOffset).asScala)
+    targetSeg.flatMap(_.findOffsetByTimestamp(targetTimestamp, startOffset, config.maxDecompressedMessageBytes).asScala)
   }
 
   def legacyFetchOffsetsBefore(timestamp: Long, maxNumOffsets: Int): Seq[Long] = {

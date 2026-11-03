@@ -46,6 +46,55 @@ class LogValidatorTest {
   val metricsKeySet = KafkaYammerMetrics.defaultRegistry.allMetrics.keySet.asScala
   val metricsRecorder = UnifiedLog.newValidatorMetricsRecorder(new BrokerTopicStats().allTopicsStats)
 
+  /**
+   * The compressed validation path enforces the per-record decompressed-body-size limit
+   * (max.decompressed.message.bytes): a record whose decompressed body exceeds the configured
+   * limit is rejected with InvalidRecordException before the body is allocated, while the
+   * limit-less constructor applies no effective limit. Legacy (v1) batches, which can still be
+   * produced to topics with an older message.format.version, are covered by the deep-decode guard.
+   */
+  @ParameterizedTest
+  @CsvSource(Array("1", "2"))
+  def testCompressedRecordExceedingMaxRecordBodySizeIsRejected(magic: Byte): Unit = {
+    val records = MemoryRecords.withRecords(magic, Compression.gzip().build(),
+      new SimpleRecord(System.currentTimeMillis(), "key".getBytes, new Array[Byte](1000)))
+
+    new LogValidator(records,
+      topicPartition,
+      time,
+      CompressionType.GZIP,
+      Compression.gzip().build(),
+      false,
+      magic,
+      TimestampType.CREATE_TIME,
+      5000L,
+      5000L,
+      RecordBatch.NO_PARTITION_LEADER_EPOCH,
+      AppendOrigin.CLIENT,
+      MetadataVersion.latestTesting
+    ).validateMessagesAndAssignOffsets(
+      PrimitiveRef.ofLong(0), metricsRecorder, RequestLocal.withThreadConfinedCaching.bufferSupplier)
+
+    val e = assertThrows(classOf[InvalidRecordException], () => new LogValidator(records,
+      topicPartition,
+      time,
+      CompressionType.GZIP,
+      Compression.gzip().build(),
+      false,
+      magic,
+      TimestampType.CREATE_TIME,
+      5000L,
+      5000L,
+      RecordBatch.NO_PARTITION_LEADER_EPOCH,
+      AppendOrigin.CLIENT,
+      MetadataVersion.latestTesting,
+      100
+    ).validateMessagesAndAssignOffsets(
+      PrimitiveRef.ofLong(0), metricsRecorder, RequestLocal.withThreadConfinedCaching.bufferSupplier))
+    assertTrue(e.getMessage.contains("exceeds the configured maximum record size"),
+      "expected the configured-maximum guard, got: " + e.getMessage)
+  }
+
   @Test
   def testOnlyOneBatch(): Unit = {
     checkOnlyOneBatch(RecordBatch.MAGIC_VALUE_V0, Compression.gzip().build(), Compression.gzip().build())

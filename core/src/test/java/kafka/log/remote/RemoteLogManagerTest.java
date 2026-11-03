@@ -25,11 +25,13 @@ import kafka.server.BrokerTopicStats;
 import kafka.server.KafkaConfig;
 import kafka.server.StopPartition;
 
+import org.apache.kafka.common.InvalidRecordException;
 import org.apache.kafka.common.KafkaException;
 import org.apache.kafka.common.TopicIdPartition;
 import org.apache.kafka.common.TopicPartition;
 import org.apache.kafka.common.Uuid;
 import org.apache.kafka.common.compress.Compression;
+import org.apache.kafka.common.config.TopicConfig;
 import org.apache.kafka.common.errors.ReplicaNotAvailableException;
 import org.apache.kafka.common.metrics.KafkaMetric;
 import org.apache.kafka.common.metrics.Metrics;
@@ -1586,8 +1588,44 @@ public class RemoteLogManagerTest {
                 .thenAnswer(a -> new ByteArrayInputStream(records(ts, startOffset, targetLeaderEpoch).buffer().array()));
 
         when(mockLog.logEndOffset()).thenReturn(600L);
+        when(mockLog.config()).thenReturn(new LogConfig(new Properties()));
 
         remoteLogManager.onLeadershipChange(Collections.singleton(mockPartition(leaderTopicIdPartition)), Collections.emptySet(), topicIds);
+    }
+
+    @Test
+    void testFindOffsetByTimestampRejectsRemoteRecordExceedingMaxDecompressedMessageBytes() throws IOException, RemoteStorageException {
+        remoteLogManager.startup();
+        TopicPartition tp = leaderTopicIdPartition.topicPartition();
+        long ts = time.milliseconds();
+        long startOffset = 120;
+        int targetLeaderEpoch = 10;
+
+        TreeMap<Integer, Long> validSegmentEpochs = new TreeMap<>();
+        validSegmentEpochs.put(targetLeaderEpoch, startOffset);
+
+        LeaderEpochFileCache leaderEpochFileCache = new LeaderEpochFileCache(tp, checkpoint, scheduler);
+        leaderEpochFileCache.assign(4, 99L);
+        leaderEpochFileCache.assign(5, 99L);
+        leaderEpochFileCache.assign(targetLeaderEpoch, startOffset);
+        leaderEpochFileCache.assign(12, 500L);
+
+        doTestFindOffsetByTimestamp(ts, startOffset, targetLeaderEpoch, validSegmentEpochs, RemoteLogSegmentState.COPY_SEGMENT_FINISHED);
+
+        // Serve a remote segment holding a compressed record whose decompressed body exceeds the topic's limit
+        MemoryRecords oversized = MemoryRecords.withRecords(startOffset, Compression.gzip().build(), targetLeaderEpoch,
+                new SimpleRecord(ts + 1, "key".getBytes(), new byte[1000]));
+        byte[] oversizedBytes = new byte[oversized.sizeInBytes()];
+        oversized.buffer().get(oversizedBytes);
+        when(remoteStorageManager.fetchLogSegment(any(RemoteLogSegmentMetadata.class), anyInt()))
+                .thenAnswer(a -> new ByteArrayInputStream(oversizedBytes));
+        Properties props = new Properties();
+        props.put(TopicConfig.MAX_DECOMPRESSED_MESSAGE_BYTES_CONFIG, "100");
+        when(mockLog.config()).thenReturn(new LogConfig(props));
+
+        InvalidRecordException e = assertThrows(InvalidRecordException.class,
+                () -> remoteLogManager.findOffsetByTimestamp(tp, ts, startOffset, leaderEpochFileCache));
+        assertTrue(e.getMessage().contains("exceeds the configured maximum record size of 100"), e.getMessage());
     }
 
     @Test
