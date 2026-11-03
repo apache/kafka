@@ -36,17 +36,13 @@ import org.apache.kafka.common.metrics.stats.Value;
 import org.apache.kafka.common.utils.Time;
 import org.apache.kafka.common.utils.Utils;
 import org.apache.kafka.common.utils.Utils.UncheckedCloseable;
-import org.apache.kafka.connect.data.SchemaAndValue;
 import org.apache.kafka.connect.errors.ConnectException;
 import org.apache.kafka.connect.errors.RetriableException;
-import org.apache.kafka.connect.header.ConnectHeaders;
-import org.apache.kafka.connect.header.Headers;
 import org.apache.kafka.connect.runtime.ConnectMetrics.MetricGroup;
 import org.apache.kafka.connect.runtime.errors.ErrorHandlingMetrics;
 import org.apache.kafka.connect.runtime.errors.ErrorReporter;
 import org.apache.kafka.connect.runtime.errors.ProcessingContext;
 import org.apache.kafka.connect.runtime.errors.RetryWithToleranceOperator;
-import org.apache.kafka.connect.runtime.errors.Stage;
 import org.apache.kafka.connect.runtime.errors.WorkerErrantRecordReporter;
 import org.apache.kafka.connect.runtime.isolation.LoaderSwap;
 import org.apache.kafka.connect.sink.SinkRecord;
@@ -55,7 +51,6 @@ import org.apache.kafka.connect.storage.ClusterConfigState;
 import org.apache.kafka.connect.storage.Converter;
 import org.apache.kafka.connect.storage.HeaderConverter;
 import org.apache.kafka.connect.storage.StatusBackingStore;
-import org.apache.kafka.connect.util.ConnectUtils;
 import org.apache.kafka.connect.util.ConnectorTaskId;
 
 import org.slf4j.Logger;
@@ -89,7 +84,7 @@ class WorkerSinkTask extends WorkerTask<ConsumerRecord<byte[], byte[]>, SinkReco
     private final Plugin<Converter> valueConverterPlugin;
     private final Plugin<HeaderConverter> headerConverterPlugin;
     private final SinkTaskMetricsGroup sinkTaskMetricsGroup;
-    private final boolean isTopicTrackingEnabled;
+    private final SinkRecordConverter recordConverter;
     private final Consumer<byte[], byte[]> consumer;
     private WorkerSinkTaskContext context;
     private final List<SinkRecord> messageBatch;
@@ -152,7 +147,9 @@ class WorkerSinkTask extends WorkerTask<ConsumerRecord<byte[], byte[]>, SinkReco
         this.sinkTaskMetricsGroup = new SinkTaskMetricsGroup(id, connectMetrics);
         this.sinkTaskMetricsGroup.recordOffsetSequenceNumber(commitSeqno);
         this.consumer = consumer;
-        this.isTopicTrackingEnabled = workerConfig.getBoolean(TOPIC_TRACKING_ENABLE_CONFIG);
+        this.recordConverter = new SinkRecordConverter(id, keyConverterPlugin, valueConverterPlugin,
+                headerConverterPlugin, transformationChain, retryWithToleranceOperator, pluginLoaderSwapper,
+                workerConfig.getBoolean(TOPIC_TRACKING_ENABLE_CONFIG) ? this::recordActiveTopic : topic -> { });
         this.taskStopped = false;
         this.workerErrantRecordReporter = workerErrantRecordReporter;
         this.version = task.version();
@@ -531,7 +528,7 @@ class WorkerSinkTask extends WorkerTask<ConsumerRecord<byte[], byte[]>, SinkReco
 
             ProcessingContext<ConsumerRecord<byte[], byte[]>> context = new ProcessingContext<>(msg);
 
-            SinkRecord transRecord = convertAndTransformRecord(context, msg);
+            SinkRecord transRecord = recordConverter.convert(context, msg);
 
             origOffsets.put(
                     new TopicPartition(msg.topic(), msg.partition()),
@@ -548,63 +545,6 @@ class WorkerSinkTask extends WorkerTask<ConsumerRecord<byte[], byte[]>, SinkReco
             }
         }
         sinkTaskMetricsGroup.recordConsumedOffsets(origOffsets);
-    }
-
-    private SinkRecord convertAndTransformRecord(ProcessingContext<ConsumerRecord<byte[], byte[]>> context, final ConsumerRecord<byte[], byte[]> msg) {
-        SchemaAndValue keyAndSchema = retryWithToleranceOperator.execute(context, () -> {
-            try (LoaderSwap swap = pluginLoaderSwapper.apply(keyConverterPlugin.get().getClass().getClassLoader())) {
-                return keyConverterPlugin.get().toConnectData(msg.topic(), msg.headers(), msg.key());
-            }
-        }, Stage.KEY_CONVERTER, keyConverterPlugin.get().getClass());
-
-        SchemaAndValue valueAndSchema = retryWithToleranceOperator.execute(context, () -> {
-            try (LoaderSwap swap = pluginLoaderSwapper.apply(valueConverterPlugin.get().getClass().getClassLoader())) {
-                return valueConverterPlugin.get().toConnectData(msg.topic(), msg.headers(), msg.value());
-            }
-        }, Stage.VALUE_CONVERTER, valueConverterPlugin.get().getClass());
-
-        Headers headers = retryWithToleranceOperator.execute(context, () -> convertHeadersFor(msg), Stage.HEADER_CONVERTER, headerConverterPlugin.get().getClass());
-
-        if (context.failed()) {
-            return null;
-        }
-
-        Long timestamp = ConnectUtils.checkAndConvertTimestamp(msg.timestamp());
-        SinkRecord origRecord = new SinkRecord(msg.topic(), msg.partition(),
-                keyAndSchema.schema(), keyAndSchema.value(),
-                valueAndSchema.schema(), valueAndSchema.value(),
-                msg.offset(),
-                timestamp,
-                msg.timestampType(),
-                headers);
-        log.trace("{} Applying transformations to record in topic '{}' partition {} at offset {} and timestamp {} with key {} and value {}",
-                this, msg.topic(), msg.partition(), msg.offset(), timestamp, keyAndSchema.value(), valueAndSchema.value());
-        if (isTopicTrackingEnabled) {
-            recordActiveTopic(origRecord.topic());
-        }
-
-        // Apply the transformations
-        SinkRecord transformedRecord = transformationChain.apply(context, origRecord);
-        if (transformedRecord == null) {
-            return null;
-        }
-        // Error reporting will need to correlate each sink record with the original consumer record
-        return new InternalSinkRecord(context, transformedRecord);
-    }
-
-    private Headers convertHeadersFor(ConsumerRecord<byte[], byte[]> record) {
-        Headers result = new ConnectHeaders();
-        org.apache.kafka.common.header.Headers recordHeaders = record.headers();
-        if (recordHeaders != null) {
-            String topic = record.topic();
-            for (org.apache.kafka.common.header.Header recordHeader : recordHeaders) {
-                try (LoaderSwap swap = pluginLoaderSwapper.apply(headerConverterPlugin.get().getClass().getClassLoader())) {
-                    SchemaAndValue schemaAndValue = headerConverterPlugin.get().toConnectHeader(topic, recordHeader.key(), recordHeader.value());
-                    result.add(recordHeader.key(), schemaAndValue);
-                }
-            }
-        }
-        return result;
     }
 
     protected WorkerErrantRecordReporter workerErrantRecordReporter() {
