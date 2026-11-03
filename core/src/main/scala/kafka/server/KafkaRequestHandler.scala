@@ -117,10 +117,13 @@ class KafkaRequestHandler(
       val req = requestChannel.receiveRequest(300)
       val endTime = time.nanoseconds
       val idleTime = endTime - startSelectTime
-      // Per-pool idle ratio uses the pool's own thread count as denominator
-      poolIdleMeter.mark(idleTime / poolHandlerThreads.get)
-      // Aggregate idle ratio uses the total threads across all pools as denominator
-      aggregateIdleMeter.mark(idleTime / aggregateThreads.get)
+      // A stopped handler is leaving its pool, so it may no longer be included in the thread counts
+      if (!stopped) {
+        // Per-pool idle ratio uses the pool's own thread count as denominator
+        poolIdleMeter.mark(idleTime / poolHandlerThreads.get)
+        // Aggregate idle ratio uses the total threads across all pools as denominator
+        aggregateIdleMeter.mark(idleTime / aggregateThreads.get)
+      }
 
       req match {
         case _: ShutdownRequest =>
@@ -297,8 +300,12 @@ class KafkaRequestHandlerPool(
 
   def shutdown(): Unit = synchronized {
     info("shutting down")
-    for (handler <- runnables)
+    for (handler <- runnables) {
+      // Handlers removed by `resizeThreadPool` may still be waiting for a request, and may receive the shutdown
+      // request meant for this handler. Stopping it makes sure that it exits regardless.
+      handler.stop()
       handler.initiateShutdown()
+    }
     for (handler <- runnables)
       handler.awaitShutdown()
     // Unregister this pool's threads from shared aggregate counter

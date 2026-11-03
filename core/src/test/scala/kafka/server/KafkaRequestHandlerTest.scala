@@ -42,7 +42,7 @@ import org.mockito.Mockito.{mock, times, verify, when}
 
 import java.net.InetAddress
 import java.nio.ByteBuffer
-import java.util.concurrent.CompletableFuture
+import java.util.concurrent.{CompletableFuture, TimeUnit}
 import java.util.concurrent.atomic.AtomicInteger
 import java.util.stream.Collectors
 
@@ -750,5 +750,36 @@ class KafkaRequestHandlerTest {
     assertEquals(2, brokerPool.threadPoolSize.get)
     assertEquals(6, controllerPool.threadPoolSize.get)
     assertEquals(8, factory.aggregateThreadCount)
+  }
+
+  @Test
+  def testShutdownRightAfterShrinkingThreadPool(): Unit = {
+    val time = new MockTime()
+    val metricsBroker = mock(classOf[RequestChannelMetrics])
+    val requestChannelBroker = new RequestChannel(10, time, metricsBroker)
+    val apiHandler = mock(classOf[ApiRequestHandler])
+
+    // Create a factory for this test
+    val factory = new KafkaRequestHandlerPoolFactory()
+
+    // Create broker pool with 16 threads
+    val pool = factory.createPool(
+      0,
+      requestChannelBroker,
+      apiHandler,
+      time,
+      16,
+      "broker"
+    )
+    val handlers = pool.runnables.toList
+
+    // The removed handlers are still waiting for requests, so they may receive the shutdown request meant for the
+    // remaining handler, and may still be running after the pool's threads are no longer counted
+    pool.resizeThreadPool(1)
+    CompletableFuture.runAsync(() => {
+      pool.shutdown()
+      handlers.foreach(_.awaitShutdown())
+    }).get(10, TimeUnit.SECONDS)
+    assertEquals(0, factory.aggregateThreadCount)
   }
 }

@@ -36,6 +36,8 @@ class DynamicConfigPublisher(
 ) extends Logging with org.apache.kafka.image.publisher.MetadataPublisher {
   logIdent = s"[${name()}] "
 
+  @volatile private var firstPublish = true
+
   override def name(): String = s"DynamicConfigPublisher $nodeType id=${conf.nodeId}"
 
   override def onMetadataUpdate(
@@ -51,6 +53,8 @@ class DynamicConfigPublisher(
     newImage: MetadataImage,
   ): Unit = {
     val deltaName = s"MetadataDelta up to ${newImage.highestOffsetAndEpoch().offset}"
+    val initialLoad = firstPublish
+    firstPublish = false
     try {
       // Apply configuration deltas.
       Option(delta.configsDelta()).foreach { configsDelta =>
@@ -78,7 +82,7 @@ class DynamicConfigPublisher(
                     // These are stored in KRaft with an empty name field.
                     info("Updating cluster configuration : " +
                       toLoggableProps(resource, props).mkString(","))
-                    nodeConfigHandler.processConfigChanges(resource.name(), props)
+                    processNodeConfigChanges(nodeConfigHandler, resource.name(), props, initialLoad)
                   } catch {
                     case t: Throwable => faultHandler.handleFault("Error updating " +
                       s"cluster with new configuration: ${toLoggableProps(resource, props).mkString(",")} " +
@@ -89,7 +93,7 @@ class DynamicConfigPublisher(
                     // Apply changes to this node's dynamic configuration.
                     info(s"Updating node ${conf.nodeId} with new configuration : " +
                       toLoggableProps(resource, props).mkString(","))
-                    nodeConfigHandler.processConfigChanges(resource.name(), props)
+                    processNodeConfigChanges(nodeConfigHandler, resource.name(), props, initialLoad)
                     // When applying a per node config (not a cluster config), we also
                     // reload any associated file. For example, if the ssl.keystore is still
                     // set to /tmp/foo, we still want to reload /tmp/foo in case its contents
@@ -134,6 +138,18 @@ class DynamicConfigPublisher(
       case t: Throwable => faultHandler.handleFault("Uncaught exception while " +
         s"publishing dynamic configuration changes from $deltaName", t)
     }
+  }
+
+  private def processNodeConfigChanges(
+    nodeConfigHandler: ConfigHandler,
+    nodeName: String,
+    props: Properties,
+    initialLoad: Boolean
+  ): Unit = {
+    if (initialLoad)
+      conf.dynamicConfig.loadInitialConfigs(nodeConfigHandler.processConfigChanges(nodeName, props))
+    else
+      nodeConfigHandler.processConfigChanges(nodeName, props)
   }
 
   def reloadUpdatedFilesWithoutConfigChange(props: Properties): Unit = {

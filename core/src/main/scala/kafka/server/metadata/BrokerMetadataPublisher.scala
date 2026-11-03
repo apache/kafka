@@ -343,7 +343,8 @@ class BrokerMetadataPublisher(
       // point because LogManager#startup creates the LogCleaner object, if
       // log.cleaner.enable is true. TODO: improve this (see KAFKA-13610)
       Option(logManager.cleaner).foreach(cleaner =>
-        config.dynamicConfig.addBrokerReconfigurable(new DynamicLogCleanerConfig(cleaner))
+        config.dynamicConfig.addBrokerReconfigurable(
+          new DynamicLogCleanerConfig(cleaner, () => !config.isLoadingInitialDynamicConfigs))
       )
     } catch {
       case t: Throwable => fatalFaultHandler.handleFault("Error starting LogManager", t)

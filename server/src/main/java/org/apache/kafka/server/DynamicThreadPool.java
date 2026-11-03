@@ -35,23 +35,30 @@ public class DynamicThreadPool {
 
     private DynamicThreadPool() {}
 
-    public static void validateReconfiguration(AbstractKafkaConfig currentConfig, AbstractKafkaConfig newConfig) {
+    public static void validateReconfiguration(AbstractKafkaConfig currentConfig, AbstractKafkaConfig newConfig, boolean enforceBounds) {
         for (Map.Entry<String, ?> entry : newConfig.values().entrySet()) {
             String key = entry.getKey();
             if (RECONFIGURABLE_CONFIGS.contains(key)) {
-                int newValue = (int) entry.getValue();
-                int oldValue = getValue(currentConfig, key);
+                validateThreadCount(key, getValue(currentConfig, key), (int) entry.getValue(), enforceBounds);
+            }
+        }
+    }
 
-                if (newValue != oldValue) {
-                    String errorMsg = String.format("Dynamic thread count update validation failed for %s=%d", key, newValue);
+    /**
+     * Validates a dynamic thread count update. The new value must be at least 1 and, if {@code enforceBounds} is set,
+     * within [currentValue / 2, currentValue * 2] to avoid drastic changes to running thread pools.
+     */
+    public static void validateThreadCount(String name, int currentValue, int newValue, boolean enforceBounds) {
+        if (newValue != currentValue) {
+            String errorMsg = String.format("Dynamic thread count update validation failed for %s=%d", name, newValue);
 
-                    if (newValue <= 0)
-                        throw new ConfigException(String.format("%s, value should be at least 1", errorMsg));
-                    if (newValue < oldValue / 2)
-                        throw new ConfigException(String.format("%s, value should be at least half the current value %d", errorMsg, oldValue));
-                    if (newValue > oldValue * 2)
-                        throw new ConfigException(String.format("%s, value should not be greater than double the current value %d", errorMsg, oldValue));
-                }
+            if (newValue <= 0)
+                throw new ConfigException(String.format("%s, value should be at least 1", errorMsg));
+            if (enforceBounds) {
+                if (newValue < currentValue / 2)
+                    throw new ConfigException(String.format("%s, value should be at least half the current value %d", errorMsg, currentValue));
+                if (newValue > currentValue * 2)
+                    throw new ConfigException(String.format("%s, value should not be greater than double the current value %d", errorMsg, currentValue));
             }
         }
     }

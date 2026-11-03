@@ -42,7 +42,7 @@ import org.apache.kafka.common.utils.internals.LogContext
 import org.apache.kafka.common.{Endpoint, KafkaException, MetricName, Reconfigurable}
 import org.apache.kafka.network.{ConnectionQuotaEntity, ConnectionThrottledException, Processor => JProcessor, Request, SocketServer => JSocketServer, SocketServerConfigs, TooManyConnectionsException}
 import org.apache.kafka.security.CredentialProvider
-import org.apache.kafka.server.{ApiVersionManager, ServerSocketFactory}
+import org.apache.kafka.server.{ApiVersionManager, DynamicThreadPool, ServerSocketFactory}
 import org.apache.kafka.server.config.QuotaConfig
 import org.apache.kafka.common.metrics.internals.MetricsUtils
 import org.apache.kafka.common.utils.internals.KafkaThread
@@ -409,17 +409,7 @@ class DataPlaneAcceptor(socketServer: SocketServer,
   override def validateReconfiguration(configs: util.Map[String, _]): Unit = {
     configs.forEach { (k, v) =>
       if (reconfigurableConfigs().contains(k)) {
-        val newValue = v.asInstanceOf[Int]
-        val oldValue = processors.length
-        if (newValue != oldValue) {
-          val errorMsg = s"Dynamic thread count update validation failed for $k=$v"
-          if (newValue <= 0)
-            throw new ConfigException(s"$errorMsg, value should be at least 1")
-          if (newValue < oldValue / 2)
-            throw new ConfigException(s"$errorMsg, value should be at least half the current value $oldValue")
-          if (newValue > oldValue * 2)
-            throw new ConfigException(s"$errorMsg, value should not be greater than double the current value $oldValue")
-        }
+        DynamicThreadPool.validateThreadCount(k, processors.length, v.asInstanceOf[Int], !socketServer.config.isLoadingInitialDynamicConfigs)
       }
     }
   }

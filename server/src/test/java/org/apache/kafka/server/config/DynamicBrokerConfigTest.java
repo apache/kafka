@@ -98,19 +98,32 @@ public class DynamicBrokerConfigTest {
     @Test
     public void testDynamicClusterMirrorConfigValidation() {
         AbstractKafkaConfig currentConfig = mockConfig(4);
-        DynamicClusterMirrorConfig dynamicConfig = new DynamicClusterMirrorConfig(() -> currentConfig);
+        DynamicClusterMirrorConfig dynamicConfig = new DynamicClusterMirrorConfig(() -> currentConfig, () -> true);
 
         assertDoesNotThrow(() -> dynamicConfig.validateReconfiguration(mockConfig(6)));
 
         ConfigException err1 = assertThrows(ConfigException.class,
                 () -> dynamicConfig.validateReconfiguration(mockConfig(1)));
-        assertTrue(err1.getMessage().contains("Value should be at least half the current value 4"));
+        assertTrue(err1.getMessage().contains("value should be at least half the current value 4"));
 
         ConfigException err2 = assertThrows(ConfigException.class,
                 () -> dynamicConfig.validateReconfiguration(mockConfig(9)));
-        assertTrue(err2.getMessage().contains("Value should not be greater than double the current value 4"));
+        assertTrue(err2.getMessage().contains("value should not be greater than double the current value 4"));
 
         assertDoesNotThrow(() -> dynamicConfig.validateReconfiguration(mockConfig(4)));
+    }
+
+    @Test
+    public void testDynamicClusterMirrorConfigValidationWithoutBounds() {
+        AbstractKafkaConfig currentConfig = mockConfig(4);
+        DynamicClusterMirrorConfig dynamicConfig = new DynamicClusterMirrorConfig(() -> currentConfig, () -> false);
+
+        assertDoesNotThrow(() -> dynamicConfig.validateReconfiguration(mockConfig(1)));
+        assertDoesNotThrow(() -> dynamicConfig.validateReconfiguration(mockConfig(9)));
+
+        ConfigException err = assertThrows(ConfigException.class,
+                () -> dynamicConfig.validateReconfiguration(mockConfig(0)));
+        assertTrue(err.getMessage().contains("value should be at least 1"));
     }
 
     private static AbstractKafkaConfig mockConfig(int fetchers) {
