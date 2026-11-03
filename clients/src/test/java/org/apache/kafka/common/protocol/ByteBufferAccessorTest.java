@@ -53,11 +53,13 @@ public class ByteBufferAccessorTest {
         accessor.writeByteArray(testArray);
         accessor.writeInt(12345);
         accessor.flip();
-        final ByteBuffer res = accessor.readByteBuffer(3);
-        final byte[] resArray = new byte[3];
-        res.get(resArray);
-        assertArrayEquals(testArray, resArray);
+        final ByteBuffer testBuffer = accessor.readByteBuffer(3);
+        final byte[] testArray2 = new byte[3];
+        testBuffer.get(testArray2);
+        assertArrayEquals(testArray, testArray2);
         assertEquals(12345, accessor.readInt());
+        assertThrows(IllegalArgumentException.class,
+            () -> accessor.readByteBuffer(3));
         assertEquals("Error reading byte buffer of -1 byte(s): length cannot be negative",
             assertThrows(RuntimeException.class,
                 () -> accessor.readByteBuffer(-1)).getMessage());
