@@ -18,13 +18,16 @@
 package integration.kafka.admin
 
 import kafka.api.IntegrationTestHarness
-import org.apache.kafka.clients.admin.{AlterConfigOp, ConfigEntry}
+import kafka.server.KafkaConfig
+import org.apache.kafka.clients.admin.ConfigEntry.ConfigSource
+import org.apache.kafka.clients.admin.{Admin, AlterConfigOp, ConfigEntry}
 import org.apache.kafka.common.config.provider.FileConfigProvider
 import org.apache.kafka.common.config.{AbstractConfig, ConfigResource}
 import org.apache.kafka.common.errors.InvalidRequestException
 import org.apache.kafka.common.utils.Utils
 import org.apache.kafka.server.config.ServerConfigs
-import org.junit.jupiter.api.Assertions.{assertFalse, assertInstanceOf, assertThrows, assertTrue}
+import org.apache.kafka.test.TestUtils
+import org.junit.jupiter.api.Assertions._
 import org.junit.jupiter.api.{AfterEach, BeforeEach, Tag, TestInfo}
 
 import java.nio.charset.StandardCharsets
@@ -59,7 +62,7 @@ abstract class BaseAlterConfigsIntegrationTest extends IntegrationTestHarness {
     val adminClient = createAdminClient(configOverrides = props)
     try {
       val brokerResource = new ConfigResource(ConfigResource.Type.BROKER, "")
-      val alterations = Map(brokerResource -> configProviderOps.asJavaCollection).asJava
+      val alterations = Map(brokerResource -> configProviderOps(ServerConfigs.NUM_IO_THREADS_CONFIG).asJavaCollection).asJava
       val ee = assertThrows(classOf[ExecutionException], () => adminClient.incrementalAlterConfigs(alterations).all.get)
       assertInstanceOf(expectedCause, ee.getCause)
       val message = ee.getCause.getMessage
@@ -73,9 +76,30 @@ abstract class BaseAlterConfigsIntegrationTest extends IntegrationTestHarness {
     }
   }
 
-  protected def configProviderOps: Seq[AlterConfigOp] = List(
+  protected def configProviderOps(configName: String): Seq[AlterConfigOp] = List(
     new AlterConfigOp(new ConfigEntry(AbstractConfig.CONFIG_PROVIDERS_CONFIG, "file"), AlterConfigOp.OpType.SET),
     new AlterConfigOp(new ConfigEntry(AbstractConfig.CONFIG_PROVIDERS_CONFIG + ".file.class", classOf[FileConfigProvider].getName), AlterConfigOp.OpType.SET),
-    new AlterConfigOp(new ConfigEntry(ServerConfigs.NUM_IO_THREADS_CONFIG, "${file:" + file.toAbsolutePath + ":key}"), AlterConfigOp.OpType.SET)
+    new AlterConfigOp(new ConfigEntry(configName, "${file:" + file.toAbsolutePath + ":key}"), AlterConfigOp.OpType.SET)
   )
+
+  protected def checkAlterConfigsApplied(target: ConfigResource, expectedSource: ConfigSource, configName: String, value: String): Unit = {
+    Files.write(file, s"key=$value".getBytes(StandardCharsets.UTF_8))
+    val resource = brokerResource
+    val admin = createAdminClient()
+    try {
+      admin.incrementalAlterConfigs(Map(target -> configProviderOps(configName).asJavaCollection).asJava).all.get
+      // The broker applies the update asynchronously when it replays the metadata log. DescribeConfigs is
+      // served from the broker's own config, so the source only changes once the update took effect.
+      TestUtils.waitForCondition(() => describeConfig(admin, resource, configName).source eq expectedSource, configName + " was not applied with source " + expectedSource)
+      assertEquals(value, describeConfig(admin, resource, configName).value)
+    } finally if (admin != null) admin.close()
+  }
+
+  private def describeConfig(admin: Admin, resource: ConfigResource, name: String) = admin.describeConfigs(List(resource).asJava).all.get.get(resource).get(name)
+
+  private def brokerId = servers.head.config.brokerId
+
+  protected def brokerResource = new ConfigResource(ConfigResource.Type.BROKER, String.valueOf(brokerId))
+
+  protected def brokerConfig: KafkaConfig = servers.head.config
 }

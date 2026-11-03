@@ -17,14 +17,19 @@
 
 package integration.kafka.admin
 
-import org.apache.kafka.common.config.AbstractConfig
+import org.apache.kafka.clients.admin.ConfigEntry
+import org.apache.kafka.common.config.{AbstractConfig, ConfigResource}
 import org.apache.kafka.common.errors.InvalidRequestException
+import org.apache.kafka.server.config.{ServerConfigs, ServerLogConfigs}
+import org.apache.kafka.storage.internals.log.CleanerConfig
+import org.junit.jupiter.api.Assertions.{assertEquals, assertTrue}
 import org.junit.jupiter.api._
 import org.junit.jupiter.params.ParameterizedTest
 import org.junit.jupiter.params.provider.ValueSource
 
 import java.nio.charset.StandardCharsets
 import java.nio.file.Files
+import scala.jdk.CollectionConverters._
 
 @Tag("integration")
 class PlaintextAlterConfigsIntegrationTest extends BaseAlterConfigsIntegrationTest {
@@ -53,5 +58,50 @@ class PlaintextAlterConfigsIntegrationTest extends BaseAlterConfigsIntegrationTe
       if (previous == null) System.clearProperty(AbstractConfig.AUTOMATIC_CONFIG_PROVIDERS_PROPERTY)
       else System.setProperty(AbstractConfig.AUTOMATIC_CONFIG_PROVIDERS_PROPERTY, previous)
     }
+  }
+
+  // Non-STRING configs resolved through a config provider must be applied by the broker, not only accepted
+  // by the request validation (KAFKA-20973).
+
+  @ParameterizedTest
+  @ValueSource(strings = Array("zk", "kraft"))
+  def testAlterConfigsWithConfigProvidersForPerBrokerIntConfig(): Unit = {
+    checkAlterConfigsApplied(brokerResource, ConfigEntry.ConfigSource.DYNAMIC_BROKER_CONFIG, ServerConfigs.NUM_IO_THREADS_CONFIG, "10")
+    assertEquals(10, brokerConfig.getInt(ServerConfigs.NUM_IO_THREADS_CONFIG))
+  }
+
+  @ParameterizedTest
+  @ValueSource(strings = Array("zk", "kraft"))
+  def testAlterConfigsWithConfigProvidersForClusterWideIntConfig(): Unit = {
+    checkAlterConfigsApplied(new ConfigResource(ConfigResource.Type.BROKER, ""), ConfigEntry.ConfigSource.DYNAMIC_DEFAULT_BROKER_CONFIG, ServerConfigs.NUM_IO_THREADS_CONFIG, "10")
+    assertEquals(10, brokerConfig.getInt(ServerConfigs.NUM_IO_THREADS_CONFIG))
+  }
+
+  @ParameterizedTest
+  @ValueSource(strings = Array("zk", "kraft"))
+  def testAlterConfigsWithConfigProvidersForLongConfig(): Unit = {
+    checkAlterConfigsApplied(brokerResource, ConfigEntry.ConfigSource.DYNAMIC_BROKER_CONFIG, ServerLogConfigs.LOG_RETENTION_TIME_MILLIS_CONFIG, "86400000")
+    assertEquals(86400000L, brokerConfig.getLong(ServerLogConfigs.LOG_RETENTION_TIME_MILLIS_CONFIG))
+  }
+
+  @ParameterizedTest
+  @ValueSource(strings = Array("zk", "kraft"))
+  def testAlterConfigsWithConfigProvidersForDoubleConfig(): Unit = {
+    checkAlterConfigsApplied(brokerResource, ConfigEntry.ConfigSource.DYNAMIC_BROKER_CONFIG, CleanerConfig.LOG_CLEANER_MIN_CLEAN_RATIO_PROP, "0.75")
+    assertEquals(0.75, brokerConfig.getDouble(CleanerConfig.LOG_CLEANER_MIN_CLEAN_RATIO_PROP))
+  }
+
+  @ParameterizedTest
+  @ValueSource(strings = Array("zk", "kraft"))
+  def testAlterConfigsWithConfigProvidersForBooleanConfig(): Unit = {
+    checkAlterConfigsApplied(brokerResource, ConfigEntry.ConfigSource.DYNAMIC_BROKER_CONFIG, ServerLogConfigs.LOG_PRE_ALLOCATE_CONFIG, "true")
+    assertTrue(brokerConfig.getBoolean(ServerLogConfigs.LOG_PRE_ALLOCATE_CONFIG))
+  }
+
+  @ParameterizedTest
+  @ValueSource(strings = Array("zk", "kraft"))
+  def testAlterConfigsWithConfigProvidersForListConfig(): Unit = {
+    checkAlterConfigsApplied(brokerResource, ConfigEntry.ConfigSource.DYNAMIC_BROKER_CONFIG, ServerLogConfigs.LOG_CLEANUP_POLICY_CONFIG, "compact,delete")
+    assertEquals(List("compact", "delete").asJava, brokerConfig.getList(ServerLogConfigs.LOG_CLEANUP_POLICY_CONFIG))
   }
 }

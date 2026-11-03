@@ -172,8 +172,9 @@ object DynamicBrokerConfig {
   private def securityConfigsWithoutListenerPrefix(props: Properties): Set[String] = {
     DynamicSecurityConfigs.filter(props.containsKey)
   }
-  private def validateConfigTypes(props: Properties): Unit = {
-    validateConfigTypes(props, props)
+
+  private[server] def validateConfigTypes(props: Properties): Unit = {
+    validateConfigTypes(props, resolveVariableConfigs(props))
   }
 
   private def validateConfigTypes(propsOriginal: Properties, propsResolved: Properties): Unit = {
